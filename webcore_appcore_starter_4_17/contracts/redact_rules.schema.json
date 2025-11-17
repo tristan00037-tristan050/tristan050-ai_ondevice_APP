@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RedactRules",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "rules"
+  ],
+  "properties": {
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "pattern",
+          "replacement"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": "string",
+            "description": "JS-style regex string (without leading/trailing /)."
+          },
+          "flags": {
+            "type": "string",
+            "description": "Regex flags, e.g., 'i' for case-insensitive."
+          },
+          "replacement": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "over_redaction_guard_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 80
+    }
+  }
+}

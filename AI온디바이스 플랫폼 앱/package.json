@@ -1,0 +1,11 @@
+{
+  "name": "ai-ondevice-app-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "quickcheck": "node scripts/ops/app_quickcheck_md.mjs examples/qc_snapshot.example.json > qc.md",
+    "quickcheck:gate": "node scripts/ops/app_quickcheck_gate.mjs --qc examples/qc_snapshot.example.json --policy configs/webcore_qc_policy.example.json",
+    "quickcheck:bundle": "node scripts/ops/app_quickcheck_bundle.mjs --qc examples/qc_snapshot.example.json --md qc.md --out ./bundles/latest --base-url $WEBCORE_BASE_URL --policy-version v1 --app-version 0.1.0 --zip"
+  }
+}

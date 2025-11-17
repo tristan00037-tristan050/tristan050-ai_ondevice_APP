@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QuickCheckReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "diff",
+    "policy",
+    "notes",
+    "raw"
+  ],
+  "properties": {
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api",
+        "jwks",
+        "holidays",
+        "observability",
+        "ics",
+        "lighthouse"
+      ],
+      "properties": {
+        "api": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        },
+        "jwks": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        },
+        "holidays": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        },
+        "observability": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        },
+        "ics": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        },
+        "lighthouse": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        }
+      }
+    },
+    "diff": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "summary": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "dir": {
+                "type": "string",
+                "enum": [
+                  "+",
+                  "-",
+                  "="
+                ]
+              },
+              "pct": {
+                "type": "number"
+              },
+              "delta": {
+                "type": "number"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "evaluations": {
+          "type": "array"
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "raw": {
+      "type": "object"
+    }
+  }
+}
