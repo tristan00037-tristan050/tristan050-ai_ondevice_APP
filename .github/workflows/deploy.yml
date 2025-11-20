@@ -65,8 +65,8 @@ jobs:
       - name: Build and push Collector image
         uses: docker/build-push-action@v5
         with:
-          context: ./packages/collector-node-ts
-          file: ./packages/collector-node-ts/Dockerfile
+          context: ./webcore_appcore_starter_4_17
+          file: ./webcore_appcore_starter_4_17/packages/collector-node-ts/Dockerfile
           push: true
           tags: ${{ steps.meta-collector.outputs.tags }}
           labels: ${{ steps.meta-collector.outputs.labels }}
@@ -89,8 +89,8 @@ jobs:
       - name: Build and push BFF image
         uses: docker/build-push-action@v5
         with:
-          context: ./packages/bff-node-ts
-          file: ./packages/bff-node-ts/Dockerfile
+          context: ./webcore_appcore_starter_4_17
+          file: ./webcore_appcore_starter_4_17/packages/bff-node-ts/Dockerfile
           push: true
           tags: ${{ steps.meta-bff.outputs.tags }}
           labels: ${{ steps.meta-bff.outputs.labels }}
@@ -113,8 +113,8 @@ jobs:
       - name: Build and push Ops Console image
         uses: docker/build-push-action@v5
         with:
-          context: ./packages/ops-console
-          file: ./packages/ops-console/Dockerfile
+          context: ./webcore_appcore_starter_4_17
+          file: ./webcore_appcore_starter_4_17/packages/ops-console/Dockerfile
           push: true
           tags: ${{ steps.meta-ops.outputs.tags }}
           labels: ${{ steps.meta-ops.outputs.labels }}
