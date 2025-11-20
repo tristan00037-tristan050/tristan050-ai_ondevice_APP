@@ -1,0 +1,20 @@
+{
+  "name": "@appcore/app-expo",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "react": "18.2.0",
+    "react-native": "0.72.0",
+    "expo": "~49.0.0",
+    "@react-native-community/netinfo": "^11.0.0",
+    "@react-native-async-storage/async-storage": "^1.19.0",
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "~18.2.0",
+    "@types/react-native": "~0.72.0",
+    "typescript": "~5.0.0"
+  }
+}
+

@@ -1,0 +1,26 @@
+{
+  "name": "app-core-monorepo-r5c",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "ci": "npm run ci --workspaces --if-present",
+    "ci:lint": "npm run lint --workspaces --if-present",
+    "ci:type-check": "npm run type-check --workspaces --if-present",
+    "ci:validate": "node scripts/validate_all.js",
+    "ci:redaction": "node scripts/redactionCoverage.js",
+    "ci:gen-types": "./scripts/generate-types.sh",
+    "ci:check-openapi": "node scripts/check_openapi_sync.js",
+    "ci:check-roles": "node scripts/check_roles_guard.mjs",
+    "ci:check-client-filter": "node scripts/check_client_filter.mjs",
+    "smoke": "./scripts/smoke.sh"
+  },
+  "devDependencies": {
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1",
+    "openapi-typescript": "^7.0.0"
+  }
+}
+
