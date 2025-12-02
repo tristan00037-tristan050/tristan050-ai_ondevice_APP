@@ -3,8 +3,7 @@ name: release-bff
 on:
   push:
     tags:
-      - "r6-s4-*"
-      - "r6-s5-*"
+      - "r6-*"     # r6 전체 릴리스 태그 일괄 대응
 
 jobs:
   build-test-image:

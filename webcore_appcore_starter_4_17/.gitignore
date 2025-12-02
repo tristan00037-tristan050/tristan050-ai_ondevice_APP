@@ -1,0 +1,8 @@
+
+ode_modules/
+**/dist/
+**/*.tsbuildinfo
+.tmp/
+.turbo/
+coverage/
+.DS_Store
