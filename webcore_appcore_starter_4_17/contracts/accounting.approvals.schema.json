@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "accounting.approvals.schema.json",
+  "title": "accounting_approval",
+  "type": "object",
+  "required": ["action", "client_request_id"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["approve", "reject"]
+    },
+    "client_request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "note": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}
+
+

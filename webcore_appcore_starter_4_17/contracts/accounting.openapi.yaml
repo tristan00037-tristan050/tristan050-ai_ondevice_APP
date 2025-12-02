@@ -1,0 +1,525 @@
+openapi: 3.0.3
+info:
+  title: Accounting API
+  version: 0.1.0
+  description: |
+    회계 API: 분개 추천, 승인, 대사, VAT, Export 기능 제공
+    R6 회계 확장 - R5d~5.4 기준선 계승
+
+paths:
+  /v1/accounting/postings/suggest:
+    post:
+      summary: Suggest ledger postings from extracted items
+      description: |
+        추출된 라인아이템으로부터 분개 추천
+        신뢰도와 근거를 포함하여 반환
+      operationId: suggestPostings
+      tags:
+        - Postings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuggestRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestResponse'
+        '400':
+          description: Bad Request - Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation Error - Ajv schema validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '429':
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/accounting/postings:
+    post:
+      summary: Create ledger posting
+      description: |
+        분개 생성 및 확정
+        멱등성 보장: Idempotency-Key 헤더 또는 client_request_id 필드 사용
+      operationId: createPosting
+      tags:
+        - Postings
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 멱등성 보장을 위한 클라이언트 요청 ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePostingRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Posting'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Conflict - Duplicate request (idempotency)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/accounting/approvals/{id}:
+    get:
+      summary: Get approval status
+      description: 승인 상태 조회
+      operationId: getApproval
+      tags:
+        - Approvals
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Approval ID
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/accounting/approvals:
+    post:
+      summary: Request approval
+      description: 승인 요청 생성
+      operationId: requestApproval
+      tags:
+        - Approvals
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+
+  /v1/accounting/reconcile:
+    post:
+      summary: Reconcile transactions
+      description: 거래 대사 (거래 매칭/중복 탐지)
+      operationId: reconcile
+      tags:
+        - Reconcile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconcileRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconcileResponse'
+
+  /v1/accounting/vat:
+    get:
+      summary: Get VAT information
+      description: 부가세 정보 조회
+      operationId: getVAT
+      tags:
+        - VAT
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: 기간 (YYYY-MM-DD)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VATInfo'
+
+  /v1/accounting/exports:
+    post:
+      summary: Export accounting data
+      description: |
+        회계 데이터 Export (감사용)
+        manifest 서명 및 만료 URL 포함
+      operationId: exportAccounting
+      tags:
+        - Exports
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequest'
+      responses:
+        '202':
+          description: Accepted - Export job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResponse'
+
+components:
+  schemas:
+    LineItem:
+      type: object
+      required:
+        - desc
+        - amount
+        - currency
+      properties:
+        desc:
+          type: string
+          description: 항목 설명
+        amount:
+          type: string
+          pattern: '^-?[0-9]+(\.[0-9]{1,2})?$'
+          description: |
+            금액 (부동소수점 오류 방지를 위해 string으로 표현)
+            형식: 정수 또는 소수점 이하 2자리
+            예: "1234.56", "-100.00"
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: |
+            통화 코드 (ISO-4217)
+            예: "KRW", "USD", "EUR"
+
+    SuggestRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineItem'
+          description: 추출된 라인아이템 목록
+        policy_version:
+          type: string
+          description: 정책 버전
+          example: "v1.0.0"
+
+    Posting:
+      type: object
+      required:
+        - account
+        - debit
+        - credit
+      properties:
+        account:
+          type: string
+          description: 계정 코드
+          example: "1010"
+        debit:
+          type: string
+          pattern: '^[0-9]+(\.[0-9]{1,2})?$'
+          description: 차변 금액 (string, 최소값 0)
+          example: "1000.00"
+        credit:
+          type: string
+          pattern: '^[0-9]+(\.[0-9]{1,2})?$'
+          description: 대변 금액 (string, 최소값 0)
+          example: "0.00"
+        note:
+          type: string
+          description: 비고
+
+    SuggestResponse:
+      type: object
+      properties:
+        postings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Posting'
+          description: 추천된 분개 목록
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: 신뢰도 (0.0 ~ 1.0)
+        rationale:
+          type: string
+          description: 추천 근거
+
+    CreatePostingRequest:
+      type: object
+      required:
+        - entries
+        - currency
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/Posting'
+          minItems: 2
+          description: 분개 항목 (최소 2개)
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: 통화 코드 (ISO-4217)
+        client_request_id:
+          type: string
+          description: 멱등성 보장을 위한 클라이언트 요청 ID
+          example: "req-20250120-001"
+
+    Approval:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Approval ID
+        status:
+          type: string
+          enum:
+            - pending
+            - approved
+            - rejected
+            - needs_review
+          description: 승인 상태
+        steps:
+          type: array
+          items:
+            type: string
+          description: 승인 단계 목록
+        requested_at:
+          type: string
+          format: date-time
+          description: 요청 시각 (UTC ISO8601)
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 승인 시각 (UTC ISO8601)
+
+    ApprovalRequest:
+      type: object
+      required:
+        - posting_id
+      properties:
+        posting_id:
+          type: string
+          description: 분개 ID
+        approver_id:
+          type: string
+          description: 승인자 ID
+
+    ReconcileRequest:
+      type: object
+      required:
+        - transactions
+      properties:
+        transactions:
+          type: array
+          items:
+            type: object
+          description: 대사할 거래 목록
+        period_start:
+          type: string
+          format: date-time
+          description: 기간 시작 (UTC ISO8601)
+        period_end:
+          type: string
+          format: date-time
+          description: 기간 종료 (UTC ISO8601)
+
+    ReconcileResponse:
+      type: object
+      properties:
+        matched:
+          type: array
+          items:
+            type: object
+          description: 매칭된 거래
+        unmatched:
+          type: array
+          items:
+            type: object
+          description: 매칭되지 않은 거래
+        duplicates:
+          type: array
+          items:
+            type: object
+          description: 중복 거래
+
+    VATInfo:
+      type: object
+      properties:
+        period:
+          type: string
+          format: date
+          description: 기간 (YYYY-MM-DD)
+        total_sales:
+          type: string
+          pattern: '^[0-9]+(\.[0-9]{1,2})?$'
+          description: 총 매출액
+        total_vat:
+          type: string
+          pattern: '^[0-9]+(\.[0-9]{1,2})?$'
+          description: 총 부가세
+
+    ExportRequest:
+      type: object
+      required:
+        - format
+        - period_start
+        - period_end
+      properties:
+        format:
+          type: string
+          enum:
+            - csv
+            - json
+          description: Export 형식
+        period_start:
+          type: string
+          format: date-time
+          description: 기간 시작 (UTC ISO8601)
+        period_end:
+          type: string
+          format: date-time
+          description: 기간 종료 (UTC ISO8601)
+        max_records:
+          type: integer
+          minimum: 1
+          maximum: 10000
+          default: 1000
+          description: 최대 레코드 수 (상한)
+
+    ExportResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+          description: Export Job ID
+        status:
+          type: string
+          enum:
+            - pending
+            - processing
+            - completed
+            - failed
+          description: Job 상태
+        manifest_url:
+          type: string
+          format: uri
+          description: Manifest 다운로드 URL (서명 포함)
+        expires_at:
+          type: string
+          format: date-time
+          description: URL 만료 시각 (UTC ISO8601)
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: 에러 메시지
+        code:
+          type: string
+          description: 에러 코드
+
+    ValidationError:
+      type: object
+      required:
+        - error
+        - details
+      properties:
+        error:
+          type: string
+          description: 검증 실패 메시지
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+                description: 검증 실패 필드 경로
+              message:
+                type: string
+                description: 검증 실패 메시지
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+

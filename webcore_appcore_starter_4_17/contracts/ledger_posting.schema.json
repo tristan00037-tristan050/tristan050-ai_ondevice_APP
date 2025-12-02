@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ledger_posting.schema.json",
+  "title": "Ledger Posting Schema",
+  "description": "분개 JSON Ajv 스키마 - R6 회계 확장",
+  "type": "object",
+  "required": ["entries", "currency", "created_at"],
+  "properties": {
+    "entries": {
+      "type": "array",
+      "minItems": 2,
+      "description": "분개 항목 (최소 2개 - 차변/대변)",
+      "items": {
+        "type": "object",
+        "required": ["account", "debit", "credit"],
+        "properties": {
+          "account": {
+            "type": "string",
+            "description": "계정 코드",
+            "pattern": "^[0-9]{4,10}$",
+            "examples": ["1010", "2010", "5010"]
+          },
+          "debit": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]{1,2})?$",
+            "description": "차변 금액 (string, 최소값 0, 부동소수점 오류 방지)",
+            "examples": ["1000.00", "0.00"]
+          },
+          "credit": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]{1,2})?$",
+            "description": "대변 금액 (string, 최소값 0, 부동소수점 오류 방지)",
+            "examples": ["0.00", "1000.00"]
+          },
+          "note": {
+            "type": "string",
+            "description": "비고",
+            "maxLength": 500
+          }
+        },
+        "allOf": [
+          {
+            "description": "debit와 credit이 동시에 0이 되지 않도록 검증 (런타임 규칙으로 처리 권장)"
+          }
+        ]
+      }
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "description": "통화 코드 (ISO-4217)",
+      "examples": ["KRW", "USD", "EUR"]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "생성 시각 (UTC ISO8601 형식)",
+      "examples": ["2025-01-20T10:30:00Z"]
+    },
+    "client_request_id": {
+      "type": "string",
+      "description": "멱등성 보장을 위한 클라이언트 요청 ID",
+      "pattern": "^[a-zA-Z0-9_-]+$",
+      "maxLength": 100
+    },
+    "policy_version": {
+      "type": "string",
+      "description": "정책 버전",
+      "examples": ["v1.0.0"]
+    }
+  },
+  "additionalProperties": false
+}
+

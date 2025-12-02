@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "export_manifest.schema.json",
+  "title": "Export Manifest Schema",
+  "description": "감사 Export 매니페스트 스키마 - R6 회계 확장",
+  "type": "object",
+  "required": ["job_id", "format", "created_at", "expires_at", "files", "checksums"],
+  "properties": {
+    "job_id": {
+      "type": "string",
+      "description": "Export Job ID",
+      "pattern": "^[a-zA-Z0-9_-]+$"
+    },
+    "format": {
+      "type": "string",
+      "enum": ["csv", "json"],
+      "description": "Export 형식"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "생성 시각 (UTC ISO8601)"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "만료 시각 (UTC ISO8601)"
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Export 기간 시작 (UTC ISO8601)"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Export 기간 종료 (UTC ISO8601)"
+    },
+    "files": {
+      "type": "array",
+      "description": "Export 파일 목록",
+      "items": {
+        "type": "object",
+        "required": ["name", "size", "checksum"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "파일명",
+            "examples": ["accounting_export_20250120.csv", "accounting_export_20250120.json"]
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "파일 크기 (bytes)"
+          },
+          "checksum": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA256 체크섬"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "다운로드 URL (서명 포함)"
+          }
+        }
+      }
+    },
+    "checksums": {
+      "type": "object",
+      "description": "전체 Export 체크섬",
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "전체 Export SHA256 체크섬"
+        }
+      }
+    },
+    "record_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Export된 레코드 수"
+    },
+    "tenant_id": {
+      "type": "string",
+      "description": "테넌트 ID"
+    },
+    "signature": {
+      "type": "string",
+      "description": "매니페스트 서명 (HMAC-SHA256)"
+    }
+  },
+  "additionalProperties": false
+}
+

@@ -1,0 +1,43 @@
+image:
+  repository: ghcr.io/OWNER/REPO/bff-accounting
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8081
+
+env:
+  USE_PG: "1"
+  EXPORT_SIGN_SECRET: ""
+  DATABASE_URL: ""  # secretRef 로 주입
+
+resources:
+  requests: { cpu: "100m", memory: "256Mi" }
+  limits: { cpu: "500m", memory: "512Mi" }
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  path: /
+  tls: false
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+
+alerts:
+  enabled: false
+  errorRateWindow: 5m
+  highErrorRate: 0.05    # 5%
+  highLatencyP95: 0.5    # 0.5s
+
+dashboard:
+  enabled: false
+
+cleanup:
+  enabled: true
+  schedule: "0 3 * * *"
+  retentionDays: 30
+

@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "accounting.reconciliation_match.schema.json",
+  "title": "ReconciliationManualMatch",
+  "type": "object",
+  "properties": {
+    "bank_id": {
+      "type": "string"
+    },
+    "ledger_id": {
+      "type": "string"
+    },
+    "client_request_id": {
+      "type": "string"
+    }
+  },
+  "required": ["bank_id", "ledger_id"],
+  "additionalProperties": false
+}
+
+
