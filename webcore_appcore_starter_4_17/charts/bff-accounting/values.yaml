@@ -7,12 +7,13 @@ service:
   type: ClusterIP
   port: 8081
 
-env:
-  USE_PG: "1"
-  EXPORT_SIGN_SECRET: ""
-  DATABASE_URL: ""  # secretRef 로 주입
-  OS_POLICY_BRIDGE_ENFORCE: "true"
-  OS_ROLE_MAP_JSON: '{"viewer":"viewer","operator":"operator","auditor":"auditor","admin":"admin"}'
+        env:
+          USE_PG: "1"
+          EXPORT_SIGN_SECRET: ""
+          DATABASE_URL: ""  # secretRef 로 주입
+          OS_POLICY_BRIDGE_ENFORCE: "true"
+          OS_ROLE_MAP_JSON: '{"viewer":"viewer","operator":"operator","auditor":"auditor","admin":"admin"}'
+          OS_TENANT_ALLOWLIST_JSON: '[]'  # 파일럿 테넌트만 허용: '["default","pilot-a"]'
 
 osRoleMap:
   viewer: viewer
