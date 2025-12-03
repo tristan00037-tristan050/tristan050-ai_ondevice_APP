@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { BankSandboxAdapter } from '../packages/service-core-accounting/src/adapters/BankSandboxAdapter.js';
-import { safeSync } from '../packages/service-core-accounting/src/reconciliation_sync.js';
+import { BankSandboxAdapter } from '../packages/service-core-accounting/dist/adapters/BankSandboxAdapter.js';
+import { safeSync } from '../packages/service-core-accounting/dist/reconciliation_sync.js';
 
 const TENANTS = (process.env.TENANT_LIST || 'default').split(',');
 const SOURCES = (process.env.SOURCES || 'bank-sbx').split(',');
