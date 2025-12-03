@@ -15,8 +15,11 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
-      - run: npm run -w @appcore/app-expo typecheck
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
+      - working-directory: webcore_appcore_starter_4_17
+        run: npm ci
+      - working-directory: webcore_appcore_starter_4_17
+        run: npm run -w @appcore/app-expo typecheck
 
   expo_bundle:
     name: Expo Bundle (Web)
@@ -27,7 +30,9 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
+      - working-directory: webcore_appcore_starter_4_17
+        run: npm ci
       - run: npx expo-doctor || echo "expo-doctor skipped"
       - run: npx expo export --platform web --no-install || echo "expo export skipped (requires expo config)"
 
@@ -41,7 +46,9 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
+      - working-directory: webcore_appcore_starter_4_17
+        run: npm ci
       - run: npx expo login --token ${{ secrets.EAS_TOKEN }} || echo "EAS login skipped"
       - run: npx eas build --platform android --profile preview --non-interactive || echo "EAS build skipped"
 
@@ -51,4 +58,3 @@ jobs:
     needs: [typecheck_app, expo_bundle]
     steps:
       - run: echo "✅ mobile gate passed"
-

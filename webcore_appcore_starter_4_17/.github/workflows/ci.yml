@@ -18,14 +18,21 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
       - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm ci
       
       - name: Run ESLint
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run lint --workspaces
       
       - name: Run TypeScript check
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run type-check --workspaces
 
   schema-validation:
@@ -39,14 +46,21 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
       - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm ci
       
       - name: Validate schemas
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run validate:all
       
       - name: Validate accounting schemas
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run ci:validate:accounting || echo "⚠️ Accounting schemas validation skipped (no test data)"
 
   openapi-sync:
@@ -60,17 +74,22 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
       - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
         run: npm ci
       
       - name: Generate OpenAPI types
+        working-directory: webcore_appcore_starter_4_17
         run: npm run ci:gen-types
       
       - name: Generate Accounting OpenAPI types
+        working-directory: webcore_appcore_starter_4_17
         run: npm run ci:gen-types:accounting || echo "⚠️ Accounting types generation skipped"
       
       - name: Check OpenAPI sync
+        working-directory: webcore_appcore_starter_4_17
         run: npm run ci:check-openapi
 
   security-checks:
@@ -84,14 +103,18 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
       - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
         run: npm ci
       
       - name: Check roles guard
+        working-directory: webcore_appcore_starter_4_17
         run: npm run ci:check-roles
       
       - name: Check client-side filter
+        working-directory: webcore_appcore_starter_4_17
         run: npm run ci:check-client-filter
 
   schema-and-types:
@@ -105,14 +128,18 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
       - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
         run: npm ci
       
       - name: Generate accounting types
+        working-directory: webcore_appcore_starter_4_17
         run: npm run ci:gen-types:accounting
       
       - name: Validate accounting schemas
+        working-directory: webcore_appcore_starter_4_17
         run: npm run ci:validate:accounting || echo "⚠️ Accounting schemas validation skipped (no test data)"
 
   build:
@@ -127,17 +154,22 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
       - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
         run: npm ci
       
       - name: Build Collector
+        working-directory: webcore_appcore_starter_4_17
         run: npm run build --workspace=@appcore/collector-node-ts
       
       - name: Build BFF
+        working-directory: webcore_appcore_starter_4_17
         run: npm run build --workspace=@appcore/bff-node-ts
       
       - name: Build Ops Console
+        working-directory: webcore_appcore_starter_4_17
         run: npm run build --workspace=@appcore/ops-console
 
   test:
@@ -152,14 +184,18 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
       - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
         run: npm ci
       
       - name: Run tests
+        working-directory: webcore_appcore_starter_4_17
         run: npm test --workspaces --if-present
       
       - name: Run accounting smoke tests
+        working-directory: webcore_appcore_starter_4_17
         run: npm run smoke:accounting || echo "⚠️ Accounting smoke tests skipped (service not running)"
         continue-on-error: true
 
@@ -175,16 +211,21 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
       - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
         run: npm ci
       
       - name: Golden set size / PII / format
+        working-directory: webcore_appcore_starter_4_17
         run: npm run ci:gold-size
       
       - name: Synthetic ratio gate (≤ 30%)
         env:
           MAX_SYN_RATIO: "0.30"
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run ci:gold-synthetic
 
   bench-accounting:
@@ -199,20 +240,26 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
       - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
         run: npm ci
       
       - name: Build service-core-accounting
+        working-directory: webcore_appcore_starter_4_17
         run: npm run build --workspace=@appcore/service-core-accounting
       
       - name: Generate accounting types
+        working-directory: webcore_appcore_starter_4_17
         run: npm run ci:gen-types:accounting
       
       - name: Validate accounting schemas
+        working-directory: webcore_appcore_starter_4_17
         run: npm run ci:validate:accounting || echo "⚠️ Accounting schemas validation skipped (no test data)"
       
       - name: Accuracy gate
+        working-directory: webcore_appcore_starter_4_17
         run: npm run ci:gate:accuracy
         env:
           MIN_GOLD: "50"
@@ -220,6 +267,7 @@ jobs:
           THRESH_TOP5: "0.85"
       
       - name: Bench (report)
+        working-directory: webcore_appcore_starter_4_17
         run: npm run measure:accuracy
 
   e2e-accounting:
@@ -233,17 +281,22 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
       - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
         run: npm ci
       
       - name: Build service-core-accounting
+        working-directory: webcore_appcore_starter_4_17
         run: npm run build --workspace=@appcore/service-core-accounting
       
       - name: Build bff-accounting
+        working-directory: webcore_appcore_starter_4_17
         run: npm run build --workspace=@appcore/bff-accounting
       
       - name: Install bff-accounting dependencies
+        working-directory: webcore_appcore_starter_4_17
         run: npm install --prefix packages/bff-accounting
       
       - name: Start BFF server
@@ -292,17 +345,22 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
       - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
         run: npm ci
       
       - name: Build service-core-accounting
+        working-directory: webcore_appcore_starter_4_17
         run: npm run build --workspace=@appcore/service-core-accounting
       
       - name: Build bff-accounting
+        working-directory: webcore_appcore_starter_4_17
         run: npm run build --workspace=@appcore/bff-accounting
       
       - name: Install bff-accounting dependencies
+        working-directory: webcore_appcore_starter_4_17
         run: npm install --prefix packages/bff-accounting
       
       - name: Start BFF server
@@ -319,6 +377,8 @@ jobs:
           BFF_URL: http://localhost:8081
           API_KEY: collector-key
           TENANT_ID: default
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run test:e2e:accounting:bff
       
       - name: E2E Approvals
@@ -326,6 +386,8 @@ jobs:
           BFF_URL: http://localhost:8081
           API_KEY: collector-key:operator
           TENANT_ID: default
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run test:e2e:accounting:approvals
       
       - name: E2E Exports
@@ -333,12 +395,16 @@ jobs:
           BFF_URL: http://localhost:8081
           API_KEY: collector-key:auditor
           TENANT_ID: default
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run test:e2e:accounting:exports
       
       - name: E2E Exports (negative cases)
         env:
           BFF_URL: http://localhost:8081
           TENANT_ID: default
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run test:e2e:accounting:exports:neg
       
       - name: E2E Reconciliation
@@ -346,6 +412,8 @@ jobs:
           BFF_URL: http://localhost:8081
           API_KEY: collector-key:operator
           TENANT_ID: default
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run test:e2e:accounting:recon
       
       - name: Stop BFF server
@@ -393,12 +461,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       
-      - run: npm ci
+        working-directory: webcore_appcore_starter_4_17
+
+        run: npm ci
       
       - name: DB migrate
         env:
           DATABASE_URL: postgres://app:app@localhost:5432/app
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run db:migrate
       
       - name: Start BFF (PG)
@@ -421,6 +495,8 @@ jobs:
           API_KEY_AUD: collector-key:auditor
           API_KEY_OP: collector-key:operator
           DATABASE_URL: postgres://app:app@localhost:5432/app
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run test:e2e:accounting:persistence
       
       - name: Stop BFF server
@@ -443,7 +519,6 @@ jobs:
           else
             echo "✅ No build artifacts or dependencies tracked in git"
           fi
-
 
   gate-os-integration:
     name: OS Integration Gate
@@ -468,12 +543,18 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
+        working-directory: webcore_appcore_starter_4_17
+
+        run: npm ci
       - name: Build packages
+        working-directory: webcore_appcore_starter_4_17
         run: npm run build:packages
       - name: DB migrate
         env:
           DATABASE_URL: postgres://app:app@localhost:5432/app
+        working-directory: webcore_appcore_starter_4_17
+
         run: npm run db:migrate
       - name: Start BFF
         env:

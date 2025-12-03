@@ -29,13 +29,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
 
-      - run: npm ci
+      - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
+        run: npm ci
 
       - name: Build workspaces
+        working-directory: webcore_appcore_starter_4_17
         run: npm run build:packages
 
       - name: DB migrate
+        working-directory: webcore_appcore_starter_4_17
         env:
           DATABASE_URL: postgres://app:app@localhost:5432/app
         run: npm run db:migrate
@@ -60,6 +66,7 @@ jobs:
           curl -sf http://localhost:8081/health
 
       - name: E2E smoke against container
+        working-directory: webcore_appcore_starter_4_17
         env:
           BFF_URL: http://localhost:8081
           TENANT_ID: default
@@ -80,8 +87,13 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
-      - run: npm run -w @appcore/app-expo typecheck || echo "typecheck skipped"
+          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
+      - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17
+        run: npm ci
+      - name: TypeScript check
+        working-directory: webcore_appcore_starter_4_17
+        run: npm run -w @appcore/app-expo typecheck || echo "typecheck skipped"
       - run: echo "✅ mobile gate passed"
 
   publish-and-deploy:
@@ -125,5 +137,3 @@ jobs:
             --set env.EXPORT_SIGN_SECRET=${{ secrets.EXPORT_SIGN_SECRET }} \
             --set env.DATABASE_URL=${{ secrets.DATABASE_URL }} \
             --wait --timeout 5m
-
-
