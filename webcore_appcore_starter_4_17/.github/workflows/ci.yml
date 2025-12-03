@@ -444,3 +444,108 @@ jobs:
             echo "✅ No build artifacts or dependencies tracked in git"
           fi
 
+
+  gate-os-integration:
+    name: OS Integration Gate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: app
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd="pg_isready -U app -d app"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Build packages
+        run: npm run build:packages
+      - name: DB migrate
+        env:
+          DATABASE_URL: postgres://app:app@localhost:5432/app
+        run: npm run db:migrate
+      - name: Start BFF
+        env:
+          DATABASE_URL: postgres://app:app@localhost:5432/app
+          USE_PG: "1"
+          EXPORT_SIGN_SECRET: ci-secret
+          OS_POLICY_BRIDGE_ENFORCE: "true"
+          OS_ROLE_MAP_JSON: '{"viewer":"viewer","operator":"operator","auditor":"auditor","admin":"admin"}'
+        run: |
+          cd packages/bff-accounting
+          npm i
+          npm run build
+          node --enable-source-maps dist/index.js &
+          sleep 3
+          cd ../..
+      - name: Test OS policy bridge (403 on invalid role)
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -H 'X-Tenant: default' -H 'X-User-Id: u1' -H 'X-User-Role: unknown' http://localhost:8081/v1/accounting/audit)
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -1)
+          if [ "$http_code" != "403" ]; then
+            echo "❌ Expected 403, got $http_code"
+            exit 1
+          fi
+          if ! echo "$body" | grep -q "OS_POLICY_DENY"; then
+            echo "❌ Expected error_code=OS_POLICY_DENY"
+            exit 1
+          fi
+          echo "✅ OS policy bridge correctly rejects invalid role"
+      - name: Test audit API (auditor access)
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -H 'X-Tenant: default' -H 'X-User-Id: u2' -H 'X-User-Role: auditor' 'http://localhost:8081/v1/accounting/audit?page=1&page_size=20')
+          http_code=$(echo "$response" | tail -1)
+          if [ "$http_code" != "200" ]; then
+            echo "❌ Expected 200, got $http_code"
+            exit 1
+          fi
+          echo "✅ Audit API accessible to auditor"
+      - name: Test audit API (viewer denied)
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -H 'X-Tenant: default' -H 'X-User-Id: u3' -H 'X-User-Role: viewer' 'http://localhost:8081/v1/accounting/audit')
+          http_code=$(echo "$response" | tail -1)
+          if [ "$http_code" != "403" ]; then
+            echo "❌ Expected 403 for viewer, got $http_code"
+            exit 1
+          fi
+          echo "✅ Viewer correctly denied access to audit API"
+      - name: Test OS summary API
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -H 'X-Tenant: default' -H 'X-User-Id: u4' -H 'X-User-Role: operator' http://localhost:8081/v1/accounting/os/summary)
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -1)
+          if [ "$http_code" != "200" ]; then
+            echo "❌ Expected 200, got $http_code"
+            exit 1
+          fi
+          if ! echo "$body" | grep -q "approvals"; then
+            echo "❌ Missing approvals field in summary"
+            exit 1
+          fi
+          if ! echo "$body" | grep -q "exports"; then
+            echo "❌ Missing exports field in summary"
+            exit 1
+          fi
+          if ! echo "$body" | grep -q "recon"; then
+            echo "❌ Missing recon field in summary"
+            exit 1
+          fi
+          if ! echo "$body" | grep -q "errors"; then
+            echo "❌ Missing errors field in summary"
+            exit 1
+          fi
+          echo "✅ OS summary API returns expected fields"
+      - name: Stop BFF
+        run: pkill -f "bff-accounting" || true
