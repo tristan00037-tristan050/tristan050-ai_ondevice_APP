@@ -258,3 +258,4 @@ kubectl rollout status deployment/collector -n production
 
 **다음 단계**: GitHub Secrets 설정 후 배포 워크플로우를 실행하세요!
 
+

@@ -65,3 +65,4 @@ if [ "$CHECK_ONLY" = "--check-only" ]; then
   echo "✅ 타입 파일이 최신 상태입니다."
 fi
 
+

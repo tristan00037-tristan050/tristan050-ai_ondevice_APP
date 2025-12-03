@@ -144,3 +144,4 @@ curl http://localhost:9090/metrics | grep collector_reports_ingested_total
 **날짜**: 2025-01-XX
 **상태**: ✅ 기본 메트릭 수집 완료
 
+

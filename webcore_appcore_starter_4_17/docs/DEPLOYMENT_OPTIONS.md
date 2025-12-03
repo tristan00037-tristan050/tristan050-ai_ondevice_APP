@@ -259,3 +259,4 @@ kubectl rollout status deployment/collector -n production
 
 프로덕션 클러스터 정보를 알려주시면 연결 방법을 안내하겠습니다.
 
+

@@ -297,3 +297,4 @@ psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "\du"
 **승인자**: 보안 리더
 **감사 주기**: 배포 전 + 정기 (분기별)
 
+

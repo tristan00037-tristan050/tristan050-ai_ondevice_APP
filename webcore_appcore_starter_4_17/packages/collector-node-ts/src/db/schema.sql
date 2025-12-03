@@ -61,3 +61,4 @@ SELECT
   report_data->'policy'->>'policy_version' as policy_version
 FROM reports;
 
+

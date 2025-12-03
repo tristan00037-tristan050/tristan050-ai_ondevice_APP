@@ -88,3 +88,4 @@ if (!allValid) {
 console.log('✅ 모든 스키마 검증 통과');
 process.exit(0);
 
+

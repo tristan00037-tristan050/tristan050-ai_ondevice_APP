@@ -55,3 +55,4 @@ gunzip -c "$BACKUP_FILE" | PGPASSWORD="${DB_PASSWORD}" psql \
 
 echo "✅ Database restore completed successfully"
 
+

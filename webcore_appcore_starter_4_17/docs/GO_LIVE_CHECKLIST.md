@@ -221,3 +221,4 @@ kubectl rollout status deployment/collector
 **담당자**: DevOps 팀
 **승인자**: 기술 리더
 
+

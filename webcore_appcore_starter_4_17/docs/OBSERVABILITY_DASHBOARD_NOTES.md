@@ -202,9 +202,20 @@ Grafana 대시보드 구성 및 알림 규칙 권장 사항입니다.
 - **지속 시간**: 즉시
 - **액션**: PagerDuty 트리거 (운영팀 합의 필요)
 
+**알림 13: 회계 Block 스파이크 (R6 회계 확장)**
+- **메트릭**: 회계 도메인 전용 BLOCK 카운트
+- **조건**: 
+  - 현재 24h 회계 BLOCK 수 > 이전 24h 회계 BLOCK 수 * 1.5 (50% 증가)
+  - 또는 현재 24h 회계 BLOCK 수 > 50
+- **지속 시간**: 5분 (dedup)
+- **액션**: Slack 알림 + PagerDuty 트리거 (Critical)
+- **Dedup 키**: `tenant + accounting_block_spike + 24h`
+- **구현**: `notifyAccountingBlockSpike()` 함수 사용
+
 **운영팀 합의 필요 사항**:
 - BLOCK 급증 임계값 (50%, 100% 등)
 - BLOCK 절대값 임계값 (100, 20 등)
+- 회계 Block 스파이크 임계값 (50%, 50건 등)
 - 알림 레벨 (Warning vs Critical)
 - 알림 수신자
 

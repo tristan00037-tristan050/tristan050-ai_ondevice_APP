@@ -147,3 +147,4 @@ node scripts/check_openapi_sync.js
 3. CI/CD 파이프라인에 통합
 4. 테스트 및 검증
 
+

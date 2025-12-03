@@ -232,3 +232,4 @@ kubectl create secret generic collector-secrets ...
 
 **다음 단계**: Kubernetes 클러스터 연결 후 `docs/GO_LIVE_EXECUTION_PLAN.md`의 배포 절차를 진행하세요.
 
+

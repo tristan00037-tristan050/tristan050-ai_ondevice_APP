@@ -39,3 +39,4 @@ EXPOSE 9090
 
 CMD ["node", "packages/collector-node-ts/dist/index.js"]
 
+

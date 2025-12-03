@@ -1,0 +1,1931 @@
+[
+  {
+    "id": "sample-001",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "스타벅스 커피",
+          "amount": "4500",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6020",
+          "debit": "4500.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "스타벅스 커피"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "4500.00",
+        "credit": "0.00",
+        "note": "스타벅스 커피"
+      },
+      {
+        "account": "6020",
+        "debit": "0.00",
+        "credit": "4500.00",
+        "note": "스타벅스 커피"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T10:30:00Z"
+  },
+  {
+    "id": "sample-002",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "택시 요금",
+          "amount": "13800",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6010",
+          "debit": "13800.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "택시 요금"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "13800.00",
+        "credit": "0.00",
+        "note": "택시 요금"
+      },
+      {
+        "account": "6010",
+        "debit": "0.00",
+        "credit": "13800.00",
+        "note": "택시 요금"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T11:00:00Z"
+  },
+  {
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "10000.00",
+        "credit": "0.00",
+        "note": "사무용품 구매"
+      },
+      {
+        "account": "5010",
+        "debit": "0.00",
+        "credit": "10000.00",
+        "note": "사무용품 구매"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T10:30:00Z"
+  },
+  {
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "5000.00",
+        "credit": "0.00",
+        "note": "택시비"
+      },
+      {
+        "account": "6010",
+        "debit": "0.00",
+        "credit": "5000.00",
+        "note": "택시비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T11:00:00Z"
+  },
+  {
+    "id": "sample-005",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "통신비",
+          "amount": "85000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6030",
+          "debit": "85000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "통신비"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "85000.00",
+        "credit": "0.00",
+        "note": "통신비"
+      },
+      {
+        "account": "6030",
+        "debit": "0.00",
+        "credit": "85000.00",
+        "note": "통신비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T12:00:00Z"
+  },
+  {
+    "id": "sample-006",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "임대료",
+          "amount": "2000000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6040",
+          "debit": "2000000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "임대료"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "2000000.00",
+        "credit": "0.00",
+        "note": "임대료"
+      },
+      {
+        "account": "6040",
+        "debit": "0.00",
+        "credit": "2000000.00",
+        "note": "임대료"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T13:00:00Z"
+  },
+  {
+    "id": "sample-007",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "급여",
+          "amount": "3500000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6050",
+          "debit": "3500000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "급여"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "3500000.00",
+        "credit": "0.00",
+        "note": "급여"
+      },
+      {
+        "account": "6050",
+        "debit": "0.00",
+        "credit": "3500000.00",
+        "note": "급여"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T14:00:00Z"
+  },
+  {
+    "id": "sample-008",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "수도광열비",
+          "amount": "120000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6060",
+          "debit": "120000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "수도광열비"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "120000.00",
+        "credit": "0.00",
+        "note": "수도광열비"
+      },
+      {
+        "account": "6060",
+        "debit": "0.00",
+        "credit": "120000.00",
+        "note": "수도광열비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T15:00:00Z"
+  },
+  {
+    "id": "sample-009",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "보험료",
+          "amount": "150000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6070",
+          "debit": "150000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "보험료"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "150000.00",
+        "credit": "0.00",
+        "note": "보험료"
+      },
+      {
+        "account": "6070",
+        "debit": "0.00",
+        "credit": "150000.00",
+        "note": "보험료"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T16:00:00Z"
+  },
+  {
+    "id": "sample-010",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "세금과공과",
+          "amount": "50000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6080",
+          "debit": "50000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "세금과공과"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "50000.00",
+        "credit": "0.00",
+        "note": "세금과공과"
+      },
+      {
+        "account": "6080",
+        "debit": "0.00",
+        "credit": "50000.00",
+        "note": "세금과공과"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T17:00:00Z"
+  },
+  {
+    "id": "sample-011",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "수수료",
+          "amount": "3000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6090",
+          "debit": "3000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "수수료"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "3000.00",
+        "credit": "0.00",
+        "note": "수수료"
+      },
+      {
+        "account": "6090",
+        "debit": "0.00",
+        "credit": "3000.00",
+        "note": "수수료"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T18:00:00Z"
+  },
+  {
+    "id": "sample-012",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "주유비",
+          "amount": "65000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6010",
+          "debit": "65000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "주유비"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "65000.00",
+        "credit": "0.00",
+        "note": "주유비"
+      },
+      {
+        "account": "6010",
+        "debit": "0.00",
+        "credit": "65000.00",
+        "note": "주유비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T19:00:00Z"
+  },
+  {
+    "id": "sample-013",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "식대",
+          "amount": "25000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6020",
+          "debit": "25000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "식대"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "25000.00",
+        "credit": "0.00",
+        "note": "식대"
+      },
+      {
+        "account": "6020",
+        "debit": "0.00",
+        "credit": "25000.00",
+        "note": "식대"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T20:00:00Z"
+  },
+  {
+    "id": "sample-014",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "커피",
+          "amount": "5000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6020",
+          "debit": "5000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "커피"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "5000.00",
+        "credit": "0.00",
+        "note": "커피"
+      },
+      {
+        "account": "6020",
+        "debit": "0.00",
+        "credit": "5000.00",
+        "note": "커피"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T21:00:00Z"
+  },
+  {
+    "id": "sample-015",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "사무용품",
+          "amount": "15000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "5010",
+          "debit": "15000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "사무용품"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "15000.00",
+        "credit": "0.00",
+        "note": "사무용품"
+      },
+      {
+        "account": "5010",
+        "debit": "0.00",
+        "credit": "15000.00",
+        "note": "사무용품"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-21T09:00:00Z"
+  },
+  {
+    "id": "sample-001",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "스타벅스 커피",
+          "amount": "4500",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6020",
+          "debit": "4500.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "스타벅스 커피"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "4500.00",
+        "credit": "0.00",
+        "note": "스타벅스 커피"
+      },
+      {
+        "account": "6020",
+        "debit": "0.00",
+        "credit": "4500.00",
+        "note": "스타벅스 커피"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T10:30:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-002",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "택시 요금",
+          "amount": "13800",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6010",
+          "debit": "13800.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "택시 요금"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "13800.00",
+        "credit": "0.00",
+        "note": "택시 요금"
+      },
+      {
+        "account": "6010",
+        "debit": "0.00",
+        "credit": "13800.00",
+        "note": "택시 요금"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T11:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "10000.00",
+        "credit": "0.00",
+        "note": "사무용품 구매"
+      },
+      {
+        "account": "5010",
+        "debit": "0.00",
+        "credit": "10000.00",
+        "note": "사무용품 구매"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T10:30:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "5000.00",
+        "credit": "0.00",
+        "note": "택시비"
+      },
+      {
+        "account": "6010",
+        "debit": "0.00",
+        "credit": "5000.00",
+        "note": "택시비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T11:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-005",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "통신비",
+          "amount": "85000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6030",
+          "debit": "85000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "통신비"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "85000.00",
+        "credit": "0.00",
+        "note": "통신비"
+      },
+      {
+        "account": "6030",
+        "debit": "0.00",
+        "credit": "85000.00",
+        "note": "통신비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T12:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-006",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "임대료",
+          "amount": "2000000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6040",
+          "debit": "2000000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "임대료"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "2000000.00",
+        "credit": "0.00",
+        "note": "임대료"
+      },
+      {
+        "account": "6040",
+        "debit": "0.00",
+        "credit": "2000000.00",
+        "note": "임대료"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T13:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-007",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "급여",
+          "amount": "3500000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6050",
+          "debit": "3500000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "급여"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "3500000.00",
+        "credit": "0.00",
+        "note": "급여"
+      },
+      {
+        "account": "6050",
+        "debit": "0.00",
+        "credit": "3500000.00",
+        "note": "급여"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T14:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-008",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "수도광열비",
+          "amount": "120000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6060",
+          "debit": "120000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "수도광열비"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "120000.00",
+        "credit": "0.00",
+        "note": "수도광열비"
+      },
+      {
+        "account": "6060",
+        "debit": "0.00",
+        "credit": "120000.00",
+        "note": "수도광열비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T15:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-009",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "보험료",
+          "amount": "150000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6070",
+          "debit": "150000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "보험료"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "150000.00",
+        "credit": "0.00",
+        "note": "보험료"
+      },
+      {
+        "account": "6070",
+        "debit": "0.00",
+        "credit": "150000.00",
+        "note": "보험료"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T16:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-010",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "세금과공과",
+          "amount": "50000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6080",
+          "debit": "50000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "세금과공과"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "50000.00",
+        "credit": "0.00",
+        "note": "세금과공과"
+      },
+      {
+        "account": "6080",
+        "debit": "0.00",
+        "credit": "50000.00",
+        "note": "세금과공과"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T17:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-011",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "수수료",
+          "amount": "3000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6090",
+          "debit": "3000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "수수료"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "3000.00",
+        "credit": "0.00",
+        "note": "수수료"
+      },
+      {
+        "account": "6090",
+        "debit": "0.00",
+        "credit": "3000.00",
+        "note": "수수료"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T18:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-012",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "주유비",
+          "amount": "65000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6010",
+          "debit": "65000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "주유비"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "65000.00",
+        "credit": "0.00",
+        "note": "주유비"
+      },
+      {
+        "account": "6010",
+        "debit": "0.00",
+        "credit": "65000.00",
+        "note": "주유비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T19:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-013",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "식대",
+          "amount": "25000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6020",
+          "debit": "25000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "식대"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "25000.00",
+        "credit": "0.00",
+        "note": "식대"
+      },
+      {
+        "account": "6020",
+        "debit": "0.00",
+        "credit": "25000.00",
+        "note": "식대"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T20:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-014",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "커피",
+          "amount": "5000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6020",
+          "debit": "5000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "커피"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "5000.00",
+        "credit": "0.00",
+        "note": "커피"
+      },
+      {
+        "account": "6020",
+        "debit": "0.00",
+        "credit": "5000.00",
+        "note": "커피"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T21:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-015",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "사무용품",
+          "amount": "15000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "5010",
+          "debit": "15000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "사무용품"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "15000.00",
+        "credit": "0.00",
+        "note": "사무용품"
+      },
+      {
+        "account": "5010",
+        "debit": "0.00",
+        "credit": "15000.00",
+        "note": "사무용품"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-21T09:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-001",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "스타벅스 커피",
+          "amount": "4500",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6020",
+          "debit": "4500.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "스타벅스 커피"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "4500.00",
+        "credit": "0.00",
+        "note": "스타벅스 커피"
+      },
+      {
+        "account": "6020",
+        "debit": "0.00",
+        "credit": "4500.00",
+        "note": "스타벅스 커피"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T10:30:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-002",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "택시 요금",
+          "amount": "13800",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6010",
+          "debit": "13800.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "택시 요금"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "13800.00",
+        "credit": "0.00",
+        "note": "택시 요금"
+      },
+      {
+        "account": "6010",
+        "debit": "0.00",
+        "credit": "13800.00",
+        "note": "택시 요금"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T11:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "10000.00",
+        "credit": "0.00",
+        "note": "사무용품 구매"
+      },
+      {
+        "account": "5010",
+        "debit": "0.00",
+        "credit": "10000.00",
+        "note": "사무용품 구매"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T10:30:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "5000.00",
+        "credit": "0.00",
+        "note": "택시비"
+      },
+      {
+        "account": "6010",
+        "debit": "0.00",
+        "credit": "5000.00",
+        "note": "택시비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T11:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-005",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "통신비",
+          "amount": "85000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6030",
+          "debit": "85000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "통신비"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "85000.00",
+        "credit": "0.00",
+        "note": "통신비"
+      },
+      {
+        "account": "6030",
+        "debit": "0.00",
+        "credit": "85000.00",
+        "note": "통신비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T12:00:00Z",
+    "meta": {
+      "synthetic": false
+    }
+  },
+  {
+    "id": "sample-006_synth_1764559867644_m0dgxp",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "임대료 [카드승인] - MERCHANT_INS_A",
+          "amount": "2000000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6040",
+          "debit": "2000000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "임대료"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "2000000.00",
+        "credit": "0.00",
+        "note": "임대료"
+      },
+      {
+        "account": "6040",
+        "debit": "0.00",
+        "credit": "2000000.00",
+        "note": "임대료"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T13:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-007_synth_1764559867644_0evyw",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "급여 [간이영수증] - MERCHANT_FEE_A",
+          "amount": "3500000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6050",
+          "debit": "3500000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "급여"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "3500000.00",
+        "credit": "0.00",
+        "note": "급여"
+      },
+      {
+        "account": "6050",
+        "debit": "0.00",
+        "credit": "3500000.00",
+        "note": "급여"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T14:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-008_synth_1764559867644_we951s",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "수도광열비 [현금영수증] - MERCHANT_CAFE_B",
+          "amount": "120000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6060",
+          "debit": "120000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "수도광열비"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "120000.00",
+        "credit": "0.00",
+        "note": "수도광열비"
+      },
+      {
+        "account": "6060",
+        "debit": "0.00",
+        "credit": "120000.00",
+        "note": "수도광열비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T15:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-009_synth_1764559867644_g9svbc",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "보험료 [간이영수증] - MERCHANT_TELCO_A",
+          "amount": "150000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6070",
+          "debit": "150000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "보험료"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "150000.00",
+        "credit": "0.00",
+        "note": "보험료"
+      },
+      {
+        "account": "6070",
+        "debit": "0.00",
+        "credit": "150000.00",
+        "note": "보험료"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T16:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-010_synth_1764559867644_c3zpcg",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "세금과공과 [간이영수증] - MERCHANT_TELCO_A",
+          "amount": "50000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6080",
+          "debit": "50000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "세금과공과"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "50000.00",
+        "credit": "0.00",
+        "note": "세금과공과"
+      },
+      {
+        "account": "6080",
+        "debit": "0.00",
+        "credit": "50000.00",
+        "note": "세금과공과"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T17:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-011_synth_1764559867644_wlel7s",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "수수료 [전자영수증] - MERCHANT_INS_A",
+          "amount": "3000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6090",
+          "debit": "3000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "수수료"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "3000.00",
+        "credit": "0.00",
+        "note": "수수료"
+      },
+      {
+        "account": "6090",
+        "debit": "0.00",
+        "credit": "3000.00",
+        "note": "수수료"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T18:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-012_synth_1764559867644_u80nr5",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "주유비 [간이영수증] - MERCHANT_GAS_A",
+          "amount": "65000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6010",
+          "debit": "65000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "주유비"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "65000.00",
+        "credit": "0.00",
+        "note": "주유비"
+      },
+      {
+        "account": "6010",
+        "debit": "0.00",
+        "credit": "65000.00",
+        "note": "주유비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T19:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-013_synth_1764559867644_2hnl8m",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "식대 [전자영수증] - MERCHANT_INS_A",
+          "amount": "25000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6020",
+          "debit": "25000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "식대"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "25000.00",
+        "credit": "0.00",
+        "note": "식대"
+      },
+      {
+        "account": "6020",
+        "debit": "0.00",
+        "credit": "25000.00",
+        "note": "식대"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T20:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-014_synth_1764559867644_4qyss",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "커피 [간이영수증] - MERCHANT_CAFE_A",
+          "amount": "5000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6020",
+          "debit": "5000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "커피"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "5000.00",
+        "credit": "0.00",
+        "note": "커피"
+      },
+      {
+        "account": "6020",
+        "debit": "0.00",
+        "credit": "5000.00",
+        "note": "커피"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T21:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-015_synth_1764559867644_bryjcr",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "사무용품 [카드승인] - MERCHANT_TAX_A",
+          "amount": "15000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "5010",
+          "debit": "15000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "사무용품"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "15000.00",
+        "credit": "0.00",
+        "note": "사무용품"
+      },
+      {
+        "account": "5010",
+        "debit": "0.00",
+        "credit": "15000.00",
+        "note": "사무용품"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-21T09:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-001_synth_1764559852675_19s1lm_synth_1764559867644_f2leci",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "스타벅스 커피 [현금영수증] - MERCHANT_GAS_A [간이영수증] - MERCHANT_INS_A",
+          "amount": "4500",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6020",
+          "debit": "4500.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "스타벅스 커피"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "4500.00",
+        "credit": "0.00",
+        "note": "스타벅스 커피"
+      },
+      {
+        "account": "6020",
+        "debit": "0.00",
+        "credit": "4500.00",
+        "note": "스타벅스 커피"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T10:30:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-002_synth_1764559852675_b1zrkk_synth_1764559867644_1sx5q4",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "택시 요금 [전자영수증] - MERCHANT_SUPPLY_A [카드승인] - MERCHANT_CAFE_A",
+          "amount": "13800",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6010",
+          "debit": "13800.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "택시 요금"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "13800.00",
+        "credit": "0.00",
+        "note": "택시 요금"
+      },
+      {
+        "account": "6010",
+        "debit": "0.00",
+        "credit": "13800.00",
+        "note": "택시 요금"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T11:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "10000.00",
+        "credit": "0.00",
+        "note": "사무용품 구매 [카드승인] - MERCHANT_TAX_A [간이영수증] - MERCHANT_SUPPLY_A"
+      },
+      {
+        "account": "5010",
+        "debit": "0.00",
+        "credit": "10000.00",
+        "note": "사무용품 구매 [카드승인] - MERCHANT_TELCO_A [간이영수증] - MERCHANT_TELCO_A"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T10:30:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "5000.00",
+        "credit": "0.00",
+        "note": "택시비 [전자영수증] - MERCHANT_GAS_A [현금영수증] - MERCHANT_TAX_A"
+      },
+      {
+        "account": "6010",
+        "debit": "0.00",
+        "credit": "5000.00",
+        "note": "택시비 [현금영수증] - MERCHANT_CAFE_A [전자영수증] - MERCHANT_CAFE_B"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T11:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  },
+  {
+    "id": "sample-005_synth_1764559852675_jfmqc_synth_1764559867644_4kd8n",
+    "policy_version": "appcore-6.0.0",
+    "input": {
+      "line_items": [
+        {
+          "description": "통신비 [현금영수증] - MERCHANT_TAX_A [현금영수증] - MERCHANT_MEAL_A",
+          "amount": "85000",
+          "currency": "KRW"
+        }
+      ]
+    },
+    "ground_truth": {
+      "postings": [
+        {
+          "account": "6030",
+          "debit": "85000.00",
+          "credit": "0.00",
+          "currency": "KRW",
+          "note": "통신비"
+        }
+      ]
+    },
+    "entries": [
+      {
+        "account": "1010",
+        "debit": "85000.00",
+        "credit": "0.00",
+        "note": "통신비"
+      },
+      {
+        "account": "6030",
+        "debit": "0.00",
+        "credit": "85000.00",
+        "note": "통신비"
+      }
+    ],
+    "currency": "KRW",
+    "created_at": "2025-01-20T12:00:00Z",
+    "meta": {
+      "synthetic": true
+    }
+  }
+]

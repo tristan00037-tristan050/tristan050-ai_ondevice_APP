@@ -274,3 +274,4 @@ export DB_PASSWORD=your-password
 **날짜**: 2025-01-XX
 **상태**: ✅ 기본 운영 자동화 완료
 
+

@@ -35,3 +35,4 @@ export const SeverityBadge: React.FC<SeverityBadgeProps> = ({ severity, classNam
   );
 };
 
+

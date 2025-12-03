@@ -18,6 +18,7 @@ import exportsRouter from './routes/exports.js';
 import reconciliationRouter from './routes/reconciliation.js';
 import auditRoute from './routes/audit.js';
 import osSummaryRoute from './routes/os-summary.js';
+import osSourcesRoute from './routes/os-sources.js';
 import { requestId } from './middleware/requestId.js';
 import { accessLog } from './middleware/accessLog.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -100,6 +101,7 @@ app.use(exportsRouter);
 app.use('/v1/accounting/reconciliation', reconciliationRouter);
 app.use(auditRoute);
 app.use(osSummaryRoute);
+app.use(osSourcesRoute);
 
 // 표준 에러 핸들러 (라우트 뒤에)
 app.use(errorHandler);

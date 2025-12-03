@@ -83,3 +83,4 @@ if (!allValid) {
 console.log('✅ 모든 타입 파일이 유효합니다.');
 process.exit(0);
 
+

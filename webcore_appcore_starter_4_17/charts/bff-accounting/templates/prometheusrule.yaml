@@ -24,5 +24,14 @@ spec:
             severity: warning
           annotations:
             summary: "BFF p95 latency > {{ .Values.alerts.highLatencyP95 }}s"
+    - name: external-sync
+      rules:
+        - alert: ExternalSyncStale
+          expr: (time() - external_sync_last_ts) > 300
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "External ledger sync stale (tenant={{ $labels.tenant }}, source={{ $labels.source }})"
 {{- end }}
 

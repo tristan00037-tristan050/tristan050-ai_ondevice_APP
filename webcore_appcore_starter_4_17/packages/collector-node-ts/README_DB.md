@@ -195,3 +195,4 @@ EXPLAIN ANALYZE SELECT * FROM reports WHERE tenant_id = 'default';
 - `src/db/schema.sql` - 데이터베이스 스키마
 - `src/db/client.ts` - 데이터베이스 클라이언트
 
+

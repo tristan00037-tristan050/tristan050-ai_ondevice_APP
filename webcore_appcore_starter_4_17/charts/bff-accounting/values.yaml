@@ -52,3 +52,15 @@ cleanup:
   schedule: "0 3 * * *"
   retentionDays: 30
 
+adapters:
+  bankSbx:
+    enabled: true
+    base: "https://sandbox.example-bank.com"
+    tokenSecretName: "bank-sbx-secret"   # K8s Secret에 token 저장(key: TOKEN)
+
+cronJobs:
+  syncExternal:
+    enabled: true
+    schedule: "*/5 * * * *"   # 5분마다
+    sinceDays: 7
+

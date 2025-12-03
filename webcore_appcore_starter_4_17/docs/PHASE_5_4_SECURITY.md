@@ -314,3 +314,4 @@ export async function saveAuditLogToDB(log: AuditLog): Promise<void> {
 **날짜**: 2025-01-XX
 **상태**: ✅ 기본 보안 강화 완료
 
+

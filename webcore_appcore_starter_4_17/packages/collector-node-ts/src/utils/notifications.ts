@@ -229,3 +229,29 @@ export async function notifyRateLimitExceeded(
   });
 }
 
+/**
+ * 회계 Block 스파이크 알림
+ * 서버사이드 dedup 키: tenant + accounting_block_spike + window
+ */
+export async function notifyAccountingBlockSpike(
+  tenantId: string,
+  threshold: number,
+  currentRate: number,
+  window: string = '24h'
+): Promise<void> {
+  await sendNotification({
+    level: 'critical',
+    title: 'Accounting Block Spike Detected',
+    message: `Tenant ${tenantId} accounting block spike: ${currentRate} (threshold: ${threshold}) in ${window}`,
+    timestamp: Date.now(),
+    metadata: {
+      tenantId,
+      ruleId: 'accounting_block_spike',
+      threshold,
+      currentRate,
+      window,
+      dedupKey: `${tenantId}:accounting_block_spike:${window}`,
+    },
+  });
+}
+

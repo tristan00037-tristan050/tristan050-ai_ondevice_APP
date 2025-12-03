@@ -62,3 +62,4 @@ echo ""
 echo "📦 Available backups:"
 ls -lh "$BACKUP_DIR"/collector_*.sql.gz 2>/dev/null || echo "No backups found"
 
+

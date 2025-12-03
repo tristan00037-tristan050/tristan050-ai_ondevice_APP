@@ -37,3 +37,4 @@ EXPOSE 8080
 
 CMD ["node", "packages/bff-node-ts/dist/index.js"]
 
+

@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "strict": false,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "lib": ["ES2020", "DOM"],
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "noEmit": false
+  },
+  "include": ["src/security/**/*", "src/hud/**/*", "src/ui/**/*", "src/index.ts"],
+  "exclude": ["src/lib/**/*"]
+}
+

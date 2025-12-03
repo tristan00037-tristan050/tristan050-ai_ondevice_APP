@@ -155,3 +155,4 @@ export function setActiveReports(tenantId: string, count: number): void {
   metrics.set('collector_reports_active', count, { tenant: tenantId });
 }
 
+
