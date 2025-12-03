@@ -9,6 +9,9 @@ on:
 jobs:
   build-test-image:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     services:
       postgres:
         image: postgres:16
@@ -33,20 +36,18 @@ jobs:
           cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
 
       - name: Install dependencies
-        working-directory: webcore_appcore_starter_4_17
         run: npm ci
 
       - name: Build workspaces
-        working-directory: webcore_appcore_starter_4_17
         run: npm run build:packages
 
       - name: DB migrate
-        working-directory: webcore_appcore_starter_4_17
         env:
           DATABASE_URL: postgres://app:app@localhost:5432/app
         run: npm run db:migrate
 
       - name: Build Docker image
+        working-directory: .
         run: docker build -f Dockerfile.bff -t bff-accounting:release .
 
       - name: Run BFF container
@@ -66,7 +67,6 @@ jobs:
           curl -sf http://localhost:8081/health
 
       - name: E2E smoke against container
-        working-directory: webcore_appcore_starter_4_17
         env:
           BFF_URL: http://localhost:8081
           TENANT_ID: default
@@ -81,6 +81,9 @@ jobs:
   gate_mobile:
     name: Mobile Gate
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -89,10 +92,8 @@ jobs:
           cache: 'npm'
           cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       - name: Install dependencies
-        working-directory: webcore_appcore_starter_4_17
         run: npm ci
       - name: TypeScript check
-        working-directory: webcore_appcore_starter_4_17
         run: npm run -w @appcore/app-expo typecheck || echo "typecheck skipped"
       - run: echo "✅ mobile gate passed"
 
