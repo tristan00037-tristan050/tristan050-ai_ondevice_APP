@@ -16,12 +16,15 @@ import suggestRouter from './routes/suggest.js';
 import approvalsRouter from './routes/approvals.js';
 import exportsRouter from './routes/exports.js';
 import reconciliationRouter from './routes/reconciliation.js';
+import auditRoute from './routes/audit.js';
+import osSummaryRoute from './routes/os-summary.js';
 import { requestId } from './middleware/requestId.js';
 import { accessLog } from './middleware/accessLog.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { reqContext } from './middleware/context.js';
 import { securityHeaders, limitGeneral, limitApprovals, limitExports, limitRecon } from './middleware/security.js';
 import { observeRequest, metricsHandler } from './middleware/metrics.js';
+import { osPolicyBridge } from './middleware/osPolicyBridge.js';
 import { ping as pgPing } from '@appcore/data-pg';
 
 const app = express();
@@ -32,6 +35,7 @@ app.set('trust proxy', 1);
 
 // 공통 미들웨어
 app.use(requestId);
+app.use(osPolicyBridge()); // ★ OS 정책 헤더 브릿지
 app.use(accessLog);
 app.use(reqContext());
 app.use(securityHeaders);
@@ -94,6 +98,8 @@ app.use('/v1/accounting/postings', suggestRouter);
 app.use(approvalsRouter);
 app.use(exportsRouter);
 app.use('/v1/accounting/reconciliation', reconciliationRouter);
+app.use(auditRoute);
+app.use(osSummaryRoute);
 
 // 표준 에러 핸들러 (라우트 뒤에)
 app.use(errorHandler);

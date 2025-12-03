@@ -11,6 +11,14 @@ env:
   USE_PG: "1"
   EXPORT_SIGN_SECRET: ""
   DATABASE_URL: ""  # secretRef 로 주입
+  OS_POLICY_BRIDGE_ENFORCE: "true"
+  OS_ROLE_MAP_JSON: '{"viewer":"viewer","operator":"operator","auditor":"auditor","admin":"admin"}'
+
+osRoleMap:
+  viewer: viewer
+  operator: operator
+  auditor: auditor
+  admin: admin
 
 resources:
   requests: { cpu: "100m", memory: "256Mi" }
@@ -32,6 +40,9 @@ alerts:
   errorRateWindow: 5m
   highErrorRate: 0.05    # 5%
   highLatencyP95: 0.5    # 0.5s
+  slo:
+    latency_p95_ms: 300
+    error_rate_5xx: 0.5
 
 dashboard:
   enabled: false
