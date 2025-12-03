@@ -192,3 +192,95 @@ helm upgrade --install bff charts/bff-accounting \
 - `scripts/set_pilot_tenants.sh`: 파일럿 테넌트 설정 스크립트
 - `scripts/onboard_tenant.mjs`: 테넌트 온보딩 스크립트
 
+## 5. 파일럿 성공 / 실패 기준 (R7-H)
+
+### 5.1 정량 성공 기준
+
+R7-H 파일럿(2~4주) 종료 시, 아래 모든 조건을 만족하면 "성공"으로 간주합니다.
+
+- **정확도**
+  - Top-1 정확도(실데이터 기준): **≥ 90%**
+  - Top-5 정확도: **≥ 98%**
+
+- **Manual Review 비율**
+  - 전체 처리 요청 중 Manual Review로 전환된 비율: **≤ 25%**
+
+- **장애 / 품질**
+  - P0 (데이터 손실, 중복 분개, 보안 사고): **0건**
+  - P1 (Export 연속 실패, Recon 세션 누락 등 핵심 기능 장애):
+    - 24시간 이내 복구, 파일럿 기간 동안 **1건 이내**
+  - SLO 위반(가용성 99.9%, p95 ≤ 300ms, 5xx < 0.5%) 상태가 **1일 이상 지속되면 실패 후보**
+
+### 5.2 파일럿 종료 후 판정 플로우
+
+- ✅ **성공**
+  - 위 정량 기준을 모두 충족
+  - → R8 설계 확정 및 v1 확장(리스크 엔진, 멀티테넌트 온보딩) 준비
+
+- 🟡 **조건부 보류**
+  - Top-1 정확도 85~90% 구간, Manual Review 비율 25~35% 등
+  - → 규칙/매핑/골든셋 보강 후 R7-H 2차 파일럿 여부 결정
+
+- ❌ **실패**
+  - P0 발생, 또는 정확도/Manual Review 지표가 기준에서 크게 벗어남
+  - → RCA(원인 분석) 및 설계 재검토 후 재파일럿 계획 수립
+
+## 6. 파일럿 테넌트 Allowlist 운영 절차
+
+### 6.1 개념
+
+- `OS_TENANT_ALLOWLIST_JSON` 은 **파일럿에서 회계 모듈을 사용할 수 있는 테넌트 목록**입니다.
+- 값에 따른 의미:
+  - `'[]'` : **모든 테넌트 허용 (파일럿 기간에는 사용 금지)**
+  - `'["default","pilot-a"]'` : `default`, `pilot-a` 만 허용
+
+### 6.2 변경 절차 (운영)
+
+1. **allowlist 수정 (스크립트 사용 권장)**
+
+   ```bash
+   ./scripts/set_pilot_tenants.sh default pilot-a
+
+   # 예: default + pilot-a + pilot-b
+   ./scripts/set_pilot_tenants.sh default pilot-a pilot-b
+   ```
+
+2. **Helm 배포(운영 환경)**
+
+   ```bash
+   helm upgrade --install bff charts/bff-accounting \
+     --set env.OS_TENANT_ALLOWLIST_JSON='["default","pilot-a"]' \
+     --namespace accounting \
+     --wait --timeout 5m
+   ```
+
+3. **게이팅 검증**
+
+   ```bash
+   ./scripts/verify_pilot_gating.sh https://<bff-domain>
+
+   # 기대 결과:
+   # - default, pilot-a  → 200 OK (또는 역할에 따른 403)
+   # - pilot-b 등       → 403, error_code=TENANT_NOT_ENABLED
+   ```
+
+## 7. 외부 Adapter 파일럿 SLO (R7-H 기준)
+
+파일럿 기간 동안 외부 은행/PG/ERP 동기화에 대해 아래 SLO를 적용합니다.
+
+### 7.1 동기화 지연
+
+```
+time() - external_sync_last_ts_seconds ≤ 300초(5분)
+```
+
+### 7.2 알람 지속 시간
+
+`ExternalSyncStale` 알람이 10분 이상 지속되면 P1 이슈로 분류
+
+### 7.3 오류율
+
+외부 소스별 오류율 (에러 건수 / 전체 호출 수) ≤ 5%
+
+초과 시, 원인 분석 및 재시도/백오프 전략을 재검토합니다.
+

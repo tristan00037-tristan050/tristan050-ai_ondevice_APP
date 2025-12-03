@@ -169,6 +169,17 @@ kubectl logs -n accounting deployment/bff-accounting | grep TENANT_NOT_ENABLED
 curl http://<bff-url>/metrics | grep http_requests_total
 ```
 
+### 5. 외부 Adapter 동기화 상태 체크
+
+- [ ] `external_sync_last_ts_seconds` 지표 확인  
+      → 각 소스별 마지막 동기화 시간 지연이 **5분 이내인지** 확인
+
+- [ ] `external_sync_errors_total` 지표 확인  
+      → 최근 1일 기준 오류율이 **5% 이하인지** 확인
+
+- [ ] `ExternalSyncStale` 알람 여부 확인  
+      → 알람 발생 시, **10분 이내 해소**되지 않으면 P1 이슈로 분류
+
 ## 롤백 절차
 
 문제 발생 시 이전 버전으로 롤백:

@@ -177,3 +177,52 @@ node scripts/measure_accuracy.js \
 - `contracts/tenant_template.default.json`: 테넌트 온보딩 템플릿
 - `packages/service-core-accounting/src/riskScoreEngine.ts`: 리스크 엔진 인터페이스
 
+## 3. R8-S1 RiskScoreEngine v1 스코프 (초안)
+
+### 3.1 목적
+
+- 범용 리스크 모델이 아닌, **"고액 거래 리스크 필터"**에 한정된 v1 엔진을 먼저 도입합니다.
+- 고액 거래에 대해서만 보다 보수적인 승인/검토 플로우를 적용합니다.
+
+### 3.2 동작
+
+- 테넌트 설정에 따른 임계값(threshold) 이상인 거래에만 동작합니다.
+  - 예) `amount >= 1,000,000` (테넌트별 설정값 사용)
+
+- 리스크 엔진은 다음 정보를 반환합니다.
+  - `score` (0.0 ~ 1.0)
+  - `level` (`LOW` / `MEDIUM` / `HIGH`)
+  - `reason` (예: `"HIGH_VALUE_TRANSACTION"`)
+
+### 3.3 사용처
+
+- Suggest / Approvals 플로우에서:
+  - `level = HIGH` 인 경우:
+    - 자동 승인 방지
+    - Manual Review 큐로 강제 라우팅
+    - Audit 이벤트에 `risk_score`, `risk_level`, `risk_reason` 기록
+
+### 3.4 데이터 소스
+
+- R7-H 파일럿 기간 동안의:
+  - 고액 거래 + Manual Review 케이스
+  - 규칙 위반/오류 패턴
+
+을 기반으로 룰/threshold를 튜닝합니다.
+
+## 4. 멀티테넌트 온보딩 템플릿 커스터마이징 가이드
+
+`contracts/tenant_template.default.json` 기준으로, 다음 필드들은 고객사마다 반드시 검토/수정해야 합니다.
+
+| 필드명                               | 설명                             | MUST_CUSTOMIZE |
+|--------------------------------------|----------------------------------|----------------|
+| `accounts[].code`                    | 계정 코드 매핑                   | YES            |
+| `accounts[].description`             | 계정 설명 (고객사 용어)         | YES            |
+| `categories[]`                       | 비용/수익 카테고리 구성         | YES            |
+| `policies.manual_review_threshold`   | 수동 검토 기준 금액             | RECOMMENDED    |
+| `policies.export_retention_days`     | Export 보존 기간                 | 기본값 사용 가능 |
+| `locale`                             | 로케일 (예: `ko-KR`)            | YES            |
+| `currency`                           | 기본 통화 (예: `KRW`)           | YES            |
+
+- `MUST_CUSTOMIZE = YES` 인 항목은 온보딩 시 반드시 고객사별로 협의 후 설정해야 합니다.
+

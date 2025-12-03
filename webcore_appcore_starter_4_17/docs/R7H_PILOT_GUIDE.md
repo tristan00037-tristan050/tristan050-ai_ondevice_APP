@@ -207,6 +207,35 @@ sum(rate(http_requests_total{job="bff-accounting"}[10m]))
 - 실패 케이스 자동 링크
 - 감사 이벤트 subject_id 포함
 
+## 8. 파일럿 이슈 / 피드백 수집 가이드
+
+파일럿 기간 동안의 모든 이슈/개선 제안은 Slack 채널 또는 이슈 트래커에 아래 템플릿으로 등록합니다.
+
+```text
+[분류]    RULE | UX | ADAPTER | BUG
+[시나리오] HUD | Backoffice | OS Dashboard 중 어느 화면/흐름인지
+[케이스 ID] audit_id / export_job_id / recon_session_id / request_id 등
+[설명]    기대했던 동작 vs 실제 동작
+[심각도]  P0 (서비스 중단) / P1 (핵심 기능 영향) / P2 (경미/개선 제안)
+```
+
+**예시:**
+
+```text
+[분류]    RULE
+[시나리오] HUD > Suggest
+[케이스 ID] audit_id=12345
+[설명]    해외 결제 수수료인데 일반 비용 계정으로 추천됨
+[심각도]  P1
+```
+
+R8 설계 시,
+- RULE/ADAPTER 이슈 → 규칙/리스크/어댑터 고도화
+- UX 이슈 → HUD/Backoffice 개선
+- BUG → 안정화/결함 수정
+
+의 우선순위를 잡는 기준으로 사용합니다.
+
 ## 8. 수용 기준 (AC)
 
 - 파일럿 테넌트 일일 사용(HUD/Backoffice/OS 카드)
