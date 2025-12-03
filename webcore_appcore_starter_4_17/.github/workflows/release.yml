@@ -29,10 +29,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create package-lock.json symlink
+      - name: Copy package-lock.json to root
         run: |
           if [ ! -f package-lock.json ] && [ -f webcore_appcore_starter_4_17/package-lock.json ]; then
-            ln -s webcore_appcore_starter_4_17/package-lock.json package-lock.json
+            cp webcore_appcore_starter_4_17/package-lock.json package-lock.json
           fi
 
       - uses: actions/setup-node@v4
