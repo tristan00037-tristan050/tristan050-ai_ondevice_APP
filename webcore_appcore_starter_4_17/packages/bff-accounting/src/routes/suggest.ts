@@ -21,7 +21,7 @@ const ROOT_DIR = path.join(__dirname, '../../../../..');
 const ajv = new (Ajv as any)({
   allErrors: true,
   verbose: true,
-  strict: true,
+  strict: false,  // strict 모드 비활성화 (anyOf 내 required 필드 문제 해결)
   validateFormats: true,
   removeAdditional: false,
 });
