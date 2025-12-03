@@ -261,6 +261,24 @@ jobs:
       - name: Stop BFF server
         run: pkill -f "bff-accounting" || true
 
+  no-artifacts-committed:
+    name: Ensure no deps/build artifacts in git
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure no deps/build artifacts in git
+        run: |
+          if git ls-files | grep -E '(^|/)(node_modules|dist)(/|$)'; then
+            echo "❌ Found tracked node_modules/dist files"
+            echo "Files:"
+            git ls-files | grep -E '(^|/)(node_modules|dist)(/|$)'
+            exit 1
+          else
+            echo "✅ No build artifacts or dependencies tracked in git"
+          fi
+
   e2e-bff-accounting:
     name: BFF Accounting E2E Smoke
     runs-on: ubuntu-latest
@@ -333,6 +351,24 @@ jobs:
       - name: Stop BFF server
         run: pkill -f "bff-accounting" || true
 
+  no-artifacts-committed:
+    name: Ensure no deps/build artifacts in git
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure no deps/build artifacts in git
+        run: |
+          if git ls-files | grep -E '(^|/)(node_modules|dist)(/|$)'; then
+            echo "❌ Found tracked node_modules/dist files"
+            echo "Files:"
+            git ls-files | grep -E '(^|/)(node_modules|dist)(/|$)'
+            exit 1
+          else
+            echo "✅ No build artifacts or dependencies tracked in git"
+          fi
+
   persistence-e2e:
     name: Persistence E2E (PostgreSQL)
     needs: [e2e-bff-accounting]
@@ -389,4 +425,22 @@ jobs:
       
       - name: Stop BFF server
         run: pkill -f "bff-accounting" || true
+
+  no-artifacts-committed:
+    name: Ensure no deps/build artifacts in git
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure no deps/build artifacts in git
+        run: |
+          if git ls-files | grep -E '(^|/)(node_modules|dist)(/|$)'; then
+            echo "❌ Found tracked node_modules/dist files"
+            echo "Files:"
+            git ls-files | grep -E '(^|/)(node_modules|dist)(/|$)'
+            exit 1
+          else
+            echo "✅ No build artifacts or dependencies tracked in git"
+          fi
 
