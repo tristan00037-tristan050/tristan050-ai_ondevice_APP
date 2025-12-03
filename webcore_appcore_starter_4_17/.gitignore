@@ -6,3 +6,4 @@ ode_modules/
 .turbo/
 coverage/
 .DS_Store
+node_modules/
