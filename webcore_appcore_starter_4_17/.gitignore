@@ -7,3 +7,16 @@ ode_modules/
 coverage/
 .DS_Store
 node_modules/
+
+# build & deps
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+**/*.tsbuildinfo
+
+# caches & tmp
+.tmp/
+.turbo/
+coverage/
+.DS_Store

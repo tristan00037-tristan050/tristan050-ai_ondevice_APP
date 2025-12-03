@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 금지: node_modules/dist 커밋
+if git diff --cached --name-only | grep -E '(^|/)(node_modules|dist)(/|$)'; then
+  echo "✖ Do not commit node_modules/ or dist/"
+  exit 1
+fi

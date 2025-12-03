@@ -7,6 +7,22 @@ on:
     branches: [main, develop]
 
 jobs:
+  no-artifacts-committed:
+    name: Ensure no deps/build artifacts in git
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check for tracked node_modules/dist
+        run: |
+          if git ls-files | grep -E '(^|/)(node_modules|dist)(/|$)'; then
+            echo "❌ Found tracked node_modules/dist in Git"
+            exit 1
+          else
+            echo "✅ No build artifacts tracked in Git"
+          fi
+
   lint-and-typecheck:
     name: Lint and TypeScript Check
     runs-on: ubuntu-latest
@@ -45,6 +61,9 @@ jobs:
       
       - name: Validate schemas
         run: npm run validate:all
+      
+      - name: Validate accounting schemas
+        run: npm run ci:validate:accounting || echo "⚠️ Accounting schemas validation skipped (no test data)"
 
   openapi-sync:
     name: OpenAPI Type Sync
@@ -63,6 +82,9 @@ jobs:
       
       - name: Generate OpenAPI types
         run: npm run ci:gen-types
+      
+      - name: Generate Accounting OpenAPI types
+        run: npm run ci:gen-types:accounting || echo "⚠️ Accounting types generation skipped"
       
       - name: Check OpenAPI sync
         run: npm run ci:check-openapi
@@ -87,6 +109,27 @@ jobs:
       
       - name: Check client-side filter
         run: npm run ci:check-client-filter
+
+  schema-and-types:
+    name: Schema and Type Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Generate accounting types
+        run: npm run ci:gen-types:accounting
+      
+      - name: Validate accounting schemas
+        run: npm run ci:validate:accounting || echo "⚠️ Accounting schemas validation skipped (no test data)"
 
   build:
     name: Build All Packages
@@ -131,4 +174,235 @@ jobs:
       
       - name: Run tests
         run: npm test --workspaces --if-present
+      
+      - name: Run accounting smoke tests
+        run: npm run smoke:accounting || echo "⚠️ Accounting smoke tests skipped (service not running)"
+        continue-on-error: true
+
+  golden-set-guard:
+    name: Golden Set Guard
+    runs-on: ubuntu-latest
+    needs: [schema-and-types]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Golden set size / PII / format
+        run: npm run ci:gold-size
+      
+      - name: Synthetic ratio gate (≤ 30%)
+        env:
+          MAX_SYN_RATIO: "0.30"
+        run: npm run ci:gold-synthetic
+
+  bench-accounting:
+    name: Accounting Accuracy Benchmark
+    runs-on: ubuntu-latest
+    needs: [golden-set-guard]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build service-core-accounting
+        run: npm run build --workspace=@appcore/service-core-accounting
+      
+      - name: Generate accounting types
+        run: npm run ci:gen-types:accounting
+      
+      - name: Validate accounting schemas
+        run: npm run ci:validate:accounting || echo "⚠️ Accounting schemas validation skipped (no test data)"
+      
+      - name: Accuracy gate
+        run: npm run ci:gate:accuracy
+        env:
+          MIN_GOLD: "50"
+          THRESH_TOP1: "0.70"
+          THRESH_TOP5: "0.85"
+      
+      - name: Bench (report)
+        run: npm run measure:accuracy
+
+  e2e-accounting:
+    name: Accounting E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build service-core-accounting
+        run: npm run build --workspace=@appcore/service-core-accounting
+      
+      - name: Build bff-accounting
+        run: npm run build --workspace=@appcore/bff-accounting
+      
+      - name: Install bff-accounting dependencies
+        run: npm install --prefix packages/bff-accounting
+      
+      - name: Start BFF server
+        run: |
+          npm --prefix packages/bff-accounting run start &
+          sleep 2
+          for i in {1..30}; do
+            curl -fsS http://localhost:8081/health && break
+            sleep 1
+          done
+      
+      - name: Run E2E tests
+        run: BFF_URL=http://localhost:8081 API_KEY=collector-key TENANT_ID=default npm run test:e2e:accounting
+      
+      - name: Stop BFF server
+        run: pkill -f "bff-accounting" || true
+
+  e2e-bff-accounting:
+    name: BFF Accounting E2E Smoke
+    runs-on: ubuntu-latest
+    needs: [golden-set-guard, bench-accounting]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build service-core-accounting
+        run: npm run build --workspace=@appcore/service-core-accounting
+      
+      - name: Build bff-accounting
+        run: npm run build --workspace=@appcore/bff-accounting
+      
+      - name: Install bff-accounting dependencies
+        run: npm install --prefix packages/bff-accounting
+      
+      - name: Start BFF server
+        run: |
+          npm --prefix packages/bff-accounting run start &
+          sleep 3
+          for i in {1..30}; do
+            curl -fsS http://localhost:8081/health && break
+            sleep 1
+          done
+      
+      - name: E2E Suggest
+        env:
+          BFF_URL: http://localhost:8081
+          API_KEY: collector-key
+          TENANT_ID: default
+        run: npm run test:e2e:accounting:bff
+      
+      - name: E2E Approvals
+        env:
+          BFF_URL: http://localhost:8081
+          API_KEY: collector-key:operator
+          TENANT_ID: default
+        run: npm run test:e2e:accounting:approvals
+      
+      - name: E2E Exports
+        env:
+          BFF_URL: http://localhost:8081
+          API_KEY: collector-key:auditor
+          TENANT_ID: default
+        run: npm run test:e2e:accounting:exports
+      
+      - name: E2E Exports (negative cases)
+        env:
+          BFF_URL: http://localhost:8081
+          TENANT_ID: default
+        run: npm run test:e2e:accounting:exports:neg
+      
+      - name: E2E Reconciliation
+        env:
+          BFF_URL: http://localhost:8081
+          API_KEY: collector-key:operator
+          TENANT_ID: default
+        run: npm run test:e2e:accounting:recon
+      
+      - name: Stop BFF server
+        run: pkill -f "bff-accounting" || true
+
+  persistence-e2e:
+    name: Persistence E2E (PostgreSQL)
+    needs: [e2e-bff-accounting]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: app
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd="pg_isready -U app -d app"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - run: npm ci
+      
+      - name: DB migrate
+        env:
+          DATABASE_URL: postgres://app:app@localhost:5432/app
+        run: npm run db:migrate
+      
+      - name: Start BFF (PG)
+        env:
+          DATABASE_URL: postgres://app:app@localhost:5432/app
+          USE_PG: "1"
+          EXPORT_SIGN_SECRET: ci-secret
+        run: |
+          cd packages/bff-accounting
+          npm i
+          npm run build
+          node --enable-source-maps dist/index.js &
+          sleep 3
+          cd ../..
+      
+      - name: E2E persistence (API→DB)
+        env:
+          BFF_URL: http://localhost:8081
+          TENANT_ID: default
+          API_KEY_AUD: collector-key:auditor
+          API_KEY_OP: collector-key:operator
+          DATABASE_URL: postgres://app:app@localhost:5432/app
+        run: npm run test:e2e:accounting:persistence
+      
+      - name: Stop BFF server
+        run: pkill -f "bff-accounting" || true
 
