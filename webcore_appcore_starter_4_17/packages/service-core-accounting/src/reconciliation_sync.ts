@@ -6,44 +6,64 @@ import {
 } from '@appcore/data-pg/repos/externalLedgerRepo.js';
 
 // prom-client는 선택적 의존성 (메트릭이 활성화된 경우만 사용)
-let Counter: any, Gauge: any;
+// 더미 메트릭 클래스
+class DummyCounter {
+  constructor() {}
+  labels() {
+    return { inc: () => {} };
+  }
+}
+
+class DummyGauge {
+  constructor() {}
+  labels() {
+    return { set: () => {} };
+  }
+}
+
+let Counter: any = DummyCounter;
+let Gauge: any = DummyGauge;
+let metricsInitialized = false;
 
 async function initMetrics() {
+  if (metricsInitialized) return;
   try {
     const prom = await import('prom-client');
     Counter = prom.Counter;
     Gauge = prom.Gauge;
   } catch {
-    // prom-client가 없으면 더미 메트릭
-    Counter = class {
-      constructor() {}
-      labels() {
-        return { inc: () => {} };
-      }
-    };
-    Gauge = class {
-      constructor() {}
-      labels() {
-        return { set: () => {} };
-      }
-    };
+    // prom-client가 없으면 더미 메트릭 유지
+    Counter = DummyCounter;
+    Gauge = DummyGauge;
   }
+  metricsInitialized = true;
 }
 
-// 초기화 (최초 호출 시)
-let metricsInitialized = false;
+// 메트릭 인스턴스는 lazy initialization
+let syncErrors: any = null;
+let syncLastTs: any = null;
 
-const syncErrors = new Counter({
-  name: 'external_sync_errors_total',
-  help: 'errors',
-  labelNames: ['tenant', 'source'],
-});
+function getSyncErrors() {
+  if (!syncErrors) {
+    syncErrors = new Counter({
+      name: 'external_sync_errors_total',
+      help: 'errors',
+      labelNames: ['tenant', 'source'],
+    });
+  }
+  return syncErrors;
+}
 
-const syncLastTs = new Gauge({
-  name: 'external_sync_last_ts',
-  help: 'last ts',
-  labelNames: ['tenant', 'source'],
-});
+function getSyncLastTs() {
+  if (!syncLastTs) {
+    syncLastTs = new Gauge({
+      name: 'external_sync_last_ts',
+      help: 'last ts',
+      labelNames: ['tenant', 'source'],
+    });
+  }
+  return syncLastTs;
+}
 
 export async function syncExternalLedger(
   tenant: string,
@@ -52,7 +72,6 @@ export async function syncExternalLedger(
 ) {
   if (!metricsInitialized) {
     await initMetrics();
-    metricsInitialized = true;
   }
 
   let cursor = (await getOffset(tenant, adapter.source))?.last_cursor ?? undefined;
@@ -79,7 +98,7 @@ export async function syncExternalLedger(
       }));
       await upsertTransactions(tenant, adapter.source, rows);
       lastTs = items[items.length - 1].ts;
-      syncLastTs.labels(tenant, adapter.source).set(Date.parse(lastTs) / 1000);
+      getSyncLastTs().labels(tenant, adapter.source).set(Date.parse(lastTs) / 1000);
     }
     pages++;
     cursor = nextCursor;
@@ -96,7 +115,7 @@ export async function safeSync(
   try {
     await syncExternalLedger(tenant, adapter, sinceISO);
   } catch (e: any) {
-    syncErrors.labels(tenant, adapter.source).inc();
+    getSyncErrors().labels(tenant, adapter.source).inc();
     throw e;
   }
 }
