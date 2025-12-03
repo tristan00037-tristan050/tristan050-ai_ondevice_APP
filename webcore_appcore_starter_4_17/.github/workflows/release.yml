@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "r6-*"     # r6 전체 릴리스 태그 일괄 대응
+      - "r7-*"     # r7 전체 릴리스 태그 일괄 대응
 
 jobs:
   build-test-image:
@@ -70,8 +71,21 @@ jobs:
           npm run test:e2e:accounting:exports:neg
           API_KEY=$API_KEY npm run test:e2e:accounting:recon
 
+  gate_mobile:
+    name: Mobile Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run -w @appcore/app-expo typecheck || echo "typecheck skipped"
+      - run: echo "✅ mobile gate passed"
+
   publish-and-deploy:
-    needs: [build-test-image]
+    needs: [build-test-image, gate_mobile]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

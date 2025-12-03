@@ -14,6 +14,19 @@ function requireAuditRole(req: any, res: any, next: any) {
   next();
 }
 
+function requireRole(...roles: string[]) {
+  return (req: any, res: any, next: any) => {
+    if (!roles.includes(req?.ctx?.role)) {
+      return res.status(403).json({
+        error_code: 'FORBIDDEN',
+        request_id: req.ctx?.request_id || req.id,
+        message: `${roles.join('/')} only`,
+      });
+    }
+    next();
+  };
+}
+
 router.get('/v1/accounting/audit', requireAuditRole, async (req: any, res: any, next: any) => {
   try {
     const { tenant } = req.ctx;
@@ -65,6 +78,30 @@ router.get('/v1/accounting/audit', requireAuditRole, async (req: any, res: any, 
     next(e);
   }
 });
+
+// POST /v1/accounting/audit/manual-review
+router.post(
+  '/v1/accounting/audit/manual-review',
+  requireRole('operator', 'auditor', 'admin'),
+  async (req: any, res: any, next: any) => {
+    try {
+      const { subject_type, subject_id, reason } = req.body || {};
+      const { auditLog } = await import('@appcore/service-core-accounting');
+      await auditLog({
+        tenant: req.ctx?.tenant || 'default',
+        request_id: req.ctx?.request_id || req.id,
+        actor: req.ctx?.actor || '',
+        action: 'manual_review_request',
+        subject_type,
+        subject_id,
+        payload: { reason, client_request_id: req.header('Idempotency-Key') || undefined },
+      });
+      res.status(201).json({ ok: true });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
 
 export default router;
 

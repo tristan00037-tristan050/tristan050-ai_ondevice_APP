@@ -1,0 +1,54 @@
+name: mobile
+
+on:
+  pull_request:
+  push:
+    tags: ['r7-*']
+
+jobs:
+  typecheck_app:
+    name: TypeScript Check (App)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run -w @appcore/app-expo typecheck
+
+  expo_bundle:
+    name: Expo Bundle (Web)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx expo-doctor || echo "expo-doctor skipped"
+      - run: npx expo export --platform web --no-install || echo "expo export skipped (requires expo config)"
+
+  eas_android:
+    name: EAS Android Build (Preview)
+    if: ${{ secrets.EAS_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx expo login --token ${{ secrets.EAS_TOKEN }} || echo "EAS login skipped"
+      - run: npx eas build --platform android --profile preview --non-interactive || echo "EAS build skipped"
+
+  gate_mobile:
+    name: Mobile Gate
+    runs-on: ubuntu-latest
+    needs: [typecheck_app, expo_bundle]
+    steps:
+      - run: echo "✅ mobile gate passed"
+

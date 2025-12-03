@@ -9,7 +9,10 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Button, TextInput, ScrollView } from 'react-native';
 import { ScreenPrivacyGate, useScreenPrivacy } from './hooks/useScreenPrivacy.js';
 import { useOnline } from './hooks/useOnline.js';
+import { useOfflineQueue } from './hooks/useOfflineQueue.js';
 import { enqueue, flushQueue, startQueueAutoFlush } from './offline/offline-queue.js';
+import QueueBadge from './components/QueueBadge.js';
+import ManualReviewButton from './components/ManualReviewButton.js';
 import {
   postSuggest,
   postApproval,
@@ -25,6 +28,7 @@ type Props = { cfg: ClientCfg };
 export default function AccountingHUD({ cfg }: Props) {
   useScreenPrivacy();
   const online = useOnline();
+  const { count, lastSyncTs } = useOfflineQueue();
   const [reportId, setReportId] = useState('demo-report-1');
   const [desc, setDesc] = useState('커피 영수증 4500원');
   const [suggestOut, setSuggestOut] = useState<any>(null);
@@ -111,6 +115,8 @@ export default function AccountingHUD({ cfg }: Props) {
       {/* @ts-ignore - React Native JSX */}
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         {/* @ts-ignore - React Native JSX */}
+        <QueueBadge count={count} lastSyncTs={lastSyncTs} />
+        {/* @ts-ignore - React Native JSX */}
         <Text>네트워크: {online === null ? '...' : online ? '온라인' : '오프라인'}</Text>
 
         {/* @ts-ignore - React Native JSX */}
@@ -141,6 +147,21 @@ export default function AccountingHUD({ cfg }: Props) {
         <Text selectable style={{ marginTop: 8 }}>
           결과 미리보기: {suggestOut ? JSON.stringify(suggestOut).slice(0, 400) : '-'}
         </Text>
+        {/* @ts-ignore - React Native JSX */}
+        {suggestOut?.postings?.[0] && (
+          <ManualReviewButton
+            cfg={cfg}
+            subjectType="posting"
+            subjectId={suggestOut.postings[0].id || 'unknown'}
+            reason="수동 검토 필요"
+          />
+        )}
+        {/* @ts-ignore - React Native JSX */}
+        {suggestOut?.rationale && (
+          <Text style={{ marginTop: 8, fontSize: 12 }}>
+            매칭 근거: {typeof suggestOut.rationale === 'string' ? suggestOut.rationale : JSON.stringify(suggestOut.rationale)}
+          </Text>
+        )}
       </ScrollView>
     </ScreenPrivacyGate>
   );
