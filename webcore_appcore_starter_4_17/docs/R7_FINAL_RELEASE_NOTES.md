@@ -46,8 +46,15 @@ R7 릴리스는 OS 통합, 외부 어댑터 실연동, 제품화(Backoffice/HUD 
 
 ### 롤백
 ```bash
+# 이전 태그로 롤백 (예: r6-s4-20241201)
 helm upgrade --install bff charts/bff-accounting \
-  --set image.tag=<previous-tag> \
+  --set image.tag=r6-s4-20241201 \
+  --namespace accounting
+
+# 또는 최신 태그 확인 후 롤백
+git tag | grep -E "r[67]-" | sort -V | tail -5
+helm upgrade --install bff charts/bff-accounting \
+  --set image.tag=<실제-태그-이름> \
   --namespace accounting
 ```
 
