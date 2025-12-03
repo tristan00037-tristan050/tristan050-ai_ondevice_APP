@@ -9,6 +9,9 @@ jobs:
   typecheck_app:
     name: TypeScript Check (App)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,14 +19,17 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
-      - working-directory: webcore_appcore_starter_4_17
+      - name: Install dependencies
         run: npm ci
-      - working-directory: webcore_appcore_starter_4_17
+      - name: Typecheck app
         run: npm run -w @appcore/app-expo typecheck
 
   expo_bundle:
     name: Expo Bundle (Web)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -31,15 +37,20 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
-      - working-directory: webcore_appcore_starter_4_17
+      - name: Install dependencies
         run: npm ci
-      - run: npx expo-doctor || echo "expo-doctor skipped"
-      - run: npx expo export --platform web --no-install || echo "expo export skipped (requires expo config)"
+      - name: Expo doctor
+        run: npx expo-doctor || echo "expo-doctor skipped"
+      - name: Expo export (web)
+        run: npx expo export --platform web --no-install || echo "expo export skipped (requires expo config)"
 
   eas_android:
     name: EAS Android Build (Preview)
     if: ${{ secrets.EAS_TOKEN != '' }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,10 +58,12 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
-      - working-directory: webcore_appcore_starter_4_17
+      - name: Install dependencies
         run: npm ci
-      - run: npx expo login --token ${{ secrets.EAS_TOKEN }} || echo "EAS login skipped"
-      - run: npx eas build --platform android --profile preview --non-interactive || echo "EAS build skipped"
+      - name: EAS login
+        run: npx expo login --token ${{ secrets.EAS_TOKEN }} || echo "EAS login skipped"
+      - name: EAS build (Android)
+        run: npx eas build --platform android --profile preview --non-interactive || echo "EAS build skipped"
 
   gate_mobile:
     name: Mobile Gate
