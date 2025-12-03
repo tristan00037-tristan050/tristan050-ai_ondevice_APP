@@ -34,14 +34,13 @@ router.get('/v1/accounting/os/summary', requireOps, async (req: any, res: any, n
            COUNT(*) AS total,
            SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed,
            SUM(CASE WHEN status='expired' THEN 1 ELSE 0 END) AS expired
-         FROM export_jobs WHERE tenant=$1 AND updated_at >= NOW() - INTERVAL '1 hour'`,
+         FROM export_jobs WHERE tenant=$1 AND created_at >= NOW() - INTERVAL '1 hour'`,
         [tenant]
       ),
       q(
         `SELECT
-           SUM(CASE WHEN status='open' THEN 1 ELSE 0 END) AS open,
-           AVG(match_rate) AS avg_match_rate
-         FROM recon_sessions WHERE tenant=$1 AND updated_at >= NOW() - INTERVAL '1 hour'`,
+           COUNT(*) AS open
+         FROM recon_sessions WHERE tenant=$1 AND created_at >= NOW() - INTERVAL '1 hour'`,
         [tenant]
       ),
       q(
@@ -55,7 +54,7 @@ router.get('/v1/accounting/os/summary', requireOps, async (req: any, res: any, n
     res.json({
       approvals: approvals.rows[0] || { approved: 0, rejected: 0 },
       exports: exportsSum.rows[0] || { total: 0, failed: 0, expired: 0 },
-      recon: recon.rows[0] || { open: 0, avg_match_rate: null },
+      recon: recon.rows[0] || { open: 0 },
       errors: errors.rows[0] || { err5xx: 0 },
       // 레이턴시/레이트리밋 등은 Prometheus 기반 위젯으로 병행 표출
     });

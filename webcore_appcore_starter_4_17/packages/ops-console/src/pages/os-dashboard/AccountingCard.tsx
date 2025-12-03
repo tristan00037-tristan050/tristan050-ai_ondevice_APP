@@ -27,10 +27,7 @@ export default function AccountingCard() {
         Exports total {data.exports.total}, failed {data.exports.failed}, expired{' '}
         {data.exports.expired}
       </div>
-      <div>
-        Recon open {data.recon.open}, avg match{' '}
-        {Math.round((data.recon.avg_match_rate || 0) * 100)}%
-      </div>
+      <div>Recon open {data.recon.open}</div>
       <div>Errors(5xx) last hour {data.errors.err5xx}</div>
     </div>
   );
