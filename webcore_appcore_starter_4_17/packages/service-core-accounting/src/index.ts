@@ -11,3 +11,4 @@ export * from './reconciliation.js';
 export * from './suggest.js';
 export * from './topn.js';
 export * from './audit.js';
+export * from './riskScoreEngine.js';
