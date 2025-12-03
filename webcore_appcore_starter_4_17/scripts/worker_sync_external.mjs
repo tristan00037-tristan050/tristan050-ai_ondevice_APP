@@ -24,7 +24,13 @@ for (const tenant of TENANTS) {
         await safeSync(tenant, ad, sinceISO);
         console.log(`✅ Synced ${src} for tenant ${tenant}`);
       } catch (e) {
-        console.error(`❌ Sync failed for ${src} tenant ${tenant}:`, e.message);
+        const errMsg = e.message || String(e);
+        if (errMsg.includes('fetch failed') || errMsg.includes('ECONNREFUSED')) {
+          console.error(`❌ Sync failed for ${src} tenant ${tenant}: Connection failed`);
+          console.error(`   Check if ${base} is accessible and BANK_SBX_TOKEN is valid`);
+        } else {
+          console.error(`❌ Sync failed for ${src} tenant ${tenant}:`, errMsg);
+        }
       }
     }
   }
