@@ -13,9 +13,6 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     name: Lint and TypeScript Check
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -39,9 +36,6 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     name: Schema Validation
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -62,9 +56,6 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     name: OpenAPI Type Sync
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -88,9 +79,6 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     name: Security and Compliance Checks
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -114,9 +102,6 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     name: Build All Packages
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     needs: [lint-and-typecheck, schema-validation]
     steps:
       - uses: actions/checkout@v4
@@ -144,9 +129,6 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     name: Run Tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     needs: [build]
     steps:
       - uses: actions/checkout@v4
