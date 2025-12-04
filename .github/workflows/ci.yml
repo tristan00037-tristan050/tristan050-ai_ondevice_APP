@@ -131,8 +131,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-      - name: Build Collector
-        run: npm run build --workspace=@appcore/collector-node-ts
+      # 🔥 Collector 빌드 스텝 제거 (해당 workspace가 없어서 CI가 깨지고 있음)
+      # - name: Build Collector
+      #   run: npm run build --workspace=@appcore/collector-node-ts
       
       - name: Build BFF
         run: npm run build --workspace=@appcore/bff-node-ts
