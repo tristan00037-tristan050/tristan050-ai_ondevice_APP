@@ -2,9 +2,6 @@ name: release-bff
 
 on:
   push:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     tags:
       - "r6-*"     # r6 전체 릴리스 태그 일괄 대응
       - "r7-*"     # r7 전체 릴리스 태그 일괄 대응

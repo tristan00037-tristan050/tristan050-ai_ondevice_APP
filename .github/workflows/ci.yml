@@ -2,14 +2,8 @@ name: CI Pipeline
 
 on:
   push:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     branches: [main, develop]
   pull_request:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     branches: [main, develop]
 
 jobs:
