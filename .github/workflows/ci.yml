@@ -6,11 +6,12 @@ on:
   pull_request:
     branches: [main, develop]
 
+defaults:
+  run:
+    working-directory: webcore_appcore_starter_4_17  # ✅ 여기서부터 모든 run:은 이 디렉토리 기준으로 실행
+
 jobs:
   lint-and-typecheck:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     name: Lint and TypeScript Check
     runs-on: ubuntu-latest
     steps:
@@ -31,9 +32,6 @@ jobs:
         run: npm run type-check --workspaces
 
   schema-validation:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     name: Schema Validation
     runs-on: ubuntu-latest
     steps:
@@ -51,9 +49,6 @@ jobs:
         run: npm run validate:all
 
   openapi-sync:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     name: OpenAPI Type Sync
     runs-on: ubuntu-latest
     steps:
@@ -74,9 +69,6 @@ jobs:
         run: npm run ci:check-openapi
 
   security-checks:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     name: Security and Compliance Checks
     runs-on: ubuntu-latest
     steps:
@@ -97,9 +89,6 @@ jobs:
         run: npm run ci:check-client-filter
 
   build:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     name: Build All Packages
     runs-on: ubuntu-latest
     needs: [lint-and-typecheck, schema-validation]
@@ -124,9 +113,6 @@ jobs:
         run: npm run build --workspace=@appcore/ops-console
 
   test:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     name: Run Tests
     runs-on: ubuntu-latest
     needs: [build]
@@ -143,4 +129,3 @@ jobs:
       
       - name: Run tests
         run: npm test --workspaces --if-present
-
