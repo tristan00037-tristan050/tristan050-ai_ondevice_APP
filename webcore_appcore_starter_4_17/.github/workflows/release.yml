@@ -52,6 +52,7 @@ jobs:
         run: npm run db:migrate
 
       - name: Build Docker image
+        working-directory: .
         run: docker build -f Dockerfile.bff -t bff-accounting:release .
 
       - name: Run BFF container
