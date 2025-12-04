@@ -136,7 +136,7 @@ jobs:
       #   run: npm run build --workspace=@appcore/collector-node-ts
       
       - name: Build BFF
-        run: npm run build --workspace=@appcore/bff-node-ts
+        run: npm run build --workspace=@appcore/bff-accounting
       
       - name: Build Ops Console
         run: npm run build --workspace=@appcore/ops-console
