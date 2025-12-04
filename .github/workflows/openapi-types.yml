@@ -49,4 +49,3 @@ jobs:
         run: |
           node scripts/check_openapi_sync.js
 
-
