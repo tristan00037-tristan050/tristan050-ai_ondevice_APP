@@ -8,9 +8,15 @@ on:
       - 'scripts/generate-types.sh'
       - 'scripts/check_openapi_sync.js'
   workflow_dispatch:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
 
 jobs:
   generate-types:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

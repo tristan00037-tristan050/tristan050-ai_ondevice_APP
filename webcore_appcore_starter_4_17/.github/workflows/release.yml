@@ -2,6 +2,9 @@ name: release-bff
 
 on:
   push:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     tags:
       - "r6-*"     # r6 전체 릴리스 태그 일괄 대응
       - "r7-*"     # r7 전체 릴리스 태그 일괄 대응
@@ -9,6 +12,9 @@ on:
 jobs:
   build-test-image:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
@@ -81,6 +87,9 @@ jobs:
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -94,6 +103,9 @@ jobs:
       - run: echo "✅ mobile gate passed"
 
   publish-and-deploy:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     needs: [build-test-image, gate_mobile]
     runs-on: ubuntu-latest
     steps:

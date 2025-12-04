@@ -2,12 +2,18 @@ name: Database Backup
 
 on:
   schedule:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     # 매일 UTC 02:00에 실행
     - cron: '0 2 * * *'
   workflow_dispatch: {}
 
 jobs:
   backup:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     name: Database Backup
     runs-on: ubuntu-latest
     steps:

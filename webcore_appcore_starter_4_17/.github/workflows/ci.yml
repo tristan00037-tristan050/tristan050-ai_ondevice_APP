@@ -2,14 +2,23 @@ name: CI Pipeline
 
 on:
   push:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     branches: [main, develop]
   pull_request:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     branches: [main, develop]
 
 jobs:
   lint-and-typecheck:
     name: Lint and TypeScript Check
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
@@ -36,6 +45,9 @@ jobs:
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -56,6 +68,9 @@ jobs:
   openapi-sync:
     name: OpenAPI Type Sync
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
@@ -85,6 +100,9 @@ jobs:
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -108,6 +126,9 @@ jobs:
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -128,6 +149,9 @@ jobs:
   build:
     name: Build All Packages
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     needs: [lint-and-typecheck, schema-validation]
     defaults:
       run:
@@ -155,6 +179,9 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     needs: [build]
     defaults:
       run:
@@ -180,6 +207,9 @@ jobs:
   golden-set-guard:
     name: Golden Set Guard
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     needs: [schema-and-types]
     defaults:
       run:
@@ -206,6 +236,9 @@ jobs:
   bench-accounting:
     name: Accounting Accuracy Benchmark
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     needs: [golden-set-guard]
     defaults:
       run:
@@ -243,6 +276,9 @@ jobs:
   e2e-accounting:
     name: Accounting E2E Tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     needs: [bench-accounting]
     defaults:
       run:
@@ -283,6 +319,9 @@ jobs:
         run: pkill -f "bff-accounting" || true
 
   no-artifacts-committed:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     name: Ensure no deps/build artifacts in git
     runs-on: ubuntu-latest
     steps:
@@ -303,6 +342,9 @@ jobs:
   e2e-bff-accounting:
     name: BFF Accounting E2E Smoke
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     needs: [golden-set-guard, bench-accounting]
     timeout-minutes: 10
     defaults:
@@ -375,6 +417,9 @@ jobs:
         run: pkill -f "bff-accounting" || true
 
   no-artifacts-committed:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     name: Ensure no deps/build artifacts in git
     runs-on: ubuntu-latest
     steps:
@@ -396,6 +441,9 @@ jobs:
     name: Persistence E2E (PostgreSQL)
     needs: [e2e-bff-accounting]
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     services:
       postgres:
         image: postgres:16
@@ -455,6 +503,9 @@ jobs:
         run: pkill -f "bff-accounting" || true
 
   no-artifacts-committed:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     name: Ensure no deps/build artifacts in git
     runs-on: ubuntu-latest
     steps:
@@ -475,6 +526,9 @@ jobs:
   gate-os-integration:
     name: OS Integration Gate
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
