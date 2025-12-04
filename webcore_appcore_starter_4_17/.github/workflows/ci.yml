@@ -533,10 +533,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
       - name: Copy package files to root for cache
         run: |
           if [ -f webcore_appcore_starter_4_17/package-lock.json ] && [ ! -f package-lock.json ]; then
@@ -546,6 +542,11 @@ jobs:
             cp webcore_appcore_starter_4_17/package.json package.json
           fi
       
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
         run: npm ci
       
       - name: DB migrate
@@ -618,10 +619,7 @@ jobs:
           --health-retries=20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache-dependency-path: webcore_appcore_starter_4_17/package-lock.json
+      
       - name: Copy package files to root for cache
         run: |
           if [ -f webcore_appcore_starter_4_17/package-lock.json ] && [ ! -f package-lock.json ]; then
@@ -630,6 +628,12 @@ jobs:
           if [ -f webcore_appcore_starter_4_17/package.json ] && [ ! -f package.json ]; then
             cp webcore_appcore_starter_4_17/package.json package.json
           fi
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
         run: npm ci
       - name: Build packages
         run: npm run build:packages
