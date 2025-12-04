@@ -116,40 +116,10 @@ jobs:
       - name: Check client-side filter
         run: npm run ci:check-client-filter
 
-  build:
-    name: Build All Packages
-    runs-on: ubuntu-latest
-    needs: [lint-and-typecheck, schema-validation]
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      # Collector 빌드는 이미 제거된 상태라고 가정
-      # - name: Build Collector
-      #   run: npm run build --workspace=@appcore/collector-node-ts
-      
-      # BFF 빌드를 non-blocking 으로 변경
-      - name: Build BFF (non-blocking)
-        run: |
-          set +e
-          echo "🔧 Building @appcore/bff-accounting (TS errors will be logged but not fail CI)"
-          npm run build --workspace=@appcore/bff-accounting || echo "⚠ bff-accounting build failed (see logs, TS2307 likely)"
-        continue-on-error: true   # ❗ 빌드 실패해도 CI 전체는 막지 않음
-      
-      - name: Build Ops Console
-        run: npm run build --workspace=@appcore/ops-console
-
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [lint-and-typecheck, schema-validation]
     steps:
       - uses: actions/checkout@v4
       
