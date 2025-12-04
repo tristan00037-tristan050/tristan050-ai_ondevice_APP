@@ -12,9 +12,6 @@ jobs:
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -29,9 +26,6 @@ jobs:
   expo_bundle:
     name: Expo Bundle (Web)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
@@ -55,9 +49,6 @@ jobs:
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -77,6 +68,9 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     name: Mobile Gate
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     needs: [typecheck_app, expo_bundle]
     steps:
       - run: echo "✅ mobile gate passed"

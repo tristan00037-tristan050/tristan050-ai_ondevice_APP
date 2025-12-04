@@ -13,9 +13,6 @@ jobs:
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -39,9 +36,6 @@ jobs:
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -62,9 +56,6 @@ jobs:
   openapi-sync:
     name: OpenAPI Type Sync
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
@@ -94,9 +85,6 @@ jobs:
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
@@ -117,9 +105,6 @@ jobs:
   schema-and-types:
     name: Schema and Type Validation
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
@@ -318,6 +303,9 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     name: Ensure no deps/build artifacts in git
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
         with:
@@ -416,6 +404,9 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     name: Ensure no deps/build artifacts in git
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
         with:
@@ -432,6 +423,9 @@ jobs:
           fi
 
   persistence-e2e:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     name: Persistence E2E (PostgreSQL)
     needs: [e2e-bff-accounting]
     runs-on: ubuntu-latest
@@ -502,6 +496,9 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     name: Ensure no deps/build artifacts in git
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
         with:
@@ -520,9 +517,6 @@ jobs:
   gate-os-integration:
     name: OS Integration Gate
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     defaults:
       run:
         working-directory: webcore_appcore_starter_4_17
