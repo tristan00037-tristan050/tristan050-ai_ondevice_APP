@@ -3,9 +3,6 @@ name: mobile
 on:
   pull_request:
   push:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     tags: ['r7-*']
 
 jobs:
