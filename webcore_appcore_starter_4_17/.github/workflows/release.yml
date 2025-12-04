@@ -29,17 +29,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Copy package-lock.json to root
+      - name: Copy package files to root for cache
         run: |
-          if [ ! -f package-lock.json ] && [ -f webcore_appcore_starter_4_17/package-lock.json ]; then
+          if [ -f webcore_appcore_starter_4_17/package-lock.json ] && [ ! -f package-lock.json ]; then
             cp webcore_appcore_starter_4_17/package-lock.json package-lock.json
+          fi
+          if [ -f webcore_appcore_starter_4_17/package.json ] && [ ! -f package.json ]; then
+            cp webcore_appcore_starter_4_17/package.json package.json
           fi
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-
       - name: Install dependencies
         run: npm ci
 
@@ -92,16 +93,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Copy package-lock.json to root
+      - name: Copy package files to root for cache
         run: |
-          if [ ! -f package-lock.json ] && [ -f webcore_appcore_starter_4_17/package-lock.json ]; then
+          if [ -f webcore_appcore_starter_4_17/package-lock.json ] && [ ! -f package-lock.json ]; then
             cp webcore_appcore_starter_4_17/package-lock.json package-lock.json
+          fi
+          if [ -f webcore_appcore_starter_4_17/package.json ] && [ ! -f package.json ]; then
+            cp webcore_appcore_starter_4_17/package.json package.json
           fi
       
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
       - name: Install dependencies
         run: npm ci
       - name: TypeScript check
