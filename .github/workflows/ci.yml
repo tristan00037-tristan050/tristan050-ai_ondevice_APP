@@ -8,7 +8,7 @@ on:
 
 defaults:
   run:
-    working-directory: webcore_appcore_starter_4_17  # ✅ 여기서부터 모든 run:은 이 디렉토리 기준으로 실행
+    working-directory: webcore_appcore_starter_4_17  # ✅ 여기부터 모든 run:은 이 디렉토리 기준
 
 jobs:
   lint-and-typecheck:
