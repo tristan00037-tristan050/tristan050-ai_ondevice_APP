@@ -5,8 +5,7 @@
  */
 
 import crypto from 'node:crypto';
-import { PgReconRepo } from '@appcore/data-pg/repos/reconRepo.js';
-import type { ReconSessionRow } from '@appcore/data-pg';
+import { PgReconRepo, type ReconSessionRow } from '@appcore/data-pg';
 import { parseAmount } from './rules.js';
 
 const usePg = process.env.USE_PG === '1';

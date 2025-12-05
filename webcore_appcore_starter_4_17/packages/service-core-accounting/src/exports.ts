@@ -5,8 +5,7 @@
  */
 
 import crypto from 'node:crypto';
-import { PgExportRepo } from '@appcore/data-pg/repos/exportsRepo.js';
-import type { ExportJobRow } from '@appcore/data-pg';
+import { PgExportRepo, type ExportJobRow } from '@appcore/data-pg';
 
 export type ExportFilters = {
   since?: string;

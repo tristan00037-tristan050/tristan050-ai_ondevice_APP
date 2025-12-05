@@ -3,7 +3,7 @@ import {
   upsertTransactions,
   getOffset,
   setOffset,
-} from '@appcore/data-pg/repos/externalLedgerRepo.js';
+} from '@appcore/data-pg';
 
 // prom-client는 선택적 의존성 (메트릭이 활성화된 경우만 사용)
 // 더미 메트릭 클래스

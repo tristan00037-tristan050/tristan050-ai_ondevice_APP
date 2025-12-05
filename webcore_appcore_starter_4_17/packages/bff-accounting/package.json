@@ -7,7 +7,7 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "prebuild": "npm run -w @appcore/service-core-accounting build && npm run -w @appcore/data-pg build",
+    "prebuild": "npm run -w @appcore/data-pg build && npm run -w @appcore/service-core-accounting build",
     "build": "tsc -b",
     "start": "node dist/index.js",
     "dev": "node --enable-source-maps dist/index.js",
@@ -15,8 +15,8 @@
     "lint": "eslint src --ext .ts"
   },
   "dependencies": {
-    "@appcore/data-pg": "0.1.0",
-    "@appcore/service-core-accounting": "0.1.0",
+    "@appcore/data-pg": "*",
+    "@appcore/service-core-accounting": "*",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/sdk-node": "^0.53.0",
     "@opentelemetry/auto-instrumentations-node": "^0.53.0",
