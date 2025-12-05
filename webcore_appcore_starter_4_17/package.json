@@ -7,7 +7,8 @@
     "packages/service-core-accounting",
     "packages/bff-accounting",
     "packages/app-expo",
-    "packages/data-pg"
+    "packages/data-pg",
+    "packages/ops-console"
   ],
   "scripts": {
     "build": "tsc -b",
@@ -41,7 +42,9 @@
     "ci:gold-synthetic": "node scripts/gold_enforce_ratio.mjs",
     "ci:gate:accuracy": "node scripts/gate_accuracy.mjs",
     "ci:bench:accounting": "node scripts/bench_accounting_ci.mjs",
-    "test:e2e:accounting": "node tests/accounting_e2e.mjs"
+    "test:e2e:accounting": "node tests/accounting_e2e.mjs",
+    "report:pilot": "node scripts/report_pilot_metrics.mjs --from=2025-12-01 --to=2025-12-31",
+    "report:adapter-slo": "node scripts/report_adapter_slo.mjs"
   },
   "devDependencies": {
     "ajv": "^8.12.0",
