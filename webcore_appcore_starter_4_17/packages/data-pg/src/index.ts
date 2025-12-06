@@ -29,6 +29,8 @@ export async function ping(): Promise<boolean> {
 
 export * from './repos/auditRepo.js';
 export * from './repos/externalLedgerRepo.js';
+export * from './repos/exportsRepo.js';
+export * from './repos/reconRepo.js';
 
 export async function exec(sql: string, params?: any[]) {
   return pool.query(sql, params);
