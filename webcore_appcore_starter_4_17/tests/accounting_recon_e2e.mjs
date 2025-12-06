@@ -21,6 +21,15 @@ function ledg(id, date, amt, cur, account, memo) {
 }
 
 async function main() {
+  // OS 정책 브리지를 위한 헤더 추가
+  const userRole = API_KEY.includes(':') ? API_KEY.split(':')[1] : 'operator';
+  const commonHeaders = {
+    'X-Api-Key': API_KEY,
+    'X-Tenant': TENANT_ID,
+    'X-User-Role': userRole,  // OS 정책 브리지 필수 헤더
+    'X-User-Id': 'test-user-1',  // 감사 로그용
+  };
+
   const body = {
     bank: [
       bank('b1', '2025-11-03', '12500', 'KRW', '커피'),
@@ -39,8 +48,7 @@ async function main() {
     headers: {
       'Content-Type': 'application/json',
       'Idempotency-Key': crypto.randomUUID(),
-      'X-Api-Key': API_KEY,
-      'X-Tenant': TENANT_ID,
+      ...commonHeaders,
     },
     body: JSON.stringify(body),
   });
@@ -60,8 +68,7 @@ async function main() {
     headers: {
       'Content-Type': 'application/json',
       'Idempotency-Key': crypto.randomUUID(),
-      'X-Api-Key': API_KEY,
-      'X-Tenant': TENANT_ID,
+      ...commonHeaders,
     },
     body: JSON.stringify({
       bank_id: 'b1',
@@ -76,10 +83,7 @@ async function main() {
 
   // get session
   const r3 = await fetch(`${BFF_URL}/v1/accounting/reconciliation/sessions/${s1.sessionId}`, {
-    headers: {
-      'X-Api-Key': API_KEY,
-      'X-Tenant': TENANT_ID,
-    },
+    headers: commonHeaders,
   });
   
   if (!r3.ok) {

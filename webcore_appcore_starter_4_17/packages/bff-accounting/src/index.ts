@@ -96,7 +96,7 @@ app.get('/metrics', async (req, res, next) => {
 
 // 회계 라우트
 app.use('/v1/accounting/postings', suggestRouter);
-app.use(approvalsRouter);
+app.use('/v1/accounting/approvals', approvalsRouter);
 app.use(exportsRouter);
 app.use('/v1/accounting/reconciliation', reconciliationRouter);
 app.use(auditRoute);
