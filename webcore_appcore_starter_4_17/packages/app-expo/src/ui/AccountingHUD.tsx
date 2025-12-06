@@ -32,6 +32,7 @@ export default function AccountingHUD({ cfg }: Props) {
   const [reportId, setReportId] = useState('demo-report-1');
   const [desc, setDesc] = useState('커피 영수증 4500원');
   const [suggestOut, setSuggestOut] = useState<any>(null);
+  const [selectedPostingIndex, setSelectedPostingIndex] = useState<number>(0); // 선택된 posting index (0부터 시작)
   const [sessionId, setSessionId] = useState<string>('');
   const [exportJob, setExportJob] = useState<any>(null);
 
@@ -52,12 +53,36 @@ export default function AccountingHUD({ cfg }: Props) {
   }
 
   async function onApprove() {
-    const id = suggestOut?.postings?.[0]?.id ?? 'sample-id';
+    const selectedIndex = selectedPostingIndex;
+    const selectedPosting = suggestOut?.postings?.[selectedIndex];
+    const id = selectedPosting?.id ?? suggestOut?.postings?.[0]?.id ?? 'sample-id';
     const idem = `idem_approve_${Date.now()}`;
+    
+    // 선택 정보 계산
+    const top1_selected = selectedIndex === 0;
+    const selected_rank = selectedIndex + 1; // 1부터 시작
+    const ai_score = suggestOut?.confidence ?? undefined; // 전체 confidence를 사용 (개별 posting score가 없을 경우)
+    
+    const approvalOpts = {
+      idem,
+      top1_selected,
+      selected_rank,
+      ...(ai_score !== undefined && { ai_score }),
+    };
+    
     try {
-      await postApproval(cfg, id, 'approve', 'OK', { idem });
+      await postApproval(cfg, id, 'approve', 'OK', approvalOpts);
     } catch {
-      await enqueue({ kind: 'approval', id, action: 'approve', note: 'OK', idem });
+      await enqueue({ 
+        kind: 'approval', 
+        id, 
+        action: 'approve', 
+        note: 'OK', 
+        idem,
+        top1_selected,
+        selected_rank,
+        ...(ai_score !== undefined && { ai_score }),
+      });
     }
   }
 
@@ -148,14 +173,26 @@ export default function AccountingHUD({ cfg }: Props) {
           결과 미리보기: {suggestOut ? JSON.stringify(suggestOut).slice(0, 400) : '-'}
         </Text>
         {/* @ts-ignore - React Native JSX */}
-        {suggestOut?.postings?.[0] && (
-          <ManualReviewButton
-            cfg={cfg}
-            subjectType="posting"
-            subjectId={suggestOut.postings[0].id || 'unknown'}
-            reason="수동 검토 필요"
-          />
-        )}
+        {suggestOut?.postings?.[0] && (() => {
+          // 거래 금액 추출 (첫 번째 라인아이템의 amount 사용)
+          const amount = parseFloat(desc.match(/\d+/)?.[0] || '0') || 4500; // 기본값 4500
+          const currency = 'KRW'; // 기본값 KRW
+          const HIGH_VALUE_THRESHOLD = 1000000; // 고액 거래 기준: 100만원
+          const isHighValue = amount >= HIGH_VALUE_THRESHOLD;
+          
+          return (
+            <ManualReviewButton
+              cfg={cfg}
+              subjectType="posting"
+              subjectId={suggestOut.postings[0].id || 'unknown'}
+              reason="수동 검토 필요"
+              reasonCode={isHighValue ? 'HIGH_VALUE' : 'LOW_CONFIDENCE'}
+              amount={amount}
+              currency={currency}
+              isHighValue={isHighValue}
+            />
+          );
+        })()}
         {/* @ts-ignore - React Native JSX */}
         {suggestOut?.rationale && (
           <Text style={{ marginTop: 8, fontSize: 12 }}>

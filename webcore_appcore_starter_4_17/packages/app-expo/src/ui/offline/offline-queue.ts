@@ -9,7 +9,7 @@ import { getSecureKV } from '../../security/secure-storage.js';
 import { mkHeaders, type ClientCfg } from '../../hud/accounting-api.js';
 
 type QueueItem =
-  | { kind: 'approval'; id: string; action: 'approve' | 'reject'; note?: string; idem: string }
+  | { kind: 'approval'; id: string; action: 'approve' | 'reject'; note?: string; idem: string; top1_selected?: boolean; selected_rank?: number; ai_score?: number }
   | { kind: 'export'; body: any; idem: string }
   | { kind: 'recon_create'; body: any; idem: string }
   | { kind: 'recon_match'; sessionId: string; bank_id: string; ledger_id: string; idem: string }
@@ -42,10 +42,29 @@ async function trySend(cfg: ClientCfg, item: QueueItem) {
   const hdr = (idem: string) => h({ 'Idempotency-Key': idem });
 
   if (item.kind === 'approval') {
+    const body: any = { 
+      action: item.action, 
+      client_request_id: item.idem, 
+      note: item.note 
+    };
+    
+    // 선택 정보 추가 (approve 액션일 때만)
+    if (item.action === 'approve') {
+      if (item.top1_selected !== undefined) {
+        body.top1_selected = item.top1_selected;
+      }
+      if (item.selected_rank !== undefined) {
+        body.selected_rank = item.selected_rank;
+      }
+      if (item.ai_score !== undefined) {
+        body.ai_score = item.ai_score;
+      }
+    }
+    
     const r = await fetch(`${base}/v1/accounting/approvals/${item.id}`, {
       method: 'POST',
       headers: hdr(item.idem),
-      body: JSON.stringify({ action: item.action, client_request_id: item.idem, note: item.note }),
+      body: JSON.stringify(body),
     });
     if (!r.ok) {
       throw new Error(`approval ${r.status}`);

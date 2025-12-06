@@ -85,7 +85,7 @@ router.post(
   requireRole('operator', 'auditor', 'admin'),
   async (req: any, res: any, next: any) => {
     try {
-      const { subject_type, subject_id, reason } = req.body || {};
+      const { subject_type, subject_id, reason, reason_code, amount, currency, is_high_value } = req.body || {};
       const { auditLog } = await import('@appcore/service-core-accounting');
       await auditLog({
         tenant: req.ctx?.tenant || 'default',
@@ -94,7 +94,14 @@ router.post(
         action: 'manual_review_request',
         subject_type,
         subject_id,
-        payload: { reason, client_request_id: req.header('Idempotency-Key') || undefined },
+        payload: { 
+          reason, 
+          client_request_id: req.header('Idempotency-Key') || undefined,
+          ...(reason_code !== undefined && { reason_code }),
+          ...(amount !== undefined && { amount }),
+          ...(currency !== undefined && { currency }),
+          ...(is_high_value !== undefined && { is_high_value }),
+        },
       });
       res.status(201).json({ ok: true });
     } catch (e) {

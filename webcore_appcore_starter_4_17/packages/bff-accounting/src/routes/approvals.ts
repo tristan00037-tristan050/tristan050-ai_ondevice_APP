@@ -14,7 +14,14 @@ import { applyApproval } from '@appcore/service-core-accounting/approvals.js';
 import { auditLog } from '@appcore/service-core-accounting';
 import { requireTenantAuth, requireRole } from '../shared/guards.js';
 
-type ApprovalBody = { action: 'approve' | 'reject'; client_request_id: string; note?: string };
+type ApprovalBody = { 
+  action: 'approve' | 'reject'; 
+  client_request_id: string; 
+  note?: string;
+  top1_selected?: boolean;  // 추천 1위가 실제 선택되었는지
+  selected_rank?: number;   // 선택된 항목의 순위 (1부터 시작)
+  ai_score?: number;        // 선택 항목의 추천 점수(있으면)
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,7 +57,7 @@ router.post('/:id', requireTenantAuth, requireRole('operator'), async (req: Requ
       });
     }
     
-    const { action, client_request_id, note } = body as ApprovalBody;
+    const { action, client_request_id, note, top1_selected, selected_rank, ai_score } = body as ApprovalBody;
     
     // 멱등성 키 필수(헤더)
     const idem = req.get('Idempotency-Key');
@@ -74,7 +81,12 @@ router.post('/:id', requireTenantAuth, requireRole('operator'), async (req: Requ
       action: action === 'approve' ? 'approval_apply' : 'approval_reject',
       subject_type: 'report',
       subject_id: req.params.id,
-      payload: { note },
+      payload: { 
+        note,
+        ...(top1_selected !== undefined && { top1_selected }),
+        ...(selected_rank !== undefined && { selected_rank }),
+        ...(ai_score !== undefined && { ai_score }),
+      },
     });
     
     res.status(200).json({ ...out, client_request_id });

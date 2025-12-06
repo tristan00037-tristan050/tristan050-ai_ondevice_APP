@@ -75,11 +75,40 @@ export async function postSuggest(cfg: ClientCfg, body: any, opts?: IdemOpts) {
 /**
  * 승인 요청
  */
-export async function postApproval(cfg: ClientCfg, id: string, action: 'approve' | 'reject', note?: string, opts?: IdemOpts) {
+export async function postApproval(
+  cfg: ClientCfg, 
+  id: string, 
+  action: 'approve' | 'reject', 
+  note?: string, 
+  opts?: IdemOpts & {
+    top1_selected?: boolean;
+    selected_rank?: number;
+    ai_score?: number;
+  }
+) {
+  const body: any = { 
+    action, 
+    client_request_id: await mkUUID(), 
+    note 
+  };
+  
+  // 선택 정보 추가 (approve 액션일 때만)
+  if (action === 'approve' && opts) {
+    if (opts.top1_selected !== undefined) {
+      body.top1_selected = opts.top1_selected;
+    }
+    if (opts.selected_rank !== undefined) {
+      body.selected_rank = opts.selected_rank;
+    }
+    if (opts.ai_score !== undefined) {
+      body.ai_score = opts.ai_score;
+    }
+  }
+  
   const r = await fetch(`${cfg.baseUrl}/v1/accounting/approvals/${id}`, {
     method: 'POST',
     headers: mkHeaders(cfg, { 'Idempotency-Key': opts?.idem ?? await mkUUID() }),
-    body: JSON.stringify({ action, client_request_id: await mkUUID(), note }),
+    body: JSON.stringify(body),
   });
   
   if (!r.ok) {
