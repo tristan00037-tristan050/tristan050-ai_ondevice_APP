@@ -7,13 +7,13 @@
 import React, { useEffect, useState } from 'react';
 // @ts-ignore - React Native types
 import { View, Text, Button, TextInput, ScrollView, TouchableOpacity } from 'react-native';
-import { useScreenPrivacy } from './hooks/useScreenPrivacy';
-import { useOnline } from './hooks/useOnline';
-import { useOfflineQueue } from './hooks/useOfflineQueue';
-import { enqueue, flushQueue, startQueueAutoFlush } from './offline/offline-queue';
-import QueueBadge from './components/QueueBadge';
-import ManualReviewButton from './components/ManualReviewButton';
-import QueueInspector from './components/QueueInspector';
+import { useScreenPrivacy } from './hooks/useScreenPrivacy.js';
+import { useOnline } from './hooks/useOnline.js';
+import { useOfflineQueue } from './hooks/useOfflineQueue.js';
+import { enqueue, flushQueue, startQueueAutoFlush } from './offline/offline-queue.js';
+import QueueBadge from './components/QueueBadge.js';
+import ManualReviewButton from './components/ManualReviewButton.js';
+import QueueInspector from './components/QueueInspector.js';
 import {
   postSuggest,
   postApproval,
@@ -24,9 +24,9 @@ import {
   type ApiError,
   isMock,
   getSuggestEngine as getOldSuggestEngine,
-} from '../hud/accounting-api';
-import { suggestWithEngine, getSuggestEngine } from '../hud/engines/index';
-import { saveEncryptedReport, loadEncryptedReport } from '../security/secure-storage';
+} from '../hud/accounting-api.js';
+import { suggestWithEngine, getSuggestEngine } from '../hud/engines/index.js';
+import { saveEncryptedReport, loadEncryptedReport } from '../security/secure-storage.js';
 
 type Props = { cfg: ClientCfg };
 

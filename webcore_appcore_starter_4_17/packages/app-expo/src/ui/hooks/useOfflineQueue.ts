@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { listQueue } from '../offline/offline-queue';
+import { listQueue } from '../offline/offline-queue.js';
 
 // 간단한 타임스탬프 저장 (SecureStorage 사용)
 async function getLastSyncTs(): Promise<number | undefined> {
   try {
-    const { getSecureKV } = await import('../../security/secure-storage');
+    const { getSecureKV } = await import('../../security/secure-storage.js');
     const kv = await getSecureKV();
     const ts = kv.getString('last_sync_ts');
     return ts ? parseInt(ts, 10) : undefined;

@@ -8,9 +8,9 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { registerRootComponent } from 'expo';
-import AccountingHUD from './src/ui/AccountingHUD';
-import { CsHUD } from './src/ui/CsHUD';
-import type { ClientCfg, Mode } from './src/hud/accounting-api';
+import AccountingHUD from './src/ui/AccountingHUD.js';
+import { CsHUD } from './src/ui/CsHUD.js';
+import type { ClientCfg, Mode } from './src/hud/accounting-api.js';
 
 const envMode = (process.env.EXPO_PUBLIC_DEMO_MODE === 'mock' ? 'mock' : 'live') as Mode;
 
