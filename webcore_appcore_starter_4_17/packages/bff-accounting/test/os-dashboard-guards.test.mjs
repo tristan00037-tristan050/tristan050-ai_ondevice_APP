@@ -49,8 +49,12 @@ async function main() {
     if (!body.health || typeof body.health !== 'object') {
       throw new Error('Missing or invalid health property');
     }
-    if (!body.manual_review) {
-      throw new Error('Missing manual_review property');
+    if (!body.risk || typeof body.risk !== 'object') {
+      throw new Error('Missing or invalid risk property');
+    }
+    // manual_review는 risk 안에 manual_review_pending으로 존재
+    if (typeof body.risk.manual_review_pending !== 'number') {
+      throw new Error('Missing or invalid risk.manual_review_pending property');
     }
   });
   if (test1) passed++; else failed++;
@@ -77,7 +81,7 @@ async function main() {
   if (test2) passed++; else failed++;
 
   // 테스트 3: 응답 스키마 회귀 테스트
-  const test3 = await test('응답 스키마 회귀 테스트 - pilot, health, manual_review 키 존재 확인', async () => {
+  const test3 = await test('응답 스키마 회귀 테스트 - pilot, health, risk 키 존재 확인', async () => {
     const response = await fetch(`${BASE_URL}/v1/accounting/os/dashboard`, {
       method: 'GET',
       headers: TEST_HEADERS,
@@ -89,11 +93,16 @@ async function main() {
 
     const body = await response.json();
     const keys = Object.keys(body).sort();
-    const requiredKeys = ['pilot', 'health', 'manual_review'];
+    const requiredKeys = ['pilot', 'health', 'risk', 'queue', 'window'];
     const missingKeys = requiredKeys.filter((key) => !keys.includes(key));
 
     if (missingKeys.length > 0) {
       throw new Error(`Missing required keys: ${missingKeys.join(', ')}`);
+    }
+    
+    // risk 안에 manual_review_pending이 있는지 확인
+    if (!body.risk || typeof body.risk.manual_review_pending !== 'number') {
+      throw new Error('Missing or invalid risk.manual_review_pending property');
     }
   });
   if (test3) passed++; else failed++;
