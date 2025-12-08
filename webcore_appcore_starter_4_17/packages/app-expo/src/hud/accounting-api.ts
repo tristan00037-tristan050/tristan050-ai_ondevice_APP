@@ -260,19 +260,49 @@ const MOCK_RECON_MATCH_RESPONSE = { success: true, matched: true };
  * 분개 추천 요청
  */
 export async function postSuggest(cfg: ClientCfg, body: any, opts?: IdemOpts) {
-  const engine = getSuggestEngine(cfg);
+  // R8-S2: 새로운 SuggestEngine 계층 사용 (engines/index.ts)
+  const { getSuggestEngine: getNewSuggestEngine } = await import('./engines/index');
+  const newEngine = getNewSuggestEngine(cfg);
   
-  // 로컬 엔진 사용 시
-  if (engine.mode === 'local') {
+  // 로컬 엔진 사용 시 (mode가 'local-only'인 경우)
+  if (newEngine.mode === 'local-only') {
     console.log('[LOCAL ENGINE] postSuggest:', body);
+    const ctx = {
+      domain: 'accounting' as const,
+      tenantId: cfg.tenantId || 'default',
+      userId: 'hud-user-1',
+    };
     const input = {
-      description: body.items?.[0]?.description || body.description || '',
-      amount: parseFloat(body.items?.[0]?.amount || body.amount || '0'),
-      currency: body.items?.[0]?.currency || body.currency || 'KRW',
+      text: body.items?.[0]?.description || body.description || '',
+      meta: {
+        amount: parseFloat(body.items?.[0]?.amount || body.amount || '0'),
+        currency: body.items?.[0]?.currency || body.currency || 'KRW',
+      },
     };
     
-    const items = await engine.suggest(input);
+    // 엔진 초기화 확인
+    if (!newEngine.isReady && newEngine.initialize) {
+      await newEngine.initialize();
+    }
+    
+    const result = await newEngine.suggest(ctx, input);
     await new Promise(resolve => setTimeout(resolve, 300)); // 시뮬레이션 지연
+    
+    // 기존 응답 형식으로 변환
+    const items = result.items.map((item) => {
+      const payload = item.payload as any;
+      return {
+        id: item.id,
+        account: payload?.account,
+        amount: payload?.amount || parseFloat(body.items?.[0]?.amount || body.amount || '0'),
+        currency: payload?.currency || body.items?.[0]?.currency || body.currency || 'KRW',
+        vendor: payload?.vendor,
+        description: item.title || payload?.description || body.items?.[0]?.description || body.description || '',
+        rationale: item.description || payload?.rationale,
+        score: item.score || 0.5,
+        risk: payload?.risk || { level: 'LOW' as const, reasons: [], score: 0 },
+      };
+    });
     
     return { items };
   }
@@ -293,9 +323,16 @@ export async function postSuggest(cfg: ClientCfg, body: any, opts?: IdemOpts) {
   }
 
   try {
+    // R8-S2: 엔진 모드 헤더 추가 (Live 모드 네트워크 호출 시)
+    const engineMode = newEngine.meta?.type || null;
+    const extraHeaders: Record<string, string> = { 'Idempotency-Key': opts?.idem ?? await mkUUID() };
+    if (engineMode && ['mock', 'rule', 'local-llm', 'remote'].includes(engineMode)) {
+      extraHeaders['X-Engine-Mode'] = engineMode;
+    }
+    
     const r = await fetch(`${cfg.baseUrl}/v1/accounting/postings/suggest`, {
       method: 'POST',
-      headers: mkHeaders(cfg, { 'Idempotency-Key': opts?.idem ?? await mkUUID() }),
+      headers: mkHeaders(cfg, extraHeaders),
       body: JSON.stringify(body),
     });
     

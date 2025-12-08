@@ -161,6 +161,48 @@ router.get(
         ? health.error_count / health.total_count
         : 0.0;
       
+      // 5. Engine 모드 집계 조회 (지난 24시간 기준) - R8-S2
+      const engine24hFrom = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const engineQuery = `
+        SELECT 
+          (payload->>'engine_mode')::text AS engine_mode,
+          COUNT(*) AS cnt
+        FROM accounting_audit_events
+        WHERE 
+          tenant = $1
+          AND action = 'postings_suggest'
+          AND payload ? 'engine_mode'
+          AND ts >= $2
+        GROUP BY (payload->>'engine_mode')
+      `;
+      const engineResult = await pool.query(engineQuery, [tenant, engine24hFrom]);
+      const engineRows = engineResult.rows || [];
+      
+      // Engine 섹션 빌드
+      type EngineMode = 'mock' | 'rule' | 'local-llm' | 'remote';
+      const counts: Record<EngineMode, number> = {
+        mock: 0,
+        rule: 0,
+        'local-llm': 0,
+        remote: 0,
+      };
+      
+      for (const row of engineRows) {
+        const mode = row.engine_mode as EngineMode;
+        if (mode in counts) {
+          counts[mode] = parseInt(row.cnt, 10) || 0;
+        }
+      }
+      
+      let primary_mode: EngineMode | null = null;
+      let max = 0;
+      for (const mode of Object.keys(counts) as EngineMode[]) {
+        if (counts[mode] > max) {
+          max = counts[mode];
+          primary_mode = mode;
+        }
+      }
+      
       res.json({
         window: {
           from: windowFromISO,
@@ -184,6 +226,10 @@ router.get(
         },
         queue: {
           offline_queue_backlog: 0, // 추후 확장
+        },
+        engine: {
+          primary_mode: primary_mode,
+          counts: counts,
         },
       });
     } catch (e) {
