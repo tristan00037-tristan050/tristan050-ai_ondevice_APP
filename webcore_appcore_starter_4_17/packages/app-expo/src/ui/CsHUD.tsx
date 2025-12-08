@@ -5,10 +5,10 @@
 
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { getSuggestEngine } from '../hud/engines/index.js';
-import type { ClientCfg as EnginesClientCfg } from '../hud/engines/index.js';
-import type { ClientCfg } from '../hud/accounting-api.js';
-import { isMock } from '../hud/accounting-api.js';
+import { getSuggestEngine } from '../hud/engines/index';
+import type { ClientCfg as EnginesClientCfg } from '../hud/engines/index';
+import type { ClientCfg } from '../hud/accounting-api';
+import { isMock } from '../hud/accounting-api';
 
 type Props = { cfg?: ClientCfg };
 

@@ -11,9 +11,9 @@ import type {
   SuggestInput,
   SuggestResult,
   SuggestEngineMeta,
-} from './types.js';
-import type { ClientCfg } from './index.js';
-import { LocalRuleEngineV1Adapter } from './index.js';
+} from './types';
+import type { ClientCfg } from './index';
+import { LocalRuleEngineV1Adapter } from './index';
 
 export interface LocalLLMEngineOptions {
   cfg: ClientCfg;

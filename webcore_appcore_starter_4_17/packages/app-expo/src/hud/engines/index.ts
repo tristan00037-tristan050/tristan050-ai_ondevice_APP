@@ -4,11 +4,11 @@
  * R8-S2: 엔진 모드 확장 및 메타 정보 추가
  */
 
-import type { SuggestEngine, SuggestContext, SuggestInput, SuggestResult, EngineMode, SuggestEngineMeta } from './types.js';
-import { LocalLLMEngineV1 } from './local-llm.js';
-import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem, ClientCfg as AccountingClientCfg } from '../accounting-api.js';
-import { localRuleEngineV1 as oldLocalRuleEngineV1 } from '../accounting-api.js';
-import { isMock } from '../accounting-api.js';
+import type { SuggestEngine, SuggestContext, SuggestInput, SuggestResult, EngineMode, SuggestEngineMeta } from './types';
+import { LocalLLMEngineV1 } from './local-llm';
+import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem, ClientCfg as AccountingClientCfg } from '../accounting-api';
+import { localRuleEngineV1 as oldLocalRuleEngineV1 } from '../accounting-api';
+import { isMock } from '../accounting-api';
 
 /**
  * SuggestEngine용 ClientCfg (accounting-api의 ClientCfg를 확장)

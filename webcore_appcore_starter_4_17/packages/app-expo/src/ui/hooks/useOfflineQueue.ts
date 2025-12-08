@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listQueue } from '../offline/offline-queue.js';
+import { listQueue } from '../offline/offline-queue';
 
 // 간단한 타임스탬프 저장 (SecureStorage 사용)
 async function getLastSyncTs(): Promise<number | undefined> {
