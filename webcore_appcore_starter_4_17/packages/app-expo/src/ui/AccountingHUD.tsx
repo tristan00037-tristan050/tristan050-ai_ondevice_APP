@@ -7,13 +7,13 @@
 import React, { useEffect, useState } from 'react';
 // @ts-ignore - React Native types
 import { View, Text, Button, TextInput, ScrollView, TouchableOpacity } from 'react-native';
-import { useScreenPrivacy } from './hooks/useScreenPrivacy';
-import { useOnline } from './hooks/useOnline';
-import { useOfflineQueue } from './hooks/useOfflineQueue';
-import { enqueue, flushQueue, startQueueAutoFlush } from './offline/offline-queue';
-import QueueBadge from './components/QueueBadge';
-import ManualReviewButton from './components/ManualReviewButton';
-import QueueInspector from './components/QueueInspector';
+import { useScreenPrivacy } from './hooks/useScreenPrivacy.js';
+import { useOnline } from './hooks/useOnline.js';
+import { useOfflineQueue } from './hooks/useOfflineQueue.js';
+import { enqueue, flushQueue, startQueueAutoFlush } from './offline/offline-queue.js';
+import QueueBadge from './components/QueueBadge.js';
+import ManualReviewButton from './components/ManualReviewButton.js';
+import QueueInspector from './components/QueueInspector.js';
 import {
   postSuggest,
   postApproval,
@@ -23,9 +23,10 @@ import {
   type ClientCfg,
   type ApiError,
   isMock,
-  getSuggestEngine,
-} from '../hud/accounting-api';
-import { saveEncryptedReport, loadEncryptedReport } from '../security/secure-storage';
+  getSuggestEngine as getOldSuggestEngine,
+} from '../hud/accounting-api.js';
+import { suggestWithEngine, getSuggestEngine } from '../hud/engines/index.js';
+import { saveEncryptedReport, loadEncryptedReport } from '../security/secure-storage.js';
 
 type Props = { cfg: ClientCfg };
 
@@ -151,14 +152,48 @@ export default function AccountingHUD({ cfg }: Props) {
   async function onSuggest() {
     setErrorMessage(null);
     setErrorDetails(null);
-    const body = { items: [{ desc, amount: '4500', currency: 'KRW' }] };
+    
+    // R8-S1: 새로운 SuggestEngine 계층 사용
     try {
-      const out = await postSuggest(cfg, body);
+      const ctx = {
+        domain: 'accounting' as const,
+        tenantId: cfg.tenantId,
+        userId: 'hud-user-1',
+      };
+      
+      const input = {
+        text: desc,
+        meta: {
+          amount: 4500,
+          currency: 'KRW',
+        },
+      };
+      
+      const result = await suggestWithEngine(cfg, ctx, input);
+      
+      // 기존 응답 형식으로 변환
+      const convertedItems = result.items.map((item) => {
+        const payload = item.payload as any;
+        return {
+          id: item.id,
+          account: payload?.account,
+          amount: payload?.amount || 4500,
+          currency: payload?.currency || 'KRW',
+          vendor: payload?.vendor,
+          description: item.title || payload?.description || desc,
+          rationale: item.description || payload?.rationale,
+          score: item.score || 0.5,
+          risk: payload?.risk || { level: 'LOW' as const, reasons: [], score: 0 },
+        };
+      });
+      
+      const out = { items: convertedItems, confidence: result.confidence };
       setSuggestOut(out);
       await saveEncryptedReport(reportId, out);
     } catch (e: any) {
-      if (e.kind === 'network') {
-        // 네트워크 오류는 큐에 넣고 종료
+      // 네트워크 오류는 기존 postSuggest로 폴백 (오프라인 큐 지원)
+      if (e.kind === 'network' || (e.message && e.message.includes('network'))) {
+        const body = { items: [{ desc, amount: '4500', currency: 'KRW' }] };
         try {
           await enqueue({ kind: 'suggest', body, idem: `idem_suggest_${Date.now()}` });
         } catch (queueError: any) {
@@ -322,11 +357,13 @@ export default function AccountingHUD({ cfg }: Props) {
   const networkStatus = online === null ? '...' : online ? 'Online' : 'Offline';
   const networkIcon = online === null ? '🟡' : online ? '🟢' : '🔴';
   
-  // Suggest 엔진 정보
+  // Suggest 엔진 정보 (새로운 SuggestEngine 계층 사용)
   const suggestEngine = getSuggestEngine(cfg);
-  const engineLabel = suggestEngine.mode === 'local' 
-    ? 'On-device (localRuleEngineV1)' 
-    : (bffConfigError ? 'BFF(remote – 오류)' : 'BFF(remote)');
+  const engineLabel = suggestEngine.mode === 'local-only' 
+    ? `On-device (${suggestEngine.id})` 
+    : suggestEngine.mode === 'remote-only'
+    ? (bffConfigError ? 'BFF(remote – 오류)' : 'BFF(remote)')
+    : 'Hybrid';
   
   return (
     // @ts-ignore - React Native JSX
@@ -557,8 +594,10 @@ export default function AccountingHUD({ cfg }: Props) {
                   {/* 엔진 출처 표시 */}
                   {/* @ts-expect-error - React Native JSX type compatibility issue with @types/react 18 */}
                   <Text style={{ fontSize: 10, color: '#999', marginTop: 4, fontStyle: 'italic' }}>
-                    {suggestEngine.mode === 'local' 
-                      ? 'ⓘ 이 추천은 온디바이스 엔진이 생성했습니다.'
+                    {item.source === 'local-rule' 
+                      ? 'ⓘ 이 추천은 온디바이스 규칙 엔진이 생성했습니다.'
+                      : item.source === 'local-llm'
+                      ? 'ⓘ 이 추천은 온디바이스 LLM 엔진이 생성했습니다.'
                       : 'ⓘ 이 추천은 BFF 서버에서 생성했습니다.'}
                   </Text>
                   {risk.level === 'HIGH' && (

@@ -14,6 +14,7 @@ import { TimelinePage } from './pages/Timeline';
 import AccountingDemo from './pages/demo/AccountingDemo';
 import ManualReviewPage from './pages/manual-review/ManualReviewPage';
 import OsDashboard from './pages/os/OsDashboard';
+import { CsDashboardPage } from './pages/cs/CsDashboardPage';
 
 function AppContent() {
   const { permission, setPermission } = useAuth();
@@ -90,6 +91,13 @@ function AppContent() {
               >
                 Manual Review
               </Link>
+              {/* CS 메뉴 */}
+              <Link
+                to="/cs"
+                className="text-gray-700 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                CS
+              </Link>
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">
@@ -127,6 +135,7 @@ function AppContent() {
           <Route path="/os/dashboard" element={<OsDashboard />} />
           <Route path="/demo/accounting" element={<AccountingDemo />} />
           <Route path="/manual-review" element={<ManualReviewPage />} />
+          <Route path="/cs" element={<CsDashboardPage />} />
           <Route path="/" element={<OsDashboard />} />
         </Routes>
       </main>

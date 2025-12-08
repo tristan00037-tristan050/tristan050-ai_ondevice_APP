@@ -125,7 +125,7 @@ const MOCK_SUGGEST_RESPONSE = {
  * 로컬 규칙 기반 Suggest 엔진 (온디바이스)
  * 나중에 실제 LLM/Classifier로 교체 가능
  */
-const localRuleEngineV1: SuggestEngine = {
+export const localRuleEngineV1: SuggestEngine = {
   mode: 'local',
   async suggest(input: { description: string; amount?: number; currency?: string }): Promise<SuggestItem[]> {
     // 간단한 규칙 기반 분류
