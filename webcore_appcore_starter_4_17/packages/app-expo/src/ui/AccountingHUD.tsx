@@ -111,6 +111,49 @@ export default function AccountingHUD({ cfg }: Props) {
     startQueueAutoFlush(cfg);
   }, [cfg]);
   
+  // 엔진 초기화 (R8-S2)
+  useEffect(() => {
+    let cancelled = false;
+    
+    async function initEngine() {
+      try {
+        setEngineLoading(true);
+        setEngineError(null);
+        
+        const engine = getSuggestEngine(cfg);
+        setEngineMeta({
+          label: engine.meta.label,
+          type: engine.meta.type,
+        });
+        
+        // 엔진이 초기화 메서드를 가지고 있으면 호출
+        if (engine.initialize && !engine.isReady) {
+          await engine.initialize();
+        }
+        
+        if (!cancelled) {
+          setEngineLoading(false);
+          setEngineMeta({
+            label: engine.meta.label,
+            type: engine.meta.type,
+          });
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          console.error('[AccountingHUD] Engine initialization failed:', error);
+          setEngineError(error.message || 'Engine initialization failed');
+          setEngineLoading(false);
+        }
+      }
+    }
+    
+    initEngine();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, [cfg]);
+  
   // localStorage에서 수동 검토 카운트 로드 (Mock 모드용)
   useEffect(() => {
     if (isMock(cfg)) {
