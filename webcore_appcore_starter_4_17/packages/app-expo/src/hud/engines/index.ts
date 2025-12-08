@@ -4,11 +4,11 @@
  * R8-S2: 엔진 모드 확장 및 메타 정보 추가
  */
 
-import type { SuggestEngine, SuggestContext, SuggestInput, SuggestResult, EngineMode, SuggestEngineMeta } from './types';
-import { LocalLLMEngineV1 } from './local-llm';
-import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem, ClientCfg as AccountingClientCfg } from '../accounting-api';
-import { localRuleEngineV1 as oldLocalRuleEngineV1 } from '../accounting-api';
-import { isMock } from '../accounting-api';
+import type { SuggestEngine, SuggestContext, SuggestInput, SuggestResult, EngineMode, SuggestEngineMeta } from './types.js';
+import { LocalLLMEngineV1 } from './local-llm.js';
+import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem, ClientCfg as AccountingClientCfg } from '../accounting-api.js';
+import { localRuleEngineV1 as oldLocalRuleEngineV1 } from '../accounting-api.js';
+import { isMock } from '../accounting-api.js';
 
 /**
  * SuggestEngine용 ClientCfg (accounting-api의 ClientCfg를 확장)
@@ -139,11 +139,6 @@ export async function suggestWithEngine<TPayload = unknown>(
   
   if (!engine.canHandleDomain(ctx.domain)) {
     throw new Error(`Engine ${engine.id} does not support domain: ${ctx.domain}`);
-  }
-
-  // 엔진이 초기화되지 않았으면 자동으로 초기화
-  if (!engine.isReady && engine.initialize) {
-    await engine.initialize();
   }
 
   return engine.suggest<TPayload>(ctx, input);

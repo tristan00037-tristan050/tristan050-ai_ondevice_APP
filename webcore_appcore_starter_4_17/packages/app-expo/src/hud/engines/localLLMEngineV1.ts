@@ -10,7 +10,7 @@ import type {
   SuggestInput,
   SuggestResult,
   SuggestEngineMeta,
-} from './types';
+} from './types.js';
 
 export class LocalLLMEngineV1 implements SuggestEngine {
   readonly id = 'local-llm-v1';

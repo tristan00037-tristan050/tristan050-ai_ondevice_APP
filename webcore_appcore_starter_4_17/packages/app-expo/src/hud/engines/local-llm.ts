@@ -11,10 +11,9 @@ import type {
   SuggestInput,
   SuggestResult,
   SuggestEngineMeta,
-} from './types';
-import type { ClientCfg } from './index';
-import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem } from '../accounting-api';
-import { localRuleEngineV1 as oldLocalRuleEngineV1 } from '../accounting-api';
+} from './types.js';
+import type { ClientCfg } from './index.js';
+import { LocalRuleEngineV1Adapter } from './index.js';
 
 export interface LocalLLMEngineOptions {
   cfg: ClientCfg;
@@ -118,11 +117,17 @@ export class LocalLLMEngineV1 implements SuggestEngine {
 
   private readonly cfg: ClientCfg;
   private readonly adapter: OnDeviceLLMAdapter;
+  private readonly fallbackRuleEngine: LocalRuleEngineV1Adapter;
 
   constructor(options: LocalLLMEngineOptions) {
     this.cfg = options.cfg;
     // 더미 어댑터 사용 (나중에 실제 LLM 어댑터로 교체 가능)
     this.adapter = new DummyLLMAdapter();
+    // 추론 품질이 충분하지 않을 때를 대비해 rule 엔진을 fallback으로 사용
+    this.fallbackRuleEngine = new LocalRuleEngineV1Adapter({
+      cfg: this.cfg,
+      mode: 'rule',
+    });
   }
 
   async initialize(): Promise<void> {
@@ -176,40 +181,9 @@ export class LocalLLMEngineV1 implements SuggestEngine {
         confidence: items.length > 0 ? items[0].score : 0.5,
       };
     } catch (error) {
-      // LLM 추론 실패 시 fallback 규칙 엔진 사용 (순환 참조 방지를 위해 직접 호출)
+      // LLM 추론 실패 시 fallback 규칙 엔진 사용
       console.warn('[LocalLLMEngineV1] LLM inference failed, falling back to rule engine:', error);
-      
-      // accounting-api의 localRuleEngineV1을 직접 사용
-      const oldInput = {
-        description: input.text,
-        amount: typeof input.meta?.amount === 'number' ? input.meta.amount : undefined,
-        currency: typeof input.meta?.currency === 'string' ? input.meta.currency : undefined,
-      };
-      
-      const oldItems: OldSuggestItem[] = await (oldLocalRuleEngineV1 as OldSuggestEngine).suggest(oldInput);
-      
-      // 새로운 SuggestItem 형식으로 변환
-      const fallbackItems = oldItems.map((item, idx) => ({
-        id: item.id || `fallback-${idx}`,
-        title: item.description || item.account || 'Unknown',
-        description: item.rationale,
-        score: item.score,
-        payload: {
-          ...item,
-          account: item.account,
-          amount: item.amount,
-          currency: item.currency,
-          vendor: item.vendor,
-          risk: item.risk,
-        } as TPayload,
-        source: 'local-rule' as const,
-      }));
-      
-      return {
-        items: fallbackItems,
-        engine: 'local-llm-v1-fallback',
-        confidence: oldItems.length > 0 ? oldItems[0].score : 0.5,
-      };
+      return this.fallbackRuleEngine.suggest<TPayload>(ctx, input);
     }
   }
 }
