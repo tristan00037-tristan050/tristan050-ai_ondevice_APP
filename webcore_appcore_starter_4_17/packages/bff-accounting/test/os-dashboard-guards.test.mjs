@@ -80,8 +80,8 @@ async function main() {
   });
   if (test2) passed++; else failed++;
 
-  // 테스트 3: 응답 스키마 회귀 테스트
-  const test3 = await test('응답 스키마 회귀 테스트 - pilot, health, risk 키 존재 확인', async () => {
+  // 테스트 3: 응답 스키마 회귀 테스트 (R8-S2: engine 섹션 포함)
+  const test3 = await test('응답 스키마 회귀 테스트 - pilot, health, risk, engine 키 존재 확인', async () => {
     const response = await fetch(`${BASE_URL}/v1/accounting/os/dashboard`, {
       method: 'GET',
       headers: TEST_HEADERS,
@@ -93,7 +93,7 @@ async function main() {
 
     const body = await response.json();
     const keys = Object.keys(body).sort();
-    const requiredKeys = ['pilot', 'health', 'risk', 'queue', 'window'];
+    const requiredKeys = ['engine', 'health', 'pilot', 'queue', 'risk', 'window'];
     const missingKeys = requiredKeys.filter((key) => !keys.includes(key));
 
     if (missingKeys.length > 0) {
@@ -106,6 +106,49 @@ async function main() {
     }
   });
   if (test3) passed++; else failed++;
+
+  // 테스트 3-1: engine 섹션 구조 검증 (R8-S2)
+  const test3_1 = await test('engine 섹션 구조 검증 - primary_mode 및 counts 검증', async () => {
+    const response = await fetch(`${BASE_URL}/v1/accounting/os/dashboard`, {
+      method: 'GET',
+      headers: TEST_HEADERS,
+    });
+
+    if (response.status !== 200) {
+      throw new Error(`Expected 200, got ${response.status}`);
+    }
+
+    const body = await response.json();
+    const engine = body.engine;
+
+    if (!engine || typeof engine !== 'object') {
+      throw new Error('Missing engine section');
+    }
+
+    // primary_mode는 null 또는 EngineMode 문자열이어야 함
+    if (engine.primary_mode !== null && engine.primary_mode !== undefined) {
+      const validModes = ['mock', 'rule', 'local-llm', 'remote'];
+      if (!validModes.includes(engine.primary_mode)) {
+        throw new Error(`Invalid primary_mode: ${engine.primary_mode}`);
+      }
+    }
+
+    // counts 객체 검증
+    if (!engine.counts || typeof engine.counts !== 'object') {
+      throw new Error('Missing or invalid engine.counts');
+    }
+
+    const modes = ['mock', 'rule', 'local-llm', 'remote'];
+    for (const mode of modes) {
+      if (typeof engine.counts[mode] !== 'number') {
+        throw new Error(`engine.counts.${mode} is not a number`);
+      }
+      if (engine.counts[mode] < 0) {
+        throw new Error(`engine.counts.${mode} must be non-negative`);
+      }
+    }
+  });
+  if (test3_1) passed++; else failed++;
 
   // 테스트 4: 인증 없이 호출 시 403 Forbidden
   const test4 = await test('인증 없이 호출 시 403 Forbidden', async () => {
