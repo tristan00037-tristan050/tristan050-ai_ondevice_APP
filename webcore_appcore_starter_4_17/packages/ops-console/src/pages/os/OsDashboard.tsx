@@ -296,6 +296,33 @@ export default function OsDashboard() {
         </div>
       </div>
 
+      {/* CS 모듈 (준비 중) */}
+      <div className="bg-white rounded-lg shadow p-6 mt-8">
+        <h2 className="text-xl font-semibold mb-4">CS 모듈 (준비 중)</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-gray-50 p-6 rounded-lg border-l-4 border-gray-400">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">
+              CS 티켓 처리 현황 (준비 중)
+              <span className="ml-2 text-gray-400 cursor-help" title="CS 도메인용 지표 슬롯입니다. R8-S1에서는 실제 데이터 연동 없이 자리만 구성합니다.">
+                ⓘ
+              </span>
+            </h3>
+            <p className="text-3xl font-bold text-gray-400">--</p>
+            <p className="text-xs text-gray-500 mt-2">준비 중</p>
+          </div>
+          <div className="bg-gray-50 p-6 rounded-lg border-l-4 border-gray-400">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">
+              CS 응답 품질 지표 (준비 중)
+              <span className="ml-2 text-gray-400 cursor-help" title="향후 온디바이스 LLM 기반 CS 응답 품질 지표가 들어갈 자리입니다.">
+                ⓘ
+              </span>
+            </h3>
+            <p className="text-3xl font-bold text-gray-400">--</p>
+            <p className="text-xs text-gray-500 mt-2">준비 중</p>
+          </div>
+        </div>
+      </div>
+
       {/* Demo 플로우 링크 */}
       <div className="bg-white rounded-lg shadow p-6 mt-8">
         <h2 className="text-xl font-semibold mb-4">Demo 플로우</h2>
