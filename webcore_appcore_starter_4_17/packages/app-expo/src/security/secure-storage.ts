@@ -16,6 +16,49 @@ type RandomType = typeof import('expo-random');
 
 type Bytes = Uint8Array;
 
+// 웹 환경 체크: window가 있고 navigator.product가 'ReactNative'가 아니면 웹
+const isWeb = typeof window !== 'undefined' && 
+  (typeof navigator === 'undefined' || (navigator as any).product !== 'ReactNative');
+
+// Base64url 인코딩/디코딩 유틸 (웹 환경용)
+function bytesToBase64url(bytes: Uint8Array): string {
+  if (isWeb) {
+    // 웹 환경: Uint8Array를 문자열로 변환 후 btoa 사용
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    // base64를 base64url로 변환 (+ -> -, / -> _, = 제거)
+    return btoa(binary)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
+  } else {
+    // Node.js/RN 환경: Buffer 사용
+    return Buffer.from(bytes).toString('base64url');
+  }
+}
+
+function base64urlToBytes(s: string): Uint8Array {
+  if (isWeb) {
+    // base64url를 base64로 변환
+    let base64 = s.replace(/-/g, '+').replace(/_/g, '/');
+    // padding 추가
+    while (base64.length % 4) {
+      base64 += '=';
+    }
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  } else {
+    // Node.js/RN 환경: Buffer 사용
+    return new Uint8Array(Buffer.from(s, 'base64url'));
+  }
+}
+
 // 런타임에서 동적으로 로드 (React Native 환경)
 // Node.js 빌드 환경에서는 타입 체크만 수행
 let SecureStore: SecureStoreType | null = null;
@@ -23,6 +66,11 @@ let MMKV: MMKVType['MMKV'] | null = null;
 let Random: RandomType | null = null;
 
 async function ensureModules(): Promise<void> {
+  // 웹 환경에서는 expo 모듈을 사용하지 않음
+  if (isWeb) {
+    return;
+  }
+  
   if (SecureStore && MMKV && Random) {
     return;
   }
@@ -41,12 +89,27 @@ async function ensureModules(): Promise<void> {
 }
 
 async function getOrCreateKey(): Promise<string> {
+  const keyId = 'appcore.kek.v1';
+  
+  // 웹 환경: localStorage 사용
+  if (isWeb) {
+    let key = localStorage.getItem(keyId);
+    if (!key) {
+      // 웹에서 랜덤 키 생성 (crypto.getRandomValues 사용)
+      const bytes = new Uint8Array(32);
+      crypto.getRandomValues(bytes);
+      key = bytesToBase64url(bytes);
+      localStorage.setItem(keyId, key);
+    }
+    return key;
+  }
+  
+  // React Native 환경: SecureStore 사용
   await ensureModules();
   if (!SecureStore) {
     throw new Error('SecureStore not available in this environment');
   }
   
-  const keyId = 'appcore.kek.v1';
   let key: string | null = await SecureStore.getItemAsync(keyId);
   
   if (!key) {
@@ -55,7 +118,7 @@ async function getOrCreateKey(): Promise<string> {
     }
     const bytes = await Random.getRandomBytesAsync(32);
     // Base64url
-    key = Buffer.from(bytes).toString('base64url');
+    key = bytesToBase64url(bytes);
     if (!key) {
       throw new Error('Failed to generate key');
     }
@@ -75,7 +138,49 @@ async function getOrCreateKey(): Promise<string> {
 // SecureStore에 보관된 KEK로 MMKV encryptionKey를 설정
 let _mmkv: any = null;
 
+// 웹 환경용 localStorage 래퍼
+class WebStorageKV {
+  private prefix: string;
+  
+  constructor(prefix: string) {
+    this.prefix = prefix;
+  }
+  
+  getString(key: string): string | undefined {
+    const value = localStorage.getItem(`${this.prefix}:${key}`);
+    return value ?? undefined;
+  }
+  
+  set(key: string, value: string): void {
+    localStorage.setItem(`${this.prefix}:${key}`, value);
+  }
+  
+  delete(key: string): void {
+    localStorage.removeItem(`${this.prefix}:${key}`);
+  }
+  
+  getAllKeys(): string[] {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const fullKey = localStorage.key(i);
+      if (fullKey?.startsWith(`${this.prefix}:`)) {
+        keys.push(fullKey.substring(this.prefix.length + 1));
+      }
+    }
+    return keys;
+  }
+}
+
 export async function getSecureKV(): Promise<any> {
+  // 웹 환경: localStorage 기반 KV 사용
+  if (isWeb) {
+    if (!_mmkv) {
+      _mmkv = new WebStorageKV('appcore.secure');
+    }
+    return _mmkv;
+  }
+  
+  // React Native 환경: MMKV 사용
   await ensureModules();
   if (!MMKV) {
     throw new Error('MMKV not available in this environment');
@@ -116,11 +221,11 @@ async function importKey(rawKey: Bytes): Promise<CryptoKey> {
 }
 
 function b64uToBytes(s: string): Bytes {
-  return new Uint8Array(Buffer.from(s, 'base64url'));
+  return base64urlToBytes(s);
 }
 
 function bytesToB64u(b: Bytes): string {
-  return Buffer.from(b).toString('base64url');
+  return bytesToBase64url(b);
 }
 
 /**
@@ -134,10 +239,17 @@ export async function saveEncryptedReport(id: string, payload: unknown): Promise
   const kek = await getOrCreateKey();
   const key = await importKey(b64uToBytes(kek));
   
-  if (!Random) {
-    throw new Error('Random not available in this environment');
+  // 웹 환경: crypto.getRandomValues 사용
+  let iv: Uint8Array;
+  if (isWeb) {
+    iv = new Uint8Array(12);
+    crypto.getRandomValues(iv);
+  } else {
+    if (!Random) {
+      throw new Error('Random not available in this environment');
+    }
+    iv = await Random.getRandomBytesAsync(12);
   }
-  const iv = await Random.getRandomBytesAsync(12);
   const data = new TextEncoder().encode(JSON.stringify(payload));
   
   const ct = new Uint8Array(await subtle().encrypt({ name: 'AES-GCM', iv: iv as unknown as BufferSource }, key, data));
@@ -212,15 +324,33 @@ export async function rotateLocalKey(): Promise<void> {
   
   const oldKey = await getOrCreateKey();
   const kv = await getSecureKV();
-  const keys = kv.getAllKeys().filter(k => k.startsWith('report:'));
+  const keys = kv.getAllKeys().filter((k: string) => k.startsWith('report:'));
   
   const oldCryptoKey = await importKey(b64uToBytes(oldKey));
-  const newKeyBytes = await Random.getRandomBytesAsync(32);
-  const newKeyB64u = Buffer.from(newKeyBytes).toString('base64url');
   
-  await SecureStore.setItemAsync('appcore.kek.v1', newKeyB64u, {
-    keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
-  });
+  // 웹 환경: crypto.getRandomValues 사용
+  let newKeyBytes: Uint8Array;
+  if (isWeb) {
+    newKeyBytes = new Uint8Array(32);
+    crypto.getRandomValues(newKeyBytes);
+  } else {
+    if (!Random) {
+      throw new Error('Random not available in this environment');
+    }
+    newKeyBytes = await Random.getRandomBytesAsync(32);
+  }
+  const newKeyB64u = bytesToBase64url(newKeyBytes);
+  
+  if (isWeb) {
+    localStorage.setItem('appcore.kek.v1', newKeyB64u);
+  } else {
+    if (!SecureStore) {
+      throw new Error('SecureStore not available');
+    }
+    await SecureStore.setItemAsync('appcore.kek.v1', newKeyB64u, {
+      keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+    });
+  }
   
   const newCryptoKey = await importKey(new Uint8Array(newKeyBytes));
   
@@ -231,7 +361,18 @@ export async function rotateLocalKey(): Promise<void> {
     const ctOld = b64uToBytes(obj.ct);
     
     const pt = await subtle().decrypt({ name: 'AES-GCM', iv: ivOld as unknown as BufferSource }, oldCryptoKey, ctOld as unknown as BufferSource);
-    const newIv = await Random.getRandomBytesAsync(12);
+    
+    // 웹 환경: crypto.getRandomValues 사용
+    let newIv: Uint8Array;
+    if (isWeb) {
+      newIv = new Uint8Array(12);
+      crypto.getRandomValues(newIv);
+    } else {
+      if (!Random) {
+        throw new Error('Random not available');
+      }
+      newIv = await Random.getRandomBytesAsync(12);
+    }
     const ctNew = new Uint8Array(await subtle().encrypt({ name: 'AES-GCM', iv: newIv as unknown as BufferSource }, newCryptoKey, pt));
     
     kv.set(k, JSON.stringify({ v: 1, iv: bytesToB64u(newIv), ct: bytesToB64u(ctNew) }));

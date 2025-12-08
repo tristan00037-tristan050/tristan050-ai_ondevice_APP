@@ -13,7 +13,8 @@
     "./exports.js": "./dist/exports.js",
     "./reconciliation.js": "./dist/reconciliation.js",
     "./suggest.js": "./dist/suggest.js",
-    "./topn.js": "./dist/topn.js"
+    "./topn.js": "./dist/topn.js",
+    "./riskScoreEngine.js": "./dist/riskScoreEngine.js"
   },
   "typesVersions": {
     "*": {
@@ -22,6 +23,7 @@
       "reconciliation.js": ["dist/reconciliation.d.ts"],
       "suggest.js": ["dist/suggest.d.ts"],
       "topn.js": ["dist/topn.d.ts"],
+      "riskScoreEngine.js": ["dist/riskScoreEngine.d.ts"],
       "*": ["dist/index.d.ts"]
     }
   },

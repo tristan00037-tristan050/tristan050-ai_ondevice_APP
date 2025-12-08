@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button, Alert } from 'react-native';
-import { mkHeaders, type ClientCfg } from '../../hud/accounting-api.js';
+import { mkHeaders, isMock, type ClientCfg } from '../../hud/accounting-api';
 
 export default function ManualReviewButton({
   cfg,
@@ -11,6 +11,7 @@ export default function ManualReviewButton({
   amount,
   currency,
   isHighValue,
+  onSuccess,
 }: {
   cfg: ClientCfg;
   subjectType: string;
@@ -20,8 +21,17 @@ export default function ManualReviewButton({
   amount?: number;
   currency?: string;
   isHighValue?: boolean;
+  onSuccess?: () => void;
 }) {
   const onPress = async () => {
+    // Mock 모드에서는 실제 요청을 보내지 않음
+    if (isMock(cfg)) {
+      console.log('[MOCK] ManualReviewButton:', { subjectType, subjectId, reason, reasonCode, amount, currency, isHighValue });
+      Alert.alert('수동 검토 요청이 접수되었습니다. (모의 / 서버 전송 없음)');
+      onSuccess?.();
+      return;
+    }
+
     try {
       const headers = mkHeaders(cfg, {
         'Content-Type': 'application/json',
@@ -54,7 +64,8 @@ export default function ManualReviewButton({
         body: JSON.stringify(body),
       });
       if (r.ok) {
-        Alert.alert('수동 검토 요청이 접수되었습니다.');
+        onSuccess?.();
+        // Alert는 호출하지 않고, 상위 컴포넌트에서 메시지 표시
       } else {
         const text = await r.text();
         Alert.alert('요청 실패', text);
@@ -64,6 +75,7 @@ export default function ManualReviewButton({
     }
   };
 
+  // @ts-expect-error - React Native JSX type compatibility issue with @types/react 18
   return <Button title="수동 검토 요청" onPress={onPress} />;
 }
 

@@ -37,7 +37,7 @@ const router = Router();
  * POST /v1/accounting/exports/reports
  * Export 잡 생성
  */
-router.post('/reports', requireTenantAuth, requireRole('auditor'), async (req: Request, res: Response) => {
+router.post('/reports', requireTenantAuth, requireRole('operator'), async (req: Request, res: Response) => {
   try {
     const idem = req.get('Idempotency-Key');
     if (!idem) {

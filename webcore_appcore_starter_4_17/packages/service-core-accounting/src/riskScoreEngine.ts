@@ -38,10 +38,21 @@ export type RiskInput = {
   };
 };
 
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export interface RiskScore {
+  posting_id: string;
+  tenant: string;
+  level: RiskLevel;
+  score: number;          // 0~100
+  reasons: string[];      // ["HIGH_VALUE", "LOW_CONFIDENCE", ...]
+  created_at: Date;
+}
+
 export type RiskResult = {
-  score: number;        // 0.0 ~ 1.0 (높을수록 위험)
-  level: 'LOW' | 'MEDIUM' | 'HIGH';  // 리스크 레벨
-  reason: string;      // 위험 판단 근거 설명
+  score: number;        // 0.0 ~ 1.0 또는 0~100 (높을수록 위험)
+  level: RiskLevel;     // 리스크 레벨
+  reason: string;       // 위험 판단 근거 설명
   reasons?: string[];   // 위험 요인 설명 (하위 호환성)
   version: string;      // 엔진 버전
   metadata?: Record<string, any>;
@@ -52,6 +63,21 @@ export interface RiskScoreEngine {
    * 리스크 평가 수행 (일반)
    */
   evaluate(input: RiskInput): Promise<RiskResult>;
+  
+  /**
+   * Posting에 대한 리스크 평가 (R8-S1 v1)
+   * 
+   * @param input - Posting 정보
+   * @returns 리스크 평가 결과
+   */
+  scorePosting(input: {
+    tenant: string;
+    postingId: string;
+    amount: number;
+    currency: string;
+    modelConfidence?: number;
+    meta?: Record<string, unknown>;
+  }): Promise<RiskScore>;
   
   /**
    * 고액 거래 리스크 평가 (R8-S1 v1)
@@ -86,6 +112,24 @@ export interface RiskScoreEngine {
  */
 export class NoopRiskScore implements RiskScoreEngine {
   readonly version = 'noop-0';
+
+  async scorePosting(input: {
+    tenant: string;
+    postingId: string;
+    amount: number;
+    currency: string;
+    modelConfidence?: number;
+    meta?: Record<string, unknown>;
+  }): Promise<RiskScore> {
+    return {
+      posting_id: input.postingId,
+      tenant: input.tenant,
+      level: 'LOW',
+      score: 0,
+      reasons: [],
+      created_at: new Date(),
+    };
+  }
 
   async evaluate(input: RiskInput): Promise<RiskResult> {
     return {
@@ -141,7 +185,17 @@ export function resolveRiskEngine(name: string): RiskScoreEngine {
  * 환경변수 기반 엔진 리졸브
  */
 export function getRiskEngine(): RiskScoreEngine {
-  const engineName = process.env.RISK_ENGINE || 'noop';
+  const engineName = process.env.RISK_ENGINE || 'v1'; // 기본값을 v1으로 변경
   return resolveRiskEngine(engineName);
+}
+
+// v1 엔진 등록 (런타임에서 동적 import)
+if (typeof process !== 'undefined' && process.env) {
+  // Node.js 환경에서만 실행
+  import('./riskScoreEngineV1.js').then(({ RiskScoreEngineV1 }) => {
+    registerRiskEngine('v1', () => new RiskScoreEngineV1());
+  }).catch(() => {
+    // import 실패 시 무시 (빌드 환경 등)
+  });
 }
 

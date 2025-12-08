@@ -5,11 +5,11 @@
  * @module app-expo
  */
 
-export * from './security/secure-storage.js';
-export * from './hud/accounting-api.js';
-export { default as AccountingHUD } from './ui/AccountingHUD.js';
-export * from './ui/components/RedactedText.js';
-export * from './ui/offline/offline-queue.js';
-export * from './ui/hooks/useOnline.js';
-export * from './ui/hooks/useScreenPrivacy.js';
+export * from './security/secure-storage';
+export * from './hud/accounting-api';
+export { default as AccountingHUD } from './ui/AccountingHUD';
+export * from './ui/components/RedactedText';
+export * from './ui/offline/offline-queue';
+export * from './ui/hooks/useOnline';
+export * from './ui/hooks/useScreenPrivacy';
 

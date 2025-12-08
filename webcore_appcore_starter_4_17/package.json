@@ -44,7 +44,17 @@
     "ci:bench:accounting": "node scripts/bench_accounting_ci.mjs",
     "test:e2e:accounting": "node tests/accounting_e2e.mjs",
     "report:pilot": "node scripts/report_pilot_metrics.mjs --from=2025-12-01 --to=2025-12-31",
-    "report:adapter-slo": "node scripts/report_adapter_slo.mjs"
+    "report:adapter-slo": "node scripts/report_adapter_slo.mjs",
+    "ops:local:up": "bash scripts/ops_local_up.sh",
+    "ops:local:status": "bash scripts/ops_local_status.sh",
+    "ops:local:down": "bash scripts/ops_local_down.sh",
+    "dev:bff": "npm run dev --workspace=@appcore/bff-accounting",
+    "dev:web": "npm run dev --workspace=@appcore/ops-console",
+    "dev:app": "cd packages/app-expo && npx expo start --web",
+    "demo:web": "npm run dev --workspace=@appcore/ops-console",
+    "demo:app:mock": "cd packages/app-expo && EXPO_PUBLIC_DEMO_MODE=mock npx expo start --web",
+    "demo:app:live": "cd packages/app-expo && EXPO_PUBLIC_DEMO_MODE=live npx expo start --web",
+    "demo:seed": "node scripts/seed_demo_data.mjs"
   },
   "devDependencies": {
     "ajv": "^8.12.0",

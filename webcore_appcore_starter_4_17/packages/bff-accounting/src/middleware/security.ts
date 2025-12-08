@@ -9,7 +9,7 @@ import rateLimit from 'express-rate-limit';
 import type { RequestHandler } from 'express';
 
 export const securityHeaders: RequestHandler = helmet({
-  crossOriginResourcePolicy: { policy: 'same-site' },
+  crossOriginResourcePolicy: false, // CORS를 위해 비활성 (개발 환경)
   contentSecurityPolicy: false, // BFF API이므로 비활성
 });
 

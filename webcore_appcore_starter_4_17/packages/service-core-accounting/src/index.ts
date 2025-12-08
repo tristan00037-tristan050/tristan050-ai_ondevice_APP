@@ -12,3 +12,5 @@ export * from './suggest.js';
 export * from './topn.js';
 export * from './audit.js';
 export * from './riskScoreEngine.js';
+export * from './riskScoreEngineV1.js';
+export type { RiskScore, RiskLevel } from './riskScoreEngine.js';

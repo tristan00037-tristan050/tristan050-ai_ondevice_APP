@@ -13,7 +13,9 @@ export function RedactedText({ value, masked = true }: { value: string; masked?:
   const display = show ? value : value.replace(/./g, '•');
 
   return (
+    // @ts-expect-error - React Native JSX type compatibility issue with @types/react 18
     <Pressable onPress={() => setShow((s) => !s)}>
+      {/* @ts-expect-error - React Native JSX type compatibility issue with @types/react 18 */}
       <Text>
         {display} {show ? '🙈' : '👁️'}
       </Text>

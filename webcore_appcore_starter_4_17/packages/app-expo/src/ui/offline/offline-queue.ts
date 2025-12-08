@@ -5,8 +5,8 @@
  */
 
 import NetInfo from '@react-native-community/netinfo';
-import { getSecureKV } from '../../security/secure-storage.js';
-import { mkHeaders, type ClientCfg } from '../../hud/accounting-api.js';
+import { getSecureKV } from '../../security/secure-storage';
+import { mkHeaders, isMock, type ClientCfg } from '../../hud/accounting-api';
 
 type QueueItem =
   | { kind: 'approval'; id: string; action: 'approve' | 'reject'; note?: string; idem: string; top1_selected?: boolean; selected_rank?: number; ai_score?: number }
@@ -16,11 +16,36 @@ type QueueItem =
   | { kind: 'suggest'; body: any; idem: string };
 
 const QUEUE_PREFIX = 'q:acct:';
+const MAX_QUEUE_SIZE = 100; // 최대 큐 길이 상한
+const QUEUE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24시간
 
 const kvKey = (n: string) => `${QUEUE_PREFIX}${n}`;
 
-export async function enqueue(item: QueueItem) {
+export async function enqueue(item: QueueItem): Promise<string> {
+  // Mock 모드에서는 큐에 넣지 않음
+  // (이미 trySend에서 처리하지만, 이중 체크)
+  
   const kv = await getSecureKV();
+  
+  // 현재 큐 크기 확인
+  const keys = await listQueue();
+  if (keys.length >= MAX_QUEUE_SIZE) {
+    throw new Error('QUEUE_FULL');
+  }
+  
+  // 오래된 항목 정리 (24시간 이상)
+  const now = Date.now();
+  for (const key of keys) {
+    try {
+      const timestamp = parseInt(key.split('_')[1] || '0');
+      if (now - timestamp > QUEUE_EXPIRY_MS) {
+        await clearItem(key);
+      }
+    } catch {
+      // 파싱 실패 시 무시
+    }
+  }
+  
   const id = `it_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   kv.set(kvKey(id), JSON.stringify(item));
   return id;
@@ -37,6 +62,13 @@ export async function clearItem(storageKey: string) {
 }
 
 async function trySend(cfg: ClientCfg, item: QueueItem) {
+  // Mock 모드에서는 실제 요청을 보내지 않음
+  if (isMock(cfg)) {
+    console.log('[MOCK] offline-queue trySend:', item.kind);
+    // 그냥 성공 처리
+    return { success: true, mock: true };
+  }
+  
   const base = cfg.baseUrl;
   const h = (extra?: Record<string, string>) => mkHeaders(cfg, extra);
   const hdr = (idem: string) => h({ 'Idempotency-Key': idem });
@@ -122,8 +154,16 @@ async function trySend(cfg: ClientCfg, item: QueueItem) {
 }
 
 export async function flushQueue(cfg: ClientCfg) {
+  // Mock 모드에서는 큐를 비우지 않음 (또는 모의로만 처리)
+  if (isMock(cfg)) {
+    console.log('[MOCK] flushQueue: skip (mock mode)');
+    return;
+  }
+  
   const keys = await listQueue();
-  for (const k of keys) {
+  // Rate limit을 고려하여 각 요청 사이에 지연 추가 (429 에러 방지)
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
     const kv = await getSecureKV();
     const raw = kv.getString(k);
     if (!raw) {
@@ -133,8 +173,16 @@ export async function flushQueue(cfg: ClientCfg) {
     try {
       await trySend(cfg, item);
       await clearItem(k);
-    } catch {
+      // Rate limit 방지를 위해 요청 사이에 100ms 지연 (429 에러 방지)
+      if (i < keys.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } catch (err: any) {
       // 실패 시 item 유지 (다음 flush에서 재시도)
+      // 429 (Rate Limit) 에러인 경우 더 긴 지연 후 재시도
+      if (err?.message?.includes('429')) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
   }
 }
@@ -142,6 +190,12 @@ export async function flushQueue(cfg: ClientCfg) {
 let started = false;
 
 export function startQueueAutoFlush(cfg: ClientCfg) {
+  // Mock 모드에서는 자동 flush를 시작하지 않음
+  if (isMock(cfg)) {
+    console.log('[MOCK] startQueueAutoFlush: skip (mock mode)');
+    return;
+  }
+  
   if (started) {
     return;
   }

@@ -31,20 +31,35 @@ export * from './repos/auditRepo.js';
 export * from './repos/externalLedgerRepo.js';
 export * from './repos/exportsRepo.js';
 export * from './repos/reconRepo.js';
+export * from './repos/riskRepo.js';
+export * from './repos/manualReviewRepo.js';
 
 export async function exec(sql: string, params?: any[]) {
   return pool.query(sql, params);
 }
 
 export async function migrateDir(dir = path.join(__dirname, '../migrations')) {
-  const files = fs.readdirSync(dir)
-    .filter(f => /^\d+_.*\.sql$/.test(f))
-    .sort();
+  // 마이그레이션 실행 시 별도 Pool 생성 (DATABASE_URL 확인)
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
   
-  for (const f of files) {
-    const sql = fs.readFileSync(path.join(dir, f), 'utf8');
-    await exec(sql);
-    console.log(`✅ Applied migration: ${f}`);
+  const migratePool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+  });
+  
+  try {
+    const files = fs.readdirSync(dir)
+      .filter(f => /^\d+_.*\.sql$/.test(f))
+      .sort();
+    
+    for (const f of files) {
+      const sql = fs.readFileSync(path.join(dir, f), 'utf8');
+      await migratePool.query(sql);
+      console.log(`✅ Applied migration: ${f}`);
+    }
+  } finally {
+    await migratePool.end();
   }
 }
 

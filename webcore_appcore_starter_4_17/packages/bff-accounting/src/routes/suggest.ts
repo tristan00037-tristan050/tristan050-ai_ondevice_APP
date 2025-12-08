@@ -9,6 +9,8 @@ import { Router, Request, Response } from 'express';
 import Ajv, { type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import { suggestPostings, type SuggestRequest, type SuggestResponse } from '@appcore/service-core-accounting/suggest.js';
+import { getRiskEngine } from '@appcore/service-core-accounting/riskScoreEngine.js';
+import { upsertRiskScore } from '@appcore/data-pg';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -125,8 +127,73 @@ router.post('/suggest', async (req: Request, res: Response) => {
     const policyVersion = request.policy_version || 'v1.0.0';
     const response: SuggestResponse = suggestPostings(request, policyVersion);
 
-    // 8. 응답 반환 (200)
-    res.status(200).json(response);
+    // 8. RiskScoreEngine으로 각 posting에 대한 리스크 점수 계산 및 저장
+    const riskEngine = getRiskEngine();
+    
+    // postings를 items 형태로 변환하고 risk 정보 추가
+    const itemsWithRisk = await Promise.all(
+      (response.postings || []).map(async (posting: any, index: number) => {
+        try {
+          // request에서 해당 posting의 원본 정보 가져오기
+          const originalItem = request.items[index] || request.items[0];
+          const amount = parseFloat(originalItem?.amount || '0');
+          const currency = originalItem?.currency || 'KRW';
+          const postingId = `posting-${Date.now()}-${index}`;
+          
+          // 리스크 점수 계산
+          const riskScore = await riskEngine.scorePosting({
+            tenant: tenantId,
+            postingId,
+            amount,
+            currency,
+            modelConfidence: response.confidence, // 전체 신뢰도 사용
+          });
+          
+          // DB에 저장
+          await upsertRiskScore(riskScore);
+          
+          // 응답에 risk 정보 추가
+          return {
+            id: postingId,
+            account: posting.account,
+            amount: amount.toString(),
+            currency,
+            debit: posting.debit,
+            credit: posting.credit,
+            note: posting.note,
+            risk: {
+              level: riskScore.level,
+              reasons: riskScore.reasons,
+              score: riskScore.score,
+            },
+          };
+        } catch (error) {
+          console.error(`Failed to calculate risk for posting ${index}:`, error);
+          // 에러가 발생해도 기본 응답은 반환
+          const originalItem = request.items[index] || request.items[0];
+          return {
+            id: `posting-${Date.now()}-${index}`,
+            account: posting.account,
+            amount: originalItem?.amount || '0',
+            currency: originalItem?.currency || 'KRW',
+            debit: posting.debit,
+            credit: posting.credit,
+            note: posting.note,
+            risk: {
+              level: 'LOW' as const,
+              reasons: [],
+              score: 0,
+            },
+          };
+        }
+      })
+    );
+
+    // 9. 응답 반환 (200) - risk 정보 포함
+    res.status(200).json({
+      ...response,
+      items: itemsWithRisk,
+    });
   } catch (error) {
     console.error('Error in suggest postings:', error);
     

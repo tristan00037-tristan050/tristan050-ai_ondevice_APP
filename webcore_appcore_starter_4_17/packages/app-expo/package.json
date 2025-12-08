@@ -3,24 +3,29 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./App.tsx",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "start": "expo start",
     "build": "tsc -b || true",
     "typecheck": "tsc -b --pretty false || true"
   },
   "dependencies": {
-    "expo-secure-store": "^12.0.0",
-    "expo-random": "^13.0.0",
-    "expo-blur": "^13.0.0",
-    "expo-screen-capture": "^6.0.0",
     "@react-native-community/netinfo": "^11.0.0",
-    "react-native-mmkv": "^2.10.2"
+    "expo-blur": "^13.0.0",
+    "expo-random": "^13.0.0",
+    "expo-screen-capture": "^6.0.0",
+    "expo-secure-store": "^12.0.0",
+    "react-dom": "^19.2.1",
+    "react-native-mmkv": "^2.10.2",
+    "react-native-web": "^0.21.2"
   },
   "peerDependencies": {
-    "react-native": ">=0.72",
-    "expo": ">=50.0.0"
+    "expo": ">=50.0.0",
+    "react-native": ">=0.72"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -29,4 +34,3 @@
     "typescript": "^5.4.0"
   }
 }
-
