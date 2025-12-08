@@ -47,11 +47,6 @@ npm run demo:web
 - BFF API 호출 중 성공한 비율
 - 툴팁: "BFF API 호출 중 성공한 비율입니다."
 
-**"엔진 모드" (R8-S2 신규)**
-- 현재 주요 엔진 모드 (On-device LLM / 규칙 기반 / Mock 등)
-- 지난 24시간 기준 엔진 사용 분포
-- 툴팁: "지난 24시간 기준 엔진 사용 분포와 주요 엔진 모드입니다."
-
 #### 2. Demo 배너 설명
 
 > "지금은 데모/파일럿 데이터 기준이고, 실제 도입 시에는 귀사 ERP/회계 데이터로 그대로 들어옵니다."
@@ -88,8 +83,7 @@ npm run demo:app:mock
 
 #### 1. 상단 상태바 확인
 - **Mode: Mock**
-- **Engine: Mock** 또는 **Engine: Rule** 표시 확인
-- **"Mock 모드에서는 항상 로컬 규칙 엔진을 사용합니다"** 설명
+- **Engine: On-device**
 
 #### 2. Chrome DevTools → Network 탭 열어놓기
 
@@ -143,8 +137,7 @@ npm run demo:app:live
 
 #### 1. HUD 상단 확인
 - **Mode: Live(BFF)**
-- **Engine: Rule** 또는 **Engine: On-device LLM** 표시 확인
-- **"Live 모드에서는 엔진 모드에 따라 다른 추론 경로를 사용합니다"** 설명
+- **Engine: BFF(remote)** 표시 확인
 
 #### 2. 데모 플로우
 
@@ -163,26 +156,10 @@ npm run demo:app:live
 - 네트워크를 일부러 끊어서 Offline Queue 한두 건 만들어 보여주기
 - 네트워크 복구 후 자동 전송되는 모습 확인
 
-#### 4. **엔진 모드 전환 데모 (R8-S2 신규)**
-- **Step X: HUD 상단 상태바에서 Engine 모드 확인**
-  - 현재 `Engine: Rule` 또는 `Engine: On-device LLM` 표시 확인
-  - **"지금은 Rule 엔진을 사용하고 있습니다"** 설명
-
-- **Step Y: 동일 시나리오를 ENGINE_MODE=local-llm로 다시 실행**
-  ```bash
-  # 터미널에서 HUD 재시작
-  EXPO_PUBLIC_ENGINE_MODE=local-llm npm run demo:app:live
-  ```
-  - HUD 상단 상태바에서 `Engine: On-device LLM` 표시 확인
-  - 동일한 입력으로 추천 요청 → **"이제 온디바이스 LLM 엔진이 추론합니다"** 설명
-  - (선택) OS Dashboard에서 Engine Mode 카드 확인
-    - `primary_mode: local-llm` 및 `counts` 분포 확인
-
 ### 핵심 메시지
 
 > **"고위험 거래는 자동으로 리스크 스코어링 되고,
-> 사람이 봐야 할 건 Manual Review Queue로 자동 올라갑니다.
-> 그리고 엔진 모드를 전환하여 온디바이스 LLM 추론도 사용할 수 있습니다."**
+> 사람이 봐야 할 건 Manual Review Queue로 자동 올라갑니다."**
 
 ---
 
@@ -243,12 +220,9 @@ npm run demo:app:live
 - **Live**: BFF 서버와 통신, 원격 AI 엔진 사용, DB에 모든 이벤트 저장
 
 ### Q3. Risk Score는 어떻게 계산되나요?
-**A**: 현재는 규칙 기반입니다 (금액 > 100만 원 = HIGH, 50-100만 원 = MEDIUM). R8-S2에서 온디바이스 LLM 엔진 모드를 도입했으며, 실제 LLM 모델 연동은 다음 스프린트에서 진행 예정입니다.
+**A**: 현재는 규칙 기반입니다 (금액 > 100만 원 = HIGH, 50-100만 원 = MEDIUM). R8에서 온디바이스 LLM으로 고도화 예정입니다.
 
-### Q4. 엔진 모드는 어떻게 전환하나요?
-**A**: `EXPO_PUBLIC_ENGINE_MODE` 환경 변수로 선택할 수 있습니다 (`rule`, `local-llm`, `mock`, `remote`). 현재는 환경 변수 변경 후 HUD 재시작이 필요합니다.
-
-### Q5. Manual Review는 누가 처리하나요?
+### Q4. Manual Review는 누가 처리하나요?
 **A**: `auditor` 권한을 가진 담당자가 Backoffice에서 승인/거절합니다. 모든 과정이 감사 로그로 남습니다.
 
 ---
@@ -263,5 +237,4 @@ npm run demo:app:live
 - [ ] Manual Review 샘플 데이터 생성 (`npm run demo:seed`)
 - [ ] Chrome DevTools Network 탭 열어놓기
 - [ ] 브라우저 콘솔 열어놓기 (Mock 모드 로그 확인용)
-
 

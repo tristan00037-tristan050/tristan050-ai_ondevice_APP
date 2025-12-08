@@ -6,26 +6,16 @@
 
 import { Router } from 'express';
 import { requireTenantAuth, requireRole } from '../shared/guards.js';
-import { Pool } from 'pg';
+import { pool } from '@appcore/data-pg';
 
 const router = Router();
-
-// DATABASE_URL이 제대로 로드되도록 Pool을 직접 생성
-function getPool(): Pool {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL environment variable is not set');
-  }
-  return new Pool({
-    connectionString: process.env.DATABASE_URL,
-  });
-}
 
 /**
  * GET /v1/accounting/os/dashboard
  * OS Dashboard용 집계 데이터 조회
  */
 router.get(
-  '/dashboard',
+  '/v1/accounting/os/dashboard',
   requireTenantAuth,
   requireRole('operator'),
   async (req: any, res: any, next: any) => {
@@ -81,7 +71,6 @@ router.get(
         FROM accounting_audit_events
         WHERE tenant = $1 AND ts >= $2 AND ts <= $3
       `;
-      const pool = getPool();
       const pilotResult = await pool.query(pilotQuery, [tenant, windowFromISO, windowToISO]);
       const pilot = pilotResult.rows[0] || {
         suggest_calls: 0,
@@ -201,8 +190,7 @@ router.get(
       for (const row of engineRows) {
         const mode = row.engine_mode as EngineMode;
         if (mode in counts) {
-          // PostgreSQL COUNT(*)는 이미 숫자로 반환됨
-          counts[mode] = typeof row.cnt === 'number' ? row.cnt : parseInt(String(row.cnt), 10) || 0;
+          counts[mode] = parseInt(row.cnt, 10) || 0;
         }
       }
       
@@ -244,9 +232,7 @@ router.get(
           counts: counts,
         },
       });
-    } catch (e: any) {
-      console.error('[OS Dashboard] Error:', e);
-      console.error('[OS Dashboard] Stack:', e?.stack);
+    } catch (e) {
       next(e);
     }
   }
