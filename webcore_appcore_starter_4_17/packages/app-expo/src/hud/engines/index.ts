@@ -141,6 +141,11 @@ export async function suggestWithEngine<TPayload = unknown>(
     throw new Error(`Engine ${engine.id} does not support domain: ${ctx.domain}`);
   }
 
+  // 엔진이 초기화되지 않았으면 자동으로 초기화
+  if (!engine.isReady && engine.initialize) {
+    await engine.initialize();
+  }
+
   return engine.suggest<TPayload>(ctx, input);
 }
 
