@@ -12,6 +12,13 @@ import { Link } from 'react-router-dom';
 const baseUrl = import.meta.env.VITE_BFF_URL || 'http://localhost:8081';
 const osRole = (import.meta.env.VITE_OS_ROLE || 'operator') as 'operator' | 'auditor' | 'admin';
 
+type EngineMode = 'mock' | 'rule' | 'local-llm' | 'remote';
+
+type EngineSection = {
+  primary_mode: EngineMode | null;
+  counts: Record<EngineMode, number>;
+};
+
 type DashboardData = {
   window: {
     from: string;
@@ -36,6 +43,7 @@ type DashboardData = {
   queue: {
     offline_queue_backlog: number;
   };
+  engine?: EngineSection;
 };
 
 async function fetchDashboard(): Promise<DashboardData | null> {
@@ -105,10 +113,73 @@ export default function OsDashboard() {
     queue: {
       offline_queue_backlog: 0,
     },
+    engine: {
+      primary_mode: 'local-llm',
+      counts: {
+        mock: 0,
+        rule: 12,
+        'local-llm': 34,
+        remote: 0,
+      },
+    },
   };
 
   const displayData = data || mockData;
   const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true' || isMock;
+
+  // 엔진 모드 카드 렌더링 함수 (R8-S2)
+  function renderEngineModeCard(engine?: EngineSection) {
+    if (!engine) {
+      return (
+        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-gray-400">
+          <h3 className="text-sm font-medium text-gray-500 mb-2">
+            엔진 모드
+            <span className="ml-2 text-gray-400 cursor-help" title="현재 사용 중인 엔진 모드 정보입니다.">
+              ⓘ
+            </span>
+          </h3>
+          <p className="text-sm text-gray-500">데이터가 아직 수집되지 않았습니다.</p>
+        </div>
+      );
+    }
+
+    const labelMap: Record<EngineMode, string> = {
+      mock: 'Mock (데모)',
+      rule: '규칙 기반',
+      'local-llm': 'On-device LLM',
+      remote: '원격 LLM',
+    };
+
+    const primaryLabel = engine.primary_mode != null ? labelMap[engine.primary_mode] : '없음';
+    const totalCount = Object.values(engine.counts).reduce((sum, count) => sum + count, 0);
+
+    return (
+      <div className="bg-white p-6 rounded-lg shadow border-l-4 border-purple-500">
+        <h3 className="text-sm font-medium text-gray-500 mb-2">
+          엔진 모드
+          <span className="ml-2 text-gray-400 cursor-help" title="지난 24시간 기준 엔진 사용 분포와 주요 엔진 모드입니다.">
+            ⓘ
+          </span>
+        </h3>
+        <p className="text-lg font-semibold text-purple-600 mb-2">
+          주요 엔진: {primaryLabel}
+        </p>
+        {totalCount > 0 ? (
+          <div className="text-xs text-gray-600 space-y-1">
+            <div>분포: rule {engine.counts.rule} • local-llm {engine.counts['local-llm']} • mock {engine.counts.mock} • remote {engine.counts.remote}</div>
+            <div className="text-gray-500">총 {totalCount}건</div>
+          </div>
+        ) : (
+          <p className="text-xs text-gray-500">아직 데이터가 없습니다.</p>
+        )}
+        {isDemoMode && (
+          <p className="text-xs text-blue-600 mt-2">
+            현재 데모 환경에서는 엔진 모드 데이터가 샘플 기반으로 표시됩니다.
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -165,8 +236,8 @@ export default function OsDashboard() {
         </div>
       </div>
 
-      {/* 둘째 줄 - 안정성 & 리스크 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      {/* 둘째 줄 - 안정성 & 리스크 & 엔진 모드 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-white p-6 rounded-lg shadow border-l-4 border-green-500 relative group">
           <h3 className="text-sm font-medium text-gray-500 mb-2">
             최근 5분간 BFF 성공률
@@ -217,6 +288,9 @@ export default function OsDashboard() {
             → Workbench에서 처리
           </Link>
         </div>
+        
+        {/* 엔진 모드 카드 (R8-S2) */}
+        {renderEngineModeCard(displayData.engine)}
       </div>
 
       {/* 가운데 섹션: Risk 분포 */}

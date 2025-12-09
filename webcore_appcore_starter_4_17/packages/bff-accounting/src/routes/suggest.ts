@@ -11,6 +11,7 @@ import addFormats from 'ajv-formats';
 import { suggestPostings, type SuggestRequest, type SuggestResponse } from '@appcore/service-core-accounting/suggest.js';
 import { getRiskEngine } from '@appcore/service-core-accounting/riskScoreEngine.js';
 import { upsertRiskScore } from '@appcore/data-pg';
+import { auditLog } from '@appcore/service-core-accounting';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -110,6 +111,15 @@ router.post('/suggest', async (req: Request, res: Response) => {
     const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
     const clientRequestId = req.body.client_request_id as string | undefined;
     
+    // 5-1. X-Engine-Mode 헤더 수집 (R8-S2)
+    const engineModeHeader = req.headers['x-engine-mode'] as string | undefined;
+    const validEngineModes = ['mock', 'rule', 'local-llm', 'remote'] as const;
+    type EngineMode = typeof validEngineModes[number];
+    const engineMode: EngineMode | null = 
+      engineModeHeader && validEngineModes.includes(engineModeHeader as EngineMode)
+        ? (engineModeHeader as EngineMode)
+        : null;
+    
     // TODO: 멱등성 캐시 확인 (동일한 idempotencyKey/clientRequestId로 이전 요청이 있으면 캐시된 결과 반환)
 
     // 6. 요청 파싱 (desc 또는 description 필드 지원, currency는 body 또는 item 레벨에서 허용)
@@ -189,7 +199,32 @@ router.post('/suggest', async (req: Request, res: Response) => {
       })
     );
 
-    // 9. 응답 반환 (200) - risk 정보 포함
+    // 9. Audit 이벤트 기록 (R8-S2: engine_mode 포함)
+    const ctx = (req as any).ctx ?? {};
+    try {
+      await auditLog({
+        tenant: tenantId,
+        request_id: ctx.request_id,
+        idem_key: idempotencyKey ?? '',
+        actor: ctx.actor,
+        ip: ctx.ip,
+        route: req.originalUrl,
+        action: 'postings_suggest',
+        subject_type: 'suggest_request',
+        subject_id: clientRequestId,
+        payload: {
+          item_count: request.items.length,
+          posting_count: response.postings?.length || 0,
+          confidence: response.confidence,
+          ...(engineMode && { engine_mode: engineMode }),
+        },
+      });
+    } catch (auditError) {
+      // Audit 실패해도 응답은 반환
+      console.error('Failed to log audit event:', auditError);
+    }
+
+    // 10. 응답 반환 (200) - risk 정보 포함
     res.status(200).json({
       ...response,
       items: itemsWithRisk,

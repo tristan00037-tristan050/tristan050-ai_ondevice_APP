@@ -6,16 +6,26 @@
 
 import { Router } from 'express';
 import { requireTenantAuth, requireRole } from '../shared/guards.js';
-import { pool } from '@appcore/data-pg';
+import { Pool } from 'pg';
 
 const router = Router();
+
+// DATABASE_URL이 제대로 로드되도록 Pool을 직접 생성
+function getPool(): Pool {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
+  return new Pool({
+    connectionString: process.env.DATABASE_URL,
+  });
+}
 
 /**
  * GET /v1/accounting/os/dashboard
  * OS Dashboard용 집계 데이터 조회
  */
 router.get(
-  '/v1/accounting/os/dashboard',
+  '/dashboard',
   requireTenantAuth,
   requireRole('operator'),
   async (req: any, res: any, next: any) => {
@@ -71,6 +81,7 @@ router.get(
         FROM accounting_audit_events
         WHERE tenant = $1 AND ts >= $2 AND ts <= $3
       `;
+      const pool = getPool();
       const pilotResult = await pool.query(pilotQuery, [tenant, windowFromISO, windowToISO]);
       const pilot = pilotResult.rows[0] || {
         suggest_calls: 0,
@@ -161,6 +172,49 @@ router.get(
         ? health.error_count / health.total_count
         : 0.0;
       
+      // 5. Engine 모드 집계 조회 (지난 24시간 기준) - R8-S2
+      const engine24hFrom = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const engineQuery = `
+        SELECT 
+          (payload->>'engine_mode')::text AS engine_mode,
+          COUNT(*) AS cnt
+        FROM accounting_audit_events
+        WHERE 
+          tenant = $1
+          AND action = 'postings_suggest'
+          AND payload ? 'engine_mode'
+          AND ts >= $2
+        GROUP BY (payload->>'engine_mode')
+      `;
+      const engineResult = await pool.query(engineQuery, [tenant, engine24hFrom]);
+      const engineRows = engineResult.rows || [];
+      
+      // Engine 섹션 빌드
+      type EngineMode = 'mock' | 'rule' | 'local-llm' | 'remote';
+      const counts: Record<EngineMode, number> = {
+        mock: 0,
+        rule: 0,
+        'local-llm': 0,
+        remote: 0,
+      };
+      
+      for (const row of engineRows) {
+        const mode = row.engine_mode as EngineMode;
+        if (mode in counts) {
+          // PostgreSQL COUNT(*)는 이미 숫자로 반환됨
+          counts[mode] = typeof row.cnt === 'number' ? row.cnt : parseInt(String(row.cnt), 10) || 0;
+        }
+      }
+      
+      let primary_mode: EngineMode | null = null;
+      let max = 0;
+      for (const mode of Object.keys(counts) as EngineMode[]) {
+        if (counts[mode] > max) {
+          max = counts[mode];
+          primary_mode = mode;
+        }
+      }
+      
       res.json({
         window: {
           from: windowFromISO,
@@ -185,8 +239,14 @@ router.get(
         queue: {
           offline_queue_backlog: 0, // 추후 확장
         },
+        engine: {
+          primary_mode: primary_mode,
+          counts: counts,
+        },
       });
-    } catch (e) {
+    } catch (e: any) {
+      console.error('[OS Dashboard] Error:', e);
+      console.error('[OS Dashboard] Stack:', e?.stack);
       next(e);
     }
   }

@@ -7,13 +7,13 @@
 import React, { useEffect, useState } from 'react';
 // @ts-ignore - React Native types
 import { View, Text, Button, TextInput, ScrollView, TouchableOpacity } from 'react-native';
-import { useScreenPrivacy } from './hooks/useScreenPrivacy.js';
-import { useOnline } from './hooks/useOnline.js';
-import { useOfflineQueue } from './hooks/useOfflineQueue.js';
-import { enqueue, flushQueue, startQueueAutoFlush } from './offline/offline-queue.js';
-import QueueBadge from './components/QueueBadge.js';
-import ManualReviewButton from './components/ManualReviewButton.js';
-import QueueInspector from './components/QueueInspector.js';
+import { useScreenPrivacy } from './hooks/useScreenPrivacy';
+import { useOnline } from './hooks/useOnline';
+import { useOfflineQueue } from './hooks/useOfflineQueue';
+import { enqueue, flushQueue, startQueueAutoFlush } from './offline/offline-queue';
+import QueueBadge from './components/QueueBadge';
+import ManualReviewButton from './components/ManualReviewButton';
+import QueueInspector from './components/QueueInspector';
 import {
   postSuggest,
   postApproval,
@@ -24,9 +24,9 @@ import {
   type ApiError,
   isMock,
   getSuggestEngine as getOldSuggestEngine,
-} from '../hud/accounting-api.js';
-import { suggestWithEngine, getSuggestEngine } from '../hud/engines/index.js';
-import { saveEncryptedReport, loadEncryptedReport } from '../security/secure-storage.js';
+} from '../hud/accounting-api';
+import { suggestWithEngine, getSuggestEngine } from '../hud/engines/index';
+import { saveEncryptedReport, loadEncryptedReport } from '../security/secure-storage';
 
 type Props = { cfg: ClientCfg };
 
@@ -51,6 +51,11 @@ export default function AccountingHUD({ cfg }: Props) {
   const [lastManualReviewTime, setLastManualReviewTime] = useState<string | null>(null);
   const [queueInspectorVisible, setQueueInspectorVisible] = useState<boolean>(false);
   const [queueFullError, setQueueFullError] = useState<boolean>(false);
+  
+  // 엔진 관련 상태 (R8-S2)
+  const [engineMeta, setEngineMeta] = useState<{ label: string; type: string } | null>(null);
+  const [engineLoading, setEngineLoading] = useState(false);
+  const [engineError, setEngineError] = useState<string | null>(null);
   
   // 공통 에러 핸들러
   function handleApiError(error: ApiError, context: string) {
@@ -106,6 +111,49 @@ export default function AccountingHUD({ cfg }: Props) {
     startQueueAutoFlush(cfg);
   }, [cfg]);
   
+  // 엔진 초기화 (R8-S2)
+  useEffect(() => {
+    let cancelled = false;
+    
+    async function initEngine() {
+      try {
+        setEngineLoading(true);
+        setEngineError(null);
+        
+        const engine = getSuggestEngine(cfg);
+        setEngineMeta({
+          label: engine.meta.label,
+          type: engine.meta.type,
+        });
+        
+        // 엔진이 초기화 메서드를 가지고 있으면 호출
+        if (engine.initialize && !engine.isReady) {
+          await engine.initialize();
+        }
+        
+        if (!cancelled) {
+          setEngineLoading(false);
+          setEngineMeta({
+            label: engine.meta.label,
+            type: engine.meta.type,
+          });
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          console.error('[AccountingHUD] Engine initialization failed:', error);
+          setEngineError(error.message || 'Engine initialization failed');
+          setEngineLoading(false);
+        }
+      }
+    }
+    
+    initEngine();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, [cfg]);
+  
   // localStorage에서 수동 검토 카운트 로드 (Mock 모드용)
   useEffect(() => {
     if (isMock(cfg)) {
@@ -157,7 +205,7 @@ export default function AccountingHUD({ cfg }: Props) {
     try {
       const ctx = {
         domain: 'accounting' as const,
-        tenantId: cfg.tenantId,
+        tenantId: cfg.tenantId || 'default',
         userId: 'hud-user-1',
       };
       
@@ -358,12 +406,12 @@ export default function AccountingHUD({ cfg }: Props) {
   const networkIcon = online === null ? '🟡' : online ? '🟢' : '🔴';
   
   // Suggest 엔진 정보 (새로운 SuggestEngine 계층 사용)
-  const suggestEngine = getSuggestEngine(cfg);
-  const engineLabel = suggestEngine.mode === 'local-only' 
-    ? `On-device (${suggestEngine.id})` 
-    : suggestEngine.mode === 'remote-only'
-    ? (bffConfigError ? 'BFF(remote – 오류)' : 'BFF(remote)')
-    : 'Hybrid';
+  // 엔진 메타 정보는 useEffect에서 초기화된 값을 사용
+  const engineLabel = engineLoading
+    ? 'Loading...'
+    : engineError
+    ? 'Error'
+    : engineMeta?.label ?? 'Rule';
   
   return (
     // @ts-ignore - React Native JSX
@@ -387,6 +435,7 @@ export default function AccountingHUD({ cfg }: Props) {
           {/* @ts-expect-error - React Native JSX type compatibility issue with @types/react 18 */}
           <Text style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
             Engine: {engineLabel}
+            {engineError && ' ⚠️'}
           </Text>
           {/* 큐 인스펙터 버튼 */}
           {count > 0 && (

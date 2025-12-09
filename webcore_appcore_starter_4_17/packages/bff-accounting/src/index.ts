@@ -5,6 +5,17 @@
  * @module bff-accounting
  */
 
+// .env 파일 로드 (개발 환경)
+import { config } from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// 프로젝트 루트의 .env 파일 로드
+config({ path: resolve(__dirname, '../../../.env') });
+
 // OpenTelemetry 초기화 (환경 변수로 활성화)
 if (process.env.OTEL_ENABLED === '1') {
   await import('./otel.js');
@@ -21,7 +32,7 @@ import osSummaryRoute from './routes/os-summary.js';
 import osSourcesRoute from './routes/os-sources.js';
 import osMetricsRoute from './routes/os-metrics.js';
 import osDashboardRoute from './routes/os-dashboard.js';
-import csOsDashboardRoute from './routes/cs-os-dashboard.js';
+// import csOsDashboardRoute from './routes/cs-os-dashboard.js'; // R8-S2: CS는 아직 미구현
 import riskRoute from './routes/risk.js';
 import manualReviewRoute from './routes/manual-review.js';
 import { requestId } from './middleware/requestId.js';
@@ -165,7 +176,7 @@ app.use(auditRoute);
 app.use(osSummaryRoute);
 app.use(osSourcesRoute);
 app.use(osMetricsRoute);
-app.use(osDashboardRoute);
+app.use('/v1/accounting/os', osDashboardRoute);
 app.use(riskRoute);
 app.use(manualReviewRoute);
 // healthRoute는 이미 /healthz, /readyz로 위에서 정의했으므로 제거
