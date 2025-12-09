@@ -15,7 +15,7 @@ const router = Router();
  * OS Dashboard용 집계 데이터 조회
  */
 router.get(
-  '/v1/accounting/os/dashboard',
+  '/dashboard',
   requireTenantAuth,
   requireRole('operator'),
   async (req: any, res: any, next: any) => {

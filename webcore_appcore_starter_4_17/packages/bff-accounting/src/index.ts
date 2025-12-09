@@ -21,7 +21,7 @@ import osSummaryRoute from './routes/os-summary.js';
 import osSourcesRoute from './routes/os-sources.js';
 import osMetricsRoute from './routes/os-metrics.js';
 import osDashboardRoute from './routes/os-dashboard.js';
-import csOsDashboardRoute from './routes/cs-os-dashboard.js';
+// import csOsDashboardRoute from './routes/cs-os-dashboard.js'; // R8-S2: CS는 아직 미구현
 import riskRoute from './routes/risk.js';
 import manualReviewRoute from './routes/manual-review.js';
 import { requestId } from './middleware/requestId.js';
@@ -165,7 +165,7 @@ app.use(auditRoute);
 app.use(osSummaryRoute);
 app.use(osSourcesRoute);
 app.use(osMetricsRoute);
-app.use(osDashboardRoute);
+app.use('/v1/accounting/os', osDashboardRoute);
 app.use(riskRoute);
 app.use(manualReviewRoute);
 // healthRoute는 이미 /healthz, /readyz로 위에서 정의했으므로 제거
