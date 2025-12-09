@@ -33,6 +33,25 @@ http://<web-host>:5173
 - 스테이징: `https://demo-staging.example.com`
 - 프로덕션: `https://demo.example.com`
 
+#### 엔진 모드 설정 (R8-S2 신규)
+
+**환경 변수**:
+```bash
+# HUD 앱 환경 변수
+EXPO_PUBLIC_DEMO_MODE=live          # mock | live
+EXPO_PUBLIC_ENGINE_MODE=local-llm  # mock | rule | local-llm | remote
+```
+
+**엔진 모드 설명**:
+- `mock`: Mock 모드 (네트워크 호출 없음, 로컬 규칙 엔진)
+- `rule`: 규칙 기반 엔진 (온디바이스 규칙 분류)
+- `local-llm`: 온디바이스 LLM 엔진 (로컬 추론)
+- `remote`: 원격 BFF 엔진 (서버 기반 추론)
+
+**주의사항**:
+- `EXPO_PUBLIC_DEMO_MODE=mock`일 때는 `EXPO_PUBLIC_ENGINE_MODE` 값과 관계없이 항상 mock/rule 엔진 사용
+- 엔진 모드 변경 후 HUD 재시작 필요
+
 ---
 
 ## 헬스체크 연결
@@ -208,12 +227,36 @@ scrape_configs:
 - [ ] `/healthz` 응답 확인
 - [ ] `/readyz` 응답 확인 (DB 연결, 마이그레이션 상태)
 - [ ] Liveness/Readiness Probe 설정 확인
+- [ ] HUD 환경 변수 설정 확인 (`EXPO_PUBLIC_ENGINE_MODE`, `EXPO_PUBLIC_DEMO_MODE`)
 
 ### 배포 후
 - [ ] Kubernetes Pod 상태 확인 (`kubectl get pods`)
 - [ ] Health Check 로그 확인
 - [ ] 모니터링 시스템 연동 확인
 - [ ] 외부 접근 제한 확인 (보안그룹/Ingress)
+- [ ] OS Dashboard Engine Mode 카드 확인 (primary_mode가 의도한 값인지)
+
+## 파일럿 일일 점검 항목 (R8-S2 신규)
+
+### OS Dashboard 점검
+1. **Engine Mode 카드 확인**
+   - OS Dashboard → Engine Mode 카드 접근
+   - `primary_mode`가 의도한 값(예: `local-llm`)인지 확인
+   - `counts` 분포가 정상적인지 확인 (예: `local-llm`이 대부분이어야 함)
+
+2. **Audit/리포트에서 engine_mode 분포 주간 확인**
+   - 주간 리포트에서 엔진 모드별 사용 횟수 확인
+   - 예상과 다른 모드가 많이 사용되고 있는지 확인
+   - 필요 시 환경 변수 재확인
+
+### HUD 점검
+1. **HUD 상단 상태바 확인**
+   - `Engine: On-device LLM` 또는 `Engine: Rule` 표시 확인
+   - `Engine: Error` 표시 시 환경 변수 및 네트워크 상태 확인
+
+2. **엔진 모드 전환 테스트**
+   - `EXPO_PUBLIC_ENGINE_MODE` 변경 후 HUD 재시작
+   - 상태바에 올바른 엔진 모드 표시 확인
 
 ---
 
@@ -241,4 +284,5 @@ scrape_configs:
 - [Health Check 엔드포인트 구현](../packages/bff-accounting/src/routes/health.ts)
 - [Kubernetes Health Checks](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/)
 - [Docker Health Checks](https://docs.docker.com/engine/reference/builder/#healthcheck)
+
 
