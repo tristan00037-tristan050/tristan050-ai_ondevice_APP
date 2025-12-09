@@ -190,7 +190,8 @@ router.get(
       for (const row of engineRows) {
         const mode = row.engine_mode as EngineMode;
         if (mode in counts) {
-          counts[mode] = parseInt(row.cnt, 10) || 0;
+          // PostgreSQL COUNT(*)는 이미 숫자로 반환됨
+          counts[mode] = typeof row.cnt === 'number' ? row.cnt : parseInt(String(row.cnt), 10) || 0;
         }
       }
       
@@ -232,7 +233,9 @@ router.get(
           counts: counts,
         },
       });
-    } catch (e) {
+    } catch (e: any) {
+      console.error('[OS Dashboard] Error:', e);
+      console.error('[OS Dashboard] Stack:', e?.stack);
       next(e);
     }
   }
