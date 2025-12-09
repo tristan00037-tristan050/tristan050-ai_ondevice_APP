@@ -6,9 +6,19 @@
 
 import { Router } from 'express';
 import { requireTenantAuth, requireRole } from '../shared/guards.js';
-import { pool } from '@appcore/data-pg';
+import { Pool } from 'pg';
 
 const router = Router();
+
+// DATABASE_URL이 제대로 로드되도록 Pool을 직접 생성
+function getPool(): Pool {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
+  return new Pool({
+    connectionString: process.env.DATABASE_URL,
+  });
+}
 
 /**
  * GET /v1/accounting/os/dashboard
@@ -71,6 +81,7 @@ router.get(
         FROM accounting_audit_events
         WHERE tenant = $1 AND ts >= $2 AND ts <= $3
       `;
+      const pool = getPool();
       const pilotResult = await pool.query(pilotQuery, [tenant, windowFromISO, windowToISO]);
       const pilot = pilotResult.rows[0] || {
         suggest_calls: 0,

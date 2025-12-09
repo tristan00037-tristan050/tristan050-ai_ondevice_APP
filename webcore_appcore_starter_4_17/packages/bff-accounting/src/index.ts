@@ -5,6 +5,17 @@
  * @module bff-accounting
  */
 
+// .env 파일 로드 (개발 환경)
+import { config } from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// 프로젝트 루트의 .env 파일 로드
+config({ path: resolve(__dirname, '../../../.env') });
+
 // OpenTelemetry 초기화 (환경 변수로 활성화)
 if (process.env.OTEL_ENABLED === '1') {
   await import('./otel.js');
