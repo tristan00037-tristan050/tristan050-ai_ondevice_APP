@@ -5,9 +5,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
-import { getSuggestEngine } from '../hud/engines/index';
+import { View, Text, ScrollView, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { getSuggestEngine, suggestWithEngine } from '../hud/engines/index';
 import type { ClientCfg as EnginesClientCfg } from '../hud/engines/index';
+import type { SuggestContext, SuggestInput } from '../hud/engines/types';
 import type { ClientCfg } from '../hud/accounting-api';
 import { isMock } from '../hud/accounting-api';
 import { fetchCsTickets, type CsTicket } from '../hud/cs-api';
@@ -42,6 +43,11 @@ export function CsHUD({ cfg }: Props = {}) {
   const [tickets, setTickets] = useState<CsTicket[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // SuggestEngine 관련 상태
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestionResult, setSuggestionResult] = useState<any>(null);
+  const [selectedTicket, setSelectedTicket] = useState<CsTicket | null>(null);
 
   // 티켓 리스트 로드
   useEffect(() => {
@@ -77,10 +83,44 @@ export function CsHUD({ cfg }: Props = {}) {
     };
   }, [clientCfg]);
 
+  // CS 응답 추천 요청 핸들러
+  const handleSuggest = async (ticket: CsTicket) => {
+    setSelectedTicket(ticket);
+    setSuggesting(true);
+    setSuggestionResult(null);
+    
+    try {
+      const ctx: SuggestContext = {
+        domain: 'cs',
+        tenantId: clientCfg.tenantId,
+        userId: 'hud-user-1',
+        locale: 'ko',
+      };
+      
+      const input: SuggestInput = {
+        text: ticket.subject,
+        meta: {
+          ticketId: ticket.id,
+          status: ticket.status,
+          createdAt: ticket.createdAt.toISOString(),
+        },
+      };
+      
+      const result = await suggestWithEngine(enginesCfg, ctx, input);
+      setSuggestionResult(result);
+    } catch (err: any) {
+      console.error('[CsHUD] Suggest error:', err);
+      setError(err.message || '응답 추천을 생성하는데 실패했습니다.');
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   const renderTicket = ({ item }: { item: CsTicket }) => {
     const statusColor = item.status === 'open' ? '#28a745' : item.status === 'pending' ? '#ffc107' : '#6c757d';
     const statusText = item.status === 'open' ? '열림' : item.status === 'pending' ? '대기' : '닫힘';
     const createdAt = new Date(item.createdAt).toLocaleDateString('ko-KR');
+    const isSelected = selectedTicket?.id === item.id;
 
     return (
       <View style={styles.ticketItem}>
@@ -91,6 +131,28 @@ export function CsHUD({ cfg }: Props = {}) {
           </View>
         </View>
         <Text style={styles.ticketDate}>생성일: {createdAt}</Text>
+        <TouchableOpacity
+          style={[styles.suggestButton, isSelected && suggesting && styles.suggestButtonActive]}
+          onPress={() => handleSuggest(item)}
+          disabled={suggesting}
+        >
+          <Text style={styles.suggestButtonText}>
+            {suggesting && isSelected ? '추천 중...' : '요약/추천'}
+          </Text>
+        </TouchableOpacity>
+        {isSelected && suggestionResult && (
+          <View style={styles.suggestionResult}>
+            <Text style={styles.suggestionTitle}>응답 추천:</Text>
+            {suggestionResult.items.map((item: any, idx: number) => (
+              <View key={idx} style={styles.suggestionItem}>
+                <Text style={styles.suggestionText}>{item.title}</Text>
+                {item.description && (
+                  <Text style={styles.suggestionDesc}>{item.description}</Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     );
   };
@@ -250,6 +312,50 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 4,
+  },
+  suggestButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 4,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  suggestButtonActive: {
+    backgroundColor: '#0056b3',
+    opacity: 0.7,
+  },
+  suggestButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  suggestionResult: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#e7f3ff',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#b3d9ff',
+  },
+  suggestionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  suggestionItem: {
+    marginBottom: 8,
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 4,
+  },
+  suggestionDesc: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
   },
 });
 
