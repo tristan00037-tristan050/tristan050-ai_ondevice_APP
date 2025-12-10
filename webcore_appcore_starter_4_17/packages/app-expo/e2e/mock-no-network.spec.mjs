@@ -49,15 +49,39 @@ async function main() {
       console.log('  ℹ️  추천 버튼을 찾을 수 없거나 클릭할 수 없습니다 (정상일 수 있음)');
     }
 
-    // CS HUD로 전환 시도
+    // CS HUD로 전환 시도 (T-03: CS HUD 포함 네트워크 0 검증)
     try {
-      const csButton = page.locator('button:has-text("CS"), [role="button"]:has-text("CS")').first();
-      if (await csButton.isVisible({ timeout: 2000 })) {
+      // "CS" 텍스트를 포함한 버튼 찾기 (App.tsx의 toggleButton)
+      const csButton = page.locator('text=CS').first();
+      if (await csButton.isVisible({ timeout: 3000 })) {
+        console.log('  ℹ️  CS 버튼 발견, 클릭하여 CS HUD로 전환');
         await csButton.click();
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(1500); // CS HUD 로딩 대기
+        
+        // CS HUD가 로드되었는지 확인 (티켓 리스트 또는 "CS HUD" 텍스트)
+        try {
+          await page.waitForSelector('text=CS HUD, text=CS Tickets', { timeout: 2000 });
+          console.log('  ℹ️  CS HUD 로드 확인됨');
+        } catch (e) {
+          console.log('  ℹ️  CS HUD 로드 확인 실패 (정상일 수 있음)');
+        }
+      } else {
+        console.log('  ℹ️  CS 버튼을 찾을 수 없습니다 (정상일 수 있음)');
       }
     } catch (e) {
       console.log('  ℹ️  CS 버튼을 찾을 수 없거나 클릭할 수 없습니다 (정상일 수 있음)');
+    }
+
+    // Accounting HUD로 다시 전환 시도 (양방향 전환 검증)
+    try {
+      const accountingButton = page.locator('text=Accounting').first();
+      if (await accountingButton.isVisible({ timeout: 2000 })) {
+        console.log('  ℹ️  Accounting 버튼 발견, 다시 Accounting HUD로 전환');
+        await accountingButton.click();
+        await page.waitForTimeout(1000);
+      }
+    } catch (e) {
+      console.log('  ℹ️  Accounting 버튼을 찾을 수 없습니다 (정상일 수 있음)');
     }
 
     // 추가 대기 (비동기 작업 완료 대기)

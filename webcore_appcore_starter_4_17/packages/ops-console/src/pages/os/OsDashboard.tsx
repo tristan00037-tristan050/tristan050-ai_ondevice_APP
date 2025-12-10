@@ -19,6 +19,15 @@ type EngineSection = {
   counts: Record<EngineMode, number>;
 };
 
+type CsSummary = {
+  total: number;
+  byStatus: {
+    open: number;
+    pending: number;
+    closed: number;
+  };
+};
+
 type DashboardData = {
   window: {
     from: string;
@@ -44,6 +53,7 @@ type DashboardData = {
     offline_queue_backlog: number;
   };
   engine?: EngineSection;
+  cs?: CsSummary;
 };
 
 async function fetchDashboard(): Promise<DashboardData | null> {
@@ -58,7 +68,32 @@ async function fetchDashboard(): Promise<DashboardData | null> {
     });
     
     if (!res.ok) throw new Error('bff error');
-    return await res.json();
+    const accountingData = await res.json();
+    
+    // CS OS Dashboard 데이터도 함께 가져오기
+    let csData: CsSummary | null = null;
+    try {
+      const csRes = await fetch(`${baseUrl}/v1/cs/os/dashboard`, {
+        headers: {
+          'X-Tenant': 'default',
+          'X-User-Id': 'ops-demo',
+          'X-User-Role': osRole,
+          'X-Api-Key': 'collector-key:operator',
+        },
+      });
+      if (csRes.ok) {
+        const csJson = await csRes.json();
+        csData = csJson.summary || null;
+      }
+    } catch (csError) {
+      console.warn('CS OS Dashboard fetch failed:', csError);
+      // CS 데이터가 없어도 계속 진행
+    }
+    
+    return {
+      ...accountingData,
+      cs: csData || undefined,
+    };
   } catch {
     // BFF 연결 실패 시 null 반환
     return null;
@@ -120,6 +155,14 @@ export default function OsDashboard() {
         rule: 12,
         'local-llm': 34,
         remote: 0,
+      },
+    },
+    cs: {
+      total: 0,
+      byStatus: {
+        open: 0,
+        pending: 0,
+        closed: 0,
       },
     },
   };
@@ -370,31 +413,61 @@ export default function OsDashboard() {
         </div>
       </div>
 
-      {/* CS 모듈 (준비 중) */}
+      {/* CS 모듈 (R9-S1) */}
       <div className="bg-white rounded-lg shadow p-6 mt-8">
-        <h2 className="text-xl font-semibold mb-4">CS 모듈 (준비 중)</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-gray-50 p-6 rounded-lg border-l-4 border-gray-400">
+        <h2 className="text-xl font-semibold mb-4">CS Tickets</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white p-6 rounded-lg border-l-4 border-blue-500">
             <h3 className="text-sm font-medium text-gray-500 mb-2">
-              CS 티켓 처리 현황 (준비 중)
-              <span className="ml-2 text-gray-400 cursor-help" title="CS 도메인용 지표 슬롯입니다. R8-S1에서는 실제 데이터 연동 없이 자리만 구성합니다.">
+              Open
+              <span className="ml-2 text-gray-400 cursor-help" title="현재 열려있는 CS 티켓 수입니다.">
                 ⓘ
               </span>
             </h3>
-            <p className="text-3xl font-bold text-gray-400">--</p>
-            <p className="text-xs text-gray-500 mt-2">준비 중</p>
+            <p className="text-3xl font-bold text-blue-600">
+              {displayData.cs?.byStatus.open ?? 0}
+            </p>
+            <p className="text-xs text-gray-500 mt-2">마지막 7일 기준</p>
           </div>
-          <div className="bg-gray-50 p-6 rounded-lg border-l-4 border-gray-400">
+          <div className="bg-white p-6 rounded-lg border-l-4 border-orange-500">
             <h3 className="text-sm font-medium text-gray-500 mb-2">
-              CS 응답 품질 지표 (준비 중)
-              <span className="ml-2 text-gray-400 cursor-help" title="향후 온디바이스 LLM 기반 CS 응답 품질 지표가 들어갈 자리입니다.">
+              Pending
+              <span className="ml-2 text-gray-400 cursor-help" title="처리 대기 중인 CS 티켓 수입니다.">
                 ⓘ
               </span>
             </h3>
-            <p className="text-3xl font-bold text-gray-400">--</p>
-            <p className="text-xs text-gray-500 mt-2">준비 중</p>
+            <p className="text-3xl font-bold text-orange-600">
+              {displayData.cs?.byStatus.pending ?? 0}
+            </p>
+            <p className="text-xs text-gray-500 mt-2">마지막 7일 기준</p>
+          </div>
+          <div className="bg-white p-6 rounded-lg border-l-4 border-green-500">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">
+              Closed
+              <span className="ml-2 text-gray-400 cursor-help" title="처리 완료된 CS 티켓 수입니다.">
+                ⓘ
+              </span>
+            </h3>
+            <p className="text-3xl font-bold text-green-600">
+              {displayData.cs?.byStatus.closed ?? 0}
+            </p>
+            <p className="text-xs text-gray-500 mt-2">마지막 7일 기준</p>
           </div>
         </div>
+        {displayData.cs && (
+          <div className="mt-4 pt-4 border-t">
+            <div className="text-sm text-gray-600">
+              총 티켓 수: <span className="font-semibold">{displayData.cs.total}</span>
+            </div>
+          </div>
+        )}
+        {!displayData.cs && (
+          <div className="mt-4 pt-4 border-t">
+            <div className="text-sm text-gray-500">
+              CS 데이터를 불러올 수 없습니다. (BFF 연결 실패 또는 데이터 없음)
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Demo 플로우 링크 */}
