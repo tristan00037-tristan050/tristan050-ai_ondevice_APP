@@ -143,6 +143,49 @@ async function main() {
   });
   if (test5) passed++; else failed++;
 
+  // 테스트 6: viewer role로 호출 시 403 (operator 권한 필요)
+  const test6 = await test('viewer role로 호출 시 403 Forbidden', async () => {
+    const viewerHeaders = {
+      ...TEST_HEADERS,
+      'X-Api-Key': 'collector-key:viewer',
+      'X-User-Role': 'viewer',
+    };
+    const response = await fetch(`${BASE_URL}/v1/cs/tickets`, {
+      method: 'GET',
+      headers: viewerHeaders,
+    });
+
+    if (response.status !== 403) {
+      throw new Error(`Expected 403, got ${response.status}`);
+    }
+  });
+  if (test6) passed++; else failed++;
+
+  // 테스트 7: 잘못된 limit/offset 파라미터 시 400
+  const test7 = await test('잘못된 limit 파라미터 시 400', async () => {
+    const response = await fetch(`${BASE_URL}/v1/cs/tickets?limit=0`, {
+      method: 'GET',
+      headers: TEST_HEADERS,
+    });
+
+    if (response.status !== 400) {
+      throw new Error(`Expected 400, got ${response.status}`);
+    }
+  });
+  if (test7) passed++; else failed++;
+
+  const test8 = await test('잘못된 offset 파라미터 시 400', async () => {
+    const response = await fetch(`${BASE_URL}/v1/cs/tickets?offset=-1`, {
+      method: 'GET',
+      headers: TEST_HEADERS,
+    });
+
+    if (response.status !== 400) {
+      throw new Error(`Expected 400, got ${response.status}`);
+    }
+  });
+  if (test8) passed++; else failed++;
+
   // 결과 출력
   console.log(`\n📊 테스트 결과: ${passed}개 통과, ${failed}개 실패`);
 
