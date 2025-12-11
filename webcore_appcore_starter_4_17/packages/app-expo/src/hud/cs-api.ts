@@ -5,10 +5,10 @@
  * @module app-expo/hud/cs-api
  */
 
-import type { ClientCfg, isMock as isMockFn, mkHeaders } from './accounting-api.js';
+import type { ClientCfg } from './accounting-api';
 
 // accounting-api에서 함수 재사용
-import { isMock as _isMock, mkHeaders as _mkHeaders } from './accounting-api.js';
+import { isMock as _isMock, mkHeaders as _mkHeaders } from './accounting-api';
 
 export interface CsTicket {
   id: number;

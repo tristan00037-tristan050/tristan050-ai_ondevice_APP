@@ -4,10 +4,11 @@
  * R9-S1: CS 티켓 리스트 API 연동
  */
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
-import { getSuggestEngine } from '../hud/engines/index';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, ScrollView, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { getSuggestEngine, suggestWithEngine } from '../hud/engines/index';
 import type { ClientCfg as EnginesClientCfg } from '../hud/engines/index';
+import type { SuggestContext, SuggestInput, CsSuggestContext } from '../hud/engines/types';
 import type { ClientCfg } from '../hud/accounting-api';
 import { isMock } from '../hud/accounting-api';
 import { fetchCsTickets, type CsTicket } from '../hud/cs-api';
@@ -15,25 +16,27 @@ import { fetchCsTickets, type CsTicket } from '../hud/cs-api';
 type Props = { cfg?: ClientCfg };
 
 export function CsHUD({ cfg }: Props = {}) {
-  const defaultCfg: ClientCfg = {
+  // defaultCfg를 useMemo로 메모이제이션하여 무한 루프 방지
+  const defaultCfg: ClientCfg = useMemo(() => ({
     baseUrl: process.env.EXPO_PUBLIC_BFF_URL || 'http://localhost:8081',
     tenantId: process.env.EXPO_PUBLIC_TENANT_ID || 'default',
     apiKey: process.env.EXPO_PUBLIC_API_KEY || 'collector-key:operator',
     mode: (process.env.EXPO_PUBLIC_DEMO_MODE === 'mock' ? 'mock' : 'live') as 'mock' | 'live',
-  };
+  }), []);
   
-  const clientCfg = cfg || defaultCfg;
+  // clientCfg도 메모이제이션
+  const clientCfg = useMemo(() => cfg || defaultCfg, [cfg, defaultCfg]);
   
-  // engines/index.ts의 ClientCfg로 변환
-  const enginesCfg: EnginesClientCfg = {
+  // engines/index.ts의 ClientCfg로 변환 (메모이제이션)
+  const enginesCfg: EnginesClientCfg = useMemo(() => ({
     mode: clientCfg.mode || 'live',
     tenantId: clientCfg.tenantId,
     userId: 'hud-user-1',
     baseUrl: clientCfg.baseUrl,
     apiKey: clientCfg.apiKey,
-  };
+  }), [clientCfg.mode, clientCfg.tenantId, clientCfg.baseUrl, clientCfg.apiKey]);
   
-  const engine = getSuggestEngine(enginesCfg);
+  const engine = useMemo(() => getSuggestEngine(enginesCfg), [enginesCfg]);
   const engineLabel = engine.id === 'local-llm-v1' 
     ? 'On-device (LLM Stub)' 
     : 'On-device (Rule)';
@@ -42,6 +45,11 @@ export function CsHUD({ cfg }: Props = {}) {
   const [tickets, setTickets] = useState<CsTicket[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // SuggestEngine 관련 상태
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestionResult, setSuggestionResult] = useState<any>(null);
+  const [selectedTicket, setSelectedTicket] = useState<CsTicket | null>(null);
 
   // 티켓 리스트 로드
   useEffect(() => {
@@ -52,19 +60,35 @@ export function CsHUD({ cfg }: Props = {}) {
         setLoading(true);
         setError(null);
 
+        console.log('[CsHUD] Loading tickets, clientCfg:', { mode: clientCfg.mode, tenantId: clientCfg.tenantId });
         const response = await fetchCsTickets(clientCfg, {
           limit: 20,
           offset: 0,
         });
 
+        console.log('[CsHUD] Received response:', response);
+
         if (!cancelled) {
-          setTickets(response.items);
-          setLoading(false);
+          if (response && response.items) {
+            setTickets(response.items);
+            setLoading(false);
+          } else {
+            throw new Error('Invalid response format: missing items');
+          }
         }
       } catch (err: any) {
         if (!cancelled) {
           console.error('[CsHUD] Failed to load tickets:', err);
-          setError(err.message || '티켓을 불러오는데 실패했습니다.');
+          console.error('[CsHUD] Error details:', {
+            message: err?.message,
+            code: err?.code,
+            errno: err?.errno,
+            stack: err?.stack,
+            toString: err?.toString(),
+            string: String(err),
+          });
+          const errorMessage = err?.message || err?.toString() || String(err) || '티켓을 불러오는데 실패했습니다.';
+          setError(errorMessage);
           setLoading(false);
         }
       }
@@ -75,12 +99,51 @@ export function CsHUD({ cfg }: Props = {}) {
     return () => {
       cancelled = true;
     };
-  }, [clientCfg]);
+  }, [clientCfg.mode, clientCfg.tenantId, clientCfg.baseUrl]); // clientCfg 객체 대신 구체적인 값들을 의존성으로 사용
+
+  // CS 응답 추천 요청 핸들러
+  const handleSuggest = async (ticket: CsTicket) => {
+    setSelectedTicket(ticket);
+    setSuggesting(true);
+    setSuggestionResult(null);
+    
+    try {
+      const ctx: CsSuggestContext = {
+        domain: 'cs',
+        tenantId: clientCfg.tenantId,
+        ticket: {
+          id: ticket.id,
+          subject: ticket.subject,
+          body: ticket.body,
+          status: ticket.status,
+          createdAt: ticket.createdAt,
+        },
+      };
+      
+      // suggestWithEngine은 SuggestContext를 받지만, CsSuggestContext는 호환 가능
+      // 타입 단언을 사용하여 전달
+      const result = await suggestWithEngine(enginesCfg, ctx as SuggestContext, {
+        text: ticket.subject,
+        meta: {
+          ticketId: ticket.id,
+          status: ticket.status,
+          createdAt: ticket.createdAt,
+        },
+      });
+      setSuggestionResult(result);
+    } catch (err: any) {
+      console.error('[CsHUD] Suggest error:', err);
+      setError(err.message || '응답 추천을 생성하는데 실패했습니다.');
+    } finally {
+      setSuggesting(false);
+    }
+  };
 
   const renderTicket = ({ item }: { item: CsTicket }) => {
     const statusColor = item.status === 'open' ? '#28a745' : item.status === 'pending' ? '#ffc107' : '#6c757d';
     const statusText = item.status === 'open' ? '열림' : item.status === 'pending' ? '대기' : '닫힘';
     const createdAt = new Date(item.createdAt).toLocaleDateString('ko-KR');
+    const isSelected = selectedTicket?.id === item.id;
 
     return (
       <View style={styles.ticketItem}>
@@ -91,6 +154,28 @@ export function CsHUD({ cfg }: Props = {}) {
           </View>
         </View>
         <Text style={styles.ticketDate}>생성일: {createdAt}</Text>
+        <TouchableOpacity
+          style={[styles.suggestButton, isSelected && suggesting && styles.suggestButtonActive]}
+          onPress={() => handleSuggest(item)}
+          disabled={suggesting}
+        >
+          <Text style={styles.suggestButtonText}>
+            {suggesting && isSelected ? '추천 중...' : '요약/추천'}
+          </Text>
+        </TouchableOpacity>
+        {isSelected && suggestionResult && (
+          <View style={styles.suggestionResult}>
+            <Text style={styles.suggestionTitle}>응답 추천:</Text>
+            {suggestionResult.items.map((item: any, idx: number) => (
+              <View key={idx} style={styles.suggestionItem}>
+                <Text style={styles.suggestionText}>{item.title}</Text>
+                {item.description && (
+                  <Text style={styles.suggestionDesc}>{item.description}</Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     );
   };
@@ -250,6 +335,50 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 4,
+  },
+  suggestButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 4,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  suggestButtonActive: {
+    backgroundColor: '#0056b3',
+    opacity: 0.7,
+  },
+  suggestButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  suggestionResult: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#e7f3ff',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#b3d9ff',
+  },
+  suggestionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  suggestionItem: {
+    marginBottom: 8,
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 4,
+  },
+  suggestionDesc: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
   },
 });
 

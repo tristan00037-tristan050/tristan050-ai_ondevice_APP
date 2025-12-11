@@ -41,15 +41,20 @@ export class LocalRuleEngineV1Adapter implements SuggestEngine {
   }
 
   canHandleDomain(domain: 'accounting' | 'cs'): boolean {
-    // 기존 localRuleEngineV1은 accounting 도메인만 지원
-    return domain === 'accounting';
+    // R9-S2: CS 도메인 지원 추가
+    return domain === 'accounting' || domain === 'cs';
   }
 
   async suggest<TPayload = unknown>(
     ctx: SuggestContext,
     input: SuggestInput,
   ): Promise<SuggestResult<TPayload>> {
-    // 기존 localRuleEngineV1의 suggest 메서드 호출
+    // R9-S2: CS 도메인 처리 추가
+    if (ctx.domain === 'cs') {
+      return this.suggestForCs(ctx, input);
+    }
+
+    // 기존 accounting 도메인 처리
     const oldInput = {
       description: input.text,
       amount: typeof input.meta?.amount === 'number' ? input.meta.amount : undefined,
@@ -79,6 +84,37 @@ export class LocalRuleEngineV1Adapter implements SuggestEngine {
       items: newItems,
       engine: 'local-rule-v1',
       confidence: oldItems.length > 0 ? oldItems[0].score : 0.5,
+    };
+  }
+
+  /**
+   * CS 도메인용 추천 생성 (R9-S2)
+   */
+  private async suggestForCs(
+    ctx: SuggestContext,
+    input: SuggestInput,
+  ): Promise<SuggestResult> {
+    // Mock/Rule 모드에서 CS 도메인에 대한 더미 응답 반환
+    const inquiry = input.text || '고객 문의';
+    
+    return {
+      items: [
+        {
+          id: 'cs-rule-1',
+          title: `[Rule] "${inquiry}" 문의에 대한 규칙 기반 Mock 응답입니다.`,
+          description: 'Mock/Rule 모드에서는 간단한 규칙 기반 응답을 제공합니다.',
+          score: 0.5,
+          payload: {
+            inquiry,
+            domain: 'cs',
+            ticketId: input.meta?.ticketId,
+            status: input.meta?.status,
+          },
+          source: 'local-rule',
+        },
+      ],
+      engine: 'local-rule-v1',
+      confidence: 0.5,
     };
   }
 }
