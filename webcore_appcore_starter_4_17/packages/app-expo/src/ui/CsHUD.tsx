@@ -4,11 +4,11 @@
  * R9-S1: CS 티켓 리스트 API 연동
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { getSuggestEngine, suggestWithEngine } from '../hud/engines/index';
 import type { ClientCfg as EnginesClientCfg } from '../hud/engines/index';
-import type { SuggestContext, SuggestInput } from '../hud/engines/types';
+import type { SuggestContext, SuggestInput, CsSuggestContext } from '../hud/engines/types';
 import type { ClientCfg } from '../hud/accounting-api';
 import { isMock } from '../hud/accounting-api';
 import { fetchCsTickets, type CsTicket } from '../hud/cs-api';
@@ -16,25 +16,27 @@ import { fetchCsTickets, type CsTicket } from '../hud/cs-api';
 type Props = { cfg?: ClientCfg };
 
 export function CsHUD({ cfg }: Props = {}) {
-  const defaultCfg: ClientCfg = {
+  // defaultCfg를 useMemo로 메모이제이션하여 무한 루프 방지
+  const defaultCfg: ClientCfg = useMemo(() => ({
     baseUrl: process.env.EXPO_PUBLIC_BFF_URL || 'http://localhost:8081',
     tenantId: process.env.EXPO_PUBLIC_TENANT_ID || 'default',
     apiKey: process.env.EXPO_PUBLIC_API_KEY || 'collector-key:operator',
     mode: (process.env.EXPO_PUBLIC_DEMO_MODE === 'mock' ? 'mock' : 'live') as 'mock' | 'live',
-  };
+  }), []);
   
-  const clientCfg = cfg || defaultCfg;
+  // clientCfg도 메모이제이션
+  const clientCfg = useMemo(() => cfg || defaultCfg, [cfg, defaultCfg]);
   
-  // engines/index.ts의 ClientCfg로 변환
-  const enginesCfg: EnginesClientCfg = {
+  // engines/index.ts의 ClientCfg로 변환 (메모이제이션)
+  const enginesCfg: EnginesClientCfg = useMemo(() => ({
     mode: clientCfg.mode || 'live',
     tenantId: clientCfg.tenantId,
     userId: 'hud-user-1',
     baseUrl: clientCfg.baseUrl,
     apiKey: clientCfg.apiKey,
-  };
+  }), [clientCfg.mode, clientCfg.tenantId, clientCfg.baseUrl, clientCfg.apiKey]);
   
-  const engine = getSuggestEngine(enginesCfg);
+  const engine = useMemo(() => getSuggestEngine(enginesCfg), [enginesCfg]);
   const engineLabel = engine.id === 'local-llm-v1' 
     ? 'On-device (LLM Stub)' 
     : 'On-device (Rule)';
@@ -58,19 +60,35 @@ export function CsHUD({ cfg }: Props = {}) {
         setLoading(true);
         setError(null);
 
+        console.log('[CsHUD] Loading tickets, clientCfg:', { mode: clientCfg.mode, tenantId: clientCfg.tenantId });
         const response = await fetchCsTickets(clientCfg, {
           limit: 20,
           offset: 0,
         });
 
+        console.log('[CsHUD] Received response:', response);
+
         if (!cancelled) {
-          setTickets(response.items);
-          setLoading(false);
+          if (response && response.items) {
+            setTickets(response.items);
+            setLoading(false);
+          } else {
+            throw new Error('Invalid response format: missing items');
+          }
         }
       } catch (err: any) {
         if (!cancelled) {
           console.error('[CsHUD] Failed to load tickets:', err);
-          setError(err.message || '티켓을 불러오는데 실패했습니다.');
+          console.error('[CsHUD] Error details:', {
+            message: err?.message,
+            code: err?.code,
+            errno: err?.errno,
+            stack: err?.stack,
+            toString: err?.toString(),
+            string: String(err),
+          });
+          const errorMessage = err?.message || err?.toString() || String(err) || '티켓을 불러오는데 실패했습니다.';
+          setError(errorMessage);
           setLoading(false);
         }
       }
@@ -81,7 +99,7 @@ export function CsHUD({ cfg }: Props = {}) {
     return () => {
       cancelled = true;
     };
-  }, [clientCfg]);
+  }, [clientCfg.mode, clientCfg.tenantId, clientCfg.baseUrl]); // clientCfg 객체 대신 구체적인 값들을 의존성으로 사용
 
   // CS 응답 추천 요청 핸들러
   const handleSuggest = async (ticket: CsTicket) => {
@@ -90,23 +108,28 @@ export function CsHUD({ cfg }: Props = {}) {
     setSuggestionResult(null);
     
     try {
-      const ctx: SuggestContext = {
+      const ctx: CsSuggestContext = {
         domain: 'cs',
         tenantId: clientCfg.tenantId,
-        userId: 'hud-user-1',
-        locale: 'ko',
+        ticket: {
+          id: ticket.id,
+          subject: ticket.subject,
+          body: ticket.body,
+          status: ticket.status,
+          createdAt: ticket.createdAt,
+        },
       };
       
-      const input: SuggestInput = {
+      // suggestWithEngine은 SuggestContext를 받지만, CsSuggestContext는 호환 가능
+      // 타입 단언을 사용하여 전달
+      const result = await suggestWithEngine(enginesCfg, ctx as SuggestContext, {
         text: ticket.subject,
         meta: {
           ticketId: ticket.id,
           status: ticket.status,
-          createdAt: ticket.createdAt.toISOString(),
+          createdAt: ticket.createdAt,
         },
-      };
-      
-      const result = await suggestWithEngine(enginesCfg, ctx, input);
+      });
       setSuggestionResult(result);
     } catch (err: any) {
       console.error('[CsHUD] Suggest error:', err);
