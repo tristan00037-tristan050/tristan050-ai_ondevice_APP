@@ -12,7 +12,15 @@
     "strict": false,
     "declaration": true,
     "declarationMap": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@appcore/service-core-common": ["../service-core-common/src"]
+    }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "references": [
+    {
+      "path": "../service-core-common"
+    }
+  ]
 }
