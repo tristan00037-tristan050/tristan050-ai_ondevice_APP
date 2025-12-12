@@ -18,6 +18,23 @@ import type {
 const router = Router();
 
 /**
+ * Gateway 레벨 LLM 출력 정리
+ * R10-S2: 서버단 PII 필터 / 정책 필터 자리 마련
+ * 
+ * @param output - 원본 출력 텍스트
+ * @returns 정리된 출력 텍스트
+ */
+function sanitizeLlmGatewayOutput(output: string): string {
+  if (!output) return output;
+  let out = output.replace(/\r\n/g, '\n').trim();
+
+  // TODO: 서버단 민감 정보/금지 표현 필터 자리
+  // out = maskSensitiveServerSide(out);
+
+  return out;
+}
+
+/**
  * POST /v1/os/llm-gateway/completions
  * Remote LLM Gateway 프록시
  * 
@@ -54,12 +71,16 @@ router.post(
       // R10-S2 스코프: "계약/가드/Stub 응답"까지만.
       const now = new Date().toISOString();
 
+      // R10-S2: Gateway 레벨 후처리 적용
+      const rawOutput = `[remote-llm-stub] domain=${domain}, taskType=${taskType}\n\n${prompt}`;
+      const sanitizedOutput = sanitizeLlmGatewayOutput(rawOutput);
+
       const stub: LlmGatewayResponseBody = {
         id: `stub-${Date.now()}`,
         engineId,
         engineVariant,
         createdAt: now,
-        output: `[remote-llm-stub] domain=${domain}, taskType=${taskType}\n\n${prompt}`,
+        output: sanitizedOutput,
         usage: {
           promptTokens: undefined,
           completionTokens: undefined,

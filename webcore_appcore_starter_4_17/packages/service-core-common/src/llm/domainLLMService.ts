@@ -41,14 +41,21 @@ export interface DomainLLMService<TContext, TResponse> {
   recordAudit(ctx: TContext, res: TResponse): Promise<void>;
 
   /**
-   * (선택) 응답 후처리 훅
-   * - 개인정보 마스킹, 금지 표현 제거 등
-   * - R10-S2/P1에서 실제 로직 채워질 예정
+   * (선택) LLM이 반환한 응답을 도메인/OS 정책에 맞게 후처리하는 훅
+   * 
+   * - 예: 공백/포맷 정리
+   * - 예: 민감 정보(전화번호/주민번호 등) 마스킹
+   * - 예: 금지 표현/부적절 응답 필터링
+   * 
+   * 구현하지 않으면 raw 응답이 그대로 사용된다.
    * 
    * @param ctx - LLM 컨텍스트
-   * @param res - 원본 LLM 응답
+   * @param raw - 원본 LLM 응답
    * @returns 후처리된 LLM 응답 (동기 또는 비동기)
    */
-  postProcess?(ctx: TContext, res: TResponse): Promise<TResponse> | TResponse;
+  postProcess?(
+    ctx: TContext,
+    raw: TResponse,
+  ): Promise<TResponse> | TResponse;
 }
 

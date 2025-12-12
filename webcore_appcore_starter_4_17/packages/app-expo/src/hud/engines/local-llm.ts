@@ -11,10 +11,12 @@ import type {
   SuggestInput,
   SuggestResult,
   SuggestEngineMeta,
+  EngineMode,
 } from './types';
 import type { ClientCfg } from './index';
 import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem } from '../accounting-api';
 import { localRuleEngineV1 as oldLocalRuleEngineV1 } from '../accounting-api';
+import { applyLlmTextPostProcess } from './llmPostProcess';
 
 export interface LocalLLMEngineOptions {
   cfg: ClientCfg;
@@ -135,8 +137,8 @@ export class LocalLLMEngineV1 implements SuggestEngine {
   }
 
   canHandleDomain(domain: 'accounting' | 'cs'): boolean {
-    // 현재는 accounting만 지원 (CS는 계속 Stub)
-    return domain === 'accounting';
+    // R10-S2: CS 도메인 지원 추가
+    return domain === 'accounting' || domain === 'cs';
   }
 
   async suggest<TPayload = unknown>(
@@ -158,17 +160,39 @@ export class LocalLLMEngineV1 implements SuggestEngine {
       );
 
       // LLM 결과를 SuggestResult 형식으로 변환
-      const items = llmResult.suggestions.map((suggestion) => ({
-        id: suggestion.id,
-        title: suggestion.title,
-        description: suggestion.description,
-        score: suggestion.score,
-        payload: {
-          ...suggestion,
-          explanation: llmResult.explanation,
-        } as TPayload,
-        source: 'local-llm' as const,
-      }));
+      const items = llmResult.suggestions.map((suggestion) => {
+        // R10-S2: HUD 레벨 후처리 적용
+        const processedTitle = applyLlmTextPostProcess(
+          {
+            domain: ctx.domain,
+            engineMeta: this.meta,
+            mode: this.meta.type,
+          },
+          suggestion.title,
+        );
+        const processedDescription = suggestion.description
+          ? applyLlmTextPostProcess(
+              {
+                domain: ctx.domain,
+                engineMeta: this.meta,
+                mode: this.meta.type,
+              },
+              suggestion.description,
+            )
+          : undefined;
+
+        return {
+          id: suggestion.id,
+          title: processedTitle,
+          description: processedDescription,
+          score: suggestion.score,
+          payload: {
+            ...suggestion,
+            explanation: llmResult.explanation,
+          } as TPayload,
+          source: 'local-llm' as const,
+        };
+      });
 
       return {
         items,
@@ -189,21 +213,44 @@ export class LocalLLMEngineV1 implements SuggestEngine {
       const oldItems: OldSuggestItem[] = await (oldLocalRuleEngineV1 as OldSuggestEngine).suggest(oldInput);
       
       // 새로운 SuggestItem 형식으로 변환
-      const fallbackItems = oldItems.map((item, idx) => ({
-        id: item.id || `fallback-${idx}`,
-        title: item.description || item.account || 'Unknown',
-        description: item.rationale,
-        score: item.score,
-        payload: {
-          ...item,
-          account: item.account,
-          amount: item.amount,
-          currency: item.currency,
-          vendor: item.vendor,
-          risk: item.risk,
-        } as TPayload,
-        source: 'local-rule' as const,
-      }));
+      const fallbackItems = oldItems.map((item, idx) => {
+        const rawTitle = item.description || item.account || 'Unknown';
+        // R10-S2: HUD 레벨 후처리 적용
+        const processedTitle = applyLlmTextPostProcess(
+          {
+            domain: ctx.domain,
+            engineMeta: this.meta,
+            mode: this.meta.type,
+          },
+          rawTitle,
+        );
+        const processedDescription = item.rationale
+          ? applyLlmTextPostProcess(
+              {
+                domain: ctx.domain,
+                engineMeta: this.meta,
+                mode: this.meta.type,
+              },
+              item.rationale,
+            )
+          : undefined;
+
+        return {
+          id: item.id || `fallback-${idx}`,
+          title: processedTitle,
+          description: processedDescription,
+          score: item.score,
+          payload: {
+            ...item,
+            account: item.account,
+            amount: item.amount,
+            currency: item.currency,
+            vendor: item.vendor,
+            risk: item.risk,
+          } as TPayload,
+          source: 'local-rule' as const,
+        };
+      });
       
       return {
         items: fallbackItems,
