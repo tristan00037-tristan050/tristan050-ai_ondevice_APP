@@ -34,3 +34,15 @@
   - `X-User-Role`
 - 모든 CS 라우트는 `requireTenantAuth`, `requireRole('operator')` 등 공통 가드를 사용하여
   OS 정책 브리지를 강제한다.
+
+### R10 이후 리팩토링 메모 – Domain LLM 추상화
+
+- 현재 SuggestDomain은 'accounting' | 'cs' 기준이며,
+  HR/법무/보안/반도체/조선/SW/개인정보 도메인이 추가될 예정이다.
+- R10 이후에는 다음 방향의 리팩토링을 고려한다.
+  1) DomainLLMContext<TDomain> / DomainLLMResponse<TDomain> 제너릭 인터페이스 정의
+  2) 도메인별 LLM 서비스(csLLMService, accountingLLMService, hrLLMService 등)를
+     공통 DomainLLMService 인터페이스로 추상화
+  3) SuggestEngine 내부에서 도메인별 switch문 대신,
+     "도메인 → 핸들러" 매핑 테이블(레지스트리) 기반 구조로 전환
+
