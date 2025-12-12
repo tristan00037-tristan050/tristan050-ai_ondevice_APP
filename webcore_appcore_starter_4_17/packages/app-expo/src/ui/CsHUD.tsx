@@ -12,6 +12,7 @@ import type { SuggestContext, SuggestInput, CsSuggestContext } from '../hud/engi
 import type { ClientCfg } from '../hud/accounting-api';
 import { isMock } from '../hud/accounting-api';
 import { fetchCsTickets, type CsTicket } from '../hud/cs-api';
+import { sendLlmUsageEvent, type LlmSuggestionOutcome } from '../hud/telemetry/llmUsage';
 
 type Props = { cfg?: ClientCfg };
 
@@ -131,12 +132,54 @@ export function CsHUD({ cfg }: Props = {}) {
         },
       });
       setSuggestionResult(result);
+
+      // R10-S1: LLM Usage Audit - suggestion_shown 이벤트 전송
+      if (result.items && result.items.length > 0) {
+        const firstSuggestion = result.items[0];
+        const suggestionText = firstSuggestion.description || firstSuggestion.title || '';
+        const meta = engine.getMeta();
+        
+        await sendLlmUsageEvent(clientCfg, meta, {
+          tenantId: clientCfg.tenantId,
+          userId: enginesCfg.userId || 'hud-user-1',
+          domain: 'cs',
+          feature: 'cs_reply_suggest',
+          timestamp: new Date().toISOString(),
+          suggestionLength: suggestionText.length,
+          outcome: 'shown',
+        });
+      }
     } catch (err: any) {
       console.error('[CsHUD] Suggest error:', err);
       setError(err.message || '응답 추천을 생성하는데 실패했습니다.');
     } finally {
       setSuggesting(false);
     }
+  };
+
+  /**
+   * R10-S1: LLM 추천 결과 사용 처리
+   * 
+   * @param outcome - 사용 결과 ('used_as_is' | 'edited' | 'rejected')
+   */
+  const handleSuggestionOutcome = async (outcome: LlmSuggestionOutcome) => {
+    if (!selectedTicket || !suggestionResult || !suggestionResult.items || suggestionResult.items.length === 0) {
+      return;
+    }
+
+    const firstSuggestion = suggestionResult.items[0];
+    const suggestionText = firstSuggestion.description || firstSuggestion.title || '';
+    const meta = engine.getMeta();
+
+    await sendLlmUsageEvent(clientCfg, meta, {
+      tenantId: clientCfg.tenantId,
+      userId: enginesCfg.userId || 'hud-user-1',
+      domain: 'cs',
+      feature: 'cs_reply_suggest',
+      timestamp: new Date().toISOString(),
+      suggestionLength: suggestionText.length,
+      outcome,
+    });
   };
 
   const renderTicket = ({ item }: { item: CsTicket }) => {

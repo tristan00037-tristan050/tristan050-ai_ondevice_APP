@@ -81,12 +81,44 @@ router.get(
           tenant: ticket.tenant,
           subject: ticket.subject,
           status: ticket.status,
-          createdAt: ticket.createdAt.toISOString(),
+          createdAt: ticket.createdAt instanceof Date 
+            ? ticket.createdAt.toISOString() 
+            : (typeof ticket.createdAt === 'string' 
+              ? ticket.createdAt 
+              : new Date(ticket.createdAt).toISOString()),
         })),
       });
     } catch (e: any) {
       console.error('[CS Tickets] Error:', e);
       console.error('[CS Tickets] Stack:', e?.stack);
+      console.error('[CS Tickets] Error message:', e?.message);
+      console.error('[CS Tickets] Error code:', e?.code);
+      console.error('[CS Tickets] DATABASE_URL:', process.env.DATABASE_URL ? 'set' : 'not set');
+      
+      // DB 연결 에러인 경우 명확한 메시지
+      if (e?.code === 'ECONNREFUSED' || e?.code === 'ENOTFOUND') {
+        return res.status(503).json({
+          error_code: 'DATABASE_UNAVAILABLE',
+          message: 'Database connection failed',
+        });
+      }
+      
+      // SASL 인증 에러 (DATABASE_URL 파싱 문제)
+      if (e?.message?.includes('client password must be a string') || e?.message?.includes('SASL')) {
+        return res.status(500).json({
+          error_code: 'DATABASE_CONFIG_ERROR',
+          message: 'Database connection string configuration error. Please check DATABASE_URL format.',
+        });
+      }
+      
+      // 테이블이 없는 경우
+      if (e?.code === '42P01' || e?.message?.includes('does not exist')) {
+        return res.status(500).json({
+          error_code: 'TABLE_NOT_FOUND',
+          message: 'cs_tickets table does not exist. Please run migrations.',
+        });
+      }
+      
       next(e);
     }
   }

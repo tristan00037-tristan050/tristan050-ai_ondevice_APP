@@ -5,7 +5,7 @@
  * @module service-core-cs/domain/csTickets
  */
 
-import { pool } from '@appcore/data-pg';
+import { exec } from '@appcore/data-pg';
 
 export type CsTicketStatus = 'open' | 'pending' | 'closed';
 
@@ -58,7 +58,7 @@ export async function listTickets(params: {
     queryParams.push(limit, offset);
   }
 
-  const result = await pool.query(query, queryParams);
+  const result = await exec(query, queryParams);
 
   return result.rows.map((row) => ({
     id: row.id,
@@ -96,7 +96,7 @@ export async function summarizeTickets(params: {
     GROUP BY status
   `;
 
-  const result = await pool.query(query, [tenant, windowFrom.toISOString()]);
+  const result = await exec(query, [tenant, windowFrom.toISOString()]);
 
   const byStatus: Record<CsTicketStatus, number> = {
     open: 0,

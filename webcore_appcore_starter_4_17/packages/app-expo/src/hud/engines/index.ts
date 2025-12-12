@@ -24,15 +24,27 @@ export class LocalRuleEngineV1Adapter implements SuggestEngine {
   readonly id = 'local-rule-v1';
   readonly mode = 'local-only' as const;
   
-  public meta: SuggestEngineMeta;
+  private readonly meta: SuggestEngineMeta;
   public isReady = true; // 규칙 엔진은 항상 준비됨
 
   constructor(options?: { cfg?: ClientCfg; mode?: EngineMode }) {
     const mode = options?.mode || 'rule';
+    // R10-S1: 엔진 메타 정보 구체화
     this.meta = {
+      id: 'local-rule-v1',
       type: mode === 'mock' ? 'mock' : 'rule',
       label: mode === 'mock' ? 'Mock' : 'On-device (Rule)',
+      stub: false,
+      variant: 'rule-v1',
+      supportedDomains: ['accounting', 'cs'],
     };
+  }
+  
+  /**
+   * 엔진 메타 정보 조회 (R10-S1)
+   */
+  getMeta(): SuggestEngineMeta {
+    return this.meta;
   }
   
   async initialize?(): Promise<void> {

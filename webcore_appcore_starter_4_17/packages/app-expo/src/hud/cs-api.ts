@@ -79,7 +79,15 @@ export async function fetchCsTickets(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch CS tickets: ${response.status} ${response.statusText}`);
+    // 에러 응답 본문 읽기 (디버깅용)
+    const errorText = await response.text().catch(() => '');
+    console.error('[cs-api] /v1/cs/tickets error:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText,
+      url,
+    });
+    throw new Error(`Failed to fetch CS tickets: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ''}`);
   }
 
   const data = await response.json();

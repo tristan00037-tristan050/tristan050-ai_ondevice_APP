@@ -12,8 +12,30 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+// Pool을 lazy initialization으로 변경 (DATABASE_URL 로드 시점 문제 해결)
+let _pool: Pool | null = null;
+
+function getPool(): Pool {
+  if (!_pool) {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL environment variable is not set');
+    }
+    if (typeof databaseUrl !== 'string') {
+      console.error('[data-pg] DATABASE_URL must be a string, got:', typeof databaseUrl);
+      throw new Error('DATABASE_URL must be a string');
+    }
+    _pool = new Pool({
+      connectionString: databaseUrl,
+    });
+  }
+  return _pool;
+}
+
+export const pool = new Proxy({} as Pool, {
+  get(_target, prop) {
+    return getPool()[prop as keyof Pool];
+  },
 });
 
 export async function ping(): Promise<boolean> {
