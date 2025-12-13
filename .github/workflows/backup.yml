@@ -13,9 +13,6 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     name: Database Backup
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
       
