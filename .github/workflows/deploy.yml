@@ -235,7 +235,7 @@ jobs:
           version: 'latest'
 
       - name: Configure kubectl (if KUBE_CONFIG provided)
-        if: secrets.KUBE_CONFIG_PRODUCTION != ''
+        if: env.KUBE_CONFIG_PRODUCTION != ''
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > ~/.kube/config
@@ -246,7 +246,7 @@ jobs:
           kubectl create namespace production --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create secrets (if not exists)
-        if: secrets.KUBE_CONFIG_PRODUCTION != ''
+        if: env.KUBE_CONFIG_PRODUCTION != ''
         run: |
           kubectl create secret generic collector-secrets \
             --from-literal=db-host="${{ secrets.DB_HOST }}" \
@@ -282,14 +282,14 @@ jobs:
           fi
 
       - name: Deploy to Kubernetes
-        if: secrets.KUBE_CONFIG_PRODUCTION != ''
+        if: env.KUBE_CONFIG_PRODUCTION != ''
         run: |
           kubectl apply -f k8s/collector-deployment.yaml -n production || true
           kubectl apply -f k8s/collector-hpa.yaml -n production || true
           kubectl rollout status deployment/collector -n production --timeout=5m || true
 
       - name: Run smoke tests
-        if: secrets.KUBE_CONFIG_PRODUCTION != ''
+        if: env.KUBE_CONFIG_PRODUCTION != ''
         run: |
           echo "Waiting for services to be ready..."
           sleep 30
