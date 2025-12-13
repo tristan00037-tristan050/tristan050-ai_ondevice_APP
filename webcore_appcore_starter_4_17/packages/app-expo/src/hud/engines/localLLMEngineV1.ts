@@ -36,7 +36,12 @@ export class LocalLLMEngineV1 implements SuggestEngine {
     ctx: SuggestContext,
     input: SuggestInput,
   ): Promise<SuggestResult<TPayload>> {
-    // R8-S1에서는 네트워크 호출 없이 간단한 더미 응답만 생성한다.
+    // R9-S2: CS 도메인 지원 추가
+    if (ctx.domain === 'cs') {
+      return this.suggestForCs(ctx, input);
+    }
+    
+    // 기존 accounting 도메인 처리
     const label = ctx.domain === 'accounting' ? '회계' : 'CS';
 
     return {
@@ -48,6 +53,37 @@ export class LocalLLMEngineV1 implements SuggestEngine {
             'R8-S1에서는 인터페이스와 흐름만 검증합니다. 실제 LLM은 이후 스프린트에서 붙입니다.',
           score: 0.5,
           payload: undefined as TPayload,
+          source: 'local-llm',
+        },
+      ],
+      engine: 'local-llm-v1',
+      confidence: 0.5,
+    };
+  }
+
+  /**
+   * CS 도메인용 추천 생성 (R9-S2)
+   */
+  private async suggestForCs(
+    ctx: SuggestContext,
+    input: SuggestInput,
+  ): Promise<SuggestResult> {
+    // Stub 구현: 실제 LLM 호출 없이 CS 도메인에 맞는 더미 응답 반환
+    const inquiry = input.text || '고객 문의';
+    
+    return {
+      items: [
+        {
+          id: 'cs-stub-1',
+          title: `[Stub] "${inquiry}"에 대한 응답 추천`,
+          description: 'R9-S2 초기 단계에서는 인터페이스만 정의합니다. 실제 LLM 연동은 후속 작업에서 진행됩니다.',
+          score: 0.5,
+          payload: {
+            inquiry,
+            domain: 'cs',
+            ticketId: input.meta?.ticketId,
+            status: input.meta?.status,
+          },
           source: 'local-llm',
         },
       ],
