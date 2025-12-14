@@ -3,10 +3,10 @@ name: OpenAPI Types Generation
 on:
   pull_request:
     paths:
-      - 'packages/bff-node-ts/docs/openapi.yaml'
-      - 'packages/collector-node-ts/docs/openapi.yaml'
-      - 'scripts/generate-types.sh'
-      - 'scripts/check_openapi_sync.js'
+      - "packages/bff-node-ts/docs/openapi.yaml"
+      - "packages/collector-node-ts/docs/openapi.yaml"
+      - "scripts/generate-types.sh"
+      - "scripts/check_openapi_sync.js"
   workflow_dispatch:
 
 jobs:
@@ -20,12 +20,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # git diff를 위해 전체 히스토리 필요
+          fetch-depth: 0 # git diff를 위해 전체 히스토리 필요
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install dependencies
         run: npm ci
@@ -51,4 +51,3 @@ jobs:
       - name: Validate generated types
         run: |
           node scripts/check_openapi_sync.js
-
