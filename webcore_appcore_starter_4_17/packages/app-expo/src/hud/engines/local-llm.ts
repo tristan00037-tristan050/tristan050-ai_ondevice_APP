@@ -106,38 +106,64 @@ class DummyLLMAdapter implements OnDeviceLLMAdapter {
 /**
  * LocalLLMEngineV1
  * 온디바이스 LLM 엔진 구현
+ * R10-S3: 실제 모델 PoC 지원 (E06-1)
  */
 export class LocalLLMEngineV1 implements SuggestEngine {
   readonly id = 'local-llm-v1';
   readonly mode = 'local-only' as const;
   
-  public meta: SuggestEngineMeta = {
-    type: 'local-llm',
-    label: 'On-device LLM',
-  };
+  public meta: SuggestEngineMeta;
   
   public isReady = false;
 
   private readonly cfg: ClientCfg;
   private readonly adapter: OnDeviceLLMAdapter;
+  private readonly useRealModel: boolean;
 
   constructor(options: LocalLLMEngineOptions) {
     this.cfg = options.cfg;
-    // 더미 어댑터 사용 (나중에 실제 LLM 어댑터로 교체 가능)
+    
+    // R10-S3: 실제 모델 라이브러리 연동 전까지는 항상 Stub 사용
+    // 실제 모델 사용 여부는 환경변수로 제어 (EXPO_PUBLIC_USE_REAL_LLM=1)
+    const useRealLLMEnv = process.env.EXPO_PUBLIC_USE_REAL_LLM === '1';
+    const isMockMode = options.cfg.mode === 'mock';
+    
+    // RealLLMAdapter가 실제로 구현되기 전까지는 항상 stub=true 유지
+    // 실제 모델 스위치가 켜져도 아직 RealLLMAdapter가 없으면 stub=true
+    this.useRealModel = useRealLLMEnv && !isMockMode;
+    
+    // 어댑터 선택: 현재는 항상 DummyLLMAdapter 사용
+    // TODO: 실제 모델 라이브러리 연동 후 RealLLMAdapter 추가
     this.adapter = new DummyLLMAdapter();
+    
+    // 메타 정보 설정
+    // 실제 모델이 활성화되기 전까지는 항상 stub=true
+    // variant는 live 모드에서 local-llm-v1로 표시하되 stub=true (v1 준비 상태)
+    const variant = isMockMode ? 'local-llm-v0' : 'local-llm-v1';
+    const stub = true; // RealLLMAdapter 구현 전까지 항상 true
+    
+    this.meta = {
+      type: 'local-llm',
+      label: stub ? 'On-device LLM (Stub)' : 'On-device LLM',
+      variant,
+      stub,
+      supportedDomains: ['accounting', 'cs'],
+    };
   }
 
   async initialize(): Promise<void> {
     if (this.isReady) return;
     
-    console.log('[LocalLLMEngineV1] loading on-device model (simulated)...');
+    const modelType = this.meta.stub ? 'Stub (simulated)' : 'Real model';
+    console.log(`[LocalLLMEngineV1] loading on-device model (${modelType})...`);
     await this.adapter.initialize();
     this.isReady = true;
-    console.log('[LocalLLMEngineV1] model loaded');
+    console.log(`[LocalLLMEngineV1] model loaded (variant: ${this.meta.variant}, stub: ${this.meta.stub})`);
   }
 
   canHandleDomain(domain: 'accounting' | 'cs'): boolean {
-
+    return this.meta.supportedDomains?.includes(domain) ?? true;
+  }
 
   async suggest<TPayload = unknown>(
     ctx: SuggestContext,
@@ -159,7 +185,13 @@ export class LocalLLMEngineV1 implements SuggestEngine {
       );
 
       // LLM 결과를 SuggestResult 형식으로 변환
-
+      const items = llmResult.suggestions.map((suggestion) => ({
+        id: suggestion.id,
+        title: suggestion.title,
+        description: suggestion.description,
+        score: suggestion.score,
+        source: 'local-llm' as const,
+      }));
 
       return {
         items,
@@ -180,7 +212,13 @@ export class LocalLLMEngineV1 implements SuggestEngine {
       const oldItems: OldSuggestItem[] = await (oldLocalRuleEngineV1 as OldSuggestEngine).suggest(oldInput);
       
       // 새로운 SuggestItem 형식으로 변환
-
+      const fallbackItems = oldItems.map((item, idx) => ({
+        id: item.id || `fallback-${idx}`,
+        title: item.description || item.account || 'Unknown',
+        description: item.rationale,
+        score: item.score,
+        source: 'local-rule' as const,
+      }));
       
       return {
         items: fallbackItems,
