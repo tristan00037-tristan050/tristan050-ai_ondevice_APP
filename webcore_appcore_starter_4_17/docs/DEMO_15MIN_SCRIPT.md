@@ -178,13 +178,7 @@ npm run demo:app:live
   - (선택) OS Dashboard에서 Engine Mode 카드 확인
     - `primary_mode: local-llm` 및 `counts` 분포 확인
 
-#### 5. **회계 Export API 확인 (R9-S1 신규)**
-- **Step Z: Accounting HUD에서 Export 버튼 클릭**
-  - 화면 좌측 상단 Accounting HUD에서 **"Export"** 버튼을 1회 클릭
-  - dev/demo 환경에서는 실제 파일 다운로드 대신 "요청 성공" 또는 "준비 중" 메시지만 확인해도 됨
-  - **500 에러(missing_export_sign_secret)가 발생하지 않는지만 확인**
-  - (참고) BFF 서버의 `.env` 파일에 `EXPORT_SIGN_SECRET` 환경 변수가 설정되어 있어야 함
-
+<
 ### 핵심 메시지
 
 > **"고위험 거래는 자동으로 리스크 스코어링 되고,

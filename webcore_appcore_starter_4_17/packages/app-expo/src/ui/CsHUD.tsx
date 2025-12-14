@@ -4,15 +4,6 @@
  * R9-S1: CS 티켓 리스트 API 연동
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { getSuggestEngine, suggestWithEngine } from '../hud/engines/index';
-import type { ClientCfg as EnginesClientCfg } from '../hud/engines/index';
-import type { SuggestContext, SuggestInput, CsSuggestContext } from '../hud/engines/types';
-import type { ClientCfg } from '../hud/accounting-api';
-import { isMock } from '../hud/accounting-api';
-import { fetchCsTickets, type CsTicket } from '../hud/cs-api';
-import { sendLlmUsageEvent } from '../hud/telemetry/llmUsage';
 
 
 type Props = { cfg?: ClientCfg };

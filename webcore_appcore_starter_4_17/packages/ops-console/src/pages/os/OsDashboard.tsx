@@ -19,14 +19,6 @@ type EngineSection = {
   counts: Record<EngineMode, number>;
 };
 
-type CsSummary = {
-  total: number;
-  byStatus: {
-    open: number;
-    pending: number;
-    closed: number;
-  };
-};
 
 type DashboardData = {
   window: {
@@ -53,7 +45,7 @@ type DashboardData = {
     offline_queue_backlog: number;
   };
   engine?: EngineSection;
-  cs?: CsSummary;
+
 };
 
 async function fetchDashboard(): Promise<DashboardData | null> {
@@ -155,14 +147,6 @@ export default function OsDashboard() {
         rule: 12,
         'local-llm': 34,
         remote: 0,
-      },
-    },
-    cs: {
-      total: 0,
-      byStatus: {
-        open: 0,
-        pending: 0,
-        closed: 0,
       },
     },
   };

@@ -15,20 +15,6 @@
 postgres://app:app@<host>:5432/app
 ```
 
-#### 환경 변수 설정
-
-**필수 환경 변수**:
-
-- **DATABASE_URL**
-  - 설명: PostgreSQL 데이터베이스 연결 문자열
-  - 예시 값: `postgres://app:app@localhost:5432/app`
-  - 운영 환경에서는 실제 DB 호스트/인증 정보 사용
-
-- **EXPORT_SIGN_SECRET**
-  - 설명: Export 요청 서명/검증에 사용하는 비밀 키
-  - 예시 값: dev 환경에서는 `dev-export-secret` 처럼 단순 값 사용 가능
-  - 운영 환경에서는 충분히 긴 랜덤 문자열 사용
-  - 주의: `.env` 파일에 설정하되, Git에는 커밋하지 않음
 
 #### BFF
 ```

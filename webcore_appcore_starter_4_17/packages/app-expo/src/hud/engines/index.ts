@@ -9,7 +9,7 @@ import { LocalLLMEngineV1 } from './local-llm';
 import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem, ClientCfg as AccountingClientCfg } from '../accounting-api';
 import { localRuleEngineV1 as oldLocalRuleEngineV1 } from '../accounting-api';
 import { isMock } from '../accounting-api';
-import { applyLlmTextPostProcess } from './llmPostProcess';
+
 
 /**
  * SuggestEngine용 ClientCfg (accounting-api의 ClientCfg를 확장)
@@ -161,20 +161,13 @@ export function getSuggestEngine(cfg: ClientCfg): SuggestEngine {
   const mode = getEngineModeFromEnv();
   const demoMode = cfg.mode === 'mock' ? 'mock' : 'live';
 
-  // Mock 모드에서도 local-llm 모드가 명시되면 LocalLLMEngineV1 사용
-  // (Mock 모드에서도 네트워크 요청 없이 동작하므로 안전)
+
   if (mode === 'local-llm') {
     const engine = new LocalLLMEngineV1({ cfg });
     // initialize는 HUD 쪽에서 호출할 수 있도록 남겨둠
     return engine;
   }
 
-  // Mock 모드에서는 기본적으로 mock 엔진 사용
-  if (demoMode === 'mock') {
-    return new LocalRuleEngineV1Adapter({ cfg, mode: 'mock' });
-  }
-
-  // Live 모드에서 엔진 모드에 따라 선택
 
   if (mode === 'rule' || mode === 'mock') {
     return new LocalRuleEngineV1Adapter({ cfg, mode: 'rule' });

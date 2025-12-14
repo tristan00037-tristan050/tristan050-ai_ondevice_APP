@@ -7,13 +7,13 @@
 
 import { Router } from 'express';
 import { requireTenantAuth, requireRole } from '../shared/guards.js';
-import { summarizeTickets } from '@appcore/service-core-cs';
+
 
 const router = Router();
 
 /**
  * GET /v1/cs/os/dashboard
- * CS OS Dashboard용 집계 데이터 조회
+
  */
 router.get(
   '/dashboard',
@@ -21,8 +21,7 @@ router.get(
   requireRole('operator'),
   async (req: any, res: any, next: any) => {
     try {
-      // 테넌트: 가드에서 설정된 tenantId 사용
-      const tenant = req.tenantId || req.headers['x-tenant'] as string || 'default';
+
       
       // 쿼리 파라미터: windowDays (기본값: 7일)
       const windowDaysParam = req.query.windowDays ? parseInt(req.query.windowDays as string, 10) : undefined;
@@ -44,13 +43,7 @@ router.get(
 
       // 응답 형식
       res.json({
-        window: {
-          days: windowDays,
-        },
-        summary: {
-          total: summary.total,
-          byStatus: summary.byStatus,
-        },
+
       });
     } catch (e: any) {
       console.error('[CS OS Dashboard] Error:', e);
