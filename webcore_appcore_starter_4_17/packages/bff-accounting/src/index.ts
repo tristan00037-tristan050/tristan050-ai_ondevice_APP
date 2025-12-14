@@ -34,6 +34,8 @@ import osMetricsRoute from './routes/os-metrics.js';
 import osDashboardRoute from './routes/os-dashboard.js';
 import csOsDashboardRoute from './routes/cs-os-dashboard.js';
 import csTicketsRoute from './routes/cs-tickets.js';
+import osLlmUsageRoute from './routes/os-llm-usage.js';
+import osLlmGatewayRoute from './routes/os-llm-gateway.js';
 import riskRoute from './routes/risk.js';
 import manualReviewRoute from './routes/manual-review.js';
 import { requestId } from './middleware/requestId.js';
@@ -180,6 +182,8 @@ app.use(osMetricsRoute);
 app.use('/v1/accounting/os', osDashboardRoute);
 app.use('/v1/cs', csTicketsRoute);
 app.use('/v1/cs/os', csOsDashboardRoute);
+app.use(osLlmUsageRoute);
+app.use(osLlmGatewayRoute);
 app.use(riskRoute);
 app.use(manualReviewRoute);
 // healthRoute는 이미 /healthz, /readyz로 위에서 정의했으므로 제거

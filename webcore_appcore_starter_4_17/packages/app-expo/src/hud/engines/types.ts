@@ -76,3 +76,67 @@ export interface SuggestEngine {
   ): Promise<SuggestResult<TPayload>>;
 }
 
+// ============================================================================
+// CS LLM용 타입 정의 (R9-S2)
+// ============================================================================
+
+/**
+ * CS LLM용 공통 Role 타입
+ */
+export type CsLLMRole = 'user' | 'agent' | 'system';
+
+/**
+ * CS LLM 히스토리 한 줄
+ */
+export interface CsLLMHistoryItem {
+  role: CsLLMRole;
+  content: string;
+}
+
+/**
+ * CS LLM 컨텍스트 (티켓 + 히스토리)
+ */
+export interface CsLLMContext {
+  tenantId: string;
+  ticketId: string;
+  subject: string;
+  body: string;
+  history: CsLLMHistoryItem[];
+}
+
+/**
+ * 엔진이 반환하는 CS 응답 한 건
+ */
+export interface CsResponseSuggestion {
+  id: string;
+  replyText: string;
+  createdAt: string; // ISO string
+  source: 'rule' | 'local-llm' | 'remote-llm';
+}
+
+/**
+ * 엔진이 반환하는 전체 CS LLM 결과
+ */
+export interface CsLLMResponse {
+  summary?: string;
+  suggestions: CsResponseSuggestion[];
+}
+
+/**
+ * SuggestEngine에서 사용할 CS 도메인 컨텍스트
+ * (기존 accounting 쪽 컨텍스트와 나란히 두고 union으로 묶을 수 있습니다)
+ */
+export interface CsSuggestContext {
+  domain: 'cs';
+  tenantId: string;
+  ticket: {
+    id: string;
+    subject: string;
+    body: string;
+    status: string;
+    createdAt: string; // CsHUD에서 넘기는 createdAt과 맞춤
+  };
+  // 필요 시 LLM 컨텍스트 전체를 붙이고 싶을 때 사용
+  llmContext?: CsLLMContext;
+}
+

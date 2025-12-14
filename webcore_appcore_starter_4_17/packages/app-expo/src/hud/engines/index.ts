@@ -9,6 +9,7 @@ import { LocalLLMEngineV1 } from './local-llm';
 import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem, ClientCfg as AccountingClientCfg } from '../accounting-api';
 import { localRuleEngineV1 as oldLocalRuleEngineV1 } from '../accounting-api';
 import { isMock } from '../accounting-api';
+import { applyLlmTextPostProcess } from './llmPostProcess';
 
 /**
  * SuggestEngine용 ClientCfg (accounting-api의 ClientCfg를 확장)
@@ -64,21 +65,44 @@ export class LocalRuleEngineV1Adapter implements SuggestEngine {
     const oldItems: OldSuggestItem[] = await (oldLocalRuleEngineV1 as OldSuggestEngine).suggest(oldInput);
 
     // 새로운 SuggestItem 형식으로 변환
-    const newItems = oldItems.map((item, idx) => ({
-      id: item.id || `item-${idx}`,
-      title: item.description || item.account || 'Unknown',
-      description: item.rationale,
-      score: item.score,
-      payload: {
-        ...item,
-        account: item.account,
-        amount: item.amount,
-        currency: item.currency,
-        vendor: item.vendor,
-        risk: item.risk,
-      } as TPayload,
-      source: 'local-rule' as const,
-    }));
+    const newItems = oldItems.map((item, idx) => {
+      const rawTitle = item.description || item.account || 'Unknown';
+      // R10-S2: HUD 레벨 후처리 적용
+      const processedTitle = applyLlmTextPostProcess(
+        {
+          domain: ctx.domain,
+          engineMeta: this.meta,
+          mode: this.meta.type,
+        },
+        rawTitle,
+      );
+      const processedDescription = item.rationale
+        ? applyLlmTextPostProcess(
+            {
+              domain: ctx.domain,
+              engineMeta: this.meta,
+              mode: this.meta.type,
+            },
+            item.rationale,
+          )
+        : undefined;
+
+      return {
+        id: item.id || `item-${idx}`,
+        title: processedTitle,
+        description: processedDescription,
+        score: item.score,
+        payload: {
+          ...item,
+          account: item.account,
+          amount: item.amount,
+          currency: item.currency,
+          vendor: item.vendor,
+          risk: item.risk,
+        } as TPayload,
+        source: 'local-rule' as const,
+      };
+    });
 
     return {
       items: newItems,
@@ -96,13 +120,12 @@ export class LocalRuleEngineV1Adapter implements SuggestEngine {
   ): Promise<SuggestResult> {
     // Mock/Rule 모드에서 CS 도메인에 대한 더미 응답 반환
     const inquiry = input.text || '고객 문의';
-    
+
     return {
       items: [
         {
           id: 'cs-rule-1',
-          title: `[Rule] "${inquiry}" 문의에 대한 규칙 기반 Mock 응답입니다.`,
-          description: 'Mock/Rule 모드에서는 간단한 규칙 기반 응답을 제공합니다.',
+
           score: 0.5,
           payload: {
             inquiry,
@@ -138,17 +161,20 @@ export function getSuggestEngine(cfg: ClientCfg): SuggestEngine {
   const mode = getEngineModeFromEnv();
   const demoMode = cfg.mode === 'mock' ? 'mock' : 'live';
 
-  // Mock 모드에서는 항상 mock 엔진 사용 (불변 조건)
-  if (demoMode === 'mock') {
-    return new LocalRuleEngineV1Adapter({ cfg, mode: 'mock' });
-  }
-
-  // Live 모드에서 엔진 모드에 따라 선택
+  // Mock 모드에서도 local-llm 모드가 명시되면 LocalLLMEngineV1 사용
+  // (Mock 모드에서도 네트워크 요청 없이 동작하므로 안전)
   if (mode === 'local-llm') {
     const engine = new LocalLLMEngineV1({ cfg });
     // initialize는 HUD 쪽에서 호출할 수 있도록 남겨둠
     return engine;
   }
+
+  // Mock 모드에서는 기본적으로 mock 엔진 사용
+  if (demoMode === 'mock') {
+    return new LocalRuleEngineV1Adapter({ cfg, mode: 'mock' });
+  }
+
+  // Live 모드에서 엔진 모드에 따라 선택
 
   if (mode === 'rule' || mode === 'mock') {
     return new LocalRuleEngineV1Adapter({ cfg, mode: 'rule' });

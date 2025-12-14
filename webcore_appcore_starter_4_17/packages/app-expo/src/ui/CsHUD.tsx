@@ -13,7 +13,7 @@ import type { ClientCfg } from '../hud/accounting-api';
 import { isMock } from '../hud/accounting-api';
 import { fetchCsTickets, type CsTicket } from '../hud/cs-api';
 import { sendLlmUsageEvent } from '../hud/telemetry/llmUsage';
-import { applyLlmTextPostProcess } from '../hud/engines/llmPostProcess';
+
 
 type Props = { cfg?: ClientCfg };
 
@@ -154,58 +154,7 @@ export function CsHUD({ cfg }: Props = {}) {
       });
       setSuggestionResult(result);
 
-      // R10-S3: 추천 생성 성공 시 shown 이벤트 전송
-      if (result.items && result.items.length > 0) {
-        const firstSuggestion = result.items[0];
-        const suggestionText = firstSuggestion.description || firstSuggestion.title || '';
-        const shownText = normalizeForCompare(suggestionText);
 
-        // 이전 추천이 있었는데 아직 확정 이벤트가 없다면, 새 추천 생성은 "기존 추천을 버린 것"으로 간주
-        if (suggestionSessionRef.current && !suggestionSessionRef.current.finalized) {
-          await sendLlmUsageEvent(clientCfg, engine, {
-            tenantId: clientCfg.tenantId!,
-            userId: enginesCfg.userId || 'hud-user-1',
-            domain: 'cs',
-            eventType: 'rejected',
-            feature: 'cs_reply_suggest',
-            timestamp: new Date().toISOString(),
-            suggestionLength: suggestionSessionRef.current.shownTextNormalized.length,
-          });
-        }
-
-        // 새 추천 세션 시작
-        suggestionSessionRef.current = {
-          shownTextNormalized: shownText,
-          finalized: false,
-        };
-
-        // shown 이벤트 전송
-        await sendLlmUsageEvent(clientCfg, engine, {
-          tenantId: clientCfg.tenantId!,
-          userId: enginesCfg.userId || 'hud-user-1',
-          domain: 'cs',
-          eventType: 'shown',
-          feature: 'cs_reply_suggest',
-          timestamp: new Date().toISOString(),
-          suggestionLength: shownText.length,
-        });
-      }
-    } catch (err: any) {
-      console.error('[CsHUD] Suggest error:', err);
-      setError(err.message || '응답 추천을 생성하는데 실패했습니다.');
-
-      // R10-S3: 에러 이벤트 전송
-      await sendLlmUsageEvent(clientCfg, engine, {
-        tenantId: clientCfg.tenantId!,
-        userId: enginesCfg.userId || 'hud-user-1',
-        domain: 'cs',
-        eventType: 'error',
-        feature: 'cs_reply_suggest',
-        timestamp: new Date().toISOString(),
-        suggestionLength: 0,
-      }).catch((e) => {
-        console.error('[CsHUD] Failed to send error event:', e);
-      });
     } finally {
       setSuggesting(false);
     }
