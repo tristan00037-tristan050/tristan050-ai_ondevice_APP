@@ -12,6 +12,7 @@ import type { SuggestContext, SuggestInput, CsSuggestContext } from '../hud/engi
 import type { ClientCfg } from '../hud/accounting-api';
 import { isMock } from '../hud/accounting-api';
 import { fetchCsTickets, type CsTicket } from '../hud/cs-api';
+import { sendLlmUsageEvent } from '../hud/telemetry/llmUsage';
 
 type Props = { cfg?: ClientCfg };
 
@@ -131,9 +132,7 @@ export function CsHUD({ cfg }: Props = {}) {
         },
       });
       setSuggestionResult(result);
-    } catch (err: any) {
-      console.error('[CsHUD] Suggest error:', err);
-      setError(err.message || '응답 추천을 생성하는데 실패했습니다.');
+
     } finally {
       setSuggesting(false);
     }
