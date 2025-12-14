@@ -106,34 +106,53 @@ class DummyLLMAdapter implements OnDeviceLLMAdapter {
 /**
  * LocalLLMEngineV1
  * 온디바이스 LLM 엔진 구현
+ * R10-S3: 실제 모델 PoC 지원 (E06-1)
  */
 export class LocalLLMEngineV1 implements SuggestEngine {
   readonly id = 'local-llm-v1';
   readonly mode = 'local-only' as const;
   
-  public meta: SuggestEngineMeta = {
-    type: 'local-llm',
-    label: 'On-device LLM',
-  };
+  public meta: SuggestEngineMeta;
   
   public isReady = false;
 
   private readonly cfg: ClientCfg;
   private readonly adapter: OnDeviceLLMAdapter;
+  private readonly useRealModel: boolean;
 
   constructor(options: LocalLLMEngineOptions) {
     this.cfg = options.cfg;
-    // 더미 어댑터 사용 (나중에 실제 LLM 어댑터로 교체 가능)
+    
+    // R10-S3: Mock 모드에서는 Stub 유지, Live 모드에서 실제 모델 사용 가능
+    // TODO: 실제 모델 라이브러리 연동 후 useRealModel 로직 활성화
+    const isMockMode = options.cfg.mode === 'mock';
+    this.useRealModel = !isMockMode; // Live 모드에서만 실제 모델 사용 (현재는 아직 Stub)
+    
+    // 어댑터 선택: 현재는 항상 DummyLLMAdapter 사용
+    // TODO: 실제 모델 라이브러리 연동 후 RealLLMAdapter 추가
     this.adapter = new DummyLLMAdapter();
+    
+    // 메타 정보 설정
+    const variant = this.useRealModel ? 'local-llm-v1' : 'local-llm-v0';
+    const stub = !this.useRealModel; // Mock 모드 또는 실제 모델 미연동 시 Stub
+    
+    this.meta = {
+      type: 'local-llm',
+      label: stub ? 'On-device LLM (Stub)' : 'On-device LLM',
+      variant,
+      stub,
+      supportedDomains: ['accounting', 'cs'],
+    };
   }
 
   async initialize(): Promise<void> {
     if (this.isReady) return;
     
-    console.log('[LocalLLMEngineV1] loading on-device model (simulated)...');
+    const modelType = this.meta.stub ? 'Stub (simulated)' : 'Real model';
+    console.log(`[LocalLLMEngineV1] loading on-device model (${modelType})...`);
     await this.adapter.initialize();
     this.isReady = true;
-    console.log('[LocalLLMEngineV1] model loaded');
+    console.log(`[LocalLLMEngineV1] model loaded (variant: ${this.meta.variant}, stub: ${this.meta.stub})`);
   }
 
   canHandleDomain(domain: 'accounting' | 'cs'): boolean {
