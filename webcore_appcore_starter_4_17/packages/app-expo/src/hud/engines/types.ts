@@ -16,10 +16,26 @@ export type EngineMode = 'mock' | 'rule' | 'local-llm' | 'remote';
 
 /**
  * 엔진 메타 정보 (R8-S2)
+ * R10-S3: variant, stub 필드 추가 (E06-1)
  */
 export interface SuggestEngineMeta {
   type: EngineMode;
   label: string;
+  /**
+   * 엔진 variant (예: 'local-llm-v0', 'local-llm-v1')
+   * R10-S3: 실제 모델 버전 구분용
+   */
+  variant?: string;
+  /**
+   * Stub 여부 (true: 더미/시뮬레이션, false: 실제 모델)
+   * R10-S3: 실제 모델 vs Stub 구분용
+   */
+  stub?: boolean;
+  /**
+   * 지원 도메인 목록
+   * R10-S2: 도메인별 지원 여부 명시
+   */
+  supportedDomains?: SuggestDomain[];
 }
 
 export interface SuggestContext {
@@ -52,17 +68,17 @@ export interface SuggestResult<TPayload = unknown> {
 export interface SuggestEngine {
   readonly id: string;
   readonly mode: SuggestEngineMode;
-  
+
   /**
    * 엔진 메타 정보 (R8-S2)
    */
   meta: SuggestEngineMeta;
-  
+
   /**
    * 엔진 초기화 상태 (R8-S2)
    */
   isReady: boolean;
-  
+
   /**
    * 엔진 초기화 메서드 (선택적, R8-S2)
    */
@@ -72,7 +88,7 @@ export interface SuggestEngine {
 
   suggest<TPayload = unknown>(
     ctx: SuggestContext,
-    input: SuggestInput,
+    input: SuggestInput
   ): Promise<SuggestResult<TPayload>>;
 }
 
@@ -139,4 +155,3 @@ export interface CsSuggestContext {
   // 필요 시 LLM 컨텍스트 전체를 붙이고 싶을 때 사용
   llmContext?: CsLLMContext;
 }
-
