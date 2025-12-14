@@ -6,25 +6,25 @@
  * @module app-expo/hud/telemetry/llmUsage
  */
 
-import { mkHeaders } from "../accounting-api";
-import type { ClientCfg } from "../accounting-api";
+import { mkHeaders } from '../accounting-api';
+import type { ClientCfg } from '../accounting-api';
 import type {
   EngineMode,
   SuggestDomain,
   SuggestEngineMeta,
-} from "../engines/types";
-import type { SuggestEngine } from "../engines/types";
+} from '../engines/types';
+import type { SuggestEngine } from '../engines/types';
 
 /**
  * LLM Usage 이벤트 타입
  * R10-S2: Manual Touch Rate, 추천 사용률, 수정률, 거부률 측정을 위한 세분화
  */
 export type LlmUsageEventType =
-  | "shown" // 추천 패널 표시
-  | "accepted_as_is" // 그대로 사용
-  | "edited" // 수정 후 전송
-  | "rejected" // 추천 닫기/무시
-  | "error"; // 엔진 에러
+  | 'shown' // 추천 패널 표시
+  | 'accepted_as_is' // 그대로 사용
+  | 'edited' // 수정 후 전송
+  | 'rejected' // 추천 닫기/무시
+  | 'error'; // 엔진 에러
 
 /**
  * LLM Usage 이벤트
@@ -54,28 +54,25 @@ export interface LlmUsageEvent {
 export async function sendLlmUsageEvent(
   cfg: ClientCfg,
   engine: SuggestEngine,
-  evt: Omit<
-    LlmUsageEvent,
-    "engineId" | "engineVariant" | "engineMode" | "engineStub"
-  >
+  evt: Omit<LlmUsageEvent, 'engineId' | 'engineVariant' | 'engineMode' | 'engineStub'>,
 ) {
   // R10-S2: engine.id와 engine.meta를 사용하여 메타 정보 구성
   // R10-S3: EngineMeta 확장(variant, stub) 반영 (E06-1)
   const payload: LlmUsageEvent = {
     ...evt,
-    engineId: engine.id || "unknown",
+    engineId: engine.id || 'unknown',
     engineVariant: engine.meta.variant,
     engineMode: engine.meta.type,
-    engineStub: engine.meta.stub ?? engine.meta.type === "local-llm", // 기본값: local-llm은 Stub로 간주
+    engineStub: engine.meta.stub ?? (engine.meta.type === 'local-llm'), // 기본값: local-llm은 Stub로 간주
   };
 
-  if (cfg.mode === "mock") {
-    console.log("[MOCK] LLM usage event", payload);
+  if (cfg.mode === 'mock') {
+    console.log('[MOCK] LLM usage event', payload);
     return;
   }
 
   await fetch(`${cfg.baseUrl}/v1/os/llm-usage`, {
-    method: "POST",
+    method: 'POST',
     headers: mkHeaders(cfg),
     body: JSON.stringify(payload),
   });

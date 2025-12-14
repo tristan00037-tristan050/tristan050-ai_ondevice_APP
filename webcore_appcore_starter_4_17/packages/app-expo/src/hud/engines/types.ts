@@ -4,15 +4,15 @@
  * R8-S2: 엔진 모드 확장 및 메타 정보 추가
  */
 
-export type SuggestDomain = "accounting" | "cs";
+export type SuggestDomain = 'accounting' | 'cs';
 
-export type SuggestEngineMode = "local-only" | "remote-only" | "hybrid";
+export type SuggestEngineMode = 'local-only' | 'remote-only' | 'hybrid';
 
 /**
  * 엔진 모드 타입 (R8-S2)
  * EXPO_PUBLIC_ENGINE_MODE 환경 변수로 선택 가능
  */
-export type EngineMode = "mock" | "rule" | "local-llm" | "remote";
+export type EngineMode = 'mock' | 'rule' | 'local-llm' | 'remote';
 
 /**
  * 엔진 메타 정보 (R8-S2)
@@ -56,7 +56,7 @@ export interface SuggestItem<TPayload = unknown> {
   description?: string;
   score?: number;
   payload?: TPayload;
-  source: "local-rule" | "remote-bff" | "local-llm";
+  source: 'local-rule' | 'remote-bff' | 'local-llm';
 }
 
 export interface SuggestResult<TPayload = unknown> {
@@ -99,7 +99,7 @@ export interface SuggestEngine {
 /**
  * CS LLM용 공통 Role 타입
  */
-export type CsLLMRole = "user" | "agent" | "system";
+export type CsLLMRole = 'user' | 'agent' | 'system';
 
 /**
  * CS LLM 히스토리 한 줄
@@ -127,7 +127,7 @@ export interface CsResponseSuggestion {
   id: string;
   replyText: string;
   createdAt: string; // ISO string
-  source: "rule" | "local-llm" | "remote-llm";
+  source: 'rule' | 'local-llm' | 'remote-llm';
 }
 
 /**
@@ -143,7 +143,7 @@ export interface CsLLMResponse {
  * (기존 accounting 쪽 컨텍스트와 나란히 두고 union으로 묶을 수 있습니다)
  */
 export interface CsSuggestContext {
-  domain: "cs";
+  domain: 'cs';
   tenantId: string;
   ticket: {
     id: string;

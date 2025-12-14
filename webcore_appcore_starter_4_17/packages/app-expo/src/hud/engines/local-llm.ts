@@ -123,18 +123,24 @@ export class LocalLLMEngineV1 implements SuggestEngine {
   constructor(options: LocalLLMEngineOptions) {
     this.cfg = options.cfg;
     
-    // R10-S3: Mock 모드에서는 Stub 유지, Live 모드에서 실제 모델 사용 가능
-    // TODO: 실제 모델 라이브러리 연동 후 useRealModel 로직 활성화
+    // R10-S3: 실제 모델 라이브러리 연동 전까지는 항상 Stub 사용
+    // 실제 모델 사용 여부는 환경변수로 제어 (EXPO_PUBLIC_USE_REAL_LLM=1)
+    const useRealLLMEnv = process.env.EXPO_PUBLIC_USE_REAL_LLM === '1';
     const isMockMode = options.cfg.mode === 'mock';
-    this.useRealModel = !isMockMode; // Live 모드에서만 실제 모델 사용 (현재는 아직 Stub)
+    
+    // RealLLMAdapter가 실제로 구현되기 전까지는 항상 stub=true 유지
+    // 실제 모델 스위치가 켜져도 아직 RealLLMAdapter가 없으면 stub=true
+    this.useRealModel = useRealLLMEnv && !isMockMode;
     
     // 어댑터 선택: 현재는 항상 DummyLLMAdapter 사용
     // TODO: 실제 모델 라이브러리 연동 후 RealLLMAdapter 추가
     this.adapter = new DummyLLMAdapter();
     
     // 메타 정보 설정
-    const variant = this.useRealModel ? 'local-llm-v1' : 'local-llm-v0';
-    const stub = !this.useRealModel; // Mock 모드 또는 실제 모델 미연동 시 Stub
+    // 실제 모델이 활성화되기 전까지는 항상 stub=true
+    // variant는 live 모드에서 local-llm-v1로 표시하되 stub=true (v1 준비 상태)
+    const variant = isMockMode ? 'local-llm-v0' : 'local-llm-v1';
+    const stub = true; // RealLLMAdapter 구현 전까지 항상 true
     
     this.meta = {
       type: 'local-llm',
@@ -156,7 +162,8 @@ export class LocalLLMEngineV1 implements SuggestEngine {
   }
 
   canHandleDomain(domain: 'accounting' | 'cs'): boolean {
-
+    return this.meta.supportedDomains?.includes(domain) ?? true;
+  }
 
   async suggest<TPayload = unknown>(
     ctx: SuggestContext,
@@ -178,7 +185,13 @@ export class LocalLLMEngineV1 implements SuggestEngine {
       );
 
       // LLM 결과를 SuggestResult 형식으로 변환
-
+      const items = llmResult.suggestions.map((suggestion) => ({
+        id: suggestion.id,
+        title: suggestion.title,
+        description: suggestion.description,
+        score: suggestion.score,
+        source: 'local-llm' as const,
+      }));
 
       return {
         items,
@@ -199,7 +212,13 @@ export class LocalLLMEngineV1 implements SuggestEngine {
       const oldItems: OldSuggestItem[] = await (oldLocalRuleEngineV1 as OldSuggestEngine).suggest(oldInput);
       
       // 새로운 SuggestItem 형식으로 변환
-
+      const fallbackItems = oldItems.map((item, idx) => ({
+        id: item.id || `fallback-${idx}`,
+        title: item.description || item.account || 'Unknown',
+        description: item.rationale,
+        score: item.score,
+        source: 'local-rule' as const,
+      }));
       
       return {
         items: fallbackItems,
