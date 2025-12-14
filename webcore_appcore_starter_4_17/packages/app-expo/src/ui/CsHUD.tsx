@@ -132,33 +132,7 @@ export function CsHUD({ cfg }: Props = {}) {
         },
       });
       setSuggestionResult(result);
-      
-      // R10-S2: 추천 표시 이벤트 전송
-      await sendLlmUsageEvent(clientCfg, engine, {
-        tenantId: clientCfg.tenantId!,
-        userId: enginesCfg.userId || 'hud-user-1',
-        domain: 'cs',
-        eventType: 'shown',
-        feature: 'cs_reply_suggest',
-        timestamp: new Date().toISOString(),
-        suggestionLength: result.items[0]?.title?.length || 0,
-      });
-    } catch (err: any) {
-      console.error('[CsHUD] Suggest error:', err);
-      setError(err.message || '응답 추천을 생성하는데 실패했습니다.');
-      
-      // R10-S2: 에러 이벤트 전송
-      await sendLlmUsageEvent(clientCfg, engine, {
-        tenantId: clientCfg.tenantId!,
-        userId: enginesCfg.userId || 'hud-user-1',
-        domain: 'cs',
-        eventType: 'error',
-        feature: 'cs_reply_suggest',
-        timestamp: new Date().toISOString(),
-        suggestionLength: 0,
-      }).catch((e) => {
-        console.error('[CsHUD] Failed to send error event:', e);
-      });
+
     } finally {
       setSuggesting(false);
     }
