@@ -4,7 +4,7 @@
  * R9-S1: CS 티켓 리스트 API 연동
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { getSuggestEngine, suggestWithEngine } from '../hud/engines/index';
 import type { ClientCfg as EnginesClientCfg } from '../hud/engines/index';
@@ -13,6 +13,7 @@ import type { ClientCfg } from '../hud/accounting-api';
 import { isMock } from '../hud/accounting-api';
 import { fetchCsTickets, type CsTicket } from '../hud/cs-api';
 import { sendLlmUsageEvent } from '../hud/telemetry/llmUsage';
+
 
 type Props = { cfg?: ClientCfg };
 
@@ -51,6 +52,26 @@ export function CsHUD({ cfg }: Props = {}) {
   const [suggesting, setSuggesting] = useState(false);
   const [suggestionResult, setSuggestionResult] = useState<any>(null);
   const [selectedTicket, setSelectedTicket] = useState<CsTicket | null>(null);
+
+  // R10-S3: 추천 세션 추적 (중복 전송 방지)
+  type SuggestionSession = {
+    shownTextNormalized: string;
+    finalized: boolean; // accepted/edited/rejected 중 하나라도 찍었으면 true
+  };
+  const suggestionSessionRef = useRef<SuggestionSession | null>(null);
+
+  // 텍스트 정규화 함수 (비교용)
+  function normalizeForCompare(text: string): string {
+    if (!text) return '';
+    return applyLlmTextPostProcess(
+      {
+        domain: 'cs',
+        engineMeta: engine.meta,
+        mode: engine.meta.type,
+      },
+      text,
+    );
+  }
 
   // 티켓 리스트 로드
   useEffect(() => {
@@ -133,9 +154,60 @@ export function CsHUD({ cfg }: Props = {}) {
       });
       setSuggestionResult(result);
 
+
     } finally {
       setSuggesting(false);
     }
+  };
+
+  // R10-S3: 답변 전송 핸들러 (accepted_as_is vs edited)
+  const handleSendReply = async (finalTextRaw: string) => {
+    const sess = suggestionSessionRef.current;
+    if (!sess || sess.finalized) {
+      // 추천 세션이 없거나 이미 확정된 경우, 이벤트 전송 없이 전송만 수행
+      // TODO: 실제 답변 전송 로직 구현
+      console.log('[CsHUD] Sending reply (no suggestion session):', finalTextRaw);
+      return;
+    }
+
+    const finalText = normalizeForCompare(finalTextRaw);
+    const eventType =
+      finalText === sess.shownTextNormalized ? 'accepted_as_is' : 'edited';
+
+    await sendLlmUsageEvent(clientCfg, engine, {
+      tenantId: clientCfg.tenantId!,
+      userId: enginesCfg.userId || 'hud-user-1',
+      domain: 'cs',
+      eventType,
+      feature: 'cs_reply_suggest',
+      timestamp: new Date().toISOString(),
+      suggestionLength: finalText.length,
+    });
+
+    suggestionSessionRef.current = { ...sess, finalized: true };
+
+    // TODO: 실제 답변 전송 로직 구현
+    console.log('[CsHUD] Sending reply:', finalTextRaw);
+  };
+
+  // R10-S3: 추천 닫기/무시 핸들러 (rejected)
+  const handleDismissSuggestion = async () => {
+    const sess = suggestionSessionRef.current;
+    if (sess && !sess.finalized) {
+      await sendLlmUsageEvent(clientCfg, engine, {
+        tenantId: clientCfg.tenantId!,
+        userId: enginesCfg.userId || 'hud-user-1',
+        domain: 'cs',
+        eventType: 'rejected',
+        feature: 'cs_reply_suggest',
+        timestamp: new Date().toISOString(),
+        suggestionLength: sess.shownTextNormalized.length,
+      });
+      suggestionSessionRef.current = { ...sess, finalized: true };
+    }
+
+    // UI 상태 정리
+    setSuggestionResult(null);
   };
 
   const renderTicket = ({ item }: { item: CsTicket }) => {
@@ -164,15 +236,38 @@ export function CsHUD({ cfg }: Props = {}) {
         </TouchableOpacity>
         {isSelected && suggestionResult && (
           <View style={styles.suggestionResult}>
-            <Text style={styles.suggestionTitle}>응답 추천:</Text>
-            {suggestionResult.items.map((item: any, idx: number) => (
-              <View key={idx} style={styles.suggestionItem}>
-                <Text style={styles.suggestionText}>{item.title}</Text>
-                {item.description && (
-                  <Text style={styles.suggestionDesc}>{item.description}</Text>
-                )}
-              </View>
-            ))}
+            <View style={styles.suggestionHeader}>
+              <Text style={styles.suggestionTitle}>응답 추천:</Text>
+              <TouchableOpacity
+                style={styles.dismissButton}
+                onPress={handleDismissSuggestion}
+              >
+                <Text style={styles.dismissButtonText}>닫기</Text>
+              </TouchableOpacity>
+            </View>
+            {suggestionResult.items.map((item: any, idx: number) => {
+              const suggestionText = item.description || item.title || '';
+
+              return (
+                <View key={idx} style={styles.suggestionItem}>
+                  <Text style={styles.suggestionText}>{item.title}</Text>
+                  {item.description && (
+                    <Text style={styles.suggestionDesc}>{item.description}</Text>
+                  )}
+                  {/* R10-S3: 전송 버튼 추가 */}
+                  <View style={styles.suggestionActions}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.primaryButton]}
+                      onPress={() => handleSendReply(suggestionText)}
+                    >
+                      <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
+                        전송
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
           </View>
         )}
       </View>
@@ -378,6 +473,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     fontStyle: 'italic',
+  },
+  suggestionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  dismissButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    backgroundColor: '#e9ecef',
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  dismissButtonText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '500',
+  },
+  suggestionActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 8,
+    gap: 8,
+  },
+  actionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    backgroundColor: '#e9ecef',
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  primaryButton: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  actionButtonText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '500',
+  },
+  primaryButtonText: {
+    color: '#fff',
   },
 });
 
