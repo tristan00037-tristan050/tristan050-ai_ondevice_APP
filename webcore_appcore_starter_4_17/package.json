@@ -5,6 +5,8 @@
   "type": "module",
   "workspaces": [
     "packages/service-core-accounting",
+    "packages/service-core-common",
+    "packages/service-core-cs",
     "packages/bff-accounting",
     "packages/app-expo",
     "packages/data-pg",

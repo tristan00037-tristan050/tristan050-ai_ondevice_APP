@@ -178,6 +178,7 @@ npm run demo:app:live
   - (선택) OS Dashboard에서 Engine Mode 카드 확인
     - `primary_mode: local-llm` 및 `counts` 분포 확인
 
+<
 ### 핵심 메시지
 
 > **"고위험 거래는 자동으로 리스크 스코어링 되고,

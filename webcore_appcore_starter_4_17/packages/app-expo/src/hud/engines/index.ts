@@ -10,6 +10,7 @@ import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem, 
 import { localRuleEngineV1 as oldLocalRuleEngineV1 } from '../accounting-api';
 import { isMock } from '../accounting-api';
 
+
 /**
  * SuggestEngine용 ClientCfg (accounting-api의 ClientCfg를 확장)
  */
@@ -41,15 +42,20 @@ export class LocalRuleEngineV1Adapter implements SuggestEngine {
   }
 
   canHandleDomain(domain: 'accounting' | 'cs'): boolean {
-    // 기존 localRuleEngineV1은 accounting 도메인만 지원
-    return domain === 'accounting';
+    // R9-S2: CS 도메인 지원 추가
+    return domain === 'accounting' || domain === 'cs';
   }
 
   async suggest<TPayload = unknown>(
     ctx: SuggestContext,
     input: SuggestInput,
   ): Promise<SuggestResult<TPayload>> {
-    // 기존 localRuleEngineV1의 suggest 메서드 호출
+    // R9-S2: CS 도메인 처리 추가
+    if (ctx.domain === 'cs') {
+      return this.suggestForCs(ctx, input);
+    }
+
+    // 기존 accounting 도메인 처리
     const oldInput = {
       description: input.text,
       amount: typeof input.meta?.amount === 'number' ? input.meta.amount : undefined,
@@ -59,26 +65,79 @@ export class LocalRuleEngineV1Adapter implements SuggestEngine {
     const oldItems: OldSuggestItem[] = await (oldLocalRuleEngineV1 as OldSuggestEngine).suggest(oldInput);
 
     // 새로운 SuggestItem 형식으로 변환
-    const newItems = oldItems.map((item, idx) => ({
-      id: item.id || `item-${idx}`,
-      title: item.description || item.account || 'Unknown',
-      description: item.rationale,
-      score: item.score,
-      payload: {
-        ...item,
-        account: item.account,
-        amount: item.amount,
-        currency: item.currency,
-        vendor: item.vendor,
-        risk: item.risk,
-      } as TPayload,
-      source: 'local-rule' as const,
-    }));
+    const newItems = oldItems.map((item, idx) => {
+      const rawTitle = item.description || item.account || 'Unknown';
+      // R10-S2: HUD 레벨 후처리 적용
+      const processedTitle = applyLlmTextPostProcess(
+        {
+          domain: ctx.domain,
+          engineMeta: this.meta,
+          mode: this.meta.type,
+        },
+        rawTitle,
+      );
+      const processedDescription = item.rationale
+        ? applyLlmTextPostProcess(
+            {
+              domain: ctx.domain,
+              engineMeta: this.meta,
+              mode: this.meta.type,
+            },
+            item.rationale,
+          )
+        : undefined;
+
+      return {
+        id: item.id || `item-${idx}`,
+        title: processedTitle,
+        description: processedDescription,
+        score: item.score,
+        payload: {
+          ...item,
+          account: item.account,
+          amount: item.amount,
+          currency: item.currency,
+          vendor: item.vendor,
+          risk: item.risk,
+        } as TPayload,
+        source: 'local-rule' as const,
+      };
+    });
 
     return {
       items: newItems,
       engine: 'local-rule-v1',
       confidence: oldItems.length > 0 ? oldItems[0].score : 0.5,
+    };
+  }
+
+  /**
+   * CS 도메인용 추천 생성 (R9-S2)
+   */
+  private async suggestForCs(
+    ctx: SuggestContext,
+    input: SuggestInput,
+  ): Promise<SuggestResult> {
+    // Mock/Rule 모드에서 CS 도메인에 대한 더미 응답 반환
+    const inquiry = input.text || '고객 문의';
+
+    return {
+      items: [
+        {
+          id: 'cs-rule-1',
+
+          score: 0.5,
+          payload: {
+            inquiry,
+            domain: 'cs',
+            ticketId: input.meta?.ticketId,
+            status: input.meta?.status,
+          },
+          source: 'local-rule',
+        },
+      ],
+      engine: 'local-rule-v1',
+      confidence: 0.5,
     };
   }
 }
@@ -102,17 +161,13 @@ export function getSuggestEngine(cfg: ClientCfg): SuggestEngine {
   const mode = getEngineModeFromEnv();
   const demoMode = cfg.mode === 'mock' ? 'mock' : 'live';
 
-  // Mock 모드에서는 항상 mock 엔진 사용 (불변 조건)
-  if (demoMode === 'mock') {
-    return new LocalRuleEngineV1Adapter({ cfg, mode: 'mock' });
-  }
 
-  // Live 모드에서 엔진 모드에 따라 선택
   if (mode === 'local-llm') {
     const engine = new LocalLLMEngineV1({ cfg });
     // initialize는 HUD 쪽에서 호출할 수 있도록 남겨둠
     return engine;
   }
+
 
   if (mode === 'rule' || mode === 'mock') {
     return new LocalRuleEngineV1Adapter({ cfg, mode: 'rule' });

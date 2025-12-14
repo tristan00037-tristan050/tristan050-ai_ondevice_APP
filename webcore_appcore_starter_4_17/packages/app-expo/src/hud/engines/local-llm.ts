@@ -11,10 +11,12 @@ import type {
   SuggestInput,
   SuggestResult,
   SuggestEngineMeta,
+
 } from './types';
 import type { ClientCfg } from './index';
 import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem } from '../accounting-api';
 import { localRuleEngineV1 as oldLocalRuleEngineV1 } from '../accounting-api';
+
 
 export interface LocalLLMEngineOptions {
   cfg: ClientCfg;
@@ -135,9 +137,7 @@ export class LocalLLMEngineV1 implements SuggestEngine {
   }
 
   canHandleDomain(domain: 'accounting' | 'cs'): boolean {
-    // 현재는 accounting만 지원 (CS는 계속 Stub)
-    return domain === 'accounting';
-  }
+
 
   async suggest<TPayload = unknown>(
     ctx: SuggestContext,
@@ -146,6 +146,7 @@ export class LocalLLMEngineV1 implements SuggestEngine {
     if (!this.isReady) {
       throw new Error('LocalLLMEngineV1 is not ready. Call initialize() first.');
     }
+
 
     try {
       // 온디바이스 LLM 추론 수행
@@ -158,17 +159,7 @@ export class LocalLLMEngineV1 implements SuggestEngine {
       );
 
       // LLM 결과를 SuggestResult 형식으로 변환
-      const items = llmResult.suggestions.map((suggestion) => ({
-        id: suggestion.id,
-        title: suggestion.title,
-        description: suggestion.description,
-        score: suggestion.score,
-        payload: {
-          ...suggestion,
-          explanation: llmResult.explanation,
-        } as TPayload,
-        source: 'local-llm' as const,
-      }));
+
 
       return {
         items,
@@ -189,21 +180,7 @@ export class LocalLLMEngineV1 implements SuggestEngine {
       const oldItems: OldSuggestItem[] = await (oldLocalRuleEngineV1 as OldSuggestEngine).suggest(oldInput);
       
       // 새로운 SuggestItem 형식으로 변환
-      const fallbackItems = oldItems.map((item, idx) => ({
-        id: item.id || `fallback-${idx}`,
-        title: item.description || item.account || 'Unknown',
-        description: item.rationale,
-        score: item.score,
-        payload: {
-          ...item,
-          account: item.account,
-          amount: item.amount,
-          currency: item.currency,
-          vendor: item.vendor,
-          risk: item.risk,
-        } as TPayload,
-        source: 'local-rule' as const,
-      }));
+
       
       return {
         items: fallbackItems,

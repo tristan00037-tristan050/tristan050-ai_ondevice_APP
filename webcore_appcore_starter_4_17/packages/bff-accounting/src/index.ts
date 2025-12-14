@@ -32,7 +32,6 @@ import osSummaryRoute from './routes/os-summary.js';
 import osSourcesRoute from './routes/os-sources.js';
 import osMetricsRoute from './routes/os-metrics.js';
 import osDashboardRoute from './routes/os-dashboard.js';
-// import csOsDashboardRoute from './routes/cs-os-dashboard.js'; // R8-S2: CS는 아직 미구현
 import riskRoute from './routes/risk.js';
 import manualReviewRoute from './routes/manual-review.js';
 import { requestId } from './middleware/requestId.js';
