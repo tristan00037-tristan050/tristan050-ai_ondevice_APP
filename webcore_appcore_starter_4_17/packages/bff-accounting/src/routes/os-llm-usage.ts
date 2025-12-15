@@ -18,7 +18,7 @@ export const osLlmUsageRouter = Router();
  * 텍스트 원문은 받지 않고, 엔진 메타/모드/도메인/이벤트 타입 등만 수집
  */
 osLlmUsageRouter.post(
-  '/v1/os/llm-usage',
+  '/',
   requireTenantAuth,
   async (req, res, next) => {
     try {
