@@ -56,7 +56,8 @@
     "demo:web": "npm run dev --workspace=@appcore/ops-console",
     "demo:app:mock": "cd packages/app-expo && EXPO_PUBLIC_DEMO_MODE=mock npx expo start --web",
     "demo:app:live": "cd packages/app-expo && EXPO_PUBLIC_DEMO_MODE=live npx expo start --web",
-    "demo:seed": "node scripts/seed_demo_data.mjs"
+    "demo:seed": "node scripts/seed_demo_data.mjs",
+    "policy:check": "bash scripts/policy_check.sh"
   },
   "devDependencies": {
     "ajv": "^8.12.0",
@@ -64,4 +65,3 @@
     "openapi-typescript": "^7.0.0"
   }
 }
-

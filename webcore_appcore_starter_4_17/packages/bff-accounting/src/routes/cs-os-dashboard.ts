@@ -1,57 +1,51 @@
 /**
- * CS OS Dashboard API 라우트
- * R9-S1: CS 티켓 요약 데이터 제공
- * 
- * @module bff-accounting/routes/cs-os-dashboard
+ * CS OS Dashboard (Build-safe stub)
+ * - Dev/QA build unblocker
+ * - Does NOT process or log any original ticket text
+ *
+ * NOTE: Replace with real summarize wiring later.
  */
+import { Router } from "express";
+import { requireTenantAuth } from "../shared/guards.js";
 
-import { Router } from 'express';
-import { requireTenantAuth, requireRole } from '../shared/guards.js';
-
-
-const router = Router();
+export const csOsDashboardRouter = Router();
 
 /**
- * GET /v1/cs/os/dashboard
-
+ * GET /v1/cs/os/dashboard (mounted)
  */
-router.get(
-  '/dashboard',
-  requireTenantAuth,
-  requireRole('operator'),
-  async (req: any, res: any, next: any) => {
-    try {
+csOsDashboardRouter.get("/", requireTenantAuth, async (req, res) => {
+  const tenant =
+    (req as any).tenantId ||
+    (req.headers["x-tenant"] as string) ||
+    (req.query.tenantId as string) ||
+    "default";
 
-      
-      // 쿼리 파라미터: windowDays (기본값: 7일)
-      const windowDaysParam = req.query.windowDays ? parseInt(req.query.windowDays as string, 10) : undefined;
-      const windowDays = windowDaysParam !== undefined ? windowDaysParam : 7;
+  return res.status(200).json({
+    ok: true,
+    tenant,
+    summary: "",
+    suggestionLength: 0,
+    items: [],
+  });
+});
 
-      // 유효성 검사
-      if (windowDays < 1 || windowDays > 365) {
-        return res.status(400).json({
-          error_code: 'INVALID_WINDOW_DAYS',
-          message: 'windowDays must be between 1 and 365',
-        });
-      }
+/**
+ * POST /v1/cs/os/dashboard (optional compatibility)
+ */
+csOsDashboardRouter.post("/", requireTenantAuth, async (req, res) => {
+  const tenant =
+    (req as any).tenantId ||
+    (req.headers["x-tenant"] as string) ||
+    (req.body?.tenantId as string) ||
+    "default";
 
-      // service-core-cs의 summarizeTickets 호출
-      const summary = await summarizeTickets({
-        tenant,
-        windowDays,
-      });
+  return res.status(200).json({
+    ok: true,
+    tenant,
+    summary: "",
+    suggestionLength: 0,
+    items: [],
+  });
+});
 
-      // 응답 형식
-      res.json({
-
-      });
-    } catch (e: any) {
-      console.error('[CS OS Dashboard] Error:', e);
-      console.error('[CS OS Dashboard] Stack:', e?.stack);
-      next(e);
-    }
-  }
-);
-
-export default router;
-
+export default csOsDashboardRouter;
