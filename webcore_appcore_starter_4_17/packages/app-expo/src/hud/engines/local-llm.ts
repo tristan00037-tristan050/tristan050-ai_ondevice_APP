@@ -148,14 +148,16 @@ export class LocalLLMEngineV1 implements SuggestEngine {
     // TODO: 실제 모델 라이브러리 연동 후 RealLLMAdapter 추가
     this.adapter = new DummyLLMAdapter();
 
-    // ✅ P1: Inference adapter 초기화
-    this.inferenceAdapter = getInferenceAdapter();
+    // ✅ E06-2: Inference adapter 초기화 (Mock 강제 stub 포함)
+    this.inferenceAdapter = getInferenceAdapter({
+      demoMode: isMockMode ? "mock" : "live",
+    });
 
     // 메타 정보 설정
-    // 실제 모델이 활성화되기 전까지는 항상 stub=true
-    // variant는 live 모드에서 local-llm-v1로 표시하되 stub=true (v1 준비 상태)
+    // ✅ E06-2: Real backend 사용 여부에 따라 stub 플래그 설정
+    const isRealBackend = this.inferenceAdapter.backend === "real";
     const variant = isMockMode ? "local-llm-v0" : "local-llm-v1";
-    const stub = true; // RealLLMAdapter 구현 전까지 항상 true
+    const stub = !isRealBackend; // Real backend 사용 시 stub=false
 
     this.meta = {
       type: "local-llm",
@@ -242,15 +244,41 @@ export class LocalLLMEngineV1 implements SuggestEngine {
         hint: ctx.domain === "accounting" ? input.text : undefined,
       });
 
-      // ✅ P1: Inference adapter 사용 (EXPO_PUBLIC_LOCAL_LLM_BACKEND=real일 때만 prompt 경로)
+      // ✅ E06-2: Inference adapter 사용 (Real backend일 때만 prompt 경로)
       let suggestionText: string;
       const useRealBackend = this.inferenceAdapter.backend === "real";
 
       if (useRealBackend) {
-        // Real 모델: prompt 생성 → adapter.generate
-        const prompt = service.buildPrompt(domainContext);
-        await this.inferenceAdapter.load();
-        suggestionText = await this.inferenceAdapter.generate(prompt);
+        try {
+          // Real 모델: prompt 생성 → adapter.generate
+          const prompt = service.buildPrompt(domainContext);
+          await this.inferenceAdapter.load();
+          suggestionText = await this.inferenceAdapter.generate(prompt);
+        } catch (error: any) {
+          // ✅ E06-2: Real inference 실패 시 suggestion_error로 수렴
+          console.warn(
+            "[LocalLLMEngineV1] Real inference failed, falling back to stub:",
+            error
+          );
+
+          // 메타-only KPI: 실패를 표준 이벤트로 수렴
+          void recordLlmUsage(
+            this.cfg.mode,
+            {
+              tenantId: this.cfg.tenantId ?? "default",
+              userId: this.cfg.userId || "hud-user-1",
+              userRole: "operator",
+              apiKey: this.cfg.apiKey || "collector-key:operator",
+            },
+            { eventType: "suggestion_error", suggestionLength: 0 }
+          ).catch(() => {
+            // 로깅 실패는 무시 (이중 실패 방지)
+          });
+
+          // Stub으로 폴백
+          const result = service.stubSuggest(domainContext);
+          suggestionText = result.suggestionText;
+        }
       } else {
         // Stub(v0): 도메인 서비스의 stubSuggest 사용
         const result = service.stubSuggest(domainContext);
