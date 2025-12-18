@@ -6,6 +6,8 @@
  */
 
 import type { ClientCfg } from './accounting-api';
+import { bffUrl } from "./bffBase";
+import { resolveBffBaseUrl } from "../os/bff";
 
 // accounting-api에서 함수 재사용
 import { isMock as _isMock, mkHeaders as _mkHeaders } from './accounting-api';
@@ -70,7 +72,11 @@ export async function fetchCsTickets(
   queryParams.set('limit', String(limit));
   queryParams.set('offset', String(offset));
 
-  const url = `${cfg.baseUrl}/v1/cs/tickets?${queryParams.toString()}`;
+  // OS 공통 resolveBffBaseUrl 사용 (하드코딩 URL 금지)
+  const baseUrl =
+    (cfg.baseUrl || "").trim().replace(/\/$/, "") ||
+    resolveBffBaseUrl().replace(/\/$/, "");
+  const url = `${baseUrl}/v1/cs/tickets?${queryParams.toString()}`;
   const headers = _mkHeaders(cfg);
 
   const response = await fetch(url, {
@@ -82,6 +88,13 @@ export async function fetchCsTickets(
     throw new Error(`Failed to fetch CS tickets: ${response.status} ${response.statusText}`);
   }
 
+  const ct = response.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) {
+    const text = await response.text();
+    throw new Error(
+      `CS tickets expected JSON but got "${ct}". baseUrl=${baseUrl}. first200=${text.slice(0, 200)}`
+    );
+  }
   const data = await response.json();
   return {
     items: Array.isArray(data) ? data : (data.items || []),

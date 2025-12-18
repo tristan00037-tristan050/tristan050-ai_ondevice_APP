@@ -4,6 +4,7 @@
  * R8-S2: 엔진 모드 확장 및 메타 정보 추가
  */
 
+import { applyLlmTextPostProcess } from "./llmPostProcess";
 import type { SuggestEngine, SuggestContext, SuggestInput, SuggestResult, EngineMode, SuggestEngineMeta } from './types';
 import { LocalLLMEngineV1 } from './local-llm';
 import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem, ClientCfg as AccountingClientCfg } from '../accounting-api';
