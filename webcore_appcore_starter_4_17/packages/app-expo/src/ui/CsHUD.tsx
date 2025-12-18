@@ -175,7 +175,7 @@ export function CsHUD({ cfg }: Props = {}) {
         userRole: "operator",
         apiKey: "collector-key:operator",
       },
-      { eventType: "cs_hud_demo", suggestionLength: 0 }
+      { eventType: "qa_trigger_llm_usage", suggestionLength: 0 }
     )
       .then(() => console.log("[QA] llm-usage trigger: done"))
       .catch((e) => console.warn("[QA] llm-usage trigger: failed", e));

@@ -1,10 +1,11 @@
 import { bffUrl } from "../bff";
 import { buildTenantHeaders, type TenantHeadersInput } from "../tenantHeaders";
+import type { OsLlmUsageEventType } from "./eventTypes";
 
 export type DemoMode = "mock" | "live";
 
 export type OsLlmUsageEvent = {
-  eventType: string;
+  eventType: OsLlmUsageEventType;
   suggestionLength: number;
 };
 
@@ -17,7 +18,7 @@ export type OsLlmUsageEvent = {
 export async function recordLlmUsage(
   demoMode: DemoMode,
   auth: TenantHeadersInput,
-  evt: OsLlmUsageEvent
+  evt: { eventType: OsLlmUsageEventType; suggestionLength: number }
 ): Promise<void> {
   // DEMO_MODE=mock => Network 0 보장
   if (demoMode === "mock") {
@@ -25,10 +26,12 @@ export async function recordLlmUsage(
     return;
   }
 
-  // Payload allowlist: eventType + suggestionLength only (원문 텍스트 금지)
+  // ✅ P0-H: Payload를 2필드로 강제 (원문 키가 실수로 들어와도 전송 자체를 차단)
   const payload: OsLlmUsageEvent = {
     eventType: evt.eventType,
-    suggestionLength: evt.suggestionLength,
+    suggestionLength: Number.isFinite(evt.suggestionLength)
+      ? Math.max(0, Math.trunc(evt.suggestionLength))
+      : 0,
   };
 
   const url = bffUrl("/v1/os/llm-usage");

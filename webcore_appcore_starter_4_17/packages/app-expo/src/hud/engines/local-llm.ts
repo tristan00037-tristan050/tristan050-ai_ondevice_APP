@@ -20,6 +20,8 @@ import type {
 import { localRuleEngineV1 as oldLocalRuleEngineV1 } from "../accounting-api";
 import { getDomainLLMService } from "../../os/llm/registry";
 import type { DomainId } from "../../os/llm/types";
+import { recordLlmUsage } from "../../os/telemetry/osTelemetry";
+import { getInferenceAdapter } from "../../os/llm/inference";
 
 export interface LocalLLMEngineOptions {
   cfg: ClientCfg;
@@ -128,6 +130,7 @@ export class LocalLLMEngineV1 implements SuggestEngine {
   private readonly cfg: ClientCfg;
   private readonly adapter: OnDeviceLLMAdapter;
   private readonly useRealModel: boolean;
+  private readonly inferenceAdapter: ReturnType<typeof getInferenceAdapter>;
 
   constructor(options: LocalLLMEngineOptions) {
     this.cfg = options.cfg;
@@ -144,6 +147,9 @@ export class LocalLLMEngineV1 implements SuggestEngine {
     // 어댑터 선택: 현재는 항상 DummyLLMAdapter 사용
     // TODO: 실제 모델 라이브러리 연동 후 RealLLMAdapter 추가
     this.adapter = new DummyLLMAdapter();
+
+    // ✅ P1: Inference adapter 초기화
+    this.inferenceAdapter = getInferenceAdapter();
 
     // 메타 정보 설정
     // 실제 모델이 활성화되기 전까지는 항상 stub=true
@@ -189,7 +195,41 @@ export class LocalLLMEngineV1 implements SuggestEngine {
     try {
       // ✅ P0-1: Domain Registry 패턴으로 도메인별 분기 제거
       const domain = ctx.domain as DomainId;
-      const service = getDomainLLMService(domain);
+
+      // ✅ P0-H: fail-closed 처리 (도메인 미지원 시 suggestion_error로 수렴)
+      let service;
+      try {
+        service = getDomainLLMService(domain);
+      } catch (e: any) {
+        // 메타-only KPI: 실패를 표준 이벤트로 수렴
+        void recordLlmUsage(
+          this.cfg.mode,
+          {
+            tenantId: this.cfg.tenantId ?? "default",
+            userId: this.cfg.userId || "hud-user-1",
+            userRole: "operator",
+            apiKey: this.cfg.apiKey || "collector-key:operator",
+          },
+          { eventType: "suggestion_error", suggestionLength: 0 }
+        ).catch(() => {
+          // 로깅 실패는 무시 (이중 실패 방지)
+        });
+
+        // 온디바이스 UI 메시지(서버 전송 금지)
+        return {
+          items: [
+            {
+              id: "error-unsupported-domain",
+              title: "현재 도메인에서는 추천 기능이 지원되지 않습니다.",
+              description: e?.message || "Unsupported domain",
+              score: 0,
+              source: "local-llm" as const,
+            },
+          ],
+          engine: "local-llm-v1",
+          confidence: 0,
+        };
+      }
 
       // 도메인별 컨텍스트 구성 (원문은 온디바이스에서만 사용)
       const domainContext = service.buildContext({
@@ -202,11 +242,22 @@ export class LocalLLMEngineV1 implements SuggestEngine {
         hint: ctx.domain === "accounting" ? input.text : undefined,
       });
 
-      // Stub(v0) 단계: 도메인 서비스의 stubSuggest 사용
-      const { suggestionText } = service.stubSuggest(domainContext);
+      // ✅ P1: Inference adapter 사용 (EXPO_PUBLIC_LOCAL_LLM_BACKEND=real일 때만 prompt 경로)
+      let suggestionText: string;
+      const useRealBackend = this.inferenceAdapter.backend === "real";
 
-      // 추론 지연 시뮬레이션 (온디바이스 느낌)
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      if (useRealBackend) {
+        // Real 모델: prompt 생성 → adapter.generate
+        const prompt = service.buildPrompt(domainContext);
+        await this.inferenceAdapter.load();
+        suggestionText = await this.inferenceAdapter.generate(prompt);
+      } else {
+        // Stub(v0): 도메인 서비스의 stubSuggest 사용
+        const result = service.stubSuggest(domainContext);
+        suggestionText = result.suggestionText;
+        // 추론 지연 시뮬레이션 (온디바이스 느낌)
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
 
       // SuggestResult 형식으로 변환
       const items = [
