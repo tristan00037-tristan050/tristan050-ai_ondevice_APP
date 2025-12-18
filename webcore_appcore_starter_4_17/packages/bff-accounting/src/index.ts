@@ -54,35 +54,6 @@ import { osPolicyBridge } from "./middleware/osPolicyBridge.js";
 import { ping as pgPing } from "@appcore/data-pg";
 
 const app = express();
-// DEV ONLY: CORS preflight reflect (localhost/127.0.0.1 origin only)
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  const isLocal =
-    origin && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(String(origin));
-
-  if (isLocal) {
-    res.setHeader("Access-Control-Allow-Origin", String(origin));
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-    );
-
-    // 핵심: 브라우저가 preflight에서 요청한 헤더를 그대로 허용
-    const reqHeaders = req.headers["access-control-request-headers"];
-    if (reqHeaders) {
-      res.setHeader("Access-Control-Allow-Headers", String(reqHeaders));
-    }
-
-    // OPTIONS(미리 질문) 요청은 여기서 바로 끝냄
-    if (req.method === "OPTIONS") {
-      return res.status(204).end();
-    }
-  }
-  next();
-});
-
 const PORT = process.env.PORT || 8081;
 
 // trust proxy (LB 뒤 IP 식별)

@@ -1,4 +1,4 @@
-import type { InferenceAdapter } from "./types";
+import type { InferenceAdapter, InferenceLoadProgress } from "./types";
 import { Platform } from "react-native";
 
 function isWebGpuAvailable(): boolean {
@@ -7,8 +7,12 @@ function isWebGpuAvailable(): boolean {
 }
 
 let enginePromise: Promise<any> | null = null;
+let loadProgressCallback: ((progress: InferenceLoadProgress) => void) | null =
+  null;
 
-async function getEngine() {
+async function getEngine(
+  onProgress?: (progress: InferenceLoadProgress) => void
+) {
   if (!enginePromise) {
     const { CreateMLCEngine } = await import("@mlc-ai/web-llm");
 
@@ -20,9 +24,23 @@ async function getEngine() {
       throw new Error("WEBLLM_MODEL_ID_MISSING");
     }
 
+    // ✅ E06-3: Progress 콜백 저장 (로딩 중 여러 번 호출될 수 있음)
+    if (onProgress) {
+      loadProgressCallback = onProgress;
+    }
+
     enginePromise = CreateMLCEngine(modelId, {
       initProgressCallback: (p: any) => {
-        // UI를 오염시키지 않기 위해 console로만
+        // ✅ E06-3: Progress를 표준화된 형태로 변환하여 콜백 호출
+        if (loadProgressCallback) {
+          const progress = typeof p?.progress === "number" ? p.progress : 0;
+          const text = p?.text || "Loading model...";
+          loadProgressCallback({
+            progress: Math.min(100, Math.max(0, progress)),
+            text: String(text),
+          });
+        }
+        // 디버깅용 콘솔 로그도 유지
         console.log("[webllm] init:", p);
       },
     });
@@ -33,16 +51,21 @@ async function getEngine() {
 export class WebLLMInferenceAdapter implements InferenceAdapter {
   readonly backend = "real" as const;
 
-  async load(): Promise<void> {
+  async load(
+    onProgress?: (progress: InferenceLoadProgress) => void
+  ): Promise<void> {
     if (!isWebGpuAvailable()) {
       throw new Error("WEBGPU_NOT_AVAILABLE");
     }
 
     // 모델 로딩은 최초에 다운로드/캐시가 필요하므로, Live에서만 켜고 Mock에서는 절대 켜지 않게 해야 합니다.
-    await getEngine();
+    await getEngine(onProgress);
   }
 
-  async generate(prompt: string, opts?: { maxTokens?: number }): Promise<string> {
+  async generate(
+    prompt: string,
+    opts?: { maxTokens?: number }
+  ): Promise<string> {
     if (!isWebGpuAvailable()) {
       throw new Error("WEBGPU_NOT_AVAILABLE");
     }
@@ -65,4 +88,3 @@ export class WebLLMInferenceAdapter implements InferenceAdapter {
     return text;
   }
 }
-

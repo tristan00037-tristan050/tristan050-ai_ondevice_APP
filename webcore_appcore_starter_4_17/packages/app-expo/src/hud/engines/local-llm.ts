@@ -252,6 +252,8 @@ export class LocalLLMEngineV1 implements SuggestEngine {
         try {
           // Real 모델: prompt 생성 → adapter.generate
           const prompt = service.buildPrompt(domainContext);
+          // ✅ E06-3: Progress 콜백은 엔진 레벨에서 처리하지 않고, adapter 내부에서만 사용
+          // (UI는 HUD 레벨에서 별도 상태로 관리)
           await this.inferenceAdapter.load();
           suggestionText = await this.inferenceAdapter.generate(prompt);
         } catch (error: any) {
