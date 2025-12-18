@@ -28,7 +28,8 @@ osModelsProxyRouter.get("/:modelId/*", requireTenantAuth, async (req, res) => {
   const restPath = String(req.params[0] || "");
 
   if (!UPSTREAM_BASE) return bad(res, 500, "WEBLLM_UPSTREAM_BASE_URL_not_set");
-  if (!ALLOWED_MODEL_IDS.has(modelId)) return bad(res, 403, "modelId_not_allowed");
+  if (!ALLOWED_MODEL_IDS.has(modelId))
+    return bad(res, 403, "modelId_not_allowed");
   if (restPath.includes("..")) return bad(res, 400, "path_traversal_blocked");
 
   // 필요한 확장자만 허용(원하시면 추가)
@@ -42,7 +43,28 @@ osModelsProxyRouter.get("/:modelId/*", requireTenantAuth, async (req, res) => {
   res.status(r.status);
   const ct = r.headers.get("content-type");
   if (ct) res.setHeader("content-type", ct);
-  res.setHeader("cache-control", "public, max-age=3600");
+
+  // ✅ E06-3: 캐시 정책 강화 (ETag + Cache-Control)
+  // 모델 아티팩트는 버전이 바뀌면 새로 받아야 하므로, ETag로 무효화 전략 지원
+  const etag = r.headers.get("etag");
+  if (etag) {
+    res.setHeader("etag", etag);
+    // 클라이언트가 If-None-Match로 요청하면 304 반환
+    const ifNoneMatch = req.headers["if-none-match"];
+    if (ifNoneMatch === etag) {
+      return res.status(304).end();
+    }
+  }
+
+  // ✅ E06-3: 재방문 성능 고정 - 모델 아티팩트는 오래 캐시 가능
+  // 버전 변경 시 ETag로 무효화되므로 max-age를 길게 설정
+  res.setHeader("cache-control", "public, max-age=86400, immutable");
+
+  // Content-Length 전달 (클라이언트가 진행률 표시 가능)
+  const contentLength = r.headers.get("content-length");
+  if (contentLength) {
+    res.setHeader("content-length", contentLength);
+  }
 
   const buf = Buffer.from(await r.arrayBuffer());
   return res.send(buf);
