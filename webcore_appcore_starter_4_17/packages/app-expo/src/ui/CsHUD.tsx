@@ -27,6 +27,7 @@ import { fetchCsTickets, type CsTicket } from "../hud/cs-api";
 import { sendLlmUsageEvent } from "../hud/telemetry/llmUsage";
 import { applyLlmTextPostProcess } from "../hud/engines/llmPostProcess";
 import { recordLlmUsage } from "../os/telemetry/osTelemetry";
+import { resolveBffBaseUrl } from "../os/bff";
 
 type Props = { cfg?: ClientCfg };
 
@@ -174,7 +175,7 @@ export function CsHUD({ cfg }: Props = {}) {
         userRole: "operator",
         apiKey: "collector-key:operator",
       },
-      { eventType: "cs_hud_demo", suggestionLength: 0 }
+      { eventType: "qa_trigger_llm_usage", suggestionLength: 0 }
     )
       .then(() => console.log("[QA] llm-usage trigger: done"))
       .catch((e) => console.warn("[QA] llm-usage trigger: failed", e));
@@ -222,7 +223,7 @@ export function CsHUD({ cfg }: Props = {}) {
           firstSuggestion.description || firstSuggestion.title || "";
         const shownText = normalizeForCompare(suggestionText);
 
-        // OS 공통 Telemetry로 KPI/Audit 이벤트 전송
+        // ✅ P0-2: OS 공통 Telemetry로 KPI/Audit 이벤트 전송 (메타 only)
         void recordLlmUsage(
           clientCfg.mode,
           {
@@ -244,17 +245,22 @@ export function CsHUD({ cfg }: Props = {}) {
           suggestionSessionRef.current &&
           !suggestionSessionRef.current.finalized
         ) {
-          await sendLlmUsageEvent(clientCfg, engine, {
-            tenantId: clientCfg.tenantId!,
-            userId: enginesCfg.userId || "hud-user-1",
-            domain: "cs",
-            eventType: "rejected",
-            feature: "cs_reply_suggest",
-            timestamp: new Date().toISOString(),
-            suggestionLength:
-              suggestionSessionRef.current.shownTextNormalized.length,
-          }).catch((e) => {
-            console.warn("[CsHUD] Failed to send rejected event:", e);
+          // ✅ P0-2: OS 공통 Telemetry 사용 (메타 only)
+          void recordLlmUsage(
+            clientCfg.mode,
+            {
+              tenantId: clientCfg.tenantId ?? "default",
+              userId: enginesCfg.userId || "hud-user-1",
+              userRole: "operator",
+              apiKey: clientCfg.apiKey || "collector-key:operator",
+            },
+            {
+              eventType: "suggestion_rejected",
+              suggestionLength:
+                suggestionSessionRef.current.shownTextNormalized.length,
+            }
+          ).catch((e) => {
+            console.warn("[CsHUD] Failed to record rejected event:", e);
           });
         }
 
@@ -263,35 +269,26 @@ export function CsHUD({ cfg }: Props = {}) {
           shownTextNormalized: shownText,
           finalized: false,
         };
-
-        // shown 이벤트 전송
-        await sendLlmUsageEvent(clientCfg, engine, {
-          tenantId: clientCfg.tenantId!,
-          userId: enginesCfg.userId || "hud-user-1",
-          domain: "cs",
-          eventType: "shown",
-          feature: "cs_reply_suggest",
-          timestamp: new Date().toISOString(),
-          suggestionLength: shownText.length,
-        }).catch((e) => {
-          console.warn("[CsHUD] Failed to send shown event:", e);
-        });
       }
     } catch (err: any) {
       console.error("[CsHUD] Suggest error:", err);
       setError(err.message || "응답 추천을 생성하는데 실패했습니다.");
 
-      // R10-S3: 에러 이벤트 전송
-      await sendLlmUsageEvent(clientCfg, engine, {
-        tenantId: clientCfg.tenantId!,
-        userId: enginesCfg.userId || "hud-user-1",
-        domain: "cs",
-        eventType: "error",
-        feature: "cs_reply_suggest",
-        timestamp: new Date().toISOString(),
-        suggestionLength: 0,
-      }).catch((e) => {
-        console.warn("[CsHUD] Failed to send error event:", e);
+      // ✅ P0-2: OS 공통 Telemetry 사용 (메타 only)
+      void recordLlmUsage(
+        clientCfg.mode,
+        {
+          tenantId: clientCfg.tenantId ?? "default",
+          userId: enginesCfg.userId || "hud-user-1",
+          userRole: "operator",
+          apiKey: clientCfg.apiKey || "collector-key:operator",
+        },
+        {
+          eventType: "suggestion_error",
+          suggestionLength: 0,
+        }
+      ).catch((e) => {
+        console.warn("[CsHUD] Failed to record error event:", e);
       });
     } finally {
       setSuggesting(false);
@@ -312,19 +309,27 @@ export function CsHUD({ cfg }: Props = {}) {
     }
 
     const finalText = normalizeForCompare(finalTextRaw);
+    // ✅ P0-2: eventType 세분화 (메타 only)
     const eventType =
-      finalText === sess.shownTextNormalized ? "accepted_as_is" : "edited";
+      finalText === sess.shownTextNormalized
+        ? "suggestion_used_as_is"
+        : "suggestion_edited";
 
-    await sendLlmUsageEvent(clientCfg, engine, {
-      tenantId: clientCfg.tenantId!,
-      userId: enginesCfg.userId || "hud-user-1",
-      domain: "cs",
-      eventType,
-      feature: "cs_reply_suggest",
-      timestamp: new Date().toISOString(),
-      suggestionLength: finalText.length,
-    }).catch((e) => {
-      console.warn("[CsHUD] Failed to send usage event:", e);
+    // OS 공통 Telemetry 사용 (메타 only)
+    void recordLlmUsage(
+      clientCfg.mode,
+      {
+        tenantId: clientCfg.tenantId ?? "default",
+        userId: enginesCfg.userId || "hud-user-1",
+        userRole: "operator",
+        apiKey: clientCfg.apiKey || "collector-key:operator",
+      },
+      {
+        eventType,
+        suggestionLength: finalText.length,
+      }
+    ).catch((e) => {
+      console.warn("[CsHUD] Failed to record usage event:", e);
     });
 
     suggestionSessionRef.current = { ...sess, finalized: true };
@@ -337,16 +342,21 @@ export function CsHUD({ cfg }: Props = {}) {
   const handleDismissSuggestion = async () => {
     const sess = suggestionSessionRef.current;
     if (sess && !sess.finalized) {
-      await sendLlmUsageEvent(clientCfg, engine, {
-        tenantId: clientCfg.tenantId!,
-        userId: enginesCfg.userId || "hud-user-1",
-        domain: "cs",
-        eventType: "rejected",
-        feature: "cs_reply_suggest",
-        timestamp: new Date().toISOString(),
-        suggestionLength: sess.shownTextNormalized.length,
-      }).catch((e) => {
-        console.warn("[CsHUD] Failed to send rejected event:", e);
+      // ✅ P0-2: OS 공통 Telemetry 사용 (메타 only)
+      void recordLlmUsage(
+        clientCfg.mode,
+        {
+          tenantId: clientCfg.tenantId ?? "default",
+          userId: enginesCfg.userId || "hud-user-1",
+          userRole: "operator",
+          apiKey: clientCfg.apiKey || "collector-key:operator",
+        },
+        {
+          eventType: "suggestion_rejected",
+          suggestionLength: sess.shownTextNormalized.length,
+        }
+      ).catch((e) => {
+        console.warn("[CsHUD] Failed to record rejected event:", e);
       });
       suggestionSessionRef.current = { ...sess, finalized: true };
     }
