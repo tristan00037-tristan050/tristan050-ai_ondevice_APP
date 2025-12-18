@@ -1,7 +1,7 @@
 /**
  * LocalLLMEngineV1 구현
  * R8-S2: 실제 온디바이스 엔진 어댑터 Stub
- * 
+ *
  * 실제 LLM은 아직 연결하지 않고, 로딩·추론 지연까지 흉내 내는 더미로 구현
  */
 
@@ -11,12 +11,15 @@ import type {
   SuggestInput,
   SuggestResult,
   SuggestEngineMeta,
-
-} from './types';
-import type { ClientCfg } from './index';
-import type { SuggestEngine as OldSuggestEngine, SuggestItem as OldSuggestItem } from '../accounting-api';
-import { localRuleEngineV1 as oldLocalRuleEngineV1 } from '../accounting-api';
-
+} from "./types";
+import type { ClientCfg } from "./index";
+import type {
+  SuggestEngine as OldSuggestEngine,
+  SuggestItem as OldSuggestItem,
+} from "../accounting-api";
+import { localRuleEngineV1 as oldLocalRuleEngineV1 } from "../accounting-api";
+import { getDomainLLMService } from "../../os/llm/registry";
+import type { DomainId } from "../../os/llm/types";
 
 export interface LocalLLMEngineOptions {
   cfg: ClientCfg;
@@ -31,18 +34,21 @@ export interface OnDeviceLLMAdapter {
    * 모델 초기화
    */
   initialize(): Promise<void>;
-  
+
   /**
    * 추론 수행
    * @param context LLM 컨텍스트 (도메인, 언어, 힌트 등)
    * @param input 입력 텍스트
    * @returns 추론 결과
    */
-  infer(context: {
-    domain: 'accounting' | 'cs';
-    locale?: string;
-    hints?: string[];
-  }, input: string): Promise<{
+  infer(
+    context: {
+      domain: "accounting" | "cs";
+      locale?: string;
+      hints?: string[];
+    },
+    input: string
+  ): Promise<{
     suggestions: Array<{
       id: string;
       title: string;
@@ -67,11 +73,14 @@ class DummyLLMAdapter implements OnDeviceLLMAdapter {
     this.initialized = true;
   }
 
-  async infer(context: {
-    domain: 'accounting' | 'cs';
-    locale?: string;
-    hints?: string[];
-  }, input: string): Promise<{
+  async infer(
+    context: {
+      domain: "accounting" | "cs";
+      locale?: string;
+      hints?: string[];
+    },
+    input: string
+  ): Promise<{
     suggestions: Array<{
       id: string;
       title: string;
@@ -81,18 +90,18 @@ class DummyLLMAdapter implements OnDeviceLLMAdapter {
     explanation?: string;
   }> {
     if (!this.initialized) {
-      throw new Error('Adapter not initialized');
+      throw new Error("Adapter not initialized");
     }
 
     // 추론 지연 시뮬레이션
     await new Promise((resolve) => setTimeout(resolve, 600));
 
     // 더미 응답 생성
-    const label = context.domain === 'accounting' ? '회계' : 'CS';
+    const label = context.domain === "accounting" ? "회계" : "CS";
     return {
       suggestions: [
         {
-          id: 'llm-suggestion-1',
+          id: "llm-suggestion-1",
           title: `[LLM] ${label} 추론 결과`,
           description: `온디바이스 LLM이 "${input}"을 분석한 결과입니다.`,
           score: 0.85,
@@ -109,11 +118,11 @@ class DummyLLMAdapter implements OnDeviceLLMAdapter {
  * R10-S3: 실제 모델 PoC 지원 (E06-1)
  */
 export class LocalLLMEngineV1 implements SuggestEngine {
-  readonly id = 'local-llm-v1';
-  readonly mode = 'local-only' as const;
-  
+  readonly id = "local-llm-v1";
+  readonly mode = "local-only" as const;
+
   public meta: SuggestEngineMeta;
-  
+
   public isReady = false;
 
   private readonly cfg: ClientCfg;
@@ -122,110 +131,137 @@ export class LocalLLMEngineV1 implements SuggestEngine {
 
   constructor(options: LocalLLMEngineOptions) {
     this.cfg = options.cfg;
-    
+
     // R10-S3: 실제 모델 라이브러리 연동 전까지는 항상 Stub 사용
     // 실제 모델 사용 여부는 환경변수로 제어 (EXPO_PUBLIC_USE_REAL_LLM=1)
-    const useRealLLMEnv = process.env.EXPO_PUBLIC_USE_REAL_LLM === '1';
-    const isMockMode = options.cfg.mode === 'mock';
-    
+    const useRealLLMEnv = process.env.EXPO_PUBLIC_USE_REAL_LLM === "1";
+    const isMockMode = options.cfg.mode === "mock";
+
     // RealLLMAdapter가 실제로 구현되기 전까지는 항상 stub=true 유지
     // 실제 모델 스위치가 켜져도 아직 RealLLMAdapter가 없으면 stub=true
     this.useRealModel = useRealLLMEnv && !isMockMode;
-    
+
     // 어댑터 선택: 현재는 항상 DummyLLMAdapter 사용
     // TODO: 실제 모델 라이브러리 연동 후 RealLLMAdapter 추가
     this.adapter = new DummyLLMAdapter();
-    
+
     // 메타 정보 설정
     // 실제 모델이 활성화되기 전까지는 항상 stub=true
     // variant는 live 모드에서 local-llm-v1로 표시하되 stub=true (v1 준비 상태)
-    const variant = isMockMode ? 'local-llm-v0' : 'local-llm-v1';
+    const variant = isMockMode ? "local-llm-v0" : "local-llm-v1";
     const stub = true; // RealLLMAdapter 구현 전까지 항상 true
-    
+
     this.meta = {
-      type: 'local-llm',
-      label: stub ? 'On-device LLM (Stub)' : 'On-device LLM',
+      type: "local-llm",
+      label: stub ? "On-device LLM (Stub)" : "On-device LLM",
       variant,
       stub,
-      supportedDomains: ['accounting', 'cs'],
+      supportedDomains: ["accounting", "cs"],
     };
   }
 
   async initialize(): Promise<void> {
     if (this.isReady) return;
-    
-    const modelType = this.meta.stub ? 'Stub (simulated)' : 'Real model';
+
+    const modelType = this.meta.stub ? "Stub (simulated)" : "Real model";
     console.log(`[LocalLLMEngineV1] loading on-device model (${modelType})...`);
     await this.adapter.initialize();
     this.isReady = true;
-    console.log(`[LocalLLMEngineV1] model loaded (variant: ${this.meta.variant}, stub: ${this.meta.stub})`);
+    console.log(
+      `[LocalLLMEngineV1] model loaded (variant: ${this.meta.variant}, stub: ${this.meta.stub})`
+    );
   }
 
-  canHandleDomain(domain: 'accounting' | 'cs'): boolean {
+  canHandleDomain(domain: "accounting" | "cs"): boolean {
     return this.meta.supportedDomains?.includes(domain) ?? true;
   }
 
   async suggest<TPayload = unknown>(
     ctx: SuggestContext,
-    input: SuggestInput,
+    input: SuggestInput
   ): Promise<SuggestResult<TPayload>> {
     if (!this.isReady) {
-      throw new Error('LocalLLMEngineV1 is not ready. Call initialize() first.');
+      throw new Error(
+        "LocalLLMEngineV1 is not ready. Call initialize() first."
+      );
     }
 
-
     try {
-      // 온디바이스 LLM 추론 수행
-      const llmResult = await this.adapter.infer(
-        {
-          domain: ctx.domain,
-          locale: ctx.locale,
-        },
-        input.text
-      );
+      // ✅ P0-1: Domain Registry 패턴으로 도메인별 분기 제거
+      const domain = ctx.domain as DomainId;
+      const service = getDomainLLMService(domain);
 
-      // LLM 결과를 SuggestResult 형식으로 변환
-      const items = llmResult.suggestions.map((suggestion) => ({
-        id: suggestion.id,
-        title: suggestion.title,
-        description: suggestion.description,
-        score: suggestion.score,
-        source: 'local-llm' as const,
-      }));
+      // 도메인별 컨텍스트 구성 (원문은 온디바이스에서만 사용)
+      const domainContext = service.buildContext({
+        tickets:
+          ctx.domain === "cs"
+            ? (ctx as any).ticket
+              ? [(ctx as any).ticket]
+              : []
+            : undefined,
+        hint: ctx.domain === "accounting" ? input.text : undefined,
+      });
+
+      // Stub(v0) 단계: 도메인 서비스의 stubSuggest 사용
+      const { suggestionText } = service.stubSuggest(domainContext);
+
+      // 추론 지연 시뮬레이션 (온디바이스 느낌)
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      // SuggestResult 형식으로 변환
+      const items = [
+        {
+          id: `llm-suggestion-${Date.now()}`,
+          title: suggestionText,
+          description: suggestionText,
+          score: 0.85,
+          source: "local-llm" as const,
+        },
+      ];
 
       return {
         items,
-        engine: 'local-llm-v1',
-        confidence: items.length > 0 ? items[0].score : 0.5,
+        engine: "local-llm-v1",
+        confidence: 0.85,
       };
     } catch (error) {
       // LLM 추론 실패 시 fallback 규칙 엔진 사용 (순환 참조 방지를 위해 직접 호출)
-      console.warn('[LocalLLMEngineV1] LLM inference failed, falling back to rule engine:', error);
-      
+      console.warn(
+        "[LocalLLMEngineV1] LLM inference failed, falling back to rule engine:",
+        error
+      );
+
       // accounting-api의 localRuleEngineV1을 직접 사용
       const oldInput = {
         description: input.text,
-        amount: typeof input.meta?.amount === 'number' ? input.meta.amount : undefined,
-        currency: typeof input.meta?.currency === 'string' ? input.meta.currency : undefined,
+        amount:
+          typeof input.meta?.amount === "number"
+            ? input.meta.amount
+            : undefined,
+        currency:
+          typeof input.meta?.currency === "string"
+            ? input.meta.currency
+            : undefined,
       };
-      
-      const oldItems: OldSuggestItem[] = await (oldLocalRuleEngineV1 as OldSuggestEngine).suggest(oldInput);
-      
+
+      const oldItems: OldSuggestItem[] = await (
+        oldLocalRuleEngineV1 as OldSuggestEngine
+      ).suggest(oldInput);
+
       // 새로운 SuggestItem 형식으로 변환
       const fallbackItems = oldItems.map((item, idx) => ({
         id: item.id || `fallback-${idx}`,
-        title: item.description || item.account || 'Unknown',
+        title: item.description || item.account || "Unknown",
         description: item.rationale,
         score: item.score,
-        source: 'local-rule' as const,
+        source: "local-rule" as const,
       }));
-      
+
       return {
         items: fallbackItems,
-        engine: 'local-llm-v1-fallback',
+        engine: "local-llm-v1-fallback",
         confidence: oldItems.length > 0 ? oldItems[0].score : 0.5,
       };
     }
   }
 }
-
