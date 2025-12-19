@@ -160,3 +160,5 @@ R10-S1 스프린트는 AI_ONDEVICE_ENTERPRISE_PLAYBOOK.md의 6가지 핵심 원�
 - R10S1_DESIGN_NOTES.md
 - R10S2_BACKLOG.md
 
+
+- [E06-2B] WebLLM 모델 아티팩트는 동일 오리진 또는 BFF 경계로 제한(외부 도메인 직접 fetch 금지) 규칙을 Playbook에 반영했습니다.

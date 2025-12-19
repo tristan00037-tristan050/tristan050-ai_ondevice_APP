@@ -81,6 +81,13 @@ export function CsHUD({ cfg }: Props = {}) {
   const [suggestionResult, setSuggestionResult] = useState<any>(null);
   const [selectedTicket, setSelectedTicket] = useState<CsTicket | null>(null);
 
+  // ✅ E06-3: 모델 로딩 Progress 상태
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelLoadProgress, setModelLoadProgress] = useState<{
+    progress: number;
+    text: string;
+  } | null>(null);
+
   // R10-S3: 추천 세션 추적 (중복 전송 방지)
   type SuggestionSession = {
     shownTextNormalized: string;
@@ -186,8 +193,40 @@ export function CsHUD({ cfg }: Props = {}) {
     setSelectedTicket(ticket);
     setSuggesting(true);
     setSuggestionResult(null);
+    setModelLoading(false);
+    setModelLoadProgress(null);
 
     try {
+      // ✅ E06-3: 엔진 초기화 (모델 로딩 포함)
+      if (!engine.isReady && engine.initialize) {
+        setModelLoading(true);
+        setModelLoadProgress({ progress: 0, text: "모델 초기화 중..." });
+
+        try {
+          await engine.initialize();
+          setModelLoadProgress({ progress: 100, text: "모델 로딩 완료" });
+          // Progress 완료 후 약간의 지연 후 초기화 (UX 개선)
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        } catch (initError: any) {
+          // ✅ E06-3: 초기화 실패 시 suggestion_error + stub fallback
+          console.warn("[CsHUD] Engine initialization failed:", initError);
+          void recordLlmUsage(
+            clientCfg.mode,
+            {
+              tenantId: clientCfg.tenantId ?? "default",
+              userId: enginesCfg.userId || "hud-user-1",
+              userRole: "operator",
+              apiKey: clientCfg.apiKey || "collector-key:operator",
+            },
+            { eventType: "suggestion_error", suggestionLength: 0 }
+          ).catch(() => {});
+
+          // 초기화 실패해도 suggest는 계속 진행 (엔진이 자체적으로 stub fallback 처리)
+        } finally {
+          setModelLoading(false);
+          setModelLoadProgress(null);
+        }
+      }
       const ctx: CsSuggestContext = {
         domain: "cs",
         tenantId: clientCfg.tenantId,
@@ -393,15 +432,37 @@ export function CsHUD({ cfg }: Props = {}) {
         <TouchableOpacity
           style={[
             styles.suggestButton,
-            isSelected && suggesting && styles.suggestButtonActive,
+            isSelected &&
+              (suggesting || modelLoading) &&
+              styles.suggestButtonActive,
           ]}
           onPress={() => handleSuggest(item)}
-          disabled={suggesting}
+          disabled={suggesting || modelLoading}
         >
           <Text style={styles.suggestButtonText}>
-            {suggesting && isSelected ? "추천 중..." : "요약/추천"}
+            {modelLoading && isSelected
+              ? modelLoadProgress?.text || "모델 로딩 중..."
+              : suggesting && isSelected
+              ? "추천 중..."
+              : "요약/추천"}
           </Text>
         </TouchableOpacity>
+        {/* ✅ E06-3: 모델 로딩 Progress 표시 */}
+        {isSelected && modelLoading && modelLoadProgress && (
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${modelLoadProgress.progress}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.progressText}>
+              {modelLoadProgress.text} ({modelLoadProgress.progress}%)
+            </Text>
+          </View>
+        )}
         {isSelected && suggestionResult && (
           <View style={styles.suggestionResult}>
             <View style={styles.suggestionHeader}>
@@ -693,5 +754,29 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#fff",
+  },
+  progressContainer: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 4,
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: "#e0e0e0",
+    borderRadius: 2,
+    overflow: "hidden",
+    marginBottom: 4,
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#007AFF",
+    borderRadius: 2,
+    transition: "width 0.3s ease",
+  },
+  progressText: {
+    fontSize: 12,
+    color: "#666",
+    textAlign: "center",
   },
 });

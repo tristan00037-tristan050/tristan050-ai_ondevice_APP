@@ -14,6 +14,7 @@
     "typecheck": "tsc -b --pretty false || true"
   },
   "dependencies": {
+    "@mlc-ai/web-llm": "^0.2.80",
     "@react-native-community/netinfo": "^11.0.0",
     "expo-blur": "^13.0.0",
     "expo-random": "^13.0.0",

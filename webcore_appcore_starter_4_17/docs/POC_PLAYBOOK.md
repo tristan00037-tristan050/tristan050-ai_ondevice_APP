@@ -248,3 +248,12 @@ PoC 성공 후:
 3. 모니터링 및 알람 설정
 4. 사용자 교육 및 문서화
 
+
+## E06-2B 모델 아티팩트 경로 보안
+
+- WebLLM 모델 아티팩트(모델 파일)는 외부 도메인에서 직접 fetch하지 않는다.
+- 허용 경로는 다음 둘 중 하나로 제한한다.
+  - 동일 오리진(현재 웹 도메인)
+  - 사내 게이트웨이(BFF) 프록시 경로
+- 클라이언트(WebLLMAdapter)는 모델 base URL/origin을 검증하고, 허용되지 않은 origin은 fail-closed로 차단한다.
+- (필요 시) BFF는 모델 아티팩트 프록시 엔드포인트를 제공하며, SSRF/경로탈출 방지를 위해 upstream 고정 + modelId allowlist + 확장자 allowlist를 적용한다.
