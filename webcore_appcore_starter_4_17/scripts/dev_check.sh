@@ -4,117 +4,146 @@ set -euo pipefail
 BFF="${BFF:-http://localhost:8081}"
 WEB_ORIGIN="${WEB_ORIGIN:-http://localhost:8083}"
 
-echo "[check] 1) healthz"
-curl -fsS -i "${BFF}/healthz" | sed -n '1,12p'
-echo
+# Team standard v1 (with safe defaults for local)
+WEBLLM_TEST_MODEL_ID="${WEBLLM_TEST_MODEL_ID:-local-llm-v1}"
+WEBLLM_TEST_MODEL_FILE="${WEBLLM_TEST_MODEL_FILE:-manifest.json}"
 
-echo "[check] 2) CORS preflight reflect (OPTIONS /v1/os/llm-usage)"
-curl -fsS -i -X OPTIONS \
+hdr() {
+  echo "------------------------------------------------------------"
+  echo "$1"
+  echo "------------------------------------------------------------"
+}
+
+need_header() {
+  local file="$1"
+  local key="$2"
+  if ! grep -i -q "^${key}:" "$file"; then
+    echo "[FAIL] missing header: ${key}"
+    echo "== headers =="
+    cat "$file"
+    exit 1
+  fi
+}
+
+get_header_val() {
+  local file="$1"
+  local key="$2"
+  grep -i "^${key}:" "$file" | head -n1 | sed -E "s/^${key}:\s*//I" | tr -d '\r'
+}
+
+req_headers=(
+  -H "X-Tenant: default"
+  -H "X-User-Id: hud-user-1"
+  -H "X-User-Role: operator"
+  -H "X-Api-Key: collector-key:operator"
+)
+
+# temp files
+H1="$(mktemp)"; B1="$(mktemp)"
+H2="$(mktemp)"; B2="$(mktemp)"
+trap 'rm -f "$H1" "$B1" "$H2" "$B2"' EXIT
+
+hdr "[check] 1) healthz"
+curl -fsS -D "$H1" -o "$B1" "${BFF}/healthz" >/dev/null
+status="$(awk 'NR==1{print $2}' "$H1")"
+[ "$status" = "200" ] || { echo "[FAIL] healthz status=$status"; cat "$H1"; exit 1; }
+echo "[OK] healthz 200"
+
+hdr "[check] 2) CORS preflight (OPTIONS /v1/os/llm-usage)"
+curl -fsS -D "$H1" -o /dev/null -X OPTIONS \
   -H "Origin: ${WEB_ORIGIN}" \
   -H "Access-Control-Request-Method: POST" \
-  -H "Access-Control-Request-Headers: content-type,x-tenant,x-user-id,x-user-role,x-api-key" \
-  "${BFF}/v1/os/llm-usage" | sed -n '1,30p'
-echo
+  -H "Access-Control-Request-Headers: content-type,x-tenant,x-user-id,x-user-role,x-api-key,idempotency-key" \
+  "${BFF}/v1/os/llm-usage" >/dev/null
+status="$(awk 'NR==1{print $2}' "$H1")"
+[ "$status" = "204" ] || { echo "[FAIL] preflight status=$status"; cat "$H1"; exit 1; }
+echo "[OK] preflight 204"
 
-echo "[check] 3) POST /v1/os/llm-usage (meta-only, 204)"
-curl -fsS -i -X POST \
+hdr "[check] 3) POST /v1/os/llm-usage (meta-only -> 204)"
+curl -fsS -D "$H1" -o /dev/null -X POST \
   -H "Content-Type: application/json" \
-  -H "X-Tenant: default" \
-  -H "X-User-Id: hud-user-1" \
-  -H "X-User-Role: operator" \
-  -H "X-Api-Key: collector-key:operator" \
+  "${req_headers[@]}" \
   "${BFF}/v1/os/llm-usage" \
-  -d '{"eventType":"cs_hud_demo","suggestionLength":0}' | sed -n '1,20p'
-echo
+  -d '{"eventType":"qa_trigger_llm_usage","suggestionLength":0}' >/dev/null
+status="$(awk 'NR==1{print $2}' "$H1")"
+[ "$status" = "204" ] || { echo "[FAIL] llm-usage status=$status"; cat "$H1"; exit 1; }
+echo "[OK] llm-usage 204 (meta-only)"
 
-echo "[check] 4) CS tickets 200 OK"
-curl -fsS -i \
-  -H "X-Tenant: default" \
-  -H "X-User-Id: hud-user-1" \
-  -H "X-User-Role: operator" \
-  -H "X-Api-Key: collector-key:operator" \
-  "${BFF}/v1/cs/tickets?limit=1&offset=0" | sed -n '1,40p'
-echo
+hdr "[check] 4) CS tickets 200"
+curl -fsS -D "$H1" -o "$B1" \
+  "${req_headers[@]}" \
+  "${BFF}/v1/cs/tickets?limit=1&offset=0" >/dev/null
+status="$(awk 'NR==1{print $2}' "$H1")"
+[ "$status" = "200" ] || { echo "[FAIL] cs tickets status=$status"; cat "$H1"; exit 1; }
+echo "[OK] cs tickets 200"
 
-# --- [check] 5) Model artifact proxy security + caching (E06-2B/E06-3) ---
-MODEL_ID="${WEBLLM_TEST_MODEL_ID:-}"
-MODEL_FILE="${WEBLLM_TEST_MODEL_FILE:-}"   # 예: manifest.json (작은 json 권장)
+hdr "[check] 5) model proxy headers + cache + 304 (ETag/Cache-Control/Content-Length/If-None-Match)"
+URL="${BFF}/v1/os/models/${WEBLLM_TEST_MODEL_ID}/${WEBLLM_TEST_MODEL_FILE}"
 
-if [ -n "$MODEL_ID" ] && [ -n "$MODEL_FILE" ]; then
-  URL="${BFF}/v1/os/models/${MODEL_ID}/${MODEL_FILE}"
+# 5-1) 200 + headers
+curl -fsS -D "$H1" -o "$B1" \
+  "${req_headers[@]}" \
+  "$URL" >/dev/null
 
-  echo "[check] 5-1) Model proxy headers (HEAD): ${URL}"
-  HEADERS="$(curl -sSI \
-    -H "X-Tenant: default" \
-    -H "X-User-Id: hud-user-1" \
-    -H "X-User-Role: operator" \
-    -H "X-Api-Key: collector-key:operator" \
-    "${URL}")"
+status="$(awk 'NR==1{print $2}' "$H1")"
+[ "$status" = "200" ] || { echo "[FAIL] model proxy status=$status"; cat "$H1"; exit 1; }
 
-  CODE="$(echo "$HEADERS" | head -n 1 | awk '{print $2}')"
-  echo "$HEADERS" | sed -n '1,40p'
+need_header "$H1" "etag"
+need_header "$H1" "cache-control"
+need_header "$H1" "content-length"
 
-  if [ "$CODE" != "200" ] && [ "$CODE" != "304" ]; then
-    echo "[check] FAIL: HEAD returned ${CODE}. Showing response body:"
-    curl -i \
-      -H "X-Tenant: default" \
-      -H "X-User-Id: hud-user-1" \
-      -H "X-User-Role: operator" \
-      -H "X-Api-Key: collector-key:operator" \
-      "${URL}" | sed -n '1,120p'
-    exit 1
-  fi
+ETAG="$(get_header_val "$H1" "etag")"
+CC="$(get_header_val "$H1" "cache-control")"
+CL="$(get_header_val "$H1" "content-length")"
 
-  ETAG="$(echo "$HEADERS" | awk -F': ' 'tolower($1)=="etag"{print $2}' | tr -d '\r')"
-  CC="$(echo "$HEADERS" | awk -F': ' 'tolower($1)=="cache-control"{print $2}' | tr -d '\r')"
-  CL="$(echo "$HEADERS" | awk -F': ' 'tolower($1)=="content-length"{print $2}' | tr -d '\r')"
+# Cache-Control: public, max-age=86400 포함 여부
+echo "$CC" | grep -qi "public" || { echo "[FAIL] cache-control missing 'public': $CC"; exit 1; }
+echo "$CC" | grep -qi "max-age=86400" || { echo "[FAIL] cache-control missing 'max-age=86400': $CC"; exit 1; }
 
-  if [ -z "$ETAG" ]; then echo "[check] FAIL: ETag missing"; exit 1; fi
-  if [ -z "$CC" ]; then echo "[check] FAIL: Cache-Control missing"; exit 1; fi
-  if [ -z "$CL" ]; then echo "[check] FAIL: Content-Length missing"; exit 1; fi
+# Content-Length numeric
+echo "$CL" | grep -Eqi '^[0-9]+$' || { echo "[FAIL] content-length not numeric: $CL"; exit 1; }
 
-  echo "[check] 5-2) 304 Not Modified check (If-None-Match)"
-  CODE_304="$(curl -sS -o /dev/null -w "%{http_code}" \
-    -H "If-None-Match: ${ETAG}" \
-    -H "X-Tenant: default" \
-    -H "X-User-Id: hud-user-1" \
-    -H "X-User-Role: operator" \
-    -H "X-Api-Key: collector-key:operator" \
-    "${URL}")"
-  if [ "$CODE_304" != "304" ] && [ "$CODE_304" != "200" ]; then
-    echo "[check] FAIL: unexpected status for If-None-Match: ${CODE_304}"
-    exit 1
-  fi
+echo "[OK] model proxy 200 + headers (ETag/Cache-Control/Content-Length)"
 
-  echo "[check] 5-3) Proxy security negative tests"
+# 5-2) 304
+curl -fsS -D "$H2" -o /dev/null \
+  -H "If-None-Match: ${ETAG}" \
+  "${req_headers[@]}" \
+  "$URL" >/dev/null
 
-  CODE_FORBIDDEN="$(curl -sS -o /dev/null -w "%{http_code}" \
-    -H "X-Tenant: default" \
-    -H "X-User-Id: hud-user-1" \
-    -H "X-User-Role: operator" \
-    -H "X-Api-Key: collector-key:operator" \
-    "${BFF}/v1/os/models/__not_allowed__/manifest.json")"
-  if [ "$CODE_FORBIDDEN" != "403" ]; then
-    echo "[check] FAIL: expected 403 for not-allowed modelId, got ${CODE_FORBIDDEN}"
-    exit 1
-  fi
+status2="$(awk 'NR==1{print $2}' "$H2")"
+[ "$status2" = "304" ] || { echo "[FAIL] If-None-Match expected 304, got $status2"; cat "$H2"; exit 1; }
+echo "[OK] model proxy 304 (If-None-Match)"
 
-  CODE_BAD_EXT="$(curl -sS -o /dev/null -w "%{http_code}" \
-    -H "X-Tenant: default" \
-    -H "X-User-Id: hud-user-1" \
-    -H "X-User-Role: operator" \
-    -H "X-Api-Key: collector-key:operator" \
-    "${BFF}/v1/os/models/${MODEL_ID}/evil.exe")"
-  if [ "$CODE_BAD_EXT" != "400" ]; then
-    echo "[check] FAIL: expected 400 for disallowed extension, got ${CODE_BAD_EXT}"
-    exit 1
-  fi
+hdr "[check] 6) model proxy negative tests (403/400)"
 
-  echo "[check] 5) Model proxy checks OK"
-else
-  echo "[check] 5) Model proxy checks SKIP (set WEBLLM_TEST_MODEL_ID and WEBLLM_TEST_MODEL_FILE)"
-  echo "        e.g. WEBLLM_TEST_MODEL_ID=local-llm-v1 WEBLLM_TEST_MODEL_FILE=manifest.json"
-fi
+# 6-1) unknown modelId -> 403
+BAD_URL="${BFF}/v1/os/models/__no_such_model__/${WEBLLM_TEST_MODEL_FILE}"
+curl -sS -D "$H1" -o /dev/null \
+  "${req_headers[@]}" \
+  "$BAD_URL" >/dev/null || true
+s="$(awk 'NR==1{print $2}' "$H1")"
+[ "$s" = "403" ] || { echo "[FAIL] expected 403 for unknown modelId, got $s"; cat "$H1"; exit 1; }
+echo "[OK] unknown modelId -> 403"
+
+# 6-2) traversal -> 400
+TRAV_URL="${BFF}/v1/os/models/${WEBLLM_TEST_MODEL_ID}/..%2F..%2Fetc%2Fpasswd"
+curl -sS -D "$H1" -o /dev/null \
+  "${req_headers[@]}" \
+  "$TRAV_URL" >/dev/null || true
+s="$(awk 'NR==1{print $2}' "$H1")"
+[ "$s" = "400" ] || { echo "[FAIL] expected 400 for traversal, got $s"; cat "$H1"; exit 1; }
+echo "[OK] traversal blocked -> 400"
+
+# 6-3) bad extension -> 400
+BAD_EXT_URL="${BFF}/v1/os/models/${WEBLLM_TEST_MODEL_ID}/malware.exe"
+curl -sS -D "$H1" -o /dev/null \
+  "${req_headers[@]}" \
+  "$BAD_EXT_URL" >/dev/null || true
+s="$(awk 'NR==1{print $2}' "$H1")"
+[ "$s" = "400" ] || { echo "[FAIL] expected 400 for bad extension, got $s"; cat "$H1"; exit 1; }
+echo "[OK] extension allowlist -> 400"
 
 echo
-echo "[check] DONE"
+echo "PASS"
+echo "dev_check: healthz 200 / preflight 204 / llm-usage 204(meta-only) / cs tickets 200 / model proxy headers+cache+negative tests OK (ETag, Cache-Control, Content-Length, If-None-Match)"
