@@ -231,8 +231,12 @@ osModelsProxyRouter.all("/:modelId/*", async (req, res) => {
     }
 
     // GET: 실제 바디 전달(스트리밍)
-    const r = await fetchUpstream(upstreamUrl, upstreamHeaders, clientAborted.signal);
-    
+    const r = await fetchUpstream(
+      upstreamUrl,
+      upstreamHeaders,
+      clientAborted.signal
+    );
+
     if (!r.ok) {
       // upstream 상태를 최대한 반영
       return res.status(r.status).end();
@@ -260,10 +264,10 @@ osModelsProxyRouter.all("/:modelId/*", async (req, res) => {
     const body = r.body ? Readable.fromWeb(r.body) : null;
 
     if (!body) return res.end();
-    
+
     // 스트리밍 파이프 (클라이언트 취소 시 자동 정리)
     body.pipe(res);
-    
+
     // 클라이언트 연결 종료 시 스트림 정리
     req.on("close", () => {
       if (body && !body.destroyed) {
