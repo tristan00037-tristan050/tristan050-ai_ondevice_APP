@@ -11,3 +11,15 @@ dist/
 coverage/
 .DS_Store
 .env
+
+# local-only webllm artifacts/probes
+.webllm_artifacts/
+
+# local backups
+scripts/*.bak.*
+
+# local scratch scripts/tools (keep out of repo)
+scripts/dev_check_models_proxy.sh
+scripts/dev_webllm_upstream.sh
+scripts/webllm_upstream_server.mjs
+tools/
