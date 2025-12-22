@@ -35,7 +35,7 @@ dev_check가 기본 모드 / STRICT 모드(`STRICT_MODEL_CACHE=1`) 2가지로 �
 
 **확인 완료 문장(택1로 기입):**
 
-- [ ] **[증빙] PR Actions에서 deploy job skipped(배포 0%) 확인 완료.**
+- [x] **[증빙] PR Actions에서 deploy job skipped(배포 0%) 확인 완료.**
 - [ ] **[증빙] PR Actions 로그에서 금지 키워드(ssh/rsync/pm2/49.50.139.248//var/www/petad) 출력 0건 확인 완료.**
 
 > **참고**: 워크플로우 파일(`.github/workflows/deploy.yml`)을 확인한 결과, deploy job은 `workflow_dispatch` 또는 태그 푸시(`v*`)에서만 실행되므로, 일반 PR에서는 deploy job이 skipped됩니다. 따라서 **방법 A(배포 0%)**가 더 간단하게 확인 가능합니다.
