@@ -255,7 +255,21 @@ export class LocalLLMEngineV1 implements SuggestEngine {
           // ✅ E06-3: Progress 콜백은 엔진 레벨에서 처리하지 않고, adapter 내부에서만 사용
           // (UI는 HUD 레벨에서 별도 상태로 관리)
           await this.inferenceAdapter.load();
-          suggestionText = await this.inferenceAdapter.generate(prompt);
+          
+          // ✅ P0-2: 스트리밍 지원 (onToken 콜백 전달)
+          // input.meta에서 스트리밍 콜백을 받아 adapter에 전달
+          const onToken = (input.meta as any)?.onToken as
+            | ((token: string) => void)
+            | undefined;
+          const signal = (input.meta as any)?.signal as
+            | AbortSignal
+            | undefined;
+
+          suggestionText = await this.inferenceAdapter.generate(prompt, {
+            maxTokens: 512,
+            onToken,
+            signal,
+          });
         } catch (error: any) {
           // ✅ E06-2: Real inference 실패 시 suggestion_error로 수렴
           console.warn(

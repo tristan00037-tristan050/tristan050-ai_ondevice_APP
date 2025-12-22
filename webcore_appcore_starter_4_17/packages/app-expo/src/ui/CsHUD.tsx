@@ -80,6 +80,13 @@ export function CsHUD({ cfg }: Props = {}) {
   const [suggesting, setSuggesting] = useState(false);
   const [suggestionResult, setSuggestionResult] = useState<any>(null);
   const [selectedTicket, setSelectedTicket] = useState<CsTicket | null>(null);
+  
+  // ✅ P0-2: 스트리밍 출력 상태
+  const [streamingText, setStreamingText] = useState<string>("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  
+  // ✅ P0-2: 취소 신호 관리
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // ✅ E06-3: 모델 로딩 Progress 상태
   const [modelLoading, setModelLoading] = useState(false);
@@ -190,11 +197,25 @@ export function CsHUD({ cfg }: Props = {}) {
 
   // CS 응답 추천 요청 핸들러
   const handleSuggest = async (ticket: CsTicket) => {
+    // ✅ P0-2: 중복 요청 방지
+    if (suggesting || modelLoading) {
+      console.warn("[CsHUD] Suggest already in progress, ignoring duplicate request");
+      return;
+    }
+
+    // ✅ P0-2: 이전 요청 취소
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
     setSelectedTicket(ticket);
     setSuggesting(true);
     setSuggestionResult(null);
     setModelLoading(false);
     setModelLoadProgress(null);
+    setStreamingText("");
+    setIsStreaming(false);
 
     try {
       // ✅ E06-3: 엔진 초기화 (모델 로딩 포함)
@@ -239,21 +260,44 @@ export function CsHUD({ cfg }: Props = {}) {
         },
       };
 
-      // suggestWithEngine은 SuggestContext를 받지만, CsSuggestContext는 호환 가능
-      // 타입 단언을 사용하여 전달
-      const result = await suggestWithEngine(
-        enginesCfg,
-        ctx as SuggestContext,
-        {
-          text: ticket.subject,
-          meta: {
-            ticketId: ticket.id,
-            status: ticket.status,
-            createdAt: ticket.createdAt,
-          },
+      // ✅ P0-2: 스트리밍 출력을 위해 엔진을 직접 사용
+      // (suggestWithEngine은 스트리밍 콜백을 지원하지 않으므로 직접 호출)
+      setIsStreaming(true);
+      setStreamingText("");
+
+      // 스트리밍 콜백: 토큰이 올 때마다 UI 업데이트
+      const onToken = (token: string) => {
+        if (!abortControllerRef.current?.signal.aborted) {
+          setStreamingText((prev) => prev + token);
         }
-      );
+      };
+
+      const result = await engine.suggest(ctx as SuggestContext, {
+        text: ticket.subject,
+        meta: {
+          ticketId: ticket.id,
+          status: ticket.status,
+          createdAt: ticket.createdAt,
+          // ✅ P0-2: 스트리밍 콜백 및 취소 신호 전달
+          onToken,
+          signal: abortControllerRef.current.signal,
+        },
+      });
+
+      setIsStreaming(false);
+      
+      // ✅ P0-2: 스트리밍 완료 후 최종 텍스트로 결과 설정
+      // (스트리밍 중 텍스트가 있으면 그것을 사용, 없으면 결과 사용)
+      if (streamingText) {
+        // 스트리밍 텍스트를 결과에 반영
+        if (result.items && result.items.length > 0) {
+          result.items[0].description = streamingText;
+          result.items[0].title = streamingText.split("\n")[0] || streamingText;
+        }
+      }
+      
       setSuggestionResult(result);
+      setStreamingText(""); // 스트리밍 텍스트 초기화
 
       // R10-S3: 추천 생성 성공 시 shown 이벤트 전송
       if (result.items && result.items.length > 0) {
@@ -310,8 +354,19 @@ export function CsHUD({ cfg }: Props = {}) {
         };
       }
     } catch (err: any) {
+      // ✅ P0-2: 취소된 요청은 에러로 처리하지 않음
+      if (err?.message === "GENERATION_ABORTED" || abortControllerRef.current?.signal.aborted) {
+        console.log("[CsHUD] Suggest cancelled by user");
+        setIsStreaming(false);
+        setStreamingText("");
+        setSuggesting(false);
+        return;
+      }
+
       console.error("[CsHUD] Suggest error:", err);
       setError(err.message || "응답 추천을 생성하는데 실패했습니다.");
+      setIsStreaming(false);
+      setStreamingText("");
 
       // ✅ P0-2: OS 공통 Telemetry 사용 (메타 only)
       void recordLlmUsage(
@@ -379,6 +434,14 @@ export function CsHUD({ cfg }: Props = {}) {
 
   // R10-S3: 추천 닫기/무시 핸들러 (rejected)
   const handleDismissSuggestion = async () => {
+    // ✅ P0-2: 진행 중인 요청 취소
+    if (abortControllerRef.current && (suggesting || isStreaming)) {
+      abortControllerRef.current.abort();
+      setIsStreaming(false);
+      setStreamingText("");
+      setSuggesting(false);
+    }
+
     const sess = suggestionSessionRef.current;
     if (sess && !sess.finalized) {
       // ✅ P0-2: OS 공통 Telemetry 사용 (메타 only)
@@ -778,5 +841,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
     textAlign: "center",
+  },
+  streamingCursor: {
+    color: "#007AFF",
+    fontWeight: "bold",
+    animation: "blink 1s infinite",
   },
 });

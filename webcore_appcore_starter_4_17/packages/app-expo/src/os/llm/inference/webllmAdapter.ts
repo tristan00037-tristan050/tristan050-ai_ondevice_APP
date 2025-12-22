@@ -64,7 +64,11 @@ export class WebLLMInferenceAdapter implements InferenceAdapter {
 
   async generate(
     prompt: string,
-    opts?: { maxTokens?: number }
+    opts?: {
+      maxTokens?: number;
+      onToken?: (token: string) => void;
+      signal?: AbortSignal;
+    }
   ): Promise<string> {
     if (!isWebGpuAvailable()) {
       throw new Error("WEBGPU_NOT_AVAILABLE");
@@ -78,13 +82,53 @@ export class WebLLMInferenceAdapter implements InferenceAdapter {
       { role: "user", content: prompt },
     ];
 
-    const reply = await engine.chat.completions.create({
+    // 스트리밍 지원 확인 및 처리
+    const createOptions: any = {
       messages,
       temperature: 0.2,
       max_tokens: opts?.maxTokens ?? 512,
-    });
+    };
 
-    const text = reply?.choices?.[0]?.message?.content ?? "";
-    return text;
+    // WebLLM 스트리밍 지원 여부 확인
+    let accumulatedText = "";
+    let isStreaming = false;
+
+    try {
+      // stream 옵션이 있으면 스트리밍 시도
+      if (opts?.onToken) {
+        createOptions.stream = true;
+        isStreaming = true;
+      }
+
+      const reply = await engine.chat.completions.create(createOptions);
+
+      // 스트리밍 응답 처리
+      if (isStreaming && reply && typeof (reply as any)[Symbol.asyncIterator] === "function") {
+        // AsyncIterable 스트림 처리
+        for await (const chunk of reply as any) {
+          // 취소 신호 확인
+          if (opts?.signal?.aborted) {
+            throw new Error("GENERATION_ABORTED");
+          }
+
+          const delta = chunk?.choices?.[0]?.delta?.content;
+          if (delta) {
+            accumulatedText += delta;
+            opts.onToken?.(delta);
+          }
+        }
+        return accumulatedText;
+      }
+
+      // 비스트리밍 응답 (기존 방식)
+      const text = reply?.choices?.[0]?.message?.content ?? "";
+      return text;
+    } catch (error: any) {
+      // 취소 신호 확인
+      if (opts?.signal?.aborted || error?.message === "GENERATION_ABORTED") {
+        throw new Error("GENERATION_ABORTED");
+      }
+      throw error;
+    }
   }
 }
