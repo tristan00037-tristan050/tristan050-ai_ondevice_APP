@@ -26,14 +26,21 @@ curl -sS -D "$hdr1" -o /dev/null \
 status1=$(awk 'NR==1{print $2}' "$hdr1")
 accept_ranges=$(awk -F': ' 'tolower($1)=="accept-ranges"{print $2}' "$hdr1" | tr -d '\r')
 
-if [ "$status1" = "200" ] || [ "$status1" = "404" ]; then
+if [ "$status1" = "200" ]; then
   if [ -n "$accept_ranges" ]; then
     echo "[OK] Accept-Ranges 헤더 존재: $accept_ranges"
   else
-    echo "[INFO] Accept-Ranges 헤더 없음 (선택적 기능)"
+    echo "[WARN] Accept-Ranges 헤더 없음 (Range 요청 지원을 위해 권장)"
   fi
+elif [ "$status1" = "404" ]; then
+  echo "[SKIP] 일반 GET 요청: 404 (업스트림 파일 미존재)"
+elif [ "$status1" = "500" ]; then
+  echo "[FAIL] 일반 GET 요청: 500 (업스트림 서버 미시작 또는 BFF 설정 오류)"
+  echo "[INFO] 업스트림 서버 시작: ./scripts/dev_model_upstream.sh"
+  echo "[INFO] BFF 재시작: export WEBLLM_UPSTREAM_BASE_URL='http://127.0.0.1:9099/webllm/' && ./scripts/dev_bff.sh restart"
+  exit 1
 else
-  echo "[WARN] 일반 GET 요청 상태: $status1 (업스트림 미설정 가능)"
+  echo "[WARN] 일반 GET 요청 상태: $status1"
 fi
 
 # D-2) Range 요청으로 206 Partial Content 확인
@@ -53,11 +60,21 @@ if [ "$status1" = "200" ]; then
     echo "[OK] Range 요청: 206 Partial Content"
     if [ -n "$content_range" ]; then
       echo "[OK] Content-Range 헤더 존재: $content_range"
+    else
+      echo "[WARN] Content-Range 헤더 없음 (206 응답에 필수)"
+    fi
+    # Content-Length도 확인
+    content_length=$(awk -F': ' 'tolower($1)=="content-length"{print $2}' "$hdr2" | tr -d '\r')
+    if [ -n "$content_length" ]; then
+      echo "[OK] Content-Length 헤더 존재: $content_length"
     fi
   elif [ "$status2" = "200" ]; then
-    echo "[INFO] Range 요청: 200 OK (Range 미지원 또는 무시됨)"
+    echo "[FAIL] Range 요청: 200 OK (206 Partial Content 기대)"
+    echo "[INFO] BFF 프록시가 Range 헤더를 업스트림으로 전달하지 않았거나, 업스트림이 Range를 지원하지 않음"
+    exit 1
   else
-    echo "[WARN] Range 요청 상태: $status2"
+    echo "[FAIL] Range 요청 상태: $status2 (206 기대)"
+    exit 1
   fi
 
   rm -f "$hdr2" "$body2"

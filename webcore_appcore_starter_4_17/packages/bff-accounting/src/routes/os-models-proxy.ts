@@ -188,14 +188,18 @@ osModelsProxyRouter.all("/:modelId/*", async (req, res) => {
     const clientAborted = new AbortController();
     req.on("close", () => clientAborted.abort());
 
-    // Range 요청 지원: 클라이언트가 Range 헤더를 보내면 upstream에 전달
+    // ✅ E07-P0-4: Range 요청 지원 - 클라이언트가 Range/If-* 헤더를 보내면 upstream에 전달
     const rangeHeader = req.header("range");
     const inm = String(req.header("if-none-match") || "").trim();
+    const ifModifiedSince = req.header("if-modified-since");
+    const ifRange = req.header("if-range");
 
-    // upstream 요청 헤더 구성
+    // upstream 요청 헤더 구성 (Range 관련 헤더 전달)
     const upstreamHeaders: Record<string, string> = {};
     if (inm) upstreamHeaders["If-None-Match"] = inm;
     if (rangeHeader) upstreamHeaders["Range"] = rangeHeader;
+    if (ifModifiedSince) upstreamHeaders["If-Modified-Since"] = ifModifiedSince;
+    if (ifRange) upstreamHeaders["If-Range"] = ifRange;
 
     // HEAD로 메타 먼저 확인(ETag/Content-Length/Content-Type/Accept-Ranges)
     const metaResp = await headUpstream(
@@ -242,15 +246,11 @@ osModelsProxyRouter.all("/:modelId/*", async (req, res) => {
       return res.status(r.status).end();
     }
 
-    // Range 요청 응답(206) 처리
-    if (r.status === 206) {
-      res.status(206);
-      // Content-Range 헤더는 이미 allowlist로 전달됨
-    } else {
-      res.status(200);
-    }
+    // ✅ E07-P0-4: 상태코드 보존 (업스트림이 206이면 BFF도 206)
+    res.status(r.status);
 
-    // 헤더 재세팅(업스트림 GET이 더 정확할 수 있음, allowlist 적용)
+    // ✅ E07-P0-4: 헤더 재세팅(업스트림 GET이 더 정확할 수 있음, allowlist 적용)
+    // Range 응답(206) 시 Content-Range/Accept-Ranges/Content-Length 필수
     for (const [key, value] of r.headers.entries()) {
       if (shouldForwardHeader(key)) {
         res.setHeader(key, value);
