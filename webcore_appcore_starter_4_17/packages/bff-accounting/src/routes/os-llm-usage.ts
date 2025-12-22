@@ -57,6 +57,14 @@ osLlmUsageRouter.post("/", requireTenantAuth, async (req, res, next) => {
       feature?: string;
       timestamp?: string;
       suggestionLength: number;
+      // ✅ P0-3: 성능 메타 KPI (meta-only, 원문 금지)
+      modelLoadMs?: number;
+      inferenceMs?: number;
+      firstByteMs?: number;
+      backend?: "stub" | "real";
+      success?: boolean;
+      fallback?: boolean;
+      cancelled?: boolean;
     };
 
     const logEvent = {
