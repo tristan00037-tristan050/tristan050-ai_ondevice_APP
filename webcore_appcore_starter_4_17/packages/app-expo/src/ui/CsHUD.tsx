@@ -217,20 +217,37 @@ export function CsHUD({ cfg }: Props = {}) {
     setStreamingText("");
     setIsStreaming(false);
 
+    // ✅ P0-3: 성능 메타 수집 시작
+    const perfMeta = {
+      modelLoadStart: 0,
+      modelLoadEnd: 0,
+      inferenceStart: 0,
+      inferenceEnd: 0,
+      firstTokenTime: 0,
+      backend: engine.meta.stub ? ("stub" as const) : ("real" as const),
+      cancelled: false,
+      fallback: false,
+    };
+
     try {
       // ✅ E06-3: 엔진 초기화 (모델 로딩 포함)
       if (!engine.isReady && engine.initialize) {
         setModelLoading(true);
         setModelLoadProgress({ progress: 0, text: "모델 초기화 중..." });
+        perfMeta.modelLoadStart = Date.now();
 
         try {
           await engine.initialize();
+          perfMeta.modelLoadEnd = Date.now();
           setModelLoadProgress({ progress: 100, text: "모델 로딩 완료" });
           // Progress 완료 후 약간의 지연 후 초기화 (UX 개선)
           await new Promise((resolve) => setTimeout(resolve, 300));
         } catch (initError: any) {
+          perfMeta.modelLoadEnd = Date.now();
+          perfMeta.fallback = true;
           // ✅ E06-3: 초기화 실패 시 suggestion_error + stub fallback
           console.warn("[CsHUD] Engine initialization failed:", initError);
+          const modelLoadMs = perfMeta.modelLoadEnd - perfMeta.modelLoadStart;
           void recordLlmUsage(
             clientCfg.mode,
             {
@@ -239,7 +256,14 @@ export function CsHUD({ cfg }: Props = {}) {
               userRole: "operator",
               apiKey: clientCfg.apiKey || "collector-key:operator",
             },
-            { eventType: "suggestion_error", suggestionLength: 0 }
+            {
+              eventType: "suggestion_error",
+              suggestionLength: 0,
+              modelLoadMs,
+              backend: perfMeta.backend,
+              success: false,
+              fallback: true,
+            }
           ).catch(() => {});
 
           // 초기화 실패해도 suggest는 계속 진행 (엔진이 자체적으로 stub fallback 처리)
@@ -264,10 +288,17 @@ export function CsHUD({ cfg }: Props = {}) {
       // (suggestWithEngine은 스트리밍 콜백을 지원하지 않으므로 직접 호출)
       setIsStreaming(true);
       setStreamingText("");
+      perfMeta.inferenceStart = Date.now();
+      let firstTokenReceived = false;
 
       // 스트리밍 콜백: 토큰이 올 때마다 UI 업데이트
       const onToken = (token: string) => {
         if (!abortControllerRef.current?.signal.aborted) {
+          // ✅ P0-3: 첫 토큰 시간 기록
+          if (!firstTokenReceived) {
+            perfMeta.firstTokenTime = Date.now();
+            firstTokenReceived = true;
+          }
           setStreamingText((prev) => prev + token);
         }
       };
@@ -284,6 +315,7 @@ export function CsHUD({ cfg }: Props = {}) {
         },
       });
 
+      perfMeta.inferenceEnd = Date.now();
       setIsStreaming(false);
       
       // ✅ P0-2: 스트리밍 완료 후 최종 텍스트로 결과 설정
@@ -306,7 +338,15 @@ export function CsHUD({ cfg }: Props = {}) {
           firstSuggestion.description || firstSuggestion.title || "";
         const shownText = normalizeForCompare(suggestionText);
 
-        // ✅ P0-2: OS 공통 Telemetry로 KPI/Audit 이벤트 전송 (메타 only)
+        // ✅ P0-2 + P0-3: OS 공통 Telemetry로 KPI/Audit 이벤트 전송 (메타 only + 성능 메타)
+        const modelLoadMs = perfMeta.modelLoadEnd > 0
+          ? perfMeta.modelLoadEnd - perfMeta.modelLoadStart
+          : undefined;
+        const inferenceMs = perfMeta.inferenceEnd - perfMeta.inferenceStart;
+        const firstByteMs = perfMeta.firstTokenTime > 0
+          ? perfMeta.firstTokenTime - perfMeta.inferenceStart
+          : undefined;
+
         void recordLlmUsage(
           clientCfg.mode,
           {
@@ -318,6 +358,13 @@ export function CsHUD({ cfg }: Props = {}) {
           {
             eventType: "suggestion_shown",
             suggestionLength: shownText.length,
+            modelLoadMs,
+            inferenceMs,
+            firstByteMs,
+            backend: perfMeta.backend,
+            success: true,
+            fallback: perfMeta.fallback,
+            cancelled: false,
           }
         ).catch((e) => {
           console.warn("[CsHUD] Failed to record suggestion_shown:", e);
@@ -357,9 +404,37 @@ export function CsHUD({ cfg }: Props = {}) {
       // ✅ P0-2: 취소된 요청은 에러로 처리하지 않음
       if (err?.message === "GENERATION_ABORTED" || abortControllerRef.current?.signal.aborted) {
         console.log("[CsHUD] Suggest cancelled by user");
+        perfMeta.cancelled = true;
         setIsStreaming(false);
         setStreamingText("");
         setSuggesting(false);
+
+        // ✅ P0-3: 취소 이벤트 기록 (성능 메타 포함)
+        const inferenceMs = perfMeta.inferenceEnd > 0
+          ? perfMeta.inferenceEnd - perfMeta.inferenceStart
+          : Date.now() - perfMeta.inferenceStart;
+        const modelLoadMs = perfMeta.modelLoadEnd > 0
+          ? perfMeta.modelLoadEnd - perfMeta.modelLoadStart
+          : undefined;
+
+        void recordLlmUsage(
+          clientCfg.mode,
+          {
+            tenantId: clientCfg.tenantId ?? "default",
+            userId: enginesCfg.userId || "hud-user-1",
+            userRole: "operator",
+            apiKey: clientCfg.apiKey || "collector-key:operator",
+          },
+          {
+            eventType: "suggestion_error",
+            suggestionLength: 0,
+            modelLoadMs,
+            inferenceMs,
+            backend: perfMeta.backend,
+            success: false,
+            cancelled: true,
+          }
+        ).catch(() => {});
         return;
       }
 
@@ -368,7 +443,14 @@ export function CsHUD({ cfg }: Props = {}) {
       setIsStreaming(false);
       setStreamingText("");
 
-      // ✅ P0-2: OS 공통 Telemetry 사용 (메타 only)
+      // ✅ P0-2 + P0-3: OS 공통 Telemetry 사용 (메타 only + 성능 메타)
+      const inferenceMs = perfMeta.inferenceEnd > 0
+        ? perfMeta.inferenceEnd - perfMeta.inferenceStart
+        : Date.now() - perfMeta.inferenceStart;
+      const modelLoadMs = perfMeta.modelLoadEnd > 0
+        ? perfMeta.modelLoadEnd - perfMeta.modelLoadStart
+        : undefined;
+
       void recordLlmUsage(
         clientCfg.mode,
         {
@@ -380,6 +462,12 @@ export function CsHUD({ cfg }: Props = {}) {
         {
           eventType: "suggestion_error",
           suggestionLength: 0,
+          modelLoadMs,
+          inferenceMs,
+          backend: perfMeta.backend,
+          success: false,
+          fallback: perfMeta.fallback,
+          cancelled: false,
         }
       ).catch((e) => {
         console.warn("[CsHUD] Failed to record error event:", e);

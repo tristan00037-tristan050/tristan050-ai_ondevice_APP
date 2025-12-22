@@ -203,7 +203,7 @@ export class LocalLLMEngineV1 implements SuggestEngine {
       try {
         service = getDomainLLMService(domain);
       } catch (e: any) {
-        // 메타-only KPI: 실패를 표준 이벤트로 수렴
+        // ✅ P0-3: 메타-only KPI: 실패를 표준 이벤트로 수렴 (성능 메타 포함)
         void recordLlmUsage(
           this.cfg.mode,
           {
@@ -212,7 +212,12 @@ export class LocalLLMEngineV1 implements SuggestEngine {
             userRole: "operator",
             apiKey: this.cfg.apiKey || "collector-key:operator",
           },
-          { eventType: "suggestion_error", suggestionLength: 0 }
+          {
+            eventType: "suggestion_error",
+            suggestionLength: 0,
+            backend: this.meta.stub ? "stub" : "real",
+            success: false,
+          }
         ).catch(() => {
           // 로깅 실패는 무시 (이중 실패 방지)
         });
@@ -277,7 +282,7 @@ export class LocalLLMEngineV1 implements SuggestEngine {
             error
           );
 
-          // 메타-only KPI: 실패를 표준 이벤트로 수렴
+          // ✅ P0-3: 메타-only KPI: 실패를 표준 이벤트로 수렴 (성능 메타 포함)
           void recordLlmUsage(
             this.cfg.mode,
             {
@@ -286,7 +291,13 @@ export class LocalLLMEngineV1 implements SuggestEngine {
               userRole: "operator",
               apiKey: this.cfg.apiKey || "collector-key:operator",
             },
-            { eventType: "suggestion_error", suggestionLength: 0 }
+            {
+              eventType: "suggestion_error",
+              suggestionLength: 0,
+              backend: "real",
+              success: false,
+              fallback: true,
+            }
           ).catch(() => {
             // 로깅 실패는 무시 (이중 실패 방지)
           });
