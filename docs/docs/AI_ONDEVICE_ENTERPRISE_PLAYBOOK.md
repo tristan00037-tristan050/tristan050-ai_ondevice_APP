@@ -141,6 +141,8 @@
   - 운영 환경에서는 고정 헤더 목록만 허용
 - **표준 점검은 `./scripts/dev_check.sh`로 수행하며, preflight 204를 포함한다.**
   - healthz, CS tickets, os llm-usage, CORS preflight 검사 포함
+- **주의: 문서의 주석 줄(`# ...`)은 복사하지 말고, 명령어 줄만 실행하십시오.**
+  - zsh에서 `#` 주석 라인을 그대로 실행하면 불필요한 에러가 발생할 수 있습니다.
 
 ---
 
