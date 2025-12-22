@@ -41,11 +41,8 @@ if [ -z "${DATABASE_URL}" ] || [[ "${DATABASE_URL}" != *"://"* ]]; then
 fi
 
 # --- Model proxy upstream ---
-export WEBLLM_UPSTREAM_BASE_URL="${WEBLLM_UPSTREAM_BASE_URL:-}"
-if [ -z "${WEBLLM_UPSTREAM_BASE_URL}" ]; then
-  echo "[dev_bff] ERROR: WEBLLM_UPSTREAM_BASE_URL not set"
-  exit 1
-fi
+# ✅ R10-S4: 기본값 설정 (로컬 개발용)
+export WEBLLM_UPSTREAM_BASE_URL="${WEBLLM_UPSTREAM_BASE_URL:-http://127.0.0.1:9099/webllm/}"
 
 echo "[dev_bff] Starting BFF on :${PORT}"
 echo "[dev_bff] DATABASE_URL=${DATABASE_URL}"
