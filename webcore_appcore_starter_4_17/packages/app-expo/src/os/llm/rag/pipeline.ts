@@ -56,8 +56,11 @@ export class RAGPipelineImpl implements RAGPipeline {
 
   /**
    * 문서 인덱싱
+   * ✅ R10-S5 P0-4: 성능 메타 반환
    */
-  async index(chunks: DocumentChunk[]): Promise<void> {
+  async index(chunks: DocumentChunk[]): Promise<{ indexBuildMs: number; docCount: number }> {
+    const startTime = Date.now();
+    
     // 1. 임베딩 생성 (배치)
     const texts = chunks.map((chunk) => chunk.text);
     const embeddings = await this.embedder.embedBatch(texts);
@@ -70,6 +73,11 @@ export class RAGPipelineImpl implements RAGPipeline {
 
     // 3. 벡터 스토어에 저장
     await this.store.upsert(chunksWithEmbeddings);
+    
+    const indexBuildMs = Date.now() - startTime;
+    const docCount = (this.store as any).getDocCount?.() || chunks.length;
+    
+    return { indexBuildMs, docCount };
   }
 
   /**
@@ -96,14 +104,20 @@ export class RAGPipelineImpl implements RAGPipeline {
 
     // 3. 메타데이터 수집 (텔레메트리용, 원문 금지)
     const embedderMeta = this.embedder.getMeta?.() || {};
-    const docCount = (this.store as any).getDocCount?.() || 0;
+    const storeMeta = this.store.getMeta?.() || {};
+    const docCount = (this.store as any).getDocCount?.() || storeMeta.docCount || 0;
     const meta: RAGMeta = {
       ragEnabled: this.config.enabled,
-      ragDocs: docCount, // ✅ P0-4: 검색 대상 문서 수
+      ragDocs: results.length, // ✅ P0-5: 검색된 문서 수
       ragTopK: topK,
       ragContextChars: context.length,
+      ragEmbeddingMs: embedderMeta.embedMs,
       ragRetrieveMs: retrieveMs,
-      ragIndexWarm: false, // ✅ P0-4: restore() 성공 여부로 설정
+      ragIndexWarm: storeMeta.hydrateMs !== undefined && storeMeta.hydrateMs > 0, // ✅ P0-4: 복원 성공 여부
+      ragIndexBuildMs: storeMeta.indexBuildMs,
+      ragIndexPersistMs: storeMeta.persistMs,
+      ragIndexHydrateMs: storeMeta.hydrateMs,
+      ragDocCount: docCount,
     };
 
     return {

@@ -111,6 +111,19 @@ export class StubVectorStore implements VectorStore {
     this.chunks = [];
     this.isInitialized = false;
   }
+
+  getDocCount(): number {
+    return this.chunks.length;
+  }
+
+  getMeta() {
+    return {
+      indexVersion: this.indexVersion,
+      schemaVersion: 1,
+      docCount: this.chunks.length,
+      isInitialized: this.isInitialized,
+    };
+  }
 }
 
 /**
@@ -155,6 +168,9 @@ export class RealVectorStore implements VectorStore {
   private chunks: Array<DocumentChunk & { embedding: EmbeddingVector }> = [];
   private indexVersion = "1.0.0";
   private db: IDBDatabase | null = null;
+  private _indexBuildMs = 0;
+  private _persistMs = 0;
+  private _hydrateMs = 0;
 
   async initialize(onProgress?: (progress: { progress: number; text: string }) => void): Promise<void> {
     if (this.isInitialized) return;
@@ -199,6 +215,8 @@ export class RealVectorStore implements VectorStore {
       await this.initialize();
     }
 
+    const startTime = Date.now();
+    
     // 임베딩이 없는 청크는 에러 (임베딩은 외부에서 생성되어야 함)
     for (const chunk of chunks) {
       if (!chunk.embedding) {
@@ -220,6 +238,8 @@ export class RealVectorStore implements VectorStore {
         await this.putToIndexedDB(chunkWithEmbedding);
       }
     }
+    
+    this._indexBuildMs = Date.now() - startTime;
   }
 
   private async putToIndexedDB(chunk: DocumentChunk & { embedding: EmbeddingVector }): Promise<void> {
@@ -262,11 +282,13 @@ export class RealVectorStore implements VectorStore {
   }
 
   async persist(): Promise<void> {
+    const startTime = Date.now();
     // 이미 upsert에서 IndexedDB에 저장되므로, 여기서는 명시적 저장 완료만 표시
     if (this.db) {
       // 모든 청크가 이미 IndexedDB에 저장되어 있음
       console.log(`[RealVectorStore] persist() called: ${this.chunks.length} chunks already persisted`);
     }
+    this._persistMs = Date.now() - startTime;
   }
 
   async restore(): Promise<boolean> {
@@ -274,6 +296,7 @@ export class RealVectorStore implements VectorStore {
       return false;
     }
 
+    const startTime = Date.now();
     try {
       const chunks = await this.getAllFromIndexedDB();
       if (chunks.length === 0) {
@@ -282,7 +305,8 @@ export class RealVectorStore implements VectorStore {
 
       // 메모리 캐시에 복원
       this.chunks = chunks;
-      console.log(`[RealVectorStore] restore() completed: ${chunks.length} chunks restored`);
+      this._hydrateMs = Date.now() - startTime;
+      console.log(`[RealVectorStore] restore() completed: ${chunks.length} chunks restored in ${this._hydrateMs}ms`);
       return true;
     } catch (error: any) {
       console.warn("[RealVectorStore] restore() failed:", error);
@@ -343,6 +367,18 @@ export class RealVectorStore implements VectorStore {
    */
   getDocCount(): number {
     return this.chunks.length;
+  }
+
+  getMeta() {
+    return {
+      indexVersion: this.indexVersion,
+      schemaVersion: 1,
+      docCount: this.chunks.length,
+      isInitialized: this.isInitialized,
+      indexBuildMs: this._indexBuildMs,
+      persistMs: this._persistMs,
+      hydrateMs: this._hydrateMs,
+    };
   }
 }
 

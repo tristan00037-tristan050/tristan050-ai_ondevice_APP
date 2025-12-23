@@ -97,6 +97,19 @@ export interface VectorStore {
    * 인덱스 초기화 (모든 데이터 삭제)
    */
   clear(): Promise<void>;
+
+  /**
+   * 메타데이터 조회 (텔레메트리용, 선택적)
+   */
+  getMeta?(): {
+    indexVersion?: string;
+    schemaVersion?: number;
+    docCount?: number;
+    isInitialized?: boolean;
+    indexBuildMs?: number;
+    persistMs?: number;
+    hydrateMs?: number;
+  };
 }
 
 /**

@@ -154,4 +154,6 @@ export interface CsSuggestContext {
   };
   // 필요 시 LLM 컨텍스트 전체를 붙이고 싶을 때 사용
   llmContext?: CsLLMContext;
+  // ✅ R10-S5 P0-5: RAG 컨텍스트 (선택적)
+  ragContext?: string;
 }
