@@ -45,6 +45,17 @@ osLlmUsageRouter.post("/", requireTenantAuth, async (req, res, next) => {
       "ragSource",
       "errorMessage",
       "errorText",
+      // ✅ R10-S5 P1-2: 출처/스니펫 관련 원문 텍스트 필드
+      "snippet",
+      "sourceSnippet",
+      "excerpt",
+      "subject",
+      "title",
+      "contextText",
+      "chunkText",
+      "documentText",
+      "ticketBody",
+      "body",
     ];
 
     for (const k of Object.keys(body)) {

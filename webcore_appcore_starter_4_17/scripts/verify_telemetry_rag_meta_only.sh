@@ -171,5 +171,74 @@ else
 fi
 
 echo ""
-echo "[OK] R10-S5 P0-6: RAG 텔레메트리 meta-only 계약 검증 PASS"
+
+# ✅ R10-S5 P1-2: 출처/스니펫 관련 원문 텍스트 필드 차단 검증
+echo "[test] RAG-7) 출처/스니펫 원문 텍스트 필드 차단 (기대: 400)"
+status7=$(curl -sS -o /dev/null -w "%{http_code}" \
+  -X POST "${BFF}/v1/os/llm-usage" \
+  "${AUTH_HEADERS[@]}" \
+  -d '{
+    "eventType":"suggestion_shown",
+    "suggestionLength":100,
+    "ragEnabled":true,
+    "snippet":"SHOULD_BLOCK_SNIPPET",
+    "sourceSnippet":"SHOULD_BLOCK"
+  }')
+
+if [ "$status7" = "400" ]; then
+  echo "[OK] 출처/스니펫 원문 텍스트 필드 차단: 400 Bad Request"
+else
+  echo "[FAIL] 출처/스니펫 원문 텍스트 필드 차단: 기대 400, 실제 $status7"
+  exit 1
+fi
+
+echo ""
+
+# RAG-8) subject/title/excerpt 등 출처 관련 원문 필드 차단
+echo "[test] RAG-8) 출처 관련 원문 필드 차단 (subject/title/excerpt) (기대: 400)"
+status8=$(curl -sS -o /dev/null -w "%{http_code}" \
+  -X POST "${BFF}/v1/os/llm-usage" \
+  "${AUTH_HEADERS[@]}" \
+  -d '{
+    "eventType":"suggestion_shown",
+    "suggestionLength":100,
+    "ragEnabled":true,
+    "subject":"SHOULD_BLOCK",
+    "title":"SHOULD_BLOCK",
+    "excerpt":"SHOULD_BLOCK"
+  }')
+
+if [ "$status8" = "400" ]; then
+  echo "[OK] 출처 관련 원문 필드 차단: 400 Bad Request"
+else
+  echo "[FAIL] 출처 관련 원문 필드 차단: 기대 400, 실제 $status8"
+  exit 1
+fi
+
+echo ""
+
+# RAG-9) 본문/컨텍스트 관련 원문 필드 차단 (ticketBody, body, contextText 등)
+echo "[test] RAG-9) 본문/컨텍스트 원문 필드 차단 (기대: 400)"
+status9=$(curl -sS -o /dev/null -w "%{http_code}" \
+  -X POST "${BFF}/v1/os/llm-usage" \
+  "${AUTH_HEADERS[@]}" \
+  -d '{
+    "eventType":"suggestion_shown",
+    "suggestionLength":100,
+    "ragEnabled":true,
+    "ticketBody":"SHOULD_BLOCK",
+    "body":"SHOULD_BLOCK",
+    "contextText":"SHOULD_BLOCK",
+    "chunkText":"SHOULD_BLOCK"
+  }')
+
+if [ "$status9" = "400" ]; then
+  echo "[OK] 본문/컨텍스트 원문 필드 차단: 400 Bad Request"
+else
+  echo "[FAIL] 본문/컨텍스트 원문 필드 차단: 기대 400, 실제 $status9"
+  exit 1
+fi
+
+echo ""
+echo "[OK] R10-S5 P0-6 + P1-2: RAG 텔레메트리 meta-only 계약 검증 PASS"
 
