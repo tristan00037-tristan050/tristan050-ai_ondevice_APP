@@ -24,4 +24,19 @@ export { getEmbedder, StubEmbedder, RealEmbedder } from "./embedder";
 export { getVectorStore, StubVectorStore, RealVectorStore } from "./store";
 export { RAGRetriever } from "./retriever";
 export { RAGContextBuilder } from "./contextBuilder";
+export { RAGPipeline, RAGPipelineImpl } from "./pipeline";
+
+/**
+ * ✅ R10-S5 P0-4: Hydration 또는 빌드 헬퍼 함수
+ */
+export async function hydrateOrBuildRAGIndex(
+  embedder: Embedder,
+  store: VectorStore,
+  config: RAGConfig,
+  chunks: DocumentChunk[],
+  onProgress?: (progress: { progress: number; text: string }) => void
+): Promise<{ hydrated: boolean; indexBuildMs?: number; docCount: number }> {
+  const pipeline = new RAGPipelineImpl(embedder, store, config);
+  return pipeline.hydrateOrBuildIndex(chunks, onProgress);
+}
 

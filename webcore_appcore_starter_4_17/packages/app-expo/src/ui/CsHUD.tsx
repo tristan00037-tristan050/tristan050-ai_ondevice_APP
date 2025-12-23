@@ -28,6 +28,15 @@ import { sendLlmUsageEvent } from "../hud/telemetry/llmUsage";
 import { applyLlmTextPostProcess } from "../hud/engines/llmPostProcess";
 import { recordLlmUsage } from "../os/telemetry/osTelemetry";
 import { resolveBffBaseUrl } from "../os/bff";
+// ✅ R10-S5 P0-5: RAG 파이프라인 통합
+import {
+  getEmbedder,
+  getVectorStore,
+  RAGPipelineImpl,
+  type DocumentChunk,
+  type SearchResult,
+  type RAGConfig,
+} from "../os/llm/rag";
 
 type Props = { cfg?: ClientCfg };
 
@@ -95,6 +104,23 @@ export function CsHUD({ cfg }: Props = {}) {
     text: string;
   } | null>(null);
 
+  // ✅ R10-S5 P0-5: RAG 하이드레이션 상태
+  const [ragHydrating, setRagHydrating] = useState(false);
+  const [ragHydrationProgress, setRagHydrationProgress] = useState<{
+    progress: number;
+    text: string;
+  } | null>(null);
+  const [ragIndexWarm, setRagIndexWarm] = useState<boolean | null>(null);
+  const [ragDocCount, setRagDocCount] = useState<number>(0);
+  const ragPipelineRef = useRef<RAGPipelineImpl | null>(null);
+  const [ragSources, setRagSources] = useState<Array<{
+    id: string;
+    subject: string;
+    category: string;
+    score?: number;
+    rank?: number;
+  }>>([]);
+
   // R10-S3: 추천 세션 추적 (중복 전송 방지)
   type SuggestionSession = {
     shownTextNormalized: string;
@@ -139,6 +165,11 @@ export function CsHUD({ cfg }: Props = {}) {
           if (response && response.items) {
             setTickets(response.items);
             setLoading(false);
+            
+            // ✅ R10-S5 P0-5: 티켓 로드 후 RAG 인덱스 하이드레이션/빌드
+            if (response.items.length > 0) {
+              await hydrateRAGIndex(response.items);
+            }
           } else {
             throw new Error("Invalid response format: missing items");
           }
@@ -170,6 +201,68 @@ export function CsHUD({ cfg }: Props = {}) {
       cancelled = true;
     };
   }, [clientCfg.mode, clientCfg.tenantId, clientCfg.baseUrl]); // clientCfg 객체 대신 구체적인 값들을 의존성으로 사용
+
+  // ✅ R10-S5 P0-5: RAG 인덱스 하이드레이션/빌드
+  const hydrateRAGIndex = async (tickets: CsTicket[]) => {
+    try {
+      setRagHydrating(true);
+      setRagHydrationProgress({ progress: 0, text: "RAG 인덱스 초기화 중..." });
+
+      const embedder = getEmbedder(clientCfg.mode);
+      const store = getVectorStore(clientCfg.mode);
+      const config: RAGConfig = {
+        enabled: true,
+        topK: 5,
+        minScore: 0.1,
+        maxContextChars: 2000,
+      };
+
+      const pipeline = new RAGPipelineImpl(embedder, store, config);
+      ragPipelineRef.current = pipeline;
+
+      // 티켓을 DocumentChunk로 변환
+      const chunks: DocumentChunk[] = tickets.map((ticket) => ({
+        id: ticket.id,
+        text: `${ticket.subject}\n${ticket.body}`,
+        metadata: {
+          sourceId: ticket.id,
+          sourceTitle: ticket.subject,
+          category: ticket.category || "unknown",
+          timestamp: new Date(ticket.createdAt).getTime(),
+        },
+      }));
+
+      const { hydrated, indexBuildMs, docCount } = await pipeline.hydrateOrBuildIndex(
+        chunks,
+        (progress) => {
+          setRagHydrationProgress(progress);
+        }
+      );
+
+      setRagIndexWarm(hydrated);
+      setRagDocCount(docCount);
+
+      // ✅ P0-5: Warm start는 1초 이내면 표시 즉시 숨김
+      if (hydrated) {
+        setRagHydrationProgress({ progress: 100, text: `캐시에서 복원됨 (${docCount}개 문서)` });
+        setTimeout(() => {
+          setRagHydrating(false);
+          setRagHydrationProgress(null);
+        }, 1000);
+      } else {
+        setRagHydrationProgress({ progress: 100, text: `인덱스 생성됨 (${docCount}개 문서)` });
+        setTimeout(() => {
+          setRagHydrating(false);
+          setRagHydrationProgress(null);
+        }, 500);
+      }
+    } catch (err: any) {
+      console.warn("[CsHUD] RAG 인덱스 하이드레이션 실패:", err);
+      setRagHydrating(false);
+      setRagHydrationProgress(null);
+      // 실패해도 계속 진행 (RAG 없이 동작)
+    }
+  };
 
   // QA 트리거는 제품 플로우가 아니라 QA 증빙용. ENV=1일 때만 1회 실행.
   useEffect(() => {
@@ -272,6 +365,42 @@ export function CsHUD({ cfg }: Props = {}) {
           setModelLoadProgress(null);
         }
       }
+      // ✅ R10-S5 P0-5: RAG 컨텍스트 검색 (있는 경우)
+      let ragContext = "";
+      let ragMeta: any = null;
+      const sources: Array<{
+        id: string;
+        subject: string;
+        category: string;
+        score?: number;
+        rank?: number;
+      }> = [];
+
+      if (ragPipelineRef.current) {
+        try {
+          const query = `${ticket.subject} ${ticket.body}`;
+          const { context, results, meta } = await ragPipelineRef.current.retrieveAndBuildContext(query, 5);
+          ragContext = context;
+          ragMeta = meta;
+
+          // 출처 정보 추출 (meta-only: 원문 body는 포함하지 않음)
+          results.forEach((result, index) => {
+            const chunk = result.chunk;
+            sources.push({
+              id: chunk.metadata?.sourceId || chunk.id,
+              subject: chunk.metadata?.sourceTitle || chunk.id,
+              category: chunk.metadata?.category || "unknown",
+              score: result.score,
+              rank: index + 1,
+            });
+          });
+          setRagSources(sources);
+        } catch (ragErr: any) {
+          console.warn("[CsHUD] RAG 검색 실패:", ragErr);
+          // RAG 실패해도 계속 진행
+        }
+      }
+
       const ctx: CsSuggestContext = {
         domain: "cs",
         tenantId: clientCfg.tenantId,
@@ -282,6 +411,8 @@ export function CsHUD({ cfg }: Props = {}) {
           status: ticket.status,
           createdAt: ticket.createdAt,
         },
+        // ✅ R10-S5 P0-5: RAG 컨텍스트 주입 (엔진이 사용할 수 있도록)
+        ragContext: ragContext || undefined,
       };
 
       // ✅ P0-2: 스트리밍 출력을 위해 엔진을 직접 사용
@@ -347,6 +478,7 @@ export function CsHUD({ cfg }: Props = {}) {
           ? perfMeta.firstTokenTime - perfMeta.inferenceStart
           : undefined;
 
+        // ✅ R10-S5 P0-5: RAG 메타 포함 (meta-only, 원문 금지)
         void recordLlmUsage(
           clientCfg.mode,
           {
@@ -365,6 +497,20 @@ export function CsHUD({ cfg }: Props = {}) {
             success: true,
             fallback: perfMeta.fallback,
             cancelled: false,
+            // RAG 메타 (meta-only)
+            ...(ragMeta && {
+              ragEnabled: ragMeta.ragEnabled,
+              ragDocs: ragMeta.ragDocs,
+              ragTopK: ragMeta.ragTopK,
+              ragContextChars: ragMeta.ragContextChars,
+              ragEmbeddingMs: ragMeta.ragEmbeddingMs,
+              ragRetrieveMs: ragMeta.ragRetrieveMs,
+              ragIndexWarm: ragMeta.ragIndexWarm,
+              ragIndexBuildMs: ragMeta.ragIndexBuildMs,
+              ragIndexPersistMs: ragMeta.ragIndexPersistMs,
+              ragIndexHydrateMs: ragMeta.ragIndexHydrateMs,
+              ragDocCount: ragMeta.ragDocCount,
+            }),
           }
         ).catch((e) => {
           console.warn("[CsHUD] Failed to record suggestion_shown:", e);
@@ -655,6 +801,24 @@ export function CsHUD({ cfg }: Props = {}) {
                 </View>
               );
             })}
+            {/* ✅ R10-S5 P0-5: 출처 표시 */}
+            {ragSources.length > 0 && (
+              <View style={styles.ragSourcesContainer}>
+                <Text style={styles.ragSourcesTitle}>출처:</Text>
+                {ragSources.map((source, idx) => (
+                  <View key={idx} style={styles.ragSourceItem}>
+                    <Text style={styles.ragSourceText}>
+                      [{source.category}] {source.subject} ({source.id})
+                      {source.score !== undefined && (
+                        <Text style={styles.ragSourceScore}>
+                          {" "}({Math.round(source.score * 100)}%)
+                        </Text>
+                      )}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -666,6 +830,22 @@ export function CsHUD({ cfg }: Props = {}) {
       <View style={styles.header}>
         <Text style={styles.title}>CS HUD</Text>
         <Text style={styles.engineLabel}>Engine: {engineLabel}</Text>
+        {/* ✅ R10-S5 P0-5: RAG 하이드레이션 상태 배지 */}
+        {ragIndexWarm !== null && (
+          <View style={styles.ragStatusBadge}>
+            <Text style={styles.ragStatusText}>
+              {ragIndexWarm ? "캐시에서 복원됨" : "인덱스 생성됨"} ({ragDocCount}개 문서)
+            </Text>
+          </View>
+        )}
+        {ragHydrating && ragHydrationProgress && (
+          <View style={styles.ragHydrationContainer}>
+            <ActivityIndicator size="small" color="#007AFF" />
+            <Text style={styles.ragHydrationText}>
+              {ragHydrationProgress.text}
+            </Text>
+          </View>
+        )}
       </View>
 
       {isMock(clientCfg) && (
@@ -934,5 +1114,57 @@ const styles = StyleSheet.create({
     color: "#007AFF",
     fontWeight: "bold",
     animation: "blink 1s infinite",
+  },
+  // ✅ R10-S5 P0-5: RAG 하이드레이션 상태 스타일
+  ragStatusBadge: {
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: "#d4edda",
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#c3e6cb",
+  },
+  ragStatusText: {
+    fontSize: 11,
+    color: "#155724",
+    fontWeight: "500",
+  },
+  ragHydrationContainer: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  ragHydrationText: {
+    fontSize: 11,
+    color: "#666",
+  },
+  // ✅ R10-S5 P0-5: RAG 출처 표시 스타일
+  ragSourcesContainer: {
+    marginTop: 12,
+    padding: 8,
+    backgroundColor: "#f8f9fa",
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#dee2e6",
+  },
+  ragSourcesTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 8,
+  },
+  ragSourceItem: {
+    marginBottom: 4,
+  },
+  ragSourceText: {
+    fontSize: 11,
+    color: "#666",
+  },
+  ragSourceScore: {
+    fontSize: 10,
+    color: "#999",
+    fontStyle: "italic",
   },
 });
