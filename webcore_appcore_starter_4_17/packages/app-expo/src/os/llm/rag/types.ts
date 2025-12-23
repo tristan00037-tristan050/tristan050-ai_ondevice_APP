@@ -134,14 +134,18 @@ export interface RAGConfig {
 
 /**
  * RAG 메타데이터 (텔레메트리용, 원문 금지)
+ * 
+ * ✅ R10-S5 P0-4: 성능 메타 확장
  */
 export interface RAGMeta {
   ragEnabled: boolean;
   ragDocs: number; // 검색 대상 문서 수
   ragTopK: number;
   ragContextChars: number; // 주입한 컨텍스트 문자 수
-  ragEmbeddingMs?: number;
-  ragRetrieveMs?: number;
-  ragIndexWarm?: boolean;
+  ragEmbeddingMs?: number; // 임베딩 소요 시간 (ms)
+  ragRetrieveMs?: number; // 검색 소요 시간 (ms)
+  ragIndexWarm?: boolean; // 인덱스 복원 여부 (Warm start)
+  ragIndexBuildMs?: number; // 인덱스 빌드 소요 시간 (ms)
+  ragHydrateMs?: number; // 인덱스 복원 소요 시간 (ms)
 }
 

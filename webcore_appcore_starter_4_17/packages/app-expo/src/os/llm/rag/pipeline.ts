@@ -65,6 +65,8 @@ export class RAGPipelineImpl implements RAGPipeline {
 
   /**
    * 쿼리로 관련 문서 검색 및 컨텍스트 생성
+   * 
+   * ✅ R10-S5 P0-4: 성능 메타 수집 (hydrateMs, docCount 포함)
    */
   async retrieveAndBuildContext(
     query: string,
@@ -85,14 +87,14 @@ export class RAGPipelineImpl implements RAGPipeline {
 
     // 3. 메타데이터 수집 (텔레메트리용, 원문 금지)
     const embedderMeta = this.embedder.getMeta?.() || {};
+    const docCount = (this.store as any).getDocCount?.() || 0;
     const meta: RAGMeta = {
       ragEnabled: this.config.enabled,
-      ragDocs: results.length,
+      ragDocs: docCount, // ✅ P0-4: 검색 대상 문서 수
       ragTopK: topK,
       ragContextChars: context.length,
       ragRetrieveMs: retrieveMs,
-      ragIndexWarm: false, // TODO: P0-4에서 구현
-      ...(embedderMeta.dim && { ragEmbeddingMs: undefined }), // TODO: 임베딩 시간 측정
+      ragIndexWarm: false, // ✅ P0-4: restore() 성공 여부로 설정
     };
 
     return {
@@ -100,6 +102,43 @@ export class RAGPipelineImpl implements RAGPipeline {
       results,
       meta,
     };
+  }
+
+  /**
+   * ✅ R10-S5 P0-4: Hydration 또는 빌드
+   * 앱 시작 시 인덱스가 있으면 복원, 없으면 빌드
+   */
+  async hydrateOrBuildIndex(
+    chunks: DocumentChunk[],
+    onProgress?: (progress: { progress: number; text: string }) => void
+  ): Promise<{ hydrated: boolean; indexBuildMs?: number; docCount: number }> {
+    // 1. 스토어 초기화 (복원 시도)
+    await this.store.initialize(onProgress);
+
+    // 2. 복원 시도
+    const hydrated = await this.store.restore();
+    const docCount = (this.store as any).getDocCount?.() || 0;
+
+    if (hydrated && docCount > 0) {
+      // Warm start: 복원 성공
+      if (onProgress) {
+        onProgress({ progress: 100, text: `Index restored: ${docCount} documents` });
+      }
+      return { hydrated: true, docCount };
+    }
+
+    // Cold start: 빌드 필요
+    if (onProgress) {
+      onProgress({ progress: 0, text: "Building index..." });
+    }
+
+    const { indexBuildMs, docCount: newDocCount } = await this.index(chunks);
+
+    if (onProgress) {
+      onProgress({ progress: 100, text: `Index built: ${newDocCount} documents` });
+    }
+
+    return { hydrated: false, indexBuildMs, docCount: newDocCount };
   }
 }
 

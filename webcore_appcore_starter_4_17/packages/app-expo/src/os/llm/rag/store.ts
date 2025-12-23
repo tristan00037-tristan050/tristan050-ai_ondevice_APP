@@ -114,53 +114,257 @@ export class StubVectorStore implements VectorStore {
 }
 
 /**
- * Real VectorStore (TODO: IndexedDB 영속화)
+ * IndexedDB 헬퍼 (웹 환경 전용)
+ */
+function isIndexedDBAvailable(): boolean {
+  return typeof window !== "undefined" && "indexedDB" in window;
+}
+
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (!isIndexedDBAvailable()) {
+      reject(new Error("IndexedDB not available"));
+      return;
+    }
+
+    const request = indexedDB.open("rag_vector_store", 1);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains("chunks")) {
+        const store = db.createObjectStore("chunks", { keyPath: "id" });
+        store.createIndex("sourceId", "metadata.sourceId", { unique: false });
+      }
+    };
+  });
+}
+
+/**
+ * Real VectorStore (IndexedDB 영속화)
+ * 
+ * ✅ R10-S5 P0-4: IndexedDB 기반 영속화
+ * - Schema v1: dbName="rag_vector_store", storeName="chunks"
+ * - Warm start 시 인덱스 복원
+ * - 결정성 유지: 같은 픽스처 입력이면 재시작 후에도 동일한 결과
  */
 export class RealVectorStore implements VectorStore {
   private isInitialized = false;
+  private chunks: Array<DocumentChunk & { embedding: EmbeddingVector }> = [];
+  private indexVersion = "1.0.0";
+  private db: IDBDatabase | null = null;
 
   async initialize(onProgress?: (progress: { progress: number; text: string }) => void): Promise<void> {
-    // TODO: IndexedDB 초기화
-    // - 스키마 버전 확인
-    // - Warm start 시 restore() 호출
-    throw new Error("RealVectorStore not implemented yet");
+    if (this.isInitialized) return;
+
+    if (!isIndexedDBAvailable()) {
+      throw new Error("IndexedDB not available (non-web environment)");
+    }
+
+    if (onProgress) {
+      onProgress({ progress: 0, text: "Opening IndexedDB..." });
+    }
+
+    try {
+      this.db = await openDB();
+
+      // Warm start: 복원 시도
+      if (onProgress) {
+        onProgress({ progress: 50, text: "Checking for existing index..." });
+      }
+
+      const restored = await this.restore();
+      if (restored) {
+        if (onProgress) {
+          onProgress({ progress: 100, text: "Index restored from cache" });
+        }
+      } else {
+        if (onProgress) {
+          onProgress({ progress: 100, text: "Index ready (will build on first upsert)" });
+        }
+      }
+    } catch (error: any) {
+      console.warn("[RealVectorStore] IndexedDB initialization failed:", error);
+      // IndexedDB 실패 시 인메모리로 폴백
+      this.chunks = [];
+    }
+
+    this.isInitialized = true;
   }
 
   async upsert(chunks: DocumentChunk[]): Promise<void> {
-    // TODO: IndexedDB에 저장
-    throw new Error("RealVectorStore not implemented yet");
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+
+    // 임베딩이 없는 청크는 에러 (임베딩은 외부에서 생성되어야 함)
+    for (const chunk of chunks) {
+      if (!chunk.embedding) {
+        throw new Error(`Chunk ${chunk.id} missing embedding`);
+      }
+
+      const chunkWithEmbedding = { ...chunk, embedding: chunk.embedding };
+
+      // 메모리 캐시 업데이트
+      const existingIndex = this.chunks.findIndex((c) => c.id === chunk.id);
+      if (existingIndex >= 0) {
+        this.chunks[existingIndex] = chunkWithEmbedding;
+      } else {
+        this.chunks.push(chunkWithEmbedding);
+      }
+
+      // IndexedDB에 저장
+      if (this.db) {
+        await this.putToIndexedDB(chunkWithEmbedding);
+      }
+    }
+  }
+
+  private async putToIndexedDB(chunk: DocumentChunk & { embedding: EmbeddingVector }): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error("Database not initialized"));
+        return;
+      }
+
+      const transaction = this.db.transaction(["chunks"], "readwrite");
+      const store = transaction.objectStore("chunks");
+      const request = store.put({
+        id: chunk.id,
+        text: chunk.text,
+        embedding: chunk.embedding,
+        metadata: chunk.metadata || {},
+        indexVersion: this.indexVersion,
+        updatedAt: Date.now(),
+      });
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
   }
 
   async search(queryVector: EmbeddingVector, topK: number): Promise<SearchResult[]> {
-    // TODO: IndexedDB에서 검색
-    throw new Error("RealVectorStore not implemented yet");
+    if (this.chunks.length === 0) return [];
+
+    // 브루트포스 코사인 유사도 검색 (인메모리)
+    const results: SearchResult[] = this.chunks.map((chunk) => ({
+      chunk,
+      score: cosineSimilarity(queryVector, chunk.embedding),
+    }));
+
+    // 점수 내림차순 정렬 및 topK 반환
+    return results
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topK)
+      .filter((r) => r.score > 0);
   }
 
   async persist(): Promise<void> {
-    // TODO: IndexedDB에 저장
-    throw new Error("RealVectorStore not implemented yet");
+    // 이미 upsert에서 IndexedDB에 저장되므로, 여기서는 명시적 저장 완료만 표시
+    if (this.db) {
+      // 모든 청크가 이미 IndexedDB에 저장되어 있음
+      console.log(`[RealVectorStore] persist() called: ${this.chunks.length} chunks already persisted`);
+    }
   }
 
   async restore(): Promise<boolean> {
-    // TODO: IndexedDB에서 복원
-    throw new Error("RealVectorStore not implemented yet");
+    if (!this.db) {
+      return false;
+    }
+
+    try {
+      const chunks = await this.getAllFromIndexedDB();
+      if (chunks.length === 0) {
+        return false; // 복원할 데이터 없음
+      }
+
+      // 메모리 캐시에 복원
+      this.chunks = chunks;
+      console.log(`[RealVectorStore] restore() completed: ${chunks.length} chunks restored`);
+      return true;
+    } catch (error: any) {
+      console.warn("[RealVectorStore] restore() failed:", error);
+      return false;
+    }
+  }
+
+  private async getAllFromIndexedDB(): Promise<Array<DocumentChunk & { embedding: EmbeddingVector }>> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error("Database not initialized"));
+        return;
+      }
+
+      const transaction = this.db.transaction(["chunks"], "readonly");
+      const store = transaction.objectStore("chunks");
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const items = request.result as Array<{
+          id: string;
+          text: string;
+          embedding: EmbeddingVector;
+          metadata?: any;
+        }>;
+
+        const chunks: Array<DocumentChunk & { embedding: EmbeddingVector }> = items.map((item) => ({
+          id: item.id,
+          text: item.text,
+          embedding: item.embedding,
+          metadata: item.metadata,
+        }));
+
+        resolve(chunks);
+      };
+
+      request.onerror = () => reject(request.error);
+    });
   }
 
   async clear(): Promise<void> {
-    // TODO: IndexedDB 초기화
-    throw new Error("RealVectorStore not implemented yet");
+    if (this.db) {
+      const transaction = this.db.transaction(["chunks"], "readwrite");
+      const store = transaction.objectStore("chunks");
+      await new Promise<void>((resolve, reject) => {
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    this.chunks = [];
+    this.isInitialized = false;
+  }
+
+  /**
+   * 문서 개수 조회 (텔레메트리용)
+   */
+  getDocCount(): number {
+    return this.chunks.length;
   }
 }
 
 /**
  * VectorStore 팩토리
+ * 
+ * ✅ R10-S5 P0-4: Live 모드에서 RealVectorStore 사용 (IndexedDB)
+ * - Mock: StubVectorStore (인메모리, Network 0)
+ * - Live: RealVectorStore (IndexedDB 영속화, 웹 환경에서만)
  */
 export function getVectorStore(demoMode: "mock" | "live"): VectorStore {
   if (demoMode === "mock") {
     return new StubVectorStore();
   }
 
-  // TODO: Live 모드에서 실제 벡터 스토어 사용 여부 결정
-  return new StubVectorStore(); // 현재는 stub만
+  // Live 모드: IndexedDB 사용 가능 여부 확인
+  if (isIndexedDBAvailable()) {
+    return new RealVectorStore();
+  }
+
+  // IndexedDB 사용 불가 시 Stub으로 폴백
+  console.warn("[getVectorStore] IndexedDB not available, falling back to StubVectorStore");
+  return new StubVectorStore();
 }
 
