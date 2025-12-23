@@ -1,0 +1,7 @@
+[range206] starting deterministic upstream + bff + verify...
+[verify] D. Range(206) / Accept-Ranges 동작 확인
+
+[test] D-1) 일반 GET 요청 (Accept-Ranges 헤더 확인)
+[FAIL] 일반 GET 요청: 500 (업스트림 서버 미시작 또는 BFF 설정 오류)
+[INFO] 업스트림 서버 시작: ./scripts/dev_model_upstream.sh
+[INFO] BFF 재시작: export WEBLLM_UPSTREAM_BASE_URL='http://127.0.0.1:9099/webllm/' && ./scripts/dev_bff.sh restart
