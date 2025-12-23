@@ -24,4 +24,5 @@ export { getEmbedder, StubEmbedder, RealEmbedder } from "./embedder";
 export { getVectorStore, StubVectorStore, RealVectorStore } from "./store";
 export { RAGRetriever } from "./retriever";
 export { RAGContextBuilder } from "./contextBuilder";
+export { RAGPipeline, RAGPipelineImpl } from "./pipeline";
 

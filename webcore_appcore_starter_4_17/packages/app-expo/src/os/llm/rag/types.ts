@@ -48,6 +48,7 @@ export interface Embedder {
 
   /**
    * 텍스트를 임베딩 벡터로 변환
+   * 동일 입력에 대해 항상 동일한 벡터 반환 (결정성 보장)
    */
   embed(text: string): Promise<EmbeddingVector>;
 
@@ -55,6 +56,11 @@ export interface Embedder {
    * 여러 텍스트를 배치로 임베딩
    */
   embedBatch(texts: string[]): Promise<EmbeddingVector[]>;
+
+  /**
+   * 임베딩 메타데이터 (텔레메트리용, 선택적)
+   */
+  getMeta?(): { dim?: number; version?: string; backend?: string };
 }
 
 /**
