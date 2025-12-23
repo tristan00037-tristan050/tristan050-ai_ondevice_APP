@@ -90,25 +90,37 @@ def run_retrieval_test(fixtures: List[Dict], queries: List[Tuple[str, List[str]]
         retrieve_time = (time.time() - start_time) * 1000  # ms
         retrieve_times.append(retrieve_time)
         
-        # 적중률 계산
-        hit_at_5 = any(
-            any(kw in doc['subject'].lower() or kw in doc['text'].lower() 
-                for kw in expected_keywords)
-            for doc in top_k[:5]
-        )
-        hit_at_10 = any(
-            any(kw in doc['subject'].lower() or kw in doc['text'].lower() 
-                for kw in expected_keywords)
-            for doc in top_k
-        )
+        # 적중률 계산 (docId로 원본 문서 찾기)
+        hit_at_5 = False
+        hit_at_10 = False
+        for doc_score in top_k[:5]:
+            doc_id = doc_score['docId']
+            original_doc = next((d for d in docs if d['id'] == doc_id), None)
+            if original_doc:
+                if any(kw in original_doc['subject'].lower() or kw in original_doc['text'].lower() 
+                       for kw in expected_keywords):
+                    hit_at_5 = True
+                    break
+        
+        for doc_score in top_k:
+            doc_id = doc_score['docId']
+            original_doc = next((d for d in docs if d['id'] == doc_id), None)
+            if original_doc:
+                if any(kw in original_doc['subject'].lower() or kw in original_doc['text'].lower() 
+                       for kw in expected_keywords):
+                    hit_at_10 = True
+                    break
         
         # MRR 계산
         mrr = 0.0
-        for rank, doc in enumerate(top_k[:10], 1):
-            if any(kw in doc['subject'].lower() or kw in doc['text'].lower() 
-                   for kw in expected_keywords):
-                mrr = 1.0 / rank
-                break
+        for rank, doc_score in enumerate(top_k[:10], 1):
+            doc_id = doc_score['docId']
+            original_doc = next((d for d in docs if d['id'] == doc_id), None)
+            if original_doc:
+                if any(kw in original_doc['subject'].lower() or kw in original_doc['text'].lower() 
+                       for kw in expected_keywords):
+                    mrr = 1.0 / rank
+                    break
         
         results.append({
             'query': query_text,
