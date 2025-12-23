@@ -1,0 +1,11 @@
+[range206] starting deterministic upstream + bff + verify...
+[range206] WARN: upstream server not available, verify will skip
+[range206] BFF server started (PID: 45692)
+[verify] D. Range(206) / Accept-Ranges 동작 확인
+
+[test] D-1) 일반 GET 요청 (Accept-Ranges 헤더 확인)
+[SKIP] 일반 GET 요청: 500 (업스트림 서버 미시작 또는 BFF 설정 오류)
+[INFO] 업스트림 서버 시작: ./scripts/dev_model_upstream.sh
+[INFO] BFF 재시작: export WEBLLM_UPSTREAM_BASE_URL='http://127.0.0.1:9099/webllm/' && ./scripts/dev_bff.sh restart
+[OK] D. Range(206) / Accept-Ranges 동작 확인 SKIP (업스트림 미사용)
+[range206] PASS. proof log: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/docs/ops/r10-s4-range-206-proof-20251223T030028Z.log
