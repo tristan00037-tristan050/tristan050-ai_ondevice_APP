@@ -37,6 +37,8 @@ import {
   type SearchResult,
   type RAGConfig,
 } from "../os/llm/rag";
+// ✅ R10-S5 P1-2: Safe Snippet 생성 함수
+import { createSafeSnippet } from "../os/llm/rag/safeSnippet";
 
 type Props = { cfg?: ClientCfg };
 
@@ -372,6 +374,7 @@ export function CsHUD({ cfg }: Props = {}) {
         id: string;
         subject: string;
         category: string;
+        snippet: string; // ✅ R10-S5 P1-2: Safe snippet 추가
         score?: number;
         rank?: number;
       }> = [];
@@ -383,13 +386,19 @@ export function CsHUD({ cfg }: Props = {}) {
           ragContext = context;
           ragMeta = meta;
 
-          // 출처 정보 추출 (meta-only: 원문 body는 포함하지 않음)
+          // ✅ R10-S5 P1-2: 출처 정보 추출 (Safe snippet 포함, meta-only: 원문 body는 telemetry에 포함하지 않음)
           results.forEach((result, index) => {
             const chunk = result.chunk;
+            // Safe snippet 생성 (UI 표시용, telemetry에는 포함하지 않음)
+            const rawText = chunk.text || "";
+            const queryTerms = query.split(/\s+/).filter(t => t.length > 1); // 쿼리 키워드 추출
+            const snippet = createSafeSnippet(rawText, 160, queryTerms);
+            
             sources.push({
               id: chunk.metadata?.sourceId || chunk.id,
               subject: chunk.metadata?.sourceTitle || chunk.id,
               category: chunk.metadata?.category || "unknown",
+              snippet: snippet, // ✅ P1-2: Safe snippet (UI 전용, telemetry 금지)
               score: result.score,
               rank: index + 1,
             });
@@ -801,13 +810,14 @@ export function CsHUD({ cfg }: Props = {}) {
                 </View>
               );
             })}
-            {/* ✅ R10-S5 P0-5: 출처 표시 */}
+            {/* ✅ R10-S5 P1-2: 출처 표시 (subject + safe snippet) */}
             {ragSources.length > 0 && (
               <View style={styles.ragSourcesContainer}>
                 <Text style={styles.ragSourcesTitle}>출처:</Text>
                 {ragSources.map((source, idx) => (
                   <View key={idx} style={styles.ragSourceItem}>
-                    <Text style={styles.ragSourceText}>
+                    {/* Subject */}
+                    <Text style={styles.ragSourceSubject}>
                       [{source.category}] {source.subject} ({source.id})
                       {source.score !== undefined && (
                         <Text style={styles.ragSourceScore}>
@@ -815,6 +825,12 @@ export function CsHUD({ cfg }: Props = {}) {
                         </Text>
                       )}
                     </Text>
+                    {/* ✅ P1-2: Safe snippet (plain text, 길이 제한, 제어문자 제거) */}
+                    {source.snippet && (
+                      <Text style={styles.ragSourceSnippet}>
+                        {source.snippet}
+                      </Text>
+                    )}
                   </View>
                 ))}
               </View>
@@ -1156,11 +1172,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   ragSourceItem: {
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e9ecef",
+  },
+  ragSourceSubject: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#333",
     marginBottom: 4,
   },
-  ragSourceText: {
+  ragSourceSnippet: {
     fontSize: 11,
     color: "#666",
+    lineHeight: 16,
+    maxHeight: 32, // 최대 2줄 (lineHeight 16 * 2)
+    overflow: "hidden",
   },
   ragSourceScore: {
     fontSize: 10,
