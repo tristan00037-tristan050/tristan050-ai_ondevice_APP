@@ -13,8 +13,9 @@ import { RAGContextBuilder } from "./contextBuilder";
 export interface RAGPipeline {
   /**
    * 문서 인덱싱 (임베딩 + 저장)
+   * ✅ R10-S5 P0-4: 성능 메타 반환
    */
-  index(chunks: DocumentChunk[]): Promise<void>;
+  index(chunks: DocumentChunk[]): Promise<{ indexBuildMs: number; docCount: number }>;
 
   /**
    * 쿼리로 관련 문서 검색 및 컨텍스트 생성
@@ -24,6 +25,14 @@ export interface RAGPipeline {
     results: SearchResult[];
     meta: RAGMeta;
   }>;
+
+  /**
+   * ✅ R10-S5 P0-4: Hydration 또는 빌드
+   */
+  hydrateOrBuildIndex(
+    chunks: DocumentChunk[],
+    onProgress?: (progress: { progress: number; text: string }) => void
+  ): Promise<{ hydrated: boolean; indexBuildMs?: number; docCount: number }>;
 }
 
 export class RAGPipelineImpl implements RAGPipeline {
