@@ -1,0 +1,143 @@
+[
+  {
+    "id": "ticket-001",
+    "subject": "로그인 오류",
+    "body": "사용자가 로그인 시도 시 '비밀번호가 올바르지 않습니다' 오류가 발생합니다. 비밀번호를 재설정했지만 여전히 로그인이 안 됩니다.",
+    "status": "open",
+    "category": "authentication"
+  },
+  {
+    "id": "ticket-002",
+    "subject": "결제 실패",
+    "body": "신용카드로 결제를 시도했는데 '결제 처리 중 오류가 발생했습니다' 메시지가 나오고 결제가 완료되지 않습니다. 카드 정보는 정확합니다.",
+    "status": "open",
+    "category": "payment"
+  },
+  {
+    "id": "ticket-003",
+    "subject": "배송 지연 문의",
+    "body": "주문한 상품이 예상 배송일보다 3일 늦게 도착했습니다. 배송 추적 정보도 업데이트되지 않았습니다.",
+    "status": "pending",
+    "category": "shipping"
+  },
+  {
+    "id": "ticket-004",
+    "subject": "환불 요청",
+    "body": "주문 취소 후 환불이 아직 처리되지 않았습니다. 주문 취소는 5일 전에 완료했는데 환불 금액이 계좌에 입금되지 않았습니다.",
+    "status": "open",
+    "category": "refund"
+  },
+  {
+    "id": "ticket-005",
+    "subject": "상품 불량",
+    "body": "받은 상품에 흠집이 있고 포장이 손상되어 있습니다. 교환을 원합니다.",
+    "status": "open",
+    "category": "product"
+  },
+  {
+    "id": "ticket-006",
+    "subject": "계정 잠금",
+    "body": "로그인을 여러 번 시도하다가 계정이 잠겼습니다. 계정 잠금을 해제해주세요.",
+    "status": "open",
+    "category": "authentication"
+  },
+  {
+    "id": "ticket-007",
+    "subject": "쿠폰 적용 안됨",
+    "body": "할인 쿠폰을 입력했는데 할인이 적용되지 않습니다. 쿠폰 코드는 유효기간 내입니다.",
+    "status": "open",
+    "category": "payment"
+  },
+  {
+    "id": "ticket-008",
+    "subject": "배송 주소 변경",
+    "body": "주문 후 배송 주소를 변경하고 싶습니다. 아직 배송이 시작되지 않았습니다.",
+    "status": "pending",
+    "category": "shipping"
+  },
+  {
+    "id": "ticket-009",
+    "subject": "상품 설명 오류",
+    "body": "상품 페이지에 표시된 사양과 실제 상품이 다릅니다. 색상이 다르게 나왔습니다.",
+    "status": "open",
+    "category": "product"
+  },
+  {
+    "id": "ticket-010",
+    "subject": "환불 금액 확인",
+    "body": "환불 금액이 주문 금액과 다릅니다. 배송비나 할인 금액이 제대로 반영되었는지 확인이 필요합니다.",
+    "status": "open",
+    "category": "refund"
+  },
+  {
+    "id": "ticket-011",
+    "subject": "비밀번호 찾기",
+    "body": "비밀번호를 잊어버렸습니다. 이메일로 비밀번호 재설정 링크를 받지 못했습니다.",
+    "status": "open",
+    "category": "authentication"
+  },
+  {
+    "id": "ticket-012",
+    "subject": "결제 수단 추가",
+    "body": "새로운 신용카드를 등록하려고 하는데 카드 정보 입력 후 저장이 안 됩니다.",
+    "status": "open",
+    "category": "payment"
+  },
+  {
+    "id": "ticket-013",
+    "subject": "배송 추적 불가",
+    "body": "배송 추적 번호를 입력했는데 정보가 조회되지 않습니다. 택배사에 문의했는데 배송이 시작되지 않았다고 합니다.",
+    "status": "pending",
+    "category": "shipping"
+  },
+  {
+    "id": "ticket-014",
+    "subject": "부분 환불 요청",
+    "body": "주문한 상품 중 일부만 취소하고 싶습니다. 나머지 상품은 정상적으로 받았습니다.",
+    "status": "open",
+    "category": "refund"
+  },
+  {
+    "id": "ticket-015",
+    "subject": "상품 교환",
+    "body": "사이즈가 맞지 않아 다른 사이즈로 교환하고 싶습니다. 아직 사용하지 않았고 포장도 그대로입니다.",
+    "status": "open",
+    "category": "product"
+  },
+  {
+    "id": "ticket-016",
+    "subject": "이메일 인증",
+    "body": "회원가입 시 이메일 인증 메일을 받지 못했습니다. 스팸함에도 없습니다.",
+    "status": "open",
+    "category": "authentication"
+  },
+  {
+    "id": "ticket-017",
+    "subject": "할부 결제",
+    "body": "할부 결제 옵션이 표시되지 않습니다. 카드는 할부 가능한 카드입니다.",
+    "status": "open",
+    "category": "payment"
+  },
+  {
+    "id": "ticket-018",
+    "subject": "배송비 문의",
+    "body": "무료 배송 조건을 만족했는데 배송비가 추가로 청구되었습니다.",
+    "status": "open",
+    "category": "shipping"
+  },
+  {
+    "id": "ticket-019",
+    "subject": "환불 계좌 변경",
+    "body": "환불 계좌를 변경하고 싶습니다. 이미 환불 처리가 진행 중입니다.",
+    "status": "pending",
+    "category": "refund"
+  },
+  {
+    "id": "ticket-020",
+    "subject": "상품 리뷰 작성",
+    "body": "상품 리뷰를 작성하려고 하는데 작성 버튼이 작동하지 않습니다.",
+    "status": "open",
+    "category": "product"
+  }
+]
+
