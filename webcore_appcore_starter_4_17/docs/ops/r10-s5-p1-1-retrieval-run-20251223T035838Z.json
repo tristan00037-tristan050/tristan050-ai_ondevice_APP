@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/scripts/_lib/rag_retrieval_test.py", line 192, in <module>
+    main()
+  File "/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/scripts/_lib/rag_retrieval_test.py", line 175, in main
+    result1 = run_retrieval_test(fixtures, queries)
+  File "/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/scripts/_lib/rag_retrieval_test.py", line 94, in run_retrieval_test
+    hit_at_5 = any(
+  File "/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/scripts/_lib/rag_retrieval_test.py", line 95, in <genexpr>
+    any(kw in doc['subject'].lower() or kw in doc['text'].lower() 
+  File "/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/scripts/_lib/rag_retrieval_test.py", line 95, in <genexpr>
+    any(kw in doc['subject'].lower() or kw in doc['text'].lower() 
+KeyError: 'text'
