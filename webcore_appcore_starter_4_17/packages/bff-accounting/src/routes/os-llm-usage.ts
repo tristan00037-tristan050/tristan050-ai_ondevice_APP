@@ -24,6 +24,7 @@ osLlmUsageRouter.post("/", requireTenantAuth, async (req, res, next) => {
     const userRole = (req.headers["x-user-role"] as string) || "operator";
 
     // P0 방화벽: 원문 텍스트 필드 차단
+    // ✅ R10-S5 P0-6: RAG 원문 텍스트 필드도 차단
     const body = (req.body ?? {}) as Record<string, unknown>;
     const bannedKeys = [
       "prompt",
@@ -35,6 +36,15 @@ osLlmUsageRouter.post("/", requireTenantAuth, async (req, res, next) => {
       "raw",
       "input",
       "output",
+      // RAG 원문 텍스트 필드
+      "ragText",
+      "ragChunk",
+      "ragContext",
+      "ragQuery",
+      "ragResult",
+      "ragSource",
+      "errorMessage",
+      "errorText",
     ];
 
     for (const k of Object.keys(body)) {
@@ -65,6 +75,18 @@ osLlmUsageRouter.post("/", requireTenantAuth, async (req, res, next) => {
       success?: boolean;
       fallback?: boolean;
       cancelled?: boolean;
+      // ✅ R10-S5 P0-6: RAG 메타데이터 (meta-only, 원문 금지)
+      ragEnabled?: boolean;
+      ragDocs?: number;
+      ragTopK?: number;
+      ragContextChars?: number;
+      ragEmbeddingMs?: number;
+      ragRetrieveMs?: number;
+      ragIndexWarm?: boolean;
+      ragIndexBuildMs?: number;
+      ragIndexPersistMs?: number;
+      ragIndexHydrateMs?: number;
+      ragDocCount?: number;
     };
 
     const logEvent = {
