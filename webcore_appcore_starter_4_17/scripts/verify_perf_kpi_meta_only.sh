@@ -25,12 +25,38 @@ LATEST="$OPS_DIR/r10-s5-p1-4-perf-kpi-proof.latest"
 
 function http_code() {
   local payload="$1"
-  curl -s -o /tmp/p1_4_body.txt -w "%{http_code}" \
+  local resp_file="/tmp/p1_4_body.txt"
+  local err_file="/tmp/p1_4_curl_err.txt"
+  
+  # ✅ curl -sS: silent이지만 에러는 표시, -w로 HTTP 코드를 변수에 저장
+  local code
+  code=$(curl -sS -o "$resp_file" -w "%{http_code}" \
     "${HDR_COMMON[@]}" \
     -X POST "$URL" \
-    -d "$payload" 2>&1 | tee -a "$LOG" > /dev/null
-  cat /tmp/p1_4_body.txt >> "$LOG" 2>&1 || true
-  echo "" >> "$LOG"
+    -d "$payload" 2>"$err_file")
+  local curl_exit=$?
+  
+  # curl 실패 시 에러 로깅 및 CURL_ERROR 반환
+  if [ $curl_exit -ne 0 ]; then
+    {
+      echo "[ERROR] curl failed (exit=$curl_exit)"
+      echo "stderr:"
+      cat "$err_file" 2>/dev/null || true
+      echo "response body:"
+      cat "$resp_file" 2>/dev/null || true
+    } | tee -a "$LOG"
+    echo "CURL_ERROR"
+    return
+  fi
+  
+  # 응답 바디 로깅 (디버깅용)
+  {
+    echo "[HTTP $code] response:"
+    cat "$resp_file" 2>/dev/null || echo "(empty)"
+    echo ""
+  } | tee -a "$LOG" > /dev/null
+  
+  echo "$code"
 }
 
 function expect_code() {

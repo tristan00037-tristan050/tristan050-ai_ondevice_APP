@@ -146,9 +146,11 @@ osLlmUsageRouter.post("/", requireTenantAuth, async (req, res, next) => {
       "body",
     ];
 
+    // ✅ 정확한 키 매칭으로 변경 (부분 일치 제거)
+    // 이유: ragContextChars는 메타 필드인데 ragContext로 차단되는 문제 해결
     for (const k of Object.keys(body)) {
       const lower = k.toLowerCase();
-      if (bannedKeys.some((b) => lower.includes(b.toLowerCase()))) {
+      if (bannedKeys.some((b) => lower === b.toLowerCase())) {
         return res.status(400).json({
           error: "invalid_payload",
           message: "raw text is not allowed",
