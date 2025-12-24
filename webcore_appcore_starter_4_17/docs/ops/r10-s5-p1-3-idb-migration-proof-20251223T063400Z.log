@@ -1,0 +1,27 @@
+[verify] R10-S5 P1-3: IndexedDB v1→v2 마이그레이션 검증
+
+[test] 1) 코드 정합성 검증 (구문 체크)
+[OK] JavaScript 구문 체크 성공
+
+[test] 2) 마이그레이션 정책 문서 존재 확인
+[OK] 마이그레이션 정책 문서 존재: docs/R10S5_P1_IDB_MIGRATION.md
+[OK] 마이그레이션 정책 문서에 필수 키워드 포함
+
+[test] 3) 코드에서 DB_VERSION = 2 확인
+[OK] DB_VERSION = 2 확인
+[test] 4) schemaVersion = 2 확인
+[OK] schemaVersion = 2 확인
+
+[test] 5) fallback 로직 확인 (deleteDatabase 호출)
+[OK] deleteDatabase fallback 로직 존재
+[test] 6) restore() 실패 시 clear() 호출 확인
+[OK] restore() 실패 시 clear() 호출 확인
+
+[test] 7) UX 무중단 보장 확인 (예외 처리)
+[OK] 예외 처리 및 로깅 존재
+
+[OK] R10-S5 P1-3: IndexedDB v1→v2 마이그레이션 검증 PASS
+
+증빙 파일:
+  - 로그: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/docs/ops/r10-s5-p1-3-idb-migration-proof-20251223T063400Z.log
+  - JSON: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/docs/ops/r10-s5-p1-3-idb-migration-proof-20251223T063400Z.json

@@ -128,9 +128,40 @@ export class StubVectorStore implements VectorStore {
 
 /**
  * IndexedDB 헬퍼 (웹 환경 전용)
+ * 
+ * ✅ R10-S5 P1-3: DB_VERSION = 2 (v1→v2 마이그레이션 지원)
  */
+const DB_NAME = "rag_vector_store";
+const DB_VERSION = 2; // ✅ P1-3: v1 → v2 업그레이드
+
 function isIndexedDBAvailable(): boolean {
   return typeof window !== "undefined" && "indexedDB" in window;
+}
+
+/**
+ * IndexedDB 삭제 (실패 시 fallback용)
+ */
+function deleteDatabase(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!isIndexedDBAvailable()) {
+      resolve();
+      return;
+    }
+
+    const request = indexedDB.deleteDatabase(DB_NAME);
+    request.onsuccess = () => {
+      console.log("[RealVectorStore] Database deleted (fallback after migration failure)");
+      resolve();
+    };
+    request.onerror = () => {
+      console.warn("[RealVectorStore] Failed to delete database:", request.error);
+      resolve(); // 실패해도 계속 진행 (재시도 가능)
+    };
+    request.onblocked = () => {
+      console.warn("[RealVectorStore] Database deletion blocked (other connections open)");
+      resolve(); // 블로킹되어도 계속 진행
+    };
+  });
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -140,17 +171,91 @@ function openDB(): Promise<IDBDatabase> {
       return;
     }
 
-    const request = indexedDB.open("rag_vector_store", 1);
+    let upgradeFailed = false;
 
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
 
+    // ✅ P1-3: v1→v2 마이그레이션 처리
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains("chunks")) {
-        const store = db.createObjectStore("chunks", { keyPath: "id" });
-        store.createIndex("sourceId", "metadata.sourceId", { unique: false });
+      const oldVersion = event.oldVersion;
+      const newVersion = event.newVersion;
+
+      console.log(`[RealVectorStore] DB upgrade: v${oldVersion} → v${newVersion}`);
+
+      try {
+        // v1 → v2: Schema 변경 없음 (호환성 유지)
+        // 기존 데이터는 그대로 유지됨 (IndexedDB 자동 처리)
+        
+        if (!db.objectStoreNames.contains("chunks")) {
+          // v1에서 chunks가 없는 경우 (초기 생성)
+          const store = db.createObjectStore("chunks", { keyPath: "id" });
+          store.createIndex("sourceId", "metadata.sourceId", { unique: false });
+        } else {
+          // v1에서 v2로 업그레이드: 기존 스토어 유지, 인덱스 확인
+          const store = request.transaction!.objectStore("chunks");
+          if (!store.indexNames.contains("sourceId")) {
+            store.createIndex("sourceId", "metadata.sourceId", { unique: false });
+          }
+        }
+
+        console.log("[RealVectorStore] DB upgrade completed successfully");
+      } catch (error: any) {
+        console.error("[RealVectorStore] DB upgrade failed:", error);
+        upgradeFailed = true;
+        // Upgrade 실패 시 트랜잭션이 자동 롤백됨
+        request.transaction!.abort();
       }
+    };
+
+    request.onsuccess = () => {
+      if (upgradeFailed) {
+        // Upgrade 실패 시 fallback: DB 삭제 후 재생성
+        console.warn("[RealVectorStore] Upgrade failed, attempting fallback...");
+        deleteDatabase()
+          .then(() => {
+            // 재시도 (이번에는 v2로 새로 생성)
+            const retryRequest = indexedDB.open(DB_NAME, DB_VERSION);
+            retryRequest.onsuccess = () => resolve(retryRequest.result);
+            retryRequest.onerror = () => reject(retryRequest.error);
+            retryRequest.onupgradeneeded = (e) => {
+              const db = (e.target as IDBOpenDBRequest).result;
+              if (!db.objectStoreNames.contains("chunks")) {
+                const store = db.createObjectStore("chunks", { keyPath: "id" });
+                store.createIndex("sourceId", "metadata.sourceId", { unique: false });
+              }
+            };
+          })
+          .catch((deleteError) => {
+            console.error("[RealVectorStore] Failed to delete and retry:", deleteError);
+            reject(new Error("Upgrade failed and fallback also failed"));
+          });
+      } else {
+        resolve(request.result);
+      }
+    };
+
+    request.onerror = () => {
+      const error = request.error;
+      console.error("[RealVectorStore] IndexedDB open failed:", error);
+      
+      // 일반 오류 시에도 fallback 시도
+      deleteDatabase()
+        .then(() => {
+          const retryRequest = indexedDB.open(DB_NAME, DB_VERSION);
+          retryRequest.onsuccess = () => resolve(retryRequest.result);
+          retryRequest.onerror = () => reject(retryRequest.error || error);
+          retryRequest.onupgradeneeded = (e) => {
+            const db = (e.target as IDBOpenDBRequest).result;
+            if (!db.objectStoreNames.contains("chunks")) {
+              const store = db.createObjectStore("chunks", { keyPath: "id" });
+              store.createIndex("sourceId", "metadata.sourceId", { unique: false });
+            }
+          };
+        })
+        .catch(() => {
+          reject(error);
+        });
     };
   });
 }
@@ -166,7 +271,7 @@ function openDB(): Promise<IDBDatabase> {
 export class RealVectorStore implements VectorStore {
   private isInitialized = false;
   private chunks: Array<DocumentChunk & { embedding: EmbeddingVector }> = [];
-  private indexVersion = "1.0.0";
+  private indexVersion = "2.0.0"; // ✅ P1-3: v2로 업그레이드
   private db: IDBDatabase | null = null;
   private _indexBuildMs = 0;
   private _persistMs = 0;
@@ -203,8 +308,19 @@ export class RealVectorStore implements VectorStore {
       }
     } catch (error: any) {
       console.warn("[RealVectorStore] IndexedDB initialization failed:", error);
-      // IndexedDB 실패 시 인메모리로 폴백
-      this.chunks = [];
+      // ✅ P1-3: 실패 시 clear/rebuild 경로로 전환
+      try {
+        await this.clear();
+        // DB 삭제 후 재시도
+        await deleteDatabase();
+        // 재초기화 시도 (이번에는 새로 생성)
+        this.db = await openDB();
+      } catch (fallbackError: any) {
+        console.warn("[RealVectorStore] Fallback also failed:", fallbackError);
+        // 최종 폴백: 인메모리로 전환
+        this.chunks = [];
+        this.db = null;
+      }
     }
 
     this.isInitialized = true;
@@ -303,13 +419,32 @@ export class RealVectorStore implements VectorStore {
         return false; // 복원할 데이터 없음
       }
 
+      // ✅ P1-3: v1 데이터 호환성 확인 (indexVersion 체크)
+      // v1 데이터는 그대로 사용 가능 (schema 호환)
+      const validChunks = chunks.filter((chunk: any) => {
+        // v1 데이터는 indexVersion이 없을 수 있음 (호환)
+        return chunk && chunk.id && chunk.text && chunk.embedding;
+      });
+
+      if (validChunks.length === 0) {
+        console.warn("[RealVectorStore] No valid chunks found, clearing and rebuilding");
+        await this.clear();
+        return false;
+      }
+
       // 메모리 캐시에 복원
-      this.chunks = chunks;
+      this.chunks = validChunks;
       this._hydrateMs = Date.now() - startTime;
-      console.log(`[RealVectorStore] restore() completed: ${chunks.length} chunks restored in ${this._hydrateMs}ms`);
+      console.log(`[RealVectorStore] restore() completed: ${validChunks.length} chunks restored in ${this._hydrateMs}ms`);
       return true;
     } catch (error: any) {
       console.warn("[RealVectorStore] restore() failed:", error);
+      // ✅ P1-3: 복원 실패 시 clear/rebuild 경로로 전환
+      try {
+        await this.clear();
+      } catch (clearError: any) {
+        console.warn("[RealVectorStore] clear() also failed:", clearError);
+      }
       return false;
     }
   }
@@ -372,7 +507,7 @@ export class RealVectorStore implements VectorStore {
   getMeta() {
     return {
       indexVersion: this.indexVersion,
-      schemaVersion: 1,
+      schemaVersion: 2, // ✅ P1-3: v2로 업그레이드
       docCount: this.chunks.length,
       isInitialized: this.isInitialized,
       indexBuildMs: this._indexBuildMs,
