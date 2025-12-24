@@ -1,0 +1,9 @@
+[verify] RAG Retrieval 검증 (P1-1 Gates)
+
+[OK] 픽스처 파일 존재: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/tools/rag_fixtures/cs_tickets.json
+[test] RAG 파이프라인 검색 테스트 실행
+[OK] 검색 테스트 완료: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/docs/ops/r10-s5-p1-1-retrieval-run-20251224T020629Z.json
+[test] Baseline 대비 게이트 판정
+[OK] GATE PASS
+
+[OK] RAG Retrieval 검증 완료 (게이트 PASS)
