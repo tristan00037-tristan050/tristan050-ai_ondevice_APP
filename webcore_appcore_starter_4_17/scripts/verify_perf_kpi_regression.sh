@@ -20,13 +20,47 @@ exec > >(tee "$LOG") 2>&1
 GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 echo "[info] ts=$TS sha=$GIT_SHA"
 
-# 0) dist 신선도는 dev_bff.sh restart가 강제 (A안 적용 전제)
-./scripts/dev_bff.sh restart
+# 0) BFF healthz 체크 및 필요 시에만 restart (mac-friendly: 포그라운드 점유 방지)
+BFF="${BFF:-http://127.0.0.1:8081}"
+HEALTH="$BFF/healthz"
+BFF_RESTART_LOG="/tmp/dev_bff_restart_$$.log"
+
+# healthz가 200이면 restart 건너뛰기
+if curl -fsS --max-time 2 "$HEALTH" >/dev/null 2>&1; then
+  echo "[ok] BFF already up; skip restart"
+else
+  echo "[info] BFF not responding; starting in background..."
+  # 백그라운드로 restart 실행 (포그라운드 점유 방지)
+  (cd "$ROOT" && nohup ./scripts/dev_bff.sh restart > "$BFF_RESTART_LOG" 2>&1 &)
+  
+  # 최대 40초 동안 1초 간격으로 healthz 200 될 때까지 폴링
+  BFF_READY=false
+  for i in {1..40}; do
+    sleep 1
+    if curl -fsS --max-time 2 "$HEALTH" >/dev/null 2>&1; then
+      BFF_READY=true
+      echo "[ok] BFF ready after ${i}s"
+      break
+    fi
+    if [ $((i % 5)) -eq 0 ]; then
+      echo "[wait] BFF starting... (${i}/40s)"
+    fi
+  done
+  
+  if [ "$BFF_READY" != "true" ]; then
+    echo "[FAIL] BFF did not become ready within 40s"
+    echo "[FAIL] BFF restart log (last 80 lines):"
+    tail -n 80 "$BFF_RESTART_LOG" 2>/dev/null || echo "(log file not found)"
+    rm -f "$BFF_RESTART_LOG"
+    exit 1
+  fi
+  rm -f "$BFF_RESTART_LOG"
+fi
 
 # 1) preflight
 TMP_BODY="$(mktemp -t perf_reg_body.XXXXXX)"
 TMP_HDR="$(mktemp -t perf_reg_hdr.XXXXXX)"
-code="$(http_gate_request "GET" "http://127.0.0.1:8081/healthz" "$TMP_BODY" "$TMP_HDR")"
+code="$(http_gate_request "GET" "$HEALTH" "$TMP_BODY" "$TMP_HDR")"
 http_gate_expect_code "healthz" "$code" "200" "$TMP_BODY"
 
 # 2) 기존 하드 게이트 먼저 통과해야 회귀 감지 의미가 있음
@@ -34,7 +68,7 @@ bash scripts/verify_telemetry_rag_meta_only.sh
 bash scripts/verify_perf_kpi_meta_only.sh
 
 # 3) 회귀 감지(계약/방화벽) — 허용/거부 케이스를 결정적으로 실행
-URL="http://127.0.0.1:8081/v1/os/llm-usage"
+URL="$BFF/v1/os/llm-usage"
 HDRS=(
   -H "X-Tenant: default"
   -H "X-User-Id: hud-user-1"
@@ -119,9 +153,11 @@ run_case "topk_violation_blocked" 400 \
 # 결과 JSON proof 생성
 tests_joined="$(IFS=,; echo "${tests_json[*]}")"
 if [ "$pass" = true ]; then
-  echo "[OK] perf KPI regression loop PASS"
+  echo "[PASS] perf KPI regression loop"
+  echo "[PASS] proof: $LATEST"
 else
-  echo "[FAIL] perf KPI regression loop FAIL"
+  echo "[FAIL] perf KPI regression loop"
+  echo "[FAIL] see log: $LOG"
 fi
 
 cat > "$JSON" <<EOF
