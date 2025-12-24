@@ -27,6 +27,9 @@ export type OsLlmUsageEvent = {
   ragIndexPersistMs?: number; // 인덱스 영속화 소요 시간 (ms, 0~600000)
   ragIndexHydrateMs?: number; // 인덱스 복원 소요 시간 (ms, 0~600000)
   ragDocCount?: number; // 인덱스에 저장된 문서 수 (0~10000)
+  // ✅ R10-S5 P1-4: 성능 KPI 분포 지표 (p50/p95)
+  ragRetrieveMsP50?: number; // 검색 소요 시간 p50 (ms, 0~600000)
+  ragRetrieveMsP95?: number; // 검색 소요 시간 p95 (ms, 0~600000)
 };
 
 /**
@@ -58,6 +61,9 @@ export interface LlmUsageEventInput {
   ragIndexPersistMs?: number;
   ragIndexHydrateMs?: number;
   ragDocCount?: number;
+  // ✅ R10-S5 P1-4: 성능 KPI 분포 지표 (p50/p95)
+  ragRetrieveMsP50?: number;
+  ragRetrieveMsP95?: number;
 }
 
 export async function recordLlmUsage(
@@ -110,6 +116,9 @@ export async function recordLlmUsage(
     ...(Number.isFinite(evt.ragIndexPersistMs) && { ragIndexPersistMs: clampTimeMs(evt.ragIndexPersistMs) }),
     ...(Number.isFinite(evt.ragIndexHydrateMs) && { ragIndexHydrateMs: clampTimeMs(evt.ragIndexHydrateMs) }),
     ...(Number.isFinite(evt.ragDocCount) && { ragDocCount: clampNumber(evt.ragDocCount, 0, 10000) }),
+    // ✅ R10-S5 P1-4: 성능 KPI 분포 지표 (p50/p95)
+    ...(Number.isFinite(evt.ragRetrieveMsP50) && { ragRetrieveMsP50: clampTimeMs(evt.ragRetrieveMsP50) }),
+    ...(Number.isFinite(evt.ragRetrieveMsP95) && { ragRetrieveMsP95: clampTimeMs(evt.ragRetrieveMsP95) }),
   };
 
   const url = bffUrl("/v1/os/llm-usage");
