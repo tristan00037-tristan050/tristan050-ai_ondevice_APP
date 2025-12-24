@@ -25,7 +25,8 @@ echo ""
 
 # RAG-1) 정상 RAG meta-only 전송이 204로 통과하는지
 echo "[test] RAG-1) 정상 RAG meta-only 전송 (기대: 204)"
-status1=$(curl -sS -o /dev/null -w "%{http_code}" \
+resp1="/tmp/rag_meta_only_resp1.json"
+status1=$(curl -sS -o "$resp1" -w "%{http_code}" \
   -X POST "${BFF}/v1/os/llm-usage" \
   "${AUTH_HEADERS[@]}" \
   -d '{
@@ -55,6 +56,8 @@ if [ "$status1" = "204" ]; then
   echo "[OK] 정상 RAG meta-only 전송: 204 No Content"
 else
   echo "[FAIL] 정상 RAG meta-only 전송: 기대 204, 실제 $status1"
+  echo "[DEBUG] 응답 바디 (최대 120줄):"
+  head -n 120 "$resp1" 2>/dev/null || echo "(응답 바디 없음)"
   exit 1
 fi
 

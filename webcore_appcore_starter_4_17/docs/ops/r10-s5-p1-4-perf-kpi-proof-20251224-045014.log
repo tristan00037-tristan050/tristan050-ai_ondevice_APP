@@ -1,0 +1,25 @@
+[verify] R10-S5 P1-4: 성능 KPI meta-only 검증
+
+[OK] BFF 서버 실행 중: http://127.0.0.1:8081
+
+204
+[valid_meta_kpi] want=204 got=
+[valid_meta_kpi] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":100,
+  "ragEmbeddingMs":120,
+  "ragRetrieveMs":80,
+  "ragIndexHydrateMs":30,
+  "ragIndexBuildMs":0,
+  "ragIndexPersistMs":0,
+  "ragRetrieveMsP50":80,
+  "ragRetrieveMsP95":80,
+  "ragDocCount":20,
+  "ragTopK":5,
+  "ragIndexWarm":true,
+  "success":true,
+  "fallback":false,
+  "cancelled":false
+}
+
+[FAIL] valid_meta_kpi (want 204 got ) — see /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/docs/ops/r10-s5-p1-4-perf-kpi-proof-20251224-045014.log
