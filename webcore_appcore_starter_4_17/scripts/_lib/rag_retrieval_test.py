@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
 R10-S5 P1-1: RAG Retrieval 테스트 및 메트릭 수집
+R10-S6 S6-1: Retriever 품질 개선 (텍스트 정규화, 필드 가중치, 카테고리 균형)
 """
 import json
 import sys
 import os
 import time
 import hashlib
+import re
 from pathlib import Path
 from typing import Dict, List, Any, Tuple
+from collections import Counter
 
 # RAG 파이프라인을 직접 실행하기 어려우므로, 
 # 간단한 시뮬레이션으로 메트릭을 생성합니다.
@@ -19,9 +22,24 @@ def load_fixtures(fixtures_path: str) -> List[Dict]:
     with open(fixtures_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
+def normalize_text(text: str) -> str:
+    """✅ R10-S6 S6-1: 텍스트 정규화 강화 (공백/기호/대소문자/숫자 토큰 규칙)"""
+    # 공백 정규화
+    text = re.sub(r'\s+', ' ', text)
+    # 기호 정규화 (한글/영문/숫자만 유지, 나머지는 공백으로)
+    text = re.sub(r'[^\w\s가-힣]', ' ', text)
+    # 소문자 변환
+    text = text.lower()
+    # 숫자 토큰 정규화 (숫자는 그대로 유지)
+    # 공백 제거 및 정리
+    text = text.strip()
+    return text
+
 def simple_hash_embedding(text: str, dim: int = 256) -> List[float]:
     """간단한 해시 기반 임베딩 (결정성 보장)"""
-    tokens = text.lower().split()
+    # ✅ R10-S6 S6-1: 정규화된 텍스트 사용
+    normalized = normalize_text(text)
+    tokens = normalized.split()
     vector = [0.0] * dim
     
     for token in tokens:
@@ -72,20 +90,65 @@ def run_retrieval_test(fixtures: List[Dict], queries: List[Tuple[str, List[str]]
         # 쿼리 임베딩
         query_embedding = simple_hash_embedding(query_text)
         
-        # 유사도 계산
+        # ✅ R10-S6 S6-1: 유사도 계산 + 필드 가중치 + exact match boost
         scores = []
+        query_normalized = normalize_text(query_text)
+        query_keywords = set(query_normalized.split())
+        
         for doc in docs:
-            score = cosine_similarity(query_embedding, doc['embedding'])
+            base_score = cosine_similarity(query_embedding, doc['embedding'])
+            
+            # 필드 가중치: subject > body (subject에 더 높은 가중치)
+            subject_normalized = normalize_text(doc['subject'])
+            subject_keywords = set(subject_normalized.split())
+            
+            # Exact match boost (subject에 쿼리 키워드가 정확히 일치하면 boost)
+            exact_match_count = len(query_keywords & subject_keywords)
+            exact_match_boost = exact_match_count * 0.1  # 키워드당 0.1 boost
+            
+            # Subject 가중치 (subject가 더 중요)
+            subject_weight = 1.2 if any(kw in subject_normalized for kw in query_keywords) else 1.0
+            
+            final_score = base_score * subject_weight + exact_match_boost
+            
             scores.append({
                 'docId': doc['id'],
-                'score': score,
+                'score': final_score,
+                'baseScore': base_score,
                 'category': doc['category'],
                 'subject': doc['subject']
             })
         
-        # Top-K 정렬
+        # ✅ R10-S6 S6-1: 카테고리 균형 (Top-K 결과가 한 카테고리로 쏠리지 않게)
+        # 먼저 점수로 정렬
         scores.sort(key=lambda x: x['score'], reverse=True)
-        top_k = scores[:10]
+        
+        # 카테고리 균형 적용: 같은 카테고리가 연속으로 나오면 약간의 penalty
+        balanced_scores = []
+        category_counts = Counter()
+        max_per_category = max(3, len(scores) // 3)  # 카테고리당 최대 3개 또는 전체의 1/3
+        
+        for score_item in scores:
+            cat = score_item['category']
+            if category_counts[cat] < max_per_category:
+                balanced_scores.append(score_item)
+                category_counts[cat] += 1
+            elif len(balanced_scores) < 10:
+                # 카테고리 제한을 넘었지만 아직 10개 미만이면 추가 (penalty 적용)
+                score_item['score'] *= 0.95  # 5% penalty
+                balanced_scores.append(score_item)
+                category_counts[cat] += 1
+        
+        # 최종 정렬 (카테고리 균형 적용 후)
+        balanced_scores.sort(key=lambda x: x['score'], reverse=True)
+        top_k = balanced_scores[:10]
+        
+        # ✅ R10-S6 S6-1: no-result 방지 fallback (최소 후보군 확보)
+        if not top_k or (top_k[0]['score'] < 0.1):
+            # 점수가 너무 낮으면 fallback: 모든 문서를 점수 순으로 반환 (최소 후보군)
+            fallback_scores = sorted(scores, key=lambda x: x['score'], reverse=True)[:10]
+            if fallback_scores and fallback_scores[0]['score'] > 0.01:
+                top_k = fallback_scores
         
         retrieve_time = (time.time() - start_time) * 1000  # ms
         retrieve_times.append(retrieve_time)
