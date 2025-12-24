@@ -1,0 +1,14 @@
+{
+  "testName": "R10-S6 S6-2 Safe Snippet 정책 검증",
+  "timestamp": "20251224T020804Z",
+  "gatePass": true,
+  "reasons": [],
+  "tests": {
+    "safeSnippetFileExists": "PASS",
+    "maxLength160": "PASS",
+    "controlCharRemoval": "PASS",
+    "whitespaceNormalization": "PASS",
+    "cshudUsage": "PASS",
+    "bffBannedKeys": "PASS"
+  }
+}

@@ -1,0 +1,20 @@
+[verify] R10-S6 S6-2: Safe Snippet 정책 검증
+
+[test] 1) safeSnippet.ts 파일 존재 확인
+[OK] safeSnippet.ts 파일 존재
+[test] 2) 160자 상한 확인
+[OK] 160자 상한 확인
+[test] 3) 제어문자 제거 확인
+[OK] 제어문자 제거 로직 존재
+[test] 4) 공백 정규화 확인
+[OK] 공백 정규화 로직 존재
+[test] 5) CsHUD에서 safe snippet 사용 확인
+[OK] CsHUD에서 createSafeSnippet 사용
+[test] 6) 텔레메트리 금지키 확인 (BFF)
+[OK] BFF에서 출처/스니펫 관련 금지키 존재
+
+[OK] R10-S6 S6-2: Safe Snippet 정책 검증 PASS
+
+증빙 파일:
+  - 로그: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/docs/ops/r10-s6-2-safe-snippet-policy-proof-20251224T020804Z.log
+  - JSON: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/docs/ops/r10-s6-2-safe-snippet-policy-proof-20251224T020804Z.json
