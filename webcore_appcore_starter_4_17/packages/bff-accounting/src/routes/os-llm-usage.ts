@@ -11,6 +11,94 @@ import { requireTenantAuth } from "../shared/guards.js";
 
 export const osLlmUsageRouter = Router();
 
+// ✅ R10-S5 P1-4: KPI 검증 상수
+const MS_MIN = 0;
+const MS_MAX = 600_000;
+const DOC_MIN = 0;
+const DOC_MAX = 10_000;
+const TOPK_MIN = 1;
+const TOPK_MAX = 10;
+
+function isFiniteNumber(x: unknown): x is number {
+  return typeof x === "number" && Number.isFinite(x);
+}
+
+function isBool(x: unknown): x is boolean {
+  return typeof x === "boolean";
+}
+
+function inRange(n: number, min: number, max: number): boolean {
+  return n >= min && n <= max;
+}
+
+/**
+ * ✅ R10-S5 P1-4: KPI 필드 타입/상한 검증
+ * 클라이언트 실수/조작이 와도 BFF에서 "meta-only + 숫자/불리언 + 상한" 계약을 강제
+ */
+function validateKpi(body: any): string | null {
+  const msFields = [
+    "ragEmbeddingMs",
+    "ragRetrieveMs",
+    "ragIndexHydrateMs",
+    "ragIndexBuildMs",
+    "ragIndexPersistMs",
+    "ragRetrieveMsP50",
+    "ragRetrieveMsP95",
+    "modelLoadMs",
+    "inferenceMs",
+    "firstByteMs",
+  ];
+
+  for (const k of msFields) {
+    if (body[k] == null) continue; // undefined/null은 미전송 취급
+    if (!isFiniteNumber(body[k]) || !inRange(body[k], MS_MIN, MS_MAX)) {
+      return `invalid_${k}`;
+    }
+  }
+
+  if (body.ragDocCount != null) {
+    if (
+      !isFiniteNumber(body.ragDocCount) ||
+      !Number.isInteger(body.ragDocCount) ||
+      !inRange(body.ragDocCount, DOC_MIN, DOC_MAX)
+    ) {
+      return "invalid_ragDocCount";
+    }
+  }
+
+  if (body.ragTopK != null) {
+    if (
+      !isFiniteNumber(body.ragTopK) ||
+      !Number.isInteger(body.ragTopK) ||
+      !inRange(body.ragTopK, TOPK_MIN, TOPK_MAX)
+    ) {
+      return "invalid_ragTopK";
+    }
+  }
+
+  if (body.ragIndexWarm != null && !isBool(body.ragIndexWarm)) {
+    return "invalid_ragIndexWarm";
+  }
+
+  if (body.ragEnabled != null && !isBool(body.ragEnabled)) {
+    return "invalid_ragEnabled";
+  }
+
+  if (body.success != null && !isBool(body.success)) {
+    return "invalid_success";
+  }
+
+  if (body.fallback != null && !isBool(body.fallback)) {
+    return "invalid_fallback";
+  }
+
+  if (body.cancelled != null && !isBool(body.cancelled)) {
+    return "invalid_cancelled";
+  }
+
+  return null;
+}
+
 /**
  * POST /v1/os/llm-usage
  * LLM Usage 이벤트 수집
@@ -68,6 +156,15 @@ osLlmUsageRouter.post("/", requireTenantAuth, async (req, res, next) => {
       }
     }
 
+    // ✅ R10-S5 P1-4: KPI 필드 타입/상한 검증 (2차 방화벽)
+    const kpiError = validateKpi(body);
+    if (kpiError) {
+      return res.status(400).json({
+        error: kpiError,
+        message: "KPI validation failed",
+      });
+    }
+
     const typedBody = body as {
       domain?: string;
       engineId?: string;
@@ -98,6 +195,9 @@ osLlmUsageRouter.post("/", requireTenantAuth, async (req, res, next) => {
       ragIndexPersistMs?: number;
       ragIndexHydrateMs?: number;
       ragDocCount?: number;
+      // ✅ R10-S5 P1-4: 성능 KPI 분포 지표 (p50/p95)
+      ragRetrieveMsP50?: number;
+      ragRetrieveMsP95?: number;
     };
 
     const logEvent = {
