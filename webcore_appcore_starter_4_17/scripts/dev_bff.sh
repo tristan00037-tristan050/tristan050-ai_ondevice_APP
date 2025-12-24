@@ -44,6 +44,40 @@ fi
 # ✅ R10-S4: 기본값 설정 (로컬 개발용)
 export WEBLLM_UPSTREAM_BASE_URL="${WEBLLM_UPSTREAM_BASE_URL:-http://127.0.0.1:9099/webllm/}"
 
+# --- BEGIN: dist freshness guard (S6-4 baseline hardening) ---
+ensure_bff_dist_fresh() {
+  local ROOT
+  ROOT="$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+
+  local PKG="$ROOT/packages/bff-accounting"
+  local DIST="$PKG/dist/index.js"
+
+  if [ ! -f "$DIST" ]; then
+    echo "[dev_bff] dist missing -> build @appcore/bff-accounting"
+    npm run -w @appcore/bff-accounting build
+    return 0
+  fi
+
+  # src나 설정이 dist보다 새로우면 build
+  if find "$PKG/src" -type f \( -name "*.ts" -o -name "*.tsx" \) -newer "$DIST" | head -n 1 | grep -q .; then
+    echo "[dev_bff] src newer than dist -> build @appcore/bff-accounting"
+    npm run -w @appcore/bff-accounting build
+    return 0
+  fi
+
+  if [ "$PKG/tsconfig.json" -nt "$DIST" ] || [ "$PKG/tsconfig.build.json" -nt "$DIST" ] || [ "$PKG/package.json" -nt "$DIST" ]; then
+    echo "[dev_bff] config newer than dist -> build @appcore/bff-accounting"
+    npm run -w @appcore/bff-accounting build
+    return 0
+  fi
+
+  echo "[dev_bff] dist is fresh (skip build)"
+}
+
+# BFF 시작 전에 반드시 호출
+ensure_bff_dist_fresh
+# --- END: dist freshness guard ---
+
 echo "[dev_bff] Starting BFF on :${PORT}"
 echo "[dev_bff] DATABASE_URL=${DATABASE_URL}"
 echo "[dev_bff] WEBLLM_UPSTREAM_BASE_URL=${WEBLLM_UPSTREAM_BASE_URL}"
