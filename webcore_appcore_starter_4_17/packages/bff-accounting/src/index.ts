@@ -133,33 +133,26 @@ app.get("/health", (_req, res) =>
 );
 
 // ✅ S6-S7: healthz에 build anchor 추가 (JSON + 헤더 동시 제공)
+// ⚠️ 하드 룰: 빌드 타임 고정만 허용 (런타임 git 계산 금지)
 app.get("/healthz", (_req, res) => {
-  // buildSha: git rev-parse HEAD (또는 빌드 시 주입된 값)
-  let buildSha = process.env.BUILD_SHA || "";
-  if (!buildSha) {
-    try {
-      const { execSync } = require("child_process");
-      buildSha = execSync("git rev-parse HEAD", { encoding: "utf-8", cwd: __dirname }).trim();
-    } catch {
-      buildSha = "unknown";
-    }
-  }
+  // dist/build_info.json에서만 읽기 (빌드 타임 고정)
+  let buildSha = "unknown";
+  let buildShaShort = "unknown";
+  let buildTime = new Date().toISOString(); // fallback
   
-  // buildTime: 빌드 시각 (또는 dist/index.js mtime)
-  let buildTime = process.env.BUILD_TIME || "";
-  if (!buildTime) {
-    try {
-      const fs = require("fs");
-      const distPath = resolve(__dirname, "index.js");
-      if (fs.existsSync(distPath)) {
-        const stats = fs.statSync(distPath);
-        buildTime = stats.mtime.toISOString();
-      } else {
-        buildTime = new Date().toISOString();
-      }
-    } catch {
-      buildTime = new Date().toISOString();
+  try {
+    const fs = require("fs");
+    const buildInfoPath = resolve(__dirname, "build_info.json");
+    if (fs.existsSync(buildInfoPath)) {
+      const buildInfo = JSON.parse(fs.readFileSync(buildInfoPath, "utf-8"));
+      buildSha = buildInfo.buildSha || "unknown";
+      buildShaShort = buildInfo.buildShaShort || buildSha.substring(0, 7);
+      buildTime = buildInfo.buildTime || buildTime;
     }
+  } catch (error: any) {
+    // build_info.json이 없거나 파싱 실패 시 fallback
+    // (개발 환경에서 빌드 스크립트를 거치지 않은 경우)
+    console.warn("[healthz] build_info.json not found or invalid:", error.message);
   }
   
   // 헤더에 build anchor 추가 (curl -I로 즉시 확인 가능)
@@ -171,6 +164,7 @@ app.get("/healthz", (_req, res) => {
     status: "ok",
     timestamp: new Date().toISOString(),
     buildSha: buildSha,
+    buildShaShort: buildShaShort,
     buildTime: buildTime,
   });
 });

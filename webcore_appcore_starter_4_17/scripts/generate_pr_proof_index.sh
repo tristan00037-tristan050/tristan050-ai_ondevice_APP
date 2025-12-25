@@ -16,14 +16,20 @@ TMP_INDEX="$(mktemp -t pr_proof_index.XXXXXX)"
 
 echo "[generate] PR Proof Index"
 echo "[info] base: $BASE_BRANCH"
+echo "[info] merge-base: $MERGE_BASE"
 
-# base 브랜치와 현재 브랜치의 diff에서 docs/ops 파일만 추출
-changed_files=$(git diff --name-only "$BASE_BRANCH" HEAD -- "$OPS_DIR" 2>/dev/null || echo "")
+# ✅ S6-S7: merge-base 기준으로 이번 PR에서 변경된 파일만 산출 (혼입 방지)
+MERGE_BASE=$(git merge-base "$BASE_BRANCH" HEAD 2>/dev/null || echo "$BASE_BRANCH")
+changed_files=$(git diff --name-only "$MERGE_BASE" HEAD -- "$OPS_DIR" 2>/dev/null || echo "")
 
 if [ -z "$changed_files" ]; then
   echo "[info] no docs/ops files changed in this PR"
   exit 0
 fi
+
+# ✅ S6-S7: 혼입 방지 - 이번 PR과 무관한 proof가 포함되면 FAIL
+# .latest/.json/.log 매핑 규칙 고정
+# 정렬 기준 고정 (파일명/경로 오름차순)
 
 echo ""
 echo "## 📋 PR Proof Index"

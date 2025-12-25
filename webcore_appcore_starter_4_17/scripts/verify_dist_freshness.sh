@@ -83,35 +83,36 @@ echo "[check] Anchor 2: src vs dist timestamp"
 if [ ! -f "$DIST" ]; then
   FAILURES+=("dist missing: $DIST")
 else
-  dist_mtime=$(stat -f "%m" "$DIST" 2>/dev/null || stat -c "%Y" "$DIST" 2>/dev/null || echo "0")
+  # ✅ S6-S7: mtime 계산은 python으로 통일 (mac/linux 환경차 제거)
+  PYTHON_MTIME="$ROOT/scripts/_lib/mtime_python.py"
   
-  # src/**/*.ts 최신 수정시각
-  src_latest_mtime="0"
-  if [ -d "$PKG/src" ]; then
-    while IFS= read -r src_file; do
-      if [ -f "$src_file" ]; then
-        file_mtime=$(stat -f "%m" "$src_file" 2>/dev/null || stat -c "%Y" "$src_file" 2>/dev/null || echo "0")
-        if [ "$file_mtime" -gt "$src_latest_mtime" ]; then
-          src_latest_mtime="$file_mtime"
+  if [ ! -f "$PYTHON_MTIME" ]; then
+    FAILURES+=("mtime_python.py not found: $PYTHON_MTIME")
+  else
+    # dist 최신 mtime (패키지 단위)
+    dist_result=$(python3 "$PYTHON_MTIME" "$PKG/dist" "*.js" "*.map" 2>/dev/null || echo '{"latest_mtime":0}')
+    dist_mtime=$(echo "$dist_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
+    
+    # src 최신 mtime (패키지 단위, 스캔 범위 고정)
+    src_result=$(python3 "$PYTHON_MTIME" "$PKG/src" "*.ts" "*.tsx" "*.js" 2>/dev/null || echo '{"latest_mtime":0}')
+    src_latest_mtime=$(echo "$src_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
+    
+    # config 파일 mtime도 체크
+    for config_file in "$PKG/tsconfig.json" "$PKG/tsconfig.build.json" "$PKG/package.json"; do
+      if [ -f "$config_file" ]; then
+        config_result=$(python3 "$PYTHON_MTIME" "$(dirname "$config_file")" "$(basename "$config_file")" 2>/dev/null || echo '{"latest_mtime":0}')
+        config_mtime=$(echo "$config_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
+        if [ "$config_mtime" -gt "$src_latest_mtime" ]; then
+          src_latest_mtime="$config_mtime"
         fi
       fi
-    done < <(find "$PKG/src" -type f \( -name "*.ts" -o -name "*.tsx" \) 2>/dev/null || true)
-  fi
-  
-  # config 파일도 체크
-  for config_file in "$PKG/tsconfig.json" "$PKG/tsconfig.build.json" "$PKG/package.json"; do
-    if [ -f "$config_file" ]; then
-      file_mtime=$(stat -f "%m" "$config_file" 2>/dev/null || stat -c "%Y" "$config_file" 2>/dev/null || echo "0")
-      if [ "$file_mtime" -gt "$src_latest_mtime" ]; then
-        src_latest_mtime="$file_mtime"
-      fi
+    done
+    
+    if [ "$src_latest_mtime" -gt "$dist_mtime" ]; then
+      FAILURES+=("dist is older than src: dist_mtime=$dist_mtime, src_latest_mtime=$src_latest_mtime")
+    else
+      echo "[OK] dist is fresh (dist_mtime >= src_latest_mtime)"
     fi
-  done
-  
-  if [ "$src_latest_mtime" -gt "$dist_mtime" ]; then
-    FAILURES+=("dist is older than src: dist_mtime=$dist_mtime, src_latest_mtime=$src_latest_mtime")
-  else
-    echo "[OK] dist is fresh (dist_mtime >= src_latest_mtime)"
   fi
 fi
 

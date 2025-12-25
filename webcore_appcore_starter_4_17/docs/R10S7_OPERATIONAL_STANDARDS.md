@@ -1,5 +1,8 @@
 # R10-S7 운영 표준 (Operational Standards)
 
+> **⚠️ 중요**: 이 문서는 "지시서 v3.0의 구현체(Implementation Detail)"입니다.
+> 모든 운영 루틴/게이트/PR proof index/리셋 절차는 SSOT로 고정되어 있습니다.
+
 ## 0) 운영 SOP (절대 준수 3줄)
 
 1. **수동 절차 금지 → 스크립트로 고정**
