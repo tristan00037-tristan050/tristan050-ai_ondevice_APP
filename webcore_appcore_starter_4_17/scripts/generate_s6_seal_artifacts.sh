@@ -28,29 +28,30 @@ S6_LATEST_FILES=(
 parse_latest_file() {
   local latest_file="$1"
   local artifacts=()
-  
+
   if [ ! -f "$latest_file" ]; then
     return 1
   fi
-  
+
   while IFS= read -r line || [ -n "$line" ]; do
     line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     [ -z "$line" ] && continue
-    
+
     # key=value 형식 (예: json=...)
     if [[ "$line" =~ ^[a-zA-Z_]+= ]]; then
       local value="${line#*=}"
       artifacts+=("$value")
     # 절대 경로인 경우 파일명만 추출
     elif [[ "$line" =~ / ]]; then
-      local basename_file="$(basename "$line")"
+      local basename_file
+      basename_file="$(basename "$line")"
       artifacts+=("$basename_file")
     # 단순 파일명
     else
       artifacts+=("$line")
     fi
   done < "$latest_file"
-  
+
   printf '%s\n' "${artifacts[@]}"
 }
 
@@ -59,12 +60,12 @@ ops_proof_sets=()
 
 for latest_file in "${S6_LATEST_FILES[@]}"; do
   latest_path="$OPS_DIR/$latest_file"
-  
+
   if [ ! -f "$latest_path" ]; then
     echo "[warn] $latest_file not found, skipping"
     continue
   fi
-  
+
   artifacts=()
   while IFS= read -r artifact; do
     [ -z "$artifact" ] && continue
@@ -73,11 +74,11 @@ for latest_file in "${S6_LATEST_FILES[@]}"; do
       artifacts+=("$artifact")
     fi
   done < <(parse_latest_file "$latest_path")
-  
+
   if [ ${#artifacts[@]} -gt 0 ]; then
     # artifacts 정렬 (결정성 보장)
     sorted_artifacts=$(printf '%s\n' "${artifacts[@]}" | sort)
-    
+
     artifacts_json=""
     while IFS= read -r artifact; do
       [ -z "$artifact" ] && continue
@@ -87,7 +88,7 @@ for latest_file in "${S6_LATEST_FILES[@]}"; do
         artifacts_json="$artifacts_json, \"$artifact\""
       fi
     done <<< "$sorted_artifacts"
-    
+
     ops_proof_sets+=("{\"latest\":\"$latest_file\",\"artifacts\":[$artifacts_json]}")
   fi
 done
@@ -125,7 +126,7 @@ checksum_files=(
 # manifest에서 참조하는 모든 .latest + artifacts 수집
 for latest_file in "${S6_LATEST_FILES[@]}"; do
   latest_path="$OPS_DIR/$latest_file"
-  
+
   if [ -f "$latest_path" ]; then
     checksum_files+=("$latest_file")
     while IFS= read -r artifact; do
@@ -145,7 +146,7 @@ done
   echo "# Verified Commit: $VERIFIED_COMMIT_FULL"
   echo "# Note: This file's checksum is stored in r10-s6-seal-checksums.txt.sha256"
   echo ""
-  
+
   for file in $(printf '%s\n' "${checksum_files[@]}" | sort -u); do
     file_path="$OPS_DIR/$file"
     if [ -f "$file_path" ]; then
@@ -178,4 +179,5 @@ echo "[generate] Checksums created: $CHECKSUMS"
 echo "[generate] Checksums SHA256 created: $CHECKSUMS_SHA"
 echo "[generate] File count (opsProofSets.length): $file_count"
 echo "[generate] Done."
+
 

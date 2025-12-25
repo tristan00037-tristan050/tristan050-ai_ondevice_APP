@@ -5,5 +5,20 @@
   "verifiedCommitShort": "c92830f",
   "sealedAt": "2025-12-25T04:11:31Z",
   "fileCount": 2,
-  "opsProofSets": [{"latest":"r10-s5-p1-4-perf-kpi-proof.latest","artifacts":["r10-s5-p1-4-perf-kpi-proof-20251225-024644.log"]},{"latest":"r10-s6-4-perf-proof.latest","artifacts":["r10-s6-4-perf-proof-20251225-024641.json","r10-s6-4-perf-proof-20251225-024641.log"]}]
+  "opsProofSets": [
+    {
+      "latest": "r10-s5-p1-4-perf-kpi-proof.latest",
+      "artifacts": [
+        "r10-s5-p1-4-perf-kpi-proof-20251225-024644.log"
+      ]
+    },
+    {
+      "latest": "r10-s6-4-perf-proof.latest",
+      "artifacts": [
+        "r10-s6-4-perf-proof-20251225-024641.json",
+        "r10-s6-4-perf-proof-20251225-024641.log"
+      ]
+    }
+  ]
 }
+
