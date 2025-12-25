@@ -1,0 +1,15 @@
+{
+  "ts": "20251224-065716",
+  "host": "http://127.0.0.1:8081",
+  "url": "http://127.0.0.1:8081/v1/os/llm-usage",
+  "results": {
+    "valid_meta_kpi": 204,
+    "banned_key_prompt": 400,
+    "invalid_negative_ms": 400,
+    "invalid_high_ms": 400,
+    "invalid_topk": 400,
+    "invalid_type_docCount": 400,
+    "invalid_p95_ms": 400
+  },
+  "proofLog": "r10-s5-p1-4-perf-kpi-proof-20251224-065716.log"
+}

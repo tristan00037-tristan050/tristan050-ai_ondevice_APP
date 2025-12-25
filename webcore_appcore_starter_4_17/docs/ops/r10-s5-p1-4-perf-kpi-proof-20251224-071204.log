@@ -1,0 +1,88 @@
+[verify] R10-S5 P1-4: 성능 KPI meta-only 검증
+
+[OK] BFF 서버 실행 중: http://127.0.0.1:8081
+
+[HTTP 204] response:
+
+[valid_meta_kpi] want=204 got=204
+[valid_meta_kpi] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":100,
+  "ragEmbeddingMs":120,
+  "ragRetrieveMs":80,
+  "ragIndexHydrateMs":30,
+  "ragIndexBuildMs":0,
+  "ragIndexPersistMs":0,
+  "ragRetrieveMsP50":80,
+  "ragRetrieveMsP95":80,
+  "ragDocCount":20,
+  "ragTopK":5,
+  "ragIndexWarm":true,
+  "success":true,
+  "fallback":false,
+  "cancelled":false
+}
+
+[OK] valid_meta_kpi (204)
+[HTTP 400] response:
+{"error":"invalid_payload","message":"raw text is not allowed"}
+[banned_key_prompt] want=400 got=400
+[banned_key_prompt] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "prompt":"SHOULD_BLOCK"
+}
+
+[OK] banned_key_prompt (400)
+[HTTP 400] response:
+{"error":"invalid_ragRetrieveMs","message":"KPI validation failed"}
+[invalid_negative_ms] want=400 got=400
+[invalid_negative_ms] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "ragRetrieveMs":-1
+}
+
+[OK] invalid_negative_ms (400)
+[HTTP 400] response:
+{"error":"invalid_ragRetrieveMs","message":"KPI validation failed"}
+[invalid_high_ms] want=400 got=400
+[invalid_high_ms] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "ragRetrieveMs":600001
+}
+
+[OK] invalid_high_ms (400)
+[HTTP 400] response:
+{"error":"invalid_ragTopK","message":"KPI validation failed"}
+[invalid_topk] want=400 got=400
+[invalid_topk] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "ragTopK":0
+}
+
+[OK] invalid_topk (400)
+[HTTP 400] response:
+{"error":"invalid_ragDocCount","message":"KPI validation failed"}
+[invalid_type_docCount] want=400 got=400
+[invalid_type_docCount] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "ragDocCount":"20"
+}
+
+[OK] invalid_type_docCount (400)
+[HTTP 400] response:
+{"error":"invalid_ragRetrieveMsP95","message":"KPI validation failed"}
+[invalid_p95_ms] want=400 got=400
+[invalid_p95_ms] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "ragRetrieveMsP95":600001
+}
+
+[OK] invalid_p95_ms (400)
+
+[PASS] P1-4 perf KPI meta-only gate — /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/docs/ops/r10-s5-p1-4-perf-kpi-proof-20251224-071204.json

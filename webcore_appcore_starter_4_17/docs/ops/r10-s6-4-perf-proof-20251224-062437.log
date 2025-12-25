@@ -1,0 +1,63 @@
+[info] ts=20251224-062437 sha=40c69a7
+[dev_bff] Freeing port 8081...
+[dev_bff] src newer than dist -> build @appcore/bff-accounting
+
+> @appcore/bff-accounting@0.1.0 prebuild
+> npm run -w @appcore/data-pg build && npm run -w @appcore/service-core-accounting build && npm run -w @appcore/service-core-cs build
+
+
+> @appcore/data-pg@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-accounting@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-cs@0.0.1 build
+> tsc -p tsconfig.build.json
+
+
+> @appcore/bff-accounting@0.1.0 build
+> tsc -b
+
+[dev_bff] Starting BFF on :8081
+[dev_bff] DATABASE_URL=postgres://app:app@127.0.0.1:5432/app
+[dev_bff] WEBLLM_UPSTREAM_BASE_URL=http://127.0.0.1:9099/webllm/
+
+> app-core-monorepo-r5c@0.1.0 dev:bff
+> npm run dev --workspace=@appcore/bff-accounting
+
+
+> @appcore/bff-accounting@0.1.0 dev
+> node --enable-source-maps dist/index.js
+
+[dotenv@17.2.3] injecting env (0) from ../../.env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+bff-accounting on :8081
+[QA] os-llm-usage hit 
+{"type":"llm_usage","tenant":"default","userId":"hud-user-1","userRole":"operator","eventType":"suggestion_shown","suggestionLength":100,"backend":"real","modelLoadMs":12,"inferenceMs":34,"firstByteMs":10,"success":true,"fallback":false,"cancelled":false,"ragEnabled":true,"ragDocs":5,"ragTopK":3,"ragContextChars":500,"ragEmbeddingMs":10,"ragRetrieveMs":5,"ragIndexWarm":true,"ragIndexBuildMs":100,"ragIndexPersistMs":20,"ragIndexHydrateMs":15,"ragDocCount":100,"ts":"2025-12-24T06:24:39.808Z"}
+{"t":"2025-12-24T06:24:39.809Z","id":"d42dd963-dedc-47f0-b624-f08cf5eecfab","m":"POST","p":"/v1/os/llm-usage","s":204,"ms":9,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.816Z","id":"5ed54d5f-6052-47c6-a285-1a4026c406a9","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":1,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.821Z","id":"bb67f918-4809-469f-9a37-76dee0b70030","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":0,"tenant":"default","idem":""}
+[QA] os-llm-usage hit 
+{"type":"llm_usage","tenant":"default","userId":"hud-user-1","userRole":"operator","eventType":"suggestion_shown","suggestionLength":100,"ragEnabled":true,"ragIndexWarm":true,"ragIndexHydrateMs":15,"ragDocCount":100,"ts":"2025-12-24T06:24:39.828Z"}
+{"t":"2025-12-24T06:24:39.828Z","id":"9007ba4d-91eb-45b6-9678-714a41fd1e96","m":"POST","p":"/v1/os/llm-usage","s":204,"ms":0,"tenant":"default","idem":""}
+[QA] os-llm-usage hit 
+{"type":"llm_usage","tenant":"default","userId":"hud-user-1","userRole":"operator","eventType":"suggestion_shown","suggestionLength":100,"ragEnabled":true,"ragIndexWarm":false,"ragIndexBuildMs":100,"ragDocCount":100,"ts":"2025-12-24T06:24:39.835Z"}
+{"t":"2025-12-24T06:24:39.835Z","id":"0514a564-e435-4bc3-9480-bdd0cecb1b12","m":"POST","p":"/v1/os/llm-usage","s":204,"ms":0,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.842Z","id":"06abd268-5458-405a-81c6-e5018860c851","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":0,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.849Z","id":"50e17cd2-8045-4efe-aa69-f100c332316f","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":1,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.856Z","id":"65fb4a20-0358-4ac5-9421-bfbad7d6180a","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":1,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.863Z","id":"7ebd9e73-7dc6-430d-8a0b-6a6c8027615c","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":1,"tenant":"default","idem":""}
+[QA] os-llm-usage hit 
+{"type":"llm_usage","tenant":"default","userId":"hud-user-1","userRole":"operator","eventType":"suggestion_shown","suggestionLength":100,"ragEmbeddingMs":120,"ragRetrieveMs":80,"ragIndexHydrateMs":30,"ragIndexBuildMs":0,"ragIndexPersistMs":0,"ragRetrieveMsP50":80,"ragRetrieveMsP95":80,"ragDocCount":20,"ragTopK":5,"ragIndexWarm":true,"success":true,"fallback":false,"cancelled":false,"ts":"2025-12-24T06:24:39.890Z"}
+{"t":"2025-12-24T06:24:39.891Z","id":"fed13341-474c-4943-84b5-50eec95d3374","m":"POST","p":"/v1/os/llm-usage","s":204,"ms":1,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.903Z","id":"ce75ea34-8cf9-472a-a921-7fb64afd6d8b","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":1,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.914Z","id":"1aa4b3e0-91bd-4ec1-8b3f-086bc0b6a734","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":0,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.926Z","id":"edccb17a-e5e6-4305-bb95-b9c482fae576","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":0,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.938Z","id":"5684684d-6acc-4cc5-9f1a-e2fc4b2bbeb8","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":1,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.949Z","id":"bdbfe5b3-1b01-40af-9b5a-540e8013c44a","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":0,"tenant":"default","idem":""}
+{"t":"2025-12-24T06:24:39.961Z","id":"a84ecb0d-9952-45b1-9ed9-ec8c4a309019","m":"POST","p":"/v1/os/llm-usage","s":400,"ms":1,"tenant":"default","idem":""}
+[FAIL] healthz: want=200 got=000
+[FAIL] body (redacted, max 4096 bytes):
+
