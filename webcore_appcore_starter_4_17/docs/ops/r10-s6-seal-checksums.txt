@@ -1,7 +1,11 @@
 # S6 Seal Checksums (SHA256)
+# Generated: 2025-12-25T05:11:47Z
+# Verified Commit: 885dbd611251f4729f66dcce1646b2e0b7449ebd
+# Note: This file's checksum is stored in r10-s6-seal-checksums.txt.sha256
 
 d0d83811d6a0389641e702a4b188aec74e97aad58ddb90911fb67d57e4b8b617  r10-s5-p1-4-perf-kpi-proof-20251225-024644.log
 743978249a18e2192171fd1b99424336ad029fa7a61fc395559844f9f124312c  r10-s5-p1-4-perf-kpi-proof.latest
 e26f4116ae389ecd415fec524a341caff9aa800f977663197257306266e91606  r10-s6-4-perf-proof-20251225-024641.json
 508ce3a0b6cbd40cb2a2a64c2dcda562eafb3d31bede887fbd09bf2dbb93a7d5  r10-s6-4-perf-proof-20251225-024641.log
 9817ca3414b5fecdb6fa5dca67948d0601a83829b9942cbce772b7afe3d3fce3  r10-s6-4-perf-proof.latest
+e43e7f2c8f35cbcee3869bd6d9683415f559dfc7c015f9a62785f951081a2ad0  r10-s6-seal-manifest.json

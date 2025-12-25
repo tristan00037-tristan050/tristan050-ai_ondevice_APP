@@ -131,9 +131,49 @@ if (isDev) {
 app.get("/health", (_req, res) =>
   res.json({ status: "ok", service: "bff-accounting" })
 );
-app.get("/healthz", (_req, res) =>
-  res.json({ status: "ok", timestamp: new Date().toISOString() })
-);
+
+// ✅ S6-S7: healthz에 build anchor 추가 (JSON + 헤더 동시 제공)
+app.get("/healthz", (_req, res) => {
+  // buildSha: git rev-parse HEAD (또는 빌드 시 주입된 값)
+  let buildSha = process.env.BUILD_SHA || "";
+  if (!buildSha) {
+    try {
+      const { execSync } = require("child_process");
+      buildSha = execSync("git rev-parse HEAD", { encoding: "utf-8", cwd: __dirname }).trim();
+    } catch {
+      buildSha = "unknown";
+    }
+  }
+  
+  // buildTime: 빌드 시각 (또는 dist/index.js mtime)
+  let buildTime = process.env.BUILD_TIME || "";
+  if (!buildTime) {
+    try {
+      const fs = require("fs");
+      const distPath = resolve(__dirname, "index.js");
+      if (fs.existsSync(distPath)) {
+        const stats = fs.statSync(distPath);
+        buildTime = stats.mtime.toISOString();
+      } else {
+        buildTime = new Date().toISOString();
+      }
+    } catch {
+      buildTime = new Date().toISOString();
+    }
+  }
+  
+  // 헤더에 build anchor 추가 (curl -I로 즉시 확인 가능)
+  res.setHeader("X-OS-Build-SHA", buildSha);
+  res.setHeader("X-OS-Build-Time", buildTime);
+  
+  // JSON에도 포함
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    buildSha: buildSha,
+    buildTime: buildTime,
+  });
+});
 
 // k8s/런타임 준비상태 확인용 간단 엔드포인트
 // /ready 강화: USE_PG=1 이면 PG 핑까지 검사
