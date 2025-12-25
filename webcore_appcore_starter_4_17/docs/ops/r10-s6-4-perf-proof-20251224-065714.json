@@ -1,0 +1,6 @@
+{
+  "ts":"20251224-065714",
+  "gitSha":"40c69a7",
+  "pass":true,
+  "tests":[ {"name":"perf_kpi_allowed","want":204,"got":204},{"name":"banned_text_key_blocked","want":400,"got":400},{"name":"type_violation_blocked","want":400,"got":400},{"name":"range_violation_blocked","want":400,"got":400},{"name":"topk_violation_blocked","want":400,"got":400} ]
+}
