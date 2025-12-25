@@ -19,18 +19,29 @@ bash scripts/verify_perf_kpi_meta_only.sh
 bash scripts/verify_perf_kpi_regression.sh
 ```
 
-## Seal 관련 경로
+## 🔒 S6 Seal Index
 
+## 정의
+- **fileCount 정의**: `fileCount = Object.keys(opsProofSets).length`
+  - manifest 내부에 `fileCountDefinition` 필드로 고정
+  - fileCount는 opsProofSets 키 개수와 반드시 일치
+
+## Seal 관련 경로
 - **Manifest**: `webcore_appcore_starter_4_17/docs/ops/r10-s6-seal-manifest.json`
 - **Checksums**: `webcore_appcore_starter_4_17/docs/ops/r10-s6-seal-checksums.txt`
+- **Checksums SHA256**: `webcore_appcore_starter_4_17/docs/ops/r10-s6-seal-checksums.txt.sha256`
+- **생성 스크립트**: `webcore_appcore_starter_4_17/scripts/generate_s6_seal_artifacts.sh`
 - **검증 스크립트**: `webcore_appcore_starter_4_17/scripts/verify_ops_proof_manifest.sh`
 
-## Seal 검증
-
+## Golden Master 재현 커맨드(2단계)
 ```bash
 cd webcore_appcore_starter_4_17
+
+# 1단계: Seal artifacts 생성(비파괴 재생성)
+bash scripts/generate_s6_seal_artifacts.sh
+
+# 2단계: Seal 검증(PASS 필수)
 bash scripts/verify_ops_proof_manifest.sh
-```
 
 ## 운영 가드 증빙
 
