@@ -131,9 +131,43 @@ if (isDev) {
 app.get("/health", (_req, res) =>
   res.json({ status: "ok", service: "bff-accounting" })
 );
-app.get("/healthz", (_req, res) =>
-  res.json({ status: "ok", timestamp: new Date().toISOString() })
-);
+
+// ✅ S6-S7: healthz에 build anchor 추가 (JSON + 헤더 동시 제공)
+// ⚠️ 하드 룰: 빌드 타임 고정만 허용 (런타임 git 계산 금지)
+app.get("/healthz", (_req, res) => {
+  // dist/build_info.json에서만 읽기 (빌드 타임 고정)
+  let buildSha = "unknown";
+  let buildShaShort = "unknown";
+  let buildTime = new Date().toISOString(); // fallback
+  
+  try {
+    const fs = require("fs");
+    const buildInfoPath = resolve(__dirname, "build_info.json");
+    if (fs.existsSync(buildInfoPath)) {
+      const buildInfo = JSON.parse(fs.readFileSync(buildInfoPath, "utf-8"));
+      buildSha = buildInfo.buildSha || "unknown";
+      buildShaShort = buildInfo.buildShaShort || buildSha.substring(0, 7);
+      buildTime = buildInfo.buildTime || buildTime;
+    }
+  } catch (error: any) {
+    // build_info.json이 없거나 파싱 실패 시 fallback
+    // (개발 환경에서 빌드 스크립트를 거치지 않은 경우)
+    console.warn("[healthz] build_info.json not found or invalid:", error.message);
+  }
+  
+  // 헤더에 build anchor 추가 (curl -I로 즉시 확인 가능)
+  res.setHeader("X-OS-Build-SHA", buildSha);
+  res.setHeader("X-OS-Build-Time", buildTime);
+  
+  // JSON에도 포함
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    buildSha: buildSha,
+    buildShaShort: buildShaShort,
+    buildTime: buildTime,
+  });
+});
 
 // k8s/런타임 준비상태 확인용 간단 엔드포인트
 // /ready 강화: USE_PG=1 이면 PG 핑까지 검사

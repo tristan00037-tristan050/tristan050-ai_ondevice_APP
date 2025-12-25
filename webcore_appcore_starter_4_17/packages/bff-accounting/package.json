@@ -8,7 +8,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "prebuild": "npm run -w @appcore/data-pg build && npm run -w @appcore/service-core-accounting build && npm run -w @appcore/service-core-cs build",
-    "build": "tsc -b",
+    "build": "tsc -b && node scripts/generate_build_info.js",
     "start": "node dist/index.js",
     "dev": "node --enable-source-maps dist/index.js",
     "type-check": "tsc --noEmit",
