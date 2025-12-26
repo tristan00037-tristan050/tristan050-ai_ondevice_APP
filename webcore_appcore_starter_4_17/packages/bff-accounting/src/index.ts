@@ -8,7 +8,8 @@
 // .env 파일 로드 (개발 환경)
 import { config } from "dotenv";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, join } from "node:path";
+import { readFileSync, existsSync } from "node:fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -134,6 +135,7 @@ app.get("/health", (_req, res) =>
 
 // ✅ S6-S7: healthz에 build anchor 추가 (JSON + 헤더 동시 제공)
 // ⚠️ 하드 룰: 빌드 타임 고정만 허용 (런타임 git 계산 금지)
+// ✅ ESM 호환: require 제거, fs.readFileSync + import.meta.url 사용
 app.get("/healthz", (_req, res) => {
   // dist/build_info.json에서만 읽기 (빌드 타임 고정)
   let buildSha = "unknown";
@@ -141,18 +143,21 @@ app.get("/healthz", (_req, res) => {
   let buildTime = new Date().toISOString(); // fallback
   
   try {
-    const fs = require("fs");
-    const buildInfoPath = resolve(__dirname, "build_info.json");
-    if (fs.existsSync(buildInfoPath)) {
-      const buildInfo = JSON.parse(fs.readFileSync(buildInfoPath, "utf-8"));
+    // ESM 호환 경로 계산: import.meta.url → __dirname
+    const buildInfoPath = join(__dirname, "build_info.json");
+    if (existsSync(buildInfoPath)) {
+      const buildInfoContent = readFileSync(buildInfoPath, "utf-8");
+      const buildInfo = JSON.parse(buildInfoContent);
       buildSha = buildInfo.buildSha || "unknown";
-      buildShaShort = buildInfo.buildShaShort || buildSha.substring(0, 7);
+      buildShaShort = buildInfo.buildShaShort || (buildSha !== "unknown" ? buildSha.substring(0, 7) : "unknown");
       buildTime = buildInfo.buildTime || buildTime;
     }
   } catch (error: any) {
     // build_info.json이 없거나 파싱 실패 시 fallback
     // (개발 환경에서 빌드 스크립트를 거치지 않은 경우)
-    console.warn("[healthz] build_info.json not found or invalid:", error.message);
+    // 로그는 메시지 1줄만 (본문 덤프 금지)
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.warn("[healthz] build_info.json not found or invalid:", errorMsg);
   }
   
   // 헤더에 build anchor 추가 (curl -I로 즉시 확인 가능)
