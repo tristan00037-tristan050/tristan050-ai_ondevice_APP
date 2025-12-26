@@ -9,6 +9,14 @@
 2. **완료 = Gate PASS + docs/ops 증빙 + main 재검증 PASS**
 3. **meta-only/금지키 유출 0은 Hard Gate**
 
+## 0-1) Build Anchor 운영 표준 (재발 0 잠금)
+
+1. **ESM 런타임에서 require 금지** (런타임 코드에서 발견 시 Block)
+2. **/healthz build anchor는 dist/build_info.json 단일 신뢰원천**이며, 런타임 git 조회 금지
+3. **build anchor는 unknown/빈값/40자 미만/비-hex이면 즉시 FAIL(exit 1)**
+4. **/healthz는 요청마다 파일을 읽지 않고 부트 시 1회 로드 + 캐시만 사용**
+5. **dev_bff.sh는 성공 시 `OK: buildSha matches HEAD(<short>)`를 항상 출력**
+
 ## 1) S6 최종 상태 (SSOT)
 
 ### 1-1. 운영 게이트 (항상 PASS 유지)

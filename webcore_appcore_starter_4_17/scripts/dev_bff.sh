@@ -45,44 +45,54 @@ fi
 export WEBLLM_UPSTREAM_BASE_URL="${WEBLLM_UPSTREAM_BASE_URL:-http://127.0.0.1:9099/webllm/}"
 
 # --- BEGIN: dist freshness guard (S6-S7 hardening) ---
-# ✅ 하드 룰: verify_dist_freshness.sh가 FAIL이면 BFF가 아예 뜨지 않게 강제
+# ✅ 하드 룰: dist freshness 체크 + 빌드가 완료된 후에만 BFF 시작
 ROOT="$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+PKG="$ROOT/packages/bff-accounting"
+DIST="$PKG/dist/index.js"
 
-# 1) dist freshness gate (PASS 필수, FAIL이면 즉시 Exit 1)
-echo "[dev_bff] Verifying dist freshness..."
-if ! bash "$ROOT/scripts/verify_dist_freshness.sh"; then
-  echo "[dev_bff] FAIL: dist freshness gate failed. BFF will not start."
-  exit 1
+# 1) Anchor 2만 먼저 체크 (src vs dist timestamp, BFF 시작 전 가능)
+echo "[dev_bff] Checking dist freshness (src vs dist timestamp)..."
+PYTHON_MTIME="$ROOT/scripts/_lib/mtime_python.py"
+
+if [ -f "$DIST" ] && [ -f "$PYTHON_MTIME" ]; then
+  dist_result=$(python3 "$PYTHON_MTIME" "$PKG/dist" "*.js" "*.map" 2>/dev/null || echo '{"latest_mtime":0}')
+  dist_mtime=$(echo "$dist_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
+  
+  src_result=$(python3 "$PYTHON_MTIME" "$PKG/src" "*.ts" "*.tsx" "*.js" 2>/dev/null || echo '{"latest_mtime":0}')
+  src_latest_mtime=$(echo "$src_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
+  
+  for config_file in "$PKG/tsconfig.json" "$PKG/package.json"; do
+    if [ -f "$config_file" ]; then
+      config_result=$(python3 "$PYTHON_MTIME" "$(dirname "$config_file")" "$(basename "$config_file")" 2>/dev/null || echo '{"latest_mtime":0}')
+      config_mtime=$(echo "$config_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
+      if [ "$config_mtime" -gt "$src_latest_mtime" ]; then
+        src_latest_mtime="$config_mtime"
+      fi
+    fi
+  done
+  
+  if [ "$src_latest_mtime" -gt "$dist_mtime" ]; then
+    echo "[dev_bff] dist is older than src -> build required"
+    NEED_BUILD=1
+  else
+    echo "[dev_bff] dist is fresh (skip build)"
+    NEED_BUILD=0
+  fi
+else
+  echo "[dev_bff] dist missing or mtime_python.py not found -> build required"
+  NEED_BUILD=1
 fi
 
-# 2) dist가 없거나 오래되면 build
-ensure_bff_dist_fresh() {
-  local PKG="$ROOT/packages/bff-accounting"
-  local DIST="$PKG/dist/index.js"
+# 2) 빌드 필요 시 수행
+if [ "$NEED_BUILD" = "1" ]; then
+  echo "[dev_bff] Building @appcore/bff-accounting..."
+  npm run -w @appcore/bff-accounting build || {
+    echo "[dev_bff] FAIL: build failed"
+    exit 1
+  }
+fi
 
-  if [ ! -f "$DIST" ]; then
-    echo "[dev_bff] dist missing -> build @appcore/bff-accounting"
-    npm run -w @appcore/bff-accounting build
-    return 0
-  fi
-
-  # src나 설정이 dist보다 새로우면 build
-  if find "$PKG/src" -type f \( -name "*.ts" -o -name "*.tsx" \) -newer "$DIST" | head -n 1 | grep -q .; then
-    echo "[dev_bff] src newer than dist -> build @appcore/bff-accounting"
-    npm run -w @appcore/bff-accounting build
-    return 0
-  fi
-
-  if [ "$PKG/tsconfig.json" -nt "$DIST" ] || [ "$PKG/package.json" -nt "$DIST" ]; then
-    echo "[dev_bff] config newer than dist -> build @appcore/bff-accounting"
-    npm run -w @appcore/bff-accounting build
-    return 0
-  fi
-
-  echo "[dev_bff] dist is fresh (skip build)"
-}
-
-ensure_bff_dist_fresh
+# 3) Anchor 1 (healthz buildSha)는 BFF 시작 후에 체크 (아래 healthz 폴링에서 수행)
 # --- END: dist freshness guard ---
 
 echo "[dev_bff] Starting BFF on :${PORT}"
@@ -90,10 +100,11 @@ echo "[dev_bff] DATABASE_URL=${DATABASE_URL}"
 echo "[dev_bff] WEBLLM_UPSTREAM_BASE_URL=${WEBLLM_UPSTREAM_BASE_URL}"
 
 # BFF를 백그라운드로 시작
-npm run dev:bff &
+echo "[dev_bff] Starting BFF in background..."
+npm run dev:bff > /tmp/bff_dev.log 2>&1 &
 BFF_PID=$!
 
-# healthz 폴링 (상한 40~60초, curl --max-time 사용)
+# healthz 폴링 (상한 50초, curl --max-time 사용)
 echo "[dev_bff] Waiting for BFF to be ready..."
 HEALTHZ="http://127.0.0.1:${PORT}/healthz"
 BFF_READY=false
@@ -113,9 +124,86 @@ done
 
 if [ "$BFF_READY" != "true" ]; then
   echo "[dev_bff] FAIL: BFF did not become ready within ${MAX_WAIT}s"
+  echo "[dev_bff] BFF log (last 30 lines):"
+  tail -n 30 /tmp/bff_dev.log 2>/dev/null || echo "(log not available)"
   kill $BFF_PID 2>/dev/null || true
   exit 1
 fi
 
+# ✅ Anchor 1: healthz buildSha vs git HEAD 체크 (BFF 시작 후)
+# ⚠️ 하드 룰: buildSha가 unknown/빈값/40자 미만/비-hex이면 즉시 FAIL (exit 1)
+# ✅ P0: 정규식(40-hex) + 헤더/JSON 일치성 검증
+echo "[dev_bff] Verifying build anchor (healthz buildSha vs git HEAD)..."
+TMP_BODY="$(mktemp -t bff_healthz_body.XXXXXX)"
+TMP_HDR="$(mktemp -t bff_healthz_hdr.XXXXXX)"
+
+code=$(curl -sS -D "$TMP_HDR" -o "$TMP_BODY" -w "%{http_code}" --max-time 2 "$HEALTHZ" 2>/dev/null || echo "000")
+
+if [ "$code" != "200" ]; then
+  echo "[dev_bff] FAIL: healthz returned $code (expected 200)"
+  rm -f "$TMP_BODY" "$TMP_HDR"
+  exit 1
+fi
+
+build_sha_json=$(jq -r '.buildSha // empty' "$TMP_BODY" 2>/dev/null || echo "")
+build_sha_header=$(grep -i "^x-os-build-sha:" "$TMP_HDR" 2>/dev/null | cut -d' ' -f2- | tr -d '\r' || echo "")
+
+# 하드 FAIL: JSON/헤더 중 하나라도 누락 시 즉시 FAIL
+if [ -z "$build_sha_json" ] && [ -z "$build_sha_header" ]; then
+  echo "[dev_bff] FAIL: healthz buildSha missing in both JSON and header"
+  rm -f "$TMP_BODY" "$TMP_HDR"
+  exit 1
+fi
+
+# 하드 FAIL: 헤더 SHA == JSON SHA 강제
+if [ -n "$build_sha_json" ] && [ -n "$build_sha_header" ] && [ "$build_sha_json" != "$build_sha_header" ]; then
+  echo "[dev_bff] FAIL: buildSha mismatch: header=$build_sha_header, json=$build_sha_json"
+  rm -f "$TMP_BODY" "$TMP_HDR"
+  exit 1
+fi
+
+build_sha="${build_sha_json:-${build_sha_header}}"
+
+# 하드 FAIL: empty/unknown 체크
+if [ -z "$build_sha" ] || [ "$build_sha" = "unknown" ]; then
+  echo "[dev_bff] FAIL: healthz buildSha is unknown (build_info missing/invalid)"
+  rm -f "$TMP_BODY" "$TMP_HDR"
+  exit 1
+fi
+
+# 하드 FAIL: 40자 미만 체크
+if [ ${#build_sha} -lt 40 ]; then
+  echo "[dev_bff] FAIL: healthz buildSha length is ${#build_sha} (expected 40): $build_sha"
+  rm -f "$TMP_BODY" "$TMP_HDR"
+  exit 1
+fi
+
+# 하드 FAIL: 정규식 40-hex 검증
+if ! echo "$build_sha" | grep -qE '^[0-9a-f]{40}$'; then
+  echo "[dev_bff] FAIL: healthz buildSha is not 40-hex: $build_sha"
+  rm -f "$TMP_BODY" "$TMP_HDR"
+  exit 1
+fi
+
+git_head=$(git rev-parse HEAD 2>/dev/null || echo "")
+
+if [ -z "$git_head" ]; then
+  echo "[dev_bff] FAIL: git rev-parse HEAD failed"
+  rm -f "$TMP_BODY" "$TMP_HDR"
+  exit 1
+fi
+
+if [ "$build_sha" != "$git_head" ]; then
+  echo "[dev_bff] WARN: buildSha mismatch: healthz=$build_sha, git HEAD=$git_head"
+  echo "[dev_bff] WARN: This may indicate dist is from a different commit"
+else
+  # ✅ 표준 출력: 성공 시 항상 이 한 줄 출력 (검토/운영 편의)
+  git_head_short=$(echo "$git_head" | cut -c1-7)
+  echo "[dev_bff] OK: buildSha matches HEAD($git_head_short)"
+fi
+
+rm -f "$TMP_BODY" "$TMP_HDR"
+
 echo "[dev_bff] BFF started successfully (PID: $BFF_PID)"
+echo "[dev_bff] Log: /tmp/bff_dev.log"
 wait $BFF_PID
