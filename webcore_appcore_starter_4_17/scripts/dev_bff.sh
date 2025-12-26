@@ -131,7 +131,8 @@ if [ "$BFF_READY" != "true" ]; then
 fi
 
 # ✅ Anchor 1: healthz buildSha vs git HEAD 체크 (BFF 시작 후)
-# ⚠️ 하드 룰: buildSha가 unknown/빈값/40자 미만이면 즉시 FAIL (exit 1)
+# ⚠️ 하드 룰: buildSha가 unknown/빈값/40자 미만/비-hex이면 즉시 FAIL (exit 1)
+# ✅ P0: 정규식(40-hex) + 헤더/JSON 일치성 검증
 echo "[dev_bff] Verifying build anchor (healthz buildSha vs git HEAD)..."
 TMP_BODY="$(mktemp -t bff_healthz_body.XXXXXX)"
 TMP_HDR="$(mktemp -t bff_healthz_hdr.XXXXXX)"
@@ -146,17 +147,40 @@ fi
 
 build_sha_json=$(jq -r '.buildSha // empty' "$TMP_BODY" 2>/dev/null || echo "")
 build_sha_header=$(grep -i "^x-os-build-sha:" "$TMP_HDR" 2>/dev/null | cut -d' ' -f2- | tr -d '\r' || echo "")
+
+# 하드 FAIL: JSON/헤더 중 하나라도 누락 시 즉시 FAIL
+if [ -z "$build_sha_json" ] && [ -z "$build_sha_header" ]; then
+  echo "[dev_bff] FAIL: healthz buildSha missing in both JSON and header"
+  rm -f "$TMP_BODY" "$TMP_HDR"
+  exit 1
+fi
+
+# 하드 FAIL: 헤더 SHA == JSON SHA 강제
+if [ -n "$build_sha_json" ] && [ -n "$build_sha_header" ] && [ "$build_sha_json" != "$build_sha_header" ]; then
+  echo "[dev_bff] FAIL: buildSha mismatch: header=$build_sha_header, json=$build_sha_json"
+  rm -f "$TMP_BODY" "$TMP_HDR"
+  exit 1
+fi
+
 build_sha="${build_sha_json:-${build_sha_header}}"
 
-# 하드 FAIL: empty/unknown/40자 미만 체크
+# 하드 FAIL: empty/unknown 체크
 if [ -z "$build_sha" ] || [ "$build_sha" = "unknown" ]; then
   echo "[dev_bff] FAIL: healthz buildSha is unknown (build_info missing/invalid)"
   rm -f "$TMP_BODY" "$TMP_HDR"
   exit 1
 fi
 
+# 하드 FAIL: 40자 미만 체크
 if [ ${#build_sha} -lt 40 ]; then
   echo "[dev_bff] FAIL: healthz buildSha length is ${#build_sha} (expected 40): $build_sha"
+  rm -f "$TMP_BODY" "$TMP_HDR"
+  exit 1
+fi
+
+# 하드 FAIL: 정규식 40-hex 검증
+if ! echo "$build_sha" | grep -qE '^[0-9a-f]{40}$'; then
+  echo "[dev_bff] FAIL: healthz buildSha is not 40-hex: $build_sha"
   rm -f "$TMP_BODY" "$TMP_HDR"
   exit 1
 fi
@@ -173,7 +197,9 @@ if [ "$build_sha" != "$git_head" ]; then
   echo "[dev_bff] WARN: buildSha mismatch: healthz=$build_sha, git HEAD=$git_head"
   echo "[dev_bff] WARN: This may indicate dist is from a different commit"
 else
-  echo "[dev_bff] OK: buildSha matches git HEAD ($build_sha)"
+  # ✅ 표준 출력: 성공 시 항상 이 한 줄 출력 (검토/운영 편의)
+  git_head_short=$(echo "$git_head" | cut -c1-7)
+  echo "[dev_bff] OK: buildSha matches HEAD($git_head_short)"
 fi
 
 rm -f "$TMP_BODY" "$TMP_HDR"

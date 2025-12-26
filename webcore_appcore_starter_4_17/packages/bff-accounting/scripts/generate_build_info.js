@@ -50,8 +50,15 @@ try {
   process.exit(1);
 }
 
+// ✅ P0: build_info 생성 실패는 빌드 FAIL로 강제
 if (!buildSha || buildSha.length !== 40) {
   console.error('[build_info] Invalid buildSha:', buildSha);
+  process.exit(1);
+}
+
+// 정규식 40-hex 검증
+if (!/^[0-9a-f]{40}$/i.test(buildSha)) {
+  console.error('[build_info] buildSha is not 40-hex:', buildSha);
   process.exit(1);
 }
 

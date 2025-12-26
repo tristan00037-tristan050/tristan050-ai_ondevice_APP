@@ -8,8 +8,8 @@
 // .env 파일 로드 (개발 환경)
 import { config } from "dotenv";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve, join } from "node:path";
-import { readFileSync, existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { getBuildInfoOrThrow } from "./lib/buildInfo.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,6 +53,15 @@ import {
 import { observeRequest, metricsHandler } from "./middleware/metrics.js";
 import { osPolicyBridge } from "./middleware/osPolicyBridge.js";
 import { ping as pgPing } from "@appcore/data-pg";
+
+// ✅ P0: BuildInfo 부트 시 1회 로드 + 검증 (실패 시 즉시 exit 1)
+try {
+  getBuildInfoOrThrow();
+  console.log("[bff] Build anchor loaded successfully");
+} catch (error: any) {
+  console.error("[FATAL] build anchor invalid; refusing to start:", error.message);
+  process.exit(1);
+}
 
 const app = express();
 const PORT = process.env.PORT || 8081;
@@ -135,42 +144,22 @@ app.get("/health", (_req, res) =>
 
 // ✅ S6-S7: healthz에 build anchor 추가 (JSON + 헤더 동시 제공)
 // ⚠️ 하드 룰: 빌드 타임 고정만 허용 (런타임 git 계산 금지)
-// ✅ ESM 호환: require 제거, fs.readFileSync + import.meta.url 사용
+// ✅ P0: 캐시 사용 (요청당 I/O 0, 부트 시 1회 로드)
 app.get("/healthz", (_req, res) => {
-  // dist/build_info.json에서만 읽기 (빌드 타임 고정)
-  let buildSha = "unknown";
-  let buildShaShort = "unknown";
-  let buildTime = new Date().toISOString(); // fallback
-  
-  try {
-    // ESM 호환 경로 계산: import.meta.url → __dirname
-    const buildInfoPath = join(__dirname, "build_info.json");
-    if (existsSync(buildInfoPath)) {
-      const buildInfoContent = readFileSync(buildInfoPath, "utf-8");
-      const buildInfo = JSON.parse(buildInfoContent);
-      buildSha = buildInfo.buildSha || "unknown";
-      buildShaShort = buildInfo.buildShaShort || (buildSha !== "unknown" ? buildSha.substring(0, 7) : "unknown");
-      buildTime = buildInfo.buildTime || buildTime;
-    }
-  } catch (error: any) {
-    // build_info.json이 없거나 파싱 실패 시 fallback
-    // (개발 환경에서 빌드 스크립트를 거치지 않은 경우)
-    // 로그는 메시지 1줄만 (본문 덤프 금지)
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.warn("[healthz] build_info.json not found or invalid:", errorMsg);
-  }
+  // 캐시된 BuildInfo 사용 (디스크 I/O 없음)
+  const info = getBuildInfoOrThrow();
   
   // 헤더에 build anchor 추가 (curl -I로 즉시 확인 가능)
-  res.setHeader("X-OS-Build-SHA", buildSha);
-  res.setHeader("X-OS-Build-Time", buildTime);
+  res.setHeader("X-OS-Build-SHA", info.buildSha);
+  res.setHeader("X-OS-Build-Time", info.buildTime);
   
-  // JSON에도 포함
+  // JSON에도 포함 (헤더와 일치 보장)
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
-    buildSha: buildSha,
-    buildShaShort: buildShaShort,
-    buildTime: buildTime,
+    buildSha: info.buildSha,
+    buildShaShort: info.buildShaShort,
+    buildTime: info.buildTime,
   });
 });
 
