@@ -1,0 +1,33 @@
+# Ripgrep default ignore patterns
+# 목적: rg 타임아웃 근절 (기본 제외 패턴을 레포 정책으로 고정)
+
+# 의존성/빌드 산출물
+**/node_modules/
+**/dist/
+**/build/
+**/.next/
+**/out/
+
+# 증빙/로그 파일
+**/docs/ops/
+**/*.log
+**/*.jsonl
+
+# Git
+**/.git/
+
+# OS
+**/.DS_Store
+**/Thumbs.db
+
+# IDE
+**/.vscode/
+**/.idea/
+**/*.swp
+**/*.swo
+
+# 임시 파일
+**/tmp/
+**/temp/
+**/*.tmp
+

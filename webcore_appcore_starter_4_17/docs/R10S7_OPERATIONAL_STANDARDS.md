@@ -17,6 +17,28 @@
 4. **/healthz는 요청마다 파일을 읽지 않고 부트 시 1회 로드 + 캐시만 사용**
 5. **dev_bff.sh는 성공 시 `OK: buildSha matches HEAD(<short>)`를 항상 출력**
 
+### 0-1-1) Build Anchor 검증/증빙 (스크립트화, 복붙 블록 금지)
+
+**검증**: 복붙 블록 금지 → 스크립트 실행만 허용
+```bash
+bash scripts/ops/verify_build_anchor.sh
+```
+
+**증빙**: 단일 스크립트로 자동화
+```bash
+bash scripts/ops/prove_build_anchor.sh
+```
+
+증빙 파일:
+- `docs/ops/r10-s7-build-anchor-esm-proof-YYYYMMDD-HHMMSS.log`
+- `docs/ops/r10-s7-build-anchor-esm-proof.latest` (최신 포인터)
+
+### 0-1-2) Workspace 빌드 표준 (통일)
+
+**팀 표준**: `npm run build --workspace=@appcore/bff-accounting`
+
+모든 스크립트/문서에서 위 형태만 사용 (혼용 금지).
+
 ## 1) S6 최종 상태 (SSOT)
 
 ### 1-1. 운영 게이트 (항상 PASS 유지)

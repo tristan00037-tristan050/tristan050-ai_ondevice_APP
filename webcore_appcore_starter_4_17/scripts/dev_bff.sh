@@ -84,9 +84,10 @@ else
 fi
 
 # 2) 빌드 필요 시 수행
+# ✅ C) workspace 빌드 표준 1개로 통일
 if [ "$NEED_BUILD" = "1" ]; then
   echo "[dev_bff] Building @appcore/bff-accounting..."
-  npm run -w @appcore/bff-accounting build || {
+  npm run build --workspace=@appcore/bff-accounting || {
     echo "[dev_bff] FAIL: build failed"
     exit 1
   }
@@ -132,21 +133,34 @@ fi
 
 # ✅ Anchor 1: healthz buildSha vs git HEAD 체크 (BFF 시작 후)
 # ⚠️ 하드 룰: buildSha가 unknown/빈값/40자 미만/비-hex이면 즉시 FAIL (exit 1)
-# ✅ P0: 정규식(40-hex) + 헤더/JSON 일치성 검증
+# ✅ D) 헤더/바디 완전 분리 + fail-fast + PASS 요약 단일화
 echo "[dev_bff] Verifying build anchor (healthz buildSha vs git HEAD)..."
-TMP_BODY="$(mktemp -t bff_healthz_body.XXXXXX)"
 TMP_HDR="$(mktemp -t bff_healthz_hdr.XXXXXX)"
+TMP_BODY="$(mktemp -t bff_healthz_body.XXXXXX)"
 
-code=$(curl -sS -D "$TMP_HDR" -o "$TMP_BODY" -w "%{http_code}" --max-time 2 "$HEALTHZ" 2>/dev/null || echo "000")
+# 헤더는 반드시: curl -fsSI (헤더만)
+code_hdr=$(curl -fsSI --max-time 3 "$HEALTHZ" -D "$TMP_HDR" -o /dev/null 2>/dev/null && echo "200" || echo "000")
 
-if [ "$code" != "200" ]; then
-  echo "[dev_bff] FAIL: healthz returned $code (expected 200)"
-  rm -f "$TMP_BODY" "$TMP_HDR"
+if [ "$code_hdr" != "200" ]; then
+  echo "[dev_bff] FAIL: healthz header request returned $code_hdr (expected 200)"
+  rm -f "$TMP_HDR" "$TMP_BODY"
   exit 1
 fi
 
+# 바디는 반드시: curl -fsS (바디만, 헤더와 분리)
+code_body=$(curl -fsS --max-time 3 "$HEALTHZ" -o "$TMP_BODY" 2>/dev/null && echo "200" || echo "000")
+
+if [ "$code_body" != "200" ]; then
+  echo "[dev_bff] FAIL: healthz body request returned $code_body (expected 200)"
+  rm -f "$TMP_HDR" "$TMP_BODY"
+  exit 1
+fi
+
+# 헤더 buildSha 추출 (완전 분리)
+build_sha_header=$(grep -i "^x-os-build-sha:" "$TMP_HDR" 2>/dev/null | cut -d' ' -f2- | tr -d '\r' | head -1 || echo "")
+
+# JSON buildSha 추출 (완전 분리)
 build_sha_json=$(jq -r '.buildSha // empty' "$TMP_BODY" 2>/dev/null || echo "")
-build_sha_header=$(grep -i "^x-os-build-sha:" "$TMP_HDR" 2>/dev/null | cut -d' ' -f2- | tr -d '\r' || echo "")
 
 # 하드 FAIL: JSON/헤더 중 하나라도 누락 시 즉시 FAIL
 if [ -z "$build_sha_json" ] && [ -z "$build_sha_header" ]; then
@@ -193,14 +207,16 @@ if [ -z "$git_head" ]; then
   exit 1
 fi
 
+# 하드 FAIL: HEAD 일치 확인 (dev 환경 기준)
 if [ "$build_sha" != "$git_head" ]; then
-  echo "[dev_bff] WARN: buildSha mismatch: healthz=$build_sha, git HEAD=$git_head"
-  echo "[dev_bff] WARN: This may indicate dist is from a different commit"
-else
-  # ✅ 표준 출력: 성공 시 항상 이 한 줄 출력 (검토/운영 편의)
-  git_head_short=$(echo "$git_head" | cut -c1-7)
-  echo "[dev_bff] OK: buildSha matches HEAD($git_head_short)"
+  echo "[dev_bff] FAIL: buildSha mismatch: healthz=$build_sha, git HEAD=$git_head"
+  rm -f "$TMP_BODY" "$TMP_HDR"
+  exit 1
 fi
+
+# ✅ 모든 체크 통과 후 PASS 요약 1회만 출력
+git_head_short=$(echo "$git_head" | cut -c1-7)
+echo "[dev_bff] OK: buildSha matches HEAD($git_head_short)"
 
 rm -f "$TMP_BODY" "$TMP_HDR"
 

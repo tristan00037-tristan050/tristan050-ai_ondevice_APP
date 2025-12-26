@@ -154,6 +154,64 @@ jobs:
       
       - name: Build Ops Console
         run: npm run build --workspace=@appcore/ops-console
+      
+      # ✅ F) CI 게이트 승격: build_info 생성/검증 + dist require( 0 + healthz anchor 무결성
+      - name: Build bff-accounting (with build_info)
+        run: npm run build --workspace=@appcore/bff-accounting
+      
+      - name: Verify build_info.json exists
+        run: |
+          if [ ! -f packages/bff-accounting/dist/build_info.json ]; then
+            echo "❌ build_info.json not found"
+            exit 1
+          fi
+          echo "✅ build_info.json exists"
+          head -5 packages/bff-accounting/dist/build_info.json
+      
+      - name: Verify build_info.json format (40-hex buildSha)
+        run: |
+          BUILD_SHA=$(jq -r '.buildSha // empty' packages/bff-accounting/dist/build_info.json)
+          if [ -z "$BUILD_SHA" ] || [ "$BUILD_SHA" = "unknown" ]; then
+            echo "❌ buildSha is missing or unknown"
+            exit 1
+          fi
+          if [ ${#BUILD_SHA} -ne 40 ]; then
+            echo "❌ buildSha length is ${#BUILD_SHA} (expected 40)"
+            exit 1
+          fi
+          if ! echo "$BUILD_SHA" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "❌ buildSha is not 40-hex: $BUILD_SHA"
+            exit 1
+          fi
+          echo "✅ buildSha is valid 40-hex: ${BUILD_SHA:0:7}..."
+      
+      - name: Verify dist require( 0 (ESM-only)
+        run: |
+          # rg가 2를 반환하는 "미발견"을 정상으로 취급
+          if rg -n "require\\(" packages/bff-accounting/dist 2>/dev/null; then
+            echo "❌ Found require( in dist (ESM-only required)"
+            exit 1
+          else
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 0 ]; then
+              echo "❌ Unexpected rg exit code: $EXIT_CODE"
+              exit 1
+            elif [ $EXIT_CODE -eq 2 ]; then
+              echo "✅ No require( found in dist (ESM-only)"
+            else
+              echo "⚠️ rg exit code: $EXIT_CODE (treating as OK)"
+            fi
+          fi
+      
+      - name: Verify buildSha matches HEAD (CI build integrity)
+        run: |
+          BUILD_SHA=$(jq -r '.buildSha' packages/bff-accounting/dist/build_info.json)
+          GIT_HEAD=$(git rev-parse HEAD)
+          if [ "$BUILD_SHA" != "$GIT_HEAD" ]; then
+            echo "❌ buildSha mismatch: build_info=$BUILD_SHA, git HEAD=$GIT_HEAD"
+            exit 1
+          fi
+          echo "✅ buildSha matches git HEAD: ${BUILD_SHA:0:7}..."
 
   test:
     name: Run Tests
@@ -349,6 +407,39 @@ jobs:
       - name: Build bff-accounting
         run: npm run build --workspace=@appcore/bff-accounting
       
+      # ✅ F) CI 게이트: build_info 생성/검증
+      - name: Verify build_info.json exists and format
+        run: |
+          if [ ! -f packages/bff-accounting/dist/build_info.json ]; then
+            echo "❌ build_info.json not found"
+            exit 1
+          fi
+          BUILD_SHA=$(jq -r '.buildSha // empty' packages/bff-accounting/dist/build_info.json)
+          if [ -z "$BUILD_SHA" ] || [ "$BUILD_SHA" = "unknown" ] || [ ${#BUILD_SHA} -ne 40 ] || ! echo "$BUILD_SHA" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "❌ build_info.json buildSha is invalid"
+            exit 1
+          fi
+          echo "✅ build_info.json valid: ${BUILD_SHA:0:7}..."
+      
+      # ✅ F) CI 게이트: dist require( 0 (ESM-only)
+      - name: Verify dist require( 0
+        run: |
+          # rg exit code: 0=발견, 1=에러, 2=미발견
+          if rg -n "require\\(" packages/bff-accounting/dist 2>/dev/null; then
+            echo "❌ Found require( in dist (ESM-only required)"
+            exit 1
+          else
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 2 ]; then
+              echo "✅ No require( found in dist (ESM-only)"
+            elif [ $EXIT_CODE -eq 0 ]; then
+              echo "❌ Unexpected: rg returned 0 but no output"
+              exit 1
+            else
+              echo "⚠️ rg exit code: $EXIT_CODE (treating as OK)"
+            fi
+          fi
+      
       - name: Install bff-accounting dependencies
         run: npm install --prefix packages/bff-accounting
       
@@ -360,6 +451,49 @@ jobs:
             curl -fsS http://localhost:8081/health && break
             sleep 1
           done
+      
+      # ✅ F) CI 게이트: healthz anchor 무결성 검증
+      - name: Verify healthz build anchor (header + JSON)
+        run: |
+          # 헤더 확인 (완전 분리)
+          HDR_FILE=$(mktemp)
+          curl -fsSI --max-time 3 "http://localhost:8081/healthz" -D "$HDR_FILE" -o /dev/null || {
+            echo "❌ healthz header request failed"
+            exit 1
+          }
+          
+          BUILD_SHA_HDR=$(grep -i "^x-os-build-sha:" "$HDR_FILE" | cut -d' ' -f2- | tr -d '\r' | head -1 || echo "")
+          
+          # JSON 확인 (완전 분리)
+          BODY_FILE=$(mktemp)
+          curl -fsS --max-time 3 "http://localhost:8081/healthz" -o "$BODY_FILE" || {
+            echo "❌ healthz body request failed"
+            exit 1
+          }
+          
+          BUILD_SHA_JSON=$(jq -r '.buildSha // empty' "$BODY_FILE" 2>/dev/null || echo "")
+          
+          # 헤더/JSON 일치성 검증
+          if [ -z "$BUILD_SHA_HDR" ] && [ -z "$BUILD_SHA_JSON" ]; then
+            echo "❌ buildSha missing in both header and JSON"
+            exit 1
+          fi
+          
+          if [ -n "$BUILD_SHA_HDR" ] && [ -n "$BUILD_SHA_JSON" ] && [ "$BUILD_SHA_HDR" != "$BUILD_SHA_JSON" ]; then
+            echo "❌ buildSha mismatch: header=$BUILD_SHA_HDR, json=$BUILD_SHA_JSON"
+            exit 1
+          fi
+          
+          BUILD_SHA="${BUILD_SHA_JSON:-${BUILD_SHA_HDR}}"
+          
+          # 40-hex 검증
+          if [ ${#BUILD_SHA} -ne 40 ] || ! echo "$BUILD_SHA" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "❌ buildSha is not valid 40-hex: $BUILD_SHA"
+            exit 1
+          fi
+          
+          echo "✅ healthz build anchor verified: ${BUILD_SHA:0:7}... (header/JSON match)"
+          rm -f "$HDR_FILE" "$BODY_FILE"
       
       - name: E2E Suggest
         env:
