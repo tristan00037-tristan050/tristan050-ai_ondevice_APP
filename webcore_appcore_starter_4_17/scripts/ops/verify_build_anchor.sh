@@ -9,26 +9,38 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
 cd "$ROOT"
 
-PORT="${PORT:-8081}"
-HEALTHZ="http://127.0.0.1:${PORT}/healthz"
+# BASE_URL 환경변수 지원 (기본값: http://127.0.0.1:8081)
+BASE_URL="${BASE_URL:-http://127.0.0.1:8081}"
+HEALTHZ_URL="${BASE_URL%/}/healthz"
 
-# 1) healthz 200 확인
 TMP_HDR="$(mktemp -t verify_anchor_hdr.XXXXXX)"
 TMP_BODY="$(mktemp -t verify_anchor_body.XXXXXX)"
 
-code=$(curl -fsSI --max-time 3 "$HEALTHZ" -D "$TMP_HDR" -o "$TMP_BODY" 2>/dev/null || echo "000")
+# 1) healthz 200 확인 (fail-safe + 재시도 + 진단)
+# ✅ 실패/예외/타임아웃에서도 http_code는 절대 빈 문자열이 되지 않는다(기본값 000)
+# ✅ 레이스 방지: 최대 5초(0.2s * 25) 재시도
+http_code="000"
+for i in $(seq 1 25); do
+  http_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 "$HEALTHZ_URL" 2>/dev/null || echo 000)"
+  [ "$http_code" = "200" ] && break
+  sleep 0.2
+done
 
-if [ "$code" != "200" ]; then
-  echo "[FAIL] healthz returned $code (expected 200)"
+if [ "$http_code" != "200" ]; then
+  echo "[FAIL] healthz returned $http_code (expected 200)"
+  echo "[diag] LISTEN 8081:"; lsof -nP -iTCP:8081 -sTCP:LISTEN || true
+  echo "[diag] curl -v (2s):"; curl -v --max-time 2 "$HEALTHZ_URL" || true
+  echo "[diag] tail /tmp/bff_dev.log:"; tail -n 120 /tmp/bff_dev.log 2>/dev/null || true
   rm -f "$TMP_HDR" "$TMP_BODY"
   exit 1
 fi
 
-# 2) 헤더 buildSha 추출 (완전 분리)
-build_sha_header=$(grep -i "^x-os-build-sha:" "$TMP_HDR" 2>/dev/null | cut -d' ' -f2- | tr -d '\r' | head -1 || echo "")
+# 2) 헤더 buildSha 추출 (완전 분리, status code 확인 후)
+build_sha_header=$(curl -fsSI --max-time 3 "$HEALTHZ_URL" -D "$TMP_HDR" -o /dev/null 2>/dev/null && grep -i "^x-os-build-sha:" "$TMP_HDR" 2>/dev/null | cut -d' ' -f2- | tr -d '\r' | head -1 || echo "")
 
-# 3) JSON buildSha 추출 (완전 분리)
-build_sha_json=$(curl -fsS --max-time 3 "$HEALTHZ" 2>/dev/null | jq -r '.buildSha // empty' 2>/dev/null || echo "")
+# 3) JSON buildSha 추출 (완전 분리, status code 확인과 절대 섞지 않음)
+healthz_json="$(curl -fsS --max-time 2 "$HEALTHZ_URL")"
+build_sha_json=$(echo "$healthz_json" | jq -r '.buildSha // empty' 2>/dev/null || echo "")
 
 # 4) 헤더/JSON 일치성 검증
 if [ -z "$build_sha_header" ] && [ -z "$build_sha_json" ]; then
