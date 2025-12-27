@@ -1,6 +1,6 @@
 [proof] R10-S7 Build Anchor ESM Proof
-Generated: 20251227-040511
-Commit: a2ebaba
+Generated: 20251227-065612
+Commit: f863f4e
 
 === Step 1: Standard Build ===
 
@@ -16,12 +16,12 @@ Run `npm audit` for details.
 > tsc -b && node scripts/generate_build_info.js
 
 [build_info] Generated: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/packages/bff-accounting/dist/build_info.json
-[build_info] buildSha: a2ebaba875839e254b7183519cff7dc169405c73
-[build_info] buildTime: 2025-12-27T04:05:25.199Z
+[build_info] buildSha: f863f4eb248eb6a72573f210e2bf4c7d18ba1e84
+[build_info] buildTime: 2025-12-27T06:56:29.612Z
 
 === Step 2: BFF Restart ===
 [dev_bff] Freeing port 8081...
-[dev_bff] Attempt 1: killing PID(s): 69513
+[dev_bff] Attempt 1: killing PID(s): 98980
 [dev_bff] Checking dist freshness (src vs dist timestamp)...
 [dev_bff] dist is older than src -> build required
 [dev_bff] Building @appcore/bff-accounting...
