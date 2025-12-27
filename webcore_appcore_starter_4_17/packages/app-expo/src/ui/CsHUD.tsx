@@ -4,124 +4,75 @@
  * R9-S1: CS 티켓 리스트 API 연동
  */
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  TouchableOpacity,
-} from "react-native";
-import { getSuggestEngine, suggestWithEngine } from "../hud/engines/index";
-import type { ClientCfg as EnginesClientCfg } from "../hud/engines/index";
-import type {
-  SuggestContext,
-  SuggestInput,
-  CsSuggestContext,
-} from "../hud/engines/types";
-import type { ClientCfg } from "../hud/accounting-api";
-import { isMock } from "../hud/accounting-api";
-import { fetchCsTickets, type CsTicket } from "../hud/cs-api";
-import { sendLlmUsageEvent } from "../hud/telemetry/llmUsage";
-import { applyLlmTextPostProcess } from "../hud/engines/llmPostProcess";
-import { recordLlmUsage } from "../os/telemetry/osTelemetry";
-import { resolveBffBaseUrl } from "../os/bff";
-// ✅ R10-S5 P0-5: RAG 파이프라인 통합
-import {
-  getEmbedder,
-  getVectorStore,
-  RAGPipelineImpl,
-  type DocumentChunk,
-  type SearchResult,
-  type RAGConfig,
-} from "../os/llm/rag";
-// ✅ R10-S5 P1-2: Safe Snippet 생성 함수
-import { createSafeSnippet } from "../os/llm/rag/safeSnippet";
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { View, Text, ScrollView, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { getSuggestEngine, suggestWithEngine } from '../hud/engines/index';
+import type { ClientCfg as EnginesClientCfg } from '../hud/engines/index';
+import type { SuggestContext, SuggestInput, CsSuggestContext } from '../hud/engines/types';
+import type { ClientCfg } from '../hud/accounting-api';
+import { isMock } from '../hud/accounting-api';
+import { fetchCsTickets, type CsTicket } from '../hud/cs-api';
+import { sendLlmUsageEvent } from '../hud/telemetry/llmUsage';
+import { applyLlmTextPostProcess } from '../hud/engines/llmPostProcess';
+import { useEffect, useRef, useState } from "react";
+async function postLlmUsageQATrigger() {
+  try {
+    await fetch("http://localhost:8081/v1/os/llm-usage", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Tenant": "default",
+        "X-User-Id": "hud-user-1",
+        "X-User-Role": "operator",
+        "X-Api-Key": "collector-key:operator",
+      },
+      body: JSON.stringify({
+        eventType: "cs_hud_demo",
+        suggestionLength: 0,
+      }),
+    });
+  } catch (e) {
+    console.warn("[CsHUD] llm-usage QA trigger failed", e);
+  }
+}
 
 type Props = { cfg?: ClientCfg };
 
-const QA_TRIGGER = process.env.EXPO_PUBLIC_QA_TRIGGER_LLM_USAGE === "1";
-
-export function CsHUD({ cfg }: Props = {}) {
-  const qaTriggeredRef = useRef(false);
+export function CsHUD({ cfg }: Props = {}) { 
   // defaultCfg를 useMemo로 메모이제이션하여 무한 루프 방지
-  const defaultCfg: ClientCfg = useMemo(() => {
-    // OS 공통 resolveBffBaseUrl 사용 (하드코딩 URL 금지)
-    return {
-      baseUrl: (
-        process.env.EXPO_PUBLIC_BFF_BASE_URL ||
-        process.env.EXPO_PUBLIC_BFF_URL ||
-        resolveBffBaseUrl()
-      ).replace(/\/$/, ""),
-      tenantId: process.env.EXPO_PUBLIC_TENANT_ID || "default",
-      apiKey: process.env.EXPO_PUBLIC_API_KEY || "collector-key:operator",
-      mode: (process.env.EXPO_PUBLIC_DEMO_MODE === "mock" ? "mock" : "live") as
-        | "mock"
-        | "live",
-    };
-  }, []);
-
+  const defaultCfg: ClientCfg = useMemo(() => ({
+    baseUrl: process.env.EXPO_PUBLIC_BFF_URL || 'http://localhost:8081',
+    tenantId: process.env.EXPO_PUBLIC_TENANT_ID || 'default',
+    apiKey: process.env.EXPO_PUBLIC_API_KEY || 'collector-key:operator',
+    mode: (process.env.EXPO_PUBLIC_DEMO_MODE === 'mock' ? 'mock' : 'live') as 'mock' | 'live',
+  }), []);
+  
   // clientCfg도 메모이제이션
   const clientCfg = useMemo(() => cfg || defaultCfg, [cfg, defaultCfg]);
-
+  
   // engines/index.ts의 ClientCfg로 변환 (메모이제이션)
-  const enginesCfg: EnginesClientCfg = useMemo(
-    () => ({
-      mode: clientCfg.mode || "live",
-      tenantId: clientCfg.tenantId,
-      userId: "hud-user-1",
-      baseUrl: clientCfg.baseUrl,
-      apiKey: clientCfg.apiKey,
-    }),
-    [clientCfg.mode, clientCfg.tenantId, clientCfg.baseUrl, clientCfg.apiKey]
-  );
-
+  const enginesCfg: EnginesClientCfg = useMemo(() => ({
+    mode: clientCfg.mode || 'live',
+    tenantId: clientCfg.tenantId,
+    userId: 'hud-user-1',
+    baseUrl: clientCfg.baseUrl,
+    apiKey: clientCfg.apiKey,
+  }), [clientCfg.mode, clientCfg.tenantId, clientCfg.baseUrl, clientCfg.apiKey]);
+  
   const engine = useMemo(() => getSuggestEngine(enginesCfg), [enginesCfg]);
-  const engineLabel =
-    engine.id === "local-llm-v1" ? "On-device (LLM Stub)" : "On-device (Rule)";
+  const engineLabel = engine.id === 'local-llm-v1' 
+    ? 'On-device (LLM Stub)' 
+    : 'On-device (Rule)';
 
   // 티켓 리스트 상태
   const [tickets, setTickets] = useState<CsTicket[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  
   // SuggestEngine 관련 상태
   const [suggesting, setSuggesting] = useState(false);
   const [suggestionResult, setSuggestionResult] = useState<any>(null);
   const [selectedTicket, setSelectedTicket] = useState<CsTicket | null>(null);
-  
-  // ✅ P0-2: 스트리밍 출력 상태
-  const [streamingText, setStreamingText] = useState<string>("");
-  const [isStreaming, setIsStreaming] = useState(false);
-  
-  // ✅ P0-2: 취소 신호 관리
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  // ✅ E06-3: 모델 로딩 Progress 상태
-  const [modelLoading, setModelLoading] = useState(false);
-  const [modelLoadProgress, setModelLoadProgress] = useState<{
-    progress: number;
-    text: string;
-  } | null>(null);
-
-  // ✅ R10-S5 P0-5: RAG 하이드레이션 상태
-  const [ragHydrating, setRagHydrating] = useState(false);
-  const [ragHydrationProgress, setRagHydrationProgress] = useState<{
-    progress: number;
-    text: string;
-  } | null>(null);
-  const [ragIndexWarm, setRagIndexWarm] = useState<boolean | null>(null);
-  const [ragDocCount, setRagDocCount] = useState<number>(0);
-  const ragPipelineRef = useRef<RAGPipelineImpl | null>(null);
-  const [ragSources, setRagSources] = useState<Array<{
-    id: string;
-    subject: string;
-    category: string;
-    score?: number;
-    rank?: number;
-  }>>([]);
 
   // R10-S3: 추천 세션 추적 (중복 전송 방지)
   type SuggestionSession = {
@@ -132,14 +83,14 @@ export function CsHUD({ cfg }: Props = {}) {
 
   // 텍스트 정규화 함수 (비교용)
   function normalizeForCompare(text: string): string {
-    if (!text) return "";
+    if (!text) return '';
     return applyLlmTextPostProcess(
       {
-        domain: "cs",
+        domain: 'cs',
         engineMeta: engine.meta,
         mode: engine.meta.type,
       },
-      text
+      text,
     );
   }
 
@@ -152,34 +103,26 @@ export function CsHUD({ cfg }: Props = {}) {
         setLoading(true);
         setError(null);
 
-        console.log("[CsHUD] Loading tickets, clientCfg:", {
-          mode: clientCfg.mode,
-          tenantId: clientCfg.tenantId,
-        });
+        console.log('[CsHUD] Loading tickets, clientCfg:', { mode: clientCfg.mode, tenantId: clientCfg.tenantId });
         const response = await fetchCsTickets(clientCfg, {
           limit: 20,
           offset: 0,
         });
 
-        console.log("[CsHUD] Received response:", response);
+        console.log('[CsHUD] Received response:', response);
 
         if (!cancelled) {
           if (response && response.items) {
             setTickets(response.items);
             setLoading(false);
-            
-            // ✅ R10-S5 P0-5: 티켓 로드 후 RAG 인덱스 하이드레이션/빌드
-            if (response.items.length > 0) {
-              await hydrateRAGIndex(response.items);
-            }
           } else {
-            throw new Error("Invalid response format: missing items");
+            throw new Error('Invalid response format: missing items');
           }
         }
       } catch (err: any) {
         if (!cancelled) {
-          console.error("[CsHUD] Failed to load tickets:", err);
-          console.error("[CsHUD] Error details:", {
+          console.error('[CsHUD] Failed to load tickets:', err);
+          console.error('[CsHUD] Error details:', {
             message: err?.message,
             code: err?.code,
             errno: err?.errno,
@@ -187,16 +130,13 @@ export function CsHUD({ cfg }: Props = {}) {
             toString: err?.toString(),
             string: String(err),
           });
-          const errorMessage =
-            err?.message ||
-            err?.toString() ||
-            String(err) ||
-            "티켓을 불러오는데 실패했습니다.";
+          const errorMessage = err?.message || err?.toString() || String(err) || '티켓을 불러오는데 실패했습니다.';
           setError(errorMessage);
           setLoading(false);
         }
       }
     }
+
     loadTickets();
 
     return () => {
@@ -204,214 +144,15 @@ export function CsHUD({ cfg }: Props = {}) {
     };
   }, [clientCfg.mode, clientCfg.tenantId, clientCfg.baseUrl]); // clientCfg 객체 대신 구체적인 값들을 의존성으로 사용
 
-  // ✅ R10-S5 P0-5: RAG 인덱스 하이드레이션/빌드
-  const hydrateRAGIndex = async (tickets: CsTicket[]) => {
-    try {
-      setRagHydrating(true);
-      setRagHydrationProgress({ progress: 0, text: "RAG 인덱스 초기화 중..." });
-
-      const embedder = getEmbedder(clientCfg.mode);
-      const store = getVectorStore(clientCfg.mode);
-      const config: RAGConfig = {
-        enabled: true,
-        topK: 5,
-        minScore: 0.1,
-        maxContextChars: 2000,
-      };
-
-      const pipeline = new RAGPipelineImpl(embedder, store, config);
-      ragPipelineRef.current = pipeline;
-
-      // 티켓을 DocumentChunk로 변환
-      const chunks: DocumentChunk[] = tickets.map((ticket) => ({
-        id: ticket.id,
-        text: `${ticket.subject}\n${ticket.body}`,
-        metadata: {
-          sourceId: ticket.id,
-          sourceTitle: ticket.subject,
-          category: ticket.category || "unknown",
-          timestamp: new Date(ticket.createdAt).getTime(),
-        },
-      }));
-
-      const { hydrated, indexBuildMs, docCount } = await pipeline.hydrateOrBuildIndex(
-        chunks,
-        (progress) => {
-          setRagHydrationProgress(progress);
-        }
-      );
-
-      setRagIndexWarm(hydrated);
-      setRagDocCount(docCount);
-
-      // ✅ P0-5: Warm start는 1초 이내면 표시 즉시 숨김
-      if (hydrated) {
-        setRagHydrationProgress({ progress: 100, text: `캐시에서 복원됨 (${docCount}개 문서)` });
-        setTimeout(() => {
-          setRagHydrating(false);
-          setRagHydrationProgress(null);
-        }, 1000);
-      } else {
-        setRagHydrationProgress({ progress: 100, text: `인덱스 생성됨 (${docCount}개 문서)` });
-        setTimeout(() => {
-          setRagHydrating(false);
-          setRagHydrationProgress(null);
-        }, 500);
-      }
-    } catch (err: any) {
-      console.warn("[CsHUD] RAG 인덱스 하이드레이션 실패:", err);
-      setRagHydrating(false);
-      setRagHydrationProgress(null);
-      // 실패해도 계속 진행 (RAG 없이 동작)
-    }
-  };
-
-  // QA 트리거는 제품 플로우가 아니라 QA 증빙용. ENV=1일 때만 1회 실행.
-  useEffect(() => {
-    if (!QA_TRIGGER) return;
-    if (clientCfg.mode !== "live") return;
-    if (qaTriggeredRef.current) return;
-
-    qaTriggeredRef.current = true;
-
-    console.log("[QA] llm-usage trigger: start");
-
-    void recordLlmUsage(
-      "live",
-      {
-        tenantId: clientCfg.tenantId ?? "default",
-        userId: "hud-user-1",
-        userRole: "operator",
-        apiKey: "collector-key:operator",
-      },
-      { eventType: "qa_trigger_llm_usage", suggestionLength: 0 }
-    )
-      .then(() => console.log("[QA] llm-usage trigger: done"))
-      .catch((e) => console.warn("[QA] llm-usage trigger: failed", e));
-  }, [clientCfg.mode, clientCfg.tenantId]);
-
   // CS 응답 추천 요청 핸들러
   const handleSuggest = async (ticket: CsTicket) => {
-    // ✅ P0-2: 중복 요청 방지
-    if (suggesting || modelLoading) {
-      console.warn("[CsHUD] Suggest already in progress, ignoring duplicate request");
-      return;
-    }
-
-    // ✅ P0-2: 이전 요청 취소
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-
     setSelectedTicket(ticket);
     setSuggesting(true);
     setSuggestionResult(null);
-    setModelLoading(false);
-    setModelLoadProgress(null);
-    setStreamingText("");
-    setIsStreaming(false);
-
-    // ✅ P0-3: 성능 메타 수집 시작
-    const perfMeta = {
-      modelLoadStart: 0,
-      modelLoadEnd: 0,
-      inferenceStart: 0,
-      inferenceEnd: 0,
-      firstTokenTime: 0,
-      backend: engine.meta.stub ? ("stub" as const) : ("real" as const),
-      cancelled: false,
-      fallback: false,
-    };
-
+    
     try {
-      // ✅ E06-3: 엔진 초기화 (모델 로딩 포함)
-      if (!engine.isReady && engine.initialize) {
-        setModelLoading(true);
-        setModelLoadProgress({ progress: 0, text: "모델 초기화 중..." });
-        perfMeta.modelLoadStart = Date.now();
-
-        try {
-          await engine.initialize();
-          perfMeta.modelLoadEnd = Date.now();
-          setModelLoadProgress({ progress: 100, text: "모델 로딩 완료" });
-          // Progress 완료 후 약간의 지연 후 초기화 (UX 개선)
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        } catch (initError: any) {
-          perfMeta.modelLoadEnd = Date.now();
-          perfMeta.fallback = true;
-          // ✅ E06-3: 초기화 실패 시 suggestion_error + stub fallback
-          console.warn("[CsHUD] Engine initialization failed:", initError);
-          const modelLoadMs = perfMeta.modelLoadEnd - perfMeta.modelLoadStart;
-          void recordLlmUsage(
-            clientCfg.mode,
-            {
-              tenantId: clientCfg.tenantId ?? "default",
-              userId: enginesCfg.userId || "hud-user-1",
-              userRole: "operator",
-              apiKey: clientCfg.apiKey || "collector-key:operator",
-            },
-            {
-              eventType: "suggestion_error",
-              suggestionLength: 0,
-              modelLoadMs,
-              backend: perfMeta.backend,
-              success: false,
-              fallback: true,
-            }
-          ).catch(() => {});
-
-          // 초기화 실패해도 suggest는 계속 진행 (엔진이 자체적으로 stub fallback 처리)
-        } finally {
-          setModelLoading(false);
-          setModelLoadProgress(null);
-        }
-      }
-      // ✅ R10-S5 P0-5: RAG 컨텍스트 검색 (있는 경우)
-      let ragContext = "";
-      let ragMeta: any = null;
-      const sources: Array<{
-        id: string;
-        subject: string;
-        category: string;
-        snippet: string; // ✅ R10-S5 P1-2: Safe snippet 추가
-        score?: number;
-        rank?: number;
-      }> = [];
-
-      if (ragPipelineRef.current) {
-        try {
-          const query = `${ticket.subject} ${ticket.body}`;
-          const { context, results, meta } = await ragPipelineRef.current.retrieveAndBuildContext(query, 5);
-          ragContext = context;
-          ragMeta = meta;
-
-          // ✅ R10-S5 P1-2: 출처 정보 추출 (Safe snippet 포함, meta-only: 원문 body는 telemetry에 포함하지 않음)
-          results.forEach((result, index) => {
-            const chunk = result.chunk;
-            // Safe snippet 생성 (UI 표시용, telemetry에는 포함하지 않음)
-            const rawText = chunk.text || "";
-            const queryTerms = query.split(/\s+/).filter(t => t.length > 1); // 쿼리 키워드 추출
-            const snippet = createSafeSnippet(rawText, 160, queryTerms);
-            
-            sources.push({
-              id: chunk.metadata?.sourceId || chunk.id,
-              subject: chunk.metadata?.sourceTitle || chunk.id,
-              category: chunk.metadata?.category || "unknown",
-              snippet: snippet, // ✅ P1-2: Safe snippet (UI 전용, telemetry 금지)
-              score: result.score,
-              rank: index + 1,
-            });
-          });
-          setRagSources(sources);
-        } catch (ragErr: any) {
-          console.warn("[CsHUD] RAG 검색 실패:", ragErr);
-          // RAG 실패해도 계속 진행
-        }
-      }
-
       const ctx: CsSuggestContext = {
-        domain: "cs",
+        domain: 'cs',
         tenantId: clientCfg.tenantId,
         ticket: {
           id: ticket.id,
@@ -420,132 +161,38 @@ export function CsHUD({ cfg }: Props = {}) {
           status: ticket.status,
           createdAt: ticket.createdAt,
         },
-        // ✅ R10-S5 P0-5: RAG 컨텍스트 주입 (엔진이 사용할 수 있도록)
-        ragContext: ragContext || undefined,
       };
-
-      // ✅ P0-2: 스트리밍 출력을 위해 엔진을 직접 사용
-      // (suggestWithEngine은 스트리밍 콜백을 지원하지 않으므로 직접 호출)
-      setIsStreaming(true);
-      setStreamingText("");
-      perfMeta.inferenceStart = Date.now();
-      let firstTokenReceived = false;
-
-      // 스트리밍 콜백: 토큰이 올 때마다 UI 업데이트
-      const onToken = (token: string) => {
-        if (!abortControllerRef.current?.signal.aborted) {
-          // ✅ P0-3: 첫 토큰 시간 기록
-          if (!firstTokenReceived) {
-            perfMeta.firstTokenTime = Date.now();
-            firstTokenReceived = true;
-          }
-          setStreamingText((prev) => prev + token);
-        }
-      };
-
-      const result = await engine.suggest(ctx as SuggestContext, {
+      
+      // suggestWithEngine은 SuggestContext를 받지만, CsSuggestContext는 호환 가능
+      // 타입 단언을 사용하여 전달
+      const result = await suggestWithEngine(enginesCfg, ctx as SuggestContext, {
         text: ticket.subject,
         meta: {
           ticketId: ticket.id,
           status: ticket.status,
           createdAt: ticket.createdAt,
-          // ✅ P0-2: 스트리밍 콜백 및 취소 신호 전달
-          onToken,
-          signal: abortControllerRef.current.signal,
         },
       });
-
-      perfMeta.inferenceEnd = Date.now();
-      setIsStreaming(false);
-      
-      // ✅ P0-2: 스트리밍 완료 후 최종 텍스트로 결과 설정
-      // (스트리밍 중 텍스트가 있으면 그것을 사용, 없으면 결과 사용)
-      if (streamingText) {
-        // 스트리밍 텍스트를 결과에 반영
-        if (result.items && result.items.length > 0) {
-          result.items[0].description = streamingText;
-          result.items[0].title = streamingText.split("\n")[0] || streamingText;
-        }
-      }
-      
       setSuggestionResult(result);
-      setStreamingText(""); // 스트리밍 텍스트 초기화
 
       // R10-S3: 추천 생성 성공 시 shown 이벤트 전송
       if (result.items && result.items.length > 0) {
         const firstSuggestion = result.items[0];
-        const suggestionText =
-          firstSuggestion.description || firstSuggestion.title || "";
+        const suggestionText = firstSuggestion.description || firstSuggestion.title || '';
         const shownText = normalizeForCompare(suggestionText);
 
-        // ✅ P0-2 + P0-3: OS 공통 Telemetry로 KPI/Audit 이벤트 전송 (메타 only + 성능 메타)
-        const modelLoadMs = perfMeta.modelLoadEnd > 0
-          ? perfMeta.modelLoadEnd - perfMeta.modelLoadStart
-          : undefined;
-        const inferenceMs = perfMeta.inferenceEnd - perfMeta.inferenceStart;
-        const firstByteMs = perfMeta.firstTokenTime > 0
-          ? perfMeta.firstTokenTime - perfMeta.inferenceStart
-          : undefined;
-
-        // ✅ R10-S5 P0-5: RAG 메타 포함 (meta-only, 원문 금지)
-        void recordLlmUsage(
-          clientCfg.mode,
-          {
-            tenantId: clientCfg.tenantId ?? "default",
-            userId: enginesCfg.userId || "hud-user-1",
-            userRole: "operator",
-            apiKey: clientCfg.apiKey || "collector-key:operator",
-          },
-          {
-            eventType: "suggestion_shown",
-            suggestionLength: shownText.length,
-            modelLoadMs,
-            inferenceMs,
-            firstByteMs,
-            backend: perfMeta.backend,
-            success: true,
-            fallback: perfMeta.fallback,
-            cancelled: false,
-            // RAG 메타 (meta-only)
-            ...(ragMeta && {
-              ragEnabled: ragMeta.ragEnabled,
-              ragDocs: ragMeta.ragDocs,
-              ragTopK: ragMeta.ragTopK,
-              ragContextChars: ragMeta.ragContextChars,
-              ragEmbeddingMs: ragMeta.ragEmbeddingMs,
-              ragRetrieveMs: ragMeta.ragRetrieveMs,
-              ragIndexWarm: ragMeta.ragIndexWarm,
-              ragIndexBuildMs: ragMeta.ragIndexBuildMs,
-              ragIndexPersistMs: ragMeta.ragIndexPersistMs,
-              ragIndexHydrateMs: ragMeta.ragIndexHydrateMs,
-              ragDocCount: ragMeta.ragDocCount,
-            }),
-          }
-        ).catch((e) => {
-          console.warn("[CsHUD] Failed to record suggestion_shown:", e);
-        });
-
         // 이전 추천이 있었는데 아직 확정 이벤트가 없다면, 새 추천 생성은 "기존 추천을 버린 것"으로 간주
-        if (
-          suggestionSessionRef.current &&
-          !suggestionSessionRef.current.finalized
-        ) {
-          // ✅ P0-2: OS 공통 Telemetry 사용 (메타 only)
-          void recordLlmUsage(
-            clientCfg.mode,
-            {
-              tenantId: clientCfg.tenantId ?? "default",
-              userId: enginesCfg.userId || "hud-user-1",
-              userRole: "operator",
-              apiKey: clientCfg.apiKey || "collector-key:operator",
-            },
-            {
-              eventType: "suggestion_rejected",
-              suggestionLength:
-                suggestionSessionRef.current.shownTextNormalized.length,
-            }
-          ).catch((e) => {
-            console.warn("[CsHUD] Failed to record rejected event:", e);
+        if (suggestionSessionRef.current && !suggestionSessionRef.current.finalized) {
+          await sendLlmUsageEvent(clientCfg, engine, {
+            tenantId: clientCfg.tenantId!,
+            userId: enginesCfg.userId || 'hud-user-1',
+            domain: 'cs',
+            eventType: 'rejected',
+            feature: 'cs_reply_suggest',
+            timestamp: new Date().toISOString(),
+            suggestionLength: suggestionSessionRef.current.shownTextNormalized.length,
+          }).catch((e) => {
+            console.warn('[CsHUD] Failed to send rejected event:', e);
           });
         }
 
@@ -554,78 +201,35 @@ export function CsHUD({ cfg }: Props = {}) {
           shownTextNormalized: shownText,
           finalized: false,
         };
+
+        // shown 이벤트 전송
+        await sendLlmUsageEvent(clientCfg, engine, {
+          tenantId: clientCfg.tenantId!,
+          userId: enginesCfg.userId || 'hud-user-1',
+          domain: 'cs',
+          eventType: 'shown',
+          feature: 'cs_reply_suggest',
+          timestamp: new Date().toISOString(),
+          suggestionLength: shownText.length,
+        }).catch((e) => {
+          console.warn('[CsHUD] Failed to send shown event:', e);
+        });
       }
     } catch (err: any) {
-      // ✅ P0-2: 취소된 요청은 에러로 처리하지 않음
-      if (err?.message === "GENERATION_ABORTED" || abortControllerRef.current?.signal.aborted) {
-        console.log("[CsHUD] Suggest cancelled by user");
-        perfMeta.cancelled = true;
-        setIsStreaming(false);
-        setStreamingText("");
-        setSuggesting(false);
+      console.error('[CsHUD] Suggest error:', err);
+      setError(err.message || '응답 추천을 생성하는데 실패했습니다.');
 
-        // ✅ P0-3: 취소 이벤트 기록 (성능 메타 포함)
-        const inferenceMs = perfMeta.inferenceEnd > 0
-          ? perfMeta.inferenceEnd - perfMeta.inferenceStart
-          : Date.now() - perfMeta.inferenceStart;
-        const modelLoadMs = perfMeta.modelLoadEnd > 0
-          ? perfMeta.modelLoadEnd - perfMeta.modelLoadStart
-          : undefined;
-
-        void recordLlmUsage(
-          clientCfg.mode,
-          {
-            tenantId: clientCfg.tenantId ?? "default",
-            userId: enginesCfg.userId || "hud-user-1",
-            userRole: "operator",
-            apiKey: clientCfg.apiKey || "collector-key:operator",
-          },
-          {
-            eventType: "suggestion_error",
-            suggestionLength: 0,
-            modelLoadMs,
-            inferenceMs,
-            backend: perfMeta.backend,
-            success: false,
-            cancelled: true,
-          }
-        ).catch(() => {});
-        return;
-      }
-
-      console.error("[CsHUD] Suggest error:", err);
-      setError(err.message || "응답 추천을 생성하는데 실패했습니다.");
-      setIsStreaming(false);
-      setStreamingText("");
-
-      // ✅ P0-2 + P0-3: OS 공통 Telemetry 사용 (메타 only + 성능 메타)
-      const inferenceMs = perfMeta.inferenceEnd > 0
-        ? perfMeta.inferenceEnd - perfMeta.inferenceStart
-        : Date.now() - perfMeta.inferenceStart;
-      const modelLoadMs = perfMeta.modelLoadEnd > 0
-        ? perfMeta.modelLoadEnd - perfMeta.modelLoadStart
-        : undefined;
-
-      void recordLlmUsage(
-        clientCfg.mode,
-        {
-          tenantId: clientCfg.tenantId ?? "default",
-          userId: enginesCfg.userId || "hud-user-1",
-          userRole: "operator",
-          apiKey: clientCfg.apiKey || "collector-key:operator",
-        },
-        {
-          eventType: "suggestion_error",
-          suggestionLength: 0,
-          modelLoadMs,
-          inferenceMs,
-          backend: perfMeta.backend,
-          success: false,
-          fallback: perfMeta.fallback,
-          cancelled: false,
-        }
-      ).catch((e) => {
-        console.warn("[CsHUD] Failed to record error event:", e);
+      // R10-S3: 에러 이벤트 전송
+      await sendLlmUsageEvent(clientCfg, engine, {
+        tenantId: clientCfg.tenantId!,
+        userId: enginesCfg.userId || 'hud-user-1',
+        domain: 'cs',
+        eventType: 'error',
+        feature: 'cs_reply_suggest',
+        timestamp: new Date().toISOString(),
+        suggestionLength: 0,
+      }).catch((e) => {
+        console.warn('[CsHUD] Failed to send error event:', e);
       });
     } finally {
       setSuggesting(false);
@@ -638,70 +242,46 @@ export function CsHUD({ cfg }: Props = {}) {
     if (!sess || sess.finalized) {
       // 추천 세션이 없거나 이미 확정된 경우, 이벤트 전송 없이 전송만 수행
       // TODO: 실제 답변 전송 로직 구현
-      console.log(
-        "[CsHUD] Sending reply (no suggestion session):",
-        finalTextRaw
-      );
+      console.log('[CsHUD] Sending reply (no suggestion session):', finalTextRaw);
       return;
     }
 
     const finalText = normalizeForCompare(finalTextRaw);
-    // ✅ P0-2: eventType 세분화 (메타 only)
     const eventType =
-      finalText === sess.shownTextNormalized
-        ? "suggestion_used_as_is"
-        : "suggestion_edited";
+      finalText === sess.shownTextNormalized ? 'accepted_as_is' : 'edited';
 
-    // OS 공통 Telemetry 사용 (메타 only)
-    void recordLlmUsage(
-      clientCfg.mode,
-      {
-        tenantId: clientCfg.tenantId ?? "default",
-        userId: enginesCfg.userId || "hud-user-1",
-        userRole: "operator",
-        apiKey: clientCfg.apiKey || "collector-key:operator",
-      },
-      {
-        eventType,
-        suggestionLength: finalText.length,
-      }
-    ).catch((e) => {
-      console.warn("[CsHUD] Failed to record usage event:", e);
+    await sendLlmUsageEvent(clientCfg, engine, {
+      tenantId: clientCfg.tenantId!,
+      userId: enginesCfg.userId || 'hud-user-1',
+      domain: 'cs',
+      eventType,
+      feature: 'cs_reply_suggest',
+      timestamp: new Date().toISOString(),
+      suggestionLength: finalText.length,
+    }).catch((e) => {
+      console.warn('[CsHUD] Failed to send usage event:', e);
     });
 
     suggestionSessionRef.current = { ...sess, finalized: true };
 
     // TODO: 실제 답변 전송 로직 구현
-    console.log("[CsHUD] Sending reply:", finalTextRaw);
+    console.log('[CsHUD] Sending reply:', finalTextRaw);
   };
 
   // R10-S3: 추천 닫기/무시 핸들러 (rejected)
   const handleDismissSuggestion = async () => {
-    // ✅ P0-2: 진행 중인 요청 취소
-    if (abortControllerRef.current && (suggesting || isStreaming)) {
-      abortControllerRef.current.abort();
-      setIsStreaming(false);
-      setStreamingText("");
-      setSuggesting(false);
-    }
-
     const sess = suggestionSessionRef.current;
     if (sess && !sess.finalized) {
-      // ✅ P0-2: OS 공통 Telemetry 사용 (메타 only)
-      void recordLlmUsage(
-        clientCfg.mode,
-        {
-          tenantId: clientCfg.tenantId ?? "default",
-          userId: enginesCfg.userId || "hud-user-1",
-          userRole: "operator",
-          apiKey: clientCfg.apiKey || "collector-key:operator",
-        },
-        {
-          eventType: "suggestion_rejected",
-          suggestionLength: sess.shownTextNormalized.length,
-        }
-      ).catch((e) => {
-        console.warn("[CsHUD] Failed to record rejected event:", e);
+      await sendLlmUsageEvent(clientCfg, engine, {
+        tenantId: clientCfg.tenantId!,
+        userId: enginesCfg.userId || 'hud-user-1',
+        domain: 'cs',
+        eventType: 'rejected',
+        feature: 'cs_reply_suggest',
+        timestamp: new Date().toISOString(),
+        suggestionLength: sess.shownTextNormalized.length,
+      }).catch((e) => {
+        console.warn('[CsHUD] Failed to send rejected event:', e);
       });
       suggestionSessionRef.current = { ...sess, finalized: true };
     }
@@ -711,19 +291,9 @@ export function CsHUD({ cfg }: Props = {}) {
   };
 
   const renderTicket = ({ item }: { item: CsTicket }) => {
-    const statusColor =
-      item.status === "open"
-        ? "#28a745"
-        : item.status === "pending"
-        ? "#ffc107"
-        : "#6c757d";
-    const statusText =
-      item.status === "open"
-        ? "열림"
-        : item.status === "pending"
-        ? "대기"
-        : "닫힘";
-    const createdAt = new Date(item.createdAt).toLocaleDateString("ko-KR");
+    const statusColor = item.status === 'open' ? '#28a745' : item.status === 'pending' ? '#ffc107' : '#6c757d';
+    const statusText = item.status === 'open' ? '열림' : item.status === 'pending' ? '대기' : '닫힘';
+    const createdAt = new Date(item.createdAt).toLocaleDateString('ko-KR');
     const isSelected = selectedTicket?.id === item.id;
 
     return (
@@ -736,39 +306,14 @@ export function CsHUD({ cfg }: Props = {}) {
         </View>
         <Text style={styles.ticketDate}>생성일: {createdAt}</Text>
         <TouchableOpacity
-          style={[
-            styles.suggestButton,
-            isSelected &&
-              (suggesting || modelLoading) &&
-              styles.suggestButtonActive,
-          ]}
+          style={[styles.suggestButton, isSelected && suggesting && styles.suggestButtonActive]}
           onPress={() => handleSuggest(item)}
-          disabled={suggesting || modelLoading}
+          disabled={suggesting}
         >
           <Text style={styles.suggestButtonText}>
-            {modelLoading && isSelected
-              ? modelLoadProgress?.text || "모델 로딩 중..."
-              : suggesting && isSelected
-              ? "추천 중..."
-              : "요약/추천"}
+            {suggesting && isSelected ? '추천 중...' : '요약/추천'}
           </Text>
         </TouchableOpacity>
-        {/* ✅ E06-3: 모델 로딩 Progress 표시 */}
-        {isSelected && modelLoading && modelLoadProgress && (
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${modelLoadProgress.progress}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {modelLoadProgress.text} ({modelLoadProgress.progress}%)
-            </Text>
-          </View>
-        )}
         {isSelected && suggestionResult && (
           <View style={styles.suggestionResult}>
             <View style={styles.suggestionHeader}>
@@ -781,15 +326,13 @@ export function CsHUD({ cfg }: Props = {}) {
               </TouchableOpacity>
             </View>
             {suggestionResult.items.map((item: any, idx: number) => {
-              const suggestionText = item.description || item.title || "";
+              const suggestionText = item.description || item.title || '';
 
               return (
                 <View key={idx} style={styles.suggestionItem}>
                   <Text style={styles.suggestionText}>{item.title}</Text>
                   {item.description && (
-                    <Text style={styles.suggestionDesc}>
-                      {item.description}
-                    </Text>
+                    <Text style={styles.suggestionDesc}>{item.description}</Text>
                   )}
                   {/* R10-S3: 전송 버튼 추가 */}
                   <View style={styles.suggestionActions}>
@@ -797,12 +340,7 @@ export function CsHUD({ cfg }: Props = {}) {
                       style={[styles.actionButton, styles.primaryButton]}
                       onPress={() => handleSendReply(suggestionText)}
                     >
-                      <Text
-                        style={[
-                          styles.actionButtonText,
-                          styles.primaryButtonText,
-                        ]}
-                      >
+                      <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
                         전송
                       </Text>
                     </TouchableOpacity>
@@ -810,31 +348,6 @@ export function CsHUD({ cfg }: Props = {}) {
                 </View>
               );
             })}
-            {/* ✅ R10-S5 P1-2: 출처 표시 (subject + safe snippet) */}
-            {ragSources.length > 0 && (
-              <View style={styles.ragSourcesContainer}>
-                <Text style={styles.ragSourcesTitle}>출처:</Text>
-                {ragSources.map((source, idx) => (
-                  <View key={idx} style={styles.ragSourceItem}>
-                    {/* Subject */}
-                    <Text style={styles.ragSourceSubject}>
-                      [{source.category}] {source.subject} ({source.id})
-                      {source.score !== undefined && (
-                        <Text style={styles.ragSourceScore}>
-                          {" "}({Math.round(source.score * 100)}%)
-                        </Text>
-                      )}
-                    </Text>
-                    {/* ✅ P1-2: Safe snippet (plain text, 길이 제한, 제어문자 제거) */}
-                    {source.snippet && (
-                      <Text style={styles.ragSourceSnippet}>
-                        {source.snippet}
-                      </Text>
-                    )}
-                  </View>
-                ))}
-              </View>
-            )}
           </View>
         )}
       </View>
@@ -846,24 +359,8 @@ export function CsHUD({ cfg }: Props = {}) {
       <View style={styles.header}>
         <Text style={styles.title}>CS HUD</Text>
         <Text style={styles.engineLabel}>Engine: {engineLabel}</Text>
-        {/* ✅ R10-S5 P0-5: RAG 하이드레이션 상태 배지 */}
-        {ragIndexWarm !== null && (
-          <View style={styles.ragStatusBadge}>
-            <Text style={styles.ragStatusText}>
-              {ragIndexWarm ? "캐시에서 복원됨" : "인덱스 생성됨"} ({ragDocCount}개 문서)
-            </Text>
-          </View>
-        )}
-        {ragHydrating && ragHydrationProgress && (
-          <View style={styles.ragHydrationContainer}>
-            <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.ragHydrationText}>
-              {ragHydrationProgress.text}
-            </Text>
-          </View>
-        )}
       </View>
-
+      
       {isMock(clientCfg) && (
         <View style={styles.mockBanner}>
           <Text style={styles.mockText}>
@@ -874,7 +371,7 @@ export function CsHUD({ cfg }: Props = {}) {
 
       <View style={styles.content}>
         <Text style={styles.sectionTitle}>최근 티켓</Text>
-
+        
         {loading && (
           <View style={styles.centerContainer}>
             <ActivityIndicator size="small" color="#007AFF" />
@@ -918,12 +415,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: "bold",
-    color: "#333",
+    fontWeight: 'bold',
+    color: '#333',
   },
   engineLabel: {
     fontSize: 12,
-    color: "#666",
+    color: '#666',
     marginTop: 4,
   },
   content: {
@@ -931,70 +428,70 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
+    fontWeight: '600',
+    color: '#333',
     marginBottom: 12,
   },
   mockBanner: {
-    backgroundColor: "#fff3cd",
+    backgroundColor: '#fff3cd',
     padding: 12,
     borderRadius: 4,
     marginTop: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#ffc107",
+    borderColor: '#ffc107',
   },
   mockText: {
     fontSize: 12,
-    color: "#856404",
+    color: '#856404',
   },
   centerContainer: {
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 32,
   },
   loadingText: {
     marginTop: 8,
     fontSize: 14,
-    color: "#666",
+    color: '#666',
   },
   errorContainer: {
-    backgroundColor: "#f8d7da",
+    backgroundColor: '#f8d7da',
     padding: 12,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: "#f5c6cb",
+    borderColor: '#f5c6cb',
   },
   errorText: {
     fontSize: 14,
-    color: "#721c24",
+    color: '#721c24',
   },
   emptyText: {
     fontSize: 14,
-    color: "#666",
-    fontStyle: "italic",
+    color: '#666',
+    fontStyle: 'italic',
   },
   ticketList: {
     marginTop: 8,
   },
   ticketItem: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: '#f8f9fa',
     padding: 12,
     borderRadius: 4,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#dee2e6",
+    borderColor: '#dee2e6',
   },
   ticketHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 4,
   },
   ticketSubject: {
     fontSize: 16,
-    fontWeight: "500",
-    color: "#333",
+    fontWeight: '500',
+    color: '#333',
     flex: 1,
     marginRight: 8,
   },
@@ -1005,43 +502,43 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    color: "#fff",
-    fontWeight: "600",
+    color: '#fff',
+    fontWeight: '600',
   },
   ticketDate: {
     fontSize: 12,
-    color: "#666",
+    color: '#666',
     marginTop: 4,
   },
   suggestButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: '#007AFF',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 4,
     marginTop: 8,
-    alignItems: "center",
+    alignItems: 'center',
   },
   suggestButtonActive: {
-    backgroundColor: "#0056b3",
+    backgroundColor: '#0056b3',
     opacity: 0.7,
   },
   suggestButtonText: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   suggestionResult: {
     marginTop: 12,
     padding: 12,
-    backgroundColor: "#e7f3ff",
+    backgroundColor: '#e7f3ff',
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: "#b3d9ff",
+    borderColor: '#b3d9ff',
   },
   suggestionTitle: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
+    fontWeight: '600',
+    color: '#333',
     marginBottom: 8,
   },
   suggestionItem: {
@@ -1049,36 +546,36 @@ const styles = StyleSheet.create({
   },
   suggestionText: {
     fontSize: 14,
-    color: "#333",
+    color: '#333',
     marginBottom: 4,
   },
   suggestionDesc: {
     fontSize: 12,
-    color: "#666",
-    fontStyle: "italic",
+    color: '#666',
+    fontStyle: 'italic',
   },
   suggestionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
   dismissButton: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
-    backgroundColor: "#e9ecef",
+    backgroundColor: '#e9ecef',
     borderWidth: 1,
-    borderColor: "#dee2e6",
+    borderColor: '#dee2e6',
   },
   dismissButtonText: {
     fontSize: 12,
-    color: "#333",
-    fontWeight: "500",
+    color: '#333',
+    fontWeight: '500',
   },
   suggestionActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     marginTop: 8,
     gap: 8,
   },
@@ -1086,113 +583,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 4,
-    backgroundColor: "#e9ecef",
+    backgroundColor: '#e9ecef',
     borderWidth: 1,
-    borderColor: "#dee2e6",
+    borderColor: '#dee2e6',
   },
   primaryButton: {
-    backgroundColor: "#007AFF",
-    borderColor: "#007AFF",
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
   },
   actionButtonText: {
     fontSize: 12,
-    color: "#333",
-    fontWeight: "500",
+    color: '#333',
+    fontWeight: '500',
   },
   primaryButtonText: {
-    color: "#fff",
-  },
-  progressContainer: {
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: "#f0f0f0",
-    borderRadius: 4,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: "#e0e0e0",
-    borderRadius: 2,
-    overflow: "hidden",
-    marginBottom: 4,
-  },
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#007AFF",
-    borderRadius: 2,
-    transition: "width 0.3s ease",
-  },
-  progressText: {
-    fontSize: 12,
-    color: "#666",
-    textAlign: "center",
-  },
-  streamingCursor: {
-    color: "#007AFF",
-    fontWeight: "bold",
-    animation: "blink 1s infinite",
-  },
-  // ✅ R10-S5 P0-5: RAG 하이드레이션 상태 스타일
-  ragStatusBadge: {
-    marginTop: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: "#d4edda",
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "#c3e6cb",
-  },
-  ragStatusText: {
-    fontSize: 11,
-    color: "#155724",
-    fontWeight: "500",
-  },
-  ragHydrationContainer: {
-    marginTop: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  ragHydrationText: {
-    fontSize: 11,
-    color: "#666",
-  },
-  // ✅ R10-S5 P0-5: RAG 출처 표시 스타일
-  ragSourcesContainer: {
-    marginTop: 12,
-    padding: 8,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "#dee2e6",
-  },
-  ragSourcesTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 8,
-  },
-  ragSourceItem: {
-    marginBottom: 8,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e9ecef",
-  },
-  ragSourceSubject: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 4,
-  },
-  ragSourceSnippet: {
-    fontSize: 11,
-    color: "#666",
-    lineHeight: 16,
-    maxHeight: 32, // 최대 2줄 (lineHeight 16 * 2)
-    overflow: "hidden",
-  },
-  ragSourceScore: {
-    fontSize: 10,
-    color: "#999",
-    fontStyle: "italic",
+    color: '#fff',
   },
 });
+

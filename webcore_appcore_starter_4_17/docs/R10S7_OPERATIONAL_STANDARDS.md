@@ -19,6 +19,13 @@
 
 ### 0-1-1) Build Anchor 검증/증빙 (스크립트화, 복붙 블록 금지)
 
+**절대 하드룰**: 검증/증빙은 scripts/ops/*.sh로만 수행 (zsh 복붙 블록 금지)
+
+**루트 고정**: 모든 스크립트는 시작부에 다음 포함
+```bash
+cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+```
+
 **검증**: 복붙 블록 금지 → 스크립트 실행만 허용
 ```bash
 bash scripts/ops/verify_build_anchor.sh
@@ -38,6 +45,14 @@ bash scripts/ops/prove_build_anchor.sh
 **팀 표준**: `npm run build --workspace=@appcore/bff-accounting`
 
 모든 스크립트/문서에서 위 형태만 사용 (혼용 금지).
+
+### 0-1-3) rg 사용 정책 (타임아웃 근절)
+
+**기본 제외**: `.rgignore` 정책 기반
+- `**/node_modules/`, `**/dist/`, `**/docs/ops/` 등 기본 제외
+
+**패키지 범위**: rg는 패키지 범위로만 사용
+- 예: `rg -n "require\\(" packages/bff-accounting/dist`
 
 ## 1) S6 최종 상태 (SSOT)
 
