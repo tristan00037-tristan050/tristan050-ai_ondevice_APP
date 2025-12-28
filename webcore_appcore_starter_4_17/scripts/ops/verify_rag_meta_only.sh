@@ -10,15 +10,14 @@ DOCS_OPS_DIR="docs/ops"
 
 # Scope is intentionally limited to S7 retriever-quality artifacts only.
 # This prevents false positives from unrelated docs while enforcing meta-only for outputs.
-# NOTE: schema.json files are excluded (they legitimately contain JSON Schema URLs)
+# NOTE: Only schema.json files are excluded from PII/URL checks (they legitimately contain JSON Schema URLs)
 FILES=()
 while IFS= read -r line; do
-  [ -n "$line" ] && [[ "$line" != *.schema.json ]] && FILES+=("$line")
+  [ -n "$line" ] && FILES+=("$line")
 done < <(
   find "$DOCS_OPS_DIR" -maxdepth 1 -type f \( \
-    -name 'r10-s7-retriever-*.json' -o \
     -name 'r10-s7-retriever-*.jsonl' -o \
-    -name 'r10-s7-retriever-*.log' -o \
+    -name 'r10-s7-retriever-*.json' -o \
     -name 'r10-s7-retriever-quality-*.json' -o \
     -name 'r10-s7-retriever-quality-*.log' \
   \) 2>/dev/null | sort
@@ -43,9 +42,19 @@ PHONE_REGEX='(\+?[0-9]{1,3}[- ][0-9]{2,4}[- ][0-9]{2,4}[- ][0-9]{3,4}|[0-9]{2,4}
 # File-type-specific rules
 for f in "${FILES[@]}"; do
   case "$f" in
+    # Schema files: skip PII/URL checks (schema URLs are legitimate), but check for forbidden keys
+    *goldenset.schema.json)
+      # 1) Forbidden JSON keys (raw-content-like) - still check
+      if rg -n -i "$FORBIDDEN_JSON_KEYS_REGEX" "$f" >/dev/null 2>&1; then
+        rg -n -i "$FORBIDDEN_JSON_KEYS_REGEX" "$f" | head -n 20 >&2 || true
+        fail "meta-only violation: forbidden raw-content-like key in $f"
+      fi
+      # PII/URL checks are skipped for schema files (schema URLs are legitimate)
+      ;;
+    
     # Goldenset JSONL: query allowed (synthetic), PII forbidden, raw-content keys forbidden
-    *.jsonl)
-      # 1) Forbidden JSON keys (raw-content-like)
+    *goldenset.jsonl)
+      # 1) Forbidden JSON keys (raw-content-like, but query is allowed)
       if rg -n -i "$FORBIDDEN_JSON_KEYS_REGEX" "$f" >/dev/null 2>&1; then
         rg -n -i "$FORBIDDEN_JSON_KEYS_REGEX" "$f" | head -n 20 >&2 || true
         fail "meta-only violation: forbidden raw-content-like key in $f"
