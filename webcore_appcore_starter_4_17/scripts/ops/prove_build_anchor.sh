@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ✅ R10-S7 ESM Build Anchor "재발 0 잠금" 정본 v1.0
-# 1회 실행: 빌드+기동+검증+증빙+.latest
-
 cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:8081}"

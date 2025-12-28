@@ -212,6 +212,40 @@ jobs:
             exit 1
           fi
           echo "✅ buildSha matches git HEAD: ${BUILD_SHA:0:7}..."
+      
+      # ✅ CI Hard Gate: verify_build_anchor.sh 실행 (필수 PASS)
+      - name: Verify build anchor (scripts/ops/verify_build_anchor.sh)
+        run: |
+          # BFF 기동 (포트 충돌 방지)
+          PORT=8082
+          cd packages/bff-accounting
+          node --enable-source-maps dist/index.js &
+          BFF_PID=$!
+          sleep 3
+          cd ../..
+          
+          # verify 실행
+          BASE_URL="http://localhost:${PORT}" bash scripts/ops/verify_build_anchor.sh
+          
+          # 정리
+          kill $BFF_PID 2>/dev/null || true
+      
+      # ✅ CI Hard Gate: destructive_build_anchor_should_fail.sh 실행 (필수 PASS)
+      - name: Destructive test (build anchor tamper should fail)
+        run: |
+          # BFF 기동 (포트 충돌 방지)
+          PORT=8082
+          cd packages/bff-accounting
+          node --enable-source-maps dist/index.js &
+          BFF_PID=$!
+          sleep 3
+          cd ../..
+          
+          # destructive 테스트 실행 (스크립트 자체는 PASS로 종료)
+          BASE_URL="http://localhost:${PORT}" bash scripts/ops/destructive_build_anchor_should_fail.sh
+          
+          # 정리
+          kill $BFF_PID 2>/dev/null || true
 
   test:
     name: Run Tests
