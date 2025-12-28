@@ -146,6 +146,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
+      - name: S7 Always On - preflight
+        run: |
+          set -euo pipefail
+          cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+          bash scripts/ops/verify_s7_always_on.sh
+      
+      - name: S7 Phase 0 - retriever quality meta-only report
+        run: |
+          set -euo pipefail
+          cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+          bash scripts/ops/verify_retriever_quality.sh
+          test -f docs/ops/r10-s7-retriever-quality-phase0-report.json
+      
+      - name: Upload S7 Phase 0 report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: s7-retriever-quality-phase0-report
+          path: webcore_appcore_starter_4_17/docs/ops/r10-s7-retriever-quality-phase0-report.json
+      
       - name: Build Collector
         run: npm run build --workspace=@appcore/collector-node-ts
       
@@ -495,6 +514,12 @@ jobs:
       - name: Destructive test (build anchor tamper should fail)
         run: |
           BASE_URL="http://localhost:8081" bash scripts/ops/destructive_build_anchor_should_fail.sh
+      
+      - name: S7 Always On - post-scan
+        run: |
+          set -euo pipefail
+          cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+          bash scripts/ops/verify_s7_always_on.sh
       
       - name: E2E Suggest
         env:
