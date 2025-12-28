@@ -36,7 +36,9 @@ FORBIDDEN_JSON_KEYS_REGEX='\"(text|content|snippet|passage|raw|prompt|completion
 EMAIL_REGEX='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
 KRRN_REGEX='[0-9]{6}-[1-4][0-9]{6}'
 URL_REGEX='https?://[^[:space:]]+'
-PHONE_REGEX='(\+?[0-9]{1,3}[- ]?)?([0-9]{2,4}[- ]?){2,4}[0-9]{3,4}'
+# Phone pattern: more strict to avoid false positives with SHA256 (64 hex chars) and timestamps
+# Require at least one space/dash separator and reasonable length constraints
+PHONE_REGEX='(\+?[0-9]{1,3}[- ][0-9]{2,4}[- ][0-9]{2,4}[- ][0-9]{3,4}|[0-9]{2,4}[- ][0-9]{2,4}[- ][0-9]{3,4})'
 
 # File-type-specific rules
 for f in "${FILES[@]}"; do
