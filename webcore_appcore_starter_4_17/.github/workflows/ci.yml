@@ -531,6 +531,19 @@ jobs:
         run: |
           BASE_URL="http://localhost:8081" bash scripts/ops/destructive_build_anchor_should_fail.sh
       
+      - name: S7 Step 3 - baseline change forbidden in PR
+        run: |
+          set -euo pipefail
+          if [ -n "${GITHUB_BASE_REF:-}" ]; then
+            git fetch --no-tags origin "${GITHUB_BASE_REF}":"refs/remotes/origin/${GITHUB_BASE_REF}"
+            CHANGED="$(git diff --name-only "origin/${GITHUB_BASE_REF}"...HEAD | rg "^webcore_appcore_starter_4_17/docs/ops/r10-s7-retriever-metrics-baseline\\.json$" || true)"
+            if [ -n "$CHANGED" ]; then
+              echo "FAIL: baseline file must not change in PR (ratchet runs on main with explicit command)"
+              exit 1
+            fi
+          fi
+          echo "OK: baseline not changed in PR"
+
       - name: S7 Phase 1 - Regression Gate (baseline compare)
         run: |
           set -euo pipefail
