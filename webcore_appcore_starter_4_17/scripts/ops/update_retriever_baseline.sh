@@ -9,12 +9,26 @@ BASELINE="${BASELINE:-docs/ops/r10-s7-retriever-metrics-baseline.json}"
 REPORT="${REPORT:-docs/ops/r10-s7-retriever-quality-phase1-report.json}"
 
 TOL="${TOL:-0.0}"
-MIN_GAIN="${MIN_GAIN:-0.000000}"
 
 UPDATE=0
-if [ "${1:-}" = "--update-baseline" ]; then
-  UPDATE=1
-fi
+MIN_GAIN=0.0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --update-baseline)
+      UPDATE=1
+      shift
+      ;;
+    --min-gain)
+      MIN_GAIN="$2"
+      shift 2
+      ;;
+    *)
+      echo "FAIL: unknown option: $1" >&2
+      echo "Usage: $0 [--update-baseline] [--min-gain VALUE]" >&2
+      exit 1
+      ;;
+  esac
+done
 
 # Phase1 report 생성(현 러너 기준)
 bash scripts/ops/eval_retriever_quality_phase1.sh

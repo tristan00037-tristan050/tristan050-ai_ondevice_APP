@@ -24,8 +24,16 @@ cleanup_old() {
   echo "== START PROVE_BASELINE_RATCHET =="
   echo "TS=$TS"
   echo "PWD=$(pwd)"
+  echo "== ALWAYS ON =="
+  bash scripts/ops/verify_s7_always_on.sh
+  echo "== CORPUS GATE =="
+  bash scripts/ops/verify_s7_corpus_no_pii.sh
+  echo "== PHASE1 EVAL =="
+  bash scripts/ops/eval_retriever_quality_phase1.sh
+  echo "== META-ONLY VERIFY =="
+  bash scripts/ops/verify_rag_meta_only.sh
   echo "== UPDATE BASELINE (ratchet) =="
-  bash scripts/ops/update_retriever_baseline.sh --update-baseline
+  bash scripts/ops/update_retriever_baseline.sh "$@"
   echo "== META_ONLY_DEBUG (scan list proof) =="
   META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh
   echo "== END PROVE_BASELINE_RATCHET =="
