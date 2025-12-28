@@ -38,7 +38,9 @@ FORBIDDEN_JSON_KEYS_REGEX='\"(text|content|snippet|passage|raw|prompt|completion
 EMAIL_REGEX='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
 KRRN_REGEX='[0-9]{6}-[1-4][0-9]{6}'
 URL_REGEX='https?://[^[:space:]]+'
-PHONE_REGEX='(\+?[0-9]{1,3}[- ]?)?([0-9]{2,4}[- ]?){2,4}[0-9]{3,4}'
+# Phone pattern: require separators (space/dash) and reasonable length to avoid SHA256 false positives
+# SHA256 is 64 hex chars, so we require at least one separator and limit total length
+PHONE_REGEX='(\+?[0-9]{1,3}[- ][0-9]{2,4}[- ][0-9]{2,4}[- ][0-9]{3,4}|[0-9]{2,4}[- ][0-9]{2,4}[- ][0-9]{3,4})'
 
 for f in "${FILES[@]}"; do
   base="$(basename "$f")"
