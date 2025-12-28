@@ -531,6 +531,18 @@ jobs:
         run: |
           BASE_URL="http://localhost:8081" bash scripts/ops/destructive_build_anchor_should_fail.sh
       
+      - name: S7 Phase 1 - Regression Gate (baseline compare)
+        run: |
+          set -euo pipefail
+          cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+          bash scripts/ops/verify_retriever_regression_gate.sh
+
+      - name: Upload S7 Phase 1 report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: s7-retriever-quality-phase1-report
+          path: webcore_appcore_starter_4_17/docs/ops/r10-s7-retriever-quality-phase1-report.json
+
       - name: S7 Always On - post-scan
         run: |
           set -euo pipefail

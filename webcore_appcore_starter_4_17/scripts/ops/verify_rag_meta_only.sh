@@ -10,10 +10,15 @@ DOCS_OPS_DIR="docs/ops"
 
 # Scope is intentionally limited to S7 retriever-quality artifacts only.
 # This prevents false positives from unrelated docs while enforcing meta-only for outputs.
-# NOTE: Only schema.json files are excluded from PII/URL checks (they legitimately contain JSON Schema URLs)
+# NOTE: 
+# - schema.json files are excluded from PII/URL checks (they legitimately contain JSON Schema URLs)
+# - corpus.jsonl is excluded (it's input data, not output artifact)
 FILES=()
 while IFS= read -r line; do
-  [ -n "$line" ] && FILES+=("$line")
+  [ -n "$line" ] && \
+    [[ "$line" != *.schema.json ]] && \
+    [[ "$line" != *corpus.jsonl ]] && \
+    FILES+=("$line")
 done < <(
   find "$DOCS_OPS_DIR" -maxdepth 1 -type f \( \
     -name 'r10-s7-retriever-*.jsonl' -o \
