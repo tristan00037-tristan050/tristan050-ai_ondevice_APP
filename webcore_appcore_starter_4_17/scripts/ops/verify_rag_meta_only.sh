@@ -75,5 +75,4 @@ for f in "${FILES[@]}"; do
 done
 
 FILE_COUNT="${#FILES[@]}"
-FILE_COUNT="${#FILES[@]}"
 echo "OK: meta-only verifier passed - ${FILE_COUNT} files scanned"
