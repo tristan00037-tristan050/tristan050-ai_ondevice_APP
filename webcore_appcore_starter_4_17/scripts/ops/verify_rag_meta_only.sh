@@ -74,4 +74,4 @@ for f in "${FILES[@]}"; do
   esac
 done
 
-echo "OK: meta-only verifier passed - ${#FILES[@]} file(s) scanned"
+echo "OK: meta-only verifier passed - ${#FILES[@]} files scanned"
