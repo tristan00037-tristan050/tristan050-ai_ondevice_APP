@@ -159,6 +159,22 @@ jobs:
           bash scripts/ops/verify_retriever_quality.sh
           test -f docs/ops/r10-s7-retriever-quality-phase0-report.json
       
+      - name: Verify S7 Phase 0 report meta-only (before upload)
+        run: |
+          set -euo pipefail
+          cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+          REPORT="docs/ops/r10-s7-retriever-quality-phase0-report.json"
+          test -f "$REPORT" || (echo "FAIL: report not found" && exit 1)
+          # Query key must be absent
+          if rg -n '"query"' "$REPORT" >/dev/null 2>&1; then
+            echo "FAIL: report contains query key (meta-only violation)"
+            rg -n '"query"' "$REPORT"
+            exit 1
+          fi
+          # Run meta-only verifier
+          bash scripts/ops/verify_rag_meta_only.sh
+          echo "OK: report is meta-only compliant"
+      
       - name: Upload S7 Phase 0 report artifact
         uses: actions/upload-artifact@v4
         with:
