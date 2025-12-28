@@ -32,7 +32,7 @@ for g in "${TARGET_GLOBS[@]}"; do
 done
 
 if [ "${#FILES[@]}" -eq 0 ]; then
-  echo "OK: meta-only verifier - no S7 retriever artifacts found; nothing to scan"
+  echo "OK: meta-only verifier - no S7 retriever artifacts found, nothing to scan"
   exit 0
 fi
 
