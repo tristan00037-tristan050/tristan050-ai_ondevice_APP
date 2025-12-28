@@ -104,3 +104,14 @@
 ## 6. Closing Statement
 본 건은 로컬 one-shot 증빙 로그, proof/.latest 포인터, 그리고 main CI Hard Gate PASS로 결정적으로 실증 완료되었다.
 검증/파괴/증빙 절차는 ops 스크립트 3종과 CI 게이트로 고정되어, 사람 실수로 동일 유형 장애가 재발할 가능성은 구조적으로 차단되었다.
+
+## Appendix: Permanent Record (Verified by Commit Patch)
+- **Post-Mortem Commit**
+  - Message: `docs(ops): add post-mortem report for R10-S7 build anchor incident`
+  - SHA: `840f70685ea0e1a810403f349c4e88a0be86cdf5`
+  - Added File: `docs/R10S7_BUILD_ANCHOR_POST_MORTEM.md`
+
+- **Golden Proofs**
+  - One-Shot Proof: `docs/ops/r10-s7-one_shot_proof_20251228-044642.log`
+  - Proof Log: `docs/ops/r10-s7-build-anchor-esm-proof-20251228-044649.log`
+  - Latest Pointer: `docs/ops/r10-s7-build-anchor-esm-proof.latest` → `r10-s7-build-anchor-esm-proof-20251228-044649.log`
