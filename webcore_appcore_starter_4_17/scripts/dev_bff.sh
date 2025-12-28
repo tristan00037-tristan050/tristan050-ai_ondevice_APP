@@ -46,51 +46,56 @@ export WEBLLM_UPSTREAM_BASE_URL="${WEBLLM_UPSTREAM_BASE_URL:-http://127.0.0.1:90
 
 # --- BEGIN: dist freshness guard (S6-S7 hardening) ---
 # ✅ 하드 룰: dist freshness 체크 + 빌드가 완료된 후에만 BFF 시작
-ROOT="$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
-PKG="$ROOT/packages/bff-accounting"
-DIST="$PKG/dist/index.js"
-
-# 1) Anchor 2만 먼저 체크 (src vs dist timestamp, BFF 시작 전 가능)
-echo "[dev_bff] Checking dist freshness (src vs dist timestamp)..."
-PYTHON_MTIME="$ROOT/scripts/_lib/mtime_python.py"
-
-if [ -f "$DIST" ] && [ -f "$PYTHON_MTIME" ]; then
-  dist_result=$(python3 "$PYTHON_MTIME" "$PKG/dist" "*.js" "*.map" 2>/dev/null || echo '{"latest_mtime":0}')
-  dist_mtime=$(echo "$dist_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
-  
-  src_result=$(python3 "$PYTHON_MTIME" "$PKG/src" "*.ts" "*.tsx" "*.js" 2>/dev/null || echo '{"latest_mtime":0}')
-  src_latest_mtime=$(echo "$src_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
-  
-  for config_file in "$PKG/tsconfig.json" "$PKG/package.json"; do
-    if [ -f "$config_file" ]; then
-      config_result=$(python3 "$PYTHON_MTIME" "$(dirname "$config_file")" "$(basename "$config_file")" 2>/dev/null || echo '{"latest_mtime":0}')
-      config_mtime=$(echo "$config_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
-      if [ "$config_mtime" -gt "$src_latest_mtime" ]; then
-        src_latest_mtime="$config_mtime"
-      fi
-    fi
-  done
-  
-  if [ "$src_latest_mtime" -gt "$dist_mtime" ]; then
-    echo "[dev_bff] dist is older than src -> build required"
-    NEED_BUILD=1
-  else
-    echo "[dev_bff] dist is fresh (skip build)"
-    NEED_BUILD=0
-  fi
+# ✅ DEV_BFF_SKIP_BUILD=1이면 dist freshness 체크 및 build 완전 스킵
+if [ "${DEV_BFF_SKIP_BUILD:-0}" = "1" ]; then
+  echo "[dev_bff] SKIP_BUILD=1 -> skip dist freshness + build"
 else
-  echo "[dev_bff] dist missing or mtime_python.py not found -> build required"
-  NEED_BUILD=1
-fi
+  ROOT="$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+  PKG="$ROOT/packages/bff-accounting"
+  DIST="$PKG/dist/index.js"
 
-# 2) 빌드 필요 시 수행
-# ✅ C) workspace 빌드 표준 1개로 통일
-if [ "$NEED_BUILD" = "1" ]; then
-  echo "[dev_bff] Building @appcore/bff-accounting..."
-  npm run build --workspace=@appcore/bff-accounting || {
-    echo "[dev_bff] FAIL: build failed"
-    exit 1
-  }
+  # 1) Anchor 2만 먼저 체크 (src vs dist timestamp, BFF 시작 전 가능)
+  echo "[dev_bff] Checking dist freshness (src vs dist timestamp)..."
+  PYTHON_MTIME="$ROOT/scripts/_lib/mtime_python.py"
+
+  if [ -f "$DIST" ] && [ -f "$PYTHON_MTIME" ]; then
+    dist_result=$(python3 "$PYTHON_MTIME" "$PKG/dist" "*.js" "*.map" 2>/dev/null || echo '{"latest_mtime":0}')
+    dist_mtime=$(echo "$dist_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
+    
+    src_result=$(python3 "$PYTHON_MTIME" "$PKG/src" "*.ts" "*.tsx" "*.js" 2>/dev/null || echo '{"latest_mtime":0}')
+    src_latest_mtime=$(echo "$src_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
+    
+    for config_file in "$PKG/tsconfig.json" "$PKG/package.json"; do
+      if [ -f "$config_file" ]; then
+        config_result=$(python3 "$PYTHON_MTIME" "$(dirname "$config_file")" "$(basename "$config_file")" 2>/dev/null || echo '{"latest_mtime":0}')
+        config_mtime=$(echo "$config_result" | jq -r '.latest_mtime // 0' 2>/dev/null || echo "0")
+        if [ "$config_mtime" -gt "$src_latest_mtime" ]; then
+          src_latest_mtime="$config_mtime"
+        fi
+      fi
+    done
+    
+    if [ "$src_latest_mtime" -gt "$dist_mtime" ]; then
+      echo "[dev_bff] dist is older than src -> build required"
+      NEED_BUILD=1
+    else
+      echo "[dev_bff] dist is fresh (skip build)"
+      NEED_BUILD=0
+    fi
+  else
+    echo "[dev_bff] dist missing or mtime_python.py not found -> build required"
+    NEED_BUILD=1
+  fi
+
+  # 2) 빌드 필요 시 수행
+  # ✅ C) workspace 빌드 표준 1개로 통일
+  if [ "$NEED_BUILD" = "1" ]; then
+    echo "[dev_bff] Building @appcore/bff-accounting..."
+    npm run build --workspace=@appcore/bff-accounting || {
+      echo "[dev_bff] FAIL: build failed"
+      exit 1
+    }
+  fi
 fi
 
 # 3) Anchor 1 (healthz buildSha)는 BFF 시작 후에 체크 (아래 healthz 폴링에서 수행)
