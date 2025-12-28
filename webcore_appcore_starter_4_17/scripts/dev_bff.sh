@@ -105,26 +105,28 @@ echo "[dev_bff] Starting BFF on :${PORT}"
 echo "[dev_bff] DATABASE_URL=${DATABASE_URL}"
 echo "[dev_bff] WEBLLM_UPSTREAM_BASE_URL=${WEBLLM_UPSTREAM_BASE_URL}"
 
-# BFF를 백그라운드로 시작
+# BFF를 백그라운드로 시작 (nohup으로 완전 분리)
 echo "[dev_bff] Starting BFF in background..."
-npm run dev:bff > /tmp/bff_dev.log 2>&1 &
+nohup npm run dev:bff >> /tmp/bff_dev.log 2>&1 &
 BFF_PID=$!
+echo $BFF_PID > /tmp/bff_dev.pid
 
-# healthz 폴링 (상한 50초, curl --max-time 사용)
+# healthz 폴링 (상한 10초, curl 재시도 방식)
 echo "[dev_bff] Waiting for BFF to be ready..."
 HEALTHZ="http://127.0.0.1:${PORT}/healthz"
 BFF_READY=false
-MAX_WAIT=50
+MAX_WAIT=10
 
 for i in $(seq 1 $MAX_WAIT); do
-  sleep 1
-  if curl -fsS --max-time 2 "$HEALTHZ" >/dev/null 2>&1; then
+  http_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 "$HEALTHZ" 2>/dev/null || echo "000")"
+  if [ "$http_code" = "200" ]; then
     BFF_READY=true
     echo "[dev_bff] BFF ready after ${i}s"
     break
   fi
-  if [ $((i % 5)) -eq 0 ]; then
-    echo "[dev_bff] Waiting... (${i}/${MAX_WAIT}s)"
+  sleep 1
+  if [ $((i % 3)) -eq 0 ]; then
+    echo "[dev_bff] Waiting... (${i}/${MAX_WAIT}s, http_code=$http_code)"
   fi
 done
 
@@ -133,6 +135,7 @@ if [ "$BFF_READY" != "true" ]; then
   echo "[dev_bff] BFF log (last 30 lines):"
   tail -n 30 /tmp/bff_dev.log 2>/dev/null || echo "(log not available)"
   kill $BFF_PID 2>/dev/null || true
+  rm -f /tmp/bff_dev.pid
   exit 1
 fi
 
@@ -227,4 +230,12 @@ rm -f "$TMP_BODY" "$TMP_HDR"
 
 echo "[dev_bff] BFF started successfully (PID: $BFF_PID)"
 echo "[dev_bff] Log: /tmp/bff_dev.log"
-wait $BFF_PID
+echo "[dev_bff] PID file: /tmp/bff_dev.pid"
+
+# 기본 실행은 종료형, DEV_BFF_FOLLOW_LOG=1일 때만 tail -f
+if [ "${DEV_BFF_FOLLOW_LOG:-0}" = "1" ]; then
+  echo "[dev_bff] Following log (DEV_BFF_FOLLOW_LOG=1)..."
+  tail -f /tmp/bff_dev.log
+else
+  exit 0
+fi
