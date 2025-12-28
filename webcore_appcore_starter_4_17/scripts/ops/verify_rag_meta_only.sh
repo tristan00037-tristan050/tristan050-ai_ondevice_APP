@@ -9,7 +9,8 @@ DOCS_OPS_DIR="docs/ops"
 
 FILES=()
 while IFS= read -r f; do
-  FILES+=("$f")
+  # corpus.jsonl은 입력 데이터이므로 스캔 대상에서 제외
+  [[ "$f" != *corpus.jsonl ]] && FILES+=("$f")
 done < <(
   find "$DOCS_OPS_DIR" -maxdepth 1 -type f \( \
     -name "r10-s7-retriever-*.json" -o \
