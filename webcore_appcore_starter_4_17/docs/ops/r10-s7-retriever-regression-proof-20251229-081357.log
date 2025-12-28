@@ -1,0 +1,71 @@
+== START PROVE_RETRIEVER_REGRESSION ==
+TS=20251229-081357
+PWD=/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17
+== VERIFY REGRESSION GATE ==
+OK: meta-only verifier scanned 8 file(s)
+OK: S7 Always On invariants are present and verified
+OK: corpus no PII/secret patterns detected
+OK: meta-only verifier scanned 8 file(s)
+OK: S7 Always On invariants are present and verified
+OK: corpus no PII/secret patterns detected
+OK: phase1 report written: docs/ops/r10-s7-retriever-quality-phase1-report.json
+OK: eval_retriever_quality_phase1 exit 0
+OK: meta-only verifier scanned 8 file(s)
+OK: S7 Always On invariants are present and verified
+OK: no regression vs baseline
+OK: verify_retriever_regression_gate exit 0
+== BASELINE (top 80) ==
+{
+  "ok": true,
+  "phase": "S7/Phase1Baseline",
+  "meta_only": true,
+  "algo": "lexical_overlap/v1",
+  "topk": 5,
+  "inputs": {
+    "goldenset_sha256": "5bc61a66bdeaaff3a4b94bbc03b057294004dbc4f88a21f4783b4bef94224d49",
+    "corpus_sha256": "ea5d021c41ddf306a56b8870a940dbc86681bee8bc0ab2909514fa68cfc911d7"
+  },
+  "metrics": {
+    "precision_at_k": 0.3,
+    "recall_at_k": 0.683333,
+    "mrr_at_k": 0.75,
+    "ndcg_at_k": 0.688113
+  },
+  "created_at": "2025-12-28T10:32:42Z"
+}
+== REPORT (top 80) ==
+{
+  "ok": true,
+  "phase": "S7/Phase1",
+  "meta_only": true,
+  "algo": "lexical_overlap/v1",
+  "topk": 5,
+  "inputs": {
+    "goldenset_path": "docs/ops/r10-s7-retriever-goldenset.jsonl",
+    "goldenset_sha256": "5bc61a66bdeaaff3a4b94bbc03b057294004dbc4f88a21f4783b4bef94224d49",
+    "corpus_path": "docs/ops/r10-s7-retriever-corpus.jsonl",
+    "corpus_sha256": "ea5d021c41ddf306a56b8870a940dbc86681bee8bc0ab2909514fa68cfc911d7"
+  },
+  "metrics": {
+    "precision_at_k": 0.3,
+    "recall_at_k": 0.683333,
+    "mrr_at_k": 0.75,
+    "ndcg_at_k": 0.688113
+  },
+  "created_at": "2025-12-28T23:13:58Z"
+}
+== META_ONLY_DEBUG (scan list proof) ==
+META_ONLY_DEBUG=1
+META_ONLY_DEBUG: exclude docs/ops/r10-s7-retriever-corpus.jsonl
+META_ONLY_DEBUG: exclude docs/ops/r10-s7-retriever-goldenset.jsonl
+META_ONLY_DEBUG: exclude docs/ops/r10-s7-retriever-goldenset.schema.json
+META_ONLY_DEBUG: scan docs/ops/r10-s7-retriever-metrics-baseline.json
+META_ONLY_DEBUG: scan docs/ops/r10-s7-retriever-quality-phase0-report.json
+META_ONLY_DEBUG: scan docs/ops/r10-s7-retriever-quality-phase1-report.json
+META_ONLY_DEBUG: scan docs/ops/r10-s7-retriever-quality-proof-20251228-191113.log
+META_ONLY_DEBUG: scan docs/ops/r10-s7-retriever-quality-proof.latest
+META_ONLY_DEBUG: scan docs/ops/r10-s7-retriever-regression-proof-20251228-194827.log
+META_ONLY_DEBUG: scan docs/ops/r10-s7-retriever-regression-proof-20251229-081357.log
+META_ONLY_DEBUG: scan docs/ops/r10-s7-retriever-regression-proof.latest
+OK: meta-only verifier scanned 8 file(s)
+== END PROVE_RETRIEVER_REGRESSION ==

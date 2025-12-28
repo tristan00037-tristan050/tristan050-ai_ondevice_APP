@@ -3,6 +3,7 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
 bash scripts/ops/verify_s7_always_on.sh
+bash scripts/ops/verify_s7_corpus_no_pii.sh
 
 GSET="${GSET:-docs/ops/r10-s7-retriever-goldenset.jsonl}"
 CORPUS="${CORPUS:-docs/ops/r10-s7-retriever-corpus.jsonl}"

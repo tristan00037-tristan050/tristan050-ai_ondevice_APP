@@ -29,7 +29,15 @@ cleanup_old() {
   sed -n "1,80p" docs/ops/r10-s7-retriever-metrics-baseline.json || true
   echo "== REPORT (top 80) =="
   sed -n "1,80p" docs/ops/r10-s7-retriever-quality-phase1-report.json || true
-  echo "== END PROVE_RETRIEVER_REGRESSION =="
+      echo "== META_ONLY_DEBUG (scan list proof) =="
+      DBG="$(META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh)"
+      printf "%s\n" "$DBG"
+      echo "$DBG" | grep -q "META_ONLY_DEBUG:" || { echo "FAIL: META_ONLY_DEBUG output missing"; exit 1; }
+      echo "$DBG" | grep -q "docs/ops/r10-s7-retriever-metrics-baseline.json" || { echo "FAIL: baseline not shown in debug scan list"; exit 1; }
+      echo "$DBG" | grep -q "docs/ops/r10-s7-retriever-quality-phase1-report.json" || { echo "FAIL: phase1 report not shown in debug scan list"; exit 1; }
+      echo "$DBG" | grep -q "docs/ops/r10-s7-retriever-regression-proof.latest" || { echo "FAIL: regression latest not shown in debug scan list"; exit 1; }
+      echo "$DBG" | grep -q "exclude docs/ops/r10-s7-retriever-corpus.jsonl" || { echo "FAIL: corpus exclusion not shown in debug output"; exit 1; }
+      echo "== END PROVE_RETRIEVER_REGRESSION =="
 } | tee "$LOG" >/dev/null
 
 echo "$(basename "$LOG")" > "$LATEST"

@@ -3,6 +3,7 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
 bash scripts/ops/verify_s7_always_on.sh
+bash scripts/ops/verify_s7_corpus_no_pii.sh
 
 BASELINE="${BASELINE:-docs/ops/r10-s7-retriever-metrics-baseline.json}"
 REPORT="${REPORT:-docs/ops/r10-s7-retriever-quality-phase1-report.json}"
