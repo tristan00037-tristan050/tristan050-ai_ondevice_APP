@@ -1,88 +1,45 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ✅ B) zsh parse error 재발 0: 복잡한 검증은 scripts/ops/*.sh로만 제공
-# 역할: build anchor 무결성 검증 (헤더/JSON 분리 + fail-fast)
-# 출력 표준: 성공 시 `OK: buildSha matches HEAD(<short>)`
-# 실패 시: 원인 1줄 + exit 1 (PASS 요약 금지)
+cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
 
-ROOT="$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
-cd "$ROOT"
+BASE_URL="${BASE_URL:-http://127.0.0.1:8081}"
+URL="${BASE_URL%/}/healthz"
+SHA_RE='^[0-9a-fA-F]{40}$'
 
-PORT="${PORT:-8081}"
-HEALTHZ="http://127.0.0.1:${PORT}/healthz"
+fail() { echo "FAIL: $*"; exit 1; }
 
-# 1) healthz 200 확인
-TMP_HDR="$(mktemp -t verify_anchor_hdr.XXXXXX)"
-TMP_BODY="$(mktemp -t verify_anchor_body.XXXXXX)"
-
-code=$(curl -fsSI --max-time 3 "$HEALTHZ" -D "$TMP_HDR" -o "$TMP_BODY" 2>/dev/null || echo "000")
-
-if [ "$code" != "200" ]; then
-  echo "[FAIL] healthz returned $code (expected 200)"
-  rm -f "$TMP_HDR" "$TMP_BODY"
-  exit 1
+# ESM 순수성 회귀 차단: dist require( 0
+if rg -n "require\\(" packages/bff-accounting/dist >/dev/null 2>&1; then
+  rg -n "require\\(" packages/bff-accounting/dist || true
+  fail "dist contains require( (ESM regression)"
 fi
 
-# 2) 헤더 buildSha 추출 (완전 분리)
-build_sha_header=$(grep -i "^x-os-build-sha:" "$TMP_HDR" 2>/dev/null | cut -d' ' -f2- | tr -d '\r' | head -1 || echo "")
+# Header (분리)
+hdr="$(curl -fsSI --connect-timeout 2 --max-time 3 "$URL")" || fail "healthz header fetch failed"
+sha_hdr="$(printf "%s" "$hdr" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-os-build-sha"{print $2}' | tail -n 1)"
 
-# 3) JSON buildSha 추출 (완전 분리)
-build_sha_json=$(curl -fsS --max-time 3 "$HEALTHZ" 2>/dev/null | jq -r '.buildSha // empty' 2>/dev/null || echo "")
+[[ -n "${sha_hdr:-}" ]] || fail "missing X-OS-Build-SHA header"
+[[ "$sha_hdr" =~ $SHA_RE ]] || fail "invalid header sha: $sha_hdr"
 
-# 4) 헤더/JSON 일치성 검증
-if [ -z "$build_sha_header" ] && [ -z "$build_sha_json" ]; then
-  echo "[FAIL] buildSha missing in both header and JSON"
-  rm -f "$TMP_HDR" "$TMP_BODY"
-  exit 1
-fi
+# Body (분리)
+body="$(curl -fsS --connect-timeout 2 --max-time 3 "$URL")" || fail "healthz body fetch failed"
 
-if [ -n "$build_sha_header" ] && [ -n "$build_sha_json" ] && [ "$build_sha_header" != "$build_sha_json" ]; then
-  echo "[FAIL] buildSha mismatch: header=$build_sha_header, json=$build_sha_json"
-  rm -f "$TMP_HDR" "$TMP_BODY"
-  exit 1
-fi
+sha_json="$(
+  printf "%s" "$body" | node --input-type=module -e '
+let d=""; process.stdin.setEncoding("utf8");
+process.stdin.on("data", c => d += c);
+process.stdin.on("end", () => {
+  try { const j = JSON.parse(d); process.stdout.write(String(j.buildSha||"").trim()); }
+  catch { process.stdout.write(""); }
+});'
+)"
 
-build_sha="${build_sha_json:-${build_sha_header}}"
+[[ -n "${sha_json:-}" ]] || fail "missing JSON buildSha"
+[[ "$sha_json" =~ $SHA_RE ]] || fail "invalid json sha: $sha_json"
+[[ "$sha_hdr" == "$sha_json" ]] || fail "header sha != json sha ($sha_hdr != $sha_json)"
 
-# 5) 40-hex 검증
-if [ -z "$build_sha" ] || [ "$build_sha" = "unknown" ]; then
-  echo "[FAIL] buildSha is missing or unknown"
-  rm -f "$TMP_HDR" "$TMP_BODY"
-  exit 1
-fi
+head_sha="$(git rev-parse HEAD)"
+[[ "$head_sha" == "$sha_hdr" ]] || fail "git HEAD != healthz sha ($head_sha != $sha_hdr)"
 
-if [ ${#build_sha} -ne 40 ]; then
-  echo "[FAIL] buildSha length is ${#build_sha} (expected 40)"
-  rm -f "$TMP_HDR" "$TMP_BODY"
-  exit 1
-fi
-
-if ! echo "$build_sha" | grep -qE '^[0-9a-f]{40}$'; then
-  echo "[FAIL] buildSha is not 40-hex: $build_sha"
-  rm -f "$TMP_HDR" "$TMP_BODY"
-  exit 1
-fi
-
-# 6) HEAD 일치 확인 (dev 환경 기준)
-git_head=$(git rev-parse HEAD 2>/dev/null || echo "")
-
-if [ -z "$git_head" ]; then
-  echo "[FAIL] git rev-parse HEAD failed"
-  rm -f "$TMP_HDR" "$TMP_BODY"
-  exit 1
-fi
-
-if [ "$build_sha" != "$git_head" ]; then
-  echo "[FAIL] buildSha mismatch: healthz=$build_sha, git HEAD=$git_head"
-  rm -f "$TMP_HDR" "$TMP_BODY"
-  exit 1
-fi
-
-# ✅ 성공: 표준 출력 1줄만
-git_head_short=$(echo "$git_head" | cut -c1-7)
-echo "OK: buildSha matches HEAD($git_head_short)"
-
-rm -f "$TMP_HDR" "$TMP_BODY"
-exit 0
-
+echo "OK: buildSha matches HEAD(${head_sha:0:7})"
