@@ -23,3 +23,13 @@
 {"id":"doc-0023","text":"meta-only report는 Phase0에서 생성되며 artifact로 업로드된다."}
 {"id":"doc-0024","text":"A deterministic destructive test includes tamper, FAIL, and restore."}
 {"id":"doc-0025","text":"The integrity contract compares Header, JSON, and HEAD values."}
+{"id": "s7doc-026", "text": "This document contains rarelexs7-021 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-027", "text": "This document contains rarelexs7-022 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-028", "text": "This document contains rarelexs7-023 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-029", "text": "This document contains rarelexs7-024 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-030", "text": "This document contains rarelexs7-025 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-031", "text": "This document contains rarelexs7-026 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-032", "text": "This document contains rarelexs7-027 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-033", "text": "This document contains rarelexs7-028 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-034", "text": "This document contains rarelexs7-029 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-035", "text": "This document contains rarelexs7-030 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
