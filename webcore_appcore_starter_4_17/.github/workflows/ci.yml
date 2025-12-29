@@ -531,6 +531,49 @@ jobs:
         run: |
           BASE_URL="http://localhost:8081" bash scripts/ops/destructive_build_anchor_should_fail.sh
       
+      - name: S7 Step 3 - Detect input/algo changes and block mixed PR
+        id: s7diff
+        run: |
+          set -euo pipefail
+          cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+          
+          INPUT_CHANGED=0
+          ALGO_CHANGED=0
+          
+          if [ -n "${GITHUB_BASE_REF:-}" ]; then
+            git fetch --no-tags origin "${GITHUB_BASE_REF}":"refs/remotes/origin/${GITHUB_BASE_REF}"
+            
+            # 입력 변경 감지 (goldenset/corpus)
+            INPUT_FILES="$(git diff --name-only "origin/${GITHUB_BASE_REF}"...HEAD | rg "^webcore_appcore_starter_4_17/docs/ops/r10-s7-retriever-(goldenset|corpus)\\.jsonl$" || true)"
+            if [ -n "$INPUT_FILES" ]; then
+              INPUT_CHANGED=1
+              echo "INPUT_CHANGED=1 (detected: $INPUT_FILES)"
+            else
+              echo "INPUT_CHANGED=0"
+            fi
+            
+            # 알고리즘 변경 감지 (eval 스크립트)
+            ALGO_FILES="$(git diff --name-only "origin/${GITHUB_BASE_REF}"...HEAD | rg "^webcore_appcore_starter_4_17/scripts/ops/eval_retriever_quality_phase1\\.sh$" || true)"
+            if [ -n "$ALGO_FILES" ]; then
+              ALGO_CHANGED=1
+              echo "ALGO_CHANGED=1 (detected: $ALGO_FILES)"
+            else
+              echo "ALGO_CHANGED=0"
+            fi
+            
+            # 혼합 PR 차단 (입력 변경 + 알고리즘 변경 동시)
+            if [ "$INPUT_CHANGED" = "1" ] && [ "$ALGO_CHANGED" = "1" ]; then
+              echo "FAIL: mixed PR detected (input change + algo change). Split into separate PRs."
+              echo "INPUT_FILES: $INPUT_FILES"
+              echo "ALGO_FILES: $ALGO_FILES"
+              exit 1
+            fi
+          fi
+          
+          echo "input_changed=$INPUT_CHANGED" >> $GITHUB_OUTPUT
+          echo "algo_changed=$ALGO_CHANGED" >> $GITHUB_OUTPUT
+          echo "OK: S7 diff detection completed (input=$INPUT_CHANGED, algo=$ALGO_CHANGED)"
+
       - name: S7 Step 3 - baseline change forbidden in PR
         run: |
           set -euo pipefail
@@ -544,7 +587,52 @@ jobs:
           fi
           echo "OK: baseline not changed in PR"
 
+      - name: S7 Data Expansion Gate (input changed only)
+        if: steps.s7diff.outputs.input_changed == '1'
+        run: |
+          set -euo pipefail
+          cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+          
+          # Always On
+          bash scripts/ops/verify_s7_always_on.sh
+          
+          # 코퍼스 안전 게이트
+          bash scripts/ops/verify_s7_corpus_no_pii.sh
+          
+          # Phase1 report 생성
+          bash scripts/ops/eval_retriever_quality_phase1.sh
+          test -f docs/ops/r10-s7-retriever-quality-phase1-report.json
+          
+          # Meta-only 검증
+          bash scripts/ops/verify_rag_meta_only.sh
+          
+          echo "OK: Data Expansion Gate PASS (input changed, regression gate skipped)"
+
+      - name: Verify Step4 data-expansion proof is committed (hard evidence)
+        if: steps.s7diff.outputs.input_changed == '1'
+        run: |
+          set -euo pipefail
+          cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+          
+          test -f docs/ops/r10-s7-step4-data-expansion-proof.latest || { echo "FAIL: proof latest file missing"; exit 1; }
+          LATEST="$(tr -d '\r\n' < docs/ops/r10-s7-step4-data-expansion-proof.latest)"
+          echo "LATEST=$LATEST"
+          test -f "docs/ops/$LATEST" || { echo "FAIL: proof log file missing: docs/ops/$LATEST"; exit 1; }
+          
+          # proof 자체가 증거(요약 금지): META_ONLY_DEBUG 섹션/scan-exclude 문자열이 있어야 함
+          if ! rg -n "== META_ONLY_DEBUG \(scan list proof\) ==" "docs/ops/$LATEST" >/dev/null 2>&1; then
+            echo "FAIL: META_ONLY_DEBUG section missing in proof log"
+            exit 1
+          fi
+          if ! rg -n "scan:|exclude:|META_ONLY_DEBUG" "docs/ops/$LATEST" >/dev/null 2>&1; then
+            echo "FAIL: META_ONLY_DEBUG scan/exclude evidence missing in proof log"
+            exit 1
+          fi
+          
+          echo "OK: Step4 data-expansion proof verified (META_ONLY_DEBUG evidence present)"
+
       - name: S7 Phase 1 - Regression Gate (baseline compare)
+        if: steps.s7diff.outputs.input_changed != '1'
         run: |
           set -euo pipefail
           cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
