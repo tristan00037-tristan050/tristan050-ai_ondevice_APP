@@ -176,6 +176,9 @@ report = {
   "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 }
 
+if tie_enable == 1:
+    report["algo_variant"] = "rare_query_overlap_tiebreak/v1"
+
 open(out, "w", encoding="utf-8").write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 print(f"OK: phase1 report written: {out}")
 print("OK: report contains no query key by design")
