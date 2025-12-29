@@ -185,3 +185,5 @@ print("OK: report contains no query key by design")
 PY
 
 echo "OK: eval_retriever_quality_phase1 exit 0"
+
+# test: mixed PR block (expected fail)

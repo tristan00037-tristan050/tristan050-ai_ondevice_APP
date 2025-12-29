@@ -28,3 +28,4 @@
 {"schema_version": "r10-s7-retriever-goldenset/v1", "id": "s7-028", "locale": "ko", "query": "rarelexs7-028 tiebreak improvement deterministic", "expected": {"must_have_any": ["rarelexs7-028", "tiebreak"], "must_not_have_any": []}}
 {"schema_version": "r10-s7-retriever-goldenset/v1", "id": "s7-029", "locale": "ko", "query": "rarelexs7-029 tiebreak improvement deterministic", "expected": {"must_have_any": ["rarelexs7-029", "tiebreak"], "must_not_have_any": []}}
 {"schema_version": "r10-s7-retriever-goldenset/v1", "id": "s7-030", "locale": "ko", "query": "rarelexs7-030 tiebreak improvement deterministic", "expected": {"must_have_any": ["rarelexs7-030", "tiebreak"], "must_not_have_any": []}}
+
