@@ -154,6 +154,7 @@ report = {
   "ok": True,
   "phase": "S7/Phase1",
   "meta_only": True,
+  "algo": "lexical_overlap/v1",
   "topk": k,
   "tiebreak": {
     "enable": bool(tie_enable),
