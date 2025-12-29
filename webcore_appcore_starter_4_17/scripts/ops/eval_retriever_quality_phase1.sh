@@ -84,8 +84,6 @@ def rank(query: str, k: int):
     for did, dt in docs:
         inter = q & dt
         primary = len(inter)              # 기존 primary 유지(단순 overlap)
-        if primary <= 0:
-            continue
         secondary = 0
         if tie_enable == 1 and primary >= tie_min_primary:
             # 희소 토큰 보너스: (N - df[token]) 합산 (정수, 결정적)
@@ -93,6 +91,7 @@ def rank(query: str, k: int):
         scored.append((primary, secondary, did, dt))
 
     # 정렬: primary 우선, primary 동점에서만 secondary가 의미를 가짐
+    # tie_enable=0이면 secondary는 항상 0이므로 baseline과 동일한 순위 유지
     scored.sort(key=lambda x:(-x[0], -x[1], x[2]))
     return scored[:k]
 
