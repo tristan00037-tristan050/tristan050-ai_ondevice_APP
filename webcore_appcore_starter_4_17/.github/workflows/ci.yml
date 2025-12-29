@@ -531,7 +531,7 @@ jobs:
         run: |
           BASE_URL="http://localhost:8081" bash scripts/ops/destructive_build_anchor_should_fail.sh
       
-      - name: S7 Step 3 - Detect input/algo changes and block mixed PR
+      - name: Detect S7 input changes
         id: s7diff
         run: |
           set -euo pipefail
@@ -539,6 +539,7 @@ jobs:
           
           INPUT_CHANGED=0
           ALGO_CHANGED=0
+          BASELINE_CHANGED=0
           
           if [ -n "${GITHUB_BASE_REF:-}" ]; then
             git fetch --no-tags origin "${GITHUB_BASE_REF}":"refs/remotes/origin/${GITHUB_BASE_REF}"
@@ -561,6 +562,15 @@ jobs:
               echo "ALGO_CHANGED=0"
             fi
             
+            # Baseline 변경 감지
+            BASELINE_FILES="$(git diff --name-only "origin/${GITHUB_BASE_REF}"...HEAD | rg "^webcore_appcore_starter_4_17/docs/ops/r10-s7-retriever-metrics-baseline\\.json$" || true)"
+            if [ -n "$BASELINE_FILES" ]; then
+              BASELINE_CHANGED=1
+              echo "BASELINE_CHANGED=1 (detected: $BASELINE_FILES)"
+            else
+              echo "BASELINE_CHANGED=0"
+            fi
+            
             # 혼합 PR 차단 (입력 변경 + 알고리즘 변경 동시)
             if [ "$INPUT_CHANGED" = "1" ] && [ "$ALGO_CHANGED" = "1" ]; then
               echo "FAIL: mixed PR detected (input change + algo change). Split into separate PRs."
@@ -572,20 +582,26 @@ jobs:
           
           echo "input_changed=$INPUT_CHANGED" >> $GITHUB_OUTPUT
           echo "algo_changed=$ALGO_CHANGED" >> $GITHUB_OUTPUT
-          echo "OK: S7 diff detection completed (input=$INPUT_CHANGED, algo=$ALGO_CHANGED)"
+          echo "baseline_changed=$BASELINE_CHANGED" >> $GITHUB_OUTPUT
+          echo "input_changed=$INPUT_CHANGED"
+          echo "algo_changed=$ALGO_CHANGED"
+          echo "baseline_changed=$BASELINE_CHANGED"
+          echo "OK: S7 diff detection completed (input=$INPUT_CHANGED, algo=$ALGO_CHANGED, baseline=$BASELINE_CHANGED)"
 
-      - name: S7 Step 3 - baseline change forbidden in PR
+      - name: Block mixed PR (input + algo)
+        if: steps.s7diff.outputs.input_changed == '1' && steps.s7diff.outputs.algo_changed == '1'
         run: |
           set -euo pipefail
-          if [ -n "${GITHUB_BASE_REF:-}" ]; then
-            git fetch --no-tags origin "${GITHUB_BASE_REF}":"refs/remotes/origin/${GITHUB_BASE_REF}"
-            CHANGED="$(git diff --name-only "origin/${GITHUB_BASE_REF}"...HEAD | rg "^webcore_appcore_starter_4_17/docs/ops/r10-s7-retriever-metrics-baseline\\.json$" || true)"
-            if [ -n "$CHANGED" ]; then
-              echo "FAIL: baseline file must not change in PR (ratchet runs on main with explicit command)"
-              exit 1
-            fi
-          fi
-          echo "OK: baseline not changed in PR"
+          echo "FAIL: mixed PR detected (input change + algo change). Split into separate PRs."
+          echo "This check should have been caught in Detect step, but double-checking..."
+          exit 1
+
+      - name: Block baseline change in PR
+        if: steps.s7diff.outputs.baseline_changed == '1'
+        run: |
+          set -euo pipefail
+          echo "FAIL: baseline file must not change in PR (ratchet runs on main with explicit command)"
+          exit 1
 
       - name: S7 Data Expansion Gate (input changed only)
         if: steps.s7diff.outputs.input_changed == '1'
