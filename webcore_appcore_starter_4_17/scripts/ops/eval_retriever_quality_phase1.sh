@@ -12,7 +12,8 @@ REPORT="${REPORT:-$OUT_DIR/r10-s7-retriever-quality-phase1-report.json}"
 TOPK="${TOPK:-5}"
 
 # tie-break 제어(튜닝 루프용)
-TIEBREAK_ENABLE="${TIEBREAK_ENABLE:-1}"          # 1=enable, 0=disable
+# 기본값: tie-break 비활성화 (baseline과 100% 동일한 순위 유지)
+TIEBREAK_ENABLE="${TIEBREAK_ENABLE:-0}"          # 1=enable, 0=disable
 TIEBREAK_MIN_PRIMARY="${TIEBREAK_MIN_PRIMARY:-1}" # primary < N이면 secondary=0
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
