@@ -82,11 +82,12 @@ def rank(query: str, k: int):
     q=set(tok(query))
     scored=[]
     for did, dt in docs:
-        inter = q & dt
+        inter = q & dt  # query와 doc이 공통으로 가진 토큰
         primary = len(inter)              # 기존 primary 유지(단순 overlap)
         secondary = 0
         if tie_enable == 1 and primary >= tie_min_primary:
-            # 희소 토큰 보너스: (N - df[token]) 합산 (정수, 결정적)
+            # 희소 토큰 보너스: query와 doc이 공통으로 가진 토큰에만 부여
+            # secondary += (N - df[t]) for t in (query_tokens ∩ doc_tokens)
             secondary = sum((N - df.get(t,0)) for t in inter)
         scored.append((primary, secondary, did, dt))
 

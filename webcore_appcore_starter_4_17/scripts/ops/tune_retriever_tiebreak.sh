@@ -21,15 +21,20 @@ r=json.load(open(rep,"r",encoding="utf-8"))
 keys=["precision_at_k","recall_at_k","mrr_at_k","ndcg_at_k"]
 dec=[]
 inc=[]
+strict_improve=False
 for k in keys:
     bv=float(b["metrics"][k]); rv=float(r["metrics"][k])
     d=rv-bv
     if d < 0: dec.append((k,d))
-    if d > 0: inc.append((k,d))
+    if d > 0: 
+        inc.append((k,d))
+        strict_improve=True  # 최소 1개 > 0이면 strict improvement
 # meta-only 출력(수치만)
-status="OK" if not dec else "BAD"
+gate_pass = len(dec) == 0  # regression 없으면 PASS
+strict_ok = strict_improve  # 최소 1개 strict 상승
+status = "PASS" if (gate_pass and strict_ok) else ("GATE_PASS" if gate_pass else "GATE_FAIL")
 deltas = ",".join([f"{k}:{float(r['metrics'][k])-float(b['metrics'][k]):+.6f}" for k in keys])
-print(f"{status}: tiebreak_min_primary={mp} deltas={deltas}")
+print(f"{status}: tiebreak_min_primary={mp} deltas={deltas} strict_improve={strict_improve}")
 PY
 done
 
