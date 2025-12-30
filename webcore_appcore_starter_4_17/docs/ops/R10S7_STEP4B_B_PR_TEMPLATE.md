@@ -7,7 +7,7 @@
 
 - **Base(타깃)**: main
 - **Compare(소스)**: feat/s7-step4b-b-algo-improve (권장 예시)
-- **Title(정본)**: `feat(s7): step4-b b algorithm improvement with strict metric gain (input frozen)`
+- **Title(정본)**: `feat(s7): step4-b-b strict improvement under regression gate (input fixed)`
 
 ## PR 본문 템플릿
 
