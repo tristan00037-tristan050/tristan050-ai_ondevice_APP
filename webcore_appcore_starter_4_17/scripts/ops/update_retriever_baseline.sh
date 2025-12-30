@@ -100,7 +100,8 @@ if reanchor == 0:
         raise SystemExit(1)
 
     if not improve and min_gain > 0.0:
-        raise SystemExit(f"FAIL: no metric improved by MIN_GAIN={min_gain}")
+        print(f"OK: no metric improved by MIN_GAIN={min_gain} (no baseline update)")
+        raise SystemExit(0)
 
     print("OK: ratchet conditions satisfied (no decreases; improvement requirement met if configured)")
 else:
