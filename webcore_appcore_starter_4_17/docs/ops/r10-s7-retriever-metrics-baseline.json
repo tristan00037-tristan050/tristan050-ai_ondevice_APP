@@ -5,15 +5,14 @@
   "algo": "lexical_overlap/v1",
   "topk": 5,
   "inputs": {
-    "goldenset_sha256": "5bc61a66bdeaaff3a4b94bbc03b057294004dbc4f88a21f4783b4bef94224d49",
-    "corpus_sha256": "ea5d021c41ddf306a56b8870a940dbc86681bee8bc0ab2909514fa68cfc911d7"
+    "goldenset_sha256": "063b4b5749ec5b6e90b4a0e77de477bd0557d25dde5a99d065254f1a7af50baa",
+    "corpus_sha256": "f0fc272042d616307cc542330a565e31d3dd698845b63a839208679cde4eddea"
   },
   "metrics": {
-    "precision_at_k": 0.3,
-    "recall_at_k": 0.683333,
-    "mrr_at_k": 0.75,
-    "ndcg_at_k": 0.688113
+    "precision_at_k": 0.533333,
+    "recall_at_k": 0.622222,
+    "mrr_at_k": 0.833333,
+    "ndcg_at_k": 0.792075
   },
-  "created_at": "2025-12-28T10:32:42Z"
+  "created_at": "2025-12-30T01:01:34Z"
 }
-
