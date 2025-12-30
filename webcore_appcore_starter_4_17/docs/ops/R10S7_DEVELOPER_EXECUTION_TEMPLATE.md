@@ -12,7 +12,7 @@ META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh
 ## merge 후 main re-anchoring(정본)
 
 ```bash
-bash scripts/ops/prove_update_retriever_baseline.sh --update-baseline --min-gain 0.00
+bash scripts/ops/prove_update_retriever_baseline.sh --update-baseline --min-gain 0.00 --reanchor-input
 bash scripts/ops/verify_retriever_regression_gate.sh
 ```
 

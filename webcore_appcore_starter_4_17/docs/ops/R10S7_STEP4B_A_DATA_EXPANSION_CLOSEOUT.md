@@ -37,10 +37,12 @@
 입력 해시 변경에 대해 main에서 명시 승인 절차로 baseline re-anchoring 수행:
 
 ```bash
-bash scripts/ops/prove_update_retriever_baseline.sh --update-baseline --min-gain 0.00
+bash scripts/ops/prove_update_retriever_baseline.sh --update-baseline --min-gain 0.00 --reanchor-input
 ```
 
 **주의사항**:
+- `--reanchor-input` 옵션은 **main 브랜치에서만 허용**됨
+- non-main 브랜치에서 사용 시 즉시 FAIL
 - 입력 해시 불일치 시 기본 동작은 FAIL (명시 승인 필요)
 - re-anchoring은 merge 후 main에서만 수행
 
