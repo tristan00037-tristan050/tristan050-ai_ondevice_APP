@@ -3,6 +3,15 @@
 # PR 올리기 전에 한 번만 실행
 
 set -euo pipefail
+
+# === Guard: must not run on main (Step4-B B is input-fixed improvement PR) ===
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+[ -n "${BRANCH}" ] || { echo "FAIL: cannot detect current branch"; exit 1; }
+if [ "${BRANCH}" = "main" ]; then
+  echo "FAIL: do not run on main; switch to an improvement branch for Step4-B B"
+  exit 1
+fi
+
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
