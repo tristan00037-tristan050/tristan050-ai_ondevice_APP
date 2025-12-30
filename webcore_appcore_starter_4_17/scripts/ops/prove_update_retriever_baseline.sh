@@ -20,10 +20,32 @@ cleanup_old() {
   done
 }
 
+# 옵션 파싱 (--reanchor-input 포함)
+REANCHOR_INPUT=0
+UPDATE_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --reanchor-input)
+      REANCHOR_INPUT=1
+      UPDATE_ARGS+=("$1")
+      shift
+      ;;
+    *)
+      UPDATE_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
 {
   echo "== START PROVE_BASELINE_RATCHET =="
   echo "TS=$TS"
   echo "PWD=$(pwd)"
+  if [ "$REANCHOR_INPUT" -eq 1 ]; then
+    echo "MODE=re-anchoring (input hash change)"
+  else
+    echo "MODE=ratchet (same input hash)"
+  fi
   echo "== ALWAYS ON =="
   bash scripts/ops/verify_s7_always_on.sh
   echo "== CORPUS GATE =="
@@ -32,8 +54,8 @@ cleanup_old() {
   bash scripts/ops/eval_retriever_quality_phase1.sh
   echo "== META-ONLY VERIFY =="
   bash scripts/ops/verify_rag_meta_only.sh
-  echo "== UPDATE BASELINE (ratchet) =="
-  bash scripts/ops/update_retriever_baseline.sh "$@"
+  echo "== UPDATE BASELINE =="
+  bash scripts/ops/update_retriever_baseline.sh "${UPDATE_ARGS[@]}"
   echo "== META_ONLY_DEBUG (scan list proof) =="
   META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh
   echo "== END PROVE_BASELINE_RATCHET =="
