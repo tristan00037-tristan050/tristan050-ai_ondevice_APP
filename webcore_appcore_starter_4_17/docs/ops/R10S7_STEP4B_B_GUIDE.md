@@ -100,7 +100,13 @@ ssh -o StrictHostKeyChecking=no <USER>@49.50.139.248
 
 ## 참고 문서
 
+- **실행 순서 정본**: `docs/ops/R10S7_STEP4B_B_EXECUTION_GUIDE.md`
+- **검토팀/개발팀 공지**: `docs/ops/R10S7_STEP4B_B_ANNOUNCEMENT.md`
 - PR 템플릿: `docs/ops/R10S7_STEP4B_B_PR_TEMPLATE.md`
-- 원샷 프롬프트: `docs/ops/R10S7_STEP4B_B_ONE_SHOT_PROMPT.sh`
+- PR 본문 정본: `docs/ops/R10S7_STEP4B_B_PR_BODY.md`
+- PR 메타데이터 자동 생성: `docs/ops/R10S7_STEP4B_B_PR_METADATA_GEN.sh`
+- PR 생성 전 체크: `docs/ops/R10S7_STEP4B_B_PR_PREFLIGHT_CHECK.sh`
+- Cursor 원샷 프롬프트: `docs/ops/R10S7_STEP4B_B_CURSOR_PROMPT.md`
+- 로컬 원샷 실행 스크립트: `docs/ops/R10S7_STEP4B_B_ONE_SHOT_PROMPT.sh`
 - 개발팀 실행 템플릿: `docs/ops/R10S7_DEVELOPER_EXECUTION_TEMPLATE.md`
 
