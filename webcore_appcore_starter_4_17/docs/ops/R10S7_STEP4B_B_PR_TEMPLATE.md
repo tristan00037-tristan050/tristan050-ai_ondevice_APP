@@ -9,12 +9,28 @@
 - **Compare(소스)**: feat/s7-step4b-b-algo-improve (권장 예시)
 - **Title(정본)**: `feat(s7): step4-b-b strict improvement under regression gate (input fixed)`
 
+## PR 메타데이터 자동 생성 (정본)
+
+**PR 생성 전 체크 + 메타데이터 자동 출력:**
+
+```bash
+bash docs/ops/R10S7_STEP4B_B_PR_METADATA_GEN.sh
+```
+
+이 스크립트는:
+1. Preflight 체크 실행 (입력 고정/베이스라인 고정 확인)
+2. 현재 브랜치명 자동 감지
+3. PR 메타데이터 (Base, Compare, Title, Body) 출력
+
+**출력 결과 사용 방법:**
+- GitHub PR 생성 화면에서 출력된 Base, Compare, Title, Body를 그대로 사용
+
 ## PR 본문 템플릿
 
 **정본 PR 본문은 다음 파일을 참조하거나 그대로 복붙:**
 - `docs/ops/R10S7_STEP4B_B_PR_BODY.md`
 
-**PR 생성 전 체크 스크립트:**
+**PR 생성 전 체크 스크립트 (단독 실행):**
 - `bash docs/ops/R10S7_STEP4B_B_PR_PREFLIGHT_CHECK.sh`
 
 **아래는 참고용 (SSOT 파일 기반 참조 방식 권장):**
