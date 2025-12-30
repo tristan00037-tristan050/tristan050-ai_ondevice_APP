@@ -26,57 +26,62 @@
 ## 원샷 로컬 체크 블록 (PR 만들기 직전 1분 점검)
 
 ```bash
+bash -lc '
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
 
 # Always On
 bash scripts/ops/verify_s7_always_on.sh
 
-# 입력 고정 확인(변경 0이어야 함)
+# 입력 고정(변경 0) 강제 확인
 git fetch origin main --depth=1
 CHANGED="$(git diff --name-only origin/main...HEAD)"
-echo "$CHANGED" | sed -n '1,200p'
+echo "$CHANGED" | sed -n "1,200p"
 
-echo "$CHANGED" | rg -n "^webcore_appcore_starter_4_17/docs/ops/r10-s7-retriever-(goldenset\.jsonl|corpus\.jsonl)$" && {
-  echo "FAIL: input must be frozen in Step4-B B"
+echo "$CHANGED" | rg -n "docs/ops/r10-s7-retriever-(goldenset\.jsonl|corpus\.jsonl)" && {
+  echo "FAIL: input must be frozen for Step4-B B"
   exit 1
 } || true
 
-echo "$CHANGED" | rg -n "^webcore_appcore_starter_4_17/docs/ops/r10-s7-retriever-metrics-baseline\.json$" && {
+echo "$CHANGED" | rg -n "docs/ops/r10-s7-retriever-metrics-baseline\.json" && {
   echo "FAIL: baseline must not be modified in PR"
   exit 1
 } || true
 
-# Regression proof + meta-only
+# Safety gates (meta-only)
+bash scripts/ops/verify_s7_corpus_no_pii.sh
+
+# Regression proof (must PASS)
 bash scripts/ops/prove_retriever_regression_gate.sh
+
+# Meta-only scan + debug evidence
 META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh
 
-# strict improvement 확인(최소 1개 지표 baseline 초과)
-python3 - <<'PY'
+# Strict improvement check (meta-only metrics only)
+python3 - <<PY
 import json
 b=json.load(open("docs/ops/r10-s7-retriever-metrics-baseline.json","r",encoding="utf-8"))
 r=json.load(open("docs/ops/r10-s7-retriever-quality-phase1-report.json","r",encoding="utf-8"))
 keys=["precision_at_k","recall_at_k","mrr_at_k","ndcg_at_k"]
-
 improved=[]
 print("=== STRICT IMPROVEMENT CHECK (meta-only) ===")
+out={"improved_keys":[], "metrics":{}}
 for k in keys:
-    bv=float(b["metrics"][k])
-    rv=float(r["metrics"][k])
-    print(f"{k}: baseline={bv:.6f} current={rv:.6f} delta={rv-bv:+.6f}")
-    if rv>bv:
-        improved.append(k)
-
-print("IMPROVED_KEYS=", improved)
+    bv=float(b["metrics"][k]); rv=float(r["metrics"][k])
+    out["metrics"][k]={"baseline":round(bv,6),"current":round(rv,6),"delta":round(rv-bv,6)}
+    if rv>bv: improved.append(k)
+out["improved_keys"]=improved
+print(json.dumps(out, ensure_ascii=False, indent=2))
 raise SystemExit(0 if improved else 1)
 PY
+'
 ```
 
 ## merge 후 main에서 baseline 상향 (ratchet)
 
 Step4-B B는 **입력 고정 상태의 "성능 개선"**이므로, merge 후 main에서 re-anchoring이 아니라 ratchet로 올립니다.
 
-**입력이 변하지 않았으면 `--reanchor-input`을 쓰지 않습니다.**
+**`--reanchor-input`는 입력 변경 A 전용이며, Step4-B B(입력 고정)에서는 사용하지 않습니다.**
 
 ```bash
 # main에서만

@@ -12,20 +12,22 @@ echo "ssh -o StrictHostKeyChecking=no <USER>@49.50.139.248"
 # 0) Always On
 bash scripts/ops/verify_s7_always_on.sh
 
-# 1) 입력/베이스라인 "변경 0" 잠금(작업 시작 전)
-#   - goldenset/corpus/baseline이 변경되면 즉시 중단
-git status --porcelain
-CHANGED="$(git diff --name-only)"
-echo "$CHANGED" | sed -n '1,200p'
+# 1) 입력 고정(변경 0) 강제 확인
+git fetch origin main --depth=1
+CHANGED="$(git diff --name-only origin/main...HEAD)"
+echo "$CHANGED" | sed -n "1,200p"
 
-# rg가 없을 수 있으면 grep -E로 대체 가능하지만,
-# 레포가 rg 기반이면 rg 사용을 우선합니다.
-if echo "$CHANGED" | rg -n "^docs/ops/r10-s7-retriever-(goldenset\.jsonl|corpus\.jsonl)$|^docs/ops/r10-s7-retriever-metrics-baseline\.json$" ; then
-  echo "FAIL: input/baseline files must not be modified in Step4-B B (input frozen PR)"
+echo "$CHANGED" | rg -n "docs/ops/r10-s7-retriever-(goldenset\.jsonl|corpus\.jsonl)" && {
+  echo "FAIL: input must be frozen for Step4-B B"
   exit 1
-fi
+} || true
 
-# 2) 코퍼스 입력 안전 게이트(입력 변경 없더라도 정본 흐름 유지)
+echo "$CHANGED" | rg -n "docs/ops/r10-s7-retriever-metrics-baseline\.json" && {
+  echo "FAIL: baseline must not be modified in PR"
+  exit 1
+} || true
+
+# 2) Safety gates (meta-only)
 bash scripts/ops/verify_s7_corpus_no_pii.sh
 
 # 3) 알고리즘 변경(정본 지침)
@@ -47,42 +49,41 @@ rg -n "TIEBREAK_ENABLE|secondary_score|secondaryScore|primary_score|primaryScore
 #
 # 주의: 출력/로그는 meta-only 유지. 쿼리/문서 원문 출력 금지.
 
-# 4) 로컬 검증(필수)
-# - Regression Gate PASS
+# 4) Regression proof (must PASS)
 bash scripts/ops/prove_retriever_regression_gate.sh
 
-# - Meta-only PASS
-bash scripts/ops/verify_rag_meta_only.sh
+# 5) Meta-only scan + debug evidence
+META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh
 
 # 5) strict improvement 체크(필수: baseline 대비 최소 1개 지표 strictly greater)
 python3 - <<'PY'
 import json
-base="docs/ops/r10-s7-retriever-metrics-baseline.json"
-rep ="docs/ops/r10-s7-retriever-quality-phase1-report.json"
-b=json.load(open(base,"r",encoding="utf-8"))
-r=json.load(open(rep ,"r",encoding="utf-8"))
+b=json.load(open("docs/ops/r10-s7-retriever-metrics-baseline.json","r",encoding="utf-8"))
+r=json.load(open("docs/ops/r10-s7-retriever-quality-phase1-report.json","r",encoding="utf-8"))
 keys=["precision_at_k","recall_at_k","mrr_at_k","ndcg_at_k"]
-
 improved=[]
-print("=== STRICT IMPROVEMENT CHECK (meta-only numbers) ===")
+print("=== STRICT IMPROVEMENT CHECK (meta-only) ===")
+out={"improved_keys":[], "metrics":{}}
 for k in keys:
-    bv=float(b["metrics"][k])
-    rv=float(r["metrics"][k])
-    d=rv-bv
-    print(f"{k}: baseline={bv:.6f} current={rv:.6f} delta={d:+.6f}")
-    if rv>bv:
-        improved.append(k)
-
-print("IMPROVED_KEYS=", improved)
+    bv=float(b["metrics"][k]); rv=float(r["metrics"][k])
+    out["metrics"][k]={"baseline":round(bv,6),"current":round(rv,6),"delta":round(rv-bv,6)}
+    if rv>bv: improved.append(k)
+out["improved_keys"]=improved
+print(json.dumps(out, ensure_ascii=False, indent=2))
 raise SystemExit(0 if improved else 1)
 PY
 
 # 6) 입력 고정 재확인(커밋 직전)
 CHANGED2="$(git diff --name-only)"
-if echo "$CHANGED2" | rg -n "^docs/ops/r10-s7-retriever-(goldenset\.jsonl|corpus\.jsonl)$|^docs/ops/r10-s7-retriever-metrics-baseline\.json$" ; then
-  echo "FAIL: input/baseline files changed unexpectedly"
+echo "$CHANGED2" | rg -n "docs/ops/r10-s7-retriever-(goldenset\.jsonl|corpus\.jsonl)" && {
+  echo "FAIL: input must be frozen for Step4-B B"
   exit 1
-fi
+} || true
+
+echo "$CHANGED2" | rg -n "docs/ops/r10-s7-retriever-metrics-baseline\.json" && {
+  echo "FAIL: baseline must not be modified in PR"
+  exit 1
+} || true
 
 # 7) 커밋
 git add -A
