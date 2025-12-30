@@ -63,6 +63,7 @@ bash scripts/ops/prove_retriever_regression_gate.sh
 META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh | tee /tmp/meta_only_debug_step4b_b.log
 
 # 5) strict improvement JSON (SSOT 고정, meta-only)
+# 보강 2: 항상 생성 (phase1 report 부재 시에도 strict_improvement=false로 생성)
 OUT_JSON="docs/ops/r10-s7-step4b-b-strict-improvement.json"
 BASELINE_JSON="docs/ops/r10-s7-retriever-metrics-baseline.json"
 PHASE1_JSON="docs/ops/r10-s7-retriever-quality-phase1-report.json"
@@ -70,11 +71,33 @@ PHASE1_JSON="docs/ops/r10-s7-retriever-quality-phase1-report.json"
 mkdir -p "$(dirname "$OUT_JSON")"
 
 python3 - <<'PY' "$BASELINE_JSON" "$PHASE1_JSON" "$OUT_JSON"
-import json, sys, time
+import json, sys, time, os
 
 baseline_path, phase1_path, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
 
+# baseline은 필수
+if not os.path.exists(baseline_path):
+    raise SystemExit(f"FAIL: baseline missing: {baseline_path}")
+
 b = json.load(open(baseline_path, "r", encoding="utf-8"))
+
+# phase1 report가 없으면 strict_improvement=false로 생성 (보강 2: 항상 생성)
+if not os.path.exists(phase1_path):
+    payload = {
+      "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+      "mode": "step4b-b",
+      "result": {
+        "strict_improvement": False,
+        "improved_metrics": [],
+        "regressed_metrics": [],
+        "note": "phase1_report_missing"
+      },
+      "metrics": {}
+    }
+    open(out_path, "w", encoding="utf-8").write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    sys.exit(0)
+
 r = json.load(open(phase1_path, "r", encoding="utf-8"))
 
 # "metrics" 키가 없으면(스키마 변동) 즉시 FAIL하도록 보수적으로 처리
