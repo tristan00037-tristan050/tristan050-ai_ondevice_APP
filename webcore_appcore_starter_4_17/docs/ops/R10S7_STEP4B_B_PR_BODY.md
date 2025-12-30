@@ -1,22 +1,3 @@
-# S7 Step4-B B PR 템플릿 (정본)
-
-## 목표
-"입력 고정(데이터 변경 0)" 상태에서 **Regression Gate PASS + strict improvement(최소 1개 지표 baseline 초과)**를 증빙과 함께 남기는 PR.
-
-## PR 기본 정보
-
-- **Base(타깃)**: main
-- **Compare(소스)**: feat/s7-step4b-b-algo-improve (권장 예시)
-- **Title(정본)**: `feat(s7): step4-b b algorithm improvement with strict metric gain (input frozen)`
-
-## PR 본문 템플릿
-
-정본 PR 본문은 다음 파일을 참조:
-- `docs/ops/R10S7_STEP4B_B_PR_BODY.md`
-
-또는 아래 내용을 그대로 복붙:
-
-```markdown
 ## 목적
 본 PR은 **S7 Step4-B B(입력 고정 알고리즘 개선 PR)** 입니다.  
 입력(goldenset/corpus) 변경 없이, **Regression Gate PASS**를 유지하면서
@@ -128,41 +109,4 @@ bash scripts/ops/prove_update_retriever_baseline.sh --update-baseline --min-gain
 
 입력 고정 증거(변경 0), Regression Gate PASS(로컬/CI), meta-only + META_ONLY_DEBUG 증거,
 strict improvement JSON(최소 1개 지표 baseline 초과) 4개가 모두 없으면 PASS 선언 금지입니다.
-```
-
-## strict improvement 증빙 표준 포맷
-
-### (A) 콘솔 출력 표준(권장)
-```
-[Strict Improvement Evidence]
-baseline: docs/ops/r10-s7-retriever-metrics-baseline.json
-report:   docs/ops/r10-s7-retriever-quality-phase1-report.json
-
-precision_at_k: baseline=0.xxxxxx current=0.xxxxxx delta=+0.xxxxxx
-recall_at_k:    baseline=0.xxxxxx current=0.xxxxxx delta=+0.xxxxxx
-mrr_at_k:       baseline=0.xxxxxx current=0.xxxxxx delta=+0.xxxxxx
-ndcg_at_k:      baseline=0.xxxxxx current=0.xxxxxx delta=+0.xxxxxx
-
-IMPROVED_KEYS=[mrr_at_k]   # 최소 1개 이상이어야 함
-proof.latest=docs/ops/r10-s7-retriever-regression-proof.latest
-meta-only=PASS (verify_rag_meta_only.sh)
-```
-
-### (B) JSON 표준(자동화/아카이빙 용)
-```json
-{
-  "strict_improvement": true,
-  "baseline_path": "docs/ops/r10-s7-retriever-metrics-baseline.json",
-  "report_path": "docs/ops/r10-s7-retriever-quality-phase1-report.json",
-  "improved_keys": ["mrr_at_k"],
-  "metrics": {
-    "precision_at_k": {"baseline": 0.0, "current": 0.0, "delta": 0.0},
-    "recall_at_k":    {"baseline": 0.0, "current": 0.0, "delta": 0.0},
-    "mrr_at_k":       {"baseline": 0.0, "current": 0.0, "delta": 0.0},
-    "ndcg_at_k":      {"baseline": 0.0, "current": 0.0, "delta": 0.0}
-  },
-  "proof_latest": "docs/ops/r10-s7-retriever-regression-proof.latest",
-  "meta_only": true
-}
-```
 

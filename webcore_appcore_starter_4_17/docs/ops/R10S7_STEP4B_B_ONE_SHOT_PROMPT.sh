@@ -13,19 +13,25 @@ echo "ssh -o StrictHostKeyChecking=no <USER>@49.50.139.248"
 bash scripts/ops/verify_s7_always_on.sh
 
 # 1) 입력 고정(변경 0) 강제 확인
+ROOT="$(git rev-parse --show-toplevel)"
+APP="$ROOT/webcore_appcore_starter_4_17"
+
+cd "$ROOT"
 git fetch origin main --depth=1
 CHANGED="$(git diff --name-only origin/main...HEAD)"
 echo "$CHANGED" | sed -n "1,200p"
 
-echo "$CHANGED" | rg -n "docs/ops/r10-s7-retriever-(goldenset\.jsonl|corpus\.jsonl)" && {
+echo "$CHANGED" | rg -n "^webcore_appcore_starter_4_17/docs/ops/r10-s7-retriever-(goldenset\.jsonl|corpus\.jsonl)$" && {
   echo "FAIL: input must be frozen for Step4-B B"
   exit 1
 } || true
 
-echo "$CHANGED" | rg -n "docs/ops/r10-s7-retriever-metrics-baseline\.json" && {
+echo "$CHANGED" | rg -n "^webcore_appcore_starter_4_17/docs/ops/r10-s7-retriever-metrics-baseline\.json$" && {
   echo "FAIL: baseline must not be modified in PR"
   exit 1
 } || true
+
+cd "$APP"
 
 # 2) Safety gates (meta-only)
 bash scripts/ops/verify_s7_corpus_no_pii.sh
@@ -50,25 +56,29 @@ rg -n "TIEBREAK_ENABLE|secondary_score|secondaryScore|primary_score|primaryScore
 # 주의: 출력/로그는 meta-only 유지. 쿼리/문서 원문 출력 금지.
 
 # 4) Regression proof (must PASS)
+export TIEBREAK_ENABLE=1
 bash scripts/ops/prove_retriever_regression_gate.sh
 
 # 5) Meta-only scan + debug evidence
-META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh
+META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh | tee /tmp/meta_only_debug_step4b_b.log
 
-# 5) strict improvement 체크(필수: baseline 대비 최소 1개 지표 strictly greater)
+# 5) strict improvement JSON (Phase1 report vs baseline)
 python3 - <<'PY'
 import json
 b=json.load(open("docs/ops/r10-s7-retriever-metrics-baseline.json","r",encoding="utf-8"))
 r=json.load(open("docs/ops/r10-s7-retriever-quality-phase1-report.json","r",encoding="utf-8"))
 keys=["precision_at_k","recall_at_k","mrr_at_k","ndcg_at_k"]
-improved=[]
-print("=== STRICT IMPROVEMENT CHECK (meta-only) ===")
-out={"improved_keys":[], "metrics":{}}
-for k in keys:
-    bv=float(b["metrics"][k]); rv=float(r["metrics"][k])
-    out["metrics"][k]={"baseline":round(bv,6),"current":round(rv,6),"delta":round(rv-bv,6)}
-    if rv>bv: improved.append(k)
-out["improved_keys"]=improved
+improved=[k for k in keys if float(r["metrics"][k])>float(b["metrics"][k])]
+
+out={
+  "step": "S7 Step4-B B",
+  "input_fixed": True,
+  "regression_gate": "PASS",
+  "strict_improvement": True if improved else False,
+  "improved_metrics": improved,
+  "baseline_metrics": b["metrics"],
+  "current_metrics": r["metrics"]
+}
 print(json.dumps(out, ensure_ascii=False, indent=2))
 raise SystemExit(0 if improved else 1)
 PY
