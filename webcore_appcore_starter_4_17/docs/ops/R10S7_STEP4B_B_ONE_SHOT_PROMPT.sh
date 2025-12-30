@@ -62,25 +62,74 @@ bash scripts/ops/prove_retriever_regression_gate.sh
 # 5) Meta-only scan + debug evidence
 META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh | tee /tmp/meta_only_debug_step4b_b.log
 
-# 5) strict improvement JSON (Phase1 report vs baseline)
-python3 - <<'PY'
-import json
-b=json.load(open("docs/ops/r10-s7-retriever-metrics-baseline.json","r",encoding="utf-8"))
-r=json.load(open("docs/ops/r10-s7-retriever-quality-phase1-report.json","r",encoding="utf-8"))
-keys=["precision_at_k","recall_at_k","mrr_at_k","ndcg_at_k"]
-improved=[k for k in keys if float(r["metrics"][k])>float(b["metrics"][k])]
+# 5) strict improvement JSON (SSOT 고정, meta-only)
+OUT_JSON="docs/ops/r10-s7-step4b-b-strict-improvement.json"
+BASELINE_JSON="docs/ops/r10-s7-retriever-metrics-baseline.json"
+PHASE1_JSON="docs/ops/r10-s7-retriever-quality-phase1-report.json"
 
-out={
-  "step": "S7 Step4-B B",
-  "input_fixed": True,
-  "regression_gate": "PASS",
-  "strict_improvement": True if improved else False,
-  "improved_metrics": improved,
-  "baseline_metrics": b["metrics"],
-  "current_metrics": r["metrics"]
+mkdir -p "$(dirname "$OUT_JSON")"
+
+python3 - <<'PY' "$BASELINE_JSON" "$PHASE1_JSON" "$OUT_JSON"
+import json, sys, time
+
+baseline_path, phase1_path, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
+
+b = json.load(open(baseline_path, "r", encoding="utf-8"))
+r = json.load(open(phase1_path, "r", encoding="utf-8"))
+
+# "metrics" 키가 없으면(스키마 변동) 즉시 FAIL하도록 보수적으로 처리
+if "metrics" not in b or "metrics" not in r or not isinstance(b["metrics"], dict) or not isinstance(r["metrics"], dict):
+    raise SystemExit("FAIL: baseline/report JSON schema missing top-level 'metrics' dict")
+
+# 숫자 메트릭만 비교(meta-only 유지)
+metrics = {}
+improved = []
+regressed = []
+
+for k, bv_raw in b["metrics"].items():
+    if k not in r["metrics"]:
+        continue
+    rv_raw = r["metrics"][k]
+
+    # 숫자형만 처리
+    try:
+        bv = float(bv_raw)
+        rv = float(rv_raw)
+    except Exception:
+        continue
+
+    dv = rv - bv
+    metrics[k] = {"baseline": bv, "current": rv, "delta": dv}
+    if dv > 0:
+        improved.append(k)
+    elif dv < 0:
+        regressed.append(k)
+
+payload = {
+  "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+  "mode": "step4b-b",
+  "result": {
+    "strict_improvement": len(improved) > 0,
+    "improved_metrics": improved,
+    "regressed_metrics": regressed
+  },
+  "metrics": metrics
 }
-print(json.dumps(out, ensure_ascii=False, indent=2))
-raise SystemExit(0 if improved else 1)
+
+open(out_path, "w", encoding="utf-8").write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+print(json.dumps(payload, ensure_ascii=False, indent=2))
+PY
+
+echo "OK: strict improvement json -> $OUT_JSON"
+
+# Step4-B B 정본: strict improvement가 없으면 ONE_SHOT은 FAIL로 종료
+python3 - <<'PY' "$OUT_JSON"
+import json, sys
+j=json.load(open(sys.argv[1],"r",encoding="utf-8"))
+if not j["result"]["strict_improvement"]:
+    print("FAIL: strict improvement is 0 (no metric strictly improved)")
+    raise SystemExit(1)
+print("OK: strict improvement >= 1")
 PY
 
 # 6) 입력 고정 재확인(커밋 직전)
