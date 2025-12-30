@@ -11,10 +11,13 @@
 
 ## PR 본문 템플릿
 
-정본 PR 본문은 다음 파일을 참조:
+**정본 PR 본문은 다음 파일을 참조하거나 그대로 복붙:**
 - `docs/ops/R10S7_STEP4B_B_PR_BODY.md`
 
-또는 아래 내용을 그대로 복붙:
+**PR 생성 전 체크 스크립트:**
+- `bash docs/ops/R10S7_STEP4B_B_PR_PREFLIGHT_CHECK.sh`
+
+**아래는 참고용 (SSOT 파일 기반 참조 방식 권장):**
 
 ```markdown
 ## 목적
