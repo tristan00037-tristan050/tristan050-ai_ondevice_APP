@@ -131,8 +131,11 @@ docs/ops/r10-s7-step4b-b-strict-improvement.json
 - 파일은 항상 생성(성공/실패 여부와 무관)
 
 **내용 규칙(meta-only 준수):**
-- 메트릭 키/숫자만 포함
-- 쿼리 원문/문서 원문/URL/IP/이메일/토큰/키/시크릿 등 텍스트 원문 0
+- 자유 텍스트(원문/설명/문장) 금지, PII/시크릿/URL/IP/이메일/토큰/키 금지
+- 값은 **숫자/불리언/짧은 열거형(필요 시)**만 허용
+- 키는 JSON 구조상 항상 문자열(불가피)
+- strict improvement 결과는 보통 boolean이 가장 자연스러움
+- "짧은 열거형"은 예: "mode": "step4b-b" 같은 통제된 문자열(길이 제한)만 허용
 
 **Step4-B B 정본 목적 보장:**
 - strict improvement가 0이면 ONE_SHOT은 결정적으로 FAIL(exit 1)
@@ -264,7 +267,7 @@ webcore_appcore_starter_4_17/docs/ops/r10-s7-step4b-b-strict-improvement.json
 1) `bash docs/ops/R10S7_STEP4B_B_ONE_SHOT_PROMPT.sh` 실행 시:
 - `docs/ops/r10-s7-step4b-b-strict-improvement.json` **항상 생성**
 - stdout에도 동일 JSON 출력
-- JSON은 meta-only(키/숫자만), 텍스트/PII/시크릿 0
+- JSON은 meta-only 준수: 자유 텍스트/PII/시크릿/URL 등 금지, 숫자/불리언/짧은 열거형만 허용
 - strict improvement가 0이면 ONE_SHOT이 **결정적으로 FAIL**
 
 2) `bash scripts/ops/prove_update_retriever_baseline.sh --update-baseline --min-gain 0.001`:
@@ -322,6 +325,18 @@ bash docs/ops/R10S7_STEP4B_B_ONE_SHOT_PROMPT.sh
 bash scripts/ops/prove_update_retriever_baseline.sh --update-baseline --min-gain 0.001
 ```
 - Step4-B B: `--reanchor-input` 금지(A 전용)
+
+---
+
+---
+
+## 10) 보강 2 검증 완료 후 "추가 봉인 선언문" (정본)
+
+위 원샷 검증이 통과하면, 보강 2는 아래 문구로 **PASS(CLOSED & SEALED)** 추가 봉인 가능합니다.
+
+**[추가 봉인] 보강 2 PASS (CLOSED & SEALED)**
+
+Step4-B B ONE_SHOT은 strict improvement 증거 JSON을 SSOT 경로(`docs/ops/r10-s7-step4b-b-strict-improvement.json`)에 항상 생성하고, 동일 내용을 stdout에 출력한다. strict improvement==0일 때는 결정적으로 FAIL(exit 1) 처리하여 "개선 없는 PR이 실수로 통과"하는 가능성을 제거했다. SSOT JSON은 meta-only 기준(자유 텍스트/PII/시크릿/URL 등 금지, 숫자/불리언/짧은 열거형만 허용)을 만족하며, .gitignore 정책으로 레포 위생(working tree clean)이 유지된다. 따라서 보강 2는 CLOSED & SEALED로 추가 봉인한다.
 
 ---
 
