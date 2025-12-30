@@ -120,6 +120,7 @@ b={
   "ok": True,
   "phase": "S7/Phase1Baseline",
   "meta_only": True,
+  "algo": r.get("algo", "lexical_overlap/v1"),
   "topk": r["topk"],
   "inputs": {
     "goldenset_sha256": r["inputs"]["goldenset_sha256"],
