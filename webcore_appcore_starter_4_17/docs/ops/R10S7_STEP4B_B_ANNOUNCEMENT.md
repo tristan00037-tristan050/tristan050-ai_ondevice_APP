@@ -15,6 +15,8 @@
   - 현재 브랜치명 자동 감지
   - PR 메타데이터 (Base/Compare/Title/Body) 자동 출력
 - **보호**: main 브랜치에서 실행 시 즉시 FAIL (개선 브랜치 강제)
+  - main에서 preflight 실행 시 즉시 FAIL
+  - 개선 브랜치에서만 PASS 및 PR 메타데이터 출력
 
 ### 2. Preflight 가드
 
