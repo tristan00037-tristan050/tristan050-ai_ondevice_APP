@@ -12,3 +12,9 @@ coverage/
 .DS_Store
 .env
 .webllm_artifacts/
+
+# ops runtime artifacts (do not commit)
+docs/ops/r10-s7-retriever-baseline-proof-*.log
+docs/ops/r10-s7-retriever-baseline-proof.latest
+docs/ops/r10-s7-retriever-quality-*-report.json
+docs/ops/r10-s7-retriever-quality-proof.latest
