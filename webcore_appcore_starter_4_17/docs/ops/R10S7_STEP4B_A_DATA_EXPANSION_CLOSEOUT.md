@@ -37,27 +37,22 @@
 입력 해시 변경에 대해 main에서 명시 승인 절차로 baseline re-anchoring 수행:
 
 ```bash
-bash scripts/ops/prove_update_retriever_baseline.sh --update-baseline --min-gain 0.00 --reanchor-input
+bash scripts/ops/prove_update_retriever_baseline.sh --update-baseline --min-gain 0.00
 ```
 
 **주의사항**:
-- `--reanchor-input` 옵션은 **main 브랜치에서만 허용**됨
-- non-main 브랜치에서 사용 시 즉시 FAIL
 - 입력 해시 불일치 시 기본 동작은 FAIL (명시 승인 필요)
+- re-anchoring은 merge 후 main에서만 수행
 
 ### re-anchoring 완료 증빙
 - ✅ baseline proof log/.latest 생성 및 커밋/푸시 완료
 - ✅ re-anchoring 이후 `bash scripts/ops/verify_retriever_regression_gate.sh` PASS 복귀 확인
 - ✅ meta-only PASS 유지
 
-### 구현 스크립트
-- `scripts/ops/update_retriever_baseline.sh`: `--reanchor-input` 옵션 지원
-- `scripts/ops/prove_update_retriever_baseline.sh`: `--reanchor-input` 옵션 전달 및 proof log 생성
-
 ## 최종 상태
 
 1. **S7 Step4-B A 절차는 문서 및 proof/.latest, META_ONLY_DEBUG 증거로 레포에 영구 봉인됨**
-   - 본 문서: `docs/R10S7_STEP4B_A_DATA_EXPANSION_CLOSEOUT.md`
+   - 본 문서: `docs/ops/R10S7_STEP4B_A_DATA_EXPANSION_CLOSEOUT.md`
    - Proof log: `docs/ops/r10-s7-step4-data-expansion-proof-*.log`
    - Latest pointer: `docs/ops/r10-s7-step4-data-expansion-proof.latest`
 
@@ -66,8 +61,8 @@ bash scripts/ops/prove_update_retriever_baseline.sh --update-baseline --min-gain
    - 입력 변경 PR에서는 baseline 비교를 수행하지 않음 (입력 해시 불일치)
 
 3. **입력 해시 변경 시 baseline re-anchoring은 명시 승인 절차로만 허용됨**
-   - `--reanchor-input` 옵션은 main 브랜치에서만 허용
    - 기본 동작은 입력 해시 불일치 시 FAIL (안전성 유지)
+   - merge 후 main에서 re-anchoring 수행
 
 ## 다음 단계
 
@@ -93,4 +88,3 @@ ssh -o StrictHostKeyChecking=no <USER>@49.50.139.248
 ---
 
 **봉인 완료**: S7 Step4-B A Data Expansion 절차는 모든 하드 게이트를 통과하고, CI 분기/차단이 구조적으로 봉인되었으며, main re-anchoring 절차가 명시 승인으로 고정되었습니다.
-
