@@ -19,6 +19,10 @@ docs/ops/r10-s7-retriever-baseline-proof.latest
 docs/ops/r10-s7-retriever-quality-*-report.json
 docs/ops/r10-s7-retriever-quality-proof.latest
 
+# backup files
+*.bak
+**/*.bak
+
 # Step4-B B strict improvement evidence (runtime, meta-only)
 webcore_appcore_starter_4_17/docs/ops/r10-s7-step4b-b-strict-improvement.json
 
