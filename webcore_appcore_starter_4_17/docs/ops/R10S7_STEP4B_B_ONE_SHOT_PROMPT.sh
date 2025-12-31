@@ -178,14 +178,15 @@ META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh | tee /tmp/meta_only_
 echo "OK: strict improvement json -> $OUT_JSON"
 
 # Step4-B B 정본: strict improvement가 없으면 ONE_SHOT은 FAIL로 종료
-python3 - <<'PY' "$OUT_JSON"
-import json, sys
-j=json.load(open(sys.argv[1],"r",encoding="utf-8"))
-if not j["result"]["strict_improvement"]:
-    print("FAIL: strict improvement is 0 (no metric strictly improved)")
-    raise SystemExit(1)
-print("OK: strict improvement >= 1")
-PY
+STRICT_IMPROVEMENT="$(python3 -c 'import json,sys; j=json.load(open(sys.argv[1],"r",encoding="utf-8")); ok=(bool(j.get("result",{}).get("strict_improvement", False)) if isinstance(j,dict) and isinstance(j.get("result"),dict) else (bool(j.get("strict_improvement", False)) if isinstance(j,dict) else False)); print("1" if ok else "0")' "$OUT_JSON")"
+export STRICT_IMPROVEMENT
+
+if [ "${STRICT_IMPROVEMENT}" = "1" ]; then
+  echo "OK: strict_improvement=1"
+else
+  echo "FAIL: strict_improvement=0 (no metric strictly improved)"
+  exit 1
+fi
 
 # 6) 입력 고정 재확인(커밋 직전)
 CHANGED2="$(git diff --name-only)"
