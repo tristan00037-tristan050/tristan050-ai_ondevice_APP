@@ -29,3 +29,6 @@ webcore_appcore_starter_4_17/docs/ops/r10-s7-step4b-b-strict-improvement.json
 # step4b-b runtime artifacts (do not commit)
 docs/ops/r10-s7-step4b-b-strict-improvement.json
 docs/ops/r10-s7-retriever-regression-proof-*.log
+
+# ops runtime artifacts (do not commit)
+docs/ops/r10-s7-retriever-regression-proof.latest
