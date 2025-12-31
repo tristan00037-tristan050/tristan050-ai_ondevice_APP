@@ -88,7 +88,7 @@ def rank(query: str, k: int):
         if tie_enable == 1 and primary >= tie_min_primary:
             # 희소 토큰 보너스: query와 doc이 공통으로 가진 토큰에만 부여
             # secondary += (N - df[t]) for t in (query_tokens ∩ doc_tokens)
-            secondary = sum((N - df.get(t,0)) for t in inter)
+            secondary = sum(math.log((N + 1) / (df.get(t,0) + 1)) for t in inter)
         scored.append((primary, secondary, did, dt))
 
     # 정렬: primary 우선, primary 동점에서만 secondary가 의미를 가짐
