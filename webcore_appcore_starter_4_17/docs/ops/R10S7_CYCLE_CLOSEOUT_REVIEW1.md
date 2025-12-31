@@ -342,18 +342,6 @@ Step4-B B ONE_SHOT은 strict improvement 증거 JSON을 SSOT 경로(`docs/ops/r1
 
 ---
 
-## 10) 보강 2 검증 완료 후 "추가 봉인 선언문" (정본)
-
-위 원샷 검증이 통과하면, 보강 2는 아래 문구로 **PASS(CLOSED & SEALED)** 추가 봉인 가능합니다.
-
-**[추가 봉인] 보강 2 PASS (CLOSED & SEALED)**
-
-Step4-B B ONE_SHOT은 strict improvement 증거 JSON을 SSOT 경로(`docs/ops/r10-s7-step4b-b-strict-improvement.json`)에 항상 생성하고, 동일 내용을 stdout에 출력한다. strict improvement==0일 때는 결정적으로 FAIL(exit 1) 처리하여 "개선 없는 PR이 실수로 통과"하는 가능성을 제거했다. SSOT JSON은 meta-only 기준(자유 텍스트/PII/시크릿/URL 등 금지, 숫자/불리언/짧은 열거형만 허용)을 만족하며, .gitignore 정책으로 레포 위생(working tree clean)이 유지된다. 따라서 보강 2는 CLOSED & SEALED로 추가 봉인한다.
-
----
-
----
-
 ## 11) 보강 2 PASS Gate 통과 기록 (종결 기록 블록, SSOT)
 
 **봉인일**: 2025-12-31  
