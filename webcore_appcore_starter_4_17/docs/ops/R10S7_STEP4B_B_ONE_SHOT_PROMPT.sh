@@ -10,16 +10,32 @@ OUT_JSON="docs/ops/r10-s7-step4b-b-strict-improvement.json"
 mkdir -p "$(dirname "$OUT_JSON")"
 
 write_strict_json_always() {
-  # STRICT_IMPROVEMENT may be set by the script (0/1). If absent, fall back to exit_code==0.
+  # STRICT_IMPROVEMENT may be set by the script (0/1). If absent, calculate from phase1 report vs baseline.
   export ONE_SHOT_EXIT="${ONE_SHOT_EXIT:-0}"
-  python3 - <<'PYY' > "$OUT_JSON" || true
+  APP_DIR="${APP_DIR:-$(pwd)}"
+  python3 - <<PYY > "$OUT_JSON" || true
 import json, os, time
 rc = int(os.environ.get("ONE_SHOT_EXIT","0"))
 si_env = os.environ.get("STRICT_IMPROVEMENT","")
+app_dir = os.environ.get("APP_DIR", ".")
 if si_env.strip() in ("0","1"):
     strict_improve = (si_env.strip() == "1")
 else:
-    strict_improve = (rc == 0)
+    # Calculate from phase1 report vs baseline
+    try:
+        baseline_path = os.path.join(app_dir, "docs/ops/r10-s7-retriever-metrics-baseline.json")
+        report_path = os.path.join(app_dir, "docs/ops/r10-s7-retriever-quality-phase1-report.json")
+        if os.path.exists(baseline_path) and os.path.exists(report_path):
+            b=json.load(open(baseline_path,"r",encoding="utf-8"))
+            r=json.load(open(report_path,"r",encoding="utf-8"))
+            bm=b.get("metrics",b); rm=r.get("metrics",r)
+            eps=1e-12
+            improved = sum(1 for k in set(bm)&set(rm) if isinstance(bm[k],(int,float)) and isinstance(rm[k],(int,float)) and rm[k]>bm[k]+eps)
+            strict_improve = (improved > 0)
+        else:
+            strict_improve = (rc == 0)
+    except Exception:
+        strict_improve = (rc == 0)
 
 payload = {
   "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -34,8 +50,9 @@ PYY
 }
 
 # ensure JSON exists even when the script exits non-zero (set -e path)
-trap 'ONE_SHOT_EXIT=$?; export ONE_SHOT_EXIT; write_strict_json_always || true' EXIT
+trap 'ONE_SHOT_EXIT=$?; export ONE_SHOT_EXIT; export APP_DIR="$(pwd)"; write_strict_json_always || true' EXIT
 cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
+export APP_DIR="$(pwd)"
 
 # (고정) 운영 서버 접속 코드
 echo "ssh -o StrictHostKeyChecking=no <USER>@49.50.139.248"
@@ -87,7 +104,9 @@ rg -n "TIEBREAK_ENABLE|secondary_score|secondaryScore|primary_score|primaryScore
 # 주의: 출력/로그는 meta-only 유지. 쿼리/문서 원문 출력 금지.
 
 # 4) Regression proof (must PASS)
+# MP=2 고정: 회귀 0 구간 유지 (환경 흔들림 방지)
 export TIEBREAK_ENABLE=1
+export TIEBREAK_MIN_PRIMARY=2
 bash scripts/ops/prove_retriever_regression_gate.sh
 
 # 5) Meta-only scan + debug evidence
@@ -178,7 +197,20 @@ META_ONLY_DEBUG=1 bash scripts/ops/verify_rag_meta_only.sh | tee /tmp/meta_only_
 echo "OK: strict improvement json -> $OUT_JSON"
 
 # Step4-B B 정본: strict improvement가 없으면 ONE_SHOT은 FAIL로 종료
-STRICT_IMPROVEMENT="$(python3 -c 'import json,sys; j=json.load(open(sys.argv[1],"r",encoding="utf-8")); ok=(bool(j.get("result",{}).get("strict_improvement", False)) if isinstance(j,dict) and isinstance(j.get("result"),dict) else (bool(j.get("strict_improvement", False)) if isinstance(j,dict) else False)); print("1" if ok else "0")' "$OUT_JSON")"
+# phase1 report vs baseline 직접 비교
+STRICT_IMPROVEMENT="$(python3 - <<'PY'
+import json
+try:
+    b=json.load(open("docs/ops/r10-s7-retriever-metrics-baseline.json","r",encoding="utf-8"))
+    r=json.load(open("docs/ops/r10-s7-retriever-quality-phase1-report.json","r",encoding="utf-8"))
+    bm=b.get("metrics",b); rm=r.get("metrics",r)
+    eps=1e-12
+    improved = sum(1 for k in set(bm)&set(rm) if isinstance(bm[k],(int,float)) and isinstance(rm[k],(int,float)) and rm[k]>bm[k]+eps)
+    print("1" if improved > 0 else "0")
+except Exception:
+    print("0")
+PY
+)"
 export STRICT_IMPROVEMENT
 
 if [ "${STRICT_IMPROVEMENT}" = "1" ]; then

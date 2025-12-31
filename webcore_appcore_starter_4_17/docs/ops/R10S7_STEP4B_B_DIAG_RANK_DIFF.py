@@ -10,6 +10,7 @@ OUT    = ROOT / "docs/ops/r10-s7-step4b-b-rank-diff.json"
 TOPK = 5
 TIE_MIN_PRIMARY = 2
 TIE_WEIGHT = float(os.environ.get("TIEBREAK_WEIGHT", "0.2"))
+PRIMARY_RARE_ALPHA = float(os.environ.get("PRIMARY_RARE_ALPHA", "0.05"))
 
 def tok(s: str):
     s = s.lower()
@@ -52,16 +53,10 @@ def rank(query: str, docs, df, tie_enable: int):
     N=len(docs)
     for did,dt in docs:
         inter = q & dt
-        primary = len(inter)
+        # eval_retriever_quality_phase1.sh와 완전히 동일한 계산식 (SSOT)
+        rare_boost = sum((N - df.get(t,0)) for t in inter)
+        primary = len(inter) + PRIMARY_RARE_ALPHA * rare_boost
         secondary = 0.0
-        if tie_enable==1 and primary>=TIE_MIN_PRIMARY:
-            # eval_retriever_quality_phase1.sh와 완전히 동일한 계산식 (SSOT)
-            # 희소 토큰 우선 강화: query의 희소 토큰 상위 3개만 사용
-            qtoks = list(q)
-            qtoks.sort(key=lambda t: df.get(t, 0))  # 희소 토큰 우선 (df 오름차순)
-            rare = qtoks[:3]  # 상위 3개 희소 토큰만 사용
-            # 그 토큰이 문서에 포함되면 가점
-            secondary = TIE_WEIGHT * sum((N - df.get(t,0)) for t in rare if t in dt)
         scored.append((primary, secondary, did))
     scored.sort(key=lambda x:(-x[0], -x[1], x[2]))
     return [did for _,_,did in scored[:TOPK]]
@@ -89,9 +84,9 @@ def main():
             if len(examples) < 10:
                 examples.append({"query": q, "rank0": r0, "rank1": r1})
         
-        # 동점 그룹 내 secondary 변별력 확인
+        # 동점 그룹 내 secondary 변별력 확인 (primary 계산식 변경으로 인해 의미가 줄어들었지만 유지)
         q_set = set(tok(q))
-        primaries = [len(q_set & dt) for _, dt in docs]
+        primaries = [len(q_set & dt) + PRIMARY_RARE_ALPHA * sum((len(docs) - df.get(t,0)) for t in (q_set & dt)) for _, dt in docs]
         mx = max(primaries) if primaries else 0
         if mx > 0:
             # primary==mx인 문서들의 secondary 값 수집
@@ -99,14 +94,10 @@ def main():
             for idx, (did, dt) in enumerate(docs):
                 inter = q_set & dt
                 primary = len(inter)
-                if primary == mx:
+                inter = q_set & dt
+                primary_calc = len(inter) + PRIMARY_RARE_ALPHA * sum((len(docs) - df.get(t,0)) for t in inter)
+                if abs(primary_calc - mx) < 1e-6:  # primary가 최대값과 동일
                     secondary = 0.0
-                    if primary >= TIE_MIN_PRIMARY:
-                        # eval과 동일한 희소 토큰 우선 로직
-                        qtoks = list(q_set)
-                        qtoks.sort(key=lambda t: df.get(t, 0))
-                        rare = qtoks[:3]
-                        secondary = TIE_WEIGHT * sum((len(docs) - df.get(t,0)) for t in rare if t in dt)
                     tie_secondaries.append(secondary)
             
             if len(tie_secondaries) >= 2:  # 동점 그룹이 2개 이상
