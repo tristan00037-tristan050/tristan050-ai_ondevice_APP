@@ -1,0 +1,17 @@
+{
+  "doc_count": 35,
+  "total_queries": 30,
+  "agg": {
+    "queries_some_must_missing": 11,
+    "queries_all_must_present": 18,
+    "queries_all_must_missing": 1
+  },
+  "missing_count_hist": {
+    "2": 3,
+    "1": 6,
+    "0": 18,
+    "3": 1,
+    "4": 2
+  },
+  "note": "Text-only corpus token coverage. No raw tokens are output."
+}
