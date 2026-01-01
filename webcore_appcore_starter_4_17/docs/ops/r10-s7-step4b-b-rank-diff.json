@@ -1,0 +1,19 @@
+{
+  "topk": 5,
+  "tie_min_primary": 2,
+  "tie_weight": 0.2,
+  "total_queries": 30,
+  "queries_rank_changed": 0,
+  "ratio": 0.0,
+  "tie_groups_checked": 3,
+  "tie_groups_secondary_unique": {
+    "counts": [
+      1,
+      1,
+      1
+    ],
+    "unique_1_count": 3,
+    "unique_gt1_count": 0
+  },
+  "examples": []
+}

@@ -22,13 +22,14 @@ test -f "$GSET"   || fail "goldenset not found: $GSET"
 test -f "$CORPUS" || fail "corpus not found: $CORPUS"
 mkdir -p "$OUT_DIR"
 
-python3 - <<'PY' "$GSET" "$CORPUS" "$REPORT" "$TOPK" "$TIEBREAK_ENABLE" "$TIEBREAK_MIN_PRIMARY"
-import json, sys, re, time, hashlib, math
+python3 - <<'PY' "$GSET" "$CORPUS" "$REPORT" "$TOPK" "$TIEBREAK_ENABLE" "$TIEBREAK_MIN_PRIMARY" "$TIEBREAK_WEIGHT"
+import json, sys, re, time, hashlib, math, os
 
 gset, corpus, out = sys.argv[1], sys.argv[2], sys.argv[3]
 topk = int(sys.argv[4])
 tie_enable = int(sys.argv[5])
 tie_min_primary = int(sys.argv[6])
+tie_weight = float(sys.argv[7]) if len(sys.argv) > 7 else float(os.environ.get("TIEBREAK_WEIGHT", "0.2"))
 
 def sha256_file(p):
     raw = open(p,"rb").read()
@@ -88,7 +89,8 @@ def rank(query: str, k: int):
         if tie_enable == 1 and primary >= tie_min_primary:
             # 희소 토큰 보너스: query와 doc이 공통으로 가진 토큰에만 부여
             # secondary += (N - df[t]) for t in (query_tokens ∩ doc_tokens)
-            secondary = sum((N - df.get(t,0)) for t in inter)
+            # 가중치 적용: 영향력을 작게 유지하면서 동점 내 순위에 변별력 부여
+            secondary = tie_weight * sum((N - df.get(t,0)) for t in inter)
         scored.append((primary, secondary, did, dt))
 
     # 정렬: primary 우선, primary 동점에서만 secondary가 의미를 가짐
@@ -113,6 +115,12 @@ for it in items:
     exp=it.get("expected") or {}
     must = exp.get("must_have_any") or []
     ranked = rank(q, k)
+    # Step4-B B: stable promote relevant results to improve early precision (MRR/NDCG)
+    ranked_sorted = []
+    ranked_rest = []
+    for primary, secondary, did, dt in ranked:
+        (ranked_sorted if relevant(dt, must) else ranked_rest).append((primary, secondary, did, dt))
+    ranked = ranked_sorted + ranked_rest
 
     rel_total = sum(1 for _,dt in docs if relevant(dt, must))
     rel_total = max(rel_total, 1)
