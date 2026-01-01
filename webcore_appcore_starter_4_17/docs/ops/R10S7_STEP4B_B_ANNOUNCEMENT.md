@@ -89,3 +89,10 @@ ssh -o StrictHostKeyChecking=no <USER>@49.50.139.248
 
 **봉인 완료**: S7 Step4-B B PR 메타데이터 자동 생성 및 Preflight 가드는 모든 하드 게이트를 통과하고, 정본 규칙으로 봉인되었습니다.
 
+
+---
+## Step4-B B Closeout (SSOT)
+- Step4-B B는 안전성(회귀 0) 및 증빙/정합(SSOT: rank_stats/hit_stats_v0/bm25_guard/INTERNAL_K)을 봉인 완료했다.
+- strict improvement ≥ 1 미달성 원인은 SSOT로 확인된 "개선 여지 부족(24/30 first_hit=1) + hitless 4개 존재"이다.
+- hitless 해소 및 실질 개선은 Step4-A 트랙(입력/필드/토큰화 확장 또는 평가 재설계 + baseline 재생성)에서 추진한다.
+- PASS 선언은 계속 PASS Gate 결과로만 가능하다.
