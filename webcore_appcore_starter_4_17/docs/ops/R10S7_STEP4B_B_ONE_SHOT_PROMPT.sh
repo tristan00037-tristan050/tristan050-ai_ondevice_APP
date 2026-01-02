@@ -232,6 +232,20 @@ echo "$CHANGED2" | rg -n "docs/ops/r10-s7-retriever-metrics-baseline\.json" && {
   exit 1
 } || true
 
+# PASS Gate eligible 검증 (SSOT 단일 진실원)
+PASS_GATE_SCRIPT="scripts/ops/verify_pass_gate.sh"
+if [ ! -f "$PASS_GATE_SCRIPT" ]; then
+  echo "FAIL: PASS Gate script not found: $PASS_GATE_SCRIPT (PASS blocked)" >&2
+  exit 1
+fi
+
+bash "$PASS_GATE_SCRIPT" || {
+  echo "FAIL: PASS Gate verification failed (PASS blocked)" >&2
+  exit 1
+}
+
+echo "OK: PASS Gate eligible confirmed"
+
 # 7) 커밋
 git add -A
 git commit -m "feat(s7): step4-b-b enable deterministic tiebreak for strict improvement (input frozen)"
