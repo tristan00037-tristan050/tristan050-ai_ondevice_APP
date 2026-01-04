@@ -8,7 +8,7 @@ on:
 
 defaults:
   run:
-    working-directory: webcore_appcore_starter_4_17  # ✅ 여기부터 모든 run:은 이 디렉토리 기준
+    working-directory: webcore_appcore_starter_4_17
 
 jobs:
   lint-and-typecheck:
@@ -21,12 +21,31 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            webcore_appcore_starter_4_17/package-lock.json
+            webcore_appcore_starter_4_17/**/package-lock.json
       
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (retry, fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          npm config set fund false
+          npm config set audit false
+          for i in 1 2 3; do
+            echo "== npm ci attempt $i/3 =="
+            if npm ci; then exit 0; fi
+            echo "WARN: npm ci failed. retrying..."
+            sleep $((i*15))
+          done
+          echo "FAIL: npm ci failed after retries"
+          exit 1
 
-      # 각 워크스페이스에 lint 스크립트/ESLint 설정이 제대로 안 되어 있으므로,
-      # 당분간 "핵심 패키지만 lint, 실패해도 CI는 계속 진행"으로 운용
       - name: Run ESLint (core workspaces, non-blocking)
         run: |
           set +e
@@ -38,9 +57,8 @@ jobs:
 
           echo "🔍 Lint @appcore/ops-console"
           npm run lint --workspace=@appcore/ops-console || echo "⚠ ops-console lint failed (see logs)"
-        continue-on-error: true  # ❗ lint가 깨져도 파이프라인 전체는 막지 않음
+        continue-on-error: true
 
-      # ✅ 여기부터 TypeScript 체크를 "워크스페이스별, non-blocking" 으로 변경
       - name: Run TypeScript check (core workspaces, non-blocking)
         run: |
           set +e
@@ -50,9 +68,8 @@ jobs:
           echo "🔍 Type-check @appcore/bff-accounting"
           npm run type-check --workspace=@appcore/bff-accounting || echo "⚠ bff-accounting type-check failed (see logs)"
 
-          # app-expo, data-pg 는 type-check 스크립트가 없으므로 지금은 스킵
           echo "ℹ skipping @appcore/app-expo and @appcore/data-pg type-check (no script)"
-        continue-on-error: true  # ❗ 타입 체크 실패해도 전체 CI는 막지 않음
+        continue-on-error: true
 
   schema-validation:
     name: Schema Validation
@@ -64,12 +81,31 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            webcore_appcore_starter_4_17/package-lock.json
+            webcore_appcore_starter_4_17/**/package-lock.json
       
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (retry, fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          npm config set fund false
+          npm config set audit false
+          for i in 1 2 3; do
+            echo "== npm ci attempt $i/3 =="
+            if npm ci; then exit 0; fi
+            echo "WARN: npm ci failed. retrying..."
+            sleep $((i*15))
+          done
+          echo "FAIL: npm ci failed after retries"
+          exit 1
 
-      # 기존 npm run validate:all 은 스크립트가 없어서 실패하므로 제거
-      # 회계 스키마만 우선 검증, 없으면 warning만 출력
       - name: Validate accounting schemas
         run: npm run ci:validate:accounting || echo "⚠ Accounting schemas validation skipped (no script or test data)"
 
@@ -83,15 +119,34 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            webcore_appcore_starter_4_17/package-lock.json
+            webcore_appcore_starter_4_17/**/package-lock.json
       
-      - name: Install dependencies
-        run: npm ci
-      
+      - name: Install dependencies (retry, fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          npm config set fund false
+          npm config set audit false
+          for i in 1 2 3; do
+            echo "== npm ci attempt $i/3 =="
+            if npm ci; then exit 0; fi
+            echo "WARN: npm ci failed. retrying..."
+            sleep $((i*15))
+          done
+          echo "FAIL: npm ci failed after retries"
+          exit 1
+
       - name: Generate OpenAPI types
         run: npm run ci:gen-types
 
-      # app-expo generated types 디렉토리 등 미준비로 인해 ci:check-openapi 가 깨지고 있으므로,
-      # 지금은 "로그만 남기고 파이프라인은 통과" 로 운용
       - name: Check OpenAPI sync (non-blocking)
         run: npm run ci:check-openapi || echo "⚠ ci:check-openapi failed (see logs)"
         continue-on-error: true
@@ -106,9 +161,30 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            webcore_appcore_starter_4_17/package-lock.json
+            webcore_appcore_starter_4_17/**/package-lock.json
       
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (retry, fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          npm config set fund false
+          npm config set audit false
+          for i in 1 2 3; do
+            echo "== npm ci attempt $i/3 =="
+            if npm ci; then exit 0; fi
+            echo "WARN: npm ci failed. retrying..."
+            sleep $((i*15))
+          done
+          echo "FAIL: npm ci failed after retries"
+          exit 1
       
       - name: Check roles guard
         run: npm run ci:check-roles
@@ -127,9 +203,30 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            webcore_appcore_starter_4_17/package-lock.json
+            webcore_appcore_starter_4_17/**/package-lock.json
       
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (retry, fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          npm config set fund false
+          npm config set audit false
+          for i in 1 2 3; do
+            echo "== npm ci attempt $i/3 =="
+            if npm ci; then exit 0; fi
+            echo "WARN: npm ci failed. retrying..."
+            sleep $((i*15))
+          done
+          echo "FAIL: npm ci failed after retries"
+          exit 1
       
       - name: Run tests
         run: npm test --workspaces --if-present

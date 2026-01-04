@@ -50,5 +50,10 @@ if bad:
 print("OK: no regression vs baseline")
 PY
 
+# Hit movement stats (meta-only)
+echo "== HIT MOVEMENT STATS (meta-only) =="
+bash scripts/ops/calc_hit_movement_stats.sh
+echo "OK: hit movement stats calculated (meta-only)"
+
 echo "OK: verify_retriever_regression_gate exit 0"
 
