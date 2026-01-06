@@ -6,7 +6,18 @@
 set -euo pipefail
 ### R10S7_STRICT_IMPROVEMENT_JSON_SSOT_V1 ###
 # SSOT strict improvement JSON must be created ALWAYS (success/failure independent)
-OUT_JSON="docs/ops/r10-s7-step4b-b-strict-improvement.json"
+# SSOT: strict improvement JSON output path (meta-only, fail-closed)
+OUT_DIR="${OUT_DIR:-docs/ops}"
+OUT_JSON="${OUT_DIR}/r10-s7-step4b-b-strict-improvement.json"
+
+# Option A: Redirect artifacts to /tmp when ONE_SHOT_ARTIFACTS_TMP=1 (worktree cleanliness)
+if [ "${ONE_SHOT_ARTIFACTS_TMP:-0}" = "1" ]; then
+  OUT_DIR="${STEP4B_OUTPUT_DIR:-/tmp/step4b-one-shot-artifacts}"
+  mkdir -p "$OUT_DIR"
+  OUT_JSON="${OUT_DIR}/r10-s7-step4b-b-strict-improvement.json"
+fi
+
+export OUT_DIR OUT_JSON
 mkdir -p "$(dirname "$OUT_JSON")"
 
 write_strict_json_always() {
@@ -54,8 +65,10 @@ trap 'ONE_SHOT_EXIT=$?; export ONE_SHOT_EXIT; export APP_DIR="$(pwd)"; write_str
 cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
 export APP_DIR="$(pwd)"
 
-# (고정) 운영 서버 접속 코드
-echo "ssh -o StrictHostKeyChecking=no <USER>@49.50.139.248"
+# (고정) 운영 서버 접속 코드 (기본 비출력, PRINT_SSH_HINT=1일 때만 출력)
+if [ "${PRINT_SSH_HINT:-0}" = "1" ]; then
+  echo "ssh -o StrictHostKeyChecking=no <USER>@49.50.139.248"
+fi
 
 # 0) Always On
 bash scripts/ops/verify_s7_always_on.sh
@@ -247,7 +260,3 @@ bash "$PASS_GATE_SCRIPT" || {
 echo "OK: PASS Gate eligible confirmed"
 
 # 7) 커밋
-git add -A
-git commit -m "feat(s7): step4-b-b enable deterministic tiebreak for strict improvement (input frozen)"
-git push
-
