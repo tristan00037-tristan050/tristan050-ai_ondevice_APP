@@ -4,7 +4,8 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17"
 bash scripts/ops/verify_s7_always_on.sh
 
-OUT_DIR="docs/ops"
+# Support OUT_DIR environment variable (for worktree cleanliness in nightly)
+OUT_DIR="${OUT_DIR:-docs/ops}"
 mkdir -p "$OUT_DIR"
 
 TS="$(date +%Y%m%d-%H%M%S)"
