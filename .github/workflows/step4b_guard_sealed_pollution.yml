@@ -1,0 +1,72 @@
+name: step4b-guard-sealed-pollution
+
+on:
+  pull_request:
+    branches: [ "main" ]
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  sealed_pollution_guard:
+    name: Block SEALED file diffs in non-SEALED PRs (fail-closed)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for stable diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch base/head commits (fail-closed)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch -q origin "$BASE_SHA" "$HEAD_SHA" || {
+            echo "::error::Failed to fetch base/head commits (fail-closed)."
+            exit 1
+          }
+
+      - name: Guard - SEALED instrumentation files must not be modified in algorithm PRs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_LABELS_JSON: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess, sys
+
+          base = os.environ["BASE_SHA"]
+          head = os.environ["HEAD_SHA"]
+          labels = json.loads(os.environ.get("PR_LABELS_JSON", "[]") or "[]")
+
+          # 정본: SEALED 예외 라벨은 1개로 고정(혼선 0)
+          SEALED_LABEL = "step4b-sealed"
+          is_sealed_pr = SEALED_LABEL in labels
+
+          try:
+              out = subprocess.check_output(["git", "diff", "--name-only", base, head], text=True)
+          except subprocess.CalledProcessError:
+              print("::error::Failed to compute diff for this PR (fail-closed).")
+              sys.exit(1)
+
+          changed = [line.strip() for line in out.splitlines() if line.strip()]
+
+          # prefix 무관: .../scripts/ops/<file> 형태면 차단
+          sealed_pat = re.compile(r"(^|/)scripts/ops/(calc_hit_movement_stats\.sh|verify_retriever_regression_gate\.sh)$")
+          sealed_touched = [p for p in changed if sealed_pat.search(p)]
+
+          if sealed_touched and not is_sealed_pr:
+              print("::error::SEALED instrumentation files were modified in this PR (non-SEALED PR => Block).")
+              for p in sealed_touched:
+                  print(f"::error::  - {p}")  # meta-only: path only
+              print(f"::error::Action: split into a dedicated SEALED PR and apply label '{SEALED_LABEL}'.")
+              sys.exit(1)
+
+          if sealed_touched and is_sealed_pr:
+              print(f"OK: SEALED PR label '{SEALED_LABEL}' present; SEALED file diffs allowed.")
+          else:
+              print("OK: No SEALED instrumentation file diffs detected.")
+          PY
