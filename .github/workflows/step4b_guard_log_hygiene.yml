@@ -45,6 +45,11 @@ jobs:
           # - 강화 정책: docs도 포함(운영 힌트 0을 일관되게 유지)
           def is_scannable(path: str) -> bool:
               p = path.lower()
+
+              # Guard workflow self-exclusion (avoid self-failure)
+              if p == ".github/workflows/step4b_guard_log_hygiene.yml":
+                  return False
+
               if p.startswith(".github/workflows/"):
                   return True
               if "/scripts/" in p or p.startswith("scripts/"):
