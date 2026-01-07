@@ -1,0 +1,100 @@
+name: step4b-guard-log-hygiene
+
+on:
+  pull_request:
+    branches: [ "main" ]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  forbidden_output_guard:
+    name: Block forbidden operational hints in diff (fail-closed)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for stable diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch base/head commits (fail-closed)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git fetch -q origin "$BASE_SHA" "$HEAD_SHA" || {
+            echo "::error::Failed to fetch base/head commits (fail-closed)."
+            exit 1
+          }
+
+      - name: Guard - Forbidden keywords must not appear in added lines (fail-closed)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess, sys
+
+          base = os.environ["BASE_SHA"]
+          head = os.environ["HEAD_SHA"]
+
+          # 정본: 스캔 대상
+          # - 워크플로/스크립트는 반드시 스캔
+          # - 강화 정책: docs도 포함(운영 힌트 0을 일관되게 유지)
+          def is_scannable(path: str) -> bool:
+              p = path.lower()
+              if p.startswith(".github/workflows/"):
+                  return True
+              if "/scripts/" in p or p.startswith("scripts/"):
+                  return True
+              # docs도 포함(강화)
+              if p.startswith("docs/") or "/docs/" in p:
+                  return True
+              # 기타 운영 파일 확장자
+              if p.endswith((".sh", ".yml", ".yaml", ".py", ".mjs", ".sql")):
+                  return True
+              return False
+
+          # 금지 패턴(정본: meta-only 차단)
+          PATTERNS = {
+              "SSH": re.compile(r"\\bssh\\b", re.IGNORECASE),
+              "STRICT_HOST_KEY_CHECKING": re.compile(r"StrictHostKeyChecking", re.IGNORECASE),
+              "RSYNC": re.compile(r"\\brsync\\b", re.IGNORECASE),
+              "PM2": re.compile(r"\\bpm2\\b", re.IGNORECASE),
+              "SCP": re.compile(r"\\bscp\\b", re.IGNORECASE),
+              "IP_ADDRESS": re.compile(r"\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b"),
+          }
+
+          try:
+              diff = subprocess.check_output(["git", "diff", "--unified=0", base, head], text=True, errors="replace")
+          except subprocess.CalledProcessError:
+              print("::error::Failed to compute diff for this PR (fail-closed).")
+              sys.exit(1)
+
+          current_file = None
+          violations = []  # (file, rule)
+
+          for line in diff.splitlines():
+              if line.startswith("+++ b/"):
+                  current_file = line[len("+++ b/"):].strip()
+                  continue
+              if current_file is None:
+                  continue
+              if not is_scannable(current_file):
+                  continue
+              if line.startswith("+") and not line.startswith("+++"):
+                  for key, rgx in PATTERNS.items():
+                      if rgx.search(line):
+                          violations.append((current_file, key))
+
+          if violations:
+              print("::error::Forbidden operational hints detected in added lines (fail-closed).")
+              for f, k in sorted(set(violations)):
+                  print(f"::error::  - file={f} rule={k}")  # meta-only: file+rule only
+              print("::error::Action: remove forbidden strings (ssh/rsync/pm2/IP etc.).")
+              sys.exit(1)
+
+          print("OK: No forbidden keywords detected in added lines (scoped scan).")
+          PY
