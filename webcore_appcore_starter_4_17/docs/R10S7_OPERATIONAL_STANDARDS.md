@@ -3,6 +3,48 @@
 > **⚠️ 중요**: 이 문서는 "지시서 v3.0의 구현체(Implementation Detail)"입니다.
 > 모든 운영 루틴/게이트/PR proof index/리셋 절차는 SSOT로 고정되어 있습니다.
 
+## Step4-B SSOT v1.1 (Remote-First Truth)
+
+### Remote-First Truth
+"파일 존재/반영 여부의 단일 진실원은 git fetch 이후의 origin/main이다. main(로컬) 기준 판정은 금지한다."
+
+### Fail-Closed 확인 순서
+"모든 PR 준비/검토는 fetch → origin/main 확인 → 필요 시 pull 순서를 강제한다. 이 순서를 생략한 '없다/있다' 보고는 반려한다."
+
+### Identical PR 금지
+"git rev-list --left-right --count origin/main...HEAD가 0 0이면 PR 생성 금지(비교 불가/중복 작업 차단)."
+
+### Reviewer Hard Gate
+"PR 생성/검토 전 git fetch 이후 origin/main 기준 존재 확인을 수행하지 않았으면 Block(오판 기반 중복 PR은 가장 큰 비용)."
+
+### 30초 실행 블록
+
+#### A) 원격 기준 확정(필수)
+```bash
+set -euo pipefail
+git rev-parse --show-toplevel >/dev/null
+git fetch -q origin main
+
+git show origin/main:.github/workflows/step4b_guard_sealed_pollution.yml >/dev/null 2>&1 \
+  && echo "PASS: exists on origin/main" \
+  || echo "FAIL: not on origin/main"
+```
+
+#### B) PASS면 로컬 정렬(권장)
+```bash
+set -euo pipefail
+git checkout main
+git pull --ff-only origin main
+```
+
+#### C) identical PR 오판 방지 게이트(표준)
+```bash
+set -euo pipefail
+git fetch -q origin main
+git rev-list --left-right --count origin/main...HEAD
+# 결과가 "0 0" 이면 PR 생성 금지
+```
+
 ## 0) 운영 SOP (절대 준수 3줄)
 
 1. **수동 절차 금지 → 스크립트로 고정**

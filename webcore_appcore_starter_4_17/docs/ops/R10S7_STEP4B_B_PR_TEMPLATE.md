@@ -1,5 +1,19 @@
 # S7 Step4-B B PR 템플릿 (정본)
 
+## Step4-B SSOT v1.1 (Remote-First Truth)
+
+### Remote-First Truth
+"파일 존재/반영 여부의 단일 진실원은 git fetch 이후의 origin/main이다. main(로컬) 기준 판정은 금지한다."
+
+### Fail-Closed 확인 순서
+"모든 PR 준비/검토는 fetch → origin/main 확인 → 필요 시 pull 순서를 강제한다. 이 순서를 생략한 '없다/있다' 보고는 반려한다."
+
+### Identical PR 금지
+"git rev-list --left-right --count origin/main...HEAD가 0 0이면 PR 생성 금지(비교 불가/중복 작업 차단)."
+
+### Reviewer Hard Gate
+"PR 생성/검토 전 git fetch 이후 origin/main 기준 존재 확인을 수행하지 않았으면 Block(오판 기반 중복 PR은 가장 큰 비용)."
+
 ## 목표
 "입력 고정(데이터 변경 0)" 상태에서 **Regression Gate PASS + strict improvement(최소 1개 지표 baseline 초과)**를 증빙과 함께 남기는 PR.
 
