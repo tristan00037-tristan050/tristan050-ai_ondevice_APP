@@ -7,6 +7,7 @@
 import NetInfo from '@react-native-community/netinfo';
 import { getSecureKV } from '../../security/secure-storage';
 import { mkHeaders, isMock, type ClientCfg } from '../../hud/accounting-api';
+import { guardEgressPayload, extractEgressAudit } from '../../egress/guard';
 
 type QueueItem =
   | { kind: 'approval'; id: string; action: 'approve' | 'reject'; note?: string; idem: string; top1_selected?: boolean; selected_rank?: number; ai_score?: number }
@@ -93,6 +94,14 @@ async function trySend(cfg: ClientCfg, item: QueueItem) {
       }
     }
     
+    // Egress Guard v1: Live 모드에서 payload 검증 (Fail-Closed)
+    const guardResult = guardEgressPayload(cfg, body);
+    if (!guardResult.pass) {
+      const audit = extractEgressAudit(guardResult);
+      console.warn('[Egress Guard] Blocked:', audit);
+      throw new Error(`egress_guard_blocked: ${guardResult.reason_code}`);
+    }
+    
     const r = await fetch(`${base}/v1/accounting/approvals/${item.id}`, {
       method: 'POST',
       headers: hdr(item.idem),
@@ -105,6 +114,14 @@ async function trySend(cfg: ClientCfg, item: QueueItem) {
   }
 
   if (item.kind === 'export') {
+    // Egress Guard v1: Live 모드에서 payload 검증 (Fail-Closed)
+    const guardResult = guardEgressPayload(cfg, item.body);
+    if (!guardResult.pass) {
+      const audit = extractEgressAudit(guardResult);
+      console.warn('[Egress Guard] Blocked:', audit);
+      throw new Error(`egress_guard_blocked: ${guardResult.reason_code}`);
+    }
+    
     const r = await fetch(`${base}/v1/accounting/exports/reports`, {
       method: 'POST',
       headers: hdr(item.idem),
@@ -141,6 +158,14 @@ async function trySend(cfg: ClientCfg, item: QueueItem) {
   }
 
   if (item.kind === 'suggest') {
+    // Egress Guard v1: Live 모드에서 payload 검증 (Fail-Closed)
+    const guardResult = guardEgressPayload(cfg, item.body);
+    if (!guardResult.pass) {
+      const audit = extractEgressAudit(guardResult);
+      console.warn('[Egress Guard] Blocked:', audit);
+      throw new Error(`egress_guard_blocked: ${guardResult.reason_code}`);
+    }
+    
     const r = await fetch(`${base}/v1/accounting/postings/suggest`, {
       method: 'POST',
       headers: hdr(item.idem),

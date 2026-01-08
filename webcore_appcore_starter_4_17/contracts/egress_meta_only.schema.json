@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Egress Meta-Only Whitelist Schema",
+  "description": "서버로 나가는 모든 payload의 화이트리스트 스키마 (meta-only)",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["approve", "reject", "export_create", "recon_create", "recon_match", "suggest", "manual_review"]
+    },
+    "client_request_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_-]+$"
+    },
+    "note": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "top1_selected": {
+      "type": "boolean"
+    },
+    "selected_rank": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "ai_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "since": {
+      "type": "string",
+      "format": "date"
+    },
+    "until": {
+      "type": "string",
+      "format": "date"
+    },
+    "limitDays": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 90
+    },
+    "severity": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["LOW", "MEDIUM", "HIGH"]
+      }
+    },
+    "bank_id": {
+      "type": "string"
+    },
+    "ledger_id": {
+      "type": "string"
+    },
+    "sessionId": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "amount": {
+      "type": "number",
+      "minimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "subject_type": {
+      "type": "string"
+    },
+    "subject_id": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "reason_code": {
+      "type": "string"
+    },
+    "is_high_value": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false,
+  "required": []
+}
+
