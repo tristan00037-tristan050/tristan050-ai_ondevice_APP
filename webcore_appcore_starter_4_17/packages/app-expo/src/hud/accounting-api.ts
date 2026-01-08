@@ -450,10 +450,28 @@ export async function postExport(cfg: ClientCfg, body: any, opts?: IdemOpts) {
     return { jobId: 'export-mock-1', status: 'queued' };
   }
 
+  // Policy-as-Code v1: 클라이언트 측 검증 (Fail-Closed, 전송 전 차단)
+  const { validateExportBody } = await import('../policy/validator.js');
+  const bodyCheck = validateExportBody(body);
+  if (!bodyCheck.pass) {
+    const error: ApiError = {
+      kind: 'client',
+      status: 400,
+      message: '정책 위반: Export 요청이 차단되었습니다',
+      details: JSON.stringify({
+        policy_rule_id: bodyCheck.rule_id,
+        reason: bodyCheck.reason,
+        blocked_fields: bodyCheck.blocked_fields,
+      }),
+    };
+    throw error;
+  }
+
   try {
+    const headers = mkHeaders(cfg, { 'Idempotency-Key': opts?.idem ?? await mkUUID() });
     const r = await fetch(`${cfg.baseUrl}/v1/accounting/exports/reports`, {
       method: 'POST',
-      headers: mkHeaders(cfg, { 'Idempotency-Key': opts?.idem ?? await mkUUID() }),
+      headers,
       body: JSON.stringify(body),
     });
     

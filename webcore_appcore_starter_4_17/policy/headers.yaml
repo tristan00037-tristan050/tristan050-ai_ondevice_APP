@@ -1,0 +1,24 @@
+# Headers Policy (Policy-as-Code v1)
+# Fail-Closed: 필수 헤더 누락 시 요청 차단
+
+version: "1.0"
+rules:
+  - id: "header_001"
+    name: "Live 요청 필수 헤더"
+    description: "클라이언트→BFF Live 요청에 필수 헤더 검증"
+    required_headers:
+      - "X-Tenant"
+      - "X-Api-Key"
+    optional_headers:
+      - "Idempotency-Key"
+    action: "block"
+    
+  - id: "header_002"
+    name: "Export 요청 필수 헤더"
+    description: "Export 요청에 Idempotency-Key 필수"
+    required_headers:
+      - "Idempotency-Key"
+      - "X-Tenant"
+      - "X-Api-Key"
+    action: "block"
+

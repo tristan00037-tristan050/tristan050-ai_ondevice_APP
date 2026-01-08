@@ -1,0 +1,33 @@
+# Export Policy (Policy-as-Code v1)
+# Fail-Closed: 위반 시 Export 요청 자체를 차단
+
+version: "1.0"
+rules:
+  - id: "export_001"
+    name: "금지 필드 차단"
+    description: "Export 요청 본문에 금지된 필드가 포함되면 즉시 차단"
+    forbidden_fields:
+      - "raw_text"
+      - "full_content"
+      - "original_message"
+      - "token"
+      - "secret"
+      - "password"
+      - "api_key"
+    action: "block"
+    
+  - id: "export_002"
+    name: "필수 헤더 검증"
+    description: "필수 헤더 누락 시 즉시 차단"
+    required_headers:
+      - "Idempotency-Key"
+      - "X-Tenant"
+      - "X-Api-Key"
+    action: "block"
+    
+  - id: "export_003"
+    name: "범위 제한"
+    description: "limitDays가 90일을 초과하면 차단"
+    max_limit_days: 90
+    action: "block"
+
