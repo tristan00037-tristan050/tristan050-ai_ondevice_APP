@@ -14,6 +14,8 @@ import { enqueue, flushQueue, startQueueAutoFlush } from './offline/offline-queu
 import QueueBadge from './components/QueueBadge';
 import ManualReviewButton from './components/ManualReviewButton';
 import QueueInspector from './components/QueueInspector';
+import WhyBlockCard from './components/WhyBlockCard';
+import { checkLeakageBatch, extractLeakageAudit } from '../shared/leak_guard';
 import {
   postSuggest,
   postApproval,
@@ -37,6 +39,7 @@ export default function AccountingHUD({ cfg }: Props) {
   const [reportId, setReportId] = useState('demo-report-1');
   const [desc, setDesc] = useState('커피 영수증 4500원');
   const [suggestOut, setSuggestOut] = useState<any>(null);
+  const [suggestOutBlocked, setSuggestOutBlocked] = useState<{ blocked: boolean; reason_code?: string } | null>(null);
   const [selectedPostingIndex, setSelectedPostingIndex] = useState<number>(0); // 선택된 posting index (0부터 시작)
   const [sessionId, setSessionId] = useState<string>('');
   const [exportJob, setExportJob] = useState<any>(null);
@@ -236,6 +239,23 @@ export default function AccountingHUD({ cfg }: Props) {
       });
       
       const out = { items: convertedItems, confidence: result.confidence };
+      
+      // Leakage Firewall v1: 출력 렌더 직전 검사
+      const leakResult = checkLeakageBatch(desc, out.items || []);
+      if (!leakResult.pass) {
+        // 감사 로그 (meta-only)
+        const audit = extractLeakageAudit(leakResult);
+        console.warn('[Leakage Firewall] Blocked:', audit);
+        
+        setSuggestOutBlocked({
+          blocked: true,
+          reason_code: leakResult.reason_code,
+        });
+        setSuggestOut(null); // 출력 표시 차단
+        return;
+      }
+      
+      setSuggestOutBlocked({ blocked: false });
       setSuggestOut(out);
       await saveEncryptedReport(reportId, out);
     } catch (e: any) {
@@ -311,6 +331,19 @@ export default function AccountingHUD({ cfg }: Props) {
   async function onExport() {
     setErrorMessage(null);
     setErrorDetails(null);
+    
+    // Leakage Firewall v1: Export 차단 (Fail-Closed)
+    if (suggestOutBlocked?.blocked) {
+      const error: ApiError = {
+        kind: 'client',
+        status: 400,
+        message: 'Leakage Firewall: 차단된 출력은 Export할 수 없습니다',
+        details: JSON.stringify({ reason_code: suggestOutBlocked.reason_code }),
+      };
+      handleApiError(error, 'Export');
+      return;
+    }
+    
     const idem = `idem_export_${Date.now()}`;
     try {
       const out = await postExport(
@@ -397,6 +430,23 @@ export default function AccountingHUD({ cfg }: Props) {
 
   async function onLoadLocal() {
     const data = await loadEncryptedReport(reportId);
+    
+    // Leakage Firewall v1: 출력 렌더 직전 검사
+    const leakResult = checkLeakageBatch(desc, data?.items || []);
+    if (!leakResult.pass) {
+      // 감사 로그 (meta-only)
+      const audit = extractLeakageAudit(leakResult);
+      console.warn('[Leakage Firewall] Blocked:', audit);
+      
+      setSuggestOutBlocked({
+        blocked: true,
+        reason_code: leakResult.reason_code,
+      });
+      setSuggestOut(null); // 출력 표시 차단
+      return;
+    }
+    
+    setSuggestOutBlocked({ blocked: false });
     setSuggestOut(data);
   }
 
@@ -586,8 +636,16 @@ export default function AccountingHUD({ cfg }: Props) {
           visible={queueInspectorVisible}
           onClose={() => setQueueInspectorVisible(false)}
         />
+        {/* Leakage Firewall 차단 카드 */}
+        {suggestOutBlocked?.blocked && suggestOutBlocked.reason_code && (
+          // @ts-expect-error - React Native JSX type compatibility issue with @types/react 18
+          <View style={{ marginTop: 12 }}>
+            <WhyBlockCard reason_code={suggestOutBlocked.reason_code} />
+          </View>
+        )}
+        
         {/* 추천 결과 리스트 (Risk 뱃지 포함) */}
-        {suggestOut?.items && suggestOut.items.length > 0 && (
+        {!suggestOutBlocked?.blocked && suggestOut?.items && suggestOut.items.length > 0 && (
           // @ts-expect-error - React Native JSX type compatibility issue with @types/react 18
           <View style={{ marginTop: 12, gap: 8 }}>
             {/* @ts-expect-error - React Native JSX type compatibility issue with @types/react 18 */}
