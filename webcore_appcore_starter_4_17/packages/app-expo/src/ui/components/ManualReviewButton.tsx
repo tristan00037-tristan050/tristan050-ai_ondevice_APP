@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button, Alert } from 'react-native';
 import { mkHeaders, isMock, type ClientCfg } from '../../hud/accounting-api';
+import { guardEgressPayload, extractEgressAudit } from '../../egress/guard';
 
 export default function ManualReviewButton({
   cfg,
@@ -56,6 +57,15 @@ export default function ManualReviewButton({
       }
       if (isHighValue !== undefined) {
         body.is_high_value = isHighValue;
+      }
+      
+      // Egress Guard v1: Live 모드에서 payload 검증 (Fail-Closed)
+      const guardResult = guardEgressPayload(cfg, body);
+      if (!guardResult.pass) {
+        const audit = extractEgressAudit(guardResult);
+        console.warn('[Egress Guard] Blocked:', audit);
+        Alert.alert('요청 차단', `Egress Guard: ${guardResult.reason_code}`);
+        return;
       }
       
       const r = await fetch(`${cfg.baseUrl}/v1/accounting/audit/manual-review`, {

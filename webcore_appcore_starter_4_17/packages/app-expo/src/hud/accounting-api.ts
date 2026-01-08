@@ -5,6 +5,8 @@
  * @module app-expo/hud/accounting-api
  */
 
+import { guardEgressPayload, extractEgressAudit } from '../egress/guard';
+
 // crypto.randomUUID() polyfill for environments without Web Crypto API
 function randomUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -323,6 +325,22 @@ export async function postSuggest(cfg: ClientCfg, body: any, opts?: IdemOpts) {
   }
 
   try {
+    // Egress Guard v1: Live 모드에서 payload 검증 (Fail-Closed)
+    const guardResult = guardEgressPayload(cfg, body);
+    if (!guardResult.pass) {
+      // 감사 로그 (meta-only)
+      const audit = extractEgressAudit(guardResult);
+      console.warn('[Egress Guard] Blocked:', audit);
+      
+      const error: ApiError = {
+        kind: 'client',
+        status: 400,
+        message: 'Egress Guard: 요청이 차단되었습니다',
+        details: JSON.stringify(audit),
+      };
+      throw error;
+    }
+    
     // R8-S2: 엔진 모드 헤더 추가 (Live 모드 네트워크 호출 시)
     const engineMode = newEngine.meta?.type || null;
     const extraHeaders: Record<string, string> = { 'Idempotency-Key': opts?.idem ?? await mkUUID() };
@@ -406,6 +424,22 @@ export async function postApproval(
   }
   
   try {
+    // Egress Guard v1: Live 모드에서 payload 검증 (Fail-Closed)
+    const guardResult = guardEgressPayload(cfg, body);
+    if (!guardResult.pass) {
+      // 감사 로그 (meta-only)
+      const audit = extractEgressAudit(guardResult);
+      console.warn('[Egress Guard] Blocked:', audit);
+      
+      const error: ApiError = {
+        kind: 'client',
+        status: 400,
+        message: 'Egress Guard: 요청이 차단되었습니다',
+        details: JSON.stringify(audit),
+      };
+      throw error;
+    }
+    
     const r = await fetch(`${cfg.baseUrl}/v1/accounting/approvals/${id}`, {
       method: 'POST',
       headers: mkHeaders(cfg, { 'Idempotency-Key': opts?.idem ?? await mkUUID() }),
@@ -468,6 +502,22 @@ export async function postExport(cfg: ClientCfg, body: any, opts?: IdemOpts) {
   }
 
   try {
+    // Egress Guard v1: Live 모드에서 payload 검증 (Fail-Closed)
+    const guardResult = guardEgressPayload(cfg, body);
+    if (!guardResult.pass) {
+      // 감사 로그 (meta-only)
+      const audit = extractEgressAudit(guardResult);
+      console.warn('[Egress Guard] Blocked:', audit);
+      
+      const error: ApiError = {
+        kind: 'client',
+        status: 400,
+        message: 'Egress Guard: 요청이 차단되었습니다',
+        details: JSON.stringify(audit),
+      };
+      throw error;
+    }
+    
     const headers = mkHeaders(cfg, { 'Idempotency-Key': opts?.idem ?? await mkUUID() });
     const r = await fetch(`${cfg.baseUrl}/v1/accounting/exports/reports`, {
       method: 'POST',
