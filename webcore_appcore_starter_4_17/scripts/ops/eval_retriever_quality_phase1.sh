@@ -127,11 +127,27 @@ bucketize_gini = telemetry_module.bucketize_gini
 bucketize_unique_count = telemetry_module.bucketize_unique_count
 calculate_distribution_telemetry = telemetry_module.calculate_distribution_telemetry
 
+# GTB v0.3 Shadow Mode 함수 로드
+gtb_path = "scripts/ops/gtb_v03_shadow.py"
+spec_gtb = importlib.util.spec_from_file_location("gtb_v03_shadow", gtb_path)
+gtb_module = importlib.util.module_from_spec(spec_gtb)
+spec_gtb.loader.exec_module(gtb_module)
+
+# GTB 함수 import
+calculate_gap_p25_for_query = gtb_module.calculate_gap_p25_for_query
+simulate_gtb_v03_shadow = gtb_module.simulate_gtb_v03_shadow
+
 # 분포 텔레메트리 누적 변수
 all_gaps = []
 all_entropies = []
 all_ginis = []
 all_unique_counts = []
+
+# GTB v0.3 Shadow Mode 누적 변수
+gtb_would_move_up_count = 0
+gtb_would_move_down_count = 0
+gtb_proposed_swap_count = 0
+gtb_budget_hit_count = 0
 
 for it in items:
     q=str(it.get("query",""))
@@ -195,6 +211,39 @@ for it in items:
         all_entropies.append(calculate_entropy(scores_for_query))
         all_ginis.append(calculate_gini(scores_for_query))
         all_unique_counts.append(len(set(scores_for_query)))
+    
+    # GTB v0.3 Shadow Mode 시뮬레이션 (Shadow only, 랭킹 변경 없음)
+    # Baseline 랭킹 생성 (primary만 사용, secondary=0)
+    baseline_ranked_for_query = []
+    baseline_scored = []
+    q_tokens = set(tok(q))  # q는 문자열이므로 토큰화
+    for did, dt in docs:
+        inter = q_tokens & dt
+        primary_baseline = len(inter)
+        baseline_scored.append((primary_baseline, 0, did, dt))
+    baseline_scored.sort(key=lambda x:(-x[0], x[2]))  # primary desc, doc_id asc
+    baseline_ranked_for_query = [did for _, _, did, _ in baseline_scored[:k]]
+    
+    # Relevant 문서 집합 (doc_id 문자열 집합)
+    relevant_docs_set = set()
+    for did, dt in docs:
+        if relevant(dt, must):
+            relevant_docs_set.add(str(did))  # 문자열로 변환
+    
+    # Gap_p25 계산 (동일 요청 내 topK 기준)
+    gap_p25_query = calculate_gap_p25_for_query(ranked, k)
+    
+    # GTB v0.3 Shadow Mode 시뮬레이션
+    gtb_result = simulate_gtb_v03_shadow(
+        ranked, k, gap_p25_query, relevant_docs_set, baseline_ranked_for_query
+    )
+    
+    # 누적 카운트 (meta-only)
+    gtb_would_move_up_count += gtb_result["would_move_up_count"]
+    gtb_would_move_down_count += gtb_result["would_move_down_count"]
+    gtb_proposed_swap_count += gtb_result["proposed_swap_count"]
+    if gtb_result["budget_hit"]:
+        gtb_budget_hit_count += 1
 
 if n==0:
     raise SystemExit("FAIL: no evaluable goldenset items")
@@ -228,6 +277,12 @@ report = {
     "score_entropy_bucket": bucketize_entropy(percentile(all_entropies, 0.50)) if all_entropies else "VERY_LOW",
     "score_gini_bucket": bucketize_gini(percentile(all_ginis, 0.50)) if all_ginis else "LOW_INEQUALITY",
     "unique_score_count_bucket": bucketize_unique_count(round(percentile(all_unique_counts, 0.50)), k) if all_unique_counts else "LOW_DIVERSITY"
+  },
+  "gtb_v03_shadow": {
+    "would_move_up_count": gtb_would_move_up_count,
+    "would_move_down_count": gtb_would_move_down_count,
+    "proposed_swap_count": gtb_proposed_swap_count,
+    "budget_hit_count": gtb_budget_hit_count
   },
   "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 }
