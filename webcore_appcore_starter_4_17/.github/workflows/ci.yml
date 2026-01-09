@@ -117,6 +117,22 @@ jobs:
           }
           # Policy Diff Risk Gate 실행 (meta-only 출력)
           bash scripts/ops/verify_policy_diff_risk.sh
+      
+      - name: SSOT-Policy Headers Parity Gate (Fail-Closed)
+        run: |
+          set -euo pipefail
+          # Fail-Closed: 스크립트 존재 확인
+          test -f scripts/ops/verify_headers_policy_matches_ssot.sh || {
+            echo "FAIL: verify_headers_policy_matches_ssot.sh not found" >&2
+            exit 1
+          }
+          # Fail-Closed: 스크립트 문법 검증
+          bash -n scripts/ops/verify_headers_policy_matches_ssot.sh || {
+            echo "FAIL: verify_headers_policy_matches_ssot.sh syntax error" >&2
+            exit 1
+          }
+          # SSOT-Policy 헤더 정합성 검사 (meta-only 출력)
+          bash scripts/ops/verify_headers_policy_matches_ssot.sh
 
   schema-and-types:
     name: Schema and Type Validation
