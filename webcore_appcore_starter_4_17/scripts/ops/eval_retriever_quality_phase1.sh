@@ -24,7 +24,7 @@ test -f "$CORPUS" || fail "corpus not found: $CORPUS"
 mkdir -p "$OUT_DIR"
 
 python3 - <<'PY' "$GSET" "$CORPUS" "$REPORT" "$TOPK" "$TIEBREAK_ENABLE" "$TIEBREAK_MIN_PRIMARY" "$TIEBREAK_WEIGHT"
-import json, sys, re, time, hashlib, math, os
+import json, sys, re, time, hashlib, math, os, importlib.util
 
 gset, corpus, out = sys.argv[1], sys.argv[2], sys.argv[3]
 topk = int(sys.argv[4])
@@ -111,6 +111,28 @@ k=topk
 prec_sum=rec_sum=mrr_sum=ndcg_sum=0.0
 n=0
 
+# 분포 텔레메트리 함수 로드 (Shadow only, meta-only)
+telemetry_path = "scripts/ops/score_distribution_telemetry.py"
+spec = importlib.util.spec_from_file_location("score_distribution_telemetry", telemetry_path)
+telemetry_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(telemetry_module)
+
+# 함수 import
+percentile = telemetry_module.percentile
+calculate_gaps = telemetry_module.calculate_gaps
+calculate_entropy = telemetry_module.calculate_entropy
+calculate_gini = telemetry_module.calculate_gini
+bucketize_entropy = telemetry_module.bucketize_entropy
+bucketize_gini = telemetry_module.bucketize_gini
+bucketize_unique_count = telemetry_module.bucketize_unique_count
+calculate_distribution_telemetry = telemetry_module.calculate_distribution_telemetry
+
+# 분포 텔레메트리 누적 변수
+all_gaps = []
+all_entropies = []
+all_ginis = []
+all_unique_counts = []
+
 for it in items:
     q=str(it.get("query",""))
     exp=it.get("expected") or {}
@@ -156,6 +178,23 @@ for it in items:
     mrr_sum  += rr
     ndcg_sum += ndcg
     n += 1
+    
+    # 분포 텔레메트리 계산 (Shadow only, 랭킹 변경 없음)
+    telemetry = calculate_distribution_telemetry(ranked, k)
+    if telemetry["gap_p25"] > 0 or telemetry["gap_p50"] > 0 or telemetry["gap_p75"] > 0:
+        # Gap이 있는 경우만 누적 (모든 gap이 0이면 빈 리스트)
+        gaps_for_query = []
+        if len(ranked) >= 2:
+            scores = [p for p, _, _, _ in ranked[:k]]
+            gaps_for_query = calculate_gaps(scores)
+        all_gaps.extend(gaps_for_query)
+    
+    # 엔트로피/지니는 각 쿼리별로 계산하여 누적
+    scores_for_query = [p for p, _, _, _ in ranked[:k]]
+    if scores_for_query:
+        all_entropies.append(calculate_entropy(scores_for_query))
+        all_ginis.append(calculate_gini(scores_for_query))
+        all_unique_counts.append(len(set(scores_for_query)))
 
 if n==0:
     raise SystemExit("FAIL: no evaluable goldenset items")
@@ -181,6 +220,14 @@ report = {
     "recall_at_k": round(rec_sum/n, 6),
     "mrr_at_k": round(mrr_sum/n, 6),
     "ndcg_at_k": round(ndcg_sum/n, 6)
+  },
+  "score_distribution_telemetry": {
+    "gap_p25": round(percentile(all_gaps, 0.25), 6) if all_gaps else 0.0,
+    "gap_p50": round(percentile(all_gaps, 0.50), 6) if all_gaps else 0.0,
+    "gap_p75": round(percentile(all_gaps, 0.75), 6) if all_gaps else 0.0,
+    "score_entropy_bucket": bucketize_entropy(percentile(all_entropies, 0.50)) if all_entropies else "VERY_LOW",
+    "score_gini_bucket": bucketize_gini(percentile(all_ginis, 0.50)) if all_ginis else "LOW_INEQUALITY",
+    "unique_score_count_bucket": bucketize_unique_count(round(percentile(all_unique_counts, 0.50)), k) if all_unique_counts else "LOW_DIVERSITY"
   },
   "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 }
