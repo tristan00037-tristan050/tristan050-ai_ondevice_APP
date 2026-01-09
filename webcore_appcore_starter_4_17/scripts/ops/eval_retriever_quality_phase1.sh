@@ -198,11 +198,12 @@ gtb_would_move_down_count = 0
 gtb_proposed_swap_count = 0
 gtb_budget_hit_count = 0
 
-# Meta-Guard 누적 변수 (observe_only=True 고정)
+# Meta-Guard 누적 변수 (enforce 모드)
 meta_guard_states = []
 meta_guard_gate_allow_count = 0
 meta_guard_entropy_buckets = []
 meta_guard_gini_buckets = []
+meta_guard_reason_codes = []
 
 # GTB v0.3 Canary Mode 누적 변수
 gtb_canary_applied_count = 0
@@ -307,13 +308,56 @@ for it in items:
     if gtb_result["budget_hit"]:
         gtb_budget_hit_count += 1
     
-    # Meta-Guard 계산 (observe_only=True 고정, 행동 변경 없음)
-    meta_guard_result = calculate_meta_guard_for_query(ranked, k, observe_only=True)
+    # Meta-Guard 계산 (enforce 모드: observe_only=False)
+    meta_guard_result = calculate_meta_guard_for_query(ranked, k, observe_only=False)
     meta_guard_states.append(meta_guard_result["meta_guard_state"])
     if meta_guard_result["gate_allow"]:
         meta_guard_gate_allow_count += 1
     meta_guard_entropy_buckets.append(meta_guard_result["entropy_bucket"])
     meta_guard_gini_buckets.append(meta_guard_result["gini_bucket"])
+    if meta_guard_result.get("reason_code"):
+        meta_guard_reason_codes.append(meta_guard_result["reason_code"])
+    
+    # GTB v0.3 Canary Mode 적용 (Meta-Guard enforce)
+    # 결정론적 request_id 생성 (쿼리 ID 기반)
+    request_id_for_query = f"query_{it.get('id', str(hash(q)))}"
+    canary_bucket_query = calculate_canary_bucket(request_id_for_query)
+    gtb_canary_buckets.append(canary_bucket_query)
+    
+    # GTB 적용 여부 결정 (Fail-Closed: Meta-Guard gate_allow=false면 무조건 비활성화)
+    should_apply_gtb = False
+    if not kill_switch and meta_guard_result["gate_allow"]:
+        should_apply_gtb = should_apply_gtb_canary(
+            request_id_for_query,
+            canary_percent,
+            meta_guard_result["gate_allow"]
+        )
+    
+    # GTB Canary 적용 (should_apply_gtb=True일 때만)
+    if should_apply_gtb:
+        # Swap budget 계산
+        from gtb_v03_shadow import calculate_swap_budget
+        max_swaps = calculate_swap_budget(k)
+        
+        # GTB Canary 적용
+        ranked_after_gtb, canary_result = apply_gtb_v03_canary(
+            ranked, k, gap_p25_query, max_swaps,
+            relevant_docs_set, baseline_ranked_for_query, canary_bucket_query
+        )
+        
+        # 랭킹 업데이트 (GTB 적용된 랭킹 사용)
+        ranked = ranked_after_gtb
+        
+        # 누적 카운트 (meta-only)
+        if canary_result["applied"]:
+            gtb_canary_applied_count += 1
+        gtb_canary_swaps_applied_count += canary_result["swaps_applied_count"]
+        gtb_canary_moved_up_count += canary_result["moved_up_count"]
+        gtb_canary_moved_down_count += canary_result["moved_down_count"]
+    else:
+        # GTB 미적용 (Meta-Guard 차단 또는 kill_switch 또는 canary 조건 불충족)
+        # applied=false로 기록 (meta-only)
+        pass  # gtb_canary_applied_count는 증가하지 않음 (applied=false)
 
 if n==0:
     raise SystemExit("FAIL: no evaluable goldenset items")
@@ -355,12 +399,13 @@ report = {
     "budget_hit_count": gtb_budget_hit_count
   },
   "meta_guard": {
-    "observe_only": True,
+    "observe_only": False,
     "meta_guard_state_most_common": max(set(meta_guard_states), key=meta_guard_states.count) if meta_guard_states else "UNKNOWN",
     "gate_allow_count": meta_guard_gate_allow_count,
     "gate_allow_ratio": round(meta_guard_gate_allow_count / n, 6) if n > 0 else 0.0,
     "entropy_bucket_most_common": max(set(meta_guard_entropy_buckets), key=meta_guard_entropy_buckets.count) if meta_guard_entropy_buckets else "VERY_LOW",
-    "gini_bucket_most_common": max(set(meta_guard_gini_buckets), key=meta_guard_gini_buckets.count) if meta_guard_gini_buckets else "LOW_INEQUALITY"
+    "gini_bucket_most_common": max(set(meta_guard_gini_buckets), key=meta_guard_gini_buckets.count) if meta_guard_gini_buckets else "LOW_INEQUALITY",
+    "reason_code_most_common": max(set(meta_guard_reason_codes), key=meta_guard_reason_codes.count) if meta_guard_reason_codes else None
   },
   "gtb_v03_canary": {
     "applied": gtb_canary_applied_count > 0,
