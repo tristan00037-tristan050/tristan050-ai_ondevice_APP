@@ -146,6 +146,46 @@ spec_meta.loader.exec_module(meta_guard_module)
 # Meta-Guard 함수 import
 calculate_meta_guard_for_query = meta_guard_module.calculate_meta_guard_for_query
 
+# GTB v0.3 Canary Mode 함수 로드
+gtb_canary_path = "scripts/ops/gtb_v03_canary.py"
+spec_canary = importlib.util.spec_from_file_location("gtb_v03_canary", gtb_canary_path)
+gtb_canary_module = importlib.util.module_from_spec(spec_canary)
+spec_canary.loader.exec_module(gtb_canary_module)
+
+# GTB Canary 함수 import
+calculate_canary_bucket = gtb_canary_module.calculate_canary_bucket
+should_apply_gtb_canary = gtb_canary_module.should_apply_gtb_canary
+apply_gtb_v03_canary = gtb_canary_module.apply_gtb_v03_canary
+
+# 카나리 설정 로드 (정책/설정 분리, 코드 상수 금지)
+canary_config_path = "policy/gtb_canary.yaml"
+canary_config = {}
+canary_percent = 0
+kill_switch = True  # 기본값: Fail-Closed (비활성화)
+try:
+    if yaml:
+        with open(canary_config_path, "r", encoding="utf-8") as f:
+            canary_config = yaml.safe_load(f)
+        canary_percent = canary_config.get("rules", [{}])[0].get("canary_percent", 0)
+        kill_switch = canary_config.get("rules", [{}])[0].get("kill_switch", True)
+    else:
+        # yaml 모듈 없으면 간단한 파싱 (정책 파일 형식 고정)
+        with open(canary_config_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            # canary_percent: 숫자 추출
+            import re
+            m = re.search(r'canary_percent:\s*(\d+)', content)
+            if m:
+                canary_percent = int(m.group(1))
+            # kill_switch: true/false 추출
+            m = re.search(r'kill_switch:\s*(true|false)', content)
+            if m:
+                kill_switch = m.group(1).lower() == "true"
+except:
+    # 정책 파일 없으면 기본값 (Fail-Closed: 비활성화)
+    canary_percent = 0
+    kill_switch = True
+
 # 분포 텔레메트리 누적 변수
 all_gaps = []
 all_entropies = []
@@ -163,6 +203,13 @@ meta_guard_states = []
 meta_guard_gate_allow_count = 0
 meta_guard_entropy_buckets = []
 meta_guard_gini_buckets = []
+
+# GTB v0.3 Canary Mode 누적 변수
+gtb_canary_applied_count = 0
+gtb_canary_swaps_applied_count = 0
+gtb_canary_moved_up_count = 0
+gtb_canary_moved_down_count = 0
+gtb_canary_buckets = []
 
 for it in items:
     q=str(it.get("query",""))
@@ -314,6 +361,15 @@ report = {
     "gate_allow_ratio": round(meta_guard_gate_allow_count / n, 6) if n > 0 else 0.0,
     "entropy_bucket_most_common": max(set(meta_guard_entropy_buckets), key=meta_guard_entropy_buckets.count) if meta_guard_entropy_buckets else "VERY_LOW",
     "gini_bucket_most_common": max(set(meta_guard_gini_buckets), key=meta_guard_gini_buckets.count) if meta_guard_gini_buckets else "LOW_INEQUALITY"
+  },
+  "gtb_v03_canary": {
+    "applied": gtb_canary_applied_count > 0,
+    "applied_count": gtb_canary_applied_count,
+    "applied_ratio": round(gtb_canary_applied_count / n, 6) if n > 0 else 0.0,
+    "canary_bucket_median": int(percentile(gtb_canary_buckets, 0.50)) if gtb_canary_buckets else 0,
+    "swaps_applied_count": gtb_canary_swaps_applied_count,
+    "moved_up_count": gtb_canary_moved_up_count,
+    "moved_down_count": gtb_canary_moved_down_count
   },
   "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 }
