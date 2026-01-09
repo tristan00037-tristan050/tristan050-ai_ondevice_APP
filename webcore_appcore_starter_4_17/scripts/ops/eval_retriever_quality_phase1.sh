@@ -137,6 +137,15 @@ spec_gtb.loader.exec_module(gtb_module)
 calculate_gap_p25_for_query = gtb_module.calculate_gap_p25_for_query
 simulate_gtb_v03_shadow = gtb_module.simulate_gtb_v03_shadow
 
+# Meta-Guard 함수 로드
+meta_guard_path = "scripts/ops/meta_guard.py"
+spec_meta = importlib.util.spec_from_file_location("meta_guard", meta_guard_path)
+meta_guard_module = importlib.util.module_from_spec(spec_meta)
+spec_meta.loader.exec_module(meta_guard_module)
+
+# Meta-Guard 함수 import
+calculate_meta_guard_for_query = meta_guard_module.calculate_meta_guard_for_query
+
 # 분포 텔레메트리 누적 변수
 all_gaps = []
 all_entropies = []
@@ -148,6 +157,12 @@ gtb_would_move_up_count = 0
 gtb_would_move_down_count = 0
 gtb_proposed_swap_count = 0
 gtb_budget_hit_count = 0
+
+# Meta-Guard 누적 변수 (observe_only=True 고정)
+meta_guard_states = []
+meta_guard_gate_allow_count = 0
+meta_guard_entropy_buckets = []
+meta_guard_gini_buckets = []
 
 for it in items:
     q=str(it.get("query",""))
@@ -244,6 +259,14 @@ for it in items:
     gtb_proposed_swap_count += gtb_result["proposed_swap_count"]
     if gtb_result["budget_hit"]:
         gtb_budget_hit_count += 1
+    
+    # Meta-Guard 계산 (observe_only=True 고정, 행동 변경 없음)
+    meta_guard_result = calculate_meta_guard_for_query(ranked, k, observe_only=True)
+    meta_guard_states.append(meta_guard_result["meta_guard_state"])
+    if meta_guard_result["gate_allow"]:
+        meta_guard_gate_allow_count += 1
+    meta_guard_entropy_buckets.append(meta_guard_result["entropy_bucket"])
+    meta_guard_gini_buckets.append(meta_guard_result["gini_bucket"])
 
 if n==0:
     raise SystemExit("FAIL: no evaluable goldenset items")
@@ -283,6 +306,14 @@ report = {
     "would_move_down_count": gtb_would_move_down_count,
     "proposed_swap_count": gtb_proposed_swap_count,
     "budget_hit_count": gtb_budget_hit_count
+  },
+  "meta_guard": {
+    "observe_only": True,
+    "meta_guard_state_most_common": max(set(meta_guard_states), key=meta_guard_states.count) if meta_guard_states else "UNKNOWN",
+    "gate_allow_count": meta_guard_gate_allow_count,
+    "gate_allow_ratio": round(meta_guard_gate_allow_count / n, 6) if n > 0 else 0.0,
+    "entropy_bucket_most_common": max(set(meta_guard_entropy_buckets), key=meta_guard_entropy_buckets.count) if meta_guard_entropy_buckets else "VERY_LOW",
+    "gini_bucket_most_common": max(set(meta_guard_gini_buckets), key=meta_guard_gini_buckets.count) if meta_guard_gini_buckets else "LOW_INEQUALITY"
   },
   "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 }
