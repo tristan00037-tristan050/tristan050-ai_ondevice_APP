@@ -101,6 +101,22 @@ jobs:
       
       - name: Check client-side filter
         run: npm run ci:check-client-filter
+      
+      - name: Policy Diff Risk Gate (Fail-Closed)
+        run: |
+          set -euo pipefail
+          # Fail-Closed: 스크립트 존재 확인
+          test -f scripts/ops/verify_policy_diff_risk.sh || {
+            echo "FAIL: verify_policy_diff_risk.sh not found" >&2
+            exit 1
+          }
+          # Fail-Closed: 스크립트 문법 검증
+          bash -n scripts/ops/verify_policy_diff_risk.sh || {
+            echo "FAIL: verify_policy_diff_risk.sh syntax error" >&2
+            exit 1
+          }
+          # Policy Diff Risk Gate 실행 (meta-only 출력)
+          bash scripts/ops/verify_policy_diff_risk.sh
 
   schema-and-types:
     name: Schema and Type Validation
