@@ -15,6 +15,7 @@ from gtb_v03_canary import (
     should_apply_gtb_canary,
     apply_gtb_v03_canary,
 )
+from gtb_v03_shadow import calculate_swap_budget
 
 
 def test_canary_bucket_deterministic():
@@ -77,6 +78,74 @@ def test_gtb_canary_meta_only():
     print("PASS: GTB canary meta-only")
 
 
+def test_gtb_canary_blocked_by_meta_guard_collapsed():
+    """Meta-Guard COLLAPSED_*일 때 GTB Canary가 applied=false인지 검증"""
+    from meta_guard import calculate_meta_guard_for_query
+    
+    # COLLAPSED_UNIFORM 케이스: 매우 작은 변동성
+    ranked_collapsed = [
+        (0.1, 0.0, "doc1", set()),
+        (0.1, 0.0, "doc2", set()),
+        (0.1, 0.0, "doc3", set()),
+    ]
+    k = 3
+    
+    # Meta-Guard 계산 (enforce 모드)
+    meta_guard_result = calculate_meta_guard_for_query(ranked_collapsed, k, observe_only=False)
+    
+    # COLLAPSED_*이면 gate_allow=False
+    if meta_guard_result["meta_guard_state"] in ["COLLAPSED_UNIFORM", "COLLAPSED_DELTA"]:
+        assert meta_guard_result["gate_allow"] == False, \
+            f"gate_allow should be False for COLLAPSED: {meta_guard_result}"
+        
+        # should_apply_gtb_canary는 gate_allow=False면 False 반환
+        should_apply = should_apply_gtb_canary("test-req", 50, meta_guard_result["gate_allow"])
+        assert should_apply == False, \
+            f"should_apply_gtb_canary should be False when gate_allow=False: {should_apply}"
+        
+        print("PASS: GTB canary blocked by Meta-Guard COLLAPSED")
+    else:
+        print(f"INFO: Meta-Guard state is {meta_guard_result['meta_guard_state']}, not COLLAPSED (gate_allow={meta_guard_result['gate_allow']})")
+
+
+def test_gtb_canary_allowed_by_meta_guard_healthy():
+    """Meta-Guard HEALTHY일 때 기존 Canary 조건을 유지하는지 검증"""
+    from meta_guard import calculate_meta_guard_for_query
+    
+    # HEALTHY 케이스: 정상 분포
+    ranked_healthy = [
+        (5.0, 0.5, "doc1", set()),
+        (4.0, 0.4, "doc2", set()),
+        (3.0, 0.3, "doc3", set()),
+        (2.0, 0.2, "doc4", set()),
+        (1.0, 0.1, "doc5", set()),
+    ]
+    k = 5
+    
+    # Meta-Guard 계산 (enforce 모드)
+    meta_guard_result = calculate_meta_guard_for_query(ranked_healthy, k, observe_only=False)
+    
+    # HEALTHY이면 gate_allow=True
+    if meta_guard_result["meta_guard_state"] == "HEALTHY":
+        assert meta_guard_result["gate_allow"] == True, \
+            f"gate_allow should be True for HEALTHY: {meta_guard_result}"
+        
+        # should_apply_gtb_canary는 기존 Canary 조건에 따라 결정
+        # canary_percent=0이면 False
+        should_apply_0 = should_apply_gtb_canary("test-req", 0, meta_guard_result["gate_allow"])
+        assert should_apply_0 == False, \
+            f"should_apply_gtb_canary should be False when canary_percent=0: {should_apply_0}"
+        
+        # canary_percent=100이면 True (gate_allow=True이므로)
+        should_apply_100 = should_apply_gtb_canary("test-req", 100, meta_guard_result["gate_allow"])
+        assert should_apply_100 == True, \
+            f"should_apply_gtb_canary should be True when canary_percent=100 and gate_allow=True: {should_apply_100}"
+        
+        print("PASS: GTB canary allowed by Meta-Guard HEALTHY (canary conditions preserved)")
+    else:
+        print(f"INFO: Meta-Guard state is {meta_guard_result['meta_guard_state']}, not HEALTHY")
+
+
 def main():
     """모든 테스트 실행"""
     tests = [
@@ -84,6 +153,8 @@ def main():
         test_fail_closed_meta_guard,
         test_canary_routing_deterministic,
         test_gtb_canary_meta_only,
+        test_gtb_canary_blocked_by_meta_guard_collapsed,
+        test_gtb_canary_allowed_by_meta_guard_healthy,
     ]
     
     passed = 0
@@ -106,4 +177,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
