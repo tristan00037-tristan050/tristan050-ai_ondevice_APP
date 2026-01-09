@@ -441,6 +441,7 @@ export default function AccountingHUD({ cfg }: Props) {
       setSuggestOutBlocked({
         blocked: true,
         reason_code: leakResult.reason_code,
+        next_steps: leakResult.next_steps,
       });
       setSuggestOut(null); // 출력 표시 차단
       return;
@@ -640,7 +641,10 @@ export default function AccountingHUD({ cfg }: Props) {
         {suggestOutBlocked?.blocked && suggestOutBlocked.reason_code && (
           // @ts-expect-error - React Native JSX type compatibility issue with @types/react 18
           <View style={{ marginTop: 12 }}>
-            <WhyBlockCard reason_code={suggestOutBlocked.reason_code} />
+            <WhyBlockCard 
+              reason_code={suggestOutBlocked.reason_code} 
+              next_steps={suggestOutBlocked.next_steps}
+            />
           </View>
         )}
         
