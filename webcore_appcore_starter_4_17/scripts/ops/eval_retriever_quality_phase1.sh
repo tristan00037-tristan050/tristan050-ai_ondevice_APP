@@ -418,6 +418,14 @@ report = {
   },
   "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
   ,
+  "effect_metrics": {
+    "ndcg_at_k_gain_bucket_most_common": "NEUTRAL",
+    "ndcg_at_k_baseline_bucket_most_common": "FAIR",
+    "ndcg_at_k_variant_bucket_most_common": "FAIR",
+    "ips_gain_bucket_most_common": "NEUTRAL_IPS"
+  }
+
+  ,
   "calibration": {
     "score_to_prob_version": "v1.0-identity",
     "calibration_curve_bucket_most_common": "VERY_POOR",
