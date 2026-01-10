@@ -417,6 +417,13 @@ report = {
     "moved_down_count": gtb_canary_moved_down_count
   },
   "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+  ,
+  "calibration": {
+    "score_to_prob_version": "v1.0-identity",
+    "calibration_curve_bucket_most_common": "VERY_POOR",
+    "ece_bucket_most_common": "VERY_POOR"
+  }
+
 }
 
 if tie_enable == 1:
