@@ -418,6 +418,12 @@ report = {
   },
   "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
   ,
+  "plugin_registry": {
+    "enabled": true,
+    "plugin_error_count": 0
+  }
+
+  ,
   "effect_metrics": {
     "ndcg_at_k_gain_bucket_most_common": "NEUTRAL",
     "ndcg_at_k_baseline_bucket_most_common": "FAIR",
