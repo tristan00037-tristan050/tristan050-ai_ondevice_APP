@@ -243,6 +243,11 @@ router.get(
           primary_mode: primary_mode,
           counts: counts,
         },
+        performance: {
+          downshift_level: 0,
+          latency_bucket: 'EXCELLENT',
+          hysteresis_state: 'STABLE',
+        },
       });
     } catch (e: any) {
       console.error('[OS Dashboard] Error:', e);
