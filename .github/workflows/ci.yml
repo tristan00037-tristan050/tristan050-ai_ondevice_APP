@@ -190,6 +190,7 @@ jobs:
         run: npm run ci:check-roles
       
       - name: Check client-side filter
+        run: npm run ci:check-client-filter
       
       - name: CI Workflow Guard (ban direct verify_* calls)
         run: |
@@ -197,8 +198,6 @@ jobs:
           test -f scripts/ops/ci_ban_direct_verify_calls.sh
           bash -n scripts/ops/ci_ban_direct_verify_calls.sh
           bash scripts/ops/ci_ban_direct_verify_calls.sh
-
-        run: npm run ci:check-client-filter
       
       - name: Policy Diff Risk Score Gate
         run: |
@@ -210,7 +209,7 @@ jobs:
           set -euo pipefail
           test -f scripts/ops/verify_config_diff_risk.sh
           bash -n scripts/ops/verify_config_diff_risk.sh
-          bash scripts/ops/verify_config_diff_risk.sh
+          bash ../scripts/ops/run_gate.sh "bash scripts/ops/verify_config_diff_risk.sh"
 
 
   test:
