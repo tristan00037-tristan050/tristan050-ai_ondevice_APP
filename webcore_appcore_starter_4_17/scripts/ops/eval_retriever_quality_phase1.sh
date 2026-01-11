@@ -157,6 +157,15 @@ calculate_canary_bucket = gtb_canary_module.calculate_canary_bucket
 should_apply_gtb_canary = gtb_canary_module.should_apply_gtb_canary
 apply_gtb_v03_canary = gtb_canary_module.apply_gtb_v03_canary
 
+# Report Plugin Registry 로드
+report_registry_path = "scripts/ops/report_registry.py"
+spec_registry = importlib.util.spec_from_file_location("report_registry", report_registry_path)
+report_registry_module = importlib.util.module_from_spec(spec_registry)
+spec_registry.loader.exec_module(report_registry_module)
+
+# Registry 함수 import
+run_plugins = report_registry_module.run_plugins
+
 # 카나리 설정 로드 (정책/설정 분리, 코드 상수 금지)
 canary_config_path = "policy/gtb_canary.yaml"
 canary_config = {}
@@ -384,7 +393,8 @@ report = {
     "mrr_at_k": round(mrr_sum/n, 6),
     "ndcg_at_k": round(ndcg_sum/n, 6)
   },
-  "score_distribution_telemetry": {
+  # 레거시 score_distribution_telemetry 계산 (parity 체크용)
+  "legacy_score_distribution_telemetry": {
     "gap_p25": round(percentile(all_gaps, 0.25), 6) if all_gaps else 0.0,
     "gap_p50": round(percentile(all_gaps, 0.50), 6) if all_gaps else 0.0,
     "gap_p75": round(percentile(all_gaps, 0.75), 6) if all_gaps else 0.0,
@@ -417,11 +427,55 @@ report = {
     "moved_down_count": gtb_canary_moved_down_count
   },
   "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-  ,
-  "plugin_registry": {
-    "enabled": true,
-    "plugin_error_count": 0
-  }
+}
+
+# Plugin Registry 실행 및 parity 체크 (Fail-Closed)
+legacy_score_distribution_telemetry = report["legacy_score_distribution_telemetry"]
+ctx = {
+    "k": k,
+    "all_gaps": all_gaps,
+    "all_entropies": all_entropies,
+    "all_ginis": all_ginis,
+    "all_unique_counts": all_unique_counts
+}
+plugin_out = run_plugins(ctx)
+plugin_err = plugin_out.get("plugin_error_count", 0)
+plugin_tel = plugin_out.get("score_distribution_telemetry")
+
+# Parity 체크: plugin_tel이 없거나 legacy와 다르면 plugin_err++ 하고 plugin_tel은 legacy로 강제
+if plugin_tel is None:
+    plugin_err += 1
+    plugin_tel = legacy_score_distribution_telemetry
+else:
+    # 모든 키가 동일한지 체크
+    parity_ok = True
+    for key in legacy_score_distribution_telemetry:
+        if key not in plugin_tel:
+            parity_ok = False
+            break
+        legacy_val = legacy_score_distribution_telemetry[key]
+        plugin_val = plugin_tel[key]
+        # 숫자는 반올림 차이 허용 (6자리), 문자열은 정확히 일치
+        if isinstance(legacy_val, (int, float)) and isinstance(plugin_val, (int, float)):
+            if abs(legacy_val - plugin_val) > 1e-6:
+                parity_ok = False
+                break
+        elif legacy_val != plugin_val:
+            parity_ok = False
+            break
+    
+    if not parity_ok:
+        plugin_err += 1
+        plugin_tel = legacy_score_distribution_telemetry
+
+# report에 plugin 결과 사용 (섹션 1개만)
+report["score_distribution_telemetry"] = plugin_tel
+
+# plugin_registry 섹션 정규화 (기존 값이 있으면 교체)
+report["plugin_registry"] = {
+    "enabled": True,
+    "plugin_error_count": plugin_err
+}
 
   ,
   "effect_metrics": {
@@ -446,6 +500,11 @@ if tie_enable == 1:
 open(out, "w", encoding="utf-8").write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
 print(f"OK: phase1 report written: {out}")
 print("OK: report contains no query key by design")
+
+# Plugin error count 체크 (Fail-Closed)
+if plugin_err > 0:
+    print(f"FAIL: plugin_error_count={plugin_err} (parity mismatch or plugin load failure)", file=sys.stderr)
+    sys.exit(1)
 PY
 
 echo "OK: eval_retriever_quality_phase1 exit 0"
