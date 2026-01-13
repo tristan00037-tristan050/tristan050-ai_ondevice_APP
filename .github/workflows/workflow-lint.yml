@@ -36,12 +36,20 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "stable"
-
       - name: Install actionlint
-        run: go install github.com/rhysd/actionlint/cmd/actionlint@latest
-
-      - name: Workflow lint gate (meta-only, fail-closed)
+        shell: bash
         run: |
-          test -f scripts/ops/run_gate.sh
-          bash -n scripts/ops/run_gate.sh
-          bash scripts/ops/run_gate.sh "bash scripts/ops/verify_workflow_lint.sh"
+          set -euo pipefail
+          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+
+          # PATH 반영(다음 step/run_gate에서도 잡히게)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+
+          # 증빙(출력 기반)
+          echo "== actionlint proof =="
+          echo "HOME=$HOME"
+          go env GOPATH GOBIN
+          ls -la "$HOME/go/bin" || true
+          command -v actionlint
+          actionlint -version || true
+

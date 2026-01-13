@@ -14,17 +14,29 @@ cd "${TOPLEVEL}"
 python scripts/ci/workflow_lint_gate.py
 
 # 2) 추가 정적검사: actionlint (없으면 Fail-Closed)
+GOPATH="$(go env GOPATH 2>/dev/null || true)"
 ACTIONLINT_BIN="$(command -v actionlint || true)"
 if [[ -z "${ACTIONLINT_BIN}" && -x "${HOME}/go/bin/actionlint" ]]; then
   ACTIONLINT_BIN="${HOME}/go/bin/actionlint"
 fi
 
-if [[ -z "${ACTIONLINT_BIN}" ]]; then
-  echo "WORKFLOW_ACTIONLINT_OK=0"
-  echo "WORKFLOW_ACTIONLINT_ERROR=.github/workflows:0:0 reason_code=ACTIONLINT_NOT_INSTALLED"
-  exit 1
+if [[ -z "${ACTIONLINT_BIN:-}" && -n "${GOPATH:-}" && -x "${GOPATH}/bin/actionlint" ]]; then
+  ACTIONLINT_BIN="${GOPATH}/bin/actionlint"
+fi
+if [[ -z "${ACTIONLINT_BIN:-}" && -x "${HOME}/go/bin/actionlint" ]]; then
+  ACTIONLINT_BIN="${HOME}/go/bin/actionlint"
 fi
 
+if [[ -z "${ACTIONLINT_BIN:-}" ]]; then
+  echo "WORKFLOW_ACTIONLINT_OK=0"
+  echo "WORKFLOW_ACTIONLINT_ERROR=.github/workflows:0:0 reason_code=ACTIONLINT_NOT_FOUND"
+  echo "WORKFLOW_ACTIONLINT_DIAG_PATH=${PATH}"
+  echo "WORKFLOW_ACTIONLINT_DIAG_HOME=${HOME}"
+  echo "WORKFLOW_ACTIONLINT_DIAG_GOPATH=${GOPATH:-unknown}"
+  ls -la "${HOME}/go/bin" 2>/dev/null || true
+  if [[ -n "${GOPATH:-}" ]]; then ls -la "${GOPATH}/bin" 2>/dev/null || true; fi
+  exit 1
+fi
 # actionlint 출력은 메시지(원문)를 포함할 수 있으므로, meta-only로 file:line:col만 추출한다.
 set +e
 RAW="$("${ACTIONLINT_BIN}" .github/workflows 2>&1)"
