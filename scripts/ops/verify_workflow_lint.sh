@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TOPLEVEL>"$(git rev-parse --show-toplevel 2>/dev/null || true)"
+TOPLEVEL="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "${TOPLEVEL}" ]]; then
   echo "WORKFLOW_LINT_OK=0"
   echo "WORKFLOW_LINT_ERROR=NA:0:0 reason_code=NOT_A_GIT_REPO job=- step=-"
@@ -10,10 +10,10 @@ fi
 
 cd "${TOPLEVEL}"
 
-# 1) 구조/문학: YAML 파 + 빀닇 step + 중보킐, Fail-Closed
+# 1) YAML 구조/문법: 파싱 + 빈 step + 중복키 Fail-Closed
 python scripts/ci/workflow_lint_gate.py
 
-# 2) 추가 전젘: actionlint (서치하가 한 수 아가); 업위 안읔 Fail-Closed)
+# 2) 추가 정적검사: actionlint (없으면 Fail-Closed)
 ACTIONLINT_BIN="$(command -v actionlint || true)"
 if [[ -z "${ACTIONLINT_BIN}" && -x "${HOME}/go/bin/actionlint" ]]; then
   ACTIONLINT_BIN="${HOME}/go/bin/actionlint"
@@ -25,6 +25,7 @@ if [[ -z "${ACTIONLINT_BIN}" ]]; then
   exit 1
 fi
 
+# actionlint 출력은 메시지(원문)를 포함할 수 있으므로, meta-only로 file:line:col만 추출한다.
 set +e
 RAW="$("${ACTIONLINT_BIN}" .github/workflows 2>&1)"
 RC=$?
@@ -40,7 +41,7 @@ if [[ ${RC} -ne 0 ]]; then
       col="${BASH_REMATCH[3]}"
       echo "WORKFLOW_ACTIONLINT_ERROR=${f}:${ln}:${col} reason_code=WORKFLOW_ACTIONLINT_ERROR"
       n=$((n+1))
-      [[ ${n} -ge 50 ]] && break
+      [[ ${n} -ge 50 ]] && break
     fi
   done <<< "${RAW}"
   echo "WORKFLOW_ACTIONLINT_ERROR_COUNT=${n}"
