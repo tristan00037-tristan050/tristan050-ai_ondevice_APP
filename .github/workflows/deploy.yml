@@ -180,6 +180,7 @@ jobs:
           OPS_CONSOLE_IMAGE="${{ needs['build-and-push'].outputs['ops-console-image'] }}"
 
 
+
           # Update collector deployment
           if [ -f k8s/collector-deployment.yaml ]; then
             sed -i "s|image:.*collector.*|image: ${COLLECTOR_IMAGE}|g" k8s/collector-deployment.yaml
