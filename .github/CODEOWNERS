@@ -1,0 +1,4 @@
+# Prompt Registry / Cursor Rules (SSOT)
+/.cursor/rules/                       @platform-owner @quality-gate-owner
+/docs/ops/cursor_prompts/             @platform-owner @quality-gate-owner
+/docs/ops/contracts/                  @platform-owner @quality-gate-owner
