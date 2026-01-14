@@ -1,0 +1,24 @@
+---
+description: SSOT v3.4 Global Guardrails (meta-only, fail-closed, output-based)
+globs:
+  - "**/*"
+---
+
+# Global Contract (SSOT v3.4)
+
+## Non-negotiables
+- meta-only: 본문/라인/로그 전문 출력 금지.
+- Fail-Closed: 불확실/누락/에러는 반드시 exit 1 + reason_code.
+- Output-based evidence only: 증빙은 표준 게이트 출력만 인정.
+- 1 PR = 1 Purpose: 목적 혼합 금지.
+- R4(.github/workflows/*)는 Single Lane: 동시에 1개 PR만 유지.
+
+## Required sections for any PR prompt you generate
+- Purpose (single sentence)
+- Scope (allowed paths + forbidden paths)
+- Invariants
+- DoD (output-based)
+- Negative test
+- Failure modes + reason_codes
+- Minimal diff plan
+- References (primary sources)
