@@ -10,6 +10,8 @@ fi
 
 cd "${TOPLEVEL}"
 
+echo "WORKFLOW_ACTIONLINT_IMPL=verify_workflow_lint_sh_noloc_v1"
+echo "WORKFLOW_ACTIONLINT_CHECKOUT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 # 1) YAML 구조/문법: 파싱 + 빈 step + 중복키 Fail-Closed
 python scripts/ci/workflow_lint_gate.py
 
