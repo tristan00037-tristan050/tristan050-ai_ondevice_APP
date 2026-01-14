@@ -26,19 +26,22 @@ env:
 
 jobs:
   build-and-push:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: webcore_appcore_starter_4_17
 
     permissions:
       contents: read
       packages: write
+
     outputs:
       collector-image: ${{ steps.meta-collector.outputs.tags }}
       bff-image: ${{ steps.meta-bff.outputs.tags }}
       ops-console-image: ${{ steps.meta-ops.outputs.tags }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -126,18 +129,21 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy-staging:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     name: Deploy to Staging
     runs-on: ubuntu-latest
-
     needs: build-and-push
+    defaults:
+      run:
+        shell: bash
+        working-directory: webcore_appcore_starter_4_17
+
     env:
       KUBE_CONFIG_STAGING: ${{ secrets.KUBE_CONFIG_STAGING }}
+
     if: github.event.inputs.environment == 'staging' || github.ref == 'refs/heads/main'
     environment:
       name: staging
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -150,17 +156,20 @@ jobs:
       - name: Configure kubectl (if KUBE_CONFIG provided)
         if: env.KUBE_CONFIG_STAGING != ''
         run: |
+          set -euo pipefail
           mkdir -p ~/.kube
           echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > ~/.kube/config
           kubectl config current-context
 
       - name: Create namespace (if not exists)
         run: |
+          set -euo pipefail
           kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create secrets (if not exists)
         if: env.KUBE_CONFIG_STAGING != ''
         run: |
+          set -euo pipefail
           kubectl create secret generic collector-secrets \
             --from-literal=db-host="${{ secrets.DB_HOST_STAGING }}" \
             --from-literal=db-port="${{ secrets.DB_PORT_STAGING || '5432' }}" \
@@ -175,11 +184,10 @@ jobs:
 
       - name: Update deployment manifests with new images
         run: |
+          set -euo pipefail
           COLLECTOR_IMAGE="${{ needs['build-and-push'].outputs['collector-image'] }}"
           BFF_IMAGE="${{ needs['build-and-push'].outputs['bff-image'] }}"
           OPS_CONSOLE_IMAGE="${{ needs['build-and-push'].outputs['ops-console-image'] }}"
-
-
 
           # Update collector deployment
           if [ -f k8s/collector-deployment.yaml ]; then
@@ -199,6 +207,7 @@ jobs:
       - name: Deploy to Kubernetes
         if: env.KUBE_CONFIG_STAGING != ''
         run: |
+          set -euo pipefail
           kubectl apply -f k8s/collector-deployment.yaml -n staging || true
           kubectl apply -f k8s/collector-hpa.yaml -n staging || true
           kubectl rollout status deployment/collector -n staging --timeout=5m || true
@@ -206,24 +215,26 @@ jobs:
       - name: Run smoke tests
         if: env.KUBE_CONFIG_STAGING != ''
         run: |
+          set -euo pipefail
           echo "Waiting for services to be ready..."
           sleep 30
-          # Add smoke test commands here
-          # kubectl get pods -n staging
-          # curl http://collector.staging/health
 
   deploy-production:
-    defaults:
-      run:
-        working-directory: webcore_appcore_starter_4_17
     name: Deploy to Production
     runs-on: ubuntu-latest
+    needs: build-and-push
+    defaults:
+      run:
+        shell: bash
+        working-directory: webcore_appcore_starter_4_17
 
     env:
       KUBE_CONFIG_PRODUCTION: ${{ secrets.KUBE_CONFIG_PRODUCTION }}
+
     if: github.event.inputs.environment == 'production' || startsWith(github.ref, 'refs/tags/v')
     environment:
       name: production
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -236,17 +247,20 @@ jobs:
       - name: Configure kubectl (if KUBE_CONFIG provided)
         if: env.KUBE_CONFIG_PRODUCTION != ''
         run: |
+          set -euo pipefail
           mkdir -p ~/.kube
           echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > ~/.kube/config
           kubectl config current-context
 
       - name: Create namespace (if not exists)
         run: |
+          set -euo pipefail
           kubectl create namespace production --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create secrets (if not exists)
         if: env.KUBE_CONFIG_PRODUCTION != ''
         run: |
+          set -euo pipefail
           kubectl create secret generic collector-secrets \
             --from-literal=db-host="${{ secrets.DB_HOST }}" \
             --from-literal=db-port="${{ secrets.DB_PORT || '5432' }}" \
@@ -261,9 +275,10 @@ jobs:
 
       - name: Update deployment manifests with new images
         run: |
-          COLLECTOR_IMAGE="${{ needs.build-and-push.outputs.collector-image }}"
-          BFF_IMAGE="${{ needs.build-and-push.outputs.bff-image }}"
-          OPS_CONSOLE_IMAGE="${{ needs.build-and-push.outputs.ops-console-image }}"
+          set -euo pipefail
+          COLLECTOR_IMAGE="${{ needs['build-and-push'].outputs['collector-image'] }}"
+          BFF_IMAGE="${{ needs['build-and-push'].outputs['bff-image'] }}"
+          OPS_CONSOLE_IMAGE="${{ needs['build-and-push'].outputs['ops-console-image'] }}"
 
           # Update collector deployment
           if [ -f k8s/collector-deployment.yaml ]; then
@@ -283,6 +298,7 @@ jobs:
       - name: Deploy to Kubernetes
         if: env.KUBE_CONFIG_PRODUCTION != ''
         run: |
+          set -euo pipefail
           kubectl apply -f k8s/collector-deployment.yaml -n production || true
           kubectl apply -f k8s/collector-hpa.yaml -n production || true
           kubectl rollout status deployment/collector -n production --timeout=5m || true
@@ -290,10 +306,7 @@ jobs:
       - name: Run smoke tests
         if: env.KUBE_CONFIG_PRODUCTION != ''
         run: |
+          set -euo pipefail
           echo "Waiting for services to be ready..."
           sleep 30
           echo "Smoke tests would run here"
-          # Add actual smoke test commands
-          # COLLECTOR_URL="https://collector.production.com"
-          # API_KEY="${{ secrets.API_KEYS }}"
-          # npm run smoke
