@@ -56,6 +56,14 @@ if [[ ${RC} -ne 0 ]]; then
       [[ ${n} -ge 50 ]] && break
     fi
   done <<< "${RAW}"
+
+  # 핵심 보강: 위치를 못 뽑는 실패(RAW가 file:line:col 형태가 아님)도 meta-only로 1줄 강제 출력
+  if [[ ${n} -eq 0 ]]; then
+    echo "WORKFLOW_ACTIONLINT_ERROR=.github/workflows:0:0 reason_code=WORKFLOW_ACTIONLINT_ERROR_NOLOC"
+    echo "WORKFLOW_ACTIONLINT_RC=${RC}"
+    n=1
+  fi
+
   echo "WORKFLOW_ACTIONLINT_ERROR_COUNT=${n}"
   exit 1
 fi
