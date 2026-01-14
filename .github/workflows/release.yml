@@ -64,9 +64,12 @@ jobs:
             -e EXPORT_SIGN_SECRET="ci-secret" \
             bff-accounting:release
 
-
+          # readiness 체크
+          for ((i=1; i<=40; i++)); do
+            curl -sf http://localhost:8081/ready && break
             sleep 1
           done
+          curl -sf http://localhost:8081/health
 
       - name: E2E smoke against container
         env:
