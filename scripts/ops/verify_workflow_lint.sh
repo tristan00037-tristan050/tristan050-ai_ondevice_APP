@@ -32,6 +32,9 @@ echo "WORKFLOW_ACTIONLINT_IMPL=$("${ACTIONLINT_BIN}" -version 2>/dev/null | head
 
 shopt -s nullglob
 FILES=(.github/workflows/*.yml .github/workflows/*.yaml)
+# Stable ordering (sort) to make outputs deterministic
+IFS=$'\n' FILES=($(printf '%s\n' "${FILES[@]}" | sort))
+unset IFS
 echo "WORKFLOW_ACTIONLINT_WORKFLOWS_COUNT=${#FILES[@]}"
 for f in "${FILES[@]}"; do
   echo "WORKFLOW_ACTIONLINT_WORKFLOW_FILE=${f}"
