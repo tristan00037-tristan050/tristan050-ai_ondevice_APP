@@ -14,11 +14,11 @@ globs:
 - R4(.github/workflows/*)는 Single Lane: 동시에 1개 PR만 유지.
 
 ## Required sections for any PR prompt you generate
-- Purpose
-- Scope
+- Purpose (single sentence)
+- Scope (allowed paths + forbidden paths)
 - Invariants
 - DoD (output-based)
 - Negative test
 - Failure modes + reason_codes
 - Minimal diff plan
-- References
+- References (primary sources)
