@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
+        shell: bash
         working-directory: webcore_appcore_starter_4_17  # ✅ npm 명령 실행 디렉토리 고정
     services:
       postgres:
@@ -86,6 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
+        shell: bash
         working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
@@ -106,6 +108,9 @@ jobs:
   publish-and-deploy:
     needs: [build-test-image, gate_mobile]
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
