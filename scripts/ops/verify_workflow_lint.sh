@@ -48,15 +48,35 @@ fi
 # actionlint 버전 출력 (ACTIONLINT_BIN이 설정된 후)
 echo "WORKFLOW_ACTIONLINT_VERSION=$("${ACTIONLINT_BIN}" -version 2>/dev/null | head -n 1 || echo unknown)"
 
-# actionlint 출력은 메시지(원문)를 포함할 수 있으므로, meta-only로 file:line:col만 추출한다.
+# actionlint는 디렉터리 단일 실행에서 RC=3(Runtime) 형태로 실패하는 케이스가 있어,
+# Fail-Closed를 유지하되 "파일 단위"로 실행하여 안정적으로 위치(file:line:col)를 수집한다.
 set +e
-RAW="$("${ACTIONLINT_BIN}" .github/workflows 2>&1)"
-RC=$?
+RAW_ALL=""
+FAIL_RC=0
+FAIL_FILE=""
+
+while IFS= read -r wf; do
+  _RAW_SINGLE="$("${ACTIONLINT_BIN}" "${wf}" 2>&1)"
+  _RC_SINGLE=$?
+  if [[ ${_RC_SINGLE} -ne 0 ]]; then
+    # 첫 실패 파일 기록(메타)
+    if [[ -z "${FAIL_FILE}" ]]; then
+      FAIL_FILE="${wf}"
+      FAIL_RC=${_RC_SINGLE}
+    fi
+    RAW_ALL="${RAW_ALL}"$'\n'"${_RAW_SINGLE}"
+  fi
+done < <(find .github/workflows -maxdepth 1 -type f \( -name "*.yml" -o -name "*.yaml" \) -print | sort)
+
 set -e
 
-if [[ ${RC} -ne 0 ]]; then
+if [[ -n "${FAIL_FILE}" ]]; then
   echo "WORKFLOW_ACTIONLINT_OK=0"
+  echo "WORKFLOW_ACTIONLINT_FAIL_FILE=${FAIL_FILE}"
+  echo "WORKFLOW_ACTIONLINT_RC=${FAIL_RC}"
+
   n=0
+  # meta-only: file:line:col 형태만 추출
   while IFS= read -r line; do
     if [[ "${line}" =~ ^([^:]+):([0-9]+):([0-9]+): ]]; then
       f="${BASH_REMATCH[1]}"
@@ -66,40 +86,17 @@ if [[ ${RC} -ne 0 ]]; then
       n=$((n+1))
       [[ ${n} -ge 50 ]] && break
     fi
-  done <<< "${RAW}"
+  done <<< "${RAW_ALL}"
 
-  # 핵심 보강: 위치를 못 뽑는 실패(RAW가 file:line:col 형태가 아님)도 meta-only로 1줄 강제 출력
-  
-  # RC=3(Runtime) 원인 파일 특정(meta-only: 경로만)
-  if [[ "${RC}" -eq 3 ]]; then
-    bad=""
-    while IFS= read -r wf; do
-      set +e
-      _RAW_SINGLE="$("${ACTIONLINT_BIN}" "${wf}" 2>&1)"
-      _RC_SINGLE=$?
-      set -e
-      if [[ "${_RC_SINGLE}" -eq 3 ]]; then
-        bad="${wf}"
-        break
-      fi
-    done < <(find .github/workflows -maxdepth 1 -type f \( -name "*.yml" -o -name "*.yaml" \) -print | sort)
-
-    if [[ -n "${bad}" ]]; then
-      echo "WORKFLOW_ACTIONLINT_RUNTIME_FILE=${bad}"
-    else
-      echo "WORKFLOW_ACTIONLINT_RUNTIME_FILE=unknown"
-    fi
-  fi
-
+  # 위치를 못 뽑는 실패도 봉인(FAIL_RC에 따라 reason_code 분류)
   if [[ ${n} -eq 0 ]]; then
-    case "${RC}" in
-  1) REASON="WORKFLOW_ACTIONLINT_LINT_ERRORS_NOLOC" ;;
-  2) REASON="WORKFLOW_ACTIONLINT_USAGE_ERROR" ;;
-  3) REASON="WORKFLOW_ACTIONLINT_RUNTIME_ERROR" ;;
-  *) REASON="WORKFLOW_ACTIONLINT_UNKNOWN_ERROR" ;;
-esac
+    case "${FAIL_RC}" in
+      1) REASON="WORKFLOW_ACTIONLINT_LINT_ERRORS_NOLOC" ;;
+      2) REASON="WORKFLOW_ACTIONLINT_USAGE_ERROR" ;;
+      3) REASON="WORKFLOW_ACTIONLINT_RUNTIME_ERROR" ;;
+      *) REASON="WORKFLOW_ACTIONLINT_UNKNOWN_ERROR" ;;
+    esac
     echo "WORKFLOW_ACTIONLINT_ERROR=.github/workflows:0:0 reason_code=${REASON}"
-    echo "WORKFLOW_ACTIONLINT_RC=${RC}"
     n=1
   fi
 
@@ -108,3 +105,4 @@ esac
 fi
 
 echo "WORKFLOW_ACTIONLINT_OK=1"
+echo "WORKFLOW_ACTIONLINT_ERROR_COUNT=0"
