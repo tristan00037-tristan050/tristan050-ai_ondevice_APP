@@ -53,3 +53,10 @@ jobs:
           command -v actionlint
           actionlint -version || true
 
+      - name: Run workflow gate (fail-closed)
+        run: |
+          set -euo pipefail
+          test -f scripts/ops/run_gate.sh
+          bash -n scripts/ops/run_gate.sh
+          bash scripts/ops/run_gate.sh "bash scripts/ops/verify_workflow_lint.sh"
+
