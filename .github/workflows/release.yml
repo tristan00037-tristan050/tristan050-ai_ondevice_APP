@@ -64,7 +64,7 @@ jobs:
             -e EXPORT_SIGN_SECRET="ci-secret" \
             bff-accounting:release
 
-          # readiness 체크(brace expansion 제거)
+          # readiness 체크 (brace expansion 제거)
           i=1
           while [ "$i" -le 40 ]; do
             if curl -sf "http://localhost:8081/ready"; then
