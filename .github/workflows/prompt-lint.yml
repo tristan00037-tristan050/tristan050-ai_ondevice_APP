@@ -1,0 +1,23 @@
+name: prompt-lint
+
+on:
+  pull_request:
+    paths:
+      - ".cursor/rules/**"
+      - "docs/ops/cursor_prompts/**"
+      - "docs/ops/contracts/**"
+  workflow_dispatch: {}
+
+jobs:
+  prompt-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prompt lint gate (fail-closed, meta-only)
+        env:
+          PROMPT_LINT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PROMPT_LINT_HEAD_SHA: ${{ github.sha }}
+        run: |
+          bash scripts/ops/verify_prompt_quality.sh
+
