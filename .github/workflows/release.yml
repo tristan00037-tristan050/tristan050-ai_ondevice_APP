@@ -12,7 +12,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: webcore_appcore_starter_4_17  # ✅ npm 명령 실행 디렉토리 고정
+        working-directory: webcore_appcore_starter_4_17  # npm 명령 실행 디렉토리 고정
     services:
       postgres:
         image: postgres:16
@@ -48,7 +48,6 @@ jobs:
         run: npm run db:migrate
 
       - name: Build Docker image
-        # Docker 빌드는 레포 루트 기준이므로 working-directory를 명시적으로 . 로 변경
         working-directory: .
         run: docker build -f Dockerfile.bff -t bff-accounting:release .
 
@@ -57,23 +56,25 @@ jobs:
         env:
           DATABASE_URL: postgres://app:app@host.docker.internal:5432/app
         run: |
+          set -euo pipefail
+
           docker run -d --name bff -p 8081:8081 \
             -e USE_PG=1 \
             -e DATABASE_URL="postgres://app:app@host.docker.internal:5432/app" \
             -e EXPORT_SIGN_SECRET="ci-secret" \
             bff-accounting:release
 
-          # readiness 체크 (brace expansion 제거: actionlint/쉘 호환성 안정화)
+          # readiness 체크(brace expansion 제거)
           i=1
           while [ "$i" -le 40 ]; do
-            if curl -sf http://localhost:8081/ready; then
+            if curl -sf "http://localhost:8081/ready"; then
               break
             fi
             sleep 1
             i=$((i+1))
           done
 
-          curl -sf http://localhost:8081/health
+          curl -sf "http://localhost:8081/health"
 
       - name: E2E smoke against container
         env:
@@ -82,10 +83,14 @@ jobs:
           API_KEY: collector-key:operator
           API_KEY_AUD: collector-key:auditor
         run: |
+          set -euo pipefail
+          : "${API_KEY:?}"
+          : "${API_KEY_AUD:?}"
+
           npm run test:e2e:accounting:approvals
-          API_KEY=$API_KEY_AUD npm run test:e2e:accounting:exports
+          API_KEY="${API_KEY_AUD}" npm run test:e2e:accounting:exports
           npm run test:e2e:accounting:exports:neg
-          API_KEY=$API_KEY npm run test:e2e:accounting:recon
+          API_KEY="${API_KEY}" npm run test:e2e:accounting:recon
 
   gate_mobile:
     name: Mobile Gate
@@ -108,7 +113,7 @@ jobs:
       - name: TypeScript check
         run: npm run -w @appcore/app-expo typecheck || echo "typecheck skipped"
 
-      - run: echo "✅ mobile gate passed"
+      - run: echo "mobile gate passed"
 
   publish-and-deploy:
     needs: [build-test-image, gate_mobile]
@@ -134,26 +139,32 @@ jobs:
       - name: Build & Push image
         working-directory: .
         run: |
-          IMAGE=ghcr.io/${{ github.repository }}/bff-accounting
-          TAG=${{ github.ref_name }}
-          docker build -f Dockerfile.bff -t $IMAGE:$TAG -t $IMAGE:latest .
-          docker push $IMAGE:$TAG
-          docker push $IMAGE:latest
+          set -euo pipefail
+
+          IMAGE="ghcr.io/${{ github.repository }}/bff-accounting"
+          TAG="${{ github.ref_name }}"
+
+          docker build -f Dockerfile.bff -t "${IMAGE}:${TAG}" -t "${IMAGE}:latest" .
+          docker push "${IMAGE}:${TAG}"
+          docker push "${IMAGE}:latest"
 
       - name: Setup kubectl & helm
         uses: azure/setup-helm@v4
 
       - name: Kubeconfig
         run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+          set -euo pipefail
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG }}" > "$HOME/.kube/config"
 
       - name: Helm upgrade
         working-directory: .
         run: |
+          set -euo pipefail
+
           helm upgrade --install bff charts/bff-accounting \
-            --set image.repository=ghcr.io/${{ github.repository }}/bff-accounting \
-            --set image.tag=${{ github.ref_name }} \
-            --set env.EXPORT_SIGN_SECRET=${{ secrets.EXPORT_SIGN_SECRET }} \
-            --set env.DATABASE_URL=${{ secrets.DATABASE_URL }} \
+            --set image.repository="ghcr.io/${{ github.repository }}/bff-accounting" \
+            --set image.tag="${{ github.ref_name }}" \
+            --set env.EXPORT_SIGN_SECRET="${{ secrets.EXPORT_SIGN_SECRET }}" \
+            --set env.DATABASE_URL="${{ secrets.DATABASE_URL }}" \
             --wait --timeout 5m
