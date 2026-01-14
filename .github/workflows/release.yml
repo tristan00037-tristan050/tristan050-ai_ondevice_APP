@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
+        shell: bash
         working-directory: webcore_appcore_starter_4_17  # ✅ npm 명령 실행 디렉토리 고정
     services:
       postgres:
@@ -33,7 +34,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install dependencies
         run: npm ci
@@ -62,11 +63,16 @@ jobs:
             -e EXPORT_SIGN_SECRET="ci-secret" \
             bff-accounting:release
 
-          # readiness 체크
-          for i in {1..40}; do
-            curl -sf http://localhost:8081/ready && break
+          # readiness 체크 (brace expansion 제거: actionlint/쉘 호환성 안정화)
+          i=1
+          while [ "$i" -le 40 ]; do
+            if curl -sf http://localhost:8081/ready; then
+              break
+            fi
             sleep 1
+            i=$((i+1))
           done
+
           curl -sf http://localhost:8081/health
 
       - name: E2E smoke against container
@@ -86,6 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
+        shell: bash
         working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +100,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install dependencies
         run: npm ci
@@ -106,13 +113,16 @@ jobs:
   publish-and-deploy:
     needs: [build-test-image, gate_mobile]
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
