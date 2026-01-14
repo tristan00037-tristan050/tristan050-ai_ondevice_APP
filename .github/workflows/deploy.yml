@@ -275,7 +275,7 @@ jobs:
 
       - name: Update deployment manifests with new images
         run: |
-          set -euo pipefail
+
           COLLECTOR_IMAGE="${{ needs['build-and-push'].outputs['collector-image'] }}"
           BFF_IMAGE="${{ needs['build-and-push'].outputs['bff-image'] }}"
           OPS_CONSOLE_IMAGE="${{ needs['build-and-push'].outputs['ops-console-image'] }}"
