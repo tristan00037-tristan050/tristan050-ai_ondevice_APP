@@ -175,9 +175,10 @@ jobs:
 
       - name: Update deployment manifests with new images
         run: |
-          COLLECTOR_IMAGE="${{ needs.build-and-push.outputs.collector-image }}"
-          BFF_IMAGE="${{ needs.build-and-push.outputs.bff-image }}"
-          OPS_CONSOLE_IMAGE="${{ needs.build-and-push.outputs.ops-console-image }}"
+          COLLECTOR_IMAGE="${{ needs['build-and-push'].outputs['collector-image'] }}"
+          BFF_IMAGE="${{ needs['build-and-push'].outputs['bff-image'] }}"
+          OPS_CONSOLE_IMAGE="${{ needs['build-and-push'].outputs['ops-console-image'] }}"
+
 
           # Update collector deployment
           if [ -f k8s/collector-deployment.yaml ]; then
