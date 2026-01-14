@@ -69,6 +69,28 @@ if [[ ${RC} -ne 0 ]]; then
   done <<< "${RAW}"
 
   # 핵심 보강: 위치를 못 뽑는 실패(RAW가 file:line:col 형태가 아님)도 meta-only로 1줄 강제 출력
+  
+  # RC=3(Runtime) 원인 파일 특정(meta-only: 경로만)
+  if [[ "${RC}" -eq 3 ]]; then
+    bad=""
+    while IFS= read -r wf; do
+      set +e
+      _RAW_SINGLE="$("${ACTIONLINT_BIN}" "${wf}" 2>&1)"
+      _RC_SINGLE=$?
+      set -e
+      if [[ "${_RC_SINGLE}" -eq 3 ]]; then
+        bad="${wf}"
+        break
+      fi
+    done < <(find .github/workflows -maxdepth 1 -type f \( -name "*.yml" -o -name "*.yaml" \) -print | sort)
+
+    if [[ -n "${bad}" ]]; then
+      echo "WORKFLOW_ACTIONLINT_RUNTIME_FILE=${bad}"
+    else
+      echo "WORKFLOW_ACTIONLINT_RUNTIME_FILE=unknown"
+    fi
+  fi
+
   if [[ ${n} -eq 0 ]]; then
     case "${RC}" in
   1) REASON="WORKFLOW_ACTIONLINT_LINT_ERRORS_NOLOC" ;;
