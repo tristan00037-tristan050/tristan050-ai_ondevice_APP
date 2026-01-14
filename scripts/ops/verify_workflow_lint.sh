@@ -10,8 +10,13 @@ fi
 
 cd "${TOPLEVEL}"
 
+# Meta-only diagnostics (actionlint 버전/워크플로 목록)
+# ACTIONLINT_BIN은 아직 설정되지 않았으므로, 나중에 다시 출력하거나 여기서는 스킵
+# 대신 워크플로 파일 목록만 먼저 출력
 echo "WORKFLOW_ACTIONLINT_IMPL=verify_workflow_lint_sh_noloc_v1"
 echo "WORKFLOW_ACTIONLINT_CHECKOUT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+echo "WORKFLOW_ACTIONLINT_WORKFLOWS_COUNT=$(find .github/workflows -maxdepth 1 -type f \( -name "*.yml" -o -name "*.yaml" \) | wc -l | tr -d " ")"
+find .github/workflows -maxdepth 1 -type f \( -name "*.yml" -o -name "*.yaml" \) -print | sort | sed "s/^/WORKFLOW_ACTIONLINT_WORKFLOW_FILE=/" | head -n 50
 # 1) YAML 구조/문법: 파싱 + 빈 step + 중복키 Fail-Closed
 python scripts/ci/workflow_lint_gate.py
 
@@ -39,6 +44,10 @@ if [[ -z "${ACTIONLINT_BIN:-}" ]]; then
   if [[ -n "${GOPATH:-}" ]]; then ls -la "${GOPATH}/bin" 2>/dev/null || true; fi
   exit 1
 fi
+
+# actionlint 버전 출력 (ACTIONLINT_BIN이 설정된 후)
+echo "WORKFLOW_ACTIONLINT_VERSION=$("${ACTIONLINT_BIN}" -version 2>/dev/null | head -n 1 || echo unknown)"
+
 # actionlint 출력은 메시지(원문)를 포함할 수 있으므로, meta-only로 file:line:col만 추출한다.
 set +e
 RAW="$("${ACTIONLINT_BIN}" .github/workflows 2>&1)"
@@ -61,7 +70,13 @@ if [[ ${RC} -ne 0 ]]; then
 
   # 핵심 보강: 위치를 못 뽑는 실패(RAW가 file:line:col 형태가 아님)도 meta-only로 1줄 강제 출력
   if [[ ${n} -eq 0 ]]; then
-    echo "WORKFLOW_ACTIONLINT_ERROR=.github/workflows:0:0 reason_code=WORKFLOW_ACTIONLINT_ERROR_NOLOC"
+    case "${RC}" in
+  1) REASON="WORKFLOW_ACTIONLINT_LINT_ERRORS_NOLOC" ;;
+  2) REASON="WORKFLOW_ACTIONLINT_USAGE_ERROR" ;;
+  3) REASON="WORKFLOW_ACTIONLINT_RUNTIME_ERROR" ;;
+  *) REASON="WORKFLOW_ACTIONLINT_UNKNOWN_ERROR" ;;
+esac
+    echo "WORKFLOW_ACTIONLINT_ERROR=.github/workflows:0:0 reason_code=${REASON}"
     echo "WORKFLOW_ACTIONLINT_RC=${RC}"
     n=1
   fi
