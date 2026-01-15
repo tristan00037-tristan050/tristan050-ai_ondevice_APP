@@ -8,3 +8,7 @@
 - 실패 모드 + reason_code
 - 최소 변경 계획(minimal diff plan)
 - 근거(References: 1차 자료)
+
+## 명확한 정의(강제)
+- 박사급 = 필수 섹션 충족 + References 비어있음 금지 + 메타스탬프(Owner/Last-Reviewed) 필수
+- Prompt Lint Gate PASS가 아니면 프롬프트 변경 PR은 머지 불가
