@@ -1,11 +1,7 @@
 name: prompt-lint
 
 on:
-  pull_request:
-    paths:
-      - ".cursor/rules/**"
-      - "docs/ops/cursor_prompts/**"
-      - "docs/ops/contracts/**"
+  pull_request: {}
   workflow_dispatch: {}
 
 jobs:
@@ -20,4 +16,3 @@ jobs:
           PROMPT_LINT_HEAD_SHA: ${{ github.sha }}
         run: |
           bash scripts/ops/verify_prompt_quality.sh
-
