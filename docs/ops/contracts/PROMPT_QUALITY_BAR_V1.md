@@ -7,4 +7,3 @@
 - 부정 테스트(negative test)
 - 실패 모드 + reason_code
 - 최소 변경 계획(minimal diff plan)
-- 근거(References: 1차 자료)
