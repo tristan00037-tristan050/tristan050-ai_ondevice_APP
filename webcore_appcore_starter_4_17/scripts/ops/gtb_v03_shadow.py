@@ -57,33 +57,78 @@ def simulate_gtb_v03_shadow(
     baseline_ranked: List[str]
 ) -> Dict:
     """
-    GTB v0.3 Shadow Mode 시뮬레이션
+    GTB v0.3 Shadow Mode 시뮬레이션 (primary-sorted invariance)
+    
+    모든 계산을 primary-score-monotonic view에서 수행하여 입력 순서와 무관하게
+    동일한 카운터를 생성합니다.
     
     Args:
-        ranked: [(primary, secondary, did, dt), ...] 리스트 (primary 기준 정렬됨)
+        ranked: [(primary, secondary, did, dt), ...] 리스트 (입력 순서 무관)
         k: topK 값
         gap_p25: 동일 요청 내 topK 기준 gap_p25
         relevant_docs: relevant document ID 집합
         baseline_ranked: baseline 랭킹 (doc_id 리스트)
     
     Returns:
-        meta-only 카운트 딕셔너리
+        meta-only 카운트 딕셔너리 (shadow_reason_code 포함)
     """
     if len(ranked) < 2:
         return {
             "would_move_up_count": 0,
             "would_move_down_count": 0,
             "proposed_swap_count": 0,
-            "budget_hit": False,
+            "budget_hit_count": 0,
+            "shadow_reason_code": "",
         }
     
-    topk_ranked = ranked[:k]
-    if len(topk_ranked) < 2:
+    # Primary-sorted view 생성 (stable sort by -primary_score, +original_index)
+    primary_sorted_items = []
+    for orig_idx, item in enumerate(ranked[:k]):
+        primary_score, secondary_score, did, dt = item
+        
+        # Fail-Closed: primary_score missing/non-finite 체크
+        if not isinstance(primary_score, (int, float)):
+            return {
+                "would_move_up_count": 0,
+                "would_move_down_count": 0,
+                "proposed_swap_count": 0,
+                "budget_hit_count": 0,
+                "shadow_reason_code": "GTB_SHADOW_PRIMARY_MISSING",
+            }
+        
+        if not math.isfinite(primary_score):
+            return {
+                "would_move_up_count": 0,
+                "would_move_down_count": 0,
+                "proposed_swap_count": 0,
+                "budget_hit_count": 0,
+                "shadow_reason_code": "GTB_SHADOW_PRIMARY_MISSING",
+            }
+        
+        primary_sorted_items.append((orig_idx, primary_score, secondary_score, did, dt))
+    
+    # Stable sort: -primary_score (desc), +orig_idx (asc) for ties
+    try:
+        primary_sorted_items.sort(key=lambda x: (-x[1], x[0]))
+    except Exception as e:
         return {
             "would_move_up_count": 0,
             "would_move_down_count": 0,
             "proposed_swap_count": 0,
-            "budget_hit": False,
+            "budget_hit_count": 0,
+            "shadow_reason_code": "GTB_SHADOW_SORT_ERROR",
+        }
+    
+    # primary_sorted view로 변환: (primary, secondary, did, dt)
+    primary_sorted = [(p, s, d, dt) for _, p, s, d, dt in primary_sorted_items]
+    
+    if len(primary_sorted) < 2:
+        return {
+            "would_move_up_count": 0,
+            "would_move_down_count": 0,
+            "proposed_swap_count": 0,
+            "budget_hit_count": 0,
+            "shadow_reason_code": "",
         }
     
     # Swap budget 계산
@@ -94,24 +139,24 @@ def simulate_gtb_v03_shadow(
     for idx, did in enumerate(baseline_ranked, 1):
         baseline_rank_map[did] = idx
     
-    # Primary score와 gap 추출
-    primary_scores = [p for p, _, _, _ in topk_ranked]
+    # Primary score와 gap 추출 (primary_sorted view에서)
+    primary_scores = [p for p, _, _, _ in primary_sorted]
     gaps = []
     for i in range(len(primary_scores) - 1):
         gap = primary_scores[i] - primary_scores[i + 1]
         gaps.append(gap)
     
-    # Near-tie 그룹 찾기 (gap <= gap_p25인 인접 쌍)
+    # Near-tie 그룹 찾기 (gap <= gap_p25인 인접 쌍, primary_sorted view에서)
     near_tie_groups = []
     i = 0
-    while i < len(topk_ranked) - 1:
+    while i < len(primary_sorted) - 1:
         gap = gaps[i]
         if is_near_tie(gap, gap_p25):
             # Near-tie 그룹 시작
-            group = [topk_ranked[i], topk_ranked[i + 1]]
+            group = [primary_sorted[i], primary_sorted[i + 1]]
             j = i + 1
-            while j < len(topk_ranked) - 1 and is_near_tie(gaps[j], gap_p25):
-                group.append(topk_ranked[j + 1])
+            while j < len(primary_sorted) - 1 and is_near_tie(gaps[j], gap_p25):
+                group.append(primary_sorted[j + 1])
                 j += 1
             if len(group) > 1:
                 near_tie_groups.append(group)
@@ -128,12 +173,11 @@ def simulate_gtb_v03_shadow(
         if len(group) < 2:
             continue
         
-        # Baseline 순서 (원래 순서) - group은 이미 primary 기준 정렬되어 있음
+        # Baseline 순서 (primary_sorted view에서의 순서)
         baseline_dids = [did for _, _, did, _ in group]
         
         # Secondary signal로 재정렬 (Shadow only, 실제 적용 안 함)
         shadow_order = sorted(group, key=lambda x: (-x[1], x[2]))  # secondary desc, doc_id asc
-        shadow_dids = [did for _, _, did, _ in shadow_order]
         
         # 각 문서의 위치 변화 확인 (Shadow only, 실제 적용 안 함)
         for shadow_idx, (_, _, did, _) in enumerate(shadow_order):
@@ -160,13 +204,14 @@ def simulate_gtb_v03_shadow(
     
     # Swap budget 확인
     proposed_swap_count = len(proposed_swaps)
-    budget_hit = proposed_swap_count > max_swaps
+    budget_hit_count = 1 if proposed_swap_count > max_swaps else 0
     
     return {
         "would_move_up_count": would_move_up_count,
         "would_move_down_count": would_move_down_count,
         "proposed_swap_count": proposed_swap_count,
-        "budget_hit": budget_hit,
+        "budget_hit_count": budget_hit_count,
+        "shadow_reason_code": "",
     }
 
 

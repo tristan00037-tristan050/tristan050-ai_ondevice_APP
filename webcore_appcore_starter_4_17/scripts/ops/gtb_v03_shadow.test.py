@@ -71,13 +71,15 @@ def test_gtb_shadow_meta_only():
     
     result = simulate_gtb_v03_shadow(ranked, 3, gap_p25, relevant_docs, baseline_ranked)
     
-    # 숫자/불린만 허용 (원문/리스트 없음)
-    allowed_types = (int, bool)
+    # 숫자/불린/문자열(빈 문자열 또는 reason_code)만 허용 (원문/리스트 없음)
+    allowed_types = (int, bool, str)
     for key, value in result.items():
         assert isinstance(value, allowed_types), f"Non-meta-only value: {key}={value} (type: {type(value)})"
+        if isinstance(value, str):
+            assert key == "shadow_reason_code", f"Unexpected string key: {key}"
     
     # 필수 키 확인
-    required_keys = ["would_move_up_count", "would_move_down_count", "proposed_swap_count", "budget_hit"]
+    required_keys = ["would_move_up_count", "would_move_down_count", "proposed_swap_count", "budget_hit_count", "shadow_reason_code"]
     for key in required_keys:
         assert key in result, f"Missing key: {key}"
     
@@ -101,6 +103,69 @@ def test_budget_hit():
     print("PASS: budget hit calculation")
 
 
+def test_primary_sorted_invariance():
+    """Primary-sorted invariance 검증: 입력 순서와 무관하게 동일한 카운터"""
+    # 의도적으로 primary-monotonic이 아닌 입력 생성
+    ranked_inverted = [
+        (3.0, 0.0, "doc3", set()),  # 낮은 primary
+        (5.0, 0.5, "doc1", set()),  # 높은 primary
+        (4.0, 0.0, "doc2", set()),  # 중간 primary
+    ]
+    
+    # 명시적으로 primary-sorted된 버전
+    ranked_sorted = [
+        (5.0, 0.5, "doc1", set()),
+        (4.0, 0.0, "doc2", set()),
+        (3.0, 0.0, "doc3", set()),
+    ]
+    
+    gap_p25 = 0.0  # 모든 gap이 near-tie
+    relevant_docs = {"doc1", "doc2", "doc3"}
+    baseline_ranked = ["doc1", "doc2", "doc3"]
+    
+    result_inverted = simulate_gtb_v03_shadow(ranked_inverted, 3, gap_p25, relevant_docs, baseline_ranked)
+    result_sorted = simulate_gtb_v03_shadow(ranked_sorted, 3, gap_p25, relevant_docs, baseline_ranked)
+    
+    # 카운터가 동일해야 함
+    assert result_inverted["would_move_up_count"] == result_sorted["would_move_up_count"], \
+        f"would_move_up_count mismatch: {result_inverted['would_move_up_count']} != {result_sorted['would_move_up_count']}"
+    assert result_inverted["would_move_down_count"] == result_sorted["would_move_down_count"], \
+        f"would_move_down_count mismatch: {result_inverted['would_move_down_count']} != {result_sorted['would_move_down_count']}"
+    assert result_inverted["proposed_swap_count"] == result_sorted["proposed_swap_count"], \
+        f"proposed_swap_count mismatch: {result_inverted['proposed_swap_count']} != {result_sorted['proposed_swap_count']}"
+    assert result_inverted["budget_hit_count"] == result_sorted["budget_hit_count"], \
+        f"budget_hit_count mismatch: {result_inverted['budget_hit_count']} != {result_sorted['budget_hit_count']}"
+    
+    print("PASS: primary-sorted invariance")
+
+
+def test_fail_closed_primary_missing():
+    """Fail-Closed: primary_score missing/non-finite 처리"""
+    # NaN 테스트
+    ranked_nan = [
+        (float('nan'), 0.5, "doc1", set()),
+        (4.0, 0.0, "doc2", set()),
+    ]
+    
+    result = simulate_gtb_v03_shadow(ranked_nan, 2, 0.0, set(), [])
+    assert result["shadow_reason_code"] == "GTB_SHADOW_PRIMARY_MISSING", \
+        f"Expected GTB_SHADOW_PRIMARY_MISSING, got {result['shadow_reason_code']}"
+    assert result["would_move_up_count"] == 0
+    assert result["proposed_swap_count"] == 0
+    
+    # Inf 테스트
+    ranked_inf = [
+        (float('inf'), 0.5, "doc1", set()),
+        (4.0, 0.0, "doc2", set()),
+    ]
+    
+    result = simulate_gtb_v03_shadow(ranked_inf, 2, 0.0, set(), [])
+    assert result["shadow_reason_code"] == "GTB_SHADOW_PRIMARY_MISSING", \
+        f"Expected GTB_SHADOW_PRIMARY_MISSING, got {result['shadow_reason_code']}"
+    
+    print("PASS: fail-closed primary missing")
+
+
 def main():
     """모든 테스트 실행"""
     tests = [
@@ -109,6 +174,8 @@ def main():
         test_gtb_shadow_deterministic,
         test_gtb_shadow_meta_only,
         test_budget_hit,
+        test_primary_sorted_invariance,
+        test_fail_closed_primary_missing,
     ]
     
     passed = 0
