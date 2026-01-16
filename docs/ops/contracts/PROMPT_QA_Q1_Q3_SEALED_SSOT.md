@@ -1,82 +1,67 @@
 # Prompt QA 강제 체계(Q1~Q3) 운영 종결(SEALED) — SSOT
 
-## 0) 라벨 정정(고정)
-- “개발팀 전달용”은 부적절. 우리는 개발팀이므로: 팀 내부 공지용(복붙)
-- 외부 공유: 타팀 공유용(복붙)
+Prompt-Version: 1.0
+Owner: Platform Team
+Last-Reviewed: 2026-01-16
 
-## 1) 문서 범위(고정)
-포함
-- Prompt QA 강제 체계(Q1~Q3) 운영 종결(SEALED): 게이트/리뷰/계약 봉인 + 머지 차단(merge-blocking)
-- SSOT 경로 변경이 CI(prompt-lint) + Branch protection(Required checks) + CODEOWNERS로 강제되는 구조
-- 팀 내부/타팀/알고리즘팀/PR 코멘트용 복붙 블록(6-1~6-4)
+## Problem
+Prompt/Rule/Contract 변경 품질이 사람 기억에 의존하면 기준이 흔들리고 재발 경로가 열립니다.
+따라서 Prompt QA를 “권고”가 아니라 “머지 차단(merge-blocking)”으로 고정합니다.
 
-제외
-- 명칭/코드명/이름 논의(범위 밖)
+## Scope
+### MUST include
+- Prompt QA(Q1~Q3) 운영 종결(SEALED): prompt-lint 게이트 + required checks + CODEOWNERS + 품질 계약(PROMPT_QUALITY_BAR_V1) 봉인
+- SSOT 경로 변경이 “prompt-lint PASS + Code Owner 승인” 없이는 main 머지 불가인 구조
+- required check 운영 함정 2개(Expected/Waiting vs skipped)와 방지 문장(스킵 우회 차단)
+- 후속 PR #107/#108은 “merged 입력”만 반영하고, 범위/DoD 키는 PR Files changed + checks(출력)로 meta-only 확정 후 편입
 
-## 2) 실행 결과 SSOT 요약(merged=true 기준)
-- Q1(Gate): prompt-lint 게이트 구축 → PR #102 merged
-- Q1 보완(상태 보고): 모든 PR에서 prompt-lint 상태 보고 → PR #105 merged
-  - 효과: required check가 Waiting/Expected로 대기하며 머지가 막히는 함정 제거(항상 상태 보고 정렬)
-- Q2(Review 강제): CODEOWNERS 실제 계정 연결 → PR #104 merged
-- Q3(품질 계약 봉인): “박사급 정의 + Gate PASS 전제” 문구 봉인 → PR #106 merged
-  - 계약 키: PROMPT_QUALITY_BAR_V1
+### MUST NOT include
+- 명칭/이름/코드명 논의(본 SSOT 범위 밖)
 
-## 3) 운영 근거(요지)
-- Required status checks: required check가 PASS 전에는 보호 브랜치(main)에 머지 불가
-- Code Owners 강제: “Require review from Code Owners” 활성 시 지정 경로 변경은 Code Owner 승인 없이는 머지 불가
-- CODEOWNERS 조건: .github/ → root → docs/ 우선순위, PR base 브랜치(main)에 존재해야 적용
+## Invariants
+- Output-based only (말로 PASS 금지, 기록/출력으로만 판정)
+- meta-only (원문/덤프/대량 인용 금지)
+- Fail-Closed (애매하면 막고, reason_code를 남긴다)
+- 1 PR = 1 Purpose
 
-## 4) 운영 표준(고정)
-시스템 강제 정의(한 문장)
-- “SSOT 경로 변경은 prompt-lint(PASS)와 Code Owner 승인(완료)이 동시에 만족되지 않으면 main 머지가 불가능하다.”
+## DoD
+- 보호 브랜치(main)에서 required check(prompt-lint)가 PASS가 아니면 머지 불가
+- SSOT 경로 변경 시 CODEOWNERS 승인 없으면 머지 불가
+- 품질 계약(PROMPT_QUALITY_BAR_V1)이 main에 봉인되어 기준이 흔들리지 않음
 
-Required check
-- prompt-lint (PASS 아니면 머지 불가)
+## Failure Modes (FMEA) & Threat Model
+- FM1: required check 상태가 “보고되지 않음” → PR이 Waiting/Expected로 멈춤
+  - Control: 모든 PR에서 required check 상태가 항상 보고되도록 유지 (Q1 보완 #105 정렬)
+  - reason_code=PQA_EXPECTED_WAITING
+- FM2: 워크플로는 떴지만 required job/step이 조건식으로 skipped → 성공으로 취급될 수 있어 차단 약화
+  - Control: required check job/step은 조건식으로 쉽게 skipped 되지 않도록 유지
+  - reason_code=PQA_SKIPPED_BYPASS
+- FM3: required check 선택 시 “표기 이름(체크 런/잡)” 혼선 → 잘못된 체크를 required로 걸어 무력화/오판 위험
+  - Control: Required status check는 GitHub UI에 표시되는 체크 런(보통 job) 이름 기준으로 고정, job 이름은 유니크하게 유지
+  - reason_code=PQA_CHECKNAME_MISMATCH
+- FM4: CODEOWNERS 미적용(위치/우선순위/베이스 브랜치 조건 불충족) → 리뷰 강제 누락
+  - Control: CODEOWNERS는 base 브랜치(main)에 존재해야 하며, .github/ → root → docs/ 우선순위를 준수
+  - reason_code=PQA_CODEOWNERS_NOT_APPLIED
 
-SSOT 대상 경로(고정)
-- .cursor/rules/**
-- docs/ops/cursor_prompts/**
-- docs/ops/contracts/**
+## Reason Codes
+- PQA_EXPECTED_WAITING
+- PQA_SKIPPED_BYPASS
+- PQA_CHECKNAME_MISMATCH
+- PQA_CODEOWNERS_NOT_APPLIED
 
-운영 안전 문장(고정)
-- required check에 해당하는 job/step은 조건식으로 skipped 되지 않도록 유지한다.
+## Rollback
+- 필요한 경우: 관련 PR revert로 되돌린다.
+- 영향 범위는 SSOT 경로와 CI/보호 규칙에 한정하며, 1 PR=1 목적을 유지한다.
 
-## 5) 실무 규칙(팀 공통, 단문 고정)
-- SSOT 경로 변경 PR은 prompt-lint PASS + Code Owner 승인 전까지 main 머지 불가
-- 테스트/검증 목적 PR은 머지 금지(확인 후 Close + 브랜치 삭제로 종료)
-
-## 6) 복붙 블록 4종 정본
-
-6-1) 팀 내부 공지용(복붙)
-제목
-[SEALED] Prompt QA 강제 체계(Q1~Q3) 운영 종결 (prompt-lint + CODEOWNERS + 품질 계약 봉인)
-
-본문
-- 근거: PR #102, #105, #104, #106 merged
-- 운영 표준: Required status check=prompt-lint, SSOT 경로 변경은 prompt-lint PASS + Code Owner 승인 없으면 main 머지 불가
-- 실무 규칙: 테스트/검증 PR은 머지 금지(확인 후 Close + 브랜치 삭제)
-
-6-2) 타팀 공유용(복붙)
-제목
-[공지] Prompt QA Standard v1.0 운영 강제 시작 (SSOT 경로: prompt-lint 필수 통과 + Code Owner 승인)
-
-본문
-- SSOT 경로 변경은 prompt-lint PASS + Code Owner 승인 없이는 main 머지 불가
-- 위반 예: 필수 섹션/References/스탬프 누락 → CI FAIL → 머지 차단
-- 기준 문서: PROMPT_QUALITY_BAR_V1(main 봉인, PR #106 merged)
-
-6-3) 알고리즘팀 안내용(R2 준수, 복붙)
-제목
-[R2 준수] 알고리즘 프롬프트는 References 근거 포함 필수 (prompt-lint 자동 검증)
-
-본문
-- SSOT 경로 변경으로 분류되며 prompt-lint PASS 아니면 main 머지 불가
-- 최소 준수: Problem/Scope/Invariants/DoD/Failure/Reason Codes/Rollback/References + Owner/Last-Reviewed
-- 리뷰 포인트: prompt-lint PASS 이후에도 References 진위/정합성은 리뷰에서 확인
-
-6-4) PR Conversation 코멘트용 초단문 5줄(복붙)
-[SEALED] Prompt QA 강제 체계(Q1~Q3) 종결
-- prompt-lint: PR #102 + 상태 보고 보완 PR #105 (merged)
-- CODEOWNERS 실계정 연결: PR #104 (merged)
-- 품질 계약(PROMPT_QUALITY_BAR_V1) 봉인: PR #106 (merged)
-- SSOT 경로 변경은 prompt-lint PASS + Code Owner 승인 없으면 main 머지 불가
+## References
+- Internal SSOT inputs (user-provided):
+  - PR #102 merged (prompt-lint gate)
+  - PR #105 merged (prompt-lint status always reported on PRs)
+  - PR #104 merged (CODEOWNERS wired to real accounts for SSOT paths)
+  - PR #106 merged (PROMPT_QUALITY_BAR_V1 sealed)
+  - PR #107 merged (follow-up; scope/DoD to be confirmed via Files changed + checks)
+  - PR #108 merged (follow-up; scope/DoD to be confirmed via Files changed + checks)
+- GitHub Docs (external behavior):
+  - Required status checks (success/skipped/neutral; waiting-for-status; skipped semantics)
+  - Code owners (locations/precedence; base branch requirement)
+  - Protected branches / rulesets (require code owner reviews; required checks)
