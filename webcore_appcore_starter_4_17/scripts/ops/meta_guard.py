@@ -7,6 +7,7 @@ Meta-Guard: 분포 붕괴 감지 및 GTB 개입 Fail-Closed 비활성화
 import json
 import math
 import os
+import hashlib
 from typing import List, Tuple, Dict, Optional
 
 # SSOT 임계치 파일 경로 (하드코딩 금지)
@@ -15,9 +16,112 @@ THRESHOLDS_FILE = os.path.join(
     "config", "step4b", "meta_guard_thresholds_v1.json"
 )
 
+# Frozen thresholds 파일 경로 (enforce 모드용)
+FROZEN_THRESHOLDS_FILE = os.path.join(
+    os.path.dirname(__file__),
+    "config", "meta_guard_thresholds_frozen.v1.json"
+)
+
 # 임계치 캐시 (파일에서 한 번만 읽기)
 _thresholds_cache: Optional[Dict] = None
 _thresholds_err_cache: Optional[str] = None
+
+
+def calculate_thresholds_fingerprint(thresholds: Dict) -> str:
+    """
+    Thresholds 객체의 SHA256 fingerprint 계산 (canonicalized)
+    
+    Args:
+        thresholds: thresholds 딕셔너리
+    
+    Returns:
+        SHA256 hex digest (meta-only)
+    """
+    # Canonicalize: thresholds만 추출하고 정렬된 JSON으로 변환
+    thresholds_only = thresholds.get("thresholds", thresholds)
+    canonical_json = json.dumps(thresholds_only, sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(canonical_json.encode('utf-8')).hexdigest()
+
+
+def load_frozen_thresholds_with_validation(path: str) -> Tuple[Optional[Dict], Optional[str], Optional[str], Optional[str]]:
+    """
+    Frozen thresholds 파일 로드 및 검증 (explicit frozen contract)
+    
+    Args:
+        path: frozen thresholds 파일 경로
+    
+    Returns:
+        (thresholds_obj | None, err_code | None, schema_version | None, fingerprint | None)
+        - thresholds_obj: 로드 및 검증 성공 시 딕셔너리
+        - err_code: 오류 시 reason_code
+        - schema_version: 성공 시 schema_version
+        - fingerprint: 성공 시 SHA256 fingerprint
+    """
+    # 파일 존재 및 읽기 가능 확인
+    if not os.path.exists(path):
+        return None, "META_GUARD_THRESHOLDS_UNAVAILABLE_FAILCLOSED", None, None
+    
+    if not os.access(path, os.R_OK):
+        return None, "META_GUARD_THRESHOLDS_UNAVAILABLE_FAILCLOSED", None, None
+    
+    # JSON 파싱
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, UnicodeDecodeError, IOError):
+        return None, "META_GUARD_THRESHOLDS_UNAVAILABLE_FAILCLOSED", None, None
+    
+    # Frozen contract 검증
+    if not isinstance(data, dict):
+        return None, "META_GUARD_SCHEMA_INVALID_FAILCLOSED", None, None
+    
+    # 필수 frozen contract 필드 확인
+    schema_version = data.get("schema_version")
+    frozen = data.get("frozen")
+    frozen_at_utc = data.get("frozen_at_utc")
+    thresholds = data.get("thresholds")
+    
+    if schema_version != "v1":
+        return None, "META_GUARD_SCHEMA_INVALID_FAILCLOSED", None, None
+    
+    if frozen is not True:
+        return None, "META_GUARD_THRESHOLDS_NOT_FROZEN_FAILCLOSED", None, None
+    
+    if not isinstance(frozen_at_utc, str) or not frozen_at_utc:
+        return None, "META_GUARD_SCHEMA_INVALID_FAILCLOSED", None, None
+    
+    if not isinstance(thresholds, dict):
+        return None, "META_GUARD_SCHEMA_INVALID_FAILCLOSED", None, None
+    
+    # Thresholds 구조 검증
+    collapse_detection = thresholds.get("collapse_detection")
+    if not isinstance(collapse_detection, dict):
+        return None, "META_GUARD_SCHEMA_INVALID_FAILCLOSED", None, None
+    
+    # 필수 키 확인
+    required_states = ["HEALTHY", "COLLAPSED_UNIFORM", "COLLAPSED_DELTA"]
+    for state in required_states:
+        if state not in collapse_detection:
+            return None, "META_GUARD_SCHEMA_INVALID_FAILCLOSED", None, None
+    
+    # 숫자 범위 검증 (sanity check)
+    for state, rule in collapse_detection.items():
+        if not isinstance(rule, dict):
+            return None, "META_GUARD_SCHEMA_INVALID_FAILCLOSED", None, None
+        
+        # 엔트로피/지니 값이 0~1 범위인지 확인 (음수 불가)
+        for key in ["entropy_min", "entropy_max", "gini_min", "gini_max"]:
+            if key in rule:
+                value = rule[key]
+                if not isinstance(value, (int, float)):
+                    return None, "META_GUARD_SCHEMA_INVALID_FAILCLOSED", None, None
+                if value < 0.0 or value > 1.0:
+                    return None, "META_GUARD_SCHEMA_INVALID_FAILCLOSED", None, None
+    
+    # Fingerprint 계산
+    fingerprint = calculate_thresholds_fingerprint(data)
+    
+    return data, None, schema_version, fingerprint
 
 
 def load_thresholds_with_validation(path: str) -> Tuple[Optional[Dict], Optional[str]]:
@@ -242,6 +346,8 @@ def detect_distribution_collapse(
             "entropy_bucket": "VERY_LOW",
             "gini_bucket": "LOW_INEQUALITY",
             "reason_code": "META_GUARD_UNKNOWN" if not observe_only else None,
+            "thresholds_schema_version": None,
+            "thresholds_fingerprint": None,
         }
     
     # 엔트로피 및 지니 계산
@@ -251,24 +357,29 @@ def detect_distribution_collapse(
     entropy_bucket = bucketize_entropy(entropy)
     gini_bucket = bucketize_gini(gini)
     
-    # SSOT 임계치 로드 및 검증 (enforce 모드: strict fail-closed)
+    # SSOT 임계치 로드 및 검증 (enforce 모드: frozen contract required)
     if observe_only:
         # Observe-only 모드: 기존 동작 유지 (meta reporting)
         thresholds = load_thresholds()
         collapse_rules = thresholds.get("collapse_detection", {})
         thresholds_err = None
+        schema_version = None
+        fingerprint = None
     else:
-        # Enforce 모드: strict fail-closed (thresholds 오류 시 gate_allow=false)
-        thresholds, thresholds_err = load_thresholds_with_validation(THRESHOLDS_FILE)
+        # Enforce 모드: frozen thresholds required (explicit frozen contract)
+        frozen_data, thresholds_err, schema_version, fingerprint = load_frozen_thresholds_with_validation(FROZEN_THRESHOLDS_FILE)
         if thresholds_err is not None:
-            # Thresholds 오류: Fail-Closed (NO FAIL-OPEN)
+            # Frozen thresholds 오류: Fail-Closed (NO FAIL-OPEN)
             return {
                 "meta_guard_state": "UNKNOWN",
                 "gate_allow": False,
                 "entropy_bucket": entropy_bucket,
                 "gini_bucket": gini_bucket,
                 "reason_code": thresholds_err,
+                "thresholds_schema_version": None,
+                "thresholds_fingerprint": None,
             }
+        thresholds = frozen_data.get("thresholds", {})
         collapse_rules = thresholds.get("collapse_detection", {})
         if not collapse_rules:
             # 스키마 오류 (collapse_detection 없음)
@@ -278,6 +389,8 @@ def detect_distribution_collapse(
                 "entropy_bucket": entropy_bucket,
                 "gini_bucket": gini_bucket,
                 "reason_code": "META_GUARD_SCHEMA_INVALID_FAILCLOSED",
+                "thresholds_schema_version": schema_version,
+                "thresholds_fingerprint": None,
             }
     
     # 분포 붕괴 판정 (SSOT 임계치 사용)
@@ -315,7 +428,7 @@ def detect_distribution_collapse(
         
         if entropy >= entropy_min and (gini < gini_max if exclusive_gini_max else gini <= gini_max):
             state = "HEALTHY"
-            reason_code = None  # HEALTHY는 reason_code 없음
+            reason_code = "META_GUARD_OK"  # HEALTHY는 OK reason_code
     
     # gate_allow 결정 (enforce 모드)
     if observe_only:
@@ -336,6 +449,8 @@ def detect_distribution_collapse(
         "entropy_bucket": entropy_bucket,
         "gini_bucket": gini_bucket,
         "reason_code": reason_code,
+        "thresholds_schema_version": schema_version if not observe_only else None,
+        "thresholds_fingerprint": fingerprint if not observe_only else None,
     }
 
 
@@ -362,6 +477,8 @@ def calculate_meta_guard_for_query(
             "entropy_bucket": "VERY_LOW",
             "gini_bucket": "LOW_INEQUALITY",
             "reason_code": "META_GUARD_UNKNOWN" if not observe_only else None,
+            "thresholds_schema_version": None,
+            "thresholds_fingerprint": None,
         }
     
     topk_ranked = ranked[:k]
