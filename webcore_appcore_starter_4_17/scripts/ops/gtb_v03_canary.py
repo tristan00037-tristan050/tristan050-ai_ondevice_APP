@@ -6,7 +6,7 @@ GTB v0.3 Canary Mode (결정론적, Fail-Closed)
 
 import hashlib
 import math
-from typing import List, Tuple, Dict, Set
+from typing import List, Tuple, Dict, Set, Optional
 
 
 def calculate_canary_bucket(request_id: str) -> int:
@@ -32,7 +32,7 @@ def should_apply_gtb_canary(
     meta_guard_gate_allow: bool
 ) -> bool:
     """
-    카나리 모드에서 GTB 적용 여부 결정 (Fail-Closed)
+    카나리 모드에서 GTB 적용 여부 결정 (Fail-Closed, backward compatibility)
     
     Args:
         request_id: 요청 ID (결정론적 라우팅용)
@@ -51,6 +51,84 @@ def should_apply_gtb_canary(
     return bucket < canary_percent
 
 
+def should_apply_gtb_canary_with_config(
+    request_id: str,
+    config: Optional[Dict],
+    meta_guard_gate_allow: bool
+) -> Tuple[bool, str, Dict]:
+    """
+    카나리 모드에서 GTB 적용 여부 결정 (Fail-Closed, config 기반)
+    
+    Args:
+        request_id: 요청 ID (결정론적 라우팅용)
+        config: Canary config 딕셔너리 (canary_percent, kill_switch, routing_seed) 또는 None
+        meta_guard_gate_allow: Meta-Guard gate_allow 값
+    
+    Returns:
+        (should_apply, blocked_reason_code, telemetry_dict)
+        - should_apply: True면 GTB 적용, False면 비활성화
+        - blocked_reason_code: 차단 이유 (CANARY_APPLIED, CANARY_KILL_SWITCH_ON, etc.)
+        - telemetry_dict: canary_percent, kill_switch, applied, applied_ratio, blocked_reason_code, config_source
+    """
+    # Block Rule: config missing/invalid => applied=false
+    if config is None:
+        return False, "CANARY_CONFIG_INVALID_FAILCLOSED", {
+            "canary_percent": 0,
+            "kill_switch": True,
+            "applied": False,
+            "applied_ratio": 0.0,
+            "blocked_reason_code": "CANARY_CONFIG_INVALID_FAILCLOSED",
+            "config_source": "MISSING_FAILCLOSED",
+        }
+    
+    canary_percent = config.get("canary_percent", 0)
+    kill_switch = config.get("kill_switch", True)  # Default: fail-closed
+    routing_seed = config.get("routing_seed", "default")
+    config_source = config.get("_config_source", "FILE")
+    
+    # Block Rule 1: kill_switch on => applied=false
+    if kill_switch:
+        return False, "CANARY_KILL_SWITCH_ON", {
+            "canary_percent": canary_percent,
+            "kill_switch": kill_switch,
+            "applied": False,
+            "applied_ratio": 0.0,
+            "blocked_reason_code": "CANARY_KILL_SWITCH_ON",
+            "config_source": config_source,
+        }
+    
+    # Block Rule 2: Meta-Guard not allow => applied=false
+    if not meta_guard_gate_allow:
+        return False, "CANARY_BLOCKED_BY_META_GUARD", {
+            "canary_percent": canary_percent,
+            "kill_switch": kill_switch,
+            "applied": False,
+            "applied_ratio": 0.0,
+            "blocked_reason_code": "CANARY_BLOCKED_BY_META_GUARD",
+            "config_source": config_source,
+        }
+    
+    # 카나리 라우팅: request_id + routing_seed 해시 mod 100 < canary_percent
+    routing_key = f"{routing_seed}:{request_id}"
+    bucket = calculate_canary_bucket(routing_key)
+    applied = bucket < canary_percent
+    applied_ratio = canary_percent / 100.0 if canary_percent > 0 else 0.0
+    
+    if applied:
+        blocked_reason_code = "CANARY_APPLIED"
+    else:
+        blocked_reason_code = "CANARY_NOT_IN_BUCKET"
+    
+    return applied, blocked_reason_code, {
+        "canary_percent": canary_percent,
+        "kill_switch": kill_switch,
+        "applied": applied,
+        "applied_ratio": applied_ratio,
+        "blocked_reason_code": blocked_reason_code,
+        "config_source": config_source,
+    }
+
+
 def apply_gtb_v03_canary(
     ranked: List[Tuple[float, float, str, set]],
     k: int,
@@ -58,7 +136,8 @@ def apply_gtb_v03_canary(
     max_swaps: int,
     relevant_docs: Set[str],
     baseline_ranked: List[str],
-    canary_bucket: int = 0
+    canary_bucket: int = 0,
+    telemetry_base: Optional[Dict] = None
 ) -> Tuple[List[Tuple[float, float, str, set]], Dict]:
     """
     GTB v0.3 Canary Mode 실제 적용
@@ -177,13 +256,19 @@ def apply_gtb_v03_canary(
     # 전체 랭킹 재구성 (topk_ranked + 나머지)
     applied_ranked = topk_ranked + ranked[k:]
     
-    return applied_ranked, {
+    # Telemetry 병합 (telemetry_base가 있으면 병합)
+    result_telemetry = {
         "applied": len(swaps_applied) > 0,
         "canary_bucket": canary_bucket,
         "swaps_applied_count": len(swaps_applied),
         "moved_up_count": moved_up_count,
         "moved_down_count": moved_down_count,
     }
+    
+    if telemetry_base:
+        result_telemetry.update(telemetry_base)
+    
+    return applied_ranked, result_telemetry
 
 
 if __name__ == "__main__":
