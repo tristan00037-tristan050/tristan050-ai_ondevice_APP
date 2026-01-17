@@ -1,0 +1,28 @@
+{
+  "schema_version": "v1",
+  "frozen": true,
+  "frozen_at_utc": "2026-01-15T00:00:00Z",
+  "thresholds": {
+    "collapse_detection": {
+      "HEALTHY": {
+        "entropy_min": 0.4,
+        "gini_max": 0.6,
+        "exclusive_gini_max": true,
+        "description": "정상 분포, GTB 개입 허용"
+      },
+      "COLLAPSED_UNIFORM": {
+        "entropy_max": 0.2,
+        "exclusive_entropy_max": true,
+        "gini_max": 0.4,
+        "exclusive_gini_max": true,
+        "description": "모든 점수가 거의 동일 (uniform collapse), GTB 개입 비활성화"
+      },
+      "COLLAPSED_DELTA": {
+        "entropy_min": 0.8,
+        "gini_min": 0.8,
+        "description": "극단적 불균형 (소수 점수에 집중), GTB 개입 비활성화"
+      }
+    }
+  }
+}
+
