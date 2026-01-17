@@ -166,6 +166,15 @@ spec_registry.loader.exec_module(report_registry_module)
 # Registry 함수 import
 run_plugins = report_registry_module.run_plugins
 
+# Effect Metrics Registry 로드
+metrics_registry_path = "scripts/eval/metrics_registry.py"
+spec_metrics = importlib.util.spec_from_file_location("metrics_registry", metrics_registry_path)
+metrics_registry_module = importlib.util.module_from_spec(spec_metrics)
+spec_metrics.loader.exec_module(metrics_registry_module)
+
+# Metrics Registry 함수 import
+aggregate_effect_metrics = metrics_registry_module.aggregate_effect_metrics
+
 # 카나리 설정 로드 (정책/설정 분리, 코드 상수 금지)
 canary_config_path = "policy/gtb_canary.yaml"
 canary_config = {}
@@ -220,6 +229,11 @@ gtb_canary_swaps_applied_count = 0
 gtb_canary_moved_up_count = 0
 gtb_canary_moved_down_count = 0
 gtb_canary_buckets = []
+
+# Effect metrics 누적 변수 (meta-only)
+all_baseline_ranked = []
+all_treatment_ranked = []
+all_relevance_labels = []
 
 for it in items:
     q=str(it.get("query",""))
@@ -367,6 +381,22 @@ for it in items:
         # GTB 미적용 (Meta-Guard 차단 또는 kill_switch 또는 canary 조건 불충족)
         # applied=false로 기록 (meta-only)
         pass  # gtb_canary_applied_count는 증가하지 않음 (applied=false)
+    
+    # Effect metrics 수집 (meta-only)
+    # Baseline 랭킹 (baseline_scored를 ranked 형식으로 변환)
+    baseline_ranked_tuple = baseline_scored[:k]
+    # Treatment 랭킹 (GTB canary 적용 후 또는 적용 전)
+    treatment_ranked_tuple = ranked[:k]
+    
+    # Graded relevance labels 생성 (binary -> graded: 1.0 for relevant, 0.0 for not relevant)
+    relevance_labels_query = {}
+    for did, dt in docs:
+        doc_id_str = str(did)
+        relevance_labels_query[doc_id_str] = 1.0 if relevant(dt, must) else 0.0
+    
+    all_baseline_ranked.append(baseline_ranked_tuple)
+    all_treatment_ranked.append(treatment_ranked_tuple)
+    all_relevance_labels.append(relevance_labels_query)
 
 if n==0:
     raise SystemExit("FAIL: no evaluable goldenset items")
@@ -477,15 +507,13 @@ report["plugin_registry"] = {
     "plugin_error_count": plugin_err
 }
 
-  ,
-  "effect_metrics": {
-    "ndcg_at_k_gain_bucket_most_common": "NEUTRAL",
-    "ndcg_at_k_baseline_bucket_most_common": "FAIR",
-    "ndcg_at_k_variant_bucket_most_common": "FAIR",
-    "ips_gain_bucket_most_common": "NEUTRAL_IPS"
-  }
+# Effect Metrics 계산 (meta-only, fail-closed)
+effect_metrics_result = aggregate_effect_metrics(
+    all_baseline_ranked, all_treatment_ranked, all_relevance_labels, k=k,
+    all_logged_propensities=None, all_observed_rewards=None
+)
+report["effect_metrics"] = effect_metrics_result
 
-  ,
   "calibration": {
     "score_to_prob_version": "v1.0-identity",
     "calibration_curve_bucket_most_common": "VERY_POOR",
