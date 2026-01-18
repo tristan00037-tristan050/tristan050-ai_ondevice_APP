@@ -33,6 +33,10 @@ Prompt QA(Q1~Q3)는 “정책/권고”가 아니라 GitHub의 브랜치 보호(
 - Fail-Closed: 애매하면 막고 reason_code를 남김
 - 1 PR = 1 Purpose
 
+## 운영 표준(고정)
+
+required check 이름은 GitHub UI에 표시되는 체크 런/잡 이름 기준으로 고정한다.
+
 ## DoD
 - Required status check(prompt-lint)가 PASS가 아니면 main 머지 불가
 - SSOT 경로 변경 시 Code Owner 승인 없으면 main 머지 불가
