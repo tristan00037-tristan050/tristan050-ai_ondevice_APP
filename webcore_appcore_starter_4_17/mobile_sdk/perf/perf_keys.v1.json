@@ -1,0 +1,41 @@
+{
+  "version": "v1.0",
+  "schema": "perf_keys_v1",
+  "description": "Performance metrics keys (meta-only, no user text)",
+  "keys": {
+    "inference_count": {
+      "type": "integer",
+      "description": "Total number of inferences performed",
+      "meta_only": true
+    },
+    "latency_p50_ms": {
+      "type": "integer",
+      "description": "P50 latency in milliseconds",
+      "meta_only": true,
+      "unit": "milliseconds"
+    },
+    "latency_p95_ms": {
+      "type": "integer",
+      "description": "P95 latency in milliseconds",
+      "meta_only": true,
+      "unit": "milliseconds"
+    },
+    "peak_memory_bytes": {
+      "type": "integer",
+      "description": "Peak memory usage in bytes",
+      "meta_only": true,
+      "unit": "bytes"
+    }
+  },
+  "required_keys": [
+    "inference_count",
+    "latency_p50_ms",
+    "latency_p95_ms",
+    "peak_memory_bytes"
+  ],
+  "meta_only_policy": {
+    "enforced": true,
+    "description": "All metrics must be meta-only (numerical values only, no raw text)"
+  }
+}
+
