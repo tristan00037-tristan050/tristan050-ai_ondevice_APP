@@ -87,21 +87,25 @@ router.get(
 
     // Fail-Closed: Cross-tenant access blocked (unless superadmin)
     if (!isSuperAdmin(context) && requestedId !== context.tenant_id) {
-      // Audit deny
-      const { createAuditLog } = require('../audit/service');
-      createAuditLog({
-        tenant_id: context.tenant_id,
-        user_id: context.user_id,
-        action: 'read',
-        resource_type: 'tenant',
-        resource_id: requestedId,
-        success: false,
-        error_message: 'Cross-tenant access denied',
-        metadata: {
-          requested_tenant_id: requestedId,
-          caller_tenant_id: context.tenant_id,
-        },
-      });
+      // Audit DENY: cross-tenant access denied
+      const { auditDeny } = require('../audit/hooks');
+      try {
+        auditDeny(
+          req,
+          context,
+          'tenant:read',
+          'tenant',
+          requestedId,
+          'Cross-tenant access denied'
+        );
+      } catch (error: any) {
+        // Fail-Closed: audit write failure => request fails
+        return res.status(500).json({
+          error: 'Internal Server Error',
+          message: 'Audit logging failed',
+          reason_code: 'AUDIT_WRITE_FAILED',
+        });
+      }
 
       return res.status(403).json({
         error: 'Forbidden',
@@ -169,21 +173,25 @@ router.patch(
 
     // Fail-Closed: Cross-tenant access blocked (unless superadmin)
     if (!isSuperAdmin(context) && requestedId !== context.tenant_id) {
-      // Audit deny
-      const { createAuditLog } = require('../audit/service');
-      createAuditLog({
-        tenant_id: context.tenant_id,
-        user_id: context.user_id,
-        action: 'update',
-        resource_type: 'tenant',
-        resource_id: requestedId,
-        success: false,
-        error_message: 'Cross-tenant access denied',
-        metadata: {
-          requested_tenant_id: requestedId,
-          caller_tenant_id: context.tenant_id,
-        },
-      });
+      // Audit DENY: cross-tenant access denied
+      const { auditDeny } = require('../audit/hooks');
+      try {
+        auditDeny(
+          req,
+          context,
+          'tenant:write',
+          'tenant',
+          requestedId,
+          'Cross-tenant access denied'
+        );
+      } catch (error: any) {
+        // Fail-Closed: audit write failure => request fails
+        return res.status(500).json({
+          error: 'Internal Server Error',
+          message: 'Audit logging failed',
+          reason_code: 'AUDIT_WRITE_FAILED',
+        });
+      }
 
       return res.status(403).json({
         error: 'Forbidden',

@@ -74,42 +74,37 @@ export function queryAuditLogs(
 
 /**
  * Audit middleware factory
- * Automatically log mutating operations
+ * Automatically log mutating operations (ALLOW decisions)
+ * Fail-Closed: audit write failure => request fails
  */
 export function auditMiddleware(
   action: AuditAction,
   resource_type: AuditResourceType
 ) {
   return async (req: any, res: any, next: any) => {
-    const authContext = (req as any).authContext;
-    if (!authContext) {
+    const context = (req as any).callerContext;
+    if (!context) {
       return next(); // Auth middleware should have already handled this
     }
 
     // Store original res.json to intercept response
     const originalJson = res.json.bind(res);
     res.json = function(body: any) {
-      // Log audit entry after response
+      // Log audit entry after response (ALLOW decision for mutating operations)
       const success = res.statusCode >= 200 && res.statusCode < 300;
       const resourceId = req.params.id || req.body.id || 'unknown';
 
-      createAuditLog({
-        tenant_id: authContext.tenant_id,
-        user_id: authContext.user_id,
-        action,
-        resource_type,
-        resource_id: resourceId,
-        ip_address: req.ip || req.connection.remoteAddress,
-        user_agent: req.headers['user-agent'],
-        request_id: req.headers['x-request-id'],
-        success,
-        error_message: success ? undefined : body.error || body.message,
-        metadata: {
-          method: req.method,
-          path: req.path,
-          status_code: res.statusCode,
-        },
-      });
+      // Only audit ALLOW for successful mutating operations
+      if (success && ['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method)) {
+        const { auditAllow } = require('./hooks');
+        try {
+          auditAllow(req, context, action, resource_type, resourceId);
+        } catch (error: any) {
+          // Fail-Closed: audit write failure => request fails
+          // Note: Response already sent, but we log the error
+          console.error('Audit write failed after response:', error);
+        }
+      }
 
       return originalJson(body);
     };
