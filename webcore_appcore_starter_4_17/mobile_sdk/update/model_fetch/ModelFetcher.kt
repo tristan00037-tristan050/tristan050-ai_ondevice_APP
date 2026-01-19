@@ -1,164 +1,103 @@
 /**
  * Model Fetcher
- * Fetch model with ETag/TTL support
+ * Fetches ML models with ETag/TTL caching and attestation
  */
 
-package com.webcore.update.model
+package com.webcore.mobile.update.model
 
+import com.webcore.mobile.attestation.AttestationClient
+import com.webcore.mobile.attestation.AttestationReasonCodes
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class ModelFetchResult(
-    val success: Boolean,
-    val modelPath: String? = null,
-    val etag: String? = null,
-    val ttlSeconds: Long? = null,
-    val cached: Boolean = false,
-    val error: String? = null
-)
-
 /**
- * Model fetcher with ETag/TTL cache support
+ * Model fetch result
  */
-class ModelFetcher(
-    private val cacheDir: File,
-    private val defaultTtlSeconds: Long = 86400 // 24 hours
-) {
-    private val modelCacheDir = File(cacheDir, "models")
-    private val etagFile = File(cacheDir, "model_etag.txt")
-    private val ttlFile = File(cacheDir, "model_ttl.txt")
-
-    init {
-        modelCacheDir.mkdirs()
-    }
-
-    /**
-     * Fetch model from URL with ETag/TTL cache
-     */
-    fun fetch(url: String, modelId: String): ModelFetchResult {
-        try {
-            val cachedModelFile = File(modelCacheDir, "$modelId.bin")
-            val cachedEtagFile = File(modelCacheDir, "$modelId.etag")
-
-            // Check cache first
-            if (cachedModelFile.exists() && cachedEtagFile.exists()) {
-                val cachedEtag = cachedEtagFile.readText().trim()
-                val cachedTtl = if (ttlFile.exists()) ttlFile.readText().trim().toLongOrNull() ?: 0L else 0L
-                val cacheTime = cachedModelFile.lastModified()
-                val now = System.currentTimeMillis()
-                val ageSeconds = (now - cacheTime) / 1000
-
-                // Check if cache is still valid (TTL)
-                if (ageSeconds < cachedTtl) {
-                    // Cache hit - return cached model
-                    return ModelFetchResult(
-                        success = true,
-                        modelPath = cachedModelFile.absolutePath,
-                        etag = cachedEtag,
-                        ttlSeconds = cachedTtl - ageSeconds,
-                        cached = true
-                    )
-                }
-
-                // Cache expired - fetch with If-None-Match
-                val connection = URL(url).openConnection() as HttpURLConnection
-                connection.setRequestProperty("If-None-Match", cachedEtag)
-                connection.connectTimeout = 10000
-                connection.readTimeout = 30000
-
-                val responseCode = connection.responseCode
-
-                if (responseCode == HttpURLConnection.HTTP_NOT_MODIFIED) {
-                    // 304 Not Modified - cache is still valid
-                    val newTtl = connection.getHeaderField("Cache-Control")?.let { parseTtl(it) } ?: defaultTtlSeconds
-                    updateCache(cachedModelFile, cachedEtag, newTtl)
-                    return ModelFetchResult(
-                        success = true,
-                        modelPath = cachedModelFile.absolutePath,
-                        etag = cachedEtag,
-                        ttlSeconds = newTtl,
-                        cached = true
-                    )
-                }
-            }
-
-            // Fetch fresh model
-            val connection = URL(url).openConnection() as HttpURLConnection
-            connection.connectTimeout = 10000
-            connection.readTimeout = 30000
-
-            val responseCode = connection.responseCode
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                return ModelFetchResult(
-                    success = false,
-                    error = "HTTP $responseCode"
-                )
-            }
-
-            // Download to temporary file first
-            val tempFile = File(modelCacheDir, "$modelId.tmp")
-            connection.inputStream.use { input ->
-                tempFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-
-            val etag = connection.getHeaderField("ETag")?.removeSurrounding("\"")
-            val ttl = connection.getHeaderField("Cache-Control")?.let { parseTtl(it) } ?: defaultTtlSeconds
-
-            // Move temp file to final location (atomic)
-            val finalFile = File(modelCacheDir, "$modelId.bin")
-            tempFile.renameTo(finalFile)
-
-            // Update cache metadata
-            if (etag != null) {
-                cachedEtagFile.writeText(etag)
-            }
-            ttlFile.writeText(ttl.toString())
-
-            return ModelFetchResult(
-                success = true,
-                modelPath = finalFile.absolutePath,
-                etag = etag,
-                ttlSeconds = ttl,
-                cached = false
-            )
-        } catch (e: Exception) {
-            // Offline resilience: return cached model if available
-            val cachedModelFile = File(modelCacheDir, "$modelId.bin")
-            if (cachedModelFile.exists()) {
-                val cachedEtag = if (File(modelCacheDir, "$modelId.etag").exists()) {
-                    File(modelCacheDir, "$modelId.etag").readText().trim()
-                } else {
-                    null
-                }
-                return ModelFetchResult(
-                    success = true,
-                    modelPath = cachedModelFile.absolutePath,
-                    etag = cachedEtag,
-                    ttlSeconds = null,
-                    cached = true
-                )
-            }
-
-            return ModelFetchResult(
-                success = false,
-                error = e.message
-            )
-        }
-    }
-
-    private fun updateCache(modelFile: File, etag: String?, ttl: Long) {
-        if (etag != null) {
-            File(modelCacheDir, "${modelFile.nameWithoutExtension}.etag").writeText(etag)
-        }
-        ttlFile.writeText(ttl.toString())
-    }
-
-    private fun parseTtl(cacheControl: String): Long {
-        val maxAgeMatch = Regex("max-age=(\\d+)").find(cacheControl)
-        return maxAgeMatch?.groupValues?.get(1)?.toLongOrNull() ?: defaultTtlSeconds
-    }
+sealed class ModelFetchResult {
+    data class Success(val modelData: ByteArray, val etag: String?, val sha256: String?) : ModelFetchResult()
+    data class Failure(val reasonCode: String) : ModelFetchResult()
 }
 
+/**
+ * Model fetcher with attestation
+ * Fail-closed: if attestation fails, fetch is blocked
+ */
+class ModelFetcher(
+    private val baseUrl: String,
+    private val attestationClient: AttestationClient? = null
+) {
+    private var cachedEtag: String? = null
+    
+    /**
+     * Fetch model with attestation
+     * @param modelPath Path to model resource
+     * @param forceRefresh Force refresh (ignore cache)
+     * @return ModelFetchResult
+     */
+    suspend fun fetch(
+        modelPath: String,
+        forceRefresh: Boolean = false
+    ): ModelFetchResult = withContext(Dispatchers.IO) {
+        // Fail-closed: Obtain attestation token
+        val (attestationToken, attestationReason) = attestationClient?.getTokenForRequest()
+            ?: Pair(null, null)
+        
+        if (attestationToken == null && attestationClient != null) {
+            // Attestation required but not available
+            return@withContext ModelFetchResult.Failure(
+                attestationReason ?: AttestationReasonCodes.ATTESTATION_UNAVAILABLE
+            )
+        }
+        
+        try {
+            val url = URL("$baseUrl/$modelPath")
+            val connection = url.openConnection() as HttpURLConnection
+            
+            // Set headers
+            connection.setRequestProperty("Accept", "application/octet-stream")
+            connection.setRequestProperty("If-None-Match", if (forceRefresh) null else cachedEtag)
+            
+            // Attach attestation token if available
+            if (attestationToken != null) {
+                connection.setRequestProperty("X-Attestation-Token", attestationToken)
+            }
+            
+            connection.requestMethod = "GET"
+            connection.connect()
+            
+            when (connection.responseCode) {
+                200 -> {
+                    val etag = connection.getHeaderField("ETag")
+                    val sha256 = connection.getHeaderField("X-Model-SHA256")
+                    val modelData = connection.inputStream.readBytes()
+                    cachedEtag = etag
+                    ModelFetchResult.Success(modelData, etag, sha256)
+                }
+                304 -> {
+                    // Not modified (cache hit)
+                    ModelFetchResult.Success(ByteArray(0), cachedEtag, null)
+                }
+                else -> {
+                    ModelFetchResult.Failure("MODEL_FETCH_HTTP_ERROR_${connection.responseCode}")
+                }
+            }
+        } catch (e: Exception) {
+            ModelFetchResult.Failure("MODEL_FETCH_ERROR")
+        }
+    }
+    
+    /**
+     * Check if model fetch is allowed (attestation check)
+     * @return true if fetch is allowed, false otherwise
+     */
+    suspend fun isFetchAllowed(): Boolean {
+        return if (attestationClient != null) {
+            attestationClient.isAvailable()
+        } else {
+            true // No attestation required
+        }
+    }
+}
