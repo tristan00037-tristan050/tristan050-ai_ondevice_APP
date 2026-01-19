@@ -115,7 +115,7 @@ export class ConfigApiClient {
     tenantId: string
   ): Promise<ConfigReleaseResponse> {
     // First, create a new config version
-    const createVersionResponse = await this.request<{ version_id: string; version: number }>(
+    const createVersionResponse = await this.request<{ version: { id: string; version: number } }>(
       'POST',
       `/api/v1/configs/${environment}/canary:create-version`,
       {
@@ -127,16 +127,23 @@ export class ConfigApiClient {
     );
 
     // Then, release the version
-    return this.request<ConfigReleaseResponse>(
+    const releaseResponse = await this.request<{ release: any }>(
       'POST',
       `/api/v1/configs/${environment}/canary:release`,
       {
         config_type: 'canary',
         environment,
         tenant_id: tenantId,
-        version_id: createVersionResponse.version_id,
+        version_id: createVersionResponse.version.id,
       }
     );
+
+    return {
+      version: String(createVersionResponse.version.version),
+      environment,
+      released_at: releaseResponse.release.released_at,
+      released_by: releaseResponse.release.released_by,
+    };
   }
 
   /**
@@ -154,12 +161,15 @@ export class ConfigApiClient {
         config_type: 'canary',
         environment,
         tenant_id: tenantId,
-        to_version_id: targetVersionId || '', // If empty, rollback to previous
+        to_version_id: targetVersionId || '', // If empty, backend finds previous version
       }
     );
 
+    // Get version number from version_id
+    const version = await this.getConfig(environment);
+    
     return {
-      version: rollbackResponse.release.version_id, // Use version_id as version string
+      version: String(version.version),
       environment,
       rolled_back_at: rollbackResponse.release.released_at,
       rolled_back_by: rollbackResponse.release.released_by,
