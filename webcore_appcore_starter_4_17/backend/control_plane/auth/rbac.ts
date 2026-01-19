@@ -50,7 +50,7 @@ export function hasPermissionFromContext(
 
 /**
  * Require permission middleware factory
- * Fail-Closed: no permission => 403
+ * Fail-Closed: no permission => 403 + audit DENY
  */
 export function requirePermission(permission: Permission | string) {
   return async (
@@ -70,21 +70,28 @@ export function requirePermission(permission: Permission | string) {
     const hasAccess = hasPermissionFromContext(context, permission as string);
 
     if (!hasAccess) {
-      // Audit deny
-      const { createAuditLog } = require('../audit/service');
-      createAuditLog({
-        tenant_id: context.tenant_id,
-        user_id: context.user_id,
-        action: 'permission_denied',
-        resource_type: 'tenant',
-        resource_id: 'unknown',
-        success: false,
-        error_message: `Required permission: ${permission}`,
-        metadata: {
-          required_permission: permission,
-          caller_permissions: context.permissions,
-        },
-      });
+      // Audit DENY: permission check failed
+      const { auditDeny } = require('../audit/hooks');
+      const resourceType = inferResourceType(req.path);
+      const resourceId = req.params.id || 'unknown';
+
+      try {
+        auditDeny(
+          req,
+          context,
+          permission as string,
+          resourceType,
+          resourceId,
+          `Required permission: ${permission}`
+        );
+      } catch (error: any) {
+        // Fail-Closed: audit write failure => request fails
+        return res.status(500).json({
+          error: 'Internal Server Error',
+          message: 'Audit logging failed',
+          reason_code: 'AUDIT_WRITE_FAILED',
+        });
+      }
 
       return res.status(403).json({
         error: 'Forbidden',
@@ -95,5 +102,18 @@ export function requirePermission(permission: Permission | string) {
 
     next();
   };
+}
+
+/**
+ * Infer resource type from path
+ */
+function inferResourceType(path: string): 'tenant' | 'project' | 'environment' | 'user' | 'role' | 'audit_log' {
+  if (path.includes('/tenants')) return 'tenant';
+  if (path.includes('/projects')) return 'project';
+  if (path.includes('/environments')) return 'environment';
+  if (path.includes('/users')) return 'user';
+  if (path.includes('/roles')) return 'role';
+  if (path.includes('/audit')) return 'audit_log';
+  return 'tenant'; // Default
 }
 

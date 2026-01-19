@@ -58,22 +58,25 @@ router.get(
 
     // Fail-Closed: Cross-tenant access blocked
     if (role.tenant_id !== context.tenant_id) {
-      // Audit deny
-      const { createAuditLog } = require('../audit/service');
-      createAuditLog({
-        tenant_id: context.tenant_id,
-        user_id: context.user_id,
-        action: 'read',
-        resource_type: 'role',
-        resource_id: requestedId,
-        success: false,
-        error_message: 'Cross-tenant access denied',
-        metadata: {
-          requested_role_id: requestedId,
-          resource_tenant_id: role.tenant_id,
-          caller_tenant_id: context.tenant_id,
-        },
-      });
+      // Audit DENY: cross-tenant access denied
+      const { auditDeny } = require('../audit/hooks');
+      try {
+        auditDeny(
+          req,
+          context,
+          'role:read',
+          'role',
+          requestedId,
+          'Cross-tenant access denied'
+        );
+      } catch (error: any) {
+        // Fail-Closed: audit write failure => request fails
+        return res.status(500).json({
+          error: 'Internal Server Error',
+          message: 'Audit logging failed',
+          reason_code: 'AUDIT_WRITE_FAILED',
+        });
+      }
 
       return res.status(403).json({
         error: 'Forbidden',
@@ -105,21 +108,25 @@ router.post(
 
     // Fail-Closed: Can only create roles in own tenant
     if (body.tenant_id !== context.tenant_id) {
-      // Audit deny
-      const { createAuditLog } = require('../audit/service');
-      createAuditLog({
-        tenant_id: context.tenant_id,
-        user_id: context.user_id,
-        action: 'create',
-        resource_type: 'role',
-        resource_id: 'new',
-        success: false,
-        error_message: 'Cross-tenant access denied',
-        metadata: {
-          requested_tenant_id: body.tenant_id,
-          caller_tenant_id: context.tenant_id,
-        },
-      });
+      // Audit DENY: cross-tenant access denied
+      const { auditDeny } = require('../audit/hooks');
+      try {
+        auditDeny(
+          req,
+          context,
+          'role:write',
+          'role',
+          'new',
+          'Cross-tenant access denied'
+        );
+      } catch (error: any) {
+        // Fail-Closed: audit write failure => request fails
+        return res.status(500).json({
+          error: 'Internal Server Error',
+          message: 'Audit logging failed',
+          reason_code: 'AUDIT_WRITE_FAILED',
+        });
+      }
 
       return res.status(403).json({
         error: 'Forbidden',
@@ -167,22 +174,25 @@ router.patch(
 
     // Fail-Closed: Cross-tenant access blocked
     if (role.tenant_id !== context.tenant_id) {
-      // Audit deny
-      const { createAuditLog } = require('../audit/service');
-      createAuditLog({
-        tenant_id: context.tenant_id,
-        user_id: context.user_id,
-        action: 'update',
-        resource_type: 'role',
-        resource_id: requestedId,
-        success: false,
-        error_message: 'Cross-tenant access denied',
-        metadata: {
-          requested_role_id: requestedId,
-          resource_tenant_id: role.tenant_id,
-          caller_tenant_id: context.tenant_id,
-        },
-      });
+      // Audit DENY: cross-tenant access denied
+      const { auditDeny } = require('../audit/hooks');
+      try {
+        auditDeny(
+          req,
+          context,
+          'role:write',
+          'role',
+          requestedId,
+          'Cross-tenant access denied'
+        );
+      } catch (error: any) {
+        // Fail-Closed: audit write failure => request fails
+        return res.status(500).json({
+          error: 'Internal Server Error',
+          message: 'Audit logging failed',
+          reason_code: 'AUDIT_WRITE_FAILED',
+        });
+      }
 
       return res.status(403).json({
         error: 'Forbidden',
