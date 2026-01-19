@@ -8,8 +8,8 @@ on:
       - 'docs/ops/contracts/**'
       - 'webcore_appcore_starter_4_17/backend/control_plane/**'
       - 'webcore_appcore_starter_4_17/scripts/verify/**'
-  merge_group:
-  workflow_dispatch:
+  merge_group: {}
+  workflow_dispatch: {}
 
 jobs:
   verify_control_plane:
@@ -45,7 +45,6 @@ jobs:
           fi
 
   guard_no_unconditional_ok:
-    name: Guard: No Unconditional OK in Tests
     name: "Guard: No Unconditional OK in Tests"
     runs-on: ubuntu-latest
     steps:
