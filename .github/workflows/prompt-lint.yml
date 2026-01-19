@@ -12,34 +12,63 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prompt lint (capture log)
-        env:
-          PROMPT_LINT_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PROMPT_LINT_MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
-          PROMPT_LINT_PUSH_BEFORE: ${{ github.event.before }}
-          PROMPT_LINT_HEAD_SHA: ${{ github.sha }}
+      - name: Resolve BASE/HEAD sha (fail-closed)
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess, sys
 
-          # Resolve BASE_SHA from event type (fail-closed)
-          if [ -n "${PROMPT_LINT_PR_BASE_SHA:-}" ]; then
-            export PROMPT_LINT_BASE_SHA="${PROMPT_LINT_PR_BASE_SHA}"
-          elif [ -n "${PROMPT_LINT_MERGE_GROUP_BASE_SHA:-}" ]; then
-            export PROMPT_LINT_BASE_SHA="${PROMPT_LINT_MERGE_GROUP_BASE_SHA}"
-          elif [ -n "${PROMPT_LINT_PUSH_BEFORE:-}" ]; then
-            export PROMPT_LINT_BASE_SHA="${PROMPT_LINT_PUSH_BEFORE}"
-          else
-            echo "FAIL: Could not determine BASE_SHA from event (fail-closed)"
-            exit 1
-          fi
+          event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+          event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+          if not event_path:
+            print("FAIL: GITHUB_EVENT_PATH missing")
+            sys.exit(1)
 
-          export PROMPT_LINT_HEAD_SHA="${PROMPT_LINT_HEAD_SHA}"
+          with open(event_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
+          def die(msg):
+            print(f"FAIL: {msg}")
+            sys.exit(1)
+
+          base = head = None
+
+          if event_name == "pull_request":
+            pr = data.get("pull_request", {})
+            base = pr.get("base", {}).get("sha")
+            head = pr.get("head", {}).get("sha")
+
+          elif event_name == "merge_group":
+            mg = data.get("merge_group", {})
+            base = mg.get("base_sha")
+            head = os.environ.get("GITHUB_SHA")
+
+          elif event_name == "workflow_dispatch":
+            base = subprocess.check_output(["git", "rev-parse", "HEAD~1"], text=True).strip()
+            head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+
+          else:
+            die(f"unsupported event_name={event_name}")
+
+          if not base or not head:
+            die(f"could not resolve base/head sha (event_name={event_name})")
+
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+            env.write(f"PROMPT_LINT_BASE_SHA={base}\n")
+            env.write(f"PROMPT_LINT_HEAD_SHA={head}\n")
+
+          print(f"PROMPT_LINT_BASE_SHA={base}")
+          print(f"PROMPT_LINT_HEAD_SHA={head}")
+          PY
+
+      - name: Prompt lint (capture log)
+        run: |
+          set -euo pipefail
           LOG="/tmp/verify_prompt_quality_${GITHUB_RUN_ID}.log"
           echo "LOG=$LOG"
           bash scripts/ops/verify_prompt_quality.sh 2>&1 | tee "$LOG"
 
-      - name: Show log on failure
+      - name: Show log tail (always)
         if: always()
         run: |
           set -euo pipefail
