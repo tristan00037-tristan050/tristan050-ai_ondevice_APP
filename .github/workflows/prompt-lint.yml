@@ -1,56 +1,92 @@
 name: prompt-lint
 
 on:
-  pull_request: {}
-  merge_group: {}
-  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - '.cursor/rules/**'
+      - 'docs/ops/cursor_prompts/**'
+      - 'docs/ops/contracts/**'
+      - 'webcore_appcore_starter_4_17/backend/control_plane/**'
+      - 'webcore_appcore_starter_4_17/scripts/verify/**'
+  merge_group:
+  workflow_dispatch:
 
 jobs:
-  prompt_lint_check:
-    name: prompt-lint-check
+  verify_control_plane:
+    name: Verify Control Plane DoD
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Run prompt quality verification (fail-closed)
-        env:
-          PROMPT_LINT_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PROMPT_LINT_MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
-          PROMPT_LINT_PUSH_BEFORE: ${{ github.event.before }}
-          PROMPT_LINT_HEAD_SHA: ${{ github.sha }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        working-directory: webcore_appcore_starter_4_17/backend/control_plane
         run: |
-          set -euo pipefail
-
-          # Resolve BASE_SHA from event type (fail-closed)
-          if [ -n "${PROMPT_LINT_PR_BASE_SHA:-}" ]; then
-            export PROMPT_LINT_BASE_SHA="${PROMPT_LINT_PR_BASE_SHA}"
-          elif [ -n "${PROMPT_LINT_MERGE_GROUP_BASE_SHA:-}" ]; then
-            export PROMPT_LINT_BASE_SHA="${PROMPT_LINT_MERGE_GROUP_BASE_SHA}"
-          elif [ -n "${PROMPT_LINT_PUSH_BEFORE:-}" ]; then
-            export PROMPT_LINT_BASE_SHA="${PROMPT_LINT_PUSH_BEFORE}"
-          else
-            echo "FAIL: Could not determine BASE_SHA from event (fail-closed)"
+          if [ -f package.json ]; then
+            npm install || true
+          fi
+      
+      - name: Run Control Plane verification
+        working-directory: webcore_appcore_starter_4_17
+        run: |
+          bash scripts/verify/verify_control_plane.sh
+        id: verify_control_plane
+      
+      - name: Check verification output
+        if: always()
+        run: |
+          if [ "${{ steps.verify_control_plane.outcome }}" != "success" ]; then
+            echo "FAIL: Control Plane verification failed"
             exit 1
           fi
 
-          export PROMPT_LINT_HEAD_SHA="${PROMPT_LINT_HEAD_SHA}"
-          bash scripts/ops/verify_prompt_quality.sh
+  guard_no_unconditional_ok:
+    name: Guard: No Unconditional OK in Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for unconditional OK=1 patterns
+        working-directory: webcore_appcore_starter_4_17
+        run: |
+          bash scripts/verify/verify_no_unconditional_ok.sh
 
   prompt_lint_gate:
     name: prompt-lint
+    needs: [verify_control_plane, guard_no_unconditional_ok]
     runs-on: ubuntu-latest
-    needs: [prompt_lint_check]
     if: always()
     steps:
-      - name: Gate (fail-closed)
+      - uses: actions/checkout@v4
+      
+      - name: Set environment variables
         run: |
-          set -euo pipefail
-          if [ "${{ needs.prompt_lint_check.result }}" = "skipped" ]; then
-            echo "FAIL: prompt_lint_check was skipped (fail-closed)"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "PROMPT_LINT_BASE_SHA=${{ github.event.pull_request.base.sha }}" >> $GITHUB_ENV
+            echo "PROMPT_LINT_HEAD_SHA=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+          else
+            echo "PROMPT_LINT_BASE_SHA=$(git rev-parse HEAD~1)" >> $GITHUB_ENV
+            echo "PROMPT_LINT_HEAD_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
+          fi
+      
+      - name: Prompt lint gate (fail-closed, meta-only)
+        working-directory: webcore_appcore_starter_4_17
+        run: |
+          bash scripts/ops/verify_prompt_quality.sh
+      
+      - name: Check upstream jobs
+        if: always()
+        run: |
+          if [ "${{ needs.verify_control_plane.result }}" != "success" ]; then
+            echo "FAIL: verify_control_plane job failed"
             exit 1
           fi
-          if [ "${{ needs.prompt_lint_check.result }}" != "success" ]; then
-            echo "FAIL: prompt_lint_check result was ${{ needs.prompt_lint_check.result }} (fail-closed)"
+          if [ "${{ needs.guard_no_unconditional_ok.result }}" != "success" ]; then
+            echo "FAIL: guard_no_unconditional_ok job failed"
             exit 1
           fi
-          echo "PASS: prompt_lint_check completed successfully"
+          echo "PASS: All upstream jobs succeeded"

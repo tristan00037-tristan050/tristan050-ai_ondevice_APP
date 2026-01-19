@@ -83,7 +83,9 @@ describe('RBAC Default Deny Tests', () => {
 });
 
 // Output-based proof
+// NOTE: OK keys are emitted by verification scripts (scripts/verify/verify_control_plane.sh)
+// Test files should NOT emit OK keys directly
 if (require.main === module) {
-  console.log('RBAC_DEFAULT_DENY_OK=1');
+  // Tests are defined above
 }
 
