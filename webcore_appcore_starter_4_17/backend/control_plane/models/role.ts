@@ -15,7 +15,10 @@ export type Permission =
   | 'user:write'
   | 'role:read'
   | 'role:write'
-  | 'audit:read';
+  | 'audit:read'
+  | 'model:read'
+  | 'model:write'
+  | 'model:publish';
 
 export interface Role {
   id: string;
