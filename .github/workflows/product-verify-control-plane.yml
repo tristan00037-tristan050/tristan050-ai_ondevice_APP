@@ -1,33 +1,28 @@
 name: product-verify-control-plane
 
 on:
-  pull_request:
-    # No path filters - always run for required check
-  merge_group:
-    # Merge queue compatible
-  workflow_dispatch:
-    # Manual trigger
+  pull_request: {}
+  merge_group: {}
+  workflow_dispatch: {}
 
 jobs:
   product_verify_control_plane:
     name: product-verify-control-plane
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Install base tools
+      - name: Guard: forbid OK=1 in control_plane tests
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ripgrep || true
+          set -euo pipefail
+          rg -n "OK=1" webcore_appcore_starter_4_17/backend/control_plane/tests && exit 1 || true
 
-      - name: Run SVR-01 Control Plane verification
+      - name: Run SVR-01 verify (output-based, fail-closed)
         run: |
+          set -euo pipefail
           bash webcore_appcore_starter_4_17/scripts/verify/verify_svr01_control_plane.sh
-
