@@ -54,31 +54,48 @@ export function hasPermissionFromContext(
  */
 export function requirePermission(permission: Permission | string) {
   return async (
-    req: any, // Express Request with callerContext
+    req: any, // Express Request with authContext
     res: any, // Express Response
     next: any // Express NextFunction
   ) => {
-    const context = (req as any).callerContext;
-    if (!context) {
+    // Read ONLY req.authContext (not callerContext)
+    const authContext = (req as any).authContext;
+    if (!authContext) {
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Authentication required',
       });
     }
 
-    // Use caller context permissions (single source of truth)
-    const hasAccess = hasPermissionFromContext(context, permission as string);
+    // Get userRoles from req (set by auth middleware)
+    const userRoles = (req as any).userRoles || [];
+    
+    // Check permission using authContext and userRoles
+    const check = {
+      permission: permission as Permission,
+      resource_tenant_id: authContext.tenant_id,
+    };
+    const hasAccess = hasPermission(authContext, check, userRoles);
 
     if (!hasAccess) {
       // Audit DENY: permission check failed
       const { auditDeny } = require('../audit/hooks');
       const resourceType = inferResourceType(req.path);
       const resourceId = req.params.id || 'unknown';
+      
+      // Create caller context for audit (from authContext)
+      const callerContext = {
+        tenant_id: authContext.tenant_id,
+        user_id: authContext.user_id,
+        roles: authContext.roles || [],
+        permissions: userRoles.flatMap((r: any) => r.permissions || []),
+        is_super_admin: false,
+      };
 
       try {
         auditDeny(
           req,
-          context,
+          callerContext,
           permission as string,
           resourceType,
           resourceId,
