@@ -80,6 +80,12 @@ describe('RBAC Tests', () => {
       const req: any = {
         authContext,
         userRoles: [{ permissions: ['user:read'] as Permission[] }],
+        path: '/api/v1/users',
+        params: {},
+        method: 'GET',
+        ip: '127.0.0.1',
+        connection: { remoteAddress: '127.0.0.1' },
+        headers: {},
       };
       const res: any = {
         status: jest.fn().mockReturnThis(),

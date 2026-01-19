@@ -92,7 +92,10 @@ export function requirePermission(permission: Permission | string) {
         is_super_admin: false,
       };
 
+      // Audit DENY: permission check failed
+      // Note: auditDeny may throw, but we catch and continue with 403
       try {
+        const { auditDeny } = require('../audit/hooks');
         auditDeny(
           req,
           callerContext,

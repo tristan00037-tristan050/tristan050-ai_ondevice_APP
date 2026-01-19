@@ -10,9 +10,25 @@ let auditLogs: AuditLog[] = [];
 
 /**
  * Deep clone helper for immutability
+ * Preserves Date objects by converting them to ISO strings and back
  */
 function deepClone<T>(x: T): T {
-  return JSON.parse(JSON.stringify(x));
+  if (x === null || typeof x !== 'object') {
+    return x;
+  }
+  if (x instanceof Date) {
+    return new Date(x.getTime()) as T;
+  }
+  if (Array.isArray(x)) {
+    return x.map(item => deepClone(item)) as T;
+  }
+  const cloned = {} as T;
+  for (const key in x) {
+    if (Object.prototype.hasOwnProperty.call(x, key)) {
+      (cloned as any)[key] = deepClone((x as any)[key]);
+    }
+  }
+  return cloned;
 }
 
 /**
