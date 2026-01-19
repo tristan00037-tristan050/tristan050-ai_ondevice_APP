@@ -72,8 +72,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Run prompt quality verification (fail-closed)
         env:
           PROMPT_LINT_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PROMPT_LINT_MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
@@ -95,7 +93,20 @@ jobs:
           fi
 
           export PROMPT_LINT_HEAD_SHA="${PROMPT_LINT_HEAD_SHA}"
-          bash scripts/ops/verify_prompt_quality.sh
+
+          LOG="/tmp/verify_prompt_quality_${GITHUB_RUN_ID}.log"
+          echo "LOG=$LOG"
+          bash scripts/ops/verify_prompt_quality.sh 2>&1 | tee "$LOG"
+
+      - name: Show log on failure
+        if: always()
+        run: |
+          set -euo pipefail
+          LOG="/tmp/verify_prompt_quality_${GITHUB_RUN_ID}.log"
+          if [ -f "$LOG" ]; then
+            echo "---- last 200 lines ----"
+            tail -n 200 "$LOG" || true
+          fi
 
   prompt_lint_gate:
     name: prompt-lint
