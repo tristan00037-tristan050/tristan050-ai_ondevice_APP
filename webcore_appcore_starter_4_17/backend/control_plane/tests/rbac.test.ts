@@ -3,85 +3,9 @@
  * Verify Fail-Closed behavior: default deny, insufficient permission => 403
  */
 
-// Simple test runner (no Jest dependency)
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    console.log(`PASS: ${name}`);
-    return true;
-  } catch (error: any) {
-    console.error(`FAIL: ${name}: ${error.message}`);
-    return false;
-  }
-}
-
-function expect(actual: any) {
-  return {
-    toBe: (expected: any) => {
-      if (actual !== expected) {
-        throw new Error(`Expected ${expected}, got ${actual}`);
-      }
-    },
-    toBeInstanceOf: (expected: any) => {
-      if (!(actual instanceof expected)) {
-        throw new Error(`Expected instance of ${expected.name}, got ${typeof actual}`);
-      }
-    },
-    toBeDefined: () => {
-      if (actual === undefined) {
-        throw new Error('Expected defined, got undefined');
-      }
-    },
-    toEqual: (expected: any) => {
-      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-        throw new Error(`Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
-      }
-    },
-  };
-}
-
-// Mock jest functions
-const jest = {
-  fn: () => {
-    const calls: any[] = [];
-    const fn = (...args: any[]) => {
-      calls.push(args);
-      return fn;
-    };
-    (fn as any).mockReturnThis = () => fn;
-    (fn as any).mockReturnValue = (value: any) => {
-      const newFn = (...args: any[]) => {
-        calls.push(args);
-        return value;
-      };
-      (newFn as any).mockReturnThis = () => newFn;
-      (newFn as any).toHaveBeenCalledWith = (...expectedArgs: any[]) => {
-        return calls.some(call => JSON.stringify(call) === JSON.stringify(expectedArgs));
-      };
-      (newFn as any).toHaveBeenCalled = () => calls.length > 0;
-      (newFn as any).not = {
-        toHaveBeenCalled: () => calls.length === 0,
-      };
-      return newFn;
-    };
-    (fn as any).toHaveBeenCalledWith = (...expectedArgs: any[]) => {
-      return calls.some(call => JSON.stringify(call) === JSON.stringify(expectedArgs));
-    };
-    (fn as any).toHaveBeenCalled = () => calls.length > 0;
-    (fn as any).not = {
-      toHaveBeenCalled: () => calls.length === 0,
-    };
-    return fn;
-  },
-};
-
 import { hasPermission, requirePermission } from '../auth/rbac';
 import { AuthContext } from '../auth/oidc';
 import { Permission } from '../models/role';
-
-function describe(name: string, fn: () => void) {
-  fn();
-}
 
 describe('RBAC Tests', () => {
   const authContext: AuthContext = {
@@ -189,9 +113,3 @@ describe('RBAC Tests', () => {
     });
   });
 });
-
-// Output-based proof
-if (require.main === module) {
-  // NOTE: OK keys are emitted by verification scripts, not test files
-}
-

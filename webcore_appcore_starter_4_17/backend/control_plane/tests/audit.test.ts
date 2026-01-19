@@ -3,56 +3,6 @@
  * Verify immutable append-only behavior
  */
 
-// Simple test runner (no Jest dependency)
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    console.log(`PASS: ${name}`);
-    return true;
-  } catch (error: any) {
-    console.error(`FAIL: ${name}: ${error.message}`);
-    return false;
-  }
-}
-
-function expect(actual: any) {
-  return {
-    toBe: (expected: any) => {
-      if (actual !== expected) {
-        throw new Error(`Expected ${expected}, got ${actual}`);
-      }
-    },
-    toBeInstanceOf: (expected: any) => {
-      if (!(actual instanceof expected)) {
-        throw new Error(`Expected instance of ${expected.name}, got ${typeof actual}`);
-      }
-    },
-    toBeDefined: () => {
-      if (actual === undefined) {
-        throw new Error('Expected defined, got undefined');
-      }
-    },
-    toEqual: (expected: any) => {
-      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-        throw new Error(`Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
-      }
-    },
-    toBe: (expected: any) => {
-      if (actual !== expected) {
-        throw new Error(`Expected ${expected}, got ${actual}`);
-      }
-    },
-  };
-}
-
-function describe(name: string, fn: () => void) {
-  fn();
-}
-
-function beforeEach(fn: () => void) {
-  fn();
-}
-
 import { createAuditLog, queryAuditLogs, clearAuditLogs } from '../audit/service';
 import { CreateAuditLogRequest } from '../models/audit';
 
@@ -160,9 +110,3 @@ describe('Audit Tests', () => {
     expect(found?.created_at).toEqual(originalCreatedAt);
   });
 });
-
-// Output-based proof
-if (require.main === module) {
-  // NOTE: OK keys are emitted by verification scripts, not test files
-}
-
