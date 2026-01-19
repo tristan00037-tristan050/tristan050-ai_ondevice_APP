@@ -17,12 +17,18 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Guard: forbid OK=1 in control_plane tests
+      - name: Install ripgrep
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: "Guard: forbid OK=1 in control_plane tests"
         run: |
           set -euo pipefail
           rg -n "OK=1" webcore_appcore_starter_4_17/backend/control_plane/tests && exit 1 || true
 
-      - name: Run SVR-01 verify (output-based, fail-closed)
+      - name: Run SVR-01 verify
         run: |
           set -euo pipefail
           bash webcore_appcore_starter_4_17/scripts/verify/verify_svr01_control_plane.sh
