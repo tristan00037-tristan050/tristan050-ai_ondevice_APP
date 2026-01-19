@@ -192,6 +192,6 @@ describe('RBAC Tests', () => {
 
 // Output-based proof
 if (require.main === module) {
-  console.log('RBAC_DENY_OK=1');
+  // NOTE: OK keys are emitted by verification scripts, not test files
 }
 
