@@ -24,6 +24,7 @@ jobs:
           sudo apt-get install -y ripgrep
 
       - name: "Guard: forbid OK=1 in control_plane tests"
+        shell: bash
         run: |
           set -euo pipefail
           if rg -n "OK=1" webcore_appcore_starter_4_17/backend/control_plane/tests; then
