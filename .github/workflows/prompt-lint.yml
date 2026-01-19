@@ -1,15 +1,9 @@
 name: prompt-lint
 
 on:
-  pull_request:
-    paths:
-      - '.cursor/rules/**'
-      - 'docs/ops/cursor_prompts/**'
-      - 'docs/ops/contracts/**'
-      - 'webcore_appcore_starter_4_17/backend/control_plane/**'
-      - 'webcore_appcore_starter_4_17/scripts/verify/**'
-  merge_group:
-  workflow_dispatch:
+  pull_request: {}
+  merge_group: {}
+  workflow_dispatch: {}
 
 jobs:
   verify_control_plane:
@@ -17,43 +11,46 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      
+          node-version: "20"
+
       - name: Install dependencies
         working-directory: webcore_appcore_starter_4_17/backend/control_plane
         run: |
+          set -euo pipefail
           if [ -f package.json ]; then
             npm install || true
           fi
-      
+
       - name: Run Control Plane verification
+        id: verify_control_plane
         working-directory: webcore_appcore_starter_4_17
         run: |
+          set -euo pipefail
           bash scripts/verify/verify_control_plane.sh
-        id: verify_control_plane
-      
+
       - name: Check verification output
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ steps.verify_control_plane.outcome }}" != "success" ]; then
             echo "FAIL: Control Plane verification failed"
             exit 1
           fi
 
   guard_no_unconditional_ok:
-    name: Guard: No Unconditional OK in Tests
     name: "Guard: No Unconditional OK in Tests"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Check for unconditional OK=1 patterns
         working-directory: webcore_appcore_starter_4_17
         run: |
+          set -euo pipefail
           bash scripts/verify/verify_no_unconditional_ok.sh
 
   prompt_lint_gate:
@@ -63,25 +60,34 @@ jobs:
     if: always()
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set environment variables
         run: |
+          set -euo pipefail
+
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "PROMPT_LINT_BASE_SHA=${{ github.event.pull_request.base.sha }}" >> $GITHUB_ENV
-            echo "PROMPT_LINT_HEAD_SHA=${{ github.event.pull_request.head.sha }}" >> $GITHUB_ENV
+            echo "PROMPT_LINT_BASE_SHA=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
+            echo "PROMPT_LINT_HEAD_SHA=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"
+
+          elif [ "${{ github.event_name }}" = "merge_group" ]; then
+            echo "PROMPT_LINT_BASE_SHA=${{ github.event.merge_group.base_sha }}" >> "$GITHUB_ENV"
+            echo "PROMPT_LINT_HEAD_SHA=${{ github.sha }}" >> "$GITHUB_ENV"
+
           else
-            echo "PROMPT_LINT_BASE_SHA=$(git rev-parse HEAD~1)" >> $GITHUB_ENV
-            echo "PROMPT_LINT_HEAD_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
+            echo "PROMPT_LINT_BASE_SHA=$(git rev-parse HEAD~1)" >> "$GITHUB_ENV"
+            echo "PROMPT_LINT_HEAD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           fi
-      
+
       - name: Prompt lint gate (fail-closed, meta-only)
         working-directory: webcore_appcore_starter_4_17
         run: |
+          set -euo pipefail
           bash scripts/ops/verify_prompt_quality.sh
-      
+
       - name: Check upstream jobs
         if: always()
         run: |
+          set -euo pipefail
           if [ "${{ needs.verify_control_plane.result }}" != "success" ]; then
             echo "FAIL: verify_control_plane job failed"
             exit 1
