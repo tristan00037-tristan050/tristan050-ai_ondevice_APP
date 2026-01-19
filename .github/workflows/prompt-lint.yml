@@ -46,6 +46,7 @@ jobs:
 
   guard_no_unconditional_ok:
     name: Guard: No Unconditional OK in Tests
+    name: "Guard: No Unconditional OK in Tests"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
