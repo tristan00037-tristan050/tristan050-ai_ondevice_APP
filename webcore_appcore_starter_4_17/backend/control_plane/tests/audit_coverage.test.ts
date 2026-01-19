@@ -8,58 +8,6 @@ import { auditDeny, auditAllow, getRequestId } from '../audit/hooks';
 import { CallerContext } from '../services/auth_context';
 import { Request } from 'express';
 
-// Simple test runner
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    console.log(`PASS: ${name}`);
-    return true;
-  } catch (error: any) {
-    console.error(`FAIL: ${name}: ${error.message}`);
-    return false;
-  }
-}
-
-function expect(actual: any) {
-  return {
-    toBe: (expected: any) => {
-      if (actual !== expected) {
-        throw new Error(`Expected ${expected}, got ${actual}`);
-      }
-    },
-    not: {
-      toBe: (expected: any) => {
-        if (actual === expected) {
-          throw new Error(`Expected not ${expected}, got ${actual}`);
-        }
-      },
-      toBeNull: () => {
-        if (actual === null) {
-          throw new Error('Expected not null, got null');
-        }
-      },
-    },
-    toContain: (expected: string) => {
-      if (!String(actual).includes(expected)) {
-        throw new Error(`Expected ${actual} to contain ${expected}`);
-      }
-    },
-    toHaveLength: (expected: number) => {
-      if (actual.length !== expected) {
-        throw new Error(`Expected length ${expected}, got ${actual.length}`);
-      }
-    },
-  };
-}
-
-function describe(name: string, fn: () => void) {
-  fn();
-}
-
-function beforeEach(fn: () => void) {
-  fn();
-}
-
 describe('Audit Coverage Tests', () => {
   beforeEach(() => {
     clearAuditLogs();
@@ -232,11 +180,3 @@ describe('Audit Coverage Tests', () => {
     }
   });
 });
-
-// Output-based proof
-// NOTE: OK keys are emitted by verification scripts (scripts/verify/verify_svr01_control_plane.sh)
-// Test files should NOT emit OK keys directly
-if (require.main === module) {
-  // Tests are defined above and run via describe/it calls
-}
-

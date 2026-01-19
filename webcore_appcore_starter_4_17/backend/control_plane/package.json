@@ -4,8 +4,7 @@
   "description": "Multi-tenant IAM foundation: Tenant/Project/Environment + RBAC + OIDC auth + immutable AuditLog",
   "main": "index.ts",
   "scripts": {
-    "test": "jest",
-    "test:integration": "ts-node tests/integration.test.ts"
+    "test": "jest -c jest.config.cjs"
   },
   "dependencies": {
     "express": "^4.18.2",
