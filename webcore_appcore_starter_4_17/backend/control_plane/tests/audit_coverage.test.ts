@@ -234,18 +234,9 @@ describe('Audit Coverage Tests', () => {
 });
 
 // Output-based proof
+// NOTE: OK keys are emitted by verification scripts (scripts/verify/verify_svr01_control_plane.sh)
+// Test files should NOT emit OK keys directly
 if (require.main === module) {
-  let allPassed = true;
-
-  try {
-    console.log('AUDIT_DENY_COVERAGE_OK=1');
-    console.log('AUDIT_ALLOW_COVERAGE_OK=1');
-    console.log('AUDIT_APPEND_ONLY_OK=1');
-  } catch (e: any) {
-    console.error(`FAIL: ${e.message}`);
-    allPassed = false;
-  }
-
-  process.exit(allPassed ? 0 : 1);
+  // Tests are defined above and run via describe/it calls
 }
 

@@ -211,22 +211,9 @@ describe('Tenant Isolation Hardening Tests', () => {
 });
 
 // Output-based proof
+// NOTE: OK keys are emitted by verification scripts (scripts/verify/verify_svr01_control_plane.sh)
+// Test files should NOT emit OK keys directly
 if (require.main === module) {
-  let allPassed = true;
-
-  try {
-    // Run tests
-    describe('Tenant Isolation Hardening', () => {
-      // Tests are defined above and run via describe/it calls
-    });
-    
-    console.log('TENANT_ISOLATION_OK=1');
-    console.log('RBAC_DEFAULT_DENY_OK=1');
-  } catch (e: any) {
-    console.error(`FAIL: ${e.message}`);
-    allPassed = false;
-  }
-
-  process.exit(allPassed ? 0 : 1);
+  // Tests are defined above and run via describe/it calls
 }
 

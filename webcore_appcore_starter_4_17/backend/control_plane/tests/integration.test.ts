@@ -8,9 +8,9 @@ import './audit.test';
 import './tenant_isolation.test';
 
 // Output-based proof
+// NOTE: OK keys are emitted by verification scripts (scripts/verify/verify_svr01_control_plane.sh)
+// Test files should NOT emit OK keys directly
 if (require.main === module) {
-  console.log('RBAC_DENY_OK=1');
-  console.log('AUDIT_APPEND_ONLY_OK=1');
-  console.log('TENANT_ISOLATION_OK=1');
+  // Tests are defined above and run via describe/it calls
 }
 
