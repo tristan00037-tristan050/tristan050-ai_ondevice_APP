@@ -5,6 +5,7 @@
 
 import { Permission } from '../models/role';
 import { AuthContext } from './oidc';
+import { CallerContext } from '../services/auth_context';
 
 export interface PermissionCheck {
   permission: Permission;
@@ -36,36 +37,59 @@ export function hasPermission(
 }
 
 /**
+ * Check if caller context has permission
+ * Fail-Closed: default deny
+ */
+export function hasPermissionFromContext(
+  context: CallerContext,
+  permission: string
+): boolean {
+  // Fail-Closed: default deny
+  return context.permissions.includes(permission);
+}
+
+/**
  * Require permission middleware factory
  * Fail-Closed: no permission => 403
  */
-export function requirePermission(permission: Permission) {
+export function requirePermission(permission: Permission | string) {
   return async (
-    req: any, // Express Request with authContext
+    req: any, // Express Request with callerContext
     res: any, // Express Response
     next: any // Express NextFunction
   ) => {
-    const authContext: AuthContext = (req as any).authContext;
-    if (!authContext) {
+    const context = (req as any).callerContext;
+    if (!context) {
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Authentication required',
       });
     }
 
-    // Get user roles (should be loaded from DB in real implementation)
-    const userRoles = (req as any).userRoles || [];
-
-    const hasAccess = hasPermission(
-      authContext,
-      { permission, resource_tenant_id: (req as any).resourceTenantId },
-      userRoles
-    );
+    // Use caller context permissions (single source of truth)
+    const hasAccess = hasPermissionFromContext(context, permission as string);
 
     if (!hasAccess) {
+      // Audit deny
+      const { createAuditLog } = require('../audit/service');
+      createAuditLog({
+        tenant_id: context.tenant_id,
+        user_id: context.user_id,
+        action: 'permission_denied',
+        resource_type: 'tenant',
+        resource_id: 'unknown',
+        success: false,
+        error_message: `Required permission: ${permission}`,
+        metadata: {
+          required_permission: permission,
+          caller_permissions: context.permissions,
+        },
+      });
+
       return res.status(403).json({
         error: 'Forbidden',
         message: `Required permission: ${permission}`,
+        reason_code: 'RBAC_PERMISSION_DENIED',
       });
     }
 

@@ -1,12 +1,13 @@
 /**
  * Roles API
- * RBAC: Role management
+ * RBAC: Role management with strict isolation
  */
 
 import { Router, Request, Response } from 'express';
-import { requireAuth, extractTenantId } from '../auth/middleware';
+import { requireAuthAndContext } from '../auth/middleware';
 import { requirePermission } from '../auth/rbac';
 import { auditMiddleware } from '../audit/service';
+import { getCallerContext } from '../services/auth_context';
 import { Role, CreateRoleRequest, UpdateRoleRequest } from '../models/role';
 
 const router = Router();
@@ -16,34 +17,38 @@ const roles: Role[] = [];
 
 /**
  * GET /api/v1/iam/roles
- * List roles (tenant-scoped)
+ * List roles (tenant-scoped only)
  */
 router.get(
   '/',
-  requireAuth,
+  requireAuthAndContext,
   requirePermission('role:read'),
   async (req: Request, res: Response) => {
-    const tenantId = extractTenantId(req);
-    if (!tenantId) {
+    const context = getCallerContext(req);
+    if (!context) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     // Fail-Closed: Only show tenant's own roles
-    const filtered = roles.filter(r => r.tenant_id === tenantId);
+    const filtered = roles.filter(r => r.tenant_id === context.tenant_id);
     res.json({ roles: filtered });
   }
 );
 
 /**
  * GET /api/v1/iam/roles/:id
- * Get role by ID
+ * Get role by ID (tenant-scoped, cross-tenant access blocked)
  */
 router.get(
   '/:id',
-  requireAuth,
+  requireAuthAndContext,
   requirePermission('role:read'),
   async (req: Request, res: Response) => {
-    const tenantId = extractTenantId(req);
+    const context = getCallerContext(req);
+    if (!context) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     const requestedId = req.params.id;
 
     const role = roles.find(r => r.id === requestedId);
@@ -52,10 +57,28 @@ router.get(
     }
 
     // Fail-Closed: Cross-tenant access blocked
-    if (role.tenant_id !== tenantId) {
+    if (role.tenant_id !== context.tenant_id) {
+      // Audit deny
+      const { createAuditLog } = require('../audit/service');
+      createAuditLog({
+        tenant_id: context.tenant_id,
+        user_id: context.user_id,
+        action: 'read',
+        resource_type: 'role',
+        resource_id: requestedId,
+        success: false,
+        error_message: 'Cross-tenant access denied',
+        metadata: {
+          requested_role_id: requestedId,
+          resource_tenant_id: role.tenant_id,
+          caller_tenant_id: context.tenant_id,
+        },
+      });
+
       return res.status(403).json({
         error: 'Forbidden',
         message: 'Cross-tenant access denied',
+        reason_code: 'TENANT_ISOLATION_VIOLATION',
       });
     }
 
@@ -65,22 +88,43 @@ router.get(
 
 /**
  * POST /api/v1/iam/roles
- * Create role
+ * Create role (tenant-scoped)
  */
 router.post(
   '/',
-  requireAuth,
+  requireAuthAndContext,
   requirePermission('role:write'),
   auditMiddleware('create', 'role'),
   async (req: Request, res: Response) => {
+    const context = getCallerContext(req);
+    if (!context) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     const body: CreateRoleRequest = req.body;
-    const authContext = (req as any).authContext;
 
     // Fail-Closed: Can only create roles in own tenant
-    if (body.tenant_id !== authContext.tenant_id) {
+    if (body.tenant_id !== context.tenant_id) {
+      // Audit deny
+      const { createAuditLog } = require('../audit/service');
+      createAuditLog({
+        tenant_id: context.tenant_id,
+        user_id: context.user_id,
+        action: 'create',
+        resource_type: 'role',
+        resource_id: 'new',
+        success: false,
+        error_message: 'Cross-tenant access denied',
+        metadata: {
+          requested_tenant_id: body.tenant_id,
+          caller_tenant_id: context.tenant_id,
+        },
+      });
+
       return res.status(403).json({
         error: 'Forbidden',
         message: 'Cross-tenant access denied',
+        reason_code: 'TENANT_ISOLATION_VIOLATION',
       });
     }
 
@@ -101,15 +145,19 @@ router.post(
 
 /**
  * PATCH /api/v1/iam/roles/:id
- * Update role
+ * Update role (tenant-scoped, cross-tenant access blocked)
  */
 router.patch(
   '/:id',
-  requireAuth,
+  requireAuthAndContext,
   requirePermission('role:write'),
   auditMiddleware('update', 'role'),
   async (req: Request, res: Response) => {
-    const tenantId = extractTenantId(req);
+    const context = getCallerContext(req);
+    if (!context) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     const requestedId = req.params.id;
 
     const role = roles.find(r => r.id === requestedId);
@@ -118,10 +166,28 @@ router.patch(
     }
 
     // Fail-Closed: Cross-tenant access blocked
-    if (role.tenant_id !== tenantId) {
+    if (role.tenant_id !== context.tenant_id) {
+      // Audit deny
+      const { createAuditLog } = require('../audit/service');
+      createAuditLog({
+        tenant_id: context.tenant_id,
+        user_id: context.user_id,
+        action: 'update',
+        resource_type: 'role',
+        resource_id: requestedId,
+        success: false,
+        error_message: 'Cross-tenant access denied',
+        metadata: {
+          requested_role_id: requestedId,
+          resource_tenant_id: role.tenant_id,
+          caller_tenant_id: context.tenant_id,
+        },
+      });
+
       return res.status(403).json({
         error: 'Forbidden',
         message: 'Cross-tenant access denied',
+        reason_code: 'TENANT_ISOLATION_VIOLATION',
       });
     }
 
@@ -136,4 +202,3 @@ router.patch(
 );
 
 export default router;
-

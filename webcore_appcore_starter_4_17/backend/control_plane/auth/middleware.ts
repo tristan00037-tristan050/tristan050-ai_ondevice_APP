@@ -5,6 +5,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { extractAuthContext, OIDCConfig, AuthContext } from './oidc';
+import { getCallerContext, requireCallerContext } from '../services/auth_context';
 
 // OIDC config (should be loaded from environment)
 const oidcConfig: OIDCConfig = {
@@ -25,6 +26,11 @@ export async function requireAuth(
   try {
     const authContext = await extractAuthContext(req, oidcConfig);
     (req as any).authContext = authContext;
+    
+    // Load user roles (should be loaded from DB in real implementation)
+    // For now, mock based on auth context
+    (req as any).userRoles = [];
+    
     next();
   } catch (error: any) {
     res.status(401).json({
@@ -39,7 +45,19 @@ export async function requireAuth(
  * Used for multi-tenant scoping
  */
 export function extractTenantId(req: Request): string | null {
-  const authContext: AuthContext | undefined = (req as any).authContext;
-  return authContext?.tenant_id || null;
+  const context = getCallerContext(req);
+  return context?.tenant_id || null;
 }
 
+/**
+ * Require caller context (auth + context)
+ */
+export function requireAuthAndContext(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  requireAuth(req, res, () => {
+    requireCallerContext(req, res, next);
+  });
+}
