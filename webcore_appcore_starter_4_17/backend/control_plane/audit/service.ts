@@ -9,6 +9,29 @@ import { AuditLog, CreateAuditLogRequest, AuditAction, AuditResourceType } from 
 let auditLogs: AuditLog[] = [];
 
 /**
+ * Deep clone helper for immutability
+ * Preserves Date objects by converting them to ISO strings and back
+ */
+function deepClone<T>(x: T): T {
+  if (x === null || typeof x !== 'object') {
+    return x;
+  }
+  if (x instanceof Date) {
+    return new Date(x.getTime()) as T;
+  }
+  if (Array.isArray(x)) {
+    return x.map(item => deepClone(item)) as T;
+  }
+  const cloned = {} as T;
+  for (const key in x) {
+    if (Object.prototype.hasOwnProperty.call(x, key)) {
+      (cloned as any)[key] = deepClone((x as any)[key]);
+    }
+  }
+  return cloned;
+}
+
+/**
  * Clear audit logs (for testing only)
  */
 export function clearAuditLogs(): void {
@@ -36,8 +59,11 @@ export function createAuditLog(request: CreateAuditLogRequest): AuditLog {
     created_at: new Date(), // Immutable timestamp
   };
 
-  auditLogs.push(auditLog);
-  return auditLog;
+  // Deep clone on store for immutability
+  const stored = deepClone(auditLog);
+  auditLogs.push(stored);
+  // Deep clone on return for immutability
+  return deepClone(stored);
 }
 
 /**
@@ -56,7 +82,7 @@ export function queryAuditLogs(
   }
 ): AuditLog[] {
   // Fail-Closed: Cross-tenant access blocked
-  return auditLogs.filter(log => {
+  const results = auditLogs.filter(log => {
     if (log.tenant_id !== tenant_id) {
       return false; // Block cross-tenant access
     }
@@ -70,6 +96,8 @@ export function queryAuditLogs(
     }
     return true;
   });
+  // Deep clone on return for immutability
+  return results.map(deepClone);
 }
 
 /**
