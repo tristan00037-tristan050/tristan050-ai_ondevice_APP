@@ -3,37 +3,6 @@
  * Verify cross-tenant access is blocked by design
  */
 
-// Simple test runner (no Jest dependency)
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    console.log(`PASS: ${name}`);
-    return true;
-  } catch (error: any) {
-    console.error(`FAIL: ${name}: ${error.message}`);
-    return false;
-  }
-}
-
-function expect(actual: any) {
-  return {
-    toBe: (expected: any) => {
-      if (actual !== expected) {
-        throw new Error(`Expected ${expected}, got ${actual}`);
-      }
-    },
-    toBeNull: () => {
-      if (actual !== null) {
-        throw new Error(`Expected null, got ${actual}`);
-      }
-    },
-  };
-}
-
-function describe(name: string, fn: () => void) {
-  fn();
-}
-
 import { extractTenantId } from '../auth/middleware';
 import { AuthContext } from '../auth/oidc';
 
@@ -96,9 +65,3 @@ describe('Tenant Isolation Tests', () => {
     expect(resource.tenant_id).toBe(authTenantId);
   });
 });
-
-// Output-based proof
-if (require.main === module) {
-  // NOTE: OK keys are emitted by verification scripts, not test files
-}
-

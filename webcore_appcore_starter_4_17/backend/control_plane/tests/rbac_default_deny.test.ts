@@ -6,32 +6,6 @@
 import { hasPermissionFromContext } from '../auth/rbac';
 import { CallerContext } from '../services/auth_context';
 
-// Simple test runner
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    console.log(`PASS: ${name}`);
-    return true;
-  } catch (error: any) {
-    console.error(`FAIL: ${name}: ${error.message}`);
-    return false;
-  }
-}
-
-function expect(actual: any) {
-  return {
-    toBe: (expected: any) => {
-      if (actual !== expected) {
-        throw new Error(`Expected ${expected}, got ${actual}`);
-      }
-    },
-  };
-}
-
-function describe(name: string, fn: () => void) {
-  fn();
-}
-
 describe('RBAC Default Deny Tests', () => {
   it('should deny by default when no permissions', () => {
     const context: CallerContext = {
@@ -81,11 +55,3 @@ describe('RBAC Default Deny Tests', () => {
     expect(hasAccess).toBe(false); // Default deny
   });
 });
-
-// Output-based proof
-// NOTE: OK keys are emitted by verification scripts (scripts/verify/verify_svr01_control_plane.sh)
-// Test files should NOT emit OK keys directly
-if (require.main === module) {
-  // Tests are defined above and run via describe/it calls
-}
-

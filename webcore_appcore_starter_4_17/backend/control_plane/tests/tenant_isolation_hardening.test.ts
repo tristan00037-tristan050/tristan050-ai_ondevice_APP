@@ -7,53 +7,6 @@ import { Request, Response } from 'express';
 import { getCallerContext, isSuperAdmin } from '../services/auth_context';
 import { createAuditLog, queryAuditLogs, clearAuditLogs } from '../audit/service';
 
-// Simple test runner
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    console.log(`PASS: ${name}`);
-    return true;
-  } catch (error: any) {
-    console.error(`FAIL: ${name}: ${error.message}`);
-    return false;
-  }
-}
-
-function expect(actual: any) {
-  return {
-    toBe: (expected: any) => {
-      if (actual !== expected) {
-        throw new Error(`Expected ${expected}, got ${actual}`);
-      }
-    },
-    not: {
-      toBe: (expected: any) => {
-        if (actual === expected) {
-          throw new Error(`Expected not ${expected}, got ${actual}`);
-        }
-      },
-    },
-    toContain: (expected: string) => {
-      if (!String(actual).includes(expected)) {
-        throw new Error(`Expected ${actual} to contain ${expected}`);
-      }
-    },
-    toHaveLength: (expected: number) => {
-      if (actual.length !== expected) {
-        throw new Error(`Expected length ${expected}, got ${actual.length}`);
-      }
-    },
-  };
-}
-
-function describe(name: string, fn: () => void) {
-  fn();
-}
-
-function beforeEach(fn: () => void) {
-  fn();
-}
-
 describe('Tenant Isolation Hardening Tests', () => {
   beforeEach(() => {
     clearAuditLogs();
@@ -209,11 +162,3 @@ describe('Tenant Isolation Hardening Tests', () => {
     expect(crossTenant).toBeUndefined();
   });
 });
-
-// Output-based proof
-// NOTE: OK keys are emitted by verification scripts (scripts/verify/verify_svr01_control_plane.sh)
-// Test files should NOT emit OK keys directly
-if (require.main === module) {
-  // Tests are defined above and run via describe/it calls
-}
-
