@@ -6,6 +6,7 @@
 export type Permission = 
   | 'tenant:read'
   | 'tenant:write'
+  | 'iam:tenants:list_all' // Superadmin only: list all tenants
   | 'project:read'
   | 'project:write'
   | 'environment:read'
