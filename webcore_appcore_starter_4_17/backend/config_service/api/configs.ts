@@ -14,6 +14,7 @@ import {
   releaseConfig,
   rollbackConfig,
   calculateETag,
+  listConfigVersions,
 } from '../storage/service';
 import {
   ConfigType,
@@ -82,6 +83,68 @@ router.get(
 );
 
 /**
+ * POST /api/v1/configs/{env}/canary:create-version
+ * Create a new config version (without releasing)
+ */
+router.post(
+  '/:env/canary:create-version',
+  requireAuth,
+  requirePermission('tenant:write'),
+  auditMiddleware('create', 'config_version'),
+  async (req: Request, res: Response) => {
+    const tenantId = extractTenantId(req);
+    if (!tenantId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const environment = req.params.env as Environment;
+    if (!['development', 'staging', 'production'].includes(environment)) {
+      return res.status(400).json({ error: 'Invalid environment' });
+    }
+
+    const body: CreateConfigVersionRequest = req.body;
+    const authContext = (req as any).authContext;
+
+    // Fail-Closed: Can only create in own tenant
+    if (body.tenant_id !== tenantId) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Cross-tenant access denied',
+        reason_code: 'TENANT_ISOLATION_VIOLATION',
+      });
+    }
+
+    // Fail-Closed: Config type and environment must match
+    if (body.config_type !== 'canary' || body.environment !== environment) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'Config type or environment mismatch',
+        reason_code: 'CONFIG_MISMATCH',
+      });
+    }
+
+    try {
+      const version = createConfigVersion({
+        config_type: body.config_type,
+        environment: body.environment,
+        content: body.content,
+        tenant_id: body.tenant_id,
+        created_by: authContext.user_id,
+        metadata: body.metadata,
+      });
+
+      res.status(201).json({ version });
+    } catch (error: any) {
+      res.status(400).json({
+        error: 'Version creation failed',
+        message: error.message,
+        reason_code: 'VERSION_CREATION_FAILED',
+      });
+    }
+  }
+);
+
+/**
  * POST /api/v1/configs/{env}/canary:release
  * Release a config version
  */
@@ -109,6 +172,7 @@ router.post(
       return res.status(403).json({
         error: 'Forbidden',
         message: 'Cross-tenant access denied',
+        reason_code: 'TENANT_ISOLATION_VIOLATION',
       });
     }
 
@@ -117,6 +181,7 @@ router.post(
       return res.status(400).json({
         error: 'Invalid request',
         message: 'Config type or environment mismatch',
+        reason_code: 'CONFIG_MISMATCH',
       });
     }
 
@@ -134,6 +199,7 @@ router.post(
       res.status(400).json({
         error: 'Release failed',
         message: error.message,
+        reason_code: 'RELEASE_FAILED',
       });
     }
   }
@@ -167,6 +233,7 @@ router.post(
       return res.status(403).json({
         error: 'Forbidden',
         message: 'Cross-tenant access denied',
+        reason_code: 'TENANT_ISOLATION_VIOLATION',
       });
     }
 
@@ -175,14 +242,30 @@ router.post(
       return res.status(400).json({
         error: 'Invalid request',
         message: 'Config type or environment mismatch',
+        reason_code: 'CONFIG_MISMATCH',
       });
+    }
+
+    // If to_version_id is not provided, find previous version
+    let targetVersionId = body.to_version_id;
+    if (!targetVersionId) {
+      const versions = listConfigVersions('canary', environment, tenantId);
+      if (versions.length < 2) {
+        return res.status(400).json({
+          error: 'Rollback failed',
+          message: 'No previous version to rollback to',
+          reason_code: 'NO_PREVIOUS_VERSION',
+        });
+      }
+      // Get second-to-last version (previous active version)
+      targetVersionId = versions[1].id;
     }
 
     try {
       const release = rollbackConfig({
         config_type: body.config_type,
         environment: body.environment,
-        to_version_id: body.to_version_id,
+        to_version_id: targetVersionId,
         tenant_id: body.tenant_id,
         released_by: authContext.user_id,
       });
@@ -192,10 +275,10 @@ router.post(
       res.status(400).json({
         error: 'Rollback failed',
         message: error.message,
+        reason_code: 'ROLLBACK_FAILED',
       });
     }
   }
 );
 
 export default router;
-
