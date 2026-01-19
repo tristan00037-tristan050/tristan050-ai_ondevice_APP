@@ -56,6 +56,9 @@ function getKey(header: jwt.JwtHeader, jwksUri: string): Promise<string> {
       if (err) {
         return reject(err);
       }
+      if (!key) {
+        return reject(new Error("JWKS signing key not found"));
+      }
       const signingKey = key.getPublicKey();
       resolve(signingKey);
     });

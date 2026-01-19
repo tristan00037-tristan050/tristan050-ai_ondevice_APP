@@ -6,6 +6,7 @@
 import { Request, Response } from 'express';
 import { getCallerContext, isSuperAdmin } from '../services/auth_context';
 import { createAuditLog, queryAuditLogs, clearAuditLogs } from '../audit/service';
+import type { Permission } from '../models/role';
 
 describe('Tenant Isolation Hardening Tests', () => {
   beforeEach(() => {
@@ -19,7 +20,7 @@ describe('Tenant Isolation Hardening Tests', () => {
         tenant_id: 'tenant1',
         user_id: 'user1',
         roles: [],
-        permissions: ['user:read'],
+        permissions: ['user:read'] as Permission[],
       },
     };
 
@@ -33,7 +34,7 @@ describe('Tenant Isolation Hardening Tests', () => {
         tenant_id: 'tenant2',
         user_id: 'user2',
         roles: [],
-        permissions: ['user:read'],
+        permissions: ['user:read'] as Permission[],
       },
     };
 
@@ -118,7 +119,7 @@ describe('Tenant Isolation Hardening Tests', () => {
       tenant_id: 'admin-tenant',
       user_id: 'admin-user',
       roles: [],
-      permissions: ['iam:tenants:list_all', 'tenant:read'],
+      permissions: ['iam:tenants:list_all', 'tenant:read'] as Permission[],
     };
 
     const isSuper = isSuperAdmin(superAdminContext);
@@ -130,7 +131,7 @@ describe('Tenant Isolation Hardening Tests', () => {
       tenant_id: 'tenant1',
       user_id: 'user1',
       roles: [],
-      permissions: [], // No permissions
+      permissions: [] as Permission[], // No permissions
     };
 
     // Default deny: no permission => deny

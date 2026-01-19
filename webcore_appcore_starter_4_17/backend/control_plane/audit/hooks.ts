@@ -4,7 +4,8 @@
  */
 
 import { Request } from 'express';
-import { createAuditLog, AuditLog } from './service';
+import { createAuditLog } from './service';
+import type { AuditLog } from '../models/audit';
 import { CallerContext } from '../services/auth_context';
 import { AuditAction, AuditResourceType } from '../models/audit';
 

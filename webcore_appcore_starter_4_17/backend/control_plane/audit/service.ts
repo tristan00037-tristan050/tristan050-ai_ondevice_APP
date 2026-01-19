@@ -9,6 +9,13 @@ import { AuditLog, CreateAuditLogRequest, AuditAction, AuditResourceType } from 
 let auditLogs: AuditLog[] = [];
 
 /**
+ * Deep clone helper for immutability
+ */
+function deepClone<T>(x: T): T {
+  return JSON.parse(JSON.stringify(x));
+}
+
+/**
  * Clear audit logs (for testing only)
  */
 export function clearAuditLogs(): void {
@@ -36,8 +43,11 @@ export function createAuditLog(request: CreateAuditLogRequest): AuditLog {
     created_at: new Date(), // Immutable timestamp
   };
 
-  auditLogs.push(auditLog);
-  return auditLog;
+  // Deep clone on store for immutability
+  const stored = deepClone(auditLog);
+  auditLogs.push(stored);
+  // Deep clone on return for immutability
+  return deepClone(stored);
 }
 
 /**
@@ -56,7 +66,7 @@ export function queryAuditLogs(
   }
 ): AuditLog[] {
   // Fail-Closed: Cross-tenant access blocked
-  return auditLogs.filter(log => {
+  const results = auditLogs.filter(log => {
     if (log.tenant_id !== tenant_id) {
       return false; // Block cross-tenant access
     }
@@ -70,6 +80,8 @@ export function queryAuditLogs(
     }
     return true;
   });
+  // Deep clone on return for immutability
+  return results.map(deepClone);
 }
 
 /**

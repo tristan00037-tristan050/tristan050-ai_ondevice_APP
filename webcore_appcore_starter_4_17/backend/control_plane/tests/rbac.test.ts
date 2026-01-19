@@ -94,6 +94,7 @@ describe('RBAC Tests', () => {
       expect(res.json).toHaveBeenCalledWith({
         error: 'Forbidden',
         message: 'Required permission: user:write',
+        reason_code: 'RBAC_PERMISSION_DENIED',
       });
       expect(next).not.toHaveBeenCalled();
     });
@@ -103,7 +104,10 @@ describe('RBAC Tests', () => {
         authContext,
         userRoles: [{ permissions: ['user:read', 'user:write'] as Permission[] }],
       };
-      const res: any = {};
+      const res: any = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      };
       const next = jest.fn();
 
       const middleware = requirePermission('user:read');
