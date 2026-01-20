@@ -18,7 +18,8 @@ export type AuditResourceType =
   | 'environment'
   | 'user'
   | 'role'
-  | 'audit_log';
+  | 'audit_log'
+  | 'model';
 
 export interface AuditLog {
   id: string;

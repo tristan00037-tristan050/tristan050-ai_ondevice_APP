@@ -1,31 +1,31 @@
 /**
  * Model Registry Service
- * Main entry point
+ * Express app for Model Registry API
  */
 
 import express from 'express';
-import { requireAuthAndContext } from '../control_plane/auth/middleware';
-import modelsRouter from './api/models';
+import { requireAuthAndContext } from '../control_plane/services/auth_context';
+import * as modelsApi from './api/models';
+import * as versionsApi from './api/versions';
+import * as artifactsApi from './api/artifacts';
 
 const app = express();
 
+// Middleware
 app.use(express.json());
+app.use(requireCallerContext);
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
+// Model routes
+app.post('/api/v1/models', modelsApi.createModelHandler);
+app.get('/api/v1/models', modelsApi.listModelsHandler);
+app.get('/api/v1/models/:modelId', modelsApi.getModelHandler);
 
-// Model Registry API
-app.use('/api/v1/models', requireAuthAndContext, modelsRouter);
+// Model version routes
+app.post('/api/v1/models/:modelId/versions', versionsApi.createModelVersionHandler);
+app.get('/api/v1/models/:modelId/versions', versionsApi.listModelVersionsHandler);
 
-const PORT = process.env.PORT || 3003;
-
-if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Model Registry service listening on port ${PORT}`);
-  });
-}
+// Artifact routes
+app.post('/api/v1/models/:modelId/versions/:versionId/artifacts', artifactsApi.createArtifactHandler);
+app.get('/api/v1/models/:modelId/versions/:versionId/artifacts', artifactsApi.listArtifactsHandler);
 
 export default app;
-
