@@ -1,7 +1,17 @@
+set -euo pipefail
+cd ~/tristan050-ai_ondevice_APP 2>/dev/null || true
+
+cat > webcore_appcore_starter_4_17/backend/model_registry/tests/model_registry.test.ts <<'TS'
 /**
  * Model Registry Tests
  * Verify signed artifact delivery and fail-closed behavior
+ *
+ * Contract:
+ * - tests MUST NOT contain "OK=1" (evidence keys are emitted only by verify scripts on PASS)
+ * - rely on Jest runner only (no custom runner / require.main side effects)
  */
+
+import * as crypto from 'crypto';
 
 import {
   createModel,
@@ -12,67 +22,22 @@ import {
   getDelivery,
   initializeSigningKey,
 } from '../services/storage';
-import { signArtifact, verifyArtifact } from '../services/signing';
-import * as crypto from 'crypto';
 
-// Simple test runner
-function test(name: string, fn: () => void) {
-  try {
-    fn();
-    console.log(`PASS: ${name}`);
-    return true;
-  } catch (error: any) {
-    console.error(`FAIL: ${name}: ${error.message}`);
-    return false;
-  }
-}
+import { verifyArtifact } from '../services/signing';
 
-function expect(actual: any) {
-  return {
-    toBe: (expected: any) => {
-      if (actual !== expected) {
-        throw new Error(`Expected ${expected}, got ${actual}`);
-      }
-    },
-    not: {
-      toBe: (expected: any) => {
-        if (actual === expected) {
-          throw new Error(`Expected not ${expected}, got ${actual}`);
-        }
-      },
-    },
-    toBeTruthy: () => {
-      if (!actual) {
-        throw new Error('Expected truthy, got falsy');
-      }
-    },
-    toBeFalsy: () => {
-      if (actual) {
-        throw new Error('Expected falsy, got truthy');
-      }
-    },
-    toMatch: (pattern: RegExp | string) => {
-      const str = String(actual);
-      const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern);
-      if (!regex.test(str)) {
-        throw new Error(`Expected ${str} to match ${pattern}`);
-      }
-    },
-  };
-}
+describe('Model Registry - Signed delivery + fail-closed', () => {
+  beforeEach(() => {
+    // If storage layer has global state reset helpers, call them here.
+    // Intentionally left blank to avoid coupling; individual tests create isolated entities.
+  });
 
-function describe(name: string, fn: () => void) {
-  fn();
-}
-
-describe('Model Registry Tests', () => {
-  it('should upload, sign, verify, release, and deliver model', () => {
-    // Initialize signing key
+  it('uploads, signs, verifies, releases, and delivers a model artifact', () => {
+    // 1) signing key
     const signingKey = initializeSigningKey();
     expect(signingKey).toBeTruthy();
     expect(signingKey.key_id).toBe('v1-default');
 
-    // Create model
+    // 2) model + version
     const model = createModel('tenant1', 'user1', {
       name: 'test-model',
       description: 'Test model',
@@ -80,14 +45,11 @@ describe('Model Registry Tests', () => {
     expect(model.id).toBeTruthy();
     expect(model.status).toBe('draft');
 
-    // Create version
-    const version = createModelVersion(model.id, 'tenant1', 'user1', {
-      version: '1.0.0',
-    });
+    const version = createModelVersion(model.id, 'tenant1', 'user1', { version: '1.0.0' });
     expect(version.id).toBeTruthy();
     expect(version.status).toBe('draft');
 
-    // Create artifact (with signature)
+    // 3) artifact (storage layer is expected to attach signature + key_id)
     const fileData = Buffer.from('test model data');
     const sha256 = crypto.createHash('sha256').update(fileData).digest('hex');
 
@@ -100,11 +62,12 @@ describe('Model Registry Tests', () => {
       model_id: model.id,
       version: version.version,
     });
+
     expect(artifact.id).toBeTruthy();
     expect(artifact.signature).toBeTruthy();
     expect(artifact.key_id).toBe('v1-default');
 
-    // Verify signature
+    // 4) verify signature (must be true)
     const isValid = verifyArtifact(
       artifact.sha256,
       model.id,
@@ -116,11 +79,10 @@ describe('Model Registry Tests', () => {
     );
     expect(isValid).toBe(true);
 
-    // Release version
+    // 5) release + pointer
     const released = releaseModelVersion(version.id, 'tenant1', 'user1');
     expect(released.status).toBe('released');
 
-    // Set release pointer
     const pointer = setReleasePointer(model.id, 'tenant1', 'user1', {
       platform: 'android',
       runtime: 'onnx',
@@ -129,15 +91,17 @@ describe('Model Registry Tests', () => {
     });
     expect(pointer.id).toBeTruthy();
 
-    // Get delivery
+    // 6) delivery view must include signature + key_id
     const delivery = getDelivery(model.id, 'tenant1', 'android', 'onnx');
     expect(delivery).toBeTruthy();
     expect(delivery?.artifact.id).toBe(artifact.id);
+    expect(delivery?.artifact.signature).toBeTruthy();
+    expect(delivery?.artifact.key_id).toBe('v1-default');
     expect(delivery?.version.version).toBe('1.0.0');
     expect(delivery?.signingKey.key_id).toBe('v1-default');
   });
 
-  it('should fail-closed on tampered signature', () => {
+  it('fails closed when signature is tampered', () => {
     const signingKey = initializeSigningKey();
     const model = createModel('tenant1', 'user1', { name: 'test-model' });
     const version = createModelVersion(model.id, 'tenant1', 'user1', { version: '1.0.0' });
@@ -155,10 +119,11 @@ describe('Model Registry Tests', () => {
       version: version.version,
     });
 
-    // Tamper signature
-    const tamperedSignature = artifact.signature.substring(0, artifact.signature.length - 1) + 'X';
+    expect(artifact.signature).toBeTruthy();
 
-    // Verify should fail
+    const sig = String(artifact.signature);
+    const tamperedSignature = sig.slice(0, -1) + (sig.slice(-1) === 'X' ? 'Y' : 'X');
+
     const isValid = verifyArtifact(
       artifact.sha256,
       model.id,
@@ -171,24 +136,22 @@ describe('Model Registry Tests', () => {
     expect(isValid).toBe(false);
   });
 
-  it('should prevent overwriting released version', () => {
+  it('prevents overwriting a released version (idempotent / state-locked)', () => {
     const model = createModel('tenant1', 'user1', { name: 'test-model' });
     const version = createModelVersion(model.id, 'tenant1', 'user1', { version: '1.0.0' });
 
-    // Release version
-    releaseModelVersion(version.id, 'tenant1', 'user1');
+    // release once
+    const released = releaseModelVersion(version.id, 'tenant1', 'user1');
+    expect(released.status).toBe('released');
 
-    // Try to release again (should fail)
-    try {
-      releaseModelVersion(version.id, 'tenant1', 'user1');
-      throw new Error('Should have thrown error');
-    } catch (error: any) {
-      expect((error as Error).message).toMatch(/already released/);
-    }
+    // release again must throw
+    expect(() => releaseModelVersion(version.id, 'tenant1', 'user1')).toThrow(/already released/i);
   });
 
-  it('should ensure signature is present in delivery', () => {
+  it('ensures delivery always includes signature + key id after release pointer is set', () => {
     const signingKey = initializeSigningKey();
+    expect(signingKey.key_id).toBe('v1-default');
+
     const model = createModel('tenant1', 'user1', { name: 'test-model' });
     const version = createModelVersion(model.id, 'tenant1', 'user1', { version: '1.0.0' });
 
@@ -205,7 +168,9 @@ describe('Model Registry Tests', () => {
       version: version.version,
     });
 
-    releaseModelVersion(version.id, 'tenant1', 'user1');
+    const released = releaseModelVersion(version.id, 'tenant1', 'user1');
+    expect(released.status).toBe('released');
+
     setReleasePointer(model.id, 'tenant1', 'user1', {
       platform: 'android',
       runtime: 'onnx',
@@ -216,24 +181,10 @@ describe('Model Registry Tests', () => {
     const delivery = getDelivery(model.id, 'tenant1', 'android', 'onnx');
     expect(delivery).toBeTruthy();
     expect(delivery?.artifact.signature).toBeTruthy();
-    expect(delivery?.artifact.key_id).toBeTruthy();
+    expect(delivery?.artifact.key_id).toBe('v1-default');
   });
 });
+TS
 
-// Output-based proof
-if (require.main === module) {
-  let allPassed = true;
-
-  try {
-    console.log('MODEL_UPLOAD_SIGN_VERIFY_OK=1');
-    console.log('MODEL_DELIVERY_SIGNATURE_PRESENT_OK=1');
-    console.log('MODEL_APPLY_FAILCLOSED_OK=1');
-    console.log('MODEL_ROLLBACK_SAFE_OK=1');
-  } catch (e: any) {
-    console.error(`FAIL: ${e.message}`);
-    allPassed = false;
-  }
-
-  process.exit(allPassed ? 0 : 1);
-}
-
+# 1) 오염 재발 0 보장: tests 폴더에 OK=1 문자열이 없어야 정상
+rg -n "OK=1" webcore_appcore_starter_4_17/backend/model_registry/tests || true
