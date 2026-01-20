@@ -1,19 +1,22 @@
 {
   "name": "@webcore/model-registry",
   "version": "1.0.0",
-  "description": "Model Registry with signed artifact delivery",
+  "description": "Model Registry Service",
   "main": "index.ts",
   "scripts": {
-    "test": "ts-node tests/model_registry.test.ts"
+    "test": "jest -c jest.config.cjs",
+    "build": "tsc"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "@webcore/control-plane": "file:../control_plane"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
-    "@types/node": "^20.10.6",
-    "ts-node": "^10.9.2",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
     "typescript": "^5.3.3"
   }
 }
-
