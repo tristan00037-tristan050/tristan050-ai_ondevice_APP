@@ -51,6 +51,13 @@ function expect(actual: any) {
         throw new Error('Expected falsy, got truthy');
       }
     },
+    toMatch: (pattern: RegExp | string) => {
+      const str = String(actual);
+      const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern);
+      if (!regex.test(str)) {
+        throw new Error(`Expected ${str} to match ${pattern}`);
+      }
+    },
   };
 }
 
@@ -176,7 +183,7 @@ describe('Model Registry Tests', () => {
       releaseModelVersion(version.id, 'tenant1', 'user1');
       throw new Error('Should have thrown error');
     } catch (error: any) {
-      expect(error.message).toContain('already released');
+      expect((error as Error).message).toMatch(/already released/);
     }
   });
 
