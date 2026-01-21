@@ -2,13 +2,20 @@
   "compilerOptions": {
     "target": "es2020",
     "module": "CommonJS",
+    "moduleResolution": "node",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
     "outDir": "./dist",
     "rootDir": "./",
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "typeRoots": ["./node_modules/@types", "../control_plane/node_modules/@types"],
+    "paths": {
+      "express": ["./node_modules/express"],
+      "@webcore/control-plane/*": ["../control_plane/*"]
+    }
   },
   "include": [
     "**/*.ts",

@@ -1,0 +1,24 @@
+name: product-verify-model-registry
+
+on:
+  pull_request: {}
+  merge_group: {}
+  workflow_dispatch: {}
+
+jobs:
+  product_verify_model_registry:
+    name: product-verify-model-registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run SVR-03 verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash webcore_appcore_starter_4_17/scripts/verify/verify_svr03_model_registry.sh
