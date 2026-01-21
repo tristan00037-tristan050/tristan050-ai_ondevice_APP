@@ -1,6 +1,7 @@
 import { bffUrl } from "../bff";
 import { buildTenantHeaders, type TenantHeadersInput } from "../tenantHeaders";
 import type { OsLlmUsageEventType } from "./eventTypes";
+import { validateTelemetryPayload } from "./metaOnlyGuard";
 
 export type DemoMode = "mock" | "live";
 
@@ -120,6 +121,19 @@ export async function recordLlmUsage(
     ...(Number.isFinite(evt.ragRetrieveMsP50) && { ragRetrieveMsP50: clampTimeMs(evt.ragRetrieveMsP50) }),
     ...(Number.isFinite(evt.ragRetrieveMsP95) && { ragRetrieveMsP95: clampTimeMs(evt.ragRetrieveMsP95) }),
   };
+
+  // ✅ APP-04: SDK-side meta-only guard (fail-closed)
+  // 전송 전 검증: identifier/raw-text/candidate-list 차단
+  const validation = validateTelemetryPayload(payload);
+  if (!validation.valid) {
+    // Fail-Closed: 전송하지 않고 reason_code만 로깅
+    console.warn(
+      "[osTelemetry] BLOCKED: meta-only validation failed",
+      validation.reason_code,
+      validation.message
+    );
+    return; // 전송하지 않음
+  }
 
   const url = bffUrl("/v1/os/llm-usage");
   const headers = {
