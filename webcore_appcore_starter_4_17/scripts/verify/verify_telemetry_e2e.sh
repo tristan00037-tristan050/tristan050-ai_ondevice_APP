@@ -29,7 +29,9 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Guard: Forbid "OK=1" in tests (only check telemetry_e2e.test.ts)
+# Guard: Forbid "OK=1" in tests
+# Scope: tests/telemetry_e2e.test.ts only (gate verification scope)
+# Note: Other test files may contain OK=1 for legacy reasons, but gate only checks telemetry_e2e.test.ts
 if [[ -d "${ROOT}/webcore_appcore_starter_4_17" ]]; then
   TEST_FILE="${ROOT}/webcore_appcore_starter_4_17/backend/telemetry/tests/telemetry_e2e.test.ts"
   TELEMETRY_DIR="${ROOT}/webcore_appcore_starter_4_17/backend/telemetry"
