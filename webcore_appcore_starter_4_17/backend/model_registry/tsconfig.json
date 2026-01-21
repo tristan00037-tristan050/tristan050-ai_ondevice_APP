@@ -11,6 +11,7 @@
     "rootDir": "./",
     "resolveJsonModule": true,
     "baseUrl": ".",
+    "typeRoots": ["./node_modules/@types", "../control_plane/node_modules/@types"],
     "paths": {
       "express": ["./node_modules/express"],
       "@webcore/control-plane/*": ["../control_plane/*"]
