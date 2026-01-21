@@ -1,0 +1,25 @@
+name: product-verify-telemetry
+
+on:
+  pull_request: {}
+  merge_group: {}
+  workflow_dispatch: {}
+
+jobs:
+  product_verify_telemetry:
+    name: product-verify-telemetry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Telemetry E2E verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash webcore_appcore_starter_4_17/scripts/verify/verify_telemetry_e2e.sh
+
