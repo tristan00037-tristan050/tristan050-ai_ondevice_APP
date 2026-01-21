@@ -6,5 +6,8 @@ module.exports = {
     "^.+\\.ts$": ["ts-jest", { tsconfig: "<rootDir>/tsconfig.json" }],
   },
   moduleFileExtensions: ["ts", "js", "json"],
+  moduleNameMapper: {
+    "^express$": "<rootDir>/node_modules/express",
+  },
 };
 
