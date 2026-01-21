@@ -141,8 +141,3 @@ describe('Meta-Only Schema Guard Tests', () => {
   });
 });
 
-// Output-based proof
-if (require.main === module) {
-  console.log('META_ONLY_SCHEMA_GUARD_OK=1');
-}
-

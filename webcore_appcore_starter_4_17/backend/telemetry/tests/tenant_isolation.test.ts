@@ -101,8 +101,3 @@ describe('Tenant Isolation Tests', () => {
   });
 });
 
-// Output-based proof
-if (require.main === module) {
-  console.log('TENANT_ISOLATION_OK=1');
-}
-

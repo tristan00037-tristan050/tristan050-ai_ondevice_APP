@@ -17,7 +17,7 @@ describe('Telemetry E2E Verification', () => {
   beforeEach(() => {
     clearStorage();
   });
-  it('should reject raw text/identifier payload and not store (fail-closed)', () => {
+  it('should reject raw text payload and not store (fail-closed)', () => {
     const request: IngestRequest = {
       tenant_id: 'tenant1',
       telemetry: [
@@ -34,6 +34,38 @@ describe('Telemetry E2E Verification', () => {
     expect(validation.valid).toBe(false);
     if (!validation.valid) {
       expect(validation.reason_code).toContain('RAW_TEXT');
+    }
+
+    const result = ingestTelemetry(request);
+    expect(result.success).toBe(false);
+    expect(result.ingested_count).toBe(0);
+    expect(result.rejected_count).toBe(1);
+    expect(result.reason_code).toBeTruthy();
+
+    const stored = queryTelemetry('tenant1');
+    expect(stored.length).toBe(0);
+  });
+
+  it('should reject identifier-like token payload and not store (fail-closed)', () => {
+    const uuid = '550e8400-e29b-41d4-a716-446655440000';
+
+    const request: IngestRequest = {
+      tenant_id: 'tenant1',
+      telemetry: [
+        {
+          tenant_id: 'tenant1',
+          timestamp: Date.now(),
+          metric_name: 'request_count',
+          metric_value: 1,
+          tags: { session_id: uuid },
+        },
+      ],
+    };
+
+    const validation = validateIngestRequest(request);
+    expect(validation.valid).toBe(false);
+    if (!validation.valid) {
+      expect(validation.reason_code).toContain('IDENTIFIER');
     }
 
     const result = ingestTelemetry(request);
