@@ -14,6 +14,7 @@ import type {
   SuggestEngineMeta,
 } from '../engines/types';
 import type { SuggestEngine } from '../engines/types';
+import { validateTelemetryPayload } from '../../os/telemetry/metaOnlyGuard';
 
 /**
  * LLM Usage 이벤트 타입
@@ -69,6 +70,19 @@ export async function sendLlmUsageEvent(
   if (cfg.mode === 'mock') {
     console.log('[MOCK] LLM usage event', payload);
     return;
+  }
+
+  // ✅ APP-04: SDK-side meta-only guard (fail-closed)
+  // 전송 전 검증: identifier/raw-text/candidate-list 차단
+  const validation = validateTelemetryPayload(payload);
+  if (!validation.valid) {
+    // Fail-Closed: 전송하지 않고 reason_code만 로깅
+    console.warn(
+      '[llmUsage] BLOCKED: meta-only validation failed',
+      validation.reason_code,
+      validation.message
+    );
+    return; // 전송하지 않음
   }
 
   await fetch(`${cfg.baseUrl}/v1/os/llm-usage`, {
