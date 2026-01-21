@@ -83,7 +83,8 @@ export function parseOTLP(payload: unknown): IngestRequest | null {
   
   // Extract tenant_id from resource attributes
   const resource = obj.resource as Record<string, unknown> | undefined;
-  const tenantId = resource?.attributes?.['tenant.id'] as string | undefined;
+  const attributes = resource?.attributes as Record<string, unknown> | undefined;
+  const tenantId = attributes?.['tenant.id'] as string | undefined;
   
   if (!tenantId) {
     return null;
@@ -110,7 +111,9 @@ export function parseOTLP(payload: unknown): IngestRequest | null {
       }
 
       // Extract data points
-      const dataPoints = metric.sum?.dataPoints || metric.gauge?.dataPoints || [];
+      const sum = metric.sum as { dataPoints?: unknown[] } | undefined;
+      const gauge = metric.gauge as { dataPoints?: unknown[] } | undefined;
+      const dataPoints = (sum?.dataPoints || gauge?.dataPoints || []) as Array<Record<string, unknown>>;
       if (!Array.isArray(dataPoints)) {
         continue;
       }
