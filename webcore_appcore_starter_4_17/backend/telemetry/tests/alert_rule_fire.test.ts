@@ -141,8 +141,3 @@ describe('Alert Rule Fire Tests', () => {
   });
 });
 
-// Output-based proof
-if (require.main === module) {
-  console.log('ALERT_RULE_FIRE_OK=1');
-}
-

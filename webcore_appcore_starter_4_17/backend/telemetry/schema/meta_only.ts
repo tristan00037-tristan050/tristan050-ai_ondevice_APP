@@ -22,6 +22,46 @@ export type ValidationResult =
   | { valid: false; reason_code: string; message: string };
 
 /**
+ * Check if a value contains identifier-like tokens (non-meta-only)
+ */
+function containsIdentifier(value: unknown): boolean {
+  if (typeof value === 'string') {
+    const s = value.trim();
+
+    // UUID v4/v1 등
+    const uuid =
+      /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
+    if (uuid.test(s)) return true;
+
+    // Long hex tokens (md5/sha1/sha256 등 흔한 길이)
+    const hex32 = /\b[0-9a-f]{32}\b/i;
+    const hex40 = /\b[0-9a-f]{40}\b/i;
+    const hex64 = /\b[0-9a-f]{64}\b/i;
+    if (hex32.test(s) || hex40.test(s) || hex64.test(s)) return true;
+
+    // JWT-like (header.payload.signature)
+    const jwtLike = /^[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/;
+    if (jwtLike.test(s)) return true;
+
+    // High-entropy token-like (base64url-ish) – 보수적으로: 길이>=24, 영문+숫자 혼합
+    // 주의: 단순 긴 단어(문장 일부)와 구분하기 위해 숫자 포함을 요구
+    if (s.length >= 24 && /^[A-Za-z0-9_-]+$/.test(s) && /[A-Za-z]/.test(s) && /\d/.test(s)) {
+      return true;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((v) => containsIdentifier(v));
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    return Object.values(value).some((v) => containsIdentifier(v));
+  }
+
+  return false;
+}
+
+/**
  * Check if a value contains raw text (non-meta-only)
  */
 function containsRawText(value: unknown): boolean {
@@ -93,6 +133,15 @@ export function validateMetaOnly(telemetry: MetaOnlyTelemetry): ValidationResult
     };
   }
 
+  // Check for identifiers in metric_value
+  if (containsIdentifier(telemetry.metric_value)) {
+    return {
+      valid: false,
+      reason_code: 'META_ONLY_IDENTIFIER_DETECTED',
+      message: 'metric_value contains identifier-like token (not meta-only)',
+    };
+  }
+
   // Check for raw text in metric_value
   if (containsRawText(telemetry.metric_value)) {
     return {
@@ -102,8 +151,15 @@ export function validateMetaOnly(telemetry: MetaOnlyTelemetry): ValidationResult
     };
   }
 
-  // Check tags for raw text
+  // Check tags for identifiers/raw text
   if (telemetry.tags) {
+    if (containsIdentifier(telemetry.tags)) {
+      return {
+        valid: false,
+        reason_code: 'META_ONLY_IDENTIFIER_IN_TAGS',
+        message: 'tags contain identifier-like token (not meta-only)',
+      };
+    }
     if (containsRawText(telemetry.tags)) {
       return {
         valid: false,
@@ -113,8 +169,15 @@ export function validateMetaOnly(telemetry: MetaOnlyTelemetry): ValidationResult
     }
   }
 
-  // Check metadata for raw text
+  // Check metadata for identifiers/raw text
   if (telemetry.metadata) {
+    if (containsIdentifier(telemetry.metadata)) {
+      return {
+        valid: false,
+        reason_code: 'META_ONLY_IDENTIFIER_IN_METADATA',
+        message: 'metadata contains identifier-like token (not meta-only)',
+      };
+    }
     if (containsRawText(telemetry.metadata)) {
       return {
         valid: false,

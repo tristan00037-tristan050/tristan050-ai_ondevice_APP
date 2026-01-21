@@ -29,29 +29,41 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Guard: Forbid "OK=1" in tests
-# Scope: tests/telemetry_e2e.test.ts only (gate verification scope)
-# Note: Other test files may contain OK=1 for legacy reasons, but gate only checks telemetry_e2e.test.ts
+# Determine telemetry directory
 if [[ -d "${ROOT}/webcore_appcore_starter_4_17" ]]; then
-  TEST_FILE="${ROOT}/webcore_appcore_starter_4_17/backend/telemetry/tests/telemetry_e2e.test.ts"
   TELEMETRY_DIR="${ROOT}/webcore_appcore_starter_4_17/backend/telemetry"
 else
-  TEST_FILE="${ROOT}/backend/telemetry/tests/telemetry_e2e.test.ts"
   TELEMETRY_DIR="${ROOT}/backend/telemetry"
 fi
 
-if command -v rg >/dev/null 2>&1; then
-  OK1_MATCHES=$(rg -n "OK=1" "${TEST_FILE}" 2>/dev/null || true)
-  if [[ -n "$OK1_MATCHES" ]]; then
-    echo "FAIL: 'OK=1' found in tests:"
-    echo "$OK1_MATCHES"
-    exit 1
+# Evidence-contamination guard (fail-closed)
+# Scan ALL telemetry test files, not just one file.
+TESTS_DIR="${TELEMETRY_DIR}/tests"
+
+PAT_1="OK=1"
+PAT_2="TELEM_META_ONLY_SCHEMA_GUARD_OK=1"
+PAT_3="TELEM_REJECT_RAW_OK=1"
+PAT_4="TELEM_INGEST_OK=1"
+
+if [[ -d "$TESTS_DIR" ]]; then
+  if command -v rg >/dev/null 2>&1; then
+    HITS="$(rg -n --glob='*.test.ts' -e "$PAT_1" -e "$PAT_2" -e "$PAT_3" -e "$PAT_4" "$TESTS_DIR" 2>/dev/null || true)"
+    if [[ -n "$HITS" ]]; then
+      echo "FAIL: evidence-string contamination detected in telemetry tests:"
+      echo "$HITS"
+      exit 1
+    fi
+  elif command -v grep >/dev/null 2>&1; then
+    HITS="$(grep -RIn --include='*.test.ts' -e "$PAT_1" -e "$PAT_2" -e "$PAT_3" -e "$PAT_4" "$TESTS_DIR" 2>/dev/null || true)"
+    if [[ -n "$HITS" ]]; then
+      echo "FAIL: evidence-string contamination detected in telemetry tests:"
+      echo "$HITS"
+      exit 1
+    fi
   fi
-elif command -v grep >/dev/null 2>&1; then
-  if grep -r "OK=1" "${TEST_FILE}" 2>/dev/null | grep -v "^$"; then
-    echo "FAIL: 'OK=1' found in tests"
-    exit 1
-  fi
+else
+  echo "FAIL: telemetry tests directory not found: $TESTS_DIR"
+  exit 1
 fi
 
 # Check Node.js and npm availability
