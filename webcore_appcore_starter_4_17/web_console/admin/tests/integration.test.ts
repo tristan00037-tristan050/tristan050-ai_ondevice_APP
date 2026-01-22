@@ -4,5 +4,5 @@
  */
 
 import './e2e.test';
-import './rbac_ui.test';
+import './rbac_ui.test.tsx';
 

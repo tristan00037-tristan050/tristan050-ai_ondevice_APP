@@ -65,17 +65,11 @@ if [[ ! -d "$WEB_CONSOLE_ADMIN_DIR" ]]; then
   exit 1
 fi
 
-# Install dependencies for ops-console
+# Install dependencies for ops-console (lock-based, deterministic)
 if [[ -f "${OPS_CONSOLE_DIR}/package-lock.json" ]]; then
   npm --prefix "$OPS_CONSOLE_DIR" ci
 else
   npm --prefix "$OPS_CONSOLE_DIR" install
-fi
-
-# Install Jest dependencies if needed (in ops-console)
-# Check if jest is already installed
-if ! npm --prefix "$OPS_CONSOLE_DIR" list jest >/dev/null 2>&1; then
-  npm --prefix "$OPS_CONSOLE_DIR" install --save-dev jest@^29.7.0 ts-jest@^29.1.2 @types/jest@^29.5.12 @testing-library/react@^14.0.0 @testing-library/jest-dom@^6.1.0 jest-environment-jsdom@^29.7.0
 fi
 
 # Run tests using npm-only (ops-console's jest)
@@ -88,7 +82,7 @@ export NODE_PATH="${OPS_CONSOLE_DIR}/node_modules:${NODE_PATH:-}"
 JEST_BIN="${OPS_CONSOLE_DIR}/node_modules/.bin/jest"
 
 # Run tests using jest with config (npm-only, no ts-node/tsx)
-if "$JEST_BIN" -c jest.config.cjs --preset ts-jest/presets/default tests/integration.test.ts tests/e2e.test.ts tests/rbac_ui.test.ts --no-coverage 2>&1; then
+if "$JEST_BIN" -c jest.config.cjs tests/integration.test.ts tests/e2e.test.ts tests/rbac_ui.test.tsx --no-coverage 2>&1; then
   CONSOLE_ONBOARDING_DONE_OK=1
   RBAC_UI_ENFORCE_OK=1
   exit 0

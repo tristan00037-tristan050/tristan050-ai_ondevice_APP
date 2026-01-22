@@ -9,7 +9,9 @@
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "types": ["jest", "node", "@testing-library/jest-dom"],
+    "typeRoots": ["../../packages/ops-console/node_modules/@types", "../../node_modules/@types"]
   },
   "include": ["tests/**/*", "**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]
