@@ -6,6 +6,12 @@
 import { createModel, createModelVersion, createArtifact, clearAll } from '../storage/service';
 import { clearAuditLogs, queryAuditLogs } from '../../control_plane/audit/service';
 import * as artifactsApi from '../api/artifacts';
+import * as signatureVerify from '../verify/signature';
+
+// Mock signature verification for tests
+jest.mock('../verify/signature', () => ({
+  verifyArtifactRegisterSignature: jest.fn(),
+}));
 
 describe('Model Registry - Artifacts', () => {
   beforeEach(() => {
@@ -14,6 +20,13 @@ describe('Model Registry - Artifacts', () => {
   });
 
   describe('createArtifactHandler', () => {
+    beforeEach(() => {
+      // Mock signature verification to pass by default
+      (signatureVerify.verifyArtifactRegisterSignature as jest.Mock).mockReturnValue({
+        valid: true,
+      });
+    });
+
     it('should register artifact with model:write permission', async () => {
       const model = createModel('tenant1', { name: 'test-model' });
       const version = createModelVersion('tenant1', model.id, { version: '1.0.0' });
@@ -26,6 +39,9 @@ describe('Model Registry - Artifacts', () => {
           sha256: 'abc123',
           size_bytes: 1024,
           storage_ref: 's3://bucket/key',
+          signature: 'test-signature',
+          sig_alg: 'ed25519',
+          key_id: 'test-key-1',
         },
         method: 'POST',
         path: `/api/v1/models/${model.id}/versions/${version!.id}/artifacts`,
@@ -74,6 +90,9 @@ describe('Model Registry - Artifacts', () => {
           sha256: 'abc123',
           size_bytes: 1024,
           storage_ref: 's3://bucket/key',
+          signature: 'test-signature',
+          sig_alg: 'ed25519',
+          key_id: 'test-key-1',
         },
         method: 'POST',
         path: `/api/v1/models/${model.id}/versions/${version!.id}/artifacts`,
