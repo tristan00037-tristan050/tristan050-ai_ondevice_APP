@@ -16,7 +16,7 @@ required check + 증거 링크를 단일 진실원(SSOT)으로 고정한다.
   - PR #157 (required check workflow)
 
 - product-verify-web-console Actions run 링크(필수)
-  - (여기에 "대표 run 1개" URL을 붙여넣기)
+  - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/actions/runs/21234676789
 
 ## 봉인 커맨드(출력 기반)
 - 오염 스캔(0건이어야 함)
