@@ -20,7 +20,10 @@ GitHub required checks + 증거 링크를 단일 진실원(SSOT)으로 고정한
   - PR #152 (HTTP boundary E2E): https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/actions/runs/21229225851
 
 ## 완료 조건(체크리스트)
-- [ ] main ruleset에서 product-verify-telemetry가 required check로 설정됨
-- [ ] PR 화면에서 product-verify-telemetry가 필수로 표시되고, 실패 시 머지 불가가 보임
-- [ ] 위 Actions run 링크가 SSOT에 고정됨
+- [x] main ruleset에서 product-verify-telemetry가 required check로 설정됨
+- [x] PR 화면에서 product-verify-telemetry가 필수로 표시되고, 실패 시 머지 불가가 보임
+- [x] 위 Actions run 링크가 SSOT에 고정됨
+
+## Ruleset evidence
+- Ruleset evidence: docs/ops/evidence/2026-01-23_ruleset_required_checks_telemetry_web_console.md
 
