@@ -31,7 +31,7 @@ PASS requires:
   - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/actions/runs/21235725619
 
 ## 완료 조건(체크리스트)
-- [ ] main ruleset/branch protection에서 product-verify-attestation가 required check로 설정됨
-- [ ] PR 화면에서 product-verify-attestation가 필수로 표시되고, 실패 시 머지 불가가 보임
-- [ ] Actions run 링크가 SSOT에 고정됨
+- [x] main ruleset/branch protection에서 product-verify-attestation가 required check로 설정됨
+- [x] PR 화면에서 product-verify-attestation가 필수로 표시되고, 실패 시 머지 불가가 보임
+- [x] Actions run 링크가 SSOT에 고정됨
 
