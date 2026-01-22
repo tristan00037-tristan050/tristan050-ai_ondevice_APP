@@ -1,1 +1,3 @@
 package-lock.json
+# Exception: ops-console requires package-lock.json for npm ci in CI
+!webcore_appcore_starter_4_17/packages/ops-console/package-lock.json
