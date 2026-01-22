@@ -69,11 +69,31 @@ else
   npm --prefix "$ATTESTATION_DIR" install
 fi
 
-# Run tests
-if npm --prefix "$ATTESTATION_DIR" test; then
-  ATTEST_VERIFY_FAILCLOSED_OK=1
-  ATTEST_ALLOW_OK=1
-  ATTEST_BLOCK_OK=1
+# Run tests and parse results
+cd "$ATTESTATION_DIR"
+
+# Run tests and capture output
+TEST_OUTPUT=$(npm test 2>&1) || TEST_EXIT=$?
+
+# Check if tests passed
+if [[ "${TEST_EXIT:-0}" -eq 0 ]]; then
+  # Check if HTTP E2E test file exists and passed
+  HTTP_E2E_FILE="${ATTESTATION_DIR}/tests/attestation_http_e2e.test.ts"
+  if [[ -f "$HTTP_E2E_FILE" ]]; then
+    # If HTTP E2E test suite passed, both deny and allow tests should have run
+    if echo "$TEST_OUTPUT" | grep -q "attestation_http_e2e.test.ts" && \
+       echo "$TEST_OUTPUT" | grep -q "PASS"; then
+      # HTTP E2E file contains both deny and allow tests
+      # If the test suite passed, both tests should have passed
+      ATTEST_BLOCK_OK=1
+      ATTEST_ALLOW_OK=1
+    fi
+  fi
+
+  # Both deny and allow tests must pass for fail-closed OK
+  if [[ "$ATTEST_BLOCK_OK" -eq 1 ]] && [[ "$ATTEST_ALLOW_OK" -eq 1 ]]; then
+    ATTEST_VERIFY_FAILCLOSED_OK=1
+  fi
   exit 0
 else
   exit 1
