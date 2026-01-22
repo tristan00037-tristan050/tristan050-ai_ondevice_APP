@@ -10,6 +10,7 @@ import { requirePermission } from '../../control_plane/auth/rbac';
 import { auditAllow, auditDeny } from '../../control_plane/audit/hooks';
 import { createArtifact, getArtifactById, listArtifacts } from '../storage/service';
 import { CreateArtifactRequest } from '../models/artifact';
+import { verifyArtifactRegisterSignature } from '../verify/signature';
 
 /**
  * POST /api/v1/models/{modelId}/versions/{versionId}/artifacts
@@ -54,6 +55,42 @@ export async function createArtifactHandler(req: Request, res: Response): Promis
       res.status(400).json({
         error: 'Bad Request',
         message: 'platform, runtime, sha256, and storage_ref are required',
+        reason_code: 'CANONICAL_PAYLOAD_INVALID',
+      });
+      return;
+    }
+
+    // Fail-closed: Verify signature (required)
+    const signatureValidation = verifyArtifactRegisterSignature(
+      context.tenant_id,
+      {
+        model_id: modelId,
+        version_id: versionId,
+        platform: request.platform,
+        runtime: request.runtime,
+        sha256: request.sha256,
+        size_bytes: request.size_bytes || 0,
+        storage_ref: request.storage_ref,
+      },
+      request.signature,
+      request.sig_alg,
+      request.key_id
+    );
+
+    if (!signatureValidation.valid) {
+      // Fail-closed: Do not store/apply rejected requests
+      auditDeny(
+        req,
+        context,
+        'model:write',
+        'model',
+        modelId,
+        `Signature validation failed: ${signatureValidation.reason_code}`
+      );
+      res.status(signatureValidation.status).json({
+        error: signatureValidation.status === 400 ? 'Bad Request' : 'Forbidden',
+        message: 'Signature validation failed',
+        reason_code: signatureValidation.reason_code,
       });
       return;
     }

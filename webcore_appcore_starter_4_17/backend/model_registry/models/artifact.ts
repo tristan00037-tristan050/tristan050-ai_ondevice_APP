@@ -23,5 +23,9 @@ export interface CreateArtifactRequest {
   size_bytes: number;
   storage_ref: string;
   metadata?: Record<string, unknown>;
+  // Signature fields (required for artifact register)
+  signature?: string;
+  sig_alg?: string;
+  key_id?: string;
 }
 
