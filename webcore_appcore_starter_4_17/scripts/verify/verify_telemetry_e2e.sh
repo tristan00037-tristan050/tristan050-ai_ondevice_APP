@@ -76,23 +76,24 @@ if [[ ! -d "$TELEMETRY_DIR" ]]; then
   exit 1
 fi
 
-# Install dependencies
-# First install control_plane dependencies (telemetry depends on it)
+# Install dependencies (npm ci only, fail-closed if lockfile missing)
+
+require_lockfile() {
+  local dir="$1"
+  if [[ ! -f "${dir}/package-lock.json" ]]; then
+    echo "FAIL: lockfile missing (package-lock.json): ${dir}"
+    exit 1
+  fi
+}
+
 CONTROL_PLANE_DIR="${ROOT}/webcore_appcore_starter_4_17/backend/control_plane"
 if [[ -d "$CONTROL_PLANE_DIR" ]]; then
-  if [[ -f "${CONTROL_PLANE_DIR}/package-lock.json" ]]; then
-    npm --prefix "$CONTROL_PLANE_DIR" ci
-  else
-    npm --prefix "$CONTROL_PLANE_DIR" install
-  fi
+  require_lockfile "$CONTROL_PLANE_DIR"
+  npm --prefix "$CONTROL_PLANE_DIR" ci
 fi
 
-# Then install telemetry dependencies
-if [[ -f "${TELEMETRY_DIR}/package-lock.json" ]]; then
-  npm --prefix "$TELEMETRY_DIR" ci
-else
-  npm --prefix "$TELEMETRY_DIR" install
-fi
+require_lockfile "$TELEMETRY_DIR"
+npm --prefix "$TELEMETRY_DIR" ci
 
 # Run tests
 if npm --prefix "$TELEMETRY_DIR" test; then

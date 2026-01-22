@@ -65,23 +65,24 @@ if [[ ! -d "$MODEL_REGISTRY_DIR" ]]; then
   exit 1
 fi
 
-# Install dependencies
-# First install control_plane dependencies (model_registry depends on it)
+# Install dependencies (npm ci only, fail-closed if lockfile missing)
+
+require_lockfile() {
+  local dir="$1"
+  if [[ ! -f "${dir}/package-lock.json" ]]; then
+    echo "FAIL: lockfile missing (package-lock.json): ${dir}"
+    exit 1
+  fi
+}
+
 CONTROL_PLANE_DIR="${ROOT}/webcore_appcore_starter_4_17/backend/control_plane"
 if [[ -d "$CONTROL_PLANE_DIR" ]]; then
-  if [[ -f "${CONTROL_PLANE_DIR}/package-lock.json" ]]; then
-    npm --prefix "$CONTROL_PLANE_DIR" ci
-  else
-    npm --prefix "$CONTROL_PLANE_DIR" install
-  fi
+  require_lockfile "$CONTROL_PLANE_DIR"
+  npm --prefix "$CONTROL_PLANE_DIR" ci
 fi
 
-# Then install model_registry dependencies
-if [[ -f "${MODEL_REGISTRY_DIR}/package-lock.json" ]]; then
-  npm --prefix "$MODEL_REGISTRY_DIR" ci
-else
-  npm --prefix "$MODEL_REGISTRY_DIR" install
-fi
+require_lockfile "$MODEL_REGISTRY_DIR"
+npm --prefix "$MODEL_REGISTRY_DIR" ci
 
 # Run tests and parse results
 cd "$MODEL_REGISTRY_DIR"
