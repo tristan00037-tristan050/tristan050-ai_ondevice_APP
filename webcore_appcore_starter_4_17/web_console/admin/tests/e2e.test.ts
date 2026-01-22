@@ -107,8 +107,3 @@ describe('E2E Onboarding Test', () => {
   });
 });
 
-// Output-based proof
-if (require.main === module) {
-  console.log('CONSOLE_ONBOARDING_DONE_OK=1');
-}
-
