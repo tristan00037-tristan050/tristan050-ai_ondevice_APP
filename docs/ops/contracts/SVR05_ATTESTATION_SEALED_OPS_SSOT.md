@@ -28,7 +28,7 @@ PASS requires:
 
 ## 증거 링크(필수)
 - product-verify-attestation Actions run 링크(필수)
-  - (여기에 "대표 run 1개" URL을 붙여넣기)
+  - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/actions/runs/21235725619
 
 ## 완료 조건(체크리스트)
 - [ ] main ruleset/branch protection에서 product-verify-attestation가 required check로 설정됨
