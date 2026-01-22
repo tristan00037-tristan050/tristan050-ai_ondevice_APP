@@ -9,4 +9,4 @@
   - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/166
 
 ## Actions Run (product-verify-model-registry)
-- (여기에 최신 run 1개 URL을 붙여넣기)
+- https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/actions/runs/21238929913
