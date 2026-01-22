@@ -83,8 +83,3 @@ describe('RBAC UI Tests', () => {
   });
 });
 
-// Output-based proof
-if (require.main === module) {
-  console.log('RBAC_UI_ENFORCE_OK=1');
-}
-
