@@ -38,7 +38,7 @@ describe('Model Registry - Signed Artifact Delivery', () => {
     return Buffer.from(pem, 'utf-8').toString('base64');
   }
 
-  it('should deliver signed artifact with meta-only metadata', () => {
+  it('should allow signed artifact with valid signature (upload sign verify)', () => {
     const model = createModel('tenant1', { name: 'test-model' });
     expect(model.id).toBeTruthy();
     expect(model.status).toBe('active');
@@ -81,7 +81,7 @@ describe('Model Registry - Signed Artifact Delivery', () => {
     expect(isValid).toBe(true);
   });
 
-  it('should fail-closed on tampered signature', () => {
+  it('should reject tampered signature (apply fail-closed)', () => {
     const model = createModel('tenant1', { name: 'test-model' });
     const version = createModelVersion('tenant1', model.id, { version: '1.0.0' });
 
