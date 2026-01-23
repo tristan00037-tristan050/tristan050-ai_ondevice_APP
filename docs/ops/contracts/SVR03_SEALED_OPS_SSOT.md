@@ -75,6 +75,38 @@ PASS requires:
 - 보관 기간: 최근 14일만 유지 (그 외 자동 삭제)
 - 민감 데이터: payload 원문은 절대 저장하지 않음
 
+## Audit 조회 레시피(복붙 커맨드)
+
+공통:
+- 기본 출력 상한: 200줄 (LIMIT=200)
+- audit 파일: audit_YYYY-MM-DD(.1).json
+- 민감 데이터(payload 원문) 저장 금지
+
+1) 특정 날짜 전체(상한 200)
+```bash
+LIMIT=200 bash webcore_appcore_starter_4_17/scripts/ops/svr03_audit_query.sh --date YYYY-MM-DD
+```
+
+2) 기간 조회(from~to)
+```bash
+LIMIT=200 bash webcore_appcore_starter_4_17/scripts/ops/svr03_audit_query.sh --from YYYY-MM-DD --to YYYY-MM-DD
+```
+
+3) reason_code 필터
+```bash
+LIMIT=200 bash webcore_appcore_starter_4_17/scripts/ops/svr03_audit_query.sh --from YYYY-MM-DD --to YYYY-MM-DD --reason_code <RC>
+```
+
+4) key_id 필터
+```bash
+LIMIT=200 bash webcore_appcore_starter_4_17/scripts/ops/svr03_audit_query.sh --from YYYY-MM-DD --to YYYY-MM-DD --key_id <KEY_ID>
+```
+
+5) sha256 필터
+```bash
+LIMIT=200 bash webcore_appcore_starter_4_17/scripts/ops/svr03_audit_query.sh --from YYYY-MM-DD --to YYYY-MM-DD --artifact_sha256 <SHA256>
+```
+
 ## 완료 조건(체크리스트)
 - [x] main ruleset/branch protection에서 product-verify-model-registry가 required check로 설정됨
 - [x] PR 화면에서 product-verify-model-registry가 필수로 표시되고, 실패 시 머지 불가가 보임
