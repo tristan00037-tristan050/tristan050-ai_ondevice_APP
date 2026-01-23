@@ -26,5 +26,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/verify/verify_repo_guards.sh
+          bash scripts/verify/verify_repo_contracts.sh
 
