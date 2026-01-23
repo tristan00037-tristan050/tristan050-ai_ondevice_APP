@@ -7,11 +7,12 @@
 import { Model, CreateModelRequest } from '../models/model';
 import { ModelVersion, CreateModelVersionRequest } from '../models/version';
 import { Artifact, CreateArtifactRequest } from '../models/artifact';
+import { PersistMap } from '../services/persist_maps';
 
-// In-memory stores
-const models: Model[] = [];
-const modelVersions: ModelVersion[] = [];
-const artifacts: Artifact[] = [];
+// Persistent stores (file-based, restart-safe)
+const models = new PersistMap<Model>("models.json");
+const modelVersions = new PersistMap<ModelVersion>("model_versions.json");
+const artifacts = new PersistMap<Artifact>("artifacts.json");
 
 /**
  * Model operations
@@ -26,13 +27,16 @@ export function createModel(tenantId: string, request: CreateModelRequest): Mode
     updated_at: new Date(),
     metadata: request.metadata,
   };
-  models.push(model);
+  models.set(model.id, model);
   return model;
 }
 
 export function getModelById(tenantId: string, modelId: string): Model | null {
-  const model = models.find(m => m.id === modelId && m.tenant_id === tenantId);
-  return model || null;
+  const model = models.get(modelId);
+  if (!model || model.tenant_id !== tenantId) {
+    return null;
+  }
+  return model;
 }
 
 export function listModels(tenantId: string): Model[] {
@@ -61,7 +65,7 @@ export function createModelVersion(
     created_at: new Date(),
     metadata: request.metadata,
   };
-  modelVersions.push(version);
+  modelVersions.set(version.id, version);
   return version;
 }
 
@@ -76,10 +80,11 @@ export function getModelVersionById(
     return null;
   }
 
-  const version = modelVersions.find(
-    v => v.id === versionId && v.model_id === modelId
-  );
-  return version || null;
+  const version = modelVersions.get(versionId);
+  if (!version || version.model_id !== modelId) {
+    return null;
+  }
+  return version;
 }
 
 export function listModelVersions(tenantId: string, modelId: string): ModelVersion[] {
@@ -119,7 +124,7 @@ export function createArtifact(
     created_at: new Date(),
     metadata: request.metadata,
   };
-  artifacts.push(artifact);
+  artifacts.set(artifact.id, artifact);
   return artifact;
 }
 
@@ -135,10 +140,11 @@ export function getArtifactById(
     return null;
   }
 
-  const artifact = artifacts.find(
-    a => a.id === artifactId && a.model_version_id === versionId
-  );
-  return artifact || null;
+  const artifact = artifacts.get(artifactId);
+  if (!artifact || artifact.model_version_id !== versionId) {
+    return null;
+  }
+  return artifact;
 }
 
 export function listArtifacts(
@@ -159,8 +165,15 @@ export function listArtifacts(
  * Clear all data (for testing only)
  */
 export function clearAll(): void {
-  models.length = 0;
-  modelVersions.length = 0;
-  artifacts.length = 0;
+  // Clear all entries from persistent maps
+  for (const [key] of models.entries()) {
+    models.delete(key);
+  }
+  for (const [key] of modelVersions.entries()) {
+    modelVersions.delete(key);
+  }
+  for (const [key] of artifacts.entries()) {
+    artifacts.delete(key);
+  }
 }
 
