@@ -22,10 +22,25 @@ GitHub required checks + 증거 링크를 단일 진실원(SSOT)으로 고정한
   - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/176
 - #177 key rotation/revoke (P0-7)
   - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/177
+- #179 영속+감사 (P1-1)
+  - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/179
+- #180 저장소 마이그레이션 (P1-2)
+  - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/180
+- #181 원자/손상 가드 (P1-3)
+  - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/181
+- #182 lock/rotate (P1-4)
+  - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/182
+- #183 ops smoke/report (P1-5)
+  - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/183
+- #184 batch flush (P1-6)
+  - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/184
+- #185 multiproc lock + daily audit (P1-7)
+  - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/185
+- #186 ops SSOT 최종화 (P1-8)
+  - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/186
 
 ## Actions Run (product-verify-model-registry)
 - 최신 run: https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/actions/runs/21238929913
-- (PR #177 이후 최신 run URL로 업데이트 필요)
 
 ## Ruleset evidence
 - docs/ops/evidence/2026-01-23_ruleset_required_checks_svr03_model_registry.md
