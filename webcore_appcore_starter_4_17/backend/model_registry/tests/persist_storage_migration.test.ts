@@ -20,6 +20,8 @@ describe("P1-2: storage migrated to persistence (restart-safe)", () => {
 
     const m1 = new PersistMap<any>(testFile);
     m1.set(key, { id: key, v: 1 });
+    // Force flush to ensure data is written before creating new instance
+    m1.flushNow();
 
     // simulate restart by creating a new instance
     const m2 = new PersistMap<any>(testFile);
