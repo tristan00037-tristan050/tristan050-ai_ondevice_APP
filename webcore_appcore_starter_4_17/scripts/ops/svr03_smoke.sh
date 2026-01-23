@@ -5,7 +5,18 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 echo "== SVR-03 SMOKE START =="
-date -Is
+# timestamp (portable: Linux/macOS)
+ts() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - <<'PY'
+from datetime import datetime, timezone
+print(datetime.now(timezone.utc).isoformat())
+PY
+  else
+    date
+  fi
+}
+ts
 
 echo "== 1) verify (must PASS) =="
 bash scripts/verify/verify_svr03_model_registry.sh ; echo "EXIT=$?"

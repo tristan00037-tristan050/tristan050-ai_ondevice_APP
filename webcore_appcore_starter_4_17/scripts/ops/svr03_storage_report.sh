@@ -6,7 +6,18 @@ cd "$ROOT"
 
 DATA_DIR="backend/model_registry/data"
 echo "== SVR-03 STORAGE REPORT =="
-date -Is
+# timestamp (portable: Linux/macOS)
+ts() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - <<'PY'
+from datetime import datetime, timezone
+print(datetime.now(timezone.utc).isoformat())
+PY
+  else
+    date
+  fi
+}
+ts
 echo "DIR=$DATA_DIR"
 
 if [[ ! -d "$DATA_DIR" ]]; then
