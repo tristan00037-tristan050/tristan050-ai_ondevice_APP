@@ -1,0 +1,30 @@
+name: product-verify-repo-guards
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  product-verify-repo-guards:
+    name: product-verify-repo-guards
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ripgrep
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: Run repo-wide guards (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_repo_guards.sh
+
