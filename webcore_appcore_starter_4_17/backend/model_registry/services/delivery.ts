@@ -4,6 +4,7 @@
  */
 
 import { verifyDeliveryApplySignature, verifyDeliveryRollbackSignature } from '../verify/signature';
+import { appendAudit } from './audit';
 
 export type ApplyResult =
   | { ok: true; applied: boolean }
@@ -35,16 +36,40 @@ export function applyArtifact(
 ): ApplyResult {
   // Fail-closed: signature required
   if (!delivery.signature || !delivery.key_id) {
+    appendAudit({
+      ts_ms: Date.now(),
+      action: "APPLY",
+      result: "DENY",
+      reason_code: 'SIGNATURE_MISSING',
+      key_id: delivery.key_id,
+      sha256: delivery.sha256,
+    });
     return { ok: false, reason_code: 'SIGNATURE_MISSING', applied: false };
   }
 
   // Fail-closed: ts_ms required
   if (delivery.ts_ms === undefined || delivery.ts_ms === null) {
+    appendAudit({
+      ts_ms: Date.now(),
+      action: "APPLY",
+      result: "DENY",
+      reason_code: 'CANONICAL_PAYLOAD_INVALID',
+      key_id: delivery.key_id,
+      sha256: delivery.sha256,
+    });
     return { ok: false, reason_code: 'CANONICAL_PAYLOAD_INVALID', applied: false };
   }
 
   // Fail-closed: check expiration
   if (delivery.expires_at !== undefined && delivery.expires_at < Date.now()) {
+    appendAudit({
+      ts_ms: Date.now(),
+      action: "APPLY",
+      result: "DENY",
+      reason_code: 'SIGNATURE_EXPIRED',
+      key_id: delivery.key_id,
+      sha256: delivery.sha256,
+    });
     return { ok: false, reason_code: 'SIGNATURE_EXPIRED', applied: false };
   }
 
@@ -64,6 +89,14 @@ export function applyArtifact(
   );
 
   if (!validation.valid) {
+    appendAudit({
+      ts_ms: Date.now(),
+      action: "APPLY",
+      result: "DENY",
+      reason_code: validation.reason_code,
+      key_id: delivery.key_id,
+      sha256: delivery.sha256,
+    });
     return { ok: false, reason_code: validation.reason_code, applied: false };
   }
 
@@ -71,8 +104,24 @@ export function applyArtifact(
   // In real implementation, this would check against stored artifact
   // For now, we just ensure sha256 is present
   if (!delivery.sha256) {
+    appendAudit({
+      ts_ms: Date.now(),
+      action: "APPLY",
+      result: "DENY",
+      reason_code: 'SHA256_MISSING',
+      key_id: delivery.key_id,
+    });
     return { ok: false, reason_code: 'SHA256_MISSING', applied: false };
   }
+
+  // Success: record ALLOW audit event
+  appendAudit({
+    ts_ms: Date.now(),
+    action: "APPLY",
+    result: "ALLOW",
+    key_id: delivery.key_id,
+    sha256: delivery.sha256,
+  });
 
   return { ok: true, applied: true };
 }
@@ -95,11 +144,27 @@ export function rollbackArtifact(
 ): RollbackResult {
   // Fail-closed: signature required
   if (!delivery.signature || !delivery.key_id) {
+    appendAudit({
+      ts_ms: Date.now(),
+      action: "ROLLBACK",
+      result: "DENY",
+      reason_code: 'SIGNATURE_MISSING',
+      key_id: delivery.key_id,
+      sha256: delivery.sha256,
+    });
     return { ok: false, reason_code: 'SIGNATURE_MISSING', rolled_back: false };
   }
 
   // Fail-closed: ts_ms required
   if (delivery.ts_ms === undefined || delivery.ts_ms === null) {
+    appendAudit({
+      ts_ms: Date.now(),
+      action: "ROLLBACK",
+      result: "DENY",
+      reason_code: 'CANONICAL_PAYLOAD_INVALID',
+      key_id: delivery.key_id,
+      sha256: delivery.sha256,
+    });
     return { ok: false, reason_code: 'CANONICAL_PAYLOAD_INVALID', rolled_back: false };
   }
 
@@ -119,8 +184,25 @@ export function rollbackArtifact(
   );
 
   if (!validation.valid) {
+    appendAudit({
+      ts_ms: Date.now(),
+      action: "ROLLBACK",
+      result: "DENY",
+      reason_code: validation.reason_code,
+      key_id: delivery.key_id,
+      sha256: delivery.sha256,
+    });
     return { ok: false, reason_code: validation.reason_code, rolled_back: false };
   }
+
+  // Success: record ALLOW audit event
+  appendAudit({
+    ts_ms: Date.now(),
+    action: "ROLLBACK",
+    result: "ALLOW",
+    key_id: delivery.key_id,
+    sha256: delivery.sha256,
+  });
 
   return { ok: true, rolled_back: true };
 }
