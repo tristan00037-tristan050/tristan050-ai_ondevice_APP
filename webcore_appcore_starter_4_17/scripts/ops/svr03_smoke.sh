@@ -26,7 +26,7 @@ DATA_DIR="backend/model_registry/data"
 test -d "$DATA_DIR" && ls -lh "$DATA_DIR" || { echo "FAIL: missing $DATA_DIR"; exit 1; }
 
 echo "== 3) audit log exists (or rotated) =="
-ls -lh "$DATA_DIR"/audit_log*.json 2>/dev/null || echo "WARN: audit log not found yet (no events recorded)"
+ls -lh "$DATA_DIR"/audit_*.json 2>/dev/null || echo "WARN: audit log not found yet (no events recorded)"
 
 echo "== 4) corruption guard sanity (should not crash on normal files) =="
 # 읽기 실패가 발생하면 persist_read가 PERSIST_CORRUPTED로 fail-closed 되어야 함
