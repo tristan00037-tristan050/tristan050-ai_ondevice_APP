@@ -61,6 +61,7 @@ export async function createArtifactHandler(req: Request, res: Response): Promis
     }
 
     // Fail-closed: Verify signature (required)
+    // ts_ms must come from signed payload, not regenerated
     const signatureValidation = verifyArtifactRegisterSignature(
       context.tenant_id,
       {
@@ -74,7 +75,8 @@ export async function createArtifactHandler(req: Request, res: Response): Promis
       },
       request.signature,
       request.sig_alg,
-      request.key_id
+      request.key_id,
+      request.ts_ms
     );
 
     if (!signatureValidation.valid) {
