@@ -103,7 +103,6 @@ fun main() {
         test.testSignatureVerificationFailure()
         test.testSwapFailsWithoutStagedFile()
         test.testVerificationFailurePreventsSwap()
-        println("APPLY_FAILCLOSED_OK=1")
     } catch (e: Exception) {
         println("FAIL: ${e.message}")
         throw e

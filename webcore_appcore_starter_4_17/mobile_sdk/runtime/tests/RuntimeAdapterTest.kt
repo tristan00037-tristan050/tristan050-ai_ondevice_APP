@@ -125,10 +125,6 @@ fun main() {
         test.testDeterministicInference()
         test.testPerfMetrics()
         test.testOfflineFirst()
-        
-        println("ONDEVICE_INFER_OK=1")
-        println("PERF_P50_P95_KEYS_PRESENT=1")
-        println("PERF_MEMORY_PEAK_KEY_PRESENT=1")
     } catch (e: Exception) {
         println("FAIL: ${e.message}")
         throw e

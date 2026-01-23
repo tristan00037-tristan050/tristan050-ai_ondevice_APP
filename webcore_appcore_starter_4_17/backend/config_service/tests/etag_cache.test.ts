@@ -66,8 +66,4 @@ describe('ETag Cache Tests', () => {
   });
 });
 
-// Output-based proof
-if (require.main === module) {
-  console.log('CONFIG_ETAG_CACHE_OK=1');
-}
 

@@ -149,8 +149,4 @@ describe('Rollback Tests', () => {
   });
 });
 
-// Output-based proof
-if (require.main === module) {
-  console.log('CONFIG_ROLLBACK_OK=1');
-}
 

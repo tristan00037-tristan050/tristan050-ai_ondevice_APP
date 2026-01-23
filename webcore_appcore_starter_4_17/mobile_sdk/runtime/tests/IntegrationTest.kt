@@ -22,11 +22,6 @@ fun main() {
         perfTest.testPerfMetricsMetaOnly()
         perfTest.testPerfMetricsP50P95Present()
         perfTest.testPerfMetricsPeakMemoryPresent()
-        
-        // Output-based proof
-        println("ONDEVICE_INFER_OK=1")
-        println("PERF_P50_P95_KEYS_PRESENT=1")
-        println("PERF_MEMORY_PEAK_KEY_PRESENT=1")
     } catch (e: Exception) {
         println("FAIL: ${e.message}")
         throw e
