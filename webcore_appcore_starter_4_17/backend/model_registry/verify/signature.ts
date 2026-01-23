@@ -9,6 +9,7 @@
 import * as crypto from 'crypto';
 import { verify } from '../services/signing';
 import { canonicalizeJson } from '../../../../packages/common/src/canon/jcs';
+import { canVerifyWithKey, getKey } from '../services/key_store';
 
 export type SignatureValidationResult =
   | { valid: true }
@@ -36,18 +37,27 @@ function createCanonicalPayload(
 }
 
 /**
- * Get signing key by key_id (mock for now)
- * TODO: Implement key lookup from key store
+ * Get signing key by key_id from key store
+ * Checks key state (active/grace/revoked) before returning
  */
-function getSigningKey(keyId: string): { publicKey: string } | null {
-  // Mock: return a test key for now
-  // In production, this should look up from key store
-  if (keyId === 'test-key-1') {
-    return {
-      publicKey: 'test-public-key-base64',
-    };
+function getSigningKey(keyId: string, now_ms: number): { publicKey: string } | null {
+  // Check if key can be used for verification (active/grace/revoked check)
+  const keyCheck = canVerifyWithKey(keyId, now_ms);
+  if (!keyCheck.ok) {
+    return null; // Will return KEY_UNKNOWN or KEY_REVOKED or KEY_GRACE_EXPIRED
   }
-  return null;
+
+  // Get key record from store
+  const rec = getKey(keyId);
+  if (!rec) {
+    return null;
+  }
+
+  // Return public key (key_store uses PEM format, convert to base64 for verify function)
+  // Note: verify function expects base64-encoded PEM
+  return {
+    publicKey: rec.public_key_pem, // Already base64-encoded PEM from key_store
+  };
 }
 
 /**
@@ -96,15 +106,30 @@ export function verifyArtifactRegisterSignature(
     };
   }
 
-  // Get signing key
-  const key = getSigningKey(key_id);
-  if (!key) {
+  // Check key state and get signing key from key store
+  const now_ms = Date.now();
+  const keyCheck = canVerifyWithKey(key_id, now_ms);
+  if (!keyCheck.ok) {
+    return {
+      valid: false,
+      reason_code: keyCheck.reason_code || 'KEY_ID_UNKNOWN',
+      status: keyCheck.reason_code === 'KEY_REVOKED' || keyCheck.reason_code === 'KEY_GRACE_EXPIRED' ? 403 : 400,
+    };
+  }
+
+  const rec = getKey(key_id);
+  if (!rec) {
     return {
       valid: false,
       reason_code: 'KEY_ID_UNKNOWN',
       status: 400,
     };
   }
+
+  // Get signing key (convert PEM to base64 for verify function)
+  const key = {
+    publicKey: rec.public_key_pem, // key_store stores base64-encoded PEM
+  };
 
   // Create canonical payload using ts_ms from signed payload
   const canonicalPayload = createCanonicalPayload('ARTIFACT_REGISTER', tenantId, ts_ms, {
@@ -171,16 +196,6 @@ export function verifyDeliveryApplySignature(
     };
   }
 
-  // Get signing key
-  const key = getSigningKey(key_id);
-  if (!key) {
-    return {
-      valid: false,
-      reason_code: 'KEY_ID_UNKNOWN',
-      status: 400,
-    };
-  }
-
   // Fail-closed: ts_ms must be provided from signed payload
   if (ts_ms === undefined || ts_ms === null) {
     return {
@@ -189,6 +204,31 @@ export function verifyDeliveryApplySignature(
       status: 400,
     };
   }
+
+  // Check key state and get signing key from key store
+  const now_ms = Date.now();
+  const keyCheck = canVerifyWithKey(key_id, now_ms);
+  if (!keyCheck.ok) {
+    return {
+      valid: false,
+      reason_code: keyCheck.reason_code || 'KEY_ID_UNKNOWN',
+      status: keyCheck.reason_code === 'KEY_REVOKED' || keyCheck.reason_code === 'KEY_GRACE_EXPIRED' ? 403 : 400,
+    };
+  }
+
+  const rec = getKey(key_id);
+  if (!rec) {
+    return {
+      valid: false,
+      reason_code: 'KEY_ID_UNKNOWN',
+      status: 400,
+    };
+  }
+
+  // Get signing key (convert PEM to base64 for verify function)
+  const key = {
+    publicKey: rec.public_key_pem, // key_store stores base64-encoded PEM
+  };
 
   // Create canonical payload
   const canonicalPayload = createCanonicalPayload('DELIVERY_APPLY', tenantId, ts_ms, {
@@ -249,16 +289,6 @@ export function verifyDeliveryRollbackSignature(
     };
   }
 
-  // Get signing key
-  const key = getSigningKey(key_id);
-  if (!key) {
-    return {
-      valid: false,
-      reason_code: 'KEY_ID_UNKNOWN',
-      status: 400,
-    };
-  }
-
   // Fail-closed: ts_ms must be provided from signed payload
   if (ts_ms === undefined || ts_ms === null) {
     return {
@@ -267,6 +297,31 @@ export function verifyDeliveryRollbackSignature(
       status: 400,
     };
   }
+
+  // Check key state and get signing key from key store
+  const now_ms = Date.now();
+  const keyCheck = canVerifyWithKey(key_id, now_ms);
+  if (!keyCheck.ok) {
+    return {
+      valid: false,
+      reason_code: keyCheck.reason_code || 'KEY_ID_UNKNOWN',
+      status: keyCheck.reason_code === 'KEY_REVOKED' || keyCheck.reason_code === 'KEY_GRACE_EXPIRED' ? 403 : 400,
+    };
+  }
+
+  const rec = getKey(key_id);
+  if (!rec) {
+    return {
+      valid: false,
+      reason_code: 'KEY_ID_UNKNOWN',
+      status: 400,
+    };
+  }
+
+  // Get signing key (convert PEM to base64 for verify function)
+  const key = {
+    publicKey: rec.public_key_pem, // key_store stores base64-encoded PEM
+  };
 
   // Create canonical payload
   const canonicalPayload = createCanonicalPayload('DELIVERY_ROLLBACK', tenantId, ts_ms, {
