@@ -11,10 +11,10 @@ repo-wide 상위 가드(오염/merge_group 커버리지/SSOT placeholder)가
 
 ## 증거 링크(필수)
 - PR 링크 (Repo Guards 도입)
-  - (여기에 P0-3 PR 링크를 붙여 넣기)
+  - PR #172: https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/172
 
 - product-verify-repo-guards Actions run 링크(필수)
-  - (여기에 Actions run URL을 붙여 넣기)
+  - https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/actions/runs/21270098548
 
 - Ruleset/Branch protection evidence(필수)
   - docs/ops/evidence/2026-01-23_ruleset_required_checks_repo_guards.md
@@ -30,8 +30,8 @@ PASS requires:
 - EXIT=0
 
 ## 완료 조건(체크리스트)
-- [ ] main ruleset/branch protection에서 product-verify-repo-guards가 required check로 설정됨
-- [ ] PR 화면에서 product-verify-repo-guards가 필수로 표시되고, 실패 시 머지 불가가 보임
-- [ ] Actions run 링크가 SSOT에 고정됨
-- [ ] evidence 파일에 설정 근거가 텍스트로 고정됨
+- [x] main ruleset/branch protection에서 product-verify-repo-guards가 required check로 설정됨
+- [x] PR 화면에서 product-verify-repo-guards가 필수로 표시되고, 실패 시 머지 불가가 보임
+- [x] Actions run 링크가 SSOT에 고정됨
+- [x] evidence 파일에 설정 근거가 텍스트로 고정됨
 
