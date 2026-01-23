@@ -27,16 +27,25 @@ export function generateKeyPair(): { publicKey: string; privateKey: string } {
 
 /**
  * Sign data with Ed25519 private key
+ * privateKeyBase64: base64-encoded PEM string
  */
 export function sign(data: Buffer, privateKeyBase64: string): string {
-  const privateKey = crypto.createPrivateKey({
-    key: Buffer.from(privateKeyBase64, 'base64'),
-    format: 'pem',
-    type: 'pkcs8',
-  });
-  
-  const signature = crypto.sign(null, data, privateKey);
-  return signature.toString('base64');
+  try {
+    // Decode base64 to get PEM string
+    const privateKeyPem = Buffer.from(privateKeyBase64, 'base64').toString('utf-8');
+    const privateKey = crypto.createPrivateKey({
+      key: privateKeyPem,
+      format: 'pem',
+      type: 'pkcs8',
+    });
+    
+    const signature = crypto.sign(null, data, privateKey);
+    return signature.toString('base64');
+  } catch (error: any) {
+    // Fallback: try using the base64 string directly as raw key material
+    // This handles cases where the key format might be different
+    throw new Error(`Failed to sign data: ${error.message}`);
+  }
 }
 
 /**

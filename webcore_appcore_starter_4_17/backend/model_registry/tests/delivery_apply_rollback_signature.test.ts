@@ -1,54 +1,151 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect, beforeEach } from "@jest/globals";
+import { getDelivery, createModel, createModelVersion, createArtifact, releaseModelVersion, setReleasePointer, initializeSigningKey } from "../services/storage";
+import { applyArtifact, rollbackArtifact } from "../services/delivery";
+
+// Note: clearAll is not exported from services/storage, so we'll create test data fresh each time
 
 /**
  * P0-6: delivery/apply/rollback signature enforcement (deny-by-default)
  * NOTE: 이 테스트는 "서명/만료/키" 검증 실패 시 apply/rollback이 0으로 막히는지를 봉인한다.
- *
- * 실제 프로젝트의 delivery/apply/rollback 함수/엔드포인트에 맞게 import/호출만 연결하면 된다.
  */
 
 describe("SVR-03 signed delivery/apply/rollback (deny-by-default)", () => {
-  it("[EVID:MODEL_DELIVERY_SIGNATURE_REQUIRED_OK] delivery includes signature fields", async () => {
-    // TODO: 실제 delivery 호출로 교체
-    const delivery = {
-      sha256: "dummy",
-      signature: "dummy",
-      key_id: "k1",
-      ts_ms: 1700000000000,
-      expires_at: 1800000000000,
-    };
+  beforeEach(() => {
+    // Initialize signing key for each test
+    initializeSigningKey();
+  });
 
-    expect(delivery.sha256).toBeTruthy();
-    expect(delivery.signature).toBeTruthy();
-    expect(delivery.key_id).toBeTruthy();
-    expect(typeof delivery.ts_ms).toBe("number");
-    expect(typeof delivery.expires_at).toBe("number");
+  it("[EVID:MODEL_DELIVERY_SIGNATURE_REQUIRED_OK] delivery includes signature fields", async () => {
+    const model = createModel("tenant1", "user1", { name: "test-model" });
+    const version = createModelVersion(model.id, "tenant1", "user1", { version: "1.0.0" });
+    const artifact = createArtifact(version.id, "tenant1", "user1", {
+      platform: "android",
+      runtime: "tflite",
+      sha256: "abc123",
+      file_size: 1024,
+      file_path: "s3://bucket/key",
+      model_id: model.id,
+      version: version.version,
+    });
+    releaseModelVersion(version.id, "tenant1", "user1");
+    setReleasePointer(model.id, "tenant1", "user1", {
+      platform: "android",
+      runtime: "tflite",
+      model_version_id: version.id,
+      artifact_id: artifact.id,
+    });
+
+    const delivery = getDelivery(model.id, "tenant1", "android", "tflite");
+
+    expect(delivery).not.toBeNull();
+    expect(delivery!.sha256).toBeTruthy();
+    expect(delivery!.signature).toBeTruthy();
+    expect(delivery!.key_id).toBeTruthy();
+    expect(typeof delivery!.ts_ms).toBe("number");
+    expect(typeof delivery!.expires_at).toBe("number");
   });
 
   it("[EVID:MODEL_APPLY_FAILCLOSED_OK] apply fails closed on missing/invalid/expired signature", async () => {
-    // TODO: 실제 apply 호출로 교체
-    const apply = (x: any) => {
-      // placeholder: 실제 구현에서는 여기서 fail-closed 되어야 함
-      if (!x.signature || !x.key_id) return { ok: false, reason_code: "SIGNATURE_MISSING" };
-      return { ok: false, reason_code: "SIGNATURE_INVALID" };
-    };
+    const model = createModel("tenant1", "user1", { name: "test-model" });
+    const version = createModelVersion(model.id, "tenant1", "user1", { version: "1.0.0" });
+    const artifact = createArtifact(version.id, "tenant1", "user1", {
+      platform: "android",
+      runtime: "tflite",
+      sha256: "abc123",
+      file_size: 1024,
+      file_path: "s3://bucket/key",
+      model_id: model.id,
+      version: version.version,
+    });
+    releaseModelVersion(version.id, "tenant1", "user1");
+    setReleasePointer(model.id, "tenant1", "user1", {
+      platform: "android",
+      runtime: "tflite",
+      model_version_id: version.id,
+      artifact_id: artifact.id,
+    });
 
-    const r1 = apply({ sha256: "x" }); // missing
+    const delivery = getDelivery(model.id, "tenant1", "android", "tflite");
+    expect(delivery).not.toBeNull();
+
+    // Case 1: Missing signature
+    const r1 = applyArtifact("tenant1", {
+      sha256: delivery!.sha256,
+      model_id: model.id,
+      version_id: version.id,
+      artifact_id: artifact.id,
+      // signature, key_id missing
+    });
     expect(r1.ok).toBe(false);
+    expect(r1.applied).toBe(false);
+    expect("reason_code" in r1 && r1.reason_code).toBe("SIGNATURE_MISSING");
 
-    const r2 = apply({ sha256: "x", signature: "bad", key_id: "k1" }); // invalid
+    // Case 2: Invalid signature (tampered sha256)
+    const tampered = {
+      ...delivery!,
+      sha256: delivery!.sha256.replace(/./, "0"), // Tamper sha256
+    };
+    const r2 = applyArtifact("tenant1", {
+      ...tampered,
+      model_id: model.id,
+      version_id: version.id,
+      artifact_id: artifact.id,
+    });
     expect(r2.ok).toBe(false);
+    expect(r2.applied).toBe(false);
+    expect("reason_code" in r2 && r2.reason_code).toBeDefined();
+
+    // Case 3: Expired signature
+    const expired = {
+      ...delivery!,
+      expires_at: 1, // Past expiration
+    };
+    const r3 = applyArtifact("tenant1", {
+      ...expired,
+      model_id: model.id,
+      version_id: version.id,
+      artifact_id: artifact.id,
+    });
+    expect(r3.ok).toBe(false);
+    expect(r3.applied).toBe(false);
+    expect("reason_code" in r3 && r3.reason_code).toBe("SIGNATURE_EXPIRED");
   });
 
   it("[EVID:MODEL_ROLLBACK_OK] rollback is safe (fail-closed on invalid signature)", async () => {
-    // TODO: 실제 rollback 호출로 교체
-    const rollback = (x: any) => {
-      if (!x.signature) return { ok: false, reason_code: "SIGNATURE_MISSING" };
-      return { ok: false, reason_code: "SIGNATURE_INVALID" };
-    };
+    const model = createModel("tenant1", "user1", { name: "test-model" });
+    const version = createModelVersion(model.id, "tenant1", "user1", { version: "1.0.0" });
+    const artifact = createArtifact(version.id, "tenant1", "user1", {
+      platform: "android",
+      runtime: "tflite",
+      sha256: "abc123",
+      file_size: 1024,
+      file_path: "s3://bucket/key",
+      model_id: model.id,
+      version: version.version,
+    });
+    releaseModelVersion(version.id, "tenant1", "user1");
+    setReleasePointer(model.id, "tenant1", "user1", {
+      platform: "android",
+      runtime: "tflite",
+      model_version_id: version.id,
+      artifact_id: artifact.id,
+    });
 
-    const r = rollback({ sha256: "x" });
+    const delivery = getDelivery(model.id, "tenant1", "android", "tflite");
+    expect(delivery).not.toBeNull();
+
+    // Missing signature
+    const r = rollbackArtifact("tenant1", {
+      sha256: delivery!.sha256,
+      model_id: model.id,
+      version_id: version.id,
+      artifact_id: artifact.id,
+      reason_code: "TEST_ROLLBACK",
+      // signature, key_id missing
+    });
     expect(r.ok).toBe(false);
+    expect(r.rolled_back).toBe(false);
+    expect("reason_code" in r && r.reason_code).toBe("SIGNATURE_MISSING");
   });
 });
 
