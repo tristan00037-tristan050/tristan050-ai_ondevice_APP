@@ -168,16 +168,4 @@ async function runTests() {
   });
 }
 
-// Output-based proof
-if (require.main === module) {
-  runTests().then(() => {
-    console.log('WEB_ROLLOUT_APPLY_OK=1');
-    console.log('WEB_KILLSWITCH_TAKE_EFFECT_OK=1');
-    console.log('WEB_ROLLBACK_TAKE_EFFECT_OK=1');
-    process.exit(0);
-  }).catch((error) => {
-    console.error(`FAIL: ${error.message}`);
-    process.exit(1);
-  });
-}
 

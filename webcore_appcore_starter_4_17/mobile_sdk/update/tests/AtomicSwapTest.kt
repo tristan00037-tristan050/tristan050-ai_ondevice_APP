@@ -90,7 +90,6 @@ fun main() {
     try {
         test.testAtomicSwap()
         test.testAtomicSwapWithBackup()
-        println("ATOMIC_SWAP_OK=1")
     } catch (e: Exception) {
         println("FAIL: ${e.message}")
         throw e

@@ -138,9 +138,5 @@ fun main() {
             expect(isAllowed).toBeTrue()
         }
     }
-    
-    // Output-based proof
-    println("ATTEST_CLIENT_SEND_OK=1")
-    println("ATTEST_BLOCK_ENFORCED_OK=1")
 }
 

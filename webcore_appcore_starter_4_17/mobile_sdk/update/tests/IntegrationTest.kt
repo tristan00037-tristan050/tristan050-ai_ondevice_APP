@@ -27,11 +27,6 @@ fun main() {
         failClosedTest.testSignatureVerificationFailure()
         failClosedTest.testSwapFailsWithoutStagedFile()
         failClosedTest.testVerificationFailurePreventsSwap()
-
-        // Output-based proof
-        println("CACHE_ETAG_HIT_OK=1")
-        println("ATOMIC_SWAP_OK=1")
-        println("APPLY_FAILCLOSED_OK=1")
     } catch (e: Exception) {
         println("FAIL: ${e.message}")
         throw e

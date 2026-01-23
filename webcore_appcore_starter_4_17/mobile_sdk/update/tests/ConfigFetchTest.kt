@@ -44,7 +44,6 @@ fun main() {
     val test = ConfigFetchTest()
     try {
         test.testEtagCacheHit()
-        println("CACHE_ETAG_HIT_OK=1")
     } catch (e: Exception) {
         println("FAIL: ${e.message}")
         throw e

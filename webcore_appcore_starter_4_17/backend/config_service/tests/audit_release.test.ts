@@ -173,8 +173,4 @@ describe('Audit Release Tests', () => {
   });
 });
 
-// Output-based proof
-if (require.main === module) {
-  console.log('AUDIT_CONFIG_RELEASE_OK=1');
-}
 

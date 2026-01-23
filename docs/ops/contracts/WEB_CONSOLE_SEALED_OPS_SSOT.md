@@ -31,7 +31,10 @@ PASS requires:
 - EXIT=0
 
 ## 완료 조건(체크리스트)
-- [ ] main ruleset/branch protection에서 product-verify-web-console가 required check로 설정됨
-- [ ] PR 화면에서 product-verify-web-console가 필수로 표시되고, 실패 시 머지 불가가 보임
-- [ ] Actions run 링크가 SSOT에 고정됨
+- [x] main ruleset/branch protection에서 product-verify-web-console가 required check로 설정됨
+- [x] PR 화면에서 product-verify-web-console가 필수로 표시되고, 실패 시 머지 불가가 보임
+- [x] Actions run 링크가 SSOT에 고정됨
+
+## Ruleset evidence
+- Ruleset evidence: docs/ops/evidence/2026-01-23_ruleset_required_checks_telemetry_web_console.md
 
