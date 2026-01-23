@@ -11,12 +11,14 @@ import { ReleasePointer } from '../models/release';
 import { SigningKey } from './signing';
 import { canonicalizeJson } from '../../../../packages/common/src/canon/jcs';
 import { sign } from './signing';
+import { PersistMap } from './persist_maps';
 
-// In-memory stores (should be replaced with database in production)
-const models: Model[] = [];
-const modelVersions: ModelVersion[] = [];
-const artifacts: Artifact[] = [];
-const releasePointers: ReleasePointer[] = [];
+// Persistent stores (file-based, restart-safe)
+const models = new PersistMap<Model>("models.json");
+const modelVersions = new PersistMap<ModelVersion>("model_versions.json");
+const artifacts = new PersistMap<Artifact>("artifacts.json");
+const releasePointers = new PersistMap<ReleasePointer>("release_pointers.json");
+// Signing keys remain in-memory for now (security-sensitive)
 const signingKeys: SigningKey[] = [];
 
 // Export for API access
@@ -70,7 +72,7 @@ export function createModel(tenantId: string, userId: string, data: {
     metadata: data.metadata,
   };
   
-  models.push(model);
+  models.set(model.id, model);
   return model;
 }
 
@@ -87,7 +89,10 @@ export function createModelVersion(
   }
 ): ModelVersion {
   // Fail-Closed: Model must exist and belong to tenant
-  const model = models.find(m => m.id === modelId && m.tenant_id === tenantId);
+  const model = models.get(modelId);
+  if (!model || model.tenant_id !== tenantId) {
+    throw new Error('Model not found');
+  }
   if (!model) {
     throw new Error('Model not found');
   }
@@ -101,7 +106,7 @@ export function createModelVersion(
     metadata: data.metadata,
   };
   
-  modelVersions.push(version);
+  modelVersions.set(version.id, version);
   return version;
 }
 
@@ -123,11 +128,12 @@ export function createArtifact(
   }
 ): Artifact {
   // Fail-Closed: Model version must exist
-  const version = modelVersions.find(
-    v => v.id === modelVersionId
-  );
+  const version = modelVersions.get(modelVersionId);
   // Verify model belongs to tenant via model_id lookup
-  const model = models.find(m => m.id === version?.model_id && m.tenant_id === tenantId);
+  const model = version ? models.get(version.model_id) : null;
+  if (!model || model.tenant_id !== tenantId) {
+    throw new Error('Model version not found or tenant mismatch');
+  }
   if (!model) {
     throw new Error('Model version not found or tenant mismatch');
   }
@@ -150,7 +156,7 @@ export function createArtifact(
     created_at: new Date(),
   };
   
-  artifacts.push(artifact);
+  artifacts.set(artifact.id, artifact);
   return artifact;
 }
 
@@ -162,14 +168,15 @@ export function releaseModelVersion(
   tenantId: string,
   userId: string
 ): ModelVersion {
-  const version = modelVersions.find(
-    v => v.id === modelVersionId
-  );
+  const version = modelVersions.get(modelVersionId);
   if (!version) {
     throw new Error('Model version not found');
   }
   // Verify model belongs to tenant via model_id lookup
-  const model = models.find(m => m.id === version.model_id && m.tenant_id === tenantId);
+  const model = models.get(version.model_id);
+  if (!model || model.tenant_id !== tenantId) {
+    throw new Error('Model version not found or tenant mismatch');
+  }
   if (!model) {
     throw new Error('Model version not found or tenant mismatch');
   }
@@ -199,28 +206,24 @@ export function setReleasePointer(
   }
 ): ReleasePointer {
   // Fail-Closed: Version must be released
-  const version = modelVersions.find(
-    v => v.id === data.model_version_id && v.status === 'released'
-  );
-  // Verify model belongs to tenant
-  const model = models.find(m => m.id === version?.model_id && m.tenant_id === tenantId);
-  if (!model) {
-    throw new Error('Model version not found or tenant mismatch');
-  }
-  if (!version) {
+  const version = modelVersions.get(data.model_version_id);
+  if (!version || version.status !== 'released') {
     throw new Error('Model version not released');
+  }
+  // Verify model belongs to tenant
+  const model = models.get(version.model_id);
+  if (!model || model.tenant_id !== tenantId) {
+    throw new Error('Model version not found or tenant mismatch');
   }
   
   // Fail-Closed: Artifact must exist and match version
-  const artifact = artifacts.find(
-    a => a.id === data.artifact_id && a.model_version_id === data.model_version_id
-  );
-  if (!artifact) {
+  const artifact = artifacts.get(data.artifact_id);
+  if (!artifact || artifact.model_version_id !== data.model_version_id) {
     throw new Error('Artifact not found or does not match version');
   }
   
   // Update or create release pointer
-  let pointer = releasePointers.find(
+  let pointer = releasePointers.values().find(
     p => p.model_id === modelId && p.platform === data.platform && p.runtime === data.runtime
   );
   
@@ -228,6 +231,8 @@ export function setReleasePointer(
     pointer.model_version_id = data.model_version_id;
     pointer.artifact_id = data.artifact_id;
     pointer.updated_at = new Date();
+    // Update in persistent store
+    releasePointers.set(pointer.id, pointer);
   } else {
     pointer = {
       id: `pointer_${Date.now()}_${Math.random().toString(36).substring(7)}`,
@@ -240,7 +245,7 @@ export function setReleasePointer(
       created_at: new Date(),
       created_by: userId,
     };
-    releasePointers.push(pointer);
+    releasePointers.set(pointer.id, pointer);
   }
   
   return pointer;
@@ -266,7 +271,7 @@ export function getDelivery(
   ts_ms: number;
   expires_at: number;
 } | null {
-  const pointer = releasePointers.find(
+  const pointer = releasePointers.values().find(
     p => p.model_id === modelId &&
          p.tenant_id === tenantId &&
          p.platform === platform &&
@@ -277,8 +282,8 @@ export function getDelivery(
     return null;
   }
   
-  const artifact = artifacts.find(a => a.id === pointer.artifact_id);
-  const version = modelVersions.find(v => v.id === pointer.model_version_id);
+  const artifact = artifacts.get(pointer.artifact_id);
+  const version = modelVersions.get(pointer.model_version_id);
   const signingKey = signingKeys.find(k => k.active) || (signingKeys.length > 0 ? signingKeys[0] : null);
   
   if (!artifact || !version || !signingKey) {
