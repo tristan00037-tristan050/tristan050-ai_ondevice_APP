@@ -7,41 +7,43 @@ function lockPath(name: string) {
   return path.join(DATA_DIR, `${name}.lock`);
 }
 
-export function withFileLock<T>(name: string, fn: () => T): T {
+function sleep(ms: number) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {}
+}
+
+/**
+ * Multi-process safe-ish lock via exclusive create with retry.
+ * - timeoutMs: total time to wait for lock
+ * - retryMs: backoff between retries
+ */
+export function withFileLock<T>(
+  name: string,
+  fn: () => T,
+  opts: { timeoutMs?: number; retryMs?: number } = {}
+): T {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const lp = lockPath(name);
 
-  // Retry logic for lock acquisition (handles race conditions in test cleanup)
-  const maxRetries = 10;
-  const retryDelay = 10; // ms
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  const timeoutMs = opts.timeoutMs ?? 3000;
+  const retryMs = opts.retryMs ?? 50;
+
+  const start = Date.now();
+  while (true) {
     try {
-      // simple lock: create lock file exclusively
-      const fd = fs.openSync(lp, "wx"); // throws if exists
+      const fd = fs.openSync(lp, "wx"); // exclusive
       try {
         return fn();
       } finally {
         fs.closeSync(fd);
-        if (fs.existsSync(lp)) {
-          fs.unlinkSync(lp);
-        }
+        try { fs.unlinkSync(lp); } catch {}
       }
-    } catch (error: any) {
-      if (error.code === 'EEXIST' && attempt < maxRetries - 1) {
-        // Lock file exists, wait and retry
-        const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-        // Use synchronous sleep for simplicity (blocking)
-        const start = Date.now();
-        while (Date.now() - start < retryDelay) {
-          // busy wait
-        }
-        continue;
+    } catch (e: any) {
+      // lock exists → retry until timeout
+      if (Date.now() - start >= timeoutMs) {
+        throw new Error(`LOCK_TIMEOUT: ${name}`);
       }
-      throw error;
+      sleep(retryMs);
     }
   }
-  
-  throw new Error(`Failed to acquire lock after ${maxRetries} attempts`);
 }
-
