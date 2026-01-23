@@ -1,9 +1,17 @@
 import { persistReadJson, persistWriteJson } from "./persist_store";
+import { registerPersist, hookProcessFlush } from "./persist_registry";
 
 export class PersistMap<V> {
   private loaded = false;
   private map = new Map<string, V>();
-  constructor(private file: string) {}
+  private dirty = false;
+  private flushTimer: NodeJS.Timeout | null = null;
+  private flushDelayMs = 200;
+
+  constructor(private file: string) {
+    registerPersist(this);
+    hookProcessFlush();
+  }
 
   private ensureLoaded() {
     if (this.loaded) return;
@@ -15,7 +23,29 @@ export class PersistMap<V> {
   private flush() {
     const obj: Record<string, V> = {};
     for (const [k, v] of this.map.entries()) obj[k] = v;
+    // Always write, even if empty (to allow clearing)
     persistWriteJson(this.file, obj);
+  }
+
+  private scheduleFlush() {
+    this.dirty = true;
+    if (this.flushTimer) return;
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      this.flushNow();
+    }, this.flushDelayMs);
+  }
+
+  flushNow() {
+    this.ensureLoaded();
+    if (!this.dirty) return;
+    this.dirty = false;
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    // 기존 flush 로직 호출
+    this.flush();
   }
 
   get(key: string): V | undefined {
@@ -26,7 +56,7 @@ export class PersistMap<V> {
   set(key: string, val: V) {
     this.ensureLoaded();
     this.map.set(key, val);
-    this.flush();
+    this.scheduleFlush();
   }
 
   has(key: string): boolean {
@@ -37,7 +67,9 @@ export class PersistMap<V> {
   delete(key: string): boolean {
     this.ensureLoaded();
     const ok = this.map.delete(key);
-    this.flush();
+    if (ok) {
+      this.scheduleFlush();
+    }
     return ok;
   }
 
@@ -64,7 +96,7 @@ export class PersistMap<V> {
   push(val: V & { id: string }) {
     this.ensureLoaded();
     this.map.set(val.id, val);
-    this.flush();
+    this.scheduleFlush();
   }
 
   get length(): number {
