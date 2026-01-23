@@ -50,6 +50,6 @@ export function persistReadJson<T>(file: string): T | null {
       // fail-closed: corrupted persistence must not silently continue
       throw new Error(`PERSIST_CORRUPTED: ${file}`);
     }
-  });
+  }, { timeoutMs: 3000, retryMs: 50 });
 }
 

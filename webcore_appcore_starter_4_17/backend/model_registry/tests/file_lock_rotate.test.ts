@@ -35,6 +35,47 @@ describe("P1-4: file lock + audit rotation", () => {
     expect(fs.existsSync(lockFile)).toBe(false); // Lock should be released
   });
 
+  it("[EVID:LOCK_RETRY_TIMEOUT_OK] lock retries and times out correctly", () => {
+    const lockFile = path.join(dataDir, "lock_retry_test.lock");
+    if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile);
+
+    // Create a lock file manually to simulate another process holding the lock
+    const fd = fs.openSync(lockFile, "wx");
+    
+    // Try to acquire lock with short timeout - should fail
+    expect(() => {
+      withFileLock("lock_retry_test", () => {
+        // This should not execute
+        expect(true).toBe(false);
+      }, { timeoutMs: 100, retryMs: 10 });
+    }).toThrow(/LOCK_TIMEOUT/);
+
+    // Clean up
+    fs.closeSync(fd);
+    if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile);
+  });
+
+  it("[EVID:AUDIT_DAILY_FILE_OK] audit log uses daily file format", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const auditFile = path.join(dataDir, `audit_${today}.json`);
+    if (fs.existsSync(auditFile)) fs.unlinkSync(auditFile);
+
+    const event: AuditEvent = {
+      ts_ms: Date.now(),
+      action: "APPLY",
+      result: "ALLOW",
+    };
+
+    appendAudit(event);
+
+    expect(fs.existsSync(auditFile)).toBe(true);
+    const raw = fs.readFileSync(auditFile, "utf8");
+    const events = JSON.parse(raw);
+    expect(Array.isArray(events)).toBe(true);
+    expect(events.length).toBeGreaterThan(0);
+    expect(events[events.length - 1].action).toBe("APPLY");
+  });
+
   it("[EVID:AUDIT_LOG_ROTATE_OK] audit log rotates when exceeding max size", () => {
     // Create a large audit log (simulate by writing large data)
     const largeEvent: AuditEvent = {
