@@ -14,23 +14,8 @@ MODEL_DELIVERY_SIGNATURE_REQUIRED_OK=0
 MODEL_APPLY_FAILCLOSED_OK=0
 MODEL_ROLLBACK_OK=0
 
-cleanup() {
-  echo "MODEL_UPLOAD_SIGN_VERIFY_OK=${MODEL_UPLOAD_SIGN_VERIFY_OK}"
-  echo "MODEL_DELIVERY_SIGNATURE_REQUIRED_OK=${MODEL_DELIVERY_SIGNATURE_REQUIRED_OK}"
-  echo "MODEL_APPLY_FAILCLOSED_OK=${MODEL_APPLY_FAILCLOSED_OK}"
-  echo "MODEL_ROLLBACK_OK=${MODEL_ROLLBACK_OK}"
-  
-  # Core tests must pass (rollback is optional)
-  if [[ "$MODEL_UPLOAD_SIGN_VERIFY_OK" -eq 1 ]] && \
-     [[ "$MODEL_DELIVERY_SIGNATURE_REQUIRED_OK" -eq 1 ]] && \
-     [[ "$MODEL_APPLY_FAILCLOSED_OK" -eq 1 ]]; then
-    exit 0
-  else
-    exit 1
-  fi
-}
-
-trap cleanup EXIT
+# Note: Evidence keys are now set by Node.js JSON parser, not in cleanup
+# cleanup trap removed - exit codes are handled directly
 
 # Guard: Forbid "OK=1" in tests
 if [[ -d "${ROOT}/webcore_appcore_starter_4_17" ]]; then
@@ -87,58 +72,75 @@ npm --prefix "$MODEL_REGISTRY_DIR" ci
 # Run tests and parse results
 cd "$MODEL_REGISTRY_DIR"
 
-# Run tests with verbose output to capture test names
-TEST_OUTPUT=$(npm test -- --verbose 2>&1) || TEST_EXIT=$?
+export RESULT_JSON="/tmp/svr03_jest_results.json"
+rm -f "$RESULT_JSON"
 
-# Check if tests passed
-if [[ "${TEST_EXIT:-0}" -eq 0 ]]; then
-  # Parse test output to set individual evidence keys based on test names
-  
-  # MODEL_UPLOAD_SIGN_VERIFY_OK: valid signature test passes
-  # Look for test names containing "valid signature" or "allow signed artifact" or "upload sign verify"
-  if echo "$TEST_OUTPUT" | grep -qE "(✓|PASS).*valid signature|✓.*allow.*signed artifact|✓.*upload sign verify"; then
-    MODEL_UPLOAD_SIGN_VERIFY_OK=1
-  fi
+# Run tests with JSON output (stable, no grep of human text)
+set +e
+npm test -- --json --outputFile "$RESULT_JSON"
+TEST_EXIT=$?
+set -e
 
-  # MODEL_DELIVERY_SIGNATURE_REQUIRED_OK: missing signature test passes
-  # Look for test names containing "missing signature"
-  if echo "$TEST_OUTPUT" | grep -qE "(✓|PASS).*missing signature"; then
-    MODEL_DELIVERY_SIGNATURE_REQUIRED_OK=1
-  fi
+# Fail-closed if jest did not produce json
+if [[ ! -f "$RESULT_JSON" ]]; then
+  echo "FAIL: jest json output missing: $RESULT_JSON"
+  exit 1
+fi
 
-  # MODEL_APPLY_FAILCLOSED_OK: invalid/tampered signature test passes
-  # Look for test names containing "tampered" or "invalid signature" or "apply fail-closed"
-  if echo "$TEST_OUTPUT" | grep -qE "(✓|PASS).*tampered|✓.*invalid signature|✓.*apply fail-closed"; then
-    MODEL_APPLY_FAILCLOSED_OK=1
-  fi
+# Parse JSON and set evidence keys based on tagged test names
+node <<'NODE'
+const fs = require('fs');
 
-  # MODEL_ROLLBACK_OK: rollback test passes (if exists)
-  # Look for test names containing "rollback"
-  if echo "$TEST_OUTPUT" | grep -qE "(✓|PASS).*rollback"; then
-    MODEL_ROLLBACK_OK=1
-  fi
+const jsonPath = process.env.RESULT_JSON || "/tmp/svr03_jest_results.json";
+const raw = fs.readFileSync(jsonPath, 'utf8');
+const data = JSON.parse(raw);
 
-  # Fallback: if verbose output doesn't show test names, check test file existence and PASS status
-  if [[ "$MODEL_UPLOAD_SIGN_VERIFY_OK" -eq 0 ]] || \
-     [[ "$MODEL_DELIVERY_SIGNATURE_REQUIRED_OK" -eq 0 ]] || \
-     [[ "$MODEL_APPLY_FAILCLOSED_OK" -eq 0 ]]; then
-    # Check if signature_required test file exists and passed
-    if [[ -f "${MODEL_REGISTRY_DIR}/tests/signature_required.test.ts" ]]; then
-      if echo "$TEST_OUTPUT" | grep -q "signature_required.test.ts" && \
-         echo "$TEST_OUTPUT" | grep -q "PASS"; then
-        # If the test file passed, assume all signature tests ran
-        # Check model_registry.test.ts for tampered signature test
-        if echo "$TEST_OUTPUT" | grep -q "model_registry.test.ts" && \
-           echo "$TEST_OUTPUT" | grep -q "PASS"; then
-          MODEL_UPLOAD_SIGN_VERIFY_OK=1
-          MODEL_DELIVERY_SIGNATURE_REQUIRED_OK=1
-          MODEL_APPLY_FAILCLOSED_OK=1
-        fi
-      fi
-    fi
-  fi
+const keys = [
+  "MODEL_UPLOAD_SIGN_VERIFY_OK",
+  "MODEL_DELIVERY_SIGNATURE_REQUIRED_OK",
+  "MODEL_APPLY_FAILCLOSED_OK",
+  "MODEL_ROLLBACK_OK"
+];
 
-  exit 0
-else
+const found = new Set();
+function walk(node) {
+  if (!node) return;
+  if (typeof node === 'string') {
+    const m = node.match(/\[EVID:([A-Z0-9_]+)\]/g);
+    if (m) m.forEach(x => found.add(x.replace('[EVID:','').replace(']','')));
+    return;
+  }
+  if (Array.isArray(node)) return node.forEach(walk);
+  if (typeof node === 'object') {
+    for (const k of Object.keys(node)) walk(node[k]);
+  }
+}
+
+walk(data);
+
+const out = {};
+for (const k of keys) out[k] = 0;
+for (const k of keys) {
+  if (found.has(k)) out[k] = 1;
+}
+
+for (const k of keys) {
+  console.log(`${k}=${out[k]}`);
+}
+
+// Hard rule: core 3 keys must be present
+const ok = out.MODEL_UPLOAD_SIGN_VERIFY_OK && out.MODEL_DELIVERY_SIGNATURE_REQUIRED_OK && out.MODEL_APPLY_FAILCLOSED_OK;
+process.exit(ok ? 0 : 1);
+NODE
+
+NODE_EXIT=$?
+
+# If node script failed, exit with failure
+if [[ "$NODE_EXIT" -ne 0 ]]; then
+  exit 1
+fi
+
+# If tests failed, exit with failure
+if [[ "$TEST_EXIT" -ne 0 ]]; then
   exit 1
 fi

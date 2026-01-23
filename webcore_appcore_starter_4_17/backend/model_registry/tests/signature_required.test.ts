@@ -23,7 +23,7 @@ describe('Model Registry - Signature Required', () => {
   });
 
   describe('createArtifactHandler signature validation', () => {
-    it('should allow artifact register with valid signature', async () => {
+    it('[EVID:MODEL_UPLOAD_SIGN_VERIFY_OK] should allow artifact register with valid signature', async () => {
       const model = createModel('tenant1', { name: 'test-model' });
       const version = createModelVersion('tenant1', model.id, { version: '1.0.0' });
 
@@ -69,7 +69,7 @@ describe('Model Registry - Signature Required', () => {
       expect(signatureVerify.verifyArtifactRegisterSignature).toHaveBeenCalled();
     });
 
-    it('should reject artifact register with missing signature', async () => {
+    it('[EVID:MODEL_DELIVERY_SIGNATURE_REQUIRED_OK] should reject artifact register with missing signature', async () => {
       const model = createModel('tenant1', { name: 'test-model' });
       const version = createModelVersion('tenant1', model.id, { version: '1.0.0' });
 
@@ -119,7 +119,7 @@ describe('Model Registry - Signature Required', () => {
       );
     });
 
-    it('should reject artifact register with invalid signature (tampered)', async () => {
+    it('[EVID:MODEL_APPLY_FAILCLOSED_OK] should reject artifact register with invalid signature (tampered)', async () => {
       const model = createModel('tenant1', { name: 'test-model' });
       const version = createModelVersion('tenant1', model.id, { version: '1.0.0' });
 
