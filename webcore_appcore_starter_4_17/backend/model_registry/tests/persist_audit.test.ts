@@ -1,17 +1,37 @@
-import { describe, it, expect, beforeEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
 import fs from "node:fs";
 import path from "node:path";
 import { applyArtifact, rollbackArtifact } from "../services/delivery";
-import { appendAudit } from "../services/audit";
+import { appendAudit, AuditEvent } from "../services/audit";
+import { persistReadJson } from "../services/persist_store";
+import { clearAll, initializeSigningKey } from "../services/storage";
 
 describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
   const dataDir = path.resolve(__dirname, "../data");
-  const auditFile = path.join(dataDir, "audit_log.json");
+  const today = new Date().toISOString().slice(0, 10);
+  const auditFile = path.join(dataDir, `audit_${today}.json`);
+  const rotatedFile = path.join(dataDir, `audit_${today}.1.json`);
 
   beforeEach(() => {
-    // Clean up audit file before each test
+    // Ensure data directory exists and clear audit log before each test
+    fs.mkdirSync(dataDir, { recursive: true });
     if (fs.existsSync(auditFile)) {
       fs.unlinkSync(auditFile);
+    }
+    if (fs.existsSync(rotatedFile)) {
+      fs.unlinkSync(rotatedFile);
+    }
+    clearAll();
+    initializeSigningKey();
+  });
+
+  afterEach(() => {
+    // Clean up audit log after each test
+    if (fs.existsSync(auditFile)) {
+      fs.unlinkSync(auditFile);
+    }
+    if (fs.existsSync(rotatedFile)) {
+      fs.unlinkSync(rotatedFile);
     }
   });
 
@@ -29,28 +49,23 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
     expect(result.applied).toBe(false);
     expect("reason_code" in result && result.reason_code).toBe("SIGNATURE_MISSING");
 
-    // Verify audit log was written
+    // Verify audit log was written (daily file format)
     expect(fs.existsSync(auditFile)).toBe(true);
-    const raw = fs.readFileSync(auditFile, "utf8");
-    const auditLog = JSON.parse(raw);
-    expect(Array.isArray(auditLog)).toBe(true);
-    expect(auditLog.length).toBeGreaterThan(0);
+    const auditLogs = persistReadJson<AuditEvent[]>(`audit_${today}.json`);
+    expect(auditLogs).toBeTruthy();
+    expect(auditLogs!.length).toBeGreaterThan(0);
 
     // Verify deny event was recorded
-    const denyEvent = auditLog.find((e: any) => e.result === "DENY" && e.reason_code === "SIGNATURE_MISSING");
+    const denyEvent = auditLogs!.find((e) => e.result === "DENY" && e.reason_code === "SIGNATURE_MISSING");
     expect(denyEvent).toBeDefined();
-    expect(denyEvent.action).toBe("APPLY");
-    expect(denyEvent.reason_code).toBe("SIGNATURE_MISSING");
+    expect(denyEvent!.action).toBe("APPLY");
+    expect(denyEvent!.reason_code).toBe("SIGNATURE_MISSING");
     // Verify no sensitive payload data is stored (only reason_code)
-    expect(denyEvent.model_id).toBeUndefined();
-    expect(denyEvent.tenant_id).toBeUndefined();
+    expect((denyEvent as any).model_id).toBeUndefined();
+    expect((denyEvent as any).tenant_id).toBeUndefined();
   });
 
-  it("allow path writes audit with ALLOW result", () => {
-    // Note: This test requires a valid signature, which would need proper key setup
-    // For now, we test that audit is called on allow path
-    // In a full implementation, this would use a valid signature
-
+  it("[EVID:PERSIST_AUDIT_ALLOW_OK] allow path writes audit with ALLOW result", () => {
     // Test that audit file can be written directly
     appendAudit({
       ts_ms: Date.now(),
@@ -61,18 +76,18 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
     });
 
     expect(fs.existsSync(auditFile)).toBe(true);
-    const raw = fs.readFileSync(auditFile, "utf8");
-    const auditLog = JSON.parse(raw);
-    expect(auditLog.length).toBeGreaterThan(0);
+    const auditLogs = persistReadJson<AuditEvent[]>(`audit_${today}.json`);
+    expect(auditLogs).toBeTruthy();
+    expect(auditLogs!.length).toBeGreaterThan(0);
 
-    const allowEvent = auditLog.find((e: any) => e.result === "ALLOW");
+    const allowEvent = auditLogs!.find((e) => e.result === "ALLOW");
     expect(allowEvent).toBeDefined();
-    expect(allowEvent.action).toBe("APPLY");
-    expect(allowEvent.key_id).toBe("test-key");
-    expect(allowEvent.sha256).toBe("test-sha256");
+    expect(allowEvent!.action).toBe("APPLY");
+    expect(allowEvent!.key_id).toBe("test-key");
+    expect(allowEvent!.sha256).toBe("test-sha256");
   });
 
-  it("rollback deny path writes audit", () => {
+  it("[EVID:PERSIST_AUDIT_ROLLBACK_DENY_OK] rollback deny path writes audit", () => {
     const result = rollbackArtifact("tenant1", {
       sha256: "test-sha256",
       model_id: "m1",
@@ -88,13 +103,12 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
 
     // Verify audit log was written
     expect(fs.existsSync(auditFile)).toBe(true);
-    const raw = fs.readFileSync(auditFile, "utf8");
-    const auditLog = JSON.parse(raw);
-    expect(auditLog.length).toBeGreaterThan(0);
+    const auditLogs = persistReadJson<AuditEvent[]>(`audit_${today}.json`);
+    expect(auditLogs).toBeTruthy();
+    expect(auditLogs!.length).toBeGreaterThan(0);
 
-    const denyEvent = auditLog.find((e: any) => e.action === "ROLLBACK" && e.result === "DENY");
+    const denyEvent = auditLogs!.find((e) => e.action === "ROLLBACK" && e.result === "DENY");
     expect(denyEvent).toBeDefined();
-    expect(denyEvent.reason_code).toBe("SIGNATURE_MISSING");
+    expect(denyEvent!.reason_code).toBe("SIGNATURE_MISSING");
   });
 });
-
