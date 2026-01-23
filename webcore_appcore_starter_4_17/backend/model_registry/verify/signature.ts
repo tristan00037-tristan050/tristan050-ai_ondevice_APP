@@ -151,7 +151,8 @@ export function verifyDeliveryApplySignature(
   },
   signature?: string,
   sig_alg?: string,
-  key_id?: string
+  key_id?: string,
+  ts_ms?: number
 ): SignatureValidationResult {
   // Fail-closed: signature required
   if (!signature) {
@@ -181,8 +182,13 @@ export function verifyDeliveryApplySignature(
   }
 
   // Fail-closed: ts_ms must be provided from signed payload
-  // For now, use a placeholder - this should be passed from API handler
-  const ts_ms = Date.now(); // TODO: Remove this - ts_ms must come from signed payload
+  if (ts_ms === undefined || ts_ms === null) {
+    return {
+      valid: false,
+      reason_code: 'CANONICAL_PAYLOAD_INVALID',
+      status: 400,
+    };
+  }
 
   // Create canonical payload
   const canonicalPayload = createCanonicalPayload('DELIVERY_APPLY', tenantId, ts_ms, {
@@ -223,7 +229,8 @@ export function verifyDeliveryRollbackSignature(
   },
   signature?: string,
   sig_alg?: string,
-  key_id?: string
+  key_id?: string,
+  ts_ms?: number
 ): SignatureValidationResult {
   // Fail-closed: signature required
   if (!signature) {
@@ -253,8 +260,13 @@ export function verifyDeliveryRollbackSignature(
   }
 
   // Fail-closed: ts_ms must be provided from signed payload
-  // For now, use a placeholder - this should be passed from API handler
-  const ts_ms = Date.now(); // TODO: Remove this - ts_ms must come from signed payload
+  if (ts_ms === undefined || ts_ms === null) {
+    return {
+      valid: false,
+      reason_code: 'CANONICAL_PAYLOAD_INVALID',
+      status: 400,
+    };
+  }
 
   // Create canonical payload
   const canonicalPayload = createCanonicalPayload('DELIVERY_ROLLBACK', tenantId, ts_ms, {

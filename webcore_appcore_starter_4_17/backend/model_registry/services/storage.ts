@@ -4,8 +4,13 @@
  * Immutable released artifacts
  */
 
-import { Model, ModelVersion, Artifact, ReleasePointer } from '../models/model';
+import { Model } from '../models/model';
+import { ModelVersion } from '../models/version';
+import { Artifact } from '../models/artifact';
+import { ReleasePointer } from '../models/release';
 import { SigningKey } from './signing';
+import { canonicalizeJson } from '../../../../packages/common/src/canon/jcs';
+import { sign } from './signing';
 
 // In-memory stores (should be replaced with database in production)
 const models: Model[] = [];
@@ -59,11 +64,9 @@ export function createModel(tenantId: string, userId: string, data: {
     id: `model_${Date.now()}_${Math.random().toString(36).substring(7)}`,
     tenant_id: tenantId,
     name: data.name,
-    description: data.description,
-    status: 'draft',
+    status: 'active',
     created_at: new Date(),
     updated_at: new Date(),
-    created_by: userId,
     metadata: data.metadata,
   };
   
@@ -92,12 +95,9 @@ export function createModelVersion(
   const version: ModelVersion = {
     id: `version_${Date.now()}_${Math.random().toString(36).substring(7)}`,
     model_id: modelId,
-    tenant_id: tenantId,
     version: data.version,
     status: 'draft',
     created_at: new Date(),
-    updated_at: new Date(),
-    created_by: userId,
     metadata: data.metadata,
   };
   
@@ -122,43 +122,32 @@ export function createArtifact(
     version: string;
   }
 ): Artifact {
-  // Fail-Closed: Model version must exist and belong to tenant
+  // Fail-Closed: Model version must exist
   const version = modelVersions.find(
-    v => v.id === modelVersionId && v.tenant_id === tenantId
+    v => v.id === modelVersionId
   );
+  // Verify model belongs to tenant via model_id lookup
+  const model = models.find(m => m.id === version?.model_id && m.tenant_id === tenantId);
+  if (!model) {
+    throw new Error('Model version not found or tenant mismatch');
+  }
   if (!version) {
     throw new Error('Model version not found');
   }
   
-  // Sign artifact
-  const signingKey = getActiveSigningKey();
-  if (!signingKey) {
-    throw new Error('Signing key not available');
-  }
-  
-  const { signArtifact } = require('./signing');
-  const signature = signArtifact(
-    data.sha256,
-    data.model_id,
-    data.version,
-    data.platform,
-    data.runtime,
-    signingKey.private_key
-  );
+  // Note: Artifact signature is not created here - it's created during delivery
+  // This function just creates the artifact record
   
   const artifact: Artifact = {
     id: `artifact_${Date.now()}_${Math.random().toString(36).substring(7)}`,
     model_version_id: modelVersionId,
-    tenant_id: tenantId,
     platform: data.platform,
     runtime: data.runtime,
-    file_path: data.file_path,
-    file_size: data.file_size,
     sha256: data.sha256,
-    signature,
-    key_id: signingKey.key_id,
+    size_bytes: data.file_size,
+    storage_ref: data.file_path,
+    status: 'ready',
     created_at: new Date(),
-    created_by: userId,
   };
   
   artifacts.push(artifact);
@@ -174,10 +163,15 @@ export function releaseModelVersion(
   userId: string
 ): ModelVersion {
   const version = modelVersions.find(
-    v => v.id === modelVersionId && v.tenant_id === tenantId
+    v => v.id === modelVersionId
   );
   if (!version) {
     throw new Error('Model version not found');
+  }
+  // Verify model belongs to tenant via model_id lookup
+  const model = models.find(m => m.id === version.model_id && m.tenant_id === tenantId);
+  if (!model) {
+    throw new Error('Model version not found or tenant mismatch');
   }
   
   // Fail-Closed: Cannot overwrite released version
@@ -186,7 +180,7 @@ export function releaseModelVersion(
   }
   
   version.status = 'released';
-  version.updated_at = new Date();
+  version.released_at = new Date();
   return version;
 }
 
@@ -206,8 +200,13 @@ export function setReleasePointer(
 ): ReleasePointer {
   // Fail-Closed: Version must be released
   const version = modelVersions.find(
-    v => v.id === data.model_version_id && v.tenant_id === tenantId && v.status === 'released'
+    v => v.id === data.model_version_id && v.status === 'released'
   );
+  // Verify model belongs to tenant
+  const model = models.find(m => m.id === version?.model_id && m.tenant_id === tenantId);
+  if (!model) {
+    throw new Error('Model version not found or tenant mismatch');
+  }
   if (!version) {
     throw new Error('Model version not released');
   }
@@ -248,7 +247,8 @@ export function setReleasePointer(
 }
 
 /**
- * Get delivery information
+ * Get delivery information with signature
+ * Returns delivery response with required signature fields (sha256, signature, key_id, ts_ms, expires_at)
  */
 export function getDelivery(
   modelId: string,
@@ -259,6 +259,12 @@ export function getDelivery(
   artifact: Artifact;
   version: ModelVersion;
   signingKey: SigningKey;
+  // Signature fields (required for delivery response)
+  sha256: string;
+  signature: string;
+  key_id: string;
+  ts_ms: number;
+  expires_at: number;
 } | null {
   const pointer = releasePointers.find(
     p => p.model_id === modelId &&
@@ -273,12 +279,63 @@ export function getDelivery(
   
   const artifact = artifacts.find(a => a.id === pointer.artifact_id);
   const version = modelVersions.find(v => v.id === pointer.model_version_id);
-  const signingKey = signingKeys.find(k => k.key_id === artifact?.key_id);
+  const signingKey = signingKeys.find(k => k.active) || (signingKeys.length > 0 ? signingKeys[0] : null);
   
   if (!artifact || !version || !signingKey) {
     return null;
   }
+
+  // Create canonical payload for delivery
+  const ts_ms = Date.now();
+  const expires_at = ts_ms + (7 * 24 * 60 * 60 * 1000); // 7 days from now
   
-  return { artifact, version, signingKey };
+  const canonicalPayload = canonicalizeJson({
+    v: 'v1',
+    ts_ms,
+    tenant_id: tenantId,
+    op: 'DELIVERY',
+    body: {
+      model_id: modelId,
+      version_id: version.id,
+      artifact_id: artifact.id,
+      sha256: artifact.sha256,
+      platform: artifact.platform,
+      runtime: artifact.runtime,
+    },
+  });
+
+  // Sign the canonical payload using crypto directly
+  // Note: signingKey.private_key is base64-encoded PEM, need to decode first
+  const crypto = require('crypto');
+  let privateKey;
+  try {
+    // Try decoding base64 to PEM
+    const privateKeyPem = Buffer.from(signingKey.private_key, 'base64').toString('utf-8');
+    privateKey = crypto.createPrivateKey({
+      key: privateKeyPem,
+      format: 'pem',
+      type: 'pkcs8',
+    });
+  } catch (error) {
+    // If that fails, try using the key directly (might already be PEM)
+    privateKey = crypto.createPrivateKey({
+      key: signingKey.private_key,
+      format: 'pem',
+      type: 'pkcs8',
+    });
+  }
+  const signatureBuffer = crypto.sign(null, Buffer.from(canonicalPayload, 'utf-8'), privateKey);
+  const signature = signatureBuffer.toString('base64');
+  
+  return {
+    artifact,
+    version,
+    signingKey,
+    sha256: artifact.sha256,
+    signature,
+    key_id: signingKey.key_id,
+    ts_ms,
+    expires_at,
+  };
 }
 
