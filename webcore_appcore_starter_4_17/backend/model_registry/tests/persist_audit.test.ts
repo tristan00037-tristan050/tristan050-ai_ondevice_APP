@@ -4,7 +4,8 @@ import path from "node:path";
 import { applyArtifact, rollbackArtifact } from "../services/delivery";
 import { appendAudit, AuditEvent } from "../services/audit";
 import { persistReadJson } from "../services/persist_store";
-import { clearAll, initializeSigningKey } from "../services/storage";
+import { clearAll } from "../storage/service";
+import { initializeSigningKey } from "../services/storage";
 
 describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
   const dataDir = path.resolve(__dirname, "../data");
