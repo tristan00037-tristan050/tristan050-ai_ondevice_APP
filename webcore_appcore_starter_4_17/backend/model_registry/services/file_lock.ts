@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { writeLockMeta, removeLockMeta } from "./lock_meta";
 
 const DATA_DIR = path.resolve(__dirname, "../data");
 
@@ -28,16 +29,22 @@ export function withFileLock<T>(
   const timeoutMs = opts.timeoutMs ?? 3000;
   const retryMs = opts.retryMs ?? 50;
 
-  const start = Date.now();
-  while (true) {
-    try {
-      const fd = fs.openSync(lp, "wx"); // exclusive
-      try {
-        return fn();
-      } finally {
-        fs.closeSync(fd);
-        try { fs.unlinkSync(lp); } catch {}
-      }
+         const start = Date.now();
+         while (true) {
+           try {
+             const fd = fs.openSync(lp, "wx"); // exclusive
+             try {
+               writeLockMeta(name, {
+                 pid: process.pid,
+                 host: process.env.HOSTNAME || "unknown",
+                 created_at_utc: new Date().toISOString(),
+                 repo_sha: process.env.REPO_SHA || "unknown",
+               });
+               return fn();
+             } finally {
+               fs.closeSync(fd);
+               removeLockMeta(name);
+             }
     } catch (e: any) {
       // lock exists → retry until timeout
       if (Date.now() - start >= timeoutMs) {
