@@ -8,8 +8,9 @@ import { persistReadJson, persistWriteJson } from "../services/persist_store";
 describe("P1-4: file lock + audit rotation", () => {
   const dataDir = path.resolve(__dirname, "../data");
   const lockFile = path.join(dataDir, "test.lock");
-  const auditFile = path.join(dataDir, "audit_log.json");
-  const rotatedFile = path.join(dataDir, "audit_log.1.json");
+  const today = new Date().toISOString().slice(0, 10);
+  const auditFile = path.join(dataDir, `audit_${today}.json`);
+  const rotatedFile = path.join(dataDir, `audit_${today}.1.json`);
 
   beforeEach(() => {
     // Clean up test files
@@ -77,6 +78,10 @@ describe("P1-4: file lock + audit rotation", () => {
   });
 
   it("[EVID:AUDIT_LOG_ROTATE_OK] audit log rotates when exceeding max size", () => {
+    // Clean up any existing audit files for today
+    if (fs.existsSync(auditFile)) fs.unlinkSync(auditFile);
+    if (fs.existsSync(rotatedFile)) fs.unlinkSync(rotatedFile);
+
     // Create a large audit log (simulate by writing large data)
     const largeEvent: AuditEvent = {
       ts_ms: Date.now(),
@@ -85,24 +90,34 @@ describe("P1-4: file lock + audit rotation", () => {
       sha256: "a".repeat(10000), // Large data to trigger rotation
     };
 
-    // Fill audit log to exceed 1MB
+    // Fill audit log to exceed 1MB (need more events to exceed 1MB)
     const events: AuditEvent[] = [];
-    for (let i = 0; i < 150; i++) {
+    for (let i = 0; i < 200; i++) {
       events.push({ ...largeEvent, ts_ms: Date.now() + i });
     }
     
     // Write large audit log directly to trigger rotation
-    persistWriteJson("audit_log.json", events);
+    persistWriteJson(`audit_${today}.json`, events);
+
+    // Wait a bit to ensure file is written
+    const sleep = (ms: number) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {}
+    };
+    sleep(100);
 
     // Now append one more event - should trigger rotation
     appendAudit(largeEvent);
+
+    // Wait a bit for rotation to complete
+    sleep(100);
 
     // Check that rotated file exists
     expect(fs.existsSync(rotatedFile)).toBe(true);
     expect(fs.existsSync(auditFile)).toBe(true);
 
     // New audit log should be smaller (only 1 event)
-    const newLog = persistReadJson<AuditEvent[]>("audit_log.json");
+    const newLog = persistReadJson<AuditEvent[]>(`audit_${today}.json`);
     expect(newLog).toBeTruthy();
     expect(newLog!.length).toBe(1);
   });
