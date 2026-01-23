@@ -30,6 +30,9 @@ GitHub required checks + 증거 링크를 단일 진실원(SSOT)으로 고정한
 ## Ruleset evidence
 - docs/ops/evidence/2026-01-23_ruleset_required_checks_svr03_model_registry.md
 
+## Ops policies evidence
+- docs/ops/evidence/2026-01-23_svr03_ops_policies.md
+
 ## 봉인 커맨드(출력 기반)
 - 오염 스캔(0건이어야 함)
   - rg -n "OK=1" webcore_appcore_starter_4_17/backend/model_registry/tests || true
@@ -43,6 +46,19 @@ PASS requires:
 - MODEL_APPLY_FAILCLOSED_OK=1
 - MODEL_ROLLBACK_OK=1
 - EXIT=0
+
+## 운영 점검 커맨드
+- 스모크 테스트 (서명/키/영속/감사 기본 동작 확인)
+  - bash webcore_appcore_starter_4_17/scripts/ops/svr03_smoke.sh
+
+- 스토리지 리포트 (data 디렉토리 용량 및 파일 상태)
+  - bash webcore_appcore_starter_4_17/scripts/ops/svr03_storage_report.sh
+
+## Audit 정책
+- 파일 패턴: `audit_YYYY-MM-DD.json` (일자별)
+- 회전 기준: 1MB 초과 시 `audit_YYYY-MM-DD.1.json`으로 회전
+- 보관 기간: 최근 14일만 유지 (그 외 자동 삭제)
+- 민감 데이터: payload 원문은 절대 저장하지 않음
 
 ## 완료 조건(체크리스트)
 - [x] main ruleset/branch protection에서 product-verify-model-registry가 required check로 설정됨
