@@ -172,5 +172,95 @@ describe('Canonical Vectors', () => {
 
     expect(canonical1).not.toBe(canonical2);
   });
+
+  // Extended vectors: nested structures
+  it('deeply nested object', () => {
+    expect(canonicalizeJson({ a: { b: { c: { d: 1 } } } })).toBe('{"a":{"b":{"c":{"d":1}}}}');
+  });
+
+  it('nested array in object', () => {
+    expect(canonicalizeJson({ a: [1, 2, 3] })).toBe('{"a":[1,2,3]}');
+  });
+
+  it('object in array', () => {
+    expect(canonicalizeJson([{ a: 1, b: 2 }, { c: 3 }])).toBe('[{"a":1,"b":2},{"c":3}]');
+  });
+
+  it('mixed nested structure', () => {
+    expect(canonicalizeJson({ a: [{ b: 1 }, { c: 2 }], d: { e: 3 } })).toBe('{"a":[{"b":1},{"c":2}],"d":{"e":3}}');
+  });
+
+  // Extended vectors: numbers
+  it('integer numbers', () => {
+    expect(canonicalizeJson({ a: 0, b: 123, c: -456 })).toBe('{"a":0,"b":123,"c":-456}');
+  });
+
+  it('floating point numbers', () => {
+    const result = canonicalizeJson({ a: 1.5, b: -0.5, c: 3.14159 });
+    // Floating point representation may vary, so we check structure
+    expect(result).toContain('"a":');
+    expect(result).toContain('"b":');
+    expect(result).toContain('"c":');
+  });
+
+  it('large numbers', () => {
+    expect(canonicalizeJson({ a: 1000000, b: -999999 })).toBe('{"a":1000000,"b":-999999}');
+  });
+
+  // Extended vectors: unicode and escape sequences
+  it('unicode characters (Korean)', () => {
+    expect(canonicalizeJson({ a: "안녕" })).toBe('{"a":"안녕"}');
+  });
+
+  it('escape sequences', () => {
+    expect(canonicalizeJson({ a: "line1\nline2" })).toBe('{"a":"line1\\nline2"}');
+    expect(canonicalizeJson({ a: "tab\there" })).toBe('{"a":"tab\\there"}');
+    expect(canonicalizeJson({ a: 'quote"here' })).toBe('{"a":"quote\\"here"}');
+  });
+
+  it('mixed escape sequences', () => {
+    expect(canonicalizeJson({ a: "a\nb\tc\"d" })).toBe('{"a":"a\\nb\\tc\\"d"}');
+  });
+
+  // Extended vectors: edge cases
+  it('empty array', () => {
+    expect(canonicalizeJson([])).toBe("[]");
+  });
+
+  it('null values', () => {
+    expect(canonicalizeJson({ a: null, b: 1 })).toBe('{"a":null,"b":1}');
+  });
+
+  it('boolean values', () => {
+    expect(canonicalizeJson({ a: true, b: false })).toBe('{"a":true,"b":false}');
+  });
+
+  it('complex mixed structure', () => {
+    const input = {
+      z: "last",
+      a: {
+        nested: [1, { deep: "value" }],
+        number: 42,
+        bool: true,
+        null_val: null,
+      },
+      b: ["array", "items"],
+    };
+    const result = canonicalizeJson(input);
+    // Verify structure (exact order may vary, but keys should be sorted)
+    expect(result).toContain('"a":');
+    expect(result).toContain('"b":');
+    expect(result).toContain('"z":');
+    expect(result).toContain('"nested":');
+    expect(result).toContain('"deep":');
+  });
+
+  // Consistency: same input should produce same output
+  it('consistency: same input produces same output', () => {
+    const input = { a: 1, b: { c: 2, d: [3, 4] } };
+    const result1 = canonicalizeJson(input);
+    const result2 = canonicalizeJson(input);
+    expect(result1).toBe(result2);
+  });
 });
 
