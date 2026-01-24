@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { writeLockMeta, removeLockMeta } from "./lock_meta";
-import { incCounter } from "./ops_counters";
+import { bump } from "../../../../packages/common/src/metrics/counters";
+import crypto from "node:crypto";
 
 const DATA_DIR = path.resolve(__dirname, "../data");
 
@@ -49,7 +50,14 @@ export function withFileLock<T>(
            } catch (e: any) {
              // lock exists → retry until timeout
              if (Date.now() - start >= timeoutMs) {
-               incCounter("LOCK_TIMEOUT");
+               const now = Date.now();
+               const event_id = `${process.env.REPO_SHA || "unknown"}:LOCK_TIMEOUT:${now}:${crypto.createHash("sha256").update(name + ":" + now).digest("hex").slice(0, 8)}`;
+               bump({
+                 v: 1,
+                 event_id,
+                 event_ts_ms: now,
+                 name: "LOCK_TIMEOUT",
+               });
                throw new Error(`LOCK_TIMEOUT: ${name}`);
              }
       sleep(retryMs);
