@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { persistReadJson, persistWriteJson } from "./persist_store";
+import { incCounter } from "./ops_counters";
 
 export type AuditEvent = {
   ts_ms: number;
@@ -29,7 +30,10 @@ function rotateIfNeeded(day: string) {
   const sz = fs.statSync(base).size;
   if (sz <= MAX_BYTES) return;
   const rotated = path.join(DATA_DIR, `audit_${day}.1.json`);
-  try { fs.renameSync(base, rotated); } catch {}
+  try {
+    fs.renameSync(base, rotated);
+    incCounter("AUDIT_ROTATE");
+  } catch {}
 }
 
 function enforceRetention() {
@@ -43,7 +47,10 @@ function enforceRetention() {
     const ts = Date.parse(day + "T00:00:00.000Z");
     if (!Number.isFinite(ts)) continue;
     if (ts < cutoff) {
-      try { fs.unlinkSync(path.join(DATA_DIR, f)); } catch {}
+      try {
+        fs.unlinkSync(path.join(DATA_DIR, f));
+        incCounter("AUDIT_RETENTION_DELETE");
+      } catch {}
     }
   }
 }

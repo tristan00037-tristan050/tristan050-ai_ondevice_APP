@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { withFileLock } from "./file_lock";
+import { incCounter } from "./ops_counters";
 
 const DATA_DIR = path.resolve(__dirname, "../data");
 
@@ -44,12 +45,13 @@ export function persistReadJson<T>(file: string): T | null {
     if (!fs.existsSync(p)) return null;
 
     const raw = fs.readFileSync(p, "utf8");
-    try {
-      return JSON.parse(raw) as T;
-    } catch (e) {
-      // fail-closed: corrupted persistence must not silently continue
-      throw new Error(`PERSIST_CORRUPTED: ${file}`);
-    }
+           try {
+             return JSON.parse(raw) as T;
+           } catch (e) {
+             // fail-closed: corrupted persistence must not silently continue
+             incCounter("PERSIST_CORRUPTED");
+             throw new Error(`PERSIST_CORRUPTED: ${file}`);
+           }
   }, { timeoutMs: 3000, retryMs: 50 });
 }
 
