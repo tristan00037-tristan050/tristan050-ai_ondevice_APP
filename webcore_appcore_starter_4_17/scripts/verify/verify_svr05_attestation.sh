@@ -62,12 +62,12 @@ if [[ ! -d "$ATTESTATION_DIR" ]]; then
   exit 1
 fi
 
-# Install dependencies
-if [[ -f "${ATTESTATION_DIR}/package-lock.json" ]]; then
-  npm --prefix "$ATTESTATION_DIR" ci
-else
-  npm --prefix "$ATTESTATION_DIR" install
+# Install dependencies (npm ci only, fail-closed if lockfile missing)
+if [[ ! -f "${ATTESTATION_DIR}/package-lock.json" ]]; then
+  echo "FAIL: lockfile missing (package-lock.json): ${ATTESTATION_DIR}"
+  exit 1
 fi
+npm --prefix "$ATTESTATION_DIR" ci
 
 # Run tests and parse results
 cd "$ATTESTATION_DIR"

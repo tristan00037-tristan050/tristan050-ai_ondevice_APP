@@ -32,13 +32,13 @@ AUDIT_DENY_COVERAGE_OK=0
 RBAC_DEFAULT_DENY_OK=0
 SVR01_SEALED_OK=0
 
-# Install dependencies (fail-closed)
+# Install dependencies (npm ci only, fail-closed if lockfile missing)
 echo "Installing dependencies..."
-if [ -f package-lock.json ]; then
-  npm ci
-else
-  npm install
+if [ ! -f package-lock.json ]; then
+  echo "FAIL: lockfile missing (package-lock.json): $(pwd)"
+  exit 1
 fi
+npm ci
 
 # Run tests
 echo "Running tests..."
