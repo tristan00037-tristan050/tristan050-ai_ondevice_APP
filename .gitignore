@@ -4,3 +4,4 @@ package-lock.json
 !webcore_appcore_starter_4_17/backend/telemetry/package-lock.json
 !webcore_appcore_starter_4_17/backend/model_registry/package-lock.json
 !webcore_appcore_starter_4_17/backend/control_plane/package-lock.json
+!webcore_appcore_starter_4_17/backend/attestation/package-lock.json
