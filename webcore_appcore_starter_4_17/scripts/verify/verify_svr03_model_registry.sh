@@ -8,6 +8,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+# Pre-gate: canonicalization single-source guard
+# Find repo root (may be webcore_appcore_starter_4_17 or parent)
+REPO_ROOT="$ROOT"
+if [[ -d "${ROOT}/webcore_appcore_starter_4_17" ]]; then
+  REPO_ROOT="${ROOT}/webcore_appcore_starter_4_17/.."
+  REPO_ROOT="$(cd "$REPO_ROOT" && pwd)"
+fi
+if [[ -f "${REPO_ROOT}/scripts/verify/verify_canonicalization_single_source.sh" ]]; then
+  bash "${REPO_ROOT}/scripts/verify/verify_canonicalization_single_source.sh"
+elif [[ -f "${ROOT}/../scripts/verify/verify_canonicalization_single_source.sh" ]]; then
+  bash "${ROOT}/../scripts/verify/verify_canonicalization_single_source.sh"
+else
+  echo "WARN: verify_canonicalization_single_source.sh not found, skipping"
+fi
+
 # Initialize evidence flags
 MODEL_UPLOAD_SIGN_VERIFY_OK=0
 MODEL_DELIVERY_SIGNATURE_REQUIRED_OK=0
