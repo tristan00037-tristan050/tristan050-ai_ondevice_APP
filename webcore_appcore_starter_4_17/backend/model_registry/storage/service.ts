@@ -7,12 +7,10 @@
 import { Model, CreateModelRequest } from '../models/model';
 import { ModelVersion, CreateModelVersionRequest } from '../models/version';
 import { Artifact, CreateArtifactRequest } from '../models/artifact';
-import { PersistMap } from '../services/persist_maps';
+import { getRegistryStore } from '../store';
 
-// Persistent stores (file-based, restart-safe)
-const models = new PersistMap<Model>("models.json");
-const modelVersions = new PersistMap<ModelVersion>("model_versions.json");
-const artifacts = new PersistMap<Artifact>("artifacts.json");
+// Use IRegistryStore interface instead of direct PersistMap access
+const store = getRegistryStore();
 
 /**
  * Model operations
@@ -27,12 +25,12 @@ export function createModel(tenantId: string, request: CreateModelRequest): Mode
     updated_at: new Date(),
     metadata: request.metadata,
   };
-  models.set(model.id, model);
+  store.putModel(model.id, model);
   return model;
 }
 
 export function getModelById(tenantId: string, modelId: string): Model | null {
-  const model = models.get(modelId);
+  const model = store.getModel(modelId);
   if (!model || model.tenant_id !== tenantId) {
     return null;
   }
@@ -40,7 +38,7 @@ export function getModelById(tenantId: string, modelId: string): Model | null {
 }
 
 export function listModels(tenantId: string): Model[] {
-  return models.filter(m => m.tenant_id === tenantId);
+  return store.listModels().filter((m: Model) => m.tenant_id === tenantId);
 }
 
 /**
@@ -65,7 +63,7 @@ export function createModelVersion(
     created_at: new Date(),
     metadata: request.metadata,
   };
-  modelVersions.set(version.id, version);
+  store.putModelVersion(version.id, version);
   return version;
 }
 
@@ -80,7 +78,7 @@ export function getModelVersionById(
     return null;
   }
 
-  const version = modelVersions.get(versionId);
+  const version = store.getModelVersion(versionId);
   if (!version || version.model_id !== modelId) {
     return null;
   }
@@ -94,7 +92,7 @@ export function listModelVersions(tenantId: string, modelId: string): ModelVersi
     return [];
   }
 
-  return modelVersions.filter(v => v.model_id === modelId);
+  return store.listModelVersions().filter((v: ModelVersion) => v.model_id === modelId);
 }
 
 /**
@@ -124,7 +122,7 @@ export function createArtifact(
     created_at: new Date(),
     metadata: request.metadata,
   };
-  artifacts.set(artifact.id, artifact);
+  store.putArtifact(artifact.id, artifact);
   return artifact;
 }
 
@@ -140,7 +138,7 @@ export function getArtifactById(
     return null;
   }
 
-  const artifact = artifacts.get(artifactId);
+  const artifact = store.getArtifact(artifactId);
   if (!artifact || artifact.model_version_id !== versionId) {
     return null;
   }
@@ -158,22 +156,12 @@ export function listArtifacts(
     return [];
   }
 
-  return artifacts.filter(a => a.model_version_id === versionId);
+  return store.listArtifacts().filter((a: Artifact) => a.model_version_id === versionId);
 }
 
 /**
  * Clear all data (for testing only)
  */
 export function clearAll(): void {
-  // Clear all entries from persistent maps
-  for (const [key] of models.entries()) {
-    models.delete(key);
-  }
-  for (const [key] of modelVersions.entries()) {
-    modelVersions.delete(key);
-  }
-  for (const [key] of artifacts.entries()) {
-    artifacts.delete(key);
-  }
+  store.clearAll();
 }
-
