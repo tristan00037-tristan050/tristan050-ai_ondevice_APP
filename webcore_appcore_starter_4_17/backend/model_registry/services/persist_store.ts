@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { withFileLock } from "./file_lock";
-import { incCounter } from "./ops_counters";
+import { bump } from "../../../../packages/common/src/metrics/counters";
+import crypto from "node:crypto";
 
 const DATA_DIR = path.resolve(__dirname, "../data");
 
@@ -49,7 +50,14 @@ export function persistReadJson<T>(file: string): T | null {
              return JSON.parse(raw) as T;
            } catch (e) {
              // fail-closed: corrupted persistence must not silently continue
-             incCounter("PERSIST_CORRUPTED");
+             const now = Date.now();
+             const event_id = `${process.env.REPO_SHA || "unknown"}:PERSIST_CORRUPTED:${now}:${crypto.createHash("sha256").update(file + ":" + now).digest("hex").slice(0, 8)}`;
+             bump({
+               v: 1,
+               event_id,
+               event_ts_ms: now,
+               name: "PERSIST_CORRUPTED",
+             });
              throw new Error(`PERSIST_CORRUPTED: ${file}`);
            }
   }, { timeoutMs: 3000, retryMs: 50 });

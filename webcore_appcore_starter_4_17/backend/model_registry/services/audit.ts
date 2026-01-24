@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { persistReadJson, persistWriteJson } from "./persist_store";
-import { incCounter } from "./ops_counters";
+import { bump } from "../../../../packages/common/src/metrics/counters";
+import crypto from "node:crypto";
 
 export type AuditEvent = {
   ts_ms: number;
@@ -29,11 +30,18 @@ function rotateIfNeeded(day: string) {
   if (!fs.existsSync(base)) return;
   const sz = fs.statSync(base).size;
   if (sz <= MAX_BYTES) return;
-  const rotated = path.join(DATA_DIR, `audit_${day}.1.json`);
-  try {
-    fs.renameSync(base, rotated);
-    incCounter("AUDIT_ROTATE");
-  } catch {}
+         const rotated = path.join(DATA_DIR, `audit_${day}.1.json`);
+         try {
+           fs.renameSync(base, rotated);
+           const now = Date.now();
+           const event_id = `${process.env.REPO_SHA || "unknown"}:AUDIT_ROTATE:${now}:${crypto.createHash("sha256").update(day + ":" + now).digest("hex").slice(0, 8)}`;
+           bump({
+             v: 1,
+             event_id,
+             event_ts_ms: now,
+             name: "AUDIT_ROTATE",
+           });
+         } catch {}
 }
 
 function enforceRetention() {
@@ -46,12 +54,19 @@ function enforceRetention() {
     const day = m[1];
     const ts = Date.parse(day + "T00:00:00.000Z");
     if (!Number.isFinite(ts)) continue;
-    if (ts < cutoff) {
-      try {
-        fs.unlinkSync(path.join(DATA_DIR, f));
-        incCounter("AUDIT_RETENTION_DELETE");
-      } catch {}
-    }
+           if (ts < cutoff) {
+             try {
+               fs.unlinkSync(path.join(DATA_DIR, f));
+               const now = Date.now();
+               const event_id = `${process.env.REPO_SHA || "unknown"}:AUDIT_RETENTION_DELETE:${now}:${crypto.createHash("sha256").update(f + ":" + now).digest("hex").slice(0, 8)}`;
+               bump({
+                 v: 1,
+                 event_id,
+                 event_ts_ms: now,
+                 name: "AUDIT_RETENTION_DELETE",
+               });
+             } catch {}
+           }
   }
 }
 
