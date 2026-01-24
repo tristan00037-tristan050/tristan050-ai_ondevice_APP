@@ -72,30 +72,60 @@ npm --prefix "$ATTESTATION_DIR" ci
 # Run tests and parse results
 cd "$ATTESTATION_DIR"
 
-# Run tests and capture output
-TEST_OUTPUT=$(npm test 2>&1) || TEST_EXIT=$?
+# Run tests and capture machine-verdict (Jest JSON), forbid log-grep based verdict
+RESULT_JSON="/tmp/svr05_attestation_jest.json"
+rm -f "$RESULT_JSON"
 
-# Check if tests passed
-if [[ "${TEST_EXIT:-0}" -eq 0 ]]; then
-  # Check if HTTP E2E test file exists and passed
-  HTTP_E2E_FILE="${ATTESTATION_DIR}/tests/attestation_http_e2e.test.ts"
-  if [[ -f "$HTTP_E2E_FILE" ]]; then
-    # If HTTP E2E test suite passed, both deny and allow tests should have run
-    if echo "$TEST_OUTPUT" | grep -q "attestation_http_e2e.test.ts" && \
-       echo "$TEST_OUTPUT" | grep -q "PASS"; then
-      # HTTP E2E file contains both deny and allow tests
-      # If the test suite passed, both tests should have passed
-      ATTEST_BLOCK_OK=1
-      ATTEST_ALLOW_OK=1
-    fi
-  fi
+set +e
+npm test -- --json --outputFile "$RESULT_JSON"
+TEST_EXIT=$?
+set -e
 
-  # Both deny and allow tests must pass for fail-closed OK
-  if [[ "$ATTEST_BLOCK_OK" -eq 1 ]] && [[ "$ATTEST_ALLOW_OK" -eq 1 ]]; then
-    ATTEST_VERIFY_FAILCLOSED_OK=1
-  fi
-  exit 0
-else
+if [[ ! -f "$RESULT_JSON" ]]; then
+  echo "FAIL: jest json output missing: $RESULT_JSON"
   exit 1
 fi
+
+# Parse Jest JSON to ensure:
+# - attestation_http_e2e.test.ts ran and passed
+# - at least one "denies request..." test passed
+# - the "allows request..." test passed
+node <<'NODE'
+const fs = require('fs');
+const p = "/tmp/svr05_attestation_jest.json";
+const d = JSON.parse(fs.readFileSync(p, 'utf8'));
+
+let allowOk = 0;
+let denyOk = 0;
+
+const tr = (d.testResults || []).find(x => String(x.name || '').includes('attestation_http_e2e.test.ts'));
+if (!tr) process.exit(1);
+if (String(tr.status) !== 'passed') process.exit(1);
+
+for (const a of (tr.assertionResults || [])) {
+  const title = String(a.title || '');
+  const status = String(a.status || '');
+  if (status !== 'passed') continue;
+  if (title.startsWith('denies request')) denyOk = 1;
+  if (title.startsWith('allows request')) allowOk = 1;
+}
+
+process.stdout.write(`ATTEST_ALLOW_OK=${allowOk}\n`);
+process.stdout.write(`ATTEST_BLOCK_OK=${denyOk}\n`);
+process.exit((allowOk && denyOk) ? 0 : 1);
+NODE
+PARSE_EXIT=$?
+
+if [[ "$PARSE_EXIT" -ne 0 ]]; then
+  exit 1
+fi
+if [[ "$TEST_EXIT" -ne 0 ]]; then
+  exit 1
+fi
+
+# success keys
+ATTEST_ALLOW_OK=1
+ATTEST_BLOCK_OK=1
+ATTEST_VERIFY_FAILCLOSED_OK=1
+exit 0
 
