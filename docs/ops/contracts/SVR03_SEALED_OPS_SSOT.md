@@ -107,6 +107,24 @@ LIMIT=200 bash webcore_appcore_starter_4_17/scripts/ops/svr03_audit_query.sh --f
 LIMIT=200 bash webcore_appcore_starter_4_17/scripts/ops/svr03_audit_query.sh --from YYYY-MM-DD --to YYYY-MM-DD --artifact_sha256 <SHA256>
 ```
 
+## Key lifecycle(Active/Grace/Revoked) 운영 커맨드
+
+Ops(메타만 출력, *_OK=1 금지)
+```bash
+bash webcore_appcore_starter_4_17/scripts/ops/svr03_key_report.sh
+```
+
+Verify(출력 키는 verify에서만)
+```bash
+bash scripts/verify/verify_svr03_key_rotation.sh ; echo EXIT=$?
+```
+
+PASS requires:
+- KEY_ROTATION_MULTIKEY_VERIFY_OK=1
+- KEY_ROTATION_GRACE_PERIOD_OK=1
+- KEY_REVOCATION_BLOCK_OK=1
+- EXIT=0
+
 ## 완료 조건(체크리스트)
 - [x] main ruleset/branch protection에서 product-verify-model-registry가 required check로 설정됨
 - [x] PR 화면에서 product-verify-model-registry가 필수로 표시되고, 실패 시 머지 불가가 보임

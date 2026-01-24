@@ -7,7 +7,7 @@ describe("SVR-03 key ops: rotation + revoke (fail-closed)", () => {
     // 현재 구현이 Map을 모듈 스코프로 두었으므로, 이 테스트에서는 key_id를 매번 다르게 사용합니다.
   });
 
-  it("[EVID:KEY_ROTATION_MULTI_KEY_VERIFY_OK] multi-key verify allowed during grace", () => {
+  it("[EVID:KEY_ROTATION_MULTIKEY_VERIFY_OK] multi-key verify allowed during grace", () => {
     const now = Date.now();
     upsertKey({ key_id: "k_old", public_key_pem: "PEM_OLD", state: "grace", grace_until_ms: now + 60_000 });
     upsertKey({ key_id: "k_new", public_key_pem: "PEM_NEW", state: "active" });
@@ -16,7 +16,7 @@ describe("SVR-03 key ops: rotation + revoke (fail-closed)", () => {
     expect(canVerifyWithKey("k_old", now).ok).toBe(true);
   });
 
-  it("[EVID:KEY_REVOKE_BLOCK_OK] revoked key must be blocked immediately", () => {
+  it("[EVID:KEY_REVOCATION_BLOCK_OK] revoked key must be blocked immediately", () => {
     const now = Date.now();
     upsertKey({ key_id: "k_rev", public_key_pem: "PEM_REV", state: "revoked" });
 
@@ -25,7 +25,7 @@ describe("SVR-03 key ops: rotation + revoke (fail-closed)", () => {
     expect(r.reason_code).toBe("KEY_REVOKED");
   });
 
-  it("grace expired must be blocked", () => {
+  it("[EVID:KEY_ROTATION_GRACE_PERIOD_OK] grace expired must be blocked", () => {
     const now = Date.now();
     upsertKey({ key_id: "k_grace", public_key_pem: "PEM_G", state: "grace", grace_until_ms: now - 1 });
 
