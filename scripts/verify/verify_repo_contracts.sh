@@ -4,6 +4,8 @@ set -euo pipefail
 OK_CONTAMINATION_REPO_GUARD_OK=0
 REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=0
 SSOT_PLACEHOLDER_GUARD_OK=0
+REQUIRED_CHECK_NAME_STABILITY_OK=0
+REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK=0
 
 run_guard() {
   local name="$1"; shift
@@ -28,8 +30,16 @@ REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=1
 run_guard "repo SSOT doc gate" bash scripts/verify/verify_repo_ssot_no_placeholders.sh
 SSOT_PLACEHOLDER_GUARD_OK=1
 
+run_guard "repo required check name stability" bash scripts/verify/verify_repo_required_check_name_stability.sh
+REQUIRED_CHECK_NAME_STABILITY_OK=1
+
+run_guard "repo no skipped bypass" bash scripts/verify/verify_repo_no_skipped_bypass.sh
+REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK=1
+
 echo "OK_CONTAMINATION_REPO_GUARD_OK=${OK_CONTAMINATION_REPO_GUARD_OK}"
 echo "REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=${REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK}"
 echo "SSOT_PLACEHOLDER_GUARD_OK=${SSOT_PLACEHOLDER_GUARD_OK}"
+echo "REQUIRED_CHECK_NAME_STABILITY_OK=${REQUIRED_CHECK_NAME_STABILITY_OK}"
+echo "REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK=${REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK}"
 exit 0
 
