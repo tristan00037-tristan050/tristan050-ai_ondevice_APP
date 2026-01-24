@@ -11,18 +11,47 @@ import { ReleasePointer } from '../models/release';
 import { SigningKey } from './signing';
 import { canonicalizeJson } from '../../../../packages/common/src/canon/jcs';
 import { sign } from './signing';
-import { PersistMap } from './persist_maps';
+import { getRegistryStore } from '../store';
 
-// Persistent stores (file-based, restart-safe)
-const models = new PersistMap<Model>("models.json");
-const modelVersions = new PersistMap<ModelVersion>("model_versions.json");
-const artifacts = new PersistMap<Artifact>("artifacts.json");
-const releasePointers = new PersistMap<ReleasePointer>("release_pointers.json");
+// Use IRegistryStore interface instead of direct PersistMap access
+const store = getRegistryStore();
 // Signing keys remain in-memory for now (security-sensitive)
 const signingKeys: SigningKey[] = [];
 
-// Export for API access
-export { models, modelVersions, artifacts, releasePointers };
+// Legacy exports for backward compatibility (deprecated, use store interface)
+// These will be removed in future refactoring
+export const models = {
+  get: (id: string) => store.getModel(id),
+  set: (id: string, model: Model) => store.putModel(id, model),
+  find: (predicate: (m: Model) => boolean) => store.listModels().find(predicate),
+  filter: (predicate: (m: Model) => boolean) => store.listModels().filter(predicate),
+  values: () => store.listModels(),
+  entries: () => store.listModels().map((m: Model) => [m.id, m] as [string, Model]),
+};
+export const modelVersions = {
+  get: (id: string) => store.getModelVersion(id),
+  set: (id: string, mv: ModelVersion) => store.putModelVersion(id, mv),
+  find: (predicate: (mv: ModelVersion) => boolean) => store.listModelVersions().find(predicate),
+  filter: (predicate: (mv: ModelVersion) => boolean) => store.listModelVersions().filter(predicate),
+  values: () => store.listModelVersions(),
+  entries: () => store.listModelVersions().map((mv: ModelVersion) => [mv.id, mv] as [string, ModelVersion]),
+};
+export const artifacts = {
+  get: (id: string) => store.getArtifact(id),
+  set: (id: string, a: Artifact) => store.putArtifact(id, a),
+  find: (predicate: (a: Artifact) => boolean) => store.listArtifacts().find(predicate),
+  filter: (predicate: (a: Artifact) => boolean) => store.listArtifacts().filter(predicate),
+  values: () => store.listArtifacts(),
+  entries: () => store.listArtifacts().map((a: Artifact) => [a.id, a] as [string, Artifact]),
+};
+export const releasePointers = {
+  get: (id: string) => store.getReleasePointer(id),
+  set: (id: string, rp: ReleasePointer) => store.putReleasePointer(id, rp),
+  find: (predicate: (rp: ReleasePointer) => boolean) => store.listReleasePointers().find(predicate),
+  filter: (predicate: (rp: ReleasePointer) => boolean) => store.listReleasePointers().filter(predicate),
+  values: () => store.listReleasePointers(),
+  entries: () => store.listReleasePointers().map((rp: ReleasePointer) => [rp.id, rp] as [string, ReleasePointer]),
+};
 
 /**
  * Initialize default signing key (for v1)
@@ -72,7 +101,7 @@ export function createModel(tenantId: string, userId: string, data: {
     metadata: data.metadata,
   };
   
-  models.set(model.id, model);
+  store.putModel(model.id, model);
   return model;
 }
 
@@ -89,7 +118,7 @@ export function createModelVersion(
   }
 ): ModelVersion {
   // Fail-Closed: Model must exist and belong to tenant
-  const model = models.get(modelId);
+  const model = store.getModel(modelId);
   if (!model || model.tenant_id !== tenantId) {
     throw new Error('Model not found');
   }
@@ -106,7 +135,7 @@ export function createModelVersion(
     metadata: data.metadata,
   };
   
-  modelVersions.set(version.id, version);
+  store.putModelVersion(version.id, version);
   return version;
 }
 
@@ -128,9 +157,9 @@ export function createArtifact(
   }
 ): Artifact {
   // Fail-Closed: Model version must exist
-  const version = modelVersions.get(modelVersionId);
+  const version = store.getModelVersion(modelVersionId);
   // Verify model belongs to tenant via model_id lookup
-  const model = version ? models.get(version.model_id) : null;
+  const model = version ? store.getModel(version.model_id) : null;
   if (!model || model.tenant_id !== tenantId) {
     throw new Error('Model version not found or tenant mismatch');
   }
@@ -156,7 +185,7 @@ export function createArtifact(
     created_at: new Date(),
   };
   
-  artifacts.set(artifact.id, artifact);
+  store.putArtifact(artifact.id, artifact);
   return artifact;
 }
 
@@ -168,12 +197,12 @@ export function releaseModelVersion(
   tenantId: string,
   userId: string
 ): ModelVersion {
-  const version = modelVersions.get(modelVersionId);
+  const version = store.getModelVersion(modelVersionId);
   if (!version) {
     throw new Error('Model version not found');
   }
   // Verify model belongs to tenant via model_id lookup
-  const model = models.get(version.model_id);
+  const model = store.getModel(version.model_id);
   if (!model || model.tenant_id !== tenantId) {
     throw new Error('Model version not found or tenant mismatch');
   }
@@ -206,24 +235,24 @@ export function setReleasePointer(
   }
 ): ReleasePointer {
   // Fail-Closed: Version must be released
-  const version = modelVersions.get(data.model_version_id);
+  const version = store.getModelVersion(data.model_version_id);
   if (!version || version.status !== 'released') {
     throw new Error('Model version not released');
   }
   // Verify model belongs to tenant
-  const model = models.get(version.model_id);
+  const model = store.getModel(version.model_id);
   if (!model || model.tenant_id !== tenantId) {
     throw new Error('Model version not found or tenant mismatch');
   }
   
   // Fail-Closed: Artifact must exist and match version
-  const artifact = artifacts.get(data.artifact_id);
+  const artifact = store.getArtifact(data.artifact_id);
   if (!artifact || artifact.model_version_id !== data.model_version_id) {
     throw new Error('Artifact not found or does not match version');
   }
   
   // Update or create release pointer
-  let pointer = releasePointers.values().find(
+  let pointer = store.listReleasePointers().find(
     p => p.model_id === modelId && p.platform === data.platform && p.runtime === data.runtime
   );
   
@@ -232,7 +261,7 @@ export function setReleasePointer(
     pointer.artifact_id = data.artifact_id;
     pointer.updated_at = new Date();
     // Update in persistent store
-    releasePointers.set(pointer.id, pointer);
+    store.putReleasePointer(pointer.id, pointer);
   } else {
     pointer = {
       id: `pointer_${Date.now()}_${Math.random().toString(36).substring(7)}`,
@@ -245,7 +274,7 @@ export function setReleasePointer(
       created_at: new Date(),
       created_by: userId,
     };
-    releasePointers.set(pointer.id, pointer);
+    store.putReleasePointer(pointer.id, pointer);
   }
   
   return pointer;
@@ -271,8 +300,8 @@ export function getDelivery(
   ts_ms: number;
   expires_at: number;
 } | null {
-  const pointer = releasePointers.values().find(
-    p => p.model_id === modelId &&
+  const pointer = store.listReleasePointers().find(
+    (p: ReleasePointer) => p.model_id === modelId &&
          p.tenant_id === tenantId &&
          p.platform === platform &&
          p.runtime === runtime
@@ -282,8 +311,8 @@ export function getDelivery(
     return null;
   }
   
-  const artifact = artifacts.get(pointer.artifact_id);
-  const version = modelVersions.get(pointer.model_version_id);
+  const artifact = store.getArtifact(pointer.artifact_id);
+  const version = store.getModelVersion(pointer.model_version_id);
   const signingKey = signingKeys.find(k => k.active) || (signingKeys.length > 0 ? signingKeys[0] : null);
   
   if (!artifact || !version || !signingKey) {
