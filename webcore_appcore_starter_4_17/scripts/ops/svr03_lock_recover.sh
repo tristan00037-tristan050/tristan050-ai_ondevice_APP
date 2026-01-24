@@ -100,6 +100,29 @@ if [[ "$STALE" -eq 0 && "$FORCE" -eq 0 ]]; then
   exit 1
 fi
 
-rm -f "$LOCK_FILE"
-echo "cleared=1"
+  rm -f "$LOCK_FILE"
+  echo "cleared=1"
+
+  # FORCE 감사(meta-only): lock 강제 삭제가 실행된 경우만 기록
+  if [[ "$FORCE" -eq 1 ]]; then
+    cd "$ROOT/webcore_appcore_starter_4_17/backend/model_registry"
+    REPO_SHA="${REPO_SHA:-unknown}" node - <<'NODE'
+const { appendAuditV2, hashActorId, newEventId, nowUtcIso } = require("./services/audit_append");
+
+const repoSha = process.env.REPO_SHA || "unknown";
+appendAuditV2({
+  v: 2,
+  ts_utc: nowUtcIso(),
+  event_id: newEventId("LOCK_FORCE_CLEAR"),
+  actor_type: "system",
+  actor_id_hash: hashActorId(process.env.USER || "unknown"),
+  action: "LOCK_FORCE_CLEAR",
+  reason_code: "FORCED_RECOVERY",
+  repo_sha: repoSha,
+  target: { lock_name: "persist_store" },
+  outcome: "ALLOW",
+  policy_version: "h3.2",
+});
+NODE
+  fi
 

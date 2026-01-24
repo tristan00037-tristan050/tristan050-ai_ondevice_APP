@@ -125,6 +125,22 @@ PASS requires:
 - KEY_REVOCATION_BLOCK_OK=1
 - EXIT=0
 
+## Force 행위 감사 이벤트(v2, meta-only)
+
+- 스키마 단일 소스: `packages/common/src/audit/audit_event_v2.ts`
+- force unlock / key revoke/rotate 같은 "상태 변경 행위"는 audit_event_v2로 반드시 기록
+
+Verify:
+```bash
+bash scripts/verify/verify_svr03_audit_event_v2.sh ; echo EXIT=$?
+```
+
+PASS requires:
+- AUDIT_EVENT_SCHEMA_V2_OK=1
+- LOCK_FORCE_AUDITED_OK=1
+- KEY_EVENT_AUDITED_OK=1
+- EXIT=0
+
 ## 완료 조건(체크리스트)
 - [x] main ruleset/branch protection에서 product-verify-model-registry가 required check로 설정됨
 - [x] PR 화면에서 product-verify-model-registry가 필수로 표시되고, 실패 시 머지 불가가 보임
