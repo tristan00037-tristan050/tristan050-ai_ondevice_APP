@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { writeLockMeta, removeLockMeta } from "./lock_meta";
+import { incCounter } from "./ops_counters";
 
 const DATA_DIR = path.resolve(__dirname, "../data");
 
@@ -45,11 +46,12 @@ export function withFileLock<T>(
                fs.closeSync(fd);
                removeLockMeta(name);
              }
-    } catch (e: any) {
-      // lock exists → retry until timeout
-      if (Date.now() - start >= timeoutMs) {
-        throw new Error(`LOCK_TIMEOUT: ${name}`);
-      }
+           } catch (e: any) {
+             // lock exists → retry until timeout
+             if (Date.now() - start >= timeoutMs) {
+               incCounter("LOCK_TIMEOUT");
+               throw new Error(`LOCK_TIMEOUT: ${name}`);
+             }
       sleep(retryMs);
     }
   }
