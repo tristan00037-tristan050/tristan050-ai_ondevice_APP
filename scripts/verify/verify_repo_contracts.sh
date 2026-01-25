@@ -23,6 +23,9 @@ echo "== guard: JCS single source =="
 bash scripts/verify/verify_jcs_single_source.sh
 CANONICALIZE_SHARED_SINGLE_SOURCE_OK=1
 
+echo "== guard: SLSA provenance min =="
+bash scripts/verify/verify_slsa_provenance_min.sh || true
+
 run_guard() {
   local name="$1"; shift
   local out=""
