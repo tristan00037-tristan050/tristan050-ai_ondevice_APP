@@ -34,3 +34,9 @@ jobs:
         run: |
           set -euo pipefail
           bash webcore_appcore_starter_4_17/scripts/verify/verify_svr03_model_registry.sh
+
+      - name: Run SVR-03 store parity verify (STORE-01)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_svr03_store_parity.sh
