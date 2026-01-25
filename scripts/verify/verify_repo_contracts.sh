@@ -8,6 +8,7 @@ REQUIRED_CHECK_NAME_STABILITY_OK=0
 REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK=0
 NO_LOG_GREP_VERDICT_OK=0
 NO_NPM_INSTALL_FALLBACK_OK=0
+CANONICALIZE_SHARED_SINGLE_SOURCE_OK=0
 
 # Guard: forbid log/sentence grep verdict patterns (P1-2)
 echo "== guard: forbid log-grep verdict patterns =="
@@ -17,6 +18,10 @@ NO_LOG_GREP_VERDICT_OK=1
 echo "== guard: forbid npm install fallback in verify scripts =="
 bash scripts/verify/verify_no_npm_install_fallback.sh
 NO_NPM_INSTALL_FALLBACK_OK=1
+
+echo "== guard: JCS single source =="
+bash scripts/verify/verify_jcs_single_source.sh
+CANONICALIZE_SHARED_SINGLE_SOURCE_OK=1
 
 run_guard() {
   local name="$1"; shift
@@ -54,5 +59,6 @@ echo "REQUIRED_CHECK_NAME_STABILITY_OK=${REQUIRED_CHECK_NAME_STABILITY_OK}"
 echo "REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK=${REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK}"
 echo "NO_LOG_GREP_VERDICT_OK=${NO_LOG_GREP_VERDICT_OK}"
 echo "NO_NPM_INSTALL_FALLBACK_OK=${NO_NPM_INSTALL_FALLBACK_OK}"
+echo "CANONICALIZE_SHARED_SINGLE_SOURCE_OK=${CANONICALIZE_SHARED_SINGLE_SOURCE_OK}"
 exit 0
 
