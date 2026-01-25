@@ -6,7 +6,9 @@
 - Repo-guards blocks duplicate JCS/canonicalize implementations (fail-closed).
 
 ## Code PR
-- PR: <fill after merge>
+- PR: https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/208
+- merge_commit_sha: 50ceac1e4c8ab13659587c1ee5f80a88b62ba0d5
+- merged_at: 2026-01-25T01:34:45Z
 
 ## Evidence (how to verify)
 - PR → Checks: repo-guards must be Success (green)
