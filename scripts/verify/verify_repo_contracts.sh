@@ -7,11 +7,16 @@ SSOT_PLACEHOLDER_GUARD_OK=0
 REQUIRED_CHECK_NAME_STABILITY_OK=0
 REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK=0
 NO_LOG_GREP_VERDICT_OK=0
+NO_NPM_INSTALL_FALLBACK_OK=0
 
 # Guard: forbid log/sentence grep verdict patterns (P1-2)
 echo "== guard: forbid log-grep verdict patterns =="
 bash scripts/verify/verify_no_log_grep_verdict.sh
 NO_LOG_GREP_VERDICT_OK=1
+
+echo "== guard: forbid npm install fallback in verify scripts =="
+bash scripts/verify/verify_no_npm_install_fallback.sh
+NO_NPM_INSTALL_FALLBACK_OK=1
 
 run_guard() {
   local name="$1"; shift
@@ -48,5 +53,6 @@ echo "SSOT_PLACEHOLDER_GUARD_OK=${SSOT_PLACEHOLDER_GUARD_OK}"
 echo "REQUIRED_CHECK_NAME_STABILITY_OK=${REQUIRED_CHECK_NAME_STABILITY_OK}"
 echo "REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK=${REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK}"
 echo "NO_LOG_GREP_VERDICT_OK=${NO_LOG_GREP_VERDICT_OK}"
+echo "NO_NPM_INSTALL_FALLBACK_OK=${NO_NPM_INSTALL_FALLBACK_OK}"
 exit 0
 
