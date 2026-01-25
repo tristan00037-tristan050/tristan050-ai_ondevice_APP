@@ -10,6 +10,7 @@ import * as crypto from 'crypto';
 import { verify } from '../services/signing';
 import { canonicalizeJson } from '../../../../packages/common/src/canon/jcs';
 import { canVerifyWithKey, getKey } from '../services/key_store';
+import { enforceAntiRollbackFreeze } from "./update_anti_rollback_freeze";
 
 export type SignatureValidationResult =
   | { valid: true }
@@ -249,6 +250,26 @@ export function verifyDeliveryApplySignature(
     return {
       valid: false,
       reason_code: 'SIGNATURE_INVALID',
+      status: 403,
+    };
+  }
+
+  // P2-2: anti-rollback / anti-freeze (fail-closed)
+  // NOTE: expects the delivery payload to carry version and expires_at_ms.
+  // maxSeenVersion should be derived from store state by existing logic.
+  // If your existing code already computes maxSeenVersion/currentVersion, wire it here.
+  // Temporary default is 0 to keep compilation; replace with real value in follow-up if needed.
+  try {
+    const deliveryPayload = body as any;
+    const incomingVersion = Number(deliveryPayload?.version ?? deliveryPayload?.meta?.version ?? 0);
+    const maxSeenVersion = Number(deliveryPayload?.max_seen_version ?? deliveryPayload?.meta?.max_seen_version ?? 0);
+    const expiresAtMs = Number(deliveryPayload?.expires_at_ms ?? deliveryPayload?.meta?.expires_at_ms ?? Date.now() + 3600000);
+    enforceAntiRollbackFreeze({ incomingVersion, maxSeenVersion, expiresAtMs, nowMs: Date.now() });
+  } catch (err: any) {
+    // Fail-closed: anti-rollback/freeze violations must be rejected
+    return {
+      valid: false,
+      reason_code: err.message?.includes('ANTI_ROLLBACK') ? 'ANTI_ROLLBACK_VIOLATION' : err.message?.includes('ANTI_FREEZE') ? 'ANTI_FREEZE_VIOLATION' : 'UPDATE_CONTRACT_VIOLATION',
       status: 403,
     };
   }
