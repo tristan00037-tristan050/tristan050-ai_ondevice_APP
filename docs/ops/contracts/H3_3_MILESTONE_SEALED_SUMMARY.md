@@ -34,3 +34,21 @@ Status: SEALED (P1-4..P1-6 merged + records pinned)
 - docs/ops/contracts/H3_3_P1_5_SIGN_01_KEY_LIFECYCLE_VERIFY_SEALED.md
 - docs/ops/contracts/H3_3_P1_6_STORE_01_PARITY_SEALED.md
 
+## P2 (Supplychain / Update) — SEALED
+
+- P2-1 SUPPLYCHAIN-01 (SLSA provenance min)
+  - Code PR #215: https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/215
+    - merge_commit_sha: a2a36a9a829f2670402767d45e0ad70513854ea2
+    - merged_at: 2026-01-25T03:21:14Z
+  - Record PR #216: https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/216
+    - merge_commit_sha: f8349bec176c547f660117519ec7e7eafa87a733
+    - merged_at: (see merge commit log)
+
+- P2-2 UPDATE-01 (anti-rollback / anti-freeze min)
+  - Code PR #217: https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/217
+    - merge_commit_sha: 7a25816ac907e4dd4006728537eb5adeffd1d996
+    - merged_at: 2026-01-25T05:16:44Z
+  - Record PR #218: https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/pull/218
+    - merge_commit_sha: bb9070f6501544f3cc9e65214db53eb3a417a693
+    - merged_at: 2026-01-25T06:21:24Z
+
