@@ -40,3 +40,9 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/verify/verify_svr03_store_parity.sh
+
+      - name: Run SVR-03 update anti-rollback/freeze verify (P2-2)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_svr03_update_anti_rollback_freeze.sh
