@@ -36,7 +36,7 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
     }
   });
 
-  it("[EVID:PERSIST_AUDIT_DENY_OK] deny path does not save business data but writes audit", () => {
+  it("[EVID:PERSIST_AUDIT_DENY_OK] deny path does not save business data but writes audit", async () => {
     // Test deny case: missing signature
     const result = applyArtifact("tenant1", {
       sha256: "test-sha256",
@@ -51,6 +51,12 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
     expect("reason_code" in result && result.reason_code).toBe("SIGNATURE_MISSING");
 
     // Verify audit log was written (daily file format)
+    // Wait for file lock to complete (CI may need a moment for file system sync)
+    let retries = 10;
+    while (!fs.existsSync(auditFile) && retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      retries--;
+    }
     expect(fs.existsSync(auditFile)).toBe(true);
     const auditLogs = persistReadJson<AuditEvent[]>(`audit_${today}.json`);
     expect(auditLogs).toBeTruthy();
@@ -88,7 +94,7 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
     expect(allowEvent!.sha256).toBe("test-sha256");
   });
 
-  it("[EVID:PERSIST_AUDIT_ROLLBACK_DENY_OK] rollback deny path writes audit", () => {
+  it("[EVID:PERSIST_AUDIT_ROLLBACK_DENY_OK] rollback deny path writes audit", async () => {
     const result = rollbackArtifact("tenant1", {
       sha256: "test-sha256",
       model_id: "m1",
@@ -103,6 +109,12 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
     expect("reason_code" in result && result.reason_code).toBe("SIGNATURE_MISSING");
 
     // Verify audit log was written
+    // Wait for file lock to complete (CI may need a moment for file system sync)
+    let retries = 10;
+    while (!fs.existsSync(auditFile) && retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      retries--;
+    }
     expect(fs.existsSync(auditFile)).toBe(true);
     const auditLogs = persistReadJson<AuditEvent[]>(`audit_${today}.json`);
     expect(auditLogs).toBeTruthy();
