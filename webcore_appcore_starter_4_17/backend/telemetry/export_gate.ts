@@ -1,16 +1,11 @@
 import crypto from "node:crypto";
 import { validateMetaOnly } from "../gateway/guards/meta_only_validator";
+import { appendAuditEventV2 } from "./audit_event_v2_append";
 
-// NOTE: audit_event_v2 연결은 프로젝트마다 위치가 다를 수 있으므로,
-// 여기서는 "audit_event_v2 기록 함수"를 로컬 함수로 캡슐화하고,
-// 실제 구현은 기존 audit 경로에 맞춰 교체/연결한다.
 type AuditMeta = Record<string, any>;
 
 function writeAuditEventV2(meta: AuditMeta) {
-  // placeholder 금지 원칙 때문에, 최소 로깅이 아닌 "구조적 호출 지점"만 둔다.
-  // 실제 구현은 기존 audit_event_v2 append 경로를 호출하도록 연결해야 한다.
-  // 이 PR에서는 verify가 해당 연결을 정적으로 검사한다.
-  return meta;
+  appendAuditEventV2(meta);
 }
 
 export function exportPreview(body: any) {
