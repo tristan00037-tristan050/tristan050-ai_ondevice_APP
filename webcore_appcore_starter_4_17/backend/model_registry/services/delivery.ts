@@ -5,6 +5,7 @@
 
 import { verifyDeliveryApplySignature, verifyDeliveryRollbackSignature } from '../verify/signature';
 import { appendAudit } from './audit';
+import { getRegistryStore } from '../store';
 
 export type ApplyResult =
   | { ok: true; applied: boolean }
@@ -112,6 +113,31 @@ export function applyArtifact(
       key_id: delivery.key_id,
     });
     return { ok: false, reason_code: 'SHA256_MISSING', applied: false };
+  }
+
+  // UPDATE-02: enforce and bump max_seen_version atomically (only on success)
+  // Extract version number from ModelVersion or version_id
+  try {
+    const store = getRegistryStore();
+    const modelVersion = store.getModelVersion(delivery.version_id);
+    // Extract numeric version from ModelVersion.version (semver or numeric string)
+    const versionStr = modelVersion?.version || delivery.version_id;
+    const versionMatch = versionStr.match(/\d+/);
+    const incomingVersion = versionMatch ? Number(versionMatch[0]) : Number(versionStr) || 0;
+    
+    const updateKey = `${tenantId}:${delivery.model_id}`;
+    store.enforceAndBumpMaxSeenVersion(updateKey, incomingVersion);
+  } catch (err: any) {
+    // If rollback detected or other error, fail-closed
+    appendAudit({
+      ts_ms: Date.now(),
+      action: "APPLY",
+      result: "DENY",
+      reason_code: err.message?.includes('ANTI_ROLLBACK') ? 'ANTI_ROLLBACK_VIOLATION' : 'UPDATE_STATE_ERROR',
+      key_id: delivery.key_id,
+      sha256: delivery.sha256,
+    });
+    return { ok: false, reason_code: err.message?.includes('ANTI_ROLLBACK') ? 'ANTI_ROLLBACK_VIOLATION' : 'UPDATE_STATE_ERROR', applied: false };
   }
 
   // Success: record ALLOW audit event

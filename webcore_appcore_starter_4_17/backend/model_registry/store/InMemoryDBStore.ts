@@ -72,10 +72,42 @@ export class InMemoryDBStore implements IRegistryStore {
     this.modelVersions.clear();
     this.artifacts.clear();
     this.releasePointers.clear();
+    // UPDATE-02: clear update states
+    this.updateStates.clear();
   }
 
   flushNow(): void {
     // In-memory store doesn't need flush
+  }
+
+  // UPDATE-02: persisted anti-rollback state (in-memory for parity)
+  private updateStates = new Map<string, any>();
+
+  getUpdateState(key: string): any | null {
+    return this.updateStates.get(key) ?? null;
+  }
+
+  putUpdateState(key: string, state: any): void {
+    this.updateStates.set(key, state);
+  }
+
+  // atomic monotonic bump (fail-closed on rollback)
+  enforceAndBumpMaxSeenVersion(key: string, incomingVersion: number): number {
+    const current = this.updateStates.get(key)?.max_seen_version ?? 0;
+
+    // Fail-closed: rollback detection
+    if (incomingVersion < current) {
+      throw new Error(`ANTI_ROLLBACK: rollback_detected (incoming=${incomingVersion}, max_seen=${current})`);
+    }
+
+    // Idempotent: same version doesn't need update
+    if (incomingVersion === current) {
+      return current;
+    }
+
+    // Atomic update: incomingVersion > current
+    this.updateStates.set(key, { max_seen_version: incomingVersion });
+    return incomingVersion;
   }
 }
 
