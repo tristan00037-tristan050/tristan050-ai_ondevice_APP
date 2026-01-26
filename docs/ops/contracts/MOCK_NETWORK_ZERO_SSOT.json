@@ -1,0 +1,7 @@
+{
+  "schema_name": "MOCK_NETWORK_ZERO_V1",
+  "rule": "Requests with x-os-mode=mock must be rejected server-side (fail-closed).",
+  "blocked_mode": "mock",
+  "reason_code": "MOCK_MODE_NETWORK_FORBIDDEN"
+}
+
