@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { requireAuthAndContext } from '../control_plane/services/auth_context';
+import { requireCallerContext } from '../control_plane/services/auth_context';
 import * as modelsApi from './api/models';
 import * as versionsApi from './api/versions';
 import * as artifactsApi from './api/artifacts';
