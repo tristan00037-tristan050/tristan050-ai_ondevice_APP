@@ -29,6 +29,30 @@ jobs:
           set -euo pipefail
           bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg
 
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/backend/model_registry
+          [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing"; exit 1; }
+          npm ci
+
+      - name: Typecheck (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/backend/model_registry
+          npm run typecheck
+          echo "MODEL_REGISTRY_TYPECHECK_OK=1"
+
+      - name: Lint (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/backend/model_registry
+          npm run lint
+          echo "MODEL_REGISTRY_LINT_OK=1"
+
       - name: Run SVR-03 verify
         shell: bash
         run: |
