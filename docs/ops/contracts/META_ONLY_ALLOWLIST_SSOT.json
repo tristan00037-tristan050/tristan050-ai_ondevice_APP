@@ -1,0 +1,25 @@
+{
+  "schema_name": "META_ONLY_ALLOWLIST_V1",
+  "allowed_keys": [
+    "status",
+    "reason_code",
+    "ts_utc",
+    "duration_ms_bucket",
+    "request_id",
+    "app_version",
+    "model_version",
+    "policy_version",
+    "repo_sha",
+    "count_*"
+  ],
+  "forbidden_patterns": [
+    "patch",
+    "diff",
+    "commit message",
+    "stack trace",
+    "BEGIN",
+    "END"
+  ],
+  "max_string_len": 120
+}
+

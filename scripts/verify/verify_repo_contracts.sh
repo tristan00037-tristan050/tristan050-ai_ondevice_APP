@@ -22,6 +22,9 @@ REQUIRED_WORKFLOWS_ALWAYS_REPORTED_OK=0
 POLICY_HEADERS_REQUIRED_OK=0
 POLICY_HEADERS_FAILCLOSED_OK=0
 
+# PROD-03
+META_ONLY_ALLOWLIST_ENFORCED_OK=0
+
 cleanup(){
   echo "OK_CONTAMINATION_REPO_GUARD_OK=${OK_CONTAMINATION_REPO_GUARD_OK}"
   echo "REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=${REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK}"
@@ -41,6 +44,8 @@ cleanup(){
 
   echo "POLICY_HEADERS_REQUIRED_OK=${POLICY_HEADERS_REQUIRED_OK}"
   echo "POLICY_HEADERS_FAILCLOSED_OK=${POLICY_HEADERS_FAILCLOSED_OK}"
+
+  echo "META_ONLY_ALLOWLIST_ENFORCED_OK=${META_ONLY_ALLOWLIST_ENFORCED_OK}"
 }
 trap cleanup EXIT
 
@@ -124,5 +129,9 @@ echo "== guard: policy header bundle fail-closed =="
 run_guard "policy header bundle" bash scripts/verify/verify_policy_header_bundle_failclosed.sh
 POLICY_HEADERS_REQUIRED_OK=1
 POLICY_HEADERS_FAILCLOSED_OK=1
+
+echo "== guard: meta-only allowlist enforced =="
+run_guard "meta-only allowlist enforced" bash scripts/verify/verify_meta_only_allowlist_enforced.sh
+META_ONLY_ALLOWLIST_ENFORCED_OK=1
 
 exit 0
