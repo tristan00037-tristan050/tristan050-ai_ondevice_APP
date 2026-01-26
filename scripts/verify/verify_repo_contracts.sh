@@ -16,6 +16,7 @@ REQUIRED_CHECK_CONTEXT_SINGLE_OK=0
 AUDIT_APPEND_NO_DRIFT_OK=0
 COUNTERS_NO_DRIFT_OK=0
 ARTIFACTS_NOT_TRACKED_OK=0
+REQUIRED_WORKFLOWS_ALWAYS_REPORTED_OK=0
 
 cleanup(){
   echo "OK_CONTAMINATION_REPO_GUARD_OK=${OK_CONTAMINATION_REPO_GUARD_OK}"
@@ -32,6 +33,7 @@ cleanup(){
   echo "AUDIT_APPEND_NO_DRIFT_OK=${AUDIT_APPEND_NO_DRIFT_OK}"
   echo "COUNTERS_NO_DRIFT_OK=${COUNTERS_NO_DRIFT_OK}"
   echo "ARTIFACTS_NOT_TRACKED_OK=${ARTIFACTS_NOT_TRACKED_OK}"
+  echo "REQUIRED_WORKFLOWS_ALWAYS_REPORTED_OK=${REQUIRED_WORKFLOWS_ALWAYS_REPORTED_OK}"
 }
 trap cleanup EXIT
 
@@ -106,5 +108,9 @@ COUNTERS_NO_DRIFT_OK=1
 echo "== guard: .artifacts not tracked =="
 run_guard ".artifacts not tracked" bash scripts/verify/verify_no_tracked_artifacts.sh
 ARTIFACTS_NOT_TRACKED_OK=1
+
+echo "== guard: required workflows always-reported (SSOT) =="
+run_guard "required workflows always-reported" bash scripts/verify/verify_required_workflows_always_reported.sh
+REQUIRED_WORKFLOWS_ALWAYS_REPORTED_OK=1
 
 exit 0

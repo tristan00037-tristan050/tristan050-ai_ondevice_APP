@@ -1,0 +1,7 @@
+{
+  "required_workflows": [
+    "product-verify-repo-guards",
+    "product-verify-supplychain",
+    "product-verify-model-registry"
+  ]
+}
