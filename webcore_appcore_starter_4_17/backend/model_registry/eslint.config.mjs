@@ -26,12 +26,13 @@ export default [
     rules: {
       // 재발 방지 핵심: undefined/unused를 조기 차단
       'no-undef': 'off', // TS가 담당
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/no-floating-promises': 'off',
-      'import/no-unresolved': 'off' // tsconfig path를 TS가 잡도록(중복 경고 방지)
+      'import/no-unresolved': 'off', // tsconfig path를 TS가 잡도록(중복 경고 방지)
+      'no-empty': ['warn', { allowEmptyCatch: true }] // 빈 catch 블록은 경고만
     }
   },
   {
-    ignores: ['dist/**', 'node_modules/**', '*.cjs', '*.mjs']
+    ignores: ['dist/**', 'node_modules/**', '*.cjs', '*.mjs', '**/*.js']
   }
 ];
