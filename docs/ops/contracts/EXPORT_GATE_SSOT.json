@@ -1,0 +1,8 @@
+{
+  "schema_name": "EXPORT_GATE_V1",
+  "steps": ["preview", "approve"],
+  "preview_meta_only": true,
+  "approve_requires_audit_event_v2": true,
+  "export_payload_max_string_len": 120
+}
+
