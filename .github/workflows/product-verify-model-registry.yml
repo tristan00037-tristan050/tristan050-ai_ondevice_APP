@@ -46,3 +46,9 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/verify/verify_svr03_update_anti_rollback_freeze.sh
+
+      - name: Run UPDATE-02 max_seen_version persist verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_update_max_seen_version_persist.sh

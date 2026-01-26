@@ -26,5 +26,12 @@ export interface IRegistryStore {
   // Maintenance
   clearAll(): void;
   flushNow(): void; // batch flush 환경에서 강제 flush
+
+  // UPDATE-02: persisted anti-rollback state
+  getUpdateState(key: string): any | null;
+  putUpdateState(key: string, state: any): void;
+
+  // atomic monotonic bump (fail-closed on rollback)
+  enforceAndBumpMaxSeenVersion(key: string, incomingVersion: number): number;
 }
 

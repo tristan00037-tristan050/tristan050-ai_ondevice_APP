@@ -255,14 +255,22 @@ export function verifyDeliveryApplySignature(
   }
 
   // P2-2: anti-rollback / anti-freeze (fail-closed)
-  // NOTE: expects the delivery payload to carry version and expires_at_ms.
-  // maxSeenVersion should be derived from store state by existing logic.
-  // If your existing code already computes maxSeenVersion/currentVersion, wire it here.
-  // Temporary default is 0 to keep compilation; replace with real value in follow-up if needed.
+  // UPDATE-02: use store-based max_seen_version instead of payload default
+  // Note: This validation is done here, but actual state update happens in delivery.ts after all checks pass
   try {
     const deliveryPayload = body as any;
-    const incomingVersion = Number(deliveryPayload?.version ?? deliveryPayload?.meta?.version ?? 0);
-    const maxSeenVersion = Number(deliveryPayload?.max_seen_version ?? deliveryPayload?.meta?.max_seen_version ?? 0);
+    // Extract version number from ModelVersion or version_id
+    const store = getRegistryStore();
+    const modelVersion = store.getModelVersion(body.version_id);
+    const versionStr = modelVersion?.version || body.version_id;
+    const versionMatch = String(versionStr).match(/\d+/);
+    const incomingVersion = versionMatch ? Number(versionMatch[0]) : Number(versionStr) || 0;
+    
+    // Get max_seen_version from store (read-only check here, actual update happens in delivery.ts)
+    const updateKey = `${tenantId}:${body.model_id}`;
+    const updateState = store.getUpdateState(updateKey);
+    const maxSeenVersion = updateState?.max_seen_version ?? 0;
+    
     const expiresAtMs = Number(deliveryPayload?.expires_at_ms ?? deliveryPayload?.meta?.expires_at_ms ?? Date.now() + 3600000);
     enforceAntiRollbackFreeze({ incomingVersion, maxSeenVersion, expiresAtMs, nowMs: Date.now() });
   } catch (err: any) {
