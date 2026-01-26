@@ -33,6 +33,8 @@ export class FileStore implements IRegistryStore {
     for (const [k] of this.modelVersions.entries()) this.modelVersions.delete(k);
     for (const [k] of this.artifacts.entries()) this.artifacts.delete(k);
     for (const [k] of this.releasePointers.entries()) this.releasePointers.delete(k);
+    // UPDATE-02: clear update states
+    persistWriteJson(this.updateStatesFile, {});
     this.flushNow();
   }
 

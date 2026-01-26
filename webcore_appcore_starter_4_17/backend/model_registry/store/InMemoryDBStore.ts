@@ -72,6 +72,8 @@ export class InMemoryDBStore implements IRegistryStore {
     this.modelVersions.clear();
     this.artifacts.clear();
     this.releasePointers.clear();
+    // UPDATE-02: clear update states
+    this.updateStates.clear();
   }
 
   flushNow(): void {

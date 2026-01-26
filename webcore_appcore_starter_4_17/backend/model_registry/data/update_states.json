@@ -1,13 +1,4 @@
 {
-  "test:model1": {
-    "max_seen_version": 2
-  },
-  "test:model2": {
-    "max_seen_version": 5
-  },
-  "test:model3": {
-    "max_seen_version": 3
-  },
   "test:model4": {
     "max_seen_version": 3
   }
