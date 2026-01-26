@@ -9,11 +9,14 @@ permissions:
   contents: read
   id-token: write
   attestations: write
+  artifact-metadata: write
 
 jobs:
   verify-slsa-provenance-min:
     name: verify-slsa-provenance-min
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -118,8 +121,6 @@ jobs:
 
       - name: Verify DSSE attestation (fail-closed)
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           bash scripts/verify/verify_slsa_dsse_attestation.sh

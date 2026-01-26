@@ -3,6 +3,14 @@ set -euo pipefail
 
 SUBJ=".artifacts/supplychain_subject.txt"
 
+# CI에서 GH_TOKEN 존재를 하드게이트(원인 즉시 식별)
+if [[ -n "${GITHUB_RUN_ID:-}" && -z "${GH_TOKEN:-}" ]]; then
+  echo "BLOCK: GH_TOKEN missing in CI"
+  echo "GH_TOKEN_PRESENT_OK=0"
+  exit 1
+fi
+echo "GH_TOKEN_PRESENT_OK=1"
+
 # 로컬에서는 파일이 없으면 SKIP(개발 편의)
 if [[ ! -f "$SUBJ" ]]; then
   if [[ -n "${GITHUB_RUN_ID:-}" ]]; then
@@ -74,3 +82,4 @@ echo "SLSA_DSSE_ATTESTATION_PRESENT_OK=1"
 echo "SLSA_DSSE_ATTESTATION_VERIFY_OK=1"
 echo "SLSA_DSSE_ACTOR_IDENTITY_OK=1"
 echo "GH_ATTESTATION_VERIFY_STRICT_OK=1"
+# GH_TOKEN_PRESENT_OK is already output above

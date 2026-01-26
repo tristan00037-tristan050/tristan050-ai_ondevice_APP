@@ -1,0 +1,13 @@
+{
+  "seen": {
+    "EID_TEST_1": 1769229883301
+  },
+  "buckets": {
+    "LOCK_TIMEOUT": [
+      1769229883301
+    ],
+    "PERSIST_CORRUPTED": [],
+    "AUDIT_ROTATE": [],
+    "AUDIT_RETENTION_DELETE": []
+  }
+}
