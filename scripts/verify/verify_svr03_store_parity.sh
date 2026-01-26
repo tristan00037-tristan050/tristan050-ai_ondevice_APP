@@ -3,10 +3,16 @@ set -euo pipefail
 
 STORE_CONTRACT_TESTS_SHARED_OK=0
 DBSTORE_PARITY_SMOKE_OK=0
+DBSTORE_REAL_ADAPTER_PARITY_OK=0
+DBSTORE_CONCURRENCY_OK=0
+DBSTORE_NO_PARTIAL_WRITE_OK=0
 
 cleanup(){
   echo "STORE_CONTRACT_TESTS_SHARED_OK=${STORE_CONTRACT_TESTS_SHARED_OK}"
   echo "DBSTORE_PARITY_SMOKE_OK=${DBSTORE_PARITY_SMOKE_OK}"
+  echo "DBSTORE_REAL_ADAPTER_PARITY_OK=${DBSTORE_REAL_ADAPTER_PARITY_OK}"
+  echo "DBSTORE_CONCURRENCY_OK=${DBSTORE_CONCURRENCY_OK}"
+  echo "DBSTORE_NO_PARTIAL_WRITE_OK=${DBSTORE_NO_PARTIAL_WRITE_OK}"
 }
 trap cleanup EXIT
 
@@ -21,7 +27,7 @@ RESULT_JSON="/tmp/svr03_store_parity.json"
 rm -f "$RESULT_JSON"
 
 set +e
-npm test -- store_contract_parity.test.ts --json --outputFile "$RESULT_JSON"
+npm test -- store_contract_parity.test.ts dbstore_real_adapter.test.ts --json --outputFile "$RESULT_JSON"
 TEST_EXIT=$?
 set -e
 
@@ -45,7 +51,14 @@ function collectEvid(node, out){
 const evid = new Set();
 collectEvid(d, evid);
 
-const need = ['STORE_CONTRACT_TESTS_SHARED_OK', 'DBSTORE_PARITY_SMOKE_OK'];
+// STORE-02: expanded evidence keys
+const need = [
+  'STORE_CONTRACT_TESTS_SHARED_OK',
+  'DBSTORE_PARITY_SMOKE_OK',
+  'DBSTORE_REAL_ADAPTER_PARITY_OK',
+  'DBSTORE_CONCURRENCY_OK',
+  'DBSTORE_NO_PARTIAL_WRITE_OK'
+];
 const allFound = need.every(x => evid.has(x));
 const allPassed = (d.numFailedTests === 0) && (d.numPassedTests > 0);
 
@@ -59,5 +72,8 @@ PARSE_EXIT=$?
 
 STORE_CONTRACT_TESTS_SHARED_OK=1
 DBSTORE_PARITY_SMOKE_OK=1
+DBSTORE_REAL_ADAPTER_PARITY_OK=1
+DBSTORE_CONCURRENCY_OK=1
+DBSTORE_NO_PARTIAL_WRITE_OK=1
 exit 0
 
