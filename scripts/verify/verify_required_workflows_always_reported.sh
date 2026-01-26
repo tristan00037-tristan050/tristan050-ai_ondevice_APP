@@ -6,15 +6,15 @@ SSOT="docs/ops/contracts/REQUIRED_WORKFLOWS_SSOT.json"
 
 command -v jq >/dev/null 2>&1 || { echo "BLOCK: jq not found"; exit 1; }
 
-mapfile -t reqs < <(jq -r '.required_workflows[]' "$SSOT")
-[ "${#reqs[@]}" -ge 1 ] || { echo "BLOCK: empty required_workflows"; exit 1; }
-
 WF_DIR=".github/workflows"
 [ -d "$WF_DIR" ] || { echo "BLOCK: missing workflows dir: $WF_DIR"; exit 1; }
 
 fail=0
+count=0
 
-for name in "${reqs[@]}"; do
+while IFS= read -r name; do
+  [ -z "$name" ] && continue
+  count=$((count + 1))
   # 1) workflow file that contains this exact name:
   #    name: product-verify-...
   file="$(rg -l --fixed-strings "name: ${name}" "$WF_DIR" 2>/dev/null | head -n 1 || true)"
@@ -43,7 +43,9 @@ for name in "${reqs[@]}"; do
   fi
 
   echo "OK: REQUIRED_WORKFLOW_ALWAYS_REPORTED: ${name} file=${file}"
-done
+done < <(jq -r '.required_workflows[]' "$SSOT")
+
+[ "$count" -ge 1 ] || { echo "BLOCK: empty required_workflows"; exit 1; }
 
 if [ "$fail" -ne 0 ]; then
   echo "REQUIRED_WORKFLOWS_ALWAYS_REPORTED_OK=0"
