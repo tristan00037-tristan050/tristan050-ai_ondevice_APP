@@ -11,6 +11,7 @@ import { verify } from '../services/signing';
 import { canonicalizeJson } from '../../../../packages/common/src/canon/jcs';
 import { canVerifyWithKey, getKey } from '../services/key_store';
 import { enforceAntiRollbackFreeze } from "./update_anti_rollback_freeze";
+import { getRegistryStore } from '../store';
 
 export type SignatureValidationResult =
   | { valid: true }
