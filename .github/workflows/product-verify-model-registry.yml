@@ -43,6 +43,7 @@ jobs:
           set -euo pipefail
           cd webcore_appcore_starter_4_17/backend/model_registry
           npm run typecheck
+          echo "MODEL_REGISTRY_TYPECHECK_OK=1"
 
       - name: Run SVR-03 verify
         shell: bash
