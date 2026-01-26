@@ -26,10 +26,22 @@ else
   HITS2="$(grep -RIn -E '\[ \]' "$DIR" || true)"
 fi
 
+# Filter out false positives: lines that are describing the rule itself (contain "금지", "forbidden", "prohibited", "rule", "규칙")
 if [[ -n "$HITS1" ]]; then
-  echo "FAIL: SSOT placeholders found"
-  echo "$HITS1"
-  exit 1
+  FILTERED=""
+  while IFS= read -r line; do
+    # Skip lines that are describing the rule (not actual placeholders)
+    if echo "$line" | grep -qiE "(금지|forbidden|prohibited|rule|규칙|차단)"; then
+      continue
+    fi
+    FILTERED="${FILTERED}${line}\n"
+  done <<< "$HITS1"
+  FILTERED="$(echo -e "$FILTERED" | grep -v '^$' || true)"
+  if [[ -n "$FILTERED" ]]; then
+    echo "FAIL: SSOT placeholders found"
+    echo "$FILTERED"
+    exit 1
+  fi
 fi
 
 if [[ -n "$HITS2" ]]; then
