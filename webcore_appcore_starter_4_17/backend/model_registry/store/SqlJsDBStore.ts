@@ -6,9 +6,11 @@
  */
 
 import type { IRegistryStore } from "./IRegistryStore";
-import initSqlJs, { Database } from "sql.js";
-import fs from "node:fs";
-import path from "node:path";
+// @ts-ignore - sql.js may not have complete type definitions
+import initSqlJs from "sql.js";
+import type { Database } from "sql.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 const DATA_DIR = path.resolve(__dirname, "../data");
 
@@ -19,7 +21,7 @@ let SQL_INIT_PROMISE: Promise<any> | null = null;
 async function getSQLModule(): Promise<any> {
   if (SQL_MODULE) return SQL_MODULE;
   if (!SQL_INIT_PROMISE) {
-    SQL_INIT_PROMISE = initSqlJs().then((SQL) => {
+    SQL_INIT_PROMISE = initSqlJs().then((SQL: any) => {
       SQL_MODULE = SQL;
       return SQL;
     });
