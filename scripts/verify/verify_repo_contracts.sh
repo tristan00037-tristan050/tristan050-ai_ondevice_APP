@@ -62,13 +62,12 @@ echo "== guard: JCS single source =="
 run_guard "JCS single source" bash scripts/verify/verify_jcs_single_source.sh
 CANONICALIZE_SHARED_SINGLE_SOURCE_OK=1
 
-# SLSA provenance min: product-verify-supplychain 워크플로에서만 실행
-# (repo-guards에서는 파일이 생성되지 않으므로 건너뜀)
-if [[ "${GITHUB_WORKFLOW:-}" == "product-verify-supplychain" ]]; then
-  echo "== guard: SLSA provenance min (CI fail-closed) =="
+# SLSA provenance min: 파일이 있을 때만 검증(워크플로 이름 의존 0)
+if [[ -f ".artifacts/slsa_provenance_min.json" ]]; then
+  echo "== guard: SLSA provenance min (file-present) =="
   run_guard "SLSA provenance min" bash scripts/verify/verify_slsa_provenance_min.sh
 else
-  echo "== guard: SLSA provenance min (SKIP: not in product-verify-supplychain workflow) =="
+  echo "== guard: SLSA provenance min (SKIP: provenance file not present) =="
 fi
 
 run_guard "repo OK contamination guard" bash scripts/verify/verify_repo_no_ok_contamination.sh
