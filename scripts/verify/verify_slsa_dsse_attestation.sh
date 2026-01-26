@@ -78,6 +78,37 @@ jq -e 'type=="array" and length>=1' "$OUT" >/dev/null 2>&1 || {
   exit 1
 }
 
+# H3.5-SUPPLYCHAIN-01: SSOT 기반 identity 제약 강화 (CI에서만)
+if [[ -n "${GITHUB_RUN_ID:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
+  SSOT="docs/ops/contracts/SUPPLYCHAIN_SIGNER_SSOT.json"
+  if [[ -f "$SSOT" ]]; then
+    REPO_SSOT="$(jq -r ".repo_full_name" "$SSOT")"
+    WF_PATH_SSOT="$(jq -r ".signer_workflow_path" "$SSOT")"
+    ACTOR_ALLOW_0="$(jq -r ".allowed_actor_logins[0]" "$SSOT")"
+
+    # 현재 repo 일치
+    if [[ "${GITHUB_REPOSITORY}" != "${REPO_SSOT}" ]]; then
+      echo "SLSA_DSSE_REPO_IDENTITY_OK=0"
+      exit 1
+    fi
+    echo "SLSA_DSSE_REPO_IDENTITY_OK=1"
+
+    # 워크플로 경로는 gh verify 옵션으로 이미 강제하지만, 문서/SSOT 일치도 확인
+    if [[ "${WF_PATH_SSOT}" != ".github/workflows/product-verify-supplychain.yml" ]]; then
+      echo "SLSA_DSSE_SIGNER_WORKFLOW_OK=0"
+      exit 1
+    fi
+    echo "SLSA_DSSE_SIGNER_WORKFLOW_OK=1"
+
+    # actor allowlist(최소 1개)
+    if [[ -n "${GITHUB_ACTOR:-}" && "${GITHUB_ACTOR}" != "${ACTOR_ALLOW_0}" ]]; then
+      echo "SLSA_DSSE_ACTOR_ALLOWLIST_OK=0"
+      exit 1
+    fi
+    echo "SLSA_DSSE_ACTOR_ALLOWLIST_OK=1"
+  fi
+fi
+
 echo "SLSA_DSSE_ATTESTATION_PRESENT_OK=1"
 echo "SLSA_DSSE_ATTESTATION_VERIFY_OK=1"
 echo "SLSA_DSSE_ACTOR_IDENTITY_OK=1"
