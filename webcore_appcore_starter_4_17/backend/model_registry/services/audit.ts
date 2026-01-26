@@ -17,11 +17,11 @@ const DATA_DIR = path.resolve(__dirname, "../data");
 const MAX_BYTES = 1_000_000;
 const RETAIN_DAYS = 14;
 
-function dayKey(ts_ms: number) {
+export function dayKey(ts_ms: number) {
   return new Date(ts_ms).toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 }
 
-function auditFile(day: string) {
+export function auditFile(day: string) {
   return `audit_${day}.json`;
 }
 

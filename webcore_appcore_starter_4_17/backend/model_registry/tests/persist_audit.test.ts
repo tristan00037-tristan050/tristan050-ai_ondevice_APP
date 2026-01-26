@@ -2,15 +2,17 @@ import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
 import fs from "node:fs";
 import path from "node:path";
 import { applyArtifact, rollbackArtifact } from "../services/delivery";
-import { appendAudit, AuditEvent } from "../services/audit";
+import { appendAudit, AuditEvent, dayKey, auditFile as getAuditFileName } from "../services/audit";
 import { persistReadJson } from "../services/persist_store";
 import { clearAll } from "../storage/service";
 import { initializeSigningKey } from "../services/storage";
 
 describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
   const dataDir = path.resolve(__dirname, "../data");
-  const today = new Date().toISOString().slice(0, 10);
-  const auditFile = path.join(dataDir, `audit_${today}.json`);
+  // Use production code's dayKey to ensure date format consistency
+  const today = dayKey(Date.now());
+  const auditFileName = getAuditFileName(today);
+  const auditFile = path.join(dataDir, auditFileName);
   const rotatedFile = path.join(dataDir, `audit_${today}.1.json`);
 
   beforeEach(() => {
@@ -51,16 +53,19 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
     expect("reason_code" in result && result.reason_code).toBe("SIGNATURE_MISSING");
 
     // Verify audit log was written (daily file format)
-    // Wait for file lock to complete (CI may need a moment for file system sync)
-    let retries = 10;
-    while (!fs.existsSync(auditFile) && retries > 0) {
-      await new Promise(resolve => setTimeout(resolve, 50));
-      retries--;
+    // Poll for actual audit event content (not just file existence)
+    let retries = 20;
+    let logs: AuditEvent[] | null = null;
+    while (retries-- > 0) {
+      if (fs.existsSync(auditFile)) {
+        logs = persistReadJson<AuditEvent[]>(auditFileName) || null;
+        if (logs && logs.length > 0) break;
+      }
+      await new Promise(r => setTimeout(r, 50));
     }
     expect(fs.existsSync(auditFile)).toBe(true);
-    const auditLogs = persistReadJson<AuditEvent[]>(`audit_${today}.json`);
-    expect(auditLogs).toBeTruthy();
-    expect(auditLogs!.length).toBeGreaterThan(0);
+    expect(logs).toBeTruthy();
+    expect(logs!.length).toBeGreaterThan(0);
 
     // Verify deny event was recorded
     const denyEvent = auditLogs!.find((e) => e.result === "DENY" && e.reason_code === "SIGNATURE_MISSING");
@@ -72,7 +77,7 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
     expect((denyEvent as any).tenant_id).toBeUndefined();
   });
 
-  it("[EVID:PERSIST_AUDIT_ALLOW_OK] allow path writes audit with ALLOW result", () => {
+  it("[EVID:PERSIST_AUDIT_ALLOW_OK] allow path writes audit with ALLOW result", async () => {
     // Test that audit file can be written directly
     appendAudit({
       ts_ms: Date.now(),
@@ -82,12 +87,21 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
       sha256: "test-sha256",
     });
 
+    // Poll for actual audit event content
+    let retries = 20;
+    let logs: AuditEvent[] | null = null;
+    while (retries-- > 0) {
+      if (fs.existsSync(auditFile)) {
+        logs = persistReadJson<AuditEvent[]>(auditFileName) || null;
+        if (logs && logs.length > 0) break;
+      }
+      await new Promise(r => setTimeout(r, 50));
+    }
     expect(fs.existsSync(auditFile)).toBe(true);
-    const auditLogs = persistReadJson<AuditEvent[]>(`audit_${today}.json`);
-    expect(auditLogs).toBeTruthy();
-    expect(auditLogs!.length).toBeGreaterThan(0);
+    expect(logs).toBeTruthy();
+    expect(logs!.length).toBeGreaterThan(0);
 
-    const allowEvent = auditLogs!.find((e) => e.result === "ALLOW");
+    const allowEvent = logs!.find((e) => e.result === "ALLOW");
     expect(allowEvent).toBeDefined();
     expect(allowEvent!.action).toBe("APPLY");
     expect(allowEvent!.key_id).toBe("test-key");
@@ -109,18 +123,21 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
     expect("reason_code" in result && result.reason_code).toBe("SIGNATURE_MISSING");
 
     // Verify audit log was written
-    // Wait for file lock to complete (CI may need a moment for file system sync)
-    let retries = 10;
-    while (!fs.existsSync(auditFile) && retries > 0) {
-      await new Promise(resolve => setTimeout(resolve, 50));
-      retries--;
+    // Poll for actual audit event content (not just file existence)
+    let retries = 20;
+    let logs: AuditEvent[] | null = null;
+    while (retries-- > 0) {
+      if (fs.existsSync(auditFile)) {
+        logs = persistReadJson<AuditEvent[]>(auditFileName) || null;
+        if (logs && logs.length > 0) break;
+      }
+      await new Promise(r => setTimeout(r, 50));
     }
     expect(fs.existsSync(auditFile)).toBe(true);
-    const auditLogs = persistReadJson<AuditEvent[]>(`audit_${today}.json`);
-    expect(auditLogs).toBeTruthy();
-    expect(auditLogs!.length).toBeGreaterThan(0);
+    expect(logs).toBeTruthy();
+    expect(logs!.length).toBeGreaterThan(0);
 
-    const denyEvent = auditLogs!.find((e) => e.action === "ROLLBACK" && e.result === "DENY");
+    const denyEvent = logs!.find((e) => e.action === "ROLLBACK" && e.result === "DENY");
     expect(denyEvent).toBeDefined();
     expect(denyEvent!.reason_code).toBe("SIGNATURE_MISSING");
   });
