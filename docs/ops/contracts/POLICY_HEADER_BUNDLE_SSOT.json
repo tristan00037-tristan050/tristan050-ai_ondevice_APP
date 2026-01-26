@@ -1,0 +1,15 @@
+{
+  "bundle_name": "OS_POLICY_HEADER_BUNDLE_V1",
+  "required_headers": [
+    "x-os-request-id",
+    "x-os-device-id",
+    "x-os-user-id",
+    "x-os-user-role",
+    "x-os-client-version",
+    "x-os-build-sha",
+    "x-os-mode",
+    "x-os-ts-utc"
+  ],
+  "mode_values": ["mock", "live"]
+}
+
