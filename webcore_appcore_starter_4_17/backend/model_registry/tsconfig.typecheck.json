@@ -1,0 +1,36 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "./dist",
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "typeRoots": ["./node_modules/@types", "../control_plane/node_modules/@types"],
+    "paths": {
+      "express": ["./node_modules/express"],
+      "@webcore/control-plane/*": ["../control_plane/*"]
+    }
+  },
+  "include": [
+    "api/**/*.ts",
+    "services/**/*.ts",
+    "store/**/*.ts",
+    "verify/**/*.ts",
+    "models/**/*.ts",
+    "index.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "tests/**",
+    "dist/**",
+    "../control_plane/**",
+    "../../../../packages/common/**"
+  ]
+}
+
