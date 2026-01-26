@@ -5,6 +5,11 @@ on:
   merge_group:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
 jobs:
   verify-slsa-provenance-min:
     name: verify-slsa-provenance-min
@@ -86,4 +91,34 @@ jobs:
         with:
           name: slsa_provenance_min
           path: .artifacts/slsa_provenance_min.json
+
+      - name: Prepare subject for attestation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts
+          {
+            echo "repo=${GITHUB_REPOSITORY}"
+            echo "sha=${GITHUB_SHA}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT:-0}"
+          } > .artifacts/supplychain_subject.txt
+
+      - name: Generate DSSE provenance attestation (subject-path)
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: .artifacts/supplychain_subject.txt
+
+      - name: Install deps for verify (jq)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+
+      - name: Verify DSSE attestation (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_slsa_dsse_attestation.sh
 
