@@ -68,7 +68,7 @@ describe("P1-1 persist + audit (deny saves 0, audit records event)", () => {
     expect(logs!.length).toBeGreaterThan(0);
 
     // Verify deny event was recorded
-    const denyEvent = auditLogs!.find((e) => e.result === "DENY" && e.reason_code === "SIGNATURE_MISSING");
+    const denyEvent = logs!.find((e) => e.result === "DENY" && e.reason_code === "SIGNATURE_MISSING");
     expect(denyEvent).toBeDefined();
     expect(denyEvent!.action).toBe("APPLY");
     expect(denyEvent!.reason_code).toBe("SIGNATURE_MISSING");
