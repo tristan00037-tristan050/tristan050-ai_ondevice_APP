@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import { forbidMockModeNetwork } from '../gateway/mw/mock_network_zero_gate';
 import { requireMetaOnly } from '../gateway/mw/meta_only_gate';
 import { exportPreview, exportApprove } from './export_gate';
 import ingestRouter from './api/ingest';
@@ -12,6 +13,9 @@ import alertsRouter from './api/alerts';
 const app = express();
 
 app.use(express.json());
+
+// Mock mode network zero hard gate (must be first to block before other gates)
+app.use(forbidMockModeNetwork);
 
 // Apply meta-only gate to telemetry ingest endpoint (client -> server meta payload)
 app.use('/api/v1/telemetry', requireMetaOnly);

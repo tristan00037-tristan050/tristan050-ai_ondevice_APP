@@ -30,6 +30,9 @@ EXPORT_TWO_STEP_OK=0
 EXPORT_APPROVAL_AUDITED_OK=0
 EXPORT_APPROVAL_AUDIT_EVENT_V2_WRITTEN_OK=0
 
+# PROD-05
+MOCK_NETWORK_ZERO_OK=0
+
 cleanup(){
   echo "OK_CONTAMINATION_REPO_GUARD_OK=${OK_CONTAMINATION_REPO_GUARD_OK}"
   echo "REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=${REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK}"
@@ -55,6 +58,8 @@ cleanup(){
   echo "EXPORT_TWO_STEP_OK=${EXPORT_TWO_STEP_OK}"
   echo "EXPORT_APPROVAL_AUDITED_OK=${EXPORT_APPROVAL_AUDITED_OK}"
   echo "EXPORT_APPROVAL_AUDIT_EVENT_V2_WRITTEN_OK=${EXPORT_APPROVAL_AUDIT_EVENT_V2_WRITTEN_OK}"
+
+  echo "MOCK_NETWORK_ZERO_OK=${MOCK_NETWORK_ZERO_OK}"
 }
 trap cleanup EXIT
 
@@ -147,5 +152,10 @@ echo "== guard: export two-step + auditv2 =="
 run_guard "export two-step + auditv2" bash scripts/verify/verify_export_two_step_auditv2.sh
 EXPORT_TWO_STEP_OK=1
 EXPORT_APPROVAL_AUDITED_OK=1
+EXPORT_APPROVAL_AUDIT_EVENT_V2_WRITTEN_OK=1
+
+echo "== guard: mock network zero =="
+run_guard "mock network zero" bash scripts/verify/verify_mock_network_zero.sh
+MOCK_NETWORK_ZERO_OK=1
 
 exit 0
