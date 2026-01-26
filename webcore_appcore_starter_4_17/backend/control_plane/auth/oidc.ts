@@ -4,6 +4,7 @@
  */
 
 import jwt from 'jsonwebtoken';
+// @ts-ignore - jwks-rsa may not have complete type definitions
 import jwksClient from 'jwks-rsa';
 import { Request } from 'express';
 
@@ -52,7 +53,7 @@ function getJwksClient(jwksUri: string): jwksClient.JwksClient {
 function getKey(header: jwt.JwtHeader, jwksUri: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const client = getJwksClient(jwksUri);
-    client.getSigningKey(header.kid, (err, key) => {
+    client.getSigningKey(header.kid, (err: any, key: any) => {
       if (err) {
         return reject(err);
       }
