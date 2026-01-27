@@ -3,11 +3,17 @@
   "metric": "butler_request_p95_ms",
   "definition": "E2E: input done -> 3-block render done",
   "mode": "mock",
-  "baseline_environment": "one company standard laptop class (e.g., i5/16GB-level or equivalent), Chrome latest (reference), CI uses ubuntu-latest runner for gate wiring",
+
+  "baseline_environment": {
+    "machine_class": "one company standard laptop class (e.g., i5/16GB-level or equivalent)",
+    "os": "macOS or Windows (company standard)",
+    "browser": "Chrome latest",
+    "notes": "Mock (network off). CI uses ubuntu-latest runner for wiring only; baseline numbers are measured on the company standard laptop."
+  },
+
   "contract_ms": 2500,
   "target_ms": 2000,
   "samples": 60,
   "warmup": 10,
   "regression_policy": "fail-closed if p95_ms > contract_ms"
 }
-
