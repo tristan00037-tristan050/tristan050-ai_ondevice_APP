@@ -24,6 +24,7 @@ POLICY_HEADERS_FAILCLOSED_OK=0
 
 # PROD-03
 META_ONLY_ALLOWLIST_ENFORCED_OK=0
+META_ONLY_VALIDATOR_PARITY_OK=0
 
 # PROD-04
 EXPORT_TWO_STEP_OK=0
@@ -81,6 +82,7 @@ cleanup(){
   echo "POLICY_HEADERS_FAILCLOSED_OK=${POLICY_HEADERS_FAILCLOSED_OK}"
 
   echo "META_ONLY_ALLOWLIST_ENFORCED_OK=${META_ONLY_ALLOWLIST_ENFORCED_OK}"
+  echo "META_ONLY_VALIDATOR_PARITY_OK=${META_ONLY_VALIDATOR_PARITY_OK}"
 
   echo "EXPORT_TWO_STEP_OK=${EXPORT_TWO_STEP_OK}"
   echo "EXPORT_APPROVAL_AUDITED_OK=${EXPORT_APPROVAL_AUDITED_OK}"
@@ -195,6 +197,10 @@ POLICY_HEADERS_FAILCLOSED_OK=1
 echo "== guard: meta-only allowlist enforced =="
 run_guard "meta-only allowlist enforced" bash scripts/verify/verify_meta_only_allowlist_enforced.sh
 META_ONLY_ALLOWLIST_ENFORCED_OK=1
+
+echo "== guard: meta-only validator parity (client/server single source) =="
+run_guard "meta-only validator parity" bash scripts/verify/verify_meta_only_validator_parity.sh
+META_ONLY_VALIDATOR_PARITY_OK=1
 
 echo "== guard: export two-step + auditv2 =="
 run_guard "export two-step + auditv2" bash scripts/verify/verify_export_two_step_auditv2.sh
