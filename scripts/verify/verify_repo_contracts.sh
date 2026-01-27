@@ -38,6 +38,9 @@ PERF_P95_BUDGET_DEFINED_OK=0
 PERF_P95_CONTRACT_OK=0
 PERF_P95_REGRESSION_BLOCK_OK=0
 
+# ONPREM-01
+ONPREM_COMPOSE_ASSETS_OK=0
+
 cleanup(){
   echo "OK_CONTAMINATION_REPO_GUARD_OK=${OK_CONTAMINATION_REPO_GUARD_OK}"
   echo "REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=${REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK}"
@@ -69,6 +72,8 @@ cleanup(){
   echo "PERF_P95_BUDGET_DEFINED_OK=${PERF_P95_BUDGET_DEFINED_OK}"
   echo "PERF_P95_CONTRACT_OK=${PERF_P95_CONTRACT_OK}"
   echo "PERF_P95_REGRESSION_BLOCK_OK=${PERF_P95_REGRESSION_BLOCK_OK}"
+
+  echo "ONPREM_COMPOSE_ASSETS_OK=${ONPREM_COMPOSE_ASSETS_OK}"
 }
 trap cleanup EXIT
 
@@ -172,5 +177,9 @@ run_guard "perf p95 budget gate" bash scripts/verify/verify_perf_p95_budget.sh
 PERF_P95_BUDGET_DEFINED_OK=1
 PERF_P95_CONTRACT_OK=1
 PERF_P95_REGRESSION_BLOCK_OK=1
+
+echo "== guard: onprem compose quickstart assets =="
+run_guard "onprem compose quickstart assets" bash scripts/verify/verify_onprem_compose_quickstart_assets.sh
+ONPREM_COMPOSE_ASSETS_OK=1
 
 exit 0
