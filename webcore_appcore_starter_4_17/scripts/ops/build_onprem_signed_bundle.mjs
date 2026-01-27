@@ -2,6 +2,19 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 
+// === ONPREM-06: signing key policy (prod mode must be operator-keyed) ===
+const MODE = process.env.ONPREM_MODE || "dev"; // dev|prod
+const KEY_ID = process.env.ONPREM_SIGNING_KEY_ID || "";
+const ALLOWED = (process.env.ONPREM_ALLOWED_SIGNING_KEY_IDS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function block(msg) {
+  console.error(`BLOCK: ${msg}`);
+  process.exit(1);
+}
+
 function sha256File(p) {
   const buf = fs.readFileSync(p);
   return crypto.createHash("sha256").update(buf).digest("hex");
@@ -75,6 +88,15 @@ const manifestJson = Buffer.from(JSON.stringify(manifest, null, 2), "utf8");
 // keys: allow operator-provided keys; fallback to ephemeral keypair for self-check
 const pubB64 = process.env.ONPREM_BUNDLE_SIGN_PUBLIC_KEY_B64 || "";
 const privB64 = process.env.ONPREM_BUNDLE_SIGN_PRIVATE_KEY_B64 || "";
+
+// prod mode: keys + key_id + allowlist are mandatory (fail-closed). Ephemeral is forbidden.
+if (MODE === "prod") {
+  if (!pubB64 || !privB64) block("ONPREM_MODE=prod requires ONPREM_BUNDLE_SIGN_PUBLIC_KEY_B64 and ONPREM_BUNDLE_SIGN_PRIVATE_KEY_B64");
+  if (!KEY_ID) block("ONPREM_MODE=prod requires ONPREM_SIGNING_KEY_ID");
+  if (ALLOWED.length < 1) block("ONPREM_MODE=prod requires ONPREM_ALLOWED_SIGNING_KEY_IDS (csv)");
+  if (!ALLOWED.includes(KEY_ID)) block(`ONPREM_SIGNING_KEY_ID not in allowlist: ${KEY_ID}`);
+}
+
 const keys = (pubB64 && privB64) ? { publicKeyB64: pubB64, privateKeyB64: privB64 } : genKeyPair();
 
 const sigB64 = sign(manifestJson, keys.privateKeyB64);
@@ -93,3 +115,11 @@ console.log("ONPREM_SIGNED_BUNDLE_OK=1");
 console.log(`BUNDLE_MANIFEST=${outManifest}`);
 console.log(`BUNDLE_SIGNATURE_B64=${outSig}`);
 console.log(`PUBLIC_KEY_B64=${keys.publicKeyB64}`);
+
+// Output policy keys only when prod policy is active
+if (MODE === "prod") {
+  console.log("ONPREM_SIGNING_KEY_REQUIRED_OK=1");
+  console.log("ONPREM_EPHEMERAL_KEY_FORBIDDEN_OK=1");
+  console.log("ONPREM_KEY_ID_ALLOWLIST_OK=1");
+  console.log(`ONPREM_SIGNING_KEY_ID=${KEY_ID}`);
+}
