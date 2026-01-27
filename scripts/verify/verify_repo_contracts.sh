@@ -39,6 +39,7 @@ MOCK_NETWORK_ZERO_OK=0
 PERF_P95_BUDGET_DEFINED_OK=0
 PERF_P95_CONTRACT_OK=0
 PERF_P95_REGRESSION_BLOCK_OK=0
+PERF_P95_BASELINE_PINNED_OK=0
 
 # ONPREM-01
 ONPREM_COMPOSE_ASSETS_OK=0
@@ -95,6 +96,7 @@ cleanup(){
   echo "PERF_P95_BUDGET_DEFINED_OK=${PERF_P95_BUDGET_DEFINED_OK}"
   echo "PERF_P95_CONTRACT_OK=${PERF_P95_CONTRACT_OK}"
   echo "PERF_P95_REGRESSION_BLOCK_OK=${PERF_P95_REGRESSION_BLOCK_OK}"
+  echo "PERF_P95_BASELINE_PINNED_OK=${PERF_P95_BASELINE_PINNED_OK}"
 
   echo "ONPREM_COMPOSE_ASSETS_OK=${ONPREM_COMPOSE_ASSETS_OK}"
 
@@ -220,6 +222,10 @@ run_guard "perf p95 budget gate" bash scripts/verify/verify_perf_p95_budget.sh
 PERF_P95_BUDGET_DEFINED_OK=1
 PERF_P95_CONTRACT_OK=1
 PERF_P95_REGRESSION_BLOCK_OK=1
+
+echo "== guard: perf p95 baseline pinned (SSOT) =="
+run_guard "perf p95 baseline pinned" bash scripts/verify/verify_perf_p95_baseline_pinned.sh
+PERF_P95_BASELINE_PINNED_OK=1
 
 echo "== guard: onprem compose quickstart assets =="
 run_guard "onprem compose quickstart assets" bash scripts/verify/verify_onprem_compose_quickstart_assets.sh
