@@ -23,6 +23,7 @@ env:
 
 secrets:
   enabled: true
+  existingSecretName: ""   # secrets.enabled=false일 때 필수
   # Example keys (set via Helm values or external secret manager)
   DATABASE_URL: ""
   EXPORT_SIGN_SECRET: ""
