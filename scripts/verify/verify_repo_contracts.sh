@@ -43,6 +43,7 @@ ONPREM_COMPOSE_ASSETS_OK=0
 
 # ONPREM-02
 ONPREM_HELM_SKELETON_OK=0
+ONPREM_HELM_SECRETS_GUARD_OK=0
 
 cleanup(){
   echo "OK_CONTAMINATION_REPO_GUARD_OK=${OK_CONTAMINATION_REPO_GUARD_OK}"
@@ -79,6 +80,7 @@ cleanup(){
   echo "ONPREM_COMPOSE_ASSETS_OK=${ONPREM_COMPOSE_ASSETS_OK}"
 
   echo "ONPREM_HELM_SKELETON_OK=${ONPREM_HELM_SKELETON_OK}"
+  echo "ONPREM_HELM_SECRETS_GUARD_OK=${ONPREM_HELM_SECRETS_GUARD_OK}"
 }
 trap cleanup EXIT
 
@@ -190,5 +192,9 @@ ONPREM_COMPOSE_ASSETS_OK=1
 echo "== guard: onprem helm skeleton assets =="
 run_guard "onprem helm skeleton assets" bash scripts/verify/verify_onprem_helm_skeleton_assets.sh
 ONPREM_HELM_SKELETON_OK=1
+
+echo "== guard: helm secrets enabled guard =="
+run_guard "helm secrets enabled guard" bash scripts/verify/verify_onprem_helm_secrets_guard.sh
+ONPREM_HELM_SECRETS_GUARD_OK=1
 
 exit 0
