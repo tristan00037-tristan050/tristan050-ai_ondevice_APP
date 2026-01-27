@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import { requirePolicyHeaderBundle } from '../gateway/mw/policy_header_bundle';
 import tenantsRouter from './api/tenants';
 import usersRouter from './api/users';
 import rolesRouter from './api/roles';
@@ -12,6 +13,9 @@ import auditRouter from './api/audit';
 const app = express();
 
 app.use(express.json());
+
+// Policy header bundle validation (fail-closed for live requests)
+app.use(requirePolicyHeaderBundle);
 
 // API routes
 app.use('/api/v1/iam/tenants', tenantsRouter);
