@@ -1,0 +1,29 @@
+# Helm skeleton (Phase 1 maintained; Phase 2 Enterprise GA)
+
+image:
+  repository: onprem-gateway
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8081
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  tls:
+    enabled: false
+    secretName: ""
+
+env:
+  # required in real deployments (use Secret for sensitive values)
+  NODE_ENV: "production"
+
+secrets:
+  enabled: true
+  # Example keys (set via Helm values or external secret manager)
+  DATABASE_URL: ""
+  EXPORT_SIGN_SECRET: ""
+
