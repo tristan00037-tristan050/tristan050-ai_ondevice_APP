@@ -47,12 +47,23 @@ echo "$OUT" | grep -q "secrets.enabled=false requires secrets.existingSecretName
 
 # 케이스 C: enabled=false + existingSecretName=abc => Deployment가 abc를 참조해야 함
 OUTC="$(helm_cmd template t "$CHART" --set secrets.enabled=false --set secrets.existingSecretName=abc 2>&1)"
-# secretKeyRef 블록 안에서 name: abc가 등장해야 PASS
-echo "$OUTC" | awk '
-  /secretKeyRef:/{in_ref=1}
-  in_ref && /name:/{print}
-  /key: EXPORT_SIGN_SECRET/{in_ref=0}
-' | grep -q "name: abc"
+# EXPORT_SIGN_SECRET env 블록의 secretKeyRef.name만 정확히 검사 (false positive 방지)
+EXPORT_REF_NAME="$(
+  echo "$OUTC" | awk '
+    $0 ~ /- name: EXPORT_SIGN_SECRET/ {in_env=1; next}
+    in_env && $0 ~ /secretKeyRef:/ {in_ref=1; next}
+    in_env && in_ref && $0 ~ /^[[:space:]]*name:/ {
+      sub(/^[[:space:]]*name:[[:space:]]*/, "", $0);
+      print $0;
+      exit
+    }
+  '
+)"
+if [[ -z "${EXPORT_REF_NAME:-}" ]]; then
+  echo "BLOCK: could not find secretKeyRef.name for EXPORT_SIGN_SECRET"
+  exit 1
+fi
+echo "${EXPORT_REF_NAME}" | grep -qx "abc"
 
 ONPREM_HELM_TEMPLATE_SECRET_REF_OK=1
 ONPREM_HELM_TEMPLATE_SMOKE_OK=1
