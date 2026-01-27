@@ -41,6 +41,9 @@ PERF_P95_REGRESSION_BLOCK_OK=0
 # ONPREM-01
 ONPREM_COMPOSE_ASSETS_OK=0
 
+# ONPREM-02
+ONPREM_HELM_SKELETON_OK=0
+
 cleanup(){
   echo "OK_CONTAMINATION_REPO_GUARD_OK=${OK_CONTAMINATION_REPO_GUARD_OK}"
   echo "REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=${REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK}"
@@ -74,6 +77,8 @@ cleanup(){
   echo "PERF_P95_REGRESSION_BLOCK_OK=${PERF_P95_REGRESSION_BLOCK_OK}"
 
   echo "ONPREM_COMPOSE_ASSETS_OK=${ONPREM_COMPOSE_ASSETS_OK}"
+
+  echo "ONPREM_HELM_SKELETON_OK=${ONPREM_HELM_SKELETON_OK}"
 }
 trap cleanup EXIT
 
@@ -181,5 +186,9 @@ PERF_P95_REGRESSION_BLOCK_OK=1
 echo "== guard: onprem compose quickstart assets =="
 run_guard "onprem compose quickstart assets" bash scripts/verify/verify_onprem_compose_quickstart_assets.sh
 ONPREM_COMPOSE_ASSETS_OK=1
+
+echo "== guard: onprem helm skeleton assets =="
+run_guard "onprem helm skeleton assets" bash scripts/verify/verify_onprem_helm_skeleton_assets.sh
+ONPREM_HELM_SKELETON_OK=1
 
 exit 0
