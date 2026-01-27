@@ -9,6 +9,7 @@ REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK=0
 NO_LOG_GREP_VERDICT_OK=0
 NO_NPM_INSTALL_FALLBACK_OK=0
 CANONICALIZE_SHARED_SINGLE_SOURCE_OK=0
+TEST_EVENT_SELECTION_GUARD_OK=0
 
 # New (H3.4-prep)
 LOCKFILES_TRACKED_OK=0
@@ -114,6 +115,8 @@ cleanup(){
 
   echo "ONPREM_DELIVERED_KEYSET_PRESENT_OK=${ONPREM_DELIVERED_KEYSET_PRESENT_OK}"
   echo "ONPREM_DELIVERED_KEYSET_GUARD_OK=${ONPREM_DELIVERED_KEYSET_GUARD_OK}"
+
+  echo "TEST_EVENT_SELECTION_GUARD_OK=${TEST_EVENT_SELECTION_GUARD_OK}"
 }
 trap cleanup EXIT
 
@@ -274,5 +277,9 @@ while IFS= read -r k; do
   fi
 done <<< "$REQ_KEYS"
 ONPREM_DELIVERED_KEYSET_GUARD_OK=1
+
+echo "== guard: test event selection (reason_code requires action) =="
+run_guard "test event selection" bash scripts/verify/verify_test_event_selection_guard.sh
+TEST_EVENT_SELECTION_GUARD_OK=1
 
 exit 0
