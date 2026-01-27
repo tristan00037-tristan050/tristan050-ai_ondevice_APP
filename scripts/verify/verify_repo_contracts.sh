@@ -47,10 +47,18 @@ ONPREM_HELM_SECRETS_GUARD_OK=0
 ONPREM_HELM_TEMPLATE_SMOKE_OK=0
 ONPREM_HELM_TEMPLATE_SECRET_REF_OK=0
 
+# ONPREM-03/04 (Delivered keyset wiring)
+ONPREM_SIGNED_BUNDLE_OK=0
+ONPREM_INSTALL_VERIFY_OK=0
+
 # ONPREM-06
 ONPREM_SIGNING_KEY_REQUIRED_OK=0
 ONPREM_EPHEMERAL_KEY_FORBIDDEN_OK=0
 ONPREM_KEY_ID_ALLOWLIST_OK=0
+
+# ONPREM-08
+ONPREM_DELIVERED_KEYSET_PRESENT_OK=0
+ONPREM_DELIVERED_KEYSET_GUARD_OK=0
 
 cleanup(){
   echo "OK_CONTAMINATION_REPO_GUARD_OK=${OK_CONTAMINATION_REPO_GUARD_OK}"
@@ -91,9 +99,15 @@ cleanup(){
   echo "ONPREM_HELM_TEMPLATE_SMOKE_OK=${ONPREM_HELM_TEMPLATE_SMOKE_OK}"
   echo "ONPREM_HELM_TEMPLATE_SECRET_REF_OK=${ONPREM_HELM_TEMPLATE_SECRET_REF_OK}"
 
+  echo "ONPREM_SIGNED_BUNDLE_OK=${ONPREM_SIGNED_BUNDLE_OK}"
+  echo "ONPREM_INSTALL_VERIFY_OK=${ONPREM_INSTALL_VERIFY_OK}"
+
   echo "ONPREM_SIGNING_KEY_REQUIRED_OK=${ONPREM_SIGNING_KEY_REQUIRED_OK}"
   echo "ONPREM_EPHEMERAL_KEY_FORBIDDEN_OK=${ONPREM_EPHEMERAL_KEY_FORBIDDEN_OK}"
   echo "ONPREM_KEY_ID_ALLOWLIST_OK=${ONPREM_KEY_ID_ALLOWLIST_OK}"
+
+  echo "ONPREM_DELIVERED_KEYSET_PRESENT_OK=${ONPREM_DELIVERED_KEYSET_PRESENT_OK}"
+  echo "ONPREM_DELIVERED_KEYSET_GUARD_OK=${ONPREM_DELIVERED_KEYSET_GUARD_OK}"
 }
 trap cleanup EXIT
 
@@ -220,5 +234,30 @@ run_guard "onprem signing key policy" bash scripts/verify/verify_onprem_signing_
 ONPREM_SIGNING_KEY_REQUIRED_OK=1
 ONPREM_EPHEMERAL_KEY_FORBIDDEN_OK=1
 ONPREM_KEY_ID_ALLOWLIST_OK=1
+
+echo "== guard: onprem signed bundle verify (manifest+sig) =="
+run_guard "onprem signed bundle verify" bash scripts/verify/verify_onprem_signed_bundle.sh
+ONPREM_SIGNED_BUNDLE_OK=1
+
+echo "== guard: onprem install/verify assets == "
+run_guard "onprem install/verify assets" bash scripts/verify/verify_onprem_install_verify_assets.sh
+ONPREM_INSTALL_VERIFY_OK=1
+
+echo "== guard: onprem delivered keyset (SSOT) =="
+SSOT_FILE="docs/ops/contracts/ONPREM_DELIVERED_KEYS_SSOT.md"
+test -s "$SSOT_FILE" || { echo "BLOCK: missing SSOT file: $SSOT_FILE"; exit 1; }
+ONPREM_DELIVERED_KEYSET_PRESENT_OK=1
+
+# Parse required keys from SSOT and ensure each variable is exactly 1
+REQ_KEYS="$(sed -n 's/^- //p' "$SSOT_FILE" | tr -d '\r' | sed '/^$/d')"
+test -n "$REQ_KEYS" || { echo "BLOCK: SSOT has no required keys"; exit 1; }
+while IFS= read -r k; do
+  v="${!k:-}"
+  if [[ "$v" != "1" ]]; then
+    echo "BLOCK: delivered key not satisfied: ${k}=${v:-<unset>}"
+    exit 1
+  fi
+done <<< "$REQ_KEYS"
+ONPREM_DELIVERED_KEYSET_GUARD_OK=1
 
 exit 0
