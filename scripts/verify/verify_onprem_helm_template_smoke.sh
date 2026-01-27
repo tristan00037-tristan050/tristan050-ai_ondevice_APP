@@ -2,7 +2,11 @@
 set -euo pipefail
 
 ONPREM_HELM_TEMPLATE_SMOKE_OK=0
-cleanup(){ echo "ONPREM_HELM_TEMPLATE_SMOKE_OK=${ONPREM_HELM_TEMPLATE_SMOKE_OK}"; }
+ONPREM_HELM_TEMPLATE_SECRET_REF_OK=0
+cleanup(){
+  echo "ONPREM_HELM_TEMPLATE_SMOKE_OK=${ONPREM_HELM_TEMPLATE_SMOKE_OK}";
+  echo "ONPREM_HELM_TEMPLATE_SECRET_REF_OK=${ONPREM_HELM_TEMPLATE_SECRET_REF_OK}";
+}
 trap cleanup EXIT
 
 CHART="webcore_appcore_starter_4_17/helm/onprem-gateway"
@@ -41,5 +45,15 @@ fi
 
 echo "$OUT" | grep -q "secrets.enabled=false requires secrets.existingSecretName"
 
+# 케이스 C: enabled=false + existingSecretName=abc => Deployment가 abc를 참조해야 함
+OUTC="$(helm_cmd template t "$CHART" --set secrets.enabled=false --set secrets.existingSecretName=abc 2>&1)"
+# secretKeyRef 블록 안에서 name: abc가 등장해야 PASS
+echo "$OUTC" | awk '
+  /secretKeyRef:/{in_ref=1}
+  in_ref && /name:/{print}
+  /key: EXPORT_SIGN_SECRET/{in_ref=0}
+' | grep -q "name: abc"
+
+ONPREM_HELM_TEMPLATE_SECRET_REF_OK=1
 ONPREM_HELM_TEMPLATE_SMOKE_OK=1
 exit 0
