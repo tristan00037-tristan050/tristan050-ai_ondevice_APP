@@ -31,6 +31,10 @@ test -s "$SSOT" && ALGO_CORE_PROD_SSOT_PRESENT_OK=1
 test -s "$ENV_TPL" && ALGO_CORE_PROD_ENV_TEMPLATE_PRESENT_OK=1
 test -s "$KEYGEN" && ALGO_CORE_KEYGEN_SCRIPT_PRESENT_OK=1
 
+# keygen must run under default node stdin (CommonJS)
+grep -nF -- 'require("node:crypto")' "$KEYGEN" >/dev/null || { echo "BLOCK: keygen must use require(\"node:crypto\") for CJS stdin"; exit 1; }
+if grep -nF -- 'import crypto from "node:crypto"' "$KEYGEN" >/dev/null; then echo "BLOCK: keygen uses ESM import on stdin"; exit 1; fi
+
 # prod fail-closed가 코드에 박혀 있어야 함(문자열 기반 자산 게이트)
 test -s "$LIB"
 grep -nF -- "ALGO_CORE_PROD_KEYS_REQUIRED_FAILCLOSED" "$LIB" >/dev/null
