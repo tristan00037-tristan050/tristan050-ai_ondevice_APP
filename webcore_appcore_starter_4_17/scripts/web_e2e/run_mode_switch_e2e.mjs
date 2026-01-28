@@ -26,12 +26,18 @@ function hardAssert(cond, msg) { if (!cond) throw new Error(msg); }
 
     await page.click("input#mode_mock");
     await page.click("button#run");
-    await page.waitForSelector('#result_ok[data-mode="mock"]');
+    await page.waitForFunction(() => {
+      const el = document.querySelector('#result_ok[data-mode="mock"]');
+      return el && el.style.display !== 'none';
+    }, { timeout: 10000 });
     hardAssert(apiEchoCount === 0, `MOCK must not call /api/echo (count=${apiEchoCount})`);
 
     await page.click("input#mode_live");
     await page.click("button#run");
-    await page.waitForSelector('#result_ok[data-mode="live"]');
+    await page.waitForFunction(() => {
+      const el = document.querySelector('#result_ok[data-mode="live"]');
+      return el && el.style.display !== 'none';
+    }, { timeout: 10000 });
     hardAssert(apiEchoCount === 1, `LIVE must call /api/echo exactly once (count=${apiEchoCount})`);
     hardAssert(liveHeadersOk, "LIVE must attach policy header bundle");
 
