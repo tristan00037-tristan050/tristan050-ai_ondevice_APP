@@ -1,0 +1,8 @@
+{
+  "name": "web-ux-01-e2e",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "playwright": "1.49.0"
+  }
+}
