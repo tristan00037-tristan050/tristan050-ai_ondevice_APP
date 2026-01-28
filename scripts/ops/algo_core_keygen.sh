@@ -4,7 +4,7 @@ set -euo pipefail
 command -v node >/dev/null 2>&1 || { echo "BLOCK: node not found"; exit 1; }
 
 node - <<'NODE'
-import crypto from "node:crypto";
+const crypto = require("node:crypto");
 
 function b64(s){ return Buffer.from(s, "utf8").toString("base64"); }
 
@@ -13,7 +13,7 @@ const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
 const pubPem = publicKey.export({ type: "spki", format: "pem" }).toString();
 const privPem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
 
-// KEY_ID: 공개키 지문(sha256) 앞 16자. 운영자에게 사람이 보기 좋은 ID 제공.
+// KEY_ID: 공개키 지문(sha256) 앞 16자
 const pubDer = publicKey.export({ type: "spki", format: "der" });
 const keyId = crypto.createHash("sha256").update(pubDer).digest("hex").slice(0, 16);
 
