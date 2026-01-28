@@ -39,6 +39,7 @@ import csTicketsRoute from "./routes/cs-tickets.js";
 import csOsDashboardRoute from "./routes/cs-os-dashboard.js";
 import { osLlmUsageRouter } from "./routes/os-llm-usage.js";
 import osModelsProxyRouter from "./routes/os-models-proxy.js";
+import osAlgoCoreRouter from "./routes/os-algo-core.js";
 import { requestId } from "./middleware/requestId.js";
 import { accessLog } from "./middleware/accessLog.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -275,6 +276,8 @@ app.use("/v1/cs", csTicketsRoute);
 app.use("/v1/cs/os", csOsDashboardRoute);
 // OS Models Proxy (E06-2B)
 app.use("/v1/os/models", osModelsProxyRouter);
+// ALGO-CORE-04 Runtime Wiring
+app.use("/v1/os/algo", osAlgoCoreRouter);
 // OS LLM 라우트 (R10-S2)
 app.use("/v1/os/llm-usage", osLlmUsageRouter);
 // healthRoute는 이미 /healthz, /readyz로 위에서 정의했으므로 제거
