@@ -1,0 +1,12 @@
+{
+  "request_id": "req_2026_01_28_algo_core_demo",
+  "intent": "ALGO_CORE_THREE_BLOCKS",
+  "model_id": "algo-core-demo",
+  "device_class": "web",
+  "client_version": "0.0.0-dev",
+  "constraints": {
+    "language": "ko",
+    "max_tokens": 256
+  },
+  "ts_utc": "2026-01-28T00:00:00Z"
+}
