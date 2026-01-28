@@ -11,6 +11,10 @@ NO_NPM_INSTALL_FALLBACK_OK=0
 CANONICALIZE_SHARED_SINGLE_SOURCE_OK=0
 TEST_EVENT_SELECTION_GUARD_OK=0
 
+# PROD Delivered Keyset
+PROD_DELIVERED_KEYSET_PRESENT_OK=0
+PROD_DELIVERED_KEYSET_GUARD_OK=0
+
 # New (H3.4-prep)
 LOCKFILES_TRACKED_OK=0
 REQUIRED_CHECK_CONTEXT_SINGLE_OK=0
@@ -35,6 +39,10 @@ EXPORT_APPROVE_AUDIT_V2_OK=0
 
 # PROD-05
 MOCK_NETWORK_ZERO_OK=0
+
+# PROD-DELIVERED (SSOT)
+PROD_DELIVERED_KEYSET_PRESENT_OK=0
+PROD_DELIVERED_KEYSET_GUARD_OK=0
 
 # PERF-01
 PERF_P95_BUDGET_DEFINED_OK=0
@@ -94,6 +102,9 @@ cleanup(){
 
   echo "MOCK_NETWORK_ZERO_OK=${MOCK_NETWORK_ZERO_OK}"
 
+  echo "PROD_DELIVERED_KEYSET_PRESENT_OK=${PROD_DELIVERED_KEYSET_PRESENT_OK}"
+  echo "PROD_DELIVERED_KEYSET_GUARD_OK=${PROD_DELIVERED_KEYSET_GUARD_OK}"
+
   echo "PERF_P95_BUDGET_DEFINED_OK=${PERF_P95_BUDGET_DEFINED_OK}"
   echo "PERF_P95_CONTRACT_OK=${PERF_P95_CONTRACT_OK}"
   echo "PERF_P95_REGRESSION_BLOCK_OK=${PERF_P95_REGRESSION_BLOCK_OK}"
@@ -117,6 +128,9 @@ cleanup(){
   echo "ONPREM_DELIVERED_KEYSET_GUARD_OK=${ONPREM_DELIVERED_KEYSET_GUARD_OK}"
 
   echo "TEST_EVENT_SELECTION_GUARD_OK=${TEST_EVENT_SELECTION_GUARD_OK}"
+
+  echo "PROD_DELIVERED_KEYSET_PRESENT_OK=${PROD_DELIVERED_KEYSET_PRESENT_OK}"
+  echo "PROD_DELIVERED_KEYSET_GUARD_OK=${PROD_DELIVERED_KEYSET_GUARD_OK}"
 }
 trap cleanup EXIT
 
@@ -281,5 +295,24 @@ ONPREM_DELIVERED_KEYSET_GUARD_OK=1
 echo "== guard: test event selection (reason_code requires action) =="
 run_guard "test event selection" bash scripts/verify/verify_test_event_selection_guard.sh
 TEST_EVENT_SELECTION_GUARD_OK=1
+
+echo "== guard: prod delivered keyset (SSOT) =="
+SSOT_FILE="docs/ops/contracts/PROD_DELIVERED_KEYS_SSOT.md"
+test -s "$SSOT_FILE" || { echo "BLOCK: missing SSOT file: $SSOT_FILE"; exit 1; }
+PROD_DELIVERED_KEYSET_PRESENT_OK=1
+
+REQ_KEYS="$(sed -n 's/^- //p' "$SSOT_FILE" | tr -d '\r' | sed '/^$/d')"
+test -n "$REQ_KEYS" || { echo "BLOCK: SSOT has no required keys"; exit 1; }
+
+# Each required key must be exactly 1 in this script's variables (no recursion)
+while IFS= read -r k; do
+  v="${!k:-}"
+  if [[ "$v" != "1" ]]; then
+    echo "BLOCK: delivered key not satisfied: ${k}=${v:-<unset>}"
+    exit 1
+  fi
+done <<< "$REQ_KEYS"
+
+PROD_DELIVERED_KEYSET_GUARD_OK=1
 
 exit 0
