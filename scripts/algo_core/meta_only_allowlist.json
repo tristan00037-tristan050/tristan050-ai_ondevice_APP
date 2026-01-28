@@ -1,0 +1,28 @@
+{
+  "schema_name": "ALGO_CORE_META_ONLY_V1",
+  "allowed_root_keys": [
+    "request_id",
+    "intent",
+    "model_id",
+    "device_class",
+    "client_version",
+    "constraints",
+    "ts_utc"
+  ],
+  "forbidden_key_patterns": [
+    "prompt",
+    "raw",
+    "content",
+    "text",
+    "message",
+    "messages",
+    "input",
+    "context"
+  ],
+  "limits": {
+    "max_string_len": 256,
+    "max_array_len": 50,
+    "max_object_keys": 50,
+    "max_depth": 6
+  }
+}

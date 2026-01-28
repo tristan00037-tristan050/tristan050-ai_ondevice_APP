@@ -49,6 +49,14 @@ WEB_E2E_MODE_SWITCH_WIRED_OK=0
 WEB_E2E_MOCK_NETWORK_ZERO_OK=0
 WEB_E2E_LIVE_HEADER_BUNDLE_OK=0
 
+# ALGO-CORE-01~03
+ALGO_META_ONLY_FAILCLOSED_OK=0
+ALGO_THREE_BLOCKS_NO_RAW_OK=0
+ALGO_SIGNED_MANIFEST_VERIFY_OK=0
+ALGO_P95_HOOK_OK=0
+ALGO_CORE_DELIVERED_KEYSET_PRESENT_OK=0
+ALGO_CORE_DELIVERED_KEYSET_GUARD_OK=0
+
 # PERF-01
 PERF_P95_BUDGET_DEFINED_OK=0
 PERF_P95_CONTRACT_OK=0
@@ -140,6 +148,14 @@ cleanup(){
   echo "WEB_E2E_MODE_SWITCH_WIRED_OK=${WEB_E2E_MODE_SWITCH_WIRED_OK}"
   echo "WEB_E2E_MOCK_NETWORK_ZERO_OK=${WEB_E2E_MOCK_NETWORK_ZERO_OK}"
   echo "WEB_E2E_LIVE_HEADER_BUNDLE_OK=${WEB_E2E_LIVE_HEADER_BUNDLE_OK}"
+
+  # ALGO-CORE-01~03
+  echo "ALGO_META_ONLY_FAILCLOSED_OK=${ALGO_META_ONLY_FAILCLOSED_OK}"
+  echo "ALGO_THREE_BLOCKS_NO_RAW_OK=${ALGO_THREE_BLOCKS_NO_RAW_OK}"
+  echo "ALGO_SIGNED_MANIFEST_VERIFY_OK=${ALGO_SIGNED_MANIFEST_VERIFY_OK}"
+  echo "ALGO_P95_HOOK_OK=${ALGO_P95_HOOK_OK}"
+  echo "ALGO_CORE_DELIVERED_KEYSET_PRESENT_OK=${ALGO_CORE_DELIVERED_KEYSET_PRESENT_OK}"
+  echo "ALGO_CORE_DELIVERED_KEYSET_GUARD_OK=${ALGO_CORE_DELIVERED_KEYSET_GUARD_OK}"
 }
 trap cleanup EXIT
 
@@ -323,6 +339,31 @@ while IFS= read -r k; do
 done <<< "$REQ_KEYS"
 
 PROD_DELIVERED_KEYSET_GUARD_OK=1
+
+echo "== guard: algo-core 01~03 (meta-only + 3 blocks + signed manifest + p95) =="
+run_guard "algo-core 01~03" bash scripts/verify/verify_algo_core_01_03.sh
+ALGO_META_ONLY_FAILCLOSED_OK=1
+ALGO_THREE_BLOCKS_NO_RAW_OK=1
+ALGO_SIGNED_MANIFEST_VERIFY_OK=1
+ALGO_P95_HOOK_OK=1
+
+echo "== guard: algo-core delivered keyset (SSOT) =="
+SSOT_FILE="docs/ops/contracts/ALGO_CORE_DELIVERED_KEYS_SSOT.md"
+test -s "$SSOT_FILE" || { echo "BLOCK: missing SSOT file: $SSOT_FILE"; exit 1; }
+ALGO_CORE_DELIVERED_KEYSET_PRESENT_OK=1
+
+REQ_KEYS="$(sed -n 's/^- //p' "$SSOT_FILE" | tr -d '\r' | sed '/^$/d')"
+test -n "$REQ_KEYS" || { echo "BLOCK: SSOT has no required keys"; exit 1; }
+
+while IFS= read -r k; do
+  v="${!k:-}"
+  if [[ "$v" != "1" ]]; then
+    echo "BLOCK: delivered key not satisfied: ${k}=${v:-<unset>}"
+    exit 1
+  fi
+done <<< "$REQ_KEYS"
+
+ALGO_CORE_DELIVERED_KEYSET_GUARD_OK=1
 
 echo "== guard: web ux-01 assets (E2E fixture) =="
 run_guard "web ux-01 assets" bash scripts/verify/verify_web_ux_01_assets.sh
