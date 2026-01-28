@@ -49,6 +49,10 @@ WEB_E2E_MODE_SWITCH_WIRED_OK=0
 WEB_E2E_MOCK_NETWORK_ZERO_OK=0
 WEB_E2E_LIVE_HEADER_BUNDLE_OK=0
 
+# ALGO-CORE-04
+ALGO_CORE_RUNTIME_ROUTE_PRESENT_OK=0
+ALGO_CORE_RUNTIME_PROD_FAILCLOSED_KEYS_OK=0
+
 # ALGO-CORE-01~03
 ALGO_META_ONLY_FAILCLOSED_OK=0
 ALGO_THREE_BLOCKS_NO_RAW_OK=0
@@ -149,6 +153,10 @@ cleanup(){
   echo "WEB_E2E_MOCK_NETWORK_ZERO_OK=${WEB_E2E_MOCK_NETWORK_ZERO_OK}"
   echo "WEB_E2E_LIVE_HEADER_BUNDLE_OK=${WEB_E2E_LIVE_HEADER_BUNDLE_OK}"
 
+  # ALGO-CORE-04
+  echo "ALGO_CORE_RUNTIME_ROUTE_PRESENT_OK=${ALGO_CORE_RUNTIME_ROUTE_PRESENT_OK}"
+  echo "ALGO_CORE_RUNTIME_PROD_FAILCLOSED_KEYS_OK=${ALGO_CORE_RUNTIME_PROD_FAILCLOSED_KEYS_OK}"
+
   # ALGO-CORE-01~03
   echo "ALGO_META_ONLY_FAILCLOSED_OK=${ALGO_META_ONLY_FAILCLOSED_OK}"
   echo "ALGO_THREE_BLOCKS_NO_RAW_OK=${ALGO_THREE_BLOCKS_NO_RAW_OK}"
@@ -247,6 +255,11 @@ META_ONLY_ALLOWLIST_ENFORCED_OK=1
 echo "== guard: meta-only validator parity (client/server single source) =="
 run_guard "meta-only validator parity" bash scripts/verify/verify_meta_only_validator_parity.sh
 META_ONLY_VALIDATOR_PARITY_OK=1
+
+echo "== guard: algo-core-04 runtime wiring assets =="
+run_guard "algo-core-04 runtime wiring assets" bash scripts/verify/verify_algo_core_04_runtime_wiring.sh
+ALGO_CORE_RUNTIME_ROUTE_PRESENT_OK=1
+ALGO_CORE_RUNTIME_PROD_FAILCLOSED_KEYS_OK=1
 
 echo "== guard: export two-step + auditv2 =="
 run_guard "export two-step + auditv2" bash scripts/verify/verify_export_two_step_auditv2.sh
