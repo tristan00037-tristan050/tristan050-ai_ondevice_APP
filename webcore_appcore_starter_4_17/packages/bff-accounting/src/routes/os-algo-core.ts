@@ -4,6 +4,64 @@ import { validateMetaOnlyOrThrow, generateThreeBlocks, getAlgoCoreSignerOrThrow,
 
 const router = Router();
 
+// Shadow mode configuration
+const SHADOW_ENABLED = (process.env.BUTLER_RUNTIME_SHADOW_ENABLED || "0") === "1";
+const RUNTIME_URL = process.env.BUTLER_RUNTIME_URL || "http://butler-runtime:8091";
+const HOST_ALLOWLIST = (process.env.BUTLER_RUNTIME_HOST_ALLOWLIST || "butler-runtime,butler-runtime.default.svc")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const SHADOW_SAMPLE_RATE = Number(process.env.BUTLER_RUNTIME_SHADOW_SAMPLE_RATE || "0.1");
+const SHADOW_TIMEOUT_MS = Number(process.env.BUTLER_RUNTIME_SHADOW_TIMEOUT_MS || "250");
+
+// Shadow fire-and-forget helper (non-blocking, no response modification)
+async function fireShadowRequest(body: any) {
+  if (!SHADOW_ENABLED) return;
+  // Deterministic sampling
+  if (Math.random() >= SHADOW_SAMPLE_RATE) return;
+
+  try {
+    // Validate meta-only (drop if invalid)
+    validateMetaOnlyOrThrow(body);
+  } catch (e) {
+    // Drop invalid requests silently
+    return;
+  }
+
+  try {
+    const url = new URL("/v0/runtime/shadow", RUNTIME_URL);
+    // Host allowlist check (fail-closed)
+    if (!HOST_ALLOWLIST.includes(url.hostname)) {
+      // Silently drop (not in allowlist)
+      return;
+    }
+
+    // Use fetch for http/https protocol auto-detection
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), SHADOW_TIMEOUT_MS);
+
+    // Fire-and-forget: don't await, discard response
+    fetch(url.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+      .then((res) => {
+        // Fire-and-forget: read and discard response (204 expected)
+        res.text().catch(() => {});
+      })
+      .catch(() => {
+        // Silently ignore errors (fire-and-forget)
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
+      });
+  } catch (e) {
+    // Silently ignore errors (fire-and-forget)
+  }
+}
+
 // 부트 시점 fail-closed (prod 모드면 키 미설정 시 즉시 throw -> index.ts에서 import 시점에 터짐)
 try {
   getAlgoCoreSignerOrThrow();
@@ -48,6 +106,10 @@ router.post(
       const ms = Number(t1 - t0) / 1e6;
       res.setHeader("X-OS-Algo-Latency-Ms", ms.toFixed(3));
       res.setHeader("X-OS-Algo-Manifest-SHA256", sig.manifest_sha256);
+
+      // Shadow fire-and-forget (non-blocking, no response modification)
+      // Note: fireShadowRequest is async but we don't await (fire-and-forget)
+      fireShadowRequest(req.body).catch(() => {});
 
       return res.json({
         ok: true,
