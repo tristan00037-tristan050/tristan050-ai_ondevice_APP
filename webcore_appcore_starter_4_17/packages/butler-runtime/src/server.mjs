@@ -1,4 +1,5 @@
 import http from "node:http";
+import crypto from "node:crypto";
 import { assertInternalUrlOrThrow } from "./safe_net.mjs";
 
 function json(res, code, obj) {
@@ -73,6 +74,24 @@ const server = http.createServer(async (req, res) => {
         blocks,
         latency_ms: t1 - t0
       });
+    }
+    if (req.method === "POST" && req.url === "/v0/runtime/shadow") {
+      const body = await parseBody(req);
+      validateMetaOnlyOrThrow(body);
+
+      const t0 = Date.now();
+      // meta-only 요청 기반 SHA256
+      const metaJson = JSON.stringify(body);
+      const manifestSha256 = crypto.createHash("sha256").update(metaJson, "utf8").digest("hex");
+      const t1 = Date.now();
+      const latencyMs = t1 - t0;
+
+      // 204 No Content: 바디 없이 헤더만
+      res.writeHead(204, {
+        "X-OS-Algo-Latency-Ms": latencyMs.toString(),
+        "X-OS-Algo-Manifest-SHA256": manifestSha256,
+      });
+      return res.end();
     }
     return json(res, 404, { ok: false, error_code: "NOT_FOUND" });
   } catch (e) {

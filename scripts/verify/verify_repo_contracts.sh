@@ -52,6 +52,10 @@ WEB_E2E_LIVE_HEADER_BUNDLE_OK=0
 # BUTLER-RUNTIME-V0
 RUNTIME_V0_HTTP_OK=0
 RUNTIME_EGRESS_DENY_DEFAULT_OK=0
+RUNTIME_SHADOW_ENDPOINT_OK=0
+RUNTIME_SHADOW_HEADERS_OK=0
+BFF_SHADOW_FIREFORGET_OK=0
+RUNTIME_SHADOW_PROOF_OK=0
 
 # BUTLER-SSOT
 BUTLER_SSOT_V1_1_OK=0
@@ -171,6 +175,10 @@ cleanup(){
   # BUTLER-RUNTIME-V0
   echo "RUNTIME_V0_HTTP_OK=${RUNTIME_V0_HTTP_OK}"
   echo "RUNTIME_EGRESS_DENY_DEFAULT_OK=${RUNTIME_EGRESS_DENY_DEFAULT_OK}"
+  echo "RUNTIME_SHADOW_ENDPOINT_OK=${RUNTIME_SHADOW_ENDPOINT_OK}"
+  echo "RUNTIME_SHADOW_HEADERS_OK=${RUNTIME_SHADOW_HEADERS_OK}"
+  echo "BFF_SHADOW_FIREFORGET_OK=${BFF_SHADOW_FIREFORGET_OK}"
+  echo "RUNTIME_SHADOW_PROOF_OK=${RUNTIME_SHADOW_PROOF_OK}"
 
   # BUTLER-SSOT
   echo "BUTLER_SSOT_V1_1_OK=${BUTLER_SSOT_V1_1_OK}"
@@ -293,6 +301,13 @@ echo "== guard: butler runtime v0 skeleton =="
 run_guard "butler runtime v0 skeleton" bash scripts/verify/verify_runtime_v0_skeleton.sh
 RUNTIME_V0_HTTP_OK=1
 RUNTIME_EGRESS_DENY_DEFAULT_OK=1
+
+echo "== guard: butler runtime shadow mode =="
+run_guard "butler runtime shadow" bash scripts/verify/verify_runtime_shadow.sh
+RUNTIME_SHADOW_ENDPOINT_OK=1
+RUNTIME_SHADOW_HEADERS_OK=1
+BFF_SHADOW_FIREFORGET_OK=1
+RUNTIME_SHADOW_PROOF_OK=1
 
 echo "== guard: butler ssot v1.1 =="
 run_guard "butler ssot v1.1" bash scripts/verify/verify_butler_ssot_v1_1.sh
