@@ -10,7 +10,14 @@
     "model_version",
     "policy_version",
     "repo_sha",
-    "count_*"
+    "count_*",
+    "device_id_hash",
+    "mode",
+    "shadow",
+    "runtime_ok",
+    "runtime_status",
+    "runtime_latency_ms_bucket",
+    "runtime_manifest_sha256"
   ],
   "forbidden_patterns": [
     "patch",
