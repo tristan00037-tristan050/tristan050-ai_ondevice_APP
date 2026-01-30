@@ -22,19 +22,19 @@ TEST_CONTAINER="${TEST_CONTAINER:-butler-runtime}"
   echo "container: ${TEST_CONTAINER}"
   echo "expectation: outbound DNS/HTTP to public internet must FAIL"
   echo
-  echo "## Attempt: DNS resolve (example.com)"
+  echo "## Attempt: DNS resolve (example.com) via node"
   echo '```'
   set +e
-  docker exec "${TEST_CONTAINER}" sh -lc "getent hosts example.com" 2>&1
+  docker exec "${TEST_CONTAINER}" node -e 'require("dns").lookup("example.com", (err) => { process.exit(err ? 1 : 0); });' 2>&1
   RC1=$?
   set -e
   echo "RC=${RC1}"
   echo '```'
   echo
-  echo "## Attempt: HTTPS request (https://example.com)"
+  echo "## Attempt: HTTPS request (https://example.com) via node"
   echo '```'
   set +e
-  docker exec "${TEST_CONTAINER}" sh -lc "wget -qO- https://example.com >/dev/null" 2>&1
+  docker exec "${TEST_CONTAINER}" node -e 'require("https").get("https://example.com", () => {}).on("error", () => { process.exit(1); }); setTimeout(() => process.exit(0), 2000);' 2>&1
   RC2=$?
   set -e
   echo "RC=${RC2}"
