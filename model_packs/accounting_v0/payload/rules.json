@@ -1,0 +1,11 @@
+{
+  "schema_name": "ACCOUNTING_RULES_V0",
+  "rules": [
+    {
+      "id": "rule_001",
+      "type": "meta_only",
+      "description": "회계 이벤트는 meta-only만 허용"
+    }
+  ]
+}
+

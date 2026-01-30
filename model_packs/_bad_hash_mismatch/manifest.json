@@ -1,0 +1,11 @@
+{
+  "schema_name": "MODEL_PACK_MANIFEST_V0",
+  "pack_name": "_bad_hash_mismatch",
+  "created_at_utc": "2026-01-30T01:08:55.553Z",
+  "files": [
+    {
+      "path": "pack.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}
