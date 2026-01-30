@@ -24,10 +24,14 @@ model_packs/<pack_name>/
 ```json
 {
   "schema_name": "MODEL_PACK_V0",
+  "pack_id": "<stable id>",
   "name": "<pack_name>",
   "version": "<semver>",
   "dept": "<department>",
-  "created_at_utc": "<ISO8601>"
+  "platform": "<platform>",
+  "runtime_version": "<runtime version>",
+  "created_at_utc": "<ISO8601>",
+  "expires_at_ms": "<unix ms>"
 }
 ```
 
@@ -69,6 +73,8 @@ model_packs/<pack_name>/
 2. **SHA256 일치**: manifest의 sha256과 실제 파일 해시가 일치해야 함
 3. **서명 검증**: signature.json의 서명이 manifest.json에 대해 유효해야 함
 4. **PRIVATE KEY 금지**: 레포에 private key 원문/복호화 가능한 형태 커밋 금지
+5. **pack_id/platform/runtime_version/expires_at_ms 누락**: 즉시 실패
+6. **expires_at_ms 만료**: 즉시 실패
 
 ## DoD Keys
 
