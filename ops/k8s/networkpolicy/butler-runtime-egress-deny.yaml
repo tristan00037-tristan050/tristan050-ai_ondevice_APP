@@ -1,0 +1,12 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: butler-runtime-egress-deny
+spec:
+  podSelector:
+    matchLabels:
+      app: butler-runtime
+  policyTypes:
+    - Egress
+  # 기본 deny: egress 규칙을 비워두면 "모든 egress 차단"
+  egress: []
