@@ -161,8 +161,8 @@ EVENT
 REPORT_OUTPUT=$(mktemp -t ops_hub_report_XXXXXX.json 2>/dev/null || mktemp /tmp/ops_hub_report_XXXXXX.json 2>/dev/null || echo "/tmp/ops_hub_report_$$.json")
 rm -f "$REPORT_OUTPUT"
 
-# Create a temporary Node.js script file (use .js for CommonJS)
-NODE_SCRIPT=$(mktemp -t ops_hub_node_XXXXXX.js 2>/dev/null || mktemp /tmp/ops_hub_node_XXXXXX.js 2>/dev/null || echo "/tmp/ops_hub_node_$$.js")
+# Create a temporary Node.js script file (use .cjs for CommonJS to avoid ESM conflicts)
+NODE_SCRIPT=$(mktemp -t ops_hub_node_XXXXXX.cjs 2>/dev/null || mktemp /tmp/ops_hub_node_XXXXXX.cjs 2>/dev/null || echo "/tmp/ops_hub_node_$$.cjs")
 cat > "$NODE_SCRIPT" <<'NODE'
 const fs = require('fs');
 const path = require('path');
