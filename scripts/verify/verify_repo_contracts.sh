@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+REPO_CONTRACTS_HYGIENE_OK=0
+
 OK_CONTAMINATION_REPO_GUARD_OK=0
 REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=0
 SSOT_PLACEHOLDER_GUARD_OK=0
@@ -10,10 +12,6 @@ NO_LOG_GREP_VERDICT_OK=0
 NO_NPM_INSTALL_FALLBACK_OK=0
 CANONICALIZE_SHARED_SINGLE_SOURCE_OK=0
 TEST_EVENT_SELECTION_GUARD_OK=0
-
-# PROD Delivered Keyset
-PROD_DELIVERED_KEYSET_PRESENT_OK=0
-PROD_DELIVERED_KEYSET_GUARD_OK=0
 
 # New (H3.4-prep)
 LOCKFILES_TRACKED_OK=0
@@ -159,6 +157,7 @@ ONPREM_DELIVERED_KEYSET_PRESENT_OK=0
 ONPREM_DELIVERED_KEYSET_GUARD_OK=0
 
 cleanup(){
+  echo "REPO_CONTRACTS_HYGIENE_OK=${REPO_CONTRACTS_HYGIENE_OK}"
   echo "OK_CONTAMINATION_REPO_GUARD_OK=${OK_CONTAMINATION_REPO_GUARD_OK}"
   echo "REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=${REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK}"
   echo "SSOT_PLACEHOLDER_GUARD_OK=${SSOT_PLACEHOLDER_GUARD_OK}"
@@ -311,6 +310,10 @@ run_guard() {
 }
 
 # Existing guards
+echo "== guard: repo contracts hygiene =="
+run_guard "repo contracts hygiene" bash scripts/verify/verify_repo_contracts_hygiene.sh
+REPO_CONTRACTS_HYGIENE_OK=1
+
 echo "== guard: forbid log-grep verdict patterns =="
 run_guard "forbid log-grep verdict patterns" bash scripts/verify/verify_no_log_grep_verdict.sh
 NO_LOG_GREP_VERDICT_OK=1
