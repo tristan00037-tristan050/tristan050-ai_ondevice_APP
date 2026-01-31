@@ -76,3 +76,15 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/verify/verify_update_max_seen_version_persist.sh
+
+  gate:
+    runs-on: ubuntu-latest
+    needs: [product_verify_model_registry]
+    steps:
+      - name: gate
+        run: |
+          if [ "${{ needs.product_verify_model_registry.result }}" != "success" ]; then
+            echo "GATE:FAIL"
+            exit 1
+          fi
+          echo "GATE:OK"

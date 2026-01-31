@@ -34,3 +34,15 @@ jobs:
           set -euo pipefail
           bash scripts/verify/verify_repo_contracts.sh
 
+  gate:
+    runs-on: ubuntu-latest
+    needs: [product-verify-repo-guards]
+    steps:
+      - name: gate
+        run: |
+          if [ "${{ needs.product-verify-repo-guards.result }}" != "success" ]; then
+            echo "GATE:FAIL"
+            exit 1
+          fi
+          echo "GATE:OK"
+
