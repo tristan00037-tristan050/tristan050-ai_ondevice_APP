@@ -27,17 +27,15 @@ export function applyModelPackOrBlock(args) {
     return { applied: false, reason_code: "EXPIRED_BLOCKED", ...before };
   }
 
-  // 3) compat 검증 fail-closed (상태 불변)
-  if (args.compat && args.runtime_semver && args.gateway_semver) {
-    const compatCheck = checkCompatOrBlock({
-      compat: args.compat,
-      runtime_semver: args.runtime_semver,
-      gateway_semver: args.gateway_semver,
-    });
-    if (!compatCheck.ok) {
-      const rc = assertReasonCodeV1(compatCheck.reason_code);
-      return { applied: false, reason_code: rc, ...before };
-    }
+  // 3) compat 검증 fail-closed (상태 불변, 무조건 실행)
+  const compatRes = checkCompatOrBlock({
+    compat: args.compat ?? null,
+    runtime_semver: args.runtime_semver,
+    gateway_semver: args.gateway_semver,
+  });
+  if (!compatRes.ok) {
+    const rc = assertReasonCodeV1(compatRes.reason_code);
+    return { applied: false, reason_code: rc, ...before };
   }
 
   // 4) 적용 성공 => 상태 갱신(원자/내구성)

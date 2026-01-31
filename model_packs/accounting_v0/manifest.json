@@ -1,7 +1,7 @@
 {
   "schema_name": "MODEL_PACK_MANIFEST_V0",
   "pack_name": "accounting_v0",
-  "created_at_utc": "2026-01-31T08:14:48.813Z",
+  "created_at_utc": "2026-01-31T08:24:51.365Z",
   "files": [
     {
       "path": "pack.json",

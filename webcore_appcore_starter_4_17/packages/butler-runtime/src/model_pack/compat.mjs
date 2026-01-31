@@ -19,8 +19,17 @@ function compareSemver(a, b) {
   return 0;
 }
 
+function isNonEmptyString(x) {
+  return typeof x === "string" && x.trim().length > 0;
+}
+
 export function checkCompatOrBlock({ compat, runtime_semver, gateway_semver }) {
   if (!compat) return { ok: false, reason_code: "MODEL_PACK_COMPAT_MISSING" };
+
+  // 누락도 무조건 차단
+  if (!isNonEmptyString(runtime_semver) || !isNonEmptyString(gateway_semver)) {
+    return { ok: false, reason_code: "MODEL_PACK_COMPAT_SEMVER_INVALID" };
+  }
 
   const cr = compareSemver(runtime_semver, compat.min_runtime_semver);
   const cg = compareSemver(gateway_semver, compat.min_gateway_semver);
