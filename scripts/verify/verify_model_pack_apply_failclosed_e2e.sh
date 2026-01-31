@@ -83,6 +83,7 @@ const beforeBytes = readStateBytes(statePath);
 // 1) good apply => state must change
 const goodPackId = packIdFromDir(goodDir);
 const goodManifestSha = manifestShaFromDir(goodDir);
+const goodPackJson = readJson(path.join(ROOT, goodDir, "pack.json"));
 
 const r1 = applyModelPackOrBlock({
   verified: true,
@@ -92,6 +93,9 @@ const r1 = applyModelPackOrBlock({
   expires_at_ms: Date.now() + 3600_000,
   now_ms: Date.now(),
   state_path: statePath,
+  compat: goodPackJson.compat,
+  runtime_semver: "0.1.0",
+  gateway_semver: "0.1.0",
 });
 
 if (r1.applied !== true) throw new Error("GOOD_APPLY_NOT_APPLIED");
@@ -118,6 +122,28 @@ if (r2.reason_code !== "SIGNATURE_INVALID") throw new Error("BAD_REASON_CODE_NOT
 
 const afterBadBytes = readStateBytes(statePath);
 if (Buffer.compare(snapshotBytes, afterBadBytes) !== 0) throw new Error("BAD_STATE_CHANGED");
+
+// 3) compat 필드 누락 => verified=true, compat은 존재하지만 runtime_semver/gateway_semver 누락 -> applied=false, state unchanged
+const compatMissingSnapshotBytes = Buffer.from(afterBadBytes);
+
+const r3 = applyModelPackOrBlock({
+  verified: true,
+  verify_reason_code: "APPLY_OK",
+  pack_id: goodPackId,
+  manifest_sha256: goodManifestSha,
+  expires_at_ms: Date.now() + 3600_000,
+  now_ms: Date.now(),
+  state_path: statePath,
+  compat: goodPackJson.compat,
+  runtime_semver: undefined,
+  gateway_semver: "0.1.0",
+});
+
+if (r3.applied !== false) throw new Error("COMPAT_MISSING_SHOULD_BE_BLOCKED");
+if (r3.reason_code !== "MODEL_PACK_COMPAT_SEMVER_INVALID") throw new Error("COMPAT_MISSING_REASON_CODE_NOT_PRESERVED");
+
+const afterCompatMissingBytes = readStateBytes(statePath);
+if (Buffer.compare(compatMissingSnapshotBytes, afterCompatMissingBytes) !== 0) throw new Error("COMPAT_MISSING_STATE_CHANGED");
 
 console.log("ALGO_APPLY_FAILCLOSED_E2E_OK=1");
 console.log("ALGO_APPLY_STATE_UNCHANGED_OK=1");
