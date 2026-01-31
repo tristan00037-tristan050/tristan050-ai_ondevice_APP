@@ -4,6 +4,8 @@ set -euo pipefail
 REPO_CONTRACTS_HYGIENE_OK=0
 PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK=0
 DOCS_NO_BANNED_PHRASES_OK=0
+ONPREM_REAL_WORLD_PROOF_OK=0
+ONPREM_REAL_WORLD_PROOF_FORMAT_OK=0
 
 OK_CONTAMINATION_REPO_GUARD_OK=0
 REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=0
@@ -162,6 +164,8 @@ cleanup(){
   echo "REPO_CONTRACTS_HYGIENE_OK=${REPO_CONTRACTS_HYGIENE_OK}"
   echo "PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK=${PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK}"
   echo "DOCS_NO_BANNED_PHRASES_OK=${DOCS_NO_BANNED_PHRASES_OK}"
+  echo "ONPREM_REAL_WORLD_PROOF_OK=${ONPREM_REAL_WORLD_PROOF_OK}"
+  echo "ONPREM_REAL_WORLD_PROOF_FORMAT_OK=${ONPREM_REAL_WORLD_PROOF_FORMAT_OK}"
   echo "OK_CONTAMINATION_REPO_GUARD_OK=${OK_CONTAMINATION_REPO_GUARD_OK}"
   echo "REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=${REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK}"
   echo "SSOT_PLACEHOLDER_GUARD_OK=${SSOT_PLACEHOLDER_GUARD_OK}"
@@ -325,6 +329,11 @@ PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK=1
 echo "== guard: docs banned phrases =="
 run_guard "docs banned phrases" bash scripts/verify/verify_docs_banned_phrases.sh
 DOCS_NO_BANNED_PHRASES_OK=1
+
+echo "== guard: onprem real-world proof =="
+run_guard "onprem real-world proof" bash scripts/verify/verify_onprem_real_world_proof.sh
+ONPREM_REAL_WORLD_PROOF_OK=1
+ONPREM_REAL_WORLD_PROOF_FORMAT_OK=1
 
 echo "== guard: forbid log-grep verdict patterns =="
 run_guard "forbid log-grep verdict patterns" bash scripts/verify/verify_no_log_grep_verdict.sh
