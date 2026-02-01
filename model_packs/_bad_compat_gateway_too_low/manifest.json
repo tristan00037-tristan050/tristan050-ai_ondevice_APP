@@ -1,0 +1,11 @@
+{
+  "schema_name": "MODEL_PACK_MANIFEST_V0",
+  "pack_name": "_bad_compat_gateway_too_low",
+  "created_at_utc": "2026-01-31T08:15:17.558Z",
+  "files": [
+    {
+      "path": "pack.json",
+      "sha256": "7b2cfd10d99bbe79ff79801e2f1354ad92bd4a25d290d61c8759628aaef30c8e"
+    }
+  ]
+}

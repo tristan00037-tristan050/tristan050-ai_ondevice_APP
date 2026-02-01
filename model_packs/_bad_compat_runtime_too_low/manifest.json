@@ -1,0 +1,11 @@
+{
+  "schema_name": "MODEL_PACK_MANIFEST_V0",
+  "pack_name": "_bad_compat_runtime_too_low",
+  "created_at_utc": "2026-01-31T08:15:16.865Z",
+  "files": [
+    {
+      "path": "pack.json",
+      "sha256": "6889d9be9663ff2375a3b0fa15ffc06078ff48a86ee86d4d915df9cf0ee06e41"
+    }
+  ]
+}
