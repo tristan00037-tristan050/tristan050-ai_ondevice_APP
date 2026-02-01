@@ -29,6 +29,14 @@ Doc: docs/ops/SEALED_RECORDS/2026-01-31_P1_SUPPLYCHAIN_UPDATE_STORE_SEALED.md
 
 PR: #282 (merged)
 
+### M6 (Ops Hub Traceability)
+
+M6는 기준선 키로 편입됨 (OPS_HUB_TRACEABILITY_*_OK=1).
+
+Doc: docs/ops/SEALED_RECORDS/2026-02-01_M6_SEALED.md
+
+PR: #284, #285, #286, #287, #289, #290, #291, #292 (merged), #288 (merged=false, #291에서 재적용)
+
 ## What this baseline guarantees (non-reversible)
 
 - reason_code single source + drift guard
