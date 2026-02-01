@@ -25,11 +25,14 @@ command -v node >/dev/null 2>&1 || { echo "BLOCK: node not found"; exit 1; }
 
 GOOD_DIR="model_packs/accounting_v0"
 BAD_DIR="model_packs/_bad_signature_invalid"
+COMPAT_BAD_DIR="model_packs/_bad_compat_runtime_too_low"
 
 test -s "${GOOD_DIR}/pack.json"
 test -s "${GOOD_DIR}/manifest.json"
 test -s "${BAD_DIR}/pack.json" || true
 test -s "${BAD_DIR}/manifest.json" || true
+test -s "${COMPAT_BAD_DIR}/pack.json" || { echo "BLOCK: missing ${COMPAT_BAD_DIR}/pack.json"; exit 1; }
+test -s "${COMPAT_BAD_DIR}/manifest.json" || { echo "BLOCK: missing ${COMPAT_BAD_DIR}/manifest.json"; exit 1; }
 
 APPLY_MOD="webcore_appcore_starter_4_17/packages/butler-runtime/src/model_pack/apply_model_pack.mjs"
 test -s "$APPLY_MOD"
@@ -123,10 +126,33 @@ if (r2.reason_code !== "SIGNATURE_INVALID") throw new Error("BAD_REASON_CODE_NOT
 const afterBadBytes = readStateBytes(statePath);
 if (Buffer.compare(snapshotBytes, afterBadBytes) !== 0) throw new Error("BAD_STATE_CHANGED");
 
-// 3) compat 필드 누락 => verified=true, compat은 존재하지만 runtime_semver/gateway_semver 누락 -> applied=false, state unchanged
-const compatMissingSnapshotBytes = Buffer.from(afterBadBytes);
+// 3) compat mismatch => verified=true, 만료 OK, compat mismatch -> applied=false, state unchanged
+const compatBadDir = "model_packs/_bad_compat_runtime_too_low";
+const compatSnapshotBytes = Buffer.from(afterBadBytes);
 
 const r3 = applyModelPackOrBlock({
+  verified: true,
+  verify_reason_code: "APPLY_OK",
+  pack_id: packIdFromDir(compatBadDir),
+  manifest_sha256: manifestShaFromDir(compatBadDir),
+  expires_at_ms: Date.now() + 3600_000,
+  now_ms: Date.now(),
+  state_path: statePath,
+  compat: readJson(path.join(ROOT, compatBadDir, "pack.json")).compat,
+  runtime_semver: "0.0.1",
+  gateway_semver: "0.1.0",
+});
+
+if (r3.applied !== false) throw new Error("COMPAT_MISMATCH_SHOULD_BE_BLOCKED");
+if (r3.reason_code !== "MODEL_PACK_COMPAT_RUNTIME_TOO_LOW") throw new Error("COMPAT_REASON_CODE_NOT_PRESERVED");
+
+const afterCompatBytes = readStateBytes(statePath);
+if (Buffer.compare(compatSnapshotBytes, afterCompatBytes) !== 0) throw new Error("COMPAT_STATE_CHANGED");
+
+// 4) compat 필드 누락 => verified=true, compat은 존재하지만 runtime_semver/gateway_semver 누락 -> applied=false, state unchanged
+const compatMissingSnapshotBytes = Buffer.from(afterCompatBytes);
+
+const r4 = applyModelPackOrBlock({
   verified: true,
   verify_reason_code: "APPLY_OK",
   pack_id: goodPackId,
@@ -139,8 +165,8 @@ const r3 = applyModelPackOrBlock({
   gateway_semver: "0.1.0",
 });
 
-if (r3.applied !== false) throw new Error("COMPAT_MISSING_SHOULD_BE_BLOCKED");
-if (r3.reason_code !== "MODEL_PACK_COMPAT_SEMVER_INVALID") throw new Error("COMPAT_MISSING_REASON_CODE_NOT_PRESERVED");
+if (r4.applied !== false) throw new Error("COMPAT_MISSING_SHOULD_BE_BLOCKED");
+if (r4.reason_code !== "MODEL_PACK_COMPAT_SEMVER_INVALID") throw new Error("COMPAT_MISSING_REASON_CODE_NOT_PRESERVED");
 
 const afterCompatMissingBytes = readStateBytes(statePath);
 if (Buffer.compare(compatMissingSnapshotBytes, afterCompatMissingBytes) !== 0) throw new Error("COMPAT_MISSING_STATE_CHANGED");

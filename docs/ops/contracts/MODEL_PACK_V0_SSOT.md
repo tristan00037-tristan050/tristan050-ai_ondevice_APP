@@ -31,7 +31,11 @@ model_packs/<pack_name>/
   "platform": "<platform>",
   "runtime_version": "<runtime version>",
   "created_at_utc": "<ISO8601>",
-  "expires_at_ms": "<unix ms>"
+  "expires_at_ms": "<unix ms>",
+  "compat": {
+    "min_runtime_semver": "0.1.0",
+    "min_gateway_semver": "0.1.0"
+  }
 }
 ```
 
@@ -75,6 +79,8 @@ model_packs/<pack_name>/
 4. **PRIVATE KEY 금지**: 레포에 private key 원문/복호화 가능한 형태 커밋 금지
 5. **pack_id/platform/runtime_version/expires_at_ms 누락**: 즉시 실패
 6. **expires_at_ms 만료**: 즉시 실패
+7. **compat 누락/형식 오류/버전 미달**: apply=0 (상태 불변)
+8. **compat semver는 strict X.Y.Z만 허용**
 
 ## DoD Keys
 
