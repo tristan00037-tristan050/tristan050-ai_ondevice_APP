@@ -53,6 +53,16 @@ function hardAssert(cond, msg) { if (!cond) throw new Error(msg); }
     const parsed = JSON.parse(data.outText);
     hardAssert(typeof parsed.runtime?.manifest_sha256 === "string" && parsed.runtime.manifest_sha256.length > 10, "runtime manifest sha missing in UI output");
 
+    // marker only (no *_OK keys)
+    const summary = {
+      request_id: data.requestId,
+      input_done_ts_ms: data.inputDoneTs,
+      render_done_ts_ms: data.renderDoneTs,
+      runtime_manifest_sha256: parsed.runtime?.manifest_sha256 ?? "",
+      runtime_latency_ms: parsed.runtime?.latency_ms ?? "",
+    };
+    console.log("P95_MARKS_SUMMARY " + JSON.stringify(summary));
+
     process.exit(0);
   } catch (e) {
     console.error(String(e?.stack ?? e));
