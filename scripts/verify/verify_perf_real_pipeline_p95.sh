@@ -41,6 +41,8 @@ BUDGET="docs/ops/contracts/PERF_REAL_PIPELINE_BUDGET_V1.txt"
 [[ -f "${E2E_DIR}/package-lock.json" ]] || { echo "BLOCK: missing package-lock.json in ${E2E_DIR}"; exit 1; }
 cd "${E2E_DIR}"
 npm ci
+# Install playwright browsers (required for E2E)
+npx playwright install chromium
 cd "$ROOT"
 
 # 1) Run E2E and capture summary marker
