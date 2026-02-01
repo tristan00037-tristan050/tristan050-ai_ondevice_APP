@@ -31,16 +31,55 @@ export RUNTIME_PORT="$PORT"
 node "$PKG/src/server.mjs" --smoke >/tmp/runtime_v0.out 2>&1 &
 PID=$!
 
-# wait
-for i in $(seq 1 50); do
-  if grep -q "RUNTIME_LISTENING=1" /tmp/runtime_v0.out; then break; fi
-  sleep 0.1
+# wait for server to be ready (check port or log)
+MAX_WAIT=10
+WAITED=0
+while [ $WAITED -lt $MAX_WAIT ]; do
+  if grep -q "RUNTIME_LISTENING=1" /tmp/runtime_v0.out 2>/dev/null; then
+    # also verify port is actually listening
+    if command -v nc >/dev/null 2>&1; then
+      if nc -z 127.0.0.1 "$PORT" 2>/dev/null; then
+        break
+      fi
+    else
+      # fallback: try curl
+      if curl -sS --connect-timeout 1 "http://127.0.0.1:${PORT}/v1/runtime/three-blocks" >/dev/null 2>&1; then
+        break
+      fi
+    fi
+  fi
+  sleep 0.2
+  WAITED=$((WAITED + 1))
 done
 
-# HTTP check
-BODY="$(curl -sS -X POST "http://127.0.0.1:${PORT}/v1/runtime/three-blocks" \
-  -H "Content-Type: application/json" \
-  --data '{"request_id":"req1","dept":"acct","tier":"S","signals":{"x":1}}')"
+# verify server is still running
+if ! kill -0 "$PID" 2>/dev/null; then
+  echo "BLOCK: server process died"
+  cat /tmp/runtime_v0.out 2>/dev/null || true
+  exit 1
+fi
+
+# HTTP check (with retry)
+BODY=""
+for retry in $(seq 1 5); do
+  BODY="$(curl -sS -X POST "http://127.0.0.1:${PORT}/v1/runtime/three-blocks" \
+    -H "Content-Type: application/json" \
+    --data '{"request_id":"req1","dept":"acct","tier":"S","signals":{"x":1}}' \
+    --max-time 2 --connect-timeout 1 2>/dev/null || echo '')"
+  if [[ -n "$BODY" && "$BODY" != '{"ok":false}' ]]; then
+    break
+  fi
+  if [ $retry -lt 5 ]; then
+    sleep 0.5
+  fi
+done
+
+if [[ -z "$BODY" || "$BODY" == '{"ok":false}' ]]; then
+  echo "BLOCK: HTTP request failed after retries"
+  echo "Server output:"
+  cat /tmp/runtime_v0.out 2>/dev/null || true
+  exit 1
+fi
 
 echo "$BODY" | node -e '
 const s=require("fs").readFileSync(0,"utf8"); const o=JSON.parse(s);
