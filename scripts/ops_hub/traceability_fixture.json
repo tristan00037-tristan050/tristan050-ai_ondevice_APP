@@ -1,0 +1,39 @@
+{
+  "events": [
+    {
+      "event_type": "ui_marks_v1",
+      "request_id": "req_demo_123456",
+      "trace": {
+        "ui_input_done_ms": 1000,
+        "ui_render_done_ms": 1320
+      }
+    },
+    {
+      "event_type": "runtime_headers_v1",
+      "request_id": "req_demo_123456",
+      "trace": {
+        "runtime_algo_latency_ms": 7,
+        "runtime_manifest_sha256": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+      }
+    },
+    {
+      "event_type": "modelpack_v1",
+      "request_id": "req_demo_123456",
+      "trace": {
+        "model_pack_id": "accounting_v0",
+        "model_pack_version": "0.1.0",
+        "reason_code": "APPLY_OK"
+      }
+    },
+
+    {
+      "event_type": "ui_marks_v1",
+      "request_id": "req_incomplete_0001",
+      "trace": {
+        "ui_input_done_ms": 2000,
+        "ui_render_done_ms": 2100
+      }
+    }
+  ]
+}
+
