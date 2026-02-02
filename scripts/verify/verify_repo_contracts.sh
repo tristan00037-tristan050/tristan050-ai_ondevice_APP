@@ -366,6 +366,10 @@ run_guard() {
 }
 
 # Existing guards
+echo "== guard: verify purity (no install in verify) =="
+run_guard "verify purity (no install in verify)" bash scripts/verify/verify_verify_purity_no_install.sh
+VERIFY_PURITY_NO_INSTALL_OK=1
+
 echo "== guard: repo contracts hygiene =="
 run_guard "repo contracts hygiene" bash scripts/verify/verify_repo_contracts_hygiene.sh
 REPO_CONTRACTS_HYGIENE_OK=1
