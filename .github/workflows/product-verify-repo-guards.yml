@@ -12,11 +12,35 @@ jobs:
   product-verify-repo-guards:
     name: product-verify-repo-guards
     runs-on: ubuntu-latest
+    env:
+      # verify 스크립트가 이 경로를 검사합니다(설치는 workflow에서만).
+      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+      # web_e2e 루트(여기에 node_modules가 생겨야 합니다)
+      WEB_E2E_DIR: webcore_appcore_starter_4_17/scripts/web_e2e
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install ripgrep
+      # Node 설치 + npm cache (web_e2e package-lock 기준)
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            webcore_appcore_starter_4_17/scripts/web_e2e/package-lock.json
+
+      # Playwright 브라우저 캐시(ms-playwright)
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('webcore_appcore_starter_4_17/scripts/web_e2e/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-ms-playwright-
+
+      - name: Install ripgrep + jq
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -28,8 +52,44 @@ jobs:
           set -euo pipefail
           bash scripts/verify/verify_ops_deps.sh --require-rg --require-jq
 
+      # 핵심 1) web_e2e node_modules 준비 (verify는 설치 금지이므로 workflow에서만)
+      - name: Install deps (web_e2e)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix "${WEB_E2E_DIR}" ci
+
+      # 핵심 2) Playwright 브라우저 설치 (workflow에서만)
+      - name: Install Playwright browsers (chromium)
+        shell: bash
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+        run: |
+          set -euo pipefail
+          npx --prefix "${WEB_E2E_DIR}" playwright install --with-deps chromium
+
+      # 증거 1) node_modules 존재 확인(없으면 여기서 즉시 FAIL)
+      - name: Debug confirm node_modules (web_e2e)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "${WEB_E2E_DIR}/node_modules" || (echo "MISSING node_modules" && exit 1)
+          test -d "${WEB_E2E_DIR}/node_modules/playwright" || (echo "MISSING playwright pkg" && exit 1)
+          echo "OK: node_modules + playwright pkg present"
+
+      # 증거 2) 브라우저 캐시 존재 확인(없으면 여기서 즉시 FAIL)
+      - name: Debug confirm Playwright browsers cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "${PLAYWRIGHT_BROWSERS_PATH}" || (echo "MISSING ms-playwright cache dir" && exit 1)
+          ls -la "${PLAYWRIGHT_BROWSERS_PATH}" | head -n 40
+
+      # repo-wide guards 실행
       - name: Run repo-wide guards (fail-closed)
         shell: bash
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
         run: |
           set -euo pipefail
           bash scripts/verify/verify_repo_contracts.sh
@@ -45,4 +105,3 @@ jobs:
             exit 1
           fi
           echo "GATE:OK"
-
