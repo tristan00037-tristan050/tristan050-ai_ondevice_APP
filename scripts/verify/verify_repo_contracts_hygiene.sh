@@ -12,15 +12,26 @@ safe_grep() {
   # usage:
   #   safe_grep -E "regex" path
   #   safe_grep -F "fixed" path
+  #   path가 파일이면 -n만 사용, 디렉터리면 -RIn 사용
   local mode="$1"; shift
   local pat="$1"; shift
   local p="${1:-.}"
 
-  case "$mode" in
-    -E) grep -RInE -- "$pat" "$p" ;;
-    -F) grep -RInF -- "$pat" "$p" ;;
-    *)  echo "BLOCK: safe_grep bad mode: $mode" ; exit 1 ;;
-  esac
+  if [[ -f "$p" ]]; then
+    # 단일 파일: -n만 사용 (rg -n과 동일)
+    case "$mode" in
+      -E) grep -nE -- "$pat" "$p" ;;
+      -F) grep -nF -- "$pat" "$p" ;;
+      *)  echo "BLOCK: safe_grep bad mode: $mode" ; exit 1 ;;
+    esac
+  else
+    # 디렉터리: -RIn 사용
+    case "$mode" in
+      -E) grep -RInE -- "$pat" "$p" ;;
+      -F) grep -RInF -- "$pat" "$p" ;;
+      *)  echo "BLOCK: safe_grep bad mode: $mode" ; exit 1 ;;
+    esac
+  fi
 }
 
 # 1) *_OK=0 중복 선언 탐지
