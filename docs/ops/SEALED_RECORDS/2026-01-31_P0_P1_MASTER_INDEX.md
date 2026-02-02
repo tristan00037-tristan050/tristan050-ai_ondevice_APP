@@ -60,3 +60,6 @@ Baseline SEALED (P0+P1) is fixed on main.
 
 ## M7 SEALED
 - docs/ops/SEALED_RECORDS/2026-02-01_M7_SEALED.md
+
+## M8 SEALED
+- docs/ops/SEALED_RECORDS/2026-02-02_M8_SEALED.md
