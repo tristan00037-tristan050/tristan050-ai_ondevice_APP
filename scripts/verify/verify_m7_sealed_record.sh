@@ -12,9 +12,11 @@ test -s "$DOC" || { echo "BLOCK: missing/empty $DOC"; exit 1; }
 M7_SEALED_RECORD_PRESENT_OK=1
 
 # 2) placeholder 금지 (규율 설명 제외: "PLACEHOLDER 금지" 같은 설명 텍스트는 허용)
-if grep -nE '(TODO|TBD|FIXME)' "$DOC" >/dev/null; then
+# 금지 패턴과 함께 나오는 placeholder는 제외 (규율 설명)
+BAD_PLACEHOLDER_TODO="$(grep -nE '(TODO|TBD|FIXME)' "$DOC" | grep -vE '(금지|forbidden|prohibited)' || true)"
+if [[ -n "$BAD_PLACEHOLDER_TODO" ]]; then
   echo "BLOCK: placeholder detected"
-  grep -nE '(TODO|TBD|FIXME)' "$DOC" | head -n 20
+  echo "$BAD_PLACEHOLDER_TODO" | head -n 20
   exit 1
 fi
 # PLACEHOLDER는 규율 설명 또는 DoD 키 이름에만 사용 가능 (실제 placeholder는 금지)
