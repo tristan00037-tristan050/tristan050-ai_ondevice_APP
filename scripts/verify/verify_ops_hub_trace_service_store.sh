@@ -23,12 +23,16 @@ trap cleanup EXIT
 
 command -v node >/dev/null 2>&1 || { echo "BLOCK: node missing"; exit 1; }
 
+# 작업 디렉터리 오염 파일 제거
+rm -f -- -
+
 DB="$(mktemp -t opshub_trace_store_XXXXXX).json"
 rm -f "$DB"
 
 node - <<'NODE' "$DB"
 const { openStore } = require("./scripts/ops_hub/trace_service_store_v1.cjs");
-const db = process.argv[1];
+const db = process.argv[2];
+if (!db || db === "-") process.exit(1);
 const store = openStore(db);
 
 const rid = "req_" + Date.now();
