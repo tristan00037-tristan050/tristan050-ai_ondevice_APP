@@ -3,9 +3,9 @@ name: product-verify-perf-real-pipeline-schedule
 on:
   pull_request:
   merge_group:
-  schedule:
-    - cron: "0 3 * * 1"  # 매주 월요일 03:00 UTC (원하는 시간으로 조정 가능)
   workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"  # 매주 월요일 03:00 UTC
 
 permissions:
   contents: read
@@ -16,7 +16,6 @@ jobs:
     env:
       PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
       WEB_E2E_DIR: webcore_appcore_starter_4_17/scripts/web_e2e
-      PERF_RUN_MODE: schedule
 
     steps:
       - uses: actions/checkout@v4
@@ -43,10 +42,18 @@ jobs:
           PLAYWRIGHT_BROWSERS_PATH: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
         run: npx --prefix "${WEB_E2E_DIR}" playwright install --with-deps chromium
 
+      # schedule일 때만 PERF_RUN_MODE=schedule로 설정 (YAML if 없이 run 내부에서 결정)
+      - name: Set PERF_RUN_MODE
+        run: |
+          set -euo pipefail
+          MODE="merge"
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then MODE="schedule"; fi
+          echo "PERF_RUN_MODE=${MODE}" >> "$GITHUB_ENV"
+          echo "MODE=${MODE}"
+
       - name: Verify perf real pipeline (N/variance)
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-          PERF_RUN_MODE: schedule
         run: |
           set -euo pipefail
           bash scripts/verify/verify_perf_real_pipeline_p95.sh
@@ -62,4 +69,3 @@ jobs:
             exit 1
           fi
           echo "GATE:OK"
-
