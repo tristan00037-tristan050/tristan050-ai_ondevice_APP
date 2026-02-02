@@ -17,14 +17,14 @@ if grep -nE '(TODO|TBD|FIXME)' "$DOC" >/dev/null; then
   grep -nE '(TODO|TBD|FIXME)' "$DOC" | head -n 20
   exit 1
 fi
-# PLACEHOLDER는 규율 설명에만 사용 가능 (실제 placeholder는 금지)
-# "PLACEHOLDER 금지" 같은 설명은 허용 (같은 줄에 "금지"가 있으면 규율 설명으로 간주)
+# PLACEHOLDER는 규율 설명 또는 DoD 키 이름에만 사용 가능 (실제 placeholder는 금지)
+# 허용: "PLACEHOLDER 금지" (규율 설명), "_PLACEHOLDER_OK=1" (DoD 키 이름)
 PLACEHOLDER_LINES="$(grep -nE 'PLACEHOLDER' "$DOC" || true)"
 if [[ -n "$PLACEHOLDER_LINES" ]]; then
-  # 각 줄을 확인: "금지" 또는 "forbidden" 또는 "prohibited"가 같은 줄에 없으면 실제 placeholder
+  # 각 줄을 확인: "금지", "_OK=", "forbidden", "prohibited"가 같은 줄에 없으면 실제 placeholder
   while IFS= read -r line; do
-    if ! echo "$line" | grep -qE '(금지|forbidden|prohibited)'; then
-      echo "BLOCK: placeholder detected (not in rule description)"
+    if ! echo "$line" | grep -qE '(금지|_OK=|forbidden|prohibited)'; then
+      echo "BLOCK: placeholder detected (not in rule description or DoD key)"
       echo "$line" | head -n 20
       exit 1
     fi
