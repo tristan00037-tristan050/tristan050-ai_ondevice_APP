@@ -22,17 +22,36 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ripgrep jq
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Ops deps preflight (fail-closed)
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/verify/verify_ops_deps.sh --require-rg --require-jq
+          bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg --require-jq
+
+      - name: Install E2E dependencies (for E2E verify scripts)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
+
+      - name: Install playwright browsers (for E2E verify scripts)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
       - name: Run repo-wide guards (fail-closed)
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/verify/verify_repo_contracts.sh
+          PLAYWRIGHT_BROWSERS_PATH=${{ runner.temp }}/ms-playwright bash scripts/verify/verify_repo_contracts.sh
 
   gate:
     runs-on: ubuntu-latest
