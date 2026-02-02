@@ -12,11 +12,30 @@ jobs:
   product-verify-repo-guards:
     name: product-verify-repo-guards
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+      WEB_E2E_DIR: webcore_appcore_starter_4_17/scripts/web_e2e
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install ripgrep
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: webcore_appcore_starter_4_17/scripts/web_e2e/package-lock.json
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ format('{0}-ms-playwright-{1}', runner.os, hashFiles('webcore_appcore_starter_4_17/scripts/web_e2e/package-lock.json')) }}
+          restore-keys: |
+            ${{ runner.os }}-ms-playwright-
+
+      - name: Install ripgrep + jq
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -28,8 +47,39 @@ jobs:
           set -euo pipefail
           bash scripts/verify/verify_ops_deps.sh --require-rg --require-jq
 
+      - name: Install deps (web_e2e)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix "${WEB_E2E_DIR}" ci
+
+      - name: Install Playwright browsers (chromium)
+        shell: bash
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+        run: |
+          set -euo pipefail
+          npx --prefix "${WEB_E2E_DIR}" playwright install --with-deps chromium
+
+      - name: Debug confirm node_modules (web_e2e)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "${WEB_E2E_DIR}/node_modules" || (echo "MISSING node_modules" && exit 1)
+          test -d "${WEB_E2E_DIR}/node_modules/playwright" || (echo "MISSING playwright pkg" && exit 1)
+          echo "OK: node_modules + playwright pkg present"
+
+      - name: Debug confirm Playwright browsers cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "${PLAYWRIGHT_BROWSERS_PATH}" || (echo "MISSING ms-playwright cache dir" && exit 1)
+          ls -la "${PLAYWRIGHT_BROWSERS_PATH}" | head -n 40
+
       - name: Run repo-wide guards (fail-closed)
         shell: bash
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
         run: |
           set -euo pipefail
           bash scripts/verify/verify_repo_contracts.sh
@@ -45,4 +95,3 @@ jobs:
             exit 1
           fi
           echo "GATE:OK"
-
