@@ -40,10 +40,12 @@ jobs:
       - name: Install Playwright browsers
         run: |
           npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
       - name: Run repo-wide guards (fail-closed)
         env:
-          PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
         run: |
           bash scripts/verify/verify_repo_contracts.sh
 
