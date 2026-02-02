@@ -73,6 +73,9 @@ PERF_REAL_PIPELINE_P95_BUDGET_OK=0
 # WEB-UX-08
 WEB_META_ONLY_NEGATIVE_SUITE_OK=0
 
+# VERIFY-PURITY
+VERIFY_PURITY_NO_INSTALL_OK=0
+
 
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
@@ -265,6 +268,7 @@ cleanup(){
   echo "PERF_REAL_PIPELINE_NO_RAW_OK=${PERF_REAL_PIPELINE_NO_RAW_OK}"
   echo "PERF_REAL_PIPELINE_P95_BUDGET_OK=${PERF_REAL_PIPELINE_P95_BUDGET_OK}"
   echo "WEB_META_ONLY_NEGATIVE_SUITE_OK=${WEB_META_ONLY_NEGATIVE_SUITE_OK}"
+  echo "VERIFY_PURITY_NO_INSTALL_OK=${VERIFY_PURITY_NO_INSTALL_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -362,6 +366,10 @@ run_guard() {
 }
 
 # Existing guards
+echo "== guard: verify purity (no install in verify) =="
+run_guard "verify purity (no install in verify)" bash scripts/verify/verify_verify_purity_no_install.sh
+VERIFY_PURITY_NO_INSTALL_OK=1
+
 echo "== guard: repo contracts hygiene =="
 run_guard "repo contracts hygiene" bash scripts/verify/verify_repo_contracts_hygiene.sh
 REPO_CONTRACTS_HYGIENE_OK=1

@@ -1,4 +1,4 @@
-name: product-verify-web-ux-03
+name: product-verify-perf-real-pipeline
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  web_ux_03_e2e:
+  perf_real_pipeline:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,19 +21,17 @@ jobs:
           npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
-      - name: WEB-UX-03 verify
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+      - name: perf real pipeline p95 verify
         run: |
-          bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_03_export_auditv2_e2e.sh
+          PLAYWRIGHT_BROWSERS_PATH=${{ runner.temp }}/ms-playwright bash scripts/verify/verify_perf_real_pipeline_p95.sh
 
   gate:
     runs-on: ubuntu-latest
-    needs: [web_ux_03_e2e]
+    needs: [perf_real_pipeline]
     steps:
       - name: gate
         run: |
-          if [ "${{ needs.web_ux_03_e2e.result }}" != "success" ]; then
+          if [ "${{ needs.perf_real_pipeline.result }}" != "success" ]; then
             echo "GATE:FAIL"
             exit 1
           fi
