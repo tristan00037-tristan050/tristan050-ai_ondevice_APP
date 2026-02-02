@@ -1,6 +1,8 @@
 name: product-verify-perf-real-pipeline-schedule
 
 on:
+  pull_request:
+  merge_group:
   schedule:
     - cron: "0 3 * * 1"  # 매주 월요일 03:00 UTC (원하는 시간으로 조정 가능)
   workflow_dispatch:
