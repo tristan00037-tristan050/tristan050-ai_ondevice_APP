@@ -5,44 +5,47 @@ on:
   merge_group:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  web_e2e:
+  verify:
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+      WEB_E2E_DIR: webcore_appcore_starter_4_17/scripts/web_e2e
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Install E2E dependencies
-        run: |
-          npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
-      - name: Install playwright browsers
-        run: |
-          npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
+          cache: "npm"
+          cache-dependency-path: webcore_appcore_starter_4_17/scripts/web_e2e/package-lock.json
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ format('{0}-ms-playwright-{1}', runner.os, hashFiles('webcore_appcore_starter_4_17/scripts/web_e2e/package-lock.json')) }}
+          restore-keys: |
+            ${{ runner.os }}-ms-playwright-
+
+      - name: Install deps (web_e2e)
+        run: npm --prefix "${WEB_E2E_DIR}" ci
+
+      - name: Install Playwright browsers (chromium)
         env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
-      - name: WEB-UX-01 verify
-        run: |
-          PLAYWRIGHT_BROWSERS_PATH=${{ runner.temp }}/ms-playwright bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_01_mode_switch_e2e.sh
-      - name: WEB-UX-03 verify
-        run: |
-          PLAYWRIGHT_BROWSERS_PATH=${{ runner.temp }}/ms-playwright bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_03_export_auditv2_e2e.sh
-      - name: WEB-UX-04 verify
-        run: |
-          PLAYWRIGHT_BROWSERS_PATH=${{ runner.temp }}/ms-playwright bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_04_p95_marks_parity_e2e.sh
-      - name: WEB-UX-08 verify
-        run: |
-          PLAYWRIGHT_BROWSERS_PATH=${{ runner.temp }}/ms-playwright bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_08_meta_only_negative_suite.sh
+          PLAYWRIGHT_BROWSERS_PATH: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+        run: npx --prefix "${WEB_E2E_DIR}" playwright install --with-deps chromium
 
-  gate:
-    runs-on: ubuntu-latest
-    needs: [web_e2e]
-    steps:
-      - name: gate
+      - name: Run web E2E verifiers (pure)
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
         run: |
-          if [ "${{ needs.web_e2e.result }}" != "success" ]; then
-            echo "GATE:FAIL"
-            exit 1
-          fi
-          echo "GATE:OK"
-
+          set -euo pipefail
+          bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_01_mode_switch_e2e.sh
+          bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_03_export_auditv2_e2e.sh
+          bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_04_p95_marks_parity_e2e.sh
+          bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_08_meta_only_negative_suite.sh
