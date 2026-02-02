@@ -49,3 +49,15 @@ jobs:
           bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_03_export_auditv2_e2e.sh
           bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_04_p95_marks_parity_e2e.sh
           bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_08_meta_only_negative_suite.sh
+
+  gate:
+    runs-on: ubuntu-latest
+    needs: [verify]
+    steps:
+      - name: gate
+        run: |
+          if [ "${{ needs.verify.result }}" != "success" ]; then
+            echo "GATE:FAIL"
+            exit 1
+          fi
+          echo "GATE:OK"
