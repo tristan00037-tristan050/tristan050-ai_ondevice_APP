@@ -19,16 +19,12 @@ if grep -nE '(TODO|TBD|FIXME)' "$DOC" >/dev/null; then
 fi
 # PLACEHOLDER는 규율 설명 또는 DoD 키 이름에만 사용 가능 (실제 placeholder는 금지)
 # 허용: "PLACEHOLDER 금지" (규율 설명), "_PLACEHOLDER_OK=1" (DoD 키 이름)
-PLACEHOLDER_LINES="$(grep -nE 'PLACEHOLDER' "$DOC" || true)"
-if [[ -n "$PLACEHOLDER_LINES" ]]; then
-  # 각 줄을 확인: "금지", "_OK=", "forbidden", "prohibited"가 같은 줄에 없으면 실제 placeholder
-  while IFS= read -r line; do
-    if ! echo "$line" | grep -qE '(금지|_OK=|forbidden|prohibited)'; then
-      echo "BLOCK: placeholder detected (not in rule description or DoD key)"
-      echo "$line" | head -n 20
-      exit 1
-    fi
-  done <<< "$PLACEHOLDER_LINES"
+# 금지 패턴과 함께 나오는 PLACEHOLDER는 제외
+BAD_PLACEHOLDER="$(grep -nE 'PLACEHOLDER' "$DOC" | grep -vE '(금지|_OK=|forbidden|prohibited)' || true)"
+if [[ -n "$BAD_PLACEHOLDER" ]]; then
+  echo "BLOCK: placeholder detected (not in rule description or DoD key)"
+  echo "$BAD_PLACEHOLDER" | head -n 20
+  exit 1
 fi
 M7_SEALED_RECORD_NO_PLACEHOLDER_OK=1
 
