@@ -26,7 +26,6 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
 command -v node >/dev/null 2>&1 || { echo "BLOCK: node not found"; exit 1; }
-command -v npm >/dev/null 2>&1 || { echo "BLOCK: npm not found"; exit 1; }
 
 E2E="webcore_appcore_starter_4_17/scripts/web_e2e/run_p95_marks_e2e.mjs"
 E2E_DIR="webcore_appcore_starter_4_17/scripts/web_e2e"
@@ -37,13 +36,9 @@ BUDGET="docs/ops/contracts/PERF_REAL_PIPELINE_BUDGET_V1.txt"
 [[ -s "$STORE" ]] || { echo "BLOCK: missing $STORE (M7-02 must be on main)"; exit 1; }
 [[ -s "$BUDGET" ]] || { echo "BLOCK: missing $BUDGET"; exit 1; }
 
-# Install E2E dependencies (npm ci only, no fallback)
-[[ -f "${E2E_DIR}/package-lock.json" ]] || { echo "BLOCK: missing package-lock.json in ${E2E_DIR}"; exit 1; }
-cd "${E2E_DIR}"
-npm ci
-# Install playwright browsers (required for E2E)
-npx playwright install chromium
-cd "$ROOT"
+# Check dependencies exist (workflow must install)
+test -d "${E2E_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
+test -d "${PLAYWRIGHT_BROWSERS_PATH:-${HOME}/.cache/ms-playwright}" || { echo "BLOCK: playwright browsers missing (workflow must install)"; exit 1; }
 
 # 1) Run E2E and capture summary marker
 OUT="$(node "$E2E" 2>&1)" || { echo "BLOCK: p95 marks e2e failed"; echo "$OUT"; exit 1; }
