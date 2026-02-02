@@ -26,12 +26,21 @@ MAX_AGE_DAYS="$(grep -nE '^MAX_AGE_DAYS=' "$POLICY" | tail -n 1 | cut -d= -f2 | 
 LAST_DATE="$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' "$LATEST" | sort | tail -n 1)"
 [[ -n "$LAST_DATE" ]] || { echo "BLOCK: no date (YYYY-MM-DD) found in LATEST"; exit 1; }
 
-# 오늘(UTC) 기준으로 age 계산
-TODAY="$(date -u +%F)"
-AGE_DAYS="$(( ( $(date -u -d "$TODAY" +%s) - $(date -u -d "$LAST_DATE" +%s) ) / 86400 ))"
+# 오늘(UTC) 기준으로 age 계산 (POSIX 호환: Node.js 사용)
+AGE_DAYS="$(node -e "
+const last = new Date('${LAST_DATE}T00:00:00Z');
+const today = new Date();
+const ageMs = today - last;
+const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+if (ageDays < 0) {
+  console.error('BLOCK: last_date is in the future: ${LAST_DATE}');
+  process.exit(1);
+}
+console.log(ageDays);
+")"
 
-if [[ "$AGE_DAYS" -lt 0 ]]; then
-  echo "BLOCK: last_date is in the future: $LAST_DATE"
+if [[ -z "$AGE_DAYS" ]] || ! [[ "$AGE_DAYS" =~ ^[0-9]+$ ]]; then
+  echo "BLOCK: failed to calculate age_days"
   exit 1
 fi
 
