@@ -39,19 +39,19 @@ jobs:
           set -euo pipefail
           npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
 
-      - name: Install playwright browsers (for E2E verify scripts)
-        shell: bash
+      - name: Install deps (web_e2e)
         run: |
-          set -euo pipefail
+          npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
+
+      - name: Install Playwright browsers
+        run: |
           npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
       - name: Run repo-wide guards (fail-closed)
-        shell: bash
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
         run: |
-          set -euo pipefail
-          PLAYWRIGHT_BROWSERS_PATH=${{ runner.temp }}/ms-playwright bash scripts/verify/verify_repo_contracts.sh
+          bash scripts/verify/verify_repo_contracts.sh
 
   gate:
     runs-on: ubuntu-latest
