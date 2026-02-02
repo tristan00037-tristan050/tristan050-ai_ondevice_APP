@@ -4,14 +4,27 @@ set -euo pipefail
 MODE="${1:?MODE required}"
 SEED="${2:?SEED required}"
 
-# 현재 레포에서 알고리즘 엔트리가 확정되기 전까지는,
-# "결정론 게이트 출력 계약"만 먼저 고정한다.
-# 후속 PR에서 실제 알고리즘 실행을 연결한다.
+# D0 gate: 실제 알고리즘 출력(3블록 JSON)을 생성하고 그 결과를 sha256로 해시한다.
+# 입력은 meta-only fixture를 사용한다(원문 금지).
+REQ="scripts/algo_core/sample_meta_request.json"
+GEN="scripts/algo_core/generate_three_blocks.mjs"
 
-# meta-only 출력(원문 금지)
+test -s "$REQ" || { echo "BLOCK: missing $REQ"; exit 1; }
+test -s "$GEN" || { echo "BLOCK: missing $GEN"; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "BLOCK: node missing"; exit 1; }
+
+OUT_JSON="$(mktemp -t determinism_out_XXXXXX.json 2>/dev/null || mktemp /tmp/determinism_out_XXXXXX.json)"
+rm -f "$OUT_JSON"
+
+# 실행(메타-only 3블록 생성)
+node "$GEN" "$REQ" "$OUT_JSON" >/dev/null
+
+test -s "$OUT_JSON" || { echo "BLOCK: output json missing/empty"; rm -f "$OUT_JSON"; exit 1; }
+
+# meta-only 출력 계약
 echo "DETERMINISM_MODE=${MODE}"
 
-# 임시 체크섬: 현재는 정책/환경 문자열에 대한 sha256.
-# 후속 PR에서 실제 모델 출력 텐서/결과를 해시로 바꾼다.
-printf "%s" "mode=${MODE};seed=${SEED};node=$(node -v 2>/dev/null || echo none)" | sha256sum | awk '{print "DETERMINISM_SHA256="$1}'
+# 실제 출력(JSON)의 sha256
+sha256sum "$OUT_JSON" | awk '{print "DETERMINISM_SHA256="$1}'
 
+rm -f "$OUT_JSON"
