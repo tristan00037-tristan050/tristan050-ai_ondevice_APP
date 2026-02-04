@@ -14,7 +14,7 @@ permissions:
   artifact-metadata: write
 
 jobs:
-  provenance_min:
+  verify-slsa-provenance-min:
     name: verify-slsa-provenance-min
     runs-on: ubuntu-latest
     env:
@@ -43,8 +43,7 @@ jobs:
           const started = new Date(now.getTime() - 1000).toISOString();
           const finished = now.toISOString();
 
-          // Minimal, audit-friendly statement:
-          // - 목적: 존재/형식/링크 핀ning (PR에서도 네트워크 의존 없이 통과 가능)
+          // PR/merge_group에서도 네트워크 의존 없이 “존재/형식/링크 핀ning”만 보장하는 최소 provenance
           const out = {
             _type: "https://in-toto.io/Statement/v1",
             subject: [
@@ -60,23 +59,13 @@ jobs:
               buildType: "https://github.com/actions/workflow",
               builder: { id: "github-actions" },
               invocation: {
-                parameters: {
-                  repo,
-                  sha,
-                  run_id: runId,
-                  run_url: runUrl
-                }
+                parameters: { repo, sha, run_id: runId, run_url: runUrl }
               },
-              metadata: {
-                buildStartedOn: started,
-                buildFinishedOn: finished
-              },
+              metadata: { buildStartedOn: started, buildFinishedOn: finished },
               materials: [
                 {
                   uri: `git+https://github.com/${repo}@${sha}`,
-                  digest: {
-                    sha256: sha ? sha.padStart(64, '0').slice(0, 64) : "0".repeat(64)
-                  }
+                  digest: { sha256: sha ? sha.padStart(64, '0').slice(0, 64) : "0".repeat(64) }
                 }
               ]
             }
@@ -97,19 +86,28 @@ jobs:
           name: slsa_provenance_min
           path: .artifacts/slsa_provenance_min.json
 
-  attest_dsse:
-    name: attest-dsse-provenance (main only)
-    # main push에서만 DSSE attestation 생성/검증
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  attest-dsse-provenance:
+    name: attest-dsse-provenance
     runs-on: ubuntu-latest
-    needs: [provenance_min]
+    needs: [verify-slsa-provenance-min]
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare subject for attestation
+      # PR/merge_group에서는 “job은 항상 성공으로 보고”되어야 merge_group guard를 통과한다.
+      # 단, 네트워크 의존( actions/attest* 다운로드 / apt-get )은 PR에서 실행하지 않는다.
+      - name: Skip attestation on PR/merge_group (report OK, no network)
+        if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "SKIP: attestation is main-only (to avoid PR/merge_group network flakiness)"
+          echo "ATTEST_DSSE_SKIPPED=1" >> "$GITHUB_ENV"
+
+      - name: Prepare subject for attestation (main only)
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -121,16 +119,14 @@ jobs:
             echo "run_attempt=${GITHUB_RUN_ATTEMPT:-0}"
           } > .artifacts/supplychain_subject.txt
 
-      # NOTE:
-      # - PR/merge_group에서는 actions/attest* 다운로드 타임아웃으로 기준선이 흔들릴 수 있어 실행 금지
-      # - main에서만 실행하여 supplychain 증빙을 유지
-      - name: Generate DSSE provenance attestation (subject-path)
+      - name: Generate DSSE provenance attestation (main only)
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: .artifacts/supplychain_subject.txt
 
-      # jq는 ubuntu-latest에 있는 경우가 많지만, 없을 수도 있어 main에서만 설치 허용
       - name: Install deps for verify (jq) (main only)
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -138,6 +134,7 @@ jobs:
           sudo apt-get install -y jq
 
       - name: Verify DSSE attestation (fail-closed) (main only)
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -146,25 +143,27 @@ jobs:
   gate:
     name: gate
     runs-on: ubuntu-latest
-    needs: [provenance_min, attest_dsse]
+    needs: [verify-slsa-provenance-min, attest-dsse-provenance]
     steps:
       - name: Gate (PR/merge_group: provenance_min only, main: require DSSE)
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "provenance_min=${{ needs.provenance_min.result }}"
-          echo "attest_dsse=${{ needs.attest_dsse.result }}"
+          echo "provenance_min=${{ needs.verify-slsa-provenance-min.result }}"
+          echo "attest_dsse=${{ needs.attest-dsse-provenance.result }}"
+          echo "event_name=${GITHUB_EVENT_NAME}"
+          echo "ref=${GITHUB_REF}"
 
           # 1) 항상 provenance_min은 성공해야 함
-          if [ "${{ needs.provenance_min.result }}" != "success" ]; then
+          if [ "${{ needs.verify-slsa-provenance-min.result }}" != "success" ]; then
             echo "GATE:FAIL (provenance_min)"
             exit 1
           fi
 
-          # 2) main push에서는 attest_dsse도 성공해야 함
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            if [ "${{ needs.attest_dsse.result }}" != "success" ]; then
+          # 2) main push에서는 DSSE도 성공해야 함
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            if [ "${{ needs.attest-dsse-provenance.result }}" != "success" ]; then
               echo "GATE:FAIL (attest_dsse required on main)"
               exit 1
             fi
