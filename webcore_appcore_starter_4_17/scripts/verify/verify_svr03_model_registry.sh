@@ -65,7 +65,7 @@ if [[ ! -d "$MODEL_REGISTRY_DIR" ]]; then
   exit 1
 fi
 
-# Install dependencies (npm ci only, fail-closed if lockfile missing)
+# Check dependencies exist (workflow must install)
 
 require_lockfile() {
   local dir="$1"
@@ -78,11 +78,13 @@ require_lockfile() {
 CONTROL_PLANE_DIR="${ROOT}/webcore_appcore_starter_4_17/backend/control_plane"
 if [[ -d "$CONTROL_PLANE_DIR" ]]; then
   require_lockfile "$CONTROL_PLANE_DIR"
-  npm --prefix "$CONTROL_PLANE_DIR" ci
+  # Check dependencies exist (workflow must install)
+  test -d "${CONTROL_PLANE_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must install dependencies)"; exit 1; }
 fi
 
 require_lockfile "$MODEL_REGISTRY_DIR"
-npm --prefix "$MODEL_REGISTRY_DIR" ci
+# Check dependencies exist (workflow must install)
+test -d "${MODEL_REGISTRY_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must install dependencies)"; exit 1; }
 
 # Run tests and parse results
 cd "$MODEL_REGISTRY_DIR"

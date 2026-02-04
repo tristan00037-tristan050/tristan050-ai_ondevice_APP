@@ -1,6 +1,6 @@
 {
-  "version": "2026-02-01",
-  "created_at_utc": "2026-02-01T04:25:21.145Z",
+  "version": "2026-02-04",
+  "created_at_utc": "2026-02-04T07:44:05.812Z",
   "files": [
     {
       "path": "webcore_appcore_starter_4_17/docker-compose.yml",

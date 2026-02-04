@@ -65,16 +65,16 @@ if [[ ! -d "$WEB_CONSOLE_ADMIN_DIR" ]]; then
   exit 1
 fi
 
-# Guard: package-lock.json required for npm ci (fail-closed)
+# Guard: package-lock.json required (fail-closed)
 LOCK="${OPS_CONSOLE_DIR}/package-lock.json"
 if [[ ! -f "$LOCK" ]]; then
-  echo "FAIL: package-lock.json required for npm ci: $LOCK"
+  echo "FAIL: package-lock.json required: $LOCK"
   echo "This ensures deterministic, reproducible builds in CI"
   exit 1
 fi
 
-# Install dependencies for ops-console (lock-based, deterministic)
-npm --prefix "$OPS_CONSOLE_DIR" ci
+# Check dependencies exist (workflow must install)
+test -d "${OPS_CONSOLE_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
 
 # Run tests using npm-only (ops-console's jest)
 # Tests are in web_console/admin/tests
