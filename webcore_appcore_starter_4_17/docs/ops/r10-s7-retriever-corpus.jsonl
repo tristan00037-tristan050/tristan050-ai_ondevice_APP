@@ -1,0 +1,35 @@
+{"id":"doc-0001","text":"Always On 불변 조건은 verify_s7_always_on.sh로 작업 시작 전에 결정적으로 검증한다."}
+{"id":"doc-0002","text":"meta-only 리포트는 counts, hash, created_at 같은 메타만 포함하고 원문은 포함하지 않는다."}
+{"id":"doc-0003","text":"nothing to scan 상태에서도 meta-only verifier는 초기 단계에서 PASS가 될 수 있다."}
+{"id":"doc-0004","text":"Build Anchor Gate는 verify, destructive, proof, .latest 포인터 정합성이 모두 통과해야 한다."}
+{"id":"doc-0005","text":"curl http_code 기반 상태코드 추출은 000 오판을 줄이고 재시도를 쉽게 만든다."}
+{"id":"doc-0006","text":"DEV_BFF_SKIP_BUILD=1 플래그는 restart 과정에서 빌드 덮어쓰기를 차단한다."}
+{"id":"doc-0007","text":"파괴 테스트는 변조 후 FAIL(exit=1)이 재현되고 원복 후 PASS까지 포함해야 한다."}
+{"id":"doc-0008","text":"proof 로그는 최신 1개만 유지하며 latest 포인터는 항상 최신을 가리킨다."}
+{"id":"doc-0009","text":"Phase 0는 goldenset schema/jsonl 유효성 검증과 meta-only report 생성, artifact 업로드를 고정한다."}
+{"id":"doc-0010","text":"Phase 1는 precision@k, recall@k, mrr@k, ndcg@k 메트릭을 baseline과 비교해 하락을 차단한다."}
+{"id":"doc-0011","text":"Header SHA 와 JSON SHA 와 git HEAD 무결성 계약은 빌드 앵커 unknown 생존을 차단한다."}
+{"id":"doc-0012","text":"검증과 증빙은 ops 스크립트와 bash -lc로 실행해 zsh 붙여넣기 오염을 피한다."}
+{"id":"doc-0013","text":"meta-only 정책에서는 payload 또는 raw content 출력이 금지된다."}
+{"id":"doc-0014","text":"CI 하드 게이트는 PR에서 옵션이 아니며 merge 불가를 강제한다."}
+{"id":"doc-0015","text":"goldenset의 expected는 must_have_any와 must_not_have_any로 구성된다."}
+{"id":"doc-0016","text":"온디바이스 우선 원칙에서는 외부 호출이 금지되는 범위를 명확히 정의한다."}
+{"id":"doc-0017","text":"prove 스크립트는 1회 실행으로 proof 로그 생성과 .latest 갱신까지 완료해야 한다."}
+{"id":"doc-0018","text":"meta-only report에는 query 키를 넣지 않으며 민감정보 노출을 구조적으로 차단한다."}
+{"id":"doc-0019","text":"Hard Gate와 Always On은 skip이나 optional 같은 예외를 허용하지 않는다."}
+{"id":"doc-0020","text":"CLOSEOUT은 proof와 latest 그리고 Hard Gate PASS로 결정적이어야 한다."}
+{"id":"doc-0021","text":"S7 Step 1의 목적은 골든셋과 검증과 증빙과 게이트를 먼저 고정하는 것이다."}
+{"id":"doc-0022","text":"Phase 0에서 금지되는 출력은 원문과 payload이며 민감정보는 절대 포함하지 않는다."}
+{"id":"doc-0023","text":"meta-only report는 Phase0에서 생성되며 artifact로 업로드된다."}
+{"id":"doc-0024","text":"A deterministic destructive test includes tamper, FAIL, and restore."}
+{"id":"doc-0025","text":"The integrity contract compares Header, JSON, and HEAD values."}
+{"id": "s7doc-026", "text": "This document contains rarelexs7-021 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-027", "text": "This document contains rarelexs7-022 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-028", "text": "This document contains rarelexs7-023 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-029", "text": "This document contains rarelexs7-024 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-030", "text": "This document contains rarelexs7-025 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-031", "text": "This document contains rarelexs7-026 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-032", "text": "This document contains rarelexs7-027 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-033", "text": "This document contains rarelexs7-028 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-034", "text": "This document contains rarelexs7-029 token for tiebreak testing. Deterministic improvement requires rare query overlap."}
+{"id": "s7doc-035", "text": "This document contains rarelexs7-030 token for tiebreak testing. Deterministic improvement requires rare query overlap."}

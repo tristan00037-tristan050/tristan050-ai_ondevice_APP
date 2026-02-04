@@ -1,0 +1,6 @@
+{
+  "schema_name": "ALGO_CORE_P95_BUDGET_V1",
+  "p95_budget_ms": 50,
+  "sample_runs": 25,
+  "notes": "Measured by scripts/algo_core/generate_three_blocks.mjs (meta-only; no raw input)."
+}

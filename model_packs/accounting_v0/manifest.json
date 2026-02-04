@@ -1,0 +1,19 @@
+{
+  "schema_name": "MODEL_PACK_MANIFEST_V0",
+  "pack_name": "accounting_v0",
+  "created_at_utc": "2026-01-31T08:24:51.365Z",
+  "files": [
+    {
+      "path": "pack.json",
+      "sha256": "514b2ab2e307fc1a6480172bbc35989dfc0014bfd451dc0fe7e972460bc1f1ac"
+    },
+    {
+      "path": "payload/rules.json",
+      "sha256": "6cff0f953b6c99e41e179e4e245b2430cb898651fd61b1991fd3972d0bc00f72"
+    },
+    {
+      "path": "payload/templates.json",
+      "sha256": "bcafa496ba104f3af38b1f8f6db8191ab1e9e74c997c0a67efac3ff1274b2cb1"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+# Meta-Only Policy (Policy-as-Code v1)
+# Fail-Closed: 원문/토큰/PII가 감사 로그에 포함되면 차단
+
+version: "1.0"
+rules:
+  - id: "meta_001"
+    name: "감사 로그 meta-only 강제"
+    description: "감사 로그에는 policy_rule_id, action, subject_type, subject_id만 허용"
+    allowed_fields:
+      - "policy_rule_id"
+      - "action"
+      - "subject_type"
+      - "subject_id"
+      - "tenant"
+      - "request_id"
+      - "idem_key"
+      - "actor"
+      - "ip"
+      - "route"
+      - "timestamp"
+    forbidden_fields:
+      - "payload"
+      - "body"
+      - "raw_text"
+      - "full_content"
+      - "original_message"
+      - "token"
+      - "secret"
+      - "password"
+    action: "block"
+

@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bff-accounting.fullname" . }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: {{ include "bff-accounting.name" . }} }
+  template:
+    metadata:
+      labels: { app: {{ include "bff-accounting.name" . }} }
+    spec:
+      containers:
+        - name: bff
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8081
+          env:
+            - name: PORT
+              value: "8081"
+            - name: USE_PG
+              value: "{{ .Values.env.USE_PG }}"
+            - name: EXPORT_SIGN_SECRET
+              valueFrom: { secretKeyRef: { name: {{ include "bff-accounting.fullname" . }}, key: EXPORT_SIGN_SECRET } }
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: {{ include "bff-accounting.fullname" . }}, key: DATABASE_URL } }
+          readinessProbe:
+            httpGet: { path: /ready, port: 8081 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 8081 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: {{- toYaml .Values.resources.requests | nindent 12 }}
+            limits: {{- toYaml .Values.resources.limits | nindent 12 }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh","-c","sleep 2"]
+      terminationGracePeriodSeconds: 10
+

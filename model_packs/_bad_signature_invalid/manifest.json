@@ -1,0 +1,11 @@
+{
+  "schema_name": "MODEL_PACK_MANIFEST_V0",
+  "pack_name": "_bad_signature_invalid",
+  "created_at_utc": "2026-01-30T01:08:58.982Z",
+  "files": [
+    {
+      "path": "pack.json",
+      "sha256": "fb67f52381af3824312726c4fe1a4dfce17df6276c1e8cb8107a433d282cc4b3"
+    }
+  ]
+}

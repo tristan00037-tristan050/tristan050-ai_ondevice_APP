@@ -1,0 +1,47 @@
+{
+  "n_queries": 30,
+  "queries_with_top_primary_tie": 6,
+  "queries_with_any_primary_tie": 24,
+  "sample_first10": [
+    {
+      "max_primary": 5,
+      "top_tie": 1
+    },
+    {
+      "max_primary": 4,
+      "top_tie": 1
+    },
+    {
+      "max_primary": 3,
+      "top_tie": 1
+    },
+    {
+      "max_primary": 2,
+      "top_tie": 1
+    },
+    {
+      "max_primary": 1,
+      "top_tie": 2
+    },
+    {
+      "max_primary": 4,
+      "top_tie": 1
+    },
+    {
+      "max_primary": 4,
+      "top_tie": 1
+    },
+    {
+      "max_primary": 1,
+      "top_tie": 3
+    },
+    {
+      "max_primary": 3,
+      "top_tie": 1
+    },
+    {
+      "max_primary": 1,
+      "top_tie": 1
+    }
+  ]
+}

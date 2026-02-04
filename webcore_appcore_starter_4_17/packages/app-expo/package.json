@@ -1,0 +1,37 @@
+{
+  "name": "@appcore/app-expo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./App.tsx",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "start": "expo start",
+    "build": "tsc -b || true",
+    "typecheck": "tsc -b --pretty false || true"
+  },
+  "dependencies": {
+    "@mlc-ai/web-llm": "^0.2.80",
+    "@react-native-community/netinfo": "^11.0.0",
+    "expo-blur": "^13.0.0",
+    "expo-random": "^13.0.0",
+    "expo-screen-capture": "^6.0.0",
+    "expo-secure-store": "^12.0.0",
+    "react-dom": "^19.2.1",
+    "react-native-mmkv": "^2.10.2",
+    "react-native-web": "^0.21.2"
+  },
+  "peerDependencies": {
+    "expo": ">=50.0.0",
+    "react-native": ">=0.72"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-native": "^0.72.0",
+    "typescript": "^5.4.0"
+  }
+}

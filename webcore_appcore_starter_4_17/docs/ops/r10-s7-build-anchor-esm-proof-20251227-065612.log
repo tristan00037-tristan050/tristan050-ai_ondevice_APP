@@ -1,0 +1,43 @@
+[proof] R10-S7 Build Anchor ESM Proof
+Generated: 20251227-065612
+Commit: f863f4e
+
+=== Step 1: Standard Build ===
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+> @appcore/service-core-cs@0.0.1 build
+> tsc -p tsconfig.build.json
+
+
+> @appcore/bff-accounting@0.1.0 build
+> tsc -b && node scripts/generate_build_info.js
+
+[build_info] Generated: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/packages/bff-accounting/dist/build_info.json
+[build_info] buildSha: f863f4eb248eb6a72573f210e2bf4c7d18ba1e84
+[build_info] buildTime: 2025-12-27T06:56:29.612Z
+
+=== Step 2: BFF Restart ===
+[dev_bff] Freeing port 8081...
+[dev_bff] Attempt 1: killing PID(s): 98980
+[dev_bff] Checking dist freshness (src vs dist timestamp)...
+[dev_bff] dist is older than src -> build required
+[dev_bff] Building @appcore/bff-accounting...
+
+> @appcore/bff-accounting@0.1.0 prebuild
+> npm run -w @appcore/data-pg build && npm run -w @appcore/service-core-accounting build && npm run -w @appcore/service-core-cs build
+
+
+> @appcore/data-pg@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-accounting@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-cs@0.0.1 build
+> tsc -p tsconfig.build.json
+[FAIL] BFF restart failed

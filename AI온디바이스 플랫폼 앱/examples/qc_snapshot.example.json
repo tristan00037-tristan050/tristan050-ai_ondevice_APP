@@ -1,0 +1,37 @@
+{
+  "status": {
+    "api": "pass",
+    "jwks": "pass",
+    "holidays": "pass",
+    "observability": "warn",
+    "ics": "pass",
+    "lighthouse": "warn"
+  },
+  "diff": {
+    "summary": [
+      {
+        "id": "lighthouse.staleness_hours",
+        "dir": "+",
+        "delta": 18,
+        "label": "LH staleness hours +18"
+      },
+      {
+        "id": "observability.latency_p95",
+        "dir": "+",
+        "pct": 12.5,
+        "label": "p95 latency +12.5%"
+      }
+    ]
+  },
+  "policy": {
+    "evaluations": []
+  },
+  "notes": [
+    "example snapshot created for app-core starter"
+  ],
+  "raw": {
+    "lighthouse": {
+      "staleness_hours": 42
+    }
+  }
+}

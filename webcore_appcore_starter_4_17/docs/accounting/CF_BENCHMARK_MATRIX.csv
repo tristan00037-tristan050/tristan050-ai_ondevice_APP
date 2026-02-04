@@ -1,0 +1,13 @@
+기능,등가,비고,Δ,보완안,priority,wave
+캡처(OCR),동등,영수증 이미지 → 라인아이템 추출,0%,OCR 엔진 선택 필요 (Tesseract/Cloud),P0,MVP
+분개 추천,동등,라인아이템 → 분개 추천 (신뢰도/근거),0%,규칙 DSL v0 + 골든셋 정확도 측정,P0,MVP
+승인 워크플로우,동등,승인 요청 → 다단계 승인 → 확정,0%,승인 API + HUD 통합,P0,MVP
+대사(Reconcile),부분,거래 매칭/중복 탐지,20%,목업 → 어댑터 인터페이스 설계,P1,+90d
+VAT 계산,동등,부가세 정보 조회,0%,VAT API 구현,P1,+90d
+Export(감사),동등,CSV/JSON Export + manifest 서명,0%,Export v0 + manifest 서명/만료,P0,MVP
+PII 레드랙션,강화,계좌/카드/세금번호 마스킹,+,레드랙션 룰 강화 (계약 명시),P0,MVP
+멱등성 보장,동등,Idempotency-Key / client_request_id,0%,/postings 확장 시 적용,P0,MVP
+금액 표현,강화,부동소수점 지양 (string),+,OpenAPI/Ajv 스키마에 반영 완료,P0,MVP
+통화 표현,강화,ISO-4217 코드 강제,+,OpenAPI pattern 검증 추가 완료,P0,MVP
+
+

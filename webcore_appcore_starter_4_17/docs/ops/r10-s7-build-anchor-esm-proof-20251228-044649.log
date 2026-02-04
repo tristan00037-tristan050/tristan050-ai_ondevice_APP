@@ -1,0 +1,98 @@
+== PROOF START 2025-12-28T04:46:49Z ==
+PWD=/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17
+HEAD=ec70106cf21a1d524d1c2c58ef138a355028a75b
+
+== npm ci ==
+[prove] PROVE_FAST=1 -> skip npm ci
+
+== build workspace ==
+
+> @appcore/bff-accounting@0.1.0 prebuild
+> npm run -w @appcore/data-pg build && npm run -w @appcore/service-core-accounting build && npm run -w @appcore/service-core-cs build
+
+
+> @appcore/data-pg@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-accounting@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-cs@0.0.1 build
+> tsc -p tsconfig.build.json
+
+
+> @appcore/bff-accounting@0.1.0 build
+> tsc -b && node scripts/generate_build_info.js
+
+[build_info] Generated: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/packages/bff-accounting/dist/build_info.json
+[build_info] buildSha: ec70106cf21a1d524d1c2c58ef138a355028a75b
+[build_info] buildTime: 2025-12-28T04:46:50.405Z
+
+== restart BFF ==
+[dev_bff] Freeing port 8081...
+[dev_bff] Attempt 1: killing PID(s): 44831
+[dev_bff] Checking dist freshness (src vs dist timestamp)...
+[dev_bff] dist is older than src -> build required
+[dev_bff] Building @appcore/bff-accounting...
+
+> @appcore/bff-accounting@0.1.0 prebuild
+> npm run -w @appcore/data-pg build && npm run -w @appcore/service-core-accounting build && npm run -w @appcore/service-core-cs build
+
+
+> @appcore/data-pg@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-accounting@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-cs@0.0.1 build
+> tsc -p tsconfig.build.json
+
+
+> @appcore/bff-accounting@0.1.0 build
+> tsc -b && node scripts/generate_build_info.js
+
+[build_info] Generated: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/packages/bff-accounting/dist/build_info.json
+[build_info] buildSha: ec70106cf21a1d524d1c2c58ef138a355028a75b
+[build_info] buildTime: 2025-12-28T04:46:52.085Z
+[dev_bff] Starting BFF on :8081
+[dev_bff] DATABASE_URL=postgres://app:app@127.0.0.1:5432/app
+[dev_bff] WEBLLM_UPSTREAM_BASE_URL=http://127.0.0.1:9099/webllm/
+[dev_bff] Starting BFF in background...
+[dev_bff] Waiting for BFF to be ready...
+[dev_bff] BFF ready after 2s
+[dev_bff] Verifying build anchor (healthz buildSha vs git HEAD)...
+[dev_bff] OK: buildSha matches HEAD(ec70106)
+[dev_bff] BFF started successfully (PID: 45209)
+[dev_bff] Log: /tmp/bff_dev.log
+[dev_bff] PID file: /tmp/bff_dev.pid
+
+== verify_build_anchor ==
+OK: buildSha matches HEAD(ec70106)
+
+== dist/build_info.json (top 80) ==
+{
+  "buildSha": "ec70106cf21a1d524d1c2c58ef138a355028a75b",
+  "buildShaShort": "ec70106",
+  "buildTime": "2025-12-28T04:46:52.085Z"
+}
+
+== /healthz (top 80) ==
+HTTP/1.1 200 OK
+X-Powered-By: Express
+X-Request-Id: d947ad6c-d621-45ed-82cd-e09d721a7bef
+X-OS-Build-SHA: ec70106cf21a1d524d1c2c58ef138a355028a75b
+X-OS-Build-Time: 2025-12-28T04:46:52.085Z
+Content-Type: application/json; charset=utf-8
+Content-Length: 173
+ETag: W/"ad-+wh6Au2LLyfaQMoy4KVBi4QAoAU"
+Date: Sun, 28 Dec 2025 04:46:53 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+{"status":"ok","timestamp":"2025-12-28T04:46:53.248Z","buildSha":"ec70106cf21a1d524d1c2c58ef138a355028a75b","buildShaShort":"ec70106","buildTime":"2025-12-28T04:46:52.085Z"}
+== PROOF END 2025-12-28T04:46:53Z ==

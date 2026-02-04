@@ -1,0 +1,361 @@
+{
+  "determinismMismatchCount": 0,
+  "networkRequestCount": 0,
+  "telemetryBannedKeysLeakCount": 0,
+  "hitAt5": 1.0,
+  "hitAt10": 1.0,
+  "mrrAt10": 0.9,
+  "noResultRate": 0.0,
+  "p95RetrieveMs": 0.43702125549316406,
+  "p99RetrieveMs": 0.43702125549316406,
+  "nQueries": 5,
+  "nDocs": 20,
+  "topK": 10,
+  "results": [
+    {
+      "query": "로그인 문제",
+      "topK": [
+        {
+          "docId": "ticket-001",
+          "score": 0.8722829438358002,
+          "category": "authentication",
+          "subject": "로그인 오류"
+        },
+        {
+          "docId": "ticket-014",
+          "score": 0.8475868968264216,
+          "category": "refund",
+          "subject": "부분 환불 요청"
+        },
+        {
+          "docId": "ticket-007",
+          "score": 0.8464803161443477,
+          "category": "payment",
+          "subject": "쿠폰 적용 안됨"
+        },
+        {
+          "docId": "ticket-002",
+          "score": 0.8458029971176039,
+          "category": "payment",
+          "subject": "결제 실패"
+        },
+        {
+          "docId": "ticket-003",
+          "score": 0.8443338311777266,
+          "category": "shipping",
+          "subject": "배송 지연 문의"
+        },
+        {
+          "docId": "ticket-004",
+          "score": 0.8429248326069783,
+          "category": "refund",
+          "subject": "환불 요청"
+        },
+        {
+          "docId": "ticket-015",
+          "score": 0.8398493436816121,
+          "category": "product",
+          "subject": "상품 교환"
+        },
+        {
+          "docId": "ticket-012",
+          "score": 0.8353500182758934,
+          "category": "payment",
+          "subject": "결제 수단 추가"
+        },
+        {
+          "docId": "ticket-013",
+          "score": 0.8237053554534324,
+          "category": "shipping",
+          "subject": "배송 추적 불가"
+        },
+        {
+          "docId": "ticket-009",
+          "score": 0.8221747573192655,
+          "category": "product",
+          "subject": "상품 설명 오류"
+        }
+      ],
+      "hitAt5": 1.0,
+      "hitAt10": 1.0,
+      "mrr": 1.0,
+      "retrieveMs": 0.4000663757324219
+    },
+    {
+      "query": "결제 오류",
+      "topK": [
+        {
+          "docId": "ticket-012",
+          "score": 0.9468835652500918,
+          "category": "payment",
+          "subject": "결제 수단 추가"
+        },
+        {
+          "docId": "ticket-017",
+          "score": 0.9199825693195282,
+          "category": "payment",
+          "subject": "할부 결제"
+        },
+        {
+          "docId": "ticket-006",
+          "score": 0.9191984173614623,
+          "category": "authentication",
+          "subject": "계정 잠금"
+        },
+        {
+          "docId": "ticket-009",
+          "score": 0.9153072314433874,
+          "category": "product",
+          "subject": "상품 설명 오류"
+        },
+        {
+          "docId": "ticket-005",
+          "score": 0.9149259248368153,
+          "category": "product",
+          "subject": "상품 불량"
+        },
+        {
+          "docId": "ticket-020",
+          "score": 0.909629047982683,
+          "category": "product",
+          "subject": "상품 리뷰 작성"
+        },
+        {
+          "docId": "ticket-004",
+          "score": 0.9068235196089659,
+          "category": "refund",
+          "subject": "환불 요청"
+        },
+        {
+          "docId": "ticket-015",
+          "score": 0.902003747921839,
+          "category": "product",
+          "subject": "상품 교환"
+        },
+        {
+          "docId": "ticket-007",
+          "score": 0.901761276987097,
+          "category": "payment",
+          "subject": "쿠폰 적용 안됨"
+        },
+        {
+          "docId": "ticket-002",
+          "score": 0.8982676881307771,
+          "category": "payment",
+          "subject": "결제 실패"
+        }
+      ],
+      "hitAt5": 1.0,
+      "hitAt10": 1.0,
+      "mrr": 1.0,
+      "retrieveMs": 0.39076805114746094
+    },
+    {
+      "query": "배송 지연",
+      "topK": [
+        {
+          "docId": "ticket-003",
+          "score": 0.8641434195163935,
+          "category": "shipping",
+          "subject": "배송 지연 문의"
+        },
+        {
+          "docId": "ticket-006",
+          "score": 0.8547662068977184,
+          "category": "authentication",
+          "subject": "계정 잠금"
+        },
+        {
+          "docId": "ticket-007",
+          "score": 0.8478717708573456,
+          "category": "payment",
+          "subject": "쿠폰 적용 안됨"
+        },
+        {
+          "docId": "ticket-008",
+          "score": 0.8429822917165805,
+          "category": "shipping",
+          "subject": "배송 주소 변경"
+        },
+        {
+          "docId": "ticket-013",
+          "score": 0.8332282770843514,
+          "category": "shipping",
+          "subject": "배송 추적 불가"
+        },
+        {
+          "docId": "ticket-015",
+          "score": 0.8304246975931521,
+          "category": "product",
+          "subject": "상품 교환"
+        },
+        {
+          "docId": "ticket-002",
+          "score": 0.8246228541159419,
+          "category": "payment",
+          "subject": "결제 실패"
+        },
+        {
+          "docId": "ticket-018",
+          "score": 0.8236471883784061,
+          "category": "shipping",
+          "subject": "배송비 문의"
+        },
+        {
+          "docId": "ticket-005",
+          "score": 0.8227932025555545,
+          "category": "product",
+          "subject": "상품 불량"
+        },
+        {
+          "docId": "ticket-001",
+          "score": 0.8138340786449321,
+          "category": "authentication",
+          "subject": "로그인 오류"
+        }
+      ],
+      "hitAt5": 1.0,
+      "hitAt10": 1.0,
+      "mrr": 1.0,
+      "retrieveMs": 0.38623809814453125
+    },
+    {
+      "query": "환불 요청",
+      "topK": [
+        {
+          "docId": "ticket-004",
+          "score": 0.8899734335508162,
+          "category": "refund",
+          "subject": "환불 요청"
+        },
+        {
+          "docId": "ticket-014",
+          "score": 0.8698257161604747,
+          "category": "refund",
+          "subject": "부분 환불 요청"
+        },
+        {
+          "docId": "ticket-002",
+          "score": 0.8682167775773364,
+          "category": "payment",
+          "subject": "결제 실패"
+        },
+        {
+          "docId": "ticket-019",
+          "score": 0.8641999994702759,
+          "category": "refund",
+          "subject": "환불 계좌 변경"
+        },
+        {
+          "docId": "ticket-010",
+          "score": 0.8640166402078724,
+          "category": "refund",
+          "subject": "환불 금액 확인"
+        },
+        {
+          "docId": "ticket-009",
+          "score": 0.8412600467692555,
+          "category": "product",
+          "subject": "상품 설명 오류"
+        },
+        {
+          "docId": "ticket-001",
+          "score": 0.8383831152150935,
+          "category": "authentication",
+          "subject": "로그인 오류"
+        },
+        {
+          "docId": "ticket-015",
+          "score": 0.8345201235858618,
+          "category": "product",
+          "subject": "상품 교환"
+        },
+        {
+          "docId": "ticket-020",
+          "score": 0.8315099555671871,
+          "category": "product",
+          "subject": "상품 리뷰 작성"
+        },
+        {
+          "docId": "ticket-003",
+          "score": 0.8301650998294514,
+          "category": "shipping",
+          "subject": "배송 지연 문의"
+        }
+      ],
+      "hitAt5": 1.0,
+      "hitAt10": 1.0,
+      "mrr": 1.0,
+      "retrieveMs": 0.43702125549316406
+    },
+    {
+      "query": "계정 잠김",
+      "topK": [
+        {
+          "docId": "ticket-012",
+          "score": 0.8911523733912617,
+          "category": "payment",
+          "subject": "결제 수단 추가"
+        },
+        {
+          "docId": "ticket-006",
+          "score": 0.8758309592812366,
+          "category": "authentication",
+          "subject": "계정 잠금"
+        },
+        {
+          "docId": "ticket-005",
+          "score": 0.87287156094397,
+          "category": "product",
+          "subject": "상품 불량"
+        },
+        {
+          "docId": "ticket-013",
+          "score": 0.8693242283237453,
+          "category": "shipping",
+          "subject": "배송 추적 불가"
+        },
+        {
+          "docId": "ticket-018",
+          "score": 0.8671401545438678,
+          "category": "shipping",
+          "subject": "배송비 문의"
+        },
+        {
+          "docId": "ticket-003",
+          "score": 0.8537856471514369,
+          "category": "shipping",
+          "subject": "배송 지연 문의"
+        },
+        {
+          "docId": "ticket-009",
+          "score": 0.8494508211838481,
+          "category": "product",
+          "subject": "상품 설명 오류"
+        },
+        {
+          "docId": "ticket-004",
+          "score": 0.8330338852762766,
+          "category": "refund",
+          "subject": "환불 요청"
+        },
+        {
+          "docId": "ticket-008",
+          "score": 0.8312741379054951,
+          "category": "shipping",
+          "subject": "배송 주소 변경"
+        },
+        {
+          "docId": "ticket-015",
+          "score": 0.8203775613625185,
+          "category": "product",
+          "subject": "상품 교환"
+        }
+      ],
+      "hitAt5": 1.0,
+      "hitAt10": 1.0,
+      "mrr": 0.5,
+      "retrieveMs": 0.4088878631591797
+    }
+  ]
+}

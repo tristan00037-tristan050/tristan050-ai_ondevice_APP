@@ -1,0 +1,9 @@
+{
+  "manifestVersion": 1,
+  "fileCountDefinition": "fileCount = Object.keys(opsProofSets).length",
+  "verifiedCommit": "885dbd611251f4729f66dcce1646b2e0b7449ebd",
+  "verifiedCommitShort": "885dbd6",
+  "sealedAt": "2025-12-25T05:11:47Z",
+  "fileCount": 2,
+  "opsProofSets": [{"latest":"r10-s5-p1-4-perf-kpi-proof.latest","artifacts":["r10-s5-p1-4-perf-kpi-proof-20251225-024644.log"]},{"latest":"r10-s6-4-perf-proof.latest","artifacts":["r10-s6-4-perf-proof-20251225-024641.json","r10-s6-4-perf-proof-20251225-024641.log"]}]
+}

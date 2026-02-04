@@ -1,0 +1,15 @@
+{
+  "schema_name": "MODEL_PACK_V0",
+  "pack_id": "accounting_v0",
+  "name": "accounting_v0",
+  "version": "0.1.0",
+  "dept": "accounting",
+  "platform": "onprem",
+  "runtime_version": "butler-runtime-v0",
+  "created_at_utc": "2026-01-30T00:00:00Z",
+  "expires_at_ms": 1893456000000,
+  "compat": {
+    "min_runtime_semver": "0.1.0",
+    "min_gateway_semver": "0.1.0"
+  }
+}

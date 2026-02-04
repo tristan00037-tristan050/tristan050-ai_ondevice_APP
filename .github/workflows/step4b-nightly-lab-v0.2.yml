@@ -1,0 +1,129 @@
+name: Step4-B Nightly Lab v0.2 (Report-only)
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # Daily at 2 AM UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nightly-report:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run Nightly Lab (Report-only)
+        working-directory: webcore_appcore_starter_4_17
+        env:
+          TIEBREAK_ENABLE: 1
+          TIEBREAK_MIN_PRIMARY: 2
+          TIEBREAK_WEIGHT: 0.1
+          TIEBREAK_EPS: 1e-6
+          # Option A: Redirect ONE_SHOT outputs to /tmp (repo pollution 0)
+          ONE_SHOT_ARTIFACTS_TMP: 1
+          STEP4B_OUTPUT_DIR: /tmp/step4b-nightly-output
+        run: |
+          # shellcheck disable=all
+          set -euo pipefail
+
+          cd "$(git rev-parse --show-toplevel)/webcore_appcore_starter_4_17" || exit 1
+
+          # Create isolated output directory in /tmp (repo pollution 0)
+          REPORT_DIR="/tmp/step4b-nightly-$(date -u +%Y%m%d-%H%M%S)"
+          mkdir -p "$REPORT_DIR"
+          mkdir -p "$STEP4B_OUTPUT_DIR"
+
+          # ONE_SHOT_ARTIFACTS_TMP=1 will redirect all artifacts to STEP4B_OUTPUT_DIR
+          export ONE_SHOT_ARTIFACTS_TMP=1
+          export STEP4B_OUTPUT_DIR
+
+          # Run ONE_SHOT in isolated environment (outputs to /tmp)
+          set +e
+          bash docs/ops/R10S7_STEP4B_B_ONE_SHOT_PROMPT.sh >"$REPORT_DIR/one_shot.log" 2>&1
+          ONE_SHOT_EXIT=$?
+          set -e
+
+          # Verify worktree is clean (fail-closed)
+          if ! git diff --quiet || ! git diff --cached --quiet; then
+            echo "FAIL: ONE_SHOT execution polluted worktree (git status not clean)" >&2
+            git status --porcelain >&2
+            exit 1
+          fi
+          echo "OK: worktree clean after ONE_SHOT"
+          echo "ONE_SHOT_EXIT=$ONE_SHOT_EXIT"
+
+          # Extract strict_improvement from strict improvement JSON (SSOT, /tmp 경로)
+          # ONE_SHOT_ARTIFACTS_TMP=1 redirects to STEP4B_OUTPUT_DIR
+          STRICT_RC=1
+          STRICT_JSON="$STEP4B_OUTPUT_DIR/r10-s7-step4b-b-strict-improvement.json"
+          if [ -f "$STRICT_JSON" ]; then
+            if grep -q '"strict_improvement":\s*true' "$STRICT_JSON" 2>/dev/null; then
+              STRICT_RC=0
+            fi
+          fi
+
+          # Extract eligible status from PASS Gate
+          ELIGIBLE_RC=1
+          if grep -q "PASS Gate eligible confirmed\|verify_pass_gate.*exit 0" "$REPORT_DIR/one_shot.log" 2>/dev/null; then
+            ELIGIBLE_RC=0
+          fi
+
+          # Extract hit movement stats (meta-only) from proof log (/tmp 경로)
+          HIT_MOVED_UP=0
+          HIT_MOVED_DOWN=0
+          HIT_SAME=0
+          HIT_MISSING=0
+          FIRST_HIT_DELTA_SUM=0
+
+          LATEST_PTR="$STEP4B_OUTPUT_DIR/r10-s7-retriever-regression-proof.latest"
+          if [ -f "$LATEST_PTR" ]; then
+            PROOF_NAME="$(cat "$LATEST_PTR")"
+            PROOF_FILE="$STEP4B_OUTPUT_DIR/$PROOF_NAME"
+            if [ -f "$PROOF_FILE" ]; then
+              HIT_MOVED_UP="$(grep -o "HIT_MOVED_UP=[0-9]*" "$PROOF_FILE" 2>/dev/null | cut -d= -f2 || echo "0")"
+              HIT_MOVED_DOWN="$(grep -o "HIT_MOVED_DOWN=[0-9]*" "$PROOF_FILE" 2>/dev/null | cut -d= -f2 || echo "0")"
+              HIT_SAME="$(grep -o "HIT_SAME=[0-9]*" "$PROOF_FILE" 2>/dev/null | cut -d= -f2 || echo "0")"
+              HIT_MISSING="$(grep -o "HIT_MISSING=[0-9]*" "$PROOF_FILE" 2>/dev/null | cut -d= -f2 || echo "0")"
+              FIRST_HIT_DELTA_SUM="$(grep -o "FIRST_HIT_DELTA_SUM=[-0-9]*" "$PROOF_FILE" 2>/dev/null | cut -d= -f2 || echo "0")"
+            fi
+          fi
+
+          # Generate report.tsv (meta-only)
+          TS="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          REPORT_TSV="$REPORT_DIR/report.tsv"
+
+          echo -e "timestamp\tstrict_rc\teligible_rc\tHIT_MOVED_UP\tHIT_MOVED_DOWN\tHIT_SAME\tHIT_MISSING\tFIRST_HIT_DELTA_SUM" >"$REPORT_TSV"
+          echo -e "$TS\t$STRICT_RC\t$ELIGIBLE_RC\t$HIT_MOVED_UP\t$HIT_MOVED_DOWN\t$HIT_SAME\t$HIT_MISSING\t$FIRST_HIT_DELTA_SUM" >>"$REPORT_TSV"
+
+          echo "OK: report.tsv generated at $REPORT_TSV"
+          cat "$REPORT_TSV"
+
+          # Pick top-1 candidate (meta-only)
+          TOP1_JSON="$REPORT_DIR/top1_candidate.json"
+          python3 scripts/ops/step4b_pick_top1_candidate.py "$REPORT_TSV" "$TOP1_JSON"
+          echo "OK: top1_candidate.json generated at $TOP1_JSON"
+          cat "$TOP1_JSON"
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: step4b-nightly-report
+          path: |
+            /tmp/step4b-nightly-*/report.tsv
+            /tmp/step4b-nightly-*/top1_candidate.json
+          if-no-files-found: error
+          retention-days: 30

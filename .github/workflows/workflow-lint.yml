@@ -1,0 +1,62 @@
+name: workflow-lint
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "scripts/ci/**"
+      - "scripts/ops/run_gate.sh"
+      - "scripts/ops/verify_workflow_lint.sh"
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/ci/**"
+      - "scripts/ops/run_gate.sh"
+      - "scripts/ops/verify_workflow_lint.sh"
+
+jobs:
+  workflow-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install ruamel.yaml (pinned)
+        run: python -m pip install --disable-pip-version-check --no-cache-dir "ruamel.yaml==0.18.6"
+
+      - name: Setup Go (for actionlint)
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+      - name: Install actionlint
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+
+          # PATH 반영(다음 step/run_gate에서도 잡히게)
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+
+          # 증빙(출력 기반)
+          echo "== actionlint proof =="
+          echo "HOME=$HOME"
+          go env GOPATH GOBIN
+          ls -la "$HOME/go/bin" || true
+          command -v actionlint
+          actionlint -version || true
+
+      - name: Run workflow gate (fail-closed)
+        run: |
+          set -euo pipefail
+          test -f scripts/ops/run_gate.sh
+          bash -n scripts/ops/run_gate.sh
+          bash scripts/ops/run_gate.sh "bash scripts/ops/verify_workflow_lint.sh"
+

@@ -1,0 +1,65 @@
+{
+  "version": "v1.0",
+  "created_at": "2026-01-09",
+  "source": "최근 30회 telemetry 산출물 집계 (meta-only)",
+  "entropy_buckets": {
+    "VERY_LOW": { "min": 0.0, "max": 0.2, "exclusive_max": true },
+    "LOW": { "min": 0.2, "max": 0.4, "exclusive_max": true },
+    "MEDIUM": { "min": 0.4, "max": 0.6, "exclusive_max": true },
+    "HIGH": { "min": 0.6, "max": 0.8, "exclusive_max": true },
+    "VERY_HIGH": { "min": 0.8, "max": 1.0, "inclusive_max": true }
+  },
+  "gini_buckets": {
+    "VERY_LOW_INEQUALITY": { "min": 0.0, "max": 0.2, "exclusive_max": true },
+    "LOW_INEQUALITY": { "min": 0.2, "max": 0.4, "exclusive_max": true },
+    "MEDIUM_INEQUALITY": { "min": 0.4, "max": 0.6, "exclusive_max": true },
+    "HIGH_INEQUALITY": { "min": 0.6, "max": 0.8, "exclusive_max": true },
+    "VERY_HIGH_INEQUALITY": { "min": 0.8, "max": 1.0, "inclusive_max": true }
+  },
+  "collapse_detection": {
+    "HEALTHY": {
+      "entropy_min": 0.4,
+      "gini_max": 0.6,
+      "exclusive_gini_max": true,
+      "description": "정상 분포, GTB 개입 허용"
+    },
+    "COLLAPSED_UNIFORM": {
+      "entropy_max": 0.2,
+      "exclusive_entropy_max": true,
+      "gini_max": 0.4,
+      "exclusive_gini_max": true,
+      "description": "모든 점수가 거의 동일 (uniform collapse), GTB 개입 비활성화"
+    },
+    "COLLAPSED_DELTA": {
+      "entropy_min": 0.8,
+      "gini_min": 0.8,
+      "description": "극단적 불균형 (소수 점수에 집중), GTB 개입 비활성화"
+    },
+    "UNKNOWN": {
+      "description": "빈 리스트 또는 데이터 부족, 안전하게 비활성화 (Fail-Closed)"
+    }
+  },
+  "aggregation_summary": {
+    "sample_count": 30,
+    "entropy_distribution": {
+      "VERY_LOW": { "count": 2, "percentage": 6.7 },
+      "LOW": { "count": 5, "percentage": 16.7 },
+      "MEDIUM": { "count": 12, "percentage": 40.0 },
+      "HIGH": { "count": 8, "percentage": 26.7 },
+      "VERY_HIGH": { "count": 3, "percentage": 10.0 }
+    },
+    "gini_distribution": {
+      "VERY_LOW_INEQUALITY": { "count": 3, "percentage": 10.0 },
+      "LOW_INEQUALITY": { "count": 7, "percentage": 23.3 },
+      "MEDIUM_INEQUALITY": { "count": 11, "percentage": 36.7 },
+      "HIGH_INEQUALITY": { "count": 6, "percentage": 20.0 },
+      "VERY_HIGH_INEQUALITY": { "count": 3, "percentage": 10.0 }
+    },
+    "collapse_occurrence": {
+      "COLLAPSED_UNIFORM": { "count": 2, "percentage": 6.7 },
+      "COLLAPSED_DELTA": { "count": 1, "percentage": 3.3 },
+      "HEALTHY": { "count": 27, "percentage": 90.0 }
+    }
+  }
+}
+

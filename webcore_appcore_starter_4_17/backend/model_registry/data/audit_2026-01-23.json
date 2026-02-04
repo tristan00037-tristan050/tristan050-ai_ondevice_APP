@@ -1,0 +1,1 @@
+[{"ts_ms": 1769149496176, "action": "APPLY", "result": "DENY", "reason_code": "TEST_RC_A", "key_id": "kA", "sha256": "sA"}, {"ts_ms": 1769149496176, "action": "APPLY", "result": "DENY", "reason_code": "TEST_RC_B", "key_id": "kB", "sha256": "sB"}]

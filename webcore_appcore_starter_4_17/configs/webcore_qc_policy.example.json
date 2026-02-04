@@ -1,0 +1,48 @@
+{
+  "policy_version": "v1",
+  "created_at": "2025-11-17T01:49:09Z",
+  "rules": [
+    {
+      "id": "jwks_ok",
+      "target": "jwks",
+      "operator": "eq",
+      "value": "ok",
+      "severity": "block",
+      "notes": "JWKS health must be ok"
+    },
+    {
+      "id": "holidays_provider_available",
+      "target": "holidays",
+      "operator": "exists",
+      "value": "primary_or_fallback",
+      "severity": "block",
+      "notes": "At least one provider available"
+    },
+    {
+      "id": "ics_rotate_rate_warn",
+      "target": "ics",
+      "operator": "gt",
+      "value": {
+        "rotate_per_day": 3
+      },
+      "severity": "warn",
+      "notes": "High rotate rate"
+    },
+    {
+      "id": "lh_staleness_warn",
+      "target": "lighthouse",
+      "operator": "stale_hours_gt",
+      "value": 24,
+      "severity": "warn",
+      "notes": "LH result older than 24h is warn"
+    },
+    {
+      "id": "lh_staleness_block",
+      "target": "lighthouse",
+      "operator": "stale_hours_gt",
+      "value": 48,
+      "severity": "block",
+      "notes": "LH result older than 48h is block"
+    }
+  ]
+}

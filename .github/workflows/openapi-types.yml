@@ -1,0 +1,53 @@
+name: OpenAPI Types Generation
+
+on:
+  pull_request:
+    paths:
+      - "packages/bff-node-ts/docs/openapi.yaml"
+      - "packages/collector-node-ts/docs/openapi.yaml"
+      - "scripts/generate-types.sh"
+      - "scripts/check_openapi_sync.js"
+  workflow_dispatch:
+
+jobs:
+  generate-types:
+    defaults:
+      run:
+        working-directory: webcore_appcore_starter_4_17
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # git diff를 위해 전체 히스토리 필요
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install openapi-typescript
+        run: npm install -g openapi-typescript || npm install -D openapi-typescript
+
+      - name: Generate types
+        run: |
+          chmod +x scripts/generate-types.sh
+          ./scripts/generate-types.sh
+
+      - name: Check for changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "❌ 타입 파일에 변경사항이 있습니다."
+            echo "다음 명령으로 타입을 재생성하세요:"
+            echo "  ./scripts/generate-types.sh"
+            git diff
+            exit 1
+          fi
+
+      - name: Validate generated types
+        run: |
+          node scripts/check_openapi_sync.js

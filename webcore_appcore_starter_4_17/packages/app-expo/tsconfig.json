@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "strict": false,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "node"
+    ],
+    "jsx": "react-jsx",
+    "noEmit": false
+  },
+  "include": [
+    "App.tsx",
+    "src/security/**/*",
+    "src/hud/**/*",
+    "src/ui/**/*",
+    "src/index.ts"
+  ],
+  "exclude": [
+    "src/lib/**/*",
+    "node_modules"
+  ],
+  "extends": "expo/tsconfig.base"
+}

@@ -1,0 +1,27 @@
+{{- if .Values.cleanup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "bff-accounting.fullname" . }}-cleanup
+spec:
+  schedule: {{ .Values.cleanup.schedule | quote }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "bff-accounting.fullname" . }}
+                      key: DATABASE_URL
+                - name: RETENTION_DAYS
+                  value: "{{ .Values.cleanup.retentionDays }}"
+              command: ["node", "scripts/cleanup_jobs.mjs"]
+{{- end }}
+

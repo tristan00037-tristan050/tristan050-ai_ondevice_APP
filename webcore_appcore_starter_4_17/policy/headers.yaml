@@ -1,0 +1,22 @@
+# Headers Policy (Policy-as-Code v1)
+# Fail-Closed: 필수 헤더 누락 시 요청 차단
+# SSOT v3.4 alignment: required headers are X-Tenant, X-User-Id, X-User-Role (+ Idempotency-Key for export)
+
+version: "1.0"
+rules:
+  - id: "header_live_required_v3_4"
+    name: "Live 요청 필수 헤더(SSOT v3.4)"
+    required_headers:
+      - "X-Tenant"
+      - "X-User-Id"
+      - "X-User-Role"
+    action: "block"
+
+  - id: "header_export_required_v3_4"
+    name: "Export 요청 필수 헤더(SSOT v3.4)"
+    required_headers:
+      - "Idempotency-Key"
+      - "X-Tenant"
+      - "X-User-Id"
+      - "X-User-Role"
+    action: "block"

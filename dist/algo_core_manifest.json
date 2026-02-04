@@ -1,0 +1,30 @@
+{
+  "schema_name": "ALGO_CORE_SIGNED_MANIFEST_V1",
+  "created_at_utc": "2026-02-01T04:25:21.401Z",
+  "files": [
+    {
+      "path": "scripts/algo_core/meta_only_allowlist.json",
+      "sha256": "23b1d77d94a0dc8c84a615ecd95c3b998c3d8605498a17c58c0651343d292149"
+    },
+    {
+      "path": "scripts/algo_core/sample_meta_request.json",
+      "sha256": "f95fa8a482557d4d1e192d09e10aeceb168e508ed31af2391c721b54d6a1881d"
+    },
+    {
+      "path": "scripts/algo_core/validate_meta_only_request.mjs",
+      "sha256": "13fe9e498ed386f656a4a9ce7bc2edd608e2caca65921878d45cce7c0c189258"
+    },
+    {
+      "path": "scripts/algo_core/generate_three_blocks.mjs",
+      "sha256": "dc7f5726527458d4043bd3a412a89740f233843e7447c588470e997c1dc0f810"
+    },
+    {
+      "path": "docs/ops/contracts/ALGO_CORE_P95_BUDGET_SSOT.json",
+      "sha256": "ad5af90282a59dbfc5d1a50631fc80e55a25bc344dc3dd9da1f2bbc9cffc0764"
+    },
+    {
+      "path": "docs/ops/contracts/ALGO_CORE_DELIVERED_KEYS_SSOT.md",
+      "sha256": "6fdc71c0d5b2eabc9953a5ab15613e18562751a91dbea333ccc15b6ae6973171"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+[verify] RAG Retrieval 검증
+
+[OK] 픽스처 파일 존재: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/tools/rag_fixtures/cs_tickets.json
+[OK] 픽스처 파일 형식 검증: 20개 티켓
+[OK] 모든 티켓에 필수 필드 존재
+
+[test] RAG 파이프라인 end-to-end 검증
+[INFO] RAG 파이프라인 구조:
+  - Embedder: RealEmbedder (해시 기반, 256차원, 결정성 보장)
+  - VectorStore: StubVectorStore (인메모리, 코사인 유사도)
+  - Retriever: RAGRetriever
+  - ContextBuilder: RAGContextBuilder
+
+[INFO] 검색 테스트 케이스:
+  - 질의: '로그인 문제' → 기대 키워드: 로그인|인증|비밀번호
+  - 질의: '결제 오류' → 기대 키워드: 결제|카드|처리
+  - 질의: '배송 지연' → 기대 키워드: 배송|도착|지연
+  - 질의: '환불 요청' → 기대 키워드: 환불|취소|반환
+
+[INFO] TODO: TypeScript 컴파일 후 실제 검색 테스트 구현
+  - 인덱스 생성 (픽스처 티켓 임베딩)
+  - 질의 실행
+  - topK 결과 검증 (기대 키워드 포함 여부)
+
+[INFO] IndexedDB 영속화 검증 (웹 환경 필요)
+[INFO] - IndexedDB schema v1: dbName='rag_vector_store', storeName='chunks'
+[INFO] - persist/restore 메서드 구현 완료
+[INFO] - hydrateOrBuildIndex() 헬퍼 함수 제공
+
+[OK] RAG Retrieval 검증 완료 (픽스처 검증 PASS)
+[INFO] 실제 검색 테스트는 TypeScript 컴파일 환경에서 활성화 예정

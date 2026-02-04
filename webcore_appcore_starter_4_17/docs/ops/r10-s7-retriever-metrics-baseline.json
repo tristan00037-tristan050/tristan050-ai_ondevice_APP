@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "phase": "S7/Phase1Baseline",
+  "meta_only": true,
+  "algo": "lexical_overlap/v1",
+  "topk": 5,
+  "inputs": {
+    "goldenset_sha256": "063b4b5749ec5b6e90b4a0e77de477bd0557d25dde5a99d065254f1a7af50baa",
+    "corpus_sha256": "f0fc272042d616307cc542330a565e31d3dd698845b63a839208679cde4eddea"
+  },
+  "metrics": {
+    "precision_at_k": 0.533333,
+    "recall_at_k": 0.622222,
+    "mrr_at_k": 0.866667,
+    "ndcg_at_k": 0.81816
+  },
+  "created_at": "2026-01-02T00:24:08Z"
+}

@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  butler-runtime:
+    # 예: image: butler-runtime:local
+    # runtime은 외부로 나갈 이유가 없으므로 internal 네트워크만 붙인다.
+    networks:
+      - butler_internal
+    # runtime은 외부 노출 금지(ports 금지). gateway만 접근.
+    # ports: []
+
+  butler-gateway:
+    networks:
+      - butler_internal
+      - butler_ingress
+    # 사내 접근은 gateway만 노출(예시)
+    ports:
+      - "8081:8081"
+
+networks:
+  # 외부 격리 네트워크 (Compose internal)
+  butler_internal:
+    internal: true
+  # 사내 접근용
+  butler_ingress: {}

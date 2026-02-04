@@ -1,0 +1,9 @@
+version: "1.0.0"
+rules:
+  - id: "gtb_canary_v03"
+    name: "GTB v0.3 Canary Configuration"
+    description: "Guarded Tie-Break v0.3 카나리 모드 설정 (정책/설정 분리)"
+    action: "configure"
+    canary_percent: 10  # 카나리 비율 (0~100, 코드 상수 금지)
+    kill_switch: false  # kill switch (true면 전체 비활성화)
+

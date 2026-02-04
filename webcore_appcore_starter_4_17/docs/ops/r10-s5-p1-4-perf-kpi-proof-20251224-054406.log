@@ -1,0 +1,5 @@
+[verify] R10-S5 P1-4: 성능 KPI meta-only 검증
+
+[WARN] BFF 서버 미실행 (검증 건너뜀): http://127.0.0.1:8081
+[INFO] BFF 서버 시작: ./scripts/dev_bff.sh
+[SKIP] R10-S5 P1-4: 성능 KPI meta-only 검증 SKIP (BFF 미실행)

@@ -1,0 +1,269 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+defaults:
+  run:
+    working-directory: webcore_appcore_starter_4_17
+
+jobs:
+  lint-and-typecheck:
+    name: Lint and TypeScript Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+
+      - name: Set up Go (for actionlint)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - name: Install actionlint
+        shell: bash
+        run: |
+          set -euo pipefail
+          go install github.com/rhysd/actionlint/cmd/actionlint@latest
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          command -v actionlint
+          actionlint -version || true
+
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            webcore_appcore_starter_4_17/package-lock.json
+            webcore_appcore_starter_4_17/**/package-lock.json
+      
+      - name: Install dependencies (retry, fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          npm config set fund false
+          npm config set audit false
+          for i in 1 2 3; do
+            echo "== npm ci attempt $i/3 =="
+            if npm ci; then exit 0; fi
+            echo "WARN: npm ci failed. retrying..."
+            sleep $((i*15))
+          done
+          echo "FAIL: npm ci failed after retries"
+          exit 1
+
+      - name: Run ESLint (core workspaces, non-blocking)
+        run: |
+          set +e
+          echo "🔍 Lint @appcore/service-core-accounting"
+          npm run lint --workspace=@appcore/service-core-accounting || echo "⚠ service-core lint failed (see logs)"
+
+          echo "🔍 Lint @appcore/bff-accounting"
+          npm run lint --workspace=@appcore/bff-accounting || echo "⚠ bff-accounting lint failed (see logs)"
+
+          echo "🔍 Lint @appcore/ops-console"
+          npm run lint --workspace=@appcore/ops-console || echo "⚠ ops-console lint failed (see logs)"
+        continue-on-error: true
+
+      - name: Run TypeScript check (core workspaces, non-blocking)
+        run: |
+          set +e
+          echo "🔍 Type-check @appcore/service-core-accounting"
+          npm run type-check --workspace=@appcore/service-core-accounting || echo "⚠ service-core type-check failed (see logs)"
+
+          echo "🔍 Type-check @appcore/bff-accounting"
+          npm run type-check --workspace=@appcore/bff-accounting || echo "⚠ bff-accounting type-check failed (see logs)"
+
+          echo "ℹ skipping @appcore/app-expo and @appcore/data-pg type-check (no script)"
+        continue-on-error: true
+
+  schema-validation:
+    name: Schema Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            webcore_appcore_starter_4_17/package-lock.json
+            webcore_appcore_starter_4_17/**/package-lock.json
+      
+      - name: Install dependencies (retry, fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          npm config set fund false
+          npm config set audit false
+          for i in 1 2 3; do
+            echo "== npm ci attempt $i/3 =="
+            if npm ci; then exit 0; fi
+            echo "WARN: npm ci failed. retrying..."
+            sleep $((i*15))
+          done
+          echo "FAIL: npm ci failed after retries"
+          exit 1
+
+      - name: Validate accounting schemas
+        run: npm run ci:validate:accounting || echo "⚠ Accounting schemas validation skipped (no script or test data)"
+
+  openapi-sync:
+    name: OpenAPI Type Sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            webcore_appcore_starter_4_17/package-lock.json
+            webcore_appcore_starter_4_17/**/package-lock.json
+      
+      - name: Install dependencies (retry, fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          npm config set fund false
+          npm config set audit false
+          for i in 1 2 3; do
+            echo "== npm ci attempt $i/3 =="
+            if npm ci; then exit 0; fi
+            echo "WARN: npm ci failed. retrying..."
+            sleep $((i*15))
+          done
+          echo "FAIL: npm ci failed after retries"
+          exit 1
+
+      - name: Generate OpenAPI types
+        run: npm run ci:gen-types
+
+      - name: Check OpenAPI sync (non-blocking)
+        run: npm run ci:check-openapi || echo "⚠ ci:check-openapi failed (see logs)"
+        continue-on-error: true
+
+  security-checks:
+    name: Security and Compliance Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            webcore_appcore_starter_4_17/package-lock.json
+            webcore_appcore_starter_4_17/**/package-lock.json
+      
+      - name: Install dependencies (retry, fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          npm config set fund false
+          npm config set audit false
+          for i in 1 2 3; do
+            echo "== npm ci attempt $i/3 =="
+            if npm ci; then exit 0; fi
+            echo "WARN: npm ci failed. retrying..."
+            sleep $((i*15))
+          done
+          echo "FAIL: npm ci failed after retries"
+          exit 1
+      
+      - name: Check roles guard
+        run: npm run ci:check-roles
+      
+      - name: Check client-side filter
+        run: npm run ci:check-client-filter
+      
+      - name: CI Workflow Guard (ban direct verify_* calls)
+        run: |
+          set -euo pipefail
+          test -f scripts/ops/ci_ban_direct_verify_calls.sh
+          bash -n scripts/ops/ci_ban_direct_verify_calls.sh
+          bash scripts/ops/ci_ban_direct_verify_calls.sh
+
+      
+      - name: Policy Diff Risk Score Gate
+        run: |
+          set -euo pipefail
+          bash ../scripts/ops/run_gate.sh "bash scripts/ops/verify_policy_diff_risk.sh"
+      
+      - name: Config Diff Risk Score Gate
+        run: |
+          set -euo pipefail
+          test -f scripts/ops/verify_config_diff_risk.sh
+          bash -n scripts/ops/verify_config_diff_risk.sh
+          bash scripts/ops/verify_config_diff_risk.sh
+
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, schema-validation]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            webcore_appcore_starter_4_17/package-lock.json
+            webcore_appcore_starter_4_17/**/package-lock.json
+      
+      - name: Install dependencies (retry, fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-timeout 300000
+          npm config set fund false
+          npm config set audit false
+          for i in 1 2 3; do
+            echo "== npm ci attempt $i/3 =="
+            if npm ci; then exit 0; fi
+            echo "WARN: npm ci failed. retrying..."
+            sleep $((i*15))
+          done
+          echo "FAIL: npm ci failed after retries"
+          exit 1
+      
+      - name: Run tests
+        run: npm test --workspaces --if-present

@@ -1,0 +1,30 @@
+{
+  "policy_version": "v1",
+  "created_at": "2025-11-17T00:00:00Z",
+  "rules": [
+    {
+      "id": "jwks-ok",
+      "path": "status.jwks",
+      "op": "eq",
+      "value": "pass",
+      "severity": "block",
+      "note": "JWKS health must be PASS for deployment."
+    },
+    {
+      "id": "lh-recent-24h",
+      "path": "raw.lighthouse.staleness_hours",
+      "op": "lte",
+      "value": 24,
+      "severity": "warn",
+      "note": "Lighthouse run should be within 24h."
+    },
+    {
+      "id": "lh-recent-48h",
+      "path": "raw.lighthouse.staleness_hours",
+      "op": "lte",
+      "value": 48,
+      "severity": "block",
+      "note": "Hard bound: Lighthouse must be within 48h."
+    }
+  ]
+}

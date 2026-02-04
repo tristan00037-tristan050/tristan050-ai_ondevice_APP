@@ -1,0 +1,7 @@
+{
+  "required_checks": {
+    "supplychain": [
+      "product-verify-supplychain"
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schema_name": "ACCOUNTING_TEMPLATES_V0",
+  "templates": [
+    {
+      "id": "template_001",
+      "type": "report",
+      "description": "회계 리포트 템플릿"
+    }
+  ]
+}
+

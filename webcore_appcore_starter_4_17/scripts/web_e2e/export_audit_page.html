@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WEB-UX-03 Export Audit Fixture</title>
+  </head>
+  <body>
+    <h1>WEB-UX-03</h1>
+
+    <fieldset>
+      <legend>mode</legend>
+      <label><input id="mode_live" type="radio" name="mode" value="live" checked />live</label>
+    </fieldset>
+
+    <button id="preview">preview</button>
+    <button id="approve">approve</button>
+
+    <pre id="out"></pre>
+    <div id="result_ok" style="display:none"></div>
+
+    <script type="module" src="/export_audit_page.mjs"></script>
+  </body>
+</html>
+

@@ -1,0 +1,23 @@
+[proof] R10-S7 Build Anchor ESM Fix Proof
+Generated: 20251226-065217
+
+=== build_info.json ===
+{
+  "buildSha": "50a6c25c15b404307d364bc78d0c679c8b699a89",
+  "buildShaShort": "50a6c25",
+  "buildTime": "2025-12-26T06:52:04.750Z"
+}
+
+=== HEAD ===
+HEAD=50a6c25c15b404307d364bc78d0c679c8b699a89
+
+=== healthz headers ===
+X-OS-Build-SHA: 50a6c25c15b404307d364bc78d0c679c8b699a89
+X-OS-Build-Time: 2025-12-26T06:52:04.750Z
+
+=== healthz JSON ===
+{
+  "buildSha": "50a6c25c15b404307d364bc78d0c679c8b699a89",
+  "buildShaShort": "50a6c25",
+  "buildTime": "2025-12-26T06:52:04.750Z"
+}

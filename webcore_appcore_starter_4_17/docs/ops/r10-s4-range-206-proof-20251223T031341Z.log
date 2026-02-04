@@ -1,0 +1,18 @@
+[range206] starting deterministic upstream + bff + verify...
+[webllm-upstream] Freeing port 9099...
+[webllm-upstream] WARN: webllm_upstream_server.mjs not found, skipping upstream server
+[webllm-upstream] INFO: verify_range_206.sh will skip tests if upstream is not available
+[dev_bff] Freeing port 8081...
+[dev_bff] Starting BFF on :8081
+[dev_bff] DATABASE_URL=postgres://app:app@127.0.0.1:5432/app
+[dev_bff] WEBLLM_UPSTREAM_BASE_URL=http://127.0.0.1:9099/webllm/
+
+> app-core-monorepo-r5c@0.1.0 dev:bff
+> npm run dev --workspace=@appcore/bff-accounting
+
+
+> @appcore/bff-accounting@0.1.0 dev
+> node --enable-source-maps dist/index.js
+
+[dotenv@17.2.3] injecting env (0) from ../../.env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+bff-accounting on :8081

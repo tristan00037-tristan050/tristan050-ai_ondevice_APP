@@ -1,0 +1,40 @@
+---
+description: R4(P0) Contract for .github/workflows (Diagnosable Fail-Closed)
+globs:
+  - ".github/workflows/*.yml"
+  - ".github/workflows/*.yaml"
+  - "scripts/ops/verify_workflow_lint.sh"
+  - ".github/workflows/workflow-lint.yml"
+---
+
+# R4(P0) Contract v2.0
+
+## Authoritative PASS key (4 lines)
+- WORKFLOW_LINT_OK=1
+- WORKFLOW_LINT_ERROR_COUNT=0
+- WORKFLOW_ACTIONLINT_OK=1
+- WORKFLOW_ACTIONLINT_ERROR_COUNT=0
+
+## Diagnosable Fail-Closed (mandatory)
+If FAIL then at least one must exist:
+- coordinate line: <file>:<line>:<col> (content forbidden)
+OR
+- NOLOC sentinel line (at least one)
+
+If FAIL then always print meta-only:
+- FAIL_FILE
+- RC
+- ERROR_COUNT
+
+## Workflow syntax defaults (stability)
+- When run scripts include bash-specific constructs, set default shell explicitly (workflow-level defaults.run.shell: bash).
+- If working-directory ambiguity exists, pin defaults.run.working-directory.
+
+## SSOT of workflow-lint
+- "install/proof only" workflow is forbidden.
+- Must run verification via run_gate -> verify_workflow_lint.sh.
+
+## References (must be kept in prompts)
+- GitHub Actions workflow location: .github/workflows
+- workflow_dispatch event
+- defaults.run.shell / defaults.run.working-directory

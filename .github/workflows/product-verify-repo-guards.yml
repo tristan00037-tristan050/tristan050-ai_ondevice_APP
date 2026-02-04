@@ -1,0 +1,63 @@
+name: product-verify-repo-guards
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  product-verify-repo-guards:
+    name: product-verify-repo-guards
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ripgrep
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ripgrep jq
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Ops deps preflight (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg --require-jq
+
+      - name: Install deps (web_e2e)
+        run: |
+          npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
+
+      - name: Install Playwright browsers
+        run: |
+          npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+
+      - name: Run repo-wide guards (fail-closed)
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+        run: |
+          bash scripts/verify/verify_repo_contracts.sh
+
+  gate:
+    runs-on: ubuntu-latest
+    needs: [product-verify-repo-guards]
+    steps:
+      - name: gate
+        run: |
+          if [ "${{ needs.product-verify-repo-guards.result }}" != "success" ]; then
+            echo "GATE:FAIL"
+            exit 1
+          fi
+          echo "GATE:OK"
+

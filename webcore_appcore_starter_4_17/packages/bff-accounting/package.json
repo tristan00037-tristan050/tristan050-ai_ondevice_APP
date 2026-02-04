@@ -1,0 +1,48 @@
+{
+  "name": "@appcore/bff-accounting",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "prebuild": "npm run -w @appcore/data-pg build && npm run -w @appcore/service-core-accounting build && npm run -w @appcore/service-core-cs build",
+    "build": "tsc -b && node scripts/generate_build_info.js",
+    "start": "node dist/index.js",
+    "dev": "node --enable-source-maps dist/index.js",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@appcore/data-pg": "*",
+    "@appcore/service-core-accounting": "*",
+    "@appcore/service-core-cs": "*",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.53.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.53.0",
+    "@opentelemetry/resources": "^1.9.0",
+    "@opentelemetry/sdk-node": "^0.53.0",
+    "@opentelemetry/semantic-conventions": "^1.9.0",
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.0",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "js-yaml": "^4.1.1",
+    "prom-client": "^14.2.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.0",
+    "@types/express": "^4.17.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

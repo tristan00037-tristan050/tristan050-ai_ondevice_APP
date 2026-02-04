@@ -1,0 +1,37 @@
+{{- if .Values.alerts.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "bff-accounting.fullname" . }}-rules
+spec:
+  groups:
+    - name: bff-http
+      rules:
+        - alert: BffHighErrorRate
+          expr: sum(rate(http_requests_total{status=~"5.."}[{{ .Values.alerts.errorRateWindow }}]))
+                /
+                sum(rate(http_requests_total[{{ .Values.alerts.errorRateWindow }}])) > {{ .Values.alerts.highErrorRate }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "BFF 5xx error rate > {{ .Values.alerts.highErrorRate }}"
+        - alert: BffHighLatencyP95
+          expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+                > {{ .Values.alerts.highLatencyP95 }}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "BFF p95 latency > {{ .Values.alerts.highLatencyP95 }}s"
+    - name: external-sync
+      rules:
+        - alert: ExternalSyncStale
+          expr: (time() - external_sync_last_ts) > 300
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "External ledger sync stale (tenant={{ $labels.tenant }}, source={{ $labels.source }})"
+{{- end }}
+

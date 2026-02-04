@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+
+  bff:
+    build:
+      context: .
+      dockerfile: Dockerfile.bff
+    environment:
+      PORT: "8081"
+      USE_PG: "1"
+      DATABASE_URL: "postgres://app:app@db:5432/app"
+      EXPORT_SIGN_SECRET: "change-me-in-prod"
+    depends_on:
+      - db
+    ports:
+      - "8081:8081"

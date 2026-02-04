@@ -1,0 +1,46 @@
+{
+  "version": "2026-02-01",
+  "created_at_utc": "2026-02-01T04:25:21.145Z",
+  "files": [
+    {
+      "path": "webcore_appcore_starter_4_17/docker-compose.yml",
+      "sha256": "6fa6c7b4c6fc2bd583ebb806fe7fa6b18cbb0d7fd61ff888d3615f3540e3a44b"
+    },
+    {
+      "path": "webcore_appcore_starter_4_17/docs/ONPREM_COMPOSE_QUICKSTART.md",
+      "sha256": "b3b83dbe2c516d6e3fc30a1c28de9d278301ca413488bba4484bd133cd1e2f1b"
+    },
+    {
+      "path": "webcore_appcore_starter_4_17/docs/ONPREM_HELM_DEPLOYMENT.md",
+      "sha256": "fc6f87cb5a37c70637e5f955a527747086857299c52006d1dade500ca318346a"
+    },
+    {
+      "path": "webcore_appcore_starter_4_17/helm/onprem-gateway/Chart.yaml",
+      "sha256": "581618db3e5ea1a5369bfedbda2ebd95a40ae9fdc760ae99aae358afd05c84a0"
+    },
+    {
+      "path": "webcore_appcore_starter_4_17/helm/onprem-gateway/templates/_helpers.tpl",
+      "sha256": "2b766538b49c5f12e569755c9aaabec81936e5f880d38be94fa8575e076d0465"
+    },
+    {
+      "path": "webcore_appcore_starter_4_17/helm/onprem-gateway/templates/deployment.yaml",
+      "sha256": "f51fe7245efbec7997d9056a3b9c0616b67df9a1c372623c539aff3a1a71fe03"
+    },
+    {
+      "path": "webcore_appcore_starter_4_17/helm/onprem-gateway/templates/secret.yaml",
+      "sha256": "0c7efe0b97aca01e21a8f2055cb848d5c97b3c0e714556636946e6f01d524b26"
+    },
+    {
+      "path": "webcore_appcore_starter_4_17/helm/onprem-gateway/templates/service.yaml",
+      "sha256": "dc3c27246e8564b4b98b0e4a23910bc99d83e9fb88afc4e7bc398dd67ec0476c"
+    },
+    {
+      "path": "webcore_appcore_starter_4_17/helm/onprem-gateway/values.schema.json",
+      "sha256": "f5f5531445a38b4354b4a4819a1368289f4700f141ed237969bab6a18bf97d8b"
+    },
+    {
+      "path": "webcore_appcore_starter_4_17/helm/onprem-gateway/values.yaml",
+      "sha256": "638e4896d883159b88817b1e6c1a464820b2ac9e2cf134358674ad2ecdd12352"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+name: product-verify-web-ux-01
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+jobs:
+  web_ux_e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install E2E dependencies
+        run: |
+          npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
+      - name: Install playwright browsers
+        run: |
+          npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+      - name: WEB-UX-01 verify
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+        run: |
+          bash webcore_appcore_starter_4_17/scripts/verify/verify_web_ux_01_mode_switch_e2e.sh
+
+  gate:
+    runs-on: ubuntu-latest
+    needs: [web_ux_e2e]
+    steps:
+      - name: gate
+        run: |
+          if [ "${{ needs.web_ux_e2e.result }}" != "success" ]; then
+            exit 1
+          fi
+          exit 0

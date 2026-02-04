@@ -1,0 +1,21 @@
+{
+  "name": "ai-ondevice-app-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "quickcheck": "node scripts/ops/app_quickcheck_md.mjs examples/qc_snapshot.example.json > qc.md",
+    "quickcheck:gate": "node scripts/ops/app_quickcheck_gate.mjs --qc examples/qc_snapshot.example.json --policy configs/webcore_qc_policy.example.json",
+    "quickcheck:bundle": "node scripts/ops/app_quickcheck_bundle.mjs --qc examples/qc_snapshot.example.json --md qc.md --out ./bundles/latest --base-url $WEBCORE_BASE_URL --policy-version v1 --app-version 0.1.0 --zip",
+    "validate:report": "node ../webcore_appcore_starter_4_17/scripts/validateReportFull.js",
+    "validate:redaction": "node ../webcore_appcore_starter_4_17/scripts/redactionCoverage.js",
+    "ci:gen-types": "../webcore_appcore_starter_4_17/scripts/generate-types.sh",
+    "ci:check-openapi": "node ../webcore_appcore_starter_4_17/scripts/check_openapi_sync.js",
+    "ci": "npm run ci:gen-types && npm run ci:check-openapi"
+  },
+  "devDependencies": {
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1",
+    "openapi-typescript": "^7.0.0"
+  }
+}

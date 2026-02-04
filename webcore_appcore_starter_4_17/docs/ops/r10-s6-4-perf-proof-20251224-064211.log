@@ -1,0 +1,37 @@
+[info] ts=20251224-064211 sha=40c69a7
+[dev_bff] Freeing port 8081...
+[dev_bff] Attempt 1: killing PID(s): 28888
+[dev_bff] src newer than dist -> build @appcore/bff-accounting
+
+> @appcore/bff-accounting@0.1.0 prebuild
+> npm run -w @appcore/data-pg build && npm run -w @appcore/service-core-accounting build && npm run -w @appcore/service-core-cs build
+
+
+> @appcore/data-pg@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-accounting@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-cs@0.0.1 build
+> tsc -p tsconfig.build.json
+
+
+> @appcore/bff-accounting@0.1.0 build
+> tsc -b
+
+[dev_bff] Starting BFF on :8081
+[dev_bff] DATABASE_URL=postgres://app:app@127.0.0.1:5432/app
+[dev_bff] WEBLLM_UPSTREAM_BASE_URL=http://127.0.0.1:9099/webllm/
+
+> app-core-monorepo-r5c@0.1.0 dev:bff
+> npm run dev --workspace=@appcore/bff-accounting
+
+
+> @appcore/bff-accounting@0.1.0 dev
+> node --enable-source-maps dist/index.js
+
+[dotenv@17.2.3] injecting env (0) from ../../.env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+bff-accounting on :8081

@@ -1,0 +1,67 @@
+image:
+  repository: ghcr.io/OWNER/REPO/bff-accounting
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8081
+
+        env:
+          USE_PG: "1"
+          EXPORT_SIGN_SECRET: ""
+          DATABASE_URL: ""  # secretRef 로 주입
+          OS_POLICY_BRIDGE_ENFORCE: "true"
+          OS_ROLE_MAP_JSON: '{"viewer":"viewer","operator":"operator","auditor":"auditor","admin":"admin"}'
+          OS_TENANT_ALLOWLIST_JSON: '["default","pilot-a"]'
+
+osRoleMap:
+  viewer: viewer
+  operator: operator
+  auditor: auditor
+  admin: admin
+
+resources:
+  requests: { cpu: "100m", memory: "256Mi" }
+  limits: { cpu: "500m", memory: "512Mi" }
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  path: /
+  tls: false
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+
+alerts:
+  enabled: false
+  errorRateWindow: 5m
+  highErrorRate: 0.05    # 5%
+  highLatencyP95: 0.5    # 0.5s
+  slo:
+    latency_p95_ms: 300
+    error_rate_5xx: 0.5
+
+dashboard:
+  enabled: false
+
+cleanup:
+  enabled: true
+  schedule: "0 3 * * *"
+  retentionDays: 30
+
+adapters:
+  bankSbx:
+    enabled: true
+    base: "https://sandbox.example-bank.com"
+    tokenSecretName: "bank-sbx-secret"   # K8s Secret에 token 저장(key: TOKEN)
+
+cronJobs:
+  syncExternal:
+    enabled: true
+    schedule: "*/5 * * * *"   # 5분마다
+    sinceDays: 7
+

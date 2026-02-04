@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "accounting.approvals.schema.json",
+  "title": "accounting_approval",
+  "type": "object",
+  "required": ["action", "client_request_id"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["approve", "reject"]
+    },
+    "client_request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "note": {
+      "type": "string"
+    },
+    "top1_selected": {
+      "type": "boolean",
+      "description": "추천 1위가 실제 선택되었는지"
+    },
+    "selected_rank": {
+      "type": "number",
+      "minimum": 1,
+      "description": "선택된 항목의 순위 (1부터 시작)"
+    },
+    "ai_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "선택 항목의 추천 점수 (있으면)"
+    }
+  },
+  "additionalProperties": false
+}
+
+

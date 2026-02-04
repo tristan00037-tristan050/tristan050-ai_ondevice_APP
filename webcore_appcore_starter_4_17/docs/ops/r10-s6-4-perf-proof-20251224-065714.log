@@ -1,0 +1,116 @@
+[info] ts=20251224-065714 sha=40c69a7
+[info] BFF not responding; starting in background...
+[ok] BFF ready after 2s
+[OK] healthz: 200
+[verify] R10-S5 P0-6: RAG 텔레메트리 meta-only 계약 검증
+
+
+[test] RAG-1) 정상 RAG meta-only 전송 (기대: 204)
+[OK] 정상 RAG meta-only 전송: 204 No Content
+
+[test] RAG-2) 원문 키 차단 검증 (기대: 400)
+[OK] 원문 키 차단: 400 Bad Request
+
+[test] RAG-3) RAG 원문 텍스트 필드 차단 (기대: 400)
+[OK] RAG 원문 텍스트 필드 차단: 400 Bad Request
+
+[test] RAG-4) Warm start 케이스 (기대: 204)
+[OK] Warm start 케이스: 204 No Content
+
+[test] RAG-5) Cold start 케이스 (기대: 204)
+[OK] Cold start 케이스: 204 No Content
+
+[test] RAG-6) 에러 케이스에서 원문 유출 차단 (기대: 400)
+[OK] 에러 케이스 원문 유출 차단: 400 Bad Request
+
+[test] RAG-7) 출처/스니펫 원문 텍스트 필드 차단 (기대: 400)
+[OK] 출처/스니펫 원문 텍스트 필드 차단: 400 Bad Request
+
+[test] RAG-8) 출처 관련 원문 필드 차단 (subject/title/excerpt) (기대: 400)
+[OK] 출처 관련 원문 필드 차단: 400 Bad Request
+
+[test] RAG-9) 본문/컨텍스트 원문 필드 차단 (기대: 400)
+[OK] 본문/컨텍스트 원문 필드 차단: 400 Bad Request
+
+[OK] R10-S5 P0-6 + P1-2: RAG 텔레메트리 meta-only 계약 검증 PASS
+[verify] R10-S5 P1-4: 성능 KPI meta-only 검증
+
+[OK] BFF 서버 실행 중: http://127.0.0.1:8081
+
+[valid_meta_kpi] want=204 got=204
+[valid_meta_kpi] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":100,
+  "ragEmbeddingMs":120,
+  "ragRetrieveMs":80,
+  "ragIndexHydrateMs":30,
+  "ragIndexBuildMs":0,
+  "ragIndexPersistMs":0,
+  "ragRetrieveMsP50":80,
+  "ragRetrieveMsP95":80,
+  "ragDocCount":20,
+  "ragTopK":5,
+  "ragIndexWarm":true,
+  "success":true,
+  "fallback":false,
+  "cancelled":false
+}
+
+[OK] valid_meta_kpi (204)
+[banned_key_prompt] want=400 got=400
+[banned_key_prompt] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "prompt":"SHOULD_BLOCK"
+}
+
+[OK] banned_key_prompt (400)
+[invalid_negative_ms] want=400 got=400
+[invalid_negative_ms] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "ragRetrieveMs":-1
+}
+
+[OK] invalid_negative_ms (400)
+[invalid_high_ms] want=400 got=400
+[invalid_high_ms] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "ragRetrieveMs":600001
+}
+
+[OK] invalid_high_ms (400)
+[invalid_topk] want=400 got=400
+[invalid_topk] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "ragTopK":0
+}
+
+[OK] invalid_topk (400)
+[invalid_type_docCount] want=400 got=400
+[invalid_type_docCount] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "ragDocCount":"20"
+}
+
+[OK] invalid_type_docCount (400)
+[invalid_p95_ms] want=400 got=400
+[invalid_p95_ms] payload={
+  "eventType":"suggestion_shown",
+  "suggestionLength":0,
+  "ragRetrieveMsP95":600001
+}
+
+[OK] invalid_p95_ms (400)
+
+[PASS] P1-4 perf KPI meta-only gate — /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/docs/ops/r10-s5-p1-4-perf-kpi-proof-20251224-065716.json
+[OK] perf_kpi_allowed: 204
+[OK] banned_text_key_blocked: 400
+[OK] type_violation_blocked: 400
+[OK] range_violation_blocked: 400
+[OK] topk_violation_blocked: 400
+[PASS] perf KPI regression loop
+[PASS] proof: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/docs/ops/r10-s6-4-perf-proof.latest

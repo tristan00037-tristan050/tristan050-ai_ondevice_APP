@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Tenant Onboarding Template",
+  "description": "멀티테넌트 온보딩 기본 템플릿",
+  "type": "object",
+  "properties": {
+    "tenant": {
+      "type": "string",
+      "description": "테넌트 ID"
+    },
+    "accountMapping": {
+      "type": "object",
+      "description": "계정 매핑 규칙",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {
+        "8000": "현금",
+        "8100": "은행예금",
+        "8200": "매출채권",
+        "9000": "매출",
+        "9100": "비용"
+      }
+    },
+    "categories": {
+      "type": "array",
+      "description": "카테고리 목록",
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "식비",
+        "교통비",
+        "통신비",
+        "사무용품",
+        "기타"
+      ]
+    },
+    "policies": {
+      "type": "object",
+      "description": "정책 기본값",
+      "properties": {
+        "maxAmount": {
+          "type": "number",
+          "description": "최대 금액 (원)",
+          "default": 10000000
+        },
+        "requireApproval": {
+          "type": "boolean",
+          "description": "승인 필수 여부",
+          "default": true
+        },
+        "riskThreshold": {
+          "type": "number",
+          "description": "리스크 임계값 (0.0 ~ 1.0)",
+          "default": 0.7
+        }
+      }
+    },
+    "adapters": {
+      "type": "object",
+      "description": "외부 어댑터 설정",
+      "properties": {
+        "enabled": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["bank-sbx"]
+        },
+        "secrets": {
+          "type": "object",
+          "description": "어댑터별 시크릿 이름 (Kubernetes Secret)",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "description": "네트워크 정책",
+      "properties": {
+        "egressAllowList": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Egress 허용 목록 (URL/도메인)",
+          "default": []
+        }
+      }
+    }
+  },
+  "required": ["tenant"]
+}
+

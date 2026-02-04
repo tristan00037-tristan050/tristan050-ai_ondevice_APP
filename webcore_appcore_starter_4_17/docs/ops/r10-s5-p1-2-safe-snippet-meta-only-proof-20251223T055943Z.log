@@ -1,0 +1,5 @@
+[verify] R10-S5 P0-6: RAG 텔레메트리 meta-only 계약 검증
+
+
+[test] RAG-1) 정상 RAG meta-only 전송 (기대: 204)
+[FAIL] 정상 RAG meta-only 전송: 기대 204, 실제 400

@@ -1,0 +1,181 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QuickCheckReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "diff",
+    "policy",
+    "notes",
+    "raw"
+  ],
+  "properties": {
+    "status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "api",
+        "jwks",
+        "holidays",
+        "observability",
+        "ics",
+        "lighthouse"
+      ],
+      "properties": {
+        "api": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        },
+        "jwks": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        },
+        "holidays": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        },
+        "observability": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        },
+        "ics": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        },
+        "lighthouse": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail",
+            "na"
+          ]
+        }
+      }
+    },
+    "diff": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "summary": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "trend",
+              "deltaPct"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "trend": {
+                "type": "string",
+                "enum": [
+                  "up",
+                  "down",
+                  "flat"
+                ]
+              },
+              "deltaPct": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "policy_version": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "evaluations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "rule_id",
+              "target",
+              "verdict",
+              "severity"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "rule_id": {
+                "type": "string"
+              },
+              "target": {
+                "type": "string"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "pass",
+                  "warn",
+                  "block"
+                ]
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "warn",
+                  "block"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "topN": {
+          "type": "integer"
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "raw": {
+      "type": "object"
+    }
+  }
+}

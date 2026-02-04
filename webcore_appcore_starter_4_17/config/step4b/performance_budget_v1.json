@@ -1,0 +1,56 @@
+{
+  "version": "v1.0",
+  "created_at": "2026-01-09",
+  "purpose": "성능 예산 SSOT 및 다운시프트 임계치",
+  "latency_thresholds": {
+    "L0": { "max": 200, "description": "최고 성능 상태" },
+    "L1": { "min": 200, "max": 400, "description": "정상 범위" },
+    "L2": { "min": 400, "max": 600, "description": "성능 저하 시작" },
+    "L3": { "min": 600, "max": 800, "description": "심각한 성능 저하" },
+    "L4": { "min": 800, "description": "최대 다운시프트" }
+  },
+  "downshift_levels": {
+    "0": { "name": "최고 성능 모드", "latency_level": "L0" },
+    "1": { "name": "정상 모드", "latency_level": "L1" },
+    "2": { "name": "경고 모드", "latency_level": "L2" },
+    "3": { "name": "위험 모드", "latency_level": "L3" },
+    "4": { "name": "최대 다운시프트 모드", "latency_level": "L4" }
+  },
+  "hysteresis": {
+    "upward_thresholds": {
+      "L0_to_L1": 400,
+      "L1_to_L2": 600,
+      "L2_to_L3": 800,
+      "L3_to_L4": 1000
+    },
+    "downward_thresholds": {
+      "L4_to_L3": 700,
+      "L3_to_L2": 500,
+      "L2_to_L1": 300,
+      "L1_to_L0": 150
+    },
+    "gaps": {
+      "L0_L1": 250,
+      "L1_L2": 300,
+      "L2_L3": 300,
+      "L3_L4": 300
+    }
+  },
+  "budget_limits": {
+    "p95_latency_max_ms": 1000,
+    "fail_closed_on_exceed": true
+  },
+  "latency_buckets": {
+    "EXCELLENT": { "max": 200 },
+    "GOOD": { "min": 200, "max": 400 },
+    "FAIR": { "min": 400, "max": 600 },
+    "POOR": { "min": 600, "max": 800 },
+    "VERY_POOR": { "min": 800 }
+  },
+  "hysteresis_states": {
+    "STABLE": "현재 레벨 유지 (히스테리시스 범위 내)",
+    "UPWARD": "상향 임계치 초과 (downshift_level 증가)",
+    "DOWNWARD": "하향 임계치 미만 (downshift_level 감소)"
+  }
+}
+

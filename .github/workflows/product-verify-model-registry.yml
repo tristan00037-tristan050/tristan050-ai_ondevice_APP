@@ -1,0 +1,90 @@
+name: product-verify-model-registry
+
+on:
+  pull_request: {}
+  merge_group: {}
+  workflow_dispatch: {}
+
+jobs:
+  product_verify_model_registry:
+    name: product-verify-model-registry
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ripgrep
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: Ops deps preflight (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/backend/model_registry
+          [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing"; exit 1; }
+          npm ci
+
+      - name: Typecheck (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/backend/model_registry
+          npm run typecheck
+          echo "MODEL_REGISTRY_TYPECHECK_OK=1"
+
+      - name: Lint (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/backend/model_registry
+          npm run lint
+          echo "MODEL_REGISTRY_LINT_OK=1"
+
+      - name: Run SVR-03 verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash webcore_appcore_starter_4_17/scripts/verify/verify_svr03_model_registry.sh
+
+      - name: Run SVR-03 store parity verify (STORE-01)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_svr03_store_parity.sh
+
+      - name: Run SVR-03 update anti-rollback/freeze verify (P2-2)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_svr03_update_anti_rollback_freeze.sh
+
+      - name: Run UPDATE-02 max_seen_version persist verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_update_max_seen_version_persist.sh
+
+  gate:
+    runs-on: ubuntu-latest
+    needs: [product_verify_model_registry]
+    steps:
+      - name: gate
+        run: |
+          if [ "${{ needs.product_verify_model_registry.result }}" != "success" ]; then
+            echo "GATE:FAIL"
+            exit 1
+          fi
+          echo "GATE:OK"

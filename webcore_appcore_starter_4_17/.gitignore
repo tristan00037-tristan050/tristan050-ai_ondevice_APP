@@ -1,0 +1,34 @@
+# build & deps
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+**/*.tsbuildinfo
+
+# caches & tmp
+.tmp/
+.turbo/
+coverage/
+.DS_Store
+.env
+.webllm_artifacts/
+
+# ops runtime artifacts (do not commit)
+docs/ops/r10-s7-retriever-baseline-proof-*.log
+docs/ops/r10-s7-retriever-baseline-proof.latest
+docs/ops/r10-s7-retriever-quality-*-report.json
+docs/ops/r10-s7-retriever-quality-proof.latest
+
+# backup files
+*.bak
+**/*.bak
+
+# Step4-B B strict improvement evidence (runtime, meta-only)
+webcore_appcore_starter_4_17/docs/ops/r10-s7-step4b-b-strict-improvement.json
+
+# step4b-b runtime artifacts (do not commit)
+docs/ops/r10-s7-step4b-b-strict-improvement.json
+docs/ops/r10-s7-retriever-regression-proof-*.log
+
+# ops runtime artifacts (do not commit)
+docs/ops/r10-s7-retriever-regression-proof.latest

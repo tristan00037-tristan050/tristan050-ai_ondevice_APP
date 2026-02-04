@@ -1,0 +1,7 @@
+{
+  "repo_full_name": "tristan00037-tristan050/tristan050-ai_ondevice_APP",
+  "signer_workflow_path": ".github/workflows/product-verify-supplychain.yml",
+  "allowed_actor_logins": [
+    "tristan00037-tristan050"
+  ]
+}

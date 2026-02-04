@@ -1,0 +1,87 @@
+== START 2025-12-28T04:46:42Z ==
+BRANCH=main
+HEAD=ec70106cf21a1d524d1c2c58ef138a355028a75b
+== BUILD (workspace) ==
+
+> @appcore/bff-accounting@0.1.0 prebuild
+> npm run -w @appcore/data-pg build && npm run -w @appcore/service-core-accounting build && npm run -w @appcore/service-core-cs build
+
+
+> @appcore/data-pg@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-accounting@0.1.0 build
+> tsc -b
+
+
+> @appcore/service-core-cs@0.0.1 build
+> tsc -p tsconfig.build.json
+
+
+> @appcore/bff-accounting@0.1.0 build
+> tsc -b && node scripts/generate_build_info.js
+
+[build_info] Generated: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/webcore_appcore_starter_4_17/packages/bff-accounting/dist/build_info.json
+[build_info] buildSha: ec70106cf21a1d524d1c2c58ef138a355028a75b
+[build_info] buildTime: 2025-12-28T04:46:43.836Z
+== START BFF (restart; no hang) ==
+[dev_bff] Freeing port 8081...
+[dev_bff] Attempt 1: killing PID(s): 44161
+[dev_bff] SKIP_BUILD=1 -> skip dist freshness + build
+[dev_bff] Starting BFF on :8081
+[dev_bff] DATABASE_URL=postgres://app:app@127.0.0.1:5432/app
+[dev_bff] WEBLLM_UPSTREAM_BASE_URL=http://127.0.0.1:9099/webllm/
+[dev_bff] Starting BFF in background...
+[dev_bff] Waiting for BFF to be ready...
+[dev_bff] BFF ready after 2s
+[dev_bff] Verifying build anchor (healthz buildSha vs git HEAD)...
+[dev_bff] OK: buildSha matches HEAD(ec70106)
+[dev_bff] BFF started successfully (PID: 44539)
+[dev_bff] Log: /tmp/bff_dev.log
+[dev_bff] PID file: /tmp/bff_dev.pid
+== VERIFY ==
+OK: buildSha matches HEAD(ec70106)
+== DESTRUCTIVE ==
+[destructive] Step 1: Verify initial state (should PASS)...
+OK: buildSha matches HEAD(ec70106)
+[destructive] Step 2: Tampering build_info.json (40-hex but != HEAD)...
+[destructive] Tampered buildSha: ec70106cf21a1d524d1c2c58ef138a355028a751 (HEAD: ec70106cf21a1d524d1c2c58ef138a355028a75b)
+[destructive] Step 3: Restart BFF with SKIP_BUILD=1 (preserve tampered build_info)...
+[dev_bff] Freeing port 8081...
+[dev_bff] Attempt 1: killing PID(s): 44580
+[dev_bff] SKIP_BUILD=1 -> skip dist freshness + build
+[dev_bff] Starting BFF on :8081
+[dev_bff] DATABASE_URL=postgres://app:app@127.0.0.1:5432/app
+[dev_bff] WEBLLM_UPSTREAM_BASE_URL=http://127.0.0.1:9099/webllm/
+[dev_bff] Starting BFF in background...
+[dev_bff] Waiting for BFF to be ready...
+[dev_bff] BFF ready after 2s
+[dev_bff] Verifying build anchor (healthz buildSha vs git HEAD)...
+[destructive] Waiting for BFF to be ready (may have buildSha mismatch warning)...
+[destructive] BFF is ready
+[destructive] Step 4: Verify tampered state (should FAIL)...
+[destructive] ✓ Tampered state correctly failed (exit=1)
+[destructive] Step 5: Restore original build_info.json...
+[destructive] Step 6: Restart BFF with SKIP_BUILD=1 (restored build_info)...
+[dev_bff] Freeing port 8081...
+[dev_bff] Attempt 1: killing PID(s): 44723
+[dev_bff] SKIP_BUILD=1 -> skip dist freshness + build
+[dev_bff] Starting BFF on :8081
+[dev_bff] DATABASE_URL=postgres://app:app@127.0.0.1:5432/app
+[dev_bff] WEBLLM_UPSTREAM_BASE_URL=http://127.0.0.1:9099/webllm/
+[dev_bff] Starting BFF in background...
+[dev_bff] Waiting for BFF to be ready...
+[dev_bff] BFF ready after 2s
+[dev_bff] Verifying build anchor (healthz buildSha vs git HEAD)...
+[dev_bff] OK: buildSha matches HEAD(ec70106)
+[dev_bff] BFF started successfully (PID: 44790)
+[dev_bff] Log: /tmp/bff_dev.log
+[dev_bff] PID file: /tmp/bff_dev.pid
+[destructive] Step 7: Verify restored state (should PASS)...
+OK: buildSha matches HEAD(ec70106)
+[destructive] PASS: tamper -> verify failed (exit=1), restore -> verify passed
+== PROVE_FAST ==
+OK: wrote docs/ops/r10-s7-build-anchor-esm-proof-20251228-044649.log
+OK: updated docs/ops/r10-s7-build-anchor-esm-proof.latest -> r10-s7-build-anchor-esm-proof-20251228-044649.log
+== END 2025-12-28T04:46:53Z ==

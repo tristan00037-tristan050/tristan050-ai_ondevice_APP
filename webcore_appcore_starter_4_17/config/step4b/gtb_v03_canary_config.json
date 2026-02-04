@@ -1,0 +1,6 @@
+{
+  "canary_percent": 10,
+  "kill_switch": false,
+  "routing_seed": "default"
+}
+

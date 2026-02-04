@@ -1,0 +1,3 @@
+# PERF Real Pipeline Budget (SSOT)
+# Meaning: runtime latency header parsed as number must be <= this value in tests.
+P95_BUDGET_MS=200

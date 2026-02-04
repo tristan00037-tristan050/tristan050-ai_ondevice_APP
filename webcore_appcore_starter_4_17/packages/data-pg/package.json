@@ -1,0 +1,28 @@
+{
+  "name": "@appcore/data-pg",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./repos/exportsRepo.js": "./dist/repos/exportsRepo.js",
+    "./repos/reconRepo.js": "./dist/repos/reconRepo.js",
+    "./repos/auditRepo.js": "./dist/repos/auditRepo.js",
+    "./repos/externalLedgerRepo.js": "./dist/repos/externalLedgerRepo.js"
+  },
+  "files": ["dist", "migrations"],
+  "scripts": {
+    "build": "tsc -b",
+    "migrate": "node dist/migrate.js"
+  },
+  "dependencies": {
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.10.9",
+    "typescript": "^5.4.0"
+  }
+}
+
