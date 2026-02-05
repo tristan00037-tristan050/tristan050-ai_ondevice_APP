@@ -71,8 +71,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "DEBUG: repo pwd=$(pwd)"
+          ls -la
+
+          echo "DEBUG: target dir listing"
+          ls -la webcore_appcore_starter_4_17/packages || true
+          ls -la webcore_appcore_starter_4_17/packages/ops-console || true
+
           cd webcore_appcore_starter_4_17/packages/ops-console
-          npm ci
+
+          echo "DEBUG: ops-console pwd=$(pwd)"
+          [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing"; exit 1; }
+
+          # 워크스페이스/설정 영향으로 .bin이 안 생길 수 있으니, workspace를 끄고(dev 포함) 설치
+          npm ci --no-workspaces --include=dev
+
+          echo "DEBUG: node_modules exists?"
+          ls -la node_modules | head -n 40 || true
+
+          echo "DEBUG: jest entry check"
+          test -f node_modules/jest/bin/jest.js || test -f node_modules/jest-cli/bin/jest.js || true
 
       - name: Run Web Console verify (pure)
         shell: bash

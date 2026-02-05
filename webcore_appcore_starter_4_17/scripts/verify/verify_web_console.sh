@@ -74,7 +74,12 @@ if [[ ! -f "$LOCK" ]]; then
 fi
 
 # Check dependencies exist (workflow must install)
-test -d "${OPS_CONSOLE_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
+echo "DEBUG: ROOT=$ROOT"
+echo "DEBUG: OPS_CONSOLE_DIR=$OPS_CONSOLE_DIR"
+if [[ ! -d "${OPS_CONSOLE_DIR}/node_modules" ]]; then
+  echo "BLOCK: node_modules missing (workflow must install dependencies)"
+  exit 1
+fi
 
 # Check jest is actually runnable (most reliable method)
 cd "${OPS_CONSOLE_DIR}"
