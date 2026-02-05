@@ -1,11 +1,11 @@
 name: product-verify-supplychain
 
 on:
-  pull_request:
-  merge_group:
+  pull_request: {}
+  merge_group: {}
   push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches: ["main"]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -42,7 +42,6 @@ jobs:
           const now = new Date();
           const started = new Date(now.getTime() - 1000).toISOString();
           const finished = now.toISOString();
-
           // PR/merge_group에서도 네트워크 의존 없이 “존재/형식/링크 핀ning”만 보장하는 최소 provenance
           const out = {
             _type: "https://in-toto.io/Statement/v1",
@@ -70,7 +69,6 @@ jobs:
               ]
             }
           };
-
           fs.writeFileSync(".artifacts/slsa_provenance_min.json", JSON.stringify(out));
           NODE
 
@@ -149,7 +147,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           echo "provenance_min=${{ needs.verify-slsa-provenance-min.result }}"
           echo "attest_dsse=${{ needs.attest-dsse-provenance.result }}"
           echo "event_name=${GITHUB_EVENT_NAME}"
