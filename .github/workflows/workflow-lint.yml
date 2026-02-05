@@ -4,7 +4,7 @@ on:
   pull_request:
   merge_group:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -14,7 +14,9 @@ permissions:
   artifact-metadata: write
 
 jobs:
-  verify-slsa-provenance-min:
+  # job id는 언더스코어로(표현식 needs 참조 안정화)
+  # name은 기존 required check 기대값(verify-slsa-provenance-min) 유지
+  verify_slsa_provenance_min:
     name: verify-slsa-provenance-min
     runs-on: ubuntu-latest
     env:
@@ -88,20 +90,21 @@ jobs:
   attest_dsse_provenance:
     name: attest-dsse-provenance
     runs-on: ubuntu-latest
-    needs: [verify-slsa-provenance-min]
+    needs: [verify_slsa_provenance_min]
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # PR/merge_group에서는 job 자체가 스킵되면 merge_group guard가 FAIL하므로
+      # job은 항상 돌되, PR에서는 “스텝만 스킵” 처리(성공으로 보고)
       - name: Skip attestation on PR/merge_group (report OK, no network)
         if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
         shell: bash
         run: |
           set -euo pipefail
           echo "SKIP: attestation is main-only (to avoid PR/merge_group network flakiness)"
-          echo "ATTEST_DSSE_SKIPPED=1" >> "$GITHUB_ENV"
 
       - name: Prepare subject for attestation (main only)
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -140,23 +143,25 @@ jobs:
   gate:
     name: gate
     runs-on: ubuntu-latest
-    needs: [verify-slsa-provenance-min, attest_dsse_provenance]
+    needs: [verify_slsa_provenance_min, attest_dsse_provenance]
     steps:
       - name: Gate (PR/merge_group: provenance_min only, main: require DSSE)
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "provenance_min=${{ needs.verify-slsa-provenance-min.result }}"
+          echo "provenance_min=${{ needs.verify_slsa_provenance_min.result }}"
           echo "attest_dsse=${{ needs.attest_dsse_provenance.result }}"
           echo "event_name=${GITHUB_EVENT_NAME}"
           echo "ref=${GITHUB_REF}"
 
-          if [ "${{ needs.verify-slsa-provenance-min.result }}" != "success" ]; then
+          # 항상 provenance_min은 성공해야 함
+          if [ "${{ needs.verify_slsa_provenance_min.result }}" != "success" ]; then
             echo "GATE:FAIL (provenance_min)"
             exit 1
           fi
 
+          # main push에서는 DSSE도 성공해야 함
           if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             if [ "${{ needs.attest_dsse_provenance.result }}" != "success" ]; then
               echo "GATE:FAIL (attest_dsse required on main)"
