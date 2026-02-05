@@ -1,0 +1,14 @@
+# Verify Purity Allowlist v1 (SSOT)
+#
+# 이 파일은 verify 스크립트에서 설치/다운로드/네트워크 동작을 허용하는 예외 목록입니다.
+#
+# 규칙:
+# - 정확한 파일 경로 1줄만 허용 (디렉터리/글롭/정규식 금지)
+# - 예: scripts/verify/verify_special_case.sh
+#
+# 기본은 비어있음 (예외 없음).
+# 예외가 필요하면 위 형식으로 정확한 파일 경로만 추가하세요.
+
+# 검사 스크립트 예외 (패턴 문자열 자체를 포함하는 검사 스크립트)
+scripts/verify/verify_no_npm_install_fallback.sh
+scripts/verify/verify_verify_purity_no_install.sh

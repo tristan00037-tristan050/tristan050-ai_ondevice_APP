@@ -17,7 +17,8 @@ DIR="${TOP}/webcore_appcore_starter_4_17/backend/model_registry"
 cd "$DIR"
 
 [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing (package-lock.json): $DIR"; exit 1; }
-npm ci
+# Check dependencies exist (workflow must install)
+test -d "node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
 
 # 정적 스캔: signature.ts에 함수가 실제로 연결되어야 함
 command -v rg >/dev/null 2>&1 || { echo "FAIL: rg not found"; exit 1; }

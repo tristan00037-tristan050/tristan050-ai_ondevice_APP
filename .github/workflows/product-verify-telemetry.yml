@@ -29,6 +29,19 @@ jobs:
           set -euo pipefail
           bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg
 
+      - name: Install dependencies (control_plane + telemetry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # control_plane (dependency)
+          cd webcore_appcore_starter_4_17/backend/control_plane
+          [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing"; exit 1; }
+          npm ci
+          # telemetry
+          cd ../telemetry
+          [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing"; exit 1; }
+          npm ci
+
       - name: Run Telemetry E2E verify
         shell: bash
         run: |
