@@ -39,10 +39,12 @@ jobs:
           
           # NODE_ENV가 production으로 설정되어 있으면 devDependencies가 설치되지 않음
           unset NODE_ENV
-          npm ci
+          
+          # --no-workspaces 플래그로 workspace 모드 비활성화 (package-lock.json 사용)
+          npm ci --no-workspaces
 
-          # jest 패키지가 설치되었는지 확인 (여러 가능한 경로 확인)
-          if [[ ! -d node_modules/jest ]] && [[ ! -f node_modules/jest/package.json ]]; then
+          # jest 패키지가 설치되었는지 확인
+          if [[ ! -d node_modules/jest ]]; then
             echo "FAIL: jest package not installed after npm ci"
             echo "Debug: checking for jest in node_modules..."
             ls -la node_modules/ | grep jest || echo "No jest found in node_modules"
