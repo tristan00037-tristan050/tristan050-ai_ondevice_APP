@@ -43,18 +43,9 @@ jobs:
           # --no-workspaces 플래그로 workspace 모드 비활성화 (package-lock.json 사용)
           npm ci --no-workspaces
 
-          # jest 패키지가 설치되었는지 확인
-          if [[ ! -d node_modules/jest ]]; then
-            echo "FAIL: jest package not installed after npm ci"
-            echo "Debug: checking for jest in node_modules..."
-            ls -la node_modules/ | grep jest || echo "No jest found in node_modules"
-            echo "Debug: package.json devDependencies:"
-            grep -A 5 '"devDependencies"' package.json || echo "No devDependencies section"
-            exit 1
-          fi
-
-          # npx를 통한 jest 실행 가능 여부 확인 (더 안정적)
-          npx --no-install jest --version >/dev/null 2>&1 || { echo "FAIL: npx jest not available"; exit 1; }
+          # jest가 실제로 실행 가능한지 확인 (가장 확실한 방법)
+          npx --no-install jest --version >/dev/null || { echo "FAIL: jest cannot run after npm ci"; exit 1; }
+          node -e "require('jest/package.json')" >/dev/null || { echo "FAIL: jest package missing after npm ci"; exit 1; }
 
   verify:
     name: product-verify-web-console

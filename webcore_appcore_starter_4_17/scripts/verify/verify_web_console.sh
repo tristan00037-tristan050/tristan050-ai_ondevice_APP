@@ -76,8 +76,11 @@ fi
 # Check dependencies exist (workflow must install)
 test -d "${OPS_CONSOLE_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
 
-# Check jest package exists (workflow must install)
-test -d "${OPS_CONSOLE_DIR}/node_modules/jest" || { echo "BLOCK: jest package missing (workflow must run npm ci in ops-console)"; exit 1; }
+# Check jest is actually runnable (most reliable method)
+cd "${OPS_CONSOLE_DIR}"
+npx --no-install jest --version >/dev/null || { echo "BLOCK: jest cannot run (workflow must run npm ci in ops-console)"; exit 1; }
+node -e "require('jest/package.json')" >/dev/null || { echo "BLOCK: jest package missing (workflow must run npm ci in ops-console)"; exit 1; }
+cd - >/dev/null
 
 # Run tests using npm-only (ops-console's jest)
 # Tests are in web_console/admin/tests
