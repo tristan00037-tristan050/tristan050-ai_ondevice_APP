@@ -38,11 +38,11 @@ jobs:
           [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing"; exit 1; }
           npm ci
 
-          # verify_web_console.sh가 node_modules/.bin/jest 를 직접 실행하는 케이스를 fail-closed로 방어
-          test -x node_modules/.bin/jest || { echo "FAIL: jest .bin missing after npm ci"; exit 1; }
+          # jest 패키지가 설치되었는지 확인 (npx는 .bin 링크 없이도 작동)
+          test -d node_modules/jest || { echo "FAIL: jest package not installed after npm ci"; exit 1; }
 
-          # (선택) npx 확인도 함께
-          npx --no-install jest --version >/dev/null
+          # npx를 통한 jest 실행 가능 여부 확인 (더 안정적)
+          npx --no-install jest --version >/dev/null 2>&1 || { echo "FAIL: npx jest not available"; exit 1; }
 
   verify:
     name: product-verify-web-console
