@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Web Console Verification Gate (fail-closed)
 # Evidence sealing script for web console verification
-# Uses npm only for test execution
+# verify는 설치하지 않고 "판정만" 한다. (의존성 설치는 workflow preflight 책임)
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 if [[ -d "${ROOT}/webcore_appcore_starter_4_17" ]]; then
@@ -18,7 +18,7 @@ RBAC_UI_ENFORCE_OK=0
 cleanup() {
   echo "CONSOLE_ONBOARDING_DONE_OK=${CONSOLE_ONBOARDING_DONE_OK}"
   echo "RBAC_UI_ENFORCE_OK=${RBAC_UI_ENFORCE_OK}"
-  
+
   if [[ "$CONSOLE_ONBOARDING_DONE_OK" -eq 1 ]] && \
      [[ "$RBAC_UI_ENFORCE_OK" -eq 1 ]]; then
     exit 0
@@ -50,7 +50,6 @@ fi
 command -v node >/dev/null 2>&1 || { echo "FAIL: node not found"; exit 1; }
 command -v npm >/dev/null 2>&1 || { echo "FAIL: npm not found"; exit 1; }
 
-# Run tests using npm only (ops-console package)
 OPS_CONSOLE_DIR="${ROOT}/packages/ops-console"
 WEB_CONSOLE_ADMIN_DIR="${ROOT}/web_console/admin"
 
@@ -74,12 +73,7 @@ if [[ ! -f "$LOCK" ]]; then
 fi
 
 # Check dependencies exist (workflow must install)
-echo "DEBUG: ROOT=$ROOT"
-echo "DEBUG: OPS_CONSOLE_DIR=$OPS_CONSOLE_DIR"
-if [[ ! -d "${OPS_CONSOLE_DIR}/node_modules" ]]; then
-  echo "BLOCK: node_modules missing (workflow must install dependencies)"
-  exit 1
-fi
+test -d "${OPS_CONSOLE_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must install dependencies)"; exit 1; }
 
 # Check jest is actually runnable (most reliable method)
 cd "${OPS_CONSOLE_DIR}"
@@ -104,4 +98,3 @@ if npx --prefix "${OPS_CONSOLE_DIR}" jest -c jest.config.cjs tests/integration.t
 else
   exit 1
 fi
-
