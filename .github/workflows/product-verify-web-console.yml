@@ -68,6 +68,15 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install dependencies (ops-console)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/packages/ops-console
+          [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing"; exit 1; }
+          unset NODE_ENV
+          npm ci --no-workspaces
+
       - name: Run Web Console verify (pure)
         shell: bash
         run: |
