@@ -36,6 +36,8 @@ jobs:
           cd webcore_appcore_starter_4_17/packages/ops-console
           [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing"; exit 1; }
           npm ci
+          # Verify jest is installed
+          test -f node_modules/.bin/jest || { echo "FAIL: jest not installed after npm ci"; exit 1; }
 
       - name: Run Web Console verify
         shell: bash
