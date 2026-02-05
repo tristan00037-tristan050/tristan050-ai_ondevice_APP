@@ -32,13 +32,12 @@ AUDIT_DENY_COVERAGE_OK=0
 RBAC_DEFAULT_DENY_OK=0
 SVR01_SEALED_OK=0
 
-# Install dependencies (npm ci only, fail-closed if lockfile missing)
-echo "Installing dependencies..."
+# Check dependencies exist (workflow must install)
 if [ ! -f package-lock.json ]; then
   echo "FAIL: lockfile missing (package-lock.json): $(pwd)"
   exit 1
 fi
-npm ci
+test -d "node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
 
 # Run tests
 echo "Running tests..."

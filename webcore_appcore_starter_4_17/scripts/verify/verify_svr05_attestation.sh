@@ -62,12 +62,12 @@ if [[ ! -d "$ATTESTATION_DIR" ]]; then
   exit 1
 fi
 
-# Install dependencies (npm ci only, fail-closed if lockfile missing)
+# Check dependencies exist (workflow must install)
 if [[ ! -f "${ATTESTATION_DIR}/package-lock.json" ]]; then
   echo "FAIL: lockfile missing (package-lock.json): ${ATTESTATION_DIR}"
   exit 1
 fi
-npm --prefix "$ATTESTATION_DIR" ci
+test -d "${ATTESTATION_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
 
 # Run tests and parse results
 cd "$ATTESTATION_DIR"

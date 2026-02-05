@@ -78,7 +78,8 @@ WEB_META_ONLY_NEGATIVE_SUITE_OK=0
 
 # VERIFY-PURITY
 VERIFY_PURITY_NO_INSTALL_OK=0
-
+VERIFY_PURITY_FULL_SCOPE_OK=0
+VERIFY_PURITY_ALLOWLIST_SSOT_OK=0
 
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
@@ -291,6 +292,8 @@ cleanup(){
   echo "PERF_REAL_PIPELINE_VARIANCE_OK=${PERF_REAL_PIPELINE_VARIANCE_OK}"
   echo "WEB_META_ONLY_NEGATIVE_SUITE_OK=${WEB_META_ONLY_NEGATIVE_SUITE_OK}"
   echo "VERIFY_PURITY_NO_INSTALL_OK=${VERIFY_PURITY_NO_INSTALL_OK}"
+  echo "VERIFY_PURITY_FULL_SCOPE_OK=${VERIFY_PURITY_FULL_SCOPE_OK}"
+  echo "VERIFY_PURITY_ALLOWLIST_SSOT_OK=${VERIFY_PURITY_ALLOWLIST_SSOT_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -408,6 +411,13 @@ echo "== guard: verify purity (no install in verify) =="
 run_guard "verify purity (no install in verify)" bash scripts/verify/verify_verify_purity_no_install.sh
 VERIFY_PURITY_NO_INSTALL_OK=1
 
+echo "== guard: verify purity full scope (SSOT allowlist) =="
+run_guard "verify purity full scope" bash scripts/verify/verify_verify_purity_full_scope.sh
+VERIFY_PURITY_FULL_SCOPE_OK=1
+VERIFY_PURITY_ALLOWLIST_SSOT_OK=1
+VERIFY_PURITY_FULL_SCOPE_OK=1
+VERIFY_PURITY_ALLOWLIST_SSOT_OK=1
+
 echo "== guard: repo contracts hygiene =="
 run_guard "repo contracts hygiene" bash scripts/verify/verify_repo_contracts_hygiene.sh
 REPO_CONTRACTS_HYGIENE_OK=1
@@ -439,8 +449,8 @@ echo "== guard: forbid log-grep verdict patterns =="
 run_guard "forbid log-grep verdict patterns" bash scripts/verify/verify_no_log_grep_verdict.sh
 NO_LOG_GREP_VERDICT_OK=1
 
-echo "== guard: forbid npm install fallback in verify scripts =="
-run_guard "forbid npm install fallback" bash scripts/verify/verify_no_npm_install_fallback.sh
+echo "== guard: forbid install fallback in verify scripts =="
+run_guard "forbid install fallback" bash scripts/verify/verify_no_npm_install_fallback.sh
 NO_NPM_INSTALL_FALLBACK_OK=1
 
 echo "== guard: JCS single source =="

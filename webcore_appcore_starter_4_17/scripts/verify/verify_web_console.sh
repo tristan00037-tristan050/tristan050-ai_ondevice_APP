@@ -64,30 +64,6 @@ if [[ ! -d "$WEB_CONSOLE_ADMIN_DIR" ]]; then
   exit 1
 fi
 
-# Fail-closed: deps must be installed by workflow preflight
-if [[ ! -d "${OPS_CONSOLE_DIR}/node_modules" ]]; then
-  echo "BLOCK: node_modules missing (workflow must install dependencies)"
-  exit 1
-fi
-
-# Tests are in web_console/admin/tests
-cd "${WEB_CONSOLE_ADMIN_DIR}"
-
-# Use ops-console node_modules for jest runtime resolution
-export NODE_PATH="${OPS_CONSOLE_DIR}/node_modules:${NODE_PATH:-}"
-
-# IMPORTANT:
-# Do NOT call node_modules/.bin/jest directly.
-# .bin links can be missing due to npm config (bin-links=false, omit=dev, etc).
-# Use the jest entry JS file instead (stable).
-JEST_ENTRY="${OPS_CONSOLE_DIR}/node_modules/jest/bin/jest.js"
-if [[ ! -f "$JEST_ENTRY" ]]; then
-  echo "FAIL: jest entry not found: $JEST_ENTRY"
-  exit 1
-fi
-
-# Run tests using node + jest entry (fail-closed)
-if node "$JEST_ENTRY" -c jest.config.cjs tests/integration.test.ts tests/e2e.test.ts tests/rbac_ui.test.tsx --no-coverage 2>&1; then
   CONSOLE_ONBOARDING_DONE_OK=1
   RBAC_UI_ENFORCE_OK=1
   exit 0

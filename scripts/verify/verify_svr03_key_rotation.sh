@@ -16,9 +16,10 @@ TOP="$(git rev-parse --show-toplevel)"
 DIR="${TOP}/webcore_appcore_starter_4_17/backend/model_registry"
 cd "$DIR"
 
-# npm ci only + lockfile required
+# lockfile required
 [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing (package-lock.json): $DIR"; exit 1; }
-npm ci
+# Check dependencies exist (workflow must install)
+test -d "node_modules" || { echo "BLOCK: node_modules missing (workflow must install dependencies)"; exit 1; }
 
 RESULT_JSON="/tmp/svr03_key_rotation_revoke.json"
 rm -f "$RESULT_JSON"
