@@ -29,6 +29,14 @@ jobs:
           set -euo pipefail
           bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg
 
+      - name: Install dependencies (ops-console)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/packages/ops-console
+          [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing"; exit 1; }
+          npm ci
+
       - name: Run Web Console verify
         shell: bash
         run: |

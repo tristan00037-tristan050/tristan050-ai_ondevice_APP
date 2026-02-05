@@ -27,7 +27,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/verify/verify_ops_deps.sh --require-rg
+          bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg
+
+      - name: Install dependencies (control_plane)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/backend/control_plane
+          [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing"; exit 1; }
+          npm ci
 
       - name: "Guard: forbid OK=1 in control_plane tests"
         shell: bash
