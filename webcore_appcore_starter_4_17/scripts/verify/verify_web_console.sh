@@ -76,6 +76,10 @@ fi
 # Check dependencies exist (workflow must install)
 test -d "${OPS_CONSOLE_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
 
+# Check jest binary exists (workflow must install)
+JEST_BIN="${OPS_CONSOLE_DIR}/node_modules/.bin/jest"
+test -f "$JEST_BIN" || { echo "BLOCK: jest binary missing (workflow must run npm ci in ops-console)"; exit 1; }
+
 # Run tests using npm-only (ops-console's jest)
 # Tests are in web_console/admin/tests
 cd "${WEB_CONSOLE_ADMIN_DIR}"
@@ -83,7 +87,6 @@ cd "${WEB_CONSOLE_ADMIN_DIR}"
 # Use jest from ops-console node_modules
 # Set NODE_PATH to include ops-console node_modules for ts-jest
 export NODE_PATH="${OPS_CONSOLE_DIR}/node_modules:${NODE_PATH:-}"
-JEST_BIN="${OPS_CONSOLE_DIR}/node_modules/.bin/jest"
 
 # Run tests using jest with config (npm-only, no ts-node/tsx)
 if "$JEST_BIN" -c jest.config.cjs tests/integration.test.ts tests/e2e.test.ts tests/rbac_ui.test.tsx --no-coverage 2>&1; then
