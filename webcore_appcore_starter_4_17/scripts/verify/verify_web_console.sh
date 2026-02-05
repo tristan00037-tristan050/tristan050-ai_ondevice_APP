@@ -64,6 +64,34 @@ if [[ ! -d "$WEB_CONSOLE_ADMIN_DIR" ]]; then
   exit 1
 fi
 
+# Guard: package-lock.json required (fail-closed)
+LOCK="${OPS_CONSOLE_DIR}/package-lock.json"
+if [[ ! -f "$LOCK" ]]; then
+  echo "FAIL: package-lock.json required: $LOCK"
+  echo "This ensures deterministic, reproducible builds in CI"
+  exit 1
+fi
+
+# Check dependencies exist (workflow must install)
+test -d "${OPS_CONSOLE_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must install dependencies)"; exit 1; }
+
+# Check jest is actually runnable (most reliable method)
+cd "${OPS_CONSOLE_DIR}"
+npx --no-install jest --version >/dev/null || { echo "BLOCK: jest cannot run (workflow must run npm ci in ops-console)"; exit 1; }
+node -e "require('jest/package.json')" >/dev/null || { echo "BLOCK: jest package missing (workflow must run npm ci in ops-console)"; exit 1; }
+cd - >/dev/null
+
+# Run tests using npm-only (ops-console's jest)
+# Tests are in web_console/admin/tests
+cd "${WEB_CONSOLE_ADMIN_DIR}"
+
+# Use jest from ops-console node_modules via npx (auto-finds .bin)
+# Set NODE_PATH to include ops-console node_modules for ts-jest
+export NODE_PATH="${OPS_CONSOLE_DIR}/node_modules:${NODE_PATH:-}"
+export PATH="${OPS_CONSOLE_DIR}/node_modules/.bin:${PATH}"
+
+# Run tests using npx jest (auto-resolves jest binary)
+if npx --prefix "${OPS_CONSOLE_DIR}" jest -c jest.config.cjs tests/integration.test.ts tests/e2e.test.ts tests/rbac_ui.test.tsx --no-coverage 2>&1; then
   CONSOLE_ONBOARDING_DONE_OK=1
   RBAC_UI_ENFORCE_OK=1
   exit 0
