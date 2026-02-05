@@ -29,6 +29,15 @@ jobs:
           set -euo pipefail
           bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg
 
+      - name: Install Web Console dependencies (npm ci)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17
+          test -f package.json || { echo "BLOCK: missing package.json (webcore_appcore_starter_4_17)"; exit 1; }
+          test -f package-lock.json || { echo "BLOCK: missing package-lock.json (webcore_appcore_starter_4_17)"; exit 1; }
+          npm ci
+
       - name: Run Web Console verify
         shell: bash
         run: |
@@ -46,4 +55,3 @@ jobs:
             exit 1
           fi
           echo "GATE:OK"
-
