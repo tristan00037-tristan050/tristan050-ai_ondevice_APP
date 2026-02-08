@@ -27,6 +27,16 @@ command -v node >/dev/null 2>&1 || { echo "BLOCK: node not found"; exit 1; }
 PORT=8091
 export RUNTIME_PORT="$PORT"
 
+# Clean up any existing process on the port (fail-closed: ensure clean state)
+if command -v lsof >/dev/null 2>&1; then
+  EXISTING_PID=$(lsof -ti:"$PORT" 2>/dev/null || echo "")
+  if [[ -n "$EXISTING_PID" ]]; then
+    echo "WARN: Port $PORT is in use (PID: $EXISTING_PID), cleaning up..."
+    kill -9 "$EXISTING_PID" 2>/dev/null || true
+    sleep 0.5
+  fi
+fi
+
 # start server
 node "$PKG/src/server.mjs" --smoke >/tmp/runtime_v0.out 2>&1 &
 PID=$!
