@@ -1,6 +1,10 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import { assertInternalUrlOrThrow } from "./safe_net.mjs";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+// 레포 루트까지: src -> butler-runtime -> packages -> webcore_appcore_starter_4_17 -> 레포 루트 (../../../../)
+const { validateMetaOnlyOrThrow } = require("../../../../packages/common/meta_only/validator_v1.cjs");
 
 function json(res, code, obj) {
   const body = Buffer.from(JSON.stringify(obj), "utf8");
@@ -26,25 +30,6 @@ function isPlainObject(x) {
   return x && typeof x === "object" && !Array.isArray(x);
 }
 
-function validateMetaOnlyOrThrow(body) {
-  if (!isPlainObject(body)) throw new Error("META_ONLY_REQUEST_NOT_OBJECT");
-  // 최소 필드(SSOT의 Contract Layer A)
-  const reqId = String(body.request_id || "");
-  const dept = String(body.dept || "");
-  const tier = String(body.tier || "");
-  if (!reqId) throw new Error("META_ONLY_MISSING:request_id");
-  if (!dept) throw new Error("META_ONLY_MISSING:dept");
-  if (!tier) throw new Error("META_ONLY_MISSING:tier");
-  // 원문 금지(대표 원칙): text/prompt/content 같은 키가 있으면 즉시 차단
-  const forbidden = ["prompt","text","content","raw","message","messages","input","context"];
-  for (const k of Object.keys(body)) {
-    const lk = String(k).toLowerCase();
-    for (const f of forbidden) {
-      if (lk.includes(f)) throw new Error(`META_ONLY_FORBIDDEN_KEY:${k}`);
-    }
-  }
-}
-
 // v0: 모델 추론 대신, 3블록 "형태"만 반환(후속 PR에서 modelpack/runtime 실행으로 교체)
 function makeThreeBlocks(meta) {
   return {
@@ -60,7 +45,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "POST" && req.url === "/v1/runtime/three-blocks") {
       const body = await parseBody(req);
-      validateMetaOnlyOrThrow(body);
+      validateMetaOnlyOrThrow(body, "butler-runtime/server.mjs");
 
       // 코드 레벨 외부 호출 0: (현재는 실제 호출 없음) 래퍼 동작 확인은 verify에서 수행
       // assertInternalUrlOrThrow("https://example.com");
@@ -77,7 +62,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && req.url === "/v0/runtime/shadow") {
       const body = await parseBody(req);
-      validateMetaOnlyOrThrow(body);
+      validateMetaOnlyOrThrow(body, "butler-runtime/server.mjs");
 
       const t0 = Date.now();
       // meta-only 요청 기반 SHA256

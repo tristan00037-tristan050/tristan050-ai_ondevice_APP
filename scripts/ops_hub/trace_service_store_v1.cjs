@@ -22,41 +22,8 @@ function loadJsonOrDefault(filePath, def) {
   }
 }
 
-// meta-only / no-raw 저장 전 차단(배열 금지, 깊이/길이 제한)
-function assertMetaOnly(x, opts = { maxDepth: 4, maxString: 512, maxKeys: 64 }) {
-  const bannedKeys = new Set([
-    "raw_text","prompt","messages","document_body","input_text","output_text",
-    "database_url","private_key","signing_key","seed"
-  ]);
-  const seen = new Set();
-
-  function walk(v, depth) {
-    if (depth > opts.maxDepth) throw new Error("META_ONLY_DEPTH");
-    if (v === null || v === undefined) return;
-
-    const t = typeof v;
-    if (t === "string") {
-      if (v.length > opts.maxString) throw new Error("META_ONLY_STRING_TOO_LONG");
-      return;
-    }
-    if (t === "number" || t === "boolean") return;
-
-    if (Array.isArray(v)) throw new Error("META_ONLY_ARRAY_FORBIDDEN");
-    if (t !== "object") throw new Error("META_ONLY_INVALID_TYPE");
-    if (seen.has(v)) throw new Error("META_ONLY_CYCLE");
-    seen.add(v);
-
-    const keys = Object.keys(v);
-    if (keys.length > opts.maxKeys) throw new Error("META_ONLY_TOO_MANY_KEYS");
-    for (const k of keys) {
-      if (bannedKeys.has(k)) throw new Error("META_ONLY_BANNED_KEY");
-      walk(v[k], depth + 1);
-    }
-  }
-
-  if (typeof x !== "object" || x === null || Array.isArray(x)) throw new Error("META_ONLY_ROOT");
-  walk(x, 0);
-}
+// 단일 소스 validator 사용 (저장 전 검증)
+const { assertMetaOnly } = require("../../packages/common/meta_only/validator_v1.cjs");
 
 function openStore(dbPath) {
   const state = loadJsonOrDefault(dbPath, { version: 1, events: [] });
@@ -85,4 +52,3 @@ function openStore(dbPath) {
 }
 
 module.exports = { openStore };
-

@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
+// @ts-ignore - CommonJS require in TypeScript
+const { validateMetaOnlyOrThrow: validateMetaOnlyOrThrowSingleSource } = require("../../../../../packages/common/meta_only/validator_v1.cjs");
 
 type Allow = {
   allowed_root_keys: string[];
-  forbidden_key_patterns: string[];
   limits: {
     max_string_len: number;
     max_array_len: number;
@@ -21,7 +22,6 @@ const ALLOW: Allow = {
     "constraints",
     "ts_utc",
   ],
-  forbidden_key_patterns: ["prompt", "raw", "content", "text", "message", "messages", "input", "context"],
   limits: { max_string_len: 256, max_array_len: 50, max_object_keys: 50, max_depth: 6 },
 };
 
@@ -32,45 +32,13 @@ function isPlainObject(x: unknown): x is Record<string, unknown> {
 export function validateMetaOnlyOrThrow(body: unknown) {
   if (!isPlainObject(body)) throw new Error("META_ONLY_REQUEST_NOT_OBJECT");
 
+  // 단일 소스 validator 사용 (fail-closed)
+  validateMetaOnlyOrThrowSingleSource(body, "bff-accounting/osAlgoCore.ts");
+
   // root allowlist (fail-closed)
   for (const k of Object.keys(body)) {
     if (!ALLOW.allowed_root_keys.includes(k)) throw new Error(`META_ONLY_ROOT_KEY_NOT_ALLOWED:${k}`);
   }
-
-  // forbidden key patterns + limits (recursive)
-  const walk = (node: unknown, depth: number, path: string) => {
-    if (depth > ALLOW.limits.max_depth) throw new Error(`META_ONLY_MAX_DEPTH_EXCEEDED:${path}`);
-
-    if (typeof node === "string") {
-      if (node.length > ALLOW.limits.max_string_len) throw new Error(`META_ONLY_STRING_TOO_LONG:${path}`);
-      return;
-    }
-    if (typeof node === "number" || typeof node === "boolean" || node === null || node === undefined) return;
-
-    if (Array.isArray(node)) {
-      if (node.length > ALLOW.limits.max_array_len) throw new Error(`META_ONLY_ARRAY_TOO_LONG:${path}`);
-      node.forEach((v, i) => walk(v, depth + 1, `${path}[${i}]`));
-      return;
-    }
-
-    if (isPlainObject(node)) {
-      const keys = Object.keys(node);
-      if (keys.length > ALLOW.limits.max_object_keys) throw new Error(`META_ONLY_TOO_MANY_KEYS:${path}`);
-
-      for (const k of keys) {
-        const lk = String(k).toLowerCase();
-        for (const pat of ALLOW.forbidden_key_patterns) {
-          if (lk.includes(String(pat).toLowerCase())) throw new Error(`META_ONLY_FORBIDDEN_KEY:${path}.${k}`);
-        }
-        walk(node[k], depth + 1, `${path}.${k}`);
-      }
-      return;
-    }
-
-    throw new Error(`META_ONLY_UNSUPPORTED_TYPE:${path}`);
-  };
-
-  walk(body, 0, "$");
 
   // required fields (minimal)
   const req = body as any;

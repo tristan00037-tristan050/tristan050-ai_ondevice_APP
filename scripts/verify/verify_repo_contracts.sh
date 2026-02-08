@@ -37,6 +37,11 @@ POLICY_HEADERS_FAILCLOSED_OK=0
 META_ONLY_ALLOWLIST_ENFORCED_OK=0
 META_ONLY_VALIDATOR_PARITY_OK=0
 
+# Track A-2
+META_ONLY_VALIDATOR_SINGLE_SOURCE_OK=0
+META_ONLY_VALIDATOR_NO_DUPLICATION_OK=0
+META_ONLY_VALIDATOR_V1_CJS_PRESENT_OK=0
+
 # PROD-04
 EXPORT_TWO_STEP_OK=0
 EXPORT_APPROVAL_AUDITED_OK=0
@@ -248,6 +253,9 @@ cleanup(){
 
   echo "META_ONLY_ALLOWLIST_ENFORCED_OK=${META_ONLY_ALLOWLIST_ENFORCED_OK}"
   echo "META_ONLY_VALIDATOR_PARITY_OK=${META_ONLY_VALIDATOR_PARITY_OK}"
+  echo "META_ONLY_VALIDATOR_SINGLE_SOURCE_OK=${META_ONLY_VALIDATOR_SINGLE_SOURCE_OK}"
+  echo "META_ONLY_VALIDATOR_NO_DUPLICATION_OK=${META_ONLY_VALIDATOR_NO_DUPLICATION_OK}"
+  echo "META_ONLY_VALIDATOR_V1_CJS_PRESENT_OK=${META_ONLY_VALIDATOR_V1_CJS_PRESENT_OK}"
 
   echo "EXPORT_TWO_STEP_OK=${EXPORT_TWO_STEP_OK}"
   echo "EXPORT_APPROVAL_AUDITED_OK=${EXPORT_APPROVAL_AUDITED_OK}"
@@ -672,6 +680,11 @@ ALGO_CORE_GATEWAY_DEPLOY_DOC_OK=1
 echo "== guard: meta-only validator parity (client/server single source) =="
 run_guard "meta-only validator parity" bash scripts/verify/verify_meta_only_validator_parity.sh
 META_ONLY_VALIDATOR_PARITY_OK=1
+
+run_guard "meta-only validator single source (Track A-2)" bash scripts/verify/verify_meta_only_validator_single_source.sh
+META_ONLY_VALIDATOR_SINGLE_SOURCE_OK=1
+META_ONLY_VALIDATOR_NO_DUPLICATION_OK=1
+META_ONLY_VALIDATOR_V1_CJS_PRESENT_OK=1
 
 echo "== guard: algo-core-04 runtime wiring assets =="
 run_guard "algo-core-04 runtime wiring assets" bash scripts/verify/verify_algo_core_04_runtime_wiring.sh
