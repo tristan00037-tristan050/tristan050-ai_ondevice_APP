@@ -30,36 +30,8 @@ function loadJsonOrDefault(filePath, def) {
   }
 }
 
-// meta-only / no-raw guard (키/값 둘 다 검사)
-function hasRawLikeAny(obj) {
-  const banned = [
-    "raw_text", "prompt", "messages", "document_body", "content",
-    "private_key", "token=", "password=", "database_url="
-  ];
-  const maxStr = 300; // 너무 긴 문자열 차단(운영 원문 유입 방지)
-
-  function walk(x, depth) {
-    if (depth > 5) return true; // 과도한 깊이 차단
-    if (x === null || x === undefined) return false;
-    if (typeof x === "string") {
-      const v = x.toLowerCase();
-      if (x.length > maxStr) return true;
-      return banned.some((k) => v.includes(k));
-    }
-    if (typeof x === "number" || typeof x === "boolean") return false;
-    if (Array.isArray(x)) return true; // 배열 덤프 금지
-    if (typeof x === "object") {
-      for (const [k, v] of Object.entries(x)) {
-        const kk = String(k).toLowerCase();
-        if (banned.some((b) => kk.includes(b))) return true;
-        if (walk(v, depth + 1)) return true;
-      }
-      return false;
-    }
-    return true;
-  }
-  return walk(obj, 0);
-}
+// 단일 소스 validator 사용 (저장 전 검증)
+const { assertMetaOnly } = require("../../packages/common/meta_only/validator_v1.cjs");
 
 function makeStore(dbPath) {
   const state = loadJsonOrDefault(dbPath, { version: 1, events: [] });
@@ -69,7 +41,13 @@ function makeStore(dbPath) {
     if (!ev || typeof ev !== "object") fail("BAD_EVENT");
     if (typeof ev.event_id !== "string" || ev.event_id.length < 8) fail("BAD_EVENT_ID");
     if (typeof ev.request_id !== "string" || ev.request_id.length < 6) fail("BAD_REQUEST_ID");
-    if (hasRawLikeAny(ev)) fail("RAW_LIKE_EVENT_REJECTED");
+    
+    // 단일 소스 validator 사용 (저장 전 검증, fail-closed)
+    try {
+      assertMetaOnly(ev);
+    } catch (e) {
+      fail(`RAW_LIKE_EVENT_REJECTED: ${e.message}`);
+    }
 
     if (seen.has(ev.event_id)) {
       return { inserted: false }; // 멱등: 중복 저장 0
