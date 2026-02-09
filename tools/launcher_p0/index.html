@@ -41,15 +41,19 @@ function saveJSONL(line){
 }
 
 async function fingerprintFromResponse(resJson) {
-  // meta-only 지문: blocks/meta + manifest.sha256만 사용
-  const meta = resJson?.blocks?.block_1_policy?.meta || {};
-  const manifestSha = resJson?.manifest?.sha256 || "";
-  const payload = JSON.stringify({ meta, manifestSha });
+  // 목적: "요청마다 바뀌는 값"을 모두 제외하고, 3블록의 안정적인 내용만 지문으로 만든다.
+  // 금지: request_id, ts_utc, manifest.sha256 같은 per-request 값 포함
+
+  const rules = resJson?.blocks?.block_1_policy?.rules || [];
+  const steps = resJson?.blocks?.block_2_plan?.steps || [];
+  const checks = resJson?.blocks?.block_3_checks?.checks || [];
+
+  // 블록 내용이 바뀌면 지문이 바뀌고, 동일하면 지문이 동일해진다.
+  const payload = JSON.stringify({ rules, steps, checks });
 
   const enc = new TextEncoder().encode(payload);
   const buf = await crypto.subtle.digest("SHA-256", enc);
   const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-  // UI는 짧게(예: 8자리) 보여도 되고 저장은 전체를 써도 됩니다.
   return hex.slice(0, 8);
 }
 
