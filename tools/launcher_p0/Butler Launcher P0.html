@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<!-- saved from url=(0022)http://127.0.0.1:5179/ -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <title>Butler Launcher P0</title>
+</head>
+<body>
+  <h3>Butler Launcher P0</h3>
+
+  <div>
+    Gateway URL: <input id="gw" value="http://127.0.0.1:8081" size="40">
+    <button id="health">healthz</button>
+    <span id="buildsha"></span>
+  </div>
+
+  <hr>
+
+  <div>
+    <input id="q" placeholder="질문 입력" size="60">
+    <button id="run">실행</button>
+  </div>
+
+  <pre id="blocks">{
+  "ok": true,
+  "blocks": {
+    "block_1_policy": {
+      "kind": "policy",
+      "meta": {
+        "request_id": "req_1770618054649_mdwny8i1w",
+        "intent": "업무일지",
+        "model_id": "demo-model",
+        "device_class": "demo",
+        "client_version": "1.0.0",
+        "ts_utc": "2026-02-09T06:20:54.649Z"
+      },
+      "rules": [
+        "meta-only input required",
+        "no raw prompt/text/content accepted",
+        "fail-closed on unknown keys"
+      ]
+    },
+    "block_2_plan": {
+      "kind": "plan",
+      "meta": {
+        "request_id": "req_1770618054649_mdwny8i1w",
+        "intent": "업무일지",
+        "model_id": "demo-model",
+        "device_class": "demo",
+        "client_version": "1.0.0",
+        "ts_utc": "2026-02-09T06:20:54.649Z"
+      },
+      "steps": [
+        "validate meta schema",
+        "generate deterministic blocks",
+        "emit signed manifest for artifacts"
+      ]
+    },
+    "block_3_checks": {
+      "kind": "checks",
+      "meta": {
+        "request_id": "req_1770618054649_mdwny8i1w",
+        "intent": "업무일지",
+        "model_id": "demo-model",
+        "device_class": "demo",
+        "client_version": "1.0.0",
+        "ts_utc": "2026-02-09T06:20:54.649Z"
+      },
+      "checks": [
+        "forbidden keys absent",
+        "exactly 3 blocks present",
+        "latency recorded"
+      ]
+    }
+  },
+  "manifest": {
+    "sha256": "2b585d6d93d93d875376b6c387f753ea820326f042aa9b796e43472968c3553c"
+  },
+  "signature": {
+    "b64": "CMIKhzSbkznv7HDJGnufJT/yVnI2abAJgjzluVxMdyufifZTP/ZY/B2XAOgoGse/wsqMI6+QHcP/fEH9iDIpDg==",
+    "public_key_b64": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQUtaclRkS1FodnJ6UmI3WVVNMHM1UWp0M3ZQRE51cHczSFc0aE0vNi9udEU9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+    "mode": "dev"
+  }
+}</pre>
+
+  <h4>Meta Panel (8)</h4>
+  <pre id="meta">request_id: req_1770618054649_mdwny8i1w
+compute_path: ondevice
+pack_id/version/manifest_sha256: N/A / N/A / 2b585d6d93d93d875376b6c387f753ea820326f042aa9b796e43472968c3553c
+latency_ms: 12
+peak_mem_mb: N/A
+result_fingerprint_sha256: 36f8c5ac
+reason_code_v1: OK
+egress_attempt_blocked: false</pre>
+
+  <h4>Quick Eval (10 x 2)</h4>
+  <button id="eval">Quick Eval 실행</button>
+  <pre id="evalout">일치: 10
+불일치: 0
+JSONL 저장키: p0_eval_jsonl</pre>
+
+<script>
+const samples = Array.from({length:10}, (_,i)=>`sample_${i+1}`);
+function q(id){ return document.getElementById(id); }
+function metaLine(k,v){ return `${k}: ${v==null ? "N/A": v}`; }
+
+function saveJSONL(line){
+  const key = "p0_eval_jsonl";
+  const prev = localStorage.getItem(key) || "";
+  localStorage.setItem(key, prev + JSON.stringify(line) + "\n");
+}
+
+async function fingerprintFromResponse(resJson) {
+  // 목적: "요청마다 바뀌는 값"을 모두 제외하고, 3블록의 안정적인 내용만 지문으로 만든다.
+  // 금지: request_id, ts_utc, manifest.sha256 같은 per-request 값 포함
+
+  const rules = resJson?.blocks?.block_1_policy?.rules || [];
+  const steps = resJson?.blocks?.block_2_plan?.steps || [];
+  const checks = resJson?.blocks?.block_3_checks?.checks || [];
+
+  // 블록 내용이 바뀌면 지문이 바뀌고, 동일하면 지문이 동일해진다.
+  const payload = JSON.stringify({ rules, steps, checks });
+
+  const enc = new TextEncoder().encode(payload);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  return hex.slice(0, 8);
+}
+
+async function healthz(){
+  const base = q("gw").value;
+  const r = await fetch(base + "/healthz");
+  const txt = await r.text();
+  q("buildsha").textContent = txt.slice(0,200);
+}
+
+async function callThreeBlocks(text){
+  const base = q("gw").value;
+  const body = {
+    request_id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    intent: text,
+    model_id: "demo-model",
+    device_class: "demo",
+    client_version: "1.0.0",
+    ts_utc: new Date().toISOString()
+  };
+  const t0 = performance.now();
+  const r = await fetch(base + "/v1/os/algo/three-blocks", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "X-Tenant":"demo",
+      "X-Api-Key":"demo",
+      "X-User-Id":"demo",
+      "X-User-Role":"admin",
+    },
+    body: JSON.stringify(body)
+  });
+  const t1 = performance.now();
+  const clientLatencyMs = Math.round(t1 - t0);
+  const latencyHeader = r.headers.get("X-OS-Algo-Latency-Ms");
+  const latencyParsed = latencyHeader ? Number.parseFloat(latencyHeader) : null;
+  const latencyMsSafe = Number.isFinite(latencyParsed) ? latencyParsed : clientLatencyMs;
+  const manifest = r.headers.get("X-OS-Algo-Manifest-SHA256")||"";
+  const json = await r.json().catch(()=>({}));
+  return { ok:r.ok, status:r.status, json, latency_ms: latencyMsSafe, manifest_sha256: manifest||null };
+}
+
+function renderMeta(m){
+  const lines = [
+    metaLine("request_id", m.request_id),
+    metaLine("compute_path", m.compute_path ?? "ondevice"),
+    metaLine("pack_id/version/manifest_sha256", `${m.pack_id??"N/A"} / ${m.version??"N/A"} / ${m.manifest_sha256??"N/A"}`),
+    metaLine("latency_ms", m.latency_ms),
+    metaLine("peak_mem_mb", m.peak_mem_mb),
+    metaLine("result_fingerprint_sha256", m.result_fingerprint_sha256),
+    metaLine("reason_code_v1", m.reason_code_v1 ?? (m.ok ? "OK" : "ERROR")),
+    metaLine("egress_attempt_blocked", m.egress_attempt_blocked ?? false),
+  ];
+  q("meta").textContent = lines.join("\n");
+}
+
+q("health").onclick = healthz;
+
+q("run").onclick = async ()=>{
+  const text = q("q").value;
+  const res = await callThreeBlocks(text);
+  q("blocks").textContent = JSON.stringify(res.json, null, 2).slice(0,2000);
+
+  const fp = await fingerprintFromResponse(res.json);
+
+  const meta = {
+    request_id: res.json?.blocks?.block_1_policy?.meta?.request_id || null,
+    compute_path: "ondevice",
+    pack_id: res.json?.pack_id || null,
+    version: res.json?.version || null,
+    manifest_sha256: res.json?.manifest?.sha256 || res.manifest_sha256 || null,
+    latency_ms: res.latency_ms,
+    peak_mem_mb: null,
+    result_fingerprint_sha256: fp,
+    reason_code_v1: res.ok ? "OK" : "ERROR",
+    egress_attempt_blocked: false,
+    ok: res.ok,
+  };
+  renderMeta(meta);
+};
+
+q("eval").onclick = async ()=>{
+  const results = [];
+  let match = 0, mismatch = 0;
+  q("evalout").textContent = "실행 중...";
+  for(let run=1; run<=2; run++){
+    for(let i=0;i<samples.length;i++){
+      const text = samples[i];
+      const res = await callThreeBlocks(text);
+      const fp = await fingerprintFromResponse(res.json);
+      const line = {
+        timestamp: Date.now(),
+        sample_id: i+1,
+        run_index: run,
+        request_id: res.json?.blocks?.block_1_policy?.meta?.request_id || "N/A",
+        compute_path: "ondevice",
+        pack_id: res.json?.pack_id || "butler-core",
+        version: res.json?.version || "N/A",
+        manifest_sha256: res.json?.manifest?.sha256 || res.manifest_sha256 || "N/A",
+        latency_ms: res.latency_ms || 0,
+        peak_mem_mb: null,
+        result_fingerprint_sha256: fp,
+        reason_code_v1: res.ok ? "OK" : "ERROR",
+        egress_attempt_blocked: false,
+        ok: !!res.ok,
+      };
+      results.push(line);
+      saveJSONL(line);
+    }
+  }
+  for(let i=1;i<=10;i++){
+    const a = results.find(x=>x.sample_id===i && x.run_index===1)?.result_fingerprint_sha256;
+    const b = results.find(x=>x.sample_id===i && x.run_index===2)?.result_fingerprint_sha256;
+    if(a && b && a===b) match++; else mismatch++;
+  }
+  q("evalout").textContent = `일치: ${match}\n불일치: ${mismatch}\nJSONL 저장키: p0_eval_jsonl`;
+};
+</script>
+
+
+
+</body></html>

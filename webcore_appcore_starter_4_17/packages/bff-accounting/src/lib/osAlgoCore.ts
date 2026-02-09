@@ -1,6 +1,13 @@
 import crypto from "node:crypto";
-// @ts-ignore - CommonJS require in TypeScript
-const { validateMetaOnlyOrThrow: validateMetaOnlyOrThrowSingleSource } = require("../../../../../packages/common/meta_only/validator_v1.cjs");
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+// ESM에서 CommonJS 모듈 import
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const require = createRequire(import.meta.url);
+const { validateMetaOnlyOrThrow: validateMetaOnlyOrThrowSingleSource } = require(resolve(__dirname, "../../../../../packages/common/meta_only/validator_v1.cjs"));
 
 type Allow = {
   allowed_root_keys: string[];
