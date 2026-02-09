@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Butler Launcher P0</title>
+</head>
+<body>
+  <h3>Butler Launcher P0</h3>
+
+  <div>
+    Gateway URL: <input id="gw" value="http://127.0.0.1:8081" size="40">
+    <button id="health">healthz</button>
+    <span id="buildsha"></span>
+  </div>
+
+  <hr/>
+
+  <div>
+    <input id="q" placeholder="질문 입력" size="60">
+    <button id="run">실행</button>
+  </div>
+
+  <pre id="blocks"></pre>
+
+  <h4>Meta Panel (8)</h4>
+  <pre id="meta"></pre>
+
+  <h4>Quick Eval (10 x 2)</h4>
+  <button id="eval">Quick Eval 실행</button>
+  <pre id="evalout"></pre>
+
+<script>
+const samples = Array.from({length:10}, (_,i)=>`sample_${i+1}`);
+function q(id){ return document.getElementById(id); }
+function metaLine(k,v){ return `${k}: ${v==null ? "N/A": v}`; }
+
+function saveJSONL(line){
+  const key = "p0_eval_jsonl";
+  const prev = localStorage.getItem(key) || "";
+  localStorage.setItem(key, prev + JSON.stringify(line) + "\n");
+}
+
+async function fingerprintFromResponse(resJson) {
+  // meta-only 지문: blocks/meta + manifest.sha256만 사용
+  const meta = resJson?.blocks?.block_1_policy?.meta || {};
+  const manifestSha = resJson?.manifest?.sha256 || "";
+  const payload = JSON.stringify({ meta, manifestSha });
+
+  const enc = new TextEncoder().encode(payload);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  // UI는 짧게(예: 8자리) 보여도 되고 저장은 전체를 써도 됩니다.
+  return hex.slice(0, 8);
+}
+
+async function healthz(){
+  const base = q("gw").value;
+  const r = await fetch(base + "/healthz");
+  const txt = await r.text();
+  q("buildsha").textContent = txt.slice(0,200);
+}
+
+async function callThreeBlocks(text){
+  const base = q("gw").value;
+  const body = {
+    request_id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    intent: text,
+    model_id: "demo-model",
+    device_class: "demo",
+    client_version: "1.0.0",
+    ts_utc: new Date().toISOString()
+  };
+  const t0 = performance.now();
+  const r = await fetch(base + "/v1/os/algo/three-blocks", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "X-Tenant":"demo",
+      "X-Api-Key":"demo",
+      "X-User-Id":"demo",
+      "X-User-Role":"admin",
+    },
+    body: JSON.stringify(body)
+  });
+  const t1 = performance.now();
+  const clientLatencyMs = Math.round(t1 - t0);
+  const latencyHeader = r.headers.get("X-OS-Algo-Latency-Ms");
+  const latencyParsed = latencyHeader ? Number.parseFloat(latencyHeader) : null;
+  const latencyMsSafe = Number.isFinite(latencyParsed) ? latencyParsed : clientLatencyMs;
+  const manifest = r.headers.get("X-OS-Algo-Manifest-SHA256")||"";
+  const json = await r.json().catch(()=>({}));
+  return { ok:r.ok, status:r.status, json, latency_ms: latencyMsSafe, manifest_sha256: manifest||null };
+}
+
+function renderMeta(m){
+  const lines = [
+    metaLine("request_id", m.request_id),
+    metaLine("compute_path", m.compute_path ?? "ondevice"),
+    metaLine("pack_id/version/manifest_sha256", `${m.pack_id??"N/A"} / ${m.version??"N/A"} / ${m.manifest_sha256??"N/A"}`),
+    metaLine("latency_ms", m.latency_ms),
+    metaLine("peak_mem_mb", m.peak_mem_mb),
+    metaLine("result_fingerprint_sha256", m.result_fingerprint_sha256),
+    metaLine("reason_code_v1", m.reason_code_v1 ?? (m.ok ? "OK" : "ERROR")),
+    metaLine("egress_attempt_blocked", m.egress_attempt_blocked ?? false),
+  ];
+  q("meta").textContent = lines.join("\n");
+}
+
+q("health").onclick = healthz;
+
+q("run").onclick = async ()=>{
+  const text = q("q").value;
+  const res = await callThreeBlocks(text);
+  q("blocks").textContent = JSON.stringify(res.json, null, 2).slice(0,2000);
+
+  const fp = await fingerprintFromResponse(res.json);
+
+  const meta = {
+    request_id: res.json?.blocks?.block_1_policy?.meta?.request_id || null,
+    compute_path: "ondevice",
+    pack_id: res.json?.pack_id || null,
+    version: res.json?.version || null,
+    manifest_sha256: res.json?.manifest?.sha256 || res.manifest_sha256 || null,
+    latency_ms: res.latency_ms,
+    peak_mem_mb: null,
+    result_fingerprint_sha256: fp,
+    reason_code_v1: res.ok ? "OK" : "ERROR",
+    egress_attempt_blocked: false,
+    ok: res.ok,
+  };
+  renderMeta(meta);
+};
+
+q("eval").onclick = async ()=>{
+  const results = [];
+  let match = 0, mismatch = 0;
+  q("evalout").textContent = "실행 중...";
+  for(let run=1; run<=2; run++){
+    for(let i=0;i<samples.length;i++){
+      const text = samples[i];
+      const res = await callThreeBlocks(text);
+      const fp = await fingerprintFromResponse(res.json);
+      const line = {
+        timestamp: Date.now(),
+        sample_id: i+1,
+        run_index: run,
+        request_id: res.json?.blocks?.block_1_policy?.meta?.request_id || "N/A",
+        compute_path: "ondevice",
+        pack_id: res.json?.pack_id || "butler-core",
+        version: res.json?.version || "N/A",
+        manifest_sha256: res.json?.manifest?.sha256 || res.manifest_sha256 || "N/A",
+        latency_ms: res.latency_ms || 0,
+        peak_mem_mb: null,
+        result_fingerprint_sha256: fp,
+        reason_code_v1: res.ok ? "OK" : "ERROR",
+        egress_attempt_blocked: false,
+        ok: !!res.ok,
+      };
+      results.push(line);
+      saveJSONL(line);
+    }
+  }
+  for(let i=1;i<=10;i++){
+    const a = results.find(x=>x.sample_id===i && x.run_index===1)?.result_fingerprint_sha256;
+    const b = results.find(x=>x.sample_id===i && x.run_index===2)?.result_fingerprint_sha256;
+    if(a && b && a===b) match++; else mismatch++;
+  }
+  q("evalout").textContent = `일치: ${match}\n불일치: ${mismatch}\nJSONL 저장키: p0_eval_jsonl`;
+};
+</script>
+</body>
+</html>
+
