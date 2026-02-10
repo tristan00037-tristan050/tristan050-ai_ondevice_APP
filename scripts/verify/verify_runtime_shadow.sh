@@ -14,13 +14,23 @@ OUT_BFF_ON=""
 HDR_OFF=""
 HDR_ON=""
 
+# 프로세스 PID 초기화
+RUNTIME_PID=""
+BFF_OFF_PID=""
+BFF_ON_PID=""
+
 cleanup(){
   # 임시 파일 정리
-  rm -f "$OUT_RUNTIME" "$OUT_PROOF" "$OUT_BFF_OFF" "$OUT_BFF_ON" "$HDR_OFF" "$HDR_ON" 2>/dev/null || true
+  [[ -n "$OUT_RUNTIME" ]] && rm -f "$OUT_RUNTIME" 2>/dev/null || true
+  [[ -n "$OUT_PROOF" ]] && rm -f "$OUT_PROOF" 2>/dev/null || true
+  [[ -n "$OUT_BFF_OFF" ]] && rm -f "$OUT_BFF_OFF" 2>/dev/null || true
+  [[ -n "$OUT_BFF_ON" ]] && rm -f "$OUT_BFF_ON" 2>/dev/null || true
+  [[ -n "$HDR_OFF" ]] && rm -f "$HDR_OFF" 2>/dev/null || true
+  [[ -n "$HDR_ON" ]] && rm -f "$HDR_ON" 2>/dev/null || true
   # 프로세스 정리
-  kill "$RUNTIME_PID" >/dev/null 2>&1 || true
-  kill "$BFF_OFF_PID" >/dev/null 2>&1 || true
-  kill "$BFF_ON_PID" >/dev/null 2>&1 || true
+  [[ -n "$RUNTIME_PID" ]] && kill "$RUNTIME_PID" >/dev/null 2>&1 || true
+  [[ -n "$BFF_OFF_PID" ]] && kill "$BFF_OFF_PID" >/dev/null 2>&1 || true
+  [[ -n "$BFF_ON_PID" ]] && kill "$BFF_ON_PID" >/dev/null 2>&1 || true
   
   echo "RUNTIME_SHADOW_ENDPOINT_OK=${RUNTIME_SHADOW_ENDPOINT_OK}"
   echo "RUNTIME_SHADOW_HEADERS_OK=${RUNTIME_SHADOW_HEADERS_OK}"
