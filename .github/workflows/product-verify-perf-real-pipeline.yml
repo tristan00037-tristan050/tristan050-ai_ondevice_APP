@@ -1,3 +1,4 @@
+# PREP_TOKEN=1
 name: product-verify-perf-real-pipeline
 
 on:
