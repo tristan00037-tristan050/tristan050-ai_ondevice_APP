@@ -86,6 +86,13 @@ VERIFY_PURITY_NO_INSTALL_OK=0
 VERIFY_PURITY_FULL_SCOPE_OK=0
 VERIFY_PURITY_ALLOWLIST_SSOT_OK=0
 
+# P3-PREP-00 (Common Hardening)
+VERIFY_NO_DEV_TCP_IN_VERIFY_OK=0
+VERIFY_RIPGREP_GUARD_PRESENT_V1_OK=0
+
+# P3-PLAT-02 (Runtime Guard Helpers)
+RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=0
+
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
 RUNTIME_EGRESS_ENV_PROOF_OK=0
@@ -338,6 +345,13 @@ cleanup(){
   echo "VERIFY_PURITY_FULL_SCOPE_OK=${VERIFY_PURITY_FULL_SCOPE_OK}"
   echo "VERIFY_PURITY_ALLOWLIST_SSOT_OK=${VERIFY_PURITY_ALLOWLIST_SSOT_OK}"
 
+  # P3-PREP-00 (Common Hardening)
+  echo "VERIFY_NO_DEV_TCP_IN_VERIFY_OK=${VERIFY_NO_DEV_TCP_IN_VERIFY_OK}"
+  echo "VERIFY_RIPGREP_GUARD_PRESENT_V1_OK=${VERIFY_RIPGREP_GUARD_PRESENT_V1_OK}"
+
+  # P3-PLAT-02 (Runtime Guard Helpers)
+  echo "RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=${RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK}"
+
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
 
@@ -497,6 +511,18 @@ VERIFY_PURITY_FULL_SCOPE_OK=1
 VERIFY_PURITY_ALLOWLIST_SSOT_OK=1
 VERIFY_PURITY_FULL_SCOPE_OK=1
 VERIFY_PURITY_ALLOWLIST_SSOT_OK=1
+
+echo "== guard: verify no /dev/tcp in verify (P3-PREP-00) =="
+run_guard "verify no /dev/tcp in verify" bash scripts/verify/verify_no_dev_tcp_in_verify_v1.sh
+VERIFY_NO_DEV_TCP_IN_VERIFY_OK=1
+
+echo "== guard: verify ripgrep guard present v1 (P3-PREP-00, enforcement pending) =="
+run_guard "verify ripgrep guard present v1" bash scripts/verify/verify_ripgrep_guard_present_v1.sh
+VERIFY_RIPGREP_GUARD_PRESENT_V1_OK=1
+
+echo "== guard: verify runtime guard helpers adopted v1 (P3-PLAT-02) =="
+run_guard "verify runtime guard helpers adopted v1" bash scripts/verify/verify_runtime_guard_helpers_adopted_v1.sh
+RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=1
 
 echo "== guard: repo contracts hygiene =="
 run_guard "repo contracts hygiene" bash scripts/verify/verify_repo_contracts_hygiene.sh

@@ -1,0 +1,8 @@
+# Insert into scripts/verify/verify_repo_contracts.sh (guard section)
+# run_guard "verify no ripgrep in verify" bash scripts/verify/verify_no_ripgrep_in_verify_v1.sh
+# run_guard "verify no /dev/tcp in verify" bash scripts/verify/verify_no_dev_tcp_in_verify_v1.sh
+#
+# DoD keys (echo only in verify_repo_contracts.sh):
+# VERIFY_NO_RIPGREP_IN_VERIFY_OK=1
+# VERIFY_NO_DEV_TCP_IN_VERIFY_OK=1
+
