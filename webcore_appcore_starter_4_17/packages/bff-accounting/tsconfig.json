@@ -17,5 +17,6 @@
   "references": [
     { "path": "../service-core-accounting" }
   ],
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts"]
 }

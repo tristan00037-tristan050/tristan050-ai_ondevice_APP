@@ -148,6 +148,13 @@ OPS_HUB_TRACE_JOINABLE_OK=0
 # A-3.1: Trace Security Lockdown
 OPS_HUB_TRACE_LOCAL_ONLY_OR_AUTH_OK=0
 
+# P1-PLAT-01
+OPS_HUB_TRACE_DB_SCHEMA_OK=0
+OPS_HUB_TRACE_REQUEST_ID_INDEX_OK=0
+OPS_HUB_TRACE_IDEMPOTENT_UPSERT_OK=0
+OPS_HUB_TRACE_CONCURRENCY_SAFE_OK=0
+OPS_HUB_TRACE_EVENT_SCHEMA_V1_OK=0
+
 # REASON-CODES-V1
 REASON_CODE_SINGLE_SOURCE_OK=0
 REASON_CODE_DRIFT_GUARD_OK=0
@@ -377,6 +384,13 @@ cleanup(){
 
   # A-3.1: Trace Security Lockdown
   echo "OPS_HUB_TRACE_LOCAL_ONLY_OR_AUTH_OK=${OPS_HUB_TRACE_LOCAL_ONLY_OR_AUTH_OK}"
+
+  # P1-PLAT-01: Trace DB Store
+  echo "OPS_HUB_TRACE_DB_SCHEMA_OK=${OPS_HUB_TRACE_DB_SCHEMA_OK}"
+  echo "OPS_HUB_TRACE_REQUEST_ID_INDEX_OK=${OPS_HUB_TRACE_REQUEST_ID_INDEX_OK}"
+  echo "OPS_HUB_TRACE_IDEMPOTENT_UPSERT_OK=${OPS_HUB_TRACE_IDEMPOTENT_UPSERT_OK}"
+  echo "OPS_HUB_TRACE_CONCURRENCY_SAFE_OK=${OPS_HUB_TRACE_CONCURRENCY_SAFE_OK}"
+  echo "OPS_HUB_TRACE_EVENT_SCHEMA_V1_OK=${OPS_HUB_TRACE_EVENT_SCHEMA_V1_OK}"
 
   # REASON-CODES-V1
   echo "REASON_CODE_SINGLE_SOURCE_OK=${REASON_CODE_SINGLE_SOURCE_OK}"
@@ -661,6 +675,14 @@ OPS_HUB_TRACE_JOINABLE_OK=1
 echo "== guard: trace security lockdown (A-3.1) =="
 run_guard "trace security lockdown (A-3.1)" bash scripts/verify/verify_trace_security_lockdown.sh
 OPS_HUB_TRACE_LOCAL_ONLY_OR_AUTH_OK=1
+
+echo "== guard: ops hub trace db store (P1-PLAT-01) =="
+run_guard "ops hub trace db store" bash scripts/verify/verify_ops_hub_trace_db_store.sh
+OPS_HUB_TRACE_DB_SCHEMA_OK=1
+OPS_HUB_TRACE_REQUEST_ID_INDEX_OK=1
+OPS_HUB_TRACE_IDEMPOTENT_UPSERT_OK=1
+OPS_HUB_TRACE_CONCURRENCY_SAFE_OK=1
+OPS_HUB_TRACE_EVENT_SCHEMA_V1_OK=1
 
 echo "== guard: reason codes v1 single source =="
 run_guard "reason codes v1 single source" bash scripts/verify/verify_reason_codes_v1_single_source.sh

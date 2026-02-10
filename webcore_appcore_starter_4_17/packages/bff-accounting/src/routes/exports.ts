@@ -103,7 +103,7 @@ router.post('/reports', requireTenantAuth, requireRole('operator'), async (req: 
       subject_id: out.jobId,
       policy_rule_id: 'export_001', // 정책 통과 표시
     });
-    await auditLog(auditPayload);
+    await auditLog(auditPayload as any);
     
     res.status(202).json(out);
   } catch (e: any) {
