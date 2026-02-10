@@ -25,8 +25,6 @@ cleanup() {
   fi
   exit 1
 }
-trap cleanup EXIT
-
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
@@ -47,9 +45,15 @@ fi
 # 임시 디렉터리
 TMP_DIR="$(mktemp -d)"
 cleanup_tmp() {
-  rm -rf "$TMP_DIR"
+  rm -rf "$TMP_DIR" || true
 }
-trap cleanup_tmp EXIT
+
+# 통합 cleanup (tmp 정리 + DoD 키 출력)
+on_exit() {
+  cleanup_tmp
+  cleanup
+}
+trap on_exit EXIT
 
 # CommonJS 테스트 러너 (빌드/설치/네트워크 금지, 판정만)
 cat > "$TMP_DIR/inference_runner.cjs" <<'RUNNER'
