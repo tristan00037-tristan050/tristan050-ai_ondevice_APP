@@ -2,6 +2,11 @@ import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { loadModelPackOrThrow } from "./modelPackLoader.js";
+import { fingerprintSha256 } from "./fingerprint.js";
+
+// A-2) Fingerprint import 마커 (import 직후)
+console.error(JSON.stringify({ reason_code: "FINGERPRINT_IMPORT_OK", ok: true }));
 
 // ESM에서 CommonJS 모듈 import
 const __filename = fileURLToPath(import.meta.url);
@@ -54,35 +59,75 @@ export function validateMetaOnlyOrThrow(body: unknown) {
   if (!String(req.model_id || "")) throw new Error("META_ONLY_MISSING:model_id");
 }
 
-export function generateThreeBlocks(metaReq: any) {
-  const meta = {
-    request_id: String(metaReq.request_id || ""),
-    intent: String(metaReq.intent || ""),
-    model_id: String(metaReq.model_id || ""),
-    device_class: String(metaReq.device_class || ""),
-    client_version: String(metaReq.client_version || ""),
-    ts_utc: String(metaReq.ts_utc || ""),
-  };
+export async function generateThreeBlocks(metaReq: any) {
+  try {
+    const modelId = String(metaReq.model_id || "");
+    const pack = loadModelPackOrThrow(modelId);
 
-  const blocks = {
-    block_1_policy: {
-      kind: "policy",
-      meta,
-      rules: ["meta-only input required", "no raw prompt/text/content accepted", "fail-closed on unknown keys"],
-    },
-    block_2_plan: {
-      kind: "plan",
-      meta,
-      steps: ["validate meta schema", "generate deterministic blocks", "emit signed manifest for artifacts"],
-    },
-    block_3_checks: {
-      kind: "checks",
-      meta,
-      checks: ["forbidden keys absent", "exactly 3 blocks present", "latency recorded"],
-    },
-  };
+    const meta = {
+      request_id: String(metaReq.request_id || ""),
+      intent: String(metaReq.intent || ""),
+      model_id: modelId,
+      device_class: String(metaReq.device_class || ""),
+      client_version: String(metaReq.client_version || ""),
+      ts_utc: String(metaReq.ts_utc || ""),
+    };
 
-  return blocks;
+    // salt를 결과에 반영 (bucket 예시)
+    const bucket = (pack.param.salt % 10);
+
+    const rules = ["meta-only input required", "no raw prompt/text/content accepted", "fail-closed on unknown keys", `pack_salt_bucket:${bucket}`];
+    const steps = ["validate meta schema", "generate deterministic blocks", "emit signed manifest for artifacts"];
+    const checks = ["forbidden keys absent", "exactly 3 blocks present", "latency recorded"];
+
+    const blocks = {
+      block_1_policy: {
+        kind: "policy",
+        meta,
+        rules,
+      },
+      block_2_plan: {
+        kind: "plan",
+        meta,
+        steps,
+      },
+      block_3_checks: {
+        kind: "checks",
+        meta,
+        checks,
+      },
+    };
+
+    // A-2) Fingerprint 호출 마커
+    console.error(JSON.stringify({ reason_code: "FINGERPRINT_CALL_BEGIN" }));
+    
+    // 안정 지문 계산 (pack_salt 포함)
+    const fp = fingerprintSha256({
+      pack_salt: pack.param.salt,
+      rules,
+      steps,
+      checks,
+    });
+    
+    console.error(JSON.stringify({ reason_code: "FINGERPRINT_CALL_END" }));
+
+    // 응답에 pack 정보와 fingerprint 포함 (확장 가능)
+    (blocks as any).__pack_meta = {
+      pack_id: pack.pack_id,
+      pack_version: pack.version,
+      manifest_sha256: pack.manifest_sha256,
+      result_fingerprint_sha256: fp,
+      compute_path: "ondevice",
+    };
+
+    return blocks;
+  } catch (e: any) {
+    // code-only (e.message 금지)
+    const code = e?.code || "INFER_FAILED";
+    const err: any = new Error(code);
+    err.code = code;
+    throw err;
+  }
 }
 
 // Ed25519 signer (dev: ephemeral ok / prod: must be provided)
