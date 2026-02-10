@@ -3,6 +3,7 @@ set -euo pipefail
 
 # P2-AI-01: On-Device Inference v0 Verification
 # 목적: 모델팩 로드 + 추론 + pack params 영향 증명 (4케이스: A/B/C/D)
+# Gateway 서버 없이 직접 함수 호출 방식
 
 ONDEVICE_MODEL_PACK_LOADED_OK=0
 ONDEVICE_MODEL_PACK_IDENTITY_OK=0
@@ -25,23 +26,15 @@ cleanup() {
   fi
   exit 1
 }
+
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
 command -v node >/dev/null 2>&1 || { echo "BLOCK: node not found"; exit 1; }
 
-# Node 18+ 내장 fetch 확인 (fail-closed, 설치 금지)
+# Node 18+ 확인 (ESM import 필요)
 node -e 'process.exit((parseInt(process.versions.node.split(".")[0],10) >= 18) ? 0 : 1)' \
-  || { echo "ERROR_CODE=NODE_FETCH_UNAVAILABLE"; echo "BLOCK: Node 18+ required for built-in fetch (install forbidden)"; exit 1; }
-
-# Gateway 서버 확인 (선택적: 없으면 스킵)
-GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:8081}"
-if ! curl -sS "${GATEWAY_URL}/healthz" >/dev/null 2>&1; then
-  echo "SKIP: Gateway server not running at ${GATEWAY_URL}/healthz"
-  echo "      (This guard requires Gateway server. Start: cd webcore_appcore_starter_4_17/packages/bff-accounting && PORT=8081 npm start)"
-  # Gateway 없으면 모든 DoD 키를 0으로 유지하고 스킵
-  exit 0
-fi
+  || { echo "ERROR_CODE=NODE_VERSION_INSUFFICIENT"; echo "BLOCK: Node 18+ required (install forbidden)"; exit 1; }
 
 # 임시 디렉터리
 TMP_DIR="$(mktemp -d)"
@@ -56,7 +49,7 @@ on_exit() {
 }
 trap on_exit EXIT
 
-# CommonJS 테스트 러너 (빌드/설치/네트워크 금지, 판정만)
+# CommonJS 테스트 러너 (직접 함수 호출, Gateway 없음)
 cat > "$TMP_DIR/inference_runner.cjs" <<'RUNNER'
 const { createRequire } = require("module");
 const path = require("path");
@@ -64,56 +57,52 @@ const fs = require("fs");
 const crypto = require("crypto");
 
 const ROOT = process.argv[2];
-const GATEWAY_URL = process.argv[3];
 
 function sha256(s) {
   return crypto.createHash("sha256").update(String(s ?? ""), "utf8").digest("hex");
 }
 
-async function callThreeBlocks(modelId, intent) {
-  const body = {
-    request_id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    intent: intent || "업무일지",
-    model_id: modelId,
-    device_class: "demo",
-    client_version: "1.0.0",
-    ts_utc: new Date().toISOString()
-  };
+// ESM 모듈 동적 import (Node 18+)
+async function importESM(modulePath) {
+  const fullPath = path.resolve(ROOT, modulePath);
+  return await import(`file://${fullPath}`);
+}
 
+async function callGenerateThreeBlocks(modelId, intent) {
   try {
-    // Node 18+ 내장 fetch 사용 (node-fetch 금지)
-    if (typeof globalThis.fetch !== "function") {
-      const err = new Error("FETCH_NOT_AVAILABLE");
-      err.code = "FETCH_NOT_AVAILABLE";
-      throw err;
-    }
-    const res = await fetch(`${GATEWAY_URL}/v1/os/algo/three-blocks`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Tenant": "demo",
-        "X-Api-Key": "demo",
-        "X-User-Id": "demo",
-        "X-User-Role": "admin",
-      },
-      body: JSON.stringify(body)
-    });
+    // 직접 import (Gateway 없이)
+    const osAlgoCore = await importESM("webcore_appcore_starter_4_17/packages/bff-accounting/src/lib/osAlgoCore.ts");
+    
+    const metaReq = {
+      request_id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      intent: intent || "업무일지",
+      model_id: modelId,
+      device_class: "demo",
+      client_version: "1.0.0",
+      ts_utc: new Date().toISOString()
+    };
 
-    const json = await res.json();
+    const blocks = await osAlgoCore.generateThreeBlocks(metaReq);
+    
+    // pack meta 추출
+    const packMeta = blocks.__pack_meta || {};
+    delete blocks.__pack_meta;
+    
     return {
-      ok: res.ok,
-      status: res.status,
-      error_code: json.error_code || null,
-      result_fingerprint_sha256: json.result_fingerprint_sha256 || null,
-      pack_id: json.pack_id || null,
-      version: json.version || null,
-      manifest_sha256: json.manifest?.sha256 || null,
-      compute_path: json.compute_path || null,
+      ok: true,
+      blocks,
+      pack_id: packMeta.pack_id || null,
+      version: packMeta.pack_version || null,
+      manifest_sha256: packMeta.manifest_sha256 || null,
+      result_fingerprint_sha256: packMeta.result_fingerprint_sha256 || null,
+      compute_path: packMeta.compute_path || null,
     };
   } catch (e) {
+    // code-only (e.message 금지)
+    const code = e?.code || "INFER_FAILED";
     return {
       ok: false,
-      error_code: "NETWORK_ERROR",
+      error_code: code,
       result_fingerprint_sha256: null,
       pack_id: null,
     };
@@ -122,15 +111,21 @@ async function callThreeBlocks(modelId, intent) {
 
 // 케이스 A: good pack → infer OK
 async function testCaseA() {
-  const result = await callThreeBlocks("demoA", "업무일지");
+  const result = await callGenerateThreeBlocks("demoA", "업무일지");
   if (!result.ok) {
-    throw new Error(`CASE_A_FAILED: ${result.error_code || "UNKNOWN"}`);
+    const err = new Error("CASE_A_FAILED");
+    err.code = result.error_code || "CASE_A_FAILED";
+    throw err;
   }
   if (!result.result_fingerprint_sha256) {
-    throw new Error("CASE_A_FAILED: result_fingerprint_sha256 missing");
+    const err = new Error("CASE_A_FAILED");
+    err.code = "CASE_A_FAILED_FINGERPRINT_MISSING";
+    throw err;
   }
   if (!result.pack_id || result.pack_id !== "demoA") {
-    throw new Error("CASE_A_FAILED: pack_id mismatch");
+    const err = new Error("CASE_A_FAILED");
+    err.code = "CASE_A_FAILED_PACK_ID_MISMATCH";
+    throw err;
   }
   return {
     case: "A",
@@ -146,12 +141,16 @@ async function testCaseA() {
 // 케이스 B: bad pack → apply=0 + infer BLOCK (negative-first)
 async function testCaseB() {
   // bad pack: 존재하지 않는 pack_id
-  const result = await callThreeBlocks("_bad_pack_not_found", "업무일지");
+  const result = await callGenerateThreeBlocks("_bad_pack_not_found", "업무일지");
   if (result.ok) {
-    throw new Error("CASE_B_FAILED: bad pack should be blocked");
+    const err = new Error("CASE_B_FAILED");
+    err.code = "CASE_B_FAILED_BAD_PACK_SHOULD_BE_BLOCKED";
+    throw err;
   }
   if (!result.error_code || !result.error_code.includes("PACK_")) {
-    throw new Error(`CASE_B_FAILED: expected PACK_* error_code, got ${result.error_code}`);
+    const err = new Error("CASE_B_FAILED");
+    err.code = "CASE_B_FAILED_WRONG_ERROR_CODE";
+    throw err;
   }
   return {
     case: "B",
@@ -163,22 +162,28 @@ async function testCaseB() {
 
 // 케이스 C: pack params 영향 증명 (가장 중요)
 async function testCaseC() {
-  const resultA = await callThreeBlocks("demoA", "업무일지");
-  const resultB = await callThreeBlocks("demoB", "업무일지");
+  const resultA = await callGenerateThreeBlocks("demoA", "업무일지");
+  const resultB = await callGenerateThreeBlocks("demoB", "업무일지");
   
   if (!resultA.ok || !resultB.ok) {
-    throw new Error(`CASE_C_FAILED: both packs must succeed (A: ${resultA.error_code}, B: ${resultB.error_code})`);
+    const err = new Error("CASE_C_FAILED");
+    err.code = `CASE_C_FAILED_BOTH_MUST_SUCCEED_A_${resultA.error_code}_B_${resultB.error_code}`;
+    throw err;
   }
   
   const fpA = resultA.result_fingerprint_sha256;
   const fpB = resultB.result_fingerprint_sha256;
   
   if (!fpA || !fpB) {
-    throw new Error("CASE_C_FAILED: fingerprints missing");
+    const err = new Error("CASE_C_FAILED");
+    err.code = "CASE_C_FAILED_FINGERPRINTS_MISSING";
+    throw err;
   }
   
   if (fpA === fpB) {
-    throw new Error("CASE_C_FAILED: fingerprints must differ (pack params not affecting output)");
+    const err = new Error("CASE_C_FAILED");
+    err.code = "CASE_C_FAILED_FINGERPRINTS_MUST_DIFFER";
+    throw err;
   }
   
   return {
@@ -192,56 +197,40 @@ async function testCaseC() {
 
 // 케이스 D: meta-only 위반 차단 (no-raw negative)
 async function testCaseD() {
-  // 금지 키 포함 payload 시도
-  const body = {
-    request_id: `test_${Date.now()}`,
-    intent: "업무일지",
-    model_id: "demoA",
-    device_class: "demo",
-    client_version: "1.0.0",
-    ts_utc: new Date().toISOString(),
-    prompt: "금지된 키", // 금지 키
-  };
-
   try {
-    // Node 18+ 내장 fetch 사용 (node-fetch 금지)
-    if (typeof globalThis.fetch !== "function") {
-      const err = new Error("FETCH_NOT_AVAILABLE");
-      err.code = "FETCH_NOT_AVAILABLE";
-      throw err;
-    }
-    const res = await fetch(`${GATEWAY_URL}/v1/os/algo/three-blocks`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Tenant": "demo",
-        "X-Api-Key": "demo",
-        "X-User-Id": "demo",
-        "X-User-Role": "admin",
-      },
-      body: JSON.stringify(body)
-    });
-
-    const json = await res.json();
+    // 금지 키 포함 payload 시도
+    const osAlgoCore = await importESM("webcore_appcore_starter_4_17/packages/bff-accounting/src/lib/osAlgoCore.ts");
     
-    // fail-closed: 금지 키 포함 시 반드시 차단되어야 함
-    if (res.ok) {
+    const metaReq = {
+      request_id: `test_${Date.now()}`,
+      intent: "업무일지",
+      model_id: "demoA",
+      device_class: "demo",
+      client_version: "1.0.0",
+      ts_utc: new Date().toISOString(),
+      prompt: "금지된 키", // 금지 키
+    };
+
+    // validateMetaOnlyOrThrow가 에러를 던져야 함
+    try {
+      osAlgoCore.validateMetaOnlyOrThrow(metaReq);
+      // 에러가 안 나면 실패
       const err = new Error("CASE_D_FAILED");
       err.code = "CASE_D_FAILED_FORBIDDEN_KEY_NOT_BLOCKED";
       throw err;
-    }
-    
-    // 금지 키가 차단되었으면 성공 (error_code가 META_ONLY_* 또는 다른 fail-closed 코드)
-    if (!json.error_code) {
-      const err = new Error("CASE_D_FAILED");
-      err.code = "CASE_D_FAILED_NO_ERROR_CODE";
-      throw err;
+    } catch (e) {
+      // META_ONLY_* 에러 코드 확인
+      if (!e?.message || !e.message.includes("META_ONLY_")) {
+        const err = new Error("CASE_D_FAILED");
+        err.code = "CASE_D_FAILED_WRONG_ERROR_CODE";
+        throw err;
+      }
     }
     
     return {
       case: "D",
       ok: false,
-      error_code: json.error_code,
+      error_code: "META_ONLY_VIOLATION",
       blocked: true,
     };
   } catch (e) {
@@ -279,7 +268,7 @@ async function main() {
     console.error(JSON.stringify({ reason_code: "CASE_B_FAIL", error_code: code }));
     process.exit(1);
   }
-  
+
   try {
     const caseC = await testCaseC();
     results.push(caseC);
@@ -290,7 +279,7 @@ async function main() {
     console.error(JSON.stringify({ reason_code: "CASE_C_FAIL", error_code: code }));
     process.exit(1);
   }
-  
+
   try {
     const caseD = await testCaseD();
     results.push(caseD);
@@ -301,7 +290,7 @@ async function main() {
     console.error(JSON.stringify({ reason_code: "CASE_D_FAIL", error_code: code }));
     process.exit(1);
   }
-  
+
   // 최종 출력 (meta-only)
   console.log(JSON.stringify({
     reason_code: "P2_AI_01_INFERENCE_VERIFIED",
@@ -324,10 +313,10 @@ main().catch(e => {
 RUNNER
 
 # Node.js 러너 실행 (빌드/설치/네트워크 금지, 판정만)
-# Node 18+ 내장 fetch 사용 (node-fetch 금지)
+# Gateway 없이 직접 함수 호출
 
 # 러너 실행
-RUNNER_OUTPUT="$(node "$TMP_DIR/inference_runner.cjs" "$ROOT" "$GATEWAY_URL" 2>&1)"
+RUNNER_OUTPUT="$(node "$TMP_DIR/inference_runner.cjs" "$ROOT" 2>&1)"
 RUNNER_RC=$?
 
 if [[ "$RUNNER_RC" -ne 0 ]]; then
@@ -391,4 +380,3 @@ fi
 
 # cleanup 함수가 DoD 키를 출력하고 exit 처리
 # (명시적 exit 0 제거, cleanup이 처리)
-
