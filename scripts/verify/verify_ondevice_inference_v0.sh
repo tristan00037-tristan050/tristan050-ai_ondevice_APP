@@ -238,7 +238,10 @@ async function testCaseD() {
     if (e.message && e.message.includes("CASE_D_FAILED")) {
       throw e;
     }
-    throw new Error(`CASE_D_FAILED: ${e.message || String(e)}`);
+    // code-only (e.message 금지)
+    const err = new Error("CASE_D_FAILED");
+    err.code = e?.code || "CASE_D_FAILED";
+    throw err;
   }
 }
 
@@ -250,7 +253,9 @@ async function main() {
     results.push(caseA);
     console.error(JSON.stringify({ reason_code: "CASE_A_PASS", ...caseA }));
   } catch (e) {
-    console.error(JSON.stringify({ reason_code: "CASE_A_FAIL", error: e.message }));
+    // code-only (e.message 금지)
+    const code = e?.code || "CASE_A_FAIL";
+    console.error(JSON.stringify({ reason_code: "CASE_A_FAIL", error_code: code }));
     process.exit(1);
   }
   
@@ -259,7 +264,9 @@ async function main() {
     results.push(caseB);
     console.error(JSON.stringify({ reason_code: "CASE_B_PASS", ...caseB }));
   } catch (e) {
-    console.error(JSON.stringify({ reason_code: "CASE_B_FAIL", error: e.message }));
+    // code-only (e.message 금지)
+    const code = e?.code || "CASE_B_FAIL";
+    console.error(JSON.stringify({ reason_code: "CASE_B_FAIL", error_code: code }));
     process.exit(1);
   }
   
@@ -268,7 +275,9 @@ async function main() {
     results.push(caseC);
     console.error(JSON.stringify({ reason_code: "CASE_C_PASS", ...caseC }));
   } catch (e) {
-    console.error(JSON.stringify({ reason_code: "CASE_C_FAIL", error: e.message }));
+    // code-only (e.message 금지)
+    const code = e?.code || "CASE_C_FAIL";
+    console.error(JSON.stringify({ reason_code: "CASE_C_FAIL", error_code: code }));
     process.exit(1);
   }
   
@@ -277,7 +286,9 @@ async function main() {
     results.push(caseD);
     console.error(JSON.stringify({ reason_code: "CASE_D_PASS", ...caseD }));
   } catch (e) {
-    console.error(JSON.stringify({ reason_code: "CASE_D_FAIL", error: e.message }));
+    // code-only (e.message 금지)
+    const code = e?.code || "CASE_D_FAIL";
+    console.error(JSON.stringify({ reason_code: "CASE_D_FAIL", error_code: code }));
     process.exit(1);
   }
   
