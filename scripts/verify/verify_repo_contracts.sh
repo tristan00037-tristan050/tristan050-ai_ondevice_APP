@@ -90,6 +90,9 @@ VERIFY_PURITY_ALLOWLIST_SSOT_OK=0
 VERIFY_NO_DEV_TCP_IN_VERIFY_OK=0
 VERIFY_RIPGREP_GUARD_PRESENT_V1_OK=0
 
+# P3-PLAT-01 (Workflow Preflight SSOT)
+WORKFLOW_PREFLIGHT_PRESENT_OK=0
+
 # P3-PLAT-02 (Runtime Guard Helpers)
 RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=0
 
@@ -349,6 +352,9 @@ cleanup(){
   echo "VERIFY_NO_DEV_TCP_IN_VERIFY_OK=${VERIFY_NO_DEV_TCP_IN_VERIFY_OK}"
   echo "VERIFY_RIPGREP_GUARD_PRESENT_V1_OK=${VERIFY_RIPGREP_GUARD_PRESENT_V1_OK}"
 
+  # P3-PLAT-01 (Workflow Preflight SSOT)
+  echo "WORKFLOW_PREFLIGHT_PRESENT_OK=${WORKFLOW_PREFLIGHT_PRESENT_OK}"
+
   # P3-PLAT-02 (Runtime Guard Helpers)
   echo "RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=${RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK}"
 
@@ -519,6 +525,10 @@ VERIFY_NO_DEV_TCP_IN_VERIFY_OK=1
 echo "== guard: verify ripgrep guard present v1 (P3-PREP-00, enforcement pending) =="
 run_guard "verify ripgrep guard present v1" bash scripts/verify/verify_ripgrep_guard_present_v1.sh
 VERIFY_RIPGREP_GUARD_PRESENT_V1_OK=1
+
+echo "== guard: verify workflow preflight present v1 (P3-PLAT-01) =="
+run_guard "verify workflow preflight present v1" bash scripts/verify/verify_workflow_preflight_present_v1.sh
+WORKFLOW_PREFLIGHT_PRESENT_OK=1
 
 echo "== guard: verify runtime guard helpers adopted v1 (P3-PLAT-02) =="
 run_guard "verify runtime guard helpers adopted v1" bash scripts/verify/verify_runtime_guard_helpers_adopted_v1.sh
