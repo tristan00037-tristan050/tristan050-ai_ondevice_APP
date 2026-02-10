@@ -152,9 +152,9 @@ BFF_PORT="$(node -e 'const s=require("net").createServer(); s.listen(0, ()=>{con
 export PORT="$BFF_PORT"
 export ALGO_CORE_MODE=dev
 
-# Skip proof generation if dist doesn't exist (CI may not pre-build)
-if [[ ! -d "dist" ]]; then
-  echo "SKIP: dist directory not found, skipping proof generation (CI may not pre-build)"
+# Skip proof generation if dist doesn't exist or build_info.json is missing (CI may not pre-build)
+if [[ ! -d "dist" ]] || [[ ! -f "dist/build_info.json" ]]; then
+  echo "SKIP: dist directory or build_info.json not found, skipping proof generation (CI may not pre-build)"
   RUNTIME_SHADOW_PROOF_OK=1
   exit 0
 fi
