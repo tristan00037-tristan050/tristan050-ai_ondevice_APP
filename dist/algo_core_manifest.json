@@ -1,6 +1,6 @@
 {
   "schema_name": "ALGO_CORE_SIGNED_MANIFEST_V1",
-  "created_at_utc": "2026-02-10T01:21:44.818Z",
+  "created_at_utc": "2026-02-10T03:36:24.570Z",
   "files": [
     {
       "path": "scripts/algo_core/meta_only_allowlist.json",
