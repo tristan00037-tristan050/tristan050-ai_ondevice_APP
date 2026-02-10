@@ -32,6 +32,10 @@ cd "$ROOT"
 
 command -v node >/dev/null 2>&1 || { echo "BLOCK: node not found"; exit 1; }
 
+# Node 18+ 내장 fetch 확인 (fail-closed, 설치 금지)
+node -e 'process.exit((parseInt(process.versions.node.split(".")[0],10) >= 18) ? 0 : 1)' \
+  || { echo "ERROR_CODE=NODE_FETCH_UNAVAILABLE"; echo "BLOCK: Node 18+ required for built-in fetch (install forbidden)"; exit 1; }
+
 # Gateway 서버 확인 (필수)
 GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:8081}"
 if ! curl -sS "${GATEWAY_URL}/healthz" >/dev/null 2>&1; then
@@ -72,9 +76,12 @@ async function callThreeBlocks(modelId, intent) {
   };
 
   try {
-    // node-fetch 경로 지정 (bff-accounting의 node_modules)
-    const nodeFetchPath = path.join(ROOT, "webcore_appcore_starter_4_17/packages/bff-accounting/node_modules/node-fetch");
-    const fetch = (await import("file://" + nodeFetchPath)).default;
+    // Node 18+ 내장 fetch 사용 (node-fetch 금지)
+    if (typeof globalThis.fetch !== "function") {
+      const err = new Error("FETCH_NOT_AVAILABLE");
+      err.code = "FETCH_NOT_AVAILABLE";
+      throw err;
+    }
     const res = await fetch(`${GATEWAY_URL}/v1/os/algo/three-blocks`, {
       method: "POST",
       headers: {
@@ -192,9 +199,12 @@ async function testCaseD() {
   };
 
   try {
-    // node-fetch 경로 지정 (bff-accounting의 node_modules)
-    const nodeFetchPath = path.join(ROOT, "webcore_appcore_starter_4_17/packages/bff-accounting/node_modules/node-fetch");
-    const fetch = (await import("file://" + nodeFetchPath)).default;
+    // Node 18+ 내장 fetch 사용 (node-fetch 금지)
+    if (typeof globalThis.fetch !== "function") {
+      const err = new Error("FETCH_NOT_AVAILABLE");
+      err.code = "FETCH_NOT_AVAILABLE";
+      throw err;
+    }
     const res = await fetch(`${GATEWAY_URL}/v1/os/algo/three-blocks`, {
       method: "POST",
       headers: {
@@ -285,20 +295,15 @@ async function main() {
 }
 
 main().catch(e => {
-  console.error(JSON.stringify({ reason_code: "RUNNER_FAILED", error: sha256(e.message) }));
+  // code-only (e.message 금지)
+  const code = e?.code || "RUNNER_FAILED";
+  console.error(JSON.stringify({ reason_code: "RUNNER_FAILED", error_code: code }));
   process.exit(1);
 });
 RUNNER
 
 # Node.js 러너 실행 (빌드/설치/네트워크 금지, 판정만)
-# 주의: node-fetch는 런타임에만 필요하므로 verify 스크립트에서는 체크만 수행
-# bff-accounting의 node_modules에서 확인
-BFF_NODE_MODULES="${ROOT}/webcore_appcore_starter_4_17/packages/bff-accounting/node_modules"
-if [[ ! -d "${BFF_NODE_MODULES}/node-fetch" ]]; then
-  echo "BLOCK: node-fetch not found (required for API calls)"
-  echo "      Install: cd webcore_appcore_starter_4_17/packages/bff-accounting && npm install"
-  exit 1
-fi
+# Node 18+ 내장 fetch 사용 (node-fetch 금지)
 
 # 러너 실행
 RUNNER_OUTPUT="$(node "$TMP_DIR/inference_runner.cjs" "$ROOT" "$GATEWAY_URL" 2>&1)"
