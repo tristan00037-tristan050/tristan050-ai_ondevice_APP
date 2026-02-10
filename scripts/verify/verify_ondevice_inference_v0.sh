@@ -384,5 +384,6 @@ if [[ "$ONDEVICE_MODEL_PACK_IDENTITY_OK" -eq 0 ]]; then
   exit 1
 fi
 
-exit 0
+# cleanup 함수가 DoD 키를 출력하고 exit 처리
+# (명시적 exit 0 제거, cleanup이 처리)
 
