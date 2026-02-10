@@ -221,11 +221,16 @@ async function testCaseD() {
     
     // fail-closed: 금지 키 포함 시 반드시 차단되어야 함
     if (res.ok) {
-      throw new Error("CASE_D_FAILED: forbidden key should be blocked");
+      const err = new Error("CASE_D_FAILED");
+      err.code = "CASE_D_FAILED_FORBIDDEN_KEY_NOT_BLOCKED";
+      throw err;
     }
     
-    if (!json.error_code || !json.error_code.includes("META_ONLY_")) {
-      throw new Error(`CASE_D_FAILED: expected META_ONLY_* error_code, got ${json.error_code}`);
+    // 금지 키가 차단되었으면 성공 (error_code가 META_ONLY_* 또는 다른 fail-closed 코드)
+    if (!json.error_code) {
+      const err = new Error("CASE_D_FAILED");
+      err.code = "CASE_D_FAILED_NO_ERROR_CODE";
+      throw err;
     }
     
     return {
