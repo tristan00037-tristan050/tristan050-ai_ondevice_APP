@@ -33,9 +33,9 @@ export function validateTraceEventV1(input: unknown): TraceEventV1 {
     }
   }
 
-  // kind 검증
+  // kind 검증 (사용자 값 포함 금지)
   if (obj.kind !== "trace_event_v1") {
-    throw new Error(`TRACE_EVENT_V1_INVALID_KIND: expected 'trace_event_v1', got '${obj.kind}'`);
+    throw new Error("TRACE_EVENT_V1_INVALID_KIND");
   }
 
   // event_id, request_id 타입 검증

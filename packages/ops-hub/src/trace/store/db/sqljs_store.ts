@@ -70,13 +70,13 @@ export async function openTraceStore(dbPath: string): Promise<TraceStore> {
   fs.writeFileSync(dbPath, Buffer.from(data));
 
   async function ingest(ev: unknown): Promise<{ inserted: boolean }> {
-    // 저장 전 검증 (trace_event_v1 파서로 먼저 검사)
-    const validated = validateTraceEventV1(ev);
-    
-    const payload = JSON.stringify(validated);
-    
-    // INSERT OR IGNORE로 멱등 보장 (DB UNIQUE/PK 사용, 코드 if 금지)
     try {
+      // 저장 전 검증 (trace_event_v1 파서로 먼저 검사) - 반드시 try 안
+      const validated = validateTraceEventV1(ev);
+      
+      const payload = JSON.stringify(validated);
+      
+      // INSERT OR IGNORE로 멱등 보장 (DB UNIQUE/PK 사용, 코드 if 금지)
       db.run(
         "INSERT OR IGNORE INTO trace_events(event_id, request_id, ts_ms, kind, payload) VALUES (?, ?, ?, ?, ?)",
         [
@@ -99,8 +99,11 @@ export async function openTraceStore(dbPath: string): Promise<TraceStore> {
       
       return { inserted };
     } catch (e: any) {
-      // DB 제약조건 위반 등
-      throw new Error(`TRACE_STORE_INGEST_FAILED: ${e?.message || String(e)}`);
+      // 외부로는 짧은 코드만 (e.message 노출 금지)
+      // validation 실패 또는 DB 제약조건 위반 등
+      const error = new Error("TRACE_STORE_INGEST_FAILED");
+      (error as any).code = "TRACE_EVENT_INVALID";
+      throw error;
     }
   }
 

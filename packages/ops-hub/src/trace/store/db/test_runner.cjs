@@ -92,6 +92,52 @@ function testFileStructure(ROOT) {
     throw new Error("BLOCK: validateMetaOnlyOrThrow 호출 없음 (금지 키 검증 필수)");
   }
 
+  // v1_trace.ts 검증: error_code에 e.message 사용 금지 확인
+  if (routeContent.includes("error_code: e?.message") || routeContent.includes("error_code: e.message") || routeContent.includes('error_code: e?.message')) {
+    throw new Error("BLOCK: error_code에 e.message 사용 금지 (짧은 코드만 사용)");
+  }
+
+  // v1_trace.ts 검증: ERROR 상수 정의 확인
+  if (!routeContent.includes("const ERROR") && !routeContent.includes("ERROR =")) {
+    throw new Error("BLOCK: ERROR 상수 정의 없음 (에러 코드 상수화 필수)");
+  }
+
+  // sqljs_store.ts 검증: validate 호출이 try 안에 있는지 확인
+  const storeLines = storeContent.split("\n");
+  let validateInTry = false;
+  let inTryBlock = false;
+  for (let i = 0; i < storeLines.length; i++) {
+    const line = storeLines[i];
+    if (line.includes("try {") || line.includes("try{")) {
+      inTryBlock = true;
+    }
+    if (inTryBlock && line.includes("validateTraceEventV1")) {
+      validateInTry = true;
+      break;
+    }
+    if (line.includes("} catch")) {
+      inTryBlock = false;
+    }
+  }
+  if (!validateInTry) {
+    throw new Error("BLOCK: validateTraceEventV1 호출이 try 블록 밖에 있음 (반드시 try 안에 있어야 함)");
+  }
+
+  // trace_event_v1.ts 검증: 사용자 값 포함 메시지 금지 확인
+  if (schemaContent.includes("got '") || schemaContent.includes('got "') || schemaContent.includes("contains '") || schemaContent.includes('contains "')) {
+    throw new Error("BLOCK: 에러 메시지에 사용자 값 포함 금지 (상수 메시지만 사용)");
+  }
+
+  // v1_trace.ts 검증: 기본 API 키 하드코딩 금지 확인
+  if (routeContent.includes('"test-key-change-in-prod"') || routeContent.includes("'test-key-change-in-prod'")) {
+    throw new Error("BLOCK: 기본 API 키 하드코딩 금지 (env 없으면 빈 문자열, fail-closed)");
+  }
+
+  // v1_trace.ts 검증: env 없을 때 fail-closed 확인
+  if (!routeContent.includes("TRACE_API_KEY ?? \"\"") && !routeContent.includes("TRACE_API_KEY || \"\"")) {
+    throw new Error("BLOCK: TRACE_API_KEY env 없을 때 기본값 설정 확인 필요 (빈 문자열로 fail-closed)");
+  }
+
   return true;
 }
 
