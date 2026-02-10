@@ -163,7 +163,17 @@ RESPONSE_OFF="$(curl -sS -D /tmp/bff_off_headers.txt -X POST "http://127.0.0.1:8
   -H "X-Tenant: default" \
   -H "X-User-Id: test-user" \
   -H "X-User-Role: operator" \
-  --data '{"request_id":"proof_test","intent":"ALGO_CORE_THREE_BLOCKS","model_id":"test","device_class":"web","client_version":"test","ts_utc":"2026-01-29T00:00:00Z"}')"
+  --data '{"request_id":"proof_test","intent":"ALGO_CORE_THREE_BLOCKS","model_id":"demoA","device_class":"web","client_version":"test","ts_utc":"2026-01-29T00:00:00Z"}')"
+
+# Check if response is OK (if error, headers may not be set)
+HTTP_CODE_OFF="$(grep -i "^HTTP" /tmp/bff_off_headers.txt | tail -1 | awk '{print $2}' || echo "")"
+if [[ "$HTTP_CODE_OFF" != "200" ]]; then
+  echo "BLOCK: BFF returned ${HTTP_CODE_OFF} (expected 200)"
+  echo "Response: $RESPONSE_OFF"
+  kill "$BFF_OFF_PID" >/dev/null 2>&1 || true
+  kill "$RUNTIME_PID" >/dev/null 2>&1 || true
+  exit 1
+fi
 
 kill "$BFF_OFF_PID" >/dev/null 2>&1 || true
 sleep 1
@@ -196,7 +206,17 @@ RESPONSE_ON="$(curl -sS -D /tmp/bff_on_headers.txt -X POST "http://127.0.0.1:808
   -H "X-Tenant: default" \
   -H "X-User-Id: test-user" \
   -H "X-User-Role: operator" \
-  --data '{"request_id":"proof_test","intent":"ALGO_CORE_THREE_BLOCKS","model_id":"test","device_class":"web","client_version":"test","ts_utc":"2026-01-29T00:00:00Z"}')"
+  --data '{"request_id":"proof_test","intent":"ALGO_CORE_THREE_BLOCKS","model_id":"demoA","device_class":"web","client_version":"test","ts_utc":"2026-01-29T00:00:00Z"}')"
+
+# Check if response is OK (if error, headers may not be set)
+HTTP_CODE_ON="$(grep -i "^HTTP" /tmp/bff_on_headers.txt | tail -1 | awk '{print $2}' || echo "")"
+if [[ "$HTTP_CODE_ON" != "200" ]]; then
+  echo "BLOCK: BFF (shadow ON) returned ${HTTP_CODE_ON} (expected 200)"
+  echo "Response: $RESPONSE_ON"
+  kill "$BFF_ON_PID" >/dev/null 2>&1 || true
+  kill "$RUNTIME_PID" >/dev/null 2>&1 || true
+  exit 1
+fi
 
 kill "$BFF_ON_PID" >/dev/null 2>&1 || true
 kill "$RUNTIME_PID" >/dev/null 2>&1 || true
