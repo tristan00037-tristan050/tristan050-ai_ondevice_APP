@@ -43,6 +43,12 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
+      - name: Build bff-accounting (preflight for P2-AI-01 verify)
+        run: |
+          cd webcore_appcore_starter_4_17/packages/bff-accounting
+          npm ci
+          npm run build
+
       - name: Run repo-wide guards (fail-closed)
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
