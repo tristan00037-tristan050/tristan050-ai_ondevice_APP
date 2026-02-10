@@ -1,8 +1,8 @@
 # Runtime Shadow Mode Proof (Output-Based)
 
 Status: SEALED
-RecordedAt(UTC): 2026-02-10T00:50:20Z
-PinnedMainHeadSHA: 286f4051ef21bd5d0e733f0b91b69dbf02423467
+RecordedAt(UTC): 2026-02-10T01:06:25Z
+PinnedMainHeadSHA: 746e895957813c301bbacd3840bf62b369c11ce3
 
 ## Test: Shadow OFF vs ON Response Identity
 
@@ -83,10 +83,10 @@ PinnedMainHeadSHA: 286f4051ef21bd5d0e733f0b91b69dbf02423467
     }
   },
   "manifest": {
-    "sha256": "7e17025a1c1cbf3ec5ff2433d30afef10a4e76f3b3e6c3261bcb14e8e36349f5"
+    "sha256": "1b40a69be61e2da20047c8da59de6783a3b68bd41df1f7f0a4403a226e32c525"
   },
   "signature": {
-    "b64": "XZFFqS2QFKOWBZN1M6il/rbAh57qObE9JfDVre8a6wFZ2Eqxe0lDzX3Yv1ea5bJkQilXeugCE9U+Iq0gYHBWAw==",
+    "b64": "4RPKXIEgrKjJNpgWMA3fR0U48wnEiHdgmIfr1MHEFxijjkG3V3XNqow6X6xlTjQluxbBnSu4RUjWuEGhqVuwAQ==",
     "public_key_b64": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQUtaclRkS1FodnJ6UmI3WVVNMHM1UWp0M3ZQRE51cHczSFc0aE0vNi9udEU9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
     "mode": "dev"
   }
@@ -148,10 +148,10 @@ PinnedMainHeadSHA: 286f4051ef21bd5d0e733f0b91b69dbf02423467
     }
   },
   "manifest": {
-    "sha256": "175d1460fad4ddf043731a6ae760f5a937b8be5f368435254e4a202eb23625a1"
+    "sha256": "7d55cccd0fd2ee1c96bdb67381bdcd32396ea33fad97f09c5a4d4bb3e1c64508"
   },
   "signature": {
-    "b64": "ORK5YqcPwCF+UFkzvUrAEXJFSN+8IjRd5Bo+l08R6pUKsD7e+iu2wI98NmYPyinqPUPRXXRPLieA3eTUk2pmAw==",
+    "b64": "5CzL1vsYc8jvQzv32xIC+DdcjwQjsVOsiTrO+oKsrfOPXStuZhik9YImYZRBJcl6uRyvc877Ql5Krkn0LGPYCA==",
     "public_key_b64": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQUtaclRkS1FodnJ6UmI3WVVNMHM1UWp0M3ZQRE51cHczSFc0aE0vNi9udEU9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
     "mode": "dev"
   }
@@ -160,14 +160,14 @@ PinnedMainHeadSHA: 286f4051ef21bd5d0e733f0b91b69dbf02423467
 
 ### Critical Headers (OFF)
 ```
-X-OS-Algo-Latency-Ms: 0.363
-X-OS-Algo-Manifest-SHA256: 7e17025a1c1cbf3ec5ff2433d30afef10a4e76f3b3e6c3261bcb14e8e36349f5
+X-OS-Algo-Latency-Ms: 0.439
+X-OS-Algo-Manifest-SHA256: 1b40a69be61e2da20047c8da59de6783a3b68bd41df1f7f0a4403a226e32c525
 ```
 
 ### Critical Headers (ON)
 ```
-X-OS-Algo-Latency-Ms: 0.329
-X-OS-Algo-Manifest-SHA256: 175d1460fad4ddf043731a6ae760f5a937b8be5f368435254e4a202eb23625a1
+X-OS-Algo-Latency-Ms: 0.399
+X-OS-Algo-Manifest-SHA256: 7d55cccd0fd2ee1c96bdb67381bdcd32396ea33fad97f09c5a4d4bb3e1c64508
 ```
 
 ## Output-Based Checks

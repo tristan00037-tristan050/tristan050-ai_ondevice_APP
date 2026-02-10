@@ -26,7 +26,6 @@ cleanup() {
   fi
   exit 1
 }
-trap cleanup EXIT
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
@@ -43,7 +42,17 @@ DB_PATH="${TMP_DIR}/test_trace.db"
 cleanup_db() {
   rm -rf "$TMP_DIR"
 }
-trap cleanup_db EXIT
+
+# 하나의 trap 함수로 합치기
+on_exit() {
+  # 1) DB/임시 자원 정리(실패해도 진행)
+  cleanup_db || true
+
+  # 2) DoD 키 출력 + 최종 exit code 처리(이게 핵심)
+  cleanup
+}
+
+trap on_exit EXIT
 
 # CommonJS 테스트 러너 실행 (빌드/설치/네트워크 금지, 판정만)
 TEST_RUNNER="packages/ops-hub/src/trace/store/db/test_runner.cjs"
