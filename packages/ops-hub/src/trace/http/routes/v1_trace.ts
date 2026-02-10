@@ -28,11 +28,15 @@ function checkAccess(req: Request): { allowed: boolean; reason?: string } {
   const ip = req.ip || req.socket.remoteAddress || "";
   const normalizedIp = ip.replace(/^::ffff:/, ""); // IPv6-mapped IPv4
   
+  // 빈 IP는 fail-closed (거부)
+  if (!normalizedIp || normalizedIp === "") {
+    return { allowed: false, reason: ReasonCodeV1.ACCESS_DENIED };
+  }
+  
   if (
     normalizedIp === "127.0.0.1" ||
     normalizedIp === "::1" ||
-    normalizedIp === "localhost" ||
-    normalizedIp === ""
+    normalizedIp === "localhost"
   ) {
     return { allowed: true };
   }
