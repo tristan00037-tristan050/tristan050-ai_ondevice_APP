@@ -105,7 +105,8 @@ export function buildTraceRouter(store: TraceStore) {
       let errorCode = ERROR.TRACE_STORE_FAILED;
       
       // TraceError 타입 확인 (내부에서 던진 에러)
-      if (e?.code === "TRACE_EVENT_INVALID" || e?.message?.includes("TRACE_EVENT_V1")) {
+      // e.message를 직접 확인하지 않고, code만 확인
+      if (e?.code === "TRACE_EVENT_INVALID") {
         errorCode = ERROR.TRACE_EVENT_INVALID;
       }
       
