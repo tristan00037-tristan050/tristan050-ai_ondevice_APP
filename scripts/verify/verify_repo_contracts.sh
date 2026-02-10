@@ -644,25 +644,12 @@ ONDEVICE_RESULT_FINGERPRINT_OK=1
 ONDEVICE_COMPUTE_PATH_ONDEVICE_OK=1
 
 echo "== guard: ondevice inference v0 (P2-AI-01) =="
-GUARD_OUTPUT="$(bash scripts/verify/verify_ondevice_inference_v0.sh 2>&1)"
-GUARD_RC=$?
-if [[ "$GUARD_RC" -eq 0 ]]; then
-  # Check if guard was skipped (SKIP: message)
-  if echo "$GUARD_OUTPUT" | grep -q "SKIP:"; then
-    echo "SKIP: ondevice inference v0 (Gateway server not running)"
-    # DoD keys remain 0 (not set to 1 when skipped)
-  else
-    # Guard passed, set DoD keys to 1
-    ONDEVICE_MODEL_PACK_LOADED_OK=1
-    ONDEVICE_MODEL_PACK_IDENTITY_OK=1
-    ONDEVICE_INFERENCE_ONCE_OK=1
-    ONDEVICE_OUTPUT_FINGERPRINT_OK=1
-    ONDEVICE_INFER_USES_PACK_PARAMS_OK=1
-  fi
-else
-  echo "FAIL: ondevice inference v0"
-  echo "$GUARD_OUTPUT" | tail -3
-fi
+run_guard "ondevice inference v0" bash scripts/verify/verify_ondevice_inference_v0.sh
+ONDEVICE_MODEL_PACK_LOADED_OK=1
+ONDEVICE_MODEL_PACK_IDENTITY_OK=1
+ONDEVICE_INFERENCE_ONCE_OK=1
+ONDEVICE_OUTPUT_FINGERPRINT_OK=1
+ONDEVICE_INFER_USES_PACK_PARAMS_OK=1
 
 echo "== guard: ai v1 modules (perf/rerank/calib/propensity) =="
 run_guard "ai v1 modules" bash scripts/verify/verify_ai_v1_modules.sh
