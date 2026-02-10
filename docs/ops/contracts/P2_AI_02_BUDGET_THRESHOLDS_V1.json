@@ -1,0 +1,5 @@
+{
+  "latency_ms_max": 2000,
+  "mem_peak_mb_max": 512,
+  "cpu_time_ms_max": 2000
+}

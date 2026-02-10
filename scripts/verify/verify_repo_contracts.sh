@@ -128,6 +128,13 @@ AI_DETERMINISM_OK=0
 AI_P95_BUDGET_OK=0
 AI_NEARTIE_SWAP_BUDGET_OK=0
 
+# P2-AI-02 (Budget Gates)
+AI_RESOURCE_BUDGET_LATENCY_OK=0
+AI_RESOURCE_BUDGET_MEM_OK=0
+AI_RESOURCE_BUDGET_ENERGY_PROXY_OK=0
+AI_BUDGET_MEASUREMENTS_PRESENT_OK=0
+AI_ENERGY_PROXY_DEFINITION_SSOT_OK=0
+
 # ALGO-DETERMINISM-GATE
 ALGO_DETERMINISM_VERIFIED_OK=0
 ALGO_DETERMINISM_HASH_MATCH_OK=0
@@ -372,6 +379,13 @@ cleanup(){
   echo "AI_P95_BUDGET_OK=${AI_P95_BUDGET_OK}"
   echo "AI_NEARTIE_SWAP_BUDGET_OK=${AI_NEARTIE_SWAP_BUDGET_OK}"
 
+  # P2-AI-02 (Budget Gates)
+  echo "AI_RESOURCE_BUDGET_LATENCY_OK=${AI_RESOURCE_BUDGET_LATENCY_OK}"
+  echo "AI_RESOURCE_BUDGET_MEM_OK=${AI_RESOURCE_BUDGET_MEM_OK}"
+  echo "AI_RESOURCE_BUDGET_ENERGY_PROXY_OK=${AI_RESOURCE_BUDGET_ENERGY_PROXY_OK}"
+  echo "AI_BUDGET_MEASUREMENTS_PRESENT_OK=${AI_BUDGET_MEASUREMENTS_PRESENT_OK}"
+  echo "AI_ENERGY_PROXY_DEFINITION_SSOT_OK=${AI_ENERGY_PROXY_DEFINITION_SSOT_OK}"
+
   # ALGO-DETERMINISM-GATE
   echo "ALGO_DETERMINISM_VERIFIED_OK=${ALGO_DETERMINISM_VERIFIED_OK}"
   echo "ALGO_DETERMINISM_HASH_MATCH_OK=${ALGO_DETERMINISM_HASH_MATCH_OK}"
@@ -468,6 +482,8 @@ run_guard() {
     echo "$out"
     exit 1
   fi
+  # Return output for DoD key extraction (if needed)
+  echo "$out"
 }
 
 # Existing guards
@@ -660,6 +676,11 @@ AI_PROPENSITY_IPS_SNIPS_V1_OK=1
 AI_DETERMINISM_OK=1
 AI_P95_BUDGET_OK=1
 AI_NEARTIE_SWAP_BUDGET_OK=1
+
+echo "== guard: ai budget gates (P2-AI-02: latency/mem/energy_proxy) =="
+GUARD_OUT="$(run_guard "ai budget gates" bash scripts/verify/verify_ai_budget_gates_v0.sh)"
+# Extract DoD keys from guard output (use eval to set in parent shell)
+eval "$(echo "$GUARD_OUT" | grep -E '^(AI_RESOURCE_BUDGET_|AI_BUDGET_MEASUREMENTS_|AI_ENERGY_PROXY_)')" || true
 
 echo "== guard: algo determinism gate (D0) =="
 run_guard "algo determinism gate (D0)" bash scripts/verify/verify_algo_determinism_gate.sh
