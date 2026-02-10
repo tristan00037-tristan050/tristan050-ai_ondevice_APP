@@ -1,8 +1,8 @@
 # Runtime Shadow Mode Proof (Output-Based)
 
 Status: SEALED
-RecordedAt(UTC): 2026-02-10T03:48:28Z
-PinnedMainHeadSHA: 5d13accee65e7a6b0adc8e078c50d3fb8e9e102f
+RecordedAt(UTC): 2026-02-10T03:49:13Z
+PinnedMainHeadSHA: 24de16d697a85de385236a056bf4d23edd66c527
 
 ## Test: Shadow OFF vs ON Response Identity
 
@@ -86,11 +86,11 @@ PinnedMainHeadSHA: 5d13accee65e7a6b0adc8e078c50d3fb8e9e102f
   "pack_id": "demoA",
   "version": "0.0.1",
   "manifest": {
-    "sha256": "85e936c69d0c15b615ad2ae6a0f09e86a13fa06bf02054b3013d1c25f22215d8"
+    "sha256": "7384745aecab84048dcf5230bdcbf21ac0cbdcbf105683ad24e99ece4b6c2073"
   },
   "signature": {
-    "b64": "X+0thOboPyPqifkqRzl7LPwnVkbkHxiQp0OFXIxy+otVboLW/y9+L8W/Y8RBemrb22QELrYv2cZIK1L6DhvrAQ==",
-    "public_key_b64": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQU9PZGFESy95ZEs3MjRwU0VSWklKQTRBYmJkMzZ3c3pBSnFRY0g2TlYrRGs9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+    "b64": "/4gE8TMtpsV4KJzyru/I0LZuR5KbmK1plC4EBNn2D6vBnl7QNrkyeCvGB7kOd7Morqy09ISdlfrifzwv1y91Bg==",
+    "public_key_b64": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQXBuWHlnY3hZNHBmVHdMMWp6MjlpTmp0bk1TNzJaZUorUm5XdGwyWXNEd1k9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
     "mode": "dev"
   },
   "result_fingerprint_sha256": "5278c8ced22bdd4e59aa23f9d8f4cebf2ad4aa339bfde2941716b71843b16300",
@@ -156,11 +156,11 @@ PinnedMainHeadSHA: 5d13accee65e7a6b0adc8e078c50d3fb8e9e102f
   "pack_id": "demoA",
   "version": "0.0.1",
   "manifest": {
-    "sha256": "d104df45fa9fca4d7b46f5c66ca5d3d62f576b80531328fe5e53e2106667b3b1"
+    "sha256": "7ea88eaa34d8bb819189a45e492e613e776e5be4b7e8e490971f3c7e1b099a62"
   },
   "signature": {
-    "b64": "+m9mX8LIsM8cwyb4D3UytU8cqlYWDhbur5XgYiyK4CPafK2BC9xd1RnHFDYuBbhUkeqvS21yJmLSFl+/C7oeCw==",
-    "public_key_b64": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQWp4T0MzNVQxRFhtaW4yZHpHWFRpZWl3emswVGxGaXZlYkZsZ2M2cVErdkk9Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
+    "b64": "wlmDcHKnP8rFYbHCUZBQDXrQNnkKX+2dCpNyu2zCz7CuqQQDKnpXROXxXt/RfdpFTgepP22Ojhjj1tdhq0b6AA==",
+    "public_key_b64": "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUNvd0JRWURLMlZ3QXlFQUZRUExyWmg2eHBGNzVuUklueGRJVXJ0d2g5amJybmlMUlM4OHM2dHNLRm89Ci0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=",
     "mode": "dev"
   },
   "result_fingerprint_sha256": "5278c8ced22bdd4e59aa23f9d8f4cebf2ad4aa339bfde2941716b71843b16300",
@@ -170,14 +170,14 @@ PinnedMainHeadSHA: 5d13accee65e7a6b0adc8e078c50d3fb8e9e102f
 
 ### Critical Headers (OFF)
 ```
-X-OS-Algo-Latency-Ms: 1.227
-X-OS-Algo-Manifest-SHA256: 85e936c69d0c15b615ad2ae6a0f09e86a13fa06bf02054b3013d1c25f22215d8
+X-OS-Algo-Latency-Ms: 1.374
+X-OS-Algo-Manifest-SHA256: 7384745aecab84048dcf5230bdcbf21ac0cbdcbf105683ad24e99ece4b6c2073
 ```
 
 ### Critical Headers (ON)
 ```
-X-OS-Algo-Latency-Ms: 1.185
-X-OS-Algo-Manifest-SHA256: d104df45fa9fca4d7b46f5c66ca5d3d62f576b80531328fe5e53e2106667b3b1
+X-OS-Algo-Latency-Ms: 1.174
+X-OS-Algo-Manifest-SHA256: 7ea88eaa34d8bb819189a45e492e613e776e5be4b7e8e490971f3c7e1b099a62
 ```
 
 ## Output-Based Checks

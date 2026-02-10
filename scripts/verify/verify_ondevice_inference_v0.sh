@@ -232,8 +232,11 @@ async function testCaseD() {
       err.code = "CASE_D_FAILED_FORBIDDEN_KEY_NOT_BLOCKED";
       throw err;
     } catch (e) {
-      // META_ONLY_* 에러 코드 확인
-      if (!e?.message || !e.message.includes("META_ONLY_")) {
+      // validator_v1.cjs는 "META_ONLY: forbidden key 'prompt'" 형식
+      // osAlgoCore.ts는 "META_ONLY_ROOT_KEY_NOT_ALLOWED:prompt" 형식
+      // 둘 다 "META_ONLY" 또는 "forbidden" 포함 확인
+      const msg = e?.message || "";
+      if (!msg.includes("META_ONLY") && !msg.includes("forbidden")) {
         const err = new Error("CASE_D_FAILED");
         err.code = "CASE_D_FAILED_WRONG_ERROR_CODE";
         throw err;
