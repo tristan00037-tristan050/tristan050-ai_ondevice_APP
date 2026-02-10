@@ -63,14 +63,26 @@ function sha256(s) {
 }
 
 // ESM 모듈 동적 import (Node 18+)
+// dist 폴더의 컴파일된 JavaScript 사용 (TypeScript 직접 import 불가)
 async function importESM(modulePath) {
-  const fullPath = path.resolve(ROOT, modulePath);
-  return await import(`file://${fullPath}`);
+  // src/lib/osAlgoCore.ts -> dist/lib/osAlgoCore.js
+  const jsPath = modulePath.replace(/\/src\//, "/dist/").replace(/\.ts$/, ".js");
+  const fullPath = path.resolve(ROOT, jsPath);
+  
+  if (!fs.existsSync(fullPath)) {
+    const err = new Error("MODULE_NOT_FOUND");
+    err.code = `MODULE_NOT_FOUND: ${jsPath}`;
+    throw err;
+  }
+  
+  // file:// URL로 변환 (경로에 공백/특수문자 처리)
+  const fileUrl = `file://${fullPath}`;
+  return await import(fileUrl);
 }
 
 async function callGenerateThreeBlocks(modelId, intent) {
   try {
-    // 직접 import (Gateway 없이)
+    // 직접 import (Gateway 없이, dist 폴더 사용)
     const osAlgoCore = await importESM("webcore_appcore_starter_4_17/packages/bff-accounting/src/lib/osAlgoCore.ts");
     
     const metaReq = {
@@ -199,6 +211,7 @@ async function testCaseC() {
 async function testCaseD() {
   try {
     // 금지 키 포함 payload 시도
+    // 직접 import (Gateway 없이, dist 폴더 사용)
     const osAlgoCore = await importESM("webcore_appcore_starter_4_17/packages/bff-accounting/src/lib/osAlgoCore.ts");
     
     const metaReq = {
