@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+source "$(git rev-parse --show-toplevel)/scripts/verify/lib/runtime_guard_helpers_v1.sh"
+
 RUNTIME_SHADOW_ENDPOINT_OK=0
 RUNTIME_SHADOW_HEADERS_OK=0
 BFF_SHADOW_FIREFORGET_OK=0
