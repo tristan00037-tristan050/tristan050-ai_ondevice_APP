@@ -1,6 +1,12 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 import { requireTenantAuth, requireRole } from "../shared/guards.js";
 import { validateMetaOnlyOrThrow, generateThreeBlocks, getAlgoCoreSignerOrThrow, signManifest } from "../lib/osAlgoCore.js";
+
+// A-1) Meta-only 디버그 헬퍼 (원문 노출 금지)
+function sha256(s: unknown): string {
+  return crypto.createHash("sha256").update(String(s ?? ""), "utf8").digest("hex");
+}
 
 const router = Router();
 
@@ -84,8 +90,13 @@ router.post(
     try {
       validateMetaOnlyOrThrow(req.body);
 
-      const blocks = generateThreeBlocks(req.body);
-      // exactly 3 blocks (fail-closed)
+      const blocks = await generateThreeBlocks(req.body);
+      
+      // P2-AI-01: pack meta 정보 추출 (fingerprint 포함)
+      const packMeta = (blocks as any).__pack_meta || {};
+      delete (blocks as any).__pack_meta; // 내부 메타 제거
+      
+      // exactly 3 blocks (fail-closed) - __pack_meta 제거 후 체크
       if (typeof blocks !== "object" || Object.keys(blocks).length !== 3) {
         return res.status(500).json({ ok: false, error_code: "ALGO_BLOCKS_NOT_THREE_FAILCLOSED" });
       }
@@ -111,9 +122,13 @@ router.post(
       // Note: fireShadowRequest is async but we don't await (fire-and-forget)
       fireShadowRequest(req.body).catch(() => {});
 
+      // P2-AI-01: pack meta 정보는 이미 위에서 추출됨
+
       return res.json({
         ok: true,
         blocks,
+        pack_id: packMeta.pack_id,
+        version: packMeta.pack_version,
         manifest: { sha256: sig.manifest_sha256 },
         signature: {
           b64: sig.signature_b64,
@@ -121,14 +136,27 @@ router.post(
           key_id: sig.key_id,
           mode: sig.mode,
         },
+        result_fingerprint_sha256: packMeta.result_fingerprint_sha256,
+        compute_path: packMeta.compute_path || "ondevice",
       });
     } catch (e: any) {
-      const msg = String(e?.message || "ALGO_CORE_UNHANDLED");
+      // A-1) Meta-only 디버그 (원문 노출 금지)
+      console.error(JSON.stringify({
+        reason_code: "INFER_FAILED",
+        err_name: e?.name || "UnknownError",
+        err_message_sha256: sha256(e?.message),
+        err_stack_sha256: sha256(e?.stack),
+        module_hint: "three_blocks_infer_path"
+      }));
+
+      // B-1) 상위 catch가 INFER_FAILED로 뭉개지 않게 고정
+      // e.code만 사용, e.message 사용 금지
+      const errorCode = e?.code || "INFER_FAILED";
       // meta-only 위반은 400으로 수렴
-      const code = msg.startsWith("META_ONLY_") ? 400 : 500;
-      return res.status(code).json({
+      const httpCode = errorCode.startsWith("META_ONLY_") || errorCode.startsWith("PACK_") || errorCode.startsWith("FINGERPRINT_") ? 400 : 500;
+      return res.status(httpCode).json({
         ok: false,
-        error_code: msg,
+        error_code: errorCode,
         request_id: String(req.body?.request_id || req.id || ""),
       });
     }
