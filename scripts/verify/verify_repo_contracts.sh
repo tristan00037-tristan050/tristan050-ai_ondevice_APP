@@ -981,4 +981,10 @@ fi
 
 echo "WORKFLOW_LINT_SEALED_OK=1"
 
+echo "== guard: P3-AI-01 fingerprint canonical v1 =="
+run_guard "P3-AI-01 fingerprint canonical v1" bash scripts/verify/verify_fingerprint_canonical_v1.sh
+
+echo "== guard: P3-AI-01 canonicalize single source v1 =="
+run_guard "P3-AI-01 canonicalize single source v1" bash scripts/verify/verify_canonicalize_single_source_v1.sh
+
 exit 0
