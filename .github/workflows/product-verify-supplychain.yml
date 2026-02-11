@@ -95,7 +95,7 @@ jobs:
         uses: actions/checkout@v4
 
       # PR/merge_group에서는 job 자체가 스킵되면 merge_group guard가 FAIL하므로
-      # job은 항상 돌되, PR에서는 “스텝만 스킵” 처리(성공으로 보고)
+      # job은 항상 돌되, PR에서는 "스텝만 스킵" 처리(성공으로 보고)
       - name: Skip attestation on PR/merge_group (report OK, no network)
         if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
         shell: bash
