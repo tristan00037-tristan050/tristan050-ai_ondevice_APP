@@ -16,7 +16,9 @@ else
 fi
 
 # guard
-if bash scripts/verify/verify_repo_contracts.sh | grep -q "WORKFLOW_LINT_SEALED_OK=1"; then
+CONTRACTS_OUT="$(bash scripts/verify/verify_repo_contracts.sh 2>&1 || true)"
+
+if echo "$CONTRACTS_OUT" | grep -q "WORKFLOW_LINT_SEALED_OK=1"; then
   echo "WORKFLOW_LINT_SEALED_OK=1" >> "$OUT"
 else
   echo "WORKFLOW_LINT_SEALED_OK=0" >> "$OUT"
