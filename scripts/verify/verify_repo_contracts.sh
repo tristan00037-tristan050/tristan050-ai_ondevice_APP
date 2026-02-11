@@ -967,8 +967,8 @@ if grep -Eq "^[[:space:]]*permissions[[:space:]]*:[[:space:]]*$WRITE_RE-all[[:sp
   exit 1
 fi
 
-# 금지 키가 write면 차단 (공백/따옴표 변형 포함)
-if grep -Eq "^[[:space:]]*(id-token|attestations|artifact-metadata)[[:space:]]*:[[:space:]]*$WRITE_RE([[:space:]]*#.*)?$" "$FILE"; then
+# 금지 키가 write면 차단 (공백/따옴표 변형 포함, 들여쓰기 허용)
+if grep -Eq "^[[:space:]]+(id-token|attestations|artifact-metadata)[[:space:]]*:[[:space:]]*.*[Ww][Rr][Ii][Tt][Ee]" "$FILE"; then
   echo "BLOCK: workflow-lint has forbidden attestation permissions"
   exit 1
 fi
