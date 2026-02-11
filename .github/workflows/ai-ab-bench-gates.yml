@@ -40,14 +40,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Build bff-accounting (dist required for AI runner)
+      - name: Install dependencies and build bff-accounting
         shell: bash
+        working-directory: webcore_appcore_starter_4_17
         run: |
           set -euo pipefail
-          cd webcore_appcore_starter_4_17/packages/bff-accounting
           npm ci
-          npm run build
-          test -f dist/lib/osAlgoCore.js
+          npm run build:packages
+          test -f packages/bff-accounting/dist/lib/osAlgoCore.js
 
       - name: Sanity check scripts exist
         shell: bash
