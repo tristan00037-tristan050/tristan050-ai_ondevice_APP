@@ -15,8 +15,6 @@ permissions:
   artifact-metadata: write
 
 jobs:
-  # job id는 언더스코어로(표현식 needs 참조 안정화)
-  # name은 기존 required check 기대값(verify-slsa-provenance-min) 유지
   verify_slsa_provenance_min:
     name: verify-slsa-provenance-min
     runs-on: ubuntu-latest
