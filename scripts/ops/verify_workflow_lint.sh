@@ -10,7 +10,8 @@ grep -n "artifact-metadata:[[:space:]]*write" "$FILE" && { echo "BLOCK: workflow
 grep -n "attest-build-provenance" "$FILE" && { echo "BLOCK: workflow-lint runs attest-build-provenance"; exit 1; } || true
 
 # 2) YAML 파싱(가능한 환경이면)
-python - <<'PY'
+if command -v python3 >/dev/null 2>&1; then
+  python3 - <<'PY'
 import pathlib, sys
 try:
     import yaml
@@ -31,5 +32,8 @@ if bad:
     sys.exit(1)
 print("Workflow YAML parse OK")
 PY
+else
+  echo "python3 not found; skip YAML parse"
+fi
 
 echo "workflow-lint OK"
