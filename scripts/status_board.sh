@@ -15,13 +15,30 @@ else
   echo "EVIDENCE_FILE_OK=0" >> "$OUT"
 fi
 
-# guard
-CONTRACTS_OUT="$(bash scripts/verify/verify_repo_contracts.sh 2>&1 || true)"
+# workflow-lint seal status (independent; no false negative from other guards)
+FILE=".github/workflows/workflow-lint.yml"
 
-if echo "$CONTRACTS_OUT" | grep -q "WORKFLOW_LINT_SEALED_OK=1"; then
-  echo "WORKFLOW_LINT_SEALED_OK=1" >> "$OUT"
-else
+# fail-closed: file missing/unreadable => 0
+if [ ! -r "$FILE" ]; then
   echo "WORKFLOW_LINT_SEALED_OK=0" >> "$OUT"
+else
+  WRITE_RE='["'"'"']?[Ww][Rr][Ii][Tt][Ee]["'"'"']?'
+
+  # Any write-all is forbidden
+  if grep -Eq "^[[:space:]]*permissions[[:space:]]*:[[:space:]]*$WRITE_RE-all[[:space:]]*$" "$FILE"; then
+    echo "WORKFLOW_LINT_SEALED_OK=0" >> "$OUT"
+
+  # Forbidden keys with write (YAML-safe: quotes/spacing variants)
+  elif grep -Eq "^[[:space:]]*(id-token|attestations|artifact-metadata)[[:space:]]*:[[:space:]]*$WRITE_RE([[:space:]]*#.*)?$" "$FILE"; then
+    echo "WORKFLOW_LINT_SEALED_OK=0" >> "$OUT"
+
+  # attest-build-provenance must not appear
+  elif grep -Eq "attest-build-provenance" "$FILE"; then
+    echo "WORKFLOW_LINT_SEALED_OK=0" >> "$OUT"
+
+  else
+    echo "WORKFLOW_LINT_SEALED_OK=1" >> "$OUT"
+  fi
 fi
 
 # ai report presence
