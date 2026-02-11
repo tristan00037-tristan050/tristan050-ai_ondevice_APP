@@ -527,8 +527,7 @@ run_guard "verify ripgrep guard present v1" bash scripts/verify/verify_ripgrep_g
 VERIFY_RIPGREP_GUARD_PRESENT_V1_OK=1
 
 echo "== guard: verify workflow preflight present v1 (P3-PLAT-01) =="
-run_guard "verify workflow preflight present v1" bash scripts/verify/verify_workflow_preflight_present_v1.sh
-WORKFLOW_PREFLIGHT_PRESENT_OK=1
+run_guard "workflow preflight ssot v1" bash scripts/verify/verify_workflow_preflight_present_v1.sh
 
 echo "== guard: verify runtime guard helpers adopted v1 (P3-PLAT-02) =="
 run_guard "verify runtime guard helpers adopted v1" bash scripts/verify/verify_runtime_guard_helpers_adopted_v1.sh
