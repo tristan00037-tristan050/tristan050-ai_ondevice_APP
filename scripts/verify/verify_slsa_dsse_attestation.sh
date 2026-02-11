@@ -51,18 +51,32 @@ fi
 
 OUT="$(mktemp)"
 set +e
-gh attestation verify "$SUBJ" -R "${GITHUB_REPOSITORY}" \
-  --predicate-type "https://slsa.dev/provenance/v1" \
-  --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/product-verify-supplychain.yml" \
-  --deny-self-hosted-runners \
-  --cert-oidc-issuer "https://token.actions.githubusercontent.com" \
-  --format json >"$OUT" 2>&1
-rc=$?
+# Attestation이 업로드될 때까지 최대 60초 대기 (재시도 로직)
+MAX_RETRIES=12
+RETRY_DELAY=5
+rc=1
+for i in $(seq 1 $MAX_RETRIES); do
+  gh attestation verify "$SUBJ" -R "${GITHUB_REPOSITORY}" \
+    --predicate-type "https://slsa.dev/provenance/v1" \
+    --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/product-verify-supplychain.yml" \
+    --deny-self-hosted-runners \
+    --cert-oidc-issuer "https://token.actions.githubusercontent.com" \
+    --format json >"$OUT" 2>&1
+  rc=$?
+  if [[ $rc -eq 0 ]]; then
+    break
+  fi
+  if [[ $i -lt $MAX_RETRIES ]]; then
+    sleep $RETRY_DELAY
+  fi
+done
 set -e
 
 if [[ $rc -ne 0 ]]; then
   # 원문 출력 금지(code-only)
+  # 재시도 횟수 정보는 code-only로 제공
   echo "ERROR_CODE=GH_ATTESTATION_VERIFY_FAILED"
+  echo "ERROR_RETRIES=${MAX_RETRIES}"
   echo "SLSA_DSSE_ATTESTATION_PRESENT_OK=1"
   echo "SLSA_DSSE_ATTESTATION_VERIFY_OK=0"
   echo "SLSA_DSSE_ACTOR_IDENTITY_OK=0"
