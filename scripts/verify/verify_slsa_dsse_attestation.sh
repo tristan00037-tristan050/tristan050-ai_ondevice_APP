@@ -55,13 +55,14 @@ gh attestation verify "$SUBJ" -R "${GITHUB_REPOSITORY}" \
   --predicate-type "https://slsa.dev/provenance/v1" \
   --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/product-verify-supplychain.yml" \
   --deny-self-hosted-runners \
+  --cert-oidc-issuer "https://token.actions.githubusercontent.com" \
   --format json >"$OUT" 2>&1
 rc=$?
 set -e
 
-# exit code만 믿지 않고 JSON 정책으로 fail-closed
 if [[ $rc -ne 0 ]]; then
-  cat "$OUT" >&2 || true
+  # 원문 출력 금지(code-only)
+  echo "ERROR_CODE=GH_ATTESTATION_VERIFY_FAILED"
   echo "SLSA_DSSE_ATTESTATION_PRESENT_OK=1"
   echo "SLSA_DSSE_ATTESTATION_VERIFY_OK=0"
   echo "SLSA_DSSE_ACTOR_IDENTITY_OK=0"
@@ -70,7 +71,8 @@ if [[ $rc -ne 0 ]]; then
 fi
 
 jq -e 'type=="array" and length>=1' "$OUT" >/dev/null 2>&1 || {
-  cat "$OUT" >&2 || true
+  # 원문 출력 금지(code-only)
+  echo "ERROR_CODE=GH_ATTESTATION_VERIFY_JSON_INVALID"
   echo "SLSA_DSSE_ATTESTATION_PRESENT_OK=1"
   echo "SLSA_DSSE_ATTESTATION_VERIFY_OK=0"
   echo "SLSA_DSSE_ACTOR_IDENTITY_OK=0"
