@@ -1,0 +1,83 @@
+name: ai-ab-bench-gates
+
+on:
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-ab-bench-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ab_bench_gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # 기본값(필요하면 PR에서 바꿀 수 있도록 유지)
+      MODEL_A: demoA
+      MODEL_B: demoB
+      INTENT: ALGO_CORE_THREE_BLOCKS
+      RUNS: "20"
+      WARMUP: "3"
+      A_P95_BUDGET_MS: "5"
+      B_P95_BUDGET_MS: "5"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies and build bff-accounting
+        shell: bash
+        working-directory: webcore_appcore_starter_4_17
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build:packages
+          test -f packages/bff-accounting/dist/lib/osAlgoCore.js
+
+      - name: Sanity check scripts exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x scripts/ai/run_ab_bench.sh
+          test -x scripts/ai/gate_ab_bench.sh
+          test -x scripts/status_board.sh
+
+      - name: Run A/B bench
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUNS="${RUNS}" WARMUP="${WARMUP}" MODEL_A="${MODEL_A}" MODEL_B="${MODEL_B}" INTENT="${INTENT}" \
+            ./scripts/ai/run_ab_bench.sh
+
+          test -f ai/reports/latest/ab_bench.json
+          test -f ai/reports/latest/ab_bench.md
+
+      - name: Run A/B bench gate (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          A_P95_BUDGET_MS="${A_P95_BUDGET_MS}" B_P95_BUDGET_MS="${B_P95_BUDGET_MS}" \
+            ./scripts/ai/gate_ab_bench.sh
+
+      - name: Status snapshot (for logs)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/status_board.sh
+          echo "== ab_bench.md (first 60 lines) =="
+          sed -n '1,60p' ai/reports/latest/ab_bench.md || true
