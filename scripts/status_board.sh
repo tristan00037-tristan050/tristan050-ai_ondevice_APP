@@ -61,5 +61,16 @@ else
   echo "AI_AB_BENCH_OK=0" >> "$OUT"
 fi
 
+# ab bench gates
+if [ -f ai/reports/latest/ab_bench.json ]; then
+  if bash scripts/ai/gate_ab_bench.sh >/dev/null 2>&1; then
+    echo "AI_AB_BENCH_GATES_OK=1" >> "$OUT"
+  else
+    echo "AI_AB_BENCH_GATES_OK=0" >> "$OUT"
+  fi
+else
+  echo "AI_AB_BENCH_GATES_OK=0" >> "$OUT"
+fi
+
 echo "WROTE=$OUT"
 cat "$OUT"
