@@ -140,7 +140,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [verify_slsa_provenance_min, attest_dsse_provenance]
     steps:
-      - name: Gate (PR/merge_group: provenance_min only, main: require DSSE)
+      - name: "Gate (PR/merge_group: provenance_min only, main: require DSSE)"
         shell: bash
         run: |
           set -euo pipefail
