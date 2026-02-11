@@ -950,11 +950,35 @@ run_guard "web ux-08 assets" bash scripts/verify/verify_web_ux_08_assets.sh
 WEB_META_ONLY_NEGATIVE_SUITE_OK=1
 
 echo "== guard: workflow-lint sealed (no attestation) =="
-if grep -qE 'id-token:[[:space:]]*write|attestations:[[:space:]]*write|artifact-metadata:[[:space:]]*write|attest-build-provenance' \
-  .github/workflows/workflow-lint.yml; then
-  echo "BLOCK: workflow-lint has forbidden attestation permissions/steps"
+FILE=".github/workflows/workflow-lint.yml"
+
+# P2) fail-closed: 파일이 없거나 못 읽으면 즉시 차단
+if [ ! -r "$FILE" ]; then
+  echo "BLOCK: $FILE missing or unreadable"
   exit 1
 fi
+
+# P1) YAML-safe matching: 공백/따옴표 변형 허용 + 대소문자 변형 허용
+WRITE_RE='["'"'"']?[Ww][Rr][Ii][Tt][Ee]["'"'"']?'
+
+# permissions: write-all (job/top-level 어디든)도 차단
+if grep -Eq "^[[:space:]]*permissions[[:space:]]*:[[:space:]]*$WRITE_RE-all[[:space:]]*$" "$FILE"; then
+  echo "BLOCK: workflow-lint permissions write-all"
+  exit 1
+fi
+
+# 금지 키가 write면 차단 (공백/따옴표 변형 포함)
+if grep -Eq "^[[:space:]]*(id-token|attestations|artifact-metadata)[[:space:]]*:[[:space:]]*$WRITE_RE([[:space:]]*#.*)?$" "$FILE"; then
+  echo "BLOCK: workflow-lint has forbidden attestation permissions"
+  exit 1
+fi
+
+# attest-build-provenance 스텝이 있으면 차단(버전 무관)
+if grep -Eq "attest-build-provenance" "$FILE"; then
+  echo "BLOCK: workflow-lint must not run attest-build-provenance"
+  exit 1
+fi
+
 echo "WORKFLOW_LINT_SEALED_OK=1"
 
 exit 0
