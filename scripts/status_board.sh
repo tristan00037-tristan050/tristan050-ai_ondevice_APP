@@ -54,5 +54,12 @@ else
   echo "AI_SUMMARY_OK=0" >> "$OUT"
 fi
 
+# ab bench report presence
+if [ -f ai/reports/latest/ab_bench.json ]; then
+  echo "AI_AB_BENCH_OK=1" >> "$OUT"
+else
+  echo "AI_AB_BENCH_OK=0" >> "$OUT"
+fi
+
 echo "WROTE=$OUT"
 cat "$OUT"
