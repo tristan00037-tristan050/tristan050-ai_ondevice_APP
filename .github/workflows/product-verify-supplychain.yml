@@ -2,11 +2,11 @@
 name: product-verify-supplychain
 
 on:
-  pull_request:
-  merge_group:
+  pull_request: {}
+  merge_group: {}
   push:
     branches: ["main"]
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -94,8 +94,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # PR/merge_group에서는 job 자체가 스킵되면 merge_group guard가 FAIL하므로
-      # job은 항상 돌되, PR에서는 "스텝만 스킵" 처리(성공으로 보고)
       - name: Skip attestation on PR/merge_group (report OK, no network)
         if: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
         shell: bash
@@ -150,16 +148,17 @@ jobs:
           echo "attest_dsse=${{ needs.attest_dsse_provenance.result }}"
           echo "event_name=${GITHUB_EVENT_NAME}"
           echo "ref=${GITHUB_REF}"
-          # 항상 provenance_min은 성공해야 함
+
           if [ "${{ needs.verify_slsa_provenance_min.result }}" != "success" ]; then
             echo "GATE:FAIL (provenance_min)"
             exit 1
           fi
-          # main push에서는 DSSE도 성공해야 함
+
           if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             if [ "${{ needs.attest_dsse_provenance.result }}" != "success" ]; then
-              echo "GATE:FAIL (attest_dsse required on main)"
+              echo "GATE:FAIL (dsse required on main)"
               exit 1
             fi
           fi
+
           echo "GATE:OK"
