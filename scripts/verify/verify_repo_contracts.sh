@@ -949,4 +949,12 @@ echo "== guard: web ux-08 assets (meta-only negative suite) =="
 run_guard "web ux-08 assets" bash scripts/verify/verify_web_ux_08_assets.sh
 WEB_META_ONLY_NEGATIVE_SUITE_OK=1
 
+echo "== guard: workflow-lint sealed (no attestation) =="
+if grep -qE 'id-token:[[:space:]]*write|attestations:[[:space:]]*write|artifact-metadata:[[:space:]]*write|attest-build-provenance' \
+  .github/workflows/workflow-lint.yml; then
+  echo "BLOCK: workflow-lint has forbidden attestation permissions/steps"
+  exit 1
+fi
+echo "WORKFLOW_LINT_SEALED_OK=1"
+
 exit 0
