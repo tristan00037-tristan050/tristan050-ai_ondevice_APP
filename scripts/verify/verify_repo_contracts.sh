@@ -1009,4 +1009,6 @@ else
   echo "TRACK_MANIFEST_KEYS_EXIST_OK=0"
 fi
 
+run_guard "DIST_FRESHNESS_POLICY_V1" bash scripts/verify/verify_dist_freshness_v1.sh
+
 exit 0
