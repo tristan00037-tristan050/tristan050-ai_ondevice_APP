@@ -11,26 +11,36 @@ doc="docs/ops/contracts/FINGERPRINT_INPUT_POLICY_V1.md"
 grep -q "FINGERPRINT_INPUT_POLICY_V1_TOKEN=1" "$doc" || { echo "BLOCK: missing policy token"; exit 1; }
 FINGERPRINT_INPUT_POLICY_V1_OK=1
 
-# 2) 런타임 enforcement 실증 (금지키 넣으면 반드시 throw)
+# 2) 런타임 enforcement 실증 (중첩 우회 포함)
 command -v node >/dev/null 2>&1 || { echo "BLOCK: node missing"; exit 1; }
 
 node - <<'NODE'
 const { assertNoPerRequestKeysV1 } = require("./packages/common/meta_only/fingerprint_input_guard_v1.cjs");
 
-const bad = { request_id: "x", a: 1 };
-try {
-  assertNoPerRequestKeysV1(bad);
-  console.error("BLOCK: banned key passed");
-  process.exit(1);
-} catch (e) {
-  const code = e && (e.code || e.message) ? String(e.code || e.message) : "";
-  // code-only reason check
-  if (!code.includes("FP_INPUT_BANNED_KEY_V1")) {
-    console.error("BLOCK: wrong error code");
+function mustBlock(obj, label) {
+  try {
+    assertNoPerRequestKeysV1(obj);
+    console.error("BLOCK: banned key passed (" + label + ")");
     process.exit(1);
+  } catch (e) {
+    const code = String((e && (e.code || e.message)) || "");
+    if (!code.includes("FP_INPUT_BANNED_KEY_V1")) {
+      console.error("BLOCK: wrong error code (" + label + "): " + code);
+      process.exit(1);
+    }
   }
-  process.exit(0);
 }
+
+// top-level
+mustBlock({ request_id: "x", a: 1 }, "top");
+
+// nested object
+mustBlock({ meta: { request_id: "x" } }, "nested_object");
+
+// nested array
+mustBlock({ payload: [{ run_id: "x" }] }, "nested_array");
+
+process.exit(0);
 NODE
 
 FINGERPRINT_INPUT_POLICY_ENFORCED_V1_OK=1
