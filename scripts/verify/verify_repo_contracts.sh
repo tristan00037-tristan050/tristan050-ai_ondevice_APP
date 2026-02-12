@@ -990,4 +990,7 @@ run_guard "P3-AI-01 canonicalize single source v1" bash scripts/verify/verify_ca
 echo "== guard: P3-AI-02 fingerprint input policy v1 =="
 run_guard "P3-AI-02 fingerprint input policy v1" bash scripts/verify/verify_fingerprint_input_policy_v1.sh
 
+echo "== guard: P3-AI-04 energy proxy cpu_time_ms v1 =="
+run_guard "P3-AI-04 energy proxy cpu_time_ms v1" bash scripts/verify/verify_energy_proxy_nontrivial_v1.sh
+
 exit 0
