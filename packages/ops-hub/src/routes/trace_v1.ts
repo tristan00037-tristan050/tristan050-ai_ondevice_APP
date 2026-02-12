@@ -1,6 +1,10 @@
 import express from "express";
 import { openTraceStore } from "../store/trace_store_sql_v1";
 
+// TRACE_BIND_MODE=LOCAL_ONLY_V1
+// TRACE_AUTH_MODE=API_KEY_REQUIRED_V1
+// TRACE_API_KEY_EXPECTED_TOKEN=1
+
 export function buildTraceRouter(dbPath: string) {
   const r = express.Router();
   r.use(express.json({ limit: "32kb" }));
