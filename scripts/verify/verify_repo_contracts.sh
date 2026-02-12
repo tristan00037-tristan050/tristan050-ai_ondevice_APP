@@ -996,4 +996,7 @@ run_guard "P3-AI-03 golden vectors meta-only v1" bash scripts/verify/verify_gold
 echo "== guard: P3-AI-04 energy proxy cpu_time_ms v1 =="
 run_guard "P3-AI-04 energy proxy cpu_time_ms v1" bash scripts/verify/verify_energy_proxy_nontrivial_v1.sh
 
+echo "== guard: P3-PLAT-03 trace bind/auth policy v1 =="
+run_guard "P3-PLAT-03 trace bind/auth policy v1" bash scripts/verify/verify_trace_bind_auth_policy_v1.sh
+
 exit 0
