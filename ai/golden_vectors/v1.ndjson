@@ -1,0 +1,6 @@
+{"case_id":"gv1_001","signals":{"domain":"pet","task":"three_blocks","lang":"ko","region":"KR","profile":"base","tone":"neutral","seed":"s1"}}
+{"case_id":"gv1_002","signals":{"domain":"pet","task":"three_blocks","lang":"ko","region":"KR","profile":"fast","tone":"neutral","seed":"s2"}}
+{"case_id":"gv1_003","signals":{"domain":"pet","task":"three_blocks","lang":"en","region":"US","profile":"base","tone":"neutral","seed":"s3"}}
+{"case_id":"gv1_004","signals":{"domain":"pet","task":"three_blocks","lang":"ja","region":"JP","profile":"base","tone":"neutral","seed":"s4"}}
+{"case_id":"gv1_005","signals":{"domain":"pet","task":"three_blocks","lang":"ko","region":"KR","profile":"strict","tone":"neutral","seed":"s5"}}
+
