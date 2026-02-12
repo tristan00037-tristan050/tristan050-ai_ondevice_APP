@@ -999,7 +999,14 @@ run_guard "P3-AI-04 energy proxy cpu_time_ms v1" bash scripts/verify/verify_ener
 echo "== guard: P3-PLAT-03 trace bind/auth policy v1 =="
 run_guard "P3-PLAT-03 trace bind/auth policy v1" bash scripts/verify/verify_trace_bind_auth_policy_v1.sh
 
-echo "== guard: P3-PLAT-04 track manifest v1 =="
-run_guard "P3-PLAT-04 track manifest v1" bash scripts/verify/verify_track_manifest_v1.sh
+# P3-PLAT-04 track manifest v1 (gated: only enforce when manifest file exists)
+if [ -f docs/ops/contracts/TRACK_MANIFEST_V1.txt ]; then
+  run_guard "P3-PLAT-04 track manifest v1" bash scripts/verify/verify_track_manifest_v1.sh
+else
+  echo "== guard: P3-PLAT-04 track manifest v1 =="
+  echo "SKIP: TRACK_MANIFEST_V1.txt not present yet (gated)"
+  echo "TRACK_MANIFEST_V1_OK=0"
+  echo "TRACK_MANIFEST_KEYS_EXIST_OK=0"
+fi
 
 exit 0

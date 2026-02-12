@@ -18,8 +18,12 @@ awk '
   END{ if(inblk==1 && tid+pr+rk!=3) exit 2 }
 ' "$f" || { echo "BLOCK: invalid TRACK_MANIFEST_V1 format"; exit 1; }
 
-# PR 숫자 검사 (모든 PR 라인이 숫자여야 함)
-grep -qE '^PR=[0-9]+$' "$f" || { echo "BLOCK: PR must be numeric"; exit 1; }
+# 모든 PR= 라인이 숫자여야 함 + PR 라인이 최소 1개는 존재해야 함
+awk '
+  BEGIN{seen=0}
+  /^PR=/{seen=1; if($0 !~ /^PR=[0-9]+$/) exit 2}
+  END{ if(seen==0) exit 3 }
+' "$f" || { echo "BLOCK: PR lines must be numeric (all) and present"; exit 1; }
 
 TRACK_MANIFEST_V1_OK=1
 
