@@ -50,6 +50,16 @@ jobs:
           npm ci
           npm run build
 
+      - name: Create build stamp (DIST_FRESHNESS_POLICY_V1)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p webcore_appcore_starter_4_17/packages/bff-accounting/dist
+          cat > webcore_appcore_starter_4_17/packages/bff-accounting/dist/.build_stamp.json <<EOF
+          {"git_sha":"${GITHUB_SHA}","built_at_utc":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","workflow_name":"${GITHUB_WORKFLOW}"}
+          EOF
+          test -s webcore_appcore_starter_4_17/packages/bff-accounting/dist/.build_stamp.json
+
       - name: Run repo-wide guards (fail-closed)
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
