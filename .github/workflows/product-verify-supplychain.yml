@@ -10,9 +10,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-  attestations: write
-  artifact-metadata: write
 
 jobs:
   verify_slsa_provenance_min:
@@ -88,6 +85,10 @@ jobs:
     name: attest-dsse-provenance
     runs-on: ubuntu-latest
     needs: [verify_slsa_provenance_min]
+    permissions:
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
