@@ -1,0 +1,5 @@
+REQUIRED_WORKFLOWS_LIST_V1_TOKEN=1
+WORKFLOW=product-verify-repo-guards
+WORKFLOW=product-verify-supplychain
+WORKFLOW=product-verify-model-registry
+

@@ -1011,4 +1011,6 @@ fi
 
 run_guard "DIST_FRESHNESS_POLICY_V1" bash scripts/verify/verify_dist_freshness_v1.sh
 
+run_guard "P4-P0-01 required workflows merge_group v1" bash scripts/verify/verify_required_workflows_merge_group_v1.sh
+
 exit 0
