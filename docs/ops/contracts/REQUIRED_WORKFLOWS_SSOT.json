@@ -2,6 +2,9 @@
   "required_workflows": [
     "product-verify-repo-guards",
     "product-verify-supplychain",
-    "product-verify-model-registry"
+    "product-verify-model-registry",
+    "product-verify-telemetry",
+    "product-verify-web-console",
+    "prompt-lint"
   ]
 }
