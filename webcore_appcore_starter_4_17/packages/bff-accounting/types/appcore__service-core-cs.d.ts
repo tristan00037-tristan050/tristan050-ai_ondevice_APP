@@ -9,13 +9,12 @@ declare module "@appcore/service-core-cs" {
   }
 
   export interface ListTicketsParams {
+    tenant?: string;
+    status?: CsTicketStatus;
+    limit?: number;
+    offset?: number;
     [k: string]: unknown;
   }
 
-  export interface ListTicketsResult {
-    tickets: CsTicket[];
-    [k: string]: unknown;
-  }
-
-  export function listTickets(params?: ListTicketsParams): Promise<ListTicketsResult>;
+  export function listTickets(params?: ListTicketsParams): Promise<CsTicket[]>;
 }
