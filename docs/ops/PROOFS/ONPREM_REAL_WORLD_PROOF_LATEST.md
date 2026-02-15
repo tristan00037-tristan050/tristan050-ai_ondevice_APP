@@ -1,5 +1,5 @@
-# Onprem Real-world Proof (ARCHIVE)
-Date: 2026-01-31
+# Onprem Real-world Proof (LATEST)
+Date: 2026-02-15
 Scope: baseline verify + gateway/runtime smoke + egress policy proof
 Raw text: 0 (meta-only only)
 
