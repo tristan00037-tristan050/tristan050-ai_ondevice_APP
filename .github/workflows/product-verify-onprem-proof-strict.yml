@@ -55,6 +55,20 @@ jobs:
           EOF
           test -s webcore_appcore_starter_4_17/packages/bff-accounting/dist/.build_stamp.json
 
+      - name: Bootstrap web_e2e deps (node_modules)
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/scripts/web_e2e
+          npm ci
+
+      - name: Install Playwright browsers
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/scripts/web_e2e
+          npx playwright install --with-deps
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+
       - name: Run repo-wide guards with strict onprem proof (fail-closed)
         env:
           ONPREM_PROOF_STRICT_ENFORCE: "1"
