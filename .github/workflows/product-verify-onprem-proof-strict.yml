@@ -1,18 +1,23 @@
 # PREP_TOKEN=1
-name: product-verify-repo-guards
+name: product-verify-onprem-proof-strict
 
 on:
   pull_request:
   merge_group:
   workflow_dispatch:
+  schedule:
+    # Run weekly on Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
 
 permissions:
   contents: read
 
 jobs:
-  product-verify-repo-guards:
-    name: product-verify-repo-guards
-    runs-on: ubuntu-latest
+  onprem-proof-strict:
+    name: onprem-proof-strict
+    runs-on: self-hosted
+    # Note: Add 'onprem' label if required by org policy
+    # runs-on: [self-hosted, onprem]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,16 +39,6 @@ jobs:
           set -euo pipefail
           bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg --require-jq
 
-      - name: Install deps (web_e2e)
-        run: |
-          npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
-
-      - name: Install Playwright browsers
-        run: |
-          npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
-
       - name: Build bff-accounting (preflight for P2-AI-01 verify)
         run: |
           cd webcore_appcore_starter_4_17/packages/bff-accounting
@@ -60,20 +55,33 @@ jobs:
           EOF
           test -s webcore_appcore_starter_4_17/packages/bff-accounting/dist/.build_stamp.json
 
-      - name: Run repo-wide guards (fail-closed)
+      - name: Bootstrap web_e2e deps (node_modules)
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/scripts/web_e2e
+          npm ci
+
+      - name: Install Playwright browsers
+        run: |
+          set -euo pipefail
+          cd webcore_appcore_starter_4_17/scripts/web_e2e
+          npx playwright install --with-deps
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
-          ONPREM_PROOF_STRICT_ENFORCE: "0"
+
+      - name: Run repo-wide guards with strict onprem proof (fail-closed)
+        env:
+          ONPREM_PROOF_STRICT_ENFORCE: "1"
         run: |
           bash scripts/verify/verify_repo_contracts.sh
 
   gate:
     runs-on: ubuntu-latest
-    needs: [product-verify-repo-guards]
+    needs: [onprem-proof-strict]
     steps:
       - name: gate
         run: |
-          if [ "${{ needs.product-verify-repo-guards.result }}" != "success" ]; then
+          if [ "${{ needs.onprem-proof-strict.result }}" != "success" ]; then
             echo "GATE:FAIL"
             exit 1
           fi
