@@ -3,6 +3,7 @@
 "use strict";
 
 const path = require("path");
+const fs = require("fs");
 const { gateSkillsRuntimeV1 } = require("./skills_runtime_gate_v1.cjs");
 
 function ok(name) {
@@ -98,8 +99,60 @@ mustThrow("SKILLS_MANIFEST_PRESENT_OK", () => {
   });
 }, "MANIFEST_MISSING");
 
+// Test 6 (케이스 A): meta_only_proof: false → BLOCK
+const tmpDir = require("os").tmpdir();
+const tmpManifestFalse = path.join(tmpDir, `skills_manifest_false_${Date.now()}.json`);
+fs.writeFileSync(
+  tmpManifestFalse,
+  JSON.stringify({
+    version: "v1",
+    skills: [
+      {
+        skill_id: "test.no_meta",
+        capabilities: ["read_only"],
+        meta_only_proof: false,
+      },
+    ],
+  }),
+  "utf-8"
+);
+mustThrow("SKILLS_META_ONLY_REQUIRED_OK", () => {
+  gateSkillsRuntimeV1({
+    skill_id: "test.no_meta",
+    requested_capabilities: ["read_only"],
+    manifest_path: tmpManifestFalse,
+  });
+}, "SKILL_META_ONLY_REQUIRED");
+fs.unlinkSync(tmpManifestFalse);
+
+// Test 7 (케이스 B): meta_only_proof 누락 → BLOCK
+const tmpManifestMissing = path.join(tmpDir, `skills_manifest_missing_${Date.now()}.json`);
+fs.writeFileSync(
+  tmpManifestMissing,
+  JSON.stringify({
+    version: "v1",
+    skills: [
+      {
+        skill_id: "test.missing_meta",
+        capabilities: ["read_only"],
+        // meta_only_proof 누락
+      },
+    ],
+  }),
+  "utf-8"
+);
+mustThrow("SKILLS_META_ONLY_REQUIRED_OK", () => {
+  gateSkillsRuntimeV1({
+    skill_id: "test.missing_meta",
+    requested_capabilities: ["read_only"],
+    manifest_path: tmpManifestMissing,
+  });
+}, "SKILL_META_ONLY_REQUIRED");
+fs.unlinkSync(tmpManifestMissing);
+
 ok("SKILLS_MANIFEST_PRESENT_OK");
 ok("SKILLS_CAPABILITY_GATE_BLOCK_OK");
 ok("SKILLS_META_ONLY_PROOF_OK");
+ok("SKILLS_META_ONLY_REQUIRED_OK");
 process.exit(0);
 

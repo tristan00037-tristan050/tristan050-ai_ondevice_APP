@@ -97,6 +97,13 @@ function gateSkillsRuntimeV1(input) {
   // 3) Validate capabilities
   validateCapabilities(skill, requested_capabilities);
 
+  // 3-A) Fail-closed: meta-only proof must be true
+  if (skill.meta_only_proof !== true) {
+    const e = new Error("BLOCK: meta-only proof required");
+    e.code = "SKILL_META_ONLY_REQUIRED";
+    throw e;
+  }
+
   // 4) Generate meta-only proof
   const proof = createMetaOnlyProof(skill, skill_id, requested_capabilities);
 
