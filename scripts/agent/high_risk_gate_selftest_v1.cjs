@@ -127,8 +127,30 @@ try {
   fail("HIGH_RISK_APPROVAL_FORMAT_OK", `valid approval rejected: ${e.message}`);
 }
 
+// Test A (P2 봉인): taint_state: "1" 승인 없음 → BLOCK
+mustThrow("HIGH_RISK_TAINT_STRING_BLOCK_OK", () => {
+  gateHighRiskV1({ risk_level: "LOW", taint_state: "1" });
+}, "TAINT_NO_APPROVAL");
+
+// Test B (P1 봉인): taint=1 + HIGH + 승인 있으나 scope mismatch → BLOCK
+const wrongApproval = {
+  ...validApproval,
+  approval_scope: hashScope("different_scope"),
+};
+mustThrow("HIGH_RISK_TAINT_HIGH_SCOPE_ENFORCED_OK", () => {
+  gateHighRiskV1({
+    risk_level: "HIGH",
+    reason_code: testScope,
+    scope_hash: testScopeHash,
+    taint_state: 1,
+    approval_token: wrongApproval,
+  });
+}, "APPROVAL_SCOPE_MISMATCH");
+
 ok("HIGH_RISK_BLOCK_WITHOUT_APPROVAL_OK");
 ok("HIGH_RISK_TAINT_PROPAGATION_OK");
 ok("HIGH_RISK_APPROVAL_FORMAT_OK");
+ok("HIGH_RISK_TAINT_STRING_BLOCK_OK");
+ok("HIGH_RISK_TAINT_HIGH_SCOPE_ENFORCED_OK");
 process.exit(0);
 

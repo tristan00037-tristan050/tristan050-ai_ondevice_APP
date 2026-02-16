@@ -43,6 +43,16 @@ function hashScope(scope) {
   return crypto.createHash("sha256").update(scope).digest("hex");
 }
 
+function isTainted(v) {
+  if (v === 1 || v === true) return true;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (s === "1" || s === "true" || s === "yes") return true;
+    if (s.includes("taint_high_risk=1")) return true;
+  }
+  return false;
+}
+
 function checkHighRiskGate(riskLevel, reasonCode, scopeHash, approval, taintState) {
   const risk = String(riskLevel || "").toUpperCase();
   const taint = taintState === 1 || taintState === true;
@@ -103,13 +113,28 @@ function gateHighRiskV1(input) {
     taint_state = 0,
   } = input || {};
 
-  // First check taint propagation (if tainted, approval required)
-  if (taint_state === 1 || taint_state === true) {
-    return checkTaintPropagation(taint_state, approval_token);
+  const tainted = isTainted(taint_state);
+  const risk = String(risk_level || "").toUpperCase();
+
+  // 1) taint가 있으면 승인 없이는 무조건 BLOCK
+  if (tainted) {
+    if (!approval_token) throw err("BLOCK: taint propagation requires approval", "TAINT_NO_APPROVAL");
+    validateApprovalFormat(approval_token);
+
+    // 1-A) taint + HIGH면 scope까지 강제(우회 0)
+    if (risk === "HIGH") {
+      const expectedScope = scope_hash || hashScope(reason_code || "");
+      if (approval_token.approval_scope !== expectedScope) {
+        throw err("BLOCK: approval scope mismatch", "APPROVAL_SCOPE_MISMATCH");
+      }
+    }
+
+    // taint는 계속 1로 유지
+    return { allow: true, taint: 1, reason: "TAINT_APPROVED" };
   }
 
-  // Then check risk level gate
-  return checkHighRiskGate(risk_level, reason_code, scope_hash, approval_token, taint_state);
+  // 2) taint 없으면 기존 risk gate로
+  return checkHighRiskGate(risk_level, reason_code, scope_hash, approval_token, 0);
 }
 
 module.exports = {
