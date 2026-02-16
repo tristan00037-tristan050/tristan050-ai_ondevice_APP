@@ -16,6 +16,7 @@ function fail(name, msg) {
   process.exit(1);
 }
 
+(async function main() {
 // Test 1: Idempotency
 // Same task_id executed multiple times produces identical result
 {
@@ -29,14 +30,14 @@ function fail(name, msg) {
   };
 
   // First execution
-  const result1 = executeTaskV1({
+  const result1 = await executeTaskV1({
     task_id: taskId,
     task_fn: taskFn,
     state_dir: tmpDir,
   });
 
   // Second execution (should return cached result, not execute again)
-  const result2 = executeTaskV1({
+  const result2 = await executeTaskV1({
     task_id: taskId,
     task_fn: taskFn,
     state_dir: tmpDir,
@@ -77,7 +78,7 @@ ok("TASK_QUEUE_IDEMPOTENCY_OK");
   const results = [];
   for (let i = 0; i < 3; i++) {
     try {
-      const result = executeTaskV1({
+      const result = await executeTaskV1({
         task_id: taskId,
         task_fn: taskFn,
         state_dir: tmpDir,
@@ -147,5 +148,104 @@ ok("TASK_QUEUE_CONCURRENCY_OK");
 
 ok("TASK_QUEUE_PARTIAL_WRITE_0_OK");
 
+// Test 4: Lock no timeout
+// Second execution waits for first to complete (6+ seconds) without timing out
+{
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "task_queue_lock_"));
+  const taskId = "test.lock_wait";
+
+  let executionCount = 0;
+  const taskFn = () => {
+    executionCount++;
+    // Simulate long-running task (6+ seconds)
+    const start = Date.now();
+    while (Date.now() - start < 6500) {
+      // Busy-wait
+    }
+    return { value: executionCount, duration_ms: Date.now() - start };
+  };
+
+  // Start first execution (will take ~6.5 seconds) - don't await yet
+  const promise1 = executeTaskV1({
+    task_id: taskId,
+    task_fn: taskFn,
+    state_dir: tmpDir,
+    lock_timeout_ms: 15 * 1000, // 15초 타임아웃
+  });
+
+  // Wait a bit to ensure first execution has acquired lock
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  // Start second execution (should wait for first to complete)
+  const promise2 = executeTaskV1({
+    task_id: taskId,
+    task_fn: taskFn,
+    state_dir: tmpDir,
+    lock_timeout_ms: 15 * 1000, // 15초 타임아웃
+  });
+
+  // Both should complete without timeout
+  const [result1, result2] = await Promise.all([promise1, promise2]);
+
+  if (result1.idempotent !== false) {
+    fail("TASK_QUEUE_LOCK_NO_TIMEOUT_OK", "first execution should not be idempotent");
+  }
+  if (result2.idempotent !== true) {
+    fail("TASK_QUEUE_LOCK_NO_TIMEOUT_OK", "second execution should be idempotent (waited for first)");
+  }
+  if (JSON.stringify(result1.result) !== JSON.stringify(result2.result)) {
+    fail("TASK_QUEUE_LOCK_NO_TIMEOUT_OK", "results must be identical after lock wait");
+  }
+  if (executionCount !== 1) {
+    fail("TASK_QUEUE_LOCK_NO_TIMEOUT_OK", `task should execute only once, got ${executionCount}`);
+  }
+
+  // Cleanup
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+}
+
+ok("TASK_QUEUE_LOCK_NO_TIMEOUT_OK");
+
+// Test 5: Async task_fn
+// Async task function is properly awaited and result is stored
+{
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "task_queue_async_"));
+  const taskId = "test.async";
+
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const taskFn = async () => {
+    await wait(100);
+    return { async_value: "test", timestamp: Date.now() };
+  };
+
+  const result = await executeTaskV1({
+    task_id: taskId,
+    task_fn: taskFn,
+    state_dir: tmpDir,
+  });
+
+  if (!result.result || !result.result.async_value) {
+    fail("TASK_QUEUE_ASYNC_TASK_FN_OK", "async task result not properly stored");
+  }
+  if (result.result.async_value !== "test") {
+    fail("TASK_QUEUE_ASYNC_TASK_FN_OK", `expected async_value='test', got '${result.result.async_value}'`);
+  }
+
+  // Verify stored state
+  const { readTaskState, getTaskStatePath } = require("./task_queue_v1.cjs");
+  const statePath = getTaskStatePath(tmpDir, taskId);
+  const storedState = readTaskState(statePath);
+  if (!storedState || !storedState.result || !storedState.result.async_value) {
+    fail("TASK_QUEUE_ASYNC_TASK_FN_OK", "async result not properly stored in state file");
+  }
+
+  // Cleanup
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+}
+
+ok("TASK_QUEUE_ASYNC_TASK_FN_OK");
+
 process.exit(0);
+})();
 

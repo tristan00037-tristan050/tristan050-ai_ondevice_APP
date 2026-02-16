@@ -52,8 +52,9 @@ function writeTaskState(statePath, state) {
   }
 }
 
-function acquireLock(lockPath, timeoutMs = 5000) {
+function acquireLock(lockPath, timeoutMs = 10 * 60 * 1000) { // 10분 기본
   const start = Date.now();
+  const pollInterval = 100; // 100ms polling interval
   while (Date.now() - start < timeoutMs) {
     try {
       // Try to create lock file exclusively
@@ -62,9 +63,10 @@ function acquireLock(lockPath, timeoutMs = 5000) {
       return true;
     } catch (e) {
       if (e.code === "EEXIST") {
-        // Lock exists, wait and retry (busy-wait for short time)
-        const waitMs = Math.min(50, timeoutMs - (Date.now() - start));
+        // Lock exists, wait and retry
+        const waitMs = Math.min(pollInterval, timeoutMs - (Date.now() - start));
         if (waitMs > 0) {
+          // Busy-wait (short interval)
           const end = Date.now() + waitMs;
           while (Date.now() < end) {
             // Busy-wait
@@ -88,12 +90,13 @@ function releaseLock(lockPath) {
   }
 }
 
-function executeTaskV1(input) {
+async function executeTaskV1(input) {
   const {
     task_id,
     task_fn,
     state_dir,
     max_retries = 3,
+    lock_timeout_ms,
   } = input || {};
 
   if (!task_id || typeof task_id !== "string") {
@@ -114,11 +117,61 @@ function executeTaskV1(input) {
   const statePath = getTaskStatePath(state_dir, task_id);
   const lockPath = `${statePath}.lock`;
 
-  // Concurrency: acquire lock
-  acquireLock(lockPath);
+  // Concurrency: try to acquire lock, but check state periodically while waiting
+  const lockTimeout = lock_timeout_ms ?? 10 * 60 * 1000; // 10분 기본
+  const startTime = Date.now();
+  const pollInterval = 100; // 100ms polling interval
+  
+  let lockAcquired = false;
+  while (Date.now() - startTime < lockTimeout) {
+    // Check if task is already completed (before acquiring lock)
+    const existingState = readTaskState(statePath);
+    if (existingState && existingState.status === "completed") {
+      // Idempotency: return existing result without lock
+      return {
+        task_id,
+        status: "completed",
+        result: existingState.result,
+        idempotent: true,
+      };
+    }
+
+    // Try to acquire lock
+    try {
+      const fd = fs.openSync(lockPath, "wx");
+      fs.closeSync(fd);
+      lockAcquired = true;
+      break;
+    } catch (e) {
+      if (e.code === "EEXIST") {
+        // Lock exists, wait a bit and check state again
+        const waitMs = pollInterval;
+        const end = Date.now() + waitMs;
+        while (Date.now() < end) {
+          // Busy-wait
+        }
+        continue;
+      }
+      throw err(`BLOCK: lock acquisition failed: ${e.message}`, "LOCK_FAILED");
+    }
+  }
+
+  if (!lockAcquired) {
+    // Final check: maybe task completed while we were waiting
+    const finalState = readTaskState(statePath);
+    if (finalState && finalState.status === "completed") {
+      return {
+        task_id,
+        status: "completed",
+        result: finalState.result,
+        idempotent: true,
+      };
+    }
+    throw err("BLOCK: lock timeout", "LOCK_TIMEOUT");
+  }
 
   try {
-    // Read existing state (idempotency check)
+    // Re-check state after acquiring lock (double-check)
     const existingState = readTaskState(statePath);
 
     if (existingState && existingState.status === "completed") {
@@ -132,14 +185,15 @@ function executeTaskV1(input) {
       };
     }
 
-    // Execute task
+    // Execute task (support async task_fn)
     let result;
     let attempts = 0;
     let lastError = null;
 
     while (attempts < max_retries) {
       try {
-        result = task_fn();
+        const maybePromise = task_fn();
+        result = await Promise.resolve(maybePromise);
         break;
       } catch (e) {
         lastError = e;
