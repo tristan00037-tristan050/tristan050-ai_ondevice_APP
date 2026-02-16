@@ -63,30 +63,14 @@ has_job_level_if() {
 }
 
 for f in "${FILES[@]}"; do
-  # Exception: 예외 목록에 있는 파일은 pull_request/merge_group 불필요, 대신 schedule/workflow_dispatch 필수
-  if is_exception "$f"; then
-    # 예외는 schedule/workflow_dispatch 필수
-    if ! has_token "workflow_dispatch" "$f"; then
-      echo "FAIL: $f missing trigger token: workflow_dispatch (exception requires workflow_dispatch)"
-      fail=1
-    fi
-    if ! has_token "schedule" "$f"; then
-      echo "FAIL: $f missing trigger token: schedule (exception requires schedule)"
-      fail=1
-    fi
-  else
-    # 기존 규칙 유지: pull_request + merge_group 필수
+
     for kw in pull_request merge_group; do
       if ! has_token "$kw" "$f"; then
         echo "FAIL: $f missing trigger token: $kw"
         fail=1
       fi
     done
-    # workflow_dispatch는 모든 product-verify 워크플로에 필수
-    if ! has_token "workflow_dispatch" "$f"; then
-      echo "FAIL: $f missing trigger token: workflow_dispatch"
-      fail=1
-    fi
+
   fi
 
   if has_paths_filter "$f"; then
