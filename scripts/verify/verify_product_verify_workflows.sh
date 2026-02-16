@@ -10,33 +10,36 @@ test -d "$GLOB_DIR" || { echo "BLOCK: missing $GLOB_DIR"; exit 1; }
 FILES="$(ls -1 ${GLOB_DIR}/product-verify-*.yml 2>/dev/null || true)"
 test -n "$FILES" || { echo "BLOCK: no product-verify-*.yml found"; exit 1; }
 
+EXCEPT_SSOT="docs/ops/contracts/PRODUCT_VERIFY_WORKFLOW_TEMPLATE_EXCEPTIONS_V1.md"
+
+is_exception() {
+  local wf="$1"
+  local ssot="docs/ops/contracts/PRODUCT_VERIFY_WORKFLOW_TEMPLATE_EXCEPTIONS_V1.md"
+  test -f "$ssot" || return 1
+
+  if command -v rg >/dev/null 2>&1; then
+    rg -qF "$wf" "$ssot"
+    return $?
+  fi
+
+  # no-rg fallback
+  grep -Fq -- "$wf" "$ssot"
+  return $?
+}
+
 FAIL=0
 
 for f in $FILES; do
-  # Exception: product-verify-onprem-proof-strict.yml does not require pull_request/merge_group
-  # (intentionally runs only via schedule/workflow_dispatch)
-  IS_ONPREM_STRICT=0
-  if [[ "$f" == *"product-verify-onprem-proof-strict.yml" ]]; then
-    IS_ONPREM_STRICT=1
-  fi
-
   # 1) triggers: pull_request / merge_group / workflow_dispatch
-  # 패턴: pull_request: 또는 pull_request: {} 모두 허용
-  # Exception: onprem-proof-strict는 pull_request/merge_group 불필요
-  if [[ "$IS_ONPREM_STRICT" == "0" ]]; then
-    if ! rg -n '^\s*pull_request\s*:' "$f" >/dev/null; then
-      echo "FAIL: missing pull_request in $f"
-      FAIL=1
-    fi
-    if ! rg -n '^\s*merge_group\s*:' "$f" >/dev/null; then
-      echo "FAIL: missing merge_group in $f"
-      FAIL=1
-    fi
-  fi
-  # workflow_dispatch는 모든 product-verify 워크플로에 필수
-  if ! rg -n '^\s*workflow_dispatch\s*:' "$f" >/dev/null; then
-    echo "FAIL: missing workflow_dispatch in $f"
-    FAIL=1
+  # Exception: 예외 목록에 있는 파일은 pull_request/merge_group 불필요, 대신 schedule/workflow_dispatch 필수
+  if is_exception "$f"; then
+    # 예외는 schedule/workflow_dispatch만 요구
+    rg -q "workflow_dispatch" "$f" || { echo "FAIL: missing workflow_dispatch in $f"; exit 1; }
+    rg -q "schedule" "$f" || { echo "FAIL: missing schedule in $f"; exit 1; }
+  else
+    # 일반은 pull_request + merge_group 요구
+    rg -q "pull_request" "$f" || { echo "FAIL: missing pull_request in $f"; exit 1; }
+    rg -q "merge_group" "$f" || { echo "FAIL: missing merge_group in $f"; exit 1; }
   fi
 
   # 2) job-level if 금지 (jobs 블록 하위에서 if: 감지)
