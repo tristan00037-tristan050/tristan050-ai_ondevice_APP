@@ -1,0 +1,11 @@
+{
+  "version": "v1",
+  "skills": [
+    {
+      "skill_id": "example.echo",
+      "capabilities": ["read_only"],
+      "meta_only_proof": true
+    }
+  ]
+}
+
