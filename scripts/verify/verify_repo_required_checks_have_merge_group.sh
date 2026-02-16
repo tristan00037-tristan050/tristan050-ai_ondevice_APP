@@ -55,12 +55,28 @@ has_job_level_if() {
 }
 
 for f in "${FILES[@]}"; do
-  for kw in pull_request merge_group workflow_dispatch; do
-    if ! has_token "$kw" "$f"; then
-      echo "FAIL: $f missing trigger token: $kw"
-      fail=1
-    fi
-  done
+  # Exception: product-verify-onprem-proof-strict.yml does not require pull_request/merge_group
+  # (intentionally runs only via schedule/workflow_dispatch)
+  IS_ONPREM_STRICT=0
+  if [[ "$f" == *"product-verify-onprem-proof-strict.yml" ]]; then
+    IS_ONPREM_STRICT=1
+  fi
+
+  # Check triggers: pull_request / merge_group / workflow_dispatch
+  # Exception: onprem-proof-strict는 pull_request/merge_group 불필요
+  if [[ "$IS_ONPREM_STRICT" == "0" ]]; then
+    for kw in pull_request merge_group; do
+      if ! has_token "$kw" "$f"; then
+        echo "FAIL: $f missing trigger token: $kw"
+        fail=1
+      fi
+    done
+  fi
+  # workflow_dispatch는 모든 product-verify 워크플로에 필수
+  if ! has_token "workflow_dispatch" "$f"; then
+    echo "FAIL: $f missing trigger token: workflow_dispatch"
+    fail=1
+  fi
 
   if has_paths_filter "$f"; then
     echo "FAIL: $f contains paths/paths-ignore (skip risk)"
