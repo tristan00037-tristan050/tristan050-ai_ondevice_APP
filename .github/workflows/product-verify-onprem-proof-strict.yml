@@ -2,8 +2,6 @@
 name: product-verify-onprem-proof-strict
 
 on:
-  pull_request:
-  merge_group:
   workflow_dispatch:
   schedule:
     # Run weekly on Monday at 00:00 UTC
