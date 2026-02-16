@@ -10,22 +10,45 @@ test -d "$GLOB_DIR" || { echo "BLOCK: missing $GLOB_DIR"; exit 1; }
 FILES="$(ls -1 ${GLOB_DIR}/product-verify-*.yml 2>/dev/null || true)"
 test -n "$FILES" || { echo "BLOCK: no product-verify-*.yml found"; exit 1; }
 
+EXCEPT_SSOT="docs/ops/contracts/PRODUCT_VERIFY_WORKFLOW_TEMPLATE_EXCEPTIONS_V1.md"
+
+is_exception() {
+  local f="$1"
+  test -f "$EXCEPT_SSOT" || return 1
+  rg -qF "$f" "$EXCEPT_SSOT"
+}
+
 FAIL=0
 
 for f in $FILES; do
   # 1) triggers: pull_request / merge_group / workflow_dispatch
   # 패턴: pull_request: 또는 pull_request: {} 모두 허용
-  if ! rg -n '^\s*pull_request\s*:' "$f" >/dev/null; then
-    echo "FAIL: missing pull_request in $f"
-    FAIL=1
-  fi
-  if ! rg -n '^\s*merge_group\s*:' "$f" >/dev/null; then
-    echo "FAIL: missing merge_group in $f"
-    FAIL=1
-  fi
-  if ! rg -n '^\s*workflow_dispatch\s*:' "$f" >/dev/null; then
-    echo "FAIL: missing workflow_dispatch in $f"
-    FAIL=1
+  # Exception: 예외 목록에 있는 파일은 pull_request/merge_group 불필요, 대신 schedule/workflow_dispatch 필수
+  if is_exception "$f"; then
+    # 예외는 schedule/workflow_dispatch 필수
+    if ! rg -n '^\s*workflow_dispatch\s*:' "$f" >/dev/null; then
+      echo "FAIL: missing workflow_dispatch in $f (exception requires workflow_dispatch)"
+      FAIL=1
+    fi
+    if ! rg -n '^\s*schedule\s*:' "$f" >/dev/null; then
+      echo "FAIL: missing schedule in $f (exception requires schedule)"
+      FAIL=1
+    fi
+  else
+    # 기존 규칙 유지: pull_request + merge_group 필수
+    if ! rg -n '^\s*pull_request\s*:' "$f" >/dev/null; then
+      echo "FAIL: missing pull_request in $f"
+      FAIL=1
+    fi
+    if ! rg -n '^\s*merge_group\s*:' "$f" >/dev/null; then
+      echo "FAIL: missing merge_group in $f"
+      FAIL=1
+    fi
+    # workflow_dispatch는 모든 product-verify 워크플로에 필수
+    if ! rg -n '^\s*workflow_dispatch\s*:' "$f" >/dev/null; then
+      echo "FAIL: missing workflow_dispatch in $f"
+      FAIL=1
+    fi
   fi
 
   # 2) job-level if 금지 (jobs 블록 하위에서 if: 감지)
