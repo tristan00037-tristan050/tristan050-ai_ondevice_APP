@@ -16,9 +16,18 @@ WF_DIR=".github/workflows"
 EXCEPT_SSOT="docs/ops/contracts/PRODUCT_VERIFY_WORKFLOW_TEMPLATE_EXCEPTIONS_V1.md"
 
 is_exception() {
-  local f="$1"
-  [[ -f "$EXCEPT_SSOT" ]] || return 1
-  rg -qF "$f" "$EXCEPT_SSOT" 2>/dev/null || return 1
+  local wf="$1"
+  local ssot="docs/ops/contracts/PRODUCT_VERIFY_WORKFLOW_TEMPLATE_EXCEPTIONS_V1.md"
+  [[ -f "$ssot" ]] || return 1
+
+  if command -v rg >/dev/null 2>&1; then
+    rg -qF "$wf" "$ssot" 2>/dev/null
+    return $?
+  fi
+
+  # no-rg fallback
+  grep -Fq -- "$wf" "$ssot" 2>/dev/null
+  return $?
 }
 
 have_rg() { command -v rg >/dev/null 2>&1; }
@@ -63,14 +72,18 @@ has_job_level_if() {
 }
 
 for f in "${FILES[@]}"; do
-
+  # Exception: 예외 목록에 있는 파일은 pull_request/merge_group 불필요
+  if is_exception "$f"; then
+    # 예외 워크플로는 merge_group 요구에서 제외
+    continue
+  else
+    # 일반 워크플로는 merge_group 존재 요구
     for kw in pull_request merge_group; do
       if ! has_token "$kw" "$f"; then
         echo "FAIL: $f missing trigger token: $kw"
         fail=1
       fi
     done
-
   fi
 
   if has_paths_filter "$f"; then

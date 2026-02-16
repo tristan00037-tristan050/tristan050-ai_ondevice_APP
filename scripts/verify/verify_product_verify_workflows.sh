@@ -13,9 +13,18 @@ test -n "$FILES" || { echo "BLOCK: no product-verify-*.yml found"; exit 1; }
 EXCEPT_SSOT="docs/ops/contracts/PRODUCT_VERIFY_WORKFLOW_TEMPLATE_EXCEPTIONS_V1.md"
 
 is_exception() {
-  local f="$1"
-  test -f "$EXCEPT_SSOT" || return 1
-  rg -qF "$f" "$EXCEPT_SSOT"
+  local wf="$1"
+  local ssot="docs/ops/contracts/PRODUCT_VERIFY_WORKFLOW_TEMPLATE_EXCEPTIONS_V1.md"
+  test -f "$ssot" || return 1
+
+  if command -v rg >/dev/null 2>&1; then
+    rg -qF "$wf" "$ssot"
+    return $?
+  fi
+
+  # no-rg fallback
+  grep -Fq -- "$wf" "$ssot"
+  return $?
 }
 
 FAIL=0
