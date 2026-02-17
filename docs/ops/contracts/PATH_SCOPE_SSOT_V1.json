@@ -1,34 +1,17 @@
 {
   "version": "v1",
-  "path_scopes": [
-    {
-      "scope_id": "workspace",
-      "allowed_paths": [
-        "scripts/**",
-        "docs/**",
-        ".github/**",
-        "webcore_appcore_starter_4_17/**"
-      ],
-      "excluded_paths": [
-        "**/node_modules/**",
-        "**/.git/**",
-        "**/dist/**"
-      ]
-    },
-    {
-      "scope_id": "verify",
-      "allowed_paths": [
-        "scripts/verify/**"
-      ],
-      "excluded_paths": []
-    },
-    {
-      "scope_id": "agent",
-      "allowed_paths": [
-        "scripts/agent/**"
-      ],
-      "excluded_paths": []
-    }
+  "allowed_paths": [
+    "scripts/verify",
+    "scripts/agent",
+    "scripts/ops",
+    ".github/workflows",
+    "docs/ops/contracts",
+    "docs/ops/PROOFS"
+  ],
+  "excluded_paths": [
+    "node_modules",
+    ".git",
+    "dist",
+    ".artifacts"
   ]
 }
-

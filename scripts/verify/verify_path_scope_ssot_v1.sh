@@ -28,26 +28,21 @@ test -f "$doc" || { echo "BLOCK: missing $doc"; exit 1; }
 grep -q "PATH_SCOPE_POLICY_V1_TOKEN=1" "$doc" || { echo "BLOCK: missing policy token"; exit 1; }
 
 # 2) SSOT file existence and format
-ssot="docs/ops/contracts/PATH_SCOPE_SSOT_V1.json"
-test -f "$ssot" || { echo "BLOCK: missing SSOT file: $ssot"; exit 1; }
+SSOT="docs/ops/contracts/PATH_SCOPE_SSOT_V1.json"
+test -f "$SSOT" || { echo "BLOCK: missing SSOT file: $SSOT"; exit 1; }
 
 command -v node >/dev/null 2>&1 || { echo "BLOCK: node not found"; exit 1; }
 
-# Validate JSON format
-node -e "
+# Validate JSON format and structure
+node - <<'NODE'
 const fs = require('fs');
-const s = fs.readFileSync('$ssot', 'utf8');
-try {
-  const obj = JSON.parse(s);
-  if (!obj || !obj.version || !Array.isArray(obj.path_scopes)) {
-    console.error('BLOCK: invalid SSOT format');
-    process.exit(1);
-  }
-} catch (e) {
-  console.error('BLOCK: invalid JSON:', e.message);
-  process.exit(1);
+const ssot = JSON.parse(fs.readFileSync('docs/ops/contracts/PATH_SCOPE_SSOT_V1.json','utf8'));
+if (!Array.isArray(ssot.allowed_paths) || !Array.isArray(ssot.excluded_paths)) {
+  console.error('BLOCK: invalid SSOT format (allowed_paths/excluded_paths must be arrays)');
+  process.exit(2);
 }
-" || exit 1
+NODE
+[ $? -eq 0 ] || exit 1
 
 PATH_SCOPE_SSOT_PRESENT_OK=1
 
@@ -63,7 +58,7 @@ PLACEHOLDERS=(
 
 FOUND_PLACEHOLDER=0
 for p in "${PLACEHOLDERS[@]}"; do
-  if grep -qi "$p" "$ssot"; then
+  if grep -qi "$p" "$SSOT"; then
     echo "BLOCK: placeholder found in SSOT: $p"
     FOUND_PLACEHOLDER=1
   fi
@@ -75,38 +70,64 @@ fi
 
 PATH_SCOPE_NO_PLACEHOLDER_OK=1
 
-# 4) Drift check: verify that actual path usage matches SSOT
-# For now, we check that the SSOT structure is valid and contains expected fields
-# More sophisticated drift detection can be added later
-node -e "
-const fs = require('fs');
-const s = fs.readFileSync('$ssot', 'utf8');
-const obj = JSON.parse(s);
+# 4) Drift check: compare actual path usage against SSOT
+have_rg() { command -v rg >/dev/null 2>&1; }
 
-// Check that each scope has required fields
-for (const scope of obj.path_scopes) {
-  if (!scope.scope_id || typeof scope.scope_id !== 'string') {
-    console.error('BLOCK: scope_id missing or invalid');
-    process.exit(1);
+extract_paths() {
+  if have_rg; then
+    rg -oN '(?<![A-Za-z0-9_./-])(\.github/[^"'\''\s)]+|docs/[^"'\''\s)]+|scripts/[^"'\''\s)]+|webcore_appcore_starter_4_17/[^"'\''\s)]+)' \
+      .github/workflows scripts/verify 2>/dev/null \
+      | awk -F: '{print $NF}' | sort -u
+  else
+    # 단순 패턴(정확도 낮지만 fail-closed 방지용)
+    grep -RhoE '(\.github/[^"'\''[:space:])]+|docs/[^"'\''[:space:])]+|scripts/[^"'\''[:space:])]+|webcore_appcore_starter_4_17/[^"'\''[:space:])]+)' \
+      .github/workflows scripts/verify 2>/dev/null \
+      | sort -u
+  fi
+}
+
+PATHS="$(extract_paths || true)"
+
+echo "$PATHS" | node - <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const ssot = JSON.parse(fs.readFileSync('docs/ops/contracts/PATH_SCOPE_SSOT_V1.json','utf8'));
+const allowed = ssot.allowed_paths.map(p=>p.replace(/\/+$/,''));
+const excluded = ssot.excluded_paths.map(p=>p.replace(/\/+$/,''));
+
+function isUnder(x, root) {
+  x = x.replace(/\\/g,'/').replace(/\/+$/,'');
+  root = root.replace(/\\/g,'/').replace(/\/+$/,'');
+  return x === root || x.startsWith(root + '/');
+}
+
+const lines = require('fs').readFileSync(0,'utf8').split('\n').map(s=>s.trim()).filter(Boolean);
+
+let bad = [];
+for (const p of lines) {
+  const norm = p.replace(/\\/g,'/');
+  // excluded 우선
+  if (excluded.some(ex => isUnder(norm, ex))) {
+    bad.push(`BLOCK: path hits excluded_paths: ${p}`);
+    continue;
   }
-  if (!Array.isArray(scope.allowed_paths)) {
-    console.error('BLOCK: allowed_paths must be array');
-    process.exit(1);
-  }
-  if (!Array.isArray(scope.excluded_paths)) {
-    console.error('BLOCK: excluded_paths must be array');
-    process.exit(1);
+  // allowed 아래인지
+  if (!allowed.some(al => isUnder(norm, al))) {
+    bad.push(`BLOCK: path outside allowed_paths: ${p}`);
   }
 }
 
-// Basic validation: at least one scope must exist
-if (obj.path_scopes.length === 0) {
-  console.error('BLOCK: no path scopes defined');
+if (bad.length) {
+  console.error(bad.join('\n'));
   process.exit(1);
 }
-" || exit 1
+
+process.exit(0);
+NODE
+
+[ $? -eq 0 ] || exit 1
 
 PATH_SCOPE_DRIFT_0_OK=1
 
 exit 0
-
