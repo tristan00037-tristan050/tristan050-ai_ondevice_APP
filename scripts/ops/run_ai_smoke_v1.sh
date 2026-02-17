@@ -123,3 +123,13 @@ print(f"OK: wrote {json_path}")
 print(f"OK: wrote {md_path}")
 PY
 
+ARCHIVE_DIR="docs/ops/reports/archive"
+mkdir -p "$ARCHIVE_DIR"
+
+DAY_UTC="$(date -u +%Y-%m-%d)"
+
+cp -f "docs/ops/reports/ai_smoke_latest.json" "$ARCHIVE_DIR/${DAY_UTC}_ai_smoke_latest.json"
+cp -f "docs/ops/reports/ai_smoke_latest.md"   "$ARCHIVE_DIR/${DAY_UTC}_ai_smoke_latest.md"
+
+echo "OK: archived $ARCHIVE_DIR/${DAY_UTC}_ai_smoke_latest.(json|md)"
+
