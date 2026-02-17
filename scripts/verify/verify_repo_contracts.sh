@@ -80,6 +80,7 @@ AI_GOLDEN_VECTORS_V2_OK=0
 AI_DETERMINISM_FINGERPRINT_OK=0
 
 # P4-AI-02 (AI) Variance outlier guard (p50/p95 variance + outlier ratio)
+AI_VARIANCE_MEASUREMENTS_SOURCE_OK=0
 AI_VARIANCE_OK=0
 AI_OUTLIER_RATIO_OK=0
 
@@ -598,6 +599,7 @@ cleanup(){
   echo "AI_DETERMINISM_FINGERPRINT_OK=${AI_DETERMINISM_FINGERPRINT_OK}"
 
   # P4-AI-02 (AI) Variance outlier guard
+  echo "AI_VARIANCE_MEASUREMENTS_SOURCE_OK=${AI_VARIANCE_MEASUREMENTS_SOURCE_OK}"
   echo "AI_VARIANCE_OK=${AI_VARIANCE_OK}"
   echo "AI_OUTLIER_RATIO_OK=${AI_OUTLIER_RATIO_OK}"
 
@@ -1196,6 +1198,7 @@ AI_DETERMINISM_FINGERPRINT_OK=1
 
 echo "== guard: P4-AI-02 variance outlier guard (p50/p95 variance + outlier ratio) =="
 run_guard "P4-AI-02 variance outlier v1" bash scripts/verify/verify_ai_variance_outlier_v1.sh
+AI_VARIANCE_MEASUREMENTS_SOURCE_OK=1
 AI_VARIANCE_OK=1
 AI_OUTLIER_RATIO_OK=1
 

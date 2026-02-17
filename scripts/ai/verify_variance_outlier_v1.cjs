@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 "use strict";
 
+const fs = require("fs");
+const path = require("path");
+
 function err(msg, code) {
   const e = new Error(String(msg));
   e.code = code || "BLOCK";
@@ -78,18 +81,60 @@ function verifyVarianceOutlier(input) {
   };
 }
 
-// Self-test mode
+function loadMeasurementsFromFile(filePath) {
+  const abs = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(process.cwd(), filePath);
+
+  if (!fs.existsSync(abs)) {
+    throw err(`BLOCK: measurements file missing: ${abs}`, "MEASUREMENTS_FILE_MISSING");
+  }
+
+  let obj;
+  try {
+    const content = fs.readFileSync(abs, "utf8");
+    obj = JSON.parse(content);
+  } catch (e) {
+    throw err(`BLOCK: failed to parse measurements file: ${e.message}`, "MEASUREMENTS_PARSE_FAILED");
+  }
+
+  if (!obj || !Array.isArray(obj.measurements)) {
+    throw err("BLOCK: measurements file must contain 'measurements' array", "MEASUREMENTS_FORMAT_INVALID");
+  }
+
+  return obj.measurements;
+}
+
+// CLI mode
 if (require.main === module) {
   try {
-    // Test with sample data
-    const testMeasurements = [10, 12, 11, 13, 10, 12, 11, 13, 10, 12, 15, 14, 12, 13, 11];
+    // Parse CLI arguments
+    const args = process.argv.slice(2);
+    let measurementsJsonPath = null;
+
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === "--measurements_json" && i + 1 < args.length) {
+        measurementsJsonPath = args[i + 1];
+        break;
+      }
+    }
+
+    if (!measurementsJsonPath) {
+      throw err("BLOCK: --measurements_json <path> required", "MEASUREMENTS_JSON_REQUIRED");
+    }
+
+    // Load measurements from file
+    const measurements = loadMeasurementsFromFile(measurementsJsonPath);
+
+    // Verify variance and outlier
     const result = verifyVarianceOutlier({
-      measurements: testMeasurements,
+      measurements,
       p50_variance_max: 100,
       p95_variance_max: 500,
       outlier_ratio_max: 0.05,
     });
 
+    console.log("AI_VARIANCE_MEASUREMENTS_SOURCE_OK=1");
     console.log("AI_VARIANCE_OK=1");
     console.log("AI_OUTLIER_RATIO_OK=1");
     process.exit(0);
@@ -99,5 +144,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { verifyVarianceOutlier, computeVariance, computeOutlierRatio };
-
+module.exports = { verifyVarianceOutlier, computeVariance, computeOutlierRatio, loadMeasurementsFromFile };
