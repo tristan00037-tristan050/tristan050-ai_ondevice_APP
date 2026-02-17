@@ -90,6 +90,8 @@ function releaseLock(lockPath) {
   }
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function executeTaskV1(input) {
   const {
     task_id,
@@ -144,12 +146,8 @@ async function executeTaskV1(input) {
       break;
     } catch (e) {
       if (e.code === "EEXIST") {
-        // Lock exists, wait a bit and check state again
-        const waitMs = pollInterval;
-        const end = Date.now() + waitMs;
-        while (Date.now() < end) {
-          // Busy-wait
-        }
+        // Lock exists, yield and check state again
+        await sleep(pollInterval);
         continue;
       }
       throw err(`BLOCK: lock acquisition failed: ${e.message}`, "LOCK_FAILED");

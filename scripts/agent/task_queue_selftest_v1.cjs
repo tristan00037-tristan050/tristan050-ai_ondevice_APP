@@ -246,6 +246,60 @@ ok("TASK_QUEUE_LOCK_NO_TIMEOUT_OK");
 
 ok("TASK_QUEUE_ASYNC_TASK_FN_OK");
 
+// Test 6: Yield wait (event loop yield while waiting for lock)
+// First execution: async task_fn with await setTimeout(500~1000ms)
+// Second execution: starts almost simultaneously
+// Success: both complete without timeout, results identical, execution count = 1
+{
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "task_queue_yield_"));
+  const taskId = "test.yield_wait";
+
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  let executionCount = 0;
+  const taskFn = async () => {
+    executionCount++;
+    await wait(500 + Math.floor(Math.random() * 500)); // 500~1000ms
+    return { value: executionCount, timestamp: Date.now() };
+  };
+
+  // Start first execution (will take ~500~1000ms)
+  const promise1 = executeTaskV1({
+    task_id: taskId,
+    task_fn: taskFn,
+    state_dir: tmpDir,
+  });
+
+  // Start second execution almost immediately (should wait for first)
+  await wait(10); // Small delay to ensure first has acquired lock
+  const promise2 = executeTaskV1({
+    task_id: taskId,
+    task_fn: taskFn,
+    state_dir: tmpDir,
+  });
+
+  // Both should complete without timeout
+  const [result1, result2] = await Promise.all([promise1, promise2]);
+
+  if (result1.idempotent !== false) {
+    fail("TASK_QUEUE_YIELD_WAIT_OK", "first execution should not be idempotent");
+  }
+  if (result2.idempotent !== true) {
+    fail("TASK_QUEUE_YIELD_WAIT_OK", "second execution should be idempotent (waited for first)");
+  }
+  if (JSON.stringify(result1.result) !== JSON.stringify(result2.result)) {
+    fail("TASK_QUEUE_YIELD_WAIT_OK", "results must be identical after yield wait");
+  }
+  if (executionCount !== 1) {
+    fail("TASK_QUEUE_YIELD_WAIT_OK", `task should execute only once, got ${executionCount}`);
+  }
+
+  // Cleanup
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+}
+
+ok("TASK_QUEUE_YIELD_WAIT_OK");
+
 process.exit(0);
 })();
 
