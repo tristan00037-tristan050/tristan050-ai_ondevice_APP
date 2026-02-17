@@ -1,0 +1,159 @@
+{
+  "version": "v1",
+  "samples": [
+    {
+      "latency_ms": 10,
+      "mem_mb": 100,
+      "steps": 5,
+      "device_class": "cpu",
+      "expected_energy_proxy": 16
+    },
+    {
+      "latency_ms": 12,
+      "mem_mb": 120,
+      "steps": 6,
+      "device_class": "cpu",
+      "expected_energy_proxy": 19.2
+    },
+    {
+      "latency_ms": 15,
+      "mem_mb": 150,
+      "steps": 8,
+      "device_class": "cpu",
+      "expected_energy_proxy": 24.1
+    },
+    {
+      "latency_ms": 8,
+      "mem_mb": 80,
+      "steps": 4,
+      "device_class": "cpu",
+      "expected_energy_proxy": 12.8
+    },
+    {
+      "latency_ms": 20,
+      "mem_mb": 200,
+      "steps": 10,
+      "device_class": "cpu",
+      "expected_energy_proxy": 32
+    },
+    {
+      "latency_ms": 5,
+      "mem_mb": 50,
+      "steps": 2,
+      "device_class": "gpu",
+      "expected_energy_proxy": 7.4
+    },
+    {
+      "latency_ms": 7,
+      "mem_mb": 70,
+      "steps": 3,
+      "device_class": "gpu",
+      "expected_energy_proxy": 10.6
+    },
+    {
+      "latency_ms": 9,
+      "mem_mb": 90,
+      "steps": 4,
+      "device_class": "gpu",
+      "expected_energy_proxy": 13.8
+    },
+    {
+      "latency_ms": 11,
+      "mem_mb": 110,
+      "steps": 5,
+      "device_class": "gpu",
+      "expected_energy_proxy": 17
+    },
+    {
+      "latency_ms": 13,
+      "mem_mb": 130,
+      "steps": 6,
+      "device_class": "gpu",
+      "expected_energy_proxy": 20.2
+    },
+    {
+      "latency_ms": 18,
+      "mem_mb": 180,
+      "steps": 9,
+      "device_class": "cpu",
+      "expected_energy_proxy": 28.8
+    },
+    {
+      "latency_ms": 22,
+      "mem_mb": 220,
+      "steps": 11,
+      "device_class": "cpu",
+      "expected_energy_proxy": 35.2
+    },
+    {
+      "latency_ms": 6,
+      "mem_mb": 60,
+      "steps": 3,
+      "device_class": "gpu",
+      "expected_energy_proxy": 9.1
+    },
+    {
+      "latency_ms": 14,
+      "mem_mb": 140,
+      "steps": 7,
+      "device_class": "cpu",
+      "expected_energy_proxy": 22.4
+    },
+    {
+      "latency_ms": 16,
+      "mem_mb": 160,
+      "steps": 8,
+      "device_class": "cpu",
+      "expected_energy_proxy": 25.6
+    },
+    {
+      "latency_ms": 4,
+      "mem_mb": 40,
+      "steps": 2,
+      "device_class": "gpu",
+      "expected_energy_proxy": 5.9
+    },
+    {
+      "latency_ms": 19,
+      "mem_mb": 190,
+      "steps": 9,
+      "device_class": "cpu",
+      "expected_energy_proxy": 30.3
+    },
+    {
+      "latency_ms": 21,
+      "mem_mb": 210,
+      "steps": 10,
+      "device_class": "cpu",
+      "expected_energy_proxy": 33.5
+    },
+    {
+      "latency_ms": 3,
+      "mem_mb": 30,
+      "steps": 1,
+      "device_class": "gpu",
+      "expected_energy_proxy": 4.2
+    },
+    {
+      "latency_ms": 17,
+      "mem_mb": 170,
+      "steps": 8,
+      "device_class": "cpu",
+      "expected_energy_proxy": 27.1
+    },
+    {
+      "latency_ms": 25,
+      "mem_mb": 250,
+      "steps": 12,
+      "device_class": "cpu",
+      "expected_energy_proxy": 39.9
+    },
+    {
+      "latency_ms": 2,
+      "mem_mb": 20,
+      "steps": 1,
+      "device_class": "gpu",
+      "expected_energy_proxy": 2.7
+    }
+  ]
+}
