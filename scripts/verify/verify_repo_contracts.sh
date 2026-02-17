@@ -79,6 +79,10 @@ PATH_SCOPE_DRIFT_0_OK=0
 AI_GOLDEN_VECTORS_V2_OK=0
 AI_DETERMINISM_FINGERPRINT_OK=0
 
+# P4-AI-02 (AI) Variance outlier guard (p50/p95 variance + outlier ratio)
+AI_VARIANCE_OK=0
+AI_OUTLIER_RATIO_OK=0
+
 # P4-P0-02: Onprem strict proof (default: skip in dev/CI PR)
 ONPREM_PROOF_STRICT_ENFORCE="${ONPREM_PROOF_STRICT_ENFORCE:-0}"
 ONPREM_PROOF_STRICT_SKIPPED=0
@@ -592,6 +596,10 @@ cleanup(){
   # P4-AI-01 (AI) Golden vectors v2
   echo "AI_GOLDEN_VECTORS_V2_OK=${AI_GOLDEN_VECTORS_V2_OK}"
   echo "AI_DETERMINISM_FINGERPRINT_OK=${AI_DETERMINISM_FINGERPRINT_OK}"
+
+  # P4-AI-02 (AI) Variance outlier guard
+  echo "AI_VARIANCE_OK=${AI_VARIANCE_OK}"
+  echo "AI_OUTLIER_RATIO_OK=${AI_OUTLIER_RATIO_OK}"
 
 }
 trap cleanup EXIT
@@ -1185,5 +1193,10 @@ echo "== guard: P4-AI-01 golden vectors v2 (determinism + fingerprint validation
 run_guard "P4-AI-01 golden vectors v2" bash scripts/verify/verify_ai_golden_vectors_v2.sh
 AI_GOLDEN_VECTORS_V2_OK=1
 AI_DETERMINISM_FINGERPRINT_OK=1
+
+echo "== guard: P4-AI-02 variance outlier guard (p50/p95 variance + outlier ratio) =="
+run_guard "P4-AI-02 variance outlier v1" bash scripts/verify/verify_ai_variance_outlier_v1.sh
+AI_VARIANCE_OK=1
+AI_OUTLIER_RATIO_OK=1
 
 exit 0
