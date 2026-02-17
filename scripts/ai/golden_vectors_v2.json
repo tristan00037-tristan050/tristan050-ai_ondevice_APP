@@ -1,0 +1,25 @@
+{
+  "version": "v2",
+  "vectors": [
+    {
+      "test_id": "test_001",
+      "input": {
+        "text": "sample input text",
+        "mode": "meta_only"
+      },
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic"
+    },
+    {
+      "test_id": "test_002",
+      "input": {
+        "text": "another test input",
+        "mode": "meta_only"
+      },
+      "seed": 123,
+      "expected_fingerprint": "9073b6e3e6c655bd8c942e107744a6b2d843def4e15b1ec82d81a7324bf9292b",
+      "mode": "deterministic"
+    }
+  ]
+}

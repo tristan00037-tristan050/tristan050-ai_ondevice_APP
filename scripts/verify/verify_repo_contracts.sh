@@ -75,6 +75,10 @@ PATH_SCOPE_SSOT_PRESENT_OK=0
 PATH_SCOPE_NO_PLACEHOLDER_OK=0
 PATH_SCOPE_DRIFT_0_OK=0
 
+# P4-AI-01 (AI) Golden vectors v2 (determinism + fingerprint validation)
+AI_GOLDEN_VECTORS_V2_OK=0
+AI_DETERMINISM_FINGERPRINT_OK=0
+
 # P4-P0-02: Onprem strict proof (default: skip in dev/CI PR)
 ONPREM_PROOF_STRICT_ENFORCE="${ONPREM_PROOF_STRICT_ENFORCE:-0}"
 ONPREM_PROOF_STRICT_SKIPPED=0
@@ -584,6 +588,10 @@ cleanup(){
   echo "PATH_SCOPE_SSOT_PRESENT_OK=${PATH_SCOPE_SSOT_PRESENT_OK}"
   echo "PATH_SCOPE_NO_PLACEHOLDER_OK=${PATH_SCOPE_NO_PLACEHOLDER_OK}"
   echo "PATH_SCOPE_DRIFT_0_OK=${PATH_SCOPE_DRIFT_0_OK}"
+
+  # P4-AI-01 (AI) Golden vectors v2
+  echo "AI_GOLDEN_VECTORS_V2_OK=${AI_GOLDEN_VECTORS_V2_OK}"
+  echo "AI_DETERMINISM_FINGERPRINT_OK=${AI_DETERMINISM_FINGERPRINT_OK}"
 
 }
 trap cleanup EXIT
@@ -1172,5 +1180,10 @@ run_guard "P4-P1-03 path scope SSOT v1" bash scripts/verify/verify_path_scope_ss
 PATH_SCOPE_SSOT_PRESENT_OK=1
 PATH_SCOPE_NO_PLACEHOLDER_OK=1
 PATH_SCOPE_DRIFT_0_OK=1
+
+echo "== guard: P4-AI-01 golden vectors v2 (determinism + fingerprint validation) =="
+run_guard "P4-AI-01 golden vectors v2" bash scripts/verify/verify_ai_golden_vectors_v2.sh
+AI_GOLDEN_VECTORS_V2_OK=1
+AI_DETERMINISM_FINGERPRINT_OK=1
 
 exit 0
