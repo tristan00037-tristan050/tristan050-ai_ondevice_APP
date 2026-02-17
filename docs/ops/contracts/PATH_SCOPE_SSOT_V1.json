@@ -1,0 +1,17 @@
+{
+  "version": "v1",
+  "allowed_paths": [
+    "scripts/verify",
+    "scripts/agent",
+    "scripts/ops",
+    ".github/workflows",
+    "docs/ops/contracts",
+    "docs/ops/PROOFS"
+  ],
+  "excluded_paths": [
+    "node_modules",
+    ".git",
+    "dist",
+    ".artifacts"
+  ]
+}
