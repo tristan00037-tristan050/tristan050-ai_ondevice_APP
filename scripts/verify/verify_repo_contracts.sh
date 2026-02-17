@@ -702,6 +702,12 @@ echo "== guard: meta-only allowlist enforced =="
 run_guard "meta-only allowlist enforced" bash scripts/verify/verify_meta_only_allowlist_enforced.sh
 META_ONLY_ALLOWLIST_ENFORCED_OK=1
 
+echo "== guard: algo-core 01~03 (meta-only + 3 blocks + signed manifest + p95) =="
+run_guard "algo-core 01~03" bash scripts/verify/verify_algo_core_01_03.sh
+ALGO_META_ONLY_FAILCLOSED_OK=1
+ALGO_THREE_BLOCKS_NO_RAW_OK=1
+ALGO_SIGNED_MANIFEST_VERIFY_OK=1
+ALGO_P95_HOOK_OK=1
 
 echo "== guard: algo-core-06 prod key management (SSOT + keygen + fail-closed) =="
 run_guard "algo-core-06 prod keys" bash scripts/verify/verify_algo_core_06_prod_keys.sh
@@ -964,13 +970,6 @@ while IFS= read -r k; do
 done <<< "$REQ_KEYS"
 
 PROD_DELIVERED_KEYSET_GUARD_OK=1
-
-echo "== guard: algo-core 01~03 (meta-only + 3 blocks + signed manifest + p95) =="
-run_guard "algo-core 01~03" bash scripts/verify/verify_algo_core_01_03.sh
-ALGO_META_ONLY_FAILCLOSED_OK=1
-ALGO_THREE_BLOCKS_NO_RAW_OK=1
-ALGO_SIGNED_MANIFEST_VERIFY_OK=1
-ALGO_P95_HOOK_OK=1
 
 echo "== guard: algo-core delivered keyset (SSOT) =="
 SSOT_FILE="docs/ops/contracts/ALGO_CORE_DELIVERED_KEYS_SSOT.md"
