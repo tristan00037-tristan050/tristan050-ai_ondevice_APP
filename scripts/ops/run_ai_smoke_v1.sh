@@ -43,7 +43,11 @@ run_step "variance_outlier_v1" bash scripts/verify/verify_ai_variance_outlier_v1
 # 3) energy proxy
 run_step "energy_proxy_v1" bash scripts/verify/verify_ai_energy_proxy_v1.sh
 
-python - <<'PY' "$OUTDIR" "$TS_UTC" "$GIT_SHA" "$BRANCH" "$TMP"
+PYTHON_BIN="python3"
+command -v "$PYTHON_BIN" >/dev/null 2>&1 || PYTHON_BIN="python"
+command -v "$PYTHON_BIN" >/dev/null 2>&1 || { echo "BLOCK: python3/python not found"; exit 1; }
+
+"$PYTHON_BIN" - <<'PY' "$OUTDIR" "$TS_UTC" "$GIT_SHA" "$BRANCH" "$TMP"
 import json, os, re, sys
 
 outdir, ts_utc, git_sha, branch, tmpdir = sys.argv[1:]

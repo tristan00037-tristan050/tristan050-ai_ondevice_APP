@@ -25,7 +25,11 @@ trap 'rm -f "$TMP_LOG"' EXIT
 bash scripts/verify/verify_repo_contracts.sh >"$TMP_LOG" 2>&1 || true
 
 # KEY=VALUE 라인만 추출(중복 키는 마지막 값을 채택)
-python - <<'PY' "$TMP_LOG" "$OUTDIR" "$TS_UTC" "$GIT_SHA" "$BRANCH"
+PYTHON_BIN="python3"
+command -v "$PYTHON_BIN" >/dev/null 2>&1 || PYTHON_BIN="python"
+command -v "$PYTHON_BIN" >/dev/null 2>&1 || { echo "BLOCK: python3/python not found"; exit 1; }
+
+"$PYTHON_BIN" - <<'PY' "$TMP_LOG" "$OUTDIR" "$TS_UTC" "$GIT_SHA" "$BRANCH"
 import json, re, sys, os, datetime
 
 log_path, outdir, ts_utc, git_sha, branch = sys.argv[1:]
