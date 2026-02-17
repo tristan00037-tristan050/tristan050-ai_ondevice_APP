@@ -61,6 +61,15 @@ TASK_QUEUE_LOCK_NO_TIMEOUT_OK=0
 TASK_QUEUE_ASYNC_TASK_FN_OK=0
 TASK_QUEUE_YIELD_WAIT_OK=0
 
+# P4-P1-01 (AGENT) Instruction layers meta-only (raw=0, hash/scope only)
+INSTRUCTION_RAW_0_OK=0
+INSTRUCTION_HASH_ONLY_OK=0
+INSTRUCTION_LAYER_REGISTRY_OK=0
+
+# P4-P1-02 (AGENT) Reason code registry (unregistered BLOCK, single source)
+REASON_CODE_REGISTRY_PRESENT_OK=0
+REASON_CODE_NOT_REGISTERED_BLOCK_OK=0
+
 # P4-P0-02: Onprem strict proof (default: skip in dev/CI PR)
 ONPREM_PROOF_STRICT_ENFORCE="${ONPREM_PROOF_STRICT_ENFORCE:-0}"
 ONPREM_PROOF_STRICT_SKIPPED=0
@@ -555,7 +564,7 @@ cleanup(){
   echo "TASK_QUEUE_PARTIAL_WRITE_0_OK=${TASK_QUEUE_PARTIAL_WRITE_0_OK}"
   echo "TASK_QUEUE_LOCK_NO_TIMEOUT_OK=${TASK_QUEUE_LOCK_NO_TIMEOUT_OK}"
   echo "TASK_QUEUE_ASYNC_TASK_FN_OK=${TASK_QUEUE_ASYNC_TASK_FN_OK}"
-  echo "TASK_QUEUE_YIELD_WAIT_OK=${TASK_QUEUE_YIELD_WAIT_OK}"
+
 }
 trap cleanup EXIT
 
@@ -704,6 +713,12 @@ echo "== guard: meta-only allowlist enforced =="
 run_guard "meta-only allowlist enforced" bash scripts/verify/verify_meta_only_allowlist_enforced.sh
 META_ONLY_ALLOWLIST_ENFORCED_OK=1
 
+echo "== guard: algo-core 01~03 (meta-only + 3 blocks + signed manifest + p95) =="
+run_guard "algo-core 01~03" bash scripts/verify/verify_algo_core_01_03.sh
+ALGO_META_ONLY_FAILCLOSED_OK=1
+ALGO_THREE_BLOCKS_NO_RAW_OK=1
+ALGO_SIGNED_MANIFEST_VERIFY_OK=1
+ALGO_P95_HOOK_OK=1
 
 echo "== guard: algo-core-06 prod key management (SSOT + keygen + fail-closed) =="
 run_guard "algo-core-06 prod keys" bash scripts/verify/verify_algo_core_06_prod_keys.sh
@@ -967,13 +982,6 @@ done <<< "$REQ_KEYS"
 
 PROD_DELIVERED_KEYSET_GUARD_OK=1
 
-echo "== guard: algo-core 01~03 (meta-only + 3 blocks + signed manifest + p95) =="
-run_guard "algo-core 01~03" bash scripts/verify/verify_algo_core_01_03.sh
-ALGO_META_ONLY_FAILCLOSED_OK=1
-ALGO_THREE_BLOCKS_NO_RAW_OK=1
-ALGO_SIGNED_MANIFEST_VERIFY_OK=1
-ALGO_P95_HOOK_OK=1
-
 echo "== guard: algo-core delivered keyset (SSOT) =="
 SSOT_FILE="docs/ops/contracts/ALGO_CORE_DELIVERED_KEYS_SSOT.md"
 test -s "$SSOT_FILE" || { echo "BLOCK: missing SSOT file: $SSOT_FILE"; exit 1; }
@@ -1126,5 +1134,17 @@ TASK_QUEUE_PARTIAL_WRITE_0_OK=1
 TASK_QUEUE_LOCK_NO_TIMEOUT_OK=1
 TASK_QUEUE_ASYNC_TASK_FN_OK=1
 TASK_QUEUE_YIELD_WAIT_OK=1
+
+echo "== guard: P4-P1-01 instruction layers meta-only (raw=0, hash/scope only, fail-closed) =="
+run_guard "P4-P1-01 instruction layers v1" bash scripts/verify/verify_instruction_layers_v1.sh
+INSTRUCTION_RAW_0_OK=1
+INSTRUCTION_HASH_ONLY_OK=1
+INSTRUCTION_LAYER_REGISTRY_OK=1
+
+echo "== guard: P4-P1-02 reason_code registry (unregistered BLOCK, single source) =="
+run_guard "P4-P1-02 reason_code registry v1" bash scripts/verify/verify_reason_code_registry_v1.sh
+REASON_CODE_REGISTRY_PRESENT_OK=1
+REASON_CODE_NOT_REGISTERED_BLOCK_OK=1
+REASON_CODE_SINGLE_SOURCE_OK=1
 
 exit 0

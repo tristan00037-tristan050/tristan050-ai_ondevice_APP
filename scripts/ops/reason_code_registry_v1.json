@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "reason_codes": [
+    "OK",
+    "POLICY_BLOCK",
+    "INPUT_INVALID",
+    "CAPABILITY_NOT_ALLOWED",
+    "LAYER_NOT_REGISTERED",
+    "SKILL_META_ONLY_REQUIRED",
+    "TASK_QUEUE_LOCK_TIMEOUT"
+  ]
+}
+
