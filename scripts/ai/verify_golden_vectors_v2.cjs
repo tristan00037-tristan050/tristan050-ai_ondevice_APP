@@ -42,9 +42,24 @@ function loadGoldenVectors(ssotPath) {
 function verifyDeterminism(vectors) {
   const failures = [];
 
+  // Allowed modes (SSOT-aligned)
+  const ALLOWED_MODES = new Set(["deterministic", "prod", "mock", "shadow"]);
+
   for (const vec of vectors) {
     if (!vec.test_id || !vec.input || typeof vec.seed !== "number" || !vec.expected_fingerprint) {
       failures.push(`BLOCK: invalid vector format: ${vec.test_id || "unknown"}`);
+      continue;
+    }
+
+    // Mode validation (required)
+    if (typeof vec.mode !== "string" || vec.mode.trim().length === 0) {
+      failures.push(`BLOCK: vec.mode is required for ${vec.test_id || "unknown"}`);
+      continue;
+    }
+
+    // Mode allowlist validation
+    if (!ALLOWED_MODES.has(vec.mode)) {
+      failures.push(`BLOCK: vec.mode invalid: ${vec.mode} for ${vec.test_id || "unknown"}`);
       continue;
     }
 
