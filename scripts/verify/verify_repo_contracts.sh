@@ -84,6 +84,11 @@ AI_GOLDEN_VECTORS_V2_RAW_TEXT_0_OK=0
 AI_GOLDEN_VECTORS_V2_NO_ARRAY_OK=0
 AI_GOLDEN_VECTORS_V2_PRESENT_OK=0
 
+# P5-AI-P0-02 (AI) Canonicalize nested preserve v2
+CANONICALIZE_V2_SSOT_OK=0
+CANONICALIZE_V2_NO_DUP_OK=0
+AI_INPUT_CANON_PRESERVE_NESTED_V1_OK=0
+
 # P4-AI-02 (AI) Variance outlier guard (p50/p95 variance + outlier ratio)
 AI_VARIANCE_MEASUREMENTS_SOURCE_OK=0
 AI_VARIANCE_OK=0
@@ -627,6 +632,11 @@ cleanup(){
   echo "AI_GOLDEN_VECTORS_V2_NO_ARRAY_OK=${AI_GOLDEN_VECTORS_V2_NO_ARRAY_OK}"
   echo "AI_GOLDEN_VECTORS_V2_PRESENT_OK=${AI_GOLDEN_VECTORS_V2_PRESENT_OK}"
 
+  # P5-AI-P0-02 (AI) Canonicalize nested preserve v2
+  echo "CANONICALIZE_V2_SSOT_OK=${CANONICALIZE_V2_SSOT_OK}"
+  echo "CANONICALIZE_V2_NO_DUP_OK=${CANONICALIZE_V2_NO_DUP_OK}"
+  echo "AI_INPUT_CANON_PRESERVE_NESTED_V1_OK=${AI_INPUT_CANON_PRESERVE_NESTED_V1_OK}"
+
   # P4-AI-02 (AI) Variance outlier guard
   echo "AI_VARIANCE_MEASUREMENTS_SOURCE_OK=${AI_VARIANCE_MEASUREMENTS_SOURCE_OK}"
   echo "AI_VARIANCE_OK=${AI_VARIANCE_OK}"
@@ -1162,6 +1172,13 @@ run_guard "P3-AI-01 fingerprint canonical v1" bash scripts/verify/verify_fingerp
 
 echo "== guard: P3-AI-01 canonicalize single source v1 =="
 run_guard "P3-AI-01 canonicalize single source v1" bash scripts/verify/verify_canonicalize_single_source_v1.sh
+
+echo "== guard: P5-AI-P0-02 canonicalize nested preserve v2 (single source + nested effect) =="
+run_guard "P5-AI-P0-02 canonicalize single source no dup v2" bash scripts/verify/verify_canonicalize_single_source_no_dup_v2.sh
+CANONICALIZE_V2_SSOT_OK=1
+CANONICALIZE_V2_NO_DUP_OK=1
+run_guard "P5-AI-P0-02 fingerprint nested effect v1" bash scripts/verify/verify_fingerprint_nested_effect_v1.sh
+AI_INPUT_CANON_PRESERVE_NESTED_V1_OK=1
 
 echo "== guard: P3-AI-02 fingerprint input policy v1 =="
 run_guard "P3-AI-02 fingerprint input policy v1" bash scripts/verify/verify_fingerprint_input_policy_v1.sh
