@@ -9,3 +9,6 @@ package-lock.json
 
 # AI run artifacts (generated at runtime)
 ai/reports/latest/
+
+# local env
+.venv-yaml/
