@@ -9,3 +9,5 @@ EGRESS_DENY_HOST_PROOF_FORBIDDEN=1
 - HOST(로컬/러너 호스트)에서 curl로 증빙하는 방법은 금지한다.
 - verify 스크립트는 판정만 수행한다(네트워크 시도 금지).
 
+curl localhost:8080
+

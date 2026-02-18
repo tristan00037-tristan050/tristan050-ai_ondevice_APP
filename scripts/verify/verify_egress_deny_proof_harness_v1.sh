@@ -19,24 +19,34 @@ grep -q "EGRESS_DENY_PROOF_MUST_RUN_IN_SANDBOX=1" "$runbook" || { echo "BLOCK: m
 
 test -f "$compose" || { echo "BLOCK: missing compose harness"; exit 1; }
 
-# 1) 런북/템플릿에 'host curl로 증빙' 같은 문구/커맨드가 있으면 즉시 BLOCK
-#    (금지 문구 설명이 아닌 실제 사용 예시/커맨드만 차단)
-#    금지 문구: "금지", "forbidden", "금지한다" 등과 함께 나오면 허용
-#    실제 사용: "curl", "wget", "nc" 등이 명령어/예시로 사용되면 차단
-if grep -Eqi "(curl|wget|nc).*(https?://|example\.com|google\.com|외부)" "$runbook" "$compose" 2>/dev/null; then
-  echo "BLOCK: host proof guidance detected (external URL with network tool)"
-  exit 1
-fi
-if grep -Eqi "(localhost|127\.0\.0\.1|0\.0\.0\.0).*(curl|wget|nc)" "$runbook" "$compose" 2>/dev/null; then
-  echo "BLOCK: host proof guidance detected (localhost with network tool)"
-  exit 1
+# 스캔 대상 모으기 (runbook + compose + (있으면) k8s 템플릿)
+targets=("$runbook" "$compose")
+if [[ -d "tools/egress_proof/k8s" ]]; then
+  # 파일이 없을 때 에러 나지 않게
+  while IFS= read -r f; do targets+=("$f"); done < <(find tools/egress_proof/k8s -type f -maxdepth 2 2>/dev/null || true)
 fi
 
-# 2) verify 자체가 네트워크를 시도하는 흔적이 있으면 BLOCK(방어적)
-#    (이 파일 안에 curl/wget/nc가 실제 명령어로 사용되면 즉시 실패)
-#    주석이나 검사 로직은 제외 (grep 패턴 자체는 허용)
-if grep -vE "^[[:space:]]*#|grep.*curl|grep.*wget|grep.*nc" "$0" | grep -Eqi "(curl|wget|nc|telnet)[[:space:]]"; then
-  echo "BLOCK: verify script must be decision-only (no network tools)"
+# 금지: host-side proof 커맨드 (양방향 모두 차단)
+# - 도구: curl/wget/nc/telnet
+# - 호스트: localhost/127.0.0.1/0.0.0.0/::1
+# 같은 라인에 도구와 호스트가 모두 있으면 차단
+for target in "${targets[@]}"; do
+  if [[ ! -f "$target" ]]; then
+    continue
+  fi
+  # curl/wget/nc/telnet이 있고, 같은 라인에 localhost/127.0.0.1/0.0.0.0/::1이 있으면 차단
+  if grep -qiE "(curl|wget|nc|telnet)" "$target" && grep -qiE "(localhost|127\.0\.0\.1|0\.0\.0\.0|::1)" "$target"; then
+    # 같은 라인에 둘 다 있는지 확인
+    if grep -EIn "(curl|wget|nc|telnet).*(localhost|127\.0\.0\.1|0\.0\.0\.0|::1)|(localhost|127\.0\.0\.1|0\.0\.0\.0|::1).*(curl|wget|nc|telnet)" "$target" >/dev/null 2>&1; then
+      echo "BLOCK: host-side proof command detected (tool<->host on same line in $target)"
+      exit 1
+    fi
+  fi
+done
+
+# 2) verify 스크립트가 실제로 네트워크 도구를 실행하면 안 됨(라인 시작 커맨드만 탐지)
+if grep -EIn '^[[:space:]]*(curl|wget|nc|telnet)[[:space:]]+' "$0" >/dev/null 2>&1; then
+  echo "BLOCK: verify must be decision-only (no network tool execution)"
   exit 1
 fi
 
