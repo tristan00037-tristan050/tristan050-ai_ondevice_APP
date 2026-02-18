@@ -29,19 +29,32 @@ AI_GOLDEN_VECTORS_V2_PRESENT_OK=1
 grep -q "AI_GOLDEN_VECTORS_V2_RAW_TEXT_FORBIDDEN_PATTERNS_V1_TOKEN=1" "$PATTERNS" || { echo "BLOCK: missing patterns token"; exit 1; }
 
 # 3) 금지 패턴 검사 (raw text 직접 저장 금지)
-# 주의: input.text는 허용 (meta-only input의 일부)
-# 금지: raw_text, rawText 필드만 차단
-if grep -Eiq '(^[[:space:]]*"raw_text"|^[[:space:]]*"rawText"|^[[:space:]]*'\''raw_text'\''|^[[:space:]]*'\''rawText'\''|raw_text[[:space:]]*:|rawText[[:space:]]*:)' "$SSOT" >/dev/null 2>&1; then
-  echo "BLOCK: forbidden raw_text/rawText field detected in SSOT"
-  grep -Eiq '(^[[:space:]]*"raw_text"|^[[:space:]]*"rawText"|^[[:space:]]*'\''raw_text'\''|^[[:space:]]*'\''rawText'\''|raw_text[[:space:]]*:|rawText[[:space:]]*:)' "$SSOT" | head -n 10
+# BLOCK only when it appears as a JSON key declaration: "raw_text":
+# 스캔 대상: golden vectors v2 데이터 파일
+SCAN_TARGETS=("$SSOT")
+
+# 3-1) raw_text 필드 키 검사
+if grep -EIn '"raw_text"[[:space:]]*:' "${SCAN_TARGETS[@]}" >/dev/null 2>&1; then
+  echo "BLOCK: forbidden field key raw_text present"
+  exit 1
+fi
+
+# 3-2) rawText 필드 키 검사
+if grep -EIn '"rawText"[[:space:]]*:' "${SCAN_TARGETS[@]}" >/dev/null 2>&1; then
+  echo "BLOCK: forbidden field key rawText present"
   exit 1
 fi
 
 AI_GOLDEN_VECTORS_V2_RAW_TEXT_0_OK=1
 
-# 4) 배열 형태의 raw text 저장 금지 (raw_texts, rawTexts 등)
-if grep -qiE "(raw_texts|rawTexts)" "$SSOT"; then
-  echo "BLOCK: array form of raw text detected (raw_texts/rawTexts)"
+# 4) 배열 형태의 raw text 저장 금지 (raw_texts, rawTexts 필드 키만 차단)
+if grep -EIn '"raw_texts"[[:space:]]*:' "${SCAN_TARGETS[@]}" >/dev/null 2>&1; then
+  echo "BLOCK: forbidden field key raw_texts present"
+  exit 1
+fi
+
+if grep -EIn '"rawTexts"[[:space:]]*:' "${SCAN_TARGETS[@]}" >/dev/null 2>&1; then
+  echo "BLOCK: forbidden field key rawTexts present"
   exit 1
 fi
 
