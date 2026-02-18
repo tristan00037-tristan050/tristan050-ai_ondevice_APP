@@ -1,0 +1,6 @@
+{
+  "version": "v2",
+  "measurement_window_runs": 10,
+  "min_p50_ms": 0.001,
+  "expected_required": true
+}
