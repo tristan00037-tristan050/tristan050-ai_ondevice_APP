@@ -1,0 +1,11 @@
+name: preflight_v1
+description: "Run the repo's single-source preflight script (tools/preflight_v1.sh)"
+runs:
+  using: "composite"
+  steps:
+    - name: Run preflight_v1
+      shell: bash
+      run: |
+        set -euo pipefail
+        bash tools/preflight_v1.sh
+
