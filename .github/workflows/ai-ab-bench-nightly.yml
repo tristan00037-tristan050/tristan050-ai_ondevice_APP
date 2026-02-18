@@ -1,0 +1,29 @@
+name: ai-ab-bench-nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"  # daily 03:17 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ai_ab_bench_nightly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Single-source preflight (already sealed in P5-P0-02)
+      - name: Preflight (single source)
+        uses: ./.github/actions/preflight_v1
+
+      - name: Verify repo contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_repo_contracts.sh
