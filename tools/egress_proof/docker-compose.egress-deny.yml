@@ -1,0 +1,10 @@
+version: "3.9"
+
+services:
+  egress-deny-probe:
+    image: alpine:3.20
+    command: ["sh", "-lc", "echo EGRESS_DENY_PROBE_READY=1 && sleep 1"]
+    # 주의: 실제 egress deny는 프로젝트의 네트워크 정책 방식에 맞춰
+    # 이 compose를 확장해야 합니다.
+    # 여기서는 "하네스 파일이 존재하고, 런북이 host proof를 금지"하는 것부터 봉인합니다.
+
