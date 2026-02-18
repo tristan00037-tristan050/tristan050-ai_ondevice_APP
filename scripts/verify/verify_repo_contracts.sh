@@ -79,6 +79,11 @@ PATH_SCOPE_DRIFT_0_OK=0
 AI_GOLDEN_VECTORS_V2_OK=0
 AI_DETERMINISM_FINGERPRINT_OK=0
 
+# P5-AI-P0-01 (AI) Golden vectors v2 raw text 0 v1
+AI_GOLDEN_VECTORS_V2_RAW_TEXT_0_OK=0
+AI_GOLDEN_VECTORS_V2_NO_ARRAY_OK=0
+AI_GOLDEN_VECTORS_V2_PRESENT_OK=0
+
 # P4-AI-02 (AI) Variance outlier guard (p50/p95 variance + outlier ratio)
 AI_VARIANCE_MEASUREMENTS_SOURCE_OK=0
 AI_VARIANCE_OK=0
@@ -616,6 +621,11 @@ cleanup(){
   # P4-AI-01 (AI) Golden vectors v2
   echo "AI_GOLDEN_VECTORS_V2_OK=${AI_GOLDEN_VECTORS_V2_OK}"
   echo "AI_DETERMINISM_FINGERPRINT_OK=${AI_DETERMINISM_FINGERPRINT_OK}"
+
+  # P5-AI-P0-01 (AI) Golden vectors v2 raw text 0 v1
+  echo "AI_GOLDEN_VECTORS_V2_RAW_TEXT_0_OK=${AI_GOLDEN_VECTORS_V2_RAW_TEXT_0_OK}"
+  echo "AI_GOLDEN_VECTORS_V2_NO_ARRAY_OK=${AI_GOLDEN_VECTORS_V2_NO_ARRAY_OK}"
+  echo "AI_GOLDEN_VECTORS_V2_PRESENT_OK=${AI_GOLDEN_VECTORS_V2_PRESENT_OK}"
 
   # P4-AI-02 (AI) Variance outlier guard
   echo "AI_VARIANCE_MEASUREMENTS_SOURCE_OK=${AI_VARIANCE_MEASUREMENTS_SOURCE_OK}"
@@ -1241,6 +1251,12 @@ echo "== guard: P4-AI-01 golden vectors v2 (determinism + fingerprint validation
 run_guard "P4-AI-01 golden vectors v2" bash scripts/verify/verify_ai_golden_vectors_v2.sh
 AI_GOLDEN_VECTORS_V2_OK=1
 AI_DETERMINISM_FINGERPRINT_OK=1
+
+echo "== guard: P5-AI-P0-01 golden vectors v2 raw text 0 v1 (meta-only, no raw text fields) =="
+run_guard "P5-AI-P0-01 golden vectors v2 raw text 0 v1" bash scripts/verify/verify_ai_golden_vectors_v2_raw_text_0_v1.sh
+AI_GOLDEN_VECTORS_V2_RAW_TEXT_0_OK=1
+AI_GOLDEN_VECTORS_V2_NO_ARRAY_OK=1
+AI_GOLDEN_VECTORS_V2_PRESENT_OK=1
 
 echo "== guard: P4-AI-02 variance outlier guard (p50/p95 variance + outlier ratio) =="
 run_guard "P4-AI-02 variance outlier v1" bash scripts/verify/verify_ai_variance_outlier_v1.sh
