@@ -1,0 +1,26 @@
+AI_GOLDEN_VECTORS_V2_RAW_TEXT_FORBIDDEN_PATTERNS_V1_TOKEN=1
+
+# 금지 패턴: raw text가 직접 저장되는 형태 (필드명 기준)
+# - raw_text 필드 (top-level 또는 nested)
+# - rawText 필드 (camelCase)
+# 주의: input.text는 허용 (meta-only input의 일부)
+
+"raw_text"
+'raw_text'
+"rawText"
+'rawText'
+raw_text:
+rawText:
+raw_text=
+rawText=
+
+# 금지: 배열 형태의 raw text 저장
+"raw_texts"
+'raw_texts'
+"rawTexts"
+'rawTexts'
+raw_texts:
+rawTexts:
+raw_texts=
+rawTexts=
+
