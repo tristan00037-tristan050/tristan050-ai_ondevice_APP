@@ -28,6 +28,9 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Preflight (single source)
+        uses: ./.github/actions/preflight_v1
+
       - name: Ops deps preflight (fail-closed)
         shell: bash
         run: |
