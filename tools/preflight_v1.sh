@@ -30,27 +30,22 @@ fi
 git_head="$(git rev-parse HEAD)"
 
 # 4) dist 준비(프로젝트에 맞게 커맨드 조정)
-# 예시:
-# npm ci
-# npm run build
-# 또는 pnpm i --frozen-lockfile
-# pnpm build
-#
-# 여기서는 "프로젝트 실커맨드가 무엇인지"를 문서에서 확정할 수 없어서 비워둡니다.
-# 팀 표준 커맨드로 교체하세요.
-echo "INFO: preflight_v1.sh placeholder - fill build commands for your repo" >/dev/null
+# bff-accounting 빌드 (DIST_FRESHNESS_POLICY_V1 요구사항)
+cd webcore_appcore_starter_4_17/packages/bff-accounting
+npm ci
+npm run build
+cd "$repo_root"
 
 # 5) stamp 생성(비교 대상 필드 고정)
-mkdir -p dist
+# verify_dist_freshness_v1.sh가 확인하는 경로와 필드명에 맞춤
+mkdir -p webcore_appcore_starter_4_17/packages/bff-accounting/dist
 built_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-cat > dist/.build_stamp.json <<EOF
+cat > webcore_appcore_starter_4_17/packages/bff-accounting/dist/.build_stamp.json <<EOF
 {
-  "git_head": "${git_head}",
-  "lock_hash": "${lock_hash}",
-  "node_major": ${node_major},
-  "workflow_name": "local-preflight",
-  "built_at_utc": "${built_at_utc}"
+  "git_sha": "${git_head}",
+  "built_at_utc": "${built_at_utc}",
+  "workflow_name": "local-preflight"
 }
 EOF
 
