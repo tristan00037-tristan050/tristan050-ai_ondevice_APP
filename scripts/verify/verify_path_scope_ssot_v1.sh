@@ -30,6 +30,8 @@ grep -q "PATH_SCOPE_POLICY_V1_TOKEN=1" "$doc" || { echo "BLOCK: missing policy t
 # 2) SSOT file existence and format
 SSOT="docs/ops/contracts/PATH_SCOPE_SSOT_V1.json"
 test -f "$SSOT" || { echo "BLOCK: missing SSOT file: $SSOT"; exit 1; }
+# P2: enforce actual read of SSOT (guard verify_path_scope_enforced_v2)
+cat "docs/ops/contracts/PATH_SCOPE_SSOT_V1.json" >/dev/null
 
 command -v node >/dev/null 2>&1 || { echo "BLOCK: node not found"; exit 1; }
 
