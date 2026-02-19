@@ -2,7 +2,7 @@
   "version": "v2",
   "vectors": [
     {
-      "test_id": "test_001",
+      "test_id": "gv2_div_00",
       "input": {
         "text": "sample input text",
         "mode": "meta_only"
@@ -13,18 +13,221 @@
       "feature_digest_v1": {
         "model_pack_id": "pack-demo-001",
         "pack_version_id": "v1.0.0",
-        "mode": "deterministic"
+        "mode": "default",
+        "device_class_id": "dc_low",
+        "policy_id": "pol_a",
+        "backend_id": "be_cpu",
+        "quantization_id": "q8"
       }
     },
     {
-      "test_id": "test_002",
+      "test_id": "gv2_div_01",
       "input": {
-        "text": "another test input",
+        "text": "sample input text",
         "mode": "meta_only"
       },
-      "seed": 123,
-      "expected_fingerprint": "9073b6e3e6c655bd8c942e107744a6b2d843def4e15b1ec82d81a7324bf9292b",
-      "mode": "deterministic"
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "default",
+        "device_class_id": "dc_low",
+        "policy_id": "pol_b",
+        "backend_id": "be_gpu",
+        "quantization_id": "q4"
+      }
+    },
+    {
+      "test_id": "gv2_div_02",
+      "input": {
+        "text": "sample input text",
+        "mode": "meta_only"
+      },
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "shadow",
+        "device_class_id": "dc_low",
+        "policy_id": "pol_a",
+        "backend_id": "be_cpu",
+        "quantization_id": "q8"
+      }
+    },
+    {
+      "test_id": "gv2_div_03",
+      "input": {
+        "text": "sample input text",
+        "mode": "meta_only"
+      },
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "shadow",
+        "device_class_id": "dc_low",
+        "policy_id": "pol_b",
+        "backend_id": "be_gpu",
+        "quantization_id": "q4"
+      }
+    },
+    {
+      "test_id": "gv2_div_04",
+      "input": {
+        "text": "sample input text",
+        "mode": "meta_only"
+      },
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "default",
+        "device_class_id": "dc_mid",
+        "policy_id": "pol_a",
+        "backend_id": "be_cpu",
+        "quantization_id": "q8"
+      }
+    },
+    {
+      "test_id": "gv2_div_05",
+      "input": {
+        "text": "sample input text",
+        "mode": "meta_only"
+      },
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "default",
+        "device_class_id": "dc_mid",
+        "policy_id": "pol_b",
+        "backend_id": "be_gpu",
+        "quantization_id": "q4"
+      }
+    },
+    {
+      "test_id": "gv2_div_06",
+      "input": {
+        "text": "sample input text",
+        "mode": "meta_only"
+      },
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "shadow",
+        "device_class_id": "dc_mid",
+        "policy_id": "pol_a",
+        "backend_id": "be_cpu",
+        "quantization_id": "q8"
+      }
+    },
+    {
+      "test_id": "gv2_div_07",
+      "input": {
+        "text": "sample input text",
+        "mode": "meta_only"
+      },
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "shadow",
+        "device_class_id": "dc_mid",
+        "policy_id": "pol_b",
+        "backend_id": "be_gpu",
+        "quantization_id": "q4"
+      }
+    },
+    {
+      "test_id": "gv2_div_08",
+      "input": {
+        "text": "sample input text",
+        "mode": "meta_only"
+      },
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "default",
+        "device_class_id": "dc_high",
+        "policy_id": "pol_a",
+        "backend_id": "be_cpu",
+        "quantization_id": "q8"
+      }
+    },
+    {
+      "test_id": "gv2_div_09",
+      "input": {
+        "text": "sample input text",
+        "mode": "meta_only"
+      },
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "default",
+        "device_class_id": "dc_high",
+        "policy_id": "pol_b",
+        "backend_id": "be_gpu",
+        "quantization_id": "q4"
+      }
+    },
+    {
+      "test_id": "gv2_div_10",
+      "input": {
+        "text": "sample input text",
+        "mode": "meta_only"
+      },
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "shadow",
+        "device_class_id": "dc_high",
+        "policy_id": "pol_a",
+        "backend_id": "be_cpu",
+        "quantization_id": "q8"
+      }
+    },
+    {
+      "test_id": "gv2_div_11",
+      "input": {
+        "text": "sample input text",
+        "mode": "meta_only"
+      },
+      "seed": 42,
+      "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "shadow",
+        "device_class_id": "dc_high",
+        "policy_id": "pol_b",
+        "backend_id": "be_gpu",
+        "quantization_id": "q4"
+      }
     }
   ]
 }
