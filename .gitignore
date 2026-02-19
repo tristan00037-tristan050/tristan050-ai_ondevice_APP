@@ -12,3 +12,7 @@ ai/reports/latest/
 
 # local env
 .venv-yaml/
+
+# demo outputs (generated)
+docs/ops/reports/demo_*
+docs/ops/reports/archive/*demo_*
