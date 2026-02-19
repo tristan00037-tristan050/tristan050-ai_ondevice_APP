@@ -8,9 +8,22 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ai-ab-bench-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ai_ab_bench_nightly:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # 모델/의도 기본값(필요 시 workflow_dispatch 입력 확장 가능)
+      MODEL_A: demoA
+      MODEL_B: demoB
+      INTENT: ALGO_CORE_THREE_BLOCKS
+      A_P95_BUDGET_MS: "5"
+      B_P95_BUDGET_MS: "5"
+
     steps:
       - uses: actions/checkout@v4
 
@@ -18,9 +31,61 @@ jobs:
         with:
           node-version: "20"
 
-      # Single-source preflight (already sealed in P5-P0-02)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # single-source preflight (sealed)
       - name: Preflight (single source)
         uses: ./.github/actions/preflight_v1
+
+      - name: Load policy (RUNS_NIGHTLY/WARMUP)
+        shell: bash
+        run: |
+          set -euo pipefail
+          POLICY="docs/ops/contracts/AI_AB_BENCH_POLICY_V1.md"
+          test -f "$POLICY"
+
+          RUNS_NIGHTLY="$(grep -E '^RUNS_NIGHTLY=' "$POLICY" | tail -n1 | cut -d= -f2 | tr -d '[:space:]')"
+          WARMUP="$(grep -E '^WARMUP=' "$POLICY" | tail -n1 | cut -d= -f2 | tr -d '[:space:]')"
+
+          [[ "$RUNS_NIGHTLY" =~ ^[0-9]+$ ]]
+          [[ "$WARMUP" =~ ^[0-9]+$ ]]
+
+          echo "RUNS=$RUNS_NIGHTLY" >> "$GITHUB_ENV"
+          echo "WARMUP=$WARMUP" >> "$GITHUB_ENV"
+
+      - name: Sanity check scripts exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x scripts/ai/run_ab_bench.sh
+          test -x scripts/ai/gate_ab_bench.sh
+
+      - name: Run A/B bench (nightly long-run)
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUNS="${RUNS}" WARMUP="${WARMUP}" MODEL_A="${MODEL_A}" MODEL_B="${MODEL_B}" INTENT="${INTENT}" \
+            ./scripts/ai/run_ab_bench.sh
+
+          test -f ai/reports/latest/ab_bench.json
+          test -f ai/reports/latest/ab_bench.md
+
+      - name: Run A/B bench gate (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          A_P95_BUDGET_MS="${A_P95_BUDGET_MS}" B_P95_BUDGET_MS="${B_P95_BUDGET_MS}" \
+            ./scripts/ai/gate_ab_bench.sh
+
+      - name: Upload reports (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-ab-bench-nightly-reports
+          path: |
+            ai/reports/latest/ab_bench.json
+            ai/reports/latest/ab_bench.md
 
       - name: Verify repo contracts
         shell: bash
