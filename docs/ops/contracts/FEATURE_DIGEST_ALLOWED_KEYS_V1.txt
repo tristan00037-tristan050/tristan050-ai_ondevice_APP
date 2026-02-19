@@ -1,0 +1,9 @@
+model_pack_id
+pack_version_id
+pack_manifest_sha256
+device_class_id
+backend_id
+quantization_id
+policy_id
+mode
+seed_policy_id
