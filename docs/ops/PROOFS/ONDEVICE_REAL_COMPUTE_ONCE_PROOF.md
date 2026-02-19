@@ -31,7 +31,7 @@
 
 ### 4. 원문 저장 0 검증
 
-- 금지 키/패턴 스캔: `raw_text`, `prompt`, `messages`, `document_body`, `BEGIN .* PRIVATE KEY`, `_TOKEN=`, `_PASSWORD=` 등
+- 금지 키/패턴 스캔: `raw_text`, `prompt`, `messages`, `document_body`, `BEGIN .* PRIVATE KEY`, env형 `_TOKEN`/`_PASSWORD` 등
 - 검증 결과: 금지 패턴 미검출 (meta-only만 출력)
 
 ## Meta-Only 마커 예시
