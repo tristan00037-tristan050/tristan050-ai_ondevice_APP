@@ -15,6 +15,42 @@ import type {
   LlmGatewayResponseBody,
 } from './os-llm-gateway.types.js';
 
+// ASSIST_COMPUTE_DEFAULT_OFF_LOCK_V1
+import fs from 'fs';
+import path from 'path';
+
+const ASSIST_POLICY_PATH = 'docs/ops/contracts/ASSIST_COMPUTE_POLICY_V1.md';
+
+function readAssistPolicy(): string | null {
+  try {
+    const abs = path.resolve(process.cwd(), ASSIST_POLICY_PATH);
+    return fs.readFileSync(abs, 'utf8');
+  } catch {
+    // fail-closed: policy unreadable => feature stays OFF
+    return null;
+  }
+}
+
+type AssistReqLike = { headers?: Record<string, unknown> };
+
+function isAssistEnabled(req: AssistReqLike): boolean {
+  const enabled = String(process.env.ASSIST_COMPUTE_ENABLED || '') === '1';
+  if (!enabled) return false;
+
+  const txt = readAssistPolicy();
+  if (!txt) return false; // fail-closed: no exception, stay OFF
+
+  if (!txt.includes('ASSIST_COMPUTE_POLICY_V1_TOKEN=1')) return false;
+  if (!txt.includes('DEFAULT_OFF=1')) return false;
+
+  const requireHeader = txt.includes('REQUIRE_HEADER=1');
+  if (requireHeader) {
+    const v = String(req?.headers?.['x-assist-compute'] || '');
+    if (v !== '1') return false;
+  }
+  return true;
+}
+
 const router = Router();
 
 /**
@@ -47,6 +83,10 @@ router.post(
   requireRole('operator'),
   async (req: Request<unknown, unknown, LlmGatewayRequestBody>, res: Response, next: NextFunction) => {
     try {
+      // ASSIST_COMPUTE_DEFAULT_OFF_GUARD_V1
+      if (!isAssistEnabled(req)) {
+        return res.status(501).json({ message: 'Assist compute is default OFF (policy-gated).' });
+      }
       const tenant = (req as any).tenantId || req.headers['x-tenant'] as string;
       const userId = req.headers['x-user-id'] as string;
       const role = req.headers['x-user-role'] as string;
