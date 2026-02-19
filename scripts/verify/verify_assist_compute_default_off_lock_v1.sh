@@ -23,6 +23,11 @@ grep -Eq "docs/ops/contracts/ASSIST_COMPUTE_POLICY_V1\\.md" "$route" || { echo "
 grep -Eq "ASSIST_COMPUTE_DEFAULT_OFF_GUARD_V1" "$route" || { echo "BLOCK: handler guard not injected"; exit 1; }
 grep -Eq "isAssistEnabled\\(req\\)" "$route" || { echo "BLOCK: isAssistEnabled(req) not used"; exit 1; }
 
+# P1: readAssistPolicy try/catch + fail-closed branch (no exception => OFF)
+grep -Eq "readAssistPolicy\\(\\): string \\| null" "$route" || { echo "BLOCK: readAssistPolicy must return string | null"; exit 1; }
+grep -Eq "try \\{" "$route" && grep -Eq "catch \\{" "$route" || { echo "BLOCK: readAssistPolicy must use try/catch"; exit 1; }
+grep -Eq "if \\(!txt\\) return false" "$route" || { echo "BLOCK: isAssistEnabled must have if (!txt) return false"; exit 1; }
+
 ASSIST_COMPUTE_POLICY_V1_OK=1
 ASSIST_COMPUTE_DEFAULT_OFF_LOCK_V1_OK=1
 exit 0

@@ -21,27 +21,31 @@ import path from 'path';
 
 const ASSIST_POLICY_PATH = 'docs/ops/contracts/ASSIST_COMPUTE_POLICY_V1.md';
 
-function readAssistPolicy(): string {
-  // Only used when enable is requested; fail-closed if missing/unreadable.
-  const abs = path.resolve(process.cwd(), ASSIST_POLICY_PATH);
-  return fs.readFileSync(abs, 'utf8');
+function readAssistPolicy(): string | null {
+  try {
+    const abs = path.resolve(process.cwd(), ASSIST_POLICY_PATH);
+    return fs.readFileSync(abs, 'utf8');
+  } catch {
+    // fail-closed: policy unreadable => feature stays OFF
+    return null;
+  }
 }
 
-function isAssistEnabled(req: Request): boolean {
-  // Default OFF unless explicit env + (optional) explicit header + SSOT token.
-  const envKey = 'ASSIST_COMPUTE_ENABLED';
-  const enabled = String(process.env[envKey] || '') === '1';
+type AssistReqLike = { headers?: Record<string, unknown> };
+
+function isAssistEnabled(req: AssistReqLike): boolean {
+  const enabled = String(process.env.ASSIST_COMPUTE_ENABLED || '') === '1';
   if (!enabled) return false;
 
   const txt = readAssistPolicy();
+  if (!txt) return false; // fail-closed: no exception, stay OFF
+
   if (!txt.includes('ASSIST_COMPUTE_POLICY_V1_TOKEN=1')) return false;
   if (!txt.includes('DEFAULT_OFF=1')) return false;
 
-  // Optional header gate (kept strict)
   const requireHeader = txt.includes('REQUIRE_HEADER=1');
   if (requireHeader) {
-    const hName = 'x-assist-compute';
-    const v = String((req.headers as Record<string, string>)?.[hName] || '');
+    const v = String(req?.headers?.['x-assist-compute'] || '');
     if (v !== '1') return false;
   }
   return true;
