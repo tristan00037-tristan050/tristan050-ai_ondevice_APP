@@ -17,6 +17,16 @@ cat > "$out_json" <<JSON
     "approval_required": 1,
     "audit_event": "EXPORT_APPROVAL_AUDIT_EVENT_V2"
   },
+  "allow_case": {
+    "decision": "allow",
+    "reason_code": "DEMO_ALLOW",
+    "evidence_id": "ev_allow_1"
+  },
+  "block_case": {
+    "decision": "block",
+    "reason_code": "DEMO_BLOCK",
+    "evidence_id": "ev_block_1"
+  },
   "checks": {
     "WRITE_APPROVE_ALLOW_OK": 1,
     "WRITE_APPROVE_BLOCK_OK": 1,

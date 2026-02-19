@@ -18,6 +18,16 @@ cat > "$out_json" <<JSON
     "priority_id": "P2",
     "device_class_id": "dc_low"
   },
+  "allow_case": {
+    "decision": "allow",
+    "reason_code": "DEMO_ALLOW",
+    "evidence_id": "ev_allow_1"
+  },
+  "block_case": {
+    "decision": "block",
+    "reason_code": "DEMO_BLOCK",
+    "evidence_id": "ev_block_1"
+  },
   "checks": {
     "HELPDESK_ALLOW_OK": 1,
     "HELPDESK_BLOCK_OK": 1,

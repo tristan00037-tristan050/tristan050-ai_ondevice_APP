@@ -19,6 +19,16 @@ cat > "$out_json" <<JSON
     "model_pack_id": "pack_demo",
     "pack_version_id": "v1"
   },
+  "allow_case": {
+    "decision": "allow",
+    "reason_code": "DEMO_ALLOW",
+    "evidence_id": "ev_allow_1"
+  },
+  "block_case": {
+    "decision": "block",
+    "reason_code": "DEMO_BLOCK",
+    "evidence_id": "ev_block_1"
+  },
   "checks": {
     "DOC_SEARCH_ALLOW_OK": 1,
     "DOC_SEARCH_BLOCK_OK": 1,
