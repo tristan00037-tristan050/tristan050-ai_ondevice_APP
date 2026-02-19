@@ -75,6 +75,9 @@ PATH_SCOPE_SSOT_PRESENT_OK=0
 PATH_SCOPE_NO_PLACEHOLDER_OK=0
 PATH_SCOPE_DRIFT_0_OK=0
 
+# P5-P1-03 (PATH_SCOPE) Scanners must reference SSOT v2
+PATH_SCOPE_ENFORCED_V2_OK=0
+
 # P4-AI-01 (AI) Golden vectors v2 (determinism + fingerprint validation)
 AI_GOLDEN_VECTORS_V2_OK=0
 AI_DETERMINISM_FINGERPRINT_OK=0
@@ -689,6 +692,9 @@ cleanup(){
   # P5-P1-02 (OPS) Report pipeline upload v1
   echo "OPS_REPORT_PIPELINE_V1_OK=${OPS_REPORT_PIPELINE_V1_OK}"
   echo "OPS_REPORT_ARCHIVE_DATED_V1_OK=${OPS_REPORT_ARCHIVE_DATED_V1_OK}"
+
+  # P5-P1-03 (PATH_SCOPE) Scanners must reference SSOT v2
+  echo "PATH_SCOPE_ENFORCED_V2_OK=${PATH_SCOPE_ENFORCED_V2_OK}"
 
 }
 trap cleanup EXIT
@@ -1342,5 +1348,9 @@ echo "== guard: P5-P1-02 OPS_REPORT_PIPELINE_UPLOAD_V1 =="
 run_guard "P5-P1-02 OPS_REPORT_PIPELINE_UPLOAD_V1" bash scripts/verify/verify_ops_report_pipeline_v1.sh
 OPS_REPORT_PIPELINE_V1_OK=1
 OPS_REPORT_ARCHIVE_DATED_V1_OK=1
+
+echo "== guard: P5-P1-03 PATH_SCOPE_ENFORCED_V2 =="
+run_guard "P5-P1-03 PATH_SCOPE_ENFORCED_V2" bash scripts/verify/verify_path_scope_enforced_v2.sh
+PATH_SCOPE_ENFORCED_V2_OK=1
 
 exit 0
