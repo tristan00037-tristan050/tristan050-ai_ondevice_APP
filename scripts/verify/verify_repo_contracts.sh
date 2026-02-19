@@ -120,6 +120,8 @@ DEMO_HELPDESK_REQUEST_ID_JOIN_OK=0
 ASSIST_COMPUTE_POLICY_V1_OK=0
 ASSIST_COMPUTE_DEFAULT_OFF_LOCK_V1_OK=0
 
+DOD_SINGLE_OUTPUT_GUARD_V1_OK=0
+
 # P4-AI-01 (AI) Golden vectors v2 (determinism + fingerprint validation)
 AI_GOLDEN_VECTORS_V2_OK=0
 AI_DETERMINISM_FINGERPRINT_OK=0
@@ -779,24 +781,46 @@ cleanup(){
   # P5-PLAT-P1-05 (PLAT) Assist compute default OFF lock v1
   echo "ASSIST_COMPUTE_POLICY_V1_OK=${ASSIST_COMPUTE_POLICY_V1_OK}"
   echo "ASSIST_COMPUTE_DEFAULT_OFF_LOCK_V1_OK=${ASSIST_COMPUTE_DEFAULT_OFF_LOCK_V1_OK}"
+  echo "DOD_SINGLE_OUTPUT_GUARD_V1_OK=${DOD_SINGLE_OUTPUT_GUARD_V1_OK}"
 
 }
 trap cleanup EXIT
 
 run_guard() {
-  local name="$1"; shift
-  local out=""
-  set +e
-  out="$("$@" 2>&1)"
-  local rc=$?
-  set -e
-  if [[ $rc -ne 0 ]]; then
+  local name="$1"
+  shift
+  local script_or_cmd=("$@")
+
+  echo "== guard: ${name} =="
+
+  local tmp_out
+  tmp_out="$(mktemp)"
+
+  if "${script_or_cmd[@]}" >"$tmp_out" 2>&1; then
+    :
+  else
+    grep -vE '^[A-Z0-9_]+_OK=[0-9]+$' "$tmp_out" || true
+    rm -f "$tmp_out"
     echo "FAIL: ${name}"
-    echo "$out"
     exit 1
   fi
-  # Return output for DoD key extraction (if needed)
-  echo "$out"
+
+  while IFS= read -r line; do
+    case "$line" in
+      *_OK=0|*_OK=1)
+        key="${line%%=*}"
+        val="${line#*=}"
+        if echo "$key" | grep -Eq '^[A-Z0-9_]+_OK$' && echo "$val" | grep -Eq '^[01]$'; then
+          # shellcheck disable=SC2163
+          eval "$key=$val"
+        fi
+        ;;
+    esac
+  done < <(grep -E '^[A-Z0-9_]+_OK=[01]$' "$tmp_out" || true)
+
+  grep -vE '^[A-Z0-9_]+_OK=[0-9]+$' "$tmp_out" || true
+
+  rm -f "$tmp_out"
 }
 
 # Existing guards
@@ -1024,9 +1048,7 @@ AI_P95_BUDGET_OK=1
 AI_NEARTIE_SWAP_BUDGET_OK=1
 
 echo "== guard: ai budget gates (P2-AI-02: latency/mem/energy_proxy) =="
-GUARD_OUT="$(run_guard "ai budget gates" bash scripts/verify/verify_ai_budget_gates_v0.sh)"
-# Extract DoD keys from guard output (use eval to set in parent shell)
-eval "$(echo "$GUARD_OUT" | grep -E '^(AI_RESOURCE_BUDGET_|AI_BUDGET_MEASUREMENTS_|AI_ENERGY_PROXY_)')" || true
+run_guard "ai budget gates" bash scripts/verify/verify_ai_budget_gates_v0.sh
 
 echo "== guard: algo determinism gate (D0) =="
 run_guard "algo determinism gate (D0)" bash scripts/verify/verify_algo_determinism_gate.sh
@@ -1485,5 +1507,7 @@ echo "== guard: P5-PLAT-P1-05 ASSIST_COMPUTE_DEFAULT_OFF_LOCK_V1 =="
 run_guard "P5-PLAT-P1-05 ASSIST_COMPUTE_DEFAULT_OFF_LOCK_V1" bash scripts/verify/verify_assist_compute_default_off_lock_v1.sh
 ASSIST_COMPUTE_POLICY_V1_OK=1
 ASSIST_COMPUTE_DEFAULT_OFF_LOCK_V1_OK=1
+
+run_guard "P5-PLAT-P1-06 DOD_SINGLE_OUTPUT_GUARD_V1" bash scripts/verify/verify_dod_single_output_guard_v1.sh
 
 exit 0
