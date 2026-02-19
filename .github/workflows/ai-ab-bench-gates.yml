@@ -21,8 +21,8 @@ jobs:
       MODEL_A: demoA
       MODEL_B: demoB
       INTENT: ALGO_CORE_THREE_BLOCKS
-      RUNS: "20"
-      WARMUP: "3"
+      RUNS: "10"
+      WARMUP: "5"
       A_P95_BUDGET_MS: "5"
       B_P95_BUDGET_MS: "5"
 
