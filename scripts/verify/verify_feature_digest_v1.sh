@@ -21,6 +21,12 @@ test -f "$allow" || { echo "BLOCK: missing allowlist"; exit 1; }
 test -f "$impl" || { echo "BLOCK: missing implementation"; exit 1; }
 test -f "$gv" || { echo "BLOCK: missing golden vectors v2 json ($gv)"; exit 1; }
 
+# P2: Detect JSON -0 at text level (python parses -0 as 0)
+if grep -EIn '":[[:space:]]*-0([^0-9]|$)' "$gv" >/dev/null 2>&1; then
+  echo "BLOCK: forbidden -0 literal detected in JSON"
+  exit 1
+fi
+
 PYTHON_BIN="python3"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || PYTHON_BIN="python"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || { echo "BLOCK: python3/python not found"; exit 1; }

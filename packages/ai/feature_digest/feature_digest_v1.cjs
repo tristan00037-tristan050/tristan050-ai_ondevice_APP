@@ -3,8 +3,8 @@
 const fs = require('fs');
 const path = require('path');
 
-// SSOT allowlist
-const ALLOWLIST_PATH = path.join(process.cwd(), 'docs/ops/contracts/FEATURE_DIGEST_ALLOWED_KEYS_V1.txt');
+// SSOT allowlist (__dirname so path is independent of process.cwd())
+const ALLOWLIST_PATH = path.join(__dirname, '..', '..', '..', 'docs', 'ops', 'contracts', 'FEATURE_DIGEST_ALLOWED_KEYS_V1.txt');
 
 function loadAllowlist() {
   const txt = fs.readFileSync(ALLOWLIST_PATH, 'utf8');
@@ -45,7 +45,7 @@ function featureDigestV1(inputMeta) {
   const out = {};
 
   for (const k of Object.keys(inputMeta)) {
-    if (!allow.has(k)) continue; // ignore non-allowlisted keys
+    if (!allow.has(k)) throw new Error('FEATURE_DIGEST_KEY_NOT_ALLOWED:' + k);
     const v = inputMeta[k];
     assertPrimitive(v);
     out[k] = v;
