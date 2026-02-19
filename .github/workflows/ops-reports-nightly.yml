@@ -1,0 +1,69 @@
+name: ops-reports-nightly
+
+on:
+  schedule:
+    - cron: "41 3 * * *"  # daily 03:41 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ops_reports_nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Single-source preflight (sealed)
+      - name: Preflight (single source)
+        uses: ./.github/actions/preflight_v1
+
+      # Generate reports (existing scripts; meta-only)
+      - name: Generate repo guard report
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ops/gen_repo_guard_report_v1.sh
+
+      - name: Run AI smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ops/run_ai_smoke_v1.sh
+
+      # Sanity check + prepare for upload
+      - name: Prepare report upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ops/upload_reports_v1.sh
+
+      # Upload artifacts (GitHub Actions artifact)
+      - name: Upload ops reports artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-reports-nightly
+          path: |
+            docs/ops/reports/repo_contracts_latest.json
+            docs/ops/reports/repo_contracts_latest.md
+            docs/ops/reports/ai_smoke_latest.json
+            docs/ops/reports/ai_smoke_latest.md
+            docs/ops/reports/archive/
+          if-no-files-found: error
+
+      # Repo contracts should still pass
+      - name: Verify repo contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_repo_contracts.sh
