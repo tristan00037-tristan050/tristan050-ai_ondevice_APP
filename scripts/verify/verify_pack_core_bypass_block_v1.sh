@@ -23,8 +23,8 @@ else
   exit 1
 fi
 
-# Forbidden imports from pack code
-FORBIDDEN_RE='(from|require\().*(policy/|router/|egress/|ops_hub/|ops-hub/|trace/|export/)'
+# Forbidden imports from pack code (match with or without trailing slash, e.g. "../../policy" or "router/")
+FORBIDDEN_RE='(from[[:space:]]+|require\()[^\n]*?(policy|router|egress|ops_hub|ops-hub|trace|export)([^[:alnum:]_]|$)'
 
 # scan only code-like files
 while IFS= read -r f; do
@@ -36,8 +36,14 @@ while IFS= read -r f; do
 done < <(find "$PACK_ROOT" -type f \( -name "*.js" -o -name "*.cjs" -o -name "*.mjs" -o -name "*.ts" \) 2>/dev/null || true)
 
 # Manifest forbidden fields (routing_override/egress_mode/record_mode etc.)
-if find "$PACK_ROOT" -type f \( -name "*manifest*.json" -o -name "*manifest*.yml" -o -name "*manifest*.yaml" \) 2>/dev/null | grep -q .; then
-  if grep -RInE '"(routing_override|egress_mode|record_mode|routingOverride|egressMode|recordMode)"[[:space:]]*:' "$PACK_ROOT" >/dev/null 2>&1; then
+# Restrict scan to manifest files only (avoid false positives in source files)
+manifest_files=()
+while IFS= read -r mf; do
+  manifest_files+=("$mf")
+done < <(find "$PACK_ROOT" -type f \( -name "*manifest*.json" -o -name "*manifest*.yml" -o -name "*manifest*.yaml" \) 2>/dev/null || true)
+
+if [ "${#manifest_files[@]}" -gt 0 ]; then
+  if grep -InE '"(routing_override|egress_mode|record_mode|routingOverride|egressMode|recordMode)"[[:space:]]*:' "${manifest_files[@]}" >/dev/null 2>&1; then
     echo "BLOCK: forbidden manifest override field present"
     exit 1
   fi
