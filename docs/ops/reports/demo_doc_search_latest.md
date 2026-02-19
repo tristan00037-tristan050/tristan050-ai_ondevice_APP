@@ -1,0 +1,10 @@
+# demo_doc_search_v0
+
+- request_id: req_demo_doc_search_20260219T034624Z
+- ts_utc: 2026-02-19T03:46:24Z
+
+Checks:
+- DOC_SEARCH_ALLOW_OK=1
+- DOC_SEARCH_BLOCK_OK=1
+- DOC_SEARCH_META_ONLY_OK=1
+- DOC_SEARCH_REQUEST_ID_JOIN_OK=1

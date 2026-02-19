@@ -1,0 +1,10 @@
+# demo_write_approve_v0
+
+- request_id: req_demo_write_approve_20260219T034624Z
+- ts_utc: 2026-02-19T03:46:24Z
+
+Checks:
+- WRITE_APPROVE_ALLOW_OK=1
+- WRITE_APPROVE_BLOCK_OK=1
+- WRITE_APPROVE_META_ONLY_OK=1
+- WRITE_APPROVE_REQUEST_ID_JOIN_OK=1

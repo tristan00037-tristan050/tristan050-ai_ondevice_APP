@@ -1,0 +1,18 @@
+{
+  "scenario": "doc_search_v0",
+  "request_id": "req_demo_doc_search_20260219T034624Z",
+  "ts_utc": "2026-02-19T03:46:24Z",
+  "signals": {
+    "intent_id": "DOC_SEARCH",
+    "query_hash": "sha256:demo_query_hash",
+    "device_class_id": "dc_mid",
+    "model_pack_id": "pack_demo",
+    "pack_version_id": "v1"
+  },
+  "checks": {
+    "DOC_SEARCH_ALLOW_OK": 1,
+    "DOC_SEARCH_BLOCK_OK": 1,
+    "DOC_SEARCH_META_ONLY_OK": 1,
+    "DOC_SEARCH_REQUEST_ID_JOIN_OK": 1
+  }
+}
