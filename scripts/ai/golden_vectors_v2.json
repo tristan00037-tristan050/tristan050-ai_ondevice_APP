@@ -9,7 +9,12 @@
       },
       "seed": 42,
       "expected_fingerprint": "39951c90be4316564bf6cf80768099a21df7670d61c5755e921bd03480e8d908",
-      "mode": "deterministic"
+      "mode": "deterministic",
+      "feature_digest_v1": {
+        "model_pack_id": "pack-demo-001",
+        "pack_version_id": "v1.0.0",
+        "mode": "deterministic"
+      }
     },
     {
       "test_id": "test_002",
