@@ -18,36 +18,57 @@ banned="docs/ops/contracts/META_ONLY_BANNED_KEYS_V1.txt"
 test -f "$policy" || { echo "BLOCK: missing policy"; exit 1; }
 grep -q "NO_RAW_IN_LOGS_POLICY_V1_TOKEN=1" "$policy" || { echo "BLOCK: missing policy token"; exit 1; }
 
-test -f "$patterns" || { echo "BLOCK: missing sensitive patterns"; exit 1; }
-test -f "$banned" || { echo "BLOCK: missing banned keys"; exit 1; }
+test -f "$patterns" || { echo "BLOCK: missing sensitive patterns SSOT"; exit 1; }
+test -f "$banned" || { echo "BLOCK: missing banned keys SSOT"; exit 1; }
 
-targets=()
-for d in "docs/ops/reports" "docs/ops/PROOFS" "scripts"; do
-  if [ -d "$d" ]; then targets+=("$d"); fi
-done
+# P2 Fix: fail-closed if sensitive-pattern SSOT is empty (or only blank/comment lines)
+if ! grep -Eq '^[[:space:]]*[^#[:space:]].+' "$patterns"; then
+  echo "BLOCK: sensitive-pattern SSOT is empty"
+  exit 1
+fi
 
-# Files to scan for sensitive patterns: reports and PROOFS, excluding DoD key outputs and docs that mention patterns by name
-sensitive_files=()
-if [ -d "docs/ops/reports" ]; then
+# Targets that exist
+reports_dir="docs/ops/reports"
+proofs_dir="docs/ops/PROOFS"
+scripts_dir="scripts"
+
+# P2 Fix: restrict report exclusions to exact intended paths only
+# - We only exclude:
+#   - docs/ops/reports/archive/**
+#   - docs/ops/reports/repo_contracts_latest.*
+# Everything else under docs/ops/reports is scanned.
+report_files=()
+if [ -d "$reports_dir" ]; then
   while IFS= read -r f; do
-    [[ -z "$f" ]] && continue
+    # exclude archive dir exactly
     case "$f" in
-      *repo_contracts*|*archive*) continue ;;
-      *) sensitive_files+=("$f") ;;
+      "$reports_dir/archive/"* ) continue ;;
     esac
-  done < <(find docs/ops/reports -type f 2>/dev/null || true)
-fi
-if [ -d "docs/ops/PROOFS" ]; then
-  while IFS= read -r f; do
-    [[ -z "$f" ]] && continue
-    # Exclude .md that document forbidden patterns (e.g. "금지 키/패턴 스캔: ... _TOKEN=")
-    [[ "$f" == *.md ]] && continue
-    sensitive_files+=("$f")
-  done < <(find docs/ops/PROOFS -type f 2>/dev/null || true)
+    # exclude exact repo_contracts_latest.* only
+    base="$(basename "$f")"
+    if [[ "$base" == repo_contracts_latest.json || "$base" == repo_contracts_latest.md ]]; then
+      continue
+    fi
+    report_files+=("$f")
+  done < <(find "$reports_dir" -type f 2>/dev/null || true)
 fi
 
-if [ "${#targets[@]}" -eq 0 ]; then
-  echo "BLOCK: no scan targets found (docs/ops/reports, docs/ops/PROOFS, scripts)"
+proof_files=()
+if [ -d "$proofs_dir" ]; then
+  # P1 Fix: include *.md (proof artifacts are markdown in this repo)
+  while IFS= read -r f; do
+    proof_files+=("$f")
+  done < <(find "$proofs_dir" -type f 2>/dev/null || true)
+fi
+
+# Long-line scan: reports + PROOFS + scripts (as you already do)
+long_targets=()
+[ -d "$reports_dir" ] && long_targets+=("$reports_dir")
+[ -d "$proofs_dir" ] && long_targets+=("$proofs_dir")
+[ -d "$scripts_dir" ] && long_targets+=("$scripts_dir")
+
+if [ "${#long_targets[@]}" -eq 0 ]; then
+  echo "BLOCK: no scan targets found"
   exit 1
 fi
 
@@ -60,32 +81,43 @@ while IFS= read -r f; do
     echo "BLOCK: long line (>2000) detected in $f"
     exit 1
   fi
-done < <(find "${targets[@]}" -type f 2>/dev/null)
+done < <(find "${long_targets[@]}" -type f 2>/dev/null)
 
 LONG_LINE_BLOCK_V1_OK=1
 
-# 2) Sensitive patterns (substring) — scan selected report/proof files (exclude DoD key names and pattern-doc .md)
-if [ "${#sensitive_files[@]}" -gt 0 ]; then
-  if grep -InF -f "$patterns" "${sensitive_files[@]}" >/dev/null 2>&1; then
-    echo "BLOCK: sensitive pattern detected in logs/reports/proofs"
-    exit 1
-  fi
+# 2) Sensitive patterns: scan reports (filtered) + PROOFS (all files incl md)
+# Fail-closed if there are no files to scan at all (prevents silent disable)
+sens_files=()
+for f in "${report_files[@]}"; do sens_files+=("$f"); done
+for f in "${proof_files[@]}"; do sens_files+=("$f"); done
+
+if [ "${#sens_files[@]}" -eq 0 ]; then
+  echo "BLOCK: no files selected for sensitive scan"
+  exit 1
+fi
+
+if grep -InF -f "$patterns" "${sens_files[@]}" >/dev/null 2>&1; then
+  echo "BLOCK: sensitive pattern detected in reports/proofs"
+  exit 1
 fi
 SENSITIVE_PATTERN_BLOCK_V1_OK=1
 
-# 3) Banned keys (JSON key declaration only) — reports and PROOFS only (scripts may have test fixtures with "text" etc.)
-banned_targets=()
-for d in "docs/ops/reports" "docs/ops/PROOFS"; do
-  if [ -d "$d" ]; then banned_targets+=("$d"); fi
-done
+# 3) Banned keys: JSON key declaration only, scan reports + PROOFS
 keys_re="$(paste -sd'|' "$banned")"
 [ -n "$keys_re" ] || { echo "BLOCK: empty banned keys"; exit 1; }
 
-if [ "${#banned_targets[@]}" -gt 0 ]; then
-  if grep -RInE "\"(${keys_re})\"[[:space:]]*:" "${banned_targets[@]}" >/dev/null 2>&1; then
-    echo "BLOCK: banned raw-like key declaration detected"
-    exit 1
-  fi
+ban_files=()
+for f in "${report_files[@]}"; do ban_files+=("$f"); done
+for f in "${proof_files[@]}"; do ban_files+=("$f"); done
+
+if [ "${#ban_files[@]}" -eq 0 ]; then
+  echo "BLOCK: no files selected for banned-key scan"
+  exit 1
+fi
+
+if grep -InE "\"(${keys_re})\"[[:space:]]*:" "${ban_files[@]}" >/dev/null 2>&1; then
+  echo "BLOCK: banned raw-like key declaration detected"
+  exit 1
 fi
 
 NO_RAW_IN_LOGS_POLICY_V1_OK=1
