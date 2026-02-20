@@ -54,6 +54,13 @@ jobs:
         run: |
           bash scripts/verify/verify_repo_contracts.sh
 
+      - name: Release gate (autodecision must be ok)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s docs/ops/reports/autodecision_latest.json
+          node -e 'const p=require("./docs/ops/reports/autodecision_latest.json"); if(p.decision!=="ok"){console.error("BLOCK: autodecision decision="+p.decision); process.exit(1)}'
+
   gate:
     runs-on: ubuntu-latest
     needs: [product-verify-repo-guards]
