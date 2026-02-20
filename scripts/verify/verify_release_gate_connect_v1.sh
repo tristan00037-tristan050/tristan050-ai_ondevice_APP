@@ -45,6 +45,12 @@ while IFS= read -r wf || [ -n "$wf" ]; do
 
   # 4) 게이트 없는 릴리즈 방지: 'continue-on-error: true'로 verify를 무력화하면 안 됨
   grep -Eq "continue-on-error:[[:space:]]*true" "$f" && { echo "BLOCK: $wf has continue-on-error true (bypass risk)"; bad=1; }
+
+  # 5) release 시 strict proof 필수: env 제거 시 즉시 BLOCK
+  grep -Eq 'ONPREM_PROOF_STRICT_ENFORCE:[[:space:]]*"1"' "$f" || {
+    echo "BLOCK: $wf missing ONPREM_PROOF_STRICT_ENFORCE=1 for release"
+    missing=1
+  }
 done < "$ssot"
 
 [ "$missing" -eq 0 ] || exit 1
