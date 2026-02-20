@@ -40,9 +40,10 @@ function main() {
     const rv = repoKeys[k];
     const av = aiKeys[k];
 
+    // *_SKIPPED 키는 평가 대상에서 제외 (상태 키로 인한 착시 block 방지)
+    if (k.endsWith("_SKIPPED")) continue;
+
     // 정책: "입력들 중 하나라도 non-1이면 block"
-    // - 키가 한쪽에만 있으면 그쪽 값만 검사
-    // - 둘 다 있으면 둘 중 하나라도 non-1이면 fail
     const repoFail = (rv !== undefined) && (String(rv) !== "1");
     const aiFail   = (av !== undefined) && (String(av) !== "1");
 

@@ -113,6 +113,8 @@ jobs:
   repo-contracts-gate:
     name: Repo contracts + autodecision gate
     runs-on: ubuntu-latest
+    env:
+      ONPREM_PROOF_STRICT_ENFORCE: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
