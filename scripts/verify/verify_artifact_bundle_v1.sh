@@ -22,6 +22,10 @@ ARTIFACT_BUNDLE_POLICY_V1_OK=1
 
 # 번들 파일이 없으면 1회 생성 (네트워크/설치 없음)
 if [ ! -f "$out_json" ] || [ ! -f "$out_md" ]; then
+  if [ "${ARTIFACT_BUNDLE_GEN_IN_PROGRESS:-0}" = "1" ]; then
+    echo "BLOCK: artifact bundle generator re-entry detected"
+    exit 1
+  fi
   bash "$gen"
 fi
 
