@@ -18,6 +18,15 @@ rc_md="docs/ops/reports/repo_contracts_latest.md"
 ai_json="docs/ops/reports/ai_smoke_latest.json"
 ai_md="docs/ops/reports/ai_smoke_latest.md"
 
+# 입력 리포트가 없으면 생성 (CI clean checkout 대비)
+if [ ! -f "$rc_json" ] || [ ! -f "$rc_md" ]; then
+  bash scripts/ops/gen_repo_guard_report_v1.sh
+fi
+
+if [ ! -f "$ai_json" ] || [ ! -f "$ai_md" ]; then
+  bash scripts/ops/run_ai_smoke_v1.sh
+fi
+
 # 입력 리포트가 없으면 fail-closed
 test -f "$rc_json" || { echo "BLOCK: missing $rc_json"; exit 1; }
 test -f "$rc_md"   || { echo "BLOCK: missing $rc_md"; exit 1; }
