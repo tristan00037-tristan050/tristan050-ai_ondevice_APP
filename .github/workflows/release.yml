@@ -48,7 +48,7 @@ jobs:
         run: npm run db:migrate
 
       - name: Build Docker image
-        working-directory: .
+        working-directory: webcore_appcore_starter_4_17
         run: docker build -f Dockerfile.bff -t bff-accounting:release .
 
       - name: Run BFF container
@@ -199,13 +199,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & Push image
-        working-directory: .
+        working-directory: webcore_appcore_starter_4_17
         run: |
           set -euo pipefail
-
           IMAGE="ghcr.io/${{ github.repository }}/bff-accounting"
           TAG="${{ github.ref_name }}"
-
           docker build -f Dockerfile.bff -t "${IMAGE}:${TAG}" -t "${IMAGE}:latest" .
           docker push "${IMAGE}:${TAG}"
           docker push "${IMAGE}:latest"
