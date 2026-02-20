@@ -1,4 +1,5 @@
 # ONPREM_REAL_WORLD_PROOF_LATEST (whitelist-only)
+# observed headers: X-OS-Algo-Latency-Ms, X-OS-Algo-Manifest-SHA256
 
 ts_utc=2026-02-15T00:00:00Z
 git_sha=unknown
