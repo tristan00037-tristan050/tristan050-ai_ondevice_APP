@@ -29,11 +29,26 @@ function main() {
   const repo = readJson(repoPath);
   const ai = readJson(aiPath);
 
-  const all = { ...collectKeys(repo), ...collectKeys(ai) };
-  const fails = Object.entries(all)
-    .filter(([_, v]) => String(v) !== "1")
-    .map(([k]) => k)
-    .sort();
+  const repoKeys = collectKeys(repo);
+  const aiKeys = collectKeys(ai);
+
+  // 모든 키 집합(충돌 포함)
+  const keySet = new Set([...Object.keys(repoKeys), ...Object.keys(aiKeys)]);
+
+  const fails = [];
+  for (const k of keySet) {
+    const rv = repoKeys[k];
+    const av = aiKeys[k];
+
+    // 정책: "입력들 중 하나라도 non-1이면 block"
+    // - 키가 한쪽에만 있으면 그쪽 값만 검사
+    // - 둘 다 있으면 둘 중 하나라도 non-1이면 fail
+    const repoFail = (rv !== undefined) && (String(rv) !== "1");
+    const aiFail   = (av !== undefined) && (String(av) !== "1");
+
+    if (repoFail || aiFail) fails.push(k);
+  }
+  fails.sort();
 
   const decision = fails.length === 0 ? "ok" : "block";
   const reason_codes = fails.slice(0, 10); // code-only
