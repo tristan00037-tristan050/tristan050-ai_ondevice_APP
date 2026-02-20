@@ -131,6 +131,8 @@ ONPREM_LATEST_LONG_LINE_SCAN_EOF_SAFE_OK=0
 AI_ENERGY_PROXY_SSOT_RUNS_CONSUMED_OK=0
 AI_ENERGY_PROXY_SSOT_MIN_P50_CONSUMED_OK=0
 
+ONE_COMMAND_VERIFY_V1_OK=0
+
 # P4-AI-01 (AI) Golden vectors v2 (determinism + fingerprint validation)
 AI_GOLDEN_VECTORS_V2_OK=0
 AI_DETERMINISM_FINGERPRINT_OK=0
@@ -797,6 +799,7 @@ cleanup(){
   echo "ONPREM_LATEST_LONG_LINE_SCAN_EOF_SAFE_OK=${ONPREM_LATEST_LONG_LINE_SCAN_EOF_SAFE_OK}"
   echo "AI_ENERGY_PROXY_SSOT_RUNS_CONSUMED_OK=${AI_ENERGY_PROXY_SSOT_RUNS_CONSUMED_OK}"
   echo "AI_ENERGY_PROXY_SSOT_MIN_P50_CONSUMED_OK=${AI_ENERGY_PROXY_SSOT_MIN_P50_CONSUMED_OK}"
+  echo "ONE_COMMAND_VERIFY_V1_OK=${ONE_COMMAND_VERIFY_V1_OK}"
 
 }
 trap cleanup EXIT
@@ -1539,5 +1542,9 @@ echo "== guard: P6-AI-P0-01 ENERGY_PROXY_SSOT_CONSUMED_V3 (decision-only) =="
 run_guard "P6-AI-P0-01 energy proxy ssot consumed v3" bash scripts/verify/verify_energy_proxy_ssot_consumed_v3.sh
 AI_ENERGY_PROXY_SSOT_RUNS_CONSUMED_OK=1
 AI_ENERGY_PROXY_SSOT_MIN_P50_CONSUMED_OK=1
+
+echo "== guard: P6-P0-03 ONE_COMMAND_VERIFY_V1 (decision-only) =="
+run_guard "P6-P0-03 one command verify v1" bash scripts/verify/verify_one_command_verify_v1.sh
+ONE_COMMAND_VERIFY_V1_OK=1
 
 exit 0
