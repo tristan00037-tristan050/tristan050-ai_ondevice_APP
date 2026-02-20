@@ -20,10 +20,8 @@ test -f "$gen" || { echo "BLOCK: missing $gen"; exit 1; }
 
 AUTODECISION_POLICY_V1_OK=1
 
-# 없으면 1회 생성
-if [ ! -f "$out_json" ] || [ ! -f "$out_md" ]; then
-  node "$gen"
-fi
+# 항상 최신 입력 기준으로 재생성 (stale 방지)
+node "$gen"
 
 test -f "$out_json" || { echo "BLOCK: missing $out_json"; exit 1; }
 test -s "$out_json" || { echo "BLOCK: empty $out_json"; exit 1; }
