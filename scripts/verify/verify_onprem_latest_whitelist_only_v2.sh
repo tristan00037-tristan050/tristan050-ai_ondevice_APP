@@ -28,24 +28,32 @@ fi
 
 # 2) whitelist-only + 긴라인 차단(EOF-safe)
 while IFS= read -r line || [ -n "$line" ]; do
-  # 빈 줄은 허용(더 엄격히 하려면 빈 줄도 BLOCK 가능)
+  # 0) 빈 줄은 허용(유지)
   [ -z "$line" ] && continue
-  # 주석/헤더 줄은 검사 제외
-  [[ "$line" = \#* ]] && continue
-  [[ "$line" != *"="* ]] && continue
 
-  # 2000자 이상이면 덤프/블랍으로 간주하고 차단
+  # 1) 긴 라인 차단을 가장 먼저 수행 (우회 방지)
   if [ "${#line}" -ge 2000 ]; then
     echo "BLOCK: long line (>=2000 chars) in LATEST"
     exit 1
   fi
 
-  # key=value 엄격 포맷(설명 문장/공백/여러 줄 흔적 차단)
+  # 2) 주석 줄(#...)은 내용 검사 제외(하지만 위에서 긴 라인은 이미 차단됨)
+  [[ "$line" = \#* ]] && continue
+
+  # 3) whitelist-only: key=value가 아니면 즉시 BLOCK (continue 금지)
+  [[ "$line" != *"="* ]] && {
+    echo "BLOCK: non key=value line in LATEST"
+    echo "BLOCK_LINE: $line"
+    exit 1
+  }
+
+  # 4) key=value 엄격 포맷(공백/설명문 차단)
   echo "$line" | grep -Eq '^[A-Za-z0-9_.-]+=[A-Za-z0-9_.:-]+$' || {
     echo "BLOCK: invalid line format in LATEST: $line"
     exit 1
   }
 
+  # 5) 키 allowlist 검사
   key="${line%%=*}"
   grep -qx "$key" "$allowed" || {
     echo "BLOCK: key not allowed in LATEST: $key"
