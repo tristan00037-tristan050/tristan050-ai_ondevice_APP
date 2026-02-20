@@ -147,6 +147,19 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
+      - name: Generate latest reports (A)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ops/gen_repo_guard_report_v1.sh
+          bash scripts/ops/run_ai_smoke_v1.sh
+
+      - name: Generate autodecision (B)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/ops/gen_autodecision_v1.mjs
+
       - name: Repo contracts gate
         shell: bash
         run: |
@@ -155,7 +168,7 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
-      - name: Release gate (autodecision must be ok)
+      - name: Release gate (autodecision must be ok) (C)
         shell: bash
         run: |
           set -euo pipefail
