@@ -1,0 +1,11 @@
+# allowlisted keys only (one per line)
+EXIT
+exit_code
+ok
+ts_utc
+git_sha
+egress_default
+blocked_attempt_observed
+external_success
+blocks
+signature.mode
