@@ -20,11 +20,11 @@ ai_md="docs/ops/reports/ai_smoke_latest.md"
 
 # 입력 리포트가 없으면 생성 (CI clean checkout 대비)
 if [ ! -f "$rc_json" ] || [ ! -f "$rc_md" ]; then
-  bash scripts/ops/gen_repo_guard_report_v1.sh
+  ARTIFACT_BUNDLE_GEN_IN_PROGRESS=1 bash scripts/ops/gen_repo_guard_report_v1.sh
 fi
 
 if [ ! -f "$ai_json" ] || [ ! -f "$ai_md" ]; then
-  bash scripts/ops/run_ai_smoke_v1.sh
+  ARTIFACT_BUNDLE_GEN_IN_PROGRESS=1 bash scripts/ops/run_ai_smoke_v1.sh
 fi
 
 # 입력 리포트가 없으면 fail-closed
