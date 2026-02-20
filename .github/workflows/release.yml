@@ -110,8 +110,60 @@ jobs:
 
       - run: echo "mobile gate passed"
 
+  repo-contracts-gate:
+    name: Repo contracts + autodecision gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ripgrep
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ripgrep jq
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Preflight (single source)
+        uses: ./.github/actions/preflight_v1
+
+      - name: Ops deps preflight (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg --require-jq
+
+      - name: Install deps (web_e2e)
+        run: |
+          npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
+
+      - name: Install Playwright browsers
+        run: |
+          npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+
+      - name: Repo contracts gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_repo_contracts.sh
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+
+      - name: Release gate (autodecision must be ok)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s docs/ops/reports/autodecision_latest.json
+          node -e 'const p=require("./docs/ops/reports/autodecision_latest.json"); if(p.decision!=="ok"){console.error("BLOCK: autodecision decision="+p.decision); console.error("reason_codes="+JSON.stringify(p.reason_codes)); process.exit(1)}'
+
   publish-and-deploy:
-    needs: [build-test-image, gate_mobile]
+    needs: [build-test-image, gate_mobile, repo-contracts-gate]
     runs-on: ubuntu-latest
     defaults:
       run:

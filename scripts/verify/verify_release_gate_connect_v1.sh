@@ -34,9 +34,16 @@ while IFS= read -r wf || [ -n "$wf" ]; do
 
   # 2) autodecision 결과 파일 존재/decision 검사 강제(최소한 grep 수준이라도 워크플로에 있어야 함)
   #    (정확한 파싱은 워크플로 단계에서 node로 수행해도 됨)
-  grep -Eq "autodecision_latest\.json" "$f" || { echo "BLOCK: $wf missing autodecision check"; missing=1; }
+  grep -Eq "autodecision_latest\.json" "$f" || { echo "BLOCK: $wf missing autodecision file check"; missing=1; }
 
-  # 3) 게이트 없는 릴리즈 방지: 'continue-on-error: true'로 verify를 무력화하면 안 됨
+  # 3) autodecision decision==ok 검사 강제 (문자열 존재만으로는 부족)
+  #    decision 비교가 실제로 있어야 함 (ok 비교 or not-ok BLOCK)
+  grep -Eq 'decision.*"ok"|decision!==\"ok\"|decision!=\=\"ok\"' "$f" || {
+    echo "BLOCK: $wf missing autodecision decision==ok enforcement"
+    missing=1
+  }
+
+  # 4) 게이트 없는 릴리즈 방지: 'continue-on-error: true'로 verify를 무력화하면 안 됨
   grep -Eq "continue-on-error:[[:space:]]*true" "$f" && { echo "BLOCK: $wf has continue-on-error true (bypass risk)"; bad=1; }
 done < "$ssot"
 
