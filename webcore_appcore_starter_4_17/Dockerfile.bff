@@ -1,10 +1,12 @@
 # build stage
 FROM node:20-alpine AS build
+ARG GIT_SHA
+ENV GIT_SHA=${GIT_SHA}
 WORKDIR /app
 COPY package*.json ./
 COPY . .
 RUN npm ci
-# 워크스페이스 전체 빌드(서비스 코어 → BFF 순서로 설정되어 있음)
+# 워크스페이스 전체 빌드(서비스 코어 → BFF 순서로 설정되어 있음). GIT_SHA 주입 시 build_info가 git 없이 동작
 RUN npm run build:packages
 
 # runtime stage
