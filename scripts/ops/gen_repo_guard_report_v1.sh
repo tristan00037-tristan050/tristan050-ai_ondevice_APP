@@ -24,7 +24,11 @@ trap 'rm -f "$TMP_LOG"' EXIT
 # P6-P1-03B: preflight 먼저 실행하여 dist stamp = HEAD 보장 (DIST_FRESHNESS 통과 → energy 등 후속 가드 실행). fail-closed(|| true 없음).
 bash tools/preflight_v1.sh >/dev/null 2>&1
 
+# verify 실행 (stdout/stderr 모두 캡처). 실패 시 로그 출력 후 종료(fail-closed)
+RC=0
+bash scripts/verify/verify_repo_contracts.sh >"$TMP_LOG" 2>&1 || RC=$?
 
+if [ "$RC" -ne 0 ]; then
   echo "BLOCK: verify_repo_contracts failed (rc=$RC)"
   tail -n 200 "$TMP_LOG" || true
   exit "$RC"
