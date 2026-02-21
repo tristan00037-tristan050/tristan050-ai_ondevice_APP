@@ -6,6 +6,7 @@ version: "1.0"
 rules:
   - id: "header_live_required_v3_4"
     name: "Live 요청 필수 헤더(SSOT v3.4)"
+    description: "Live 요청은 X-Tenant/X-User-Id/X-User-Role 헤더가 반드시 필요합니다."
     required_headers:
       - "X-Tenant"
       - "X-User-Id"
@@ -14,6 +15,7 @@ rules:
 
   - id: "header_export_required_v3_4"
     name: "Export 요청 필수 헤더(SSOT v3.4)"
+    description: "Export 요청은 Idempotency-Key 및 X-Tenant/X-User-Id/X-User-Role 헤더가 반드시 필요합니다."
     required_headers:
       - "Idempotency-Key"
       - "X-Tenant"
