@@ -25,7 +25,7 @@ type ApprovalBody = {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT_DIR = join(__dirname, '../../../../..');
+const ROOT_DIR = join(__dirname, '../../../../');
 
 // Ajv 인스턴스 생성
 const ajv = new (Ajv as any)({ allErrors: true, strict: false });
