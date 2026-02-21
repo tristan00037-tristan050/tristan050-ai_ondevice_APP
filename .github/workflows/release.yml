@@ -58,18 +58,41 @@ jobs:
         run: |
           set -euo pipefail
 
-          docker run -d --name bff -p 8081:8081 \
+          # 혹시 남아있을 수 있는 컨테이너 정리
+          docker rm -f bff >/dev/null 2>&1 || true
+
+          # 컨테이너 실행: PORT를 8081로 명시 (포트 불일치로 8081 미리스닝 방지)
+          CID="$(docker run -d --name bff -p 8081:8081 \
+            -e PORT=8081 \
             -e USE_PG=1 \
             -e DATABASE_URL="postgres://app:app@host.docker.internal:5432/app" \
             -e EXPORT_SIGN_SECRET="ci-secret" \
             bff-accounting:release
+          )"
+          echo "$CID"
 
-          # readiness 체크
-          for ((i=1; i<=40; i++)); do
-            curl -sf http://localhost:8081/ready && break
-            sleep 1
+          # readiness 대기(최대 60초). 실패하면 logs/inspect 출력 후 종료
+          for i in $(seq 1 120); do
+            if curl -fsS --max-time 2 "http://127.0.0.1:8081/ready" >/dev/null 2>&1; then
+              echo "OK: /ready"
+              break
+            fi
+            sleep 0.5
+            if [ "$i" -eq 120 ]; then
+              echo "BLOCK: bff did not become ready"
+              echo "== docker ps =="
+              docker ps -a || true
+              echo "== docker inspect bff =="
+              docker inspect bff || true
+              echo "== docker logs bff (tail 200) =="
+              docker logs --tail=200 bff || true
+              exit 1
+            fi
           done
-          curl -sf http://localhost:8081/health
+
+          # 최종 확인
+          curl -fsS --max-time 3 "http://127.0.0.1:8081/health" || true
+          curl -fsS --max-time 3 "http://127.0.0.1:8081/ready"
 
       - name: E2E smoke against container
         env:
