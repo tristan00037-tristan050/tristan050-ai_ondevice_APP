@@ -20,6 +20,12 @@ COPY --from=build /app/package-lock.json ./package-lock.json
 # 워크스페이스 패키지 복사 (의존성 해결을 위해)
 COPY --from=build /app/packages/service-core-accounting/dist ./packages/service-core-accounting/dist
 COPY --from=build /app/packages/service-core-accounting/package.json ./packages/service-core-accounting/package.json
+# service-core-common
+COPY --from=build /app/packages/service-core-common/dist ./packages/service-core-common/dist
+COPY --from=build /app/packages/service-core-common/package.json ./packages/service-core-common/package.json
+# service-core-cs (ERR_MODULE_NOT_FOUND 원인)
+COPY --from=build /app/packages/service-core-cs/dist ./packages/service-core-cs/dist
+COPY --from=build /app/packages/service-core-cs/package.json ./packages/service-core-cs/package.json
 COPY --from=build /app/packages/data-pg/dist ./packages/data-pg/dist
 COPY --from=build /app/packages/data-pg/package.json ./packages/data-pg/package.json
 COPY --from=build /app/packages/data-pg/migrations ./packages/data-pg/migrations
@@ -27,6 +33,10 @@ COPY --from=build /app/packages/bff-accounting/dist ./packages/bff-accounting/di
 COPY --from=build /app/packages/bff-accounting/package.json ./packages/bff-accounting/package.json
 # contracts 디렉토리 복사 (스키마 파일)
 COPY --from=build /app/contracts ./contracts
+# policy 디렉토리 복사 (meta_only/export/headers YAML)
+COPY --from=build /app/policy ./policy
+# packages/common (validator_v1.cjs 등) — osAlgoCore 등에서 require
+COPY --from=build /app/packages/common ./packages/common
 # scripts 디렉토리 복사 (cleanup 스크립트)
 COPY --from=build /app/scripts ./scripts
 # 포트/실행

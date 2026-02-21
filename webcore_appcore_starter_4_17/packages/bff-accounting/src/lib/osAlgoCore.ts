@@ -12,7 +12,7 @@ console.error(JSON.stringify({ reason_code: "FINGERPRINT_IMPORT_OK", ok: true })
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
-const { validateMetaOnlyOrThrow: validateMetaOnlyOrThrowSingleSource } = require(resolve(__dirname, "../../../../../packages/common/meta_only/validator_v1.cjs"));
+const { validateMetaOnlyOrThrow: validateMetaOnlyOrThrowSingleSource } = require(resolve(__dirname, "../../../common/meta_only/validator_v1.cjs"));
 
 type Allow = {
   allowed_root_keys: string[];

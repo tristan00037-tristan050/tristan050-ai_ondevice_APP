@@ -11,7 +11,7 @@ import yaml from 'js-yaml';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT_DIR = join(__dirname, '../../../../..');
+const ROOT_DIR = join(__dirname, '../../../../');
 const POLICY_DIR = join(ROOT_DIR, 'policy');
 
 export interface PolicyRule {
