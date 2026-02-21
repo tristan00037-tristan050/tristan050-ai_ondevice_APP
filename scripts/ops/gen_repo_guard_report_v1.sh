@@ -25,8 +25,9 @@ trap 'rm -f "$TMP_LOG"' EXIT
 bash tools/preflight_v1.sh >/dev/null 2>&1
 
 # verify 실행 (stdout/stderr 모두 캡처). 실패 시 로그 출력 후 종료(fail-closed)
-bash scripts/verify/verify_repo_contracts.sh >"$TMP_LOG" 2>&1
-RC=$?
+RC=0
+bash scripts/verify/verify_repo_contracts.sh >"$TMP_LOG" 2>&1 || RC=$?
+
 if [ "$RC" -ne 0 ]; then
   echo "BLOCK: verify_repo_contracts failed (rc=$RC)"
   tail -n 200 "$TMP_LOG" || true
