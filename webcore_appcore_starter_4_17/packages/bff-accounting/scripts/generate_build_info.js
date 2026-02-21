@@ -18,36 +18,42 @@ const PKG_ROOT = resolve(__dirname, '..');
 const DIST_DIR = resolve(PKG_ROOT, 'dist');
 const BUILD_INFO_PATH = resolve(DIST_DIR, 'build_info.json');
 
-// buildSha: git rev-parse HEAD (풀 40자)
-// git repo root 찾기 (packages/bff-accounting에서 상위로 올라가서 .git 찾기)
-let gitRoot = PKG_ROOT;
-for (let i = 0; i < 10; i++) {
-  if (existsSync(resolve(gitRoot, '.git'))) {
-    break;
-  }
-  const parent = dirname(gitRoot);
-  if (parent === gitRoot) {
-    gitRoot = '';
-    break;
-  }
-  gitRoot = parent;
-}
-
-if (!gitRoot) {
-  console.error('[build_info] Failed to find git root');
-  process.exit(1);
-}
+// buildSha: GIT_SHA env (Docker/CI) or git rev-parse HEAD (로컬). 주입 없으면 git 필수(fail-closed)
+const injectedSha = process.env.GIT_SHA && process.env.GIT_SHA.trim();
+const isValid40Hex = (s) => typeof s === 'string' && s.length === 40 && /^[0-9a-f]{40}$/i.test(s);
 
 let buildSha = '';
-try {
-  buildSha = execSync('git rev-parse HEAD', {
-    encoding: 'utf-8',
-    cwd: gitRoot,
-    stdio: 'pipe',
-  }).trim();
-} catch (error) {
-  console.error('[build_info] Failed to get git HEAD:', error.message);
-  process.exit(1);
+if (isValid40Hex(injectedSha)) {
+  buildSha = injectedSha;
+} else {
+  let gitRoot = PKG_ROOT;
+  for (let i = 0; i < 10; i++) {
+    if (existsSync(resolve(gitRoot, '.git'))) {
+      break;
+    }
+    const parent = dirname(gitRoot);
+    if (parent === gitRoot) {
+      gitRoot = '';
+      break;
+    }
+    gitRoot = parent;
+  }
+
+  if (!gitRoot) {
+    console.error('[build_info] Failed to find git root');
+    process.exit(1);
+  }
+
+  try {
+    buildSha = execSync('git rev-parse HEAD', {
+      encoding: 'utf-8',
+      cwd: gitRoot,
+      stdio: 'pipe',
+    }).trim();
+  } catch (error) {
+    console.error('[build_info] Failed to get git HEAD:', error.message);
+    process.exit(1);
+  }
 }
 
 // ✅ P0: build_info 생성 실패는 빌드 FAIL로 강제
