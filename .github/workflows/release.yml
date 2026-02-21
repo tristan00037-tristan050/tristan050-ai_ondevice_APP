@@ -61,8 +61,9 @@ jobs:
           # 혹시 남아있을 수 있는 컨테이너 정리
           docker rm -f bff >/dev/null 2>&1 || true
 
-          # 컨테이너 실행: PORT를 8081로 명시 (포트 불일치로 8081 미리스닝 방지)
+          # 컨테이너 실행: PORT 8081, Linux GHA에서 host.docker.internal 해석 가능하도록 add-host
           CID="$(docker run -d --name bff -p 8081:8081 \
+            --add-host=host.docker.internal:host-gateway \
             -e PORT=8081 \
             -e USE_PG=1 \
             -e DATABASE_URL="postgres://app:app@host.docker.internal:5432/app" \
