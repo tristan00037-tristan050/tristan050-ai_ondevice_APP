@@ -282,12 +282,47 @@ jobs:
 
       - name: Kubeconfig
         shell: bash
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.kube"
-          echo "${{ secrets.KUBE_CONFIG }}" > "$HOME/.kube/config"
+          printf '%s' "$KUBE_CONFIG" > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
           echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+
+      - name: Kubeconfig normalize (set current-context if missing)
+        shell: bash
+        run: |
+          set -euo pipefail
+          CFG="$HOME/.kube/config"
+
+          # current-context가 있으면 그대로 사용
+          if kubectl config current-context --kubeconfig "$CFG" >/dev/null 2>&1; then
+            echo "OK: current-context already set"
+            exit 0
+          fi
+
+          # 1) context 목록이 있으면 첫 context를 current로 설정
+          ctx="$(kubectl config get-contexts -o name --kubeconfig "$CFG" 2>/dev/null | head -n1 || true)"
+          if [ -n "$ctx" ]; then
+            kubectl config use-context "$ctx" --kubeconfig "$CFG"
+            echo "OK: set current-context=${ctx}"
+            exit 0
+          fi
+
+          # 2) context가 아예 없으면, 첫 cluster/user로 context를 생성
+          cluster="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.clusters[0].name}' 2>/dev/null || true)"
+          user="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.users[0].name}' 2>/dev/null || true)"
+
+          if [ -z "$cluster" ] || [ -z "$user" ]; then
+            echo "BLOCK: kubeconfig missing clusters/users (cannot create context)"
+            exit 1
+          fi
+
+          kubectl config set-context ci --cluster="$cluster" --user="$user" --kubeconfig "$CFG"
+          kubectl config use-context ci --kubeconfig "$CFG"
+          echo "OK: created and set current-context=ci (cluster=${cluster}, user=${user})"
 
       - name: Kubeconfig sanity check (fail-closed)
         shell: bash
