@@ -12,7 +12,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: webcore_appcore_starter_4_17  # npm 명령 실행 디렉토리 고정
+        working-directory: webcore_appcore_starter_4_17
     services:
       postgres:
         image: postgres:16
@@ -27,14 +27,13 @@ jobs:
           --health-interval=5s
           --health-timeout=5s
           --health-retries=20
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install dependencies
         run: npm ci
@@ -57,11 +56,8 @@ jobs:
           DATABASE_URL: postgres://app:app@host.docker.internal:5432/app
         run: |
           set -euo pipefail
-
-          # 혹시 남아있을 수 있는 컨테이너 정리
           docker rm -f bff >/dev/null 2>&1 || true
 
-          # 컨테이너 실행: PORT 8081, Linux GHA에서 host.docker.internal 해석 가능하도록 add-host
           CID="$(docker run -d --name bff -p 8081:8081 \
             --add-host=host.docker.internal:host-gateway \
             -e PORT=8081 \
@@ -72,7 +68,6 @@ jobs:
           )"
           echo "$CID"
 
-          # readiness 대기(최대 60초). 실패하면 logs/inspect 출력 후 종료
           for i in $(seq 1 120); do
             if curl -fsS --max-time 2 "http://127.0.0.1:8081/ready" >/dev/null 2>&1; then
               echo "OK: /ready"
@@ -91,7 +86,6 @@ jobs:
             fi
           done
 
-          # 최종 확인
           curl -fsS --max-time 3 "http://127.0.0.1:8081/health" || true
           curl -fsS --max-time 3 "http://127.0.0.1:8081/ready"
 
@@ -105,7 +99,6 @@ jobs:
           set -euo pipefail
           : "${API_KEY:?}"
           : "${API_KEY_AUD:?}"
-
           npm run test:e2e:accounting:approvals
           API_KEY="${API_KEY_AUD}" npm run test:e2e:accounting:exports
           npm run test:e2e:accounting:exports:neg
@@ -124,7 +117,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install dependencies
         run: npm ci
@@ -132,7 +125,8 @@ jobs:
       - name: TypeScript check
         run: npm run -w @appcore/app-expo typecheck || echo "typecheck skipped"
 
-      - run: echo "mobile gate passed"
+      - name: Mobile gate passed
+        run: echo "mobile gate passed"
 
   repo-contracts-gate:
     name: Repo contracts + autodecision gate
@@ -143,11 +137,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Show checked-out SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "GITHUB_REF=${GITHUB_REF}"
+          echo "GITHUB_SHA=${GITHUB_SHA}"
+          git rev-parse HEAD
+          git show -s --format=%H%n%an%n%ad%n%s HEAD
+
       - name: Install ripgrep
+        shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y ripgrep jq
+
+      - name: Scan workflow patterns (safe)
+        shell: bash
+        run: |
+          set -euo pipefail
+          a="id-"; b="token"
+          c="attest"; d="ations"
+          e="artifact-"; f="metadata"
+          g="attest-build-"; h="provenance"
+          rg -n "${a}${b}[[:space:]]*:[[:space:]]*write|${c}${d}[[:space:]]*:[[:space:]]*write|${e}${f}[[:space:]]*:[[:space:]]*write|${g}${h}" .github/workflows || true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -157,6 +171,15 @@ jobs:
       - name: Preflight (single source)
         uses: ./.github/actions/preflight_v1
 
+      - name: Show dist build stamp sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAMP="webcore_appcore_starter_4_17/packages/bff-accounting/dist/.build_stamp.json"
+          test -f "$STAMP" || { echo "missing stamp: $STAMP"; exit 1; }
+          echo "HEAD=$(git rev-parse HEAD)"
+          node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); console.log("STAMP.git_sha="+j.git_sha); console.log("STAMP.workflow_name="+j.workflow_name); console.log("STAMP.built_at_utc="+j.built_at_utc);' "$STAMP"
+
       - name: Ops deps preflight (fail-closed)
         shell: bash
         run: |
@@ -164,11 +187,15 @@ jobs:
           bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg --require-jq
 
       - name: Install deps (web_e2e)
+        shell: bash
         run: |
+          set -euo pipefail
           npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
 
       - name: Install Playwright browsers
+        shell: bash
         run: |
+          set -euo pipefail
           npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
@@ -179,6 +206,8 @@ jobs:
           set -euo pipefail
           bash scripts/ops/gen_repo_guard_report_v1.sh
           bash scripts/ops/run_ai_smoke_v1.sh
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
       - name: Generate autodecision (B)
         shell: bash
@@ -186,13 +215,24 @@ jobs:
           set -euo pipefail
           node scripts/ops/gen_autodecision_v1.mjs
 
-      - name: Repo contracts gate
+      - name: Repo contracts gate (always tail on fail)
         shell: bash
-        run: |
-          set -euo pipefail
-          bash scripts/verify/verify_repo_contracts.sh
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+        run: |
+          set -euo pipefail
+          set +e
+          bash scripts/verify/verify_repo_contracts.sh > /tmp/verify_repo_contracts.log 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            echo "BLOCK: verify_repo_contracts failed (rc=$rc)"
+            echo "=== tail verify_repo_contracts (last 200 lines) ==="
+            tail -n 200 /tmp/verify_repo_contracts.log || true
+          else
+            cat /tmp/verify_repo_contracts.log
+          fi
+          exit "$rc"
 
       - name: Release gate (autodecision must be ok) (C)
         shell: bash
@@ -213,7 +253,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -245,7 +285,6 @@ jobs:
         working-directory: .
         run: |
           set -euo pipefail
-
           helm upgrade --install bff charts/bff-accounting \
             --set image.repository="ghcr.io/${{ github.repository }}/bff-accounting" \
             --set image.tag="${{ github.ref_name }}" \
