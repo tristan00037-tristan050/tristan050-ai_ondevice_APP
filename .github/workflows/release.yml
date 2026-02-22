@@ -281,10 +281,32 @@ jobs:
         uses: azure/setup-helm@v4
 
       - name: Kubeconfig
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.kube"
           echo "${{ secrets.KUBE_CONFIG }}" > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+
+      - name: Kubeconfig sanity check (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "KUBECONFIG=${KUBECONFIG:-<empty>}"
+          kubectl config current-context || true
+          kubectl config view --minify || true
+
+          # server가 localhost로 떨어지면 즉시 차단
+          server="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
+          echo "cluster.server=${server:-<empty>}"
+          if [ -z "${server}" ] || echo "${server}" | rg -q '^https?://localhost:8080'; then
+            echo "BLOCK: kubeconfig not loaded (server is empty or localhost:8080)"
+            exit 1
+          fi
+
+          kubectl cluster-info
+          kubectl get nodes
 
       - name: Helm upgrade
         working-directory: .
