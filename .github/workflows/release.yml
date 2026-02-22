@@ -137,7 +137,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Debug: show checked-out SHA
         shell: bash
         run: |
           set -euo pipefail
@@ -153,7 +152,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ripgrep jq
 
-      - name: Debug: scan workflow patterns (safe)
         shell: bash
         run: |
           set -euo pipefail
@@ -171,7 +169,6 @@ jobs:
       - name: Preflight (single source)
         uses: ./.github/actions/preflight_v1
 
-      - name: Debug: show dist build stamp sha
         shell: bash
         run: |
           set -euo pipefail
