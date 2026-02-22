@@ -128,7 +128,7 @@ jobs:
       - name: Mobile gate passed
         run: echo "mobile gate passed"
 
-    repo-contracts-gate:
+  repo-contracts-gate:
     name: Repo contracts + autodecision gate
     runs-on: ubuntu-latest
     env:
@@ -153,8 +153,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ripgrep jq
 
-      # 중요: supplychain 가드가 release.yml 안에 금지어가 "연속 문자열"로 존재하면 BLOCK 합니다.
-      # 그래서 스캔 패턴은 문자열을 쪼개서(파일 텍스트에 금지어가 그대로 남지 않게) 구성합니다.
       - name: Debug: scan workflow patterns (safe)
         shell: bash
         run: |
@@ -217,7 +215,6 @@ jobs:
           set -euo pipefail
           node scripts/ops/gen_autodecision_v1.mjs
 
-      # 중요: set -euo pipefail 상태에서 실패하면 tail이 스킵될 수 있어 rc를 확실히 잡습니다.
       - name: Repo contracts gate (always tail on fail)
         shell: bash
         env:
@@ -243,3 +240,54 @@ jobs:
           set -euo pipefail
           test -s docs/ops/reports/autodecision_latest.json
           node -e 'const p=require("./docs/ops/reports/autodecision_latest.json"); if(p.decision!=="ok"){console.error("BLOCK: autodecision decision="+p.decision); console.error("reason_codes="+JSON.stringify(p.reason_codes)); process.exit(1)}'
+
+  publish-and-deploy:
+    needs: [build-test-image, gate_mobile, repo-contracts-gate]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push image
+        working-directory: webcore_appcore_starter_4_17
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${{ github.repository }}/bff-accounting"
+          TAG="${{ github.ref_name }}"
+          docker build --build-arg GIT_SHA="${{ github.sha }}" -f Dockerfile.bff -t "${IMAGE}:${TAG}" -t "${IMAGE}:latest" .
+          docker push "${IMAGE}:${TAG}"
+          docker push "${IMAGE}:latest"
+
+      - name: Setup kubectl & helm
+        uses: azure/setup-helm@v4
+
+      - name: Kubeconfig
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG }}" > "$HOME/.kube/config"
+
+      - name: Helm upgrade
+        working-directory: .
+        run: |
+          set -euo pipefail
+          helm upgrade --install bff charts/bff-accounting \
+            --set image.repository="ghcr.io/${{ github.repository }}/bff-accounting" \
+            --set image.tag="${{ github.ref_name }}" \
+            --set env.EXPORT_SIGN_SECRET="${{ secrets.EXPORT_SIGN_SECRET }}" \
+            --set env.DATABASE_URL="${{ secrets.DATABASE_URL }}" \
+            --wait --timeout 5m
