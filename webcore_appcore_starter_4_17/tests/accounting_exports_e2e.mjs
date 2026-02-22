@@ -12,6 +12,9 @@ const API_KEY = process.env.API_KEY ?? 'collector-key';
 const TENANT_ID = process.env.TENANT_ID ?? 'default';
 
 async function main() {
+  // OS 정책 브리지를 위한 헤더 추가 (Approvals 테스트와 동일 규칙)
+  const userRole = API_KEY.includes(':') ? API_KEY.split(':')[1] : 'operator';
+
   // 1. Export 잡 생성
   const r1 = await fetch(`${BFF_URL}/v1/accounting/exports/reports`, {
     method: 'POST',
@@ -19,7 +22,9 @@ async function main() {
       'Content-Type': 'application/json',
       'Idempotency-Key': crypto.randomUUID(),
       'X-Api-Key': API_KEY,
-      'X-Tenant': TENANT_ID
+      'X-Tenant': TENANT_ID,
+      'X-User-Role': userRole,
+      'X-User-Id': 'test-user-1',
     },
     body: JSON.stringify({
       since: '2025-11-01T00:00:00Z',
@@ -29,6 +34,9 @@ async function main() {
   
   if (!r1.ok) {
     const err = await r1.text().catch(() => '');
+    if (r1.status === 500 && err.includes('missing_export_sign_secret')) {
+      throw new Error(`HTTP ${r1.status}: ${err}\nHint: Start BFF with EXPORT_SIGN_SECRET (e.g. EXPORT_SIGN_SECRET=ci-secret or dev-export-secret).`);
+    }
     throw new Error(`HTTP ${r1.status}: ${err}`);
   }
   
@@ -39,7 +47,9 @@ async function main() {
   const r2 = await fetch(`${BFF_URL}/v1/accounting/exports/${j1.jobId}`, {
     headers: {
       'X-Api-Key': API_KEY,
-      'X-Tenant': TENANT_ID
+      'X-Tenant': TENANT_ID,
+      'X-User-Role': userRole,
+      'X-User-Id': 'test-user-1',
     }
   });
   
