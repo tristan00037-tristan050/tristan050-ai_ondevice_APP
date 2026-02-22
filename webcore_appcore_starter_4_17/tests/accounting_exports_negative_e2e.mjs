@@ -11,6 +11,10 @@ import crypto from 'node:crypto';
 const BFF_URL = process.env.BFF_URL ?? 'http://localhost:8081';
 const TENANT_ID = process.env.TENANT_ID ?? 'default';
 
+function roleFromApiKey(apiKey) {
+  return apiKey.includes(':') ? apiKey.split(':')[1] : 'operator';
+}
+
 async function t(desc, fn) {
   try {
     await fn();
@@ -24,12 +28,16 @@ async function t(desc, fn) {
 async function run() {
   // 1) Idempotency-Key 누락 → 400
   await t('missing Idempotency-Key → 400', async () => {
+    const apiKey = 'collector-key:auditor';
     const r = await fetch(`${BFF_URL}/v1/accounting/exports/reports`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Api-Key': 'collector-key:auditor',
-        'X-Tenant': TENANT_ID
+        'X-Api-Key': apiKey,
+        'X-Tenant': TENANT_ID,
+        'X-User-Role': roleFromApiKey(apiKey),
+        'X-User-Id': 'test-user-1',
+        // Idempotency-Key는 의도적으로 누락(400 도달 목적)
       },
       body: JSON.stringify({ limitDays: 30 })
     });
@@ -40,13 +48,16 @@ async function run() {
 
   // 2) viewer 권한 → 403
   await t('viewer → 403', async () => {
+    const apiKey = 'collector-key:viewer';
     const r = await fetch(`${BFF_URL}/v1/accounting/exports/reports`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Idempotency-Key': crypto.randomUUID(),
-        'X-Api-Key': 'collector-key:viewer',
-        'X-Tenant': TENANT_ID
+        'X-Api-Key': apiKey,
+        'X-Tenant': TENANT_ID,
+        'X-User-Role': roleFromApiKey(apiKey),
+        'X-User-Id': 'test-user-1',
       },
       body: JSON.stringify({ limitDays: 30 })
     });
@@ -55,23 +66,34 @@ async function run() {
     }
   });
 
-  // 3) limitDays > 90 → 422
-  await t('limitDays > 90 → 422', async () => {
+  // 3) limitDays > 90 → 400 (policy-as-code)
+  await t('limitDays > 90 → 400', async () => {
+    const apiKey = 'collector-key:auditor';
     const r = await fetch(`${BFF_URL}/v1/accounting/exports/reports`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Idempotency-Key': crypto.randomUUID(),
-        'X-Api-Key': 'collector-key:auditor',
-        'X-Tenant': TENANT_ID
+        'X-Api-Key': apiKey,
+        'X-Tenant': TENANT_ID,
+        'X-User-Role': roleFromApiKey(apiKey),
+        'X-User-Id': 'test-user-1',
       },
       body: JSON.stringify({ limitDays: 120 })
     });
-    if (r.status !== 422) {
-      throw new Error(`expected 422, got ${r.status}`);
+    if (r.status !== 400) {
+      throw new Error(`expected 400, got ${r.status}`);
+    }
+    const body = await r.json().catch(() => ({}));
+    if (body.error && body.error !== 'policy_violation') {
+      throw new Error(`expected error 'policy_violation', got ${body.error}`);
     }
   });
 
+  if (process.exitCode && process.exitCode !== 0) {
+    console.error('BLOCK: E2E Exports negative tests failed');
+    process.exit(1);
+  }
   console.log('✅ E2E Exports negative tests passed');
 }
 
