@@ -137,7 +137,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show checked-out SHA
         shell: bash
         run: |
           set -euo pipefail
@@ -153,7 +152,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ripgrep jq
 
-      - name: Scan workflow patterns (safe)
         shell: bash
         run: |
           set -euo pipefail
@@ -171,7 +169,6 @@ jobs:
       - name: Preflight (single source)
         uses: ./.github/actions/preflight_v1
 
-      - name: Show dist build stamp sha
         shell: bash
         run: |
           set -euo pipefail
@@ -266,9 +263,13 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
         run: |
           set -euo pipefail
-          IMAGE="ghcr.io/${{ github.repository }}/bff-accounting"
-          TAG="${{ github.ref_name }}"
-          docker build --build-arg GIT_SHA="${{ github.sha }}" -f Dockerfile.bff -t "${IMAGE}:${TAG}" -t "${IMAGE}:latest" .
+
+          # GHCR repository name must be lowercase (Docker constraint)
+          REPO_LC="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE="ghcr.io/${REPO_LC}/bff-accounting"
+          TAG="${GITHUB_REF_NAME}"
+
+          docker build --build-arg GIT_SHA="${GITHUB_SHA}" -f Dockerfile.bff -t "${IMAGE}:${TAG}" -t "${IMAGE}:latest" .
           docker push "${IMAGE}:${TAG}"
           docker push "${IMAGE}:latest"
 
