@@ -1,4 +1,4 @@
-    name: release-bff
+name: release-bff
 
 on:
   push:
