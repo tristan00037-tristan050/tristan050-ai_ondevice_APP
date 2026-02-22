@@ -305,8 +305,11 @@ jobs:
             exit 1
           fi
 
-          kubectl cluster-info
-          kubectl get nodes
+          echo "probe: /version"
+          kubectl --request-timeout=5s get --raw='/version' >/dev/null
+
+          echo "probe: /readyz"
+          kubectl --request-timeout=5s get --raw='/readyz' >/dev/null
 
       - name: Helm upgrade
         working-directory: .
