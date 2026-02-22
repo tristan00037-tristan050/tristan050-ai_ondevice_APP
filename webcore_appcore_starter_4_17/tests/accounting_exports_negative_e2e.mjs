@@ -66,8 +66,8 @@ async function run() {
     }
   });
 
-  // 3) limitDays > 90 → 422
-  await t('limitDays > 90 → 422', async () => {
+  // 3) limitDays > 90 → 400 (policy-as-code)
+  await t('limitDays > 90 → 400', async () => {
     const apiKey = 'collector-key:auditor';
     const r = await fetch(`${BFF_URL}/v1/accounting/exports/reports`, {
       method: 'POST',
@@ -81,8 +81,12 @@ async function run() {
       },
       body: JSON.stringify({ limitDays: 120 })
     });
-    if (r.status !== 422) {
-      throw new Error(`expected 422, got ${r.status}`);
+    if (r.status !== 400) {
+      throw new Error(`expected 400, got ${r.status}`);
+    }
+    const body = await r.json().catch(() => ({}));
+    if (body.error && body.error !== 'policy_violation') {
+      throw new Error(`expected error 'policy_violation', got ${body.error}`);
     }
   });
 
