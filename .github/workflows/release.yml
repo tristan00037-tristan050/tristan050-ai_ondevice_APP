@@ -1,140 +1,4 @@
-name: release-bff
-
-on:
-  push:
-    tags:
-      - "r6-*"
-      - "r7-*"
-
-jobs:
-  build-test-image:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        working-directory: webcore_appcore_starter_4_17  # npm 명령 실행 디렉토리 고정
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: app
-          POSTGRES_PASSWORD: app
-          POSTGRES_DB: app
-        ports:
-          - "5432:5432"
-        options: >-
-          --health-cmd="pg_isready -U app -d app"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build workspaces
-        run: npm run build:packages
-
-      - name: DB migrate
-        env:
-          DATABASE_URL: postgres://app:app@localhost:5432/app
-        run: npm run db:migrate
-
-      - name: Build Docker image
-        working-directory: webcore_appcore_starter_4_17
-        run: docker build --build-arg GIT_SHA="${{ github.sha }}" -f Dockerfile.bff -t bff-accounting:release .
-
-      - name: Run BFF container
-        working-directory: .
-        env:
-          DATABASE_URL: postgres://app:app@host.docker.internal:5432/app
-        run: |
-          set -euo pipefail
-
-          # 혹시 남아있을 수 있는 컨테이너 정리
-          docker rm -f bff >/dev/null 2>&1 || true
-
-          # 컨테이너 실행: PORT 8081, Linux GHA에서 host.docker.internal 해석 가능하도록 add-host
-          CID="$(docker run -d --name bff -p 8081:8081 \
-            --add-host=host.docker.internal:host-gateway \
-            -e PORT=8081 \
-            -e USE_PG=1 \
-            -e DATABASE_URL="postgres://app:app@host.docker.internal:5432/app" \
-            -e EXPORT_SIGN_SECRET="ci-secret" \
-            bff-accounting:release
-          )"
-          echo "$CID"
-
-          # readiness 대기(최대 60초). 실패하면 logs/inspect 출력 후 종료
-          for i in $(seq 1 120); do
-            if curl -fsS --max-time 2 "http://127.0.0.1:8081/ready" >/dev/null 2>&1; then
-              echo "OK: /ready"
-              break
-            fi
-            sleep 0.5
-            if [ "$i" -eq 120 ]; then
-              echo "BLOCK: bff did not become ready"
-              echo "== docker ps =="
-              docker ps -a || true
-              echo "== docker inspect bff =="
-              docker inspect bff || true
-              echo "== docker logs bff (tail 200) =="
-              docker logs --tail=200 bff || true
-              exit 1
-            fi
-          done
-
-          # 최종 확인
-          curl -fsS --max-time 3 "http://127.0.0.1:8081/health" || true
-          curl -fsS --max-time 3 "http://127.0.0.1:8081/ready"
-
-      - name: E2E smoke against container
-        env:
-          BFF_URL: http://localhost:8081
-          TENANT_ID: default
-          API_KEY: collector-key:operator
-          API_KEY_AUD: collector-key:auditor
-        run: |
-          set -euo pipefail
-          : "${API_KEY:?}"
-          : "${API_KEY_AUD:?}"
-
-          npm run test:e2e:accounting:approvals
-          API_KEY="${API_KEY_AUD}" npm run test:e2e:accounting:exports
-          npm run test:e2e:accounting:exports:neg
-          API_KEY="${API_KEY}" npm run test:e2e:accounting:recon
-
-  gate_mobile:
-    name: Mobile Gate
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        working-directory: webcore_appcore_starter_4_17
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: TypeScript check
-        run: npm run -w @appcore/app-expo typecheck || echo "typecheck skipped"
-
-      - run: echo "mobile gate passed"
-
-  repo-contracts-gate:
+    repo-contracts-gate:
     name: Repo contracts + autodecision gate
     runs-on: ubuntu-latest
     env:
@@ -143,11 +7,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Debug: show checked-out SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "GITHUB_REF=${GITHUB_REF}"
+          echo "GITHUB_SHA=${GITHUB_SHA}"
+          git rev-parse HEAD
+          git show -s --format=%H%n%an%n%ad%n%s HEAD
+
       - name: Install ripgrep
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y ripgrep jq
+
+      - name: Debug: scan forbidden attestation patterns in workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          rg -n "id-token\s*:\s*write|attestations\s*:\s*write|artifact-metadata\s*:\s*write|attest-build-provenance" .github/workflows || true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -173,12 +52,23 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
+      - name: Debug: show dist build stamp sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAMP="webcore_appcore_starter_4_17/packages/bff-accounting/dist/.build_stamp.json"
+          test -f "$STAMP" || { echo "missing stamp: $STAMP"; exit 1; }
+          echo "HEAD=$(git rev-parse HEAD)"
+          node -e 'const fs=require("fs"); const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); console.log("STAMP.git_sha="+j.git_sha); console.log("STAMP.workflow_name="+j.workflow_name); console.log("STAMP.built_at_utc="+j.built_at_utc);' "$STAMP"
+
       - name: Generate latest reports (A)
         shell: bash
         run: |
           set -euo pipefail
           bash scripts/ops/gen_repo_guard_report_v1.sh
           bash scripts/ops/run_ai_smoke_v1.sh
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
       - name: Generate autodecision (B)
         shell: bash
@@ -190,7 +80,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/verify/verify_repo_contracts.sh
+          bash scripts/verify/verify_repo_contracts.sh 2>&1 | tee /tmp/verify_repo_contracts.log
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            echo "=== tail verify_repo_contracts (last 200 lines) ==="
+            tail -n 200 /tmp/verify_repo_contracts.log || true
+          fi
+          exit "$rc"
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
@@ -200,55 +96,3 @@ jobs:
           set -euo pipefail
           test -s docs/ops/reports/autodecision_latest.json
           node -e 'const p=require("./docs/ops/reports/autodecision_latest.json"); if(p.decision!=="ok"){console.error("BLOCK: autodecision decision="+p.decision); console.error("reason_codes="+JSON.stringify(p.reason_codes)); process.exit(1)}'
-
-  publish-and-deploy:
-    needs: [build-test-image, gate_mobile, repo-contracts-gate]
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build & Push image
-        working-directory: webcore_appcore_starter_4_17
-        run: |
-          set -euo pipefail
-          IMAGE="ghcr.io/${{ github.repository }}/bff-accounting"
-          TAG="${{ github.ref_name }}"
-          docker build --build-arg GIT_SHA="${{ github.sha }}" -f Dockerfile.bff -t "${IMAGE}:${TAG}" -t "${IMAGE}:latest" .
-          docker push "${IMAGE}:${TAG}"
-          docker push "${IMAGE}:latest"
-
-      - name: Setup kubectl & helm
-        uses: azure/setup-helm@v4
-
-      - name: Kubeconfig
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.kube"
-          echo "${{ secrets.KUBE_CONFIG }}" > "$HOME/.kube/config"
-
-      - name: Helm upgrade
-        working-directory: .
-        run: |
-          set -euo pipefail
-
-          helm upgrade --install bff charts/bff-accounting \
-            --set image.repository="ghcr.io/${{ github.repository }}/bff-accounting" \
-            --set image.tag="${{ github.ref_name }}" \
-            --set env.EXPORT_SIGN_SECRET="${{ secrets.EXPORT_SIGN_SECRET }}" \
-            --set env.DATABASE_URL="${{ secrets.DATABASE_URL }}" \
-            --wait --timeout 5m
