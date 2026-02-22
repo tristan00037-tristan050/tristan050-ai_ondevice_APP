@@ -27,7 +27,6 @@ jobs:
           --health-interval=5s
           --health-timeout=5s
           --health-retries=20
-
     steps:
       - uses: actions/checkout@v4
 
@@ -57,7 +56,6 @@ jobs:
           DATABASE_URL: postgres://app:app@host.docker.internal:5432/app
         run: |
           set -euo pipefail
-
           docker rm -f bff >/dev/null 2>&1 || true
 
           CID="$(docker run -d --name bff -p 8081:8081 \
@@ -101,7 +99,6 @@ jobs:
           set -euo pipefail
           : "${API_KEY:?}"
           : "${API_KEY_AUD:?}"
-
           npm run test:e2e:accounting:approvals
           API_KEY="${API_KEY_AUD}" npm run test:e2e:accounting:exports
           npm run test:e2e:accounting:exports:neg
@@ -128,7 +125,8 @@ jobs:
       - name: TypeScript check
         run: npm run -w @appcore/app-expo typecheck || echo "typecheck skipped"
 
-      - run: echo "mobile gate passed"
+      - name: Mobile gate passed
+        run: echo "mobile gate passed"
 
   repo-contracts-gate:
     name: Repo contracts + autodecision gate
@@ -149,12 +147,13 @@ jobs:
           git show -s --format=%H%n%an%n%ad%n%s HEAD
 
       - name: Install ripgrep
+        shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y ripgrep jq
 
-      - name: Debug: scan forbidden patterns in workflows (safe)
+      - name: Debug: scan workflow patterns (safe)
         shell: bash
         run: |
           set -euo pipefail
@@ -188,11 +187,13 @@ jobs:
           bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg --require-jq
 
       - name: Install deps (web_e2e)
+        shell: bash
         run: |
           set -euo pipefail
           npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
 
       - name: Install Playwright browsers
+        shell: bash
         run: |
           set -euo pipefail
           npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
@@ -214,8 +215,10 @@ jobs:
           set -euo pipefail
           node scripts/ops/gen_autodecision_v1.mjs
 
-      - name: Repo contracts gate (fail-closed + always tail on fail)
+      - name: Repo contracts gate (always tail on fail)
         shell: bash
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
         run: |
           set -euo pipefail
           set +e
@@ -230,8 +233,6 @@ jobs:
             cat /tmp/verify_repo_contracts.log
           fi
           exit "$rc"
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
       - name: Release gate (autodecision must be ok) (C)
         shell: bash
