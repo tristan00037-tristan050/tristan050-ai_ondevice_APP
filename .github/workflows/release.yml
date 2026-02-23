@@ -192,6 +192,12 @@ jobs:
           set -euo pipefail
           bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg --require-jq
 
+      - name: Release-bff Phase1 gate (fail-closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_release_bff_phase1_gate.sh
+
       - name: Install deps (web_e2e)
         shell: bash
         run: |
@@ -263,17 +269,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: "Preflight: ensure minikube is up (self-hosted)"
-        shell: bash
-        run: |
-          set -euo pipefail
-          command -v kubectl >/dev/null 2>&1 || { echo "BLOCK: kubectl not found on self-hosted runner"; exit 1; }
-          if command -v minikube >/dev/null 2>&1; then
-            minikube status || true
-          fi
-          kubectl cluster-info >/dev/null
-          echo "OK: minikube/k8s reachable"
-
       - name: Use local kubeconfig (no secret)
         shell: bash
         run: |
@@ -283,6 +278,36 @@ jobs:
           chmod 600 "$CFG" || true
           echo "KUBECONFIG=$CFG" >> "$GITHUB_ENV"
           echo "OK: KUBECONFIG set to local $CFG"
+
+      - name: "Preflight: pin minikube context + verify target cluster"
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${KUBECONFIG:?}"
+
+          command -v kubectl >/dev/null 2>&1 || { echo "BLOCK: kubectl not found on self-hosted runner"; exit 1; }
+
+          if command -v minikube >/dev/null 2>&1; then
+            minikube status || true
+          fi
+
+          if ! kubectl config get-contexts -o name --kubeconfig "$KUBECONFIG" 2>/dev/null | grep -Fxq "minikube"; then
+            echo "BLOCK: kubeconfig has no 'minikube' context. Refusing to deploy."
+            echo "debug: contexts=$(kubectl config get-contexts -o name --kubeconfig "$KUBECONFIG" | tr '\n' ' ' || true)"
+            exit 1
+          fi
+
+          kubectl config use-context minikube --kubeconfig "$KUBECONFIG" >/dev/null
+
+          server="$(kubectl config view --minify --kubeconfig "$KUBECONFIG" -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
+          echo "cluster.server=${server:-<empty>}"
+          echo "$server" | grep -Eq '^https?://(127\.0\.0\.1|localhost):' || {
+            echo "BLOCK: target cluster is not local minikube (server must be 127.0.0.1/localhost). Refusing to deploy."
+            exit 1
+          }
+
+          kubectl cluster-info --kubeconfig "$KUBECONFIG" >/dev/null
+          echo "OK: pinned context=minikube and cluster reachable"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
