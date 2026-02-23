@@ -1,3 +1,4 @@
+# Step names containing ":" must be quoted to avoid YAML parse errors.
 name: release-bff
 
 permissions:
@@ -262,7 +263,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Preflight: ensure minikube is up (self-hosted)
+      - name: "Preflight: ensure minikube is up (self-hosted)"
         shell: bash
         run: |
           set -euo pipefail
