@@ -89,7 +89,6 @@ jobs:
             fi
           done
 
-          # status-code only (body 출력 0 유지)
           curl -s -o /dev/null -w "HEALTHZ=%{http_code}\n" --max-time 3 "http://127.0.0.1:8081/healthz" || true
           curl -s -o /dev/null -w "READYZ=%{http_code}\n"  --max-time 3 "http://127.0.0.1:8081/readyz" || true
 
@@ -105,13 +104,8 @@ jobs:
           : "${API_KEY_AUD:?}"
 
           npm run test:e2e:accounting:approvals
-
-          # exports는 auditor 권한으로 실행
           API_KEY="${API_KEY_AUD}" npm run test:e2e:accounting:exports
-
-          # exports:neg는 기대 코드(400/422)가 나오려면 operator 키로 돌려야 함(403 오탐 방지)
           API_KEY="${API_KEY}" npm run test:e2e:accounting:exports:neg
-
           API_KEY="${API_KEY}" npm run test:e2e:accounting:recon
 
   gate_mobile:
@@ -283,7 +277,6 @@ jobs:
           docker push "${IMAGE}:${TAG}"
           docker push "${IMAGE}:latest"
 
-      # setup-helm은 helm만 설치하므로 kubectl은 별도로 설치해야 함. :contentReference[oaicite:1]{index=1}
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
         with:
@@ -304,7 +297,6 @@ jobs:
           printf '%s' "$KUBE_CONFIG" > "$tmp"
           sed -i 's/\r$//' "$tmp" 2>/dev/null || true
 
-          # Detect YAML-ish kubeconfig, else treat as base64 blob.
           if grep -qE '^[[:space:]]*(---[[:space:]]*)?(apiVersion:|kind:[[:space:]]*Config|clusters:|users:|contexts:)' "$tmp"; then
             cp "$tmp" "$HOME/.kube/config"
           else
@@ -316,9 +308,6 @@ jobs:
           chmod 600 "$HOME/.kube/config"
           echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
 
-      # FIX: 기존 kube-norm(v1)은 '키 존재'만 보고 clusters/users null을 놓칠 수 있었음.
-      #      아래는 kubectl이 실제로 파싱한 clusters/users/contexts 개수로 fail-closed 판정.
-      #      current-context는 use-context로 설정하는 것이 정석. :contentReference[oaicite:2]{index=2}
       - name: Kubeconfig normalize (strict, meta-only)
         shell: bash
         env:
@@ -341,13 +330,11 @@ jobs:
             exit 1
           fi
 
-          # basic header sanity
           grep -qE '^[[:space:]]*apiVersion:' "$CFG" || { echo "BLOCK: missing apiVersion"; exit 1; }
           grep -qE '^[[:space:]]*kind:[[:space:]]*Config' "$CFG" || { echo "BLOCK: missing kind: Config"; exit 1; }
           grep -qE '^[[:space:]]*clusters:' "$CFG" || { echo "BLOCK: missing clusters:"; exit 1; }
           grep -qE '^[[:space:]]*users:' "$CFG" || { echo "BLOCK: missing users:"; exit 1; }
 
-          # kubectl parse + counts (no content output)
           view_len="$(kubectl config view --kubeconfig "$CFG" -o json 2>/dev/null | wc -c | tr -d ' ' || echo 0)"
           num_clusters="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.clusters[*].name}' 2>/dev/null | wc -w | tr -d ' ' || echo 0)"
           num_users="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.users[*].name}' 2>/dev/null | wc -w | tr -d ' ' || echo 0)"
@@ -392,7 +379,6 @@ jobs:
           KUBECONFIG: /home/runner/.kube/config
         run: |
           set -euo pipefail
-          # server가 localhost로 떨어지면 즉시 차단
           server="$(kubectl config view --minify --kubeconfig "$KUBECONFIG" -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
           echo "cluster.server=${server:-<empty>}"
           if [ -z "${server}" ] || echo "${server}" | grep -qE '^https?://localhost:8080'; then
@@ -408,7 +394,7 @@ jobs:
           set -euo pipefail
           REPO_LC="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
 
-          helm upgrade --install bff charts/bff-accounting \
+          helm upgrade --install bff webcore_appcore_starter_4_17/charts/bff-accounting \
             --set image.repository="ghcr.io/${REPO_LC}/bff-accounting" \
             --set image.tag="${GITHUB_REF_NAME}" \
             --set env.EXPORT_SIGN_SECRET="${{ secrets.EXPORT_SIGN_SECRET }}" \
