@@ -280,7 +280,7 @@ jobs:
       - name: Setup kubectl & helm
         uses: azure/setup-helm@v4
 
-      - name: Kubeconfig
+      - name: Kubeconfig (robust write: yaml-or-base64, no rg)
         shell: bash
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
@@ -288,13 +288,18 @@ jobs:
           set -euo pipefail
           mkdir -p "$HOME/.kube"
 
-          tmp="$RUNNER_TEMP/kubeconfig.in"
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+
+          # 1) secret -> tmp (raw)
           printf '%s' "$KUBE_CONFIG" > "$tmp"
-          # CRLF 정규화 (Windows 줄바꿈 제거)
+
+          # 2) CRLF normalize on tmp
           sed -i 's/\r$//' "$tmp"
 
-          # YAML이면 그대로, 아니면 base64 decode 시도
-          if rg -q '^apiVersion:' "$tmp"; then
+          # 3) YAML vs base64 (enhanced probe)
+          yaml_probe='^[[:space:]]*(---[[:space:]]*)?(apiVersion:|clusters:|users:|contexts:)'
+          if grep -qE "$yaml_probe" "$tmp"; then
             cp "$tmp" "$HOME/.kube/config"
           else
             base64 -d < "$tmp" > "$HOME/.kube/config" 2>/dev/null || {
@@ -303,7 +308,15 @@ jobs:
             }
           fi
 
+          # 4) CRLF normalize on final config
           sed -i 's/\r$//' "$HOME/.kube/config"
+
+          # 5) Fail-closed: final config must look like kubeconfig YAML
+          if ! grep -qE "$yaml_probe" "$HOME/.kube/config"; then
+            echo "BLOCK: kubeconfig file missing required keys (apiVersion/clusters/users/contexts)"
+            exit 1
+          fi
+
           chmod 600 "$HOME/.kube/config"
           echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
 
@@ -316,11 +329,11 @@ jobs:
           echo "[DEBUG] config path=$CFG"
           echo "[DEBUG] size_bytes=$(wc -c < "$CFG" | tr -d ' ')"
 
-          has_api="$(rg -n '^apiVersion:' "$CFG" >/dev/null && echo 1 || echo 0)"
-          has_clusters="$(rg -n '^clusters:' "$CFG" >/dev/null && echo 1 || echo 0)"
-          has_users="$(rg -n '^users:' "$CFG" >/dev/null && echo 1 || echo 0)"
-          has_contexts="$(rg -n '^contexts:' "$CFG" >/dev/null && echo 1 || echo 0)"
-          has_cc="$(rg -n '^current-context:' "$CFG" >/dev/null && echo 1 || echo 0)"
+          has_api="$(grep -qE '^[[:space:]]*apiVersion:' "$CFG" && echo 1 || echo 0)"
+          has_clusters="$(grep -qE '^[[:space:]]*clusters:' "$CFG" && echo 1 || echo 0)"
+          has_users="$(grep -qE '^[[:space:]]*users:' "$CFG" && echo 1 || echo 0)"
+          has_contexts="$(grep -qE '^[[:space:]]*contexts:' "$CFG" && echo 1 || echo 0)"
+          has_cc="$(grep -qE '^[[:space:]]*current-context:' "$CFG" && echo 1 || echo 0)"
           echo "[DEBUG] has_apiVersion=$has_api has_clusters=$has_clusters has_users=$has_users has_contexts=$has_contexts has_current_context=$has_cc"
 
           # clusters/users 자체가 없으면 여기서 바로 종결(현재 실패 케이스)
@@ -368,7 +381,7 @@ jobs:
           # server가 localhost로 떨어지면 즉시 차단
           server="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
           echo "cluster.server=${server:-<empty>}"
-          if [ -z "${server}" ] || echo "${server}" | rg -q '^https?://localhost:8080'; then
+          if [ -z "${server}" ] || echo "${server}" | grep -qE '^https?://localhost:8080'; then
             echo "BLOCK: kubeconfig not loaded (server is empty or localhost:8080)"
             exit 1
           fi
