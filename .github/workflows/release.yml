@@ -280,31 +280,38 @@ jobs:
       - name: Setup kubectl & helm
         uses: azure/setup-helm@v4
 
-      - name: Kubeconfig
+      - name: Kubeconfig (robust write, yaml-or-base64, no rg)
         shell: bash
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.kube"
-
-          tmp="$RUNNER_TEMP/kubeconfig.in"
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
           printf '%s' "$KUBE_CONFIG" > "$tmp"
-          # CRLF 정규화 (Windows 줄바꿈 제거)
-          sed -i 's/\r$//' "$tmp"
-
-          # YAML이면 그대로, 아니면 base64 decode 시도
-          if rg -q '^apiVersion:' "$tmp"; then
+          # Normalize line endings (CRLF from paste/Windows can break kubectl parsing)
+          sed -i 's/\r$//' "$tmp" 2>/dev/null || true
+          # Treat as YAML if we see a kubeconfig key (allow optional leading whitespace and '---' doc header)
+          if grep -qE '^[[:space:]]*(---[[:space:]]*)?(apiVersion:|clusters:|users:|contexts:)' "$tmp"; then
             cp "$tmp" "$HOME/.kube/config"
           else
             base64 -d < "$tmp" > "$HOME/.kube/config" 2>/dev/null || {
-              echo "BLOCK: KUBE_CONFIG is neither kubeconfig YAML nor base64"
+              echo "BLOCK: KUBE_CONFIG is not valid YAML kubeconfig and not valid base64. Use raw kubeconfig content or base64(cat ~/.kube/config)."
               exit 1
             }
           fi
-
-          sed -i 's/\r$//' "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
+          # H1: fail fast if secret was empty (no clusters/users possible)
+          if [ ! -s "$HOME/.kube/config" ]; then
+            echo "BLOCK: KUBE_CONFIG secret is empty or not set. Add a valid kubeconfig in Settings → Secrets and variables → Actions (name: KUBE_CONFIG)."
+            exit 1
+          fi
+          # Fail fast if content is not a kubeconfig (e.g. path, or wrong secret)
+          if ! grep -qE '^[[:space:]]*(---[[:space:]]*)?(apiVersion:|clusters:|users:|contexts:)' "$HOME/.kube/config"; then
+            echo "BLOCK: KUBE_CONFIG does not look like a kubeconfig. Use the full file content from your kubeconfig, not a path. In Settings → Secrets, paste the entire output of e.g. cat ~/.kube/config."
+            exit 1
+          fi
           echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
 
       - name: Kubeconfig normalize (set current-context if missing)
@@ -329,6 +336,13 @@ jobs:
             exit 1
           fi
 
+          # [DEBUG] H4: file existence and size (no content)
+          if [ -f "$CFG" ]; then
+            echo "[DEBUG] config path=$CFG file_size=$(wc -c < "$CFG")"
+          else
+            echo "[DEBUG] config path=$CFG file_missing=1"
+          fi
+
           # current-context가 있으면 그대로 사용
           if kubectl config current-context --kubeconfig "$CFG" >/dev/null 2>&1; then
             echo "OK: current-context already set"
@@ -348,8 +362,16 @@ jobs:
           user="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.users[0].name}' 2>/dev/null || true)"
           echo "[DEBUG] cluster_name_len=${#cluster} user_name_len=${#user}"
 
+          # [DEBUG] H2/H3/H5: view output size; cluster/user lengths; array counts
+          view_len="$(kubectl config view --kubeconfig "$CFG" -o json 2>/dev/null | wc -c || echo 0)"
+          num_clusters="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.clusters[*].name}' 2>/dev/null | wc -w || echo 0)"
+          num_users="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.users[*].name}' 2>/dev/null | wc -w || echo 0)"
+          echo "[DEBUG] cluster_len=${#cluster} user_len=${#user} config_view_output_len=$view_len num_clusters=$num_clusters num_users=$num_users"
+
           if [ -z "$cluster" ] || [ -z "$user" ]; then
-            echo "BLOCK: kubeconfig has clusters/users keys but cannot read first cluster/user name"
+            echo "kubectl config view (first 15 lines; parse errors appear here):"
+            kubectl config view --kubeconfig "$CFG" 2>&1 | head -15 || true
+            echo "BLOCK: kubeconfig missing clusters/users (cannot create context). Paste the full step log (including all [DEBUG] lines and kubectl output above) so we can fix."
             exit 1
           fi
 
