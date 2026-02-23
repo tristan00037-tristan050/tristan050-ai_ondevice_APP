@@ -280,7 +280,7 @@ jobs:
       - name: Setup kubectl & helm
         uses: azure/setup-helm@v4
 
-      - name: Kubeconfig (robust write, yaml-or-base64, no rg)
+      - name: "Kubeconfig (robust write: yaml-or-base64, no rg)"
         shell: bash
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
