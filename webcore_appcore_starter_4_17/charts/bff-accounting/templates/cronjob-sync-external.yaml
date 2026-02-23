@@ -32,7 +32,7 @@ spec:
                 - name: DATABASE_URL
                   valueFrom:
                     secretKeyRef:
-                      name: {{ include "bff-accounting.secretName" . }}
+                      name: {{ include "bff-accounting.fullname" . }}
                       key: DATABASE_URL
 {{- end }}
 
