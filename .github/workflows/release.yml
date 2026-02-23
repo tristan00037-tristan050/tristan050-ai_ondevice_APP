@@ -280,13 +280,18 @@ jobs:
       - name: Setup kubectl & helm
         uses: azure/setup-helm@v4
 
+      - name: "Kubeconfig (robust write: yaml-or-base64, no rg)"
         shell: bash
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.kube"
-
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          printf '%s' "$KUBE_CONFIG" > "$tmp"
+          sed -i 's/\r$//' "$tmp" 2>/dev/null || true
+          if grep -qE '^[[:space:]]*(---[[:space:]]*)?(apiVersion:|clusters:|users:|contexts:)' "$tmp"; then
             cp "$tmp" "$HOME/.kube/config"
           else
             base64 -d < "$tmp" > "$HOME/.kube/config" 2>/dev/null || {
@@ -294,14 +299,11 @@ jobs:
               exit 1
             }
           fi
-
           chmod 600 "$HOME/.kube/config"
-          # H1: fail fast if secret was empty (no clusters/users possible)
           if [ ! -s "$HOME/.kube/config" ]; then
             echo "BLOCK: KUBE_CONFIG secret is empty or not set. Add a valid kubeconfig in Settings → Secrets and variables → Actions (name: KUBE_CONFIG)."
             exit 1
           fi
-          # Fail fast if content is not a kubeconfig (e.g. path, or wrong secret)
           if ! grep -qE '^[[:space:]]*(---[[:space:]]*)?(apiVersion:|clusters:|users:|contexts:)' "$HOME/.kube/config"; then
             echo "BLOCK: KUBE_CONFIG does not look like a kubeconfig. Use the full file content from your kubeconfig, not a path. In Settings → Secrets, paste the entire output of e.g. cat ~/.kube/config."
             exit 1
