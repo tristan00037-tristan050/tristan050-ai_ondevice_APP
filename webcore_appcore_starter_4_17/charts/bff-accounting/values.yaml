@@ -1,3 +1,6 @@
+secret:
+  create: false
+
 image:
   repository: ghcr.io/OWNER/REPO/bff-accounting
   tag: "latest"
