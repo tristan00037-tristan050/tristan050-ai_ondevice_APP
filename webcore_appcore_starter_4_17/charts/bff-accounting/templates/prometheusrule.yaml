@@ -32,6 +32,6 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: "External ledger sync stale (tenant={{ $labels.tenant }}, source={{ $labels.source }})"
+            summary: "External ledger sync stale (tenant={{ "{{ $labels.tenant }}" }}, source={{ "{{ $labels.source }}" }})"
 {{- end }}
 
