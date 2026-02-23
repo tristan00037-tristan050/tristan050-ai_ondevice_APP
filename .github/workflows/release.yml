@@ -42,8 +42,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build workspaces
-        run: npm run build:packages
+      - name: Build workspaces (server only)
+        run: npm run build:packages:server
 
       - name: DB migrate
         env:
@@ -55,6 +55,8 @@ jobs:
 
       - name: Run BFF container
         working-directory: .
+        env:
+          DATABASE_URL: postgres://app:app@host.docker.internal:5432/app
         run: |
           set -euo pipefail
           docker rm -f bff >/dev/null 2>&1 || true
@@ -69,8 +71,7 @@ jobs:
           )"
           echo "$CID"
 
-          # NOTE: onprem 표준(/healthz, /readyz)로 통일.
-          # host.docker.internal on Linux requires host-gateway mapping (already added). :contentReference[oaicite:0]{index=0}
+          # onprem 표준(/healthz, /readyz)로 통일.
           for i in $(seq 1 120); do
             if curl -fsS --max-time 2 "http://127.0.0.1:8081/readyz" >/dev/null 2>&1; then
               echo "OK: /readyz"
@@ -246,13 +247,41 @@ jobs:
           node -e 'const p=require("./docs/ops/reports/autodecision_latest.json"); if(p.decision!=="ok"){console.error("BLOCK: autodecision decision="+p.decision); console.error("reason_codes="+JSON.stringify(p.reason_codes)); process.exit(1)}'
 
   publish-and-deploy:
+    name: publish-and-deploy (self-hosted)
     needs: [build-test-image, gate_mobile, repo-contracts-gate]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
+
+    concurrency:
+      group: release-bff-publish-and-deploy
+      cancel-in-progress: false
+
     defaults:
       run:
         shell: bash
+
     steps:
       - uses: actions/checkout@v4
+
+      - name: Preflight: ensure minikube is up (self-hosted)
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v kubectl >/dev/null 2>&1 || { echo "BLOCK: kubectl not found on self-hosted runner"; exit 1; }
+          if command -v minikube >/dev/null 2>&1; then
+            minikube status || true
+          fi
+          kubectl cluster-info >/dev/null
+          echo "OK: minikube/k8s reachable"
+
+      - name: Use local kubeconfig (no secret)
+        shell: bash
+        run: |
+          set -euo pipefail
+          CFG="$HOME/.kube/config"
+          test -f "$CFG" || { echo "BLOCK: local kubeconfig missing at $CFG"; exit 1; }
+          chmod 600 "$CFG" || true
+          echo "KUBECONFIG=$CFG" >> "$GITHUB_ENV"
+          echo "OK: KUBECONFIG set to local $CFG"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -285,115 +314,10 @@ jobs:
       - name: Setup helm
         uses: azure/setup-helm@v4
 
-      - name: "Kubeconfig (robust write: yaml-or-base64, no content output)"
-        shell: bash
-        env:
-          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.kube"
-          tmp="$(mktemp)"
-          trap 'rm -f "$tmp"' EXIT
-          printf '%s' "$KUBE_CONFIG" > "$tmp"
-          sed -i 's/\r$//' "$tmp" 2>/dev/null || true
-
-          if grep -qE '^[[:space:]]*(---[[:space:]]*)?(apiVersion:|kind:[[:space:]]*Config|clusters:|users:|contexts:)' "$tmp"; then
-            cp "$tmp" "$HOME/.kube/config"
-          else
-            base64 -d < "$tmp" > "$HOME/.kube/config" 2>/dev/null || {
-              echo "BLOCK: KUBE_CONFIG is not valid kubeconfig YAML and not valid base64"
-              exit 1
-            }
-          fi
-          chmod 600 "$HOME/.kube/config"
-          echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
-
-      - name: Kubeconfig normalize (strict, meta-only)
-        shell: bash
-        env:
-          KUBECONFIG: /home/runner/.kube/config
-        run: |
-          set -euo pipefail
-          echo "[DEBUG] release.yml kube-norm version=2026-02-v2"
-          CFG="${KUBECONFIG:-$HOME/.kube/config}"
-          echo "[DEBUG] config path=$CFG"
-
-          if [ ! -f "$CFG" ]; then
-            echo "BLOCK: kubeconfig file missing"
-            exit 1
-          fi
-
-          size_bytes="$(wc -c < "$CFG" | tr -d ' ')"
-          echo "[DEBUG] size_bytes=$size_bytes"
-          if [ "$size_bytes" -lt 200 ]; then
-            echo "BLOCK: kubeconfig too small (likely truncated/invalid)"
-            exit 1
-          fi
-
-          grep -qE '^[[:space:]]*apiVersion:' "$CFG" || { echo "BLOCK: missing apiVersion"; exit 1; }
-          grep -qE '^[[:space:]]*kind:[[:space:]]*Config' "$CFG" || { echo "BLOCK: missing kind: Config"; exit 1; }
-          grep -qE '^[[:space:]]*clusters:' "$CFG" || { echo "BLOCK: missing clusters:"; exit 1; }
-          grep -qE '^[[:space:]]*users:' "$CFG" || { echo "BLOCK: missing users:"; exit 1; }
-
-          view_len="$(kubectl config view --kubeconfig "$CFG" -o json 2>/dev/null | wc -c | tr -d ' ' || echo 0)"
-          num_clusters="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.clusters[*].name}' 2>/dev/null | wc -w | tr -d ' ' || echo 0)"
-          num_users="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.users[*].name}' 2>/dev/null | wc -w | tr -d ' ' || echo 0)"
-          num_contexts="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.contexts[*].name}' 2>/dev/null | wc -w | tr -d ' ' || echo 0)"
-          cc="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.current-context}' 2>/dev/null || true)"
-          echo "[DEBUG] config_view_output_len=$view_len num_clusters=$num_clusters num_users=$num_users num_contexts=$num_contexts current_context_len=${#cc}"
-
-          if [ "$num_clusters" -lt 1 ] || [ "$num_users" -lt 1 ]; then
-            echo "BLOCK: kubeconfig parses but has null/empty clusters or users"
-            exit 1
-          fi
-
-          if [ -n "$cc" ]; then
-            if kubectl config get-contexts -o name --kubeconfig "$CFG" 2>/dev/null | grep -Fxq "$cc"; then
-              echo "OK: current-context already valid (len=${#cc})"
-              exit 0
-            fi
-            echo "BLOCK: current-context set but does not exist in contexts list"
-            exit 1
-          fi
-
-          if [ "$num_contexts" -ge 1 ]; then
-            first_ctx="$(kubectl config get-contexts -o name --kubeconfig "$CFG" 2>/dev/null | head -n1 || true)"
-            [ -n "$first_ctx" ] || { echo "BLOCK: contexts present but cannot read first context"; exit 1; }
-            kubectl config use-context "$first_ctx" --kubeconfig "$CFG" >/dev/null 2>&1
-            echo "OK: set current-context from first context (len=${#first_ctx})"
-            exit 0
-          fi
-
-          cluster="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.clusters[0].name}' 2>/dev/null || true)"
-          user="$(kubectl config view --kubeconfig "$CFG" -o jsonpath='{.users[0].name}' 2>/dev/null || true)"
-          echo "[DEBUG] first_cluster_len=${#cluster} first_user_len=${#user}"
-          [ -n "$cluster" ] && [ -n "$user" ] || { echo "BLOCK: cannot derive cluster/user names to create context"; exit 1; }
-
-          kubectl config set-context ci --cluster="$cluster" --user="$user" --kubeconfig "$CFG" >/dev/null 2>&1
-          kubectl config use-context ci --kubeconfig "$CFG" >/dev/null 2>&1
-          echo "OK: created and set current-context=ci"
-
-      - name: Kubeconfig sanity check (fail-closed, no content)
-        shell: bash
-        env:
-          KUBECONFIG: /home/runner/.kube/config
-        run: |
-          set -euo pipefail
-          server="$(kubectl config view --minify --kubeconfig "$KUBECONFIG" -o jsonpath='{.clusters[0].cluster.server}' 2>/dev/null || true)"
-          echo "cluster.server=${server:-<empty>}"
-          if [ -z "${server}" ] || echo "${server}" | grep -qE '^https?://localhost:8080'; then
-            echo "BLOCK: kubeconfig not loaded (server is empty or localhost:8080)"
-            exit 1
-          fi
-
-          kubectl --request-timeout=5s get --raw='/version' >/dev/null
-          kubectl --request-timeout=5s get --raw='/readyz'  >/dev/null
-
       - name: Helm upgrade
         run: |
           set -euo pipefail
           REPO_LC="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
-
           helm upgrade --install bff webcore_appcore_starter_4_17/charts/bff-accounting \
             --set image.repository="ghcr.io/${REPO_LC}/bff-accounting" \
             --set image.tag="${GITHUB_REF_NAME}" \
