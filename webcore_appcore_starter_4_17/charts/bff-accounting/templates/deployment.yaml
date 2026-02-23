@@ -34,8 +34,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:
-            requests: {{- toYaml .Values.resources.requests | nindent 12 }}
-            limits: {{- toYaml .Values.resources.limits | nindent 12 }}
+            {{- toYaml .Values.resources | nindent 12 }}
           lifecycle:
             preStop:
               exec:
