@@ -15,6 +15,7 @@
   "scripts": {
     "build": "tsc -b",
     "build:packages": "npm run -w @appcore/data-pg build && npm run -w @appcore/service-core-accounting build && npm run -w @appcore/bff-accounting build && npm run -w @appcore/app-expo build",
+    "build:packages:server": "npm run -w @appcore/data-pg build && npm run -w @appcore/service-core-accounting build && npm run -w @appcore/bff-accounting build",
     "typecheck:app": "npm run -w @appcore/app-expo typecheck",
     "ci": "npm run ci --workspaces --if-present",
     "ci:lint": "npm run lint --workspaces --if-present",
