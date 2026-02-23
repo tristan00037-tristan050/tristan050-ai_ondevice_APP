@@ -277,9 +277,10 @@ jobs:
           docker push "${IMAGE}:${TAG}"
           docker push "${IMAGE}:latest"
 
-      - name: Setup kubectl & helm
+            - name: Setup kubectl & helm
         uses: azure/setup-helm@v4
 
+      - name: "Kubeconfig (robust write: yaml-or-base64, no rg)"
         shell: bash
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
@@ -287,25 +288,44 @@ jobs:
           set -euo pipefail
           mkdir -p "$HOME/.kube"
 
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+
+          # 1) secret -> tmp
+          printf '%s' "$KUBE_CONFIG" > "$tmp"
+
+          # 2) CRLF 정규화
+          sed -i 's/\r$//' "$tmp"
+
+          # 3) YAML vs base64 판별(강화)
+          yaml_probe='^[[:space:]]*(---[[:space:]]*)?(apiVersion:|clusters:|users:|contexts:)'
+          if grep -qE "$yaml_probe" "$tmp"; then
             cp "$tmp" "$HOME/.kube/config"
           else
             base64 -d < "$tmp" > "$HOME/.kube/config" 2>/dev/null || {
-              echo "BLOCK: KUBE_CONFIG is not valid YAML kubeconfig and not valid base64. Use raw kubeconfig content or base64(cat ~/.kube/config)."
+              echo "BLOCK: KUBE_CONFIG is not valid kubeconfig YAML and not valid base64."
+              echo "Fix: store full kubeconfig content or base64(cat ~/.kube/config) in the KUBE_CONFIG secret."
               exit 1
             }
           fi
 
+          # 4) 최종 config도 CRLF 정규화
+          sed -i 's/\r$//' "$HOME/.kube/config"
+
           chmod 600 "$HOME/.kube/config"
-          # H1: fail fast if secret was empty (no clusters/users possible)
+
+          # 5) fail-closed: 빈 값 차단
           if [ ! -s "$HOME/.kube/config" ]; then
-            echo "BLOCK: KUBE_CONFIG secret is empty or not set. Add a valid kubeconfig in Settings → Secrets and variables → Actions (name: KUBE_CONFIG)."
+            echo "BLOCK: KUBE_CONFIG secret is empty or not set."
             exit 1
           fi
-          # Fail fast if content is not a kubeconfig (e.g. path, or wrong secret)
-          if ! grep -qE '^[[:space:]]*(---[[:space:]]*)?(apiVersion:|clusters:|users:|contexts:)' "$HOME/.kube/config"; then
-            echo "BLOCK: KUBE_CONFIG does not look like a kubeconfig. Use the full file content from your kubeconfig, not a path. In Settings → Secrets, paste the entire output of e.g. cat ~/.kube/config."
+
+          # 6) fail-closed: kubeconfig 키 존재 확인
+          if ! grep -qE "$yaml_probe" "$HOME/.kube/config"; then
+            echo "BLOCK: KUBE_CONFIG does not look like a kubeconfig (missing apiVersion/clusters/users/contexts)."
             exit 1
           fi
+
           echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
 
       - name: Kubeconfig normalize (set current-context if missing)
