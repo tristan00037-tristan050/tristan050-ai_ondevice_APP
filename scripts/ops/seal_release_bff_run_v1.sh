@@ -29,6 +29,23 @@ if [[ -z "$RELEASE_TAG" ]] || [[ -z "$RUN_URL" ]] || [[ -z "$HEAD_SHA" ]]; then
   exit 1
 fi
 
+# Fail-closed: placeholder inputs must never be recorded as success
+is_placeholder() {
+  local v="$1"
+  [[ "$v" =~ [Pp][Ll][Aa][Cc][Ee][Hh][Oo][Ll][Dd][Ee][Rr] ]] && return 0
+  [[ "$v" =~ [Xx]{6,} ]] && return 0
+  [[ "$v" =~ \*.*\* ]] && return 0
+  [[ "$v" =~ ^[0-9]+$ ]] && [[ ${#v} -lt 8 ]] && return 0
+  return 1
+}
+if is_placeholder "$RELEASE_TAG" || is_placeholder "$RUN_URL" || is_placeholder "$HEAD_SHA"; then
+  RELEASE_BFF_RESULT="pending"
+  RELEASE_BFF_REASON_CODE="unsealed_placeholder"
+fi
+if [[ "$RELEASE_BFF_RESULT" = "success" ]] && [[ "$RELEASE_BFF_REASON_CODE" = "unsealed_placeholder" ]]; then
+  RELEASE_BFF_RESULT="pending"
+fi
+
 # YYYY-MM-DD from today (or env)
 SEAL_DATE="${SEAL_DATE:-$(date -u +%Y-%m-%d 2>/dev/null || date +%Y-%m-%d)}"
 REPORT_DIR="$REPO_ROOT/docs/DEPLOY_RUNS"
@@ -52,6 +69,10 @@ mkdir -p "$REPORT_DIR"
   echo "<!-- meta-only, sealed by seal_release_bff_run_v1.sh -->"
 } > "$REPORT_FILE"
 
-release_bff_seal_exit_code=0
+if [[ "$RELEASE_BFF_RESULT" = "pending" ]] && [[ "$RELEASE_BFF_REASON_CODE" = "unsealed_placeholder" ]]; then
+  release_bff_seal_exit_code=1
+else
+  release_bff_seal_exit_code=0
+fi
 emit
-exit 0
+exit $release_bff_seal_exit_code
