@@ -15,6 +15,8 @@ probe_chart_liveness_path=""
 probe_ci_wait_path=""
 probe_app_health_path=""
 probe_app_ready_path=""
+probe_app_health_route_declared=0
+probe_app_ready_route_declared=0
 probes_ssot_fail_class="unknown"
 probes_ssot_fail_hint=""
 
@@ -28,6 +30,8 @@ cleanup() {
   echo "probe_ci_wait_path=${probe_ci_wait_path}"
   echo "probe_app_health_path=${probe_app_health_path}"
   echo "probe_app_ready_path=${probe_app_ready_path}"
+  echo "probe_app_health_route_declared=${probe_app_health_route_declared}"
+  echo "probe_app_ready_route_declared=${probe_app_ready_route_declared}"
   if [[ "$PROBES_SSOT_V1_OK" != "1" ]]; then
     echo "probes_ssot_fail_class=${probes_ssot_fail_class}"
     echo "probes_ssot_fail_hint=${probes_ssot_fail_hint}"
@@ -70,15 +74,22 @@ if [[ "$probe_chart_readiness_path" != "${probes_ssot_ready_path}" ]] || [[ "$pr
   exit 1
 fi
 
-# App: must define /healthz and /readyz
-if ! grep -q '"/healthz"' "$APP_INDEX" && ! grep -q "'/healthz'" "$APP_INDEX"; then
+# App: must declare route (app.get/router.get or app.route().get), not redirect target string
+# Match .get("/path" or .get('/path' so redirect(308, "/healthz") does not match
+if grep -qE '(app|router)\.get\("/healthz"' "$APP_INDEX" || grep -qE "(app|router)\\.get\\('/healthz'" "$APP_INDEX" || grep -qE 'app\.route\(["\x27]/healthz["\x27]\)\.get\(' "$APP_INDEX"; then
+  probe_app_health_route_declared=1
+fi
+if grep -qE '(app|router)\.get\("/readyz"' "$APP_INDEX" || grep -qE "(app|router)\\.get\\('/readyz'" "$APP_INDEX" || grep -qE 'app\.route\(["\x27]/readyz["\x27]\)\.get\(' "$APP_INDEX"; then
+  probe_app_ready_route_declared=1
+fi
+if [[ "$probe_app_health_route_declared" != "1" ]]; then
   probes_ssot_fail_class="app_missing_route"
-  probes_ssot_fail_hint="app must define GET /healthz in ${APP_INDEX}"
+  probes_ssot_fail_hint="app must declare GET /healthz (app.get or router.get or app.route) in ${APP_INDEX}"
   exit 1
 fi
-if ! grep -q '"/readyz"' "$APP_INDEX" && ! grep -q "'/readyz'" "$APP_INDEX"; then
+if [[ "$probe_app_ready_route_declared" != "1" ]]; then
   probes_ssot_fail_class="app_missing_route"
-  probes_ssot_fail_hint="app must define GET /readyz in ${APP_INDEX}"
+  probes_ssot_fail_hint="app must declare GET /readyz (app.get or router.get or app.route) in ${APP_INDEX}"
   exit 1
 fi
 probe_app_health_path="${probes_ssot_health_path}"
