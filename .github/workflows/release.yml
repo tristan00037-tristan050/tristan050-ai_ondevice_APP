@@ -49,6 +49,10 @@ jobs:
         working-directory: .
         env:
           BFF_IMAGE: bff-accounting:release
+          READY_WAIT_URL: "http://127.0.0.1:8081/readyz"
+          READY_WAIT_CONTAINER_NAME: "bff"
+          READY_WAIT_TIMEOUT_SEC: "30"
+          READY_WAIT_INTERVAL_SEC: "2"
         run: |
           set -euo pipefail
           bash scripts/ops/docker_it_net_db_svcname_v1.sh
