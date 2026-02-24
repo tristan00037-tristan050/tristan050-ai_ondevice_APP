@@ -72,7 +72,7 @@ jobs:
           )"
           echo "$CID"
 
-          # onprem 표준(/healthz, /readyz)로 통일.
+          # PR-P0-DEPLOY-01: probe SSOT /healthz, /readyz only
           for i in $(seq 1 120); do
             if curl -fsS --max-time 2 "http://127.0.0.1:8081/readyz" >/dev/null 2>&1; then
               echo "OK: /readyz"

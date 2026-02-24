@@ -138,10 +138,9 @@ if (isDev) {
   );
 }
 
-// 2) Health Check 엔드포인트 (인증 불필요, osPolicyBridge 이전에 정의)
-app.get("/health", (_req, res) =>
-  res.json({ status: "ok", service: "bff-accounting" })
-);
+// PR-P0-DEPLOY-01: SSOT probe paths /healthz, /readyz only. Legacy aliases redirect.
+app.get("/health", (_req, res) => res.redirect(308, "/healthz"));
+app.get("/ready", (_req, res) => res.redirect(308, "/readyz"));
 
 // ✅ S6-S7: healthz에 build anchor 추가 (JSON + 헤더 동시 제공)
 // ⚠️ 하드 룰: 빌드 타임 고정만 허용 (런타임 git 계산 금지)
@@ -164,25 +163,7 @@ app.get("/healthz", (_req, res) => {
   });
 });
 
-// k8s/런타임 준비상태 확인용 간단 엔드포인트
-// /ready 강화: USE_PG=1 이면 PG 핑까지 검사
-app.get("/ready", async (_req, res) => {
-  if (process.env.USE_PG === "1") {
-    try {
-      const ok = await Promise.race([
-        pgPing(),
-        new Promise<boolean>((_, rej) =>
-          setTimeout(() => rej(new Error("pg_timeout")), 800)
-        ),
-      ]);
-      if (!ok) return res.status(503).send("pg_not_ready");
-    } catch {
-      return res.status(503).send("pg_not_ready");
-    }
-  }
-  res.status(200).send("ok");
-});
-
+// k8s/런타임 준비상태 확인용 (PR-P0-DEPLOY-01: SSOT /readyz; /ready -> redirect above)
 app.get("/readyz", async (_req, res) => {
   try {
     // DB 연결 체크
