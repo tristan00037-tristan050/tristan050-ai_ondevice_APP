@@ -293,7 +293,8 @@ jobs:
 
           if ! kubectl config get-contexts -o name --kubeconfig "$KUBECONFIG" 2>/dev/null | grep -Fxq "minikube"; then
             echo "BLOCK: kubeconfig has no 'minikube' context. Refusing to deploy."
-            echo "debug: contexts=$(kubectl config get-contexts -o name --kubeconfig "$KUBECONFIG" | tr '\n' ' ' || true)"
+            contexts="$(kubectl config get-contexts -o name --kubeconfig "$KUBECONFIG" 2>/dev/null | tr '\n' ' ' || true)"
+            echo "debug: contexts=${contexts}"
             exit 1
           fi
 
@@ -340,22 +341,25 @@ jobs:
       - name: Setup helm
         uses: azure/setup-helm@v4
 
+      # apply -> require -> helm (fail-closed)
       - name: "Preflight: apply bff-accounting secret (fail-closed)"
         shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          EXPORT_SIGN_SECRET: ${{ secrets.EXPORT_SIGN_SECRET }}
         run: |
           set -euo pipefail
           ns=default
           name="bff-accounting"
 
-          : "${{ secrets.DATABASE_URL:?missing secrets.DATABASE_URL }}"
-          : "${{ secrets.EXPORT_SIGN_SECRET:?missing secrets.EXPORT_SIGN_SECRET }}"
+          : "${DATABASE_URL:?missing secrets.DATABASE_URL}"
+          : "${EXPORT_SIGN_SECRET:?missing secrets.EXPORT_SIGN_SECRET}"
 
           kubectl -n "$ns" create secret generic "$name" \
-            --from-literal=DATABASE_URL='${{ secrets.DATABASE_URL }}' \
-            --from-literal=EXPORT_SIGN_SECRET='${{ secrets.EXPORT_SIGN_SECRET }}' \
+            --from-literal=DATABASE_URL="$DATABASE_URL" \
+            --from-literal=EXPORT_SIGN_SECRET="$EXPORT_SIGN_SECRET" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-          # 키 존재 재확인(빈 값이면 즉시 BLOCK)
           kubectl -n "$ns" get secret "$name" -o jsonpath='{.data.DATABASE_URL}' | grep -q .
           kubectl -n "$ns" get secret "$name" -o jsonpath='{.data.EXPORT_SIGN_SECRET}' | grep -q .
           echo "OK: secret $ns/$name applied and keys present"
