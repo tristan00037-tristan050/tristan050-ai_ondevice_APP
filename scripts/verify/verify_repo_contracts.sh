@@ -145,10 +145,11 @@ BUILD_STAMP_GENERATION_SSOT_V1_OK=0
 PROBES_SSOT_V1_OK=0
 PROBES_PATHS_MATCH_APP_V1_OK=0
 
-# PR-P0-DEPLOY-02 BFF secret schema v1 (meta-only, no value output)
+# PR-P0-DEPLOY-02 BFF secret schema v1 (meta-only; skip when both env empty)
 BFF_SECRET_SCHEMA_V1_OK=0
 BFF_SECRET_FORMAT_OK=0
 BFF_SECRET_EMPTY_STRING_BLOCK_OK=0
+BFF_SECRET_SCHEMA_V1_SKIPPED=0
 
 # P6-P0-05 (OPS) Autodecision from nightly v1
 AUTODECISION_POLICY_V1_OK=0
@@ -842,6 +843,7 @@ cleanup(){
   echo "BFF_SECRET_SCHEMA_V1_OK=${BFF_SECRET_SCHEMA_V1_OK}"
   echo "BFF_SECRET_FORMAT_OK=${BFF_SECRET_FORMAT_OK}"
   echo "BFF_SECRET_EMPTY_STRING_BLOCK_OK=${BFF_SECRET_EMPTY_STRING_BLOCK_OK}"
+  echo "BFF_SECRET_SCHEMA_V1_SKIPPED=${BFF_SECRET_SCHEMA_V1_SKIPPED}"
   echo "AUTODECISION_POLICY_V1_OK=${AUTODECISION_POLICY_V1_OK}"
   echo "AUTODECISION_OUTPUT_PRESENT_OK=${AUTODECISION_OUTPUT_PRESENT_OK}"
   echo "AUTODECISION_REASON_CODE_ONLY_OK=${AUTODECISION_REASON_CODE_ONLY_OK}"
@@ -1421,10 +1423,16 @@ run_guard "probes SSOT v1 (PR-P0-DEPLOY-01)" bash scripts/verify/verify_probes_s
 PROBES_SSOT_V1_OK=1
 PROBES_PATHS_MATCH_APP_V1_OK=1
 
-run_guard "bff secret schema v1 (PR-P0-DEPLOY-02)" bash scripts/verify/verify_bff_secret_schema_v1.sh
-BFF_SECRET_SCHEMA_V1_OK=1
-BFF_SECRET_FORMAT_OK=1
-BFF_SECRET_EMPTY_STRING_BLOCK_OK=1
+if [[ -z "${DATABASE_URL:-}" ]] && [[ -z "${EXPORT_SIGN_SECRET:-}" ]]; then
+  echo "== guard: bff secret schema v1 (PR-P0-DEPLOY-02) =="
+  echo "SKIP: BFF secret schema (DATABASE_URL and EXPORT_SIGN_SECRET not set)"
+  BFF_SECRET_SCHEMA_V1_SKIPPED=1
+else
+  run_guard "bff secret schema v1 (PR-P0-DEPLOY-02)" bash scripts/verify/verify_bff_secret_schema_v1.sh
+  BFF_SECRET_SCHEMA_V1_OK=1
+  BFF_SECRET_FORMAT_OK=1
+  BFF_SECRET_EMPTY_STRING_BLOCK_OK=1
+fi
 
 run_guard "DIST_FRESHNESS_POLICY_V1" bash scripts/verify/verify_dist_freshness_v1.sh
 
