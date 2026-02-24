@@ -18,20 +18,6 @@ jobs:
       run:
         shell: bash
         working-directory: webcore_appcore_starter_4_17
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: app
-          POSTGRES_PASSWORD: app
-          POSTGRES_DB: app
-        ports:
-          - "5432:5432"
-        options: >-
-          --health-cmd="pg_isready -U app -d app"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
     steps:
       - uses: actions/checkout@v4
 
@@ -46,51 +32,26 @@ jobs:
       - name: Build workspaces (server only)
         run: npm run build:packages:server
 
+      # PR-P0-DEPLOY-03: it-net-v1 + postgres16 (no host.docker.internal)
+      - name: Start Postgres (it-net-v1)
+        working-directory: .
+        run: bash scripts/ops/docker_it_net_db_svcname_v1.sh
+
       - name: DB migrate
         env:
-          DATABASE_URL: postgres://app:app@localhost:5432/app
+          DATABASE_URL: postgres://u:p@localhost:5432/app
         run: npm run db:migrate
 
       - name: Build Docker image
         run: docker build --build-arg GIT_SHA="${{ github.sha }}" -f Dockerfile.bff -t bff-accounting:release .
 
-      - name: Run BFF container
+      - name: Run BFF container (it-net, host=postgres16)
         working-directory: .
         env:
-          DATABASE_URL: postgres://app:app@host.docker.internal:5432/app
+          BFF_IMAGE: bff-accounting:release
         run: |
           set -euo pipefail
-          docker rm -f bff >/dev/null 2>&1 || true
-
-          CID="$(docker run -d --name bff -p 8081:8081 \
-            --add-host=host.docker.internal:host-gateway \
-            -e PORT=8081 \
-            -e USE_PG=1 \
-            -e DATABASE_URL="postgres://app:app@host.docker.internal:5432/app" \
-            -e EXPORT_SIGN_SECRET="ci-secret" \
-            bff-accounting:release
-          )"
-          echo "$CID"
-
-          # PR-P0-DEPLOY-01: probe SSOT /healthz, /readyz only
-          for i in $(seq 1 120); do
-            if curl -fsS --max-time 2 "http://127.0.0.1:8081/readyz" >/dev/null 2>&1; then
-              echo "OK: /readyz"
-              break
-            fi
-            sleep 0.5
-            if [ "$i" -eq 120 ]; then
-              echo "BLOCK: bff did not become ready"
-              echo "== docker ps =="
-              docker ps -a || true
-              echo "== docker inspect bff =="
-              docker inspect bff || true
-              echo "== docker logs bff (tail 200) =="
-              docker logs --tail=200 bff || true
-              exit 1
-            fi
-          done
-
+          bash scripts/ops/docker_it_net_db_svcname_v1.sh
           curl -s -o /dev/null -w "HEALTHZ=%{http_code}\n" --max-time 3 "http://127.0.0.1:8081/healthz" || true
           curl -s -o /dev/null -w "READYZ=%{http_code}\n"  --max-time 3 "http://127.0.0.1:8081/readyz" || true
 
