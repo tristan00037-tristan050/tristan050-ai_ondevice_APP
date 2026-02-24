@@ -61,7 +61,7 @@ adapters:
 
 cronJobs:
   syncExternal:
-    enabled: true
+    enabled: false
     schedule: "*/5 * * * *"   # 5분마다
     sinceDays: 7
 
