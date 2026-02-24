@@ -56,8 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/ops/docker_it_net_db_svcname_v1.sh
-          curl -s -o /dev/null -w "HEALTHZ=%{http_code}\n" --max-time 3 "http://127.0.0.1:8081/healthz" || true
-          curl -s -o /dev/null -w "READYZ=%{http_code}\n"  --max-time 3 "http://127.0.0.1:8081/readyz" || true
+          bash scripts/ops/ready_wait_reason_code_v1.sh
 
       - name: E2E smoke against container
         env:
