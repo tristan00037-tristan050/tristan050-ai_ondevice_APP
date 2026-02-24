@@ -66,6 +66,13 @@ if ! echo "$db_trim" | grep -qE '://[^/?#]+'; then
   exit 1
 fi
 
+# DATABASE_URL: port required (e.g. :5432)
+if ! echo "$db_trim" | grep -qE ':[0-9]{1,5}(/|$|\?|#)'; then
+  bff_secret_fail_class="port_missing"
+  bff_secret_fail_hint="DATABASE_URL must include port (e.g. :5432)"
+  exit 1
+fi
+
 # EXPORT_SIGN_SECRET: length >= 16 (no value output)
 sign_len="${#sign_trim}"
 if [[ "$sign_len" -lt 16 ]]; then
