@@ -47,6 +47,10 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
 
+      - name: "Generate build stamp SSOT v1 (pre-verify)"
+        run: |
+          bash scripts/ops/gen_build_stamp_v1.sh
+
       - name: Run repo-wide guards (fail-closed)
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
