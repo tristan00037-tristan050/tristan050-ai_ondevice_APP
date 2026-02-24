@@ -55,6 +55,9 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
           ONPREM_PROOF_STRICT_ENFORCE: "0"
+          # PR-P0-DEPLOY-02B: BFF secret schema v1 guard (dummy only; no real secrets, no value output)
+          DATABASE_URL: "postgres://u:p@localhost:5432/app"
+          EXPORT_SIGN_SECRET: "ci_format_check_only_16ch"
         run: |
           bash scripts/verify/verify_repo_contracts.sh
 
