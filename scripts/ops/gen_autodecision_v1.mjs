@@ -1,7 +1,18 @@
 import fs from "node:fs";
+import path from "node:path";
 
-function readJson(path) {
-  return JSON.parse(fs.readFileSync(path, "utf8"));
+function loadRequiredKeysSSOT() {
+  const ssotPath = path.resolve("docs/ops/contracts/AUTODECISION_REQUIRED_KEYS_V1.txt");
+  const raw = fs.readFileSync(ssotPath, "utf8");
+  const keys = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith("#"));
+  return new Set(keys);
+}
+
+function readJson(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
 function collectKeys(obj) {
@@ -42,19 +53,35 @@ function main() {
     ignoredFailKeys.add("ONPREM_REAL_WORLD_PROOF_FORMAT_OK");
   }
 
-  const fails = [];
+  const requiredKeys = loadRequiredKeysSSOT();
+
+  // ignoredCount: keySet 중 requiredKeys 밖(기존 의미 유지)
+  let ignoredCount = 0;
   for (const k of keySet) {
+    if (!requiredKeys.has(k)) ignoredCount++;
+  }
+
+  // required 중심 평가: requiredKeys 전체를 반드시 검사
+  const fails = [];
+  let missingRequiredCount = 0;
+
+  for (const k of requiredKeys) {
     const rv = repoKeys[k];
     const av = aiKeys[k];
 
-    // *_SKIPPED 키는 평가 대상에서 제외 (상태 키로 인한 착시 block 방지)
-    if (k.endsWith("_SKIPPED")) continue;
+    // presence: required 키가 두 입력 모두에 없으면 실패 (키 이름 그대로 reason_codes)
+    const absent = (v) => v === undefined || v === null || v === "";
+    if (absent(rv) && absent(av)) {
+      missingRequiredCount++;
+      fails.push(k);
+      continue;
+    }
+
     if (ignoredFailKeys.has(k)) continue;
 
     // 정책: "입력들 중 하나라도 non-1이면 block"
     const repoFail = (rv !== undefined) && (String(rv) !== "1");
-    const aiFail   = (av !== undefined) && (String(av) !== "1");
-
+    const aiFail = (av !== undefined) && (String(av) !== "1");
     if (repoFail || aiFail) fails.push(k);
   }
   fails.sort();
@@ -69,6 +96,11 @@ function main() {
     ts_utc,
     decision,
     reason_codes,
+    autodecision_decision: decision,
+    autodecision_reason_codes: reason_codes,
+    autodecision_required_keys_count: requiredKeys.size,
+    autodecision_ignored_keys_count: ignoredCount,
+    autodecision_missing_required_keys_count: missingRequiredCount,
     inputs: {
       repo_contracts_latest_json: repoPath,
       ai_smoke_latest_json: aiPath

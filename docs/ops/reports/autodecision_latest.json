@@ -1,0 +1,1 @@
+{"schema":"autodecision_v1","ts_utc":"2026-02-25T02:00:56Z","decision":"ok","reason_codes":[],"autodecision_decision":"ok","autodecision_reason_codes":[],"autodecision_required_keys_count":6,"autodecision_ignored_keys_count":226,"inputs":{"repo_contracts_latest_json":"docs/ops/reports/repo_contracts_latest.json","ai_smoke_latest_json":"docs/ops/reports/ai_smoke_latest.json"}}
