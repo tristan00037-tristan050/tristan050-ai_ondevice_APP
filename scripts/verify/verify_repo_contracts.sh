@@ -1429,10 +1429,24 @@ run_guard "probes SSOT v1 (PR-P0-DEPLOY-01)" bash scripts/verify/verify_probes_s
 PROBES_SSOT_V1_OK=1
 PROBES_PATHS_MATCH_APP_V1_OK=1
 
-echo "== guard: docker it-net db svcname v1 (PR-P0-DEPLOY-03) =="
-run_guard "docker it-net db svcname v1" bash scripts/verify/verify_docker_it_net_db_svcname_v1.sh
-DOCKER_IT_NET_DB_SVCNAME_V1_OK=1
+# 1) 정적 가드: Docker 유무와 무관하게 항상 실행
+echo "== guard: host.docker.internal forbidden scan v1 =="
+run_guard "host docker internal forbidden v1" bash scripts/verify/verify_host_docker_internal_forbidden_v1.sh
 HOST_DOCKER_INTERNAL_FORBIDDEN_OK=1
+
+# 2) Docker 의존 가드: Docker 가능할 때만 실행
+echo "== guard: docker it-net db svcname v1 (PR-P0-DEPLOY-03) =="
+docker_ok=0
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  docker_ok=1
+fi
+
+if [ "$docker_ok" -eq 1 ]; then
+  run_guard "docker it-net db svcname v1" bash scripts/verify/verify_docker_it_net_db_svcname_v1.sh
+  DOCKER_IT_NET_DB_SVCNAME_V1_OK=1
+else
+  echo "== guard: docker unavailable -> skip docker it-net verify (emit DOCKER_IT_NET_DB_SVCNAME_V1_OK=0) =="
+fi
 
 if [[ -z "${DATABASE_URL:-}" ]] && [[ -z "${EXPORT_SIGN_SECRET:-}" ]]; then
   echo "== guard: bff secret schema v1 (PR-P0-DEPLOY-02) =="
