@@ -24,7 +24,7 @@ trap 'rm -f "$TMP_LOG"' EXIT
 # P6-P1-03B: preflight 먼저 실행하여 dist stamp = HEAD 보장 (DIST_FRESHNESS 통과 → energy 등 후속 가드 실행). fail-closed(|| true 없음).
 bash tools/preflight_v1.sh >/dev/null 2>&1
 
-# verify 실행 (stdout/stderr 모두 캡처). 실패 시 로그 출력 후 종료(fail-closed)
+# verify 실행 (stdout/stderr 모두 캡처). rc 반드시 수신, rc!=0이면 즉시 종료(쓰기/아카이브 없음). PR-P0-06 fail-closed.
 RC=0
 bash scripts/verify/verify_repo_contracts.sh >"$TMP_LOG" 2>&1 || RC=$?
 
@@ -38,7 +38,7 @@ if [ "$RC" -ne 0 ]; then
   exit "$RC"
 fi
 
-# KEY=VALUE 라인만 추출(중복 키는 마지막 값을 채택)
+# rc==0일 때만 아래: KEY 추출 → json/md write → archive
 PYTHON_BIN="python3"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || PYTHON_BIN="python"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || { echo "BLOCK: python3/python not found"; exit 1; }
@@ -59,9 +59,8 @@ with open(log_path, "r", encoding="utf-8", errors="replace") as f:
 
 # overall status (meta-only)
 exit_code = 0 if kv.get("REPO_CONTRACTS_HYGIENE_OK") == "1" else 1
-# 실제 EXIT=0을 엄밀히 기록하려면 verify 종료코드를 받아야 하나,
-# 이 스크립트는 '키 기반 상태'만 저장한다(원문/로그 전문 0).
-# repo guards 최종 상태는 caller가 EXIT를 확인하면 된다.
+# PR-P0-06: 이 블록은 rc==0일 때만 실행되므로, 성공 시 report.keys에 fail-closed 증명 키 추가.
+kv["REPO_GUARD_REPORT_FAILCLOSED_OK"] = "1"
 
 report = {
     "schema": "repo_contracts_report_v1",
