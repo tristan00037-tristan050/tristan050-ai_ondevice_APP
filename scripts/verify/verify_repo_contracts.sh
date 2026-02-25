@@ -469,6 +469,7 @@ ONPREM_DELIVERED_KEYSET_PRESENT_OK=0
 ONPREM_DELIVERED_KEYSET_GUARD_OK=0
 
 cleanup(){
+  echo "DOD_KV_BLOCK_BEGIN=1"
   # P0-01: Emit debug keys first so gen_repo_guard_report_v1.sh grep always finds them in TMP_LOG
   echo "REPO_CONTRACTS_FAILED_GUARD=${CURRENT_GUARD}"
   echo "REPO_GUARD_KEYS_ONLY_MODE_OK=${REPO_GUARD_KEYS_ONLY_MODE_OK}"
@@ -879,7 +880,7 @@ cleanup(){
   echo "RELEASE_GATE_POLICY_V1_OK=${RELEASE_GATE_POLICY_V1_OK}"
   echo "RELEASE_GATE_WIRING_V1_OK=${RELEASE_GATE_WIRING_V1_OK}"
   echo "RELEASE_BLOCKED_WITHOUT_GATES_OK=${RELEASE_BLOCKED_WITHOUT_GATES_OK}"
-
+  echo "DOD_KV_BLOCK_END=1"
 }
 # EXIT: on non-zero exit emit failed guard once then cleanup; success(0) emits nothing extra
 trap 'rc=$?; if [ "$rc" -ne 0 ]; then emit_failed_guard_once; fi; cleanup' EXIT
