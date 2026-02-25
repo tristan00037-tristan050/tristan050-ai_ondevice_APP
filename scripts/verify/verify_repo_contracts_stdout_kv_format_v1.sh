@@ -14,41 +14,77 @@ trap 'rm -f "$tmp_out"' EXIT
 # Run producer; capture stdout (and stderr so we see guard output). We only validate the captured stdout.
 bash scripts/verify/verify_repo_contracts.sh >"$tmp_out" 2>&1 || true
 
-# Extract only between DOD_KV_BLOCK_BEGIN=1 and DOD_KV_BLOCK_END=1 (inclusive lines optional; we take inner lines)
-block=""
+# DoD block marker tokens (verify_repo_contracts.sh cleanup에서 이미 출력)
+BEGIN_MARKER='DOD_KV_BLOCK_BEGIN=1'
+END_MARKER='DOD_KV_BLOCK_END=1'
+
+# DoD KV must be strictly KEY=0/1
+kv_re='^[A-Z0-9_]+=[01]$'
+
+all_ok=1
+error_code=""
+error_key=""
+
+begin_count=0
+end_count=0
 in_block=0
+saw_any_kv=0
+
+declare -A seen_keys=()
+
+# tmp_out: verify_repo_contracts.sh stdout 캡처 파일
 while IFS= read -r line; do
-  if [[ "$line" =~ ^DOD_KV_BLOCK_BEGIN=1 ]]; then
+  # 빈 줄은 무시(원문0 유지)
+  [[ -z "$line" ]] && continue
+
+  # marker handling
+  if [[ "$line" == "$BEGIN_MARKER" ]]; then
+    begin_count=$((begin_count+1))
+    if [[ $begin_count -gt 1 ]]; then all_ok=0; error_code="BEGIN_DUP"; break; fi
+    if [[ $end_count -gt 0 ]]; then all_ok=0; error_code="BEGIN_AFTER_END"; break; fi
     in_block=1
     continue
   fi
-  if [[ "$line" =~ ^DOD_KV_BLOCK_END=1 ]]; then
+  if [[ "$line" == "$END_MARKER" ]]; then
+    end_count=$((end_count+1))
+    if [[ $begin_count -eq 0 ]]; then all_ok=0; error_code="END_BEFORE_BEGIN"; break; fi
+    if [[ $end_count -gt 1 ]]; then all_ok=0; error_code="END_DUP"; break; fi
     in_block=0
     continue
   fi
-  [[ "$in_block" -eq 1 ]] && block="${block}${line}"$'\n'
+
+  # only validate lines inside DoD block
+  if [[ $in_block -eq 1 ]]; then
+    if [[ ! "$line" =~ $kv_re ]]; then
+      all_ok=0; error_code="KV_SHAPE_INVALID"; break
+    fi
+    saw_any_kv=1
+
+    key="${line%%=*}"
+    if [[ -n "${seen_keys[$key]+x}" ]]; then
+      all_ok=0; error_code="DUP_KEY"; error_key="$key"; break
+    fi
+    seen_keys[$key]=1
+  fi
 done < "$tmp_out"
 
-# Contract: block non-empty and every line matches KEY=VALUE (key: uppercase/numbers/underscore, value: rest)
-if [[ -z "${block//[$'\n']/}" ]]; then
+# post conditions: must have exactly one BEGIN and one END, properly closed, and at least one KV
+if [[ $all_ok -eq 1 ]]; then
+  if [[ $begin_count -ne 1 || $end_count -ne 1 ]]; then
+    all_ok=0; error_code="MARKERS_MISSING"
+  elif [[ $in_block -ne 0 ]]; then
+    all_ok=0; error_code="BLOCK_NOT_CLOSED"
+  elif [[ $saw_any_kv -ne 1 ]]; then
+    all_ok=0; error_code="EMPTY_BLOCK"
+  fi
+fi
+
+if [[ $all_ok -eq 1 ]]; then
+  echo "REPO_CONTRACTS_STDOUT_KV_FORMAT_OK=1"
+  exit 0
+else
   echo "REPO_CONTRACTS_STDOUT_KV_FORMAT_OK=0"
+  [[ -n "$error_code" ]] && echo "ERROR_CODE=$error_code"
+  [[ -n "$error_key" ]] && echo "ERROR_KEY=$error_key"
   exit 1
 fi
-
-kv_re='^[A-Z0-9_]+=.*$'
-all_ok=1
-while IFS= read -r line; do
-  [[ -z "$line" ]] && continue
-  if [[ ! "$line" =~ $kv_re ]]; then
-    all_ok=0
-    break
-  fi
-done <<< "$block"
-
-if [[ "$all_ok" -eq 1 ]]; then
-  REPO_CONTRACTS_STDOUT_KV_FORMAT_OK=1
-fi
-
-echo "REPO_CONTRACTS_STDOUT_KV_FORMAT_OK=${REPO_CONTRACTS_STDOUT_KV_FORMAT_OK}"
-[[ "$REPO_CONTRACTS_STDOUT_KV_FORMAT_OK" -eq 1 ]] && exit 0
-exit 1
