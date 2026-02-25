@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DOCKER_HOST: unix:///var/run/does-not-exist.sock
+      REPO_GUARD_KEYS_ONLY: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,7 +27,11 @@ jobs:
 
       - name: Confirm Docker inaccessible (no output)
         run: |
-          docker info >/dev/null 2>&1 && exit 1 || true
+          if docker info >/dev/null 2>&1; then
+            echo "BLOCK: docker daemon is accessible but dockerless proof expects it to be inaccessible"
+            exit 1
+          fi
+          echo "OK: docker daemon is inaccessible (as expected)"
 
       - name: Preflight (single source)
         uses: ./.github/actions/preflight_v1
@@ -37,7 +42,16 @@ jobs:
           set -euo pipefail
           bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg --require-jq || true
 
-      - name: Generate repo guard report (dockerless)
+      - name: Debug - show sha and keys-only markers
+        run: |
+          git rev-parse HEAD
+          grep -n "REPO_GUARD_KEYS_ONLY_MODE_OK" scripts/verify/verify_repo_contracts.sh || true
+          grep -n "REPO_CONTRACTS_FAILED_GUARD" scripts/verify/verify_repo_contracts.sh || true
+
+      - name: Generate repo guard report (dockerless, keys-only)
+        env:
+          DOCKER_HOST: unix:///var/run/does-not-exist.sock
+          REPO_GUARD_KEYS_ONLY: "1"
         run: |
           set -euo pipefail
           bash scripts/ops/gen_repo_guard_report_v1.sh
