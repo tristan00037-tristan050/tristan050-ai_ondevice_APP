@@ -26,6 +26,8 @@ jobs:
           node-version: "20"
 
       - name: Confirm Docker inaccessible (no output)
+        env:
+          DOCKER_HOST: unix:///var/run/does-not-exist.sock
         run: |
           if docker info >/dev/null 2>&1; then
             echo "BLOCK: docker daemon is accessible but dockerless proof expects it to be inaccessible"
