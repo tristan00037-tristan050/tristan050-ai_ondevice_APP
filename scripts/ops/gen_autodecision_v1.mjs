@@ -35,11 +35,12 @@ function main() {
   // 모든 키 집합(충돌 포함)
   const keySet = new Set([...Object.keys(repoKeys), ...Object.keys(aiKeys)]);
 
-  // ONPREM_PROOF_STRICT 스킵 시 해당 proof 키는 평가 제외 (착시 block 방지)
-  const onpremStrictSkipped = String(repoKeys["ONPREM_PROOF_STRICT_SKIPPED"]) === "1";
-  const skipOnpremProofKeys = onpremStrictSkipped
-    ? new Set(["ONPREM_REAL_WORLD_PROOF_OK", "ONPREM_REAL_WORLD_PROOF_FORMAT_OK"])
-    : new Set();
+  // If onprem strict proof is skipped, do not treat strict-only proof keys as failures.
+  const ignoredFailKeys = new Set();
+  if (String(repoKeys["ONPREM_PROOF_STRICT_SKIPPED"]) === "1") {
+    ignoredFailKeys.add("ONPREM_REAL_WORLD_PROOF_OK");
+    ignoredFailKeys.add("ONPREM_REAL_WORLD_PROOF_FORMAT_OK");
+  }
 
   const fails = [];
   for (const k of keySet) {
@@ -48,7 +49,7 @@ function main() {
 
     // *_SKIPPED 키는 평가 대상에서 제외 (상태 키로 인한 착시 block 방지)
     if (k.endsWith("_SKIPPED")) continue;
-    if (skipOnpremProofKeys.has(k)) continue;
+    if (ignoredFailKeys.has(k)) continue;
 
     // 정책: "입력들 중 하나라도 non-1이면 block"
     const repoFail = (rv !== undefined) && (String(rv) !== "1");
