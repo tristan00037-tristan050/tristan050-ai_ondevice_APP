@@ -1,0 +1,6 @@
+# AUTODECISION_IGNORED_FAIL_KEYS_V1
+# one key per line, comments start with '#', sorted, no duplicates
+# Applied when ONPREM_PROOF_STRICT_SKIPPED=1 (do not treat as fail)
+
+ONPREM_REAL_WORLD_PROOF_FORMAT_OK
+ONPREM_REAL_WORLD_PROOF_OK
