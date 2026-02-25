@@ -11,6 +11,24 @@ function loadRequiredKeysSSOT() {
   return new Set(keys);
 }
 
+function loadIgnoredFailKeysSSOT() {
+  const ssotPath = path.resolve("docs/ops/contracts/AUTODECISION_IGNORED_FAIL_KEYS_V1.txt");
+  const raw = fs.readFileSync(ssotPath, "utf8");
+  const lines = raw.split(/\r?\n/);
+  // Inline # strip + trim; empty skip; strict key format or throw
+  const keys = lines
+    .map((l) => {
+      const cleaned = l.replace(/#.*$/, "").trim();
+      if (!cleaned) return null;
+      if (!/^[A-Z0-9_]+$/.test(cleaned)) {
+        throw new Error(`IGNORED_FAIL_KEYS_SSOT_INVALID_KEY:${cleaned}`);
+      }
+      return cleaned;
+    })
+    .filter(Boolean);
+  return new Set(keys);
+}
+
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
@@ -46,12 +64,12 @@ function main() {
   // 모든 키 집합(충돌 포함)
   const keySet = new Set([...Object.keys(repoKeys), ...Object.keys(aiKeys)]);
 
-  // If onprem strict proof is skipped, do not treat strict-only proof keys as failures.
-  const ignoredFailKeys = new Set();
-  if (String(repoKeys["ONPREM_PROOF_STRICT_SKIPPED"]) === "1") {
-    ignoredFailKeys.add("ONPREM_REAL_WORLD_PROOF_OK");
-    ignoredFailKeys.add("ONPREM_REAL_WORLD_PROOF_FORMAT_OK");
-  }
+  // If onprem strict proof is skipped, do not treat SSOT-listed keys as failures.
+  const ignoredFailKeysFromSSOT = loadIgnoredFailKeysSSOT();
+  const ignoredFailKeys =
+    String(repoKeys["ONPREM_PROOF_STRICT_SKIPPED"]) === "1"
+      ? new Set(ignoredFailKeysFromSSOT)
+      : new Set();
 
   const requiredKeys = loadRequiredKeysSSOT();
 
