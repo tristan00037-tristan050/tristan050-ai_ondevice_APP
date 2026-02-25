@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+CURRENT_GUARD="NONE"
+FAILED_GUARD_EMITTED=0
+
+emit_failed_guard_once() {
+  if [ "${FAILED_GUARD_EMITTED}" -eq 0 ]; then
+    echo "REPO_CONTRACTS_FAILED_GUARD=${CURRENT_GUARD}"
+    FAILED_GUARD_EMITTED=1
+  fi
+}
+
 REPO_CONTRACTS_HYGIENE_OK=0
 PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK=0
 DOCS_NO_BANNED_PHRASES_OK=0
@@ -159,6 +169,7 @@ BFF_SECRET_SCHEMA_V1_SKIPPED=0
 DOCKERLESS_REPORT_RUN_OK=0
 DOCKERLESS_REPORT_DEGRADED_DOCKER_KEYS_OK=0
 DOCKERLESS_REPORT_STATIC_POLICY_ALWAYS_ON_OK=0
+REPO_GUARD_KEYS_ONLY_MODE_OK=0
 
 # P6-P0-05 (OPS) Autodecision from nightly v1
 AUTODECISION_POLICY_V1_OK=0
@@ -458,6 +469,9 @@ ONPREM_DELIVERED_KEYSET_PRESENT_OK=0
 ONPREM_DELIVERED_KEYSET_GUARD_OK=0
 
 cleanup(){
+  # P0-01: Emit debug keys first so gen_repo_guard_report_v1.sh grep always finds them in TMP_LOG
+  echo "REPO_CONTRACTS_FAILED_GUARD=${CURRENT_GUARD}"
+  echo "REPO_GUARD_KEYS_ONLY_MODE_OK=${REPO_GUARD_KEYS_ONLY_MODE_OK}"
   echo "REPO_CONTRACTS_HYGIENE_OK=${REPO_CONTRACTS_HYGIENE_OK}"
   echo "PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK=${PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK}"
   echo "DOCS_NO_BANNED_PHRASES_OK=${DOCS_NO_BANNED_PHRASES_OK}"
@@ -854,6 +868,7 @@ cleanup(){
   echo "DOCKERLESS_REPORT_RUN_OK=${DOCKERLESS_REPORT_RUN_OK}"
   echo "DOCKERLESS_REPORT_DEGRADED_DOCKER_KEYS_OK=${DOCKERLESS_REPORT_DEGRADED_DOCKER_KEYS_OK}"
   echo "DOCKERLESS_REPORT_STATIC_POLICY_ALWAYS_ON_OK=${DOCKERLESS_REPORT_STATIC_POLICY_ALWAYS_ON_OK}"
+  echo "REPO_GUARD_KEYS_ONLY_MODE_OK=${REPO_GUARD_KEYS_ONLY_MODE_OK}"
   echo "BFF_SECRET_SCHEMA_V1_OK=${BFF_SECRET_SCHEMA_V1_OK}"
   echo "BFF_SECRET_FORMAT_OK=${BFF_SECRET_FORMAT_OK}"
   echo "BFF_SECRET_EMPTY_STRING_BLOCK_OK=${BFF_SECRET_EMPTY_STRING_BLOCK_OK}"
@@ -866,11 +881,14 @@ cleanup(){
   echo "RELEASE_BLOCKED_WITHOUT_GATES_OK=${RELEASE_BLOCKED_WITHOUT_GATES_OK}"
 
 }
-trap cleanup EXIT
+# EXIT: on non-zero exit emit failed guard once then cleanup; success(0) emits nothing extra
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then emit_failed_guard_once; fi; cleanup' EXIT
+trap 'emit_failed_guard_once' ERR
 
 run_guard() {
   local name="$1"
   shift
+  CURRENT_GUARD="$name"
   local script_or_cmd=("$@")
 
   echo "== guard: ${name} =="
@@ -904,6 +922,46 @@ run_guard() {
 
   rm -f "$tmp_out"
 }
+
+# Keys-only mode (P0-01 dockerless proof): minimal guards for report contract only
+if [[ "${REPO_GUARD_KEYS_ONLY:-0}" == "1" ]]; then
+  REPO_GUARD_KEYS_ONLY_MODE_OK=1
+  CURRENT_GUARD="policy headers schema v1"
+  echo "== guard: POLICY_HEADERS_SCHEMA_V1 (keys-only) =="
+  run_guard "policy headers schema v1" bash scripts/verify/verify_policy_headers_schema_v1.sh
+  POLICY_HEADERS_SCHEMA_V1_OK=1
+  POLICY_HEADERS_RULE_DESCRIPTION_PRESENT_OK=1
+
+  CURRENT_GUARD="build stamp SSOT v1"
+  echo "== guard: Generate build stamp SSOT v1 (keys-only) =="
+  run_guard "build stamp SSOT v1" bash scripts/ops/gen_build_stamp_v1.sh
+  BUILD_STAMP_GENERATION_SSOT_V1_OK=1
+
+  CURRENT_GUARD="probes SSOT v1"
+  run_guard "probes SSOT v1 (PR-P0-DEPLOY-01)" bash scripts/verify/verify_probes_ssot_v1.sh
+  PROBES_SSOT_V1_OK=1
+  PROBES_PATHS_MATCH_APP_V1_OK=1
+
+  CURRENT_GUARD="host docker internal forbidden v1"
+  echo "== guard: host.docker.internal forbidden scan v1 (keys-only) =="
+  run_guard "host docker internal forbidden v1" bash scripts/verify/verify_host_docker_internal_forbidden_v1.sh
+  HOST_DOCKER_INTERNAL_FORBIDDEN_OK=1
+
+  CURRENT_GUARD="docker it-net db svcname v1"
+  echo "== guard: docker it-net db svcname v1 (keys-only) =="
+  docker_ok=0
+  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    docker_ok=1
+  fi
+  if [ "$docker_ok" -eq 1 ]; then
+    run_guard "docker it-net db svcname v1" bash scripts/verify/verify_docker_it_net_db_svcname_v1.sh
+    DOCKER_IT_NET_DB_SVCNAME_V1_OK=1
+  else
+    echo "== guard: docker unavailable -> skip docker it-net verify (emit DOCKER_IT_NET_DB_SVCNAME_V1_OK=0) =="
+  fi
+
+  exit 0
+fi
 
 # Existing guards
 echo "== guard: verify purity (no install in verify) =="
