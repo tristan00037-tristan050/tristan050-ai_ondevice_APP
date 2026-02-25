@@ -1429,26 +1429,23 @@ run_guard "probes SSOT v1 (PR-P0-DEPLOY-01)" bash scripts/verify/verify_probes_s
 PROBES_SSOT_V1_OK=1
 PROBES_PATHS_MATCH_APP_V1_OK=1
 
-echo "== guard: docker it-net db svcname v1 (PR-P0-DEPLOY-03) =="
+# 1) 정적 가드: Docker 유무와 무관하게 항상 실행
+echo "== guard: host.docker.internal forbidden scan v1 =="
+run_guard "host docker internal forbidden v1" bash scripts/verify/verify_host_docker_internal_forbidden_v1.sh
+HOST_DOCKER_INTERNAL_FORBIDDEN_OK=1
 
-# preflight: docker 사용 가능 여부
+# 2) Docker 의존 가드: Docker 가능할 때만 실행
+echo "== guard: docker it-net db svcname v1 (PR-P0-DEPLOY-03) =="
 docker_ok=0
-if command -v docker >/dev/null 2>&1; then
-  # daemon 접근 가능 여부까지 확인(권장)
-  if docker info >/dev/null 2>&1; then
-    docker_ok=1
-  fi
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  docker_ok=1
 fi
 
 if [ "$docker_ok" -eq 1 ]; then
   run_guard "docker it-net db svcname v1" bash scripts/verify/verify_docker_it_net_db_svcname_v1.sh
-  # 성공 시에만 1 설정(실패 시 0 유지)
   DOCKER_IT_NET_DB_SVCNAME_V1_OK=1
-  HOST_DOCKER_INTERNAL_FORBIDDEN_OK=1
 else
-  # Docker 미존재/미가동: 검증 불가. 하드 실패로 리포트 생성을 막지 않는다.
-  # 키는 0 유지하고 cleanup emit로 report에 반영되도록 한다.
-  echo "== guard: docker unavailable -> skip docker it-net verify (emit *_OK=0) =="
+  echo "== guard: docker unavailable -> skip docker it-net verify (emit DOCKER_IT_NET_DB_SVCNAME_V1_OK=0) =="
 fi
 
 if [[ -z "${DATABASE_URL:-}" ]] && [[ -z "${EXPORT_SIGN_SECRET:-}" ]]; then
