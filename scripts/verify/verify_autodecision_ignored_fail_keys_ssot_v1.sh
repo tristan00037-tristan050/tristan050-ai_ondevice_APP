@@ -14,14 +14,22 @@ if [[ ! -f "$SSOT" ]] || [[ ! -s "$SSOT" ]]; then
   exit 1
 fi
 
-# Extract keys (non-empty, non-comment)
+# Extract keys: inline # strip, trim only (no space deletion). Then format then dup/sort.
 keys=()
 while IFS= read -r line; do
   line="${line%%#*}"
-  line="${line// /}"
+  line="${line#"${line%%[![:space:]]*}"}"
+  line="${line%"${line##*[![:space:]]}"}"
   [[ -z "$line" ]] && continue
   keys+=( "$line" )
 done < "$SSOT"
+# Strict key format: ^[A-Z0-9_]+$ or fail
+for k in "${keys[@]}"; do
+  if [[ ! "$k" =~ ^[A-Z0-9_]+$ ]]; then
+    echo "AUTODECISION_IGNORED_FAIL_KEYS_SSOT_OK=0"
+    exit 1
+  fi
+done
 
 # Check duplicates
 seen=""

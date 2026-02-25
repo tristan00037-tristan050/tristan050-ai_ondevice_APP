@@ -14,10 +14,18 @@ function loadRequiredKeysSSOT() {
 function loadIgnoredFailKeysSSOT() {
   const ssotPath = path.resolve("docs/ops/contracts/AUTODECISION_IGNORED_FAIL_KEYS_V1.txt");
   const raw = fs.readFileSync(ssotPath, "utf8");
-  const keys = raw
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0 && !l.startsWith("#"));
+  const lines = raw.split(/\r?\n/);
+  // Inline # strip + trim; empty skip; strict key format or throw
+  const keys = lines
+    .map((l) => {
+      const cleaned = l.replace(/#.*$/, "").trim();
+      if (!cleaned) return null;
+      if (!/^[A-Z0-9_]+$/.test(cleaned)) {
+        throw new Error(`IGNORED_FAIL_KEYS_SSOT_INVALID_KEY:${cleaned}`);
+      }
+      return cleaned;
+    })
+    .filter(Boolean);
   return new Set(keys);
 }
 
