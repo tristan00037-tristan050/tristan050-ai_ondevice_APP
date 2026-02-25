@@ -1,7 +1,18 @@
 import fs from "node:fs";
+import path from "node:path";
 
-function readJson(path) {
-  return JSON.parse(fs.readFileSync(path, "utf8"));
+function loadRequiredKeysSSOT() {
+  const ssotPath = path.resolve("docs/ops/contracts/AUTODECISION_REQUIRED_KEYS_V1.txt");
+  const raw = fs.readFileSync(ssotPath, "utf8");
+  const keys = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith("#"));
+  return new Set(keys);
+}
+
+function readJson(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
 function collectKeys(obj) {
@@ -42,8 +53,16 @@ function main() {
     ignoredFailKeys.add("ONPREM_REAL_WORLD_PROOF_FORMAT_OK");
   }
 
+  const requiredKeys = loadRequiredKeysSSOT();
+  let ignoredCount = 0;
+
   const fails = [];
   for (const k of keySet) {
+    if (!requiredKeys.has(k)) {
+      ignoredCount++;
+      continue;
+    }
+
     const rv = repoKeys[k];
     const av = aiKeys[k];
 
@@ -69,6 +88,10 @@ function main() {
     ts_utc,
     decision,
     reason_codes,
+    autodecision_decision: decision,
+    autodecision_reason_codes: reason_codes,
+    autodecision_required_keys_count: requiredKeys.size,
+    autodecision_ignored_keys_count: ignoredCount,
     inputs: {
       repo_contracts_latest_json: repoPath,
       ai_smoke_latest_json: aiPath
