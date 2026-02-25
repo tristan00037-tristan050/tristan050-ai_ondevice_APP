@@ -1,0 +1,48 @@
+# P0-01: Prove repo guard report completes without Docker; docker key degrades to 0, host static scan always-on.
+name: ci-dockerless-repo-guard-report
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dockerless-report:
+    name: dockerless-repo-guard-report
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_HOST: unix:///var/run/does-not-exist.sock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Confirm Docker inaccessible (no output)
+        run: |
+          docker info >/dev/null 2>&1 && exit 1 || true
+
+      - name: Preflight (single source)
+        uses: ./.github/actions/preflight_v1
+
+      - name: Ops deps preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg --require-jq || true
+
+      - name: Generate repo guard report (dockerless)
+        run: |
+          set -euo pipefail
+          bash scripts/ops/gen_repo_guard_report_v1.sh
+
+      - name: Verify dockerless report contract v1
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_dockerless_report_contract_v1.sh
