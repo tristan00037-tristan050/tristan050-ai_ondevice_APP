@@ -30,6 +30,7 @@ bash scripts/verify/verify_repo_contracts.sh >"$TMP_LOG" 2>&1 || RC=$?
 
 if [ "$RC" -ne 0 ]; then
   echo "BLOCK: verify_repo_contracts failed (rc=$RC)"
+  grep -E "REPO_CONTRACTS_FAILED_GUARD=|REPO_GUARD_KEYS_ONLY_MODE_OK=" "$TMP_LOG" 2>/dev/null || true
   tail -n 200 "$TMP_LOG" || true
   exit "$RC"
 fi
