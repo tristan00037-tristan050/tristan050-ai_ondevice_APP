@@ -145,6 +145,10 @@ BUILD_STAMP_GENERATION_SSOT_V1_OK=0
 PROBES_SSOT_V1_OK=0
 PROBES_PATHS_MATCH_APP_V1_OK=0
 
+# PR-P0-DEPLOY-03 docker it-net + postgres16 service name, no host.docker.internal
+DOCKER_IT_NET_DB_SVCNAME_V1_OK=0
+HOST_DOCKER_INTERNAL_FORBIDDEN_OK=0
+
 # PR-P0-DEPLOY-02 BFF secret schema v1 (meta-only; skip when both env empty)
 BFF_SECRET_SCHEMA_V1_OK=0
 BFF_SECRET_FORMAT_OK=0
@@ -840,6 +844,8 @@ cleanup(){
   echo "BUILD_STAMP_GENERATION_SSOT_V1_OK=${BUILD_STAMP_GENERATION_SSOT_V1_OK}"
   echo "PROBES_SSOT_V1_OK=${PROBES_SSOT_V1_OK}"
   echo "PROBES_PATHS_MATCH_APP_V1_OK=${PROBES_PATHS_MATCH_APP_V1_OK}"
+  echo "DOCKER_IT_NET_DB_SVCNAME_V1_OK=${DOCKER_IT_NET_DB_SVCNAME_V1_OK}"
+  echo "HOST_DOCKER_INTERNAL_FORBIDDEN_OK=${HOST_DOCKER_INTERNAL_FORBIDDEN_OK}"
   echo "BFF_SECRET_SCHEMA_V1_OK=${BFF_SECRET_SCHEMA_V1_OK}"
   echo "BFF_SECRET_FORMAT_OK=${BFF_SECRET_FORMAT_OK}"
   echo "BFF_SECRET_EMPTY_STRING_BLOCK_OK=${BFF_SECRET_EMPTY_STRING_BLOCK_OK}"
@@ -1422,6 +1428,11 @@ BUILD_STAMP_GENERATION_SSOT_V1_OK=1
 run_guard "probes SSOT v1 (PR-P0-DEPLOY-01)" bash scripts/verify/verify_probes_ssot_v1.sh
 PROBES_SSOT_V1_OK=1
 PROBES_PATHS_MATCH_APP_V1_OK=1
+
+echo "== guard: docker it-net db svcname v1 (PR-P0-DEPLOY-03) =="
+run_guard "docker it-net db svcname v1" bash scripts/verify/verify_docker_it_net_db_svcname_v1.sh
+DOCKER_IT_NET_DB_SVCNAME_V1_OK=1
+HOST_DOCKER_INTERNAL_FORBIDDEN_OK=1
 
 if [[ -z "${DATABASE_URL:-}" ]] && [[ -z "${EXPORT_SIGN_SECRET:-}" ]]; then
   echo "== guard: bff secret schema v1 (PR-P0-DEPLOY-02) =="
