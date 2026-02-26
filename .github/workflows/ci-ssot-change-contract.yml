@@ -39,3 +39,18 @@ jobs:
         run: |
           set -euo pipefail
           REPO_GUARD_KEYS_ONLY=1 bash scripts/verify/verify_autodecision_ssot_change_contract_v1.sh
+
+      - name: Run exec mode v1 (mock)
+        run: |
+          set -euo pipefail
+          bash tools/exec_mode/run_exec_mode_v1.sh \
+            --engine mock \
+            --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl \
+            --outdir out/exec_mode
+
+      - name: Verify exec mode v1 (fail-closed)
+        run: |
+          set -euo pipefail
+          bash tools/exec_mode/verify_exec_mode_v1.sh \
+            --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl \
+            --outdir out/exec_mode

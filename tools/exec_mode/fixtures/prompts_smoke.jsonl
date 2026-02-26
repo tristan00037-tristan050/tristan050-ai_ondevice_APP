@@ -1,0 +1,5 @@
+{"id":"smoke-1","prompt":"Say hello in one word."}
+{"id":"smoke-2","prompt":"What is 2+2? Reply with a number only."}
+{"id":"smoke-3","prompt":"Complete: The sky is ___."}
+{"id":"smoke-4","prompt":"Reply OK if you read this."}
+{"id":"smoke-5","prompt":"Echo: exec_mode_v1"}
