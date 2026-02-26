@@ -38,4 +38,4 @@ jobs:
           REPO_GUARD_KEYS_ONLY: "1"
         run: |
           set -euo pipefail
-          bash scripts/verify/verify_autodecision_ssot_change_contract_v1.sh
+          REPO_GUARD_KEYS_ONLY=1 bash scripts/verify/verify_autodecision_ssot_change_contract_v1.sh

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+echo "P0_02_KEYS_ONLY_VAL=${REPO_GUARD_KEYS_ONLY:-unset}"
 
 CURRENT_GUARD="NONE"
 FAILED_GUARD="NONE"
