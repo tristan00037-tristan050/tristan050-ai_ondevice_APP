@@ -3,15 +3,18 @@
 # Meta-only, fail-closed, 원문0.
 set -euo pipefail
 
+# This script is only used by ci-ssot-change-contract; always use keys-only so report has required keys only.
+export REPO_GUARD_KEYS_ONLY=1
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 AUTODECISION_SSOT_CHANGE_CONTRACT_OK=0
 ERROR_CODE=""
 
-REQUIRED_KEYS_SSOT="docs/ops/contracts/AUTODECISION_REQUIRED_KEYS_V1.txt"
-REPO_REPORT="docs/ops/reports/repo_contracts_latest.json"
-AUTODECISION_JSON="docs/ops/reports/autodecision_latest.json"
+REQUIRED_KEYS_SSOT="$REPO_ROOT/docs/ops/contracts/AUTODECISION_REQUIRED_KEYS_V1.txt"
+REPO_REPORT="$REPO_ROOT/docs/ops/reports/repo_contracts_latest.json"
+AUTODECISION_JSON="$REPO_ROOT/docs/ops/reports/autodecision_latest.json"
 
 # Base ref for diff (CI: GITHUB_BASE_REF, local: main)
 BASE_REF="${GITHUB_BASE_REF:-main}"
@@ -36,7 +39,7 @@ if [[ -z "$changed" ]]; then
 fi
 
 # SSOT changed: run producer, then verify required keys presence and autodecision count
-bash scripts/ops/gen_repo_guard_report_v1.sh
+REPO_GUARD_KEYS_ONLY=1 bash scripts/ops/gen_repo_guard_report_v1.sh
 
 if [[ ! -f "$REPO_REPORT" ]] || [[ ! -s "$REPO_REPORT" ]]; then
   ERROR_CODE="REPO_REPORT_MISSING"
@@ -57,9 +60,13 @@ while IFS= read -r line; do
 done < "$REQUIRED_KEYS_SSOT"
 
 # Each required key must exist in repo report with value "0" or "1"
+# Use absolute path so Node resolves the same file gen_repo_guard_report wrote
 for k in "${required_keys[@]}"; do
   val=$(node -e "
-    const r = require(process.argv[1]);
+    const fs = require('fs');
+    const p = process.argv[1];
+    const data = fs.readFileSync(p, 'utf8');
+    const r = JSON.parse(data);
     const v = r && r.keys && r.keys[process.argv[2]];
     process.stdout.write(v !== undefined && v !== null ? String(v) : '');
   " "$REPO_REPORT" "$k" 2>/dev/null || true)
