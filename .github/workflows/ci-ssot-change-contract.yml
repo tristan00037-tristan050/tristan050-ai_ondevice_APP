@@ -18,12 +18,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install ripgrep
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
+      - name: Verify autodecision keys SSOT hygiene v1
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_autodecision_keys_ssot_hygiene_v1.sh
+
       - name: Verify autodecision SSOT change contract v1
+        env:
+          REPO_GUARD_KEYS_ONLY: "1"
         run: |
           set -euo pipefail
           REPO_GUARD_KEYS_ONLY=1 bash scripts/verify/verify_autodecision_ssot_change_contract_v1.sh
