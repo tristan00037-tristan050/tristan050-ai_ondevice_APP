@@ -3,6 +3,9 @@
 # Meta-only, fail-closed, 원문0.
 set -euo pipefail
 
+# This script is only used by ci-ssot-change-contract; always use keys-only so report has required keys only.
+export REPO_GUARD_KEYS_ONLY=1
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
@@ -36,7 +39,7 @@ if [[ -z "$changed" ]]; then
 fi
 
 # SSOT changed: run producer, then verify required keys presence and autodecision count
-bash scripts/ops/gen_repo_guard_report_v1.sh
+REPO_GUARD_KEYS_ONLY=1 bash scripts/ops/gen_repo_guard_report_v1.sh
 
 if [[ ! -f "$REPO_REPORT" ]] || [[ ! -s "$REPO_REPORT" ]]; then
   ERROR_CODE="REPO_REPORT_MISSING"

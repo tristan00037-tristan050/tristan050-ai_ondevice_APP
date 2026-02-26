@@ -25,11 +25,15 @@ trap 'rm -f "$TMP_LOG"' EXIT
 bash tools/preflight_v1.sh >/dev/null 2>&1
 
 # verify 실행 (stdout/stderr 모두 캡처). rc 반드시 수신, rc!=0이면 즉시 종료(쓰기/아카이브 없음). PR-P0-06 fail-closed.
+# Pass REPO_GUARD_KEYS_ONLY through so keys-only mode is not lost across process boundary.
+_KEYS_ONLY_VAL="${REPO_GUARD_KEYS_ONLY:-0}"
+[[ "$_KEYS_ONLY_VAL" != "1" ]] && _KEYS_ONLY_VAL=0
 RC=0
-bash scripts/verify/verify_repo_contracts.sh >"$TMP_LOG" 2>&1 || RC=$?
+REPO_GUARD_KEYS_ONLY="$_KEYS_ONLY_VAL" bash scripts/verify/verify_repo_contracts.sh >"$TMP_LOG" 2>&1 || RC=$?
 
 if [ "$RC" -ne 0 ]; then
   echo "BLOCK: verify_repo_contracts failed (rc=$RC)"
+  grep "P0_02_KEYS_ONLY_VAL=" "$TMP_LOG" 2>/dev/null || true
   if ! grep -E "REPO_CONTRACTS_FAILED_GUARD=|REPO_GUARD_KEYS_ONLY_MODE_OK=" "$TMP_LOG" 2>/dev/null; then
     echo "REPO_CONTRACTS_FAILED_GUARD=(not in log)"
     echo "REPO_GUARD_KEYS_ONLY_MODE_OK=(not in log)"
