@@ -53,6 +53,7 @@ ENGINE_META_JSON="{}"
 ENGINE_EXIT=0
 ENGINE_BLOCK=0
 ENGINE_STDOUT_LOG=""
+ENGINE_RUNTIME_PER_LINE=0
 
 if [[ "$ENGINE" == "mock" ]]; then
   # mock: 결과는 항상 성공으로 fan-out
@@ -97,23 +98,11 @@ PY
   fi
 
 elif [[ "$ENGINE" == "ondevice_runtime_v1" ]]; then
-  # real on-device runtime (slot; fail-closed until wired)
-  LOG_PATH="$OUTDIR/ondevice_runtime_v1.log"
-  set +e
-  PROMPT="(exec_mode_v1_slot)" bash "$REPO_ROOT/tools/exec_mode/engines/ondevice_runtime_v1.sh" 2>&1 | tee "$LOG_PATH"
-  ENGINE_EXIT="${PIPESTATUS[0]}"
-  set -e
-
-  ENGINE_STDOUT_LOG="$(tail -n 400 "$LOG_PATH" || true)"
-  if echo "$ENGINE_STDOUT_LOG" | grep -q "BLOCK:"; then ENGINE_BLOCK=1; fi
-  if [[ "$ENGINE_EXIT" -ne 0 ]]; then ENGINE_BLOCK=1; fi
-
-  FPR="$(echo "$ENGINE_STDOUT_LOG" | grep -oE 'fingerprint=[0-9a-fA-F]{64}' | grep -oE '[0-9a-fA-F]{64}' | head -n 1 || true)"
-  if [[ -n "$FPR" ]]; then
-    ENGINE_META_JSON="$(printf '{"engine":"ondevice_runtime_v1","tokens_out_supported":false,"result_fingerprint_sha256":"%s"}' "${FPR,,}")"
-  else
-    ENGINE_META_JSON='{"engine":"ondevice_runtime_v1","tokens_out_supported":false,"result_fingerprint_sha256":null}'
-  fi
+  # real on-device runtime: run engine per input line with PROMPT from JSONL (no single shot)
+  ENGINE_RUNTIME_PER_LINE=1
+  ENGINE_EXIT=0
+  ENGINE_BLOCK=0
+  ENGINE_META_JSON='{}'
 
 else
   echo "BLOCK: unknown engine: $ENGINE" >&2
@@ -122,20 +111,22 @@ fi
 
 START_MS="$(ts_ms)"
 # Build result.jsonl (always valid JSON; id must be string; result must exist; count must match)
-python3 - "$ENGINE" "$INPUTS" "$RESULT_PATH" "$ENGINE_EXIT" "$ENGINE_BLOCK" "$ENGINE_META_JSON" <<'PY'
-import json,sys,time
+python3 - "$ENGINE" "$INPUTS" "$RESULT_PATH" "$ENGINE_EXIT" "$ENGINE_BLOCK" "$ENGINE_META_JSON" "$ENGINE_RUNTIME_PER_LINE" "$REPO_ROOT" <<'PY'
+import json,sys,time,subprocess,os,re
 engine=sys.argv[1]
 inputs_path=sys.argv[2]
 result_path=sys.argv[3]
 engine_exit=int(sys.argv[4])
 engine_block=int(sys.argv[5])
 engine_meta=json.loads(sys.argv[6])
+engine_runtime_per_line=int(sys.argv[7])
+repo_root=sys.argv[8]
 
 # fixed fields
 tokens_out=None
 engine_meta["tokens_out_supported"]=False  # hard seal
 
-# determine result string
+# determine result string (used when not per-line)
 if engine_block or engine_exit!=0:
   result="BLOCK"
   exit_code=1
@@ -152,21 +143,36 @@ with open(inputs_path,'r',encoding='utf-8') as f:
     _id=obj.get("id", None)
     if not isinstance(_id,str) or not _id:
       raise SystemExit("BLOCK: input id must be non-empty string")
-    rows.append(_id)
+    rows.append((_id, obj.get("prompt","")))
 
 # latency: keep simple (ms)
 latency_ms=0
 
+engine_script=os.path.join(repo_root,"tools","exec_mode","engines","ondevice_runtime_v1.sh")
+
 with open(result_path,'w',encoding='utf-8') as out:
-  for _id in rows:
-    rec={
-      "id": _id,
-      "result": result,
-      "exit_code": exit_code,
-      "latency_ms": latency_ms,
-      "tokens_out": tokens_out,
-      "engine_meta": engine_meta,
-    }
+  for _id, _prompt in rows:
+    if engine == "ondevice_runtime_v1" and engine_runtime_per_line == 1:
+      env = os.environ.copy()
+      env["PROMPT"] = _prompt if isinstance(_prompt, str) else ""
+      env["REPO_ROOT"] = repo_root
+      proc = subprocess.run(
+        ["bash", engine_script],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+      )
+      line_stdout = proc.stdout or ""
+      line_block = 1 if (proc.returncode != 0 or "BLOCK:" in line_stdout) else 0
+      line_result = "BLOCK" if line_block else "OK"
+      line_exit_code = 1 if line_block else 0
+      m = re.search(r"fingerprint=([0-9a-fA-F]{64})", line_stdout)
+      fpr = m.group(1).lower() if m else None
+      line_meta = {"engine": "ondevice_runtime_v1", "tokens_out_supported": False, "result_fingerprint_sha256": fpr}
+      rec = {"id": _id, "result": line_result, "exit_code": line_exit_code, "latency_ms": latency_ms, "tokens_out": tokens_out, "engine_meta": line_meta}
+    else:
+      rec = {"id": _id, "result": result, "exit_code": exit_code, "latency_ms": latency_ms, "tokens_out": tokens_out, "engine_meta": engine_meta}
     out.write(json.dumps(rec, ensure_ascii=False) + "\n")
 PY
 
