@@ -26,7 +26,9 @@ mkdir -p "$OUTDIR"
 RESULT_PATH="$OUTDIR/result.jsonl"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-REPORT_PATH="$REPO_ROOT/docs/EXEC_MODE_REPORT_V1.md"
+OUTPUT_ROOT="${EXEC_MODE_OUTPUT_ROOT:-$REPO_ROOT/docs}"
+REPORT_PATH="$OUTPUT_ROOT/EXEC_MODE_REPORT_V1.md"
+mkdir -p "$OUTPUT_ROOT"
 
 # Count inputs (strict: non-empty lines only)
 INPUT_COUNT="$(python3 - "$INPUTS" <<'PY'
