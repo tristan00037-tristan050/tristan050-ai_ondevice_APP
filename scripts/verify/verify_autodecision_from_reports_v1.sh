@@ -11,8 +11,9 @@ trap 'echo "AUTODECISION_POLICY_V1_OK=$AUTODECISION_POLICY_V1_OK";
 
 policy="docs/ops/contracts/AUTODECISION_POLICY_V1.md"
 gen="scripts/ops/gen_autodecision_v1.mjs"
-out_json="docs/ops/reports/autodecision_latest.json"
-out_md="docs/ops/reports/autodecision_latest.md"
+REPORTS_ROOT="${AUTODECISION_REPORTS_ROOT:-docs/ops/reports}"
+out_json="$REPORTS_ROOT/autodecision_latest.json"
+out_md="$REPORTS_ROOT/autodecision_latest.md"
 
 test -f "$policy" || { echo "BLOCK: missing $policy"; exit 1; }
 grep -q "AUTODECISION_POLICY_V1_TOKEN=1" "$policy" || { echo "BLOCK: missing token"; exit 1; }
@@ -36,9 +37,9 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$out_json"
 
 # reason_codes는 키 이름만(대문자/숫자/_)로 제한
-node - <<'NODE'
+AUTODECISION_JSON_PATH="$out_json" node - <<'NODE'
 const fs = require('fs');
-const p = JSON.parse(fs.readFileSync('docs/ops/reports/autodecision_latest.json','utf8'));
+const p = JSON.parse(fs.readFileSync(process.env.AUTODECISION_JSON_PATH || 'docs/ops/reports/autodecision_latest.json','utf8'));
 if (!p || typeof p !== 'object') process.exit(2);
 if (!Array.isArray(p.reason_codes)) process.exit(2);
 for (const r of p.reason_codes) {
