@@ -50,15 +50,16 @@ function collectKeys(obj) {
 function main() {
   const reportsRoot = process.env.AUTODECISION_REPORTS_ROOT || "docs/ops/reports";
   const repoPath = `${reportsRoot}/repo_contracts_latest.json`;
+  const repoPathResolved = fs.existsSync(repoPath) ? repoPath : "docs/ops/reports/repo_contracts_latest.json";
   const aiPath = `${reportsRoot}/ai_smoke_latest.json`;
   const outJson = `${reportsRoot}/autodecision_latest.json`;
   const outMd = `${reportsRoot}/autodecision_latest.md`;
 
-  if (!fs.existsSync(repoPath)) throw new Error("BLOCK: missing " + repoPath);
+  if (!fs.existsSync(repoPathResolved)) throw new Error("BLOCK: missing " + repoPath + " and fallback " + repoPathResolved);
   const aiPathResolved = fs.existsSync(aiPath) ? aiPath : "docs/ops/reports/ai_smoke_latest.json";
   if (!fs.existsSync(aiPathResolved)) throw new Error("BLOCK: missing " + aiPath + " and fallback " + aiPathResolved);
 
-  const repo = readJson(repoPath);
+  const repo = readJson(repoPathResolved);
   const ai = readJson(aiPathResolved);
 
   const repoKeys = collectKeys(repo);
@@ -123,7 +124,7 @@ function main() {
     autodecision_ignored_keys_count: ignoredCount,
     autodecision_missing_required_keys_count: missingRequiredCount,
     inputs: {
-      repo_contracts_latest_json: repoPath,
+      repo_contracts_latest_json: repoPathResolved,
       ai_smoke_latest_json: aiPathResolved
     }
   };
