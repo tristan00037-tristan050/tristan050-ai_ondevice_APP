@@ -115,8 +115,18 @@ jobs:
       - name: Repo guards report (docker optional) + autodecision verify
         run: |
           set -euo pipefail
+
+          # 1) keys-only 강제: SSOT/리포트 목적 외 full-chain(예: perf p95)로 빠지는 재발 차단
+          export REPO_GUARD_KEYS_ONLY=1
+
+          # 2) repo guard report + autodecision
           bash scripts/ops/gen_repo_guard_report_v1.sh
-          node -e "const r=require('./docs/ops/reports/repo_contracts_latest.json'); console.log('DOCKER_IT_NET_DB_SVCNAME_V1_OK=', r.keys?.DOCKER_IT_NET_DB_SVCNAME_V1_OK, 'HOST_DOCKER_INTERNAL_FORBIDDEN_OK=', r.keys?.HOST_DOCKER_INTERNAL_FORBIDDEN_OK);"
+          node -e "const r=require('./docs/ops/reports/repo_contracts_latest.json'); console.log('DOCKER_IT_NET_DB_SVCNAME_V1_OK=', r.keys?.DOCKER_IT_NET_DB_SVCNAME_V1_OK, 'HOST_DOCKER_INTERNAL_FORBIDDEN_OK=', r.keys?.HOST_DOCKER_INTERNAL_FORBIDDEN_OK, 'REPO_GUARD_KEYS_ONLY_MODE_OK=', r.keys?.REPO_GUARD_KEYS_ONLY_MODE_OK);"
+
           bash scripts/verify/verify_autodecision_from_reports_v1.sh
           node -e "const a=require('./docs/ops/reports/autodecision_latest.json'); console.log('autodecision_missing_required_keys_count=', a.autodecision_missing_required_keys_count); if (a.autodecision_missing_required_keys_count!==0) process.exit(1);"
+
+          # 3) CI clean-finish 보장: 보고서는 런타임 산출물이므로 작업트리에 남기지 않음
+          git restore --source=HEAD --worktree --staged -- docs/ops/reports || true
+          git clean -fd -- docs/ops/reports || true
 
