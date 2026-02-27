@@ -51,6 +51,26 @@ function main() {
   const reportsRoot = process.env.AUTODECISION_REPORTS_ROOT || "docs/ops/reports";
   const repoPath = `${reportsRoot}/repo_contracts_latest.json`;
   const repoPathResolved = fs.existsSync(repoPath) ? repoPath : "docs/ops/reports/repo_contracts_latest.json";
+  const allowDocsRepoFallback = process.env.AUTODECISION_ALLOW_DOCS_REPO_FALLBACK === "1";
+  const maxAgeSec = Number(process.env.AUTODECISION_DOCS_REPO_FALLBACK_MAX_AGE_SEC || "3600"); // default 1h
+  let repoFallbackUsed = 0;
+
+  // If reportsRoot is non-default and repoPath is missing, do NOT silently fall back unless explicitly allowed.
+  if (!fs.existsSync(repoPath) && !allowDocsRepoFallback) {
+    throw new Error("BLOCK: missing " + repoPath + " (docs fallback disabled; set AUTODECISION_ALLOW_DOCS_REPO_FALLBACK=1 only for controlled pre-report runs)");
+  }
+
+  // If we will use docs fallback, enforce freshness window to avoid stale decisions.
+  if (!fs.existsSync(repoPath) && allowDocsRepoFallback) {
+    if (!fs.existsSync(repoPathResolved)) throw new Error("BLOCK: docs fallback file missing: " + repoPathResolved);
+    const st = fs.statSync(repoPathResolved);
+    const ageSec = (Date.now() - st.mtimeMs) / 1000;
+    if (Number.isFinite(maxAgeSec) && ageSec > maxAgeSec) {
+      throw new Error("BLOCK: docs repo_contracts_latest.json is stale (age_sec=" + Math.floor(ageSec) + " > max_age_sec=" + maxAgeSec + ")");
+    }
+    repoFallbackUsed = 1;
+  }
+
   const aiPath = `${reportsRoot}/ai_smoke_latest.json`;
   const outJson = `${reportsRoot}/autodecision_latest.json`;
   const outMd = `${reportsRoot}/autodecision_latest.md`;
@@ -124,6 +144,7 @@ function main() {
     autodecision_ignored_keys_count: ignoredCount,
     autodecision_missing_required_keys_count: missingRequiredCount,
     inputs: {
+      repo_contracts_fallback_used: repoFallbackUsed,
       repo_contracts_latest_json: repoPathResolved,
       ai_smoke_latest_json: aiPathResolved
     }
