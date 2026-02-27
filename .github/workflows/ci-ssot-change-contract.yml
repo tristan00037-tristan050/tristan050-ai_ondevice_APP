@@ -48,6 +48,14 @@ jobs:
             --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl \
             --outdir out/exec_mode
 
+      - name: Run exec mode v1 (ondevice_candidate_v0)
+        run: |
+          set -euo pipefail
+          bash tools/exec_mode/run_exec_mode_v1.sh \
+            --engine ondevice_candidate_v0 \
+            --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl \
+            --outdir out/exec_mode
+
       - name: Verify exec mode v1 (fail-closed)
         run: |
           set -euo pipefail

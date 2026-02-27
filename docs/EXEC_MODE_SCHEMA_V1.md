@@ -1,41 +1,19 @@
-# Exec Mode V1 Schema
+# EXEC_MODE_SCHEMA_V1
 
-## Input: prompts (JSONL)
+## Input (JSONL)
+Each line is a JSON object:
+- `id` (string, required): non-empty
+- `prompt` (string, optional)
+- `params` (object, optional)
 
-One JSON object per line.
-
-| Field   | Type   | Required | Description |
-|---------|--------|----------|-------------|
-| `id`    | string | yes      | Unique request id (e.g. smoke-1). |
-| `prompt`| string | yes      | User prompt text. |
-
-Example:
-
-```json
-{"id":"smoke-1","prompt":"Say hello in one word."}
-```
-
-## Output: result (JSONL)
-
-One JSON object per line; one line per input line, same order.
-
-| Field    | Type   | Required | Description |
-|----------|--------|----------|-------------|
-| `id`     | string | yes      | Same as input `id`. |
-| `prompt` | string | yes      | Echo of input prompt. |
-| `result` | string | yes      | Engine output (e.g. `[mock] OK`). |
-| `engine` | string | yes      | Engine id (e.g. `mock`). |
-| `ts_utc` | string | yes      | ISO 8601 UTC timestamp. |
-
-Example:
-
-```json
-{"id":"smoke-1","prompt":"Say hello in one word.","result":"[mock] OK","engine":"mock","ts_utc":"2026-02-19T12:00:00Z"}
-```
-
-## Verification (fail-closed)
-
-- `result.jsonl` must exist under `--outdir`.
-- Result line count must be ≥ input line count.
-- Each result line must be valid JSON and contain `id` and `result`.
-- Any violation → verifier exits non-zero and does **not** emit `EXEC_MODE_V1_OK=1`.
+## Output (JSONL)
+Each line is a JSON object:
+- `id` (string, required): must match input id line-by-line
+- `result` (string, required): `OK` or `BLOCK` (v1)
+- `exit_code` (number, required): `0` for OK, `1` for BLOCK
+- `latency_ms` (number, required)
+- `tokens_out` (number|null, required): v1 allows null. For ondevice_candidate_v0 it is always null.
+- `engine_meta` (object, required)
+  - `engine` (string, required): `mock` or `ondevice_candidate_v0`
+  - `tokens_out_supported` (boolean, required): must be `false` in v1
+  - `result_fingerprint_sha256` (string|null, required): optional evidence for real-compute candidate; null if not available

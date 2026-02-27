@@ -1,73 +1,192 @@
 #!/usr/bin/env bash
-# Run exec mode v1: read prompts, run engine (mock only in P2), write result.jsonl and update report.
 set -euo pipefail
 
 ENGINE=""
 INPUTS=""
 OUTDIR=""
 
+usage() {
+  echo "Usage: $0 --engine <mock|ondevice_candidate_v0> --inputs <path.jsonl> --outdir <dir>"
+  exit 2
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --engine)  ENGINE="$2";  shift 2 ;;
-    --inputs)  INPUTS="$2";  shift 2 ;;
-    --outdir)  OUTDIR="$2";  shift 2 ;;
-    *) echo "Unknown option: $1" >&2; exit 1 ;;
+    --engine) ENGINE="${2:-}"; shift 2;;
+    --inputs) INPUTS="${2:-}"; shift 2;;
+    --outdir) OUTDIR="${2:-}"; shift 2;;
+    *) usage;;
   esac
 done
 
-if [[ -z "$ENGINE" || -z "$INPUTS" || -z "$OUTDIR" ]]; then
-  echo "Usage: $0 --engine <mock> --inputs <path.jsonl> --outdir <dir>" >&2
-  exit 1
-fi
-
-if [[ "$ENGINE" != "mock" ]]; then
-  echo "P2: only --engine mock is supported." >&2
-  exit 1
-fi
-
-if [[ ! -f "$INPUTS" ]]; then
-  echo "Inputs file not found: $INPUTS" >&2
-  exit 1
-fi
+[[ -n "$ENGINE" && -n "$INPUTS" && -n "$OUTDIR" ]] || usage
+[[ -f "$INPUTS" ]] || { echo "BLOCK: inputs not found: $INPUTS" >&2; exit 1; }
 
 mkdir -p "$OUTDIR"
-RESULT_FILE="${OUTDIR}/result.jsonl"
-: > "$RESULT_FILE"
-
-while IFS= read -r line || [[ -n "$line" ]]; do
-  [[ -z "$line" ]] && continue
-  id=$(echo "$line" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-  prompt=$(echo "$line" | sed -n 's/.*"prompt"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
-  if [[ -z "$id" ]]; then id="unknown"; fi
-  if [[ -z "$prompt" ]]; then prompt=""; fi
-  ts_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  result="[mock] OK"
-  printf '%s\n' "{\"id\":\"${id}\",\"prompt\":\"${prompt}\",\"result\":\"${result}\",\"engine\":\"mock\",\"ts_utc\":\"${ts_utc}\"}" >> "$RESULT_FILE"
-done < "$INPUTS"
-
-# Update report (repo-root: tools/exec_mode -> repo root)
+RESULT_PATH="$OUTDIR/result.jsonl"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-REPORT_MD="${REPO_ROOT}/docs/EXEC_MODE_REPORT_V1.md"
-RUN_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-COUNT=$(wc -l < "$RESULT_FILE" | tr -d ' ')
-cat > "$REPORT_MD" << EOF
-# Exec Mode V1 Report
+REPORT_PATH="$REPO_ROOT/docs/EXEC_MODE_REPORT_V1.md"
 
-**Last run:** ${RUN_TS}  
-**Engine:** mock  
-**Inputs:** \`${INPUTS}\`  
-**Outdir:** \`${OUTDIR}\`  
-**Result file:** \`${RESULT_FILE}\`  
-**Result count:** ${COUNT}
+# Count inputs (strict: non-empty lines only)
+INPUT_COUNT="$(python3 - "$INPUTS" <<'PY'
+import sys
+p=sys.argv[1]
+n=0
+with open(p,'r',encoding='utf-8') as f:
+  for line in f:
+    if line.strip():
+      n+=1
+print(n)
+PY
+)"
 
-## Latest result (preview)
+ts_ms() { python3 - <<'PY'
+import time
+print(int(time.time()*1000))
+PY
+}
 
-\`\`\`jsonl
-$(head -n 3 "$RESULT_FILE" 2>/dev/null || true)
-\`\`\`
+ENGINE_META_JSON="{}"
+ENGINE_EXIT=0
+ENGINE_BLOCK=0
+ENGINE_STDOUT_LOG=""
 
-*This file is updated by \`tools/exec_mode/run_exec_mode_v1.sh\`.*
-EOF
+if [[ "$ENGINE" == "mock" ]]; then
+  # mock: 결과는 항상 성공으로 fan-out
+  ENGINE_EXIT=0
+  ENGINE_BLOCK=0
+  ENGINE_STDOUT_LOG="MOCK_OK=1"
+  ENGINE_META_JSON='{"engine":"mock","tokens_out_supported":false,"result_fingerprint_sha256":null}'
+elif [[ "$ENGINE" == "ondevice_candidate_v0" ]]; then
+  # real compute candidate A: run once
+  LOG_PATH="$OUTDIR/ondevice_candidate_v0.log"
+  set +e
+  bash "$REPO_ROOT/scripts/verify/verify_ondevice_real_compute_once.sh" 2>&1 | tee "$LOG_PATH"
+  ENGINE_EXIT="${PIPESTATUS[0]}"
+  set -e
 
-echo "run_exec_mode_v1: wrote ${RESULT_FILE} (${COUNT} rows), updated ${REPORT_MD}"
+  ENGINE_STDOUT_LOG="$(tail -n 400 "$LOG_PATH" || true)"
+
+  # fail-closed signal: BLOCK: in output OR non-zero exit
+  if echo "$ENGINE_STDOUT_LOG" | grep -q "BLOCK:"; then ENGINE_BLOCK=1; fi
+  if [[ "$ENGINE_EXIT" -ne 0 ]]; then ENGINE_BLOCK=1; fi
+
+  # try extract fingerprint (robust): any 64-hex near result_fingerprint_sha256
+  FPR="$(python3 - <<'PY'
+import re,sys
+text=sys.stdin.read()
+m=re.search(r"result_fingerprint_sha256[^0-9a-fA-F]*([0-9a-fA-F]{64})", text)
+print(m.group(1).lower() if m else "")
+PY
+<<<"$ENGINE_STDOUT_LOG")"
+
+  if [[ -n "$FPR" ]]; then
+    ENGINE_META_JSON="$(python3 - <<'PY'
+import json,sys
+fpr=sys.argv[1]
+print(json.dumps({"engine":"ondevice_candidate_v0","tokens_out_supported":False,"result_fingerprint_sha256":fpr}, ensure_ascii=False))
+PY
+"$FPR")"
+  else
+    ENGINE_META_JSON='{"engine":"ondevice_candidate_v0","tokens_out_supported":false,"result_fingerprint_sha256":null}'
+  fi
+else
+  echo "BLOCK: unknown engine: $ENGINE" >&2
+  exit 1
+fi
+
+START_MS="$(ts_ms)"
+# Build result.jsonl (always valid JSON; id must be string; result must exist; count must match)
+python3 - "$ENGINE" "$INPUTS" "$RESULT_PATH" "$ENGINE_EXIT" "$ENGINE_BLOCK" "$ENGINE_META_JSON" <<'PY'
+import json,sys,time
+engine=sys.argv[1]
+inputs_path=sys.argv[2]
+result_path=sys.argv[3]
+engine_exit=int(sys.argv[4])
+engine_block=int(sys.argv[5])
+engine_meta=json.loads(sys.argv[6])
+
+# fixed fields
+tokens_out=None
+engine_meta["tokens_out_supported"]=False  # hard seal
+
+# determine result string
+if engine_block or engine_exit!=0:
+  result="BLOCK"
+  exit_code=1
+else:
+  result="OK"
+  exit_code=0
+
+rows=[]
+with open(inputs_path,'r',encoding='utf-8') as f:
+  for line in f:
+    if not line.strip():
+      continue
+    obj=json.loads(line)  # fail-closed if invalid
+    _id=obj.get("id", None)
+    if not isinstance(_id,str) or not _id:
+      raise SystemExit("BLOCK: input id must be non-empty string")
+    rows.append(_id)
+
+# latency: keep simple (ms)
+latency_ms=0
+
+with open(result_path,'w',encoding='utf-8') as out:
+  for _id in rows:
+    rec={
+      "id": _id,
+      "result": result,
+      "exit_code": exit_code,
+      "latency_ms": latency_ms,
+      "tokens_out": tokens_out,
+      "engine_meta": engine_meta,
+    }
+    out.write(json.dumps(rec, ensure_ascii=False) + "\n")
+PY
+
+END_MS="$(ts_ms)"
+
+# Update report (append/overwrite minimal summary)
+python3 - "$ENGINE" "$INPUTS" "$OUTDIR" "$REPORT_PATH" <<'PY'
+import os,sys,json
+engine=sys.argv[1]
+inputs=sys.argv[2]
+outdir=sys.argv[3]
+report_path=sys.argv[4]
+result_path=os.path.join(outdir,"result.jsonl")
+
+def count_lines(p):
+  n=0
+  with open(p,'r',encoding='utf-8') as f:
+    for line in f:
+      if line.strip(): n+=1
+  return n
+
+inp=count_lines(inputs)
+out=count_lines(result_path)
+
+# read one line for meta
+meta={}
+with open(result_path,'r',encoding='utf-8') as f:
+  first=f.readline()
+  if first.strip():
+    meta=json.loads(first).get("engine_meta",{})
+
+txt=[]
+txt.append("# EXEC_MODE_REPORT_V1")
+txt.append("")
+txt.append("## Latest run")
+txt.append(f"- engine: {engine}")
+txt.append(f"- inputs: {inp}")
+txt.append(f"- outputs: {out}")
+txt.append(f"- tokens_out_supported: {meta.get('tokens_out_supported')}")
+txt.append(f"- result_fingerprint_sha256: {meta.get('result_fingerprint_sha256')}")
+txt.append("")
+with open(report_path,'w',encoding='utf-8') as f:
+  f.write("\n".join(txt))
+PY
+
+echo "EXEC_MODE_RUN_OK=1"
+echo "ENGINE=$ENGINE INPUT_COUNT=$INPUT_COUNT RESULT_PATH=$RESULT_PATH"
