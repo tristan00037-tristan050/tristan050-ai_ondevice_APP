@@ -79,6 +79,31 @@ jobs:
 
           bash tools/exec_mode/verify_exec_mode_archive_v1.sh --engine ondevice_candidate_v0 --utc-date "${UTC_DATE}"
 
+      - name: "Guard: CI must not leave docs/ artifacts (tracked + untracked)"
+        run: |
+          set -euo pipefail
+          # exec-mode steps may generate docs artifacts for runtime checks; CI must finish clean.
+          # 1) Revert tracked report updates (generated during run)
+          git restore --source=HEAD --worktree --staged -- docs/EXEC_MODE_REPORT_V1.md || true
+
+          # 2) Remove untracked run archives generated during CI
+          git clean -fd -- docs/EXEC_MODE_RUNS || true
+
+          # 3) Final guard: no tracked diffs under docs/
+          if ! git diff --quiet -- docs/; then
+            echo "BLOCK: CI left tracked docs/ diffs after cleanup" >&2
+            git diff -- docs/ | head -n 200 >&2 || true
+            exit 1
+          fi
+
+          # 4) Final guard: no untracked files under docs/
+          UNTRACKED="$(git ls-files --others --exclude-standard -- docs/ || true)"
+          if [ -n "${UNTRACKED}" ]; then
+            echo "BLOCK: CI left untracked docs/ artifacts after cleanup" >&2
+            printf '%s\n' "${UNTRACKED}" | head -n 200 >&2 || true
+            exit 1
+          fi
+
       - name: Verify exec mode v1 (fail-closed)
         run: |
           set -euo pipefail
