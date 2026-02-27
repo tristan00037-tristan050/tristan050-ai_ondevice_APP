@@ -62,22 +62,36 @@ for i,obj in enumerate(out):
   if _id!=inp_ids[i]:
     raise SystemExit("BLOCK: output id order mismatch (must match inputs line-by-line)")
 
-  # tokens_out must exist (int or null); for candidate engine it must be null
-  if "tokens_out" not in obj:
-    raise SystemExit("BLOCK: output missing tokens_out")
-  tokens_out=obj["tokens_out"]
+  # required fields per schema
+  if "exit_code" not in obj:
+    raise SystemExit("BLOCK: output missing exit_code")
+  if not isinstance(obj["exit_code"], int):
+    raise SystemExit("BLOCK: exit_code must be int")
+
+  if "latency_ms" not in obj:
+    raise SystemExit("BLOCK: output missing latency_ms")
+  if not isinstance(obj["latency_ms"], int):
+    raise SystemExit("BLOCK: latency_ms must be int")
 
   em=obj.get("engine_meta", None)
   if not isinstance(em,dict):
     raise SystemExit("BLOCK: engine_meta missing or not object")
+
+  eng_meta_engine=em.get("engine", None)
+  if not isinstance(eng_meta_engine, str) or not eng_meta_engine:
+    raise SystemExit("BLOCK: engine_meta.engine must be non-empty string")
+
+  # tokens_out must exist (int or null); for candidate engine it must be null
+  if "tokens_out" not in obj:
+    raise SystemExit("BLOCK: output missing tokens_out")
+  tokens_out=obj["tokens_out"]
 
   # tokens_out_supported must be present and false
   tos=em.get("tokens_out_supported", None)
   if tos is not False:
     raise SystemExit("BLOCK: engine_meta.tokens_out_supported must be false")
 
-  eng=em.get("engine", "")
-  if eng=="ondevice_candidate_v0":
+  if eng_meta_engine=="ondevice_candidate_v0":
     if tokens_out is not None:
       raise SystemExit("BLOCK: ondevice_candidate_v0 requires tokens_out=null")
 

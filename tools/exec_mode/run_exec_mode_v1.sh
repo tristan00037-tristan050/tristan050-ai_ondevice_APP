@@ -73,21 +73,23 @@ elif [[ "$ENGINE" == "ondevice_candidate_v0" ]]; then
   if [[ "$ENGINE_EXIT" -ne 0 ]]; then ENGINE_BLOCK=1; fi
 
   # try extract fingerprint (robust): any 64-hex near result_fingerprint_sha256
-  FPR="$(python3 - <<'PY'
+  # NOTE: read from LOG_PATH to avoid stdin/empty reads (fail-closed)
+  FPR="$(python3 - "$LOG_PATH" <<'PYP'
 import re,sys
-text=sys.stdin.read()
+log_path=sys.argv[1]
+text=open(log_path,'r',encoding='utf-8',errors='replace').read()
 m=re.search(r"result_fingerprint_sha256[^0-9a-fA-F]*([0-9a-fA-F]{64})", text)
 print(m.group(1).lower() if m else "")
-PY
-<<<"$ENGINE_STDOUT_LOG")"
+PYP
+)"
 
   if [[ -n "$FPR" ]]; then
-    ENGINE_META_JSON="$(python3 - <<'PY'
-import json,sys
-fpr=sys.argv[1]
+    ENGINE_META_JSON="$(FPR="$FPR" python3 - <<'PY'
+import json,os
+fpr=os.environ.get("FPR","")
 print(json.dumps({"engine":"ondevice_candidate_v0","tokens_out_supported":False,"result_fingerprint_sha256":fpr}, ensure_ascii=False))
 PY
-"$FPR")"
+)"
   else
     ENGINE_META_JSON='{"engine":"ondevice_candidate_v0","tokens_out_supported":false,"result_fingerprint_sha256":null}'
   fi
