@@ -56,6 +56,21 @@ jobs:
             --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl \
             --outdir out/exec_mode
 
+      - name: Run exec mode v1 (ondevice_candidate_v0) twice to verify archive non-overwrite
+        run: |
+          set -euo pipefail
+          UTC_DATE="$(date -u +%F)"
+          bash tools/exec_mode/run_exec_mode_v1.sh --engine ondevice_candidate_v0 --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl --outdir out/exec_mode
+          bash tools/exec_mode/verify_exec_mode_v1.sh --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl --outdir out/exec_mode
+          bash tools/exec_mode/run_exec_mode_v1.sh --engine ondevice_candidate_v0 --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl --outdir out/exec_mode
+          bash tools/exec_mode/verify_exec_mode_v1.sh --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl --outdir out/exec_mode
+          CNT="$(find "docs/EXEC_MODE_RUNS/${UTC_DATE}" -maxdepth 1 -type f -name "ondevice_candidate_v0__*.md" | wc -l | tr -d ' ')"
+          if [ "${CNT}" -lt 2 ]; then
+            echo "BLOCK: archive overwrite detected (count < 2): ${CNT}" >&2
+            exit 1
+          fi
+          bash tools/exec_mode/verify_exec_mode_archive_v1.sh --engine ondevice_candidate_v0 --utc-date "${UTC_DATE}"
+
       - name: Verify exec mode v1 (fail-closed)
         run: |
           set -euo pipefail
