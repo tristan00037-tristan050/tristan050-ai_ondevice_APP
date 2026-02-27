@@ -156,20 +156,35 @@ with open(result_path,'w',encoding='utf-8') as out:
       env = os.environ.copy()
       env["PROMPT"] = _prompt if isinstance(_prompt, str) else ""
       env["REPO_ROOT"] = repo_root
-      proc = subprocess.run(
-        ["bash", engine_script],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=300,
-      )
-      line_stdout = proc.stdout or ""
-      line_block = 1 if (proc.returncode != 0 or "BLOCK:" in line_stdout) else 0
-      line_result = "BLOCK" if line_block else "OK"
-      line_exit_code = 1 if line_block else 0
-      m = re.search(r"fingerprint=([0-9a-fA-F]{64})", line_stdout)
-      fpr = m.group(1).lower() if m else None
-      line_meta = {"engine": "ondevice_runtime_v1", "tokens_out_supported": False, "result_fingerprint_sha256": fpr}
+      try:
+        proc = subprocess.run(
+          ["bash", engine_script],
+          env=env,
+          capture_output=True,
+          text=True,
+          timeout=300,
+        )
+        line_stdout = proc.stdout or ""
+        line_block = 1 if (proc.returncode != 0 or "BLOCK:" in line_stdout) else 0
+        line_result = "BLOCK" if line_block else "OK"
+        line_exit_code = 1 if line_block else 0
+        m = re.search(r"fingerprint=([0-9a-fA-F]{64})", line_stdout)
+        fpr = m.group(1).lower() if m else None
+        line_meta = {"engine": "ondevice_runtime_v1", "tokens_out_supported": False, "result_fingerprint_sha256": fpr}
+      except subprocess.TimeoutExpired:
+        line_stdout = "BLOCK: TIMEOUT"
+        line_block = 1
+        line_result = "BLOCK"
+        line_exit_code = 1
+        fpr = None
+        line_meta = {"engine": "ondevice_runtime_v1", "tokens_out_supported": False, "result_fingerprint_sha256": None, "error": "timeout"}
+      except Exception as e:
+        line_stdout = f"BLOCK: EXCEPTION {type(e).__name__}"
+        line_block = 1
+        line_result = "BLOCK"
+        line_exit_code = 1
+        fpr = None
+        line_meta = {"engine": "ondevice_runtime_v1", "tokens_out_supported": False, "result_fingerprint_sha256": None, "error": "exception", "error_type": type(e).__name__}
       rec = {"id": _id, "result": line_result, "exit_code": line_exit_code, "latency_ms": latency_ms, "tokens_out": tokens_out, "engine_meta": line_meta}
     else:
       rec = {"id": _id, "result": result, "exit_code": exit_code, "latency_ms": latency_ms, "tokens_out": tokens_out, "engine_meta": engine_meta}
