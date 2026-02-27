@@ -111,3 +111,12 @@ jobs:
           bash tools/exec_mode/verify_exec_mode_v1.sh \
             --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl \
             --outdir out/exec_mode
+
+      - name: Repo guards report (docker optional) + autodecision verify
+        run: |
+          set -euo pipefail
+          bash scripts/ops/gen_repo_guard_report_v1.sh
+          node -e "const r=require('./docs/ops/reports/repo_contracts_latest.json'); console.log('DOCKER_IT_NET_DB_SVCNAME_V1_OK=', r.keys?.DOCKER_IT_NET_DB_SVCNAME_V1_OK, 'HOST_DOCKER_INTERNAL_FORBIDDEN_OK=', r.keys?.HOST_DOCKER_INTERNAL_FORBIDDEN_OK);"
+          bash scripts/verify/verify_autodecision_from_reports_v1.sh
+          node -e "const a=require('./docs/ops/reports/autodecision_latest.json'); console.log('autodecision_missing_required_keys_count=', a.autodecision_missing_required_keys_count); if (a.autodecision_missing_required_keys_count!==0) process.exit(1);"
+
