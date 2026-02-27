@@ -100,7 +100,7 @@ elif [[ "$ENGINE" == "ondevice_runtime_v1" ]]; then
   # real on-device runtime (slot; fail-closed until wired)
   LOG_PATH="$OUTDIR/ondevice_runtime_v1.log"
   set +e
-  PROMPT="(slot)" bash "$REPO_ROOT/tools/exec_mode/engines/ondevice_runtime_v1.sh" 2>&1 | tee "$LOG_PATH"
+  PROMPT="(exec_mode_v1_slot)" bash "$REPO_ROOT/tools/exec_mode/engines/ondevice_runtime_v1.sh" 2>&1 | tee "$LOG_PATH"
   ENGINE_EXIT="${PIPESTATUS[0]}"
   set -e
 
