@@ -11,7 +11,7 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-OUTDIR="docs/ops/reports"
+OUTDIR="${REPO_GUARD_REPORTS_ROOT:-docs/ops/reports}"
 mkdir -p "$OUTDIR"
 
 TS_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -99,13 +99,13 @@ print(f"OK: wrote {json_path}")
 print(f"OK: wrote {md_path}")
 PY
 
-ARCHIVE_DIR="docs/ops/reports/archive"
+ARCHIVE_DIR="$OUTDIR/archive"
 mkdir -p "$ARCHIVE_DIR"
 
 DAY_UTC="$(date -u +%Y-%m-%d)"
 
-cp -f "docs/ops/reports/repo_contracts_latest.json" "$ARCHIVE_DIR/${DAY_UTC}_repo_contracts_latest.json"
-cp -f "docs/ops/reports/repo_contracts_latest.md"   "$ARCHIVE_DIR/${DAY_UTC}_repo_contracts_latest.md"
+cp -f "$OUTDIR/repo_contracts_latest.json" "$ARCHIVE_DIR/${DAY_UTC}_repo_contracts_latest.json"
+cp -f "$OUTDIR/repo_contracts_latest.md"   "$ARCHIVE_DIR/${DAY_UTC}_repo_contracts_latest.md"
 
 echo "OK: archived $ARCHIVE_DIR/${DAY_UTC}_repo_contracts_latest.(json|md)"
 

@@ -4,9 +4,10 @@ import path from "node:path";
 function loadRequiredKeysSSOT() {
   const ssotPath = path.resolve("docs/ops/contracts/AUTODECISION_REQUIRED_KEYS_V1.txt");
   const raw = fs.readFileSync(ssotPath, "utf8");
+  // Inline # strip + trim (match hygiene verifier and loadIgnoredFailKeysSSOT)
   const keys = raw
     .split(/\r?\n/)
-    .map((l) => l.trim())
+    .map((l) => l.replace(/#.*$/, "").trim())
     .filter((l) => l.length > 0 && !l.startsWith("#"));
   return new Set(keys);
 }
@@ -47,16 +48,18 @@ function collectKeys(obj) {
 }
 
 function main() {
-  const repoPath = "docs/ops/reports/repo_contracts_latest.json";
-  const aiPath = "docs/ops/reports/ai_smoke_latest.json";
-  const outJson = "docs/ops/reports/autodecision_latest.json";
-  const outMd = "docs/ops/reports/autodecision_latest.md";
+  const reportsRoot = process.env.AUTODECISION_REPORTS_ROOT || "docs/ops/reports";
+  const repoPath = `${reportsRoot}/repo_contracts_latest.json`;
+  const aiPath = `${reportsRoot}/ai_smoke_latest.json`;
+  const outJson = `${reportsRoot}/autodecision_latest.json`;
+  const outMd = `${reportsRoot}/autodecision_latest.md`;
 
   if (!fs.existsSync(repoPath)) throw new Error("BLOCK: missing " + repoPath);
-  if (!fs.existsSync(aiPath)) throw new Error("BLOCK: missing " + aiPath);
+  const aiPathResolved = fs.existsSync(aiPath) ? aiPath : "docs/ops/reports/ai_smoke_latest.json";
+  if (!fs.existsSync(aiPathResolved)) throw new Error("BLOCK: missing " + aiPath + " and fallback " + aiPathResolved);
 
   const repo = readJson(repoPath);
-  const ai = readJson(aiPath);
+  const ai = readJson(aiPathResolved);
 
   const repoKeys = collectKeys(repo);
   const aiKeys = collectKeys(ai);
@@ -121,11 +124,11 @@ function main() {
     autodecision_missing_required_keys_count: missingRequiredCount,
     inputs: {
       repo_contracts_latest_json: repoPath,
-      ai_smoke_latest_json: aiPath
+      ai_smoke_latest_json: aiPathResolved
     }
   };
 
-  fs.mkdirSync("docs/ops/reports", { recursive: true });
+  fs.mkdirSync(reportsRoot, { recursive: true });
   fs.writeFileSync(outJson, JSON.stringify(payload));
   fs.writeFileSync(
     outMd,
