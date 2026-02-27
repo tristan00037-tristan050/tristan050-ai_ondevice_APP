@@ -188,6 +188,25 @@ txt.append(f"- result_fingerprint_sha256: {meta.get('result_fingerprint_sha256')
 txt.append("")
 with open(report_path,'w',encoding='utf-8') as f:
   f.write("\n".join(txt))
+
+# Archive run (commit-able; text only)
+from datetime import datetime, timezone
+run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+archive_dir = os.path.join(os.path.dirname(report_path), "EXEC_MODE_RUNS", run_date)
+os.makedirs(archive_dir, exist_ok=True)
+archive_path = os.path.join(archive_dir, f"{engine}.md")
+arch=[]
+arch.append("# EXEC_MODE_RUN_ARCHIVE_V1")
+arch.append("")
+arch.append(f"- utc_date: {run_date}")
+arch.append(f"- engine: {engine}")
+arch.append(f"- inputs: {inp}")
+arch.append(f"- outputs: {out}")
+arch.append(f"- tokens_out_supported: {meta.get('tokens_out_supported')}")
+arch.append(f"- result_fingerprint_sha256: {meta.get('result_fingerprint_sha256')}")
+arch.append("")
+with open(archive_path,'w',encoding='utf-8') as af:
+  af.write("\n".join(arch))
 PY
 
 echo "EXEC_MODE_RUN_OK=1"

@@ -1,6 +1,6 @@
-# EXEC_MODE_REPORT_V1
+# EXEC_MODE_RUN_ARCHIVE_V1
 
-## Latest run
+- utc_date: 2026-02-27
 - engine: ondevice_candidate_v0
 - inputs: 5
 - outputs: 5
