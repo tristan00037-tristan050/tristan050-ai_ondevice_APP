@@ -12,6 +12,8 @@ jobs:
   ssot-change-contract:
     name: ssot-change-contract
     runs-on: ubuntu-latest
+    env:
+      EXEC_MODE_P95_MAX_MS: ${{ vars.EXEC_MODE_P95_MAX_MS }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -112,10 +114,15 @@ jobs:
             --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl \
             --outdir out/exec_mode
 
+      - name: Run exec mode v1 (ondevice_runtime_v1) for latency gate
+        if: env.EXEC_MODE_P95_MAX_MS != ''
+        run: |
+          set -euo pipefail
+          EXEC_MODE_OUTPUT_ROOT=out/exec_mode_docs bash tools/exec_mode/run_exec_mode_v1.sh --engine ondevice_runtime_v1 --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl --outdir out/exec_mode
+          bash tools/exec_mode/verify_exec_mode_v1.sh --inputs tools/exec_mode/fixtures/prompts_smoke.jsonl --outdir out/exec_mode
+
       - name: Exec mode latency gate v1 (optional)
         if: env.EXEC_MODE_P95_MAX_MS != ''
-        env:
-          EXEC_MODE_P95_MAX_MS: ${{ env.EXEC_MODE_P95_MAX_MS }}
         run: |
           set -euo pipefail
           bash tools/exec_mode/verify_exec_mode_latency_gate_v1.sh --outdir out/exec_mode --p95-max-ms "${EXEC_MODE_P95_MAX_MS}"
