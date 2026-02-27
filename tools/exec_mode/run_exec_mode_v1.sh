@@ -100,7 +100,7 @@ elif [[ "$ENGINE" == "ondevice_runtime_v1" ]]; then
   # real on-device runtime (slot; fail-closed until wired)
   LOG_PATH="$OUTDIR/ondevice_runtime_v1.log"
   set +e
-  PROMPT="(slot)" bash "$REPO_ROOT/tools/exec_mode/engines/ondevice_runtime_v1.sh" 2>&1 | tee "$LOG_PATH"
+  PROMPT="(exec_mode_v1_slot)" bash "$REPO_ROOT/tools/exec_mode/engines/ondevice_runtime_v1.sh" 2>&1 | tee "$LOG_PATH"
   ENGINE_EXIT="${PIPESTATUS[0]}"
   set -e
 
@@ -108,7 +108,12 @@ elif [[ "$ENGINE" == "ondevice_runtime_v1" ]]; then
   if echo "$ENGINE_STDOUT_LOG" | grep -q "BLOCK:"; then ENGINE_BLOCK=1; fi
   if [[ "$ENGINE_EXIT" -ne 0 ]]; then ENGINE_BLOCK=1; fi
 
-  ENGINE_META_JSON='{"engine":"ondevice_runtime_v1","tokens_out_supported":false,"result_fingerprint_sha256":null}'
+  FPR="$(echo "$ENGINE_STDOUT_LOG" | grep -oE 'fingerprint=[0-9a-fA-F]{64}' | grep -oE '[0-9a-fA-F]{64}' | head -n 1 || true)"
+  if [[ -n "$FPR" ]]; then
+    ENGINE_META_JSON="$(printf '{"engine":"ondevice_runtime_v1","tokens_out_supported":false,"result_fingerprint_sha256":"%s"}' "${FPR,,}")"
+  else
+    ENGINE_META_JSON='{"engine":"ondevice_runtime_v1","tokens_out_supported":false,"result_fingerprint_sha256":null}'
+  fi
 
 else
   echo "BLOCK: unknown engine: $ENGINE" >&2
