@@ -6,7 +6,7 @@ INPUTS=""
 OUTDIR=""
 
 usage() {
-  echo "Usage: $0 --engine <mock|ondevice_candidate_v0> --inputs <path.jsonl> --outdir <dir>"
+  echo "Usage: $0 --engine <mock|ondevice_candidate_v0|ondevice_runtime_v1> --inputs <path.jsonl> --outdir <dir>"
   exit 2
 }
 
@@ -95,6 +95,21 @@ PY
   else
     ENGINE_META_JSON='{"engine":"ondevice_candidate_v0","tokens_out_supported":false,"result_fingerprint_sha256":null}'
   fi
+
+elif [[ "$ENGINE" == "ondevice_runtime_v1" ]]; then
+  # real on-device runtime (slot; fail-closed until wired)
+  LOG_PATH="$OUTDIR/ondevice_runtime_v1.log"
+  set +e
+  PROMPT="(slot)" bash "$REPO_ROOT/tools/exec_mode/engines/ondevice_runtime_v1.sh" 2>&1 | tee "$LOG_PATH"
+  ENGINE_EXIT="${PIPESTATUS[0]}"
+  set -e
+
+  ENGINE_STDOUT_LOG="$(tail -n 400 "$LOG_PATH" || true)"
+  if echo "$ENGINE_STDOUT_LOG" | grep -q "BLOCK:"; then ENGINE_BLOCK=1; fi
+  if [[ "$ENGINE_EXIT" -ne 0 ]]; then ENGINE_BLOCK=1; fi
+
+  ENGINE_META_JSON='{"engine":"ondevice_runtime_v1","tokens_out_supported":false,"result_fingerprint_sha256":null}'
+
 else
   echo "BLOCK: unknown engine: $ENGINE" >&2
   exit 1
