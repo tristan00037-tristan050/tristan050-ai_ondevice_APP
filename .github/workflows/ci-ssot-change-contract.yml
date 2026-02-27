@@ -79,6 +79,16 @@ jobs:
 
           bash tools/exec_mode/verify_exec_mode_archive_v1.sh --engine ondevice_candidate_v0 --utc-date "${UTC_DATE}"
 
+      - name: Guard: CI must not leave docs/ changes uncommitted
+        run: |
+          set -euo pipefail
+          # docs/EXEC_MODE_RUNS are generated for runtime checks; they must not be committed from CI
+          if ! git diff --quiet -- docs/; then
+            echo "BLOCK: CI produced uncommitted docs/ changes" >&2
+            git diff -- docs/ | head -n 200 >&2 || true
+            exit 1
+          fi
+
       - name: Verify exec mode v1 (fail-closed)
         run: |
           set -euo pipefail
