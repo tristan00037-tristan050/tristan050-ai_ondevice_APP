@@ -19,7 +19,8 @@ done
 
 [[ -n "$ENGINE" && -n "$UTC_DATE" ]] || usage
 
-DIR="docs/EXEC_MODE_RUNS/${UTC_DATE}"
+OUTPUT_ROOT="${EXEC_MODE_OUTPUT_ROOT:-docs}"
+DIR="$OUTPUT_ROOT/EXEC_MODE_RUNS/${UTC_DATE}"
 [[ -d "$DIR" ]] || { echo "BLOCK: archive dir missing: $DIR" >&2; exit 1; }
 
 # 구 형식(<engine>.md) 금지
