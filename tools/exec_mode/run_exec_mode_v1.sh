@@ -156,6 +156,7 @@ with open(result_path,'w',encoding='utf-8') as out:
       env = os.environ.copy()
       env["PROMPT"] = _prompt if isinstance(_prompt, str) else ""
       env["REPO_ROOT"] = repo_root
+      t0 = time.time()
       try:
         proc = subprocess.run(
           ["bash", engine_script],
@@ -164,6 +165,7 @@ with open(result_path,'w',encoding='utf-8') as out:
           text=True,
           timeout=300,
         )
+        lat_ms = int((time.time() - t0) * 1000)
         line_stdout = proc.stdout or ""
         line_block = 1 if (proc.returncode != 0 or "BLOCK:" in line_stdout) else 0
         line_result = "BLOCK" if line_block else "OK"
@@ -172,6 +174,7 @@ with open(result_path,'w',encoding='utf-8') as out:
         fpr = m.group(1).lower() if m else None
         line_meta = {"engine": "ondevice_runtime_v1", "tokens_out_supported": False, "result_fingerprint_sha256": fpr}
       except subprocess.TimeoutExpired:
+        lat_ms = int((time.time() - t0) * 1000)
         line_stdout = "BLOCK: TIMEOUT"
         line_block = 1
         line_result = "BLOCK"
@@ -179,13 +182,14 @@ with open(result_path,'w',encoding='utf-8') as out:
         fpr = None
         line_meta = {"engine": "ondevice_runtime_v1", "tokens_out_supported": False, "result_fingerprint_sha256": None, "error": "timeout"}
       except Exception as e:
+        lat_ms = int((time.time() - t0) * 1000)
         line_stdout = f"BLOCK: EXCEPTION {type(e).__name__}"
         line_block = 1
         line_result = "BLOCK"
         line_exit_code = 1
         fpr = None
         line_meta = {"engine": "ondevice_runtime_v1", "tokens_out_supported": False, "result_fingerprint_sha256": None, "error": "exception", "error_type": type(e).__name__}
-      rec = {"id": _id, "result": line_result, "exit_code": line_exit_code, "latency_ms": latency_ms, "tokens_out": tokens_out, "engine_meta": line_meta}
+      rec = {"id": _id, "result": line_result, "exit_code": line_exit_code, "latency_ms": lat_ms, "tokens_out": tokens_out, "engine_meta": line_meta}
     else:
       rec = {"id": _id, "result": result, "exit_code": exit_code, "latency_ms": latency_ms, "tokens_out": tokens_out, "engine_meta": engine_meta}
     out.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -212,12 +216,31 @@ def count_lines(p):
 inp=count_lines(inputs)
 out=count_lines(result_path)
 
-# read one line for meta
+# read first line for meta and collect latency_ms for p50/p95
 meta={}
+latencies=[]
 with open(result_path,'r',encoding='utf-8') as f:
-  first=f.readline()
-  if first.strip():
-    meta=json.loads(first).get("engine_meta",{})
+  for line in f:
+    if not line.strip(): continue
+    obj=json.loads(line)
+    if not meta:
+      meta=obj.get("engine_meta",{})
+    v=obj.get("latency_ms")
+    if v is not None:
+      latencies.append(int(v))
+
+def pct(sorted_arr, p):
+  if not sorted_arr: return None
+  n = len(sorted_arr)
+  if n == 1: return sorted_arr[0]
+  idx = int((n - 1) * p / 100)
+  if idx < 0: idx = 0
+  if idx > n - 1: idx = n - 1
+  return sorted_arr[idx]
+
+sorted_lat = sorted(latencies)
+latency_p50_ms = pct(sorted_lat, 50)
+latency_p95_ms = pct(sorted_lat, 95)
 
 txt=[]
 txt.append("# EXEC_MODE_REPORT_V1")
@@ -228,6 +251,8 @@ txt.append(f"- inputs: {inp}")
 txt.append(f"- outputs: {out}")
 txt.append(f"- tokens_out_supported: {meta.get('tokens_out_supported')}")
 txt.append(f"- result_fingerprint_sha256: {meta.get('result_fingerprint_sha256')}")
+txt.append(f"- latency_p50_ms: {latency_p50_ms}")
+txt.append(f"- latency_p95_ms: {latency_p95_ms}")
 txt.append("")
 with open(report_path,'w',encoding='utf-8') as f:
   f.write("\n".join(txt))
