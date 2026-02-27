@@ -5,4 +5,4 @@
 - inputs: 5
 - outputs: 5
 - tokens_out_supported: False
-- result_fingerprint_sha256: 7804fed890a707021af0e2588ac2494c6ded3f4f78491313c9c941474dad2cc4
+- result_fingerprint_sha256: 3b759edea6bd05ee8fe6f71ad1cc1b7e830c69a0bcac8f4824a5e01d19ebdf5d

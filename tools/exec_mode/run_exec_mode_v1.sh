@@ -194,7 +194,7 @@ from datetime import datetime, timezone
 run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 archive_dir = os.path.join(os.path.dirname(report_path), "EXEC_MODE_RUNS", run_date)
 os.makedirs(archive_dir, exist_ok=True)
-archive_path = os.path.join(archive_dir, f"{engine}.md")
+archive_path = os.path.join(archive_dir, f"{engine}__{datetime.now(timezone.utc).strftime('%H%M%S%f')}.md")
 arch=[]
 arch.append("# EXEC_MODE_RUN_ARCHIVE_V1")
 arch.append("")
