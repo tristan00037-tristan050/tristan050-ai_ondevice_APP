@@ -79,7 +79,7 @@ jobs:
 
           bash tools/exec_mode/verify_exec_mode_archive_v1.sh --engine ondevice_candidate_v0 --utc-date "${UTC_DATE}"
 
-      - name: Guard: CI must not leave docs/ artifacts (tracked + untracked)
+      - name: "Guard: CI must not leave docs/ artifacts (tracked + untracked)"
         run: |
           set -euo pipefail
           # Fail if docs/ has tracked diffs OR untracked files (e.g. docs/EXEC_MODE_RUNS/...)
