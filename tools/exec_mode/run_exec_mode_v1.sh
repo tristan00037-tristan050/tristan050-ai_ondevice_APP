@@ -231,7 +231,11 @@ with open(result_path,'r',encoding='utf-8') as f:
 
 def pct(sorted_arr, p):
   if not sorted_arr: return None
-  idx = min(int(len(sorted_arr) * p / 100), len(sorted_arr) - 1)
+  n = len(sorted_arr)
+  if n == 1: return sorted_arr[0]
+  idx = int((n - 1) * p / 100)
+  if idx < 0: idx = 0
+  if idx > n - 1: idx = n - 1
   return sorted_arr[idx]
 
 sorted_lat = sorted(latencies)
