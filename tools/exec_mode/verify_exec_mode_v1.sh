@@ -1,56 +1,99 @@
 #!/usr/bin/env bash
-# Verify exec mode v1: fail-closed on missing result, line count mismatch, or schema error.
 set -euo pipefail
 
 INPUTS=""
 OUTDIR=""
 
+usage() {
+  echo "Usage: $0 --inputs <path.jsonl> --outdir <dir>"
+  exit 2
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --inputs)  INPUTS="$2";  shift 2 ;;
-    --outdir)  OUTDIR="$2";  shift 2 ;;
-    *) echo "Unknown option: $1" >&2; exit 1 ;;
+    --inputs) INPUTS="${2:-}"; shift 2;;
+    --outdir) OUTDIR="${2:-}"; shift 2;;
+    *) usage;;
   esac
 done
 
-if [[ -z "$INPUTS" || -z "$OUTDIR" ]]; then
-  echo "Usage: $0 --inputs <path.jsonl> --outdir <dir>" >&2
-  exit 1
-fi
+[[ -n "$INPUTS" && -n "$OUTDIR" ]] || usage
+[[ -f "$INPUTS" ]] || { echo "BLOCK: inputs not found: $INPUTS" >&2; exit 1; }
 
-RESULT_FILE="${OUTDIR}/result.jsonl"
-EXEC_MODE_V1_OK=0
+RESULT_PATH="$OUTDIR/result.jsonl"
+[[ -f "$RESULT_PATH" ]] || { echo "BLOCK: result not found: $RESULT_PATH" >&2; exit 1; }
 
-if [[ ! -f "$RESULT_FILE" ]]; then
-  echo "FAIL: result file missing: ${RESULT_FILE}" >&2
-  echo "EXEC_MODE_V1_OK=0"
-  exit 1
-fi
+python3 - "$INPUTS" "$RESULT_PATH" <<'PY'
+import json,sys,os
 
-INPUT_COUNT=0
-while IFS= read -r line || [[ -n "$line" ]]; do
-  [[ -z "$line" ]] && continue
-  ((INPUT_COUNT+=1)) || true
-done < "$INPUTS"
+inputs_path=sys.argv[1]
+result_path=sys.argv[2]
 
-RESULT_COUNT=0
-while IFS= read -r line || [[ -n "$line" ]]; do
-  [[ -z "$line" ]] && continue
-  ((RESULT_COUNT+=1)) || true
-  # Schema: must have "id" and "result" (and valid JSON)
-  if ! echo "$line" | grep -qE '"id"[[:space:]]*:' || ! echo "$line" | grep -qE '"result"[[:space:]]*:'; then
-    echo "FAIL: result line missing required id/result: ${line}" >&2
-    echo "EXEC_MODE_V1_OK=0"
-    exit 1
-  fi
-done < "$RESULT_FILE"
+def read_jsonl(p):
+  rows=[]
+  with open(p,'r',encoding='utf-8') as f:
+    for line in f:
+      if not line.strip():
+        continue
+      rows.append(json.loads(line))  # fail-closed
+  return rows
 
-if [[ $RESULT_COUNT -lt $INPUT_COUNT ]]; then
-  echo "FAIL: result count ${RESULT_COUNT} < input count ${INPUT_COUNT}" >&2
-  echo "EXEC_MODE_V1_OK=0"
-  exit 1
-fi
+inp=read_jsonl(inputs_path)
+out=read_jsonl(result_path)
 
-EXEC_MODE_V1_OK=1
-echo "EXEC_MODE_V1_OK=1"
-exit 0
+if len(inp)!=len(out):
+  raise SystemExit(f"BLOCK: RESULT_COUNT != INPUT_COUNT ({len(out)} != {len(inp)})")
+
+# build set of ids from inputs
+inp_ids=[]
+for obj in inp:
+  _id=obj.get("id", None)
+  if not isinstance(_id,str) or not _id:
+    raise SystemExit("BLOCK: input id must be non-empty string")
+  inp_ids.append(_id)
+
+# verify each output row
+for i,obj in enumerate(out):
+  _id=obj.get("id", None)
+  if not isinstance(_id,str) or not _id:
+    raise SystemExit("BLOCK: output id must be non-empty string")
+  if "result" not in obj:
+    raise SystemExit("BLOCK: output missing result")
+  if _id!=inp_ids[i]:
+    raise SystemExit("BLOCK: output id order mismatch (must match inputs line-by-line)")
+
+  # required fields per schema
+  if "exit_code" not in obj:
+    raise SystemExit("BLOCK: output missing exit_code")
+  if not isinstance(obj["exit_code"], int):
+    raise SystemExit("BLOCK: exit_code must be int")
+
+  if "latency_ms" not in obj:
+    raise SystemExit("BLOCK: output missing latency_ms")
+  if not isinstance(obj["latency_ms"], int):
+    raise SystemExit("BLOCK: latency_ms must be int")
+
+  em=obj.get("engine_meta", None)
+  if not isinstance(em,dict):
+    raise SystemExit("BLOCK: engine_meta missing or not object")
+
+  eng_meta_engine=em.get("engine", None)
+  if not isinstance(eng_meta_engine, str) or not eng_meta_engine:
+    raise SystemExit("BLOCK: engine_meta.engine must be non-empty string")
+
+  # tokens_out must exist (int or null); for candidate engine it must be null
+  if "tokens_out" not in obj:
+    raise SystemExit("BLOCK: output missing tokens_out")
+  tokens_out=obj["tokens_out"]
+
+  # tokens_out_supported must be present and false
+  tos=em.get("tokens_out_supported", None)
+  if tos is not False:
+    raise SystemExit("BLOCK: engine_meta.tokens_out_supported must be false")
+
+  if eng_meta_engine=="ondevice_candidate_v0":
+    if tokens_out is not None:
+      raise SystemExit("BLOCK: ondevice_candidate_v0 requires tokens_out=null")
+
+print("EXEC_MODE_V1_OK=1")
+PY

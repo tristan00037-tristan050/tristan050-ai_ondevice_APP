@@ -245,6 +245,12 @@ OUT=$(node "$NODE_SCRIPT" "$ROOT" "$GOOD_PACK_DIR" "$BAD_PACK_DIR" "$STATE_PATH"
   exit 1
 }
 
+# Emit only the marker line (meta-only; 1 line) so downstream runners can parse fingerprint.
+MARKER_LINE="$(printf '%s\n' "$OUT" | grep -m 1 'ONDEVICE_EXEC_MARKER' || true)"
+if [[ -n "${MARKER_LINE}" ]]; then
+  echo "${MARKER_LINE}"
+fi
+
 # 마커 파싱
 if echo "$OUT" | grep -q "ONDEVICE_REAL_COMPUTE_ONCE_OK=1"; then
   ONDEVICE_REAL_COMPUTE_ONCE_OK=1
