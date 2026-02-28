@@ -5,14 +5,19 @@ CANONICALIZE_SHARED_SINGLE_SOURCE_OK=0
 cleanup(){ echo "CANONICALIZE_SHARED_SINGLE_SOURCE_OK=${CANONICALIZE_SHARED_SINGLE_SOURCE_OK}"; }
 trap cleanup EXIT
 
-command -v rg >/dev/null 2>&1 || { echo "FAIL: rg not found"; exit 1; }
-
-# "canonicalize" 또는 "JCS" 구현 흔적을 스캔해 중복 구현을 차단
-HITS="$(rg -n --no-messages '(jcsCanonicalize|JSON Canonicalization Scheme|RFC 8785|canonicalize\()' . \
-  -g'*.ts' -g'*.js' \
-  -g'!packages/common/src/crypto/jcs.ts' \
-  -g'!packages/common/test/jcs.test.ts' \
-  || true)"
+# "canonicalize" 또는 "JCS" 구현 흔적을 스캔해 중복 구현을 차단 (rg 없으면 grep+find 폴백, 설치 금지)
+if command -v rg >/dev/null 2>&1; then
+  HITS="$(rg -n --no-messages '(jcsCanonicalize|JSON Canonicalization Scheme|RFC 8785|canonicalize\()' . \
+    -g'*.ts' -g'*.js' \
+    -g'!packages/common/src/crypto/jcs.ts' \
+    -g'!packages/common/test/jcs.test.ts' \
+    || true)"
+else
+  HITS="$(find . -type f \( -name '*.ts' -o -name '*.js' \) \
+    ! -path '*node_modules*' \
+    ! -path './packages/common/src/crypto/jcs.ts' ! -path './packages/common/test/jcs.test.ts' \
+    -exec grep -nE '(jcsCanonicalize|JSON Canonicalization Scheme|RFC 8785|canonicalize\()' {} + 2>/dev/null || true)"
+fi
 
 if [[ -n "$HITS" ]]; then
   echo "FAIL: JCS/canonicalize duplicate implementation detected (single source required)"

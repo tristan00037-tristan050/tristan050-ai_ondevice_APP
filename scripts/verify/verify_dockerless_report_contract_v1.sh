@@ -12,18 +12,30 @@ finish() {
 }
 trap finish EXIT
 
-# 단일 경로 계약(우선순위):
+# 단일 경로 계약: gen_repo_guard_report_v1.sh와 동일 (REPO_GUARD_REPORTS_ROOT, default docs/ops/reports)
 # 1) REPO_GUARD_REPORTS_ROOT (generator와 동일)
-# 2) OUT_ROOT/ops/reports
-# 3) docs/ops/reports (generator default 호환)
-OUT_ROOT="${OUT_ROOT:-out}"
-REPORT_ROOT="${REPO_GUARD_REPORTS_ROOT:-${OUT_ROOT}/ops/reports}"
+# 2) docs/ops/reports (generator default)
+# 3) OUT_ROOT/ops/reports (호환 폴백)
+REPORT_ROOT="${REPO_GUARD_REPORTS_ROOT:-docs/ops/reports}"
 report="${REPORT_ROOT}/repo_contracts_latest.json"
+if [ ! -f "$report" ]; then
+  report="${OUT_ROOT:-out}/ops/reports/repo_contracts_latest.json"
+fi
 if [ ! -f "$report" ]; then
   report="docs/ops/reports/repo_contracts_latest.json"
 fi
 
-test -f "$report" || { echo "ERROR_CODE=REPORT_MISSING"; exit 1; }
+# keys-only 모드(리포트 생성 중)에서는 리포트가 아직 없을 수 있음 → 0 출력 후 성공
+if [ ! -f "$report" ]; then
+  if [[ "${REPO_GUARD_KEYS_ONLY:-0}" == "1" ]]; then
+    DOCKERLESS_REPORT_RUN_OK=0
+    DOCKERLESS_REPORT_DEGRADED_DOCKER_KEYS_OK=0
+    DOCKERLESS_REPORT_STATIC_POLICY_ALWAYS_ON_OK=0
+    exit 0
+  fi
+  echo "ERROR_CODE=REPORT_MISSING"
+  exit 1
+fi
 
 node - "$report" <<'NODE'
 const fs = require("fs");
