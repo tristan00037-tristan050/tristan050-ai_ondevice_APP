@@ -9,6 +9,8 @@ command -v jq >/dev/null 2>&1 || { echo "BLOCK: jq not found"; exit 1; }
 WF_DIR=".github/workflows"
 [ -d "$WF_DIR" ] || { echo "BLOCK: missing workflows dir: $WF_DIR"; exit 1; }
 
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
+
 fail=0
 count=0
 
@@ -16,8 +18,11 @@ while IFS= read -r name; do
   [ -z "$name" ] && continue
   count=$((count + 1))
   # 1) workflow file that contains this exact name:
-  #    name: product-verify-...
-  file="$(rg -l --fixed-strings "name: ${name}" "$WF_DIR" 2>/dev/null | head -n 1 || true)"
+  if have_rg; then
+    file="$(rg -l --fixed-strings "name: ${name}" "$WF_DIR" 2>/dev/null | head -n 1 || true)"
+  else
+    file="$(grep -Rl -F "name: ${name}" "$WF_DIR" 2>/dev/null | head -n 1 || true)"
+  fi
   if [ -z "$file" ]; then
     echo "BLOCK: workflow name not found in .github/workflows: ${name}"
     fail=1
@@ -25,21 +30,42 @@ while IFS= read -r name; do
   fi
 
   # 2) must include pull_request trigger
-  if ! rg -n "^[[:space:]]*pull_request:" "$file" >/dev/null 2>&1; then
-    echo "BLOCK: missing pull_request trigger: ${name} file=${file}"
-    fail=1
+  if have_rg; then
+    if ! rg -n "^[[:space:]]*pull_request:" "$file" >/dev/null 2>&1; then
+      echo "BLOCK: missing pull_request trigger: ${name} file=${file}"
+      fail=1
+    fi
+  else
+    if ! grep -qE "^[[:space:]]*pull_request:" "$file" 2>/dev/null; then
+      echo "BLOCK: missing pull_request trigger: ${name} file=${file}"
+      fail=1
+    fi
   fi
 
   # 3) must include merge_group trigger
-  if ! rg -n "^[[:space:]]*merge_group:" "$file" >/dev/null 2>&1; then
-    echo "BLOCK: missing merge_group trigger: ${name} file=${file}"
-    fail=1
+  if have_rg; then
+    if ! rg -n "^[[:space:]]*merge_group:" "$file" >/dev/null 2>&1; then
+      echo "BLOCK: missing merge_group trigger: ${name} file=${file}"
+      fail=1
+    fi
+  else
+    if ! grep -qE "^[[:space:]]*merge_group:" "$file" 2>/dev/null; then
+      echo "BLOCK: missing merge_group trigger: ${name} file=${file}"
+      fail=1
+    fi
   fi
 
   # 4) basic bypass patterns (best-effort static)
-  if rg -n "continue-on-error:[[:space:]]*true" "$file" >/dev/null 2>&1; then
-    echo "BLOCK: continue-on-error true found: ${name} file=${file}"
-    fail=1
+  if have_rg; then
+    if rg -n "continue-on-error:[[:space:]]*true" "$file" >/dev/null 2>&1; then
+      echo "BLOCK: continue-on-error true found: ${name} file=${file}"
+      fail=1
+    fi
+  else
+    if grep -qE "continue-on-error:[[:space:]]*true" "$file" 2>/dev/null; then
+      echo "BLOCK: continue-on-error true found: ${name} file=${file}"
+      fail=1
+    fi
   fi
 
   echo "OK: REQUIRED_WORKFLOW_ALWAYS_REPORTED: ${name} file=${file}"

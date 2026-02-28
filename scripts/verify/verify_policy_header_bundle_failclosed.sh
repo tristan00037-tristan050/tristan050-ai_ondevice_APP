@@ -10,7 +10,12 @@ n="$(jq -r '.required_headers | length' "$SSOT")"
 [ "$n" -ge 1 ] || { echo "POLICY_HEADERS_REQUIRED_OK=0"; exit 1; }
 
 # middleware exists anywhere under backend/*/mw/policy_header_bundle.ts
-hits="$(rg -l "requirePolicyHeaderBundle" webcore_appcore_starter_4_17/backend -S || true)"
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
+if have_rg; then
+  hits="$(rg -l "requirePolicyHeaderBundle" webcore_appcore_starter_4_17/backend -S || true)"
+else
+  hits="$(grep -Rl "requirePolicyHeaderBundle" webcore_appcore_starter_4_17/backend 2>/dev/null || true)"
+fi
 [ -n "$hits" ] || { echo "POLICY_HEADERS_REQUIRED_OK=0"; exit 1; }
 
 echo "POLICY_HEADERS_REQUIRED_OK=1"
