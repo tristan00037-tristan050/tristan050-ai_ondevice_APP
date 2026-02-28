@@ -13,16 +13,18 @@ list="$(find "$OUT_ROOT" -type f -name "result.jsonl" 2>/dev/null | sort || true
 files=()
 while IFS= read -r f; do [[ -n "$f" ]] && files+=("$f"); done <<< "$list"
 
-# 금지 키/패턴(최소 세트, 오탐 최소화)
-deny_keys='("exception_message"|"traceback"|"stack"|"stderr_dump"|"raw_output")'
-deny_patterns='(Traceback|Exception:| at [^"]+:[0-9]+)'
+# 금지 "키"만 검사(값 "id":"stack" 등 오탐 방지); payload 필드 값 내 예외 패턴은 별도
+deny_key_re='"(exception_message|traceback|stack|stderr_dump|raw_output)"[[:space:]]*:'
+deny_payload_re='"(error|stderr|message|error_message)"[[:space:]]*:[[:space:]]*"[^"]*(Traceback|Exception:| at [^"]+:[0-9]+)'
 
 for f in "${files[@]}"; do
-  if grep -Eqs "$deny_keys" "$f"; then
+  # 1) 금지 "키"만 검사(값 매칭 금지)
+  if grep -Eqs "$deny_key_re" "$f"; then
     echo "ERROR_CODE=DENY_KEY_FOUND"
     exit 1
   fi
-  if grep -Eqs "$deny_patterns" "$f"; then
+  # 2) 금지 "패턴"은 payload 키 값에만 제한(오탐 방지)
+  if grep -Eqs "$deny_payload_re" "$f"; then
     echo "ERROR_CODE=DENY_PATTERN_FOUND"
     exit 1
   fi
