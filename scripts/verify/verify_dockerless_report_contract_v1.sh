@@ -12,15 +12,29 @@ finish() {
 }
 trap finish EXIT
 
+# 단일 경로 계약(우선순위):
+# 1) REPO_GUARD_REPORTS_ROOT (generator와 동일)
+# 2) OUT_ROOT/ops/reports
+# 3) docs/ops/reports (generator default 호환)
 OUT_ROOT="${OUT_ROOT:-out}"
-report="${OUT_ROOT}/ops/reports/repo_contracts_latest.json"
+REPORT_ROOT="${REPO_GUARD_REPORTS_ROOT:-${OUT_ROOT}/ops/reports}"
+report="${REPORT_ROOT}/repo_contracts_latest.json"
+if [ ! -f "$report" ]; then
+  report="docs/ops/reports/repo_contracts_latest.json"
+fi
 
 test -f "$report" || { echo "ERROR_CODE=REPORT_MISSING"; exit 1; }
 
 node - "$report" <<'NODE'
 const fs = require("fs");
-const p = process.argv[2];
-const j = JSON.parse(fs.readFileSync(p, "utf8"));
+
+// node - "$report" 형태는 환경에 따라 argv[1]이 "-"가 될 수 있어 보강
+const a1 = process.argv[1];
+const a2 = process.argv[2];
+const reportPath = (!a1 || a1 === "-") ? a2 : a1;
+if (!reportPath) process.exit(20);
+
+const j = JSON.parse(fs.readFileSync(reportPath, "utf8"));
 const keys = (j && j.keys) || {};
 
 function is01(v){ return v === "0" || v === "1"; }
@@ -31,9 +45,6 @@ function must01(k){
 
 must01("DOCKER_IT_NET_DB_SVCNAME_V1_OK");
 must01("HOST_DOCKER_INTERNAL_FORBIDDEN_OK");
-
-// dockerless 환경에서는 DB 네트워크 관련 키가 degrade(0)일 수 있음.
-// 핵심은 "결측 금지(0/1 반드시 emit)"와 "정적 정책 키 always-on(결측 금지)".
 process.exit(0);
 NODE
 
