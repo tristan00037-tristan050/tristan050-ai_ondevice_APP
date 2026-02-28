@@ -13,6 +13,8 @@ jobs:
       CI: "true"
       OUT_ROOT: out
       REPO_GUARD_REPORTS_ROOT: out/ops/reports
+      REPO_GUARD_KEYS_ONLY: "1"
+      DOCKERLESS_REPORT_ENFORCE: "1"
       DOCKER_HOST: unix:///var/run/does-not-exist.sock
     steps:
       - uses: actions/checkout@v4
@@ -31,8 +33,6 @@ jobs:
 
       - name: Generate repo guard report (must not hard-fail)
         shell: bash
-        env:
-          REPO_GUARD_KEYS_ONLY: "1"
         run: |
           set -euo pipefail
           bash scripts/ops/gen_repo_guard_report_v1.sh
