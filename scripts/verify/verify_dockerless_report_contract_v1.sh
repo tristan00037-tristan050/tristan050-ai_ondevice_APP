@@ -14,20 +14,18 @@ finish() {
 }
 trap finish EXIT
 
-# ENFORCE=1인 경우에만 fail-closed로 강제한다.
+# ENFORCE=1인 경우에만 fail-closed로 강제한다. 그 외 워크플로는 무조건 SKIP(리포트 유무와 무관).
 ENFORCE="${DOCKERLESS_REPORT_ENFORCE:-0}"
+if [ "$ENFORCE" != "1" ]; then
+  DOCKERLESS_REPORT_SKIPPED=1
+  exit 0
+fi
 
 OUT_ROOT="${OUT_ROOT:-out}"
 REPORT_ROOT="${REPO_GUARD_REPORTS_ROOT:-${OUT_ROOT}/ops/reports}"
 report="${REPORT_ROOT}/repo_contracts_latest.json"
 if [ ! -f "$report" ]; then
   report="docs/ops/reports/repo_contracts_latest.json"
-fi
-
-# 리포트가 없고 ENFORCE가 아니면 SKIP(다른 워크플로 false-fail 방지)
-if [ ! -f "$report" ] && [ "$ENFORCE" != "1" ]; then
-  DOCKERLESS_REPORT_SKIPPED=1
-  exit 0
 fi
 
 # ENFORCE=1인데 리포트가 없으면 FAIL
