@@ -5,9 +5,10 @@ COUNTER_SINGLE_WRITER_OK=0
 cleanup(){ echo "COUNTER_SINGLE_WRITER_OK=${COUNTER_SINGLE_WRITER_OK}"; }
 trap cleanup EXIT
 
-# 금지: ops_counters/직접 증가/임의 저장 (rg 없으면 grep+find 폴백)
+# 금지: ops_counters/직접 증가/임의 저장 (rg 없거나 동작 안 하면 grep+find 폴백)
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 DIR="webcore_appcore_starter_4_17/backend/model_registry"
-if command -v rg >/dev/null 2>&1; then
+if have_rg; then
   BAD="$(rg -n --no-messages \
     -e 'incCounter\(' \
     -e 'LOCK_TIMEOUT_COUNT_24H' \

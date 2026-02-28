@@ -9,7 +9,7 @@ set -euo pipefail
 DIR="docs/ops/contracts"
 [[ -d "$DIR" ]] || { echo "FAIL: missing $DIR"; exit 1; }
 
-have_rg() { command -v rg >/dev/null 2>&1; }
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 
 # 실제 placeholder만 잡기: PASTE_*, <PASTE*, TODO + (URL|LINK|HERE|UPDATE), PLACEHOLDER + (URL|LINK|HERE|UPDATE)
 PAT_PLACEHOLDER='(PASTE_|<PASTE|TODO\s+(URL|LINK|HERE|UPDATE)|PLACEHOLDER\s+(URL|LINK|HERE|UPDATE))'

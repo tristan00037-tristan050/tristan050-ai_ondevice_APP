@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# grep/rg 공용 검색기(설치 금지: rg 없으면 grep로 폴백)
+# grep/rg 공용 검색기(설치 금지: rg 없거나 동작 안 하면 grep로 폴백)
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 scan() {
-  if command -v rg >/dev/null 2>&1; then
+  if have_rg; then
     rg "$@"
   else
     local pat="" path="."

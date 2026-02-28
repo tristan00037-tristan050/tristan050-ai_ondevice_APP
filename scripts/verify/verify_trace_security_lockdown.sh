@@ -18,8 +18,8 @@ trap cleanup EXIT
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-# rg 없으면 grep 폴백 (설치 금지)
-have_rg() { command -v rg >/dev/null 2>&1; }
+# rg 없거나 동작 안 하면 grep 폴백 (설치 금지)
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 rg_n_dir()  { if have_rg; then rg -n --hidden --no-messages "$1" "$2" 2>/dev/null; else grep -RInE "$1" "$2" 2>/dev/null || true; fi; }
 rg_q_file() { if have_rg; then rg -q "$1" "$2" 2>/dev/null; else grep -qE "$1" "$2" 2>/dev/null; fi; }
 rg_l_dir()  { if have_rg; then rg -l --hidden --no-messages "$1" "$2" 2>/dev/null || true; else grep -RlE "$1" "$2" 2>/dev/null || true; fi; }

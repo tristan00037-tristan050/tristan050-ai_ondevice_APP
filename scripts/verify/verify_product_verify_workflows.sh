@@ -4,10 +4,11 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-# Use grep when rg not available (e.g. ai-ab-bench-nightly, ops-reports-nightly)
-qmatch_f() { if command -v rg >/dev/null 2>&1; then rg -q "$1" "$2"; else grep -qF "$1" "$2"; fi; }
-qmatch_re() { if command -v rg >/dev/null 2>&1; then rg -q "$1" "$2"; else grep -qE "$1" "$2"; fi; }
-nmatch_re() { if command -v rg >/dev/null 2>&1; then rg -n "$1" "$2"; else grep -nE "$1" "$2"; fi; }
+# Use grep when rg not available or broken (e.g. ai-ab-bench-nightly, ops-reports-nightly)
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
+qmatch_f() { if have_rg; then rg -q "$1" "$2"; else grep -qF "$1" "$2"; fi; }
+qmatch_re() { if have_rg; then rg -q "$1" "$2"; else grep -qE "$1" "$2"; fi; }
+nmatch_re() { if have_rg; then rg -n "$1" "$2"; else grep -nE "$1" "$2"; fi; }
 
 GLOB_DIR=".github/workflows"
 test -d "$GLOB_DIR" || { echo "BLOCK: missing $GLOB_DIR"; exit 1; }

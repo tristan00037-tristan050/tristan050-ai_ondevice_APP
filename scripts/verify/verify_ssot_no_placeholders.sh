@@ -7,8 +7,9 @@ DIR="docs/ops/contracts"
 # placeholder 계열만 금지한다. (PASS requires의 *_OK=1 같은 설명 문구는 허용)
 PAT='(PASTE_|<PASTE|TODO|\(여기에|PLACEHOLDER)'
 
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 HITS=""
-if command -v rg >/dev/null 2>&1; then
+if have_rg; then
   HITS="$(rg -n --no-messages -e "${PAT}" "${DIR}" || true)"
   # *_OK=1 패턴은 제외 (설명 문구 허용)
   if [[ -n "${HITS}" ]]; then

@@ -24,9 +24,10 @@ trap cleanup EXIT
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-# rg 없으면 grep 폴백 (설치 금지)
-run_q() { if command -v rg >/dev/null 2>&1; then rg -q "$@"; else grep -qE "$1" "$2" 2>/dev/null; fi; }
-run_n() { if command -v rg >/dev/null 2>&1; then rg -n "$@"; else grep -nE "$1" "$2" 2>/dev/null || true; fi; }
+# rg 없거나 동작 안 하면 grep 폴백 (설치 금지)
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
+run_q() { if have_rg; then rg -q "$@"; else grep -qE "$1" "$2" 2>/dev/null; fi; }
+run_n() { if have_rg; then rg -n "$@"; else grep -nE "$1" "$2" 2>/dev/null || true; fi; }
 
 # 단일 소스 validator 파일 (CommonJS 또는 TypeScript)
 SINGLE_SOURCE_CJS="packages/common/meta_only/validator_v1.cjs"

@@ -12,7 +12,7 @@ cd "$ROOT"
 PAT1='\b[A-Z0-9_]+_OK=1\b'
 PAT2='\bOK=1\b'
 
-have_rg() { command -v rg >/dev/null 2>&1; }
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 
 HITS=""
 if have_rg; then

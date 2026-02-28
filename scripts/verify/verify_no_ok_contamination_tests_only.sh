@@ -20,8 +20,9 @@ scan_with_grep() {
     -E '[A-Z0-9_]+_OK=1' . | grep -E '/tests/' || true
 }
 
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 HITS=""
-if command -v rg >/dev/null 2>&1; then
+if have_rg; then
   HITS="$(scan_with_rg || true)"
 else
   HITS="$(scan_with_grep || true)"

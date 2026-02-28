@@ -9,7 +9,7 @@ trap cleanup EXIT
 ROOT="webcore_appcore_starter_4_17/backend"
 test -d "$ROOT" || { echo "BLOCK: missing dir: $ROOT"; exit 1; }
 
-have_rg(){ command -v rg >/dev/null 2>&1; }
+have_rg(){ command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 
 # 파일 리스트
 if have_rg; then

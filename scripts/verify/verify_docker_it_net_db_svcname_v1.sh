@@ -22,7 +22,8 @@ check_usage() {
   [[ "$content" =~ host\.docker\.internal.*host-gateway ]] && return 0
   return 1
 }
-if command -v rg >/dev/null 2>&1; then
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
+if have_rg; then
   while IFS= read -r hit; do
     [[ -z "$hit" ]] && continue
     check_usage "$hit" && { host_docker_internal_used=1; break; }

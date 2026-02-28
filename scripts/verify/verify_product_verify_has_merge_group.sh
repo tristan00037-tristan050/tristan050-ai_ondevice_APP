@@ -11,7 +11,7 @@ cd "$ROOT"
 WF_DIR=".github/workflows"
 [[ -d "$WF_DIR" ]] || { echo "FAIL: missing $WF_DIR"; exit 1; }
 
-have_rg() { command -v rg >/dev/null 2>&1; }
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 has_token() {
   local token="$1" file="$2"
   if have_rg; then
