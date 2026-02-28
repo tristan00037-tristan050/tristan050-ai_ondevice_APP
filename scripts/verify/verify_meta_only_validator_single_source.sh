@@ -24,7 +24,9 @@ trap cleanup EXIT
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-command -v rg >/dev/null 2>&1 || { echo "BLOCK: ripgrep (rg) not found"; exit 1; }
+# rg 없으면 grep 폴백 (설치 금지)
+run_q() { if command -v rg >/dev/null 2>&1; then rg -q "$@"; else grep -qE "$1" "$2" 2>/dev/null; fi; }
+run_n() { if command -v rg >/dev/null 2>&1; then rg -n "$@"; else grep -nE "$1" "$2" 2>/dev/null || true; fi; }
 
 # 단일 소스 validator 파일 (CommonJS 또는 TypeScript)
 SINGLE_SOURCE_CJS="packages/common/meta_only/validator_v1.cjs"
@@ -47,7 +49,7 @@ fi
 test -s "$SINGLE_SOURCE" || { echo "BLOCK: missing single source: $SINGLE_SOURCE"; exit 1; }
 
 # assertMetaOnly, validateMetaOnlyOrThrow 함수가 존재하는지 확인
-if ! rg -q "(function\s+assertMetaOnly|function\s+validateMetaOnlyOrThrow)" "$SINGLE_SOURCE"; then
+if ! run_q "(function\s+assertMetaOnly|function\s+validateMetaOnlyOrThrow)" "$SINGLE_SOURCE"; then
   echo "BLOCK: assertMetaOnly or validateMetaOnlyOrThrow function not found in single source"
   exit 1
 fi
@@ -71,15 +73,15 @@ for file in "${FORBIDDEN_DUPLICATE_FILES[@]}"; do
   fi
 
   # assertMetaOnly 함수 정의가 있는지 확인 (중복 구현 - 금지)
-  if rg -n "function\s+assertMetaOnly" "$file" | grep -vE '^\s*#' | grep -vE '^\s*//' | grep -vE 'import|from|require' >/dev/null 2>&1; then
+  if run_n "function\s+assertMetaOnly" "$file" | grep -vE '^\s*#' | grep -vE '^\s*//' | grep -vE 'import|from|require' >/dev/null 2>&1; then
     echo "BLOCK: duplicate assertMetaOnly implementation found in $file (must use single source)"
-    rg -n "function\s+assertMetaOnly" "$file" | head -3
+    run_n "function\s+assertMetaOnly" "$file" | head -3
     DUPLICATE_FOUND=1
     continue
   fi
 
   # validateMetaOnlyOrThrow 함수 정의가 있는지 확인
-  FUNC_DEF=$(rg -n "export\s+function\s+validateMetaOnlyOrThrow|function\s+validateMetaOnlyOrThrow" "$file" | grep -vE '^\s*#' | grep -vE '^\s*//' | grep -vE 'import|from|require' | head -1 || echo "")
+  FUNC_DEF=$(run_n "export\s+function\s+validateMetaOnlyOrThrow|function\s+validateMetaOnlyOrThrow" "$file" | grep -vE '^\s*#' | grep -vE '^\s*//' | grep -vE 'import|from|require' | head -1 || echo "")
   
   if [[ -n "$FUNC_DEF" ]]; then
     # 단일 소스 import 확인
