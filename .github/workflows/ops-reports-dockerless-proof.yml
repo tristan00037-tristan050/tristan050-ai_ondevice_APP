@@ -1,0 +1,50 @@
+name: ops-reports-dockerless-proof
+
+on:
+  pull_request:
+  merge_group:
+
+jobs:
+  dockerless-proof:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CI: "true"
+      OUT_ROOT: out
+      REPO_GUARD_REPORTS_ROOT: out/ops/reports
+      DOCKER_HOST: unix:///var/run/does-not-exist.sock
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm docker info fails (hard guard)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v docker >/dev/null 2>&1; then
+            if docker info >/dev/null 2>&1; then
+              echo "ERROR_CODE=DOCKER_INFO_SHOULD_FAIL_BUT_OK"
+              exit 1
+            fi
+          fi
+          echo "DOCKERLESS_DOCKER_INFO_FAIL_CONFIRMED_OK=1"
+
+      - name: Generate repo guard report (must not hard-fail)
+        shell: bash
+        env:
+          REPO_GUARD_KEYS_ONLY: "1"
+        run: |
+          set -euo pipefail
+          bash scripts/ops/gen_repo_guard_report_v1.sh
+
+      - name: Verify dockerless report contract (meta-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_dockerless_report_contract_v1.sh
+
+      - name: Anchor
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_repo_contracts.sh ; echo "EXIT=$?"
