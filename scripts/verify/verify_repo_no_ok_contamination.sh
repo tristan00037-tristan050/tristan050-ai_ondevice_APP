@@ -12,7 +12,7 @@ cd "$ROOT"
 PAT1='\b[A-Z0-9_]+_OK=1\b'
 PAT2='\bOK=1\b'
 
-have_rg() { command -v rg >/dev/null 2>&1; }
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 
 HITS=""
 if have_rg; then
@@ -23,9 +23,9 @@ if have_rg; then
     --glob '**/tests/**' \
     -e "$PAT1" -e "$PAT2" . 2>/dev/null || true)"
 else
-  # grep fallback (PAT1/PAT2의 단어경계가 약해질 수 있으나 fail-closed 방향 유지)
+  # grep fallback: path에 /tests/ 가 있는 경우만 (줄 내용의 '/tests/'는 제외, 자기 스크립트 제외)
   HITS="$(grep -RIn --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=coverage \
-    -E '[A-Z0-9_]+_OK=1|(^|[^A-Za-z0-9_])OK=1([^A-Za-z0-9_]|$)' . 2>/dev/null | grep -E '/tests/' || true)"
+    -E '[A-Z0-9_]+_OK=1|(^|[^A-Za-z0-9_])OK=1([^A-Za-z0-9_]|$)' . 2>/dev/null | awk -F: 'index($1,"/tests/")>0' || true)"
 fi
 
 if [[ -n "${HITS}" ]]; then

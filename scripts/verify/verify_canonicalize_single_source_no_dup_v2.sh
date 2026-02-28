@@ -22,7 +22,7 @@ SSOT="packages/common/meta_only/canonicalize_v2.cjs"
 CANONICALIZE_V2_SSOT_OK=1
 
 # 2) 복제본 탐지 (canonicalizeMetaRecordV2 함수 구현이 다른 곳에 있으면 BLOCK)
-have_rg() { command -v rg >/dev/null 2>&1; }
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 
 if have_rg; then
   HITS="$(rg -n --hidden --no-messages \

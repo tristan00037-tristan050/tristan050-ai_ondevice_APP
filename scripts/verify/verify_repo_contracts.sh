@@ -1735,4 +1735,7 @@ RELEASE_GATE_POLICY_V1_OK=1
 RELEASE_GATE_WIRING_V1_OK=1
 RELEASE_BLOCKED_WITHOUT_GATES_OK=1
 
+# P17-P0-01 dockerless report proof
+run_guard "dockerless report contract v1" bash scripts/verify/verify_dockerless_report_contract_v1.sh
+
 exit 0

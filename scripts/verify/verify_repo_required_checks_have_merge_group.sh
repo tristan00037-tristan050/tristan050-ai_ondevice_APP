@@ -20,17 +20,15 @@ is_exception() {
   local ssot="docs/ops/contracts/PRODUCT_VERIFY_WORKFLOW_TEMPLATE_EXCEPTIONS_V1.md"
   [[ -f "$ssot" ]] || return 1
 
-  if command -v rg >/dev/null 2>&1; then
+  if have_rg; then
     rg -qF "$wf" "$ssot" 2>/dev/null
     return $?
   fi
-
-  # no-rg fallback
   grep -Fq -- "$wf" "$ssot" 2>/dev/null
   return $?
 }
 
-have_rg() { command -v rg >/dev/null 2>&1; }
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 
 shopt -s nullglob
 FILES=("$WF_DIR"/product-verify-*.yml "$WF_DIR"/product-verify-*.yaml)

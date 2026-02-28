@@ -20,9 +20,13 @@ cd "$DIR"
 # Check dependencies exist (workflow must install)
 test -d "node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
 
-# 정적 스캔: signature.ts에 함수가 실제로 연결되어야 함
-command -v rg >/dev/null 2>&1 || { echo "FAIL: rg not found"; exit 1; }
-rg -n "enforceAntiRollbackFreeze" verify/signature.ts >/dev/null || { echo "FAIL: not wired in verify/signature.ts"; exit 1; }
+# 정적 스캔: signature.ts에 함수가 실제로 연결되어야 함 (rg 없거나 동작 안 하면 grep 폴백)
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
+if have_rg; then
+  rg -n "enforceAntiRollbackFreeze" verify/signature.ts >/dev/null || { echo "FAIL: not wired in verify/signature.ts"; exit 1; }
+else
+  grep -n "enforceAntiRollbackFreeze" verify/signature.ts >/dev/null || { echo "FAIL: not wired in verify/signature.ts"; exit 1; }
+fi
 ANTI_ROLLBACK_WIRED_OK=1
 
 RESULT_JSON="/tmp/svr03_update_anti_rollback_freeze.json"

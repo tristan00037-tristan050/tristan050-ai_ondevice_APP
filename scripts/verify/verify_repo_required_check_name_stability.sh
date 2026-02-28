@@ -12,7 +12,7 @@ trap cleanup EXIT
 WF_DIR=".github/workflows"
 [[ -d "$WF_DIR" ]] || { echo "FAIL: missing $WF_DIR"; exit 1; }
 
-have_rg() { command -v rg >/dev/null 2>&1; }
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 
 fail=0
 while IFS= read -r f; do

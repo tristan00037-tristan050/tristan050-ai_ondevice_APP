@@ -14,7 +14,7 @@ cd "$ROOT"
 ALLOW_DIR="packages/common/src/canon"
 [[ -d "$ALLOW_DIR" ]] || { echo "FAIL: missing $ALLOW_DIR"; exit 1; }
 
-have_rg() { command -v rg >/dev/null 2>&1; }
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 
 # canonicalizeJson 함수 구현(키 정렬 stringify) 흔적을 탐지
 # 허용: packages/common/src/canon/**

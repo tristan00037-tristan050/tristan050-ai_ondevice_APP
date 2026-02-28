@@ -73,7 +73,7 @@ fi
 PATH_SCOPE_NO_PLACEHOLDER_OK=1
 
 # 4) Drift check: compare actual path usage against SSOT
-have_rg() { command -v rg >/dev/null 2>&1; }
+have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
 
 extract_paths() {
   if have_rg; then
