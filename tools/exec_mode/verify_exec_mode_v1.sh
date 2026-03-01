@@ -23,11 +23,23 @@ done
 RESULT_PATH="$OUTDIR/result.jsonl"
 [[ -f "$RESULT_PATH" ]] || { echo "BLOCK: result not found: $RESULT_PATH" >&2; exit 1; }
 
-python3 - "$INPUTS" "$RESULT_PATH" <<'PY'
+# P17-P0-03: SSOT schema (required_keys from JSON only)
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SCHEMA_PATH="${ROOT}/docs/ops/contracts/EXEC_MODE_SCHEMA_V1.json"
+[[ -f "$SCHEMA_PATH" ]] || { echo "BLOCK: SSOT schema not found: $SCHEMA_PATH" >&2; exit 1; }
+
+python3 - "$INPUTS" "$RESULT_PATH" "$SCHEMA_PATH" <<'PY'
 import json,sys,os
 
 inputs_path=sys.argv[1]
 result_path=sys.argv[2]
+schema_path=sys.argv[3]
+
+with open(schema_path,'r',encoding='utf-8') as f:
+  schema=json.load(f)
+required_keys=schema.get("required_keys")
+if not isinstance(required_keys,list) or len(required_keys)==0:
+  raise SystemExit("BLOCK: schema required_keys missing or empty")
 
 def read_jsonl(p):
   rows=[]
@@ -52,8 +64,11 @@ for obj in inp:
     raise SystemExit("BLOCK: input id must be non-empty string")
   inp_ids.append(_id)
 
-# verify each output row
+# verify each output row (required_keys from SSOT schema)
 for i,obj in enumerate(out):
+  for k in required_keys:
+    if k not in obj:
+      raise SystemExit(f"BLOCK: output missing required key (schema): {k!r}")
   _id=obj.get("id", None)
   if not isinstance(_id,str) or not _id:
     raise SystemExit("BLOCK: output id must be non-empty string")
