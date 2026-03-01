@@ -1765,6 +1765,5 @@ run_guard "output root ssot v1" bash scripts/verify/verify_output_root_ssot_v1.s
 run_guard "ssot change contract v1" bash scripts/verify/verify_ssot_change_contract_v1.sh
 
 run_guard "meta-only output guard v1" bash scripts/verify/verify_meta_only_output_guard_v1.sh
-exit 0
-
 run_guard "path scope read required v1" bash scripts/verify/verify_path_scope_read_required_v1.sh
+exit 0
