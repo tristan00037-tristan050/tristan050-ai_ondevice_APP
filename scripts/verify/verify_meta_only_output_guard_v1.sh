@@ -8,6 +8,11 @@ trap finish EXIT
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
+# PATH_SCOPE SSOT read (P17-P0-09: 경로 드리프트 방지)
+PATH_SCOPE_SSOT="docs/ops/contracts/PATH_SCOPE_SSOT_V1.txt"
+test -f "$PATH_SCOPE_SSOT" || { echo "ERROR_CODE=PATH_SCOPE_SSOT_MISSING"; exit 1; }
+echo "PATH_SCOPE_SSOT_READ_OK=1"
+
 # 스캔 범위(오탐 최소화를 위해 경로를 제한)
 SCAN_PATHS=(
   "scripts/verify"

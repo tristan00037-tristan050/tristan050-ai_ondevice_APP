@@ -36,6 +36,8 @@ require_read_re="(cat|jq|node|python).*PATH_SCOPE_SSOT_V1\\.json|PATH_SCOPE_SSOT
 
 for f in "${scanners[@]}"; do
   [[ "$f" == "scripts/verify/verify_path_scope_enforced_v2.sh" ]] && continue
+  # P17-P0-09: read-required v1 uses PATH_SCOPE_SSOT_V1.txt; enforced v2 checks .json consumers only
+  [[ "$f" == "scripts/verify/verify_path_scope_read_required_v1.sh" ]] && continue
 
   # (A) 실제 경로 참조(비주석)
   if ! grep -v '^[[:space:]]*#' "$f" | grep -qE "$require_ref_re"; then

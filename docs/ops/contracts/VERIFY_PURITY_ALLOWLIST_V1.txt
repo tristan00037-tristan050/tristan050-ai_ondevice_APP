@@ -10,3 +10,4 @@
 # 검사 스크립트 예외 (패턴 문자열 자체를 포함하는 검사 스크립트)
 scripts/verify/verify_no_npm_install_fallback.sh
 scripts/verify/verify_verify_purity_no_install.sh
+scripts/verify/verify_verify_purity_full_scope_v2.sh
