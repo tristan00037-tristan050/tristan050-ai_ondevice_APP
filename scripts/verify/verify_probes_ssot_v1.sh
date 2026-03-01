@@ -1,105 +1,94 @@
 #!/usr/bin/env bash
-# PR-P0-DEPLOY-01: Chart/app/CI probe paths single SSOT (/healthz, /readyz). Fail-closed on drift.
-# Output: key=value only (no sensitive data).
 set -euo pipefail
-
-REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-cd "$REPO_ROOT"
 
 PROBES_SSOT_V1_OK=0
 PROBES_PATHS_MATCH_APP_V1_OK=0
-probes_ssot_health_path="/healthz"
-probes_ssot_ready_path="/readyz"
-probe_chart_readiness_path=""
-probe_chart_liveness_path=""
-probe_ci_wait_path=""
-probe_app_health_path=""
-probe_app_ready_path=""
-probes_ssot_fail_class="unknown"
-probes_ssot_fail_hint=""
 
-cleanup() {
+finish() {
   echo "PROBES_SSOT_V1_OK=${PROBES_SSOT_V1_OK}"
   echo "PROBES_PATHS_MATCH_APP_V1_OK=${PROBES_PATHS_MATCH_APP_V1_OK}"
-  echo "probes_ssot_health_path=${probes_ssot_health_path}"
-  echo "probes_ssot_ready_path=${probes_ssot_ready_path}"
-  echo "probe_chart_readiness_path=${probe_chart_readiness_path}"
-  echo "probe_chart_liveness_path=${probe_chart_liveness_path}"
-  echo "probe_ci_wait_path=${probe_ci_wait_path}"
-  echo "probe_app_health_path=${probe_app_health_path}"
-  echo "probe_app_ready_path=${probe_app_ready_path}"
-  if [[ "$PROBES_SSOT_V1_OK" != "1" ]]; then
-    echo "probes_ssot_fail_class=${probes_ssot_fail_class}"
-    echo "probes_ssot_fail_hint=${probes_ssot_fail_hint}"
-  fi
 }
-trap cleanup EXIT
+trap finish EXIT
 
-CHART_DEPLOY="webcore_appcore_starter_4_17/charts/bff-accounting/templates/deployment.yaml"
-APP_INDEX="webcore_appcore_starter_4_17/packages/bff-accounting/src/index.ts"
-CI_WORKFLOW=".github/workflows/release.yml"
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
 
-if [[ ! -f "$CHART_DEPLOY" ]]; then
-  probes_ssot_fail_class="app_missing_route"
-  probes_ssot_fail_hint="chart deployment not found: ${CHART_DEPLOY}"
+SSOT="docs/ops/contracts/PROBES_SSOT_V1.md"
+test -f "$SSOT" || { echo "ERROR_CODE=SSOT_MISSING"; exit 1; }
+grep -q '^PROBES_SSOT_V1_TOKEN=1' "$SSOT" || { echo "ERROR_CODE=SSOT_TOKEN_MISSING"; exit 1; }
+
+HEALTH="$(grep -E '^HEALTH_PATH=' "$SSOT" | tail -n1 | cut -d= -f2 | tr -d '\r')"
+READY="$(grep -E '^READY_PATH=' "$SSOT" | tail -n1 | cut -d= -f2 | tr -d '\r')"
+[ -n "$HEALTH" ] && [ -n "$READY" ] || { echo "ERROR_CODE=SSOT_VALUES_MISSING"; exit 1; }
+
+# ---- Surface 1: Helm chart probes must match SSOT ----
+# 후보 경로(레포 구조 고정, 존재하는 첫 파일 사용)
+chart_candidates=(
+  "webcore_appcore_starter_4_17/charts/bff-accounting/templates/deployment.yaml"
+  "webcore_appcore_starter_4_17/charts/bff-accounting/templates/deployment.yml"
+  "webcore_appcore_starter_4_17/charts/bff/templates/deployment.yaml"
+  "webcore_appcore_starter_4_17/charts/bff/templates/deployment.yml"
+)
+
+chart_file=""
+for c in "${chart_candidates[@]}"; do
+  if [ -f "$c" ]; then chart_file="$c"; break; fi
+done
+[ -n "$chart_file" ] || { echo "ERROR_CODE=CHART_DEPLOYMENT_NOT_FOUND"; exit 1; }
+
+# readinessProbe/livenessProbe must use READY/HEALTH paths (path may appear on following lines)
+if ! grep -qF "path: ${READY}" "$chart_file"; then
+  echo "ERROR_CODE=CHART_READINESS_PATH_MISMATCH"
   exit 1
 fi
-if [[ ! -f "$APP_INDEX" ]]; then
-  probes_ssot_fail_class="app_missing_route"
-  probes_ssot_fail_hint="app index not found: ${APP_INDEX}"
-  exit 1
-fi
-if [[ ! -f "$CI_WORKFLOW" ]]; then
-  probes_ssot_fail_class="ci_wait_drift"
-  probes_ssot_fail_hint="workflow not found: ${CI_WORKFLOW}"
+if ! grep -qF "path: ${HEALTH}" "$chart_file"; then
+  echo "ERROR_CODE=CHART_LIVENESS_PATH_MISMATCH"
   exit 1
 fi
 
-# Chart: require path: /readyz and path: /healthz (exact SSOT)
-probe_chart_readiness_path="$(grep -E "path:[[:space:]]*/[^ ,}]+" "$CHART_DEPLOY" | head -1 | sed -n 's/.*path:[[:space:]]*\([^ ,}]*\).*/\1/p')"
-probe_chart_liveness_path="$(grep -E "path:[[:space:]]*/[^ ,}]+" "$CHART_DEPLOY" | tail -1 | sed -n 's/.*path:[[:space:]]*\([^ ,}]*\).*/\1/p')"
-# Order in file: readiness then liveness, so first path=readiness, second=liveness
-if [[ -z "$probe_chart_readiness_path" ]] || [[ -z "$probe_chart_liveness_path" ]]; then
-  probes_ssot_fail_class="chart_drift"
-  probes_ssot_fail_hint="chart probe path missing (readiness=${probe_chart_readiness_path:-empty}, liveness=${probe_chart_liveness_path:-empty})"
-  exit 1
-fi
-if [[ "$probe_chart_readiness_path" != "${probes_ssot_ready_path}" ]] || [[ "$probe_chart_liveness_path" != "${probes_ssot_health_path}" ]]; then
-  probes_ssot_fail_class="chart_drift"
-  probes_ssot_fail_hint="chart must use ${probes_ssot_health_path} and ${probes_ssot_ready_path}; got liveness=${probe_chart_liveness_path} readiness=${probe_chart_readiness_path}"
+# ---- Surface 2: CI wait script must match SSOT ----
+# 후보 경로(존재하는 첫 파일 사용)
+ci_wait_candidates=(
+  "scripts/ops/wait_ready_v1.sh"
+  "scripts/ops/wait_ready.sh"
+  "scripts/verify/wait_ready_v1.sh"
+)
+ci_wait_file=""
+for c in "${ci_wait_candidates[@]}"; do
+  if [ -f "$c" ]; then ci_wait_file="$c"; break; fi
+done
+[ -n "$ci_wait_file" ] || { echo "ERROR_CODE=CI_WAIT_SCRIPT_NOT_FOUND"; exit 1; }
+
+# CI wait에서 READY 경로를 사용해야 함
+if ! grep -qF "$READY" "$ci_wait_file"; then
+  echo "ERROR_CODE=CI_WAIT_READY_PATH_MISMATCH"
   exit 1
 fi
 
-# App: must define /healthz and /readyz
-if ! grep -q '"/healthz"' "$APP_INDEX" && ! grep -q "'/healthz'" "$APP_INDEX"; then
-  probes_ssot_fail_class="app_missing_route"
-  probes_ssot_fail_hint="app must define GET /healthz in ${APP_INDEX}"
-  exit 1
-fi
-if ! grep -q '"/readyz"' "$APP_INDEX" && ! grep -q "'/readyz'" "$APP_INDEX"; then
-  probes_ssot_fail_class="app_missing_route"
-  probes_ssot_fail_hint="app must define GET /readyz in ${APP_INDEX}"
-  exit 1
-fi
-probe_app_health_path="${probes_ssot_health_path}"
-probe_app_ready_path="${probes_ssot_ready_path}"
-PROBES_PATHS_MATCH_APP_V1_OK=1
+# ---- Surface 3: App routes must expose both endpoints ----
+# 앱 라우트 파일 후보(존재하는 첫 파일 사용)
+app_route_candidates=(
+  "webcore_appcore_starter_4_17/packages/bff-accounting/src/routes/health.ts"
+  "webcore_appcore_starter_4_17/packages/bff-accounting/src/routes/health.js"
+  "webcore_appcore_starter_4_17/packages/bff-accounting/src/routes/probes.ts"
+  "webcore_appcore_starter_4_17/packages/bff-accounting/src/routes/probes.js"
+)
+app_file=""
+for c in "${app_route_candidates[@]}"; do
+  if [ -f "$c" ]; then app_file="$c"; break; fi
+done
+[ -n "$app_file" ] || { echo "ERROR_CODE=APP_PROBES_ROUTE_NOT_FOUND"; exit 1; }
 
-# CI: ready wait and any curl to 8081 must use only /healthz or /readyz
-ci_paths="$(grep -E "8081/(healthz|readyz|health|ready)[^0-9a-zA-Z_]?" "$CI_WORKFLOW" 2>/dev/null || true)"
-if echo "$ci_paths" | grep -qE "8081/health[^z]|8081/ready[^z]"; then
-  probes_ssot_fail_class="ci_wait_drift"
-  probes_ssot_fail_hint="CI must use only /healthz and /readyz in ${CI_WORKFLOW}; found non-SSOT path"
+# 앱 라우트 파일에서 HEALTH/READY 경로가 모두 존재해야 함
+if ! grep -qF "$HEALTH" "$app_file"; then
+  echo "ERROR_CODE=APP_HEALTH_PATH_MISSING"
   exit 1
 fi
-# Prefer the path used in the wait loop (readyz)
-if grep -q "8081/readyz" "$CI_WORKFLOW"; then
-  probe_ci_wait_path="/readyz"
-else
-  probes_ssot_fail_class="ci_wait_drift"
-  probes_ssot_fail_hint="CI ready wait must call /readyz in ${CI_WORKFLOW}"
+if ! grep -qF "$READY" "$app_file"; then
+  echo "ERROR_CODE=APP_READY_PATH_MISSING"
   exit 1
 fi
 
 PROBES_SSOT_V1_OK=1
+PROBES_PATHS_MATCH_APP_V1_OK=1
 exit 0
