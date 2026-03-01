@@ -1,0 +1,4 @@
+OUTPUT_ROOT_SSOT_V1_TOKEN=1
+# Allowed: out | docs
+OUT_ROOT=out
+ALLOWED_ROOTS=out,docs

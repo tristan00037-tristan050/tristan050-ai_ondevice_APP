@@ -26,7 +26,11 @@ mkdir -p "$OUTDIR"
 RESULT_PATH="$OUTDIR/result.jsonl"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-OUTPUT_ROOT="${EXEC_MODE_OUTPUT_ROOT:-$REPO_ROOT/docs}"
+# P17-P0-02: output root from SSOT
+# shellcheck source=scripts/lib/out_root_v1.sh
+source "$REPO_ROOT/scripts/lib/out_root_v1.sh"
+OUT_ROOT_VAL="$(read_out_root)"
+OUTPUT_ROOT="${EXEC_MODE_OUTPUT_ROOT:-$REPO_ROOT/$OUT_ROOT_VAL}"
 REPORT_PATH="$OUTPUT_ROOT/EXEC_MODE_REPORT_V1.md"
 mkdir -p "$OUTPUT_ROOT"
 
