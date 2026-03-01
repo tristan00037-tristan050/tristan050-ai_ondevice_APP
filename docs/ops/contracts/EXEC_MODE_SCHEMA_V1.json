@@ -1,0 +1,6 @@
+{
+  "schema_id": "EXEC_MODE_V1",
+  "required_keys": ["id","result","exit_code","latency_us","latency_ms","tokens_out","engine_meta"],
+  "status_allowlist": ["OK","BLOCK"],
+  "max_string_len": 200
+}

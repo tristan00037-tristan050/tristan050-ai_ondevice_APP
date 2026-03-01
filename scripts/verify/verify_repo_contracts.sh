@@ -1748,4 +1748,6 @@ run_guard "exec-mode no exception text v1" bash scripts/verify/verify_exec_mode_
 
 run_guard "exec-mode latency present v1" bash scripts/verify/run_exec_mode_latency_present_v1.sh
 
+run_guard "exec-mode schema ssot consumed v1" bash scripts/verify/verify_exec_mode_schema_ssot_consumed_v1.sh
+
 exit 0
