@@ -1757,5 +1757,4 @@ run_guard "exec-mode schema ssot consumed v1" bash scripts/verify/verify_exec_mo
 run_guard "output root ssot v1" bash scripts/verify/verify_output_root_ssot_v1.sh
 
 run_guard "ssot change contract v1" bash scripts/verify/verify_ssot_change_contract_v1.sh
-
 exit 0
