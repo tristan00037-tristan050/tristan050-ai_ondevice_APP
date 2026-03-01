@@ -11,7 +11,11 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
-OUTDIR="${REPO_GUARD_REPORTS_ROOT:-docs/ops/reports}"
+# P17-P0-02: output root from SSOT (single source of truth)
+# shellcheck source=scripts/lib/out_root_v1.sh
+source "$ROOT/scripts/lib/out_root_v1.sh"
+OUT_ROOT_VAL="$(read_out_root)"
+OUTDIR="${REPO_GUARD_REPORTS_ROOT:-$OUT_ROOT_VAL/ops/reports}"
 mkdir -p "$OUTDIR"
 
 TS_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
