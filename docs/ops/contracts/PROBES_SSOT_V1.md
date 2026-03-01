@@ -1,0 +1,3 @@
+PROBES_SSOT_V1_TOKEN=1
+HEALTH_PATH=/healthz
+READY_PATH=/readyz
