@@ -175,6 +175,8 @@ DOCKERLESS_REPORT_STATIC_POLICY_ALWAYS_ON_OK=0
 EXEC_MODE_PER_LINE_NO_EXCEPTION_TEXT_OK=0
 EXEC_MODE_LATENCY_MEASURE_PRESENT_OK=0
 EXEC_MODE_LATENCY_MISSING_BLOCK_OK=0
+OUTPUT_ROOT_SSOT_V1_OK=0
+CI_DOCS_WRITE_BLOCK_V1_OK=0
 REPO_GUARD_KEYS_ONLY_MODE_OK=0
 
 # P6-P0-05 (OPS) Autodecision from nightly v1
@@ -879,6 +881,8 @@ cleanup(){
   echo "EXEC_MODE_PER_LINE_NO_EXCEPTION_TEXT_OK=${EXEC_MODE_PER_LINE_NO_EXCEPTION_TEXT_OK}"
   echo "EXEC_MODE_LATENCY_MEASURE_PRESENT_OK=${EXEC_MODE_LATENCY_MEASURE_PRESENT_OK}"
   echo "EXEC_MODE_LATENCY_MISSING_BLOCK_OK=${EXEC_MODE_LATENCY_MISSING_BLOCK_OK}"
+  echo "OUTPUT_ROOT_SSOT_V1_OK=${OUTPUT_ROOT_SSOT_V1_OK}"
+  echo "CI_DOCS_WRITE_BLOCK_V1_OK=${CI_DOCS_WRITE_BLOCK_V1_OK}"
   echo "REPO_GUARD_KEYS_ONLY_MODE_OK=${REPO_GUARD_KEYS_ONLY_MODE_OK}"
   echo "BFF_SECRET_SCHEMA_V1_OK=${BFF_SECRET_SCHEMA_V1_OK}"
   echo "BFF_SECRET_FORMAT_OK=${BFF_SECRET_FORMAT_OK}"
@@ -1747,5 +1751,7 @@ run_guard "dockerless report contract v1" bash scripts/verify/verify_dockerless_
 run_guard "exec-mode no exception text v1" bash scripts/verify/verify_exec_mode_no_exception_text_v1.sh
 
 run_guard "exec-mode latency present v1" bash scripts/verify/run_exec_mode_latency_present_v1.sh
+
+run_guard "output root ssot v1" bash scripts/verify/verify_output_root_ssot_v1.sh
 
 exit 0
