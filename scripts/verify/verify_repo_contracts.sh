@@ -178,6 +178,7 @@ EXEC_MODE_LATENCY_MISSING_BLOCK_OK=0
 OUTPUT_ROOT_SSOT_V1_OK=0
 CI_DOCS_WRITE_BLOCK_V1_OK=0
 REPO_GUARD_KEYS_ONLY_MODE_OK=0
+META_ONLY_OUTPUT_GUARD_V1_OK=0
 
 # P6-P0-05 (OPS) Autodecision from nightly v1
 AUTODECISION_POLICY_V1_OK=0
@@ -481,6 +482,7 @@ cleanup(){
   echo "REPO_CONTRACTS_LAST_GUARD=${CURRENT_GUARD}"
   echo "REPO_CONTRACTS_FAILED_GUARD=${FAILED_GUARD}"
   echo "REPO_GUARD_KEYS_ONLY_MODE_OK=${REPO_GUARD_KEYS_ONLY_MODE_OK}"
+  echo "META_ONLY_OUTPUT_GUARD_V1_OK=${META_ONLY_OUTPUT_GUARD_V1_OK}"
   echo "DOD_KV_BLOCK_BEGIN=1"
   echo "REPO_CONTRACTS_HYGIENE_OK=${REPO_CONTRACTS_HYGIENE_OK}"
   echo "PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK=${PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK}"
@@ -884,6 +886,7 @@ cleanup(){
   echo "OUTPUT_ROOT_SSOT_V1_OK=${OUTPUT_ROOT_SSOT_V1_OK}"
   echo "CI_DOCS_WRITE_BLOCK_V1_OK=${CI_DOCS_WRITE_BLOCK_V1_OK}"
   echo "REPO_GUARD_KEYS_ONLY_MODE_OK=${REPO_GUARD_KEYS_ONLY_MODE_OK}"
+  echo "META_ONLY_OUTPUT_GUARD_V1_OK=${META_ONLY_OUTPUT_GUARD_V1_OK}"
   echo "BFF_SECRET_SCHEMA_V1_OK=${BFF_SECRET_SCHEMA_V1_OK}"
   echo "BFF_SECRET_FORMAT_OK=${BFF_SECRET_FORMAT_OK}"
   echo "BFF_SECRET_EMPTY_STRING_BLOCK_OK=${BFF_SECRET_EMPTY_STRING_BLOCK_OK}"
@@ -1757,4 +1760,6 @@ run_guard "exec-mode schema ssot consumed v1" bash scripts/verify/verify_exec_mo
 run_guard "output root ssot v1" bash scripts/verify/verify_output_root_ssot_v1.sh
 
 run_guard "ssot change contract v1" bash scripts/verify/verify_ssot_change_contract_v1.sh
+
+run_guard "meta-only output guard v1" bash scripts/verify/verify_meta_only_output_guard_v1.sh
 exit 0
