@@ -1,0 +1,6 @@
+PATH_SCOPE_SSOT_V1_TOKEN=1
+# Path scopes are repo-relative. Scanners must read this SSOT and stay within these scopes.
+ALLOW_PATH_PREFIX=scripts/verify
+ALLOW_PATH_PREFIX=scripts/ops
+ALLOW_PATH_PREFIX=tools/exec_mode
+ALLOW_PATH_PREFIX=docs/ops
