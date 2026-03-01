@@ -21,24 +21,73 @@ HEALTH="$(grep -E '^HEALTH_PATH=' "$SSOT" | tail -n1 | cut -d= -f2 | tr -d '\r')
 READY="$(grep -E '^READY_PATH=' "$SSOT" | tail -n1 | cut -d= -f2 | tr -d '\r')"
 [ -n "$HEALTH" ] && [ -n "$READY" ] || { echo "ERROR_CODE=SSOT_VALUES_MISSING"; exit 1; }
 
-# 차트/CI wait/app 라우트 경로는 레포마다 위치가 다를 수 있어,
-# 최소 구현: 레포 전체에서 probe 경로 후보를 추출해 SSOT 값과 일치하는지 확인(메타-only)
-# 오탐 최소화를 위해 핵심 경로만 우선 스캔
-paths=(
-  "webcore_appcore_starter_4_17"
-  ".github/workflows"
-  "scripts"
+# ---- Surface 1: Helm chart probes must match SSOT ----
+# 후보 경로(레포 구조 고정, 존재하는 첫 파일 사용)
+chart_candidates=(
+  "webcore_appcore_starter_4_17/charts/bff-accounting/templates/deployment.yaml"
+  "webcore_appcore_starter_4_17/charts/bff-accounting/templates/deployment.yml"
+  "webcore_appcore_starter_4_17/charts/bff/templates/deployment.yaml"
+  "webcore_appcore_starter_4_17/charts/bff/templates/deployment.yml"
 )
 
-# /healthz,/readyz가 서로 바뀌거나 혼재되면 BLOCK
-found_health=0
-found_ready=0
-for p in "${paths[@]}"; do
-  [ -e "$p" ] || continue
-  if grep -RIn --binary-files=without-match "$HEALTH" "$p" >/dev/null 2>&1; then found_health=1; fi
-  if grep -RIn --binary-files=without-match "$READY" "$p" >/dev/null 2>&1; then found_ready=1; fi
+chart_file=""
+for c in "${chart_candidates[@]}"; do
+  if [ -f "$c" ]; then chart_file="$c"; break; fi
 done
-[ "$found_health" = "1" ] && [ "$found_ready" = "1" ] || { echo "ERROR_CODE=PATHS_NOT_FOUND_IN_REPO"; exit 1; }
+[ -n "$chart_file" ] || { echo "ERROR_CODE=CHART_DEPLOYMENT_NOT_FOUND"; exit 1; }
+
+# readinessProbe/livenessProbe must use READY/HEALTH paths (path may appear on following lines)
+if ! grep -qF "path: ${READY}" "$chart_file"; then
+  echo "ERROR_CODE=CHART_READINESS_PATH_MISMATCH"
+  exit 1
+fi
+if ! grep -qF "path: ${HEALTH}" "$chart_file"; then
+  echo "ERROR_CODE=CHART_LIVENESS_PATH_MISMATCH"
+  exit 1
+fi
+
+# ---- Surface 2: CI wait script must match SSOT ----
+# 후보 경로(존재하는 첫 파일 사용)
+ci_wait_candidates=(
+  "scripts/ops/wait_ready_v1.sh"
+  "scripts/ops/wait_ready.sh"
+  "scripts/verify/wait_ready_v1.sh"
+)
+ci_wait_file=""
+for c in "${ci_wait_candidates[@]}"; do
+  if [ -f "$c" ]; then ci_wait_file="$c"; break; fi
+done
+[ -n "$ci_wait_file" ] || { echo "ERROR_CODE=CI_WAIT_SCRIPT_NOT_FOUND"; exit 1; }
+
+# CI wait에서 READY 경로를 사용해야 함
+if ! grep -qF "$READY" "$ci_wait_file"; then
+  echo "ERROR_CODE=CI_WAIT_READY_PATH_MISMATCH"
+  exit 1
+fi
+
+# ---- Surface 3: App routes must expose both endpoints ----
+# 앱 라우트 파일 후보(존재하는 첫 파일 사용)
+app_route_candidates=(
+  "webcore_appcore_starter_4_17/packages/bff-accounting/src/routes/health.ts"
+  "webcore_appcore_starter_4_17/packages/bff-accounting/src/routes/health.js"
+  "webcore_appcore_starter_4_17/packages/bff-accounting/src/routes/probes.ts"
+  "webcore_appcore_starter_4_17/packages/bff-accounting/src/routes/probes.js"
+)
+app_file=""
+for c in "${app_route_candidates[@]}"; do
+  if [ -f "$c" ]; then app_file="$c"; break; fi
+done
+[ -n "$app_file" ] || { echo "ERROR_CODE=APP_PROBES_ROUTE_NOT_FOUND"; exit 1; }
+
+# 앱 라우트 파일에서 HEALTH/READY 경로가 모두 존재해야 함
+if ! grep -qF "$HEALTH" "$app_file"; then
+  echo "ERROR_CODE=APP_HEALTH_PATH_MISSING"
+  exit 1
+fi
+if ! grep -qF "$READY" "$app_file"; then
+  echo "ERROR_CODE=APP_READY_PATH_MISSING"
+  exit 1
+fi
 
 PROBES_SSOT_V1_OK=1
 PROBES_PATHS_MATCH_APP_V1_OK=1
