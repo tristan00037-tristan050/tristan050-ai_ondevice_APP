@@ -43,7 +43,7 @@ POLICY="docs/ops/contracts/PERF_REAL_PIPELINE_POLICY_V1.md"
 [[ -s "$POLICY" ]] || { echo "BLOCK: missing $POLICY"; exit 1; }
 
 # Check dependencies exist (workflow must install)
-test -d "${E2E_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
+test -d "${E2E_DIR}/node_modules" || { echo "BLOCK: node_modules missing (workflow must run dependency install)"; exit 1; }
 test -d "${PLAYWRIGHT_BROWSERS_PATH:-${HOME}/.cache/ms-playwright}" || { echo "BLOCK: playwright browsers missing (workflow must install)"; exit 1; }
 
 # 1) Run N samples and capture stats marker

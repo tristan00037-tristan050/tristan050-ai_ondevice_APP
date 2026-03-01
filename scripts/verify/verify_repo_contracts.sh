@@ -306,6 +306,7 @@ WEB_META_ONLY_NEGATIVE_SUITE_OK=0
 VERIFY_PURITY_NO_INSTALL_OK=0
 VERIFY_PURITY_FULL_SCOPE_OK=0
 VERIFY_PURITY_ALLOWLIST_SSOT_OK=0
+VERIFY_PURITY_FULL_SCOPE_V2_OK=0
 
 # P3-PREP-00 (Common Hardening)
 VERIFY_NO_DEV_TCP_IN_VERIFY_OK=0
@@ -574,6 +575,7 @@ cleanup(){
   echo "VERIFY_PURITY_NO_INSTALL_OK=${VERIFY_PURITY_NO_INSTALL_OK}"
   echo "VERIFY_PURITY_FULL_SCOPE_OK=${VERIFY_PURITY_FULL_SCOPE_OK}"
   echo "VERIFY_PURITY_ALLOWLIST_SSOT_OK=${VERIFY_PURITY_ALLOWLIST_SSOT_OK}"
+  echo "VERIFY_PURITY_FULL_SCOPE_V2_OK=${VERIFY_PURITY_FULL_SCOPE_V2_OK}"
 
   # P3-PREP-00 (Common Hardening)
   echo "VERIFY_NO_DEV_TCP_IN_VERIFY_OK=${VERIFY_NO_DEV_TCP_IN_VERIFY_OK}"
@@ -989,6 +991,10 @@ VERIFY_PURITY_FULL_SCOPE_OK=1
 VERIFY_PURITY_ALLOWLIST_SSOT_OK=1
 VERIFY_PURITY_FULL_SCOPE_OK=1
 VERIFY_PURITY_ALLOWLIST_SSOT_OK=1
+
+echo "== guard: verify purity full scope v2 (P17-P0-07) =="
+run_guard "verify purity full scope v2" bash scripts/verify/verify_verify_purity_full_scope_v2.sh
+VERIFY_PURITY_FULL_SCOPE_V2_OK=1
 
 echo "== guard: verify no /dev/tcp in verify (P3-PREP-00) =="
 run_guard "verify no /dev/tcp in verify" bash scripts/verify/verify_no_dev_tcp_in_verify_v1.sh

@@ -20,7 +20,7 @@ cd "$DIR"
 
 [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing (package-lock.json): $DIR"; exit 1; }
 # Check dependencies exist (workflow must install)
-test -d "node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
+test -d "node_modules" || { echo "BLOCK: node_modules missing (workflow must run dependency install)"; exit 1; }
 
 RESULT_JSON="/tmp/update_max_seen_version_persist.json"
 rm -f "$RESULT_JSON"

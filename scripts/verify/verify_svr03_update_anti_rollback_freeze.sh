@@ -18,7 +18,7 @@ cd "$DIR"
 
 [[ -f package-lock.json ]] || { echo "FAIL: lockfile missing (package-lock.json): $DIR"; exit 1; }
 # Check dependencies exist (workflow must install)
-test -d "node_modules" || { echo "BLOCK: node_modules missing (workflow must run npm ci)"; exit 1; }
+test -d "node_modules" || { echo "BLOCK: node_modules missing (workflow must run dependency install)"; exit 1; }
 
 # 정적 스캔: signature.ts에 함수가 실제로 연결되어야 함 (rg 없거나 동작 안 하면 grep 폴백)
 have_rg() { command -v rg >/dev/null 2>&1 && rg --version >/dev/null 2>&1; }
