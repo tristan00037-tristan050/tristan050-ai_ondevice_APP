@@ -19,8 +19,18 @@ REQUIRED_GUARDS=(
 )
 CONTRACTS="scripts/verify/verify_repo_contracts.sh"
 
+# base ref(origin/main)가 없으면 fail-closed (shallow/detached 환경에서 drift 우회 차단)
+if ! git rev-parse --verify origin/main >/dev/null 2>&1; then
+  echo "ERROR_CODE=BASE_REF_UNAVAILABLE"
+  exit 1
+fi
+
+diff_names="$(git diff --name-only origin/main...HEAD 2>/dev/null)" || {
+  echo "ERROR_CODE=GIT_DIFF_FAILED"
+  exit 1
+}
+
 changed=0
-diff_names="$(git diff --name-only origin/main...HEAD 2>/dev/null || true)"
 for f in "${WATCHED[@]}"; do
   if echo "$diff_names" | grep -qF "$f"; then
     changed=1
@@ -34,7 +44,9 @@ if [ "$changed" -eq 0 ]; then
 fi
 
 for g in "${REQUIRED_GUARDS[@]}"; do
-  if ! grep -qF "run_guard \"${g}\"" "$CONTRACTS" 2>/dev/null; then
+  # 주석(# ...)이나 문자열 잔존을 통과로 인정하지 않음.
+  # "실제로 실행되는" run_guard 라인만 인정: (선행 공백 허용) + 라인 시작에 run_guard
+  if ! grep -Eq "^[[:space:]]*run_guard[[:space:]]+\"${g}\"[[:space:]]+" "$CONTRACTS" 2>/dev/null; then
     echo "ERROR_CODE=MISSING_REQUIRED_GUARD"
     echo "MISSING_GUARD=${g}"
     exit 1
