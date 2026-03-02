@@ -1019,6 +1019,8 @@ echo "== guard: verify runtime guard helpers adopted v1 (P3-PLAT-02) =="
 run_guard "verify runtime guard helpers adopted v1" bash scripts/verify/verify_runtime_guard_helpers_adopted_v1.sh
 RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=1
 
+echo "== guard: repo contracts cleanup echo guard v1 =="
+run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh
 echo "== guard: repo contracts hygiene =="
 run_guard "repo contracts hygiene" bash scripts/verify/verify_repo_contracts_hygiene.sh
 REPO_CONTRACTS_HYGIENE_OK=1
