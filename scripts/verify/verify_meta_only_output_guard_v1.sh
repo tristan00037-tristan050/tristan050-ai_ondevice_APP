@@ -33,9 +33,11 @@ scan_grep() {
     ! -path "*/contracts/*" \
     2>/dev/null | while IFS= read -r f; do
 
-    # 1) 자기 자신은 제외(검사용 패턴/정규식 문자열 때문에 오탐 방지)
+    # 1) 자기 자신 및 시크릿 스키마 검증기는 제외(검사용 패턴/정규식 문자열 때문에 오탐 방지)
     case "$f" in
       */scripts/verify/verify_meta_only_output_guard_v1.sh) continue ;;
+      scripts/verify/verify_bff_secret_schema_v1.sh) continue ;;
+      *verify_bff_secret_schema_v1.sh) continue ;;
     esac
 
     # 2) 텍스트 파일만(바이너리 스킵)
