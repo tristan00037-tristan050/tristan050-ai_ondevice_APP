@@ -1,0 +1,5 @@
+MCP_CAPABILITIES_SSOT_V1_TOKEN=1
+# Zero-trust: only capabilities listed here are allowed for MCP gateway.
+# One capability ID per line (ALLOW_CAPABILITY=id). Add-only.
+ALLOW_CAPABILITY=read
+ALLOW_CAPABILITY=resources
