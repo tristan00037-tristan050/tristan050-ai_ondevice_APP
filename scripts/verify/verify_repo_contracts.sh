@@ -1767,5 +1767,7 @@ run_guard "ssot change contract v1" bash scripts/verify/verify_ssot_change_contr
 run_guard "meta-only output guard v1" bash scripts/verify/verify_meta_only_output_guard_v1.sh
 run_guard "path scope read required v1" bash scripts/verify/verify_path_scope_read_required_v1.sh
 run_guard "agents md compat v1" bash scripts/verify/verify_agents_md_compat_v1.sh
+run_guard "mcp capabilities ssot v1" bash scripts/verify/verify_mcp_capabilities_ssot_v1.sh
+run_guard "mcp zero trust enforced v1" bash scripts/verify/verify_mcp_zero_trust_enforced_v1.sh
 exit 0
 
