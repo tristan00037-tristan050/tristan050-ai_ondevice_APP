@@ -1769,5 +1769,6 @@ run_guard "path scope read required v1" bash scripts/verify/verify_path_scope_re
 run_guard "agents md compat v1" bash scripts/verify/verify_agents_md_compat_v1.sh
 run_guard "mcp capabilities ssot v1" bash scripts/verify/verify_mcp_capabilities_ssot_v1.sh
 run_guard "mcp zero trust enforced v1" bash scripts/verify/verify_mcp_zero_trust_enforced_v1.sh
+run_guard "mcp zero trust drift contract v1" bash scripts/verify/verify_mcp_zero_trust_drift_contract_v1.sh
 exit 0
 
