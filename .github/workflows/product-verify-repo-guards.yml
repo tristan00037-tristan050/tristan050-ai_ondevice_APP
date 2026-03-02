@@ -19,6 +19,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Preflight base ref (origin/main + merge-base)
+        run: bash scripts/verify/verify_base_ref_available_v1.sh
+
       - name: Install ripgrep
         run: |
           set -euo pipefail
