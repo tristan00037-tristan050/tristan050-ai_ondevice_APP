@@ -20,8 +20,8 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -85,8 +85,8 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     steps:
       - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -238,8 +238,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+        with:
+          fetch-depth: 0
 
       - name: Use local kubeconfig (no secret)
         shell: bash
