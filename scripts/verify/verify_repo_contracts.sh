@@ -985,6 +985,9 @@ if [[ "${REPO_GUARD_KEYS_ONLY:-0}" == "1" ]]; then
 fi
 
 # Existing guards
+
+echo "== guard: base ref available v1 =="
+run_guard "base ref available v1" bash scripts/verify/verify_base_ref_available_v1.sh
 echo "== guard: verify purity (no install in verify) =="
 run_guard "verify purity (no install in verify)" bash scripts/verify/verify_verify_purity_no_install.sh
 VERIFY_PURITY_NO_INSTALL_OK=1
