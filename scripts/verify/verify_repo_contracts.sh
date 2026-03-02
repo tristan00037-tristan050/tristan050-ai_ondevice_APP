@@ -988,6 +988,8 @@ fi
 
 echo "== guard: base ref available v1 =="
 run_guard "base ref available v1" bash scripts/verify/verify_base_ref_available_v1.sh
+echo "== guard: workflow checkout depth ssot v1 =="
+run_guard "workflow checkout depth ssot v1" bash scripts/verify/verify_workflow_checkout_depth_ssot_v1.sh
 echo "== guard: verify purity (no install in verify) =="
 run_guard "verify purity (no install in verify)" bash scripts/verify/verify_verify_purity_no_install.sh
 VERIFY_PURITY_NO_INSTALL_OK=1
