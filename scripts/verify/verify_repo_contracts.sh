@@ -176,6 +176,7 @@ EXEC_MODE_PER_LINE_NO_EXCEPTION_TEXT_OK=0
 EXEC_MODE_LATENCY_MEASURE_PRESENT_OK=0
 EXEC_MODE_LATENCY_MISSING_BLOCK_OK=0
 OUTPUT_ROOT_SSOT_V1_OK=0
+WORKFLOW_CHECKOUT_DEPTH_AUTODISCOVER_OK=0
 CI_DOCS_WRITE_BLOCK_V1_OK=0
 REPO_GUARD_KEYS_ONLY_MODE_OK=0
 META_ONLY_OUTPUT_GUARD_V1_OK=0
@@ -886,6 +887,7 @@ cleanup(){
   echo "EXEC_MODE_LATENCY_MEASURE_PRESENT_OK=${EXEC_MODE_LATENCY_MEASURE_PRESENT_OK}"
   echo "EXEC_MODE_LATENCY_MISSING_BLOCK_OK=${EXEC_MODE_LATENCY_MISSING_BLOCK_OK}"
   echo "OUTPUT_ROOT_SSOT_V1_OK=${OUTPUT_ROOT_SSOT_V1_OK}"
+  echo "WORKFLOW_CHECKOUT_DEPTH_AUTODISCOVER_OK=${WORKFLOW_CHECKOUT_DEPTH_AUTODISCOVER_OK}"
   echo "CI_DOCS_WRITE_BLOCK_V1_OK=${CI_DOCS_WRITE_BLOCK_V1_OK}"
   echo "REPO_GUARD_KEYS_ONLY_MODE_OK=${REPO_GUARD_KEYS_ONLY_MODE_OK}"
   echo "META_ONLY_OUTPUT_GUARD_V1_OK=${META_ONLY_OUTPUT_GUARD_V1_OK}"
@@ -990,6 +992,7 @@ echo "== guard: base ref available v1 =="
 run_guard "base ref available v1" bash scripts/verify/verify_base_ref_available_v1.sh
 echo "== guard: workflow checkout depth ssot v1 =="
 run_guard "workflow checkout depth ssot v1" bash scripts/verify/verify_workflow_checkout_depth_ssot_v1.sh
+run_guard "workflow checkout depth autodiscover v1" bash scripts/verify/verify_workflow_checkout_depth_autodiscover_v1.sh
 echo "== guard: verify purity (no install in verify) =="
 run_guard "verify purity (no install in verify)" bash scripts/verify/verify_verify_purity_no_install.sh
 VERIFY_PURITY_NO_INSTALL_OK=1

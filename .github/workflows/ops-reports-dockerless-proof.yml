@@ -18,6 +18,8 @@ jobs:
       DOCKER_HOST: unix:///var/run/does-not-exist.sock
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Confirm docker info fails (hard guard)
         shell: bash
