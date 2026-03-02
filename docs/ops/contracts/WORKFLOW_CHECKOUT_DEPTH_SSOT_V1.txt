@@ -1,0 +1,4 @@
+WORKFLOW_CHECKOUT_DEPTH_SSOT_V1_TOKEN=1
+REQUIRE_FETCH_DEPTH_0=.github/workflows/product-verify-repo-guards.yml
+REQUIRE_FETCH_DEPTH_0=.github/workflows/ci-ssot-change-contract.yml
+REQUIRE_FETCH_DEPTH_0=.github/workflows/product-verify-supplychain.yml
