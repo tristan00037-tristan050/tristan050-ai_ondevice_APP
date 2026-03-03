@@ -1570,6 +1570,8 @@ echo "== guard: build provenance attest v1 =="
 run_guard "build provenance attest v1" bash scripts/verify/verify_build_provenance_attest_v1.sh
 echo "== guard: model pack sbom cyclonedx v1 =="
 run_guard "model pack sbom cyclonedx v1" bash scripts/verify/verify_model_pack_sbom_cyclonedx_v1.sh
+echo "== guard: secure update tuf principles v1 =="
+run_guard "secure update tuf principles v1" bash scripts/verify/verify_secure_update_tuf_principles_v1.sh
 SLSA_SIGNER_WORKFLOW_UNIQUE_V1_OK=1
 
 echo "== guard: P4-P0-03 workspace fs sandbox v1 =="
