@@ -112,4 +112,4 @@ SSOT=docs/ops/contracts/WORKFLOW_PREFLIGHT_SSOT_V1.md STATUS=stub
 SSOT=docs/ops/contracts/WORKFLOW_PRODUCT_VERIFY_SSOT.md STATUS=stub
 SSOT=docs/ops/contracts/WORKSPACE_FS_SANDBOX_POLICY_V1.md STATUS=stub
 SSOT=docs/ops/contracts/AI_AB_BENCH_POLICY_V1.md STATUS=stub
-SSOT=docs/ops/contracts/SSOT_REGISTRY_STUB_BUDGET_V1.txt STATUS=stub
+SSOT=docs/ops/contracts/SSOT_REGISTRY_STUB_BUDGET_V1.txt CONSUMER=scripts/verify/verify_ssot_registry_stub_burndown_v1.sh
