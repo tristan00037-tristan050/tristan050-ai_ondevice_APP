@@ -4,6 +4,7 @@ SSOT_REGISTRY_V1_TOKEN=1
 SSOT=docs/ops/contracts/WORKFLOW_CHECKOUT_DEPTH_SSOT_V1.txt CONSUMER=scripts/verify/verify_workflow_checkout_depth_ssot_v1.sh
 SSOT=docs/ops/contracts/WORKFLOW_CHECKOUT_DEPTH_SSOT_V1.txt CONSUMER=scripts/verify/verify_workflow_checkout_depth_autodiscover_v1.sh
 SSOT=docs/ops/contracts/BUILD_PROVENANCE_ATTEST_SSOT_V1.txt CONSUMER=scripts/verify/verify_build_provenance_attest_v1.sh
+SSOT=docs/ops/contracts/MODEL_PACK_SBOM_CYCLONEDX_SSOT_V1.txt CONSUMER=scripts/verify/verify_model_pack_sbom_cyclonedx_v1.sh
 
 SSOT=docs/ops/contracts/MCP_CAPABILITIES_SSOT_V1.txt CONSUMER=tools/mcp_gateway/enforcer_v1.cjs
 SSOT=docs/ops/contracts/MCP_CAPABILITIES_SSOT_V1.txt CONSUMER=scripts/verify/verify_mcp_zero_trust_enforced_v1.sh
@@ -22,7 +23,7 @@ SSOT=docs/ops/contracts/ASSIST_COMPUTE_POLICY_V1.md STATUS=stub
 SSOT=docs/ops/contracts/AUTODECISION_IGNORED_FAIL_KEYS_V1.txt STATUS=stub
 SSOT=docs/ops/contracts/AUTODECISION_POLICY_V1.md STATUS=stub
 SSOT=docs/ops/contracts/AUTODECISION_REQUIRED_KEYS_V1.txt STATUS=stub
-SSOT=docs/ops/contracts/BFF_SECRET_SCHEMA_V1.md STATUS=stub
+SSOT=docs/ops/contracts/BFF_SECRET_SCHEMA_V1.md CONSUMER=scripts/verify/verify_bff_secret_schema_v1.sh
 SSOT=docs/ops/contracts/DIST_FRESHNESS_POLICY_V1.md CONSUMER=scripts/verify/verify_dist_freshness_v1.sh
 SSOT=docs/ops/contracts/ENERGY_PROXY_NORMALIZED_POLICY_V2.md STATUS=stub
 SSOT=docs/ops/contracts/ENERGY_PROXY_POLICY_V1.md STATUS=stub
