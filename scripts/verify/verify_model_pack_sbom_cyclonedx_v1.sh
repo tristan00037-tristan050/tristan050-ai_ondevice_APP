@@ -2,7 +2,7 @@
 set -euo pipefail
 
 MODEL_PACK_SBOM_CYCLONEDX_V1_OK=0
-finish() { [ "${MODEL_PACK_SBOM_CYCLONEDX_V1_OK:-0}" -eq 1 ] && echo "MODEL_PACK_SBOM_CYCLONEDX_V1_OK=1"; }
+finish() { [ "${MODEL_PACK_SBOM_CYCLONEDX_V1_OK:-0}" -eq 1 ] && echo "MODEL_PACK_SBOM_CYCLONEDX_V1_OK=1"; true; }
 trap finish EXIT
 
 ROOT="$(git rev-parse --show-toplevel)"
@@ -18,9 +18,16 @@ grep -q '^MODEL_PACK_SBOM_CYCLONEDX_SSOT_V1_TOKEN=1' "$SSOT" || { echo "ERROR_CO
 SBOM_OUT_PATH="$(grep -E '^SBOM_OUT_PATH=' "$SSOT" | head -n1 | sed 's/^SBOM_OUT_PATH=//' | tr -d '\r')"
 [ -n "$SBOM_OUT_PATH" ] || { echo "ERROR_CODE=SSOT_MISSING_OR_INVALID"; exit 1; }
 
+# enforce flag (default: 0)
+ENFORCE="${MODEL_PACK_SBOM_ENFORCE:-0}"
+
 if [ ! -f "$SBOM_OUT_PATH" ]; then
-  echo "ERROR_CODE=SBOM_FILE_MISSING"
-  exit 1
+  if [ "$ENFORCE" = "1" ]; then
+    echo "ERROR_CODE=SBOM_FILE_MISSING"
+    exit 1
+  fi
+  echo "MODEL_PACK_SBOM_CYCLONEDX_V1_SKIPPED=1"
+  exit 0
 fi
 
 set +e

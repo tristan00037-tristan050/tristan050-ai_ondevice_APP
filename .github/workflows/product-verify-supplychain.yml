@@ -84,6 +84,8 @@ jobs:
       - name: Verify model pack SBOM cyclonedx v1
         shell: bash
         run: bash scripts/verify/verify_model_pack_sbom_cyclonedx_v1.sh
+        env:
+          MODEL_PACK_SBOM_ENFORCE: "1"
       - name: Upload provenance artifact
         uses: actions/upload-artifact@v4
         with:
