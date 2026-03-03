@@ -1566,6 +1566,8 @@ SUPPLYCHAIN_PERMISSIONS_SCOPED_V1_OK=1
 
 echo "== guard: P4-P0-02 supplychain signer unique v1 =="
 run_guard "P4-P0-02 supplychain signer unique v1" bash scripts/verify/verify_attestation_signer_unique_v1.sh
+echo "== guard: build provenance attest v1 =="
+run_guard "build provenance attest v1" bash scripts/verify/verify_build_provenance_attest_v1.sh
 SLSA_SIGNER_WORKFLOW_UNIQUE_V1_OK=1
 
 echo "== guard: P4-P0-03 workspace fs sandbox v1 =="
