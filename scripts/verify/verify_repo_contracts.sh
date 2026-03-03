@@ -1774,6 +1774,8 @@ run_guard "output root ssot v1" bash scripts/verify/verify_output_root_ssot_v1.s
 
 run_guard "ssot change contract v1" bash scripts/verify/verify_ssot_change_contract_v1.sh
 run_guard "ssot consume autocontract v1" bash scripts/verify/verify_ssot_consume_autocontract_v1.sh
+run_guard "ssot registry coverage v1" bash scripts/verify/verify_ssot_registry_coverage_v1.sh
+run_guard "ssot registry no anchor consumer v1" bash scripts/verify/verify_ssot_registry_no_anchor_consumer_v1.sh
 
 run_guard "meta-only output guard v1" bash scripts/verify/verify_meta_only_output_guard_v1.sh
 run_guard "path scope read required v1" bash scripts/verify/verify_path_scope_read_required_v1.sh
