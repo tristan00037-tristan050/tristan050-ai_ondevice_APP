@@ -18,15 +18,26 @@ grep -q '^SECURE_UPDATE_TUF_PRINCIPLES_SSOT_V1_TOKEN=1' "$SSOT" || { echo "ERROR
 TUF_META_ROOT="$(grep -E '^TUF_META_ROOT=' "$SSOT" | head -n1 | sed 's/^TUF_META_ROOT=//' | tr -d '\r')"
 [ -n "$TUF_META_ROOT" ] || { echo "ERROR_CODE=SSOT_MISSING_OR_INVALID"; exit 1; }
 
-# Required role files (SSOT REQUIRE_ROLE_* = 1)
-for role in root targets snapshot timestamp; do
-  f="$TUF_META_ROOT/${role}.json"
-  if [ ! -f "$f" ]; then
+ENFORCE="${SECURE_UPDATE_TUF_ENFORCE:-0}"
+
+ROOT_JSON="${TUF_META_ROOT}/root.json"
+TARGETS_JSON="${TUF_META_ROOT}/targets.json"
+SNAPSHOT_JSON="${TUF_META_ROOT}/snapshot.json"
+TIMESTAMP_JSON="${TUF_META_ROOT}/timestamp.json"
+
+# if missing, SKIP by default; ENFORCE=1 => BLOCK
+if [ ! -f "$ROOT_JSON" ] || [ ! -f "$TARGETS_JSON" ] || [ ! -f "$SNAPSHOT_JSON" ] || [ ! -f "$TIMESTAMP_JSON" ]; then
+  if [ "$ENFORCE" = "1" ]; then
     echo "ERROR_CODE=TUF_ROLE_MISSING"
-    echo "HIT_ROLE=${role}"
+    if [ ! -f "$ROOT_JSON" ]; then echo "HIT_ROLE=root"; exit 1; fi
+    if [ ! -f "$TARGETS_JSON" ]; then echo "HIT_ROLE=targets"; exit 1; fi
+    if [ ! -f "$SNAPSHOT_JSON" ]; then echo "HIT_ROLE=snapshot"; exit 1; fi
+    if [ ! -f "$TIMESTAMP_JSON" ]; then echo "HIT_ROLE=timestamp"; exit 1; fi
     exit 1
   fi
-done
+  echo "SECURE_UPDATE_TUF_PRINCIPLES_V1_SKIPPED=1"
+  exit 0
+fi
 
 # JSON valid + minimal field presence
 for role in root targets snapshot timestamp; do

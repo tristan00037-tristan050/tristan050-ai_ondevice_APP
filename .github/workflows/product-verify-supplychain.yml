@@ -93,6 +93,8 @@ jobs:
       - name: Verify secure update TUF principles v1
         shell: bash
         run: bash scripts/verify/verify_secure_update_tuf_principles_v1.sh
+        env:
+          SECURE_UPDATE_TUF_ENFORCE: "1"
       - name: Upload provenance artifact
         uses: actions/upload-artifact@v4
         with:
