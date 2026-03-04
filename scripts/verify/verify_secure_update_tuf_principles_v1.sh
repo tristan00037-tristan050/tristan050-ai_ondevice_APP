@@ -7,6 +7,16 @@ trap finish EXIT
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+
+. scripts/verify/lib/enforce_spec_v1.sh
+if enforce_spec_should_enforce "SECURE_UPDATE_TUF"; then
+  :
+else
+  enforce_spec_emit_skip "SECURE_UPDATE_TUF"
+  echo "SECURE_UPDATE_TUF_PRINCIPLES_V1_SKIPPED=1"
+  exit 0
+fi
+
 SSOT="docs/ops/contracts/SECURE_UPDATE_TUF_PRINCIPLES_SSOT_V1.txt"
 
 if [ ! -f "$SSOT" ]; then
@@ -18,25 +28,19 @@ grep -q '^SECURE_UPDATE_TUF_PRINCIPLES_SSOT_V1_TOKEN=1' "$SSOT" || { echo "ERROR
 TUF_META_ROOT="$(grep -E '^TUF_META_ROOT=' "$SSOT" | head -n1 | sed 's/^TUF_META_ROOT=//' | tr -d '\r')"
 [ -n "$TUF_META_ROOT" ] || { echo "ERROR_CODE=SSOT_MISSING_OR_INVALID"; exit 1; }
 
-ENFORCE="${SECURE_UPDATE_TUF_ENFORCE:-0}"
-
 ROOT_JSON="${TUF_META_ROOT}/root.json"
 TARGETS_JSON="${TUF_META_ROOT}/targets.json"
 SNAPSHOT_JSON="${TUF_META_ROOT}/snapshot.json"
 TIMESTAMP_JSON="${TUF_META_ROOT}/timestamp.json"
 
-# if missing, SKIP by default; ENFORCE=1 => BLOCK
+# if missing, BLOCK (we're in ENFORCE path)
 if [ ! -f "$ROOT_JSON" ] || [ ! -f "$TARGETS_JSON" ] || [ ! -f "$SNAPSHOT_JSON" ] || [ ! -f "$TIMESTAMP_JSON" ]; then
-  if [ "$ENFORCE" = "1" ]; then
-    echo "ERROR_CODE=TUF_ROLE_MISSING"
-    if [ ! -f "$ROOT_JSON" ]; then echo "HIT_ROLE=root"; exit 1; fi
-    if [ ! -f "$TARGETS_JSON" ]; then echo "HIT_ROLE=targets"; exit 1; fi
-    if [ ! -f "$SNAPSHOT_JSON" ]; then echo "HIT_ROLE=snapshot"; exit 1; fi
-    if [ ! -f "$TIMESTAMP_JSON" ]; then echo "HIT_ROLE=timestamp"; exit 1; fi
-    exit 1
-  fi
-  echo "SECURE_UPDATE_TUF_PRINCIPLES_V1_SKIPPED=1"
-  exit 0
+  echo "ERROR_CODE=TUF_ROLE_MISSING"
+  if [ ! -f "$ROOT_JSON" ]; then echo "HIT_ROLE=root"; exit 1; fi
+  if [ ! -f "$TARGETS_JSON" ]; then echo "HIT_ROLE=targets"; exit 1; fi
+  if [ ! -f "$SNAPSHOT_JSON" ]; then echo "HIT_ROLE=snapshot"; exit 1; fi
+  if [ ! -f "$TIMESTAMP_JSON" ]; then echo "HIT_ROLE=timestamp"; exit 1; fi
+  exit 1
 fi
 
 # JSON valid + minimal field presence

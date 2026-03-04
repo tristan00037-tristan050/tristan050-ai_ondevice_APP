@@ -7,6 +7,18 @@ trap finish EXIT
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+
+. scripts/verify/lib/enforce_spec_v1.sh
+if enforce_spec_should_enforce "MODEL_PACK_SBOM"; then
+  # ENFORCE 경로
+  :
+else
+  # SKIP 경로는 키 결측 금지
+  enforce_spec_emit_skip "MODEL_PACK_SBOM"
+  echo "MODEL_PACK_SBOM_CYCLONEDX_V1_SKIPPED=1"
+  exit 0
+fi
+
 SSOT="docs/ops/contracts/MODEL_PACK_SBOM_CYCLONEDX_SSOT_V1.txt"
 
 if [ ! -f "$SSOT" ]; then
@@ -18,16 +30,9 @@ grep -q '^MODEL_PACK_SBOM_CYCLONEDX_SSOT_V1_TOKEN=1' "$SSOT" || { echo "ERROR_CO
 SBOM_OUT_PATH="$(grep -E '^SBOM_OUT_PATH=' "$SSOT" | head -n1 | sed 's/^SBOM_OUT_PATH=//' | tr -d '\r')"
 [ -n "$SBOM_OUT_PATH" ] || { echo "ERROR_CODE=SSOT_MISSING_OR_INVALID"; exit 1; }
 
-# enforce flag (default: 0)
-ENFORCE="${MODEL_PACK_SBOM_ENFORCE:-0}"
-
 if [ ! -f "$SBOM_OUT_PATH" ]; then
-  if [ "$ENFORCE" = "1" ]; then
-    echo "ERROR_CODE=SBOM_FILE_MISSING"
-    exit 1
-  fi
-  echo "MODEL_PACK_SBOM_CYCLONEDX_V1_SKIPPED=1"
-  exit 0
+  echo "ERROR_CODE=SBOM_FILE_MISSING"
+  exit 1
 fi
 
 set +e
