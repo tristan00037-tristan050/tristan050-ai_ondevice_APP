@@ -175,6 +175,7 @@ DOCKERLESS_REPORT_RUN_OK=0
 DOCKERLESS_REPORT_DEGRADED_DOCKER_KEYS_OK=0
 DOCKERLESS_REPORT_STATIC_POLICY_ALWAYS_ON_OK=0
 RUN_GUARD_TARGETS_EXIST_OK=0
+MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK=0
 EXEC_MODE_PER_LINE_NO_EXCEPTION_TEXT_OK=0
 EXEC_MODE_LATENCY_MEASURE_PRESENT_OK=0
 EXEC_MODE_LATENCY_MISSING_BLOCK_OK=0
@@ -491,6 +492,7 @@ cleanup(){
   echo "PATH_SCOPE_READ_REQUIRED_OK=${PATH_SCOPE_READ_REQUIRED_OK}"
   echo "DOD_KV_BLOCK_BEGIN=1"
   echo "RUN_GUARD_TARGETS_EXIST_OK=${RUN_GUARD_TARGETS_EXIST_OK}"
+  echo "MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK=${MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK}"
   echo "REPO_CONTRACTS_HYGIENE_OK=${REPO_CONTRACTS_HYGIENE_OK}"
   echo "PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK=${PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK}"
   echo "DOCS_NO_BANNED_PHRASES_OK=${DOCS_NO_BANNED_PHRASES_OK}"
@@ -995,6 +997,8 @@ fi
 
 echo "== guard: run_guard targets exist v1 =="
 run_guard "run_guard targets exist v1" bash scripts/verify/verify_run_guard_targets_exist_v1.sh
+echo "== guard: merge_group coverage v1 =="
+run_guard "merge_group coverage v1" bash scripts/verify/verify_merge_group_coverage_v1.sh
 
 echo "== guard: base ref available v1 =="
 run_guard "base ref available v1" bash scripts/verify/verify_base_ref_available_v1.sh
