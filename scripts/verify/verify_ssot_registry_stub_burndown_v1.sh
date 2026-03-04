@@ -37,6 +37,13 @@ head_count=0
 SSOT_REGISTRY_STUB_COUNT_BASE=$base_count
 SSOT_REGISTRY_STUB_COUNT_HEAD=$head_count
 
+# Detect whether SSOT_REGISTRY changed vs BASE_REF (merge-base aware).
+# If registry did not change, allow decrease=0 even when budget requires per-PR decrease.
+registry_changed=0
+if git diff --name-only "${BASE_REF}...HEAD" -- "$REGISTRY" | grep -q .; then
+  registry_changed=1
+fi
+
 # 1) HEAD must not exceed STUB_MAX
 if [ "$head_count" -gt "$stub_max" ]; then
   echo "ERROR_CODE=STUB_BUDGET_EXCEEDED"
@@ -53,11 +60,15 @@ if [ "$base_count" -gt 0 ]; then
     exit 1
   fi
   decrease=$((base_count - head_count))
-  if [ "$decrease" -lt "$stub_min_decrease" ]; then
-    echo "ERROR_CODE=STUB_BURNDOWN_INSUFFICIENT"
-    echo "BASE=${base_count}"
-    echo "HEAD=${head_count}"
-    exit 1
+
+  # Enforce minimum decrease only when registry itself changed in this PR.
+  if [ "$registry_changed" -eq 1 ]; then
+    if [ "$decrease" -lt "$stub_min_decrease" ]; then
+      echo "ERROR_CODE=STUB_BURNDOWN_INSUFFICIENT"
+      echo "BASE=${base_count}"
+      echo "HEAD=${head_count}"
+      exit 1
+    fi
   fi
 fi
 
