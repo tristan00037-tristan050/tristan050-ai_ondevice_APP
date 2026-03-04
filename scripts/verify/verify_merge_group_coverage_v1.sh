@@ -14,6 +14,20 @@ if [ ! -f "$SSOT" ]; then
   exit 1
 fi
 
+count=0
+while IFS= read -r wf; do
+  wf="$(printf "%s" "$wf" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [ -z "$wf" ] && continue
+  case "$wf" in \#*) continue ;; esac
+  count=$((count+1))
+done < "$SSOT"
+
+if [ "$count" -lt 1 ]; then
+  echo "ERROR_CODE=REQUIRED_WORKFLOWS_SSOT_EMPTY"
+  echo "HIT_PATH=$SSOT"
+  exit 1
+fi
+
 missing=0
 
 while IFS= read -r wf; do

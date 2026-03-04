@@ -23,13 +23,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Preflight v1
-        uses: ./.github/actions/preflight_v1
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Preflight v1
+        uses: ./.github/actions/preflight_v1
 
       - name: Create minimal provenance (file)
         shell: bash
