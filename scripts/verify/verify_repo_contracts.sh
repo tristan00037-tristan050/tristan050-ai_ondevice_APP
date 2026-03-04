@@ -168,6 +168,8 @@ BFF_SECRET_FORMAT_OK=0
 BFF_SECRET_EMPTY_STRING_BLOCK_OK=0
 BFF_SECRET_SCHEMA_V1_SKIPPED=0
 
+ENFORCE_SPEC_V1_OK=0
+
 # P0-01 (OPS) Dockerless repo guard report contract DoD (CI-only verifier emits; here for schema)
 DOCKERLESS_REPORT_RUN_OK=0
 DOCKERLESS_REPORT_DEGRADED_DOCKER_KEYS_OK=0
@@ -898,6 +900,7 @@ cleanup(){
   echo "BFF_SECRET_FORMAT_OK=${BFF_SECRET_FORMAT_OK}"
   echo "BFF_SECRET_EMPTY_STRING_BLOCK_OK=${BFF_SECRET_EMPTY_STRING_BLOCK_OK}"
   echo "BFF_SECRET_SCHEMA_V1_SKIPPED=${BFF_SECRET_SCHEMA_V1_SKIPPED}"
+  echo "ENFORCE_SPEC_V1_OK=${ENFORCE_SPEC_V1_OK}"
   echo "AUTODECISION_POLICY_V1_OK=${AUTODECISION_POLICY_V1_OK}"
   echo "AUTODECISION_OUTPUT_PRESENT_OK=${AUTODECISION_OUTPUT_PRESENT_OK}"
   echo "AUTODECISION_REASON_CODE_ONLY_OK=${AUTODECISION_REASON_CODE_ONLY_OK}"
@@ -1573,6 +1576,7 @@ echo "== guard: P4-P0-02 supplychain signer unique v1 =="
 run_guard "P4-P0-02 supplychain signer unique v1" bash scripts/verify/verify_attestation_signer_unique_v1.sh
 echo "== guard: build provenance attest v1 =="
 run_guard "build provenance attest v1" bash scripts/verify/verify_build_provenance_attest_v1.sh
+run_guard "enforce spec v1" bash scripts/verify/verify_enforce_spec_v1.sh
 echo "== guard: model pack sbom cyclonedx v1 =="
 run_guard "model pack sbom cyclonedx v1" bash scripts/verify/verify_model_pack_sbom_cyclonedx_v1.sh
 echo "== guard: secure update tuf principles v1 =="
