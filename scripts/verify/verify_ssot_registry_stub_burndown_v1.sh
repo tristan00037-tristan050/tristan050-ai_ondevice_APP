@@ -44,6 +44,13 @@ if git diff --name-only "${BASE_REF}...HEAD" -- "$REGISTRY" | grep -q .; then
   registry_changed=1
 fi
 
+# (A) Stub line change: only enforce MIN_DECREASE when STATUS=stub lines were added/changed/removed.
+# Consumer-only changes (new SSOT+CONSUMER line, no stub line touch) allow decrease=0.
+stub_lines_changed=0
+if git diff "${BASE_REF}...HEAD" -- "$REGISTRY" | grep -q 'STATUS=stub'; then
+  stub_lines_changed=1
+fi
+
 # 1) HEAD must not exceed STUB_MAX
 if [ "$head_count" -gt "$stub_max" ]; then
   echo "ERROR_CODE=STUB_BUDGET_EXCEEDED"
@@ -61,8 +68,9 @@ if [ "$base_count" -gt 0 ]; then
   fi
   decrease=$((base_count - head_count))
 
-  # Enforce minimum decrease only when registry itself changed in this PR.
-  if [ "$registry_changed" -eq 1 ]; then
+  # (B) Enforce minimum decrease only when registry changed AND stub lines changed (stub add/change/remove).
+  # Consumer-only registry changes allow decrease=0.
+  if [ "$registry_changed" -eq 1 ] && [ "$stub_lines_changed" -eq 1 ]; then
     if [ "$decrease" -lt "$stub_min_decrease" ]; then
       echo "ERROR_CODE=STUB_BURNDOWN_INSUFFICIENT"
       echo "BASE=${base_count}"
