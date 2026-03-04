@@ -46,8 +46,12 @@ fi
 
 # (A) Stub line change: only enforce MIN_DECREASE when STATUS=stub lines were added/changed/removed.
 # Consumer-only changes (new SSOT+CONSUMER line, no stub line touch) allow decrease=0.
+# -U0: no context lines; match only added/removed lines (^+ or ^-), not diff headers (+++ / ---).
 stub_lines_changed=0
-if git diff "${BASE_REF}...HEAD" -- "$REGISTRY" | grep -q 'STATUS=stub'; then
+if git diff -U0 "${BASE_REF}...HEAD" -- "$REGISTRY" \
+  | grep -E '^[+-]' \
+  | grep -v -E '^(\+\+\+|---)' \
+  | grep -q 'STATUS=stub'; then
   stub_lines_changed=1
 fi
 
