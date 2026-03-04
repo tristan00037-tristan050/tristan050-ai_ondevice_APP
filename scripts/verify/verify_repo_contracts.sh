@@ -172,6 +172,7 @@ BFF_SECRET_SCHEMA_V1_SKIPPED=0
 DOCKERLESS_REPORT_RUN_OK=0
 DOCKERLESS_REPORT_DEGRADED_DOCKER_KEYS_OK=0
 DOCKERLESS_REPORT_STATIC_POLICY_ALWAYS_ON_OK=0
+RUN_GUARD_TARGETS_EXIST_OK=0
 EXEC_MODE_PER_LINE_NO_EXCEPTION_TEXT_OK=0
 EXEC_MODE_LATENCY_MEASURE_PRESENT_OK=0
 EXEC_MODE_LATENCY_MISSING_BLOCK_OK=0
@@ -487,6 +488,7 @@ cleanup(){
   echo "META_ONLY_OUTPUT_GUARD_V1_OK=${META_ONLY_OUTPUT_GUARD_V1_OK}"
   echo "PATH_SCOPE_READ_REQUIRED_OK=${PATH_SCOPE_READ_REQUIRED_OK}"
   echo "DOD_KV_BLOCK_BEGIN=1"
+  echo "RUN_GUARD_TARGETS_EXIST_OK=${RUN_GUARD_TARGETS_EXIST_OK}"
   echo "REPO_CONTRACTS_HYGIENE_OK=${REPO_CONTRACTS_HYGIENE_OK}"
   echo "PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK=${PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK}"
   echo "DOCS_NO_BANNED_PHRASES_OK=${DOCS_NO_BANNED_PHRASES_OK}"
@@ -987,6 +989,9 @@ if [[ "${REPO_GUARD_KEYS_ONLY:-0}" == "1" ]]; then
 fi
 
 # Existing guards
+
+echo "== guard: run_guard targets exist v1 =="
+run_guard "run_guard targets exist v1" bash scripts/verify/verify_run_guard_targets_exist_v1.sh
 
 echo "== guard: base ref available v1 =="
 run_guard "base ref available v1" bash scripts/verify/verify_base_ref_available_v1.sh
