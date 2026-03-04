@@ -28,6 +28,9 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Preflight v1
+        uses: ./.github/actions/preflight_v1
+
       - name: Create minimal provenance (file)
         shell: bash
         run: |

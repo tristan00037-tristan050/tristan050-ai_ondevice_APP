@@ -7,6 +7,7 @@ SSOT=docs/ops/contracts/BUILD_PROVENANCE_ATTEST_SSOT_V1.txt CONSUMER=scripts/ver
 SSOT=docs/ops/contracts/MODEL_PACK_SBOM_CYCLONEDX_SSOT_V1.txt CONSUMER=scripts/verify/verify_model_pack_sbom_cyclonedx_v1.sh
 SSOT=docs/ops/contracts/SECURE_UPDATE_TUF_PRINCIPLES_SSOT_V1.txt CONSUMER=scripts/verify/verify_secure_update_tuf_principles_v1.sh
 SSOT=docs/ops/contracts/ENFORCE_SPEC_V1.md CONSUMER=scripts/verify/verify_enforce_spec_v1.sh
+SSOT=docs/ops/contracts/REQUIRED_WORKFLOWS_V1.txt CONSUMER=scripts/verify/verify_merge_group_coverage_v1.sh
 
 SSOT=docs/ops/contracts/MCP_CAPABILITIES_SSOT_V1.txt CONSUMER=tools/mcp_gateway/enforcer_v1.cjs
 SSOT=docs/ops/contracts/MCP_CAPABILITIES_SSOT_V1.txt CONSUMER=scripts/verify/verify_mcp_zero_trust_enforced_v1.sh
@@ -98,7 +99,6 @@ SSOT=docs/ops/contracts/REPO_GUARDS_SEALED_OPS_SSOT.md STATUS=stub
 SSOT=docs/ops/contracts/REQUIRED_CHECK_CONTEXTS_SSOT.json STATUS=stub
 SSOT=docs/ops/contracts/REQUIRED_WORKFLOWS_LIST_V1.txt STATUS=stub
 SSOT=docs/ops/contracts/REQUIRED_WORKFLOWS_SSOT.json STATUS=stub
-SSOT=docs/ops/contracts/REQUIRED_WORKFLOWS_V1.txt STATUS=stub
 SSOT=docs/ops/contracts/SKILLS_RUNTIME_POLICY_V1.md STATUS=stub
 SSOT=docs/ops/contracts/SUPPLYCHAIN_SIGNER_SSOT.json STATUS=stub
 SSOT=docs/ops/contracts/SVR03_REASON_CODES_V1.md STATUS=stub

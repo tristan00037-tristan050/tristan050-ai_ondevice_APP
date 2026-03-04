@@ -1,4 +1,4 @@
-# one per line, comments allowed
+# One workflow filename per line (no paths).
+# Comments allowed with leading '#'.
 product-verify-repo-guards.yml
-ops-reports-nightly.yml
-ai-ab-bench-nightly.yml
+product-verify-supplychain.yml
