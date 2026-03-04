@@ -41,6 +41,9 @@ while IFS= read -r line; do
       # 따옴표/뒤따르는 기호 정리(최소)
       path="${path%\"}"; path="${path#\"}"
       path="${path%\'}"; path="${path#\'}"
+      # 경로 뒤에 붙는 ';' 또는 '&&' 같은 토큰을 최소 컷
+      path="${path%%;*}"
+      path="${path%%&&*}"
 
       if [ ! -f "$path" ]; then
         echo "ERROR_CODE=RUN_GUARD_TARGET_MISSING"
