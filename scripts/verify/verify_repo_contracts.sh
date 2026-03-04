@@ -988,52 +988,39 @@ fi
 
 # Existing guards
 
-echo "== guard: base ref available v1 =="
 run_guard "base ref available v1" bash scripts/verify/verify_base_ref_available_v1.sh
-echo "== guard: workflow checkout depth ssot v1 =="
 run_guard "workflow checkout depth ssot v1" bash scripts/verify/verify_workflow_checkout_depth_ssot_v1.sh
 run_guard "workflow checkout depth autodiscover v1" bash scripts/verify/verify_workflow_checkout_depth_autodiscover_v1.sh
-echo "== guard: verify purity (no install in verify) =="
 run_guard "verify purity (no install in verify)" bash scripts/verify/verify_verify_purity_no_install.sh
 VERIFY_PURITY_NO_INSTALL_OK=1
 
-echo "== guard: verify purity full scope (SSOT allowlist) =="
 run_guard "verify purity full scope" bash scripts/verify/verify_verify_purity_full_scope.sh
 VERIFY_PURITY_FULL_SCOPE_OK=1
 VERIFY_PURITY_ALLOWLIST_SSOT_OK=1
 VERIFY_PURITY_FULL_SCOPE_OK=1
 VERIFY_PURITY_ALLOWLIST_SSOT_OK=1
 
-echo "== guard: verify no /dev/tcp in verify (P3-PREP-00) =="
 run_guard "verify no /dev/tcp in verify" bash scripts/verify/verify_no_dev_tcp_in_verify_v1.sh
 VERIFY_NO_DEV_TCP_IN_VERIFY_OK=1
 
-echo "== guard: verify ripgrep guard present v1 (P3-PREP-00, enforcement pending) =="
 run_guard "verify ripgrep guard present v1" bash scripts/verify/verify_ripgrep_guard_present_v1.sh
 VERIFY_RIPGREP_GUARD_PRESENT_V1_OK=1
 
-echo "== guard: verify workflow preflight present v1 (P3-PLAT-01) =="
 run_guard "workflow preflight ssot v1" bash scripts/verify/verify_workflow_preflight_present_v1.sh
 
-echo "== guard: verify runtime guard helpers adopted v1 (P3-PLAT-02) =="
 run_guard "verify runtime guard helpers adopted v1" bash scripts/verify/verify_runtime_guard_helpers_adopted_v1.sh
 RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=1
 
-echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh
-echo "== guard: repo contracts hygiene =="
 run_guard "repo contracts hygiene" bash scripts/verify/verify_repo_contracts_hygiene.sh
 REPO_CONTRACTS_HYGIENE_OK=1
 
-echo "== guard: product-verify workflow template (SSOT) =="
 run_guard "product-verify workflow template" bash scripts/verify/verify_product_verify_workflows.sh
 PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK=1
 
-echo "== guard: docs banned phrases =="
 run_guard "docs banned phrases" bash scripts/verify/verify_docs_banned_phrases.sh
 DOCS_NO_BANNED_PHRASES_OK=1
 
-echo "== guard: onprem real-world proof (strict) =="
 if [ "$ONPREM_PROOF_STRICT_ENFORCE" = "1" ]; then
   run_guard "onprem real-world proof" bash scripts/verify/verify_onprem_real_world_proof.sh
   ONPREM_REAL_WORLD_PROOF_OK=1
@@ -1043,32 +1030,26 @@ else
   ONPREM_PROOF_STRICT_SKIPPED=1
 fi
 
-echo "== guard: onprem proof latest + archive =="
 run_guard "onprem proof latest" bash scripts/verify/verify_onprem_proof_latest.sh
 ONPREM_PROOF_LATEST_PRESENT_OK=1
 ONPREM_PROOF_ARCHIVE_LINKED_OK=1
 ONPREM_PROOF_SENSITIVE_SCAN_OK=1
 
-echo "== guard: P5-P0-01 ONPREM_LATEST_PASS_MARKER_V1 (pass marker only, no failure text) =="
 run_guard "P5-P0-01 onprem latest pass marker v1" bash scripts/verify/verify_onprem_real_world_proof_latest_v1.sh
 ONPREM_LATEST_PASS_MARKER_V1_OK=1
 ONPREM_LATEST_NO_FAILURE_TEXT_V1_OK=1
 ONPREM_LATEST_SENSITIVE_SCAN_V1_OK=1
 ONPREM_LATEST_LONG_LINE_BLOCK_V1_OK=1
 
-echo "== guard: onprem proof freshness =="
 run_guard "onprem proof freshness" bash scripts/verify/verify_onprem_proof_freshness.sh
 ONPREM_PROOF_LATEST_FRESH_OK=1
 
-echo "== guard: forbid log-grep verdict patterns =="
 run_guard "forbid log-grep verdict patterns" bash scripts/verify/verify_no_log_grep_verdict.sh
 NO_LOG_GREP_VERDICT_OK=1
 
-echo "== guard: forbid install fallback in verify scripts =="
 run_guard "forbid install fallback" bash scripts/verify/verify_no_npm_install_fallback.sh
 NO_NPM_INSTALL_FALLBACK_OK=1
 
-echo "== guard: JCS single source =="
 run_guard "JCS single source" bash scripts/verify/verify_jcs_single_source.sh
 CANONICALIZE_SHARED_SINGLE_SOURCE_OK=1
 
@@ -1097,64 +1078,51 @@ run_guard "repo no skipped bypass" bash scripts/verify/verify_repo_no_skipped_by
 REQUIRED_CHECK_NO_SKIPPED_BYPASS_OK=1
 
 # New guards (H3.4-prep)
-echo "== guard: lockfiles tracked =="
 run_guard "lockfiles tracked" bash scripts/verify/verify_lockfiles_tracked.sh
 LOCKFILES_TRACKED_OK=1
 
-echo "== guard: required check context single (SSOT) =="
 run_guard "required check context single" bash scripts/verify/verify_required_check_context_ssot_single.sh
 REQUIRED_CHECK_CONTEXT_SINGLE_OK=1
 
-echo "== guard: dual-impl drift (audit_append) =="
 run_guard "audit_append no drift" bash scripts/verify/verify_audit_append_no_drift.sh
 AUDIT_APPEND_NO_DRIFT_OK=1
 
-echo "== guard: dual-impl drift (counters) =="
 run_guard "counters no drift" bash scripts/verify/verify_counters_no_drift.sh
 COUNTERS_NO_DRIFT_OK=1
 
-echo "== guard: .artifacts not tracked =="
 run_guard ".artifacts not tracked" bash scripts/verify/verify_no_tracked_artifacts.sh
 ARTIFACTS_NOT_TRACKED_OK=1
 
-echo "== guard: required workflows always-reported (SSOT) =="
 run_guard "required workflows always-reported" bash scripts/verify/verify_required_workflows_always_reported.sh
 REQUIRED_WORKFLOWS_ALWAYS_REPORTED_OK=1
 
-echo "== guard: policy header bundle fail-closed =="
 run_guard "policy header bundle" bash scripts/verify/verify_policy_header_bundle_failclosed.sh
 POLICY_HEADERS_REQUIRED_OK=1
 POLICY_HEADERS_FAILCLOSED_OK=1
 
-echo "== guard: POLICY_HEADERS_SCHEMA_V1 (PR-P0-BFF-01) =="
 run_guard "policy headers schema v1" bash scripts/verify/verify_policy_headers_schema_v1.sh
 POLICY_HEADERS_SCHEMA_V1_OK=1
 POLICY_HEADERS_RULE_DESCRIPTION_PRESENT_OK=1
 
-echo "== guard: meta-only allowlist enforced =="
 run_guard "meta-only allowlist enforced" bash scripts/verify/verify_meta_only_allowlist_enforced.sh
 META_ONLY_ALLOWLIST_ENFORCED_OK=1
 
-echo "== guard: algo-core 01~03 (meta-only + 3 blocks + signed manifest + p95) =="
 run_guard "algo-core 01~03" bash scripts/verify/verify_algo_core_01_03.sh
 ALGO_META_ONLY_FAILCLOSED_OK=1
 ALGO_THREE_BLOCKS_NO_RAW_OK=1
 ALGO_SIGNED_MANIFEST_VERIFY_OK=1
 ALGO_P95_HOOK_OK=1
 
-echo "== guard: algo-core-06 prod key management (SSOT + keygen + fail-closed) =="
 run_guard "algo-core-06 prod keys" bash scripts/verify/verify_algo_core_06_prod_keys.sh
 ALGO_CORE_PROD_SSOT_PRESENT_OK=1
 ALGO_CORE_PROD_ENV_TEMPLATE_PRESENT_OK=1
 ALGO_CORE_KEYGEN_SCRIPT_PRESENT_OK=1
 ALGO_CORE_PROD_FAILCLOSED_ENFORCED_OK=1
 
-echo "== guard: butler runtime v0 skeleton =="
 run_guard "butler runtime v0 skeleton" bash scripts/verify/verify_runtime_v0_skeleton.sh
 RUNTIME_V0_HTTP_OK=1
 RUNTIME_EGRESS_DENY_DEFAULT_OK=1
 
-echo "== guard: butler runtime shadow mode =="
 run_guard "butler runtime shadow" bash scripts/verify/verify_runtime_shadow.sh
 RUNTIME_SHADOW_ENDPOINT_OK=1
 RUNTIME_SHADOW_HEADERS_OK=1
@@ -1163,12 +1131,10 @@ RUNTIME_SHADOW_PROOF_OK=1
 
 
 
-echo "== guard: runtime egress env proof (compose + k8s) =="
 run_guard "runtime egress env proof" bash scripts/verify/verify_runtime_egress_env_proof.sh
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=1
 RUNTIME_EGRESS_ENV_PROOF_OK=1
 
-echo "== guard: modelpack v0 signed manifest + fail-closed =="
 run_guard "modelpack v0 failclosed" bash scripts/verify/verify_modelpack_v0_failclosed.sh
 MODEL_PACK_SCHEMA_SSOT_OK=1
 MODEL_PACK_SIGNED_MANIFEST_VERIFY_OK=1
@@ -1176,36 +1142,30 @@ MODEL_PACK_MANIFEST_MISSING_FAILCLOSED_OK=1
 MODEL_PACK_HASH_MISMATCH_FAILCLOSED_OK=1
 MODEL_PACK_SIGNATURE_INVALID_FAILCLOSED_OK=1
 
-echo "== guard: model pack apply fail-closed e2e =="
 run_guard "model pack apply fail-closed e2e" bash scripts/verify/verify_model_pack_apply_failclosed_e2e.sh
 ALGO_APPLY_FAILCLOSED_E2E_OK=1
 ALGO_APPLY_STATE_UNCHANGED_OK=1
 ALGO_APPLY_REASON_CODE_PRESERVED_OK=1
 
-echo "== guard: model pack v0 identity + expiry =="
 run_guard "model pack v0 identity + expiry" bash scripts/verify/verify_modelpack_v0_identity_expiry.sh
 MODEL_PACK_V0_ID_FIELDS_REQUIRED_OK=1
 MODEL_PACK_V0_EXPIRES_ENFORCED_OK=1
 
-echo "== guard: model pack v0 compat =="
 run_guard "model pack v0 compat" bash scripts/verify/verify_modelpack_v0_compat.sh
 MODEL_PACK_V0_COMPAT_FIELDS_REQUIRED_OK=1
 MODEL_PACK_V0_COMPAT_ENFORCED_OK=1
 
-echo "== guard: ondevice model exec v0 (Track B-1) =="
 run_guard "ondevice model exec v0" bash scripts/verify/verify_ondevice_model_exec_v0.sh
 ONDEVICE_MODEL_EXEC_V0_OK=1
 MODEL_PACK_VERIFY_REQUIRED_OK=1
 ONDEVICE_EGRESS_DENY_PROOF_OK=1
 ONDEVICE_NO_RAW_STORAGE_OK=1
 
-echo "== guard: ondevice real compute once (Track B-1.1) =="
 run_guard "ondevice real compute once" bash scripts/verify/verify_ondevice_real_compute_once.sh
 ONDEVICE_REAL_COMPUTE_ONCE_OK=1
 ONDEVICE_RESULT_FINGERPRINT_OK=1
 ONDEVICE_COMPUTE_PATH_ONDEVICE_OK=1
 
-echo "== guard: ondevice inference v0 (P2-AI-01) =="
 run_guard "ondevice inference v0" bash scripts/verify/verify_ondevice_inference_v0.sh
 ONDEVICE_MODEL_PACK_LOADED_OK=1
 ONDEVICE_MODEL_PACK_IDENTITY_OK=1
@@ -1213,7 +1173,6 @@ ONDEVICE_INFERENCE_ONCE_OK=1
 ONDEVICE_OUTPUT_FINGERPRINT_OK=1
 ONDEVICE_INFER_USES_PACK_PARAMS_OK=1
 
-echo "== guard: ai v1 modules (perf/rerank/calib/propensity) =="
 run_guard "ai v1 modules" bash scripts/verify/verify_ai_v1_modules.sh
 AI_PERF_HARNESS_V1_OK=1
 AI_RERANK_NEARTIE_V1_OK=1
@@ -1223,47 +1182,39 @@ AI_DETERMINISM_OK=1
 AI_P95_BUDGET_OK=1
 AI_NEARTIE_SWAP_BUDGET_OK=1
 
-echo "== guard: ai budget gates (P2-AI-02: latency/mem/energy_proxy) =="
 run_guard "ai budget gates" bash scripts/verify/verify_ai_budget_gates_v0.sh
 
-echo "== guard: algo determinism gate (D0) =="
 run_guard "algo determinism gate (D0)" bash scripts/verify/verify_algo_determinism_gate.sh
 ALGO_DETERMINISM_VERIFIED_OK=1
 ALGO_DETERMINISM_HASH_MATCH_OK=1
 ALGO_DETERMINISM_MODE_REPORTED_OK=1
 
-echo "== guard: ops hub v0 meta-only =="
 run_guard "ops hub v0 meta-only" bash scripts/verify/verify_ops_hub_v0_meta_only.sh
 OPS_HUB_META_SCHEMA_SSOT_OK=1
 OPS_HUB_NO_RAW_TEXT_GUARD_OK=1
 OPS_HUB_REPORT_V0_OK=1
 OPS_HUB_REPORT_INPUT_META_ONLY_OK=1
 
-echo "== guard: ops hub traceability (request_id join) =="
 run_guard "ops hub traceability" bash scripts/verify/verify_ops_hub_traceability.sh
 OPS_HUB_TRACEABILITY_OK=1
 OPS_HUB_TRACEABILITY_REPORT_OK=1
 OPS_HUB_TRACEABILITY_NO_RAW_OK=1
 
-echo "== guard: ops hub trace realpath (persistence + idempotency) =="
 run_guard "ops hub trace realpath" bash scripts/verify/verify_ops_hub_trace_realpath.sh
 OPS_HUB_TRACE_REALPATH_PERSISTED_OK=1
 OPS_HUB_TRACE_REALPATH_JOINABLE_OK=1
 OPS_HUB_TRACE_REALPATH_NO_RAW_OK=1
 OPS_HUB_TRACE_REALPATH_IDEMPOTENT_OK=1
 
-echo "== guard: ops hub trace service store =="
 run_guard "ops hub trace service store" bash scripts/verify/verify_ops_hub_trace_service_store.sh
 OPS_HUB_TRACE_SERVICE_PERSIST_OK=1
 OPS_HUB_TRACE_IDEMPOTENT_OK=1
 OPS_HUB_TRACE_NO_RAW_OK=1
 OPS_HUB_TRACE_JOINABLE_OK=1
 
-echo "== guard: trace security lockdown (A-3.1) =="
 run_guard "trace security lockdown (A-3.1)" bash scripts/verify/verify_trace_security_lockdown.sh
 OPS_HUB_TRACE_LOCAL_ONLY_OR_AUTH_OK=1
 
-echo "== guard: ops hub trace db store (P1-PLAT-01) =="
 run_guard "ops hub trace db store" bash scripts/verify/verify_ops_hub_trace_db_store.sh
 OPS_HUB_TRACE_DB_SCHEMA_OK=1
 OPS_HUB_TRACE_REQUEST_ID_INDEX_OK=1
@@ -1271,32 +1222,26 @@ OPS_HUB_TRACE_IDEMPOTENT_UPSERT_OK=1
 OPS_HUB_TRACE_CONCURRENCY_SAFE_OK=1
 OPS_HUB_TRACE_EVENT_SCHEMA_V1_OK=1
 
-echo "== guard: reason codes v1 single source =="
 run_guard "reason codes v1 single source" bash scripts/verify/verify_reason_codes_v1_single_source.sh
 REASON_CODE_SINGLE_SOURCE_OK=1
 REASON_CODE_DRIFT_GUARD_OK=1
 
-echo "== guard: m6 sealed record =="
 run_guard "m6 sealed record" bash scripts/verify/verify_m6_sealed_record.sh
 M6_SEALED_RECORD_PRESENT_OK=1
 M6_SEALED_RECORD_NO_PLACEHOLDER_OK=1
 M6_SEALED_RECORD_PR_MAP_OK=1
 
-echo "== guard: m7 sealed record =="
 run_guard "m7 sealed record" bash scripts/verify/verify_m7_sealed_record.sh
 M7_SEALED_RECORD_PRESENT_OK=1
 M7_SEALED_RECORD_FORMAT_OK=1
 M7_SEALED_RECORD_NO_PLACEHOLDER_OK=1
 
-echo "== guard: butler ssot v1.1 =="
 run_guard "butler ssot v1.1" bash scripts/verify/verify_butler_ssot_v1_1.sh
 BUTLER_SSOT_V1_1_OK=1
 
-echo "== guard: algo-core gateway deployment doc =="
 run_guard "algo-core gateway deploy doc" bash scripts/verify/verify_algo_core_gateway_deploy_doc.sh
 ALGO_CORE_GATEWAY_DEPLOY_DOC_OK=1
 
-echo "== guard: meta-only validator parity (client/server single source) =="
 run_guard "meta-only validator parity" bash scripts/verify/verify_meta_only_validator_parity.sh
 META_ONLY_VALIDATOR_PARITY_OK=1
 
@@ -1305,64 +1250,51 @@ META_ONLY_VALIDATOR_SINGLE_SOURCE_OK=1
 META_ONLY_VALIDATOR_NO_DUPLICATION_OK=1
 META_ONLY_VALIDATOR_V1_CJS_PRESENT_OK=1
 
-echo "== guard: algo-core-04 runtime wiring assets =="
 run_guard "algo-core-04 runtime wiring assets" bash scripts/verify/verify_algo_core_04_runtime_wiring.sh
 ALGO_CORE_RUNTIME_ROUTE_PRESENT_OK=1
 ALGO_CORE_RUNTIME_PROD_FAILCLOSED_KEYS_OK=1
 
-echo "== guard: export two-step + auditv2 =="
 run_guard "export two-step + auditv2" bash scripts/verify/verify_export_two_step_auditv2.sh
 EXPORT_TWO_STEP_OK=1
 EXPORT_APPROVAL_AUDITED_OK=1
 EXPORT_APPROVAL_AUDIT_EVENT_V2_WRITTEN_OK=1
 EXPORT_APPROVE_AUDIT_V2_OK=1
 
-echo "== guard: mock network zero =="
 run_guard "mock network zero" bash scripts/verify/verify_mock_network_zero.sh
 MOCK_NETWORK_ZERO_OK=1
 
-echo "== guard: perf p95 budget gate =="
 run_guard "perf p95 budget gate" bash scripts/verify/verify_perf_p95_budget.sh
 PERF_P95_BUDGET_DEFINED_OK=1
 PERF_P95_CONTRACT_OK=1
 PERF_P95_REGRESSION_BLOCK_OK=1
 
-echo "== guard: perf p95 baseline pinned (SSOT) =="
 run_guard "perf p95 baseline pinned" bash scripts/verify/verify_perf_p95_baseline_pinned.sh
 PERF_P95_BASELINE_PINNED_OK=1
 
-echo "== guard: onprem compose quickstart assets =="
 run_guard "onprem compose quickstart assets" bash scripts/verify/verify_onprem_compose_quickstart_assets.sh
 ONPREM_COMPOSE_ASSETS_OK=1
 
-echo "== guard: onprem helm skeleton assets =="
 run_guard "onprem helm skeleton assets" bash scripts/verify/verify_onprem_helm_skeleton_assets.sh
 ONPREM_HELM_SKELETON_OK=1
 
-echo "== guard: helm secrets enabled guard =="
 run_guard "helm secrets enabled guard" bash scripts/verify/verify_onprem_helm_secrets_guard.sh
 ONPREM_HELM_SECRETS_GUARD_OK=1
 
-echo "== guard: onprem helm template smoke ==" 
 run_guard "onprem helm template smoke" bash scripts/verify/verify_onprem_helm_template_smoke.sh
 ONPREM_HELM_TEMPLATE_SMOKE_OK=1
 ONPREM_HELM_TEMPLATE_SECRET_REF_OK=1
 
-echo "== guard: onprem signing key policy (prod fail-closed) =="
 run_guard "onprem signing key policy" bash scripts/verify/verify_onprem_signing_key_policy.sh
 ONPREM_SIGNING_KEY_REQUIRED_OK=1
 ONPREM_EPHEMERAL_KEY_FORBIDDEN_OK=1
 ONPREM_KEY_ID_ALLOWLIST_OK=1
 
-echo "== guard: onprem signed bundle verify (manifest+sig) =="
 run_guard "onprem signed bundle verify" bash scripts/verify/verify_onprem_signed_bundle.sh
 ONPREM_SIGNED_BUNDLE_OK=1
 
-echo "== guard: onprem install/verify assets == "
 run_guard "onprem install/verify assets" bash scripts/verify/verify_onprem_install_verify_assets.sh
 ONPREM_INSTALL_VERIFY_OK=1
 
-echo "== guard: onprem delivered keyset (SSOT) =="
 SSOT_FILE="docs/ops/contracts/ONPREM_DELIVERED_KEYS_SSOT.md"
 test -s "$SSOT_FILE" || { echo "BLOCK: missing SSOT file: $SSOT_FILE"; exit 1; }
 ONPREM_DELIVERED_KEYSET_PRESENT_OK=1
@@ -1379,11 +1311,9 @@ while IFS= read -r k; do
 done <<< "$REQ_KEYS"
 ONPREM_DELIVERED_KEYSET_GUARD_OK=1
 
-echo "== guard: test event selection (reason_code requires action) =="
 run_guard "test event selection" bash scripts/verify/verify_test_event_selection_guard.sh
 TEST_EVENT_SELECTION_GUARD_OK=1
 
-echo "== guard: prod delivered keyset (SSOT) =="
 SSOT_FILE="docs/ops/contracts/PROD_DELIVERED_KEYS_SSOT.md"
 test -s "$SSOT_FILE" || { echo "BLOCK: missing SSOT file: $SSOT_FILE"; exit 1; }
 PROD_DELIVERED_KEYSET_PRESENT_OK=1
@@ -1402,7 +1332,6 @@ done <<< "$REQ_KEYS"
 
 PROD_DELIVERED_KEYSET_GUARD_OK=1
 
-echo "== guard: algo-core delivered keyset (SSOT) =="
 SSOT_FILE="docs/ops/contracts/ALGO_CORE_DELIVERED_KEYS_SSOT.md"
 test -s "$SSOT_FILE" || { echo "BLOCK: missing SSOT file: $SSOT_FILE"; exit 1; }
 ALGO_CORE_DELIVERED_KEYSET_PRESENT_OK=1
@@ -1420,25 +1349,21 @@ done <<< "$REQ_KEYS"
 
 ALGO_CORE_DELIVERED_KEYSET_GUARD_OK=1
 
-echo "== guard: web ux-01 assets (E2E fixture) =="
 run_guard "web ux-01 assets" bash scripts/verify/verify_web_ux_01_assets.sh
 WEB_E2E_MODE_SWITCH_WIRED_OK=1
 WEB_E2E_MOCK_NETWORK_ZERO_OK=1
 WEB_E2E_LIVE_HEADER_BUNDLE_OK=1
 
-echo "== guard: web ux-03 assets (export approve auditv2 e2e) =="
 run_guard "web ux-03 assets" bash scripts/verify/verify_web_ux_03_assets.sh
 WEB_E2E_EXPORT_TWO_STEP_OK=1
 WEB_E2E_EXPORT_AUDITV2_OK=1
 EXPORT_APPROVE_IDEMPOTENT_OK=1
 EXPORT_APPROVE_AUDIT_ID_RETURNED_OK=1
 
-echo "== guard: web ux-04 assets (p95 marks parity e2e) =="
 run_guard "web ux-04 assets" bash scripts/verify/verify_web_ux_04_assets.sh
 PERF_E2E_EVENT_MARKS_WIRED_OK=1
 PERF_E2E_MARKS_PARITY_OK=1
 
-echo "== guard: perf real pipeline p95 (wired + ops hub join + budget) =="
 run_guard "perf real pipeline p95" bash scripts/verify/verify_perf_real_pipeline_p95.sh
 PERF_REAL_PIPELINE_WIRED_OK=1
 PERF_REAL_PIPELINE_REQUEST_ID_JOIN_OK=1
@@ -1447,11 +1372,9 @@ PERF_REAL_PIPELINE_P95_BUDGET_OK=1
 PERF_REAL_PIPELINE_MIN_SAMPLES_OK=1
 PERF_REAL_PIPELINE_VARIANCE_OK=1
 
-echo "== guard: web ux-08 assets (meta-only negative suite) =="
 run_guard "web ux-08 assets" bash scripts/verify/verify_web_ux_08_assets.sh
 WEB_META_ONLY_NEGATIVE_SUITE_OK=1
 
-echo "== guard: workflow-lint sealed (no attestation) =="
 FILE=".github/workflows/workflow-lint.yml"
 
 # P2) fail-closed: 파일이 없거나 못 읽으면 즉시 차단
@@ -1483,29 +1406,22 @@ fi
 
 echo "WORKFLOW_LINT_SEALED_OK=1"
 
-echo "== guard: P3-AI-01 fingerprint canonical v1 =="
 run_guard "P3-AI-01 fingerprint canonical v1" bash scripts/verify/verify_fingerprint_canonical_v1.sh
 
-echo "== guard: P3-AI-01 canonicalize single source v1 =="
 run_guard "P3-AI-01 canonicalize single source v1" bash scripts/verify/verify_canonicalize_single_source_v1.sh
 
-echo "== guard: P5-AI-P0-02 canonicalize nested preserve v2 (single source + nested effect) =="
 run_guard "P5-AI-P0-02 canonicalize single source no dup v2" bash scripts/verify/verify_canonicalize_single_source_no_dup_v2.sh
 CANONICALIZE_V2_SSOT_OK=1
 CANONICALIZE_V2_NO_DUP_OK=1
 run_guard "P5-AI-P0-02 fingerprint nested effect v1" bash scripts/verify/verify_fingerprint_nested_effect_v1.sh
 AI_INPUT_CANON_PRESERVE_NESTED_V1_OK=1
 
-echo "== guard: P3-AI-02 fingerprint input policy v1 =="
 run_guard "P3-AI-02 fingerprint input policy v1" bash scripts/verify/verify_fingerprint_input_policy_v1.sh
 
-echo "== guard: P3-AI-03 golden vectors meta-only v1 =="
 run_guard "P3-AI-03 golden vectors meta-only v1" bash scripts/verify/verify_golden_vectors_v1.sh
 
-echo "== guard: P3-AI-04 energy proxy cpu_time_ms v1 =="
 run_guard "P3-AI-04 energy proxy cpu_time_ms v1" bash scripts/verify/verify_energy_proxy_nontrivial_v1.sh
 
-echo "== guard: P3-PLAT-03 trace bind/auth policy v1 =="
 run_guard "P3-PLAT-03 trace bind/auth policy v1" bash scripts/verify/verify_trace_bind_auth_policy_v1.sh
 
 # P3-PLAT-04 track manifest v1 (gated: only enforce when manifest file exists)
@@ -1518,7 +1434,6 @@ else
   echo "TRACK_MANIFEST_KEYS_EXIST_OK=0"
 fi
 
-echo "== guard: Generate build stamp SSOT v1 (PR-P0-DEPLOY-00) =="
 run_guard "build stamp SSOT v1" bash scripts/ops/gen_build_stamp_v1.sh
 BUILD_STAMP_GENERATION_SSOT_V1_OK=1
 
@@ -1527,12 +1442,10 @@ PROBES_SSOT_V1_OK=1
 PROBES_PATHS_MATCH_APP_V1_OK=1
 
 # 1) 정적 가드: Docker 유무와 무관하게 항상 실행
-echo "== guard: host.docker.internal forbidden scan v1 =="
 run_guard "host docker internal forbidden v1" bash scripts/verify/verify_host_docker_internal_forbidden_v1.sh
 HOST_DOCKER_INTERNAL_FORBIDDEN_OK=1
 
 # 2) Docker 의존 가드: Docker 가능할 때만 실행
-echo "== guard: docker it-net db svcname v1 (PR-P0-DEPLOY-03) =="
 docker_ok=0
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   docker_ok=1
@@ -1560,21 +1473,15 @@ run_guard "DIST_FRESHNESS_POLICY_V1" bash scripts/verify/verify_dist_freshness_v
 
 run_guard "P4-P0-01 required workflows merge_group v1" bash scripts/verify/verify_required_workflows_merge_group_v1.sh
 
-echo "== guard: P4-P0-02 supplychain permissions scoped v1 =="
 run_guard "P4-P0-02 supplychain permissions scoped v1" bash scripts/verify/verify_attestation_permissions_scoped_v1.sh
 SUPPLYCHAIN_PERMISSIONS_SCOPED_V1_OK=1
 
-echo "== guard: P4-P0-02 supplychain signer unique v1 =="
 run_guard "P4-P0-02 supplychain signer unique v1" bash scripts/verify/verify_attestation_signer_unique_v1.sh
-echo "== guard: build provenance attest v1 =="
 run_guard "build provenance attest v1" bash scripts/verify/verify_build_provenance_attest_v1.sh
-echo "== guard: model pack sbom cyclonedx v1 =="
 run_guard "model pack sbom cyclonedx v1" bash scripts/verify/verify_model_pack_sbom_cyclonedx_v1.sh
-echo "== guard: secure update tuf principles v1 =="
 run_guard "secure update tuf principles v1" bash scripts/verify/verify_secure_update_tuf_principles_v1.sh
 SLSA_SIGNER_WORKFLOW_UNIQUE_V1_OK=1
 
-echo "== guard: P4-P0-03 workspace fs sandbox v1 =="
 run_guard "P4-P0-03 workspace fs sandbox v1" bash scripts/verify/verify_workspace_fs_sandbox_v1.sh
 WORKSPACE_FS_SANDBOX_V1_OK=1
 WORKSPACE_FS_SANDBOX_TRAVERSAL_BLOCK_OK=1
@@ -1582,7 +1489,6 @@ WORKSPACE_FS_SANDBOX_ABS_BLOCK_OK=1
 WORKSPACE_FS_SANDBOX_SYMLINK_BLOCK_OK=1
 WORKSPACE_FS_SANDBOX_WRITE_NEWFILE_BLOCK_OK=1
 
-echo "== guard: P4-P0-04 high-risk approval gate + taint propagation v1 =="
 run_guard "P4-P0-04 high-risk approval gate v1" bash scripts/verify/verify_high_risk_gate_v1.sh
 HIGH_RISK_BLOCK_WITHOUT_APPROVAL_OK=1
 HIGH_RISK_TAINT_PROPAGATION_OK=1
@@ -1590,14 +1496,12 @@ HIGH_RISK_APPROVAL_FORMAT_OK=1
 HIGH_RISK_TAINT_STRING_BLOCK_OK=1
 HIGH_RISK_TAINT_HIGH_SCOPE_ENFORCED_OK=1
 
-echo "== guard: P4-P0-05 skills runtime manifest + capability gate v1 =="
 run_guard "P4-P0-05 skills runtime v1" bash scripts/verify/verify_skills_runtime_v1.sh
 SKILLS_MANIFEST_PRESENT_OK=1
 SKILLS_CAPABILITY_GATE_BLOCK_OK=1
 SKILLS_META_ONLY_PROOF_OK=1
 SKILLS_META_ONLY_REQUIRED_OK=1
 
-echo "== guard: P4-P0-06 task queue idempotency + concurrency + atomic writes v1 =="
 run_guard "P4-P0-06 task queue v1" bash scripts/verify/verify_task_queue_v1.sh
 TASK_QUEUE_IDEMPOTENCY_OK=1
 TASK_QUEUE_CONCURRENCY_OK=1
@@ -1606,46 +1510,38 @@ TASK_QUEUE_LOCK_NO_TIMEOUT_OK=1
 TASK_QUEUE_ASYNC_TASK_FN_OK=1
 TASK_QUEUE_YIELD_WAIT_OK=1
 
-echo "== guard: P4-P1-01 instruction layers meta-only (raw=0, hash/scope only, fail-closed) =="
 run_guard "P4-P1-01 instruction layers v1" bash scripts/verify/verify_instruction_layers_v1.sh
 INSTRUCTION_RAW_0_OK=1
 INSTRUCTION_HASH_ONLY_OK=1
 INSTRUCTION_LAYER_REGISTRY_OK=1
 
-echo "== guard: P4-P1-02 reason_code registry (unregistered BLOCK, single source) =="
 run_guard "P4-P1-02 reason_code registry v1" bash scripts/verify/verify_reason_code_registry_v1.sh
 REASON_CODE_REGISTRY_PRESENT_OK=1
 REASON_CODE_NOT_REGISTERED_BLOCK_OK=1
 REASON_CODE_SINGLE_SOURCE_OK=1
 
-echo "== guard: P4-P1-03 path scope SSOT (scan drift=0, fail-closed) =="
 run_guard "P4-P1-03 path scope SSOT v1" bash scripts/verify/verify_path_scope_ssot_v1.sh
 PATH_SCOPE_SSOT_PRESENT_OK=1
 PATH_SCOPE_NO_PLACEHOLDER_OK=1
 PATH_SCOPE_DRIFT_0_OK=1
 
-echo "== guard: P4-AI-01 golden vectors v2 (determinism + fingerprint validation) =="
 run_guard "P4-AI-01 golden vectors v2" bash scripts/verify/verify_ai_golden_vectors_v2.sh
 AI_GOLDEN_VECTORS_V2_OK=1
 AI_DETERMINISM_FINGERPRINT_OK=1
 
-echo "== guard: P5-AI-P0-01 golden vectors v2 raw text 0 v1 (meta-only, no raw text fields) =="
 run_guard "P5-AI-P0-01 golden vectors v2 raw text 0 v1" bash scripts/verify/verify_ai_golden_vectors_v2_raw_text_0_v1.sh
 AI_GOLDEN_VECTORS_V2_RAW_TEXT_0_OK=1
 AI_GOLDEN_VECTORS_V2_NO_ARRAY_OK=1
 AI_GOLDEN_VECTORS_V2_PRESENT_OK=1
 
-echo "== guard: P4-AI-02 variance outlier guard (p50/p95 variance + outlier ratio) =="
 run_guard "P4-AI-02 variance outlier v1" bash scripts/verify/verify_ai_variance_outlier_v1.sh
 AI_VARIANCE_MEASUREMENTS_SOURCE_OK=1
 AI_VARIANCE_OK=1
 AI_OUTLIER_RATIO_OK=1
 
-echo "== guard: P4-AI-03 energy proxy SSOT + stability gate (measurements required, fail-closed) =="
 run_guard "P4-AI-03 energy proxy v1" bash scripts/verify/verify_ai_energy_proxy_v1.sh
 AI_ENERGY_PROXY_DEFINITION_SSOT_OK=1
 
-echo "== guard: P5-AI-P0-03 energy proxy fail-open/close v2 (p50>0, sum>0, expected required, no skip branch) =="
 run_guard "P5-AI-P0-03 energy proxy v2" bash scripts/verify/verify_energy_proxy_v2.sh
 AI_ENERGY_PROXY_MEASUREMENT_WINDOW_SSOT_OK=1
 AI_ENERGY_PROXY_NONTRIVIAL_SUM_GT0_OK=1
@@ -1654,61 +1550,50 @@ AI_ENERGY_PROXY_EXPECTED_REQUIRED_OK=1
 AI_ENERGY_MEASUREMENTS_SOURCE_OK=1
 AI_ENERGY_STABILITY_OK=1
 
-echo "== guard: P5-P0-02 PREFLIGHT_ONE_SHOT_V1 presence (verify=판정만) =="
 run_guard "PREFLIGHT_ONE_SHOT_V1" bash scripts/verify/verify_preflight_one_shot_v1_presence.sh
 PREFLIGHT_ONE_SHOT_V1_PRESENT_OK=1
 PREFLIGHT_ONE_SHOT_V1_RUNBOOK_OK=1
 
-echo "== guard: P5-P0-03 EGRESS_DENY_PROOF_HARNESS_V1 (harness + runbook + decision-only verify) =="
 run_guard "EGRESS_DENY_PROOF_HARNESS_V1" bash scripts/verify/verify_egress_deny_proof_harness_v1.sh
 EGRESS_DENY_PROOF_HARNESS_V1_OK=1
 EGRESS_DENY_RUNBOOK_V1_OK=1
 EGRESS_DENY_PROOF_EXECUTES_IN_SANDBOX_OK=1
 
-echo "== guard: P5-P1-01 NIGHTLY_LONG_RUN_V1 (tiered runs policy + nightly workflow) =="
 run_guard "P5-P1-01 NIGHTLY_LONG_RUN_V1" bash scripts/verify/verify_ai_ab_bench_policy_v1.sh
 AI_NIGHTLY_WORKFLOW_PRESENT_V1_OK=1
 AI_AB_BENCH_RUNS_TIERED_V1_OK=1
 
-echo "== guard: P5-P1-02 OPS_REPORT_PIPELINE_UPLOAD_V1 =="
 run_guard "P5-P1-02 OPS_REPORT_PIPELINE_UPLOAD_V1" bash scripts/verify/verify_ops_report_pipeline_v1.sh
 OPS_REPORT_PIPELINE_V1_OK=1
 OPS_REPORT_ARCHIVE_DATED_V1_OK=1
 
-echo "== guard: P5-P1-03 PATH_SCOPE_ENFORCED_V2 =="
 run_guard "P5-P1-03 PATH_SCOPE_ENFORCED_V2" bash scripts/verify/verify_path_scope_enforced_v2.sh
 PATH_SCOPE_ENFORCED_V2_OK=1
 
-echo "== guard: P5-AI-P2-01 FEATURE_DIGEST_V1 =="
 run_guard "P5-AI-P2-01 FEATURE_DIGEST_V1" bash scripts/verify/verify_feature_digest_v1.sh
 AI_FEATURE_DIGEST_V1_PRESENT_OK=1
 AI_FEATURE_DIGEST_V1_ALLOWED_KEYS_OK=1
 AI_FEATURE_DIGEST_V1_VALUE_LIMITS_OK=1
 
-echo "== guard: P5-AI-P2-02 GOLDEN_VECTORS_V2_DIVERSITY_V1 =="
 run_guard "P5-AI-P2-02 GOLDEN_VECTORS_V2_DIVERSITY_V1" bash scripts/verify/verify_ai_golden_vectors_v2_diversity_v1.sh
 AI_GOLDEN_VECTORS_V2_DIVERSITY_OK=1
 AI_GOLDEN_VECTORS_NO_RAW_OK=1
 
-echo "== guard: P5-AI-P2-03 ENERGY_PROXY_NORMALIZED_V2 =="
 run_guard "P5-AI-P2-03 ENERGY_PROXY_NORMALIZED_V2" bash scripts/verify/verify_energy_proxy_normalized_v2.sh
 AI_ENERGY_PROXY_NORMALIZED_V2_OK=1
 AI_ENERGY_PROXY_STABILITY_V2_OK=1
 
-echo "== guard: P5-PLAT-P0-04 PACK_CORE_BYPASS_BLOCK_V1 =="
 run_guard "P5-PLAT-P0-04 PACK_CORE_BYPASS_BLOCK_V1" bash scripts/verify/verify_pack_core_bypass_block_v1.sh
 PACK_CORE_BYPASS_POLICY_V1_OK=1
 PACK_FORBIDDEN_IMPORT_BLOCK_V1_OK=1
 PACK_MANIFEST_SCHEMA_LOCK_V1_OK=1
 
-echo "== guard: P5-PLAT-P0-05 NO_RAW_IN_LOGS_EXCEPTIONS_V1 =="
 run_guard "P5-PLAT-P0-05 NO_RAW_IN_LOGS_EXCEPTIONS_V1" bash scripts/verify/verify_no_raw_in_logs_exceptions_v1.sh
 NO_RAW_IN_LOGS_POLICY_V1_OK=1
 NO_RAW_IN_REPORTS_SCAN_V1_OK=1
 SENSITIVE_PATTERN_BLOCK_V1_OK=1
 LONG_LINE_BLOCK_V1_OK=1
 
-echo "== guard: P5-PLAT-P1-04 MVP_PACKAGE_DEMO_HARNESS_V1 =="
 run_guard "P5-PLAT-P1-04 MVP_PACKAGE_DEMO_HARNESS_V1" bash scripts/verify/verify_mvp_package_demo_harness_v1.sh
 DEMO_DOC_SEARCH_ALLOW_OK=1
 DEMO_DOC_SEARCH_BLOCK_OK=1
@@ -1723,45 +1608,37 @@ DEMO_HELPDESK_BLOCK_OK=1
 DEMO_HELPDESK_META_ONLY_OK=1
 DEMO_HELPDESK_REQUEST_ID_JOIN_OK=1
 
-echo "== guard: P5-PLAT-P1-05 ASSIST_COMPUTE_DEFAULT_OFF_LOCK_V1 =="
 run_guard "P5-PLAT-P1-05 ASSIST_COMPUTE_DEFAULT_OFF_LOCK_V1" bash scripts/verify/verify_assist_compute_default_off_lock_v1.sh
 ASSIST_COMPUTE_POLICY_V1_OK=1
 ASSIST_COMPUTE_DEFAULT_OFF_LOCK_V1_OK=1
 
 run_guard "P5-PLAT-P1-06 DOD_SINGLE_OUTPUT_GUARD_V1" bash scripts/verify/verify_dod_single_output_guard_v1.sh
 
-echo "== guard: P6-P0-01 PREFLIGHT_CONSUMED_EVERYWHERE_V1 (decision-only) =="
 run_guard "P6-P0-01 preflight consumed everywhere v1" bash scripts/verify/verify_preflight_consumed_everywhere_v1.sh
 PREFLIGHT_ACTION_CONSUMED_BY_REQUIRED_WORKFLOWS_OK=1
 PREFLIGHT_DUPLICATE_PREP_PATH_0_OK=1
 
-echo "== guard: P6-P0-02 ONPREM_LATEST_WHITELIST_ONLY_V2 (decision-only) =="
 run_guard "P6-P0-02 onprem latest whitelist-only v2" bash scripts/verify/verify_onprem_latest_whitelist_only_v2.sh
 ONPREM_LATEST_WHITELIST_ONLY_V2_OK=1
 ONPREM_LATEST_LONG_LINE_SCAN_EOF_SAFE_OK=1
 
-echo "== guard: P6-AI-P0-01 ENERGY_PROXY_SSOT_CONSUMED_V3 (decision-only) =="
 run_guard "P6-AI-P0-01 energy proxy ssot consumed v3" bash scripts/verify/verify_energy_proxy_ssot_consumed_v3.sh
 AI_ENERGY_PROXY_SSOT_RUNS_CONSUMED_OK=1
 AI_ENERGY_PROXY_SSOT_MIN_P50_CONSUMED_OK=1
 
-echo "== guard: P6-P0-03 ONE_COMMAND_VERIFY_V1 (decision-only) =="
 run_guard "P6-P0-03 one command verify v1" bash scripts/verify/verify_one_command_verify_v1.sh
 ONE_COMMAND_VERIFY_V1_OK=1
 
-echo "== guard: P6-P0-04 ARTIFACT_BUNDLE_V1 (decision-only) =="
 run_guard "P6-P0-04 artifact bundle v1" bash scripts/verify/verify_artifact_bundle_v1.sh
 ARTIFACT_BUNDLE_POLICY_V1_OK=1
 ARTIFACT_BUNDLE_PRESENT_OK=1
 ARTIFACT_BUNDLE_META_ONLY_OK=1
 
-echo "== guard: P6-P0-05 AUTODECISION_FROM_NIGHTLY_V1 (decision-only) =="
 run_guard "P6-P0-05 autodecision from reports v1" bash scripts/verify/verify_autodecision_from_reports_v1.sh
 AUTODECISION_POLICY_V1_OK=1
 AUTODECISION_OUTPUT_PRESENT_OK=1
 AUTODECISION_REASON_CODE_ONLY_OK=1
 
-echo "== guard: P6-P1-01 RELEASE_GATE_CONNECT_V1 (decision-only) =="
 run_guard "P6-P1-01 release gate connect v1" bash scripts/verify/verify_release_gate_connect_v1.sh
 RELEASE_GATE_POLICY_V1_OK=1
 RELEASE_GATE_WIRING_V1_OK=1
