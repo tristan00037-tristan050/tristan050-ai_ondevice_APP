@@ -169,6 +169,7 @@ BFF_SECRET_EMPTY_STRING_BLOCK_OK=0
 BFF_SECRET_SCHEMA_V1_SKIPPED=0
 
 ENFORCE_SPEC_V1_OK=0
+SSOT_CHANGE_DISCIPLINE_V1_OK=0
 
 # P0-01 (OPS) Dockerless repo guard report contract DoD (CI-only verifier emits; here for schema)
 DOCKERLESS_REPORT_RUN_OK=0
@@ -903,6 +904,7 @@ cleanup(){
   echo "BFF_SECRET_EMPTY_STRING_BLOCK_OK=${BFF_SECRET_EMPTY_STRING_BLOCK_OK}"
   echo "BFF_SECRET_SCHEMA_V1_SKIPPED=${BFF_SECRET_SCHEMA_V1_SKIPPED}"
   echo "ENFORCE_SPEC_V1_OK=${ENFORCE_SPEC_V1_OK}"
+  echo "SSOT_CHANGE_DISCIPLINE_V1_OK=${SSOT_CHANGE_DISCIPLINE_V1_OK}"
   echo "AUTODECISION_POLICY_V1_OK=${AUTODECISION_POLICY_V1_OK}"
   echo "AUTODECISION_OUTPUT_PRESENT_OK=${AUTODECISION_OUTPUT_PRESENT_OK}"
   echo "AUTODECISION_REASON_CODE_ONLY_OK=${AUTODECISION_REASON_CODE_ONLY_OK}"
@@ -1792,6 +1794,7 @@ run_guard "exec-mode schema ssot consumed v1" bash scripts/verify/verify_exec_mo
 run_guard "output root ssot v1" bash scripts/verify/verify_output_root_ssot_v1.sh
 
 run_guard "ssot change contract v1" bash scripts/verify/verify_ssot_change_contract_v1.sh
+run_guard "ssot change discipline v1" bash scripts/verify/verify_ssot_change_discipline_v1.sh
 run_guard "ssot consume autocontract v1" bash scripts/verify/verify_ssot_consume_autocontract_v1.sh
 run_guard "ssot registry coverage v1" bash scripts/verify/verify_ssot_registry_coverage_v1.sh
 run_guard "ssot registry no anchor consumer v1" bash scripts/verify/verify_ssot_registry_no_anchor_consumer_v1.sh
