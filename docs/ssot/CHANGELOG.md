@@ -15,3 +15,9 @@
 - 왜: 정본을 플레이스홀더에서 실제 최종 목표 문서로 고정
 - 영향: 레포/CI/검증 체인 기준이 동일 문서로 통일됨
 - 검증: verify_ssot_change_discipline_v1 가드 통과
+
+## 2026-03-05 (테스트 B)
+- 무엇: SSOT 문구 1자 추가 후 CHANGELOG·ADR 동반 수정(가드 통과 검증)
+- 왜: SSOT 변경 시 CHANGELOG+ADR 동반 강제가 동작하는지 확인
+- 영향: 없음(테스트용)
+- 검증: verify_repo_contracts.sh EXIT=0
