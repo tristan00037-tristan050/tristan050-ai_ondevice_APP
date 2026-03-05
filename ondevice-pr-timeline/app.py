@@ -1,10 +1,81 @@
 import os, re, time, json
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from glob import glob
 import requests
 import jwt
 from flask import Flask, jsonify, render_template_string
+
+# --- Platform UI base template (local-only) ---
+BASE_HTML = r"""
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{{ page_title }}</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;background:#0b1220;color:#e8eefc}
+    a{color:inherit;text-decoration:none}
+    .layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+    .side{border-right:1px solid rgba(255,255,255,.08);padding:18px;background:rgba(255,255,255,.02)}
+    .brand{font-weight:900}
+    .nav a{display:block;padding:10px 12px;border-radius:10px;margin:6px 0;color:#a9b6d6;border:1px solid transparent}
+    .nav a.active{background:rgba(106,168,255,.10);border-color:rgba(106,168,255,.25);color:#e8eefc}
+    .nav a:hover{border-color:rgba(255,255,255,.10);color:#e8eefc}
+    .main{padding:22px}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px}
+    .title{font-size:20px;font-weight:900}
+    .subtitle{color:#a9b6d6;font-size:13px;margin-top:6px}
+    .pill{display:inline-flex;gap:8px;align-items:center;padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(255,255,255,.03);color:#a9b6d6;font-size:12px}
+    .card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px}
+    .hint{color:#a9b6d6;font-size:12px;line-height:1.45;margin-top:8px}
+    pre{white-space:pre-wrap}
+    @media (max-width:980px){.layout{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand">On-Device Platform<br/><span style="color:#a9b6d6;font-weight:700">Local Console</span></div>
+    <nav class="nav" style="margin-top:14px;">
+      <a href="/" class="{{ 'active' if active == 'dashboard' else '' }}">Dashboard</a>
+      <a href="/" class="{{ 'active' if active == 'timeline' else '' }}">Timeline</a>
+      <a href="/updates" class="{{ 'active' if active == 'updates' else '' }}">Updates</a>
+      <a href="/decisions" class="{{ 'active' if active == 'decisions' else '' }}">Decisions</a>
+    </nav>
+    <div class="hint" style="margin-top:14px;">
+      SSOT 변경은 CHANGELOG/ADR 없이 통과할 수 없습니다.
+    </div>
+  </aside>
+  <main class="main">
+    <div class="top">
+      <div>
+        <div class="title">{{ page_title }}</div>
+        <div class="subtitle">{{ page_subtitle }}{% if _recent_ssot_change %} <span class="pill" style="border-color:rgba(255,107,107,.35); color:#ff6b6b;">최근 SSOT 변경 있음</span>{% endif %}</div>
+      </div>
+      <div>
+        <span class="pill">Local</span>
+      </div>
+    </div>
+    {{ content | safe }}
+  </main>
+</div>
+</body>
+</html>
+"""
+
+def render(active, title, subtitle, content, **ctx):
+    return render_template_string(
+        BASE_HTML,
+        active=active,
+        page_title=title,
+        page_subtitle=subtitle,
+        content=content,
+        _recent_ssot_change=_ssot_recent_change_flag(),
+        **ctx
+    )
+# --- end base template ---
 
 EVAL_RESULTS_DIR = os.environ.get("EVAL_RESULTS_DIR", "eval_results").strip()
 
@@ -542,11 +613,79 @@ def api_pr_files(pr_number: int):
 # SSOT Updates / Decisions (CHANGELOG + ADR)
 SSOT_ROOT = Path(__file__).resolve().parent.parent / "docs" / "ssot"
 
+
+def _ssot_recent_change_flag():
+    """
+    CHANGELOG 최신 섹션 날짜가 오늘(또는 최근 7일)이면 True.
+    """
+    try:
+        txt = _read_text_safe(SSOT_ROOT / "CHANGELOG.md")
+        m = re.search(r"^##\s+(\d{4}-\d{2}-\d{2})", txt, re.MULTILINE)
+        if not m:
+            return False
+        d = datetime.strptime(m.group(1), "%Y-%m-%d").date()
+        return (date.today() - d).days <= 7
+    except Exception:
+        return False
+
+
+def _extract_latest_changelog_entry(changelog_text: str):
+    """
+    CHANGELOG에서 가장 최근 섹션(## YYYY-MM-DD) 1개를 추출하고,
+    그 안의 '무엇/왜/영향/검증' 4줄을 찾아 반환합니다.
+    """
+    lines = changelog_text.splitlines()
+    start = None
+    for i, ln in enumerate(lines):
+        if ln.startswith("## "):
+            start = i
+            break
+    if start is None:
+        return None
+    end = len(lines)
+    for j in range(start + 1, len(lines)):
+        if lines[j].startswith("## "):
+            end = j
+            break
+    section = lines[start:end]
+    wanted = {"- 무엇:": None, "- 왜:": None, "- 영향:": None, "- 검증:": None}
+    for ln in section:
+        for k in list(wanted.keys()):
+            if ln.strip().startswith(k):
+                wanted[k] = ln.strip()[len(k):].strip()
+    if all(v is None for v in wanted.values()):
+        return {"title": section[0].replace("## ", "").strip(), "items": []}
+    items = []
+    for k in ["- 무엇:", "- 왜:", "- 영향:", "- 검증:"]:
+        v = wanted.get(k)
+        if v is not None:
+            items.append((k.replace("- ", "").replace(":", ""), v))
+    return {"title": section[0].replace("## ", "").strip(), "items": items}
+
+
 def _read_text_safe(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
     except Exception as e:
         return f"[ERROR] cannot read {path}: {e}"
+
+
+def _parse_adr_header(text: str):
+    """
+    ADR에서 제목(첫 줄 # ...)과 - 날짜:, - 상태: 를 가볍게 파싱합니다(없으면 빈 값).
+    """
+    title = ""
+    date = ""
+    status = ""
+    for ln in text.splitlines()[:40]:
+        if ln.startswith("# "):
+            title = ln[2:].strip()
+        if ln.lower().startswith("- 날짜:") or ln.startswith("- 날짜:"):
+            date = ln.split(":", 1)[1].strip()
+        if ln.lower().startswith("- 상태:") or ln.startswith("- 상태:"):
+            status = ln.split(":", 1)[1].strip()
+    return {"title": title, "date": date, "status": status}
+
 
 def _html_escape(s: str) -> str:
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -555,31 +694,48 @@ def _html_escape(s: str) -> str:
 @app.get("/updates")
 def updates_page():
     changelog = _read_text_safe(SSOT_ROOT / "CHANGELOG.md")
+    latest = _extract_latest_changelog_entry(changelog)
+    latest_html = ""
+    if latest:
+        rows = ""
+        for k, v in latest.get("items", []):
+            rows += f"<tr><td style='width:90px; color:#a9b6d6; font-weight:800;'>{k}</td><td>{_html_escape(v)}</td></tr>"
+        if not rows:
+            rows = "<tr><td>요약 항목이 없습니다.</td></tr>"
+        latest_html = f"""<div class="card" style="margin-bottom:12px;">
+          <h3>가장 최근 변경(요약)</h3>
+          <div class="hint">CHANGELOG의 가장 위 섹션(최신)을 자동 요약합니다.</div>
+          <div class="hint" style="margin-top:8px;">날짜: {_html_escape(latest.get('title', ''))}</div>
+          <table class="table" style="margin-top:10px; width:100%; border-collapse:collapse;">
+            <tbody>{rows}</tbody>
+          </table>
+        </div>"""
     escaped = _html_escape(changelog)
-    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Updates</title></head><body>
-    <div style="max-width:800px; margin:1em auto; font-family:sans-serif;">
-      <h2>Updates (SSOT ChangeLog)</h2>
-      <p style="color:#666;">SSOT가 바뀌면 반드시 여기에 기록됩니다.</p>
-      <pre style="white-space:pre-wrap; background:#f5f5f5; padding:1em;">{escaped}</pre>
-      <p><a href="/">← 타임라인으로</a></p>
-    </div></body></html>"""
-    return html
+    html = latest_html + f'<div class="card"><h3>SSOT ChangeLog</h3><div class="hint">SSOT가 바뀌면 반드시 여기에 기록됩니다.</div><pre style="white-space:pre-wrap; margin-top:10px;">{escaped}</pre></div>'
+    return render("updates", "Updates", "SSOT 변경 기록(CHANGELOG)과 결정 기록(ADR)을 플랫폼 화면에서 확인합니다.", html)
 
 @app.get("/decisions")
 def decisions_page():
     adr_dir = SSOT_ROOT / "DECISIONS"
     files = sorted(adr_dir.glob("ADR-*.md"), key=lambda p: p.name, reverse=True)[:5]
-    items = "".join(f'<li><a href="/decisions/{f.name}">{f.name}</a></li>' for f in files)
+    items = ""
+    for f in files:
+        name = f.name
+        body = _read_text_safe(f)
+        meta = _parse_adr_header(body)
+        title = meta.get("title") or name
+        date = meta.get("date") or ""
+        status = meta.get("status") or ""
+        items += f'<li style="margin:8px 0;"><a href="/decisions/{name}"><b>{_html_escape(title)}</b></a><div class="hint">{_html_escape(name)}'
+        if date:
+            items += f" · {_html_escape(date)}"
+        if status:
+            items += f" · {_html_escape(status)}"
+        items += "</div></li>"
     if not items:
         items = "<li>ADR 파일이 없습니다.</li>"
-    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Decisions</title></head><body>
-    <div style="max-width:800px; margin:1em auto; font-family:sans-serif;">
-      <h2>Decisions (ADR)</h2>
-      <p style="color:#666;">방향 변경은 ADR로만 기록됩니다.</p>
-      <ul>{items}</ul>
-      <p><a href="/">← 타임라인으로</a></p>
-    </div></body></html>"""
-    return html
+    html = f'<div class="card"><h3>Decisions (ADR)</h3><div class="hint">방향 변경은 ADR로만 기록됩니다. 최근 ADR을 플랫폼 화면에서 확인합니다.</div><ul style="margin-top:10px;">{items}</ul></div>'
+    return render("decisions", "Decisions", "방향 변경은 ADR로만 기록됩니다. 최근 ADR을 플랫폼 화면에서 확인합니다.", html)
 
 @app.get("/decisions/<path:name>")
 def decision_view(name: str):
@@ -591,12 +747,8 @@ def decision_view(name: str):
         return "Invalid path", 400
     body = _read_text_safe(path)
     escaped = _html_escape(body)
-    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>{_html_escape(name)}</title></head><body>
-    <div style="max-width:800px; margin:1em auto; font-family:sans-serif;">
-      <pre style="white-space:pre-wrap; background:#f5f5f5; padding:1em;">{escaped}</pre>
-      <p><a href="/decisions">← ADR 목록</a> <a href="/">타임라인</a></p>
-    </div></body></html>"""
-    return html
+    html = f'<div class="card"><h3>ADR</h3><div class="hint">{_html_escape(name)}</div><pre style="white-space:pre-wrap; margin-top:10px;">{escaped}</pre><p style="margin-top:10px;"><a href="/decisions">← ADR 목록</a> · <a href="/">타임라인</a></p></div>'
+    return render("decisions", "Decisions", "ADR 상세 내용을 플랫폼 화면에서 확인합니다.", html)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8787"))
