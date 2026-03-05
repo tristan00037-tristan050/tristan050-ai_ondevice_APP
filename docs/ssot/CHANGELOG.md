@@ -21,3 +21,9 @@
 - 왜: SSOT 변경 시 CHANGELOG+ADR 동반 강제가 동작하는지 확인
 - 영향: 없음(테스트용)
 - 검증: verify_repo_contracts.sh EXIT=0
+
+## 2026-03-06 (회귀 테스트 B)
+- 무엇: SSOT 1자 추가 + CHANGELOG·ADR 동반(가드 통과 검증)
+- 왜: SSOT 변경 시 3종 동반 강제 회귀 테스트
+- 영향: 없음(테스트)
+- 검증: verify_repo_contracts.sh EXIT=0
