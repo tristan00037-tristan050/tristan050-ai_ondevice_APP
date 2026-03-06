@@ -41,6 +41,15 @@ jobs:
       - name: Preflight (single source)
         uses: ./.github/actions/preflight_v1
 
+      # perf real pipeline p95 guard requires web_e2e node_modules + Playwright
+      - name: Install deps (web_e2e)
+        run: npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
+
+      - name: Install Playwright browsers
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+        run: npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
+
       - name: Load policy (RUNS_NIGHTLY/WARMUP)
         shell: bash
         run: |
@@ -91,6 +100,8 @@ jobs:
 
       - name: Verify repo contracts
         shell: bash
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
         run: |
           set -euo pipefail
           bash scripts/verify/verify_repo_contracts.sh
