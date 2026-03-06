@@ -176,6 +176,7 @@ DOCKERLESS_REPORT_DEGRADED_DOCKER_KEYS_OK=0
 DOCKERLESS_REPORT_STATIC_POLICY_ALWAYS_ON_OK=0
 RUN_GUARD_TARGETS_EXIST_OK=0
 MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK=0
+WORKFLOW_YAML_PARSE_OK=0
 EXEC_MODE_PER_LINE_NO_EXCEPTION_TEXT_OK=0
 EXEC_MODE_LATENCY_MEASURE_PRESENT_OK=0
 EXEC_MODE_LATENCY_MISSING_BLOCK_OK=0
@@ -493,6 +494,7 @@ cleanup(){
   echo "DOD_KV_BLOCK_BEGIN=1"
   echo "RUN_GUARD_TARGETS_EXIST_OK=${RUN_GUARD_TARGETS_EXIST_OK}"
   echo "MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK=${MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK}"
+  echo "WORKFLOW_YAML_PARSE_OK=${WORKFLOW_YAML_PARSE_OK}"
   echo "REPO_CONTRACTS_HYGIENE_OK=${REPO_CONTRACTS_HYGIENE_OK}"
   echo "PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK=${PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK}"
   echo "DOCS_NO_BANNED_PHRASES_OK=${DOCS_NO_BANNED_PHRASES_OK}"
@@ -1026,6 +1028,9 @@ VERIFY_RIPGREP_GUARD_PRESENT_V1_OK=1
 
 echo "== guard: verify workflow preflight present v1 (P3-PLAT-01) =="
 run_guard "workflow preflight ssot v1" bash scripts/verify/verify_workflow_preflight_present_v1.sh
+
+echo "== guard: workflow yaml parse v1 (P21-P0-05) =="
+WORKFLOW_YAML_PARSE_ENFORCE=1 run_guard "workflow yaml parse v1" bash scripts/verify/verify_workflow_yaml_parse_v1.sh
 
 echo "== guard: verify runtime guard helpers adopted v1 (P3-PLAT-02) =="
 run_guard "verify runtime guard helpers adopted v1" bash scripts/verify/verify_runtime_guard_helpers_adopted_v1.sh
