@@ -27,9 +27,3 @@
 - 왜: SSOT 변경 시 3종 동반 강제 회귀 테스트
 - 영향: 없음(테스트)
 - 검증: verify_repo_contracts.sh EXIT=0
-
-## 2026-03-06 (DoD 매핑 SSOT 강제 테스트 B)
-- 무엇: MODULE_DOD_KEYS_V1.json 포맷 1자 + CHANGELOG·ADR 동반
-- 왜: DoD 매핑만 바꿀 때도 CHANGELOG+ADR 필수 회귀 확인
-- 영향: 없음
-- 검증: verify_repo_contracts.sh EXIT=0
