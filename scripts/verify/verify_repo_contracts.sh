@@ -151,6 +151,11 @@ ARTIFACT_BUNDLE_POLICY_V1_OK=0
 ARTIFACT_BUNDLE_PRESENT_OK=0
 ARTIFACT_BUNDLE_META_ONLY_OK=0
 
+# P22-P1-01 TUF min signing chain (roles / expiry / verify)
+TUF_MIN_ROLES_PRESENT_OK=0
+TUF_EXPIRES_ENFORCED_OK=0
+TUF_SIGNATURE_VERIFY_OK=0
+
 # PR-P0-DEPLOY-00 (OPS) Build stamp generation SSOT v1 (pre-verify)
 BUILD_STAMP_GENERATION_SSOT_V1_OK=0
 
@@ -884,6 +889,9 @@ cleanup(){
   echo "ARTIFACT_BUNDLE_POLICY_V1_OK=${ARTIFACT_BUNDLE_POLICY_V1_OK}"
   echo "ARTIFACT_BUNDLE_PRESENT_OK=${ARTIFACT_BUNDLE_PRESENT_OK}"
   echo "ARTIFACT_BUNDLE_META_ONLY_OK=${ARTIFACT_BUNDLE_META_ONLY_OK}"
+  echo "TUF_MIN_ROLES_PRESENT_OK=${TUF_MIN_ROLES_PRESENT_OK}"
+  echo "TUF_EXPIRES_ENFORCED_OK=${TUF_EXPIRES_ENFORCED_OK}"
+  echo "TUF_SIGNATURE_VERIFY_OK=${TUF_SIGNATURE_VERIFY_OK}"
   echo "BUILD_STAMP_GENERATION_SSOT_V1_OK=${BUILD_STAMP_GENERATION_SSOT_V1_OK}"
   echo "PROBES_SSOT_V1_OK=${PROBES_SSOT_V1_OK}"
   echo "PROBES_PATHS_MATCH_APP_V1_OK=${PROBES_PATHS_MATCH_APP_V1_OK}"
@@ -1592,6 +1600,12 @@ echo "== guard: model pack sbom cyclonedx v1 =="
 run_guard "model pack sbom cyclonedx v1" bash scripts/verify/verify_model_pack_sbom_cyclonedx_v1.sh
 echo "== guard: secure update tuf principles v1 =="
 run_guard "secure update tuf principles v1" bash scripts/verify/verify_secure_update_tuf_principles_v1.sh
+
+echo "== guard: tuf min signing chain v1 (P22-P1-01) =="
+# 기본은 0(로컬 SKIP), CI/운영에서 TUF_MIN_SIGNING_CHAIN_ENFORCE=1로 override 가능
+TUF_MIN_SIGNING_CHAIN_ENFORCE="${TUF_MIN_SIGNING_CHAIN_ENFORCE:-0}" \
+  run_guard "tuf min signing chain v1" bash scripts/verify/verify_tuf_min_signing_chain_v1.sh
+
 SLSA_SIGNER_WORKFLOW_UNIQUE_V1_OK=1
 
 echo "== guard: P4-P0-03 workspace fs sandbox v1 =="

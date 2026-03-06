@@ -6,6 +6,7 @@ SSOT=docs/ops/contracts/WORKFLOW_CHECKOUT_DEPTH_SSOT_V1.txt CONSUMER=scripts/ver
 SSOT=docs/ops/contracts/BUILD_PROVENANCE_ATTEST_SSOT_V1.txt CONSUMER=scripts/verify/verify_build_provenance_attest_v1.sh
 SSOT=docs/ops/contracts/MODEL_PACK_SBOM_CYCLONEDX_SSOT_V1.txt CONSUMER=scripts/verify/verify_model_pack_sbom_cyclonedx_v1.sh
 SSOT=docs/ops/contracts/SECURE_UPDATE_TUF_PRINCIPLES_SSOT_V1.txt CONSUMER=scripts/verify/verify_secure_update_tuf_principles_v1.sh
+SSOT=docs/ops/contracts/TUF_MIN_SIGNING_CHAIN_V1.md CONSUMER=scripts/verify/verify_tuf_min_signing_chain_v1.sh
 SSOT=docs/ops/contracts/ENFORCE_SPEC_V1.md CONSUMER=scripts/verify/verify_enforce_spec_v1.sh
 SSOT=docs/ops/contracts/REQUIRED_WORKFLOWS_V1.txt CONSUMER=scripts/verify/verify_merge_group_coverage_v1.sh
 SSOT=docs/ops/contracts/WORKFLOW_YAML_PARSE_GUARD_V1.md CONSUMER=scripts/verify/verify_workflow_yaml_parse_v1.sh
