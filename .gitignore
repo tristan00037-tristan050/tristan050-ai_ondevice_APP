@@ -23,6 +23,9 @@ out/
 # local python venv
 ondevice-pr-timeline/.venv/
 
+# local verify cache (원문 미저장, 키/값·결과만)
+ondevice-pr-timeline/.local/
+
 # local logs
 .cursor/
 *.log

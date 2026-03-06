@@ -2,7 +2,8 @@
 set -euo pipefail
 
 BASE_REF="${BASE_REF:-origin/main}"
-SSOT="docs/ssot/SSOT_V1.md"
+SSOT_DOC="docs/ssot/SSOT_V1.md"
+SSOT_DOD_KEYS="docs/ssot/MODULE_DOD_KEYS_V1.json"
 CHANGELOG="docs/ssot/CHANGELOG.md"
 ADR_DIR="docs/ssot/DECISIONS"
 
@@ -13,9 +14,10 @@ git rev-parse --verify "$BASE_REF" >/dev/null 2>&1 || {
   exit 1
 }
 
-# SSOT가 바뀌었는지 확인
+# SSOT 범위: SSOT_V1.md + MODULE_DOD_KEYS_V1.json. 둘 중 하나라도 바뀌면 CHANGELOG+ADR 필수.
 SSOT_CHANGED=0
-git diff --name-only "$BASE_REF...HEAD" -- "$SSOT" | grep -q . && SSOT_CHANGED=1 || true
+git diff --name-only "$BASE_REF...HEAD" -- "$SSOT_DOC" | grep -q . && SSOT_CHANGED=1 || true
+git diff --name-only "$BASE_REF...HEAD" -- "$SSOT_DOD_KEYS" | grep -q . && SSOT_CHANGED=1 || true
 
 # SSOT가 안 바뀌면 그냥 통과
 if [[ "$SSOT_CHANGED" -eq 0 ]]; then

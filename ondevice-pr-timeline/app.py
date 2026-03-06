@@ -1,10 +1,256 @@
-import os, re, time, json
+import os, re, time, json, subprocess, threading
 from datetime import datetime, date
 from pathlib import Path
 from glob import glob
 import requests
 import jwt
-from flask import Flask, jsonify, render_template_string
+from flask import Flask, jsonify, redirect, render_template_string, request
+
+# Paths (앱/레포 기준)
+_APP_ROOT = Path(__file__).resolve().parent
+_REPO_ROOT = _APP_ROOT.parent
+_VERIFY_CACHE_PATH = _APP_ROOT / ".local" / "verify_cache.json"
+_SSOT_DOD_KEYS_PATH = _REPO_ROOT / "docs" / "ssot" / "MODULE_DOD_KEYS_V1.json"
+
+
+def _load_module_dod_keys():
+    """MODULE_DOD_KEYS: docs/ssot/MODULE_DOD_KEYS_V1.json (SSOT). 없으면 기본값."""
+    default = {
+        "doc_search": ["DEMO_DOC_SEARCH_ALLOW_OK", "DEMO_DOC_SEARCH_BLOCK_OK", "DEMO_DOC_SEARCH_META_ONLY_OK", "DEMO_DOC_SEARCH_REQUEST_ID_JOIN_OK"],
+        "write_approve_export": ["DEMO_WRITE_APPROVE_ALLOW_OK", "DEMO_WRITE_APPROVE_BLOCK_OK", "DEMO_WRITE_APPROVE_META_ONLY_OK", "DEMO_WRITE_APPROVE_REQUEST_ID_JOIN_OK"],
+        "helpdesk_ticket": ["DEMO_HELPDESK_ALLOW_OK", "DEMO_HELPDESK_BLOCK_OK", "DEMO_HELPDESK_META_ONLY_OK", "DEMO_HELPDESK_REQUEST_ID_JOIN_OK"],
+        "ssot_updates": ["SSOT_CHANGE_DISCIPLINE_V1_OK"],
+        "decisions": [],
+        "ai_perf": [],
+        "raw0_enforce": ["NO_RAW_IN_LOGS_POLICY_V1_OK", "NO_RAW_IN_REPORTS_SCAN_V1_OK"],
+        "pack_bypass": ["PACK_CORE_BYPASS_POLICY_V1_OK", "PACK_FORBIDDEN_IMPORT_BLOCK_V1_OK", "PACK_MANIFEST_SCHEMA_LOCK_V1_OK"],
+        "mvp_package": [],
+    }
+    try:
+        if _SSOT_DOD_KEYS_PATH.exists():
+            data = json.loads(_SSOT_DOD_KEYS_PATH.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return default
+
+
+# --- Platform Modules (SSOT-aligned) ---
+MODULES = [
+    {"key": "doc_search", "name": "문서 검색/요약", "status": "LOCKED", "why": "MVP 시나리오 #1", "dod": "DOC_SEARCH_* 4키(allow/block/meta_only/join)"},
+    {"key": "write_approve_export", "name": "초안 + 승인 + 반출", "status": "LOCKED", "why": "MVP 시나리오 #2 + Export 2단계", "dod": "WRITE_APPROVE_* 4키 + EXPORT_APPROVE_*"},
+    {"key": "helpdesk_ticket", "name": "헬프데스크 티켓", "status": "LOCKED", "why": "MVP 시나리오 #3", "dod": "HELPDESK_* 4키"},
+    {"key": "ssot_updates", "name": "SSOT 변경 기록", "status": "READY", "why": "방향 흔들림 0", "dod": "SSOT 변경 시 CHANGELOG+ADR 강제"},
+    {"key": "decisions", "name": "결정 기록(ADR)", "status": "READY", "why": "방향 변경의 단일 기록", "dod": "ADR 제목/날짜/상태 표시"},
+    {"key": "ai_perf", "name": "AI 성능(accuracy/latency/ram)", "status": "READY", "why": "성능 변화 가시화", "dod": "eval_results 최신 2개 비교"},
+    {"key": "raw0_enforce", "name": "원문0 전수 봉인(로그/예외/리포트)", "status": "LOCKED", "why": "추가 고정 #2", "dod": "NO_RAW_* 게이트 + 전수 스캔"},
+    {"key": "pack_bypass", "name": "업무팩 우회 봉인", "status": "LOCKED", "why": "추가 고정 #1", "dod": "PACK_* 우회 탐지/차단"},
+    {"key": "mvp_package", "name": "상품성 패키지(3시나리오+운영콘솔)", "status": "LOCKED", "why": "추가 고정 #3", "dod": "3시나리오 READY + 운영콘솔 v0"},
+]
+# --- end modules ---
+
+# 모듈별 DoD 키: docs/ssot/MODULE_DOD_KEYS_V1.json (SSOT). 변경 시 CHANGELOG+ADR 적용.
+MODULE_DOD_KEYS = _load_module_dod_keys()
+
+_verify_cache = {"output": {}, "status": {}, "ts": None, "error": None, "running": False, "result": None, "result_ts": None, "failed_guard": None}
+
+
+def _load_verify_cache():
+    """저장된 갱신 결과만 로드(키/값·결과만, 원문 미저장)."""
+    try:
+        if _VERIFY_CACHE_PATH.exists():
+            data = json.loads(_VERIFY_CACHE_PATH.read_text(encoding="utf-8"))
+            if data.get("result_ts"):
+                _verify_cache["result_ts"] = data["result_ts"]
+            if data.get("result") is not None:
+                _verify_cache["result"] = data["result"]
+            if data.get("failed_guard") is not None:
+                _verify_cache["failed_guard"] = data["failed_guard"]
+            if isinstance(data.get("status"), dict):
+                _verify_cache["status"] = data["status"]
+    except Exception:
+        pass
+
+
+def _save_verify_cache():
+    """갱신 결과만 저장(result_ts/result/failed_guard/status). 원문·stderr 미저장."""
+    try:
+        _APP_ROOT.joinpath(".local").mkdir(parents=True, exist_ok=True)
+        payload = {
+            "result_ts": _verify_cache.get("result_ts"),
+            "result": _verify_cache.get("result"),
+            "failed_guard": _verify_cache.get("failed_guard"),
+            "status": _verify_cache.get("status") or {},
+        }
+        _VERIFY_CACHE_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=0), encoding="utf-8")
+    except Exception:
+        pass
+
+
+_load_verify_cache()
+
+
+def _run_verify_and_parse():
+    """레포 루트에서 verify 실행 후 KEY=VALUE 라인만 파싱. 원문·stderr 저장 안 함."""
+    script = _REPO_ROOT / "scripts" / "verify" / "verify_repo_contracts.sh"
+    if not script.exists():
+        _verify_cache["error"] = "verify_repo_contracts.sh not found"
+        _verify_cache["result"] = "FAIL"
+        _verify_cache["result_ts"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        _verify_cache["failed_guard"] = "verify_repo_contracts.sh not found"
+        _save_verify_cache()
+        return
+    try:
+        r = subprocess.run(
+            ["bash", str(script)],
+            cwd=str(_REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        out = (r.stdout or "") + "\n" + (r.stderr or "")
+        kv = {}
+        for line in out.splitlines():
+            m = re.match(r"^([A-Za-z0-9_]+)=(\d+)$", line.strip())
+            if m:
+                kv[m.group(1)] = m.group(2)
+            m = re.match(r"^([A-Za-z0-9_]+)_SKIPPED=(\d+)$", line.strip())
+            if m:
+                kv[m.group(1) + "_SKIPPED"] = m.group(2)
+        _verify_cache["output"] = kv
+        _verify_cache["error"] = None
+        _verify_cache["ts"] = time.time()
+        _verify_cache["result_ts"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        failed_line = None
+        for line in out.splitlines():
+            s = line.strip()
+            if "REPO_CONTRACTS_FAILED_GUARD=" in s or "ERROR_CODE=" in s:
+                failed_line = s[:200]
+                break
+        if r.returncode != 0 or failed_line:
+            _verify_cache["result"] = "FAIL"
+            _verify_cache["failed_guard"] = failed_line or f"exit code {r.returncode}"
+        else:
+            _verify_cache["result"] = "OK"
+            _verify_cache["failed_guard"] = None
+        # 각 모듈 status 계산
+        for m in MODULES:
+            key = m["key"]
+            default = m.get("status", "LOCKED")
+            if key == "mvp_package":
+                s1 = _compute_module_status("doc_search", kv)
+                s2 = _compute_module_status("write_approve_export", kv)
+                s3 = _compute_module_status("helpdesk_ticket", kv)
+                if s1 == s2 == s3 == "READY":
+                    _verify_cache["status"][key] = "READY"
+                elif s1 == "READY" or s2 == "READY" or s3 == "READY":
+                    _verify_cache["status"][key] = "PARTIAL"
+                else:
+                    _verify_cache["status"][key] = "LOCKED"
+                continue
+            if key in ("decisions", "ai_perf") and not MODULE_DOD_KEYS.get(key):
+                _verify_cache["status"][key] = default
+                continue
+            _verify_cache["status"][key] = _compute_module_status(key, kv) or default
+        _save_verify_cache()
+    except subprocess.TimeoutExpired:
+        _verify_cache["error"] = "verify timeout (180s)"
+        _verify_cache["result"] = "FAIL"
+        _verify_cache["result_ts"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        _verify_cache["failed_guard"] = "verify timeout (180s)"
+        _save_verify_cache()
+    except Exception as e:
+        _verify_cache["error"] = str(e)
+        _verify_cache["result"] = "FAIL"
+        _verify_cache["result_ts"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        _verify_cache["failed_guard"] = str(e)[:200]
+        _save_verify_cache()
+
+
+def _compute_module_status(module_key: str, kv: dict) -> str:
+    keys = MODULE_DOD_KEYS.get(module_key, [])
+    if not keys:
+        return None
+    any_skipped = any(kv.get(k.replace("_OK", "_SKIPPED")) == "1" for k in keys)
+    all_ok = all(kv.get(k) == "1" for k in keys)
+    if all_ok:
+        return "READY"
+    if any_skipped or any(kv.get(k) == "1" for k in keys):
+        return "PARTIAL"
+    return "LOCKED"
+
+
+def get_effective_module_status(module_key: str) -> str:
+    """캐시에 있으면 verify 기반, 없으면 MODULES 기본값."""
+    if _verify_cache["status"]:
+        return _verify_cache["status"].get(module_key) or next((m["status"] for m in MODULES if m["key"] == module_key), "LOCKED")
+    return next((m["status"] for m in MODULES if m["key"] == module_key), "LOCKED")
+
+
+# 실패 가드 코드 → 사람이 읽기 쉬운 한 줄 설명(고정)
+FAILED_GUARD_HINTS = {
+    "SSOT_CHANGED_WITHOUT_CHANGELOG": "SSOT만 바꾸고 변경기록(CHANGELOG)이 없어 차단",
+    "SSOT_CHANGED_WITHOUT_ADR": "방향 변경 결정을 ADR로 남기지 않아 차단",
+}
+
+
+def _failed_guard_hint(raw: str) -> str:
+    """실패 가드 원문을 인간 친화적 한 줄로 변환."""
+    if not raw or not isinstance(raw, str):
+        return raw or ""
+    s = raw.strip()[:200]
+    for code, hint in FAILED_GUARD_HINTS.items():
+        if code in s:
+            return hint
+    if "REPO_CONTRACTS_FAILED_GUARD=" in s:
+        part = s.split("REPO_CONTRACTS_FAILED_GUARD=", 1)[-1].strip()
+        return f"레포 계약 가드 실패: {part[:80]}"
+    if "ERROR_CODE=" in s:
+        part = s.split("ERROR_CODE=", 1)[-1].strip()
+        return f"가드 오류: {part[:80]}"
+    return s
+
+
+def _refresh_banner_html():
+    """Dashboard/Modules 상단에 쓸 갱신 결과/실행 중 배지 HTML."""
+    if _verify_cache.get("running"):
+        return '<div class="card" style="margin-bottom:12px; border-color:rgba(255,209,102,.4);"><span class="pill" style="color:#ffd166;">⏳ 상태 갱신 실행 중… (1~2분 소요)</span></div>'
+    ts = _verify_cache.get("result_ts")
+    result = _verify_cache.get("result")
+    failed = _verify_cache.get("failed_guard")
+    if not ts and result is None:
+        return ""
+    line1 = f"마지막 갱신 시각: {_html_escape(ts)}" if ts else ""
+    line2 = f"결과: {_html_escape(result)}" if result else ""
+    hint = _failed_guard_hint(failed) if failed else ""
+    line3 = f"실패: {_html_escape(hint)}" if (result == "FAIL" and hint) else ""
+    color = "#3ddc97" if result == "OK" else "#ff6b6b"
+    return f'<div class="card" style="margin-bottom:12px; border-left:4px solid {color};"><div class="hint">{line1}</div><div class="hint">{line2}</div>' + (f'<div class="hint" style="color:#ff6b6b;">{line3}</div>' if line3 else '') + '</div>'
+
+
+def _modules_summary():
+    total = len(MODULES)
+    ready = sum(1 for m in MODULES if get_effective_module_status(m["key"]) == "READY")
+    partial = sum(1 for m in MODULES if get_effective_module_status(m["key"]) == "PARTIAL")
+    locked = sum(1 for m in MODULES if get_effective_module_status(m["key"]) == "LOCKED")
+    progress = int(round((ready + partial * 0.5) / max(1, total) * 100))
+    keys = {"doc_search", "write_approve_export", "helpdesk_ticket"}
+    mvp_ready = sum(1 for m in MODULES if m.get("key") in keys and get_effective_module_status(m["key"]) == "READY")
+    mvp_partial = sum(1 for m in MODULES if m.get("key") in keys and get_effective_module_status(m["key"]) == "PARTIAL")
+    mvp_progress = int(round((mvp_ready + mvp_partial * 0.5) / 3 * 100))
+    hard_keys = {"pack_bypass", "raw0_enforce", "mvp_package"}
+    hard = {m["key"]: get_effective_module_status(m["key"]) for m in MODULES if m.get("key") in hard_keys}
+    return {
+        "total": total,
+        "ready": ready,
+        "partial": partial,
+        "locked": locked,
+        "progress": progress,
+        "mvp_progress": mvp_progress,
+        "hard": hard,
+    }
+
 
 # --- Platform UI base template (local-only) ---
 BASE_HTML = r"""
@@ -40,7 +286,9 @@ BASE_HTML = r"""
     <div class="brand">On-Device Platform<br/><span style="color:#a9b6d6;font-weight:700">Local Console</span></div>
     <nav class="nav" style="margin-top:14px;">
       <a href="/" class="{{ 'active' if active == 'dashboard' else '' }}">Dashboard</a>
-      <a href="/" class="{{ 'active' if active == 'timeline' else '' }}">Timeline</a>
+      <a href="/timeline" class="{{ 'active' if active == 'timeline' else '' }}">Timeline</a>
+      <a href="/modules" class="{{ 'active' if active == 'modules' else '' }}">Modules</a>
+      <a href="/roadmap" class="{{ 'active' if active == 'roadmap' else '' }}">Roadmap</a>
       <a href="/updates" class="{{ 'active' if active == 'updates' else '' }}">Updates</a>
       <a href="/decisions" class="{{ 'active' if active == 'decisions' else '' }}">Decisions</a>
     </nav>
@@ -157,16 +405,10 @@ APP_ID = os.environ.get("GITHUB_APP_ID", "").strip()
 INSTALLATION_ID = os.environ.get("GITHUB_INSTALLATION_ID", "").strip()
 PRIVATE_KEY_PATH = os.environ.get("GITHUB_APP_PRIVATE_KEY_PATH", "").strip()
 
-if not REPO:
-    raise SystemExit("GITHUB_REPO is required (e.g. tristan00037-tristan050/tristan050-ai_ondevice_APP)")
-if not APP_ID:
-    raise SystemExit("GITHUB_APP_ID is required (GitHub App settings page -> App ID)")
-if not INSTALLATION_ID:
-    raise SystemExit("GITHUB_INSTALLATION_ID is required (e.g. 92382330)")
-if not PRIVATE_KEY_PATH or not os.path.exists(PRIVATE_KEY_PATH):
-    raise SystemExit("GITHUB_APP_PRIVATE_KEY_PATH must point to your downloaded .pem file")
-
-OWNER, REPO_NAME = REPO.split("/", 1)
+if REPO and "/" in REPO:
+    OWNER, REPO_NAME = REPO.split("/", 1)
+else:
+    OWNER, REPO_NAME = "", ""
 
 SESSION = requests.Session()
 SESSION.headers.update({"Accept": "application/vnd.github+json"})
@@ -249,8 +491,23 @@ def compute_weekly_report(prs_grouped: dict):
 
 
 def load_private_key() -> str:
+    if not PRIVATE_KEY_PATH or not os.path.exists(PRIVATE_KEY_PATH):
+        raise RuntimeError(
+            "GITHUB_APP_PRIVATE_KEY_PATH가 설정되지 않았거나 .pem 파일이 없습니다. "
+            "Dashboard/Modules/Updates/Decisions는 그대로 사용할 수 있고, Timeline/API만 GitHub 설정이 필요합니다."
+        )
     with open(PRIVATE_KEY_PATH, "r", encoding="utf-8") as f:
         return f.read()
+
+
+def _require_github_config():
+    if not REPO:
+        raise RuntimeError("GITHUB_REPO를 설정하세요 (예: tristan00037-tristan050/tristan050-ai_ondevice_APP). Timeline/API 사용 시 필요합니다.")
+    if not APP_ID:
+        raise RuntimeError("GITHUB_APP_ID를 설정하세요 (GitHub App 설정 페이지).")
+    if not INSTALLATION_ID:
+        raise RuntimeError("GITHUB_INSTALLATION_ID를 설정하세요 (예: 92382330).")
+
 
 def make_jwt(app_id: str, private_key_pem: str) -> str:
     now = int(time.time())
@@ -258,6 +515,7 @@ def make_jwt(app_id: str, private_key_pem: str) -> str:
     return jwt.encode(payload, private_key_pem, algorithm="RS256")
 
 def get_installation_token() -> str:
+    _require_github_config()
     key = load_private_key()
     app_jwt = make_jwt(APP_ID, key)
     headers = {"Authorization": f"Bearer {app_jwt}"}
@@ -565,9 +823,62 @@ async function loadFiles(prNumber) {
 app = Flask(__name__)
 
 @app.get("/")
+def dashboard_page():
+    ms = _modules_summary()
+
+    def _status_color(st):
+        if st == "READY":
+            return "#3ddc97"
+        if st == "PARTIAL":
+            return "#ffd166"
+        if st == "LOCKED":
+            return "#ff6b6b"
+        return "#a9b6d6"
+
+    hard = ms["hard"]
+    refresh_banner = _refresh_banner_html()
+    html = refresh_banner + f"""
+    <div class="card">
+      <h3>Dashboard</h3>
+      <div class="hint">이 화면은 '목표 대비 진행'을 한눈에 보기 위한 내부 콘솔입니다.</div>
+      <div style="margin-top:10px;">
+        <a href="/api/refresh?redirect=/" class="pill" style="text-decoration:none;">🔄 상태 갱신(verify 실행)</a>
+        <span class="hint" style="margin-left:8px;">갱신 후 자동 새로고침됩니다. (약 1~2분 소요)</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3>전체 모듈 진행률</h3>
+      <div class="hint">READY는 100점, PARTIAL은 50점으로 계산합니다.</div>
+      <div style="font-size:28px; font-weight:900; margin-top:10px;">{ms["progress"]}%</div>
+      <div class="hint">READY {ms["ready"]} / PARTIAL {ms["partial"]} / LOCKED {ms["locked"]} (총 {ms["total"]})</div>
+      <div style="margin-top:10px;"><a href="/modules" class="pill">Modules 보기</a></div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3>MVP(전사 공통 3 시나리오) 진행률</h3>
+      <div class="hint">문서검색/요약 · 초안+승인+반출 · 헬프데스크 티켓</div>
+      <div style="font-size:28px; font-weight:900; margin-top:10px;">{ms["mvp_progress"]}%</div>
+      <div class="hint">3 시나리오가 READY/PARTIAL로 바뀌면 '상품이 보이는 상태'로 진입합니다.</div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3>추가 고정 3개 상태</h3>
+      <div class="hint">업무팩 우회 봉인 / 원문0 전수 봉인 / 상품성 패키지</div>
+      <div style="margin-top:10px;">
+        <span class="pill" style="color:{_status_color(hard.get("pack_bypass", "LOCKED"))}">업무팩 우회 봉인: {hard.get("pack_bypass", "LOCKED")}</span>
+        <span class="pill" style="color:{_status_color(hard.get("raw0_enforce", "LOCKED"))}">원문0 전수 봉인: {hard.get("raw0_enforce", "LOCKED")}</span>
+        <span class="pill" style="color:{_status_color(hard.get("mvp_package", "LOCKED"))}">상품성 패키지: {hard.get("mvp_package", "LOCKED")}</span>
+      </div>
+    </div>
+    """
+    return render("dashboard", "Dashboard", "목표 대비 진행/리스크/변경 이력을 한눈에 확인합니다.", html)
+
+
+@app.get("/timeline")
 def index():
     max_pages = int(os.environ.get("MAX_PAGES", "50"))
-    feature_preview_top_n = int(os.environ.get("FEATURE_PREVIEW_TOP_N", "80"))  # 상위 N개 PR만 미리 계산
+    feature_preview_top_n = int(os.environ.get("FEATURE_PREVIEW_TOP_N", "80"))
     token = get_installation_token()
     prs = fetch_merged_prs(token, max_pages=max_pages)
     grouped = group_prs(prs, token, feature_preview_top_n)
@@ -749,6 +1060,165 @@ def decision_view(name: str):
     escaped = _html_escape(body)
     html = f'<div class="card"><h3>ADR</h3><div class="hint">{_html_escape(name)}</div><pre style="white-space:pre-wrap; margin-top:10px;">{escaped}</pre><p style="margin-top:10px;"><a href="/decisions">← ADR 목록</a> · <a href="/">타임라인</a></p></div>'
     return render("decisions", "Decisions", "ADR 상세 내용을 플랫폼 화면에서 확인합니다.", html)
+
+
+@app.get("/modules")
+def modules_page():
+    cards = ""
+    for m in MODULES:
+        status = get_effective_module_status(m["key"])
+        color = "#a9b6d6"
+        if status == "READY":
+            color = "#3ddc97"
+        elif status == "PARTIAL":
+            color = "#ffd166"
+        elif status == "LOCKED":
+            color = "#ff6b6b"
+        name = _html_escape(m["name"])
+        why = _html_escape(m["why"])
+        dod = _html_escape(m["dod"])
+        cards += f"""
+        <div class="card" style="margin:10px 0;">
+          <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+            <div style="font-weight:900;">{name}</div>
+            <span class="pill" style="border-color:rgba(255,255,255,.08); color:{color};">{status}</span>
+          </div>
+          <div class="hint" style="margin-top:8px;"><b>의미</b>: {why}</div>
+          <div class="hint"><b>PASS 조건(DoD)</b>: {dod}</div>
+        </div>
+        """
+    html = """
+    <div class="card">
+      <h3>Modules</h3>
+      <div class="hint">
+        기능이 아직 없어도 화면에 보이게 고정합니다(LOCKED). 개발될 때마다 READY/PARTIAL로 바뀌며,
+        무엇이 좋아졌는지는 Updates(CHANGELOG/ADR)에서 확인합니다. 상태는 verify 출력(DoD 키) 기준으로 자동 판정됩니다.
+      </div>
+      <div style="margin-top:10px;">
+        <a href="/api/refresh?redirect=/modules" class="pill" style="text-decoration:none;">🔄 상태 갱신(verify 실행)</a>
+      </div>
+    </div>
+    """
+    html = _refresh_banner_html() + html + cards
+    return render("modules", "Modules", "플랫폼 기능 메뉴(버튼형) + 개발 상태(READY/PARTIAL/LOCKED)", html)
+
+
+def _run_verify_background():
+    _verify_cache["running"] = True
+    try:
+        _run_verify_and_parse()
+    finally:
+        _verify_cache["running"] = False
+
+
+@app.get("/diagnostics/verify-cache")
+def diagnostics_verify_cache():
+    """저장된 verify 결과(.local/verify_cache.json)를 화면에서 확인. 마스킹/길이 제한 유지."""
+    try:
+        if _VERIFY_CACHE_PATH.exists():
+            data = json.loads(_VERIFY_CACHE_PATH.read_text(encoding="utf-8"))
+        else:
+            data = {}
+    except Exception as e:
+        data = {"_error": str(e)[:200]}
+    if data.get("result") == "FAIL" and data.get("failed_guard"):
+        data["failed_guard_hint"] = _failed_guard_hint(data["failed_guard"])
+    data["_note"] = "원문·stderr 미저장. 키/값·결과만 저장됨."
+    return jsonify(data)
+
+
+@app.get("/api/refresh_status")
+def api_refresh_status():
+    """갱신 실행 여부와 결과(마지막 갱신 시각/OK·FAIL/실패 가드) 반환."""
+    return jsonify({
+        "running": _verify_cache.get("running", False),
+        "result_ts": _verify_cache.get("result_ts"),
+        "result": _verify_cache.get("result"),
+        "failed_guard": _verify_cache.get("failed_guard"),
+    })
+
+
+@app.get("/api/refresh")
+def api_refresh():
+    """백그라운드로 verify 실행 후, '갱신 중' 페이지를 보여주고 완료 시 redirect."""
+    redirect_to = request.args.get("redirect", "").strip() or "/"
+    if not redirect_to.startswith("/"):
+        redirect_to = "/"
+    if _verify_cache.get("running"):
+        html = """<!DOCTYPE html><html><head><meta charset="utf-8"><title>갱신 중</title></head><body style="font-family:sans-serif;padding:2em;">
+        <p>⏳ 상태 갱신 실행 중… (이미 다른 갱신이 진행 중입니다)</p>
+        <p><a href="/">Dashboard로</a></p>
+        <script>setTimeout(function(){ location.href = "/api/refresh_status"; }, 2000);</script>
+        </body></html>"""
+        return html
+    threading.Thread(target=_run_verify_background, daemon=True).start()
+    esc = lambda s: s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>갱신 중</title></head><body style="font-family:sans-serif;padding:2em;background:#0b1220;color:#e8eefc;">
+    <p>⏳ 상태 갱신 실행 중… (1~2분 소요)</p>
+    <p class="hint" style="color:#a9b6d6;">완료되면 자동으로 이동합니다.</p>
+    <p><a href="{esc(redirect_to)}" style="color:#6aa8ff;">취소하고 이동</a></p>
+    <script>
+    (function poll() {{
+      fetch("/api/refresh_status")
+        .then(r => r.json())
+        .then(function(d) {{
+          if (!d.running) {{ location.href = "{esc(redirect_to)}"; return; }}
+          setTimeout(poll, 2000);
+        }})
+        .catch(function() {{ setTimeout(poll, 2000); }});
+    }})();
+    </script>
+    </body></html>"""
+    return html
+
+
+# Roadmap: Phase 1 체크리스트 (SSOT v1.0 기준)
+ROADMAP_PHASE1 = [
+    {"key": "doc_search", "label": "문서 검색/요약 (시나리오 #1)", "order": 1},
+    {"key": "write_approve_export", "label": "초안 + 승인 + 반출 (시나리오 #2, Export 2단계)", "order": 2},
+    {"key": "helpdesk_ticket", "label": "헬프데스크 티켓 (시나리오 #3)", "order": 3},
+    {"key": "raw0_enforce", "label": "raw0 전수 봉인 (로그/예외/리포트)", "order": 4},
+    {"key": "pack_bypass", "label": "업무팩 우회 봉인", "order": 5},
+    {"key": "mvp_package", "label": "상품성 패키지 (3시나리오 + 운영콘솔 v0)", "order": 6},
+]
+
+
+@app.get("/roadmap")
+def roadmap_page():
+    items = []
+    next_locked_key = None
+    for row in sorted(ROADMAP_PHASE1, key=lambda x: x["order"]):
+        st = get_effective_module_status(row["key"])
+        if next_locked_key is None and st != "READY":
+            next_locked_key = row["key"]
+        color = "#3ddc97" if st == "READY" else "#ffd166" if st == "PARTIAL" else "#ff6b6b"
+        is_next = row["key"] == next_locked_key
+        items.append({
+            "label": row["label"],
+            "status": st,
+            "color": color,
+            "next": is_next,
+        })
+    cards = ""
+    for x in items:
+        next_badge = ' <span class="pill" style="border-color:#ffd166; color:#ffd166;">다음 1개</span>' if x["next"] else ""
+        cards += f"""
+        <div class="card" style="margin:10px 0; border-left:4px solid {x['color']};">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span>{_html_escape(x['label'])}</span>
+            <span class="pill" style="color:{x['color']};">{x['status']}</span>{next_badge}
+          </div>
+        </div>
+        """
+    html = f"""
+    <div class="card">
+      <h3>Roadmap (Phase 1)</h3>
+      <div class="hint">SSOT v1.0 기준. 3시나리오 E2E · 승인 반출 0 · raw0 전수 · pack 우회 봉인 · 성능 예산. 상태는 Modules와 연동됩니다.</div>
+    </div>
+    {cards}
+    """
+    return render("roadmap", "Roadmap", "남은 개발 목표(Phase 1) 및 다음 1개 강조", html)
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8787"))
