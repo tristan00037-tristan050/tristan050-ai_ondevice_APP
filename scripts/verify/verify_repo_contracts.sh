@@ -1602,8 +1602,9 @@ echo "== guard: secure update tuf principles v1 =="
 run_guard "secure update tuf principles v1" bash scripts/verify/verify_secure_update_tuf_principles_v1.sh
 
 echo "== guard: tuf min signing chain v1 (P22-P1-01) =="
-# ENFORCE=0: 로컬/기본 SKIP. ENFORCE=1로 설정 시에만 roles/expiry/signature 검사 강제(키 material은 레포 외부).
-TUF_MIN_SIGNING_CHAIN_ENFORCE=0 run_guard "tuf min signing chain v1" bash scripts/verify/verify_tuf_min_signing_chain_v1.sh
+# 기본은 0(로컬 SKIP), CI/운영에서 TUF_MIN_SIGNING_CHAIN_ENFORCE=1로 override 가능
+TUF_MIN_SIGNING_CHAIN_ENFORCE="${TUF_MIN_SIGNING_CHAIN_ENFORCE:-0}" \
+  run_guard "tuf min signing chain v1" bash scripts/verify/verify_tuf_min_signing_chain_v1.sh
 
 SLSA_SIGNER_WORKFLOW_UNIQUE_V1_OK=1
 
