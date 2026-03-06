@@ -56,8 +56,8 @@ command -v node >/dev/null 2>&1 || {
 set +e
 node -e "
 const fs = require('fs');
-const provPath = process.argv[2];
-const digestPath = process.argv[3];
+const provPath = process.argv[1];
+const digestPath = process.argv[2];
 let prov, digest;
 try {
   prov = JSON.parse(fs.readFileSync(provPath, 'utf8'));
