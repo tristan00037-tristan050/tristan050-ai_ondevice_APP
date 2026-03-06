@@ -30,6 +30,7 @@ SSOT=docs/ops/contracts/ARTIFACT_BUNDLE_INTEGRITY_V1.md CONSUMER=scripts/verify/
 SSOT=docs/ops/contracts/ARTIFACT_BUNDLE_PROVENANCE_LINK_V1.md CONSUMER=scripts/verify/verify_artifact_bundle_provenance_link_v1.sh
 SSOT=docs/ops/contracts/ARTIFACT_BUNDLE_VERIFIER_CHAIN_V1.md CONSUMER=scripts/verify/verify_artifact_bundle_verifier_chain_v1.sh
 SSOT=docs/ops/contracts/ARTIFACT_BUNDLE_CHAIN_STRICT_MODE_V1.md CONSUMER=scripts/verify/verify_artifact_bundle_chain_strict_mode_v1.sh
+SSOT=docs/ops/contracts/ARTIFACT_BUNDLE_CHAIN_E2E_PROOF_V1.md CONSUMER=scripts/verify/verify_artifact_bundle_chain_e2e_proof_v1.sh
 SSOT=docs/ops/contracts/ASSIST_COMPUTE_POLICY_V1.md CONSUMER=scripts/verify/verify_assist_compute_default_off_lock_v1.sh
 SSOT=docs/ops/contracts/AUTODECISION_IGNORED_FAIL_KEYS_V1.txt STATUS=stub
 SSOT=docs/ops/contracts/AUTODECISION_POLICY_V1.md STATUS=stub
