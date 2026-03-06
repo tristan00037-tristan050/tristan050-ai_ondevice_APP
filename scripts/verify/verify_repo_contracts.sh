@@ -156,6 +156,11 @@ SBOM_FROM_ARTIFACTS_POLICY_V1_OK=0
 SBOM_FROM_ARTIFACTS_PRESENT_OK=0
 SBOM_FROM_ARTIFACTS_SCHEMA_OK=0
 
+# P22-P1-03 artifact manifest bind
+ARTIFACT_MANIFEST_BIND_POLICY_V1_OK=0
+ARTIFACT_MANIFEST_PRESENT_OK=0
+ARTIFACT_MANIFEST_DIGEST_MATCH_OK=0
+
 # P22-P1-01 TUF min signing chain (roles / expiry / verify)
 TUF_MIN_ROLES_PRESENT_OK=0
 TUF_EXPIRES_ENFORCED_OK=0
@@ -897,6 +902,9 @@ cleanup(){
   echo "SBOM_FROM_ARTIFACTS_POLICY_V1_OK=${SBOM_FROM_ARTIFACTS_POLICY_V1_OK}"
   echo "SBOM_FROM_ARTIFACTS_PRESENT_OK=${SBOM_FROM_ARTIFACTS_PRESENT_OK}"
   echo "SBOM_FROM_ARTIFACTS_SCHEMA_OK=${SBOM_FROM_ARTIFACTS_SCHEMA_OK}"
+  echo "ARTIFACT_MANIFEST_BIND_POLICY_V1_OK=${ARTIFACT_MANIFEST_BIND_POLICY_V1_OK}"
+  echo "ARTIFACT_MANIFEST_PRESENT_OK=${ARTIFACT_MANIFEST_PRESENT_OK}"
+  echo "ARTIFACT_MANIFEST_DIGEST_MATCH_OK=${ARTIFACT_MANIFEST_DIGEST_MATCH_OK}"
   echo "TUF_MIN_ROLES_PRESENT_OK=${TUF_MIN_ROLES_PRESENT_OK}"
   echo "TUF_EXPIRES_ENFORCED_OK=${TUF_EXPIRES_ENFORCED_OK}"
   echo "TUF_SIGNATURE_VERIFY_OK=${TUF_SIGNATURE_VERIFY_OK}"
@@ -1801,6 +1809,11 @@ echo "== guard: sbom from artifacts v1 (P22-P1-02) =="
 # 기본은 0(로컬 SKIP), CI/운영에서 SBOM_FROM_ARTIFACTS_ENFORCE=1로 override 가능
 SBOM_FROM_ARTIFACTS_ENFORCE="${SBOM_FROM_ARTIFACTS_ENFORCE:-0}" \
   run_guard "sbom from artifacts v1" bash scripts/verify/verify_sbom_from_artifacts_v1.sh
+
+echo "== guard: artifact manifest bind v1 (P22-P1-03) =="
+# 기본은 0(로컬 SKIP), CI/운영에서 ARTIFACT_MANIFEST_BIND_ENFORCE=1로 override 가능
+ARTIFACT_MANIFEST_BIND_ENFORCE="${ARTIFACT_MANIFEST_BIND_ENFORCE:-0}" \
+  run_guard "artifact manifest bind v1" bash scripts/verify/verify_artifact_manifest_bind_v1.sh
 
 echo "== guard: P6-P0-05 AUTODECISION_FROM_NIGHTLY_V1 (decision-only) =="
 run_guard "P6-P0-05 autodecision from reports v1" bash scripts/verify/verify_autodecision_from_reports_v1.sh
