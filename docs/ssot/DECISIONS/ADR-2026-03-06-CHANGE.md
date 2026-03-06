@@ -1,7 +1,7 @@
-# ADR-2026-03-06: 회귀 테스트 B (SSOT+CHANGELOG+ADR 동반)
+# ADR-XXXX: (제목)
 
-- 날짜: 2026-03-06
-- 상태: Accepted
+- 날짜: YYYY-MM-DD
+- 상태: Proposed | Accepted | Deprecated
 
 ## 배경(왜 필요한가)
 - 
@@ -16,4 +16,4 @@
 - 
 
 ## 검증(DoD/게이트/증빙)
-- verify_repo_contracts.sh EXIT=0 (SSOT 변경 시 CHANGELOG+ADR 동반 가드 통과)
+- MODULE_DOD_KEYS SSOT 강제 회귀 테스트 B: verify EXIT=0
