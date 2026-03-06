@@ -169,6 +169,7 @@ BFF_SECRET_EMPTY_STRING_BLOCK_OK=0
 BFF_SECRET_SCHEMA_V1_SKIPPED=0
 
 ENFORCE_SPEC_V1_OK=0
+SSOT_CHANGE_DISCIPLINE_V1_OK=0
 
 # P0-01 (OPS) Dockerless repo guard report contract DoD (CI-only verifier emits; here for schema)
 DOCKERLESS_REPORT_RUN_OK=0
@@ -176,6 +177,7 @@ DOCKERLESS_REPORT_DEGRADED_DOCKER_KEYS_OK=0
 DOCKERLESS_REPORT_STATIC_POLICY_ALWAYS_ON_OK=0
 RUN_GUARD_TARGETS_EXIST_OK=0
 MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK=0
+WORKFLOW_YAML_PARSE_OK=0
 EXEC_MODE_PER_LINE_NO_EXCEPTION_TEXT_OK=0
 EXEC_MODE_LATENCY_MEASURE_PRESENT_OK=0
 EXEC_MODE_LATENCY_MISSING_BLOCK_OK=0
@@ -493,6 +495,7 @@ cleanup(){
   echo "DOD_KV_BLOCK_BEGIN=1"
   echo "RUN_GUARD_TARGETS_EXIST_OK=${RUN_GUARD_TARGETS_EXIST_OK}"
   echo "MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK=${MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK}"
+  echo "WORKFLOW_YAML_PARSE_OK=${WORKFLOW_YAML_PARSE_OK}"
   echo "REPO_CONTRACTS_HYGIENE_OK=${REPO_CONTRACTS_HYGIENE_OK}"
   echo "PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK=${PRODUCT_VERIFY_WORKFLOW_TEMPLATE_OK}"
   echo "DOCS_NO_BANNED_PHRASES_OK=${DOCS_NO_BANNED_PHRASES_OK}"
@@ -903,6 +906,7 @@ cleanup(){
   echo "BFF_SECRET_EMPTY_STRING_BLOCK_OK=${BFF_SECRET_EMPTY_STRING_BLOCK_OK}"
   echo "BFF_SECRET_SCHEMA_V1_SKIPPED=${BFF_SECRET_SCHEMA_V1_SKIPPED}"
   echo "ENFORCE_SPEC_V1_OK=${ENFORCE_SPEC_V1_OK}"
+  echo "SSOT_CHANGE_DISCIPLINE_V1_OK=${SSOT_CHANGE_DISCIPLINE_V1_OK}"
   echo "AUTODECISION_POLICY_V1_OK=${AUTODECISION_POLICY_V1_OK}"
   echo "AUTODECISION_OUTPUT_PRESENT_OK=${AUTODECISION_OUTPUT_PRESENT_OK}"
   echo "AUTODECISION_REASON_CODE_ONLY_OK=${AUTODECISION_REASON_CODE_ONLY_OK}"
@@ -1026,6 +1030,9 @@ VERIFY_RIPGREP_GUARD_PRESENT_V1_OK=1
 
 echo "== guard: verify workflow preflight present v1 (P3-PLAT-01) =="
 run_guard "workflow preflight ssot v1" bash scripts/verify/verify_workflow_preflight_present_v1.sh
+
+echo "== guard: workflow yaml parse v1 (P21-P0-05) =="
+WORKFLOW_YAML_PARSE_ENFORCE=1 run_guard "workflow yaml parse v1" bash scripts/verify/verify_workflow_yaml_parse_v1.sh
 
 echo "== guard: verify runtime guard helpers adopted v1 (P3-PLAT-02) =="
 run_guard "verify runtime guard helpers adopted v1" bash scripts/verify/verify_runtime_guard_helpers_adopted_v1.sh
@@ -1792,6 +1799,7 @@ run_guard "exec-mode schema ssot consumed v1" bash scripts/verify/verify_exec_mo
 run_guard "output root ssot v1" bash scripts/verify/verify_output_root_ssot_v1.sh
 
 run_guard "ssot change contract v1" bash scripts/verify/verify_ssot_change_contract_v1.sh
+run_guard "ssot change discipline v1" bash scripts/verify/verify_ssot_change_discipline_v1.sh
 run_guard "ssot consume autocontract v1" bash scripts/verify/verify_ssot_consume_autocontract_v1.sh
 run_guard "ssot registry coverage v1" bash scripts/verify/verify_ssot_registry_coverage_v1.sh
 run_guard "ssot registry no anchor consumer v1" bash scripts/verify/verify_ssot_registry_no_anchor_consumer_v1.sh
