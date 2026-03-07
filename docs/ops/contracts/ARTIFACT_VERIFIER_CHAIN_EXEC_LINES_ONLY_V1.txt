@@ -1,0 +1,8 @@
+ARTIFACT_VERIFIER_CHAIN_EXEC_LINES_ONLY_V1_TOKEN=1
+ANCHOR_PATH=scripts/verify/verify_repo_contracts.sh
+
+CHAIN_1=scripts/verify/verify_tuf_min_signing_chain_v1.sh
+CHAIN_2=scripts/verify/verify_sbom_from_artifacts_v1.sh
+CHAIN_3=scripts/verify/verify_artifact_manifest_bind_v1.sh
+CHAIN_4=scripts/verify/verify_artifact_bundle_integrity_v1.sh
+CHAIN_5=scripts/verify/verify_artifact_bundle_provenance_link_v1.sh
