@@ -1,5 +1,11 @@
 # SSOT ChangeLog (정본)
 
+## 2026-03-07
+- 무엇: 알고리즘팀 실행 지시서 v1.1 고정
+- 왜: 운영판은 강하지만 버틀러 본체의 실제 AI 실체가 부족하다는 공식 의견 반영
+- 영향: 모든 팀이 device profiling / model pack catalog / budget routing을 공통 다음 단계로 인식
+- 검증: SSOT 변경 discipline + ADR 동반 + 콘솔 Updates/Decisions 반영
+
 규칙
 - SSOT_V1.md가 바뀌면, 이 파일도 반드시 같이 바뀌어야 합니다.
 - 아래 4줄은 매번 꼭 씁니다: (무엇/왜/영향/검증)
