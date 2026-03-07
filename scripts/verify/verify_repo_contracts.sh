@@ -366,6 +366,9 @@ WORKFLOW_PREFLIGHT_PRESENT_OK=0
 # P3-PLAT-02 (Runtime Guard Helpers)
 RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=0
 
+# P22-P1-09 (Verify Node Args Runtime)
+VERIFY_NODE_ARGS_RUNTIME_V1_OK=0
+
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
 RUNTIME_EGRESS_ENV_PROOF_OK=0
@@ -638,6 +641,9 @@ cleanup(){
 
   # P3-PLAT-02 (Runtime Guard Helpers)
   echo "RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=${RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK}"
+
+  # P22-P1-09 (Verify Node Args Runtime)
+  echo "VERIFY_NODE_ARGS_RUNTIME_V1_OK=${VERIFY_NODE_ARGS_RUNTIME_V1_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -1101,6 +1107,10 @@ WORKFLOW_YAML_PARSE_ENFORCE=1 run_guard "workflow yaml parse v1" bash scripts/ve
 echo "== guard: verify runtime guard helpers adopted v1 (P3-PLAT-02) =="
 run_guard "verify runtime guard helpers adopted v1" bash scripts/verify/verify_runtime_guard_helpers_adopted_v1.sh
 RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=1
+
+echo "== guard: verify node args runtime v1 (P22-P1-09) =="
+run_guard "verify node args runtime v1" bash scripts/verify/verify_node_args_runtime_v1.sh
+VERIFY_NODE_ARGS_RUNTIME_V1_OK=1
 
 echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh
