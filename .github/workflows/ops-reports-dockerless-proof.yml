@@ -21,6 +21,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Confirm docker info fails (hard guard)
         shell: bash
         run: |
@@ -33,8 +38,21 @@ jobs:
           fi
           echo "DOCKERLESS_DOCKER_INFO_FAIL_CONFIRMED_OK=1"
 
+      # perf real pipeline p95 guard requires web_e2e node_modules + Playwright
+      - name: Install deps (web_e2e)
+        run: npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
+
+      - name: Install Playwright browsers
+        run: npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+
       - name: Generate repo guard report (must not hard-fail)
         shell: bash
+        env:
+          DOCKER_HOST: unix:///var/run/does-not-exist.sock
+          REPO_GUARD_KEYS_ONLY: "1"
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
         run: |
           set -euo pipefail
           bash scripts/ops/gen_repo_guard_report_v1.sh
@@ -47,6 +65,9 @@ jobs:
 
       - name: Anchor
         shell: bash
+        env:
+          REPO_GUARD_KEYS_ONLY: "1"
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
         run: |
           set -euo pipefail
           bash scripts/verify/verify_repo_contracts.sh ; echo "EXIT=$?"

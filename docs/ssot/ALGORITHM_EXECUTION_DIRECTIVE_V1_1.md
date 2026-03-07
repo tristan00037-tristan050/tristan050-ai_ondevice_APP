@@ -11,8 +11,10 @@
 1. 기계 SSOT(.txt/.json)와 설명 문서(.md) 분리
 2. workflow YAML parse guard를 독립 required workflow로 분리
 3. stdout은 DoD 키만, 진단은 JSON 리포트로 분리
-4. latency는 us 기준으로 저장/판정
+4. latency 단위는 현재 SSOT/게이트와 정합되게 유지하고, 고해상도 내부 측정(us/ns) 승격은 관련 계약과 함께 별도 PR로 정렬
 5. 모델팩을 SBOM / provenance / TUF 체인에 포함
+- 현재 외부 계약(리포트/게이트/예산 지표)은 ms 기준을 유지한다.
+- 내부 고해상도 측정값은 us 또는 ns를 사용할 수 있으나, 이를 SSOT/게이트로 승격할 때는 지표명, 예산, workflow, verify를 같은 변경에서 함께 정렬한다.
 
 ## 3. 필수 추가 과제
 1. DEVICE_PROFILE_METRICS_SSOT_V1
