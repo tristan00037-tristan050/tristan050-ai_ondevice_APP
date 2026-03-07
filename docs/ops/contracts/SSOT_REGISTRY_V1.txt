@@ -29,6 +29,7 @@ SSOT=docs/ops/contracts/ARTIFACT_MANIFEST_BIND_V1.md CONSUMER=scripts/verify/ver
 SSOT=docs/ops/contracts/ARTIFACT_BUNDLE_INTEGRITY_V1.md CONSUMER=scripts/verify/verify_artifact_bundle_integrity_v1.sh
 SSOT=docs/ops/contracts/ARTIFACT_BUNDLE_PROVENANCE_LINK_V1.md CONSUMER=scripts/verify/verify_artifact_bundle_provenance_link_v1.sh
 SSOT=docs/ops/contracts/ARTIFACT_BUNDLE_VERIFIER_CHAIN_V1.md CONSUMER=scripts/verify/verify_artifact_bundle_verifier_chain_v1.sh
+SSOT=docs/ops/contracts/ARTIFACT_VERIFIER_CHAIN_EXEC_LINES_ONLY_V1.txt CONSUMER=scripts/verify/verify_artifact_bundle_verifier_chain_v1.sh
 SSOT=docs/ops/contracts/ARTIFACT_BUNDLE_CHAIN_STRICT_MODE_V1.md CONSUMER=scripts/verify/verify_artifact_bundle_chain_strict_mode_v1.sh
 SSOT=docs/ops/contracts/ARTIFACT_BUNDLE_CHAIN_E2E_PROOF_V1.md CONSUMER=scripts/verify/verify_artifact_bundle_chain_e2e_proof_v1.sh
 SSOT=docs/ops/contracts/VERIFY_NODE_ARGS_RUNTIME_V1.txt CONSUMER=scripts/verify/verify_node_args_runtime_v1.sh
