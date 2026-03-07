@@ -1,0 +1,8 @@
+VERIFY_NODE_ARGS_RUNTIME_V1_TOKEN=1
+
+# P22-P1-09: 공용 Node argv 런타임 계약
+# - verifier 내부에서 process.argv[2], process.argv[3] 직접 사용 금지.
+# - 인자 접근은 tools/verify-runtime/node_args_v1.cjs 의 getUserArg(1-based), expectUserArgsAtLeast(n) 만 사용.
+# - fail-closed, meta-only 출력.
+
+RUNTIME_PATH=tools/verify-runtime/node_args_v1.cjs
