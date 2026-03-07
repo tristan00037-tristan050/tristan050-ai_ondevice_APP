@@ -11,13 +11,17 @@ SSOT="docs/ops/contracts/VERIFY_NODE_ARGS_RUNTIME_V1.txt"
 [[ -f "$SSOT" ]] || { echo "ERROR_CODE=VERIFY_NODE_ARGS_SSOT_MISSING"; exit 1; }
 grep -q '^VERIFY_NODE_ARGS_RUNTIME_V1_TOKEN=1' "$SSOT" || { echo "ERROR_CODE=VERIFY_NODE_ARGS_SSOT_TOKEN_MISSING"; exit 1; }
 
-RUNTIME="${ROOT}/tools/verify-runtime/node_args_v1.cjs"
-[[ -s "$RUNTIME" ]] || { echo "ERROR_CODE=VERIFY_NODE_ARGS_RUNTIME_MISSING"; exit 1; }
+RUNTIME_PATH="$(grep -E '^RUNTIME_PATH=' "$SSOT" | head -n1 | sed 's/^RUNTIME_PATH=//' | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+[[ -n "$RUNTIME_PATH" ]] || { echo "ERROR_CODE=VERIFY_NODE_ARGS_RUNTIME_PATH_MISSING"; exit 1; }
 
-if ! node -e "require('$RUNTIME')" 2>/dev/null; then
+RUNTIME="${ROOT}/${RUNTIME_PATH}"
+[[ -f "$RUNTIME" ]] || { echo "ERROR_CODE=VERIFY_NODE_ARGS_RUNTIME_MISSING"; echo "HIT_PATH=$RUNTIME_PATH"; exit 1; }
+
+node -e "require(process.argv[1])" "$RUNTIME" >/dev/null 2>&1 || {
   echo "ERROR_CODE=VERIFY_NODE_ARGS_RUNTIME_LOAD_FAILED"
+  echo "HIT_PATH=$RUNTIME_PATH"
   exit 1
-fi
+}
 
 VERIFY_NODE_ARGS_RUNTIME_V1_OK=1
 exit 0

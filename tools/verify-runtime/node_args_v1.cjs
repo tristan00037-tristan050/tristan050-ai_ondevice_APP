@@ -13,7 +13,11 @@ function getUserArg(idx1Based) {
 }
 
 function expectUserArgsAtLeast(count) {
-  if ((process.argv.length - 1) < count) {
+  const n = Number(count);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new Error('VERIFY_ARGS_INVALID_COUNT');
+  }
+  if ((process.argv.length - 1) < n) {
     throw new Error('VERIFY_ARGS_COUNT_TOO_SMALL');
   }
 }
