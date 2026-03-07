@@ -127,18 +127,24 @@ jobs:
           set -euo pipefail
           bash tools/exec_mode/verify_exec_mode_latency_gate_v1.sh --outdir out/exec_mode --p95-max-ms "${EXEC_MODE_P95_MAX_MS}"
 
+      # perf real pipeline p95 guard (inside gen_repo_guard_report_v1.sh) requires web_e2e + Playwright
+      - name: Install deps (web_e2e)
+        run: npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
+
+      - name: Install Playwright browsers
+        run: npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+
       - name: Repo guards report (docker optional) + autodecision verify
+        env:
+          REPO_GUARD_KEYS_ONLY: "1"
+          REPO_GUARD_REPORTS_ROOT: out/repo_guard_reports
+          AUTODECISION_REPORTS_ROOT: out/repo_guard_reports
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
         run: |
           set -euo pipefail
 
-          # 1) keys-only 강제: SSOT/리포트 목적 외 full-chain(예: perf p95)로 빠지는 재발 차단
-          export REPO_GUARD_KEYS_ONLY=1
-
-          # 2) 출력을 out으로 루팅 → docs 오염 없음, restore/clean 불필요
-          export REPO_GUARD_REPORTS_ROOT=out/repo_guard_reports
-          export AUTODECISION_REPORTS_ROOT=out/repo_guard_reports
-
-          # 3) repo guard report + autodecision
           bash scripts/ops/gen_repo_guard_report_v1.sh
           node -e "const r=require('./out/repo_guard_reports/repo_contracts_latest.json'); console.log('DOCKER_IT_NET_DB_SVCNAME_V1_OK=', r.keys?.DOCKER_IT_NET_DB_SVCNAME_V1_OK, 'HOST_DOCKER_INTERNAL_FORBIDDEN_OK=', r.keys?.HOST_DOCKER_INTERNAL_FORBIDDEN_OK, 'REPO_GUARD_KEYS_ONLY_MODE_OK=', r.keys?.REPO_GUARD_KEYS_ONLY_MODE_OK);"
 
