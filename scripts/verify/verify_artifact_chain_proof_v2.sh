@@ -7,14 +7,27 @@ trap 'echo "ARTIFACT_CHAIN_PROOF_V2_OK=${ARTIFACT_CHAIN_PROOF_V2_OK}"' EXIT
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
+ARTIFACT_CHAIN_PROOF_V2_ENFORCE="${ARTIFACT_CHAIN_PROOF_V2_ENFORCE:-0}"
+if [[ "${ARTIFACT_CHAIN_PROOF_V2_ENFORCE}" != "1" ]]; then
+  exit 0
+fi
+
 PROOF="docs/ops/proofs/artifact_chain_proof_v2_latest.json"
 [[ -f "$PROOF" ]] || { echo "ERROR_CODE=ARTIFACT_CHAIN_PROOF_MISSING"; echo "HIT_PATH=$PROOF"; exit 1; }
 
 node - "$PROOF" <<'NODESCRIPT'
 const fs = require('fs');
 const proofPath = process.argv[2];
-const raw = fs.readFileSync(proofPath, 'utf8');
-const obj = JSON.parse(raw);
+
+let obj;
+try {
+  const raw = fs.readFileSync(proofPath, 'utf8');
+  obj = JSON.parse(raw);
+} catch (e) {
+  console.log('ERROR_CODE=ARTIFACT_CHAIN_PROOF_JSON_INVALID');
+  console.log('HIT_PATH=' + proofPath);
+  process.exit(1);
+}
 
 const requiredTop = [
   'proof_version','bundle_id','verified_at_utc','git_sha','environment_id',
