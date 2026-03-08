@@ -1,0 +1,2 @@
+ARTIFACT_CHAIN_PROOF_GENERATOR_V1_TOKEN=1
+OUTPUT_PATH=docs/ops/proofs/artifact_chain_proof_v2_latest.json

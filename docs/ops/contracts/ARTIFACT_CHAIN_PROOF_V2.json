@@ -1,0 +1,19 @@
+{
+  "proof_version": 2,
+  "bundle_id": "artifact_bundle_v1",
+  "verified_at_utc": "2026-03-08T00:00:00Z",
+  "git_sha": "REQUIRED",
+  "environment_id": "supplychain",
+  "verifier_results": {
+    "tuf_min_signing_chain": "ok",
+    "sbom_from_artifacts": "ok",
+    "manifest_bind": "ok",
+    "bundle_integrity": "ok",
+    "provenance_link": "ok",
+    "verifier_chain": "ok"
+  },
+  "manifest_digest_sha256": "REQUIRED",
+  "sbom_digest_sha256": "REQUIRED",
+  "provenance_digest_sha256": "REQUIRED",
+  "result_fingerprint_sha256": "REQUIRED"
+}
