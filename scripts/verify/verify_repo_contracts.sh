@@ -372,6 +372,9 @@ RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=0
 # P22-P1-09 (Verify Node Args Runtime)
 VERIFY_NODE_ARGS_RUNTIME_V1_OK=0
 
+# P22-P1-11 (Verify Runtime Core)
+VERIFY_RUNTIME_CORE_V1_OK=0
+
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
 RUNTIME_EGRESS_ENV_PROOF_OK=0
@@ -647,6 +650,9 @@ cleanup(){
 
   # P22-P1-09 (Verify Node Args Runtime)
   echo "VERIFY_NODE_ARGS_RUNTIME_V1_OK=${VERIFY_NODE_ARGS_RUNTIME_V1_OK}"
+
+  # P22-P1-11 (Verify Runtime Core)
+  echo "VERIFY_RUNTIME_CORE_V1_OK=${VERIFY_RUNTIME_CORE_V1_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -1115,6 +1121,10 @@ RUNTIME_GUARD_HELPERS_V1_ADOPTED_OK=1
 echo "== guard: verify node args runtime v1 (P22-P1-09) =="
 run_guard "verify node args runtime v1" bash scripts/verify/verify_node_args_runtime_v1.sh
 VERIFY_NODE_ARGS_RUNTIME_V1_OK=1
+
+echo "== guard: verify runtime core v1 (P22-P1-11) =="
+run_guard "verify runtime core v1" bash scripts/verify/verify_runtime_core_v1.sh
+VERIFY_RUNTIME_CORE_V1_OK=1
 
 echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh

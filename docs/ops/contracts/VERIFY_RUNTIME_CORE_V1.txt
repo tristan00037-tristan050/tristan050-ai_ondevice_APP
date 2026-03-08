@@ -1,0 +1,6 @@
+VERIFY_RUNTIME_CORE_V1_TOKEN=1
+REQUIRED_RUNTIME_1=tools/verify-runtime/node_args_v1.cjs
+REQUIRED_RUNTIME_2=tools/verify-runtime/json_v1.cjs
+REQUIRED_RUNTIME_3=tools/verify-runtime/meta_only_v1.cjs
+REQUIRED_RUNTIME_4=tools/verify-runtime/anchor_parser_v1.cjs
+REQUIRED_RUNTIME_5=tools/verify-runtime/enforce_v1.cjs
