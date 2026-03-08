@@ -56,38 +56,39 @@ command -v node >/dev/null 2>&1 || {
 set +e
 node -e "
 const fs = require('fs');
+const { EXIT } = require('./tools/verify-runtime/exit_codes_v1.cjs');
 const provPath = process.argv[1];
 const digestPath = process.argv[2];
 let prov, digest;
 try {
   prov = JSON.parse(fs.readFileSync(provPath, 'utf8'));
-} catch (e) { process.exit(10); }
-if (!prov || typeof prov !== 'object') process.exit(10);
+} catch (e) { process.exit(EXIT.JSON_INVALID); }
+if (!prov || typeof prov !== 'object') process.exit(EXIT.JSON_INVALID);
 try {
   digest = JSON.parse(fs.readFileSync(digestPath, 'utf8'));
-} catch (e) { process.exit(10); }
-if (!digest || typeof digest !== 'object') process.exit(10);
+} catch (e) { process.exit(EXIT.JSON_INVALID); }
+if (!digest || typeof digest !== 'object') process.exit(EXIT.JSON_INVALID);
 
 // Subject digest: in-toto subject[] or subject.digest
 const subj = prov.subject;
-if (!Array.isArray(subj) || subj.length === 0) process.exit(11);
+if (!Array.isArray(subj) || subj.length === 0) process.exit(EXIT.SCHEMA_MISSING);
 const first = subj[0];
-if (!first || typeof first !== 'object') process.exit(11);
+if (!first || typeof first !== 'object') process.exit(EXIT.SCHEMA_MISSING);
 const d = first.digest;
-if (!d || typeof d !== 'object') process.exit(11);
+if (!d || typeof d !== 'object') process.exit(EXIT.SCHEMA_MISSING);
 let subjectDigest = d.sha256 || d.sha || d.digest;
 if (typeof subjectDigest !== 'string') subjectDigest = d.sha256;
-if (!subjectDigest || typeof subjectDigest !== 'string') process.exit(11);
+if (!subjectDigest || typeof subjectDigest !== 'string') process.exit(EXIT.SCHEMA_MISSING);
 subjectDigest = subjectDigest.replace(/^sha256:/i, '').trim();
 
 const digestVal = digest.sha || digest.digest || digest.sha256;
-if (typeof digestVal !== 'string') process.exit(12);
+if (typeof digestVal !== 'string') process.exit(EXIT.DIGEST_MISMATCH);
 const normalizedDigest = digestVal.replace(/^sha256:/i, '').trim();
-if (subjectDigest !== normalizedDigest) process.exit(12);
+if (subjectDigest !== normalizedDigest) process.exit(EXIT.DIGEST_MISMATCH);
 
 // Link: subject must have name (manifest/bundle identifier)
 const name = first.name;
-if (typeof name !== 'string' || !name.trim()) process.exit(13);
+if (typeof name !== 'string' || !name.trim()) process.exit(EXIT.LINK_MISSING);
 process.exit(0);
 " "$ARTIFACT_PROVENANCE_PATH" "$ARTIFACT_DIGEST_PATH" 2>/dev/null
 rc=$?

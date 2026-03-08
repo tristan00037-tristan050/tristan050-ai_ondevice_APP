@@ -51,22 +51,23 @@ fi
 set +e
 node -e "
   const fs = require('fs');
+  const { EXIT } = require('./tools/verify-runtime/exit_codes_v1.cjs');
   let d;
-  try { d = JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); } catch (e) { process.exit(1); }
-  if (!d || typeof d !== 'object') process.exit(1);
-  if (typeof d.bomFormat !== 'string') process.exit(2);
-  if (typeof d.specVersion !== 'string' && typeof d.specVersion !== 'number') process.exit(2);
-  if (!Array.isArray(d.components)) process.exit(2);
+  try { d = JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); } catch (e) { process.exit(EXIT.JSON_INVALID); }
+  if (!d || typeof d !== 'object') process.exit(EXIT.JSON_INVALID);
+  if (typeof d.bomFormat !== 'string') process.exit(EXIT.SCHEMA_MISSING);
+  if (typeof d.specVersion !== 'string' && typeof d.specVersion !== 'number') process.exit(EXIT.SCHEMA_MISSING);
+  if (!Array.isArray(d.components)) process.exit(EXIT.SCHEMA_MISSING);
   process.exit(0);
 " "$SBOM_ARTIFACT_PATH" 2>/dev/null
 r=$?
 set -e
-if [ "$r" -eq 1 ]; then
+if [ "$r" -eq 10 ]; then
   echo "ERROR_CODE=SBOM_JSON_INVALID"
   echo "HIT_PATH=$SBOM_ARTIFACT_PATH"
   exit 1
 fi
-if [ "$r" -eq 2 ]; then
+if [ "$r" -eq 11 ]; then
   echo "ERROR_CODE=SBOM_SCHEMA_MISSING"
   echo "HIT_PATH=$SBOM_ARTIFACT_PATH"
   exit 1
