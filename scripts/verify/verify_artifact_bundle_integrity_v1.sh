@@ -81,6 +81,7 @@ command -v node >/dev/null 2>&1 || {
 set +e
 node -e "
 const fs = require('fs');
+const { EXIT } = require('./tools/verify-runtime/exit_codes_v1.cjs');
 const manifestPath = process.argv[2];
 const digestPath = process.argv[3];
 const sbomPath = process.argv[4];
@@ -88,31 +89,31 @@ const expectedSbomPath = process.argv[5];
 let manifest, digest, sbom;
 try {
   manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-} catch (e) { process.exit(10); }
-if (!manifest || typeof manifest !== 'object') process.exit(10);
+} catch (e) { process.exit(EXIT.JSON_INVALID); }
+if (!manifest || typeof manifest !== 'object') process.exit(EXIT.JSON_INVALID);
 try {
   digest = JSON.parse(fs.readFileSync(digestPath, 'utf8'));
-} catch (e) { process.exit(10); }
-if (!digest || typeof digest !== 'object') process.exit(10);
+} catch (e) { process.exit(EXIT.JSON_INVALID); }
+if (!digest || typeof digest !== 'object') process.exit(EXIT.JSON_INVALID);
 try {
   sbom = JSON.parse(fs.readFileSync(sbomPath, 'utf8'));
-} catch (e) { process.exit(10); }
-if (!sbom || typeof sbom !== 'object') process.exit(10);
+} catch (e) { process.exit(EXIT.JSON_INVALID); }
+if (!sbom || typeof sbom !== 'object') process.exit(EXIT.JSON_INVALID);
 
 // manifest ↔ digest
 const digestVal = digest.sha || digest.digest;
 const manifestVal = manifest.sha || manifest.digest;
-if (typeof digestVal !== 'string' || !digestVal) process.exit(11);
-if (typeof manifestVal !== 'string' || manifestVal !== digestVal) process.exit(11);
+if (typeof digestVal !== 'string' || !digestVal) process.exit(EXIT.SCHEMA_MISSING);
+if (typeof manifestVal !== 'string' || manifestVal !== digestVal) process.exit(EXIT.SCHEMA_MISSING);
 
 // manifest ↔ SBOM 참조/경로 정합: manifest에 sbomPath/sbom 등이 있으면 해당 값이 expectedSbomPath와 일치하거나 포함
 const manifestSbomRef = manifest.sbomPath || manifest.sbom || manifest.bomPath || '';
 if (expectedSbomPath && manifestSbomRef && typeof manifestSbomRef === 'string') {
   const norm = (p) => p.replace(/\\\\/g, '/');
-  if (norm(manifestSbomRef) !== norm(expectedSbomPath) && !norm(manifestSbomRef).endsWith(expectedSbomPath.replace(/^.*\//, ''))) process.exit(12);
+  if (norm(manifestSbomRef) !== norm(expectedSbomPath) && !norm(manifestSbomRef).endsWith(expectedSbomPath.replace(/^.*\//, ''))) process.exit(EXIT.DIGEST_MISMATCH);
 }
 // SBOM 최소 구조
-if (!sbom.bomFormat || !Array.isArray(sbom.components)) process.exit(12);
+if (!sbom.bomFormat || !Array.isArray(sbom.components)) process.exit(EXIT.DIGEST_MISMATCH);
 process.exit(0);
 " "$ARTIFACT_MANIFEST_PATH" "$ARTIFACT_DIGEST_PATH" "$ARTIFACT_SBOM_PATH" "$ARTIFACT_SBOM_PATH" 2>/dev/null
 rc=$?
