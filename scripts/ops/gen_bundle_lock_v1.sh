@@ -50,6 +50,11 @@ TUF_ROOT_FILE="${BUNDLE_LOCK_TUF_ROOT_FILE:-tuf/repository/1.root.json}"
 MODEL_PACK_FILE="${BUNDLE_LOCK_MODEL_PACK_FILE:-}"
 RETRIEVAL_PACK_FILE="${BUNDLE_LOCK_RETRIEVAL_PACK_FILE:-}"
 
+# Fail-closed: required artifacts must exist
+for _req in "$MANIFEST_FILE" "$SBOM_FILE" "$PROVENANCE_FILE" "$PROOF_FILE" "$TUF_ROOT_FILE"; do
+  [[ -f "$_req" ]] || { echo "ERROR_CODE=BUNDLE_LOCK_REQUIRED_ARTIFACT_MISSING"; echo "MISSING_FILE=$_req"; exit 1; }
+done
+
 MANIFEST_DIGEST="$(sha256_file "$MANIFEST_FILE")"
 SBOM_DIGEST="$(sha256_file "$SBOM_FILE")"
 PROVENANCE_DIGEST="$(sha256_file "$PROVENANCE_FILE")"
@@ -89,7 +94,6 @@ payload = {
     "bundle_lock_version": int(bundle_lock_version),
     "generated_at_utc": generated_at,
     "git_sha": git_sha,
-    "lock_digest_sha256": "PLACEHOLDER",
     "manifest_digest_sha256": manifest_d,
     "proof_digest_sha256": proof_d,
     "provenance_digest_sha256": provenance_d,
@@ -105,12 +109,9 @@ if model_digest:
 if retrieval_digest:
     payload["retrieval_pack_digest_sha256"] = retrieval_digest
 
-# Canonical JSON: sorted keys, no trailing newline variations
-canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, indent=2)
-
-# Compute self-referencing digest over the canonical JSON (with PLACEHOLDER)
-# Replace placeholder with actual sha256 of the file content
-lock_digest = hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+# Self-referencing: hash JSON WITHOUT lock_digest_sha256 key, then insert
+canonical_no_digest = json.dumps(payload, sort_keys=True, ensure_ascii=False, indent=2)
+lock_digest = hashlib.sha256(canonical_no_digest.encode('utf-8')).hexdigest()
 payload["lock_digest_sha256"] = lock_digest
 
 # Final canonical JSON with real digest

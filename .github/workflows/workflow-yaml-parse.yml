@@ -21,40 +21,41 @@ jobs:
       - name: Preflight
         uses: ./.github/actions/preflight_v1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
       - name: Parse all workflow YAML files
         run: |
           set -euo pipefail
-          failed=0
-          count=0
-          for f in .github/workflows/*.yml .github/workflows/*.yaml; do
-            [ -f "$f" ] || continue
-            count=$((count + 1))
-            node -e "
-              const fs = require('fs');
-              const path = '$f';
-              try {
-                const content = fs.readFileSync(path, 'utf8');
-                // Basic structure check: must contain 'on:' and 'jobs:'
-                if (!content.includes('on:') && !content.includes('\"on\":')) {
-                  process.stdout.write('ERROR: no on: trigger in ' + path + '\n');
-                  process.exit(1);
-                }
-                if (!content.includes('jobs:')) {
-                  process.stdout.write('ERROR: no jobs: in ' + path + '\n');
-                  process.exit(1);
-                }
-              } catch (e) {
-                process.stdout.write('ERROR: ' + e.message + ' in ' + path + '\n');
-                process.exit(1);
-              }
-            " || { echo "FAIL: $f"; failed=$((failed + 1)); }
-          done
-          echo "Parsed $count workflow files"
-          [ "$count" -gt 0 ] || { echo "ERROR: no workflow files found"; exit 1; }
-          [ "$failed" -eq 0 ] || { echo "ERROR: $failed file(s) failed parse"; exit 1; }
-          echo "OK: all workflow YAML files parsed successfully"
+          python3 - <<'PYEOF'
+          import sys, glob, yaml
+
+          files = sorted(glob.glob('.github/workflows/*.yml') + glob.glob('.github/workflows/*.yaml'))
+          if not files:
+              print("ERROR: no workflow files found")
+              sys.exit(1)
+
+          failed = 0
+          for f in files:
+              try:
+                  with open(f, 'r', encoding='utf-8') as fh:
+                      doc = yaml.safe_load(fh)
+                  if not isinstance(doc, dict):
+                      print(f"ERROR: not a mapping in {f}")
+                      failed += 1
+                      continue
+                  if 'on' not in doc and True not in doc:
+                      print(f"ERROR: no 'on' trigger in {f}")
+                      failed += 1
+                      continue
+                  if 'jobs' not in doc:
+                      print(f"ERROR: no 'jobs' key in {f}")
+                      failed += 1
+                      continue
+              except yaml.YAMLError as e:
+                  print(f"ERROR: YAML parse failed in {f}: {e}")
+                  failed += 1
+
+          print(f"Parsed {len(files)} workflow file(s)")
+          if failed:
+              print(f"ERROR: {failed} file(s) failed parse")
+              sys.exit(1)
+          print("OK: all workflow YAML files parsed successfully")
+          PYEOF
