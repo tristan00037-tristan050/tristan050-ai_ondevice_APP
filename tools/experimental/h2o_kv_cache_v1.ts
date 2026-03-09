@@ -51,11 +51,13 @@ export function updateH2OCache(
   // 3. heavy hitter 재선정 (상위 heavy_hitter_ratio 비율)
   const sorted = [...newAccumulator.entries()]
     .sort((a, b) => b[1] - a[1]);
-  const hh_count = Math.max(
-    1,
-    Math.floor(state.config.max_cache_tokens * state.config.heavy_hitter_ratio),
+  const hh_count = Math.floor(
+    state.config.max_cache_tokens * state.config.heavy_hitter_ratio,
   );
-  const newHeavyHitters = sorted.slice(0, hh_count).map(([id]) => id);
+  // heavy_hitter_ratio=0이면 hh_count=0 → heavy hitter 없음 (recent-only 모드)
+  const newHeavyHitters = hh_count > 0
+    ? sorted.slice(0, hh_count).map(([id]) => id)
+    : [];
 
   return {
     ...state,
