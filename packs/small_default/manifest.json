@@ -1,0 +1,13 @@
+{
+  "pack_id": "small_default",
+  "pack_version": "0.1.0-pending",
+  "tier": "small",
+  "quant": "int4",
+  "runtime_id": "ondevice_runtime_v1",
+  "weights_digest_sha256": "pending_real_weights",
+  "tokenizer_digest_sha256": "pending_real_weights",
+  "config_digest_sha256": "pending_real_weights",
+  "min_ram_mb": 3000,
+  "latency_budget_ms_p95": 2000,
+  "status": "pending_real_weights"
+}

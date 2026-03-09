@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "packs": [
+    {
+      "pack_id": "micro_default",
+      "tier": "micro",
+      "quant": "int4",
+      "runtime_id": "ondevice_runtime_v1",
+      "weights_digest_sha256": "REQUIRED",
+      "tokenizer_digest_sha256": "REQUIRED",
+      "config_digest_sha256": "REQUIRED",
+      "min_ram_mb": 1500,
+      "latency_budget_ms_p95": 1200
+    },
+    {
+      "pack_id": "small_default",
+      "tier": "small",
+      "quant": "int4",
+      "runtime_id": "ondevice_runtime_v1",
+      "weights_digest_sha256": "REQUIRED",
+      "tokenizer_digest_sha256": "REQUIRED",
+      "config_digest_sha256": "REQUIRED",
+      "min_ram_mb": 3000,
+      "latency_budget_ms_p95": 2000
+    }
+  ]
+}

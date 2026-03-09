@@ -396,6 +396,16 @@ CHECKOUT_FETCH_DEPTH_ALLOWLIST_V1_OK=0
 # P22-P2-06
 VERIFIER_AUTHORING_POLICY_V1_OK=0
 
+# P22-AI-01
+MODEL_PACK_CATALOG_V1_SCHEMA_OK=0
+MODEL_PACK_CATALOG_V1_PACKS_OK=0
+# P22-AI-02
+MODEL_PACK_MANIFEST_V1_OK=0
+# P22-AI-05
+RETRIEVAL_PACK_V1_OK=0
+# P22-AI-06
+EXEC_MODE_QUALITY_GATES_V2_OK=0
+
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
 RUNTIME_EGRESS_ENV_PROOF_OK=0
@@ -686,6 +696,12 @@ cleanup(){
 
   echo "CHECKOUT_FETCH_DEPTH_ALLOWLIST_V1_OK=${CHECKOUT_FETCH_DEPTH_ALLOWLIST_V1_OK}"
   echo "VERIFIER_AUTHORING_POLICY_V1_OK=${VERIFIER_AUTHORING_POLICY_V1_OK}"
+
+  echo "MODEL_PACK_CATALOG_V1_SCHEMA_OK=${MODEL_PACK_CATALOG_V1_SCHEMA_OK}"
+  echo "MODEL_PACK_CATALOG_V1_PACKS_OK=${MODEL_PACK_CATALOG_V1_PACKS_OK}"
+  echo "MODEL_PACK_MANIFEST_V1_OK=${MODEL_PACK_MANIFEST_V1_OK}"
+  echo "RETRIEVAL_PACK_V1_OK=${RETRIEVAL_PACK_V1_OK}"
+  echo "EXEC_MODE_QUALITY_GATES_V2_OK=${EXEC_MODE_QUALITY_GATES_V2_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -1185,6 +1201,23 @@ CHECKOUT_FETCH_DEPTH_ALLOWLIST_V1_OK=1
 echo "== guard: verifier authoring policy v1 (P22-P2-06) =="
 run_guard "verifier authoring policy v1" bash scripts/verify/verify_verifier_authoring_policy_v1.sh
 VERIFIER_AUTHORING_POLICY_V1_OK=1
+
+echo "== guard: model pack catalog v1 (P22-AI-01) =="
+run_guard "model pack catalog v1" bash scripts/verify/verify_model_pack_catalog_v1.sh
+MODEL_PACK_CATALOG_V1_SCHEMA_OK=1
+MODEL_PACK_CATALOG_V1_PACKS_OK=1
+
+echo "== guard: model pack manifest v1 (P22-AI-02) =="
+run_guard "model pack manifest v1" bash scripts/verify/verify_model_pack_manifest_v1.sh
+MODEL_PACK_MANIFEST_V1_OK=1
+
+echo "== guard: retrieval pack v1 (P22-AI-05) =="
+run_guard "retrieval pack v1" bash scripts/verify/verify_retrieval_pack_v1.sh
+RETRIEVAL_PACK_V1_OK=1
+
+echo "== guard: exec mode quality gates v2 (P22-AI-06) =="
+run_guard "exec mode quality gates v2" bash scripts/verify/verify_exec_mode_quality_gates_v2.sh
+EXEC_MODE_QUALITY_GATES_V2_OK=1
 
 echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh
