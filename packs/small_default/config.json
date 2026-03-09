@@ -1,0 +1,11 @@
+{
+  "pack_id": "small_default",
+  "model_type": "transformer",
+  "vocab_size": 32000,
+  "hidden_size": 2048,
+  "num_layers": 24,
+  "num_heads": 16,
+  "max_seq_len": 1024,
+  "quant": "int4",
+  "status": "pending_real_weights"
+}
