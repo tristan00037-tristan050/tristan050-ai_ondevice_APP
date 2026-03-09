@@ -443,6 +443,13 @@ REPLAYABLE_PROOF_BUNDLE_V1_OK=0
 # P23-P2-06
 CYCLONEDX_ML_BOM_V1_OK=0
 
+# P24-R-01
+EXPERIMENTAL_H2O_KV_V1_OK=0
+# P24-R-02
+EXPERIMENTAL_NATIVE_LOWBIT_V1_OK=0
+# P24-R-03
+EXPERIMENTAL_HW_SW_PARETO_V1_OK=0
+
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
 RUNTIME_EGRESS_ENV_PROOF_OK=0
@@ -771,6 +778,13 @@ cleanup(){
   echo "REPLAYABLE_PROOF_BUNDLE_V1_OK=${REPLAYABLE_PROOF_BUNDLE_V1_OK}"
   # P23-P2-06
   echo "CYCLONEDX_ML_BOM_V1_OK=${CYCLONEDX_ML_BOM_V1_OK}"
+
+  # P24-R-01
+  echo "EXPERIMENTAL_H2O_KV_V1_OK=${EXPERIMENTAL_H2O_KV_V1_OK}"
+  # P24-R-02
+  echo "EXPERIMENTAL_NATIVE_LOWBIT_V1_OK=${EXPERIMENTAL_NATIVE_LOWBIT_V1_OK}"
+  # P24-R-03
+  echo "EXPERIMENTAL_HW_SW_PARETO_V1_OK=${EXPERIMENTAL_HW_SW_PARETO_V1_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -1352,6 +1366,18 @@ REPLAYABLE_PROOF_BUNDLE_V1_OK=1
 echo "== guard: cyclonedx ml bom v1 (P23-P2-06) =="
 run_guard "cyclonedx ml bom v1" bash scripts/verify/verify_cyclonedx_ml_bom_v1.sh
 CYCLONEDX_ML_BOM_V1_OK=1
+
+echo "== guard: experimental h2o kv v1 (P24-R-01) =="
+run_guard "experimental h2o kv v1" bash scripts/verify/verify_experimental_h2o_kv_v1.sh
+EXPERIMENTAL_H2O_KV_V1_OK=1
+
+echo "== guard: experimental native lowbit v1 (P24-R-02) =="
+run_guard "experimental native lowbit v1" bash scripts/verify/verify_experimental_native_lowbit_v1.sh
+EXPERIMENTAL_NATIVE_LOWBIT_V1_OK=1
+
+echo "== guard: experimental hw sw pareto v1 (P24-R-03) =="
+run_guard "experimental hw sw pareto v1" bash scripts/verify/verify_experimental_hw_sw_pareto_v1.sh
+EXPERIMENTAL_HW_SW_PARETO_V1_OK=1
 
 echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh

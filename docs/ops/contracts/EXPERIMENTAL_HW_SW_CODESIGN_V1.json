@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "experiment_id": "hw_sw_codesign_pareto_v1",
+  "status": "research",
+  "production_enabled": false,
+  "description": "온디바이스 LLM accuracy-latency Pareto 최적화를 하드웨어 co-design 관점으로 탐색",
+  "target_dimensions": [
+    "accuracy_vs_latency_pareto",
+    "memory_vs_quality_tradeoff",
+    "thermal_vs_throughput_frontier",
+    "soc_architecture_specific_quantization"
+  ],
+  "current_soc_targets": [
+    "snapdragon_8_gen3",
+    "snapdragon_8_elite",
+    "apple_a17_pro",
+    "dimensity_9300"
+  ],
+  "activation_condition": "real_weights_verified AND multi_device_profiling_complete",
+  "note": "장기 연구 트랙. 단순 모델 선택이 아닌 HW별 아키텍처 공동설계 탐색."
+}

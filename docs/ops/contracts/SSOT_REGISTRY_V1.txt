@@ -154,3 +154,6 @@ SSOT=docs/ops/contracts/BUNDLE_GRAPH_LOCK_V1.json CONSUMER=scripts/verify/verify
 SSOT=tools/supply-chain/merkle_v1.ts CONSUMER=scripts/verify/verify_merkle_artifact_tree_v1.sh
 SSOT=docs/ops/contracts/REPLAYABLE_PROOF_BUNDLE_V1.json CONSUMER=scripts/verify/verify_replayable_proof_bundle_v1.sh
 SSOT=docs/ops/contracts/CYCLONEDX_ML_BOM_V1.json CONSUMER=scripts/verify/verify_cyclonedx_ml_bom_v1.sh
+SSOT=docs/ops/contracts/EXPERIMENTAL_H2O_KV_V1.json CONSUMER=scripts/verify/verify_experimental_h2o_kv_v1.sh
+SSOT=docs/ops/contracts/EXPERIMENTAL_NATIVE_LOWBIT_V1.json CONSUMER=scripts/verify/verify_experimental_native_lowbit_v1.sh
+SSOT=docs/ops/contracts/EXPERIMENTAL_HW_SW_CODESIGN_V1.json CONSUMER=scripts/verify/verify_experimental_hw_sw_pareto_v1.sh
