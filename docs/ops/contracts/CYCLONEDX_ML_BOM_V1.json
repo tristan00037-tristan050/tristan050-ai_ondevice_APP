@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "policy_id": "cyclonedx_ml_bom_v1",
+  "cyclonedx_spec_version": "1.6",
+  "required_component_type": "machine-learning-model",
+  "required_fields_per_component": [
+    "type",
+    "name",
+    "version",
+    "purl",
+    "description"
+  ],
+  "ml_model_evidence_required": true,
+  "license_required": true,
+  "note": "CycloneDX 1.6 AI/ML-BOM policy. real weights 투입 후 각 pack에 BOM 생성 필요."
+}

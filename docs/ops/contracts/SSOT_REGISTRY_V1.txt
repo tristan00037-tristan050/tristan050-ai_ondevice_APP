@@ -148,3 +148,9 @@ SSOT=docs/ops/contracts/THERMAL_ENERGY_PROFILE_V1.json CONSUMER=scripts/verify/v
 SSOT=docs/ops/contracts/GUIDED_TOOLCALL_POLICY_V1.json CONSUMER=scripts/verify/verify_guided_toolcall_policy_v1.sh
 SSOT=docs/ops/contracts/RETRIEVAL_EVIDENCE_PACK_V2_POLICY.json CONSUMER=scripts/verify/verify_retrieval_pack_v1.sh
 SSOT=docs/ops/contracts/SBOM_PROVENANCE_POLICY_V2.json CONSUMER=scripts/verify/verify_model_pack_sbom_v1.sh
+SSOT=docs/ops/contracts/SUSTAINED_PERF_GATE_V1.json CONSUMER=scripts/verify/verify_sustained_perf_gate_v1.sh
+SSOT=docs/ops/contracts/TUF_ANTI_ROLLBACK_V1.json CONSUMER=scripts/verify/verify_tuf_anti_rollback_v1.sh
+SSOT=docs/ops/contracts/BUNDLE_GRAPH_LOCK_V1.json CONSUMER=scripts/verify/verify_bundle_graph_lock_v1.sh
+SSOT=tools/supply-chain/merkle_v1.ts CONSUMER=scripts/verify/verify_merkle_artifact_tree_v1.sh
+SSOT=docs/ops/contracts/REPLAYABLE_PROOF_BUNDLE_V1.json CONSUMER=scripts/verify/verify_replayable_proof_bundle_v1.sh
+SSOT=docs/ops/contracts/CYCLONEDX_ML_BOM_V1.json CONSUMER=scripts/verify/verify_cyclonedx_ml_bom_v1.sh

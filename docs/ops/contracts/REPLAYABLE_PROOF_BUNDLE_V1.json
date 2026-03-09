@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "bundle_id": "replayable_proof_bundle_v1",
+  "generated_at_utc": "PLACEHOLDER",
+  "components": {
+    "artifact_chain_proof": {
+      "source": "docs/ops/PROOFS/artifact_chain_proof_v2_latest.json",
+      "digest_sha256": "REQUIRED"
+    },
+    "bundle_graph_lock": {
+      "source": "docs/ops/contracts/BUNDLE_GRAPH_LOCK_V1.json",
+      "digest_sha256": "REQUIRED"
+    },
+    "sustained_perf_gate": {
+      "source": "docs/ops/contracts/SUSTAINED_PERF_GATE_V1.json",
+      "digest_sha256": "REQUIRED"
+    },
+    "tuf_anti_rollback": {
+      "source": "docs/ops/contracts/TUF_ANTI_ROLLBACK_V1.json",
+      "digest_sha256": "REQUIRED"
+    },
+    "algo_core_manifest": {
+      "source": "dist/algo_core_manifest.json",
+      "digest_sha256": "REQUIRED"
+    },
+    "onprem_bundle_manifest": {
+      "source": "dist/onprem_bundle_manifest.json",
+      "digest_sha256": "REQUIRED"
+    }
+  },
+  "merkle_root_digest": "REQUIRED",
+  "bundle_digest_sha256": "PLACEHOLDER",
+  "status": "pending_real_weights",
+  "note": "gen_replayable_proof_bundle_v1.sh 실행으로 실제 digest 채워짐"
+}

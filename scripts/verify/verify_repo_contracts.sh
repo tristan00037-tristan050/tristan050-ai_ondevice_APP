@@ -430,6 +430,19 @@ THERMAL_ENERGY_PROFILE_V1_OK=0
 # P23-P1-03
 GUIDED_TOOLCALL_POLICY_V1_OK=0
 
+# P23-P2-01
+SUSTAINED_PERF_GATE_V1_OK=0
+# P23-P2-02
+TUF_ANTI_ROLLBACK_V1_OK=0
+# P23-P2-03
+BUNDLE_GRAPH_LOCK_V1_OK=0
+# P23-P2-04
+MERKLE_ARTIFACT_TREE_V1_OK=0
+# P23-P2-05
+REPLAYABLE_PROOF_BUNDLE_V1_OK=0
+# P23-P2-06
+CYCLONEDX_ML_BOM_V1_OK=0
+
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
 RUNTIME_EGRESS_ENV_PROOF_OK=0
@@ -745,6 +758,19 @@ cleanup(){
   echo "THERMAL_ENERGY_PROFILE_V1_OK=${THERMAL_ENERGY_PROFILE_V1_OK}"
   # P23-P1-03
   echo "GUIDED_TOOLCALL_POLICY_V1_OK=${GUIDED_TOOLCALL_POLICY_V1_OK}"
+
+  # P23-P2-01
+  echo "SUSTAINED_PERF_GATE_V1_OK=${SUSTAINED_PERF_GATE_V1_OK}"
+  # P23-P2-02
+  echo "TUF_ANTI_ROLLBACK_V1_OK=${TUF_ANTI_ROLLBACK_V1_OK}"
+  # P23-P2-03
+  echo "BUNDLE_GRAPH_LOCK_V1_OK=${BUNDLE_GRAPH_LOCK_V1_OK}"
+  # P23-P2-04
+  echo "MERKLE_ARTIFACT_TREE_V1_OK=${MERKLE_ARTIFACT_TREE_V1_OK}"
+  # P23-P2-05
+  echo "REPLAYABLE_PROOF_BUNDLE_V1_OK=${REPLAYABLE_PROOF_BUNDLE_V1_OK}"
+  # P23-P2-06
+  echo "CYCLONEDX_ML_BOM_V1_OK=${CYCLONEDX_ML_BOM_V1_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -1302,6 +1328,30 @@ THERMAL_ENERGY_PROFILE_V1_OK=1
 echo "== guard: guided toolcall policy v1 (P23-P1-03) =="
 run_guard "guided toolcall policy v1" bash scripts/verify/verify_guided_toolcall_policy_v1.sh
 GUIDED_TOOLCALL_POLICY_V1_OK=1
+
+echo "== guard: sustained perf gate v1 (P23-P2-01) =="
+run_guard "sustained perf gate v1" bash scripts/verify/verify_sustained_perf_gate_v1.sh
+SUSTAINED_PERF_GATE_V1_OK=1
+
+echo "== guard: tuf anti rollback v1 (P23-P2-02) =="
+run_guard "tuf anti rollback v1" bash scripts/verify/verify_tuf_anti_rollback_v1.sh
+TUF_ANTI_ROLLBACK_V1_OK=1
+
+echo "== guard: bundle graph lock v1 (P23-P2-03) =="
+run_guard "bundle graph lock v1" bash scripts/verify/verify_bundle_graph_lock_v1.sh
+BUNDLE_GRAPH_LOCK_V1_OK=1
+
+echo "== guard: merkle artifact tree v1 (P23-P2-04) =="
+run_guard "merkle artifact tree v1" bash scripts/verify/verify_merkle_artifact_tree_v1.sh
+MERKLE_ARTIFACT_TREE_V1_OK=1
+
+echo "== guard: replayable proof bundle v1 (P23-P2-05) =="
+run_guard "replayable proof bundle v1" bash scripts/verify/verify_replayable_proof_bundle_v1.sh
+REPLAYABLE_PROOF_BUNDLE_V1_OK=1
+
+echo "== guard: cyclonedx ml bom v1 (P23-P2-06) =="
+run_guard "cyclonedx ml bom v1" bash scripts/verify/verify_cyclonedx_ml_bom_v1.sh
+CYCLONEDX_ML_BOM_V1_OK=1
 
 echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh
