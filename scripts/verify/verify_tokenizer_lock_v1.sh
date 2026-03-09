@@ -44,14 +44,20 @@ for manifest_path in sorted(PACK_MANIFESTS):
         failed = 1
         continue
 
-    pack_id = manifest.get("pack_id", manifest_path)
+    # Support both flat manifest and 3-layer (logical_model_pack) structure
+    if "logical_model_pack" in manifest:
+        layer = manifest["logical_model_pack"]
+    else:
+        layer = manifest
+
+    pack_id = layer.get("pack_id", manifest.get("pack_id", manifest_path))
     for field in REQUIRED_DIGEST_FIELDS:
-        if field not in manifest:
+        if field not in layer:
             print(f"ERROR_CODE=TOKENIZER_LOCK_FIELD_MISSING")
             print(f"PACK={pack_id}")
             print(f"MISSING_FIELD={field}")
             failed = 1
-        elif manifest[field] == PLACEHOLDER:
+        elif layer[field] == PLACEHOLDER:
             has_placeholder = True
 
 if failed:

@@ -422,6 +422,9 @@ REAL_WEIGHTS_PRESENT_REQUIRED_FOR_RELEASE_OK=0
 # P23-P0A-06
 TOKENIZER_LOCK_V1_OK=0
 
+# P23-P0B-05
+SMOKE_FINGERPRINT_V1_OK=0
+
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
 RUNTIME_EGRESS_ENV_PROOF_OK=0
@@ -729,6 +732,9 @@ cleanup(){
   echo "REAL_WEIGHTS_PRESENT_REQUIRED_FOR_RELEASE_OK=${REAL_WEIGHTS_PRESENT_REQUIRED_FOR_RELEASE_OK}"
   # P23-P0A-06
   echo "TOKENIZER_LOCK_V1_OK=${TOKENIZER_LOCK_V1_OK}"
+
+  # P23-P0B-05
+  echo "SMOKE_FINGERPRINT_V1_OK=${SMOKE_FINGERPRINT_V1_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -1274,6 +1280,10 @@ REAL_WEIGHTS_PRESENT_REQUIRED_FOR_RELEASE_OK=1
 echo "== guard: tokenizer lock v1 (P23-P0A-06) =="
 run_guard "tokenizer lock v1" bash scripts/verify/verify_tokenizer_lock_v1.sh
 TOKENIZER_LOCK_V1_OK=1
+
+echo "== guard: smoke fingerprint v1 (P23-P0B-05) =="
+run_guard "smoke fingerprint v1" bash scripts/verify/verify_smoke_fingerprint_v1.sh
+SMOKE_FINGERPRINT_V1_OK=1
 
 echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh
