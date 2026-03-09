@@ -103,6 +103,19 @@ for pack_id in REQUIRED_PACKS:
         print(f"ERROR_CODE=MODEL_PROVENANCE_SUBJECT_PACK_ID_MISMATCH")
         print(f"PACK={pack_id}")
         failed = 1
+    # P23-P1-05: slsa_spec_version and in_toto_version required
+    if doc.get("slsa_spec_version") != "1.2":
+        print(f"ERROR_CODE=MODEL_PROVENANCE_SLSA_VERSION_INVALID")
+        print(f"PACK={pack_id}")
+        print(f"EXPECTED=1.2")
+        print(f"ACTUAL={doc.get('slsa_spec_version')}")
+        failed = 1
+    if doc.get("in_toto_version") != "v1":
+        print(f"ERROR_CODE=MODEL_PROVENANCE_IN_TOTO_VERSION_INVALID")
+        print(f"PACK={pack_id}")
+        print(f"EXPECTED=v1")
+        print(f"ACTUAL={doc.get('in_toto_version')}")
+        failed = 1
 
 if failed:
     sys.exit(1)

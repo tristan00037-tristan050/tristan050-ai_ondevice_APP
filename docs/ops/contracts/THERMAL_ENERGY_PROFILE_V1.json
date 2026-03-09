@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "profile_id": "thermal_energy_profile_v1",
+  "thermal_headroom_floor": 0.2,
+  "sustained_perf_required_headroom": 0.7,
+  "downgrade_on_serious": true,
+  "downgrade_on_critical": true,
+  "block_high_power_on_low_battery": true,
+  "block_high_power_on_low_power_mode": true
+}

@@ -1,8 +1,9 @@
 'use strict';
 
-// P22-AI-04 / P23-P0B-03: ROUTING_BY_BUDGET_WITH_HYSTERESIS_V2 + ROUTING_DIGEST_SPLIT_V1
+// P22-AI-04 / P23-P0B-03 / P23-P1-02: ROUTING_BY_BUDGET_WITH_HYSTERESIS_V2 + ROUTING_DIGEST_SPLIT_V1 + ROUTING_BY_HARD_CONSTRAINT_AND_UTILITY_V4
 
 import { routingDecisionDigest, routingEventId } from '../crypto/digest_v1';
+import type { ThermalEnergyProfile, PowerClass } from '../device-profile/thermal_profile_v1';
 
 export interface DeviceProfile {
   cpu_usage_pct: number;
@@ -58,6 +59,7 @@ function isValidProfile(profile: unknown): profile is DeviceProfile {
  * @param lastPackId - Pack ID currently in use (null if none)
  * @param lastChangeMs - Wall clock ms when last pack change occurred (0 if never)
  * @param nowMs  - Current wall clock ms
+ * @deprecated — use chooseBestPack() with PackCandidate[] and RouteContext
  */
 export function selectModelPackV2(
   profile: DeviceProfile | null | unknown,
@@ -145,4 +147,71 @@ export function selectModelPackV2(
     routing_decision_digest: routingDecisionDigest(decisionMaterial),
     routing_event_id: routingEventId({ timestamp_ns: timestamp_ns.toString(), ...decisionMaterial }),
   };
+}
+
+// ---------------------------------------------------------------------------
+// P23-P1-02: ROUTING_BY_HARD_CONSTRAINT_AND_UTILITY_V4
+// ---------------------------------------------------------------------------
+
+export interface PackCandidate {
+  pack_id: string;
+  compiled_pack_id: string;
+  status: 'verified' | 'pending_real_weights';
+  fallback_rate: number;
+  context_budget_tokens: number;
+  power_class: PowerClass;
+  q_lcb: number;
+  latency_ucb_ms: number;
+  rss_ucb_mb: number;
+  thermal_risk_ucb: number;
+  energy_ucb_per_128tok: number;
+  failure_ucb: number;
+}
+
+export interface RouteContext {
+  required_context_tokens: number;
+  thermal: ThermalEnergyProfile;
+}
+
+/**
+ * Choose the best pack candidate using hard constraints + utility scoring.
+ *
+ * Hard constraints (applied in order):
+ * 1. status must be 'verified'
+ * 2. fallback_rate must be 0
+ * 3. context_budget_tokens >= required_context_tokens
+ * 4. high-power pack blocked in low_power_mode
+ * 5. non-low-power pack blocked when battery is critical
+ * 6. all packs blocked when thermal_state is 'critical'
+ *
+ * Utility score (conservative bound): q_lcb - weighted penalties
+ *
+ * @throws Error('NO_ELIGIBLE_PACK') if no candidate passes hard constraints
+ */
+export function chooseBestPack(
+  candidates: PackCandidate[],
+  ctx: RouteContext
+): PackCandidate {
+  const eligible = candidates.filter(c =>
+    c.status === 'verified' &&
+    c.fallback_rate === 0 &&
+    c.context_budget_tokens >= ctx.required_context_tokens &&
+    !(ctx.thermal.low_power_mode && c.power_class === 'high') &&
+    !(ctx.thermal.battery_bucket === 'critical' && c.power_class !== 'low') &&
+    !(ctx.thermal.thermal_state === 'critical')
+  );
+
+  if (eligible.length === 0) {
+    throw new Error('NO_ELIGIBLE_PACK');
+  }
+
+  const score = (c: PackCandidate): number =>
+    c.q_lcb
+    - 0.30 * c.latency_ucb_ms
+    - 0.15 * c.rss_ucb_mb
+    - 0.25 * c.thermal_risk_ucb
+    - 0.15 * c.energy_ucb_per_128tok
+    - 0.15 * c.failure_ucb;
+
+  return [...eligible].sort((a, b) => score(b) - score(a))[0];
 }
