@@ -197,10 +197,17 @@ jobs:
           set -euo pipefail
           node scripts/ops/gen_autodecision_v1.mjs
 
+      - name: "Generate artifact chain proof v2 (pre-verify)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/ops/gen_artifact_chain_proof_v2.sh
+
       - name: Repo contracts gate (always tail on fail)
         shell: bash
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+          ARTIFACT_CHAIN_PROOF_V2_ENFORCE: "1"
         run: |
           set -euo pipefail
           set +e

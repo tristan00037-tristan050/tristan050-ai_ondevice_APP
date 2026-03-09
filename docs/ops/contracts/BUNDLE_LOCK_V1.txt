@@ -1,0 +1,3 @@
+BUNDLE_LOCK_V1_TOKEN=1
+OUTPUT_PATH=docs/ops/reports/bundle_lock_v1_latest.json
+REQUIRED_FIELDS=bundle_id,bundle_lock_version,locked_at,artifacts,digest_algo
