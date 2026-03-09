@@ -1,0 +1,20 @@
+VERIFIER_AUTHORING_POLICY_V1_TOKEN=1
+
+# Verifier Authoring Policy v1
+# All new verifier scripts MUST be created using the template generator:
+#   bash scripts/ops/new_verifier_from_template_v1.sh <FEATURE_NAME>
+#
+# Verifier rules (enforced by verify_verifier_authoring_policy_v1.sh):
+# 1. Must start with #!/usr/bin/env bash + set -euo pipefail
+# 2. Must declare all DoD keys as <FEATURE>_OK=0 at top
+# 3. Must trap cleanup that echoes all DoD keys
+# 4. If enforce-gated: MUST source scripts/verify/lib/enforce_spec_v1.sh
+#    and MUST NOT directly parse *_ENFORCE variables
+# 5. On SKIP: output <FEATURE>_OK=0, <FEATURE>_SKIPPED=1 (via enforce_spec lib)
+# 6. Must use EXIT.* named constants (no numeric process.exit literals) if Node.js
+# 7. Must not use process.argv[] directly (use node_args_v1.cjs)
+# 8. Must exit 0 on success; non-zero on any failure
+# 9. DoD key name must match guard label in verify_repo_contracts.sh
+# 10. Template: scripts/ops/new_verifier_from_template_v1.sh
+
+TEMPLATE_SCRIPT=scripts/ops/new_verifier_from_template_v1.sh

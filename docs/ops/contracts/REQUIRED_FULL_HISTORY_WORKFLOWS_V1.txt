@@ -1,0 +1,14 @@
+REQUIRED_FULL_HISTORY_WORKFLOWS_V1_TOKEN=1
+# Workflows that require fetch-depth: 0 (full git history).
+# These are distinct from REQUIRED_WORKFLOWS_V1.txt (required merge_group coverage).
+# Full history is needed for: git diff base..HEAD, git log, SSOT change detection.
+# One workflow filename per line (no paths). Comments allowed with leading '#'.
+ai-ab-bench-nightly.yml
+ci-dockerless-repo-guard-report.yml
+ci-ssot-change-contract.yml
+ops-reports-dockerless-proof.yml
+ops-reports-nightly.yml
+product-verify-onprem-proof-strict.yml
+product-verify-repo-guards.yml
+product-verify-supplychain.yml
+release.yml

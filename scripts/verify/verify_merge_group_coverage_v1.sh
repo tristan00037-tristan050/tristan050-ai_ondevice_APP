@@ -7,6 +7,7 @@ trap 'echo "MERGE_GROUP_REQUIRED_WORKFLOWS_COVERED_OK=${MERGE_GROUP_REQUIRED_WOR
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
+# P22-P2-03: updated to cover workflow-yaml-parse.yml
 SSOT="docs/ops/contracts/REQUIRED_WORKFLOWS_V1.txt"
 if [ ! -f "$SSOT" ]; then
   echo "ERROR_CODE=REQUIRED_WORKFLOWS_SSOT_MISSING"

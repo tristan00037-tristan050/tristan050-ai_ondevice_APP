@@ -1,0 +1,61 @@
+# P22-P2-02: Validate all workflow YAML files parse cleanly (independent of the main repo contracts guard)
+name: workflow-yaml-parse
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-yaml-parse:
+    name: workflow-yaml-parse
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Preflight
+        uses: ./.github/actions/preflight_v1
+
+      - name: Parse all workflow YAML files
+        run: |
+          set -euo pipefail
+          python3 - <<'PYEOF'
+          import sys, glob, yaml
+
+          files = sorted(glob.glob('.github/workflows/*.yml') + glob.glob('.github/workflows/*.yaml'))
+          if not files:
+              print("ERROR: no workflow files found")
+              sys.exit(1)
+
+          failed = 0
+          for f in files:
+              try:
+                  with open(f, 'r', encoding='utf-8') as fh:
+                      doc = yaml.safe_load(fh)
+                  if not isinstance(doc, dict):
+                      print(f"ERROR: not a mapping in {f}")
+                      failed += 1
+                      continue
+                  if 'on' not in doc and True not in doc:
+                      print(f"ERROR: no 'on' trigger in {f}")
+                      failed += 1
+                      continue
+                  if 'jobs' not in doc:
+                      print(f"ERROR: no 'jobs' key in {f}")
+                      failed += 1
+                      continue
+              except yaml.YAMLError as e:
+                  print(f"ERROR: YAML parse failed in {f}: {e}")
+                  failed += 1
+
+          print(f"Parsed {len(files)} workflow file(s)")
+          if failed:
+              print(f"ERROR: {failed} file(s) failed parse")
+              sys.exit(1)
+          print("OK: all workflow YAML files parsed successfully")
+          PYEOF

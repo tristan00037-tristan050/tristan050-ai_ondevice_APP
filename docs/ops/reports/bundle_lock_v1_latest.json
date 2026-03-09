@@ -1,0 +1,12 @@
+{
+  "bundle_id": "artifact_bundle_v1",
+  "bundle_lock_version": 1,
+  "generated_at_utc": "2026-03-09T00:57:21Z",
+  "git_sha": "171d9911c472cf23657518e16ae2f2309fffc880",
+  "lock_digest_sha256": "b3500d6b48c48e3112608bde99f7c21997d79194960f76bb48a023fc09b89f40",
+  "manifest_digest_sha256": "8754ba67d03d8272f63aac5eb379e465c74560a185c368688485d572e0bb2292",
+  "proof_digest_sha256": "MISSING",
+  "provenance_digest_sha256": "6accb27a1b28e3f92d6db2a633ff70266bbaedb89b01c0fd16a07d75477b5ef8",
+  "sbom_digest_sha256": "6accb27a1b28e3f92d6db2a633ff70266bbaedb89b01c0fd16a07d75477b5ef8",
+  "tuf_root_digest_sha256": "MISSING"
+}
