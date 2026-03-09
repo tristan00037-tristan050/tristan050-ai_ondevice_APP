@@ -26,7 +26,11 @@ GitHub: https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP
 로컬: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP
 
 Claude Code 실행:
-cd "/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP" && claude --dangerously-skip-permissions
+# 일반 실행 (기본값 — 권장)
+cd "/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP" && claude
+
+# 파일 시스템 전체 접근이 필요한 경우에만 (예외적 opt-in)
+# cd "/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP" && claude --dangerously-skip-permissions
 
 ---
 
