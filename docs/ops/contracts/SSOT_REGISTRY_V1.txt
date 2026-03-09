@@ -141,3 +141,4 @@ SSOT=docs/ops/contracts/MODEL_PACK_CATALOG_GUIDE.md CONSUMER=scripts/verify/veri
 SSOT=docs/ops/contracts/MODEL_PROVENANCE_V1.json CONSUMER=scripts/verify/verify_model_provenance_v1.sh
 SSOT=docs/ops/contracts/RUNTIME_VARIANCE_BUDGET_V1.json CONSUMER=scripts/verify/verify_runtime_variance_budget_v1.sh
 SSOT=docs/ops/contracts/UPDATE_APPROVAL_GATE_V1.json CONSUMER=scripts/verify/verify_update_approval_gate_v1.sh
+SSOT=docs/ops/contracts/TOKENIZER_LOCK_POLICY_V1.json CONSUMER=scripts/verify/verify_tokenizer_lock_v1.sh

@@ -32,31 +32,25 @@ CHAIN_4="$(grep -E '^CHAIN_4=' "$SSOT" | head -n1 | sed 's/^CHAIN_4=//' | tr -d 
 CHAIN_5="$(grep -E '^CHAIN_5=' "$SSOT" | head -n1 | sed 's/^CHAIN_5=//' | tr -d '\r' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 [[ -n "$CHAIN_1" && -n "$CHAIN_2" && -n "$CHAIN_3" && -n "$CHAIN_4" && -n "$CHAIN_5" ]] || { echo "ERROR_CODE=ARTIFACT_VERIFIER_CHAIN_DEF_MISSING"; exit 1; }
 
-node -e '
-const { parseRunGuardLines } = require("./tools/verify-runtime/anchor_parser_v1.cjs");
+VERIFIER_EXEC_MODE=eval node -e '
+const { parseRunGuardLines, assertUniqueOrderedPaths } = require("./tools/verify-runtime/anchor_parser_v1.cjs");
+const { getUserArg, expectUserArgsAtLeast } = require("./tools/verify-runtime/node_args_v1.cjs");
+expectUserArgsAtLeast(1);
+const anchorPath = getUserArg(1);
+const expected = process.argv.slice(require("./tools/verify-runtime/node_args_v1.cjs").getArgOffset() + 1);
 
-const anchorPath = process.argv[1];
-const expected = process.argv.slice(2);
 const rows = parseRunGuardLines(anchorPath);
-const actual = rows.map(function(x) { return x.script_path; });
+const filtered = rows.filter(r => expected.includes(r.script_path));
 
 for (const e of expected) {
-  if (!actual.includes(e)) {
-    console.log("ERROR_CODE=ARTIFACT_VERIFIER_CHAIN_MISSING");
-    console.log("HIT_SCRIPT=" + e);
+  if (!filtered.some(r => r.script_path === e)) {
+    process.stdout.write("ERROR_CODE=ARTIFACT_VERIFIER_CHAIN_MISSING\n");
+    process.stdout.write("HIT_SCRIPT=" + e + "\n");
     process.exit(10);
   }
 }
 
-const actualFiltered = actual.filter(x => expected.includes(x));
-for (let i = 0; i < expected.length; i++) {
-  if (actualFiltered[i] !== expected[i]) {
-    console.log("ERROR_CODE=ARTIFACT_VERIFIER_CHAIN_ORDER_INVALID");
-    console.log("HIT_SCRIPT=" + expected[i]);
-    process.exit(11);
-  }
-}
-
+assertUniqueOrderedPaths(filtered, expected);
 process.exit(0);
 ' "$ANCHOR_FULL" \
   "$CHAIN_1" "$CHAIN_2" "$CHAIN_3" "$CHAIN_4" "$CHAIN_5" || {

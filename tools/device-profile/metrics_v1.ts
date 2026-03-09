@@ -47,6 +47,7 @@ export function takeCpuSnapshot(): CpuSnapshot {
  * Compute the CPU delta in milliseconds between two snapshots.
  * Throws on negative delta (clock went backwards).
  * Throws on overflow (value exceeds Number.MAX_SAFE_INTEGER).
+ * @deprecated — use computeCpuDeltaUs / computeLatencyNs for storage, toDisplayMs* for display
  */
 export function computeCpuDeltaMs(
   before: CpuSnapshot,
@@ -77,6 +78,7 @@ export function computeCpuDeltaMs(
  * Compute wall-clock latency in milliseconds between two snapshots.
  * Throws on negative delta (clock went backwards).
  * Throws on overflow (value exceeds Number.MAX_SAFE_INTEGER).
+ * @deprecated — use computeCpuDeltaUs / computeLatencyNs for storage, toDisplayMs* for display
  */
 export function computeLatencyMs(
   before: CpuSnapshot,
@@ -94,4 +96,35 @@ export function computeLatencyMs(
 
   // Convert ns → ms (divide by 1_000_000)
   return Number(latency_ns) / 1_000_000;
+}
+
+// P23-P0A-04: storage-unit functions (raw bigint) — display conversion separated
+
+/** Returns total CPU delta in microseconds (us). Use toDisplayMsFromUs() for display. */
+export function computeCpuDeltaUs(before: CpuSnapshot, after: CpuSnapshot): bigint {
+  const user_delta = BigInt(after.user_us) - BigInt(before.user_us);
+  const system_delta = BigInt(after.system_us) - BigInt(before.system_us);
+  if (user_delta < 0n || system_delta < 0n) {
+    throw new RangeError('CPU_TIME_NEGATIVE_OR_INVALID');
+  }
+  return user_delta + system_delta;
+}
+
+/** Returns wall-clock latency in nanoseconds (ns). Use toDisplayMsFromNs() for display. */
+export function computeLatencyNs(before: CpuSnapshot, after: CpuSnapshot): bigint {
+  const latency_ns = after.captured_at_ns - before.captured_at_ns;
+  if (latency_ns < 0n) throw new RangeError('LATENCY_NEGATIVE_OR_INVALID');
+  return latency_ns;
+}
+
+/** Convert microseconds to milliseconds for display only. Throws on overflow. */
+export function toDisplayMsFromUs(v: bigint): number {
+  if (v > BigInt(Number.MAX_SAFE_INTEGER)) throw new RangeError('DISPLAY_OVERFLOW');
+  return Number(v) / 1000;
+}
+
+/** Convert nanoseconds to milliseconds for display only. Throws on overflow. */
+export function toDisplayMsFromNs(v: bigint): number {
+  if (v > BigInt(Number.MAX_SAFE_INTEGER)) throw new RangeError('DISPLAY_OVERFLOW');
+  return Number(v) / 1_000_000;
 }

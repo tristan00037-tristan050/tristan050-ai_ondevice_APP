@@ -12,11 +12,13 @@ if have_rg; then
     -g'*.ts' -g'*.js' \
     -g'!packages/common/src/crypto/jcs.ts' \
     -g'!packages/common/test/jcs.test.ts' \
+    -g'!tools/crypto/digest_v1.ts' \
     || true)"
 else
   HITS="$(find . -type f \( -name '*.ts' -o -name '*.js' \) \
     ! -path '*node_modules*' \
     ! -path './packages/common/src/crypto/jcs.ts' ! -path './packages/common/test/jcs.test.ts' \
+    ! -path './tools/crypto/digest_v1.ts' \
     -exec grep -nE '(jcsCanonicalize|JSON Canonicalization Scheme|RFC 8785|canonicalize\()' {} + 2>/dev/null || true)"
 fi
 

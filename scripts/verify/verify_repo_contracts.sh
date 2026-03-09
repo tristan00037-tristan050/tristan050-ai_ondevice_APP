@@ -417,6 +417,11 @@ RUNTIME_VARIANCE_BUDGET_V1_OK=0
 # P22-AI-11
 UPDATE_APPROVAL_GATE_V1_OK=0
 
+# P23-P0A-03
+REAL_WEIGHTS_PRESENT_REQUIRED_FOR_RELEASE_OK=0
+# P23-P0A-06
+TOKENIZER_LOCK_V1_OK=0
+
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
 RUNTIME_EGRESS_ENV_PROOF_OK=0
@@ -719,6 +724,11 @@ cleanup(){
   echo "EVAL_FINGERPRINT_V1_OK=${EVAL_FINGERPRINT_V1_OK}"
   echo "RUNTIME_VARIANCE_BUDGET_V1_OK=${RUNTIME_VARIANCE_BUDGET_V1_OK}"
   echo "UPDATE_APPROVAL_GATE_V1_OK=${UPDATE_APPROVAL_GATE_V1_OK}"
+
+  # P23-P0A-03
+  echo "REAL_WEIGHTS_PRESENT_REQUIRED_FOR_RELEASE_OK=${REAL_WEIGHTS_PRESENT_REQUIRED_FOR_RELEASE_OK}"
+  # P23-P0A-06
+  echo "TOKENIZER_LOCK_V1_OK=${TOKENIZER_LOCK_V1_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -1256,6 +1266,14 @@ RUNTIME_VARIANCE_BUDGET_V1_OK=1
 echo "== guard: update approval gate v1 (P22-AI-11) =="
 run_guard "update approval gate v1" bash scripts/verify/verify_update_approval_gate_v1.sh
 UPDATE_APPROVAL_GATE_V1_OK=1
+
+echo "== guard: real weights release block v1 (P23-P0A-03) =="
+run_guard "real weights release block v1" bash scripts/verify/verify_real_weights_release_block_v1.sh
+REAL_WEIGHTS_PRESENT_REQUIRED_FOR_RELEASE_OK=1
+
+echo "== guard: tokenizer lock v1 (P23-P0A-06) =="
+run_guard "tokenizer lock v1" bash scripts/verify/verify_tokenizer_lock_v1.sh
+TOKENIZER_LOCK_V1_OK=1
 
 echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh

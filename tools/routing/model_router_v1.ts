@@ -2,7 +2,7 @@
 
 // P22-AI-04: ROUTING_BY_BUDGET_WITH_HYSTERESIS_V2
 
-import * as crypto from 'crypto';
+import { routingDecisionDigest, routingEventId } from '../crypto/digest_v1';
 
 export interface DeviceProfile {
   cpu_usage_pct: number;
@@ -23,21 +23,13 @@ export interface RoutingResult {
   routing_log_digest: string;
 }
 
-interface RoutingLogPayload {
-  timestamp_ns: string;
-  pack_id: string;
-  reason_code: string;
-  profile_snapshot: DeviceProfile | null;
-}
+const POLICY_VERSION = 'v1';
+const SCHEMA_VERSION = 1;
 
 const PACK_IDS = ['micro_default', 'small_default'] as const;
 type PackId = (typeof PACK_IDS)[number];
 
 const FALLBACK_PACK: PackId = 'micro_default';
-
-function sha256Hex(input: string): string {
-  return crypto.createHash('sha256').update(input, 'utf8').digest('hex');
-}
 
 function buildRoutingLogDigest(
   timestamp_ns: bigint,
@@ -45,14 +37,25 @@ function buildRoutingLogDigest(
   reason_code: string,
   profile: DeviceProfile | null
 ): string {
-  const payload: RoutingLogPayload = {
+  const decisionDigest = routingDecisionDigest({
+    pack_id,
+    reason_code,
+    profile_snapshot: profile as Record<string, unknown> | null,
+    policy_version: POLICY_VERSION,
+    schema_version: SCHEMA_VERSION,
+  });
+  const eventId = routingEventId({
     timestamp_ns: timestamp_ns.toString(),
     pack_id,
     reason_code,
-    profile_snapshot: profile,
-  };
-  const serialized = JSON.stringify(payload, Object.keys(payload).sort());
-  return sha256Hex(serialized);
+    profile_snapshot: profile as Record<string, unknown> | null,
+    policy_version: POLICY_VERSION,
+    schema_version: SCHEMA_VERSION,
+  });
+  // routing_log_digest = eventId (timestamp-bound, unique per invocation)
+  // decisionDigest is deterministic for audit dedup
+  void decisionDigest;
+  return eventId;
 }
 
 function isValidProfile(profile: unknown): profile is DeviceProfile {
