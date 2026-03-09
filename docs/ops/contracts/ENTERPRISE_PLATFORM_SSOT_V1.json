@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "ssot_id": "enterprise_platform_ssot_v1",
+  "description": "기업용 온디바이스 AI 플랫폼 SSOT 통합 레지스트리. P25-ENT-P0 전체 계약 파일 목록 및 상태 관리.",
+  "contracts": [
+    {
+      "contract_id": "enterprise_scope_v1",
+      "path": "docs/ops/contracts/ENTERPRISE_SCOPE_V1.json",
+      "ts_impl": "tools/enterprise/enterprise_scope_v1.ts",
+      "verifier": "scripts/verify/verify_enterprise_scope_v1.sh",
+      "dod_key": "ENTERPRISE_SCOPE_V1_OK",
+      "status": "active"
+    },
+    {
+      "contract_id": "device_class_registry_v1",
+      "path": "docs/ops/contracts/DEVICE_CLASS_REGISTRY_V1.json",
+      "ts_impl": "tools/enterprise/device_class_registry_v1.ts",
+      "verifier": "scripts/verify/verify_device_class_registry_v1.sh",
+      "dod_key": "DEVICE_CLASS_REGISTRY_V1_OK",
+      "status": "active"
+    },
+    {
+      "contract_id": "pack_assignment_policy_v1",
+      "path": "docs/ops/contracts/PACK_ASSIGNMENT_POLICY_V1.json",
+      "ts_impl": "tools/enterprise/pack_assignment_policy_v1.ts",
+      "verifier": "scripts/verify/verify_pack_assignment_policy_v1.sh",
+      "dod_key": "PACK_ASSIGNMENT_POLICY_V1_OK",
+      "status": "active"
+    },
+    {
+      "contract_id": "runtime_manifest_v1",
+      "path": "packs/*/runtime_manifest.json",
+      "ts_impl": null,
+      "verifier": "scripts/verify/verify_runtime_manifest_v1.sh",
+      "dod_key": "RUNTIME_MANIFEST_V1_OK",
+      "status": "pending_real_weights"
+    },
+    {
+      "contract_id": "exec_mode_result_v4",
+      "path": "tools/ai/exec_mode_result_v1.ts",
+      "ts_impl": "tools/ai/exec_mode_result_v1.ts",
+      "verifier": "scripts/verify/verify_exec_mode_quality_gates_v2.sh",
+      "dod_key": "EXEC_MODE_V4_OK",
+      "status": "active"
+    }
+  ],
+  "enforcement": "all_active_contracts_must_verify",
+  "note": "status=pending_real_weights 계약은 SKIPPED=1 허용. status=active 계약은 반드시 OK=1."
+}

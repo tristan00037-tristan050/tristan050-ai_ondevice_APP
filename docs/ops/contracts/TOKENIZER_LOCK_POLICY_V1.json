@@ -10,5 +10,6 @@
     "special_token_map_digest_sha256"
   ],
   "enforcement": "block_on_missing",
+  "chat_template_required_for_chat_models": true,
   "note": "weights digest 일치만으로는 품질 보장 불충분. 입력 형식 드리프트 방지를 위해 전체 토크나이저 체계 잠금 필수."
 }

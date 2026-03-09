@@ -3,7 +3,8 @@ set -euo pipefail
 
 # P23-P0A-06: TOKENIZER_TEMPLATE_LOCK_V1 verifier
 TOKENIZER_LOCK_V1_OK=0
-trap 'echo "TOKENIZER_LOCK_V1_OK=${TOKENIZER_LOCK_V1_OK}"' EXIT
+CHAT_TEMPLATE_LOCK_V1_OK=0
+trap 'echo "TOKENIZER_LOCK_V1_OK=${TOKENIZER_LOCK_V1_OK}"; echo "CHAT_TEMPLATE_LOCK_V1_OK=${CHAT_TEMPLATE_LOCK_V1_OK}"' EXIT
 
 ENFORCE="${TOKENIZER_LOCK_ENFORCE:-0}"
 
@@ -28,6 +29,7 @@ with open(policy_path, 'r', encoding='utf-8') as f:
     policy = json.load(f)
 
 REQUIRED_DIGEST_FIELDS = policy.get("required_digests", [])
+CHAT_TEMPLATE_REQUIRED_FOR_CHAT = policy.get("chat_template_required_for_chat_models", False)
 PACK_MANIFESTS = glob.glob("packs/*/manifest.json")
 PLACEHOLDER = "REQUIRED"
 
@@ -60,6 +62,20 @@ for manifest_path in sorted(PACK_MANIFESTS):
         elif layer[field] == PLACEHOLDER:
             has_placeholder = True
 
+    # chat_template check: chat_template_required=true 인 pack에서
+    # chat_template_digest_sha256 누락 시 ENFORCE=1 → BLOCK
+    if CHAT_TEMPLATE_REQUIRED_FOR_CHAT and layer.get("chat_template_required") is True:
+        ct_digest = layer.get("chat_template_digest_sha256")
+        if not ct_digest:
+            if enforce == "1":
+                print(f"ERROR_CODE=CHAT_TEMPLATE_DIGEST_MISSING_ENFORCE=1")
+                print(f"PACK={pack_id}")
+                failed = 1
+            else:
+                has_placeholder = True
+        elif ct_digest == PLACEHOLDER:
+            has_placeholder = True
+
 if failed:
     sys.exit(1)
 
@@ -77,10 +93,13 @@ set -e
 
 if [ $py_rc -eq 2 ]; then
   echo "TOKENIZER_LOCK_V1_SKIPPED=1"
+  echo "CHAT_TEMPLATE_LOCK_V1_SKIPPED=1"
+  CHAT_TEMPLATE_LOCK_V1_OK=1
   exit 0
 elif [ $py_rc -ne 0 ]; then
   exit 1
 fi
 
 TOKENIZER_LOCK_V1_OK=1
+CHAT_TEMPLATE_LOCK_V1_OK=1
 exit 0

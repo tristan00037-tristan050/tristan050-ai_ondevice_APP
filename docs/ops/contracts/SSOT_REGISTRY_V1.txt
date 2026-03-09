@@ -157,3 +157,12 @@ SSOT=docs/ops/contracts/CYCLONEDX_ML_BOM_V1.json CONSUMER=scripts/verify/verify_
 SSOT=docs/ops/contracts/EXPERIMENTAL_H2O_KV_V1.json CONSUMER=scripts/verify/verify_experimental_h2o_kv_v1.sh
 SSOT=docs/ops/contracts/EXPERIMENTAL_NATIVE_LOWBIT_V1.json CONSUMER=scripts/verify/verify_experimental_native_lowbit_v1.sh
 SSOT=docs/ops/contracts/EXPERIMENTAL_HW_SW_CODESIGN_V1.json CONSUMER=scripts/verify/verify_experimental_hw_sw_pareto_v1.sh
+SSOT=packs/micro_default/runtime_manifest.json CONSUMER=scripts/verify/verify_runtime_manifest_v1.sh
+SSOT=packs/small_default/runtime_manifest.json CONSUMER=scripts/verify/verify_runtime_manifest_v1.sh
+SSOT=docs/ops/contracts/ENTERPRISE_SCOPE_V1.json CONSUMER=scripts/verify/verify_enterprise_scope_v1.sh
+SSOT=tools/enterprise/enterprise_scope_v1.ts CONSUMER=scripts/verify/verify_enterprise_scope_v1.sh
+SSOT=docs/ops/contracts/DEVICE_CLASS_REGISTRY_V1.json CONSUMER=scripts/verify/verify_device_class_registry_v1.sh
+SSOT=tools/enterprise/device_class_registry_v1.ts CONSUMER=scripts/verify/verify_device_class_registry_v1.sh
+SSOT=docs/ops/contracts/PACK_ASSIGNMENT_POLICY_V1.json CONSUMER=scripts/verify/verify_pack_assignment_policy_v1.sh
+SSOT=tools/enterprise/pack_assignment_policy_v1.ts CONSUMER=scripts/verify/verify_pack_assignment_policy_v1.sh
+SSOT=docs/ops/contracts/ENTERPRISE_PLATFORM_SSOT_V1.json CONSUMER=scripts/verify/verify_enterprise_platform_ssot_v1.sh

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "scope_id": "enterprise_scope_v1",
+  "description": "기업용 온디바이스 AI 플랫폼 조직 범위 정의",
+  "scope_hierarchy": {
+    "org_scope": "org:{id}",
+    "department_scope": "department:{id}",
+    "team_scope": "team:{id}",
+    "user_scope": "user:{id}"
+  },
+  "policy_override_order": [
+    "org_default",
+    "department_override",
+    "team_override",
+    "user_override"
+  ],
+  "note": "하위 scope가 상위 scope를 override. user가 가장 좁은 범위."
+}

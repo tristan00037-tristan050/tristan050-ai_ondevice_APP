@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# P22-AI-06 / P23-P0B-04: EXEC_MODE_AI_QUALITY_GATES_V2 verifier (ExecModeResultV3)
+# P22-AI-06 / P23-P0B-04 / P23-P2B-04: EXEC_MODE_AI_QUALITY_GATES_V2 verifier (ExecModeResultV3 + V4)
 EXEC_MODE_QUALITY_GATES_V2_OK=0
-trap 'echo "EXEC_MODE_QUALITY_GATES_V2_OK=${EXEC_MODE_QUALITY_GATES_V2_OK}"' EXIT
+EXEC_MODE_V4_OK=0
+trap 'echo "EXEC_MODE_QUALITY_GATES_V2_OK=${EXEC_MODE_QUALITY_GATES_V2_OK}"; echo "EXEC_MODE_V4_OK=${EXEC_MODE_V4_OK}"' EXIT
 
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
@@ -79,4 +80,34 @@ grep -q 'typedDigest' "$RESULT_TS" || {
 [[ "$failed" -eq 0 ]] || exit 1
 
 EXEC_MODE_QUALITY_GATES_V2_OK=1
+
+# V4 checks (P23-P2B-04)
+V4_SYMBOLS=(
+  "ExecModeResultV4"
+  "assertExecModeResultV4"
+  "KvCacheMode"
+  "KvPolicy"
+  "buildPackIdentityDigestV2"
+  "EXEC_V4_MISSING_FIELD"
+  "EXEC_V4_MISSING_PRINCIPAL_ID"
+  "EXEC_V4_MISSING_ORG_ID"
+  "EXEC_V4_KV_ACTIVE_WITHOUT_POLICY_PARAMS_DIGEST"
+  "logical_pack_digest"
+  "compiled_pack_digest"
+  "tokenizer_template_digest"
+  "principal_id"
+  "org_id"
+  "rollout_ring"
+)
+for sym in "${V4_SYMBOLS[@]}"; do
+  if ! grep -q "$sym" "$RESULT_TS"; then
+    echo "ERROR_CODE=EXEC_MODE_V4_SYMBOL_MISSING"
+    echo "MISSING_SYMBOL=$sym"
+    failed=1
+  fi
+done
+
+[[ "$failed" -eq 0 ]] || exit 1
+
+EXEC_MODE_V4_OK=1
 exit 0

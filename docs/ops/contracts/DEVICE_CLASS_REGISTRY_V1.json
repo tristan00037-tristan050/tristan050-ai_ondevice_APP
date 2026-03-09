@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "registry_id": "device_class_registry_v1",
+  "description": "온디바이스 AI 플랫폼 디바이스 클래스 분류 레지스트리",
+  "device_classes": [
+    {
+      "device_class_id": "tier1_flagship",
+      "display_name": "Tier 1 — Flagship",
+      "min_ram_gb": 12,
+      "min_npu_tops": 30,
+      "allowed_pack_ids": ["small_default"],
+      "power_class": "high",
+      "note": "최신 플래그십 디바이스. 고성능 추론 허용."
+    },
+    {
+      "device_class_id": "tier2_midrange",
+      "display_name": "Tier 2 — Mid-range",
+      "min_ram_gb": 6,
+      "min_npu_tops": 10,
+      "allowed_pack_ids": ["small_default", "micro_default"],
+      "power_class": "medium",
+      "note": "중급형 디바이스. 라우팅 정책에 따라 pack 선택."
+    },
+    {
+      "device_class_id": "tier3_entry",
+      "display_name": "Tier 3 — Entry",
+      "min_ram_gb": 4,
+      "min_npu_tops": 0,
+      "allowed_pack_ids": ["micro_default"],
+      "power_class": "low",
+      "note": "보급형 디바이스. micro_default 전용."
+    }
+  ],
+  "status": "active"
+}
