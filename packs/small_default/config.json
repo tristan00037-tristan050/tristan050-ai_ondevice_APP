@@ -1,11 +1,19 @@
 {
+  "schema_version": 1,
   "pack_id": "small_default",
   "model_type": "transformer",
   "vocab_size": 32000,
   "hidden_size": 2048,
   "num_layers": 24,
   "num_heads": 16,
-  "max_seq_len": 1024,
+  "max_seq_len": 8192,
   "quant": "int4",
+  "runtime_id": "ondevice_runtime_v1",
+  "max_context_tokens": 8192,
+  "max_new_tokens": 512,
+  "temperature_default": 0.7,
+  "top_p_default": 0.9,
+  "eos_token_id": null,
+  "pad_token_id": null,
   "status": "pending_real_weights"
 }

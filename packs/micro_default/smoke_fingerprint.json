@@ -1,6 +1,9 @@
 {
   "fingerprint_version": "smoke_v1",
-  "pack": "micro_default",
+  "pack_id": "micro_default",
+  "input_digest": "COMPUTED_AT_PACK_BUILD_TIME",
+  "output_digest": "COMPUTED_AT_PACK_BUILD_TIME",
+  "is_deterministic": null,
   "status": "pending_real_weights",
-  "is_deterministic": null
+  "note": "real weights 투입 후 scripts/ops/gen_smoke_fingerprint_v1.sh 실행으로 채워짐"
 }

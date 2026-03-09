@@ -1,6 +1,6 @@
 'use strict';
 
-// P22-AI-04: ROUTING_BY_BUDGET_WITH_HYSTERESIS_V2
+// P22-AI-04 / P23-P0B-03: ROUTING_BY_BUDGET_WITH_HYSTERESIS_V2 + ROUTING_DIGEST_SPLIT_V1
 
 import { routingDecisionDigest, routingEventId } from '../crypto/digest_v1';
 
@@ -20,43 +20,20 @@ export interface RoutingPolicy {
 export interface RoutingResult {
   pack_id: string;
   reason_code: string;
-  routing_log_digest: string;
+  downgrade_path: string[];
+  /** Deterministic: same decision always yields same digest (no timestamp) */
+  routing_decision_digest: string;
+  /** Unique per invocation: includes timestamp_ns */
+  routing_event_id: string;
 }
 
-const POLICY_VERSION = 'v1';
+const POLICY_VERSION = 'v2';
 const SCHEMA_VERSION = 1;
 
 const PACK_IDS = ['micro_default', 'small_default'] as const;
 type PackId = (typeof PACK_IDS)[number];
 
 const FALLBACK_PACK: PackId = 'micro_default';
-
-function buildRoutingLogDigest(
-  timestamp_ns: bigint,
-  pack_id: string,
-  reason_code: string,
-  profile: DeviceProfile | null
-): string {
-  const decisionDigest = routingDecisionDigest({
-    pack_id,
-    reason_code,
-    profile_snapshot: profile as Record<string, unknown> | null,
-    policy_version: POLICY_VERSION,
-    schema_version: SCHEMA_VERSION,
-  });
-  const eventId = routingEventId({
-    timestamp_ns: timestamp_ns.toString(),
-    pack_id,
-    reason_code,
-    profile_snapshot: profile as Record<string, unknown> | null,
-    policy_version: POLICY_VERSION,
-    schema_version: SCHEMA_VERSION,
-  });
-  // routing_log_digest = eventId (timestamp-bound, unique per invocation)
-  // decisionDigest is deterministic for audit dedup
-  void decisionDigest;
-  return eventId;
-}
 
 function isValidProfile(profile: unknown): profile is DeviceProfile {
   if (!profile || typeof profile !== 'object') return false;
@@ -95,26 +72,39 @@ export function selectModelPackV2(
   if (!isValidProfile(profile)) {
     const pack_id = FALLBACK_PACK;
     const reason_code = 'PROFILE_INVALID_FAILCLOSED';
+    const decisionMaterial = {
+      pack_id,
+      reason_code,
+      profile_snapshot: null as Record<string, unknown> | null,
+      policy_version: POLICY_VERSION,
+      schema_version: SCHEMA_VERSION,
+    };
     return {
       pack_id,
       reason_code,
-      routing_log_digest: buildRoutingLogDigest(timestamp_ns, pack_id, reason_code, null),
+      downgrade_path: [],
+      routing_decision_digest: routingDecisionDigest(decisionMaterial),
+      routing_event_id: routingEventId({ timestamp_ns: timestamp_ns.toString(), ...decisionMaterial }),
     };
   }
 
   // Determine desired pack based on device constraints (downgrade priority: CPU → RAM → thermal)
   let desiredPack: PackId = 'small_default';
   let reason_code = 'BUDGET_OK';
+  const downgrade_path: string[] = [];
 
   if (profile.cpu_usage_pct >= policy.cpu_downgrade_threshold_pct) {
     desiredPack = FALLBACK_PACK;
     reason_code = 'CPU_PRESSURE';
+    downgrade_path.push('CPU');
   } else if (profile.available_ram_mb < policy.ram_downgrade_threshold_mb) {
     desiredPack = FALLBACK_PACK;
     reason_code = 'RAM_PRESSURE';
+    downgrade_path.push('RAM');
   } else if (profile.thermal_state === 'hot' || profile.thermal_state === 'critical') {
     desiredPack = FALLBACK_PACK;
     reason_code = 'THERMAL_PRESSURE';
+    downgrade_path.push('THERMAL');
   }
 
   // Hysteresis: if within cooldown window, keep current pack
@@ -123,22 +113,36 @@ export function selectModelPackV2(
     if (elapsed < policy.cooldown_ms) {
       const pack_id = lastPackId as PackId;
       const hysteresis_reason = `HYSTERESIS_COOLDOWN(${Math.round(elapsed)}ms<${policy.cooldown_ms}ms)`;
+      const decisionMaterial = {
+        pack_id,
+        reason_code: hysteresis_reason,
+        profile_snapshot: profile as Record<string, unknown>,
+        policy_version: POLICY_VERSION,
+        schema_version: SCHEMA_VERSION,
+      };
       return {
         pack_id,
         reason_code: hysteresis_reason,
-        routing_log_digest: buildRoutingLogDigest(
-          timestamp_ns,
-          pack_id,
-          hysteresis_reason,
-          profile
-        ),
+        downgrade_path,
+        routing_decision_digest: routingDecisionDigest(decisionMaterial),
+        routing_event_id: routingEventId({ timestamp_ns: timestamp_ns.toString(), ...decisionMaterial }),
       };
     }
   }
 
+  const decisionMaterial = {
+    pack_id: desiredPack,
+    reason_code,
+    profile_snapshot: profile as Record<string, unknown>,
+    policy_version: POLICY_VERSION,
+    schema_version: SCHEMA_VERSION,
+  };
+
   return {
     pack_id: desiredPack,
     reason_code,
-    routing_log_digest: buildRoutingLogDigest(timestamp_ns, desiredPack, reason_code, profile),
+    downgrade_path,
+    routing_decision_digest: routingDecisionDigest(decisionMaterial),
+    routing_event_id: routingEventId({ timestamp_ns: timestamp_ns.toString(), ...decisionMaterial }),
   };
 }

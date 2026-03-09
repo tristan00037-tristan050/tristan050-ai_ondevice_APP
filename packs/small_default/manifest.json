@@ -1,18 +1,32 @@
 {
-  "pack_id": "small_default",
-  "pack_version": "0.1.0-pending",
-  "tier": "small",
-  "quant": "int4",
-  "runtime_id": "ondevice_runtime_v1",
-  "weights_digest_sha256": "pending_real_weights",
-  "tokenizer_digest_sha256": "REQUIRED",
-  "normalizer_digest_sha256": "REQUIRED",
-  "pretokenizer_digest_sha256": "REQUIRED",
-  "postprocessor_digest_sha256": "REQUIRED",
-  "chat_template_digest_sha256": "REQUIRED",
-  "special_token_map_digest_sha256": "REQUIRED",
-  "config_digest_sha256": "pending_real_weights",
-  "min_ram_mb": 3000,
-  "latency_budget_ms_p95": 2000,
-  "status": "pending_real_weights"
+  "logical_model_pack": {
+    "pack_id": "small_default",
+    "status": "pending_real_weights",
+    "weights_digest_sha256": "REQUIRED",
+    "tokenizer_digest_sha256": "REQUIRED",
+    "normalizer_digest_sha256": "REQUIRED",
+    "pretokenizer_digest_sha256": "REQUIRED",
+    "postprocessor_digest_sha256": "REQUIRED",
+    "chat_template_digest_sha256": "REQUIRED",
+    "config_digest_sha256": "REQUIRED",
+    "special_token_map_digest_sha256": "REQUIRED"
+  },
+  "compiled_runtime_pack": {
+    "compiled_pack_id": "small_default_onnx_int4",
+    "backend_id": "onnxruntime",
+    "delegate_id": "cpu",
+    "precision_mode": "int4",
+    "compiled_artifact_digest_sha256": "REQUIRED",
+    "reduced_op_config_digest_sha256": "REQUIRED",
+    "compile_flags_digest_sha256": "REQUIRED",
+    "fallback_rate": null,
+    "delegate_partition_coverage_pct": null
+  },
+  "quality_contract": {
+    "quality_fingerprint_sha256": "REQUIRED",
+    "context_budget_tokens": 8192,
+    "ttft_ms_p95_budget": 2000,
+    "decode_tps_floor": 5.0,
+    "thermal_degradation_pct_10min_max": 20.0
+  }
 }
