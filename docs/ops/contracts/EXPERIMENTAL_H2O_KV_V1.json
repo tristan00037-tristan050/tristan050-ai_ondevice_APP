@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "experiment_id": "h2o_kv_experimental_v1",
+  "status": "experimental",
+  "production_enabled": false,
+  "shadow_only": true,
+  "recommended_heavy_hitter_ratio": 0.3,
+  "recommended_recent_window": 128,
+  "expected_memory_reduction_pct": "20-40",
+  "known_risks": [
+    "한국어/혼합언어 환경에서 attention 분포 편차 미검증",
+    "backend delegate별 KV cache 접근 방식 차이 미반영",
+    "real weights 없이 attention score 측정 불가"
+  ],
+  "activation_condition": "real_weights_verified AND shadow_eval_pass",
+  "note": "production 라우팅에 연결 금지. eval 통과 후 P25에서 본선 검토."
+}

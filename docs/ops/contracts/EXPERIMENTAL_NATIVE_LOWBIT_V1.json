@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "experiment_id": "native_lowbit_model_track_v1",
+  "status": "research",
+  "production_enabled": false,
+  "quantization_strategies": {
+    "w8a8_stable": {
+      "method": "SmoothQuant",
+      "status": "production_candidate",
+      "note": "P23 기준 안정 계층"
+    },
+    "int4_primary": {
+      "method": "AWQ",
+      "status": "production_primary",
+      "note": "현재 micro_default/small_default 주력"
+    },
+    "mixed_precision": {
+      "method": "critical_layer_exception",
+      "status": "experimental",
+      "note": "attention layer만 fp16 유지"
+    },
+    "native_ultra_low_bit": {
+      "method": "BitNet_b1.58_style",
+      "status": "research",
+      "note": "1.58bit — 아직 연구 트랙. production 금지."
+    }
+  },
+  "activation_condition": "research_eval_pass AND hardware_codesign_verified",
+  "note": "BitNet류는 연구 트랙. P0/P1은 AWQ/SmoothQuant 표준 유지."
+}
