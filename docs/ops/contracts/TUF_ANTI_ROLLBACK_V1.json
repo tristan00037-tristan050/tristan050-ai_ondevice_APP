@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "policy_id": "tuf_anti_rollback_v1",
+  "rollback_protection": true,
+  "freeze_attack_protection": true,
+  "metadata_expiry_hours_max": 168,
+  "root_rotation_required_on_compromise": true,
+  "consistent_snapshots": true,
+  "note": "TUF anti-rollback policy for on-device model pack supply chain"
+}

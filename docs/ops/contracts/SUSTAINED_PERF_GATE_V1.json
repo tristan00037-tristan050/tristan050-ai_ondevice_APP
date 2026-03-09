@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "gate_id": "sustained_perf_gate_v1",
+  "test_duration_minutes": 10,
+  "metrics": {
+    "latency_p95_degradation_pct_max": 20.0,
+    "decode_tps_degradation_pct_max": 25.0,
+    "thermal_headroom_floor_sustained": 0.2,
+    "rss_growth_pct_max": 15.0
+  },
+  "pass_condition": "all_metrics_within_budget",
+  "status": "pending_real_weights",
+  "note": "real weights 투입 후 scripts/ops/run_sustained_perf_test_v1.sh 실행으로 채워짐"
+}

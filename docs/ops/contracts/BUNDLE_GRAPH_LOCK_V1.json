@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "lock_id": "bundle_graph_lock_v1",
+  "generated_at_utc": "PLACEHOLDER",
+  "nodes": [
+    {
+      "node_id": "micro_default_manifest",
+      "artifact_path": "packs/micro_default/manifest.json",
+      "artifact_digest_sha256": "REQUIRED",
+      "depends_on": []
+    },
+    {
+      "node_id": "small_default_manifest",
+      "artifact_path": "packs/small_default/manifest.json",
+      "artifact_digest_sha256": "REQUIRED",
+      "depends_on": []
+    },
+    {
+      "node_id": "micro_default_config",
+      "artifact_path": "packs/micro_default/config.json",
+      "artifact_digest_sha256": "REQUIRED",
+      "depends_on": ["micro_default_manifest"]
+    },
+    {
+      "node_id": "small_default_config",
+      "artifact_path": "packs/small_default/config.json",
+      "artifact_digest_sha256": "REQUIRED",
+      "depends_on": ["small_default_manifest"]
+    },
+    {
+      "node_id": "algo_core_manifest",
+      "artifact_path": "dist/algo_core_manifest.json",
+      "artifact_digest_sha256": "REQUIRED",
+      "depends_on": ["micro_default_manifest", "small_default_manifest"]
+    },
+    {
+      "node_id": "onprem_bundle_manifest",
+      "artifact_path": "dist/onprem_bundle_manifest.json",
+      "artifact_digest_sha256": "REQUIRED",
+      "depends_on": ["algo_core_manifest"]
+    }
+  ],
+  "lock_digest_sha256": "PLACEHOLDER",
+  "status": "pending_real_weights",
+  "note": "gen_bundle_graph_lock_v1.sh 실행으로 실제 digest 채워짐"
+}
