@@ -26,5 +26,6 @@
   "log_policy": "digest_only",
   "status": "pending_real_weights",
   "trust_level": "untrusted-input",
-  "supply_chain_registered": true
+  "supply_chain_registered": true,
+  "chat_template_required": false
 }

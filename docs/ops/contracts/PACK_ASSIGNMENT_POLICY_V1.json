@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "policy_id": "pack_assignment_policy_v1",
+  "description": "기업용 모델 팩 배포 정책 계약. 조직 scope, rollout ring, 디바이스 클래스 기준 팩 할당.",
+  "enforcement": "block_on_missing_fields",
+  "required_fields": [
+    "policy_id",
+    "target_groups",
+    "target_device_classes",
+    "rollout_ring",
+    "minimum_app_version",
+    "offline_capable_required",
+    "policy_digest"
+  ],
+  "valid_rollout_rings": [
+    "ring0_canary",
+    "ring1_team",
+    "ring2_department",
+    "ring3_org"
+  ],
+  "note": "policy_digest는 policy 내용의 deterministic SHA-256 digest. pack 배포 전 반드시 검증."
+}

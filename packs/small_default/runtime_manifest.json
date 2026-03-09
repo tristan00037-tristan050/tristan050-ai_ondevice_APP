@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "logical_pack_id": "small_default",
+  "model_format": "onnx",
+  "model_type": "REQUIRED",
+  "quantization_mode": "weight_only_int4",
+  "context_length": 8192,
+  "bos_token_id": null,
+  "eos_token_id": null,
+  "pad_token_id": null,
+  "external_data_shards_allowed": true,
+  "graph_io_contract": {
+    "input_ids": "input_ids",
+    "attention_mask": "attention_mask",
+    "past_key_names": "past_key_values.%d.key",
+    "past_value_names": "past_key_values.%d.value",
+    "logits": "logits",
+    "present_key_names": "present.%d.key",
+    "present_value_names": "present.%d.value"
+  },
+  "search_defaults": {
+    "do_sample": false,
+    "num_beams": 1,
+    "top_k": 1,
+    "top_p": 1.0,
+    "temperature": 1.0
+  },
+  "artifacts": {
+    "weights_digest_sha256": "REQUIRED",
+    "tokenizer_digest_sha256": "REQUIRED",
+    "chat_template_digest_sha256": "REQUIRED",
+    "manifest_digest_sha256": "REQUIRED"
+  },
+  "status": "pending_real_weights"
+}

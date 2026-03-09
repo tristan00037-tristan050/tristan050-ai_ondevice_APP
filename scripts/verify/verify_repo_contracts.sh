@@ -450,6 +450,21 @@ EXPERIMENTAL_NATIVE_LOWBIT_V1_OK=0
 # P24-R-03
 EXPERIMENTAL_HW_SW_PARETO_V1_OK=0
 
+# P23-P2B-01
+RUNTIME_MANIFEST_V1_OK=0
+# P23-P2B-02
+CHAT_TEMPLATE_LOCK_V1_OK=0
+# P23-P2B-04
+EXEC_MODE_V4_OK=0
+# P25-ENT-P0-01
+ENTERPRISE_SCOPE_V1_OK=0
+# P25-ENT-P0-02
+DEVICE_CLASS_REGISTRY_V1_OK=0
+# P25-ENT-P0-03
+PACK_ASSIGNMENT_POLICY_V1_OK=0
+# P25-ENT-P0-04
+ENTERPRISE_PLATFORM_SSOT_V1_OK=0
+
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
 RUNTIME_EGRESS_ENV_PROOF_OK=0
@@ -785,6 +800,21 @@ cleanup(){
   echo "EXPERIMENTAL_NATIVE_LOWBIT_V1_OK=${EXPERIMENTAL_NATIVE_LOWBIT_V1_OK}"
   # P24-R-03
   echo "EXPERIMENTAL_HW_SW_PARETO_V1_OK=${EXPERIMENTAL_HW_SW_PARETO_V1_OK}"
+
+  # P23-P2B-01
+  echo "RUNTIME_MANIFEST_V1_OK=${RUNTIME_MANIFEST_V1_OK}"
+  # P23-P2B-02
+  echo "CHAT_TEMPLATE_LOCK_V1_OK=${CHAT_TEMPLATE_LOCK_V1_OK}"
+  # P23-P2B-04
+  echo "EXEC_MODE_V4_OK=${EXEC_MODE_V4_OK}"
+  # P25-ENT-P0-01
+  echo "ENTERPRISE_SCOPE_V1_OK=${ENTERPRISE_SCOPE_V1_OK}"
+  # P25-ENT-P0-02
+  echo "DEVICE_CLASS_REGISTRY_V1_OK=${DEVICE_CLASS_REGISTRY_V1_OK}"
+  # P25-ENT-P0-03
+  echo "PACK_ASSIGNMENT_POLICY_V1_OK=${PACK_ASSIGNMENT_POLICY_V1_OK}"
+  # P25-ENT-P0-04
+  echo "ENTERPRISE_PLATFORM_SSOT_V1_OK=${ENTERPRISE_PLATFORM_SSOT_V1_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -1378,6 +1408,34 @@ EXPERIMENTAL_NATIVE_LOWBIT_V1_OK=1
 echo "== guard: experimental hw sw pareto v1 (P24-R-03) =="
 run_guard "experimental hw sw pareto v1" bash scripts/verify/verify_experimental_hw_sw_pareto_v1.sh
 EXPERIMENTAL_HW_SW_PARETO_V1_OK=1
+
+echo "== guard: runtime manifest v1 (P23-P2B-01) =="
+run_guard "runtime manifest v1" bash scripts/verify/verify_runtime_manifest_v1.sh
+RUNTIME_MANIFEST_V1_OK=1
+
+echo "== guard: tokenizer lock v1 with chat template (P23-P2B-02) =="
+run_guard "tokenizer lock v1 chat template" bash scripts/verify/verify_tokenizer_lock_v1.sh
+CHAT_TEMPLATE_LOCK_V1_OK=1
+
+echo "== guard: exec mode quality gates v2 with V4 (P23-P2B-04) =="
+run_guard "exec mode quality gates v2 v4" bash scripts/verify/verify_exec_mode_quality_gates_v2.sh
+EXEC_MODE_V4_OK=1
+
+echo "== guard: enterprise scope v1 (P25-ENT-P0-01) =="
+run_guard "enterprise scope v1" bash scripts/verify/verify_enterprise_scope_v1.sh
+ENTERPRISE_SCOPE_V1_OK=1
+
+echo "== guard: device class registry v1 (P25-ENT-P0-02) =="
+run_guard "device class registry v1" bash scripts/verify/verify_device_class_registry_v1.sh
+DEVICE_CLASS_REGISTRY_V1_OK=1
+
+echo "== guard: pack assignment policy v1 (P25-ENT-P0-03) =="
+run_guard "pack assignment policy v1" bash scripts/verify/verify_pack_assignment_policy_v1.sh
+PACK_ASSIGNMENT_POLICY_V1_OK=1
+
+echo "== guard: enterprise platform ssot v1 (P25-ENT-P0-04) =="
+run_guard "enterprise platform ssot v1" bash scripts/verify/verify_enterprise_platform_ssot_v1.sh
+ENTERPRISE_PLATFORM_SSOT_V1_OK=1
 
 echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh

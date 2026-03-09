@@ -8,6 +8,8 @@
     "pretokenizer_digest_sha256": "REQUIRED",
     "postprocessor_digest_sha256": "REQUIRED",
     "chat_template_digest_sha256": "REQUIRED",
+    "chat_template_required": true,
+    "chat_template_path": "chat_template.jinja",
     "config_digest_sha256": "REQUIRED",
     "special_token_map_digest_sha256": "REQUIRED"
   },

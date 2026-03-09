@@ -153,7 +153,18 @@ export function selectModelPackV2(
 // P23-P1-02: ROUTING_BY_HARD_CONSTRAINT_AND_UTILITY_V4
 // ---------------------------------------------------------------------------
 
+export interface PackAssignmentPolicy {
+  policy_id: string;
+  target_groups: string[];
+  target_device_classes: string[];
+  rollout_ring: 'ring0_canary' | 'ring1_team' | 'ring2_department' | 'ring3_org';
+  minimum_app_version: string;
+  offline_capable_required: boolean;
+  policy_digest: string;
+}
+
 export interface PackCandidate {
+  // 기존
   pack_id: string;
   compiled_pack_id: string;
   status: 'verified' | 'pending_real_weights';
@@ -166,11 +177,33 @@ export interface PackCandidate {
   thermal_risk_ucb: number;
   energy_ucb_per_128tok: number;
   failure_ucb: number;
+
+  // 신규 (알고리즘팀 요청)
+  logical_pack_id: string;
+  tokenizer_template_digest: string;
+  pack_identity_digest: string;
+  backend_id: string;
+  delegate_id?: string;
+  delegate_partition_coverage_pct: number;
+  offline_capable: boolean;
+
+  // 기업용 신규
+  device_class_id: string;
+  assignment_policy?: PackAssignmentPolicy;
 }
 
 export interface RouteContext {
+  // 기존
   required_context_tokens: number;
   thermal: ThermalEnergyProfile;
+
+  // 신규 (알고리즘팀 요청)
+  expected_new_tokens: number;
+
+  // 기업용 신규
+  principal_scope: 'user' | 'team' | 'department' | 'org';
+  policy_digest: string;
+  rollout_ring: 'ring0_canary' | 'ring1_team' | 'ring2_department' | 'ring3_org';
 }
 
 /**
@@ -195,7 +228,8 @@ export function chooseBestPack(
   const eligible = candidates.filter(c =>
     c.status === 'verified' &&
     c.fallback_rate === 0 &&
-    c.context_budget_tokens >= ctx.required_context_tokens &&
+    c.delegate_partition_coverage_pct === 100 &&
+    c.context_budget_tokens >= ctx.required_context_tokens + ctx.expected_new_tokens &&
     !(ctx.thermal.low_power_mode && c.power_class === 'high') &&
     !(ctx.thermal.battery_bucket === 'critical' && c.power_class !== 'low') &&
     !(ctx.thermal.thermal_state === 'critical')
