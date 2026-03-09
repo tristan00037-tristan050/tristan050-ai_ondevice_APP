@@ -2,3 +2,4 @@
 # Comments allowed with leading '#'.
 product-verify-repo-guards.yml
 product-verify-supplychain.yml
+workflow-yaml-parse.yml

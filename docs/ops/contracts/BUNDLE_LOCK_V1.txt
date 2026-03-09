@@ -1,3 +1,4 @@
 BUNDLE_LOCK_V1_TOKEN=1
 OUTPUT_PATH=docs/ops/reports/bundle_lock_v1_latest.json
-REQUIRED_FIELDS=bundle_id,bundle_lock_version,locked_at,artifacts,digest_algo
+REQUIRED_FIELDS=bundle_id,bundle_lock_version,generated_at_utc,git_sha,lock_digest_sha256,manifest_digest_sha256,proof_digest_sha256,provenance_digest_sha256,sbom_digest_sha256,tuf_root_digest_sha256
+OPTIONAL_FIELDS=model_pack_digest_sha256,retrieval_pack_digest_sha256

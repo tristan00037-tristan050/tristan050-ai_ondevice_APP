@@ -390,6 +390,12 @@ BUNDLE_LOCK_V1_POLICY_OK=0
 BUNDLE_LOCK_V1_REPORT_PRESENT_OK=0
 BUNDLE_LOCK_V1_SCHEMA_OK=0
 
+# P22-P2-03 merge group coverage (guard already wired above; DoD key tracked here)
+# P22-P2-04
+CHECKOUT_FETCH_DEPTH_ALLOWLIST_V1_OK=0
+# P22-P2-06
+VERIFIER_AUTHORING_POLICY_V1_OK=0
+
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
 RUNTIME_EGRESS_ENV_PROOF_OK=0
@@ -677,6 +683,9 @@ cleanup(){
   echo "BUNDLE_LOCK_V1_POLICY_OK=${BUNDLE_LOCK_V1_POLICY_OK}"
   echo "BUNDLE_LOCK_V1_REPORT_PRESENT_OK=${BUNDLE_LOCK_V1_REPORT_PRESENT_OK}"
   echo "BUNDLE_LOCK_V1_SCHEMA_OK=${BUNDLE_LOCK_V1_SCHEMA_OK}"
+
+  echo "CHECKOUT_FETCH_DEPTH_ALLOWLIST_V1_OK=${CHECKOUT_FETCH_DEPTH_ALLOWLIST_V1_OK}"
+  echo "VERIFIER_AUTHORING_POLICY_V1_OK=${VERIFIER_AUTHORING_POLICY_V1_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -1168,6 +1177,14 @@ run_guard "bundle lock v1" bash scripts/verify/verify_bundle_lock_v1.sh
 BUNDLE_LOCK_V1_POLICY_OK=1
 BUNDLE_LOCK_V1_REPORT_PRESENT_OK=1
 BUNDLE_LOCK_V1_SCHEMA_OK=1
+
+echo "== guard: checkout fetch depth allowlist v1 (P22-P2-04) =="
+run_guard "checkout fetch depth allowlist v1" bash scripts/verify/verify_checkout_fetch_depth_allowlist_v1.sh
+CHECKOUT_FETCH_DEPTH_ALLOWLIST_V1_OK=1
+
+echo "== guard: verifier authoring policy v1 (P22-P2-06) =="
+run_guard "verifier authoring policy v1" bash scripts/verify/verify_verifier_authoring_policy_v1.sh
+VERIFIER_AUTHORING_POLICY_V1_OK=1
 
 echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh

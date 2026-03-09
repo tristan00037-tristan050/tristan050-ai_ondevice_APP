@@ -1,0 +1,60 @@
+# P22-P2-02: Validate all workflow YAML files parse cleanly (independent of the main repo contracts guard)
+name: workflow-yaml-parse
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-yaml-parse:
+    name: workflow-yaml-parse
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Preflight
+        uses: ./.github/actions/preflight_v1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Parse all workflow YAML files
+        run: |
+          set -euo pipefail
+          failed=0
+          count=0
+          for f in .github/workflows/*.yml .github/workflows/*.yaml; do
+            [ -f "$f" ] || continue
+            count=$((count + 1))
+            node -e "
+              const fs = require('fs');
+              const path = '$f';
+              try {
+                const content = fs.readFileSync(path, 'utf8');
+                // Basic structure check: must contain 'on:' and 'jobs:'
+                if (!content.includes('on:') && !content.includes('\"on\":')) {
+                  process.stdout.write('ERROR: no on: trigger in ' + path + '\n');
+                  process.exit(1);
+                }
+                if (!content.includes('jobs:')) {
+                  process.stdout.write('ERROR: no jobs: in ' + path + '\n');
+                  process.exit(1);
+                }
+              } catch (e) {
+                process.stdout.write('ERROR: ' + e.message + ' in ' + path + '\n');
+                process.exit(1);
+              }
+            " || { echo "FAIL: $f"; failed=$((failed + 1)); }
+          done
+          echo "Parsed $count workflow files"
+          [ "$count" -gt 0 ] || { echo "ERROR: no workflow files found"; exit 1; }
+          [ "$failed" -eq 0 ] || { echo "ERROR: $failed file(s) failed parse"; exit 1; }
+          echo "OK: all workflow YAML files parsed successfully"

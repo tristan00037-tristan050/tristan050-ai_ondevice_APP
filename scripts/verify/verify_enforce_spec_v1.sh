@@ -15,6 +15,7 @@ test -f "$LIB" || { echo "ERROR_CODE=LIB_MISSING"; echo "HIT_PATH=$LIB"; exit 1;
 targets=(
   "scripts/verify/verify_model_pack_sbom_cyclonedx_v1.sh"
   "scripts/verify/verify_secure_update_tuf_principles_v1.sh"
+  "scripts/verify/verify_bundle_lock_v1.sh"
 )
 
 for f in "${targets[@]}"; do
