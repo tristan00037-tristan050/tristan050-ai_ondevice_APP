@@ -138,3 +138,6 @@ SSOT=docs/ops/contracts/SSOT_REGISTRY_STUB_BUDGET_V1.txt CONSUMER=scripts/verify
 SSOT=docs/ops/contracts/BUNDLE_LOCK_V1.txt CONSUMER=scripts/verify/verify_bundle_lock_v1.sh
 SSOT=docs/ops/contracts/MODEL_PACK_CATALOG_V1.json CONSUMER=scripts/verify/verify_model_pack_catalog_v1.sh
 SSOT=docs/ops/contracts/MODEL_PACK_CATALOG_GUIDE.md CONSUMER=scripts/verify/verify_model_pack_catalog_v1.sh
+SSOT=docs/ops/contracts/MODEL_PROVENANCE_V1.json CONSUMER=scripts/verify/verify_model_provenance_v1.sh
+SSOT=docs/ops/contracts/RUNTIME_VARIANCE_BUDGET_V1.json CONSUMER=scripts/verify/verify_runtime_variance_budget_v1.sh
+SSOT=docs/ops/contracts/UPDATE_APPROVAL_GATE_V1.json CONSUMER=scripts/verify/verify_update_approval_gate_v1.sh

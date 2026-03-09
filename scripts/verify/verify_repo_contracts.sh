@@ -405,6 +405,17 @@ MODEL_PACK_MANIFEST_V1_OK=0
 RETRIEVAL_PACK_V1_OK=0
 # P22-AI-06
 EXEC_MODE_QUALITY_GATES_V2_OK=0
+# P22-AI-07
+MODEL_PROVENANCE_V1_SCHEMA_OK=0
+MODEL_PROVENANCE_V1_PACKS_OK=0
+# P22-AI-08
+MODEL_PACK_SBOM_V1_OK=0
+# P22-AI-09
+EVAL_FINGERPRINT_V1_OK=0
+# P22-AI-10
+RUNTIME_VARIANCE_BUDGET_V1_OK=0
+# P22-AI-11
+UPDATE_APPROVAL_GATE_V1_OK=0
 
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
@@ -702,6 +713,12 @@ cleanup(){
   echo "MODEL_PACK_MANIFEST_V1_OK=${MODEL_PACK_MANIFEST_V1_OK}"
   echo "RETRIEVAL_PACK_V1_OK=${RETRIEVAL_PACK_V1_OK}"
   echo "EXEC_MODE_QUALITY_GATES_V2_OK=${EXEC_MODE_QUALITY_GATES_V2_OK}"
+  echo "MODEL_PROVENANCE_V1_SCHEMA_OK=${MODEL_PROVENANCE_V1_SCHEMA_OK}"
+  echo "MODEL_PROVENANCE_V1_PACKS_OK=${MODEL_PROVENANCE_V1_PACKS_OK}"
+  echo "MODEL_PACK_SBOM_V1_OK=${MODEL_PACK_SBOM_V1_OK}"
+  echo "EVAL_FINGERPRINT_V1_OK=${EVAL_FINGERPRINT_V1_OK}"
+  echo "RUNTIME_VARIANCE_BUDGET_V1_OK=${RUNTIME_VARIANCE_BUDGET_V1_OK}"
+  echo "UPDATE_APPROVAL_GATE_V1_OK=${UPDATE_APPROVAL_GATE_V1_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -1218,6 +1235,27 @@ RETRIEVAL_PACK_V1_OK=1
 echo "== guard: exec mode quality gates v2 (P22-AI-06) =="
 run_guard "exec mode quality gates v2" bash scripts/verify/verify_exec_mode_quality_gates_v2.sh
 EXEC_MODE_QUALITY_GATES_V2_OK=1
+
+echo "== guard: model provenance v1 (P22-AI-07) =="
+run_guard "model provenance v1" bash scripts/verify/verify_model_provenance_v1.sh
+MODEL_PROVENANCE_V1_SCHEMA_OK=1
+MODEL_PROVENANCE_V1_PACKS_OK=1
+
+echo "== guard: model pack sbom v1 (P22-AI-08) =="
+run_guard "model pack sbom v1" bash scripts/verify/verify_model_pack_sbom_v1.sh
+MODEL_PACK_SBOM_V1_OK=1
+
+echo "== guard: eval fingerprint v1 (P22-AI-09) =="
+run_guard "eval fingerprint v1" bash scripts/verify/verify_eval_fingerprint_v1.sh
+EVAL_FINGERPRINT_V1_OK=1
+
+echo "== guard: runtime variance budget v1 (P22-AI-10) =="
+run_guard "runtime variance budget v1" bash scripts/verify/verify_runtime_variance_budget_v1.sh
+RUNTIME_VARIANCE_BUDGET_V1_OK=1
+
+echo "== guard: update approval gate v1 (P22-AI-11) =="
+run_guard "update approval gate v1" bash scripts/verify/verify_update_approval_gate_v1.sh
+UPDATE_APPROVAL_GATE_V1_OK=1
 
 echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh

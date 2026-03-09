@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "description": "in-toto style provenance schema for ondevice model packs",
+  "schema": {
+    "subject": [
+      {
+        "pack_id": "REQUIRED",
+        "digest": { "sha256": "REQUIRED" }
+      }
+    ],
+    "builder": { "id": "ondevice_build_pipeline_v1" },
+    "build_type": "ondevice_model_pack_v1",
+    "materials": [],
+    "metadata": {
+      "build_started_on": "REQUIRED",
+      "build_finished_on": "REQUIRED",
+      "completeness": {
+        "arguments": true,
+        "environment": false,
+        "materials": false
+      }
+    }
+  },
+  "required_packs": ["micro_default", "small_default"]
+}

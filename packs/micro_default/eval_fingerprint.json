@@ -1,5 +1,11 @@
 {
   "fingerprint_version": "eval_v1",
-  "pack": "micro_default",
-  "status": "pending_ai09"
+  "pack_id": "micro_default",
+  "eval_suite_id": "ondevice_eval_v1",
+  "input_corpus_digest": "COMPUTED_AT_EVAL_TIME",
+  "output_digest": "COMPUTED_AT_EVAL_TIME",
+  "eval_score": null,
+  "eval_passed": null,
+  "status": "pending_real_weights",
+  "note": "activated in P22-AI-09, real values populated when weights available"
 }

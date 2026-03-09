@@ -1,0 +1,35 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "micro_default-sbom",
+  "documentNamespace": "https://ondevice.internal/sbom/micro_default/0.1.0-pending",
+  "documentDescribes": ["SPDXRef-micro_default"],
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-micro_default",
+      "name": "micro_default",
+      "version": "0.1.0-pending",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "supplier": "Organization: ondevice_build_pipeline_v1",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:ondevice/micro_default@0.1.0-pending"
+        }
+      ],
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "pending_real_weights"
+        }
+      ],
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION",
+      "copyrightText": "NOASSERTION"
+    }
+  ],
+  "status": "pending_real_weights"
+}
