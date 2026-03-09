@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "budgets": [
+    {
+      "pack_id": "micro_default",
+      "latency_p95_max_ms": 1200,
+      "latency_variance_max_ms": 200,
+      "cpu_time_max_ms": 800,
+      "memory_rss_max_mb": 1500
+    },
+    {
+      "pack_id": "small_default",
+      "latency_p95_max_ms": 2000,
+      "latency_variance_max_ms": 400,
+      "cpu_time_max_ms": 1500,
+      "memory_rss_max_mb": 3000
+    }
+  ]
+}

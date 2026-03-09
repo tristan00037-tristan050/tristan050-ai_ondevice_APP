@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "subject": [
+    {
+      "pack_id": "micro_default",
+      "digest": { "sha256": "REQUIRED" }
+    }
+  ],
+  "builder": { "id": "ondevice_build_pipeline_v1" },
+  "build_type": "ondevice_model_pack_v1",
+  "materials": [],
+  "metadata": {
+    "build_started_on": "REQUIRED",
+    "build_finished_on": "REQUIRED",
+    "completeness": {
+      "arguments": true,
+      "environment": false,
+      "materials": false
+    }
+  },
+  "status": "pending_real_weights"
+}
