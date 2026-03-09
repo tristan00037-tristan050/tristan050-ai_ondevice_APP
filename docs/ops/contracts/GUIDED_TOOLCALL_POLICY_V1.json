@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "policy_id": "guided_toolcall_policy_v1",
+  "required_digests_per_action_pack": [
+    "tool_schema_digest_sha256",
+    "guided_generation_schema_digest_sha256",
+    "tool_policy_digest_sha256"
+  ],
+  "unconstrained_json_tool_call_allowed": false,
+  "note": "모든 action-capable pack은 schema-constrained local decode 필수. 자유 JSON 생성 툴콜 금지."
+}

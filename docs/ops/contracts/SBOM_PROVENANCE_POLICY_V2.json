@@ -1,0 +1,10 @@
+{
+  "schema_version": 2,
+  "spdx_version_required": "2.3",
+  "spdx_future_target": "3.0",
+  "slsa_spec_version_required": "1.2",
+  "in_toto_version_required": "v1",
+  "cyclonedx_ml_bom_required": false,
+  "cyclonedx_ml_bom_target": "P23-P2",
+  "note": "SPDX 3.0 + CycloneDX AI/ML-BOM은 P23-P2에서 본선화"
+}

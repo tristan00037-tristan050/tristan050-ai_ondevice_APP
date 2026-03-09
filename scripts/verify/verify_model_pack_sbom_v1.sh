@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# P22-AI-08: MODEL_PACK_SBOM_EXT_V1 verifier
+# P22-AI-08 / P23-P1-05: MODEL_PACK_SBOM_EXT_V1 verifier (SPDX-2.3 + documentDescribes)
 MODEL_PACK_SBOM_V1_OK=0
 trap 'echo "MODEL_PACK_SBOM_V1_OK=${MODEL_PACK_SBOM_V1_OK}"' EXIT
 
@@ -13,7 +13,7 @@ command -v "$PYTHON_BIN" >/dev/null 2>&1 || PYTHON_BIN="python"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || { echo "ERROR_CODE=PYTHON_UNAVAILABLE"; exit 1; }
 
 PACK_IDS="micro_default small_default"
-REQUIRED_FIELDS="spdxVersion dataLicense SPDXID name documentNamespace packages"
+REQUIRED_FIELDS="spdxVersion dataLicense SPDXID name documentNamespace documentDescribes packages"
 
 failed=0
 for pack_id in $PACK_IDS; do
@@ -50,6 +50,13 @@ if not spdx_ver.startswith("SPDX-2."):
     print(f"ACTUAL={spdx_ver}")
     sys.exit(1)
 
+# documentDescribes must be a non-empty list
+describes = doc.get("documentDescribes", [])
+if not isinstance(describes, list) or len(describes) == 0:
+    print(f"ERROR_CODE=PACK_SBOM_DOCUMENT_DESCRIBES_EMPTY")
+    print(f"PACK={pack_id}")
+    sys.exit(1)
+
 # packages must have at least 1 entry
 packages = doc.get("packages", [])
 if not isinstance(packages, list) or len(packages) == 0:
@@ -57,7 +64,7 @@ if not isinstance(packages, list) or len(packages) == 0:
     print(f"PACK={pack_id}")
     sys.exit(1)
 
-# First package must reference the pack itself
+# First package must have required SPDX fields
 pkg = packages[0]
 for pkg_field in ["SPDXID", "name", "downloadLocation", "licenseConcluded", "licenseDeclared", "copyrightText"]:
     if pkg_field not in pkg:

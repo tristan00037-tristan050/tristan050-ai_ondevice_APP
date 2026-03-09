@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "policy_id": "retrieval_evidence_pack_v2",
+  "required_fields": [
+    "chunker_digest_sha256",
+    "normalization_policy_digest_sha256",
+    "query_rewrite_policy_digest_sha256",
+    "embedding_model_digest_sha256",
+    "reranker_digest_sha256",
+    "source_dataset_digest_sha256",
+    "source_license_class",
+    "pii_policy_digest_sha256",
+    "evidence_schema_digest_sha256"
+  ],
+  "log_policy": "digest_only",
+  "trust_tier_default": "untrusted-input",
+  "note": "원문 로그 금지. digest-only 정책 필수."
+}

@@ -144,3 +144,7 @@ SSOT=docs/ops/contracts/UPDATE_APPROVAL_GATE_V1.json CONSUMER=scripts/verify/ver
 SSOT=docs/ops/contracts/TOKENIZER_LOCK_POLICY_V1.json CONSUMER=scripts/verify/verify_tokenizer_lock_v1.sh
 SSOT=packs/micro_default/smoke_fingerprint.json CONSUMER=scripts/verify/verify_smoke_fingerprint_v1.sh
 SSOT=packs/small_default/smoke_fingerprint.json CONSUMER=scripts/verify/verify_smoke_fingerprint_v1.sh
+SSOT=docs/ops/contracts/THERMAL_ENERGY_PROFILE_V1.json CONSUMER=scripts/verify/verify_thermal_energy_profile_v1.sh
+SSOT=docs/ops/contracts/GUIDED_TOOLCALL_POLICY_V1.json CONSUMER=scripts/verify/verify_guided_toolcall_policy_v1.sh
+SSOT=docs/ops/contracts/RETRIEVAL_EVIDENCE_PACK_V2_POLICY.json CONSUMER=scripts/verify/verify_retrieval_pack_v1.sh
+SSOT=docs/ops/contracts/SBOM_PROVENANCE_POLICY_V2.json CONSUMER=scripts/verify/verify_model_pack_sbom_v1.sh

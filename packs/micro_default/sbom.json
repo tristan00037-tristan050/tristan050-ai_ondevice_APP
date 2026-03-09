@@ -3,32 +3,19 @@
   "dataLicense": "CC0-1.0",
   "SPDXID": "SPDXRef-DOCUMENT",
   "name": "micro_default-sbom",
-  "documentNamespace": "https://ondevice.internal/sbom/micro_default/0.1.0-pending",
-  "documentDescribes": ["SPDXRef-micro_default"],
+  "documentNamespace": "https://ondevice-platform.local/sbom/micro_default/v1",
+  "documentDescribes": ["SPDXRef-micro_default_pack"],
   "packages": [
     {
-      "SPDXID": "SPDXRef-micro_default",
+      "SPDXID": "SPDXRef-micro_default_pack",
       "name": "micro_default",
-      "version": "0.1.0-pending",
+      "versionInfo": "pending_real_weights",
       "downloadLocation": "NOASSERTION",
       "filesAnalyzed": false,
-      "supplier": "Organization: ondevice_build_pipeline_v1",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:ondevice/micro_default@0.1.0-pending"
-        }
-      ],
-      "checksums": [
-        {
-          "algorithm": "SHA256",
-          "checksumValue": "pending_real_weights"
-        }
-      ],
       "licenseConcluded": "NOASSERTION",
       "licenseDeclared": "NOASSERTION",
-      "copyrightText": "NOASSERTION"
+      "copyrightText": "NOASSERTION",
+      "comment": "AI model pack — real version populated at weights bring-up"
     }
   ],
   "status": "pending_real_weights"
