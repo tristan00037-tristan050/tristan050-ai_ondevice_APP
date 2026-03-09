@@ -28,7 +28,7 @@ except Exception as e:
     print(f"DETAIL={e}")
     sys.exit(1)
 
-if gate.get("schema_version") != 1:
+if gate.get("schema_version") not in (1, 2):
     print("ERROR_CODE=UPDATE_APPROVAL_GATE_SCHEMA_VERSION_INVALID")
     sys.exit(1)
 

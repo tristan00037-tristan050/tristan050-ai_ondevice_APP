@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "policy_id": "tokenizer_lock_policy_v1",
+  "required_digests": [
+    "tokenizer_digest_sha256",
+    "normalizer_digest_sha256",
+    "pretokenizer_digest_sha256",
+    "postprocessor_digest_sha256",
+    "chat_template_digest_sha256",
+    "special_token_map_digest_sha256"
+  ],
+  "enforcement": "block_on_missing",
+  "note": "weights digest 일치만으로는 품질 보장 불충분. 입력 형식 드리프트 방지를 위해 전체 토크나이저 체계 잠금 필수."
+}

@@ -5,6 +5,12 @@
   "runtime_id": "ondevice_runtime_v1",
   "index_digest_sha256": "pending_real_index",
   "config_digest_sha256": "pending_real_config",
+  "tokenizer_digest_sha256": "REQUIRED",
+  "normalizer_digest_sha256": "REQUIRED",
+  "pretokenizer_digest_sha256": "REQUIRED",
+  "postprocessor_digest_sha256": "REQUIRED",
+  "chat_template_digest_sha256": "REQUIRED",
+  "special_token_map_digest_sha256": "REQUIRED",
   "status": "pending_real_weights",
   "trust_level": "untrusted-input",
   "supply_chain_registered": true
