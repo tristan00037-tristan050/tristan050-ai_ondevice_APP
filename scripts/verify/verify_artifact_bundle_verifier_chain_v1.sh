@@ -37,7 +37,8 @@ const { parseRunGuardLines } = require("./tools/verify-runtime/anchor_parser_v1.
 
 const anchorPath = process.argv[1];
 const expected = process.argv.slice(2);
-const actual = parseRunGuardLines(anchorPath);
+const rows = parseRunGuardLines(anchorPath);
+const actual = rows.map(function(x) { return x.script_path; });
 
 for (const e of expected) {
   if (!actual.includes(e)) {

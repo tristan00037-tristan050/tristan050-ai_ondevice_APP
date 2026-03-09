@@ -381,6 +381,15 @@ VERIFY_EXIT_CODES_V1_OK=0
 # P22-P1-13 (Artifact Chain Proof V2)
 ARTIFACT_CHAIN_PROOF_V2_OK=0
 
+# P22-P1-13A (Artifact Chain Proof Generator Wiring)
+ARTIFACT_CHAIN_PROOF_GENERATOR_V1_OK=0
+ARTIFACT_CHAIN_PROOF_ENFORCE_WIRING_OK=0
+
+# P22-P1-13B bundle lock v1
+BUNDLE_LOCK_V1_POLICY_OK=0
+BUNDLE_LOCK_V1_REPORT_PRESENT_OK=0
+BUNDLE_LOCK_V1_SCHEMA_OK=0
+
 # RUNTIME-EGRESS-ENV
 RUNTIME_EGRESS_ENV_TEMPLATE_OK=0
 RUNTIME_EGRESS_ENV_PROOF_OK=0
@@ -663,6 +672,11 @@ cleanup(){
   echo "VERIFY_EXIT_CODES_V1_OK=${VERIFY_EXIT_CODES_V1_OK}"
 
   echo "ARTIFACT_CHAIN_PROOF_V2_OK=${ARTIFACT_CHAIN_PROOF_V2_OK}"
+  echo "ARTIFACT_CHAIN_PROOF_GENERATOR_V1_OK=${ARTIFACT_CHAIN_PROOF_GENERATOR_V1_OK}"
+  echo "ARTIFACT_CHAIN_PROOF_ENFORCE_WIRING_OK=${ARTIFACT_CHAIN_PROOF_ENFORCE_WIRING_OK}"
+  echo "BUNDLE_LOCK_V1_POLICY_OK=${BUNDLE_LOCK_V1_POLICY_OK}"
+  echo "BUNDLE_LOCK_V1_REPORT_PRESENT_OK=${BUNDLE_LOCK_V1_REPORT_PRESENT_OK}"
+  echo "BUNDLE_LOCK_V1_SCHEMA_OK=${BUNDLE_LOCK_V1_SCHEMA_OK}"
 
   echo "RUNTIME_EGRESS_ENV_TEMPLATE_OK=${RUNTIME_EGRESS_ENV_TEMPLATE_OK}"
   echo "RUNTIME_EGRESS_ENV_PROOF_OK=${RUNTIME_EGRESS_ENV_PROOF_OK}"
@@ -1143,6 +1157,17 @@ VERIFY_EXIT_CODES_V1_OK=1
 echo "== guard: artifact chain proof v2 (P22-P1-13) =="
 run_guard "artifact chain proof v2" bash scripts/verify/verify_artifact_chain_proof_v2.sh
 ARTIFACT_CHAIN_PROOF_V2_OK=1
+
+echo "== guard: artifact chain proof generator wiring v1 (P22-P1-13A) =="
+run_guard "artifact chain proof generator wiring v1" bash scripts/verify/verify_proof_generator_wiring_v1.sh
+ARTIFACT_CHAIN_PROOF_GENERATOR_V1_OK=1
+ARTIFACT_CHAIN_PROOF_ENFORCE_WIRING_OK=1
+
+echo "== guard: bundle lock v1 (P22-P1-13B) =="
+run_guard "bundle lock v1" bash scripts/verify/verify_bundle_lock_v1.sh
+BUNDLE_LOCK_V1_POLICY_OK=1
+BUNDLE_LOCK_V1_REPORT_PRESENT_OK=1
+BUNDLE_LOCK_V1_SCHEMA_OK=1
 
 echo "== guard: repo contracts cleanup echo guard v1 =="
 run_guard "repo contracts cleanup echo guard v1" bash scripts/verify/verify_repo_contracts_cleanup_echo_guard_v1.sh
