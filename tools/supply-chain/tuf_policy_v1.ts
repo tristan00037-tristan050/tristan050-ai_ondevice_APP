@@ -64,7 +64,7 @@ export function verifyTufMetadata(
     }
   }
 
-  // Freeze check: metadata must not be expired
+  // Freeze check: metadata must not be expired AND must not exceed policy max-expiry window
   let freeze_ok = true;
   if (policy.freeze_attack_protection) {
     const expiresAt = new Date(incoming.expires_at_utc).getTime();
@@ -78,6 +78,18 @@ export function verifyTufMetadata(
         freeze_ok,
         policy_digest_sha256: policyDigest,
         error: `FREEZE_ATTACK_DETECTED: metadata expired at ${incoming.expires_at_utc}`,
+      };
+    }
+    const maxExpiryMs = policy.metadata_expiry_hours_max * 60 * 60 * 1000;
+    if (expiresAt - now > maxExpiryMs) {
+      freeze_ok = false;
+      return {
+        role: incoming.role,
+        version: incoming.version,
+        rollback_ok,
+        freeze_ok,
+        policy_digest_sha256: policyDigest,
+        error: `TUF_METADATA_EXPIRY_EXCEEDS_POLICY_MAX: expires_at=${incoming.expires_at_utc} max_hours=${policy.metadata_expiry_hours_max}`,
       };
     }
   }

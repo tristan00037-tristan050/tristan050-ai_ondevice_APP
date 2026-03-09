@@ -67,6 +67,8 @@ required_symbols = [
     "TufVerifyResult",
     "ROLLBACK_DETECTED",
     "FREEZE_ATTACK_DETECTED",
+    "TUF_METADATA_EXPIRY_EXCEEDS_POLICY_MAX",
+    "metadata_expiry_hours_max",
 ]
 for sym in required_symbols:
     if sym not in ts_src:

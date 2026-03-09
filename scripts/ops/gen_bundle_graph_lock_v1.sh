@@ -16,14 +16,17 @@ command -v "$PYTHON_BIN" >/dev/null 2>&1 || PYTHON_BIN="python"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || { echo "ERROR_CODE=PYTHON_UNAVAILABLE"; exit 1; }
 
 "$PYTHON_BIN" - "$LOCK_FILE" <<'PYEOF'
-import json, sys, os, hashlib, datetime
+import json, sys, os, hashlib, datetime, subprocess
 
 lock_path = sys.argv[1]
 
 with open(lock_path, encoding='utf-8') as f:
     lock = json.load(f)
 
-root = os.path.dirname(os.path.dirname(os.path.dirname(lock_path)))
+root = subprocess.check_output(
+    ['git', 'rev-parse', '--show-toplevel'],
+    text=True
+).strip()
 
 errors = []
 for node in lock.get("nodes", []):

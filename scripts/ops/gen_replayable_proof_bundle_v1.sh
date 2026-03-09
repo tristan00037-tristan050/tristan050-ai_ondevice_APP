@@ -41,17 +41,37 @@ if errors:
         print(f"ERROR_CODE={e}")
     sys.exit(1)
 
-# Build Merkle tree (simple linear hash-based; mirrors merkle_v1.ts logic)
-def typed_digest_simple(domain_tag, schema_version, payload_str):
-    canonical = json.dumps({"domain_tag": domain_tag, "schema_version": schema_version, "payload": json.loads(payload_str)}, sort_keys=True, ensure_ascii=False)
+# Build Merkle tree — mirrors merkle_v1.ts typedDigest() with JCS canonicalization
+def jcs_canonicalize(obj):
+    """RFC 8785 JCS compatible canonical JSON — matches TS canonicalStringify()"""
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        return json.dumps(obj, ensure_ascii=False, separators=(',', ':'))
+    if isinstance(obj, list):
+        return '[' + ','.join(jcs_canonicalize(v) for v in obj) + ']'
+    # dict: sort keys
+    parts = []
+    for k in sorted(obj.keys()):
+        parts.append(
+            json.dumps(k, ensure_ascii=False, separators=(',', ':'))
+            + ':'
+            + jcs_canonicalize(obj[k])
+        )
+    return '{' + ','.join(parts) + '}'
+
+def typed_digest(domain_tag, schema_version, payload):
+    envelope = {
+        'domain_tag': domain_tag,
+        'schema_version': schema_version,
+        'payload': payload,
+    }
+    canonical = jcs_canonicalize(envelope)
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
 def hash_leaf(leaf):
-    return typed_digest_simple("merkle-leaf", "v1", json.dumps(leaf, sort_keys=True))
+    return typed_digest("merkle-leaf", "v1", leaf)
 
 def hash_node(left, right):
-    payload = json.dumps({"left_digest": left, "right_digest": right}, sort_keys=True)
-    return typed_digest_simple("merkle-node", "v1", payload)
+    return typed_digest("merkle-node", "v1", {"left_digest": left, "right_digest": right})
 
 current_level = [hash_leaf(l) for l in leaves]
 while len(current_level) > 1:
