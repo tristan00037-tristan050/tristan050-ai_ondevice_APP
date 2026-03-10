@@ -1,6 +1,6 @@
 'use strict';
 
-// P22-AI-06 / P23-P0B-04 / P23-P2B-04 / P25-ENT-H2: EXEC_MODE_AI_QUALITY_GATES_V2 + EXEC_FINGERPRINT_IDENTITY_SPLIT_V1 + EXEC_MODE_RESULT_V4 + EXEC_MODE_V4_STRICT
+// P22-AI-06 / P23-P0B-04 / P23-P2B-04 / P25-ENT-H2 / AI-P3-05: EXEC_MODE_AI_QUALITY_GATES_V2 + EXEC_FINGERPRINT_IDENTITY_SPLIT_V1 + EXEC_MODE_RESULT_V4 + EXEC_MODE_V4_STRICT + EXEC_FINGERPRINT_CANONICAL_V1
 
 import { typedDigest } from '../crypto/digest_v1';
 
@@ -265,4 +265,143 @@ export function assertExecModeResultV4Strict(
   if (obj['kv_cache_mode'] === 'active' && !obj['kv_policy_params_digest']) {
     throw new Error('EXEC_V4_KV_ACTIVE_WITHOUT_POLICY_PARAMS_DIGEST');
   }
+}
+
+// ---------------------------------------------------------------------------
+// AI-P3-05: EXEC_FINGERPRINT_CANONICAL_V1
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical material for computing exec_fingerprint_sha256.
+ *
+ * MUST NOT include: timestamp, temp path, routing_event_id, shadow H2O results.
+ * Deterministic: same execution identity always yields the same digest.
+ */
+export interface ExecFingerprintMaterialV1 {
+  logical_pack_digest: string;
+  compiled_pack_digest: string;
+  tokenizer_template_digest: string;
+  input_digest_sha256: string;
+  output_digest_sha256: string;
+  generation_settings_digest_sha256: string;
+  runtime_version: string;
+  device_class_id: string;
+}
+
+/**
+ * ExecModeResultV5: adds canonical fingerprint material + ns/us observation units.
+ * Extends V4 with: ExecFingerprintMaterialV1 coverage, ttft_us, decode_tps_x100,
+ * peak_rss_mb, and all bigint fields stored as string for JSON serialization.
+ */
+export interface ExecModeResultV5 {
+  // pack identity
+  logical_pack_digest: string;
+  compiled_pack_digest: string;
+  tokenizer_template_digest: string;
+  pack_identity_digest: string;
+
+  // routing
+  routing_decision_digest: string;
+  /** Must differ from routing_decision_digest */
+  routing_event_id: string;
+
+  // 실행 동일성
+  exec_fingerprint_sha256: string;
+  chain_proof_digest: string;
+  approved_pack_digest: string;
+  policy_digest: string;
+
+  // 조직
+  principal_id: string;
+  org_id: string;
+  department_id?: string;
+  rollout_ring: string;
+
+  // KV
+  kv_cache_mode: KvCacheMode;
+  kv_policy_params_digest?: string;
+  tool_schema_digest?: string;
+
+  // 관측값 (ns/us 단위 고정; bigint → string for JSON)
+  observation: {
+    cpu_time_us: string;
+    latency_ns: string;
+    ttft_us?: string;
+    decode_tps_x100?: number;
+    peak_rss_mb: number;
+    quality_proxy_score: number;
+  };
+
+  device_class_id: string;
+  reason_code: string;
+}
+
+/**
+ * Strict validator for ExecModeResultV5.
+ * Enforces: SHA-256 hex on all digest fields, routing_event_id ≠ routing_decision_digest,
+ * rollout_ring canonical values, kv_cache_mode=active requires kv_policy_params_digest,
+ * observation cpu_time_us and latency_ns must be strings.
+ */
+export function assertExecModeResultV5Strict(r: unknown): asserts r is ExecModeResultV5 {
+  if (!r || typeof r !== 'object') {
+    throw new TypeError('ExecModeResultV5 must be a non-null object');
+  }
+  const obj = r as Record<string, unknown>;
+
+  // 1. 필수 digest 필드 64자 lowercase hex 검증
+  for (const f of [
+    'logical_pack_digest',
+    'compiled_pack_digest',
+    'tokenizer_template_digest',
+    'pack_identity_digest',
+    'routing_decision_digest',
+    'exec_fingerprint_sha256',
+    'chain_proof_digest',
+    'approved_pack_digest',
+    'policy_digest',
+  ]) {
+    if (typeof obj[f] !== 'string' || !/^[0-9a-f]{64}$/.test(obj[f] as string)) {
+      throw new Error(`EXEC_V5_INVALID_SHA256:${f}`);
+    }
+  }
+
+  // 2. routing_event_id ≠ routing_decision_digest
+  if (obj['routing_event_id'] === obj['routing_decision_digest']) {
+    throw new Error('EXEC_V5_ROUTING_EVENT_ID_MUST_DIFFER_FROM_DECISION_DIGEST');
+  }
+
+  // 3. rollout_ring 유효값
+  const ring = String(obj['rollout_ring']);
+  if (!['ring0_canary', 'ring1_team', 'ring2_department', 'ring3_org'].includes(ring)) {
+    throw new Error(`EXEC_V5_INVALID_ROLLOUT_RING:${ring}`);
+  }
+
+  // 4. kv_cache_mode=active 시 kv_policy_params_digest 필수
+  if (obj['kv_cache_mode'] === 'active' && !obj['kv_policy_params_digest']) {
+    throw new Error('EXEC_V5_KV_ACTIVE_WITHOUT_POLICY_PARAMS_DIGEST');
+  }
+
+  // 5. observation 단위 검증 (ns/us must be string)
+  const obs = obj['observation'] as Record<string, unknown>;
+  if (!obs || typeof obs !== 'object') {
+    throw new Error('EXEC_V5_OBSERVATION_MISSING');
+  }
+  if (typeof obs['cpu_time_us'] !== 'string') {
+    throw new Error('EXEC_V5_CPU_TIME_MUST_BE_STRING');
+  }
+  if (typeof obs['latency_ns'] !== 'string') {
+    throw new Error('EXEC_V5_LATENCY_MUST_BE_STRING');
+  }
+}
+
+/**
+ * Build exec_fingerprint_sha256 from canonical material.
+ *
+ * Uses typedDigest (canonical JSON via tools/crypto/digest_v1.ts).
+ * MUST NOT include timestamp, routing_event_id, or shadow H2O results.
+ */
+export function buildExecFingerprintV1(
+  material: ExecFingerprintMaterialV1
+): string {
+  return typedDigest('exec-fingerprint', 'v1', material);
 }
