@@ -460,6 +460,8 @@ EXEC_MODE_V4_OK=0
 EXEC_MODE_V4_STRICT_OK=0
 # P25-ENT-P0-01
 ENTERPRISE_SCOPE_V1_OK=0
+# AI-P3-04
+POLICY_CONFLICT_ENGINE_V1_OK=0
 # P25-ENT-P0-02
 DEVICE_CLASS_REGISTRY_V1_OK=0
 # P25-ENT-H1
@@ -815,6 +817,8 @@ cleanup(){
   echo "EXEC_MODE_V4_STRICT_OK=${EXEC_MODE_V4_STRICT_OK}"
   # P25-ENT-P0-01
   echo "ENTERPRISE_SCOPE_V1_OK=${ENTERPRISE_SCOPE_V1_OK}"
+  # AI-P3-04
+  echo "POLICY_CONFLICT_ENGINE_V1_OK=${POLICY_CONFLICT_ENGINE_V1_OK}"
   # P25-ENT-P0-02
   echo "DEVICE_CLASS_REGISTRY_V1_OK=${DEVICE_CLASS_REGISTRY_V1_OK}"
   # P25-ENT-H1
@@ -1436,6 +1440,10 @@ EXEC_MODE_V4_STRICT_OK=1
 echo "== guard: enterprise scope v1 (P25-ENT-P0-01) =="
 run_guard "enterprise scope v1" bash scripts/verify/verify_enterprise_scope_v1.sh
 ENTERPRISE_SCOPE_V1_OK=1
+
+echo "== guard: policy conflict engine v1 (AI-P3-04) =="
+run_guard "policy conflict engine v1" bash scripts/verify/verify_policy_conflict_engine_v1.sh
+POLICY_CONFLICT_ENGINE_V1_OK=1
 
 echo "== guard: device class registry v1 (P25-ENT-P0-02 / P25-ENT-H1) =="
 run_guard "device class registry v1" bash scripts/verify/verify_device_class_registry_v1.sh
