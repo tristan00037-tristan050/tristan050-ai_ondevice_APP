@@ -1,6 +1,6 @@
 'use strict';
 
-// P25-ENT-P0-03: PACK_ASSIGNMENT_POLICY_V1
+// P25-ENT-P0-03 / AI-P3-03: PACK_ASSIGNMENT_POLICY_V1 + ENTERPRISE_ROUTER_ENFORCEMENT_V1
 
 export type RolloutRing = 'ring0_canary' | 'ring1_team' | 'ring2_department' | 'ring3_org';
 
@@ -48,8 +48,15 @@ export function assertPackAssignmentPolicyV1(p: unknown): asserts p is PackAssig
   if (!Array.isArray(obj['target_device_classes'])) {
     throw new Error('PACK_ASSIGNMENT_POLICY_TARGET_DEVICE_CLASSES_NOT_ARRAY');
   }
+  if ((obj['target_device_classes'] as unknown[]).length === 0) {
+    throw new Error('PACK_ASSIGNMENT_POLICY_TARGET_DEVICE_CLASSES_EMPTY');
+  }
   if (typeof obj['offline_capable_required'] !== 'boolean') {
     throw new Error('PACK_ASSIGNMENT_POLICY_OFFLINE_CAPABLE_REQUIRED_NOT_BOOLEAN');
+  }
+  // Block placeholder policy_digest — must be resolved at build time
+  if (obj['policy_digest'] === 'COMPUTED_AT_BUILD_TIME') {
+    throw new Error('PACK_ASSIGNMENT_POLICY_DIGEST_UNRESOLVED:COMPUTED_AT_BUILD_TIME');
   }
 }
 

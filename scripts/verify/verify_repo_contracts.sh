@@ -468,6 +468,10 @@ DEVICE_CLASS_REGISTRY_V1_OK=0
 DEVICE_CLASS_POWER_CLASS_CANONICAL_OK=0
 # P25-ENT-P0-03
 PACK_ASSIGNMENT_POLICY_V1_OK=0
+# AI-P3-03
+ENTERPRISE_PACK_ELIGIBILITY_V1_OK=0
+ROUTER_POLICY_DIGEST_MATCH_OK=0
+ROUTER_ROLLOUT_RING_ENFORCED_OK=0
 # P25-ENT-P0-04
 ENTERPRISE_PLATFORM_SSOT_V1_OK=0
 
@@ -825,6 +829,10 @@ cleanup(){
   echo "DEVICE_CLASS_POWER_CLASS_CANONICAL_OK=${DEVICE_CLASS_POWER_CLASS_CANONICAL_OK}"
   # P25-ENT-P0-03
   echo "PACK_ASSIGNMENT_POLICY_V1_OK=${PACK_ASSIGNMENT_POLICY_V1_OK}"
+  # AI-P3-03
+  echo "ENTERPRISE_PACK_ELIGIBILITY_V1_OK=${ENTERPRISE_PACK_ELIGIBILITY_V1_OK}"
+  echo "ROUTER_POLICY_DIGEST_MATCH_OK=${ROUTER_POLICY_DIGEST_MATCH_OK}"
+  echo "ROUTER_ROLLOUT_RING_ENFORCED_OK=${ROUTER_ROLLOUT_RING_ENFORCED_OK}"
   # P25-ENT-P0-04
   echo "ENTERPRISE_PLATFORM_SSOT_V1_OK=${ENTERPRISE_PLATFORM_SSOT_V1_OK}"
 
@@ -1453,6 +1461,12 @@ DEVICE_CLASS_POWER_CLASS_CANONICAL_OK=1
 echo "== guard: pack assignment policy v1 (P25-ENT-P0-03) =="
 run_guard "pack assignment policy v1" bash scripts/verify/verify_pack_assignment_policy_v1.sh
 PACK_ASSIGNMENT_POLICY_V1_OK=1
+
+echo "== guard: enterprise router enforcement v1 (AI-P3-03) =="
+run_guard "enterprise router enforcement v1" bash scripts/verify/verify_enterprise_router_enforcement_v1.sh
+ENTERPRISE_PACK_ELIGIBILITY_V1_OK=1
+ROUTER_POLICY_DIGEST_MATCH_OK=1
+ROUTER_ROLLOUT_RING_ENFORCED_OK=1
 
 echo "== guard: enterprise platform ssot v1 (P25-ENT-P0-04) =="
 run_guard "enterprise platform ssot v1" bash scripts/verify/verify_enterprise_platform_ssot_v1.sh

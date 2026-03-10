@@ -1,6 +1,7 @@
 'use strict';
 
-// P22-AI-04 / P23-P0B-03 / P23-P1-02: ROUTING_BY_BUDGET_WITH_HYSTERESIS_V2 + ROUTING_DIGEST_SPLIT_V1 + ROUTING_BY_HARD_CONSTRAINT_AND_UTILITY_V4
+// P22-AI-04 / P23-P0B-03 / P23-P1-02 / AI-P3-03: ROUTING_BY_BUDGET_WITH_HYSTERESIS_V2 + ROUTING_DIGEST_SPLIT_V1 + ROUTING_BY_HARD_CONSTRAINT_AND_UTILITY_V4 + ENTERPRISE_ROUTER_ENFORCEMENT_V1
+
 
 import { routingDecisionDigest, routingEventId } from '../crypto/digest_v1';
 import type { ThermalEnergyProfile, PowerClass } from '../device-profile/thermal_profile_v1';
@@ -206,26 +207,123 @@ export interface RouteContext {
   rollout_ring: 'ring0_canary' | 'ring1_team' | 'ring2_department' | 'ring3_org';
 }
 
+// ---------------------------------------------------------------------------
+// AI-P3-03: ENTERPRISE_ROUTER_ENFORCEMENT_V1
+// ---------------------------------------------------------------------------
+
 /**
- * Choose the best pack candidate using hard constraints + utility scoring.
+ * Enterprise-extended route context.
+ * Adds principal/org identity and device class to the base RouteContext.
+ */
+export interface EnterpriseRouteContext extends RouteContext {
+  principal_id: string;
+  group_id?: string;
+  org_id: string;
+  device_class_id: string;
+}
+
+/**
+ * Result of a 2-stage enterprise routing decision.
+ */
+export interface RouterDecisionV2 {
+  chosen: PackCandidate;
+  reason_code: string;
+  enterprise_policy_digest: string;
+  rollout_ring: string;
+  device_class_id: string;
+  org_id: string;
+}
+
+/**
+ * Stage 1: Enterprise eligibility hard gate.
  *
- * Hard constraints (applied in order):
- * 1. status must be 'verified'
- * 2. fallback_rate must be 0
- * 3. context_budget_tokens >= required_context_tokens
- * 4. high-power pack blocked in low_power_mode
- * 5. non-low-power pack blocked when battery is critical
- * 6. all packs blocked when thermal_state is 'critical'
+ * Blocks a candidate if any of these enterprise constraints are violated:
+ * - assignment_policy.policy_digest must match ctx.policy_digest
+ * - assignment_policy.rollout_ring must match ctx.rollout_ring
+ * - device_class_id must match ctx.device_class_id
+ * - offline_capable required when assignment_policy.offline_capable_required=true
+ * - target_groups must cover principal group (if target_groups is non-empty)
+ */
+function isPackEnterpriseEligible(
+  c: PackCandidate,
+  ctx: EnterpriseRouteContext
+): boolean {
+  const p = c.assignment_policy;
+  if (!p) return false;  // fail-closed: no policy → never eligible
+
+  if (p.policy_digest !== ctx.policy_digest) {
+    return false;
+  }
+  if (p.rollout_ring !== ctx.rollout_ring) {
+    return false;
+  }
+  if (c.device_class_id !== ctx.device_class_id) {
+    return false;
+  }
+  // assignment_policy.target_device_classes 정책 범위 검증
+  if (
+    p.target_device_classes &&
+    p.target_device_classes.length > 0 &&
+    !p.target_device_classes.includes(ctx.device_class_id)
+  ) {
+    return false;
+  }
+  if (p.offline_capable_required && !c.offline_capable) {
+    return false;
+  }
+  if (p.target_groups.length > 0) {
+    if (!ctx.group_id || !p.target_groups.includes(ctx.group_id)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Stage 2: Utility scoring (conservative bound).
+ * q_lcb minus weighted UCB penalties.
+ */
+function computeUtility(c: PackCandidate): number {
+  return (
+    c.q_lcb
+    - 0.30 * c.latency_ucb_ms
+    - 0.15 * c.rss_ucb_mb
+    - 0.25 * c.thermal_risk_ucb
+    - 0.15 * c.energy_ucb_per_128tok
+    - 0.15 * c.failure_ucb
+  );
+}
+
+/**
+ * Choose the best pack candidate using 2-stage enterprise enforcement.
  *
- * Utility score (conservative bound): q_lcb - weighted penalties
+ * Stage 1 — Enterprise hard gate (isPackEnterpriseEligible):
+ *   - policy_digest match
+ *   - rollout_ring match
+ *   - device_class_id match
+ *   - offline_capable when required
+ *   - target_groups scope coverage
  *
- * @throws Error('NO_ELIGIBLE_PACK') if no candidate passes hard constraints
+ * Stage 1 — Device hard gate (applied after enterprise gate):
+ *   1. status must be 'verified'
+ *   2. fallback_rate must be 0
+ *   3. delegate_partition_coverage_pct must be 100
+ *   4. context_budget_tokens >= required_context_tokens + expected_new_tokens
+ *   5. high-power pack blocked in low_power_mode
+ *   6. non-low-power pack blocked when battery is critical
+ *   7. all packs blocked when thermal_state is 'critical'
+ *
+ * Stage 2 — Utility score (computeUtility): q_lcb - weighted UCB penalties.
+ *
+ * @throws Error('NO_ELIGIBLE_PACK') if no candidate passes all hard gates
  */
 export function chooseBestPack(
   candidates: PackCandidate[],
-  ctx: RouteContext
+  ctx: EnterpriseRouteContext
 ): PackCandidate {
+  // Stage 1: enterprise gate + device gate combined
   const eligible = candidates.filter(c =>
+    isPackEnterpriseEligible(c, ctx) &&
     c.status === 'verified' &&
     c.fallback_rate === 0 &&
     c.delegate_partition_coverage_pct === 100 &&
@@ -239,13 +337,6 @@ export function chooseBestPack(
     throw new Error('NO_ELIGIBLE_PACK');
   }
 
-  const score = (c: PackCandidate): number =>
-    c.q_lcb
-    - 0.30 * c.latency_ucb_ms
-    - 0.15 * c.rss_ucb_mb
-    - 0.25 * c.thermal_risk_ucb
-    - 0.15 * c.energy_ucb_per_128tok
-    - 0.15 * c.failure_ucb;
-
-  return [...eligible].sort((a, b) => score(b) - score(a))[0];
+  // Stage 2: utility scoring
+  return [...eligible].sort((a, b) => computeUtility(b) - computeUtility(a))[0];
 }
