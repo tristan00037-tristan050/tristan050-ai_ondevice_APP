@@ -1,6 +1,6 @@
 'use strict';
 
-// P25-ENT-P0-01: ENTERPRISE_SCOPE_V1
+// P25-ENT-P0-01 / AI-P3-04: ENTERPRISE_SCOPE_V1 + POLICY_CONFLICT_ENGINE_V1
 
 export type ScopeLevel = 'org' | 'department' | 'team' | 'user';
 
@@ -87,4 +87,122 @@ export function assertEnterpriseScopeV1(doc: unknown): asserts doc is Enterprise
   const obj = doc as Record<string, unknown>;
   assertScopeHierarchy(obj['scope_hierarchy']);
   assertPolicyOverrideOrder(obj['policy_override_order']);
+}
+
+// ---------------------------------------------------------------------------
+// AI-P3-04: POLICY_CONFLICT_ENGINE_V1 — 권한 escalation 차단 엔진
+// ---------------------------------------------------------------------------
+
+export interface ScopedPolicy {
+  scope_level: ScopeLevel;
+  scope_key: string;
+  allowed_tools: string[];
+  denied_tools: string[];
+  allowed_pack_ids: string[];
+  data_tier: 'public' | 'internal' | 'restricted';
+  rollout_ring?: string;
+  policy_digest: string;
+  overrides?: Partial<Record<string, unknown>>;
+}
+
+export interface PolicyConflict {
+  type:
+    | 'PRIVILEGE_ESCALATION'
+    | 'TOOL_PERMISSION_CONFLICT'
+    | 'PACK_ASSIGNMENT_CONFLICT'
+    | 'DATA_TIER_CONFLICT'
+    | 'ROLLOUT_RING_CONFLICT';
+  field: string;
+  wide_scope: ScopeLevel;
+  narrow_scope: ScopeLevel;
+  detail: string;
+}
+
+/**
+ * Resolve the effective policy by applying narrower scopes over wider scopes.
+ * Blocks privilege escalation: narrower scope cannot grant more than wider scope.
+ *
+ * Scope order (wide → narrow): org → department → team → user
+ *
+ * Escalation checks:
+ * - Tool: narrower scope cannot add tools not in wider scope → POLICY_PRIVILEGE_ESCALATION
+ * - Pack: narrower scope cannot add pack_ids not in wider scope → POLICY_PACK_ESCALATION
+ * - Data tier: narrower scope cannot raise data_tier rank → POLICY_DATA_TIER_ESCALATION
+ *
+ * @throws Error on any privilege escalation attempt.
+ */
+export function resolveEffectivePolicy(
+  policies: ScopedPolicy[]
+): ScopedPolicy {
+  const order: ScopeLevel[] = ['org', 'department', 'team', 'user'];
+  const sorted = [...policies].sort(
+    (a, b) => order.indexOf(a.scope_level) - order.indexOf(b.scope_level)
+  );
+
+  let effective: ScopedPolicy | null = null;
+
+  for (const p of sorted) {
+    if (!effective) {
+      effective = {
+        ...p,
+        allowed_tools: p.allowed_tools.filter(t => !p.denied_tools.includes(t)),
+      };
+      continue;
+    }
+
+    // Tool 권한 escalation 차단
+    const escalatedTools = p.allowed_tools.filter(
+      t => !effective!.allowed_tools.includes(t)
+    );
+    if (escalatedTools.length > 0) {
+      throw new Error(
+        `POLICY_PRIVILEGE_ESCALATION:${p.scope_level}:${escalatedTools.join(',')}`
+      );
+    }
+
+    // Pack 권한 escalation 차단
+    const escalatedPacks = p.allowed_pack_ids.filter(
+      x => !effective!.allowed_pack_ids.includes(x)
+    );
+    if (escalatedPacks.length > 0) {
+      throw new Error(
+        `POLICY_PACK_ESCALATION:${p.scope_level}:${escalatedPacks.join(',')}`
+      );
+    }
+
+    // Data tier escalation 차단
+    const dataTierRank: Record<string, number> = {
+      public: 0, internal: 1, restricted: 2,
+    };
+    if (dataTierRank[p.data_tier] > dataTierRank[effective.data_tier]) {
+      throw new Error(
+        `POLICY_DATA_TIER_ESCALATION:${p.scope_level}:${p.data_tier}`
+      );
+    }
+
+    effective = {
+      ...effective,
+      ...p,
+      allowed_tools: effective.allowed_tools
+        .filter(t => p.allowed_tools.includes(t))   // 하위 allowlist 교집합
+        .filter(t => !p.denied_tools.includes(t)),  // denied_tools 제거
+      allowed_pack_ids: effective.allowed_pack_ids.filter(
+        x => p.allowed_pack_ids.includes(x)
+      ),
+    };
+  }
+
+  if (!effective) throw new Error('ENTERPRISE_POLICY_NOT_FOUND');
+  return effective;
+}
+
+/**
+ * Assert that no policy conflicts exist across the given policy set.
+ * Delegates to resolveEffectivePolicy — throws on any escalation.
+ */
+export function assertNoPolicyConflicts(
+  policies: ScopedPolicy[]
+): void {
+  // resolveEffectivePolicy 가 throw 하면 conflict 존재
+  resolveEffectivePolicy(policies);
 }
