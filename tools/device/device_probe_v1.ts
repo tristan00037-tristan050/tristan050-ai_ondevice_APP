@@ -83,17 +83,7 @@ export function classifyDeviceV1(
   probe: DeviceProbeResultV1,
   registryVersion: string
 ): DeviceClassDecisionV1 {
-  // thermal_state=critical 시 THERMAL_LIMITED 마킹
-  // device_class_id는 변경하지 않음 (플랫폼팀 원칙)
-  if (probe.thermal_state === 'critical') {
-    return {
-      registry_version: registryVersion,
-      probe_digest: probe.probe_digest,
-      device_class_id: 'laptop_cpu',  // 기본값 유지
-      classification_reason_code: 'THERMAL_LIMITED',
-    };
-  }
-
+  // 1단계: probe 실측값으로 device_class_id 정상 분류 (항상 실행)
   let device_class_id: string;
   let classification_reason_code: DeviceClassDecisionV1['classification_reason_code'];
 
@@ -112,6 +102,12 @@ export function classifyDeviceV1(
   } else {
     device_class_id = 'laptop_cpu';
     classification_reason_code = 'MID_RAM_CPU';
+  }
+
+  // 2단계: thermal_state=critical이면 reason_code만 THERMAL_LIMITED로 덮어씀
+  // device_class_id는 절대 변경하지 않음 (플랫폼팀 원칙)
+  if (probe.thermal_state === 'critical') {
+    classification_reason_code = 'THERMAL_LIMITED';
   }
 
   return {
