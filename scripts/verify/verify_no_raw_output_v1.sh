@@ -35,29 +35,35 @@ if [ -z "$EXISTING_DIRS" ]; then
 fi
 
 # 1. logger/console에 prompt/output 원문 직접 출력 금지
+#    패턴 A: 템플릿 리터럴 ${...} 포함
+#    패턴 B: 변수명 직접 전달 (prompt, raw_output, raw_input, output)
 # shellcheck disable=SC2086
 HITS_LOGS="$(grep -rn \
   --include="*.ts" --include="*.js" --include="*.sh" \
-  -E "(logger|console)\.(info|warn|error|debug)\s*\(.*\\\$\{.*(prompt|raw_output|raw_input)\b" \
+  -E "(logger|console)\.(info|warn|error|debug)\s*\(\s*(\`[^\`]*\\\$\{[^}]*(prompt|raw_output|raw_input|output)[^}]*\}|[a-zA-Z_]*(prompt|raw_output|raw_input|output)[a-zA-Z_]*)\s*[,)]" \
   $EXISTING_DIRS 2>/dev/null | grep -v "\.test\." | grep -v "_digest" || true)"
 
 if [ -n "$HITS_LOGS" ]; then
+  VIOLATION_FILES=$(echo "$HITS_LOGS" | cut -d':' -f1 | sort -u)
   echo "FAILED_GUARD=RAW_IN_LOGS_DETECTED"
-  echo "$HITS_LOGS"
+  echo "VIOLATION_FILES=$VIOLATION_FILES"
   exit 1
 fi
 NO_RAW_IN_LOGS_OK=1
 
 # 2. throw new Error에 prompt/output 원문 직접 포함 금지
+#    패턴 A: 템플릿 리터럴 ${...} 포함
+#    패턴 B: 변수명 직접 전달 (raw_input, output 등)
 # shellcheck disable=SC2086
 HITS_EXC="$(grep -rn \
   --include="*.ts" --include="*.js" \
-  -E "throw new Error\s*\(.*\\\$\{.*(prompt|raw_output|raw_input)\b" \
+  -E "throw new (Error|TypeError|RangeError)\s*\(\s*(\`[^\`]*\\\$\{[^}]*(prompt|raw_output|raw_input|output)[^}]*\}|[a-zA-Z_]*(prompt|raw_output|raw_input|output)[a-zA-Z_]*)\s*[,)]" \
   $EXISTING_DIRS 2>/dev/null | grep -v "\.test\." || true)"
 
 if [ -n "$HITS_EXC" ]; then
+  VIOLATION_FILES=$(echo "$HITS_EXC" | cut -d':' -f1 | sort -u)
   echo "FAILED_GUARD=RAW_IN_EXCEPTIONS_DETECTED"
-  echo "$HITS_EXC"
+  echo "VIOLATION_FILES=$VIOLATION_FILES"
   exit 1
 fi
 NO_RAW_IN_EXCEPTIONS_OK=1
@@ -70,8 +76,9 @@ for report_dir in "docs/ops/reports/" "docs/ops/PROOFS/"; do
       -E '"(prompt|output|raw_input|raw_response)"\s*:\s*"[^"]{100,}"' \
       "$report_dir" 2>/dev/null || true)"
     if [ -n "$HITS_REPORT" ]; then
+      VIOLATION_FILES=$(echo "$HITS_REPORT" | cut -d':' -f1 | sort -u)
       echo "FAILED_GUARD=RAW_IN_REPORTS_DETECTED"
-      echo "$HITS_REPORT"
+      echo "VIOLATION_FILES=$VIOLATION_FILES"
       exit 1
     fi
   fi
