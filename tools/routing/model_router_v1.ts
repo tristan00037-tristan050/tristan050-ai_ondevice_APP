@@ -248,20 +248,31 @@ function isPackEnterpriseEligible(
   c: PackCandidate,
   ctx: EnterpriseRouteContext
 ): boolean {
-  if (c.assignment_policy && c.assignment_policy.policy_digest !== ctx.policy_digest) {
+  const p = c.assignment_policy;
+  if (!p) return false;  // fail-closed: no policy → never eligible
+
+  if (p.policy_digest !== ctx.policy_digest) {
     return false;
   }
-  if (c.assignment_policy && c.assignment_policy.rollout_ring !== ctx.rollout_ring) {
+  if (p.rollout_ring !== ctx.rollout_ring) {
     return false;
   }
   if (c.device_class_id !== ctx.device_class_id) {
     return false;
   }
-  if (c.assignment_policy && c.assignment_policy.offline_capable_required && !c.offline_capable) {
+  // assignment_policy.target_device_classes 정책 범위 검증
+  if (
+    p.target_device_classes &&
+    p.target_device_classes.length > 0 &&
+    !p.target_device_classes.includes(ctx.device_class_id)
+  ) {
     return false;
   }
-  if (c.assignment_policy && c.assignment_policy.target_groups.length > 0) {
-    if (!ctx.group_id || !c.assignment_policy.target_groups.includes(ctx.group_id)) {
+  if (p.offline_capable_required && !c.offline_capable) {
+    return false;
+  }
+  if (p.target_groups.length > 0) {
+    if (!ctx.group_id || !p.target_groups.includes(ctx.group_id)) {
       return false;
     }
   }
