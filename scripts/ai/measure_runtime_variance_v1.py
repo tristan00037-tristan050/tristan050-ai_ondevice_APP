@@ -11,6 +11,10 @@ OUT_PATH = Path("tmp/runtime_variance_summary.json")
 
 def main() -> None:
     data = json.loads(SAMPLES_PATH.read_text(encoding="utf-8"))
+
+    if len(data) < 30:
+        raise RuntimeError(f"RUNTIME_VARIANCE_SAMPLE_COUNT_TOO_LOW:{len(data)}")
+
     lat = [x["latency_ms"] for x in data]
     ttft = [x["ttft_ms"] for x in data]
     dps = [x["decode_tps"] for x in data]
