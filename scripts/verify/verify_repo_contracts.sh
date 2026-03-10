@@ -460,6 +460,8 @@ EXEC_MODE_V4_OK=0
 ENTERPRISE_SCOPE_V1_OK=0
 # P25-ENT-P0-02
 DEVICE_CLASS_REGISTRY_V1_OK=0
+# P25-ENT-H1
+DEVICE_CLASS_POWER_CLASS_CANONICAL_OK=0
 # P25-ENT-P0-03
 PACK_ASSIGNMENT_POLICY_V1_OK=0
 # P25-ENT-P0-04
@@ -811,6 +813,8 @@ cleanup(){
   echo "ENTERPRISE_SCOPE_V1_OK=${ENTERPRISE_SCOPE_V1_OK}"
   # P25-ENT-P0-02
   echo "DEVICE_CLASS_REGISTRY_V1_OK=${DEVICE_CLASS_REGISTRY_V1_OK}"
+  # P25-ENT-H1
+  echo "DEVICE_CLASS_POWER_CLASS_CANONICAL_OK=${DEVICE_CLASS_POWER_CLASS_CANONICAL_OK}"
   # P25-ENT-P0-03
   echo "PACK_ASSIGNMENT_POLICY_V1_OK=${PACK_ASSIGNMENT_POLICY_V1_OK}"
   # P25-ENT-P0-04
@@ -1425,9 +1429,10 @@ echo "== guard: enterprise scope v1 (P25-ENT-P0-01) =="
 run_guard "enterprise scope v1" bash scripts/verify/verify_enterprise_scope_v1.sh
 ENTERPRISE_SCOPE_V1_OK=1
 
-echo "== guard: device class registry v1 (P25-ENT-P0-02) =="
+echo "== guard: device class registry v1 (P25-ENT-P0-02 / P25-ENT-H1) =="
 run_guard "device class registry v1" bash scripts/verify/verify_device_class_registry_v1.sh
 DEVICE_CLASS_REGISTRY_V1_OK=1
+DEVICE_CLASS_POWER_CLASS_CANONICAL_OK=1
 
 echo "== guard: pack assignment policy v1 (P25-ENT-P0-03) =="
 run_guard "pack assignment policy v1" bash scripts/verify/verify_pack_assignment_policy_v1.sh
