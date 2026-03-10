@@ -103,10 +103,20 @@ for sym in "${REQUIRED_SYMBOLS[@]}"; do
   grep -q "$sym" "$TS_FILE" || { echo "ERROR_CODE=DEVICE_CLASS_REGISTRY_TS_SYMBOL_MISSING"; echo "MISSING_SYMBOL=$sym"; exit 1; }
 done
 
-# 5. 'medium' 잔존 확인 (power_class 컨텍스트)
-if grep -q '"medium"' "$TS_FILE"; then
+# 5. 'medium' 잔존 확인 — power_class 컨텍스트에서 double/single quote 모두 탐지
+# TS 파일: power_class 값으로 'medium'/"medium" 할당 패턴 탐지
+if grep -qE "power_class[[:space:]]*[:=][[:space:]]*['\"]medium['\"]" "$TS_FILE" 2>/dev/null; then
   echo "ERROR_CODE=DEVICE_CLASS_TS_MEDIUM_DRIFT"
+  echo "FAILED_GUARD=DEVICE_CLASS_POWER_CLASS_DRIFT (single-quote medium found)"
+  exit 1
+fi
+
+# 전역 체크: power_class 값으로 medium 잔존 여부 확인 (비주석 행만)
+DRIFT_HITS=$(grep -rE "power_class[[:space:]]*[:=][[:space:]]*['\"]medium['\"]" tools/ docs/ops/contracts/ scripts/verify/ 2>/dev/null | grep -v "^[^:]*:#" || true)
+if [[ -n "$DRIFT_HITS" ]]; then
+  echo "ERROR_CODE=DEVICE_CLASS_GLOBAL_MEDIUM_DRIFT"
   echo "FAILED_GUARD=DEVICE_CLASS_POWER_CLASS_DRIFT"
+  echo "$DRIFT_HITS"
   exit 1
 fi
 
