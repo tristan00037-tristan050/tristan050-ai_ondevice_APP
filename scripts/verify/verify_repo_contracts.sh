@@ -456,6 +456,8 @@ RUNTIME_MANIFEST_V1_OK=0
 CHAT_TEMPLATE_LOCK_V1_OK=0
 # P23-P2B-04
 EXEC_MODE_V4_OK=0
+# P25-ENT-H2
+EXEC_MODE_V4_STRICT_OK=0
 # P25-ENT-P0-01
 ENTERPRISE_SCOPE_V1_OK=0
 # P25-ENT-P0-02
@@ -809,6 +811,8 @@ cleanup(){
   echo "CHAT_TEMPLATE_LOCK_V1_OK=${CHAT_TEMPLATE_LOCK_V1_OK}"
   # P23-P2B-04
   echo "EXEC_MODE_V4_OK=${EXEC_MODE_V4_OK}"
+  # P25-ENT-H2
+  echo "EXEC_MODE_V4_STRICT_OK=${EXEC_MODE_V4_STRICT_OK}"
   # P25-ENT-P0-01
   echo "ENTERPRISE_SCOPE_V1_OK=${ENTERPRISE_SCOPE_V1_OK}"
   # P25-ENT-P0-02
@@ -1424,6 +1428,10 @@ CHAT_TEMPLATE_LOCK_V1_OK=1
 echo "== guard: exec mode quality gates v2 with V4 (P23-P2B-04) =="
 run_guard "exec mode quality gates v2 v4" bash scripts/verify/verify_exec_mode_quality_gates_v2.sh
 EXEC_MODE_V4_OK=1
+
+echo "== guard: exec mode v4 strict validation v1 (P25-ENT-H2) =="
+run_guard "exec mode v4 strict v1" bash scripts/verify/verify_exec_mode_v4_strict_v1.sh
+EXEC_MODE_V4_STRICT_OK=1
 
 echo "== guard: enterprise scope v1 (P25-ENT-P0-01) =="
 run_guard "enterprise scope v1" bash scripts/verify/verify_enterprise_scope_v1.sh
