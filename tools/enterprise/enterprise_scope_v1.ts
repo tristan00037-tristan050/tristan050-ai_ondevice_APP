@@ -143,7 +143,10 @@ export function resolveEffectivePolicy(
 
   for (const p of sorted) {
     if (!effective) {
-      effective = { ...p };
+      effective = {
+        ...p,
+        allowed_tools: p.allowed_tools.filter(t => !p.denied_tools.includes(t)),
+      };
       continue;
     }
 
@@ -180,9 +183,9 @@ export function resolveEffectivePolicy(
     effective = {
       ...effective,
       ...p,
-      allowed_tools: effective.allowed_tools.filter(
-        t => !p.denied_tools.includes(t)
-      ),
+      allowed_tools: effective.allowed_tools
+        .filter(t => p.allowed_tools.includes(t))   // 하위 allowlist 교집합
+        .filter(t => !p.denied_tools.includes(t)),  // denied_tools 제거
       allowed_pack_ids: effective.allowed_pack_ids.filter(
         x => p.allowed_pack_ids.includes(x)
       ),
