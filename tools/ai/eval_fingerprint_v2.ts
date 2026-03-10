@@ -13,6 +13,20 @@ export interface EvalFingerprintV2 {
   fingerprint_digest: string;
 }
 
+export type EvalCasePromptClassId =
+  | 'qa'
+  | 'summarize'
+  | 'rewrite'
+  | 'tool_call'
+  | 'policy_sensitive'
+  | 'retrieval_transform';
+
+export interface EvalCaseV1 {
+  case_id: string;
+  prompt_class_id: EvalCasePromptClassId;
+  input_digest_sha256: string;
+}
+
 export interface EvalFingerprintMaterialV2 {
   logical_pack_id: string;
   eval_corpus_digest_sha256: string;
