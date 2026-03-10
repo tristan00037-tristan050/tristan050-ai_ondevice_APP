@@ -1,6 +1,6 @@
 'use strict';
 
-// P22-AI-06 / P23-P0B-04 / P23-P2B-04: EXEC_MODE_AI_QUALITY_GATES_V2 + EXEC_FINGERPRINT_IDENTITY_SPLIT_V1 + EXEC_MODE_RESULT_V4
+// P22-AI-06 / P23-P0B-04 / P23-P2B-04 / P25-ENT-H2: EXEC_MODE_AI_QUALITY_GATES_V2 + EXEC_FINGERPRINT_IDENTITY_SPLIT_V1 + EXEC_MODE_RESULT_V4 + EXEC_MODE_V4_STRICT
 
 import { typedDigest } from '../crypto/digest_v1';
 
@@ -203,4 +203,66 @@ export function assertExecModeResultV3(r: unknown): asserts r is ExecModeResultV
  */
 export function isValidSha256Hex(value: string): boolean {
   return /^[0-9a-f]{64}$/.test(value);
+}
+
+// ---------------------------------------------------------------------------
+// P25-ENT-H2: EXEC_MODE_V4_STRICT — SHA-256 형식 + 의미 정합 + rollout ring 유효성
+// ---------------------------------------------------------------------------
+
+/**
+ * Assert that a field value is a valid lowercase hex SHA-256 string (64 chars).
+ * @throws Error('EXEC_V4_INVALID_SHA256:<field>') if invalid.
+ */
+function assertSha256Hex(v: unknown, field: string): void {
+  if (typeof v !== 'string' || !/^[0-9a-f]{64}$/.test(v)) {
+    throw new Error(`EXEC_V4_INVALID_SHA256:${field}`);
+  }
+}
+
+/**
+ * Strict validator for ExecModeResultV4.
+ * Calls assertExecModeResultV4 first (field presence), then enforces:
+ * - All digest fields are valid SHA-256 hex (64-char lowercase)
+ * - rollout_ring is one of the 4 canonical values
+ * - routing_event_id MUST differ from routing_decision_digest
+ * - kv_cache_mode='active' requires kv_policy_params_digest
+ */
+export function assertExecModeResultV4Strict(
+  r: unknown
+): asserts r is ExecModeResultV4 {
+  // 기존 assertExecModeResultV4 먼저 호출 (필드 존재 확인)
+  assertExecModeResultV4(r);
+  const obj = r as Record<string, unknown>;
+
+  // SHA-256 형식 검증 (64자 hex 소문자)
+  for (const f of [
+    'logical_pack_digest',
+    'compiled_pack_digest',
+    'pack_identity_digest',
+    'tokenizer_template_digest',
+    'routing_decision_digest',
+    'routing_event_id',
+    'exec_fingerprint_sha256',
+    'chain_proof_digest',
+    'policy_digest',
+    'approved_pack_digest',
+  ]) {
+    assertSha256Hex(obj[f], f);
+  }
+
+  // rollout_ring 유효성 검증
+  const ring = String(obj['rollout_ring']);
+  if (!['ring0_canary', 'ring1_team', 'ring2_department', 'ring3_org'].includes(ring)) {
+    throw new Error(`EXEC_V4_INVALID_ROLLOUT_RING:${ring}`);
+  }
+
+  // routing_event_id 와 routing_decision_digest 는 반드시 달라야 함
+  if (obj['routing_event_id'] === obj['routing_decision_digest']) {
+    throw new Error('EXEC_V4_ROUTING_EVENT_ID_MUST_DIFFER_FROM_DECISION_DIGEST');
+  }
+
+  // kv_cache_mode=active 인데 kv_policy_params_digest 없으면 BLOCK
+  if (obj['kv_cache_mode'] === 'active' && !obj['kv_policy_params_digest']) {
+    throw new Error('EXEC_V4_KV_ACTIVE_WITHOUT_POLICY_PARAMS_DIGEST');
+  }
 }
