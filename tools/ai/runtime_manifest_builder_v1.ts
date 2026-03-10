@@ -59,6 +59,19 @@ export function buildRuntimeManifestV1(
   if (!input.graph_io_contract || typeof input.graph_io_contract !== 'object') {
     throw new Error('RUNTIME_MANIFEST_GRAPH_IO_CONTRACT_INVALID');
   }
+
+  // required digest 3개 — undefined/빈 문자열 즉시 차단
+  if (!input.artifacts.weights_digest_sha256) {
+    throw new Error('RUNTIME_MANIFEST_WEIGHTS_DIGEST_REQUIRED');
+  }
+  if (!input.artifacts.tokenizer_digest_sha256) {
+    throw new Error('RUNTIME_MANIFEST_TOKENIZER_DIGEST_REQUIRED');
+  }
+  if (!input.artifacts.chat_template_digest_sha256) {
+    throw new Error('RUNTIME_MANIFEST_CHAT_TEMPLATE_DIGEST_REQUIRED');
+  }
+
+  // SHA-256 형식 검증 (required 3개 + optional 1개)
   assertSha256Maybe(input.artifacts.weights_digest_sha256, 'weights_digest_sha256');
   assertSha256Maybe(input.artifacts.tokenizer_digest_sha256, 'tokenizer_digest_sha256');
   assertSha256Maybe(input.artifacts.chat_template_digest_sha256, 'chat_template_digest_sha256');

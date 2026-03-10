@@ -7,7 +7,11 @@ def main() -> None:
     tokenizer_path = Path("packs/micro_default/tokenizer.json")
     if not tokenizer_path.exists():
         raise SystemExit("TOKENIZER_JSON_MISSING")
-    data = json.loads(tokenizer_path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(tokenizer_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        raise SystemExit("TOKENIZER_JSON_PARSE_ERROR")
+
     if not isinstance(data, dict):
         raise SystemExit("TOKENIZER_JSON_INVALID")
     print("TOKENIZER_CONTRACT_PRECHECK_OK=1")
