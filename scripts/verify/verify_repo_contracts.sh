@@ -461,6 +461,9 @@ EXEC_MODE_V4_STRICT_OK=0
 # AI-P3-05
 EXEC_FINGERPRINT_CANONICAL_V1_OK=0
 EXEC_MODE_V5_STRICT_OK=0
+# AI-P3-06
+DEVICE_PROBE_RESULT_V1_OK=0
+DEVICE_CLASS_DECISION_V1_OK=0
 # P25-ENT-P0-01
 ENTERPRISE_SCOPE_V1_OK=0
 # AI-P3-04
@@ -825,6 +828,9 @@ cleanup(){
   # AI-P3-05
   echo "EXEC_FINGERPRINT_CANONICAL_V1_OK=${EXEC_FINGERPRINT_CANONICAL_V1_OK}"
   echo "EXEC_MODE_V5_STRICT_OK=${EXEC_MODE_V5_STRICT_OK}"
+  # AI-P3-06
+  echo "DEVICE_PROBE_RESULT_V1_OK=${DEVICE_PROBE_RESULT_V1_OK}"
+  echo "DEVICE_CLASS_DECISION_V1_OK=${DEVICE_CLASS_DECISION_V1_OK}"
   # P25-ENT-P0-01
   echo "ENTERPRISE_SCOPE_V1_OK=${ENTERPRISE_SCOPE_V1_OK}"
   # AI-P3-04
@@ -1455,6 +1461,11 @@ echo "== guard: exec fingerprint canonical v1 (AI-P3-05) =="
 run_guard "exec fingerprint canonical v1" bash scripts/verify/verify_exec_fingerprint_canonical_v1.sh
 EXEC_FINGERPRINT_CANONICAL_V1_OK=1
 EXEC_MODE_V5_STRICT_OK=1
+
+echo "== guard: device probe and classify v1 (AI-P3-06) =="
+run_guard "device probe and classify v1" bash scripts/verify/verify_device_probe_and_classify_v1.sh
+DEVICE_PROBE_RESULT_V1_OK=1
+DEVICE_CLASS_DECISION_V1_OK=1
 
 echo "== guard: enterprise scope v1 (P25-ENT-P0-01) =="
 run_guard "enterprise scope v1" bash scripts/verify/verify_enterprise_scope_v1.sh
