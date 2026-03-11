@@ -30,5 +30,5 @@
     "tokenizer_digest_sha256": "a8506e7111b80c6d8635951a02eab0f4e1a8e4e5772da83846579e97b16f61bf",
     "chat_template_digest_sha256": "cd8e9439f0570856fd70470bf8889ebd8b5d1107207f67a5efb46e342330527f"
   },
-  "status": "verified"
+  "status": "pending_real_weights"
 }
