@@ -1,0 +1,225 @@
+{
+  "total": 24,
+  "passed": 24,
+  "schema_pass_rate": 1.0,
+  "slo_schema_pass_rate": 0.98,
+  "schema_pass_rate_ok": true,
+  "cases": [
+    {
+      "id": "qa_001",
+      "class": "qa",
+      "prompt_digest": "704d8d33e3a8fc8cb61e11f6643f80874235923488c51f13acb36b32e4ad6e3d",
+      "output_digest": "b75f53c73067c4f659580dfaa7542069aab7b073007e4ed1a7c1422f13bf57fd",
+      "output_len": 108,
+      "latency_ms": 941.2,
+      "passed": true
+    },
+    {
+      "id": "qa_002",
+      "class": "qa",
+      "prompt_digest": "f8c4f9ee0706326eb73f54583fa060da129173581251291fbfba20d6c8b77090",
+      "output_digest": "dd0d8faf09f204b312e7de968292e78d2d3c9503c4e7268e3ba4fda406acc2a7",
+      "output_len": 118,
+      "latency_ms": 900.8,
+      "passed": true
+    },
+    {
+      "id": "qa_003",
+      "class": "qa",
+      "prompt_digest": "54d154207b98546c044a5c61ad270d4db58a779e49821cacd9dfb575fb3c183b",
+      "output_digest": "da208a86160a2fd6a9edb1e7963602baed9b89bbb9127f24874e9810ffc3306c",
+      "output_len": 97,
+      "latency_ms": 914.1,
+      "passed": true
+    },
+    {
+      "id": "qa_004",
+      "class": "qa",
+      "prompt_digest": "880c54a6c72b0c58fb262546bbb7d221b37a9ca911e9bcbc972e3ea011af1108",
+      "output_digest": "bc2ba900bd29412ee677838c83b783bba43e895c92bdcc65f7af4eb1cc6ec89e",
+      "output_len": 88,
+      "latency_ms": 917.1,
+      "passed": true
+    },
+    {
+      "id": "qa_005",
+      "class": "qa",
+      "prompt_digest": "e35d2108aed3288c32b3591afb95f522f641141822df15158d6823fe118c1d36",
+      "output_digest": "1e71830be92fb5636e9b80b9739c9ae47c0723d01ee67c8a5cebfb3b5a79d25a",
+      "output_len": 127,
+      "latency_ms": 925.8,
+      "passed": true
+    },
+    {
+      "id": "qa_006",
+      "class": "qa",
+      "prompt_digest": "6c8495545c63c80e8293515228d8102b7c16b7723cdc60f2b96f92e2c57477e4",
+      "output_digest": "a45e44b9601df1a42f09cda88d110ffef831ee899fae0d0567a6f5da624927f1",
+      "output_len": 89,
+      "latency_ms": 900.9,
+      "passed": true
+    },
+    {
+      "id": "sum_001",
+      "class": "summarize",
+      "prompt_digest": "345fbcfa477be3e058b0b8bb6a34d8b8499bec1e40d5ba3bbd1177b024a3d910",
+      "output_digest": "84f7e491e4274e9f6823f582cb3ee23166f38731963302af55536f855878860d",
+      "output_len": 88,
+      "latency_ms": 972.9,
+      "passed": true
+    },
+    {
+      "id": "sum_002",
+      "class": "summarize",
+      "prompt_digest": "1fae41e09051ff27c5db2191987f4e5530b0b3e50b1b67a8a910492b319a0bea",
+      "output_digest": "b336b1ede4664393224781c6f4f8440c362b2de9ddedc45932c0919994a39acf",
+      "output_len": 100,
+      "latency_ms": 968.7,
+      "passed": true
+    },
+    {
+      "id": "sum_003",
+      "class": "summarize",
+      "prompt_digest": "ce8830d4bb8969aec3eb0757fd7023f03c282238eab288a89e4293636b3bf641",
+      "output_digest": "1d4aeac77ff012b542b6a1d4882be45aa3e161418d366ecaec209bbe928ffaa1",
+      "output_len": 83,
+      "latency_ms": 959.5,
+      "passed": true
+    },
+    {
+      "id": "sum_004",
+      "class": "summarize",
+      "prompt_digest": "e46a47dd7e23b1a10ab3b1bc6beca600c52f72cadf1acbfeafd001311724f781",
+      "output_digest": "a816764ccffc5646e42046bbf30f627fb215a5dcc8baf87ad62bfbb516a79705",
+      "output_len": 77,
+      "latency_ms": 969.7,
+      "passed": true
+    },
+    {
+      "id": "rew_001",
+      "class": "rewrite",
+      "prompt_digest": "a32e13586467535d8f87f4b5d9453c50271b90d477452327bbf5623721416712",
+      "output_digest": "bdc22a30baa9dbc1e72147ebf0d7feb972c52c007fc0382806c00d6cdd753d34",
+      "output_len": 104,
+      "latency_ms": 908.8,
+      "passed": true
+    },
+    {
+      "id": "rew_002",
+      "class": "rewrite",
+      "prompt_digest": "f26f540658ce04e588c6834b64626ac2d358e05269ee7028a667b96061ae571c",
+      "output_digest": "ec31fa0487bdf0f9fcd97d0ececcd002e3145071e0a726e0510a8006948642e9",
+      "output_len": 99,
+      "latency_ms": 924.5,
+      "passed": true
+    },
+    {
+      "id": "rew_003",
+      "class": "rewrite",
+      "prompt_digest": "1ac8ee8be4f0993166364ed3581f9f6682c668f3d47011b108c3f615ccd9ed25",
+      "output_digest": "023de2b4181013432f2ac8f5e1df7b14157bc250e1e0ae57b0f25f645e320b2f",
+      "output_len": 143,
+      "latency_ms": 933.6,
+      "passed": true
+    },
+    {
+      "id": "rew_004",
+      "class": "rewrite",
+      "prompt_digest": "901230f5786d1e3dac96e3e8824de8d1f10ddd962e92138b3edafc804b7c683a",
+      "output_digest": "0e94b84f37f7460eafaee9c65eac58163593893a9828c10df438da9cf8a6c9c1",
+      "output_len": 156,
+      "latency_ms": 964.3,
+      "passed": true
+    },
+    {
+      "id": "tool_001",
+      "class": "tool_call",
+      "prompt_digest": "47fdb74aa05be512386b1a7b7f566c13e25d50b3bd0d58a423715749b80f725f",
+      "output_digest": "05ac2ddce35970bb15ffb6573116a098643db2e29795d4bf4df411f126a5dd8a",
+      "output_len": 115,
+      "latency_ms": 977.1,
+      "passed": true
+    },
+    {
+      "id": "tool_002",
+      "class": "tool_call",
+      "prompt_digest": "b821998c15e1a064331d0cb63061be7ab8da87a02c1402b4e99499cc985a9f03",
+      "output_digest": "03a932af20160d4e36a66ccd925ecc6c127c20c75db140ff0de68aae52e12ae1",
+      "output_len": 119,
+      "latency_ms": 905.9,
+      "passed": true
+    },
+    {
+      "id": "tool_003",
+      "class": "tool_call",
+      "prompt_digest": "8454f68baa0d35c8ede519474c90dd694b1c6d437649f93f479da1fdae5bcf9f",
+      "output_digest": "b4b4bb0b4cd039fef7e9c34964aaf2620658aadedd8bd7f7f752b0129c30c39f",
+      "output_len": 141,
+      "latency_ms": 911.0,
+      "passed": true
+    },
+    {
+      "id": "tool_004",
+      "class": "tool_call",
+      "prompt_digest": "4e48d4e8ec718cff7ae3f4a51e7fa949494326f16e6d2b0ad24af581faccf0b0",
+      "output_digest": "26df6ce6da64928d64ba3072b8eae97cce1ac5103807c6673359ec9eb1316a47",
+      "output_len": 71,
+      "latency_ms": 916.0,
+      "passed": true
+    },
+    {
+      "id": "pol_001",
+      "class": "policy_sensitive",
+      "prompt_digest": "c06e50b6df6f016884a301da2a390c68e9b90e4816ef897884c73497a871feac",
+      "output_digest": "ec66ad750769b9f6ef82445beb2a9d3081bcf647bef74e9808bd62725125cb08",
+      "output_len": 115,
+      "latency_ms": 923.5,
+      "passed": true
+    },
+    {
+      "id": "pol_002",
+      "class": "policy_sensitive",
+      "prompt_digest": "f0a39d2c0e69a1332054c1a400549f04ed24350b0050978402b06a1e58e1f1c1",
+      "output_digest": "32e4d259fe0009a5912738a0d17d8a442265b0d866ad3b89872add352830b5c1",
+      "output_len": 98,
+      "latency_ms": 913.5,
+      "passed": true
+    },
+    {
+      "id": "pol_003",
+      "class": "policy_sensitive",
+      "prompt_digest": "703a67f115a71e7e4818ce9bd2d343aa0772e723507c8e9295ae1365552d6ecc",
+      "output_digest": "84ff3fde1eafe57618a094b42374cfe84a73ec76098e0e10aa987db2230bf47d",
+      "output_len": 104,
+      "latency_ms": 915.3,
+      "passed": true
+    },
+    {
+      "id": "ret_001",
+      "class": "retrieval_transform",
+      "prompt_digest": "11e1658636c48e1779bfdbefce5568224bdab68e5b7a60b9a53ed1c04b33ba89",
+      "output_digest": "e53f5f3b654ed2cfdb0dbe5b1daad6ebecdd25c9e6c1d752c66d38819aee0543",
+      "output_len": 101,
+      "latency_ms": 935.1,
+      "passed": true
+    },
+    {
+      "id": "ret_002",
+      "class": "retrieval_transform",
+      "prompt_digest": "94ab7753be5fd6eeedc596c5b9deca731e97005c9b517c759bc91077dc34445f",
+      "output_digest": "c97b718d526906d8fd525d3aa1cd53bb1faa09a1e488c8706d4dabfcdc3c2fb8",
+      "output_len": 93,
+      "latency_ms": 954.8,
+      "passed": true
+    },
+    {
+      "id": "ret_003",
+      "class": "retrieval_transform",
+      "prompt_digest": "8c168803f4baaa86b3d66be9478b0033efc391635a1c4213c83d9d48dcbc2c18",
+      "output_digest": "4c7cf855d28d5acbea4bd382e726f532113ec5cf16c1709adb338280feeb61b0",
+      "output_len": 122,
+      "latency_ms": 920.5,
+      "passed": true
+    }
+  ]
+}

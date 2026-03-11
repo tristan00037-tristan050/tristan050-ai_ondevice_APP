@@ -1,0 +1,11 @@
+{
+  "schema": "artifact_bundle_v1",
+  "ts_utc": "2026-03-08T23:56:02Z",
+  "git_sha": "3c338b7a3556ccd6ea88d89af80e71accd8dbf4c",
+  "inputs": {
+    "repo_contracts_latest_json": "docs/ops/reports/repo_contracts_latest.json",
+    "repo_contracts_latest_md": "docs/ops/reports/repo_contracts_latest.md",
+    "ai_smoke_latest_json": "docs/ops/reports/ai_smoke_latest.json",
+    "ai_smoke_latest_md": "docs/ops/reports/ai_smoke_latest.md"
+  }
+}

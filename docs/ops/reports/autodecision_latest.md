@@ -1,6 +1,6 @@
 # Auto Decision (latest)
 
-- ts_utc: 2026-03-09T00:39:17Z
+- ts_utc: 2026-03-10T08:38:16Z
 - decision: ok
 
 ## reason_codes (max 10)
