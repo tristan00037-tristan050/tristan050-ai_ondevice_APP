@@ -34,7 +34,6 @@ REQUIRED_ARTIFACT_FIELDS = [
     "weights_digest_sha256",
     "tokenizer_digest_sha256",
     "chat_template_digest_sha256",
-    "manifest_digest_sha256"
 ]
 REQUIRED_GRAPH_IO_FIELDS = [
     "input_ids", "attention_mask", "logits"

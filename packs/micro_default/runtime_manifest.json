@@ -2,16 +2,17 @@
   "schema_version": 1,
   "logical_pack_id": "micro_default",
   "model_format": "onnx",
-  "model_type": "REQUIRED",
+  "model_type": "qwen2",
   "quantization_mode": "weight_only_int4",
   "context_length": 8192,
-  "bos_token_id": null,
-  "eos_token_id": null,
+  "bos_token_id": 151643,
+  "eos_token_id": 151645,
   "pad_token_id": null,
   "external_data_shards_allowed": true,
   "graph_io_contract": {
     "input_ids": "input_ids",
     "attention_mask": "attention_mask",
+    "position_ids": "position_ids",
     "past_key_names": "past_key_values.%d.key",
     "past_value_names": "past_key_values.%d.value",
     "logits": "logits",
@@ -26,10 +27,10 @@
     "temperature": 1.0
   },
   "artifacts": {
-    "weights_digest_sha256": "REQUIRED",
-    "tokenizer_digest_sha256": "REQUIRED",
-    "chat_template_digest_sha256": "REQUIRED",
-    "manifest_digest_sha256": "REQUIRED"
+    "weights_digest_sha256": "9fb55cfbbad4f8013f90fa712ce9f23e304b3c0e952b071b4197ccc07bab0d13",
+    "tokenizer_digest_sha256": "a8506e7111b80c6d8635951a02eab0f4e1a8e4e5772da83846579e97b16f61bf",
+    "chat_template_digest_sha256": "cd8e9439f0570856fd70470bf8889ebd8b5d1107207f67a5efb46e342330527f",
+    "config_digest_sha256": "18ecab261ff17f5aa1e6697c388d68efa4f7c43f7923efce8b094e683cf8599e"
   },
   "status": "pending_real_weights"
 }
