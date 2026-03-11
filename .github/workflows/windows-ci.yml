@@ -27,11 +27,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install onnxruntime-genai==0.12.2 transformers==4.40.2 psutil sentencepiece
 
-      - name: smoke eval 3종
+      - name: CI 스크립트 생성
+        shell: python
         run: |
-          python - << 'EOF'
-          import hashlib
-          import onnxruntime_genai as og
+          from pathlib import Path
+
+          smoke = '''
+          import hashlib, onnxruntime_genai as og
 
           PACK_DIR = "packs/micro_default"
 
@@ -63,11 +65,9 @@ jobs:
               print(f"SMOKE_PASS type={smoke_type} output_len={len(output)}")
 
           print("ALL_SMOKE_PASS=1")
-          EOF
+          '''
 
-      - name: eval 24개
-        run: |
-          python - << 'EOF'
+          eval_script = '''
           import hashlib, json, time
           from pathlib import Path
           import onnxruntime_genai as og
@@ -75,9 +75,6 @@ jobs:
           PACK_DIR = "packs/micro_default"
           OUT_PATH = Path("tmp/eval_results_windows.json")
           OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-          def sha256_text(text):
-              return hashlib.sha256(text.encode()).hexdigest()
 
           EVAL_CASES = [
               {"id":"qa_001","class":"qa","prompt":"대한민국의 수도는 어디인가요?"},
@@ -139,11 +136,9 @@ jobs:
           print(f"EVAL_DONE=1 passed={pass_count}/{len(EVAL_CASES)} schema_pass_rate={schema_pass_rate:.4f}")
           if schema_pass_rate < 0.98:
               raise RuntimeError(f"SCHEMA_PASS_RATE_BELOW_SLO:{schema_pass_rate}")
-          EOF
+          '''
 
-      - name: variance 실측 (10회 — CI 시간 제약)
-        run: |
-          python - << 'EOF'
+          variance = '''
           import time, json, psutil, os
           from pathlib import Path
           import onnxruntime_genai as og
@@ -154,7 +149,7 @@ jobs:
 
           PROMPT = "인공지능 기술의 발전이 사회에 미치는 영향을 설명해 주세요. " * 4
           MAX_NEW_TOKENS = 64
-          TOTAL_RUNS = 11  # cold 1회 제외 → warm 10회
+          TOTAL_RUNS = 11
 
           model = og.Model(PACK_DIR)
           tokenizer = og.Tokenizer(model)
@@ -194,15 +189,27 @@ jobs:
                      "rss_max_mb": round(rss_max,1),
                      "slo_tps_ok": tps_mean >= 8.0, "slo_rss_ok": rss_max <= 1536}
           OUT_PATH.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-
-          print(f"\nVARIANCE_DONE=1 p95={p95:.0f}ms tps_mean={tps_mean:.1f} rss_max={rss_max:.0f}MB")
-          print(f"SLO_TPS_OK={summary['slo_tps_ok']} SLO_RSS_OK={summary['slo_rss_ok']}")
-
-          if not summary['slo_tps_ok']:
+          print(f"VARIANCE_DONE=1 p95={p95:.0f}ms tps_mean={tps_mean:.1f} rss_max={rss_max:.0f}MB")
+          if not summary["slo_tps_ok"]:
               raise RuntimeError(f"TPS_BELOW_SLO:{tps_mean:.2f}")
-          if not summary['slo_rss_ok']:
+          if not summary["slo_rss_ok"]:
               raise RuntimeError(f"RSS_ABOVE_SLO:{rss_max:.0f}MB")
-          EOF
+          '''
+
+          Path("scripts/ci/smoke_eval_ci.py").parent.mkdir(parents=True, exist_ok=True)
+          Path("scripts/ci/smoke_eval_ci.py").write_text(smoke.strip(), encoding="utf-8")
+          Path("scripts/ci/eval_24_ci.py").write_text(eval_script.strip(), encoding="utf-8")
+          Path("scripts/ci/variance_ci.py").write_text(variance.strip(), encoding="utf-8")
+          print("CI_SCRIPTS_CREATED=1")
+
+      - name: smoke eval 3종
+        run: python scripts/ci/smoke_eval_ci.py
+
+      - name: eval 24개
+        run: python scripts/ci/eval_24_ci.py
+
+      - name: variance 실측 (10회)
+        run: python scripts/ci/variance_ci.py
 
       - name: 결과 업로드
         if: always()
