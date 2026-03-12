@@ -104,13 +104,13 @@ def verify_runtime_manifest(pack_dir: Path) -> dict:
 # ---------------------------------------------------------------------------
 
 def verify_slo(pack_dir: Path, tmp_dir: Path, logical_pack_id: str) -> dict:
-    # eval 결과
+    # eval 결과 — 팩 전용 파일만 허용 (fallback 금지)
     eval_path = tmp_dir / f"{logical_pack_id}_eval_results.json"
     if not eval_path.exists():
-        # 대체 경로 시도
-        eval_path = tmp_dir / "eval_results_small_default.json"
-    if not eval_path.exists():
-        raise RuntimeError(f"EVAL_RESULT_MISSING: {eval_path}")
+        raise RuntimeError(
+            f"EVAL_RESULT_MISSING: {eval_path} "
+            f"— 반드시 {logical_pack_id} 전용 eval 결과 파일이 있어야 합니다."
+        )
 
     eval_data = json.loads(eval_path.read_text(encoding="utf-8"))
     schema_pass_rate = eval_data.get("schema_pass_rate", 0)
@@ -119,12 +119,16 @@ def verify_slo(pack_dir: Path, tmp_dir: Path, logical_pack_id: str) -> dict:
             f"SLO_EVAL_FAILED: schema_pass_rate={schema_pass_rate} < 0.98"
         )
 
-    # variance 결과
-    var_path = tmp_dir / f"runtime_variance_summary_{logical_pack_id}.json"
+    # variance 결과 — 정규 경로 우선, 팩별 경로 보조
+    # 정규 경로: measure_runtime_variance_v1.py 출력 경로
+    var_path = tmp_dir / "runtime_variance_summary.json"
     if not var_path.exists():
-        var_path = tmp_dir / "small_default_variance_summary.json"
+        var_path = tmp_dir / f"runtime_variance_summary_{logical_pack_id}.json"
     if not var_path.exists():
-        raise RuntimeError(f"VARIANCE_RESULT_MISSING: {var_path}")
+        raise RuntimeError(
+            f"VARIANCE_RESULT_MISSING: tmp/runtime_variance_summary.json 또는 "
+            f"tmp/runtime_variance_summary_{logical_pack_id}.json 필요"
+        )
 
     var_data = json.loads(var_path.read_text(encoding="utf-8"))
 
