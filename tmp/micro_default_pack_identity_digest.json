@@ -1,0 +1,11 @@
+{
+  "logical_pack_id": "micro_default",
+  "weights_digest_sha256": "94b6d38ffa3f66c86d0bfa0383e77f948ad13c9f766d5d1afac90610354fe762",
+  "tokenizer_digest_sha256": "a8506e7111b80c6d8635951a02eab0f4e1a8e4e5772da83846579e97b16f61bf",
+  "config_digest_sha256": "1330ecc4c55635ba5dc3876873a81f4af5e524fb945ac028fb3c2f3a56d552a6",
+  "chat_template_digest_sha256": "cd8e9439f0570856fd70470bf8889ebd8b5d1107207f67a5efb46e342330527f",
+  "logical_pack_digest": "e6477519f1652970cc7c01ba8b8a13a526fea44b78c78a4a6e509837004854e5",
+  "compiled_pack_digest": "67bf05c776124090d684debd2385a0cebd0f4b45441610f73b05604932374170",
+  "pack_identity_digest": "0c4ae5f6705890430462c7adf620a08ed7392c307f7e5d83b4c90a8d2315d96d",
+  "compiled_artifact_present": true
+}

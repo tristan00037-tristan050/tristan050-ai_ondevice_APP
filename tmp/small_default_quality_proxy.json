@@ -1,0 +1,35 @@
+{
+  "quality_proxy_score": 1.0,
+  "cases": [
+    {
+      "prompt": "\ub300\ud55c\ubbfc\uad6d\uc758 \uc218\ub3c4\ub294?",
+      "output_len": 222,
+      "latency_ms": 4024.4,
+      "quality_pass": true
+    },
+    {
+      "prompt": "\ubb3c\uc758 \ud654\ud559\uc2dd\uc744 \uc54c\ub824\uc918.",
+      "output_len": 186,
+      "latency_ms": 3775.0,
+      "quality_pass": true
+    },
+    {
+      "prompt": "\ub2e4\uc74c\uc744 \uc694\uc57d\ud574\uc918: \uc778\uacf5\uc9c0\ub2a5\uc740 \ucef4\ud4e8\ud130\uac00 \uc778\uac04\ucc98\ub7fc \ud559\uc2b5\ud558\uace0",
+      "output_len": 201,
+      "latency_ms": 4060.1,
+      "quality_pass": true
+    },
+    {
+      "prompt": "\uc0ac\uacfc, \ubc14\ub098\ub098, \ud3ec\ub3c4\ub97c \uac00\ub098\ub2e4\uc21c\uc73c\ub85c \uc815\ub82c\ud574\uc918.",
+      "output_len": 262,
+      "latency_ms": 3784.6,
+      "quality_pass": true
+    },
+    {
+      "prompt": "10, 20, 30, 40, 50\uc758 \ud3c9\uade0\uc744 \uacc4\uc0b0\ud574\uc918.",
+      "output_len": 170,
+      "latency_ms": 4198.0,
+      "quality_pass": true
+    }
+  ]
+}
