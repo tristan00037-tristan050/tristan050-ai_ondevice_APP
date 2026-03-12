@@ -1,0 +1,11 @@
+{
+  "logical_pack_id": "small_default",
+  "weights_digest_sha256": "8578ab53dc899084cc66867b033a2c78b4aedad9f09a3e5b03ca042f6628b49a",
+  "tokenizer_digest_sha256": "a8506e7111b80c6d8635951a02eab0f4e1a8e4e5772da83846579e97b16f61bf",
+  "config_digest_sha256": "77e77ab115ce315a570acc800f5cc082596dd897c1383d0607199ab02a5efabe",
+  "chat_template_digest_sha256": "cd8e9439f0570856fd70470bf8889ebd8b5d1107207f67a5efb46e342330527f",
+  "logical_pack_digest": "814c5cf706988148448195617fc47df36c1951edc5ff20c9e19e1699b5cc5986",
+  "compiled_pack_digest": "382e51e987753149a3918c291ec0e33d78ca25009a148644b75291c0db6da88f",
+  "pack_identity_digest": "3a69a4fbb8322c669ab8b3b2bc8b43ce1bbf0d2551e763259de6ea8e6e828184",
+  "compiled_artifact_present": true
+}

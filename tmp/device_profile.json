@@ -1,0 +1,25 @@
+{
+  "os": "Darwin",
+  "os_version": "Darwin Kernel Version 24.6.0: Mon Jan 19 22:01:41 PST 2026; root:xnu-11417.140.69.708.3~1/RELEASE_ARM64_T8132",
+  "machine": "arm64",
+  "cpu_model": "arm",
+  "cpu_physical_cores": 10,
+  "cpu_logical_cores": 10,
+  "cpu_freq_max_mhz": 4,
+  "ram_total_mb": 16384.0,
+  "ram_available_mb": 4160.6,
+  "disk_total_gb": 460.4,
+  "disk_free_gb": 203.8,
+  "python_version": "3.11.15 (main, Mar  3 2026, 00:52:57) [Clang 17.0.0 (clang-1700.6.3.2)]",
+  "onnxruntime_genai_version": "0.12.2",
+  "onnxruntime_version": "1.24.3",
+  "onnxruntime_providers": [
+    "CoreMLExecutionProvider",
+    "AzureExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "gpu_detected": true,
+  "gpu_info": "Graphics/Displays:\n\n    Apple M4:\n\n      Chipset Model: Apple M4\n      Type: GPU\n      Bus: Built-In\n      Total Number of Cores: 10\n      Vendor: Apple (0x106b)\n      Metal Support: Metal 3\n      Displays:\n        Color LCD:\n          Display Type: Built-in Liquid Retina XDR Display\n          Resolution: 3024 x 1964 Retina\n          Main Display: Yes\n          Mirror: Off\n          Online: Yes",
+  "device_class": "mid",
+  "probe_timestamp": "2026-03-12T04:48:31Z"
+}
