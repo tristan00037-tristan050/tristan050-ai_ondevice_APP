@@ -29,3 +29,5 @@ ondevice-pr-timeline/.local/
 # local logs
 .cursor/
 *.log
+packs/small_default/model.onnx.data
+packs/small_default/model.onnx

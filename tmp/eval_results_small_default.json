@@ -1,0 +1,179 @@
+{
+  "total": 24,
+  "passed": 24,
+  "schema_pass_rate": 1.0,
+  "slo_schema_pass_rate": 0.98,
+  "schema_pass_rate_ok": true,
+  "platform": "macOS_cpu",
+  "pack": "small_default",
+  "cases": [
+    {
+      "id": "qa_001",
+      "class": "qa",
+      "latency_ms": 1890.9,
+      "output_len": 108,
+      "passed": true
+    },
+    {
+      "id": "qa_002",
+      "class": "qa",
+      "latency_ms": 1759.5,
+      "output_len": 85,
+      "passed": true
+    },
+    {
+      "id": "qa_003",
+      "class": "qa",
+      "latency_ms": 1752.4,
+      "output_len": 96,
+      "passed": true
+    },
+    {
+      "id": "qa_004",
+      "class": "qa",
+      "latency_ms": 1696.7,
+      "output_len": 84,
+      "passed": true
+    },
+    {
+      "id": "qa_005",
+      "class": "qa",
+      "latency_ms": 1689.8,
+      "output_len": 110,
+      "passed": true
+    },
+    {
+      "id": "qa_006",
+      "class": "qa",
+      "latency_ms": 1693.5,
+      "output_len": 116,
+      "passed": true
+    },
+    {
+      "id": "sum_001",
+      "class": "summarize",
+      "latency_ms": 1866.5,
+      "output_len": 111,
+      "passed": true
+    },
+    {
+      "id": "sum_002",
+      "class": "summarize",
+      "latency_ms": 1804.5,
+      "output_len": 91,
+      "passed": true
+    },
+    {
+      "id": "sum_003",
+      "class": "summarize",
+      "latency_ms": 1818.4,
+      "output_len": 94,
+      "passed": true
+    },
+    {
+      "id": "sum_004",
+      "class": "summarize",
+      "latency_ms": 1799.6,
+      "output_len": 95,
+      "passed": true
+    },
+    {
+      "id": "rew_001",
+      "class": "rewrite",
+      "latency_ms": 1753.0,
+      "output_len": 107,
+      "passed": true
+    },
+    {
+      "id": "rew_002",
+      "class": "rewrite",
+      "latency_ms": 1734.7,
+      "output_len": 112,
+      "passed": true
+    },
+    {
+      "id": "rew_003",
+      "class": "rewrite",
+      "latency_ms": 1736.6,
+      "output_len": 113,
+      "passed": true
+    },
+    {
+      "id": "rew_004",
+      "class": "rewrite",
+      "latency_ms": 1721.2,
+      "output_len": 134,
+      "passed": true
+    },
+    {
+      "id": "tool_001",
+      "class": "tool_call",
+      "latency_ms": 1718.9,
+      "output_len": 142,
+      "passed": true
+    },
+    {
+      "id": "tool_002",
+      "class": "tool_call",
+      "latency_ms": 1710.0,
+      "output_len": 163,
+      "passed": true
+    },
+    {
+      "id": "tool_003",
+      "class": "tool_call",
+      "latency_ms": 1737.7,
+      "output_len": 163,
+      "passed": true
+    },
+    {
+      "id": "tool_004",
+      "class": "tool_call",
+      "latency_ms": 1713.0,
+      "output_len": 111,
+      "passed": true
+    },
+    {
+      "id": "pol_001",
+      "class": "policy_sensitive",
+      "latency_ms": 1724.8,
+      "output_len": 118,
+      "passed": true
+    },
+    {
+      "id": "pol_002",
+      "class": "policy_sensitive",
+      "latency_ms": 1712.9,
+      "output_len": 124,
+      "passed": true
+    },
+    {
+      "id": "pol_003",
+      "class": "policy_sensitive",
+      "latency_ms": 1690.5,
+      "output_len": 110,
+      "passed": true
+    },
+    {
+      "id": "ret_001",
+      "class": "retrieval_transform",
+      "latency_ms": 1890.7,
+      "output_len": 90,
+      "passed": true
+    },
+    {
+      "id": "ret_002",
+      "class": "retrieval_transform",
+      "latency_ms": 1803.9,
+      "output_len": 103,
+      "passed": true
+    },
+    {
+      "id": "ret_003",
+      "class": "retrieval_transform",
+      "latency_ms": 1755.1,
+      "output_len": 99,
+      "passed": true
+    }
+  ]
+}
