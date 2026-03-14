@@ -71,20 +71,49 @@ def sha256_text(t: str) -> str:
 # ── load_tool_schema — v3/v2 모두 대응 ────────────────────────────────────
 def load_tool_schema() -> dict:
     """
-    v3: {"tools": [{"name": "add_schedule", "arguments": {...}, "required": [...]}, ...]}
-    v2: {"registered_actions": [...], "tools": [{"tools": [...]}]}
+    schema_v3.json / schema_v2.json 을 아래 순서로 탐색한다.
+      1. 스크립트 기준 상대 경로  : <script_dir>/../../schemas/tool_call_schema_v3.json
+      2. 실행 CWD 기준 경로       : schemas/tool_call_schema_v3.json  (repo root 실행 시)
+      3. 하드코딩된 내장 fallback : schema_v3 9종 도구 (파일이 없어도 실행 가능)
+
     반환 schema에 반드시 "registered_actions": [str, ...] 키 존재.
     """
-    path = SCHEMA_PATH_V3 if SCHEMA_PATH_V3.exists() else SCHEMA_PATH_V2
-    if not path.exists():
-        raise RuntimeError(
-            f"SCHEMA_MISSING: v3={SCHEMA_PATH_V3}, v2={SCHEMA_PATH_V2}"
-        )
-    schema = json.loads(path.read_text(encoding="utf-8"))
+    # ── 탐색 경로 목록 (v3 우선, v2 fallback)
+    script_dir = Path(__file__).resolve().parent
+    candidates = [
+        script_dir / ".." / ".." / "schemas" / "tool_call_schema_v3.json",
+        script_dir / ".." / ".." / "schemas" / "tool_call_schema_v2.json",
+        SCHEMA_PATH_V3,   # CWD 기준
+        SCHEMA_PATH_V2,
+    ]
 
+    schema: dict | None = None
+    for p in candidates:
+        resolved = p.resolve()
+        if resolved.exists():
+            schema = json.loads(resolved.read_text(encoding="utf-8"))
+            break
+
+    # ── 파일 없을 때 내장 fallback (repo에 schema 파일이 없어도 동작)
+    if schema is None:
+        schema = {
+            "schema_version": "v3-builtin",
+            "tools": [
+                {"name": "get_weather",    "arguments": {"location": {"type": "string"}, "date": {"type": "string"}}, "required": ["location"]},
+                {"name": "add_schedule",   "arguments": {"title": {"type": "string"}, "date": {"type": "string"}, "time": {"type": "string"}, "location": {"type": "string"}}, "required": ["title", "date"]},
+                {"name": "send_email",     "arguments": {"to": {"type": "string"}, "subject": {"type": "string"}, "body": {"type": "string"}}, "required": ["to", "subject", "body"]},
+                {"name": "search_contact", "arguments": {"name": {"type": "string"}}, "required": ["name"]},
+                {"name": "summarize_doc",  "arguments": {"document_text": {"type": "string"}, "target_length": {"type": "string"}}, "required": ["document_text"]},
+                {"name": "set_volume",     "arguments": {"level": {"type": "integer"}}, "required": ["level"]},
+                {"name": "toggle_wifi",    "arguments": {"enabled": {"type": "boolean"}}, "required": ["enabled"]},
+                {"name": "open_file",      "arguments": {"path": {"type": "string"}}, "required": ["path"]},
+                {"name": "save_memo",      "arguments": {"title": {"type": "string"}, "content": {"type": "string"}}, "required": ["title", "content"]},
+            ],
+        }
+
+    # ── v2 nested 구조 평탄화
     if "tools" in schema and isinstance(schema["tools"], list):
         first = schema["tools"][0] if schema["tools"] else {}
-        # v2 nested 구조 평탄화
         if "tools" in first:
             flat = []
             for cat in schema["tools"]:
@@ -92,13 +121,12 @@ def load_tool_schema() -> dict:
                     flat.append(t)
             schema["tools"] = flat
 
-    # registered_actions 키 보장 (v2 호환 + 이름 기반)
+    # ── registered_actions 키 보장
     if "registered_actions" not in schema:
         schema["registered_actions"] = [
-            t["name"]
-            for t in schema.get("tools", [])
-            if "name" in t
+            t["name"] for t in schema.get("tools", []) if "name" in t
         ]
+
     return schema
 
 
@@ -483,6 +511,36 @@ def _make_rewrite_pool(lang: str) -> list[tuple[str, str]]:
 #   open_file     : path(req)
 #   save_memo     : title(req), content(req)
 
+def _validate_tool_call(record: dict, schema: dict) -> bool:
+    """
+    생성된 tool_call completion이 schema에 실제로 부합하는지 검증.
+    - tool_name 이 registered_actions 에 있는지
+    - required 필드가 arguments 에 모두 존재하는지
+    - arguments 에 schema 미정의 키가 없는지 (additionalProperties=False 동치)
+    """
+    tool_name = record.get("tool_name")
+    registered = set(schema.get("registered_actions", []))
+    if tool_name not in registered:
+        return False
+
+    tool_defs = {t["name"]: t for t in schema.get("tools", []) if "name" in t}
+    tool_def = tool_defs.get(tool_name)
+    if tool_def is None:
+        return False
+
+    args = record.get("arguments", {})
+    allowed_keys = set(tool_def.get("arguments", {}).keys())
+    required_keys = set(tool_def.get("required", []))
+
+    # required 필드 누락 체크
+    if not required_keys.issubset(set(args.keys())):
+        return False
+    # 허용되지 않은 키 체크 (additionalProperties=False)
+    if not set(args.keys()).issubset(allowed_keys):
+        return False
+    return True
+
+
 def _make_tool_call_pool(lang: str, schema: dict) -> list[tuple[str, str]]:
     pairs = []
 
@@ -542,6 +600,8 @@ def _make_tool_call_pool(lang: str, schema: dict) -> list[tuple[str, str]]:
                             for time_ in TIMES[:3]:
                                 for loc in KO_LOCS[:3]:
                                     args = out_fn(name, date, topic, time_, loc)
+                                    if not _validate_tool_call(args, schema):
+                                        continue
                                     pairs.append((
                                         pt.format(name=name, dept=dept, topic=topic, date=date, time=time_, loc=loc),
                                         args,
@@ -603,6 +663,8 @@ def _make_tool_call_pool(lang: str, schema: dict) -> list[tuple[str, str]]:
                             for time_ in TIMES[:3]:
                                 for loc in KO_LOCS[:3]:
                                     args = out_fn(name, date, topic, time_, loc)
+                                    if not _validate_tool_call(args, schema):
+                                        continue
                                     pairs.append((
                                         pt.format(name=name, dept=dept, topic=topic, date=date, time=time_, loc=loc),
                                         args,
@@ -652,6 +714,8 @@ def _make_tool_call_pool(lang: str, schema: dict) -> list[tuple[str, str]]:
                             for time_ in TIMES[:3]:
                                 for loc in KO_LOCS[:3]:
                                     args = out_fn(name, date, topic, time_, loc)
+                                    if not _validate_tool_call(args, schema):
+                                        continue
                                     pairs.append((
                                         pt.format(name=name, dept=dept, topic=topic, date=date, time=time_, loc=loc),
                                         args,
