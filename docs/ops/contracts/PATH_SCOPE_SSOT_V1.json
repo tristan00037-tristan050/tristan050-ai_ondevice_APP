@@ -6,7 +6,8 @@
     "scripts/ops",
     ".github/workflows",
     "docs/ops/contracts",
-    "docs/ops/PROOFS"
+    "docs/ops/PROOFS",
+    "scripts/ai"
   ],
   "excluded_paths": [
     "node_modules",
