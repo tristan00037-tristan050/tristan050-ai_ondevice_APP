@@ -89,10 +89,12 @@ extract_paths() {
 }
 
 PATHS="$(extract_paths || true)"
+TMP_PATHS="$(mktemp)"
+trap 'rm -f "$TMP_PATHS"' EXIT
+printf '%s\n' "$PATHS" > "$TMP_PATHS"
 
-echo "$PATHS" | node - <<'NODE'
+node - "$TMP_PATHS" <<'NODE'
 const fs = require('fs');
-const path = require('path');
 
 const ssot = JSON.parse(fs.readFileSync('docs/ops/contracts/PATH_SCOPE_SSOT_V1.json','utf8'));
 const allowed = ssot.allowed_paths.map(p=>p.replace(/\/+$/,''));
@@ -104,7 +106,11 @@ function isUnder(x, root) {
   return x === root || x.startsWith(root + '/');
 }
 
-const lines = require('fs').readFileSync(0,'utf8').split('\n').map(s=>s.trim()).filter(Boolean);
+const inputPath = process.argv[2];
+const lines = fs.readFileSync(inputPath, 'utf8')
+  .split('\n')
+  .map(s=>s.trim())
+  .filter(Boolean);
 
 let bad = [];
 for (const p of lines) {
