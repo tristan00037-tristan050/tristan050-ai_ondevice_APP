@@ -44,8 +44,15 @@ def main():
         sft_params=inspect.signature(SFTConfig).parameters
         if "eval_strategy" in sft_params: kwargs["eval_strategy"] = "steps" if eval_dataset is not None else "no"
         elif "evaluation_strategy" in sft_params: kwargs["evaluation_strategy"] = "steps" if eval_dataset is not None else "no"
-        if eval_dataset is not None: kwargs["eval_steps"] = args.eval_steps
-        trainer=SFTTrainer(model=model, train_dataset=train_dataset, eval_dataset=eval_dataset, processing_class=tokenizer, peft_config=peft_config, args=SFTConfig(**kwargs))
+        if eval_dataset is not None:
+            kwargs["eval_steps"] = args.eval_steps
+        else:
+            kwargs["load_best_model_at_end"] = False
+            kwargs.pop("metric_for_best_model", None)
+            kwargs.pop("greater_is_better", None)
+        trainer_params = inspect.signature(SFTTrainer).parameters
+        tokenizer_kwarg = "processing_class" if "processing_class" in trainer_params else "tokenizer"
+        trainer=SFTTrainer(model=model, train_dataset=train_dataset, eval_dataset=eval_dataset, **{tokenizer_kwarg: tokenizer}, peft_config=peft_config, args=SFTConfig(**kwargs))
         trainer.train(resume_from_checkpoint=args.resume)
     Path("tmp").mkdir(exist_ok=True)
     Path("tmp/qlora_dryrun_result.json").write_text(json.dumps({"QLORA_SCRIPT_OK":1,"model_id":args.model_id,"train_file":args.train_file,"eval_file":args.eval_file,"output_dir":args.output_dir,"dry_run":args.dry_run,"resume":args.resume,"num_train_epochs":args.num_train_epochs,"warmup_ratio":args.warmup_ratio,"eval_steps":args.eval_steps,"save_total_limit":args.save_total_limit,"gradient_checkpointing":True,"load_best_model_at_end":True,"format":"instruction(prompt+completion)"}, ensure_ascii=False, indent=2), encoding="utf-8")
