@@ -17,40 +17,6 @@ interface ConfigResult {
   config: CanaryConfig;
 }
 
-// Mock state — per-environment, persists across calls
-type EnvState = { version: string; canary_percent: number; kill_switch: boolean };
-
-const mockStates: Record<string, EnvState> = {};
-
-function getEnvState(env: string): EnvState {
-  if (!mockStates[env]) {
-    mockStates[env] = { version: 'v1.0.0', canary_percent: 10, kill_switch: false };
-  }
-  return mockStates[env];
-}
-
-// Mock ConfigApiClient — replace with real implementation when backend is ready
-const mockConfigApiClient = {
-  async getConfig(env: string): Promise<ConfigResult> {
-    const s = getEnvState(env);
-    return {
-      version: s.version,
-      config: { canary_percent: s.canary_percent, kill_switch: s.kill_switch },
-    };
-  },
-  async releaseConfig(env: string, config: CanaryConfig, _tenantId: string): Promise<{ version: string }> {
-    const s = getEnvState(env);
-    s.canary_percent = config.canary_percent;
-    s.kill_switch = config.kill_switch;
-    s.version = `v1.0.${Date.now()}`;
-    return { version: s.version };
-  },
-  async rollbackConfig(env: string, _tenantId: string): Promise<{ version: string }> {
-    const s = getEnvState(env);
-    s.canary_percent = 0;
-    s.kill_switch = false;
-    s.version = 'v1.0.0';
-    return { version: s.version };
   },
 };
 
@@ -127,11 +93,7 @@ const KillSwitchToggle: React.FC<{
 
 const RollbackButton: React.FC<{
   onRollback: () => Promise<void>;
-  onError: (msg: string) => void;
-  disabled?: boolean;
-  currentVersion?: string;
-  previousVersion?: string;
-}> = ({ onRollback, onError, disabled, currentVersion, previousVersion }) => {
+
   const [confirming, setConfirming] = useState(false);
   const [rolling, setRolling] = useState(false);
 
@@ -144,8 +106,7 @@ const RollbackButton: React.FC<{
     setConfirming(false);
     try {
       await onRollback();
-    } catch (err: any) {
-      onError(err.message || 'Rollback failed');
+
     } finally {
       setRolling(false);
     }
@@ -198,7 +159,7 @@ export const RolloutPage: React.FC = () => {
   const loadConfig = async () => {
     setIsLoading(true);
     setError(null);
-    // success는 여기서 초기화하지 않음 — apply/rollback 성공 토스트를 loadConfig 후에도 유지
+
     try {
       const result = await mockConfigApiClient.getConfig(environment);
       setCanaryPercent(result.config.canary_percent);
@@ -232,16 +193,7 @@ export const RolloutPage: React.FC = () => {
   };
 
   const handleRollback = async () => {
-    setError(null);
-    setSuccess(null);
-    try {
-      const result = await mockConfigApiClient.rollbackConfig(environment, TENANT_ID);
-      setCurrentVersion(result.version);
-      setSuccess(`Rolled back → ${result.version}`);
-      await loadConfig();
-    } catch (err: any) {
-      setError(err.message || 'Rollback failed');
-    }
+
   };
 
   return (
@@ -312,7 +264,7 @@ export const RolloutPage: React.FC = () => {
         <div className="px-6 py-5">
           <RollbackButton
             onRollback={handleRollback}
-            onError={setError}
+
             disabled={isApplying || isLoading}
             currentVersion={currentVersion ?? undefined}
           />
