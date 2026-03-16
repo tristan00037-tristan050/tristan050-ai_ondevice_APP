@@ -14,7 +14,6 @@ TRAIN_FILE="data/synthetic_v40/train.jsonl"
 EVAL_FILE="data/synthetic_v40/validation.jsonl"
 OUTPUT_DIR="output/butler_model_v1"
 LOG_FILE="output/training.log"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 echo "=============================================="
 echo " AI-16 Phase B QLoRA 학습 시작"

@@ -73,10 +73,12 @@ echo "  ✅ 패키지 설치 완료"
 # ── 5. 설치 확인 ──────────────────────────────────────
 echo ""
 echo "[5/5] 설치된 패키지 최종 확인..."
+
 for pkg in transformers trl peft bitsandbytes datasets accelerate torch; do
     VER=$("$PYTHON_BIN" -c "import $pkg; print($pkg.__version__)" 2>/dev/null || echo "미설치")
     if [ "$VER" = "미설치" ]; then
         echo "  ❌ $pkg — 설치 실패"
+
     else
         echo "  ✅ $pkg==$VER"
     fi
