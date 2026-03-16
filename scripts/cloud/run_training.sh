@@ -14,7 +14,26 @@ TRAIN_FILE="data/synthetic_v40/train.jsonl"
 EVAL_FILE="data/synthetic_v40/validation.jsonl"
 OUTPUT_DIR="output/butler_model_v1"
 LOG_FILE="output/training.log"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+# ── Python 인터프리터 결정 ────────────────────────────────────────────────────
+# setup.sh가 저장한 경로를 우선 사용; 없으면 직접 탐색
+if [ -f /tmp/butler_python_bin ]; then
+    PYTHON_BIN="$(cat /tmp/butler_python_bin)"
+    echo "  ✅ setup.sh 저장 인터프리터 사용: $PYTHON_BIN"
+else
+    PYTHON_BIN=""
+    for py in python3.11 python3.10 python3 python; do
+        if command -v "$py" &>/dev/null; then
+            PYTHON_BIN="$(command -v "$py")"
+            echo "  ✅ Python 인터프리터 자동 탐색: $PYTHON_BIN"
+            break
+        fi
+    done
+    if [ -z "$PYTHON_BIN" ]; then
+        echo "❌ Python을 찾을 수 없습니다. setup.sh 를 먼저 실행해 주세요."
+        exit 1
+    fi
+fi
 
 echo "=============================================="
 echo " AI-16 Phase B QLoRA 학습 시작"
