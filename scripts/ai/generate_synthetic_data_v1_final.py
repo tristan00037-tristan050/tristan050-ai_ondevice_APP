@@ -201,10 +201,18 @@ def main() -> None:
     schema = load_tool_schema()
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # 기본 조합(FUNCTIONS × LANGS = 18건)을 count에 맞게 반복/샘플링
+    base_combos = [(fn, lang) for fn in FUNCTIONS for lang in LANGS]
+    if args.count <= len(base_combos):
+        combos = random.sample(base_combos, args.count)
+    else:
+        full_repeats, remainder = divmod(args.count, len(base_combos))
+        combos = base_combos * full_repeats + random.sample(base_combos, remainder)
+
     rows = []
-    for fn in FUNCTIONS:
-        for lang in LANGS:
-            rows.append(build_record(fn, lang, len(rows) + 1, schema))
+    for fn, lang in combos:
+        rows.append(build_record(fn, lang, len(rows) + 1, schema))
     random.shuffle(rows)
 
     status = {
