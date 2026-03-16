@@ -19,6 +19,7 @@ import { CsDashboardPage } from './pages/cs/CsDashboardPage';
 // ↓ 신규 추가
 import { ModelPackPage } from './pages/ai/ModelPackPage';
 import { OnDeviceStatusPage } from './pages/ai/OnDeviceStatusPage';
+import { RolloutPage } from './pages/rollout/RolloutPage';
 
 const NAV_LINK_BASE = 'text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors';
 const NAV_LINK_ACTIVE = 'text-indigo-600 bg-indigo-50 font-semibold';
@@ -49,6 +50,11 @@ function AppContent() {
                 <NavLink to="/ai/ondevice-status"
                   className={({ isActive }) => `${NAV_LINK_BASE} ${isActive ? NAV_LINK_ACTIVE : ''}`}>
                   기기 상태
+                </NavLink>
+
+                <NavLink to="/rollout"
+                  className={({ isActive }) => `${NAV_LINK_BASE} ${isActive ? NAV_LINK_ACTIVE : ''}`}>
+                  Rollout
                 </NavLink>
 
                 {/* 구분선 */}
@@ -108,6 +114,9 @@ function AppContent() {
           {/* ─── AI 신규 라우트 ─── */}
           <Route path="/ai/model-packs"      element={<ModelPackPage />} />
           <Route path="/ai/ondevice-status"  element={<OnDeviceStatusPage />} />
+
+          {/* ─── Rollout ─── */}
+          <Route path="/rollout" element={<RolloutPage />} />
 
           {/* ─── 기존 라우트 ─── */}
           <Route path="/reports"   element={<Reports />} />
