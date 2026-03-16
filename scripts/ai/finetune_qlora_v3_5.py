@@ -388,8 +388,8 @@ def run_finetune(args: argparse.Namespace) -> None:
         packing=False,
     )
 
-    # checkpoint 재시작
-    trainer.train(resume_from_checkpoint=args.resume if args.resume else None)
+    # checkpoint 재시작 (경로 지정 또는 None)
+    trainer.train(resume_from_checkpoint=args.resume)
 
     # 저장
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
@@ -450,8 +450,8 @@ def main() -> None:
     parser.add_argument("--output-dir",        type=str, default="packs/finetuned")
     parser.add_argument("--dry-run",           action="store_true",
                         help="설정 검증 + JSON 저장 (GPU 불필요)")
-    parser.add_argument("--resume",            action="store_true",
-                        help="최근 checkpoint에서 재시작")
+    parser.add_argument("--resume",            type=str, default=None,
+                        help="재시작할 checkpoint 경로 (예: outputs/checkpoint-400)")
     parser.add_argument("--max-steps",         type=int,   default=None)
     parser.add_argument("--num-train-epochs",  type=float, default=None)
     parser.add_argument("--warmup-ratio",      type=float, default=None)
