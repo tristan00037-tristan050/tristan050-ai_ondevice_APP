@@ -17,33 +17,40 @@ interface ConfigResult {
   config: CanaryConfig;
 }
 
-// Mock state — persists across getConfig/releaseConfig/rollbackConfig calls
-const mockState: { version: string; canary_percent: number; kill_switch: boolean } = {
-  version: 'v1.0.0',
-  canary_percent: 10,
-  kill_switch: false,
-};
+// Mock state — per-environment, persists across calls
+type EnvState = { version: string; canary_percent: number; kill_switch: boolean };
+
+const mockStates: Record<string, EnvState> = {};
+
+function getEnvState(env: string): EnvState {
+  if (!mockStates[env]) {
+    mockStates[env] = { version: 'v1.0.0', canary_percent: 10, kill_switch: false };
+  }
+  return mockStates[env];
+}
 
 // Mock ConfigApiClient — replace with real implementation when backend is ready
 const mockConfigApiClient = {
-  async getConfig(_env: string): Promise<ConfigResult> {
+  async getConfig(env: string): Promise<ConfigResult> {
+    const s = getEnvState(env);
     return {
-      version: mockState.version,
-      config: { canary_percent: mockState.canary_percent, kill_switch: mockState.kill_switch },
+      version: s.version,
+      config: { canary_percent: s.canary_percent, kill_switch: s.kill_switch },
     };
   },
-  async releaseConfig(_env: string, config: CanaryConfig, _tenantId: string): Promise<{ version: string }> {
-    const ts = Date.now();
-    mockState.canary_percent = config.canary_percent;
-    mockState.kill_switch = config.kill_switch;
-    mockState.version = `v1.0.${ts}`;
-    return { version: mockState.version };
+  async releaseConfig(env: string, config: CanaryConfig, _tenantId: string): Promise<{ version: string }> {
+    const s = getEnvState(env);
+    s.canary_percent = config.canary_percent;
+    s.kill_switch = config.kill_switch;
+    s.version = `v1.0.${Date.now()}`;
+    return { version: s.version };
   },
-  async rollbackConfig(_env: string, _tenantId: string): Promise<{ version: string }> {
-    mockState.canary_percent = 0;
-    mockState.kill_switch = false;
-    mockState.version = 'v1.0.0';
-    return { version: mockState.version };
+  async rollbackConfig(env: string, _tenantId: string): Promise<{ version: string }> {
+    const s = getEnvState(env);
+    s.canary_percent = 0;
+    s.kill_switch = false;
+    s.version = 'v1.0.0';
+    return { version: s.version };
   },
 };
 
@@ -191,7 +198,7 @@ export const RolloutPage: React.FC = () => {
   const loadConfig = async () => {
     setIsLoading(true);
     setError(null);
-    setSuccess(null);
+    // success는 여기서 초기화하지 않음 — apply/rollback 성공 토스트를 loadConfig 후에도 유지
     try {
       const result = await mockConfigApiClient.getConfig(environment);
       setCanaryPercent(result.config.canary_percent);
