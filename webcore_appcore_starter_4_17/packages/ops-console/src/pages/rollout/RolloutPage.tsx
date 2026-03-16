@@ -159,7 +159,7 @@ export const RolloutPage: React.FC = () => {
   const loadConfig = async () => {
     setIsLoading(true);
     setError(null);
-    setSuccess(null);
+
     try {
       const result = await mockConfigApiClient.getConfig(environment);
       setCanaryPercent(result.config.canary_percent);
