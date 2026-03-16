@@ -17,33 +17,6 @@ interface ConfigResult {
   config: CanaryConfig;
 }
 
-// Mock state — persists across getConfig/releaseConfig/rollbackConfig calls
-const mockState: { version: string; canary_percent: number; kill_switch: boolean } = {
-  version: 'v1.0.0',
-  canary_percent: 10,
-  kill_switch: false,
-};
-
-// Mock ConfigApiClient — replace with real implementation when backend is ready
-const mockConfigApiClient = {
-  async getConfig(_env: string): Promise<ConfigResult> {
-    return {
-      version: mockState.version,
-      config: { canary_percent: mockState.canary_percent, kill_switch: mockState.kill_switch },
-    };
-  },
-  async releaseConfig(_env: string, config: CanaryConfig, _tenantId: string): Promise<{ version: string }> {
-    const ts = Date.now();
-    mockState.canary_percent = config.canary_percent;
-    mockState.kill_switch = config.kill_switch;
-    mockState.version = `v1.0.${ts}`;
-    return { version: mockState.version };
-  },
-  async rollbackConfig(_env: string, _tenantId: string): Promise<{ version: string }> {
-    mockState.canary_percent = 0;
-    mockState.kill_switch = false;
-    mockState.version = 'v1.0.0';
-    return { version: mockState.version };
   },
 };
 
@@ -120,11 +93,7 @@ const KillSwitchToggle: React.FC<{
 
 const RollbackButton: React.FC<{
   onRollback: () => Promise<void>;
-  onError: (msg: string) => void;
-  disabled?: boolean;
-  currentVersion?: string;
-  previousVersion?: string;
-}> = ({ onRollback, onError, disabled, currentVersion, previousVersion }) => {
+
   const [confirming, setConfirming] = useState(false);
   const [rolling, setRolling] = useState(false);
 
@@ -137,8 +106,7 @@ const RollbackButton: React.FC<{
     setConfirming(false);
     try {
       await onRollback();
-    } catch (err: any) {
-      onError(err.message || 'Rollback failed');
+
     } finally {
       setRolling(false);
     }
@@ -225,16 +193,7 @@ export const RolloutPage: React.FC = () => {
   };
 
   const handleRollback = async () => {
-    setError(null);
-    setSuccess(null);
-    try {
-      const result = await mockConfigApiClient.rollbackConfig(environment, TENANT_ID);
-      setCurrentVersion(result.version);
-      setSuccess(`Rolled back → ${result.version}`);
-      await loadConfig();
-    } catch (err: any) {
-      setError(err.message || 'Rollback failed');
-    }
+
   };
 
   return (
@@ -305,7 +264,7 @@ export const RolloutPage: React.FC = () => {
         <div className="px-6 py-5">
           <RollbackButton
             onRollback={handleRollback}
-            onError={setError}
+
             disabled={isApplying || isLoading}
             currentVersion={currentVersion ?? undefined}
           />
