@@ -12,6 +12,7 @@ train / validation / test JSONL 파일 사이에 (prompt, completion) 중복 행
   CROSS_SPLIT_REQUIRED_FILES_PRESENT_OK=1
   CROSS_SPLIT_DUPLICATE_NO_RAW_LOG_OK=1
   CROSS_SPLIT_DUPLICATE_SIGNAL_SINGLE_SOURCE_OK=1
+  CROSS_SPLIT_NONEMPTY_CONTENT_REQUIRED_OK=1
 """
 
 import argparse
@@ -29,17 +30,19 @@ def pair_digest(prompt: str, completion: str) -> str:
 
 def load_pairs(path: Path) -> set[tuple[str, str]]:
     """JSONL 파일에서 (prompt, completion) 튜플 set 반환.
-    파일 없음/빈 파일/빈 레코드는 RuntimeError로 fail-closed 처리."""
+    파일 없음/빈 파일/공백-전용 파일/빈 레코드는 RuntimeError로 fail-closed 처리."""
     if not path.exists():
         raise RuntimeError(f"SPLIT_FILE_MISSING:{path.name}")
     if path.stat().st_size == 0:
         raise RuntimeError(f"SPLIT_FILE_EMPTY:{path.name}")
 
     pairs: set[tuple[str, str]] = set()
+    nonblank_count = 0
     for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         line = line.strip()
         if not line:
             continue
+        nonblank_count += 1
         try:
             row = json.loads(line)
         except json.JSONDecodeError as e:
@@ -50,6 +53,8 @@ def load_pairs(path: Path) -> set[tuple[str, str]]:
         if not prompt or not completion:
             raise RuntimeError(f"SPLIT_RECORD_INVALID:{path.name}:{i}")
         pairs.add((prompt, completion))
+    if nonblank_count == 0:
+        raise RuntimeError(f"SPLIT_FILE_WHITESPACE_ONLY:{path.name}")
     return pairs
 
 
@@ -104,6 +109,7 @@ def main() -> None:
         sys.exit(1)
 
     print("CROSS_SPLIT_DUPLICATE_NO_RAW_LOG_OK=1")
+    print("CROSS_SPLIT_NONEMPTY_CONTENT_REQUIRED_OK=1")
     print("DATASET_CROSS_SPLIT_DUPLICATE_0_OK=1")
     print("CROSS_SPLIT_DUPLICATE_SIGNAL_SINGLE_SOURCE_OK=1")
     sys.exit(0)

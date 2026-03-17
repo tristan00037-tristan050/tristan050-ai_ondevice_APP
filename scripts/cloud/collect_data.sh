@@ -447,10 +447,10 @@ for f in train.jsonl validation.jsonl test.jsonl; do
         COUNT=$(wc -l < "$FPATH" | tr -d ' ')
         SIZE=$(du -sh "$FPATH" | cut -f1)
         if [ "$COUNT" -eq 0 ]; then
-            echo "  ⚠️  $f — 파일 존재하지만 0건 (비어있음)"
-        else
-            echo "  ✅ $f — $COUNT 건 ($SIZE)"
+            echo "BLOCK: $f — 0건 (비어있음)"
+            exit 1
         fi
+        echo "  ✅ $f — $COUNT 건 ($SIZE)"
     else
         echo "  ❌ $f — 파일 없음"
         exit 1
