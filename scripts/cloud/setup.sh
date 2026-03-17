@@ -59,8 +59,8 @@ echo ""
 
 # bitsandbytes는 CUDA 빌드가 필요해 별도 설치
 "$PYTHON_BIN" -m pip install \
-    "transformers==4.40.0" \
-    "trl==0.9.0" \
+    "transformers>=4.40,<5" \
+    "trl==0.9.6" \
     "peft==0.10.0" \
     "bitsandbytes>=0.43,<1" \
     "datasets>=2.18,<4" \
