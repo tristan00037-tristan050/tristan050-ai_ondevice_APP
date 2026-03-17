@@ -13,6 +13,7 @@ train / validation / test JSONL 파일 사이에 (prompt, completion) 중복 행
   CROSS_SPLIT_DUPLICATE_NO_RAW_LOG_OK=1
   CROSS_SPLIT_DUPLICATE_SIGNAL_SINGLE_SOURCE_OK=1
   CROSS_SPLIT_NONEMPTY_CONTENT_REQUIRED_OK=1
+  CROSS_SPLIT_RECORD_STRING_FIELDS_REQUIRED_OK=1
 """
 
 import argparse
@@ -28,9 +29,13 @@ def pair_digest(prompt: str, completion: str) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def norm_text(s: str) -> str:
+    return " ".join(s.split())
+
+
 def load_pairs(path: Path) -> set[tuple[str, str]]:
     """JSONL 파일에서 (prompt, completion) 튜플 set 반환.
-    파일 없음/빈 파일/공백-전용 파일/빈 레코드는 RuntimeError로 fail-closed 처리."""
+    파일 없음/빈 파일/공백-전용 파일/타입 오류/빈 레코드는 RuntimeError로 fail-closed 처리."""
     if not path.exists():
         raise RuntimeError(f"SPLIT_FILE_MISSING:{path.name}")
     if path.stat().st_size == 0:
@@ -48,8 +53,18 @@ def load_pairs(path: Path) -> set[tuple[str, str]]:
         except json.JSONDecodeError as e:
             print(f"BLOCK: JSON 파싱 실패 — {path}:{i}: {e}", file=sys.stderr)
             sys.exit(1)
-        prompt = row.get("prompt", "")
-        completion = row.get("completion", "")
+        if not isinstance(row, dict):
+            raise RuntimeError(f"SPLIT_RECORD_NOT_OBJECT:{path.name}:{i}")
+        raw_prompt = row.get("prompt")
+        raw_completion = row.get("completion")
+        if raw_prompt is None or raw_completion is None:
+            raise RuntimeError(f"SPLIT_RECORD_FIELD_MISSING:{path.name}:{i}")
+        if not isinstance(raw_prompt, str):
+            raise RuntimeError(f"SPLIT_RECORD_PROMPT_NOT_STRING:{path.name}:{i}:{type(raw_prompt).__name__}")
+        if not isinstance(raw_completion, str):
+            raise RuntimeError(f"SPLIT_RECORD_COMPLETION_NOT_STRING:{path.name}:{i}:{type(raw_completion).__name__}")
+        prompt = norm_text(raw_prompt)
+        completion = norm_text(raw_completion)
         if not prompt or not completion:
             raise RuntimeError(f"SPLIT_RECORD_INVALID:{path.name}:{i}")
         pairs.add((prompt, completion))
@@ -110,6 +125,7 @@ def main() -> None:
 
     print("CROSS_SPLIT_DUPLICATE_NO_RAW_LOG_OK=1")
     print("CROSS_SPLIT_NONEMPTY_CONTENT_REQUIRED_OK=1")
+    print("CROSS_SPLIT_RECORD_STRING_FIELDS_REQUIRED_OK=1")
     print("DATASET_CROSS_SPLIT_DUPLICATE_0_OK=1")
     print("CROSS_SPLIT_DUPLICATE_SIGNAL_SINGLE_SOURCE_OK=1")
     sys.exit(0)
