@@ -16,10 +16,13 @@ jobs:
         working-directory: webcore_appcore_starter_4_17
     runs-on: ubuntu-latest
 
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          lfs: false
           fetch-depth: 0 # git diff를 위해 전체 히스토리 필요
 
       - name: Setup Node.js

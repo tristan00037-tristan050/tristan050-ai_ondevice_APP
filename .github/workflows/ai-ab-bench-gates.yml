@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      GIT_LFS_SKIP_SMUDGE: "1"
       # 기본값(필요하면 PR에서 바꿀 수 있도록 유지)
       MODEL_A: demoA
       MODEL_B: demoB
@@ -29,6 +30,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4

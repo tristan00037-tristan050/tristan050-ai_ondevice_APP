@@ -14,12 +14,14 @@ jobs:
     name: dockerless-repo-guard-report
     runs-on: ubuntu-latest
     env:
+      GIT_LFS_SKIP_SMUDGE: "1"
       DOCKER_HOST: unix:///var/run/does-not-exist.sock
       REPO_GUARD_KEYS_ONLY: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          lfs: false
           fetch-depth: 0
 
       - name: Setup Node.js

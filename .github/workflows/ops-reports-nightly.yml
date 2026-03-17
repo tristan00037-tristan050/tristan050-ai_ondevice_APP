@@ -13,9 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
     steps:
       - uses: actions/checkout@v4
         with:
+          lfs: false
           fetch-depth: 0
 
       - uses: actions/setup-node@v4

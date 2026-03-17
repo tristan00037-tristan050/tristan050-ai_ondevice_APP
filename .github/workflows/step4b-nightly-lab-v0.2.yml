@@ -15,10 +15,13 @@ jobs:
       run:
         shell: bash
 
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          lfs: false
           fetch-depth: 1
 
       - name: Setup Python
