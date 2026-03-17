@@ -73,15 +73,9 @@ if [ "$OFFLINE" -eq 0 ]; then
     echo "[2/4] 한국어 공개 데이터 다운로드 중..."
     echo "  ※ 인터넷 연결이 필요해요. 속도에 따라 시간이 걸릴 수 있어요."
 
-    # ── Wikipedia 한국어 (소형 샘플 — 전체 덤프 대신 Hugging Face 미러 사용) ──
-    if command -v curl &>/dev/null || command -v wget &>/dev/null; then
-        DL_CMD=""
-        command -v curl &>/dev/null && DL_CMD="curl -fsSL -o"
-        command -v wget &>/dev/null && [ -z "$DL_CMD" ] && DL_CMD="wget -q -O"
-
-        # datasets 패키지로 Wikipedia 한국어 스트리밍 다운로드
-        echo "  📥 Wikipedia 한국어 샘플 다운로드 (Hugging Face datasets)..."
-        "$PYTHON_BIN" - <<'PYEOF'
+    # ── Wikipedia 한국어 (소형 샘플 — Hugging Face datasets 스트리밍) ──────────
+    echo "  📥 Wikipedia 한국어 샘플 다운로드 (Hugging Face datasets)..."
+    "$PYTHON_BIN" - <<'PYEOF'
 import json
 import sys
 from pathlib import Path
@@ -117,8 +111,6 @@ except Exception as e:
     print(f"  ⚠️  Wikipedia 다운로드 실패 (합성 데이터만 사용): {e}", file=sys.stderr)
     out_path.write_text("", encoding="utf-8")
 PYEOF
-
-    fi
 
     # ── 국립국어원 모두의 말뭉치 공개 샘플 (JSON Lines 형태 직접 생성) ──────
     echo "  📥 한국어 대화 샘플 생성 중 (공개 도메인 예시)..."
@@ -273,10 +265,13 @@ for split_name, records in splits.items():
     for r in records:
         r["split"] = split_name
     path = out_dir / f"{split_name}.jsonl"
-    path.write_text(
-        "\n".join(json.dumps(r, ensure_ascii=False) for r in records) + "\n",
-        encoding="utf-8",
-    )
+    if records:
+        path.write_text(
+            "\n".join(json.dumps(r, ensure_ascii=False) for r in records) + "\n",
+            encoding="utf-8",
+        )
+    else:
+        path.write_text("", encoding="utf-8")
     print(f"  ✅ {split_name}.jsonl → {len(records)} 건")
 
 print(f"  전체 {n} 건 (train {len(splits['train'])} / val {len(splits['validation'])} / test {len(splits['test'])})")
