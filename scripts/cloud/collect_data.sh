@@ -390,7 +390,7 @@ else:
 
 # ── 전체 병합 및 분할 ─────────────────────────────────────────────────────────
 # split 전 전체 풀 dedup — cross-split leakage 방지
-# dedup 키: (function, lang, norm_text(prompt), norm_text(completion))
+# dedup 키: (norm_text(prompt), norm_text(completion)) — pair 기준
 # norm_text: 공백 정규화 + strip
 def norm_text(s):
     return " ".join(str(s).split())
@@ -399,14 +399,13 @@ _seen_keys = set()
 deduped_all = []
 for r in existing + wiki_records + dialogue_records:
     key = (
-        r.get("function", ""),
-        r.get("lang", ""),
         norm_text(r.get("prompt", "")),
         norm_text(r.get("completion", "")),
     )
     if key not in _seen_keys:
         _seen_keys.add(key)
         deduped_all.append(r)
+print("DATASET_PRE_SPLIT_DEDUP_BY_PAIR_ONLY_OK=1")
 
 print(f"  dedup 후 전체: {len(deduped_all)} 건 (원본 {len(existing) + len(wiki_records) + len(dialogue_records)} 건 중)")
 random.shuffle(deduped_all)
@@ -437,7 +436,6 @@ for split_name, records in splits.items():
     print(f"  ✅ {split_name}.jsonl → {len(records)} 건")
 
 print(f"  전체 {n} 건 (train {len(splits['train'])} / val {len(splits['validation'])} / test {len(splits['test'])})")
-print("DATASET_CROSS_SPLIT_DUPLICATE_0_OK=1")
 PYEOF
 
 # ── STEP 4. 최종 확인 ─────────────────────────────────────────────────────────
