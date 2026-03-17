@@ -240,16 +240,17 @@ def fill(template):
         return template
 
 TARGET = 500
-# 중복 제거를 고려해 목표의 3배 후보 생성
-candidates = []
-for _ in range(TARGET * 3):
-    q_tpl, a_tpl, topic = random.choice(TEMPLATES)
-    candidates.append((fill(q_tpl), fill(a_tpl), topic))
+MAX_ATTEMPTS = TARGET * 50
 
-# prompt 기준 중복 제거
 seen = set()
 records = []
-for q, a, topic in candidates:
+attempts = 0
+while len(records) < TARGET:
+    if attempts >= MAX_ATTEMPTS:
+        break
+    attempts += 1
+    q_tpl, a_tpl, topic = random.choice(TEMPLATES)
+    q, a = fill(q_tpl), fill(a_tpl)
     if q not in seen:
         seen.add(q)
         records.append({
@@ -258,11 +259,9 @@ for q, a, topic in candidates:
             "source": "nikl_dialogue_sample",
             "topic": topic,
         })
-    if len(records) >= TARGET:
-        break
 
 if len(records) < TARGET:
-    print(f"  ⚠️  중복 제거 후 {len(records)} 건만 확보 (목표 {TARGET} 건)", file=sys.stderr)
+    print(f"  경고: {len(records)}건만 생성됨 (목표 {TARGET}건 미달)", file=sys.stderr)
 
 random.shuffle(records)
 
