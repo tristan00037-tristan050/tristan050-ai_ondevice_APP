@@ -219,23 +219,35 @@ TEMPLATES = [
     ("법인카드 신청은 어떻게 해요?", "팀장님 결재 후 경리팀에 신청서 내시면 {num}일 내 발급돼요.", "정보 요청"),
 ]
 
-def fill(template):
-    """템플릿 변수를 랜덤 값으로 채움."""
-    vals = {
-        "name":    random.choice(NAMES),
-        "num":     random.choice(NUMS),
-        "weekday": random.choice(WEEKDAYS),
-        "time":    random.choice(TIMES),
-        "time2":   random.choice(TIMES),
-        "date":    random.choice(DATES),
-        "item":    random.choice(ITEMS),
-        "folder":  random.choice(FOLDERS),
-        "loc":     random.choice(LOCS),
-        "room":    random.choice(ROOMS),
-        "word":    random.choice(WORDS),
+_VAR_POOLS = {
+    "name":    NAMES,
+    "num":     NUMS,
+    "weekday": WEEKDAYS,
+    "time":    TIMES,
+    "time2":   TIMES,
+    "date":    DATES,
+    "item":    ITEMS,
+    "folder":  FOLDERS,
+    "loc":     LOCS,
+    "room":    ROOMS,
+    "word":    WORDS,
+}
+
+def make_mapping(q_tpl, a_tpl):
+    """두 템플릿에서 사용된 플레이스홀더를 추출하고
+    각 키를 한 번만 샘플링한 공유 매핑을 반환."""
+    import string
+    keys = {
+        f[1]
+        for f in string.Formatter().parse(q_tpl + a_tpl)
+        if f[1] is not None
     }
+    return {k: random.choice(_VAR_POOLS[k]) for k in keys if k in _VAR_POOLS}
+
+def fill(template, mapping):
+    """공유 매핑으로 템플릿 변수를 채움."""
     try:
-        return template.format(**vals)
+        return template.format(**mapping)
     except KeyError:
         return template
 
@@ -250,7 +262,8 @@ while len(records) < TARGET:
         break
     attempts += 1
     q_tpl, a_tpl, topic = random.choice(TEMPLATES)
-    q, a = fill(q_tpl), fill(a_tpl)
+    mapping = make_mapping(q_tpl, a_tpl)
+    q, a = fill(q_tpl, mapping), fill(a_tpl, mapping)
     if q not in seen:
         seen.add(q)
         records.append({
