@@ -18,10 +18,16 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 # ── Python 인터프리터 결정 ────────────────────────────────────────────────────
+PYTHON_BIN=""
 if [ -f /tmp/butler_python_bin ]; then
-    PYTHON_BIN="$(cat /tmp/butler_python_bin)"
-else
-    PYTHON_BIN=""
+    _candidate="$(cat /tmp/butler_python_bin)"
+    if [ -n "$_candidate" ] && "$_candidate" -V &>/dev/null; then
+        PYTHON_BIN="$_candidate"
+    else
+        echo "  ⚠️  /tmp/butler_python_bin 경로 실행 불가 — 자동 탐색으로 전환"
+    fi
+fi
+if [ -z "$PYTHON_BIN" ]; then
     for py in python3.11 python3.10 python3 python; do
         _candidate="$(command -v "$py" 2>/dev/null || true)"
         if [ -n "$_candidate" ] && "$_candidate" -V &>/dev/null; then
@@ -237,11 +243,11 @@ def make_mapping(q_tpl, a_tpl):
     """두 템플릿에서 사용된 플레이스홀더를 추출하고
     각 키를 한 번만 샘플링한 공유 매핑을 반환."""
     import string
-    keys = {
+    keys = sorted({
         f[1]
         for f in string.Formatter().parse(q_tpl + a_tpl)
         if f[1] is not None
-    }
+    })
     return {k: random.choice(_VAR_POOLS[k]) for k in keys if k in _VAR_POOLS}
 
 def fill(template, mapping):
@@ -263,6 +269,11 @@ while len(records) < TARGET:
     attempts += 1
     q_tpl, a_tpl, topic = random.choice(TEMPLATES)
     mapping = make_mapping(q_tpl, a_tpl)
+    # time과 time2가 동시에 있으면 서로 다른 값으로 보정
+    if "time" in mapping and "time2" in mapping and mapping["time"] == mapping["time2"]:
+        others = [t for t in TIMES if t != mapping["time"]]
+        if others:
+            mapping["time2"] = random.choice(others)
     q, a = fill(q_tpl, mapping), fill(a_tpl, mapping)
     if q not in seen:
         seen.add(q)
@@ -296,6 +307,7 @@ echo ""
 echo "[3/4] 데이터 병합 및 train/validation/test 분할 중..."
 
 "$PYTHON_BIN" - <<PYEOF
+import hashlib
 import json
 import random
 import sys
@@ -360,7 +372,6 @@ if not offline:
             try:
                 item = json.loads(line)
                 if item.get("prompt") and item.get("completion"):
-                    import hashlib
                     dialogue_records.append({
                         "id": f"dial_{len(dialogue_records):04d}",
                         "function": "dialogue",
@@ -378,7 +389,15 @@ else:
     print("  오프라인 모드 — raw 파일 로드 건너뜀 (합성 데이터만 사용)")
 
 # ── 전체 병합 및 분할 ─────────────────────────────────────────────────────────
-all_records = existing + wiki_records + dialogue_records
+# prompt 기준 dedup: 재실행 시 wiki/dialogue 중복 누적 방지
+_seen_prompts = set()
+all_records = []
+for r in existing + wiki_records + dialogue_records:
+    p = r.get("prompt", "")
+    if p not in _seen_prompts:
+        _seen_prompts.add(p)
+        all_records.append(r)
+print(f"  dedup 후 전체: {len(all_records)} 건")
 random.shuffle(all_records)
 
 n = len(all_records)
@@ -416,7 +435,11 @@ for f in train.jsonl validation.jsonl test.jsonl; do
     if [ -f "$FPATH" ]; then
         COUNT=$(wc -l < "$FPATH" | tr -d ' ')
         SIZE=$(du -sh "$FPATH" | cut -f1)
-        echo "  ✅ $f — $COUNT 건 ($SIZE)"
+        if [ "$COUNT" -eq 0 ]; then
+            echo "  ⚠️  $f — 파일 존재하지만 0건 (비어있음)"
+        else
+            echo "  ✅ $f — $COUNT 건 ($SIZE)"
+        fi
     else
         echo "  ❌ $f — 파일 없음"
         exit 1
