@@ -23,8 +23,9 @@ if [ -f /tmp/butler_python_bin ]; then
 else
     PYTHON_BIN=""
     for py in python3.11 python3.10 python3 python; do
-        if command -v "$py" &>/dev/null; then
-            PYTHON_BIN="$(command -v "$py")"
+        _candidate="$(command -v "$py" 2>/dev/null || true)"
+        if [ -n "$_candidate" ] && "$_candidate" -V &>/dev/null; then
+            PYTHON_BIN="$_candidate"
             break
         fi
     done
@@ -178,6 +179,7 @@ import sys
 from pathlib import Path
 
 random.seed(42)
+offline = int("$OFFLINE")
 out_dir = Path("$OUT_DIR")
 raw_dir = Path("$RAW_DIR")
 
@@ -195,57 +197,62 @@ for split_file in ["train.jsonl", "validation.jsonl", "test.jsonl"]:
                     pass
 print(f"  기존 합성 데이터: {len(existing)} 건")
 
-# ── Wikipedia 샘플 변환 ───────────────────────────────────────────────────────
+# ── raw 파일 로드 (온라인 모드에서만) ─────────────────────────────────────────
 wiki_records = []
-wiki_path = raw_dir / "wiki_ko_sample.jsonl"
-if wiki_path.exists() and wiki_path.stat().st_size > 0:
-    for line in wiki_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            item = json.loads(line)
-            text = item.get("text", "")
-            if len(text) > 50:
-                # 앞부분을 prompt, 나머지를 completion으로 분할
-                split_at = min(len(text) // 2, 200)
-                wiki_records.append({
-                    "id": f"wiki_{len(wiki_records):04d}",
-                    "function": "summarize",
-                    "lang": "ko",
-                    "prompt": f"다음 내용을 간단히 설명해 주세요: {text[:split_at]}",
-                    "completion": text[split_at:split_at + 200].strip(),
-                    "format": "qwen2.5_chat",
-                })
-        except Exception:
-            pass
-    print(f"  Wikipedia 변환: {len(wiki_records)} 건")
-
-# ── 대화 샘플 변환 ────────────────────────────────────────────────────────────
 dialogue_records = []
-dial_path = raw_dir / "nikl_dialogue_sample.jsonl"
-if dial_path.exists() and dial_path.stat().st_size > 0:
-    for line in dial_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            item = json.loads(line)
-            if item.get("prompt") and item.get("completion"):
-                import hashlib
-                dialogue_records.append({
-                    "id": f"dial_{len(dialogue_records):04d}",
-                    "function": "dialogue",
-                    "lang": "ko",
-                    "prompt": item["prompt"],
-                    "completion": item["completion"],
-                    "format": "qwen2.5_chat",
-                    "prompt_digest_sha256": hashlib.sha256(item["prompt"].encode()).hexdigest(),
-                    "output_digest_sha256": hashlib.sha256(item["completion"].encode()).hexdigest(),
-                })
-        except Exception:
-            pass
-    print(f"  대화 샘플 변환: {len(dialogue_records)} 건")
+
+if not offline:
+    # ── Wikipedia 샘플 변환 ───────────────────────────────────────────────────
+    wiki_path = raw_dir / "wiki_ko_sample.jsonl"
+    if wiki_path.exists() and wiki_path.stat().st_size > 0:
+        for line in wiki_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+                text = item.get("text", "")
+                if len(text) > 50:
+                    # 앞부분을 prompt, 나머지를 completion으로 분할
+                    split_at = min(len(text) // 2, 200)
+                    wiki_records.append({
+                        "id": f"wiki_{len(wiki_records):04d}",
+                        "function": "summarize",
+                        "lang": "ko",
+                        "prompt": f"다음 내용을 간단히 설명해 주세요: {text[:split_at]}",
+                        "completion": text[split_at:split_at + 200].strip(),
+                        "format": "qwen2.5_chat",
+                    })
+            except Exception:
+                pass
+        print(f"  Wikipedia 변환: {len(wiki_records)} 건")
+
+    # ── 대화 샘플 변환 ────────────────────────────────────────────────────────
+    dial_path = raw_dir / "nikl_dialogue_sample.jsonl"
+    if dial_path.exists() and dial_path.stat().st_size > 0:
+        for line in dial_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+                if item.get("prompt") and item.get("completion"):
+                    import hashlib
+                    dialogue_records.append({
+                        "id": f"dial_{len(dialogue_records):04d}",
+                        "function": "dialogue",
+                        "lang": "ko",
+                        "prompt": item["prompt"],
+                        "completion": item["completion"],
+                        "format": "qwen2.5_chat",
+                        "prompt_digest_sha256": hashlib.sha256(item["prompt"].encode()).hexdigest(),
+                        "output_digest_sha256": hashlib.sha256(item["completion"].encode()).hexdigest(),
+                    })
+            except Exception:
+                pass
+        print(f"  대화 샘플 변환: {len(dialogue_records)} 건")
+else:
+    print("  오프라인 모드 — raw 파일 로드 건너뜀 (합성 데이터만 사용)")
 
 # ── 전체 병합 및 분할 ─────────────────────────────────────────────────────────
 all_records = existing + wiki_records + dialogue_records
