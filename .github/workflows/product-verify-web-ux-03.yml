@@ -9,8 +9,13 @@ on:
 jobs:
   web_ux_03_e2e:
     runs-on: ubuntu-latest
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -31,6 +36,8 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     needs: [web_ux_03_e2e]
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
     steps:
       - name: gate
         run: |

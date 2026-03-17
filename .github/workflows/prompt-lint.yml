@@ -9,8 +9,13 @@ jobs:
   prompt_lint_check:
     name: prompt-lint-check
     runs-on: ubuntu-latest
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 0
 
       - name: Resolve BASE/HEAD sha (fail-closed)
         run: |
@@ -83,6 +88,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [prompt_lint_check]
     if: always()
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
     steps:
       - name: Gate (fail-closed)
         run: |

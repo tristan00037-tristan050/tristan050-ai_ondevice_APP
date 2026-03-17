@@ -10,6 +10,7 @@ jobs:
     permissions:
       contents: read
     env:
+      GIT_LFS_SKIP_SMUDGE: "1"
       CI: "true"
       OUT_ROOT: out
       REPO_GUARD_REPORTS_ROOT: out/ops/reports
@@ -19,6 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          lfs: false
           fetch-depth: 0
 
       - name: Setup Node.js
