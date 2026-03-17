@@ -389,16 +389,17 @@ else:
     print("  오프라인 모드 — raw 파일 로드 건너뜀 (합성 데이터만 사용)")
 
 # ── 전체 병합 및 분할 ─────────────────────────────────────────────────────────
-# (prompt, completion) 조합 기준 dedup: 재실행 시 완전 중복 행만 제거
-# prompt 단독 dedup은 같은 prompt + 다른 completion을 삭제해 데이터 손실 유발
-_seen_keys = set()
-all_records = []
-for r in existing + wiki_records + dialogue_records:
+# existing은 dedup 대상에서 제외 — 현재 실행에서 생성된 합성 데이터를 그대로 유지
+# _seen_keys를 existing으로 초기화해 wiki/dialogue 중 existing과 완전 중복인 것만 제거
+_seen_keys = {(r.get("prompt", ""), r.get("completion", "")) for r in existing}
+deduped_new = []
+for r in wiki_records + dialogue_records:
     key = (r.get("prompt", ""), r.get("completion", ""))
     if key not in _seen_keys:
         _seen_keys.add(key)
-        all_records.append(r)
-print(f"  dedup 후 전체: {len(all_records)} 건")
+        deduped_new.append(r)
+all_records = existing + deduped_new
+print(f"  dedup 후 전체: {len(all_records)} 건 (existing {len(existing)} + 신규 {len(deduped_new)})")
 random.shuffle(all_records)
 
 n = len(all_records)
