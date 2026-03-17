@@ -12,10 +12,13 @@ jobs:
   sealed_pollution_guard:
     name: Block SEALED file diffs in non-SEALED PRs (fail-closed)
     runs-on: ubuntu-latest
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
     steps:
       - name: Checkout (full history for stable diff)
         uses: actions/checkout@v4
         with:
+          lfs: false
           fetch-depth: 0
 
       - name: Fetch base/head commits (fail-closed)

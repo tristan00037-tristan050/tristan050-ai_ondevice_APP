@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      GIT_LFS_SKIP_SMUDGE: "1"
       # 모델/의도 기본값(필요 시 workflow_dispatch 입력 확장 가능)
       MODEL_A: demoA
       MODEL_B: demoB
@@ -27,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          lfs: false
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
