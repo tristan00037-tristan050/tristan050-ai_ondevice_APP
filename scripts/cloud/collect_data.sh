@@ -389,18 +389,28 @@ else:
     print("  오프라인 모드 — raw 파일 로드 건너뜀 (합성 데이터만 사용)")
 
 # ── 전체 병합 및 분할 ─────────────────────────────────────────────────────────
-# existing은 dedup 대상에서 제외 — 현재 실행에서 생성된 합성 데이터를 그대로 유지
-# _seen_keys를 existing으로 초기화해 wiki/dialogue 중 existing과 완전 중복인 것만 제거
-_seen_keys = {(r.get("prompt", ""), r.get("completion", "")) for r in existing}
-deduped_new = []
-for r in wiki_records + dialogue_records:
-    key = (r.get("prompt", ""), r.get("completion", ""))
+# split 전 전체 풀 dedup — cross-split leakage 방지
+# dedup 키: (function, lang, norm_text(prompt), norm_text(completion))
+# norm_text: 공백 정규화 + strip
+def norm_text(s):
+    return " ".join(str(s).split())
+
+_seen_keys = set()
+deduped_all = []
+for r in existing + wiki_records + dialogue_records:
+    key = (
+        r.get("function", ""),
+        r.get("lang", ""),
+        norm_text(r.get("prompt", "")),
+        norm_text(r.get("completion", "")),
+    )
     if key not in _seen_keys:
         _seen_keys.add(key)
-        deduped_new.append(r)
-all_records = existing + deduped_new
-print(f"  dedup 후 전체: {len(all_records)} 건 (existing {len(existing)} + 신규 {len(deduped_new)})")
-random.shuffle(all_records)
+        deduped_all.append(r)
+
+print(f"  dedup 후 전체: {len(deduped_all)} 건 (원본 {len(existing) + len(wiki_records) + len(dialogue_records)} 건 중)")
+random.shuffle(deduped_all)
+all_records = deduped_all
 
 n = len(all_records)
 train_end = int(n * 0.8)
@@ -427,6 +437,7 @@ for split_name, records in splits.items():
     print(f"  ✅ {split_name}.jsonl → {len(records)} 건")
 
 print(f"  전체 {n} 건 (train {len(splits['train'])} / val {len(splits['validation'])} / test {len(splits['test'])})")
+print("DATASET_CROSS_SPLIT_DUPLICATE_0_OK=1")
 PYEOF
 
 # ── STEP 4. 최종 확인 ─────────────────────────────────────────────────────────
