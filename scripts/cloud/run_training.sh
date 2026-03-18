@@ -8,6 +8,19 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
+# ── Python 바이너리 자동 탐지 ─────────────────────────────────────────────
+PYTHON_BIN=""
+for py in python3.11 python3.10 python3 python; do
+    if command -v "$py" &>/dev/null; then
+        PYTHON_BIN="$py"
+        break
+    fi
+done
+if [ -z "$PYTHON_BIN" ]; then
+    echo "❌ Python을 찾을 수 없습니다."
+    exit 1
+fi
+
 # ── 설정값 ──────────────────────────────────────────────────────────────────
 MODEL_ID="Qwen/Qwen2.5-7B-Instruct"   # Hugging Face 모델 ID
 TRAIN_FILE="data/synthetic_v40/train.jsonl"
