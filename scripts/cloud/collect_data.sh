@@ -302,6 +302,24 @@ else
     echo "[2/4] 오프라인 모드 — 공개 데이터 다운로드 건너뜀"
 fi
 
+# ── STEP 2-B: AI Hub SSD 데이터 로딩 ─────────────────────────────────────
+echo ""
+echo "[2-B] AI Hub SSD 데이터 로딩 중..."
+SSD_DIR="${SSD_DIR:-/Volumes/T7 Shield/버틀러 트레이닝 데이터}"
+
+if [ -d "$SSD_DIR" ]; then
+    "$PYTHON_BIN" scripts/ai/preprocess_aihub_v1.py \
+        --ssd-dir "$SSD_DIR" \
+        --out-dir data/raw/aihub
+    # aihub 데이터를 raw 풀에 합산
+    for f in data/raw/aihub/aihub_*.jsonl; do
+        [ -f "$f" ] && cat "$f" >> data/raw/all_raw.jsonl
+    done
+    echo "  ✅ AI Hub 데이터 로딩 완료"
+else
+    echo "  ⚠️  SSD 미연결 — AI Hub 데이터 건너뜀"
+fi
+
 # ── STEP 3. 데이터 병합 및 전처리 ────────────────────────────────────────────
 echo ""
 echo "[3/4] 데이터 병합 및 train/validation/test 분할 중..."
