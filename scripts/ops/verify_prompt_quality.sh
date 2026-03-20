@@ -21,6 +21,8 @@ is_exempt() {
   local f="$1"
   case "$f" in
     */README.md) return 0 ;;
+    *.json) return 0 ;;
+    *.txt) return 0 ;;
   esac
   return 1
 }
