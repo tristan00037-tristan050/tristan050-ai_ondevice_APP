@@ -142,13 +142,12 @@ def main() -> None:
         all_errors.extend(errs)
         checked_files += 1
 
-    print(f"검사 파일: {checked_files}개 "
-          f"(py/sh/md: {len(targets_text)}, jsonl: {len(targets_jsonl)})")
+    print(f"DATASET_SPLIT_TAXONOMY_FILES_CHECKED={checked_files}")
 
     if all_errors:
         for e in all_errors:
             print(e, file=sys.stderr)
-        print(f"\n오류: {len(all_errors)}건")
+        print(f"ERROR_CODE=TAXONOMY_REPO_WIDE_FAIL:{len(all_errors)}")
         print("DATASET_SPLIT_TAXONOMY_REPO_WIDE_OK=0")
         sys.exit(1)
 
