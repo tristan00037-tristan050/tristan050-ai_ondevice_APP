@@ -5,9 +5,20 @@
     "scripts/agent",
     "scripts/ops",
     ".github/workflows",
+    ".github/actions",
     "docs/ops/contracts",
     "docs/ops/PROOFS",
-    "scripts/ai"
+    "docs/ops/reports",
+    "docs/ssot",
+    "scripts/ai",
+    "scripts/algo",
+    "scripts/algo_core",
+    "scripts/ci",
+    "scripts/cloud",
+    "scripts/demo",
+    "scripts/ops_hub",
+    "scripts/perf",
+    "webcore_appcore_starter_4_17"
   ],
   "excluded_paths": [
     "node_modules",
