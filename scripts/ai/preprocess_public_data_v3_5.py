@@ -80,14 +80,35 @@ def dedupe(records:list[dict[str,Any]]):
         seen.add(rec["record_digest_sha256"]); out.append(rec)
     return out
 
+def _compute_nonempty_split_counts(n: int) -> dict[str, int]:
+    """n >= 3일 때 train/validation/test 각 최소 1건 보장. n < 3이면 RuntimeError."""
+    if n < 3:
+        raise RuntimeError(f"SPLIT_COUNT_TOO_SMALL:{n}")
+    counts = {"train": 1, "validation": 1, "test": 1}
+    remaining = n - 3
+    weights = {"train": 0.8, "validation": 0.1, "test": 0.1}
+    raw = {k: remaining * weights[k] for k in counts}
+    for k in counts:
+        counts[k] += int(raw[k])
+    assigned = sum(counts.values())
+    leftover = n - assigned
+    order = sorted(counts.keys(), key=lambda k: (raw[k] - int(raw[k]), weights[k]), reverse=True)
+    for k in order[:leftover]:
+        counts[k] += 1
+    return counts
+
 def split_write(records:list[dict[str,Any]], out_dir:Path, function:str):
-    total=len(records); train_n=int(total*0.8); val_n=int(total*0.1); test_n=total-train_n-val_n
-    splits={"train":records[:train_n],"validation":records[train_n:train_n+val_n],"test":records[train_n+val_n:]}
+    total = len(records)
+    cnt = _compute_nonempty_split_counts(total)
+    train_n, val_n, test_n = cnt["train"], cnt["validation"], cnt["test"]
+    splits = {"train": records[:train_n], "validation": records[train_n:train_n + val_n], "test": records[train_n + val_n : train_n + val_n + test_n]}
     for split, rows in splits.items():
-        path=out_dir/split/f"{function}.jsonl"; path.parent.mkdir(parents=True, exist_ok=True)
+        path = out_dir / split / f"{function}.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as f:
-            for row in rows: f.write(json.dumps(row, ensure_ascii=False)+"\n")
-    return {"train":train_n,"validation":val_n,"test":test_n}
+            for row in rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    return {"train": train_n, "validation": val_n, "test": test_n}
 
 def main():
     try:
@@ -132,10 +153,19 @@ def main():
             collected[rec["function"]].append(rec)
     stats={"PUBLIC_DATA_OK":1,"errors":errors,"functions":{},"filtered_count":{k:dict(v) for k,v in filter_stats.items()}}
     for fn, rows in collected.items():
-        rows=dedupe(rows); random.shuffle(rows); split_stats=split_write(rows, out_dir, fn); stats["functions"][fn]={"total":len(rows), **split_stats}
+        rows = dedupe(rows)
+        random.shuffle(rows)
+        try:
+            split_stats = split_write(rows, out_dir, fn)
+        except RuntimeError as e:
+            import sys
+            print(f"ERROR_CODE={e}", file=sys.stderr)
+            sys.exit(1)
+        stats["functions"][fn] = {"total": len(rows), **split_stats}
     Path("tmp").mkdir(exist_ok=True)
     Path("tmp/public_data_stats.json").write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
     print("PUBLIC_DATA_OK=1")
+    print("DATASET_SPLIT_NONEMPTY_V1_OK=1")
 
 if __name__=="__main__":
     main()

@@ -49,9 +49,6 @@ _FOLDER_FUNCTION: list[tuple[str, str]] = [
     ("e3_질의응답_기계독해", "retrieval_transform"),
 ]
 
-MAX_PER_FOLDER = 2000
-
-
 def _infer_function(file_path: Path, ssd_dir: Path) -> str:
     """파일 경로에서 function 분류 결정 (더 구체적인 매핑 우선)."""
     try:
@@ -236,7 +233,6 @@ def _process_folder(
     folder: Path,
     function: str,
     ssd_dir: Path,
-    max_records: int,
 ) -> list[dict]:
     """폴더 내 JSON/JSONL 파일을 재귀 스캔하여 버틀러 레코드 추출."""
     results: list[dict] = []
@@ -248,8 +244,6 @@ def _process_folder(
     )
 
     for jf in json_files:
-        if len(results) >= max_records:
-            break
         if jf.name.startswith("._"):
             continue
 
@@ -263,8 +257,6 @@ def _process_folder(
 
         try:
             for prompt, completion in actual_parser(data):
-                if len(results) >= max_records:
-                    break
                 prompt = prompt.strip()
                 completion = completion.strip()
                 if not prompt or not completion:
@@ -331,22 +323,21 @@ def main() -> None:
             continue
 
         print(f"  📂 {folder.name} → function={function} 처리 중...")
-        records = _process_folder(folder, function, ssd_dir, MAX_PER_FOLDER)
+        records = _process_folder(folder, function, ssd_dir)
 
         if not records:
             print(f"     ⚠️  JSON 파일 없음 또는 파싱 결과 0건 (데이터 다운로드 필요)")
             continue
 
-        # function별 JSONL 파일로 저장
         out_file = out_dir / f"aihub_{function}.jsonl"
-        # 기존 파일에 추가 (같은 function의 여러 폴더 합산)
-        with out_file.open("a", encoding="utf-8") as f:
-            for r in records:
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        with out_file.open("w", encoding="utf-8") as f:
+            for rec in records:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
-        function_counts[function] = function_counts.get(function, 0) + len(records)
-        total += len(records)
-        print(f"     ✅ {len(records)} 건 → {out_file}")
+        count = len(records)
+        function_counts[function] = function_counts.get(function, 0) + count
+        total += count
+        print(f"     ✅ {count:,} 건 저장: {out_file}")
 
     # 결과 요약
     print("")
