@@ -1,0 +1,12 @@
+# Pinned top-level training stack for AI-20 Qwen2.5 small/micro QLoRA path
+# Generate a fully resolved transitive lock in the target build environment with pip-compile or pip lock.
+accelerate==1.1.1
+bitsandbytes==0.44.1
+datasets==3.1.0
+jsonschema==4.23.0
+packaging==24.2
+peft==0.13.2
+rich==13.9.4
+torch==2.5.1
+transformers==4.46.3
+trl==0.11.4
