@@ -79,10 +79,11 @@ def main() -> None:
             break
 
     ok = int(all(s['returncode'] == 0 for s in steps))
+    ready = int(len(steps) == len(cmds) and all(s['returncode'] == 0 for s in steps))
     pr_dir = emit_pr_artifacts(args.emit_pr_artifacts_dir, success=bool(ok), dry_run=args.dry_run,
                                smoke_path='tmp/smoke_result.json', eval_path='tmp/eval_result.json', det_path='tmp/determinism_result.json')
     payload = {
-        'PHASE_C_VERIFICATION_READY': 1 if args.dry_run else ok,
+        'PHASE_C_VERIFICATION_READY': ready,
         'PHASE_C_VERIFICATION_OK': ok if not args.dry_run else 0,
         'dry_run': args.dry_run,
         'steps': steps,
@@ -107,6 +108,8 @@ def main() -> None:
     if args.dry_run:
         print(f"PHASE_C_VERIFICATION_READY={payload['PHASE_C_VERIFICATION_READY']}")
         print('PHASE_C_VERIFICATION_OK=0 (dry-run by design)')
+        if payload['PHASE_C_VERIFICATION_READY'] != 1:
+            print('PHASE_C_READY_REASON=one_or_more_steps_failed_even_in_dry_run')
     else:
         print(f"PHASE_C_VERIFICATION_OK={payload['PHASE_C_VERIFICATION_OK']}")
     if not args.dry_run and ok != 1:

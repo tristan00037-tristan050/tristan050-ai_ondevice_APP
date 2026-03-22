@@ -470,12 +470,41 @@ def add_common_cli(ap: argparse.ArgumentParser) -> None:
 
 
 def dry_run_payload(kind: str, args: argparse.Namespace, extra: dict[str, Any] | None = None) -> dict[str, Any]:
-    meta = load_adapter_meta(args.adapter_dir, schema_file=args.schema_file, base_model_id=args.base_model_id)
+    adapter_path = Path(args.adapter_dir)
+    adapter_dir_present = adapter_path.exists()
+    meta_error = None
+    try:
+        if adapter_dir_present:
+            meta = load_adapter_meta(args.adapter_dir, schema_file=args.schema_file, base_model_id=args.base_model_id)
+        else:
+            raise FileNotFoundError(f"ADAPTER_DIR_MISSING: {adapter_path}")
+    except FileNotFoundError as e:
+        meta_error = str(e)
+        root = resolve_root()
+        schema_candidate = find_existing([
+            root / (args.schema_file or DEFAULT_SCHEMA_FILE),
+            Path(args.schema_file or DEFAULT_SCHEMA_FILE),
+            root / DEFAULT_SCHEMA_FILE,
+            Path(DEFAULT_SCHEMA_FILE),
+        ])
+        schema_path = str(schema_candidate or (root / DEFAULT_SCHEMA_FILE))
+        base_model_id = getattr(args, 'base_model_id', None) or BASE_MODEL_FALLBACK
+        meta = AdapterMeta(
+            adapter_dir=str(adapter_path),
+            base_model_id=base_model_id,
+            tokenizer_source=base_model_id,
+            schema_file=schema_path,
+            train_manifest_path=None,
+            adapter_config_path=None,
+        )
     schema = load_tool_schema(meta.schema_file)
     payload = {
         f"{kind.upper()}_READY": 1,
         "dry_run": True,
         "adapter_dir": meta.adapter_dir,
+        "adapter_dir_present": adapter_dir_present,
+        "adapter_meta_fallback": not adapter_dir_present,
+        "adapter_meta_warning": meta_error,
         "base_model_id": meta.base_model_id,
         "tokenizer_source": meta.tokenizer_source,
         "schema_file": meta.schema_file,
