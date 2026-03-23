@@ -358,14 +358,21 @@ def write_jsonl(path: Path, rows: Iterable[dict[str, Any]], split_name: str) -> 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="AI Hub preprocessing v1")
-    ap.add_argument("--root-dir", required=True, help="AI Hub dataset root directory")
+    ap.add_argument("--root-dir", default=None, help="AI Hub dataset root directory")
+    ap.add_argument("--ssd-dir", default=None, help="Alias for --root-dir (legacy)")
     ap.add_argument("--out-dir", required=True, help="Output directory for JSONL splits")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--limit-files", type=int, default=0)
     ap.add_argument("--strict", action="store_true", help="Fail when unknown JSON structure is found")
     args = ap.parse_args()
 
-    root_dir = Path(args.root_dir)
+    # --ssd-dir은 --root-dir의 legacy alias
+    import sys as _sys
+    resolved_root = args.root_dir or args.ssd_dir
+    if not resolved_root:
+        print("BLOCK: --root-dir or --ssd-dir is required", file=_sys.stderr)
+        _sys.exit(1)
+    root_dir = Path(resolved_root)
     out_dir = Path(args.out_dir)
     files = sorted(root_dir.rglob("*.json"))
     if args.limit_files > 0:
@@ -395,6 +402,8 @@ def main() -> None:
             stats["files_skipped"] += 1
             if args.strict:
                 stats["errors"].append({"file": str(path), "error": "UNKNOWN_JSON_STRUCTURE"})
+                print(f"STRICT_FAIL: UNKNOWN_JSON_STRUCTURE: {path}", file=__import__('sys').stderr)
+                __import__('sys').exit(1)
             continue
         stats["files_parsed"] += 1
         stats["parser_counts"][parser_name] += 1
@@ -425,6 +434,16 @@ def main() -> None:
     splits = split_rows(all_rows, args.seed)
     for split_name in VALID_SPLITS:
         write_jsonl(out_dir / f"{split_name}.jsonl", splits[split_name], split_name)
+
+    # legacy aihub_*.jsonl 출력 (collect_data.sh 호환)
+    from collections import defaultdict
+    by_function: dict = defaultdict(list)
+    for row in all_rows:
+        by_function[row["function"]].append(row)
+    for func, rows in by_function.items():
+        write_jsonl(out_dir / f"aihub_{func}.jsonl", rows, "train")
+    # all_raw.jsonl
+    write_jsonl(out_dir / "all_raw.jsonl", all_rows, "train")
 
     summary = {
         "AIHUB_LOAD_OK": 1,
