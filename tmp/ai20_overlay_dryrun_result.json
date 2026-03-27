@@ -1,0 +1,34 @@
+{
+  "changed_files": [
+    {
+      "backup_path": null,
+      "path": "tests/test_overlay.py",
+      "replacements_applied": 5
+    }
+  ],
+  "changed_files_count": 1,
+  "mode": "dry-run",
+  "qwen3_additions": {
+    "chat_template": "qwen3_nonthinking",
+    "enable_thinking": false
+  },
+  "replacement_rules": [
+    [
+      "Qwen/Qwen2.5-7B-Instruct",
+      "Qwen/Qwen3-4B"
+    ],
+    [
+      "Qwen/Qwen2.5-1.5B-Instruct",
+      "Qwen/Qwen3-4B"
+    ],
+    [
+      "butler_model_v1",
+      "butler_model_small_v1"
+    ],
+    [
+      "butler_model_micro_v1",
+      "butler_model_small_v1"
+    ]
+  ],
+  "repo_dir": "/mnt/data/ai20_butler_model_small_v1_bundle"
+}

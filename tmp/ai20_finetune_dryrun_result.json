@@ -1,0 +1,67 @@
+{
+  "base_model_id": "Qwen/Qwen3-4B",
+  "checks": {
+    "chat_template_is_qwen3_nonthinking": true,
+    "enable_thinking_is_false": true
+  },
+  "inspection": {
+    "allowed_sft_kwargs": [],
+    "allowed_sfttrainer_kwargs": [],
+    "forbidden_params_absent": true,
+    "forbidden_sfttrainer_params": [
+      "dataset_text_field",
+      "packing",
+      "max_seq_length"
+    ],
+    "resolved_max_length_key": "handled_outside_sftconfig",
+    "sftconfig_status": "ModuleNotFoundError: No module named 'trl'",
+    "sfttrainer_status": "ModuleNotFoundError: No module named 'trl'"
+  },
+  "output_dir": "output/butler_model_small_v1",
+  "preview": {
+    "sft_config_kwargs": {
+      "bf16": true,
+      "eval_strategy": "epoch",
+      "gradient_accumulation_steps": 6,
+      "learning_rate": 0.00025,
+      "logging_steps": 10,
+      "num_train_epochs": 3,
+      "output_dir": "output/butler_model_small_v1",
+      "per_device_train_batch_size": 3,
+      "report_to": "none",
+      "save_strategy": "epoch"
+    },
+    "trainer_kwargs": {
+      "forbidden_params_passed_to_sfttrainer": [],
+      "passes_formatting_func": false,
+      "passes_processing_class": false
+    }
+  },
+  "qlora_small_config": {
+    "base_model_id": "Qwen/Qwen3-4B",
+    "bf16": true,
+    "gradient_accumulation_steps": 6,
+    "learning_rate": 0.00025,
+    "load_in_4bit": true,
+    "lora_alpha": 24,
+    "lora_dropout": 0.05,
+    "lora_r": 12,
+    "max_seq_length": 1536,
+    "num_train_epochs": 3,
+    "output_dir": "output/butler_model_small_v1",
+    "per_device_train_batch_size": 3
+  },
+  "qwen3_specific": {
+    "chat_template": "qwen3_nonthinking",
+    "enable_thinking": false
+  },
+  "versions": {
+    "accelerate": "unavailable",
+    "bitsandbytes": "unavailable",
+    "datasets": "unavailable",
+    "peft": "unavailable",
+    "torch": "2.10.0+cpu",
+    "transformers": "unavailable",
+    "trl": "unavailable"
+  }
+}
