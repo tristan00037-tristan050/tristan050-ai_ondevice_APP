@@ -1,0 +1,50 @@
+{
+  "AI20_BUNDLE_STRUCTURE_OK": 1,
+  "structure": {
+    "keyword_missing": [],
+    "qlora_small_config": {
+      "base_model_id": "Qwen/Qwen3-4B",
+      "bf16": true,
+      "gradient_accumulation_steps": 6,
+      "learning_rate": 0.00025,
+      "load_in_4bit": true,
+      "lora_alpha": 24,
+      "lora_dropout": 0.05,
+      "lora_r": 12,
+      "max_seq_length": 1536,
+      "num_train_epochs": 3,
+      "output_dir": "output/butler_model_small_v1",
+      "per_device_train_batch_size": 3
+    },
+    "qwen3_specific": {
+      "chat_template": "qwen3_nonthinking",
+      "enable_thinking": false
+    },
+    "report": [
+      {
+        "label": "베이스 모델: Qwen/Qwen3-4B",
+        "ok": true
+      },
+      {
+        "label": "lora_r=12, lora_alpha=24, max_seq_length=1536",
+        "ok": true
+      },
+      {
+        "label": "enable_thinking=False",
+        "ok": true
+      },
+      {
+        "label": "chat_template=qwen3_nonthinking",
+        "ok": true
+      },
+      {
+        "label": "SFTTrainer 제거 파라미터 없음",
+        "ok": true
+      },
+      {
+        "label": "SAFE_POLICY_KEYWORDS_KO 영어 키워드 포함",
+        "ok": true
+      }
+    ]
+  }
+}

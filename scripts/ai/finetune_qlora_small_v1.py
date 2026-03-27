@@ -1,515 +1,350 @@
 #!/usr/bin/env python3
+"""AI-20 / butler_model_small_v1 QLoRA training entrypoint for Qwen3-4B.
+
+Design goals:
+- dry-run works without GPU and without importing heavy training libraries eagerly.
+- runtime training path stays compatible with multiple TRL versions by inspecting signatures.
+- Qwen3 non-thinking mode is enforced fail-closed.
+"""
 from __future__ import annotations
 
 import argparse
-import hashlib
 import inspect
 import json
-import subprocess
-import sys
+import os
 from pathlib import Path
 from typing import Any
 
-TARGET_PRESETS: dict[str, dict[str, Any]] = {
-    "small_default": {
-        "model_id": "Qwen/Qwen2.5-3B-Instruct",
-        "model_tag": "small_default",
-        "target_vram_gb": 8,
-        "max_seq_length": 1536,
-        "lora_r": 16,
-        "lora_alpha": 32,
-        "lora_dropout": 0.05,
-        "per_device_train_batch_size": 1,
-        "gradient_accumulation_steps": 16,
-        "learning_rate": 2e-4,
-        "num_train_epochs": 3.0,
-        "warmup_ratio": 0.05,
-        "eval_steps": 50,
-        "save_steps": 100,
-        "save_total_limit": 3,
-    },
-    "micro_default": {
-        "model_id": "Qwen/Qwen2.5-1.5B-Instruct",
-        "model_tag": "micro_default",
-        "target_vram_gb": 4,
-        "max_seq_length": 1024,
-        "lora_r": 8,
-        "lora_alpha": 16,
-        "lora_dropout": 0.05,
-        "per_device_train_batch_size": 1,
-        "gradient_accumulation_steps": 16,
-        "learning_rate": 2.5e-4,
-        "num_train_epochs": 3.0,
-        "warmup_ratio": 0.05,
-        "eval_steps": 50,
-        "save_steps": 100,
-        "save_total_limit": 3,
-    },
+QLORA_SMALL_CONFIG = {
+    'base_model_id': 'Qwen/Qwen3-4B',
+    'output_dir': 'output/butler_model_small_v1',
+    'per_device_train_batch_size': 3,
+    'gradient_accumulation_steps': 6,
+    'num_train_epochs': 3,
+    'learning_rate': 2.5e-4,
+    'lora_r': 12,
+    'lora_alpha': 24,
+    'lora_dropout': 0.05,
+    'max_seq_length': 1536,
+    'load_in_4bit': True,
+    'bf16': True,
 }
 
-COMMON_DEFAULTS: dict[str, Any] = {
-    "quantization": "4bit_nf4",
-    "bnb_4bit_use_double_quant": True,
-    "bnb_4bit_quant_type": "nf4",
-    "gradient_checkpointing": True,
-    "optim": "paged_adamw_8bit",
-    "lr_scheduler_type": "cosine",
-    "save_strategy": "steps",
-    "logging_steps": 10,
-    "report_to": "none",
-    "seed": 42,
-    "data_seed": 42,
-    "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+QWEN3_SPECIFIC = {
+    'enable_thinking': False,
+    'chat_template': 'qwen3_nonthinking',
 }
 
-
-def sha256_file(path: str | Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
+FORBIDDEN_SFTTRAINER_PARAMS = ['dataset_text_field', 'packing', 'max_seq_length']
+DEFAULT_RESULT_FILE = Path('tmp/ai20_finetune_dryrun_result.json')
 
 
-def sha256_text(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--train-file')
+    parser.add_argument('--eval-file')
+    parser.add_argument('--output-dir', default=QLORA_SMALL_CONFIG['output_dir'])
+    parser.add_argument('--dry-run', action='store_true')
+    return parser.parse_args()
 
 
-def get_git_sha() -> str:
+def optional_version(module_name: str) -> str:
     try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
+        module = __import__(module_name)
     except Exception:
-        return "UNKNOWN"
+        return 'unavailable'
+    return getattr(module, '__version__', 'unknown')
 
 
-def resolve_preset(args: argparse.Namespace) -> tuple[dict[str, Any], list[str]]:
-    preset = dict(TARGET_PRESETS[args.target_tag])
-    warnings: list[str] = []
-    if args.model_id:
-        if args.model_id != preset["model_id"] and not args.allow_model_override:
-            raise RuntimeError(
-                f"MODEL_TAG_MISMATCH:{args.target_tag}:expected={preset['model_id']}:got={args.model_id}. "
-                "커스텀 모델을 쓰려면 --allow-model-override 사용"
-            )
-        if args.model_id != preset["model_id"]:
-            warnings.append(f"model_override={args.model_id}")
-        preset["model_id"] = args.model_id
-    return preset, warnings
-
-
-def validate_transformers_version() -> str | None:
+def _inspect_signature(module_name: str, attr_chain: list[str]) -> tuple[list[str], str]:
     try:
-        import transformers
-        from packaging.version import Version
-        if Version(transformers.__version__) < Version("4.37.0"):
-            return f"transformers<{transformers.__version__}> may fail for qwen2; use >=4.37.0"
-    except Exception:
-        return None
-    return None
+        module = __import__(module_name, fromlist=[attr_chain[0]])
+        target = module
+        for attr in attr_chain:
+            target = getattr(target, attr)
+        signature = inspect.signature(target)
+    except Exception as exc:
+        return [], f'{type(exc).__name__}: {exc}'
+    return list(signature.parameters.keys()), 'ok'
 
 
-def detect_missing_packages() -> list[str]:
-    missing = []
-    for pkg in ["transformers", "peft", "bitsandbytes", "trl", "datasets", "accelerate"]:
-        try:
-            __import__(pkg)
-        except Exception:
-            missing.append(pkg)
-    return missing
+def collect_dry_run_metadata(output_dir: str) -> dict[str, Any]:
+    sft_allowed, sft_status = _inspect_signature('trl', ['SFTConfig', '__init__'])
+    trainer_allowed, trainer_status = _inspect_signature('trl', ['SFTTrainer', '__init__'])
 
-
-def pick_precision_flags() -> tuple[bool, bool]:
-    try:
-        import torch
-        if torch.cuda.is_available():
-            if torch.cuda.is_bf16_supported():
-                return True, False
-            return False, True
-    except Exception:
-        pass
-    return False, False
-
-
-def choose_eval_strategy_key() -> tuple[str, bool, str]:
-    try:
-        from transformers import TrainingArguments
-        params = inspect.signature(TrainingArguments).parameters
-        if "eval_strategy" in params:
-            return "eval_strategy", True, "runtime_inspection"
-        if "evaluation_strategy" in params:
-            return "evaluation_strategy", True, "runtime_inspection"
-        return "eval_strategy", False, "runtime_trainingarguments_unknown"
-    except Exception:
-        return "eval_strategy", False, "assumed_default_without_transformers"
-
-
-def enforce_real_train_fail_closed(git_sha: str, strategy_meta: dict[str, Any]) -> None:
-    if git_sha == "UNKNOWN":
-        raise RuntimeError("REAL_TRAIN_GIT_SHA_RESOLVED_OK=0: git repo 안에서 실행해야 합니다")
-    if strategy_meta.get("training_arguments_strategy_key_resolved") is None:
-        raise RuntimeError(
-            "TRAINING_ARGUMENTS_STRATEGY_KEY_RESOLVED_FOR_REAL_RUN_OK=0: "
-            "실제 학습 환경에서 TrainingArguments strategy key가 resolve되어야 합니다"
-        )
-
-
-def build_effective_kwargs(args: argparse.Namespace, preset: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    has_eval = bool(args.eval_file)
-    bf16, fp16 = pick_precision_flags()
-    strategy_key, strategy_resolved, strategy_source = choose_eval_strategy_key()
-    kwargs: dict[str, Any] = {
-        "output_dir": args.output_dir,
-        "num_train_epochs": args.num_train_epochs or preset["num_train_epochs"],
-        "per_device_train_batch_size": preset["per_device_train_batch_size"],
-        "gradient_accumulation_steps": preset["gradient_accumulation_steps"],
-        "learning_rate": preset["learning_rate"],
-        "bf16": bf16,
-        "fp16": fp16,
-        "optim": COMMON_DEFAULTS["optim"],
-        "lr_scheduler_type": COMMON_DEFAULTS["lr_scheduler_type"],
-        "warmup_ratio": args.warmup_ratio or preset["warmup_ratio"],
-        "save_strategy": COMMON_DEFAULTS["save_strategy"],
-        "save_steps": args.save_steps or preset["save_steps"],
-        "save_total_limit": args.save_total_limit or preset["save_total_limit"],
-        "logging_steps": COMMON_DEFAULTS["logging_steps"],
-        "gradient_checkpointing": COMMON_DEFAULTS["gradient_checkpointing"],
-        "seed": COMMON_DEFAULTS["seed"],
-        "data_seed": COMMON_DEFAULTS["data_seed"],
-        "report_to": COMMON_DEFAULTS["report_to"],
-        "load_best_model_at_end": has_eval,
-        "max_steps": args.max_steps if args.max_steps else -1,
+    resolved_max_length_key = None
+    sft_kwargs_preview = {
+        'output_dir': output_dir,
+        'per_device_train_batch_size': QLORA_SMALL_CONFIG['per_device_train_batch_size'],
+        'gradient_accumulation_steps': QLORA_SMALL_CONFIG['gradient_accumulation_steps'],
+        'num_train_epochs': QLORA_SMALL_CONFIG['num_train_epochs'],
+        'learning_rate': QLORA_SMALL_CONFIG['learning_rate'],
+        'bf16': QLORA_SMALL_CONFIG['bf16'],
+        'report_to': 'none',
+        'save_strategy': 'epoch',
+        'eval_strategy': 'epoch',
+        'logging_steps': 10,
     }
-    if has_eval:
-        kwargs[strategy_key] = "steps"
-        kwargs["eval_steps"] = args.eval_steps or preset["eval_steps"]
-        kwargs["metric_for_best_model"] = "eval_loss"
-        kwargs["greater_is_better"] = False
+
+    if 'max_seq_length' in sft_allowed:
+        resolved_max_length_key = 'max_seq_length'
+        sft_kwargs_preview['max_seq_length'] = QLORA_SMALL_CONFIG['max_seq_length']
+    elif 'max_length' in sft_allowed:
+        resolved_max_length_key = 'max_length'
+        sft_kwargs_preview['max_length'] = QLORA_SMALL_CONFIG['max_seq_length']
     else:
-        kwargs[strategy_key] = "no"
-    meta = {
-        "training_arguments_strategy_key_resolved": strategy_key if strategy_resolved else None,
-        "training_arguments_strategy_key_assumed": None if strategy_resolved else strategy_key,
-        "training_arguments_strategy_key_resolution_source": strategy_source,
+        resolved_max_length_key = 'handled_outside_sftconfig'
+
+    trainer_preview = {
+        'passes_processing_class': 'processing_class' in trainer_allowed,
+        'passes_formatting_func': 'formatting_func' in trainer_allowed,
+        'forbidden_params_passed_to_sfttrainer': [],
     }
-    return kwargs, meta
 
-
-def compute_tokenizer_digest(model_id: str) -> str | None:
-    try:
-        from transformers import AutoTokenizer
-        tok = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-        return sha256_text(json.dumps(tok.get_vocab(), sort_keys=True))
-    except Exception:
-        return None
-
-
-def build_train_run_manifest(
-    args: argparse.Namespace,
-    preset: dict[str, Any],
-    effective_kwargs: dict[str, Any],
-    strategy_meta: dict[str, Any],
-    start_utc: str | None = None,
-    end_utc: str | None = None,
-    checkpoint_digest: str | None = None,
-) -> dict[str, Any]:
-    req_lock = Path("requirements.lock")
     return {
-        "TRAIN_RUN_MANIFEST_V1_OK": 1,
-        "git_sha": get_git_sha(),
-        "model_id": preset["model_id"],
-        "model_tag": preset["model_tag"],
-        "target_vram_gb": preset["target_vram_gb"],
-        "tokenizer_digest_sha256": compute_tokenizer_digest(preset["model_id"]),
-        "seed": COMMON_DEFAULTS["seed"],
-        "data_seed": COMMON_DEFAULTS["data_seed"],
-        "train_file_sha256": sha256_file(args.train_file) if args.train_file and Path(args.train_file).exists() else None,
-        "eval_file_sha256": sha256_file(args.eval_file) if args.eval_file and Path(args.eval_file).exists() else None,
-        "requirements_lock_sha256": sha256_file(req_lock) if req_lock.exists() else None,
-        "effective_sft_kwargs": effective_kwargs,
-        **strategy_meta,
-        "start_utc": start_utc,
-        "end_utc": end_utc,
-        "resume_from_checkpoint": args.resume_from_checkpoint,
-        "checkpoint_artifact_digest": checkpoint_digest,
-        "quantization": COMMON_DEFAULTS["quantization"],
-        "bnb_4bit_quant_type": "nf4",
-        "bnb_4bit_use_double_quant": True,
+        'base_model_id': QLORA_SMALL_CONFIG['base_model_id'],
+        'output_dir': output_dir,
+        'qlora_small_config': QLORA_SMALL_CONFIG,
+        'qwen3_specific': QWEN3_SPECIFIC,
+        'versions': {
+            'torch': optional_version('torch'),
+            'transformers': optional_version('transformers'),
+            'trl': optional_version('trl'),
+            'peft': optional_version('peft'),
+            'bitsandbytes': optional_version('bitsandbytes'),
+            'accelerate': optional_version('accelerate'),
+            'datasets': optional_version('datasets'),
+        },
+        'inspection': {
+            'sftconfig_status': sft_status,
+            'sfttrainer_status': trainer_status,
+            'allowed_sft_kwargs': sft_allowed,
+            'allowed_sfttrainer_kwargs': trainer_allowed,
+            'resolved_max_length_key': resolved_max_length_key,
+            'forbidden_sfttrainer_params': FORBIDDEN_SFTTRAINER_PARAMS,
+            'forbidden_params_absent': all(param not in trainer_allowed for param in FORBIDDEN_SFTTRAINER_PARAMS),
+        },
+        'preview': {
+            'sft_config_kwargs': sft_kwargs_preview,
+            'trainer_kwargs': trainer_preview,
+        },
+        'checks': {
+            'enable_thinking_is_false': QWEN3_SPECIFIC['enable_thinking'] is False,
+            'chat_template_is_qwen3_nonthinking': QWEN3_SPECIFIC['chat_template'] == 'qwen3_nonthinking',
+        },
     }
 
 
-def write_pending_output(output_dir: Path, manifest: dict[str, Any], preset: dict[str, Any]) -> str:
-    output_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = output_dir / "train_run_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    (output_dir / "PENDING_REAL_TRAIN.txt").write_text(
-        "실제 GPU 학습 전 상태입니다. adapter_model.safetensors 는 아직 생성되지 않았습니다.\n"
-        f"model_tag={preset['model_tag']}\nmodel_id={preset['model_id']}\n",
-        encoding="utf-8",
-    )
-    return str(manifest_path)
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding='utf-8')
 
 
-def evaluate_manifest_status(manifest_path: str | Path, manifest: dict[str, Any]) -> tuple[int, int]:
-    manifest_present = Path(manifest_path).exists()
-    manifest_complete = all([
-        manifest_present,
-        manifest.get("git_sha") not in (None, "UNKNOWN"),
-        manifest.get("tokenizer_digest_sha256") is not None,
-        manifest.get("train_file_sha256") is not None,
-        manifest.get("requirements_lock_sha256") is not None,
-        manifest.get("effective_sft_kwargs") is not None,
-        manifest.get("start_utc") is not None,
-        manifest.get("end_utc") is not None,
-        manifest.get("checkpoint_artifact_digest") is not None,
-    ])
-    return int(manifest_present), int(manifest_complete)
-
-
-def load_jsonl_as_text_dataset(path: str, tokenizer):
-    from datasets import Dataset
-    rows = []
-    with open(path, encoding="utf-8") as f:
-        for line in f:
+def load_jsonl_rows(path: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    with open(path, 'r', encoding='utf-8') as handle:
+        for idx, line in enumerate(handle, start=1):
             line = line.strip()
             if not line:
                 continue
-            rec = json.loads(line)
-            prompt = str(rec.get("prompt", "")).strip()
-            completion = str(rec.get("completion", "")).strip()
-            if not prompt or not completion:
-                continue
             try:
-                messages = [{"role": "user", "content": prompt}, {"role": "assistant", "content": completion}]
-                text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
-            except Exception:
-                text = prompt + "\n" + completion
-            rows.append({"text": text})
-    return Dataset.from_list(rows)
+                rows.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                raise ValueError(f'Invalid JSONL at {path}:{idx}: {exc}') from exc
+    return rows
 
 
-def write_json(path: str | Path, obj: dict[str, Any]) -> None:
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+def normalize_messages(record: dict[str, Any]) -> list[dict[str, str]]:
+    if isinstance(record.get('messages'), list):
+        return [
+            {'role': str(item['role']), 'content': str(item['content'])}
+            for item in record['messages']
+            if isinstance(item, dict) and 'role' in item and 'content' in item
+        ]
+    if isinstance(record.get('conversations'), list):
+        normalized: list[dict[str, str]] = []
+        for item in record['conversations']:
+            if not isinstance(item, dict):
+                continue
+            role = item.get('role') or item.get('from')
+            content = item.get('content') or item.get('value')
+            if role and content is not None:
+                normalized.append({'role': str(role), 'content': str(content)})
+        if normalized:
+            return normalized
+    if 'prompt' in record and 'response' in record:
+        return [
+            {'role': 'user', 'content': str(record['prompt'])},
+            {'role': 'assistant', 'content': str(record['response'])},
+        ]
+    if 'instruction' in record and 'output' in record:
+        system = record.get('system')
+        msgs: list[dict[str, str]] = []
+        if system:
+            msgs.append({'role': 'system', 'content': str(system)})
+        msgs.append({'role': 'user', 'content': str(record['instruction'])})
+        msgs.append({'role': 'assistant', 'content': str(record['output'])})
+        return msgs
+    if 'text' in record:
+        return [{'role': 'user', 'content': str(record['text'])}]
+    raise ValueError(f'Unsupported training record keys: {sorted(record.keys())}')
 
 
-def hash_directory(dir_path: Path) -> str | None:
-    if not dir_path.exists():
-        return None
-    h = hashlib.sha256()
-    for f in sorted(dir_path.rglob("*")):
-        if f.is_file():
-            h.update(f.relative_to(dir_path).as_posix().encode("utf-8"))
-            with f.open("rb") as fh:
-                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-                    h.update(chunk)
-    return h.hexdigest()
+def render_training_text(tokenizer: Any, record: dict[str, Any]) -> str:
+    messages = normalize_messages(record)
+    try:
+        return tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=False,
+            enable_thinking=False,
+        )
+    except TypeError:
+        return tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=False,
+        )
 
 
-def run_dry_run(args: argparse.Namespace) -> None:
-    preset, warnings = resolve_preset(args)
-    version_warning = validate_transformers_version()
-    if version_warning:
-        warnings.append(version_warning)
-    effective_kwargs, strategy_meta = build_effective_kwargs(args, preset)
-    missing = detect_missing_packages()
-    manifest = build_train_run_manifest(args, preset, effective_kwargs, strategy_meta)
-    manifest_path = write_pending_output(Path(args.output_dir), manifest, preset)
-    manifest_present, manifest_complete = evaluate_manifest_status(manifest_path, manifest)
-    config_blockers: list[str] = []
-    if not args.train_file or not Path(args.train_file).exists():
-        config_blockers.append("missing_train_file")
-    if args.eval_file and not Path(args.eval_file).exists():
-        config_blockers.append("missing_eval_file")
-    config_ready = int(len(config_blockers) == 0)
-    runtime_blockers: list[str] = []
-    if missing:
-        runtime_blockers.append("missing_packages")
-    runtime_ready = int(config_ready == 1 and len(runtime_blockers) == 0)
-    result = {
-        "AI20_SMALL_MODEL_DRYRUN_OK": 1,
-        "SMALL_MODEL_TRAIN_OK": 0,
-        "SMALL_MODEL_OUTPUT_DIR_PRESENT": 1,
-        "ADAPTER_MODEL_PRESENT_OK": 0,
-        "TRAIN_RUN_MANIFEST_V1_OK": 1,
-        "TRAIN_RUN_MANIFEST_PRESENT_OK": manifest_present,
-        "TRAIN_RUN_MANIFEST_COMPLETE_OK": manifest_complete,
-        "model_id": preset["model_id"],
-        "model_tag": preset["model_tag"],
-        "target_vram_gb": preset["target_vram_gb"],
-        "train_file": args.train_file,
-        "eval_file": args.eval_file,
-        "output_dir": args.output_dir,
-        "dry_run": True,
-        "effective_sft_kwargs": effective_kwargs,
-        **strategy_meta,
-        "effective_sft_kwargs_scope": "config_assuming_runtime_ready",
-        "TRAINING_ARGUMENTS_STRATEGY_KEY_RESOLVED_FOR_REAL_RUN_OK": int(strategy_meta.get("training_arguments_strategy_key_resolved") is not None),
-        "missing_packages": missing,
-        "warnings": warnings,
-        "config_ready_for_training": config_ready,
-        "runtime_ready_for_training": runtime_ready,
-        "config_blockers": config_blockers,
-        "runtime_blockers": runtime_blockers,
-        "ready_for_real_gpu_train": runtime_ready,
-        "tokenizer_digest_sha256": manifest.get("tokenizer_digest_sha256"),
-        "train_file_sha256": manifest.get("train_file_sha256"),
-        "eval_file_sha256": manifest.get("eval_file_sha256"),
-        "requirements_lock_sha256": manifest.get("requirements_lock_sha256"),
-        "resume_from_checkpoint": args.resume_from_checkpoint,
-        "REAL_TRAIN_GIT_SHA_RESOLVED_OK": int(manifest.get("git_sha") not in (None, "UNKNOWN")),
-        "note": "GPU 환경에서 --dry-run 없이 실행하면 adapter_model.safetensors 와 실제 train_run_manifest가 생성됩니다. 실학습은 git_sha resolve 및 TrainingArguments strategy key resolve에 실패하면 fail-closed 됩니다.",
+def pretokenize_dataset(dataset: Any, tokenizer: Any, max_length: int) -> Any:
+    def tokenize_row(example: dict[str, Any]) -> dict[str, Any]:
+        tokens = tokenizer(
+            example['text'],
+            truncation=True,
+            max_length=max_length,
+            add_special_tokens=False,
+        )
+        tokens['labels'] = list(tokens['input_ids'])
+        return tokens
+
+    columns = list(dataset.column_names)
+    return dataset.map(tokenize_row, remove_columns=columns)
+
+
+def resolve_sft_config(output_dir: str) -> Any:
+    from trl import SFTConfig
+
+    allowed = set(inspect.signature(SFTConfig.__init__).parameters.keys())
+    kwargs = {
+        'output_dir': output_dir,
+        'per_device_train_batch_size': QLORA_SMALL_CONFIG['per_device_train_batch_size'],
+        'gradient_accumulation_steps': QLORA_SMALL_CONFIG['gradient_accumulation_steps'],
+        'num_train_epochs': QLORA_SMALL_CONFIG['num_train_epochs'],
+        'learning_rate': QLORA_SMALL_CONFIG['learning_rate'],
+        'bf16': QLORA_SMALL_CONFIG['bf16'],
+        'report_to': 'none',
+        'save_strategy': 'epoch',
+        'eval_strategy': 'epoch',
+        'logging_steps': 10,
+        'seed': 42,
+        'gradient_checkpointing': True,
     }
-    out = Path("tmp") / f"ai20_{preset['model_tag']}_dryrun_result.json"
-    write_json(out, result)
-    print("AI20_SMALL_MODEL_DRYRUN_OK=1")
-    print("SMALL_MODEL_OUTPUT_DIR_PRESENT=1")
-    print(f"TRAIN_RUN_MANIFEST_PRESENT_OK={manifest_present}")
-    print(f"TRAIN_RUN_MANIFEST_COMPLETE_OK={manifest_complete}")
-    print(f"READY_FOR_REAL_GPU_TRAIN={runtime_ready}")
-    print(f"RESULT_JSON={out}")
+    if 'max_seq_length' in allowed:
+        kwargs['max_seq_length'] = QLORA_SMALL_CONFIG['max_seq_length']
+    elif 'max_length' in allowed:
+        kwargs['max_length'] = QLORA_SMALL_CONFIG['max_seq_length']
+    if 'save_total_limit' in allowed:
+        kwargs['save_total_limit'] = 2
+    if 'remove_unused_columns' in allowed:
+        kwargs['remove_unused_columns'] = False
+    return SFTConfig(**kwargs)
 
 
-def run_train(args: argparse.Namespace) -> None:
-    preset, warnings = resolve_preset(args)
-    if warnings:
-        print("WARNING:", "; ".join(warnings), file=sys.stderr)
-
-    if not args.train_file or not Path(args.train_file).exists():
-        raise RuntimeError(f"TRAIN_FILE_NOT_FOUND:{args.train_file}")
-    if args.eval_file and not Path(args.eval_file).exists():
-        raise RuntimeError(f"EVAL_FILE_NOT_FOUND:{args.eval_file}")
-
-    effective_kwargs, strategy_meta = build_effective_kwargs(args, preset)
-    git_sha = get_git_sha()
-    enforce_real_train_fail_closed(git_sha, strategy_meta)
-
-    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments
-    from peft import LoraConfig, TaskType, get_peft_model
-    from trl import SFTTrainer
-    import datetime as dt
+def run_training(train_file: str, eval_file: str | None, output_dir: str) -> None:
     import torch
+    from datasets import Dataset
+    from peft import LoraConfig
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+    from trl import SFTTrainer
 
-    tokenizer = AutoTokenizer.from_pretrained(preset["model_id"], trust_remote_code=True)
+    if not train_file:
+        raise ValueError('--train-file is required for training mode.')
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    tokenizer = AutoTokenizer.from_pretrained(QLORA_SMALL_CONFIG['base_model_id'])
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    tokenizer.padding_side = "right"
 
-    bf16, fp16 = pick_precision_flags()
-    compute_dtype = torch.bfloat16 if bf16 else (torch.float16 if fp16 else torch.float32)
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
+    quantization_config = BitsAndBytesConfig(
+        load_in_4bit=QLORA_SMALL_CONFIG['load_in_4bit'],
+        bnb_4bit_quant_type='nf4',
         bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=compute_dtype,
+        bnb_4bit_compute_dtype=torch.bfloat16,
     )
+
     model = AutoModelForCausalLM.from_pretrained(
-        preset["model_id"],
-        quantization_config=bnb_config,
-        device_map="auto",
-        trust_remote_code=True,
+        QLORA_SMALL_CONFIG['base_model_id'],
+        enable_thinking=False,
+        torch_dtype=torch.bfloat16,
+        quantization_config=quantization_config,
+        device_map='auto',
     )
-    model.config.use_cache = False
+
+    train_rows = load_jsonl_rows(train_file)
+    train_text_rows = [{'text': render_training_text(tokenizer, row)} for row in train_rows]
+    train_dataset = Dataset.from_list(train_text_rows)
+
+    eval_dataset = None
+    if eval_file:
+        eval_rows = load_jsonl_rows(eval_file)
+        eval_text_rows = [{'text': render_training_text(tokenizer, row)} for row in eval_rows]
+        eval_dataset = Dataset.from_list(eval_text_rows)
 
     peft_config = LoraConfig(
-        r=preset["lora_r"],
-        lora_alpha=preset["lora_alpha"],
-        lora_dropout=preset["lora_dropout"],
-        bias="none",
-        task_type=TaskType.CAUSAL_LM,
-        target_modules=COMMON_DEFAULTS["target_modules"],
+        r=QLORA_SMALL_CONFIG['lora_r'],
+        lora_alpha=QLORA_SMALL_CONFIG['lora_alpha'],
+        lora_dropout=QLORA_SMALL_CONFIG['lora_dropout'],
+        bias='none',
+        task_type='CAUSAL_LM',
+        target_modules=['q_proj', 'k_proj', 'v_proj', 'o_proj', 'gate_proj', 'up_proj', 'down_proj'],
     )
-    model = get_peft_model(model, peft_config)
 
-    train_dataset = load_jsonl_as_text_dataset(args.train_file, tokenizer)
-    eval_dataset = load_jsonl_as_text_dataset(args.eval_file, tokenizer) if args.eval_file else None
-    training_args = TrainingArguments(**effective_kwargs)
-
-    start_utc = dt.datetime.utcnow().isoformat() + "Z"
-    pre_manifest = build_train_run_manifest(args, preset, effective_kwargs, strategy_meta, start_utc=start_utc)
-    write_pending_output(Path(args.output_dir), pre_manifest, preset)
-    write_json(Path("tmp") / f"ai20_{preset['model_tag']}_train_manifest_pre.json", pre_manifest)
-
-    trainer_params = inspect.signature(SFTTrainer).parameters
-    tokenizer_kwarg = "processing_class" if "processing_class" in trainer_params else "tokenizer"
-    trainer = SFTTrainer(
-        model=model,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
-        args=training_args,
-        dataset_text_field="text",
-        max_seq_length=preset["max_seq_length"],
-        packing=False,
-        **{tokenizer_kwarg: tokenizer},
-    )
-    trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
-
-    out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    trainer.save_model(args.output_dir)
-    tokenizer.save_pretrained(args.output_dir)
-
-    end_utc = dt.datetime.utcnow().isoformat() + "Z"
-    checkpoint_digest = hash_directory(out_dir)
-    final_manifest = build_train_run_manifest(args, preset, effective_kwargs, strategy_meta, start_utc=start_utc, end_utc=end_utc, checkpoint_digest=checkpoint_digest)
-    final_manifest_path = out_dir / "train_run_manifest.json"
-    write_json(final_manifest_path, final_manifest)
-    write_json(Path("tmp") / f"ai20_{preset['model_tag']}_train_manifest.json", final_manifest)
-    manifest_present, manifest_complete = evaluate_manifest_status(final_manifest_path, final_manifest)
-    result = {
-        "SMALL_MODEL_TRAIN_OK": 1,
-        "SMALL_MODEL_OUTPUT_DIR_PRESENT": int(out_dir.exists()),
-        "ADAPTER_MODEL_PRESENT_OK": int((out_dir / "adapter_model.safetensors").exists()),
-        "TRAIN_RUN_MANIFEST_V1_OK": 1,
-        "TRAIN_RUN_MANIFEST_PRESENT_OK": manifest_present,
-        "TRAIN_RUN_MANIFEST_COMPLETE_OK": manifest_complete,
-        "model_id": preset["model_id"],
-        "model_tag": preset["model_tag"],
-        "output_dir": args.output_dir,
-        "train_samples": len(train_dataset),
-        "eval_samples": len(eval_dataset) if eval_dataset is not None else 0,
-        "checkpoint_artifact_digest": checkpoint_digest,
-        "effective_sft_kwargs": effective_kwargs,
-        **strategy_meta,
-        "effective_sft_kwargs_scope": "applied_runtime_config",
-        "resume_from_checkpoint": args.resume_from_checkpoint,
-        "config_ready_for_training": 1,
-        "runtime_ready_for_training": 1,
-        "REAL_TRAIN_GIT_SHA_RESOLVED_OK": 1,
-        "TRAINING_ARGUMENTS_STRATEGY_KEY_RESOLVED_FOR_REAL_RUN_OK": 1,
+    trainer_signature = set(inspect.signature(SFTTrainer.__init__).parameters.keys())
+    trainer_kwargs: dict[str, Any] = {
+        'model': model,
+        'args': resolve_sft_config(output_dir),
+        'train_dataset': train_dataset,
+        'eval_dataset': eval_dataset,
+        'peft_config': peft_config,
     }
-    out = Path("tmp") / f"ai20_{preset['model_tag']}_train_result.json"
-    write_json(out, result)
-    print("SMALL_MODEL_TRAIN_OK=1")
-    print(f"SMALL_MODEL_OUTPUT_DIR_PRESENT={int(out_dir.exists())}")
-    print(f"ADAPTER_MODEL_PRESENT_OK={int((out_dir / 'adapter_model.safetensors').exists())}")
-    print(f"TRAIN_RUN_MANIFEST_PRESENT_OK={manifest_present}")
-    print(f"TRAIN_RUN_MANIFEST_COMPLETE_OK={manifest_complete}")
-    print(f"RESULT_JSON={out}")
 
+    if 'processing_class' in trainer_signature:
+        trainer_kwargs['processing_class'] = tokenizer
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="AI-20 small deployment QLoRA trainer")
-    ap.add_argument("--model-id", type=str, default=None)
-    ap.add_argument("--target-tag", type=str, required=True, choices=sorted(TARGET_PRESETS.keys()))
-    ap.add_argument("--train-file", type=str, default="data/synthetic_v40/train.jsonl")
-    ap.add_argument("--eval-file", type=str, default="data/synthetic_v40/validation.jsonl")
-    ap.add_argument("--output-dir", type=str, required=True)
-    ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--resume-from-checkpoint", type=str, default=None)
-    ap.add_argument("--allow-model-override", action="store_true")
-    ap.add_argument("--max-steps", type=int, default=None)
-    ap.add_argument("--num-train-epochs", type=float, default=None)
-    ap.add_argument("--warmup-ratio", type=float, default=None)
-    ap.add_argument("--eval-steps", type=int, default=None)
-    ap.add_argument("--save-steps", type=int, default=None)
-    ap.add_argument("--save-total-limit", type=int, default=None)
-    args = ap.parse_args()
-    if args.dry_run:
-        run_dry_run(args)
+    if 'formatting_func' in trainer_signature:
+        trainer_kwargs['formatting_func'] = lambda example: example['text']
     else:
-        run_train(args)
+        train_dataset = pretokenize_dataset(train_dataset, tokenizer, QLORA_SMALL_CONFIG['max_seq_length'])
+        trainer_kwargs['train_dataset'] = train_dataset
+        if eval_dataset is not None:
+            trainer_kwargs['eval_dataset'] = pretokenize_dataset(eval_dataset, tokenizer, QLORA_SMALL_CONFIG['max_seq_length'])
+
+    trainer = SFTTrainer(**trainer_kwargs)
+    trainer.train()
+    trainer.save_model(output_dir)
+    tokenizer.save_pretrained(output_dir)
+    write_json(Path(output_dir) / 'ai20_training_metadata.json', {
+        'base_model_id': QLORA_SMALL_CONFIG['base_model_id'],
+        'qwen3_specific': QWEN3_SPECIFIC,
+        'environment': {
+            'cwd': os.getcwd(),
+        },
+    })
+    print('QLORA_TRAIN_RUN_OK=1')
 
 
-if __name__ == "__main__":
-    main()
+def main() -> int:
+    args = parse_args()
+    payload = collect_dry_run_metadata(output_dir=args.output_dir)
+    write_json(DEFAULT_RESULT_FILE, payload)
+    if args.dry_run:
+        print('FINETUNE_SMALL_DRY_OK=1')
+        return 0
+    run_training(args.train_file, args.eval_file, args.output_dir)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
