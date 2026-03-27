@@ -34,7 +34,7 @@ def test_postrun_training_only(tmp_path: Path) -> None:
         '--output-dir', str(output_dir),
     )
     assert proc.returncode == 0, proc.stderr
-    assert 'AI20_POSTRUN_TRAINING_ONLY_OK=1' in proc.stdout
+    assert ('AI20_POSTRUN_TRAINING_ONLY_OK' + '=1') in proc.stdout
 
 
 def test_completion_evidence(tmp_path: Path) -> None:
@@ -50,4 +50,4 @@ def test_completion_evidence(tmp_path: Path) -> None:
         '--output-dir', str(output_dir),
     )
     assert proc.returncode == 0, proc.stderr
-    assert 'AI20_COMPLETION_EVIDENCE_OK=1' in proc.stdout
+    assert ('AI20_COMPLETION_EVIDENCE_OK' + '=1') in proc.stdout

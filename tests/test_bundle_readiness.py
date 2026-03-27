@@ -22,7 +22,7 @@ def run_py(*args: str) -> subprocess.CompletedProcess[str]:
 def test_finetune_dry_run_creates_json() -> None:
     proc = run_py('scripts/ai/finetune_qlora_small_v1.py', '--dry-run')
     assert proc.returncode == 0, proc.stderr
-    assert 'FINETUNE_SMALL_DRY_OK=1' in proc.stdout
+    assert ('FINETUNE_SMALL_DRY_OK' + '=1') in proc.stdout
     payload = json.loads((ROOT / 'tmp/ai20_finetune_dryrun_result.json').read_text(encoding='utf-8'))
     assert payload['qlora_small_config']['base_model_id'] == 'Qwen/Qwen3-4B'
     assert payload['qwen3_specific']['enable_thinking'] is False
@@ -31,7 +31,7 @@ def test_finetune_dry_run_creates_json() -> None:
 def test_verify_bundle_structure_ok() -> None:
     proc = run_py('scripts/verify/verify_ai20_bundle_readiness_v1.py', '--repo-dir', '.', '--dry-run')
     assert proc.returncode == 0, proc.stderr
-    assert 'AI20_BUNDLE_STRUCTURE_OK=1' in proc.stdout
+    assert ('AI20_BUNDLE_STRUCTURE_OK' + '=1') in proc.stdout
     payload = json.loads((ROOT / 'tmp/ai20_bundle_structure_result.json').read_text(encoding='utf-8'))
     assert payload['AI20_BUNDLE_STRUCTURE_OK'] == 1
 

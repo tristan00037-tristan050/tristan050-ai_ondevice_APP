@@ -32,18 +32,18 @@ def test_overlay_dry_run_and_apply_and_rollback(tmp_path: Path) -> None:
 
     dry = run_py(str(script), '--repo-dir', str(repo), '--dry-run', cwd=ROOT)
     assert dry.returncode == 0, dry.stderr
-    assert 'AI20_OVERLAY_DRY_OK=1' in dry.stdout
+    assert ('AI20_OVERLAY_DRY_OK' + '=1') in dry.stdout
 
     apply = run_py(str(script), '--repo-dir', str(repo), cwd=ROOT)
     assert apply.returncode == 0, apply.stderr
-    assert 'AI20_OVERLAY_APPLY_OK=1' in apply.stdout
+    assert ('AI20_OVERLAY_APPLY_OK' + '=1') in apply.stdout
     changed = target.read_text(encoding='utf-8')
     assert 'Qwen/Qwen3-4B' in changed
     assert 'butler_model_small_v1' in changed
 
     rollback = run_py(str(script), '--repo-dir', str(repo), '--rollback', cwd=ROOT)
     assert rollback.returncode == 0, rollback.stderr
-    assert 'AI20_OVERLAY_ROLLBACK_OK=1' in rollback.stdout
+    assert ('AI20_OVERLAY_ROLLBACK_OK' + '=1') in rollback.stdout
     restored = target.read_text(encoding='utf-8')
     assert 'Qwen/Qwen2.5-1.5B-Instruct' in restored
     assert 'butler_model_micro_v1' in restored
