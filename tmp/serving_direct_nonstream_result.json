@@ -1,0 +1,23 @@
+{
+    "id": "chatcmpl-0b208ada3bc1",
+    "object": "chat.completion",
+    "created": 1774674253,
+    "model": "butler-small",
+    "choices": [
+        {
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": "[butler-small stub] \ubaa8\ub378\uc774 \uc544\uc9c1 \ub85c\ub4dc\ub418\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4."
+            },
+            "finish_reason": "stop"
+        }
+    ],
+    "usage": {
+        "prompt_tokens": -1,
+        "completion_tokens": -1,
+        "total_tokens": -1
+    },
+    "x_request_id": "0b208ada3bc1",
+    "x_latency_ms": 0
+}

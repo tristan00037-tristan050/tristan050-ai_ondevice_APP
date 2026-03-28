@@ -1,29 +1,29 @@
-# 주간 개발 진행현황 (2026-03-27)
+# 주간 진행현황 (AI-22 서빙 레이어)
 
-## 전체 완성도
-**71%**
+기준일: 2026-03-28
 
-## 항목별 진행률
-| 항목 | 진행률 | 상태 |
-|---|---:|---|
-| TurboQuant 코어 엔진 스캐폴드 | 92% | 완료 직전 |
-| Butler 후킹 / 폴백 경계 | 88% | 완료 |
-| 서버 status scaffold | 82% | 완료 |
-| 모바일 설정 계산기 / MNN 계획 | 78% | 완료 |
-| CPU dry-run / unit test | 95% | 완료 |
-| GPU 실측 벤치마크 | 20% | 실행팀 필요 |
-| 실기기 MNN smoke / thermal | 10% | 실행팀 필요 |
-| 버틀러 실제 제품 통합 | 35% | 메인개발팀 필요 |
+| 항목 | 진행률 |
+|---|---:|
+| OpenAI 호환 `/v1/chat/completions` | 100% |
+| `healthz` / `readyz` / `version` / `metrics` | 100% |
+| 인증 / allowlist / body size 제한 | 95% |
+| SSE `[DONE]` 종료 / half-open 방지 | 95% |
+| stub deterministic 응답 | 100% |
+| 테스트 9개 이상 | 100% |
+| 실제 모델 smoke test | 15% |
+| TurboQuant 실연동 | 20% |
+| `/v1/responses` / tool-calling | 10% |
+| structured outputs | 10% |
 
-## 이번 주 완료 사항
-- 논문-정합 TurboQuant 스캐폴드 구현
-- wrapper 기본값 / fail-closed 폴백 반영
-- dry-run, pytest, shell syntax 검증 경로 구성
-- measured_* 비워두는 정책 반영
-- Qwen3-4B 실제 config와 예시값 차이 자동 교차검증 반영
+전체 완성도: **74%**
 
-## 다음 주 최우선 과제
-1. GPU 서버에 실제 버틀러 모델 연결
-2. `tmp/turboq_benchmark_result.json` 실측 생성
-3. Android/iOS 실기기 MNN 경로 smoke 수행
-4. 장기 문맥 정확도 및 thermal regression 측정
+## 이번 주 완료
+- AI-22 필수 파일 구현
+- stub 기반 direct run 검증
+- OpenAI 형식 응답 스키마 테스트 통과
+
+## 다음 주 우선순위
+- 실제 `adapter_model.safetensors` 연결
+- `/v1/responses` 추가
+- structured outputs / function calling
+- Prometheus 메트릭, rate limiting, request tracing
