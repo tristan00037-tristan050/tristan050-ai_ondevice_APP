@@ -137,8 +137,15 @@ def create_app(config: Optional[ServerConfig] = None) -> FastAPI:
 
         if request_body.stream:
             SERVER_STATS['stream_requests_total'] += 1
+            semaphore = request.app.state.request_semaphore
+
+            async def guarded_stream():
+                async with semaphore:
+                    async for chunk in stream_generator(model, request_body, req_id):
+                        yield chunk
+
             return StreamingResponse(
-                stream_generator(model, request_body, req_id),
+                guarded_stream(),
                 media_type='text/event-stream',
                 headers={
                     'X-Request-Id': req_id,

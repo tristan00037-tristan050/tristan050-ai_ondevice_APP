@@ -70,6 +70,8 @@ class ButlerAuthMiddleware(BaseHTTPMiddleware):
         return response
 
     def _check_body_size(self, request: Request) -> None:
+        if 'chunked' in request.headers.get('transfer-encoding', '').lower():
+            raise HTTPException(status_code=400, detail='chunked_transfer_not_allowed')
         raw = request.headers.get('content-length', '0')
         try:
             content_length = int(raw)

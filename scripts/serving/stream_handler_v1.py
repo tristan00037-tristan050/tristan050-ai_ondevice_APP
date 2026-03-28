@@ -111,6 +111,6 @@ async def stream_generator(model, request, req_id: str) -> AsyncGenerator[str, N
         finish_reason = 'length' if timed_out else 'stop'
         yield make_chunk('', finish_reason=finish_reason)
         yield 'data: [DONE]\n\n'
-    except Exception as exc:
-        yield make_error_chunk(str(exc))
+    except Exception:
+        yield make_error_chunk('stream_error')
         yield 'data: [DONE]\n\n'
