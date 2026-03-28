@@ -1,0 +1,26 @@
+{
+    "object": "list",
+    "data": [
+        {
+            "id": "butler-small",
+            "object": "model",
+            "owned_by": "butler",
+            "created": 1700000000,
+            "base_model": "Qwen/Qwen3-4B"
+        },
+        {
+            "id": "butler-micro",
+            "object": "model",
+            "owned_by": "butler",
+            "created": 1700000000,
+            "base_model": "Qwen/Qwen2.5-1.5B-Instruct"
+        },
+        {
+            "id": "butler-v1",
+            "object": "model",
+            "owned_by": "butler",
+            "created": 1700000000,
+            "base_model": "Qwen/Qwen2.5-7B-Instruct"
+        }
+    ]
+}
