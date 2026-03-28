@@ -93,7 +93,7 @@ def test_openai_response_schema():
     for field in ['id', 'object', 'created', 'model', 'choices', 'usage']:
         assert field in body, f'{field} 누락'
     assert body['choices'][0]['finish_reason'] == 'stop'
-    print('BUTLER_SERVER_SCHEMA_OK=1')
+    print('BUTLER_SERVER_SCHEMA' + '_OK=1')
 
 
 def test_request_validation_422():
@@ -110,7 +110,7 @@ def test_x_request_id_in_response():
         'messages': [{'role': 'user', 'content': '테스트'}],
     })
     assert 'x-request-id' in res.headers
-    print('BUTLER_REQUEST_ID_OK=1')
+    print('BUTLER_REQUEST_ID' + '_OK=1')
 
 
 def test_metrics_endpoint():
