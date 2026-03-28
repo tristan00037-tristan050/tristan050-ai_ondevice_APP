@@ -124,6 +124,9 @@ def run_pipeline(source_dir: str, output_dir: str, dry_run: bool = False) -> dic
 
     stats["stages"]["quarantine"] = {"count_preview": quarantine.count()}
 
+    if not training_records:
+        raise RuntimeError("PIPELINE_NO_TRAINING_RECORDS: training_records 0건 — 파이프라인 중단")
+
     if dry_run:
         print("[5/7] dry-run 종료: 분할/저장 생략")
         stats["dry_run_ok"] = True

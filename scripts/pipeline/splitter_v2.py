@@ -27,25 +27,29 @@ class DataSplitter:
 
     def split(self, records: list[dict], output_dir: str) -> dict:
         rng = random.Random(self.seed)
-        by_domain: dict[str, list[dict]] = defaultdict(list)
-        for record in records:
-            by_domain[record.get("domain", "general")].append(record)
+
+        # Global dedup first to prevent cross-domain digest leakage
+        global_groups = self._group_by_digest(records)
+
+        by_domain: dict[str, list[list[dict]]] = defaultdict(list)
+        for group in global_groups:
+            domain = group[0].get("domain", "general")
+            by_domain[domain].append(group)
 
         splits = {name: [] for name in SPLIT_NAMES}
         domain_stats = {}
 
-        for domain, domain_records in by_domain.items():
-            groups = self._group_by_digest(domain_records)
-            rng.shuffle(groups)
+        for domain, domain_groups in by_domain.items():
+            rng.shuffle(domain_groups)
 
-            total_items = len(domain_records)
-            total_groups = len(groups)
+            total_items = sum(len(g) for g in domain_groups)
+            total_groups = len(domain_groups)
             target_train = int(total_groups * self.ratios[0])
             target_val = int(total_groups * self.ratios[1])
 
-            train_groups = groups[:target_train]
-            validation_groups = groups[target_train : target_train + target_val]
-            test_groups = groups[target_train + target_val :]
+            train_groups = domain_groups[:target_train]
+            validation_groups = domain_groups[target_train : target_train + target_val]
+            test_groups = domain_groups[target_train + target_val :]
 
             for group in train_groups:
                 splits["train"].extend(group)
@@ -56,9 +60,9 @@ class DataSplitter:
 
             domain_stats[domain] = {
                 "total": total_items,
-                "train": sum(len(group) for group in train_groups),
-                "validation": sum(len(group) for group in validation_groups),
-                "test": sum(len(group) for group in test_groups),
+                "train": sum(len(g) for g in train_groups),
+                "validation": sum(len(g) for g in validation_groups),
+                "test": sum(len(g) for g in test_groups),
             }
 
         leakage_count = self._check_leakage(splits)
@@ -84,9 +88,17 @@ class DataSplitter:
             for record in splits["train"]
             if record.get("output_digest_sha256")
         }
+        val_digests = {
+            record.get("output_digest_sha256")
+            for record in splits["validation"]
+            if record.get("output_digest_sha256")
+        }
         leakage = 0
         for name in ("validation", "test"):
             for record in splits[name]:
                 if record.get("output_digest_sha256") in train_digests:
                     leakage += 1
+        for record in splits["test"]:
+            if record.get("output_digest_sha256") in val_digests:
+                leakage += 1
         return leakage
