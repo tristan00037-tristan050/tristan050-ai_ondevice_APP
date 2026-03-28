@@ -42,7 +42,8 @@ def verify_turboq_structure() -> dict[str, Any]:
     for rel_path in required_files:
         exists = (ROOT_DIR / rel_path).exists()
         report.append({'file': rel_path, 'ok': exists})
-        print(f"[{'PASS' if exists else 'FAIL'}] {rel_path}")
+        if not exists:
+            print(f'TURBOQ_FILE_PRESENT=0 ERR_MISSING')
 
     rng = np.random.default_rng(7)
 
@@ -60,7 +61,7 @@ def verify_turboq_structure() -> dict[str, Any]:
             'fallback_used': quantizer.fallback_used,
         }
     )
-    print(f"[{'PASS' if lloyd_ok else 'FAIL'}] Lloyd-Max MSE: {mse:.6f}")
+    print(f"TURBOQ_LLOYD_MAX_OK={'1' if lloyd_ok else '0'}" + ('' if lloyd_ok else ' ERR_MSE_HIGH'))
 
     polar = PolarQuant(dim=128, bits=3)
     qjl = QJLCorrector(dim=128, n_bits=2048)
@@ -81,7 +82,7 @@ def verify_turboq_structure() -> dict[str, Any]:
     mean_bias = float(np.mean(biases))
     bias_ok = bool(mean_bias < 0.05)
     report.append({'check': 'inner_product_bias', 'mean_bias': mean_bias, 'ok': bias_ok})
-    print(f"[{'PASS' if bias_ok else 'FAIL'}] Inner-product bias: {mean_bias:.6f}")
+    print(f"TURBOQ_INNER_PRODUCT_OK={'1' if bias_ok else '0'}" + ('' if bias_ok else ' ERR_BIAS_HIGH'))
 
     smoke_q = rng.standard_normal(128).astype(np.float32)
     smoke_q /= max(np.linalg.norm(smoke_q), 1e-8)
@@ -90,7 +91,7 @@ def verify_turboq_structure() -> dict[str, Any]:
     attention_smoke = kvcache.approx_attention_score(smoke_q, smoke_payload, index=0)
     attention_ok = bool(np.isfinite(attention_smoke))
     report.append({'check': 'attention_smoke', 'score': float(attention_smoke), 'ok': attention_ok})
-    print(f"[{'PASS' if attention_ok else 'FAIL'}] Attention smoke: {attention_smoke:.6f}")
+    print(f"TURBOQ_ATTENTION_SMOKE_OK={'1' if attention_ok else '0'}" + ('' if attention_ok else ' ERR_NOT_FINITE'))
 
     skipped_checks.append({'check': 'gpu_benchmark', 'reason': 'gpu_required'})
     skipped_checks.append({'check': 'mobile_real_device', 'reason': 'device_required'})
