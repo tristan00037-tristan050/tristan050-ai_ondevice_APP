@@ -1,0 +1,80 @@
+{
+  "report": [
+    {
+      "file": "scripts/turboq/__init__.py",
+      "ok": true
+    },
+    {
+      "file": "scripts/turboq/turboq_core_v1.py",
+      "ok": true
+    },
+    {
+      "file": "scripts/turboq/turboq_butler_hook_v1.py",
+      "ok": true
+    },
+    {
+      "file": "scripts/turboq/turboq_server_v1.py",
+      "ok": true
+    },
+    {
+      "file": "scripts/turboq/turboq_mobile_v1.py",
+      "ok": true
+    },
+    {
+      "file": "scripts/turboq/turboq_benchmark_v1.py",
+      "ok": true
+    },
+    {
+      "file": "scripts/turboq/turboq_verify_v1.py",
+      "ok": true
+    },
+    {
+      "file": "scripts/turboq/turboq_run_dryrun_v1.sh",
+      "ok": true
+    },
+    {
+      "file": "tests/turboq/test_turboq_core.py",
+      "ok": true
+    },
+    {
+      "file": "tests/turboq/test_turboq_hook.py",
+      "ok": true
+    },
+    {
+      "file": "README_TURBOQ_KO.md",
+      "ok": true
+    },
+    {
+      "check": "lloyd_max_mse",
+      "mse": 0.03457319363951683,
+      "ok": true,
+      "fallback_used": false
+    },
+    {
+      "check": "inner_product_bias",
+      "mean_bias": 0.045256798628252,
+      "ok": true
+    },
+    {
+      "check": "attention_smoke",
+      "score": -0.4715070128440857,
+      "ok": true
+    }
+  ],
+  "all_pass": true,
+  "skipped_checks": [
+    {
+      "check": "gpu_benchmark",
+      "reason": "gpu_required"
+    },
+    {
+      "check": "mobile_real_device",
+      "reason": "device_required"
+    }
+  ],
+  "fallback_used": false,
+  "notes": [
+    "GPU measured_* fields remain empty until execution-team benchmark.",
+    "This bundle is a research-faithful scaffold, not a claim of official Google code parity."
+  ]
+}

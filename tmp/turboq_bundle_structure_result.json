@@ -1,0 +1,81 @@
+{
+  "all_ok": true,
+  "report": [
+    {
+      "path": "scripts/__init__.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/turboq/__init__.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/turboq/turboq_core_v1.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/turboq/turboq_butler_hook_v1.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/turboq/turboq_server_v1.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/turboq/turboq_mobile_v1.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/turboq/turboq_benchmark_v1.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/turboq/turboq_verify_v1.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/turboq/turboq_run_dryrun_v1.sh",
+      "exists": true
+    },
+    {
+      "path": "tests/turboq/test_turboq_core.py",
+      "exists": true
+    },
+    {
+      "path": "tests/turboq/test_turboq_hook.py",
+      "exists": true
+    },
+    {
+      "path": "README_TURBOQ_KO.md",
+      "exists": true
+    },
+    {
+      "path": "BENCHMARK_TURBOQ_KO.md",
+      "exists": true
+    },
+    {
+      "path": "STATUS_WEEKLY_KO.md",
+      "exists": true
+    },
+    {
+      "path": "RESEARCH_SOURCES_2026_KO.md",
+      "exists": true
+    },
+    {
+      "path": "tmp/turboq_compile_result.txt",
+      "exists": true
+    },
+    {
+      "path": "tmp/turboq_verify_result.json",
+      "exists": true
+    },
+    {
+      "path": "tmp/turboq_unittest_result.txt",
+      "exists": true
+    },
+    {
+      "path": "tmp/turboq_shell_syntax_result.txt",
+      "exists": true
+    }
+  ]
+}
