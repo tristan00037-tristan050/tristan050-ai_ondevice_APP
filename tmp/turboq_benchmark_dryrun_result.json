@@ -1,0 +1,42 @@
+{
+  "dry_run": true,
+  "results": [
+    {
+      "scenario": "일상 대화 (10턴)",
+      "seq_len": 512,
+      "expected_compression_ratio": 5.333333333333333,
+      "expected_accuracy": 0.99,
+      "measured_compression_ratio": null,
+      "measured_accuracy": null,
+      "pass": null
+    },
+    {
+      "scenario": "문서 요약 (A4 3장)",
+      "seq_len": 2048,
+      "expected_compression_ratio": 5.333333333333333,
+      "expected_accuracy": 0.99,
+      "measured_compression_ratio": null,
+      "measured_accuracy": null,
+      "pass": null
+    },
+    {
+      "scenario": "법률 문서 분석",
+      "seq_len": 4096,
+      "expected_compression_ratio": 5.333333333333333,
+      "expected_accuracy": 0.98,
+      "measured_compression_ratio": null,
+      "measured_accuracy": null,
+      "pass": null
+    },
+    {
+      "scenario": "장기 프로젝트 대화 (50턴)",
+      "seq_len": 8192,
+      "expected_compression_ratio": 5.333333333333333,
+      "expected_accuracy": 0.97,
+      "measured_compression_ratio": null,
+      "measured_accuracy": null,
+      "pass": null
+    }
+  ],
+  "note": "measured_* values remain None until GPU/server/device execution is completed"
+}

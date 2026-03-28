@@ -1,0 +1,25 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- /opt/pyvenv/bin/python
+cachedir: .pytest_cache
+metadata: {'Python': '3.13.5', 'Platform': 'Linux-4.4.0-x86_64-with-glibc2.41', 'Packages': {'pytest': '9.0.2', 'pluggy': '1.6.0'}, 'Plugins': {'Faker': '40.1.2', 'metadata': '3.1.1', 'cov': '7.0.0', 'anyio': '4.12.1', 'asyncio': '1.3.0', 'json-report': '1.5.0', 'ddtrace': '4.4.0'}, 'PLATFORM': 'linux/amd64', 'CI': 'true'}
+rootdir: /mnt/data/butler_turboq_ai21_bundle
+plugins: Faker-40.1.2, metadata-3.1.1, cov-7.0.0, anyio-4.12.1, asyncio-1.3.0, json-report-1.5.0, ddtrace-4.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 8 items
+
+tests/turboq/test_turboq_core.py::test_lloyd_max_quantizer_roundtrip_mse_under_budget PASSED [ 12%]
+tests/turboq/test_turboq_core.py::test_force_fallback_keeps_centroids_deterministic PASSED [ 25%]
+tests/turboq/test_turboq_core.py::test_polar_quant_roundtrip_shape_and_dtype PASSED [ 37%]
+tests/turboq/test_turboq_core.py::test_qjl_bias_is_reasonable_on_normalized_vectors PASSED [ 50%]
+tests/turboq/test_turboq_core.py::test_turboquant_kvcache_summary_fields_exist PASSED [ 62%]
+tests/turboq/test_turboq_hook.py::test_wrapper_mode_compresses_cache_to_dict_payloads PASSED [ 75%]
+tests/turboq/test_turboq_hook.py::test_fallback_on_unsupported_cache_shape_returns_original_path PASSED [ 87%]
+tests/turboq/test_turboq_hook.py::test_memory_stats_only_expose_targets_before_measurement PASSED [100%]
+
+=============================== warnings summary ===============================
+../../../opt/pyvenv/lib/python3.13/site-packages/ddtrace/internal/module.py:313
+  /opt/pyvenv/lib/python3.13/site-packages/ddtrace/internal/module.py:313: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    self.loader.exec_module(module)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========================= 8 passed, 1 warning in 7.29s =========================
