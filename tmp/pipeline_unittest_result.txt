@@ -1,0 +1,26 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- /opt/pyvenv/bin/python
+cachedir: .pytest_cache
+metadata: {'Python': '3.13.5', 'Platform': 'Linux-4.4.0-x86_64-with-glibc2.41', 'Packages': {'pytest': '9.0.2', 'pluggy': '1.6.0'}, 'Plugins': {'ddtrace': '4.4.0', 'asyncio': '1.3.0', 'Faker': '40.1.2', 'metadata': '3.1.1', 'cov': '7.0.0', 'json-report': '1.5.0', 'anyio': '4.12.1'}, 'PLATFORM': 'linux/amd64', 'CI': 'true'}
+rootdir: /mnt/data/butler_ai23_pipeline_bundle
+plugins: ddtrace-4.4.0, asyncio-1.3.0, Faker-40.1.2, metadata-3.1.1, cov-7.0.0, json-report-1.5.0, anyio-4.12.1
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 15 items
+
+tests/pipeline/test_cleaner.py::test_cleaner_masks_pii PASSED            [  6%]
+tests/pipeline/test_cleaner.py::test_cleaner_rejects_low_korean_ratio PASSED [ 13%]
+tests/pipeline/test_cleaner.py::test_cleaner_rejects_length_out_of_range PASSED [ 20%]
+tests/pipeline/test_collector.py::test_collect_supported_files_and_dedup PASSED [ 26%]
+tests/pipeline/test_collector.py::test_failed_file_is_tracked PASSED     [ 33%]
+tests/pipeline/test_formatter.py::test_format_document_creates_digest PASSED [ 40%]
+tests/pipeline/test_formatter.py::test_validate_template_dummy_tokenizer PASSED [ 46%]
+tests/pipeline/test_formatter.py::test_format_qa PASSED                  [ 53%]
+tests/pipeline/test_quality_filter.py::test_quality_filter_general_pass PASSED [ 60%]
+tests/pipeline/test_quality_filter.py::test_quality_filter_restricted_domain_rejects_hallucination PASSED [ 66%]
+tests/pipeline/test_quality_filter.py::test_quality_filter_rejects_ngram_duplication PASSED [ 73%]
+tests/pipeline/test_runner.py::test_run_pipeline_dry_run PASSED          [ 80%]
+tests/pipeline/test_runner.py::test_run_pipeline_real_run_creates_manifest_and_stats PASSED [ 86%]
+tests/pipeline/test_splitter.py::test_splitter_writes_expected_split_files PASSED [ 93%]
+tests/pipeline/test_splitter.py::test_splitter_keeps_duplicate_digest_in_same_split PASSED [100%]
+
+============================== 15 passed in 0.36s ==============================
