@@ -1,32 +1,30 @@
-# STATUS_WEEKLY_KO
+# 주간 진행현황 — AI-24 Judge + Hard-case 배포 게이트 엔진 v6
 
-기준일: 2026-03-28
+기준일: 2026-03-29
 
-## 전체 완성도
-**78%**
-
-| 항목 | 진행률 | 메모 |
+| 항목 | 진행률 | 비고 |
 |---|---:|---|
-| 수집기(6포맷, SHA-256 dedup) | 90% | PDF/DOCX/TXT/JSONL/JSON/CSV 동작 |
-| 정제기(PII/한국어/NFC) | 88% | regex 기반 5종 마스킹 |
-| 품질 필터(도메인/중복/hallucination) | 84% | 규제 도메인 엄격 reject 포함 |
-| 포맷 변환(JSONL/digest) | 92% | training record 생성 완료 |
-| split/leakage | 86% | digest 그룹 단위 분할 |
-| orchestrator/manifest/quarantine | 82% | dry-run/real-run 분리 완료 |
-| 검증/pytest/로그 | 95% | dry-run + pytest 로그 포함 |
-| 실데이터 운영 검증 | 20% | 운영팀 범위 |
-| 스캔 PDF OCR lane | 15% | 후속 구현 필요 |
-| 대규모 분산 dedup | 10% | DataTrove/MinHash 후속 |
+| fail-closed 게이트 로직 | 99% | `gate_basis=fail_reasons_empty` 유지 |
+| dataset validator | 97% | malformed / imbalance / leakage / duplicate prompt 반영 |
+| rule judge 실동작 | 95% | `judge_score`, `judge_source`, `judge_confidence` 실제 값 |
+| hard-case / adversarial 세트 | 96% | 50건 / refusal 15건 이상 |
+| dry-run / pytest / shell 검증 | 100% | GPU 없이 완료 |
+| Markdown 리포트 | 97% | hardcase, rule judge, 재현성 metadata 반영 |
+| real-run GPU 실측 | 20% | 운영 환경 필요 |
+| LLM-as-judge calibration | 35% | rule judge 이후 후속 단계 |
+| human spot check 운영 | 25% | 규칙만 남김 |
+
+전체 완성도: **87%**
 
 ## 이번 주 완료
-- AI-23 필수 10개 파일 구현
-- pytest 추가
-- dry-run 검증 로그 생성
-- README / PR 템플릿 / 벤치마킹 문서 작성
+- `eval_judge_rule_v1.py` 추가
+- `butler_hardcase_v1.jsonl` 50건 세트 추가
+- `eval_domain_v3.py` rule judge 실연동
+- `eval_judge_v3.py` hard-case 결과 포함
+- `eval_verify_v3.py`에 hard-case/rule judge 검증 추가
 
 ## 다음 주 우선순위
-1. Presidio optional backend
-2. Docling optional parser
-3. real-run manifest/quarantine 운영 가이드
-4. parquet export
-5. restricted domain tuning
+- GPU real-run 수행
+- judge calibration 경로 추가
+- 운영 hard-case 세트 확장
+- human spot check 샘플링 규칙 추가

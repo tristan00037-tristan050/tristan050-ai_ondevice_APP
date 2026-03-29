@@ -1,0 +1,2 @@
+score=0.490, source=rule_v1, passed=True
+RULE_JUDGE_OK=1
