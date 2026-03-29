@@ -46,9 +46,13 @@ def _load_baseline_file(path: Path) -> Optional[dict]:
 
 
 def _change_ratio(metric: str, current: float, baseline: float) -> Optional[float]:
-    if baseline in (None, 0):
+    if baseline is None:
         return None
     direction = METRIC_DIRECTIONS.get(metric, "higher")
+    if baseline == 0:
+        # zero-baseline: use absolute delta to avoid division by zero
+        delta = float(current) - float(baseline)
+        return delta if direction == "higher" else -delta
     if direction == "higher":
         return (float(current) - float(baseline)) / float(baseline)
     return (float(baseline) - float(current)) / float(baseline)
