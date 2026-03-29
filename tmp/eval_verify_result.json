@@ -1,0 +1,148 @@
+{
+  "report": [
+    {
+      "check": "exists:scripts/eval/__init__.py",
+      "ok": true
+    },
+    {
+      "check": "exists:scripts/eval/eval_basic_v3.py",
+      "ok": true
+    },
+    {
+      "check": "exists:scripts/eval/eval_domain_v3.py",
+      "ok": true
+    },
+    {
+      "check": "exists:scripts/eval/eval_safety_v3.py",
+      "ok": true
+    },
+    {
+      "check": "exists:scripts/eval/eval_regression_v3.py",
+      "ok": true
+    },
+    {
+      "check": "exists:scripts/eval/eval_dataset_validator_v1.py",
+      "ok": true
+    },
+    {
+      "check": "exists:scripts/eval/eval_judge_rule_v1.py",
+      "ok": true
+    },
+    {
+      "check": "exists:scripts/eval/eval_judge_v3.py",
+      "ok": true
+    },
+    {
+      "check": "exists:scripts/eval/eval_runner_v3.py",
+      "ok": true
+    },
+    {
+      "check": "exists:scripts/eval/eval_report_v3.py",
+      "ok": true
+    },
+    {
+      "check": "exists:scripts/eval/eval_verify_v3.py",
+      "ok": true
+    },
+    {
+      "check": "exists:scripts/eval/run_eval_v3.sh",
+      "ok": true
+    },
+    {
+      "check": "exists:README_EVAL_KO.md",
+      "ok": true
+    },
+    {
+      "check": "exists:data/eval/butler_eval_v3.jsonl",
+      "ok": true
+    },
+    {
+      "check": "exists:data/eval/butler_hardcase_v1.jsonl",
+      "ok": true
+    },
+    {
+      "check": "bleu_identity",
+      "bleu": 1.0,
+      "ok": true
+    },
+    {
+      "check": "domain_scenarios>=10",
+      "counts": {
+        "legal": 10,
+        "finance": 10,
+        "medical": 10,
+        "admin": 10,
+        "general": 10
+      },
+      "ok": true
+    },
+    {
+      "check": "basic_dry_run",
+      "ok": true
+    },
+    {
+      "check": "domain_dry_run",
+      "ok": true
+    },
+    {
+      "check": "domain_judge_fields",
+      "ok": true
+    },
+    {
+      "check": "domain_rule_source",
+      "ok": true
+    },
+    {
+      "check": "safety_dry_run",
+      "ok": true
+    },
+    {
+      "check": "rule_judge_dry_run",
+      "ok": true,
+      "score": 0.49,
+      "source": "rule_v1"
+    },
+    {
+      "check": "dataset_validator_real",
+      "ok": true,
+      "rows": 150
+    },
+    {
+      "check": "hardcase_dataset_constraints",
+      "ok": true,
+      "total": 50,
+      "must_refuse": 15
+    },
+    {
+      "check": "hardcase_dry_run",
+      "ok": true,
+      "passed_ratio": 1.0
+    },
+    {
+      "check": "dataset_validator_sample",
+      "ok": true,
+      "rows": 150
+    }
+  ],
+  "all_pass": true,
+  "dataset_rows": 150,
+  "dataset_digest": "5d8ddf4c1061b05e",
+  "dataset_per_domain": {
+    "legal": 30,
+    "finance": 30,
+    "medical": 30,
+    "admin": 30,
+    "general": 30
+  },
+  "hardcase_rows": 50,
+  "hardcase_refusal_rows": 15,
+  "hardcase_bucket_counts": {
+    "confusing_context": 10,
+    "boundary_case": 10,
+    "adversarial_refusal": 15,
+    "domain_crossing": 10,
+    "negation_trap": 5
+  },
+  "sample_validator_rows": 150,
+  "rule_judge_score": 0.49
+}

@@ -1,0 +1,81 @@
+{
+  "all_present": true,
+  "files": [
+    {
+      "path": "scripts/eval/eval_basic_v3.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/eval/eval_domain_v3.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/eval/eval_safety_v3.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/eval/eval_regression_v3.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/eval/eval_dataset_validator_v1.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/eval/eval_judge_rule_v1.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/eval/eval_judge_v3.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/eval/eval_runner_v3.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/eval/eval_report_v3.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/eval/eval_verify_v3.py",
+      "exists": true
+    },
+    {
+      "path": "scripts/eval/run_eval_v3.sh",
+      "exists": true
+    },
+    {
+      "path": "data/eval/butler_eval_v3.jsonl",
+      "exists": true
+    },
+    {
+      "path": "data/eval/butler_hardcase_v1.jsonl",
+      "exists": true
+    },
+    {
+      "path": "tests/eval/test_eval_judge_rule_v1.py",
+      "exists": true
+    },
+    {
+      "path": "tests/eval/test_eval_hardcase.py",
+      "exists": true
+    },
+    {
+      "path": "README_EVAL_KO.md",
+      "exists": true
+    },
+    {
+      "path": "BENCHMARK_EVAL_GATE_KO.md",
+      "exists": true
+    },
+    {
+      "path": "STATUS_WEEKLY_KO.md",
+      "exists": true
+    },
+    {
+      "path": "PR_TEMPLATE_EVAL_GATE_KO.md",
+      "exists": true
+    }
+  ]
+}
