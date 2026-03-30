@@ -1,0 +1,2 @@
+매니페스트 저장: tmp/conversion_manifest.json
+MANIFEST_FIELDS_OK=1

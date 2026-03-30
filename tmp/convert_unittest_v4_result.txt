@@ -1,0 +1,32 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- /opt/pyvenv/bin/python
+cachedir: .pytest_cache
+metadata: {'Python': '3.13.5', 'Platform': 'Linux-4.4.0-x86_64-with-glibc2.41', 'Packages': {'pytest': '9.0.2', 'pluggy': '1.6.0'}, 'Plugins': {'cov': '7.0.0', 'json-report': '1.5.0', 'ddtrace': '4.4.0', 'asyncio': '1.3.0', 'metadata': '3.1.1', 'anyio': '4.12.1', 'Faker': '40.1.2'}, 'PLATFORM': 'linux/amd64', 'CI': 'true'}
+rootdir: /mnt/data/butler_ai25_convert_v4_bundle
+plugins: cov-7.0.0, json-report-1.5.0, ddtrace-4.4.0, asyncio-1.3.0, metadata-3.1.1, anyio-4.12.1, Faker-40.1.2
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 21 items
+
+tests/convert/test_convert_budget.py::test_budget_dry_run_passes PASSED  [  4%]
+tests/convert/test_convert_budget.py::test_budget_small_files_pass PASSED [  9%]
+tests/convert/test_convert_manifest.py::test_create_manifest_dry_run PASSED [ 14%]
+tests/convert/test_convert_manifest.py::test_create_manifest_real_run_records_digests PASSED [ 19%]
+tests/convert/test_convert_merge.py::test_sha256_file PASSED             [ 23%]
+tests/convert/test_convert_merge.py::test_merge_missing_adapter_raises PASSED [ 28%]
+tests/convert/test_convert_merge.py::test_merge_success_with_fake_modules PASSED [ 33%]
+tests/convert/test_convert_mnn.py::test_convert_to_mnn_missing_binary_raises PASSED [ 38%]
+tests/convert/test_convert_mnn.py::test_convert_to_mnn_success PASSED    [ 42%]
+tests/convert/test_convert_mnn.py::test_verify_mnn_dryrun PASSED         [ 47%]
+tests/convert/test_convert_onnx.py::test_convert_to_onnx_missing_model_dir_raises PASSED [ 52%]
+tests/convert/test_convert_onnx.py::test_convert_to_onnx_fallback_success PASSED [ 57%]
+tests/convert/test_convert_onnx.py::test_verify_onnx_dryrun PASSED       [ 61%]
+tests/convert/test_convert_ort_mobile.py::test_convert_to_ort_missing_onnx_raises PASSED [ 66%]
+tests/convert/test_convert_ort_mobile.py::test_convert_to_ort_skips_without_tools PASSED [ 71%]
+tests/convert/test_convert_ort_mobile.py::test_convert_to_ort_success PASSED [ 76%]
+tests/convert/test_convert_package.py::test_create_package_requires_tokenizer PASSED [ 80%]
+tests/convert/test_convert_package.py::test_create_package_success PASSED [ 85%]
+tests/convert/test_convert_runner.py::test_run_pipeline_dryrun PASSED    [ 90%]
+tests/convert/test_convert_runner.py::test_run_pipeline_real_run_with_monkeypatched_stages PASSED [ 95%]
+tests/convert/test_convert_verify.py::test_verify_passes_from_bundle_root PASSED [100%]
+
+============================== 21 passed in 0.53s ==============================
