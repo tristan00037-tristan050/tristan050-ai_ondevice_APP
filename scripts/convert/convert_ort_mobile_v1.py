@@ -81,12 +81,15 @@ def convert_to_ort(onnx_path: str, output_path: str, optimization_style: str = "
     print("ORT mobile format 변환 중...")
     _invoke_converter(converter_fn, onnx_file.parent, out_file.parent, optimization_style)
 
-    ort_files = sorted(out_file.parent.glob("*.ort"))
-    if not ort_files:
-        print("WARN: ORT 파일 미생성 — 환경 미지원 가능성")
-        return {"skipped": True, "reason": "no ort files generated"}
+    if not out_file.exists():
+        # 변환기가 stem 기반 파일명을 쓸 경우 fallback
+        candidates = sorted(out_file.parent.glob("*.ort"))
+        if not candidates:
+            print("WARN: ORT 파일 미생성 — 환경 미지원 가능성")
+            return {"skipped": True, "reason": "no ort files generated"}
+        out_file = candidates[0]
 
-    ort_file = ort_files[0]
+    ort_file = out_file
     size_mb = ort_file.stat().st_size / (1024 ** 2)
     ort_digest = _sha256_file(ort_file)
     print("ORT_CONVERT_OK=1")

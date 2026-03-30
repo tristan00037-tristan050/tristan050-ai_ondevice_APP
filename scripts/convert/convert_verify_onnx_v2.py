@@ -121,16 +121,17 @@ def verify_onnx(onnx_path: str, dry_run: bool = False) -> dict:
         out = sess.run(None, feed)
         runtime_verified = out is not None and len(out) > 0
     except Exception as exc:
-        print(f"WARN: ORT runtime 검증 실패: {exc}")
+        print("WARN: ORT runtime 검증 실패")
     report.append(
         {
             "check": "ort_verification",
             "structure_verified": structure_verified,
             "runtime_verified": runtime_verified,
-            "ok": structure_verified,
+            "ok": structure_verified and runtime_verified,
         }
     )
-    print(f"[PASS] ORT: structure={structure_verified}, runtime={runtime_verified}")
+    ort_ok = structure_verified and runtime_verified
+    print(f"[{'PASS' if ort_ok else 'FAIL'}] ORT: structure={structure_verified}, runtime={runtime_verified}")
 
     size_ok = file_size_gb <= 3.0
     report.append({"check": "size", "size_gb": round(file_size_gb, 3), "ok": size_ok})

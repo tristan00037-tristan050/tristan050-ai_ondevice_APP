@@ -131,10 +131,13 @@ def run_pipeline(
         if not stage_results.get("ort_mobile", {}).get("skipped"):
             effective_ort_path = stage_results["ort_mobile"].get("ort_path")
         budget_result = check_budget(mnn_path, effective_ort_path, dry_run=False)
+        budget_dict = _budget_to_dict(budget_result)
         stage_results["budget"] = {
             "budget_spec": get_budget_spec(),
-            "result": _budget_to_dict(budget_result),
+            "result": budget_dict,
         }
+        if not budget_dict.get("file_budget_passed", True):
+            raise ConversionStageError("budget 초과: 온디바이스 제약 위반")
 
         elapsed = round(time.time() - start, 1)
         create_manifest(
