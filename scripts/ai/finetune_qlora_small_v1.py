@@ -20,7 +20,8 @@ QLORA_SMALL_CONFIG = {
     'output_dir': 'output/butler_model_small_v1',
     'per_device_train_batch_size': 3,
     'gradient_accumulation_steps': 6,
-    'num_train_epochs': 3,
+    'num_train_epochs': 1,
+    'max_steps': 1000,
     'learning_rate': 2.5e-4,
     'lora_r': 12,
     'lora_alpha': 24,
@@ -81,8 +82,8 @@ def collect_dry_run_metadata(output_dir: str) -> dict[str, Any]:
         'learning_rate': QLORA_SMALL_CONFIG['learning_rate'],
         'bf16': QLORA_SMALL_CONFIG['bf16'],
         'report_to': 'none',
-        'save_strategy': 'epoch',
-        'eval_strategy': 'epoch',
+        'save_strategy': 'steps',
+        'eval_strategy': 'steps',
         'logging_steps': 10,
     }
 
@@ -185,6 +186,11 @@ def normalize_messages(record: dict[str, Any]) -> list[dict[str, str]]:
         msgs.append({'role': 'user', 'content': str(record['instruction'])})
         msgs.append({'role': 'assistant', 'content': str(record['output'])})
         return msgs
+    if 'prompt' in record and 'completion' in record:
+        return [
+            {'role': 'user', 'content': str(record['prompt'])},
+            {'role': 'assistant', 'content': str(record['completion'])},
+        ]
     if 'text' in record:
         return [{'role': 'user', 'content': str(record['text'])}]
     raise ValueError(f'Unsupported training record keys: {sorted(record.keys())}')
@@ -197,7 +203,6 @@ def render_training_text(tokenizer: Any, record: dict[str, Any]) -> str:
             messages,
             tokenize=False,
             add_generation_prompt=False,
-            enable_thinking=False,
         )
     except TypeError:
         return tokenizer.apply_chat_template(
@@ -219,7 +224,13 @@ def pretokenize_dataset(dataset: Any, tokenizer: Any, max_length: int) -> Any:
         return tokens
 
     columns = list(dataset.column_names)
-    return dataset.map(tokenize_row, remove_columns=columns)
+    import hashlib, os
+    dataset_fingerprint = getattr(dataset, '_fingerprint', '') or str(len(dataset))
+    cache_key = hashlib.md5((str(tokenizer.name_or_path) + str(max_length) + dataset_fingerprint).encode()).hexdigest()[:12]
+    cache_dir = '/data/tokenize_cache'
+    os.makedirs(cache_dir, exist_ok=True)
+    cache_file = f'{cache_dir}/tokenized_{cache_key}.arrow'
+    return dataset.map(tokenize_row, remove_columns=columns, cache_file_name=cache_file)
 
 
 def resolve_sft_config(output_dir: str) -> Any:
@@ -234,11 +245,12 @@ def resolve_sft_config(output_dir: str) -> Any:
         'learning_rate': QLORA_SMALL_CONFIG['learning_rate'],
         'bf16': QLORA_SMALL_CONFIG['bf16'],
         'report_to': 'none',
-        'save_strategy': 'epoch',
-        'eval_strategy': 'epoch',
+        'save_strategy': 'steps',
+        'eval_strategy': 'steps',
         'logging_steps': 10,
         'seed': 42,
         'gradient_checkpointing': True,
+        'max_steps': QLORA_SMALL_CONFIG['max_steps'],
     }
     if 'max_seq_length' in allowed:
         kwargs['max_seq_length'] = QLORA_SMALL_CONFIG['max_seq_length']
@@ -255,7 +267,7 @@ def run_training(train_file: str, eval_file: str | None, output_dir: str) -> Non
     import torch
     from datasets import Dataset
     from peft import LoraConfig
-    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+    from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import SFTTrainer
 
     if not train_file:
@@ -267,18 +279,9 @@ def run_training(train_file: str, eval_file: str | None, output_dir: str) -> Non
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=QLORA_SMALL_CONFIG['load_in_4bit'],
-        bnb_4bit_quant_type='nf4',
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
-
     model = AutoModelForCausalLM.from_pretrained(
         QLORA_SMALL_CONFIG['base_model_id'],
-        enable_thinking=False,
-        torch_dtype=torch.bfloat16,
-        quantization_config=quantization_config,
+        dtype=torch.bfloat16,
         device_map='auto',
     )
 
