@@ -225,7 +225,8 @@ def pretokenize_dataset(dataset: Any, tokenizer: Any, max_length: int) -> Any:
 
     columns = list(dataset.column_names)
     import hashlib, os
-    cache_key = hashlib.md5((str(tokenizer.name_or_path) + str(max_length)).encode()).hexdigest()[:8]
+    dataset_fingerprint = getattr(dataset, '_fingerprint', '') or str(len(dataset))
+    cache_key = hashlib.md5((str(tokenizer.name_or_path) + str(max_length) + dataset_fingerprint).encode()).hexdigest()[:12]
     cache_dir = '/data/tokenize_cache'
     os.makedirs(cache_dir, exist_ok=True)
     cache_file = f'{cache_dir}/tokenized_{cache_key}.arrow'
