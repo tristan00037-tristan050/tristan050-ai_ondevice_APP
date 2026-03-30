@@ -1,0 +1,59 @@
+{
+  "run_mode": "dry_run",
+  "created_at": "2026-03-29T07:58:34.216847+00:00",
+  "git_sha": "unknown",
+  "config_digest": "1926a832431b13b6",
+  "version": "butler_model_small_v1",
+  "adapter_dir": "output/butler_model_small_v1",
+  "work_dir": "output/convert_work",
+  "package_dir": "output/butler_mobile_package",
+  "environment": {
+    "python": "3.13.5",
+    "platform": "Linux-4.4.0-x86_64-with-glibc2.41"
+  },
+  "adapter_digest": null,
+  "merged_digest": null,
+  "onnx_digest": null,
+  "mnn_digest": null,
+  "package_digest": null,
+  "tokenizer_file_digests": null,
+  "config_file_digests": null,
+  "generation_config_digest": null,
+  "onnx_export_method": null,
+  "onnx_exporter_report_digests": null,
+  "mnn_stdout_digest": null,
+  "mnn_stderr_digest": null,
+  "ort_structure_verified": null,
+  "ort_runtime_verified": null,
+  "external_data_file_digests": null,
+  "ort_mobile_path": null,
+  "ort_mobile_digest": null,
+  "ort_mobile_size_mb": null,
+  "budget_spec": null,
+  "budget_result": null,
+  "elapsed_seconds": 0.0,
+  "stage_results": {
+    "budget": {
+      "budget_spec": {
+        "mnn_size_mb_max": 3072,
+        "mnn_size_mb_target": 1024,
+        "ort_size_mb_max": 3072,
+        "first_token_sec_max": 5.0,
+        "throughput_tokens_per_sec_min": 10,
+        "load_time_sec_max": 10.0
+      },
+      "result": {
+        "mnn_size_mb": 0.0,
+        "mnn_size_ok": true,
+        "mnn_target_ok": true,
+        "ort_size_mb": null,
+        "ort_size_ok": null,
+        "file_budget_passed": true,
+        "fail_reasons": [],
+        "first_token_sec": null,
+        "throughput_tps": null,
+        "load_time_sec": null
+      }
+    }
+  }
+}
