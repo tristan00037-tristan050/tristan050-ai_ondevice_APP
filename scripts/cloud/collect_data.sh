@@ -285,7 +285,8 @@ while len(records) < TARGET:
         })
 
 if len(records) < TARGET:
-    print(f"  경고: {len(records)}건만 생성됨 (목표 {TARGET}건 미달)", file=sys.stderr)
+    print(f"ERROR_CODE=NIKL_DIALOGUE_GEN_UNDER_TARGET:{len(records)}:{TARGET}", file=sys.stderr)
+    sys.exit(1)
 
 random.shuffle(records)
 
@@ -320,11 +321,97 @@ else
     echo "  ⚠️  SSD 미연결 — AI Hub 데이터 건너뜀"
 fi
 
+# ── fail-closed helpers (bash) ───────────────────────────────────────────────
+# 비어 있지 않은 JSONL: 각 비어 있지 않은 줄이 JSON object 여야 함 (merge 전 선검사)
+jsonl_strict_probe_dict_lines() {
+    local f="$1"
+    local lab="$2"
+    [ -f "$f" ] || return 0
+    [ -s "$f" ] || return 0
+    COLLECT_PROBE_F="$f" COLLECT_PROBE_L="$lab" "$PYTHON_BIN" <<'PROB'
+import json, os, sys
+from pathlib import Path
+p = Path(os.environ["COLLECT_PROBE_F"])
+lab = os.environ["COLLECT_PROBE_L"]
+for i, raw in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+    line = raw.strip()
+    if not line:
+        continue
+    try:
+        o = json.loads(line)
+    except json.JSONDecodeError as e:
+        print(f"ERROR_CODE=COLLECT_JSONL_PARSE:{lab}:{p.name}:{i}:{e.msg}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(o, dict):
+        print(f"ERROR_CODE=COLLECT_ROW_NOT_OBJECT:{lab}:{p.name}:{i}", file=sys.stderr)
+        sys.exit(1)
+sys.exit(0)
+PROB
+}
+
+# n>=3 일 때 train/validation/test 각 최소 1건 분할 크기 (stdout: 세 정수; 실패 시 stderr ERROR_CODE)
+compute_nonempty_split_counts_triple() {
+    local n="$1"
+    if [ -z "${n}" ] || ! [[ "${n}" =~ ^[0-9]+$ ]]; then
+        echo "ERROR_CODE=SPLIT_COUNT_INVALID" >&2
+        return 1
+    fi
+    if [ "$n" -lt 3 ]; then
+        echo "ERROR_CODE=SPLIT_COUNT_TOO_SMALL:${n}" >&2
+        return 1
+    fi
+    "$PYTHON_BIN" -c "
+c = {'train': 1, 'validation': 1, 'test': 1}
+rem = int('${n}') - 3
+w = {'train': 0.8, 'validation': 0.1, 'test': 0.1}
+raw = {k: rem * w[k] for k in c}
+for k in c:
+    c[k] += int(raw[k])
+leftover = int('${n}') - sum(c.values())
+order = sorted(c.keys(), key=lambda k: (raw[k] - int(raw[k]), w[k]), reverse=True)
+for k in order[:leftover]:
+    c[k] += 1
+print(c['train'], c['validation'], c['test'])
+"
+}
+
+# verifier 전: split 파일 존재·비0·공백만 아님
+collect_precheck_nonempty_split_files() {
+    local s f
+    for s in train validation test; do
+        f="$OUT_DIR/${s}.jsonl"
+        if [ ! -f "$f" ]; then
+            echo "ERROR_CODE=SPLIT_FILE_MISSING:${s}.jsonl" >&2
+            return 1
+        fi
+        if [ ! -s "$f" ]; then
+            echo "ERROR_CODE=SPLIT_FILE_EMPTY:${s}.jsonl" >&2
+            return 1
+        fi
+        if ! grep -q '[^[:space:]]' "$f"; then
+            echo "ERROR_CODE=SPLIT_FILE_WHITESPACE_ONLY:${s}.jsonl" >&2
+            return 1
+        fi
+    done
+}
+
 # ── STEP 3. 데이터 병합 및 전처리 ────────────────────────────────────────────
 echo ""
-echo "[3/4] 데이터 병합 및 train/validation/test 분할 중..."
+echo "[3/5] 데이터 병합 및 train/validation/test 분할 중..."
+
+if [ "$OFFLINE" -eq 1 ] && [ "$SYNTHETIC_COUNT" -lt 3 ]; then
+    echo "ERROR_CODE=SYNTHETIC_COUNT_OFFLINE_TOO_SMALL:${SYNTHETIC_COUNT}" >&2
+    exit 1
+fi
+
+if [ "$OFFLINE" -eq 0 ]; then
+    jsonl_strict_probe_dict_lines "$RAW_DIR/wiki_ko_sample.jsonl" "wiki_ko_sample" || exit 1
+    jsonl_strict_probe_dict_lines "$RAW_DIR/nikl_dialogue_sample.jsonl" "nikl_dialogue_sample" || exit 1
+fi
 
 "$PYTHON_BIN" - <<PYEOF
+from __future__ import annotations
+
 import hashlib
 import json
 import random
@@ -336,146 +423,176 @@ offline = int("$OFFLINE")
 out_dir = Path("$OUT_DIR")
 raw_dir = Path("$RAW_DIR")
 
-# ── 기존 합성 데이터 로드 ─────────────────────────────────────────────────────
-existing = []
-for split_file in ["train.jsonl", "validation.jsonl", "test.jsonl"]:
-    p = out_dir / split_file
-    if p.exists():
-        for line in p.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line:
-                try:
-                    existing.append(json.loads(line))
-                except Exception:
-                    pass
-print(f"  기존 합성 데이터: {len(existing)} 건")
+def load_jsonl_records_strict(path: Path, source_name: str) -> list[dict]:
+    if not path.exists():
+        return []
+    records: list[dict] = []
+    text = path.read_text(encoding="utf-8")
+    for i, raw_line in enumerate(text.splitlines(), 1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as e:
+            print(f"ERROR_CODE=COLLECT_JSONL_PARSE:{source_name}:{path.name}:{i}:{e.msg}", file=sys.stderr)
+            sys.exit(1)
+        if not isinstance(row, dict):
+            print(f"ERROR_CODE=COLLECT_ROW_NOT_OBJECT:{source_name}:{path.name}:{i}", file=sys.stderr)
+            sys.exit(1)
+        records.append(row)
+    return records
 
-# ── raw 파일 로드 (온라인 모드에서만) ─────────────────────────────────────────
-wiki_records = []
-dialogue_records = []
-
-if not offline:
-    # ── Wikipedia 샘플 변환 ───────────────────────────────────────────────────
-    wiki_path = raw_dir / "wiki_ko_sample.jsonl"
-    if wiki_path.exists() and wiki_path.stat().st_size > 0:
-        for line in wiki_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                item = json.loads(line)
-                text = item.get("text", "")
-                if len(text) > 50:
-                    # 앞부분을 prompt, 나머지를 completion으로 분할
-                    split_at = min(len(text) // 2, 200)
-                    wiki_records.append({
-                        "id": f"wiki_{len(wiki_records):04d}",
-                        "function": "summarize",
-                        "lang": "ko",
-                        "prompt": f"다음 내용을 간단히 설명해 주세요: {text[:split_at]}",
-                        "completion": text[split_at:split_at + 200].strip(),
-                        "format": "qwen2.5_chat",
-                    })
-            except Exception:
-                pass
-        print(f"  Wikipedia 변환: {len(wiki_records)} 건")
-
-    # ── 대화 샘플 변환 ────────────────────────────────────────────────────────
-    dial_path = raw_dir / "nikl_dialogue_sample.jsonl"
-    if dial_path.exists() and dial_path.stat().st_size > 0:
-        for line in dial_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                item = json.loads(line)
-                if item.get("prompt") and item.get("completion"):
-                    dialogue_records.append({
-                        "id": f"dial_{len(dialogue_records):04d}",
-                        "function": "dialogue",
-                        "lang": "ko",
-                        "prompt": item["prompt"],
-                        "completion": item["completion"],
-                        "format": "qwen2.5_chat",
-                        "prompt_digest_sha256": hashlib.sha256(item["prompt"].encode()).hexdigest(),
-                        "output_digest_sha256": hashlib.sha256(item["completion"].encode()).hexdigest(),
-                    })
-            except Exception:
-                pass
-        print(f"  대화 샘플 변환: {len(dialogue_records)} 건")
-else:
-    print("  오프라인 모드 — raw 파일 로드 건너뜀 (합성 데이터만 사용)")
-
-# ── 전체 병합 및 분할 ─────────────────────────────────────────────────────────
-# split 전 전체 풀 dedup — cross-split leakage 방지
-# dedup 키: (norm_text(prompt), norm_text(completion)) — pair 기준
-# norm_text: 공백 정규화 + strip
-def norm_text(s):
+def norm_text(s: str) -> str:
     return " ".join(str(s).split())
 
-_seen_keys = set()
-deduped_all = []
+def compute_nonempty_split_counts(n: int) -> dict[str, int]:
+    if n < 3:
+        print("ERROR_CODE=SPLIT_COUNT_TOO_SMALL", file=sys.stderr)
+        sys.exit(1)
+    counts = {"train": 1, "validation": 1, "test": 1}
+    remaining = n - 3
+    weights = {"train": 0.8, "validation": 0.1, "test": 0.1}
+    raw = {k: remaining * weights[k] for k in counts}
+    for k in counts:
+        counts[k] += int(raw[k])
+    assigned = sum(counts.values())
+    leftover = n - assigned
+    order = sorted(counts.keys(), key=lambda k: (raw[k] - int(raw[k]), weights[k]), reverse=True)
+    for k in order[:leftover]:
+        counts[k] += 1
+    return counts
+
+def load_synthetic_pool(out_dir: Path) -> list[dict]:
+    pool: list[dict] = []
+    for split_file in ("train.jsonl", "validation.jsonl", "test.jsonl"):
+        p = out_dir / split_file
+        tag = f"synthetic_{split_file}"
+        for row in load_jsonl_records_strict(p, tag):
+            if "prompt" not in row or "completion" not in row:
+                print(f"ERROR_CODE=COLLECT_SYNTHETIC_FIELD_MISSING:{split_file}", file=sys.stderr)
+                sys.exit(1)
+            if not isinstance(row["prompt"], str) or not isinstance(row["completion"], str):
+                print(f"ERROR_CODE=COLLECT_SYNTHETIC_FIELD_NOT_STRING:{split_file}", file=sys.stderr)
+                sys.exit(1)
+            pool.append(dict(row))
+    return pool
+
+existing = load_synthetic_pool(out_dir)
+wiki_records: list[dict] = []
+dialogue_records: list[dict] = []
+
+if not offline:
+    wiki_path = raw_dir / "wiki_ko_sample.jsonl"
+    if wiki_path.exists() and wiki_path.stat().st_size > 0:
+        for item in load_jsonl_records_strict(wiki_path, "wiki_ko_sample"):
+            text = item.get("text", "")
+            if not isinstance(text, str):
+                print("ERROR_CODE=COLLECT_WIKI_TEXT_NOT_STRING", file=sys.stderr)
+                sys.exit(1)
+            text = text.strip()
+            if len(text) <= 50:
+                continue
+            split_at = min(len(text) // 2, 200)
+            wiki_records.append({
+                "id": f"wiki_{len(wiki_records):04d}",
+                "function": "summarize",
+                "lang": "ko",
+                "prompt": f"다음 내용을 간단히 설명해 주세요: {text[:split_at]}",
+                "completion": text[split_at:split_at + 200].strip(),
+                "format": "qwen2.5_chat",
+            })
+
+    dial_path = raw_dir / "nikl_dialogue_sample.jsonl"
+    if dial_path.exists() and dial_path.stat().st_size > 0:
+        for item in load_jsonl_records_strict(dial_path, "nikl_dialogue_sample"):
+            if "prompt" not in item or "completion" not in item:
+                print("ERROR_CODE=COLLECT_DIALOGUE_FIELD_MISSING", file=sys.stderr)
+                sys.exit(1)
+            pr, co = item["prompt"], item["completion"]
+            if not isinstance(pr, str) or not isinstance(co, str):
+                print("ERROR_CODE=COLLECT_DIALOGUE_FIELD_NOT_STRING", file=sys.stderr)
+                sys.exit(1)
+            dialogue_records.append({
+                "id": f"dial_{len(dialogue_records):04d}",
+                "function": "dialogue",
+                "lang": "ko",
+                "prompt": pr,
+                "completion": co,
+                "format": "qwen2.5_chat",
+                "prompt_digest_sha256": hashlib.sha256(pr.encode()).hexdigest(),
+                "output_digest_sha256": hashlib.sha256(co.encode()).hexdigest(),
+            })
+
+_seen_keys: set[tuple[str, str]] = set()
+deduped_all: list[dict] = []
 for r in existing + wiki_records + dialogue_records:
-    key = (
-        norm_text(r.get("prompt", "")),
-        norm_text(r.get("completion", "")),
-    )
-    if key not in _seen_keys:
-        _seen_keys.add(key)
-        deduped_all.append(r)
-print("DATASET_PRE_SPLIT_DEDUP_BY_PAIR_ONLY_OK=1")
+    p = norm_text(r.get("prompt", ""))
+    c = norm_text(r.get("completion", ""))
+    if not p or not c:
+        print("ERROR_CODE=COLLECT_EMPTY_PAIR_AFTER_NORM", file=sys.stderr)
+        sys.exit(1)
+    key = (p, c)
+    if key in _seen_keys:
+        continue
+    _seen_keys.add(key)
+    deduped_all.append(r)
 
-print(f"  dedup 후 전체: {len(deduped_all)} 건 (원본 {len(existing) + len(wiki_records) + len(dialogue_records)} 건 중)")
 random.shuffle(deduped_all)
-all_records = deduped_all
+n = len(deduped_all)
+if n < 3:
+    print("ERROR_CODE=SPLIT_COUNT_TOO_SMALL", file=sys.stderr)
+    sys.exit(1)
 
-n = len(all_records)
-train_end = int(n * 0.8)
-val_end   = int(n * 0.9)
-
+counts = compute_nonempty_split_counts(n)
+train_n = counts["train"]
+val_n = counts["validation"]
+test_n = counts["test"]
 splits = {
-    "train":      all_records[:train_end],
-    "validation": all_records[train_end:val_end],
-    "test":       all_records[val_end:],
+    "train": deduped_all[:train_n],
+    "validation": deduped_all[train_n : train_n + val_n],
+    "test": deduped_all[train_n + val_n : train_n + val_n + test_n],
 }
 
 for split_name, records in splits.items():
-    # split 필드 보정
+    if len(records) < 1:
+        print(f"ERROR_CODE=SPLIT_EMPTY_AFTER_ASSIGN:{split_name}", file=sys.stderr)
+        sys.exit(1)
     for r in records:
         r["split"] = split_name
     path = out_dir / f"{split_name}.jsonl"
-    if records:
-        path.write_text(
-            "\n".join(json.dumps(r, ensure_ascii=False) for r in records) + "\n",
-            encoding="utf-8",
-        )
-    else:
-        path.write_text("", encoding="utf-8")
-    print(f"  ✅ {split_name}.jsonl → {len(records)} 건")
+    path.write_text(
+        "\n".join(json.dumps(r, ensure_ascii=False) for r in records) + "\n",
+        encoding="utf-8",
+    )
 
-print(f"  전체 {n} 건 (train {len(splits['train'])} / val {len(splits['validation'])} / test {len(splits['test'])})")
+print("COLLECT_DATA_JSONL_STRICT_PARSE_OK=1")
+print("DATASET_PRE_SPLIT_DEDUP_BY_PAIR_ONLY_OK=1")
+print("DATASET_SPLIT_NONEMPTY_V1_OK=1")
+print("COLLECT_DATA_BLOCKS_ON_TOO_SMALL_SPLIT_INPUT_OK=1")
 PYEOF
 
-# ── STEP 4. 최종 확인 ─────────────────────────────────────────────────────────
-echo ""
-echo "[4/4] 최종 파일 확인..."
-for f in train.jsonl validation.jsonl test.jsonl; do
-    FPATH="$OUT_DIR/$f"
-    if [ -f "$FPATH" ]; then
-        COUNT=$(wc -l < "$FPATH" | tr -d ' ')
-        SIZE=$(du -sh "$FPATH" | cut -f1)
-        if [ "$COUNT" -eq 0 ]; then
-            echo "BLOCK: $f — 0건 (비어있음)"
-            exit 1
-        fi
-        echo "  ✅ $f — $COUNT 건 ($SIZE)"
-    else
-        echo "  ❌ $f — 파일 없음"
-        exit 1
-    fi
-done
+# STEP3 Python 분할과 동일 알고리즘인지 bash compute_nonempty_split_counts_triple로 교차검증
+_TR=$(wc -l < "$OUT_DIR/train.jsonl" | tr -d ' ')
+_VA=$(wc -l < "$OUT_DIR/validation.jsonl" | tr -d ' ')
+_TE=$(wc -l < "$OUT_DIR/test.jsonl" | tr -d ' ')
+_TOT=$((_TR + _VA + _TE))
+read -r _E_TR _E_VA _E_TE <<< "$(compute_nonempty_split_counts_triple "$_TOT")" || exit 1
+if [ "$_TR" != "$_E_TR" ] || [ "$_VA" != "$_E_VA" ] || [ "$_TE" != "$_E_TE" ]; then
+    echo "ERROR_CODE=SPLIT_COUNT_MISMATCH:actual=${_TR},${_VA},${_TE}:expected=${_E_TR},${_E_VA},${_E_TE}" >&2
+    exit 1
+fi
 
-# 결과 요약 저장
+# ── STEP 4. split 선검사 (verifier 전) ───────────────────────────────────────
+echo ""
+echo "[4/5] split 파일 선검사..."
+collect_precheck_nonempty_split_files || exit 1
+
+# ── STEP 5. cross-split verifier → 통과 시에만 요약 ─────────────────────────
+echo ""
+echo "[5/5] cross-split duplicate 검증..."
+"$PYTHON_BIN" scripts/verify/verify_cross_split_duplicate_v1.py --data-dir "$OUT_DIR" || exit 1
+
 "$PYTHON_BIN" - <<PYEOF
 import json
 from pathlib import Path
@@ -495,14 +612,12 @@ summary = {
 Path("tmp/collect_data_summary.json").write_text(
     json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
 )
-print("  ✅ 요약 저장: tmp/collect_data_summary.json")
+print("COLLECT_DATA_SUMMARY_WRITTEN_OK=1")
 PYEOF
 
 echo ""
 echo "=============================================="
-echo " ✅ 데이터 수집 완료!"
-echo "    학습 데이터: $OUT_DIR/train.jsonl"
-echo "    검증 데이터: $OUT_DIR/validation.jsonl"
-echo "    테스트 데이터: $OUT_DIR/test.jsonl"
+echo " COLLECT_PIPELINE_OK=1"
+echo " OUT_DIR=$OUT_DIR"
 echo " 다음 단계: bash scripts/cloud/run_training.sh"
 echo "=============================================="
