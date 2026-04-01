@@ -20,7 +20,8 @@ QLORA_SMALL_CONFIG = {
     'output_dir': 'output/butler_model_small_v1',
     'per_device_train_batch_size': 3,
     'gradient_accumulation_steps': 6,
-    'num_train_epochs': 1,
+    # Training length: max_steps only. Do not pass num_train_epochs to Trainer/SFTConfig
+    # (e.g. -1 is invalid; mixing epochs + max_steps conflicts with HF Trainer).
     'max_steps': 1000,
     'learning_rate': 2.5e-4,
     'lora_r': 12,
@@ -78,7 +79,7 @@ def collect_dry_run_metadata(output_dir: str) -> dict[str, Any]:
         'output_dir': output_dir,
         'per_device_train_batch_size': QLORA_SMALL_CONFIG['per_device_train_batch_size'],
         'gradient_accumulation_steps': QLORA_SMALL_CONFIG['gradient_accumulation_steps'],
-        'num_train_epochs': QLORA_SMALL_CONFIG['num_train_epochs'],
+        'max_steps': QLORA_SMALL_CONFIG['max_steps'],
         'learning_rate': QLORA_SMALL_CONFIG['learning_rate'],
         'bf16': QLORA_SMALL_CONFIG['bf16'],
         'report_to': 'none',
@@ -241,7 +242,6 @@ def resolve_sft_config(output_dir: str) -> Any:
         'output_dir': output_dir,
         'per_device_train_batch_size': QLORA_SMALL_CONFIG['per_device_train_batch_size'],
         'gradient_accumulation_steps': QLORA_SMALL_CONFIG['gradient_accumulation_steps'],
-        'num_train_epochs': QLORA_SMALL_CONFIG['num_train_epochs'],
         'learning_rate': QLORA_SMALL_CONFIG['learning_rate'],
         'bf16': QLORA_SMALL_CONFIG['bf16'],
         'report_to': 'none',
