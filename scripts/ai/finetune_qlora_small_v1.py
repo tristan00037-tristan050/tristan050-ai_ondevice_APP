@@ -21,7 +21,7 @@ QLORA_SMALL_CONFIG = {
     'output_dir': 'output/butler_model_small_v1',
     'per_device_train_batch_size': 3,
     'gradient_accumulation_steps': 6,
-    # Training length: max_steps only. Do not pass num_train_epochs to Trainer/SFTConfig
+    # Training length: max_steps primary. num_train_epochs=1 is passed explicitly to prevent SFTConfig default (3.0) from overriding max_steps.
     # (e.g. -1 is invalid; mixing epochs + max_steps conflicts with HF Trainer).
     'max_steps': 1000,
     'learning_rate': 2.5e-4,
@@ -308,7 +308,7 @@ def _write_train_run_plan(
         'estimated_optimizer_steps_per_epoch': est,
         'trainer_args_max_steps': trainer_args_max_steps,
         'trainer_args_num_train_epochs': trainer_args_num_train_epochs,
-        'training_length_mode': 'max_steps_only',
+        'training_length_mode': 'max_steps_primary_num_epochs_1',
     }
     write_json(Path(output_dir) / 'ai20_train_run_plan.json', payload)
 
