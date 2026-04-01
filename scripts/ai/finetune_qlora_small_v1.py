@@ -256,6 +256,7 @@ def resolve_sft_config(output_dir: str, max_steps: int) -> Any:
         'seed': 42,
         'gradient_checkpointing': True,
         'max_steps': max_steps,
+        'num_train_epochs': 1,
     }
     if 'max_seq_length' in allowed:
         kwargs['max_seq_length'] = QLORA_SMALL_CONFIG['max_seq_length']
