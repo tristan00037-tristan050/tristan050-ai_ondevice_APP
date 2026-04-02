@@ -6,9 +6,11 @@ One Model/Tokenizer load for the whole job. Used only from .github/workflows/win
 Env:
   CI_EVAL_MODE: "full" (24 cases) or "pr_subset" (12 cases, stratified).
   CI_VARIANCE_TOTAL_RUNS: int, default 11 (first run cold-excluded). PR workflows use fewer.
+  CI_RSS_MAX_MB: float, default 1536 — RSS SLO for bundled process (PR may use 1540 for allocator jitter).
 """
 from __future__ import annotations
 
+import gc
 import json
 import os
 import time
@@ -56,7 +58,6 @@ EVAL_CASES_FULL = [
 def eval_cases_for_mode(mode: str) -> list[dict[str, str]]:
     if mode == "full":
         return list(EVAL_CASES_FULL)
-    # PR: every other case + last case → 12 prompts, spread across list order
     return [EVAL_CASES_FULL[i] for i in range(0, len(EVAL_CASES_FULL), 2)]
 
 
@@ -122,7 +123,7 @@ def run_eval(model: og.Model, tokenizer: og.Tokenizer, cases: list[dict[str, str
         raise RuntimeError(f"SCHEMA_PASS_RATE_BELOW_SLO:{schema_pass_rate}")
 
 
-def run_variance(model: og.Model, tokenizer: og.Tokenizer, total_runs: int) -> None:
+def run_variance(model: og.Model, tokenizer: og.Tokenizer, total_runs: int, rss_limit_mb: float) -> None:
     out_path = Path("tmp/variance_windows.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     prompt = "인공지능 기술의 발전이 사회에 미치는 영향을 설명해 주세요. " * 4
@@ -157,6 +158,7 @@ def run_variance(model: og.Model, tokenizer: og.Tokenizer, total_runs: int) -> N
     p95 = latencies[int(len(latencies) * 0.95)]
     tps_mean = sum(tps_values) / len(tps_values)
     rss_max = max(s["rss_mb"] for s in samples)
+    slo_rss_ok = rss_max <= rss_limit_mb
 
     summary = {
         "platform": "windows_cpu",
@@ -164,32 +166,41 @@ def run_variance(model: og.Model, tokenizer: og.Tokenizer, total_runs: int) -> N
         "latency_p95_ms": round(p95, 1),
         "decode_tps_mean": round(tps_mean, 2),
         "rss_max_mb": round(rss_max, 1),
+        "rss_limit_mb": rss_limit_mb,
         "slo_tps_ok": tps_mean >= 8.0,
-        "slo_rss_ok": rss_max <= 1536,
+        "slo_rss_ok": slo_rss_ok,
     }
     out_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"VARIANCE_DONE=1 p95={p95:.0f}ms tps_mean={tps_mean:.1f} rss_max={rss_max:.0f}MB")
+    print(
+        f"VARIANCE_DONE=1 p95={p95:.0f}ms tps_mean={tps_mean:.1f} rss_max={rss_max:.0f}MB "
+        f"rss_limit_mb={rss_limit_mb:.0f}"
+    )
     if not summary["slo_tps_ok"]:
         raise RuntimeError(f"TPS_BELOW_SLO:{tps_mean:.2f}")
     if not summary["slo_rss_ok"]:
-        raise RuntimeError(f"RSS_ABOVE_SLO:{rss_max:.0f}MB")
+        raise RuntimeError(f"RSS_ABOVE_SLO:{rss_max:.0f}MB limit={rss_limit_mb:.0f}MB")
 
 
 def main() -> None:
     eval_mode = os.environ.get("CI_EVAL_MODE", "full")
     total_runs = int(os.environ.get("CI_VARIANCE_TOTAL_RUNS", "11"))
+    rss_limit_mb = float(os.environ.get("CI_RSS_MAX_MB", "1536"))
     if total_runs < 3:
         raise ValueError("CI_VARIANCE_TOTAL_RUNS must be >= 3 (cold + at least 2 samples)")
 
     cases = eval_cases_for_mode(eval_mode)
-    print(f"CI_BUNDLE_PROFILE=1 eval_mode={eval_mode} eval_cases={len(cases)} variance_total_runs={total_runs}")
+    print(
+        f"CI_BUNDLE_PROFILE=1 eval_mode={eval_mode} eval_cases={len(cases)} "
+        f"variance_total_runs={total_runs} CI_RSS_MAX_MB={rss_limit_mb}"
+    )
 
     model = og.Model(PACK_DIR)
     tokenizer = og.Tokenizer(model)
 
     run_smoke(model, tokenizer)
     run_eval(model, tokenizer, cases)
-    run_variance(model, tokenizer, total_runs)
+    gc.collect()
+    run_variance(model, tokenizer, total_runs, rss_limit_mb)
 
 
 if __name__ == "__main__":

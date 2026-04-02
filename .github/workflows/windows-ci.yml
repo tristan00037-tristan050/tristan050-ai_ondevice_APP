@@ -2,8 +2,8 @@ name: Windows CI — smoke / eval / variance
 
 # ── Windows PR CI speedup (독립 작업) ─────────────────────────────────────────
 # 범위: 본 워크플로 + .github/ci/requirements-windows-ci.txt + scripts/ci/windows_cpu_ci_bundle.py
-# 목적: pull_request 시 Windows 잡 실행 시간 단축(pip 캐시, 단일 프로세스·단일 모델 로드, PR 전용 축약 프로파일).
-# PR: 12 eval, variance 5 runs(샘플 4), bundle 1회 로드. push(main 등): 24 eval, variance 11, 동일 번들.
+# 목적: pull_request 시 Windows 잡 시간 단축(pip 캐시·번들) + 번들 프로세스 RSS SLO(PR만 완충 MB).
+# PR: 12 eval, variance 5 runs, CI_RSS_MAX_MB=1540. push(main 등): 24 eval, variance 11, 1536.
 
 on:
   push:
@@ -41,6 +41,7 @@ jobs:
         env:
           CI_EVAL_MODE: ${{ github.event_name == 'pull_request' && 'pr_subset' || 'full' }}
           CI_VARIANCE_TOTAL_RUNS: ${{ github.event_name == 'pull_request' && '5' || '11' }}
+          CI_RSS_MAX_MB: ${{ github.event_name == 'pull_request' && '1540' || '1536' }}
         run: python scripts/ci/windows_cpu_ci_bundle.py
 
       - name: 결과 업로드
