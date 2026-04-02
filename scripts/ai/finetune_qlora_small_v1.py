@@ -51,6 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--smoke-steps', type=int, default=None, help='Override max_steps for smoke runs (fail-closed vs trainer args).')
     parser.add_argument('--max-train-samples', type=int, default=None, help='Use only the first N training rows after load.')
     parser.add_argument('--max-eval-samples', type=int, default=None, help='Use only the first N eval rows after load.')
+    parser.add_argument('--tokenize-cache-dir', type=str, default=None, help='토크나이징 캐시 저장/로드 디렉토리. None이면 캐시 비활성화.')
     return parser.parse_args()
 
 
@@ -74,7 +75,7 @@ def _inspect_signature(module_name: str, attr_chain: list[str]) -> tuple[list[st
     return list(signature.parameters.keys()), 'ok'
 
 
-def collect_dry_run_metadata(output_dir: str, preview_max_steps: int | None = None) -> dict[str, Any]:
+def collect_dry_run_metadata(output_dir: str, preview_max_steps: int | None = None, tokenize_cache_dir: str | None = None) -> dict[str, Any]:
     sft_allowed, sft_status = _inspect_signature('trl', ['SFTConfig', '__init__'])
     trainer_allowed, trainer_status = _inspect_signature('trl', ['SFTTrainer', '__init__'])
 
@@ -138,6 +139,10 @@ def collect_dry_run_metadata(output_dir: str, preview_max_steps: int | None = No
         'checks': {
             'enable_thinking_is_false': QWEN3_SPECIFIC['enable_thinking'] is False,
             'chat_template_is_qwen3_nonthinking': QWEN3_SPECIFIC['chat_template'] == 'qwen3_nonthinking',
+        },
+        'tokenize_cache': {
+            'enabled': tokenize_cache_dir is not None,
+            'cache_dir': tokenize_cache_dir,
         },
     }
 
@@ -218,7 +223,14 @@ def render_training_text(tokenizer: Any, record: dict[str, Any]) -> str:
         )
 
 
-def pretokenize_dataset(dataset: Any, tokenizer: Any, max_length: int) -> Any:
+def pretokenize_dataset(
+    dataset: Any,
+    tokenizer: Any,
+    max_length: int,
+    *,
+    split_name: str,
+    cache_dir: str | None = None,
+) -> Any:
     def tokenize_row(example: dict[str, Any]) -> dict[str, Any]:
         tokens = tokenizer(
             example['text'],
@@ -229,14 +241,44 @@ def pretokenize_dataset(dataset: Any, tokenizer: Any, max_length: int) -> Any:
         tokens['labels'] = list(tokens['input_ids'])
         return tokens
 
-    columns = list(dataset.column_names)
-    import hashlib, os
-    dataset_fingerprint = getattr(dataset, '_fingerprint', '') or str(len(dataset))
-    cache_key = hashlib.md5((str(tokenizer.name_or_path) + str(max_length) + dataset_fingerprint).encode()).hexdigest()[:12]
-    cache_dir = '/data/tokenize_cache'
-    os.makedirs(cache_dir, exist_ok=True)
-    cache_file = f'{cache_dir}/tokenized_{cache_key}.arrow'
-    return dataset.map(tokenize_row, remove_columns=columns, cache_file_name=cache_file)
+    if cache_dir is None:
+        print('TOKENIZE_CACHE_ENABLED=0')
+        return dataset.map(tokenize_row, remove_columns=list(dataset.column_names))
+
+    import hashlib, json, shutil
+    from datasets import load_from_disk
+
+    print('TOKENIZE_CACHE_ENABLED=1')
+    print(f'TOKENIZE_CACHE_DIR={cache_dir}')
+
+    fingerprint = getattr(dataset, '_fingerprint', None) or str(len(dataset))
+    raw = json.dumps({
+        'split_name': split_name,
+        'tokenizer_name': str(tokenizer.name_or_path),
+        'max_length': max_length,
+        'fingerprint': fingerprint,
+    }, sort_keys=True, separators=(',', ':'))
+    cache_key = hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]
+
+    cache_root = Path(cache_dir)
+    cache_root.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_root / split_name / cache_key
+    tmp_path = cache_path.with_name(cache_key + '.tmp')
+
+    if cache_path.exists():
+        try:
+            result = load_from_disk(str(cache_path))
+            print(f'TOKENIZE_CACHE_HIT_SPLIT={split_name}')
+            return result
+        except Exception:
+            shutil.rmtree(str(cache_path), ignore_errors=True)
+
+    tokenized = dataset.map(tokenize_row, remove_columns=list(dataset.column_names))
+    shutil.rmtree(str(tmp_path), ignore_errors=True)
+    tokenized.save_to_disk(str(tmp_path))
+    tmp_path.replace(cache_path)
+    print(f'TOKENIZE_CACHE_SAVE_SPLIT={split_name}')
+    return tokenized
 
 
 def resolve_sft_config(output_dir: str, max_steps: int) -> Any:
@@ -271,13 +313,13 @@ def resolve_sft_config(output_dir: str, max_steps: int) -> Any:
 
 def _estimate_optimizer_steps_per_epoch(
     train_len: int,
-    per_device_bs: int,
+    per_device_train_batch_size: int,
     world_size: int,
-    grad_accum: int,
+    gradient_accumulation_steps: int,
 ) -> int:
     if train_len <= 0:
         return 0
-    denom = max(1, per_device_bs * world_size * grad_accum)
+    denom = max(1, per_device_train_batch_size * world_size * gradient_accumulation_steps)
     return int(math.ceil(train_len / denom))
 
 
@@ -321,6 +363,7 @@ def run_training(
     smoke_steps: int | None = None,
     max_train_samples: int | None = None,
     max_eval_samples: int | None = None,
+    tokenize_cache_dir: str | None = None,
 ) -> None:
     import torch
     from datasets import Dataset
@@ -416,13 +459,14 @@ def run_training(
     if 'processing_class' in trainer_signature:
         trainer_kwargs['processing_class'] = tokenizer
 
-    if 'formatting_func' in trainer_signature:
-        trainer_kwargs['formatting_func'] = lambda example: example['text']
-    else:
-        train_dataset = pretokenize_dataset(train_dataset, tokenizer, QLORA_SMALL_CONFIG['max_seq_length'])
+    use_pretokenized = tokenize_cache_dir is not None or 'formatting_func' not in trainer_signature
+    if use_pretokenized:
+        train_dataset = pretokenize_dataset(train_dataset, tokenizer, QLORA_SMALL_CONFIG['max_seq_length'], split_name='train', cache_dir=tokenize_cache_dir)
         trainer_kwargs['train_dataset'] = train_dataset
         if eval_dataset is not None:
-            trainer_kwargs['eval_dataset'] = pretokenize_dataset(eval_dataset, tokenizer, QLORA_SMALL_CONFIG['max_seq_length'])
+            trainer_kwargs['eval_dataset'] = pretokenize_dataset(eval_dataset, tokenizer, QLORA_SMALL_CONFIG['max_seq_length'], split_name='eval', cache_dir=tokenize_cache_dir)
+    else:
+        trainer_kwargs['formatting_func'] = lambda example: example['text']
 
     trainer = SFTTrainer(**trainer_kwargs)
 
@@ -457,6 +501,7 @@ def run_training(
     trainer.train()
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
+    print(f'TRAIN_OUTPUT_DIR={output_dir}')
     write_json(Path(output_dir) / 'ai20_training_metadata.json', {
         'base_model_id': QLORA_SMALL_CONFIG['base_model_id'],
         'qwen3_specific': QWEN3_SPECIFIC,
@@ -470,7 +515,7 @@ def run_training(
 def main() -> int:
     args = parse_args()
     preview_steps = QLORA_SMALL_CONFIG['max_steps'] if args.smoke_steps is None else args.smoke_steps
-    payload = collect_dry_run_metadata(output_dir=args.output_dir, preview_max_steps=preview_steps)
+    payload = collect_dry_run_metadata(output_dir=args.output_dir, preview_max_steps=preview_steps, tokenize_cache_dir=args.tokenize_cache_dir)
     write_json(DEFAULT_RESULT_FILE, payload)
     if args.dry_run:
         print('FINETUNE_SMALL_DRY_OK=1')
@@ -482,6 +527,7 @@ def main() -> int:
         smoke_steps=args.smoke_steps,
         max_train_samples=args.max_train_samples,
         max_eval_samples=args.max_eval_samples,
+        tokenize_cache_dir=args.tokenize_cache_dir,
     )
     return 0
 
