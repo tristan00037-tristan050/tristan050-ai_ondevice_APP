@@ -1,0 +1,5 @@
+# Windows PR CI speedup — pip cache SSOT (windows-ci.yml 번들 잡 전용)
+onnxruntime-genai==0.12.2
+transformers==4.40.2
+psutil
+sentencepiece
