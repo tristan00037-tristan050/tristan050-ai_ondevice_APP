@@ -152,13 +152,15 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding='utf-8')
 
 
-def load_jsonl_rows(path: str) -> list[dict[str, Any]]:
+def load_jsonl_rows(path: str, limit: int | None = None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with open(path, 'r', encoding='utf-8') as handle:
         for idx, line in enumerate(handle, start=1):
             line = line.strip()
             if not line:
                 continue
+            if limit is not None and len(rows) >= limit:
+                break
             try:
                 rows.append(json.loads(line))
             except json.JSONDecodeError as exc:
@@ -215,12 +217,10 @@ def render_training_text(tokenizer: Any, record: dict[str, Any]) -> str:
             tokenize=False,
             add_generation_prompt=False,
         )
-    except TypeError:
-        return tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=False,
-        )
+    except TypeError as exc:
+        raise RuntimeError(
+            'apply_chat_template 호출이 현재 tokenizer 시그니처와 맞지 않습니다.'
+        ) from exc
 
 
 def pretokenize_dataset(
@@ -242,14 +242,10 @@ def pretokenize_dataset(
         return tokens
 
     if cache_dir is None:
-        print('TOKENIZE_CACHE_ENABLED=0')
         return dataset.map(tokenize_row, remove_columns=list(dataset.column_names))
 
     import hashlib, json, shutil
     from datasets import load_from_disk
-
-    print('TOKENIZE_CACHE_ENABLED=1')
-    print(f'TOKENIZE_CACHE_DIR={cache_dir}')
 
     fingerprint = getattr(dataset, '_fingerprint', None) or str(len(dataset))
     raw = json.dumps({
@@ -368,11 +364,27 @@ def run_training(
     import torch
     from datasets import Dataset
     from peft import LoraConfig
-    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainerCallback
     from trl import SFTTrainer
 
     if not train_file:
         raise ValueError('--train-file is required for training mode.')
+
+    def _quantization_config_for_qlora() -> Any | None:
+        if not QLORA_SMALL_CONFIG.get('load_in_4bit'):
+            return None
+        try:
+            import bitsandbytes  # noqa: F401
+        except ImportError as exc:
+            raise RuntimeError(
+                'ERROR_CODE=BITSANDBYTES_REQUIRED_FOR_4BIT QLoRA load_in_4bit=True requires bitsandbytes.'
+            ) from exc
+        return BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type='nf4',
+        )
 
     effective_max_steps = QLORA_SMALL_CONFIG['max_steps'] if smoke_steps is None else smoke_steps
     if effective_max_steps < 1:
@@ -410,31 +422,38 @@ def run_training(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(
-        QLORA_SMALL_CONFIG['base_model_id'],
-        dtype=torch.bfloat16,
-        device_map='auto',
-    )
+    qconf = _quantization_config_for_qlora()
+    if qconf is not None:
+        print('QLORA_MODEL_LOAD_4BIT=1')
+        model = AutoModelForCausalLM.from_pretrained(
+            QLORA_SMALL_CONFIG['base_model_id'],
+            device_map='auto',
+            torch_dtype=torch.bfloat16,
+            quantization_config=qconf,
+        )
+    else:
+        print('QLORA_MODEL_LOAD_4BIT=0')
+        model = AutoModelForCausalLM.from_pretrained(
+            QLORA_SMALL_CONFIG['base_model_id'],
+            device_map='auto',
+            torch_dtype=torch.bfloat16,
+        )
 
-    train_rows = load_jsonl_rows(train_file)
+    train_limit = max_train_samples
+    if train_limit is not None and train_limit < 1:
+        raise ValueError('--max-train-samples must be >= 1 when set')
+    train_rows = load_jsonl_rows(train_file, limit=train_limit)
     train_text_rows = [{'text': render_training_text(tokenizer, row)} for row in train_rows]
     train_dataset = Dataset.from_list(train_text_rows)
-    if max_train_samples is not None:
-        if max_train_samples < 1:
-            raise ValueError('--max-train-samples must be >= 1 when set')
-        n = min(max_train_samples, len(train_dataset))
-        train_dataset = train_dataset.select(range(n))
 
     eval_dataset = None
     if eval_file:
-        eval_rows = load_jsonl_rows(eval_file)
+        eval_limit = max_eval_samples
+        if eval_limit is not None and eval_limit < 1:
+            raise ValueError('--max-eval-samples must be >= 1 when set')
+        eval_rows = load_jsonl_rows(eval_file, limit=eval_limit)
         eval_text_rows = [{'text': render_training_text(tokenizer, row)} for row in eval_rows]
         eval_dataset = Dataset.from_list(eval_text_rows)
-        if max_eval_samples is not None:
-            if max_eval_samples < 1:
-                raise ValueError('--max-eval-samples must be >= 1 when set')
-            n_ev = min(max_eval_samples, len(eval_dataset))
-            eval_dataset = eval_dataset.select(range(n_ev))
 
     peft_config = LoraConfig(
         r=QLORA_SMALL_CONFIG['lora_r'],
@@ -461,6 +480,11 @@ def run_training(
 
     use_pretokenized = tokenize_cache_dir is not None or 'formatting_func' not in trainer_signature
     if use_pretokenized:
+        if tokenize_cache_dir is None:
+            print('TOKENIZE_CACHE_ENABLED=0')
+        else:
+            print('TOKENIZE_CACHE_ENABLED=1')
+            print(f'TOKENIZE_CACHE_DIR={tokenize_cache_dir}')
         train_dataset = pretokenize_dataset(train_dataset, tokenizer, QLORA_SMALL_CONFIG['max_seq_length'], split_name='train', cache_dir=tokenize_cache_dir)
         trainer_kwargs['train_dataset'] = train_dataset
         if eval_dataset is not None:
