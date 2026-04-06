@@ -25,10 +25,19 @@ python3 scripts/verify/verify_ai20_bundle_readiness_v1.py \
 
 # ── 캐시 복원 절차 ──────────────────────────────────────────
 # butler-data 스토리지가 /data 에 마운트된 상태에서 실행할 것
-# 새 서버에서 캐시 복원이 필요한 경우 아래 명령으로 rsync:
-#   rsync -avz --progress /data/토크나이징_v2/ /root/tokenize_cache/
+# butler-data 스토리지를 /data 에 직접 마운트하여 사용 (rsync 불필요)
+# 스토리지 마운트: mkdir -p /data && mount /dev/vdb /data
+# 확인: du -sh /data/토크나이징_v2/ → 49G
 # 캐시 경로: /data/토크나이징_v2 (butler-data 스토리지 직접 사용)
 # ────────────────────────────────────────────────────────────
+
+if [ ! -d "/data/토크나이징_v2" ]; then
+  echo "ERROR: /data/토크나이징_v2 가 존재하지 않습니다."
+  echo "ERROR: butler-data 스토리지(ID: 134279703)를 /data 에 마운트한 후 실행하세요."
+  echo "ERROR: mkdir -p /data && mount /dev/vdb /data"
+  exit 1
+fi
+echo "TOKENIZE_CACHE_MOUNT_OK=1"
 
 echo '[3/4] QLoRA 학습 실행 중...'
 python3 scripts/ai/finetune_qlora_small_v1.py \
