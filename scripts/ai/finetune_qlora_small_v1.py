@@ -230,6 +230,7 @@ def pretokenize_dataset(
     *,
     split_name: str,
     cache_dir: str | None = None,
+    source_file: str | None = None,
 ) -> Any:
     def tokenize_row(example: dict[str, Any]) -> dict[str, Any]:
         tokens = tokenizer(
@@ -247,14 +248,21 @@ def pretokenize_dataset(
     import hashlib, json, shutil
     from datasets import load_from_disk
 
-    fingerprint = getattr(dataset, '_fingerprint', None) or str(len(dataset))
-    raw = json.dumps({
-        'split_name': split_name,
-        'tokenizer_name': str(tokenizer.name_or_path),
+    import os as _os
+    _abs_src = _os.path.abspath(source_file) if source_file else ''
+    _file_size = str(_os.path.getsize(source_file)) if source_file and _os.path.exists(source_file) else ''
+    _file_mtime = f'{_os.path.getmtime(source_file):.6f}' if source_file and _os.path.exists(source_file) else ''
+    _stable_key_dict = {
+        'source_file': _abs_src,
+        'file_size': _file_size,
+        'file_mtime': _file_mtime,
+        'tokenizer': tokenizer.name_or_path,
         'max_length': max_length,
-        'fingerprint': fingerprint,
-    }, sort_keys=True, separators=(',', ':'))
-    cache_key = hashlib.sha256(raw.encode('utf-8')).hexdigest()[:16]
+        'split_name': split_name,
+        'cache_schema_version': 'v1',
+    }
+    _raw = json.dumps(_stable_key_dict, sort_keys=True)
+    cache_key = hashlib.sha256(_raw.encode('utf-8')).hexdigest()[:16]
 
     cache_root = Path(cache_dir)
     cache_root.mkdir(parents=True, exist_ok=True)
@@ -485,10 +493,10 @@ def run_training(
         else:
             print('TOKENIZE_CACHE_ENABLED=1')
             print(f'TOKENIZE_CACHE_DIR={tokenize_cache_dir}')
-        train_dataset = pretokenize_dataset(train_dataset, tokenizer, QLORA_SMALL_CONFIG['max_seq_length'], split_name='train', cache_dir=tokenize_cache_dir)
+        train_dataset = pretokenize_dataset(train_dataset, tokenizer, QLORA_SMALL_CONFIG['max_seq_length'], split_name='train', cache_dir=tokenize_cache_dir, source_file=train_file)
         trainer_kwargs['train_dataset'] = train_dataset
         if eval_dataset is not None:
-            trainer_kwargs['eval_dataset'] = pretokenize_dataset(eval_dataset, tokenizer, QLORA_SMALL_CONFIG['max_seq_length'], split_name='eval', cache_dir=tokenize_cache_dir)
+            trainer_kwargs['eval_dataset'] = pretokenize_dataset(eval_dataset, tokenizer, QLORA_SMALL_CONFIG['max_seq_length'], split_name='eval', cache_dir=tokenize_cache_dir, source_file=eval_file)
     else:
         trainer_kwargs['formatting_func'] = lambda example: example['text']
 
