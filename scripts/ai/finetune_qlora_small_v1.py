@@ -249,13 +249,12 @@ def pretokenize_dataset(
     from datasets import load_from_disk
 
     import os as _os
-    _abs_src = _os.path.abspath(source_file) if source_file else ''
     _file_size = str(_os.path.getsize(source_file)) if source_file and _os.path.exists(source_file) else ''
     _file_mtime = f'{_os.path.getmtime(source_file):.6f}' if source_file and _os.path.exists(source_file) else ''
     _stable_key_dict = {
-        'source_file': _abs_src,
         'file_size': _file_size,
         'file_mtime': _file_mtime,
+        'dataset_len': str(len(dataset)),
         'tokenizer': tokenizer.name_or_path,
         'max_length': max_length,
         'split_name': split_name,
