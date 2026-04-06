@@ -23,11 +23,19 @@ python3 scripts/verify/verify_ai20_bundle_readiness_v1.py \
   --train-file "$TRAIN_FILE" \
   --eval-file "$EVAL_FILE"
 
+# ── 캐시 복원 절차 ──────────────────────────────────────────
+# butler-data 스토리지가 /data 에 마운트된 상태에서 실행할 것
+# 새 서버에서 캐시 복원이 필요한 경우 아래 명령으로 rsync:
+#   rsync -avz --progress /data/토크나이징_v2/ /root/tokenize_cache/
+# 캐시 경로: /data/토크나이징_v2 (butler-data 스토리지 직접 사용)
+# ────────────────────────────────────────────────────────────
+
 echo '[3/4] QLoRA 학습 실행 중...'
 python3 scripts/ai/finetune_qlora_small_v1.py \
   --train-file "$TRAIN_FILE" \
   --eval-file "$EVAL_FILE" \
-  --output-dir "$OUTPUT_DIR"
+  --output-dir "$OUTPUT_DIR" \
+  --tokenize-cache-dir /data/토크나이징_v2
 
 echo '[4/4] 학습 결과 검증 중...'
 python3 scripts/verify/verify_ai20_server_postrun_v1.py \

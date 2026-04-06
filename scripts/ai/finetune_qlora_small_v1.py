@@ -275,6 +275,9 @@ def pretokenize_dataset(
             return result
         except Exception:
             shutil.rmtree(str(cache_path), ignore_errors=True)
+            print(f'TOKENIZE_CACHE_MISS_SPLIT={split_name}')
+    else:
+        print(f'TOKENIZE_CACHE_MISS_SPLIT={split_name}')
 
     tokenized = dataset.map(tokenize_row, remove_columns=list(dataset.column_names))
     shutil.rmtree(str(tmp_path), ignore_errors=True)
