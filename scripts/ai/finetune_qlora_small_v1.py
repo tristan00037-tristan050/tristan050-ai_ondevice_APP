@@ -262,6 +262,8 @@ def pretokenize_dataset(
     }
     _raw = json.dumps(_stable_key_dict, sort_keys=True)
     cache_key = hashlib.sha256(_raw.encode('utf-8')).hexdigest()[:16]
+    print(f'TOKENIZE_CACHE_KEY={cache_key}')
+    print(f'TOKENIZE_CACHE_DATASET_LEN={len(dataset)}')
 
     cache_root = Path(cache_dir)
     cache_root.mkdir(parents=True, exist_ok=True)
