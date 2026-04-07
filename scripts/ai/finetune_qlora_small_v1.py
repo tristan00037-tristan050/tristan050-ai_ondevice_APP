@@ -19,8 +19,8 @@ from typing import Any
 QLORA_SMALL_CONFIG = {
     'base_model_id': 'Qwen/Qwen3-4B',
     'output_dir': 'output/butler_model_small_v1',
-    'per_device_train_batch_size': 3,
-    'gradient_accumulation_steps': 6,
+    'per_device_train_batch_size': 1,
+    'gradient_accumulation_steps': 18,
     # Training length: max_steps primary. num_train_epochs=1 is passed explicitly to prevent SFTConfig default (3.0) from overriding max_steps.
     # (e.g. -1 is invalid; mixing epochs + max_steps conflicts with HF Trainer).
     'max_steps': 1000,
