@@ -301,7 +301,7 @@ def resolve_sft_config(output_dir: str, max_steps: int) -> Any:
         'bf16': QLORA_SMALL_CONFIG['bf16'],
         'report_to': 'none',
         'save_strategy': 'steps',
-        'eval_strategy': 'steps',
+        'eval_strategy': 'no',
         'logging_steps': 10,
         'seed': 42,
         'gradient_checkpointing': True,
