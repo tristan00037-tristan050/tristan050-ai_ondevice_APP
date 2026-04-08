@@ -253,7 +253,7 @@ def run_smoke(adapter_path, output_dir, base_model_id, prefer_device, seed, stri
 
     # STEP 6 generate
     input_ids = input_ids.to(selected_device)
-    gen_kwargs = dict(max_new_tokens=64, do_sample=False, temperature=1.0, top_p=1.0, use_cache=True)
+    gen_kwargs = dict(max_new_tokens=64, do_sample=False, use_cache=True)
     try:
         with torch.no_grad():
             output_ids_1 = model.generate(input_ids, **gen_kwargs)
