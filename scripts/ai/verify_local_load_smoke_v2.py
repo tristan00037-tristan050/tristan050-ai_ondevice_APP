@@ -265,14 +265,13 @@ def run_smoke(adapter_path, output_dir, base_model_id, prefer_device, seed, stri
         result["GENERATE_OUTPUT"] = decoded
     except Exception as e:
         import traceback as _tb
-        err_msg = _tb.format_exc()
-        rec.emit(f"GENERATE_ERROR={str(e)[:200]}")
+        _err_type = type(e).__name__
+        rec.emit(f"GENERATE_ERROR_CODE={_err_type}")
         rec.emit("GENERATE_FAIL=1")
         result["GENERATE_OK"] = 0
-        result["GENERATE_ERROR"] = str(e)[:500]
+        result["GENERATE_ERROR_CODE"] = _err_type
         result["LOCAL_LOAD_SMOKE_OK"] = 0
         _save_outputs(output_dir, result, env_data, rec, save_env_json)
-        print(err_msg)
         return 1
 
     # STEP 7 determinism
