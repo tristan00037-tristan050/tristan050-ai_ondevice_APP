@@ -225,6 +225,9 @@ def run_smoke(adapter_path, output_dir, base_model_id, prefer_device, seed, stri
             input_ids = tokenizer.apply_chat_template(
                 messages, tokenize=True, add_generation_prompt=True,
                 return_tensors="pt", enable_thinking=False)
+        # BatchEncoding인 경우 텐서 직접 추출
+        if hasattr(input_ids, 'input_ids'):
+            input_ids = input_ids['input_ids']
         enable_thinking_supported = True
         rec.emit("CHAT_TEMPLATE_ENABLE_THINKING_SUPPORTED=1")
     except TypeError:
@@ -233,6 +236,9 @@ def run_smoke(adapter_path, output_dir, base_model_id, prefer_device, seed, stri
                 input_ids = tokenizer.apply_chat_template(
                     messages, tokenize=True, add_generation_prompt=True,
                     return_tensors="pt")
+            # BatchEncoding인 경우 텐서 직접 추출
+            if hasattr(input_ids, 'input_ids'):
+                input_ids = input_ids['input_ids']
             rec.emit("CHAT_TEMPLATE_ENABLE_THINKING_FALLBACK=1")
         except Exception as e:
             rec.emit("CHAT_TEMPLATE_FAIL=1")
