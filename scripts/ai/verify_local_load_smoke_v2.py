@@ -72,10 +72,17 @@ def _select_device(prefer: str) -> str:
     import torch
     if prefer == "cpu":
         return "cpu"
+    if prefer == "cuda":
+        if torch.cuda.is_available():
+            return "cuda"
+        return "cpu"
     if prefer == "mps":
         if torch.backends.mps.is_available():
             return "mps"
         return "cpu"
+    # auto: CUDA > MPS > CPU 순서
+    if torch.cuda.is_available():
+        return "cuda"
     if torch.backends.mps.is_available():
         return "mps"
     return "cpu"
@@ -191,6 +198,7 @@ def run_smoke(adapter_path, output_dir, base_model_id, prefer_device, seed, stri
         state_dict = st_load_file(str(safetensors_path), device="cpu")
         state_dict = {k: v.to(torch.float32) for k, v in state_dict.items()}
         missing, unexpected = model.load_state_dict(state_dict, strict=False)
+        model = model.to(selected_device)
         rec.emit(f"LOAD_ADAPTER_MISSING_KEYS={len(missing)}")
         rec.emit(f"LOAD_ADAPTER_UNEXPECTED_KEYS={len(unexpected)}")
         rec.emit("LOAD_ADAPTER_OK=1")
@@ -328,7 +336,7 @@ def parse_args():
     p.add_argument("--adapter-path", required=True)
     p.add_argument("--output-dir", required=True)
     p.add_argument("--base-model-id", default=None)
-    p.add_argument("--prefer-device", default="auto", choices=["auto", "mps", "cpu"])
+    p.add_argument("--prefer-device", default="auto", choices=["auto", "mps", "cpu", "cuda"])
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--strict-determinism", action="store_true", default=True)
     p.add_argument("--save-env-json", action="store_true", default=True)
