@@ -202,6 +202,15 @@ def _as_python_list(value: Any) -> Any:
     return value
 
 
+def _is_tensor(obj: Any) -> bool:
+    """torch 없이도 안전하게 Tensor 여부 확인."""
+    try:
+        import torch
+        return isinstance(obj, torch.Tensor)
+    except ModuleNotFoundError:
+        return False
+
+
 def _extract_generated_ids(outputs: Any, model_inputs: Any) -> Any:
     if isinstance(model_inputs, dict):
         input_ids = model_inputs.get("input_ids")
@@ -778,7 +787,7 @@ def _generate_text(runtime: RuntimeBundle, model: Any, tokenizer: Any, model_inp
     elif hasattr(model_inputs, 'input_ids'):
         input_ids = model_inputs['input_ids']
         kwargs["input_ids"] = input_ids
-    elif isinstance(model_inputs, __import__('torch').Tensor):
+    elif _is_tensor(model_inputs):
         kwargs["input_ids"] = model_inputs
     else:
         kwargs["input_ids"] = model_inputs
