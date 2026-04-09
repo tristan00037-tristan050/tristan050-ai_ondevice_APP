@@ -1,0 +1,110 @@
+[
+  {
+    "case_id": "dialogue_003",
+    "function": "dialogue",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "dialogue_007",
+    "function": "dialogue",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "dialogue_hard_002",
+    "function": "dialogue",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "summarize_003",
+    "function": "summarize",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "summarize_007",
+    "function": "summarize",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "summarize_hard_002",
+    "function": "summarize",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "rewrite_003",
+    "function": "rewrite",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "rewrite_007",
+    "function": "rewrite",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "rewrite_hard_002",
+    "function": "rewrite",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "tool_call_003",
+    "function": "tool_call",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "tool_call_007",
+    "function": "tool_call",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "tool_call_hard_002",
+    "function": "tool_call",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "policy_sensitive_explicit_003",
+    "function": "policy_sensitive",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "policy_sensitive_boundary_003",
+    "function": "policy_sensitive",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "policy_sensitive_hard_002",
+    "function": "policy_sensitive",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "retrieval_transform_003",
+    "function": "retrieval_transform",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "retrieval_transform_007",
+    "function": "retrieval_transform",
+    "approved": null,
+    "note": ""
+  },
+  {
+    "case_id": "retrieval_transform_hard_002",
+    "function": "retrieval_transform",
+    "approved": null,
+    "note": ""
+  }
+]
