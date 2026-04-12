@@ -1,9 +1,8 @@
 from __future__ import annotations
-import argparse, json
+import argparse, json, sys
 from collections import Counter, defaultdict
 from pathlib import Path
 if __package__ in (None, ""):
-    import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.ai._aihub_common_v1 import jsonl_read, jsonl_write, REQUIRED_FIELDS, FUNCTIONS, is_korean_text
 
@@ -143,7 +142,11 @@ def main():
     Path(args.coverage_gap).write_text(json.dumps(coverage, ensure_ascii=False, indent=2), encoding="utf-8")
     if all_functions_present:
         print("AIHUB_FUNCTION_COVERAGE_OK=1")
-    print("AIHUB_VALIDATION_OK=1")
+    if all_pass:
+        print("AIHUB_VALIDATION_OK=1")
+    else:
+        print("AIHUB_VALIDATION_FAIL=1")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

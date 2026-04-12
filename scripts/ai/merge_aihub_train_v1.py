@@ -1,9 +1,8 @@
 from __future__ import annotations
-import argparse, json
+import argparse, json, sys
 from collections import Counter
 from pathlib import Path
 if __package__ in (None, ""):
-    import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts.ai._aihub_common_v1 import jsonl_read, jsonl_write, REQUIRED_FIELDS
 
@@ -30,11 +29,15 @@ def main():
     dup_removed = 0
     raw_line_count = 0
     for name in INPUT_NAMES:
-        rows = jsonl_read(Path(args.input_dir) / name)
+        fpath = Path(args.input_dir) / name
+        if not fpath.exists():
+            print(f"MERGE_MISSING_FILE={name}")
+            sys.exit(1)
+        rows = jsonl_read(fpath)
         counts[name] = len(rows)
         raw_line_count += len(rows)
         for row in rows:
-            key = row.get("prompt", "")
+            key = (row.get("prompt", ""), row.get("function", ""), row.get("completion", ""))
             if key in seen:
                 dup_removed += 1
                 continue
