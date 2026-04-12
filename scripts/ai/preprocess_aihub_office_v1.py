@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, json
+import argparse, json, re
 from pathlib import Path
 if __package__ in (None, ""):
     import sys
@@ -12,8 +12,13 @@ def office_to_row(rec: dict, source_file: str) -> dict | None:
     plain_text = normalize_text(try_get(rec, "plain_text", "text", "content", "document", "input"))
     if not plain_text or len(plain_text) < 200:
         return None
+    sentences = [s.strip() for s in re.split(r'[.\n]', plain_text) if len(s.strip()) > 10]
+    if not sentences:
+        return None
+    completion = '. '.join(sentences[:2]) + '.'
+    if len(completion) < 20:
+        return None
     prompt = f"다음 문서를 3문장 이내로 요약하세요:\n{plain_text}"
-    completion = plain_text[:100]
     return build_row(prompt, completion, "summarize", "office", dataset_name="Office", source_file=source_file, record_id=f"office_{abs(hash(source_file+plain_text))%10**8:08d}", quality_flags=[])
 
 def load_records(input_dir: str):

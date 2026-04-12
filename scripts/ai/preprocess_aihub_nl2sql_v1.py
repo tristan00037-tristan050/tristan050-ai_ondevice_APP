@@ -7,7 +7,7 @@ if __package__ in (None, ""):
 from scripts.ai._aihub_common_v1 import find_sample_files, sniff_records, try_get, normalize_text, build_row, jsonl_write, tool_name_from_sql
 
 _UTTERANCE_KEYS = ("utterance", "question", "nl", "nl_query")
-_QUERY_KEYS = ("query", "sql", "sql_query")
+_QUERY_KEYS = ("query", "sql", "sql_query", "query_sql", "label_sql", "answer")
 
 
 def nl2sql_to_row(rec: dict, source_file: str) -> dict | None:
