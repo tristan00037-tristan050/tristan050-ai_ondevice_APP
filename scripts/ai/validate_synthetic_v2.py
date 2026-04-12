@@ -9,7 +9,20 @@ import argparse
 import json
 import re
 from collections import Counter
-from scripts.ai._anthropic_common_v1 import read_jsonl, write_jsonl, save_json
+def read_jsonl(path):
+    with open(path, encoding='utf-8') as f:
+        return [json.loads(l) for l in f if l.strip()]
+
+def write_jsonl(path, rows):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + '\n')
+
+def save_json(path, obj):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
 
 POLITE = ('죄송', '안내', '드립니다', '감사')
 MIN_LENGTH_BY_TASK = {
