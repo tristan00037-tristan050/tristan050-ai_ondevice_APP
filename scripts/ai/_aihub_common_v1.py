@@ -28,9 +28,13 @@ def build_row(prompt: str, completion: str, function: str, source: str, dataset_
 def safe_zip_members(z: zipfile.ZipFile) -> list[str]:
     safe = []
     for name in z.namelist():
-        if '..' in name or name.startswith('/'):
+        if '..' in name:
+            print(f'PATH_TRAVERSAL_QUARANTINE: {name}')
             continue
-        safe.append(name)
+        clean = name.lstrip('/')
+        if not clean:
+            continue
+        safe.append(clean)
     return safe
 
 def record_zip_inventory(zip_fp: Path, z: zipfile.ZipFile, inventory: dict):
