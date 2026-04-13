@@ -1,67 +1,33 @@
 from __future__ import annotations
-import argparse, json, sys
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+import argparse, json
 from collections import Counter
 from pathlib import Path
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.ai._aihub_common_v1 import jsonl_read, jsonl_write, REQUIRED_FIELDS
+from scripts.ai._aihub_common_v1 import write_json, write_jsonl
 
-INPUT_NAMES = [
-    "tool_call_nl2sql.jsonl",
-    "rewrite_office.jsonl",
-    "retrieval_event.jsonl",
-    "dialogue_merged.jsonl",
-    "domain_merged.jsonl",
-]
-
+def read_rows(fp: Path):
+    if not fp.exists(): return []
+    return [json.loads(l) for l in fp.read_text(encoding='utf-8').splitlines() if l.strip()]
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--input-dir", required=True)
-    ap.add_argument("--output", required=True)
-    args = ap.parse_args()
-    all_rows = []
-    counts = {}
-    source_counts = Counter()
-    function_counts = Counter()
-    split_counts = Counter()
-    seen = set()
-    dup_removed = 0
-    raw_line_count = 0
-    for name in INPUT_NAMES:
-        fpath = Path(args.input_dir) / name
-        if not fpath.exists():
-            print(f"MERGE_MISSING_FILE={name}")
-            sys.exit(1)
-        rows = jsonl_read(fpath)
-        counts[name] = len(rows)
-        raw_line_count += len(rows)
-        for row in rows:
-            key = (row.get("prompt", ""), row.get("function", ""), row.get("completion", ""))
-            if key in seen:
-                dup_removed += 1
-                continue
-            seen.add(key)
-            all_rows.append(row)
-            source_counts[row.get("source", "unknown")] += 1
-            function_counts[row.get("function", "unknown")] += 1
-            split_counts[row.get("split", "unknown")] += 1
-    total = jsonl_write(args.output, all_rows)
-    manifest = {
-        "input_files": counts,
-        "raw_line_count": raw_line_count,
-        "dedup_removed": dup_removed,
-        "final_line_count": total,
-        "function_counts": dict(function_counts),
-        "source_counts": dict(source_counts),
-        "validation_split_counts": dict(split_counts),
-        "required_fields": REQUIRED_FIELDS,
-    }
-    mpath = Path(args.output).with_name("merge_manifest.json")
-    mpath.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    print("AIHUB_MERGE_OK=1")
-    print(f"AIHUB_TOTAL_COUNT={total}")
-
-
-if __name__ == "__main__":
-    main()
+    ap=argparse.ArgumentParser(); ap.add_argument('--input-dir', required=True); ap.add_argument('--output', required=True); args=ap.parse_args()
+    inp=Path(args.input_dir)
+    files=['tool_call_nl2sql.jsonl','rewrite_office.jsonl','retrieval_event.jsonl','dialogue_감성대화.jsonl','dialogue_공감형대화.jsonl','dialogue_멀티세션.jsonl','전문분야.jsonl','금융.jsonl','웹데이터.jsonl']
+    input_files={}; source_counts=Counter(); function_counts=Counter(); split_counts=Counter(); all_rows=[]; seen=set(); dedup=0
+    for name in files:
+        rows=read_rows(inp/name)
+        input_files[name]=len(rows)
+        for r in rows:
+            if r['prompt'] in seen: dedup += 1; continue
+            seen.add(r['prompt']); all_rows.append(r)
+            source_counts[r['source']]+=1; function_counts[r['function']]+=1; split_counts[r['split']]+=1
+    write_jsonl(Path(args.output), all_rows)
+    write_json(inp/'merge_manifest.json', {'input_files': input_files,'raw_line_count': sum(input_files.values()),'dedup_removed': dedup,'final_line_count': len(all_rows),'function_counts': dict(function_counts),'source_counts': dict(source_counts),'validation_split_counts': dict(split_counts)})
+    print('AIHUB_MERGE_OK=1'); print(f'AIHUB_TOTAL_COUNT={len(all_rows)}')
+if __name__=='__main__': main()

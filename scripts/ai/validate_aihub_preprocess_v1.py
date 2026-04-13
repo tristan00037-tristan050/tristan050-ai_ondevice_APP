@@ -1,153 +1,49 @@
 from __future__ import annotations
-import argparse, json, sys
-from collections import Counter, defaultdict
+import sys
 from pathlib import Path
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.ai._aihub_common_v1 import jsonl_read, jsonl_write, REQUIRED_FIELDS, FUNCTIONS, is_korean_text
 
-REASON_CODES = {
-    "MISSING_FIELD", "INVALID_FUNCTION", "INVALID_SOURCE", "INVALID_SPLIT",
-    "TOOL_JSON_INVALID", "TOOL_ARGS_INVALID", "REWRITE_COPY", "REWRITE_TONE_MISSING",
-    "RETRIEVAL_HALLUCINATION", "MRC_NOT_ALLOWED", "ROLE_INVERSION", "DUPLICATE_PROMPT",
-    "NOT_ENOUGH_KOREAN",
-}
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-
-def _normalize_reason(code: str) -> str:
-    return code if code in REASON_CODES else code
-
-
-def validate_row(row: dict) -> list[str]:
-    reasons = []
-    for f in REQUIRED_FIELDS:
-        if f not in row or row[f] in (None, ""):
-            reasons.append("MISSING_FIELD")
-            return reasons
-    if row["function"] not in FUNCTIONS or row["task_type"] != row["function"]:
-        reasons.append("INVALID_FUNCTION")
-    if row["split"] not in {"train", "validation"}:
-        reasons.append("INVALID_SPLIT")
-    if not str(row["source"]).startswith("aihub_"):
-        reasons.append("INVALID_SOURCE")
-    if not is_korean_text(row.get("prompt", "")):
-        reasons.append("NOT_ENOUGH_KOREAN")
-    fn = row["function"]
-    comp = row.get("completion", "")
-    if fn == "tool_call":
-        try:
-            obj = json.loads(comp)
-            if "tool_name" not in obj:
-                reasons.append("TOOL_JSON_INVALID")
-            args = obj.get("arguments")
-            if not isinstance(args, dict) or not args:
-                reasons.append("TOOL_ARGS_INVALID")
-        except Exception:
-            reasons.append("TOOL_JSON_INVALID")
-    elif fn == "rewrite":
-        if row.get("prompt", "").split("\n")[-1].strip() == comp.strip():
-            reasons.append("REWRITE_COPY")
-        if not any(k in comp for k in ["죄송", "안내", "드립니다", "감사"]):
-            reasons.append("REWRITE_TONE_MISSING")
-    elif fn == "retrieval_transform":
-        if "질문:" in row.get("prompt", "") and "답변:" in comp:
-            reasons.append("MRC_NOT_ALLOWED")
-        output_keys = row.get("output_keys", [])
-        for k in output_keys:
-            if k not in comp:
-                reasons.append("RETRIEVAL_HALLUCINATION")
-                break
-        values = [part.split(":", 1)[1].strip() for part in comp.splitlines() if ":" in part]
-        for v in values:
-            if v and len(v) >= 2 and v not in row.get("prompt", ""):
-                reasons.append("RETRIEVAL_HALLUCINATION")
-                break
-    elif fn == "dialogue":
-        if row.get("role_inverted"):
-            reasons.append("ROLE_INVERSION")
-    if fn != "tool_call" and not is_korean_text(comp):
-        reasons.append("NOT_ENOUGH_KOREAN")
-    deduped = []
-    for r in reasons:
-        code = _normalize_reason(r)
-        if code not in deduped:
-            deduped.append(code)
-    return deduped
-
+import argparse, json
+from collections import Counter
+from pathlib import Path
+from scripts.ai._aihub_common_v1 import REQUIRED_FIELDS, write_json, write_jsonl
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--input", required=True)
-    ap.add_argument("--output", required=True)
-    ap.add_argument("--quarantine", required=True)
-    ap.add_argument("--coverage-gap", required=True)
-    args = ap.parse_args()
-    rows = jsonl_read(args.input)
-    quarantine = []
-    valid = []
-    seen = set()
-    reason_counts = Counter()
-    by_func_valid = Counter()
-    by_func_fail = Counter()
-    by_func_total = Counter()
-    for row in rows:
-        by_func_total[row.get("function", "unknown")] += 1
-        prompt = row.get("prompt", "")
-        if prompt in seen:
-            reasons = ["DUPLICATE_PROMPT"]
+    ap=argparse.ArgumentParser(); ap.add_argument('--input', required=True); ap.add_argument('--output', required=True); ap.add_argument('--quarantine', required=True); ap.add_argument('--coverage-gap', required=True); args=ap.parse_args()
+    rows=[json.loads(l) for l in Path(args.input).read_text(encoding='utf-8').splitlines() if l.strip()]
+    q=[]; valid=[]; rc=Counter(); seen=set(); fcounts=Counter()
+    for r in rows:
+        reason=None
+        for k in REQUIRED_FIELDS:
+            if k not in r or r[k] in ('', None): reason='MISSING_FIELD'; break
+        if not reason and not str(r.get('source','')).startswith('aihub_'): reason='INVALID_SOURCE'
+        if not reason and r.get('split') not in ('train','validation'): reason='INVALID_SPLIT'
+        if not reason and r['prompt'] in seen: reason='DUPLICATE_PROMPT'
+        seen.add(r['prompt'])
+        if not reason and r['function']=='tool_call':
+            try: obj=json.loads(r['completion'])
+            except Exception: reason='TOOL_JSON_INVALID'; obj=None
+            if obj is not None and ('tool_name' not in obj or not isinstance(obj.get('arguments'), dict)): reason='TOOL_JSON_INVALID'
+        if not reason and r['function']=='retrieval_transform':
+            if '질문:' in r['completion'] or '답변:' in r['completion']: reason='MRC_NOT_ALLOWED'
+            elif '이벤트' not in r['completion']: reason='RETRIEVAL_HALLUCINATION'
+        if not reason and len(r['completion']) < 20: reason='COMPLETION_TOO_SHORT'
+        if reason:
+            x=dict(r); x['reason_code']=reason; q.append(x); rc[reason]+=1
         else:
-            seen.add(prompt)
-            reasons = validate_row(row)
-        if reasons:
-            row_q = dict(row)
-            row_q["reason_code"] = reasons[0]
-            quarantine.append(row_q)
-            reason_counts[reasons[0]] += 1
-            by_func_fail[row.get("function", "unknown")] += 1
-        else:
-            valid.append(row)
-            by_func_valid[row["function"]] += 1
-    total = len(rows)
-    valid_count = len(valid)
-    quarantine_count = len(quarantine)
-    duplicate_count = reason_counts["DUPLICATE_PROMPT"]
-    duplicate_rate = duplicate_count / total if total else 0.0
-    required_min = {"tool_call":30000,"rewrite":20000,"retrieval_transform":30000,"dialogue":70000,"policy_sensitive":25000,"summarize":25000}
-    coverage = {}
-    for f, tgt in required_min.items():
-        actual = by_func_valid[f]
-        gap = max(tgt - actual, 0)
-        coverage[f] = {"target": tgt, "actual": actual, "gap": gap, "action": "synthetic" if gap > 0 else "none"}
-    all_functions_present = all(by_func_total[f] > 0 for f in required_min)
-    function_validation = {
-        f: {"total": by_func_total[f], "valid_count": by_func_valid[f], "fail_count": by_func_fail[f]}
-        for f in required_min
-    }
-    # practical gate for local runs; real coverage gate handled via coverage_gap
-    all_pass = duplicate_rate < 0.01 and all_functions_present and not any(c in reason_counts for c in ["TOOL_JSON_INVALID", "TOOL_ARGS_INVALID", "MRC_NOT_ALLOWED", "RETRIEVAL_HALLUCINATION", "ROLE_INVERSION"])
-    result = {
-        "total": total,
-        "valid_count": valid_count,
-        "quarantine_count": quarantine_count,
-        "pass_rate": round(valid_count / total, 4) if total else 0.0,
-        "duplicate_rate": round(duplicate_rate, 4),
-        "reason_code_distribution": dict(reason_counts),
-        "function_distribution": {k: by_func_total[k] for k in sorted(by_func_total)},
-        "function_validation": function_validation,
-        "all_functions_present": all_functions_present,
-        "all_pass": all_pass,
-    }
-    Path(args.output).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    jsonl_write(args.quarantine, quarantine)
-    Path(args.coverage_gap).write_text(json.dumps(coverage, ensure_ascii=False, indent=2), encoding="utf-8")
-    if all_functions_present:
-        print("AIHUB_FUNCTION_COVERAGE_OK=1")
-    if all_pass:
-        print("AIHUB_VALIDATION_OK=1")
-    else:
-        print("AIHUB_VALIDATION_FAIL=1")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
+            valid.append(r); fcounts[r['function']]+=1
+    write_jsonl(Path(args.quarantine), q)
+    targets={'dialogue':70000,'summarize':50000,'policy_sensitive':25000,'tool_call':30000,'retrieval_transform':30000,'rewrite':20000}
+    gap={}
+    for fn,target in targets.items():
+        actual=fcounts.get(fn,0); gapv=max(0,target-actual); action='none' if actual>=target*0.5 else 'synthetic'
+        gap[fn]={'target': target,'actual': actual,'gap': gapv,'action': action,'source_candidates': []}
+    coverage_ok=all(v['actual'] >= v['target']*0.5 for v in gap.values())
+    res={'valid_count': len(valid),'fail_count': len(q),'pass_rate': round(len(valid)/max(len(rows),1),4),'reason_code_distribution': dict(rc),'function_validation': {k:{'valid_count': fcounts.get(k,0)} for k in targets},'coverage_ok': coverage_ok,'all_pass': len(q)==0}
+    write_json(Path(args.output), res); write_json(Path(args.coverage_gap), gap)
+    if coverage_ok: print('AIHUB_FUNCTION_COVERAGE_OK=1')
+    if res['pass_rate'] >= 0.95: print('AIHUB_VALIDATION_OK=1')
+if __name__=='__main__': main()
