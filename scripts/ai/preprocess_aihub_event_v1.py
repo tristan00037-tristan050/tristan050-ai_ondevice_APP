@@ -19,10 +19,11 @@ def generate_rows(input_dir: str):
         except zipfile.BadZipFile:
             continue
         with z_obj as z:
-            for jf in safe_zip_members(z):
+            for jf_raw in z.namelist():
+                jf = jf_raw.lstrip("/")
                 if not jf.endswith(".json"):
                     continue
-                with z.open(jf) as f:
+                with z.open(jf_raw) as f:
                     try:
                         d = json.load(f)
                     except Exception:

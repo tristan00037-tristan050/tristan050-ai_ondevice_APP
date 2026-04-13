@@ -8,33 +8,48 @@ if str(REPO_ROOT) not in sys.path:
 
 import argparse, csv, io, zipfile
 from collections import defaultdict
-from pathlib import Path
-from scripts.ai._aihub_common_v1 import build_row, safe_zip_members, write_jsonl
+from scripts.ai._aihub_common_v1 import build_row, write_jsonl
 
 def generate_rows(input_dir: str):
-    rows=[]
+    rows = []
     for zip_fp in sorted(Path(input_dir).rglob('*.zip')):
         try:
             z_obj = zipfile.ZipFile(zip_fp)
         except zipfile.BadZipFile:
             continue
         with z_obj as z:
-            for tf in safe_zip_members(z):
-                if not tf.endswith('.tsv'): continue
-                with z.open(tf) as f:
-                    content=f.read().decode('utf-8', errors='ignore')
-                reader=csv.DictReader(io.StringIO(content), delimiter='	'); groups=defaultdict(list)
-                for row in reader: groups[row.get('id','')].append(row)
+            for tf_raw in z.namelist():
+                if not tf_raw.endswith('.tsv'):
+                    continue
+                try:
+                    with z.open(tf_raw) as f:
+                        content = f.read().decode('utf-8', errors='ignore')
+                except Exception:
+                    continue
+                reader = csv.DictReader(io.StringIO(content), delimiter='\t')
+                groups = defaultdict(list)
+                for row in reader:
+                    groups[row.get('id', '')].append(row)
                 for gid, vals in groups.items():
-                    speakers=[r for r in vals if r.get('utterance_type')=='0']; listeners=[r for r in vals if r.get('utterance_type')=='1']
-                    for sp,ls in zip(speakers,listeners):
-                        p=sp.get('utterance_text','').strip(); c=ls.get('utterance_text','').strip()
-                        if p and c: rows.append(build_row(p, c, 'dialogue', 'aihub_공감형대화', '공감형대화', f'{zip_fp}/{tf}', f'empathy_{len(rows):06d}'))
+                    speakers = [r for r in vals if r.get('utterance_type') == '0']
+                    listeners = [r for r in vals if r.get('utterance_type') == '1']
+                    for sp, ls in zip(speakers, listeners):
+                        p = sp.get('utterance_text', '').strip()
+                        c = ls.get('utterance_text', '').strip()
+                        if p and c:
+                            rows.append(build_row(p, c, 'dialogue', 'aihub_공감형대화', '공감형대화', f'{zip_fp}/{tf_raw}', f'empathy_{len(rows):06d}'))
     return rows
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument('--input-dir', required=True); ap.add_argument('--output', required=True); ap.add_argument('--target', type=int, default=20000); args=ap.parse_args()
-    rows=generate_rows(args.input_dir)[:args.target]
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--input-dir', required=True)
+    ap.add_argument('--output', required=True)
+    ap.add_argument('--target', type=int, default=20000)
+    args = ap.parse_args()
+    rows = generate_rows(args.input_dir)[:args.target]
     write_jsonl(Path(args.output), rows)
-    print('AIHUB_공감형대화_LOAD_OK=1'); print(f'AIHUB_공감형대화_COUNT={len(rows)}')
-if __name__=='__main__': main()
+    print('AIHUB_공감형대화_LOAD_OK=1')
+    print(f'AIHUB_공감형대화_COUNT={len(rows)}')
+
+if __name__ == '__main__':
+    main()

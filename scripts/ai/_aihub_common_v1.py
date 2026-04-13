@@ -25,12 +25,19 @@ def build_row(prompt: str, completion: str, function: str, source: str, dataset_
         "quality_flags": quality_flags or [],
     }
 
-def safe_zip_members(z: zipfile.ZipFile) -> list[str]:
+def safe_zip_members(z: zipfile.ZipFile) -> list[tuple[str, str]]:
+    """Returns list of (original_name, clean_name) tuples.
+    Blocks path traversal (..). Strips leading / for extension checks.
+    """
     safe = []
     for name in z.namelist():
-        if '..' in name or name.startswith('/'):
+        if '..' in name:
+            print(f'PATH_TRAVERSAL_QUARANTINE: {name}')
             continue
-        safe.append(name)
+        clean = name.lstrip('/')
+        if not clean:
+            continue
+        safe.append((name, clean))
     return safe
 
 def record_zip_inventory(zip_fp: Path, z: zipfile.ZipFile, inventory: dict):
