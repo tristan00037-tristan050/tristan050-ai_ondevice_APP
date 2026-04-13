@@ -16,7 +16,11 @@ def generate_rows(input_dir: str):
     rows = []
     docs = defaultdict(list)
     for zip_fp in sorted(Path(input_dir).rglob("TL*.zip")):
-        with zipfile.ZipFile(zip_fp) as z:
+        try:
+            z_obj = zipfile.ZipFile(zip_fp)
+        except zipfile.BadZipFile:
+            continue
+        with z_obj as z:
             for jf in safe_zip_members(z):
                 if not jf.endswith(".json"):
                     continue
