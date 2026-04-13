@@ -9,8 +9,8 @@ from scripts.ai._aihub_common_v1 import find_sample_files, sniff_records, try_ge
 
 
 def _doc_id(fp: Path) -> str:
-    """파일명에서 문서 ID 추출 (언더스코어 기준 앞 4개 파트)."""
-    return '_'.join(fp.stem.split('_')[:4])
+    """파일명에서 문서 ID 추출 (상위 디렉토리 + 파일명 앞 4개 파트)."""
+    return str(fp.parent) + '_' + '_'.join(fp.stem.split('_')[:4])
 
 
 def _merged_to_row(doc_id: str, merged_text: str) -> dict | None:
