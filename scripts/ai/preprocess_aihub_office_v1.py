@@ -4,31 +4,45 @@ from pathlib import Path
 if __package__ in (None, ""):
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from collections import defaultdict
 from scripts.ai._aihub_common_v1 import find_sample_files, sniff_records, try_get, normalize_text, build_row, jsonl_write, polite_present
 
-def office_to_row(rec: dict, source_file: str) -> dict | None:
-    # 오피스 데이터는 OCR 바운딩박스 구조라 rewrite 변환 불가.
-    # plain_text가 200자 이상인 경우 summarize 태스크로 변환.
-    plain_text = normalize_text(try_get(rec, "plain_text", "text", "content", "document", "input"))
-    if not plain_text or len(plain_text) < 200:
+
+def _doc_id(fp: Path) -> str:
+    """파일명에서 문서 ID 추출 (상위 디렉토리 + 파일명 앞 4개 파트)."""
+    return str(fp.parent) + '_' + '_'.join(fp.stem.split('_')[:4])
+
+
+def _merged_to_row(doc_id: str, merged_text: str) -> dict | None:
+    if len(merged_text) < 200:
         return None
-    sentences = [s.strip() for s in re.split(r'[.\n]', plain_text) if len(s.strip()) > 10]
+    sentences = [s.strip() for s in re.split(r'[.\n]', merged_text) if len(s.strip()) > 10]
     if not sentences:
         return None
     completion = '. '.join(sentences[:2]) + '.'
     if len(completion) < 20:
         return None
-    prompt = f"다음 문서를 3문장 이내로 요약하세요:\n{plain_text}"
-    return build_row(prompt, completion, "summarize", "office", dataset_name="Office", source_file=source_file, record_id=f"office_{abs(hash(source_file+plain_text))%10**8:08d}", quality_flags=[])
+    prompt = f"다음 문서를 3문장 이내로 요약하세요:\n{merged_text}"
+    return build_row(prompt, completion, "summarize", "office", dataset_name="Office", source_file=doc_id, record_id=f"office_{abs(hash(doc_id))%10**8:08d}", quality_flags=[])
+
 
 def load_records(input_dir: str):
-    rows = []
+    # doc_id별로 텍스트 박스 plain_text 수집
+    doc_texts: dict[str, list[str]] = defaultdict(list)
     for fp in find_sample_files(input_dir, limit=99999):
-        fmt, recs = sniff_records(fp, sample_count=10**6)
+        did = _doc_id(fp)
+        _, recs = sniff_records(fp, sample_count=10**6)
         for rec in recs:
-            row = office_to_row(rec, str(fp))
-            if row:
-                rows.append(row)
+            text = normalize_text(try_get(rec, "plain_text", "text", "content", "document", "input"))
+            if text:
+                doc_texts[did].append(text)
+
+    rows = []
+    for did, texts in doc_texts.items():
+        merged = ' '.join(texts)
+        row = _merged_to_row(did, merged)
+        if row:
+            rows.append(row)
     return rows
 
 def main():
