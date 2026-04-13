@@ -19,14 +19,44 @@ def event_to_row(rec: dict, source_file: str) -> dict | None:
     return build_row(prompt, completion, "retrieval_transform", "event", dataset_name="Event", source_file=source_file, record_id=f"event_{abs(hash(source_file+text))%10**8:08d}", output_keys=[k for k in ["이벤트","일시","장소","참여자","주최"] if fields.get(k)], quality_flags=[])
 
 def load_records(input_dir: str):
-    rows = []
-    for fp in find_sample_files(input_dir, limit=99999):
-        fmt, recs = sniff_records(fp, sample_count=10**6)
-        for rec in recs:
-            row = event_to_row(rec, str(fp))
-            if row:
-                rows.append(row)
-    return rows
+    from pathlib import Path
+    import json as _json
+    import ast
+
+    for fp in Path(input_dir).rglob("*.json"):
+        try:
+            with open(fp, encoding="utf-8") as f:
+                d = _json.load(f)
+            data = d.get("data", {})
+            if not isinstance(data, dict):
+                continue
+            text = data.get("text", "").strip()
+            events = data.get("event", [])
+            if isinstance(events, str):
+                try:
+                    events = ast.literal_eval(events)
+                except Exception:
+                    continue
+            if not text or not events:
+                continue
+            sentences = [
+                e.get("sentence", "").strip()
+                for e in events
+                if isinstance(e, dict) and e.get("sentence", "").strip()
+            ]
+            if not sentences:
+                continue
+            lines = [f"이벤트 {i+1}: {s}" for i, s in enumerate(sentences[:3])]
+            completion = "\n".join(lines)
+            prompt = f"다음 기사에서 주요 이벤트를 추출하세요.\n\n기사: {text[:500]}"
+            yield build_row(
+                prompt, completion, "retrieval_transform", "event",
+                dataset_name="Event", source_file=str(fp),
+                record_id=f"event_{abs(hash(str(fp))) % 10**8:08d}",
+                quality_flags=[],
+            )
+        except Exception:
+            continue
 
 def main():
     ap = argparse.ArgumentParser()
@@ -34,7 +64,7 @@ def main():
     ap.add_argument("--output", required=True)
     ap.add_argument("--target", type=int, default=30000)
     args = ap.parse_args()
-    rows = load_records(args.input_dir)[:args.target]
+    rows = list(load_records(args.input_dir))[:args.target]
     count = jsonl_write(args.output, rows)
     print("AIHUB_EVENT_LOAD_OK=1")
     print(f"AIHUB_EVENT_COUNT={count}")
