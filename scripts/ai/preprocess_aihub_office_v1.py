@@ -5,7 +5,7 @@ if __package__ in (None, ""):
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from collections import defaultdict
-from scripts.ai._aihub_common_v1 import find_sample_files, sniff_records, try_get, normalize_text, build_row, jsonl_write, polite_present
+from scripts.ai._aihub_common_v1 import try_get, normalize_text, build_row, jsonl_write, polite_present
 
 
 def _doc_id(fp: Path) -> str:
@@ -27,15 +27,20 @@ def _merged_to_row(doc_id: str, merged_text: str) -> dict | None:
 
 
 def load_records(input_dir: str):
-    # doc_id별로 텍스트 박스 plain_text 수집
     doc_texts: dict[str, list[str]] = defaultdict(list)
-    for fp in find_sample_files(input_dir, limit=99999):
+    input_path = Path(input_dir)
+    for fp in input_path.rglob('*.json'):
         did = _doc_id(fp)
-        _, recs = sniff_records(fp, sample_count=10**6)
-        for rec in recs:
-            text = normalize_text(try_get(rec, "plain_text", "text", "content", "document", "input"))
-            if text:
-                doc_texts[did].append(text)
+        try:
+            with open(fp, encoding='utf-8') as f:
+                d = json.load(f)
+            li = d.get('learning_data_info', {})
+            if isinstance(li, dict):
+                text = li.get('plain_text', '').strip()
+                if text:
+                    doc_texts[did].append(text)
+        except Exception:
+            continue
 
     rows = []
     for did, texts in doc_texts.items():
