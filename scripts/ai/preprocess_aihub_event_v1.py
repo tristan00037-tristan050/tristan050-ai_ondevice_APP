@@ -1,62 +1,48 @@
 from __future__ import annotations
-import argparse, json
+import sys
 from pathlib import Path
-if __package__ in (None, ""):
-    import sys
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.ai._aihub_common_v1 import find_sample_files, sniff_records, try_get, normalize_text, build_row, jsonl_write, extract_event_fields
 
-def event_to_row(rec: dict, source_file: str) -> dict | None:
-    text = normalize_text(try_get(rec, "text", "content", "document", "context", "input"))
-    if not text:
-        return None
-    fields = extract_event_fields(text)
-    keys = ["이벤트","일시","장소"]
-    completion = "\n".join([f"{k}: {fields.get(k,'')}" for k in ["이벤트","일시","장소","참여자","주최"] if fields.get(k)])
-    if not completion:
-        return None
-    prompt = f"다음 원문을 지정 포맷으로 변환하세요.\n형식: 이벤트:/일시:/장소:/참여자:/주최:\n\n{text}"
-    return build_row(prompt, completion, "retrieval_transform", "event", dataset_name="Event", source_file=source_file, record_id=f"event_{abs(hash(source_file+text))%10**8:08d}", output_keys=[k for k in ["이벤트","일시","장소","참여자","주최"] if fields.get(k)], quality_flags=[])
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-def load_records(input_dir: str):
-    from pathlib import Path
-    import json as _json
-    import ast
+import argparse, ast, json, zipfile
 
-    for fp in Path(input_dir).rglob("*.json"):
-        try:
-            with open(fp, encoding="utf-8") as f:
-                d = _json.load(f)
-            data = d.get("data", {})
-            if not isinstance(data, dict):
-                continue
-            text = data.get("text", "").strip()
-            events = data.get("event", [])
-            if isinstance(events, str):
-                try:
-                    events = ast.literal_eval(events)
-                except Exception:
+from scripts.ai._aihub_common_v1 import build_row, safe_zip_members, write_jsonl
+
+
+def generate_rows(input_dir: str):
+    rows = []
+    for zip_fp in sorted(Path(input_dir).rglob("TL*.zip")):
+        with zipfile.ZipFile(zip_fp) as z:
+            for jf in safe_zip_members(z):
+                if not jf.endswith(".json"):
                     continue
-            if not text or not events:
-                continue
-            sentences = [
-                e.get("sentence", "").strip()
-                for e in events
-                if isinstance(e, dict) and e.get("sentence", "").strip()
-            ]
-            if not sentences:
-                continue
-            lines = [f"이벤트 {i+1}: {s}" for i, s in enumerate(sentences[:3])]
-            completion = "\n".join(lines)
-            prompt = f"다음 기사에서 주요 이벤트를 추출하세요.\n\n기사: {text[:500]}"
-            yield build_row(
-                prompt, completion, "retrieval_transform", "event",
-                dataset_name="Event", source_file=str(fp),
-                record_id=f"event_{abs(hash(str(fp))) % 10**8:08d}",
-                quality_flags=[],
-            )
-        except Exception:
-            continue
+                with z.open(jf) as f:
+                    try:
+                        d = json.load(f)
+                    except Exception:
+                        continue
+                data = d.get("data", {})
+                if not isinstance(data, dict):
+                    continue
+                text = str(data.get("text", "")).strip()
+                events = data.get("event", [])
+                if isinstance(events, str):
+                    try:
+                        events = ast.literal_eval(events)
+                    except Exception:
+                        continue
+                sents = [e.get("sentence", "").strip() for e in events if isinstance(e, dict) and e.get("sentence", "").strip()]
+                if not text or not sents:
+                    continue
+                if any(s[:10] not in text for s in sents[:3]):
+                    continue
+                completion = "\n".join(f"이벤트 {i+1}: {s}" for i, s in enumerate(sents[:3]))
+                prompt = f"다음 기사에서 주요 이벤트를 추출하세요.\n\n기사: {text[:500]}"
+                rows.append(build_row(prompt, completion, "retrieval_transform", "aihub_event", "이벤트", f"{zip_fp}/{jf}", f"event_{len(rows):06d}"))
+    return rows
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -64,10 +50,11 @@ def main():
     ap.add_argument("--output", required=True)
     ap.add_argument("--target", type=int, default=30000)
     args = ap.parse_args()
-    rows = list(load_records(args.input_dir))[:args.target]
-    count = jsonl_write(args.output, rows)
-    print("AIHUB_EVENT_LOAD_OK=1")
-    print(f"AIHUB_EVENT_COUNT={count}")
+    rows = generate_rows(args.input_dir)[: args.target]
+    write_jsonl(Path(args.output), rows)
+    print("AIHUB_이벤트_LOAD_OK=1")
+    print(f"AIHUB_이벤트_COUNT={len(rows)}")
+
 
 if __name__ == "__main__":
     main()
