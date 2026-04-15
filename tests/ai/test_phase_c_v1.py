@@ -52,7 +52,14 @@ def test_dry_run_exits_cleanly(tmp_path, capsys):
     ])
     assert rc == 0
     captured = capsys.readouterr().out
-    for key in ['PHASE_C_DRYRUN_OK=1', 'eval_records=12', 'PHASE_C_EVAL_DATASET_OK=1', 'PHASE_C_TOOL_CALL_DATASET_SCHEMA_OK=1', 'PHASE_C_SCRIPTS_READY=1']:
+    expected = {
+        'PHASE_C_DRYRUN_OK': '1',
+        'eval_records': '12',
+        'PHASE_C_EVAL_DATASET_OK': '1',
+        'PHASE_C_TOOL_CALL_DATASET_SCHEMA_OK': '1',
+        'PHASE_C_SCRIPTS_READY': '1',
+    }
+    for key, val in expected.items():
         assert key in captured
 
 
