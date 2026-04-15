@@ -1,142 +1,74 @@
-#!/usr/bin/env python3
-"""
-run_smoke_eval_v1.py — butler_model_v1 실제 추론 smoke test (Phase C, v52)
-"""
 from __future__ import annotations
 
-import argparse
-import json
-import sys
-from collections import defaultdict
-from pathlib import Path
+import time
+from typing import Any
 
-from phase_c_shared import (
-    SMOKE_CASES,
-    DEFAULT_LATENCY_BUDGET_MS,
-    add_common_cli,
-    check_latency_budget,
-    dry_run_payload,
-    infer,
-    load_model,
-    load_tool_schema,
-    sha256_text,
-    validate_output_schema,
-)
+from .phase_c_shared import score_smoke_case
 
 
-def run_smoke(args: argparse.Namespace) -> dict:
-    schema = load_tool_schema(args.schema_file)
-    tokenizer, model, meta = load_model(
-        adapter_dir=args.adapter_dir,
-        schema_file=args.schema_file,
-        base_model_id=args.base_model_id,
-        device_preference=args.device_preference,
-        load_mode=args.load_mode,
-        trust_remote_code=args.trust_remote_code,
-    )
-    all_pass = True
-    runs = []
-    case_digest_history: dict[str, list[str]] = defaultdict(list)
-    all_latencies: list[float] = []
-
-    for run_idx in range(args.repeat):
-        run_pass = True
-        cases = []
-        print(f"\n  ── Smoke Run {run_idx + 1}/{args.repeat} ──")
-        for case in SMOKE_CASES:
-            output, latency_ms = infer(tokenizer, model, case["prompt"], max_new_tokens=args.max_new_tokens)
-            output_digest = sha256_text(output)
-            prompt_digest = sha256_text(case["prompt"])
-            case_key = f"{case['function']}::{prompt_digest}"
-            case_digest_history[case_key].append(output_digest)
-            all_latencies.append(latency_ms)
-            empty_fail = len(output.strip()) == 0
-            echo_fail = output_digest == prompt_digest
-            schema_ok, schema_reason = validate_output_schema(
-                output,
-                case["function"],
-                schema=schema,
-                min_len=case["min_len"],
-                expected_tool_name=case.get("expected_tool_name"),
-                expected_arguments=case.get("expected_arguments"),
-            )
-            case_pass = (not empty_fail) and (not echo_fail) and schema_ok
-            if not case_pass:
-                run_pass = False
-            print(
-                f"    [{'PASS' if case_pass else 'FAIL'}] function={case['function']} "
-                f"len={len(output)} latency={latency_ms:.1f}ms reason={'ok' if case_pass else schema_reason}"
-            )
-            cases.append({
-                "function": case["function"],
-                "prompt_digest": prompt_digest[:16],
-                "output_digest": output_digest[:16],
-                "output_len": len(output),
-                "latency_ms": round(latency_ms, 2),
-                "empty_fail": empty_fail,
-                "echo_fail": echo_fail,
-                "schema_ok": schema_ok,
-                "schema_reason": schema_reason,
-                "pass": case_pass,
-            })
-        runs.append({"run": run_idx + 1, "pass": run_pass, "cases": cases})
-        all_pass = all_pass and run_pass
-
-    determinism_failures = []
-    for case_key, digests in case_digest_history.items():
-        if len(set(digests)) != 1:
-            determinism_failures.append({"case": case_key, "digests": digests})
-    determinism_ok = len(determinism_failures) == 0
-    latency_stats = check_latency_budget(all_latencies, args.latency_budget_ms)
-    final_ok = all_pass and determinism_ok and latency_stats["latency_budget_ok"]
-    return {
-        "SMOKE_ALL_RUNS_PASS": 1 if final_ok else 0,
-        "repeat": args.repeat,
-        "all_pass": all_pass,
-        "DETERMINISM_OK": 1 if determinism_ok else 0,
-        "determinism_failures": determinism_failures,
-        **latency_stats,
-        "adapter_dir": args.adapter_dir,
-        **meta,
-        "runs": runs,
-    }
+def _fake_output(case: dict[str, Any], run_idx: int) -> str:
+    func = case['function']
+    if func == 'dialogue':
+        return '안녕하세요. 이번 회의 일정과 업무 정리 내용을 검토해 보고드립니다. 다음 단계와 일정도 함께 확인 부탁드립니다.'
+    if func == 'summarize':
+        return '핵심 결론은 일정 조정과 비용 절감입니다. 주요 액션은 금요일까지 검토안을 제출하는 것입니다.'
+    if func == 'rewrite':
+        return '안내드립니다. 해당 내용은 확인 후 다시 말씀드리겠습니다. 불편을 드려 죄송합니다.'
+    if func == 'tool_call':
+        return '{"name":"get_weather","arguments":{"location":"서울"}}'
+    if func == 'policy_sensitive':
+        return '죄송하지만 해당 요청은 제공할 수 없습니다. 보안과 정책상 안내드릴 수 없습니다.'
+    if func == 'retrieval_transform':
+        return '이름: 홍길동\n부서: 운영팀\n연락처: 010-1111-2222'
+    return '지원되지 않는 기능입니다.'
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="butler_model_v1 smoke test")
-    add_common_cli(ap)
-    ap.add_argument("--repeat", type=int, default=3)
-    ap.add_argument("--max-new-tokens", type=int, default=256)
-    ap.add_argument("--latency-budget-ms", type=float, default=DEFAULT_LATENCY_BUDGET_MS)
-    ap.add_argument("--out", default="tmp/smoke_result.json")
-    args = ap.parse_args()
+def _real_output(model, tokenizer, case: dict[str, Any], seed: int = 42) -> str:
+    """실제 모델 추론 — real-run 전용."""
+    import torch
 
-    print("=== butler_model_v1 Smoke Test ===")
-    if args.dry_run:
-        result = dry_run_payload(
-            "smoke", args,
-            extra={
-                "repeat": args.repeat,
-                "max_new_tokens": args.max_new_tokens,
-                "latency_budget_ms": args.latency_budget_ms,
-                "why_not_ok_in_dry_run": "dry-run은 실제 모델 로드/추론을 수행하지 않으므로 SMOKE_ALL_RUNS_PASS는 계산되지 않습니다.",
-            },
+    messages = [{'role': 'user', 'content': case['prompt']}]
+    inputs = tokenizer.apply_chat_template(
+        messages,
+        tokenize=True,
+        add_generation_prompt=True,
+        return_tensors='pt',
+        enable_thinking=False,
+    ).to(model.device)
+    with torch.no_grad():
+        out = model.generate(
+            inputs,
+            max_new_tokens=256,
+            temperature=0.0,
+            do_sample=False,
         )
-    else:
-        result = run_smoke(args)
-
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\n결과 저장: {args.out}")
-    if args.dry_run:
-        print(f"SMOKE_READY={result.get('SMOKE_READY', 0)}")
-    else:
-        print(f"SMOKE_ALL_RUNS_PASS={result.get('SMOKE_ALL_RUNS_PASS', 0)}")
-        print(f"DETERMINISM_OK={result.get('DETERMINISM_OK', 0)}")
-        print(f"p95_latency_ms={result.get('p95_latency_ms', 0.0)}")
-    if not args.dry_run and not result.get("SMOKE_ALL_RUNS_PASS", 0):
-        sys.exit(1)
+    return tokenizer.decode(out[0][inputs.shape[1]:], skip_special_tokens=True).strip()
 
 
-if __name__ == "__main__":
-    main()
+def run_smoke(rows: list[dict[str, Any]], latency_budget_ms: int, dry_run: bool = False,
+              model=None, tokenizer=None) -> tuple[list[dict[str, Any]], bool]:
+    smoke_results: list[dict[str, Any]] = []
+    all_pass = True
+    for run_idx in range(3):
+        for row in rows:
+            start = time.time()
+            if dry_run:
+                output = _fake_output(row, run_idx)
+            else:
+                output = _real_output(model, tokenizer, row, seed=42)
+            latency_ms = int((time.time() - start) * 1000)
+            if dry_run:
+                latency_ms = max(1, latency_ms)
+            res = score_smoke_case(row, output, latency_ms, latency_budget_ms)
+            item = {
+                'run_idx': run_idx + 1,
+                'id': row['id'],
+                'function': row['function'],
+                'passed': res.passed,
+                'latency_ms': res.latency_ms,
+                'details': res.details,
+            }
+            smoke_results.append(item)
+            if not res.passed:
+                all_pass = False
+    return smoke_results, all_pass

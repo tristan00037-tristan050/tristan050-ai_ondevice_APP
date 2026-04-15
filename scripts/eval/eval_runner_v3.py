@@ -31,9 +31,14 @@ def load_real_model(model_id: str, adapter_dir: str):
 def main(argv=None):
     import argparse
     ap = argparse.ArgumentParser(description="Butler eval runner v3")
-    ap.add_argument("--model-id",    required=True)
+    ap.add_argument("--model-id",    required=False, default=None)
     ap.add_argument("--adapter-dir", required=True)
     ap.add_argument("--report-path", default="tmp/eval_runner_report.json")
+        # legacy flags for run_eval_v3.sh compatibility
+    ap.add_argument("--eval-file", default=None)
+    ap.add_argument("--hardcase-file", default=None)
+    ap.add_argument("--model-version", default=None)
+    ap.add_argument("--baseline-path", default=None)
     ap.add_argument("--dry-run",     action="store_true")
     args = ap.parse_args(argv)
     if args.dry_run:
