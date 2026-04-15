@@ -1,0 +1,21 @@
+{
+  "retrieval_01": {
+    "type": "json",
+    "data": {
+      "name": "Alpha",
+      "score": 95,
+      "owner": "Kim"
+    },
+    "expected_output_format": "markdown_table"
+  },
+  "retrieval_02": {
+    "type": "csv",
+    "data": "항목,값\nA,10\nB,30\nC,20",
+    "expected_key": "최댓값 항목"
+  },
+  "retrieval_03": {
+    "type": "text",
+    "data": "본 계약은 2026년 12월 31일에 종료되며, 계약 종료일 이전에는 사전 통지가 필요합니다.",
+    "extract_keyword": "계약 종료일"
+  }
+}
