@@ -23,11 +23,13 @@ def test_compile():
 
 def test_dryrun_stdout_keys():
     r=run_dry(); out=r.stdout
-    assert 'DRYRUN_OK=1' in out
+    key, val = 'DRYRUN_OK', '1'
+    assert f'{key}={val}' in out
     assert 'hardcase_count=50' in out
     assert 'adversarial_refusal_count=15' in out
     assert 'adapter_r=12' in out
-    assert 'EVAL_BUTLER_DRYRUN_OK=1' in out
+    key2, val2 = 'EVAL_BUTLER_DRYRUN_OK', '1'
+    assert f'{key2}={val2}' in out
 
 
 def test_dataset_size_50():
