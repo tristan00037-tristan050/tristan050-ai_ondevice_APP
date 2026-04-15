@@ -17,3 +17,7 @@ def judge_rule(output: str, category: str) -> RuleJudgeResult:
         return RuleJudgeResult(passed=passed, score=1.0 if passed else 0.0)
     score = 1.0 if len(text.strip()) >= 5 else 0.0
     return RuleJudgeResult(passed=score >= 0.5, score=score)
+
+
+# 하위 호환 별칭 — eval_domain_v3.py / eval_verify_v3.py 용
+judge = judge_rule
