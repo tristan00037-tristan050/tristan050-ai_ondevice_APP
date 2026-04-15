@@ -227,14 +227,108 @@ def parse_args(argv=None):
     return ap.parse_args(argv)
 
 
+
+def run_real(args):
+    import torch, gc
+    from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+    from peft import PeftModel
+    from statistics import mean
+
+    # reproducibility
+    import random, numpy as np
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+
+    # fixtures 직접 로드
+    fixture_dir = Path(__file__).parent / 'fixtures'
+    prompts = load_prompts(fixture_dir / 'compare_prompts_v1.jsonl')
+    summarize_fixtures = load_json(fixture_dir / 'summarize_texts_v1.json')
+    retrieval_fixtures = load_json(fixture_dir / 'retrieval_texts_v1.json')
+
+    # adapter config 직접 읽기
+    cfg_path = Path(args.adapter_dir) / 'adapter_config.json'
+    adapter_cfg = load_json(cfg_path) if cfg_path.exists() else {}
+    adapter_digest = sha16(Path(args.adapter_dir) / 'adapter_model.safetensors')
+
+    quant_cfg = BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type='nf4',
+        bnb_4bit_compute_dtype=torch.bfloat16,
+    )
+
+    def infer(model, tokenizer, row):
+        messages = [{'role': 'user', 'content': row['user']}]
+        inputs = tokenizer.apply_chat_template(
+            messages, tokenize=True, add_generation_prompt=True,
+            return_tensors='pt', enable_thinking=False,
+        ).to(model.device)
+        with torch.no_grad():
+            out = model.generate(inputs, max_new_tokens=args.max_new_tokens,
+                                 temperature=0.0, do_sample=False)
+        return tokenizer.decode(out[0][inputs.shape[1]:], skip_special_tokens=True).strip()
+
+    results = {'base': {}, 'ft': {}}
+    for tag, load_adapter in [('base', False), ('ft', True)]:
+        tokenizer = AutoTokenizer.from_pretrained(args.base_model_id, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            args.base_model_id, trust_remote_code=True,
+            quantization_config=quant_cfg, device_map='auto', low_cpu_mem_usage=True,
+        )
+        if load_adapter:
+            model = PeftModel.from_pretrained(model, args.adapter_dir)
+        model.eval()
+
+        scores = {f: [] for f in ['dialogue','summarize','rewrite','tool_call','policy_sensitive','retrieval_transform']}
+        report_rows = []
+        for row in prompts:
+            output = infer(model, tokenizer, row)
+            score, details = score_response(output, row, summarize_fixtures, retrieval_fixtures)
+            func = row['func']
+            scores[func].append(score)
+            report_rows.append(CaseResult(
+                id=row['id'], func=func, prompt_preview=row['user'][:50],
+                base_output=output if tag=='base' else '',
+                ft_output=output if tag=='ft' else '',
+                base_score=score if tag=='base' else 0.0,
+                ft_score=score if tag=='ft' else 0.0,
+                delta=0.0, pass_case=score>=0.6, fail_reason=None,
+            ))
+        results[tag] = {f: round(mean(v),4) if v else 0.0 for f, v in scores.items()}
+        del model; gc.collect(); torch.cuda.empty_cache()
+
+    deltas = {f: round(results['ft'][f] - results['base'][f], 4) for f in results['base']}
+    overall_delta = round(mean(deltas.values()), 4)
+    ok = 1 if overall_delta >= 0.30 and all(v > 0 for v in deltas.values()) else 0
+
+    result = {
+        'execution_mode': 'real',
+        'adapter_digest_sha256_16': adapter_digest,
+        'base_model_id': args.base_model_id,
+        'adapter_dir': args.adapter_dir,
+        'seed': args.seed,
+        'base_scores': results['base'],
+        'ft_scores': results['ft'],
+        'delta_scores': deltas,
+        'overall_delta': overall_delta,
+        'BASE_VS_FT_OK': ok,
+        'fail_cases': [],
+    }
+    save_outputs(Path(args.output_dir), result, report_rows)
+    if ok:
+        print('BASE_VS_FT_OK=1')
+    else:
+        print(f'BASE_VS_FT_FAIL=1 overall_delta={overall_delta}')
+    return 0 if ok else 1
+
 def main(argv=None):
     args = parse_args(argv)
     if args.dry_run:
         run_dry(args)
         return 0
-    # real-run path intentionally present but not executable in this environment
-    print('BASE_VS_FT_FAIL=1 reason=real_run_requires_gpu')
-    return 1
+    return run_real(args)
 
 
 if __name__ == '__main__':
