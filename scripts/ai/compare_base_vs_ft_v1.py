@@ -234,9 +234,23 @@ def run_real(args):
     from peft import PeftModel
     from statistics import mean
 
-    seed_everything(args.seed)
-    prompts, summarize_fixtures, retrieval_fixtures = load_fixtures()
-    adapter_cfg = read_adapter_config(Path(args.adapter_dir))
+    # reproducibility
+    import random, numpy as np
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
+
+    # fixtures 직접 로드
+    fixture_dir = Path(__file__).parent / 'fixtures'
+    prompts = load_prompts(fixture_dir / 'compare_prompts_v1.jsonl')
+    summarize_fixtures = load_json(fixture_dir / 'summarize_texts_v1.json')
+    retrieval_fixtures = load_json(fixture_dir / 'retrieval_texts_v1.json')
+
+    # adapter config 직접 읽기
+    cfg_path = Path(args.adapter_dir) / 'adapter_config.json'
+    adapter_cfg = load_json(cfg_path) if cfg_path.exists() else {}
     adapter_digest = sha16(Path(args.adapter_dir) / 'adapter_model.safetensors')
 
     quant_cfg = BitsAndBytesConfig(
@@ -302,7 +316,7 @@ def run_real(args):
         'BASE_VS_FT_OK': ok,
         'fail_cases': [],
     }
-    save_outputs(Path(args.output_dir), result, [])
+    save_outputs(Path(args.output_dir), result, report_rows)
     if ok:
         print('BASE_VS_FT_OK=1')
     else:
