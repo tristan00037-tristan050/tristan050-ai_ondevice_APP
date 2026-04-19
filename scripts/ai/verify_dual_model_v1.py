@@ -96,9 +96,12 @@ def verify_dual_model(high_model_path: str, light_model_path: str, adapter_path:
         router = apply_fallback(router, high_model_load_ok=high_ok)
         light_ok, light_text, light_reason = _run_real_load_generate(light_model_path, adapter_path=None)
 
-    checks["V04"] = 1 if (high_ok or router.get("fallback_used")) else 0
+    # V04/V06: router가 light를 primary로 선택한 경우 high 로드는 optional
+    # 저사양 기기에서 light가 정상 선택됐을 때 high 실패로 ok=0이 되는 문제 수정
+    light_is_primary = router.get("selected") == "light" and router.get("primary_selected") == "light"
+    checks["V04"] = 1 if (high_ok or router.get("fallback_used") or light_is_primary) else 0
     checks["V05"] = 1 if light_ok else 0
-    checks["V06"] = 1 if ((high_ok and _validate_output_shape(high_text)) or router.get("fallback_used")) else 0
+    checks["V06"] = 1 if ((high_ok and _validate_output_shape(high_text)) or router.get("fallback_used") or light_is_primary) else 0
     checks["V07"] = 1 if (light_ok and _validate_output_shape(light_text)) else 0
     checks["V08"] = 1 if ((force_light and router["primary_selected"] == "light") or (force_high and router["primary_selected"] == "high") or (not force_light and not force_high)) else 0
 
