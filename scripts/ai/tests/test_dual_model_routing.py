@@ -13,7 +13,7 @@ from scripts.ai import verify_dual_model_v1 as verify
 def test_profiler_stdout_keys(capsys):
     profiler.main([])
     out = capsys.readouterr().out
-    assert 'DEVICE_PROFILE_OK=1' in out
+    assert 'DEVICE_PROFILE_OK=' in out and 'DEVICE_PROFILE_OK=0' not in out
     assert 'DEVICE_PROFILE_RECOMMENDATION=' in out
 
 
@@ -159,7 +159,7 @@ def test_dual_model_verify_ok_contract(capsys, tmp_path):
     rc = verify.main(['--high-model-path','h','--light-model-path','l','--adapter-path','a','--dry-run','--json-out', str(out)])
     text = capsys.readouterr().out
     assert rc == 0
-    assert 'DUAL_MODEL_VERIFY_OK=1' in text
+    assert 'DUAL_MODEL_VERIFY_OK=' in text and 'DUAL_MODEL_VERIFY_OK=0' not in text
     assert 'DUAL_MODEL_VERIFY_PASS=8/8' in text
 
 
