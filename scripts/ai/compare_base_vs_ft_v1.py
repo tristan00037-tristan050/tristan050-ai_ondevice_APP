@@ -271,6 +271,7 @@ def run_real(args):
         return tokenizer.decode(out[0][inputs.shape[1]:], skip_special_tokens=True).strip()
 
     results = {'base': {}, 'ft': {}}
+    report_rows = []
     for tag, load_adapter in [('base', False), ('ft', True)]:
         tokenizer = AutoTokenizer.from_pretrained(args.base_model_id, trust_remote_code=True)
         model = AutoModelForCausalLM.from_pretrained(
@@ -282,7 +283,6 @@ def run_real(args):
         model.eval()
 
         scores = {f: [] for f in ['dialogue','summarize','rewrite','tool_call','policy_sensitive','retrieval_transform']}
-        report_rows = []
         for row in prompts:
             output = infer(model, tokenizer, row)
             score, details = score_response(output, row, summarize_fixtures, retrieval_fixtures)

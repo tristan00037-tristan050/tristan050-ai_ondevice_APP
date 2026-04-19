@@ -1,0 +1,8 @@
+{
+  "ok": 1,
+  "pass_count": 8,
+  "evidence_keys": [
+    "high_output_digest16",
+    "light_output_digest16"
+  ]
+}
