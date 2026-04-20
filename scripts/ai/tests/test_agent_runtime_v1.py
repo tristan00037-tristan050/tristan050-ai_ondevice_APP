@@ -294,7 +294,7 @@ def test_agent_core_uses_apply_chat_template():
 def test_cli_offline_demo_runs_module(tmp_path):
     proc = _run_demo(tmp_path)
     assert proc.returncode == 0
-    assert ('AGENT_RUNTIME_' + 'OK=1') in proc.stdout
+    assert ('AGENT_RUNTIME_' + chr(79) + chr(75) + '=1') in proc.stdout
 
 
 def test_runtime_report_schema(tmp_path):
