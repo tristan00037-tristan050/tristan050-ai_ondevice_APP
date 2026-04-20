@@ -1,0 +1,55 @@
+{
+  "schema_version": "3.0",
+  "generated_at": "2026-04-20T05:14:55.830405+00:00",
+  "execution_mode": "local_e2e",
+  "effective_backend": "transformers",
+  "quant_mode": "4bit",
+  "fallback_used": 0,
+  "fallback_reason": "",
+  "product_ready": 1,
+  "selected_model": "high",
+  "route_reason": "ram_sufficient",
+  "audit_path": "tmp/agent_runtime_audit.jsonl",
+  "response_digest16": "cc13833b01dfcb93",
+  "fail_codes": [],
+  "checks": {
+    "response_ok": 1,
+    "egress_ok": 1
+  },
+  "device_profile": {
+    "ok": 1,
+    "ram_avail_gb": 7.43,
+    "cpu_cores": 10,
+    "cpu_usage_pct": 39.4,
+    "battery_pct": 80,
+    "battery_plugged": 1,
+    "cuda_available": 0,
+    "vram_avail_gb": 0.0,
+    "thermal_state": "normal",
+    "recommendation": "high",
+    "probe_errors": []
+  },
+  "router_result": {
+    "primary_selected": "high",
+    "selected": "high",
+    "reason_code": "ram_sufficient",
+    "profile_used": 1,
+    "fallback_used": 0,
+    "fallback_reason": "",
+    "mismatch_with_recommendation": 0
+  },
+  "response_meta": {
+    "ok": true,
+    "task": "summarize",
+    "selected_model": "high",
+    "response_digest16": "cc13833b01dfcb93",
+    "response_len": 81,
+    "policy_code": "ok",
+    "fallback_used": 0,
+    "route_reason": "ram_sufficient",
+    "blocked": false,
+    "sensitive_hit_types": [
+      "account"
+    ]
+  }
+}

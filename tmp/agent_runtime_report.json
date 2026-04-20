@@ -1,0 +1,55 @@
+{
+  "schema_version": "3.0",
+  "generated_at": "2026-04-20T03:25:36.883353+00:00",
+  "execution_mode": "local_e2e",
+  "effective_backend": "local_echo",
+  "quant_mode": "4bit",
+  "fallback_used": 1,
+  "fallback_reason": "ModuleNotFoundError",
+  "product_ready": 0,
+  "selected_model": "light",
+  "route_reason": "ram_low",
+  "audit_path": "tmp/agent_runtime_audit.jsonl",
+  "response_digest16": "9ff02aba9c31a6b4",
+  "fail_codes": [],
+  "checks": {
+    "response_ok": 1,
+    "egress_ok": 1
+  },
+  "device_profile": {
+    "ok": 1,
+    "ram_avail_gb": 3.57,
+    "cpu_cores": 56,
+    "cpu_usage_pct": 0.0,
+    "battery_pct": null,
+    "battery_plugged": null,
+    "cuda_available": 0,
+    "vram_avail_gb": 0.0,
+    "thermal_state": "normal",
+    "recommendation": "light",
+    "probe_errors": []
+  },
+  "router_result": {
+    "primary_selected": "light",
+    "selected": "light",
+    "reason_code": "ram_low",
+    "profile_used": 1,
+    "fallback_used": 0,
+    "fallback_reason": "",
+    "mismatch_with_recommendation": 0
+  },
+  "response_meta": {
+    "ok": true,
+    "task": "summarize",
+    "selected_model": "light",
+    "response_digest16": "9ff02aba9c31a6b4",
+    "response_len": 14,
+    "policy_code": "ok",
+    "fallback_used": 0,
+    "route_reason": "ram_low",
+    "blocked": false,
+    "sensitive_hit_types": [
+      "account"
+    ]
+  }
+}
