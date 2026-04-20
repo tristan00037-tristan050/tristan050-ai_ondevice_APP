@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .audit_logger import AuditLogger
-from .egress_block import verify_no_egress
+from .egress_block import verify_no_egress, block_network_calls
 from .model_loader import apply_fallback, load, probe_device, select_model
 from .privacy_guard import scan
 from .runtime_contracts import AgentResponse, PolicyConfig, RuntimeReport
@@ -78,7 +78,9 @@ class ButlerAgent:
             meta.selected = 'light'
         if require_real_backend and meta.backend != 'transformers':
             raise RuntimeError('real_backend_required')
-        output = self._real_output(model, tokenizer, scan_in.masked_text)
+        # egress 차단 컨텍스트 안에서 추론 실행
+        with block_network_calls():
+            output = self._real_output(model, tokenizer, scan_in.masked_text)
         scan_out = scan(output)
         egress_ok, egress_code = verify_no_egress()
         self.sessions.append_turn(session.session_id, 'assistant', output, task=decision.task, selected_model=router['selected'])
