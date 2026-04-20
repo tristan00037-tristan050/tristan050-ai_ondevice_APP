@@ -147,7 +147,7 @@ def _find_candidates(base_dir: Path, spec: dict[str, Any]) -> list[Path]:
     found: list[Path] = []
     for pattern in spec["patterns"]:
         candidates = sorted(root.rglob(pattern))
-        candidates = [f for f in candidates if f.name not in SELF_EXCLUDE_FILENAMES]
+        candidates = [f for f in candidates if f.name not in SELF_EXCLUDE_FILENAMES and 'fixtures' not in f.parts]
         found.extend(candidates)
     # only files
     uniq: list[Path] = []
