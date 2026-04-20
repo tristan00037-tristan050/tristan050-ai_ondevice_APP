@@ -31,3 +31,4 @@ ondevice-pr-timeline/.local/
 *.log
 packs/small_default/model.onnx.data
 packs/small_default/model.onnx
+__pycache__/
