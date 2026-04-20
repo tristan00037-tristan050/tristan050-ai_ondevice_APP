@@ -34,7 +34,13 @@ class ButlerAgent:
         )
 
     def _real_output(self, model, tokenizer, prompt: str) -> str:
-        import torch
+        # local_echo fallback 경로에서는 torch 불필요 — 조건부 import
+        if model is None or getattr(model, '_is_local_echo', False):
+            return getattr(model, 'generate_text', lambda x: '')(prompt)
+        try:
+            import torch
+        except ImportError:
+            return '[torch unavailable]'
         inputs = self._prepare_inputs(tokenizer, prompt)
         if hasattr(inputs, 'to') and hasattr(model, 'device'):
             try:

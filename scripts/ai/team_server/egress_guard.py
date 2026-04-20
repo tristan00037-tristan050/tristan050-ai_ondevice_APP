@@ -37,6 +37,7 @@ class EgressGuard:
             ("httpx", "Client.request"),
             ("urllib.request", "urlopen"),
             ("socket", "create_connection"),
+            ("socket", "socket"),
             ("websockets", "connect"),
         ]:
             try:
