@@ -1,0 +1,42 @@
+{
+  "TEAM_SERVER_OK": 1,
+  "status": "NORMAL",
+  "offline_only": true,
+  "safe_mode_entered": false,
+  "safe_mode_reason": "",
+  "safe_mode_entered_at": null,
+  "safe_mode_exit_condition": "manual_reset or restart",
+  "collect": {
+    "ok": true,
+    "event_type": "COLLECT",
+    "team_id": "team-red",
+    "result_digest16": "94b8078442a62428",
+    "policy_code": "4ab60812ee7edc66",
+    "error_code": "",
+    "status": "NORMAL"
+  },
+  "rag": {
+    "ok": true,
+    "event_type": "RAG_QUERY",
+    "team_id": "team-red",
+    "result_digest16": "bae8cbef12c8b859",
+    "policy_code": "38abe28a9318b611",
+    "error_code": "",
+    "status": "NORMAL"
+  },
+  "metrics": {
+    "hit_rate": 1.0,
+    "avg_relevance": 0.6,
+    "zero_hit_rate": 0.0,
+    "access_filtered_count": 0,
+    "stale_doc_count": 0,
+    "top1_relevance": 0.6,
+    "rejected_by_policy_count": 0,
+    "query_coverage_bucket": "low",
+    "stale_penalty_applied": false
+  },
+  "audit_events": 4,
+  "model_versions": {
+    "team-red": "team-model-v0"
+  }
+}
