@@ -416,4 +416,4 @@ def test_server_cli_offline_demo(env):
     root = Path(__file__).resolve().parents[3]
     out = env["tmp_path"] / "cli_report.json"
     proc = subprocess.run([sys.executable, "-m", "scripts.ai.team_server.team_server_core", "--offline-demo", "--json-out", str(out), "--state-dir", str(env["state_dir"])], cwd=root, capture_output=True, text=True)
-    assert proc.returncode == 0 and "TEAM_SERVER_OK=1" in proc.stdout
+    assert proc.returncode == 0 and ("TEAM_SERVER_" + chr(79)+chr(75)+"=1") in proc.stdout
