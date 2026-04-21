@@ -53,6 +53,10 @@ class FinetuneTrigger:
         count = self.team_counts.get(team_id, 0)
         if count < self.threshold:
             return None
+        # 이미 트리거된 팀은 threshold 배수 단위로만 재트리거
+        triggered = len(self.jobs_by_team.get(team_id, []))
+        if triggered > 0 and count < self.threshold * (triggered + 1):
+            return None
         next_version = f"team-model-v{len(self.jobs_by_team.get(team_id, [])) + 1}"
         job = FinetuneJob(
             job_id=digest16({"team": team_id, "count": count, "version": next_version, "ts": utcnow_iso()}),
