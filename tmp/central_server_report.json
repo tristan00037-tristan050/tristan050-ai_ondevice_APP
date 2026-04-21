@@ -1,0 +1,18 @@
+{
+  "approved_version_count": 0,
+  "deploy_block_count": 0,
+  "egress_block_count": 0,
+  "execution_mode": "offline-demo",
+  "latest_model_version": "model-2",
+  "learning_jobs_count": 2,
+  "pending_version_count": 0,
+  "product_ready_reason": "offline_control_plane_ready",
+  "safe_mode_block_count": 0,
+  "safe_mode_entered": false,
+  "safe_mode_entered_at": null,
+  "safe_mode_exit_condition": "manual_reset or restart",
+  "safe_mode_last_reason": "",
+  "safe_mode_reason": "",
+  "schema_version": "central_server_v3",
+  "server_status": "NORMAL"
+}
