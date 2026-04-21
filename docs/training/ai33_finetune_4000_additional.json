@@ -1,0 +1,35 @@
+{
+  "training_id": "AI-33",
+  "date": "2026-04-21",
+  "base_model": "Qwen3-4B",
+  "base_checkpoint": "butler_model_qwen3_4b_2026-04-19/checkpoint-5000",
+  "additional_data": {
+    "total": 4000,
+    "dialogue": 1000,
+    "tool_call": 1500,
+    "rewrite": 857,
+    "summarize": 500,
+    "policy_sensitive": 143
+  },
+  "training": {
+    "steps_completed": 3000,
+    "max_steps": 4000,
+    "epochs": 12,
+    "batch_size": 4,
+    "gradient_accumulation": 4,
+    "learning_rate": 0.0002,
+    "bf16": true
+  },
+  "results": {
+    "initial_loss": 1.32,
+    "final_loss": 0.064,
+    "loss_reduction_pct": 95.2
+  },
+  "infrastructure": {
+    "provider": "RunPod",
+    "gpu": "A100 SXM 80GB",
+    "cost_usd": 5.0,
+    "duration_hours": 3.4
+  },
+  "output": "butler_output_4000_2026-04-21"
+}
