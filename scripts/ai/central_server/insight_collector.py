@@ -20,7 +20,9 @@ class InsightCollector:
         self.by_team[insight.team_id] += insight.record_count
         self.total_count += insight.record_count
         self.last_ts[insight.team_id] = insight.timestamp
-        if self.learner and self.total_count >= self.threshold:
+        # threshold 배수 단위로만 트리거 — 연속 재트리거 방지
+        triggered = len(getattr(self.learner, "jobs", []))
+        if self.learner and self.total_count >= self.threshold * (triggered + 1):
             self.learner.check_and_trigger(list(self.by_team.keys()), self.total_count)
         return CollectResult(ok=True, team_id=insight.team_id, count=self.by_team[insight.team_id], data_digest16=insight.data_digest16)
 

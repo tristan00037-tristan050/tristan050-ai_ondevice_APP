@@ -204,8 +204,16 @@ def main():
     parser.add_argument("--json-out", type=str, default="")
     parser.add_argument("--state-dir", type=str, default="")
     args = parser.parse_args()
-    base_dir = Path(args.json_out).resolve().parent.parent if args.json_out else Path.cwd()
-    server = CentralServer(base_dir)
+    if args.state_dir:
+        base_dir = Path(args.state_dir).resolve().parent
+        state_dir = Path(args.state_dir).resolve()
+    elif args.json_out:
+        base_dir = Path(args.json_out).resolve().parent.parent
+        state_dir = base_dir / "tmp" / "central_state"
+    else:
+        base_dir = Path.cwd()
+        state_dir = base_dir / "tmp" / "central_state"
+    server = CentralServer(base_dir, state_dir=state_dir)
     if args.offline_demo:
         from .central_contracts import EventType
         server.run({"route": EventType.INSIGHT_COLLECT.value, "payload": {
