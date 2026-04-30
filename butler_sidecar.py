@@ -27,7 +27,11 @@ try:
 except ImportError:
     _FASTAPI_AVAILABLE = False
 
-from butler_pc_core.router.task_budget_router import classify_file, BudgetResult
+from butler_pc_core.router.task_budget_router import (
+    classify_file,
+    BudgetResult,
+    NotAFileError,
+)
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -65,17 +69,27 @@ if _FASTAPI_AVAILABLE:
         """
         파일 경로를 받아 처리 가능 여부와 예상 비용을 반환한다.
 
-        - **tier**: S / M / L / XL / Media-L
+        - **tier**: S / M / L / XL / Media-L / empty
         - **size_kb**: 파일 크기 (KB)
         - **estimated_chunks**: 예상 청크 수
         - **estimated_seconds**: 예상 처리 시간(초)
-        - **blocked**: XL일 때 True
+        - **blocked**: XL 또는 empty일 때 True
         - **block_reason**: 차단 사유 (Team Hub 안내 포함)
         """
         try:
             result: BudgetResult = classify_file(req.file_path)
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except IsADirectoryError:
+            raise HTTPException(
+                status_code=422,
+                detail="폴더가 아닌 개별 파일을 첨부해 주세요.",
+            )
+        except NotAFileError:
+            raise HTTPException(
+                status_code=422,
+                detail="원본 파일을 직접 첨부해 주세요 (심볼릭 링크 불가).",
+            )
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"분류 오류: {exc}") from exc
 
@@ -131,6 +145,10 @@ else:
                     })
                 except FileNotFoundError as exc:
                     self._send_json(404, {"detail": str(exc)})
+                except IsADirectoryError:
+                    self._send_json(422, {"detail": "폴더가 아닌 개별 파일을 첨부해 주세요."})
+                except NotAFileError:
+                    self._send_json(422, {"detail": "원본 파일을 직접 첨부해 주세요 (심볼릭 링크 불가)."})
                 except (KeyError, json.JSONDecodeError) as exc:
                     self._send_json(400, {"detail": f"잘못된 요청: {exc}"})
                 except Exception as exc:
