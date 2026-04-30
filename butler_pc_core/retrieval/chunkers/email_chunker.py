@@ -6,7 +6,7 @@ import re
 from .base import BaseChunker, Chunk
 
 _HEADER_FIELDS = re.compile(
-    r"(?im)^(From|To|Cc|Subject|Date|Reply-To)\s*:\s*.+$"
+    r"(?im)^(?:From|To|Cc|Bcc|Subject|Date|Reply-To)\s*:.*$"
 )
 _QUOTED_LINES = re.compile(r"(?m)^>.*$")
 _THREAD_SEP = re.compile(
