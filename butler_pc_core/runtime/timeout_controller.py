@@ -57,23 +57,27 @@ def _safe_json_default(obj: Any) -> Any:
 # ---------------------------------------------------------------------------
 # 예외
 # ---------------------------------------------------------------------------
-class HardTimeoutError(RuntimeError):
-    """전체 작업 180초 초과."""
-
-
-class ChunkTimeoutError(RuntimeError):
-    """단일 청크 45초 초과."""
-
-
-class TaskCancelledError(RuntimeError):
-    """사용자 또는 외부 신호로 작업이 취소됨."""
-
-
 class PartialResultError(RuntimeError):
     """partial_result.json 이 생성된 뒤 발생하는 중단 신호."""
     def __init__(self, message: str, partial_path: Path):
         super().__init__(message)
         self.partial_path = partial_path
+
+
+class HardTimeoutError(PartialResultError):
+    """전체 작업 hard_timeout(180초) 초과."""
+
+
+class ChunkTimeoutError(PartialResultError):
+    """단일 청크 chunk_timeout(45초) 초과."""
+
+
+class UserCancelledError(PartialResultError):
+    """사용자가 명시적으로 취소."""
+
+
+# 하위 호환 별칭
+TaskCancelledError = UserCancelledError
 
 
 # ---------------------------------------------------------------------------
@@ -224,15 +228,14 @@ class TimeoutController:
         path = self._save_partial()
 
         if reason == "hard_timeout":
-            raise PartialResultError(
+            raise HardTimeoutError(
                 f"[hard_timeout] {self.hard_timeout}초 초과 → {path}", path
             )
         if reason == "chunk_timeout":
-            raise PartialResultError(
+            raise ChunkTimeoutError(
                 f"[chunk_timeout] {self.chunk_timeout}초 초과 → {path}", path
             )
-        # cancelled
-        raise PartialResultError(f"[cancelled] 작업 취소 → {path}", path)
+        raise UserCancelledError(f"[cancelled] 작업 취소 → {path}", path)
 
     def _save_partial(self) -> Path:
         self.output_dir.mkdir(parents=True, exist_ok=True)

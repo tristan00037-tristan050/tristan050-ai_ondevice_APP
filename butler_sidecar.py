@@ -41,12 +41,19 @@ from butler_pc_core.router.task_budget_router import (
 from butler_pc_core.runtime.timeout_controller import (
     TimeoutController,
     PartialResultError,
+    HardTimeoutError,
+    ChunkTimeoutError,
+    UserCancelledError,
     HARD_TIMEOUT_SEC,
 )
 
 # task_id → TimeoutController マップ (キャンセル用)
 _active_controllers: dict[str, TimeoutController] = {}
 _controllers_lock = asyncio.Lock() if _FASTAPI_AVAILABLE else None  # type: ignore[assignment]
+
+
+def _stub_chunk_work(chunk_index: int) -> None:
+    """청크 처리 스텁 — Phase 4에서 실제 파이프라인 연결 예정."""
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -159,24 +166,23 @@ if _FASTAPI_AVAILABLE:
             last_event_time = time.monotonic()
 
             for i in range(total):
-                ctrl.check_hard_timeout()
+                ctrl.check_hard_timeout()  # 빠른 하드 타임아웃 검사 (타임아웃 없이)
 
                 chunk_start = time.monotonic()
-                # 각 청크마다 heartbeat 확인
                 async for frame in _heartbeat_if_idle():
                     yield frame
 
-                # 실제 청크 처리는 executor에서 수행 (blocking 작업 대비)
+                # 실제 청크 처리 함수를 chunk_timeout 안에 강제 종료 (P1 수정)
                 loop = asyncio.get_event_loop()
                 try:
                     await asyncio.wait_for(
-                        loop.run_in_executor(None, ctrl.check_hard_timeout),
+                        loop.run_in_executor(None, _stub_chunk_work, i),
                         timeout=ctrl.chunk_timeout,
                     )
                 except asyncio.TimeoutError:
-                    ctrl.cancel()
+                    ctrl._abort("chunk_timeout")  # ChunkTimeoutError 발생
 
-                ctrl.check_hard_timeout()
+                ctrl.check_hard_timeout()  # 청크 완료 후 하드 타임아웃 재확인
 
                 chunk_elapsed = time.monotonic() - chunk_start
                 elapsed_total = time.monotonic() - start
@@ -207,25 +213,30 @@ if _FASTAPI_AVAILABLE:
                 "total_elapsed_sec": round(time.monotonic() - start, 2),
             })
 
-        except PartialResultError as exc:
-            reason = getattr(exc, "partial_path", None)
-            partial = str(reason) if reason else ""
-            abort = getattr(exc, "args", ("cancelled",))[0]
-            if "timeout" in str(abort).lower() or "hard" in str(abort).lower():
-                yield _sse("cancelled", {
-                    "reason": "hard_timeout",
-                    "partial_path": partial,
-                })
-            elif "chunk" in str(abort).lower():
-                yield _sse("cancelled", {
-                    "reason": "chunk_timeout",
-                    "partial_path": partial,
-                })
-            else:
-                yield _sse("cancelled", {
-                    "reason": "user_cancel",
-                    "partial_path": partial,
-                })
+        except ChunkTimeoutError as exc:  # 구체 → 일반 순서 (P2 수정)
+            yield _sse("cancelled", {
+                "reason": "chunk_timeout",
+                "partial_path": str(exc.partial_path),
+                "message": str(exc),
+            })
+        except HardTimeoutError as exc:
+            yield _sse("cancelled", {
+                "reason": "hard_timeout",
+                "partial_path": str(exc.partial_path),
+                "message": str(exc),
+            })
+        except UserCancelledError as exc:
+            yield _sse("cancelled", {
+                "reason": "user_cancel",
+                "partial_path": str(exc.partial_path),
+                "message": str(exc),
+            })
+        except asyncio.TimeoutError as exc:
+            yield _sse("cancelled", {
+                "reason": "unknown_timeout",
+                "partial_path": "",
+                "message": str(exc),
+            })
         except Exception as exc:  # noqa: BLE001
             yield _sse("error", {
                 "error_class": type(exc).__name__,
