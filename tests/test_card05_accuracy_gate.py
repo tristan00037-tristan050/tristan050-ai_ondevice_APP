@@ -79,3 +79,36 @@ def test_adv_empty_description_safe_handling():
     # 특수문자 포함 설명도 안전 처리
     result_special = classify("!@#$% ???", -50000, codes)
     assert isinstance(result_special, str)
+
+
+def test_adv_accounting_codes_all_unique():
+    """결함 2 회귀: 모든 계정과목 코드가 유일해야 한다."""
+    data = json.loads(_CODES.read_text(encoding="utf-8"))
+    codes = [v["code"] for k, v in data.items() if not k.startswith("_")]
+    duplicates = [c for c in codes if codes.count(c) > 1]
+    assert len(duplicates) == 0, (
+        f"중복 코드 발견: {set(duplicates)} — 집계 시 항목이 합쳐지는 위험"
+    )
+    # 4자리 숫자 형식 검증
+    for name, info in data.items():
+        if name.startswith("_"):
+            continue
+        code = info["code"]
+        assert len(code) == 4 and code.isdigit(), (
+            f"{name}의 코드 '{code}'가 4자리 숫자 형식 아님"
+        )
+
+
+def test_boundary_account_code_aggregation_no_collision():
+    """코드→이름 역매핑이 1:1이어야 집계 결과가 정확하다."""
+    data = json.loads(_CODES.read_text(encoding="utf-8"))
+    code_to_name: dict[str, str] = {}
+    for name, info in data.items():
+        if name.startswith("_"):
+            continue
+        code = info["code"]
+        assert code not in code_to_name, (
+            f"코드 {code}가 '{code_to_name[code]}'와 '{name}' 둘 다에 매핑 — "
+            f"집계 오류 위험"
+        )
+        code_to_name[code] = name
