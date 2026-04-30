@@ -1,0 +1,105 @@
+card_id: "card_06_fill_external_form"
+version: "1.0.0"
+title: "상대 양식에 우리 자료 채우기"
+description: |
+  빈 외부 양식의 각 항목에 우리 보유 자료를 자동으로 매핑·기입한다.
+
+input_schema:
+  blank_form:
+    type: string
+    description: "채워야 할 외부 빈 양식 (텍스트, 항목 레이블 포함)"
+    required: true
+  our_data:
+    type: object
+    description: "우리 회사 보유 데이터 사전 (키: 항목명, 값: 내용)"
+    required: true
+  form_type:
+    type: string
+    description: "양식 유형 힌트 (예: 입찰 참가신청서, 납품 확인서)"
+    required: false
+  strict_mode:
+    type: boolean
+    description: "True: 매핑 불확실 항목은 절대 채우지 않음. False: MEDIUM 신뢰도 항목도 채움."
+    default: true
+    required: false
+
+output_schema:
+  filled_form:
+    type: string
+    description: "기입 완료된 양식 (마크다운 테이블 또는 원본 형식 유지)"
+  field_mapping:
+    type: array
+    items:
+      type: object
+      properties:
+        form_field:
+          type: string
+        matched_data_key:
+          type: string
+        filled_value:
+          type: string
+        confidence:
+          type: string
+          enum: [HIGH, MEDIUM, LOW, UNFILLED]
+        reason:
+          type: string
+  unfilled_fields:
+    type: array
+    items: string
+    description: "자료 없어 채우지 못한 항목 목록"
+  review_required:
+    type: array
+    items: string
+    description: "담당자가 직접 확인·수정해야 할 항목"
+
+system_prompt: |
+  당신은 양식 자동 기입 전문 사무 보조 AI입니다.
+
+  규칙
+  ----
+  1. 양식의 각 빈칸(항목)을 식별하고, our_data 에서 가장 적합한 값을 찾아 기입하십시오.
+  2. 항목명과 데이터 키가 정확히 일치하면 confidence=HIGH.
+  3. 의미는 같으나 표현이 다르면 confidence=MEDIUM.
+  4. strict_mode=True 일 때 MEDIUM 이하는 UNFILLED 처리하고 unfilled_fields 에 추가.
+  5. 수치·날짜는 our_data 에서 그대로 가져오고 절대 수정하지 마십시오.
+  6. 환각 금지 — our_data 에 없는 값을 임의 생성하지 마십시오.
+  7. filled_form 은 원본 양식 구조를 유지하되 기입된 값만 교체하십시오.
+
+user_prompt_template: |
+  ## 빈 외부 양식
+  {{ blank_form }}
+
+  ## 우리 회사 보유 데이터
+  {{ our_data | tojson(indent=2) }}
+
+  {% if form_type %}
+  ## 양식 유형
+  {{ form_type }}
+  {% endif %}
+
+  strict_mode: {{ strict_mode }}
+
+  위 양식에 우리 데이터를 채워 JSON 형식으로 출력하십시오.
+
+examples:
+  - input:
+      form_type: "납품 확인서"
+      blank_form: |
+        납품업체명: ___
+        사업자등록번호: ___
+        납품일자: ___
+        납품 품목: ___
+      our_data:
+        회사명: "주식회사 버틀러"
+        사업자번호: "123-45-67890"
+        납품일: "2026-04-30"
+        품목: "소프트웨어 라이선스"
+      strict_mode: true
+    expected_output:
+      filled_form: |
+        납품업체명: 주식회사 버틀러
+        사업자등록번호: 123-45-67890
+        납품일자: 2026-04-30
+        납품 품목: 소프트웨어 라이선스
+      unfilled_fields: []
+      review_required: []

@@ -1,0 +1,81 @@
+card_id: "card_02_external_to_our_format"
+version: "1.0.0"
+title: "남의 문서 → 우리 양식 보고서"
+description: |
+  외부에서 받은 문서를 우리 회사 보고서 양식에 맞게 재작성한다.
+
+input_schema:
+  external_document:
+    type: string
+    description: "외부 문서 전문 (텍스트 추출본)"
+    required: true
+  our_template:
+    type: string
+    description: "우리 회사 보고서 양식 (섹션 헤더 포함 텍스트)"
+    required: true
+  document_type:
+    type: string
+    description: "문서 유형 (예: 견적서, 제안서, 회의록)"
+    required: false
+
+output_schema:
+  filled_report:
+    type: string
+    description: "양식이 채워진 완성 보고서 (마크다운)"
+  missing_sections:
+    type: array
+    items: string
+    description: "외부 문서에 정보가 없어 채우지 못한 섹션 목록"
+  notes:
+    type: string
+    description: "변환 시 판단이 필요했던 사항 메모"
+
+system_prompt: |
+  당신은 문서 변환 전문 사무 보조 AI입니다.
+
+  규칙
+  ----
+  1. 우리 양식의 모든 섹션을 유지하십시오.
+  2. 외부 문서의 내용을 우리 양식 각 섹션에 알맞게 재배치하십시오.
+  3. 원문에 없는 내용은 채우지 말고 missing_sections 에 기재하십시오.
+  4. 수치·날짜·고유명사는 원문 그대로 사용하십시오 (변형 금지).
+  5. 격식체(합니다/습니다) 사용.
+  6. 출력: filled_report(마크다운) + missing_sections(배열) + notes(문자열).
+
+user_prompt_template: |
+  ## 외부 문서
+  {{ external_document }}
+
+  ## 우리 회사 보고서 양식
+  {{ our_template }}
+
+  {% if document_type %}
+  ## 문서 유형
+  {{ document_type }}
+  {% endif %}
+
+  위 외부 문서를 우리 양식에 맞게 변환하여 JSON으로 출력하십시오.
+
+examples:
+  - input:
+      document_type: "견적서"
+      external_document: "공급사: ABC Corp / 품목: 서버 장비 / 단가: 3,500,000원 / 납기: 3주"
+      our_template: |
+        # 구매 검토 보고서
+        ## 1. 공급업체 정보
+        ## 2. 품목 및 금액
+        ## 3. 납기 일정
+        ## 4. 검토 의견
+    expected_output:
+      filled_report: |
+        # 구매 검토 보고서
+        ## 1. 공급업체 정보
+        - 업체명: ABC Corp
+        ## 2. 품목 및 금액
+        - 서버 장비: 3,500,000원
+        ## 3. 납기 일정
+        - 발주 후 3주
+        ## 4. 검토 의견
+        (작성 필요)
+      missing_sections: ["4. 검토 의견"]
+      notes: "공급사 사업자번호 및 담당자 정보 없음"

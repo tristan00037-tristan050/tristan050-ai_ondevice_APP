@@ -1,0 +1,106 @@
+card_id: "card_05_bank_to_accounting"
+version: "1.0.0"
+title: "통장·거래내역 → 회계 분류"
+description: |
+  통장 사본 또는 거래내역 텍스트를 읽어 항목별 회계 분류 결과를 반환한다.
+
+security_note: |
+  본 카드는 민감 금융 데이터를 처리합니다.
+  - 온디바이스(로컬) 처리만 허용.
+  - 네트워크 전송 절대 금지.
+  - 처리 후 원문 데이터 즉시 폐기.
+
+input_schema:
+  transaction_text:
+    type: string
+    description: "거래내역 텍스트 (날짜 / 적요 / 입출금액 포함)"
+    required: true
+  account_code_map:
+    type: object
+    description: "계정과목 매핑 사전 (키: 키워드, 값: 계정과목코드)"
+    required: false
+  currency:
+    type: string
+    description: "통화 코드 (기본: KRW)"
+    default: "KRW"
+    required: false
+
+output_schema:
+  classified_rows:
+    type: array
+    items:
+      type: object
+      properties:
+        date:
+          type: string
+          description: "거래 날짜 (YYYY-MM-DD)"
+        description:
+          type: string
+          description: "적요"
+        amount:
+          type: number
+          description: "금액 (출금: 음수, 입금: 양수)"
+        account_code:
+          type: string
+          description: "분류된 계정과목 코드"
+        account_name:
+          type: string
+          description: "계정과목명"
+        confidence:
+          type: string
+          enum: [HIGH, MEDIUM, LOW]
+          description: "분류 신뢰도"
+        note:
+          type: string
+          description: "분류 근거 또는 불확실 사유"
+  unclassified:
+    type: array
+    items: string
+    description: "분류하지 못한 행 원문 목록"
+  summary:
+    type: object
+    properties:
+      total_in:
+        type: number
+      total_out:
+        type: number
+      row_count:
+        type: integer
+
+system_prompt: |
+  당신은 회계 분류 전문 사무 보조 AI입니다.
+
+  규칙
+  ----
+  1. 각 거래 행을 date / description / amount / account_code / account_name / confidence / note 로 변환하십시오.
+  2. 출금은 음수(예: -50000), 입금은 양수(예: 100000).
+  3. 분류 근거가 명확하면 confidence=HIGH, 키워드 추정은 MEDIUM, 판단 불가는 LOW.
+  4. 분류 불가 행은 unclassified 에 원문 그대로 추가하십시오.
+  5. 수치를 임의로 변경하거나 반올림하지 마십시오.
+  6. 계정과목은 account_code_map 이 제공된 경우 해당 매핑을 우선 사용하십시오.
+  7. 환각 금지 — 원문에 없는 거래를 생성하지 마십시오.
+
+user_prompt_template: |
+  ## 거래내역
+  {{ transaction_text }}
+
+  {% if account_code_map %}
+  ## 계정과목 매핑
+  {{ account_code_map | tojson(indent=2) }}
+  {% endif %}
+
+  통화: {{ currency }}
+
+  위 거래내역을 분류하여 JSON 형식으로 출력하십시오.
+
+default_account_codes:
+  급여: {code: "4101", name: "급여"}
+  임차료: {code: "8201", name: "임차료"}
+  수도광열비: {code: "8301", name: "수도광열비"}
+  통신비: {code: "8401", name: "통신비"}
+  복리후생비: {code: "8501", name: "복리후생비"}
+  접대비: {code: "8601", name: "접대비"}
+  소모품비: {code: "8701", name: "소모품비"}
+  광고선전비: {code: "8801", name: "광고선전비"}
+  매출: {code: "1001", name: "매출"}
+  이자비용: {code: "9101", name: "이자비용"}

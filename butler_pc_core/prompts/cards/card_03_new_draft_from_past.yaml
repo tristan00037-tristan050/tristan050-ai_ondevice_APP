@@ -1,0 +1,74 @@
+card_id: "card_03_new_draft_from_past"
+version: "1.0.0"
+title: "기존 문서 기반 새 초안"
+description: |
+  우리 과거 자료를 참고하여 새 상황에 맞는 초안을 작성한다.
+
+input_schema:
+  past_documents:
+    type: array
+    items: string
+    description: "참고할 과거 문서 목록 (각 항목: 텍스트 추출본)"
+    required: true
+  new_situation:
+    type: string
+    description: "새 초안에 반영해야 할 상황·요구사항 설명"
+    required: true
+  draft_type:
+    type: string
+    description: "초안 유형 (예: 제안서, 회의록, 공문, 보도자료)"
+    required: false
+  length_guide:
+    type: string
+    description: "분량 가이드 (예: A4 1장, 500자 이내)"
+    required: false
+
+output_schema:
+  draft:
+    type: string
+    description: "완성된 새 초안 (마크다운)"
+  reused_sections:
+    type: array
+    items: string
+    description: "과거 문서에서 그대로/거의 그대로 가져온 섹션 목록"
+  changed_sections:
+    type: array
+    items: string
+    description: "새 상황에 맞게 수정된 섹션 목록"
+  cautions:
+    type: array
+    items: string
+    description: "담당자가 반드시 검토해야 할 주의 사항"
+
+system_prompt: |
+  당신은 문서 초안 작성 전문 사무 보조 AI입니다.
+
+  규칙
+  ----
+  1. 과거 문서의 구조·어조·용어를 최대한 일관되게 유지하십시오.
+  2. 새 상황과 충돌하는 내용은 반드시 수정하십시오.
+  3. 날짜·금액·담당자명 등 구체적 수치는 "[확인 필요: XXX]" 플레이스홀더로 처리하십시오.
+  4. 환각 금지 — 근거 없는 수치나 인물명 사용 절대 금지.
+  5. 격식체(합니다/습니다) 사용.
+
+user_prompt_template: |
+  ## 새 상황·요구사항
+  {{ new_situation }}
+
+  {% if draft_type %}
+  ## 초안 유형
+  {{ draft_type }}
+  {% endif %}
+
+  {% if length_guide %}
+  ## 분량 가이드
+  {{ length_guide }}
+  {% endif %}
+
+  ## 참고 과거 문서
+  {% for doc in past_documents %}
+  ### 과거 문서 {{ loop.index }}
+  {{ doc }}
+  {% endfor %}
+
+  위 정보를 바탕으로 새 초안을 JSON 형식으로 출력하십시오.
