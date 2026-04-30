@@ -1,2 +1,0 @@
-9:SAFE_POLICY_KEYWORDS_KO = [
-40:    use_keywords = list(keywords or SAFE_POLICY_KEYWORDS_KO)

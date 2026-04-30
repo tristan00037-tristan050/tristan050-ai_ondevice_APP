@@ -1,8 +1,0 @@
-============================================================
-  버틀러 ONNX/MNN 변환 파이프라인
-  버전: butler_model_small_v1, dry_run: True
-============================================================
-ONNX_VERIFY_OK=1
-MNN_VERIFY_OK=1
-매니페스트 저장: tmp/conversion_manifest.json
-CONVERT_DRYRUN_OK=1
