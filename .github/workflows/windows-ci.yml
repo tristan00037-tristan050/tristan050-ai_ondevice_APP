@@ -23,7 +23,7 @@ jobs:
       - name: Checkout (LFS 포함)
         uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: false
 
       - name: Python 3.11 설치
         uses: actions/setup-python@v5
