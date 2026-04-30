@@ -160,14 +160,4 @@ examples:
         total_out: -80000
         row_count: 1
 
-default_account_codes:
-  급여: {code: "4101", name: "급여"}
-  임차료: {code: "8201", name: "임차료"}
-  수도광열비: {code: "8301", name: "수도광열비"}
-  통신비: {code: "8401", name: "통신비"}
-  복리후생비: {code: "8501", name: "복리후생비"}
-  접대비: {code: "8601", name: "접대비"}
-  소모품비: {code: "8701", name: "소모품비"}
-  광고선전비: {code: "8801", name: "광고선전비"}
-  매출: {code: "1001", name: "매출"}
-  이자비용: {code: "9101", name: "이자비용"}
+default_account_codes_ref: "butler_pc_core/data/accounting_codes/default_v2.json"
