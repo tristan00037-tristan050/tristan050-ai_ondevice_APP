@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -124,6 +125,12 @@ def main() -> None:
     ap.add_argument("--val")
     ap.add_argument("--test")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--json-out",
+        type=str,
+        default=None,
+        help="검증 결과를 JSON 파일로 출력할 경로",
+    )
     args = ap.parse_args()
     if args.dry_run:
         print("TRAIN_EVAL_INPUT_SANITY_V1_OK=1")
@@ -139,8 +146,12 @@ def main() -> None:
     all_ok = True
     digest_sets = {}
     all_rows = {}
+    split_results: dict[str, dict] = {}
+    errors_list: list[str] = []
+
     for split_name, path in [("train", args.train), ("validation", args.val), ("test", args.test)]:
         if not path:
+            split_results[split_name] = {"path": path, "count": 0, "valid": True}
             continue
         stats, digests, rows = check_file(path, split_name)
         digest_sets[split_name] = digests
@@ -153,10 +164,13 @@ def main() -> None:
             stats["wrong_split"] == 0 and
             stats["tool_call_parse_fail"] == 0
         )
+        split_results[split_name] = {"path": str(path), "count": stats["total"], "valid": ok}
         status = "OK" if ok else "FAIL"
         print(f"[{split_name}] {status} total={stats['total']} parse_err={stats['parse_errors']} empty_prompt={stats['empty_prompt']} dup={stats['duplicate_digests']} wrong_split={stats['wrong_split']}")
         if not ok:
             all_ok = False
+            errors_list.append(f"{split_name}: parse_err={stats['parse_errors']} empty_prompt={stats['empty_prompt']} dup={stats['duplicate_digests']}")
+
     leakage_ok = check_leakage(digest_sets)
     print(f"[leakage] {'OK' if leakage_ok else 'FAIL'}")
     global_stats = compute_global_stats(digest_sets, all_rows)
@@ -168,6 +182,24 @@ def main() -> None:
     print(f"  TOOL_CALL_COMPLETION_DUP_RATE: {global_stats['TOOL_CALL_COMPLETION_DUP_RATE']}")
     if not leakage_ok:
         all_ok = False
+        errors_list.append("leakage: digest overlap detected between splits")
+
+    if args.json_out:
+        result = {
+            "schema_version": "verify_train_input.v1",
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "train": split_results.get("train", {"path": str(args.train), "count": 0, "valid": False}),
+            "val": split_results.get("validation", {"path": str(args.val), "count": 0, "valid": True}),
+            "test": split_results.get("test", {"path": str(args.test), "count": 0, "valid": True}),
+            "overall_ok": all_ok,
+            "errors": errors_list,
+        }
+        Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.json_out).write_text(
+            json.dumps(result, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
     if all_ok:
         print("TRAIN_EVAL_INPUT_SANITY_V1_OK=1")
         print("DATASET_SPLIT_NO_LEAKAGE_OK=1")
