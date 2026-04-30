@@ -81,8 +81,17 @@ user_prompt_template: |
 
   위 양식에 우리 데이터를 채워 JSON 형식으로 출력하십시오.
 
+forbidden_actions:
+  - our_data 에 없는 값을 임의로 생성하여 양식에 채우는 것
+  - strict_mode=True 일 때 MEDIUM·LOW 신뢰도 항목을 채우는 것
+  - 수치·날짜를 our_data 원문과 다르게 변환하거나 반올림하는 것
+  - confidence 를 HIGH/MEDIUM/LOW/UNFILLED 이외의 값으로 반환하는 것
+  - unfilled_fields 목록을 임의로 비워 미기입 항목을 숨기는 것
+  - 마크다운 코드 블록(```) 밖에서 JSON 외 텍스트를 출력하는 것
+
 examples:
-  - input:
+  - label: best
+    input:
       form_type: "납품 확인서"
       blank_form: |
         납품업체명: ___
@@ -101,5 +110,75 @@ examples:
         사업자등록번호: 123-45-67890
         납품일자: 2026-04-30
         납품 품목: 소프트웨어 라이선스
+      field_mapping:
+        - form_field: "납품업체명"
+          matched_data_key: "회사명"
+          filled_value: "주식회사 버틀러"
+          confidence: HIGH
+          reason: "의미 일치 (납품업체 = 회사)"
+        - form_field: "사업자등록번호"
+          matched_data_key: "사업자번호"
+          filled_value: "123-45-67890"
+          confidence: HIGH
+          reason: "키 의미 동일"
+        - form_field: "납품일자"
+          matched_data_key: "납품일"
+          filled_value: "2026-04-30"
+          confidence: HIGH
+          reason: "키 의미 동일"
+        - form_field: "납품 품목"
+          matched_data_key: "품목"
+          filled_value: "소프트웨어 라이선스"
+          confidence: HIGH
+          reason: "키 의미 동일"
       unfilled_fields: []
       review_required: []
+
+  - label: edge
+    input:
+      form_type: "입찰 참가신청서"
+      blank_form: |
+        법인명: ___
+        대표이사: ___
+        설립일: ___
+        자본금: ___
+        입찰 참가 품목: ___
+      our_data:
+        회사명: "주식회사 버틀러"
+        납품일: "2026-04-30"
+      strict_mode: true
+    expected_output:
+      filled_form: |
+        법인명: 주식회사 버틀러
+        대표이사: ___
+        설립일: ___
+        자본금: ___
+        입찰 참가 품목: ___
+      field_mapping:
+        - form_field: "법인명"
+          matched_data_key: "회사명"
+          filled_value: "주식회사 버틀러"
+          confidence: HIGH
+          reason: "법인명 = 회사명"
+        - form_field: "대표이사"
+          matched_data_key: ""
+          filled_value: ""
+          confidence: UNFILLED
+          reason: "our_data 에 대표이사 정보 없음"
+        - form_field: "설립일"
+          matched_data_key: ""
+          filled_value: ""
+          confidence: UNFILLED
+          reason: "our_data 에 설립일 정보 없음"
+        - form_field: "자본금"
+          matched_data_key: ""
+          filled_value: ""
+          confidence: UNFILLED
+          reason: "our_data 에 자본금 정보 없음"
+        - form_field: "입찰 참가 품목"
+          matched_data_key: ""
+          filled_value: ""
+          confidence: UNFILLED
+          reason: "our_data 에 입찰 품목 정보 없음"
+      unfilled_fields: ["대표이사", "설립일", "자본금", "입찰 참가 품목"]
+      review_required: ["대표이사", "설립일", "자본금", "입찰 참가 품목"]

@@ -56,8 +56,17 @@ user_prompt_template: |
 
   위 외부 문서를 우리 양식에 맞게 변환하여 JSON으로 출력하십시오.
 
+forbidden_actions:
+  - 외부 문서에 없는 내용을 양식 빈칸에 임의로 채우는 것
+  - 수치·날짜·고유명사를 원문과 다르게 변형하는 것
+  - missing_sections 없이 빈 섹션을 공란으로 남기는 것
+  - 우리 양식 섹션 헤더를 임의로 삭제하거나 추가하는 것
+  - 비격식체(해요/해/임) 사용 — 격식체(합니다/습니다) 강제
+  - 마크다운 코드 블록(```) 밖에서 JSON 외 텍스트를 출력하는 것
+
 examples:
-  - input:
+  - label: best
+    input:
       document_type: "견적서"
       external_document: "공급사: ABC Corp / 품목: 서버 장비 / 단가: 3,500,000원 / 납기: 3주"
       our_template: |
@@ -79,3 +88,28 @@ examples:
         (작성 필요)
       missing_sections: ["4. 검토 의견"]
       notes: "공급사 사업자번호 및 담당자 정보 없음"
+
+  - label: edge
+    input:
+      document_type: "회의록"
+      external_document: "Meeting notes — 장소: 본사 2층. 참석자 명단 없음. 결정사항 없음."
+      our_template: |
+        # 회의록
+        ## 1. 일시 및 장소
+        ## 2. 참석자
+        ## 3. 안건
+        ## 4. 결정사항 및 후속조치
+    expected_output:
+      filled_report: |
+        # 회의록
+        ## 1. 일시 및 장소
+        - 장소: 본사 2층
+        - 일시: (작성 필요)
+        ## 2. 참석자
+        (작성 필요)
+        ## 3. 안건
+        (작성 필요)
+        ## 4. 결정사항 및 후속조치
+        (작성 필요)
+      missing_sections: ["1. 일시", "2. 참석자", "3. 안건", "4. 결정사항 및 후속조치"]
+      notes: "외부 문서에 일시·참석자·안건·결정사항이 모두 누락. 각 섹션 직접 작성 필요."
