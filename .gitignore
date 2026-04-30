@@ -65,3 +65,27 @@ packs/*/tokenizer.*
 
 # Large test fixtures (>1 MB) — CI에서 fetch_test_fixtures.sh로 다운로드
 tests/fixtures/large/
+
+# Claude Code 개인 설정
+.claude/
+
+# 임시 데이터·캐시
+data/raw/
+data/cache/
+tmp/
+*.tmp
+*.swp
+
+# 빌드 산출물 (자동 재생성)
+dist/
+
+# Python 캐시
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 환경
+.env.local
+.venv/
+venv/
