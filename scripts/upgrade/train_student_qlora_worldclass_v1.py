@@ -116,11 +116,13 @@ def main() -> None:
     ap.add_argument('--eval-steps', type=int, default=100)
     ap.add_argument('--resume')
     ap.add_argument('--dry-run', action='store_true')
+    ap.add_argument('--out', default='tmp/worldclass_student_qlora_dryrun.json',
+                    help='JSON 결과 출력 경로 (기본: tmp/worldclass_student_qlora_dryrun.json)')
     args = ap.parse_args()
 
     eff = build_sft_kwargs(args)
     manifest = build_train_run_manifest(args, eff)
-    out = Path('tmp/worldclass_student_qlora_dryrun.json')
+    out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
 
     pkgs_missing = missing_packages()
