@@ -1,0 +1,30 @@
+{"qid": "q01", "query": "Q1 매출 실적 보고서", "relevant_chunk_ids": ["doc_003_c0", "doc_003_c1"]}
+{"qid": "q02", "query": "B사 서비스 계약 조건", "relevant_chunk_ids": ["doc_005_c0"]}
+{"qid": "q03", "query": "서버 정기 점검 일정", "relevant_chunk_ids": ["doc_007_c0", "doc_008_c0"]}
+{"qid": "q04", "query": "D사 클라우드 마이그레이션 제안서", "relevant_chunk_ids": ["doc_009_c0", "doc_009_c1"]}
+{"qid": "q05", "query": "온디바이스 AI 추론 속도 목표", "relevant_chunk_ids": ["doc_016_c1", "doc_028_c1"]}
+{"qid": "q06", "query": "2026년 하반기 채용 계획 인원수", "relevant_chunk_ids": ["doc_013_c0"]}
+{"qid": "q07", "query": "연간 예산 매출 목표", "relevant_chunk_ids": ["doc_014_c0"]}
+{"qid": "q08", "query": "ONNX Runtime BM25 벡터 인덱스 아키텍처", "relevant_chunk_ids": ["doc_016_c0", "doc_028_c1"]}
+{"qid": "q09", "query": "재택근무 정책 변경", "relevant_chunk_ids": ["doc_026_c0"]}
+{"qid": "q10", "query": "C사 컨설팅 계약 기간 금액", "relevant_chunk_ids": ["doc_006_c0"]}
+{"qid": "q11", "query": "SSE 스트림 청크 타임아웃 버그", "relevant_chunk_ids": ["doc_032_c0"]}
+{"qid": "q12", "query": "회계 분류 이자수익 오분류 수정", "relevant_chunk_ids": ["doc_032_c1"]}
+{"qid": "q13", "query": "고객사 현황 계약 만료일", "relevant_chunk_ids": ["doc_034_c0"]}
+{"qid": "q14", "query": "버틀러 v1.0 출시 일정 로드맵", "relevant_chunk_ids": ["doc_036_c0"]}
+{"qid": "q15", "query": "테스트 전략 happy boundary adv 비율", "relevant_chunk_ids": ["doc_041_c0"]}
+{"qid": "q16", "query": "캐시 시스템 SQLite TTL 설계", "relevant_chunk_ids": ["doc_047_c0"]}
+{"qid": "q17", "query": "3월 지출 내역 인건비 임차료", "relevant_chunk_ids": ["doc_048_c0"]}
+{"qid": "q18", "query": "API 엔드포인트 인증 요청 형식", "relevant_chunk_ids": ["doc_024_c0", "doc_024_c1"]}
+{"qid": "q19", "query": "E사 AI 공동개발 협의 미팅", "relevant_chunk_ids": ["doc_044_c0"]}
+{"qid": "q20", "query": "보안 취약점 API 토큰 패치", "relevant_chunk_ids": ["doc_040_c0"]}
+{"qid": "q21", "query": "마케팅 LinkedIn Google 광고 효과", "relevant_chunk_ids": ["doc_021_c1"]}
+{"qid": "q22", "query": "Personal Pack 스프린트 검색 v2", "relevant_chunk_ids": ["doc_046_c0"]}
+{"qid": "q23", "query": "온디바이스 보안 정책 네트워크 미전송", "relevant_chunk_ids": ["doc_049_c0"]}
+{"qid": "q24", "query": "F사 유지보수 SLA 계약금", "relevant_chunk_ids": ["doc_027_c0"]}
+{"qid": "q25", "query": "경쟁사 시장점유율 차별화", "relevant_chunk_ids": ["doc_038_c0"]}
+{"qid": "q26", "query": "성과평가 S등급 성과급", "relevant_chunk_ids": ["doc_039_c0"]}
+{"qid": "q27", "query": "출장비 부산 KTX 숙박", "relevant_chunk_ids": ["doc_019_c0"]}
+{"qid": "q28", "query": "접대비 C기업 임원 식사", "relevant_chunk_ids": ["doc_043_c0"]}
+{"qid": "q29", "query": "AI 솔루션 신사업 예산 배정", "relevant_chunk_ids": ["doc_011_c0"]}
+{"qid": "q30", "query": "연간 목표 진행률 신규 고객사 확보", "relevant_chunk_ids": ["doc_050_c0"]}
