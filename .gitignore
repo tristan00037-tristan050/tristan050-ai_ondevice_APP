@@ -29,6 +29,39 @@ ondevice-pr-timeline/.local/
 # local logs
 .cursor/
 *.log
-packs/small_default/model.onnx.data
-packs/small_default/model.onnx
 __pycache__/
+
+# ────────────────────────────────────────────────────────────────
+# 모델 가중치 파일 — git에 절대 커밋 금지
+# 실제 파일은 T7 SSD 또는 Naver Cloud 보관.
+# (2026-04-30 hotfix/remove-lfs-large-files)
+# ────────────────────────────────────────────────────────────────
+
+# ONNX
+*.onnx
+*.onnx.data
+
+# GGUF / llama.cpp
+*.gguf
+
+# PyTorch / safetensors
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+
+# Other inference formats
+*.onnx
+*.mnn
+*.tflite
+*.ncnn
+
+# Model directories
+models/
+weights/
+packs/*/model.*
+packs/*/tokenizer.*
+
+# Large test fixtures (>1 MB) — CI에서 fetch_test_fixtures.sh로 다운로드
+tests/fixtures/large/

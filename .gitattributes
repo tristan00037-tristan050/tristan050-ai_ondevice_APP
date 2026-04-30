@@ -1,2 +1,4 @@
-*.onnx.data filter=lfs diff=lfs merge=lfs -text
-*.onnx filter=lfs diff=lfs merge=lfs -text
+# .gitattributes
+# LFS 추적 패턴 제거됨 (2026-04-30 hotfix/remove-lfs-large-files)
+# 모델 가중치 파일은 T7 SSD / Naver Cloud에 보관.
+# git lfs track 명령 재사용 금지 — .gitignore로 차단.
