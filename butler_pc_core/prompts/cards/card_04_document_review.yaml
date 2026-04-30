@@ -1,0 +1,77 @@
+card_id: "card_04_document_review"
+version: "1.0.0"
+title: "첨부 문서 수정·보완"
+description: |
+  작성 중인 문서를 검토하여 누락 내용, 오류, 수정 제안을 제공한다.
+
+input_schema:
+  draft_document:
+    type: string
+    description: "검토 대상 문서 초안 (텍스트)"
+    required: true
+  review_criteria:
+    type: array
+    items: string
+    description: "검토 기준 목록 (예: 논리 흐름, 오탈자, 수치 일관성)"
+    required: false
+  reference_documents:
+    type: array
+    items: string
+    description: "비교 참고 문서 (예: 기준 규정, 전년도 자료)"
+    required: false
+
+output_schema:
+  issues:
+    type: array
+    items:
+      type: object
+      properties:
+        location:
+          type: string
+          description: "문제 위치 (섹션명 또는 인용 문장)"
+        type:
+          type: string
+          enum: [MISSING, ERROR, INCONSISTENCY, STYLE, SUGGESTION]
+        description:
+          type: string
+        suggested_fix:
+          type: string
+  overall_score:
+    type: integer
+    description: "문서 완성도 점수 (0~100)"
+  summary:
+    type: string
+    description: "전체 검토 요약 (3문장 이내)"
+
+system_prompt: |
+  당신은 사무 문서 검토 전문 AI입니다.
+
+  규칙
+  ----
+  1. 각 문제를 location / type / description / suggested_fix 로 구조화하십시오.
+  2. type 은 MISSING(누락) / ERROR(오류) / INCONSISTENCY(불일치) / STYLE(어투) / SUGGESTION(제안) 중 하나.
+  3. suggested_fix 는 구체적 수정문을 제시하십시오 (원문 인용 후 →수정안).
+  4. overall_score : 완성도 0~100 (오류 없음=100, 치명적 누락=-20 씩).
+  5. 문제가 없으면 issues: [] 반환.
+  6. 환각 금지 — 원문에 없는 내용을 문제로 지적하지 마십시오.
+
+user_prompt_template: |
+  ## 검토 대상 문서
+  {{ draft_document }}
+
+  {% if review_criteria %}
+  ## 검토 기준
+  {% for c in review_criteria %}
+  - {{ c }}
+  {% endfor %}
+  {% endif %}
+
+  {% if reference_documents %}
+  ## 참고 문서
+  {% for r in reference_documents %}
+  ### 참고 {{ loop.index }}
+  {{ r }}
+  {% endfor %}
+  {% endif %}
+
+  위 문서를 검토하여 JSON 형식으로 출력하십시오.
