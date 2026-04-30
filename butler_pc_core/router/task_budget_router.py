@@ -10,6 +10,11 @@ M       : ≤ 200 KB  – 단일 청크 처리
 L       : ≤ 1 MB    – 멀티청크 처리
 XL      : > 1 MB    – 즉시 차단 + Team Hub 안내
 Media-L : 음성·이미지 파일 – 별도 미디어 파이프라인
+empty   : 0 바이트  – 처리 거부
+
+변경 이력
+---------
+v1.1.0 (Day 1.5 hotfix): 비파일 경로 사전 거절 + 빈 파일 처리
 """
 from __future__ import annotations
 
@@ -43,7 +48,15 @@ _TEAM_HUB_BLOCK_MSG = (
     "[Team Hub 연결 → /api/teamhub/delegate]"
 )
 
-Tier = Literal["S", "M", "L", "XL", "Media-L"]
+Tier = Literal["S", "M", "L", "XL", "Media-L", "empty"]
+
+
+# ---------------------------------------------------------------------------
+# 커스텀 예외
+# ---------------------------------------------------------------------------
+
+class NotAFileError(OSError):
+    """경로가 존재하지만 일반 파일이 아닌 경우 (심볼릭 링크 등)."""
 
 
 # ---------------------------------------------------------------------------
@@ -80,12 +93,38 @@ def classify_file(file_path: str | os.PathLike) -> BudgetResult:
     ------
     FileNotFoundError
         파일이 존재하지 않을 때.
+    IsADirectoryError
+        경로가 디렉터리일 때.
+    NotAFileError
+        경로가 심볼릭 링크 등 일반 파일이 아닐 때.
     """
     path = Path(file_path)
+
+    # ── 존재 여부
     if not path.exists():
         raise FileNotFoundError(f"파일을 찾을 수 없습니다: {file_path}")
 
+    # ── 파일 종류 검증
+    if path.is_dir():
+        raise IsADirectoryError(
+            f"폴더가 아닌 개별 파일을 첨부해 주세요: {file_path}"
+        )
+    if not path.is_file():
+        raise NotAFileError(
+            f"일반 파일이 아닙니다 (심볼릭 링크 등): {file_path}"
+        )
+
+    # ── 빈 파일
     size_bytes = path.stat().st_size
+    if size_bytes == 0:
+        return BudgetResult(
+            tier="empty",
+            size_kb=0.0,
+            estimated_chunks=0,
+            estimated_seconds=0.0,
+            blocked=True,
+            block_reason="내용이 없는 파일입니다. 내용을 추가한 후 다시 시도하세요.",
+        )
     size_kb    = size_bytes / 1024.0
 
     # Media 판별 (MIME 또는 확장자 기준)

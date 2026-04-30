@@ -21,6 +21,7 @@ import signal
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -29,6 +30,28 @@ from typing import Any, Callable, Optional
 # ---------------------------------------------------------------------------
 HARD_TIMEOUT_SEC  = 180.0
 CHUNK_TIMEOUT_SEC = 45.0
+
+
+# ---------------------------------------------------------------------------
+# 안전 직렬화 헬퍼
+# ---------------------------------------------------------------------------
+
+def _safe_json_default(obj: Any) -> Any:
+    """JSON 직렬화 불가능 객체를 안전하게 변환."""
+    if isinstance(obj, (set, frozenset)):
+        return {"__type__": "set", "values": sorted(obj, key=str)}
+    if isinstance(obj, bytes):
+        return {
+            "__type__": "bytes",
+            "size": len(obj),
+            "preview": obj[:64].hex(),
+        }
+    if hasattr(obj, "__dict__"):
+        return {
+            "__type__": obj.__class__.__name__,
+            "repr": repr(obj)[:200],
+        }
+    return {"__type__": "unserializable", "repr": repr(obj)[:200]}
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +251,33 @@ class TimeoutController:
                 for c in self._partial.completed_chunks
             ],
         }
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        try:
+            text = json.dumps(payload, ensure_ascii=False, indent=2,
+                              default=_safe_json_default)
+            path.write_text(text, encoding="utf-8")
+        except Exception as primary_exc:  # noqa: BLE001
+            # 직렬화 자체 실패 → 최소 메타데이터 fallback
+            fallback = {
+                "task_id":         self._partial.task_id,
+                "partial":         True,
+                "abort_reason":    self._partial.abort_reason,
+                "total_elapsed_sec": self._partial.total_elapsed_sec,
+                "completed_count": len(self._partial.completed_chunks),
+                "serialization_error": {
+                    "error_class": type(primary_exc).__name__,
+                    "message":     str(primary_exc)[:300],
+                },
+                "fallback":        True,
+                "saved_at":        datetime.now(timezone.utc).isoformat(),
+            }
+            try:
+                path.write_text(
+                    json.dumps(fallback, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            except Exception:  # noqa: BLE001
+                # 파일 쓰기 자체 실패 시에도 경로는 반환 (호출자가 처리)
+                pass
         return path
 
 
