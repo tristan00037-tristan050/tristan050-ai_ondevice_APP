@@ -150,7 +150,7 @@ def test_adv_train_qlora_exits_one_when_deps_missing():
 
 
 def test_happy_train_qlora_exits_zero_when_deps_present():
-    """All deps installed → exit 0 + ready=True in manifest."""
+    """All deps installed + --dry-run → exit 0 + DRY_RUN_OK in manifest."""
     missing = _missing_qlora_pkgs()
     if missing:
         pytest.skip(f"deps not installed, cannot run happy-path: {missing}")
@@ -177,7 +177,73 @@ def test_happy_train_qlora_exits_zero_when_deps_present():
         assert out_json.exists(), "manifest not written on success"
         data = json.loads(out_json.read_text(encoding="utf-8"))
         assert data.get("ready") is True
-        assert data.get("status") == "READY"
+        assert data.get("status") == "DRY_RUN_OK"
+        assert data.get("mode") == "dry_run"
+
+
+def test_happy_train_qlora_dry_run_returns_dry_run_ok():
+    """--dry-run mode: exit 0, status==DRY_RUN_OK, ready==True."""
+    missing = _missing_qlora_pkgs()
+    if missing:
+        pytest.skip(f"deps not installed: {missing}")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        dummy_train = tmp_path / "train.jsonl"
+        dummy_train.write_text(_sample_jsonl_row(), encoding="utf-8")
+        out_json = tmp_path / "manifest.json"
+
+        proc = subprocess.run(
+            [
+                sys.executable, str(QLORA_SCRIPT),
+                "--train-file", str(dummy_train),
+                "--out", str(out_json),
+                "--dry-run",
+            ],
+            capture_output=True, text=True,
+        )
+
+        assert proc.returncode == 0, f"dry-run failed: {proc.stderr}"
+        assert out_json.exists(), "manifest not written"
+        data = json.loads(out_json.read_text(encoding="utf-8"))
+        assert data.get("status") == "DRY_RUN_OK"
+        assert data.get("ready") is True
+        assert data.get("mode") == "dry_run"
+
+
+def test_adv_train_qlora_refuses_real_training_without_implementation():
+    """Production mode (no --dry-run): exit 2, NOT_IMPLEMENTED, blocked_promotion."""
+    missing = _missing_qlora_pkgs()
+    if missing:
+        pytest.skip(f"deps not installed: {missing}")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        dummy_train = tmp_path / "train.jsonl"
+        dummy_train.write_text(_sample_jsonl_row(), encoding="utf-8")
+        out_json = tmp_path / "manifest.json"
+
+        proc = subprocess.run(
+            [
+                sys.executable, str(QLORA_SCRIPT),
+                "--train-file", str(dummy_train),
+                "--out", str(out_json),
+                # intentionally no --dry-run
+            ],
+            capture_output=True, text=True,
+        )
+
+        assert proc.returncode == 2, (
+            f"production mode must exit 2; got {proc.returncode}\n"
+            f"stdout={proc.stdout}\nstderr={proc.stderr}"
+        )
+        assert out_json.exists(), "manifest must be written even on refusal"
+        data = json.loads(out_json.read_text(encoding="utf-8"))
+        assert data.get("status") == "NOT_IMPLEMENTED"
+        assert data.get("ready") is False
+        assert data.get("blocked_promotion") is True
+        assert isinstance(data.get("next_steps"), list)
+        assert len(data["next_steps"]) > 0
 
 
 # ─── Cycle integration boundary ──────────────────────────────────────────────

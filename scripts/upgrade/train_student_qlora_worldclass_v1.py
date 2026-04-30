@@ -140,14 +140,31 @@ def main() -> None:
         out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
         print(f'WORLDCLASS_STUDENT_QLORA_NOT_READY: missing {pkgs_missing}', file=sys.stderr)
         sys.exit(1)
-    else:
-        payload['status'] = 'READY'
+    elif args.dry_run:
+        payload['status'] = 'DRY_RUN_OK'
         payload['missing_packages'] = []
         payload['ready'] = True
-        payload['WORLDCLASS_STUDENT_QLORA_READY_OK'] = 1
+        payload['mode'] = 'dry_run'
         out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
-        print('WORLDCLASS_STUDENT_QLORA_READY_OK=1')
+        print('WORLDCLASS_STUDENT_QLORA_DRY_RUN_OK')
         sys.exit(0)
+    else:
+        payload['status'] = 'NOT_IMPLEMENTED'
+        payload['missing_packages'] = []
+        payload['ready'] = False
+        payload['mode'] = 'production'
+        payload['blocked_promotion'] = True
+        payload['next_steps'] = [
+            'Phase 4 (Week 2-4)에서 실제 학습 로직 구현 예정',
+            '1단계 검증 학습: 네이버클라우드 L40S x2 (1000-5000 스텝)',
+            '2단계 본 학습: RunPod H100 x8 (300만건 데이터)',
+            'transformers + peft + trl 기반 QLoRA fine-tuning',
+            'Qwen3-4B 베이스 모델 + AI Hub 한국어 데이터셋',
+        ]
+        out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+        print('WORLDCLASS_STUDENT_QLORA_NOT_IMPLEMENTED: use --dry-run for validation',
+              file=sys.stderr)
+        sys.exit(2)
 
 if __name__ == '__main__':
     main()
