@@ -5,14 +5,20 @@ Butler PC Core – 로컬 사이드카 HTTP 서버 (FastAPI)
 
 엔드포인트
 ----------
-GET  /health          서버 상태 확인
-POST /api/precheck    파일 등급 사전 체크 (file_path)
+GET  /health                  서버 상태 확인
+POST /api/precheck             파일 등급 사전 체크 (file_path)
+POST /api/analyze/stream       진행률 SSE 스트림 (text/event-stream)
+DELETE /api/analyze/{task_id}/cancel  작업 취소
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
+import time
+import uuid
 from pathlib import Path
+from typing import AsyncGenerator
 
 # 레포 루트를 sys.path에 추가 (직접 실행 시)
 _REPO_ROOT = Path(__file__).resolve().parent
@@ -21,7 +27,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 try:
     from fastapi import FastAPI, HTTPException
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, StreamingResponse
     from pydantic import BaseModel
     _FASTAPI_AVAILABLE = True
 except ImportError:
@@ -32,6 +38,15 @@ from butler_pc_core.router.task_budget_router import (
     BudgetResult,
     NotAFileError,
 )
+from butler_pc_core.runtime.timeout_controller import (
+    TimeoutController,
+    PartialResultError,
+    HARD_TIMEOUT_SEC,
+)
+
+# task_id → TimeoutController マップ (キャンセル用)
+_active_controllers: dict[str, TimeoutController] = {}
+_controllers_lock = asyncio.Lock() if _FASTAPI_AVAILABLE else None  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -56,6 +71,11 @@ if _FASTAPI_AVAILABLE:
         estimated_seconds: float
         blocked: bool
         block_reason: str
+
+    class AnalyzeStreamRequest(BaseModel):
+        file_path: str
+        total_chunks: int = 1
+        output_dir: str = "."
 
     # -----------------------------------------------------------------------
     # 엔드포인트
@@ -101,6 +121,147 @@ if _FASTAPI_AVAILABLE:
             blocked=result.blocked,
             block_reason=result.block_reason,
         )
+
+    # -----------------------------------------------------------------------
+    # SSE helpers
+    # -----------------------------------------------------------------------
+    def _sse(event: str, data: dict) -> str:
+        """SSE フレーム (Tauri fetch 互換, no buffering)."""
+        payload = json.dumps(data, ensure_ascii=False, default=str)
+        return f"event: {event}\ndata: {payload}\n\n"
+
+    async def _stream_analyze(
+        req: AnalyzeStreamRequest,
+        task_id: str,
+    ) -> AsyncGenerator[str, None]:
+        """진행률 SSE 제너레이터."""
+        total = max(1, req.total_chunks)
+        ctrl = TimeoutController(
+            task_id=task_id,
+            output_dir=req.output_dir,
+            hard_timeout=HARD_TIMEOUT_SEC,
+        )
+        async with asyncio.Lock():
+            _active_controllers[task_id] = ctrl
+
+        start = time.monotonic()
+        last_event_time = start
+
+        async def _heartbeat_if_idle() -> AsyncGenerator[str, None]:
+            nonlocal last_event_time
+            now = time.monotonic()
+            if now - last_event_time >= 5.0:
+                last_event_time = now
+                yield _sse("heartbeat", {"elapsed_sec": round(now - start, 2)})
+
+        try:
+            yield _sse("phase_start", {"phase": "analyze", "total_steps": total})
+            last_event_time = time.monotonic()
+
+            for i in range(total):
+                ctrl.check_hard_timeout()
+
+                chunk_start = time.monotonic()
+                # 각 청크마다 heartbeat 확인
+                async for frame in _heartbeat_if_idle():
+                    yield frame
+
+                # 실제 청크 처리는 executor에서 수행 (blocking 작업 대비)
+                loop = asyncio.get_event_loop()
+                try:
+                    await asyncio.wait_for(
+                        loop.run_in_executor(None, ctrl.check_hard_timeout),
+                        timeout=ctrl.chunk_timeout,
+                    )
+                except asyncio.TimeoutError:
+                    ctrl.cancel()
+
+                ctrl.check_hard_timeout()
+
+                chunk_elapsed = time.monotonic() - chunk_start
+                elapsed_total = time.monotonic() - start
+                remaining = max(0.0, (elapsed_total / (i + 1)) * (total - i - 1))
+
+                yield _sse("chunk_progress", {
+                    "current": i + 1,
+                    "total": total,
+                    "elapsed_sec": round(elapsed_total, 2),
+                    "est_remaining_sec": round(remaining, 2),
+                })
+                last_event_time = time.monotonic()
+
+                yield _sse("chunk_done", {
+                    "chunk_id": i,
+                    "latency_ms": round(chunk_elapsed * 1000, 1),
+                })
+                last_event_time = time.monotonic()
+
+            yield _sse("reduce_start", {"input_chunks": total})
+            last_event_time = time.monotonic()
+            yield _sse("verify_start", {})
+            last_event_time = time.monotonic()
+
+            result_path = str(Path(req.output_dir) / f"{task_id}_result.json")
+            yield _sse("complete", {
+                "result_path": result_path,
+                "total_elapsed_sec": round(time.monotonic() - start, 2),
+            })
+
+        except PartialResultError as exc:
+            reason = getattr(exc, "partial_path", None)
+            partial = str(reason) if reason else ""
+            abort = getattr(exc, "args", ("cancelled",))[0]
+            if "timeout" in str(abort).lower() or "hard" in str(abort).lower():
+                yield _sse("cancelled", {
+                    "reason": "hard_timeout",
+                    "partial_path": partial,
+                })
+            elif "chunk" in str(abort).lower():
+                yield _sse("cancelled", {
+                    "reason": "chunk_timeout",
+                    "partial_path": partial,
+                })
+            else:
+                yield _sse("cancelled", {
+                    "reason": "user_cancel",
+                    "partial_path": partial,
+                })
+        except Exception as exc:  # noqa: BLE001
+            yield _sse("error", {
+                "error_class": type(exc).__name__,
+                "message": str(exc)[:500],
+            })
+        finally:
+            _active_controllers.pop(task_id, None)
+
+    @app.post("/api/analyze/stream")
+    async def analyze_stream(req: AnalyzeStreamRequest):
+        """진행률 SSE 스트림 엔드포인트.
+
+        Content-Type: text/event-stream
+        이벤트: phase_start / chunk_progress / chunk_done /
+                reduce_start / verify_start / complete /
+                error / cancelled / heartbeat
+        """
+        task_id = str(uuid.uuid4())
+        return StreamingResponse(
+            _stream_analyze(req, task_id),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "X-Task-Id": task_id,
+            },
+        )
+
+    @app.delete("/api/analyze/{task_id}/cancel")
+    def cancel_analyze(task_id: str):
+        """진행 중인 analyze 작업을 취소한다."""
+        ctrl = _active_controllers.get(task_id)
+        if ctrl is None:
+            raise HTTPException(status_code=404, detail=f"task {task_id} not found")
+        ctrl.cancel()
+        return {"cancelled": True, "task_id": task_id}
 
 # ---------------------------------------------------------------------------
 # FastAPI 미설치 환경용 경량 HTTP 서버 (stdlib only)
