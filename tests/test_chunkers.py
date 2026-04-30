@@ -258,6 +258,59 @@ def test_adv_receipt_many_items_batched():
 
 
 # ─────────────────────────────────────────────
+# EmailChunker 결함 1 회귀 테스트
+# ─────────────────────────────────────────────
+
+def test_adv_email_header_preserves_full_lines():
+    """결함 1 회귀: 헤더 본문(주소·제목·날짜)이 청크에 보존된다."""
+    content = (
+        "From: kim@acme.com\n"
+        "To: lee@partner.com\n"
+        "Subject: Q3 보고서 검토 부탁드립니다\n"
+        "Date: 2026-04-15\n\n"
+        "본문 시작..."
+    )
+    chunks = EmailChunker().chunk(content, "regression.eml")
+    header_chunks = [c for c in chunks if c.section_title == "header"]
+    assert len(header_chunks) > 0, "헤더 chunk 없음"
+    header_text = header_chunks[0].text
+    assert "kim@acme.com" in header_text, f"발신 주소 누락: {header_text!r}"
+    assert "lee@partner.com" in header_text, f"수신 주소 누락: {header_text!r}"
+    assert "Q3 보고서 검토 부탁드립니다" in header_text, f"제목 누락: {header_text!r}"
+    assert "2026-04-15" in header_text, f"날짜 누락: {header_text!r}"
+    assert header_text.strip() not in {"From\nTo\nSubject\nDate", ""}, \
+        f"필드명만 추출된 결함 재발: {header_text!r}"
+
+
+def test_adv_email_search_by_sender_finds_correct_chunk():
+    """발신자 이름·주소가 청크에 포함되어 검색 가능하다."""
+    content = (
+        "From: 김부장 <kim@acme.com>\n"
+        "Subject: 분기 보고서\n\n"
+        "본문 내용입니다."
+    )
+    chunks = EmailChunker().chunk(content, "sender.eml")
+    full_text = " ".join(c.text for c in chunks)
+    assert "김부장" in full_text, "발신자 이름 검색 불가"
+    assert "kim@acme.com" in full_text, "발신자 주소 검색 불가"
+
+
+def test_happy_email_body_chunked_separately():
+    """본문은 헤더와 별도 section_title='body' chunk로 분리된다."""
+    content = (
+        "From: a@b.com\n"
+        "Subject: Test\n\n"
+        "This is the body content.\n"
+        "Multiple paragraphs.\n\n"
+        "Another paragraph."
+    )
+    chunks = EmailChunker().chunk(content, "body_test.eml")
+    section_titles = {c.section_title for c in chunks}
+    assert "header" in section_titles
+    assert "body" in section_titles
+
+
+# ─────────────────────────────────────────────
 # dispatcher (bonus — not counted in 21)
 # ─────────────────────────────────────────────
 
