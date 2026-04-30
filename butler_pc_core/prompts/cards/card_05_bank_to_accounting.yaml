@@ -93,6 +93,73 @@ user_prompt_template: |
 
   위 거래내역을 분류하여 JSON 형식으로 출력하십시오.
 
+forbidden_actions:
+  - 원문에 없는 거래 행을 임의로 생성하는 것
+  - 금액을 원문과 다르게 변경하거나 반올림하는 것
+  - confidence 를 HIGH/MEDIUM/LOW 이외의 값으로 반환하는 것
+  - 분류 불가 행을 unclassified 없이 임의 계정과목으로 채우는 것
+  - 온디바이스 외 네트워크 전송 (security_note 절대 준수)
+  - 마크다운 코드 블록(```) 밖에서 JSON 외 텍스트를 출력하는 것
+
+examples:
+  - label: best
+    input:
+      transaction_text: |
+        2026-04-01  급여 지급      -3000000
+        2026-04-05  사무실 임차료  -500000
+        2026-04-10  매출 입금       2000000
+      account_code_map: {}
+      currency: "KRW"
+    expected_output:
+      classified_rows:
+        - date: "2026-04-01"
+          description: "급여 지급"
+          amount: -3000000
+          account_code: "4101"
+          account_name: "급여"
+          confidence: HIGH
+          note: "키워드 '급여' → 계정코드 4101"
+        - date: "2026-04-05"
+          description: "사무실 임차료"
+          amount: -500000
+          account_code: "8201"
+          account_name: "임차료"
+          confidence: HIGH
+          note: "키워드 '임차료' → 계정코드 8201"
+        - date: "2026-04-10"
+          description: "매출 입금"
+          amount: 2000000
+          account_code: "1001"
+          account_name: "매출"
+          confidence: HIGH
+          note: "키워드 '매출' → 계정코드 1001"
+      unclassified: []
+      summary:
+        total_in: 2000000
+        total_out: -3500000
+        row_count: 3
+
+  - label: edge
+    input:
+      transaction_text: |
+        2026-04-15  기타지출  -80000
+      account_code_map: {}
+      currency: "KRW"
+    expected_output:
+      classified_rows:
+        - date: "2026-04-15"
+          description: "기타지출"
+          amount: -80000
+          account_code: ""
+          account_name: ""
+          confidence: LOW
+          note: "'기타지출'은 계정과목 매핑 불가 — 담당자 직접 분류 필요"
+      unclassified: ["2026-04-15  기타지출  -80000"]
+      summary:
+        total_in: 0
+        total_out: -80000
+        row_count: 1
+
 default_account_codes:
   급여: {code: "4101", name: "급여"}
   임차료: {code: "8201", name: "임차료"}

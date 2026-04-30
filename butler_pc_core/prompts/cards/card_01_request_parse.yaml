@@ -57,8 +57,17 @@ user_prompt_template: |
 
   위 메시지를 분석하여 JSON 형식으로 출력하십시오.
 
+forbidden_actions:
+  - 원문에 없는 날짜·수치·인물명을 추측으로 채우는 것
+  - 마감이 불명확한데도 deadline 에 특정 날짜를 확정 기재하는 것
+  - priority 를 HIGH/MEDIUM/LOW 이외의 값으로 반환하는 것
+  - ambiguities 목록을 임의로 비워 불명확 사항을 숨기는 것
+  - 비격식체(해요/해/임) 사용 — 격식체(합니다/습니다) 강제
+  - JSON 외 텍스트(설명·인사말)를 함께 출력하는 것
+
 examples:
-  - input:
+  - label: best
+    input:
       message_text: |
         안녕하세요, 이번 주 금요일까지 2분기 매출 보고서 초안 부탁드립니다.
         작년 동기 데이터와 비교 분석이 필요합니다.
@@ -68,3 +77,13 @@ examples:
       required_materials: ["작년 2분기 매출 데이터", "이번 2분기 매출 데이터"]
       priority: "HIGH"
       ambiguities: ["'이번 주 금요일'의 정확한 날짜", "보고서 포맷·분량 기준"]
+
+  - label: edge
+    input:
+      message_text: "수고하세요~"
+    expected_output:
+      what: "명확한 업무 요청 없음"
+      deadline: "명시 없음"
+      required_materials: []
+      priority: "LOW"
+      ambiguities: ["메시지에 구체적 요청 사항이 없음 — 발신자에게 재확인 필요"]
