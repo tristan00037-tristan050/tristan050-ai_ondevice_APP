@@ -6,10 +6,20 @@ name: Windows CI — smoke / eval / variance
 # PR: 12 eval, variance 5 runs, CI_RSS_MAX_MB=1540. push(main 등 full 번들): 24 eval, variance 11, CI_RSS_MAX_MB=1544 (bundled baseline).
 
 on:
-  push:
-    branches: [ "pr/windows-ci-556", "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
+    # 수동 실행만 허용 (베타 1차: macOS 단독 대상)
+    #
+    # 재활성화 조건 (Week 2~4):
+    #   1. ONNX 모델을 GitHub Releases에 업로드
+    #   2. windows-ci.yml에 다운로드 스크립트 추가
+    #   3. push/pull_request 트리거 복원
+    #
+    # 비활성화 사유: PR #646 LFS 정리 시 packs/micro_default/model.onnx 제거됨
+    # 참고: docs/ci/windows_ci_status.md
+  # push:          # ← Week 2~4에 복원
+  #   branches: [ "main" ]
+  # pull_request:  # ← Week 2~4에 복원
+  #   branches: [ "main" ]
 
 jobs:
   windows-smoke-eval:
@@ -20,10 +30,10 @@ jobs:
       PYTHONUTF8: 1
 
     steps:
-      - name: Checkout (LFS 포함)
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: false  # 모델 가중치 LFS 파일 제거됨 (hotfix/remove-lfs-large-files)
 
       - name: Python 3.11 설치
         uses: actions/setup-python@v5
