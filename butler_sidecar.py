@@ -15,9 +15,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import subprocess as _subprocess
 import sys
 import tempfile
-import threading
 import time
 import uuid
 from dataclasses import dataclass, field as _dc_field
@@ -51,74 +51,50 @@ from butler_pc_core.runtime.timeout_controller import (
     HARD_TIMEOUT_SEC,
 )
 
-try:
-    from butler_pc_core.inference.llm_runtime import LlmRuntime as _LlmRuntime
-    _LLM_IMPORT_OK = True
-except ImportError:
-    _LLM_IMPORT_OK = False
-
-try:
-    from butler_pc_core.prompts.cards import load_card_prompt as _load_card_prompt
-    _CARDS_IMPORT_OK = True
-except ImportError:
-    _CARDS_IMPORT_OK = False
-
 # task_id → TimeoutController マップ (キャンセル用)
 _active_controllers: dict[str, TimeoutController] = {}
 _controllers_lock = asyncio.Lock() if _FASTAPI_AVAILABLE else None  # type: ignore[assignment]
 
-# LLM 런타임 싱글톤
-_llm_runtime: "_LlmRuntime | None" = None
-_llm_lock = threading.Lock()
+_CHUNK_WORKER = Path(__file__).resolve().parent / "butler_pc_core" / "inference" / "chunk_worker.py"
 
 
-def ensure_llm() -> "_LlmRuntime":
-    """LlmRuntime 싱글톤을 반환한다. BUTLER_MODEL_PATH 환경변수 참조."""
-    global _llm_runtime
-    with _llm_lock:
-        if _llm_runtime is None:
-            if not _LLM_IMPORT_OK:
-                class _NoOpRuntime:  # noqa: N801
-                    status = "error"
-                    last_error = "butler_pc_core.inference 모듈 임포트 실패"
-                    def generate(self, prompt: str, **_: object) -> str:  # noqa: D102
-                        return "[stub] inference 모듈 없음"
-                    def generate_stream(self, prompt: str, **_: object):  # noqa: D102
-                        yield self.generate(prompt)
-                return _NoOpRuntime()  # type: ignore[return-value]
-            model_path = os.environ.get("BUTLER_MODEL_PATH", "")
-            _llm_runtime = _LlmRuntime(model_path=model_path or None)
-        return _llm_runtime
+async def _real_chunk_work_isolated(
+    params: "_AnalyzeParams",
+    chunk_idx: int,
+    timeout_sec: float,
+) -> str:
+    """LLM inference를 별도 subprocess에서 격리 실행.
+    timeout 시 SIGKILL → thread 누수 없음.
+    """
+    params_json = json.dumps(params.__dict__, default=str)
+    cmd = [
+        sys.executable,
+        str(_CHUNK_WORKER),
+        "--params", params_json,
+        "--chunk-idx", str(chunk_idx),
+    ]
 
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent)},
+    )
 
-def _real_chunk_work(params: "_AnalyzeParams", chunk_index: int) -> str:
-    """LLM 추론으로 chunk_index번째 청크를 처리하고 결과 텍스트를 반환한다."""
-    llm = ensure_llm()
-
-    card: dict = {}
-    if _CARDS_IMPORT_OK:
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
+        if proc.returncode != 0:
+            err = (stderr or b"").decode(errors="replace")[:200]
+            raise RuntimeError(f"chunk worker 오류 (rc={proc.returncode}): {err}")
+        result = json.loads(stdout.decode())
+        return str(result.get("result", ""))
+    except asyncio.TimeoutError:
         try:
-            card = _load_card_prompt(params.card_mode)
-        except Exception:
-            card = {}
-
-    system_prompt: str = card.get("system_prompt", "당신은 유능한 사무 보조 AI입니다.")
-    user_tmpl: str = card.get("user_prompt_template", "{{ query }}")
-
-    # 첨부 파일 텍스트 읽기
-    file_texts: list[str] = []
-    for fp in params.file_paths:
-        try:
-            file_texts.append(Path(fp).read_text(encoding="utf-8", errors="replace"))
-        except Exception:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
             pass
-
-    user_content = user_tmpl.replace("{{ query }}", params.query)
-    if file_texts:
-        user_content += "\n\n## 첨부 파일 내용\n" + "\n\n---\n".join(file_texts)
-
-    prompt = f"<s>[INST] <<SYS>>\n{system_prompt}\n<</SYS>>\n\n{user_content} [/INST]"
-    return llm.generate(prompt, max_tokens=1024)
+        raise
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -161,23 +137,25 @@ if _FASTAPI_AVAILABLE:
 
     @app.get("/api/sidecar/health")
     def sidecar_health():
-        llm = ensure_llm()
+        model_path = os.environ.get("BUTLER_MODEL_PATH", "")
+        model_status = "ready" if (model_path and Path(model_path).exists()) else "no_model"
         return {
             "status": "ok",
             "service": "butler-pc-core-sidecar",
             "version": "0.9.0",
-            "model_status": llm.status,
+            "model_status": model_status,
             "active_tasks": len(_active_controllers),
         }
 
     @app.get("/api/model/status")
     def model_status():
-        llm = ensure_llm()
-        return {
-            "status": llm.status,
-            "model_path": os.environ.get("BUTLER_MODEL_PATH", ""),
-            "last_error": getattr(llm, "last_error", ""),
-        }
+        model_path = os.environ.get("BUTLER_MODEL_PATH", "")
+        if not model_path:
+            return {"status": "no_model", "model_path": "", "last_error": "BUTLER_MODEL_PATH 미설정"}
+        p = Path(model_path)
+        if not p.exists():
+            return {"status": "no_model", "model_path": model_path, "last_error": "파일 없음"}
+        return {"status": "ready", "model_path": model_path, "last_error": ""}
 
     @app.post("/api/precheck", response_model=PrecheckResponse)
     def precheck(req: PrecheckRequest):
@@ -261,11 +239,9 @@ if _FASTAPI_AVAILABLE:
                 async for frame in _heartbeat_if_idle():
                     yield frame
 
-                loop = asyncio.get_event_loop()
                 try:
-                    chunk_text: str = await asyncio.wait_for(
-                        loop.run_in_executor(None, _real_chunk_work, params, i),
-                        timeout=ctrl.chunk_timeout,
+                    chunk_text: str = await _real_chunk_work_isolated(
+                        params, i, ctrl.chunk_timeout
                     )
                     chunk_results.append(chunk_text)
                 except asyncio.TimeoutError:
