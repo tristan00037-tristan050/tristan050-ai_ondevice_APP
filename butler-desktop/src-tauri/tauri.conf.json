@@ -28,7 +28,8 @@
     "externalBin": ["binaries/butler-sidecar"],
     "resources": {
       "../../butler_sidecar.py": "butler_sidecar.py",
-      "../../butler_pc_core/**/*": "butler_pc_core/"
+      "../../butler_pc_core": "butler_pc_core",
+      "../../requirements-serving.txt": "requirements-serving.txt"
     }
   }
 }

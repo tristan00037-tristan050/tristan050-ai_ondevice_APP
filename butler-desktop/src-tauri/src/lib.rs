@@ -59,12 +59,11 @@ pub fn run() {
             tauri::async_runtime::block_on(async move {
                 match spawn_sidecar(&app_handle).await {
                     Ok(child) => {
-                        app_handle
-                            .state::<SidecarState>()
-                            .child
-                            .lock()
-                            .unwrap()
-                            .replace(child);
+                        // 명시적 블록으로 MutexGuard를 state보다 먼저 drop
+                        {
+                            let state = app_handle.state::<SidecarState>();
+                            *state.child.lock().unwrap() = Some(child);
+                        }
                         println!("[main] sidecar 시작 완료 (포트 5903)");
                     }
                     Err(e) => {
@@ -78,8 +77,13 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
-                let state = window.state::<SidecarState>();
-                if let Some(child) = state.child.lock().unwrap().take() {
+                // MutexGuard를 세미콜론으로 먼저 drop 후 value만 반환
+                let child_opt = {
+                    let state = window.state::<SidecarState>();
+                    let x = state.child.lock().unwrap().take();
+                    x
+                };
+                if let Some(child) = child_opt {
                     let _ = child.kill();
                     println!("[main] sidecar 종료 완료");
                 }
