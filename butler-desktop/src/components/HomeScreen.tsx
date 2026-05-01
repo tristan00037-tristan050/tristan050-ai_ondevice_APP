@@ -10,13 +10,12 @@ export const CARDS = [
 ] as const;
 
 interface HomeScreenProps {
-  onSubmit?: (text: string, cardId: number | null) => void;
   onCardSelect?: (cardId: number | null) => void;
+  children?: React.ReactNode;
 }
 
-export function HomeScreen({ onSubmit, onCardSelect }: HomeScreenProps) {
+export function HomeScreen({ onCardSelect, children }: HomeScreenProps) {
   const [activeCard, setActiveCard] = useState<number | null>(null);
-  const [inputText, setInputText] = useState('');
 
   const handleCardClick = (cardId: number) => {
     const next = activeCard === cardId ? null : cardId;
@@ -29,10 +28,6 @@ export function HomeScreen({ onSubmit, onCardSelect }: HomeScreenProps) {
       e.preventDefault();
       handleCardClick(cardId);
     }
-  };
-
-  const handleSubmit = () => {
-    if (inputText.trim()) onSubmit?.(inputText, activeCard);
   };
 
   return (
@@ -71,16 +66,7 @@ export function HomeScreen({ onSubmit, onCardSelect }: HomeScreenProps) {
       )}
 
       <div style={{ marginTop: 16 }}>
-        <textarea
-          data-testid="main-input"
-          value={inputText}
-          onChange={e => setInputText(e.target.value)}
-          placeholder="무엇을 도와드릴까요? 자유롭게…"
-          maxLength={4000}
-          rows={3}
-          style={{ width: '100%', resize: 'vertical' }}
-        />
-        <button data-testid="submit-btn" onClick={handleSubmit}>전송</button>
+        {children}
       </div>
     </div>
   );

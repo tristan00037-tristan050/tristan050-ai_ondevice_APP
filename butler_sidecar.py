@@ -15,8 +15,10 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import tempfile
 import time
 import uuid
+from dataclasses import dataclass, field as _dc_field
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -26,7 +28,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import FastAPI, HTTPException, Request
     from fastapi.responses import JSONResponse, StreamingResponse
     from pydantic import BaseModel
     _FASTAPI_AVAILABLE = True
@@ -79,10 +81,13 @@ if _FASTAPI_AVAILABLE:
         blocked: bool
         block_reason: str
 
-    class AnalyzeStreamRequest(BaseModel):
-        file_path: str
+    @dataclass
+    class _AnalyzeParams:
+        query: str = ""
+        card_mode: str = "free"
         total_chunks: int = 1
         output_dir: str = "."
+        file_paths: list = _dc_field(default_factory=list)
 
     # -----------------------------------------------------------------------
     # 엔드포인트
@@ -138,14 +143,14 @@ if _FASTAPI_AVAILABLE:
         return f"event: {event}\ndata: {payload}\n\n"
 
     async def _stream_analyze(
-        req: AnalyzeStreamRequest,
+        params: _AnalyzeParams,
         task_id: str,
     ) -> AsyncGenerator[str, None]:
         """진행률 SSE 제너레이터."""
-        total = max(1, req.total_chunks)
+        total = max(1, params.total_chunks)
         ctrl = TimeoutController(
             task_id=task_id,
-            output_dir=req.output_dir,
+            output_dir=params.output_dir,
             hard_timeout=HARD_TIMEOUT_SEC,
         )
         async with asyncio.Lock():
@@ -207,7 +212,7 @@ if _FASTAPI_AVAILABLE:
             yield _sse("verify_start", {})
             last_event_time = time.monotonic()
 
-            result_path = str(Path(req.output_dir) / f"{task_id}_result.json")
+            result_path = str(Path(params.output_dir) / f"{task_id}_result.json")
             yield _sse("complete", {
                 "result_path": result_path,
                 "total_elapsed_sec": round(time.monotonic() - start, 2),
@@ -246,17 +251,45 @@ if _FASTAPI_AVAILABLE:
             _active_controllers.pop(task_id, None)
 
     @app.post("/api/analyze/stream")
-    async def analyze_stream(req: AnalyzeStreamRequest):
-        """진행률 SSE 스트림 엔드포인트.
+    async def analyze_stream(request: Request):
+        """진행률 SSE 스트림 엔드포인트 (multipart/form-data).
 
         Content-Type: text/event-stream
+        Form fields: query, card_mode, total_chunks, output_dir, file_count
+        File fields: file_0 … file_{N-1}
         이벤트: phase_start / chunk_progress / chunk_done /
                 reduce_start / verify_start / complete /
                 error / cancelled / heartbeat
         """
+        form = await request.form()
+
+        query = str(form.get("query") or "")
+        card_mode = str(form.get("card_mode") or "free")
+        total_chunks = max(1, int(form.get("total_chunks") or 1))
+        output_dir = str(form.get("output_dir") or ".")
+        file_count = max(0, int(form.get("file_count") or 0))
+
+        file_paths: list[str] = []
+        for i in range(file_count):
+            upload = form.get(f"file_{i}")
+            if upload is not None and hasattr(upload, "read"):
+                fname = getattr(upload, "filename", "") or ""
+                suffix = Path(fname).suffix if fname else ""
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                    content = await upload.read()
+                    tmp.write(content)
+                    file_paths.append(tmp.name)
+
+        params = _AnalyzeParams(
+            query=query,
+            card_mode=card_mode,
+            total_chunks=total_chunks,
+            output_dir=output_dir,
+            file_paths=file_paths,
+        )
         task_id = str(uuid.uuid4())
         return StreamingResponse(
-            _stream_analyze(req, task_id),
+            _stream_analyze(params, task_id),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

@@ -8,6 +8,7 @@ import type { SSEEvent } from './types';
 export function App() {
   const [sseEvents, setSseEvents] = useState<SSEEvent[]>([]);
   const [overlayVisible, setOverlayVisible] = useState(false);
+  const [cardMode, setCardMode] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const handleSubmit = async (text: string, files: File[]) => {
@@ -17,10 +18,16 @@ export function App() {
     setOverlayVisible(true);
 
     try {
+      const formData = new FormData();
+      formData.append('query', text);
+      formData.append('card_mode', String(cardMode ?? 'free'));
+      formData.append('total_chunks', '1');
+      files.forEach((file, idx) => formData.append(`file_${idx}`, file));
+      formData.append('file_count', String(files.length));
+
       const res = await fetch('/api/analyze/stream', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: text }),
+        body: formData,
         signal: ctrl.signal,
       });
       const reader = res.body?.getReader();
@@ -55,8 +62,9 @@ export function App() {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: 16 }}>
       <EgressBadge />
-      <HomeScreen />
-      <InputBar onSubmit={handleSubmit} />
+      <HomeScreen onCardSelect={setCardMode}>
+        <InputBar onSubmit={handleSubmit} />
+      </HomeScreen>
       <ProgressOverlay
         visible={overlayVisible}
         events={sseEvents}
