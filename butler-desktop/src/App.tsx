@@ -64,7 +64,7 @@ export function App() {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: 16 }}>
       <EgressBadge />
-      <ModelSetup />
+      <ModelSetup onReady={() => {}} />
       <HomeScreen onCardSelect={setCardMode}>
         <InputBar onSubmit={handleSubmit} />
       </HomeScreen>
