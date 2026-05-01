@@ -1,0 +1,29 @@
+
+> butler-desktop@0.1.0 tauri
+> tauri build --debug
+
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm run build`
+
+> butler-desktop@0.1.0 build
+> tsc && vite build
+
+vite v6.4.2 building for production...
+transforming...
+✓ 33 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.32 kB │ gzip:  0.23 kB
+dist/assets/core-DhEqZVGG.js     2.44 kB │ gzip:  0.98 kB
+dist/assets/index-DvM6eNv-.js  155.01 kB │ gzip: 50.90 kB
+✓ built in 259ms
+   Compiling butler-desktop v0.1.0 (/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/butler-desktop/src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.09s
+       Built application at: /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/butler-desktop/src-tauri/target/debug/butler-desktop
+    Bundling Butler.app (/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/butler-desktop/src-tauri/target/debug/bundle/macos/Butler.app)
+    Bundling Butler_0.1.0_aarch64.dmg (/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/butler-desktop/src-tauri/target/debug/bundle/dmg/Butler_0.1.0_aarch64.dmg)
+     Running bundle_dmg.sh
+    Finished 2 bundles at:
+        /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/butler-desktop/src-tauri/target/debug/bundle/macos/Butler.app
+        /Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/tristan050-ai_ondevice_APP/butler-desktop/src-tauri/target/debug/bundle/dmg/Butler_0.1.0_aarch64.dmg
+
