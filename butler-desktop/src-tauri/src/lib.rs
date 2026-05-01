@@ -51,6 +51,7 @@ async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_http::init())
         .manage(SidecarState {
             child: Mutex::new(None),
         })

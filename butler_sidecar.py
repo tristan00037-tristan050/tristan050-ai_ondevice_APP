@@ -31,6 +31,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 try:
     from fastapi import FastAPI, HTTPException, Request
+    from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse, StreamingResponse
     from pydantic import BaseModel
     _FASTAPI_AVAILABLE = True
@@ -104,6 +105,19 @@ if _FASTAPI_AVAILABLE:
         title="Butler PC Core Sidecar",
         version="0.9.0",
         description="Butler PC Core 로컬 사이드카 — 파일 사전 체크 및 작업 라우팅",
+    )
+
+    # WKWebView origin은 tauri://localhost (프로덕션) 또는 http://localhost:1420 (개발)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "tauri://localhost",
+            "http://localhost:1420",
+            "http://127.0.0.1:1420",
+        ],
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+        expose_headers=["X-Task-Id"],
     )
 
     # -----------------------------------------------------------------------
@@ -391,12 +405,33 @@ else:
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data)))
+            self.send_header("Access-Control-Allow-Origin", "tauri://localhost")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.end_headers()
             self.wfile.write(data)
 
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "tauri://localhost")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.end_headers()
+
         def do_GET(self):
-            if self.path == "/health":
-                self._send_json(200, {"status": "ok", "service": "butler-pc-core-sidecar", "version": "0.9.0"})
+            if self.path in ("/health", "/api/model/status", "/api/sidecar/health"):
+                model_path = os.environ.get("BUTLER_MODEL_PATH", "")
+                if self.path == "/health":
+                    self._send_json(200, {"status": "ok", "service": "butler-pc-core-sidecar", "version": "0.9.0"})
+                elif self.path == "/api/model/status":
+                    if not model_path:
+                        self._send_json(200, {"status": "no_model", "model_path": "", "last_error": "BUTLER_MODEL_PATH 미설정"})
+                    elif not Path(model_path).exists():
+                        self._send_json(200, {"status": "no_model", "model_path": model_path, "last_error": "파일 없음"})
+                    else:
+                        self._send_json(200, {"status": "ready", "model_path": model_path, "last_error": ""})
+                else:
+                    self._send_json(200, {"status": "ok", "service": "butler-pc-core-sidecar", "version": "0.9.0"})
             else:
                 self._send_json(404, {"detail": "not found"})
 
