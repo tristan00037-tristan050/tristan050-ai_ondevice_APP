@@ -55,7 +55,7 @@ export function App() {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: 16 }}>
       <EgressBadge />
-      <HomeScreen onSubmit={handleSubmit} />
+      <HomeScreen />
       <InputBar onSubmit={handleSubmit} />
       <ProgressOverlay
         visible={overlayVisible}
