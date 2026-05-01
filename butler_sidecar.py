@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field as _dc_field
@@ -49,13 +51,74 @@ from butler_pc_core.runtime.timeout_controller import (
     HARD_TIMEOUT_SEC,
 )
 
+try:
+    from butler_pc_core.inference.llm_runtime import LlmRuntime as _LlmRuntime
+    _LLM_IMPORT_OK = True
+except ImportError:
+    _LLM_IMPORT_OK = False
+
+try:
+    from butler_pc_core.prompts.cards import load_card_prompt as _load_card_prompt
+    _CARDS_IMPORT_OK = True
+except ImportError:
+    _CARDS_IMPORT_OK = False
+
 # task_id → TimeoutController マップ (キャンセル用)
 _active_controllers: dict[str, TimeoutController] = {}
 _controllers_lock = asyncio.Lock() if _FASTAPI_AVAILABLE else None  # type: ignore[assignment]
 
+# LLM 런타임 싱글톤
+_llm_runtime: "_LlmRuntime | None" = None
+_llm_lock = threading.Lock()
 
-def _stub_chunk_work(chunk_index: int) -> None:
-    """청크 처리 스텁 — Phase 4에서 실제 파이프라인 연결 예정."""
+
+def ensure_llm() -> "_LlmRuntime":
+    """LlmRuntime 싱글톤을 반환한다. BUTLER_MODEL_PATH 환경변수 참조."""
+    global _llm_runtime
+    with _llm_lock:
+        if _llm_runtime is None:
+            if not _LLM_IMPORT_OK:
+                class _NoOpRuntime:  # noqa: N801
+                    status = "error"
+                    last_error = "butler_pc_core.inference 모듈 임포트 실패"
+                    def generate(self, prompt: str, **_: object) -> str:  # noqa: D102
+                        return "[stub] inference 모듈 없음"
+                    def generate_stream(self, prompt: str, **_: object):  # noqa: D102
+                        yield self.generate(prompt)
+                return _NoOpRuntime()  # type: ignore[return-value]
+            model_path = os.environ.get("BUTLER_MODEL_PATH", "")
+            _llm_runtime = _LlmRuntime(model_path=model_path or None)
+        return _llm_runtime
+
+
+def _real_chunk_work(params: "_AnalyzeParams", chunk_index: int) -> str:
+    """LLM 추론으로 chunk_index번째 청크를 처리하고 결과 텍스트를 반환한다."""
+    llm = ensure_llm()
+
+    card: dict = {}
+    if _CARDS_IMPORT_OK:
+        try:
+            card = _load_card_prompt(params.card_mode)
+        except Exception:
+            card = {}
+
+    system_prompt: str = card.get("system_prompt", "당신은 유능한 사무 보조 AI입니다.")
+    user_tmpl: str = card.get("user_prompt_template", "{{ query }}")
+
+    # 첨부 파일 텍스트 읽기
+    file_texts: list[str] = []
+    for fp in params.file_paths:
+        try:
+            file_texts.append(Path(fp).read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            pass
+
+    user_content = user_tmpl.replace("{{ query }}", params.query)
+    if file_texts:
+        user_content += "\n\n## 첨부 파일 내용\n" + "\n\n---\n".join(file_texts)
+
+    prompt = f"<s>[INST] <<SYS>>\n{system_prompt}\n<</SYS>>\n\n{user_content} [/INST]"
+    return llm.generate(prompt, max_tokens=1024)
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -95,6 +158,26 @@ if _FASTAPI_AVAILABLE:
     @app.get("/health")
     def health():
         return {"status": "ok", "service": "butler-pc-core-sidecar", "version": "0.9.0"}
+
+    @app.get("/api/sidecar/health")
+    def sidecar_health():
+        llm = ensure_llm()
+        return {
+            "status": "ok",
+            "service": "butler-pc-core-sidecar",
+            "version": "0.9.0",
+            "model_status": llm.status,
+            "active_tasks": len(_active_controllers),
+        }
+
+    @app.get("/api/model/status")
+    def model_status():
+        llm = ensure_llm()
+        return {
+            "status": llm.status,
+            "model_path": os.environ.get("BUTLER_MODEL_PATH", ""),
+            "last_error": getattr(llm, "last_error", ""),
+        }
 
     @app.post("/api/precheck", response_model=PrecheckResponse)
     def precheck(req: PrecheckRequest):
@@ -158,6 +241,7 @@ if _FASTAPI_AVAILABLE:
 
         start = time.monotonic()
         last_event_time = start
+        chunk_results: list[str] = []
 
         async def _heartbeat_if_idle() -> AsyncGenerator[str, None]:
             nonlocal last_event_time
@@ -171,23 +255,23 @@ if _FASTAPI_AVAILABLE:
             last_event_time = time.monotonic()
 
             for i in range(total):
-                ctrl.check_hard_timeout()  # 빠른 하드 타임아웃 검사 (타임아웃 없이)
+                ctrl.check_hard_timeout()
 
                 chunk_start = time.monotonic()
                 async for frame in _heartbeat_if_idle():
                     yield frame
 
-                # 실제 청크 처리 함수를 chunk_timeout 안에 강제 종료 (P1 수정)
                 loop = asyncio.get_event_loop()
                 try:
-                    await asyncio.wait_for(
-                        loop.run_in_executor(None, _stub_chunk_work, i),
+                    chunk_text: str = await asyncio.wait_for(
+                        loop.run_in_executor(None, _real_chunk_work, params, i),
                         timeout=ctrl.chunk_timeout,
                     )
+                    chunk_results.append(chunk_text)
                 except asyncio.TimeoutError:
-                    ctrl._abort("chunk_timeout")  # ChunkTimeoutError 발생
+                    ctrl._abort("chunk_timeout")
 
-                ctrl.check_hard_timeout()  # 청크 완료 후 하드 타임아웃 재확인
+                ctrl.check_hard_timeout()
 
                 chunk_elapsed = time.monotonic() - chunk_start
                 elapsed_total = time.monotonic() - start
@@ -212,9 +296,17 @@ if _FASTAPI_AVAILABLE:
             yield _sse("verify_start", {})
             last_event_time = time.monotonic()
 
+            result_text = "\n\n".join(chunk_results)
             result_path = str(Path(params.output_dir) / f"{task_id}_result.json")
+            try:
+                with open(result_path, "w", encoding="utf-8") as _f:
+                    json.dump({"task_id": task_id, "results": chunk_results}, _f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
+
             yield _sse("complete", {
                 "result_path": result_path,
+                "result_text": result_text,
                 "total_elapsed_sec": round(time.monotonic() - start, 2),
             })
 
@@ -371,8 +463,15 @@ else:
 # 진입점
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
+    import argparse as _argparse
+
+    _parser = _argparse.ArgumentParser(description="Butler PC Core Sidecar")
+    _parser.add_argument("--host", default="127.0.0.1", help="바인딩 호스트 (기본: 127.0.0.1)")
+    _parser.add_argument("--port", type=int, default=8765, help="바인딩 포트 (기본: 8765)")
+    _args = _parser.parse_args()
+
     if _FASTAPI_AVAILABLE:
         import uvicorn
-        uvicorn.run("butler_sidecar:app", host="127.0.0.1", port=8765, reload=False)
+        uvicorn.run("butler_sidecar:app", host=_args.host, port=_args.port, reload=False)
     else:
-        _run_stdlib_server()
+        _run_stdlib_server(host=_args.host, port=_args.port)

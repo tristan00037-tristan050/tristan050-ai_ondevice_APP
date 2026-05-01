@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Butler sidecar launcher — Tauri externalBin 래퍼
+# 이 스크립트는 butler_sidecar.py를 찾아 python3로 실행한다.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# 1) 앱 번들 내부 Resources 경로 (프로덕션)
+BUNDLE_SIDECAR="${SCRIPT_DIR}/../Resources/butler_sidecar.py"
+# 2) 개발환경 — src-tauri/binaries 기준 상위 경로
+DEV_SIDECAR="${SCRIPT_DIR}/../../../../butler_sidecar.py"
+
+if [[ -f "$BUNDLE_SIDECAR" ]]; then
+    SIDECAR_PY="$BUNDLE_SIDECAR"
+    WORK_DIR="$(dirname "$BUNDLE_SIDECAR")"
+elif [[ -f "$DEV_SIDECAR" ]]; then
+    SIDECAR_PY="$(realpath "$DEV_SIDECAR")"
+    WORK_DIR="$(dirname "$SIDECAR_PY")"
+else
+    echo "[butler-sidecar] ERROR: butler_sidecar.py not found" >&2
+    exit 1
+fi
+
+exec python3 "$SIDECAR_PY" "$@" &

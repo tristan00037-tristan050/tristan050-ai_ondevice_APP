@@ -2,7 +2,9 @@ import React, { useState, useRef } from 'react';
 import { HomeScreen } from './components/HomeScreen';
 import { EgressBadge } from './components/EgressBadge';
 import { InputBar } from './components/InputBar';
+import { ModelSetup } from './components/ModelSetup';
 import { ProgressOverlay } from './components/ProgressOverlay';
+import { SIDECAR_BASE } from './constants';
 import type { SSEEvent } from './types';
 
 export function App() {
@@ -25,7 +27,7 @@ export function App() {
       files.forEach((file, idx) => formData.append(`file_${idx}`, file));
       formData.append('file_count', String(files.length));
 
-      const res = await fetch('/api/analyze/stream', {
+      const res = await fetch(`${SIDECAR_BASE}/api/analyze/stream`, {
         method: 'POST',
         body: formData,
         signal: ctrl.signal,
@@ -62,6 +64,7 @@ export function App() {
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: 16 }}>
       <EgressBadge />
+      <ModelSetup />
       <HomeScreen onCardSelect={setCardMode}>
         <InputBar onSubmit={handleSubmit} />
       </HomeScreen>
