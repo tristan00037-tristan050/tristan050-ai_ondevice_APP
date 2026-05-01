@@ -18,7 +18,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:5903 http://localhost:5903; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:5903 http://localhost:5903; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
+      "devCsp": null
     }
   },
   "bundle": {
