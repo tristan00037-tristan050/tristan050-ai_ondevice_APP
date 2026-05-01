@@ -37,6 +37,53 @@ Butler는 Apple Developer 프로그램에 미가입 상태(코드 서명 없음)
 
 > **주의:** 이 절차는 사내 배포 버전에만 해당합니다. 출처 불명 파일에는 동일한 우회를 시도하지 마세요.
 
+### 1.4 Python 의존성 설치
+
+Butler의 AI 엔진은 Python 사이드카(butler_sidecar.py)로 구동됩니다.  
+배포 패키지에 포함되어 있으나, 최초 1회 아래 명령을 실행해야 합니다.
+
+```bash
+# 터미널에서 실행 (Butler 배포 폴더로 이동 후)
+pip3 install -r requirements-serving.txt
+```
+
+> Python 3.10 이상이 필요합니다. `python3 --version`으로 확인하세요.
+
+### 1.5 AI 모델 다운로드 및 경로 설정
+
+Butler는 로컬 GGUF 모델 파일을 사용합니다. 모델 파일은 앱과 별도로 관리합니다.
+
+**모델 다운로드 (권장: Qwen3-4B Q4_K_M):**
+
+```bash
+# Hugging Face CLI 사용
+pip3 install huggingface_hub
+huggingface-cli download Qwen/Qwen3-4B-GGUF qwen3-4b-q4_k_m.gguf \
+  --local-dir ~/butler-models
+```
+
+**모델 경로 설정:**
+
+```bash
+# ~/.zshrc 또는 ~/.bash_profile에 추가
+export BUTLER_MODEL_PATH="$HOME/butler-models/qwen3-4b-q4_k_m.gguf"
+```
+
+설정 후 새 터미널을 열거나 `source ~/.zshrc`를 실행하세요.
+
+**LLM 추론 라이브러리 설치 (선택 — 고품질 응답을 원할 경우):**
+
+```bash
+# Apple Silicon Mac
+CMAKE_ARGS="-DGGML_METAL=ON" pip3 install llama-cpp-python
+
+# Intel Mac
+pip3 install llama-cpp-python
+```
+
+> `llama-cpp-python` 미설치 시에도 Butler는 작동합니다. 이 경우 "stub 응답"이 표시되며,  
+> 상단 노란색 배너에서 설치 안내를 확인할 수 있습니다.
+
 ---
 
 ## 2. 첫 실행

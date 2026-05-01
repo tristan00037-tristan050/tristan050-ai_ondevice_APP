@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { SIDECAR_BASE } from '../constants';
 import type { FileGrade } from '../types';
 
 interface PrecheckResult {
@@ -36,7 +37,7 @@ export function InputBar({
   cardMode,
   onSubmit,
   maxLength = 4000,
-  precheckUrl = '/api/precheck',
+  precheckUrl = `${SIDECAR_BASE}/api/precheck`,
   invokeVoice = defaultVoiceFn,
 }: InputBarProps) {
   const [text, setText] = useState('');

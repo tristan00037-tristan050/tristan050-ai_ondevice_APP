@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import subprocess as _subprocess
 import sys
 import tempfile
 import time
@@ -53,9 +55,46 @@ from butler_pc_core.runtime.timeout_controller import (
 _active_controllers: dict[str, TimeoutController] = {}
 _controllers_lock = asyncio.Lock() if _FASTAPI_AVAILABLE else None  # type: ignore[assignment]
 
+_CHUNK_WORKER = Path(__file__).resolve().parent / "butler_pc_core" / "inference" / "chunk_worker.py"
 
-def _stub_chunk_work(chunk_index: int) -> None:
-    """청크 처리 스텁 — Phase 4에서 실제 파이프라인 연결 예정."""
+
+async def _real_chunk_work_isolated(
+    params: "_AnalyzeParams",
+    chunk_idx: int,
+    timeout_sec: float,
+) -> str:
+    """LLM inference를 별도 subprocess에서 격리 실행.
+    timeout 시 SIGKILL → thread 누수 없음.
+    """
+    params_json = json.dumps(params.__dict__, default=str)
+    cmd = [
+        sys.executable,
+        str(_CHUNK_WORKER),
+        "--params", params_json,
+        "--chunk-idx", str(chunk_idx),
+    ]
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent)},
+    )
+
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
+        if proc.returncode != 0:
+            err = (stderr or b"").decode(errors="replace")[:200]
+            raise RuntimeError(f"chunk worker 오류 (rc={proc.returncode}): {err}")
+        result = json.loads(stdout.decode())
+        return str(result.get("result", ""))
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+            await proc.wait()
+        except ProcessLookupError:
+            pass
+        raise
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -95,6 +134,28 @@ if _FASTAPI_AVAILABLE:
     @app.get("/health")
     def health():
         return {"status": "ok", "service": "butler-pc-core-sidecar", "version": "0.9.0"}
+
+    @app.get("/api/sidecar/health")
+    def sidecar_health():
+        model_path = os.environ.get("BUTLER_MODEL_PATH", "")
+        model_status = "ready" if (model_path and Path(model_path).exists()) else "no_model"
+        return {
+            "status": "ok",
+            "service": "butler-pc-core-sidecar",
+            "version": "0.9.0",
+            "model_status": model_status,
+            "active_tasks": len(_active_controllers),
+        }
+
+    @app.get("/api/model/status")
+    def model_status():
+        model_path = os.environ.get("BUTLER_MODEL_PATH", "")
+        if not model_path:
+            return {"status": "no_model", "model_path": "", "last_error": "BUTLER_MODEL_PATH 미설정"}
+        p = Path(model_path)
+        if not p.exists():
+            return {"status": "no_model", "model_path": model_path, "last_error": "파일 없음"}
+        return {"status": "ready", "model_path": model_path, "last_error": ""}
 
     @app.post("/api/precheck", response_model=PrecheckResponse)
     def precheck(req: PrecheckRequest):
@@ -158,6 +219,7 @@ if _FASTAPI_AVAILABLE:
 
         start = time.monotonic()
         last_event_time = start
+        chunk_results: list[str] = []
 
         async def _heartbeat_if_idle() -> AsyncGenerator[str, None]:
             nonlocal last_event_time
@@ -171,23 +233,21 @@ if _FASTAPI_AVAILABLE:
             last_event_time = time.monotonic()
 
             for i in range(total):
-                ctrl.check_hard_timeout()  # 빠른 하드 타임아웃 검사 (타임아웃 없이)
+                ctrl.check_hard_timeout()
 
                 chunk_start = time.monotonic()
                 async for frame in _heartbeat_if_idle():
                     yield frame
 
-                # 실제 청크 처리 함수를 chunk_timeout 안에 강제 종료 (P1 수정)
-                loop = asyncio.get_event_loop()
                 try:
-                    await asyncio.wait_for(
-                        loop.run_in_executor(None, _stub_chunk_work, i),
-                        timeout=ctrl.chunk_timeout,
+                    chunk_text: str = await _real_chunk_work_isolated(
+                        params, i, ctrl.chunk_timeout
                     )
+                    chunk_results.append(chunk_text)
                 except asyncio.TimeoutError:
-                    ctrl._abort("chunk_timeout")  # ChunkTimeoutError 발생
+                    ctrl._abort("chunk_timeout")
 
-                ctrl.check_hard_timeout()  # 청크 완료 후 하드 타임아웃 재확인
+                ctrl.check_hard_timeout()
 
                 chunk_elapsed = time.monotonic() - chunk_start
                 elapsed_total = time.monotonic() - start
@@ -212,9 +272,17 @@ if _FASTAPI_AVAILABLE:
             yield _sse("verify_start", {})
             last_event_time = time.monotonic()
 
+            result_text = "\n\n".join(chunk_results)
             result_path = str(Path(params.output_dir) / f"{task_id}_result.json")
+            try:
+                with open(result_path, "w", encoding="utf-8") as _f:
+                    json.dump({"task_id": task_id, "results": chunk_results}, _f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
+
             yield _sse("complete", {
                 "result_path": result_path,
+                "result_text": result_text,
                 "total_elapsed_sec": round(time.monotonic() - start, 2),
             })
 
@@ -371,8 +439,15 @@ else:
 # 진입점
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
+    import argparse as _argparse
+
+    _parser = _argparse.ArgumentParser(description="Butler PC Core Sidecar")
+    _parser.add_argument("--host", default="127.0.0.1", help="바인딩 호스트 (기본: 127.0.0.1)")
+    _parser.add_argument("--port", type=int, default=8765, help="바인딩 포트 (기본: 8765)")
+    _args = _parser.parse_args()
+
     if _FASTAPI_AVAILABLE:
         import uvicorn
-        uvicorn.run("butler_sidecar:app", host="127.0.0.1", port=8765, reload=False)
+        uvicorn.run("butler_sidecar:app", host=_args.host, port=_args.port, reload=False)
     else:
-        _run_stdlib_server()
+        _run_stdlib_server(host=_args.host, port=_args.port)
