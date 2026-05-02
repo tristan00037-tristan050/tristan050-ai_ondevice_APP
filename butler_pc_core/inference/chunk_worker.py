@@ -57,10 +57,10 @@ def main() -> None:
     if file_texts:
         user_content += "\n\n## 첨부 파일 내용\n" + "\n\n---\n".join(file_texts)
 
-    # Qwen3 ChatML 포맷 — <s>[INST] 형식(LLaMA-2)은 Qwen3에서 빈 응답 유발
+    # Qwen3 ChatML — /no_think 로 thinking 블록 비활성화 (속도 우선)
     prompt = (
         f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
-        f"<|im_start|>user\n{user_content}<|im_end|>\n"
+        f"<|im_start|>user\n/no_think\n{user_content}<|im_end|>\n"
         f"<|im_start|>assistant\n"
     )
 
