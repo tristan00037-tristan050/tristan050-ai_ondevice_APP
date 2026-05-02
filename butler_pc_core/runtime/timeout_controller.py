@@ -5,8 +5,8 @@ Butler PC Core – Timeout / Cancel / Partial Result 컨트롤러
 
 동작 방식
 ---------
-- hard timeout  : 180 초 (전체 작업 한도)
-- chunk timeout : 45 초  (청크 단위 한도)
+- hard timeout  : 300 초 (전체 작업 한도)
+- chunk timeout : 120 초 (청크 단위 한도)
 - 중단 발생 시  : partial_result.json 자동 생성 후 PartialResultError 발생
 
 스레드 안전성
@@ -28,8 +28,8 @@ from typing import Any, Callable, Optional
 # ---------------------------------------------------------------------------
 # 상수
 # ---------------------------------------------------------------------------
-HARD_TIMEOUT_SEC  = 180.0
-CHUNK_TIMEOUT_SEC = 45.0
+HARD_TIMEOUT_SEC  = 300.0
+CHUNK_TIMEOUT_SEC = 120.0
 
 
 # ---------------------------------------------------------------------------
