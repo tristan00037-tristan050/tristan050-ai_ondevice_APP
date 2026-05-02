@@ -21,4 +21,4 @@ else
     exit 1
 fi
 
-exec python3 "$SIDECAR_PY" "$@" &
+exec python3 "$SIDECAR_PY" "$@"

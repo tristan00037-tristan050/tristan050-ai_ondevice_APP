@@ -6,7 +6,7 @@ import type { SSEEvent } from '../types';
 describe('ProgressOverlay', () => {
   it('test_happy_chunk_progress_updates_progressbar', () => {
     const events: SSEEvent[] = [
-      { type: 'chunk_progress', data: { current: 4, total: 8, phase: 2, total_phases: 4, estimated_remaining_secs: 45 } },
+      { type: 'chunk_progress', data: { current: 4, total: 8, phase: 2, total_phases: 4, est_remaining_sec: 45 } },
     ];
     render(<ProgressOverlay visible events={events} onCancel={vi.fn()} />);
     const bar = screen.getByTestId('progress-bar') as HTMLProgressElement;
@@ -26,7 +26,7 @@ describe('ProgressOverlay', () => {
 
   it('test_boundary_heartbeat_keeps_ui_alive', () => {
     const events: SSEEvent[] = [
-      { type: 'heartbeat', data: { elapsed_seconds: 45 } },
+      { type: 'heartbeat', data: { elapsed_sec: 45 } },
     ];
     render(<ProgressOverlay visible events={events} onCancel={vi.fn()} />);
     expect(screen.getByTestId('progress-overlay')).toHaveAttribute('data-state', 'heartbeat');
