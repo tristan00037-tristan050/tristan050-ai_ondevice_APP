@@ -1,0 +1,73 @@
+{
+  "version": "1.0.0",
+  "category": "korea_accounting",
+  "last_verified": "2026-05-01",
+  "notes": "출처: 한국채택국제회계기준(K-IFRS), 일반기업회계기준(K-GAAP), 회계 표준 교재.",
+  "facts": [
+    {
+      "id": "kr_acc_financial_statements_v1",
+      "category": "korea_accounting",
+      "question_patterns": [
+        "재무제표 종류 5가지",
+        "재무제표 구성",
+        "재무제표 5대 종류",
+        "재무제표 어떤 것"
+      ],
+      "keywords_required": ["재무제표"],
+      "keywords_any": ["종류", "구성", "어떤"],
+      "answer": "K-IFRS 기준 재무제표는 5가지로 구성됩니다 (K-IFRS 제1001호 '재무제표 표시').\n\n1. 재무상태표 (Statement of Financial Position): 특정 시점의 자산·부채·자본을 표시 (구 대차대조표).\n2. 포괄손익계산서 (Statement of Comprehensive Income): 일정 기간 수익·비용·당기순손익·기타포괄손익을 표시.\n3. 자본변동표 (Statement of Changes in Equity): 일정 기간 자본 항목의 변동 내역.\n4. 현금흐름표 (Statement of Cash Flows): 일정 기간 현금 유입·유출을 영업·투자·재무활동으로 구분 표시.\n5. 주석 (Notes): 회계정책, 추정 가정, 보충 정보 등 본문에 표시되지 않는 정보.\n\n일반기업회계기준(K-GAAP)도 동일하게 5가지(주석 포함)이며, 명칭은 손익계산서·이익잉여금처분계산서 등을 사용할 수 있습니다.\n\n작성 의무: 외부감사 대상 회사는 K-IFRS 또는 K-GAAP 적용. 상장법인은 K-IFRS 의무 적용.",
+      "source": "한국회계기준원 / K-IFRS 제1001호",
+      "source_url": "https://www.kasb.or.kr/",
+      "verified_at": "2026-05-01",
+      "confidence": 1.0
+    },
+    {
+      "id": "kr_acc_debit_credit_v1",
+      "category": "korea_accounting",
+      "question_patterns": [
+        "차변 대변 차이",
+        "차변과 대변 무엇",
+        "분개 차변 대변 원칙"
+      ],
+      "keywords_required": [],
+      "keywords_any": ["차변", "대변", "분개"],
+      "answer": "복식부기의 차변(借邊)과 대변(貸邊)은 회계장부의 좌·우 양측을 의미하며, 거래의 이중성에 따라 양변 합계가 항상 일치해야 합니다 (대차평균의 원리).\n\n차변(왼쪽)에 기록하는 항목:\n- 자산의 증가 (현금, 매출채권, 재고자산 증가 등)\n- 부채의 감소 (차입금 상환, 매입채무 감소 등)\n- 자본의 감소 (자기주식 취득 등)\n- 비용의 발생 (급여, 임차료, 매출원가 등)\n\n대변(오른쪽)에 기록하는 항목:\n- 자산의 감소 (현금 지급, 매출채권 회수 등)\n- 부채의 증가 (차입, 매입 등)\n- 자본의 증가 (유상증자, 이익잉여금 증가 등)\n- 수익의 발생 (매출, 이자수익 등)\n\n예시 분개: 현금 100만원으로 상품을 매입한 경우 → (차) 상품 100만원 / (대) 현금 100만원.",
+      "source": "한국회계기준원 / 일반기업회계기준",
+      "source_url": "https://www.kasb.or.kr/",
+      "verified_at": "2026-05-01",
+      "confidence": 1.0
+    },
+    {
+      "id": "kr_acc_assets_equation_v1",
+      "category": "korea_accounting",
+      "question_patterns": [
+        "회계 등식",
+        "자산 부채 자본 관계",
+        "회계 기본 등식"
+      ],
+      "keywords_required": [],
+      "keywords_any": ["회계 등식", "자산 부채 자본"],
+      "answer": "회계의 기본 등식 (재무상태표 등식):\n\n자산 = 부채 + 자본\n\n의미:\n- 자산 (Assets): 기업이 보유한 경제적 자원\n- 부채 (Liabilities): 외부에 갚아야 할 의무 (타인자본)\n- 자본 (Equity): 자산에서 부채를 뺀 잔여 청구권 (자기자본)\n\n확장된 등식 (손익을 포함):\n자산 = 부채 + (자본금 + 이익잉여금) = 부채 + 자본금 + (수익 - 비용)\n\n복식부기에서는 모든 거래가 이 등식의 양변을 균형 상태로 유지하도록 양변에 동시 기록됩니다 (대차평균의 원리).\n\n예시:\n- 회사가 1,000만원을 차입하면: 자산(현금) +1,000만원 / 부채(차입금) +1,000만원 → 양변 동일하게 증가\n- 1,000만원 매출 발생: 자산(현금 또는 매출채권) +1,000만원 / 자본(수익을 통한 이익잉여금) +1,000만원 → 양변 균형",
+      "source": "한국회계기준원 / 회계학 표준 교재",
+      "source_url": "https://www.kasb.or.kr/",
+      "verified_at": "2026-05-01",
+      "confidence": 1.0
+    },
+    {
+      "id": "kr_acc_depreciation_v1",
+      "category": "korea_accounting",
+      "question_patterns": [
+        "감가상각 무엇",
+        "감가상각 정의",
+        "감가상각 방법"
+      ],
+      "keywords_required": ["감가상각"],
+      "keywords_any": ["뭐", "무엇", "정의", "방법", "설명"],
+      "answer": "감가상각(Depreciation)은 유형자산의 취득원가를 그 자산의 내용연수에 걸쳐 체계적·합리적으로 비용으로 배분하는 회계 절차입니다.\n\n대상: 토지를 제외한 유형자산 (건물, 기계장치, 차량운반구, 비품 등). 토지는 감가상각하지 않습니다.\n\n주요 방법:\n1. 정액법 (Straight-line): 매년 동일 금액 상각. (취득원가 - 잔존가치) ÷ 내용연수\n2. 정률법 (Declining-balance): 장부가액에 일정 상각률을 곱해 계산. 초기 상각액이 큼.\n3. 생산량비례법 (Units-of-production): 실제 사용량·생산량에 비례하여 상각.\n4. 연수합계법 (Sum-of-years-digits): 잔여 내용연수의 비율로 가중 상각.\n\n세무 vs 회계: 회계상으로는 합리적 추정에 따라 방법 선택 가능. 세무상으로는 법인세법 시행령 별표에 따른 기준내용연수와 상각방법(정액법·정률법) 적용.\n\n감가상각비는 손익계산서의 비용 항목, 누적 감가상각액은 재무상태표상 해당 자산의 차감 항목으로 표시.",
+      "source": "한국회계기준원 / 법인세법 시행령",
+      "source_url": "https://www.kasb.or.kr/",
+      "verified_at": "2026-05-01",
+      "confidence": 1.0
+    }
+  ]
+}

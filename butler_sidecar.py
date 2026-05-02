@@ -51,6 +51,14 @@ from butler_pc_core.runtime.timeout_controller import (
     UserCancelledError,
     HARD_TIMEOUT_SEC,
 )
+from butler_pc_core.factpack import FactPack
+from butler_pc_core.factpack.schema import FactPackAuditEntry
+from datetime import datetime, timezone as _tz
+
+# FactPack — 기동 시 1회 로드 (수~수십 ms, 메모리 ~수 MB)
+FACT_PACK = FactPack.from_default_facts_dir()
+_PACK_VERSION = "factpack-v1"
+_factpack_audit_log: list[FactPackAuditEntry] = []
 
 # task_id → TimeoutController マップ (キャンセル用)
 _active_controllers: dict[str, TimeoutController] = {}
@@ -210,6 +218,21 @@ if _FASTAPI_AVAILABLE:
         )
 
     # -----------------------------------------------------------------------
+    # FactPack 출력 포매팅
+    # -----------------------------------------------------------------------
+    def _format_factpack_answer(fact) -> str:
+        """fact 답변에 출처 푸터 자동 부착."""
+        lines = [fact.answer.rstrip(), "", "─────────"]
+        lines.append(f"출처: {fact.source} ({fact.verified_at} 기준)")
+        if fact.source_doc:
+            lines.append(f"근거 문서: {fact.source_doc}")
+        if fact.source_url:
+            lines.append(fact.source_url)
+        if fact.expires_at:
+            lines.append(f"※ 본 답변은 {fact.expires_at}까지 유효 (이후 재검증 필요)")
+        return "\n".join(lines)
+
+    # -----------------------------------------------------------------------
     # SSE helpers
     # -----------------------------------------------------------------------
     def _sse(event: str, data: dict) -> str:
@@ -222,6 +245,43 @@ if _FASTAPI_AVAILABLE:
         task_id: str,
     ) -> AsyncGenerator[str, None]:
         """진행률 SSE 제너레이터."""
+        # ── (1) FactPack 1차 매칭 — HIT 시 LLM 호출 없이 즉시 응답 ──
+        fp_match = FACT_PACK.lookup(params.query)
+        if fp_match is not None:
+            answer = _format_factpack_answer(fp_match.fact)
+            yield _sse("meta", {
+                "source": "factpack",
+                "fact_id": fp_match.fact.id,
+                "score": round(fp_match.score, 3),
+            })
+            yield _sse("complete", {
+                "result_text": answer,
+                "result_path": "",
+                "total_elapsed_sec": 0.0,
+            })
+            _factpack_audit_log.append(FactPackAuditEntry(
+                query=params.query,
+                source="factpack",
+                fact_id=fp_match.fact.id,
+                score=fp_match.score,
+                threshold_used=FACT_PACK.threshold,
+                timestamp_iso=datetime.now(_tz.utc).isoformat(),
+                pack_version=_PACK_VERSION,
+            ))
+            return
+
+        # ── (2) FactPack 미스 → 기존 LLM 파이프라인 ──
+        yield _sse("meta", {"source": "llm"})
+        _factpack_audit_log.append(FactPackAuditEntry(
+            query=params.query,
+            source="llm",
+            fact_id=None,
+            score=None,
+            threshold_used=FACT_PACK.threshold,
+            timestamp_iso=datetime.now(_tz.utc).isoformat(),
+            pack_version=_PACK_VERSION,
+        ))
+
         total = max(1, params.total_chunks)
         ctrl = TimeoutController(
             task_id=task_id,
