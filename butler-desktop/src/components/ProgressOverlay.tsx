@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { SSEEvent } from '../types';
 
 interface ProgressOverlayProps {
@@ -16,6 +16,13 @@ const CANCELLED_MESSAGES: Record<string, string> = {
 };
 
 export function ProgressOverlay({ visible, events, onCancel, onViewPartial, onResult }: ProgressOverlayProps) {
+  // complete 이벤트 도착 시 onResult 자동 호출 — App.tsx SSE 루프의 백업
+  useEffect(() => {
+    if (!visible) return;
+    const completeEvt = events.find(e => e.type === 'complete');
+    if (completeEvt) onResult?.(completeEvt.data);
+  }, [events, visible, onResult]);
+
   if (!visible) return null;
 
   const lastEvent = events[events.length - 1] as SSEEvent | undefined;
