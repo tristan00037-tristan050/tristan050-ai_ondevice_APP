@@ -264,7 +264,7 @@ if _FASTAPI_AVAILABLE:
                 source="factpack",
                 fact_id=fp_match.fact.id,
                 score=fp_match.score,
-                threshold_used=FACT_PACK.threshold,
+                threshold_used=FACT_PACK.matcher.threshold,
                 timestamp_iso=datetime.now(_tz.utc).isoformat(),
                 pack_version=_PACK_VERSION,
             ))
@@ -277,7 +277,7 @@ if _FASTAPI_AVAILABLE:
             source="llm",
             fact_id=None,
             score=None,
-            threshold_used=FACT_PACK.threshold,
+            threshold_used=FACT_PACK.matcher.threshold,
             timestamp_iso=datetime.now(_tz.utc).isoformat(),
             pack_version=_PACK_VERSION,
         ))
