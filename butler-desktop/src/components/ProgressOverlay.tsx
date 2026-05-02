@@ -65,7 +65,7 @@ export function ProgressOverlay({ visible, events, onCancel, onViewPartial, onRe
   }
 
   if (lastEvent.type === 'heartbeat') {
-    const elapsed = (lastEvent.data.elapsed_seconds as number) ?? 0;
+    const elapsed = (lastEvent.data.elapsed_sec as number) ?? 0;
     return (
       <div data-testid="progress-overlay" data-state="heartbeat">
         <p data-testid="heartbeat-msg">응답 대기 중... ({elapsed}초 경과)</p>
@@ -79,7 +79,7 @@ export function ProgressOverlay({ visible, events, onCancel, onViewPartial, onRe
   const total = (lastEvent.data.total as number) ?? 1;
   const phase = (lastEvent.data.phase as number) ?? 1;
   const totalPhases = (lastEvent.data.total_phases as number) ?? 4;
-  const remaining = (lastEvent.data.estimated_remaining_secs as number) ?? 0;
+  const remaining = (lastEvent.data.est_remaining_sec as number) ?? 0;
   const pct = total > 0 ? Math.round((current / total) * 100) : 0;
 
   const phaseLabel: Record<string, string> = {

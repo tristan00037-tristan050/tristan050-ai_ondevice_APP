@@ -49,6 +49,17 @@ pip3 install -r requirements-serving.txt
 
 > Python 3.10 이상이 필요합니다. `python3 --version`으로 확인하세요.
 
+> **⚠️ LLM 실제 응답을 받으려면 llama-cpp-python이 필요합니다.**  
+> `requirements-serving.txt`에 포함되어 있지만, Apple Silicon Mac에서는  
+> Metal GPU 가속을 위해 아래 명령으로 별도 설치를 권장합니다:
+>
+> ```bash
+> # Apple Silicon (Metal GPU 가속)
+> CMAKE_ARGS="-DGGML_METAL=ON" pip3 install llama-cpp-python
+> ```
+>
+> 미설치 시에도 Butler는 작동하지만 "stub 응답"이 표시됩니다.
+
 ### 1.5 AI 모델 다운로드 및 경로 설정
 
 Butler는 로컬 GGUF 모델 파일을 사용합니다. 모델 파일은 앱과 별도로 관리합니다.
