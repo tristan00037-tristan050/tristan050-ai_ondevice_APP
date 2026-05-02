@@ -78,9 +78,13 @@ def test_adv_generate_passes_stop_tokens_to_llama():
 
     rt.generate("프롬프트")
 
-    call_kwargs = mock_llm.call_args
-    stop_arg = call_kwargs.kwargs.get("stop") or call_kwargs.args[1] if call_kwargs.args[1:] else call_kwargs.kwargs.get("stop")
-    # keyword 인자로 전달됐는지 확인
-    assert call_kwargs.kwargs.get("stop") == DEFAULT_STOP_TOKENS, (
-        f"stop token이 Llama에 전달되지 않음: {call_kwargs}"
+    assert mock_llm.call_args.kwargs.get("stop") == DEFAULT_STOP_TOKENS, (
+        f"stop token이 Llama에 전달되지 않음: {mock_llm.call_args}"
     )
+
+
+def test_boundary_strip_token_at_position_zero_preserved():
+    """stop token이 위치 0에 있으면 잘라내지 않는다 — 빈 응답 방지."""
+    leading_token = "<|im_end|>본문 텍스트"
+    result = _strip_residual_stop_tokens(leading_token)
+    assert result == leading_token.strip()

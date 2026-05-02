@@ -29,10 +29,11 @@ DEFAULT_STOP_TOKENS: list[str] = [
 
 
 def _strip_residual_stop_tokens(text: str) -> str:
-    """generate() 후처리: stop token이 출력에 포함된 경우 잘라낸다."""
+    """generate() 후처리: stop token이 출력 내에 잔류할 경우 잘라낸다.
+    위치 0에서 시작하는 경우는 건너뜀 — 포맷 불일치 시 빈 응답 방지."""
     for tok in DEFAULT_STOP_TOKENS:
         idx = text.find(tok)
-        if idx != -1:
+        if idx > 0:
             text = text[:idx]
     return text.strip()
 
