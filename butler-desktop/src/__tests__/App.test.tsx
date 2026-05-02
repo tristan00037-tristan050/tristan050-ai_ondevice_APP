@@ -87,6 +87,62 @@ describe('App integration', () => {
     );
   });
 
+  it('test_happy_complete_event_shows_result_immediately', async () => {
+    // complete 이벤트 → overlay 닫힘 + result-panel 자동 표시 (버튼 클릭 불필요)
+    const sseBody = 'event: complete\ndata: {"result_text": "테스트 결과입니다"}\n\n';
+    const encoder = new TextEncoder();
+    vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
+      if (String(url).includes('/api/precheck')) {
+        return Promise.resolve(new Response(JSON.stringify({ grade: 'S' }), {
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      const stream = new ReadableStream({
+        start(c) { c.enqueue(encoder.encode(sseBody)); c.close(); },
+      });
+      return Promise.resolve(new Response(stream, { status: 200 }));
+    });
+
+    render(<App />);
+
+    fireEvent.change(screen.getByTestId('text-input'), { target: { value: '질문' } });
+    await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('result-panel')).toBeInTheDocument();
+    }, { timeout: 2000 });
+
+    expect(screen.getByTestId('result-panel').textContent).toContain('테스트 결과입니다');
+    // overlay가 닫혀 있어야 함
+    expect(screen.queryByTestId('cancel-btn')).not.toBeInTheDocument();
+  });
+
+  it('test_happy_result_panel_has_copy_button', async () => {
+    // 결과 패널에 복사 버튼 존재 확인
+    const sseBody = 'event: complete\ndata: {"result_text": "복사할 결과"}\n\n';
+    const encoder = new TextEncoder();
+    vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
+      if (String(url).includes('/api/precheck')) {
+        return Promise.resolve(new Response(JSON.stringify({ grade: 'S' }), {
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      const stream = new ReadableStream({
+        start(c) { c.enqueue(encoder.encode(sseBody)); c.close(); },
+      });
+      return Promise.resolve(new Response(stream, { status: 200 }));
+    });
+
+    render(<App />);
+
+    fireEvent.change(screen.getByTestId('text-input'), { target: { value: '질문' } });
+    await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('copy-btn')).toBeInTheDocument();
+    }, { timeout: 2000 });
+  });
+
   it('test_happy_no_files_works_with_text_only', async () => {
     // 정상 흐름: 파일 없이 텍스트만 전송 → query 포함, file_0 없음
     const fetchMock = makeFetchMock();
