@@ -21,6 +21,25 @@ try:
 except ImportError:
     _LLAMA_AVAILABLE = False
 
+# Qwen3 + 범용 stop token — [/S] 미설정 시 할루시네이션 루프 발생
+DEFAULT_STOP_TOKENS: list[str] = [
+    "[/S]", "[END]", "\n\n\n",
+    "<|im_end|>", "<|endoftext|>", "<|end|>", "</s>",
+]
+
+
+def _strip_residual_stop_tokens(text: str) -> str:
+    """generate() 후처리: stop token 제거 + Qwen3 <think> 블록 제거.
+    위치 0에서 시작하는 stop token은 건너뜀 — 포맷 불일치 시 빈 응답 방지."""
+    import re
+    # Qwen3 thinking 블록 제거 (<think>...</think>)
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    for tok in DEFAULT_STOP_TOKENS:
+        idx = text.find(tok)
+        if idx > 0:
+            text = text[:idx]
+    return text.strip()
+
 
 class LlmRuntime:
     """llama-cpp-python 기반 로컬 LLM 런타임 (GGUF 전용)."""
@@ -28,7 +47,7 @@ class LlmRuntime:
     def __init__(
         self,
         model_path: str | None = None,
-        n_ctx: int = 2048,
+        n_ctx: int = 4096,
         n_threads: int = 0,
     ) -> None:
         self._model_path = model_path
@@ -88,35 +107,40 @@ class LlmRuntime:
         prompt: str,
         max_tokens: int = 512,
         temperature: float = 0.2,
+        stop: list[str] | None = None,
     ) -> str:
         if self._status != "ready" or self._llm is None:
             return self._stub_response(prompt)
 
+        stop_tokens = stop if stop is not None else DEFAULT_STOP_TOKENS
         with self._lock:
             output = self._llm(
                 prompt,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                stop=["</s>", "\n\n###"],
+                stop=stop_tokens,
                 echo=False,
             )
-        return output["choices"][0]["text"].strip()
+        text = output["choices"][0]["text"].strip()
+        return _strip_residual_stop_tokens(text)
 
     def generate_stream(
         self,
         prompt: str,
         max_tokens: int = 512,
         temperature: float = 0.2,
+        stop: list[str] | None = None,
     ) -> Iterator[str]:
         if self._status != "ready" or self._llm is None:
             yield self._stub_response(prompt)
             return
 
+        stop_tokens = stop if stop is not None else DEFAULT_STOP_TOKENS
         for chunk in self._llm(  # type: ignore[union-attr]
             prompt,
             max_tokens=max_tokens,
             temperature=temperature,
-            stop=["</s>", "\n\n###"],
+            stop=stop_tokens,
             echo=False,
             stream=True,
         ):
