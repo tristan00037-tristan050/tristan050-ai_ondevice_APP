@@ -51,14 +51,24 @@ from butler_pc_core.runtime.timeout_controller import (
     UserCancelledError,
     HARD_TIMEOUT_SEC,
 )
-from butler_pc_core.factpack import FactPack
-from butler_pc_core.factpack.schema import FactPackAuditEntry
 from datetime import datetime, timezone as _tz
 
-# FactPack — 기동 시 1회 로드 (수~수십 ms, 메모리 ~수 MB)
-FACT_PACK = FactPack.from_default_facts_dir()
-_PACK_VERSION = "factpack-v1"
-_factpack_audit_log: list[FactPackAuditEntry] = []
+# FactPack 관련 import 및 초기화는 FastAPI/Pydantic 가용성에 의존.
+# (Pydantic 미설치 환경에서도 stdlib fallback 모드가 import 단계에서 깨지지 않도록 가드)
+if _FASTAPI_AVAILABLE:
+    from butler_pc_core.factpack import FactPack
+    from butler_pc_core.factpack.schema import FactPackAuditEntry
+
+    # FactPack — 기동 시 1회 로드 (수~수십 ms, 메모리 ~수 MB)
+    FACT_PACK = FactPack.from_default_facts_dir()
+    _PACK_VERSION = "factpack-v1"
+    _factpack_audit_log: list[FactPackAuditEntry] = []
+else:
+    # stdlib fallback 모드 — FactPack 분기는 라우트 핸들러 안에서만 호출되며,
+    # 라우트 핸들러 자체가 _FASTAPI_AVAILABLE 가드 안에 있으므로 None 안전.
+    FACT_PACK = None  # type: ignore[assignment]
+    _PACK_VERSION = "factpack-v1"
+    _factpack_audit_log = []  # type: ignore[var-annotated]
 
 # task_id → TimeoutController マップ (キャンセル用)
 _active_controllers: dict[str, TimeoutController] = {}
