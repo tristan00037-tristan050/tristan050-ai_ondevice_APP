@@ -10,7 +10,7 @@ const CARDS = [
 ] as const;
 
 interface EmptyStateProps {
-  onCardSelect?: (mode: string) => void;
+  onCardSelect?: (mode: string | null) => void;
 }
 
 export function EmptyState({ onCardSelect }: EmptyStateProps) {
@@ -18,8 +18,9 @@ export function EmptyState({ onCardSelect }: EmptyStateProps) {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const handleCardClick = (mode: string) => {
-    setActiveMode(prev => (prev === mode ? null : mode));
-    onCardSelect?.(mode);
+    const next = activeMode === mode ? null : mode;
+    setActiveMode(next);
+    onCardSelect?.(next);
   };
 
   const activeCard = CARDS.find(c => c.mode === activeMode) ?? null;
