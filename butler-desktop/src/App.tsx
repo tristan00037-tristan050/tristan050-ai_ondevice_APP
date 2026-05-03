@@ -116,6 +116,7 @@ export function App() {
   const handleSubmit = async (text: string, files: File[], mode: string) => {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
+    let currentSource: 'factpack' | 'llm' | null = null;
 
     // Get or create conversation
     let conv: Conversation;
@@ -218,6 +219,7 @@ export function App() {
 
           if (eventType === 'meta') {
             const src = data.source as 'factpack' | 'llm' | undefined;
+            currentSource = src ?? null;
             setPendingBot(prev => prev ? { ...prev, source: src ?? null } : prev);
           } else if (eventType === 'phase_start') {
             setPendingBot(prev => prev ? { ...prev, loadingStatus: '분석 중' } : prev);
@@ -232,6 +234,7 @@ export function App() {
               role: 'butler',
               content: resultText,
               timestamp: new Date().toISOString(),
+              source: currentSource ?? undefined,
             };
 
             setConversations(prev => {
