@@ -1,6 +1,11 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { App } from '../App';
+
+beforeEach(() => {
+  localStorage.clear();
+  vi.restoreAllMocks();
+});
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -89,7 +94,7 @@ describe('App integration', () => {
 
   it('test_happy_complete_event_shows_result_immediately', async () => {
     // complete 이벤트 → overlay 닫힘 + result-panel 자동 표시 (버튼 클릭 불필요)
-    const sseBody = 'event: complete\ndata: {"result_text": "테스트 결과입니다"}\n\n';
+    const sseBody = 'event: meta\ndata: {"source":"llm"}\n\nevent: phase_start\ndata: {"phase":"analyze","total_steps":1}\n\nevent: complete\ndata: {"result_text": "테스트 결과입니다"}\n\n';
     const encoder = new TextEncoder();
     vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
       if (String(url).includes('/api/precheck')) {
@@ -140,6 +145,61 @@ describe('App integration', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('copy-btn')).toBeInTheDocument();
+    }, { timeout: 2000 });
+  });
+
+  it('test_adv_factpack_source_badge_visible_after_complete', async () => {
+    // 결함 핫픽스 회귀: meta(source=factpack) + complete → "✓ 검증된 사실" 배지 표시
+    const sseBody =
+      'event: meta\ndata: {"source":"factpack"}\n\n' +
+      'event: phase_start\ndata: {"phase":"analyze","total_steps":1}\n\n' +
+      'event: complete\ndata: {"result_text":"검증된 답변입니다"}\n\n';
+    const encoder = new TextEncoder();
+    vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
+      if (String(url).includes('/api/precheck')) {
+        return Promise.resolve(new Response(JSON.stringify({ grade: 'S' }), {
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      const stream = new ReadableStream({
+        start(c) { c.enqueue(encoder.encode(sseBody)); c.close(); },
+      });
+      return Promise.resolve(new Response(stream, { status: 200 }));
+    });
+
+    render(<App />);
+    fireEvent.change(screen.getByTestId('text-input'), { target: { value: '사실 확인' } });
+    await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
+
+    await waitFor(() => {
+      expect(screen.getByText('✓ 검증된 사실')).toBeInTheDocument();
+    }, { timeout: 2000 });
+  });
+
+  it('test_adv_llm_source_badge_visible_after_complete', async () => {
+    // meta(source=llm) + complete → "✨ AI 생성" 배지 표시
+    const sseBody =
+      'event: meta\ndata: {"source":"llm"}\n\n' +
+      'event: complete\ndata: {"result_text":"AI가 생성한 답변"}\n\n';
+    const encoder = new TextEncoder();
+    vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
+      if (String(url).includes('/api/precheck')) {
+        return Promise.resolve(new Response(JSON.stringify({ grade: 'S' }), {
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      const stream = new ReadableStream({
+        start(c) { c.enqueue(encoder.encode(sseBody)); c.close(); },
+      });
+      return Promise.resolve(new Response(stream, { status: 200 }));
+    });
+
+    render(<App />);
+    fireEvent.change(screen.getByTestId('text-input'), { target: { value: '질문' } });
+    await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
+
+    await waitFor(() => {
+      expect(screen.getByText('✨ AI 생성')).toBeInTheDocument();
     }, { timeout: 2000 });
   });
 

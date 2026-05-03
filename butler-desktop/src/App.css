@@ -1,0 +1,69 @@
+/* Design tokens per DESIGN_SPEC_PR665.md */
+:root {
+  /* Colors */
+  --color-bg-app: #EBEBEB;
+  --color-bg-message-user: #FFFFFF;
+  --color-bg-sidebar: #FFFFFF;
+  --color-bg-input: #FFFFFF;
+  --color-brand-primary: #10367D;
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #666666;
+  --color-text-on-brand: #FFFFFF;
+  --color-border-subtle: #E0E0E0;
+  --color-success: #0F7B0F;
+  --color-warning: #B8860B;
+  --color-error: #B91C1C;
+
+  /* Typography */
+  --font-sans: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+  background: var(--color-bg-app);
+  line-height: 1.6;
+}
+
+button:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+}
+
+/* Message appear animation */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Thinking dots animation */
+@keyframes thinkDot {
+  0%, 60%, 100% { opacity: 0.2; }
+  30% { opacity: 1; }
+}

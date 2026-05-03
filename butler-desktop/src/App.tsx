@@ -1,39 +1,181 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { HomeScreen } from './components/HomeScreen';
+import React, { useState, useRef } from 'react';
 import { EgressBadge } from './components/EgressBadge';
-import { InputBar } from './components/InputBar';
-import { ModelSetup } from './components/ModelSetup';
-import { ProgressOverlay } from './components/ProgressOverlay';
+import { Sidebar } from './components/chat/Sidebar';
+import { EmptyState } from './components/chat/EmptyState';
+import { ChatInput } from './components/chat/ChatInput';
+import { MessageList } from './components/chat/MessageList';
+import { DeleteConfirmModal } from './components/chat/DeleteConfirmModal';
 import { SIDECAR_BASE } from './constants';
-import type { SSEEvent } from './types';
+import type { SSEEvent, Conversation, Message } from './types';
+import {
+  loadConversations,
+  saveConversations,
+  upsertConversation,
+  deleteConversation,
+  generateId,
+} from './lib/storage';
+
+type PendingBotState = {
+  source: 'factpack' | 'llm' | null;
+  loadingStatus: string;
+  content: string | null;
+  isError: boolean;
+  factId?: string;
+  score?: number;
+};
+
+const CARD_MODE_MAP: Record<number, string> = {
+  1: 'request_organize',
+  2: 'format_convert',
+  3: 'new_draft',
+  4: 'attachment_edit',
+  5: 'accounting_classify',
+  6: 'form_fill',
+};
+
+// Suppress unused import warning — CARD_MODE_MAP used below
+void CARD_MODE_MAP;
 
 export function App() {
-  const [sseEvents, setSseEvents] = useState<SSEEvent[]>([]);
-  const [overlayVisible, setOverlayVisible] = useState(false);
-  const [cardMode, setCardMode] = useState<number | null>(null);
-  const [resultText, setResultText] = useState<string | null>(null);
-  const [cancelReason, setCancelReason] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>(() => loadConversations());
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [pendingBot, setPendingBot] = useState<PendingBotState | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [cardMode, setCardMode] = useState<string>('free');
   const abortRef = useRef<AbortController | null>(null);
-  const resultRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (resultText && resultRef.current && typeof resultRef.current.scrollIntoView === 'function') {
-      resultRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const activeConv = conversations.find(c => c.id === activeConvId) ?? null;
+  const hasMessages = (activeConv?.messages.length ?? 0) > 0 || pendingBot !== null;
+
+  // --- Conversation management ---
+
+  const createNewConversation = (): Conversation => {
+    const now = new Date().toISOString();
+    return {
+      id: generateId(),
+      title: '새 대화',
+      title_is_custom: false,
+      created_at: now,
+      updated_at: now,
+      messages: [],
+    };
+  };
+
+  const handleNewConv = () => {
+    setActiveConvId(null);
+    setPendingBot(null);
+    setCardMode('free');
+    if (processing) {
+      abortRef.current?.abort();
+      setProcessing(false);
     }
-  }, [resultText]);
+  };
 
-  const handleSubmit = async (text: string, files: File[]) => {
+  const handleSelectConv = (id: string) => {
+    if (processing) {
+      abortRef.current?.abort();
+      setProcessing(false);
+    }
+    setPendingBot(null);
+    setActiveConvId(id);
+  };
+
+  const handleRename = (id: string, title: string) => {
+    setConversations(prev => {
+      const updated = prev.map(c =>
+        c.id === id ? { ...c, title, title_is_custom: true } : c
+      );
+      saveConversations(updated);
+      return updated;
+    });
+  };
+
+  const handleDeleteRequest = (id: string) => {
+    setDeleteTarget(id);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteTarget) return;
+    deleteConversation(deleteTarget);
+    setConversations(prev => prev.filter(c => c.id !== deleteTarget));
+    if (activeConvId === deleteTarget) {
+      setActiveConvId(null);
+      setPendingBot(null);
+    }
+    setDeleteTarget(null);
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteTarget(null);
+  };
+
+  // --- Submit handler ---
+
+  const handleSubmit = async (text: string, files: File[], mode: string) => {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    setSseEvents([]);
-    setResultText(null);
-    setCancelReason(null);
-    setOverlayVisible(true);
+    let currentSource: 'factpack' | 'llm' | null = null;
+
+    // Get or create conversation
+    let conv: Conversation;
+    if (activeConvId) {
+      conv = conversations.find(c => c.id === activeConvId) ?? createNewConversation();
+    } else {
+      conv = createNewConversation();
+    }
+
+    const now = new Date().toISOString();
+
+    // User message
+    const userMsg: Message = {
+      id: generateId(),
+      role: 'user',
+      content: text,
+      timestamp: now,
+    };
+
+    // Update title from first message if not custom
+    const isFirstMessage = conv.messages.length === 0;
+    const newTitle = isFirstMessage && !conv.title_is_custom
+      ? text.slice(0, 40) || '새 대화'
+      : conv.title;
+
+    const updatedConv: Conversation = {
+      ...conv,
+      title: newTitle,
+      updated_at: now,
+      messages: [...conv.messages, userMsg],
+    };
+
+    // Update state
+    setConversations(prev => {
+      const idx = prev.findIndex(c => c.id === updatedConv.id);
+      let next: Conversation[];
+      if (idx >= 0) {
+        next = prev.map(c => (c.id === updatedConv.id ? updatedConv : c));
+      } else {
+        next = [updatedConv, ...prev];
+      }
+      saveConversations(next);
+      return next;
+    });
+    setActiveConvId(updatedConv.id);
+
+    // Start pending bot
+    setPendingBot({
+      source: null,
+      loadingStatus: '생각 중',
+      content: null,
+      isError: false,
+    });
+    setProcessing(true);
 
     try {
       const formData = new FormData();
       formData.append('query', text);
-      formData.append('card_mode', String(cardMode ?? 'free'));
+      formData.append('card_mode', mode || 'free');
       formData.append('total_chunks', '1');
       files.forEach((file, idx) => formData.append(`file_${idx}`, file));
       formData.append('file_count', String(files.length));
@@ -43,142 +185,214 @@ export function App() {
         body: formData,
         signal: ctrl.signal,
       });
+
       const reader = res.body?.getReader();
-      if (!reader) return;
+      if (!reader) {
+        setPendingBot(null);
+        setProcessing(false);
+        return;
+      }
+
       const decoder = new TextDecoder();
       let buf = '';
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
         const blocks = buf.split('\n\n');
         buf = blocks.pop() ?? '';
+
         for (const block of blocks) {
           const parts = block.split('\n');
           const eventLine = parts.find(l => l.startsWith('event:'));
           const dataLine = parts.find(l => l.startsWith('data:'));
-          if (dataLine) {
-            const eventType = (eventLine?.slice(6).trim() ?? 'unknown') as SSEEvent['type'];
-            const data = JSON.parse(dataLine.slice(5).trim()) as Record<string, unknown>;
-            const evt: SSEEvent = { type: eventType, data };
-            setSseEvents(prev => [...prev, evt]);
+          if (!dataLine) continue;
 
-            if (eventType === 'complete') {
-              if (data.result_text) {
-                setResultText(data.result_text as string);
-              }
-              setOverlayVisible(false);
-              return;
-            }
+          const eventType = (eventLine?.slice(6).trim() ?? 'unknown') as SSEEvent['type'];
+          let data: Record<string, unknown> = {};
+          try {
+            data = JSON.parse(dataLine.slice(5).trim()) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
 
-            if (eventType === 'cancelled') {
-              setCancelReason((data.reason as string) ?? 'unknown');
-              setOverlayVisible(false);
-              return;
-            }
+          if (eventType === 'meta') {
+            const src = data.source as 'factpack' | 'llm' | undefined;
+            currentSource = src ?? null;
+            setPendingBot(prev => prev ? { ...prev, source: src ?? null } : prev);
+          } else if (eventType === 'phase_start') {
+            setPendingBot(prev => prev ? { ...prev, loadingStatus: '분석 중' } : prev);
+          } else if (eventType === 'reduce_start') {
+            setPendingBot(prev => prev ? { ...prev, loadingStatus: '정리 중' } : prev);
+          } else if (eventType === 'verify_start') {
+            setPendingBot(prev => prev ? { ...prev, loadingStatus: '확인 중' } : prev);
+          } else if (eventType === 'complete') {
+            const resultText = (data.result_text as string) ?? '';
+            const botMsg: Message = {
+              id: generateId(),
+              role: 'butler',
+              content: resultText,
+              timestamp: new Date().toISOString(),
+              source: currentSource ?? undefined,
+            };
+
+            setConversations(prev => {
+              const updated = prev.map(c => {
+                if (c.id !== updatedConv.id) return c;
+                return {
+                  ...c,
+                  updated_at: new Date().toISOString(),
+                  messages: [...c.messages, botMsg],
+                };
+              });
+              saveConversations(updated);
+              return updated;
+            });
+
+            // Clear pendingBot — the result is now in conversations
+            setPendingBot(null);
+            setProcessing(false);
+            return;
+          } else if (eventType === 'cancelled') {
+            const reason = (data.reason as string) ?? 'user_cancel';
+            const cancelMsg =
+              reason === 'chunk_timeout'
+                ? '한 청크가 너무 오래 걸려 중단됐습니다.'
+                : reason === 'hard_timeout'
+                ? '전체 시간 초과 (300초)로 중단됐습니다.'
+                : '작업이 중단됐습니다.';
+            setPendingBot(prev => prev
+              ? { ...prev, content: cancelMsg, isError: true, loadingStatus: '' }
+              : prev
+            );
+            setProcessing(false);
+            return;
+          } else if (eventType === 'error') {
+            const errMsg = (data.message as string) ?? '알 수 없는 오류가 발생했습니다.';
+            setPendingBot(prev => prev
+              ? { ...prev, content: errMsg, isError: true, loadingStatus: '' }
+              : prev
+            );
+            setProcessing(false);
+            return;
           }
         }
       }
-    } catch {
-      setOverlayVisible(false);
+    } catch (err: unknown) {
+      const isAbort = err instanceof Error && err.name === 'AbortError';
+      if (!isAbort) {
+        setPendingBot(prev => prev
+          ? { ...prev, content: '요청 중 오류가 발생했습니다.', isError: true, loadingStatus: '' }
+          : prev
+        );
+      } else {
+        setPendingBot(null);
+      }
+      setProcessing(false);
     }
   };
 
-  const handleCancel = () => {
+  const handleStop = () => {
     abortRef.current?.abort();
-    setOverlayVisible(false);
-    setSseEvents([]);
+    setProcessing(false);
+    setPendingBot(null);
+  };
+
+  const handleCardSelect = (mode: string) => {
+    setCardMode(mode);
   };
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: 16 }}>
-      <EgressBadge />
-      <ModelSetup onReady={() => {}} />
-      <HomeScreen onCardSelect={setCardMode}>
-        <InputBar onSubmit={handleSubmit} />
-      </HomeScreen>
-      <ProgressOverlay
-        visible={overlayVisible}
-        events={sseEvents}
-        onCancel={handleCancel}
-        onResult={() => setOverlayVisible(false)}
+    <div style={{ display: 'flex', height: '100%', background: 'var(--color-bg-app)' }}>
+      <Sidebar
+        conversations={conversations}
+        activeConvId={activeConvId}
+        onSelect={handleSelectConv}
+        onNew={handleNewConv}
+        onRename={handleRename}
+        onDeleteRequest={handleDeleteRequest}
+        isOpen={sidebarOpen}
       />
-      {cancelReason && !overlayVisible && (
-        <div style={{
-          marginTop: 16,
-          padding: 12,
-          background: '#fff3cd',
-          border: '1px solid #ffc107',
-          borderRadius: 8,
-          fontSize: 13,
-          color: '#856404',
-        }}>
-          {cancelReason === 'chunk_timeout'
-            ? '한 청크가 너무 오래 걸려 중단됐습니다.'
-            : cancelReason === 'hard_timeout'
-            ? '전체 시간 초과 (300초)로 중단됐습니다.'
-            : '작업이 중단됐습니다.'}
-        </div>
-      )}
-      {resultText && !overlayVisible && (
+
+      <main
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          minWidth: 0,
+        }}
+      >
+        {/* Top bar */}
         <div
-          ref={resultRef}
-          data-testid="result-panel"
           style={{
-            marginTop: 24,
-            padding: 24,
-            background: '#f8f9fa',
-            border: '1px solid #dee2e6',
-            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            padding: 'var(--space-3) var(--space-4)',
+            borderBottom: '1px solid var(--color-border-subtle)',
+            background: 'var(--color-bg-input)',
+            gap: 'var(--space-3)',
           }}
         >
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 16,
-          }}>
-            <h3 style={{ margin: 0, fontSize: 14, color: '#666' }}>📋 결과</h3>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                data-testid="copy-btn"
-                onClick={() => navigator.clipboard.writeText(resultText)}
-                style={{
-                  padding: '6px 12px',
-                  background: '#fff',
-                  border: '1px solid #ccc',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  fontSize: 13,
-                }}
-              >
-                📋 복사
-              </button>
-              <button
-                data-testid="result-close-btn"
-                onClick={() => setResultText(null)}
-                style={{
-                  padding: '6px 12px',
-                  background: 'transparent',
-                  border: '1px solid #ccc',
-                  borderRadius: 4,
-                  cursor: 'pointer',
-                  fontSize: 13,
-                }}
-              >
-                닫기
-              </button>
-            </div>
-          </div>
-          <div style={{
-            whiteSpace: 'pre-wrap',
-            lineHeight: 1.7,
-            fontSize: 14,
-            color: '#333',
-          }}>
-            {resultText}
+          <button
+            data-testid="sidebar-toggle-btn"
+            onClick={() => setSidebarOpen(o => !o)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 18,
+              color: 'var(--color-text-secondary)',
+              padding: '2px 4px',
+              borderRadius: 4,
+            }}
+            aria-label="사이드바 토글"
+          >
+            ☰
+          </button>
+          <span
+            style={{
+              fontSize: 'var(--text-base)',
+              fontWeight: 600,
+              color: 'var(--color-brand-primary)',
+            }}
+          >
+            Butler
+          </span>
+          <div style={{ marginLeft: 'auto' }}>
+            <EgressBadge />
           </div>
         </div>
+
+        {/* Content area */}
+        {hasMessages ? (
+          <MessageList
+            messages={activeConv?.messages ?? []}
+            pendingBot={pendingBot}
+            onRetry={() => {
+              // Clear error state for retry
+              setPendingBot(null);
+            }}
+          />
+        ) : (
+          <EmptyState onCardSelect={handleCardSelect} />
+        )}
+
+        <ChatInput
+          onSubmit={handleSubmit}
+          onStop={handleStop}
+          processing={processing}
+          cardMode={cardMode}
+        />
+      </main>
+
+      {deleteTarget && (
+        <DeleteConfirmModal
+          isOpen={true}
+          onConfirm={handleDeleteConfirm}
+          onCancel={handleDeleteCancel}
+        />
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 export interface SSEEvent {
   type:
+    | 'meta'
     | 'phase_start'
     | 'chunk_progress'
     | 'chunk_done'
@@ -29,3 +30,22 @@ export interface EgressStats {
 }
 
 export type FileGrade = 'S' | 'M' | 'L' | 'XL' | 'Media-L' | 'blocked';
+
+export interface Message {
+  id: string;
+  role: 'user' | 'butler';
+  content: string;
+  timestamp: string;
+  source?: 'factpack' | 'llm';
+  fact_id?: string;
+  score?: number;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  title_is_custom: boolean;
+  created_at: string;
+  updated_at: string;
+  messages: Message[];
+}
