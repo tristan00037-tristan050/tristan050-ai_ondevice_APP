@@ -18,6 +18,7 @@ import os
 import subprocess as _subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field as _dc_field
@@ -58,15 +59,34 @@ from datetime import datetime, timezone as _tz
 # 공유 LLM 싱글톤 — sidecar 기동 시 1회 로드, 모든 요청에서 재사용
 # ---------------------------------------------------------------------------
 _SHARED_LLM: LlmRuntime | None = None
-# 동시 호출 직렬화: LlmRuntime.generate() 내부 threading.Lock 이 보호.
-# asyncio.Lock 은 Python 3.9 이벤트 루프 생명주기와 충돌 가능성 → 제거.
+_LLM_INIT_LOCK = threading.Lock()
 
 
 def _init_shared_llm() -> None:
-    """BUTLER_MODEL_PATH 로 모델을 1회 로드한다. 경로 미설정 시 stub 모드."""
+    """BUTLER_MODEL_PATH 로 모델을 강제 로드(기존 인스턴스 교체). startup 이벤트에서 호출."""
     global _SHARED_LLM
     model_path = os.environ.get("BUTLER_MODEL_PATH", "") or None
     _SHARED_LLM = LlmRuntime(model_path=model_path)
+
+
+def _init_if_none_sync() -> "LlmRuntime":
+    """double-check locking — 동시 첫 요청이 모두 같은 싱글톤을 받도록 보장 (P1-1)."""
+    global _SHARED_LLM
+    if _SHARED_LLM is None:
+        with _LLM_INIT_LOCK:
+            if _SHARED_LLM is None:
+                model_path = os.environ.get("BUTLER_MODEL_PATH", "") or None
+                _SHARED_LLM = LlmRuntime(model_path=model_path)
+    return _SHARED_LLM  # type: ignore[return-value]
+
+
+async def _ensure_shared_llm() -> "LlmRuntime":
+    """비블로킹: executor 에서 싱글톤 보장 후 반환."""
+    if _SHARED_LLM is not None:
+        return _SHARED_LLM
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _init_if_none_sync)
+    return _SHARED_LLM  # type: ignore[return-value]
 
 # FactPack 관련 import 및 초기화는 FastAPI/Pydantic 가용성에 의존.
 # (Pydantic 미설치 환경에서도 stdlib fallback 모드가 import 단계에서 깨지지 않도록 가드)
@@ -139,7 +159,7 @@ async def _real_chunk_work_inprocess(
     """공유 모델 싱글톤으로 인-프로세스 LLM 추론.
 
     subprocess 스폰 없음 → 매 호출 모델 로드 없음 → 31s → ~6s.
-    asyncio.Lock 으로 동시 호출 직렬화.
+    generate_with_cancel + cancel_event 로 timeout 시 executor thread 조기 종료 (P1-2).
     """
     # 프롬프트 조립 (chunk_worker.py 동일 로직)
     system_prompt = "당신은 유능한 사무 보조 AI입니다."
@@ -169,16 +189,20 @@ async def _real_chunk_work_inprocess(
         f"<|im_start|>assistant\n"
     )
 
-    llm = _SHARED_LLM
-    if llm is None:
-        # 모델 아직 로딩 중인 경우 — 인라인 초기화 (첫 요청 엣지케이스)
-        llm = LlmRuntime(model_path=os.environ.get("BUTLER_MODEL_PATH") or None)
-
+    llm = await _ensure_shared_llm()
+    cancel_event = threading.Event()
     loop = asyncio.get_running_loop()
-    result = await asyncio.wait_for(
-        loop.run_in_executor(None, lambda: llm.generate(prompt, max_tokens=1024)),
-        timeout=timeout_sec,
-    )
+    try:
+        result = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                lambda: llm.generate_with_cancel(prompt, cancel_event, max_tokens=1024),
+            ),
+            timeout=timeout_sec,
+        )
+    except asyncio.TimeoutError:
+        cancel_event.set()
+        raise
     return result
 
 

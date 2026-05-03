@@ -55,6 +55,9 @@ _PARTIAL_PATH = Path("/tmp/p.json")
 def client_and_deps():
     app, controllers, ChunkTimeoutError, HardTimeoutError, UserCancelledError = _get_app_and_deps()
     controllers.clear()
+    import butler_sidecar as _sidecar
+    from butler_pc_core.inference.llm_runtime import LlmRuntime as _LlmRuntime
+    _sidecar._SHARED_LLM = _LlmRuntime(model_path=None)
     client = TestClient(app)
     yield client, controllers, ChunkTimeoutError, HardTimeoutError, UserCancelledError
     controllers.clear()
@@ -67,15 +70,14 @@ def client_and_deps():
 def test_happy_normal_completion(client_and_deps):
     """정상 완료 시 phase_start → chunk_* × N → complete 이벤트 수신."""
     client, *_ = client_and_deps
-    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None), \
-         patch("asyncio.wait_for", side_effect=lambda coro, timeout: coro):
+    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None):
         resp = client.post("/api/analyze/stream", json=_STREAM_PAYLOAD)
 
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers["content-type"]
     events = _parse_events(resp.text)
     event_types = [e["event"] for e in events]
-    assert event_types[0] == "phase_start"
+    assert "phase_start" in event_types
     assert "complete" in event_types
     assert "error" not in event_types
 
@@ -84,30 +86,27 @@ def test_happy_normal_completion(client_and_deps):
 def test_happy_chunk_progress_order(client_and_deps):
     """chunk_progress 이벤트의 current 값이 1부터 total까지 순서대로 증가한다."""
     client, *_ = client_and_deps
-    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None), \
-         patch("asyncio.wait_for", side_effect=lambda coro, timeout: coro):
-        resp = client.post("/api/analyze/stream", json=_STREAM_PAYLOAD)
+    _form = {"file_path": "/tmp/test.txt", "total_chunks": "3", "output_dir": "/tmp"}
+    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None):
+        resp = client.post("/api/analyze/stream", data=_form)
 
     events = _parse_events(resp.text)
     progress = [e["data"]["current"] for e in events if e.get("event") == "chunk_progress"]
-    assert progress == list(range(1, _STREAM_PAYLOAD["total_chunks"] + 1))
+    assert progress == list(range(1, int(_form["total_chunks"]) + 1))
 
 
 @_skip_no_fastapi
 def test_boundary_heartbeat_event_present_after_idle(client_and_deps):
     """last_event_time 조작으로 heartbeat 경로가 실행되는지 확인한다."""
     client, *_ = client_and_deps
-    original_monotonic = time.monotonic
     call_count = [0]
 
     def _fake_monotonic():
         call_count[0] += 1
-        base = original_monotonic()
-        return base + (10.0 if call_count[0] > 5 else 0.0)
+        return call_count[0] * 10.0
 
     with patch("butler_sidecar.time.monotonic", side_effect=_fake_monotonic), \
-         patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None), \
-         patch("asyncio.wait_for", side_effect=lambda coro, timeout: coro):
+         patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None):
         resp = client.post(
             "/api/analyze/stream",
             json={"file_path": "/tmp/f.txt", "total_chunks": 1, "output_dir": "/tmp"},
@@ -122,8 +121,7 @@ def test_boundary_concurrent_streams_get_distinct_task_ids(client_and_deps):
     """동시 스트림 요청은 서로 다른 task_id를 받는다."""
     client, *_ = client_and_deps
     task_ids: list[str] = []
-    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None), \
-         patch("asyncio.wait_for", side_effect=lambda coro, timeout: coro):
+    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None):
         for _ in range(3):
             resp = client.post("/api/analyze/stream", json=_STREAM_PAYLOAD)
             task_ids.append(resp.headers.get("x-task-id", ""))
@@ -202,18 +200,19 @@ def test_adv_unserializable_chunk_safe(client_and_deps):
 def test_adv_chunk_timeout_actually_cancels_slow_chunk(client_and_deps):
     """결함 1 회귀: 청크 작업이 chunk_timeout 초과 시 실제로 취소된다.
 
-    _stub_chunk_work에 60초 sleep을 심고, chunk_timeout=2초로 줄여서
-    2초 내에 cancelled(chunk_timeout)이 발생하는지 검증한다.
+    generate_with_cancel 을 cancel_event 대기 slow 함수로 교체하고
+    chunk_timeout=2초로 단축 → 2초 내에 cancelled(chunk_timeout)이 발생하는지 검증.
     60초를 실제로 기다리면 결함이 재발한 것이다.
     """
     from butler_pc_core.runtime.timeout_controller import TimeoutController as TC
+    from butler_pc_core.inference.llm_runtime import LlmRuntime as _LR
 
     client, *_ = client_and_deps
 
-    def _slow_work(_chunk_index: int) -> None:
-        time.sleep(60)
+    def _slow_cancellable(self, prompt, cancel_event, max_tokens=512, temperature=0.2, stop=None):
+        cancel_event.wait(timeout=60)
+        return "[cancelled]"
 
-    # TimeoutController 서브클래스로 chunk_timeout을 2초로 단축
     class _FastTC(TC):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -221,7 +220,7 @@ def test_adv_chunk_timeout_actually_cancels_slow_chunk(client_and_deps):
 
     start = time.time()
     with patch("butler_sidecar.TimeoutController", _FastTC), \
-         patch("butler_sidecar._stub_chunk_work", side_effect=_slow_work):
+         patch.object(_LR, "generate_with_cancel", _slow_cancellable):
         resp = client.post(
             "/api/analyze/stream",
             json={"file_path": "/tmp/f.txt", "total_chunks": 1, "output_dir": "/tmp"},

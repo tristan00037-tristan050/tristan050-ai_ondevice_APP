@@ -123,10 +123,10 @@ def test_adv_concurrent_inprocess_calls_all_succeed():
 
 def test_adv_inprocess_uses_shared_singleton_not_new_instance():
     """_real_chunk_work_inprocess 가 _SHARED_LLM 인스턴스를 재사용하는지 확인.
-    generate() 호출 횟수로 검증 — 새 LlmRuntime 이 생성되면 mock 이 호출되지 않는다."""
+    generate_with_cancel() 호출로 검증 — 새 LlmRuntime 이 생성되면 mock 이 호출되지 않는다."""
     mock_llm = MagicMock(spec=LlmRuntime)
     mock_llm.status = "ready"
-    mock_llm.generate.return_value = "mock 응답"
+    mock_llm.generate_with_cancel.return_value = "mock 응답"
     sidecar._SHARED_LLM = mock_llm
 
     async def _run():
@@ -135,7 +135,9 @@ def test_adv_inprocess_uses_shared_singleton_not_new_instance():
         return result
 
     result = asyncio.run(_run())
-    assert mock_llm.generate.called, "싱글톤의 generate()가 호출되지 않음 — 새 인스턴스 생성 버그"
+    assert mock_llm.generate_with_cancel.called, (
+        "싱글톤의 generate_with_cancel()가 호출되지 않음 — 새 인스턴스 생성 버그"
+    )
     assert result == "mock 응답"
 
 
@@ -168,3 +170,67 @@ def test_boundary_model_loaded_once_across_multiple_calls():
     # 싱글톤 초기화 1회 + 추가 생성 없음
     assert init_count_after_singleton == 1, "싱글톤 초기화 횟수가 1이어야 함"
     assert call_count == 1, f"LlmRuntime 생성 {call_count}회 — 모델 재로드 버그"
+
+
+# ---------------------------------------------------------------------------
+# P1-1 검증: 동시 첫 요청 — 모두 같은 싱글톤
+# ---------------------------------------------------------------------------
+def test_concurrent_first_requests_share_singleton():
+    """동시 N개 첫 요청 — double-check locking 으로 모두 같은 싱글톤 인스턴스를 받는다."""
+    sidecar._SHARED_LLM = None
+    os.environ.pop("BUTLER_MODEL_PATH", None)
+
+    acquired: list[LlmRuntime] = []
+    lock = threading.Lock()
+
+    def _request():
+        async def _run():
+            await sidecar._ensure_shared_llm()
+
+        asyncio.run(_run())
+        with lock:
+            acquired.append(sidecar._SHARED_LLM)
+
+    threads = [threading.Thread(target=_request) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(acquired) == 5
+    assert all(r is acquired[0] for r in acquired), (
+        "싱글톤 누수 — 스레드마다 다른 LlmRuntime 인스턴스 생성"
+    )
+
+
+# ---------------------------------------------------------------------------
+# P1-2 검증: timeout 후 cancel_event 설정 확인
+# ---------------------------------------------------------------------------
+def test_timeout_releases_infer_lock():
+    """asyncio.TimeoutError 발생 후 cancel_event 가 설정되어 executor thread 가 조기 종료된다."""
+    mock_llm = MagicMock(spec=LlmRuntime)
+    mock_llm.status = "ready"
+    sidecar._SHARED_LLM = mock_llm
+
+    cancel_seen: list[threading.Event] = []
+
+    def _capture_and_block(prompt, cancel_event, max_tokens=512, temperature=0.2, stop=None):
+        cancel_seen.append(cancel_event)
+        cancel_event.wait(timeout=5)
+        return "done"
+
+    mock_llm.generate_with_cancel.side_effect = _capture_and_block
+
+    async def _run():
+        params = _TestParams(query="timeout test", card_mode="free")
+        try:
+            await sidecar._real_chunk_work_inprocess(params, 0, 0.1)
+        except asyncio.TimeoutError:
+            pass
+
+        assert len(cancel_seen) == 1, "generate_with_cancel 이 호출되지 않음"
+        assert cancel_seen[0].is_set(), (
+            "TimeoutError 후 cancel_event 미설정 — executor thread leak 버그"
+        )
+
+    asyncio.run(_run())
