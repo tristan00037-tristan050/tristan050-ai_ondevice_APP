@@ -18,6 +18,7 @@ import os
 import subprocess as _subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field as _dc_field
@@ -51,7 +52,41 @@ from butler_pc_core.runtime.timeout_controller import (
     UserCancelledError,
     HARD_TIMEOUT_SEC,
 )
+from butler_pc_core.inference.llm_runtime import LlmRuntime
 from datetime import datetime, timezone as _tz
+
+# ---------------------------------------------------------------------------
+# 공유 LLM 싱글톤 — sidecar 기동 시 1회 로드, 모든 요청에서 재사용
+# ---------------------------------------------------------------------------
+_SHARED_LLM: LlmRuntime | None = None
+_LLM_INIT_LOCK = threading.Lock()
+
+
+def _init_shared_llm() -> None:
+    """BUTLER_MODEL_PATH 로 모델을 강제 로드(기존 인스턴스 교체). startup 이벤트에서 호출."""
+    global _SHARED_LLM
+    model_path = os.environ.get("BUTLER_MODEL_PATH", "") or None
+    _SHARED_LLM = LlmRuntime(model_path=model_path)
+
+
+def _init_if_none_sync() -> "LlmRuntime":
+    """double-check locking — 동시 첫 요청이 모두 같은 싱글톤을 받도록 보장 (P1-1)."""
+    global _SHARED_LLM
+    if _SHARED_LLM is None:
+        with _LLM_INIT_LOCK:
+            if _SHARED_LLM is None:
+                model_path = os.environ.get("BUTLER_MODEL_PATH", "") or None
+                _SHARED_LLM = LlmRuntime(model_path=model_path)
+    return _SHARED_LLM  # type: ignore[return-value]
+
+
+async def _ensure_shared_llm() -> "LlmRuntime":
+    """비블로킹: executor 에서 싱글톤 보장 후 반환."""
+    if _SHARED_LLM is not None:
+        return _SHARED_LLM
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, _init_if_none_sync)
+    return _SHARED_LLM  # type: ignore[return-value]
 
 # FactPack 관련 import 및 초기화는 FastAPI/Pydantic 가용성에 의존.
 # (Pydantic 미설치 환경에서도 stdlib fallback 모드가 import 단계에서 깨지지 않도록 가드)
@@ -115,6 +150,62 @@ async def _real_chunk_work_isolated(
             pass
         raise
 
+
+async def _real_chunk_work_inprocess(
+    params: "_AnalyzeParams",
+    chunk_idx: int,
+    timeout_sec: float,
+) -> str:
+    """공유 모델 싱글톤으로 인-프로세스 LLM 추론.
+
+    subprocess 스폰 없음 → 매 호출 모델 로드 없음 → 31s → ~6s.
+    generate_with_cancel + cancel_event 로 timeout 시 executor thread 조기 종료 (P1-2).
+    """
+    # 프롬프트 조립 (chunk_worker.py 동일 로직)
+    system_prompt = "당신은 유능한 사무 보조 AI입니다."
+    user_tmpl = "{{ query }}"
+    try:
+        from butler_pc_core.prompts.cards import load_card_prompt
+        card = load_card_prompt(params.card_mode)
+        system_prompt = card.get("system_prompt", system_prompt)
+        user_tmpl = card.get("user_prompt_template", user_tmpl)
+    except Exception:
+        pass
+
+    file_texts: list[str] = []
+    for fp in params.file_paths:
+        try:
+            file_texts.append(Path(fp).read_text(encoding="utf-8", errors="replace"))
+        except Exception:
+            pass
+
+    user_content = user_tmpl.replace("{{ query }}", params.query)
+    if file_texts:
+        user_content += "\n\n## 첨부 파일 내용\n" + "\n\n---\n".join(file_texts)
+
+    prompt = (
+        f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
+        f"<|im_start|>user\n/no_think\n{user_content}<|im_end|>\n"
+        f"<|im_start|>assistant\n"
+    )
+
+    llm = await _ensure_shared_llm()
+    cancel_event = threading.Event()
+    loop = asyncio.get_running_loop()
+    try:
+        result = await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                lambda: llm.generate_with_cancel(prompt, cancel_event, max_tokens=1024),
+            ),
+            timeout=timeout_sec,
+        )
+    except asyncio.TimeoutError:
+        cancel_event.set()
+        raise
+    return result
+
+
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
@@ -163,31 +254,46 @@ if _FASTAPI_AVAILABLE:
     # -----------------------------------------------------------------------
     # 엔드포인트
     # -----------------------------------------------------------------------
+    @app.on_event("startup")
+    async def _startup_load_model():
+        """sidecar 기동 시 모델을 백그라운드 스레드에서 비동기 로드."""
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, _init_shared_llm)
+
     @app.get("/health")
     def health():
         return {"status": "ok", "service": "butler-pc-core-sidecar", "version": "0.9.0"}
 
     @app.get("/api/sidecar/health")
     def sidecar_health():
-        model_path = os.environ.get("BUTLER_MODEL_PATH", "")
-        model_status = "ready" if (model_path and Path(model_path).exists()) else "no_model"
+        if _SHARED_LLM is not None:
+            llm_status = _SHARED_LLM.status
+        else:
+            model_path = os.environ.get("BUTLER_MODEL_PATH", "")
+            llm_status = "loading" if model_path else "no_model"
         return {
             "status": "ok",
             "service": "butler-pc-core-sidecar",
             "version": "0.9.0",
-            "model_status": model_status,
+            "model_status": llm_status,
             "active_tasks": len(_active_controllers),
         }
 
     @app.get("/api/model/status")
     def model_status():
         model_path = os.environ.get("BUTLER_MODEL_PATH", "")
+        if _SHARED_LLM is not None:
+            return {
+                "status": _SHARED_LLM.status,
+                "model_path": model_path,
+                "last_error": _SHARED_LLM.last_error,
+            }
         if not model_path:
             return {"status": "no_model", "model_path": "", "last_error": "BUTLER_MODEL_PATH 미설정"}
         p = Path(model_path)
         if not p.exists():
             return {"status": "no_model", "model_path": model_path, "last_error": "파일 없음"}
-        return {"status": "ready", "model_path": model_path, "last_error": ""}
+        return {"status": "loading", "model_path": model_path, "last_error": ""}
 
     @app.post("/api/precheck", response_model=PrecheckResponse)
     def precheck(req: PrecheckRequest):
@@ -324,7 +430,7 @@ if _FASTAPI_AVAILABLE:
                     yield frame
 
                 try:
-                    chunk_text: str = await _real_chunk_work_isolated(
+                    chunk_text: str = await _real_chunk_work_inprocess(
                         params, i, ctrl.chunk_timeout
                     )
                     chunk_results.append(chunk_text)
