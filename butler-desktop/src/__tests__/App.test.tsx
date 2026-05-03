@@ -1,6 +1,11 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { App } from '../App';
+
+beforeEach(() => {
+  localStorage.clear();
+  vi.restoreAllMocks();
+});
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -89,7 +94,7 @@ describe('App integration', () => {
 
   it('test_happy_complete_event_shows_result_immediately', async () => {
     // complete 이벤트 → overlay 닫힘 + result-panel 자동 표시 (버튼 클릭 불필요)
-    const sseBody = 'event: complete\ndata: {"result_text": "테스트 결과입니다"}\n\n';
+    const sseBody = 'event: meta\ndata: {"source":"llm"}\n\nevent: phase_start\ndata: {"phase":"analyze","total_steps":1}\n\nevent: complete\ndata: {"result_text": "테스트 결과입니다"}\n\n';
     const encoder = new TextEncoder();
     vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
       if (String(url).includes('/api/precheck')) {
