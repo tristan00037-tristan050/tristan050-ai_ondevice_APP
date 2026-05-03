@@ -299,8 +299,8 @@ export function App() {
     setPendingBot(null);
   };
 
-  const handleCardSelect = (mode: string) => {
-    setCardMode(mode);
+  const handleCardSelect = (mode: string | null) => {
+    setCardMode(mode ?? 'free');
   };
 
   return (
