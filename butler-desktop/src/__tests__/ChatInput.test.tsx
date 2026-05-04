@@ -107,8 +107,8 @@ describe('ChatInput', () => {
     expect(onStop).toHaveBeenCalled();
   });
 
-  it('test_ux_processing_placeholder_shown', () => {
-    // processing=true → 처리 중 placeholder 표시
+  it('test_ux_processing_status_text_shown', () => {
+    // processing=true → 처리 중 상태 텍스트 요소 표시 (WKWebView disabled placeholder 미표시 대응)
     render(
       <ChatInput
         onSubmit={vi.fn()}
@@ -117,8 +117,21 @@ describe('ChatInput', () => {
         cardMode="free"
       />
     );
-    const textarea = screen.getByTestId('text-input') as HTMLTextAreaElement;
-    expect(textarea.placeholder).toBe('Butler가 답변을 준비하고 있습니다...');
+    expect(screen.getByTestId('processing-status-text')).toBeInTheDocument();
+    expect(screen.getByTestId('processing-status-text').textContent).toBe('Butler가 답변을 준비하고 있습니다...');
+  });
+
+  it('test_ux_processing_status_text_hidden_when_idle', () => {
+    // processing=false → 처리 중 상태 텍스트 숨김
+    render(
+      <ChatInput
+        onSubmit={vi.fn()}
+        onStop={vi.fn()}
+        processing={false}
+        cardMode="free"
+      />
+    );
+    expect(screen.queryByTestId('processing-status-text')).not.toBeInTheDocument();
   });
 
   it('test_ux_idle_placeholder_shown', () => {

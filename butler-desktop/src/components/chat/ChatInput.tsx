@@ -186,6 +186,21 @@ export function ChatInput({
           )}
         </div>
 
+        {/* Processing indicator: shown when disabled textarea placeholder is unreliable in WKWebView */}
+        {processing && (
+          <p
+            data-testid="processing-status-text"
+            style={{
+              margin: '0 0 var(--space-1)',
+              fontSize: 'var(--text-sm)',
+              color: 'var(--color-text-secondary)',
+              fontStyle: 'italic',
+            }}
+          >
+            Butler가 답변을 준비하고 있습니다...
+          </p>
+        )}
+
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-2)' }}>
           <textarea
             data-testid="text-input"
@@ -193,7 +208,7 @@ export function ChatInput({
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
             disabled={isInputDisabled}
-            placeholder={processing ? 'Butler가 답변을 준비하고 있습니다...' : '무엇을 도와드릴까요? 자유롭게…'}
+            placeholder="무엇을 도와드릴까요? 자유롭게…"
             maxLength={maxLength}
             rows={3}
             style={{
