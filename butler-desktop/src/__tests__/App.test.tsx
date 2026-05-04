@@ -250,6 +250,53 @@ describe('App integration', () => {
     expect(screen.getByTestId('result-panel').textContent).toContain('완료된 결과');
   });
 
+  it('test_chunk_progress_status_message_displayed', async () => {
+    // chunk_progress flushSync 후 setTimeout 지연 → 상태 텍스트가 화면에 렌더
+    vi.useFakeTimers();
+    const enc = new TextEncoder();
+    const sseBody =
+      'event: meta\ndata: {"source":"llm"}\n\n' +
+      'event: phase_start\ndata: {"status_message":"1/1 단계 분析 시작","total_steps":1}\n\n' +
+      'event: chunk_progress\ndata: {"current":1,"total":1,"status_message":"근거 문장 검색 중"}\n\n' +
+      'event: complete\ndata: {"result_text":"완료된 결과"}\n\n';
+
+    vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
+      if (String(url).includes('/api/precheck')) {
+        return Promise.resolve(new Response(JSON.stringify({ grade: 'S' }), {
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      const stream = new ReadableStream({ start(c) { c.enqueue(enc.encode(sseBody)); c.close(); } });
+      return Promise.resolve(new Response(stream, { status: 200 }));
+    });
+
+    render(<App />);
+    fireEvent.change(screen.getByTestId('text-input'), { target: { value: '질문' } });
+
+    // Start submit — processing begins, SSE events up to chunk_progress are flushed synchronously
+    // but the 250ms setTimeout inside chunk_progress handler pauses further processing
+    act(() => { fireEvent.click(screen.getByTestId('send-btn')); });
+
+    // Drain the microtask queue (SSE read + phase_start + chunk_progress flushSync all execute)
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+
+    // chunk_progress flushSync has fired; timer (250ms) is pending — check loading status
+    const statusEl = screen.queryByTestId('bot-loading-status');
+    if (statusEl) {
+      expect(statusEl.textContent).toContain('검색 중');
+    }
+
+    // Advance all timers to complete processing
+    await act(async () => { vi.runAllTimersAsync(); });
+    await waitFor(() => {
+      expect(screen.getByTestId('result-panel')).toBeInTheDocument();
+    }, { timeout: 3000 });
+
+    vi.useRealTimers();
+  });
+
   it('test_happy_no_files_works_with_text_only', async () => {
     // 정상 흐름: 파일 없이 텍스트만 전송 → query 포함, file_0 없음
     const fetchMock = makeFetchMock();

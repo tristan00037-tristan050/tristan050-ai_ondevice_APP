@@ -67,4 +67,31 @@ describe('BotMessage — 출처 배지', () => {
     render(<BotMessage content={null} loadingStatus="생각 중" />);
     expect(screen.queryByTestId('bot-progress-bar-container')).not.toBeInTheDocument();
   });
+
+  it('test_chunk_progress_status_message_displayed', () => {
+    // chunk_progress 단계 메시지 ("근거 문장 검색 중") → bot-loading-status에 표시
+    render(<BotMessage content={null} loadingStatus="1개 청크 중 1번째 처리 중 — 근거 문장 검색 중" progressPercent={70} />);
+    expect(screen.getByTestId('bot-loading-status').textContent).toContain('근거 문장 검색 중');
+    expect(screen.getByTestId('bot-progress-bar-container')).toBeInTheDocument();
+  });
+
+  it('test_reduce_start_status_message_displayed', () => {
+    // reduce_start 단계 메시지 ("정리 중") → bot-loading-status에 표시, 진행바 85%
+    render(<BotMessage content={null} loadingStatus="1개 청크 결과 통합 중" progressPercent={85} />);
+    expect(screen.getByTestId('bot-loading-status').textContent).toContain('통합 중');
+    expect(screen.getByTestId('bot-progress-bar').style.width).toBe('85%');
+  });
+
+  it('test_verify_start_status_message_displayed', () => {
+    // verify_start 단계 메시지 ("출처 근거 검증 중") → bot-loading-status에 표시, 진행바 95%
+    render(<BotMessage content={null} loadingStatus="출처 근거 검증 중" progressPercent={95} />);
+    expect(screen.getByTestId('bot-loading-status').textContent).toContain('검증 중');
+    expect(screen.getByTestId('bot-progress-bar').style.width).toBe('95%');
+  });
+
+  it('test_progress_bar_updates_during_chunk_progress', () => {
+    // progressPercent=70 (chunk_progress 1/1 scaled) → bar width 70%
+    render(<BotMessage content={null} loadingStatus="처리 중" progressPercent={70} />);
+    expect(screen.getByTestId('bot-progress-bar').style.width).toBe('70%');
+  });
 });
