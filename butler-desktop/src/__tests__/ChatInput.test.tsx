@@ -106,4 +106,49 @@ describe('ChatInput', () => {
 
     expect(onStop).toHaveBeenCalled();
   });
+
+  it('test_ux_processing_placeholder_shown', () => {
+    // processing=true → 처리 중 placeholder 표시
+    render(
+      <ChatInput
+        onSubmit={vi.fn()}
+        onStop={vi.fn()}
+        processing={true}
+        cardMode="free"
+      />
+    );
+    const textarea = screen.getByTestId('text-input') as HTMLTextAreaElement;
+    expect(textarea.placeholder).toBe('Butler가 답변을 준비하고 있습니다...');
+  });
+
+  it('test_ux_idle_placeholder_shown', () => {
+    // processing=false → 기본 placeholder 표시
+    render(
+      <ChatInput
+        onSubmit={vi.fn()}
+        onStop={vi.fn()}
+        processing={false}
+        cardMode="free"
+      />
+    );
+    const textarea = screen.getByTestId('text-input') as HTMLTextAreaElement;
+    expect(textarea.placeholder).toBe('무엇을 도와드릴까요? 자유롭게…');
+  });
+
+  it('test_ux_empty_submit_triggers_shake', () => {
+    // 빈 입력에서 Enter → chat-input-wrapper에 shakeX 애니메이션 적용
+    render(
+      <ChatInput
+        onSubmit={vi.fn()}
+        onStop={vi.fn()}
+        processing={false}
+        cardMode="free"
+      />
+    );
+    const wrapper = screen.getByTestId('chat-input-wrapper');
+    const textarea = screen.getByTestId('text-input');
+    // textarea is empty; Enter triggers handleSubmit → triggerShake
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+    expect(wrapper.style.animation).toContain('shakeX');
+  });
 });

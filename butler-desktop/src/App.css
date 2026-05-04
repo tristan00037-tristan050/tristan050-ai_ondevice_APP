@@ -67,3 +67,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
   0%, 60%, 100% { opacity: 0.2; }
   30% { opacity: 1; }
 }
+
+/* Shake animation for empty submit attempt */
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-4px); }
+  40%       { transform: translateX(4px); }
+  60%       { transform: translateX(-3px); }
+  80%       { transform: translateX(3px); }
+}
