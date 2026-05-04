@@ -302,6 +302,30 @@ if _FASTAPI_AVAILABLE:
             return {"status": "no_model", "model_path": model_path, "last_error": "파일 없음"}
         return {"status": "loading", "model_path": model_path, "last_error": ""}
 
+    @app.get("/api/egress/report")
+    def egress_report():
+        """Egress Monitor용 송신 현황 리포트 (베타: 모든 값 정적 반환).
+
+        실제 네트워크 모니터링은 D-1-C 이후 구현 예정.
+        """
+        import uuid as _uuid
+        return JSONResponse({
+            "schema_version": "egress_report.v2",
+            "task_id": str(_uuid.uuid4()),
+            "mode": "local_only",
+            "raw_file_sent_external": False,
+            "raw_text_logged": False,
+            "egress_bytes_total": 0,
+            "dns_requests": 0,
+            "http_requests": 0,
+            "https_requests": 0,
+            "telemetry_enabled": False,
+            "crash_report_enabled": False,
+            "update_check_enabled": False,
+            "verdict": "PASS",
+            "generated_at": datetime.now(_tz.utc).isoformat(),
+        })
+
     @app.post("/api/precheck", response_model=PrecheckResponse)
     def precheck(req: PrecheckRequest):
         """

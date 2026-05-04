@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { EgressBadge } from './components/EgressBadge';
+import { EgressMonitor } from './components/chat/EgressMonitor';
 import { Sidebar } from './components/chat/Sidebar';
 import { EmptyState } from './components/chat/EmptyState';
 import { ChatInput } from './components/chat/ChatInput';
@@ -18,6 +19,7 @@ import {
 type PendingBotState = {
   source: 'factpack' | 'llm' | null;
   loadingStatus: string;
+  progressPercent?: number;
   content: string | null;
   isError: boolean;
   factId?: string;
@@ -44,6 +46,7 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [cardMode, setCardMode] = useState<string>('free');
+  const [egressMonitorOpen, setEgressMonitorOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const activeConv = conversations.find(c => c.id === activeConvId) ?? null;
@@ -222,11 +225,20 @@ export function App() {
             currentSource = src ?? null;
             setPendingBot(prev => prev ? { ...prev, source: src ?? null } : prev);
           } else if (eventType === 'phase_start') {
-            setPendingBot(prev => prev ? { ...prev, loadingStatus: '분석 중' } : prev);
+            const msg = (data.status_message as string) || '분석 중';
+            setPendingBot(prev => prev ? { ...prev, loadingStatus: msg } : prev);
+          } else if (eventType === 'chunk_progress') {
+            const current = (data.current as number) ?? 0;
+            const total = (data.total as number) ?? 1;
+            const msg = (data.status_message as string) || `처리 중 (${current}/${total})`;
+            const pct = Math.round((current / total) * 100);
+            setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: pct } : prev);
           } else if (eventType === 'reduce_start') {
-            setPendingBot(prev => prev ? { ...prev, loadingStatus: '정리 중' } : prev);
+            const msg = (data.status_message as string) || '정리 중';
+            setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: 90 } : prev);
           } else if (eventType === 'verify_start') {
-            setPendingBot(prev => prev ? { ...prev, loadingStatus: '확인 중' } : prev);
+            const msg = (data.status_message as string) || '확인 중';
+            setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: 96 } : prev);
           } else if (eventType === 'complete') {
             const resultText = (data.result_text as string) ?? '';
             const botMsg: Message = {
@@ -360,7 +372,23 @@ export function App() {
           >
             Butler
           </span>
-          <div style={{ marginLeft: 'auto' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <button
+              data-testid="egress-monitor-btn"
+              onClick={() => setEgressMonitorOpen(true)}
+              style={{
+                background: 'none',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 6,
+                padding: '3px 10px',
+                cursor: 'pointer',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-text-secondary)',
+              }}
+              aria-label="Egress Monitor 열기"
+            >
+              🔒 외부 송신 0
+            </button>
             <EgressBadge />
           </div>
         </div>
@@ -393,6 +421,10 @@ export function App() {
           onConfirm={handleDeleteConfirm}
           onCancel={handleDeleteCancel}
         />
+      )}
+
+      {egressMonitorOpen && (
+        <EgressMonitor onClose={() => setEgressMonitorOpen(false)} />
       )}
     </div>
   );

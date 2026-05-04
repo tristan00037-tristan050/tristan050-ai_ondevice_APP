@@ -6,6 +6,7 @@ import { BotMessage } from './BotMessage';
 interface PendingBotState {
   source?: 'factpack' | 'llm' | null;
   loadingStatus: string;
+  progressPercent?: number;
   content: string | null;
   isError?: boolean;
 }
@@ -72,6 +73,7 @@ export function MessageList({ messages, pendingBot, onRetry }: MessageListProps)
               content={pendingBot.content}
               source={pendingBot.source ?? undefined}
               loadingStatus={pendingBot.loadingStatus}
+              progressPercent={pendingBot.progressPercent}
               isError={pendingBot.isError}
               isLast={true}
               onRetry={onRetry}

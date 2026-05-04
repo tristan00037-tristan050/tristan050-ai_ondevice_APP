@@ -40,7 +40,13 @@ export function ChatInput({
   const [files, setFiles] = useState<File[]>([]);
   const [teamHubGuide, setTeamHubGuide] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [shakeActive, setShakeActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const triggerShake = () => {
+    setShakeActive(true);
+    setTimeout(() => setShakeActive(false), 400);
+  };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value.slice(0, maxLength));
@@ -71,6 +77,8 @@ export function ChatInput({
       onSubmit(text, files, cardMode);
       setText('');
       setFiles([]);
+    } else if (!processing && !text.trim() && files.length === 0) {
+      triggerShake();
     }
   };
 
@@ -95,16 +103,20 @@ export function ChatInput({
       }}
     >
       <div
+        data-testid="chat-input-wrapper"
         style={{
           maxWidth: 760,
           margin: '0 auto',
           background: isInputDisabled ? '#F5F5F5' : 'var(--color-bg-input)',
-          border: '1px solid var(--color-border-subtle)',
+          border: shakeActive
+            ? '2px solid var(--color-brand-primary)'
+            : '1px solid var(--color-border-subtle)',
           borderRadius: 12,
           padding: 'var(--space-3) var(--space-4)',
           display: 'flex',
           flexDirection: 'column',
           gap: 'var(--space-2)',
+          animation: shakeActive ? 'shakeX 0.4s ease' : 'none',
         }}
       >
         <div
@@ -181,7 +193,7 @@ export function ChatInput({
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
             disabled={isInputDisabled}
-            placeholder="무엇을 도와드릴까요? 자유롭게…"
+            placeholder={processing ? 'Butler가 답변을 준비하고 있습니다...' : '무엇을 도와드릴까요? 자유롭게…'}
             maxLength={maxLength}
             rows={3}
             style={{

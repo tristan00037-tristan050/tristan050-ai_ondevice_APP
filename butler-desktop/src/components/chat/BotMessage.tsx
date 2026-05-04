@@ -4,6 +4,7 @@ interface BotMessageProps {
   content: string | null;
   source?: 'factpack' | 'llm' | null;
   loadingStatus?: string;
+  progressPercent?: number;
   factId?: string;
   score?: number;
   isError?: boolean;
@@ -71,6 +72,7 @@ export function BotMessage({
   content,
   source,
   loadingStatus,
+  progressPercent,
   isError = false,
   onRetry,
   isLast = false,
@@ -141,17 +143,41 @@ export function BotMessage({
       {/* Body */}
       <div style={{ paddingLeft: 36 }}>
         {content === null ? (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-2)',
-              color: 'var(--color-text-secondary)',
-              fontSize: 'var(--text-sm)',
-            }}
-          >
-            <span>{loadingStatus ?? '생각 중'}</span>
-            <ThinkingDots />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+                color: 'var(--color-text-secondary)',
+                fontSize: 'var(--text-sm)',
+              }}
+            >
+              <span data-testid="bot-loading-status">{loadingStatus ?? '생각 중'}</span>
+              <ThinkingDots />
+            </div>
+            {progressPercent !== undefined && (
+              <div
+                data-testid="bot-progress-bar-container"
+                style={{
+                  height: 4,
+                  borderRadius: 2,
+                  background: 'var(--color-border-subtle)',
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  data-testid="bot-progress-bar"
+                  style={{
+                    height: '100%',
+                    borderRadius: 2,
+                    background: 'var(--color-brand-primary)',
+                    width: `${Math.min(100, Math.max(0, progressPercent))}%`,
+                    transition: 'width 300ms ease',
+                  }}
+                />
+              </div>
+            )}
           </div>
         ) : isError ? (
           <div>
