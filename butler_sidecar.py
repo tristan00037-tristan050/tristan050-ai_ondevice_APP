@@ -203,7 +203,7 @@ async def _real_chunk_work_inprocess(
         result = await asyncio.wait_for(
             loop.run_in_executor(
                 None,
-                lambda: llm.generate_with_cancel(prompt, cancel_event, max_tokens=1024),
+                lambda: llm.generate_with_cancel(prompt, cancel_event, max_tokens=2048),
             ),
             timeout=timeout_sec,
         )
@@ -520,10 +520,21 @@ if _FASTAPI_AVAILABLE:
                 async for frame in _heartbeat_if_idle():
                     yield frame
 
+                # Run inference in a background task and send heartbeats every 4 s
+                # so WKWebView's 60-s idle timeout is never reached regardless of max_tokens.
+                inference_task = asyncio.create_task(
+                    _real_chunk_work_inprocess(params, i, ctrl.chunk_timeout)
+                )
                 try:
-                    chunk_text: str = await _real_chunk_work_inprocess(
-                        params, i, ctrl.chunk_timeout
-                    )
+                    while True:
+                        done, _ = await asyncio.wait({inference_task}, timeout=4.0)
+                        if done:
+                            break
+                        now = time.monotonic()
+                        last_event_time = now
+                        yield _sse("heartbeat", {"elapsed_sec": round(now - start, 2)})
+                        await asyncio.sleep(0)  # flush heartbeat
+                    chunk_text: str = await inference_task
                     chunk_results.append(chunk_text)
                     completed_count += 1
                 except asyncio.TimeoutError:
@@ -545,22 +556,26 @@ if _FASTAPI_AVAILABLE:
                     ),
                 })
                 last_event_time = time.monotonic()
+                await asyncio.sleep(0)  # flush chunk_progress before chunk_done
 
                 yield _sse("chunk_done", {
                     "chunk_id": i,
                     "latency_ms": round(chunk_elapsed * 1000, 1),
                 })
                 last_event_time = time.monotonic()
+                await asyncio.sleep(0)  # flush chunk_done before next event
 
             yield _sse("reduce_start", {
                 "input_chunks": total,
                 "status_message": f"{total}개 청크 결과 통합 중",
             })
             last_event_time = time.monotonic()
+            await asyncio.sleep(0)  # flush reduce_start before verify_start
             yield _sse("verify_start", {
                 "status_message": "출처 근거 검증 중",
             })
             last_event_time = time.monotonic()
+            await asyncio.sleep(0)  # flush verify_start before complete
 
             result_text = "\n\n".join(chunk_results)
             result_path = str(Path(params.output_dir) / f"{task_id}_result.json")
