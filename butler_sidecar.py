@@ -203,7 +203,7 @@ async def _real_chunk_work_inprocess(
         result = await asyncio.wait_for(
             loop.run_in_executor(
                 None,
-                lambda: llm.generate_with_cancel(prompt, cancel_event, max_tokens=1024),
+                lambda: llm.generate_with_cancel(prompt, cancel_event, max_tokens=2048),
             ),
             timeout=timeout_sec,
         )
@@ -545,22 +545,26 @@ if _FASTAPI_AVAILABLE:
                     ),
                 })
                 last_event_time = time.monotonic()
+                await asyncio.sleep(0)  # flush chunk_progress before chunk_done
 
                 yield _sse("chunk_done", {
                     "chunk_id": i,
                     "latency_ms": round(chunk_elapsed * 1000, 1),
                 })
                 last_event_time = time.monotonic()
+                await asyncio.sleep(0)  # flush chunk_done before next event
 
             yield _sse("reduce_start", {
                 "input_chunks": total,
                 "status_message": f"{total}개 청크 결과 통합 중",
             })
             last_event_time = time.monotonic()
+            await asyncio.sleep(0)  # flush reduce_start before verify_start
             yield _sse("verify_start", {
                 "status_message": "출처 근거 검증 중",
             })
             last_event_time = time.monotonic()
+            await asyncio.sleep(0)  # flush verify_start before file I/O + complete
 
             result_text = "\n\n".join(chunk_results)
             result_path = str(Path(params.output_dir) / f"{task_id}_result.json")
