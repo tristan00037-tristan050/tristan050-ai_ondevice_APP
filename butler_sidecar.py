@@ -43,6 +43,8 @@ from butler_pc_core.router.task_budget_router import (
     classify_file,
     BudgetResult,
     NotAFileError,
+    decide_task_budget,
+    Route,
 )
 from butler_pc_core.runtime.timeout_controller import (
     TimeoutController,
@@ -78,6 +80,11 @@ def _init_if_none_sync() -> "LlmRuntime":
                 model_path = os.environ.get("BUTLER_MODEL_PATH", "") or None
                 _SHARED_LLM = LlmRuntime(model_path=model_path)
     return _SHARED_LLM  # type: ignore[return-value]
+
+
+def _is_hub_paired() -> bool:
+    """Team Hub PC 페어링 상태 (베타: 환경변수 BUTLER_HUB_PAIRED 또는 기본 False)."""
+    return os.environ.get("BUTLER_HUB_PAIRED", "").lower() in ("1", "true", "yes")
 
 
 async def _ensure_shared_llm() -> "LlmRuntime":
@@ -361,6 +368,59 @@ if _FASTAPI_AVAILABLE:
         task_id: str,
     ) -> AsyncGenerator[str, None]:
         """진행률 SSE 제너레이터."""
+        # ── (0) Task Budget Router — 자료 크기 기반 라우팅 ──
+        total_file_bytes = sum(
+            Path(fp).stat().st_size for fp in params.file_paths if Path(fp).is_file()
+        )
+        estimated_tokens = total_file_bytes // 4  # rough: ~4 bytes/token
+        budget = decide_task_budget(
+            file_bytes=total_file_bytes,
+            estimated_tokens=estimated_tokens,
+            page_count=0,
+            hub_paired=_is_hub_paired(),
+            task_type=params.card_mode,
+        )
+        yield _sse("meta", {
+            "route_check": True,
+            "route": budget.route,
+            "file_bytes": total_file_bytes,
+            "estimated_tokens": estimated_tokens,
+            "max_wall_time_sec": budget.max_wall_time_sec,
+        })
+
+        if budget.route == Route.REFUSE_TEAM_HUB:
+            yield _sse("error", {
+                "error_class": "input_too_large",
+                "message": budget.user_message,
+            })
+            return
+
+        if budget.route == Route.TEAM_HUB_RECOMMENDED:
+            yield _sse("meta", {
+                "source": "team_hub",
+                "route": budget.route,
+                "message": budget.user_message,
+            })
+            yield _sse("complete", {
+                "result_text": budget.user_message,
+                "result_path": "",
+                "total_elapsed_sec": 0.0,
+            })
+            return
+
+        if budget.route == Route.PC_PREVIEW_TEAM_HUB:
+            yield _sse("meta", {
+                "source": "pc_preview",
+                "route": budget.route,
+                "message": budget.user_message,
+            })
+            yield _sse("complete", {
+                "result_text": budget.user_message,
+                "result_path": "",
+                "total_elapsed_sec": 0.0,
+            })
+            return
+
         # ── (1) FactPack 1차 매칭 — HIT 시 LLM 호출 없이 즉시 응답 ──
         fp_match = FACT_PACK.lookup(params.query)
         if fp_match is not None:
@@ -410,6 +470,7 @@ if _FASTAPI_AVAILABLE:
         start = time.monotonic()
         last_event_time = start
         chunk_results: list[str] = []
+        completed_count = 0  # 부분 결과 추적용
 
         async def _heartbeat_if_idle() -> AsyncGenerator[str, None]:
             nonlocal last_event_time
@@ -419,7 +480,12 @@ if _FASTAPI_AVAILABLE:
                 yield _sse("heartbeat", {"elapsed_sec": round(now - start, 2)})
 
         try:
-            yield _sse("phase_start", {"phase": "analyze", "total_steps": total})
+            estimated_chunk_sec = max(1, budget.max_wall_time_sec // max(1, total))
+            yield _sse("phase_start", {
+                "phase": "analyze",
+                "total_steps": total,
+                "status_message": f"1/{total} 단계 분석 시작 — 예상 {estimated_chunk_sec}초",
+            })
             last_event_time = time.monotonic()
 
             for i in range(total):
@@ -434,6 +500,7 @@ if _FASTAPI_AVAILABLE:
                         params, i, ctrl.chunk_timeout
                     )
                     chunk_results.append(chunk_text)
+                    completed_count += 1
                 except asyncio.TimeoutError:
                     ctrl._abort("chunk_timeout")
 
@@ -448,6 +515,9 @@ if _FASTAPI_AVAILABLE:
                     "total": total,
                     "elapsed_sec": round(elapsed_total, 2),
                     "est_remaining_sec": round(remaining, 2),
+                    "status_message": (
+                        f"{total}개 청크 중 {i + 1}번째 처리 중 — 근거 문장 검색 중"
+                    ),
                 })
                 last_event_time = time.monotonic()
 
@@ -457,9 +527,14 @@ if _FASTAPI_AVAILABLE:
                 })
                 last_event_time = time.monotonic()
 
-            yield _sse("reduce_start", {"input_chunks": total})
+            yield _sse("reduce_start", {
+                "input_chunks": total,
+                "status_message": f"{total}개 청크 결과 통합 중",
+            })
             last_event_time = time.monotonic()
-            yield _sse("verify_start", {})
+            yield _sse("verify_start", {
+                "status_message": "출처 근거 검증 중",
+            })
             last_event_time = time.monotonic()
 
             result_text = "\n\n".join(chunk_results)
@@ -477,27 +552,38 @@ if _FASTAPI_AVAILABLE:
             })
 
         except ChunkTimeoutError as exc:  # 구체 → 일반 순서 (P2 수정)
+            partial_path = str(exc.partial_path)
             yield _sse("cancelled", {
                 "reason": "chunk_timeout",
-                "partial_path": str(exc.partial_path),
-                "message": str(exc),
+                "partial_path": partial_path,
+                "partial_result_path": partial_path,
+                "completed_chunks": completed_count,
+                "message": f"사용자 중단. 현재까지 처리된 {completed_count}개 청크 결과를 부분 저장했습니다.",
             })
         except HardTimeoutError as exc:
+            partial_path = str(exc.partial_path)
             yield _sse("cancelled", {
                 "reason": "hard_timeout",
-                "partial_path": str(exc.partial_path),
-                "message": str(exc),
+                "partial_path": partial_path,
+                "partial_result_path": partial_path,
+                "completed_chunks": completed_count,
+                "message": f"사용자 중단. 현재까지 처리된 {completed_count}개 청크 결과를 부분 저장했습니다.",
             })
         except UserCancelledError as exc:
+            partial_path = str(exc.partial_path)
             yield _sse("cancelled", {
                 "reason": "user_cancel",
-                "partial_path": str(exc.partial_path),
-                "message": str(exc),
+                "partial_path": partial_path,
+                "partial_result_path": partial_path,
+                "completed_chunks": completed_count,
+                "message": f"사용자 중단. 현재까지 처리된 {completed_count}개 청크 결과를 부분 저장했습니다.",
             })
         except asyncio.TimeoutError as exc:
             yield _sse("cancelled", {
                 "reason": "unknown_timeout",
                 "partial_path": "",
+                "partial_result_path": "",
+                "completed_chunks": completed_count,
                 "message": str(exc),
             })
         except Exception as exc:  # noqa: BLE001
