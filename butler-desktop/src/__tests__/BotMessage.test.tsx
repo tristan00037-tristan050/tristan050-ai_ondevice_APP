@@ -46,4 +46,25 @@ describe('BotMessage — 출처 배지', () => {
     expect(screen.queryByText('✨ AI 생성')).not.toBeInTheDocument();
     expect(screen.getByText('생각 중')).toBeInTheDocument();
   });
+
+  it('test_status_message_displayed_during_processing', () => {
+    // phase_start loadingStatus → bot-loading-status 요소에 단계 메시지 표시
+    const phaseMsg = '1/1 단계 분석 시작 — 예상 60초';
+    render(<BotMessage content={null} loadingStatus={phaseMsg} />);
+    expect(screen.getByTestId('bot-loading-status').textContent).toBe(phaseMsg);
+  });
+
+  it('test_progress_bar_visible_during_chunk_progress', () => {
+    // progressPercent 설정 시 bot-progress-bar 표시
+    render(<BotMessage content={null} loadingStatus="처리 중" progressPercent={45} />);
+    expect(screen.getByTestId('bot-progress-bar-container')).toBeInTheDocument();
+    const bar = screen.getByTestId('bot-progress-bar');
+    expect(bar.style.width).toBe('45%');
+  });
+
+  it('test_boundary_progress_bar_hidden_without_progressPercent', () => {
+    // progressPercent 미설정 → progress bar 숨김
+    render(<BotMessage content={null} loadingStatus="생각 중" />);
+    expect(screen.queryByTestId('bot-progress-bar-container')).not.toBeInTheDocument();
+  });
 });

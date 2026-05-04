@@ -203,6 +203,53 @@ describe('App integration', () => {
     }, { timeout: 2000 });
   });
 
+  it('test_status_message_displayed_during_processing', async () => {
+    // ChatInput에 처리 중 상태 텍스트 요소 표시 (WKWebView placeholder 대응)
+    vi.spyOn(global, 'fetch').mockImplementation(() =>
+      Promise.resolve(new Response(new ReadableStream({ start(c) { c.close(); } }), { status: 200 }))
+    );
+
+    render(<App />);
+    fireEvent.change(screen.getByTestId('text-input'), { target: { value: '질문' } });
+
+    await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
+
+    // 전송 직후 처리 중 상태 텍스트 표시
+    await waitFor(() => {
+      expect(screen.getByTestId('processing-status-text')).toBeInTheDocument();
+    }, { timeout: 1000 });
+  });
+
+  it('test_phase_start_message_visible_with_flushsync', async () => {
+    // flushSync 적용: phase_start + complete가 같은 read()에 도착해도 phase 메시지가 렌더링됨
+    const phaseMsg = '1/1 단계 분석 시작 — 예상 60초';
+    const sseBody =
+      `event: phase_start\ndata: {"status_message":"${phaseMsg}","total_steps":1}\n\n` +
+      'event: complete\ndata: {"result_text":"완료된 결과"}\n\n';
+    const encoder = new TextEncoder();
+    vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
+      if (String(url).includes('/api/precheck')) {
+        return Promise.resolve(new Response(JSON.stringify({ grade: 'S' }), {
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      const stream = new ReadableStream({
+        start(c) { c.enqueue(encoder.encode(sseBody)); c.close(); },
+      });
+      return Promise.resolve(new Response(stream, { status: 200 }));
+    });
+
+    render(<App />);
+    fireEvent.change(screen.getByTestId('text-input'), { target: { value: '질문' } });
+    await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
+
+    // 최종적으로 결과가 보여야 함 (flushSync로 인한 중간 렌더 후 최종 상태)
+    await waitFor(() => {
+      expect(screen.getByTestId('result-panel')).toBeInTheDocument();
+    }, { timeout: 2000 });
+    expect(screen.getByTestId('result-panel').textContent).toContain('완료된 결과');
+  });
+
   it('test_happy_no_files_works_with_text_only', async () => {
     // 정상 흐름: 파일 없이 텍스트만 전송 → query 포함, file_0 없음
     const fetchMock = makeFetchMock();

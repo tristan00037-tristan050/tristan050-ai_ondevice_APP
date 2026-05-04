@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { EgressBadge } from './components/EgressBadge';
 import { EgressMonitor } from './components/chat/EgressMonitor';
 import { Sidebar } from './components/chat/Sidebar';
@@ -226,19 +227,28 @@ export function App() {
             setPendingBot(prev => prev ? { ...prev, source: src ?? null } : prev);
           } else if (eventType === 'phase_start') {
             const msg = (data.status_message as string) || '분석 중';
-            setPendingBot(prev => prev ? { ...prev, loadingStatus: msg } : prev);
+            // flushSync: same-batch events must render immediately so loading state is visible
+            flushSync(() => {
+              setPendingBot(prev => prev ? { ...prev, loadingStatus: msg } : prev);
+            });
           } else if (eventType === 'chunk_progress') {
             const current = (data.current as number) ?? 0;
             const total = (data.total as number) ?? 1;
             const msg = (data.status_message as string) || `처리 중 (${current}/${total})`;
             const pct = Math.round((current / total) * 100);
-            setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: pct } : prev);
+            flushSync(() => {
+              setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: pct } : prev);
+            });
           } else if (eventType === 'reduce_start') {
             const msg = (data.status_message as string) || '정리 중';
-            setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: 90 } : prev);
+            flushSync(() => {
+              setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: 90 } : prev);
+            });
           } else if (eventType === 'verify_start') {
             const msg = (data.status_message as string) || '확인 중';
-            setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: 96 } : prev);
+            flushSync(() => {
+              setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: 96 } : prev);
+            });
           } else if (eventType === 'complete') {
             const resultText = (data.result_text as string) ?? '';
             const botMsg: Message = {

@@ -511,6 +511,7 @@ if _FASTAPI_AVAILABLE:
                 "status_message": f"1/{total} 단계 분석 시작 — 예상 {estimated_chunk_sec}초",
             })
             last_event_time = time.monotonic()
+            await asyncio.sleep(0)  # flush phase_start to client before LLM blocks
 
             for i in range(total):
                 ctrl.check_hard_timeout()
