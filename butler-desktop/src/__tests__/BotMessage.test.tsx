@@ -117,11 +117,12 @@ describe('BotMessage — 출처 배지', () => {
 
 describe('BotMessage — 봇 아바타 아이콘', () => {
   it('test_bot_avatar_uses_img_not_emoji', () => {
-    // 봇 헤더 아바타가 🤖 이모지 아닌 <img alt="Butler"> 로 렌더됨
+    // 봇 헤더 아바타가 🤖 이모지 아닌 장식용 <img> 로 렌더됨
     render(<BotMessage content="답변입니다" />);
     expect(screen.getByTestId('bot-avatar-icon')).toBeInTheDocument();
     expect(screen.getByTestId('bot-avatar-icon').tagName).toBe('IMG');
-    expect(screen.getByTestId('bot-avatar-icon')).toHaveAttribute('alt', 'Butler');
+    expect(screen.getByTestId('bot-avatar-icon')).toHaveAttribute('alt', '');
+    expect(screen.getByTestId('bot-avatar-icon')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('test_bot_avatar_visible_during_loading', () => {

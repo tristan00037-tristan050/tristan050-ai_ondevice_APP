@@ -179,7 +179,8 @@ export function BotMessage({
       >
         <img
           src={butlerIconStaticUrl}
-          alt="Butler"
+          alt=""
+          aria-hidden="true"
           width={20}
           height={20}
           data-testid="bot-avatar-icon"
