@@ -604,16 +604,29 @@ if _FASTAPI_AVAILABLE:
                     if _token is None:
                         break
 
-                    # State machine: silently drop leading <think>...</think> block
+                    # State machine: drop leading <think>...</think>, preserve surrounding text
                     if _think_state == "before":
-                        if _token.strip() == "<think>":
+                        if "<think>" in _token:
                             _think_state = "in_think"
+                            pre = _token.split("<think>", 1)[0]
+                            if pre:
+                                tokens_acc.append(pre)
+                                last_event_time = time.monotonic()
+                                yield _sse("chunk", {"token": pre})
+                                await asyncio.sleep(0)
                             continue
                         else:
                             _think_state = "after"
                     elif _think_state == "in_think":
                         if "</think>" in _token:
                             _think_state = "after"
+                            post = _token.split("</think>", 1)[1]
+                            if post:
+                                tokens_acc.append(post)
+                                last_event_time = time.monotonic()
+                                yield _sse("chunk", {"token": post})
+                                await asyncio.sleep(0)
+                            continue
                         continue  # skip all tokens inside the think block
 
                     tokens_acc.append(_token)
