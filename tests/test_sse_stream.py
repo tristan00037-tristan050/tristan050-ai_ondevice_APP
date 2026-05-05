@@ -344,3 +344,108 @@ def test_adv_chunk_flush_each_token_separate_event(client_and_deps):
     assert len(chunk_events) == len(_tokens), (
         f"chunk 이벤트 수 불일치: expected {len(_tokens)}, got {len(chunk_events)}"
     )
+
+
+# ─────────────── PR #677 — think 필터 post-</think> 텍스트 보존 ────────────────
+
+@_skip_no_fastapi
+def test_adv_think_post_tag_text_emitted(client_and_deps):
+    """PR #677 핵심: '</think>실제답변' 단일 토큰에서 '실제답변' 부분이 chunk로 emit된다.
+
+    기존 구현은 in_think 분기에서 </think> 발견 후 무조건 continue → post 텍스트 손실.
+    수정 후: post = token.split('</think>', 1)[1] 추출 후 비어있지 않으면 chunk emit.
+    """
+    from butler_pc_core.inference.llm_runtime import LlmRuntime as _LR
+
+    client, *_ = client_and_deps
+    _tokens = ["<think>", "\n\n", "</think>실제답변", " 이어서"]
+
+    def _gen(self, prompt, cancel_event, max_tokens=512, temperature=0.2, stop=None):
+        for tok in _tokens:
+            if cancel_event.is_set():
+                return
+            yield tok
+
+    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None), \
+         patch.object(_LR, "generate_stream_with_cancel", _gen):
+        resp = client.post(
+            "/api/analyze/stream",
+            json={"file_path": "/tmp/f.txt", "total_chunks": 1, "output_dir": "/tmp"},
+        )
+
+    events = _parse_events(resp.text)
+    chunk_tokens = [e["data"]["token"] for e in events if e.get("event") == "chunk"]
+    combined = "".join(chunk_tokens)
+
+    assert "실제답변" in combined, (
+        f"post-</think> 텍스트 손실: combined='{combined}'"
+    )
+    assert "<think>" not in combined and "</think>" not in combined, (
+        f"think 태그 누출: combined='{combined}'"
+    )
+
+
+@_skip_no_fastapi
+def test_adv_think_pre_tag_text_emitted(client_and_deps):
+    """PR #677 대칭: '안녕<think>' 단일 토큰에서 '안녕' 부분이 chunk로 emit된다.
+
+    before 분기에서 <think>가 토큰 중간에 위치할 때 pre 텍스트를 보존하는지 검증.
+    수정 후: pre = token.split('<think>', 1)[0] 추출 후 비어있지 않으면 chunk emit.
+    """
+    from butler_pc_core.inference.llm_runtime import LlmRuntime as _LR
+
+    client, *_ = client_and_deps
+    _tokens = ["안녕<think>", "\n\n", "</think>", " 세계"]
+
+    def _gen(self, prompt, cancel_event, max_tokens=512, temperature=0.2, stop=None):
+        for tok in _tokens:
+            if cancel_event.is_set():
+                return
+            yield tok
+
+    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None), \
+         patch.object(_LR, "generate_stream_with_cancel", _gen):
+        resp = client.post(
+            "/api/analyze/stream",
+            json={"file_path": "/tmp/f.txt", "total_chunks": 1, "output_dir": "/tmp"},
+        )
+
+    events = _parse_events(resp.text)
+    chunk_tokens = [e["data"]["token"] for e in events if e.get("event") == "chunk"]
+    combined = "".join(chunk_tokens)
+
+    assert "안녕" in combined, (
+        f"pre-<think> 텍스트 손실: combined='{combined}'"
+    )
+    assert "<think>" not in combined and "</think>" not in combined, (
+        f"think 태그 누출: combined='{combined}'"
+    )
+
+
+@_skip_no_fastapi
+def test_adv_think_single_token_with_full_block(client_and_deps):
+    """PR #677 회귀: <think> 단독 토큰 후 분리 토큰 패턴 — 정상 답변 보존 확인."""
+    from butler_pc_core.inference.llm_runtime import LlmRuntime as _LR
+
+    client, *_ = client_and_deps
+    _tokens = ["<think>", "\n\n", "</think>", "정상답변", " 확인"]
+
+    def _gen(self, prompt, cancel_event, max_tokens=512, temperature=0.2, stop=None):
+        for tok in _tokens:
+            if cancel_event.is_set():
+                return
+            yield tok
+
+    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None), \
+         patch.object(_LR, "generate_stream_with_cancel", _gen):
+        resp = client.post(
+            "/api/analyze/stream",
+            json={"file_path": "/tmp/f.txt", "total_chunks": 1, "output_dir": "/tmp"},
+        )
+
+    events = _parse_events(resp.text)
+    chunk_tokens = [e["data"]["token"] for e in events if e.get("event") == "chunk"]
+    combined = "".join(chunk_tokens)
+
+    assert "정상답변" in combined, f"정상 토큰 손실: combined='{combined}'"
+    assert "<think>" not in combined and "</think>" not in combined
