@@ -114,3 +114,69 @@ describe('BotMessage — 출처 배지', () => {
     expect(screen.getByTestId('bot-loading-status')).toBeInTheDocument();
   });
 });
+
+describe('BotMessage — react-markdown 렌더링', () => {
+  it('test_bold_renders_as_strong', () => {
+    // **굵게** → <strong> 요소
+    render(<BotMessage content="**굵게** 텍스트" />);
+    expect(screen.getByText('굵게').tagName).toBe('STRONG');
+  });
+
+  it('test_heading_renders_as_h2', () => {
+    // ## 제목 → <h2> 요소
+    render(<BotMessage content="## 섹션 제목" />);
+    expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('섹션 제목');
+  });
+
+  it('test_code_block_renders_as_pre_code', () => {
+    // 코드 블록 → <pre><code>
+    const { container } = render(<BotMessage content={'```\nconst x = 1;\n```'} />);
+    const pre = container.querySelector('pre');
+    expect(pre).toBeInTheDocument();
+    expect(pre?.querySelector('code')).toBeInTheDocument();
+  });
+
+  it('test_inline_code_renders_in_code_element', () => {
+    // `인라인 코드` → <code> 요소
+    render(<BotMessage content="결과는 `null`입니다" />);
+    expect(document.querySelector('code')).toBeInTheDocument();
+    expect(document.querySelector('code')?.textContent).toBe('null');
+  });
+
+  it('test_ul_renders_unordered_list', () => {
+    // - 항목 → <ul><li>
+    render(<BotMessage content={'- 항목1\n- 항목2'} />);
+    expect(document.querySelector('ul')).toBeInTheDocument();
+    const items = document.querySelectorAll('li');
+    expect(items.length).toBe(2);
+  });
+
+  it('test_table_renders_with_th_td', () => {
+    // GFM 표 → <table><th><td>
+    const tablemd = '| 이름 | 값 |\n|------|----|\n| 사과 | 100 |';
+    render(<BotMessage content={tablemd} />);
+    expect(document.querySelector('table')).toBeInTheDocument();
+    expect(document.querySelector('th')).toBeInTheDocument();
+    expect(document.querySelector('td')).toBeInTheDocument();
+  });
+
+  it('test_blockquote_renders_correctly', () => {
+    // > 인용 → <blockquote>
+    render(<BotMessage content="> 인용 텍스트" />);
+    expect(document.querySelector('blockquote')).toBeInTheDocument();
+  });
+
+  it('test_streaming_buffer_also_renders_markdown', () => {
+    // streamBuffer 중간 상태에서도 마크다운 렌더 (content=null)
+    render(<BotMessage content={null} streamBuffer="**굵은** 스트리밍" />);
+    expect(screen.getByTestId('streaming-text')).toBeInTheDocument();
+    expect(screen.getByText('굵은').tagName).toBe('STRONG');
+  });
+
+  it('test_raw_markdown_not_visible_as_plain_text', () => {
+    // ## 기호가 화면에 그대로 노출되지 않음 (렌더링됨)
+    render(<BotMessage content="## 제목" />);
+    expect(screen.queryByText('## 제목')).not.toBeInTheDocument();
+  });
+});
