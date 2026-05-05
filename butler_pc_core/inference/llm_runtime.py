@@ -173,6 +173,32 @@ class LlmRuntime:
                 tokens.append(chunk["choices"][0]["text"])
         return _strip_residual_stop_tokens("".join(tokens))
 
+    def generate_stream_with_cancel(
+        self,
+        prompt: str,
+        cancel_event: threading.Event,
+        max_tokens: int = 512,
+        temperature: float = 0.2,
+        stop: list[str] | None = None,
+    ) -> Iterator[str]:
+        """Token-by-token streaming with cancel_event support."""
+        if self._status != "ready" or self._llm is None:
+            yield self._stub_response(prompt)
+            return
+        stop_tokens = stop if stop is not None else DEFAULT_STOP_TOKENS
+        with self._lock:
+            for chunk in self._llm(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stop=stop_tokens,
+                echo=False,
+                stream=True,
+            ):
+                if cancel_event.is_set():
+                    break
+                yield chunk["choices"][0]["text"]
+
     # ------------------------------------------------------------------
     @staticmethod
     def _stub_response(prompt: str) -> str:

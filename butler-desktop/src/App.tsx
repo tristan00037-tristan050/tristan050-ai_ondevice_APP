@@ -21,6 +21,7 @@ type PendingBotState = {
   source: 'factpack' | 'llm' | null;
   loadingStatus: string;
   progressPercent?: number;
+  streamBuffer: string;
   content: string | null;
   isError: boolean;
   factId?: string;
@@ -170,7 +171,8 @@ export function App() {
     // Start pending bot
     setPendingBot({
       source: null,
-      loadingStatus: '생각 중',
+      loadingStatus: '답변 준비중...',
+      streamBuffer: '',
       content: null,
       isError: false,
     });
@@ -225,6 +227,9 @@ export function App() {
             const src = data.source as 'factpack' | 'llm' | undefined;
             currentSource = src ?? null;
             setPendingBot(prev => prev ? { ...prev, source: src ?? null } : prev);
+          } else if (eventType === 'chunk') {
+            const token = (data.token as string) ?? '';
+            setPendingBot(prev => prev ? { ...prev, streamBuffer: prev.streamBuffer + token } : prev);
           } else if (eventType === 'phase_start') {
             const msg = (data.status_message as string) || '분석 중';
             // flushSync forces React DOM update; sidecar heartbeats keep the connection alive
@@ -286,7 +291,7 @@ export function App() {
                 ? '전체 시간 초과 (300초)로 중단됐습니다.'
                 : '작업이 중단됐습니다.';
             setPendingBot(prev => prev
-              ? { ...prev, content: cancelMsg, isError: true, loadingStatus: '' }
+              ? { ...prev, content: cancelMsg, isError: true, loadingStatus: '', streamBuffer: '' }
               : prev
             );
             setProcessing(false);
@@ -294,7 +299,7 @@ export function App() {
           } else if (eventType === 'error') {
             const errMsg = (data.message as string) ?? '알 수 없는 오류가 발생했습니다.';
             setPendingBot(prev => prev
-              ? { ...prev, content: errMsg, isError: true, loadingStatus: '' }
+              ? { ...prev, content: errMsg, isError: true, loadingStatus: '', streamBuffer: '' }
               : prev
             );
             setProcessing(false);
@@ -306,7 +311,7 @@ export function App() {
       const isAbort = err instanceof Error && err.name === 'AbortError';
       if (!isAbort) {
         setPendingBot(prev => prev
-          ? { ...prev, content: '요청 중 오류가 발생했습니다.', isError: true, loadingStatus: '' }
+          ? { ...prev, content: '요청 중 오류가 발생했습니다.', isError: true, loadingStatus: '', streamBuffer: '' }
           : prev
         );
       } else {

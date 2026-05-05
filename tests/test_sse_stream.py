@@ -96,24 +96,19 @@ def test_happy_chunk_progress_order(client_and_deps):
 
 
 @_skip_no_fastapi
-def test_boundary_heartbeat_event_present_after_idle(client_and_deps):
-    """last_event_time 조작으로 heartbeat 경로가 실행되는지 확인한다."""
+def test_boundary_chunk_events_present_during_streaming(client_and_deps):
+    """스트리밍 중 chunk 이벤트가 포함되어야 한다 (토큰 스트림이 heartbeat를 대체)."""
     client, *_ = client_and_deps
-    call_count = [0]
-
-    def _fake_monotonic():
-        call_count[0] += 1
-        return call_count[0] * 10.0
-
-    with patch("butler_sidecar.time.monotonic", side_effect=_fake_monotonic), \
-         patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None):
+    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None):
         resp = client.post(
             "/api/analyze/stream",
             json={"file_path": "/tmp/f.txt", "total_chunks": 1, "output_dir": "/tmp"},
         )
 
     events = _parse_events(resp.text)
-    assert "heartbeat" in [e["event"] for e in events]
+    event_types = [e["event"] for e in events]
+    # 스트리밍 모드: chunk 이벤트가 존재하고 heartbeat는 더 이상 사용되지 않음
+    assert "chunk" in event_types, f"chunk 이벤트 없음: {event_types}"
 
 
 @_skip_no_fastapi
@@ -200,7 +195,7 @@ def test_adv_unserializable_chunk_safe(client_and_deps):
 def test_adv_chunk_timeout_actually_cancels_slow_chunk(client_and_deps):
     """결함 1 회귀: 청크 작업이 chunk_timeout 초과 시 실제로 취소된다.
 
-    generate_with_cancel 을 cancel_event 대기 slow 함수로 교체하고
+    generate_stream_with_cancel을 cancel_event 대기 slow 제너레이터로 교체하고
     chunk_timeout=2초로 단축 → 2초 내에 cancelled(chunk_timeout)이 발생하는지 검증.
     60초를 실제로 기다리면 결함이 재발한 것이다.
     """
@@ -209,9 +204,12 @@ def test_adv_chunk_timeout_actually_cancels_slow_chunk(client_and_deps):
 
     client, *_ = client_and_deps
 
-    def _slow_cancellable(self, prompt, cancel_event, max_tokens=512, temperature=0.2, stop=None):
+    def _slow_streaming_gen(self, prompt, cancel_event, max_tokens=512, temperature=0.2, stop=None):
+        # cancel_event가 설정될 때까지 대기 (최대 60초)
         cancel_event.wait(timeout=60)
-        return "[cancelled]"
+        # 취소됐으면 토큰 없이 종료
+        return
+        yield  # 제너레이터 함수로 만들기 위한 unreachable yield
 
     class _FastTC(TC):
         def __init__(self, *args, **kwargs):
@@ -220,7 +218,7 @@ def test_adv_chunk_timeout_actually_cancels_slow_chunk(client_and_deps):
 
     start = time.time()
     with patch("butler_sidecar.TimeoutController", _FastTC), \
-         patch.object(_LR, "generate_with_cancel", _slow_cancellable):
+         patch.object(_LR, "generate_stream_with_cancel", _slow_streaming_gen):
         resp = client.post(
             "/api/analyze/stream",
             json={"file_path": "/tmp/f.txt", "total_chunks": 1, "output_dir": "/tmp"},
@@ -233,7 +231,7 @@ def test_adv_chunk_timeout_actually_cancels_slow_chunk(client_and_deps):
     # 본질 검증 2: cancelled 이벤트 reason이 chunk_timeout
     events = _parse_events(resp.text)
     cancelled = [e for e in events if e.get("event") == "cancelled"]
-    assert len(cancelled) == 1
+    assert len(cancelled) == 1, f"cancelled 이벤트 없음: {[e['event'] for e in events]}"
     assert cancelled[0]["data"]["reason"] == "chunk_timeout"
 
 

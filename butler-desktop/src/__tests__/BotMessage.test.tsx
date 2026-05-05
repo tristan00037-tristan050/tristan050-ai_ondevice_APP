@@ -94,4 +94,23 @@ describe('BotMessage — 출처 배지', () => {
     render(<BotMessage content={null} loadingStatus="처리 중" progressPercent={70} />);
     expect(screen.getByTestId('bot-progress-bar').style.width).toBe('70%');
   });
+
+  it('test_streaming_buffer_text_rendered', () => {
+    // streamBuffer 있음 → streaming-text 요소에 토큰 텍스트 표시
+    render(<BotMessage content={null} streamBuffer="부분 응답..." />);
+    expect(screen.getByTestId('streaming-text')).toBeInTheDocument();
+    expect(screen.getByTestId('streaming-text').textContent).toContain('부분 응답...');
+  });
+
+  it('test_streaming_hides_loading_dots_when_buffer_set', () => {
+    // streamBuffer 있음 → loading dots(bot-loading-status) 숨김
+    render(<BotMessage content={null} streamBuffer="토큰" loadingStatus="답변 준비중..." />);
+    expect(screen.queryByTestId('bot-loading-status')).not.toBeInTheDocument();
+  });
+
+  it('test_streaming_empty_buffer_shows_loading_dots', () => {
+    // streamBuffer 없음(undefined 또는 '') → loading dots 표시
+    render(<BotMessage content={null} streamBuffer="" loadingStatus="답변 준비중..." />);
+    expect(screen.getByTestId('bot-loading-status')).toBeInTheDocument();
+  });
 });

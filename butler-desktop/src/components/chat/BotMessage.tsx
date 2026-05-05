@@ -5,6 +5,7 @@ interface BotMessageProps {
   source?: 'factpack' | 'llm' | null;
   loadingStatus?: string;
   progressPercent?: number;
+  streamBuffer?: string;
   factId?: string;
   score?: number;
   isError?: boolean;
@@ -73,6 +74,7 @@ export function BotMessage({
   source,
   loadingStatus,
   progressPercent,
+  streamBuffer,
   isError = false,
   onRetry,
   isLast = false,
@@ -143,42 +145,56 @@ export function BotMessage({
       {/* Body */}
       <div style={{ paddingLeft: 36 }}>
         {content === null ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          streamBuffer ? (
             <div
+              data-testid="streaming-text"
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-2)',
-                color: 'var(--color-text-secondary)',
-                fontSize: 'var(--text-sm)',
+                fontSize: 'var(--text-base)',
+                color: 'var(--color-text-primary)',
+                whiteSpace: 'pre-wrap',
+                lineHeight: 1.7,
               }}
             >
-              <span data-testid="bot-loading-status">{loadingStatus ?? '생각 중'}</span>
-              <ThinkingDots />
+              {streamBuffer}
             </div>
-            {progressPercent !== undefined && (
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
               <div
-                data-testid="bot-progress-bar-container"
                 style={{
-                  height: 4,
-                  borderRadius: 2,
-                  background: 'var(--color-border-subtle)',
-                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  color: 'var(--color-text-secondary)',
+                  fontSize: 'var(--text-sm)',
                 }}
               >
-                <div
-                  data-testid="bot-progress-bar"
-                  style={{
-                    height: '100%',
-                    borderRadius: 2,
-                    background: 'var(--color-brand-primary)',
-                    width: `${Math.min(100, Math.max(0, progressPercent))}%`,
-                    transition: 'width 300ms ease',
-                  }}
-                />
+                <span data-testid="bot-loading-status">{loadingStatus ?? '생각 중'}</span>
+                <ThinkingDots />
               </div>
-            )}
-          </div>
+              {progressPercent !== undefined && (
+                <div
+                  data-testid="bot-progress-bar-container"
+                  style={{
+                    height: 4,
+                    borderRadius: 2,
+                    background: 'var(--color-border-subtle)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    data-testid="bot-progress-bar"
+                    style={{
+                      height: '100%',
+                      borderRadius: 2,
+                      background: 'var(--color-brand-primary)',
+                      width: `${Math.min(100, Math.max(0, progressPercent))}%`,
+                      transition: 'width 300ms ease',
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )
         ) : isError ? (
           <div>
             <p
