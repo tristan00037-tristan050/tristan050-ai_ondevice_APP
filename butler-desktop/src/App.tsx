@@ -227,27 +227,28 @@ export function App() {
             setPendingBot(prev => prev ? { ...prev, source: src ?? null } : prev);
           } else if (eventType === 'phase_start') {
             const msg = (data.status_message as string) || '분석 중';
-            // flushSync: same-batch events must render immediately so loading state is visible
+            // flushSync forces React DOM update; sidecar heartbeats keep the connection alive
             flushSync(() => {
-              setPendingBot(prev => prev ? { ...prev, loadingStatus: msg } : prev);
+              setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: 5 } : prev);
             });
           } else if (eventType === 'chunk_progress') {
             const current = (data.current as number) ?? 0;
             const total = (data.total as number) ?? 1;
             const msg = (data.status_message as string) || `처리 중 (${current}/${total})`;
-            const pct = Math.round((current / total) * 100);
+            // 5–70%: monotonic scale avoids backward jump when reduce_start follows at fixed 85%
+            const pct = 5 + Math.round((current / total) * 65);
             flushSync(() => {
               setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: pct } : prev);
             });
           } else if (eventType === 'reduce_start') {
             const msg = (data.status_message as string) || '정리 중';
             flushSync(() => {
-              setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: 90 } : prev);
+              setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: 85 } : prev);
             });
           } else if (eventType === 'verify_start') {
             const msg = (data.status_message as string) || '확인 중';
             flushSync(() => {
-              setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: 96 } : prev);
+              setPendingBot(prev => prev ? { ...prev, loadingStatus: msg, progressPercent: 95 } : prev);
             });
           } else if (eventType === 'complete') {
             const resultText = (data.result_text as string) ?? '';
@@ -399,7 +400,6 @@ export function App() {
             >
               🔒 외부 송신 0
             </button>
-            <EgressBadge />
           </div>
         </div>
 
