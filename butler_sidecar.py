@@ -584,6 +584,8 @@ if _FASTAPI_AVAILABLE:
 
                 tokens_acc: list[str] = []
                 _deadline = chunk_start + ctrl.chunk_timeout
+                # think-block filter: drop <think>...</think> before first response token
+                _think_state = "before"  # "before" | "in_think" | "after"
 
                 while True:
                     _remaining = _deadline - time.monotonic()
@@ -602,9 +604,22 @@ if _FASTAPI_AVAILABLE:
                     if _token is None:
                         break
 
+                    # State machine: silently drop leading <think>...</think> block
+                    if _think_state == "before":
+                        if _token.strip() == "<think>":
+                            _think_state = "in_think"
+                            continue
+                        else:
+                            _think_state = "after"
+                    elif _think_state == "in_think":
+                        if "</think>" in _token:
+                            _think_state = "after"
+                        continue  # skip all tokens inside the think block
+
                     tokens_acc.append(_token)
                     last_event_time = time.monotonic()
                     yield _sse("chunk", {"token": _token})
+                    await asyncio.sleep(0)  # flush each token as a separate TCP chunk
 
                 chunk_text = _strip_residual_stop_tokens("".join(tokens_acc))
                 chunk_results.append(chunk_text)

@@ -269,3 +269,78 @@ def test_boundary_hard_timeout_classification(client_and_deps):
 
     cancelled = next(e for e in _parse_events(resp.text) if e.get("event") == "cancelled")
     assert cancelled["data"]["reason"] == "hard_timeout"
+
+
+# ─────────────── PR #675 회귀 테스트 (think-block 필터 + chunk flush) ──────────
+
+@_skip_no_fastapi
+def test_adv_think_block_tokens_not_in_chunk_events(client_and_deps):
+    """think-block 필터 회귀: <think>...</think> 토큰이 chunk 이벤트에 포함되지 않는다.
+
+    Qwen3 모델은 /no_think 지시에도 빈 thinking block(<think>\\n\\n</think>)을 emit한다.
+    _think_state 상태 머신이 이 토큰들을 소비하고 chunk 이벤트에 누출하지 않는지 검증.
+    """
+    from butler_pc_core.inference.llm_runtime import LlmRuntime as _LR
+
+    client, *_ = client_and_deps
+
+    # Simulate Qwen3's null think block followed by real response tokens
+    _think_tokens = ["<think>", "\n\n", "</think>", "실제", " 답변", " 입니다"]
+
+    def _think_streaming_gen(self, prompt, cancel_event, max_tokens=512, temperature=0.2, stop=None):
+        for tok in _think_tokens:
+            if cancel_event.is_set():
+                return
+            yield tok
+
+    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None), \
+         patch.object(_LR, "generate_stream_with_cancel", _think_streaming_gen):
+        resp = client.post(
+            "/api/analyze/stream",
+            json={"file_path": "/tmp/f.txt", "total_chunks": 1, "output_dir": "/tmp"},
+        )
+
+    assert resp.status_code == 200
+    events = _parse_events(resp.text)
+    chunk_tokens = [e["data"]["token"] for e in events if e.get("event") == "chunk"]
+
+    # think-block tokens must not appear in any chunk event
+    for tok in ("<think>", "</think>"):
+        assert not any(tok in t for t in chunk_tokens), (
+            f"think 토큰 누출: '{tok}' in chunk_tokens={chunk_tokens}"
+        )
+
+    # Real response tokens must be present
+    combined = "".join(chunk_tokens)
+    assert "실제" in combined, f"실제 답변 토큰 없음: chunk_tokens={chunk_tokens}"
+
+
+@_skip_no_fastapi
+def test_adv_chunk_flush_each_token_separate_event(client_and_deps):
+    """chunk flush 회귀: 각 토큰이 독립적인 chunk 이벤트로 전달된다.
+
+    asyncio.sleep(0) 추가로 TCP flush가 보장되므로 토큰 수만큼 chunk 이벤트가 있어야 한다.
+    """
+    from butler_pc_core.inference.llm_runtime import LlmRuntime as _LR
+
+    client, *_ = client_and_deps
+    _tokens = ["첫째", " 둘째", " 셋째"]
+
+    def _multi_token_gen(self, prompt, cancel_event, max_tokens=512, temperature=0.2, stop=None):
+        for tok in _tokens:
+            if cancel_event.is_set():
+                return
+            yield tok
+
+    with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None), \
+         patch.object(_LR, "generate_stream_with_cancel", _multi_token_gen):
+        resp = client.post(
+            "/api/analyze/stream",
+            json={"file_path": "/tmp/f.txt", "total_chunks": 1, "output_dir": "/tmp"},
+        )
+
+    events = _parse_events(resp.text)
+    chunk_events = [e for e in events if e.get("event") == "chunk"]
+    assert len(chunk_events) == len(_tokens), (
+        f"chunk 이벤트 수 불일치: expected {len(_tokens)}, got {len(chunk_events)}"
+    )
