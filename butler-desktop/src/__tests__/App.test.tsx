@@ -281,6 +281,49 @@ describe('App integration', () => {
     expect(screen.getByTestId('result-panel').textContent).toContain('안녕하세요');
   });
 
+  it('test_cancel_btn_clears_pending_bot_immediately', async () => {
+    // cancel race 핫픽스 회귀: 취소 버튼 클릭 시 pendingBot이 null로 초기화되어
+    // 완료 이벤트 처리 후에도 result-panel에 결과가 표시되지 않아야 함
+    let resolveStream!: () => void;
+    const neverEndingStream = new ReadableStream({
+      start(c) {
+        // Stream holds open until we resolve — simulates slow LLM
+        resolveStream = () => c.close();
+      },
+    });
+
+    vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
+      if (String(url).includes('/api/precheck')) {
+        return Promise.resolve(new Response(JSON.stringify({ grade: 'S' }), {
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      return Promise.resolve(new Response(neverEndingStream, { status: 200 }));
+    });
+
+    render(<App />);
+    fireEvent.change(screen.getByTestId('text-input'), { target: { value: '취소 테스트' } });
+    await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
+
+    // cancel-btn should be visible while processing
+    await waitFor(() => {
+      expect(screen.getByTestId('cancel-btn')).toBeInTheDocument();
+    }, { timeout: 1000 });
+
+    // Click cancel — handleStop fires, pendingBot cleared
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('cancel-btn'));
+      resolveStream(); // let the stream close
+    });
+
+    // After cancel: processing stopped, cancel-btn gone, no result content
+    await waitFor(() => {
+      expect(screen.queryByTestId('cancel-btn')).not.toBeInTheDocument();
+    }, { timeout: 1000 });
+    // No bot result content in the DOM
+    expect(screen.queryByTestId('result-panel')).not.toBeInTheDocument();
+  });
+
   it('test_happy_no_files_works_with_text_only', async () => {
     // 정상 흐름: 파일 없이 텍스트만 전송 → query 포함, file_0 없음
     const fetchMock = makeFetchMock();

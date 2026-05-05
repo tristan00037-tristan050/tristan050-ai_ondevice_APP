@@ -191,6 +191,7 @@ export function App() {
         body: formData,
         signal: ctrl.signal,
       });
+      if (ctrl.signal.aborted) return;
 
       const reader = res.body?.getReader();
       if (!reader) {
@@ -204,6 +205,7 @@ export function App() {
 
       while (true) {
         const { done, value } = await reader.read();
+        if (ctrl.signal.aborted) return;
         if (done) break;
         buf += decoder.decode(value, { stream: true });
         const blocks = buf.split('\n\n');
