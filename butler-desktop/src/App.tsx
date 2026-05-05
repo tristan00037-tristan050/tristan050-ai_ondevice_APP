@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { flushSync } from 'react-dom';
+import butlerIconStaticUrl from './assets/butler-icon-static.svg';
 import { EgressBadge } from './components/EgressBadge';
 import { EgressMonitor } from './components/chat/EgressMonitor';
 import { Sidebar } from './components/chat/Sidebar';
@@ -381,15 +382,24 @@ export function App() {
           >
             ☰
           </button>
-          <span
-            style={{
-              fontSize: 'var(--text-base)',
-              fontWeight: 600,
-              color: 'var(--color-brand-primary)',
-            }}
-          >
-            Butler
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <img
+              src={butlerIconStaticUrl}
+              width={24}
+              height={24}
+              alt=""
+              data-testid="butler-header-icon"
+            />
+            <span
+              style={{
+                fontSize: 'var(--text-base)',
+                fontWeight: 600,
+                color: 'var(--color-brand-primary)',
+              }}
+            >
+              Butler
+            </span>
+          </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <button
               data-testid="egress-monitor-btn"
