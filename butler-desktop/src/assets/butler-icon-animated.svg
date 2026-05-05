@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <style>
+    @keyframes butlerPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .butler-dots { animation: butlerPulse 1.2s ease-in-out infinite; }
+  </style>
+  <path d="M24 5 L39 13.5 L39 34.5 L24 43 L9 34.5 L9 13.5 Z"
+        stroke="#10367D" stroke-width="2.5" stroke-linejoin="round">
+    <animateTransform attributeName="transform" type="rotate"
+      from="0 24 24" to="360 24 24" dur="3s" repeatCount="indefinite"/>
+  </path>
+  <g class="butler-dots">
+    <circle cx="24" cy="19" r="3" fill="#10367D"/>
+    <circle cx="18" cy="29" r="3" fill="#10367D"/>
+    <circle cx="30" cy="29" r="3" fill="#10367D"/>
+  </g>
+</svg>

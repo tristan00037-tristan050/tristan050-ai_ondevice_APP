@@ -115,6 +115,27 @@ describe('BotMessage — 출처 배지', () => {
   });
 });
 
+describe('BotMessage — 애니메이션 로딩 아이콘', () => {
+  it('test_loading_shows_animated_icon', () => {
+    // content=null + streamBuffer 없음 → animated icon 표시
+    render(<BotMessage content={null} loadingStatus="답변 준비중..." />);
+    expect(screen.getByTestId('butler-loading-icon')).toBeInTheDocument();
+  });
+
+  it('test_streaming_hides_animated_icon', () => {
+    // streamBuffer 존재 → animated icon 숨김 (streaming-text로 대체)
+    render(<BotMessage content={null} streamBuffer="첫 토큰" />);
+    expect(screen.queryByTestId('butler-loading-icon')).not.toBeInTheDocument();
+    expect(screen.getByTestId('streaming-text')).toBeInTheDocument();
+  });
+
+  it('test_completed_content_hides_animated_icon', () => {
+    // content 완료 상태 → animated icon 없음
+    render(<BotMessage content="완성된 답변" />);
+    expect(screen.queryByTestId('butler-loading-icon')).not.toBeInTheDocument();
+  });
+});
+
 describe('BotMessage — react-markdown 렌더링', () => {
   it('test_bold_renders_as_strong', () => {
     // **굵게** → <strong> 요소

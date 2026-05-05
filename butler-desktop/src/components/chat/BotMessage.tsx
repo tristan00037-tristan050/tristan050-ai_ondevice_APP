@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import butlerIconAnimatedUrl from '../../assets/butler-icon-animated.svg';
 
 interface BotMessageProps {
   content: string | null;
@@ -52,25 +53,6 @@ function SourceBadge({ source }: { source?: 'factpack' | 'llm' | null }) {
   );
 }
 
-function ThinkingDots() {
-  return (
-    <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}>
-      {[0, 1, 2].map(i => (
-        <span
-          key={i}
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            background: 'var(--color-brand-primary)',
-            display: 'inline-block',
-            animation: `thinkDot 1.2s ease-in-out ${i * 0.2}s infinite`,
-          }}
-        />
-      ))}
-    </span>
-  );
-}
 
 const mdComponents: React.ComponentProps<typeof ReactMarkdown>['components'] = {
   h1: ({ children }) => (
@@ -231,18 +213,22 @@ export function BotMessage({
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <div
+              <img
+                src={butlerIconAnimatedUrl}
+                width={48}
+                height={48}
+                alt=""
+                data-testid="butler-loading-icon"
+              />
+              <span
+                data-testid="bot-loading-status"
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-2)',
                   color: 'var(--color-text-secondary)',
                   fontSize: 'var(--text-sm)',
                 }}
               >
-                <span data-testid="bot-loading-status">{loadingStatus ?? '생각 중'}</span>
-                <ThinkingDots />
-              </div>
+                {loadingStatus ?? '생각 중'}
+              </span>
               {progressPercent !== undefined && (
                 <div
                   data-testid="bot-progress-bar-container"

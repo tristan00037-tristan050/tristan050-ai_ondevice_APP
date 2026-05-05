@@ -25,6 +25,13 @@ function makeFetchMock() {
 }
 
 describe('App integration', () => {
+  it('test_header_static_icon_rendered', () => {
+    // 헤더에 Butler 정적 아이콘이 항상 표시됨
+    render(<App />);
+    expect(screen.getByTestId('butler-header-icon')).toBeInTheDocument();
+    expect(screen.getByTestId('butler-header-icon').tagName).toBe('IMG');
+  });
+
   it('test_adv_attached_files_sent_to_backend', async () => {
     // P1 회귀: 첨부 파일이 /api/analyze/stream 요청의 FormData에 포함돼야 한다
     const fetchMock = makeFetchMock();
