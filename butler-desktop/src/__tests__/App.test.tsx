@@ -250,6 +250,37 @@ describe('App integration', () => {
     expect(screen.getByTestId('result-panel').textContent).toContain('완료된 결과');
   });
 
+  it('test_chunk_event_streams_to_display_and_complete_shows_result', async () => {
+    // chunk 이벤트 → streaming-text 표시, complete → result-panel에 최종 텍스트
+    const sseBody =
+      'event: meta\ndata: {"source":"llm"}\n\n' +
+      'event: chunk\ndata: {"token":"안녕"}\n\n' +
+      'event: chunk\ndata: {"token":"하세요"}\n\n' +
+      'event: complete\ndata: {"result_text":"안녕하세요"}\n\n';
+    const encoder = new TextEncoder();
+    vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
+      if (String(url).includes('/api/precheck')) {
+        return Promise.resolve(new Response(JSON.stringify({ grade: 'S' }), {
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      const stream = new ReadableStream({
+        start(c) { c.enqueue(encoder.encode(sseBody)); c.close(); },
+      });
+      return Promise.resolve(new Response(stream, { status: 200 }));
+    });
+
+    render(<App />);
+    fireEvent.change(screen.getByTestId('text-input'), { target: { value: '인사' } });
+    await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
+
+    // 최종 결과가 result-panel에 표시됨
+    await waitFor(() => {
+      expect(screen.getByTestId('result-panel')).toBeInTheDocument();
+    }, { timeout: 2000 });
+    expect(screen.getByTestId('result-panel').textContent).toContain('안녕하세요');
+  });
+
   it('test_happy_no_files_works_with_text_only', async () => {
     // 정상 흐름: 파일 없이 텍스트만 전송 → query 포함, file_0 없음
     const fetchMock = makeFetchMock();

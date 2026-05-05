@@ -2,6 +2,7 @@ export interface SSEEvent {
   type:
     | 'meta'
     | 'phase_start'
+    | 'chunk'
     | 'chunk_progress'
     | 'chunk_done'
     | 'reduce_start'

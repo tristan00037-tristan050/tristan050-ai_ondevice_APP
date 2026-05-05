@@ -54,7 +54,7 @@ from butler_pc_core.runtime.timeout_controller import (
     UserCancelledError,
     HARD_TIMEOUT_SEC,
 )
-from butler_pc_core.inference.llm_runtime import LlmRuntime
+from butler_pc_core.inference.llm_runtime import LlmRuntime, _strip_residual_stop_tokens
 from datetime import datetime, timezone as _tz
 
 # ---------------------------------------------------------------------------
@@ -169,7 +169,14 @@ async def _real_chunk_work_inprocess(
     generate_with_cancel + cancel_event 로 timeout 시 executor thread 조기 종료 (P1-2).
     """
     # 프롬프트 조립 (chunk_worker.py 동일 로직)
-    system_prompt = "당신은 유능한 사무 보조 AI입니다."
+    system_prompt = (
+        "당신은 유능한 사무 보조 AI입니다. "
+        "답변은 자연스러운 문단 중심으로 작성하세요. "
+        "제목(##, ###)은 정말 필요한 경우에만 최소화하여 사용하고, "
+        "구분선(---)은 사용하지 마세요. "
+        "굵게(**) 강조도 최소화하세요. "
+        "간결하고 읽기 쉬운 문장 구성을 우선하세요."
+    )
     user_tmpl = "{{ query }}"
     try:
         from butler_pc_core.prompts.cards import load_card_prompt
@@ -517,28 +524,91 @@ if _FASTAPI_AVAILABLE:
                 ctrl.check_hard_timeout()
 
                 chunk_start = time.monotonic()
-                async for frame in _heartbeat_if_idle():
-                    yield frame
 
-                # Run inference in a background task and send heartbeats every 4 s
-                # so WKWebView's 60-s idle timeout is never reached regardless of max_tokens.
-                inference_task = asyncio.create_task(
-                    _real_chunk_work_inprocess(params, i, ctrl.chunk_timeout)
+                # Build prompt (same logic as _real_chunk_work_inprocess)
+                _sys_prompt = (
+                    "당신은 유능한 사무 보조 AI입니다. "
+                    "답변은 자연스러운 문단 중심으로 작성하세요. "
+                    "제목(##, ###)은 정말 필요한 경우에만 최소화하여 사용하고, "
+                    "구분선(---)은 사용하지 마세요. "
+                    "굵게(**) 강조도 최소화하세요. "
+                    "간결하고 읽기 쉬운 문장 구성을 우선하세요."
                 )
+                _user_tmpl = "{{ query }}"
                 try:
-                    while True:
-                        done, _ = await asyncio.wait({inference_task}, timeout=4.0)
-                        if done:
-                            break
-                        now = time.monotonic()
-                        last_event_time = now
-                        yield _sse("heartbeat", {"elapsed_sec": round(now - start, 2)})
-                        await asyncio.sleep(0)  # flush heartbeat
-                    chunk_text: str = await inference_task
-                    chunk_results.append(chunk_text)
-                    completed_count += 1
-                except asyncio.TimeoutError:
-                    ctrl._abort("chunk_timeout")
+                    from butler_pc_core.prompts.cards import load_card_prompt
+                    card = load_card_prompt(params.card_mode)
+                    _sys_prompt = card.get("system_prompt", _sys_prompt)
+                    _user_tmpl = card.get("user_prompt_template", _user_tmpl)
+                except Exception:
+                    pass
+
+                _file_texts: list[str] = []
+                for fp in params.file_paths:
+                    try:
+                        _file_texts.append(Path(fp).read_text(encoding="utf-8", errors="replace"))
+                    except Exception:
+                        pass
+
+                _user_content = _user_tmpl.replace("{{ query }}", params.query)
+                if _file_texts:
+                    _user_content += "\n\n## 첨부 파일 내용\n" + "\n\n---\n".join(_file_texts)
+
+                _prompt = (
+                    f"<|im_start|>system\n{_sys_prompt}<|im_end|>\n"
+                    f"<|im_start|>user\n/no_think\n{_user_content}<|im_end|>\n"
+                    f"<|im_start|>assistant\n"
+                )
+
+                # Stream tokens via asyncio.Queue bridge (thread → coroutine)
+                llm = await _ensure_shared_llm()
+                cancel_event = threading.Event()
+                _loop = asyncio.get_running_loop()
+                _token_queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+                def _produce_tokens(
+                    _q: asyncio.Queue = _token_queue,
+                    _ce: threading.Event = cancel_event,
+                    _p: str = _prompt,
+                    _lp: asyncio.AbstractEventLoop = _loop,
+                ) -> None:
+                    try:
+                        for tok in llm.generate_stream_with_cancel(_p, _ce, max_tokens=2048):
+                            _lp.call_soon_threadsafe(_q.put_nowait, tok)
+                    except Exception:
+                        pass
+                    finally:
+                        _lp.call_soon_threadsafe(_q.put_nowait, None)
+
+                _loop.run_in_executor(None, _produce_tokens)
+
+                tokens_acc: list[str] = []
+                _deadline = chunk_start + ctrl.chunk_timeout
+
+                while True:
+                    _remaining = _deadline - time.monotonic()
+                    if _remaining <= 0:
+                        cancel_event.set()
+                        ctrl._abort("chunk_timeout")
+
+                    try:
+                        _token = await asyncio.wait_for(
+                            _token_queue.get(), timeout=min(_remaining, 10.0)
+                        )
+                    except asyncio.TimeoutError:
+                        cancel_event.set()
+                        ctrl._abort("chunk_timeout")
+
+                    if _token is None:
+                        break
+
+                    tokens_acc.append(_token)
+                    last_event_time = time.monotonic()
+                    yield _sse("chunk", {"token": _token})
+
+                chunk_text = _strip_residual_stop_tokens("".join(tokens_acc))
+                chunk_results.append(chunk_text)
+                completed_count += 1
 
                 ctrl.check_hard_timeout()
 

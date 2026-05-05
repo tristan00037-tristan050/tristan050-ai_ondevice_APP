@@ -7,6 +7,7 @@ interface PendingBotState {
   source?: 'factpack' | 'llm' | null;
   loadingStatus: string;
   progressPercent?: number;
+  streamBuffer?: string;
   content: string | null;
   isError?: boolean;
 }
@@ -74,6 +75,7 @@ export function MessageList({ messages, pendingBot, onRetry }: MessageListProps)
               source={pendingBot.source ?? undefined}
               loadingStatus={pendingBot.loadingStatus}
               progressPercent={pendingBot.progressPercent}
+              streamBuffer={pendingBot.streamBuffer}
               isError={pendingBot.isError}
               isLast={true}
               onRetry={onRetry}
