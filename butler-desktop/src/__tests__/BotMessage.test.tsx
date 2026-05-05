@@ -115,6 +115,28 @@ describe('BotMessage — 출처 배지', () => {
   });
 });
 
+describe('BotMessage — 봇 아바타 아이콘', () => {
+  it('test_bot_avatar_uses_img_not_emoji', () => {
+    // 봇 헤더 아바타가 🤖 이모지 아닌 <img alt="Butler"> 로 렌더됨
+    render(<BotMessage content="답변입니다" />);
+    expect(screen.getByTestId('bot-avatar-icon')).toBeInTheDocument();
+    expect(screen.getByTestId('bot-avatar-icon').tagName).toBe('IMG');
+    expect(screen.getByTestId('bot-avatar-icon')).toHaveAttribute('alt', 'Butler');
+  });
+
+  it('test_bot_avatar_visible_during_loading', () => {
+    // 로딩 중에도 아바타 아이콘 표시
+    render(<BotMessage content={null} loadingStatus="답변 준비중..." />);
+    expect(screen.getByTestId('bot-avatar-icon')).toBeInTheDocument();
+  });
+
+  it('test_bot_avatar_visible_during_streaming', () => {
+    // 스트리밍 중에도 아바타 아이콘 표시
+    render(<BotMessage content={null} streamBuffer="첫 토큰" />);
+    expect(screen.getByTestId('bot-avatar-icon')).toBeInTheDocument();
+  });
+});
+
 describe('BotMessage — 애니메이션 로딩 아이콘', () => {
   it('test_loading_shows_animated_icon', () => {
     // content=null + streamBuffer 없음 → animated icon 표시
