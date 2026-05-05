@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 
 interface BotMessageProps {
   content: string | null;
@@ -66,6 +69,83 @@ function ThinkingDots() {
         />
       ))}
     </span>
+  );
+}
+
+const mdComponents: React.ComponentProps<typeof ReactMarkdown>['components'] = {
+  h1: ({ children }) => (
+    <h1 style={{ fontSize: '1.5em', fontWeight: 700, margin: '0.75em 0 0.4em', color: 'var(--color-text-primary)', lineHeight: 1.3 }}>{children}</h1>
+  ),
+  h2: ({ children }) => (
+    <h2 style={{ fontSize: '1.25em', fontWeight: 700, margin: '0.75em 0 0.4em', color: 'var(--color-text-primary)', lineHeight: 1.3 }}>{children}</h2>
+  ),
+  h3: ({ children }) => (
+    <h3 style={{ fontSize: '1.1em', fontWeight: 600, margin: '0.6em 0 0.3em', color: 'var(--color-text-primary)', lineHeight: 1.3 }}>{children}</h3>
+  ),
+  p: ({ children }) => (
+    <p style={{ margin: '0 0 0.75em', lineHeight: 1.7, color: 'var(--color-text-primary)' }}>{children}</p>
+  ),
+  strong: ({ children }) => (
+    <strong style={{ fontWeight: 700, color: 'var(--color-text-primary)' }}>{children}</strong>
+  ),
+  em: ({ children }) => (
+    <em style={{ fontStyle: 'italic' }}>{children}</em>
+  ),
+  ul: ({ children }) => (
+    <ul style={{ margin: '0.4em 0 0.75em', paddingLeft: '1.5em', listStyleType: 'disc' }}>{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol style={{ margin: '0.4em 0 0.75em', paddingLeft: '1.5em', listStyleType: 'decimal' }}>{children}</ol>
+  ),
+  li: ({ children }) => (
+    <li style={{ margin: '0.25em 0', lineHeight: 1.65, color: 'var(--color-text-primary)' }}>{children}</li>
+  ),
+  table: ({ children }) => (
+    <div style={{ overflowX: 'auto', margin: '0.75em 0' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th style={{ padding: '6px 12px', border: '1px solid var(--color-border-subtle)', background: 'var(--color-bg-input)', fontWeight: 600, textAlign: 'left', color: 'var(--color-text-primary)' }}>{children}</th>
+  ),
+  td: ({ children }) => (
+    <td style={{ padding: '6px 12px', border: '1px solid var(--color-border-subtle)', color: 'var(--color-text-primary)' }}>{children}</td>
+  ),
+  code: ({ children, className }) => {
+    const isBlock = Boolean(className);
+    if (isBlock) {
+      return (
+        <code style={{ display: 'block', fontFamily: 'var(--font-mono, monospace)', fontSize: '0.875em', color: 'var(--color-text-primary)' }}>{children}</code>
+      );
+    }
+    return (
+      <code style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: '0.875em', background: 'var(--color-bg-input)', padding: '1px 5px', borderRadius: 4, color: 'var(--color-text-primary)' }}>{children}</code>
+    );
+  },
+  pre: ({ children }) => (
+    <pre style={{ margin: '0.5em 0 0.75em', padding: '12px 14px', background: 'var(--color-bg-input)', border: '1px solid var(--color-border-subtle)', borderRadius: 8, overflowX: 'auto', fontFamily: 'var(--font-mono, monospace)', fontSize: '0.875em', lineHeight: 1.5 }}>{children}</pre>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote style={{ margin: '0.5em 0 0.75em', paddingLeft: '1em', borderLeft: '3px solid var(--color-brand-primary)', color: 'var(--color-text-secondary)' }}>{children}</blockquote>
+  ),
+  a: ({ children, href }) => {
+    const safe = href && /^https?:\/\//.test(href) ? href : undefined;
+    return (
+      <a href={safe} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--color-brand-primary)', textDecoration: 'underline' }}>{children}</a>
+    );
+  },
+  hr: () => (
+    <hr style={{ border: 'none', borderTop: '1px solid var(--color-border-subtle)', margin: '1em 0' }} />
+  ),
+};
+
+function MarkdownContent({ text }: { text: string }) {
+  return (
+    <div data-testid="markdown-content" style={{ fontSize: 'var(--text-base)', lineHeight: 1.7 }}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={mdComponents}>
+        {text}
+      </ReactMarkdown>
+    </div>
   );
 }
 
@@ -146,16 +226,8 @@ export function BotMessage({
       <div style={{ paddingLeft: 36 }}>
         {content === null ? (
           streamBuffer ? (
-            <div
-              data-testid="streaming-text"
-              style={{
-                fontSize: 'var(--text-base)',
-                color: 'var(--color-text-primary)',
-                whiteSpace: 'pre-wrap',
-                lineHeight: 1.7,
-              }}
-            >
-              {streamBuffer}
+            <div data-testid="streaming-text">
+              <MarkdownContent text={streamBuffer} />
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
@@ -227,16 +299,7 @@ export function BotMessage({
           </div>
         ) : (
           <div>
-            <div
-              style={{
-                fontSize: 'var(--text-base)',
-                color: 'var(--color-text-primary)',
-                whiteSpace: 'pre-wrap',
-                lineHeight: 1.7,
-              }}
-            >
-              {content}
-            </div>
+            <MarkdownContent text={content} />
             {content && (
               <button
                 data-testid="copy-btn"
