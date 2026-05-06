@@ -167,27 +167,37 @@ def match_account(description: str, vendor: str = "") -> Tuple[str, float]:
 
     best_name = "미분류"
     best_score = 0.0
+    best_conf = 0.0
 
     for acc, kw_pats, vd_pats in _COMPILED:
         if acc.name == "미분류":
             continue
 
-        score = 0.0
-        total = len(kw_pats) + len(vd_pats)
-        if total == 0:
+        if not kw_pats and not vd_pats:
             continue
 
-        for pat in kw_pats:
-            if pat.search(description):
-                score += 1.0
-        for pat in vd_pats:
-            if pat.search(combined):
-                score += 0.5  # 거래처 매칭은 가중치 0.5
+        kw_hit = sum(1 for p in kw_pats if p.search(description))
+        vd_hit = sum(1 for p in vd_pats if p.search(combined))
 
-        if score > 0:
-            conf = min(1.0, score / max(1, len(kw_pats)))
-            if conf > best_score:
-                best_score = conf
-                best_name = acc.name
+        if kw_hit == 0 and vd_hit == 0:
+            continue
 
-    return best_name, round(best_score, 3)
+        # raw 선택점수 (계정 선택 기준 — 기존 로직 유지)
+        raw = kw_hit * 1.0 + vd_hit * 0.5
+
+        if raw > best_score:
+            best_score = raw
+            best_name = acc.name
+            if kw_hit > 0:
+                # 키워드 커버리지 기반 신뢰도: 50%~90% + 벤더 보너스 10%
+                kw_ratio = kw_hit / max(1, len(kw_pats))
+                best_conf = min(1.0, 0.50 + kw_ratio * 0.40 + (0.10 if vd_hit > 0 else 0.0))
+            else:
+                # 벤더 단독 매칭: 임계값 미만 — 미분류로 격리됨
+                best_conf = 0.30
+
+    # 50% 미만 신뢰도는 미분류로 격리
+    if best_conf < 0.50:
+        return "미분류", 0.0
+
+    return best_name, round(best_conf, 3)
