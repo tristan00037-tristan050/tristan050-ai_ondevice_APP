@@ -242,4 +242,40 @@ describe('AccountingModal — 업로드 흐름', () => {
     });
     expect(screen.getByTestId('accounting-error').textContent).toContain('예기치 않게 종료');
   });
+
+  it('test_modal_guide_text_contains_xlsx_csv', () => {
+    // 모달 안내 문구가 .xlsx, .csv 텍스트를 포함하는지 확인
+    render(<AccountingModal onClose={() => {}} />);
+    const zone = screen.getByTestId('accounting-drop-zone');
+    expect(zone.textContent).toContain('.xlsx');
+    expect(zone.textContent).toContain('.csv');
+  });
+
+  it('test_file_delete_button_resets_to_idle', async () => {
+    // 파일 첨부 후 × 버튼 클릭 → 첨부 상태 초기화 (drop zone 복귀)
+    const mockFetch = vi.fn().mockImplementation(() => new Promise(() => {}));
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'transactions.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    // processing 상태 진입 확인
+    await waitFor(() => {
+      expect(screen.getByTestId('accounting-selected-file')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('accounting-selected-file').textContent).toContain('transactions.xlsx');
+
+    // × 버튼 클릭 → idle 복귀
+    const deleteBtn = screen.getByTestId('accounting-file-delete-btn');
+    expect(deleteBtn).toHaveAttribute('aria-label', '첨부 파일 삭제');
+    fireEvent.click(deleteBtn);
+
+    expect(screen.getByTestId('accounting-drop-zone')).toBeInTheDocument();
+    expect(screen.queryByTestId('accounting-selected-file')).not.toBeInTheDocument();
+  });
 });

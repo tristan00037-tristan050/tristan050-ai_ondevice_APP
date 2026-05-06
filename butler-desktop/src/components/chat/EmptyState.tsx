@@ -125,7 +125,7 @@ export function EmptyState({ onCardSelect }: EmptyStateProps) {
             width: '100%',
           }}
         >
-          통장·거래내역 파일을 첨부해주세요 (PDF, CSV, 이미지 지원)
+          통장·거래내역 파일을 첨부해주세요 (.xlsx, .xls, .csv 지원)
         </div>
       )}
 
