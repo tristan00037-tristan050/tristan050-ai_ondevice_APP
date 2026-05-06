@@ -8,6 +8,7 @@ import { EmptyState } from './components/chat/EmptyState';
 import { ChatInput } from './components/chat/ChatInput';
 import { MessageList } from './components/chat/MessageList';
 import { DeleteConfirmModal } from './components/chat/DeleteConfirmModal';
+import { AccountingModal } from './components/chat/AccountingModal';
 import { SIDECAR_BASE } from './constants';
 import type { SSEEvent, Conversation, Message } from './types';
 import {
@@ -49,6 +50,7 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [cardMode, setCardMode] = useState<string>('free');
+  const [accountingModalOpen, setAccountingModalOpen] = useState(false);
   const [egressMonitorOpen, setEgressMonitorOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -331,7 +333,11 @@ export function App() {
   };
 
   const handleCardSelect = (mode: string | null) => {
-    setCardMode(mode ?? 'free');
+    const m = mode ?? 'free';
+    setCardMode(m);
+    if (m === 'accounting_classify') {
+      setAccountingModalOpen(true);
+    }
   };
 
   return (
@@ -452,6 +458,15 @@ export function App() {
 
       {egressMonitorOpen && (
         <EgressMonitor onClose={() => setEgressMonitorOpen(false)} />
+      )}
+
+      {accountingModalOpen && (
+        <AccountingModal
+          onClose={() => {
+            setAccountingModalOpen(false);
+            setCardMode('free');
+          }}
+        />
       )}
     </div>
   );
