@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import butlerIconAnimatedUrl from '../../assets/butler-icon-animated.svg';
+import butlerIconStaticUrl from '../../assets/butler-icon-static.svg';
 
 interface BotMessageProps {
   content: string | null;
@@ -176,22 +177,15 @@ export function BotMessage({
           marginBottom: 'var(--space-2)',
         }}
       >
-        <div
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            background: 'var(--color-brand-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#FFFFFF',
-            fontSize: 14,
-            flexShrink: 0,
-          }}
-        >
-          🤖
-        </div>
+        <img
+          src={butlerIconStaticUrl}
+          alt=""
+          aria-hidden="true"
+          width={20}
+          height={20}
+          data-testid="bot-avatar-icon"
+          style={{ flexShrink: 0, marginRight: 2 }}
+        />
         <span
           style={{
             fontSize: 'var(--text-sm)',
