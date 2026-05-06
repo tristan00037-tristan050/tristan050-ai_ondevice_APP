@@ -73,6 +73,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
 
       const decoder = new TextDecoder();
       let buf = '';
+      let receivedTerminal = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -90,6 +91,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
           if (event === 'phase_start') {
             setPhase({ kind: 'processing', status: (data.status_message as string) ?? '처리 중...' });
           } else if (event === 'complete') {
+            receivedTerminal = true;
             setPhase({
               kind: 'done',
               resultId: (data.result_id as string) ?? '',
@@ -99,10 +101,15 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
             });
             return;
           } else if (event === 'error') {
+            receivedTerminal = true;
             setPhase({ kind: 'error', message: (data.message as string) ?? '알 수 없는 오류' });
             return;
           }
         }
+      }
+
+      if (!receivedTerminal) {
+        setPhase({ kind: 'error', message: '연결이 예기치 않게 종료되었습니다.' });
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;

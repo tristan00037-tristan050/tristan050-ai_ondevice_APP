@@ -270,9 +270,10 @@ if _FASTAPI_AVAILABLE:
     # -----------------------------------------------------------------------
     @app.on_event("startup")
     async def _startup_load_model():
-        """sidecar 기동 시 모델을 백그라운드 스레드에서 비동기 로드."""
+        """sidecar 기동 시 모델 로드 + 회계 결과 eviction 태스크 등록."""
         loop = asyncio.get_running_loop()
         loop.run_in_executor(None, _init_shared_llm)
+        asyncio.create_task(_cleanup_accounting_results())
 
     @app.get("/health")
     def health():
@@ -794,8 +795,28 @@ if _FASTAPI_AVAILABLE:
     # -----------------------------------------------------------------------
     from fastapi.responses import FileResponse as _FileResponse
 
-    # result_id → { "xlsx_path": str, "md_content": str, "summary": dict }
+    ACCOUNTING_RESULT_TTL = 3600        # 결과 보관 최대 시간 (초)
+    ACCOUNTING_CLEANUP_INTERVAL = 300   # 만료 스캔 주기 (초)
+
+    # result_id → { "xlsx_path": str, "md_content": str, "summary": dict, "created_at": float }
     _accounting_results: dict[str, dict] = {}
+
+    async def _cleanup_accounting_results() -> None:
+        """만료된 회계 분류 결과를 메모리 + 디스크에서 제거하는 백그라운드 태스크."""
+        while True:
+            await asyncio.sleep(ACCOUNTING_CLEANUP_INTERVAL)
+            now = time.monotonic()
+            expired = [
+                rid for rid, entry in list(_accounting_results.items())
+                if now - entry.get("created_at", now) > ACCOUNTING_RESULT_TTL
+            ]
+            for rid in expired:
+                entry = _accounting_results.pop(rid, None)
+                if entry:
+                    try:
+                        Path(entry["xlsx_path"]).unlink(missing_ok=True)
+                    except Exception:
+                        pass
 
     async def _stream_accounting(file_path: str, result_id: str):
         """회계 분류 SSE 제너레이터."""
@@ -843,6 +864,7 @@ if _FASTAPI_AVAILABLE:
                 "xlsx_path": str(out_xlsx),
                 "md_content": md_content,
                 "summary": summary,
+                "created_at": time.monotonic(),
             }
 
             yield _sse("complete", {

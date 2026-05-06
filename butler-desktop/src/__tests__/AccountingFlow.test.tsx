@@ -213,4 +213,33 @@ describe('AccountingModal — 업로드 흐름', () => {
     fireEvent.click(screen.getByTestId('accounting-retry-btn'));
     expect(screen.getByTestId('accounting-drop-zone')).toBeInTheDocument();
   });
+
+  it('test_sse_early_close_without_complete_shows_error', async () => {
+    // complete/error 이벤트 없이 스트림이 닫히는 경우 → error 상태 + 메시지 노출
+    const encoder = new TextEncoder();
+    const abruptStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // phase_start만 보내고 complete 없이 종료
+        controller.enqueue(encoder.encode('event: phase_start\ndata: {"status_message":"분류 중"}\n\n'));
+        controller.close();
+      },
+    });
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: abruptStream,
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('accounting-error')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('accounting-error').textContent).toContain('예기치 않게 종료');
+  });
 });
