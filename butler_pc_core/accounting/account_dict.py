@@ -182,19 +182,21 @@ def match_account(description: str, vendor: str = "") -> Tuple[str, float]:
         if kw_hit == 0 and vd_hit == 0:
             continue
 
-        # raw 선택점수 (계정 선택 기준 — 기존 로직 유지)
         raw = kw_hit * 1.0 + vd_hit * 0.5
 
-        if raw > best_score:
+        # 신뢰도 계산 (동점 비교에서도 사용하므로 비교 전에 산출)
+        if kw_hit > 0:
+            kw_ratio = kw_hit / max(1, len(kw_pats))
+            conf = min(1.0, 0.50 + kw_ratio * 0.40 + (0.10 if vd_hit > 0 else 0.0))
+        else:
+            # 벤더 단독 매칭: 임계값 미만 — 미분류로 격리됨
+            conf = 0.30
+
+        # 동점(raw==best_score) 시 신뢰도가 높은 쪽 선택 — vendor-only 잠김 방지
+        if raw > best_score or (raw == best_score and conf > best_conf):
             best_score = raw
+            best_conf = conf
             best_name = acc.name
-            if kw_hit > 0:
-                # 키워드 커버리지 기반 신뢰도: 50%~90% + 벤더 보너스 10%
-                kw_ratio = kw_hit / max(1, len(kw_pats))
-                best_conf = min(1.0, 0.50 + kw_ratio * 0.40 + (0.10 if vd_hit > 0 else 0.0))
-            else:
-                # 벤더 단독 매칭: 임계값 미만 — 미분류로 격리됨
-                best_conf = 0.30
 
     # 50% 미만 신뢰도는 미분류로 격리
     if best_conf < 0.50:

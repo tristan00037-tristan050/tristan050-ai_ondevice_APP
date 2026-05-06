@@ -137,6 +137,20 @@ _SYNTHETIC_ROWS = [
     ("외상매출금회수 처리", "", "외상매출금"),
     ("매출채권회수 입금", "", "외상매출금"),
     ("거래대금수령 처리", "", "외상매출금"),
+    # ── 동점(raw score tie) 시나리오 — vendor-only vs keyword ──────────────
+    # 통신비(KT+SKT vendor, raw=1.0, conf=0.30)보다 임차료(keyword, raw=1.0, conf≥0.50)가 이겨야 함
+    ("KT SKT 임차료 납부", "", "임차료"),
+    # 통신비(KT vendor, raw=0.5)보다 보험료(keyword, raw=1.0)가 이겨야 함 (raw 우선)
+    ("KT 보험료납부 처리", "SKT", "보험료"),
+]
+
+# 콤마 포함 금액 시나리오 — 한국 실무 데이터 현실 반영
+_COMMA_AMOUNT_ROWS = [
+    ("급여 지급", "", "급여", "3,200,000"),
+    ("통신비 납부", "KT", "통신비", "88,000"),
+    ("임차료 납부", "", "임차료", "1,500,000"),
+    ("광고비 집행", "", "광고선전비", "320,000"),
+    ("접대비 거래처 식사", "", "접대비", "85,000"),
 ]
 
 
@@ -154,3 +168,17 @@ def make_synthetic_df(n: int = 100) -> "pd.DataFrame":
         "expected": [r[2] for r in rows],
     }
     return pd.DataFrame(data)
+
+
+def make_comma_amount_df() -> "pd.DataFrame":
+    """콤마 포함 금액 형식의 거래내역 DataFrame (5건)."""
+    if not _PANDAS_OK:
+        raise ImportError("pandas 미설치")
+
+    return pd.DataFrame({
+        "날짜": [f"2024-01-{i+1:02d}" for i in range(len(_COMMA_AMOUNT_ROWS))],
+        "적요": [r[0] for r in _COMMA_AMOUNT_ROWS],
+        "거래처": [r[1] for r in _COMMA_AMOUNT_ROWS],
+        "금액": [r[3] for r in _COMMA_AMOUNT_ROWS],  # 콤마 포함 문자열
+        "expected": [r[2] for r in _COMMA_AMOUNT_ROWS],
+    })
