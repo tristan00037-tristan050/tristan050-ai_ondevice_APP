@@ -789,6 +789,125 @@ if _FASTAPI_AVAILABLE:
         ctrl.cancel()
         return {"cancelled": True, "task_id": task_id}
 
+    # -----------------------------------------------------------------------
+    # 회계 분류 엔드포인트
+    # -----------------------------------------------------------------------
+    from fastapi.responses import FileResponse as _FileResponse
+
+    # result_id → { "xlsx_path": str, "md_content": str, "summary": dict }
+    _accounting_results: dict[str, dict] = {}
+
+    async def _stream_accounting(file_path: str, result_id: str):
+        """회계 분류 SSE 제너레이터."""
+        try:
+            yield _sse("phase_start", {"status_message": "분류 중 — 회계과목 매칭"})
+            await asyncio.sleep(0)
+
+            loop = asyncio.get_running_loop()
+
+            try:
+                from butler_pc_core.accounting.classifier import classify_file, save_classified
+                from butler_pc_core.accounting.report import build_summary
+            except ImportError as exc:
+                yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
+                return
+
+            df = await loop.run_in_executor(None, classify_file, file_path)
+
+            yield _sse("phase_start", {"status_message": "보고서 생성 중 — 요약 집계"})
+            await asyncio.sleep(0)
+
+            summary = await loop.run_in_executor(None, build_summary, df)
+
+            out_xlsx = Path(tempfile.gettempdir()) / f"butler_accounting_{result_id}.xlsx"
+            await loop.run_in_executor(None, save_classified, df, out_xlsx)
+
+            cats = summary.get("categories", {})
+            cat_rows = "\n".join(
+                f"| {name} | {info['count']} | {info['avg_confidence']:.0%} |"
+                for name, info in sorted(cats.items(), key=lambda x: -x[1]["count"])
+            )
+            md_content = (
+                f"## 회계 분류 결과 요약\n\n"
+                f"- **총 거래건수**: {summary['total_rows']}건\n"
+                f"- **분류 완료**: {summary['classified_rows']}건\n"
+                f"- **미분류**: {summary['unclassified_rows']}건\n"
+                f"- **평균 신뢰도**: {summary['avg_confidence']:.1%}\n\n"
+                f"### 계정과목별 분류\n\n"
+                f"| 계정과목 | 건수 | 평균신뢰도 |\n"
+                f"|---------|------|----------|\n"
+                f"{cat_rows}\n"
+            )
+
+            _accounting_results[result_id] = {
+                "xlsx_path": str(out_xlsx),
+                "md_content": md_content,
+                "summary": summary,
+            }
+
+            yield _sse("complete", {
+                "result_id": result_id,
+                "md_content": md_content,
+                "summary": summary,
+                "row_count": summary["total_rows"],
+                "category_count": len(cats),
+            })
+
+        except Exception as exc:
+            yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)[:500]})
+        finally:
+            try:
+                Path(file_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    @app.post("/accounting/classify")
+    async def accounting_classify(request: Request):
+        """회계 분류 SSE 엔드포인트 (multipart/form-data).
+
+        Form field: file (.xlsx/.csv/.xls)
+        이벤트: phase_start / complete / error
+        """
+        form = await request.form()
+        upload = form.get("file")
+        if upload is None or not hasattr(upload, "read"):
+            raise HTTPException(status_code=422, detail="file 필드가 없습니다.")
+
+        fname = getattr(upload, "filename", "") or "upload"
+        suffix = Path(fname).suffix if fname else ".xlsx"
+        if suffix.lower() not in (".xlsx", ".xls", ".csv"):
+            raise HTTPException(
+                status_code=422,
+                detail=f"지원하지 않는 파일 형식: {suffix} (지원: .xlsx .xls .csv)",
+            )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            content = await upload.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        result_id = str(uuid.uuid4())
+        return StreamingResponse(
+            _stream_accounting(tmp_path, result_id),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.get("/accounting/result/{result_id}/xlsx")
+    def accounting_result_xlsx(result_id: str):
+        """분류 결과 xlsx 파일 다운로드."""
+        entry = _accounting_results.get(result_id)
+        if entry is None:
+            raise HTTPException(status_code=404, detail=f"result {result_id} not found")
+        xlsx_path = entry["xlsx_path"]
+        if not Path(xlsx_path).exists():
+            raise HTTPException(status_code=404, detail="xlsx 파일이 만료되었습니다.")
+        return _FileResponse(
+            xlsx_path,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename="butler_accounting_result.xlsx",
+        )
+
 # ---------------------------------------------------------------------------
 # FastAPI 미설치 환경용 경량 HTTP 서버 (stdlib only)
 # ---------------------------------------------------------------------------
