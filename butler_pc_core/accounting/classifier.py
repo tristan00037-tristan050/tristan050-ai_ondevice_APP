@@ -95,7 +95,65 @@ def classify_file(path: Union[str, Path]) -> "pd.DataFrame":
 
 
 def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
-    """분류 결과를 xlsx로 저장."""
+    """분류 결과를 3시트 xlsx로 저장.
+
+    [분류결과] 원본 컬럼 + 분류과목 + 신뢰도(정수%)  — 분류 성공 행만
+    [요약]    분류과목 | 건수 | 합계 | 평균
+    [미분류]  원본 컬럼만  — 분류 실패 행
+    """
     if not _PANDAS_OK:
         raise ImportError("pandas가 설치되지 않았습니다.")
-    df.to_excel(str(out_path), index=False, engine="openpyxl")
+    try:
+        import openpyxl
+        from openpyxl.styles import Font
+    except ImportError as exc:
+        raise RuntimeError("openpyxl 미설치 — pip install openpyxl") from exc
+
+    orig_cols = [c for c in df.columns if c not in ("분류과목", "신뢰도")]
+    df_ok = df[df["분류과목"] != "미분류"].copy()
+    df_ng = df[df["분류과목"] == "미분류"][orig_cols].copy()
+    bold = Font(bold=True)
+
+    wb = openpyxl.Workbook()
+
+    # ── [분류결과] ──────────────────────────────────────────────────────────
+    ws1 = wb.active
+    ws1.title = "분류결과"
+    ws1.append(orig_cols + ["분류과목", "신뢰도"])
+    for cell in ws1[1]:
+        cell.font = bold
+    for _, row in df_ok.iterrows():
+        vals = [row[c] for c in orig_cols]
+        vals.append(row["분류과목"])
+        vals.append(f"{int(round(float(row['신뢰도']) * 100))}%")
+        ws1.append(vals)
+
+    # ── [요약] ──────────────────────────────────────────────────────────────
+    ws2 = wb.create_sheet("요약")
+    ws2.append(["분류과목", "건수", "합계", "평균"])
+    for cell in ws2[1]:
+        cell.font = bold
+    amount_col = _detect_col(list(df.columns), _AMOUNT_CANDIDATES)
+    if amount_col and not df_ok.empty:
+        df_ok["_amt"] = pd.to_numeric(df_ok[amount_col], errors="coerce").fillna(0)
+        grp = df_ok.groupby("분류과목")["_amt"].agg(["count", "sum", "mean"]).reset_index()
+        for _, r in grp.iterrows():
+            ws2.append([r["분류과목"], int(r["count"]), int(r["sum"]), int(r["mean"])])
+        t_cnt = int(grp["count"].sum())
+        t_sum = int(grp["sum"].sum())
+        ws2.append(["총계", t_cnt, t_sum, int(t_sum / t_cnt) if t_cnt else 0])
+    elif not df_ok.empty:
+        grp = df_ok.groupby("분류과목").size().reset_index(name="count")
+        for _, r in grp.iterrows():
+            ws2.append([r["분류과목"], int(r["count"]), 0, 0])
+        ws2.append(["총계", int(grp["count"].sum()), 0, 0])
+
+    # ── [미분류] ────────────────────────────────────────────────────────────
+    ws3 = wb.create_sheet("미분류")
+    ws3.append(orig_cols)
+    for cell in ws3[1]:
+        cell.font = bold
+    for _, row in df_ng.iterrows():
+        ws3.append([row[c] for c in orig_cols])
+
+    wb.save(str(out_path))
