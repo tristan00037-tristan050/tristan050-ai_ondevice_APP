@@ -18,6 +18,13 @@ import os
 import subprocess as _subprocess
 import sys
 import tempfile
+
+# 회계 분류 런타임 의존성 — 정적 분석/번들 도구(PyInstaller 등)에 visible하게 명시
+try:
+    import openpyxl  # noqa: F401  xlsx read/write
+    import xlrd      # noqa: F401  legacy .xls read
+except ImportError:
+    pass  # 미설치 시 accounting/classify 엔드포인트에서 RuntimeError로 처리
 import threading
 import time
 import uuid

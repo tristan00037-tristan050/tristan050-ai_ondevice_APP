@@ -10,7 +10,7 @@ interface AccountingModalProps {
 
 type Phase =
   | { kind: 'idle' }
-  | { kind: 'processing'; status: string }
+  | { kind: 'processing'; status: string; fileName: string }
   | { kind: 'done'; resultId: string; mdContent: string; rowCount: number; categoryCount: number }
   | { kind: 'error'; message: string };
 
@@ -46,7 +46,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
 
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    setPhase({ kind: 'processing', status: '파일 업로드 중...' });
+    setPhase({ kind: 'processing', status: '파일 업로드 중...', fileName: file.name });
     setReportOpen(false);
 
     try {
@@ -89,7 +89,11 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
           const { event, data } = parsed;
 
           if (event === 'phase_start') {
-            setPhase({ kind: 'processing', status: (data.status_message as string) ?? '처리 중...' });
+            setPhase(prev => ({
+              kind: 'processing',
+              status: (data.status_message as string) ?? '처리 중...',
+              fileName: prev.kind === 'processing' ? prev.fileName : '',
+            }));
           } else if (event === 'complete') {
             receivedTerminal = true;
             setPhase({
@@ -242,6 +246,38 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
             data-testid="accounting-processing"
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) 0' }}
           >
+            {/* 첨부 파일 표시 + 삭제 버튼 */}
+            <div
+              data-testid="accounting-selected-file"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 12px',
+                background: 'var(--color-bg-input)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 8,
+                fontSize: 'var(--text-sm)',
+                color: 'var(--color-text-primary)',
+                maxWidth: '100%',
+              }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                📄 {phase.fileName}
+              </span>
+              <button
+                data-testid="accounting-file-delete-btn"
+                aria-label="첨부 파일 삭제"
+                onClick={() => { abortRef.current?.abort(); setPhase({ kind: 'idle' }); }}
+                style={{
+                  flexShrink: 0,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 16, lineHeight: 1,
+                  color: 'var(--color-text-secondary)',
+                  padding: '0 2px',
+                }}
+              >
+                ×
+              </button>
+            </div>
             <img
               src={butlerIconAnimatedUrl}
               width={64} height={64}
