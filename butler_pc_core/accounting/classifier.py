@@ -135,7 +135,9 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
         cell.font = bold
     amount_col = _detect_col(list(df.columns), _AMOUNT_CANDIDATES)
     if amount_col and not df_ok.empty:
-        df_ok["_amt"] = pd.to_numeric(df_ok[amount_col], errors="coerce").fillna(0)
+        # 콤마·원화기호·공백 포함 문자열 정제 후 수치 변환
+        cleaned = df_ok[amount_col].astype(str).str.replace(r"[,￦원\s]", "", regex=True)
+        df_ok["_amt"] = pd.to_numeric(cleaned, errors="coerce").fillna(0)
         grp = df_ok.groupby("분류과목")["_amt"].agg(["count", "sum", "mean"]).reset_index()
         for _, r in grp.iterrows():
             ws2.append([r["분류과목"], int(r["count"]), int(r["sum"]), int(r["mean"])])
