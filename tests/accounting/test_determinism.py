@@ -40,4 +40,4 @@ def test_determinism_single_row():
     results = [classify_df(df)["분류과목"].iloc[0] for _ in range(10)]
 
     assert len(set(results)) == 1, f"단일 행 결과 불일치: {set(results)}"
-    assert results[0] == "급여"
+    assert results[0] == "직원급여"

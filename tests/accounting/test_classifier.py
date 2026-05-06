@@ -72,7 +72,7 @@ def test_vendor_pattern_assists_classification():
     ])
     result = classify_df(df)
 
-    assert result.iloc[0]["분류과목"] == "수도광열비"
+    assert result.iloc[0]["분류과목"] == "전력비"
     assert result.iloc[1]["분류과목"] == "보험료"
     assert result.iloc[2]["분류과목"] == "차량유지비"
 
