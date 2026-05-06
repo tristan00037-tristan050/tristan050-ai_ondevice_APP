@@ -29,20 +29,20 @@ _HEADER_PARAMS = [
 # (bank_id, filename, expected_desc_col, expect_vendor)
 _COLUMN_PARAMS = [
     ("ibk",     "ibk_sample.xlsx",     "거래내용",  True),
-    ("kb",      "kb_sample.xlsx",      "거래내역",  True),
+    ("kb",      "kb_sample.xlsx",      "적요",      True),
     ("shinhan", "shinhan_sample.xlsx", "적요",      True),
-    ("woori",   "woori_sample.xlsx",   "적요",      True),
-    ("hana",    "hana_sample.xlsx",    "적요",      True),
+    ("woori",   "woori_sample.xlsx",   "적요",      False),   # 우리은행: 별도 거래처 컬럼 없음
+    ("hana",    "hana_sample.xlsx",    "적요",      False),   # 하나은행: 별도 거래처 컬럼 없음
     ("nh",      "nh_sample.xlsx",      "거래내용",  False),
 ]
 
-# (bank_id, filename, has_split_columns)
+# (bank_id, filename, has_split_columns) — 모든 은행 출금/입금 분리
 _SPLIT_PARAMS = [
     ("ibk",     "ibk_sample.xlsx",     True),
     ("kb",      "kb_sample.xlsx",      True),
-    ("shinhan", "shinhan_sample.xlsx", False),
+    ("shinhan", "shinhan_sample.xlsx", True),
     ("woori",   "woori_sample.xlsx",   True),
-    ("hana",    "hana_sample.xlsx",    False),
+    ("hana",    "hana_sample.xlsx",    True),
     ("nh",      "nh_sample.xlsx",      True),
 ]
 

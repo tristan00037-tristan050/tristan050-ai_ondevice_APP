@@ -47,6 +47,12 @@ _DATE_CANDIDATES = [
 _TIME_CANDIDATES = [
     "거래시간", "시간",
 ]
+# 2차 적요 컬럼 — 1차 desc_col에 텍스트 결합 (우리은행 메모, 농협 거래기록사항 등)
+_MEMO_CANDIDATES = [
+    "거래기록사항",  # 농협: 거래내용 세부 기록
+    "메모",
+    "이체메모",
+]
 
 # classify_df가 내부적으로 추가하는 컬럼 — orig_cols에서 제외
 _INTERNAL_COLS = {"분류과목", "신뢰도", "_amt", "_datetime"}
@@ -138,10 +144,33 @@ def _read_file(path: Union[str, Path]) -> "pd.DataFrame":
         raise ValueError(f"지원하지 않는 파일 형식: {suffix} (지원: .xlsx .xls .csv)")
 
 
-def _build_classify_text(row: "pd.Series", desc_col: str | None, vendor_col: str | None) -> tuple[str, str]:
-    """적요 + 거래처 추출 → (description, vendor) 반환."""
-    desc = str(row[desc_col]).strip() if desc_col else ""
-    vendor = str(row[vendor_col]).strip() if vendor_col else ""
+def _build_classify_text(
+    row: "pd.Series",
+    desc_col: str | None,
+    vendor_col: str | None,
+    memo_col: str | None = None,
+) -> tuple[str, str]:
+    """적요 + 2차메모 결합 + 거래처 추출 → (description, vendor) 반환.
+
+    거래처(vendor) 텍스트도 description에 포함: KB처럼 적요가 '체크카드' 등
+    은행 코드이고 실제 상호명이 보낸분/받는분에만 있는 경우 키워드 매칭 활성화.
+    """
+    parts = []
+    if desc_col:
+        v = str(row[desc_col]).strip()
+        if v and v.lower() != "nan":
+            parts.append(v)
+    if memo_col:
+        v = str(row[memo_col]).strip()
+        if v and v.lower() != "nan":
+            parts.append(v)
+    vendor = ""
+    if vendor_col:
+        v = str(row[vendor_col]).strip()
+        if v and v.lower() != "nan":
+            vendor = v
+            parts.append(v)
+    desc = " ".join(parts)
     return desc, vendor
 
 
@@ -152,6 +181,7 @@ def classify_df(df: "pd.DataFrame") -> "pd.DataFrame":
     - 미분류 항목은 분류과목="미분류" 신뢰도=0.0
     - 입출금 분리 컬럼 자동 감지 → _amt 통합
     - 농협식 거래일자+거래시간 분리 → _datetime 결합
+    - 2차 메모 컬럼 결합 (우리은행 메모, 농협 거래기록사항 등)
     """
     if not _PANDAS_OK:
         raise ImportError("pandas가 설치되지 않았습니다.")
@@ -161,6 +191,10 @@ def classify_df(df: "pd.DataFrame") -> "pd.DataFrame":
 
     desc_col = _detect_col(columns, _DESC_CANDIDATES)
     vendor_col = _detect_col(columns, _VENDOR_CANDIDATES)
+    memo_col = _detect_col(columns, _MEMO_CANDIDATES)
+    # 동일 컬럼 중복 방지
+    if memo_col == desc_col:
+        memo_col = None
 
     # 농협: 거래일자 + 거래시간 분리 → _datetime 결합
     date_col = _detect_col(columns, _DATE_CANDIDATES)
@@ -181,7 +215,7 @@ def classify_df(df: "pd.DataFrame") -> "pd.DataFrame":
     confs: list[float] = []
 
     for _, row in df.iterrows():
-        desc, vendor = _build_classify_text(row, desc_col, vendor_col)
+        desc, vendor = _build_classify_text(row, desc_col, vendor_col, memo_col)
         name, conf = match_account(desc, vendor)
         labels.append(name)
         confs.append(conf)
