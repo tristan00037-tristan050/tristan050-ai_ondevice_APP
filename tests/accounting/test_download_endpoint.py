@@ -52,12 +52,15 @@ def test_classify_then_download_returns_xlsx():
     # Step 2: download
     dl = client.get(f"/accounting/result/{result_id}/xlsx")
     assert dl.status_code == 200, f"download failed: {dl.text[:200]}"
-    assert "spreadsheetml" in dl.headers.get("content-type", ""), (
+    # Content-Type: octet-stream (inline disposition so WKWebView doesn't intercept)
+    assert "octet-stream" in dl.headers.get("content-type", ""), (
         f"wrong content-type: {dl.headers.get('content-type')}"
     )
-    assert "attachment" in dl.headers.get("content-disposition", "").lower() or \
-           "butler_accounting_result.xlsx" in dl.headers.get("content-disposition", ""), (
+    assert "butler_accounting_result.xlsx" in dl.headers.get("content-disposition", ""), (
         f"unexpected content-disposition: {dl.headers.get('content-disposition')}"
+    )
+    assert "inline" in dl.headers.get("content-disposition", "").lower(), (
+        f"content-disposition must be inline: {dl.headers.get('content-disposition')}"
     )
 
     # Step 3: xlsx 파일 유효성 + 3시트 구조

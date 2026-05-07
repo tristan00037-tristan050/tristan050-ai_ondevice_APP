@@ -852,10 +852,16 @@ if _FASTAPI_AVAILABLE:
 
             cats = summary.get("categories", {})
             has_amount = any(info.get("total_amount", 0) != 0 for info in cats.values())
+
+            def _cat_sort_key(item):
+                _, info = item
+                amt = info.get("total_amount", 0)
+                return (1 if amt < 0 else 0, -abs(amt), -info["count"])
+
             if has_amount:
                 cat_rows = "\n".join(
                     f"| {name} | {info['count']} | {info.get('total_amount', 0):,}원 | {info['avg_confidence']:.0%} |"
-                    for name, info in sorted(cats.items(), key=lambda x: -x[1]["count"])
+                    for name, info in sorted(cats.items(), key=_cat_sort_key)
                 )
                 md_content = (
                     f"## 회계 분류 결과 요약\n\n"
@@ -871,7 +877,7 @@ if _FASTAPI_AVAILABLE:
             else:
                 cat_rows = "\n".join(
                     f"| {name} | {info['count']} | {info['avg_confidence']:.0%} |"
-                    for name, info in sorted(cats.items(), key=lambda x: -x[1]["count"])
+                    for name, info in sorted(cats.items(), key=_cat_sort_key)
                 )
                 md_content = (
                     f"## 회계 분류 결과 요약\n\n"
@@ -952,10 +958,14 @@ if _FASTAPI_AVAILABLE:
         if not Path(xlsx_path).exists():
             _log.warning("[accounting] xlsx 파일 소멸: %s → %s", result_id, xlsx_path)
             raise HTTPException(status_code=404, detail="xlsx 파일이 만료되었습니다.")
-        return _FileResponse(
-            xlsx_path,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename="butler_accounting_result.xlsx",
+        # Use inline disposition so WKWebView (Tauri/macOS) does not intercept
+        # the response as a native download before fetch().arrayBuffer() can read it.
+        xlsx_bytes = Path(xlsx_path).read_bytes()
+        from fastapi.responses import Response as _RawResponse
+        return _RawResponse(
+            content=xlsx_bytes,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": 'inline; filename="butler_accounting_result.xlsx"'},
         )
 
 # ---------------------------------------------------------------------------

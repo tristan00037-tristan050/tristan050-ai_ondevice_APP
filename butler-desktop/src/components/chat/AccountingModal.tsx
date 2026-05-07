@@ -177,6 +177,10 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
         return;
       }
       const buffer = await res.arrayBuffer();
+      if (buffer.byteLength < 1000) {
+        setPhase({ kind: 'error', message: `다운로드 오류: 분류 결과 파일을 받지 못했습니다 (수신 크기: ${buffer.byteLength}B)` });
+        return;
+      }
       const filePath = await tauriSave({
         defaultPath: 'butler_accounting_result.xlsx',
         filters: [{ name: 'Excel', extensions: ['xlsx'] }],
@@ -385,7 +389,12 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
               {/* 계정과목 분류 결과 표 */}
               {Object.keys(phase.categories).length > 0 && (() => {
                 const entries = Object.entries(phase.categories)
-                  .sort(([, a], [, b]) => Math.abs(b.total_amount) - Math.abs(a.total_amount) || b.count - a.count);
+                  .sort(([, a], [, b]) => {
+                    const aIsNeg = a.total_amount < 0 ? 1 : 0;
+                    const bIsNeg = b.total_amount < 0 ? 1 : 0;
+                    if (aIsNeg !== bIsNeg) return aIsNeg - bIsNeg;
+                    return Math.abs(b.total_amount) - Math.abs(a.total_amount) || b.count - a.count;
+                  });
                 const totalCount = Object.values(phase.categories).reduce((s, v) => s + v.count, 0);
                 const totalAmount = Object.values(phase.categories).reduce((s, v) => s + v.total_amount, 0);
                 const hasAmt = entries.some(([, v]) => v.total_amount !== 0);
@@ -501,7 +510,16 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
                   color: 'var(--color-text-primary)',
                 }}
               >
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    td({ node: _node, children, ...props }) {
+                      const text = String(Array.isArray(children) ? children.join('') : (children ?? ''));
+                      const isDebit = /^-[\d,]+원$/.test(text.trim());
+                      return <td {...props} style={isDebit ? { color: 'var(--color-accounting-debit)' } : undefined}>{children}</td>;
+                    },
+                  }}
+                >
                   {phase.mdContent}
                 </ReactMarkdown>
               </div>
