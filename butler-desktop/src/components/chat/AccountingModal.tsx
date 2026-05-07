@@ -1,6 +1,8 @@
 import React, { useRef, useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { save as tauriSave } from '@tauri-apps/plugin-dialog';
+import { writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
 import butlerIconAnimatedUrl from '../../assets/butler-icon-animated.svg';
 import { SIDECAR_BASE } from '../../constants';
 
@@ -8,14 +10,16 @@ interface AccountingModalProps {
   onClose: () => void;
 }
 
+type CategoryInfo = { count: number; total_amount: number };
+
 type Phase =
   | { kind: 'idle' }
   | { kind: 'processing'; status: string; fileName: string }
-  | { kind: 'done'; resultId: string; mdContent: string; rowCount: number; categoryCount: number }
+  | { kind: 'done'; resultId: string; mdContent: string; rowCount: number; categoryCount: number; categories: Record<string, CategoryInfo> }
   | { kind: 'error'; message: string };
 
 const ACCEPT = '.xlsx,.xls,.csv';
-const MIN_PHASE_MS = 800;
+const MIN_PHASE_MS = 1500;
 
 function parseSseBlock(block: string): { event: string; data: Record<string, unknown> } | null {
   const eventLine = block.split('\n').find(l => l.startsWith('event:'));
@@ -104,12 +108,14 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
             if (elapsed < MIN_PHASE_MS) {
               await new Promise<void>(r => setTimeout(r, MIN_PHASE_MS - elapsed));
             }
+            const summary = data.summary as { categories: Record<string, CategoryInfo> } | null;
             setPhase({
               kind: 'done',
               resultId: (data.result_id as string) ?? '',
               mdContent: (data.md_content as string) ?? '',
               rowCount: (data.row_count as number) ?? 0,
               categoryCount: (data.category_count as number) ?? 0,
+              categories: summary?.categories ?? {},
             });
             return;
           } else if (event === 'error') {
@@ -141,6 +147,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
     if (file) handleFile(file);
   };
 
+  // Tauri v2 표준 다운로드: plugin-dialog save() + plugin-fs writeFile()
   const handleDownload = useCallback(async () => {
     if (phase.kind !== 'done') return;
     try {
@@ -149,17 +156,14 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
         setPhase({ kind: 'error', message: `다운로드 오류 (${res.status})` });
         return;
       }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'butler_accounting_result.xlsx';
-      // Tauri WKWebView: 앵커를 DOM에 추가해야 클릭이 다운로드를 트리거함
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      // 브라우저가 다운로드를 처리한 뒤 URL 해제 (즉시 revoke하면 다운로드 누락)
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const buffer = await res.arrayBuffer();
+      const filePath = await tauriSave({
+        defaultPath: 'butler_accounting_result.xlsx',
+        filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+      });
+      if (filePath) {
+        await tauriWriteFile(filePath, new Uint8Array(buffer));
+      }
     } catch (err: unknown) {
       setPhase({ kind: 'error', message: err instanceof Error ? err.message : '다운로드 오류' });
     }
@@ -294,13 +298,18 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
                 ×
               </button>
             </div>
-            <img
-              src={butlerIconAnimatedUrl}
-              width={64} height={64}
-              alt=""
-              aria-hidden="true"
-              data-testid="accounting-loading-icon"
-            />
+            {/* 애니메이션: GPU 합성 레이어 강제 + isolation으로 부모 stacking context 차단 */}
+            <div style={{ isolation: 'isolate', width: 80, height: 80 }}>
+              <img
+                src={butlerIconAnimatedUrl}
+                width={80}
+                height={80}
+                alt=""
+                aria-hidden="true"
+                data-testid="accounting-loading-icon"
+                style={{ display: 'block', willChange: 'transform', transform: 'translateZ(0)' }}
+              />
+            </div>
             <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
               {phase.status}
             </span>
@@ -339,12 +348,37 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
               border: '1px solid rgba(15,123,15,0.2)',
               borderRadius: 8,
             }}>
-              <span style={{ color: 'var(--color-success)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
-                ✓ 분류 완료
-              </span>
-              <span style={{ marginLeft: 8, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                {phase.rowCount}건 · {phase.categoryCount}개 계정과목
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--color-success)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
+                  ✓ 분류 완료
+                </span>
+                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                  {phase.rowCount}건 · {phase.categoryCount}개 계정과목
+                </span>
+              </div>
+              {/* 계정과목별 건수 + 합계금액 */}
+              {Object.keys(phase.categories).length > 0 && (
+                <div
+                  data-testid="accounting-category-summary"
+                  style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}
+                >
+                  {Object.entries(phase.categories)
+                    .sort(([, a], [, b]) => b.count - a.count)
+                    .map(([name, info]) => (
+                      <span
+                        key={name}
+                        style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}
+                      >
+                        {name} {info.count}건
+                        {info.total_amount !== 0 && (
+                          <span style={{ color: info.total_amount < 0 ? 'var(--color-warning)' : 'inherit' }}>
+                            {` · 합계 ${info.total_amount.toLocaleString()}원`}
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>

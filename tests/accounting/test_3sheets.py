@@ -45,7 +45,7 @@ def test_xlsx_has_three_sheets():
 
 @_skip
 def test_summary_sheet_columns():
-    """[요약] 시트 헤더가 분류과목, 건수, 합계, 평균이어야 한다."""
+    """[요약] 시트 헤더가 분류과목, 건수, 합계금액, 비율이어야 한다."""
     from butler_pc_core.accounting.classifier import classify_df, save_classified
 
     df = classify_df(_mixed_df())
@@ -56,7 +56,7 @@ def test_summary_sheet_columns():
         wb = openpyxl.load_workbook(tmp)
         ws = wb["요약"]
         header = [cell.value for cell in ws[1]]
-        assert header == ["분류과목", "건수", "합계", "평균"], (
+        assert header == ["분류과목", "건수", "합계금액", "비율"], (
             f"[요약] 헤더 불일치: {header}"
         )
     finally:

@@ -851,21 +851,39 @@ if _FASTAPI_AVAILABLE:
             await loop.run_in_executor(None, save_classified, df, out_xlsx)
 
             cats = summary.get("categories", {})
-            cat_rows = "\n".join(
-                f"| {name} | {info['count']} | {info['avg_confidence']:.0%} |"
-                for name, info in sorted(cats.items(), key=lambda x: -x[1]["count"])
-            )
-            md_content = (
-                f"## 회계 분류 결과 요약\n\n"
-                f"- **총 거래건수**: {summary['total_rows']}건\n"
-                f"- **분류 완료**: {summary['classified_rows']}건\n"
-                f"- **미분류**: {summary['unclassified_rows']}건\n"
-                f"- **평균 신뢰도**: {summary['avg_confidence']:.1%}\n\n"
-                f"### 계정과목별 분류\n\n"
-                f"| 계정과목 | 건수 | 평균신뢰도 |\n"
-                f"|---------|------|----------|\n"
-                f"{cat_rows}\n"
-            )
+            has_amount = any(info.get("total_amount", 0) != 0 for info in cats.values())
+            if has_amount:
+                cat_rows = "\n".join(
+                    f"| {name} | {info['count']} | {info.get('total_amount', 0):,}원 | {info['avg_confidence']:.0%} |"
+                    for name, info in sorted(cats.items(), key=lambda x: -x[1]["count"])
+                )
+                md_content = (
+                    f"## 회계 분류 결과 요약\n\n"
+                    f"- **총 거래건수**: {summary['total_rows']}건\n"
+                    f"- **분류 완료**: {summary['classified_rows']}건\n"
+                    f"- **미분류**: {summary['unclassified_rows']}건\n"
+                    f"- **평균 신뢰도**: {summary['avg_confidence']:.1%}\n\n"
+                    f"### 계정과목별 분류\n\n"
+                    f"| 계정과목 | 건수 | 합계금액 | 평균신뢰도 |\n"
+                    f"|---------|------|---------|----------|\n"
+                    f"{cat_rows}\n"
+                )
+            else:
+                cat_rows = "\n".join(
+                    f"| {name} | {info['count']} | {info['avg_confidence']:.0%} |"
+                    for name, info in sorted(cats.items(), key=lambda x: -x[1]["count"])
+                )
+                md_content = (
+                    f"## 회계 분류 결과 요약\n\n"
+                    f"- **총 거래건수**: {summary['total_rows']}건\n"
+                    f"- **분류 완료**: {summary['classified_rows']}건\n"
+                    f"- **미분류**: {summary['unclassified_rows']}건\n"
+                    f"- **평균 신뢰도**: {summary['avg_confidence']:.1%}\n\n"
+                    f"### 계정과목별 분류\n\n"
+                    f"| 계정과목 | 건수 | 평균신뢰도 |\n"
+                    f"|---------|------|----------|\n"
+                    f"{cat_rows}\n"
+                )
 
             _accounting_results[result_id] = {
                 "xlsx_path": str(out_xlsx),
