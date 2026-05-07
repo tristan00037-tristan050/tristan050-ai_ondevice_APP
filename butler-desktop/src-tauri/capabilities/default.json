@@ -12,6 +12,11 @@
         { "url": "http://127.0.0.1:5903/**" },
         { "url": "http://localhost:5903/**" }
       ]
-    }
+    },
+    "dialog:allow-save",
+    "fs:allow-write-file",
+    "fs:scope-download-recursive",
+    "fs:scope-desktop-recursive",
+    "fs:scope-document-recursive"
   ]
 }

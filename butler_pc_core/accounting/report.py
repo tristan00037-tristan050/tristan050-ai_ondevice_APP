@@ -54,9 +54,12 @@ def build_summary(df: "pd.DataFrame") -> dict[str, Any]:
     for name, group in df[~unclassified_mask].groupby("분류과목"):
         conf_col = group["신뢰도"] if "신뢰도" in group.columns else None
         avg_conf = float(conf_col.mean()) if conf_col is not None else 0.0
+        # _amt: classify_df가 입출금 분리 컬럼에서 미리 계산한 순액 (없으면 0)
+        total_amt = int(group["_amt"].sum()) if "_amt" in group.columns else 0
         categories[str(name)] = {
             "count": int(len(group)),
             "avg_confidence": round(avg_conf, 3),
+            "total_amount": total_amt,
         }
 
     overall_conf = float(df["신뢰도"].mean()) if "신뢰도" in df.columns else 0.0
