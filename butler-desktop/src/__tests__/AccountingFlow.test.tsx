@@ -496,4 +496,75 @@ describe('AccountingModal — 업로드 흐름', () => {
     expect(summary.textContent).not.toContain('합계');
     expect(summary.textContent).not.toContain('원');
   });
+
+  it('test_category_amount_negative_preserves_sign', async () => {
+    // 음수 total_amount → "-xxx,xxx원" 부호 포함 표시 (Math.abs 제거 검증)
+    const negSummary = {
+      total_rows: 3,
+      classified_rows: 3,
+      unclassified_rows: 0,
+      categories: {
+        '직원급여': { count: 2, avg_confidence: 0.90, total_amount: -6000000 },
+        '통신비':  { count: 1, avg_confidence: 0.85, total_amount: -88000 },
+      },
+      avg_confidence: 0.88,
+    };
+    const eventsNeg = [
+      { event: 'phase_start', data: { status_message: '분류 중 — 회계과목 매칭' } },
+      { event: 'phase_start', data: { status_message: '보고서 생성 중 — 요약 집계' } },
+      {
+        event: 'complete',
+        data: {
+          result_id: 'neg-uuid-0001',
+          md_content: '## 보고서',
+          summary: negSummary,
+          row_count: 3,
+          category_count: 2,
+        },
+      },
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      body: makeSseStream(eventsNeg),
+    }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 3000 });
+
+    const summaryEl = screen.getByTestId('accounting-category-summary');
+    // 음수 부호(-) 포함 표시
+    expect(summaryEl.textContent).toContain('-');
+    // 6,000,000원 숫자 포함
+    expect(summaryEl.textContent).toContain('6,000,000원');
+  });
+
+  it('test_category_amount_positive_no_sign', async () => {
+    // 양수 total_amount → "xxx,xxx원" 형식 (마이너스 없음)
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: makeSseStream(SSE_EVENTS_OK),  // MOCK_SUMMARY: 급여 12,500,000 / 통신비 524,300 (모두 양수)
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 3000 });
+
+    const summaryEl = screen.getByTestId('accounting-category-summary');
+    // 양수: 마이너스 없이 표시
+    expect(summaryEl.textContent).toContain('12,500,000원');
+    expect(summaryEl.textContent).not.toMatch(/-12,500,000원/);
+    expect(summaryEl.textContent).toContain('524,300원');
+  });
 });

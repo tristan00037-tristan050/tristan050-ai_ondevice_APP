@@ -370,9 +370,11 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
                         style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}
                       >
                         {name} {info.count}건
-                        {info.total_amount !== 0
-                          ? ` · 합계 ${Math.abs(info.total_amount).toLocaleString()}원`
-                          : ''}
+                        {info.total_amount !== 0 && (
+                          <span style={{ color: info.total_amount < 0 ? 'var(--color-warning)' : 'inherit' }}>
+                            {` · 합계 ${info.total_amount.toLocaleString()}원`}
+                          </span>
+                        )}
                       </span>
                     ))}
                 </div>
