@@ -802,7 +802,7 @@ if _FASTAPI_AVAILABLE:
     # -----------------------------------------------------------------------
     from fastapi.responses import FileResponse as _FileResponse
 
-    ACCOUNTING_RESULT_TTL = 3600        # 결과 보관 최대 시간 (초)
+    ACCOUNTING_RESULT_TTL = 21600       # 결과 보관 최대 시간 6시간 (베타 사용자 여유)
     ACCOUNTING_CLEANUP_INTERVAL = 300   # 만료 스캔 주기 (초)
 
     # result_id → { "xlsx_path": str, "md_content": str, "summary": dict, "created_at": float }
@@ -943,11 +943,14 @@ if _FASTAPI_AVAILABLE:
     @app.get("/accounting/result/{result_id}/xlsx")
     def accounting_result_xlsx(result_id: str):
         """분류 결과 xlsx 파일 다운로드."""
+        import logging as _log
         entry = _accounting_results.get(result_id)
         if entry is None:
-            raise HTTPException(status_code=404, detail=f"result {result_id} not found")
+            _log.warning("[accounting] result_id 미존재 또는 만료: %s (보관 중 %d건)", result_id, len(_accounting_results))
+            raise HTTPException(status_code=404, detail=f"결과가 존재하지 않습니다. result_id={result_id} (만료 또는 미존재)")
         xlsx_path = entry["xlsx_path"]
         if not Path(xlsx_path).exists():
+            _log.warning("[accounting] xlsx 파일 소멸: %s → %s", result_id, xlsx_path)
             raise HTTPException(status_code=404, detail="xlsx 파일이 만료되었습니다.")
         return _FileResponse(
             xlsx_path,

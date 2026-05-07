@@ -106,5 +106,5 @@ def test_accounting_result_ttl_constant():
     import butler_sidecar as _sidecar
     assert hasattr(_sidecar, "ACCOUNTING_RESULT_TTL")
     assert hasattr(_sidecar, "ACCOUNTING_CLEANUP_INTERVAL")
-    assert _sidecar.ACCOUNTING_RESULT_TTL == 3600
+    assert _sidecar.ACCOUNTING_RESULT_TTL == 21600  # 6시간 (베타 여유)
     assert _sidecar.ACCOUNTING_CLEANUP_INTERVAL == 300
