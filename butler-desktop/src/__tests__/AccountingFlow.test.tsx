@@ -447,4 +447,53 @@ describe('AccountingModal — 업로드 흐름', () => {
     expect(summary.textContent).toContain('통신비');
     expect(summary.textContent).toContain('524,300원');
   });
+
+  it('test_category_summary_hides_zero_amount', async () => {
+    // total_amount=0일 때 합계금액 텍스트 미표시 검증
+    const zeroAmountSummary = {
+      total_rows: 5,
+      classified_rows: 5,
+      unclassified_rows: 0,
+      categories: {
+        '급여': { count: 3, avg_confidence: 0.90, total_amount: 0 },
+        '통신비': { count: 2, avg_confidence: 0.85, total_amount: 0 },
+      },
+      avg_confidence: 0.88,
+    };
+    const eventsZero = [
+      { event: 'phase_start', data: { status_message: '분류 중 — 회계과목 매칭' } },
+      { event: 'phase_start', data: { status_message: '보고서 생성 중 — 요약 집계' } },
+      {
+        event: 'complete',
+        data: {
+          result_id: 'zero-uuid-0000',
+          md_content: '## 보고서',
+          summary: zeroAmountSummary,
+          row_count: 5,
+          category_count: 2,
+        },
+      },
+    ];
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: makeSseStream(eventsZero),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 3000 });
+
+    const summary = screen.getByTestId('accounting-category-summary');
+    expect(summary).toBeInTheDocument();
+    // 카테고리 이름은 표시
+    expect(summary.textContent).toContain('급여');
+    // 합계금액은 미표시 (total_amount=0)
+    expect(summary.textContent).not.toContain('합계');
+    expect(summary.textContent).not.toContain('원');
+  });
 });

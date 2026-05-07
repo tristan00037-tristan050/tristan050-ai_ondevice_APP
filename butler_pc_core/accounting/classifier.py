@@ -267,14 +267,14 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
 
     # ── [요약] ──────────────────────────────────────────────────────────────
     ws2 = wb.create_sheet("요약")
-    ws2.append(["분류과목", "건수", "합계", "평균"])
+    ws2.append(["분류과목", "건수", "합계금액", "비율"])
     for cell in ws2[1]:
         cell.font = bold
 
     if not df_ok.empty:
         # _amt: classify_df가 입출금 분리 컬럼에서 미리 계산한 값 우선 사용
         if "_amt" in df_ok.columns:
-            grp = df_ok.groupby("분류과목")["_amt"].agg(["count", "sum", "mean"]).reset_index()
+            grp = df_ok.groupby("분류과목")["_amt"].agg(["count", "sum"]).reset_index()
         else:
             amount_col = _detect_col(list(df.columns), _AMOUNT_CANDIDATES)
             if amount_col:
@@ -282,17 +282,23 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
                     r"[,￦원\s]", "", regex=True
                 )
                 df_ok["_amt"] = pd.to_numeric(cleaned, errors="coerce").fillna(0)
-                grp = df_ok.groupby("분류과목")["_amt"].agg(["count", "sum", "mean"]).reset_index()
+                grp = df_ok.groupby("분류과목")["_amt"].agg(["count", "sum"]).reset_index()
             else:
                 grp = df_ok.groupby("분류과목").size().reset_index(name="count")
                 grp["sum"] = 0
-                grp["mean"] = 0
 
-        for _, r in grp.iterrows():
-            ws2.append([r["분류과목"], int(r["count"]), int(r["sum"]), int(r["mean"])])
         t_cnt = int(grp["count"].sum())
         t_sum = int(grp["sum"].sum())
-        ws2.append(["총계", t_cnt, t_sum, int(t_sum / t_cnt) if t_cnt else 0])
+        data_start_row = 2
+        for i, (_, r) in enumerate(grp.iterrows()):
+            cnt = int(r["count"])
+            amt = int(r["sum"])
+            ratio = f"{cnt / t_cnt * 100:.1f}%" if t_cnt else "0%"
+            ws2.append([r["분류과목"], cnt, amt, ratio])
+            # 합계금액 셀에 콤마 서식 적용
+            ws2.cell(row=data_start_row + i, column=3).number_format = '#,##0"원"'
+        ws2.append(["총계", t_cnt, t_sum, "100%"])
+        ws2.cell(row=data_start_row + len(grp), column=3).number_format = '#,##0"원"'
 
     # ── [미분류] ────────────────────────────────────────────────────────────
     ws3 = wb.create_sheet("미분류")
