@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import butlerIconAnimatedUrl from '../../assets/butler-icon-animated.svg';
@@ -15,6 +15,7 @@ type Phase =
   | { kind: 'error'; message: string };
 
 const ACCEPT = '.xlsx,.xls,.csv';
+const MIN_PHASE_MS = 800;
 
 function parseSseBlock(block: string): { event: string; data: Record<string, unknown> } | null {
   const eventLine = block.split('\n').find(l => l.startsWith('event:'));
@@ -36,6 +37,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
   const [reportOpen, setReportOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const lastPhaseStartMs = useRef<number>(0);
 
   const handleFile = async (file: File) => {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
@@ -89,6 +91,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
           const { event, data } = parsed;
 
           if (event === 'phase_start') {
+            lastPhaseStartMs.current = Date.now();
             setPhase(prev => ({
               kind: 'processing',
               status: (data.status_message as string) ?? '처리 중...',
@@ -96,6 +99,11 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
             }));
           } else if (event === 'complete') {
             receivedTerminal = true;
+            // 최소 표시 시간 보장: 마지막 phase_start로부터 MIN_PHASE_MS 경과 후 전환
+            const elapsed = Date.now() - lastPhaseStartMs.current;
+            if (elapsed < MIN_PHASE_MS) {
+              await new Promise<void>(r => setTimeout(r, MIN_PHASE_MS - elapsed));
+            }
             setPhase({
               kind: 'done',
               resultId: (data.result_id as string) ?? '',
@@ -133,21 +141,29 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
     if (file) handleFile(file);
   };
 
-  const handleDownload = async () => {
+  const handleDownload = useCallback(async () => {
     if (phase.kind !== 'done') return;
     try {
       const res = await fetch(`${SIDECAR_BASE}/accounting/result/${phase.resultId}/xlsx`);
+      if (!res.ok) {
+        setPhase({ kind: 'error', message: `다운로드 오류 (${res.status})` });
+        return;
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = 'butler_accounting_result.xlsx';
+      // Tauri WKWebView: 앵커를 DOM에 추가해야 클릭이 다운로드를 트리거함
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      // ignore download errors
+      document.body.removeChild(a);
+      // 브라우저가 다운로드를 처리한 뒤 URL 해제 (즉시 revoke하면 다운로드 누락)
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err: unknown) {
+      setPhase({ kind: 'error', message: err instanceof Error ? err.message : '다운로드 오류' });
     }
-  };
+  }, [phase]);
 
   const handleClose = () => {
     abortRef.current?.abort();

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { AccountingModal } from '../components/chat/AccountingModal';
 
 // SSE 응답 헬퍼
@@ -45,6 +45,7 @@ describe('AccountingModal — 업로드 흐름', () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('test_modal_renders_drop_zone', () => {
@@ -138,7 +139,7 @@ describe('AccountingModal — 업로드 흐름', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('accounting-result')).toBeInTheDocument();
-    });
+    }, { timeout: 2000 });
     expect(screen.getByTestId('accounting-download-btn')).toBeInTheDocument();
     expect(screen.getByTestId('accounting-report-toggle')).toBeInTheDocument();
     expect(screen.getByTestId('accounting-result').textContent).toContain('10건');
@@ -159,7 +160,7 @@ describe('AccountingModal — 업로드 흐름', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('accounting-report-toggle')).toBeInTheDocument();
-    });
+    }, { timeout: 2000 });
 
     // 보고서 닫힌 상태
     expect(screen.queryByTestId('accounting-report-content')).not.toBeInTheDocument();
@@ -277,5 +278,94 @@ describe('AccountingModal — 업로드 흐름', () => {
 
     expect(screen.getByTestId('accounting-drop-zone')).toBeInTheDocument();
     expect(screen.queryByTestId('accounting-selected-file')).not.toBeInTheDocument();
+  });
+
+  it('test_download_btn_fetches_xlsx_blob_and_triggers_save', async () => {
+    // 다운로드 버튼 클릭 시 올바른 URL로 fetch + DOM 첨부 앵커 클릭 트리거 검증
+    // (real timers: MIN_PHASE_MS 800ms 자연 경과 후 done 상태에서 다운로드 검증)
+    const xlsxBlob = new Blob(['PK\x03\x04'], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, body: makeSseStream(SSE_EVENTS_OK) }) // classify
+      .mockResolvedValueOnce({ ok: true, blob: async () => xlsxBlob });         // download
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    // MIN_PHASE_MS(800ms) 경과 후 done 상태 대기
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 2000 });
+
+    // DOM spies는 React 마운팅 이후 설치해야 render()가 정상 동작함
+    const createObjURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-xlsx-url');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const appendChildSpy = vi.spyOn(document.body, 'appendChild').mockImplementation(node => node as Node);
+    vi.spyOn(document.body, 'removeChild').mockImplementation(node => node as Node);
+
+    // Click download button
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('accounting-download-btn'));
+    });
+
+    // Verify xlsx fetch called with correct result_id URL
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    const [xlsxUrl] = mockFetch.mock.calls[1] as [string];
+    expect(xlsxUrl).toContain('/accounting/result/test-uuid-1234/xlsx');
+
+    // Verify anchor was appended to DOM (Tauri WKWebView 수정 핵심)
+    const appendedAnchor = appendChildSpy.mock.calls.find(
+      call => (call[0] as HTMLElement)?.tagName === 'A'
+    )?.[0] as HTMLAnchorElement | undefined;
+    expect(appendedAnchor).toBeDefined();
+    expect(appendedAnchor?.download).toBe('butler_accounting_result.xlsx');
+    expect(appendedAnchor?.href).toBe('blob:mock-xlsx-url');
+    createObjURLSpy.mockRestore();
+  });
+
+  it('test_phase_start_minimum_800ms_display', async () => {
+    // phase_start 직후 complete 도착해도 processing 상태가 done 전환 전에 표시됨을 검증
+    // (fake timers: 800ms 타이머를 수동으로 진행해 상태 전환 시점 검증)
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: makeSseStream(SSE_EVENTS_OK),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    // render 먼저 — React 18 스케줄러가 타이머를 사용하므로 useFakeTimers 이전
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+
+    // fake timers 설치 후 파일 처리 시작
+    vi.useFakeTimers();
+    try {
+      fireEvent.change(input);
+
+      // 마이크로태스크 플러시: SSE 파싱 + MIN_PHASE_MS 타이머 등록 (setTimeout 미실행)
+      for (let i = 0; i < 30; i++) await Promise.resolve();
+
+      // 800ms 이전: processing 상태 유지
+      expect(screen.getByTestId('accounting-processing')).toBeInTheDocument();
+      expect(screen.queryByTestId('accounting-result')).not.toBeInTheDocument();
+
+      // 800ms 경과 → MIN_PHASE_MS 타이머 해제 → done 상태 전환
+      await vi.advanceTimersByTimeAsync(800);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+
+      expect(screen.getByTestId('accounting-result')).toBeInTheDocument();
+      expect(screen.queryByTestId('accounting-processing')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
