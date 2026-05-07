@@ -724,4 +724,82 @@ describe('AccountingModal — 업로드 흐름', () => {
       vi.useRealTimers();
     }
   });
+
+  // Cancellation safety tests (codex P1)
+
+  it('test_abort_during_inter_phase_delay_prevents_stale_update', async () => {
+    // inter-phase delay 도중 abort 시 phase_2 setPhase가 호출되지 않아야 한다 (Promise.race 즉시 취소)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(SSE_EVENTS_OK) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.change(input);
+      for (let i = 0; i < 30; i++) await Promise.resolve();
+
+      // 첫 번째 phase 표시 중, inter-phase delay(1500ms) 대기 중
+      expect(screen.getByTestId('accounting-processing').textContent).toContain('분류 중');
+
+      // 파일 삭제 버튼 클릭 → abort + setPhase(idle) (1500ms 타이머 만료 전)
+      fireEvent.click(screen.getByTestId('accounting-file-delete-btn'));
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+
+      // 즉시 idle 전환 — abort race가 timeout race보다 먼저 종료됨
+      expect(screen.getByTestId('accounting-drop-zone')).toBeInTheDocument();
+      expect(screen.queryByTestId('accounting-processing')).not.toBeInTheDocument();
+
+      // 1500ms 경과 후에도 여전히 idle (phase_2 setPhase 미호출)
+      await vi.advanceTimersByTimeAsync(1500);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+
+      expect(screen.getByTestId('accounting-drop-zone')).toBeInTheDocument();
+      expect(screen.queryByTestId('accounting-processing')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('accounting-result')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('test_stale_phase_start_after_abort_does_not_change_state', async () => {
+    // abort 후 늦게 도착하는 phase_start 이벤트가 state를 변경하지 않아야 한다
+    const encoder = new TextEncoder();
+    let enqueue!: (chunk: Uint8Array) => void;
+    let closeStream!: () => void;
+    const delayedStream = new ReadableStream<Uint8Array>({
+      start(c) {
+        enqueue = (chunk) => c.enqueue(chunk);
+        closeStream = () => c.close();
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: delayedStream }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    // 첫 번째 phase_start 도착
+    act(() => { enqueue(encoder.encode('event: phase_start\ndata: {"status_message":"분류 중 — 회계과목 매칭"}\n\n')); });
+    await waitFor(() => expect(screen.getByTestId('accounting-processing')).toBeInTheDocument());
+
+    // abort: 삭제 버튼 → abortRef.abort() + setPhase(idle)
+    fireEvent.click(screen.getByTestId('accounting-file-delete-btn'));
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(screen.getByTestId('accounting-drop-zone')).toBeInTheDocument();
+
+    // stale 이벤트 도착 (abort 이후) — while 루프 상단 ctrl.signal.aborted 체크로 무시되어야 함
+    act(() => { enqueue(encoder.encode('event: phase_start\ndata: {"status_message":"보고서 생성 중 — 요약 집계"}\n\n')); });
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+
+    // idle 상태 유지
+    expect(screen.getByTestId('accounting-drop-zone')).toBeInTheDocument();
+    expect(screen.queryByTestId('accounting-processing')).not.toBeInTheDocument();
+
+    act(() => { closeStream(); });
+  });
 });

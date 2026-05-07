@@ -80,6 +80,13 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
       const decoder = new TextDecoder();
       let buf = '';
       let receivedTerminal = false;
+      const abortRace = new Promise<never>((_, rej) => {
+        const onAbort = () => { const e = new Error('AbortError'); e.name = 'AbortError'; rej(e); };
+        if (ctrl.signal.aborted) { onAbort(); return; }
+        ctrl.signal.addEventListener('abort', onAbort, { once: true });
+      });
+      // Suppress unhandled-rejection when abort fires while not inside a Promise.race window
+      void abortRace.catch(() => {});
 
       while (true) {
         const { done, value } = await reader.read();
@@ -98,8 +105,12 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
             // Ensure previous phase is visible for MIN_PHASE_MS before switching
             const sinceLast = Date.now() - lastPhaseStartMs.current;
             if (lastPhaseStartMs.current > 0 && sinceLast < MIN_PHASE_MS) {
-              await new Promise<void>(r => setTimeout(r, MIN_PHASE_MS - sinceLast));
+              await Promise.race([
+                new Promise<void>(r => setTimeout(r, MIN_PHASE_MS - sinceLast)),
+                abortRace,
+              ]);
             }
+            if (ctrl.signal.aborted) return;
             lastPhaseStartMs.current = Date.now();
             setPhase(prev => ({
               kind: 'processing',
@@ -111,8 +122,12 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
             // 최소 표시 시간 보장: 마지막 phase_start로부터 MIN_PHASE_MS 경과 후 전환
             const elapsed = Date.now() - lastPhaseStartMs.current;
             if (elapsed < MIN_PHASE_MS) {
-              await new Promise<void>(r => setTimeout(r, MIN_PHASE_MS - elapsed));
+              await Promise.race([
+                new Promise<void>(r => setTimeout(r, MIN_PHASE_MS - elapsed)),
+                abortRace,
+              ]);
             }
+            if (ctrl.signal.aborted) return;
             const summary = data.summary as { categories: Record<string, CategoryInfo> } | null;
             setPhase({
               kind: 'done',
