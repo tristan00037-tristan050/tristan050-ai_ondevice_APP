@@ -80,6 +80,13 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
       const decoder = new TextDecoder();
       let buf = '';
       let receivedTerminal = false;
+      const abortRace = new Promise<never>((_, rej) => {
+        const onAbort = () => { const e = new Error('AbortError'); e.name = 'AbortError'; rej(e); };
+        if (ctrl.signal.aborted) { onAbort(); return; }
+        ctrl.signal.addEventListener('abort', onAbort, { once: true });
+      });
+      // Suppress unhandled-rejection when abort fires while not inside a Promise.race window
+      void abortRace.catch(() => {});
 
       while (true) {
         const { done, value } = await reader.read();
@@ -95,6 +102,15 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
           const { event, data } = parsed;
 
           if (event === 'phase_start') {
+            // Ensure previous phase is visible for MIN_PHASE_MS before switching
+            const sinceLast = Date.now() - lastPhaseStartMs.current;
+            if (lastPhaseStartMs.current > 0 && sinceLast < MIN_PHASE_MS) {
+              await Promise.race([
+                new Promise<void>(r => setTimeout(r, MIN_PHASE_MS - sinceLast)),
+                abortRace,
+              ]);
+            }
+            if (ctrl.signal.aborted) return;
             lastPhaseStartMs.current = Date.now();
             setPhase(prev => ({
               kind: 'processing',
@@ -106,8 +122,12 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
             // 최소 표시 시간 보장: 마지막 phase_start로부터 MIN_PHASE_MS 경과 후 전환
             const elapsed = Date.now() - lastPhaseStartMs.current;
             if (elapsed < MIN_PHASE_MS) {
-              await new Promise<void>(r => setTimeout(r, MIN_PHASE_MS - elapsed));
+              await Promise.race([
+                new Promise<void>(r => setTimeout(r, MIN_PHASE_MS - elapsed)),
+                abortRace,
+              ]);
             }
+            if (ctrl.signal.aborted) return;
             const summary = data.summary as { categories: Record<string, CategoryInfo> } | null;
             setPhase({
               kind: 'done',
@@ -208,7 +228,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
               💰 통장·거래내역 → 회계 분류
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-              .xlsx / .xls / .csv 파일을 업로드하면 KIFRS 계정과목으로 자동 분류합니다
+              .xlsx / .xls / .csv 파일을 업로드하면 중소기업회계기준 계정과목으로 자동 분류합니다
             </p>
           </div>
           <button
@@ -298,8 +318,8 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
                 ×
               </button>
             </div>
-            {/* 애니메이션: GPU 합성 레이어 강제 + isolation으로 부모 stacking context 차단 */}
-            <div style={{ isolation: 'isolate', width: 80, height: 80 }}>
+            {/* 애니메이션: perspective + backfaceVisibility로 WKWebView 블러 방지 */}
+            <div style={{ width: 80, height: 80, perspective: '1000px' }}>
               <img
                 src={butlerIconAnimatedUrl}
                 width={80}
@@ -307,7 +327,13 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
                 alt=""
                 aria-hidden="true"
                 data-testid="accounting-loading-icon"
-                style={{ display: 'block', willChange: 'transform', transform: 'translateZ(0)' }}
+                style={{
+                  display: 'block',
+                  transform: 'translateZ(0)',
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                  filter: 'none',
+                } as React.CSSProperties}
               />
             </div>
             <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
@@ -356,29 +382,71 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
                   {phase.rowCount}건 · {phase.categoryCount}개 계정과목
                 </span>
               </div>
-              {/* 계정과목별 건수 + 합계금액 */}
-              {Object.keys(phase.categories).length > 0 && (
-                <div
-                  data-testid="accounting-category-summary"
-                  style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}
-                >
-                  {Object.entries(phase.categories)
-                    .sort(([, a], [, b]) => b.count - a.count)
-                    .map(([name, info]) => (
-                      <span
-                        key={name}
-                        style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}
-                      >
-                        {name} {info.count}건
-                        {info.total_amount !== 0 && (
-                          <span style={{ color: info.total_amount < 0 ? 'var(--color-warning)' : 'inherit' }}>
-                            {` · 합계 ${info.total_amount.toLocaleString()}원`}
-                          </span>
-                        )}
-                      </span>
-                    ))}
-                </div>
-              )}
+              {/* 계정과목 분류 결과 표 */}
+              {Object.keys(phase.categories).length > 0 && (() => {
+                const entries = Object.entries(phase.categories)
+                  .sort(([, a], [, b]) => Math.abs(b.total_amount) - Math.abs(a.total_amount) || b.count - a.count);
+                const totalCount = Object.values(phase.categories).reduce((s, v) => s + v.count, 0);
+                const totalAmount = Object.values(phase.categories).reduce((s, v) => s + v.total_amount, 0);
+                const hasAmt = entries.some(([, v]) => v.total_amount !== 0);
+                return (
+                  <div
+                    data-testid="accounting-category-summary"
+                    style={{ marginTop: 8, overflowX: 'auto' }}
+                  >
+                    <table
+                      data-testid="accounting-category-table"
+                      style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)' }}
+                    >
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+                          <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>분류과목</th>
+                          <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>건수</th>
+                          {hasAmt && <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>합계금액</th>}
+                          <th style={{ textAlign: 'center', padding: '4px 8px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>비율</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {entries.map(([name, info]) => {
+                          const ratio = totalCount > 0 ? (info.count / totalCount * 100).toFixed(1) : '0.0';
+                          return (
+                            <tr key={name} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                              <td style={{ padding: '4px 8px' }}>{name}</td>
+                              <td style={{ padding: '4px 8px', textAlign: 'right' }}>{info.count}건</td>
+                              {hasAmt && (
+                                <td style={{
+                                  padding: '4px 8px',
+                                  textAlign: 'right',
+                                  color: info.total_amount < 0 ? 'var(--color-accounting-debit)' : 'inherit',
+                                }}>
+                                  {info.total_amount !== 0 ? `${info.total_amount.toLocaleString()}원` : '-'}
+                                </td>
+                              )}
+                              <td style={{ padding: '4px 8px', textAlign: 'center' }}>{ratio}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ borderTop: '2px solid var(--color-border-subtle)', fontWeight: 600 }}>
+                          <td style={{ padding: '4px 8px' }}>합계</td>
+                          <td style={{ padding: '4px 8px', textAlign: 'right' }}>{totalCount}건</td>
+                          {hasAmt && (
+                            <td style={{
+                              padding: '4px 8px',
+                              textAlign: 'right',
+                              color: totalAmount < 0 ? 'var(--color-accounting-debit)' : 'inherit',
+                            }}>
+                              {totalAmount !== 0 ? `${totalAmount.toLocaleString()}원` : '-'}
+                            </td>
+                          )}
+                          <td style={{ padding: '4px 8px', textAlign: 'center' }}>100%</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                );
+              })()}
             </div>
 
             <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>

@@ -153,7 +153,7 @@ describe('AccountingModal — 업로드 흐름', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('accounting-result')).toBeInTheDocument();
-    }, { timeout: 3000 });
+    }, { timeout: 5000 });
     expect(screen.getByTestId('accounting-download-btn')).toBeInTheDocument();
     expect(screen.getByTestId('accounting-report-toggle')).toBeInTheDocument();
     expect(screen.getByTestId('accounting-result').textContent).toContain('10건');
@@ -174,7 +174,7 @@ describe('AccountingModal — 업로드 흐름', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('accounting-report-toggle')).toBeInTheDocument();
-    }, { timeout: 3000 });
+    }, { timeout: 5000 });
 
     expect(screen.queryByTestId('accounting-report-content')).not.toBeInTheDocument();
 
@@ -306,7 +306,7 @@ describe('AccountingModal — 업로드 흐름', () => {
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
-    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('accounting-download-btn'));
@@ -346,7 +346,7 @@ describe('AccountingModal — 업로드 흐름', () => {
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
-    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('accounting-download-btn'));
@@ -357,7 +357,8 @@ describe('AccountingModal — 업로드 흐름', () => {
   });
 
   it('test_phase_start_minimum_1500ms_display', async () => {
-    // phase_start 직후 complete 도착해도 processing 상태가 1500ms 이상 표시됨을 검증
+    // phase_start 직후 complete 도착해도 각 단계가 최소 1500ms씩 표시됨을 검증
+    // inter-phase wait(1500ms) + complete MIN_PHASE_MS wait(1500ms) = 총 3000ms
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       body: makeSseStream(SSE_EVENTS_OK),
@@ -376,14 +377,21 @@ describe('AccountingModal — 업로드 흐름', () => {
     try {
       fireEvent.change(input);
 
-      // 마이크로태스크 플러시: SSE 파싱 + MIN_PHASE_MS 타이머 등록
+      // 마이크로태스크 플러시: SSE 파싱 + inter-phase MIN_PHASE_MS 타이머 등록
       for (let i = 0; i < 30; i++) await Promise.resolve();
 
-      // 1500ms 이전: processing 상태 유지
+      // 1500ms 이전: 첫 번째 phase 표시 중, result 없음
       expect(screen.getByTestId('accounting-processing')).toBeInTheDocument();
       expect(screen.queryByTestId('accounting-result')).not.toBeInTheDocument();
 
-      // 1500ms 경과 → MIN_PHASE_MS 타이머 해제 → done 상태 전환
+      // 1500ms 경과 → inter-phase 타이머 해제 → 두 번째 phase_start 처리 → complete 타이머 등록
+      await vi.advanceTimersByTimeAsync(1500);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      // 아직 processing 상태 (complete MIN_PHASE_MS 타이머 대기 중)
+      expect(screen.getByTestId('accounting-processing')).toBeInTheDocument();
+      expect(screen.queryByTestId('accounting-result')).not.toBeInTheDocument();
+
+      // 추가 1500ms 경과 → complete MIN_PHASE_MS 타이머 해제 → done 전환
       await vi.advanceTimersByTimeAsync(1500);
       for (let i = 0; i < 10; i++) await Promise.resolve();
 
@@ -409,7 +417,7 @@ describe('AccountingModal — 업로드 흐름', () => {
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
-    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('accounting-download-btn'));
@@ -436,7 +444,7 @@ describe('AccountingModal — 업로드 흐름', () => {
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
-    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
 
     const summary = screen.getByTestId('accounting-category-summary');
     expect(summary).toBeInTheDocument();
@@ -486,14 +494,14 @@ describe('AccountingModal — 업로드 흐름', () => {
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
-    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
 
     const summary = screen.getByTestId('accounting-category-summary');
     expect(summary).toBeInTheDocument();
     // 카테고리 이름은 표시
     expect(summary.textContent).toContain('급여');
-    // 합계금액은 미표시 (total_amount=0)
-    expect(summary.textContent).not.toContain('합계');
+    // 합계금액 컬럼 미표시 (total_amount=0 → hasAmt=false)
+    expect(summary.textContent).not.toContain('합계금액');
     expect(summary.textContent).not.toContain('원');
   });
 
@@ -534,7 +542,7 @@ describe('AccountingModal — 업로드 흐름', () => {
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
-    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
 
     const summaryEl = screen.getByTestId('accounting-category-summary');
     // 음수 부호(-) 포함 표시
@@ -559,12 +567,239 @@ describe('AccountingModal — 업로드 흐름', () => {
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
-    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
 
     const summaryEl = screen.getByTestId('accounting-category-summary');
     // 양수: 마이너스 없이 표시
     expect(summaryEl.textContent).toContain('12,500,000원');
     expect(summaryEl.textContent).not.toMatch(/-12,500,000원/);
     expect(summaryEl.textContent).toContain('524,300원');
+  });
+
+  // A.3 — 표 형식 테스트 (4개)
+
+  it('test_category_table_renders_with_headers', async () => {
+    // accounting-category-table이 thead 헤더 4종을 렌더해야 한다
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(SSE_EVENTS_OK) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-category-table')).toBeInTheDocument(), { timeout: 5000 });
+    const table = screen.getByTestId('accounting-category-table');
+    expect(table.textContent).toContain('분류과목');
+    expect(table.textContent).toContain('건수');
+    expect(table.textContent).toContain('합계금액');
+    expect(table.textContent).toContain('비율');
+  });
+
+  it('test_category_table_negative_amount_has_debit_color', async () => {
+    // 음수 합계금액 td 셀에 --color-accounting-debit 색상이 인라인 스타일로 적용되어야 한다
+    const negSummary = {
+      total_rows: 1,
+      classified_rows: 1,
+      unclassified_rows: 0,
+      categories: { '직원급여': { count: 1, avg_confidence: 0.90, total_amount: -6000000 } },
+      avg_confidence: 0.90,
+    };
+    const eventsNeg = [
+      { event: 'phase_start', data: { status_message: '분류 중 — 회계과목 매칭' } },
+      { event: 'phase_start', data: { status_message: '보고서 생성 중 — 요약 집계' } },
+      { event: 'complete', data: { result_id: 'neg-color', md_content: '## 보고서', summary: negSummary, row_count: 1, category_count: 1 } },
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(eventsNeg) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-category-table')).toBeInTheDocument(), { timeout: 5000 });
+    const table = screen.getByTestId('accounting-category-table');
+    const allCells = Array.from(table.querySelectorAll('td'));
+    const debitCells = allCells.filter(td => td.style.color === 'var(--color-accounting-debit)');
+    expect(debitCells.length).toBeGreaterThan(0);
+  });
+
+  it('test_category_table_totals_row_present', async () => {
+    // tfoot 합계행에 전체 건수 합계와 100% 비율이 표시되어야 한다
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(SSE_EVENTS_OK) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-category-table')).toBeInTheDocument(), { timeout: 5000 });
+    const table = screen.getByTestId('accounting-category-table');
+    const tfoot = table.querySelector('tfoot');
+    expect(tfoot).not.toBeNull();
+    expect(tfoot!.textContent).toContain('합계');
+    expect(tfoot!.textContent).toContain('100%');
+    // MOCK_SUMMARY: 급여 5건 + 통신비 4건 = 9건
+    expect(tfoot!.textContent).toContain('9건');
+  });
+
+  it('test_category_table_zero_amount_hides_column', async () => {
+    // 모든 total_amount=0일 때 합계금액 헤더/컬럼이 렌더되지 않아야 한다
+    const zeroSummary = {
+      total_rows: 2,
+      classified_rows: 2,
+      unclassified_rows: 0,
+      categories: { '기타': { count: 2, avg_confidence: 0.80, total_amount: 0 } },
+      avg_confidence: 0.80,
+    };
+    const eventsZero = [
+      { event: 'phase_start', data: { status_message: '분류 중 — 회계과목 매칭' } },
+      { event: 'phase_start', data: { status_message: '보고서 생성 중 — 요약 집계' } },
+      { event: 'complete', data: { result_id: 'zero-col', md_content: '## 보고서', summary: zeroSummary, row_count: 2, category_count: 1 } },
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(eventsZero) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-category-table')).toBeInTheDocument(), { timeout: 5000 });
+    const table = screen.getByTestId('accounting-category-table');
+    expect(table.textContent).not.toContain('합계금액');
+    expect(table.textContent).not.toContain('원');
+  });
+
+  // C.3 — SSE phase 메시지 타이밍 테스트 (2개)
+
+  it('test_first_phase_message_shown_before_timer', async () => {
+    // 첫 번째 phase_start 메시지는 타이머 없이 즉시 UI에 반영되어야 한다
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(SSE_EVENTS_OK) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.change(input);
+      for (let i = 0; i < 30; i++) await Promise.resolve();
+
+      // 타이머 진행 없이 첫 번째 phase 메시지가 이미 표시되어야 함
+      const processingEl = screen.getByTestId('accounting-processing');
+      expect(processingEl.textContent).toContain('분류 중');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('test_second_phase_message_shown_after_timer', async () => {
+    // 두 번째 phase_start 메시지는 MIN_PHASE_MS(1500ms) 경과 후 전환되어야 한다
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(SSE_EVENTS_OK) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.change(input);
+      for (let i = 0; i < 30; i++) await Promise.resolve();
+
+      // 1500ms 이전: 첫 번째 phase '분류 중' 표시 중
+      expect(screen.getByTestId('accounting-processing').textContent).toContain('분류 중');
+      expect(screen.getByTestId('accounting-processing').textContent).not.toContain('보고서');
+
+      // 1500ms 경과 → inter-phase 타이머 해제 → 두 번째 phase '보고서 생성 중' 전환
+      await vi.advanceTimersByTimeAsync(1500);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+
+      expect(screen.getByTestId('accounting-processing').textContent).toContain('보고서');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Cancellation safety tests (codex P1)
+
+  it('test_abort_during_inter_phase_delay_prevents_stale_update', async () => {
+    // inter-phase delay 도중 abort 시 phase_2 setPhase가 호출되지 않아야 한다 (Promise.race 즉시 취소)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(SSE_EVENTS_OK) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.change(input);
+      for (let i = 0; i < 30; i++) await Promise.resolve();
+
+      // 첫 번째 phase 표시 중, inter-phase delay(1500ms) 대기 중
+      expect(screen.getByTestId('accounting-processing').textContent).toContain('분류 중');
+
+      // 파일 삭제 버튼 클릭 → abort + setPhase(idle) (1500ms 타이머 만료 전)
+      fireEvent.click(screen.getByTestId('accounting-file-delete-btn'));
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+
+      // 즉시 idle 전환 — abort race가 timeout race보다 먼저 종료됨
+      expect(screen.getByTestId('accounting-drop-zone')).toBeInTheDocument();
+      expect(screen.queryByTestId('accounting-processing')).not.toBeInTheDocument();
+
+      // 1500ms 경과 후에도 여전히 idle (phase_2 setPhase 미호출)
+      await vi.advanceTimersByTimeAsync(1500);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+
+      expect(screen.getByTestId('accounting-drop-zone')).toBeInTheDocument();
+      expect(screen.queryByTestId('accounting-processing')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('accounting-result')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('test_stale_phase_start_after_abort_does_not_change_state', async () => {
+    // abort 후 늦게 도착하는 phase_start 이벤트가 state를 변경하지 않아야 한다
+    const encoder = new TextEncoder();
+    let enqueue!: (chunk: Uint8Array) => void;
+    let closeStream!: () => void;
+    const delayedStream = new ReadableStream<Uint8Array>({
+      start(c) {
+        enqueue = (chunk) => c.enqueue(chunk);
+        closeStream = () => c.close();
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: delayedStream }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    // 첫 번째 phase_start 도착
+    act(() => { enqueue(encoder.encode('event: phase_start\ndata: {"status_message":"분류 중 — 회계과목 매칭"}\n\n')); });
+    await waitFor(() => expect(screen.getByTestId('accounting-processing')).toBeInTheDocument());
+
+    // abort: 삭제 버튼 → abortRef.abort() + setPhase(idle)
+    fireEvent.click(screen.getByTestId('accounting-file-delete-btn'));
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(screen.getByTestId('accounting-drop-zone')).toBeInTheDocument();
+
+    // stale 이벤트 도착 (abort 이후) — while 루프 상단 ctrl.signal.aborted 체크로 무시되어야 함
+    act(() => { enqueue(encoder.encode('event: phase_start\ndata: {"status_message":"보고서 생성 중 — 요약 집계"}\n\n')); });
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+
+    // idle 상태 유지
+    expect(screen.getByTestId('accounting-drop-zone')).toBeInTheDocument();
+    expect(screen.queryByTestId('accounting-processing')).not.toBeInTheDocument();
+
+    act(() => { closeStream(); });
   });
 });
