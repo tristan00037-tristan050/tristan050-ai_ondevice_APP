@@ -287,7 +287,7 @@ describe('AccountingModal — 업로드 흐름', () => {
 
   it('test_download_btn_uses_tauri_dialog_and_fs', async () => {
     // Tauri v2 표준 다운로드: save dialog + writeFile 호출 검증
-    const xlsxBuffer = new ArrayBuffer(4);
+    const xlsxBuffer = new ArrayBuffer(2048); // ≥ 1000 bytes to pass buffer guard
     new Uint8Array(xlsxBuffer).set([0x50, 0x4B, 0x03, 0x04]);
 
     const mockFetch = vi.fn()
@@ -335,7 +335,7 @@ describe('AccountingModal — 업로드 흐름', () => {
     // save dialog에서 사용자가 취소(null 반환) → writeFile 미호출
     const mockFetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, body: makeSseStream(SSE_EVENTS_OK) })
-      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new ArrayBuffer(4) });
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new ArrayBuffer(2048) }); // ≥ 1000 bytes
     vi.stubGlobal('fetch', mockFetch);
 
     vi.mocked(tauriSave).mockResolvedValueOnce(null);
@@ -801,5 +801,164 @@ describe('AccountingModal — 업로드 흐름', () => {
     expect(screen.queryByTestId('accounting-processing')).not.toBeInTheDocument();
 
     act(() => { closeStream(); });
+  });
+
+  // A.4 — 다운로드 버퍼 정확성 테스트
+
+  it('test_download_buffer_passed_exactly_to_writefile', async () => {
+    // fetch arrayBuffer 바이트가 tauriWriteFile에 그대로 전달되어야 한다 (byte-level 비교)
+    const xlsx = new Uint8Array(2048);
+    xlsx[0] = 0x50; xlsx[1] = 0x4B; xlsx[2] = 0x03; xlsx[3] = 0x04; // ZIP magic
+    for (let i = 4; i < 2048; i++) xlsx[i] = (i % 256);
+    const xlsxBuffer = xlsx.buffer;
+
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, body: makeSseStream(SSE_EVENTS_OK) })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => xlsxBuffer });
+    vi.stubGlobal('fetch', mockFetch);
+    vi.mocked(tauriSave).mockResolvedValueOnce('/tmp/out.xlsx');
+    vi.mocked(tauriWriteFile).mockResolvedValueOnce(undefined);
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('accounting-download-btn'));
+    });
+
+    await waitFor(() => expect(tauriWriteFile).toHaveBeenCalledOnce());
+    const [, writeData] = vi.mocked(tauriWriteFile).mock.calls[0];
+    expect(writeData).toBeInstanceOf(Uint8Array);
+    const written = writeData as Uint8Array;
+    expect(written.byteLength).toBe(2048);
+    expect(written[0]).toBe(0x50);
+    expect(written[1]).toBe(0x4B);
+    // sample bytes across the buffer
+    for (let i = 4; i < 2048; i += 128) {
+      expect(written[i]).toBe(i % 256);
+    }
+  });
+
+  it('test_download_small_buffer_shows_error_no_writefile', async () => {
+    // 응답 바이트가 1000 미만이면 에러 상태로 전환하고 writeFile을 호출하지 않아야 한다
+    const tinyBuffer = new ArrayBuffer(42); // < 1000
+
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, body: makeSseStream(SSE_EVENTS_OK) })
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => tinyBuffer });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('accounting-download-btn'));
+    });
+
+    await waitFor(() => expect(screen.getByTestId('accounting-error')).toBeInTheDocument());
+    expect(screen.getByTestId('accounting-error').textContent).toContain('42B');
+    expect(tauriWriteFile).not.toHaveBeenCalled();
+  });
+
+  // B.3 — ReactMarkdown 보고서 음수 금액 debit 색상 테스트
+
+  it('test_report_markdown_td_debit_color_for_negative_amount', async () => {
+    // 보고서(ReactMarkdown) 테이블 td에서 음수 금액 셀에 --color-accounting-debit 색상이 적용되어야 한다
+    const mdWithNegative = [
+      '## 보고서\n',
+      '| 계정과목 | 건수 | 합계금액 |',
+      '|---------|------|---------|',
+      '| 급여 | 3 | 3,000,000원 |',
+      '| 광고비 | 2 | -500,000원 |',
+    ].join('\n');
+
+    const eventsWithMd = [
+      { event: 'phase_start', data: { status_message: '분류 중 — 회계과목 매칭' } },
+      { event: 'phase_start', data: { status_message: '보고서 생성 중 — 요약 집계' } },
+      {
+        event: 'complete',
+        data: {
+          result_id: 'md-debit-test',
+          md_content: mdWithNegative,
+          summary: MOCK_SUMMARY,
+          row_count: 5,
+          category_count: 2,
+        },
+      },
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(eventsWithMd) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
+
+    // 보고서 열기
+    fireEvent.click(screen.getByTestId('accounting-report-toggle'));
+    await waitFor(() => expect(screen.getByTestId('accounting-report-content')).toBeInTheDocument());
+
+    const reportEl = screen.getByTestId('accounting-report-content');
+    const allTds = Array.from(reportEl.querySelectorAll('td'));
+    const debitTds = allTds.filter(td => td.style.color === 'var(--color-accounting-debit)');
+    expect(debitTds.length).toBeGreaterThan(0);
+    const debitText = debitTds.map(td => td.textContent).join('');
+    expect(debitText).toContain('-500,000원');
+  });
+
+  // C.2 — 결과 테이블 양수 카테고리 먼저 정렬 테스트
+
+  it('test_result_table_positive_categories_before_negative', async () => {
+    // 결과 테이블에서 양수 합계금액 카테고리가 음수보다 앞에 위치해야 한다
+    const mixedSummary = {
+      total_rows: 6,
+      classified_rows: 6,
+      unclassified_rows: 0,
+      categories: {
+        '광고선전비': { count: 2, avg_confidence: 0.88, total_amount: -400000 },
+        '매출액': { count: 3, avg_confidence: 0.95, total_amount: 9000000 },
+        '통신비': { count: 1, avg_confidence: 0.82, total_amount: -88000 },
+      },
+      avg_confidence: 0.90,
+    };
+    const eventsMixed = [
+      { event: 'phase_start', data: { status_message: '분류 중 — 회계과목 매칭' } },
+      { event: 'phase_start', data: { status_message: '보고서 생성 중 — 요약 집계' } },
+      { event: 'complete', data: { result_id: 'sort-test', md_content: '## 보고서', summary: mixedSummary, row_count: 6, category_count: 3 } },
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(eventsMixed) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-category-table')).toBeInTheDocument(), { timeout: 5000 });
+    const table = screen.getByTestId('accounting-category-table');
+    const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+    expect(bodyRows.length).toBe(3);
+
+    // 첫 번째 행: 양수 카테고리 (매출액)
+    expect(bodyRows[0].textContent).toContain('매출액');
+    // 두 번째, 세 번째 행: 음수 카테고리
+    expect(bodyRows[1].textContent).toMatch(/광고선전비|통신비/);
+    expect(bodyRows[2].textContent).toMatch(/광고선전비|통신비/);
+
+    // 두 음수 카테고리 중 절댓값 큰 것(광고선전비 400000)이 먼저
+    expect(bodyRows[1].textContent).toContain('광고선전비');
+    expect(bodyRows[2].textContent).toContain('통신비');
   });
 });
