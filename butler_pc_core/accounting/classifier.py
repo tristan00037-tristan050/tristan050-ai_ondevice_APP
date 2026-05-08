@@ -11,7 +11,7 @@ try:
 except ImportError:
     _PANDAS_OK = False
 
-from .account_dict import match_account
+from .account_dict import match_account, ACCOUNT_BY_NAME, SECTION_ORDER
 
 # ── 헤더 자동 감지 키워드 ────────────────────────────────────────────────────
 HEADER_KEYWORDS: frozenset[str] = frozenset({
@@ -239,6 +239,16 @@ def classify_df(df: "pd.DataFrame") -> "pd.DataFrame":
 
     df["분류과목"] = labels
     df["신뢰도"] = confs
+
+    # 계정과목 부호 강제: 비용 계정(_amt > 0)은 음수로 정정
+    if "_amt" in df.columns:
+        _sign_map = {a.name: a.sign for a in ACCOUNT_BY_NAME.values()}
+        _expense_mask = (
+            df["분류과목"].map(lambda n: _sign_map.get(n, "+")).eq("-")
+            & (df["_amt"] > 0)
+        )
+        df.loc[_expense_mask, "_amt"] = -df.loc[_expense_mask, "_amt"].abs()
+
     return df
 
 
@@ -305,6 +315,18 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
                 grp = df_ok.groupby("분류과목").size().reset_index(name="count")
                 grp["sum"] = 0
 
+        # 재무제표 섹션 순서 + 절댓값 내림차순 정렬
+        grp["_section_rank"] = grp["분류과목"].map(
+            lambda n: SECTION_ORDER.get(
+                getattr(ACCOUNT_BY_NAME.get(n), "section", "other"), 5
+            )
+        )
+        grp = grp.sort_values(
+            ["_section_rank", "sum"],
+            ascending=[True, False],
+            key=lambda s: s.abs() if s.name == "sum" else s,
+        ).drop(columns=["_section_rank"])
+
         t_cnt = int(grp["count"].sum())
         t_sum = int(grp["sum"].sum())
         data_start_row = 2
@@ -325,6 +347,20 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
                 cell.font = bold
 
     # ── [분류결과] — 두 번째 시트 ────────────────────────────────────────────
+    # 재무제표 섹션 순서 + 절댓값 내림차순 정렬
+    df_ok = df_ok.copy()
+    df_ok["_section_rank"] = df_ok["분류과목"].map(
+        lambda n: SECTION_ORDER.get(
+            getattr(ACCOUNT_BY_NAME.get(n), "section", "other"), 5
+        )
+    )
+    if "_amt" in df_ok.columns:
+        df_ok["_abs_amt"] = df_ok["_amt"].abs()
+        df_ok = df_ok.sort_values(["_section_rank", "_abs_amt"], ascending=[True, False])
+        df_ok = df_ok.drop(columns=["_section_rank", "_abs_amt"])
+    else:
+        df_ok = df_ok.sort_values("_section_rank").drop(columns=["_section_rank"])
+
     ws1 = wb.create_sheet("분류결과")
     before_cols, after_cols = _build_result_output_cols(orig_cols)
     header = before_cols + ["분류과목", "신뢰도"] + after_cols

@@ -854,9 +854,11 @@ if _FASTAPI_AVAILABLE:
             has_amount = any(info.get("total_amount", 0) != 0 for info in cats.values())
 
             def _cat_sort_key(item):
-                _, info = item
-                amt = info.get("total_amount", 0)
-                return (1 if amt < 0 else 0, -abs(amt), -info["count"])
+                name, info = item
+                from butler_pc_core.accounting.account_dict import ACCOUNT_BY_NAME, SECTION_ORDER
+                acc = ACCOUNT_BY_NAME.get(name)
+                section = acc.section if acc else "other"
+                return (SECTION_ORDER.get(section, 5), -abs(info.get("total_amount", 0)), -info["count"])
 
             if has_amount:
                 cat_rows = "\n".join(
