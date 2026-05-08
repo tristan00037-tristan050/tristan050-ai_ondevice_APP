@@ -6,6 +6,8 @@ pytest
 httpx
 openpyxl>=3.0.0
 xlrd>=2.0.0
+python-docx>=1.1.0
+pdfminer.six>=20231228
 # LLM 추론 (stub 응답 대신 실제 Qwen3 응답을 원할 경우):
 # Apple Silicon: CMAKE_ARGS="-DGGML_METAL=ON" pip3 install llama-cpp-python
 # Intel Mac:     pip3 install llama-cpp-python

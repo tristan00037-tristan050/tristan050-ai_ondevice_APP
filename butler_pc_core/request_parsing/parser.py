@@ -115,7 +115,7 @@ class ParsedResult:
             )
             for a in d.get("actions", [])
         ]
-        dl = d.get("deadline", {})
+        dl = d.get("deadline") or {}
         result.deadline = Deadline(
             raw_text=dl.get("raw_text", ""),
             parsed_date=dl.get("parsed_date"),

@@ -44,6 +44,39 @@ def test_from_dict_defaults_when_fields_absent():
     assert result.input_format == "text"
 
 
+def test_from_dict_with_none_deadline():
+    """LLM이 deadline: null을 반환할 때 from_dict가 안전하게 처리해야 한다."""
+    d = {
+        "actions": [],
+        "deadline": None,
+        "required_materials": [],
+        "intent": {"summary": "test", "tone": "formal", "expected_response": ""},
+        "confidence": 0.85,
+        "masked_text": "마스킹된 텍스트 <rrn_masked>",
+        "input_format": "eml",
+    }
+    result = ParsedResult.from_dict(d)
+    assert result.masked_text == "마스킹된 텍스트 <rrn_masked>"
+    assert result.input_format == "eml"
+    assert result.deadline is not None  # Deadline 객체로 안전 초기화
+
+
+def test_from_dict_with_missing_deadline_field():
+    """deadline 키 자체가 없을 때 from_dict가 안전하게 처리해야 한다."""
+    d = {
+        "actions": [],
+        "required_materials": [],
+        "intent": {"summary": "test", "tone": "informal", "expected_response": ""},
+        "confidence": 0.7,
+        "masked_text": "",
+        "input_format": "text",
+    }
+    result = ParsedResult.from_dict(d)
+    assert result.masked_text == ""
+    assert result.input_format == "text"
+    assert result.deadline is not None  # Deadline 객체로 안전 초기화
+
+
 # ── P1: extract_text_from_file_bytes ──────────────────────────────────────────
 
 def test_extract_txt_bytes_utf8():
