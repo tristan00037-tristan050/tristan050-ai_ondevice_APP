@@ -961,4 +961,95 @@ describe('AccountingModal — 업로드 흐름', () => {
     expect(bodyRows[1].textContent).toContain('광고선전비');
     expect(bodyRows[2].textContent).toContain('통신비');
   });
+
+  // A.1 — ReactMarkdown 보고서 table CSS 스타일 검증 (PR #692)
+
+  it('test_report_table_has_collapse_border_style', async () => {
+    // 보고서 ReactMarkdown 표에 borderCollapse: collapse 스타일이 적용되어야 한다
+    const mdWithTable = [
+      '## 보고서',
+      '',
+      '| 계정과목 | 건수 | 합계금액 |',
+      '|---------|------|---------|',
+      '| 급여 | 3 | 3,000,000원 |',
+    ].join('\n');
+
+    const eventsWithTable = [
+      { event: 'phase_start', data: { status_message: '분류 중 — 회계과목 매칭' } },
+      { event: 'phase_start', data: { status_message: '보고서 생성 중 — 요약 집계' } },
+      {
+        event: 'complete',
+        data: {
+          result_id: 'table-style-test',
+          md_content: mdWithTable,
+          summary: MOCK_SUMMARY,
+          row_count: 3,
+          category_count: 1,
+        },
+      },
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(eventsWithTable) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
+    fireEvent.click(screen.getByTestId('accounting-report-toggle'));
+    await waitFor(() => expect(screen.getByTestId('accounting-report-content')).toBeInTheDocument());
+
+    const reportEl = screen.getByTestId('accounting-report-content');
+    const tableEl = reportEl.querySelector('table');
+    expect(tableEl).not.toBeNull();
+    expect(tableEl!.style.borderCollapse).toBe('collapse');
+    expect(tableEl!.style.width).toBe('100%');
+  });
+
+  it('test_report_th_has_padding_style', async () => {
+    // 보고서 ReactMarkdown 표 th 헤더 셀에 padding 스타일이 적용되어야 한다
+    const mdWithTable = [
+      '## 보고서',
+      '',
+      '| 계정과목 | 건수 |',
+      '|---------|------|',
+      '| 급여 | 5 |',
+    ].join('\n');
+
+    const eventsWithTable = [
+      { event: 'phase_start', data: { status_message: '분류 중 — 회계과목 매칭' } },
+      { event: 'phase_start', data: { status_message: '보고서 생성 중 — 요약 집계' } },
+      {
+        event: 'complete',
+        data: {
+          result_id: 'th-style-test',
+          md_content: mdWithTable,
+          summary: MOCK_SUMMARY,
+          row_count: 5,
+          category_count: 1,
+        },
+      },
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(eventsWithTable) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
+    fireEvent.click(screen.getByTestId('accounting-report-toggle'));
+    await waitFor(() => expect(screen.getByTestId('accounting-report-content')).toBeInTheDocument());
+
+    const reportEl = screen.getByTestId('accounting-report-content');
+    const thEls = Array.from(reportEl.querySelectorAll('th'));
+    expect(thEls.length).toBeGreaterThan(0);
+    // 모든 th에 padding 스타일 적용 확인
+    thEls.forEach(th => {
+      expect(th.style.padding).toBeTruthy();
+      expect(th.style.fontWeight).toBe('600');
+    });
+  });
 });

@@ -513,10 +513,27 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
+                    table({ node: _node, children, ...props }) {
+                      return <table {...props} style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, marginBottom: 12 }}>{children}</table>;
+                    },
+                    thead({ node: _node, children, ...props }) {
+                      return <thead {...props} style={{ background: 'var(--color-bg-elevated)', borderBottom: '2px solid var(--color-border-subtle)' }}>{children}</thead>;
+                    },
+                    th({ node: _node, children, ...props }) {
+                      return <th {...props} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--color-text-primary)' }}>{children}</th>;
+                    },
                     td({ node: _node, children, ...props }) {
                       const text = String(Array.isArray(children) ? children.join('') : (children ?? ''));
                       const isDebit = /^-[\d,]+원$/.test(text.trim());
-                      return <td {...props} style={isDebit ? { color: 'var(--color-accounting-debit)' } : undefined}>{children}</td>;
+                      const isNumeric = /^-?[\d,]+/.test(text.trim());
+                      const style: React.CSSProperties = {
+                        padding: '6px 12px',
+                        borderTop: '1px solid var(--color-border-subtle)',
+                        fontVariantNumeric: 'tabular-nums',
+                        textAlign: isNumeric ? 'right' : 'left',
+                        ...(isDebit ? { color: 'var(--color-accounting-debit)' } : {}),
+                      };
+                      return <td {...props} style={style}>{children}</td>;
                     },
                   }}
                 >

@@ -57,12 +57,29 @@ _MEMO_CANDIDATES = [
 # classify_df가 내부적으로 추가하는 컬럼 — orig_cols에서 제외
 _INTERNAL_COLS = {"분류과목", "신뢰도", "_amt", "_datetime"}
 
+# [분류결과] 시트 컬럼 순서: [번호] → [분류과목, 신뢰도] → [아래 순서] → [나머지]
+_RESULT_COL_BEFORE_CLASS = ["번호"]
+_RESULT_COL_AFTER_CLASS = ["거래일시", "출금", "입금", "거래내용", "상대계좌예금주명"]
+_RESULT_DROP_COLS = frozenset([
+    "거래후잔액", "상대계좌번호", "상대은행", "메모", "거래구분", "수표어음금액", "CMS코드",
+])
+
 
 def _normalize_col(s: str) -> str:
     """'(원)' 제거 + 공백/유니코드 공백 제거."""
     s = re.sub(r'\(원\)', '', str(s))
     s = re.sub(r'[\s　 ]+', '', s)
     return s
+
+
+def _build_result_output_cols(orig_cols: "list[str]") -> "tuple[list[str], list[str]]":
+    """[분류결과] 출력 컬럼을 (분류과목/신뢰도 앞, 뒤) 두 리스트로 분할."""
+    orig_set = set(orig_cols)
+    before = [c for c in _RESULT_COL_BEFORE_CLASS if c in orig_set]
+    after = [c for c in _RESULT_COL_AFTER_CLASS if c in orig_set]
+    all_mentioned = set(_RESULT_COL_BEFORE_CLASS) | set(_RESULT_COL_AFTER_CLASS) | _RESULT_DROP_COLS
+    remaining = [c for c in orig_cols if c not in all_mentioned]
+    return before, after + remaining
 
 
 def _detect_col(columns: list[str], candidates: list[str]) -> str | None:
@@ -246,30 +263,31 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
     except ImportError as exc:
         raise RuntimeError("openpyxl 미설치 — pip install openpyxl") from exc
 
+    try:
+        from openpyxl.styles import PatternFill, Border, Side
+    except ImportError:
+        PatternFill = Border = Side = None  # type: ignore[assignment,misc]
+
     orig_cols = [c for c in df.columns if c not in _INTERNAL_COLS]
     df_ok = df[df["분류과목"] != "미분류"].copy()
     df_ng = df[df["분류과목"] == "미분류"][orig_cols].copy()
     bold = Font(bold=True)
+    header_fill = (
+        PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
+        if PatternFill else None
+    )
+    thick_top = Border(top=Side(border_style="medium")) if Border and Side else None
 
     wb = openpyxl.Workbook()
 
-    # ── [분류결과] ──────────────────────────────────────────────────────────
-    ws1 = wb.active
-    ws1.title = "분류결과"
-    ws1.append(orig_cols + ["분류과목", "신뢰도"])
-    for cell in ws1[1]:
-        cell.font = bold
-    for _, row in df_ok.iterrows():
-        vals = [row[c] for c in orig_cols]
-        vals.append(row["분류과목"])
-        vals.append(f"{int(round(float(row['신뢰도']) * 100))}%")
-        ws1.append(vals)
-
-    # ── [요약] ──────────────────────────────────────────────────────────────
-    ws2 = wb.create_sheet("요약")
+    # ── [요약] — 활성 시트(첫 번째) ─────────────────────────────────────────
+    ws2 = wb.active
+    ws2.title = "요약"
     ws2.append(["분류과목", "건수", "합계금액", "비율"])
     for cell in ws2[1]:
         cell.font = bold
+        if header_fill:
+            cell.fill = header_fill
 
     if not df_ok.empty:
         # _amt: classify_df가 입출금 분리 컬럼에서 미리 계산한 값 우선 사용
@@ -295,12 +313,32 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
             amt = int(r["sum"])
             ratio = f"{cnt / t_cnt * 100:.1f}%" if t_cnt else "0%"
             ws2.append([r["분류과목"], cnt, amt, ratio])
-            # 합계금액 셀에 콤마 서식 적용
             ws2.cell(row=data_start_row + i, column=3).number_format = '#,##0"원"'
+        totals_row = data_start_row + len(grp)
         ws2.append(["총계", t_cnt, t_sum, "100%"])
-        ws2.cell(row=data_start_row + len(grp), column=3).number_format = '#,##0"원"'
+        ws2.cell(row=totals_row, column=3).number_format = '#,##0"원"'
+        # 합계 행 굵은 상단 테두리 + 볼드
+        if thick_top:
+            for col_idx in range(1, 5):
+                cell = ws2.cell(row=totals_row, column=col_idx)
+                cell.border = thick_top
+                cell.font = bold
 
-    # ── [미분류] ────────────────────────────────────────────────────────────
+    # ── [분류결과] — 두 번째 시트 ────────────────────────────────────────────
+    ws1 = wb.create_sheet("분류결과")
+    before_cols, after_cols = _build_result_output_cols(orig_cols)
+    header = before_cols + ["분류과목", "신뢰도"] + after_cols
+    ws1.append(header)
+    for cell in ws1[1]:
+        cell.font = bold
+    for _, row in df_ok.iterrows():
+        vals = [row[c] for c in before_cols]
+        vals.append(row["분류과목"])
+        vals.append(f"{int(round(float(row['신뢰도']) * 100))}%")
+        vals.extend(row[c] for c in after_cols)
+        ws1.append(vals)
+
+    # ── [미분류] — 세 번째 시트 ──────────────────────────────────────────────
     ws3 = wb.create_sheet("미분류")
     ws3.append(orig_cols)
     for cell in ws3[1]:
