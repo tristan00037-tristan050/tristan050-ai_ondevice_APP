@@ -277,10 +277,11 @@ if _FASTAPI_AVAILABLE:
     # -----------------------------------------------------------------------
     @app.on_event("startup")
     async def _startup_load_model():
-        """sidecar 기동 시 모델 로드 + 회계 결과 eviction 태스크 등록."""
+        """sidecar 기동 시 모델 로드 + 결과 eviction 태스크 등록."""
         loop = asyncio.get_running_loop()
         loop.run_in_executor(None, _init_shared_llm)
         asyncio.create_task(_cleanup_accounting_results())
+        asyncio.create_task(_cleanup_parse_results())
 
     @app.get("/health")
     def health():
@@ -969,6 +970,312 @@ if _FASTAPI_AVAILABLE:
             media_type="application/octet-stream",
             headers={"Content-Disposition": 'inline; filename="butler_accounting_result.xlsx"'},
         )
+
+    # -----------------------------------------------------------------------
+    # 요청 파싱 (D-3 카드 1)
+    # -----------------------------------------------------------------------
+    PARSE_RESULT_TTL = 3600       # 1시간 보관
+    PARSE_CLEANUP_INTERVAL = 120  # 만료 스캔 주기 (초)
+
+    _parse_results: dict[str, dict] = {}
+
+    async def _cleanup_parse_results() -> None:
+        while True:
+            await asyncio.sleep(PARSE_CLEANUP_INTERVAL)
+            now = time.monotonic()
+            expired = [
+                rid for rid, entry in list(_parse_results.items())
+                if now - entry.get("created_at", now) > PARSE_RESULT_TTL
+            ]
+            for rid in expired:
+                _parse_results.pop(rid, None)
+
+    async def _stream_parse(text: str, input_format: str, result_id: str) -> AsyncGenerator[str, None]:
+        """요청 파싱 SSE 4-phase 제너레이터."""
+        try:
+            from butler_pc_core.request_parsing import parse_text, mask_pii
+        except ImportError as exc:
+            yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
+            return
+
+        # Phase 1 — PII 마스킹
+        yield _sse("phase_start", {"phase": 1, "status_message": "PII 마스킹 중"})
+        await asyncio.sleep(0)
+        masked = mask_pii(text)
+
+        # Phase 2 — 날짜/액션 추출
+        yield _sse("phase_start", {"phase": 2, "status_message": "날짜·액션 추출 중"})
+        await asyncio.sleep(0)
+
+        # Phase 3 — LLM 파싱 (또는 휴리스틱)
+        yield _sse("phase_start", {"phase": 3, "status_message": "의도 분석 중"})
+        await asyncio.sleep(0)
+
+        loop = asyncio.get_running_loop()
+        try:
+            llm = _SHARED_LLM if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready") else None
+            result = await loop.run_in_executor(
+                None, lambda: parse_text(masked, input_format=input_format, llm=llm)
+            )
+        except Exception as exc:
+            yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)})
+            return
+
+        # Phase 4 — 결과 저장
+        yield _sse("phase_start", {"phase": 4, "status_message": "결과 저장 중"})
+        await asyncio.sleep(0)
+
+        result_dict = result.to_dict()
+        result_dict["masked_text"] = result.masked_text
+        result_dict["input_format"] = result.input_format
+        _parse_results[result_id] = {
+            "result": result_dict,
+            "created_at": time.monotonic(),
+        }
+
+        yield _sse("complete", {
+            "result_id": result_id,
+            "result": result_dict,
+        })
+
+    @app.post("/request_parsing/parse")
+    async def request_parsing_parse(request: Request):
+        """동기 파싱 — 짧은 텍스트 전용."""
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="JSON 파싱 오류")
+
+        text: str = body.get("text", "")
+        input_format: str = body.get("input_format", "text")
+
+        if not text:
+            raise HTTPException(status_code=422, detail="text 필드가 비어 있습니다.")
+
+        try:
+            from butler_pc_core.request_parsing import parse_text, TextTooShortError, TextTooLongError
+        except ImportError as exc:
+            raise HTTPException(status_code=500, detail=f"request_parsing 모듈 로드 실패: {exc}")
+
+        try:
+            llm = _SHARED_LLM if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready") else None
+            result = parse_text(text, input_format=input_format, llm=llm)
+        except TextTooShortError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        except TextTooLongError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"파싱 오류: {exc}")
+
+        result_id = str(uuid.uuid4())
+        result_dict = result.to_dict()
+        result_dict["masked_text"] = result.masked_text
+        result_dict["input_format"] = result.input_format
+        _parse_results[result_id] = {
+            "result": result_dict,
+            "created_at": time.monotonic(),
+        }
+        return JSONResponse({"result_id": result_id, "result": result_dict})
+
+    @app.post("/request_parsing/parse_stream")
+    async def request_parsing_parse_stream(request: Request):
+        """SSE 스트리밍 파싱 — 4-phase 진행률 보고."""
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="JSON 파싱 오류")
+
+        text: str = body.get("text", "")
+        input_format: str = body.get("input_format", "text")
+
+        if not text:
+            raise HTTPException(status_code=422, detail="text 필드가 비어 있습니다.")
+
+        try:
+            from butler_pc_core.request_parsing import TextTooShortError, TextTooLongError
+            from butler_pc_core.request_parsing.parser import MIN_TEXT_LENGTH, MAX_TEXT_LENGTH
+            if len(text) < MIN_TEXT_LENGTH:
+                raise HTTPException(status_code=422, detail=f"메시지가 너무 짧습니다 (최소 {MIN_TEXT_LENGTH}자)")
+            if len(text) > MAX_TEXT_LENGTH:
+                raise HTTPException(status_code=422, detail=f"메시지가 너무 깁니다 (최대 {MAX_TEXT_LENGTH:,}자)")
+        except HTTPException:
+            raise
+        except ImportError:
+            pass
+
+        result_id = str(uuid.uuid4())
+        return StreamingResponse(
+            _stream_parse(text, input_format, result_id),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "X-Result-Id": result_id,
+            },
+        )
+
+    @app.get("/request_parsing/result/{result_id}/markdown")
+    def request_parsing_result_markdown(result_id: str):
+        """파싱 결과 Markdown 다운로드."""
+        entry = _parse_results.get(result_id)
+        if entry is None:
+            raise HTTPException(status_code=404, detail=f"결과 없음 또는 만료: {result_id}")
+
+        try:
+            from butler_pc_core.request_parsing import ParsedResult, result_to_markdown
+        except ImportError as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+        from fastapi.responses import Response as _RawResponse
+        result = ParsedResult.from_dict(entry["result"])
+        md_text = result_to_markdown(result)
+        return _RawResponse(
+            content=md_text.encode("utf-8"),
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": 'inline; filename="butler_parse_result.md"'},
+        )
+
+    @app.get("/request_parsing/result/{result_id}/docx")
+    def request_parsing_result_docx(result_id: str):
+        """파싱 결과 .docx 다운로드."""
+        entry = _parse_results.get(result_id)
+        if entry is None:
+            raise HTTPException(status_code=404, detail=f"결과 없음 또는 만료: {result_id}")
+
+        try:
+            from butler_pc_core.request_parsing import ParsedResult, result_to_docx_bytes, ParseError
+        except ImportError as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+        from fastapi.responses import Response as _RawResponse
+        try:
+            result = ParsedResult.from_dict(entry["result"])
+            docx_bytes = result_to_docx_bytes(result)
+        except ParseError as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+        return _RawResponse(
+            content=docx_bytes,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": 'inline; filename="butler_parse_result.docx"'},
+        )
+
+    @app.post("/request_parsing/feedback")
+    async def request_parsing_feedback(request: Request):
+        """사용자 피드백 수신 (👍/👎)."""
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="JSON 파싱 오류")
+
+        result_id: str = body.get("result_id", "")
+        feedback: str = body.get("feedback", "")  # "positive" | "negative"
+        comment: str = body.get("comment", "")
+
+        if feedback not in ("positive", "negative"):
+            raise HTTPException(status_code=422, detail="feedback 값은 positive 또는 negative")
+
+        # 피드백 로깅 (향후 fine-tuning 데이터로 활용)
+        import logging as _log
+        _log.info("[request_parsing] feedback result_id=%s feedback=%s comment=%r",
+                  result_id, feedback, comment[:100] if comment else "")
+
+        return JSONResponse({"ok": True, "result_id": result_id, "feedback": feedback})
+
+    async def _stream_parse_file(
+        file_bytes: bytes, suffix: str, input_format: str, result_id: str
+    ) -> AsyncGenerator[str, None]:
+        """바이너리 파일 업로드 전용 SSE 파싱 제너레이터."""
+        try:
+            from butler_pc_core.request_parsing import (
+                extract_text_from_file_bytes, ParseError, parse_text, mask_pii,
+            )
+        except ImportError as exc:
+            yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
+            return
+
+        # Phase 1 — 파일 텍스트 추출
+        yield _sse("phase_start", {"phase": 1, "status_message": f"파일 텍스트 추출 중 ({suffix})"})
+        await asyncio.sleep(0)
+        try:
+            text = extract_text_from_file_bytes(file_bytes, suffix)
+        except ParseError as exc:
+            yield _sse("error", {"error_class": "ParseError", "message": str(exc)})
+            return
+
+        # Phase 2 — PII 마스킹
+        yield _sse("phase_start", {"phase": 2, "status_message": "PII 마스킹 중"})
+        await asyncio.sleep(0)
+        masked = mask_pii(text)
+
+        # Phase 3 — LLM 파싱 또는 휴리스틱
+        yield _sse("phase_start", {"phase": 3, "status_message": "의도 분석 중"})
+        await asyncio.sleep(0)
+
+        loop = asyncio.get_running_loop()
+        try:
+            llm = _SHARED_LLM if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready") else None
+            result = await loop.run_in_executor(
+                None, lambda: parse_text(masked, input_format=input_format, llm=llm)
+            )
+        except Exception as exc:
+            yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)})
+            return
+
+        # Phase 4 — 결과 저장
+        yield _sse("phase_start", {"phase": 4, "status_message": "결과 저장 중"})
+        await asyncio.sleep(0)
+
+        result_dict = result.to_dict()
+        result_dict["masked_text"] = result.masked_text
+        result_dict["input_format"] = result.input_format
+        _parse_results[result_id] = {
+            "result": result_dict,
+            "created_at": time.monotonic(),
+        }
+
+        yield _sse("complete", {"result_id": result_id, "result": result_dict})
+
+    @app.post("/request_parsing/parse_file_stream")
+    async def request_parsing_parse_file_stream(request: Request):
+        """바이너리 파일(multipart) 업로드 → SSE 4-phase 파싱.
+
+        Form fields: file (.txt/.md/.docx/.pdf/.eml)
+        """
+        _SUPPORTED_SUFFIXES = {".txt", ".md", ".docx", ".pdf", ".eml"}
+
+        form = await request.form()
+        upload = form.get("file")
+        if upload is None or not hasattr(upload, "read"):
+            raise HTTPException(status_code=422, detail="file 필드가 없습니다.")
+
+        fname = getattr(upload, "filename", "") or "upload.txt"
+        suffix = Path(fname).suffix.lower() if fname else ".txt"
+        if suffix not in _SUPPORTED_SUFFIXES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"지원하지 않는 파일 형식: {suffix} (지원: .txt .md .docx .pdf .eml)",
+            )
+
+        # input_format 결정
+        _format_map = {".txt": "text", ".md": "md", ".docx": "docx", ".pdf": "pdf", ".eml": "email"}
+        input_format = _format_map.get(suffix, "text")
+
+        file_bytes: bytes = await upload.read()
+        if not file_bytes:
+            raise HTTPException(status_code=422, detail="파일이 비어 있습니다.")
+
+        result_id = str(uuid.uuid4())
+        return StreamingResponse(
+            _stream_parse_file(file_bytes, suffix, input_format, result_id),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "X-Result-Id": result_id,
+            },
+        )
+
 
 # ---------------------------------------------------------------------------
 # FastAPI 미설치 환경용 경량 HTTP 서버 (stdlib only)
