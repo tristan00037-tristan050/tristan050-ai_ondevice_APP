@@ -80,12 +80,62 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const content = reader.result as string;
-      setText(content);
-    };
-    reader.readAsText(file, 'utf-8');
+    const ext = (file.name.split('.').pop() ?? '').toLowerCase();
+    if (ext === 'txt' || ext === 'md') {
+      // 텍스트 파일 → 프론트엔드 직접 디코딩 후 textarea에 넣음
+      const reader = new FileReader();
+      reader.onload = () => setText(reader.result as string);
+      reader.readAsText(file, 'utf-8');
+    } else if (ext === 'docx' || ext === 'pdf' || ext === 'eml') {
+      // 바이너리 파일 → 백엔드 multipart 업로드로 직접 분석
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+      setPhase({ kind: 'processing', phaseNum: 1, status: `파일 텍스트 추출 중 (.${ext})` });
+      setFeedback(null);
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const resp = await fetch(`${SIDECAR_BASE}/request_parsing/parse_file_stream`, {
+          method: 'POST',
+          body: form,
+          signal: ctrl.signal,
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+          setPhase({ kind: 'error', message: (err as { detail?: string }).detail ?? resp.statusText });
+          return;
+        }
+        const reader2 = resp.body!.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { done, value } = await reader2.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const blocks = buf.split('\n\n');
+          buf = blocks.pop() ?? '';
+          for (const block of blocks) {
+            const parsed = parseSseBlock(block);
+            if (!parsed) continue;
+            if (parsed.event === 'phase_start') {
+              const d = parsed.data as { phase?: number; status_message?: string };
+              setPhase({ kind: 'processing', phaseNum: d.phase ?? 1, status: d.status_message ?? '처리 중...' });
+            } else if (parsed.event === 'complete') {
+              const d = parsed.data as { result_id: string; result: ParseResult };
+              setPhase({ kind: 'done', resultId: d.result_id, result: d.result });
+            } else if (parsed.event === 'error') {
+              const d = parsed.data as { message?: string };
+              setPhase({ kind: 'error', message: d.message ?? '알 수 없는 오류' });
+            }
+          }
+        }
+      } catch (err: unknown) {
+        if ((err as { name?: string }).name === 'AbortError') return;
+        setPhase({ kind: 'error', message: String(err) });
+      }
+    } else {
+      setPhase({ kind: 'error', message: `.${ext} 파일은 지원되지 않습니다. (.txt .md .docx .pdf .eml)` });
+    }
   }, []);
 
   const handleDrop = useCallback(

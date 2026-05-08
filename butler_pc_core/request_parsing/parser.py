@@ -136,6 +136,8 @@ class ParsedResult:
             expected_response=intent.get("expected_response", ""),
         )
         result.confidence = float(d.get("confidence", 0.75))
+        result.masked_text = d.get("masked_text", "")
+        result.input_format = d.get("input_format", "text")
         return result
 
 
@@ -334,6 +336,55 @@ def extract_text_from_file(file_path: str, suffix: str) -> str:
         import email as _email
         import email.policy
         msg = _email.message_from_bytes(p.read_bytes(), policy=email.policy.default)
+        parts: list[str] = []
+        if msg.is_multipart():
+            for part in msg.walk():
+                if part.get_content_type() == "text/plain":
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        parts.append(payload.decode("utf-8", errors="replace"))
+        else:
+            payload = msg.get_payload(decode=True)
+            if payload:
+                parts.append(payload.decode("utf-8", errors="replace"))
+        return "\n".join(parts)
+
+    raise ParseError(f"지원하지 않는 파일 형식: {suffix} (지원: .txt .docx .pdf .md .eml)")
+
+
+def extract_text_from_file_bytes(file_bytes: bytes, suffix: str) -> str:
+    """파일 바이트 → 텍스트 추출. 백엔드 multipart 업로드 경로 전용."""
+    suffix = suffix.lower()
+
+    if suffix in (".txt", ".md"):
+        for enc in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
+            try:
+                return file_bytes.decode(enc)
+            except (UnicodeDecodeError, LookupError):
+                continue
+        return file_bytes.decode("utf-8", errors="replace")
+
+    if suffix == ".docx":
+        try:
+            import io
+            import docx  # python-docx
+            doc = docx.Document(io.BytesIO(file_bytes))
+            return "\n".join(para.text for para in doc.paragraphs if para.text.strip())
+        except ImportError:
+            raise ParseError("python-docx 미설치 — pip install python-docx")
+
+    if suffix == ".pdf":
+        try:
+            import io
+            from pdfminer.high_level import extract_text as _pdf_extract
+            return _pdf_extract(io.BytesIO(file_bytes)) or ""
+        except ImportError:
+            raise ParseError("pdfminer.six 미설치 — pip install pdfminer.six")
+
+    if suffix == ".eml":
+        import email as _email
+        import email.policy
+        msg = _email.message_from_bytes(file_bytes, policy=email.policy.default)
         parts: list[str] = []
         if msg.is_multipart():
             for part in msg.walk():

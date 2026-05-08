@@ -9,6 +9,7 @@ from .parser import (
     parse_korean_date,
     validate_schema,
     extract_text_from_file,
+    extract_text_from_file_bytes,
 )
 from .exporters import result_to_markdown, result_to_docx_bytes
 
@@ -22,6 +23,7 @@ __all__ = [
     "parse_korean_date",
     "validate_schema",
     "extract_text_from_file",
+    "extract_text_from_file_bytes",
     "result_to_markdown",
     "result_to_docx_bytes",
 ]

@@ -42,6 +42,7 @@ const SSE_OK = [
 describe('RequestParsingModal', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.unstubAllGlobals();
     global.fetch = vi.fn();
   });
 
@@ -98,6 +99,65 @@ describe('RequestParsingModal', () => {
     await waitFor(() => screen.getByText(/P1/));
     const p1Badge = screen.getByText(/P1 긴급/);
     expect(p1Badge).toBeTruthy();
+  });
+
+  it('.txt 파일 → FileReader.readAsText로 textarea에 삽입 (fetch 호출 없음)', async () => {
+    const TXT_CONTENT = '안녕하세요. 다음 주 화요일까지 보고서를 제출해 주시면 감사하겠습니다.';
+    class MockFileReader {
+      result: string | null = null;
+      onload: (() => void) | null = null;
+      readAsText(_file: File, _enc?: string) {
+        this.result = TXT_CONTENT;
+        this.onload?.();
+      }
+    }
+    vi.stubGlobal('FileReader', MockFileReader);
+
+    render(<RequestParsingModal onClose={() => {}} />);
+
+    const file = new File([TXT_CONTENT], 'report.txt', { type: 'text/plain' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+
+    await act(async () => {
+      fireEvent.change(input);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('textbox')).toHaveValue(TXT_CONTENT);
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('.docx 파일 → /request_parsing/parse_file_stream으로 multipart POST', async () => {
+    const SSE_DOCX = [
+      { event: 'phase_start', data: { phase: 1, status_message: '파일 텍스트 추출 중' } },
+      { event: 'complete', data: { result_id: 'docx-id-001', result: MOCK_RESULT } },
+    ];
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      body: makeSseStream(SSE_DOCX),
+    });
+
+    render(<RequestParsingModal onClose={() => {}} />);
+
+    const file = new File([new ArrayBuffer(8)], 'contract.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+
+    await act(async () => {
+      fireEvent.change(input);
+    });
+
+    await waitFor(() => {
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+    });
+    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url as string).toContain('/request_parsing/parse_file_stream');
+    expect((opts as RequestInit).method).toBe('POST');
+    expect((opts as RequestInit).body).toBeInstanceOf(FormData);
   });
 
   it('서버 오류 시 오류 화면 표시', async () => {

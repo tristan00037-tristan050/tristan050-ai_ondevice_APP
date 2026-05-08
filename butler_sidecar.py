@@ -1182,6 +1182,100 @@ if _FASTAPI_AVAILABLE:
 
         return JSONResponse({"ok": True, "result_id": result_id, "feedback": feedback})
 
+    async def _stream_parse_file(
+        file_bytes: bytes, suffix: str, input_format: str, result_id: str
+    ) -> AsyncGenerator[str, None]:
+        """바이너리 파일 업로드 전용 SSE 파싱 제너레이터."""
+        try:
+            from butler_pc_core.request_parsing import (
+                extract_text_from_file_bytes, ParseError, parse_text, mask_pii,
+            )
+        except ImportError as exc:
+            yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
+            return
+
+        # Phase 1 — 파일 텍스트 추출
+        yield _sse("phase_start", {"phase": 1, "status_message": f"파일 텍스트 추출 중 ({suffix})"})
+        await asyncio.sleep(0)
+        try:
+            text = extract_text_from_file_bytes(file_bytes, suffix)
+        except ParseError as exc:
+            yield _sse("error", {"error_class": "ParseError", "message": str(exc)})
+            return
+
+        # Phase 2 — PII 마스킹
+        yield _sse("phase_start", {"phase": 2, "status_message": "PII 마스킹 중"})
+        await asyncio.sleep(0)
+        masked = mask_pii(text)
+
+        # Phase 3 — LLM 파싱 또는 휴리스틱
+        yield _sse("phase_start", {"phase": 3, "status_message": "의도 분석 중"})
+        await asyncio.sleep(0)
+
+        loop = asyncio.get_running_loop()
+        try:
+            llm = _SHARED_LLM if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready") else None
+            result = await loop.run_in_executor(
+                None, lambda: parse_text(masked, input_format=input_format, llm=llm)
+            )
+        except Exception as exc:
+            yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)})
+            return
+
+        # Phase 4 — 결과 저장
+        yield _sse("phase_start", {"phase": 4, "status_message": "결과 저장 중"})
+        await asyncio.sleep(0)
+
+        result_dict = result.to_dict()
+        result_dict["masked_text"] = result.masked_text
+        result_dict["input_format"] = result.input_format
+        _parse_results[result_id] = {
+            "result": result_dict,
+            "created_at": time.monotonic(),
+        }
+
+        yield _sse("complete", {"result_id": result_id, "result": result_dict})
+
+    @app.post("/request_parsing/parse_file_stream")
+    async def request_parsing_parse_file_stream(request: Request):
+        """바이너리 파일(multipart) 업로드 → SSE 4-phase 파싱.
+
+        Form fields: file (.txt/.md/.docx/.pdf/.eml)
+        """
+        _SUPPORTED_SUFFIXES = {".txt", ".md", ".docx", ".pdf", ".eml"}
+
+        form = await request.form()
+        upload = form.get("file")
+        if upload is None or not hasattr(upload, "read"):
+            raise HTTPException(status_code=422, detail="file 필드가 없습니다.")
+
+        fname = getattr(upload, "filename", "") or "upload.txt"
+        suffix = Path(fname).suffix.lower() if fname else ".txt"
+        if suffix not in _SUPPORTED_SUFFIXES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"지원하지 않는 파일 형식: {suffix} (지원: .txt .md .docx .pdf .eml)",
+            )
+
+        # input_format 결정
+        _format_map = {".txt": "text", ".md": "md", ".docx": "docx", ".pdf": "pdf", ".eml": "email"}
+        input_format = _format_map.get(suffix, "text")
+
+        file_bytes: bytes = await upload.read()
+        if not file_bytes:
+            raise HTTPException(status_code=422, detail="파일이 비어 있습니다.")
+
+        result_id = str(uuid.uuid4())
+        return StreamingResponse(
+            _stream_parse_file(file_bytes, suffix, input_format, result_id),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "X-Result-Id": result_id,
+            },
+        )
+
 
 # ---------------------------------------------------------------------------
 # FastAPI 미설치 환경용 경량 HTTP 서버 (stdlib only)
