@@ -918,17 +918,17 @@ describe('AccountingModal — 업로드 흐름', () => {
     expect(debitText).toContain('-500,000원');
   });
 
-  // C.2 — 결과 테이블 양수 카테고리 먼저 정렬 테스트
+  // C.2 — 결과 테이블 재무제표 섹션 순서 정렬 테스트
 
   it('test_result_table_positive_categories_before_negative', async () => {
-    // 결과 테이블에서 양수 합계금액 카테고리가 음수보다 앞에 위치해야 한다
+    // 재무제표 섹션 순서: 매출(rank 0) → 판관비(rank 2) — 절댓값 내림차순
     const mixedSummary = {
       total_rows: 6,
       classified_rows: 6,
       unclassified_rows: 0,
       categories: {
         '광고선전비': { count: 2, avg_confidence: 0.88, total_amount: -400000 },
-        '매출액': { count: 3, avg_confidence: 0.95, total_amount: 9000000 },
+        '매출': { count: 3, avg_confidence: 0.95, total_amount: 9000000 },
         '통신비': { count: 1, avg_confidence: 0.82, total_amount: -88000 },
       },
       avg_confidence: 0.90,
@@ -951,13 +951,13 @@ describe('AccountingModal — 업로드 흐름', () => {
     const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
     expect(bodyRows.length).toBe(3);
 
-    // 첫 번째 행: 양수 카테고리 (매출액)
-    expect(bodyRows[0].textContent).toContain('매출액');
-    // 두 번째, 세 번째 행: 음수 카테고리
+    // 첫 번째 행: I_revenue 섹션 (매출, rank 0)
+    expect(bodyRows[0].textContent).toContain('매출');
+    // 두 번째, 세 번째 행: IV_sga 섹션 (판관비, rank 2)
     expect(bodyRows[1].textContent).toMatch(/광고선전비|통신비/);
     expect(bodyRows[2].textContent).toMatch(/광고선전비|통신비/);
 
-    // 두 음수 카테고리 중 절댓값 큰 것(광고선전비 400000)이 먼저
+    // 두 판관비 중 절댓값 큰 것(광고선전비 400000)이 먼저
     expect(bodyRows[1].textContent).toContain('광고선전비');
     expect(bodyRows[2].textContent).toContain('통신비');
   });
@@ -1051,5 +1051,57 @@ describe('AccountingModal — 업로드 흐름', () => {
       expect(th.style.padding).toBeTruthy();
       expect(th.style.fontWeight).toBe('600');
     });
+  });
+
+  it('category_table_revenue_before_expense — 매출(rank 0)이 판관비(rank 2)보다 앞에 렌더링', async () => {
+    const mixedSummary = {
+      total_rows: 5,
+      classified_rows: 5,
+      unclassified_rows: 0,
+      categories: {
+        '통신비': { count: 2, avg_confidence: 0.88, total_amount: -176000 },
+        '매출': { count: 3, avg_confidence: 0.95, total_amount: 9000000 },
+      },
+      avg_confidence: 0.92,
+    };
+    const sseEvents = [
+      { event: 'phase_start', data: { status_message: '분류 중' } },
+      {
+        event: 'complete',
+        data: {
+          result_id: 'sort-test-uuid',
+          md_content: '## 결과',
+          summary: mixedSummary,
+          row_count: 5,
+          category_count: 2,
+          xlsx_ready: false,
+        },
+      },
+    ];
+
+    const mockFetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: makeSseStream(sseEvents),
+      headers: new Headers({ 'content-type': 'text/event-stream' }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['적요,출금,입금\n매출 입금,,9000000\n통신비 납부,176000,'], 'test.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => expect(screen.getByTestId('accounting-result')).toBeInTheDocument(), { timeout: 5000 });
+
+    const table = screen.getByTestId('accounting-category-table');
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+
+    const firstRowText = rows[0].textContent ?? '';
+    const secondRowText = rows[1].textContent ?? '';
+    expect(firstRowText).toContain('매출');
+    expect(secondRowText).toContain('통신비');
   });
 });

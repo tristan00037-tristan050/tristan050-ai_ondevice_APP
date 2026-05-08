@@ -388,11 +388,23 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
               </div>
               {/* 계정과목 분류 결과 표 */}
               {Object.keys(phase.categories).length > 0 && (() => {
+                const ACCOUNT_SECTION: Record<string, number> = {
+                  '매출': 0,
+                  '상품매출원가': 1, '매출총이익': 1,
+                  '임원급여': 2, '직원급여': 2, '상여금': 2, '퇴직급여': 2,
+                  '복리후생비': 2, '여비교통비': 2, '접대비': 2, '통신비': 2,
+                  '전력비': 2, '세금과공과금': 2, '감가상각비': 2, '지급임차료': 2,
+                  '보험료': 2, '차량유지비': 2, '경상연구개발비': 2, '운반비': 2,
+                  '교육훈련비': 2, '도서인쇄비': 2, '사무용품비': 2, '소모품비': 2,
+                  '지급수수료': 2, '광고선전비': 2, '건물관리비': 2,
+                  '이자수익': 3, '유형자산처분이익': 3, '잡이익': 3,
+                  '이자비용': 4, '전기오류수정손실': 4, '잡손실': 4,
+                };
                 const entries = Object.entries(phase.categories)
-                  .sort(([, a], [, b]) => {
-                    const aIsNeg = a.total_amount < 0 ? 1 : 0;
-                    const bIsNeg = b.total_amount < 0 ? 1 : 0;
-                    if (aIsNeg !== bIsNeg) return aIsNeg - bIsNeg;
+                  .sort(([nameA, a], [nameB, b]) => {
+                    const rankA = ACCOUNT_SECTION[nameA] ?? 5;
+                    const rankB = ACCOUNT_SECTION[nameB] ?? 5;
+                    if (rankA !== rankB) return rankA - rankB;
                     return Math.abs(b.total_amount) - Math.abs(a.total_amount) || b.count - a.count;
                   });
                 const totalCount = Object.values(phase.categories).reduce((s, v) => s + v.count, 0);
