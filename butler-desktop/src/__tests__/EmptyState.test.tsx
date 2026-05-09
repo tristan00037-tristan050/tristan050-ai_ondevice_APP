@@ -24,14 +24,14 @@ describe('EmptyState — 카드 선택/해제 동기화', () => {
   });
 
   it('test_different_card_click_emits_new_mode', () => {
-    // 카드1 선택 후 카드2 클릭 → onCardSelect(card2_mode) 호출
+    // 카드1 선택 후 카드5(활성) 클릭 → onCardSelect(card5_mode) 호출 (카드2,3,4,6,7,8은 비활성)
     const onCardSelect = vi.fn();
     render(<EmptyState onCardSelect={onCardSelect} />);
     fireEvent.click(screen.getByTestId('card-1'));
-    fireEvent.click(screen.getByTestId('card-2'));
+    fireEvent.click(screen.getByTestId('card-5'));
     expect(onCardSelect).toHaveBeenCalledTimes(2);
     expect(onCardSelect).toHaveBeenNthCalledWith(1, 'request_organize');
-    expect(onCardSelect).toHaveBeenNthCalledWith(2, 'format_convert');
+    expect(onCardSelect).toHaveBeenNthCalledWith(2, 'accounting_classify');
   });
 
   it('test_boundary_aria_pressed_reflects_active_state', () => {

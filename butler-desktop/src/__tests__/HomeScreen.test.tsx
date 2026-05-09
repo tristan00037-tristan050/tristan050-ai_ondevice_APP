@@ -3,12 +3,12 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { HomeScreen } from '../components/HomeScreen';
 
 describe('HomeScreen', () => {
-  it('test_happy_renders_six_cards', () => {
+  it('test_happy_renders_eight_cards', () => {
     render(<HomeScreen />);
-    for (let i = 1; i <= 6; i++) {
+    for (let i = 1; i <= 8; i++) {
       expect(screen.getByTestId(`card-${i}`)).toBeInTheDocument();
     }
-    expect(screen.getAllByRole('button').filter(b => b.dataset.testid?.startsWith('card-'))).toHaveLength(6);
+    expect(screen.getAllByRole('button').filter(b => b.dataset.testid?.startsWith('card-'))).toHaveLength(8);
   });
 
   it('test_happy_card_click_activates_mode', () => {
@@ -37,12 +37,12 @@ describe('HomeScreen', () => {
 
   it('test_adv_keyboard_navigation_works', () => {
     render(<HomeScreen />);
-    const card2 = screen.getByTestId('card-2');
-    expect(card2).toHaveAttribute('tabIndex', '0');
-    expect(card2).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.keyDown(card2, { key: 'Enter' });
-    expect(card2).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.keyDown(card2, { key: ' ' });
-    expect(card2).toHaveAttribute('aria-pressed', 'false');
+    const card1 = screen.getByTestId('card-1');
+    expect(card1).toHaveAttribute('tabIndex', '0');
+    expect(card1).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.keyDown(card1, { key: 'Enter' });
+    expect(card1).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.keyDown(card1, { key: ' ' });
+    expect(card1).toHaveAttribute('aria-pressed', 'false');
   });
 });
