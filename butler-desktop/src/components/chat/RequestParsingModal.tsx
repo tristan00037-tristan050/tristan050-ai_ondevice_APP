@@ -1,6 +1,19 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { save as tauriSave } from '@tauri-apps/plugin-dialog';
 import { writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
+import {
+  Inbox,
+  X,
+  Clipboard,
+  FolderOpen,
+  ThumbsUp,
+  ThumbsDown,
+  AlertCircle,
+  Calendar,
+  Download,
+  Copy,
+  AlertTriangle,
+} from 'lucide-react';
 import { SIDECAR_BASE } from '../../constants';
 
 interface RequestParsingModalProps {
@@ -36,9 +49,15 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 const PRIORITY_LABELS: Record<string, string> = {
-  P1: '🔴 P1 긴급',
-  P2: '🟠 P2 권장',
-  P3: '⚪ P3 선택',
+  P1: 'P1 긴급',
+  P2: 'P2 권장',
+  P3: 'P3 선택',
+};
+
+const PRIORITY_ICON_COLORS: Record<string, string> = {
+  P1: '#dc2626',
+  P2: '#ea580c',
+  P3: '#9ca3af',
 };
 
 const ACCEPT_FORMATS = '.txt,.md,.docx,.pdf,.eml';
@@ -82,12 +101,10 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
   const handleFile = useCallback(async (file: File) => {
     const ext = (file.name.split('.').pop() ?? '').toLowerCase();
     if (ext === 'txt' || ext === 'md') {
-      // 텍스트 파일 → 프론트엔드 직접 디코딩 후 textarea에 넣음
       const reader = new FileReader();
       reader.onload = () => setText(reader.result as string);
       reader.readAsText(file, 'utf-8');
     } else if (ext === 'docx' || ext === 'pdf' || ext === 'eml') {
-      // 바이너리 파일 → 백엔드 multipart 업로드로 직접 분석
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       setPhase({ kind: 'processing', phaseNum: 1, status: `파일 텍스트 추출 중 (.${ext})` });
@@ -267,15 +284,24 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      data-testid="request-parsing-modal"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">📥 요청 핵심 파악·정리</h2>
-            <p className="text-xs text-gray-400 mt-0.5">메일·메시지를 붙여넣으면 핵심 액션을 정리해 드립니다</p>
+          <div className="flex items-center gap-2">
+            <Inbox size={20} className="text-blue-500" />
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">요청 핵심 파악·정리</h2>
+              <p className="text-xs text-gray-400 mt-0.5">메일·메시지를 붙여넣으면 핵심 액션을 정리해 드립니다</p>
+            </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors text-xl leading-none">✕</button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="닫기">
+            <X size={20} />
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -297,15 +323,17 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
               <div className="flex gap-2">
                 <button
                   onClick={handlePaste}
-                  className="flex-1 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
                 >
-                  📋 클립보드 붙여넣기
+                  <Clipboard size={12} />
+                  클립보드 붙여넣기
                 </button>
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex-1 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
                 >
-                  📂 파일 선택
+                  <FolderOpen size={12} />
+                  파일 선택
                 </button>
                 <input
                   ref={fileInputRef}
@@ -369,7 +397,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
               {/* Deadline */}
               {phase.result.deadline.raw_text && (
                 <div className="bg-yellow-50 border border-yellow-100 rounded-xl p-3 flex items-start gap-2">
-                  <span className="text-lg">⏰</span>
+                  <Calendar size={18} className="text-yellow-500 shrink-0 mt-0.5" />
                   <div>
                     <p className="text-xs font-semibold text-yellow-700">마감일</p>
                     <p className="text-sm text-gray-800">{phase.result.deadline.raw_text}</p>
@@ -391,6 +419,11 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                         className={`border rounded-xl px-3 py-2.5 ${PRIORITY_COLORS[action.priority] ?? 'text-gray-700 bg-gray-50 border-gray-200'}`}
                       >
                         <div className="flex items-start gap-2">
+                          <AlertCircle
+                            size={14}
+                            className="shrink-0 mt-0.5"
+                            style={{ color: PRIORITY_ICON_COLORS[action.priority] ?? '#9ca3af' }}
+                          />
                           <span className="text-xs font-bold shrink-0">{PRIORITY_LABELS[action.priority] ?? action.priority}</span>
                           <p className="text-sm flex-1">{action.text}</p>
                         </div>
@@ -427,15 +460,17 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleFeedback('positive')}
-                    className={`text-base transition-transform hover:scale-110 ${feedback === 'positive' ? 'opacity-100' : 'opacity-50 hover:opacity-100'}`}
+                    className={`transition-transform hover:scale-110 ${feedback === 'positive' ? 'opacity-100 text-blue-500' : 'opacity-50 hover:opacity-100 text-gray-400'}`}
+                    aria-label="도움이 됨"
                   >
-                    👍
+                    <ThumbsUp size={18} />
                   </button>
                   <button
                     onClick={() => handleFeedback('negative')}
-                    className={`text-base transition-transform hover:scale-110 ${feedback === 'negative' ? 'opacity-100' : 'opacity-50 hover:opacity-100'}`}
+                    className={`transition-transform hover:scale-110 ${feedback === 'negative' ? 'opacity-100 text-red-500' : 'opacity-50 hover:opacity-100 text-gray-400'}`}
+                    aria-label="도움 안 됨"
                   >
-                    👎
+                    <ThumbsDown size={18} />
                   </button>
                 </div>
               </div>
@@ -445,7 +480,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
           {/* Error */}
           {phase.kind === 'error' && (
             <div className="p-6 text-center">
-              <p className="text-4xl mb-3">⚠️</p>
+              <AlertTriangle size={36} className="text-red-400 mx-auto mb-3" />
               <p className="text-sm text-red-600 font-medium mb-1">파싱 오류</p>
               <p className="text-xs text-gray-500 mb-4">{phase.message}</p>
               <button
@@ -473,21 +508,24 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
             <>
               <button
                 onClick={handleCopy}
-                className="flex-1 py-2 text-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                className="flex-1 py-2 text-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
               >
-                📋 복사
+                <Copy size={14} />
+                복사
               </button>
               <button
                 onClick={handleDownloadMd}
-                className="flex-1 py-2 text-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                className="flex-1 py-2 text-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
               >
-                ⬇ .md
+                <Download size={14} />
+                .md
               </button>
               <button
                 onClick={handleDownloadDocx}
-                className="flex-1 py-2 text-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                className="flex-1 py-2 text-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
               >
-                ⬇ .docx
+                <Download size={14} />
+                .docx
               </button>
               <button
                 onClick={() => { setPhase({ kind: 'idle' }); setText(''); }}

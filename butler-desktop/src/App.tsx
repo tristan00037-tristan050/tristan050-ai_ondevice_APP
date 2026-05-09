@@ -9,6 +9,7 @@ import { ChatInput } from './components/chat/ChatInput';
 import { MessageList } from './components/chat/MessageList';
 import { DeleteConfirmModal } from './components/chat/DeleteConfirmModal';
 import { AccountingModal } from './components/chat/AccountingModal';
+import { RequestParsingModal } from './components/chat/RequestParsingModal';
 import { SIDECAR_BASE } from './constants';
 import type { SSEEvent, Conversation, Message } from './types';
 import {
@@ -51,6 +52,7 @@ export function App() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [cardMode, setCardMode] = useState<string>('free');
   const [accountingModalOpen, setAccountingModalOpen] = useState(false);
+  const [requestParsingModalOpen, setRequestParsingModalOpen] = useState(false);
   const [egressMonitorOpen, setEgressMonitorOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -337,6 +339,8 @@ export function App() {
     setCardMode(m);
     if (m === 'accounting_classify') {
       setAccountingModalOpen(true);
+    } else if (m === 'request_organize') {
+      setRequestParsingModalOpen(true);
     }
   };
 
@@ -426,16 +430,18 @@ export function App() {
           </div>
         </div>
 
-        {/* Content area */}
+        {/* Content area — card grid always visible; compact strip when messages present */}
         {hasMessages ? (
-          <MessageList
-            messages={activeConv?.messages ?? []}
-            pendingBot={pendingBot}
-            onRetry={() => {
-              // Clear error state for retry
-              setPendingBot(null);
-            }}
-          />
+          <>
+            <EmptyState compact onCardSelect={handleCardSelect} />
+            <MessageList
+              messages={activeConv?.messages ?? []}
+              pendingBot={pendingBot}
+              onRetry={() => {
+                setPendingBot(null);
+              }}
+            />
+          </>
         ) : (
           <EmptyState onCardSelect={handleCardSelect} />
         )}
@@ -464,6 +470,15 @@ export function App() {
         <AccountingModal
           onClose={() => {
             setAccountingModalOpen(false);
+            setCardMode('free');
+          }}
+        />
+      )}
+
+      {requestParsingModalOpen && (
+        <RequestParsingModal
+          onClose={() => {
+            setRequestParsingModalOpen(false);
             setCardMode('free');
           }}
         />
