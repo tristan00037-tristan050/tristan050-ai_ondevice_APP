@@ -55,6 +55,7 @@ class Deadline:
     raw_text: str = ""
     parsed_date: Optional[str] = None  # ISO 8601 "YYYY-MM-DD" or None
     confidence: float = 0.5
+    time_text: str = ""  # e.g. "오후 3시", "오전 10시 30분"
 
 
 @dataclass
@@ -91,6 +92,7 @@ class ParsedResult:
                 "raw_text": self.deadline.raw_text,
                 "parsed_date": self.deadline.parsed_date,
                 "confidence": self.deadline.confidence,
+                "time_text": self.deadline.time_text,
             },
             "required_materials": [
                 {"name": m.name, "is_optional": m.is_optional, "rationale": m.rationale}
@@ -120,6 +122,7 @@ class ParsedResult:
             raw_text=dl.get("raw_text", ""),
             parsed_date=dl.get("parsed_date"),
             confidence=float(dl.get("confidence", 0.5)),
+            time_text=dl.get("time_text", ""),
         )
         result.required_materials = [
             MaterialItem(
@@ -256,6 +259,22 @@ def parse_korean_date(text: str, today: Optional[date] = None) -> Optional[str]:
             pass
 
     return None
+
+
+# ── 한국어 시간 추출 ──────────────────────────────────────────────────────────
+
+def parse_korean_time(text: str) -> str:
+    """한국어 시간 표현 → 문자열. 예: "오후 3시", "오전 10시 30분"."""
+    m = re.search(r"(오전|오후|낮|밤|새벽)?\s*(\d{1,2})시(?:\s*(\d{1,2})분)?", text)
+    if not m:
+        return ""
+    period = m.group(1) or ""
+    hour = m.group(2)
+    minute = m.group(3)
+    result = f"{period} {hour}시".strip() if period else f"{hour}시"
+    if minute:
+        result += f" {minute}분"
+    return result
 
 
 # ── JSON Schema 검증 ──────────────────────────────────────────────────────────
@@ -445,6 +464,7 @@ def _heuristic_parse(text: str, today: Optional[date] = None) -> ParsedResult:
 
     # 마감일 추출
     date_str = parse_korean_date(text, today)
+    time_str = parse_korean_time(text)
     raw_date_text = ""
     for pattern in [r"다음\s*주\s*\S+요일?", r"이번\s*주\s*\S+요일?", r"\d+월\s*\d+일",
                     r"\d+일까지", r"내일", r"모레", r"월말", r"이번\s*달\s*말"]:
@@ -456,6 +476,7 @@ def _heuristic_parse(text: str, today: Optional[date] = None) -> ParsedResult:
         raw_text=raw_date_text,
         parsed_date=date_str,
         confidence=0.85 if date_str else 0.3,
+        time_text=time_str,
     )
 
     # 액션 추출 — 동사 패턴
@@ -485,24 +506,34 @@ def _heuristic_parse(text: str, today: Optional[date] = None) -> ParsedResult:
                 if len(result.actions) >= 3:
                     break
 
-    # 필요 자료 추출
-    material_patterns = [r"([\w\s]+(?:자료|데이터|파일|문서|견적|보고서))\s*(?:첨부|제출|보내|준비)?"]
-    for pattern in material_patterns:
-        for m in re.finditer(pattern, text):
-            name = m.group(1).strip()[:40]
-            if name and len(name) > 3:
-                is_optional = bool(re.search(r"가능하시다면|여유가 되시면|선택", text[m.start()-20:m.start()+20]))
-                result.required_materials.append(MaterialItem(name=name, is_optional=is_optional))
-                if len(result.required_materials) >= 3:
-                    break
+    # 필요 자료 추출 — 명사형 자료명만 추출, 액션 동사 문장 제외
+    _mat_pattern = re.compile(
+        r"([\w\s]{1,20}(?:자료|데이터|파일|문서|견적|보고서|서류|서식|양식|명세서|청구서|영수증|목록|리스트|표|내역|기안|계획서|제안서|첨부|별첨))"
+    )
+    _action_only = re.compile(r"(?:검토|확인|작성|제출|발송|보고|답변|회신|협조|준비)\s*(?:해|해주|드리|부탁|요청|바랍|주세요|주시면)?$")
+    for m in _mat_pattern.finditer(text):
+        name = m.group(1).strip()[:40]
+        if not name or len(name) <= 3:
+            continue
+        if _action_only.search(name):
+            continue
+        is_optional = bool(re.search(r"가능하시다면|여유가 되시면|선택", text[m.start()-20:m.start()+20]))
+        result.required_materials.append(MaterialItem(name=name, is_optional=is_optional))
+        if len(result.required_materials) >= 5:
+            break
 
     # 의도 + 톤
     is_urgent = bool(re.search(r"긴급|즉시|바로|오늘|내일|급", text))
     is_formal = bool(re.search(r"드립니다|드리겠습니다|주십시오|협조|감사합니다", text))
     tone = "urgent" if is_urgent else ("formal" if is_formal else "informal")
 
-    summary_sentences = [s.strip() for s in re.split(r"[.!?。]", text) if len(s.strip()) > 10]
-    summary = summary_sentences[0][:80] if summary_sentences else "요청 메시지 분석 완료"
+    _greeting = re.compile(r"^(안녕|수고|감사|죄송|좋은|바쁜|처음)")
+    _request_kw = re.compile(r"부탁|요청|드립니다|바랍니다|주세요|해주시면|검토|제출|확인|보내|작성|첨부")
+    sentences = [s.strip() for s in re.split(r"[.!?。\n]+", text) if len(s.strip()) > 10]
+    non_greet = [s for s in sentences if not _greeting.search(s)]
+    request_sents = [s for s in non_greet if _request_kw.search(s)]
+    _summary_src = request_sents[0] if request_sents else (non_greet[0] if non_greet else (sentences[0] if sentences else ""))
+    summary = _summary_src[:60] if _summary_src else "요청 메시지 분석 완료"
     result.intent = Intent(summary=summary, tone=tone, expected_response="회신 또는 자료 제출")
 
     # 신뢰도
@@ -533,6 +564,9 @@ def _parse_llm_response(raw: str, text: str, today: Optional[date] = None) -> Pa
     # 날짜 보강 — LLM이 한국어 날짜를 ISO로 변환 못 했을 때
     if result.deadline.raw_text and not result.deadline.parsed_date:
         result.deadline.parsed_date = parse_korean_date(result.deadline.raw_text, today)
+    # 시간 보강 — LLM이 time_text를 채우지 않은 경우
+    if result.deadline.raw_text and not result.deadline.time_text:
+        result.deadline.time_text = parse_korean_time(result.deadline.raw_text)
 
     return result
 

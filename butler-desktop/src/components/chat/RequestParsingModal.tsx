@@ -5,7 +5,7 @@ import {
   Inbox,
   X,
   Clipboard,
-  FolderOpen,
+  Paperclip,
   ThumbsUp,
   ThumbsDown,
   AlertCircle,
@@ -13,6 +13,8 @@ import {
   Download,
   Copy,
   AlertTriangle,
+  MessageCircle,
+  RotateCw,
 } from 'lucide-react';
 import { SIDECAR_BASE } from '../../constants';
 
@@ -28,7 +30,7 @@ interface ActionItem {
 
 interface ParseResult {
   actions: ActionItem[];
-  deadline: { raw_text: string; parsed_date: string | null; confidence: number };
+  deadline: { raw_text: string; parsed_date: string | null; confidence: number; time_text?: string };
   required_materials: { name: string; is_optional: boolean; rationale?: string }[];
   intent: { summary: string; tone: string; expected_response: string };
   confidence: number;
@@ -289,7 +291,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
           <div className="flex items-center gap-2">
@@ -308,32 +310,43 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
           {/* Input area */}
           {phase.kind === 'idle' && (
             <div className="p-5 space-y-3">
+              {/* Text input zone */}
               <div
-                className="border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-blue-300 transition-colors"
+                className="border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-blue-300 transition-colors bg-gray-50/40"
                 onDrop={handleDrop}
                 onDragOver={(e) => e.preventDefault()}
               >
                 <textarea
-                  className="w-full min-h-[140px] resize-none text-sm text-gray-700 placeholder-gray-300 focus:outline-none"
-                  placeholder="메일·메시지를 여기에 붙여넣거나 파일을 드래그하세요&#10;(.txt .md .docx .pdf .eml 지원)"
+                  className="w-full min-h-[300px] resize-none text-sm text-gray-700 placeholder-gray-400 focus:outline-none bg-transparent leading-relaxed"
+                  placeholder={'메일·메시지를 여기에 붙여넣거나 파일을 드래그하세요\n(.txt .md .docx .pdf .eml 지원)'}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                 />
               </div>
-              <div className="flex gap-2">
+
+              {/* Character count — always visible */}
+              <p className={`text-xs text-right ${text.length > 3800 ? 'text-orange-500 font-medium' : 'text-gray-400'}`}>
+                {text.length.toLocaleString()} / 4,000
+              </p>
+
+              {/* Action buttons — vertical hierarchy */}
+              <div className="space-y-2 pt-1 border-t border-gray-100">
+                {/* 1순위: 클립보드 붙여넣기 */}
                 <button
                   onClick={handlePaste}
-                  className="flex-1 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+                  className="w-full py-3 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-colors rounded-xl flex items-center justify-center gap-2 shadow-sm"
                 >
-                  <Clipboard size={12} />
+                  <Clipboard size={16} />
                   클립보드 붙여넣기
                 </button>
+
+                {/* 2순위: 파일 첨부 */}
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex-1 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+                  className="w-full py-2.5 text-sm text-gray-600 border border-gray-200 bg-white hover:bg-gray-50 transition-colors rounded-xl flex items-center justify-center gap-2"
                 >
-                  <FolderOpen size={12} />
-                  파일 선택
+                  <Paperclip size={15} />
+                  파일 첨부 (.txt · .md · .docx · .pdf · .eml)
                 </button>
                 <input
                   ref={fileInputRef}
@@ -346,9 +359,6 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                   }}
                 />
               </div>
-              {text.length > 0 && (
-                <p className="text-xs text-gray-400 text-right">{text.length.toLocaleString()}자</p>
-              )}
             </div>
           )}
 
@@ -384,8 +394,11 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
 
               {/* Intent */}
               <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-xs font-semibold text-gray-500 mb-1">발신자 의도</p>
-                <p className="text-sm text-gray-800">{phase.result.intent.summary}</p>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <MessageCircle size={13} className="text-gray-400 shrink-0" />
+                  <p className="text-xs font-semibold text-gray-500">발신자 의도</p>
+                </div>
+                <p className="text-sm text-gray-800 font-medium leading-snug">{phase.result.intent.summary}</p>
                 <div className="flex gap-3 mt-2 text-xs text-gray-400">
                   <span>톤: {phase.result.intent.tone}</span>
                   {phase.result.intent.expected_response && (
@@ -400,9 +413,14 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                   <Calendar size={18} className="text-yellow-500 shrink-0 mt-0.5" />
                   <div>
                     <p className="text-xs font-semibold text-yellow-700">마감일</p>
-                    <p className="text-sm text-gray-800">{phase.result.deadline.raw_text}</p>
-                    {phase.result.deadline.parsed_date && (
-                      <p className="text-xs text-yellow-600 mt-0.5">{phase.result.deadline.parsed_date}</p>
+                    <p className="text-sm text-gray-800">
+                      {phase.result.deadline.raw_text}
+                      {phase.result.deadline.time_text ? ` ${phase.result.deadline.time_text}까지` : ''}
+                    </p>
+                    {(phase.result.deadline.parsed_date || phase.result.deadline.time_text) && (
+                      <p className="text-xs text-yellow-600 mt-0.5">
+                        {[phase.result.deadline.parsed_date, phase.result.deadline.time_text].filter(Boolean).join(' ')}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -436,10 +454,15 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                 </div>
               )}
 
-              {/* Materials */}
-              {phase.result.required_materials.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 mb-2">필요 자료</p>
+              {/* Materials — always render */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Paperclip size={13} className="text-gray-400 shrink-0" />
+                  <p className="text-xs font-semibold text-gray-500">필요 자료</p>
+                </div>
+                {phase.result.required_materials.length === 0 ? (
+                  <p className="text-sm text-gray-400 italic">필요 자료 명시 X</p>
+                ) : (
                   <div className="space-y-1">
                     {phase.result.required_materials.map((mat, i) => (
                       <div key={i} className="flex items-center gap-2 text-sm text-gray-700 py-0.5">
@@ -451,8 +474,8 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Feedback */}
               <div className="flex items-center justify-between pt-2 border-t border-gray-100">
@@ -499,7 +522,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
             <button
               onClick={handleSubmit}
               disabled={text.trim().length < 30}
-              className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-xl transition-colors"
+              className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-400 text-white text-base font-semibold rounded-xl transition-colors shadow-sm disabled:shadow-none"
             >
               분석하기
             </button>
@@ -529,8 +552,9 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
               </button>
               <button
                 onClick={() => { setPhase({ kind: 'idle' }); setText(''); }}
-                className="flex-1 py-2 text-sm text-blue-500 border border-blue-200 rounded-xl hover:bg-blue-50 transition-colors"
+                className="flex-1 py-2 text-sm text-blue-500 border border-blue-200 rounded-xl hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5"
               >
+                <RotateCw size={14} />
                 새 분석
               </button>
             </>
