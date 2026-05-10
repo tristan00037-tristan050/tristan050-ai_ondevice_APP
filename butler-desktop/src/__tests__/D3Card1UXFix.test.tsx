@@ -146,4 +146,71 @@ describe('D-3 Card 1 UX Fix', () => {
     const p2Container = p2Label.closest('.border.rounded-xl');
     expect(p2Container?.className).toContain('text-orange-600');
   });
+
+  it('test_action_full_text_displayed', async () => {
+    const LONG_ACTION = '이번 분기 실적 보고서 작성 및 제출과 함께 손익계산서 항목별 분석 자료를 최대한 상세하게 준비해 주시기 바랍니다';
+    const withLongAction = {
+      ...BASE_RESULT,
+      actions: [{ text: LONG_ACTION, priority: 'P1' as const, rationale: '긴급 요청' }],
+    };
+    (global.fetch as ReturnType<typeof vi.fn>) = mockComplete(withLongAction);
+
+    render(<RequestParsingModal onClose={() => {}} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: LONG_INPUT } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '분석하기' }));
+    });
+
+    await waitFor(() => {
+      // 50자 이상의 액션 텍스트가 잘리지 않고 전체 표시되어야 함
+      expect(screen.getByText(LONG_ACTION)).toBeTruthy();
+    });
+  });
+
+  it('test_required_files_separated_from_actions', async () => {
+    const withBoth = {
+      ...BASE_RESULT,
+      required_materials: [{ name: '손익계산서 파일', is_optional: false, rationale: '첨부 요청' }],
+      actions: [{ text: '계약서 검토 및 날인', priority: 'P1' as const, rationale: '긴급' }],
+    };
+    (global.fetch as ReturnType<typeof vi.fn>) = mockComplete(withBoth);
+
+    render(<RequestParsingModal onClose={() => {}} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: LONG_INPUT } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '분석하기' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('손익계산서 파일')).toBeTruthy();
+      expect(screen.getByText('계약서 검토 및 날인')).toBeTruthy();
+    });
+
+    // 자료명이 P1 액션 카드 안에 포함되지 않아야 함
+    const p1Label = screen.getByText('P1 긴급');
+    const actionCard = p1Label.closest('.border.rounded-xl');
+    expect(actionCard?.textContent).not.toContain('손익계산서 파일');
+  });
+
+  it('test_deadline_with_time_format', async () => {
+    const withDateTime = {
+      ...BASE_RESULT,
+      deadline: { raw_text: '다음 주 화요일', parsed_date: '2026-05-12', confidence: 0.9, time_text: '오후 3시' },
+    };
+    (global.fetch as ReturnType<typeof vi.fn>) = mockComplete(withDateTime);
+
+    render(<RequestParsingModal onClose={() => {}} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: LONG_INPUT } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '분석하기' }));
+    });
+
+    await waitFor(() => {
+      // parsed_date + time_text가 "2026-05-12 오후 3시" 형식으로 합쳐서 렌더링되어야 함
+      expect(screen.getByText('2026-05-12 오후 3시')).toBeTruthy();
+    });
+  });
 });
