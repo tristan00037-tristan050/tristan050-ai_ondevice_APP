@@ -506,18 +506,23 @@ def _heuristic_parse(text: str, today: Optional[date] = None) -> ParsedResult:
                 if len(result.actions) >= 3:
                     break
 
-    # 필요 자료 추출 — 명사형 자료명만 추출 (동사형 "첨부"/"별첨" 접미사 제외)
-    # 자료 뒤에 오는 문맥이 액션 요청(검토/확인 등)이면 제외, 전달 요청(첨부/보내 등)이면 포함
+    # 필요 자료 추출 — 동사형 접미사("첨부"/"별첨") 제외, 액션 문맥 자료명 제외
+    # "계약서|계산서|신청서|확인서" 계열 추가; 자료명에서 마감일 접두 표현 제거
     _mat_pattern = re.compile(
-        r"([\w\s]{1,20}(?:자료|데이터|파일|문서|견적|보고서|서류|서식|양식|명세서|청구서|영수증|목록|리스트|표|내역|기안|계획서|제안서))"
+        r"([\w\s]{1,20}(?:자료|데이터|파일|문서|견적|보고서|서류|서식|양식|명세서|청구서|영수증|목록|리스트|표|내역|기안|계획서|제안서|계약서|계산서|신청서|확인서))"
     )
     _action_ctx_re = re.compile(
         r"(?:작성|제출|확인|검토|날인|서명|완료|처리|수정|진행)\s*(?:해|해주|드리|부탁|요청|바랍|주세요|주시면|합니다|드립니다)"
     )
     _delivery_ctx_re = re.compile(r"첨부|보내|전달|제공|공유")
+    _date_prefix_re = re.compile(r"^[\w\s가-힣]*?(?:까지|이전)\s*")
     seen_mat: set[str] = set()
     for m in _mat_pattern.finditer(text):
         name = m.group(1).strip()[:40]
+        if not name or len(name) <= 3:
+            continue
+        # 자료명에 마감일 표현이 포함된 경우 제거 ("이번 주 금요일까지 손익계산서 파일" → "손익계산서 파일")
+        name = _date_prefix_re.sub("", name).strip()
         if not name or len(name) <= 3:
             continue
         ctx = text[m.end():min(len(text), m.end() + 50)]
@@ -542,7 +547,21 @@ def _heuristic_parse(text: str, today: Optional[date] = None) -> ParsedResult:
     non_greet = [s for s in sentences if not _greeting.search(s)]
     request_sents = [s for s in non_greet if _request_kw.search(s)]
     _summary_src = request_sents[0] if request_sents else (non_greet[0] if non_greet else (sentences[0] if sentences else ""))
-    summary = _summary_src[:60] if _summary_src else "요청 메시지 분석 완료"
+
+    # 의도 요약 정제 — 마감일 표현 + 정중어법 제거하여 핵심 동사구만 추출
+    _dl_strip_re = re.compile(r"^[\w\s가-힣]*?(?:까지|이전)\s*", re.UNICODE)
+    _polite_strip_re = re.compile(
+        r"\s*(?:\S+\s+){1,2}(?:부탁드립니다|감사하겠습니다|요청드립니다|바랍니다|주세요|드립니다|드리겠습니다|부탁합니다).*$",
+        re.UNICODE,
+    )
+    _trailing_re = re.compile(r"(?:\s*(?:및|그리고|또한)|(?:도|은|는|이|가|을|를))$", re.UNICODE)
+    if _summary_src:
+        clean = _dl_strip_re.sub("", _summary_src).strip()
+        clean = _polite_strip_re.sub("", clean).strip()
+        clean = _trailing_re.sub("", clean).strip()
+        summary = (clean if len(clean) >= 5 else _summary_src)[:60]
+    else:
+        summary = "요청 메시지 분석 완료"
     result.intent = Intent(summary=summary, tone=tone, expected_response="회신 또는 자료 제출")
 
     # 신뢰도

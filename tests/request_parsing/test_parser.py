@@ -242,3 +242,43 @@ def test_streaming_last_chunk_received():
     d = result.to_dict()
     assert "time_text" in d["deadline"], "to_dict()에 deadline.time_text 필드 누락"
     assert d["deadline"]["time_text"] == result.deadline.time_text
+
+
+# ── 4차 정정: 의도 요약 정제 + 자료명 결함 ────────────────────────────────────
+
+def test_intent_summary_excludes_deadline_and_polite():
+    # 마감일 + 정중어법이 제거된 핵심 내용만 summary에 포함되어야 함
+    text = (
+        "다음 주 화요일 오후 3시까지 계약서 검토 및 날인을 부탁드립니다. "
+        "빠른 회신 부탁드립니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 10))
+    assert "다음 주 화요일" not in result.intent.summary, \
+        f"마감일 표현이 intent summary에 포함됨: {result.intent.summary!r}"
+    assert "부탁드립니다" not in result.intent.summary, \
+        f"정중어법이 intent summary에 포함됨: {result.intent.summary!r}"
+    assert len(result.intent.summary) >= 3
+
+
+def test_material_from_calcsheet_attachment():
+    # "손익계산서도 첨부해 주시기 바랍니다" → 손익계산서가 필요 자료로 추출되어야 함
+    text = (
+        "다음 주 화요일까지 손익계산서도 첨부해 주시기 바랍니다. 확인 부탁드립니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 10))
+    mat_names = [m.name for m in result.required_materials]
+    assert any("계산서" in n or "손익" in n for n in mat_names), \
+        f"손익계산서가 필요 자료에 없음: {mat_names}"
+
+
+def test_material_name_excludes_date_prefix():
+    # 자료명에 마감일 표현("이번 주 금요일까지")이 포함되지 않아야 함
+    text = (
+        "이번 주 금요일까지 손익계산서 파일도 첨부해 주시기 바랍니다. "
+        "검토 후 피드백 드리겠습니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 10))
+    mat_names = [m.name for m in result.required_materials]
+    for name in mat_names:
+        assert "금요일" not in name, f"자료명에 날짜 표현 포함: {name!r}"
+        assert "까지" not in name, f"자료명에 마감일 표현 포함: {name!r}"
