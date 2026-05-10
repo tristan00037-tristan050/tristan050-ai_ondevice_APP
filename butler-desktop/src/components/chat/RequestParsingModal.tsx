@@ -95,12 +95,14 @@ function ConfidenceGauge({ value }: { value: number }) {
 
 export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
   const [text, setText] = useState('');
+  const [selectedFileName, setSelectedFileName] = useState<string>('');
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [feedback, setFeedback] = useState<'positive' | 'negative' | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
+    setSelectedFileName(file.name);
     const ext = (file.name.split('.').pop() ?? '').toLowerCase();
     if (ext === 'txt' || ext === 'md') {
       const reader = new FileReader();
@@ -285,84 +287,170 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
     }
   };
 
+  const canAnalyze = text.trim().length >= 30;
+
   return (
+    /* ── 오버레이 (인라인 style — AccountingModal 동일 패턴, Tauri WebView 호환) ── */
     <div
       data-testid="request-parsing-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      style={{
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 flex flex-col max-h-[90vh]">
+      {/* ── 다이얼로그 컨테이너 ── */}
+      <div
+        style={{
+          backgroundColor: 'white',
+          borderRadius: '16px',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+          width: '100%',
+          maxWidth: '896px',
+          margin: '0 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          maxHeight: '85vh',
+          overflow: 'hidden',
+        }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <Inbox size={20} className="text-blue-500" />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #f3f4f6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Inbox size={22} style={{ color: '#2563eb' }} />
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">요청 핵심 파악·정리</h2>
-              <p className="text-xs text-gray-400 mt-0.5">메일·메시지를 붙여넣으면 핵심 액션을 정리해 드립니다</p>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0 }}>요청 핵심 파악·정리</h2>
+              <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px', marginBottom: 0 }}>메일·메시지를 붙여넣으면 핵심 액션을 정리해 드립니다</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="닫기">
-            <X size={20} />
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '8px', color: '#9ca3af', display: 'flex' }}
+          >
+            <X size={22} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {/* Input area */}
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+
+          {/* ── Input area ── */}
           {phase.kind === 'idle' && (
-            <div className="p-5 space-y-3">
-              {/* Text input zone */}
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+              {/* Textarea zone */}
               <div
-                className="border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-blue-300 transition-colors bg-gray-50/40"
+                style={{ border: '2px dashed #e5e7eb', borderRadius: '12px', padding: '16px', backgroundColor: '#f9fafb' }}
                 onDrop={handleDrop}
                 onDragOver={(e) => e.preventDefault()}
               >
                 <textarea
-                  className="w-full min-h-[300px] resize-none text-sm text-gray-700 placeholder-gray-400 focus:outline-none bg-transparent leading-relaxed"
+                  rows={15}
+                  style={{
+                    width: '100%',
+                    minHeight: '400px',
+                    resize: 'vertical',
+                    fontSize: '14px',
+                    lineHeight: '1.6',
+                    color: '#374151',
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box',
+                  }}
                   placeholder={'메일·메시지를 여기에 붙여넣거나 파일을 드래그하세요\n(.txt .md .docx .pdf .eml 지원)'}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                 />
               </div>
 
-              {/* Character count — always visible */}
-              <p className={`text-xs text-right ${text.length > 3800 ? 'text-orange-500 font-medium' : 'text-gray-400'}`}>
+              {/* Character count */}
+              <p style={{ textAlign: 'right', fontSize: '12px', color: text.length > 3800 ? '#f97316' : '#9ca3af', fontWeight: text.length > 3800 ? 600 : 400, margin: 0 }}>
                 {text.length.toLocaleString()} / 4,000
               </p>
 
-              {/* Action buttons — vertical hierarchy */}
-              <div className="space-y-2 pt-1 border-t border-gray-100">
-                {/* 1순위: 클립보드 붙여넣기 */}
+              {/* Buttons */}
+              <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {/* 1순위: 클립보드 붙여넣기 — primary */}
                 <button
+                  data-testid="clipboard-paste-btn"
                   onClick={handlePaste}
-                  className="w-full py-3 text-sm font-semibold text-white bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-colors rounded-xl flex items-center justify-center gap-2 shadow-sm"
+                  style={{
+                    width: '100%',
+                    padding: '14px 24px',
+                    backgroundColor: '#2563eb',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
                 >
-                  <Clipboard size={16} />
+                  <Clipboard size={18} />
                   클립보드 붙여넣기
                 </button>
 
-                {/* 2순위: 파일 첨부 */}
+                {/* 2순위: 파일 첨부 — secondary */}
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full py-2.5 text-sm text-gray-600 border border-gray-200 bg-white hover:bg-gray-50 transition-colors rounded-xl flex items-center justify-center gap-2"
+                  style={{
+                    width: '100%',
+                    padding: '12px 24px',
+                    backgroundColor: '#f3f4f6',
+                    color: '#374151',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '12px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
                 >
-                  <Paperclip size={15} />
+                  <Paperclip size={16} />
                   파일 첨부 (.txt · .md · .docx · .pdf · .eml)
                 </button>
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept={ACCEPT_FORMATS}
-                  className="hidden"
+                  style={{ display: 'none' }}
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (f) handleFile(f);
                   }}
                 />
+
+                {/* File state */}
+                {selectedFileName ? (
+                  <p style={{ fontSize: '13px', color: '#4b5563', margin: 0 }}>
+                    선택됨: <strong>{selectedFileName}</strong>
+                  </p>
+                ) : (
+                  <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>선택된 파일 X</p>
+                )}
               </div>
             </div>
           )}
 
-          {/* Processing */}
+          {/* ── Processing ── */}
           {phase.kind === 'processing' && (
             <div className="p-8 flex flex-col items-center gap-4">
               <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
@@ -372,22 +460,16 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
               </div>
               <div className="flex gap-1 mt-1">
                 {[1, 2, 3, 4].map((n) => (
-                  <div
-                    key={n}
-                    className={`w-2 h-2 rounded-full ${n <= phase.phaseNum ? 'bg-blue-500' : 'bg-gray-200'}`}
-                  />
+                  <div key={n} className={`w-2 h-2 rounded-full ${n <= phase.phaseNum ? 'bg-blue-500' : 'bg-gray-200'}`} />
                 ))}
               </div>
-              <button
-                onClick={handleCancel}
-                className="mt-2 text-xs text-gray-400 hover:text-gray-600 underline"
-              >
+              <button onClick={handleCancel} className="mt-2 text-xs text-gray-400 hover:text-gray-600 underline">
                 취소
               </button>
             </div>
           )}
 
-          {/* Result */}
+          {/* ── Result ── */}
           {phase.kind === 'done' && (
             <div className="p-5 space-y-4">
               <ConfidenceGauge value={phase.result.confidence} />
@@ -500,29 +582,37 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
             </div>
           )}
 
-          {/* Error */}
+          {/* ── Error ── */}
           {phase.kind === 'error' && (
             <div className="p-6 text-center">
               <AlertTriangle size={36} className="text-red-400 mx-auto mb-3" />
               <p className="text-sm text-red-600 font-medium mb-1">파싱 오류</p>
               <p className="text-xs text-gray-500 mb-4">{phase.message}</p>
-              <button
-                onClick={() => setPhase({ kind: 'idle' })}
-                className="text-xs text-blue-500 hover:underline"
-              >
+              <button onClick={() => setPhase({ kind: 'idle' })} className="text-xs text-blue-500 hover:underline">
                 다시 시도
               </button>
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-100 flex gap-2">
+        {/* ── Footer ── */}
+        <div style={{ padding: '16px 24px', borderTop: '1px solid #f3f4f6', display: 'flex', gap: '8px' }}>
           {phase.kind === 'idle' && (
             <button
               onClick={handleSubmit}
-              disabled={text.trim().length < 30}
-              className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-400 text-white text-base font-semibold rounded-xl transition-colors shadow-sm disabled:shadow-none"
+              disabled={!canAnalyze}
+              style={{
+                flex: 1,
+                width: '100%',
+                padding: '16px 24px',
+                backgroundColor: canAnalyze ? '#2563eb' : '#d1d5db',
+                color: canAnalyze ? 'white' : '#6b7280',
+                border: 'none',
+                borderRadius: '12px',
+                fontSize: '17px',
+                fontWeight: 700,
+                cursor: canAnalyze ? 'pointer' : 'not-allowed',
+              }}
             >
               분석하기
             </button>
@@ -551,7 +641,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                 .docx
               </button>
               <button
-                onClick={() => { setPhase({ kind: 'idle' }); setText(''); }}
+                onClick={() => { setPhase({ kind: 'idle' }); setText(''); setSelectedFileName(''); }}
                 className="flex-1 py-2 text-sm text-blue-500 border border-blue-200 rounded-xl hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5"
               >
                 <RotateCw size={14} />
@@ -559,8 +649,11 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
               </button>
             </>
           )}
-          {(phase.kind === 'error') && (
-            <button onClick={onClose} className="flex-1 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+          {phase.kind === 'error' && (
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+            >
               닫기
             </button>
           )}

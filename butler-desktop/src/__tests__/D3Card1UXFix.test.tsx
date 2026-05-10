@@ -44,8 +44,9 @@ describe('D-3 Card 1 UX Fix', () => {
   it('test_modal_input_area_min_12_lines', () => {
     render(<RequestParsingModal onClose={() => {}} />);
     const textarea = screen.getByRole('textbox');
-    // min-h-[300px] corresponds to ≥12 lines at standard line-height
-    expect(textarea.className).toContain('min-h-[300px]');
+    // rows={15} ensures minimum 15 lines; inline style minHeight 400px
+    expect(textarea.getAttribute('rows')).toBe('15');
+    expect(textarea.style.minHeight).toBe('400px');
   });
 
   it('test_action_text_not_in_required_files', async () => {
