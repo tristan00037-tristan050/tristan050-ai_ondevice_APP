@@ -282,3 +282,54 @@ def test_material_name_excludes_date_prefix():
     for name in mat_names:
         assert "금요일" not in name, f"자료명에 날짜 표현 포함: {name!r}"
         assert "까지" not in name, f"자료명에 마감일 표현 포함: {name!r}"
+
+
+# ── 5차 정정: 의문문 의도 + 인사말 처리 + 쉼표 마감일 ────────────────────────
+
+_T1_TEXT = (
+    "안녕하세요 김 대리님, 다음 주 화요일까지 A안과 B안 비교 자료를 정리해 주실 수 있을까요? "
+    "특히 비용 차이와 도입 일정 차이를 명확히 보여주는 표가 있으면 좋겠습니다. "
+    "늦어도 화요일 오후 3시까지 받았으면 합니다. 박 부장 드림"
+)
+
+
+def test_intent_question_form_summarized():
+    # "주실 수 있을까요?" 의문문 어미가 intent summary에서 제거되어야 함
+    result = parse_text(_T1_TEXT, today=date(2026, 5, 10))
+    assert "주실 수 있을까요" not in result.intent.summary, \
+        f"의문문 어미가 summary에 포함됨: {result.intent.summary!r}"
+    assert len(result.intent.summary) >= 3
+
+
+def test_intent_long_text_with_greeting_extracted():
+    # 인사말("안녕하세요")로 시작하는 긴 문장 → 30자 초과이므로 필터하지 않고 요청 내용 추출
+    text = (
+        "안녕하세요 이 팀장님, 이번 주 금요일까지 예산 계획서를 작성해 주시면 감사하겠습니다. "
+        "빠른 회신 부탁드립니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 10))
+    assert "예산 계획서" in result.intent.summary or "작성" in result.intent.summary, \
+        f"인사말 문장의 요청 내용이 summary에 없음: {result.intent.summary!r}"
+
+
+def test_deadline_prefix_comma_stripped():
+    # 마감일 앞에 쉼표("김 대리님, 다음 주...")가 있어도 dl_strip 정상 작동
+    text = (
+        "안녕하세요 김 대리님, 다음 주 화요일까지 실적 자료를 제출해 주시기 바랍니다. "
+        "감사합니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 10))
+    assert "다음 주 화요일" not in result.intent.summary, \
+        f"마감일 표현이 summary에 포함됨: {result.intent.summary!r}"
+    assert len(result.intent.summary) >= 3
+
+
+def test_intent_question_form_dl_prefix_both_stripped():
+    # 마감일 접두어 + 의문문 어미가 모두 포함된 경우 둘 다 제거되어야 함
+    text = "다음 주 금요일까지 예산안 검토를 완료해 주실 수 있을까요? 빠른 회신 부탁드립니다."
+    result = parse_text(text, today=date(2026, 5, 10))
+    assert "다음 주 금요일" not in result.intent.summary, \
+        f"마감일 표현이 포함됨: {result.intent.summary!r}"
+    assert "주실 수 있을까요" not in result.intent.summary, \
+        f"의문문 어미가 포함됨: {result.intent.summary!r}"
+    assert len(result.intent.summary) >= 3

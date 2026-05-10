@@ -214,3 +214,63 @@ describe('D-3 Card 1 UX Fix', () => {
     });
   });
 });
+
+// ── 5차 정정: 로딩 UI (Loader2 스피너 + 4단계 표시 + 중앙 정렬) ──────────────
+
+describe('D-3 Card 1 Loading UI', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.unstubAllGlobals();
+    global.fetch = vi.fn();
+  });
+
+  function neverFetch() {
+    (global.fetch as ReturnType<typeof vi.fn>) = vi.fn().mockReturnValue(new Promise(() => {}));
+  }
+
+  it('test_loading_modal_has_spinner_animation', async () => {
+    neverFetch();
+    render(<RequestParsingModal onClose={() => {}} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: LONG_INPUT } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '분석하기' }));
+    });
+
+    await waitFor(() => screen.getByTestId('loading-spinner'));
+    const spinner = screen.getByTestId('loading-spinner');
+    // Lucide Loader2 with animate-spin class
+    expect(spinner.getAttribute('class')).toContain('animate-spin');
+  });
+
+  it('test_progress_bar_4_steps_visible', async () => {
+    neverFetch();
+    render(<RequestParsingModal onClose={() => {}} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: LONG_INPUT } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '분석하기' }));
+    });
+
+    await waitFor(() => screen.getByTestId('progress-steps'));
+    const stepsEl = screen.getByTestId('progress-steps');
+    // 4 step circles marked with data-step attribute
+    expect(stepsEl.querySelectorAll('[data-step]').length).toBe(4);
+  });
+
+  it('test_loading_text_centered', async () => {
+    neverFetch();
+    render(<RequestParsingModal onClose={() => {}} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: LONG_INPUT } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '분석하기' }));
+    });
+
+    await waitFor(() => screen.getByTestId('loading-container'));
+    const container = screen.getByTestId('loading-container');
+    expect(container.style.display).toBe('flex');
+    expect(container.style.flexDirection).toBe('column');
+    expect(container.style.alignItems).toBe('center');
+  });
+});

@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   MessageCircle,
   RotateCw,
+  Loader2,
 } from 'lucide-react';
 import { SIDECAR_BASE } from '../../constants';
 
@@ -452,18 +453,89 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
 
           {/* ── Processing ── */}
           {phase.kind === 'processing' && (
-            <div className="p-8 flex flex-col items-center gap-4">
-              <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
-              <div className="text-center">
-                <p className="text-sm font-medium text-gray-700">{phase.status}</p>
-                <p className="text-xs text-gray-400 mt-1">단계 {phase.phaseNum}/4</p>
+            <div
+              data-testid="loading-container"
+              style={{
+                padding: '48px 32px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '24px',
+                minHeight: '300px',
+              }}
+            >
+              <Loader2
+                data-testid="loading-spinner"
+                size={64}
+                className="animate-spin"
+                style={{ color: '#2563eb' }}
+              />
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '18px', fontWeight: 600, color: '#111827', margin: 0 }}>{phase.status}</p>
+                <p style={{ fontSize: '13px', color: '#9ca3af', marginTop: '6px', marginBottom: 0 }}>단계 {phase.phaseNum} / 4</p>
               </div>
-              <div className="flex gap-1 mt-1">
-                {[1, 2, 3, 4].map((n) => (
-                  <div key={n} className={`w-2 h-2 rounded-full ${n <= phase.phaseNum ? 'bg-blue-500' : 'bg-gray-200'}`} />
+
+              {/* 4-step indicator with ✓ for completed steps */}
+              <div
+                data-testid="progress-steps"
+                style={{ display: 'flex', alignItems: 'center', width: '100%', maxWidth: '320px' }}
+              >
+                {[1, 2, 3, 4].map((n, idx) => (
+                  <React.Fragment key={n}>
+                    <div
+                      data-step={n}
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: n <= phase.phaseNum ? '#2563eb' : '#e5e7eb',
+                        color: n <= phase.phaseNum ? 'white' : '#9ca3af',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {n < phase.phaseNum ? '✓' : n}
+                    </div>
+                    {idx < 3 && (
+                      <div style={{
+                        flex: 1,
+                        height: '3px',
+                        backgroundColor: n < phase.phaseNum ? '#2563eb' : '#e5e7eb',
+                      }} />
+                    )}
+                  </React.Fragment>
                 ))}
               </div>
-              <button onClick={handleCancel} className="mt-2 text-xs text-gray-400 hover:text-gray-600 underline">
+
+              {/* linear progress bar */}
+              <div style={{ width: '100%', maxWidth: '320px', height: '4px', backgroundColor: '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${(phase.phaseNum / 4) * 100}%`,
+                  backgroundColor: '#2563eb',
+                  borderRadius: '2px',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+
+              <button
+                onClick={handleCancel}
+                style={{
+                  padding: '10px 24px',
+                  border: '1.5px solid #d1d5db',
+                  borderRadius: '10px',
+                  background: 'white',
+                  color: '#374151',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
                 취소
               </button>
             </div>

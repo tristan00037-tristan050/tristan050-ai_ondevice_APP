@@ -542,16 +542,18 @@ def _heuristic_parse(text: str, today: Optional[date] = None) -> ParsedResult:
     tone = "urgent" if is_urgent else ("formal" if is_formal else "informal")
 
     _greeting = re.compile(r"^(안녕|수고|감사|죄송|좋은|바쁜|처음)")
-    _request_kw = re.compile(r"부탁|요청|드립니다|바랍니다|주세요|해주시면|검토|제출|확인|보내|작성|첨부")
+    _request_kw = re.compile(r"부탁|요청|드립니다|바랍니다|주세요|해주시면|검토|제출|확인|보내|작성|첨부|주실|주시겠|있을까요|해주실")
     sentences = [s.strip() for s in re.split(r"[.!?。\n]+", text) if len(s.strip()) > 10]
-    non_greet = [s for s in sentences if not _greeting.search(s)]
+    # 인사말로 시작해도 30자 초과 문장은 요청 내용이 포함될 수 있으므로 유지
+    non_greet = [s for s in sentences if not _greeting.search(s) or len(s) > 30]
     request_sents = [s for s in non_greet if _request_kw.search(s)]
     _summary_src = request_sents[0] if request_sents else (non_greet[0] if non_greet else (sentences[0] if sentences else ""))
 
-    # 의도 요약 정제 — 마감일 표현 + 정중어법 제거하여 핵심 동사구만 추출
-    _dl_strip_re = re.compile(r"^[\w\s가-힣]*?(?:까지|이전)\s*", re.UNICODE)
+    # 의도 요약 정제 — 마감일 표현 + 정중어법 + 의문문 어미 제거하여 핵심 동사구만 추출
+    # ^.+?(?:까지|이전) — 쉼표 포함 어떤 문자도 처리 (기존 [\w\s가-힣] 는 쉼표 미처리)
+    _dl_strip_re = re.compile(r"^.+?(?:까지|이전)\s*", re.UNICODE)
     _polite_strip_re = re.compile(
-        r"\s*(?:\S+\s+){1,2}(?:부탁드립니다|감사하겠습니다|요청드립니다|바랍니다|주세요|드립니다|드리겠습니다|부탁합니다).*$",
+        r"\s*(?:\S+\s+){0,1}(?:부탁드립니다|감사하겠습니다|요청드립니다|바랍니다|주세요|드립니다|드리겠습니다|부탁합니다|주실\s*수\s*있을까요|수\s*있을까요|있을까요|주실까요|주시겠어요|주실래요|있나요)[\?？]?.*$",
         re.UNICODE,
     )
     _trailing_re = re.compile(r"(?:\s*(?:및|그리고|또한)|(?:도|은|는|이|가|을|를))$", re.UNICODE)
