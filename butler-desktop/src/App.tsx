@@ -61,35 +61,47 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    const MAX_SECONDS = 60;
-    const INTERVAL = 1000;
-    let tick = 0;
+    let isReady = false;
+    const MAX_MS = 60_000;
+    const FETCH_ABORT_MS = 1_500;
+    const RETRY_MS = 500;
+    const startMs = Date.now();
 
-    const poll = async () => {
-      if (cancelled) return;
-      setSidecarElapsed(tick);
+    const poll = async (): Promise<void> => {
+      if (cancelled || isReady) return;
+      setSidecarElapsed(Math.floor((Date.now() - startMs) / 1000));
       try {
         const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 2000);
+        const abortHandle = setTimeout(() => ctrl.abort(), FETCH_ABORT_MS);
         const res = await fetch(`${SIDECAR_BASE}/health`, { signal: ctrl.signal });
-        clearTimeout(t);
+        clearTimeout(abortHandle);
         if (!cancelled && res.ok) {
+          isReady = true;
           setSidecarReady(true);
           return;
         }
       } catch {
         // sidecar not yet up — keep polling
       }
-      tick++;
-      if (tick >= MAX_SECONDS) {
-        if (!cancelled) setSidecarFailed(true);
-        return;
+      if (!cancelled && !isReady && Date.now() - startMs < MAX_MS) {
+        await new Promise<void>(r => setTimeout(r, RETRY_MS));
+        return poll();
+      } else if (!cancelled && !isReady) {
+        setSidecarFailed(true);
       }
-      setTimeout(poll, INTERVAL);
     };
 
-    poll();
-    return () => { cancelled = true; };
+    // Hard wall-clock guarantee: sidecarFailed set at exactly 60 s
+    const failTimer = setTimeout(() => {
+      if (!cancelled && !isReady) setSidecarFailed(true);
+    }, MAX_MS);
+
+    poll().finally(() => clearTimeout(failTimer));
+
+    return () => {
+      cancelled = true;
+      clearTimeout(failTimer);
+    };
   }, []);
 
   const activeConv = conversations.find(c => c.id === activeConvId) ?? null;
