@@ -5,7 +5,7 @@ import {
   Inbox,
   X,
   Clipboard,
-  FolderOpen,
+  Paperclip,
   ThumbsUp,
   ThumbsDown,
   AlertCircle,
@@ -13,6 +13,9 @@ import {
   Download,
   Copy,
   AlertTriangle,
+  MessageCircle,
+  RotateCw,
+  Loader2,
 } from 'lucide-react';
 import { SIDECAR_BASE } from '../../constants';
 
@@ -28,7 +31,7 @@ interface ActionItem {
 
 interface ParseResult {
   actions: ActionItem[];
-  deadline: { raw_text: string; parsed_date: string | null; confidence: number };
+  deadline: { raw_text: string; parsed_date: string | null; confidence: number; time_text?: string };
   required_materials: { name: string; is_optional: boolean; rationale?: string }[];
   intent: { summary: string; tone: string; expected_response: string };
   confidence: number;
@@ -93,12 +96,14 @@ function ConfidenceGauge({ value }: { value: number }) {
 
 export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
   const [text, setText] = useState('');
+  const [selectedFileName, setSelectedFileName] = useState<string>('');
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [feedback, setFeedback] = useState<'positive' | 'negative' | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
+    setSelectedFileName(file.name);
     const ext = (file.name.split('.').pop() ?? '').toLowerCase();
     if (ext === 'txt' || ext === 'md') {
       const reader = new FileReader();
@@ -283,109 +288,271 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
     }
   };
 
+  const canAnalyze = text.trim().length >= 30;
+
   return (
+    /* ── 오버레이 (인라인 style — AccountingModal 동일 패턴, Tauri WebView 호환) ── */
     <div
       data-testid="request-parsing-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      style={{
+        position: 'fixed',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[90vh]">
+      {/* ── 다이얼로그 컨테이너 ── */}
+      <div
+        style={{
+          backgroundColor: 'white',
+          borderRadius: '16px',
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+          width: '100%',
+          maxWidth: '896px',
+          margin: '0 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          maxHeight: '85vh',
+          overflow: 'hidden',
+        }}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <Inbox size={20} className="text-blue-500" />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid #f3f4f6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Inbox size={22} style={{ color: '#2563eb' }} />
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">요청 핵심 파악·정리</h2>
-              <p className="text-xs text-gray-400 mt-0.5">메일·메시지를 붙여넣으면 핵심 액션을 정리해 드립니다</p>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0 }}>요청 핵심 파악·정리</h2>
+              <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px', marginBottom: 0 }}>메일·메시지를 붙여넣으면 핵심 액션을 정리해 드립니다</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="닫기">
-            <X size={20} />
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '8px', color: '#9ca3af', display: 'flex' }}
+          >
+            <X size={22} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {/* Input area */}
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+
+          {/* ── Input area ── */}
           {phase.kind === 'idle' && (
-            <div className="p-5 space-y-3">
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+              {/* Textarea zone */}
               <div
-                className="border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-blue-300 transition-colors"
+                style={{ border: '2px dashed #e5e7eb', borderRadius: '12px', padding: '16px', backgroundColor: '#f9fafb' }}
                 onDrop={handleDrop}
                 onDragOver={(e) => e.preventDefault()}
               >
                 <textarea
-                  className="w-full min-h-[140px] resize-none text-sm text-gray-700 placeholder-gray-300 focus:outline-none"
-                  placeholder="메일·메시지를 여기에 붙여넣거나 파일을 드래그하세요&#10;(.txt .md .docx .pdf .eml 지원)"
+                  rows={15}
+                  style={{
+                    width: '100%',
+                    minHeight: '400px',
+                    resize: 'vertical',
+                    fontSize: '14px',
+                    lineHeight: '1.6',
+                    color: '#374151',
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box',
+                  }}
+                  placeholder={'메일·메시지를 여기에 붙여넣거나 파일을 드래그하세요\n(.txt .md .docx .pdf .eml 지원)'}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                 />
               </div>
-              <div className="flex gap-2">
+
+              {/* Character count */}
+              <p style={{ textAlign: 'right', fontSize: '12px', color: text.length > 3800 ? '#f97316' : '#9ca3af', fontWeight: text.length > 3800 ? 600 : 400, margin: 0 }}>
+                {text.length.toLocaleString()} / 4,000
+              </p>
+
+              {/* Buttons */}
+              <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {/* 1순위: 클립보드 붙여넣기 — primary */}
                 <button
+                  data-testid="clipboard-paste-btn"
                   onClick={handlePaste}
-                  className="flex-1 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+                  style={{
+                    width: '100%',
+                    padding: '14px 24px',
+                    backgroundColor: '#2563eb',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
                 >
-                  <Clipboard size={12} />
+                  <Clipboard size={18} />
                   클립보드 붙여넣기
                 </button>
+
+                {/* 2순위: 파일 첨부 — secondary */}
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex-1 py-1.5 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+                  style={{
+                    width: '100%',
+                    padding: '12px 24px',
+                    backgroundColor: '#f3f4f6',
+                    color: '#374151',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '12px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
                 >
-                  <FolderOpen size={12} />
-                  파일 선택
+                  <Paperclip size={16} />
+                  파일 첨부 (.txt · .md · .docx · .pdf · .eml)
                 </button>
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept={ACCEPT_FORMATS}
-                  className="hidden"
+                  style={{ display: 'none' }}
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (f) handleFile(f);
                   }}
                 />
+
+                {/* File state */}
+                {selectedFileName ? (
+                  <p style={{ fontSize: '13px', color: '#4b5563', margin: 0 }}>
+                    선택됨: <strong>{selectedFileName}</strong>
+                  </p>
+                ) : (
+                  <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>선택된 파일 X</p>
+                )}
               </div>
-              {text.length > 0 && (
-                <p className="text-xs text-gray-400 text-right">{text.length.toLocaleString()}자</p>
-              )}
             </div>
           )}
 
-          {/* Processing */}
+          {/* ── Processing ── */}
           {phase.kind === 'processing' && (
-            <div className="p-8 flex flex-col items-center gap-4">
-              <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
-              <div className="text-center">
-                <p className="text-sm font-medium text-gray-700">{phase.status}</p>
-                <p className="text-xs text-gray-400 mt-1">단계 {phase.phaseNum}/4</p>
+            <div
+              data-testid="loading-container"
+              style={{
+                padding: '48px 32px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '24px',
+                minHeight: '300px',
+              }}
+            >
+              <Loader2
+                data-testid="loading-spinner"
+                size={64}
+                className="animate-spin"
+                style={{ color: '#2563eb' }}
+              />
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '18px', fontWeight: 600, color: '#111827', margin: 0 }}>{phase.status}</p>
+                <p style={{ fontSize: '13px', color: '#9ca3af', marginTop: '6px', marginBottom: 0 }}>단계 {phase.phaseNum} / 4</p>
               </div>
-              <div className="flex gap-1 mt-1">
-                {[1, 2, 3, 4].map((n) => (
-                  <div
-                    key={n}
-                    className={`w-2 h-2 rounded-full ${n <= phase.phaseNum ? 'bg-blue-500' : 'bg-gray-200'}`}
-                  />
+
+              {/* 4-step indicator with ✓ for completed steps */}
+              <div
+                data-testid="progress-steps"
+                style={{ display: 'flex', alignItems: 'center', width: '100%', maxWidth: '320px' }}
+              >
+                {[1, 2, 3, 4].map((n, idx) => (
+                  <React.Fragment key={n}>
+                    <div
+                      data-step={n}
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: n <= phase.phaseNum ? '#2563eb' : '#e5e7eb',
+                        color: n <= phase.phaseNum ? 'white' : '#9ca3af',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {n < phase.phaseNum ? '✓' : n}
+                    </div>
+                    {idx < 3 && (
+                      <div style={{
+                        flex: 1,
+                        height: '3px',
+                        backgroundColor: n < phase.phaseNum ? '#2563eb' : '#e5e7eb',
+                      }} />
+                    )}
+                  </React.Fragment>
                 ))}
               </div>
+
+              {/* linear progress bar */}
+              <div style={{ width: '100%', maxWidth: '320px', height: '4px', backgroundColor: '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${(phase.phaseNum / 4) * 100}%`,
+                  backgroundColor: '#2563eb',
+                  borderRadius: '2px',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+
               <button
                 onClick={handleCancel}
-                className="mt-2 text-xs text-gray-400 hover:text-gray-600 underline"
+                style={{
+                  padding: '10px 24px',
+                  border: '1.5px solid #d1d5db',
+                  borderRadius: '10px',
+                  background: 'white',
+                  color: '#374151',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
               >
                 취소
               </button>
             </div>
           )}
 
-          {/* Result */}
+          {/* ── Result ── */}
           {phase.kind === 'done' && (
             <div className="p-5 space-y-4">
               <ConfidenceGauge value={phase.result.confidence} />
 
               {/* Intent */}
               <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-xs font-semibold text-gray-500 mb-1">발신자 의도</p>
-                <p className="text-sm text-gray-800">{phase.result.intent.summary}</p>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <MessageCircle size={13} className="text-gray-400 shrink-0" />
+                  <p className="text-xs font-semibold text-gray-500">발신자 의도</p>
+                </div>
+                <p className="text-sm text-gray-800 font-medium leading-snug">{phase.result.intent.summary}</p>
                 <div className="flex gap-3 mt-2 text-xs text-gray-400">
                   <span>톤: {phase.result.intent.tone}</span>
                   {phase.result.intent.expected_response && (
@@ -400,9 +567,14 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                   <Calendar size={18} className="text-yellow-500 shrink-0 mt-0.5" />
                   <div>
                     <p className="text-xs font-semibold text-yellow-700">마감일</p>
-                    <p className="text-sm text-gray-800">{phase.result.deadline.raw_text}</p>
-                    {phase.result.deadline.parsed_date && (
-                      <p className="text-xs text-yellow-600 mt-0.5">{phase.result.deadline.parsed_date}</p>
+                    <p className="text-sm text-gray-800">
+                      {phase.result.deadline.raw_text}
+                      {phase.result.deadline.time_text ? ` ${phase.result.deadline.time_text}까지` : ''}
+                    </p>
+                    {(phase.result.deadline.parsed_date || phase.result.deadline.time_text) && (
+                      <p className="text-xs text-yellow-600 mt-0.5">
+                        {[phase.result.deadline.parsed_date, phase.result.deadline.time_text].filter(Boolean).join(' ')}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -436,10 +608,15 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                 </div>
               )}
 
-              {/* Materials */}
-              {phase.result.required_materials.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 mb-2">필요 자료</p>
+              {/* Materials — always render */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Paperclip size={13} className="text-gray-400 shrink-0" />
+                  <p className="text-xs font-semibold text-gray-500">필요 자료</p>
+                </div>
+                {phase.result.required_materials.length === 0 ? (
+                  <p className="text-sm text-gray-400 italic">필요 자료 명시 X</p>
+                ) : (
                   <div className="space-y-1">
                     {phase.result.required_materials.map((mat, i) => (
                       <div key={i} className="flex items-center gap-2 text-sm text-gray-700 py-0.5">
@@ -451,8 +628,8 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Feedback */}
               <div className="flex items-center justify-between pt-2 border-t border-gray-100">
@@ -477,29 +654,37 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
             </div>
           )}
 
-          {/* Error */}
+          {/* ── Error ── */}
           {phase.kind === 'error' && (
             <div className="p-6 text-center">
               <AlertTriangle size={36} className="text-red-400 mx-auto mb-3" />
               <p className="text-sm text-red-600 font-medium mb-1">파싱 오류</p>
               <p className="text-xs text-gray-500 mb-4">{phase.message}</p>
-              <button
-                onClick={() => setPhase({ kind: 'idle' })}
-                className="text-xs text-blue-500 hover:underline"
-              >
+              <button onClick={() => setPhase({ kind: 'idle' })} className="text-xs text-blue-500 hover:underline">
                 다시 시도
               </button>
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-100 flex gap-2">
+        {/* ── Footer ── */}
+        <div style={{ padding: '16px 24px', borderTop: '1px solid #f3f4f6', display: 'flex', gap: '8px' }}>
           {phase.kind === 'idle' && (
             <button
               onClick={handleSubmit}
-              disabled={text.trim().length < 30}
-              className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium rounded-xl transition-colors"
+              disabled={!canAnalyze}
+              style={{
+                flex: 1,
+                width: '100%',
+                padding: '16px 24px',
+                backgroundColor: canAnalyze ? '#2563eb' : '#d1d5db',
+                color: canAnalyze ? 'white' : '#6b7280',
+                border: 'none',
+                borderRadius: '12px',
+                fontSize: '17px',
+                fontWeight: 700,
+                cursor: canAnalyze ? 'pointer' : 'not-allowed',
+              }}
             >
               분석하기
             </button>
@@ -528,15 +713,19 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                 .docx
               </button>
               <button
-                onClick={() => { setPhase({ kind: 'idle' }); setText(''); }}
-                className="flex-1 py-2 text-sm text-blue-500 border border-blue-200 rounded-xl hover:bg-blue-50 transition-colors"
+                onClick={() => { setPhase({ kind: 'idle' }); setText(''); setSelectedFileName(''); }}
+                className="flex-1 py-2 text-sm text-blue-500 border border-blue-200 rounded-xl hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5"
               >
+                <RotateCw size={14} />
                 새 분석
               </button>
             </>
           )}
-          {(phase.kind === 'error') && (
-            <button onClick={onClose} className="flex-1 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+          {phase.kind === 'error' && (
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+            >
               닫기
             </button>
           )}

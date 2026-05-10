@@ -179,3 +179,157 @@ def test_result_masked_text_set():
     result = parse_text(text_with_pii, today=date(2026, 5, 8))
     assert "user@company.com" not in result.masked_text
     assert "<email_masked>" in result.masked_text
+
+
+# ── 3차 정정: 텍스트 짤림 + 자료 분리 + 시간 추출 ─────────────────────────────
+
+def test_action_text_not_truncated_on_long_input():
+    long_text = (
+        "안녕하세요. 이번 달 말일까지 이번 분기 전체 실적 데이터를 기반으로 손익계산서 항목별 "
+        "상세 분석 보고서를 작성하고 관련 팀에 배포해 주시기 바랍니다. "
+        "빠른 처리 부탁드립니다."
+    )
+    result = parse_text(long_text, today=date(2026, 5, 8))
+    assert len(result.actions) >= 1
+    for action in result.actions:
+        # 50자 또는 60자 경계에서 정확히 잘린 텍스트가 없어야 함
+        assert len(action.text) not in (50, 60) or not action.text[-1].isalpha(), \
+            f"Action text suspiciously truncated at {len(action.text)} chars: {action.text!r}"
+        assert len(action.text) > 5
+
+
+def test_action_not_in_required_files():
+    # "보고서를 검토해 주시면" — 보고서는 액션 대상, 필요 자료 X
+    text = (
+        "안녕하세요. 다음 주 화요일까지 이번 분기 실적 보고서를 검토해 주시면 감사하겠습니다. "
+        "협조 부탁드립니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 8))
+    mat_names = [m.name for m in result.required_materials]
+    action_ctx_mats = [n for n in mat_names if "보고서" in n]
+    assert len(action_ctx_mats) == 0, \
+        f"액션 문맥의 '보고서'가 필요 자료로 추출됨: {action_ctx_mats}"
+
+
+def test_required_files_extracts_actual_documents():
+    # "파일도 첨부해 주시기 바랍니다" — 실제 자료가 필요 자료로 추출되어야 함
+    result = parse_text(_SAMPLE_MAIL, today=date(2026, 5, 8))
+    mat_names = [m.name for m in result.required_materials]
+    assert any("계산서" in n or "파일" in n for n in mat_names), \
+        f"'손익계산서 파일'이 필요 자료에 없음: {mat_names}"
+
+
+def test_deadline_includes_time():
+    text = (
+        "다음 주 화요일 오후 3시까지 계약서 검토 및 날인을 부탁드립니다. "
+        "빠른 회신 부탁드립니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 8))
+    assert result.deadline.time_text, "time_text가 비어 있음"
+    assert "3시" in result.deadline.time_text, \
+        f"'3시'가 time_text에 없음: {result.deadline.time_text!r}"
+    assert "오후" in result.deadline.time_text, \
+        f"'오후'가 time_text에 없음: {result.deadline.time_text!r}"
+
+
+def test_streaming_last_chunk_received():
+    # to_dict()에 time_text 포함 여부 — SSE 스트리밍 complete 이벤트 직렬화 검증
+    text = (
+        "다음 주 화요일 오후 3시까지 계약서 검토 및 날인을 부탁드립니다. "
+        "빠른 회신 부탁드립니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 8))
+    d = result.to_dict()
+    assert "time_text" in d["deadline"], "to_dict()에 deadline.time_text 필드 누락"
+    assert d["deadline"]["time_text"] == result.deadline.time_text
+
+
+# ── 4차 정정: 의도 요약 정제 + 자료명 결함 ────────────────────────────────────
+
+def test_intent_summary_excludes_deadline_and_polite():
+    # 마감일 + 정중어법이 제거된 핵심 내용만 summary에 포함되어야 함
+    text = (
+        "다음 주 화요일 오후 3시까지 계약서 검토 및 날인을 부탁드립니다. "
+        "빠른 회신 부탁드립니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 10))
+    assert "다음 주 화요일" not in result.intent.summary, \
+        f"마감일 표현이 intent summary에 포함됨: {result.intent.summary!r}"
+    assert "부탁드립니다" not in result.intent.summary, \
+        f"정중어법이 intent summary에 포함됨: {result.intent.summary!r}"
+    assert len(result.intent.summary) >= 3
+
+
+def test_material_from_calcsheet_attachment():
+    # "손익계산서도 첨부해 주시기 바랍니다" → 손익계산서가 필요 자료로 추출되어야 함
+    text = (
+        "다음 주 화요일까지 손익계산서도 첨부해 주시기 바랍니다. 확인 부탁드립니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 10))
+    mat_names = [m.name for m in result.required_materials]
+    assert any("계산서" in n or "손익" in n for n in mat_names), \
+        f"손익계산서가 필요 자료에 없음: {mat_names}"
+
+
+def test_material_name_excludes_date_prefix():
+    # 자료명에 마감일 표현("이번 주 금요일까지")이 포함되지 않아야 함
+    text = (
+        "이번 주 금요일까지 손익계산서 파일도 첨부해 주시기 바랍니다. "
+        "검토 후 피드백 드리겠습니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 10))
+    mat_names = [m.name for m in result.required_materials]
+    for name in mat_names:
+        assert "금요일" not in name, f"자료명에 날짜 표현 포함: {name!r}"
+        assert "까지" not in name, f"자료명에 마감일 표현 포함: {name!r}"
+
+
+# ── 5차 정정: 의문문 의도 + 인사말 처리 + 쉼표 마감일 ────────────────────────
+
+_T1_TEXT = (
+    "안녕하세요 김 대리님, 다음 주 화요일까지 A안과 B안 비교 자료를 정리해 주실 수 있을까요? "
+    "특히 비용 차이와 도입 일정 차이를 명확히 보여주는 표가 있으면 좋겠습니다. "
+    "늦어도 화요일 오후 3시까지 받았으면 합니다. 박 부장 드림"
+)
+
+
+def test_intent_question_form_summarized():
+    # "주실 수 있을까요?" 의문문 어미가 intent summary에서 제거되어야 함
+    result = parse_text(_T1_TEXT, today=date(2026, 5, 10))
+    assert "주실 수 있을까요" not in result.intent.summary, \
+        f"의문문 어미가 summary에 포함됨: {result.intent.summary!r}"
+    assert len(result.intent.summary) >= 3
+
+
+def test_intent_long_text_with_greeting_extracted():
+    # 인사말("안녕하세요")로 시작하는 긴 문장 → 30자 초과이므로 필터하지 않고 요청 내용 추출
+    text = (
+        "안녕하세요 이 팀장님, 이번 주 금요일까지 예산 계획서를 작성해 주시면 감사하겠습니다. "
+        "빠른 회신 부탁드립니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 10))
+    assert "예산 계획서" in result.intent.summary or "작성" in result.intent.summary, \
+        f"인사말 문장의 요청 내용이 summary에 없음: {result.intent.summary!r}"
+
+
+def test_deadline_prefix_comma_stripped():
+    # 마감일 앞에 쉼표("김 대리님, 다음 주...")가 있어도 dl_strip 정상 작동
+    text = (
+        "안녕하세요 김 대리님, 다음 주 화요일까지 실적 자료를 제출해 주시기 바랍니다. "
+        "감사합니다."
+    )
+    result = parse_text(text, today=date(2026, 5, 10))
+    assert "다음 주 화요일" not in result.intent.summary, \
+        f"마감일 표현이 summary에 포함됨: {result.intent.summary!r}"
+    assert len(result.intent.summary) >= 3
+
+
+def test_intent_question_form_dl_prefix_both_stripped():
+    # 마감일 접두어 + 의문문 어미가 모두 포함된 경우 둘 다 제거되어야 함
+    text = "다음 주 금요일까지 예산안 검토를 완료해 주실 수 있을까요? 빠른 회신 부탁드립니다."
+    result = parse_text(text, today=date(2026, 5, 10))
+    assert "다음 주 금요일" not in result.intent.summary, \
+        f"마감일 표현이 포함됨: {result.intent.summary!r}"
+    assert "주실 수 있을까요" not in result.intent.summary, \
+        f"의문문 어미가 포함됨: {result.intent.summary!r}"
+    assert len(result.intent.summary) >= 3

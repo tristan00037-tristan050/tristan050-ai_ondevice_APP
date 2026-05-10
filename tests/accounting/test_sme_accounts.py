@@ -13,12 +13,12 @@ _skip = pytest.mark.skipif(not _PANDAS_OK, reason="pandas 미설치")
 
 # ── 1. 32개 계정과목 등록 확인 ──────────────────────────────────────────────
 def test_sme_32_accounts_registered():
-    """중소기업회계기준 표준 계정과목 32개가 모두 등록돼야 한다 (미분류 제외)."""
+    """중소기업회계기준 표준 계정과목이 모두 등록돼야 한다 (미분류 제외, Phase 7 확장 후 ≥47)."""
     from butler_pc_core.accounting.account_dict import ACCOUNTS
 
     real_accounts = [a for a in ACCOUNTS if a.name != "미분류"]
-    assert len(real_accounts) == 32, (
-        f"계정과목 수 불일치 — 기대: 32, 실제: {len(real_accounts)}\n"
+    assert len(real_accounts) >= 47, (
+        f"계정과목 수 불일치 — 기대: ≥47, 실제: {len(real_accounts)}\n"
         f"등록된 계정: {[a.name for a in real_accounts]}"
     )
 
@@ -70,8 +70,8 @@ def test_non_operating_items_classified():
         ("잡이익 발생", "", "잡이익"),
         ("대출이자 납부", "", "이자비용"),
         ("이자비용 지급", "", "이자비용"),
-        ("잡비 처리", "", "잡손실"),
-        ("기타잡비 지급", "", "잡손실"),
+        ("잡비 처리", "", "잡비"),
+        ("기타잡비 지급", "", "잡비"),
     ]
     for desc, vendor, expected in cases:
         name, conf = match_account(desc, vendor)
