@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Calculator } from 'lucide-react';
 import { save as tauriSave } from '@tauri-apps/plugin-dialog';
 import { writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
 import butlerIconAnimatedUrl from '../../assets/butler-icon-animated.svg';
@@ -229,7 +230,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              💰 통장·거래내역 → 회계 분류
+              <Calculator size={20} style={{ marginRight: '8px', verticalAlign: 'middle', display: 'inline' }} />통장·거래내역 → 회계 분류
             </h2>
             <p style={{ margin: '4px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
               .xlsx / .xls / .csv 파일을 업로드하면 중소기업회계기준 계정과목으로 자동 분류합니다

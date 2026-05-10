@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import butlerIconStaticUrl from './assets/butler-icon-static.svg';
 import { EgressBadge } from './components/EgressBadge';
@@ -54,7 +54,43 @@ export function App() {
   const [accountingModalOpen, setAccountingModalOpen] = useState(false);
   const [requestParsingModalOpen, setRequestParsingModalOpen] = useState(false);
   const [egressMonitorOpen, setEgressMonitorOpen] = useState(false);
+  const [sidecarReady, setSidecarReady] = useState(false);
+  const [sidecarElapsed, setSidecarElapsed] = useState(0);
+  const [sidecarFailed, setSidecarFailed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const MAX_SECONDS = 60;
+    const INTERVAL = 1000;
+    let tick = 0;
+
+    const poll = async () => {
+      if (cancelled) return;
+      setSidecarElapsed(tick);
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 2000);
+        const res = await fetch(`${SIDECAR_BASE}/health`, { signal: ctrl.signal });
+        clearTimeout(t);
+        if (!cancelled && res.ok) {
+          setSidecarReady(true);
+          return;
+        }
+      } catch {
+        // sidecar not yet up — keep polling
+      }
+      tick++;
+      if (tick >= MAX_SECONDS) {
+        if (!cancelled) setSidecarFailed(true);
+        return;
+      }
+      setTimeout(poll, INTERVAL);
+    };
+
+    poll();
+    return () => { cancelled = true; };
+  }, []);
 
   const activeConv = conversations.find(c => c.id === activeConvId) ?? null;
   const hasMessages = (activeConv?.messages.length ?? 0) > 0 || pendingBot !== null;
@@ -344,6 +380,7 @@ export function App() {
     }
   };
 
+
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--color-bg-app)' }}>
       <Sidebar
@@ -482,6 +519,43 @@ export function App() {
             setCardMode('free');
           }}
         />
+      )}
+      {/* Sidecar readiness overlay */}
+      {!sidecarReady && !sidecarFailed && (
+        <div
+          data-testid="sidecar-loading"
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'var(--color-bg-app)',
+          }}
+        >
+          <div style={{ textAlign: 'center', padding: '40px 32px' }}>
+            <p style={{ fontSize: 40, margin: '0 0 16px' }}>⚙️</p>
+            <h2 style={{ margin: '0 0 8px', fontSize: 18 }}>분석 엔진 시작 중</h2>
+            <p data-testid="sidecar-elapsed" style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: 0 }}>
+              {sidecarElapsed}초 경과 / 최대 60초
+            </p>
+          </div>
+        </div>
+      )}
+      {!sidecarReady && sidecarFailed && (
+        <div
+          data-testid="sidecar-failed"
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'var(--color-bg-app)',
+          }}
+        >
+          <div style={{ textAlign: 'center', padding: '40px 32px', maxWidth: 400 }}>
+            <p style={{ fontSize: 32, margin: '0 0 16px' }}>⚠️</p>
+            <h2 style={{ margin: '0 0 8px', fontSize: 18 }}>분석 엔진 연결 실패</h2>
+            <p style={{ color: 'var(--color-text-secondary)', fontSize: 14, margin: 0 }}>
+              60초 동안 응답이 없습니다. Butler.app을 재실행해주세요.
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 try:
     import pandas as pd
@@ -12,6 +12,7 @@ except ImportError:
     _PANDAS_OK = False
 
 from .account_dict import match_account, ACCOUNT_BY_NAME, SECTION_ORDER
+from .ft_classifier import ft_classify
 
 # ── 헤더 자동 감지 키워드 ────────────────────────────────────────────────────
 HEADER_KEYWORDS: frozenset[str] = frozenset({
@@ -233,9 +234,14 @@ def classify_df(df: "pd.DataFrame") -> "pd.DataFrame":
 
     for _, row in df.iterrows():
         desc, vendor = _build_classify_text(row, desc_col, vendor_col, memo_col)
-        name, conf = match_account(desc, vendor)
-        labels.append(name)
-        confs.append(conf)
+        amt = float(row["_amt"]) if "_amt" in row.index else 0.0
+        if "_amt" in row.index:
+            direction: Optional[str] = "입금" if amt > 0 else ("출금" if amt < 0 else None)
+        else:
+            direction = None
+        result = ft_classify(desc, vendor, abs(amt), direction)
+        labels.append(result.category)
+        confs.append(result.confidence)
 
     df["분류과목"] = labels
     df["신뢰도"] = confs
