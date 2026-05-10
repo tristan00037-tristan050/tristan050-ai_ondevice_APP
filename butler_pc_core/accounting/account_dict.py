@@ -46,7 +46,7 @@ ACCOUNTS: List[Account] = [
             [], sign="+", section="I_revenue"),
     Account("4050", "임대수입",
             [r"임대수입", r"임대\s*수입", r"임대\s*수익", r"부동산\s*임대"],
-            [], sign="+", section="I_revenue"),
+            [], sign="+", section="VI_non_op_revenue"),
 
     # ── 매출원가 ─────────────────────────────────────────────────────────────
     Account("5005", "제품매출원가",

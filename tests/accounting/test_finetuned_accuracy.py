@@ -7,7 +7,7 @@ Tests:
   4. d2_jibeoum_expense_section_sign — D-2 Case1: 자문료 출금 → IV_sga / (-)
   5. d2_jibeoum_income_override      — D-2 Case2: 자문 수입 입금 → I_revenue / (+)
   6. d2_imdaeryo_expense             — D-2 Case3: 임대료 지급 → IV_sga / (-)
-  7. d2_imdae_income                 — D-2 Case4: 임대 수입 입금 → I_revenue / (+)
+  7. d2_imdae_income                 — D-2 Case4: 임대 수입 입금 → VI_non_op_revenue / (+)
   8. d2_resolution_rate_above_80pct  — D-2 4건 모두 통과 ≥80%
   9. labeled_section_accuracy_sample — 200개 샘플 section 정확도 ≥75%
  10. labeled_sign_accuracy_sample    — 200개 샘플 sign 정확도 ≥85%
@@ -95,10 +95,10 @@ def test_d2_imdaeryo_expense(classifier):
 
 
 def test_d2_imdae_income(classifier):
-    """D-2 Case4: 임대 수입 입금 → 임대수입 / I_revenue / (+)."""
+    """D-2 Case4: 임대 수입 입금 → 임대수입 / VI_non_op_revenue / (+) [codex P1 정정]."""
     r = classifier("한국빌딩 임대 수입 5,000,000원 입금", "", 5_000_000, "입금")
     assert r.category == "임대수입", f"category={r.category}"
-    assert r.section == "I_revenue", f"section={r.section}"
+    assert r.section == "VI_non_op_revenue", f"section={r.section}"
     assert r.sign == "+", f"sign={r.sign}"
 
 
@@ -113,7 +113,7 @@ def test_d2_resolution_rate_above_80pct(classifier):
         ("한국빌딩 임대료 3,000,000원 지급", "", 3_000_000, "출금",
          "지급임차료", "IV_sga", "-"),
         ("한국빌딩 임대 수입 5,000,000원 입금", "", 5_000_000, "입금",
-         "임대수입", "I_revenue", "+"),
+         "임대수입", "VI_non_op_revenue", "+"),
     ]
     passed = sum(
         1 for (desc, vendor, amt, direction, exp_cat, exp_sec, exp_sign) in cases
