@@ -24,7 +24,7 @@ TARGET_SLOTS: list[TargetSlot] = [
         slot_id="business_period",
         heading="사업 기간",
         level=2,
-        allowed_types=[ValueType.DATE_RANGE, ValueType.DATE, ValueType.TEXT],
+        allowed_types=[ValueType.DATE_RANGE, ValueType.TEXT],
         aliases=["기간", "기한", "duration", "period", "개월", "주간", "연간"],
         required=True,
     ),

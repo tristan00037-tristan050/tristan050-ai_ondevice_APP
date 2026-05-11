@@ -1,4 +1,4 @@
-"""semantic_mapping — 6단계 의미 매핑 파이프라인 (단계 1: 계약 + 타입 + 슬롯)."""
+"""semantic_mapping — 6단계 의미 매핑 파이프라인 (단계 1-2)."""
 from .contracts import (
     ValueType,
     SourceField,
@@ -8,6 +8,7 @@ from .contracts import (
 )
 from .value_type_detector import detect_value_type
 from .slot_schema import TARGET_SLOTS, SLOT_BY_ID
+from .pipeline import map_fields
 
 __all__ = [
     "ValueType",
@@ -18,4 +19,5 @@ __all__ = [
     "detect_value_type",
     "TARGET_SLOTS",
     "SLOT_BY_ID",
+    "map_fields",
 ]
