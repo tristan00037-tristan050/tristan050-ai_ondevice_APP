@@ -26,11 +26,21 @@ type Phase =
   | { kind: 'done'; resultId: string; summary: TransformSummary }
   | { kind: 'error'; message: string };
 
+interface SlotResult {
+  slot_id: string;
+  heading: string;
+  confidence: number;
+  needs_review: boolean;
+  mapped: boolean;
+}
+
 interface TransformSummary {
   confidence: number;
   mapped_count: number;
   total_count: number;
   unmapped_sections: string[];
+  slot_results?: SlotResult[];
+  needs_review?: boolean;
 }
 
 const ACCEPT_EXTERNAL = '.txt,.md,.docx,.pdf,.eml';
@@ -454,6 +464,16 @@ export function DocumentTransformModal({ onClose }: DocumentTransformModalProps)
             <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <ConfidenceBar value={phase.summary.confidence} />
 
+              {/* §11 needs_review 배지 */}
+              {phase.summary.needs_review && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '8px', padding: '10px 14px' }}>
+                  <AlertTriangle size={15} style={{ color: '#d97706', flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px', color: '#92400e', fontWeight: 500 }}>
+                    일부 항목의 신뢰도가 낮습니다 (0.70 미만). 사용자 확인 필요
+                  </span>
+                </div>
+              )}
+
               {/* Mapping summary */}
               <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px 16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
@@ -471,6 +491,41 @@ export function DocumentTransformModal({ onClose }: DocumentTransformModalProps)
                   </div>
                 )}
               </div>
+
+              {/* 슬롯별 신뢰도 (semantic_mapping 결과) */}
+              {phase.summary.slot_results && phase.summary.slot_results.length > 0 && (
+                <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px 16px' }}>
+                  <p style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '8px', marginTop: 0 }}>
+                    항목별 매핑 신뢰도
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {phase.summary.slot_results.map((sr) => (
+                      <div key={sr.slot_id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                        <span style={{ flex: 1, color: '#374151' }}>{sr.heading}</span>
+                        {sr.mapped ? (
+                          <>
+                            <span style={{
+                              padding: '2px 7px',
+                              borderRadius: '9999px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              backgroundColor: sr.confidence >= 0.70 ? '#dcfce7' : '#fef3c7',
+                              color: sr.confidence >= 0.70 ? '#15803d' : '#92400e',
+                            }}>
+                              {Math.round(sr.confidence * 100)}%
+                            </span>
+                            {sr.needs_review && (
+                              <span style={{ fontSize: '11px', color: '#d97706' }}>검토 필요</span>
+                            )}
+                          </>
+                        ) : (
+                          <span style={{ fontSize: '11px', color: '#9ca3af' }}>미매핑</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Feedback */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #f3f4f6' }}>
