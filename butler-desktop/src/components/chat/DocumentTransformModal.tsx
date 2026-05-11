@@ -166,20 +166,43 @@ export function DocumentTransformModal({ onClose }: DocumentTransformModalProps)
     setPhase({ kind: 'processing', phaseNum: 1, status: '외부 문서 분석 중...' });
     setFeedback(null);
 
+    const MAX_RETRIES = 1;
+    const RETRY_DELAY_MS = 2000;
+
+    let resp: Response | null = null;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        // 첫 호출 실패 시 자동 재시도 (sidecar 첫 기동 cold-start 대응)
+        setPhase({ kind: 'processing', phaseNum: 1, status: `분석 엔진 연결 재시도 중... (${attempt}/${MAX_RETRIES})` });
+        await new Promise<void>(r => setTimeout(r, RETRY_DELAY_MS));
+        if (ctrl.signal.aborted) return;
+      }
+      try {
+        const form = new FormData();
+        form.append('external_file', externalFile);
+        form.append('template_file', templateFile);
+        form.append('include_source_note', String(includeSourceNote));
+        resp = await fetch(`${SIDECAR_BASE}/document_transform/transform_stream`, {
+          method: 'POST',
+          body: form,
+          signal: ctrl.signal,
+        });
+        break; // 성공 시 루프 탈출
+      } catch (err: unknown) {
+        if ((err as { name?: string }).name === 'AbortError') return;
+        if (attempt >= MAX_RETRIES) {
+          setPhase({ kind: 'error', message: '분석 엔진에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.' });
+          return;
+        }
+        // 재시도
+      }
+    }
+
+    if (!resp) return;
+
     try {
-      const form = new FormData();
-      form.append('external_file', externalFile);
-      form.append('template_file', templateFile);
-      form.append('include_source_note', String(includeSourceNote));
-
-      const resp = await fetch(`${SIDECAR_BASE}/document_transform/transform_stream`, {
-        method: 'POST',
-        body: form,
-        signal: ctrl.signal,
-      });
-
       if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        const err = await resp.json().catch(() => ({ detail: resp!.statusText }));
         setPhase({ kind: 'error', message: (err as { detail?: string }).detail ?? resp.statusText });
         return;
       }
