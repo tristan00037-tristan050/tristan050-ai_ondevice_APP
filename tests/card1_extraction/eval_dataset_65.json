@@ -1,0 +1,953 @@
+{
+  "version": "1.0.0",
+  "total": 65,
+  "categories": {
+    "의문문": {"count": 8, "range": "card1_001~card1_008"},
+    "평서문": {"count": 8, "range": "card1_009~card1_016"},
+    "명령형": {"count": 8, "range": "card1_017~card1_024"},
+    "청유형": {"count": 6, "range": "card1_025~card1_030"},
+    "보고형": {"count": 5, "range": "card1_031~card1_035"},
+    "조건형": {"count": 5, "range": "card1_036~card1_040"},
+    "부정형/no-action": {"count": 5, "range": "card1_041~card1_045"},
+    "복합 다중 액션": {"count": 10, "range": "card1_046~card1_055"},
+    "마감 없는 요청": {"count": 5, "range": "card1_056~card1_060"},
+    "자료 없는 액션": {"count": 5, "range": "card1_061~card1_065"}
+  },
+  "items": [
+    {
+      "id": "card1_001",
+      "category": "의문문",
+      "source_text": "이 자료 보내주실 수 있나요?",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": null,
+        "materials": ["자료"],
+        "actions": [
+          {"action_text": "보내", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_002",
+      "category": "의문문",
+      "source_text": "보고서 검토 언제까지 가능하신가요?",
+      "expected": {
+        "intent_type": "QUESTION",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": null,
+        "materials": ["보고서"],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_003",
+      "category": "의문문",
+      "source_text": "계약서 수정 사항 확인 부탁드려도 될까요?",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": null,
+        "materials": ["계약서"],
+        "actions": [
+          {"action_text": "확인", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_004",
+      "category": "의문문",
+      "source_text": "미팅 일정 조율이 가능한지 확인해주실 수 있을까요?",
+      "expected": {
+        "intent_type": "QUESTION",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "확인", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_005",
+      "category": "의문문",
+      "source_text": "첨부 파일 받으셨나요?",
+      "expected": {
+        "intent_type": "QUESTION",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": null,
+        "materials": ["파일"],
+        "actions": [
+          {"action_text": "확인", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_006",
+      "category": "의문문",
+      "source_text": "내일까지 서류 제출 가능하실까요?",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": "내일까지",
+        "materials": ["서류"],
+        "actions": [
+          {"action_text": "제출", "owner": null, "due_date": "내일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_007",
+      "category": "의문문",
+      "source_text": "이번 주 안으로 예산안 검토해주실 수 있을까요?",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": "이번 주 안",
+        "materials": [],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": "이번 주 안"}
+        ]
+      }
+    },
+    {
+      "id": "card1_008",
+      "category": "의문문",
+      "source_text": "오늘 중에 회의 자료 공유해 주실 수 있으신가요?",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": "오늘 중",
+        "materials": ["자료"],
+        "actions": [
+          {"action_text": "공유", "owner": null, "due_date": "오늘 중"}
+        ]
+      }
+    },
+    {
+      "id": "card1_009",
+      "category": "평서문",
+      "source_text": "프로젝트 계획서를 내일까지 제출할 예정입니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "내일까지",
+        "materials": ["계획서"],
+        "actions": [
+          {"action_text": "제출", "owner": null, "due_date": "내일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_010",
+      "category": "평서문",
+      "source_text": "이번 주 금요일에 팀 미팅이 있습니다.",
+      "expected": {
+        "intent_type": "SCHEDULE",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "이번 주 금요일",
+        "materials": [],
+        "actions": []
+      }
+    },
+    {
+      "id": "card1_011",
+      "category": "평서문",
+      "source_text": "보고서 작성이 완료되면 공유드리겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": null,
+        "materials": ["보고서"],
+        "actions": [
+          {"action_text": "공유", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_012",
+      "category": "평서문",
+      "source_text": "회의 결과를 정리해서 오늘 중에 메일 보내드리겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "오늘 중",
+        "materials": [],
+        "actions": [
+          {"action_text": "정리", "owner": null, "due_date": null},
+          {"action_text": "보내", "owner": null, "due_date": "오늘 중"}
+        ]
+      }
+    },
+    {
+      "id": "card1_013",
+      "category": "평서문",
+      "source_text": "견적서를 수정해서 다음 주까지 재발송하겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "다음 주까지",
+        "materials": ["견적서"],
+        "actions": [
+          {"action_text": "수정", "owner": null, "due_date": null},
+          {"action_text": "발송", "owner": null, "due_date": "다음 주까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_014",
+      "category": "평서문",
+      "source_text": "해당 이슈는 검토 후 다음 주 월요일까지 처리하겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "다음 주 월요일까지",
+        "materials": [],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": null},
+          {"action_text": "처리", "owner": null, "due_date": "다음 주 월요일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_015",
+      "category": "평서문",
+      "source_text": "고객사 미팅 후 결과를 정리하여 보고드리겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "정리", "owner": null, "due_date": null},
+          {"action_text": "보고", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_016",
+      "category": "평서문",
+      "source_text": "자료를 취합하여 월요일까지 전달드리겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "월요일까지",
+        "materials": ["자료"],
+        "actions": [
+          {"action_text": "취합", "owner": null, "due_date": null},
+          {"action_text": "전달", "owner": null, "due_date": "월요일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_017",
+      "category": "명령형",
+      "source_text": "오늘 중으로 보고서 제출하세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "오늘 중",
+        "materials": ["보고서"],
+        "actions": [
+          {"action_text": "제출", "owner": null, "due_date": "오늘 중"}
+        ]
+      }
+    },
+    {
+      "id": "card1_018",
+      "category": "명령형",
+      "source_text": "계약서 검토하고 수정 사항 알려주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": ["계약서"],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": null},
+          {"action_text": "회신", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_019",
+      "category": "명령형",
+      "source_text": "첨부 파일 확인 후 서명해서 돌려주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": ["파일"],
+        "actions": [
+          {"action_text": "확인", "owner": null, "due_date": null},
+          {"action_text": "서명", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_020",
+      "category": "명령형",
+      "source_text": "이 자료 팀원들에게 공유해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": ["자료"],
+        "actions": [
+          {"action_text": "공유", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_021",
+      "category": "명령형",
+      "source_text": "오전 10시까지 기획서 제출해주십시오.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "오전 10시까지",
+        "materials": [],
+        "actions": [
+          {"action_text": "제출", "owner": null, "due_date": "오전 10시까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_022",
+      "category": "명령형",
+      "source_text": "다음 주 월요일까지 예산 계획 수립해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "다음 주 월요일까지",
+        "materials": [],
+        "actions": [
+          {"action_text": "완료", "owner": null, "due_date": "다음 주 월요일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_023",
+      "category": "명령형",
+      "source_text": "클라이언트에게 지금 바로 연락해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "확인", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_024",
+      "category": "명령형",
+      "source_text": "이번 달 말까지 실적 데이터 정리해서 공유해주시기 바랍니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "이번 달 말까지",
+        "materials": [],
+        "actions": [
+          {"action_text": "정리", "owner": null, "due_date": null},
+          {"action_text": "공유", "owner": null, "due_date": "이번 달 말까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_025",
+      "category": "청유형",
+      "source_text": "이번 주 금요일에 같이 검토해봅시다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": "이번 주 금요일",
+        "materials": [],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": "이번 주 금요일"}
+        ]
+      }
+    },
+    {
+      "id": "card1_026",
+      "category": "청유형",
+      "source_text": "회의 전까지 자료를 미리 준비해 둡시다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": "회의 전까지",
+        "materials": ["자료"],
+        "actions": [
+          {"action_text": "준비", "owner": null, "due_date": "회의 전까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_027",
+      "category": "청유형",
+      "source_text": "팀 전체가 같이 이 건을 논의해봅시다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "완료", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_028",
+      "category": "청유형",
+      "source_text": "진행 상황을 공유하고 함께 방향을 잡아봅시다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "공유", "owner": null, "due_date": null},
+          {"action_text": "완료", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_029",
+      "category": "청유형",
+      "source_text": "오늘 오후에 잠깐 모여서 이야기해보죠.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": "오늘 중",
+        "materials": [],
+        "actions": [
+          {"action_text": "완료", "owner": null, "due_date": "오늘 중"}
+        ]
+      }
+    },
+    {
+      "id": "card1_030",
+      "category": "청유형",
+      "source_text": "이번 안건은 모두 함께 검토하고 결정합시다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": null},
+          {"action_text": "완료", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_031",
+      "category": "보고형",
+      "source_text": "이번 분기 실적을 보고드립니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "REPORTIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "보고", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_032",
+      "category": "보고형",
+      "source_text": "클라이언트 미팅 결과를 말씀드리겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "REPORTIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "보고", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_033",
+      "category": "보고형",
+      "source_text": "프로젝트 진행 현황을 공유해드립니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "REPORTIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "공유", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_034",
+      "category": "보고형",
+      "source_text": "현재 이슈 사항을 정리하여 알려드립니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "REPORTIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "정리", "owner": null, "due_date": null},
+          {"action_text": "보고", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_035",
+      "category": "보고형",
+      "source_text": "계약 체결 완료 사실을 보고드립니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "REPORTIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "보고", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_036",
+      "category": "조건형",
+      "source_text": "자료를 받으시면 검토 후 회신 부탁드립니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "CONDITIONAL",
+        "deadline": null,
+        "materials": ["자료"],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": null},
+          {"action_text": "회신", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_037",
+      "category": "조건형",
+      "source_text": "이번 주 내로 확인이 어려우시다면 다음 주 월요일까지 보내주셔도 됩니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "CONDITIONAL",
+        "deadline": "다음 주 월요일까지",
+        "materials": [],
+        "actions": [
+          {"action_text": "확인", "owner": null, "due_date": null},
+          {"action_text": "보내", "owner": null, "due_date": "다음 주 월요일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_038",
+      "category": "조건형",
+      "source_text": "추가 수정이 필요하시다면 말씀해주시기 바랍니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "CONDITIONAL",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "수정", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_039",
+      "category": "조건형",
+      "source_text": "계약서 수정이 완료되면 바로 보내주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "CONDITIONAL",
+        "deadline": null,
+        "materials": ["계약서"],
+        "actions": [
+          {"action_text": "수정", "owner": null, "due_date": null},
+          {"action_text": "보내", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_040",
+      "category": "조건형",
+      "source_text": "검토가 완료된다면 최종본을 공유해 주시면 감사하겠습니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "CONDITIONAL",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": null},
+          {"action_text": "공유", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_041",
+      "category": "부정형/no-action",
+      "source_text": "오늘은 특별한 일정이 없습니다.",
+      "expected": {
+        "intent_type": "NO_ACTION",
+        "sentence_type": "NEGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": []
+      }
+    },
+    {
+      "id": "card1_042",
+      "category": "부정형/no-action",
+      "source_text": "해당 건은 더 이상 진행하지 않아도 됩니다.",
+      "expected": {
+        "intent_type": "NO_ACTION",
+        "sentence_type": "NEGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": []
+      }
+    },
+    {
+      "id": "card1_043",
+      "category": "부정형/no-action",
+      "source_text": "아직 확인된 사항이 없어서 추가 안내는 어렵습니다.",
+      "expected": {
+        "intent_type": "NO_ACTION",
+        "sentence_type": "NEGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": []
+      }
+    },
+    {
+      "id": "card1_044",
+      "category": "부정형/no-action",
+      "source_text": "이번 회의는 취소되었습니다.",
+      "expected": {
+        "intent_type": "NO_ACTION",
+        "sentence_type": "NEGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": []
+      }
+    },
+    {
+      "id": "card1_045",
+      "category": "부정형/no-action",
+      "source_text": "현재는 결정된 것이 없으니 추후 안내 드리겠습니다.",
+      "expected": {
+        "intent_type": "NO_ACTION",
+        "sentence_type": "NEGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": []
+      }
+    },
+    {
+      "id": "card1_046",
+      "category": "복합 다중 액션",
+      "source_text": "보고서 검토하고 수정 사항 정리해서 목요일까지 보내주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "COMPLEX",
+        "deadline": "목요일까지",
+        "materials": ["보고서"],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": null},
+          {"action_text": "정리", "owner": null, "due_date": null},
+          {"action_text": "보내", "owner": null, "due_date": "목요일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_047",
+      "category": "복합 다중 액션",
+      "source_text": "계약서 파일 확인 후 서명해서 내일까지 메일로 보내주세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "COMPLEX",
+        "deadline": "내일까지",
+        "materials": ["파일", "계약서"],
+        "actions": [
+          {"action_text": "확인", "owner": null, "due_date": null},
+          {"action_text": "서명", "owner": null, "due_date": null},
+          {"action_text": "보내", "owner": null, "due_date": "내일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_048",
+      "category": "복합 다중 액션",
+      "source_text": "회의 자료 준비하고, 참석자들에게 일정 공지도 해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "COMPLEX",
+        "deadline": null,
+        "materials": ["자료"],
+        "actions": [
+          {"action_text": "준비", "owner": null, "due_date": null},
+          {"action_text": "완료", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_049",
+      "category": "복합 다중 액션",
+      "source_text": "예산안 검토 후 승인하고, 팀원들에게 공유해주세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "COMPLEX",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": null},
+          {"action_text": "완료", "owner": null, "due_date": null},
+          {"action_text": "공유", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_050",
+      "category": "복합 다중 액션",
+      "source_text": "고객 데이터 정리하고 분석 보고서 작성해서 이번 주 금요일까지 제출해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "COMPLEX",
+        "deadline": "이번 주 금요일까지",
+        "materials": ["보고서"],
+        "actions": [
+          {"action_text": "정리", "owner": null, "due_date": null},
+          {"action_text": "작성", "owner": null, "due_date": null},
+          {"action_text": "제출", "owner": null, "due_date": "이번 주 금요일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_051",
+      "category": "복합 다중 액션",
+      "source_text": "발표 자료 만들고, 연습도 한 번 해보고, 월요일까지 발표 준비 완료해주세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "COMPLEX",
+        "deadline": "월요일까지",
+        "materials": ["자료"],
+        "actions": [
+          {"action_text": "작성", "owner": null, "due_date": null},
+          {"action_text": "준비", "owner": null, "due_date": null},
+          {"action_text": "완료", "owner": null, "due_date": "월요일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_052",
+      "category": "복합 다중 액션",
+      "source_text": "기획서 검토하고 피드백 주시고, 최종본은 수요일까지 주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "COMPLEX",
+        "deadline": "수요일까지",
+        "materials": [],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": null},
+          {"action_text": "회신", "owner": null, "due_date": null},
+          {"action_text": "전달", "owner": null, "due_date": "수요일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_053",
+      "category": "복합 다중 액션",
+      "source_text": "팀별 실적 취합하고, 비교 분석해서, 이사님께 보고드려주세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "COMPLEX",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "취합", "owner": null, "due_date": null},
+          {"action_text": "완료", "owner": null, "due_date": null},
+          {"action_text": "보고", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_054",
+      "category": "복합 다중 액션",
+      "source_text": "계약 조건 협의하고, 법무팀 검토 받고, 최종 서명까지 이번 달 말까지 완료해주세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "COMPLEX",
+        "deadline": "이번 달 말까지",
+        "materials": [],
+        "actions": [
+          {"action_text": "완료", "owner": null, "due_date": null},
+          {"action_text": "검토", "owner": "법무팀", "due_date": null},
+          {"action_text": "서명", "owner": null, "due_date": "이번 달 말까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_055",
+      "category": "복합 다중 액션",
+      "source_text": "신규 직원 교육 자료 작성하고, 교육 일정 잡아서 다음 달 말까지 시작해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "COMPLEX",
+        "deadline": "다음 달 말까지",
+        "materials": ["자료"],
+        "actions": [
+          {"action_text": "작성", "owner": null, "due_date": null},
+          {"action_text": "완료", "owner": null, "due_date": null},
+          {"action_text": "완료", "owner": null, "due_date": "다음 달 말까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_056",
+      "category": "마감 없는 요청",
+      "source_text": "자료 정리되면 공유해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": ["자료"],
+        "actions": [
+          {"action_text": "정리", "owner": null, "due_date": null},
+          {"action_text": "공유", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_057",
+      "category": "마감 없는 요청",
+      "source_text": "검토해보시고 의견 주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "검토", "owner": null, "due_date": null},
+          {"action_text": "회신", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_058",
+      "category": "마감 없는 요청",
+      "source_text": "계약서 확인해주시면 감사하겠습니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "DECLARATIVE",
+        "deadline": null,
+        "materials": ["계약서"],
+        "actions": [
+          {"action_text": "확인", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_059",
+      "category": "마감 없는 요청",
+      "source_text": "이 파일 팀원들에게 전달해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": ["파일"],
+        "actions": [
+          {"action_text": "전달", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_060",
+      "category": "마감 없는 요청",
+      "source_text": "보고서 완성되는 대로 주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": ["보고서"],
+        "actions": [
+          {"action_text": "전달", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_061",
+      "category": "자료 없는 액션",
+      "source_text": "내일까지 미팅 참석 여부 확인해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "내일까지",
+        "materials": [],
+        "actions": [
+          {"action_text": "확인", "owner": null, "due_date": "내일까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_062",
+      "category": "자료 없는 액션",
+      "source_text": "고객사에 연락해서 미팅 일정 잡아주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "완료", "owner": null, "due_date": null},
+          {"action_text": "완료", "owner": null, "due_date": null}
+        ]
+      }
+    },
+    {
+      "id": "card1_063",
+      "category": "자료 없는 액션",
+      "source_text": "다음 주 교육 일정 잡아주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "다음 주까지",
+        "materials": [],
+        "actions": [
+          {"action_text": "완료", "owner": null, "due_date": "다음 주까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_064",
+      "category": "자료 없는 액션",
+      "source_text": "다음 주 미팅 일정 조율해주시면 감사하겠습니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "다음 주까지",
+        "materials": [],
+        "actions": [
+          {"action_text": "완료", "owner": null, "due_date": "다음 주까지"}
+        ]
+      }
+    },
+    {
+      "id": "card1_065",
+      "category": "자료 없는 액션",
+      "source_text": "팀장님께 결재 올려주시면 됩니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "DECLARATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {"action_text": "완료", "owner": null, "due_date": null}
+        ]
+      }
+    }
+  ]
+}
