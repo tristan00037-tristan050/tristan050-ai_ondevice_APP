@@ -1,4 +1,4 @@
-"""test_card1_extraction.py — 단계 5: card1_extraction 모듈 검증 (20 tests)."""
+"""test_card1_extraction.py — 단계 5+6.4: card1_extraction 모듈 검증 (27 tests)."""
 from __future__ import annotations
 
 import os
@@ -125,8 +125,9 @@ def test_confidence_evidence_based():
         hallucination_count=0,
     )
     conf = compute_card1_confidence(factors)
-    # base(0.40) + intent(0.25) + deadline(0.25) + material(0.10) + action(0.10) = 1.10 → 1.0
-    assert conf >= 0.90, f"evidence 충분할 때 신뢰도 0.90+ 기대, 실제: {conf}"
+    # Platt 보정 후: base(0.35)+intent(0.20)+deadline(0.20)+material(0.10)+action(0.10)=0.95
+    # calibrated = 0.85 * 0.95 + 0.05 ≈ 0.858
+    assert conf >= 0.85, f"evidence 충분할 때 신뢰도 0.85+ 기대, 실제: {conf}"
 
 
 # ── 16: hallucination penalty ─────────────────────────────────────────────────
@@ -153,8 +154,8 @@ def test_confidence_hallucination_penalty():
     assert penalized_conf < base_conf, (
         f"hallucination penalty 미적용: base={base_conf:.3f}, penalized={penalized_conf:.3f}"
     )
-    assert base_conf - penalized_conf >= 0.38, (
-        f"penalty 2건(-0.40)이 반영되어야 합니다: diff={base_conf - penalized_conf:.3f}"
+    assert base_conf - penalized_conf >= 0.20, (
+        f"penalty 2건(-0.30 → Platt 보정 후 ~0.255)이 반영되어야 합니다: diff={base_conf - penalized_conf:.3f}"
     )
 
 
@@ -252,3 +253,107 @@ def test_extract_card1_pipeline_integration():
     assert 0.0 <= result.confidence <= 1.0
     assert isinstance(result.sentence_type, SentenceType)
     assert isinstance(result.intent_type, IntentType)
+
+
+# ── 21~25: 단계 6.4 정정 검증 ────────────────────────────────────────────────
+
+def test_parser_negative_patterns_6():
+    """NEGATIVE 패턴 6개 추가 — 없어서/없으니/취소/어렵습니다/보류/연기."""
+    cases = [
+        ("아직 확인된 사항이 없어서 추가 안내는 어렵습니다.", SentenceType.NEGATIVE),
+        ("현재는 결정된 것이 없으니 추후 안내 드리겠습니다.", SentenceType.NEGATIVE),
+        ("이번 회의는 취소되었습니다.", SentenceType.NEGATIVE),
+        ("해당 일정은 보류됩니다.", SentenceType.NEGATIVE),
+        ("계획이 연기됩니다.", SentenceType.NEGATIVE),
+        ("해당 건은 더 이상 진행하지 않아도 됩니다.", SentenceType.NEGATIVE),
+    ]
+    for text, expected_st in cases:
+        result = classify_sentence_type(text)
+        assert result == expected_st, (
+            f"'{text[:40]}...' → 기대={expected_st.name}, 실제={result.name}"
+        )
+
+
+def test_parser_deadline_next_week():
+    """'다음 주까지' (요일 없이) 패턴 감지 — 단계 6.3 MISS 수정."""
+    cases = [
+        "다음 주까지 재발송하겠습니다.",
+        "다음 주까지 완료해주세요.",
+        "다음 주 월요일까지 보내주세요.",
+    ]
+    for text in cases:
+        found = extract_deadlines(text)
+        assert found, f"'{text}' 에서 마감일 미감지"
+        assert any("다음" in d for d in found), (
+            f"'다음 주까지' 미감지: {found}"
+        )
+
+
+def test_heuristic_classifies_report():
+    """heuristic — '드리겠습니다/하겠습니다/예정입니다' → REPORT 분류."""
+    from butler_pc_core.card1_extraction.llm_extractor import _heuristic_extraction
+
+    report_cases = [
+        "이번 분기 실적을 보고드립니다.",
+        "계획서를 내일까지 제출할 예정입니다.",
+        "회의 결과를 정리해서 오늘 중에 보내드리겠습니다.",
+        "견적서를 수정해서 다음 주까지 재발송하겠습니다.",
+    ]
+    for text in report_cases:
+        hints = {"deadlines": [], "materials": [], "actions": []}
+        result = _heuristic_extraction(text, hints)
+        assert result.intent_type == IntentType.REPORT, (
+            f"'{text[:40]}' → 기대=REPORT, 실제={result.intent_type.value}"
+        )
+
+
+def test_heuristic_classifies_no_action():
+    """heuristic — 부정/취소/없습니다 → NO_ACTION 분류."""
+    from butler_pc_core.card1_extraction.llm_extractor import _heuristic_extraction
+
+    no_action_cases = [
+        "오늘은 특별한 일정이 없습니다.",
+        "이번 회의는 취소되었습니다.",
+        "아직 확인된 사항이 없어서 추가 안내는 어렵습니다.",
+        "현재는 결정된 것이 없으니 추후 안내 드리겠습니다.",
+        "해당 건은 더 이상 진행하지 않아도 됩니다.",
+    ]
+    for text in no_action_cases:
+        hints = {"deadlines": [], "materials": [], "actions": []}
+        result = _heuristic_extraction(text, hints)
+        assert result.intent_type == IntentType.NO_ACTION, (
+            f"'{text[:40]}' → 기대=NO_ACTION, 실제={result.intent_type.value}"
+        )
+
+
+def test_calibration_corrected():
+    """Platt-style 보정 후 heuristic 신뢰도 범위 및 calibration 특성 검증."""
+    from butler_pc_core.card1_extraction.confidence import _BASE_SCORE
+
+    assert _BASE_SCORE == 0.35, f"Platt 보정 base 기대=0.35, 실제={_BASE_SCORE}"
+
+    # 증거 없음 → 최저 신뢰도 (과신뢰 억제)
+    low_factors = ConfidenceFactors(
+        action_verb_count=0, deadline_found=False, deadline_claimed=False,
+        material_count=0, action_count=0, hallucination_count=0,
+    )
+    low_conf = compute_card1_confidence(low_factors)
+    assert low_conf < 0.40, f"증거 없을 때 신뢰도 0.40 미만 기대, 실제: {low_conf}"
+
+    # 증거 풍부 → 적절한 신뢰도 (0.85~0.90 수렴)
+    high_factors = ConfidenceFactors(
+        action_verb_count=2, deadline_found=True, deadline_claimed=True,
+        material_count=2, action_count=2, hallucination_count=0,
+    )
+    high_conf = compute_card1_confidence(high_factors)
+    assert 0.80 <= high_conf <= 0.95, (
+        f"증거 풍부 시 신뢰도 0.80~0.95 기대, 실제: {high_conf}"
+    )
+
+    # hallucination → 신뢰도 감소 확인
+    penalized = ConfidenceFactors(
+        action_verb_count=2, deadline_found=True, deadline_claimed=True,
+        material_count=1, action_count=1, hallucination_count=2,
+    )
+    pen_conf = compute_card1_confidence(penalized)
+    assert pen_conf < high_conf, "hallucination penalty 미작동"

@@ -14,20 +14,23 @@ class ConfidenceFactors:
     hallucination_count: int  = 0     # 원문 근거 없는 항목 수 (verifier 판정)
 
 
-_BASE_SCORE = 0.40
+_BASE_SCORE = 0.35
 
 
 def compute_card1_confidence(factors: ConfidenceFactors) -> float:
     """
-    evidence 기반 신뢰도 계산.
+    evidence 기반 신뢰도 계산 (Platt-style 보정 적용).
 
     구성:
-      base                          = 0.40
-      의도 근거 (ACTION_VERBS 히트)   → +0.25
-      마감 근거 (DEADLINE_PATTERNS)   → +0.25 (근거 없이 주장 시 -0.20)
-      자료 근거                       → +0.05 × hits (max 0.20)
-      액션 근거                       → +0.05 × hits (max 0.20)
-      hallucination penalty          → -0.20 × count
+      base                          = 0.35  (heuristic calibration 보정)
+      의도 근거 (ACTION_VERBS 히트)   → +0.20  (0.25 → 0.20 하향)
+      마감 근거 (DEADLINE_PATTERNS)   → +0.20 (근거 없이 주장 시 -0.15)
+      자료 근거                       → +0.05 × hits (max 0.15)
+      액션 근거                       → +0.05 × hits (max 0.15)
+      hallucination penalty          → -0.15 × count
+
+    Platt-style calibration: raw → calibrated = 0.85 × raw + 0.05
+    heuristic 예상 정확도 ~75-85% 구간 → 신뢰도 0.60~0.75 수렴.
 
     구간 (§6-6):
       0.90+     : 자동 적용
@@ -38,18 +41,23 @@ def compute_card1_confidence(factors: ConfidenceFactors) -> float:
     score = _BASE_SCORE
 
     if factors.action_verb_count > 0:
-        score += 0.25
+        score += 0.20
 
     if factors.deadline_found:
-        score += 0.25
+        score += 0.20
     elif factors.deadline_claimed:
-        score -= 0.20
+        score -= 0.15
 
-    score += min(factors.material_count * 0.05, 0.20)
-    score += min(factors.action_count   * 0.05, 0.20)
-    score -= factors.hallucination_count * 0.20
+    score += min(factors.material_count * 0.05, 0.15)
+    score += min(factors.action_count   * 0.05, 0.15)
+    score -= factors.hallucination_count * 0.15
 
-    return round(max(0.0, min(1.0, score)), 3)
+    raw = max(0.0, min(1.0, score))
+
+    # Platt-style linear calibration (heuristic 과신뢰 억제)
+    calibrated = 0.85 * raw + 0.05
+
+    return round(max(0.0, min(1.0, calibrated)), 3)
 
 
 def confidence_band(confidence: float) -> str:

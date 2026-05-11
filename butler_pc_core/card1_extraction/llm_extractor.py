@@ -103,23 +103,89 @@ def _parse_llm_response(raw: str) -> Optional[dict]:
 
 
 def _heuristic_extraction(text: str, parsed_hints: Dict[str, Any]) -> Card1Extraction:
-    """LLM 미사용 시 파서 힌트 기반 fallback extraction."""
+    """LLM 미사용 시 6-타입 분류 기반 heuristic extraction (알고리즘 팀 §6-3).
+
+    분류 우선순위:
+      1. NO_ACTION  — 부정/취소 표현 (최우선)
+      2. REPORT     — 보고/드리겠습니다/예정입니다
+      3. QUESTION   — 정보 확인형 의문문 (요청형 X)
+      4. COMMAND    — 하십시오/하시기 바랍니다/해주십시오
+      5. SCHEDULE   — 회의/미팅/일정 + 있습니다
+      6. REQUEST    — 주세요/해주세요/봅시다/제안/ACTION_VERBS
+      7. UNKNOWN    — 위 패턴 없음
+    """
+    import re as _re
     from .parser import _ACTION_VERB_RE
 
-    deadlines: List[str] = parsed_hints.get("deadlines", [])
-    materials: List[str] = parsed_hints.get("materials", [])
+    deadlines: List[str]    = parsed_hints.get("deadlines", [])
+    materials: List[str]    = parsed_hints.get("materials", [])
     action_sents: List[str] = parsed_hints.get("actions", [])
 
-    # 의도 요약: 첫 번째 액션 문장 또는 텍스트 앞 60자
     intent = action_sents[0][:60] if action_sents else text[:60]
 
-    # 의도 유형
-    if action_sents:
-        intent_type = IntentType.REQUEST
-    elif "보고" in text or "알려드" in text:
+    # ── 패턴 정의 ──────────────────────────────────────────────────────────────
+    _no_action_re = _re.compile(
+        r"(?:하지\s*않|않습니다|안\s*됩니다|없습니다|없어서|없으니"
+        r"|취소(?:되었|됩니다)?|어렵습니다|보류|연기(?:됩니다)?"
+        r"|못\s*합니다|불가|진행하지\s*않)"
+    )
+    _report_re = _re.compile(
+        r"(?:보고드립니다|보고드리겠습니다|말씀드리겠습니다|공유드립니다"
+        r"|전달드립니다|알려드립니다|공유해드립니다|보고합니다"
+        r"|드립니다|드리겠습니다|예정입니다|하겠습니다)"
+    )
+    # QUESTION: 정보 확인형 의문문 — 행동 요청이 없는 순수 질문
+    _question_marker_re = _re.compile(
+        r"(?:언제|가능한지|됩니까\s*[?？]?|받으셨|어떻게|무엇|어디|왜)"
+    )
+    _question_form_re = _re.compile(
+        r"(?:나요\s*[?？]?|까요\s*[?？]?|합니까\s*[?？]?|[?？])"
+    )
+    # REQUEST 표지 (QUESTION과 구분 기준)
+    _request_keyword_re = _re.compile(
+        r"(?:주세요|해주세요|부탁드|주시기\s*바랍니다|주시면)"
+    )
+    # COMMAND: 격식체 명령 (해주세요 제외)
+    _command_re = _re.compile(
+        r"(?:하십시오|해주십시오|주십시오|하시기\s*바랍니다)"
+    )
+    _command_haseyo_re = _re.compile(r"하세요")   # "해주세요"와 구분 — 별도 처리
+    _schedule_re = _re.compile(
+        r"(?:회의|미팅|일정|행사|세미나|워크숍)\s*(?:이|가|은|는)?\s*있습니다"
+    )
+    _propositive_re = _re.compile(
+        r"(?:합시다|봅시다|해봅시다|해봐요|하죠|해보죠|해봐요)"
+    )
+
+    # ── 분류 ───────────────────────────────────────────────────────────────────
+    has_request_keyword = bool(_request_keyword_re.search(text))
+    has_하세요          = bool(_command_haseyo_re.search(text))
+    is_command_form    = (has_하세요 and not has_request_keyword)
+
+    if _no_action_re.search(text):
+        intent_type = IntentType.NO_ACTION
+
+    elif _report_re.search(text):
         intent_type = IntentType.REPORT
-    elif "?" in text or "나요" in text or "까요" in text:
+
+    elif (_question_form_re.search(text)
+          and _question_marker_re.search(text)
+          and not has_request_keyword):
         intent_type = IntentType.QUESTION
+
+    elif _command_re.search(text) or is_command_form:
+        intent_type = IntentType.COMMAND
+
+    elif _schedule_re.search(text):
+        intent_type = IntentType.SCHEDULE
+
+    elif action_sents or has_request_keyword or _propositive_re.search(text):
+        intent_type = IntentType.REQUEST
+
+    elif _question_form_re.search(text):
+        # 요청형 의문문 (REQUEST disguised as question)
+        intent_type = IntentType.REQUEST
+
     else:
         intent_type = IntentType.UNKNOWN
 
@@ -140,7 +206,7 @@ def _heuristic_extraction(text: str, parsed_hints: Dict[str, Any]) -> Card1Extra
         materials=materials,
         actions=actions,
         sentence_type=SentenceType.DECLARATIVE,
-        confidence=0.60,
+        confidence=0.55,
         needs_review=True,
         reason_code="heuristic_fallback",
     )
