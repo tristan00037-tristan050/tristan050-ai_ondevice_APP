@@ -282,6 +282,7 @@ if _FASTAPI_AVAILABLE:
         loop.run_in_executor(None, _init_shared_llm)
         asyncio.create_task(_cleanup_accounting_results())
         asyncio.create_task(_cleanup_parse_results())
+        asyncio.create_task(_cleanup_doc_transform_results())
 
     @app.get("/health")
     def health():
@@ -1275,6 +1276,178 @@ if _FASTAPI_AVAILABLE:
                 "X-Result-Id": result_id,
             },
         )
+
+
+    # -----------------------------------------------------------------------
+    # 문서 변환 엔드포인트 (D-4 카드 2)
+    # -----------------------------------------------------------------------
+
+    DOC_TRANSFORM_RESULT_TTL = 1800      # 결과 보관 30분
+    DOC_TRANSFORM_CLEANUP_INTERVAL = 120
+
+    # result_id → { "docx_bytes": bytes, "md_text": str, "summary": dict, "created_at": float }
+    _doc_transform_results: dict[str, dict] = {}
+
+    async def _cleanup_doc_transform_results() -> None:
+        while True:
+            await asyncio.sleep(DOC_TRANSFORM_CLEANUP_INTERVAL)
+            now = time.monotonic()
+            expired = [
+                rid for rid, entry in list(_doc_transform_results.items())
+                if now - entry.get("created_at", now) > DOC_TRANSFORM_RESULT_TTL
+            ]
+            for rid in expired:
+                _doc_transform_results.pop(rid, None)
+
+    async def _stream_transform(
+        external_data: bytes,
+        external_suffix: str,
+        template_data: bytes,
+        template_suffix: str,
+        include_source_note: bool,
+        result_id: str,
+    ) -> AsyncGenerator[str, None]:
+        """문서 변환 SSE 4-phase 제너레이터."""
+        try:
+            from butler_pc_core.document_transform import transform_document
+        except ImportError as exc:
+            yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
+            return
+
+        # Phase 1 — 외부 문서 분석
+        yield _sse("phase_start", {"phase": 1, "status_message": "외부 문서 분석 중..."})
+        await asyncio.sleep(0)
+
+        # Phase 2 — 양식 구조 분석
+        yield _sse("phase_start", {"phase": 2, "status_message": "우리 양식 구조 분석 중..."})
+        await asyncio.sleep(0)
+
+        # Phase 3 — LLM 매핑
+        yield _sse("phase_start", {"phase": 3, "status_message": "내용 매핑 중..."})
+        await asyncio.sleep(0)
+
+        loop = asyncio.get_running_loop()
+        try:
+            llm = _SHARED_LLM if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready") else None
+            result = await loop.run_in_executor(
+                None,
+                lambda: transform_document(
+                    external_data, external_suffix,
+                    template_data, template_suffix,
+                    include_source_note=include_source_note,
+                    llm=llm,
+                ),
+            )
+        except Exception as exc:
+            yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)})
+            return
+
+        # Phase 4 — 문서 생성
+        yield _sse("phase_start", {"phase": 4, "status_message": "문서 생성 중..."})
+        await asyncio.sleep(0)
+
+        _doc_transform_results[result_id] = {
+            "docx_bytes": result.output_docx_bytes,
+            "md_text": result.output_md,
+            "summary": {
+                "confidence": result.confidence,
+                "mapped_count": len([s for s in result.mapped_sections if s.mapped]),
+                "total_count": len(result.mapped_sections),
+                "unmapped_sections": result.unmapped_sections,
+            },
+            "created_at": time.monotonic(),
+        }
+
+        yield _sse("complete", {
+            "result_id": result_id,
+            "summary": _doc_transform_results[result_id]["summary"],
+        })
+
+    @app.post("/document_transform/transform_stream")
+    async def document_transform_stream(request: Request):
+        """SSE 스트리밍 문서 변환 — 4-phase 진행률 보고."""
+        try:
+            form = await request.form()
+        except Exception:
+            raise HTTPException(status_code=400, detail="multipart 파싱 오류")
+
+        external_file = form.get("external_file")
+        template_file = form.get("template_file")
+        include_source_note = str(form.get("include_source_note", "false")).lower() == "true"
+
+        if external_file is None or not hasattr(external_file, "read"):
+            raise HTTPException(status_code=422, detail="external_file 필드가 없습니다.")
+        if template_file is None or not hasattr(template_file, "read"):
+            raise HTTPException(status_code=422, detail="template_file 필드가 없습니다.")
+
+        external_data = await external_file.read()
+        external_suffix = Path(external_file.filename or "").suffix.lower().lstrip(".")
+        template_data = await template_file.read()
+        template_suffix = Path(template_file.filename or "").suffix.lower().lstrip(".")
+
+        if not external_data:
+            raise HTTPException(status_code=422, detail="외부 문서 파일이 비어 있습니다.")
+        if not template_data:
+            raise HTTPException(status_code=422, detail="양식 파일이 비어 있습니다.")
+
+        allowed_external = {"txt", "md", "docx", "pdf", "eml"}
+        allowed_template = {"docx", "md"}
+        if external_suffix not in allowed_external:
+            raise HTTPException(status_code=422, detail=f"외부 문서: .{external_suffix} 미지원 (지원: .txt .md .docx .pdf .eml)")
+        if template_suffix not in allowed_template:
+            raise HTTPException(status_code=422, detail=f"양식 파일: .{template_suffix} 미지원 (지원: .docx .md)")
+
+        result_id = str(uuid.uuid4())
+        return StreamingResponse(
+            _stream_transform(
+                external_data, external_suffix,
+                template_data, template_suffix,
+                include_source_note, result_id,
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "X-Result-Id": result_id,
+            },
+        )
+
+    @app.get("/document_transform/result/{result_id}/docx")
+    def document_transform_result_docx(result_id: str):
+        entry = _doc_transform_results.get(result_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail="결과가 없거나 만료되었습니다.")
+        from fastapi.responses import Response as _Response
+        return _Response(
+            content=entry["docx_bytes"],
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": 'attachment; filename="butler_transform_result.docx"'},
+        )
+
+    @app.get("/document_transform/result/{result_id}/md")
+    def document_transform_result_md(result_id: str):
+        entry = _doc_transform_results.get(result_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail="결과가 없거나 만료되었습니다.")
+        from fastapi.responses import Response as _Response
+        return _Response(
+            content=entry["md_text"].encode("utf-8"),
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="butler_transform_result.md"'},
+        )
+
+    @app.post("/document_transform/feedback")
+    async def document_transform_feedback(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="JSON 파싱 오류")
+        result_id: str = body.get("result_id", "")
+        feedback: str = body.get("feedback", "")
+        if feedback not in ("positive", "negative"):
+            raise HTTPException(status_code=422, detail="feedback은 'positive' 또는 'negative'여야 합니다.")
+        _log.info("[document_transform] feedback result_id=%s feedback=%s", result_id, feedback)
+        return JSONResponse({"status": "ok"})
 
 
 # ---------------------------------------------------------------------------
