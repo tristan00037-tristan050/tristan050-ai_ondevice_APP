@@ -76,7 +76,7 @@ def test_slot_collapse_gate(report: EvalReport):
 # ── Gate 6: 신뢰도 교정 오차 ≤ 10% ──────────────────────────────────────────
 
 def test_confidence_calibration_gate(report: EvalReport):
-    assert report.confidence_calibration_error <= 0.25, (
-        f"신뢰도 교정 오차 {report.confidence_calibration_error*100:.1f}% > 25% 기준\n"
-        "heuristic 스코어 시스템 한계 — 단계 4 LLM 교정 후 재평가 예정"
+    assert report.confidence_calibration_error <= 0.05, (
+        f"신뢰도 교정 오차 {report.confidence_calibration_error*100:.1f}% > 5% 기준\n"
+        "Platt-style 교정 (1-(1-c)^2) 후 오차 < 5% 미달성 — pipeline._calibrate_confidence 점검"
     )
