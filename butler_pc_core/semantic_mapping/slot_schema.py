@@ -17,7 +17,7 @@ TARGET_SLOTS: list[TargetSlot] = [
         heading="사업 영역",
         level=2,
         allowed_types=[ValueType.TEXT, ValueType.CATEGORY],
-        aliases=["영역", "분야", "scope", "범위", "역할", "업무", "서비스"],
+        aliases=["영역", "분야", "scope", "범위", "역할", "업무", "서비스", "파트너십"],
         required=True,
     ),
     TargetSlot(
@@ -25,7 +25,8 @@ TARGET_SLOTS: list[TargetSlot] = [
         heading="사업 기간",
         level=2,
         allowed_types=[ValueType.DATE_RANGE, ValueType.TEXT],
-        aliases=["기간", "기한", "duration", "period", "개월", "주간", "연간"],
+        aliases=["기간", "기한", "duration", "period", "개월", "주간", "연간",
+                 "계약기간", "수행기간", "용역기간", "사업기간"],
         required=True,
     ),
     TargetSlot(
@@ -33,7 +34,8 @@ TARGET_SLOTS: list[TargetSlot] = [
         heading="예산 영역",
         level=2,
         allowed_types=[ValueType.MONEY, ValueType.TEXT],
-        aliases=["예산", "금액", "budget", "비용", "fee", "cost", "가격", "견적"],
+        aliases=["예산", "금액", "budget", "비용", "fee", "cost", "가격", "견적",
+                 "사업비", "용역비", "사업비용", "계약금", "총액"],
         required=True,
     ),
     TargetSlot(
@@ -41,7 +43,8 @@ TARGET_SLOTS: list[TargetSlot] = [
         heading="일정",
         level=2,
         allowed_types=[ValueType.DATE, ValueType.DATE_RANGE, ValueType.TEXT],
-        aliases=["일정", "시작일", "착수일", "schedule", "날짜", "date", "종료일", "완료일", "마감일"],
+        aliases=["일정", "시작일", "착수일", "schedule", "날짜", "date", "종료일", "완료일", "마감일",
+                 "납기일", "착수예정일", "완료예정일"],
         required=False,
     ),
     TargetSlot(
@@ -49,7 +52,8 @@ TARGET_SLOTS: list[TargetSlot] = [
         heading="연락처",
         level=2,
         allowed_types=[ValueType.EMAIL, ValueType.PHONE, ValueType.PERSON, ValueType.TEXT],
-        aliases=["연락처", "이메일", "email", "전화", "phone", "tel", "contact", "담당자", "수신인"],
+        aliases=["연락처", "이메일", "email", "전화", "phone", "tel", "contact", "담당자", "수신인",
+                 "연락자", "담당이메일", "전화번호"],
         required=False,
     ),
 ]
