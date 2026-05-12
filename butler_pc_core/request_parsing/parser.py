@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 # ── 입력 길이 제약 §6.3 ───────────────────────────────────────────────────────
-MIN_TEXT_LENGTH = 30
+MIN_TEXT_LENGTH = 15
 MAX_TEXT_LENGTH = 32_000
 
 # ── PII 패턴 (D-2 anonymize.py 패턴 동일) ────────────────────────────────────
@@ -34,7 +34,7 @@ class ParseError(Exception):
 
 
 class TextTooShortError(ParseError):
-    """텍스트가 너무 짧음 (30자 미만)."""
+    """텍스트가 너무 짧음 (15자 미만)."""
 
 
 class TextTooLongError(ParseError):
