@@ -14,7 +14,7 @@ async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         .shell()
         .sidecar("butler-sidecar")
         .map_err(|e| format!("sidecar 명령 생성 실패: {}", e))?
-        .args(["--port", "5903", "--host", "127.0.0.1"])
+        .args(["--port", "8765", "--host", "127.0.0.1"])
         .spawn()
         .map_err(|e| format!("sidecar 실행 실패: {}", e))?;
 
@@ -67,7 +67,7 @@ pub fn run() {
                             let state = app_handle.state::<SidecarState>();
                             *state.child.lock().unwrap() = Some(child);
                         }
-                        println!("[main] sidecar 시작 완료 (포트 5903)");
+                        println!("[main] sidecar 시작 완료 (포트 8765)");
                     }
                     Err(e) => {
                         eprintln!("[main] sidecar 시작 실패: {}", e);

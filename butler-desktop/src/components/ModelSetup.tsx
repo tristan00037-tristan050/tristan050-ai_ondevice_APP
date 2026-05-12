@@ -174,7 +174,7 @@ pip3 install -r requirements-serving.txt</pre>
           </li>
           <li>sidecar 직접 실행 테스트:
             <pre style={{ fontSize: 11, background: '#fff', padding: 8, borderRadius: 4 }}>
-curl http://127.0.0.1:5903/api/model/status</pre>
+curl http://127.0.0.1:8765/api/model/status</pre>
           </li>
           <li>응답 있으면 Butler.app 종료 후 재실행</li>
         </ol>

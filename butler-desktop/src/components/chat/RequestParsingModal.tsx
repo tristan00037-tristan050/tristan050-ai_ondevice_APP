@@ -295,7 +295,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
     }
   };
 
-  const canAnalyze = text.trim().length >= 30;
+  const canAnalyze = text.trim().length >= 15;
 
   return (
     /* ── 오버레이 (인라인 style — AccountingModal 동일 패턴, Tauri WebView 호환) ── */
