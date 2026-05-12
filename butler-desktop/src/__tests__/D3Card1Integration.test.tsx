@@ -39,10 +39,11 @@ describe('D-3 Card 1 통합', () => {
     for (let i = 1; i <= 8; i++) {
       expect(screen.getByTestId(`card-${i}`)).toBeInTheDocument();
     }
-    // Cards 1 and 5 are active; 2,3,4,6,7,8 are disabled
+    // Cards 1, 2, 5 are active (D-4 §8.1: card-2 format_convert activated); 3,4,6,7,8 are disabled
     expect(screen.getByTestId('card-1')).not.toBeDisabled();
+    expect(screen.getByTestId('card-2')).not.toBeDisabled();
     expect(screen.getByTestId('card-5')).not.toBeDisabled();
-    for (const id of [2, 3, 4, 6, 7, 8]) {
+    for (const id of [3, 4, 6, 7, 8]) {
       expect(screen.getByTestId(`card-${id}`)).toBeDisabled();
     }
     // Lucide renders SVG elements

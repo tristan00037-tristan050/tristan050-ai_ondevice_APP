@@ -10,6 +10,7 @@ import { MessageList } from './components/chat/MessageList';
 import { DeleteConfirmModal } from './components/chat/DeleteConfirmModal';
 import { AccountingModal } from './components/chat/AccountingModal';
 import { RequestParsingModal } from './components/chat/RequestParsingModal';
+import { DocumentTransformModal } from './components/chat/DocumentTransformModal';
 import { SIDECAR_BASE } from './constants';
 import type { SSEEvent, Conversation, Message } from './types';
 import {
@@ -53,6 +54,7 @@ export function App() {
   const [cardMode, setCardMode] = useState<string>('free');
   const [accountingModalOpen, setAccountingModalOpen] = useState(false);
   const [requestParsingModalOpen, setRequestParsingModalOpen] = useState(false);
+  const [documentTransformModalOpen, setDocumentTransformModalOpen] = useState(false);
   const [egressMonitorOpen, setEgressMonitorOpen] = useState(false);
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarElapsed, setSidecarElapsed] = useState(0);
@@ -389,6 +391,8 @@ export function App() {
       setAccountingModalOpen(true);
     } else if (m === 'request_organize') {
       setRequestParsingModalOpen(true);
+    } else if (m === 'format_convert') {
+      setDocumentTransformModalOpen(true);
     }
   };
 
@@ -528,6 +532,15 @@ export function App() {
         <RequestParsingModal
           onClose={() => {
             setRequestParsingModalOpen(false);
+            setCardMode('free');
+          }}
+        />
+      )}
+
+      {documentTransformModalOpen && (
+        <DocumentTransformModal
+          onClose={() => {
+            setDocumentTransformModalOpen(false);
             setCardMode('free');
           }}
         />

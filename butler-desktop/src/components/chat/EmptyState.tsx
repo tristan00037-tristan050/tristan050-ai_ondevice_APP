@@ -25,7 +25,7 @@ const CARDS = [
     title: '남의 문서 → 우리 양식',
     desc: '외부 문서 + 우리 과거 양식',
     mode: 'format_convert',
-    active: false,
+    active: true,
   },
   {
     id: 3,

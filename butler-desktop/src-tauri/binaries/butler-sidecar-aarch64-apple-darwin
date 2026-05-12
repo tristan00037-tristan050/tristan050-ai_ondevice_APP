@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 # Butler sidecar launcher — Tauri externalBin 래퍼
-# 이 스크립트는 butler_sidecar.py를 찾아 python3로 실행한다.
+# 이 스크립트는 butler_sidecar.py를 찾아 적절한 Python으로 실행한다.
+# Python 우선순위:
+#   1) BUTLER_PYTHON 환경 변수 (사용자가 명시한 경로)
+#   2) SIDECAR 파일 영역 부모 디렉토리에서 위쪽 7단계까지 .venv/bin/python 탐색
+#   3) HOME 영역 일반 후보 (~/Desktop/butler/...,  ~/.venv)
+#   4) system python3 (fallback — 의존성 미설치 시 endpoint 등록 실패 가능)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # 1) 앱 번들 내부 Resources 경로 (프로덕션)
 BUNDLE_SIDECAR="${SCRIPT_DIR}/../Resources/butler_sidecar.py"
-# 2) 개발환경 — src-tauri/binaries 기준 상위 경로
-DEV_SIDECAR="${SCRIPT_DIR}/../../../../butler_sidecar.py"
+# 2) 개발환경 — src-tauri/binaries 기준 상위 경로 (binaries → src-tauri → butler-desktop → root)
+DEV_SIDECAR="${SCRIPT_DIR}/../../../butler_sidecar.py"
 
 if [[ -f "$BUNDLE_SIDECAR" ]]; then
     SIDECAR_PY="$BUNDLE_SIDECAR"
@@ -21,4 +26,45 @@ else
     exit 1
 fi
 
-exec python3 "$SIDECAR_PY" "$@"
+# ── Python 영역 탐지 ───────────────────────────────────────────
+PYTHON_BIN=""
+
+# (1) 환경 변수 우선
+if [[ -n "${BUTLER_PYTHON:-}" && -x "${BUTLER_PYTHON}" ]]; then
+    PYTHON_BIN="${BUTLER_PYTHON}"
+fi
+
+# (2) WORK_DIR에서 위쪽 영역 .venv 탐색
+if [[ -z "$PYTHON_BIN" ]]; then
+    SEARCH_DIR="$WORK_DIR"
+    for _ in 1 2 3 4 5 6 7; do
+        if [[ -x "${SEARCH_DIR}/.venv/bin/python" ]]; then
+            PYTHON_BIN="${SEARCH_DIR}/.venv/bin/python"
+            break
+        fi
+        SEARCH_DIR="$(dirname "$SEARCH_DIR")"
+        [[ "$SEARCH_DIR" == "/" ]] && break
+    done
+fi
+
+# (3) HOME 영역 일반 후보
+if [[ -z "$PYTHON_BIN" ]]; then
+    for CANDIDATE in \
+        "${HOME}/Desktop/butler/tristan050-ai_ondevice_APP/.venv/bin/python" \
+        "${HOME}/.venv/bin/python" \
+        ; do
+        if [[ -x "$CANDIDATE" ]]; then
+            PYTHON_BIN="$CANDIDATE"
+            break
+        fi
+    done
+fi
+
+# (4) system python3 fallback
+if [[ -z "$PYTHON_BIN" ]]; then
+    PYTHON_BIN="$(command -v python3 || echo python3)"
+fi
+
+echo "[butler-sidecar] Python: $PYTHON_BIN" >&2
+echo "[butler-sidecar] Sidecar: $SIDECAR_PY" >&2
+exec "$PYTHON_BIN" "$SIDECAR_PY" "$@"

@@ -1,0 +1,211 @@
+{
+  "total_items": 65,
+  "intent_type_accuracy": 0.8615,
+  "sentence_type_accuracy": 0.6615,
+  "deadline_precision": 1.0,
+  "deadline_recall": 0.8889,
+  "deadline_extraction_f1": 0.9412,
+  "material_precision": 0.9851,
+  "material_recall": 1.0,
+  "material_extraction_f1": 0.9925,
+  "action_precision": 0.8852,
+  "action_recall": 0.7013,
+  "action_extraction_f1": 0.7826,
+  "false_deadline_rate": 0.0,
+  "no_action_false_positive": 0.0,
+  "confidence_calibration_error": 0.3952,
+  "category_scores": {
+    "의문문": {
+      "category": "의문문",
+      "total": 8,
+      "correct_intent": 8,
+      "correct_sentence": 8,
+      "deadline_f1": 1.0,
+      "intent_accuracy": 1.0
+    },
+    "평서문": {
+      "category": "평서문",
+      "total": 8,
+      "correct_intent": 8,
+      "correct_sentence": 8,
+      "deadline_f1": 1.0,
+      "intent_accuracy": 1.0
+    },
+    "명령형": {
+      "category": "명령형",
+      "total": 8,
+      "correct_intent": 8,
+      "correct_sentence": 6,
+      "deadline_f1": 1.0,
+      "intent_accuracy": 1.0
+    },
+    "청유형": {
+      "category": "청유형",
+      "total": 6,
+      "correct_intent": 6,
+      "correct_sentence": 4,
+      "deadline_f1": 0.8,
+      "intent_accuracy": 1.0
+    },
+    "보고형": {
+      "category": "보고형",
+      "total": 5,
+      "correct_intent": 5,
+      "correct_sentence": 3,
+      "deadline_f1": 1.0,
+      "intent_accuracy": 1.0
+    },
+    "조건형": {
+      "category": "조건형",
+      "total": 5,
+      "correct_intent": 3,
+      "correct_sentence": 1,
+      "deadline_f1": 1.0,
+      "intent_accuracy": 0.6
+    },
+    "부정형/no-action": {
+      "category": "부정형/no-action",
+      "total": 5,
+      "correct_intent": 5,
+      "correct_sentence": 5,
+      "deadline_f1": 1.0,
+      "intent_accuracy": 1.0
+    },
+    "복합 다중 액션": {
+      "category": "복합 다중 액션",
+      "total": 10,
+      "correct_intent": 5,
+      "correct_sentence": 0,
+      "deadline_f1": 1.0,
+      "intent_accuracy": 0.5
+    },
+    "마감 없는 요청": {
+      "category": "마감 없는 요청",
+      "total": 5,
+      "correct_intent": 4,
+      "correct_sentence": 4,
+      "deadline_f1": 1.0,
+      "intent_accuracy": 0.8
+    },
+    "자료 없는 액션": {
+      "category": "자료 없는 액션",
+      "total": 5,
+      "correct_intent": 4,
+      "correct_sentence": 4,
+      "deadline_f1": 0.5,
+      "intent_accuracy": 0.8
+    }
+  },
+  "failed_cases": [
+    {
+      "id": "card1_029",
+      "category": "청유형",
+      "source_text": "오늘 오후에 잠깐 모여서 이야기해보죠.",
+      "gold_intent": "request",
+      "pred_intent": "request",
+      "intent_ok": true,
+      "gold_deadline": "오늘 중",
+      "pred_deadline": null
+    },
+    {
+      "id": "card1_036",
+      "category": "조건형",
+      "source_text": "자료를 받으시면 검토 후 회신 부탁드립니다.",
+      "gold_intent": "request",
+      "pred_intent": "report",
+      "intent_ok": false,
+      "gold_deadline": null,
+      "pred_deadline": null
+    },
+    {
+      "id": "card1_040",
+      "category": "조건형",
+      "source_text": "검토가 완료된다면 최종본을 공유해 주시면 감사하겠습니다.",
+      "gold_intent": "request",
+      "pred_intent": "report",
+      "intent_ok": false,
+      "gold_deadline": null,
+      "pred_deadline": null
+    },
+    {
+      "id": "card1_047",
+      "category": "복합 다중 액션",
+      "source_text": "계약서 파일 확인 후 서명해서 내일까지 메일로 보내주세요.",
+      "gold_intent": "command",
+      "pred_intent": "request",
+      "intent_ok": false,
+      "gold_deadline": "내일까지",
+      "pred_deadline": "내일까지"
+    },
+    {
+      "id": "card1_049",
+      "category": "복합 다중 액션",
+      "source_text": "예산안 검토 후 승인하고, 팀원들에게 공유해주세요.",
+      "gold_intent": "command",
+      "pred_intent": "request",
+      "intent_ok": false,
+      "gold_deadline": null,
+      "pred_deadline": null
+    },
+    {
+      "id": "card1_051",
+      "category": "복합 다중 액션",
+      "source_text": "발표 자료 만들고, 연습도 한 번 해보고, 월요일까지 발표 준비 완료해주세요.",
+      "gold_intent": "command",
+      "pred_intent": "request",
+      "intent_ok": false,
+      "gold_deadline": "월요일까지",
+      "pred_deadline": "월요일까지"
+    },
+    {
+      "id": "card1_053",
+      "category": "복합 다중 액션",
+      "source_text": "팀별 실적 취합하고, 비교 분석해서, 이사님께 보고드려주세요.",
+      "gold_intent": "command",
+      "pred_intent": "request",
+      "intent_ok": false,
+      "gold_deadline": null,
+      "pred_deadline": null
+    },
+    {
+      "id": "card1_054",
+      "category": "복합 다중 액션",
+      "source_text": "계약 조건 협의하고, 법무팀 검토 받고, 최종 서명까지 이번 달 말까지 완료해주세요.",
+      "gold_intent": "command",
+      "pred_intent": "request",
+      "intent_ok": false,
+      "gold_deadline": "이번 달 말까지",
+      "pred_deadline": "이번 달 말까지"
+    },
+    {
+      "id": "card1_058",
+      "category": "마감 없는 요청",
+      "source_text": "계약서 확인해주시면 감사하겠습니다.",
+      "gold_intent": "request",
+      "pred_intent": "report",
+      "intent_ok": false,
+      "gold_deadline": null,
+      "pred_deadline": null
+    },
+    {
+      "id": "card1_063",
+      "category": "자료 없는 액션",
+      "source_text": "다음 주 교육 일정 잡아주세요.",
+      "gold_intent": "request",
+      "pred_intent": "request",
+      "intent_ok": true,
+      "gold_deadline": "다음 주까지",
+      "pred_deadline": null
+    },
+    {
+      "id": "card1_064",
+      "category": "자료 없는 액션",
+      "source_text": "다음 주 미팅 일정 조율해주시면 감사하겠습니다.",
+      "gold_intent": "request",
+      "pred_intent": "report",
+      "intent_ok": false,
+      "gold_deadline": "다음 주까지",
+      "pred_deadline": null
+    }
+  ]
+}

@@ -282,6 +282,7 @@ if _FASTAPI_AVAILABLE:
         loop.run_in_executor(None, _init_shared_llm)
         asyncio.create_task(_cleanup_accounting_results())
         asyncio.create_task(_cleanup_parse_results())
+        asyncio.create_task(_cleanup_doc_transform_results())
 
     @app.get("/health")
     def health():
@@ -991,9 +992,11 @@ if _FASTAPI_AVAILABLE:
                 _parse_results.pop(rid, None)
 
     async def _stream_parse(text: str, input_format: str, result_id: str) -> AsyncGenerator[str, None]:
-        """요청 파싱 SSE 4-phase 제너레이터."""
+        """카드 1 요청 파싱 SSE 4-phase 제너레이터 — card1_extraction 통합 (단계 8)."""
         try:
-            from butler_pc_core.request_parsing import parse_text, mask_pii
+            from butler_pc_core.request_parsing import mask_pii
+            from butler_pc_core.card1_extraction import extract_card1
+            from butler_pc_core.card1_extraction.confidence import confidence_band as _cb
         except ImportError as exc:
             yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
             return
@@ -1003,31 +1006,51 @@ if _FASTAPI_AVAILABLE:
         await asyncio.sleep(0)
         masked = mask_pii(text)
 
-        # Phase 2 — 날짜/액션 추출
-        yield _sse("phase_start", {"phase": 2, "status_message": "날짜·액션 추출 중"})
+        # Phase 2 — 패턴 추출 (deadlines / materials / actions)
+        yield _sse("phase_start", {"phase": 2, "status_message": "마감·자료·액션 패턴 추출 중"})
         await asyncio.sleep(0)
 
-        # Phase 3 — LLM 파싱 (또는 휴리스틱)
-        yield _sse("phase_start", {"phase": 3, "status_message": "의도 분석 중"})
+        # Phase 3 — card1_extraction heuristic (SKIP_LLM=true)
+        yield _sse("phase_start", {"phase": 3, "status_message": "의도·마감·액션 분석 중"})
         await asyncio.sleep(0)
 
         loop = asyncio.get_running_loop()
         try:
-            llm = _SHARED_LLM if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready") else None
             result = await loop.run_in_executor(
-                None, lambda: parse_text(masked, input_format=input_format, llm=llm)
+                None,
+                lambda: _run_card1_extraction(masked),
             )
         except Exception as exc:
             yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)})
             return
 
-        # Phase 4 — 결과 저장
-        yield _sse("phase_start", {"phase": 4, "status_message": "결과 저장 중"})
+        # Phase 4 — verifier + 신뢰도 구간 판정
+        yield _sse("phase_start", {"phase": 4, "status_message": "검증 및 신뢰도 판정 중"})
         await asyncio.sleep(0)
 
-        result_dict = result.to_dict()
-        result_dict["masked_text"] = result.masked_text
-        result_dict["input_format"] = result.input_format
+        band = _cb(result.confidence)
+        result_dict = {
+            "intent": result.intent,
+            "intent_type": result.intent_type.value,
+            "deadline": result.deadline,
+            "deadline_raw": result.deadline_raw,
+            "materials": result.materials,
+            "actions": [
+                {
+                    "action_text": a.action_text,
+                    "source_evidence": a.source_evidence,
+                    "confidence": a.confidence,
+                }
+                for a in result.actions
+            ],
+            "sentence_type": result.sentence_type.value,
+            "confidence": result.confidence,
+            "confidence_band": band,
+            "needs_review": result.needs_review,
+            "reason_code": result.reason_code,
+            "masked_text": masked,
+            "input_format": input_format,
+        }
         _parse_results[result_id] = {
             "result": result_dict,
             "created_at": time.monotonic(),
@@ -1037,6 +1060,16 @@ if _FASTAPI_AVAILABLE:
             "result_id": result_id,
             "result": result_dict,
         })
+
+    def _run_card1_extraction(text: str):
+        """heuristic mode로 extract_card1() 실행 — thread-safe (단계 8.4).
+
+        이전 영역: os.environ["SKIP_LLM"] 글로벌 mutation → 동시 요청 race condition
+                    → SKIP_LLM=true 영구화 → 후속 요청이 silent LLM skip.
+        정정: extract_card1(skip_llm=True) 인자로 호출자 영역 LLM bypass — env mutation X.
+        """
+        from butler_pc_core.card1_extraction import extract_card1
+        return extract_card1(text, skip_llm=True)
 
     @app.post("/request_parsing/parse")
     async def request_parsing_parse(request: Request):
@@ -1185,11 +1218,15 @@ if _FASTAPI_AVAILABLE:
     async def _stream_parse_file(
         file_bytes: bytes, suffix: str, input_format: str, result_id: str
     ) -> AsyncGenerator[str, None]:
-        """바이너리 파일 업로드 전용 SSE 파싱 제너레이터."""
+        """바이너리 파일 업로드 전용 SSE 파싱 제너레이터.
+
+        단계 8.4 정정: parse_stream과 동일한 Card1Extraction 형식 반환 — UI 영역 일관성.
+        """
         try:
             from butler_pc_core.request_parsing import (
-                extract_text_from_file_bytes, ParseError, parse_text, mask_pii,
+                extract_text_from_file_bytes, ParseError, mask_pii,
             )
+            from butler_pc_core.card1_extraction.confidence import confidence_band as _cb
         except ImportError as exc:
             yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
             return
@@ -1208,27 +1245,47 @@ if _FASTAPI_AVAILABLE:
         await asyncio.sleep(0)
         masked = mask_pii(text)
 
-        # Phase 3 — LLM 파싱 또는 휴리스틱
+        # Phase 3 — Card1Extraction (heuristic, thread-safe skip_llm)
         yield _sse("phase_start", {"phase": 3, "status_message": "의도 분석 중"})
         await asyncio.sleep(0)
 
         loop = asyncio.get_running_loop()
         try:
-            llm = _SHARED_LLM if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready") else None
             result = await loop.run_in_executor(
-                None, lambda: parse_text(masked, input_format=input_format, llm=llm)
+                None,
+                lambda: _run_card1_extraction(masked),
             )
         except Exception as exc:
             yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)})
             return
 
-        # Phase 4 — 결과 저장
-        yield _sse("phase_start", {"phase": 4, "status_message": "결과 저장 중"})
+        # Phase 4 — verifier + 신뢰도 구간 판정
+        yield _sse("phase_start", {"phase": 4, "status_message": "검증 및 신뢰도 판정 중"})
         await asyncio.sleep(0)
 
-        result_dict = result.to_dict()
-        result_dict["masked_text"] = result.masked_text
-        result_dict["input_format"] = result.input_format
+        band = _cb(result.confidence)
+        result_dict = {
+            "intent": result.intent,
+            "intent_type": result.intent_type.value,
+            "deadline": result.deadline,
+            "deadline_raw": result.deadline_raw,
+            "materials": result.materials,
+            "actions": [
+                {
+                    "action_text": a.action_text,
+                    "source_evidence": a.source_evidence,
+                    "confidence": a.confidence,
+                }
+                for a in result.actions
+            ],
+            "sentence_type": result.sentence_type.value,
+            "confidence": result.confidence,
+            "confidence_band": band,
+            "needs_review": result.needs_review,
+            "reason_code": result.reason_code,
+            "masked_text": masked,
+            "input_format": input_format,
+        }
         _parse_results[result_id] = {
             "result": result_dict,
             "created_at": time.monotonic(),
@@ -1275,6 +1332,217 @@ if _FASTAPI_AVAILABLE:
                 "X-Result-Id": result_id,
             },
         )
+
+
+    # -----------------------------------------------------------------------
+    # 문서 변환 엔드포인트 (D-4 카드 2)
+    # -----------------------------------------------------------------------
+
+    DOC_TRANSFORM_RESULT_TTL = 1800      # 결과 보관 30분
+    DOC_TRANSFORM_CLEANUP_INTERVAL = 120
+
+    # result_id → { "docx_bytes": bytes, "md_text": str, "summary": dict, "created_at": float }
+    _doc_transform_results: dict[str, dict] = {}
+
+    async def _cleanup_doc_transform_results() -> None:
+        while True:
+            await asyncio.sleep(DOC_TRANSFORM_CLEANUP_INTERVAL)
+            now = time.monotonic()
+            expired = [
+                rid for rid, entry in list(_doc_transform_results.items())
+                if now - entry.get("created_at", now) > DOC_TRANSFORM_RESULT_TTL
+            ]
+            for rid in expired:
+                _doc_transform_results.pop(rid, None)
+
+    async def _stream_transform(
+        external_data: bytes,
+        external_suffix: str,
+        template_data: bytes,
+        template_suffix: str,
+        include_source_note: bool,
+        result_id: str,
+    ) -> AsyncGenerator[str, None]:
+        """카드 2 문서 변환 SSE 4-phase — semantic_mapping 통합 (단계 8)."""
+        try:
+            from butler_pc_core.document_transform import transform_document
+            from butler_pc_core.semantic_mapping import map_fields
+            from butler_pc_core.semantic_mapping.slot_schema import TARGET_SLOTS
+        except ImportError as exc:
+            yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
+            return
+
+        # Phase 1 — 외부 문서 분석
+        yield _sse("phase_start", {"phase": 1, "status_message": "외부 문서 분석 중..."})
+        await asyncio.sleep(0)
+
+        # Phase 2 — 양식 구조 분석
+        yield _sse("phase_start", {"phase": 2, "status_message": "우리 양식 구조 분석 중..."})
+        await asyncio.sleep(0)
+
+        # Phase 3 — 의미 매핑 (semantic_mapping pipeline)
+        yield _sse("phase_start", {"phase": 3, "status_message": "의미 매핑 중 (semantic_mapping)..."})
+        await asyncio.sleep(0)
+
+        loop = asyncio.get_running_loop()
+        try:
+            llm = _SHARED_LLM if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready") else None
+            result = await loop.run_in_executor(
+                None,
+                lambda: transform_document(
+                    external_data, external_suffix,
+                    template_data, template_suffix,
+                    include_source_note=include_source_note,
+                    llm=llm,
+                ),
+            )
+            # semantic_mapping 파이프라인 — 외부 문서 필드 → TARGET_SLOTS 매핑
+            source_fields = _extract_source_fields_from_result(result)
+            sm_decisions = await loop.run_in_executor(
+                None,
+                lambda: map_fields(source_fields, TARGET_SLOTS, use_llm=False),
+            )
+        except Exception as exc:
+            yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)})
+            return
+
+        # Phase 4 — 문서 생성 + 신뢰도 §11 Block 적용
+        yield _sse("phase_start", {"phase": 4, "status_message": "문서 생성 중..."})
+        await asyncio.sleep(0)
+
+        slot_results = [
+            {
+                "slot_id": d.target_slot.slot_id,
+                "heading": d.target_slot.heading,
+                "confidence": d.confidence,
+                "needs_review": d.needs_review,
+                "mapped": d.mapped,
+            }
+            for d in sm_decisions
+        ]
+        # §11 Block: confidence < 0.70 → needs_review
+        overall_needs_review = any(
+            d.mapped and d.confidence < 0.70 for d in sm_decisions
+        )
+
+        _doc_transform_results[result_id] = {
+            "docx_bytes": result.output_docx_bytes,
+            "md_text": result.output_md,
+            "summary": {
+                "confidence": result.confidence,
+                "mapped_count": len([s for s in result.mapped_sections if s.mapped]),
+                "total_count": len(result.mapped_sections),
+                "unmapped_sections": result.unmapped_sections,
+                "slot_results": slot_results,
+                "needs_review": overall_needs_review,
+            },
+            "created_at": time.monotonic(),
+        }
+
+        yield _sse("complete", {
+            "result_id": result_id,
+            "summary": _doc_transform_results[result_id]["summary"],
+        })
+
+    def _extract_source_fields_from_result(result) -> list:
+        """TransformResult의 매핑된 섹션에서 semantic_mapping SourceField 목록 생성."""
+        from butler_pc_core.semantic_mapping.contracts import SourceField, ValueType
+        fields = []
+        for sec in result.mapped_sections:
+            if sec.content.strip():
+                fields.append(SourceField(
+                    label=sec.heading,
+                    value=sec.content.strip()[:300],
+                    raw_text=sec.content.strip()[:300],
+                    detected_type=ValueType.UNKNOWN,
+                ))
+        return fields
+
+    @app.post("/document_transform/transform_stream")
+    async def document_transform_stream(request: Request):
+        """SSE 스트리밍 문서 변환 — 4-phase 진행률 보고."""
+        try:
+            form = await request.form()
+        except Exception:
+            raise HTTPException(status_code=400, detail="multipart 파싱 오류")
+
+        external_file = form.get("external_file")
+        template_file = form.get("template_file")
+        include_source_note = str(form.get("include_source_note", "false")).lower() == "true"
+
+        if external_file is None or not hasattr(external_file, "read"):
+            raise HTTPException(status_code=422, detail="external_file 필드가 없습니다.")
+        if template_file is None or not hasattr(template_file, "read"):
+            raise HTTPException(status_code=422, detail="template_file 필드가 없습니다.")
+
+        external_data = await external_file.read()
+        external_suffix = Path(external_file.filename or "").suffix.lower().lstrip(".")
+        template_data = await template_file.read()
+        template_suffix = Path(template_file.filename or "").suffix.lower().lstrip(".")
+
+        if not external_data:
+            raise HTTPException(status_code=422, detail="외부 문서 파일이 비어 있습니다.")
+        if not template_data:
+            raise HTTPException(status_code=422, detail="양식 파일이 비어 있습니다.")
+
+        allowed_external = {"txt", "md", "docx", "pdf", "eml"}
+        allowed_template = {"docx", "md"}
+        if external_suffix not in allowed_external:
+            raise HTTPException(status_code=422, detail=f"외부 문서: .{external_suffix} 미지원 (지원: .txt .md .docx .pdf .eml)")
+        if template_suffix not in allowed_template:
+            raise HTTPException(status_code=422, detail=f"양식 파일: .{template_suffix} 미지원 (지원: .docx .md)")
+
+        result_id = str(uuid.uuid4())
+        return StreamingResponse(
+            _stream_transform(
+                external_data, external_suffix,
+                template_data, template_suffix,
+                include_source_note, result_id,
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "X-Result-Id": result_id,
+            },
+        )
+
+    @app.get("/document_transform/result/{result_id}/docx")
+    def document_transform_result_docx(result_id: str):
+        entry = _doc_transform_results.get(result_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail="결과가 없거나 만료되었습니다.")
+        from fastapi.responses import Response as _Response
+        return _Response(
+            content=entry["docx_bytes"],
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": 'attachment; filename="butler_transform_result.docx"'},
+        )
+
+    @app.get("/document_transform/result/{result_id}/md")
+    def document_transform_result_md(result_id: str):
+        entry = _doc_transform_results.get(result_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail="결과가 없거나 만료되었습니다.")
+        from fastapi.responses import Response as _Response
+        return _Response(
+            content=entry["md_text"].encode("utf-8"),
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="butler_transform_result.md"'},
+        )
+
+    @app.post("/document_transform/feedback")
+    async def document_transform_feedback(request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="JSON 파싱 오류")
+        result_id: str = body.get("result_id", "")
+        feedback: str = body.get("feedback", "")
+        if feedback not in ("positive", "negative"):
+            raise HTTPException(status_code=422, detail="feedback은 'positive' 또는 'negative'여야 합니다.")
+        _log.info("[document_transform] feedback result_id=%s feedback=%s", result_id, feedback)
+        return JSONResponse({"status": "ok"})
 
 
 # ---------------------------------------------------------------------------

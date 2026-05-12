@@ -23,18 +23,25 @@ interface RequestParsingModalProps {
   onClose: () => void;
 }
 
-interface ActionItem {
-  text: string;
-  priority: 'P1' | 'P2' | 'P3';
-  rationale?: string;
+interface Card1Action {
+  action_text: string;
+  source_evidence: string;
+  confidence: number;
 }
 
+// Card1Extraction 결과 형식 (알고리즘 팀 §6 — 단계 8 통합)
 interface ParseResult {
-  actions: ActionItem[];
-  deadline: { raw_text: string; parsed_date: string | null; confidence: number; time_text?: string };
-  required_materials: { name: string; is_optional: boolean; rationale?: string }[];
-  intent: { summary: string; tone: string; expected_response: string };
+  intent: string;
+  intent_type: string;
+  deadline: string | null;
+  deadline_raw: string;
+  materials: string[];
+  actions: Card1Action[];
+  sentence_type: string;
   confidence: number;
+  confidence_band: 'auto' | 'badge' | 'confirm' | 'blocked';
+  needs_review: boolean;
+  reason_code: string;
   masked_text?: string;
   input_format?: string;
 }
@@ -45,22 +52,22 @@ type Phase =
   | { kind: 'done'; resultId: string; result: ParseResult }
   | { kind: 'error'; message: string };
 
-const PRIORITY_COLORS: Record<string, string> = {
-  P1: 'text-red-600 bg-red-50 border-red-200',
-  P2: 'text-orange-600 bg-orange-50 border-orange-200',
-  P3: 'text-gray-500 bg-gray-50 border-gray-200',
+// §6-6 confidence_band → 배지 스타일
+const BAND_STYLE: Record<string, { bg: string; text: string; label: string }> = {
+  auto:    { bg: '#dcfce7', text: '#15803d', label: '자동 적용' },
+  badge:   { bg: '#dbeafe', text: '#1d4ed8', label: '확인 배지' },
+  confirm: { bg: '#fef3c7', text: '#92400e', label: '사용자 확인 필요' },
+  blocked: { bg: '#fee2e2', text: '#b91c1c', label: '자동 적용 X' },
 };
 
-const PRIORITY_LABELS: Record<string, string> = {
-  P1: 'P1 긴급',
-  P2: 'P2 권장',
-  P3: 'P3 선택',
-};
-
-const PRIORITY_ICON_COLORS: Record<string, string> = {
-  P1: '#dc2626',
-  P2: '#ea580c',
-  P3: '#9ca3af',
+const INTENT_LABELS: Record<string, string> = {
+  request: '요청',
+  report: '보고',
+  question: '질문',
+  command: '지시',
+  schedule: '일정',
+  no_action: '조치 없음',
+  unknown: '미분류',
 };
 
 const ACCEPT_FORMATS = '.txt,.md,.docx,.pdf,.eml';
@@ -79,17 +86,18 @@ function parseSseBlock(block: string): { event: string; data: Record<string, unk
   }
 }
 
-function ConfidenceGauge({ value }: { value: number }) {
+// DocumentTransformModal 패턴 동일 — 인라인 style 영역 일관성 (단계 8.3)
+function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.round(value * 100);
-  const color = pct >= 90 ? 'bg-green-500' : pct >= 70 ? 'bg-yellow-400' : pct >= 50 ? 'bg-orange-400' : 'bg-red-400';
-  const label = pct >= 90 ? '높음' : pct >= 70 ? '보통' : pct >= 50 ? '낮음' : '불신뢰';
+  const color = pct >= 80 ? '#22c55e' : pct >= 60 ? '#eab308' : '#f97316';
+  const label = pct >= 80 ? '높음' : pct >= 60 ? '보통' : '낮음';
   return (
-    <div className="flex items-center gap-2 text-sm">
-      <span className="text-gray-500">신뢰도</span>
-      <div className="flex-1 bg-gray-200 rounded-full h-2 min-w-[80px]">
-        <div className={`${color} h-2 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px' }}>
+      <span style={{ color: '#6b7280', whiteSpace: 'nowrap' }}>분석 신뢰도</span>
+      <div style={{ flex: 1, backgroundColor: '#e5e7eb', borderRadius: '4px', height: '8px', minWidth: '80px' }}>
+        <div style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: '4px', transition: 'width 0.3s ease' }} />
       </div>
-      <span className="font-medium text-gray-700">{pct}% ({label})</span>
+      <span style={{ fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>{pct}% ({label})</span>
     </div>
   );
 }
@@ -288,7 +296,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
     }
   };
 
-  const canAnalyze = text.trim().length >= 30;
+  const canAnalyze = text.trim().length >= 15;
 
   return (
     /* ── 오버레이 (인라인 style — AccountingModal 동일 패턴, Tauri WebView 호환) ── */
@@ -541,66 +549,110 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
             </div>
           )}
 
-          {/* ── Result ── */}
+          {/* ── Result (Card1Extraction §6 — 단계 8.3 UI 영역 재구성) ── */}
           {phase.kind === 'done' && (
-            <div className="p-5 space-y-4">
-              <ConfidenceGauge value={phase.result.confidence} />
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <ConfidenceBar value={phase.result.confidence} />
 
-              {/* Intent */}
-              <div className="bg-gray-50 rounded-xl p-4">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <MessageCircle size={13} className="text-gray-400 shrink-0" />
-                  <p className="text-xs font-semibold text-gray-500">발신자 의도</p>
+              {/* §6-6 confidence_band + needs_review 배지 */}
+              {(() => {
+                const band = phase.result.confidence_band ?? 'confirm';
+                const st = BAND_STYLE[band] ?? BAND_STYLE.confirm;
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{
+                      padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600,
+                      backgroundColor: st.bg, color: st.text,
+                    }}>
+                      {st.label}
+                    </span>
+                    {phase.result.needs_review && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        backgroundColor: '#fffbeb', border: '1px solid #fcd34d',
+                        borderRadius: '8px', padding: '4px 10px',
+                      }}>
+                        <AlertTriangle size={13} style={{ color: '#d97706', flexShrink: 0 }} />
+                        <span style={{ fontSize: '12px', color: '#92400e', fontWeight: 500 }}>검토 필요</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Intent 카드 */}
+              <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <MessageCircle size={14} style={{ color: '#64748b', flexShrink: 0 }} />
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>발신자 의도</span>
+                  <span style={{
+                    marginLeft: 'auto', padding: '2px 10px', borderRadius: '9999px',
+                    fontSize: '11px', fontWeight: 600,
+                    backgroundColor: '#e0e7ff', color: '#3730a3',
+                  }}>
+                    {INTENT_LABELS[phase.result.intent_type] ?? phase.result.intent_type}
+                  </span>
                 </div>
-                <p className="text-sm text-gray-800 font-medium leading-snug">{phase.result.intent.summary}</p>
-                <div className="flex gap-3 mt-2 text-xs text-gray-400">
-                  <span>톤: {phase.result.intent.tone}</span>
-                  {phase.result.intent.expected_response && (
-                    <span>기대응답: {phase.result.intent.expected_response}</span>
-                  )}
-                </div>
+                <p style={{ fontSize: '14px', color: '#111827', fontWeight: 500, lineHeight: 1.5, margin: 0 }}>
+                  {phase.result.intent}
+                </p>
               </div>
 
-              {/* Deadline */}
-              {phase.result.deadline.raw_text && (
-                <div className="bg-yellow-50 border border-yellow-100 rounded-xl p-3 flex items-start gap-2">
-                  <Calendar size={18} className="text-yellow-500 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-semibold text-yellow-700">마감일</p>
-                    <p className="text-sm text-gray-800">
-                      {phase.result.deadline.raw_text}
-                      {phase.result.deadline.time_text ? ` ${phase.result.deadline.time_text}까지` : ''}
+              {/* Deadline 카드 */}
+              {phase.result.deadline_raw && (
+                <div style={{
+                  backgroundColor: '#fffbeb', border: '1px solid #fcd34d',
+                  borderRadius: '10px', padding: '14px 16px',
+                  display: 'flex', alignItems: 'flex-start', gap: '10px',
+                }}>
+                  <Calendar size={18} style={{ color: '#d97706', flexShrink: 0, marginTop: '1px' }} />
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '12px', fontWeight: 600, color: '#92400e', margin: 0 }}>마감일</p>
+                    <p style={{ fontSize: '14px', color: '#111827', fontWeight: 500, marginTop: '2px', marginBottom: 0 }}>
+                      {phase.result.deadline_raw}
                     </p>
-                    {(phase.result.deadline.parsed_date || phase.result.deadline.time_text) && (
-                      <p className="text-xs text-yellow-600 mt-0.5">
-                        {[phase.result.deadline.parsed_date, phase.result.deadline.time_text].filter(Boolean).join(' ')}
+                    {phase.result.deadline && (
+                      <p style={{ fontSize: '12px', color: '#a16207', marginTop: '2px', marginBottom: 0 }}>
+                        {phase.result.deadline}
                       </p>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Actions */}
+              {/* Actions 카드 */}
               {phase.result.actions.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 mb-2">액션 목록</p>
-                  <div className="space-y-2">
+                <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '10px', padding: '14px 16px' }}>
+                  <p style={{ fontSize: '12px', fontWeight: 600, color: '#0c4a6e', marginTop: 0, marginBottom: '10px' }}>
+                    액션 목록 ({phase.result.actions.length}건)
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {phase.result.actions.map((action, i) => (
-                      <div
-                        key={i}
-                        className={`border rounded-xl px-3 py-2.5 ${PRIORITY_COLORS[action.priority] ?? 'text-gray-700 bg-gray-50 border-gray-200'}`}
-                      >
-                        <div className="flex items-start gap-2">
-                          <AlertCircle
-                            size={14}
-                            className="shrink-0 mt-0.5"
-                            style={{ color: PRIORITY_ICON_COLORS[action.priority] ?? '#9ca3af' }}
-                          />
-                          <span className="text-xs font-bold shrink-0">{PRIORITY_LABELS[action.priority] ?? action.priority}</span>
-                          <p className="text-sm flex-1">{action.text}</p>
+                      <div key={i} style={{
+                        backgroundColor: 'white', border: '1px solid #e0f2fe',
+                        borderRadius: '8px', padding: '10px 12px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                          <AlertCircle size={14} style={{ color: '#0284c7', flexShrink: 0, marginTop: '2px' }} />
+                          <p style={{ flex: 1, fontSize: '13px', color: '#111827', lineHeight: 1.5, margin: 0 }}>
+                            {action.action_text}
+                          </p>
+                          <span style={{
+                            fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap',
+                            padding: '2px 8px', borderRadius: '9999px',
+                            backgroundColor: action.confidence >= 0.75 ? '#dcfce7' : '#fef3c7',
+                            color: action.confidence >= 0.75 ? '#15803d' : '#92400e',
+                          }}>
+                            {Math.round(action.confidence * 100)}%
+                          </span>
                         </div>
-                        {action.rationale && (
-                          <p className="text-xs opacity-70 mt-1 pl-10">{action.rationale}</p>
+                        {action.source_evidence && action.source_evidence !== action.action_text && (
+                          <p style={{
+                            fontSize: '11px', color: '#94a3b8', marginTop: '6px', marginLeft: '22px',
+                            marginBottom: 0, fontStyle: 'italic',
+                          }}>
+                            "{action.source_evidence.slice(0, 80)}"
+                          </p>
                         )}
                       </div>
                     ))}
@@ -608,23 +660,27 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                 </div>
               )}
 
-              {/* Materials — always render */}
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Paperclip size={13} className="text-gray-400 shrink-0" />
-                  <p className="text-xs font-semibold text-gray-500">필요 자료</p>
+              {/* Materials 카드 */}
+              <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <Paperclip size={14} style={{ color: '#64748b', flexShrink: 0 }} />
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>필요 자료</span>
+                  {phase.result.materials.length > 0 && (
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      ({phase.result.materials.length}건)
+                    </span>
+                  )}
                 </div>
-                {phase.result.required_materials.length === 0 ? (
-                  <p className="text-sm text-gray-400 italic">필요 자료 명시 X</p>
+                {phase.result.materials.length === 0 ? (
+                  <p style={{ fontSize: '13px', color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>
+                    필요 자료 명시 X
+                  </p>
                 ) : (
-                  <div className="space-y-1">
-                    {phase.result.required_materials.map((mat, i) => (
-                      <div key={i} className="flex items-center gap-2 text-sm text-gray-700 py-0.5">
-                        <span className="text-gray-300">•</span>
-                        <span>{mat.name}</span>
-                        {mat.is_optional && (
-                          <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">선택</span>
-                        )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {phase.result.materials.map((mat, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+                        <span style={{ color: '#cbd5e1', fontWeight: 700 }}>•</span>
+                        <span style={{ color: '#334155' }}>{mat}</span>
                       </div>
                     ))}
                   </div>
@@ -632,20 +688,29 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
               </div>
 
               {/* Feedback */}
-              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                <p className="text-xs text-gray-400">결과가 도움이 되었나요?</p>
-                <div className="flex gap-2">
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                paddingTop: '8px', borderTop: '1px solid #f3f4f6',
+              }}>
+                <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>결과가 도움이 되었나요?</p>
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     onClick={() => handleFeedback('positive')}
-                    className={`transition-transform hover:scale-110 ${feedback === 'positive' ? 'opacity-100 text-blue-500' : 'opacity-50 hover:opacity-100 text-gray-400'}`}
                     aria-label="도움이 됨"
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
+                      color: feedback === 'positive' ? '#2563eb' : '#d1d5db',
+                    }}
                   >
                     <ThumbsUp size={18} />
                   </button>
                   <button
                     onClick={() => handleFeedback('negative')}
-                    className={`transition-transform hover:scale-110 ${feedback === 'negative' ? 'opacity-100 text-red-500' : 'opacity-50 hover:opacity-100 text-gray-400'}`}
                     aria-label="도움 안 됨"
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
+                      color: feedback === 'negative' ? '#dc2626' : '#d1d5db',
+                    }}
                   >
                     <ThumbsDown size={18} />
                   </button>
@@ -656,11 +721,14 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
 
           {/* ── Error ── */}
           {phase.kind === 'error' && (
-            <div className="p-6 text-center">
-              <AlertTriangle size={36} className="text-red-400 mx-auto mb-3" />
-              <p className="text-sm text-red-600 font-medium mb-1">파싱 오류</p>
-              <p className="text-xs text-gray-500 mb-4">{phase.message}</p>
-              <button onClick={() => setPhase({ kind: 'idle' })} className="text-xs text-blue-500 hover:underline">
+            <div style={{ padding: '48px 32px', textAlign: 'center' }}>
+              <AlertTriangle size={36} style={{ color: '#f87171', margin: '0 auto 12px' }} />
+              <p style={{ fontSize: '14px', fontWeight: 600, color: '#dc2626', marginBottom: '6px' }}>파싱 오류</p>
+              <p style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>{phase.message}</p>
+              <button
+                onClick={() => setPhase({ kind: 'idle' })}
+                style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer' }}
+              >
                 다시 시도
               </button>
             </div>
@@ -693,28 +761,52 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
             <>
               <button
                 onClick={handleCopy}
-                className="flex-1 py-2 text-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+                style={{
+                  flex: 1, padding: '12px',
+                  backgroundColor: 'white', color: '#374151',
+                  border: '1.5px solid #d1d5db', borderRadius: '10px',
+                  fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                }}
               >
                 <Copy size={14} />
                 복사
               </button>
               <button
                 onClick={handleDownloadMd}
-                className="flex-1 py-2 text-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+                style={{
+                  flex: 1, padding: '12px',
+                  backgroundColor: 'white', color: '#374151',
+                  border: '1.5px solid #d1d5db', borderRadius: '10px',
+                  fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                }}
               >
                 <Download size={14} />
                 .md
               </button>
               <button
                 onClick={handleDownloadDocx}
-                className="flex-1 py-2 text-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+                style={{
+                  flex: 1, padding: '12px',
+                  backgroundColor: '#2563eb', color: 'white',
+                  border: 'none', borderRadius: '10px',
+                  fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                }}
               >
                 <Download size={14} />
                 .docx
               </button>
               <button
                 onClick={() => { setPhase({ kind: 'idle' }); setText(''); setSelectedFileName(''); }}
-                className="flex-1 py-2 text-sm text-blue-500 border border-blue-200 rounded-xl hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5"
+                style={{
+                  flex: 1, padding: '12px',
+                  backgroundColor: 'white', color: '#2563eb',
+                  border: '1.5px solid #bfdbfe', borderRadius: '10px',
+                  fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                }}
               >
                 <RotateCw size={14} />
                 새 분석
@@ -724,7 +816,12 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
           {phase.kind === 'error' && (
             <button
               onClick={onClose}
-              className="flex-1 py-2.5 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+              style={{
+                flex: 1, padding: '12px',
+                backgroundColor: 'white', color: '#6b7280',
+                border: '1px solid #e5e7eb', borderRadius: '10px',
+                fontSize: '14px', cursor: 'pointer',
+              }}
             >
               닫기
             </button>
