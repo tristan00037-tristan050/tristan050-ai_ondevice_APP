@@ -307,6 +307,59 @@ def test_heuristic_classifies_report():
         )
 
 
+def test_heuristic_polite_request_to_request():
+    """단계 8.3: '부탁드립니다/감사하겠습니다' 영역 정중 요청 → REQUEST 분류."""
+    from butler_pc_core.card1_extraction.llm_extractor import _heuristic_extraction
+
+    polite_cases = [
+        "자료를 받으시면 검토 후 회신 부탁드립니다.",
+        "검토가 완료된다면 최종본을 공유해 주시면 감사하겠습니다.",
+        "협조 부탁드립니다.",
+        "다음 주 미팅 일정 조율해주시면 감사하겠습니다.",
+    ]
+    for text in polite_cases:
+        hints = {"deadlines": [], "materials": [], "actions": []}
+        result = _heuristic_extraction(text, hints)
+        assert result.intent_type == IntentType.REQUEST, (
+            f"'{text[:40]}' → 기대=REQUEST, 실제={result.intent_type.value}"
+        )
+
+
+def test_heuristic_bonaeo_juseyo_to_request():
+    """단계 8.3: '보내주세요' 영역 직접 요청 → REQUEST 분류."""
+    from butler_pc_core.card1_extraction.llm_extractor import _heuristic_extraction
+
+    cases = [
+        "내일까지 계약서 보내주세요.",
+        "내일까지 계약서 보내주세요. 검토 부탁드립니다.",
+        "다음 주 월요일까지 보고서를 전달해주세요.",
+    ]
+    for text in cases:
+        hints = {"deadlines": [], "materials": [], "actions": []}
+        result = _heuristic_extraction(text, hints)
+        assert result.intent_type == IntentType.REQUEST, (
+            f"'{text[:40]}' → 기대=REQUEST, 실제={result.intent_type.value}"
+        )
+
+
+def test_heuristic_genuine_report_preserved():
+    """단계 8.3 회귀 방지: 진짜 보고형('보내드리겠습니다/재발송하겠습니다/처리하겠습니다')은
+    여전히 REPORT — '부탁/감사' lookbehind만 우회."""
+    from butler_pc_core.card1_extraction.llm_extractor import _heuristic_extraction
+
+    report_cases = [
+        "회의 결과를 정리해서 오늘 중에 메일 보내드리겠습니다.",
+        "견적서를 수정해서 다음 주까지 재발송하겠습니다.",
+        "해당 이슈는 검토 후 다음 주 월요일까지 처리하겠습니다.",
+    ]
+    for text in report_cases:
+        hints = {"deadlines": [], "materials": [], "actions": []}
+        result = _heuristic_extraction(text, hints)
+        assert result.intent_type == IntentType.REPORT, (
+            f"'{text[:40]}' → 기대=REPORT, 실제={result.intent_type.value}"
+        )
+
+
 def test_heuristic_classifies_no_action():
     """heuristic — 부정/취소/없습니다 → NO_ACTION 분류."""
     from butler_pc_core.card1_extraction.llm_extractor import _heuristic_extraction
