@@ -1,0 +1,5038 @@
+{
+  "model_path": "/Users/kimsunghoon/Desktop/butler-data/Butler모델/qwen3-4b-gguf/qwen3-4b-q4_k_m.gguf",
+  "load_secs": 0.488,
+  "eval_secs": 203.439,
+  "total_items": 65,
+  "metrics_d": {
+    "intent_type_accuracy": 0.8308,
+    "strict_action_f1": 0.7539,
+    "normalized_action_f1": 0.9231,
+    "multi_action_split_accuracy": 0.8571,
+    "deadline_f1": 0.4571,
+    "material_f1": 0.816,
+    "false_deadline_count": 0,
+    "false_deadline_denom": 38,
+    "false_deadline_rate": 0.0,
+    "no_action_fp_count": 0,
+    "no_action_fp_total": 5,
+    "no_action_fp_rate": 0.0,
+    "schema_valid_rate": 1.0,
+    "retry_rate": 0.0,
+    "verifier_block_rate": 0.8462,
+    "auto_apply_count": 0,
+    "auto_apply_rate": 0.0,
+    "auto_apply_accuracy": null,
+    "manual_review_rate": 1.0,
+    "low_confidence_true_positive_count": 44,
+    "verifier_error_with_auto_apply": 0
+  },
+  "metrics_a": {
+    "intent_type_accuracy": 0.9077,
+    "strict_action_f1": 0.7826,
+    "normalized_action_f1": 0.8552
+  },
+  "confusion_matrix_d": {
+    "report": {
+      "report": 12,
+      "request": 0,
+      "command": 0,
+      "no_action": 0
+    },
+    "request": {
+      "report": 0,
+      "request": 36,
+      "command": 0,
+      "no_action": 1
+    },
+    "command": {
+      "report": 0,
+      "request": 6,
+      "command": 1,
+      "no_action": 0
+    },
+    "no_action": {
+      "report": 0,
+      "request": 0,
+      "command": 0,
+      "no_action": 5
+    }
+  },
+  "calibration": {
+    "action_ece_before": 0.419,
+    "action_ece_after": 0.2701,
+    "intent_ece_before": 0.4182,
+    "intent_ece_after": 0.2819,
+    "deadline_present_ece_before": 0.3381,
+    "deadline_present_ece_after": 0.1769,
+    "material_ece_before": 0.2234,
+    "material_ece_after": 0.0,
+    "overall_ece_reference_only": 0.3569,
+    "action_A": -0.03,
+    "action_B": -1.72,
+    "intent_A": -4.24,
+    "intent_B": 0.97,
+    "deadline_A": -13.8,
+    "deadline_B": 13.06,
+    "material_A": -19.45,
+    "material_B": -8.95
+  },
+  "deadline_block_breakdown": {
+    "deadline_inquiry": 1,
+    "urgency_as_deadline": 1,
+    "condition_as_deadline": 1,
+    "false_deadline_remaining": 0
+  },
+  "normalizer": {
+    "report_override_count": 12,
+    "report_override_correct": 12,
+    "command_override_count": 1,
+    "command_override_correct": 1
+  },
+  "cm_6_5_3": {
+    "report": {
+      "report": 8,
+      "request": 4,
+      "command": 0,
+      "no_action": 0
+    },
+    "request": {
+      "report": 0,
+      "request": 36,
+      "command": 0,
+      "no_action": 1
+    },
+    "command": {
+      "report": 0,
+      "request": 6,
+      "command": 1,
+      "no_action": 0
+    },
+    "no_action": {
+      "report": 0,
+      "request": 0,
+      "command": 0,
+      "no_action": 5
+    }
+  },
+  "per_sample": [
+    {
+      "id": "card1_001",
+      "category": "의문문",
+      "source_text": "이 자료 보내주실 수 있나요?",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": null,
+        "materials": [
+          "자료"
+        ],
+        "actions": [
+          {
+            "action_text": "보내",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "이 자료 보내주실 수 있나요"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "자료 보내기"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "action_raw": 0.72,
+        "intent_raw": 0.52,
+        "overall_raw": 0.555,
+        "action_conf": 0.7068,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.6684,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8509,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8254,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_002",
+      "category": "의문문",
+      "source_text": "보고서 검토 언제까지 가능하신가요?",
+      "expected": {
+        "intent_type": "QUESTION",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": null,
+        "materials": [
+          "보고서"
+        ],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "question",
+        "actions": [
+          "보고서 검토 언제까지 가능하신가요"
+        ],
+        "deadline": "",
+        "materials": [
+          "보고서"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "보고서 검토"
+        ],
+        "deadline": "",
+        "materials": [
+          "보고서"
+        ],
+        "action_raw": 0.42,
+        "intent_raw": 0.52,
+        "overall_raw": 0.08,
+        "action_conf": 0.4207,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.3,
+        "material_conf": 0.85,
+        "final_weighted": 0.5253,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='언제까지 가능하신가요' NOT_A_DEADLINE_deadline_inquiry",
+        "deadline_type": "deadline_inquiry",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8497,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8247,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_003",
+      "category": "의문문",
+      "source_text": "계약서 수정 사항 확인 부탁드려도 될까요?",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": null,
+        "materials": [
+          "계약서"
+        ],
+        "actions": [
+          {
+            "action_text": "확인",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "계약서 수정 사항 확인 부탁드려도 될까요"
+        ],
+        "deadline": "",
+        "materials": [
+          "계약서"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "계약서 수정 사항 확인"
+        ],
+        "deadline": "",
+        "materials": [
+          "계약서"
+        ],
+        "action_raw": 0.82,
+        "intent_raw": 0.52,
+        "overall_raw": 0.63,
+        "action_conf": 0.7824,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.7062,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8513,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8256,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_004",
+      "category": "의문문",
+      "source_text": "미팅 일정 조율이 가능한지 확인해주실 수 있을까요?",
+      "expected": {
+        "intent_type": "QUESTION",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "확인",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "미팅 일정 조율이 가능한지 확인해주실 수 있을까요"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "미팅 일정 조율이 가능한지 확인해주실 수 있을까요"
+        ],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.75,
+        "intent_raw": 0.52,
+        "overall_raw": 0.56,
+        "action_conf": 0.7311,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.6467,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.851,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8205,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_005",
+      "category": "의문문",
+      "source_text": "첨부 파일 받으셨나요?",
+      "expected": {
+        "intent_type": "QUESTION",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": null,
+        "materials": [
+          "파일"
+        ],
+        "actions": [
+          {
+            "action_text": "확인",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "question",
+        "actions": [
+          "첨부 파일 받으셨나요"
+        ],
+        "deadline": "",
+        "materials": [
+          "파일"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "첨부 파일 확인"
+        ],
+        "deadline": "",
+        "materials": [
+          "첨부 파일"
+        ],
+        "action_raw": 0.72,
+        "intent_raw": 0.52,
+        "overall_raw": 0.555,
+        "action_conf": 0.7068,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.6684,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8509,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8254,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_006",
+      "category": "의문문",
+      "source_text": "내일까지 서류 제출 가능하실까요?",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": "내일까지",
+        "materials": [
+          "서류"
+        ],
+        "actions": [
+          {
+            "action_text": "제출",
+            "owner": null,
+            "due_date": "내일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "내일까지 서류 제출 가능하실까요"
+        ],
+        "deadline": "내일까지",
+        "materials": [
+          "서류"
+        ],
+        "confidence": 0.773
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "서류 제출"
+        ],
+        "deadline": "내일까지",
+        "materials": [
+          "서류"
+        ],
+        "action_raw": 0.92,
+        "intent_raw": 0.52,
+        "overall_raw": 0.805,
+        "action_conf": 0.8429,
+        "intent_conf": 0.52,
+        "deadline_conf": 1.0,
+        "material_conf": 0.85,
+        "final_weighted": 0.7628,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "deadline",
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8516,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8431,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_007",
+      "category": "의문문",
+      "source_text": "이번 주 안으로 예산안 검토해주실 수 있을까요?",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": "이번 주 안",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": "이번 주 안"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "이번 주 안으로 예산안 검토해주실 수 있을까요"
+        ],
+        "deadline": "이번 주 안",
+        "materials": [],
+        "confidence": 0.73
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "예산안 검토"
+        ],
+        "deadline": "",
+        "materials": [
+          "예산안"
+        ],
+        "action_raw": 0.45,
+        "intent_raw": 0.52,
+        "overall_raw": 0.185,
+        "action_conf": 0.4502,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.3,
+        "material_conf": 0.5,
+        "final_weighted": 0.4818,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='이번 주 안' NOT_A_DEADLINE_none",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8499,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.7665,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_008",
+      "category": "의문문",
+      "source_text": "오늘 중에 회의 자료 공유해 주실 수 있으신가요?",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "INTERROGATIVE",
+        "deadline": "오늘 중",
+        "materials": [
+          "자료"
+        ],
+        "actions": [
+          {
+            "action_text": "공유",
+            "owner": null,
+            "due_date": "오늘 중"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "오늘 중에 회의 자료 공유해 주실 수 있으신가요"
+        ],
+        "deadline": "오늘 중에",
+        "materials": [
+          "자료"
+        ],
+        "confidence": 0.773
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "회의 자료 공유"
+        ],
+        "deadline": "오늘 중에",
+        "materials": [
+          "자료"
+        ],
+        "action_raw": 0.92,
+        "intent_raw": 0.52,
+        "overall_raw": 0.805,
+        "action_conf": 0.8429,
+        "intent_conf": 0.52,
+        "deadline_conf": 1.0,
+        "material_conf": 0.85,
+        "final_weighted": 0.7628,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "deadline",
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "soft_deadline",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8516,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8431,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_009",
+      "category": "평서문",
+      "source_text": "프로젝트 계획서를 내일까지 제출할 예정입니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "내일까지",
+        "materials": [
+          "계획서"
+        ],
+        "actions": [
+          {
+            "action_text": "제출",
+            "owner": null,
+            "due_date": "내일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [
+          "프로젝트 계획서를 내일까지 제출할 예정입니다"
+        ],
+        "deadline": "내일까지",
+        "materials": [
+          "계획서"
+        ],
+        "confidence": 0.773
+      },
+      "D": {
+        "intent": "report",
+        "actions": [
+          "프로젝트 계획서 제출"
+        ],
+        "deadline": "내일까지",
+        "materials": [
+          "프로젝트 계획서"
+        ],
+        "action_raw": 0.92,
+        "intent_raw": 0.72,
+        "overall_raw": 0.8425,
+        "action_conf": 0.8429,
+        "intent_conf": 0.7068,
+        "deadline_conf": 1.0,
+        "material_conf": 0.85,
+        "final_weighted": 0.8188,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "deadline",
+          "material"
+        ],
+        "override": "REPORT",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8516,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8775,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_010",
+      "category": "평서문",
+      "source_text": "이번 주 금요일에 팀 미팅이 있습니다.",
+      "expected": {
+        "intent_type": "SCHEDULE",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "이번 주 금요일",
+        "materials": [],
+        "actions": []
+      },
+      "A": {
+        "intent": "schedule",
+        "actions": [],
+        "deadline": "이번 주 금요일에",
+        "materials": [],
+        "confidence": 0.518
+      },
+      "D": {
+        "intent": "request",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.7,
+        "intent_raw": 0.52,
+        "overall_raw": 0.645,
+        "action_conf": 0.69,
+        "intent_conf": 0.52,
+        "deadline_conf": 1.0,
+        "material_conf": 0.5,
+        "final_weighted": 0.622,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 0
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8508,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8204,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_011",
+      "category": "평서문",
+      "source_text": "보고서 작성이 완료되면 공유드리겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": null,
+        "materials": [
+          "보고서"
+        ],
+        "actions": [
+          {
+            "action_text": "공유",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [
+          "보고서 작성이 완료되면 공유드리겠습니다"
+        ],
+        "deadline": "",
+        "materials": [
+          "보고서"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "report",
+        "actions": [
+          "보고서 공유"
+        ],
+        "deadline": "",
+        "materials": [
+          "보고서"
+        ],
+        "action_raw": 0.77,
+        "intent_raw": 0.72,
+        "overall_raw": 0.63,
+        "action_conf": 0.7465,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.7505,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "REPORT",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8511,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8636,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_012",
+      "category": "평서문",
+      "source_text": "회의 결과를 정리해서 오늘 중에 메일 보내드리겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "오늘 중",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "정리",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "보내",
+            "owner": null,
+            "due_date": "오늘 중"
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [
+          "회의 결과를 정리해서 오늘 중에 메일 보내드리겠습니다"
+        ],
+        "deadline": "오늘 중에",
+        "materials": [],
+        "confidence": 0.73
+      },
+      "D": {
+        "intent": "report",
+        "actions": [
+          "회의 결과 정리",
+          "메일 보내기"
+        ],
+        "deadline": "",
+        "materials": [
+          "회의 결과",
+          "메일"
+        ],
+        "action_raw": 0.1667,
+        "intent_raw": 0.72,
+        "overall_raw": -0.1025,
+        "action_conf": 0.2086,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.3,
+        "material_conf": 0.5,
+        "final_weighted": 0.4232,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "REPORT",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='오늘 중에' NOT_A_DEADLINE_none",
+        "deadline_type": "soft_deadline",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8488,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8041,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_013",
+      "category": "평서문",
+      "source_text": "견적서를 수정해서 다음 주까지 재발송하겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "다음 주까지",
+        "materials": [
+          "견적서"
+        ],
+        "actions": [
+          {
+            "action_text": "수정",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "발송",
+            "owner": null,
+            "due_date": "다음 주까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [
+          "견적서를 수정해서 다음 주까지 재발송하겠습니다"
+        ],
+        "deadline": "다음 주까지",
+        "materials": [
+          "견적서"
+        ],
+        "confidence": 0.773
+      },
+      "D": {
+        "intent": "report",
+        "actions": [
+          "견적서 수정",
+          "견적서 재발송"
+        ],
+        "deadline": "",
+        "materials": [
+          "견적서"
+        ],
+        "action_raw": -0.1633,
+        "intent_raw": 0.62,
+        "overall_raw": -0.57,
+        "action_conf": 0.0658,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.3,
+        "material_conf": 0.4,
+        "final_weighted": 0.0,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "verifier_gate",
+        "present_fields": [
+          "material"
+        ],
+        "override": "REPORT",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='다음 주까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8475,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.7705,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_014",
+      "category": "평서문",
+      "source_text": "해당 이슈는 검토 후 다음 주 월요일까지 처리하겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "다음 주 월요일까지",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "처리",
+            "owner": null,
+            "due_date": "다음 주 월요일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [
+          "해당 이슈는 검토 후 다음 주 월요일까지 처리하겠습니다"
+        ],
+        "deadline": "월요일까지",
+        "materials": [],
+        "confidence": 0.73
+      },
+      "D": {
+        "intent": "report",
+        "actions": [
+          "해당 이슈 검토",
+          "해당 이슈 처리"
+        ],
+        "deadline": "다음 주 월요일까지",
+        "materials": [],
+        "action_raw": 0.7,
+        "intent_raw": 0.62,
+        "overall_raw": 0.51,
+        "action_conf": 0.69,
+        "intent_conf": 0.6177,
+        "deadline_conf": 1.0,
+        "material_conf": 0.5,
+        "final_weighted": 0.0,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "verifier_gate",
+        "present_fields": [
+          "deadline"
+        ],
+        "override": "REPORT",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8508,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8646,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_015",
+      "category": "평서문",
+      "source_text": "고객사 미팅 후 결과를 정리하여 보고드리겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "정리",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "보고",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [
+          "고객사 미팅 후 결과를 정리하여 보고드리겠습니다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "report",
+        "actions": [
+          "고객사 미팅 후 결과 정리",
+          "고객사 미팅 후 결과 보고"
+        ],
+        "deadline": "",
+        "materials": [
+          "고객사 미팅"
+        ],
+        "action_raw": 0.9,
+        "intent_raw": 0.72,
+        "overall_raw": 0.6475,
+        "action_conf": 0.832,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.7349,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "REPORT",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8516,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8055,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "material_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_016",
+      "category": "평서문",
+      "source_text": "자료를 취합하여 월요일까지 전달드리겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "월요일까지",
+        "materials": [
+          "자료"
+        ],
+        "actions": [
+          {
+            "action_text": "취합",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "전달",
+            "owner": null,
+            "due_date": "월요일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [
+          "자료를 취합하여 월요일까지 전달드리겠습니다"
+        ],
+        "deadline": "월요일까지",
+        "materials": [
+          "자료"
+        ],
+        "confidence": 0.773
+      },
+      "D": {
+        "intent": "report",
+        "actions": [
+          "자료 취합",
+          "자료 전달"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "action_raw": 0.37,
+        "intent_raw": 0.72,
+        "overall_raw": 0.0675,
+        "action_conf": 0.3729,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.3,
+        "material_conf": 0.85,
+        "final_weighted": 0.0,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "verifier_gate",
+        "present_fields": [
+          "material"
+        ],
+        "override": "REPORT",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='월요일까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8496,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8629,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_017",
+      "category": "명령형",
+      "source_text": "오늘 중으로 보고서 제출하세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "오늘 중",
+        "materials": [
+          "보고서"
+        ],
+        "actions": [
+          {
+            "action_text": "제출",
+            "owner": null,
+            "due_date": "오늘 중"
+          }
+        ]
+      },
+      "A": {
+        "intent": "command",
+        "actions": [
+          "오늘 중으로 보고서 제출하세요"
+        ],
+        "deadline": "오늘 중으로",
+        "materials": [
+          "보고서"
+        ],
+        "confidence": 0.773
+      },
+      "D": {
+        "intent": "command",
+        "actions": [
+          "보고서 제출"
+        ],
+        "deadline": "오늘 중으로",
+        "materials": [
+          "보고서"
+        ],
+        "action_raw": 0.82,
+        "intent_raw": 0.62,
+        "overall_raw": 0.73,
+        "action_conf": 0.7824,
+        "intent_conf": 0.6177,
+        "deadline_conf": 1.0,
+        "material_conf": 0.85,
+        "final_weighted": 0.7649,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "deadline",
+          "material"
+        ],
+        "override": "COMMAND",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "soft_deadline",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8513,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8626,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_018",
+      "category": "명령형",
+      "source_text": "계약서 검토하고 수정 사항 알려주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [
+          "계약서"
+        ],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "회신",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "계약서 검토하고 수정 사항 알려주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "계약서"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "계약서 검토",
+          "수정 사항 알려주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "계약서"
+        ],
+        "action_raw": 0.8367,
+        "intent_raw": 0.62,
+        "overall_raw": 0.6175,
+        "action_conf": 0.7936,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.7444,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8513,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8474,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_019",
+      "category": "명령형",
+      "source_text": "첨부 파일 확인 후 서명해서 돌려주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [
+          "파일"
+        ],
+        "actions": [
+          {
+            "action_text": "확인",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "서명",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "첨부 파일 확인 후 서명해서 돌려주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "파일"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "첨부 파일 확인",
+          "첨부 파일 서명",
+          "첨부 파일 돌려주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "첨부 파일"
+        ],
+        "action_raw": 0.47,
+        "intent_raw": 0.62,
+        "overall_raw": 0.1175,
+        "action_conf": 0.47,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.5,
+        "material_conf": 0.4,
+        "final_weighted": 0.0,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "verifier_gate",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 3
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8499,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.7716,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_020",
+      "category": "명령형",
+      "source_text": "이 자료 팀원들에게 공유해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [
+          "자료"
+        ],
+        "actions": [
+          {
+            "action_text": "공유",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "이 자료 팀원들에게 공유해주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "자료 공유"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "action_raw": 0.92,
+        "intent_raw": 0.72,
+        "overall_raw": 0.78,
+        "action_conf": 0.8429,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.7987,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8516,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8639,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_021",
+      "category": "명령형",
+      "source_text": "오전 10시까지 기획서 제출해주십시오.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "오전 10시까지",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "제출",
+            "owner": null,
+            "due_date": "오전 10시까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "command",
+        "actions": [
+          "오전 10시까지 기획서 제출해주십시오"
+        ],
+        "deadline": "오전 10시까지",
+        "materials": [],
+        "confidence": 0.73
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "기획서 제출"
+        ],
+        "deadline": "오전 10시까지",
+        "materials": [
+          "기획서"
+        ],
+        "action_raw": 0.85,
+        "intent_raw": 0.52,
+        "overall_raw": 0.735,
+        "action_conf": 0.8022,
+        "intent_conf": 0.52,
+        "deadline_conf": 1.0,
+        "material_conf": 0.5,
+        "final_weighted": 0.692,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "deadline",
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8514,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.7905,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "material_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_022",
+      "category": "명령형",
+      "source_text": "다음 주 월요일까지 예산 계획 수립해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "다음 주 월요일까지",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": "다음 주 월요일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "다음 주 월요일까지 예산 계획 수립해주세요"
+        ],
+        "deadline": "월요일까지",
+        "materials": [],
+        "confidence": 0.73
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "예산 계획 수립"
+        ],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.45,
+        "intent_raw": 0.72,
+        "overall_raw": 0.26,
+        "action_conf": 0.4502,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.3,
+        "material_conf": 0.5,
+        "final_weighted": 0.5528,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='다음 주 월요일까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8499,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8656,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_023",
+      "category": "명령형",
+      "source_text": "클라이언트에게 지금 바로 연락해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "확인",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "클라이언트에게 지금 바로 연락해주세요"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "클라이언트에게 연락"
+        ],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.45,
+        "intent_raw": 0.72,
+        "overall_raw": 0.16,
+        "action_conf": 0.4502,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.3,
+        "material_conf": 0.5,
+        "final_weighted": 0.5528,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='지금 바로' NOT_A_DEADLINE_urgency",
+        "deadline_type": "urgency",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8499,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8656,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_024",
+      "category": "명령형",
+      "source_text": "이번 달 말까지 실적 데이터 정리해서 공유해주시기 바랍니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "이번 달 말까지",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "정리",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "공유",
+            "owner": null,
+            "due_date": "이번 달 말까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "이번 달 말까지 실적 데이터 정리해서 공유해주시기 바랍니다"
+        ],
+        "deadline": "이번 달 말까지",
+        "materials": [],
+        "confidence": 0.73
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "실적 데이터 정리",
+          "실적 데이터 공유"
+        ],
+        "deadline": "",
+        "materials": [
+          "실적 데이터"
+        ],
+        "action_raw": 0.3,
+        "intent_raw": 0.62,
+        "overall_raw": -0.0025,
+        "action_conf": 0.31,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.3,
+        "material_conf": 0.5,
+        "final_weighted": 0.4442,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='이번 달 말까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8493,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.788,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_025",
+      "category": "청유형",
+      "source_text": "이번 주 금요일에 같이 검토해봅시다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": "이번 주 금요일",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": "이번 주 금요일"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "이번 주 금요일에 같이 검토해봅시다"
+        ],
+        "deadline": "이번 주 금요일에",
+        "materials": [],
+        "confidence": 0.73
+      },
+      "D": {
+        "intent": "request",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.25,
+        "intent_raw": 0.52,
+        "overall_raw": 0.035,
+        "action_conf": 0.2689,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.3,
+        "material_conf": 0.5,
+        "final_weighted": 0.0,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "verifier_gate",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='이번 주 금요일에' DEADLINE_EVIDENCE_NOT_IN_SOURCE",
+        "deadline_type": "none",
+        "multi_action_count": 0
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8491,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8193,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_026",
+      "category": "청유형",
+      "source_text": "회의 전까지 자료를 미리 준비해 둡시다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": "회의 전까지",
+        "materials": [
+          "자료"
+        ],
+        "actions": [
+          {
+            "action_text": "준비",
+            "owner": null,
+            "due_date": "회의 전까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "회의 전까지 자료를 미리 준비해 둡시다"
+        ],
+        "deadline": "회의 전까지",
+        "materials": [
+          "자료"
+        ],
+        "confidence": 0.773
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "자료 준비"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "action_raw": 0.52,
+        "intent_raw": 0.52,
+        "overall_raw": 0.255,
+        "action_conf": 0.52,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.3,
+        "material_conf": 0.85,
+        "final_weighted": 0.575,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='회의 전까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8501,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8249,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_027",
+      "category": "청유형",
+      "source_text": "팀 전체가 같이 이 건을 논의해봅시다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "팀 전체가 같이 이 건을 논의해봅시다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "팀 전체가 같이 이 건을 논의해봅시다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.85,
+        "intent_raw": 0.52,
+        "overall_raw": 0.635,
+        "action_conf": 0.8022,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.6893,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8514,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8207,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_028",
+      "category": "청유형",
+      "source_text": "진행 상황을 공유하고 함께 방향을 잡아봅시다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "공유",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "진행 상황을 공유하고 함께 방향을 잡아봅시다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "진행 상황 공유",
+          "방향 잡기"
+        ],
+        "deadline": "",
+        "materials": [
+          "진행 상황",
+          "방향"
+        ],
+        "action_raw": 0.7667,
+        "intent_raw": 0.52,
+        "overall_raw": 0.51,
+        "action_conf": 0.744,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.6287,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8511,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.7671,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "material_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_029",
+      "category": "청유형",
+      "source_text": "오늘 오후에 잠깐 모여서 이야기해보죠.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": "오늘 중",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": "오늘 중"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.347
+      },
+      "D": {
+        "intent": "request",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.3,
+        "intent_raw": 0.52,
+        "overall_raw": -0.005,
+        "action_conf": 0.31,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.3,
+        "material_conf": 0.5,
+        "final_weighted": 0.0,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "verifier_gate",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='오늘 오후에' NOT_A_DEADLINE_none",
+        "deadline_type": "none",
+        "multi_action_count": 0
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8493,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8195,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_030",
+      "category": "청유형",
+      "source_text": "이번 안건은 모두 함께 검토하고 결정합시다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "PROPOSITIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "이번 안건은 모두 함께 검토하고 결정합시다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "안건 검토",
+          "안건 결정"
+        ],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.9,
+        "intent_raw": 0.52,
+        "overall_raw": 0.61,
+        "action_conf": 0.832,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.7072,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8516,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8208,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_031",
+      "category": "보고형",
+      "source_text": "이번 분기 실적을 보고드립니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "REPORTIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "보고",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [
+          "이번 분기 실적을 보고드립니다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "report",
+        "actions": [
+          "이번 분기 실적 보고"
+        ],
+        "deadline": "",
+        "materials": [
+          "이번 분기 실적"
+        ],
+        "action_raw": 0.85,
+        "intent_raw": 0.72,
+        "overall_raw": 0.6725,
+        "action_conf": 0.8022,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.72,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "REPORT",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8514,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8054,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "material_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_032",
+      "category": "보고형",
+      "source_text": "클라이언트 미팅 결과를 말씀드리겠습니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "REPORTIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "보고",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.347
+      },
+      "D": {
+        "intent": "report",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.7,
+        "intent_raw": 0.72,
+        "overall_raw": 0.5825,
+        "action_conf": 0.69,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.6967,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "REPORT",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 0
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8508,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8662,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_033",
+      "category": "보고형",
+      "source_text": "프로젝트 진행 현황을 공유해드립니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "REPORTIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "공유",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [
+          "프로젝트 진행 현황을 공유해드립니다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "report",
+        "actions": [
+          "프로젝트 진행 현황 공유"
+        ],
+        "deadline": "",
+        "materials": [
+          "프로젝트 진행 현황"
+        ],
+        "action_raw": 0.75,
+        "intent_raw": 0.72,
+        "overall_raw": 0.5975,
+        "action_conf": 0.7311,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.6845,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "REPORT",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.851,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8052,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "material_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_034",
+      "category": "보고형",
+      "source_text": "현재 이슈 사항을 정리하여 알려드립니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "REPORTIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "정리",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "보고",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [
+          "현재 이슈 사항을 정리하여 알려드립니다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "report",
+        "actions": [
+          "현재 이슈 사항 정리"
+        ],
+        "deadline": "",
+        "materials": [
+          "현재 이슈 사항"
+        ],
+        "action_raw": 0.85,
+        "intent_raw": 0.72,
+        "overall_raw": 0.6725,
+        "action_conf": 0.8022,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.72,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "REPORT",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8514,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8054,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "material_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_035",
+      "category": "보고형",
+      "source_text": "계약 체결 완료 사실을 보고드립니다.",
+      "expected": {
+        "intent_type": "REPORT",
+        "sentence_type": "REPORTIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "보고",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "report",
+        "actions": [
+          "계약 체결 완료 사실을 보고드립니다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "report",
+        "actions": [
+          "계약 체결 완료 사실 보고"
+        ],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.75,
+        "intent_raw": 0.72,
+        "overall_raw": 0.5975,
+        "action_conf": 0.7311,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.7214,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "REPORT",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.851,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8663,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_036",
+      "category": "조건형",
+      "source_text": "자료를 받으시면 검토 후 회신 부탁드립니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "CONDITIONAL",
+        "deadline": null,
+        "materials": [
+          "자료"
+        ],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "회신",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "자료를 받으시면 검토 후 회신 부탁드립니다"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "자료를 받으시면 검토 후 회신"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "action_raw": 0.72,
+        "intent_raw": 0.62,
+        "overall_raw": 0.5925,
+        "action_conf": 0.7068,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.701,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8509,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8471,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_037",
+      "category": "조건형",
+      "source_text": "이번 주 내로 확인이 어려우시다면 다음 주 월요일까지 보내주셔도 됩니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "CONDITIONAL",
+        "deadline": "다음 주 월요일까지",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "확인",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "보내",
+            "owner": null,
+            "due_date": "다음 주 월요일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "이번 주 내로 확인이 어려우시다면 다음 주 월요일까지 보내주셔도 됩니다"
+        ],
+        "deadline": "월요일까지",
+        "materials": [],
+        "confidence": 0.73
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "확인"
+        ],
+        "deadline": "다음 주 월요일까지",
+        "materials": [
+          "확인"
+        ],
+        "action_raw": 0.75,
+        "intent_raw": 0.52,
+        "overall_raw": 0.66,
+        "action_conf": 0.7311,
+        "intent_conf": 0.52,
+        "deadline_conf": 1.0,
+        "material_conf": 0.5,
+        "final_weighted": 0.66,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "deadline",
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.851,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.7904,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "material_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_038",
+      "category": "조건형",
+      "source_text": "추가 수정이 필요하시다면 말씀해주시기 바랍니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "CONDITIONAL",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "수정",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "추가 수정이 필요하시다면 말씀해주시기 바랍니다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "추가 수정"
+        ],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.85,
+        "intent_raw": 0.62,
+        "overall_raw": 0.6725,
+        "action_conf": 0.8022,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.7284,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8514,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8469,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_039",
+      "category": "조건형",
+      "source_text": "계약서 수정이 완료되면 바로 보내주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "CONDITIONAL",
+        "deadline": null,
+        "materials": [
+          "계약서"
+        ],
+        "actions": [
+          {
+            "action_text": "수정",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "보내",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "계약서 수정이 완료되면 바로 보내주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "계약서"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "계약서 수정",
+          "계약서 보내기"
+        ],
+        "deadline": "",
+        "materials": [
+          "계약서"
+        ],
+        "action_raw": 0.42,
+        "intent_raw": 0.62,
+        "overall_raw": 0.055,
+        "action_conf": 0.4207,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.3,
+        "material_conf": 0.85,
+        "final_weighted": 0.5579,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='바로' NOT_A_DEADLINE_condition",
+        "deadline_type": "urgency",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8497,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8465,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_040",
+      "category": "조건형",
+      "source_text": "검토가 완료된다면 최종본을 공유해 주시면 감사하겠습니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "CONDITIONAL",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "공유",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "검토가 완료된다면 최종본을 공유해 주시면 감사하겠습니다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "최종본 공유"
+        ],
+        "deadline": "",
+        "materials": [
+          "최종본"
+        ],
+        "action_raw": 0.7167,
+        "intent_raw": 0.52,
+        "overall_raw": 0.535,
+        "action_conf": 0.7041,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.6087,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8509,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.767,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "material_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_041",
+      "category": "부정형/no-action",
+      "source_text": "오늘은 특별한 일정이 없습니다.",
+      "expected": {
+        "intent_type": "NO_ACTION",
+        "sentence_type": "NEGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": []
+      },
+      "A": {
+        "intent": "no_action",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.347
+      },
+      "D": {
+        "intent": "no_action",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.65,
+        "intent_raw": 0.62,
+        "overall_raw": 0.5075,
+        "action_conf": 0.6457,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.6345,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 0
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8506,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8464,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_042",
+      "category": "부정형/no-action",
+      "source_text": "해당 건은 더 이상 진행하지 않아도 됩니다.",
+      "expected": {
+        "intent_type": "NO_ACTION",
+        "sentence_type": "NEGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": []
+      },
+      "A": {
+        "intent": "no_action",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.39
+      },
+      "D": {
+        "intent": "no_action",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.4,
+        "intent_raw": 0.62,
+        "overall_raw": 0.2475,
+        "action_conf": 0.4013,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.0,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "verifier_gate",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 0
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8497,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8459,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_043",
+      "category": "부정형/no-action",
+      "source_text": "아직 확인된 사항이 없어서 추가 안내는 어렵습니다.",
+      "expected": {
+        "intent_type": "NO_ACTION",
+        "sentence_type": "NEGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": []
+      },
+      "A": {
+        "intent": "no_action",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.39
+      },
+      "D": {
+        "intent": "no_action",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.6,
+        "intent_raw": 0.52,
+        "overall_raw": 0.41,
+        "action_conf": 0.5987,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.5672,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 0
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8504,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8201,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_044",
+      "category": "부정형/no-action",
+      "source_text": "이번 회의는 취소되었습니다.",
+      "expected": {
+        "intent_type": "NO_ACTION",
+        "sentence_type": "NEGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": []
+      },
+      "A": {
+        "intent": "no_action",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.347
+      },
+      "D": {
+        "intent": "no_action",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.65,
+        "intent_raw": 0.52,
+        "overall_raw": 0.47,
+        "action_conf": 0.6457,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.5954,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 0
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8506,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8202,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_045",
+      "category": "부정형/no-action",
+      "source_text": "현재는 결정된 것이 없으니 추후 안내 드리겠습니다.",
+      "expected": {
+        "intent_type": "NO_ACTION",
+        "sentence_type": "NEGATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": []
+      },
+      "A": {
+        "intent": "no_action",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.39
+      },
+      "D": {
+        "intent": "no_action",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.6,
+        "intent_raw": 0.52,
+        "overall_raw": 0.41,
+        "action_conf": 0.5987,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.5672,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 0
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8504,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8201,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_046",
+      "category": "복합 다중 액션",
+      "source_text": "보고서 검토하고 수정 사항 정리해서 목요일까지 보내주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "COMPLEX",
+        "deadline": "목요일까지",
+        "materials": [
+          "보고서"
+        ],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "정리",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "보내",
+            "owner": null,
+            "due_date": "목요일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "보고서 검토하고 수정 사항 정리해서 목요일까지 보내주세요"
+        ],
+        "deadline": "목요일까지",
+        "materials": [
+          "보고서"
+        ],
+        "confidence": 0.773
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "보고서 검토",
+          "수정 사항 정리",
+          "보고서 보내기"
+        ],
+        "deadline": "",
+        "materials": [
+          "보고서"
+        ],
+        "action_raw": 0.0367,
+        "intent_raw": 0.62,
+        "overall_raw": -0.2575,
+        "action_conf": 0.1355,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.3,
+        "material_conf": 0.85,
+        "final_weighted": 0.4153,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='목요일까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 3
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8483,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8459,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_047",
+      "category": "복합 다중 액션",
+      "source_text": "계약서 파일 확인 후 서명해서 내일까지 메일로 보내주세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "COMPLEX",
+        "deadline": "내일까지",
+        "materials": [
+          "파일",
+          "계약서"
+        ],
+        "actions": [
+          {
+            "action_text": "확인",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "서명",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "보내",
+            "owner": null,
+            "due_date": "내일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "계약서 파일 확인 후 서명해서 내일까지 메일로 보내주세요"
+        ],
+        "deadline": "내일까지",
+        "materials": [
+          "파일",
+          "계약서"
+        ],
+        "confidence": 0.815
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "계약서 파일 확인",
+          "계약서 서명",
+          "계약서 메일로 보내기"
+        ],
+        "deadline": "",
+        "materials": [
+          "계약서",
+          "파일"
+        ],
+        "action_raw": 0.69,
+        "intent_raw": 0.62,
+        "overall_raw": 0.3875,
+        "action_conf": 0.6814,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.3,
+        "material_conf": 0.95,
+        "final_weighted": 0.7049,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='내일까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 3
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8508,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8638,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_048",
+      "category": "복합 다중 액션",
+      "source_text": "회의 자료 준비하고, 참석자들에게 일정 공지도 해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "COMPLEX",
+        "deadline": null,
+        "materials": [
+          "자료"
+        ],
+        "actions": [
+          {
+            "action_text": "준비",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "회의 자료 준비하고, 참석자들에게 일정 공지도 해주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "회의 자료 준비",
+          "일정 공지"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "action_raw": 0.87,
+        "intent_raw": 0.72,
+        "overall_raw": 0.68,
+        "action_conf": 0.8146,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.7846,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8515,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8638,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_049",
+      "category": "복합 다중 액션",
+      "source_text": "예산안 검토 후 승인하고, 팀원들에게 공유해주세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "COMPLEX",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "공유",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "예산안 검토 후 승인하고, 팀원들에게 공유해주세요"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "예산안 검토",
+          "예산안 승인",
+          "팀원들에게 공유"
+        ],
+        "deadline": "",
+        "materials": [
+          "예산안",
+          "팀원"
+        ],
+        "action_raw": 0.9,
+        "intent_raw": 0.72,
+        "overall_raw": 0.66,
+        "action_conf": 0.832,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.7349,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 3
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8516,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8055,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "material_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_050",
+      "category": "복합 다중 액션",
+      "source_text": "고객 데이터 정리하고 분석 보고서 작성해서 이번 주 금요일까지 제출해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "COMPLEX",
+        "deadline": "이번 주 금요일까지",
+        "materials": [
+          "보고서"
+        ],
+        "actions": [
+          {
+            "action_text": "정리",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "작성",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "제출",
+            "owner": null,
+            "due_date": "이번 주 금요일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "고객 데이터 정리하고 분석 보고서 작성해서 이번 주 금요일까지 제출해주세요"
+        ],
+        "deadline": "이번 주 금요일까지",
+        "materials": [
+          "보고서"
+        ],
+        "confidence": 0.773
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "고객 데이터 정리",
+          "분석 보고서 작성",
+          "보고서 제출"
+        ],
+        "deadline": "",
+        "materials": [
+          "고객 데이터",
+          "보고서"
+        ],
+        "action_raw": 0.12,
+        "intent_raw": 0.72,
+        "overall_raw": -0.1575,
+        "action_conf": 0.1795,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.3,
+        "material_conf": 0.85,
+        "final_weighted": 0.0,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "verifier_gate",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='이번 주 금요일까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 3
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8486,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8624,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_051",
+      "category": "복합 다중 액션",
+      "source_text": "발표 자료 만들고, 연습도 한 번 해보고, 월요일까지 발표 준비 완료해주세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "COMPLEX",
+        "deadline": "월요일까지",
+        "materials": [
+          "자료"
+        ],
+        "actions": [
+          {
+            "action_text": "작성",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "준비",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": "월요일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "발표 자료 만들고, 연습도 한 번 해보고, 월요일까지 발표 준비 완료해주세요"
+        ],
+        "deadline": "월요일까지",
+        "materials": [
+          "자료",
+          "표"
+        ],
+        "confidence": 0.815
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "발표 자료 만들고",
+          "연습도 한 번 해보고",
+          "발표 준비 완료"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료",
+          "표"
+        ],
+        "action_raw": 0.03,
+        "intent_raw": 0.72,
+        "overall_raw": -0.22,
+        "action_conf": 0.1324,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.3,
+        "material_conf": 0.95,
+        "final_weighted": 0.0,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "verifier_gate",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='월요일까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 3
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8482,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8788,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_052",
+      "category": "복합 다중 액션",
+      "source_text": "기획서 검토하고 피드백 주시고, 최종본은 수요일까지 주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "COMPLEX",
+        "deadline": "수요일까지",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "회신",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "전달",
+            "owner": null,
+            "due_date": "수요일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "기획서 검토하고 피드백 주시고, 최종본은 수요일까지 주세요"
+        ],
+        "deadline": "수요일까지",
+        "materials": [],
+        "confidence": 0.73
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "기획서 검토",
+          "피드백 주시기",
+          "최종본 주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "기획서"
+        ],
+        "action_raw": 0.5667,
+        "intent_raw": 0.62,
+        "overall_raw": 0.2725,
+        "action_conf": 0.5663,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.3,
+        "material_conf": 0.5,
+        "final_weighted": 0.5724,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='수요일까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 3
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8503,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.7885,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "material_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_053",
+      "category": "복합 다중 액션",
+      "source_text": "팀별 실적 취합하고, 비교 분석해서, 이사님께 보고드려주세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "COMPLEX",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "취합",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "보고",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "팀별 실적 취합하고, 비교 분석해서, 이사님께 보고드려주세요"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "팀별 실적 취합",
+          "팀별 실적 비교 분석",
+          "이사님께 보고드려주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "팀별 실적",
+          "이사님"
+        ],
+        "action_raw": 0.8333,
+        "intent_raw": 0.62,
+        "overall_raw": 0.5725,
+        "action_conf": 0.7914,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.6849,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 3
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8513,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.789,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "material_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_054",
+      "category": "복합 다중 액션",
+      "source_text": "계약 조건 협의하고, 법무팀 검토 받고, 최종 서명까지 이번 달 말까지 완료해주세요.",
+      "expected": {
+        "intent_type": "COMMAND",
+        "sentence_type": "COMPLEX",
+        "deadline": "이번 달 말까지",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "검토",
+            "owner": "법무팀",
+            "due_date": null
+          },
+          {
+            "action_text": "서명",
+            "owner": null,
+            "due_date": "이번 달 말까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "계약 조건 협의하고, 법무팀 검토 받고, 최종 서명까지 이번 달 말까지 완료해주세요"
+        ],
+        "deadline": "이번 달 말까지",
+        "materials": [],
+        "confidence": 0.73
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "계약 조건 협의",
+          "법무팀 검토 받기",
+          "최종 서명"
+        ],
+        "deadline": "",
+        "materials": [
+          "계약 조건",
+          "법무팀",
+          "계약"
+        ],
+        "action_raw": 0.25,
+        "intent_raw": 0.72,
+        "overall_raw": -0.0275,
+        "action_conf": 0.2689,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.3,
+        "material_conf": 0.5,
+        "final_weighted": 0.4534,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='이번 달 말까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 3
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8491,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8043,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_055",
+      "category": "복합 다중 액션",
+      "source_text": "신규 직원 교육 자료 작성하고, 교육 일정 잡아서 다음 달 말까지 시작해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "COMPLEX",
+        "deadline": "다음 달 말까지",
+        "materials": [
+          "자료"
+        ],
+        "actions": [
+          {
+            "action_text": "작성",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": "다음 달 말까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "신규 직원 교육 자료 작성하고, 교육 일정 잡아서 다음 달 말까지 시작해주세요"
+        ],
+        "deadline": "다음 달 말까지",
+        "materials": [
+          "자료"
+        ],
+        "confidence": 0.773
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "신규 직원 교육 자료 작성",
+          "교육 일정 잡기",
+          "교육 시작"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "action_raw": 0.2367,
+        "intent_raw": 0.72,
+        "overall_raw": -0.02,
+        "action_conf": 0.2586,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.3,
+        "material_conf": 0.85,
+        "final_weighted": 0.5066,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='다음 달 말까지' NOT_A_DEADLINE_none",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 3
+      },
+      "D_post": {
+        "fitted_action_conf": 0.849,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8626,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_056",
+      "category": "마감 없는 요청",
+      "source_text": "자료 정리되면 공유해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [
+          "자료"
+        ],
+        "actions": [
+          {
+            "action_text": "정리",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "공유",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "자료 정리되면 공유해주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "자료 정리",
+          "자료 공유"
+        ],
+        "deadline": "",
+        "materials": [
+          "자료"
+        ],
+        "action_raw": 0.97,
+        "intent_raw": 0.72,
+        "overall_raw": 0.755,
+        "action_conf": 0.8676,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.8111,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "intent_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8518,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.864,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_057",
+      "category": "마감 없는 요청",
+      "source_text": "검토해보시고 의견 주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "검토",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "회신",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "검토해보시고 의견 주세요"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "검토해보시고",
+          "의견 주세요"
+        ],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.8,
+        "intent_raw": 0.62,
+        "overall_raw": 0.5725,
+        "action_conf": 0.7685,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.7082,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 2
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8512,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8468,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_058",
+      "category": "마감 없는 요청",
+      "source_text": "계약서 확인해주시면 감사하겠습니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "DECLARATIVE",
+        "deadline": null,
+        "materials": [
+          "계약서"
+        ],
+        "actions": [
+          {
+            "action_text": "확인",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "계약서 확인해주시면 감사하겠습니다"
+        ],
+        "deadline": "",
+        "materials": [
+          "계약서"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "계약서 확인"
+        ],
+        "deadline": "",
+        "materials": [
+          "계약서"
+        ],
+        "action_raw": 0.92,
+        "intent_raw": 0.52,
+        "overall_raw": 0.705,
+        "action_conf": 0.8429,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.7365,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8516,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8257,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_059",
+      "category": "마감 없는 요청",
+      "source_text": "이 파일 팀원들에게 전달해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [
+          "파일"
+        ],
+        "actions": [
+          {
+            "action_text": "전달",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "이 파일 팀원들에게 전달해주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "파일"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "이 파일 팀원들에게 전달"
+        ],
+        "deadline": "",
+        "materials": [
+          "파일"
+        ],
+        "action_raw": 0.92,
+        "intent_raw": 0.72,
+        "overall_raw": 0.78,
+        "action_conf": 0.8429,
+        "intent_conf": 0.7068,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.7987,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8516,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8639,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_060",
+      "category": "마감 없는 요청",
+      "source_text": "보고서 완성되는 대로 주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [
+          "보고서"
+        ],
+        "actions": [
+          {
+            "action_text": "전달",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "보고서 완성되는 대로 주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "보고서"
+        ],
+        "confidence": 0.603
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "보고서 완성되는 대로 주세요"
+        ],
+        "deadline": "",
+        "materials": [
+          "보고서"
+        ],
+        "action_raw": 0.72,
+        "intent_raw": 0.62,
+        "overall_raw": 0.5925,
+        "action_conf": 0.7068,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.5,
+        "material_conf": 0.85,
+        "final_weighted": 0.701,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "material"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8509,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8471,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_061",
+      "category": "자료 없는 액션",
+      "source_text": "내일까지 미팅 참석 여부 확인해주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "내일까지",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "확인",
+            "owner": null,
+            "due_date": "내일까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "내일까지 미팅 참석 여부 확인해주세요"
+        ],
+        "deadline": "내일까지",
+        "materials": [],
+        "confidence": 0.73
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "미팅 참석 여부 확인"
+        ],
+        "deadline": "내일까지",
+        "materials": [],
+        "action_raw": 0.85,
+        "intent_raw": 0.72,
+        "overall_raw": 0.81,
+        "action_conf": 0.8022,
+        "intent_conf": 0.7068,
+        "deadline_conf": 1.0,
+        "material_conf": 0.5,
+        "final_weighted": 0.7918,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [
+          "deadline"
+        ],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "hard_deadline",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8514,
+        "fitted_intent_conf": 0.8892,
+        "final_weighted": 0.8822,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_062",
+      "category": "자료 없는 액션",
+      "source_text": "고객사에 연락해서 미팅 일정 잡아주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": null
+          },
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "고객사에 연락해서 미팅 일정 잡아주세요"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "고객사에 연락해서 미팅 일정 잡아주세요"
+        ],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.65,
+        "intent_raw": 0.62,
+        "overall_raw": 0.5225,
+        "action_conf": 0.6457,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.6345,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8506,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8464,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_063",
+      "category": "자료 없는 액션",
+      "source_text": "다음 주 교육 일정 잡아주세요.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "IMPERATIVE",
+        "deadline": "다음 주까지",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": "다음 주까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.347
+      },
+      "D": {
+        "intent": "request",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.5,
+        "intent_raw": 0.62,
+        "overall_raw": 0.3825,
+        "action_conf": 0.5,
+        "intent_conf": 0.6177,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.0,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "verifier_gate",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 0
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8501,
+        "fitted_intent_conf": 0.8401,
+        "final_weighted": 0.8461,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_064",
+      "category": "자료 없는 액션",
+      "source_text": "다음 주 미팅 일정 조율해주시면 감사하겠습니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "DECLARATIVE",
+        "deadline": "다음 주까지",
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": "다음 주까지"
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [
+          "다음 주 미팅 일정 조율해주시면 감사하겠습니다"
+        ],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.56
+      },
+      "D": {
+        "intent": "request",
+        "actions": [
+          "다음 주 미팅 일정 조율"
+        ],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.45,
+        "intent_raw": 0.52,
+        "overall_raw": 0.085,
+        "action_conf": 0.4502,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.3,
+        "material_conf": 0.5,
+        "final_weighted": 0.4781,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": true,
+        "block_7_reason": "deadline_raw='다음 주' NOT_A_DEADLINE_none",
+        "deadline_type": "none",
+        "multi_action_count": 1
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8499,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8198,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    },
+    {
+      "id": "card1_065",
+      "category": "자료 없는 액션",
+      "source_text": "팀장님께 결재 올려주시면 됩니다.",
+      "expected": {
+        "intent_type": "REQUEST",
+        "sentence_type": "DECLARATIVE",
+        "deadline": null,
+        "materials": [],
+        "actions": [
+          {
+            "action_text": "완료",
+            "owner": null,
+            "due_date": null
+          }
+        ]
+      },
+      "A": {
+        "intent": "request",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "confidence": 0.347
+      },
+      "D": {
+        "intent": "no_action",
+        "actions": [],
+        "deadline": "",
+        "materials": [],
+        "action_raw": 0.7,
+        "intent_raw": 0.52,
+        "overall_raw": 0.545,
+        "action_conf": 0.69,
+        "intent_conf": 0.52,
+        "deadline_conf": 0.5,
+        "material_conf": 0.5,
+        "final_weighted": 0.622,
+        "schema_valid": true,
+        "retry_count": 0,
+        "verifier_errors": [
+          "block_5_auto_apply_low_confidence"
+        ],
+        "blocked_auto": true,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
+        "present_fields": [],
+        "override": "",
+        "block_7_fired": false,
+        "block_7_reason": "",
+        "deadline_type": "none",
+        "multi_action_count": 0
+      },
+      "D_post": {
+        "fitted_action_conf": 0.8508,
+        "fitted_intent_conf": 0.7747,
+        "final_weighted": 0.8204,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
+        "gates": {
+          "schema_ok": true,
+          "verifier_ok": true,
+          "evidence_ok": true
+        }
+      }
+    }
+  ],
+  "proceed_verdict": "PATCH/BLOCK",
+  "post_fit_auto_apply": {
+    "auto_apply_rate": 0.5385,
+    "auto_apply_accuracy": 0.7429,
+    "auto_apply_count": 35,
+    "auto_apply_correct": 26,
+    "auto_apply_reasons": {
+      "OK": 35,
+      "action_below_threshold": 19,
+      "material_below_threshold": 11
+    },
+    "final_weighted_max": 0.8822,
+    "final_weighted_p50": 0.8256,
+    "final_weighted_above_80": 55,
+    "final_weighted_above_70": 65
+  }
+}
