@@ -29,15 +29,19 @@ def extract_card1(
     source_text: str,
     use_llm: bool = False,
     llm_callable: Optional[Callable[[str], str]] = None,
+    skip_llm: bool = False,
 ) -> Card1Extraction:
     """
     원문 텍스트 → Card1Extraction (단계 1~5).
 
     단계 1: 결정론적 패턴 추출 (마감/액션/자료/문형)
-    단계 2: LLM structured extraction (use_llm=True + SKIP_LLM≠true)
+    단계 2: LLM structured extraction (use_llm=True + skip_llm=False + SKIP_LLM env≠true)
     단계 3: verifier — 원문 근거 검증 + hallucination 차단
     단계 4: evidence 기반 신뢰도 산출
     단계 5: needs_review 플래그 설정
+
+    skip_llm: 호출자 영역 LLM bypass 영역 (thread-safe, env mutation X).
+              단계 8.4 — 동시 요청 race condition 영역 글로벌 SKIP_LLM env 대체 영역.
     """
     # ── 단계 1: 결정론적 파싱 ─────────────────────────────────────────────────
     deadlines   = extract_deadlines(source_text)
@@ -52,7 +56,11 @@ def extract_card1(
     }
 
     # ── 단계 2: LLM 또는 heuristic ───────────────────────────────────────────
-    use_llm_effective = use_llm and os.environ.get("SKIP_LLM") != "true"
+    use_llm_effective = (
+        use_llm
+        and not skip_llm
+        and os.environ.get("SKIP_LLM") != "true"
+    )
     extraction = extract_with_llm(source_text, parsed_hints, llm_callable if use_llm_effective else None)
 
     # sentence_type은 결정론적 분류 우선 적용

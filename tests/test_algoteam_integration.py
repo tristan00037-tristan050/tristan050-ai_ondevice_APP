@@ -194,3 +194,122 @@ def test_card1_returns_needs_review_flag():
     assert result["confidence_band"] in ("auto", "badge", "confirm", "blocked"), (
         f"유효하지 않은 confidence_band: {result['confidence_band']}"
     )
+
+
+# ---------------------------------------------------------------------------
+# 단계 8.4 — PR #700 코드 리뷰 결함 정정 검증 (+5 tests)
+# ---------------------------------------------------------------------------
+
+@_skip
+def test_parse_stream_then_download_md_no_500():
+    """P1 #1 회귀 방지: parse_stream 저장 → .md 다운로드 시 500 없음."""
+    client = _get_client()
+    resp = client.post(
+        "/request_parsing/parse_stream",
+        json={"text": _SAMPLE_TEXT, "input_format": "text"},
+    )
+    assert resp.status_code == 200
+    events = _parse_sse_events(resp.text)
+    complete = next((e for e in events if e.get("event") == "complete"), None)
+    assert complete is not None
+    rid = complete["data"]["result_id"]
+
+    md_resp = client.get(f"/request_parsing/result/{rid}/markdown")
+    assert md_resp.status_code == 200, (
+        f"다운로드 .md HTTP {md_resp.status_code}: {md_resp.text[:200]}"
+    )
+    assert len(md_resp.content) > 0, "빈 markdown 응답"
+
+
+@_skip
+def test_parse_stream_then_download_docx_no_500():
+    """P1 #1 회귀 방지: parse_stream 저장 → .docx 다운로드 시 500 없음."""
+    client = _get_client()
+    resp = client.post(
+        "/request_parsing/parse_stream",
+        json={"text": _SAMPLE_TEXT, "input_format": "text"},
+    )
+    assert resp.status_code == 200
+    events = _parse_sse_events(resp.text)
+    complete = next((e for e in events if e.get("event") == "complete"), None)
+    assert complete is not None
+    rid = complete["data"]["result_id"]
+
+    docx_resp = client.get(f"/request_parsing/result/{rid}/docx")
+    assert docx_resp.status_code == 200, (
+        f"다운로드 .docx HTTP {docx_resp.status_code}: {docx_resp.text[:200]}"
+    )
+    assert len(docx_resp.content) > 100, "비정상적으로 짧은 docx 응답"
+
+
+@_skip
+def test_parse_file_stream_returns_card1_format():
+    """P1 #2 회귀 방지: parse_file_stream도 Card1Extraction 형식 반환 (intent_type/confidence_band)."""
+    client = _get_client()
+    txt_bytes = _SAMPLE_TEXT.encode("utf-8")
+    resp = client.post(
+        "/request_parsing/parse_file_stream",
+        files={"file": ("sample.txt", io.BytesIO(txt_bytes), "text/plain")},
+    )
+    assert resp.status_code == 200, f"HTTP {resp.status_code}: {resp.text[:200]}"
+    events = _parse_sse_events(resp.text)
+    complete = next((e for e in events if e.get("event") == "complete"), None)
+    assert complete is not None, "complete 이벤트 없음"
+    result = complete["data"].get("result", {})
+    # Card1Extraction 영역 필드 확인
+    assert "intent_type" in result, f"intent_type 키 없음 — keys: {list(result.keys())}"
+    assert "confidence_band" in result, "confidence_band 키 없음"
+    assert "actions" in result, "actions 키 없음"
+    # actions의 영역 — Card1 형식은 action_text (legacy text 영역 X)
+    if result["actions"]:
+        a0 = result["actions"][0]
+        assert "action_text" in a0, f"action_text 키 없음 (legacy 형식 잔존). keys: {list(a0.keys())}"
+    # materials는 list[str] (Card1 형식)
+    assert isinstance(result.get("materials", []), list)
+
+
+@_skip
+def test_parse_file_stream_then_download_no_500():
+    """P1 #1+#2 회귀 방지: parse_file_stream 저장 → 다운로드 호환 확인."""
+    client = _get_client()
+    txt_bytes = _SAMPLE_TEXT.encode("utf-8")
+    resp = client.post(
+        "/request_parsing/parse_file_stream",
+        files={"file": ("sample.txt", io.BytesIO(txt_bytes), "text/plain")},
+    )
+    assert resp.status_code == 200
+    events = _parse_sse_events(resp.text)
+    complete = next((e for e in events if e.get("event") == "complete"), None)
+    assert complete is not None
+    rid = complete["data"]["result_id"]
+
+    md_resp = client.get(f"/request_parsing/result/{rid}/markdown")
+    assert md_resp.status_code == 200, f"다운로드 .md HTTP {md_resp.status_code}: {md_resp.text[:200]}"
+    docx_resp = client.get(f"/request_parsing/result/{rid}/docx")
+    assert docx_resp.status_code == 200, f"다운로드 .docx HTTP {docx_resp.status_code}: {docx_resp.text[:200]}"
+
+
+def test_extract_card1_concurrent_calls_no_env_leak():
+    """P2 회귀 방지: extract_card1(skip_llm=True) 동시 호출이 글로벌 SKIP_LLM env에 영향 X.
+
+    이전 영역: butler_sidecar._run_card1_extraction이 os.environ['SKIP_LLM'] 글로벌 mutation →
+              동시 요청 시 race condition으로 env 영구화.
+    정정: extract_card1(skip_llm=True) 인자로 LLM bypass — env mutation X.
+    """
+    import os as _os
+    from butler_pc_core.card1_extraction import extract_card1
+
+    # 사전 영역 — env에 SKIP_LLM 없음
+    _os.environ.pop("SKIP_LLM", None)
+    assert _os.environ.get("SKIP_LLM") is None
+
+    # 연속 호출 5회
+    for _ in range(5):
+        result = extract_card1("내일까지 계약서 보내주세요. 검토 부탁드립니다.", skip_llm=True)
+        assert result.intent_type.value in (
+            "request", "report", "question", "command", "schedule", "no_action", "unknown"
+        )
+        # ★ 핵심 검증: env에 SKIP_LLM이 영구 mutation 영역 X
+        assert _os.environ.get("SKIP_LLM") is None, (
+            "extract_card1(skip_llm=True) 호출 후 os.environ['SKIP_LLM']이 누수됨"
+        )

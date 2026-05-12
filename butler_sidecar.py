@@ -1062,18 +1062,14 @@ if _FASTAPI_AVAILABLE:
         })
 
     def _run_card1_extraction(text: str):
-        """SKIP_LLM=true 환경에서 extract_card1() 실행 (heuristic mode)."""
-        import os as _os
+        """heuristic mode로 extract_card1() 실행 — thread-safe (단계 8.4).
+
+        이전 영역: os.environ["SKIP_LLM"] 글로벌 mutation → 동시 요청 race condition
+                    → SKIP_LLM=true 영구화 → 후속 요청이 silent LLM skip.
+        정정: extract_card1(skip_llm=True) 인자로 호출자 영역 LLM bypass — env mutation X.
+        """
         from butler_pc_core.card1_extraction import extract_card1
-        prev = _os.environ.get("SKIP_LLM")
-        _os.environ["SKIP_LLM"] = "true"
-        try:
-            return extract_card1(text)
-        finally:
-            if prev is None:
-                _os.environ.pop("SKIP_LLM", None)
-            else:
-                _os.environ["SKIP_LLM"] = prev
+        return extract_card1(text, skip_llm=True)
 
     @app.post("/request_parsing/parse")
     async def request_parsing_parse(request: Request):
@@ -1222,11 +1218,15 @@ if _FASTAPI_AVAILABLE:
     async def _stream_parse_file(
         file_bytes: bytes, suffix: str, input_format: str, result_id: str
     ) -> AsyncGenerator[str, None]:
-        """바이너리 파일 업로드 전용 SSE 파싱 제너레이터."""
+        """바이너리 파일 업로드 전용 SSE 파싱 제너레이터.
+
+        단계 8.4 정정: parse_stream과 동일한 Card1Extraction 형식 반환 — UI 영역 일관성.
+        """
         try:
             from butler_pc_core.request_parsing import (
-                extract_text_from_file_bytes, ParseError, parse_text, mask_pii,
+                extract_text_from_file_bytes, ParseError, mask_pii,
             )
+            from butler_pc_core.card1_extraction.confidence import confidence_band as _cb
         except ImportError as exc:
             yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
             return
@@ -1245,27 +1245,47 @@ if _FASTAPI_AVAILABLE:
         await asyncio.sleep(0)
         masked = mask_pii(text)
 
-        # Phase 3 — LLM 파싱 또는 휴리스틱
+        # Phase 3 — Card1Extraction (heuristic, thread-safe skip_llm)
         yield _sse("phase_start", {"phase": 3, "status_message": "의도 분석 중"})
         await asyncio.sleep(0)
 
         loop = asyncio.get_running_loop()
         try:
-            llm = _SHARED_LLM if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready") else None
             result = await loop.run_in_executor(
-                None, lambda: parse_text(masked, input_format=input_format, llm=llm)
+                None,
+                lambda: _run_card1_extraction(masked),
             )
         except Exception as exc:
             yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)})
             return
 
-        # Phase 4 — 결과 저장
-        yield _sse("phase_start", {"phase": 4, "status_message": "결과 저장 중"})
+        # Phase 4 — verifier + 신뢰도 구간 판정
+        yield _sse("phase_start", {"phase": 4, "status_message": "검증 및 신뢰도 판정 중"})
         await asyncio.sleep(0)
 
-        result_dict = result.to_dict()
-        result_dict["masked_text"] = result.masked_text
-        result_dict["input_format"] = result.input_format
+        band = _cb(result.confidence)
+        result_dict = {
+            "intent": result.intent,
+            "intent_type": result.intent_type.value,
+            "deadline": result.deadline,
+            "deadline_raw": result.deadline_raw,
+            "materials": result.materials,
+            "actions": [
+                {
+                    "action_text": a.action_text,
+                    "source_evidence": a.source_evidence,
+                    "confidence": a.confidence,
+                }
+                for a in result.actions
+            ],
+            "sentence_type": result.sentence_type.value,
+            "confidence": result.confidence,
+            "confidence_band": band,
+            "needs_review": result.needs_review,
+            "reason_code": result.reason_code,
+            "masked_text": masked,
+            "input_format": input_format,
+        }
         _parse_results[result_id] = {
             "result": result_dict,
             "created_at": time.monotonic(),

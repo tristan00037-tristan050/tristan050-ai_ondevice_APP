@@ -108,6 +108,11 @@ class ParsedResult:
 
     @classmethod
     def from_dict(cls, d: dict) -> "ParsedResult":
+        # Card1Extraction dict 형식 자동 감지 — 단계 8.4 호환 영역
+        # (Card1은 intent_type 영역 + intent: str + materials: list[str] + actions[].action_text)
+        if "intent_type" in d or isinstance(d.get("intent"), str):
+            return cls._from_card1_dict(d)
+
         result = cls()
         result.actions = [
             ActionItem(
@@ -137,6 +142,49 @@ class ParsedResult:
             summary=intent.get("summary", ""),
             tone=intent.get("tone", "formal"),
             expected_response=intent.get("expected_response", ""),
+        )
+        result.confidence = float(d.get("confidence", 0.75))
+        result.masked_text = d.get("masked_text", "")
+        result.input_format = d.get("input_format", "text")
+        return result
+
+    @classmethod
+    def _from_card1_dict(cls, d: dict) -> "ParsedResult":
+        """Card1Extraction dict → ParsedResult 변환 (단계 8.4 다운로드 호환 영역).
+
+        Card1 형식:
+          intent: str, intent_type: str, deadline: str|None, deadline_raw: str,
+          materials: list[str], actions: list[{action_text, source_evidence, confidence}]
+        → ParsedResult 형식으로 변환 — exporters(result_to_markdown / result_to_docx_bytes) 영역 호환.
+        """
+        result = cls()
+        result.actions = [
+            ActionItem(
+                text=a.get("action_text", "") or a.get("text", ""),
+                priority=a.get("priority", "P2"),
+                rationale=a.get("source_evidence", "") or a.get("rationale", ""),
+            )
+            for a in d.get("actions", [])
+        ]
+        result.deadline = Deadline(
+            raw_text=d.get("deadline_raw", "") or "",
+            parsed_date=d.get("deadline") or None,
+            confidence=float(d.get("confidence", 0.5)),
+            time_text="",
+        )
+        materials_raw = d.get("materials", []) or d.get("required_materials", [])
+        result.required_materials = [
+            MaterialItem(
+                name=(m if isinstance(m, str) else m.get("name", "")),
+                is_optional=False,
+                rationale="",
+            )
+            for m in materials_raw if m
+        ]
+        result.intent = Intent(
+            summary=str(d.get("intent", "") or ""),
+            tone="formal",
+            expected_response="",
         )
         result.confidence = float(d.get("confidence", 0.75))
         result.masked_text = d.get("masked_text", "")
