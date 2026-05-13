@@ -1,0 +1,24 @@
+{
+  "ok": true,
+  "fail_class": null,
+  "total_items": 80,
+  "min_total": 80,
+  "intent_counts": {
+    "REQUEST": 29,
+    "QUESTION": 12,
+    "REPORT": 17,
+    "COMMAND": 14,
+    "NO_ACTION": 8
+  },
+  "deadline_counts": {
+    "NONE": 45,
+    "HARD": 17,
+    "SOFT": 6,
+    "CONDITION": 5,
+    "INQUIRY": 4,
+    "URGENCY": 3
+  },
+  "source_counts": {
+    "synthetic_gold": 80
+  }
+}
