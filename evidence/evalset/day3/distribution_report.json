@@ -1,0 +1,58 @@
+{
+  "ok": true,
+  "fail_class": null,
+  "total_items": 200,
+  "min_total": 200,
+  "intent_counts": {
+    "REQUEST": 75,
+    "QUESTION": 29,
+    "REPORT": 45,
+    "COMMAND": 31,
+    "NO_ACTION": 20
+  },
+  "deadline_counts": {
+    "NONE": 119,
+    "HARD": 36,
+    "SOFT": 14,
+    "CONDITION": 13,
+    "INQUIRY": 9,
+    "URGENCY": 9
+  },
+  "source_counts": {
+    "synthetic_gold": 140,
+    "internal_log_redacted": 60
+  },
+  "primary_intent_counts": {
+    "REQUEST": 75,
+    "QUESTION": 29,
+    "REPORT": 45,
+    "COMMAND": 31,
+    "NO_ACTION": 20
+  },
+  "slice_tag_counts": {
+    "document_task": 47,
+    "deadline_hard": 36,
+    "code_task": 13,
+    "deadline_soft": 14,
+    "material": 11,
+    "deadline_condition": 13,
+    "answer_only": 30,
+    "deadline_inquiry": 9,
+    "report_status": 45,
+    "server_task": 2,
+    "risky_action": 14,
+    "deployment": 8,
+    "deadline_urgency": 9,
+    "file_delete": 1,
+    "permission_change": 3,
+    "external_send": 1,
+    "negative": 20,
+    "complex_multi": 10,
+    "boundary": 10
+  },
+  "label_status_counts": {
+    "gold_reviewed": 110,
+    "double_labeled": 30,
+    "draft": 60
+  }
+}

@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""compute_agreement.py — 단계 6.5.5 Day 1 CI Gate #5.
+"""compute_agreement.py — 단계 6.5.5 CI Gate #5.
 
-같은 sample_id 에 대해 2인 라벨링 결과의 합의도를 계산.
+2인 라벨링 합의도 (intent_type / deadline_type / auto_apply_allowed).
 
-P1 정정 (2026-05-13, PR #702 리뷰):
-  fail-closed 원칙. 비교 가능한 쌍이 0개이면 NO_COMPARABLE_PAIRS 로 차단.
-  rate=1.0 자동 통과 금지 (이전 fail-open 버그).
+Day 1: 같은 sample_id 의 2 라인 비교 (legacy).
+Day 3 강화: 단일 sample 안의 annotator_a / annotator_b 필드 직접 비교.
+            Cohen's kappa 자체 구현 (sklearn 의존성 회피).
+
+fail-closed (Day 1 P1 정정 유지):
+- 비교 가능한 쌍 0개 → NO_COMPARABLE_PAIRS
+- 임계값 미달 → BELOW_AGREEMENT_THRESHOLD
+- JSON parse → JSON_PARSE_ERROR
 
 기준 (CARD1_EVALSET_SPEC §6):
 - intent_type        ≥ 0.85
@@ -17,9 +22,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Tuple
 
 THRESHOLDS = {
     "intent_type":        0.85,
@@ -29,43 +34,82 @@ THRESHOLDS = {
 FIELDS = list(THRESHOLDS.keys())
 
 
-def simple_agreement(items: List[dict], field: str) -> dict:
-    """fail-closed 합의도 계산.
+def cohen_kappa(a_labels: List[Any], b_labels: List[Any]) -> float:
+    """Cohen's kappa 자체 구현 (range [-1, 1]). 빈 입력 → 0.0."""
+    if not a_labels or len(a_labels) != len(b_labels):
+        return 0.0
+    n = len(a_labels)
+    classes = sorted(set(a_labels) | set(b_labels), key=lambda x: str(x))
+    if len(classes) < 2:
+        return 1.0 if all(a == b for a, b in zip(a_labels, b_labels)) else 0.0
+    p_o = sum(1 for a, b in zip(a_labels, b_labels) if a == b) / n
+    a_count = Counter(a_labels)
+    b_count = Counter(b_labels)
+    p_e = sum((a_count.get(c, 0) / n) * (b_count.get(c, 0) / n) for c in classes)
+    if p_e >= 1.0:
+        return 1.0
+    return round((p_o - p_e) / (1 - p_e), 4)
 
-    Returns:
-        {ok, rate, total_pairs, agreed_pairs, fail_class?, message?}
-        ok=False 인 경우 fail_class 가 포함된다.
-    """
-    pairs: Dict[str, list] = defaultdict(list)
-    for obj in items:
-        sid = obj.get("sample_id")
-        if sid is None:
+
+def _collect_pairs_from_annotators(items: List[dict], field: str) \
+        -> Tuple[List[Any], List[Any]]:
+    a_list, b_list = [], []
+    for it in items:
+        a = it.get("annotator_a")
+        b = it.get("annotator_b")
+        if not isinstance(a, dict) or not isinstance(b, dict):
             continue
-        if field in obj:
-            pairs[sid].append(obj[field])
+        if field in a and field in b:
+            a_list.append(a[field])
+            b_list.append(b[field])
+    return a_list, b_list
 
-    agreed = 0
-    total  = 0
-    for vals in pairs.values():
+
+def _collect_pairs_legacy(items: List[dict], field: str) \
+        -> Tuple[List[Any], List[Any]]:
+    by_sid: Dict[str, List[Any]] = defaultdict(list)
+    for it in items:
+        sid = it.get("sample_id")
+        if sid is None or field not in it:
+            continue
+        by_sid[sid].append(it[field])
+    a_list, b_list = [], []
+    for vals in by_sid.values():
         if len(vals) >= 2:
-            total += 1
-            agreed += int(vals[0] == vals[1])
+            a_list.append(vals[0])
+            b_list.append(vals[1])
+    return a_list, b_list
 
+
+def simple_agreement(items: List[dict], field: str) -> dict:
+    a_list, b_list = _collect_pairs_from_annotators(items, field)
+    used = "annotator_fields"
+    if not a_list:
+        a_list, b_list = _collect_pairs_legacy(items, field)
+        used = "legacy_sample_id"
+
+    total = len(a_list)
     if total == 0:
         return {
-            "ok":         False,
-            "rate":       None,
-            "total_pairs": 0,
-            "agreed_pairs": 0,
-            "fail_class": "NO_COMPARABLE_PAIRS",
-            "message":    f"{field}: 비교 가능한 2인 라벨 쌍이 없음",
+            "ok":            False,
+            "rate":          None,
+            "kappa":         None,
+            "total_pairs":   0,
+            "agreed_pairs":  0,
+            "source":        used,
+            "fail_class":    "NO_COMPARABLE_PAIRS",
+            "message":       f"{field}: 비교 가능한 2인 라벨 쌍이 없음",
         }
-
+    agreed = sum(1 for a, b in zip(a_list, b_list) if a == b)
+    rate   = round(agreed / total, 4)
+    kappa  = cohen_kappa(a_list, b_list)
     return {
-        "ok":         True,
-        "rate":       round(agreed / total, 4),
-        "total_pairs": total,
+        "ok":           True,
+        "rate":         rate,
+        "kappa":        kappa,
+        "total_pairs":  total,
         "agreed_pairs": agreed,
+        "source":       used,
     }
 
 
@@ -90,18 +134,15 @@ def main() -> int:
             try:
                 items.append(json.loads(line))
             except json.JSONDecodeError:
-                # P1 정정: JSON parse error 도 fail-closed
                 print(json.dumps({"ok": False, "fail_class": "JSON_PARSE_ERROR"},
                                  ensure_ascii=False))
                 return 1
 
     field_results: Dict[str, dict] = {}
     overall_ok = True
-
     for field in FIELDS:
         result = simple_agreement(items, field)
         result["threshold"] = THRESHOLDS[field]
-
         if not result["ok"]:
             overall_ok = False
         else:
@@ -109,16 +150,11 @@ def main() -> int:
                 result["ok"]         = False
                 result["fail_class"] = "BELOW_AGREEMENT_THRESHOLD"
                 overall_ok = False
-
         field_results[field] = result
 
-    report = {
-        "ok":     overall_ok,
-        "fields": field_results,
-    }
+    report = {"ok": overall_ok, "fields": field_results}
     if not overall_ok:
-        # overall fail_class: 첫 번째 실패 field 의 fail_class 를 노출
-        for f, r in field_results.items():
+        for r in field_results.values():
             if not r["ok"]:
                 report["fail_class"] = r["fail_class"]
                 break

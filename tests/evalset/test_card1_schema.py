@@ -23,7 +23,7 @@ def schema():
 
 @pytest.fixture
 def minimal_valid_item():
-    """PR #703 P1 정정 후: synthetic_gold 는 text 필수(string), text_redacted 는 null."""
+    """PR #703/#704 정정 후: synthetic_gold + text 필수 + reviewer 필수(gold_reviewed)."""
     return {
         "sample_id":              "card1_000001",
         "text":                   "[DOCUMENT] 오늘 안에 요약해줘",
@@ -38,6 +38,8 @@ def minimal_valid_item():
         "answer_required":        True,
         "auto_apply_allowed":     False,
         "label_status":           "gold_reviewed",
+        "reviewer":               {"id": "r1", "decision": "approved",
+                                   "reviewed_at": "2026-05-13T09:00:00Z"},
     }
 
 
@@ -102,6 +104,8 @@ def gold_item_with_text():
         "answer_required":        True,
         "auto_apply_allowed":     False,
         "label_status":           "gold_reviewed",
+        "reviewer":               {"id": "r1", "decision": "approved",
+                                   "reviewed_at": "2026-05-13T09:00:00Z"},
     }
 
 
@@ -158,3 +162,22 @@ def test_schema_rejects_userlog_with_empty_text_redacted(schema, userlog_item_wi
     bad["text_redacted"] = ""
     errs = list(Draft202012Validator(schema).iter_errors(bad))
     assert len(errs) > 0
+
+
+# ── PR #704 P2 정정 회귀 (2건) — label_status enum 확장 ──────────────────
+
+def test_schema_accepts_label_status_approved(schema, gold_item_with_text):
+    """label_status=approved → schema valid (reviewer 필수)."""
+    item = deepcopy(gold_item_with_text)
+    item["label_status"] = "approved"
+    # gold_item_with_text 에 reviewer 가 있음 → G9 conditional 통과
+    errs = list(Draft202012Validator(schema).iter_errors(item))
+    assert errs == [], f"unexpected errors: {[e.message for e in errs]}"
+
+
+def test_schema_accepts_label_status_gold_v1(schema, gold_item_with_text):
+    """label_status=gold_v1 → schema valid (reviewer 필수)."""
+    item = deepcopy(gold_item_with_text)
+    item["label_status"] = "gold_v1"
+    errs = list(Draft202012Validator(schema).iter_errors(item))
+    assert errs == [], f"unexpected errors: {[e.message for e in errs]}"

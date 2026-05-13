@@ -1,0 +1,35 @@
+{
+  "ok": false,
+  "fields": {
+    "intent_type": {
+      "ok": false,
+      "rate": 0.8333,
+      "kappa": 0.7758,
+      "total_pairs": 30,
+      "agreed_pairs": 25,
+      "source": "annotator_fields",
+      "threshold": 0.85,
+      "fail_class": "BELOW_AGREEMENT_THRESHOLD"
+    },
+    "deadline_type": {
+      "ok": true,
+      "rate": 1.0,
+      "kappa": 1.0,
+      "total_pairs": 30,
+      "agreed_pairs": 30,
+      "source": "annotator_fields",
+      "threshold": 0.8
+    },
+    "auto_apply_allowed": {
+      "ok": false,
+      "rate": 0.8333,
+      "kappa": 0.0,
+      "total_pairs": 30,
+      "agreed_pairs": 25,
+      "source": "annotator_fields",
+      "threshold": 0.95,
+      "fail_class": "BELOW_AGREEMENT_THRESHOLD"
+    }
+  },
+  "fail_class": "BELOW_AGREEMENT_THRESHOLD"
+}

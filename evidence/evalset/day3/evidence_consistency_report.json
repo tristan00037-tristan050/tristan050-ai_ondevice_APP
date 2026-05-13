@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "fail_class": null,
+  "total_items": 200,
+  "enforced_items": 110,
+  "exempt_items": 90,
+  "violation_count": 0,
+  "parse_error_count": 0,
+  "violations": [],
+  "parse_errors": []
+}
