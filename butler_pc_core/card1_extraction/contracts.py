@@ -32,8 +32,14 @@ class ExtractedAction:
     action_text:     str
     owner:           str           = ""
     due_date:        Optional[str] = None   # ISO 8601 or None
-    source_evidence: str           = ""     # 원문 근거 문장
+    source_evidence: str           = ""     # 원문 근거 문장 (== evidence)
     confidence:      float         = 0.5
+
+    # 단계 6.5.1 — card1_action_extraction.v1 schema 필드 (알고리즘 팀 §6)
+    action_type:     str           = ""     # 보내/검토/정리/공유/제출/...
+    deadline_text:   str           = ""     # 원문 마감 표현 (action 단위)
+    material_refs:   List[str]     = field(default_factory=list)
+    is_negated:      bool          = False  # 부정형(제출하지 마세요) 표시
 
 
 @dataclass
