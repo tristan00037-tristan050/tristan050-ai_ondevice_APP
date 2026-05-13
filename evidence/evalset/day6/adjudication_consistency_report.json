@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "fail_class": null,
+  "total_items": 500,
+  "violation_count": 0,
+  "parse_error_count": 0,
+  "by_gate": {
+    "ADJUDICATOR_MISSING_WHEN_ADJUDICATED": 0,
+    "FINAL_GOLD_MISSING_WHEN_ADJUDICATED": 0,
+    "APPROVED_WITHOUT_DISAGREEMENT_RESOLUTION": 0,
+    "AUTO_APPLY_REASONING_MISSING": 0,
+    "AUTO_APPLY_MISMATCH": 0
+  },
+  "violations": [],
+  "parse_errors": []
+}
