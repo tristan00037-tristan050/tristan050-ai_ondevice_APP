@@ -6,7 +6,7 @@
   G8  ANNOTATOR_MISSING_WHEN_DOUBLE_LABELED
         label_status=double_labeled 인데 annotator_a 또는 annotator_b 누락
   G9  REVIEWER_MISSING_WHEN_APPROVED
-        label_status ∈ {approved, gold_reviewed} 인데 reviewer 누락
+        label_status ∈ {approved, gold_reviewed, gold_v1} 인데 reviewer 누락
         label_status = adjudicated 인데 adjudicator 누락
   G10 PRIMARY_INTENT_MISMATCH_GOLD
         item.intent_type 과 gold.intent_type 불일치 (enforced status 만)
@@ -15,13 +15,17 @@
         deadline_type ∈ {HARD, SOFT} 인데 gold.deadline 누락
   G12 NO_ACTION_HAS_NONEMPTY_ACTIONS
         intent_type=NO_ACTION 인데 gold.actions 비어있지 않음
-  G13 AUTO_APPLY_REQUIRES_APPROVED
-        auto_apply_allowed=true 인데 label_status ∉ {approved}
+  G13 AUTO_APPLY_REQUIRES_APPROVED_LIKE
+        auto_apply_allowed=true 인데 label_status ∉ APPROVED_LIKE_STATUSES
+        APPROVED_LIKE_STATUSES = {approved, gold_reviewed, gold_v1, adjudicated}
+        (PR #704 P2 정정: 스키마 enum 정합)
   G14 USERLOG_TEXT_NOT_NULL
         source ∈ {internal_log_redacted, beta_log_redacted, adjudicated_boundary}
         인데 text != null (스키마 + Gate 이중 차단)
   G15 EVIDENCE_INCONSISTENT_WHEN_APPROVED
-        evidence 가 text/text_redacted 안에 없음 + label_status ∈ {gold_reviewed, approved}
+        evidence 가 text/text_redacted 안에 없음 + label_status ∈
+        APPROVED_LIKE_STATUSES (PR #704 P1-B 정정: adjudicated 도 포함하도록
+        G13 와 동일 상수 통일)
 
 Returns:
   exit 0 — ok=true (위반 0건)

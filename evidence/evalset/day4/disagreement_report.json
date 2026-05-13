@@ -1,0 +1,69 @@
+{
+  "cases": [
+    {
+      "sample_id": "card1_100111",
+      "case": 1,
+      "category": "case_1_report_marker_dominates",
+      "a_intent": "REPORT",
+      "b_intent": "REQUEST",
+      "a_deadline": "NONE",
+      "b_deadline": "NONE",
+      "a_auto": false,
+      "b_auto": true,
+      "adopted": "a",
+      "summary": "예정/할 예정 어미 명시 → REPORT 채택 (Day 4 P1-B 실증)"
+    },
+    {
+      "sample_id": "card1_100112",
+      "case": 2,
+      "category": "case_2_command_marker_dominates",
+      "a_intent": "REPORT",
+      "b_intent": "REQUEST",
+      "a_deadline": "NONE",
+      "b_deadline": "NONE",
+      "a_auto": false,
+      "b_auto": true,
+      "adopted": "a",
+      "summary": "지시형 어미 + 즉시성 결합 → COMMAND 채택"
+    },
+    {
+      "sample_id": "card1_100113",
+      "case": 3,
+      "category": "case_3_question_inquiry_dominates",
+      "a_intent": "REPORT",
+      "b_intent": "REQUEST",
+      "a_deadline": "NONE",
+      "b_deadline": "NONE",
+      "a_auto": false,
+      "b_auto": true,
+      "adopted": "a",
+      "summary": "deadline_inquiry 형식 → QUESTION 채택"
+    },
+    {
+      "sample_id": "card1_100114",
+      "case": 4,
+      "category": "case_4_deadline_boundary_urgency",
+      "a_intent": "REPORT",
+      "b_intent": "REQUEST",
+      "a_deadline": "NONE",
+      "b_deadline": "NONE",
+      "a_auto": false,
+      "b_auto": true,
+      "adopted": "a",
+      "summary": "구체 시간 부재 + 긴급 어휘 → URGENCY 채택"
+    },
+    {
+      "sample_id": "card1_100115",
+      "case": 5,
+      "category": "case_5_auto_apply_risk_false",
+      "a_intent": "REPORT",
+      "b_intent": "REQUEST",
+      "a_deadline": "NONE",
+      "b_deadline": "NONE",
+      "a_auto": false,
+      "b_auto": true,
+      "adopted": "a",
+      "summary": "외부 전송/위험 작업 → auto_apply_allowed=false 채택 (kappa 0.0 원인: 단일 클래스 분포)"
+    }
+  ]
+}

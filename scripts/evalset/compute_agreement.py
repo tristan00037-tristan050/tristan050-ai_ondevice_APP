@@ -51,16 +51,28 @@ def cohen_kappa(a_labels: List[Any], b_labels: List[Any]) -> float:
     return round((p_o - p_e) / (1 - p_e), 4)
 
 
-def _collect_pairs_from_annotators(items: List[dict], field: str) \
+def _collect_pairs_from_annotators(items: List[dict], field: str,
+                                   use_final_gold: bool = False) \
         -> Tuple[List[Any], List[Any]]:
+    """annotator_a/b 페어 수집.
+
+    use_final_gold=True 면 annotator_b 자리에 final_gold 값을 대입.
+    Day 4 G5 회복 검증용 — adjudication 완료 후 final_gold 기준 합의도.
+    """
     a_list, b_list = [], []
     for it in items:
         a = it.get("annotator_a")
         b = it.get("annotator_b")
         if not isinstance(a, dict) or not isinstance(b, dict):
             continue
-        if field in a and field in b:
-            a_list.append(a[field])
+        if field not in a or field not in b:
+            continue
+        a_list.append(a[field])
+        if use_final_gold:
+            fg = it.get("final_gold") or {}
+            # final_gold 가 있으면 그 값으로 b 자리를 대체
+            b_list.append(fg.get(field, b[field]))
+        else:
             b_list.append(b[field])
     return a_list, b_list
 
@@ -81,9 +93,10 @@ def _collect_pairs_legacy(items: List[dict], field: str) \
     return a_list, b_list
 
 
-def simple_agreement(items: List[dict], field: str) -> dict:
-    a_list, b_list = _collect_pairs_from_annotators(items, field)
-    used = "annotator_fields"
+def simple_agreement(items: List[dict], field: str,
+                     use_final_gold: bool = False) -> dict:
+    a_list, b_list = _collect_pairs_from_annotators(items, field, use_final_gold)
+    used = "annotator_vs_final_gold" if use_final_gold else "annotator_fields"
     if not a_list:
         a_list, b_list = _collect_pairs_legacy(items, field)
         used = "legacy_sample_id"
@@ -103,13 +116,26 @@ def simple_agreement(items: List[dict], field: str) -> dict:
     agreed = sum(1 for a, b in zip(a_list, b_list) if a == b)
     rate   = round(agreed / total, 4)
     kappa  = cohen_kappa(a_list, b_list)
+    from collections import Counter
+    label_dist = {
+        "a": dict(Counter(str(x) for x in a_list)),
+        "b": dict(Counter(str(x) for x in b_list)),
+    }
     return {
-        "ok":           True,
-        "rate":         rate,
-        "kappa":        kappa,
-        "total_pairs":  total,
-        "agreed_pairs": agreed,
-        "source":       used,
+        "ok":                   True,
+        "rate":                 rate,
+        "agreement_raw":        rate,
+        "expected_agreement":   round(sum(
+            (Counter(a_list).get(c, 0) / total) *
+            (Counter(b_list).get(c, 0) / total)
+            for c in set(a_list) | set(b_list)
+        ), 4),
+        "kappa":                kappa,
+        "pair_count":           total,
+        "total_pairs":          total,
+        "agreed_pairs":         agreed,
+        "label_distribution":   label_dist,
+        "source":               used,
     }
 
 
@@ -117,6 +143,8 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--input", required=True)
     p.add_argument("--out",   default=None)
+    p.add_argument("--use-final-gold", action="store_true",
+                   help="Day 4 G5 회복 — annotator_b 자리에 final_gold 값을 대입")
     args = p.parse_args()
 
     in_path = Path(args.input)
@@ -141,7 +169,7 @@ def main() -> int:
     field_results: Dict[str, dict] = {}
     overall_ok = True
     for field in FIELDS:
-        result = simple_agreement(items, field)
+        result = simple_agreement(items, field, use_final_gold=args.use_final_gold)
         result["threshold"] = THRESHOLDS[field]
         if not result["ok"]:
             overall_ok = False
