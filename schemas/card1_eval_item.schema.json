@@ -24,9 +24,14 @@
       "type": "string",
       "pattern": "^card1_[0-9]{6}$"
     },
+    "text": {
+      "type": ["string", "null"],
+      "description": "synthetic_gold 전용 원문 텍스트. userlog_redacted 는 항상 null."
+    },
     "text_redacted": {
-      "type": "string",
-      "minLength": 1
+      "type": ["string", "null"],
+      "minLength": 1,
+      "description": "userlog_redacted 전용 (PII 치환 후). synthetic_gold 는 null."
     },
     "raw_digest16": {
       "type": "string",
