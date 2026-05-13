@@ -65,24 +65,42 @@ def _collect_pairs_from_annotators(items: List[dict], field: str,
     final_gold 또는 final_gold[field] 누락 시 silent fallback 금지 — violations
     누적 후 호출자가 fail-closed 처리 (P2-A 정착).
 
-    PR #706 P1 정정 (2026-05-13): use_final_gold 모드에서 annotator_b 가드 분리.
-      - use_final_gold=True 면 annotator_b 불필요 (final_gold 가 비교 대상).
-      - use_final_gold=False 면 annotator_b 필수 (기존 로직 유지).
-      이전엔 두 모드 모두 annotator_b 를 요구 → gold_v1 row 가 NO_COMPARABLE_PAIRS 로
-      over-blocking 되는 결함이 있었음.
+    PR #706 옵션 2 정정 (2026-05-13): annotator_a fail-closed 강화.
+      - use_final_gold=True: annotator_a + final_gold 둘 다 필수 (둘 다 fail-closed).
+        annotator_a 누락 → ANNOTATOR_FIELD_MISSING.
+        final_gold 누락  → FINAL_GOLD_FIELD_MISSING (P2-A 유지).
+      - use_final_gold=False: annotator_a + annotator_b 짝맞춤 (silent skip 유지).
+        둘 중 어느 쪽이라도 없으면 페어 미성립 — 정상 거동.
+
+      이전 PR #706 옵션 1 정정 (b2b7cd7d): annotator_a 누락 silent skip 이었음.
+      옵션 2 는 use_final_gold 모드에서 annotator_a + final_gold 가 비교의 양 축이므로
+      한쪽이라도 누락이면 정합성 깨짐 → fail-closed 로 통일.
     """
     a_list, b_list = [], []
     violations: List[dict] = []
     for it in items:
-        a = it.get("annotator_a")
-
-        # annotator_a 가드 — 모드 무관 (a 가 없으면 페어 자체 미성립)
-        if not isinstance(a, dict) or field not in a:
-            continue
-
         if use_final_gold:
-            # use_final_gold 모드: final_gold 만 검사 (annotator_b 무관)
+            # ── use_final_gold 모드: annotator_a + final_gold 모두 fail-closed ──
+            a  = it.get("annotator_a")
             fg = it.get("final_gold")
+
+            # annotator_a 자체 누락
+            if not isinstance(a, dict):
+                violations.append({
+                    "fail_class": "ANNOTATOR_FIELD_MISSING",
+                    "sample_id":  it.get("sample_id"),
+                    "missing":    "annotator_a",
+                })
+                continue
+            # annotator_a[field] 누락
+            if field not in a:
+                violations.append({
+                    "fail_class": "ANNOTATOR_FIELD_MISSING",
+                    "sample_id":  it.get("sample_id"),
+                    "missing":    f"annotator_a.{field}",
+                })
+                continue
+            # final_gold 자체 누락
             if not isinstance(fg, dict):
                 violations.append({
                     "fail_class": "FINAL_GOLD_FIELD_MISSING",
@@ -90,6 +108,7 @@ def _collect_pairs_from_annotators(items: List[dict], field: str,
                     "missing":    "final_gold",
                 })
                 continue
+            # final_gold[field] 누락
             if field not in fg:
                 violations.append({
                     "fail_class": "FINAL_GOLD_FIELD_MISSING",
@@ -97,15 +116,21 @@ def _collect_pairs_from_annotators(items: List[dict], field: str,
                     "missing":    f"final_gold.{field}",
                 })
                 continue
+
             a_list.append(a[field])
             b_list.append(fg[field])
+
         else:
-            # 일반 모드: annotator_b 필수
+            # ── 일반 모드: annotator_a + annotator_b 짝맞춤 (silent skip 유지) ──
+            a = it.get("annotator_a")
             b = it.get("annotator_b")
-            if not isinstance(b, dict) or field not in b:
+            if not isinstance(a, dict) or not isinstance(b, dict):
+                continue
+            if field not in a or field not in b:
                 continue
             a_list.append(a[field])
             b_list.append(b[field])
+
     return a_list, b_list, violations
 
 
@@ -131,8 +156,11 @@ def simple_agreement(items: List[dict], field: str,
         items, field, use_final_gold,
     )
     used = "annotator_vs_final_gold" if use_final_gold else "annotator_fields"
-    # PR #705 P2-A: fail-closed — final_gold 필드 누락 시 즉시 fail.
+    # PR #705 P2-A + PR #706 옵션 2: violations 있으면 fail-closed.
+    # fail_class 는 첫 violation 의 코드를 노출 (ANNOTATOR_FIELD_MISSING /
+    # FINAL_GOLD_FIELD_MISSING — 어느 쪽이든 정합성 위반).
     if fg_violations:
+        first_fail = fg_violations[0].get("fail_class", "FINAL_GOLD_FIELD_MISSING")
         return {
             "ok":              False,
             "rate":            None,
@@ -140,7 +168,7 @@ def simple_agreement(items: List[dict], field: str,
             "total_pairs":     0,
             "agreed_pairs":    0,
             "source":          used,
-            "fail_class":      "FINAL_GOLD_FIELD_MISSING",
+            "fail_class":      first_fail,
             "violation_count": len(fg_violations),
             "violations":      fg_violations[:50],
         }

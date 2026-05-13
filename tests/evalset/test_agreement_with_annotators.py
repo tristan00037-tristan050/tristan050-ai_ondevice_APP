@@ -146,3 +146,66 @@ def test_compute_agreement_use_final_gold_only_annotator_a_and_final_gold(tmp_pa
     # 모든 row 가 a==final_gold 이므로 합의도 1.0
     assert out["fields"]["intent_type"]["total_pairs"] == 10
     assert out["fields"]["intent_type"]["rate"] == 1.0
+
+
+# ── PR #706 옵션 2 정정 회귀 (3건) — annotator_a fail-closed ──────────
+
+def test_compute_agreement_use_final_gold_fails_when_annotator_a_missing(tmp_path):
+    """use_final_gold + annotator_a 자체 없음 → ANNOTATOR_FIELD_MISSING."""
+    item = {
+        "sample_id": "card1_300100",
+        "final_gold": {
+            "intent_type":         "REQUEST",
+            "deadline_type":       "NONE",
+            "auto_apply_allowed":  False,
+            "finalized_at":        "t",
+        },
+    }
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p), "--use-final-gold")
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fail_class"] == "ANNOTATOR_FIELD_MISSING"
+
+
+def test_compute_agreement_use_final_gold_fails_when_annotator_a_field_missing(tmp_path):
+    """use_final_gold + annotator_a 있지만 intent_type 누락 → ANNOTATOR_FIELD_MISSING.
+
+    missing 에 'annotator_a.intent_type' 형식이 포함되어야 한다.
+    """
+    item = {
+        "sample_id": "card1_300101",
+        "annotator_a": {"id": "a", "labeled_at": "t",
+                        # intent_type 누락
+                        "deadline_type": "NONE",
+                        "auto_apply_allowed": False},
+        "final_gold": {
+            "intent_type":         "REQUEST",
+            "deadline_type":       "NONE",
+            "auto_apply_allowed":  False,
+            "finalized_at":        "t",
+        },
+    }
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p), "--use-final-gold")
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["fail_class"] == "ANNOTATOR_FIELD_MISSING"
+    # intent_type 필드 누락이 첫 fail
+    intent_field = out["fields"]["intent_type"]
+    assert intent_field["fail_class"] == "ANNOTATOR_FIELD_MISSING"
+    assert any("annotator_a.intent_type" in v.get("missing", "")
+               for v in intent_field["violations"])
+
+
+def test_compute_agreement_use_final_gold_with_annotator_a_and_final_gold_passes(tmp_path):
+    """회귀 보장 — annotator_a + final_gold 완비 (annotator_b 없음) → PASS."""
+    items = [_gold_v1_minimal("card1_300102", "REQUEST"),
+             _gold_v1_minimal("card1_300103", "REPORT")]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--use-final-gold")
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["fields"]["intent_type"]["total_pairs"] == 2
