@@ -64,17 +64,24 @@ def _collect_pairs_from_annotators(items: List[dict], field: str,
     use_final_gold=True 면 annotator_b 자리에 final_gold[field] 값을 대입.
     final_gold 또는 final_gold[field] 누락 시 silent fallback 금지 — violations
     누적 후 호출자가 fail-closed 처리 (P2-A 정착).
+
+    PR #706 P1 정정 (2026-05-13): use_final_gold 모드에서 annotator_b 가드 분리.
+      - use_final_gold=True 면 annotator_b 불필요 (final_gold 가 비교 대상).
+      - use_final_gold=False 면 annotator_b 필수 (기존 로직 유지).
+      이전엔 두 모드 모두 annotator_b 를 요구 → gold_v1 row 가 NO_COMPARABLE_PAIRS 로
+      over-blocking 되는 결함이 있었음.
     """
     a_list, b_list = [], []
     violations: List[dict] = []
     for it in items:
         a = it.get("annotator_a")
-        b = it.get("annotator_b")
-        if not isinstance(a, dict) or not isinstance(b, dict):
+
+        # annotator_a 가드 — 모드 무관 (a 가 없으면 페어 자체 미성립)
+        if not isinstance(a, dict) or field not in a:
             continue
-        if field not in a or field not in b:
-            continue
+
         if use_final_gold:
+            # use_final_gold 모드: final_gold 만 검사 (annotator_b 무관)
             fg = it.get("final_gold")
             if not isinstance(fg, dict):
                 violations.append({
@@ -93,6 +100,10 @@ def _collect_pairs_from_annotators(items: List[dict], field: str,
             a_list.append(a[field])
             b_list.append(fg[field])
         else:
+            # 일반 모드: annotator_b 필수
+            b = it.get("annotator_b")
+            if not isinstance(b, dict) or field not in b:
+                continue
             a_list.append(a[field])
             b_list.append(b[field])
     return a_list, b_list, violations
