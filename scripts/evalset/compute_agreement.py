@@ -53,13 +53,18 @@ def cohen_kappa(a_labels: List[Any], b_labels: List[Any]) -> float:
 
 def _collect_pairs_from_annotators(items: List[dict], field: str,
                                    use_final_gold: bool = False) \
-        -> Tuple[List[Any], List[Any]]:
+        -> Tuple[List[Any], List[Any], List[dict]]:
     """annotator_a/b 페어 수집.
 
     use_final_gold=True 면 annotator_b 자리에 final_gold 값을 대입.
     Day 4 G5 회복 검증용 — adjudication 완료 후 final_gold 기준 합의도.
+
+    PR #705 P2-A 정정: use_final_gold=True 인데 final_gold[field] 누락 시
+                       silent fallback 금지 — fail-closed (violations 반환).
+    Returns: (a_list, b_list, violations) — violations 가 비어있지 않으면 fail.
     """
     a_list, b_list = [], []
+    violations: List[dict] = []
     for it in items:
         a = it.get("annotator_a")
         b = it.get("annotator_b")
@@ -67,14 +72,28 @@ def _collect_pairs_from_annotators(items: List[dict], field: str,
             continue
         if field not in a or field not in b:
             continue
-        a_list.append(a[field])
         if use_final_gold:
-            fg = it.get("final_gold") or {}
-            # final_gold 가 있으면 그 값으로 b 자리를 대체
-            b_list.append(fg.get(field, b[field]))
+            fg = it.get("final_gold")
+            if not isinstance(fg, dict):
+                violations.append({
+                    "fail_class": "FINAL_GOLD_FIELD_MISSING",
+                    "sample_id":  it.get("sample_id"),
+                    "missing":    "final_gold",
+                })
+                continue
+            if field not in fg:
+                violations.append({
+                    "fail_class": "FINAL_GOLD_FIELD_MISSING",
+                    "sample_id":  it.get("sample_id"),
+                    "missing":    f"final_gold.{field}",
+                })
+                continue
+            a_list.append(a[field])
+            b_list.append(fg[field])
         else:
+            a_list.append(a[field])
             b_list.append(b[field])
-    return a_list, b_list
+    return a_list, b_list, violations
 
 
 def _collect_pairs_legacy(items: List[dict], field: str) \
@@ -95,8 +114,23 @@ def _collect_pairs_legacy(items: List[dict], field: str) \
 
 def simple_agreement(items: List[dict], field: str,
                      use_final_gold: bool = False) -> dict:
-    a_list, b_list = _collect_pairs_from_annotators(items, field, use_final_gold)
+    a_list, b_list, fg_violations = _collect_pairs_from_annotators(
+        items, field, use_final_gold,
+    )
     used = "annotator_vs_final_gold" if use_final_gold else "annotator_fields"
+    # PR #705 P2-A: fail-closed — final_gold 필드 누락 시 즉시 fail.
+    if fg_violations:
+        return {
+            "ok":            False,
+            "rate":          None,
+            "kappa":         None,
+            "total_pairs":   0,
+            "agreed_pairs":  0,
+            "source":        used,
+            "fail_class":    "FINAL_GOLD_FIELD_MISSING",
+            "violation_count": len(fg_violations),
+            "violations":    fg_violations[:50],
+        }
     if not a_list:
         a_list, b_list = _collect_pairs_legacy(items, field)
         used = "legacy_sample_id"

@@ -87,3 +87,53 @@ def test_compute_agreement_handles_missing_annotator_b(tmp_path):
     # annotator_b 없으니 페어 미수집. legacy fallback 도 sample_id 1건이라 페어 X.
     assert out["fields"]["intent_type"]["total_pairs"] == 0
     assert out["fail_class"] == "NO_COMPARABLE_PAIRS"
+
+
+# ── PR #705 P2-A 정정 회귀 (3건) — use_final_gold 시 fail-closed ─────────
+
+def _annot_pair_with_final_gold(final_gold: dict) -> dict:
+    """annotator_a/b 동일 라벨 + 임의 final_gold 부착."""
+    A = {"id": "a", "labeled_at": "t",
+         "intent_type": "REQUEST", "deadline_type": "NONE",
+         "auto_apply_allowed": False}
+    B = {"id": "b", "labeled_at": "t",
+         "intent_type": "REQUEST", "deadline_type": "NONE",
+         "auto_apply_allowed": False}
+    return {"sample_id": "card1_999900",
+            "annotator_a": A, "annotator_b": B,
+            "final_gold":  final_gold}
+
+
+def test_compute_agreement_fails_when_final_gold_intent_type_missing(tmp_path):
+    """use_final_gold=True + final_gold.intent_type 누락 → fail-closed."""
+    item = _annot_pair_with_final_gold({"deadline_type": "NONE",
+                                        "auto_apply_allowed": False,
+                                        "finalized_at": "t"})
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p), "--use-final-gold")
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fail_class"] == "FINAL_GOLD_FIELD_MISSING"
+
+
+def test_compute_agreement_fails_when_final_gold_deadline_type_missing(tmp_path):
+    item = _annot_pair_with_final_gold({"intent_type": "REQUEST",
+                                        "auto_apply_allowed": False,
+                                        "finalized_at": "t"})
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p), "--use-final-gold")
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["fail_class"] == "FINAL_GOLD_FIELD_MISSING"
+
+
+def test_compute_agreement_fails_when_final_gold_auto_apply_missing(tmp_path):
+    item = _annot_pair_with_final_gold({"intent_type": "REQUEST",
+                                        "deadline_type": "NONE",
+                                        "finalized_at": "t"})
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p), "--use-final-gold")
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["fail_class"] == "FINAL_GOLD_FIELD_MISSING"

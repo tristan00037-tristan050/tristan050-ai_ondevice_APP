@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""check_adjudication_consistency.py — 단계 6.5.5 Day 4 CI Gate G17~G20.
+"""check_adjudication_consistency.py — 단계 6.5.5 Day 4 CI Gate G17~G21.
 
-알고리즘 팀 Day 4 차단 기준 4가지를 단일 스크립트로 통합 검사. fail-closed.
+알고리즘 팀 Day 4 차단 기준을 단일 스크립트로 통합 검사. fail-closed.
 
   G17 ADJUDICATOR_MISSING_WHEN_ADJUDICATED
         label_status=adjudicated 또는 gold_v1 인데 adjudicator 누락
@@ -11,8 +11,14 @@
         annotator_a/b 불일치 sample 인데 label_status=adjudicated
         인 경우 final_gold.disagreement_resolution 누락
   G20 AUTO_APPLY_REASONING_MISSING
-        auto_apply_allowed=true 인데 auto_apply_reasoning 누락 또는
-        explanation 짧음(< 10자).
+        PR #705 P2-B 정정: top-level auto_apply_allowed=true
+                            OR final_gold.auto_apply_allowed=true 인데
+                            auto_apply_reasoning 누락/짧음(< 10자).
+                            (이전엔 top-level 만 검사 → final_gold 우회 가능)
+  G21 AUTO_APPLY_MISMATCH (PR #705 P2-C 신규)
+        label_status ∈ {adjudicated, gold_v1} 인데
+        top-level auto_apply_allowed ≠ final_gold.auto_apply_allowed.
+        (top vs final 정합성 강제)
 
 Returns: exit 0 (ok=true) or exit 1 with fail_class.
 """
@@ -24,13 +30,15 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-ENFORCED_ADJUDICATED = {"adjudicated", "gold_v1"}
+ENFORCED_ADJUDICATED      = {"adjudicated", "gold_v1"}
+ADJUDICATED_LIKE_STATUSES = {"adjudicated", "gold_v1"}
 
 GATE_CODES = {
     "G17": "ADJUDICATOR_MISSING_WHEN_ADJUDICATED",
     "G18": "FINAL_GOLD_MISSING_WHEN_ADJUDICATED",
     "G19": "APPROVED_WITHOUT_DISAGREEMENT_RESOLUTION",
     "G20": "AUTO_APPLY_REASONING_MISSING",
+    "G21": "AUTO_APPLY_MISMATCH",
 }
 
 MIN_EXPLANATION_LEN = 10
@@ -72,13 +80,20 @@ def _validate_item(item: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "fail_class": GATE_CODES["G19"],
                 "detail":     "annotator 불일치 인데 disagreement_resolution 누락",
             })
-    if item.get("auto_apply_allowed") is True:
+    # ── G20: PR #705 P2-B 정정 — top-level OR final_gold 모두 검사 ──
+    top_auto = item.get("auto_apply_allowed") is True
+    fg       = item.get("final_gold") or {}
+    fg_auto  = fg.get("auto_apply_allowed") is True
+    if top_auto or fg_auto:
         reasoning = item.get("auto_apply_reasoning")
         if not isinstance(reasoning, dict):
             violations.append({
-                "sample_id":  sid, "gate": "G20",
-                "fail_class": GATE_CODES["G20"],
-                "detail":     "auto_apply_allowed=true 인데 auto_apply_reasoning 누락",
+                "sample_id":             sid, "gate": "G20",
+                "fail_class":            GATE_CODES["G20"],
+                "top_level_auto_apply":  top_auto,
+                "final_gold_auto_apply": fg_auto,
+                "label_status":          status,
+                "detail":                "auto_apply_reasoning 누락",
             })
         else:
             missing = []
@@ -92,11 +107,27 @@ def _validate_item(item: Dict[str, Any]) -> List[Dict[str, Any]]:
                 missing.append(f"explanation(min {MIN_EXPLANATION_LEN}chars)")
             if missing:
                 violations.append({
-                    "sample_id":  sid, "gate": "G20",
-                    "fail_class": GATE_CODES["G20"],
-                    "missing":    missing,
-                    "detail":     "auto_apply_reasoning 필드 누락 또는 짧음",
+                    "sample_id":             sid, "gate": "G20",
+                    "fail_class":            GATE_CODES["G20"],
+                    "missing":               missing,
+                    "top_level_auto_apply":  top_auto,
+                    "final_gold_auto_apply": fg_auto,
+                    "detail":                "auto_apply_reasoning 필드 누락 또는 짧음",
                 })
+
+    # ── G21: PR #705 P2-C 신규 — top vs final_gold auto_apply 정합성 ──
+    if status in ADJUDICATED_LIKE_STATUSES:
+        top_raw = item.get("auto_apply_allowed")
+        fg_raw  = fg.get("auto_apply_allowed") if isinstance(fg, dict) else None
+        if top_raw is not None and fg_raw is not None and top_raw != fg_raw:
+            violations.append({
+                "sample_id":             sid, "gate": "G21",
+                "fail_class":            GATE_CODES["G21"],
+                "top_level_auto_apply":  top_raw,
+                "final_gold_auto_apply": fg_raw,
+                "label_status":          status,
+                "detail":                "top-level 과 final_gold 의 auto_apply_allowed 불일치",
+            })
 
     return violations
 

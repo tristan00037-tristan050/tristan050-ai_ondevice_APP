@@ -158,3 +158,40 @@ def test_g20_auto_apply_reasoning_verifier_pass_required(tmp_path):
     assert res.returncode == 1
     out = json.loads(res.stdout.strip().splitlines()[-1])
     assert out["fail_class"] == "AUTO_APPLY_REASONING_MISSING"
+
+
+# ── PR #705 P2-B 정정 회귀 (1건) — G20 final_gold 도 검사 ────────────────
+
+def test_g20_fails_when_final_gold_auto_apply_true_without_reasoning(tmp_path):
+    """top-level=false, final_gold.auto_apply_allowed=true, reasoning 누락 → fail.
+
+    PR #705 P2-B 정정 전: top-level=false 면 G20 통과 (final_gold 우회 가능).
+    정정 후: final_gold.auto_apply_allowed=true 도 reasoning 강제.
+    """
+    item = _base_adjudicated_item(auto_apply_allowed=False)
+    item["final_gold"]["auto_apply_allowed"] = True
+    # reasoning 부재
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["fail_class"] == "AUTO_APPLY_REASONING_MISSING"
+
+
+# ── PR #705 P2-C 신규 회귀 (1건) — G21 AUTO_APPLY_MISMATCH ───────────────
+
+def test_g21_fails_when_top_level_and_final_gold_auto_apply_mismatch(tmp_path):
+    """adjudicated + top-level=true + final_gold=false → G21 AUTO_APPLY_MISMATCH."""
+    item = _base_adjudicated_item(auto_apply_allowed=True)
+    item["final_gold"]["auto_apply_allowed"] = False   # mismatch
+    # reasoning 추가 (G20 통과시키기 위해)
+    item["auto_apply_reasoning"] = {
+        "evidence_basis": "evidence ok",
+        "verifier_pass":  True,
+        "explanation":    "evidence 가 text 에 있고 verifier 통과 (test)",
+    }
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["fail_class"] == "AUTO_APPLY_MISMATCH"
