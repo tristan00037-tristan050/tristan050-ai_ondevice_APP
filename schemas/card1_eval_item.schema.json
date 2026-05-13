@@ -109,6 +109,34 @@
     },
     "adjudicated": {
       "type": "boolean"
+    },
+    "annotator_a": { "$ref": "#/$defs/annotatorObject" },
+    "annotator_b": { "$ref": "#/$defs/annotatorObject" },
+    "reviewer":    { "$ref": "#/$defs/reviewerObject" },
+    "adjudicator": { "$ref": "#/$defs/reviewerObject" }
+  },
+  "$defs": {
+    "annotatorObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "intent_type", "deadline_type", "auto_apply_allowed", "labeled_at"],
+      "properties": {
+        "id":                 { "type": "string" },
+        "intent_type":        { "enum": ["REQUEST","COMMAND","REPORT","NO_ACTION","QUESTION"] },
+        "deadline_type":      { "enum": ["NONE","HARD","SOFT","INQUIRY","URGENCY","CONDITION"] },
+        "auto_apply_allowed": { "type": "boolean" },
+        "labeled_at":         { "type": "string" }
+      }
+    },
+    "reviewerObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "decision", "reviewed_at"],
+      "properties": {
+        "id":          { "type": "string" },
+        "decision":    { "enum": ["approved", "rejected", "needs_revision"] },
+        "reviewed_at": { "type": "string" }
+      }
     }
   },
   "allOf": [
@@ -141,6 +169,35 @@
           "text": { "type": "string", "minLength": 1 }
         },
         "required": ["text"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "label_status": { "const": "double_labeled" } },
+        "required":   ["label_status"]
+      },
+      "then": {
+        "required": ["annotator_a", "annotator_b"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "label_status": { "enum": ["approved", "gold_reviewed"] }
+        },
+        "required": ["label_status"]
+      },
+      "then": {
+        "required": ["reviewer"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "label_status": { "const": "adjudicated" } },
+        "required":   ["label_status"]
+      },
+      "then": {
+        "required": ["adjudicator"]
       }
     }
   ]

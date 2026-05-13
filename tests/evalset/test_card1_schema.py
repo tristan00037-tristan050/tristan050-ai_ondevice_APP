@@ -23,7 +23,7 @@ def schema():
 
 @pytest.fixture
 def minimal_valid_item():
-    """PR #703 P1 정정 후: synthetic_gold 는 text 필수(string), text_redacted 는 null."""
+    """PR #703/#704 정정 후: synthetic_gold + text 필수 + reviewer 필수(gold_reviewed)."""
     return {
         "sample_id":              "card1_000001",
         "text":                   "[DOCUMENT] 오늘 안에 요약해줘",
@@ -38,6 +38,8 @@ def minimal_valid_item():
         "answer_required":        True,
         "auto_apply_allowed":     False,
         "label_status":           "gold_reviewed",
+        "reviewer":               {"id": "r1", "decision": "approved",
+                                   "reviewed_at": "2026-05-13T09:00:00Z"},
     }
 
 
@@ -102,6 +104,8 @@ def gold_item_with_text():
         "answer_required":        True,
         "auto_apply_allowed":     False,
         "label_status":           "gold_reviewed",
+        "reviewer":               {"id": "r1", "decision": "approved",
+                                   "reviewed_at": "2026-05-13T09:00:00Z"},
     }
 
 
