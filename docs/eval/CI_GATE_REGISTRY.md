@@ -1,6 +1,6 @@
-# CI Gate Registry (G1~G23 통합 명세)
+# CI Gate Registry (G1~G23 통합 명세, Day 10 v1_1 패키징 확정)
 
-단계 6.5.5 Day 1~8 누적 CI Gate 23개. 모두 fail-closed 원칙.
+단계 6.5.5 Day 1~10 누적 CI Gate 23개. 모두 fail-closed 원칙.
 
 ## Gate 1~6 — Day 1 정형 검증
 
@@ -49,16 +49,24 @@
 |:----:|------|------|------------|
 | G22 | duplicate label consistency | 같은 raw_digest16 + 핵심 라벨 불일치 | DUPLICATE_LABEL_INCONSISTENCY / GOLD_V1_DUPLICATE_CONFLICT / REVIEWED_DUPLICATE_CONFLICT |
 
-G22 명세 (알고리즘 팀 확정 2026-05-14):
+G22 명세 (알고리즘 팀 확정 2026-05-14, Day 10 v1 확장):
 - Scope: 모든 row
 - Group key: raw_digest16
-- Hard fields v1: intent_type / deadline_type / auto_apply_allowed
+- Hard fields v1 (Day 6): intent_type / deadline_type / auto_apply_allowed
+- Hard fields Day 10 추가: **action_required** (승격) — DUPLICATE_ACTION_REQUIRED_INCONSISTENCY
+- Warning fields (Day 7+): answer_required (6.5.6 이후 결정 보류)
 - Priority: gold_v1 > gold_reviewed > adjudicated > double_labeled > draft
 - 예외 허용: 금지 (context_digest16 도입 후만 — Day 7+)
 - 각 violation 그룹에 recommended_truth_source (priority 최상위 sample_id) 출력
 
-### Day 7+ 검토 예약
-- action_required / answer_required G22 v2 hard fields 승격 검토
+### Day 10 hard 승격 조건 (action_required)
+1. G22 strict 모드 warning_count = 0
+2. G23 hard violation = 0
+3. auto_apply=true row 100% action_required=true
+4. duplicate-group action_required 충돌 = 0
+모두 충족 시 hard 승격 (Day 9 strict 통과 후 Day 10 진행).
+
+### answer_required hard 승격 (6.5.6 이후 보류)
 
 ## G22 v2 strict trigger (Day 7 정착, 알고리즘 팀 옵션 2 확정)
 
@@ -92,12 +100,13 @@ CLI 옵션 (`--fail-on-warning`) > 환경변수 (`EVALSET_FAIL_ON_WARNING=1`) > 
 |:----:|------|------|------------|
 | G23 | semantic label pattern guard | 모든 row text 패턴 매칭 | SEMANTIC_LABEL_PATTERN_VIOLATION |
 
-G23 v0 명세 (알고리즘 팀 옵션 C 확정 2026-05-12):
+G23 v0 → v1 명세 (알고리즘 팀 옵션 C 확정 2026-05-12, Day 10 v1 확장):
 - Scope: 모든 row
 - Hard fail 1: PURE_QUESTION_MISLABELED_AS_REQUEST — `어떻게 되나요/언제인가요/누구인가요/어디인가요` + REQUEST + action_required=true + 행동동사 없음
 - Hard fail 2: REPORT_MISLABELED_AS_REQUEST — `완료했습니다/보고드립니다/안내드립니다/공유했습니다/전달했습니다` + REQUEST
 - Warning 1: AMBIGUOUS_REQUEST_PATTERN — `가능한가요/확인 가능할까요` + REQUEST + 행동동사 없음 (라벨러 재검토 권장)
 - Warning 2: AMBIGUOUS_REPORT_PATTERN — `처리하겠습니다` + REPORT/REQUEST 경계
+- **Warning 3 (Day 10 v1)**: PROMISE_BOUNDARY_PATTERN — `처리하겠습니다/진행하겠습니다/전달드리겠습니다` + REPORT/REQUEST 경계 (hard 승격 금지)
 - 라벨 가이드 §10 참고
 
 ## 정착 시점
@@ -111,6 +120,8 @@ G23 v0 명세 (알고리즘 팀 옵션 C 확정 2026-05-12):
 | Day 6 | G22 (데이터 일관성) | #707 |
 | Day 7 | G22 v2 strict mode | #709 |
 | Day 8 | G23 (의미-라벨 일관성) | #710 |
+| Day 9 | adjudication 100건 + G5 합의도 | #711 |
+| Day 10 | G22 action_required hard 승격 + G23 v1 + v1_1 패키징 | #712 |
 
 ## fail-closed 원칙 적용 흔적
 

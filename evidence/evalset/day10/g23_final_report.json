@@ -1,0 +1,50 @@
+{
+  "ok": true,
+  "fail_class": null,
+  "total_items": 500,
+  "violation_count": 0,
+  "warning_count": 5,
+  "violations": [],
+  "warnings": [
+    {
+      "warning_class": "PROMISE_BOUNDARY_PATTERN",
+      "sample_id": "card1_100041",
+      "text": "자료를 취합하여 월요일까지 전달드리겠습니다",
+      "pattern": "전달드리겠습니다",
+      "current_intent": "REPORT",
+      "line_no": 41
+    },
+    {
+      "warning_class": "AMBIGUOUS_REPORT_PATTERN",
+      "sample_id": "card1_100046",
+      "text": "이슈 검토 후 처리하겠습니다",
+      "pattern": "처리하겠습니다",
+      "current_intent": "REPORT",
+      "line_no": 46
+    },
+    {
+      "warning_class": "PROMISE_BOUNDARY_PATTERN",
+      "sample_id": "card1_100046",
+      "text": "이슈 검토 후 처리하겠습니다",
+      "pattern": "처리하겠습니다",
+      "current_intent": "REPORT",
+      "line_no": 46
+    },
+    {
+      "warning_class": "PROMISE_BOUNDARY_PATTERN",
+      "sample_id": "card1_100114",
+      "text": "자료 취합 후 전달드리겠습니다",
+      "pattern": "전달드리겠습니다",
+      "current_intent": "REPORT",
+      "line_no": 114
+    },
+    {
+      "warning_class": "PROMISE_BOUNDARY_PATTERN",
+      "sample_id": "card1_200012",
+      "text": "2026-05-15까지 견적서 전달드리겠습니다",
+      "pattern": "전달드리겠습니다",
+      "current_intent": "REQUEST",
+      "line_no": 152
+    }
+  ]
+}

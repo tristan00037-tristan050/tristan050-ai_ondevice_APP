@@ -30,6 +30,9 @@ REPORT_FIXED_PATTERNS  = ["완료했습니다", "보고드립니다", "안내드
 WARNING_PATTERNS_REQUEST = ["가능한가요", "확인 가능할까요"]
 WARNING_PATTERNS_REPORT  = ["처리하겠습니다"]
 
+# Day 10 G23 v1 — 약속/수행 보고 경계 패턴 (warning only, hard 승격 금지)
+WARNING_PATTERNS_PROMISE = ["처리하겠습니다", "진행하겠습니다", "전달드리겠습니다"]
+
 ACTION_VERB_PATTERNS = [
     "보내", "전달", "공유", "검토", "작성", "수정", "제출", "회신",
     "업로드", "확인 부탁", "조율", "해 주", "부탁드립", "보고 부탁",
@@ -40,6 +43,7 @@ FAIL_CLASS_PURE_Q = "PURE_QUESTION_MISLABELED_AS_REQUEST"
 FAIL_CLASS_REPORT = "REPORT_MISLABELED_AS_REQUEST"
 WARN_CLASS_REQ    = "AMBIGUOUS_REQUEST_PATTERN"
 WARN_CLASS_REP    = "AMBIGUOUS_REPORT_PATTERN"
+WARN_CLASS_PROMISE = "PROMISE_BOUNDARY_PATTERN"  # Day 10 G23 v1
 
 
 def has_action_verb(text: str) -> bool:
@@ -103,6 +107,16 @@ def _detect_warnings(item: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "warning_class": WARN_CLASS_REP,
                 "sample_id":     sid, "text": text[:80],
                 "pattern":       pat,
+                "current_intent": intent,
+            })
+            break
+    # Day 10 G23 v1 — PROMISE_BOUNDARY 약속/수행 보고 경계
+    for pat in WARNING_PATTERNS_PROMISE:
+        if pat in text and intent in {"REPORT", "REQUEST"}:
+            warnings.append({
+                "warning_class":  WARN_CLASS_PROMISE,
+                "sample_id":      sid, "text": text[:80],
+                "pattern":        pat,
                 "current_intent": intent,
             })
             break

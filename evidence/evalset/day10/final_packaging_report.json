@@ -1,0 +1,52 @@
+{
+  "package_name": "card1_evalset_v1_1_500.jsonl",
+  "packaged_at": "2026-05-13T23:07:32.918119+00:00",
+  "total_items": 500,
+  "intent_distribution": {
+    "REQUEST": 181,
+    "QUESTION": 77,
+    "REPORT": 110,
+    "COMMAND": 72,
+    "NO_ACTION": 60
+  },
+  "label_status_distribution": {
+    "gold_reviewed": 110,
+    "gold_v1": 60,
+    "adjudicated": 100,
+    "draft": 230
+  },
+  "boundary_slice_tag_count": 47,
+  "auto_apply_allowed_count": 27,
+  "ci_gates_passed": [
+    "G1",
+    "G2",
+    "G3",
+    "G4",
+    "G5",
+    "G6",
+    "G7",
+    "G8",
+    "G9",
+    "G10",
+    "G11",
+    "G12",
+    "G13",
+    "G14",
+    "G15",
+    "G16",
+    "G17",
+    "G18",
+    "G19",
+    "G20",
+    "G21",
+    "G22 (action_required hard)",
+    "G23 v1 (PROMISE_BOUNDARY warning)"
+  ],
+  "raw_text_stored": 0,
+  "pii_leak": 0,
+  "g22_warnings": 0,
+  "g23_violations": 0,
+  "g23_warnings": 5,
+  "fixture_lineage": "Day 6 500건 확장 → Day 7 분포 조정 → Day 8 옵션 C → Day 9 adjudication → Day 10 v1_1 패키징",
+  "distribution_note": "분포는 목표값과 일부 차이가 있으나, 의미 라벨 정합성과 안전 라벨 품질을 우선하여 강제 재분류하지 않았다. 6.5.6 평가는 이 최종 분포 기준으로 수행한다."
+}

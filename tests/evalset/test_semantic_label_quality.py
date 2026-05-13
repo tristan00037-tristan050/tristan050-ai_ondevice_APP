@@ -115,3 +115,23 @@ def test_g23_warning_on_ambiguous_pattern(tmp_path):
     classes = {w["warning_class"] for w in out["warnings"]}
     assert "AMBIGUOUS_REQUEST_PATTERN" in classes
     assert "AMBIGUOUS_REPORT_PATTERN"  in classes
+
+
+# ── Day 10 G23 v1: PROMISE_BOUNDARY_PATTERN warning ──────────────────────
+
+def test_g23_promise_boundary_warning_only(tmp_path):
+    """진행하겠습니다 / 전달드리겠습니다 + REPORT → warning only, ok=true."""
+    items = [
+        _row("card1_test007", "검토 후 진행하겠습니다",
+             intent="REPORT", action_required=False),
+        _row("card1_test008", "결과 정리해서 전달드리겠습니다",
+             intent="REPORT", action_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["violation_count"] == 0
+    classes = {w["warning_class"] for w in out["warnings"]}
+    assert "PROMISE_BOUNDARY_PATTERN" in classes

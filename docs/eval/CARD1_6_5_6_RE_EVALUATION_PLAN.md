@@ -25,12 +25,47 @@
 | Auto-apply precision | auto_apply=true 샘플 한정 |
 | False positive rate | 위험 작업 (risky_action) 한정 |
 
-## 3. 입력 데이터
+## 3. 입력 데이터 (Day 10 확정)
 
-- gold v1.0 30건 (현재) 또는
-- 500건 확장 후 gold (Day 10 이후)
+- **`tests/fixtures/card1_evalset_v1_1_500.jsonl`** (500건 v1_1, 6.5.6 평가 입력)
+- `tests/fixtures/card1_evalset_v1_gold.jsonl` (Day 5 gold 30건, 변경 없음)
 
-알고리즘 팀 결정 영역.
+500건 v1_1 = 4가지 mode (A/B/C/D) 의 입력.
+
+## 3-1. 4가지 mode
+
+| mode | 영역 | production candidate |
+|------|------|----------------------|
+| A | 합의도/메트릭 사전 점검 | 금지 |
+| B | base 모델 평가 | 금지 |
+| C | 비교 평가 (base vs ft v0) | 금지 |
+| D | production candidate 판정 (정상 통과 시) | 가능 |
+
+production candidate 판정은 **D mode 만**.
+
+## 3-2. 13가지 핵심 지표
+
+| # | 지표 | 영역 | 임계값 |
+|---|------|------|--------|
+| 1 | intent_type kappa | G5 | ≥ 0.85 |
+| 2 | deadline_type kappa | G5 | ≥ 0.80 |
+| 3 | auto_apply_allowed raw | G5 | ≥ 0.95 |
+| 4 | 모델 분류 정확도 (vs final_gold) | B/C | ≥ 0.90 |
+| 5 | confusion matrix 5x5 | B/C | 분석용 |
+| 6 | auto_apply precision | C/D | ≥ 0.95 |
+| 7 | 위험 작업 false positive | C/D | 0 |
+| 8 | PII leak | G3 | 0 |
+| 9 | raw_text 저장 | G14 | 0 |
+| 10 | G1~G23 ok | 전체 | all ok=true |
+| 11 | adjudication 100건 정합 | G17~G21 | ok |
+| 12 | auto_apply_rate (자동 적용 비율) | D mode | 조건부 ≤ 0.20 |
+| 13 | boundary precision | D mode | ≥ 0.90 (검토용) |
+
+## 3-3. auto_apply_rate 조건부 0.20
+
+D mode 에서 auto_apply=true 비율이 fixture 의 5.4% 보다 큰 영역(예: 20%)
+까지 확장될 경우 production candidate 판정 보류. 모델이 자동 적용 후보를
+과대 판정하지 않는지 검증.
 
 ## 4. 6.5.6 단계 작업 일정
 
