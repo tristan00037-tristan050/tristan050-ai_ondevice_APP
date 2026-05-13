@@ -1,5 +1,5 @@
 {
-  "evaluated_at": "2026-05-13T23:07:32.918119+00:00",
+  "evaluated_at": "2026-05-13T23:24:49.909156+00:00",
   "fixture": "tests/fixtures/card1_evalset_v1_1_500.jsonl",
   "conditions": [
     {
@@ -76,6 +76,10 @@
       "value": "PROHIBITED until 6.5.6 D mode"
     }
   ],
+  "g23_warning_breakdown": {
+    "PROMISE_BOUNDARY_PATTERN": 4,
+    "note": "Day 10 옵션 1 통합 정정 — AMBIGUOUS_REPORT_PATTERN 제거 후 단일 매칭, warning_count 5 → 4"
+  },
   "all_passed": true,
   "ready_for_6_5_6": true,
   "production_candidate_decision": "PROHIBITED (Day 10에서 판정 금지)"

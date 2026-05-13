@@ -100,13 +100,13 @@ CLI 옵션 (`--fail-on-warning`) > 환경변수 (`EVALSET_FAIL_ON_WARNING=1`) > 
 |:----:|------|------|------------|
 | G23 | semantic label pattern guard | 모든 row text 패턴 매칭 | SEMANTIC_LABEL_PATTERN_VIOLATION |
 
-G23 v0 → v1 명세 (알고리즘 팀 옵션 C 확정 2026-05-12, Day 10 v1 확장):
+G23 v1 명세 (알고리즘 팀 옵션 C 확정 2026-05-12, Day 10 옵션 1 통합 정정 2026-05-14):
 - Scope: 모든 row
 - Hard fail 1: PURE_QUESTION_MISLABELED_AS_REQUEST — `어떻게 되나요/언제인가요/누구인가요/어디인가요` + REQUEST + action_required=true + 행동동사 없음
 - Hard fail 2: REPORT_MISLABELED_AS_REQUEST — `완료했습니다/보고드립니다/안내드립니다/공유했습니다/전달했습니다` + REQUEST
 - Warning 1: AMBIGUOUS_REQUEST_PATTERN — `가능한가요/확인 가능할까요` + REQUEST + 행동동사 없음 (라벨러 재검토 권장)
-- Warning 2: AMBIGUOUS_REPORT_PATTERN — `처리하겠습니다` + REPORT/REQUEST 경계
-- **Warning 3 (Day 10 v1)**: PROMISE_BOUNDARY_PATTERN — `처리하겠습니다/진행하겠습니다/전달드리겠습니다` + REPORT/REQUEST 경계 (hard 승격 금지)
+- Warning 2: PROMISE_BOUNDARY_PATTERN — `처리하겠습니다/진행하겠습니다/전달드리겠습니다` + REPORT/REQUEST 경계 (수행 의사·약속·경계 표현, hard 승격 금지)
+- 제거 (옵션 1): AMBIGUOUS_REPORT_PATTERN / WARNING_PATTERNS_REPORT → `처리하겠습니다` 는 PROMISE_BOUNDARY 단독 매칭
 - 라벨 가이드 §10 참고
 
 ## 정착 시점

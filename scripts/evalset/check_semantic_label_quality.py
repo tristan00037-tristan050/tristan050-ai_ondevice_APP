@@ -13,7 +13,8 @@ Hard fail (fail-closed):
 
 Warning (ok=true 유지):
   1. AMBIGUOUS_REQUEST_PATTERN — '가능한가요/확인 가능할까요' + REQUEST + 행동동사 없음
-  2. AMBIGUOUS_REPORT_PATTERN  — '처리하겠습니다' + REPORT/REQUEST 경계
+  2. PROMISE_BOUNDARY_PATTERN  — '처리하겠습니다/진행하겠습니다/전달드리겠습니다'
+                                  + REPORT/REQUEST 경계 (Day 10 G23 v1, 옵션 1)
 """
 from __future__ import annotations
 
@@ -28,9 +29,9 @@ REPORT_FIXED_PATTERNS  = ["완료했습니다", "보고드립니다", "안내드
                           "공유했습니다", "전달했습니다"]
 
 WARNING_PATTERNS_REQUEST = ["가능한가요", "확인 가능할까요"]
-WARNING_PATTERNS_REPORT  = ["처리하겠습니다"]
 
-# Day 10 G23 v1 — 약속/수행 보고 경계 패턴 (warning only, hard 승격 금지)
+# Day 10 G23 v1 — 약속/수행 보고 경계 패턴 (warning only, hard 승격 금지).
+# 옵션 1 (알고리즘 팀 확정): WARNING_PATTERNS_REPORT 제거 → PROMISE 로 통합.
 WARNING_PATTERNS_PROMISE = ["처리하겠습니다", "진행하겠습니다", "전달드리겠습니다"]
 
 ACTION_VERB_PATTERNS = [
@@ -42,8 +43,7 @@ ACTION_VERB_PATTERNS = [
 FAIL_CLASS_PURE_Q = "PURE_QUESTION_MISLABELED_AS_REQUEST"
 FAIL_CLASS_REPORT = "REPORT_MISLABELED_AS_REQUEST"
 WARN_CLASS_REQ    = "AMBIGUOUS_REQUEST_PATTERN"
-WARN_CLASS_REP    = "AMBIGUOUS_REPORT_PATTERN"
-WARN_CLASS_PROMISE = "PROMISE_BOUNDARY_PATTERN"  # Day 10 G23 v1
+WARN_CLASS_PROMISE = "PROMISE_BOUNDARY_PATTERN"  # Day 10 G23 v1 (옵션 1)
 
 
 def has_action_verb(text: str) -> bool:
@@ -101,16 +101,8 @@ def _detect_warnings(item: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "pattern":       pat,
             })
             break
-    for pat in WARNING_PATTERNS_REPORT:
-        if pat in text and intent in {"REPORT", "REQUEST"}:
-            warnings.append({
-                "warning_class": WARN_CLASS_REP,
-                "sample_id":     sid, "text": text[:80],
-                "pattern":       pat,
-                "current_intent": intent,
-            })
-            break
-    # Day 10 G23 v1 — PROMISE_BOUNDARY 약속/수행 보고 경계
+    # Day 10 G23 v1 (옵션 1) — PROMISE_BOUNDARY 약속/수행 보고 경계 단일 관리.
+    # "처리하겠습니다" 는 PROMISE 단독 매칭 (이전 REPORT 중복 제거).
     for pat in WARNING_PATTERNS_PROMISE:
         if pat in text and intent in {"REPORT", "REQUEST"}:
             warnings.append({

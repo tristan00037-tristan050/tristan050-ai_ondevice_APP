@@ -184,8 +184,7 @@ REQUEST 판정 시 본문에 다음 중 하나가 있어야 한다. 없으면 §
 | 패턴 | 라벨 | 비고 |
 |------|------|------|
 | 가능한가요 / 확인 가능할까요 | REQUEST + 행동동사 없음 → AMBIGUOUS_REQUEST_PATTERN | QUESTION 도 가능 |
-| 처리하겠습니다 | REPORT 또는 REQUEST → AMBIGUOUS_REPORT_PATTERN | 자발 행동 보고 |
-| 처리하겠습니다 / 진행하겠습니다 / 전달드리겠습니다 | REPORT 또는 REQUEST → PROMISE_BOUNDARY_PATTERN (Day 10 G23 v1) | 약속/수행 경계, hard 승격 금지 |
+| 처리하겠습니다 / 진행하겠습니다 / 전달드리겠습니다 | REPORT 또는 REQUEST → PROMISE_BOUNDARY_PATTERN (Day 10 G23 v1, 옵션 1) | 수행 의사·약속·경계, hard 승격 금지. `처리하겠습니다` 는 PROMISE 단독 매칭 (이전 AMBIGUOUS_REPORT 중복 제거) |
 
 ### 10.5 자동 정정 (Day 8 환원 4건 사례)
 
@@ -210,5 +209,4 @@ Day 8 환원 27건 grep 전수 조사 결과 4건이 §10.1~§10.2 위반으로 
 | PURE_QUESTION 어미 + REQUEST | HARD (G23) | §10.1 |
 | REPORT_FIXED 어미 + REQUEST | HARD (G23) | §10.2 |
 | AMBIGUOUS_REQUEST_PATTERN | WARNING (G23) | 가능한가요 등 |
-| AMBIGUOUS_REPORT_PATTERN | WARNING (G23) | 처리하겠습니다 |
-| PROMISE_BOUNDARY_PATTERN | WARNING (G23 v1, Day 10) | 진행/전달드리겠습니다, hard 승격 금지 |
+| PROMISE_BOUNDARY_PATTERN | WARNING (G23 v1, Day 10 옵션 1) | 처리/진행/전달드리겠습니다, hard 승격 금지. `처리하겠습니다` 단독 매칭 (AMBIGUOUS_REPORT 제거) |
