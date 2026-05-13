@@ -1,0 +1,33 @@
+{
+  "ok": false,
+  "fields": {
+    "intent_type": {
+      "ok": false,
+      "rate": null,
+      "total_pairs": 0,
+      "agreed_pairs": 0,
+      "fail_class": "NO_COMPARABLE_PAIRS",
+      "message": "intent_type: 비교 가능한 2인 라벨 쌍이 없음",
+      "threshold": 0.85
+    },
+    "deadline_type": {
+      "ok": false,
+      "rate": null,
+      "total_pairs": 0,
+      "agreed_pairs": 0,
+      "fail_class": "NO_COMPARABLE_PAIRS",
+      "message": "deadline_type: 비교 가능한 2인 라벨 쌍이 없음",
+      "threshold": 0.8
+    },
+    "auto_apply_allowed": {
+      "ok": false,
+      "rate": null,
+      "total_pairs": 0,
+      "agreed_pairs": 0,
+      "fail_class": "NO_COMPARABLE_PAIRS",
+      "message": "auto_apply_allowed: 비교 가능한 2인 라벨 쌍이 없음",
+      "threshold": 0.95
+    }
+  },
+  "fail_class": "NO_COMPARABLE_PAIRS"
+}

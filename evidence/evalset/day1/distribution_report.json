@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "fail_class": null,
+  "total_items": 2,
+  "min_total": 2,
+  "intent_counts": {
+    "REQUEST": 1,
+    "REPORT": 1
+  },
+  "deadline_counts": {
+    "SOFT": 1,
+    "NONE": 1
+  },
+  "source_counts": {
+    "synthetic_gold": 2
+  }
+}
