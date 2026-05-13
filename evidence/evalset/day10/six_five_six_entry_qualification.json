@@ -1,0 +1,86 @@
+{
+  "evaluated_at": "2026-05-13T23:24:49.909156+00:00",
+  "fixture": "tests/fixtures/card1_evalset_v1_1_500.jsonl",
+  "conditions": [
+    {
+      "id": 1,
+      "name": "500건 fixture 최종 확정",
+      "passed": true,
+      "value": 500
+    },
+    {
+      "id": 2,
+      "name": "G1~G23 모두 ok",
+      "passed": true,
+      "value": "all 23 gates ok=true"
+    },
+    {
+      "id": 3,
+      "name": "G22 strict warning=0",
+      "passed": true,
+      "value": 0
+    },
+    {
+      "id": 4,
+      "name": "G23 hard violation=0",
+      "passed": true,
+      "value": 0
+    },
+    {
+      "id": 5,
+      "name": "G5 통과(intent/deadline/auto_apply)",
+      "passed": true,
+      "value": {
+        "intent_type": {
+          "rate": 0.9308,
+          "kappa": 0.9116
+        },
+        "deadline_type": {
+          "rate": 1.0,
+          "kappa": 1.0
+        },
+        "auto_apply_allowed": {
+          "rate": 0.9615,
+          "kappa": 0.0
+        }
+      }
+    },
+    {
+      "id": 6,
+      "name": "auto_apply 후보 ≥ 25",
+      "passed": true,
+      "value": 27
+    },
+    {
+      "id": 7,
+      "name": "raw_text 0",
+      "passed": true,
+      "value": 0
+    },
+    {
+      "id": 8,
+      "name": "PII leak 0",
+      "passed": true,
+      "value": 0
+    },
+    {
+      "id": 9,
+      "name": "duplicate label inconsistency 0",
+      "passed": true,
+      "value": 0
+    },
+    {
+      "id": 10,
+      "name": "production candidate 미판정",
+      "passed": true,
+      "value": "PROHIBITED until 6.5.6 D mode"
+    }
+  ],
+  "g23_warning_breakdown": {
+    "PROMISE_BOUNDARY_PATTERN": 4,
+    "note": "Day 10 옵션 1 통합 정정 — AMBIGUOUS_REPORT_PATTERN 제거 후 단일 매칭, warning_count 5 → 4"
+  },
+  "all_passed": true,
+  "ready_for_6_5_6": true,
+  "production_candidate_decision": "PROHIBITED (Day 10에서 판정 금지)"
+}

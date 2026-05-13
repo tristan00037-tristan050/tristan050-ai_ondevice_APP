@@ -1,0 +1,168 @@
+{
+  "total": 27,
+  "rows": [
+    {
+      "sample_id": "card1_400001",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400002",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400004",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400005",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400006",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400007",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400008",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400009",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400010",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400011",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400012",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400013",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400014",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400015",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400016",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400017",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400018",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400019",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400020",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400021",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400022",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400023",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400024",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400026",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400028",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400029",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    },
+    {
+      "sample_id": "card1_400030",
+      "intent_type": "REQUEST",
+      "deadline_type": "NONE",
+      "label_status": "gold_v1"
+    }
+  ],
+  "note": "Day 10 자연 후보 추가 시도 0건 — REQUEST 가이드 §2 answer_required=true 기본값으로 안전 후보 자연 발굴 불가. 27건 유지가 안전. 6.5.6 후 가이드 재검토 시 조정 가능."
+}

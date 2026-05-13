@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "fail_class": null,
+  "total_items": 500,
+  "leak_count": 0,
+  "parse_error_count": 0,
+  "leak_by_type": {
+    "EMAIL": 0,
+    "PHONE": 0,
+    "SERVER_IP": 0,
+    "SECRET": 0,
+    "CARD": 0
+  },
+  "violations": [],
+  "parse_errors": []
+}

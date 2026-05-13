@@ -146,7 +146,7 @@ deadline_is_actionable=true 는 HARD/SOFT 에만 부여. INQUIRY/URGENCY/CONDITI
 - production candidate 판정은 6.5.6 이전 금지.
 - LoRA / 모델 변경은 6.5.5 범위 외.
 
-## 10. 의미-라벨 일관성 보강 규칙 (Day 8 옵션 C, G23 v0)
+## 10. 의미-라벨 일관성 보강 규칙 (Day 8 옵션 C → Day 10 G23 v1)
 
 알고리즘 팀 옵션 C 확정 (2026-05-12): 합성 시드의 패턴 재사용으로 인한 의미-라벨 충돌을 차단하기 위해 다음 규칙을 hard gate 로 운영한다 (CI Gate G23).
 
@@ -184,7 +184,7 @@ REQUEST 판정 시 본문에 다음 중 하나가 있어야 한다. 없으면 §
 | 패턴 | 라벨 | 비고 |
 |------|------|------|
 | 가능한가요 / 확인 가능할까요 | REQUEST + 행동동사 없음 → AMBIGUOUS_REQUEST_PATTERN | QUESTION 도 가능 |
-| 처리하겠습니다 | REPORT 또는 REQUEST → AMBIGUOUS_REPORT_PATTERN | 자발 행동 보고 |
+| 처리하겠습니다 / 진행하겠습니다 / 전달드리겠습니다 | REPORT 또는 REQUEST → PROMISE_BOUNDARY_PATTERN (Day 10 G23 v1, 옵션 1) | 수행 의사·약속·경계, hard 승격 금지. `처리하겠습니다` 는 PROMISE 단독 매칭 (이전 AMBIGUOUS_REPORT 중복 제거) |
 
 ### 10.5 자동 정정 (Day 8 환원 4건 사례)
 
@@ -196,3 +196,17 @@ Day 8 환원 27건 grep 전수 조사 결과 4건이 §10.1~§10.2 위반으로 
 | card1_200024 | "프로젝트 마감이 언제인가요?" | REQUEST → QUESTION |
 | card1_200005 | "[PR] 머지 완료했습니다" | REQUEST → REPORT |
 | card1_200028 | "배포 결과는 추후 안내드립니다" | REQUEST → REPORT |
+
+### 10.6 G22 / G23 hard / warning 분리 (Day 10 확정)
+
+| 필드 / 패턴 | 단계 | 비고 |
+|------|------|------|
+| intent_type | HARD (G22) | Day 6 이후 |
+| deadline_type | HARD (G22) | Day 6 이후 |
+| auto_apply_allowed | HARD (G22) | Day 6 이후 |
+| action_required | HARD (G22, Day 10 승격) | DUPLICATE_ACTION_REQUIRED_INCONSISTENCY |
+| answer_required | WARNING (G22 v2) | 6.5.6 이후 결정 |
+| PURE_QUESTION 어미 + REQUEST | HARD (G23) | §10.1 |
+| REPORT_FIXED 어미 + REQUEST | HARD (G23) | §10.2 |
+| AMBIGUOUS_REQUEST_PATTERN | WARNING (G23) | 가능한가요 등 |
+| PROMISE_BOUNDARY_PATTERN | WARNING (G23 v1, Day 10 옵션 1) | 처리/진행/전달드리겠습니다, hard 승격 금지. `처리하겠습니다` 단독 매칭 (AMBIGUOUS_REPORT 제거) |

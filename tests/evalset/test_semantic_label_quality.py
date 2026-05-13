@@ -100,6 +100,7 @@ def test_g23_report_correctly_labeled_passes(tmp_path):
 # ── 5. AMBIGUOUS REQUEST / REPORT pattern → WARNING ONLY ─────────────────
 
 def test_g23_warning_on_ambiguous_pattern(tmp_path):
+    """Day 10 옵션 1: '처리하겠습니다' 는 PROMISE_BOUNDARY 단독 (REPORT 중복 제거)."""
     items = [
         _row("card1_test005", "이 일정 처리 가능한가요?",
              intent="REQUEST", action_required=True, answer_required=True),
@@ -114,4 +115,44 @@ def test_g23_warning_on_ambiguous_pattern(tmp_path):
     assert out["violation_count"] == 0
     classes = {w["warning_class"] for w in out["warnings"]}
     assert "AMBIGUOUS_REQUEST_PATTERN" in classes
-    assert "AMBIGUOUS_REPORT_PATTERN"  in classes
+    assert "PROMISE_BOUNDARY_PATTERN"  in classes
+    # AMBIGUOUS_REPORT_PATTERN 은 옵션 1 에서 제거됨
+    assert "AMBIGUOUS_REPORT_PATTERN" not in classes
+
+
+# ── Day 10 G23 v1: PROMISE_BOUNDARY_PATTERN warning ──────────────────────
+
+def test_g23_promise_boundary_warning_only(tmp_path):
+    """진행하겠습니다 / 전달드리겠습니다 + REPORT → warning only, ok=true."""
+    items = [
+        _row("card1_test007", "검토 후 진행하겠습니다",
+             intent="REPORT", action_required=False),
+        _row("card1_test008", "결과 정리해서 전달드리겠습니다",
+             intent="REPORT", action_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["violation_count"] == 0
+    classes = {w["warning_class"] for w in out["warnings"]}
+    assert "PROMISE_BOUNDARY_PATTERN" in classes
+
+
+def test_g23_promise_boundary_single_warning_only(tmp_path):
+    """Day 10 옵션 1: '처리하겠습니다' + REPORT → warning_count=1
+    (PROMISE_BOUNDARY 단일, AMBIGUOUS_REPORT 중복 발생 금지)."""
+    items = [
+        _row("card1_test009", "이슈 검토 후 처리하겠습니다",
+             intent="REPORT", action_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["violation_count"] == 0
+    assert out["warning_count"] == 1
+    assert out["warnings"][0]["warning_class"] == "PROMISE_BOUNDARY_PATTERN"
+    assert out["warnings"][0]["pattern"] == "처리하겠습니다"

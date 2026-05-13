@@ -26,13 +26,19 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-HARD_FIELDS = ["intent_type", "deadline_type", "auto_apply_allowed"]
+HARD_FIELDS = ["intent_type", "deadline_type", "auto_apply_allowed",
+               "action_required"]
 
-# Day 7 G22 v2 — warning 필드 (hard 승격 X, Day 8/9 충돌 통계 확인 후 검토)
-WARNING_FIELDS = ["action_required", "answer_required"]
+# Day 10 hard 승격: action_required → HARD_FIELDS (Day 9 strict 통과 + 충돌 0
+# + auto_apply 27건 모두 action_required=true 조건 충족).
+# answer_required 는 6.5.6 이후 결정 (warning 유지).
+WARNING_FIELDS = ["answer_required"]
+
+HARD_FAIL_CLASS_MAP = {
+    "action_required": "DUPLICATE_ACTION_REQUIRED_INCONSISTENCY",
+}
 
 WARNING_CLASS_MAP = {
-    "action_required": "DUPLICATE_ACTION_REQUIRED_INCONSISTENCY",
     "answer_required": "DUPLICATE_ANSWER_REQUIRED_INCONSISTENCY",
 }
 
@@ -45,9 +51,10 @@ LABEL_STATUS_PRIORITY = {
 }
 
 SEVERITY = {
-    "GOLD_V1_DUPLICATE_CONFLICT":    3,
-    "REVIEWED_DUPLICATE_CONFLICT":   2,
-    "DUPLICATE_LABEL_INCONSISTENCY": 1,
+    "GOLD_V1_DUPLICATE_CONFLICT":             3,
+    "REVIEWED_DUPLICATE_CONFLICT":            2,
+    "DUPLICATE_LABEL_INCONSISTENCY":          1,
+    "DUPLICATE_ACTION_REQUIRED_INCONSISTENCY": 1,
 }
 
 
@@ -156,6 +163,9 @@ def main() -> int:
             fail_class = "GOLD_V1_DUPLICATE_CONFLICT"
         elif reviewed_count >= 2:
             fail_class = "REVIEWED_DUPLICATE_CONFLICT"
+        elif conflicts == ["action_required"]:
+            # Day 10 hard 승격 — action_required 단독 충돌은 별도 fail_class
+            fail_class = "DUPLICATE_ACTION_REQUIRED_INCONSISTENCY"
         else:
             fail_class = "DUPLICATE_LABEL_INCONSISTENCY"
 

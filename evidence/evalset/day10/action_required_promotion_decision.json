@@ -1,0 +1,18 @@
+{
+  "decided_at": "2026-05-13T23:07:32.918119+00:00",
+  "field": "action_required",
+  "from": "WARNING (G22 v2)",
+  "to": "HARD (G22 v1)",
+  "fail_class": "DUPLICATE_ACTION_REQUIRED_INCONSISTENCY",
+  "conditions_met": {
+    "g22_strict_warning_count_zero": true,
+    "g23_hard_violation_zero": true,
+    "auto_apply_27_all_action_required_true": true,
+    "duplicate_group_action_required_conflicts": 0
+  },
+  "approved": true,
+  "note": "Day 9 strict 모드 통과 + auto_apply 27건 모두 action_required=true + duplicate-group action_required 충돌 0건 → 알고리즘 팀 Day 10 자문 1번 조건부 승격 조건 충족.",
+  "deferred": {
+    "answer_required": "6.5.6 이후 결정 (warning 유지)"
+  }
+}

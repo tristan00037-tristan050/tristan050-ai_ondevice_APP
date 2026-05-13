@@ -1,0 +1,84 @@
+{
+  "ok": true,
+  "fields": {
+    "intent_type": {
+      "ok": true,
+      "rate": 0.9308,
+      "agreement_raw": 0.9308,
+      "expected_agreement": 0.2169,
+      "kappa": 0.9116,
+      "pair_count": 130,
+      "total_pairs": 130,
+      "agreed_pairs": 121,
+      "label_distribution": {
+        "a": {
+          "REPORT": 25,
+          "COMMAND": 22,
+          "NO_ACTION": 28,
+          "REQUEST": 39,
+          "QUESTION": 16
+        },
+        "b": {
+          "REQUEST": 40,
+          "REPORT": 22,
+          "COMMAND": 22,
+          "NO_ACTION": 28,
+          "QUESTION": 18
+        }
+      },
+      "source": "annotator_fields",
+      "threshold": 0.85
+    },
+    "deadline_type": {
+      "ok": true,
+      "rate": 1.0,
+      "agreement_raw": 1.0,
+      "expected_agreement": 0.4647,
+      "kappa": 1.0,
+      "pair_count": 130,
+      "total_pairs": 130,
+      "agreed_pairs": 130,
+      "label_distribution": {
+        "a": {
+          "NONE": 86,
+          "HARD": 15,
+          "SOFT": 9,
+          "URGENCY": 6,
+          "CONDITION": 10,
+          "INQUIRY": 4
+        },
+        "b": {
+          "NONE": 86,
+          "HARD": 15,
+          "SOFT": 9,
+          "URGENCY": 6,
+          "CONDITION": 10,
+          "INQUIRY": 4
+        }
+      },
+      "source": "annotator_fields",
+      "threshold": 0.8
+    },
+    "auto_apply_allowed": {
+      "ok": true,
+      "rate": 0.9615,
+      "agreement_raw": 0.9615,
+      "expected_agreement": 0.9615,
+      "kappa": 0.0,
+      "pair_count": 130,
+      "total_pairs": 130,
+      "agreed_pairs": 125,
+      "label_distribution": {
+        "a": {
+          "False": 130
+        },
+        "b": {
+          "True": 5,
+          "False": 125
+        }
+      },
+      "source": "annotator_fields",
+      "threshold": 0.95
+    }
+  }
+}

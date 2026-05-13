@@ -159,22 +159,37 @@ def _row_with_required(sid, digest, *, action_required=False,
     }
 
 
-def test_g22_v2_warning_on_action_required_mismatch(tmp_path):
-    """같은 digest + 다른 action_required + 같은 hard fields → WARNING."""
+# ── Day 10 hard 승격 회귀 (신규 2건) ─────────────────────────────────
+
+def test_g22_action_required_hard_fails(tmp_path):
+    """Day 10: action_required mismatch → hard fail (DUPLICATE_ACTION_REQUIRED_INCONSISTENCY)."""
     items = [
-        _row_with_required("card1_700001", "sha256:dddddddddddddddd",
+        _row_with_required("card1_900001", "sha256:dddddddddddddddd",
                            action_required=True),
-        _row_with_required("card1_700002", "sha256:dddddddddddddddd",
+        _row_with_required("card1_900002", "sha256:dddddddddddddddd",
                            action_required=False),
     ]
     p = _write_jsonl(tmp_path, items)
     res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
-    assert res.returncode == 0   # hard fields ok → ok=true 유지
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fail_class"] == "DUPLICATE_ACTION_REQUIRED_INCONSISTENCY"
+
+
+def test_g22_action_required_passes(tmp_path):
+    """Day 10: action_required 일관 → pass."""
+    items = [
+        _row_with_required("card1_900003", "sha256:dddddddd00000000",
+                           action_required=True),
+        _row_with_required("card1_900004", "sha256:dddddddd00000000",
+                           action_required=True),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 0
     out = json.loads(res.stdout.strip().splitlines()[-1])
     assert out["ok"] is True
-    assert out["warning_count"] >= 1
-    assert any(w["warning_class"] == "DUPLICATE_ACTION_REQUIRED_INCONSISTENCY"
-               for w in out["warnings"])
 
 
 def test_g22_v2_warning_on_answer_required_mismatch(tmp_path):
@@ -194,12 +209,12 @@ def test_g22_v2_warning_on_answer_required_mismatch(tmp_path):
 
 
 def test_g22_v2_warning_does_not_fail_when_hard_fields_ok(tmp_path):
-    """warning 있어도 hard fields ok 면 fail X (ok=true 유지)."""
+    """warning(answer_required) 있어도 hard fields ok 면 fail X (ok=true 유지)."""
     items = [
         _row_with_required("card1_700005", "sha256:ffffffffffffffff",
                            action_required=True, answer_required=True),
         _row_with_required("card1_700006", "sha256:ffffffffffffffff",
-                           action_required=False, answer_required=False),
+                           action_required=True, answer_required=False),
     ]
     p = _write_jsonl(tmp_path, items)
     res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
@@ -213,12 +228,12 @@ def test_g22_v2_warning_does_not_fail_when_hard_fields_ok(tmp_path):
 # ── Day 7 strict mode 회귀 (3건, 알고리즘 팀 옵션 2) ──────────────────
 
 def test_g22_warning_only_default_passes(tmp_path):
-    """기본 모드: warning 발생해도 ok=true (Day 7~9 관측 모드)."""
+    """기본 모드: answer_required warning 발생해도 ok=true (Day 7~9 관측 모드)."""
     items = [
         _row_with_required("card1_700101", "sha256:aaaa11111111aaaa",
-                           action_required=True),
+                           answer_required=True),
         _row_with_required("card1_700102", "sha256:aaaa11111111aaaa",
-                           action_required=False),
+                           answer_required=False),
     ]
     p = _write_jsonl(tmp_path, items)
     res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
@@ -230,12 +245,12 @@ def test_g22_warning_only_default_passes(tmp_path):
 
 
 def test_g22_fail_on_warning_blocks_via_cli_flag(tmp_path):
-    """--fail-on-warning CLI 플래그: warning > 0 시 fail-closed."""
+    """--fail-on-warning CLI 플래그: answer_required warning > 0 시 fail-closed."""
     items = [
         _row_with_required("card1_700103", "sha256:bbbb22222222bbbb",
-                           action_required=True),
+                           answer_required=True),
         _row_with_required("card1_700104", "sha256:bbbb22222222bbbb",
-                           action_required=False),
+                           answer_required=False),
     ]
     p = _write_jsonl(tmp_path, items)
     res = _run("--input", str(p), "--fail-on-warning",

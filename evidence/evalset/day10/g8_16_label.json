@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "fail_class": null,
+  "total_items": 500,
+  "violation_count": 0,
+  "parse_error_count": 0,
+  "by_gate": {
+    "ANNOTATOR_MISSING_WHEN_DOUBLE_LABELED": 0,
+    "REVIEWER_MISSING_WHEN_APPROVED": 0,
+    "PRIMARY_INTENT_MISMATCH_GOLD": 0,
+    "DEADLINE_TYPE_INCONSISTENT_WITH_OBJECT": 0,
+    "NO_ACTION_HAS_NONEMPTY_ACTIONS": 0,
+    "AUTO_APPLY_REQUIRES_APPROVED_LIKE": 0,
+    "USERLOG_TEXT_NOT_NULL": 0,
+    "EVIDENCE_INCONSISTENT_WHEN_APPROVED": 0
+  },
+  "violations": [],
+  "parse_errors": []
+}
