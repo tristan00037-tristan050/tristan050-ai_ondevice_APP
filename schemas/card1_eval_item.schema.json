@@ -80,7 +80,9 @@
         "draft",
         "double_labeled",
         "adjudicated",
+        "approved",
         "gold_reviewed",
+        "gold_v1",
         "rejected_pii"
       ]
     },
@@ -183,7 +185,7 @@
     {
       "if": {
         "properties": {
-          "label_status": { "enum": ["approved", "gold_reviewed"] }
+          "label_status": { "enum": ["approved", "gold_reviewed", "gold_v1"] }
         },
         "required": ["label_status"]
       },

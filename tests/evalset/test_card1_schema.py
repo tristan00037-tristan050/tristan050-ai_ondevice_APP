@@ -162,3 +162,22 @@ def test_schema_rejects_userlog_with_empty_text_redacted(schema, userlog_item_wi
     bad["text_redacted"] = ""
     errs = list(Draft202012Validator(schema).iter_errors(bad))
     assert len(errs) > 0
+
+
+# ── PR #704 P2 정정 회귀 (2건) — label_status enum 확장 ──────────────────
+
+def test_schema_accepts_label_status_approved(schema, gold_item_with_text):
+    """label_status=approved → schema valid (reviewer 필수)."""
+    item = deepcopy(gold_item_with_text)
+    item["label_status"] = "approved"
+    # gold_item_with_text 에 reviewer 가 있음 → G9 conditional 통과
+    errs = list(Draft202012Validator(schema).iter_errors(item))
+    assert errs == [], f"unexpected errors: {[e.message for e in errs]}"
+
+
+def test_schema_accepts_label_status_gold_v1(schema, gold_item_with_text):
+    """label_status=gold_v1 → schema valid (reviewer 필수)."""
+    item = deepcopy(gold_item_with_text)
+    item["label_status"] = "gold_v1"
+    errs = list(Draft202012Validator(schema).iter_errors(item))
+    assert errs == [], f"unexpected errors: {[e.message for e in errs]}"

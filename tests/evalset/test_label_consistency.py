@@ -140,14 +140,18 @@ def test_g12_no_action_requires_empty_actions(tmp_path):
     assert out["fail_class"] == "NO_ACTION_HAS_NONEMPTY_ACTIONS"
 
 
-def test_g13_auto_apply_allowed_requires_approved(tmp_path):
-    """auto_apply_allowed=true 인데 label_status=gold_reviewed → fail."""
+def test_g13_auto_apply_allowed_requires_approved_like(tmp_path):
+    """PR #704 P2 정정 후: auto_apply_allowed=true + gold_reviewed → PASS (APPROVED_LIKE).
+
+    이전 spec 은 approved 만 허용하던 결함 (스키마 enum 에 approved 없음).
+    P2 정정: APPROVED_LIKE_STATUSES = {approved, gold_reviewed, gold_v1, adjudicated}.
+    """
     item = _base_gold_item(auto_apply_allowed=True)   # label_status=gold_reviewed
     p = _write_jsonl(tmp_path, [item])
     res = _run("--input", str(p))
-    assert res.returncode == 1
+    assert res.returncode == 0
     out = json.loads(res.stdout.strip().splitlines()[-1])
-    assert out["fail_class"] == "AUTO_APPLY_REQUIRES_APPROVED"
+    assert out["ok"] is True
 
 
 def test_g14_userlog_text_must_be_null_strict(tmp_path):
@@ -184,3 +188,50 @@ def test_g15_evidence_inconsistency_blocks_approved(tmp_path):
     assert res.returncode == 1
     out = json.loads(res.stdout.strip().splitlines()[-1])
     assert out["fail_class"] == "EVIDENCE_INCONSISTENT_WHEN_APPROVED"
+
+
+# ── PR #704 P2 정정 회귀 (5건) — G13 APPROVED_LIKE_STATUSES ─────────────
+
+def test_g13_auto_apply_passes_with_approved(tmp_path):
+    item = _base_gold_item(label_status="approved", auto_apply_allowed=True)
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 0
+
+
+def test_g13_auto_apply_passes_with_gold_reviewed(tmp_path):
+    item = _base_gold_item(label_status="gold_reviewed", auto_apply_allowed=True)
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 0
+
+
+def test_g13_auto_apply_passes_with_gold_v1(tmp_path):
+    item = _base_gold_item(label_status="gold_v1", auto_apply_allowed=True)
+    # gold_v1 도 reviewer 필요 (G9 conditional)
+    item["reviewer"] = {"id": "r1", "decision": "approved",
+                        "reviewed_at": "2026-05-13T09:00:00Z"}
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 0
+
+
+def test_g13_auto_apply_passes_with_adjudicated(tmp_path):
+    item = _base_gold_item(label_status="adjudicated", auto_apply_allowed=True)
+    item.pop("reviewer", None)
+    item["adjudicator"] = {"id": "adj1", "decision": "approved",
+                           "reviewed_at": "2026-05-13T11:00:00Z"}
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 0
+
+
+def test_g13_auto_apply_fails_with_draft(tmp_path):
+    """auto_apply_allowed=true 인데 draft → AUTO_APPLY_REQUIRES_APPROVED_LIKE."""
+    item = _base_gold_item(label_status="draft", auto_apply_allowed=True)
+    item.pop("reviewer", None)
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["fail_class"] == "AUTO_APPLY_REQUIRES_APPROVED_LIKE"

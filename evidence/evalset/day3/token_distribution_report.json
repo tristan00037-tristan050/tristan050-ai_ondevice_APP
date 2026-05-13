@@ -2,9 +2,19 @@
   "ok": true,
   "fail_class": null,
   "total_items": 200,
-  "userlog_items": 60,
+  "userlog_count": 60,
   "total_tokens": 18,
-  "token_count": {
+  "detected_tokens": [
+    "[TIME]",
+    "[EMAIL]",
+    "[PHONE]",
+    "[URL]",
+    "[PR]",
+    "[BRANCH]",
+    "[SERVER]",
+    "[SECRET]"
+  ],
+  "token_distribution": {
     "[PERSON]": 0,
     "[TEAM]": 0,
     "[COMPANY]": 0,
@@ -28,7 +38,6 @@
     "[SECRET]": 1,
     "[CARD]": 0
   },
-  "skew_threshold": 0.7,
-  "skew_top_token": null,
-  "skew_top_ratio": null
+  "warnings": [],
+  "skew_threshold": 0.7
 }

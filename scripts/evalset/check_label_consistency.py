@@ -35,8 +35,11 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-ENFORCED_STATUSES = {"gold_reviewed", "approved", "adjudicated"}
-APPROVED_LIKE     = {"approved", "gold_reviewed"}
+ENFORCED_STATUSES = {"gold_reviewed", "approved", "adjudicated", "gold_v1"}
+APPROVED_LIKE     = {"approved", "gold_reviewed", "gold_v1"}
+# PR #704 P2 정정: G13 기준 — auto_apply_allowed=true 허용 status 집합
+# (Day 4 final_gold/gold_v1/adjudicated 도 자동 적용 허용)
+APPROVED_LIKE_STATUSES = {"approved", "gold_reviewed", "gold_v1", "adjudicated"}
 USERLOG_SOURCES   = {"internal_log_redacted", "beta_log_redacted",
                      "adjudicated_boundary"}
 
@@ -46,7 +49,7 @@ GATE_CODES = {
     "G10": "PRIMARY_INTENT_MISMATCH_GOLD",
     "G11": "DEADLINE_TYPE_INCONSISTENT_WITH_OBJECT",
     "G12": "NO_ACTION_HAS_NONEMPTY_ACTIONS",
-    "G13": "AUTO_APPLY_REQUIRES_APPROVED",
+    "G13": "AUTO_APPLY_REQUIRES_APPROVED_LIKE",
     "G14": "USERLOG_TEXT_NOT_NULL",
     "G15": "EVIDENCE_INCONSISTENT_WHEN_APPROVED",
 }
@@ -99,12 +102,16 @@ def _validate_item(item: Dict[str, Any]) -> List[Dict[str, Any]]:
             "detail":     "adjudicated 인데 adjudicator 누락",
         })
 
-    # ── G13: auto_apply_allowed=true 인데 approved 아님 ────────────────
-    if item.get("auto_apply_allowed") is True and status != "approved":
+    # ── G13: auto_apply_allowed=true 인데 APPROVED_LIKE_STATUSES 외 ──
+    # PR #704 P2 정정: scheme enum 정합. approved/gold_reviewed/gold_v1/adjudicated 허용.
+    if item.get("auto_apply_allowed") is True and status not in APPROVED_LIKE_STATUSES:
         violations.append({
-            "sample_id":  sid, "gate": "G13",
-            "fail_class": GATE_CODES["G13"],
-            "detail":     f"auto_apply_allowed=true 인데 label_status={status}",
+            "sample_id":            sid, "gate": "G13",
+            "fail_class":           GATE_CODES["G13"],
+            "current_status":       status,
+            "required_status_set":  sorted(APPROVED_LIKE_STATUSES),
+            "detail":               (f"auto_apply_allowed=true 인데 "
+                                     f"label_status={status} (허용 집합 외)"),
         })
 
     # ── enforced status 만 G10/G11/G12/G15 검사 ────────────────────────
