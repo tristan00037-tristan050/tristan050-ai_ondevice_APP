@@ -74,6 +74,40 @@ def test_check_pii_leak_detects_email_phone(tmp_path):
     assert out["leak_by_type"]["PHONE"] >= 1
 
 
+def test_distribution_fails_on_json_parse_error(tmp_path):
+    """PR #704 P1-A 정정 — JSON parse 오류 fail-closed (Day 1 P2 원칙 동일)."""
+    bad_path = tmp_path / "bad.jsonl"
+    bad_path.write_text(
+        '{"sample_id":"card1_000001","intent_type":"REQUEST",'
+        '"deadline_type":"NONE","source":"synthetic_gold"}\n'
+        '{not valid json}\n',
+        encoding="utf-8",
+    )
+    res = _run("check_distribution.py", "--input", str(bad_path), "--min-total", "1")
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fail_class"] == "JSON_PARSE_ERROR"
+    assert out["parse_error_count"] >= 1
+
+
+def test_distribution_passes_on_clean_jsonl(tmp_path):
+    """정상 JSONL 100건 → distribution PASS."""
+    items = [
+        {"sample_id": f"card1_{i:06d}",
+         "intent_type": "REQUEST" if i % 2 else "REPORT",
+         "deadline_type": "NONE",
+         "source": "synthetic_gold"}
+        for i in range(1, 101)
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("check_distribution.py", "--input", str(p), "--min-total", "100")
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["total_items"] == 100
+
+
 def test_check_distribution_counts_correctly(tmp_path):
     items = [
         {"sample_id": f"card1_{i:06d}",

@@ -235,3 +235,36 @@ def test_g13_auto_apply_fails_with_draft(tmp_path):
     assert res.returncode == 1
     out = json.loads(res.stdout.strip().splitlines()[-1])
     assert out["fail_class"] == "AUTO_APPLY_REQUIRES_APPROVED_LIKE"
+
+
+# ── PR #704 P1-B 정정 회귀 (2건) — G15 adjudicated 포함 ────────────────
+
+def test_adjudicated_auto_apply_requires_evidence_consistency(tmp_path):
+    """adjudicated + auto_apply_allowed=true + evidence 불일치 → fail (G15)."""
+    item = _base_gold_item(label_status="adjudicated", auto_apply_allowed=True)
+    item.pop("reviewer", None)
+    item["adjudicator"] = {"id": "adj1", "decision": "approved",
+                           "reviewed_at": "2026-05-13T11:00:00Z"}
+    # evidence 가 text 에 없도록 강제 위반
+    item["gold"]["actions"] = [{"action_text": "보내기",
+                                "evidence": "원문에 없는 문장 입니다"}]
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fail_class"] == "EVIDENCE_INCONSISTENT_WHEN_APPROVED"
+
+
+def test_adjudicated_auto_apply_passes_with_evidence_consistency(tmp_path):
+    """adjudicated + auto_apply_allowed=true + evidence 일치 → PASS."""
+    item = _base_gold_item(label_status="adjudicated", auto_apply_allowed=True)
+    item.pop("reviewer", None)
+    item["adjudicator"] = {"id": "adj1", "decision": "approved",
+                           "reviewed_at": "2026-05-13T11:00:00Z"}
+    # 기본 item 의 evidence 는 모두 text 에 있음
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True

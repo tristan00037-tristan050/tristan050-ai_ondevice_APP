@@ -34,15 +34,18 @@ def main() -> int:
     source_counts:   Counter = Counter()
     slice_tag_counts: Counter = Counter()
     label_status_counts: Counter = Counter()
+    parse_errors: list = []
     total = 0
     with in_path.open(encoding="utf-8") as f:
-        for line in f:
+        for line_no, line in enumerate(f, 1):
             line = line.strip()
             if not line:
                 continue
             try:
                 item = json.loads(line)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                # PR #704 P1-A 정정: JSON parse 오류 fail-closed (Day 1 P2 원칙 동일).
+                parse_errors.append({"line_no": line_no, "error": str(e)})
                 continue
             total += 1
             intent_counts[item.get("intent_type", "?")]     += 1
@@ -51,6 +54,23 @@ def main() -> int:
             label_status_counts[item.get("label_status", "?")] += 1
             for tag in (item.get("slice_tags") or []):
                 slice_tag_counts[tag] += 1
+
+    # PR #704 P1-A 정정: parse 오류가 있으면 즉시 fail (distribution 집계 무의미).
+    if parse_errors:
+        report = {
+            "ok":                False,
+            "fail_class":        "JSON_PARSE_ERROR",
+            "total_items":       total,
+            "parse_error_count": len(parse_errors),
+            "parse_errors":      parse_errors[:50],
+        }
+        if args.out:
+            out_path = Path(args.out)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
+                                encoding="utf-8")
+        print(json.dumps(report, ensure_ascii=False))
+        return 1
 
     ok = total >= args.min_total
     report = {

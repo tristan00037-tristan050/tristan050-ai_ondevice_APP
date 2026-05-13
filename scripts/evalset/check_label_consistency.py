@@ -88,13 +88,14 @@ def _validate_item(item: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "detail":     "annotator_a 또는 annotator_b 누락",
             })
 
-    # ── G9: approved/gold_reviewed/adjudicated 인데 reviewer/adjudicator 누락 ─
+    # ── G9: approved/gold_reviewed/gold_v1 인데 reviewer 누락 ───────────
     if status in APPROVED_LIKE and not item.get("reviewer"):
         violations.append({
             "sample_id":  sid, "gate": "G9",
             "fail_class": GATE_CODES["G9"],
             "detail":     f"{status} 인데 reviewer 누락",
         })
+    # ── G9: adjudicated 인데 adjudicator 누락 ────────────────────────
     if status == "adjudicated" and not item.get("adjudicator"):
         violations.append({
             "sample_id":  sid, "gate": "G9",
@@ -158,8 +159,9 @@ def _validate_item(item: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "detail":     f"NO_ACTION 인데 gold.actions={len(actions)}건",
             })
 
-    # ── G15: evidence 불일치 + approved/gold_reviewed ──────────────────
-    if status in APPROVED_LIKE:
+    # ── G15: evidence 불일치 + APPROVED_LIKE_STATUSES (adjudicated 포함) ──
+    # PR #704 P1-B 정정: G13 과 동일 상수 사용으로 정합 (adjudicated 도 검사).
+    if status in APPROVED_LIKE_STATUSES:
         source_text = _resolve_source(item)
         if source_text:
             def _check(ev):
