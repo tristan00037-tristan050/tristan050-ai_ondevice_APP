@@ -43,6 +43,23 @@
 | G20 | auto_apply_reasoning missing | top-level OR final_gold auto_apply=true | AUTO_APPLY_REASONING_MISSING |
 | G21 | auto_apply mismatch | adjudicated/gold_v1 + top ≠ final_gold | AUTO_APPLY_MISMATCH |
 
+## Gate 22 — Day 6 데이터 일관성 (신규)
+
+| Gate | 이름 | 조건 | fail_class |
+|:----:|------|------|------------|
+| G22 | duplicate label consistency | 같은 raw_digest16 + 핵심 라벨 불일치 | DUPLICATE_LABEL_INCONSISTENCY / GOLD_V1_DUPLICATE_CONFLICT / REVIEWED_DUPLICATE_CONFLICT |
+
+G22 명세 (알고리즘 팀 확정 2026-05-14):
+- Scope: 모든 row
+- Group key: raw_digest16
+- Hard fields v1: intent_type / deadline_type / auto_apply_allowed
+- Priority: gold_v1 > gold_reviewed > adjudicated > double_labeled > draft
+- 예외 허용: 금지 (context_digest16 도입 후만 — Day 7+)
+- 각 violation 그룹에 recommended_truth_source (priority 최상위 sample_id) 출력
+
+### Day 7+ 검토 예약
+- action_required / answer_required G22 v2 hard fields 승격 검토
+
 ## 정착 시점
 
 | Day | 정착 Gate | PR |
@@ -51,6 +68,7 @@
 | Day 2 | G7 | #703 |
 | Day 3 | G8~G16 | #704 |
 | Day 4~5 | G17~G21 | #705/#706 |
+| Day 6 | G22 (데이터 일관성) | #707 |
 
 ## fail-closed 원칙 적용 흔적
 
