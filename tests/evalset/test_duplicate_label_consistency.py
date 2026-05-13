@@ -141,3 +141,132 @@ def test_g22_fails_on_gold_v1_duplicate_conflict(tmp_path):
     assert res.returncode == 1
     out = json.loads(res.stdout.strip().splitlines()[-1])
     assert out["fail_class"] == "GOLD_V1_DUPLICATE_CONFLICT"
+
+
+# ── Day 7 G22 v2 회귀 (3건) — warning (hard 승격 X) ─────────────────────
+
+def _row_with_required(sid, digest, *, action_required=False,
+                       answer_required=False, intent="REQUEST"):
+    return {
+        "sample_id":          sid,
+        "raw_digest16":       digest,
+        "intent_type":        intent,
+        "deadline_type":      "NONE",
+        "auto_apply_allowed": False,
+        "label_status":       "draft",
+        "action_required":    action_required,
+        "answer_required":    answer_required,
+    }
+
+
+def test_g22_v2_warning_on_action_required_mismatch(tmp_path):
+    """같은 digest + 다른 action_required + 같은 hard fields → WARNING."""
+    items = [
+        _row_with_required("card1_700001", "sha256:dddddddddddddddd",
+                           action_required=True),
+        _row_with_required("card1_700002", "sha256:dddddddddddddddd",
+                           action_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 0   # hard fields ok → ok=true 유지
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["warning_count"] >= 1
+    assert any(w["warning_class"] == "DUPLICATE_ACTION_REQUIRED_INCONSISTENCY"
+               for w in out["warnings"])
+
+
+def test_g22_v2_warning_on_answer_required_mismatch(tmp_path):
+    items = [
+        _row_with_required("card1_700003", "sha256:eeeeeeeeeeeeeeee",
+                           answer_required=True),
+        _row_with_required("card1_700004", "sha256:eeeeeeeeeeeeeeee",
+                           answer_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert any(w["warning_class"] == "DUPLICATE_ANSWER_REQUIRED_INCONSISTENCY"
+               for w in out["warnings"])
+
+
+def test_g22_v2_warning_does_not_fail_when_hard_fields_ok(tmp_path):
+    """warning 있어도 hard fields ok 면 fail X (ok=true 유지)."""
+    items = [
+        _row_with_required("card1_700005", "sha256:ffffffffffffffff",
+                           action_required=True, answer_required=True),
+        _row_with_required("card1_700006", "sha256:ffffffffffffffff",
+                           action_required=False, answer_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["violation_count"] == 0
+    assert out["warning_count"] >= 1
+
+
+# ── Day 7 strict mode 회귀 (3건, 알고리즘 팀 옵션 2) ──────────────────
+
+def test_g22_warning_only_default_passes(tmp_path):
+    """기본 모드: warning 발생해도 ok=true (Day 7~9 관측 모드)."""
+    items = [
+        _row_with_required("card1_700101", "sha256:aaaa11111111aaaa",
+                           action_required=True),
+        _row_with_required("card1_700102", "sha256:aaaa11111111aaaa",
+                           action_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["strict_mode"] is False
+    assert out["warning_count"] >= 1
+
+
+def test_g22_fail_on_warning_blocks_via_cli_flag(tmp_path):
+    """--fail-on-warning CLI 플래그: warning > 0 시 fail-closed."""
+    items = [
+        _row_with_required("card1_700103", "sha256:bbbb22222222bbbb",
+                           action_required=True),
+        _row_with_required("card1_700104", "sha256:bbbb22222222bbbb",
+                           action_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--fail-on-warning",
+               "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fail_class"] == "DUPLICATE_WARNING_FIELD_INCONSISTENCY"
+    assert out["strict_mode"] is True
+
+
+def test_g22_fail_on_warning_blocks_via_env_var(tmp_path, monkeypatch):
+    """EVALSET_FAIL_ON_WARNING=1: warning > 0 시 fail-closed."""
+    monkeypatch.setenv("EVALSET_FAIL_ON_WARNING", "1")
+    items = [
+        _row_with_required("card1_700105", "sha256:cccc33333333cccc",
+                           answer_required=True),
+        _row_with_required("card1_700106", "sha256:cccc33333333cccc",
+                           answer_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    # subprocess 호출 시 환경변수 전달
+    import subprocess, sys as _sys
+    res = subprocess.run(
+        [_sys.executable, str(GATE), "--input", str(p),
+         "--out", str(tmp_path / "out.json")],
+        capture_output=True, text=True,
+        env={**__import__("os").environ, "EVALSET_FAIL_ON_WARNING": "1"},
+    )
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fail_class"] == "DUPLICATE_WARNING_FIELD_INCONSISTENCY"
+    assert out["strict_mode"] is True

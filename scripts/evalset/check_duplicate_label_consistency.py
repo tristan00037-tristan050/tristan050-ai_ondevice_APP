@@ -20,12 +20,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 HARD_FIELDS = ["intent_type", "deadline_type", "auto_apply_allowed"]
+
+# Day 7 G22 v2 — warning 필드 (hard 승격 X, Day 8/9 충돌 통계 확인 후 검토)
+WARNING_FIELDS = ["action_required", "answer_required"]
+
+WARNING_CLASS_MAP = {
+    "action_required": "DUPLICATE_ACTION_REQUIRED_INCONSISTENCY",
+    "answer_required": "DUPLICATE_ANSWER_REQUIRED_INCONSISTENCY",
+}
 
 LABEL_STATUS_PRIORITY = {
     "gold_v1":        5,
@@ -46,11 +55,26 @@ def _get_priority(status: Optional[str]) -> int:
     return LABEL_STATUS_PRIORITY.get(status or "", 0)
 
 
+def determine_strict_mode(cli_flag: bool) -> bool:
+    """우선순위: CLI > env > default(False).
+
+    CLI flag (--fail-on-warning) 가 True 면 strict mode.
+    그 외엔 EVALSET_FAIL_ON_WARNING=1 환경변수 확인.
+    """
+    if cli_flag:
+        return True
+    return os.environ.get("EVALSET_FAIL_ON_WARNING") == "1"
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--input", required=True)
     p.add_argument("--out",   default=None)
+    p.add_argument("--fail-on-warning", action="store_true",
+                   help=("strict mode: warning_count > 0 시 exit 1 "
+                         "(production/release/training handoff 필수)"))
     args = p.parse_args()
+    strict_mode = determine_strict_mode(args.fail_on_warning)
 
     in_path = Path(args.input)
     if not in_path.exists():
@@ -94,6 +118,7 @@ def main() -> int:
         return 1
 
     duplicate_groups: List[Dict[str, Any]] = []
+    warnings: List[Dict[str, Any]] = []
     duplicate_count = 0
 
     for digest, items in items_by_digest.items():
@@ -101,7 +126,18 @@ def main() -> int:
             continue
         duplicate_count += 1
 
-        # 충돌 필드 식별
+        # G22 v2 — WARNING_FIELDS 충돌 검사 (fail X, 통계 수집)
+        for w_field in WARNING_FIELDS:
+            w_vals = sorted({str(it.get(w_field)) for it in items})
+            if len(w_vals) > 1:
+                warnings.append({
+                    "warning_class": WARNING_CLASS_MAP[w_field],
+                    "raw_digest16":  digest,
+                    "sample_ids":    [it.get("sample_id") for it in items],
+                    "values":        {w_field: w_vals},
+                })
+
+        # HARD_FIELDS 충돌 식별 (fail-closed)
         conflicts: List[str] = []
         values_map: Dict[str, List[str]] = {}
         for field in HARD_FIELDS:
@@ -153,6 +189,31 @@ def main() -> int:
             "duplicate_groups_checked": duplicate_count,
             "violation_count":          len(duplicate_groups),
             "duplicate_groups":         duplicate_groups[:50],
+            "warnings":                 warnings[:50],
+            "warning_count":            len(warnings),
+            "strict_mode":              strict_mode,
+        }
+        if args.out:
+            out_path = Path(args.out)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
+                                encoding="utf-8")
+        print(json.dumps(report, ensure_ascii=False))
+        return 1
+
+    # ── Day 7 옵션 2: strict mode 에서 warning > 0 시 fail-closed ─────────
+    if warnings and strict_mode:
+        report = {
+            "ok":                       False,
+            "fail_class":               "DUPLICATE_WARNING_FIELD_INCONSISTENCY",
+            "total_items":              total,
+            "unique_digests":           len(items_by_digest),
+            "duplicate_groups_checked": duplicate_count,
+            "violation_count":          0,
+            "warning_count":            len(warnings),
+            "warnings":                 warnings[:50],
+            "strict_mode":              True,
+            "message":                  "strict mode: warning_count > 0 이므로 차단됨",
         }
         if args.out:
             out_path = Path(args.out)
@@ -169,6 +230,9 @@ def main() -> int:
         "unique_digests":           len(items_by_digest),
         "duplicate_groups_checked": duplicate_count,
         "violation_count":          0,
+        "warnings":                 warnings[:50],
+        "warning_count":            len(warnings),
+        "strict_mode":              strict_mode,
     }
     if args.out:
         out_path = Path(args.out)

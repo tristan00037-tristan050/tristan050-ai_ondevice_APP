@@ -60,6 +60,32 @@ G22 명세 (알고리즘 팀 확정 2026-05-14):
 ### Day 7+ 검토 예약
 - action_required / answer_required G22 v2 hard fields 승격 검토
 
+## G22 v2 strict trigger (Day 7 정착, 알고리즘 팀 옵션 2 확정)
+
+### 정의
+
+G22 v2 WARNING_FIELDS (`action_required` / `answer_required`) 는 기본 모드에서
+관측용 warning 이지만, strict mode (`--fail-on-warning` 또는
+`EVALSET_FAIL_ON_WARNING=1`) 에서는 fail-closed.
+
+### strict mode 필수 적용 시점
+
+| # | 시점 |
+|---|------|
+| 1 | Day 10 최종 EvalSet 패키징 |
+| 2 | 6.5.6 production candidate 판정 |
+| 3 | gold_v1 최종 패키징 |
+| 4 | 모델 학습 handoff |
+| 5 | release branch 생성 |
+
+### fail_class
+
+`DUPLICATE_WARNING_FIELD_INCONSISTENCY` (통합)
+
+### 우선순위
+
+CLI 옵션 (`--fail-on-warning`) > 환경변수 (`EVALSET_FAIL_ON_WARNING=1`) > 기본값 (False)
+
 ## 정착 시점
 
 | Day | 정착 Gate | PR |
