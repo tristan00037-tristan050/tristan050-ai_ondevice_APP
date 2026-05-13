@@ -27,6 +27,14 @@ from typing import Any, Dict, List, Optional
 
 HARD_FIELDS = ["intent_type", "deadline_type", "auto_apply_allowed"]
 
+# Day 7 G22 v2 — warning 필드 (hard 승격 X, Day 8/9 충돌 통계 확인 후 검토)
+WARNING_FIELDS = ["action_required", "answer_required"]
+
+WARNING_CLASS_MAP = {
+    "action_required": "DUPLICATE_ACTION_REQUIRED_INCONSISTENCY",
+    "answer_required": "DUPLICATE_ANSWER_REQUIRED_INCONSISTENCY",
+}
+
 LABEL_STATUS_PRIORITY = {
     "gold_v1":        5,
     "gold_reviewed":  4,
@@ -94,6 +102,7 @@ def main() -> int:
         return 1
 
     duplicate_groups: List[Dict[str, Any]] = []
+    warnings: List[Dict[str, Any]] = []
     duplicate_count = 0
 
     for digest, items in items_by_digest.items():
@@ -101,7 +110,18 @@ def main() -> int:
             continue
         duplicate_count += 1
 
-        # 충돌 필드 식별
+        # G22 v2 — WARNING_FIELDS 충돌 검사 (fail X, 통계 수집)
+        for w_field in WARNING_FIELDS:
+            w_vals = sorted({str(it.get(w_field)) for it in items})
+            if len(w_vals) > 1:
+                warnings.append({
+                    "warning_class": WARNING_CLASS_MAP[w_field],
+                    "raw_digest16":  digest,
+                    "sample_ids":    [it.get("sample_id") for it in items],
+                    "values":        {w_field: w_vals},
+                })
+
+        # HARD_FIELDS 충돌 식별 (fail-closed)
         conflicts: List[str] = []
         values_map: Dict[str, List[str]] = {}
         for field in HARD_FIELDS:
@@ -153,6 +173,8 @@ def main() -> int:
             "duplicate_groups_checked": duplicate_count,
             "violation_count":          len(duplicate_groups),
             "duplicate_groups":         duplicate_groups[:50],
+            "warnings":                 warnings[:50],
+            "warning_count":            len(warnings),
         }
         if args.out:
             out_path = Path(args.out)
@@ -169,6 +191,8 @@ def main() -> int:
         "unique_digests":           len(items_by_digest),
         "duplicate_groups_checked": duplicate_count,
         "violation_count":          0,
+        "warnings":                 warnings[:50],
+        "warning_count":            len(warnings),
     }
     if args.out:
         out_path = Path(args.out)

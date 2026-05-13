@@ -141,3 +141,70 @@ def test_g22_fails_on_gold_v1_duplicate_conflict(tmp_path):
     assert res.returncode == 1
     out = json.loads(res.stdout.strip().splitlines()[-1])
     assert out["fail_class"] == "GOLD_V1_DUPLICATE_CONFLICT"
+
+
+# ── Day 7 G22 v2 회귀 (3건) — warning (hard 승격 X) ─────────────────────
+
+def _row_with_required(sid, digest, *, action_required=False,
+                       answer_required=False, intent="REQUEST"):
+    return {
+        "sample_id":          sid,
+        "raw_digest16":       digest,
+        "intent_type":        intent,
+        "deadline_type":      "NONE",
+        "auto_apply_allowed": False,
+        "label_status":       "draft",
+        "action_required":    action_required,
+        "answer_required":    answer_required,
+    }
+
+
+def test_g22_v2_warning_on_action_required_mismatch(tmp_path):
+    """같은 digest + 다른 action_required + 같은 hard fields → WARNING."""
+    items = [
+        _row_with_required("card1_700001", "sha256:dddddddddddddddd",
+                           action_required=True),
+        _row_with_required("card1_700002", "sha256:dddddddddddddddd",
+                           action_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 0   # hard fields ok → ok=true 유지
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["warning_count"] >= 1
+    assert any(w["warning_class"] == "DUPLICATE_ACTION_REQUIRED_INCONSISTENCY"
+               for w in out["warnings"])
+
+
+def test_g22_v2_warning_on_answer_required_mismatch(tmp_path):
+    items = [
+        _row_with_required("card1_700003", "sha256:eeeeeeeeeeeeeeee",
+                           answer_required=True),
+        _row_with_required("card1_700004", "sha256:eeeeeeeeeeeeeeee",
+                           answer_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert any(w["warning_class"] == "DUPLICATE_ANSWER_REQUIRED_INCONSISTENCY"
+               for w in out["warnings"])
+
+
+def test_g22_v2_warning_does_not_fail_when_hard_fields_ok(tmp_path):
+    """warning 있어도 hard fields ok 면 fail X (ok=true 유지)."""
+    items = [
+        _row_with_required("card1_700005", "sha256:ffffffffffffffff",
+                           action_required=True, answer_required=True),
+        _row_with_required("card1_700006", "sha256:ffffffffffffffff",
+                           action_required=False, answer_required=False),
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("--input", str(p), "--out", str(tmp_path / "out.json"))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["violation_count"] == 0
+    assert out["warning_count"] >= 1
