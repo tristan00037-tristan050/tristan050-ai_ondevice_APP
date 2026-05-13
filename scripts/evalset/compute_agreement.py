@@ -3,14 +3,19 @@
 
 2인 라벨링 합의도 (intent_type / deadline_type / auto_apply_allowed).
 
-Day 1: 같은 sample_id 의 2 라인 비교 (legacy).
-Day 3 강화: 단일 sample 안의 annotator_a / annotator_b 필드 직접 비교.
-            Cohen's kappa 자체 구현 (sklearn 의존성 회피).
+Day 1:   같은 sample_id 의 2 라인 비교 (legacy).
+Day 3:   단일 sample 안의 annotator_a / annotator_b 필드 직접 비교 +
+         Cohen's kappa 자체 구현.
+Day 4~5: --use-final-gold 옵션 (annotator_b 자리에 final_gold 값 대입)
+         + 알고리즘 팀 5필드 (agreement_raw / expected_agreement / kappa /
+           pair_count / label_distribution) 출력.
+         + final_gold[field] 누락 시 silent fallback 금지 (P2-A fail-closed).
 
-fail-closed (Day 1 P1 정정 유지):
-- 비교 가능한 쌍 0개 → NO_COMPARABLE_PAIRS
-- 임계값 미달 → BELOW_AGREEMENT_THRESHOLD
-- JSON parse → JSON_PARSE_ERROR
+fail-closed:
+- 비교 가능한 쌍 0개            → NO_COMPARABLE_PAIRS
+- 임계값 미달                   → BELOW_AGREEMENT_THRESHOLD
+- JSON parse 오류               → JSON_PARSE_ERROR
+- --use-final-gold + 필드 누락  → FINAL_GOLD_FIELD_MISSING
 
 기준 (CARD1_EVALSET_SPEC §6):
 - intent_type        ≥ 0.85
@@ -51,22 +56,50 @@ def cohen_kappa(a_labels: List[Any], b_labels: List[Any]) -> float:
     return round((p_o - p_e) / (1 - p_e), 4)
 
 
-def _collect_pairs_from_annotators(items: List[dict], field: str) \
-        -> Tuple[List[Any], List[Any]]:
+def _collect_pairs_from_annotators(items: List[dict], field: str,
+                                   use_final_gold: bool = False
+                                   ) -> Tuple[List[Any], List[Any], List[dict]]:
+    """annotator_a/b 페어 수집.
+
+    use_final_gold=True 면 annotator_b 자리에 final_gold[field] 값을 대입.
+    final_gold 또는 final_gold[field] 누락 시 silent fallback 금지 — violations
+    누적 후 호출자가 fail-closed 처리 (P2-A 정착).
+    """
     a_list, b_list = [], []
+    violations: List[dict] = []
     for it in items:
         a = it.get("annotator_a")
         b = it.get("annotator_b")
         if not isinstance(a, dict) or not isinstance(b, dict):
             continue
-        if field in a and field in b:
+        if field not in a or field not in b:
+            continue
+        if use_final_gold:
+            fg = it.get("final_gold")
+            if not isinstance(fg, dict):
+                violations.append({
+                    "fail_class": "FINAL_GOLD_FIELD_MISSING",
+                    "sample_id":  it.get("sample_id"),
+                    "missing":    "final_gold",
+                })
+                continue
+            if field not in fg:
+                violations.append({
+                    "fail_class": "FINAL_GOLD_FIELD_MISSING",
+                    "sample_id":  it.get("sample_id"),
+                    "missing":    f"final_gold.{field}",
+                })
+                continue
+            a_list.append(a[field])
+            b_list.append(fg[field])
+        else:
             a_list.append(a[field])
             b_list.append(b[field])
-    return a_list, b_list
+    return a_list, b_list, violations
 
 
-def _collect_pairs_legacy(items: List[dict], field: str) \
-        -> Tuple[List[Any], List[Any]]:
+def _collect_pairs_legacy(items: List[dict], field: str
+                          ) -> Tuple[List[Any], List[Any]]:
     by_sid: Dict[str, List[Any]] = defaultdict(list)
     for it in items:
         sid = it.get("sample_id")
@@ -81,9 +114,25 @@ def _collect_pairs_legacy(items: List[dict], field: str) \
     return a_list, b_list
 
 
-def simple_agreement(items: List[dict], field: str) -> dict:
-    a_list, b_list = _collect_pairs_from_annotators(items, field)
-    used = "annotator_fields"
+def simple_agreement(items: List[dict], field: str,
+                     use_final_gold: bool = False) -> dict:
+    a_list, b_list, fg_violations = _collect_pairs_from_annotators(
+        items, field, use_final_gold,
+    )
+    used = "annotator_vs_final_gold" if use_final_gold else "annotator_fields"
+    # PR #705 P2-A: fail-closed — final_gold 필드 누락 시 즉시 fail.
+    if fg_violations:
+        return {
+            "ok":              False,
+            "rate":            None,
+            "kappa":           None,
+            "total_pairs":     0,
+            "agreed_pairs":    0,
+            "source":          used,
+            "fail_class":      "FINAL_GOLD_FIELD_MISSING",
+            "violation_count": len(fg_violations),
+            "violations":      fg_violations[:50],
+        }
     if not a_list:
         a_list, b_list = _collect_pairs_legacy(items, field)
         used = "legacy_sample_id"
@@ -91,25 +140,38 @@ def simple_agreement(items: List[dict], field: str) -> dict:
     total = len(a_list)
     if total == 0:
         return {
-            "ok":            False,
-            "rate":          None,
-            "kappa":         None,
-            "total_pairs":   0,
-            "agreed_pairs":  0,
-            "source":        used,
-            "fail_class":    "NO_COMPARABLE_PAIRS",
-            "message":       f"{field}: 비교 가능한 2인 라벨 쌍이 없음",
+            "ok":           False,
+            "rate":         None,
+            "kappa":        None,
+            "total_pairs":  0,
+            "agreed_pairs": 0,
+            "source":       used,
+            "fail_class":   "NO_COMPARABLE_PAIRS",
+            "message":      f"{field}: 비교 가능한 2인 라벨 쌍이 없음",
         }
     agreed = sum(1 for a, b in zip(a_list, b_list) if a == b)
     rate   = round(agreed / total, 4)
     kappa  = cohen_kappa(a_list, b_list)
+    label_dist = {
+        "a": dict(Counter(str(x) for x in a_list)),
+        "b": dict(Counter(str(x) for x in b_list)),
+    }
+    expected = round(sum(
+        (Counter(a_list).get(c, 0) / total) *
+        (Counter(b_list).get(c, 0) / total)
+        for c in set(a_list) | set(b_list)
+    ), 4)
     return {
-        "ok":           True,
-        "rate":         rate,
-        "kappa":        kappa,
-        "total_pairs":  total,
-        "agreed_pairs": agreed,
-        "source":       used,
+        "ok":                 True,
+        "rate":               rate,
+        "agreement_raw":      rate,
+        "expected_agreement": expected,
+        "kappa":              kappa,
+        "pair_count":         total,
+        "total_pairs":        total,
+        "agreed_pairs":       agreed,
+        "label_distribution": label_dist,
+        "source":             used,
     }
 
 
@@ -117,6 +179,8 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--input", required=True)
     p.add_argument("--out",   default=None)
+    p.add_argument("--use-final-gold", action="store_true",
+                   help="annotator_b 자리에 final_gold 값을 대입 (G5 회복 검증)")
     args = p.parse_args()
 
     in_path = Path(args.input)
@@ -141,7 +205,7 @@ def main() -> int:
     field_results: Dict[str, dict] = {}
     overall_ok = True
     for field in FIELDS:
-        result = simple_agreement(items, field)
+        result = simple_agreement(items, field, use_final_gold=args.use_final_gold)
         result["threshold"] = THRESHOLDS[field]
         if not result["ok"]:
             overall_ok = False

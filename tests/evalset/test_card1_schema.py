@@ -176,8 +176,16 @@ def test_schema_accepts_label_status_approved(schema, gold_item_with_text):
 
 
 def test_schema_accepts_label_status_gold_v1(schema, gold_item_with_text):
-    """label_status=gold_v1 → schema valid (reviewer 필수)."""
+    """label_status=gold_v1 → schema valid (reviewer + adjudicator + final_gold 필수)."""
     item = deepcopy(gold_item_with_text)
     item["label_status"] = "gold_v1"
+    item["adjudicator"] = {"id": "adj1", "decision": "approved",
+                           "reviewed_at": "2026-05-13T11:00:00Z"}
+    item["final_gold"] = {
+        "intent_type":         "REQUEST",
+        "deadline_type":       "NONE",
+        "auto_apply_allowed":  False,
+        "finalized_at":        "2026-05-13T11:30:00Z",
+    }
     errs = list(Draft202012Validator(schema).iter_errors(item))
     assert errs == [], f"unexpected errors: {[e.message for e in errs]}"

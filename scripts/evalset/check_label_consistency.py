@@ -160,7 +160,7 @@ def _validate_item(item: Dict[str, Any]) -> List[Dict[str, Any]]:
             })
 
     # ── G15: evidence 불일치 + APPROVED_LIKE_STATUSES (adjudicated 포함) ──
-    # PR #704 P1-B 정정: G13 과 동일 상수 사용으로 정합 (adjudicated 도 검사).
+    # PR #705 P1-B 흡수: G13 과 동일 상수 사용으로 정합 (adjudicated 도 검사).
     if status in APPROVED_LIKE_STATUSES:
         source_text = _resolve_source(item)
         if source_text:
