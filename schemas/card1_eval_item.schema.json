@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.example/schemas/card1_eval_item.schema.json",
+  "title": "Card1 EvalSet Item",
+  "description": "단계 6.5.5 Day 1 — 카드 1 평가 샘플 스키마. raw_text 저장 금지, digest16 보관 원칙 준수.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sample_id",
+    "text_redacted",
+    "raw_digest16",
+    "source",
+    "intent_type",
+    "deadline_type",
+    "deadline_is_actionable",
+    "slice_tags",
+    "action_required",
+    "answer_required",
+    "auto_apply_allowed",
+    "label_status"
+  ],
+  "properties": {
+    "sample_id": {
+      "type": "string",
+      "pattern": "^card1_[0-9]{6}$"
+    },
+    "text_redacted": {
+      "type": "string",
+      "minLength": 1
+    },
+    "raw_digest16": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{16}$"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "synthetic_gold",
+        "beta_log_redacted",
+        "internal_log_redacted",
+        "adjudicated_boundary"
+      ]
+    },
+    "intent_type": {
+      "type": "string",
+      "enum": ["REQUEST", "COMMAND", "REPORT", "NO_ACTION", "QUESTION"]
+    },
+    "deadline_type": {
+      "type": "string",
+      "enum": ["NONE", "HARD", "SOFT", "INQUIRY", "URGENCY", "CONDITION"]
+    },
+    "deadline_is_actionable": {
+      "type": "boolean"
+    },
+    "slice_tags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]+$"
+      }
+    },
+    "action_required": {
+      "type": "boolean"
+    },
+    "answer_required": {
+      "type": "boolean"
+    },
+    "auto_apply_allowed": {
+      "type": "boolean"
+    },
+    "label_status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "double_labeled",
+        "adjudicated",
+        "gold_reviewed",
+        "rejected_pii"
+      ]
+    },
+    "consent_scope": {
+      "type": "string"
+    },
+    "time_expression_redacted": {
+      "type": ["string", "null"]
+    },
+    "risk_tags": {
+      "type": "array",
+      "uniqueItems": true,
+      "default": [],
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]+$"
+      }
+    },
+    "gold": {
+      "type": "object"
+    },
+    "annotator_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "adjudicated": {
+      "type": "boolean"
+    }
+  }
+}
