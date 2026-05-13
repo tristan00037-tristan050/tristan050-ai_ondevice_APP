@@ -3,6 +3,7 @@
   "fail_class": null,
   "total_items": 2,
   "leak_count": 0,
+  "parse_error_count": 0,
   "leak_by_type": {
     "EMAIL": 0,
     "PHONE": 0,
@@ -10,5 +11,6 @@
     "SECRET": 0,
     "CARD": 0
   },
-  "violations": []
+  "violations": [],
+  "parse_errors": []
 }

@@ -3,14 +3,14 @@
 
 같은 sample_id 에 대해 2인 라벨링 결과의 합의도를 계산.
 
-입력 : JSONL — 각 line 에 (sample_id, intent_type, deadline_type, auto_apply_allowed,
-                          annotator_id) 등 라벨이 들어있다.
-출력 : intent / deadline / auto_apply 일치율 + 합의도 기준 PASS/FAIL.
+P1 정정 (2026-05-13, PR #702 리뷰):
+  fail-closed 원칙. 비교 가능한 쌍이 0개이면 NO_COMPARABLE_PAIRS 로 차단.
+  rate=1.0 자동 통과 금지 (이전 fail-open 버그).
 
 기준 (CARD1_EVALSET_SPEC §6):
-- intent ≥ 0.85
-- deadline ≥ 0.80
-- auto_apply ≥ 0.95
+- intent_type        ≥ 0.85
+- deadline_type      ≥ 0.80
+- auto_apply_allowed ≥ 0.95
 """
 from __future__ import annotations
 
@@ -26,6 +26,47 @@ THRESHOLDS = {
     "deadline_type":      0.80,
     "auto_apply_allowed": 0.95,
 }
+FIELDS = list(THRESHOLDS.keys())
+
+
+def simple_agreement(items: List[dict], field: str) -> dict:
+    """fail-closed 합의도 계산.
+
+    Returns:
+        {ok, rate, total_pairs, agreed_pairs, fail_class?, message?}
+        ok=False 인 경우 fail_class 가 포함된다.
+    """
+    pairs: Dict[str, list] = defaultdict(list)
+    for obj in items:
+        sid = obj.get("sample_id")
+        if sid is None:
+            continue
+        if field in obj:
+            pairs[sid].append(obj[field])
+
+    agreed = 0
+    total  = 0
+    for vals in pairs.values():
+        if len(vals) >= 2:
+            total += 1
+            agreed += int(vals[0] == vals[1])
+
+    if total == 0:
+        return {
+            "ok":         False,
+            "rate":       None,
+            "total_pairs": 0,
+            "agreed_pairs": 0,
+            "fail_class": "NO_COMPARABLE_PAIRS",
+            "message":    f"{field}: 비교 가능한 2인 라벨 쌍이 없음",
+        }
+
+    return {
+        "ok":         True,
+        "rate":       round(agreed / total, 4),
+        "total_pairs": total,
+        "agreed_pairs": agreed,
+    }
 
 
 def main() -> int:
@@ -40,58 +81,55 @@ def main() -> int:
                           "path": str(in_path)}, ensure_ascii=False))
         return 1
 
-    by_sample: Dict[str, List[dict]] = defaultdict(list)
-    total = 0
+    items: List[dict] = []
     with in_path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             try:
-                item = json.loads(line)
+                items.append(json.loads(line))
             except json.JSONDecodeError:
-                continue
-            sid = item.get("sample_id")
-            if sid:
-                by_sample[sid].append(item)
-                total += 1
+                # P1 정정: JSON parse error 도 fail-closed
+                print(json.dumps({"ok": False, "fail_class": "JSON_PARSE_ERROR"},
+                                 ensure_ascii=False))
+                return 1
 
-    paired = {sid: items for sid, items in by_sample.items() if len(items) >= 2}
+    field_results: Dict[str, dict] = {}
+    overall_ok = True
 
-    agreement: Dict[str, dict] = {}
-    for field in THRESHOLDS:
-        match = 0
-        n     = 0
-        for sid, items in paired.items():
-            a, b = items[0].get(field), items[1].get(field)
-            if a is None or b is None:
-                continue
-            n += 1
-            if a == b:
-                match += 1
-        rate = (match / n) if n > 0 else 1.0
-        agreement[field] = {
-            "rate":      round(rate, 4),
-            "matches":   match,
-            "n":         n,
-            "threshold": THRESHOLDS[field],
-            "passed":    rate >= THRESHOLDS[field],
-        }
+    for field in FIELDS:
+        result = simple_agreement(items, field)
+        result["threshold"] = THRESHOLDS[field]
 
-    ok = all(v["passed"] for v in agreement.values())
+        if not result["ok"]:
+            overall_ok = False
+        else:
+            if result["rate"] < THRESHOLDS[field]:
+                result["ok"]         = False
+                result["fail_class"] = "BELOW_AGREEMENT_THRESHOLD"
+                overall_ok = False
+
+        field_results[field] = result
+
     report = {
-        "ok":               ok,
-        "fail_class":       "AGREEMENT_BELOW_THRESHOLD" if not ok else None,
-        "total_labels":     total,
-        "paired_samples":   len(paired),
-        "agreement":        agreement,
+        "ok":     overall_ok,
+        "fields": field_results,
     }
+    if not overall_ok:
+        # overall fail_class: 첫 번째 실패 field 의 fail_class 를 노출
+        for f, r in field_results.items():
+            if not r["ok"]:
+                report["fail_class"] = r["fail_class"]
+                break
+
     if args.out:
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        out_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
+                            encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
-    return 0 if ok else 1
+    return 0 if overall_ok else 1
 
 
 if __name__ == "__main__":

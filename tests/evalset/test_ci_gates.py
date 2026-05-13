@@ -111,6 +111,99 @@ def test_compute_agreement_pairs_match(tmp_path):
     res = _run("compute_agreement.py", "--input", str(p))
     assert res.returncode == 0
     out = json.loads(res.stdout.strip().splitlines()[-1])
-    assert out["agreement"]["intent_type"]["rate"]        == 1.0
-    assert out["agreement"]["deadline_type"]["rate"]      == 1.0
-    assert out["agreement"]["auto_apply_allowed"]["rate"] == 1.0
+    # P1 정정 후 응답 구조: out["fields"][field]
+    assert out["fields"]["intent_type"]["rate"]        == 1.0
+    assert out["fields"]["deadline_type"]["rate"]      == 1.0
+    assert out["fields"]["auto_apply_allowed"]["rate"] == 1.0
+
+
+# ── P1 정정 회귀 3건 (PR #702 리뷰) ──────────────────────────────────────
+
+def test_compute_agreement_fails_when_no_pairs(tmp_path):
+    """1인 라벨만 있으면 NO_COMPARABLE_PAIRS 로 fail (fail-closed)."""
+    items = [
+        {"sample_id": "card1_000001", "intent_type": "REQUEST",
+         "deadline_type": "NONE", "auto_apply_allowed": False},
+        {"sample_id": "card1_000002", "intent_type": "REPORT",
+         "deadline_type": "NONE", "auto_apply_allowed": False},
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("compute_agreement.py", "--input", str(p))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fail_class"] == "NO_COMPARABLE_PAIRS"
+
+
+def test_compute_agreement_fails_when_below_threshold(tmp_path):
+    """2인 라벨이지만 합의도가 임계값 미만이면 fail."""
+    # 4 sample × 2인 — intent_type 1/4 match (0.25 << 0.85)
+    items = []
+    for i in range(1, 5):
+        items.append({"sample_id": f"card1_{i:06d}", "intent_type": "REQUEST",
+                      "deadline_type": "NONE", "auto_apply_allowed": False})
+        # 한 명만 동일한 답, 나머지 3 sample 은 다른 답
+        other = "REQUEST" if i == 1 else "REPORT"
+        items.append({"sample_id": f"card1_{i:06d}", "intent_type": other,
+                      "deadline_type": "NONE", "auto_apply_allowed": False})
+    p = _write_jsonl(tmp_path, items)
+    res = _run("compute_agreement.py", "--input", str(p))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fields"]["intent_type"]["fail_class"] == "BELOW_AGREEMENT_THRESHOLD"
+    assert out["fields"]["intent_type"]["rate"] < 0.85
+
+
+def test_compute_agreement_passes_when_all_threshold_met(tmp_path):
+    """모든 field 가 임계값 이상이면 PASS."""
+    items = [
+        {"sample_id": "card1_000001", "intent_type": "REQUEST",
+         "deadline_type": "NONE", "auto_apply_allowed": False},
+        {"sample_id": "card1_000001", "intent_type": "REQUEST",
+         "deadline_type": "NONE", "auto_apply_allowed": False},
+    ]
+    p = _write_jsonl(tmp_path, items)
+    res = _run("compute_agreement.py", "--input", str(p))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+
+
+# ── P2 정정 회귀 2건 (PR #702 리뷰) ──────────────────────────────────────
+
+def test_check_pii_leak_fails_on_json_parse_error(tmp_path):
+    """JSON parse 오류 시 ok=False, fail_class=JSON_PARSE_ERROR."""
+    bad_path = tmp_path / "bad.jsonl"
+    bad_path.write_text(
+        '{"sample_id":"card1_000001","text_redacted":"ok","raw_digest16":"sha256:0000000000000001"}\n'
+        '{this is not json}\n',
+        encoding="utf-8",
+    )
+    res = _run("check_pii_leak.py", "--input", str(bad_path))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fail_class"] == "JSON_PARSE_ERROR"
+    assert out["parse_error_count"] >= 1
+
+
+def test_check_pii_leak_fails_on_both_leak_and_parse_error(tmp_path):
+    """PII leak + parse error 동시 발생 — 둘 다 보고 + fail-closed."""
+    bad_path = tmp_path / "both.jsonl"
+    bad_path.write_text(
+        '{"sample_id":"card1_000001","text_redacted":"leak test@example.com",'
+        '"raw_digest16":"sha256:0000000000000001"}\n'
+        '{this is not json}\n',
+        encoding="utf-8",
+    )
+    res = _run("check_pii_leak.py", "--input", str(bad_path))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    # parse error 우선 (검사 자체 불가능이라서 더 심각)
+    assert out["fail_class"] == "JSON_PARSE_ERROR"
+    assert out["parse_error_count"] >= 1
+    assert out["leak_count"]       >= 1
+    assert len(out["violations"])  >= 1
+    assert len(out["parse_errors"]) >= 1
