@@ -1,0 +1,79 @@
+{
+  "ok": true,
+  "fields": {
+    "intent_type": {
+      "ok": true,
+      "rate": 1.0,
+      "agreement_raw": 1.0,
+      "expected_agreement": 0.2956,
+      "kappa": 1.0,
+      "pair_count": 30,
+      "total_pairs": 30,
+      "agreed_pairs": 30,
+      "label_distribution": {
+        "a": {
+          "REPORT": 10,
+          "COMMAND": 11,
+          "NO_ACTION": 6,
+          "REQUEST": 3
+        },
+        "b": {
+          "REPORT": 10,
+          "COMMAND": 11,
+          "NO_ACTION": 6,
+          "REQUEST": 3
+        }
+      },
+      "source": "annotator_vs_final_gold",
+      "threshold": 0.85
+    },
+    "deadline_type": {
+      "ok": true,
+      "rate": 1.0,
+      "agreement_raw": 1.0,
+      "expected_agreement": 0.5178,
+      "kappa": 1.0,
+      "pair_count": 30,
+      "total_pairs": 30,
+      "agreed_pairs": 30,
+      "label_distribution": {
+        "a": {
+          "NONE": 21,
+          "HARD": 4,
+          "SOFT": 2,
+          "URGENCY": 1,
+          "CONDITION": 2
+        },
+        "b": {
+          "NONE": 21,
+          "HARD": 4,
+          "SOFT": 2,
+          "URGENCY": 1,
+          "CONDITION": 2
+        }
+      },
+      "source": "annotator_vs_final_gold",
+      "threshold": 0.8
+    },
+    "auto_apply_allowed": {
+      "ok": true,
+      "rate": 1.0,
+      "agreement_raw": 1.0,
+      "expected_agreement": 1.0,
+      "kappa": 1.0,
+      "pair_count": 30,
+      "total_pairs": 30,
+      "agreed_pairs": 30,
+      "label_distribution": {
+        "a": {
+          "False": 30
+        },
+        "b": {
+          "False": 30
+        }
+      },
+      "source": "annotator_vs_final_gold",
+      "threshold": 0.95
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "fail_class": null,
+  "total_items": 30,
+  "userlog_count": 0,
+  "total_tokens": 0,
+  "detected_tokens": [],
+  "token_distribution": {},
+  "warnings": [],
+  "skew_threshold": 0.7
+}

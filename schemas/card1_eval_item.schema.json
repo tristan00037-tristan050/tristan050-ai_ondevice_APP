@@ -115,7 +115,9 @@
     "annotator_a": { "$ref": "#/$defs/annotatorObject" },
     "annotator_b": { "$ref": "#/$defs/annotatorObject" },
     "reviewer":    { "$ref": "#/$defs/reviewerObject" },
-    "adjudicator": { "$ref": "#/$defs/reviewerObject" }
+    "adjudicator": { "$ref": "#/$defs/reviewerObject" },
+    "final_gold":  { "$ref": "#/$defs/finalGoldObject" },
+    "auto_apply_reasoning": { "$ref": "#/$defs/autoApplyReasoningObject" }
   },
   "$defs": {
     "annotatorObject": {
@@ -138,6 +140,31 @@
         "id":          { "type": "string" },
         "decision":    { "enum": ["approved", "rejected", "needs_revision"] },
         "reviewed_at": { "type": "string" }
+      }
+    },
+    "finalGoldObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent_type", "deadline_type", "auto_apply_allowed", "finalized_at"],
+      "properties": {
+        "intent_type":   { "enum": ["REQUEST","COMMAND","REPORT","NO_ACTION","QUESTION"] },
+        "deadline_type": { "enum": ["NONE","HARD","SOFT","INQUIRY","URGENCY","CONDITION"] },
+        "auto_apply_allowed":     { "type": "boolean" },
+        "deadline":               { "type": ["object", "null"] },
+        "actions":                { "type": "array" },
+        "materials":              { "type": "array" },
+        "finalized_at":           { "type": "string" },
+        "disagreement_resolution":{ "type": "string" }
+      }
+    },
+    "autoApplyReasoningObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_basis", "verifier_pass", "explanation"],
+      "properties": {
+        "evidence_basis": { "type": "string", "minLength": 1 },
+        "verifier_pass":  { "type": "boolean" },
+        "explanation":    { "type": "string", "minLength": 10 }
       }
     }
   },
@@ -199,7 +226,25 @@
         "required":   ["label_status"]
       },
       "then": {
-        "required": ["adjudicator"]
+        "required": ["adjudicator", "final_gold"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "label_status": { "const": "gold_v1" } },
+        "required":   ["label_status"]
+      },
+      "then": {
+        "required": ["adjudicator", "final_gold", "reviewer"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "auto_apply_allowed": { "const": true } },
+        "required":   ["auto_apply_allowed"]
+      },
+      "then": {
+        "required": ["auto_apply_reasoning"]
       }
     }
   ]

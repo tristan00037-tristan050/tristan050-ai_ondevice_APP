@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # label_status 분류 (PR #703 P1 정정)
-ENFORCED_STATUSES = {"gold_reviewed", "approved", "adjudicated"}
+ENFORCED_STATUSES = {"gold_reviewed", "approved", "adjudicated", "gold_v1"}
 EXEMPT_STATUSES   = {"draft", "double_labeled", "rejected_pii"}
 
 
