@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "fail_class": null,
+  "total_items": 500,
+  "min_total": 1,
+  "intent_counts": {
+    "REQUEST": 181,
+    "QUESTION": 77,
+    "REPORT": 110,
+    "COMMAND": 72,
+    "NO_ACTION": 60
+  },
+  "deadline_counts": {
+    "NONE": 391,
+    "HARD": 50,
+    "SOFT": 21,
+    "CONDITION": 16,
+    "INQUIRY": 11,
+    "URGENCY": 11
+  },
+  "source_counts": {
+    "synthetic_gold": 320,
+    "internal_log_redacted": 180
+  }
+}
