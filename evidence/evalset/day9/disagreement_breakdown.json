@@ -1,0 +1,18 @@
+{
+  "intentional": {
+    "count": 70,
+    "reason_categories": [
+      "QUESTION/REQUEST 경계",
+      "REPORT/REQUEST 경계",
+      "deadline_type 경계",
+      "auto_apply 위험 판단"
+    ]
+  },
+  "accidental": {
+    "count": 30,
+    "reason_categories": [
+      "가이드 §10 미숙지",
+      "단순 실수"
+    ]
+  }
+}
