@@ -1,14 +1,14 @@
 {
   "model_path": "/Users/kimsunghoon/Desktop/butler-data/Butler모델/qwen3-4b-gguf/qwen3-4b-q4_k_m.gguf",
-  "load_secs": 0.488,
-  "eval_secs": 203.439,
+  "load_secs": 0.482,
+  "eval_secs": 202.479,
   "total_items": 65,
   "metrics_d": {
     "intent_type_accuracy": 0.8308,
     "strict_action_f1": 0.7539,
     "normalized_action_f1": 0.9231,
     "multi_action_split_accuracy": 0.8571,
-    "deadline_f1": 0.4571,
+    "deadline_f1": 0.875,
     "material_f1": 0.816,
     "false_deadline_count": 0,
     "false_deadline_denom": 38,
@@ -18,7 +18,7 @@
     "no_action_fp_rate": 0.0,
     "schema_valid_rate": 1.0,
     "retry_rate": 0.0,
-    "verifier_block_rate": 0.8462,
+    "verifier_block_rate": 0.7692,
     "auto_apply_count": 0,
     "auto_apply_rate": 0.0,
     "auto_apply_accuracy": null,
@@ -58,28 +58,28 @@
     }
   },
   "calibration": {
-    "action_ece_before": 0.419,
-    "action_ece_after": 0.2701,
+    "action_ece_before": 0.3391,
+    "action_ece_after": 0.2797,
     "intent_ece_before": 0.4182,
     "intent_ece_after": 0.2819,
-    "deadline_present_ece_before": 0.3381,
-    "deadline_present_ece_after": 0.1769,
+    "deadline_present_ece_before": 0.2744,
+    "deadline_present_ece_after": 0.2539,
     "material_ece_before": 0.2234,
     "material_ece_after": 0.0,
-    "overall_ece_reference_only": 0.3569,
-    "action_A": -0.03,
-    "action_B": -1.72,
+    "overall_ece_reference_only": 0.4076,
+    "action_A": -3.15,
+    "action_B": 0.46,
     "intent_A": -4.24,
     "intent_B": 0.97,
-    "deadline_A": -13.8,
-    "deadline_B": 13.06,
+    "deadline_A": -13.95,
+    "deadline_B": 12.42,
     "material_A": -19.45,
     "material_B": -8.95
   },
   "deadline_block_breakdown": {
     "deadline_inquiry": 1,
-    "urgency_as_deadline": 1,
-    "condition_as_deadline": 1,
+    "urgency_as_deadline": 2,
+    "condition_as_deadline": 0,
     "false_deadline_remaining": 0
   },
   "normalizer": {
@@ -180,9 +180,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8509,
+        "fitted_action_conf": 0.8591,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8254,
+        "final_weighted": 0.8294,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -257,9 +257,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8497,
+        "fitted_action_conf": 0.7033,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8247,
+        "final_weighted": 0.7516,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "gates": {
@@ -334,9 +334,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8513,
+        "fitted_action_conf": 0.8931,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8256,
+        "final_weighted": 0.8465,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -403,9 +403,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.851,
+        "fitted_action_conf": 0.8702,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8205,
+        "final_weighted": 0.832,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -480,9 +480,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8509,
+        "fitted_action_conf": 0.8591,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8254,
+        "final_weighted": 0.8294,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -556,9 +556,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8516,
+        "fitted_action_conf": 0.9197,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8431,
+        "final_weighted": 0.8738,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -629,9 +629,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8499,
+        "fitted_action_conf": 0.7226,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.7665,
+        "final_weighted": 0.7029,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "gates": {
@@ -705,9 +705,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8516,
+        "fitted_action_conf": 0.9197,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8431,
+        "final_weighted": 0.8738,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -781,9 +781,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8516,
+        "fitted_action_conf": 0.9197,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8775,
+        "final_weighted": 0.9081,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -840,9 +840,9 @@
         "multi_action_count": 0
       },
       "D_post": {
-        "fitted_action_conf": 0.8508,
+        "fitted_action_conf": 0.8513,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8204,
+        "final_weighted": 0.8207,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -915,9 +915,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8511,
+        "fitted_action_conf": 0.8771,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8636,
+        "final_weighted": 0.8766,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -964,19 +964,19 @@
           "회의 결과 정리",
           "메일 보내기"
         ],
-        "deadline": "",
+        "deadline": "오늘 중에",
         "materials": [
           "회의 결과",
           "메일"
         ],
-        "action_raw": 0.1667,
+        "action_raw": 0.7667,
         "intent_raw": 0.72,
-        "overall_raw": -0.1025,
-        "action_conf": 0.2086,
+        "overall_raw": 0.6475,
+        "action_conf": 0.744,
         "intent_conf": 0.7068,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.5,
-        "final_weighted": 0.4232,
+        "final_weighted": 0.7218,
         "schema_valid": true,
         "retry_count": 0,
         "verifier_errors": [
@@ -986,20 +986,21 @@
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "REPORT",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='오늘 중에' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "soft_deadline",
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8488,
+        "fitted_action_conf": 0.876,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8041,
+        "final_weighted": 0.836,
         "auto_apply_ok": false,
-        "auto_apply_reason": "action_below_threshold",
+        "auto_apply_reason": "material_below_threshold",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -1048,16 +1049,16 @@
           "견적서 수정",
           "견적서 재발송"
         ],
-        "deadline": "",
+        "deadline": "다음 주까지",
         "materials": [
           "견적서"
         ],
-        "action_raw": -0.1633,
+        "action_raw": 0.4367,
         "intent_raw": 0.62,
-        "overall_raw": -0.57,
-        "action_conf": 0.0658,
+        "overall_raw": 0.18,
+        "action_conf": 0.437,
         "intent_conf": 0.6177,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.4,
         "final_weighted": 0.0,
         "schema_valid": true,
@@ -1069,18 +1070,19 @@
         "auto_apply_ok": false,
         "auto_apply_reason": "verifier_gate",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "REPORT",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='다음 주까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8475,
+        "fitted_action_conf": 0.7141,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.7705,
+        "final_weighted": 0.7334,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "gates": {
@@ -1155,9 +1157,9 @@
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8508,
+        "fitted_action_conf": 0.8513,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8646,
+        "final_weighted": 0.8648,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -1234,9 +1236,9 @@
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8516,
+        "fitted_action_conf": 0.9149,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8055,
+        "final_weighted": 0.8372,
         "auto_apply_ok": false,
         "auto_apply_reason": "material_below_threshold",
         "gates": {
@@ -1287,16 +1289,16 @@
           "자료 취합",
           "자료 전달"
         ],
-        "deadline": "",
+        "deadline": "월요일까지",
         "materials": [
           "자료"
         ],
-        "action_raw": 0.37,
+        "action_raw": 0.77,
         "intent_raw": 0.72,
-        "overall_raw": 0.0675,
-        "action_conf": 0.3729,
+        "overall_raw": 0.6175,
+        "action_conf": 0.7465,
         "intent_conf": 0.7068,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.85,
         "final_weighted": 0.0,
         "schema_valid": true,
@@ -1308,20 +1310,21 @@
         "auto_apply_ok": false,
         "auto_apply_reason": "verifier_gate",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "REPORT",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='월요일까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8496,
+        "fitted_action_conf": 0.8771,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8629,
-        "auto_apply_ok": false,
-        "auto_apply_reason": "action_below_threshold",
+        "final_weighted": 0.889,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -1393,9 +1396,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8513,
+        "fitted_action_conf": 0.8931,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8626,
+        "final_weighted": 0.8814,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -1476,9 +1479,9 @@
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8513,
+        "fitted_action_conf": 0.898,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8474,
+        "final_weighted": 0.8707,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -1560,9 +1563,9 @@
         "multi_action_count": 3
       },
       "D_post": {
-        "fitted_action_conf": 0.8499,
+        "fitted_action_conf": 0.7351,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.7716,
+        "final_weighted": 0.7142,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "gates": {
@@ -1635,9 +1638,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8516,
+        "fitted_action_conf": 0.9197,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8639,
+        "final_weighted": 0.8979,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -1709,9 +1712,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8514,
+        "fitted_action_conf": 0.9018,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.7905,
+        "final_weighted": 0.8132,
         "auto_apply_ok": false,
         "auto_apply_reason": "material_below_threshold",
         "gates": {
@@ -1752,37 +1755,37 @@
         "actions": [
           "예산 계획 수립"
         ],
-        "deadline": "",
+        "deadline": "다음 주 월요일까지",
         "materials": [],
-        "action_raw": 0.45,
+        "action_raw": 0.85,
         "intent_raw": 0.72,
-        "overall_raw": 0.26,
-        "action_conf": 0.4502,
+        "overall_raw": 0.81,
+        "action_conf": 0.8022,
         "intent_conf": 0.7068,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.5,
-        "final_weighted": 0.5528,
+        "final_weighted": 0.7918,
         "schema_valid": true,
         "retry_count": 0,
-        "verifier_errors": [
-          "block_5_auto_apply_low_confidence"
-        ],
+        "verifier_errors": [],
         "blocked_auto": true,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
-        "present_fields": [],
+        "present_fields": [
+          "deadline"
+        ],
         "override": "",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='다음 주 월요일까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8499,
+        "fitted_action_conf": 0.9018,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8656,
-        "auto_apply_ok": false,
-        "auto_apply_reason": "action_below_threshold",
+        "final_weighted": 0.9089,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -1847,9 +1850,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8499,
+        "fitted_action_conf": 0.7226,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8656,
+        "final_weighted": 0.7892,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "gates": {
@@ -1896,18 +1899,18 @@
           "실적 데이터 정리",
           "실적 데이터 공유"
         ],
-        "deadline": "",
+        "deadline": "이번 달 말까지",
         "materials": [
           "실적 데이터"
         ],
-        "action_raw": 0.3,
+        "action_raw": 0.9,
         "intent_raw": 0.62,
-        "overall_raw": -0.0025,
-        "action_conf": 0.31,
+        "overall_raw": 0.7475,
+        "action_conf": 0.832,
         "intent_conf": 0.6177,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.5,
-        "final_weighted": 0.4442,
+        "final_weighted": 0.7347,
         "schema_valid": true,
         "retry_count": 0,
         "verifier_errors": [
@@ -1917,20 +1920,21 @@
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='이번 달 말까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8493,
+        "fitted_action_conf": 0.9149,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.788,
+        "final_weighted": 0.8387,
         "auto_apply_ok": false,
-        "auto_apply_reason": "action_below_threshold",
+        "auto_apply_reason": "material_below_threshold",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -1993,9 +1997,9 @@
         "multi_action_count": 0
       },
       "D_post": {
-        "fitted_action_conf": 0.8491,
+        "fitted_action_conf": 0.5812,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8193,
+        "final_weighted": 0.6586,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "gates": {
@@ -2040,39 +2044,38 @@
         "actions": [
           "자료 준비"
         ],
-        "deadline": "",
+        "deadline": "회의 전까지",
         "materials": [
           "자료"
         ],
-        "action_raw": 0.52,
+        "action_raw": 0.92,
         "intent_raw": 0.52,
-        "overall_raw": 0.255,
-        "action_conf": 0.52,
+        "overall_raw": 0.805,
+        "action_conf": 0.8429,
         "intent_conf": 0.52,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.85,
-        "final_weighted": 0.575,
+        "final_weighted": 0.7628,
         "schema_valid": true,
         "retry_count": 0,
-        "verifier_errors": [
-          "block_5_auto_apply_low_confidence"
-        ],
+        "verifier_errors": [],
         "blocked_auto": true,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='회의 전까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8501,
+        "fitted_action_conf": 0.9197,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8249,
+        "final_weighted": 0.8738,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -2139,9 +2142,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8514,
+        "fitted_action_conf": 0.9018,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8207,
+        "final_weighted": 0.851,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -2219,9 +2222,9 @@
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8511,
+        "fitted_action_conf": 0.876,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.7671,
+        "final_weighted": 0.7796,
         "auto_apply_ok": false,
         "auto_apply_reason": "material_below_threshold",
         "gates": {
@@ -2284,9 +2287,9 @@
         "multi_action_count": 0
       },
       "D_post": {
-        "fitted_action_conf": 0.8493,
+        "fitted_action_conf": 0.6189,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8195,
+        "final_weighted": 0.6812,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "gates": {
@@ -2359,9 +2362,9 @@
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8516,
+        "fitted_action_conf": 0.9149,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8208,
+        "final_weighted": 0.8588,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -2432,9 +2435,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8514,
+        "fitted_action_conf": 0.9018,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8054,
+        "final_weighted": 0.8306,
         "auto_apply_ok": false,
         "auto_apply_reason": "material_below_threshold",
         "gates": {
@@ -2497,9 +2500,9 @@
         "multi_action_count": 0
       },
       "D_post": {
-        "fitted_action_conf": 0.8508,
+        "fitted_action_conf": 0.8513,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8662,
+        "final_weighted": 0.8665,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -2570,9 +2573,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.851,
+        "fitted_action_conf": 0.8702,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8052,
+        "final_weighted": 0.8148,
         "auto_apply_ok": false,
         "auto_apply_reason": "material_below_threshold",
         "gates": {
@@ -2648,9 +2651,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8514,
+        "fitted_action_conf": 0.9018,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8054,
+        "final_weighted": 0.8306,
         "auto_apply_ok": false,
         "auto_apply_reason": "material_below_threshold",
         "gates": {
@@ -2717,9 +2720,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.851,
+        "fitted_action_conf": 0.8702,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8663,
+        "final_weighted": 0.8778,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -2799,9 +2802,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8509,
+        "fitted_action_conf": 0.8591,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8471,
+        "final_weighted": 0.8512,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -2878,9 +2881,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.851,
+        "fitted_action_conf": 0.8702,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.7904,
+        "final_weighted": 0.799,
         "auto_apply_ok": false,
         "auto_apply_reason": "material_below_threshold",
         "gates": {
@@ -2947,9 +2950,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8514,
+        "fitted_action_conf": 0.9018,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8469,
+        "final_weighted": 0.8771,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -3025,14 +3028,14 @@
         ],
         "override": "",
         "block_7_fired": true,
-        "block_7_reason": "deadline_raw='바로' NOT_A_DEADLINE_condition",
+        "block_7_reason": "deadline_raw='바로' NOT_A_DEADLINE_urgency",
         "deadline_type": "urgency",
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8497,
+        "fitted_action_conf": 0.7033,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8465,
+        "final_weighted": 0.7733,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "gates": {
@@ -3108,9 +3111,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8509,
+        "fitted_action_conf": 0.8579,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.767,
+        "final_weighted": 0.7705,
         "auto_apply_ok": false,
         "auto_apply_reason": "material_below_threshold",
         "gates": {
@@ -3167,11 +3170,11 @@
         "multi_action_count": 0
       },
       "D_post": {
-        "fitted_action_conf": 0.8506,
+        "fitted_action_conf": 0.8303,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8464,
-        "auto_apply_ok": true,
-        "auto_apply_reason": "OK",
+        "final_weighted": 0.8342,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -3226,9 +3229,9 @@
         "multi_action_count": 0
       },
       "D_post": {
-        "fitted_action_conf": 0.8497,
+        "fitted_action_conf": 0.69,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8459,
+        "final_weighted": 0.75,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "gates": {
@@ -3285,11 +3288,11 @@
         "multi_action_count": 0
       },
       "D_post": {
-        "fitted_action_conf": 0.8504,
+        "fitted_action_conf": 0.8069,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8201,
-        "auto_apply_ok": true,
-        "auto_apply_reason": "OK",
+        "final_weighted": 0.794,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -3344,11 +3347,11 @@
         "multi_action_count": 0
       },
       "D_post": {
-        "fitted_action_conf": 0.8506,
+        "fitted_action_conf": 0.8303,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8202,
-        "auto_apply_ok": true,
-        "auto_apply_reason": "OK",
+        "final_weighted": 0.8081,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -3403,11 +3406,11 @@
         "multi_action_count": 0
       },
       "D_post": {
-        "fitted_action_conf": 0.8504,
+        "fitted_action_conf": 0.8069,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8201,
-        "auto_apply_ok": true,
-        "auto_apply_reason": "OK",
+        "final_weighted": 0.794,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -3462,41 +3465,40 @@
           "수정 사항 정리",
           "보고서 보내기"
         ],
-        "deadline": "",
+        "deadline": "목요일까지",
         "materials": [
           "보고서"
         ],
-        "action_raw": 0.0367,
+        "action_raw": 0.8367,
         "intent_raw": 0.62,
-        "overall_raw": -0.2575,
-        "action_conf": 0.1355,
+        "overall_raw": 0.6925,
+        "action_conf": 0.7936,
         "intent_conf": 0.6177,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.85,
-        "final_weighted": 0.4153,
+        "final_weighted": 0.7699,
         "schema_valid": true,
         "retry_count": 0,
-        "verifier_errors": [
-          "block_5_auto_apply_low_confidence"
-        ],
+        "verifier_errors": [],
         "blocked_auto": true,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='목요일까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 3
       },
       "D_post": {
-        "fitted_action_conf": 0.8483,
+        "fitted_action_conf": 0.898,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8459,
-        "auto_apply_ok": false,
-        "auto_apply_reason": "action_below_threshold",
+        "final_weighted": 0.8836,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -3553,40 +3555,39 @@
           "계약서 서명",
           "계약서 메일로 보내기"
         ],
-        "deadline": "",
+        "deadline": "내일까지",
         "materials": [
           "계약서",
           "파일"
         ],
-        "action_raw": 0.69,
+        "action_raw": 0.89,
         "intent_raw": 0.62,
-        "overall_raw": 0.3875,
-        "action_conf": 0.6814,
+        "overall_raw": 0.7375,
+        "action_conf": 0.8264,
         "intent_conf": 0.6177,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.95,
-        "final_weighted": 0.7049,
+        "final_weighted": 0.7997,
         "schema_valid": true,
         "retry_count": 0,
-        "verifier_errors": [
-          "block_5_auto_apply_low_confidence"
-        ],
+        "verifier_errors": [],
         "blocked_auto": true,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='내일까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 3
       },
       "D_post": {
-        "fitted_action_conf": 0.8508,
+        "fitted_action_conf": 0.9124,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8638,
+        "final_weighted": 0.9051,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -3665,9 +3666,9 @@
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8515,
+        "fitted_action_conf": 0.9072,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8638,
+        "final_weighted": 0.8917,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -3751,9 +3752,9 @@
         "multi_action_count": 3
       },
       "D_post": {
-        "fitted_action_conf": 0.8516,
+        "fitted_action_conf": 0.9149,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8055,
+        "final_weighted": 0.8372,
         "auto_apply_ok": false,
         "auto_apply_reason": "material_below_threshold",
         "gates": {
@@ -3810,17 +3811,17 @@
           "분석 보고서 작성",
           "보고서 제출"
         ],
-        "deadline": "",
+        "deadline": "이번 주 금요일까지",
         "materials": [
           "고객 데이터",
           "보고서"
         ],
-        "action_raw": 0.12,
+        "action_raw": 0.72,
         "intent_raw": 0.72,
-        "overall_raw": -0.1575,
-        "action_conf": 0.1795,
+        "overall_raw": 0.5925,
+        "action_conf": 0.7068,
         "intent_conf": 0.7068,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.85,
         "final_weighted": 0.0,
         "schema_valid": true,
@@ -3832,20 +3833,21 @@
         "auto_apply_ok": false,
         "auto_apply_reason": "verifier_gate",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='이번 주 금요일까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 3
       },
       "D_post": {
-        "fitted_action_conf": 0.8486,
+        "fitted_action_conf": 0.8591,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8624,
-        "auto_apply_ok": false,
-        "auto_apply_reason": "action_below_threshold",
+        "final_weighted": 0.8809,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -3901,17 +3903,17 @@
           "연습도 한 번 해보고",
           "발표 준비 완료"
         ],
-        "deadline": "",
+        "deadline": "월요일까지",
         "materials": [
           "자료",
           "표"
         ],
-        "action_raw": 0.03,
+        "action_raw": 0.63,
         "intent_raw": 0.72,
-        "overall_raw": -0.22,
-        "action_conf": 0.1324,
+        "overall_raw": 0.53,
+        "action_conf": 0.6271,
         "intent_conf": 0.7068,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.95,
         "final_weighted": 0.0,
         "schema_valid": true,
@@ -3923,16 +3925,17 @@
         "auto_apply_ok": false,
         "auto_apply_reason": "verifier_gate",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='월요일까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 3
       },
       "D_post": {
-        "fitted_action_conf": 0.8482,
+        "fitted_action_conf": 0.8212,
         "fitted_intent_conf": 0.8892,
         "final_weighted": 0.8788,
         "auto_apply_ok": false,
@@ -3987,18 +3990,18 @@
           "피드백 주시기",
           "최종본 주세요"
         ],
-        "deadline": "",
+        "deadline": "수요일까지",
         "materials": [
           "기획서"
         ],
-        "action_raw": 0.5667,
+        "action_raw": 0.7667,
         "intent_raw": 0.62,
-        "overall_raw": 0.2725,
-        "action_conf": 0.5663,
+        "overall_raw": 0.6225,
+        "action_conf": 0.744,
         "intent_conf": 0.6177,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.5,
-        "final_weighted": 0.5724,
+        "final_weighted": 0.6951,
         "schema_valid": true,
         "retry_count": 0,
         "verifier_errors": [
@@ -4008,18 +4011,19 @@
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='수요일까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 3
       },
       "D_post": {
-        "fitted_action_conf": 0.8503,
+        "fitted_action_conf": 0.876,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.7885,
+        "final_weighted": 0.8212,
         "auto_apply_ok": false,
         "auto_apply_reason": "material_below_threshold",
         "gates": {
@@ -4103,9 +4107,9 @@
         "multi_action_count": 3
       },
       "D_post": {
-        "fitted_action_conf": 0.8513,
+        "fitted_action_conf": 0.8971,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.789,
+        "final_weighted": 0.8119,
         "auto_apply_ok": false,
         "auto_apply_reason": "material_below_threshold",
         "gates": {
@@ -4158,20 +4162,20 @@
           "법무팀 검토 받기",
           "최종 서명"
         ],
-        "deadline": "",
+        "deadline": "이번 달 말까지",
         "materials": [
           "계약 조건",
           "법무팀",
           "계약"
         ],
-        "action_raw": 0.25,
+        "action_raw": 0.85,
         "intent_raw": 0.72,
-        "overall_raw": -0.0275,
-        "action_conf": 0.2689,
+        "overall_raw": 0.7225,
+        "action_conf": 0.8022,
         "intent_conf": 0.7068,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.5,
-        "final_weighted": 0.4534,
+        "final_weighted": 0.748,
         "schema_valid": true,
         "retry_count": 0,
         "verifier_errors": [
@@ -4181,20 +4185,21 @@
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='이번 달 말까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 3
       },
       "D_post": {
-        "fitted_action_conf": 0.8491,
+        "fitted_action_conf": 0.9018,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8043,
+        "final_weighted": 0.8476,
         "auto_apply_ok": false,
-        "auto_apply_reason": "action_below_threshold",
+        "auto_apply_reason": "material_below_threshold",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -4249,41 +4254,40 @@
           "교육 일정 잡기",
           "교육 시작"
         ],
-        "deadline": "",
+        "deadline": "다음 달 말까지",
         "materials": [
           "자료"
         ],
-        "action_raw": 0.2367,
+        "action_raw": 0.8367,
         "intent_raw": 0.72,
-        "overall_raw": -0.02,
-        "action_conf": 0.2586,
+        "overall_raw": 0.73,
+        "action_conf": 0.7936,
         "intent_conf": 0.7068,
-        "deadline_conf": 0.3,
+        "deadline_conf": 1.0,
         "material_conf": 0.85,
-        "final_weighted": 0.5066,
+        "final_weighted": 0.7967,
         "schema_valid": true,
         "retry_count": 0,
-        "verifier_errors": [
-          "block_5_auto_apply_low_confidence"
-        ],
+        "verifier_errors": [],
         "blocked_auto": true,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "present_fields": [
+          "deadline",
           "material"
         ],
         "override": "",
-        "block_7_fired": true,
-        "block_7_reason": "deadline_raw='다음 달 말까지' NOT_A_DEADLINE_none",
+        "block_7_fired": false,
+        "block_7_reason": "",
         "deadline_type": "hard_deadline",
         "multi_action_count": 3
       },
       "D_post": {
-        "fitted_action_conf": 0.849,
+        "fitted_action_conf": 0.898,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8626,
-        "auto_apply_ok": false,
-        "auto_apply_reason": "action_below_threshold",
+        "final_weighted": 0.8984,
+        "auto_apply_ok": true,
+        "auto_apply_reason": "OK",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -4360,9 +4364,9 @@
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8518,
+        "fitted_action_conf": 0.9306,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.864,
+        "final_weighted": 0.9034,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -4435,9 +4439,9 @@
         "multi_action_count": 2
       },
       "D_post": {
-        "fitted_action_conf": 0.8512,
+        "fitted_action_conf": 0.887,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8468,
+        "final_weighted": 0.8682,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -4512,9 +4516,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8516,
+        "fitted_action_conf": 0.9197,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8257,
+        "final_weighted": 0.8597,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -4587,9 +4591,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8516,
+        "fitted_action_conf": 0.9197,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8639,
+        "final_weighted": 0.8979,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -4664,9 +4668,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8509,
+        "fitted_action_conf": 0.8591,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8471,
+        "final_weighted": 0.8512,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -4733,9 +4737,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8514,
+        "fitted_action_conf": 0.9018,
         "fitted_intent_conf": 0.8892,
-        "final_weighted": 0.8822,
+        "final_weighted": 0.9089,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -4807,11 +4811,11 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8506,
+        "fitted_action_conf": 0.8303,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8464,
-        "auto_apply_ok": true,
-        "auto_apply_reason": "OK",
+        "final_weighted": 0.8342,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -4872,11 +4876,11 @@
         "multi_action_count": 0
       },
       "D_post": {
-        "fitted_action_conf": 0.8501,
+        "fitted_action_conf": 0.7531,
         "fitted_intent_conf": 0.8401,
-        "final_weighted": 0.8461,
-        "auto_apply_ok": true,
-        "auto_apply_reason": "OK",
+        "final_weighted": 0.7879,
+        "auto_apply_ok": false,
+        "auto_apply_reason": "action_below_threshold",
         "gates": {
           "schema_ok": true,
           "verifier_ok": true,
@@ -4941,9 +4945,9 @@
         "multi_action_count": 1
       },
       "D_post": {
-        "fitted_action_conf": 0.8499,
+        "fitted_action_conf": 0.7226,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8198,
+        "final_weighted": 0.7434,
         "auto_apply_ok": false,
         "auto_apply_reason": "action_below_threshold",
         "gates": {
@@ -5006,9 +5010,9 @@
         "multi_action_count": 0
       },
       "D_post": {
-        "fitted_action_conf": 0.8508,
+        "fitted_action_conf": 0.8513,
         "fitted_intent_conf": 0.7747,
-        "final_weighted": 0.8204,
+        "final_weighted": 0.8207,
         "auto_apply_ok": true,
         "auto_apply_reason": "OK",
         "gates": {
@@ -5021,18 +5025,18 @@
   ],
   "proceed_verdict": "PATCH/BLOCK",
   "post_fit_auto_apply": {
-    "auto_apply_rate": 0.5385,
-    "auto_apply_accuracy": 0.7429,
-    "auto_apply_count": 35,
-    "auto_apply_correct": 26,
+    "auto_apply_rate": 0.5231,
+    "auto_apply_accuracy": 0.7353,
+    "auto_apply_count": 34,
+    "auto_apply_correct": 25,
     "auto_apply_reasons": {
-      "OK": 35,
-      "action_below_threshold": 19,
-      "material_below_threshold": 11
+      "OK": 34,
+      "action_below_threshold": 17,
+      "material_below_threshold": 14
     },
-    "final_weighted_max": 0.8822,
-    "final_weighted_p50": 0.8256,
-    "final_weighted_above_80": 55,
-    "final_weighted_above_70": 65
+    "final_weighted_max": 0.9089,
+    "final_weighted_p50": 0.8372,
+    "final_weighted_above_80": 49,
+    "final_weighted_above_70": 63
   }
 }

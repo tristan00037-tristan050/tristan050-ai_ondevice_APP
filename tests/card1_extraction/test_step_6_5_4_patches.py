@@ -129,6 +129,50 @@ def test_verify_deadline_passes_hard():
     assert "hard_deadline" in why
 
 
+# ── P1 정정 회귀 (2026-05-13, PR #701) ──────────────────────────────────
+# verify_deadline 은 deadline_text 만 분류해야 한다 (evidence 전체 X).
+# 주변 단어의 disqualifier 가 진짜 deadline 을 덮어쓰지 않아야 한다.
+
+def test_verify_deadline_hard_with_condition_in_surrounding():
+    """원문에 '완료되면'(condition) 이 있어도 deadline_text='금요일까지' 면 PASS."""
+    src = "계약서 수정이 완료되면 금요일까지 보내주세요."
+    ok, why = verify_deadline("금요일까지", src, src)
+    assert ok is True
+    assert "hard_deadline" in why, f"expected hard_deadline, got {why}"
+
+
+def test_verify_deadline_hard_with_urgency_in_surrounding():
+    """원문에 '지금 바로'(urgency) 가 있어도 deadline_text='5월 10일까지' 면 PASS."""
+    src = "지금 바로 처리해서 5월 10일까지 보내주세요."
+    ok, why = verify_deadline("5월 10일까지", src, src)
+    assert ok is True
+    assert "hard_deadline" in why, f"expected hard_deadline, got {why}"
+
+
+def test_verify_deadline_inquiry_pure():
+    """deadline_text 자체가 '언제까지 가능' → BLOCK 유지."""
+    src = "보고서 검토 언제까지 가능하신가요?"
+    ok, why = verify_deadline("언제까지 가능", src, src)
+    assert ok is False
+    assert "deadline_inquiry" in why
+
+
+def test_verify_deadline_urgency_pure():
+    """deadline_text 자체가 '지금 바로' → BLOCK 유지."""
+    src = "클라이언트에게 지금 바로 연락해주세요."
+    ok, why = verify_deadline("지금 바로", src, src)
+    assert ok is False
+    assert "urgency" in why
+
+
+def test_verify_deadline_condition_pure():
+    """deadline_text 자체가 '완료되면' → BLOCK 유지."""
+    src = "수정이 완료되면 바로 보내주세요."
+    ok, why = verify_deadline("완료되면", src, src)
+    assert ok is False
+    assert "condition" in why
+
+
 def test_block_7_applies_inquiry_in_apply_hard_rules():
     """card1_002 시나리오 — 의문문 inquiry 차단."""
     src = "보고서 검토 언제까지 가능하신가요?"

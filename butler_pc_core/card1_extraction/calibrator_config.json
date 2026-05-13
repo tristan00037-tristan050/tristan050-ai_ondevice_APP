@@ -5,10 +5,10 @@
   "cv": "5-fold",
   "targets": {
     "action": {
-      "A": -0.03,
-      "B": -1.72,
-      "ece_before": 0.419,
-      "ece_after": 0.2701
+      "A": -3.15,
+      "B": 0.46,
+      "ece_before": 0.3391,
+      "ece_after": 0.2797
     },
     "intent": {
       "A": -4.24,
@@ -17,10 +17,10 @@
       "ece_after": 0.2819
     },
     "deadline_present": {
-      "A": -13.8,
-      "B": 13.06,
-      "ece_before": 0.3381,
-      "ece_after": 0.1769,
+      "A": -13.95,
+      "B": 12.42,
+      "ece_before": 0.2744,
+      "ece_after": 0.2539,
       "n_present": 27
     },
     "material_present": {
@@ -31,7 +31,7 @@
       "n_present": 27
     }
   },
-  "overall_ece_reference_only": 0.3569,
+  "overall_ece_reference_only": 0.4076,
   "auto_apply_threshold": {
     "action": 0.85,
     "intent": 0.75,

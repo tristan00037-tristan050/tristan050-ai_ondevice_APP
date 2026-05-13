@@ -139,6 +139,11 @@ def verify_deadline(
 ) -> tuple[bool, str]:
     """단계 6.5.4 — type-aware deadline 검증.
 
+    P1 정정 (2026-05-13, PR #701 리뷰):
+      classify_deadline_candidate 호출 인자를 evidence(주변 문장) → deadline_text
+      로 변경. evidence 전체를 분류하면 주변 단어(예: "완료되면")가 진짜 deadline
+      ("금요일까지")을 덮어쓰는 false negative가 발생한다.
+
     Returns:
         (valid, reason)
         valid=True  → 통과 (deadline 보존)
@@ -162,7 +167,9 @@ def verify_deadline(
     if not evidence or evidence not in source:
         return False, "DEADLINE_EVIDENCE_NOT_IN_SOURCE"
 
-    dtype = classify_deadline_candidate(evidence)
+    # 분류는 deadline_text 만으로 — evidence 전체에 condition/urgency 단어가
+    # 섞여 있어도 진짜 hard/soft deadline 표현이 살아남도록 (P1 정정).
+    dtype = classify_deadline_candidate(deadline_text)
     if not is_valid_deadline_type(dtype):
         return False, f"NOT_A_DEADLINE_{dtype.value}"
 
