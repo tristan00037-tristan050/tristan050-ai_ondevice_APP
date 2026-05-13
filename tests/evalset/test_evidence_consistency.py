@@ -171,3 +171,136 @@ def test_evidence_consistency_multi_action_all_evidence_required(tmp_path):
     # 3개 중 1개만 위반
     assert out["violation_count"] == 1
     assert out["violations"][0]["kind"] == "action_evidence_not_in_text"
+
+
+# ── PR #703 P1 정정 회귀 — fail-closed (6건) ─────────────────────────────
+
+def test_evidence_missing_in_gold_deadline_when_approved(tmp_path):
+    """label_status=approved + gold.deadline.evidence 누락 → EVIDENCE_MISSING."""
+    item = {
+        "sample_id":      "card1_000200",
+        "text":           "금요일까지 보고서 보내주세요",
+        "text_redacted":  None,
+        "raw_digest16":   "sha256:aaaaaaaaaaaaaaaa",
+        "source":         "synthetic_gold",
+        "intent_type":    "REQUEST",
+        "deadline_type":  "HARD",
+        "label_status":   "approved",
+        "gold": {
+            "deadline": {"text": "금요일까지", "type": "HARD"},   # evidence 누락
+        },
+    }
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fail_class"] == "EVIDENCE_MISSING"
+
+
+def test_evidence_missing_in_gold_action_when_gold_reviewed(tmp_path):
+    """gold_reviewed + actions[0].evidence=None → EVIDENCE_MISSING."""
+    item = {
+        "sample_id":      "card1_000201",
+        "text":           "보고서 보내주세요",
+        "text_redacted":  None,
+        "raw_digest16":   "sha256:bbbbbbbbbbbbbbbb",
+        "source":         "synthetic_gold",
+        "intent_type":    "REQUEST",
+        "deadline_type":  "NONE",
+        "label_status":   "gold_reviewed",
+        "gold": {
+            "actions": [{"action_text": "보내기", "evidence": None}],
+        },
+    }
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["fail_class"] == "EVIDENCE_MISSING"
+
+
+def test_evidence_empty_string_treated_as_missing(tmp_path):
+    """빈 문자열 evidence 도 EVIDENCE_MISSING 처리."""
+    item = {
+        "sample_id":      "card1_000202",
+        "text":           "보고서 정리해 주세요",
+        "text_redacted":  None,
+        "raw_digest16":   "sha256:cccccccccccccccc",
+        "source":         "synthetic_gold",
+        "intent_type":    "REQUEST",
+        "deadline_type":  "NONE",
+        "label_status":   "approved",
+        "gold": {
+            "materials": [{"text": "보고서", "evidence": ""}],
+        },
+    }
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["fail_class"] == "EVIDENCE_MISSING"
+
+
+def test_evidence_present_and_in_text_passes(tmp_path):
+    """fail-closed 강화 후에도 정상 evidence 는 PASS."""
+    item = {
+        "sample_id":      "card1_000203",
+        "text":           "보고서를 보내주세요",
+        "text_redacted":  None,
+        "raw_digest16":   "sha256:dddddddddddddddd",
+        "source":         "synthetic_gold",
+        "intent_type":    "REQUEST",
+        "deadline_type":  "NONE",
+        "label_status":   "gold_reviewed",
+        "gold": {
+            "actions": [{"action_text": "보내기", "evidence": "보고서를"}],
+        },
+    }
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+
+
+def test_evidence_consistency_passes_for_draft_status_with_missing_evidence(tmp_path):
+    """draft 상태는 evidence 누락도 면제 (EXEMPT_STATUSES)."""
+    item = {
+        "sample_id":      "card1_000204",
+        "text":           "보고서를 보내주세요",
+        "text_redacted":  None,
+        "raw_digest16":   "sha256:eeeeeeeeeeeeeeee",
+        "source":         "synthetic_gold",
+        "intent_type":    "REQUEST",
+        "deadline_type":  "NONE",
+        "label_status":   "draft",
+        "gold": {"actions": [{"action_text": "보내기", "evidence": None}]},
+    }
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 0
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["exempt_items"] == 1
+
+
+def test_evidence_consistency_fails_for_unknown_label_status(tmp_path):
+    """알 수 없는 label_status → UNKNOWN_LABEL_STATUS (fail-closed)."""
+    item = {
+        "sample_id":      "card1_000205",
+        "text":           "보고서 보내주세요",
+        "text_redacted":  None,
+        "raw_digest16":   "sha256:ffffffffffffffff",
+        "source":         "synthetic_gold",
+        "intent_type":    "REQUEST",
+        "deadline_type":  "NONE",
+        "label_status":   "unknown_status",   # enum 외
+        "gold":           {},
+    }
+    p = _write_jsonl(tmp_path, [item])
+    res = _run("--input", str(p))
+    assert res.returncode == 1
+    out = json.loads(res.stdout.strip().splitlines()[-1])
+    assert out["ok"] is False
+    assert out["fail_class"] == "UNKNOWN_LABEL_STATUS"

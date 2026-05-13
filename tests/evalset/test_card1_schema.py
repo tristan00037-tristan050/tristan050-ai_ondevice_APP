@@ -23,9 +23,11 @@ def schema():
 
 @pytest.fixture
 def minimal_valid_item():
+    """PR #703 P1 정정 후: synthetic_gold 는 text 필수(string), text_redacted 는 null."""
     return {
         "sample_id":              "card1_000001",
-        "text_redacted":          "[DOCUMENT] 오늘 안에 요약해줘",
+        "text":                   "[DOCUMENT] 오늘 안에 요약해줘",
+        "text_redacted":          None,
         "raw_digest16":           "sha256:0000000000000001",
         "source":                 "synthetic_gold",
         "intent_type":            "REQUEST",
@@ -78,5 +80,81 @@ def test_schema_rejects_extra_property(schema, minimal_valid_item):
 def test_schema_rejects_invalid_digest16_format(schema, minimal_valid_item):
     bad = deepcopy(minimal_valid_item)
     bad["raw_digest16"] = "md5:abcdef"   # wrong prefix
+    errs = list(Draft202012Validator(schema).iter_errors(bad))
+    assert len(errs) > 0
+
+
+# ── PR #703 P1 정정 회귀 (5건) ─────────────────────────────────────────
+
+@pytest.fixture
+def gold_item_with_text():
+    return {
+        "sample_id":              "card1_100001",
+        "text":                   "회의록 정리해서 공유해 주세요",
+        "text_redacted":          None,
+        "raw_digest16":           "sha256:1111111111111111",
+        "source":                 "synthetic_gold",
+        "intent_type":            "REQUEST",
+        "deadline_type":          "NONE",
+        "deadline_is_actionable": False,
+        "slice_tags":             [],
+        "action_required":        True,
+        "answer_required":        True,
+        "auto_apply_allowed":     False,
+        "label_status":           "gold_reviewed",
+    }
+
+
+@pytest.fixture
+def userlog_item_with_redacted():
+    return {
+        "sample_id":              "card1_200001",
+        "text":                   None,
+        "text_redacted":          "[EMAIL]으로 보고서 보내주세요",
+        "raw_digest16":           "sha256:2222222222222222",
+        "source":                 "internal_log_redacted",
+        "intent_type":            "REQUEST",
+        "deadline_type":          "NONE",
+        "deadline_is_actionable": False,
+        "slice_tags":             [],
+        "action_required":        True,
+        "answer_required":        True,
+        "auto_apply_allowed":     False,
+        "label_status":           "draft",
+    }
+
+
+def test_schema_rejects_userlog_with_text_not_null(schema, userlog_item_with_redacted):
+    """userlog_redacted 인데 text 가 string 이면 거부 (PII leak 경로 차단)."""
+    bad = deepcopy(userlog_item_with_redacted)
+    bad["text"] = "raw content here"
+    errs = list(Draft202012Validator(schema).iter_errors(bad))
+    assert len(errs) > 0, "userlog_redacted 의 text 채워짐이 schema 위반 처리되어야 함"
+
+
+def test_schema_rejects_synthetic_gold_without_text(schema, gold_item_with_text):
+    """synthetic_gold 인데 text 가 null 이면 거부."""
+    bad = deepcopy(gold_item_with_text)
+    bad["text"] = None
+    errs = list(Draft202012Validator(schema).iter_errors(bad))
+    assert len(errs) > 0
+
+
+def test_schema_accepts_synthetic_gold_with_text(schema, gold_item_with_text):
+    """synthetic_gold + text 채워짐 → PASS."""
+    errs = list(Draft202012Validator(schema).iter_errors(gold_item_with_text))
+    assert errs == [], f"unexpected errors: {[e.message for e in errs]}"
+
+
+def test_schema_accepts_userlog_with_text_null(schema, userlog_item_with_redacted):
+    """userlog_redacted + text=null + text_redacted 채워짐 → PASS."""
+    errs = list(Draft202012Validator(schema).iter_errors(userlog_item_with_redacted))
+    assert errs == [], f"unexpected errors: {[e.message for e in errs]}"
+
+
+def test_schema_rejects_userlog_with_empty_text_redacted(schema, userlog_item_with_redacted):
+    """text_redacted 가 빈 문자열이면 거부 (minLength 1)."""
+    bad = deepcopy(userlog_item_with_redacted)
+    bad["text_redacted"] = ""
     errs = list(Draft202012Validator(schema).iter_errors(bad))
     assert len(errs) > 0

@@ -5,11 +5,14 @@ label_status 가 gold_reviewed / approved / adjudicated 인 샘플은 gold.* 의
 evidence 가 text(synthetic_gold) 또는 text_redacted(userlog_redacted) 안에
 substring 으로 존재해야 한다.
 
-label_status=draft / double_labeled / rejected_pii 인 샘플은 검증 면제.
+label_status 가 draft / double_labeled / rejected_pii 인 샘플은 검증 면제.
 
-fail-closed 원칙 (Day 1 P1 정정 동일):
-  - JSON parse error → ok=False, fail_class=JSON_PARSE_ERROR
-  - evidence 불일치 → ok=False, fail_class=EVIDENCE_NOT_IN_TEXT
+PR #703 P1 정정 (2026-05-13): fail-closed 강화.
+  - evidence 가 None 또는 빈 문자열이면 EVIDENCE_MISSING 으로 차단
+    (이전엔 silently skip → 부분 라벨링이 통과되는 fail-open 버그).
+  - label_status 가 알려진 enum 에 없으면 UNKNOWN_LABEL_STATUS 로 차단.
+  - enforced status 인데 gold 자체가 비어있으면 GOLD_MISSING_WHEN_ENFORCED.
+  - JSON parse 오류는 별도 카운터 + JSON_PARSE_ERROR (Day 1 P2 동일).
 """
 from __future__ import annotations
 
@@ -19,8 +22,9 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# 검증 대상 label_status (approved 이상)
-ENFORCE_STATUSES = {"gold_reviewed", "approved", "adjudicated"}
+# label_status 분류 (PR #703 P1 정정)
+ENFORCED_STATUSES = {"gold_reviewed", "approved", "adjudicated"}
+EXEMPT_STATUSES   = {"draft", "double_labeled", "rejected_pii"}
 
 
 def _resolve_source_text(item: Dict[str, Any]) -> Optional[str]:
@@ -35,72 +39,139 @@ def _resolve_source_text(item: Dict[str, Any]) -> Optional[str]:
 
 
 def _check_evidence(evidence: Any, source: str) -> bool:
-    """evidence 가 source 의 substring 인지."""
     if not isinstance(evidence, str) or not evidence:
         return False
     return evidence in source
 
 
 def _validate_item(item: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """샘플 1건의 모든 evidence 위반 목록 반환 (빈 = OK)."""
+    """샘플 1건 → 위반 목록 (빈 = OK).
+
+    PR #703 P1: evidence None/"" 은 fail-closed (EVIDENCE_MISSING).
+    """
     violations: List[Dict[str, Any]] = []
-    status = item.get("label_status", "draft")
-    if status not in ENFORCE_STATUSES:
-        return violations   # 검증 면제
+    sid = item.get("sample_id", "unknown")
+    status = item.get("label_status", "")
+
+    # ── 면제 ────────────────────────────────────────────────────────────
+    if status in EXEMPT_STATUSES:
+        return violations
+
+    # ── 알 수 없는 status → fail-closed ────────────────────────────────
+    if status not in ENFORCED_STATUSES:
+        return [{
+            "sample_id":    sid,
+            "kind":         "unknown_label_status",
+            "label_status": status,
+        }]
+
+    # ── enforced status 인데 gold 자체가 없음 → fail-closed ─────────────
+    gold = item.get("gold")
+    if not gold:
+        return [{
+            "sample_id":    sid,
+            "kind":         "gold_missing_when_enforced",
+            "label_status": status,
+        }]
 
     source = _resolve_source_text(item)
     if source is None:
         violations.append({
-            "sample_id": item.get("sample_id", "unknown"),
+            "sample_id": sid,
             "kind":      "no_source_text",
             "detail":    "text 와 text_redacted 모두 비어있음",
         })
         return violations
 
-    gold = item.get("gold") or {}
-
-    # gold.deadline.evidence
+    # ── gold.deadline.evidence ──────────────────────────────────────────
     deadline = gold.get("deadline")
-    if isinstance(deadline, dict):
-        ev = deadline.get("evidence")
-        if ev is not None and not _check_evidence(ev, source):
+    if deadline is not None:
+        if not isinstance(deadline, dict):
             violations.append({
-                "sample_id": item.get("sample_id", "unknown"),
-                "kind":      "deadline_evidence_not_in_text",
-                "evidence":  ev,
+                "sample_id": sid,
+                "kind":      "invalid_deadline_object",
             })
+        else:
+            ev = deadline.get("evidence")
+            if ev is None or ev == "":
+                violations.append({
+                    "sample_id": sid,
+                    "kind":      "evidence_missing",
+                    "field":     "gold.deadline.evidence",
+                })
+            elif not _check_evidence(ev, source):
+                violations.append({
+                    "sample_id": sid,
+                    "kind":      "deadline_evidence_not_in_text",
+                    "evidence":  ev,
+                })
 
-    # gold.materials[*].evidence
+    # ── gold.materials[*].evidence ──────────────────────────────────────
     materials = gold.get("materials") or []
     if isinstance(materials, list):
         for idx, m in enumerate(materials):
             if not isinstance(m, dict):
+                violations.append({
+                    "sample_id": sid,
+                    "kind":      "invalid_material_object",
+                    "index":     idx,
+                })
                 continue
             ev = m.get("evidence")
-            if ev is not None and not _check_evidence(ev, source):
+            if ev is None or ev == "":
                 violations.append({
-                    "sample_id": item.get("sample_id", "unknown"),
+                    "sample_id": sid,
+                    "kind":      "evidence_missing",
+                    "field":     f"gold.materials[{idx}].evidence",
+                })
+            elif not _check_evidence(ev, source):
+                violations.append({
+                    "sample_id": sid,
                     "kind":      "material_evidence_not_in_text",
                     "index":     idx,
                     "evidence":  ev,
                 })
 
-    # gold.actions[*].evidence
+    # ── gold.actions[*].evidence ────────────────────────────────────────
     actions = gold.get("actions") or []
     if isinstance(actions, list):
         for idx, a in enumerate(actions):
             if not isinstance(a, dict):
+                violations.append({
+                    "sample_id": sid,
+                    "kind":      "invalid_action_object",
+                    "index":     idx,
+                })
                 continue
             ev = a.get("evidence")
-            if ev is not None and not _check_evidence(ev, source):
+            if ev is None or ev == "":
                 violations.append({
-                    "sample_id": item.get("sample_id", "unknown"),
+                    "sample_id": sid,
+                    "kind":      "evidence_missing",
+                    "field":     f"gold.actions[{idx}].evidence",
+                })
+            elif not _check_evidence(ev, source):
+                violations.append({
+                    "sample_id": sid,
                     "kind":      "action_evidence_not_in_text",
                     "index":     idx,
                     "evidence":  ev,
                 })
 
     return violations
+
+
+def _violation_to_fail_class(v: Dict[str, Any]) -> str:
+    kind = v.get("kind", "")
+    if kind == "unknown_label_status":
+        return "UNKNOWN_LABEL_STATUS"
+    if kind == "gold_missing_when_enforced":
+        return "GOLD_MISSING_WHEN_ENFORCED"
+    if kind == "evidence_missing":
+        return "EVIDENCE_MISSING"
+    if "evidence_not_in_text" in kind:
+        return "EVIDENCE_NOT_IN_TEXT"
+    return "INVALID_OBJECT"
 
 
 def main() -> int:
@@ -130,32 +201,37 @@ def main() -> int:
             except json.JSONDecodeError as e:
                 parse_errors.append({"line_no": line_no, "error": str(e)})
                 continue
-            status = item.get("label_status", "draft")
-            if status in ENFORCE_STATUSES:
+            status = item.get("label_status", "")
+            if status in EXEMPT_STATUSES:
+                exempt += 1
+            else:
                 enforced += 1
                 for v in _validate_item(item):
                     v["line_no"] = line_no
                     violations.append(v)
-            else:
-                exempt += 1
 
-    parse_total = len(parse_errors)
-    violation_total = len(violations)
+    parse_total      = len(parse_errors)
+    violation_total  = len(violations)
     ok = (parse_total == 0) and (violation_total == 0)
-    fail_class = None
+    fail_class: Optional[str] = None
     if not ok:
-        # parse error 가 더 심각 (검사 자체 불가능)
-        fail_class = "JSON_PARSE_ERROR" if parse_total > 0 else "EVIDENCE_NOT_IN_TEXT"
+        # parse error 우선 (검사 자체 불가능이 더 심각)
+        if parse_total > 0:
+            fail_class = "JSON_PARSE_ERROR"
+        else:
+            # 첫 위반의 fail_class 노출
+            fail_class = _violation_to_fail_class(violations[0])
+
     report = {
-        "ok":                 ok,
-        "fail_class":         fail_class,
-        "total_items":        total,
-        "enforced_items":     enforced,
-        "exempt_items":       exempt,
-        "violation_count":    violation_total,
-        "parse_error_count":  parse_total,
-        "violations":         violations[:50],
-        "parse_errors":       parse_errors[:50],
+        "ok":                ok,
+        "fail_class":        fail_class,
+        "total_items":       total,
+        "enforced_items":    enforced,
+        "exempt_items":      exempt,
+        "violation_count":   violation_total,
+        "parse_error_count": parse_total,
+        "violations":        violations[:50],
+        "parse_errors":      parse_errors[:50],
     }
     if args.out:
         out_path = Path(args.out)

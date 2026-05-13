@@ -110,5 +110,38 @@
     "adjudicated": {
       "type": "boolean"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "enum": ["internal_log_redacted", "beta_log_redacted", "adjudicated_boundary"]
+          }
+        },
+        "required": ["source"]
+      },
+      "then": {
+        "properties": {
+          "text":          { "type": "null" },
+          "text_redacted": { "type": "string", "minLength": 1 }
+        },
+        "required": ["text_redacted"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": { "const": "synthetic_gold" }
+        },
+        "required": ["source"]
+      },
+      "then": {
+        "properties": {
+          "text": { "type": "string", "minLength": 1 }
+        },
+        "required": ["text"]
+      }
+    }
+  ]
 }
