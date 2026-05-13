@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "fail_class": null,
+  "total_items": 500,
+  "violation_count": 0,
+  "warning_count": 1,
+  "violations": [],
+  "warnings": [
+    {
+      "warning_class": "AMBIGUOUS_REPORT_PATTERN",
+      "sample_id": "card1_100046",
+      "text": "이슈 검토 후 처리하겠습니다",
+      "pattern": "처리하겠습니다",
+      "current_intent": "REPORT",
+      "line_no": 46
+    }
+  ]
+}

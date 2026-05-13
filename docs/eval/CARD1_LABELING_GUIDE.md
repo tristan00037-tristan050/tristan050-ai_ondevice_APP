@@ -145,3 +145,54 @@ deadline_is_actionable=true 는 HARD/SOFT 에만 부여. INQUIRY/URGENCY/CONDITI
 - 라벨러 추측 deadline 금지. text_redacted 에 표현 없으면 deadline_type=NONE.
 - production candidate 판정은 6.5.6 이전 금지.
 - LoRA / 모델 변경은 6.5.5 범위 외.
+
+## 10. 의미-라벨 일관성 보강 규칙 (Day 8 옵션 C, G23 v0)
+
+알고리즘 팀 옵션 C 확정 (2026-05-12): 합성 시드의 패턴 재사용으로 인한 의미-라벨 충돌을 차단하기 위해 다음 규칙을 hard gate 로 운영한다 (CI Gate G23).
+
+### 10.1 PURE_QUESTION 패턴 — REQUEST 금지
+
+다음 어미가 본문에 포함되고 **행동동사 (§10.3)** 가 동반되지 않을 경우, `intent_type=QUESTION` 만 허용한다.
+
+| 패턴 | 라벨 |
+|------|------|
+| 어떻게 되나요 / 언제인가요 / 누구인가요 / 어디인가요 | QUESTION + action_required=false + answer_required=true |
+
+예시:
+- "회사 주소가 어떻게 되나요?" → QUESTION (REQUEST 금지)
+- "마감이 언제인가요?" → QUESTION + deadline_type=INQUIRY
+- "회사 주소 정리해서 보내주세요" → REQUEST (행동동사 "보내주" 동반)
+
+### 10.2 REPORT_FIXED 패턴 — REQUEST 금지
+
+다음 어미가 본문에 포함되면 `intent_type=REPORT` 만 허용한다 (행동동사 무관).
+
+| 패턴 | 라벨 |
+|------|------|
+| 완료했습니다 / 보고드립니다 / 안내드립니다 / 공유했습니다 / 전달했습니다 | REPORT + action_required=false |
+
+### 10.3 행동동사 (action verb) 17종
+
+REQUEST 판정 시 본문에 다음 중 하나가 있어야 한다. 없으면 §10.1 적용.
+
+`보내`, `전달`, `공유`, `검토`, `작성`, `수정`, `제출`, `회신`, `업로드`, `확인 부탁`, `조율`, `해 주`, `부탁드립`, `보고 부탁`, `정리해`, `보내주`, `주실 수 있나요`
+
+### 10.4 경계 패턴 — warning (라벨러 재검토 권장)
+
+다음 패턴은 G23 가 warning 만 발행. fail 아님.
+
+| 패턴 | 라벨 | 비고 |
+|------|------|------|
+| 가능한가요 / 확인 가능할까요 | REQUEST + 행동동사 없음 → AMBIGUOUS_REQUEST_PATTERN | QUESTION 도 가능 |
+| 처리하겠습니다 | REPORT 또는 REQUEST → AMBIGUOUS_REPORT_PATTERN | 자발 행동 보고 |
+
+### 10.5 자동 정정 (Day 8 환원 4건 사례)
+
+Day 8 환원 27건 grep 전수 조사 결과 4건이 §10.1~§10.2 위반으로 자동 정정됨.
+
+| sample_id | 본문 (요약) | 변경 |
+|-----------|-------------|------|
+| card1_200003 | "[PERSON] 회사 주소가 어떻게 되나요?" | REQUEST → QUESTION |
+| card1_200024 | "프로젝트 마감이 언제인가요?" | REQUEST → QUESTION |
+| card1_200005 | "[PR] 머지 완료했습니다" | REQUEST → REPORT |
+| card1_200028 | "배포 결과는 추후 안내드립니다" | REQUEST → REPORT |
