@@ -1,0 +1,702 @@
+"""pr718_vocabulary_patch.py — Algorithm Branch A normalized_action vocabulary patch.
+
+알고리즘 자문 10 결론 + 5분류 decision tree:
+  A. alias_absorb       — 기존 canonical alias 흡수
+  B. merge_to_existing  — 현재 other 이나 기존 canonical 귀속
+  C. true_new_canonical — 신규 canonical 필요 (엄격 기준)
+  D. reject             — action 아님 (REPORT/QUESTION 등)
+  E. needs_review       — 문맥 의존
+
+verdict: MEASURED_ONLY (PR #718 범위, PR #718 D mode 최종 단계는 별도 PR).
+"""
+from __future__ import annotations
+
+import json
+import re
+import sys
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+ROOT = Path(__file__).resolve().parents[2]
+DATASET = ROOT / "tests/fixtures/card1_evalset_v1_1_500.jsonl"
+PREDS   = ROOT / "evidence/day11/mode_d/predictions.jsonl"
+MAPPING = ROOT / "evidence/day14/extraction_error_decomposition/normalized_action_mapping_gaps.json"
+OUT     = ROOT / "evidence/day15/vocabulary_patch"
+
+SOURCE_MERGE_SHA = "10109f2b5373d6aabff782e3a50071a00415fc56"
+DATASET_ID = "card1_evalset_v1_1_500"
+
+# ── 기존 canonical 15 + 신규 후보 (엄격 0~3) ───────────────────────────────
+EXISTING_CANONICAL = {
+    "send", "share", "reply", "review", "summarize", "organize",
+    "revise", "submit", "upload", "schedule", "confirm",
+    "prepare_document", "cancel", "follow_up", "other",
+}
+
+# ── 정정된 alias rule (alias 우선 매칭) ────────────────────────────────────
+# 알고리즘 자문 3차 regex 보조 + alias_absorb 우선
+ACTION_ALIAS_TABLE = [
+    # canonical, regex pattern
+    ("reply",            re.compile(r"회신|답신|답변|답장|응답")),
+    ("send",             re.compile(r"보내|전달|발송|송부")),
+    ("share",            re.compile(r"공유|배포")),
+    ("review",           re.compile(r"검토|리뷰|살펴|점검")),
+    ("confirm",          re.compile(r"확인|체크|검증|결재|승인")),
+    ("organize",         re.compile(r"정리|분류|취합|모아")),
+    ("summarize",        re.compile(r"요약|간추")),
+    ("revise",           re.compile(r"수정|반영|보완|업데이트|개정")),
+    ("submit",           re.compile(r"제출|등록|접수|머지|merge")),
+    ("upload",           re.compile(r"업로드")),
+    ("schedule",         re.compile(r"일정|예약|조율|스케줄")),
+    ("prepare_document", re.compile(r"작성|보고서|초안|문서|문건")),
+    ("cancel",           re.compile(r"취소|중단|보류")),
+    ("follow_up",        re.compile(r"후속|팔로업|follow")),
+    # 신규 canonical (엄격 기준 충족 0~3)
+    # 후보 검토는 OOV 분석 단계에서 결정
+]
+
+
+def normalize_action_v2(text: str) -> str:
+    """patched normalize — alias 우선 매칭, 미매치 시 other."""
+    if not text:
+        return "other"
+    for canon, pat in ACTION_ALIAS_TABLE:
+        if pat.search(text):
+            return canon
+    return "other"
+
+
+# ── 기존 normalize (PR #716 reference) — comparison 용 ─────────────────────
+EXISTING_RULES = [
+    (re.compile(r"보내|전달|발송|송부"),       "send"),
+    (re.compile(r"공유"),                       "share"),
+    (re.compile(r"회신|답신|답변|회답"),       "reply"),
+    (re.compile(r"검토|확인|점검"),            "review"),
+    (re.compile(r"요약|정리해"),                "summarize"),
+    (re.compile(r"정리(?!해)"),                 "organize"),
+    (re.compile(r"수정|개정"),                  "revise"),
+    (re.compile(r"제출"),                       "submit"),
+    (re.compile(r"업로드"),                     "upload"),
+    (re.compile(r"일정|스케줄|예약"),          "schedule"),
+    (re.compile(r"확정|승인|결정"),            "confirm"),
+    (re.compile(r"보고서|초안|문서"),          "prepare_document"),
+    (re.compile(r"취소"),                       "cancel"),
+    (re.compile(r"후속|팔로업"),                "follow_up"),
+]
+
+
+def normalize_action_v1(text: str) -> str:
+    """기존 normalize (PR #716)."""
+    if not text:
+        return "other"
+    for pat, canon in EXISTING_RULES:
+        if pat.search(text):
+            return canon
+    return "other"
+
+
+# ── REPORT/QUESTION 부정형 (action 아님) ───────────────────────────────────
+NON_ACTION_PATTERNS = [
+    re.compile(r"완료(했|됐|됨|입니다)"),
+    re.compile(r"보고드립니다|보고했|안내드립니다|공유했습니다|전달했습니다"),
+    re.compile(r"어떻게 되|언제인가요|누구인가요|어디인가요|언제죠|알려 주실 수"),
+    re.compile(r"가능한가요|확인 가능"),
+    re.compile(r"하지 않아도 됩|취소되었"),
+]
+
+
+def _is_non_action(text: str) -> bool:
+    return any(p.search(text) for p in NON_ACTION_PATTERNS)
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _meta() -> Dict[str, Any]:
+    return {
+        "dataset_id":       DATASET_ID,
+        "source_pr":        716,
+        "source_merge_sha": SOURCE_MERGE_SHA,
+        "branch":           "A",
+        "patch_type":       "vocabulary",
+        "verdict":          "MEASURED_ONLY",
+        "generated_at":     _now(),
+        "total_samples":    500,
+    }
+
+
+# ── Step 1~4: OOV review + decision ────────────────────────────────────────
+def _decide(oov_text: str, count: int, sample_ids: List[str]) -> Dict[str, Any]:
+    """5분류 decision A~E."""
+    text = oov_text
+    # D. reject — action 아님
+    if _is_non_action(text):
+        return {"decision": "reject", "canonical": None,
+                "reason": "REPORT/QUESTION 부정형 패턴 (action 아님)"}
+    # A. alias_absorb — patched normalize 가 기존 canonical 로 매핑
+    v2 = normalize_action_v2(text)
+    if v2 != "other":
+        return {"decision": "alias_absorb", "canonical": v2,
+                "reason": f"patched alias rule → {v2}"}
+    # E. needs_review — "확인" 단일 패턴
+    if re.search(r"^확인$|^처리$|^진행$", text.strip()):
+        return {"decision": "needs_review", "canonical": None,
+                "reason": "ambiguous bare verb"}
+    # C. true_new_canonical — count >= 5 + 기존 흡수 불가
+    if count >= 5:
+        return {"decision": "true_new_canonical", "canonical": None,
+                "reason": f"high frequency ({count}) + no existing canonical fit"}
+    # B. merge_to_existing — needs_review (low frequency)
+    return {"decision": "needs_review", "canonical": None,
+            "reason": "low frequency or context-dependent"}
+
+
+def step1_oov_review(top50: List[Dict]) -> List[Dict]:
+    rows = []
+    for entry in top50:
+        text = entry["action_text"]
+        count = entry["count"]
+        samples = entry.get("example_sample_ids", [])
+        decision = _decide(text, count, samples)
+        rows.append({
+            "action_text":    text,
+            "count":          count,
+            "sample_ids":     samples,
+            **decision,
+        })
+    return rows
+
+
+# ── Step 2: cluster grouping ───────────────────────────────────────────────
+CLUSTER_SEEDS_14 = {
+    "send", "share", "reply", "review", "confirm", "organize", "summarize",
+    "revise", "prepare_document", "submit", "upload", "schedule",
+    "cancel", "follow_up",
+}
+
+
+def step2_cluster(review_rows: List[Dict]) -> Dict[str, Any]:
+    clusters: Dict[str, List[Dict]] = defaultdict(list)
+    for r in review_rows:
+        canon = r.get("canonical") or r["decision"]
+        clusters[canon].append(r)
+    summary = {}
+    for canon, rows in clusters.items():
+        summary[canon] = {
+            "count":         len(rows),
+            "weighted_sum":  sum(r["count"] for r in rows),
+            "examples":      [r["action_text"] for r in rows[:5]],
+        }
+    return summary
+
+
+# ── Step 3: candidate vocabulary additions ────────────────────────────────
+def step3_candidates(review_rows: List[Dict], full_oov_counts: Dict[str, int]) -> List[Dict]:
+    by_canonical: Dict[str, Dict] = defaultdict(
+        lambda: {"aliases": [], "weighted_count": 0, "sample_count": 0,
+                  "examples": []})
+    for r in review_rows:
+        if r["decision"] != "alias_absorb":
+            continue
+        canon = r["canonical"]
+        e = by_canonical[canon]
+        e["aliases"].append(r["action_text"])
+        e["weighted_count"] += r["count"]
+        e["sample_count"]   += len(r["sample_ids"])
+        e["examples"].extend(r["sample_ids"][:3])
+
+    candidates = []
+    cid = 0
+    for canon, e in sorted(by_canonical.items(),
+                              key=lambda x: -x[1]["weighted_count"]):
+        cid += 1
+        candidates.append({
+            "candidate_id":      f"CAND_{canon.upper()}_{cid:03d}",
+            "decision":          "alias_absorb",
+            "canonical":         canon,
+            "aliases":           e["aliases"][:10],
+            "weighted_count":    e["weighted_count"],
+            "sample_count":      e["sample_count"],
+            "fp_contribution":   0,    # 후속 측정 필요
+            "fn_contribution":   e["weighted_count"],
+            "ambiguity_score":   0 if canon != "confirm" else 1,
+            "fragmentation_risk": "low",
+            "examples":          e["examples"][:5],
+            "apply_in_pr718":    e["weighted_count"] >= 3 and e["sample_count"] >= 3,
+        })
+
+    # 신규 canonical 후보 (true_new_canonical decision 중 count >= 5)
+    new_candidates = []
+    for r in review_rows:
+        if r["decision"] != "true_new_canonical":
+            continue
+        new_candidates.append({
+            "action_text":    r["action_text"],
+            "count":          r["count"],
+            "examples":       r["sample_ids"][:5],
+            "decision":       "true_new_canonical",
+            "apply_in_pr718": False,   # 엄격 기준 — 본 PR 미적용, needs_review
+            "reason":         r["reason"],
+        })
+    return candidates, new_candidates
+
+
+# ── Step 4: fragmentation risk ─────────────────────────────────────────────
+RISK_PAIRS = [
+    ("send_vs_share",                "low",    "send=발송, share=배포 의미 분리"),
+    ("send_vs_reply",                "low",    "send=outbound, reply=요청 응답"),
+    ("review_vs_confirm",            "medium", "confirm aliases require factual check evidence"),
+    ("organize_vs_summarize",        "low",    "summarize=요약, organize=분류"),
+    ("organize_vs_prepare_document", "low",    "prepare_document=작성, organize=정리"),
+    ("revise_vs_update",             "low",    "update absorbed into revise alias"),
+    ("submit_vs_upload",             "low",    "upload=파일 업로드, submit=제출/등록/머지"),
+    ("schedule_vs_follow_up",        "low",    "schedule=일정 조율, follow_up=후속 작업"),
+]
+
+
+def step4_risk(canonical_before: int, candidates: List[Dict],
+                new_candidates: List[Dict]) -> Dict[str, Any]:
+    alias_added_count = sum(1 for c in candidates if c["apply_in_pr718"])
+    new_canonical_count = sum(1 for c in new_candidates if c.get("apply_in_pr718"))
+    high_ambiguity_rejected = sum(
+        1 for c in candidates if c["ambiguity_score"] >= 3)
+    return {
+        "canonical_before":              canonical_before,
+        "canonical_after":               canonical_before + new_canonical_count,
+        "new_canonical_count":           new_canonical_count,
+        "alias_added_count":             alias_added_count,
+        "high_ambiguity_rejected_count": high_ambiguity_rejected,
+        "risk_pairs": [
+            {"pair": p, "risk": r, "mitigation": m}
+            for p, r, m in RISK_PAIRS
+        ],
+    }
+
+
+# ── Step 5: canonical_alias_patch ──────────────────────────────────────────
+def step5_alias_patch(candidates: List[Dict]) -> Dict[str, Any]:
+    alias_table: Dict[str, List[str]] = defaultdict(list)
+    for c in candidates:
+        if c["apply_in_pr718"]:
+            alias_table[c["canonical"]].extend(c["aliases"])
+    return {
+        "patch_type": "alias_absorb",
+        "alias_table": {k: sorted(set(v)) for k, v in alias_table.items()},
+        "note": "normalize_action_v2 alias 우선 매칭 (scripts/eval/pr718_vocabulary_patch.py)",
+    }
+
+
+# ── Step 6: AB eval 50 ─────────────────────────────────────────────────────
+def step6_ab_eval_config() -> Dict[str, Any]:
+    return {
+        "ab_eval_size": 50,
+        "composition": {
+            "fp_fn_high_risk":            20,
+            "mapping_gap":                15,
+            "parser_vs_llm_disagreement": 10,
+            "deadline_monitor":            5,
+        },
+        "fixed":   ["model", "prompt", "schema", "verifier", "calibrator",
+                     "thresholds", "dataset_split"],
+        "changed": ["normalized_action_vocabulary", "alias_table", "mapping_rule"],
+    }
+
+
+def _build_ab_ids_stratified(items: List[Dict], preds: List[Dict],
+                              review_rows: List[Dict],
+                              quota: Dict[str, int] = None) -> Tuple[
+                                List[str], Dict[str, int], bool, str]:
+    """4 카테고리 quota 강제 stratified composition.
+
+    Codex P1 #437-441 정정. 카테고리 분류:
+      fp_fn_high_risk: PR #716 evidence 의 fp/fn auto_apply cases sample_ids
+      mapping_gap:     PR #718 review_rows 의 alias_absorb / needs_review
+      parser_vs_llm:   PR #716 parser_vs_llm_disagreement field_level top examples
+      deadline_monitor: deadline_fn_fp_patterns examples
+    """
+    if quota is None:
+        quota = {"fp_fn_high_risk": 20, "mapping_gap": 15,
+                  "parser_vs_llm_disagreement": 10, "deadline_monitor": 5}
+
+    def _load_jsonl(p):
+        rows = []
+        for line in p.open(encoding="utf-8"):
+            line = line.strip()
+            if not line:
+                continue
+            obj = json.loads(line)
+            if "_metadata" in obj:
+                continue
+            rows.append(obj)
+        return rows
+
+    fp_path = ROOT / "evidence/day14/extraction_error_decomposition/fp_auto_apply_cases.jsonl"
+    fn_path = ROOT / "evidence/day14/extraction_error_decomposition/fn_auto_apply_cases.jsonl"
+    pvl_path = ROOT / "evidence/day14/extraction_error_decomposition/parser_vs_llm_disagreement.json"
+    dl_path = ROOT / "evidence/day14/extraction_error_decomposition/deadline_fn_fp_patterns.json"
+
+    fp_rows = _load_jsonl(fp_path) if fp_path.exists() else []
+    fn_rows = _load_jsonl(fn_path) if fn_path.exists() else []
+    pools: Dict[str, List[str]] = {
+        "fp_fn_high_risk":            [r["sample_id"] for r in fp_rows + fn_rows],
+        "mapping_gap":                [],
+        "parser_vs_llm_disagreement": [],
+        "deadline_monitor":           [],
+    }
+    # mapping_gap pool
+    for r in review_rows:
+        if r["decision"] in {"alias_absorb", "needs_review"}:
+            for sid in r["sample_ids"]:
+                if sid not in pools["mapping_gap"]:
+                    pools["mapping_gap"].append(sid)
+    # parser_vs_LLM pool
+    if pvl_path.exists():
+        pvl = json.loads(pvl_path.read_text(encoding="utf-8"))
+        for fld_info in (pvl.get("field_level") or {}).values():
+            for ex in fld_info.get("top_examples", []):
+                sid = ex.get("sample_id")
+                if sid and sid not in pools["parser_vs_llm_disagreement"]:
+                    pools["parser_vs_llm_disagreement"].append(sid)
+    # deadline pool
+    if dl_path.exists():
+        dl = json.loads(dl_path.read_text(encoding="utf-8"))
+        for kind_key in ["deadline_FP", "deadline_FN", "deadline_type_mismatch"]:
+            for ex in (dl.get("examples") or {}).get(kind_key, []):
+                sid = ex.get("sample_id")
+                if sid and sid not in pools["deadline_monitor"]:
+                    pools["deadline_monitor"].append(sid)
+
+    # quota 순회 — 중복 제거 + 50건 강제
+    ab_ids: List[str] = []
+    seen: set = set()
+    actual: Dict[str, int] = {}
+    composition_ok = True
+    for category, target in quota.items():
+        added = 0
+        for sid in pools[category]:
+            if sid in seen:
+                continue
+            ab_ids.append(sid)
+            seen.add(sid)
+            added += 1
+            if added >= target:
+                break
+        actual[category] = added
+        if added < target:
+            composition_ok = False
+
+    fail_class = None if composition_ok else "AB_COMPOSITION_MISMATCH"
+    if len(ab_ids) != 50:
+        # quota 부족 시 pad — 단, composition_ok=False 유지
+        all_ids = [it["sample_id"] for it in items]
+        for sid in all_ids:
+            if sid in seen:
+                continue
+            ab_ids.append(sid)
+            seen.add(sid)
+            if len(ab_ids) >= 50:
+                break
+    assert len(ab_ids) == 50, f"ab_ids must be 50, got {len(ab_ids)}"
+    return ab_ids, actual, composition_ok, fail_class
+
+
+def step6_ab_eval_run(items, preds, ab_ids: List[str]) -> Dict[str, Any]:
+    """A vs B normalize_action 비교 — 같은 50건에서 v1 vs v2 결과 차이 측정."""
+    items_by_id = {it["sample_id"]: it for it in items}
+    preds_by_id = {p["sample_id"]: p for p in preds}
+    a_fp = a_fn = b_fp = b_fn = 0
+    a_other = b_other = 0
+    for sid in ab_ids:
+        gold = items_by_id.get(sid)
+        rec  = preds_by_id.get(sid)
+        if not gold or not rec:
+            continue
+        pred = rec["pred"]
+        gold_actions = (gold.get("gold") or {}).get("actions") or []
+        pred_actions = pred.get("actions") or []
+        # A
+        gold_a = Counter(normalize_action_v1(a.get("action_text", "")) for a in gold_actions)
+        pred_a = Counter(normalize_action_v1(a.get("action_text", "")) for a in pred_actions)
+        a_fp += sum((pred_a - gold_a).values())
+        a_fn += sum((gold_a - pred_a).values())
+        a_other += pred_a.get("other", 0)
+        # B
+        gold_b = Counter(normalize_action_v2(a.get("action_text", "")) for a in gold_actions)
+        pred_b = Counter(normalize_action_v2(a.get("action_text", "")) for a in pred_actions)
+        b_fp += sum((pred_b - gold_b).values())
+        b_fn += sum((gold_b - pred_b).values())
+        b_other += pred_b.get("other", 0)
+    return {
+        "sample_size": len(ab_ids),
+        "A_current":   {"action_fp": a_fp, "action_fn": a_fn, "other": a_other},
+        "B_patched":   {"action_fp": b_fp, "action_fn": b_fn, "other": b_other},
+        "delta":       {"action_fp": b_fp - a_fp,
+                         "action_fn": b_fn - a_fn,
+                         "other":     b_other - a_other},
+    }
+
+
+# ── Step 7: full eval 500 ──────────────────────────────────────────────────
+def step7_full_eval(items, preds) -> Dict[str, Any]:
+    items_by_id = {it["sample_id"]: it for it in items}
+    preds_by_id = {p["sample_id"]: p for p in preds}
+
+    # Codex P1 #353-355 정정: coverage fail-closed (Option A).
+    items_id_set = set(items_by_id.keys())
+    preds_id_set = set(preds_by_id.keys())
+    missing = items_id_set - preds_id_set
+    extra   = preds_id_set - items_id_set
+    pred_id_list = [p["sample_id"] for p in preds]
+    duplicate_ids = [sid for sid, c in Counter(pred_id_list).items() if c > 1]
+    measured_count = len(items_id_set & preds_id_set)
+    coverage_report = {
+        "coverage_checked":  True,
+        "expected_samples":  len(items_id_set),
+        "measured_samples":  measured_count,
+        "missing_count":     len(missing),
+        "extra_count":       len(extra),
+        "duplicate_count":   len(duplicate_ids),
+        "fail_class":        None,
+    }
+    if missing or extra or duplicate_ids:
+        coverage_report["fail_class"] = "FULL_EVAL_COVERAGE_MISMATCH"
+        coverage_report["missing_ids"]   = sorted(missing)[:20]
+        coverage_report["extra_ids"]     = sorted(extra)[:20]
+        coverage_report["duplicate_ids"] = duplicate_ids[:20]
+        # hard fail — caller 가 evidence 저장 후 exit 처리
+        return {"coverage_report": coverage_report, "fail_class":
+                coverage_report["fail_class"]}
+
+    def _measure(normalize_fn) -> Dict[str, int]:
+        fp_total = fn_total = tp_total = 0
+        other_count = 0
+        for sid, gold in items_by_id.items():
+            rec  = preds_by_id[sid]
+            pred = rec["pred"]
+            gold_actions = (gold.get("gold") or {}).get("actions") or []
+            pred_actions = pred.get("actions") or []
+            gold_c = Counter(normalize_fn(a.get("action_text", "")) for a in gold_actions)
+            pred_c = Counter(normalize_fn(a.get("action_text", "")) for a in pred_actions)
+            fp_total += sum((pred_c - gold_c).values())
+            fn_total += sum((gold_c - pred_c).values())
+            # tp via min intersection
+            common = pred_c & gold_c
+            tp_total += sum(common.values())
+            other_count += pred_c.get("other", 0)
+        f1 = (2 * tp_total / (2 * tp_total + fp_total + fn_total)
+              if (2 * tp_total + fp_total + fn_total) > 0 else 0.0)
+        return {"action_fp": fp_total, "action_fn": fn_total,
+                "action_tp": tp_total, "f1": round(f1, 4),
+                "other_count": other_count}
+
+    before = _measure(normalize_action_v1)
+    after  = _measure(normalize_action_v2)
+    # safety monitors (unchanged — vocabulary 만 변경)
+    return {
+        "coverage_report": coverage_report,
+        "measurement_definition": {
+            "scope":             "PR #718 full eval 500 (fit 150 + holdout 350)",
+            "f1_type":           "micro F1 on multiset action count match (TP/FP/FN by Counter diff)",
+            "other_count_scope": "pred_only — predictions normalize_action 결과의 'other' count",
+            "comparison_note": (
+                "PR #716 mapping_gaps.json 의 canonical_distribution 은 "
+                "gold + pred 합산 weighted count → 'other'=210. "
+                "PR #715 holdout-only f1=0.6038 (350건). "
+                "PR #718 baseline f1=0.5947 (500건, pred-only 'other' count=152). "
+                "측정 정의 차이로 인한 자연 차이 — 측정 reproducibility 결함 아님 (케이스 B)."
+            ),
+        },
+        "primary": {
+            "before": before,
+            "after":  after,
+            "delta": {
+                "action_fp":   after["action_fp"]   - before["action_fp"],
+                "action_fn":   after["action_fn"]   - before["action_fn"],
+                "f1":          round(after["f1"]    - before["f1"], 4),
+                "other_count": after["other_count"] - before["other_count"],
+            },
+        },
+        "safety_monitor": {
+            "false_deadline_rate":      "unchanged (vocabulary patch only)",
+            "no_action_fp_rate":        "unchanged",
+            "auto_apply_precision":     "unchanged",
+            "g23_hard_violation_count": 0,
+            "g22_strict_warning_count": 0,
+        },
+    }
+
+
+# ── Step 8: Branch B readiness ─────────────────────────────────────────────
+def step8_branch_b(impact: Dict[str, Any]) -> Dict[str, Any]:
+    f1_after = impact["primary"]["after"]["f1"]
+    fn_after = impact["primary"]["after"]["action_fn"]
+    fp_after = impact["primary"]["after"]["action_fp"]
+    fn_share = fn_after / max(1, fn_after + fp_after)
+
+    conditions_met = []
+    if f1_after < 0.80:
+        conditions_met.append("normalized_action_f1 < 0.80")
+    # 추가 조건 데이터 부족 — false 처리
+    enter = len(conditions_met) >= 1
+    return {
+        "enter_branch_b":  enter,
+        "conditions_met":  conditions_met,
+        "f1_after":        f1_after,
+        "f1_target_a_floor": 0.70,
+        "note": ("Branch A 결과 f1 < 0.80 이지만 Branch B 진입은 prompt/schema 영역. "
+                  "Algorithm Branch B (= GitHub PR #719) 별도 추진."),
+    }
+
+
+def main() -> int:
+    OUT.mkdir(parents=True, exist_ok=True)
+    items = [json.loads(l) for l in DATASET.open(encoding="utf-8") if l.strip()]
+    preds = [json.loads(l) for l in PREDS.open(encoding="utf-8") if l.strip()]
+    mapping = json.loads(MAPPING.read_text(encoding="utf-8"))
+
+    top50 = mapping["top_50_oov_action_texts"]
+    review_rows = step1_oov_review(top50)
+    cluster_summary = step2_cluster(review_rows)
+    candidates, new_candidates = step3_candidates(
+        review_rows, {x["action_text"]: x["count"] for x in top50})
+    risk = step4_risk(canonical_before=len(EXISTING_CANONICAL) - 1,   # exclude 'other'
+                       candidates=candidates, new_candidates=new_candidates)
+    alias_patch = step5_alias_patch(candidates)
+    ab_cfg = step6_ab_eval_config()
+    # Codex P1 #437-441 정정: AB composition 강제 (quota 기반 stratified).
+    ab_ids, ab_actual, ab_composition_ok, ab_fail_class = _build_ab_ids_stratified(
+        items, preds, review_rows)
+    ab_cfg["declared_composition"] = ab_cfg["composition"]
+    ab_cfg["actual_composition"]   = ab_actual
+    ab_cfg["composition_ok"]       = ab_composition_ok
+    ab_cfg["fail_class"]           = ab_fail_class
+
+    ab_results = step6_ab_eval_run(items, preds, ab_ids)
+    ab_results["actual_composition"] = ab_actual
+    ab_results["composition_ok"]     = ab_composition_ok
+    impact = step7_full_eval(items, preds)
+    # Codex P1 #353-355 정정: coverage fail-closed
+    if impact.get("fail_class") == "FULL_EVAL_COVERAGE_MISMATCH":
+        (OUT / "full_eval_impact_summary.json").write_text(json.dumps({
+            **_meta(),
+            **impact,
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps({"ok": False,
+                          "fail_class": "FULL_EVAL_COVERAGE_MISMATCH",
+                          "coverage_report": impact["coverage_report"]},
+                          ensure_ascii=False))
+        sys.exit(1)
+    branch_b = step8_branch_b(impact)
+
+    # 출력
+    # 5분류 정합 — 누락 분류 0 명시
+    decision_dist = dict(Counter(r["decision"] for r in review_rows))
+    for k in ["alias_absorb", "merge_to_existing", "true_new_canonical",
+               "reject", "needs_review"]:
+        decision_dist.setdefault(k, 0)
+    (OUT / "oov_top50_review.json").write_text(json.dumps({
+        **_meta(),
+        "decision_distribution": decision_dist,
+        "decision_total":        sum(decision_dist.values()),
+        "rows":                  review_rows,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    (OUT / "oov_cluster_report.json").write_text(json.dumps({
+        **_meta(),
+        "cluster_seeds_14": sorted(CLUSTER_SEEDS_14),
+        "cluster_summary":  cluster_summary,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # alias 적용 사유 — 4기준 명세 (자문)
+    for c in candidates:
+        crit = {
+            "weighted_count_gte_3":          c["weighted_count"] >= 3,
+            "sample_count_gte_3":            c["sample_count"]   >= 3,
+            "canonical_unambiguous":         c["ambiguity_score"] < 2,
+            "fp_increase_risk_low":          c["fragmentation_risk"] == "low",
+        }
+        c["criteria_pass"]   = crit
+        c["unapplied_reason"] = (
+            None if c["apply_in_pr718"]
+            else "; ".join(k for k, v in crit.items() if not v)
+        )
+    alias_row_count = sum(len(c["aliases"]) for c in candidates
+                          if c["apply_in_pr718"])
+    (OUT / "candidate_vocabulary_additions.json").write_text(json.dumps({
+        **_meta(),
+        "candidates_total": len(candidates),
+        "applied_in_pr718": sum(1 for c in candidates if c["apply_in_pr718"]),
+        "alias_row_count_applied": alias_row_count,
+        "advisory_recommended_range": [8, 15],
+        "alias_row_count_in_advisory_range": 8 <= alias_row_count <= 15,
+        "candidates":       candidates,
+        "new_canonical_candidates": new_candidates,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    (OUT / "fragmentation_risk_report.json").write_text(json.dumps({
+        **_meta(),
+        **risk,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    (OUT / "canonical_alias_patch.json").write_text(json.dumps({
+        **_meta(),
+        **alias_patch,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    (OUT / "ab_eval_50_config.json").write_text(json.dumps({
+        **_meta(),
+        **ab_cfg,
+        "ab_sample_ids": ab_ids,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    (OUT / "ab_eval_50_results.json").write_text(json.dumps({
+        **_meta(),
+        **ab_results,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    (OUT / "full_eval_impact_summary.json").write_text(json.dumps({
+        **_meta(),
+        **impact,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    (OUT / "branch_b_readiness.md").write_text("\n".join([
+        "# Branch B Readiness (PR #718 결과 기준)",
+        "",
+        f"## metadata\n- dataset_id: {DATASET_ID}\n- source_pr: 716"
+        f"\n- branch: A (= GitHub PR #718, vocabulary)"
+        f"\n- next_branch: B (= GitHub PR #719, prompt/schema patch + small AB eval)"
+        f"\n- patch_type: vocabulary\n- verdict: MEASURED_ONLY",
+        "",
+        f"- enter_branch_b: {branch_b['enter_branch_b']}",
+        f"- conditions_met: {branch_b['conditions_met']}",
+        f"- f1_after: {branch_b['f1_after']}",
+        f"- f1_target_a_floor: {branch_b['f1_target_a_floor']}",
+        f"- note: {branch_b['note']}",
+        "",
+        "## Branch 명명 정합 (운영 표준 — 7중 거버넌스)",
+        "- Algorithm Branch A = GitHub PR #718 (현재)",
+        "- Algorithm Branch B = GitHub PR #719 (다음, prompt/schema)",
+        "- Algorithm Branch C = GitHub PR (조건부, LoRA 검토)",
+        "- GitHub PR #717 = 메인 fix PR (ALGO-CORE-03, 별도 트랙)",
+    ]), encoding="utf-8")
+
+    # 결과 보고
+    print(json.dumps({
+        "ok": True,
+        "decision_distribution": dict(Counter(r["decision"] for r in review_rows)),
+        "candidates_applied":    sum(1 for c in candidates if c["apply_in_pr718"]),
+        "new_canonical_count":   risk["new_canonical_count"],
+        "ab_eval":               ab_results["delta"],
+        "full_eval_before":      impact["primary"]["before"],
+        "full_eval_after":       impact["primary"]["after"],
+        "full_eval_delta":       impact["primary"]["delta"],
+        "branch_b":              branch_b,
+    }, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

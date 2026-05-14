@@ -1,0 +1,33 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 716,
+  "source_merge_sha": "10109f2b5373d6aabff782e3a50071a00415fc56",
+  "branch": "A",
+  "patch_type": "vocabulary",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-14T23:04:09.352569+00:00",
+  "total_samples": 500,
+  "sample_size": 50,
+  "A_current": {
+    "action_fp": 26,
+    "action_fn": 5,
+    "other": 28
+  },
+  "B_patched": {
+    "action_fp": 26,
+    "action_fn": 5,
+    "other": 10
+  },
+  "delta": {
+    "action_fp": 0,
+    "action_fn": 0,
+    "other": -18
+  },
+  "actual_composition": {
+    "fp_fn_high_risk": 20,
+    "mapping_gap": 15,
+    "parser_vs_llm_disagreement": 10,
+    "deadline_monitor": 5
+  },
+  "composition_ok": true
+}

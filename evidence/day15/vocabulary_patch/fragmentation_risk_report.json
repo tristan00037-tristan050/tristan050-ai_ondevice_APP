@@ -1,0 +1,57 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 716,
+  "source_merge_sha": "10109f2b5373d6aabff782e3a50071a00415fc56",
+  "branch": "A",
+  "patch_type": "vocabulary",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-14T23:04:09.352317+00:00",
+  "total_samples": 500,
+  "canonical_before": 14,
+  "canonical_after": 14,
+  "new_canonical_count": 0,
+  "alias_added_count": 3,
+  "high_ambiguity_rejected_count": 0,
+  "risk_pairs": [
+    {
+      "pair": "send_vs_share",
+      "risk": "low",
+      "mitigation": "send=발송, share=배포 의미 분리"
+    },
+    {
+      "pair": "send_vs_reply",
+      "risk": "low",
+      "mitigation": "send=outbound, reply=요청 응답"
+    },
+    {
+      "pair": "review_vs_confirm",
+      "risk": "medium",
+      "mitigation": "confirm aliases require factual check evidence"
+    },
+    {
+      "pair": "organize_vs_summarize",
+      "risk": "low",
+      "mitigation": "summarize=요약, organize=분류"
+    },
+    {
+      "pair": "organize_vs_prepare_document",
+      "risk": "low",
+      "mitigation": "prepare_document=작성, organize=정리"
+    },
+    {
+      "pair": "revise_vs_update",
+      "risk": "low",
+      "mitigation": "update absorbed into revise alias"
+    },
+    {
+      "pair": "submit_vs_upload",
+      "risk": "low",
+      "mitigation": "upload=파일 업로드, submit=제출/등록/머지"
+    },
+    {
+      "pair": "schedule_vs_follow_up",
+      "risk": "low",
+      "mitigation": "schedule=일정 조율, follow_up=후속 작업"
+    }
+  ]
+}
