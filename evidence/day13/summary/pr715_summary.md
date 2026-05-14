@@ -1,7 +1,7 @@
 # PR #715 — Calibration + Auto-apply Threshold Rework Summary
 
 ## verdict
-MEASURED_ONLY (PR #715 범위, PROCEED 판정 절대 금지 — PR #718 영역)
+MEASURED_ONLY (PR #715 범위, 최종 승인 판정 절대 금지 — PR #718 영역)
 
 ## Source
 - PR #714 merge SHA: 1632c0c7c421e3d814fa935ff542c570bd72c41c
@@ -23,6 +23,6 @@ MEASURED_ONLY (PR #715 범위, PROCEED 판정 절대 금지 — PR #718 영역)
 
 ## Tier 1~4 (holdout 350)
 - Tier 1 Hard Safety: verifier_err=0 / fd=0.0171 / na_fp=0.0163 / g22=0 / g23=0
-- Tier 2 Auto-apply:  precision=0.0812 / recall=1.0
+- Tier 2 Auto-apply:  precision=0.0789 / recall=0.9474
 - Tier 3 Extraction:  schema=1.0 / masa=0.9048 / naf1=0.6038 / dl_f1=0.8211
 - Tier 4 Calibration: action_ece=0.5186 / intent_ece=0.2548

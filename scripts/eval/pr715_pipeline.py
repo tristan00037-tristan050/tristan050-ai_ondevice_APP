@@ -149,16 +149,20 @@ def compute_candidate(intent_cal: float, action_cal: float,
 
 def evaluate_threshold(rows: List[Tuple[Dict, Dict]],
                        intent_th: float, action_th: float) -> Dict[str, Any]:
-    """rows = [(gold, pred_with_calibrated)]. returns precision/recall + counts."""
+    """rows = [(gold, prediction_record)]. record = {pred, verifier_error_count, ...}.
+
+    P1 정정 (옵션 A): record 전체 전달 → record["pred"] + record["verifier_error_count"] 정합.
+    """
     tp = fp = fn = tn = 0
     pred_auto_true = 0
     gold_auto_true = 0
-    for gold, pred in rows:
+    for gold, rec in rows:
+        pred = rec["pred"]
         ic = pred.get("intent_confidence_calibrated", 0.0)
         ac = pred.get("action_confidence_calibrated", 0.0)
         cand = compute_candidate(ic, ac, intent_th, action_th, pred)
-        # verifier errors 가정: predictions 의 verifier_error_count 사용
-        verr = pred.get("verifier_error_count", 0)
+        # P1 정정: verifier_error_count 는 record top-level 에 있음 (pred 내부 X)
+        verr = rec.get("verifier_error_count", 0)
         final_auto = cand and verr == 0
         gold_a = bool(gold.get("auto_apply_allowed"))
         if final_auto:    pred_auto_true += 1
@@ -218,7 +222,8 @@ def compute_metrics_13(rows: List[Tuple[Dict, Dict]],
     intent_confs: List[Tuple[float, int]] = []
     action_confs: List[Tuple[float, int]] = []
 
-    for gold, pred in rows:
+    for gold, rec in rows:
+        pred = rec["pred"]  # P1 정정 (옵션 A): record 전체 전달
         if pred.get("schema_valid"):
             schema_valid += 1
         gi = gold.get("intent_type")
@@ -246,7 +251,8 @@ def compute_metrics_13(rows: List[Tuple[Dict, Dict]],
         ic = pred.get("intent_confidence_calibrated", 0.0)
         ac = pred.get("action_confidence_calibrated", 0.0)
         cand = compute_candidate(ic, ac, intent_th, action_th, pred)
-        verr = pred.get("verifier_error_count", 0)
+        # P1 정정: verifier_error_count 는 record top-level
+        verr = rec.get("verifier_error_count", 0)
         final_auto = cand and verr == 0
         ga = bool(gold.get("auto_apply_allowed"))
         if final_auto:    pred_auto += 1
@@ -435,12 +441,14 @@ def main() -> int:
     FROZEN_ACTION = (-3.15, 0.46)
 
     # fit set rows
-    fit_rows  = [(items_by_id[sid], preds_by_id[sid]["pred"]) for sid in fit_ids]
-    hold_rows = [(items_by_id[sid], preds_by_id[sid]["pred"]) for sid in holdout_ids]
+    # P1 정정 (옵션 A): record 전체 전달 — rec["pred"] + rec["verifier_error_count"]
+    fit_rows  = [(items_by_id[sid], preds_by_id[sid]) for sid in fit_ids]
+    hold_rows = [(items_by_id[sid], preds_by_id[sid]) for sid in holdout_ids]
 
     # Variant A: frozen baseline (PR #713 threshold intent 0.75 / action 0.85)
     def apply_cal(rows, intent_AB, action_AB):
-        for _, p in rows:
+        for _, rec in rows:
+            p = rec["pred"]
             p["intent_confidence_calibrated"] = platt_sigmoid(
                 p.get("raw_intent_confidence", 0), *intent_AB)
             p["action_confidence_calibrated"] = platt_sigmoid(
@@ -664,7 +672,7 @@ def main() -> int:
         f"""# PR #715 — Calibration + Auto-apply Threshold Rework Summary
 
 ## verdict
-MEASURED_ONLY (PR #715 범위, PROCEED 판정 절대 금지 — PR #718 영역)
+MEASURED_ONLY (PR #715 범위, 최종 승인 판정 절대 금지 — PR #718 영역)
 
 ## Source
 - PR #714 merge SHA: 1632c0c7c421e3d814fa935ff542c570bd72c41c
@@ -705,9 +713,14 @@ MEASURED_ONLY (PR #715 범위, PROCEED 판정 절대 금지 — PR #718 영역)
 - parser vs LLM disagreement
 """, encoding="utf-8")
 
-    # ── 결과 출력 ──
+    # ── P2 정정: calibration hard gate fail-closed ──
+    # leakage_report.fail_class 가 None 이 아니면 exit 1 + ok=false
+    fail_class = leakage.get("fail_class")
+    ok_final   = (fail_class is None)
+
     print(json.dumps({
-        "ok":               True,
+        "ok":               ok_final,
+        "fail_class":       fail_class,
         "fit_size":         len(fit_ids),
         "holdout_size":     len(holdout_ids),
         "fit_auto_true":    fit_auto_true,
@@ -726,6 +739,8 @@ MEASURED_ONLY (PR #715 범위, PROCEED 판정 절대 금지 — PR #718 영역)
         "selected_thresholds": [final_m["selected_intent_threshold"],
                                 final_m["selected_action_threshold"]],
     }, ensure_ascii=False, indent=2))
+    if not ok_final:
+        sys.exit(1)
     return 0
 
 
