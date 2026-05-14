@@ -36,6 +36,9 @@
 10. parser hint: 행동동사 list 확장 (parser_vs_llm 분석 후)
 
 ## PR #716 최종 결론
-- safe_to_patch_prompt: true (위 1~3,6,8,9 후보 안전)
-- safe_to_patch_schema: true (위 4,5 후보 안전, 별도 PR 영역)
-- requires_model_training: false (현 단계 prompt/schema/vocabulary 우선)
+- safe_to_patch_prompt: true (위 1~3,6,8,9 후보 안전, PR #717B 영역)
+- safe_to_patch_schema: true (위 4,5 후보 안전, 동일 PR #717B 영역)
+- requires_model_training: false (PR #717C 영역, 현 단계 미진입)
+- vocabulary 보완은 PR #717A 영역
+- deadline 한정 patch 는 PR #717D 영역
+- auto_apply gate 강화는 PR #717E 영역

@@ -3,7 +3,7 @@
   "source_pr": 715,
   "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T06:40:54.788477+00:00",
+  "generated_at": "2026-05-14T06:53:06.865816+00:00",
   "total_samples": 500,
   "record_level": {
     "total_record_disagreement": 214,

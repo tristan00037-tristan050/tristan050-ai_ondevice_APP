@@ -37,7 +37,7 @@
 - OOV unique action_texts: 77
 
 ## Additional evidence counts
-- fp_auto_apply_cases:     0
-- fn_auto_apply_cases:     27
+- fp_auto_apply_cases:     294
+- fn_auto_apply_cases:     1
 - no_action_fp_cases:      21
 - verifier_interaction:    29

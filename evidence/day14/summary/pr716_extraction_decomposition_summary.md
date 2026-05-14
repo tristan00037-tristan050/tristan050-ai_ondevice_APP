@@ -22,8 +22,8 @@
 ### Prompt/schema candidates: 10 (적용 금지)
 
 ## 3. 메인 추가 evidence 4종
-- fp_auto_apply: 0
-- fn_auto_apply: 27
+- fp_auto_apply: 294
+- fn_auto_apply: 1
 - no_action_fp: 21
 - verifier_interaction: 29
 
@@ -36,12 +36,14 @@
 
 ## 5. PR #717 분기 추천
 - primary cause: prompt
-- branch: PR #717C — prompt patch first
+- branch: PR #717B — prompt/schema patch + small AB eval
 
 ## 6. 결론
-- safe_to_patch_prompt: true
-- safe_to_patch_schema: true (별도 PR #717D 영역)
-- requires_model_training: false (현 단계 prompt/schema/vocabulary 우선)
+- safe_to_patch_prompt: true (PR #717B 영역)
+- safe_to_patch_schema: true (PR #717B 영역, 동일 분기에 포함)
+- requires_model_training: false (PR #717C 영역, 현 단계 미진입)
+- deadline classifier/verifier patch (PR #717D, deadline 오류 한정)
+- auto_apply gate stricter (PR #717E, precision floor 강제 시)
 
 ## 7. verdict 권고
 MEASURED_ONLY (PR #716 범위, 공식 판정은 PR #718 단계에서 진행)

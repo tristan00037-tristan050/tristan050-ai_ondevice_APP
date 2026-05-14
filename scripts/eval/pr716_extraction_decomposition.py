@@ -26,6 +26,54 @@ OUT     = ROOT / "evidence/day14"
 MERGE_SHA = "194d07eec4a196df65f9801f5ad35ed67c60520b"
 DATASET_ID = "card1_evalset_v1_1_500"
 
+# PR #715 final_auto 결정 재현 (frozen baseline = selected variant)
+import math
+FROZEN_INTENT = (-4.24, 0.97)
+FROZEN_ACTION = (-3.15, 0.46)
+INTENT_TH = 0.75
+ACTION_TH = 0.85
+
+
+def _platt(z: float, A: float, B: float) -> float:
+    return 1.0 / (1.0 + math.exp(A * z + B))
+
+
+def _derive_signals(pred: Dict[str, Any]) -> Tuple[float, float]:
+    """PR #715 derive_signals 와 동일 (raw 0.5 단일값 보완)."""
+    schema_v   = 1.0 if pred.get("schema_valid") else 0.0
+    base_errs  = len(pred.get("base_verifier_errors") or [])
+    no_errs    = 1.0 if base_errs == 0 else 0.0
+    not_na     = 1.0 if pred.get("intent_type") != "NO_ACTION" else 0.0
+    has_action = 1.0 if (pred.get("actions") or []) else 0.0
+    intent_signal = (0.3 * schema_v + 0.3 * no_errs +
+                     0.2 * not_na + 0.2 * has_action)
+    actions = pred.get("actions") or []
+    if not actions:
+        action_signal = 0.0
+    else:
+        evid_count = sum(1 for a in actions
+                         if a.get("evidence") and a.get("action_text"))
+        action_signal = evid_count / max(1, len(actions))
+        for e in (pred.get("base_verifier_errors") or []):
+            if "evidence_not_in_source" in e:
+                action_signal = max(0.0, action_signal - 0.2)
+    return intent_signal, action_signal
+
+
+def _pr715_final_auto(pred: Dict[str, Any], verr: int) -> Tuple[bool, bool, float, float]:
+    """PR #715 frozen baseline final_auto 재현.
+
+    return (candidate, final_auto, intent_cal, action_cal)
+    """
+    isig, asig = _derive_signals(pred)
+    ic = _platt(isig, *FROZEN_INTENT)
+    ac = _platt(asig, *FROZEN_ACTION)
+    cand = (ic >= INTENT_TH and ac >= ACTION_TH
+            and bool(pred.get("action_required"))
+            and pred.get("intent_type") in {"REQUEST", "COMMAND"})
+    final_auto = cand and verr == 0
+    return cand, final_auto, ic, ac
+
 # ── canonical normalized_action vocabulary (참조) ─────────────────────────
 CANONICAL = {
     "send", "share", "reply", "review", "summarize", "organize",
@@ -273,30 +321,46 @@ def run_decomposition() -> Dict[str, Any]:
                     "sample_id": sid, "gold": gv, "pred": pv,
                 })
 
-        # === auto_apply 케이스 분리 ===
-        ic = pred.get("intent_confidence_calibrated", 0)
-        ac = pred.get("action_confidence_calibrated", 0)
-        if pa and not ga:
-            # FP auto_apply
+        # === auto_apply 케이스 분리 (PR #715 final_auto 재현 기반) ===
+        # 정의: PR #715 frozen baseline final_auto = candidate(intent/action cal th)
+        # AND verifier_error_count == 0. precision 0.0789 / recall 0.9474 측정값과 정합.
+        cand, final_auto, ic, ac = _pr715_final_auto(pred, verr)
+        if final_auto and not ga:
+            # FP auto_apply: PR #715 precision 실패 케이스
             link = "FP-D" if gi == "NO_ACTION" else \
                    ("FP-E" if gi in {"REPORT", "QUESTION"} else "FP-A/C")
             fp_auto_apply_cases.append({
                 "sample_id": sid, "text": text[:60],
-                "gold_auto_apply": ga, "pred_auto_apply": pa,
-                "intent_conf": ic, "action_conf": ac,
-                "fail_reason": f"intent_gold={gi} intent_pred={pi}",
-                "linked_fp_type": link,
+                "gold_auto_apply":      ga,
+                "pred_auto_apply":      final_auto,   # PR #715 final
+                "candidate":            cand,
+                "intent_conf":          round(ic, 4),
+                "action_conf":          round(ac, 4),
+                "verifier_error_count": verr,
+                "fail_reason":          f"intent_gold={gi} intent_pred={pi}",
+                "linked_fp_type":       link,
             })
-        if (not pa) and ga:
+        if (not final_auto) and ga:
+            # FN auto_apply: PR #715 recall 실패 케이스
             link = "FN-A" if g_n == 1 and p_n == 0 else \
                    ("FN-C" if g_n >= 2 and p_n == 0 else "FN-B/D/E")
+            miss_reason = (
+                f"verifier_err={verr}"   if verr > 0 else
+                "intent_cal_below_th"    if ic < INTENT_TH else
+                "action_cal_below_th"    if ac < ACTION_TH else
+                "intent_not_in_safe_set" if pred.get("intent_type") not in {"REQUEST", "COMMAND"} else
+                "action_required_false"
+            )
             fn_auto_apply_cases.append({
                 "sample_id": sid, "text": text[:60],
-                "gold_auto_apply": ga, "pred_auto_apply": pa,
-                "intent_conf": ic, "action_conf": ac,
-                "miss_reason": (f"verifier_err={verr}" if verr > 0
-                                  else "candidate_threshold_fail"),
-                "linked_fn_type": link,
+                "gold_auto_apply":      ga,
+                "pred_auto_apply":      final_auto,
+                "candidate":            cand,
+                "intent_conf":          round(ic, 4),
+                "action_conf":          round(ac, 4),
+                "verifier_error_count": verr,
+                "miss_reason":          miss_reason,
+                "linked_fn_type":       link,
             })
 
         # === no_action FP cases ===
@@ -306,18 +370,19 @@ def run_decomposition() -> Dict[str, Any]:
                     "sample_id": sid, "text": text[:60],
                     "pred_action": a.get("action_text"),
                     "pred_normalized_action": normalize_action(a.get("action_text", "")),
-                    "intent_conf": ic, "action_conf": ac,
+                    "intent_conf": round(ic, 4),
+                    "action_conf": round(ac, 4),
                     "fp_subtype": "FP-D",
                 })
 
-        # === verifier interaction (P1 정정 효과) ===
+        # === verifier interaction (P1 정정 효과, PR #715 final_auto 정합) ===
         if verr > 0:
             verifier_interaction_cases.append({
                 "sample_id": sid,
                 "verifier_error_count": verr,
-                "gold_auto_apply": ga,
-                "pred_auto_apply_field": pa,
-                "final_auto_apply": pa and verr == 0,
+                "gold_auto_apply":      ga,
+                "candidate":            cand,
+                "final_auto_apply":     final_auto,   # PR #715 정의
                 "verifier_block_reason": "verifier_error_count_gt_zero",
             })
 
@@ -526,9 +591,12 @@ def run_decomposition() -> Dict[str, Any]:
         "10. parser hint: 행동동사 list 확장 (parser_vs_llm 분석 후)",
         "",
         "## PR #716 최종 결론",
-        "- safe_to_patch_prompt: true (위 1~3,6,8,9 후보 안전)",
-        "- safe_to_patch_schema: true (위 4,5 후보 안전, 별도 PR 영역)",
-        "- requires_model_training: false (현 단계 prompt/schema/vocabulary 우선)",
+        "- safe_to_patch_prompt: true (위 1~3,6,8,9 후보 안전, PR #717B 영역)",
+        "- safe_to_patch_schema: true (위 4,5 후보 안전, 동일 PR #717B 영역)",
+        "- requires_model_training: false (PR #717C 영역, 현 단계 미진입)",
+        "- vocabulary 보완은 PR #717A 영역",
+        "- deadline 한정 patch 는 PR #717D 영역",
+        "- auto_apply gate 강화는 PR #717E 영역",
     ]
     (sub / "prompt_schema_patch_candidates.md").write_text(
         "\n".join(candidates_md), encoding="utf-8")
@@ -662,15 +730,22 @@ def run_decomposition() -> Dict[str, Any]:
         for c in causes:
             cause_totals[c] += r["count"] * r.get(c, 0)
     primary_cause = cause_totals.most_common(1)[0][0] if cause_totals else "prompt"
+    # 알고리즘 자문 decision tree (PR #717 분기):
+    #   #717A = normalized_action vocabulary patch
+    #   #717B = prompt/schema patch + small AB eval
+    #   #717C = Qwen3-4B LoRA 검토
+    #   #717D = deadline classifier/verifier patch
+    #   #717E = auto_apply gate stricter
     branch_map = {
-        "prompt":     "PR #717C — prompt patch first",
-        "schema":     "PR #717D — schema patch",
-        "vocabulary": "PR #717B — vocabulary expansion",
-        "parser":     "PR #717C — parser-aware prompt",
-        "model":      "PR #717E — model training (LoRA only if required)",
-        "gold":       "PR #717A — gold review (defer model touch)",
+        "prompt":     "PR #717B — prompt/schema patch + small AB eval",
+        "schema":     "PR #717B — prompt/schema patch + small AB eval",
+        "vocabulary": "PR #717A — normalized_action vocabulary patch",
+        "parser":     "PR #717B — prompt/schema patch + small AB eval",
+        "model":      "PR #717C — Qwen3-4B LoRA 검토",
+        "gold":       "PR #717A — normalized_action vocabulary patch",
     }
-    pr717_branch = branch_map.get(primary_cause, "PR #717A — defer")
+    pr717_branch = branch_map.get(primary_cause,
+                                    "PR #717B — prompt/schema patch + small AB eval")
 
     (sum_dir / "pr716_extraction_decomposition_summary.md").write_text("\n".join([
         "# PR #716 Extraction Error Decomposition Summary",
@@ -707,9 +782,11 @@ def run_decomposition() -> Dict[str, Any]:
         f"- branch: {pr717_branch}",
         "",
         "## 6. 결론",
-        "- safe_to_patch_prompt: true",
-        "- safe_to_patch_schema: true (별도 PR #717D 영역)",
-        "- requires_model_training: false (현 단계 prompt/schema/vocabulary 우선)",
+        "- safe_to_patch_prompt: true (PR #717B 영역)",
+        "- safe_to_patch_schema: true (PR #717B 영역, 동일 분기에 포함)",
+        "- requires_model_training: false (PR #717C 영역, 현 단계 미진입)",
+        "- deadline classifier/verifier patch (PR #717D, deadline 오류 한정)",
+        "- auto_apply gate stricter (PR #717E, precision floor 강제 시)",
         "",
         "## 7. verdict 권고",
         "MEASURED_ONLY (PR #716 범위, 공식 판정은 PR #718 단계에서 진행)",
