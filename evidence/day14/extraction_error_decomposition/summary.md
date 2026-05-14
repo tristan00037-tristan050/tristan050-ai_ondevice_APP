@@ -6,6 +6,8 @@
 - merge_sha: 194d07eec4a196df65f9801f5ad35ed67c60520b
 - verdict: MEASURED_ONLY
 - total_samples: 500
+- head_sha_aligned: 0072c81a63733101d9bb8151c45fc133698301ce
+- alignment_cycle: 1차 정정 후
 
 ## Action FP — total 259
 - FP-E_report_question_as_action: 113 (22.6%)

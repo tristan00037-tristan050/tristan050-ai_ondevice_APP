@@ -6,6 +6,8 @@
 - PR #715 merge SHA: 194d07eec4a196df65f9801f5ad35ed67c60520b
 - dataset_id: card1_evalset_v1_1_500
 - total_samples: 500
+- head_sha_aligned: 0072c81a63733101d9bb8151c45fc133698301ce
+- alignment_cycle: 1차 정정 후
 
 ## 2. 6 산출물 핵심 (top 3)
 ### Action FP
