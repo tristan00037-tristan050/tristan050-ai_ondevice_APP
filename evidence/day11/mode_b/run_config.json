@@ -1,0 +1,12 @@
+{
+  "mode": "B",
+  "merge_sha": "3b7ab991ff19f45c14aa62d65ed43f325a5e25a3",
+  "dataset_id": "card1_evalset_v1_1_500",
+  "dataset_file": "tests/fixtures/card1_evalset_v1_1_500.jsonl",
+  "n_input": 500,
+  "limit": null,
+  "temperature": 0,
+  "grammar": "json_schema",
+  "started_at": "2026-05-14T00:08:16.921073+00:00",
+  "ended_at": "2026-05-14T00:28:42.621253+00:00"
+}

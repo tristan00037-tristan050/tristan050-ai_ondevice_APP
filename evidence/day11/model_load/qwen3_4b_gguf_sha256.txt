@@ -1,0 +1,1 @@
+1ce4b49ad9438433b504f427a58d1750e53f79fd780a741a2132b623ec234ffb  /Users/kimsunghoon/Desktop/butler-data/Butler모델/qwen3-4b-gguf/qwen3-4b-q4_k_m.gguf

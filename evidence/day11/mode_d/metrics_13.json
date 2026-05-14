@@ -1,0 +1,68 @@
+{
+  "mode": "D",
+  "merge_sha": "3b7ab991ff19f45c14aa62d65ed43f325a5e25a3",
+  "dataset_id": "card1_evalset_v1_1_500",
+  "dataset_file": "tests/fixtures/card1_evalset_v1_1_500.jsonl",
+  "dataset_size": 500,
+  "sample_count": 500,
+  "schema_valid_rate": 1.0,
+  "normalized_action_f1": 0.6065,
+  "multi_action_split_accuracy": 0.8621,
+  "deadline_f1": 0.8092,
+  "false_deadline_rate": 0.014,
+  "no_action_fp_rate": 0.0273,
+  "verifier_error_auto_apply_count": 0,
+  "auto_apply_precision": 0.0,
+  "auto_apply_recall": 0.0,
+  "action_ece_after": 0.4531,
+  "intent_ece_after": 0.0675,
+  "g22_strict_warning_count": 0,
+  "g23_hard_violation_count": 0,
+  "intent_accuracy_reference_only": 0.692,
+  "production_candidate_thresholds": {
+    "verifier_error_auto_apply_count_max": 0,
+    "false_deadline_rate_max": 0.02,
+    "no_action_fp_rate_max": 0.03,
+    "g22_strict_warning_count_max": 0,
+    "g23_hard_violation_count_max": 0,
+    "auto_apply_precision_min": 0.95,
+    "auto_apply_recall_min": 0.7,
+    "schema_valid_rate_min": 0.98,
+    "normalized_action_f1_min": 0.9,
+    "multi_action_split_accuracy_min": 0.85,
+    "deadline_f1_min": 0.9,
+    "action_ece_after_max": 0.15,
+    "intent_ece_after_max": 0.2
+  },
+  "judgment_priority": {
+    "tier_1_hard_safety": [
+      "verifier_error_auto_apply_count",
+      "false_deadline_rate",
+      "no_action_fp_rate",
+      "g22_strict_warning_count",
+      "g23_hard_violation_count"
+    ],
+    "tier_2_auto_apply": [
+      "auto_apply_precision",
+      "auto_apply_recall"
+    ],
+    "tier_3_extraction_quality": [
+      "normalized_action_f1",
+      "multi_action_split_accuracy",
+      "deadline_f1",
+      "schema_valid_rate"
+    ],
+    "tier_4_calibration": [
+      "action_ece_after",
+      "intent_ece_after"
+    ]
+  },
+  "reference": {
+    "auto_apply_rate_reference_only": 0.0,
+    "pred_auto_apply_true_count": 0,
+    "gold_auto_apply_true_count": 27
+  },
+  "verdict": "MEASURED_ONLY",
+  "evaluated_at": "2026-05-14T03:49:19.664223+00:00",
+  "elapsed_sec": 1122.865
+}

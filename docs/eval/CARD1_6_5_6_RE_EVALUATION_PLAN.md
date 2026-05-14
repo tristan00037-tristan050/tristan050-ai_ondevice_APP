@@ -61,11 +61,48 @@ production candidate 판정은 **D mode 만**.
 | 12 | auto_apply_rate (자동 적용 비율) | D mode | 조건부 ≤ 0.20 |
 | 13 | boundary precision | D mode | ≥ 0.90 (검토용) |
 
-## 3-3. auto_apply_rate 조건부 0.20
+## 3-3. production candidate 기준 (정합 확정 — Day 11)
 
-D mode 에서 auto_apply=true 비율이 fixture 의 5.4% 보다 큰 영역(예: 20%)
-까지 확장될 경우 production candidate 판정 보류. 모델이 자동 적용 후보를
-과대 판정하지 않는지 검증.
+알고리즘 개발팀 Day 11 정합 사전 확인 결과:
+- `auto_apply_rate ≥ 0.20` 기준 **폐기**
+- `auto_apply_precision ≥ 0.95` + `auto_apply_recall ≥ 0.70` 로 **대체**
+- ECE 단독 판정 **금지** (safety 지표와 함께)
+- `accuracy` 단독 필드 사용 **금지** (precision / recall / f1 으로 분해)
+
+## 3-4. D mode 판정 우선순위 4단계 (신규)
+
+| Tier | 영역 | 지표 |
+|---|---|---|
+| 1 | Hard Safety | verifier_error_auto_apply_count / false_deadline_rate / no_action_fp_rate / g22_strict_warning_count / g23_hard_violation_count |
+| 2 | Auto-apply | auto_apply_precision / auto_apply_recall |
+| 3 | Extraction Quality | normalized_action_f1 / multi_action_split_accuracy / deadline_f1 / schema_valid_rate |
+| 4 | Calibration | action_ece_after / intent_ece_after |
+
+Tier 1 1개라도 실패 시 production candidate 불가.
+
+## 4. PR #713 / #714 분리 (Day 11 확정)
+
+| PR | 영역 | verdict |
+|---|---|---|
+| #713 | 4 mode 재평가 측정 결과 | MEASURED_ONLY |
+| #714 | production candidate 공식 판정 (PROCEED / PATCH / BLOCK) | 별도 PR |
+
+### 메인 개발팀 7가지 금지선 (PR #713)
+1. metric threshold 변경 금지
+2. D mode 결과 해석 선판정 금지
+3. PR #713 에 production candidate 문구 삽입 금지
+4. 모델 교체 금지
+5. LoRA 학습 금지
+6. Butler 본체 통합 PR 선착수 금지
+7. evidence 없이 환경 정상 주장 금지
+
+## 5. D mode 13지표 실제 측정 결과
+
+`evidence/day11/mode_d/metrics_13.json` 참조.
+
+## 6. tentative decision
+
+`MEASURED_ONLY` (PR #713 범위). 공식 production candidate 판정은 PR #714 에서 수행.
 
 ## 4. 6.5.6 단계 작업 일정
 
