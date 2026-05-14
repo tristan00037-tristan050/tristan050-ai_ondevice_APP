@@ -1,0 +1,7 @@
+{
+  "intent_A": -2.0,
+  "intent_B": 1.0,
+  "action_A": -9.5,
+  "action_B": 10.0,
+  "n_fit": 150
+}

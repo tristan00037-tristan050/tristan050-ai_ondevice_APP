@@ -1,0 +1,6 @@
+{
+  "method": "platt_sigmoid_grid_search",
+  "fit_size": 150,
+  "intent_target": "intent_exact_match",
+  "action_target": "action_count_match_and_nonempty"
+}
