@@ -77,11 +77,16 @@ def apply_card1_hard_rules(
     schema_valid:     bool,
     base_verifier_errors: List[str],
     duplicate_strict_warning: bool = False,
+    auto_apply_candidate: bool = False,
 ) -> VerifierResult:
     """단일 row 의 V1~V10 적용.
 
-    pred 필드 (필수):
-      - intent_type, action_required, answer_required, auto_apply_allowed
+    Codex P1-2 정정 (옵션 B+C): V8/V9 는 auto_apply_candidate=True 인 경우에만
+    적용. candidate 산출은 외부 (_mode_d_compute_auto_candidate) 에서 calibrated
+    confidence + intent + action_required 기준으로 결정한다.
+
+    pred 필수 필드:
+      - intent_type, action_required, answer_required
       - deadline_type, deadline_is_actionable
       - actions (list of {action_text, evidence})
       - slice_tags (list, 옵션)
@@ -89,12 +94,10 @@ def apply_card1_hard_rules(
     errors: List[str] = []
     detail: List[str] = []
 
-    intent = pred.get("intent_type")
-    ar     = bool(pred.get("action_required"))
-    auto   = bool(pred.get("auto_apply_allowed"))
-    dtype  = pred.get("deadline_type")
-    dact   = bool(pred.get("deadline_is_actionable"))
-    actions = pred.get("actions") or []
+    intent  = pred.get("intent_type")
+    ar      = bool(pred.get("action_required"))
+    dtype   = pred.get("deadline_type")
+    dact    = bool(pred.get("deadline_is_actionable"))
     tags    = set(pred.get("slice_tags") or [])
 
     # V1
@@ -119,27 +122,28 @@ def apply_card1_hard_rules(
         errors.append("V10/DEADLINE_NONACTIONABLE_TRUE")
         detail.append(f"deadline_type={dtype} 인데 deadline_is_actionable=true")
 
-    # V8/V9 — auto_apply 조건
+    # V7/V8/V9 — auto_apply_candidate 인 경우에만 위험 검사 (Codex P1-2 정정)
     blocked = False
-    if auto:
-        # V7 — errors 있으면 auto 금지
-        if errors:
-            errors.append("V7/AUTO_APPLY_WITH_ERRORS")
-            detail.append("auto_apply=true 이지만 verifier errors > 0")
-            blocked = True
-        # V8 — safe intent class
+    if auto_apply_candidate:
+        pre_errors = list(errors)
+        # V8 — gold-equivalent safe intent class
         if intent not in SAFE_INTENT_FOR_AUTO:
-            errors.append("V8/AUTO_APPLY_UNSAFE_INTENT")
+            errors.append("V8/AUTO_APPLY_NOT_GOLD_EQUIVALENT_SAFE_CLASS")
             detail.append(f"intent={intent} 는 auto_apply 허용 클래스가 아님")
             blocked = True
-        # V9 — 위험 작업 키워드/태그
+        # V9 — 위험 작업 태그/키워드
         if tags & RISKY_TAGS:
-            errors.append("V9/AUTO_APPLY_RISKY_TAG")
+            errors.append("V9/AUTO_APPLY_RISKY_TASK_BLOCKED")
             detail.append(f"risky tag: {sorted(tags & RISKY_TAGS)}")
             blocked = True
-        if any(w in (text or "") for w in RISKY_TASK_WORDS):
-            errors.append("V9/AUTO_APPLY_RISKY_WORD")
-            detail.append(f"risky word in text")
+        elif any(w in (text or "") for w in RISKY_TASK_WORDS):
+            errors.append("V9/AUTO_APPLY_RISKY_TASK_BLOCKED")
+            detail.append("risky word in text")
+            blocked = True
+        # V7 — V1~V6/V10 위반 동반 시 차단
+        if pre_errors:
+            errors.append("V7/AUTO_APPLY_WITH_ERRORS")
+            detail.append(f"auto_apply candidate 지만 verifier errors > 0: {pre_errors}")
             blocked = True
 
     return VerifierResult(

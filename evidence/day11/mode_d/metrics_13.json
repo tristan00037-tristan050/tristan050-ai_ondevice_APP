@@ -14,8 +14,8 @@
   "verifier_error_auto_apply_count": 0,
   "auto_apply_precision": 0.0,
   "auto_apply_recall": 0.0,
-  "action_ece_after": 0.4595,
-  "intent_ece_after": 0.0611,
+  "action_ece_after": 0.4531,
+  "intent_ece_after": 0.0675,
   "g22_strict_warning_count": 0,
   "g23_hard_violation_count": 0,
   "intent_accuracy_reference_only": 0.692,
@@ -63,6 +63,6 @@
     "gold_auto_apply_true_count": 27
   },
   "verdict": "MEASURED_ONLY",
-  "evaluated_at": "2026-05-14T01:06:22.742291+00:00",
-  "elapsed_sec": 1102.54
+  "evaluated_at": "2026-05-14T03:49:19.664223+00:00",
+  "elapsed_sec": 1122.865
 }

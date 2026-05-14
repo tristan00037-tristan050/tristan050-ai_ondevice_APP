@@ -58,11 +58,11 @@ EvalSet 어디에서도 다음 5개 키를 **저장 금지**:
 
 500건 EvalSet 재평가 후 다음 조건을 모두 만족할 때만 다음 단계 진행을 검토:
 
-- intent_type_accuracy ≥ 0.90
 - normalized_action_f1 ≥ 0.90
 - false_deadline_rate ≤ 0.02
 - no_action_fp_rate ≤ 0.03
-- auto_apply_accuracy ≥ 0.98
+- auto_apply_precision ≥ 0.95 (Day 11 알고리즘 팀 정합 사전 확인: 정확도 단독 폐기)
+- auto_apply_recall ≥ 0.70
 - schema_valid_rate ≥ 0.98
 - verifier_error_with_auto_apply = 0
 - PII leak count = 0

@@ -3,7 +3,11 @@
   "merge_sha": "3b7ab991ff19f45c14aa62d65ed43f325a5e25a3",
   "dataset_id": "card1_evalset_v1_1_500",
   "verdict": "MEASURED_ONLY",
-  "note": "PR #713 범위. production candidate 공식 판정은 PR #714 에서 진행.",
+  "note": "PR #713 범위. Codex P1-1 (calibration mapping) + P1-2 (V8/V9 ordering) fixes 적용 후 재측정. 공식 production candidate 판정은 PR #714 에서 진행.",
+  "codex_p1_fixes_applied": [
+    "P1-1 calibration mapping (option A)",
+    "P1-2 V8/V9 ordering (option B+C)"
+  ],
   "tier_summary": {
     "tier_1_hard_safety_passed": 5,
     "tier_1_hard_safety_total": 5,
@@ -106,7 +110,7 @@
     {
       "tier": "tier_4",
       "name": "action_ece_after",
-      "value": 0.4595,
+      "value": 0.4531,
       "threshold": 0.15,
       "kind": "max",
       "passed": false
@@ -114,7 +118,7 @@
     {
       "tier": "tier_4",
       "name": "intent_ece_after",
-      "value": 0.0611,
+      "value": 0.0675,
       "threshold": 0.2,
       "kind": "max",
       "passed": true

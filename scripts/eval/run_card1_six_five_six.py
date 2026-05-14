@@ -247,42 +247,50 @@ def _platt_sigmoid(z: float, A: float, B: float) -> float:
 
 
 def _apply_calibration(pred: Dict[str, Any], calibrator: Dict[str, Any]) -> None:
-    """frozen Platt sigmoid 적용 — pred 에 calibrated_* 필드 추가."""
+    """frozen Platt sigmoid 적용 — pred 에 calibrated_* 필드 추가.
+
+    Codex P1-1 정정 (옵션 A): intent → intent Platt, action → action Platt
+    매핑 정합. swap 금지.
+    """
     targets = calibrator.get("targets", {}) if calibrator else {}
-    act = targets.get("action", {})
-    intent = targets.get("intent", {})
+    intent  = targets.get("intent", {})
+    action  = targets.get("action", {})
     pred["intent_confidence_calibrated"] = _platt_sigmoid(
         pred.get("raw_intent_confidence", 0.0),
-        act.get("A", -4.0), act.get("B", 2.0),
+        intent.get("A", -4.0), intent.get("B", 2.0),
     )
     pred["action_confidence_calibrated"] = _platt_sigmoid(
         pred.get("raw_action_confidence", 0.0),
-        intent.get("A", -4.0), intent.get("B", 2.0),
+        action.get("A", -4.0), action.get("B", 2.0),
     )
 
 
-def _mode_d_decide_auto(pred: Dict[str, Any], gold: Dict[str, Any],
-                        verifier_result, calibrator: Dict[str, Any]) -> bool:
-    """D mode auto_apply 결정.
+def _mode_d_compute_auto_candidate(
+    pred: Dict[str, Any], calibrator: Dict[str, Any],
+) -> bool:
+    """Codex P1-2 정정 (옵션 B+C): auto_apply candidate 산출 (verifier 호출 전).
 
-    조건 (V7~V9 통과 후):
-      - verifier errors == 0
-      - intent ∈ SAFE_INTENT_AUTO
-      - 위험 태그/단어 없음 (verifier 통과 시 자동 OK)
-      - calibrated intent confidence ≥ auto_apply_threshold (calibrator)
+    조건:
+      - calibrated intent confidence ≥ threshold.intent
+      - calibrated action confidence ≥ threshold.action
+      - intent_type ∈ {REQUEST, COMMAND} (action 발생 클래스)
+      - action_required = true
+    위험 작업 / safe class 검증은 verifier_card1 V8/V9 에서 수행.
     """
-    if verifier_result.error_count > 0:
-        return False
-    if pred["intent_type"] not in SAFE_INTENT_AUTO:
-        return False
     thr_obj = (calibrator or {}).get("auto_apply_threshold", {})
     if isinstance(thr_obj, dict):
         thr_intent = float(thr_obj.get("intent", 0.75))
         thr_action = float(thr_obj.get("action", 0.85))
     else:
         thr_intent = thr_action = float(thr_obj)
-    return (pred.get("intent_confidence_calibrated", 0.0) >= thr_intent
-            and pred.get("action_confidence_calibrated", 0.0) >= thr_action)
+    intent_conf = float(pred.get("intent_confidence_calibrated", 0.0))
+    action_conf = float(pred.get("action_confidence_calibrated", 0.0))
+    return (
+        intent_conf >= thr_intent
+        and action_conf >= thr_action
+        and bool(pred.get("action_required"))
+        and pred.get("intent_type") in {"REQUEST", "COMMAND"}
+    )
 
 
 def _compute_metrics(predictions: List[Dict[str, Any]], gold_items: List[Dict[str, Any]],
@@ -508,21 +516,26 @@ def run(mode: str, items: List[Dict[str, Any]], out_dir: Path,
         else:
             raise ValueError(f"unknown mode {mode!r}")
 
-        # Mode D: calibration + verifier_card1 + auto_apply 결정
+        # Mode D: calibration → candidate 산출 → verifier (V8/V9 적용) → 최종 결정
+        # Codex P1-2 정정 (옵션 B+C): candidate 기반 V8/V9 순서 정합
         verifier_err_count = 0
         verifier_errors: List[str] = []
         if mode == "D":
             _apply_calibration(pred, calibrator or {})
+            auto_candidate = _mode_d_compute_auto_candidate(pred, calibrator or {})
             vres = apply_card1_hard_rules(
                 sample_id=sid, text=text, pred=pred,
                 schema_valid=pred.get("schema_valid", True),
                 base_verifier_errors=pred.get("base_verifier_errors") or [],
                 duplicate_strict_warning=False,
+                auto_apply_candidate=auto_candidate,
             )
             verifier_err_count = vres.error_count
             verifier_errors    = vres.errors
-            pred["auto_apply_allowed"] = _mode_d_decide_auto(
-                pred, it, vres, calibrator or {})
+            pred["auto_apply_candidate"] = auto_candidate
+            pred["auto_apply_allowed"]   = (
+                auto_candidate and vres.error_count == 0
+            )
 
         predictions.append({
             "sample_id":               sid,
