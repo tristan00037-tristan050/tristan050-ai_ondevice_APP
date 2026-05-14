@@ -3,23 +3,36 @@
   "source_pr": 715,
   "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T06:53:06.866663+00:00",
+  "generated_at": "2026-05-14T07:24:19.505055+00:00",
   "total_samples": 500,
   "canonical_distribution": {
-    "organize": 71,
-    "share": 41,
-    "review": 62,
-    "other": 132,
-    "send": 22,
-    "reply": 26,
+    "organize": 139,
+    "share": 85,
+    "review": 100,
+    "other": 210,
+    "send": 38,
+    "reply": 33,
     "schedule": 18,
-    "revise": 5,
-    "prepare_document": 17,
-    "submit": 6,
-    "confirm": 4,
+    "revise": 10,
+    "prepare_document": 22,
+    "submit": 15,
+    "confirm": 5,
     "summarize": 1
   },
   "top_50_oov_action_texts": [
+    {
+      "action_text": "결재 진행",
+      "suggested_canonical": "other",
+      "count": 5,
+      "example_sample_ids": [
+        "card1_400164",
+        "card1_400165",
+        "card1_400166",
+        "card1_500052",
+        "card1_500095"
+      ],
+      "decision": "needs_review"
+    },
     {
       "action_text": "결재",
       "suggested_canonical": "other",
@@ -188,16 +201,6 @@
       "example_sample_ids": [
         "card1_500024",
         "card1_500028"
-      ],
-      "decision": "needs_review"
-    },
-    {
-      "action_text": "결재 진행",
-      "suggested_canonical": "other",
-      "count": 2,
-      "example_sample_ids": [
-        "card1_500052",
-        "card1_500095"
       ],
       "decision": "needs_review"
     },
@@ -494,7 +497,7 @@
   "top_30_mapping_gap_clusters": [
     {
       "cluster_seed": "결재",
-      "count": 5
+      "count": 8
     },
     {
       "cluster_seed": "PR",
@@ -599,6 +602,12 @@
   ],
   "top_20_candidate_vocabulary_additions": [
     {
+      "action_text": "결재 진행",
+      "count": 5,
+      "suggested_canonical": "needs_review",
+      "decision": "needs_review"
+    },
+    {
       "action_text": "결재",
       "count": 3,
       "suggested_canonical": "needs_review",
@@ -696,12 +705,6 @@
     },
     {
       "action_text": "보고",
-      "count": 2,
-      "suggested_canonical": "needs_review",
-      "decision": "needs_review"
-    },
-    {
-      "action_text": "결재 진행",
       "count": 2,
       "suggested_canonical": "needs_review",
       "decision": "needs_review"

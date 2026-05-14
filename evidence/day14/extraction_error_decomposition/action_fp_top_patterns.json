@@ -3,9 +3,9 @@
   "source_pr": 715,
   "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T06:53:06.864074+00:00",
+  "generated_at": "2026-05-14T07:24:19.493282+00:00",
   "total_samples": 500,
-  "total_action_fp": 259,
+  "total_action_fp": 262,
   "top_patterns": [
     {
       "pattern_id": "FP-E_report_question_as_action",
@@ -27,8 +27,8 @@
     },
     {
       "pattern_id": "FP-C_wrong_normalized_action",
-      "count": 101,
-      "share": 0.202,
+      "count": 104,
+      "share": 0.208,
       "example_sample_ids": [
         "card1_100004",
         "card1_100018",

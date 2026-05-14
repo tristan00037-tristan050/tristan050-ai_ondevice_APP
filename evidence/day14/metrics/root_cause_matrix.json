@@ -3,7 +3,7 @@
   "source_pr": 715,
   "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T06:53:06.868422+00:00",
+  "generated_at": "2026-05-14T07:24:19.506932+00:00",
   "total_samples": 500,
   "causes": [
     "prompt",
@@ -16,8 +16,8 @@
   "rows": [
     {
       "error_type": "mapping_gap",
-      "count": 132,
-      "share": 0.264,
+      "count": 210,
+      "share": 0.42,
       "prompt": 0.1,
       "schema": 0.0,
       "parser": 0.0,
@@ -40,8 +40,8 @@
     },
     {
       "error_type": "FP-C_wrong_normalized_action",
-      "count": 101,
-      "share": 0.202,
+      "count": 104,
+      "share": 0.208,
       "prompt": 0.2,
       "schema": 0.0,
       "parser": 0.0,

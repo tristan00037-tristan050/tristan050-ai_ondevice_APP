@@ -1,4 +1,4 @@
-{"_metadata": {"dataset_id": "card1_evalset_v1_1_500", "source_pr": 715, "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b", "verdict": "MEASURED_ONLY", "generated_at": "2026-05-14T06:53:06.868218+00:00", "total_samples": 500}}
+{"_metadata": {"dataset_id": "card1_evalset_v1_1_500", "source_pr": 715, "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b", "verdict": "MEASURED_ONLY", "generated_at": "2026-05-14T07:24:19.506654+00:00", "total_samples": 500}}
 {"sample_id": "card1_100026", "verifier_error_count": 1, "gold_auto_apply": false, "candidate": false, "final_auto_apply": false, "verifier_block_reason": "verifier_error_count_gt_zero"}
 {"sample_id": "card1_100027", "verifier_error_count": 1, "gold_auto_apply": false, "candidate": false, "final_auto_apply": false, "verifier_block_reason": "verifier_error_count_gt_zero"}
 {"sample_id": "card1_100032", "verifier_error_count": 1, "gold_auto_apply": false, "candidate": false, "final_auto_apply": false, "verifier_block_reason": "verifier_error_count_gt_zero"}

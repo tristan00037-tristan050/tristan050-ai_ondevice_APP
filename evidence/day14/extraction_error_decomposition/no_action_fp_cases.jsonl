@@ -1,4 +1,4 @@
-{"_metadata": {"dataset_id": "card1_evalset_v1_1_500", "source_pr": 715, "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b", "verdict": "MEASURED_ONLY", "generated_at": "2026-05-14T06:53:06.868114+00:00", "total_samples": 500}}
+{"_metadata": {"dataset_id": "card1_evalset_v1_1_500", "source_pr": 715, "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b", "verdict": "MEASURED_ONLY", "generated_at": "2026-05-14T07:24:19.506539+00:00", "total_samples": 500}}
 {"sample_id": "card1_100066", "text": "해당 건은 더 이상 진행하지 않아도 됩니다", "pred_action": "해당 건은 더 이상 진행하지 않아도 됩니다", "pred_normalized_action": "other", "intent_conf": 0.9185, "action_conf": 0.9364, "fp_subtype": "FP-D"}
 {"sample_id": "card1_100068", "text": "견적서는 제출하지 않아도 됩니다", "pred_action": "견적서 제출", "pred_normalized_action": "submit", "intent_conf": 0.9185, "action_conf": 0.9364, "fp_subtype": "FP-D"}
 {"sample_id": "card1_100069", "text": "결정된 사항이 없어 추후 안내드리겠습니다", "pred_action": "추후 안내", "pred_normalized_action": "other", "intent_conf": 0.9634, "action_conf": 0.9364, "fp_subtype": "FP-D"}

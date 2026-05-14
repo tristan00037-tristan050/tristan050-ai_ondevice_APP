@@ -238,31 +238,38 @@ def run_decomposition() -> Dict[str, Any]:
         pred_actions = pred.get("actions") or []
         g_n, p_n = len(gold_actions), len(pred_actions)
 
-        # === action FP / FN ===
-        gold_norm = {normalize_action(a.get("action_text", "")) for a in gold_actions}
-        pred_norm = {normalize_action(a.get("action_text", "")) for a in pred_actions}
-        fp_norm = pred_norm - gold_norm
-        fn_norm = gold_norm - pred_norm
+        # === action FP / FN === Codex P1-A 정정: multiset (Counter) 차연산.
+        # set 사용 시 중복 손실 — gold=[other], pred=[other, other] 시 action_fp 잡지 못함.
+        gold_norm_list = [normalize_action(a.get("action_text", "")) for a in gold_actions]
+        pred_norm_list = [normalize_action(a.get("action_text", "")) for a in pred_actions]
+        gold_norm_counter = Counter(gold_norm_list)
+        pred_norm_counter = Counter(pred_norm_list)
+        fp_norm = pred_norm_counter - gold_norm_counter   # Counter 차연산 (multiset)
+        fn_norm = gold_norm_counter - pred_norm_counter
 
+        # 사용 시 surplus_remaining 추적 — 각 canon 의 잔여 surplus 만큼 FP/FN 카운트
+        fp_remaining = Counter(fp_norm)
         for a in pred_actions:
             atext = a.get("action_text", "")
             canon = normalize_action(atext)
-            if canon in fp_norm:
+            if fp_remaining.get(canon, 0) > 0:
                 bucket = classify_action_fp(text, atext, gi, pi)
                 action_fp_buckets[bucket].append({
                     "sample_id": sid, "action_text": atext,
                     "canonical": canon, "intent_gold": gi, "intent_pred": pi,
                 })
+                fp_remaining[canon] -= 1   # multiset 잔여 차감
                 # oov
                 if canon == "other" and atext:
                     oov_action_texts[atext] += 1
                     if len(oov_examples[atext]) < 5:
                         oov_examples[atext].append(sid)
 
+        fn_remaining = Counter(fn_norm)
         for a in gold_actions:
             atext = a.get("action_text", "")
             canon = normalize_action(atext)
-            if canon in fn_norm:
+            if fn_remaining.get(canon, 0) > 0:
                 evid_present = _evidence_in_source(
                     a.get("evidence", "") or atext, text)
                 bucket = classify_action_fn(g_n, p_n, evid_present)
@@ -270,6 +277,7 @@ def run_decomposition() -> Dict[str, Any]:
                     "sample_id": sid, "action_text": atext,
                     "canonical": canon,
                 })
+                fn_remaining[canon] -= 1   # multiset 잔여 차감
 
         # === multi-action 분리 ===
         if g_n >= 2:
@@ -480,16 +488,35 @@ def run_decomposition() -> Dict[str, Any]:
             "top_examples":       rows[:20],
         }
 
-    # parser_wins / llm_wins (휴리스틱): parser hint 가 gold 와 같고 LLM 다르면 parser_wins
-    parser_wins = llm_wins = both_fail = hybrid_wins = 0
-    for sid, gold in items_by_id.items():
-        gi = gold.get("intent_type")
-        pi = preds_by_id[sid]["pred"].get("intent_type")
-        # parser는 LLM 미사용 시 휴리스틱 결과 (간이 비교 X): pred 와 gold 비교만
-        if gi == pi:
-            llm_wins += 1   # LLM 이 옳음
-        else:
-            both_fail += 1
+    # Codex P2 정정 (Option A): mode_a (parser) / mode_b (llm) / mode_c (hybrid)
+    # predictions 각각 별도 저장 → 정확한 disagreement counter 산출.
+    mode_a_path = ROOT / "evidence/day11/mode_a/predictions.jsonl"
+    mode_b_path = ROOT / "evidence/day11/mode_b/predictions.jsonl"
+    mode_c_path = ROOT / "evidence/day11/mode_c/predictions.jsonl"
+    parser_wins = llm_wins = hybrid_wins = both_correct = both_fail = 0
+    measured = (mode_a_path.exists() and mode_b_path.exists() and mode_c_path.exists())
+    if measured:
+        a_by = {json.loads(l)["sample_id"]: json.loads(l) for l in mode_a_path.open(encoding="utf-8") if l.strip()}
+        b_by = {json.loads(l)["sample_id"]: json.loads(l) for l in mode_b_path.open(encoding="utf-8") if l.strip()}
+        c_by = {json.loads(l)["sample_id"]: json.loads(l) for l in mode_c_path.open(encoding="utf-8") if l.strip()}
+        for sid, gold in items_by_id.items():
+            gi = gold.get("intent_type")
+            ap = a_by.get(sid, {}).get("pred", {}).get("intent_type")
+            bp = b_by.get(sid, {}).get("pred", {}).get("intent_type")
+            cp = c_by.get(sid, {}).get("pred", {}).get("intent_type")
+            parser_correct = (gi == ap)
+            llm_correct    = (gi == bp)
+            hybrid_correct = (gi == cp)
+            if parser_correct and llm_correct:
+                both_correct += 1
+            elif parser_correct and not llm_correct:
+                parser_wins += 1
+            elif llm_correct and not parser_correct:
+                llm_wins += 1
+            elif hybrid_correct and not parser_correct and not llm_correct:
+                hybrid_wins += 1
+            else:
+                both_fail += 1
     (sub / "parser_vs_llm_disagreement.json").write_text(json.dumps({
         **_meta(500),
         "record_level": {
@@ -498,10 +525,12 @@ def run_decomposition() -> Dict[str, Any]:
         },
         "field_level":  field_summary,
         "summary_counts": {
-            "parser_wins_count": parser_wins,
-            "llm_wins_count":    llm_wins,
-            "hybrid_wins_count": hybrid_wins,
-            "both_fail_count":   both_fail,
+            "parser_wins_count":  parser_wins,
+            "llm_wins_count":     llm_wins,
+            "hybrid_wins_count":  hybrid_wins,
+            "both_correct_count": both_correct,
+            "both_fail_count":    both_fail,
+            "measurement_mode":   "A_three_mode_predictions" if measured else "not_measured",
         },
         "top_20_disagreement_patterns": [
             {"field": k, "count": v["disagreement_count"]}
@@ -523,7 +552,11 @@ def run_decomposition() -> Dict[str, Any]:
             if t:
                 all_action_texts[t] += 1
 
-    canonical_dist = Counter(normalize_action(t) for t in all_action_texts)
+    # Codex P1-B 정정: 가중 집계. all_action_texts 는 Counter → key 만 순회 시
+    # unique 기준 1회씩만 count → 빈출 텍스트가 무시됨. items() 로 (text, count) 합산.
+    canonical_dist = Counter()
+    for _text, _count in all_action_texts.items():
+        canonical_dist[normalize_action(_text)] += _count
     oov_top = [
         {"action_text": t, "suggested_canonical": "other",
          "count": c, "example_sample_ids": oov_examples.get(t, [])[:5],

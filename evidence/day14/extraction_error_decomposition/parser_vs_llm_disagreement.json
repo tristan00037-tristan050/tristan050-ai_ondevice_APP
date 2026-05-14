@@ -3,7 +3,7 @@
   "source_pr": 715,
   "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T06:53:06.865816+00:00",
+  "generated_at": "2026-05-14T07:24:19.504121+00:00",
   "total_samples": 500,
   "record_level": {
     "total_record_disagreement": 214,
@@ -547,10 +547,12 @@
     }
   },
   "summary_counts": {
-    "parser_wins_count": 0,
-    "llm_wins_count": 346,
-    "hybrid_wins_count": 0,
-    "both_fail_count": 154
+    "parser_wins_count": 35,
+    "llm_wins_count": 47,
+    "hybrid_wins_count": 1,
+    "both_correct_count": 298,
+    "both_fail_count": 119,
+    "measurement_mode": "A_three_mode_predictions"
   },
   "top_20_disagreement_patterns": [
     {
