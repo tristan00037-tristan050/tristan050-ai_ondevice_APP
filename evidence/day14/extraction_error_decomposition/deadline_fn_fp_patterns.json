@@ -1,0 +1,223 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 715,
+  "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-14T07:24:19.493831+00:00",
+  "total_samples": 500,
+  "deadline_FP": 7,
+  "deadline_FN": 4,
+  "deadline_type_mismatch": 14,
+  "INQUIRY_misclassified_as_HARD_or_SOFT": 1,
+  "URGENCY_misclassified_as_deadline": 0,
+  "CONDITION_misclassified_as_deadline": 0,
+  "deadline_FP_top": [
+    {
+      "kind": "relative_time",
+      "count": 5
+    },
+    {
+      "kind": "other",
+      "count": 2
+    }
+  ],
+  "deadline_FN_top": [
+    {
+      "kind": "relative_time",
+      "count": 3
+    },
+    {
+      "kind": "absolute_time",
+      "count": 1
+    }
+  ],
+  "deadline_type_mismatch_top": [
+    {
+      "kind": "relative_time",
+      "count": 14
+    }
+  ],
+  "examples": {
+    "deadline_FP": [
+      {
+        "sample_id": "card1_200006",
+        "gold_dt": "INQUIRY",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "오늘까지 분석 자료 정리 가능해요?"
+      },
+      {
+        "sample_id": "card1_200018",
+        "gold_dt": "NONE",
+        "pred_dt": "HARD",
+        "kind": "other",
+        "text_excerpt": "[PR] 머지 후 배포까지 진행하세요"
+      },
+      {
+        "sample_id": "card1_400007",
+        "gold_dt": "NONE",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "오늘 회의 결과 정리 부탁드립니다"
+      },
+      {
+        "sample_id": "card1_400024",
+        "gold_dt": "NONE",
+        "pred_dt": "HARD",
+        "kind": "other",
+        "text_excerpt": "월요일 보고 자료 정리 부탁"
+      },
+      {
+        "sample_id": "card1_400076",
+        "gold_dt": "NONE",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "이번 주 보고 일정 알려 주세요"
+      },
+      {
+        "sample_id": "card1_400113",
+        "gold_dt": "NONE",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "다음 주 보고 자료 정리 완료했습니다"
+      },
+      {
+        "sample_id": "card1_500102",
+        "gold_dt": "NONE",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "이번 주 안건 알려 주세요"
+      }
+    ],
+    "deadline_FN": [
+      {
+        "sample_id": "card1_200029",
+        "gold_dt": "HARD",
+        "pred_dt": "NONE",
+        "kind": "absolute_time",
+        "text_excerpt": "2026-06-01부터 적용 예정입니다"
+      },
+      {
+        "sample_id": "card1_500022",
+        "gold_dt": "HARD",
+        "pred_dt": "NONE",
+        "kind": "relative_time",
+        "text_excerpt": "오늘 오후 [TIME] 회의 안내드립니다"
+      },
+      {
+        "sample_id": "card1_500027",
+        "gold_dt": "HARD",
+        "pred_dt": "NONE",
+        "kind": "relative_time",
+        "text_excerpt": "오후 [TIME] 회의 일정 안내드립니다"
+      },
+      {
+        "sample_id": "card1_500030",
+        "gold_dt": "HARD",
+        "pred_dt": "NONE",
+        "kind": "relative_time",
+        "text_excerpt": "이번 주 수요일 평가 안내드립니다"
+      }
+    ],
+    "deadline_type_mismatch": [
+      {
+        "sample_id": "card1_100006",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "다음 주 월요일까지 견적서 정리 부탁드립니다"
+      },
+      {
+        "sample_id": "card1_100010",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "다음 주까지 분석 자료 정리 부탁드립니다"
+      },
+      {
+        "sample_id": "card1_100017",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "이번 주 금요일까지 계약서 검토 부탁드립니다"
+      },
+      {
+        "sample_id": "card1_100021",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "다음 주 화요일까지 PR 리뷰 부탁드립니다"
+      },
+      {
+        "sample_id": "card1_100052",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "오늘까지 작업을 완료할 예정입니다"
+      },
+      {
+        "sample_id": "card1_100088",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "이번 주 금요일까지 검토 의견 보내 주세요"
+      },
+      {
+        "sample_id": "card1_100091",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "다음 주 월요일까지 결과 정리 부탁드립니다"
+      },
+      {
+        "sample_id": "card1_200026",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "견적서 첨부해서 다음 주까지 보내주세요"
+      },
+      {
+        "sample_id": "card1_200034",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "다음 주 화요일까지 견적 비교 부탁드립니다"
+      },
+      {
+        "sample_id": "card1_200045",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "다음 주 월요일까지 결과 정리 부탁드립니다"
+      },
+      {
+        "sample_id": "card1_500023",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "다음 주 화요일까지 자료 정리 부탁"
+      },
+      {
+        "sample_id": "card1_500024",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "이번 주 금요일 보고 부탁드려요"
+      },
+      {
+        "sample_id": "card1_500029",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "다음 주 월요일 회의 진행 예정"
+      },
+      {
+        "sample_id": "card1_500054",
+        "gold_dt": "HARD",
+        "pred_dt": "SOFT",
+        "kind": "relative_time",
+        "text_excerpt": "다음 주까지 정리하세요"
+      }
+    ]
+  }
+}

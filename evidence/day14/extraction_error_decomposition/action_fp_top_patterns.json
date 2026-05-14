@@ -1,0 +1,83 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 715,
+  "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-14T07:24:19.493282+00:00",
+  "total_samples": 500,
+  "total_action_fp": 262,
+  "top_patterns": [
+    {
+      "pattern_id": "FP-E_report_question_as_action",
+      "count": 113,
+      "share": 0.226,
+      "example_sample_ids": [
+        "card1_100030",
+        "card1_100031",
+        "card1_100033",
+        "card1_100034",
+        "card1_100035",
+        "card1_100038",
+        "card1_100042",
+        "card1_100044",
+        "card1_100046",
+        "card1_100048"
+      ],
+      "recommended_fix": "prompt: clarify REPORT/QUESTION boundary"
+    },
+    {
+      "pattern_id": "FP-C_wrong_normalized_action",
+      "count": 104,
+      "share": 0.208,
+      "example_sample_ids": [
+        "card1_100004",
+        "card1_100018",
+        "card1_100087",
+        "card1_100089",
+        "card1_200004",
+        "card1_200006",
+        "card1_200009",
+        "card1_200012",
+        "card1_200015",
+        "card1_200016"
+      ],
+      "recommended_fix": "vocabulary: add canonical mapping"
+    },
+    {
+      "pattern_id": "FP-A_hallucinated_action",
+      "count": 24,
+      "share": 0.048,
+      "example_sample_ids": [
+        "card1_100082",
+        "card1_100088",
+        "card1_200001",
+        "card1_200002",
+        "card1_200008",
+        "card1_200010",
+        "card1_200011",
+        "card1_200014",
+        "card1_200016",
+        "card1_200017"
+      ],
+      "recommended_fix": "prompt: strengthen evidence requirement"
+    },
+    {
+      "pattern_id": "FP-D_no_action_violation",
+      "count": 21,
+      "share": 0.042,
+      "example_sample_ids": [
+        "card1_100066",
+        "card1_100068",
+        "card1_100069",
+        "card1_100070",
+        "card1_100131",
+        "card1_200035",
+        "card1_200037",
+        "card1_200038",
+        "card1_200039",
+        "card1_200041"
+      ],
+      "recommended_fix": "verifier: enforce V4 strictly"
+    }
+  ]
+}
