@@ -1,0 +1,6 @@
+{
+  "ok": true,
+  "llama_cpp_python_version": "0.3.23",
+  "platform": "macOS-15.6.1-arm64-arm-64bit",
+  "error": null
+}

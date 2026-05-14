@@ -1,0 +1,123 @@
+{
+  "mode": "D",
+  "merge_sha": "3b7ab991ff19f45c14aa62d65ed43f325a5e25a3",
+  "dataset_id": "card1_evalset_v1_1_500",
+  "verdict": "MEASURED_ONLY",
+  "note": "PR #713 범위. production candidate 공식 판정은 PR #714 에서 진행.",
+  "tier_summary": {
+    "tier_1_hard_safety_passed": 5,
+    "tier_1_hard_safety_total": 5,
+    "tier_2_auto_apply_passed": 0,
+    "tier_2_auto_apply_total": 2,
+    "tier_3_extraction_passed": 2,
+    "tier_3_extraction_total": 4,
+    "tier_4_calibration_passed": 1,
+    "tier_4_calibration_total": 2
+  },
+  "rows": [
+    {
+      "tier": "tier_1",
+      "name": "verifier_error_auto_apply_count",
+      "value": 0,
+      "threshold": 0,
+      "kind": "max",
+      "passed": true
+    },
+    {
+      "tier": "tier_1",
+      "name": "false_deadline_rate",
+      "value": 0.014,
+      "threshold": 0.02,
+      "kind": "max",
+      "passed": true
+    },
+    {
+      "tier": "tier_1",
+      "name": "no_action_fp_rate",
+      "value": 0.0273,
+      "threshold": 0.03,
+      "kind": "max",
+      "passed": true
+    },
+    {
+      "tier": "tier_1",
+      "name": "g22_strict_warning_count",
+      "value": 0,
+      "threshold": 0,
+      "kind": "max",
+      "passed": true
+    },
+    {
+      "tier": "tier_1",
+      "name": "g23_hard_violation_count",
+      "value": 0,
+      "threshold": 0,
+      "kind": "max",
+      "passed": true
+    },
+    {
+      "tier": "tier_2",
+      "name": "auto_apply_precision",
+      "value": 0.0,
+      "threshold": 0.95,
+      "kind": "min",
+      "passed": false
+    },
+    {
+      "tier": "tier_2",
+      "name": "auto_apply_recall",
+      "value": 0.0,
+      "threshold": 0.7,
+      "kind": "min",
+      "passed": false
+    },
+    {
+      "tier": "tier_3",
+      "name": "schema_valid_rate",
+      "value": 1.0,
+      "threshold": 0.98,
+      "kind": "min",
+      "passed": true
+    },
+    {
+      "tier": "tier_3",
+      "name": "normalized_action_f1",
+      "value": 0.6065,
+      "threshold": 0.9,
+      "kind": "min",
+      "passed": false
+    },
+    {
+      "tier": "tier_3",
+      "name": "multi_action_split_accuracy",
+      "value": 0.8621,
+      "threshold": 0.85,
+      "kind": "min",
+      "passed": true
+    },
+    {
+      "tier": "tier_3",
+      "name": "deadline_f1",
+      "value": 0.8092,
+      "threshold": 0.9,
+      "kind": "min",
+      "passed": false
+    },
+    {
+      "tier": "tier_4",
+      "name": "action_ece_after",
+      "value": 0.4595,
+      "threshold": 0.15,
+      "kind": "max",
+      "passed": false
+    },
+    {
+      "tier": "tier_4",
+      "name": "intent_ece_after",
+      "value": 0.0611,
+      "threshold": 0.2,
+      "kind": "max",
+      "passed": true
+    }
+  ]
+}
