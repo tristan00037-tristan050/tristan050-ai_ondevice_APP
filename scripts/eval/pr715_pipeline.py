@@ -672,7 +672,7 @@ def main() -> int:
         f"""# PR #715 — Calibration + Auto-apply Threshold Rework Summary
 
 ## verdict
-MEASURED_ONLY (PR #715 범위, 최종 승인 판정 절대 금지 — PR #718 영역)
+MEASURED_ONLY (PR #715 범위, 공식 판정은 PR #718 단계에서 진행)
 
 ## Source
 - PR #714 merge SHA: 1632c0c7c421e3d814fa935ff542c570bd72c41c
