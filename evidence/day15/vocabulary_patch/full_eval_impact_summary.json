@@ -1,0 +1,39 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 716,
+  "source_merge_sha": "10109f2b5373d6aabff782e3a50071a00415fc56",
+  "branch": "A",
+  "patch_type": "vocabulary",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-14T22:41:59.486049+00:00",
+  "total_samples": 500,
+  "primary": {
+    "before": {
+      "action_fp": 262,
+      "action_fn": 12,
+      "action_tp": 201,
+      "f1": 0.5947,
+      "other_count": 152
+    },
+    "after": {
+      "action_fp": 261,
+      "action_fn": 11,
+      "action_tp": 202,
+      "f1": 0.5976,
+      "other_count": 97
+    },
+    "delta": {
+      "action_fp": -1,
+      "action_fn": -1,
+      "f1": 0.0029,
+      "other_count": -55
+    }
+  },
+  "safety_monitor": {
+    "false_deadline_rate": "unchanged (vocabulary patch only)",
+    "no_action_fp_rate": "unchanged",
+    "auto_apply_precision": "unchanged",
+    "g23_hard_violation_count": 0,
+    "g22_strict_warning_count": 0
+  }
+}

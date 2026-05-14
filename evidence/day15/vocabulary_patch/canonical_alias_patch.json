@@ -1,0 +1,28 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 716,
+  "source_merge_sha": "10109f2b5373d6aabff782e3a50071a00415fc56",
+  "branch": "A",
+  "patch_type": "alias_absorb",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-14T22:41:59.485738+00:00",
+  "total_samples": 500,
+  "alias_table": {
+    "confirm": [
+      "결재",
+      "결재 진행",
+      "부서장님 결재"
+    ],
+    "submit": [
+      "PR 머지",
+      "PR 머지 완료",
+      "머지",
+      "브랜치 머지"
+    ],
+    "prepare_document": [
+      "발표 자료 작성 완료",
+      "회의록 작성 완료"
+    ]
+  },
+  "note": "normalize_action_v2 alias 우선 매칭 (scripts/eval/pr718_vocabulary_patch.py)"
+}

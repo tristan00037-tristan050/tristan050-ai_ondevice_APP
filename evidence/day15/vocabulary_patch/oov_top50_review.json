@@ -1,0 +1,540 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 716,
+  "source_merge_sha": "10109f2b5373d6aabff782e3a50071a00415fc56",
+  "branch": "A",
+  "patch_type": "vocabulary",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-14T22:41:59.484695+00:00",
+  "total_samples": 500,
+  "decision_distribution": {
+    "alias_absorb": 12,
+    "needs_review": 36,
+    "reject": 2
+  },
+  "rows": [
+    {
+      "action_text": "결재 진행",
+      "count": 5,
+      "sample_ids": [
+        "card1_400164",
+        "card1_400165",
+        "card1_400166",
+        "card1_500052",
+        "card1_500095"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "confirm",
+      "reason": "patched alias rule → confirm"
+    },
+    {
+      "action_text": "결재",
+      "count": 3,
+      "sample_ids": [
+        "card1_200053",
+        "card1_500026",
+        "card1_500060"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "confirm",
+      "reason": "patched alias rule → confirm"
+    },
+    {
+      "action_text": "PR 머지 완료",
+      "count": 2,
+      "sample_ids": [
+        "card1_100038",
+        "card1_500009"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "submit",
+      "reason": "patched alias rule → submit"
+    },
+    {
+      "action_text": "처리",
+      "count": 2,
+      "sample_ids": [
+        "card1_100046",
+        "card1_500058"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "ambiguous bare verb"
+    },
+    {
+      "action_text": "작업 완료",
+      "count": 2,
+      "sample_ids": [
+        "card1_100052",
+        "card1_100119"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "회의 시간 알려 주실 수 있나요?",
+      "count": 2,
+      "sample_ids": [
+        "card1_100101",
+        "card1_200051"
+      ],
+      "decision": "reject",
+      "canonical": null,
+      "reason": "REPORT/QUESTION 부정형 패턴 (action 아님)"
+    },
+    {
+      "action_text": "PR 머지",
+      "count": 2,
+      "sample_ids": [
+        "card1_200005",
+        "card1_200018"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "submit",
+      "reason": "patched alias rule → submit"
+    },
+    {
+      "action_text": "배포 진행",
+      "count": 2,
+      "sample_ids": [
+        "card1_200018",
+        "card1_200058"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "share",
+      "reason": "patched alias rule → share"
+    },
+    {
+      "action_text": "브랜치 머지",
+      "count": 2,
+      "sample_ids": [
+        "card1_200037",
+        "card1_500003"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "submit",
+      "reason": "patched alias rule → submit"
+    },
+    {
+      "action_text": "발표 자료 작성 완료",
+      "count": 2,
+      "sample_ids": [
+        "card1_200054",
+        "card1_400103"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "prepare_document",
+      "reason": "patched alias rule → prepare_document"
+    },
+    {
+      "action_text": "다음 단계 알려 주세요",
+      "count": 2,
+      "sample_ids": [
+        "card1_400065",
+        "card1_500049"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "월간 보고",
+      "count": 2,
+      "sample_ids": [
+        "card1_400087",
+        "card1_500062"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "분기 보고",
+      "count": 2,
+      "sample_ids": [
+        "card1_400088",
+        "card1_500061"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "프로젝트 결과 보고",
+      "count": 2,
+      "sample_ids": [
+        "card1_400095",
+        "card1_500105"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "회의록 작성 완료",
+      "count": 2,
+      "sample_ids": [
+        "card1_400098",
+        "card1_500067"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "prepare_document",
+      "reason": "patched alias rule → prepare_document"
+    },
+    {
+      "action_text": "보고드리려고 합니다",
+      "count": 2,
+      "sample_ids": [
+        "card1_400179",
+        "card1_400180"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "머지",
+      "count": 2,
+      "sample_ids": [
+        "card1_500001",
+        "card1_500010"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "submit",
+      "reason": "patched alias rule → submit"
+    },
+    {
+      "action_text": "보고",
+      "count": 2,
+      "sample_ids": [
+        "card1_500024",
+        "card1_500028"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "결과 보고",
+      "count": 2,
+      "sample_ids": [
+        "card1_500056",
+        "card1_500092"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "이번 PR 처리",
+      "count": 1,
+      "sample_ids": [
+        "card1_100031"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "버전 정보 알기",
+      "count": 1,
+      "sample_ids": [
+        "card1_100033"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "알려드리겠습니다",
+      "count": 1,
+      "sample_ids": [
+        "card1_100048"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "해당 건은 더 이상 진행하지 않아도 됩니다",
+      "count": 1,
+      "sample_ids": [
+        "card1_100066"
+      ],
+      "decision": "reject",
+      "canonical": null,
+      "reason": "REPORT/QUESTION 부정형 패턴 (action 아님)"
+    },
+    {
+      "action_text": "추후 안내",
+      "count": 1,
+      "sample_ids": [
+        "card1_100069"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "자료 출처 알려 주세요",
+      "count": 1,
+      "sample_ids": [
+        "card1_100082"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "PR 리뷰 마감",
+      "count": 1,
+      "sample_ids": [
+        "card1_100103"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "review",
+      "reason": "patched alias rule → review"
+    },
+    {
+      "action_text": "진행 상황 안내",
+      "count": 1,
+      "sample_ids": [
+        "card1_100113"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "진행 사항 변동",
+      "count": 1,
+      "sample_ids": [
+        "card1_100131"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "마지",
+      "count": 1,
+      "sample_ids": [
+        "card1_200002"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "완료되면 알림",
+      "count": 1,
+      "sample_ids": [
+        "card1_200008"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "서버 재시작",
+      "count": 1,
+      "sample_ids": [
+        "card1_200011"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "연락 주세요",
+      "count": 1,
+      "sample_ids": [
+        "card1_200015"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "회의록 알려주세요",
+      "count": 1,
+      "sample_ids": [
+        "card1_200020"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "부서장님 결재",
+      "count": 1,
+      "sample_ids": [
+        "card1_200022"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "confirm",
+      "reason": "patched alias rule → confirm"
+    },
+    {
+      "action_text": "부서장님께 보고드리겠습니다",
+      "count": 1,
+      "sample_ids": [
+        "card1_200025"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "견적서 첨부",
+      "count": 1,
+      "sample_ids": [
+        "card1_200026"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "신규 입사자 권한 설정",
+      "count": 1,
+      "sample_ids": [
+        "card1_200027"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "견적 비교",
+      "count": 1,
+      "sample_ids": [
+        "card1_200034"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "미팅",
+      "count": 1,
+      "sample_ids": [
+        "card1_200039"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "이번 주 진행 상황 보고",
+      "count": 1,
+      "sample_ids": [
+        "card1_200041"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "브랜치 리뷰 완료",
+      "count": 1,
+      "sample_ids": [
+        "card1_200043"
+      ],
+      "decision": "alias_absorb",
+      "canonical": "review",
+      "reason": "patched alias rule → review"
+    },
+    {
+      "action_text": "권한 회수",
+      "count": 1,
+      "sample_ids": [
+        "card1_200049"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "견적서 비교",
+      "count": 1,
+      "sample_ids": [
+        "card1_200052"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "회의 시간 알려 주세요",
+      "count": 1,
+      "sample_ids": [
+        "card1_400061"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "참석자 명단 알려 주세요",
+      "count": 1,
+      "sample_ids": [
+        "card1_400063"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "처리 결과 알려 주세요",
+      "count": 1,
+      "sample_ids": [
+        "card1_400067"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "미팅 시간 알려 주세요",
+      "count": 1,
+      "sample_ids": [
+        "card1_400071"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "이번 분기 보고드림",
+      "count": 1,
+      "sample_ids": [
+        "card1_400081"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "주간 보고",
+      "count": 1,
+      "sample_ids": [
+        "card1_400082"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    },
+    {
+      "action_text": "프로젝트 진행 상황 안내",
+      "count": 1,
+      "sample_ids": [
+        "card1_400084"
+      ],
+      "decision": "needs_review",
+      "canonical": null,
+      "reason": "low frequency or context-dependent"
+    }
+  ]
+}
