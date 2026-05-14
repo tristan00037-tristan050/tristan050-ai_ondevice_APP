@@ -1,0 +1,45 @@
+{
+  "fit_size": 150,
+  "holdout_size": 350,
+  "disjoint": true,
+  "fit_dist": {
+    "auto_apply_true": 8,
+    "intent": {
+      "REQUEST": 55,
+      "QUESTION": 23,
+      "REPORT": 34,
+      "COMMAND": 21,
+      "NO_ACTION": 17
+    },
+    "action_required_true": 76,
+    "deadline_type": {
+      "NONE": 117,
+      "HARD": 15,
+      "SOFT": 6,
+      "CONDITION": 6,
+      "INQUIRY": 3,
+      "URGENCY": 3
+    },
+    "boundary_slice": 16
+  },
+  "holdout_dist": {
+    "auto_apply_true": 19,
+    "intent": {
+      "REQUEST": 126,
+      "QUESTION": 54,
+      "REPORT": 76,
+      "COMMAND": 51,
+      "NO_ACTION": 43
+    },
+    "action_required_true": 177,
+    "deadline_type": {
+      "NONE": 274,
+      "HARD": 35,
+      "SOFT": 15,
+      "CONDITION": 10,
+      "INQUIRY": 8,
+      "URGENCY": 8
+    },
+    "boundary_slice": 31
+  }
+}

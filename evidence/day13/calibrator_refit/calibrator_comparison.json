@@ -1,0 +1,20 @@
+{
+  "A_frozen_baseline": {
+    "prec": 0.0812,
+    "rec": 1.0,
+    "action_ece": 0.5186,
+    "intent_ece": 0.2548
+  },
+  "B_frozen_plus_sweep": {
+    "prec": 0.0812,
+    "rec": 1.0,
+    "action_ece": 0.5186,
+    "intent_ece": 0.2548
+  },
+  "C_refit_plus_sweep": {
+    "prec": 0.0812,
+    "rec": 1.0,
+    "action_ece": 0.5186,
+    "intent_ece": 0.2548
+  }
+}

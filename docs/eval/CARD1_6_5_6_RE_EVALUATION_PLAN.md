@@ -136,6 +136,36 @@ Tier 1 1개라도 실패 시 production candidate 불가.
 
 모두 충족 전 Butler 본체 통합 / 외부 베타 / 자동 적용 노출 **금지**.
 
+## 7. PR #715 — Calibration + Auto-apply Threshold Rework (Day 13+)
+
+### 7-1. 범위
+- calibration split (150 fit / 350 holdout, stratified, seed=42)
+- threshold sweep (intent 0.50~0.85 / action 0.50~0.90, step 0.05)
+- Platt refit (옵션) + 3 variants 비교 (A/B/C)
+- holdout 13지표 측정
+
+### 7-2. verdict
+- MEASURED_ONLY 또는 PATCH_CONTINUE
+- PROCEED 판정 **절대 금지** (PR #718 영역)
+
+### 7-3. Data leakage Hard Gate (5가지 fail_class)
+1. CALIBRATION_DATA_LEAKAGE (fit ∩ holdout ≠ ∅)
+2. SPLIT_OVERLAP
+3. FULL_DATASET_FIT_FORBIDDEN (fit_size == 500 금지)
+4. FIT_SIZE_INVALID (fit_size != 150)
+5. HOLDOUT_SIZE_INVALID (holdout_size != 350)
+
+### 7-4. precision-first 4단계 선택
+1. precision ≥ 0.95 후보만 통과
+2. recall 최대
+3. pred_auto_apply_true_count 낮은 후보
+4. threshold 높은 후보
+
+### 7-5. 운영 투명성 규칙 3가지
+- PR 상태 첫 줄 명시 (HOLD / MEASURED_ONLY / PATCH_CONTINUE / PATCH / PROCEED / BLOCK)
+- 마지막 head SHA 본문 포함
+- 머지 시 merge SHA 본문 또는 후속 PR 본문에 포함
+
 ## 4. 6.5.6 단계 작업 일정
 
 | Day | 작업 |

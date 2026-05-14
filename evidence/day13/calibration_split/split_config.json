@@ -1,0 +1,13 @@
+{
+  "seed": 42,
+  "fit_size": 150,
+  "holdout_size": 350,
+  "stratification": [
+    "auto_apply_allowed",
+    "intent_type",
+    "action_required",
+    "deadline_type",
+    "boundary_slice"
+  ],
+  "split_method": "stratified_buckets_rng_shuffle"
+}

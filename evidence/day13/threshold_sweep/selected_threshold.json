@@ -1,0 +1,5 @@
+{
+  "variant_b_intent_threshold": null,
+  "variant_b_action_threshold": null,
+  "reason": "NO_CANDIDATE_PASSED_PRECISION_FLOOR"
+}

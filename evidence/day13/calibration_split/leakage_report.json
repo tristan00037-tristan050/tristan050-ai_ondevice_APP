@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "overlap_count": 0,
+  "fit_size": 150,
+  "holdout_size": 350,
+  "fit_auto_true": 8,
+  "holdout_auto_true": 19,
+  "fail_class": null
+}
