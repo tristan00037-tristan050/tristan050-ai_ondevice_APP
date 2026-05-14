@@ -5,7 +5,7 @@
   "branch": "A",
   "patch_type": "vocabulary",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T22:41:59.485822+00:00",
+  "generated_at": "2026-05-14T22:49:09.573911+00:00",
   "total_samples": 500,
   "ab_eval_size": 50,
   "composition": {

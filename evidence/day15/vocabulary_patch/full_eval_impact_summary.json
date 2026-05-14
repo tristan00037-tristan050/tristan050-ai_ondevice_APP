@@ -5,8 +5,14 @@
   "branch": "A",
   "patch_type": "vocabulary",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T22:41:59.486049+00:00",
+  "generated_at": "2026-05-14T22:49:09.574102+00:00",
   "total_samples": 500,
+  "measurement_definition": {
+    "scope": "PR #718 full eval 500 (fit 150 + holdout 350)",
+    "f1_type": "micro F1 on multiset action count match (TP/FP/FN by Counter diff)",
+    "other_count_scope": "pred_only — predictions normalize_action 결과의 'other' count",
+    "comparison_note": "PR #716 mapping_gaps.json 의 canonical_distribution 은 gold + pred 합산 weighted count → 'other'=210. PR #715 holdout-only f1=0.6038 (350건). PR #718 baseline f1=0.5947 (500건, pred-only 'other' count=152). 측정 정의 차이로 인한 자연 차이 — 측정 reproducibility 결함 아님 (케이스 B)."
+  },
   "primary": {
     "before": {
       "action_fp": 262,

@@ -374,6 +374,18 @@ def step7_full_eval(items, preds) -> Dict[str, Any]:
     after  = _measure(normalize_action_v2)
     # safety monitors (unchanged — vocabulary 만 변경)
     return {
+        "measurement_definition": {
+            "scope":             "PR #718 full eval 500 (fit 150 + holdout 350)",
+            "f1_type":           "micro F1 on multiset action count match (TP/FP/FN by Counter diff)",
+            "other_count_scope": "pred_only — predictions normalize_action 결과의 'other' count",
+            "comparison_note": (
+                "PR #716 mapping_gaps.json 의 canonical_distribution 은 "
+                "gold + pred 합산 weighted count → 'other'=210. "
+                "PR #715 holdout-only f1=0.6038 (350건). "
+                "PR #718 baseline f1=0.5947 (500건, pred-only 'other' count=152). "
+                "측정 정의 차이로 인한 자연 차이 — 측정 reproducibility 결함 아님 (케이스 B)."
+            ),
+        },
         "primary": {
             "before": before,
             "after":  after,
@@ -412,7 +424,7 @@ def step8_branch_b(impact: Dict[str, Any]) -> Dict[str, Any]:
         "f1_after":        f1_after,
         "f1_target_a_floor": 0.70,
         "note": ("Branch A 결과 f1 < 0.80 이지만 Branch B 진입은 prompt/schema 영역. "
-                  "PR #717B 영역으로 별도 추진."),
+                  "Algorithm Branch B (= GitHub PR #719) 별도 추진."),
     }
 
 
@@ -456,10 +468,16 @@ def main() -> int:
     branch_b = step8_branch_b(impact)
 
     # 출력
+    # 5분류 정합 — 누락 분류 0 명시
+    decision_dist = dict(Counter(r["decision"] for r in review_rows))
+    for k in ["alias_absorb", "merge_to_existing", "true_new_canonical",
+               "reject", "needs_review"]:
+        decision_dist.setdefault(k, 0)
     (OUT / "oov_top50_review.json").write_text(json.dumps({
         **_meta(),
-        "decision_distribution": dict(Counter(r["decision"] for r in review_rows)),
-        "rows": review_rows,
+        "decision_distribution": decision_dist,
+        "decision_total":        sum(decision_dist.values()),
+        "rows":                  review_rows,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
     (OUT / "oov_cluster_report.json").write_text(json.dumps({
@@ -468,10 +486,28 @@ def main() -> int:
         "cluster_summary":  cluster_summary,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    # alias 적용 사유 — 4기준 명세 (자문)
+    for c in candidates:
+        crit = {
+            "weighted_count_gte_3":          c["weighted_count"] >= 3,
+            "sample_count_gte_3":            c["sample_count"]   >= 3,
+            "canonical_unambiguous":         c["ambiguity_score"] < 2,
+            "fp_increase_risk_low":          c["fragmentation_risk"] == "low",
+        }
+        c["criteria_pass"]   = crit
+        c["unapplied_reason"] = (
+            None if c["apply_in_pr718"]
+            else "; ".join(k for k, v in crit.items() if not v)
+        )
+    alias_row_count = sum(len(c["aliases"]) for c in candidates
+                          if c["apply_in_pr718"])
     (OUT / "candidate_vocabulary_additions.json").write_text(json.dumps({
         **_meta(),
         "candidates_total": len(candidates),
         "applied_in_pr718": sum(1 for c in candidates if c["apply_in_pr718"]),
+        "alias_row_count_applied": alias_row_count,
+        "advisory_recommended_range": [8, 15],
+        "alias_row_count_in_advisory_range": 8 <= alias_row_count <= 15,
         "candidates":       candidates,
         "new_canonical_candidates": new_candidates,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -506,13 +542,21 @@ def main() -> int:
         "# Branch B Readiness (PR #718 결과 기준)",
         "",
         f"## metadata\n- dataset_id: {DATASET_ID}\n- source_pr: 716"
-        f"\n- branch: A\n- patch_type: vocabulary\n- verdict: MEASURED_ONLY",
+        f"\n- branch: A (= GitHub PR #718, vocabulary)"
+        f"\n- next_branch: B (= GitHub PR #719, prompt/schema patch + small AB eval)"
+        f"\n- patch_type: vocabulary\n- verdict: MEASURED_ONLY",
         "",
         f"- enter_branch_b: {branch_b['enter_branch_b']}",
         f"- conditions_met: {branch_b['conditions_met']}",
         f"- f1_after: {branch_b['f1_after']}",
         f"- f1_target_a_floor: {branch_b['f1_target_a_floor']}",
         f"- note: {branch_b['note']}",
+        "",
+        "## Branch 명명 정합 (운영 표준 — 7중 거버넌스)",
+        "- Algorithm Branch A = GitHub PR #718 (현재)",
+        "- Algorithm Branch B = GitHub PR #719 (다음, prompt/schema)",
+        "- Algorithm Branch C = GitHub PR (조건부, LoRA 검토)",
+        "- GitHub PR #717 = 메인 fix PR (ALGO-CORE-03, 별도 트랙)",
     ]), encoding="utf-8")
 
     # 결과 보고

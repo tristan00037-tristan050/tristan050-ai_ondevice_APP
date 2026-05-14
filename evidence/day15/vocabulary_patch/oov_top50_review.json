@@ -5,13 +5,16 @@
   "branch": "A",
   "patch_type": "vocabulary",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T22:41:59.484695+00:00",
+  "generated_at": "2026-05-14T22:49:09.572845+00:00",
   "total_samples": 500,
   "decision_distribution": {
     "alias_absorb": 12,
     "needs_review": 36,
-    "reject": 2
+    "reject": 2,
+    "merge_to_existing": 0,
+    "true_new_canonical": 0
   },
+  "decision_total": 50,
   "rows": [
     {
       "action_text": "결재 진행",

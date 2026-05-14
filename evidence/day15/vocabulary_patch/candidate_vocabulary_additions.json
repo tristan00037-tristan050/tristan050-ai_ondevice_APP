@@ -5,10 +5,16 @@
   "branch": "A",
   "patch_type": "vocabulary",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T22:41:59.485498+00:00",
+  "generated_at": "2026-05-14T22:49:09.573574+00:00",
   "total_samples": 500,
   "candidates_total": 5,
   "applied_in_pr718": 3,
+  "alias_row_count_applied": 9,
+  "advisory_recommended_range": [
+    8,
+    15
+  ],
+  "alias_row_count_in_advisory_range": true,
   "candidates": [
     {
       "candidate_id": "CAND_CONFIRM_001",
@@ -32,7 +38,14 @@
         "card1_200053",
         "card1_500026"
       ],
-      "apply_in_pr718": true
+      "apply_in_pr718": true,
+      "criteria_pass": {
+        "weighted_count_gte_3": true,
+        "sample_count_gte_3": true,
+        "canonical_unambiguous": true,
+        "fp_increase_risk_low": true
+      },
+      "unapplied_reason": null
     },
     {
       "candidate_id": "CAND_SUBMIT_002",
@@ -57,7 +70,14 @@
         "card1_200018",
         "card1_200037"
       ],
-      "apply_in_pr718": true
+      "apply_in_pr718": true,
+      "criteria_pass": {
+        "weighted_count_gte_3": true,
+        "sample_count_gte_3": true,
+        "canonical_unambiguous": true,
+        "fp_increase_risk_low": true
+      },
+      "unapplied_reason": null
     },
     {
       "candidate_id": "CAND_PREPARE_DOCUMENT_003",
@@ -79,7 +99,14 @@
         "card1_400098",
         "card1_500067"
       ],
-      "apply_in_pr718": true
+      "apply_in_pr718": true,
+      "criteria_pass": {
+        "weighted_count_gte_3": true,
+        "sample_count_gte_3": true,
+        "canonical_unambiguous": true,
+        "fp_increase_risk_low": true
+      },
+      "unapplied_reason": null
     },
     {
       "candidate_id": "CAND_SHARE_004",
@@ -98,7 +125,14 @@
         "card1_200018",
         "card1_200058"
       ],
-      "apply_in_pr718": false
+      "apply_in_pr718": false,
+      "criteria_pass": {
+        "weighted_count_gte_3": false,
+        "sample_count_gte_3": false,
+        "canonical_unambiguous": true,
+        "fp_increase_risk_low": true
+      },
+      "unapplied_reason": "weighted_count_gte_3; sample_count_gte_3"
     },
     {
       "candidate_id": "CAND_REVIEW_005",
@@ -118,7 +152,14 @@
         "card1_100103",
         "card1_200043"
       ],
-      "apply_in_pr718": false
+      "apply_in_pr718": false,
+      "criteria_pass": {
+        "weighted_count_gte_3": false,
+        "sample_count_gte_3": false,
+        "canonical_unambiguous": true,
+        "fp_increase_risk_low": true
+      },
+      "unapplied_reason": "weighted_count_gte_3; sample_count_gte_3"
     }
   ],
   "new_canonical_candidates": []
