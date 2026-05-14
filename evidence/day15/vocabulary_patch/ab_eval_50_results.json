@@ -5,22 +5,29 @@
   "branch": "A",
   "patch_type": "vocabulary",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T22:49:09.574021+00:00",
+  "generated_at": "2026-05-14T23:04:09.352569+00:00",
   "total_samples": 500,
   "sample_size": 50,
   "A_current": {
-    "action_fp": 56,
-    "action_fn": 0,
-    "other": 55
+    "action_fp": 26,
+    "action_fn": 5,
+    "other": 28
   },
   "B_patched": {
-    "action_fp": 56,
-    "action_fn": 0,
-    "other": 32
+    "action_fp": 26,
+    "action_fn": 5,
+    "other": 10
   },
   "delta": {
     "action_fp": 0,
     "action_fn": 0,
-    "other": -23
-  }
+    "other": -18
+  },
+  "actual_composition": {
+    "fp_fn_high_risk": 20,
+    "mapping_gap": 15,
+    "parser_vs_llm_disagreement": 10,
+    "deadline_monitor": 5
+  },
+  "composition_ok": true
 }

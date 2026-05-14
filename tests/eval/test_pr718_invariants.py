@@ -46,3 +46,55 @@ def test_ab_eval_50_composition():
     assert (comp["fp_fn_high_risk"] + comp["mapping_gap"]
             + comp["parser_vs_llm_disagreement"] + comp["deadline_monitor"]) == 50
     assert len(cfg["ab_sample_ids"]) == 50
+
+
+# ── sentinel #6: full eval coverage fail-closed (Codex P1 #353-355) ──────
+def test_full_eval_coverage_fail_closed(tmp_path, monkeypatch):
+    """items=100 / preds=95 (5 누락) → fail_class=FULL_EVAL_COVERAGE_MISMATCH."""
+    from scripts.eval.pr718_vocabulary_patch import step7_full_eval
+    items = [{"sample_id": f"S{i:03d}", "gold": {"actions": []}}
+             for i in range(100)]
+    preds = [{"sample_id": f"S{i:03d}", "pred": {"actions": []}}
+             for i in range(95)]
+    out = step7_full_eval(items, preds)
+    assert out.get("fail_class") == "FULL_EVAL_COVERAGE_MISMATCH"
+    rep = out["coverage_report"]
+    assert rep["coverage_checked"] is True
+    assert rep["missing_count"] == 5
+    assert rep["extra_count"] == 0
+    assert rep["duplicate_count"] == 0
+
+
+# ── sentinel #7: AB composition enforced (Codex P1 #437-441) ──────────────
+def test_ab_composition_enforced():
+    """4 카테고리 quota 강제 — 정합 시 composition_ok=True, 미달 시 False."""
+    cfg = json.loads((OUT / "ab_eval_50_config.json").read_text(encoding="utf-8"))
+    declared = cfg["declared_composition"]
+    actual   = cfg["actual_composition"]
+    # 정합 시
+    if cfg["composition_ok"]:
+        for k in declared:
+            assert actual[k] == declared[k], (
+                f"{k}: actual={actual[k]} != declared={declared[k]}")
+        assert cfg["fail_class"] is None
+        assert sum(actual.values()) == 50
+    else:
+        assert cfg["fail_class"] == "AB_COMPOSITION_MISMATCH"
+
+
+def test_ab_composition_enforced_with_insufficient_pool():
+    """pool 미달 fixture — composition_ok=False + fail_class=AB_COMPOSITION_MISMATCH."""
+    import sys
+    from pathlib import Path
+    ROOT = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(ROOT))
+    from scripts.eval.pr718_vocabulary_patch import _build_ab_ids_stratified
+    items = [{"sample_id": f"S{i:03d}", "gold": {"actions": []}} for i in range(100)]
+    preds = [{"sample_id": f"S{i:03d}", "pred": {"actions": []}} for i in range(100)]
+    # review_rows 빈 → mapping_gap pool 비어있음 → quota 미달
+    ab_ids, actual, ok, fail_class = _build_ab_ids_stratified(items, preds, [])
+    # parser_vs_LLM / deadline pool 도 evidence 없으면 미달 가능
+    # 미달 시 fail_class 명시 + 50건은 pad 로 채워짐
+    assert len(ab_ids) == 50
+    if not ok:
+        assert fail_class == "AB_COMPOSITION_MISMATCH"

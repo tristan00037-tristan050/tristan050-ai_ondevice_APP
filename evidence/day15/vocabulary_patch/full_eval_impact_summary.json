@@ -5,8 +5,17 @@
   "branch": "A",
   "patch_type": "vocabulary",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T22:49:09.574102+00:00",
+  "generated_at": "2026-05-14T23:04:09.352641+00:00",
   "total_samples": 500,
+  "coverage_report": {
+    "coverage_checked": true,
+    "expected_samples": 500,
+    "measured_samples": 500,
+    "missing_count": 0,
+    "extra_count": 0,
+    "duplicate_count": 0,
+    "fail_class": null
+  },
   "measurement_definition": {
     "scope": "PR #718 full eval 500 (fit 150 + holdout 350)",
     "f1_type": "micro F1 on multiset action count match (TP/FP/FN by Counter diff)",

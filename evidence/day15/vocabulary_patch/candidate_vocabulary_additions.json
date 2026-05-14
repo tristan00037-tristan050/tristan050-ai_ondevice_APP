@@ -5,7 +5,7 @@
   "branch": "A",
   "patch_type": "vocabulary",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-14T22:49:09.573574+00:00",
+  "generated_at": "2026-05-14T23:04:09.352153+00:00",
   "total_samples": 500,
   "candidates_total": 5,
   "applied_in_pr718": 3,

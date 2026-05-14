@@ -305,6 +305,104 @@ def step6_ab_eval_config() -> Dict[str, Any]:
     }
 
 
+def _build_ab_ids_stratified(items: List[Dict], preds: List[Dict],
+                              review_rows: List[Dict],
+                              quota: Dict[str, int] = None) -> Tuple[
+                                List[str], Dict[str, int], bool, str]:
+    """4 카테고리 quota 강제 stratified composition.
+
+    Codex P1 #437-441 정정. 카테고리 분류:
+      fp_fn_high_risk: PR #716 evidence 의 fp/fn auto_apply cases sample_ids
+      mapping_gap:     PR #718 review_rows 의 alias_absorb / needs_review
+      parser_vs_llm:   PR #716 parser_vs_llm_disagreement field_level top examples
+      deadline_monitor: deadline_fn_fp_patterns examples
+    """
+    if quota is None:
+        quota = {"fp_fn_high_risk": 20, "mapping_gap": 15,
+                  "parser_vs_llm_disagreement": 10, "deadline_monitor": 5}
+
+    def _load_jsonl(p):
+        rows = []
+        for line in p.open(encoding="utf-8"):
+            line = line.strip()
+            if not line:
+                continue
+            obj = json.loads(line)
+            if "_metadata" in obj:
+                continue
+            rows.append(obj)
+        return rows
+
+    fp_path = ROOT / "evidence/day14/extraction_error_decomposition/fp_auto_apply_cases.jsonl"
+    fn_path = ROOT / "evidence/day14/extraction_error_decomposition/fn_auto_apply_cases.jsonl"
+    pvl_path = ROOT / "evidence/day14/extraction_error_decomposition/parser_vs_llm_disagreement.json"
+    dl_path = ROOT / "evidence/day14/extraction_error_decomposition/deadline_fn_fp_patterns.json"
+
+    fp_rows = _load_jsonl(fp_path) if fp_path.exists() else []
+    fn_rows = _load_jsonl(fn_path) if fn_path.exists() else []
+    pools: Dict[str, List[str]] = {
+        "fp_fn_high_risk":            [r["sample_id"] for r in fp_rows + fn_rows],
+        "mapping_gap":                [],
+        "parser_vs_llm_disagreement": [],
+        "deadline_monitor":           [],
+    }
+    # mapping_gap pool
+    for r in review_rows:
+        if r["decision"] in {"alias_absorb", "needs_review"}:
+            for sid in r["sample_ids"]:
+                if sid not in pools["mapping_gap"]:
+                    pools["mapping_gap"].append(sid)
+    # parser_vs_LLM pool
+    if pvl_path.exists():
+        pvl = json.loads(pvl_path.read_text(encoding="utf-8"))
+        for fld_info in (pvl.get("field_level") or {}).values():
+            for ex in fld_info.get("top_examples", []):
+                sid = ex.get("sample_id")
+                if sid and sid not in pools["parser_vs_llm_disagreement"]:
+                    pools["parser_vs_llm_disagreement"].append(sid)
+    # deadline pool
+    if dl_path.exists():
+        dl = json.loads(dl_path.read_text(encoding="utf-8"))
+        for kind_key in ["deadline_FP", "deadline_FN", "deadline_type_mismatch"]:
+            for ex in (dl.get("examples") or {}).get(kind_key, []):
+                sid = ex.get("sample_id")
+                if sid and sid not in pools["deadline_monitor"]:
+                    pools["deadline_monitor"].append(sid)
+
+    # quota 순회 — 중복 제거 + 50건 강제
+    ab_ids: List[str] = []
+    seen: set = set()
+    actual: Dict[str, int] = {}
+    composition_ok = True
+    for category, target in quota.items():
+        added = 0
+        for sid in pools[category]:
+            if sid in seen:
+                continue
+            ab_ids.append(sid)
+            seen.add(sid)
+            added += 1
+            if added >= target:
+                break
+        actual[category] = added
+        if added < target:
+            composition_ok = False
+
+    fail_class = None if composition_ok else "AB_COMPOSITION_MISMATCH"
+    if len(ab_ids) != 50:
+        # quota 부족 시 pad — 단, composition_ok=False 유지
+        all_ids = [it["sample_id"] for it in items]
+        for sid in all_ids:
+            if sid in seen:
+                continue
+            ab_ids.append(sid)
+            seen.add(sid)
+            if len(ab_ids) >= 50:
+                break
+    assert len(ab_ids) == 50, f"ab_ids must be 50, got {len(ab_ids)}"
+    return ab_ids, actual, composition_ok, fail_class
+
+
 def step6_ab_eval_run(items, preds, ab_ids: List[str]) -> Dict[str, Any]:
     """A vs B normalize_action 비교 — 같은 50건에서 v1 vs v2 결과 차이 측정."""
     items_by_id = {it["sample_id"]: it for it in items}
@@ -346,13 +444,37 @@ def step7_full_eval(items, preds) -> Dict[str, Any]:
     items_by_id = {it["sample_id"]: it for it in items}
     preds_by_id = {p["sample_id"]: p for p in preds}
 
+    # Codex P1 #353-355 정정: coverage fail-closed (Option A).
+    items_id_set = set(items_by_id.keys())
+    preds_id_set = set(preds_by_id.keys())
+    missing = items_id_set - preds_id_set
+    extra   = preds_id_set - items_id_set
+    pred_id_list = [p["sample_id"] for p in preds]
+    duplicate_ids = [sid for sid, c in Counter(pred_id_list).items() if c > 1]
+    measured_count = len(items_id_set & preds_id_set)
+    coverage_report = {
+        "coverage_checked":  True,
+        "expected_samples":  len(items_id_set),
+        "measured_samples":  measured_count,
+        "missing_count":     len(missing),
+        "extra_count":       len(extra),
+        "duplicate_count":   len(duplicate_ids),
+        "fail_class":        None,
+    }
+    if missing or extra or duplicate_ids:
+        coverage_report["fail_class"] = "FULL_EVAL_COVERAGE_MISMATCH"
+        coverage_report["missing_ids"]   = sorted(missing)[:20]
+        coverage_report["extra_ids"]     = sorted(extra)[:20]
+        coverage_report["duplicate_ids"] = duplicate_ids[:20]
+        # hard fail — caller 가 evidence 저장 후 exit 처리
+        return {"coverage_report": coverage_report, "fail_class":
+                coverage_report["fail_class"]}
+
     def _measure(normalize_fn) -> Dict[str, int]:
         fp_total = fn_total = tp_total = 0
         other_count = 0
         for sid, gold in items_by_id.items():
-            rec  = preds_by_id.get(sid)
-            if not rec:
-                continue
+            rec  = preds_by_id[sid]
             pred = rec["pred"]
             gold_actions = (gold.get("gold") or {}).get("actions") or []
             pred_actions = pred.get("actions") or []
@@ -374,6 +496,7 @@ def step7_full_eval(items, preds) -> Dict[str, Any]:
     after  = _measure(normalize_action_v2)
     # safety monitors (unchanged — vocabulary 만 변경)
     return {
+        "coverage_report": coverage_report,
         "measurement_definition": {
             "scope":             "PR #718 full eval 500 (fit 150 + holdout 350)",
             "f1_type":           "micro F1 on multiset action count match (TP/FP/FN by Counter diff)",
@@ -443,28 +566,29 @@ def main() -> int:
                        candidates=candidates, new_candidates=new_candidates)
     alias_patch = step5_alias_patch(candidates)
     ab_cfg = step6_ab_eval_config()
-    # AB eval ids — 첫 50 (간이): top 50 OOV row 의 sample_ids 50건 추출
-    ab_ids: List[str] = []
-    seen = set()
-    for row in review_rows:
-        for sid in row["sample_ids"]:
-            if sid not in seen:
-                seen.add(sid)
-                ab_ids.append(sid)
-            if len(ab_ids) >= 50:
-                break
-        if len(ab_ids) >= 50:
-            break
-    while len(ab_ids) < 50:
-        for it in items:
-            if it["sample_id"] not in seen:
-                seen.add(it["sample_id"])
-                ab_ids.append(it["sample_id"])
-            if len(ab_ids) >= 50:
-                break
+    # Codex P1 #437-441 정정: AB composition 강제 (quota 기반 stratified).
+    ab_ids, ab_actual, ab_composition_ok, ab_fail_class = _build_ab_ids_stratified(
+        items, preds, review_rows)
+    ab_cfg["declared_composition"] = ab_cfg["composition"]
+    ab_cfg["actual_composition"]   = ab_actual
+    ab_cfg["composition_ok"]       = ab_composition_ok
+    ab_cfg["fail_class"]           = ab_fail_class
 
     ab_results = step6_ab_eval_run(items, preds, ab_ids)
+    ab_results["actual_composition"] = ab_actual
+    ab_results["composition_ok"]     = ab_composition_ok
     impact = step7_full_eval(items, preds)
+    # Codex P1 #353-355 정정: coverage fail-closed
+    if impact.get("fail_class") == "FULL_EVAL_COVERAGE_MISMATCH":
+        (OUT / "full_eval_impact_summary.json").write_text(json.dumps({
+            **_meta(),
+            **impact,
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps({"ok": False,
+                          "fail_class": "FULL_EVAL_COVERAGE_MISMATCH",
+                          "coverage_report": impact["coverage_report"]},
+                          ensure_ascii=False))
+        sys.exit(1)
     branch_b = step8_branch_b(impact)
 
     # 출력
