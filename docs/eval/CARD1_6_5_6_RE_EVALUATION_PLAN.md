@@ -100,9 +100,41 @@ Tier 1 1개라도 실패 시 production candidate 불가.
 
 `evidence/day11/mode_d/metrics_13.json` 참조.
 
-## 6. tentative decision
+## 6. Official Decision (PR #714, Day 12 갱신)
 
-`MEASURED_ONLY` (PR #713 범위). 공식 production candidate 판정은 PR #714 에서 수행.
+- verdict 흐름: MEASURED_ONLY (PR #713) → **PATCH** (PR #714)
+- 메인 팀 최종 문구: Card 1 is safe enough for internal analysis, but not mature enough for production candidate or external beta.
+
+### 6-1. 카드 1 외부 베타 배포 영역
+- 외부 베타 배포 **불가**
+- 자동 적용 사용자 노출 **불가**
+- production candidate 승인 **불가**
+
+### 6-2. 허용 영역 (내부 알파)
+- 내부 알파 검증 (auto_apply UI / 실행 OFF, manual review only)
+- 개발팀 검증
+- 라벨팀 오류 분석
+- calibration 실험
+- extraction decomposition
+
+### 6-3. 후속 PR 구조
+
+| PR | 영역 |
+|---|---|
+| PR #715 | Calibration + Auto-apply Threshold Rework (fit/holdout split + sweep) |
+| PR #716 | Extraction Error Decomposition (action / deadline) |
+| PR #717 | Conditional LoRA (PR #715/#716 결과 부족 시) |
+| PR #718 | Final D mode re-measurement (13지표 재평가) |
+
+### 6-4. Butler 본체 통합 진입 조건 (6가지)
+1. PR #715 완료
+2. PR #716 완료
+3. PR #717 완료 (필요 시)
+4. PR #718 D mode final re-measurement 완료
+5. PR #718 Tier 1~4 모두 PASS
+6. PR #718 official verdict = PROCEED
+
+모두 충족 전 Butler 본체 통합 / 외부 베타 / 자동 적용 노출 **금지**.
 
 ## 4. 6.5.6 단계 작업 일정
 
