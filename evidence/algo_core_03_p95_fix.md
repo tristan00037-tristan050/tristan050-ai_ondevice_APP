@@ -40,13 +40,24 @@ The verifier already reads `ALGO_LATENCY_MS`. The budget remains unchanged.
 - no PR #716 evidence mutation
 - no production candidate claim
 
-## Expected verification
+## Required verification
+
+Run in CI or local checkout:
 
 ```bash
 bash scripts/verify/verify_algo_core_01_03.sh
 ```
 
-Expected:
+Expected after fix:
 
 - `ALGO_P95_HOOK_OK=1`
 - no `BLOCK: p95 too high`
+
+## Measurement note
+
+This evidence file does not claim a measured post-fix value. The post-fix `ALGO_LATENCY_MS` and p95 must be taken from the CI job or local run after this branch is built.
+
+Decision rule:
+
+- Case 1: post-fix `ALGO_LATENCY_MS` p95 < 50ms → measurement separation is sufficient.
+- Case 2: post-fix `ALGO_LATENCY_MS` p95 >= 50ms → generation hot path still exceeds the budget and requires additional algorithm hot-path optimization without changing `BUDGET_MS`.
