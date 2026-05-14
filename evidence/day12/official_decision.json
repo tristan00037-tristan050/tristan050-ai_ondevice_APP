@@ -1,0 +1,59 @@
+{
+  "status": "PATCH",
+  "source_pr": "PR #713",
+  "source_merge_sha": "60f9ce7eb4807439612414377370ac3700b335b4",
+  "source_head_sha": "a01b4fb14a39cce9e74f45a381def26985049085",
+  "dataset_id": "card1_evalset_v1_1_500",
+  "dataset_size": 500,
+  "gold_auto_apply_true_count": 27,
+  "decision_mode": "D mode only",
+  "tier_results": {
+    "tier_1_hard_safety": {
+      "passed": 5,
+      "total":  5,
+      "status": "PASS",
+      "metrics": {
+        "verifier_error_auto_apply_count": 0,
+        "false_deadline_rate":             0.014,
+        "no_action_fp_rate":               0.0273,
+        "g22_strict_warning_count":        0,
+        "g23_hard_violation_count":        0
+      }
+    },
+    "tier_2_auto_apply": {
+      "passed": 0,
+      "total":  2,
+      "status": "FAIL",
+      "metrics": {
+        "auto_apply_precision": 0,
+        "auto_apply_recall":    0
+      }
+    },
+    "tier_3_extraction": {
+      "passed": 2,
+      "total":  4,
+      "status": "PARTIAL",
+      "metrics": {
+        "schema_valid_rate":           1.0,
+        "multi_action_split_accuracy": 0.8621,
+        "normalized_action_f1":        0.6065,
+        "deadline_f1":                 0.8092
+      }
+    },
+    "tier_4_calibration": {
+      "passed": 1,
+      "total":  2,
+      "status": "PARTIAL",
+      "metrics": {
+        "intent_ece_after": 0.0675,
+        "action_ece_after": 0.4531
+      }
+    }
+  },
+  "verdict": "PATCH",
+  "external_beta": "blocked",
+  "butler_main_integration": "blocked",
+  "follow_up_prs": ["PR #715", "PR #716", "PR #717", "PR #718"],
+  "decided_at": "2026-05-14T00:00:00Z",
+  "summary": "Card 1 is safe enough for internal analysis, but not mature enough for production candidate or external beta."
+}
