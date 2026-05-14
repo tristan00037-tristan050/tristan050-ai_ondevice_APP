@@ -1,0 +1,51 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 715,
+  "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-14T06:40:54.787248+00:00",
+  "total_samples": 500,
+  "total_action_fn": 12,
+  "multi_action_total": 29,
+  "multi_action_full_miss": 0,
+  "multi_action_partial_miss": 0,
+  "multi_action_collapse": 4,
+  "top_patterns": [
+    {
+      "pattern_id": "FN-B_missed_sub_action_in_multi",
+      "count": 4,
+      "share": 0.008,
+      "example_sample_ids": [
+        "card1_100005",
+        "card1_100019",
+        "card1_100020",
+        "card1_100112"
+      ],
+      "recommended_fix": "multi-action split prompt"
+    },
+    {
+      "pattern_id": "FN-A_missed_single_action",
+      "count": 4,
+      "share": 0.008,
+      "example_sample_ids": [
+        "card1_100040",
+        "card1_100077",
+        "card1_100116",
+        "card1_100117"
+      ],
+      "recommended_fix": "prompt needs stronger action decomposition"
+    },
+    {
+      "pattern_id": "FN-D_evidence_present_but_not_extracted",
+      "count": 4,
+      "share": 0.008,
+      "example_sample_ids": [
+        "card1_100087",
+        "card1_100088",
+        "card1_400003",
+        "card1_400043"
+      ],
+      "recommended_fix": "LLM ignored evidence — prompt"
+    }
+  ]
+}

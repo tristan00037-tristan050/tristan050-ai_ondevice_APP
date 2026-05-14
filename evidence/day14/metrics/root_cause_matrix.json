@@ -1,0 +1,138 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 715,
+  "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-14T06:40:54.790549+00:00",
+  "total_samples": 500,
+  "causes": [
+    "prompt",
+    "schema",
+    "parser",
+    "vocabulary",
+    "model",
+    "gold"
+  ],
+  "rows": [
+    {
+      "error_type": "mapping_gap",
+      "count": 132,
+      "share": 0.264,
+      "prompt": 0.1,
+      "schema": 0.0,
+      "parser": 0.0,
+      "vocabulary": 0.7,
+      "model": 0.0,
+      "gold": 0.2,
+      "recommended_fix_cause": "vocabulary"
+    },
+    {
+      "error_type": "FP-E_report_question_as_action",
+      "count": 113,
+      "share": 0.226,
+      "prompt": 0.8,
+      "schema": 0.1,
+      "parser": 0.0,
+      "vocabulary": 0.0,
+      "model": 0.0,
+      "gold": 0.1,
+      "recommended_fix_cause": "prompt"
+    },
+    {
+      "error_type": "FP-C_wrong_normalized_action",
+      "count": 101,
+      "share": 0.202,
+      "prompt": 0.2,
+      "schema": 0.0,
+      "parser": 0.0,
+      "vocabulary": 0.7,
+      "model": 0.0,
+      "gold": 0.1,
+      "recommended_fix_cause": "vocabulary"
+    },
+    {
+      "error_type": "FP-A_hallucinated_action",
+      "count": 24,
+      "share": 0.048,
+      "prompt": 0.7,
+      "schema": 0.2,
+      "parser": 0.0,
+      "vocabulary": 0.0,
+      "model": 0.1,
+      "gold": 0.0,
+      "recommended_fix_cause": "prompt"
+    },
+    {
+      "error_type": "FP-D_no_action_violation",
+      "count": 21,
+      "share": 0.042,
+      "prompt": 0.6,
+      "schema": 0.2,
+      "parser": 0.0,
+      "vocabulary": 0.0,
+      "model": 0.0,
+      "gold": 0.2,
+      "recommended_fix_cause": "prompt"
+    },
+    {
+      "error_type": "deadline_FP",
+      "count": 7,
+      "share": 0.014,
+      "prompt": 0.5,
+      "schema": 0.2,
+      "parser": 0.3,
+      "vocabulary": 0.0,
+      "model": 0.0,
+      "gold": 0.0,
+      "recommended_fix_cause": "prompt"
+    },
+    {
+      "error_type": "FN-B_missed_sub_action_in_multi",
+      "count": 4,
+      "share": 0.008,
+      "prompt": 0.6,
+      "schema": 0.2,
+      "parser": 0.0,
+      "vocabulary": 0.0,
+      "model": 0.2,
+      "gold": 0.0,
+      "recommended_fix_cause": "prompt"
+    },
+    {
+      "error_type": "FN-A_missed_single_action",
+      "count": 4,
+      "share": 0.008,
+      "prompt": 0.6,
+      "schema": 0.0,
+      "parser": 0.2,
+      "vocabulary": 0.0,
+      "model": 0.2,
+      "gold": 0.0,
+      "recommended_fix_cause": "prompt"
+    },
+    {
+      "error_type": "FN-D_evidence_present_but_not_extracted",
+      "count": 4,
+      "share": 0.008,
+      "prompt": 0.3,
+      "schema": 0.1,
+      "parser": 0.0,
+      "vocabulary": 0.0,
+      "model": 0.6,
+      "gold": 0.0,
+      "recommended_fix_cause": "model"
+    },
+    {
+      "error_type": "deadline_FN",
+      "count": 4,
+      "share": 0.008,
+      "prompt": 0.4,
+      "schema": 0.0,
+      "parser": 0.4,
+      "vocabulary": 0.0,
+      "model": 0.2,
+      "gold": 0.0,
+      "recommended_fix_cause": "prompt"
+    }
+  ]
+}

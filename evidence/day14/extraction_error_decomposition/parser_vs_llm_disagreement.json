@@ -1,0 +1,577 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 715,
+  "merge_sha": "194d07eec4a196df65f9801f5ad35ed67c60520b",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-14T06:40:54.788477+00:00",
+  "total_samples": 500,
+  "record_level": {
+    "total_record_disagreement": 214,
+    "fields_disagree_distribution": {
+      "1": 71,
+      "2": 82,
+      "3": 56,
+      "4": 5
+    }
+  },
+  "field_level": {
+    "deadline_type": {
+      "disagreement_count": 54,
+      "share": 0.108,
+      "top_examples": [
+        {
+          "sample_id": "card1_100004",
+          "gold": "CONDITION",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100006",
+          "gold": "HARD",
+          "pred": "SOFT"
+        },
+        {
+          "sample_id": "card1_100010",
+          "gold": "HARD",
+          "pred": "SOFT"
+        },
+        {
+          "sample_id": "card1_100017",
+          "gold": "HARD",
+          "pred": "SOFT"
+        },
+        {
+          "sample_id": "card1_100018",
+          "gold": "CONDITION",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100021",
+          "gold": "HARD",
+          "pred": "SOFT"
+        },
+        {
+          "sample_id": "card1_100026",
+          "gold": "INQUIRY",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100027",
+          "gold": "INQUIRY",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100029",
+          "gold": "INQUIRY",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100044",
+          "gold": "CONDITION",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100048",
+          "gold": "CONDITION",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100052",
+          "gold": "HARD",
+          "pred": "SOFT"
+        },
+        {
+          "sample_id": "card1_100058",
+          "gold": "URGENCY",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100077",
+          "gold": "URGENCY",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100080",
+          "gold": "CONDITION",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100088",
+          "gold": "HARD",
+          "pred": "SOFT"
+        },
+        {
+          "sample_id": "card1_100089",
+          "gold": "CONDITION",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100091",
+          "gold": "HARD",
+          "pred": "SOFT"
+        },
+        {
+          "sample_id": "card1_100100",
+          "gold": "INQUIRY",
+          "pred": "NONE"
+        },
+        {
+          "sample_id": "card1_100104",
+          "gold": "INQUIRY",
+          "pred": "NONE"
+        }
+      ]
+    },
+    "intent_type": {
+      "disagreement_count": 154,
+      "share": 0.308,
+      "top_examples": [
+        {
+          "sample_id": "card1_100025",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100026",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100027",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100028",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100029",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100030",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100031",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100032",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100033",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100034",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100035",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100036",
+          "gold": "QUESTION",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100048",
+          "gold": "REPORT",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100055",
+          "gold": "COMMAND",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100060",
+          "gold": "COMMAND",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100064",
+          "gold": "COMMAND",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100069",
+          "gold": "NO_ACTION",
+          "pred": "REPORT"
+        },
+        {
+          "sample_id": "card1_100075",
+          "gold": "COMMAND",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100078",
+          "gold": "REPORT",
+          "pred": "REQUEST"
+        },
+        {
+          "sample_id": "card1_100079",
+          "gold": "COMMAND",
+          "pred": "REQUEST"
+        }
+      ]
+    },
+    "action_required": {
+      "disagreement_count": 126,
+      "share": 0.252,
+      "top_examples": [
+        {
+          "sample_id": "card1_100025",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100026",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100027",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100028",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100029",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100030",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100031",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100032",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100033",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100034",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100035",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100036",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100048",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100078",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100099",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100100",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100101",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100102",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100103",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100104",
+          "gold": false,
+          "pred": true
+        }
+      ]
+    },
+    "answer_required": {
+      "disagreement_count": 62,
+      "share": 0.124,
+      "top_examples": [
+        {
+          "sample_id": "card1_100048",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100055",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100060",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100064",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100075",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100078",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100079",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100118",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100128",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100137",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_100140",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_200004",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_200012",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_200019",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_200025",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_200029",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_200030",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_200032",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_200033",
+          "gold": false,
+          "pred": true
+        },
+        {
+          "sample_id": "card1_200035",
+          "gold": false,
+          "pred": true
+        }
+      ]
+    },
+    "auto_apply_allowed": {
+      "disagreement_count": 27,
+      "share": 0.054,
+      "top_examples": [
+        {
+          "sample_id": "card1_400001",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400002",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400004",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400005",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400006",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400007",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400008",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400009",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400010",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400011",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400012",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400013",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400014",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400015",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400016",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400017",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400018",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400019",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400020",
+          "gold": true,
+          "pred": false
+        },
+        {
+          "sample_id": "card1_400021",
+          "gold": true,
+          "pred": false
+        }
+      ]
+    }
+  },
+  "summary_counts": {
+    "parser_wins_count": 0,
+    "llm_wins_count": 346,
+    "hybrid_wins_count": 0,
+    "both_fail_count": 154
+  },
+  "top_20_disagreement_patterns": [
+    {
+      "field": "intent_type",
+      "count": 154
+    },
+    {
+      "field": "action_required",
+      "count": 126
+    },
+    {
+      "field": "answer_required",
+      "count": 62
+    },
+    {
+      "field": "deadline_type",
+      "count": 54
+    },
+    {
+      "field": "auto_apply_allowed",
+      "count": 27
+    }
+  ]
+}
