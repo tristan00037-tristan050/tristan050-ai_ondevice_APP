@@ -1,0 +1,55 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 718,
+  "source_merge_sha": "def4bcd80190c808a38dc021cc31343a5cadb747",
+  "branch": "B",
+  "patch_type": "prompt_schema",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T01:11:55.328263+00:00",
+  "total_samples": 500,
+  "total_collapse": 4,
+  "decomp_recoverable": 3,
+  "decomp_recoverable_ratio": 0.75,
+  "rows": [
+    {
+      "sample_id": "card1_100005",
+      "text": "이거 정리해서 보내 주세요",
+      "gold_n": 2,
+      "pred_n": 1,
+      "cues": [
+        "해서",
+        "정리해서"
+      ],
+      "recoverable": true
+    },
+    {
+      "sample_id": "card1_100019",
+      "text": "고객사에 연락해서 미팅 일정 잡아주세요",
+      "gold_n": 2,
+      "pred_n": 1,
+      "cues": [
+        "해서"
+      ],
+      "recoverable": true
+    },
+    {
+      "sample_id": "card1_100020",
+      "text": "분기별 실적 자료 정리해서 보내 주세요",
+      "gold_n": 2,
+      "pred_n": 1,
+      "cues": [
+        "해서",
+        "정리해서"
+      ],
+      "recoverable": true
+    },
+    {
+      "sample_id": "card1_100112",
+      "text": "이슈 사항 정리하여 보고드리겠습니다",
+      "gold_n": 2,
+      "pred_n": 1,
+      "cues": [],
+      "recoverable": false
+    }
+  ]
+}

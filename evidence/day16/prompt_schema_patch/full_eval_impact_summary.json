@@ -1,0 +1,30 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 718,
+  "source_merge_sha": "def4bcd80190c808a38dc021cc31343a5cadb747",
+  "branch": "B",
+  "patch_type": "prompt_schema",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T01:11:55.339360+00:00",
+  "total_samples": 500,
+  "coverage_report": {
+    "coverage_checked": true,
+    "expected_samples": 500,
+    "measured_samples": 500,
+    "missing_count": 0,
+    "extra_count": 0,
+    "duplicate_count": 0,
+    "fail_class": null
+  },
+  "normalized_action_f1": 0.5976,
+  "action_fp": 261,
+  "action_fn": 11,
+  "multi_action_split_accuracy": 0.8621,
+  "deadline_f1": 0.8092,
+  "false_deadline_rate": 0.014,
+  "no_action_fp_rate": 0.0273,
+  "auto_apply_precision": 0.0,
+  "g22_strict_warning_count": 0,
+  "g23_hard_violation_count": 0,
+  "schema_valid_rate": 1.0
+}
