@@ -5,7 +5,7 @@
   "branch": "B-3A",
   "patch_type": "arbitration_measurement_only",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-15T03:45:30.719639+00:00",
+  "generated_at": "2026-05-15T05:11:55.613219+00:00",
   "total_samples": 500,
   "mixed_a_total": 67,
   "subtype_recovery": {

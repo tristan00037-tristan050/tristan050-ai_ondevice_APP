@@ -1,11 +1,24 @@
 """PR #725 Branch B-3A arbitration measurement sentinel."""
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 OUT  = ROOT / "evidence/day19/branch_b3a_arbitration"
+SCRIPT = ROOT / "scripts/eval/pr725_branch_b3a_arbitration.py"
+
+
+def _load_module():
+    """pr725_branch_b3a_arbitration 모듈 로드 (__main__ 가드로 main() 미실행)."""
+    spec = importlib.util.spec_from_file_location(
+        "pr725_branch_b3a_arbitration", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def test_mixed_a_67_subtype_coverage():
@@ -51,3 +64,47 @@ def test_pr725_verdict_measured_only():
               "recovery_potential_estimation.json"]:
         obj = json.loads((OUT / f).read_text(encoding="utf-8"))
         assert obj["verdict"] == "MEASURED_ONLY", f"{f} verdict != MEASURED_ONLY"
+
+
+# ── Codex P1/P2 정정 회귀 sentinel ───────────────────────────────────────
+def test_prediction_missing_sample_id_fail_closed(tmp_path):
+    """#6 — preds 에 sample_id 누락 시 FULL_EVAL_COVERAGE_MISMATCH fail-closed."""
+    mod = _load_module()
+    items = [{"sample_id": "S001"}, {"sample_id": "S002"}, {"sample_id": "S003"}]
+    preds = [{"sample_id": "S001"}, {"sample_id": "S002"}]   # S003 누락
+    with pytest.raises(SystemExit):
+        mod.check_coverage(items, preds, tmp_path)
+    cov = json.loads((tmp_path / "coverage_report.json").read_text(encoding="utf-8"))
+    assert cov["fail_class"] == "FULL_EVAL_COVERAGE_MISMATCH"
+    assert cov["missing_count"] > 0
+    assert "S003" in cov["missing_ids"]
+
+
+def test_prediction_duplicate_sample_id_fail_closed(tmp_path):
+    """#7 — preds 에 duplicate sample_id 시 FULL_EVAL_COVERAGE_MISMATCH fail-closed."""
+    mod = _load_module()
+    items = [{"sample_id": "S001"}, {"sample_id": "S002"}]
+    preds = [{"sample_id": "S001"}, {"sample_id": "S002"}, {"sample_id": "S002"}]
+    with pytest.raises(SystemExit):
+        mod.check_coverage(items, preds, tmp_path)
+    cov = json.loads((tmp_path / "coverage_report.json").read_text(encoding="utf-8"))
+    assert cov["fail_class"] == "FULL_EVAL_COVERAGE_MISMATCH"
+    assert cov["prediction_duplicate_count"] > 0
+    assert "S002" in cov["prediction_duplicate_ids"]
+
+
+def test_blank_evidence_action_text_not_matched():
+    """#8 — evidence/action_text 가 모두 빈 action 은 matched 로 계산되지 않는다."""
+    mod = _load_module()
+    text = "회의 자료를 금요일까지 보내주세요"
+    pred = {"actions": [
+        {"evidence": "",          "action_text": ""},                  # blank
+        {"evidence": "회의 자료", "action_text": ""},                   # matched
+        {"evidence": "",          "action_text": "존재하지 않는 문구"},  # not matched
+    ]}
+    score, blank_count = mod.evidence_score(text, pred)
+    assert blank_count == 1
+    # blank action 은 matched 0 처리 → matched 1 / 3 actions
+    assert score == round(1 / 3, 4)
+    # 이전 버그라면 blank 가 '"" in text' == True 로 과대평가됨
+    assert score < 1.0
