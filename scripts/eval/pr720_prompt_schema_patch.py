@@ -55,14 +55,23 @@ DECOMP_CUES = ["하고", "해서", " 후", "다음", "그리고", "정리해서"
 OVER_EXTRACTION_GUARD = ["가능한가요", "어떻게", "알려주세요", "확인 부탁",
                           "완료했습니다", "보고드립니다", "안내드립니다"]
 
-# ── 5분류 sentinel #7 composition ──────────────────────────────────────────
+# ── sentinel #7 composition (자문 9.2 재정의 — 자연 분포 정합) ─────────────
 AB_COMPOSITION = {
-    "multi_action_collapse":   15,
-    "action_fp_fn_high_risk":  15,
-    "parser_vs_llm_both_fail": 10,
-    "evidence_field_weakness":  5,
+    "parser_vs_llm_both_fail": 20,
+    "action_fp_fn_high_risk":  10,
+    "multi_action_collapse":    4,    # 자연 발생 전체
+    "evidence_field_weakness":  6,
     "deadline_monitor":         5,
+    "control_clean":            5,
 }
+
+# NATURAL_SHORTAGE fallback 순서 (자문 회신 정합)
+FALLBACK_ORDER = [
+    "both_fail_schema_limit",
+    "both_fail_llm_limit",
+    "action_fn_high_risk",
+    "evidence_field_weakness",
+]
 
 
 # ── normalize_action (PR #718 vocabulary patched alias 유지) ───────────────
@@ -148,36 +157,45 @@ def step2_both_fail_decomp(items: List[Dict]) -> Dict[str, Any]:
     items_by_id = {it["sample_id"]: it for it in items}
     rows = []
     parser_limit = llm_limit = schema_limit = gold_limit = 0
+    mixed_count = 0
     recoverable_by_prompt = recoverable_by_schema = recoverable_by_vocab = 0
     requires_gold_review = 0
+    # Codex P1 #2 정정: dead continue 제거 — 4축 분해 정상화.
+    # 자문 정합: parser-only-win / llm-only-win / both-wrong(schema/gold/mixed)
     for sid, gold in items_by_id.items():
         gi = gold.get("intent_type")
         ap = (a_by.get(sid, {}).get("pred") or {}).get("intent_type")
         bp = (b_by.get(sid, {}).get("pred") or {}).get("intent_type")
-        if gi == ap or gi == bp:
+        parser_correct = (gi == ap)
+        llm_correct    = (gi == bp)
+        # both_correct → skip (분류 대상 아님)
+        if parser_correct and llm_correct:
             continue
-        # 4축 분류
         gold_actions = (gold.get("gold") or {}).get("actions") or []
-        # gold_limit: gold actions 모호하거나 gold-equivalent action 없음
-        if not gold_actions and gi in {"REQUEST", "COMMAND"}:
-            gold_limit += 1
-            requires_gold_review += 1
-            classification = "gold_limit"
-        elif (b_by.get(sid, {}).get("pred") or {}).get("schema_valid") is False:
-            schema_limit += 1
-            recoverable_by_schema += 1
-            classification = "schema_limit"
-        elif ap == gi and bp != gi:
+        schema_invalid = (b_by.get(sid, {}).get("pred") or {}).get("schema_valid") is False
+
+        if parser_correct and not llm_correct:
             llm_limit += 1
             recoverable_by_prompt += 1
-            classification = "llm_limit_recoverable_by_prompt"
-        elif bp == gi and ap != gi:
+            classification = "llm_limit"
+        elif llm_correct and not parser_correct:
             parser_limit += 1
             recoverable_by_prompt += 1
-            classification = "parser_limit_recoverable_by_prompt"
+            classification = "parser_limit"
         else:
-            classification = "ambiguous_both_wrong"
-            recoverable_by_prompt += 1
+            # both wrong — schema / gold / mixed 분류
+            if schema_invalid:
+                schema_limit += 1
+                recoverable_by_schema += 1
+                classification = "schema_limit"
+            elif not gold_actions and gi in {"REQUEST", "COMMAND"}:
+                gold_limit += 1
+                requires_gold_review += 1
+                classification = "gold_limit"
+            else:
+                mixed_count += 1
+                classification = "mixed"
+
         rows.append({
             "sample_id": sid, "gold_intent": gi,
             "parser_pred": ap, "llm_pred": bp,
@@ -191,6 +209,7 @@ def step2_both_fail_decomp(items: List[Dict]) -> Dict[str, Any]:
         "llm_limit":             llm_limit,
         "schema_limit":          schema_limit,
         "gold_limit":            gold_limit,
+        "mixed":                 mixed_count,
         "recoverable_by_prompt": recoverable_by_prompt,
         "recoverable_by_schema": recoverable_by_schema,
         "recoverable_by_vocabulary": recoverable_by_vocab,
@@ -321,9 +340,13 @@ def step5_priority_score(multi_evidence: Dict, both_fail: Dict) -> Dict[str, Any
     }
 
 
-# ── 6) AB eval 50 (sentinel #7 — 5 카테고리 강제) ──────────────────────────
+# ── 6) AB eval 50 (sentinel #7 + NATURAL_SHORTAGE 정책 — 자문 회신) ────────
 def _build_ab_ids(items, preds, multi_evidence, both_fail) -> Tuple[
-        List[str], Dict[str, int], bool, str]:
+        List[str], Dict[str, int], bool, str, bool, List[Dict]]:
+    """sentinel #7 NATURAL_SHORTAGE 정책 코드화 (자문 회신 정합).
+
+    return: (ab_ids, actual, composition_ok, fail_class, natural_shortage, shortage_log)
+    """
     quota = AB_COMPOSITION
     pools: Dict[str, List[str]] = defaultdict(list)
 
@@ -331,7 +354,7 @@ def _build_ab_ids(items, preds, multi_evidence, both_fail) -> Tuple[
     for r in multi_evidence.get("rows", []):
         pools["multi_action_collapse"].append(r["sample_id"])
 
-    # action_fp_fn_high_risk
+    # action_fp_fn_high_risk + action_fn_high_risk fallback pool
     fp_path = PR716 / "fp_auto_apply_cases.jsonl"
     fn_path = PR716 / "fn_auto_apply_cases.jsonl"
     for p in [fp_path, fn_path]:
@@ -343,13 +366,20 @@ def _build_ab_ids(items, preds, multi_evidence, both_fail) -> Tuple[
                 obj = json.loads(line)
                 if "_metadata" in obj:
                     continue
-                pools["action_fp_fn_high_risk"].append(obj.get("sample_id"))
+                sid = obj.get("sample_id")
+                pools["action_fp_fn_high_risk"].append(sid)
+                pools["action_fn_high_risk"].append(sid)
 
-    # parser_vs_llm_both_fail
+    # parser_vs_llm_both_fail (전체) + schema_limit / llm_limit 분리 fallback pool
     for r in both_fail.get("rows", []):
         pools["parser_vs_llm_both_fail"].append(r["sample_id"])
+        cls = r.get("classification", "")
+        if cls == "schema_limit":
+            pools["both_fail_schema_limit"].append(r["sample_id"])
+        elif cls == "llm_limit":
+            pools["both_fail_llm_limit"].append(r["sample_id"])
 
-    # evidence_field_weakness — PR #716 mapping gaps OOV + base verifier errors
+    # evidence_field_weakness
     pvl_path = PR716 / "parser_vs_llm_disagreement.json"
     if pvl_path.exists():
         pvl = json.loads(pvl_path.read_text(encoding="utf-8"))
@@ -369,10 +399,22 @@ def _build_ab_ids(items, preds, multi_evidence, both_fail) -> Tuple[
                 if sid:
                     pools["deadline_monitor"].append(sid)
 
+    # control_clean: gold == pred 인 row (PR #715 measurements 안전 control)
+    items_by_id = {it["sample_id"]: it for it in items}
+    preds_by_id = {p["sample_id"]: p for p in preds}
+    for sid, gold in items_by_id.items():
+        gi = gold.get("intent_type")
+        pi = (preds_by_id.get(sid, {}).get("pred") or {}).get("intent_type")
+        if gi == pi and gi in {"REQUEST", "REPORT"}:
+            pools["control_clean"].append(sid)
+
     ab_ids: List[str] = []
     seen: set = set()
     actual: Dict[str, int] = {}
-    composition_ok = True
+    shortage_log: List[Dict] = []
+    natural_shortage = False
+    fallback_applied = False
+
     for category, target in quota.items():
         added = 0
         for sid in pools[category]:
@@ -383,9 +425,39 @@ def _build_ab_ids(items, preds, multi_evidence, both_fail) -> Tuple[
                 break
         actual[category] = added
         if added < target:
-            composition_ok = False
-    fail_class = None if composition_ok else "AB_COMPOSITION_MISMATCH"
-    # pad to 50
+            shortage = target - added
+            shortage_log.append({
+                "category":  category,
+                "declared":  target,
+                "available": len(pools[category]),
+                "shortage":  shortage,
+            })
+            natural_shortage = True
+            # fallback_order 순회
+            for fb in FALLBACK_ORDER:
+                if shortage <= 0:
+                    break
+                for sid in pools.get(fb, []):
+                    if sid in seen or sid is None:
+                        continue
+                    ab_ids.append(sid); seen.add(sid)
+                    actual[fb] = actual.get(fb, 0) + 1
+                    fallback_applied = True
+                    shortage -= 1
+                    if shortage <= 0:
+                        break
+
+    if natural_shortage and fallback_applied:
+        fail_class = "AB_COMPOSITION_NATURAL_SHORTAGE"
+        composition_ok = True   # MEASURED_ONLY warning, BLOCK 아님
+    elif natural_shortage and not fallback_applied:
+        fail_class = "AB_COMPOSITION_MISMATCH"
+        composition_ok = False
+    else:
+        fail_class = None
+        composition_ok = True
+
+    # 50건 정합 — 부족 시 pad
     if len(ab_ids) != 50:
         all_ids = [it["sample_id"] for it in items]
         for sid in all_ids:
@@ -395,18 +467,23 @@ def _build_ab_ids(items, preds, multi_evidence, both_fail) -> Tuple[
             if len(ab_ids) >= 50:
                 break
     assert len(ab_ids) == 50
-    return ab_ids, actual, composition_ok, fail_class
+    return ab_ids, actual, composition_ok, fail_class, natural_shortage, shortage_log
 
 
 # ── 6.b) AB eval 측정 (A current vs B patched simulation) ──────────────────
 def _split_actions_on_cues(text: str, action_text: str) -> int:
-    """patched simulation: cue 매칭 시 분해 (atomic action 추정)."""
+    """patched simulation: cue 매칭 시 분해 (atomic action 추정).
+
+    Codex P1 #1 정정: cue 는 normalize 된 action_text 보다 원문 text 에 등장 빈도 높음.
+    cue_source = text + action_text 양쪽에서 확인.
+    """
     if not action_text:
         return 0
+    cue_source = f"{text} {action_text}"
     count = 1
     for c in DECOMP_CUES:
-        if c in action_text:
-            count += action_text.count(c)
+        if c in cue_source:
+            count += cue_source.count(c)
     return min(count, 4)   # 안전 상한
 
 
@@ -647,10 +724,13 @@ def main() -> int:
     schema_patch   = step4_schema_patch()
     priority       = step5_priority_score(multi_evidence, both_fail)
 
-    ab_ids, actual, composition_ok, fail_class = _build_ab_ids(
-        items, preds, multi_evidence, both_fail)
+    ab_ids, actual, composition_ok, fail_class, natural_shortage, shortage_log = (
+        _build_ab_ids(items, preds, multi_evidence, both_fail))
     ab_results = step6_ab_eval(items, preds, ab_ids, actual,
                                  composition_ok, fail_class)
+    ab_results["natural_shortage"] = natural_shortage
+    ab_results["shortage_log"]     = shortage_log
+    ab_results["fallback_order"]   = FALLBACK_ORDER
     full_eval  = step7_full_eval(items, preds)
 
     # sentinel #6 — coverage fail-closed
@@ -677,14 +757,18 @@ def main() -> int:
         json.dumps(priority, ensure_ascii=False, indent=2), encoding="utf-8")
     (OUT / "ab_eval_50_config.json").write_text(json.dumps({
         **_meta(),
-        "ab_eval_size":          50,
-        "declared_composition":  AB_COMPOSITION,
-        "actual_composition":    actual,
-        "composition_ok":        composition_ok,
-        "fail_class":            fail_class,
-        "sentinel_7_enforced":   True,
-        "tolerance":             0,
-        "ab_sample_ids":         ab_ids,
+        "ab_eval_size":                       50,
+        "declared_composition":               AB_COMPOSITION,
+        "actual_composition":                 actual,
+        "composition_ok":                     composition_ok,
+        "fail_class":                         fail_class,
+        "natural_shortage":                   natural_shortage,
+        "shortage_log":                       shortage_log,
+        "fallback_order":                     FALLBACK_ORDER,
+        "sentinel_7_enforced":                True,
+        "sentinel_7_natural_shortage_policy": "enabled",
+        "tolerance":                          0,
+        "ab_sample_ids":                      ab_ids,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     (OUT / "ab_eval_50_results.json").write_text(
         json.dumps(ab_results, ensure_ascii=False, indent=2), encoding="utf-8")

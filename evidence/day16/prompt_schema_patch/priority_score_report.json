@@ -5,7 +5,7 @@
   "branch": "B",
   "patch_type": "prompt_schema",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-15T00:27:11.793881+00:00",
+  "generated_at": "2026-05-15T01:11:55.335735+00:00",
   "total_samples": 500,
   "formula": "priority_score = 3.0 * multi_action_collapse + 2.5 * action_fn_recoverable + 2.0 * action_fp_reducible + 2.0 * both_fail + 1.5 * parser_hint_recoverable + 1.0 * evidence_missing - 3.0 * safety_regression - 2.0 * schema_invalid - 2.0 * over_extraction - 1.5 * prompt_complexity",
   "candidates": [
@@ -30,13 +30,13 @@
     {
       "candidate": "negative_examples_QUESTION_REPORT_NO_ACTION",
       "priority": "4",
-      "score": 232.0,
+      "score": 164.0,
       "recommend_apply": true
     },
     {
       "candidate": "parser_hint_policy",
       "priority": "5",
-      "score": 232.0,
+      "score": 164.0,
       "recommend_apply": true
     }
   ],

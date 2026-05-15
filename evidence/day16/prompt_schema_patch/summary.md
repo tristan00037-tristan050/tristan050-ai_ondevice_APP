@@ -13,16 +13,16 @@
 - decomp_recoverable: 3 (75.0%)
 
 ## Parser vs LLM both_fail 4축 분해
-- both_fail_total: 120
-- parser_limit / llm_limit / schema_limit / gold_limit: 0 / 0 / 0 / 4
+- both_fail_total: 202
+- parser_limit / llm_limit / schema_limit / gold_limit: 47 / 35 / 0 / 4
 
 ## AB Eval 50
-- composition_ok: False / fail_class: AB_COMPOSITION_MISMATCH
-- A f1: 0.7959
-- B f1: 0.7525
-- delta f1: -0.0434
-- delta action_fp: 4
-- delta action_fn: 1
+- composition_ok: True / fail_class: AB_COMPOSITION_NATURAL_SHORTAGE
+- A f1: 0.7879
+- B f1: 0.5735
+- delta f1: -0.2144
+- delta action_fp: 37
+- delta action_fn: 0
 
 ## Full Eval Impact (12 fields)
 - normalized_action_f1:        0.5976
