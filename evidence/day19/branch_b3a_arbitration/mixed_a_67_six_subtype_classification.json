@@ -1,0 +1,553 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 723,
+  "source_merge_sha": "d26883e87f1b079f852ecaa45e7def487905b30e",
+  "branch": "B-3A",
+  "patch_type": "arbitration_measurement_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T03:45:30.718173+00:00",
+  "total_samples": 500,
+  "mixed_a_total": 67,
+  "subtype_distribution": {
+    "MIXED-A1_parser_action_llm_object": 59,
+    "MIXED-A3_llm_action_parser_evidence": 8
+  },
+  "rows": [
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_100031"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_100033"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_100034"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 1,
+      "llm_field_score": 1,
+      "sample_id": "card1_100048"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_100078"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_100101"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_100102"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_100103"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_100105"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_100107"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_100118"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_200021"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_200047"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_200051"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 2,
+      "sample_id": "card1_200053"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 1,
+      "sample_id": "card1_200054"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400031"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400032"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400033"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400034"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400049"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400059"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400061"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400063"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400064"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400065"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400067"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400068"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400070"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400071"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400072"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400075"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 2,
+      "sample_id": "card1_400076"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_400078"
+    },
+    {
+      "subtype": "MIXED-A3_llm_action_parser_evidence",
+      "recovery_route": "evidence-aware arbitration",
+      "recoverable_estimate": 0.6,
+      "parser_field_score": 2,
+      "llm_field_score": 4,
+      "sample_id": "card1_400083"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400089"
+    },
+    {
+      "subtype": "MIXED-A3_llm_action_parser_evidence",
+      "recovery_route": "evidence-aware arbitration",
+      "recoverable_estimate": 0.6,
+      "parser_field_score": 2,
+      "llm_field_score": 4,
+      "sample_id": "card1_400093"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400099"
+    },
+    {
+      "subtype": "MIXED-A3_llm_action_parser_evidence",
+      "recovery_route": "evidence-aware arbitration",
+      "recoverable_estimate": 0.6,
+      "parser_field_score": 2,
+      "llm_field_score": 4,
+      "sample_id": "card1_400106"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400110"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400112"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400167"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400168"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400169"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400170"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400179"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_400180"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_500002"
+    },
+    {
+      "subtype": "MIXED-A3_llm_action_parser_evidence",
+      "recovery_route": "evidence-aware arbitration",
+      "recoverable_estimate": 0.6,
+      "parser_field_score": 2,
+      "llm_field_score": 4,
+      "sample_id": "card1_500006"
+    },
+    {
+      "subtype": "MIXED-A3_llm_action_parser_evidence",
+      "recovery_route": "evidence-aware arbitration",
+      "recoverable_estimate": 0.6,
+      "parser_field_score": 2,
+      "llm_field_score": 4,
+      "sample_id": "card1_500009"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_500020"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_500032"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_500033"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_500036"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_500044"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_500048"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_500049"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_500050"
+    },
+    {
+      "subtype": "MIXED-A3_llm_action_parser_evidence",
+      "recovery_route": "evidence-aware arbitration",
+      "recoverable_estimate": 0.6,
+      "parser_field_score": 2,
+      "llm_field_score": 4,
+      "sample_id": "card1_500063"
+    },
+    {
+      "subtype": "MIXED-A3_llm_action_parser_evidence",
+      "recovery_route": "evidence-aware arbitration",
+      "recoverable_estimate": 0.6,
+      "parser_field_score": 2,
+      "llm_field_score": 3,
+      "sample_id": "card1_500067"
+    },
+    {
+      "subtype": "MIXED-A3_llm_action_parser_evidence",
+      "recovery_route": "evidence-aware arbitration",
+      "recoverable_estimate": 0.6,
+      "parser_field_score": 2,
+      "llm_field_score": 4,
+      "sample_id": "card1_500068"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_500101"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_500102"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 4,
+      "llm_field_score": 2,
+      "sample_id": "card1_500104"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_500105"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 3,
+      "llm_field_score": 3,
+      "sample_id": "card1_500116"
+    },
+    {
+      "subtype": "MIXED-A1_parser_action_llm_object",
+      "recovery_route": "hybrid merge rule 개선",
+      "recoverable_estimate": 0.55,
+      "parser_field_score": 2,
+      "llm_field_score": 2,
+      "sample_id": "card1_500120"
+    }
+  ]
+}

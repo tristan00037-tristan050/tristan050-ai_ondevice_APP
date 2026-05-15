@@ -1,0 +1,284 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 723,
+  "source_merge_sha": "d26883e87f1b079f852ecaa45e7def487905b30e",
+  "branch": "B-3A",
+  "patch_type": "arbitration_measurement_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T03:45:30.719390+00:00",
+  "total_samples": 500,
+  "mixed_a_total": 67,
+  "avg_evidence_score": 1.0,
+  "low_evidence_count": 0,
+  "evidence_scores": [
+    {
+      "sample_id": "card1_100031",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_100033",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_100034",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_100048",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_100078",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_100101",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_100102",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_100103",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_100105",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_100107",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_100118",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_200021",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_200047",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_200051",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_200053",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_200054",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400031",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400032",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400033",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400034",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400049",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400059",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400061",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400063",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400064",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400065",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400067",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400068",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400070",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400071",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400072",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400075",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400076",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400078",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400083",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400089",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400093",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400099",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400106",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400110",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400112",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400167",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400168",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400169",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400170",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400179",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_400180",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500002",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500006",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500009",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500020",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500032",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500033",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500036",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500044",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500048",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500049",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500050",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500063",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500067",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500068",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500101",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500102",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500104",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500105",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500116",
+      "evidence_score": 1.0
+    },
+    {
+      "sample_id": "card1_500120",
+      "evidence_score": 1.0
+    }
+  ],
+  "note": "evidence_score < 0.5 인 row 는 evidence-aware arbitration 후보 (AR-1)"
+}

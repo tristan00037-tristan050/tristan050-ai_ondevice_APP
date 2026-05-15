@@ -1,0 +1,26 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 723,
+  "source_merge_sha": "d26883e87f1b079f852ecaa45e7def487905b30e",
+  "branch": "B-3A",
+  "patch_type": "arbitration_measurement_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T03:45:30.719639+00:00",
+  "total_samples": 500,
+  "mixed_a_total": 67,
+  "subtype_recovery": {
+    "MIXED-A1_parser_action_llm_object": {
+      "count": 59,
+      "avg_recoverable_estimate": 0.55,
+      "estimated_recoverable_rows": 32.5,
+      "recovery_route": "hybrid merge rule 개선"
+    },
+    "MIXED-A3_llm_action_parser_evidence": {
+      "count": 8,
+      "avg_recoverable_estimate": 0.6,
+      "estimated_recoverable_rows": 4.8,
+      "recovery_route": "evidence-aware arbitration"
+    }
+  },
+  "total_estimated_recoverable": 37.3
+}
