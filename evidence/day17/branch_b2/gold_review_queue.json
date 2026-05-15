@@ -1,0 +1,96 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 720,
+  "source_merge_sha": "e838543b44cfa03ab31893304547f7218de44b82",
+  "ops_standards_pr": 721,
+  "ops_merge_sha": "cc0b5759ca794a08797a4ffc5bd5260608c47c1e",
+  "branch": "B-2",
+  "patch_type": "over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T02:08:41.690221+00:00",
+  "total_samples": 500,
+  "queue_total": 4,
+  "rows": [
+    {
+      "sample_id": "card1_200004",
+      "reason": "gold_limit",
+      "current_gold": {
+        "intent_type": "COMMAND",
+        "actions": []
+      },
+      "parser_output": {
+        "intent_type": "NO_ACTION"
+      },
+      "llm_output": {
+        "intent_type": "REQUEST"
+      },
+      "hybrid_output": {
+        "intent_type": "REQUEST"
+      },
+      "why_gold_review_needed": "Branch C 진입 조건 충족, gold ambiguity 의심",
+      "recommended_action": "review_only"
+    },
+    {
+      "sample_id": "card1_200029",
+      "reason": "gold_limit",
+      "current_gold": {
+        "intent_type": "REQUEST",
+        "actions": []
+      },
+      "parser_output": {
+        "intent_type": "NO_ACTION"
+      },
+      "llm_output": {
+        "intent_type": "REPORT"
+      },
+      "hybrid_output": {
+        "intent_type": "REPORT"
+      },
+      "why_gold_review_needed": "Branch C 진입 조건 충족, gold ambiguity 의심",
+      "recommended_action": "review_only"
+    },
+    {
+      "sample_id": "card1_200033",
+      "reason": "gold_limit",
+      "current_gold": {
+        "intent_type": "COMMAND",
+        "actions": []
+      },
+      "parser_output": {
+        "intent_type": "REQUEST"
+      },
+      "llm_output": {
+        "intent_type": "REQUEST"
+      },
+      "hybrid_output": {
+        "intent_type": "REQUEST"
+      },
+      "why_gold_review_needed": "Branch C 진입 조건 충족, gold ambiguity 의심",
+      "recommended_action": "review_only"
+    },
+    {
+      "sample_id": "card1_200049",
+      "reason": "gold_limit",
+      "current_gold": {
+        "intent_type": "COMMAND",
+        "actions": []
+      },
+      "parser_output": {
+        "intent_type": "REQUEST"
+      },
+      "llm_output": {
+        "intent_type": "REQUEST"
+      },
+      "hybrid_output": {
+        "intent_type": "REQUEST"
+      },
+      "why_gold_review_needed": "Branch C 진입 조건 충족, gold ambiguity 의심",
+      "recommended_action": "review_only"
+    }
+  ],
+  "operational_rules": [
+    "Branch C 승격 금지",
+    "PR #722 에서 gold label 수정 금지",
+    "day review queue 보관 only"
+  ]
+}

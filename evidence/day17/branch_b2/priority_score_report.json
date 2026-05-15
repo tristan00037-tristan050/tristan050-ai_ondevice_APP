@@ -1,0 +1,31 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 720,
+  "source_merge_sha": "e838543b44cfa03ab31893304547f7218de44b82",
+  "ops_standards_pr": 721,
+  "ops_merge_sha": "cc0b5759ca794a08797a4ffc5bd5260608c47c1e",
+  "branch": "B-2",
+  "patch_type": "over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T02:08:41.680814+00:00",
+  "total_samples": 500,
+  "formula": "priority_score = 3.0 * action_fp_reduction + 2.5 * mixed_recoverable_by_over_guard + 2.0 * gold_review_separation - 3.0 * safety_regression - 2.0 * over_extraction_residual",
+  "candidates": [
+    {
+      "name": "over_extraction_guard",
+      "score": 10.5,
+      "priority": 1
+    },
+    {
+      "name": "evidence_boundary_stabilization",
+      "score": 6.0,
+      "priority": 2
+    },
+    {
+      "name": "limited_decomposition",
+      "score": 3.0,
+      "priority": 3,
+      "apply": false
+    }
+  ]
+}
