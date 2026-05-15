@@ -1,0 +1,222 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 720,
+  "source_merge_sha": "e838543b44cfa03ab31893304547f7218de44b82",
+  "ops_pr": 721,
+  "ops_merge_sha": "cc0b5759ca794a08797a4ffc5bd5260608c47c1e",
+  "branch": "D",
+  "patch_type": "measurement_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T02:13:34.958973+00:00",
+  "total_samples": 500,
+  "relative_time_total": 89,
+  "absolute_time_total": 7,
+  "relative_time_mismatch_count": 22,
+  "relative_time_mismatch_rate": 0.2472,
+  "top_confusion_patterns": {
+    "HARD->SOFT": 14,
+    "NONE->SOFT": 4,
+    "HARD->NONE": 3,
+    "INQUIRY->SOFT": 1
+  },
+  "mismatch_rows": [
+    {
+      "sample_id": "card1_100006",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "다음 주 월요일까지 견적서 정리 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_100010",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "다음 주까지 분석 자료 정리 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_100017",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "이번 주 금요일까지 계약서 검토 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_100021",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "다음 주 화요일까지 PR 리뷰 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_100052",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "오늘까지 작업을 완료할 예정입니다"
+    },
+    {
+      "sample_id": "card1_100088",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "이번 주 금요일까지 검토 의견 보내 주세요"
+    },
+    {
+      "sample_id": "card1_100091",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "다음 주 월요일까지 결과 정리 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_200006",
+      "pattern": "relative_time",
+      "gold_type": "INQUIRY",
+      "pred_type": "SOFT",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "text_excerpt": "오늘까지 분석 자료 정리 가능해요?"
+    },
+    {
+      "sample_id": "card1_200026",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "견적서 첨부해서 다음 주까지 보내주세요"
+    },
+    {
+      "sample_id": "card1_200034",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "다음 주 화요일까지 견적 비교 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_200045",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "다음 주 월요일까지 결과 정리 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_400007",
+      "pattern": "relative_time",
+      "gold_type": "NONE",
+      "pred_type": "SOFT",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "text_excerpt": "오늘 회의 결과 정리 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_400076",
+      "pattern": "relative_time",
+      "gold_type": "NONE",
+      "pred_type": "SOFT",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "text_excerpt": "이번 주 보고 일정 알려 주세요"
+    },
+    {
+      "sample_id": "card1_400113",
+      "pattern": "relative_time",
+      "gold_type": "NONE",
+      "pred_type": "SOFT",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "text_excerpt": "다음 주 보고 자료 정리 완료했습니다"
+    },
+    {
+      "sample_id": "card1_500022",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "NONE",
+      "gold_actionable": true,
+      "pred_actionable": false,
+      "text_excerpt": "오늘 오후 [TIME] 회의 안내드립니다"
+    },
+    {
+      "sample_id": "card1_500023",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "다음 주 화요일까지 자료 정리 부탁"
+    },
+    {
+      "sample_id": "card1_500024",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "이번 주 금요일 보고 부탁드려요"
+    },
+    {
+      "sample_id": "card1_500027",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "NONE",
+      "gold_actionable": true,
+      "pred_actionable": false,
+      "text_excerpt": "오후 [TIME] 회의 일정 안내드립니다"
+    },
+    {
+      "sample_id": "card1_500029",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "다음 주 월요일 회의 진행 예정"
+    },
+    {
+      "sample_id": "card1_500030",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "NONE",
+      "gold_actionable": true,
+      "pred_actionable": false,
+      "text_excerpt": "이번 주 수요일 평가 안내드립니다"
+    },
+    {
+      "sample_id": "card1_500054",
+      "pattern": "relative_time",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "text_excerpt": "다음 주까지 정리하세요"
+    },
+    {
+      "sample_id": "card1_500102",
+      "pattern": "relative_time",
+      "gold_type": "NONE",
+      "pred_type": "SOFT",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "text_excerpt": "이번 주 안건 알려 주세요"
+    }
+  ]
+}

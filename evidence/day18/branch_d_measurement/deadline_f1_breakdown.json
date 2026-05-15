@@ -1,0 +1,539 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 720,
+  "source_merge_sha": "e838543b44cfa03ab31893304547f7218de44b82",
+  "ops_pr": 721,
+  "ops_merge_sha": "cc0b5759ca794a08797a4ffc5bd5260608c47c1e",
+  "branch": "D",
+  "patch_type": "measurement_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T02:13:34.957125+00:00",
+  "total_samples": 500,
+  "deadline_f1": 0.8092,
+  "deadline_tp": 53,
+  "deadline_fp": 7,
+  "deadline_fn": 18,
+  "type_match_count": 53,
+  "type_total": 500,
+  "actionable_match_rate": 0.978,
+  "type_distribution": {
+    "NONE": 391,
+    "HARD": 50,
+    "SOFT": 21,
+    "CONDITION": 16,
+    "INQUIRY": 11,
+    "URGENCY": 11
+  },
+  "confusion_matrix": {
+    "NONE->NONE": 385,
+    "HARD->HARD": 32,
+    "SOFT->SOFT": 21,
+    "CONDITION->NONE": 16,
+    "HARD->SOFT": 14,
+    "INQUIRY->INQUIRY": 1,
+    "INQUIRY->NONE": 9,
+    "URGENCY->URGENCY": 7,
+    "URGENCY->NONE": 4,
+    "INQUIRY->SOFT": 1,
+    "NONE->HARD": 2,
+    "HARD->NONE": 4,
+    "NONE->SOFT": 4
+  },
+  "mismatch_rows": [
+    {
+      "sample_id": "card1_100004",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "condition_pattern",
+      "text_excerpt": "자료 확인되면 공유해 주세요"
+    },
+    {
+      "sample_id": "card1_100006",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "다음 주 월요일까지 견적서 정리 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_100010",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "다음 주까지 분석 자료 정리 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_100017",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "이번 주 금요일까지 계약서 검토 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_100018",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "condition_pattern",
+      "text_excerpt": "자료 정리되면 공유해 주세요"
+    },
+    {
+      "sample_id": "card1_100021",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "다음 주 화요일까지 PR 리뷰 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_100026",
+      "gold_type": "INQUIRY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "inquiry_pattern",
+      "text_excerpt": "기한이 어떻게 되나요?"
+    },
+    {
+      "sample_id": "card1_100027",
+      "gold_type": "INQUIRY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "inquiry_pattern",
+      "text_excerpt": "마감이 언제인가요?"
+    },
+    {
+      "sample_id": "card1_100029",
+      "gold_type": "INQUIRY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "inquiry_pattern",
+      "text_excerpt": "다음 회의가 언제죠?"
+    },
+    {
+      "sample_id": "card1_100044",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "condition_pattern",
+      "text_excerpt": "보고서 작성이 완료되면 공유드리겠습니다"
+    },
+    {
+      "sample_id": "card1_100048",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "condition_pattern",
+      "text_excerpt": "회의 결과 정리되면 알려드리겠습니다"
+    },
+    {
+      "sample_id": "card1_100052",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "오늘까지 작업을 완료할 예정입니다"
+    },
+    {
+      "sample_id": "card1_100058",
+      "gold_type": "URGENCY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "urgency_pattern",
+      "text_excerpt": "지금 브랜치 머지하세요"
+    },
+    {
+      "sample_id": "card1_100077",
+      "gold_type": "URGENCY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "urgency_pattern",
+      "text_excerpt": "지금 작업 가능하신가요?"
+    },
+    {
+      "sample_id": "card1_100080",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "other",
+      "text_excerpt": "확인 가능하시면 답변 부탁드려요"
+    },
+    {
+      "sample_id": "card1_100088",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "이번 주 금요일까지 검토 의견 보내 주세요"
+    },
+    {
+      "sample_id": "card1_100089",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "condition_pattern",
+      "text_excerpt": "자료 정리되면 알려 주세요"
+    },
+    {
+      "sample_id": "card1_100091",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "다음 주 월요일까지 결과 정리 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_100100",
+      "gold_type": "INQUIRY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "inquiry_pattern",
+      "text_excerpt": "프로젝트 마감일이 언제인가요?"
+    },
+    {
+      "sample_id": "card1_100104",
+      "gold_type": "INQUIRY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "inquiry_pattern",
+      "text_excerpt": "기한이 어떻게 되나요?"
+    },
+    {
+      "sample_id": "card1_100138",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "other",
+      "text_excerpt": "처리 가능하시다면 부탁드려요"
+    },
+    {
+      "sample_id": "card1_100139",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "condition_pattern",
+      "text_excerpt": "회의 결과 정리되면 보고드리겠습니다"
+    },
+    {
+      "sample_id": "card1_200004",
+      "gold_type": "URGENCY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "urgency_pattern",
+      "text_excerpt": "지금 바로 내부문서 변환해줘"
+    },
+    {
+      "sample_id": "card1_200006",
+      "gold_type": "INQUIRY",
+      "pred_type": "SOFT",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "오늘까지 분석 자료 정리 가능해요?"
+    },
+    {
+      "sample_id": "card1_200008",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "condition_pattern",
+      "text_excerpt": "완료되면 알려줘"
+    },
+    {
+      "sample_id": "card1_200018",
+      "gold_type": "NONE",
+      "pred_type": "HARD",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "pattern": "other",
+      "text_excerpt": "[PR] 머지 후 배포까지 진행하세요"
+    },
+    {
+      "sample_id": "card1_200019",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "condition_pattern",
+      "text_excerpt": "이번 분기 보고서 작성이 완료되면 공유드리겠습니다"
+    },
+    {
+      "sample_id": "card1_200024",
+      "gold_type": "INQUIRY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "inquiry_pattern",
+      "text_excerpt": "프로젝트 마감이 언제인가요?"
+    },
+    {
+      "sample_id": "card1_200026",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "견적서 첨부해서 다음 주까지 보내주세요"
+    },
+    {
+      "sample_id": "card1_200029",
+      "gold_type": "HARD",
+      "pred_type": "NONE",
+      "gold_actionable": true,
+      "pred_actionable": false,
+      "pattern": "absolute_time",
+      "text_excerpt": "2026-06-01부터 적용 예정입니다"
+    },
+    {
+      "sample_id": "card1_200030",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "other",
+      "text_excerpt": "프로젝트 일정 변경되면 알려드리겠습니다"
+    },
+    {
+      "sample_id": "card1_200034",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "다음 주 화요일까지 견적 비교 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_200042",
+      "gold_type": "INQUIRY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "inquiry_pattern",
+      "text_excerpt": "프로젝트 마감일 언제인가요?"
+    },
+    {
+      "sample_id": "card1_200044",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "condition_pattern",
+      "text_excerpt": "회의록 정리되면 공유드리겠습니다"
+    },
+    {
+      "sample_id": "card1_200045",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "다음 주 월요일까지 결과 정리 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_200049",
+      "gold_type": "URGENCY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "urgency_pattern",
+      "text_excerpt": "지금 바로 권한 회수해 주세요"
+    },
+    {
+      "sample_id": "card1_200059",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "condition_pattern",
+      "text_excerpt": "발표 끝나면 정리해서 공유드릴게요"
+    },
+    {
+      "sample_id": "card1_400007",
+      "gold_type": "NONE",
+      "pred_type": "SOFT",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "오늘 회의 결과 정리 부탁드립니다"
+    },
+    {
+      "sample_id": "card1_400024",
+      "gold_type": "NONE",
+      "pred_type": "HARD",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "pattern": "other",
+      "text_excerpt": "월요일 보고 자료 정리 부탁"
+    },
+    {
+      "sample_id": "card1_400052",
+      "gold_type": "INQUIRY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "inquiry_pattern",
+      "text_excerpt": "기한이 어떻게 되나요?"
+    },
+    {
+      "sample_id": "card1_400076",
+      "gold_type": "NONE",
+      "pred_type": "SOFT",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "이번 주 보고 일정 알려 주세요"
+    },
+    {
+      "sample_id": "card1_400113",
+      "gold_type": "NONE",
+      "pred_type": "SOFT",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "다음 주 보고 자료 정리 완료했습니다"
+    },
+    {
+      "sample_id": "card1_400171",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "other",
+      "text_excerpt": "가능하시면 검토 부탁드려요"
+    },
+    {
+      "sample_id": "card1_400172",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "other",
+      "text_excerpt": "가능하시면 검토 부탁드려요"
+    },
+    {
+      "sample_id": "card1_400173",
+      "gold_type": "CONDITION",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "other",
+      "text_excerpt": "가능하시면 검토 부탁드려요"
+    },
+    {
+      "sample_id": "card1_500022",
+      "gold_type": "HARD",
+      "pred_type": "NONE",
+      "gold_actionable": true,
+      "pred_actionable": false,
+      "pattern": "relative_time",
+      "text_excerpt": "오늘 오후 [TIME] 회의 안내드립니다"
+    },
+    {
+      "sample_id": "card1_500023",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "다음 주 화요일까지 자료 정리 부탁"
+    },
+    {
+      "sample_id": "card1_500024",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "이번 주 금요일 보고 부탁드려요"
+    },
+    {
+      "sample_id": "card1_500027",
+      "gold_type": "HARD",
+      "pred_type": "NONE",
+      "gold_actionable": true,
+      "pred_actionable": false,
+      "pattern": "relative_time",
+      "text_excerpt": "오후 [TIME] 회의 일정 안내드립니다"
+    },
+    {
+      "sample_id": "card1_500029",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "다음 주 월요일 회의 진행 예정"
+    },
+    {
+      "sample_id": "card1_500030",
+      "gold_type": "HARD",
+      "pred_type": "NONE",
+      "gold_actionable": true,
+      "pred_actionable": false,
+      "pattern": "relative_time",
+      "text_excerpt": "이번 주 수요일 평가 안내드립니다"
+    },
+    {
+      "sample_id": "card1_500042",
+      "gold_type": "INQUIRY",
+      "pred_type": "NONE",
+      "gold_actionable": false,
+      "pred_actionable": false,
+      "pattern": "other",
+      "text_excerpt": "기한 어떻게 되나요?"
+    },
+    {
+      "sample_id": "card1_500054",
+      "gold_type": "HARD",
+      "pred_type": "SOFT",
+      "gold_actionable": true,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "다음 주까지 정리하세요"
+    },
+    {
+      "sample_id": "card1_500102",
+      "gold_type": "NONE",
+      "pred_type": "SOFT",
+      "gold_actionable": false,
+      "pred_actionable": true,
+      "pattern": "relative_time",
+      "text_excerpt": "이번 주 안건 알려 주세요"
+    }
+  ],
+  "coverage_report": {
+    "coverage_checked": true,
+    "expected_samples": 500,
+    "measured_samples": 500,
+    "missing_count": 0,
+    "extra_count": 0,
+    "duplicate_count": 0,
+    "fail_class": null
+  }
+}
