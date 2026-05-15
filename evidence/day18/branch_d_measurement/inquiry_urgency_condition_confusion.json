@@ -7,7 +7,7 @@
   "branch": "D",
   "patch_type": "measurement_only",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-15T02:13:34.957481+00:00",
+  "generated_at": "2026-05-15T02:47:08.759014+00:00",
   "total_samples": 500,
   "INQUIRY_misclassified_as_HARD_or_SOFT": {
     "count": 1,

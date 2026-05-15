@@ -274,23 +274,39 @@ def main() -> int:
     items = [json.loads(l) for l in DATASET.open(encoding="utf-8") if l.strip()]
     preds = [json.loads(l) for l in PREDS.open(encoding="utf-8") if l.strip()]
 
-    # coverage fail-closed (sentinel #6)
-    items_ids = {it["sample_id"] for it in items}
-    pred_ids  = {p["sample_id"] for p in preds}
+    # Codex P2 정정 — coverage fail-closed + gold duplicate sample_id 검사 추가.
+    item_id_list = [it["sample_id"] for it in items]
+    pred_id_list = [p["sample_id"] for p in preds]
+    items_ids = set(item_id_list)
+    pred_ids  = set(pred_id_list)
     missing = items_ids - pred_ids
     extra   = pred_ids - items_ids
-    dup     = [s for s, c in Counter([p["sample_id"] for p in preds]).items() if c > 1]
+    gold_duplicate_ids       = [s for s, c in Counter(item_id_list).items() if c > 1]
+    prediction_duplicate_ids = [s for s, c in Counter(pred_id_list).items() if c > 1]
     coverage = {
-        "coverage_checked":  True,
-        "expected_samples":  len(items_ids),
-        "measured_samples":  len(items_ids & pred_ids),
-        "missing_count":     len(missing),
-        "extra_count":       len(extra),
-        "duplicate_count":   len(dup),
-        "fail_class":        ("FULL_EVAL_COVERAGE_MISMATCH"
-                                if (missing or extra or dup) else None),
+        "coverage_checked":             True,
+        "expected_samples":             len(items_ids),
+        "measured_samples":             len(items_ids & pred_ids),
+        "missing_count":                len(missing),
+        "extra_count":                  len(extra),
+        "gold_duplicate_count":         len(gold_duplicate_ids),
+        "gold_duplicate_ids":           gold_duplicate_ids[:20],
+        "prediction_duplicate_count":   len(prediction_duplicate_ids),
+        "prediction_duplicate_ids":     prediction_duplicate_ids[:20],
+        "fail_class":                   None,
     }
-    if coverage["fail_class"]:
+    # gold duplicate 우선 차단 (items_by_id silent overwrite 차단)
+    if gold_duplicate_ids:
+        coverage["fail_class"] = "GOLD_SAMPLE_ID_DUPLICATE"
+        (OUT / "coverage_report.json").write_text(
+            json.dumps(coverage, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps({"ok": False, "fail_class": coverage["fail_class"],
+                          "gold_duplicate_count": len(gold_duplicate_ids),
+                          "gold_duplicate_ids":   gold_duplicate_ids[:20]},
+                          ensure_ascii=False))
+        sys.exit(1)
+    if missing or extra or prediction_duplicate_ids:
+        coverage["fail_class"] = "FULL_EVAL_COVERAGE_MISMATCH"
         (OUT / "coverage_report.json").write_text(
             json.dumps(coverage, ensure_ascii=False, indent=2), encoding="utf-8")
         print(json.dumps({"ok": False, "fail_class": coverage["fail_class"]},

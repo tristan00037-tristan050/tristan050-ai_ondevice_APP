@@ -16,7 +16,8 @@ def test_pr723_coverage_fail_closed():
     assert cov["measured_samples"] == 500
     assert cov["missing_count"] == 0
     assert cov["extra_count"] == 0
-    assert cov["duplicate_count"] == 0
+    assert cov["gold_duplicate_count"] == 0
+    assert cov["prediction_duplicate_count"] == 0
 
 
 def test_deadline_f1_breakdown_consistency():
@@ -58,6 +59,31 @@ def test_relative_time_normalization_measured():
     assert 0.0 <= r["relative_time_mismatch_rate"] <= 1.0
     # mismatch_rows 는 최대 50건 (sample 상한)
     assert len(r["mismatch_rows"]) <= 50
+
+
+def test_gold_duplicate_sample_id_fail_closed():
+    """Codex P2 정정 — items duplicate sample_id 검출 시 fail-closed."""
+    from collections import Counter as _Counter
+    items = [{"sample_id": "S001"}, {"sample_id": "S001"}, {"sample_id": "S002"}]
+    item_id_list = [it["sample_id"] for it in items]
+    gold_duplicate_ids = [s for s, c in _Counter(item_id_list).items() if c > 1]
+    assert gold_duplicate_ids == ["S001"]
+    fail_class = "GOLD_SAMPLE_ID_DUPLICATE" if gold_duplicate_ids else None
+    assert fail_class == "GOLD_SAMPLE_ID_DUPLICATE"
+
+
+def test_coverage_report_10_fields_present():
+    """coverage_report 10 필드 정합 (P2 정정 후)."""
+    d = json.loads((OUT / "deadline_f1_breakdown.json").read_text(encoding="utf-8"))
+    cov = d["coverage_report"]
+    for fld in ["coverage_checked", "expected_samples", "measured_samples",
+                "missing_count", "extra_count",
+                "gold_duplicate_count", "gold_duplicate_ids",
+                "prediction_duplicate_count", "prediction_duplicate_ids",
+                "fail_class"]:
+        assert fld in cov, f"missing coverage_report field {fld}"
+    assert cov["gold_duplicate_count"] == 0
+    assert cov["prediction_duplicate_count"] == 0
 
 
 def test_branch_d_main_pr_readiness_quantitative():

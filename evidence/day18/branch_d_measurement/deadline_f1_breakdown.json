@@ -7,7 +7,7 @@
   "branch": "D",
   "patch_type": "measurement_only",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-15T02:13:34.957125+00:00",
+  "generated_at": "2026-05-15T02:47:08.758828+00:00",
   "total_samples": 500,
   "deadline_f1": 0.8092,
   "deadline_tp": 53,
@@ -533,7 +533,10 @@
     "measured_samples": 500,
     "missing_count": 0,
     "extra_count": 0,
-    "duplicate_count": 0,
+    "gold_duplicate_count": 0,
+    "gold_duplicate_ids": [],
+    "prediction_duplicate_count": 0,
+    "prediction_duplicate_ids": [],
     "fail_class": null
   }
 }
