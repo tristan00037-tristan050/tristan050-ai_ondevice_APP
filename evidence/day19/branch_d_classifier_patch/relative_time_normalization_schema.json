@@ -1,0 +1,262 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 723,
+  "source_merge_sha": "d26883e87f1b079f852ecaa45e7def487905b30e",
+  "branch": "D",
+  "patch_type": "deadline_classifier",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T03:39:36.394282+00:00",
+  "total_samples": 500,
+  "schema_fields": [
+    "surface",
+    "relative_anchor",
+    "normalized_type",
+    "day_offset",
+    "time_part",
+    "deadline_strength"
+  ],
+  "examples": [
+    {
+      "surface": "내일까지 보고서 검토 부탁드립니다",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 1,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "오늘 중에 PR 리뷰 봐주세요",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "다음 주 월요일까지 견적서 정리 부탁드립니다",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 7,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "내일 오전 10시까지 기획안 작성해 주세요",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 1,
+      "time_part": "morning",
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "다음 주까지 분석 자료 정리 부탁드립니다",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 7,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "이번 주 안에 견적서 검토 부탁드려요",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "내일 회의 자료 미리 보내주실 수 있나요",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 1,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "이번 주 금요일까지 계약서 검토 부탁드립니다",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "다음 주 화요일까지 PR 리뷰 부탁드립니다",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 7,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "내일 회의 안건 정리해 주세요",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 1,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "다음 주 회의 일정 안내드립니다",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 7,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "오늘까지 작업을 완료할 예정입니다",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "오늘 안에 권한을 회수하시기 바랍니다",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "오늘 중으로 보고서 제출하세요",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "이번 주 안에 발표 자료 작성하세요",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "내일까지 분석 보고서 작성하세요",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 1,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "오늘은 특별한 일정 없습니다",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "계약서 파일 확인 후 서명해서 내일까지 메일로 보내주세요",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 1,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "오늘 안에 처리해 주시기 바랍니다",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "내일 점심까지 회의록 정리해 주세요",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 1,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "이번 주 안에 견적서 검토 부탁드려요",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "내일까지 회의 안건 정리 부탁드립니다",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 1,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "이번 주 금요일까지 검토 의견 보내 주세요",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "다음 주 월요일까지 결과 정리 부탁드립니다",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 7,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "내일 회의 전까지 자료 준비 부탁드립니다",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 1,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    },
+    {
+      "surface": "이번 주까지 견적 비교 부탁드려요",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "이번 주에 회의 있나요?",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "다음 주 일정 알려드립니다",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 7,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "이번 주 진행 사항 정리해 두었어요",
+      "relative_anchor": "this_week",
+      "normalized_type": "relative_range",
+      "day_offset": 0,
+      "time_part": null,
+      "deadline_strength": "SOFT"
+    },
+    {
+      "surface": "내일까지 작업 완료할 예정입니다",
+      "relative_anchor": "today",
+      "normalized_type": "relative_day",
+      "day_offset": 1,
+      "time_part": null,
+      "deadline_strength": "HARD"
+    }
+  ],
+  "relative_time_mismatch_before": 0.2442,
+  "relative_time_mismatch_after": 0.186
+}

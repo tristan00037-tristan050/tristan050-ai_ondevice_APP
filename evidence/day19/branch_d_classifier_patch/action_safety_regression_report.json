@@ -1,0 +1,16 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 723,
+  "source_merge_sha": "d26883e87f1b079f852ecaa45e7def487905b30e",
+  "branch": "D",
+  "patch_type": "deadline_classifier",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T03:39:36.395089+00:00",
+  "total_samples": 500,
+  "branch_b2_action_fp_baseline": 234,
+  "branch_d_action_fp": 234,
+  "action_fp_regression": false,
+  "branch_b2_f1_baseline": 0.6182,
+  "branch_d_action_f1": 0.6182,
+  "note": "classifier patch 는 deadline 축만 변경 — action 영역 미변경 확인"
+}

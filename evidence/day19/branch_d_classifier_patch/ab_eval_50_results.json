@@ -1,0 +1,139 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 723,
+  "source_merge_sha": "d26883e87f1b079f852ecaa45e7def487905b30e",
+  "branch": "D",
+  "patch_type": "deadline_classifier",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T03:39:36.394908+00:00",
+  "total_samples": 500,
+  "ab_eval_size": 50,
+  "declared_composition": {
+    "hard_soft_confusion": 15,
+    "relative_time_mismatch": 15,
+    "none_to_actionable_fp": 6,
+    "inquiry_urgency_condition": 4,
+    "hard_clean": 5,
+    "soft_clean": 5
+  },
+  "actual_composition": {
+    "hard_soft_confusion": 14,
+    "relative_time_mismatch": 6,
+    "none_to_actionable_fp": 0,
+    "hard_clean": 5,
+    "inquiry_urgency_condition": 4,
+    "soft_clean": 5
+  },
+  "composition_ok": true,
+  "fail_class": "AB_COMPOSITION_NATURAL_SHORTAGE",
+  "natural_shortage": true,
+  "shortage_log": [
+    {
+      "category": "hard_soft_confusion",
+      "declared": 15,
+      "available": 14,
+      "shortage": 1
+    },
+    {
+      "category": "relative_time_mismatch",
+      "declared": 15,
+      "available": 21,
+      "shortage": 9
+    },
+    {
+      "category": "none_to_actionable_fp",
+      "declared": 6,
+      "available": 6,
+      "shortage": 6
+    }
+  ],
+  "fallback_order": [
+    "hard_soft_confusion",
+    "relative_time_mismatch",
+    "none_to_actionable_fp",
+    "hard_clean",
+    "soft_clean"
+  ],
+  "ab_sample_ids": [
+    "card1_100006",
+    "card1_100010",
+    "card1_100017",
+    "card1_100021",
+    "card1_100052",
+    "card1_100088",
+    "card1_100091",
+    "card1_200026",
+    "card1_200034",
+    "card1_200045",
+    "card1_500023",
+    "card1_500024",
+    "card1_500029",
+    "card1_500054",
+    "card1_200006",
+    "card1_400007",
+    "card1_400076",
+    "card1_400113",
+    "card1_500022",
+    "card1_500030",
+    "card1_500102",
+    "card1_200018",
+    "card1_400024",
+    "card1_100002",
+    "card1_100009",
+    "card1_100014",
+    "card1_100016",
+    "card1_100022",
+    "card1_100024",
+    "card1_100041",
+    "card1_100057",
+    "card1_100060",
+    "card1_100063",
+    "card1_100073",
+    "card1_100075",
+    "card1_100081",
+    "card1_100004",
+    "card1_100018",
+    "card1_100025",
+    "card1_100026",
+    "card1_100086",
+    "card1_100096",
+    "card1_100119",
+    "card1_100120",
+    "card1_100123",
+    "card1_100003",
+    "card1_100013",
+    "card1_100055",
+    "card1_100059",
+    "card1_100061"
+  ],
+  "abc": {
+    "results": {
+      "A_current": {
+        "variant": "A",
+        "deadline_tp": 23,
+        "deadline_fp": 7,
+        "deadline_fn": 16,
+        "deadline_f1": 0.6667
+      },
+      "B_d1_d3_d4": {
+        "variant": "B",
+        "deadline_tp": 27,
+        "deadline_fp": 3,
+        "deadline_fn": 12,
+        "deadline_f1": 0.7826
+      },
+      "C_b_plus_d2": {
+        "variant": "C",
+        "deadline_tp": 27,
+        "deadline_fp": 3,
+        "deadline_fn": 12,
+        "deadline_f1": 0.7826
+      }
+    },
+    "selected": "B_d1_d3_d4",
+    "delta_table": {
+      "B_vs_A": 0.1159,
+      "C_vs_A": 0.1159
+    }
+  }
+}
