@@ -7,7 +7,7 @@
   "branch": "B-2",
   "patch_type": "over_extraction_guard",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-15T02:08:41.690221+00:00",
+  "generated_at": "2026-05-15T02:45:37.298684+00:00",
   "total_samples": 500,
   "queue_total": 4,
   "rows": [

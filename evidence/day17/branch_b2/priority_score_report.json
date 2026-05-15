@@ -7,7 +7,7 @@
   "branch": "B-2",
   "patch_type": "over_extraction_guard",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-15T02:08:41.680814+00:00",
+  "generated_at": "2026-05-15T02:45:37.290057+00:00",
   "total_samples": 500,
   "formula": "priority_score = 3.0 * action_fp_reduction + 2.5 * mixed_recoverable_by_over_guard + 2.0 * gold_review_separation - 3.0 * safety_regression - 2.0 * over_extraction_residual",
   "candidates": [

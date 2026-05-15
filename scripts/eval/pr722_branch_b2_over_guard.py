@@ -521,16 +521,7 @@ def step4_build_ab_ids(items: List[Dict], preds: List[Dict],
                     shortage -= 1
                     if shortage <= 0: break
 
-    # control_clean to pad
-    target_remaining = 50 - len(ab_ids)
-    added_control = 0
-    for sid in pools["control_clean"]:
-        if len(ab_ids) >= 50: break
-        if sid in seen: continue
-        ab_ids.append(sid); seen.add(sid); added_control += 1
-    if added_control > 0:
-        actual["control_clean"] = added_control
-
+    # Codex P1 정정 — fail_class 결정 우선 (control_clean / dataset pad 전)
     if natural_shortage and fallback_applied:
         fail_class = "AB_COMPOSITION_NATURAL_SHORTAGE"
         composition_ok = True
@@ -541,12 +532,34 @@ def step4_build_ab_ids(items: List[Dict], preds: List[Dict],
         fail_class = None
         composition_ok = True
 
-    if len(ab_ids) != 50:
-        all_ids = [it["sample_id"] for it in items]
-        for sid in all_ids:
-            if sid in seen: continue
-            ab_ids.append(sid); seen.add(sid)
+    # 정합 / NATURAL_SHORTAGE 경로에서만 control_clean / dataset pad 허용.
+    # AB_COMPOSITION_MISMATCH 는 임의 padding 차단 + fail-closed.
+    if len(ab_ids) < 50 and composition_ok:
+        added_control = 0
+        for sid in pools["control_clean"]:
             if len(ab_ids) >= 50: break
+            if sid in seen: continue
+            ab_ids.append(sid); seen.add(sid); added_control += 1
+        if added_control > 0:
+            actual["control_clean"] = added_control
+        if fail_class == "AB_COMPOSITION_NATURAL_SHORTAGE" and len(ab_ids) < 50:
+            all_ids = [it["sample_id"] for it in items]
+            for sid in all_ids:
+                if sid in seen: continue
+                ab_ids.append(sid); seen.add(sid)
+                if len(ab_ids) >= 50: break
+
+    if len(ab_ids) != 50:
+        raise SystemExit(json.dumps({
+            "fail_class":              "AB_COMPOSITION_MISMATCH",
+            "composition_ok":          False,
+            "ab_ids_count":            len(ab_ids),
+            "expected_count":          50,
+            "shortage_after_fallback": 50 - len(ab_ids),
+            "fallback_applied":        fallback_applied,
+            "natural_shortage":        natural_shortage,
+            "shortage_log":            shortage_log,
+        }, ensure_ascii=False))
     assert len(ab_ids) == 50
     return ab_ids, actual, composition_ok, fail_class, natural_shortage, shortage_log
 
