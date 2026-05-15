@@ -1,0 +1,44 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 718,
+  "source_merge_sha": "def4bcd80190c808a38dc021cc31343a5cadb747",
+  "branch": "B",
+  "patch_type": "prompt_schema",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T00:27:11.793881+00:00",
+  "total_samples": 500,
+  "formula": "priority_score = 3.0 * multi_action_collapse + 2.5 * action_fn_recoverable + 2.0 * action_fp_reducible + 2.0 * both_fail + 1.5 * parser_hint_recoverable + 1.0 * evidence_missing - 3.0 * safety_regression - 2.0 * schema_invalid - 2.0 * over_extraction - 1.5 * prompt_complexity",
+  "candidates": [
+    {
+      "candidate": "multi_action_decomposition_prompt",
+      "priority": "1",
+      "score": 19.5,
+      "recommend_apply": true
+    },
+    {
+      "candidate": "atomic_action_schema_rule",
+      "priority": "2",
+      "score": 0.0,
+      "recommend_apply": true
+    },
+    {
+      "candidate": "evidence_field_contract",
+      "priority": "3",
+      "score": 0.0,
+      "recommend_apply": true
+    },
+    {
+      "candidate": "negative_examples_QUESTION_REPORT_NO_ACTION",
+      "priority": "4",
+      "score": 232.0,
+      "recommend_apply": true
+    },
+    {
+      "candidate": "parser_hint_policy",
+      "priority": "5",
+      "score": 232.0,
+      "recommend_apply": true
+    }
+  ],
+  "note": "PR #720 본 cycle 에서는 prompt/schema 변경 자체 적용 금지. score 기반 우선순위만 보고."
+}

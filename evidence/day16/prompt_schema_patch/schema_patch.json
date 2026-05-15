@@ -1,0 +1,29 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 718,
+  "source_merge_sha": "def4bcd80190c808a38dc021cc31343a5cadb747",
+  "branch": "B",
+  "patch_type": "prompt_schema",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T00:27:11.793875+00:00",
+  "total_samples": 500,
+  "schema_change_summary": "actions[] field contract 강화 (optional 추가)",
+  "actions_required_fields": [
+    "action_text",
+    "normalized_action",
+    "source_evidence"
+  ],
+  "actions_optional_fields": [
+    "object",
+    "recipient",
+    "depends_on",
+    "is_atomic"
+  ],
+  "atomic_action_rule": {
+    "is_atomic": true,
+    "single_verb_phrase": true,
+    "evidence_substring_of_source": true
+  },
+  "schema_valid_rate_target": 0.98,
+  "note": "schema patch 적용 자체는 PR #720 본 cycle 금지. JSON schema 영역 별도 PR (Branch B-2) 에서 적용."
+}

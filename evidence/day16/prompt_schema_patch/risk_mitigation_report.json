@@ -1,0 +1,62 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 718,
+  "source_merge_sha": "def4bcd80190c808a38dc021cc31343a5cadb747",
+  "branch": "B",
+  "patch_type": "prompt_schema",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T00:27:11.797413+00:00",
+  "total_samples": 500,
+  "risks": [
+    {
+      "id": "R-1",
+      "name": "over-extraction (multi-action FP↑)",
+      "mitigation": "over-extraction guard 동반 적용 + AB 50 시뮬레이션 검증"
+    },
+    {
+      "id": "R-2",
+      "name": "question/report action 화",
+      "mitigation": "negative examples 4순위 + intent_type guard"
+    },
+    {
+      "id": "R-3",
+      "name": "schema invalid 증가",
+      "mitigation": "optional field 만 추가, required 변경 없음"
+    },
+    {
+      "id": "R-4",
+      "name": "evidence hallucination",
+      "mitigation": "source_evidence substring 검증 강제 (3순위)"
+    },
+    {
+      "id": "R-5",
+      "name": "deadline contamination",
+      "mitigation": "deadline_monitor 5건 sentinel #7 quota"
+    },
+    {
+      "id": "R-6",
+      "name": "auto_apply precision 하락",
+      "mitigation": "auto_apply Stage 2 evidence 검증 fail-closed"
+    },
+    {
+      "id": "R-7",
+      "name": "prompt length regression",
+      "mitigation": "prompt_complexity_penalty in priority_score"
+    },
+    {
+      "id": "R-8",
+      "name": "parser hint over-trust",
+      "mitigation": "parser hint = candidate, not command (5순위)"
+    },
+    {
+      "id": "R-9",
+      "name": "parser hint under-trust",
+      "mitigation": "parser_correct_llm_wrong 비중 측정 후 강화"
+    },
+    {
+      "id": "R-10",
+      "name": "gold label mismatch masking",
+      "mitigation": "gold_limit 비중 Branch C 분기로 위임"
+    }
+  ]
+}

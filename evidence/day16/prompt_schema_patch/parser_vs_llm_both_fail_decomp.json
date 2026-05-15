@@ -1,0 +1,372 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 718,
+  "source_merge_sha": "def4bcd80190c808a38dc021cc31343a5cadb747",
+  "branch": "B",
+  "patch_type": "prompt_schema",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T00:27:11.793698+00:00",
+  "total_samples": 500,
+  "measurement_mode": "A_three_mode_predictions",
+  "both_fail_total": 120,
+  "parser_limit": 0,
+  "llm_limit": 0,
+  "schema_limit": 0,
+  "gold_limit": 4,
+  "recoverable_by_prompt": 116,
+  "recoverable_by_schema": 0,
+  "recoverable_by_vocabulary": 0,
+  "requires_gold_review": 4,
+  "rows": [
+    {
+      "sample_id": "card1_100025",
+      "gold_intent": "QUESTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100028",
+      "gold_intent": "QUESTION",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100031",
+      "gold_intent": "QUESTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100033",
+      "gold_intent": "QUESTION",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100034",
+      "gold_intent": "QUESTION",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100036",
+      "gold_intent": "QUESTION",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100048",
+      "gold_intent": "REPORT",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100060",
+      "gold_intent": "COMMAND",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100064",
+      "gold_intent": "COMMAND",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100069",
+      "gold_intent": "NO_ACTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REPORT",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100075",
+      "gold_intent": "COMMAND",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100078",
+      "gold_intent": "REPORT",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100079",
+      "gold_intent": "COMMAND",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100101",
+      "gold_intent": "QUESTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100102",
+      "gold_intent": "QUESTION",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100103",
+      "gold_intent": "QUESTION",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100105",
+      "gold_intent": "QUESTION",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100106",
+      "gold_intent": "QUESTION",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100107",
+      "gold_intent": "QUESTION",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100116",
+      "gold_intent": "REPORT",
+      "parser_pred": "REQUEST",
+      "llm_pred": "NO_ACTION",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100118",
+      "gold_intent": "REPORT",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100137",
+      "gold_intent": "COMMAND",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_100140",
+      "gold_intent": "COMMAND",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200004",
+      "gold_intent": "COMMAND",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "gold_limit"
+    },
+    {
+      "sample_id": "card1_200007",
+      "gold_intent": "NO_ACTION",
+      "parser_pred": "COMMAND",
+      "llm_pred": "COMMAND",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200021",
+      "gold_intent": "QUESTION",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200029",
+      "gold_intent": "REQUEST",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REPORT",
+      "classification": "gold_limit"
+    },
+    {
+      "sample_id": "card1_200033",
+      "gold_intent": "COMMAND",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "gold_limit"
+    },
+    {
+      "sample_id": "card1_200035",
+      "gold_intent": "NO_ACTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200038",
+      "gold_intent": "NO_ACTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200041",
+      "gold_intent": "NO_ACTION",
+      "parser_pred": "REPORT",
+      "llm_pred": "REPORT",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200044",
+      "gold_intent": "NO_ACTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REPORT",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200047",
+      "gold_intent": "QUESTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200048",
+      "gold_intent": "QUESTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200049",
+      "gold_intent": "COMMAND",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "gold_limit"
+    },
+    {
+      "sample_id": "card1_200051",
+      "gold_intent": "QUESTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200052",
+      "gold_intent": "REPORT",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200053",
+      "gold_intent": "QUESTION",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200054",
+      "gold_intent": "REPORT",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200055",
+      "gold_intent": "REPORT",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200056",
+      "gold_intent": "NO_ACTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200057",
+      "gold_intent": "REPORT",
+      "parser_pred": "NO_ACTION",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_200059",
+      "gold_intent": "REPORT",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_400031",
+      "gold_intent": "QUESTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_400032",
+      "gold_intent": "QUESTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_400033",
+      "gold_intent": "QUESTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_400034",
+      "gold_intent": "REPORT",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_400035",
+      "gold_intent": "NO_ACTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_400036",
+      "gold_intent": "NO_ACTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    },
+    {
+      "sample_id": "card1_400037",
+      "gold_intent": "NO_ACTION",
+      "parser_pred": "REQUEST",
+      "llm_pred": "REQUEST",
+      "classification": "ambiguous_both_wrong"
+    }
+  ]
+}
