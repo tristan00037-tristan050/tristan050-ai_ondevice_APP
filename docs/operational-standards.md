@@ -81,14 +81,18 @@ Algorithm Branch labels and GitHub PR numbers are different namespaces.
 Required notation:
 
 - Algorithm Branch A = GitHub PR #718
-- Algorithm Branch B = GitHub PR #719
+- Algorithm Branch B = GitHub PR #720 (merge SHA `e838543b44cfa03ab31893304547f7218de44b82`)
+- Algorithm Branch B-2 = GitHub PR #721+ (planned)
 - GitHub PR #717 = ALGO-CORE-03 fix, separate track
+- GitHub PR #719 = operational standards documentation PR
 
 PR descriptions must explicitly state the Algorithm Branch label and the GitHub PR number when both are referenced.
 
 Implementation note:
 
 `expected_head_sha` squash merge is mandatory. It correctly blocks merges when an external PR merge causes head drift. This was proven during PR #718 cycle 4, where the head drifted from `54702f76` to `eff012ef` after an external PR merge was absorbed. The stale expected head merge was blocked, the drift was diagnosed, and the merge proceeded only after the expected head was updated.
+
+PR #719 itself proved this standard: the slot initially expected for Algorithm Branch B became an operational standards documentation PR. Therefore Algorithm Branch naming must never be inferred from the next GitHub PR number.
 
 ## Standard 6 — Coverage fail-closed sentinel is mandatory
 
@@ -161,6 +165,35 @@ Recommended structure:
 }
 ```
 
+## Standard 8 — Codex bot thread synchronization after correction commits
+
+Background:
+
+PR #720 cycle 5 saw a re-review report a "rediscovery" of P1 #1 and P1 #2 after a correction commit had already landed. A diagnostic cycle confirmed the correction was correctly applied at the new head, but the Codex bot threads still referenced the previous head and remained in an outdated state. The re-review reader interpreted the outdated thread alongside the new diff as evidence of recurrence.
+
+Rule:
+
+After a correction commit that resolves Codex P1/P2 findings:
+
+1. The original Codex thread carries the `commit_id` and `line` of the OLD head.
+2. GitHub may display this thread as outdated but not automatically resolved.
+3. The new head must be explicitly referenced in subsequent review requests.
+4. Reviewers should base diff inspection on the new head SHA, not on the outdated Codex thread's `original_line`.
+
+Implementation:
+
+- In correction completion reports, explicitly note: `Codex thread <id> outdated after head <new_sha> — please verify on new head diff`.
+- In re-review requests, include the new head SHA in the first line of the request body.
+- If a 5단 검토 reports "직접 diff 확인 결과 동일 재발견" but the head SHA is the new one, suspect Codex thread outdated state and trigger a diagnostic cycle before initiating any new correction commit.
+
+Sentinel:
+
+`test_codex_thread_outdated_detection` is an optional helper test, not enforced as a merge gate.
+
+Proof case:
+
+PR #720 cycle 5 — the diagnostic cycle confirmed that the correction was correctly applied at head `24dc8d092e61fed1782a2a7d621d623c8216cad9`. The Codex P1 #1 and P1 #2 threads remained outdated, pointing at `commit_id=025f403deaf95000bf9b356931e8d71ae21115d5` (the original first head) and `original_line=409` / `original_line=158`. The reviewer's auto-fetch surfaced these outdated comments alongside the new diff, producing an apparent "동일 재발견" report. Final outcome: PR #720 merged with merge SHA `e838543b44cfa03ab31893304547f7218de44b82`.
+
 ## Required pre-merge evaluation PR checklist
 
 Every future evaluation PR must satisfy the following before merge:
@@ -188,4 +221,4 @@ Every future evaluation PR must satisfy the following before merge:
 
 ## Next application
 
-These standards apply starting with the next evaluation PR after PR #718, including Algorithm Branch B / GitHub PR #719 and all later `scripts/eval/*` changes.
+These standards apply starting with the next evaluation PR after this standards PR, including Algorithm Branch B-2 / GitHub PR #721+ and all later `scripts/eval/*` changes.
