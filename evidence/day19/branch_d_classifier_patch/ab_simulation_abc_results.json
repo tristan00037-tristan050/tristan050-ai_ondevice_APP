@@ -1,0 +1,39 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 723,
+  "source_merge_sha": "d26883e87f1b079f852ecaa45e7def487905b30e",
+  "branch": "D",
+  "patch_type": "deadline_classifier",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T04:29:41.407690+00:00",
+  "total_samples": 500,
+  "results": {
+    "A_current": {
+      "variant": "A",
+      "deadline_tp": 23,
+      "deadline_fp": 7,
+      "deadline_fn": 16,
+      "deadline_f1": 0.6667
+    },
+    "B_d1_d3_d4": {
+      "variant": "B",
+      "deadline_tp": 27,
+      "deadline_fp": 3,
+      "deadline_fn": 12,
+      "deadline_f1": 0.7826
+    },
+    "C_b_plus_d2": {
+      "variant": "C",
+      "deadline_tp": 26,
+      "deadline_fp": 3,
+      "deadline_fn": 13,
+      "deadline_f1": 0.7647
+    }
+  },
+  "selected": "B_d1_d3_d4",
+  "delta_table": {
+    "B_vs_A": 0.1159,
+    "C_vs_A": 0.098
+  },
+  "ab_eval_size": 50
+}
