@@ -81,3 +81,51 @@ def test_pr724_safety_monitor():
     assert fe["no_action_fp_rate"] <= 0.03 + 1e-9
     assert fe["g22_strict_warning_count"] == 0
     assert fe["g23_hard_violation_count"] == 0
+
+
+# ── Codex P1 정정: C variant distinct ────────────────────────────────────
+def test_ab_simulation_c_variant_distinct_from_b():
+    """C variant 가 B 와 distinct (D-2 relative time 정밀화 효과 측정)."""
+    abc = json.loads((OUT / "ab_simulation_abc_results.json").read_text(encoding="utf-8"))
+    r = abc["results"]
+    b = r["B_d1_d3_d4"]
+    c = r["C_b_plus_d2"]
+    # B 와 C 가 동일 객체가 아니어야 함 (distinct 측정)
+    assert (b["deadline_tp"], b["deadline_fp"], b["deadline_fn"]) != \
+           (c["deadline_tp"], c["deadline_fp"], c["deadline_fn"]) or \
+           b["deadline_f1"] != c["deadline_f1"], (
+        "C variant 가 B 와 동일 — D-2 미구현 의심")
+    # delta_table 에 B_vs_A / C_vs_A 모두 존재
+    assert "B_vs_A" in abc["delta_table"]
+    assert "C_vs_A" in abc["delta_table"]
+
+
+# ── Codex P2 정정: AB sampler multi-category distribution ────────────────
+def test_ab_sampler_multi_category_distribution():
+    """artificial shortage 차단 — declared 충족 또는 NATURAL_SHORTAGE 만."""
+    cfg = json.loads((OUT / "ab_eval_50_results.json").read_text(encoding="utf-8"))
+    declared = cfg["declared_composition"]
+    actual = cfg["actual_composition"]
+    # composition_ok 인 경우: 정합 또는 NATURAL_SHORTAGE
+    assert cfg["composition_ok"] is True
+    assert cfg["fail_class"] in {None, "AB_COMPOSITION_NATURAL_SHORTAGE"}
+    # ab_sample_ids 50건 정합
+    assert len(cfg["ab_sample_ids"]) == 50
+
+
+# ── Codex P2 정정: NATURAL_SHORTAGE 는 multi-category fallback 후 부족만 ──
+def test_natural_shortage_warns_only_on_real_pool_exhaustion():
+    """shortage_log 는 unique pool + multi-category 배정 소진 후 남은 부족.
+
+    P2 정정: greedy global-seen 인위 부족 차단. multi-category sample 은
+    shortage 카테고리 우선 배정 — 그 후에도 부족하면 NATURAL_SHORTAGE.
+    available 필드는 전체 pool 크기 (정보용) — multi-category 경합으로
+    available >= declared 여도 NATURAL_SHORTAGE 가능.
+    """
+    cfg = json.loads((OUT / "ab_eval_50_results.json").read_text(encoding="utf-8"))
+    if cfg["fail_class"] == "AB_COMPOSITION_NATURAL_SHORTAGE":
+        assert cfg["composition_ok"] is True
+        assert len(cfg["ab_sample_ids"]) == 50
+    for entry in cfg.get("shortage_log", []):
+        assert entry["shortage"] > 0
+        assert entry["declared"] >= entry["shortage"]

@@ -5,7 +5,7 @@
   "branch": "D",
   "patch_type": "deadline_classifier",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-15T03:39:36.394827+00:00",
+  "generated_at": "2026-05-15T04:29:41.407690+00:00",
   "total_samples": 500,
   "results": {
     "A_current": {
@@ -24,16 +24,16 @@
     },
     "C_b_plus_d2": {
       "variant": "C",
-      "deadline_tp": 27,
+      "deadline_tp": 26,
       "deadline_fp": 3,
-      "deadline_fn": 12,
-      "deadline_f1": 0.7826
+      "deadline_fn": 13,
+      "deadline_f1": 0.7647
     }
   },
   "selected": "B_d1_d3_d4",
   "delta_table": {
     "B_vs_A": 0.1159,
-    "C_vs_A": 0.1159
+    "C_vs_A": 0.098
   },
   "ab_eval_size": 50
 }

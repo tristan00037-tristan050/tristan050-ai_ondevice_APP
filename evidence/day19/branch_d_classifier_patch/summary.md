@@ -23,7 +23,7 @@
 ## AB simulation A/B/C
 - A: 0.6667
 - B (D-1+D-3+D-4): 0.7826
-- C (B+D-2): 0.7826
+- C (B+D-2): 0.7647
 - selected: B_d1_d3_d4
 
 ## AB composition (sentinel #7)

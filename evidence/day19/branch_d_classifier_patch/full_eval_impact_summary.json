@@ -5,7 +5,7 @@
   "branch": "D",
   "patch_type": "deadline_classifier",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-15T03:39:36.395010+00:00",
+  "generated_at": "2026-05-15T04:29:41.407890+00:00",
   "total_samples": 500,
   "coverage_report": {
     "coverage_checked": true,

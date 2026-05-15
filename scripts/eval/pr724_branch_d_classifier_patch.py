@@ -153,13 +153,37 @@ def is_non_actionable_pattern(text: str) -> bool:
     return bool(text) and any(p in text for p in NON_ACTIONABLE_DISQUALIFIER)
 
 
+# ── D-2 relative time 정밀화 (C variant 전용) ─────────────────────────────
+def apply_relative_time_normalization(text: str, current_type: str) -> str:
+    """Codex P1 정정 — D-2 relative time 정밀화 (C variant 전용).
+
+    relative anchor + time_part 결합으로 HARD/SOFT 강도 재판정:
+    - "내일 오전까지" 처럼 명시 시간대 동반 → HARD 강도
+    - 단순 relative range ("이번 주 중") → SOFT 강도 유지
+    """
+    if not text or current_type not in {"HARD", "SOFT"}:
+        return current_type
+    sch = normalize_relative_time(text)
+    if not sch:
+        return current_type
+    # relative anchor + time_part + deadline marker 결합 시 강도 재판정
+    strength = sch.get("deadline_strength")
+    if strength in {"HARD", "SOFT"}:
+        return strength
+    return current_type
+
+
 # ── classifier patch 적용 (시뮬레이션) ─────────────────────────────────────
-def patched_deadline_classify(text: str, original_pred_type: str) -> str:
+def patched_deadline_classify(text: str, original_pred_type: str,
+                               apply_relative_time: bool = False) -> str:
     """Branch D classifier patch 시뮬레이션 — original pred 보정.
 
     D-3: deadline marker 없으면 actionable(HARD/SOFT) 금지 → NONE.
     D-4: non-actionable disqualifier → INQUIRY/URGENCY/CONDITION 보존.
     D-1: HARD/SOFT 재분류.
+    D-2 (apply_relative_time=True, C variant 전용): relative time 정밀화.
+
+    Codex P1 정정: apply_relative_time 파라미터로 B/C variant 구분.
     """
     if not text:
         return original_pred_type
@@ -176,11 +200,15 @@ def patched_deadline_classify(text: str, original_pred_type: str) -> str:
     if original_pred_type in {"HARD", "SOFT"} and not has_deadline_marker(text):
         return "NONE"
     # D-1: HARD/SOFT 재분류
+    result = original_pred_type
     if original_pred_type in {"HARD", "SOFT"}:
         hs = classify_hard_soft(text)
         if hs in {"HARD", "SOFT"}:
-            return hs
-    return original_pred_type
+            result = hs
+    # D-2: relative time 정밀화 (C variant 전용)
+    if apply_relative_time:
+        result = apply_relative_time_normalization(text, result)
+    return result
 
 
 # ── full eval ─────────────────────────────────────────────────────────────
@@ -397,26 +425,52 @@ def build_ab_ids(items: List[Dict], preds: List[Dict]) -> Tuple[
         if gd == "SOFT" and pd == "SOFT":
             pools["soft_clean"].append(sid)
 
+    # Codex P2 정정 — artificial shortage 차단.
+    # 다중 카테고리 sample 식별 → unique pool 먼저 소비 → multi-category 는
+    # shortage 카테고리 우선 할당. greedy global-seen consumption 차단.
+    sid_category_count: Counter = Counter()
+    for cat, sids in pools.items():
+        for sid in set(sids):
+            sid_category_count[sid] += 1
+    multi_category = {sid for sid, c in sid_category_count.items() if c > 1}
+
     ab_ids: List[str] = []
     seen: set = set()
-    actual: Dict[str, int] = {}
+    actual: Dict[str, int] = {cat: 0 for cat in AB_COMPOSITION}
     shortage_log: List[Dict] = []
     natural_shortage = False
     fallback_applied = False
 
+    # 1단계: unique pool 우선 소비 (multi-category sample 제외)
     for category, target in AB_COMPOSITION.items():
-        added = 0
         for sid in pools[category]:
-            if sid in seen:
+            if sid in seen or sid in multi_category:
                 continue
-            ab_ids.append(sid); seen.add(sid); added += 1
-            if added >= target:
+            ab_ids.append(sid); seen.add(sid)
+            actual[category] += 1
+            if actual[category] >= target:
                 break
-        actual[category] = added
-        if added < target:
-            shortage = target - added
+
+    # 2단계: multi-category sample 을 shortage 큰 카테고리부터 할당
+    shortage_order = sorted(
+        [c for c in AB_COMPOSITION if actual[c] < AB_COMPOSITION[c]],
+        key=lambda c: AB_COMPOSITION[c] - actual[c], reverse=True)
+    for category in shortage_order:
+        target = AB_COMPOSITION[category]
+        for sid in pools[category]:
+            if sid in seen or sid not in multi_category:
+                continue
+            ab_ids.append(sid); seen.add(sid)
+            actual[category] += 1
+            if actual[category] >= target:
+                break
+
+    # 3단계: 진짜 NATURAL_SHORTAGE 판정 (multi-category fallback 후에도 부족)
+    for category, target in AB_COMPOSITION.items():
+        if actual[category] < target:
+            shortage = target - actual[category]
             shortage_log.append({"category": category, "declared": target,
-                                  "available": len(pools[category]),
+                                  "available": len(set(pools[category])),
                                   "shortage": shortage})
             natural_shortage = True
             for fb in FALLBACK_ORDER:
@@ -474,10 +528,19 @@ def ab_simulation(items: List[Dict], preds: List[Dict],
             text = gold.get("text") or gold.get("text_redacted") or ""
             gd = gold.get("deadline_type") or "NONE"
             pd_orig = rec["pred"].get("deadline_type") or "NONE"
+            # Codex P1 정정 — C variant distinct (D-2 relative time 정밀화 적용)
             if variant == "A":
                 pd = pd_orig
-            else:   # B / C 모두 patched (C 는 relative time 추가 정규화 포함)
-                pd = patched_deadline_classify(text, pd_orig)
+            elif variant == "B":
+                # B: D-1 + D-3 + D-4 (relative time 정밀화 미적용)
+                pd = patched_deadline_classify(text, pd_orig,
+                                                 apply_relative_time=False)
+            elif variant == "C":
+                # C: B + D-2 relative time 정밀화 적용
+                pd = patched_deadline_classify(text, pd_orig,
+                                                 apply_relative_time=True)
+            else:
+                raise ValueError(f"Unknown variant: {variant}")
             gh = gd in {"HARD", "SOFT"}; ph = pd in {"HARD", "SOFT"}
             if gh and ph and gd == pd: tp += 1
             elif (not gh) and ph:      fp += 1
