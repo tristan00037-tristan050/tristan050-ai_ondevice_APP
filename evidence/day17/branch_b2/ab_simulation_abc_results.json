@@ -1,0 +1,73 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 720,
+  "source_merge_sha": "e838543b44cfa03ab31893304547f7218de44b82",
+  "ops_standards_pr": 721,
+  "ops_merge_sha": "cc0b5759ca794a08797a4ffc5bd5260608c47c1e",
+  "branch": "B-2",
+  "patch_type": "over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T02:45:37.289853+00:00",
+  "total_samples": 500,
+  "ab_eval_size": 50,
+  "results": {
+    "A_current": {
+      "label": "A_current",
+      "action_fp": 20,
+      "action_fn": 4,
+      "action_tp": 39,
+      "f1": 0.7647,
+      "over_extraction_blocked": 0,
+      "decomp_applied": 0
+    },
+    "B_over_guard_only": {
+      "label": "B_over_guard_only",
+      "action_fp": 19,
+      "action_fn": 4,
+      "action_tp": 39,
+      "f1": 0.7723,
+      "over_extraction_blocked": 1,
+      "decomp_applied": 0
+    },
+    "C_over_guard_and_decomp": {
+      "label": "C_over_guard_and_decomp",
+      "action_fp": 45,
+      "action_fn": 4,
+      "action_tp": 39,
+      "f1": 0.6142,
+      "over_extraction_blocked": 1,
+      "decomp_applied": 26
+    }
+  },
+  "selected": "B_over_guard_only",
+  "selection_reason": "B action_fp Δ ≤ 0 + safety preserved",
+  "delta_table": {
+    "B_vs_A": {
+      "action_fp": -1,
+      "f1": 0.0076
+    },
+    "C_vs_A": {
+      "action_fp": 25,
+      "f1": -0.1505
+    }
+  },
+  "actual_composition": {
+    "mixed_reclassified": 18,
+    "parser_limit": 2,
+    "parser_llm_limit": 10,
+    "action_fp_high_risk": 8,
+    "evidence_field_weakness": 5,
+    "deadline_monitor": 5,
+    "multi_action_collapse": 2
+  },
+  "composition_ok": true,
+  "natural_shortage": true,
+  "shortage_log": [
+    {
+      "category": "mixed_reclassified",
+      "declared": 20,
+      "available": 18,
+      "shortage": 2
+    }
+  ]
+}

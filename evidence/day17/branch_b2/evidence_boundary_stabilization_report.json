@@ -1,0 +1,21 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 720,
+  "source_merge_sha": "e838543b44cfa03ab31893304547f7218de44b82",
+  "ops_standards_pr": 721,
+  "ops_merge_sha": "cc0b5759ca794a08797a4ffc5bd5260608c47c1e",
+  "branch": "B-2",
+  "patch_type": "over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T02:45:37.292524+00:00",
+  "total_samples": 500,
+  "total_actions": 463,
+  "evidence_present_count": 463,
+  "evidence_in_source_count": 461,
+  "evidence_present_rate": 1.0,
+  "evidence_in_source_rate": 0.9957,
+  "stabilization_target": {
+    "evidence_present_rate_min": 0.95,
+    "evidence_in_source_rate_min": 0.9
+  }
+}
