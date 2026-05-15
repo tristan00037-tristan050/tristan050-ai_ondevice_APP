@@ -1,0 +1,47 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 720,
+  "source_merge_sha": "e838543b44cfa03ab31893304547f7218de44b82",
+  "ops_pr": 721,
+  "ops_merge_sha": "cc0b5759ca794a08797a4ffc5bd5260608c47c1e",
+  "branch": "D",
+  "patch_type": "measurement_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-15T02:47:08.759014+00:00",
+  "total_samples": 500,
+  "INQUIRY_misclassified_as_HARD_or_SOFT": {
+    "count": 1,
+    "gold_total": 11,
+    "rate": 0.0909
+  },
+  "URGENCY_misclassified_as_SOFT": {
+    "count": 0,
+    "gold_total": 11,
+    "rate": 0.0
+  },
+  "URGENCY_misclassified_as_HARD_or_SOFT": {
+    "count": 0,
+    "gold_total": 11,
+    "rate": 0.0
+  },
+  "CONDITION_misclassified_as_HARD_or_SOFT": {
+    "count": 0,
+    "gold_total": 16,
+    "rate": 0.0
+  },
+  "HARD_misclassified_as_SOFT": {
+    "count": 14,
+    "gold_total": 50,
+    "rate": 0.28
+  },
+  "SOFT_misclassified_as_HARD": {
+    "count": 0,
+    "gold_total": 21,
+    "rate": 0.0
+  },
+  "NONE_misclassified_as_actionable": {
+    "count": 6,
+    "gold_total": 391,
+    "rate": 0.0153
+  }
+}
