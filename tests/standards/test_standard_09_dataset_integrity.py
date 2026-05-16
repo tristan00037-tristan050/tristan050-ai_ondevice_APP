@@ -1,4 +1,4 @@
-"""Standard 9 — Dataset Integrity Fail-Closed sentinel (6건)."""
+"""Standard 9 — Dataset Integrity Fail-Closed sentinel (7건)."""
 from __future__ import annotations
 
 import json
@@ -129,3 +129,47 @@ def test_coverage_report_missing_fail_closed(tmp_path):
     # 평가 evidence 자체가 없으면 위반 아님 (codification PR 등)
     empty = audit_evidence(tmp_path / "nonexistent")
     assert empty["ok"] is True
+
+
+# ── #7 audit_evidence() return path 정합 — P1-C 명확 검증 ────────────────
+def test_coverage_report_missing_fail_closed_actual_path(tmp_path):
+    """실제 audit_evidence() return path 가 fail-closed 정합 작동 검증.
+
+    Codex P1-C — `ok` 가 violations 뿐 아니라 missing_required_artifact 도
+    반영하는지, return dict 가 두 fail-closed 신호를 모두 노출하는지 검증.
+    """
+    # case 1: 평가 evidence 존재 + coverage_report 0건 → fail-closed
+    eval_dir = tmp_path / "evidence" / "day99" / "branch_test"
+    eval_dir.mkdir(parents=True)
+    (eval_dir / "summary.md").write_text("test summary", encoding="utf-8")
+
+    result = audit_evidence(tmp_path)
+    assert result["ok"] is False, "fail-closed 차단 필요"
+    assert result["missing_required_artifact"] is True
+    assert any(v.get("fail_class") == "COVERAGE_REPORT_MISSING"
+               for v in result["violations"])
+    assert result["eval_evidence_dirs_count"] == 1
+    assert result["checked"] == 0
+
+    # case 2: coverage_report 추가 (정합) → ok=true (해소)
+    cov = {
+        "coverage_checked": True, "expected_samples": 500,
+        "measured_samples": 500, "missing_count": 0, "missing_ids": [],
+        "extra_count": 0, "extra_ids": [], "gold_duplicate_count": 0,
+        "gold_duplicate_ids": [], "prediction_duplicate_count": 0,
+        "prediction_duplicate_ids": [], "fail_class": None,
+    }
+    (eval_dir / "coverage_report.json").write_text(
+        json.dumps(cov, ensure_ascii=False), encoding="utf-8")
+    resolved = audit_evidence(tmp_path)
+    assert resolved["ok"] is True
+    assert resolved["missing_required_artifact"] is False
+    assert resolved["checked"] == 1
+
+    # case 3: 평가 evidence 부재 → ok=true (codification PR 정합)
+    bare = tmp_path / "bare"
+    (bare / "evidence" / "day22" / "standards_codification").mkdir(parents=True)
+    none_eval = audit_evidence(bare)
+    assert none_eval["ok"] is True
+    assert none_eval["missing_required_artifact"] is False
+    assert none_eval["eval_evidence_dirs_count"] == 0

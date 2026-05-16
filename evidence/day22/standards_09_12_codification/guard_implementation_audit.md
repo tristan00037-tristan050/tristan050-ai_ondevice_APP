@@ -39,10 +39,27 @@ specification / PR template 은 변경하지 않음 (guard implementation 한정
   ab_*.json / full_eval_*.json 검출). 평가 evidence 존재 + coverage_report
   0건 → `fail_class=COVERAGE_REPORT_MISSING` violation, `ok=false`.
 - `eval_evidence_dirs_count` 보고 필드 추가.
-- 검증: sentinel #6 `test_coverage_report_missing_fail_closed` — 평가
-  evidence + coverage 0건 → ok=false, coverage 추가 시 해소.
+
+### P1-C 명확 처리 (return 라인 정합 재정정)
+
+Codex P1-C thread 가 head 43c1eb29 line 165 (audit_evidence return)에
+remap 된 채 잔존 — thread 의 `diff_hunk` 는 fail-closed 미적용 원본 코드
+(@@ -0,0 +1,139 @@) 로, 원 코멘트가 line 번호만 갱신된 상태 (Standard 8
+outdated-thread). 그러나 thread 잔존 자체를 해소하기 위해 return 라인을
+명확히 정합 처리한다.
+
+- `missing_required_artifact` boolean 을 audit_evidence 산출물에 명시 추가
+  (Codex P1-C 권고: "audit result 에 missing_required_artifact=true 명시").
+- `ok` 산식을 return 라인에서 `(not violations) and (not
+  missing_required_artifact)` 로 명시 — 두 fail-closed 신호를 모두 반영.
+- return dict 가 두 신호(violations / missing_required_artifact)를 모두
+  노출하여 CI 및 재검토팀이 diff 기준으로 해소를 입증 가능.
+- 검증: sentinel #6 + #7 `test_coverage_report_missing_fail_closed_actual_path`
+  — case 1 (evidence + coverage 0건 → ok=false, missing_required_artifact
+  =true, checked=0) / case 2 (coverage 추가 → 해소) / case 3 (evidence 부재
+  → ok=true).
 - 실측: CI guard 09 — coverage_report 3건 / 평가 evidence 6 디렉토리,
-  fail-closed 조건 미발동 (정합), ok=true.
+  missing_required_artifact=false, fail-closed 미발동 (정합), ok=true.
 
 ## 정정 영향 범위
 

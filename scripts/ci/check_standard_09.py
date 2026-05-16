@@ -129,16 +129,23 @@ def audit_evidence(root: Path) -> Dict[str, Any]:
     """평가 evidence 의 coverage_report.json 정합 감사 (fail-closed).
 
     Codex P1-C 정정: 평가 evidence 가 존재하는데 coverage_report.json 이
-    0건이면 ok=false (이전에는 fail-open 으로 통과되어 dataset integrity
-    검사가 우회 가능했다).
+    0건이면 fail-closed 한다 (이전에는 `ok` 가 violations 만으로 산출되어
+    artifact 누락이 fail-open 으로 통과했다 — dataset integrity 검사 우회).
+
+    fail-closed 경로:
+      1) `missing_required_artifact` — 평가 evidence 검출 + coverage_report
+         0건 → `COVERAGE_REPORT_MISSING` violation 추가.
+      2) `ok` 는 violations 가 비어있고 missing_required_artifact 가 아닐
+         때만 true (return 라인에서 두 조건을 명시적으로 합산).
     """
     reports = sorted(root.glob("evidence/**/coverage_report.json"))
     eval_dirs = find_evaluation_evidence_dirs(root)
     audited: List[Dict[str, Any]] = []
     violations: List[Dict[str, Any]] = []
 
-    # fail-closed: 평가 evidence 존재 + coverage_report 0건 → 위반
-    if eval_dirs and not reports:
+    # fail-closed #1: 평가 evidence 존재 + coverage_report 0건 → 필수 artifact 누락
+    missing_required_artifact = bool(eval_dirs) and not reports
+    if missing_required_artifact:
         violations.append({
             "fail_class": "COVERAGE_REPORT_MISSING",
             "message": (f"평가 evidence {len(eval_dirs)}개 디렉토리가 검출되었으나 "
@@ -160,9 +167,12 @@ def audit_evidence(root: Path) -> Dict[str, Any]:
         if iss:
             violations.append({"file": rel, "issues": iss})
 
+    # fail-closed #2: ok 는 violations 부재 AND 필수 artifact 누락 아님
+    ok = (not violations) and (not missing_required_artifact)
     return {"checked": len(reports), "audited": audited,
             "eval_evidence_dirs_count": len(eval_dirs),
-            "violations": violations, "ok": not violations}
+            "missing_required_artifact": missing_required_artifact,
+            "violations": violations, "ok": ok}
 
 
 def main() -> int:
