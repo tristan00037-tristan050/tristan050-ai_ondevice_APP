@@ -1,0 +1,16 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 725,
+  "source_merge_sha": "a3b38c36749462a3d61fca1c472b40f046877c96",
+  "branch": "B-3B",
+  "patch_type": "arbitration_apply",
+  "verdict": "PATCH_CONTINUE",
+  "generated_at": "2026-05-16T03:04:16.689660+00:00",
+  "total_samples": 500,
+  "branch_b2_action_fp_baseline": 234,
+  "branch_b3b_action_fp": 234,
+  "action_fp_regression": false,
+  "branch_d_deadline_f1_baseline": 0.8438,
+  "branch_b3b_deadline_f1": 0.8438,
+  "deadline_f1_regression": false
+}

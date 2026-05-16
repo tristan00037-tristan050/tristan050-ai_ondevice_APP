@@ -1,0 +1,40 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 725,
+  "source_merge_sha": "a3b38c36749462a3d61fca1c472b40f046877c96",
+  "branch": "B-3B",
+  "patch_type": "arbitration_apply",
+  "verdict": "PATCH_CONTINUE",
+  "generated_at": "2026-05-16T03:04:16.689077+00:00",
+  "total_samples": 500,
+  "results": {
+    "A_current": {
+      "variant": "A",
+      "action_tp": 28,
+      "action_fp": 25,
+      "action_fn": 1,
+      "f1": 0.6829
+    },
+    "B_ar2": {
+      "variant": "B",
+      "action_tp": 28,
+      "action_fp": 25,
+      "action_fn": 1,
+      "f1": 0.6829
+    },
+    "C_ar2_ar4": {
+      "variant": "C",
+      "action_tp": 28,
+      "action_fp": 25,
+      "action_fn": 1,
+      "f1": 0.6829
+    }
+  },
+  "selected": "B_ar2",
+  "delta_table": {
+    "B_vs_A": 0.0,
+    "C_vs_A": 0.0
+  },
+  "variant_distinct": false,
+  "variant_distinct_basis": "metric-only (action_tp/fp/fn/f1), label 제외"
+}
