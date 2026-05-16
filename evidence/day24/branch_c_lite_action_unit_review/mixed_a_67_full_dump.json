@@ -1,0 +1,1234 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 730,
+  "source_merge_sha": "ee03a5cd",
+  "branch": "C-lite",
+  "patch_type": "gold_action_unit_review_analysis_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-16T06:09:47.462155+00:00",
+  "mixed_a_total": 67,
+  "rows": [
+    {
+      "sample_id": "card1_100031",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "이번 PR 어떻게 처리됐어?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "이번 PR 처리",
+          "evidence": "이번 PR 어떻게 처리됐어",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_100033",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "버전 정보 알 수 있을까요?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "버전 정보 알기",
+          "evidence": "버전 정보 알 수 있을까요?",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_100034",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "회의 참석자 명단 누가 가지고 있나요?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "회의 참석자 명단 확인",
+          "evidence": "누가 가지고 있나요?",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_100048",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "회의 결과 정리되면 알려드리겠습니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 2,
+      "pred_actions": [
+        {
+          "action_text": "회의 결과 정리",
+          "evidence": "회의 결과 정리되면",
+          "confidence": 0.0
+        },
+        {
+          "action_text": "알려드리겠습니다",
+          "evidence": "알려드리겠습니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_100078",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "회의록 정리 후 공유드리려고 합니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 2,
+      "gold_actions": [
+        {
+          "action_text": "회의록 정리",
+          "action_type": "정리",
+          "normalized_action": "organize",
+          "evidence": "회의록 정리 후"
+        },
+        {
+          "action_text": "회의록 공유",
+          "action_type": "공유",
+          "normalized_action": "share",
+          "evidence": "공유드리려고 합니다"
+        }
+      ],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 2,
+      "pred_actions": [
+        {
+          "action_text": "회의록 정리",
+          "evidence": "정리 후",
+          "confidence": 0.0
+        },
+        {
+          "action_text": "회의록 공유",
+          "evidence": "공유드리려고 합니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_100101",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "회의 시간 알려 주실 수 있나요?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "회의 시간 알려 주실 수 있나요?",
+          "evidence": "회의 시간 알려 주실 수 있나요?",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_100102",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "이 자료 누가 만들었나요?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "자료 확인",
+          "evidence": "이 자료 누가 만들었나요?",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_100103",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "이번 PR 리뷰 끝났나요?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "PR 리뷰 마감",
+          "evidence": "리뷰 끝났나요?",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_100105",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "담당자 변경 됐나요?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "담당자 변경 확인",
+          "evidence": "담당자 변경 됐나요?",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_100107",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "배포 일정 알 수 있을까요?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "배포 일정 알기",
+          "evidence": "배포 일정 알 수 있을까요?",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_100118",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "이번 주 진행 사항 정리해 두었어요",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "이번 주 진행 사항 정리",
+          "evidence": "이번 주 진행 사항 정리해 두었어요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_200021",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "자료 확인",
+          "evidence": "이 자료 누가 만들었나요?",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_200047",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "이번 분기 KPI 정리",
+          "evidence": "이번 분기 KPI 정리 부탁드려요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_200051",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "회의 시간 알려 주실 수 있나요?",
+          "evidence": "회의 시간 알려 주실 수 있나요?",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_200053",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "결재",
+          "evidence": "결재 가능하실까요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_200054",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "발표 자료 작성 완료",
+          "evidence": "발표 자료 작성 완료했어요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400031",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "고객 회신 정리 부탁드려요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 1,
+      "gold_actions": [
+        {
+          "action_text": "고객 회신 정리 부탁드려요",
+          "evidence": "고객 회신 정리 부탁드려요"
+        }
+      ],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "고객 회신 정리",
+          "evidence": "고객 회신 정리 부탁드려요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400032",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "이번 분기 정리 자료 보내 주세요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 1,
+      "gold_actions": [
+        {
+          "action_text": "이번 분기 정리 자료 보내 주세요",
+          "evidence": "이번 분기 정리 자료 보내 주세요"
+        }
+      ],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "이번 분기 정리 자료 보내 주세요",
+          "evidence": "이번 분기 정리 자료 보내 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400033",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "기획안 작성 부탁드려요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 1,
+      "gold_actions": [
+        {
+          "action_text": "기획안 작성 부탁드려요",
+          "evidence": "기획안 작성 부탁드려요"
+        }
+      ],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "기획안 작성",
+          "evidence": "기획안 작성 부탁드려요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400034",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "분석 자료 정리 부탁드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 1,
+      "gold_actions": [
+        {
+          "action_text": "분석 자료 정리 부탁드립니다",
+          "evidence": "분석 자료 정리 부탁드립니다"
+        }
+      ],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "분석 자료 정리",
+          "evidence": "분석 자료 정리 부탁드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400049",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "기획서 보완 부탁드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 1,
+      "gold_actions": [
+        {
+          "action_text": "기획서 보완 부탁드립니다",
+          "evidence": "기획서 보완 부탁드립니다"
+        }
+      ],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "기획서 보완",
+          "evidence": "기획서 보완 부탁드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400059",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "보고서 양식이 어떤가요?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "보고서 양식 확인",
+          "evidence": "보고서 양식이 어떤가요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400061",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "회의 시간 알려 주세요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "회의 시간 알려 주세요",
+          "evidence": "회의 시간 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400063",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "참석자 명단 알려 주세요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "참석자 명단 알려 주세요",
+          "evidence": "참석자 명단 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400064",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "이번 주 일정 알려 주세요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "이번 주 일정 알려 주세요",
+          "evidence": "이번 주 일정 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400065",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "다음 단계 알려 주세요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "다음 단계 알려 주세요",
+          "evidence": "다음 단계 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400067",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "처리 결과 알려 주세요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "처리 결과 알려 주세요",
+          "evidence": "처리 결과 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400068",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "회신 일정 알려 주세요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "회신 일정 알려 주세요",
+          "evidence": "회신 일정 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400070",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "재검토 가능한가요?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "재검토",
+          "evidence": "재검토 가능한가요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400071",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "다음 미팅 시간 알려 주세요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "미팅 시간 알려 주세요",
+          "evidence": "다음 미팅 시간 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400072",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "결과 공유 가능한가요?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "결과 공유",
+          "evidence": "결과 공유 가능한가요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400075",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "결제 일정 알 수 있을까요?",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "결제 일정 알기",
+          "evidence": "결제 일정 알 수 있을까요?",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400076",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "이번 주 보고 일정 알려 주세요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "이번 주 보고 일정 알려 주세요",
+          "evidence": "이번 주 보고 일정 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400078",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "결재 일정 알려 주세요",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "결재 일정 알려 주세요",
+          "evidence": "결재 일정 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400083",
+      "source_subtype": "MIXED-A3_llm_action_parser_evidence",
+      "text": "회의 결과 공유드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "회의 결과 공유",
+          "evidence": "회의 결과 공유드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400089",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "회의 결과 정리하여 공유드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 2,
+      "pred_actions": [
+        {
+          "action_text": "회의 결과 정리",
+          "evidence": "회의 결과 정리하여",
+          "confidence": 0.0
+        },
+        {
+          "action_text": "회의 결과 공유",
+          "evidence": "공유드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400093",
+      "source_subtype": "MIXED-A3_llm_action_parser_evidence",
+      "text": "회의록 공유드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "NO_ACTION",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "회의록 공유",
+          "evidence": "회의록 공유드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400099",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "이번 분기 분석 결과 공유드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "이번 분기 분석 결과 공유",
+          "evidence": "이번 분기 분석 결과 공유드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400106",
+      "source_subtype": "MIXED-A3_llm_action_parser_evidence",
+      "text": "프로젝트 일정 갱신했습니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "프로젝트 일정 갱신",
+          "evidence": "프로젝트 일정 갱신했습니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400110",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "분기 평가 결과 공유드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "분기 평가 결과 공유",
+          "evidence": "분기 평가 결과 공유드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400112",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "주간 진행 자료 공유드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "주간 진행 자료 공유",
+          "evidence": "주간 진행 자료 공유드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400167",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "회의 결과 정리하여 공유드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 2,
+      "pred_actions": [
+        {
+          "action_text": "회의 결과 정리",
+          "evidence": "회의 결과 정리하여",
+          "confidence": 0.0
+        },
+        {
+          "action_text": "회의 결과 공유",
+          "evidence": "공유드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400168",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "회의 결과 정리하여 공유드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 2,
+      "pred_actions": [
+        {
+          "action_text": "회의 결과 정리",
+          "evidence": "회의 결과 정리하여",
+          "confidence": 0.0
+        },
+        {
+          "action_text": "회의 결과 공유",
+          "evidence": "공유드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400169",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "회의 결과 정리하여 공유드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 2,
+      "pred_actions": [
+        {
+          "action_text": "회의 결과 정리",
+          "evidence": "회의 결과 정리하여",
+          "confidence": 0.0
+        },
+        {
+          "action_text": "회의 결과 공유",
+          "evidence": "공유드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400170",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "회의 결과 정리하여 공유드립니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 2,
+      "pred_actions": [
+        {
+          "action_text": "회의 결과 정리",
+          "evidence": "회의 결과 정리하여",
+          "confidence": 0.0
+        },
+        {
+          "action_text": "회의 결과 공유",
+          "evidence": "공유드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400179",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "결과 정리 후 보고드리려고 합니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 2,
+      "pred_actions": [
+        {
+          "action_text": "결과 정리",
+          "evidence": "결과 정리 후",
+          "confidence": 0.0
+        },
+        {
+          "action_text": "보고드리려고 합니다",
+          "evidence": "보고드리려고 합니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_400180",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "결과 정리 후 보고드리려고 합니다",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 2,
+      "pred_actions": [
+        {
+          "action_text": "결과 정리",
+          "evidence": "결과 정리 후",
+          "confidence": 0.0
+        },
+        {
+          "action_text": "보고드리려고 합니다",
+          "evidence": "보고드리려고 합니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500002",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "NO_ACTION",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "PR 리뷰 완료",
+          "evidence": "[PR] 리뷰 완료했어요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500006",
+      "source_subtype": "MIXED-A3_llm_action_parser_evidence",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "NO_ACTION",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "[BRANCH] 머지 완료",
+          "evidence": "[BRANCH] 머지 완료했어요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500009",
+      "source_subtype": "MIXED-A3_llm_action_parser_evidence",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "NO_ACTION",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "PR 머지 완료",
+          "evidence": "[PR] 머지 완료했어요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500020",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "연락 부탁드립니다",
+          "evidence": "[PHONE] 연락 부탁드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500032",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "보고서 검토",
+          "evidence": "보고서 검토 부탁드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500033",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "안건 정리",
+          "evidence": "안건 정리 부탁드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500036",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "회신",
+          "evidence": "회신 부탁드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500044",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "결재 라인 알려 주세요",
+          "evidence": "결재 라인 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500048",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "처리 일정 알려 주세요",
+          "evidence": "처리 일정 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500049",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "다음 단계 알려 주세요",
+          "evidence": "다음 단계 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500050",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "재검토",
+          "evidence": "재검토 가능한가요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500063",
+      "source_subtype": "MIXED-A3_llm_action_parser_evidence",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "회의 결과 공유",
+          "evidence": "회의 결과 공유드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500067",
+      "source_subtype": "MIXED-A3_llm_action_parser_evidence",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "NO_ACTION",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "회의록 작성 완료",
+          "evidence": "회의록 작성 완료했어요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500068",
+      "source_subtype": "MIXED-A3_llm_action_parser_evidence",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "NO_ACTION",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "보고서 작성 완료",
+          "evidence": "보고서 작성 완료했어요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500101",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "신규 회의 일정 알려 주세요",
+          "evidence": "신규 회의 일정 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500102",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "안 알려 주세요",
+          "evidence": "이번 주 안건 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500104",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "예산 변경 안내",
+          "evidence": "예산 변경 안내 부탁드려요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500105",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "프로젝트 결과 보고",
+          "evidence": "프로젝트 결과 보고 부탁드립니다",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500116",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "결재 진행 일정 알려 주세요",
+          "evidence": "결재 진행 일정 알려 주세요",
+          "confidence": 0.0
+        }
+      ]
+    },
+    {
+      "sample_id": "card1_500120",
+      "source_subtype": "MIXED-A1_parser_action_llm_object",
+      "text": "",
+      "gold_intent": "REPORT",
+      "gold_action_count": 0,
+      "gold_actions": [],
+      "pred_intent": "REQUEST",
+      "pred_action_count": 1,
+      "pred_actions": [
+        {
+          "action_text": "주간 진행 정리",
+          "evidence": "주간 진행 정리 부탁드립니다",
+          "confidence": 0.0
+        }
+      ]
+    }
+  ]
+}

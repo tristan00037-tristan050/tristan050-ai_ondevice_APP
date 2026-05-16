@@ -1,0 +1,30 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 730,
+  "source_merge_sha": "ee03a5cd",
+  "branch": "C-lite",
+  "patch_type": "gold_action_unit_review_analysis_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-16T06:09:47.464132+00:00",
+  "comparison": [
+    {
+      "metric": "normalized_action_f1",
+      "before": 0.6182,
+      "after": 0.6182,
+      "delta": 0.0
+    },
+    {
+      "metric": "deadline_f1",
+      "before": 0.8702,
+      "after": 0.8702,
+      "delta": 0.0
+    },
+    {
+      "metric": "action_fp",
+      "before": 234,
+      "after": 234,
+      "delta": 0.0
+    }
+  ],
+  "reason": "Analysis PR — no algorithm changes, no metric impact"
+}

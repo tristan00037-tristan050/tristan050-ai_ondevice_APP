@@ -1,0 +1,23 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 730,
+  "source_merge_sha": "ee03a5cd",
+  "branch": "C-lite",
+  "patch_type": "gold_action_unit_review_analysis_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-16T06:09:47.463801+00:00",
+  "sample_size": 30,
+  "subtype_distribution": {
+    "A3_product_equivalent_prediction": 23,
+    "A4_true_model_error": 7
+  },
+  "action_unit_mismatch_count": 0,
+  "action_unit_mismatch_rate": 0.0,
+  "user_value_unit_distribution": {
+    "pred": 17,
+    "gold": 7,
+    "both": 6
+  },
+  "gold_aligned_count": 13,
+  "gold_aligned_rate": 0.4333
+}

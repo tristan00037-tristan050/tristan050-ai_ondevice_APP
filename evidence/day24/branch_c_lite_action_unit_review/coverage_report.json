@@ -1,0 +1,14 @@
+{
+  "coverage_checked": true,
+  "expected_samples": 67,
+  "measured_samples": 67,
+  "missing_count": 0,
+  "missing_ids": [],
+  "extra_count": 0,
+  "extra_ids": [],
+  "gold_duplicate_count": 0,
+  "gold_duplicate_ids": [],
+  "prediction_duplicate_count": 0,
+  "prediction_duplicate_ids": [],
+  "fail_class": null
+}
