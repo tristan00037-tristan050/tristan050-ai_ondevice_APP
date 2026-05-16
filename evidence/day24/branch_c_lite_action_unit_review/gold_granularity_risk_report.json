@@ -1,0 +1,16 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 730,
+  "source_merge_sha": "ee03a5cd",
+  "branch": "C-lite",
+  "patch_type": "gold_action_unit_review_analysis_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-16T06:28:13.395092+00:00",
+  "sample_size": 30,
+  "gold_over_granular_count": 0,
+  "gold_under_granular_count": 17,
+  "gold_under_granular_note": "gold=0 인데 pred 가 사용자 가치 있는 action 추출 — gold 가 actionable 단위를 누락했을 risk (A3 영역)",
+  "branch_c_entry_threshold": 8,
+  "action_unit_mismatch_count": 0,
+  "branch_c_entry_recommended": false
+}

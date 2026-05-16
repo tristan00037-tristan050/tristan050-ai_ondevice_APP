@@ -1,0 +1,575 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 730,
+  "source_merge_sha": "ee03a5cd",
+  "branch": "C-lite",
+  "patch_type": "gold_action_unit_review_analysis_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-16T06:28:13.394634+00:00",
+  "sample_size": 30,
+  "judgment_fields": [
+    "gold_over_granular",
+    "pred_product_valid",
+    "both_valid_diff_unit",
+    "label_too_narrow",
+    "user_value_unit"
+  ],
+  "reviewer_note": "자문 4차 정합 — 결정적 규칙 기반 분류. gold / normalized_action label 미수정 (분석 전용).",
+  "reviews": [
+    {
+      "sample_id": "card1_100031",
+      "text": "이번 PR 어떻게 처리됐어?",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": true,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_100033",
+      "text": "버전 정보 알 수 있을까요?",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_100034",
+      "text": "회의 참석자 명단 누가 가지고 있나요?",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_100048",
+      "text": "회의 결과 정리되면 알려드리겠습니다",
+      "gold_action_count": 0,
+      "pred_action_count": 2,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "organize",
+        "other"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": false,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": true,
+        "user_value_unit": "gold"
+      },
+      "subtype": "A4_true_model_error"
+    },
+    {
+      "sample_id": "card1_100078",
+      "text": "회의록 정리 후 공유드리려고 합니다",
+      "gold_action_count": 2,
+      "pred_action_count": 2,
+      "gold_norm_labels": [
+        "organize",
+        "share"
+      ],
+      "pred_norm_labels": [
+        "organize",
+        "share"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "both"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_100101",
+      "text": "회의 시간 알려 주실 수 있나요?",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": true,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_100102",
+      "text": "이 자료 누가 만들었나요?",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_100103",
+      "text": "이번 PR 리뷰 끝났나요?",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "review"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_100105",
+      "text": "담당자 변경 됐나요?",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_100107",
+      "text": "배포 일정 알 수 있을까요?",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "share"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_100118",
+      "text": "이번 주 진행 사항 정리해 두었어요",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "organize"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": false,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "gold"
+      },
+      "subtype": "A4_true_model_error"
+    },
+    {
+      "sample_id": "card1_200021",
+      "text": "",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_200047",
+      "text": "",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "organize"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_200051",
+      "text": "",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": true,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_200053",
+      "text": "",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_200054",
+      "text": "",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "prepare_document"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": false,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "gold"
+      },
+      "subtype": "A4_true_model_error"
+    },
+    {
+      "sample_id": "card1_400031",
+      "text": "고객 회신 정리 부탁드려요",
+      "gold_action_count": 1,
+      "pred_action_count": 1,
+      "gold_norm_labels": [
+        "reply"
+      ],
+      "pred_norm_labels": [
+        "reply"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "both"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_400032",
+      "text": "이번 분기 정리 자료 보내 주세요",
+      "gold_action_count": 1,
+      "pred_action_count": 1,
+      "gold_norm_labels": [
+        "send"
+      ],
+      "pred_norm_labels": [
+        "send"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "both"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_400033",
+      "text": "기획안 작성 부탁드려요",
+      "gold_action_count": 1,
+      "pred_action_count": 1,
+      "gold_norm_labels": [
+        "prepare_document"
+      ],
+      "pred_norm_labels": [
+        "prepare_document"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "both"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_400034",
+      "text": "분석 자료 정리 부탁드립니다",
+      "gold_action_count": 1,
+      "pred_action_count": 1,
+      "gold_norm_labels": [
+        "organize"
+      ],
+      "pred_norm_labels": [
+        "organize"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "both"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_400049",
+      "text": "기획서 보완 부탁드립니다",
+      "gold_action_count": 1,
+      "pred_action_count": 1,
+      "gold_norm_labels": [
+        "revise"
+      ],
+      "pred_norm_labels": [
+        "revise"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "both"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_400059",
+      "text": "보고서 양식이 어떤가요?",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_400061",
+      "text": "회의 시간 알려 주세요",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": true,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_400063",
+      "text": "참석자 명단 알려 주세요",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": true,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_400064",
+      "text": "이번 주 일정 알려 주세요",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "schedule"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_400065",
+      "text": "다음 단계 알려 주세요",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": true,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": true,
+        "user_value_unit": "pred"
+      },
+      "subtype": "A3_product_equivalent_prediction"
+    },
+    {
+      "sample_id": "card1_400083",
+      "text": "회의 결과 공유드립니다",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "share"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": false,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "gold"
+      },
+      "subtype": "A4_true_model_error"
+    },
+    {
+      "sample_id": "card1_400093",
+      "text": "회의록 공유드립니다",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "share"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": false,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "gold"
+      },
+      "subtype": "A4_true_model_error"
+    },
+    {
+      "sample_id": "card1_400106",
+      "text": "프로젝트 일정 갱신했습니다",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "schedule"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": false,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "gold"
+      },
+      "subtype": "A4_true_model_error"
+    },
+    {
+      "sample_id": "card1_500006",
+      "text": "",
+      "gold_action_count": 0,
+      "pred_action_count": 1,
+      "gold_norm_labels": [],
+      "pred_norm_labels": [
+        "submit"
+      ],
+      "judgments": {
+        "gold_over_granular": false,
+        "pred_product_valid": false,
+        "both_valid_diff_unit": false,
+        "label_too_narrow": false,
+        "user_value_unit": "gold"
+      },
+      "subtype": "A4_true_model_error"
+    }
+  ]
+}
