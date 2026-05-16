@@ -5,7 +5,7 @@
   "branch": "B-3B",
   "patch_type": "arbitration_apply",
   "verdict": "PATCH_CONTINUE",
-  "generated_at": "2026-05-16T02:47:14.757893+00:00",
+  "generated_at": "2026-05-16T03:04:16.689077+00:00",
   "total_samples": 500,
   "results": {
     "A_current": {
@@ -35,5 +35,6 @@
     "B_vs_A": 0.0,
     "C_vs_A": 0.0
   },
-  "variant_distinct": true
+  "variant_distinct": false,
+  "variant_distinct_basis": "metric-only (action_tp/fp/fn/f1), label 제외"
 }

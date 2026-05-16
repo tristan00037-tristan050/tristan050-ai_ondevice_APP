@@ -10,8 +10,8 @@
 ## baseline (no arbitration): f1=0.6182 fp=234
 
 ## AR 후보
-- AR-2: f1=0.6182 fp=234 a1_recover=0 a3_recover=0
+- AR-2: f1=0.6173 fp=235 a1_recover=0 a3_recover=0
 - AR-4: f1=0.6182 fp=234 a1_recover=0 a3_recover=0
-- AR-2+AR-4: f1=0.6182 fp=234 a1_recover=0 a3_recover=0
+- AR-2+AR-4: f1=0.6173 fp=235 a1_recover=0 a3_recover=0
 
-## selected: AR-2+AR-4
+## selected: AR-4

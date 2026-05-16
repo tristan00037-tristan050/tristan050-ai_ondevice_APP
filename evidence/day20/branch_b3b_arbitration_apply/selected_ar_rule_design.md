@@ -6,7 +6,7 @@
 - branch: B-3B
 - verdict: PATCH_CONTINUE
 
-## selected: AR-2+AR-4
+## selected: AR-4
 
 ## AR-2 hybrid merge rule (MIXED-A1)
 - parser action 후보 + evidence 보유 action 유지 (over_guard 선적용)

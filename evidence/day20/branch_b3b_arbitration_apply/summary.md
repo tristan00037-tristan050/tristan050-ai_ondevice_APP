@@ -8,7 +8,7 @@
 - verdict: PATCH_CONTINUE
 - alignment_cycle: 1차 적용
 
-## selected AR: AR-2+AR-4
+## selected AR: AR-4
 
 ## f1 축
 - normalized_action_f1: 0.6182 → 0.6182 (Δ 0.0)

@@ -5,7 +5,7 @@
   "branch": "B-3B",
   "patch_type": "arbitration_apply",
   "verdict": "PATCH_CONTINUE",
-  "generated_at": "2026-05-16T02:47:14.758844+00:00",
+  "generated_at": "2026-05-16T03:04:16.689595+00:00",
   "total_samples": 500,
   "mixed_a_total": 67,
   "mixed_a1_recover": 0,

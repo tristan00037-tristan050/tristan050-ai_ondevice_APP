@@ -109,11 +109,26 @@ def apply_arbitration(sid: str, subtype: str, gold: Dict, pred: Dict,
                if not _b2_over_extraction(text, intent)]
 
     if subtype.startswith("MIXED-A1") and ar_rule in {"AR-2", "AR-2+AR-4"}:
-        # hybrid merge: parser action 후보 + evidence 보유 action 유지
-        merged = [a for a in guarded
-                  if (a.get("evidence") or a.get("action_text", "")) in text]
-        if merged:
-            return merged, "AR-2_hybrid_merge"
+        # Codex P2(b) 정정 — AR-2 hybrid merge 실제 구현 (방향 A).
+        # Mode-D guarded actions 기본 후보 + Mode-A parser-only candidates 병합.
+        def _akey(a):
+            return normalize_action(a.get("action_text", ""))
+        candidates = list(guarded)
+        cand_keys  = {_akey(a) for a in candidates}
+        mode_a_actions = (mode_a or {}).get("actions") or []
+        merged_in = 0
+        for a in mode_a_actions:
+            key = _akey(a)
+            if key in cand_keys:
+                continue
+            # parser-only candidate — evidence 정합 시 hybrid 후보 추가
+            atext = a.get("action_text", "")
+            if (a.get("evidence") or atext) in text:
+                candidates.append(a)
+                cand_keys.add(key)
+                merged_in += 1
+        if merged_in > 0:
+            return candidates, "AR-2_hybrid_merge"
         return guarded, "AR-2_hybrid_merge_noop"
     if subtype.startswith("MIXED-A3") and ar_rule in {"AR-4", "AR-2+AR-4"}:
         # evidence-aware arbitration: evidence 정합 action 만 채택
@@ -410,14 +425,21 @@ def main() -> int:
         "gold_duplicate_ids":         gold_dup[:20],
         "prediction_duplicate_count": len(pred_dup),
         "prediction_duplicate_ids":   pred_dup[:20],
-        "fail_class":                 ("GOLD_SAMPLE_ID_DUPLICATE" if gold_dup
-                                        else None),
+        "fail_class":                 None,
     }
+    # Codex P1 정정 — 운영 표준 #6 implementation 완전 이식 (PR #723/#725 패턴).
+    # GOLD_SAMPLE_ID_DUPLICATE 우선 → FULL_EVAL_COVERAGE_MISMATCH (missing/extra/pred_dup).
+    missing = items_ids - pred_ids
+    extra   = pred_ids - items_ids
+    if gold_dup:
+        coverage["fail_class"] = "GOLD_SAMPLE_ID_DUPLICATE"
+    elif missing or extra or pred_dup:
+        coverage["fail_class"] = "FULL_EVAL_COVERAGE_MISMATCH"
     if coverage["fail_class"]:
         (OUT / "coverage_report.json").write_text(
             json.dumps(coverage, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(json.dumps({"ok": False, "fail_class": coverage["fail_class"]},
-                          ensure_ascii=False))
+        print(json.dumps({"ok": False, "fail_class": coverage["fail_class"],
+                          "coverage_report": coverage}, ensure_ascii=False))
         sys.exit(1)
 
     # ── AR 후보 비교 — AR-2 / AR-4 / AR-2+AR-4 ──
@@ -524,13 +546,20 @@ def main() -> int:
         "- evidence 정합 action 만 채택",
     ]), encoding="utf-8")
 
+    # Codex P2(a) 정정 — Standard 11 variant_distinct metric-only 비교.
+    # variant label 필드 제외, metric key 만 비교 (false positive 차단).
+    def _variant_distinct(b_result: Dict, c_result: Dict) -> bool:
+        metric_keys = ["action_tp", "action_fp", "action_fn", "f1"]
+        return any(b_result.get(k) != c_result.get(k) for k in metric_keys)
+
     (OUT / "ab_simulation_abc_results.json").write_text(json.dumps({
         **_meta(),
         "results":       abc,
         "selected":      ab_selected,
         "delta_table":   {"B_vs_A": round(b_f1 - a_f1, 4),
                            "C_vs_A": round(c_f1 - a_f1, 4)},
-        "variant_distinct": (abc["B_ar2"] != abc["C_ar2_ar4"]),
+        "variant_distinct": _variant_distinct(abc["B_ar2"], abc["C_ar2_ar4"]),
+        "variant_distinct_basis": "metric-only (action_tp/fp/fn/f1), label 제외",
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
     (OUT / "ab_eval_50_results.json").write_text(json.dumps({
@@ -663,7 +692,7 @@ def main() -> int:
         "action_fp":                   selected_m["action_fp"],
         "deadline_f1":                 deadline["deadline_f1"],
         "ab_selected":                 ab_selected,
-        "ab_variant_distinct":         abc["B_ar2"] != abc["C_ar2_ar4"],
+        "ab_variant_distinct":         _variant_distinct(abc["B_ar2"], abc["C_ar2_ar4"]),
         "composition_ok":              comp_ok,
         "coverage_ok":                 coverage["fail_class"] is None,
         "success_1st":                 success_1st,
