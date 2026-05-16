@@ -1,0 +1,332 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 731,
+  "source_merge_sha": "9ed2b318",
+  "branch": "Metric-Design-Review",
+  "patch_type": "metric_contract_redesign_analysis_only",
+  "verdict": "MEASURED_ONLY",
+  "generated_at": "2026-05-16T06:59:06.986176+00:00",
+  "sample_size": 30,
+  "a3_count": 17,
+  "a4_count": 7,
+  "a3_route": "manual_suggestion_candidate (auto_apply OFF)",
+  "a4_route": "dangerous_over_extraction_guard 후보",
+  "a3_product_equivalent_cases": [
+    {
+      "sample_id": "card1_100031",
+      "text": "이번 PR 어떻게 처리됐어?",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "이번 PR 처리"
+      ],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_100033",
+      "text": "버전 정보 알 수 있을까요?",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "버전 정보 알기"
+      ],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_100034",
+      "text": "회의 참석자 명단 누가 가지고 있나요?",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "회의 참석자 명단 확인"
+      ],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_100101",
+      "text": "회의 시간 알려 주실 수 있나요?",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "회의 시간 알려 주실 수 있나요?"
+      ],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_100102",
+      "text": "이 자료 누가 만들었나요?",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "자료 확인"
+      ],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_100103",
+      "text": "이번 PR 리뷰 끝났나요?",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "PR 리뷰 마감"
+      ],
+      "pred_norm_labels": [
+        "review"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_100105",
+      "text": "담당자 변경 됐나요?",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "담당자 변경 확인"
+      ],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_100107",
+      "text": "배포 일정 알 수 있을까요?",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "배포 일정 알기"
+      ],
+      "pred_norm_labels": [
+        "share"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_200021",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "자료 확인"
+      ],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_200047",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "이번 분기 KPI 정리"
+      ],
+      "pred_norm_labels": [
+        "organize"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_200051",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "회의 시간 알려 주실 수 있나요?"
+      ],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_200053",
+      "text": "",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "결재"
+      ],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_400059",
+      "text": "보고서 양식이 어떤가요?",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "보고서 양식 확인"
+      ],
+      "pred_norm_labels": [
+        "confirm"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_400061",
+      "text": "회의 시간 알려 주세요",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "회의 시간 알려 주세요"
+      ],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_400063",
+      "text": "참석자 명단 알려 주세요",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "참석자 명단 알려 주세요"
+      ],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_400064",
+      "text": "이번 주 일정 알려 주세요",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "이번 주 일정 알려 주세요"
+      ],
+      "pred_norm_labels": [
+        "schedule"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    },
+    {
+      "sample_id": "card1_400065",
+      "text": "다음 단계 알려 주세요",
+      "gold_intent": "QUESTION",
+      "pred_actions": [
+        "다음 단계 알려 주세요"
+      ],
+      "pred_norm_labels": [
+        "other"
+      ],
+      "user_value_basis": "gold_intent=QUESTION — pred 가 정보/행동 요청을 추출, manual suggestion 후보",
+      "route": "manual_suggestion_candidate"
+    }
+  ],
+  "a4_dangerous_cases": [
+    {
+      "sample_id": "card1_100048",
+      "text": "회의 결과 정리되면 알려드리겠습니다",
+      "gold_intent": "REPORT",
+      "pred_actions": [
+        "회의 결과 정리",
+        "알려드리겠습니다"
+      ],
+      "pred_norm_labels": [
+        "organize",
+        "other"
+      ],
+      "user_value_basis": "gold_intent != QUESTION (보고/완료 진술) — action 추출은 불필요/위험",
+      "route": "dangerous_over_extraction_guard"
+    },
+    {
+      "sample_id": "card1_100118",
+      "text": "이번 주 진행 사항 정리해 두었어요",
+      "gold_intent": "REPORT",
+      "pred_actions": [
+        "이번 주 진행 사항 정리"
+      ],
+      "pred_norm_labels": [
+        "organize"
+      ],
+      "user_value_basis": "gold_intent != QUESTION (보고/완료 진술) — action 추출은 불필요/위험",
+      "route": "dangerous_over_extraction_guard"
+    },
+    {
+      "sample_id": "card1_200054",
+      "text": "",
+      "gold_intent": "REPORT",
+      "pred_actions": [
+        "발표 자료 작성 완료"
+      ],
+      "pred_norm_labels": [
+        "prepare_document"
+      ],
+      "user_value_basis": "gold_intent != QUESTION (보고/완료 진술) — action 추출은 불필요/위험",
+      "route": "dangerous_over_extraction_guard"
+    },
+    {
+      "sample_id": "card1_400083",
+      "text": "회의 결과 공유드립니다",
+      "gold_intent": "REPORT",
+      "pred_actions": [
+        "회의 결과 공유"
+      ],
+      "pred_norm_labels": [
+        "share"
+      ],
+      "user_value_basis": "gold_intent != QUESTION (보고/완료 진술) — action 추출은 불필요/위험",
+      "route": "dangerous_over_extraction_guard"
+    },
+    {
+      "sample_id": "card1_400093",
+      "text": "회의록 공유드립니다",
+      "gold_intent": "REPORT",
+      "pred_actions": [
+        "회의록 공유"
+      ],
+      "pred_norm_labels": [
+        "share"
+      ],
+      "user_value_basis": "gold_intent != QUESTION (보고/완료 진술) — action 추출은 불필요/위험",
+      "route": "dangerous_over_extraction_guard"
+    },
+    {
+      "sample_id": "card1_400106",
+      "text": "프로젝트 일정 갱신했습니다",
+      "gold_intent": "REPORT",
+      "pred_actions": [
+        "프로젝트 일정 갱신"
+      ],
+      "pred_norm_labels": [
+        "schedule"
+      ],
+      "user_value_basis": "gold_intent != QUESTION (보고/완료 진술) — action 추출은 불필요/위험",
+      "route": "dangerous_over_extraction_guard"
+    },
+    {
+      "sample_id": "card1_500006",
+      "text": "",
+      "gold_intent": "REPORT",
+      "pred_actions": [
+        "[BRANCH] 머지 완료"
+      ],
+      "pred_norm_labels": [
+        "submit"
+      ],
+      "user_value_basis": "gold_intent != QUESTION (보고/완료 진술) — action 추출은 불필요/위험",
+      "route": "dangerous_over_extraction_guard"
+    }
+  ]
+}
