@@ -1,6 +1,7 @@
-"""Standard 9 — Dataset Integrity Fail-Closed sentinel (5건)."""
+"""Standard 9 — Dataset Integrity Fail-Closed sentinel (6건)."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -9,7 +10,8 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.ci.check_standard_09 import (  # noqa: E402
     COVERAGE_REPORT_FIELDS, FAIL_CLASSES,
-    classify_coverage, validate_coverage_report,
+    audit_evidence, classify_coverage, find_evaluation_evidence_dirs,
+    validate_coverage_report,
 )
 
 
@@ -94,3 +96,36 @@ def test_d2_actionable_산식_정합():
     # 미매칭 + orig_actionable 미지정 → pd_orig 파생 (2-arg 하위호환)
     assert d2_classify("회의록 정리", "HARD")[1] is True
     assert d2_classify("회의록 정리", "NONE")[1] is False
+
+
+# ── #6 coverage_report 0건 fail-closed (Codex P1-C) ──────────────────────
+def test_coverage_report_missing_fail_closed(tmp_path):
+    """평가 evidence 존재 + coverage_report.json 0건 → ok=false."""
+    # 평가 evidence (branch_* + summary.md) 존재, coverage_report 없음
+    d = tmp_path / "evidence" / "day99" / "branch_test"
+    d.mkdir(parents=True)
+    (d / "summary.md").write_text("평가 evidence", encoding="utf-8")
+    (d / "full_eval_500_x.json").write_text("{}", encoding="utf-8")
+
+    assert find_evaluation_evidence_dirs(tmp_path), "평가 evidence 미검출"
+    result = audit_evidence(tmp_path)
+    assert result["ok"] is False, "coverage_report 0건인데 fail-open"
+    classes = {v.get("fail_class") for v in result["violations"]}
+    assert "COVERAGE_REPORT_MISSING" in classes
+    assert result["eval_evidence_dirs_count"] >= 1
+
+    # coverage_report 추가 → fail-closed 해소
+    cov = {
+        "coverage_checked": True, "expected_samples": 500,
+        "measured_samples": 500, "missing_count": 0, "missing_ids": [],
+        "extra_count": 0, "extra_ids": [], "gold_duplicate_count": 0,
+        "gold_duplicate_ids": [], "prediction_duplicate_count": 0,
+        "prediction_duplicate_ids": [], "fail_class": None,
+    }
+    (d / "coverage_report.json").write_text(
+        json.dumps(cov, ensure_ascii=False), encoding="utf-8")
+    assert audit_evidence(tmp_path)["ok"] is True
+
+    # 평가 evidence 자체가 없으면 위반 아님 (codification PR 등)
+    empty = audit_evidence(tmp_path / "nonexistent")
+    assert empty["ok"] is True

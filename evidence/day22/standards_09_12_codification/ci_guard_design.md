@@ -14,25 +14,32 @@ reusable API:
   - 우선순위: gold 중복 > (missing | extra | prediction 중복)
 - `validate_coverage_report(cov)` — coverage_report dict → 위반 목록
   - 12 필드 존재 / fail_class 정합 / count↔ids 정합 검사
-- `audit_evidence(root)` — evidence/**/coverage_report.json 전수 감사
+- `find_evaluation_evidence_dirs(root)` — 평가 evidence 디렉토리 검출
+  (branch_* + summary.md / ab_*.json / full_eval_*.json)
+- `audit_evidence(root)` — coverage_report 전수 감사 + **fail-closed**:
+  평가 evidence 존재 + coverage_report 0건 → `COVERAGE_REPORT_MISSING`
 
-main(): evidence 하위 모든 coverage_report.json 감사, 위반 시 exit 1.
+main(): coverage_report.json 감사, fail-open 차단, 위반 시 exit 1.
 
 ## scripts/ci/check_standard_12.py — Honest Reporting Pattern
 
 reusable API:
 - `FORBIDDEN_PATTERNS` — 기존 forbidden grep 10 패턴
-- `STANDARD_12_PATTERNS` — 확장 5 패턴 (측정값 임의 조정 / threshold 하향 /
+- `STANDARD_12_PATTERNS` — 확장 5 패턴 (측정값 수기 보정 / threshold 하향 /
   실패 은폐 / 회귀 은폐 / 테스트 완화 통과)
 - `ALLOWED_STATUS` — {MEASURED_ONLY, PATCH_CONTINUE, HOLD}
 - `scan_forbidden(text)` — forbidden 10 + 확장 5 매칭 목록
+- `is_proceed_violation_in_text(text)` — 금지 verdict 위반 판정 (line/context
+  기반, variable-width lookbehind 미사용 — Codex P1-A 정합)
 - `validate_status_line(text)` — STATUS 토큰 정합 + 금지 verdict 부재 검증
 - `validate_honest_report(report)` — expected_vs_observed / delta / natural
   shortage 명시 검증
 - `requires_root_cause_reeval(expected, observed)` — 추정 vs 실측 괴리
   (관측 < 추정 × 0.5) → 재평가 의무 여부 (PR #725 정합)
+- `audit_summaries(root)` — `evidence/day*/**/summary.md` 전수 forbidden
+  0건 검증 (day hardcoded 미사용 — Codex P1-B 정합)
 
-main(): evidence/day22/**/summary.md forbidden 패턴 0건 검증, 위반 시 exit 1.
+main(): `audit_summaries(ROOT)` 실행, 위반 시 exit 1.
 
 ## forbidden grep 패턴 확장
 

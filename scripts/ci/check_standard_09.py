@@ -108,24 +108,60 @@ def validate_coverage_report(cov: Dict[str, Any]) -> List[str]:
     return issues
 
 
+# 평가 evidence 검출 패턴 — branch_* 디렉토리의 평가 산출물
+EVAL_EVIDENCE_GLOBS = [
+    "evidence/day*/branch_*/summary.md",
+    "evidence/day*/branch_*/ab_*.json",
+    "evidence/day*/branch_*/full_eval_*.json",
+]
+
+
+def find_evaluation_evidence_dirs(root: Path) -> List[Path]:
+    """평가 evidence 디렉토리 검출 (summary.md / ab_*.json / full_eval_*.json)."""
+    eval_dirs: set = set()
+    for pattern in EVAL_EVIDENCE_GLOBS:
+        for path in root.glob(pattern):
+            eval_dirs.add(path.parent)
+    return sorted(eval_dirs)
+
+
 def audit_evidence(root: Path) -> Dict[str, Any]:
-    """evidence/ 하위 모든 coverage_report.json 정합 감사."""
+    """평가 evidence 의 coverage_report.json 정합 감사 (fail-closed).
+
+    Codex P1-C 정정: 평가 evidence 가 존재하는데 coverage_report.json 이
+    0건이면 ok=false (이전에는 fail-open 으로 통과되어 dataset integrity
+    검사가 우회 가능했다).
+    """
     reports = sorted(root.glob("evidence/**/coverage_report.json"))
+    eval_dirs = find_evaluation_evidence_dirs(root)
     audited: List[Dict[str, Any]] = []
     violations: List[Dict[str, Any]] = []
+
+    # fail-closed: 평가 evidence 존재 + coverage_report 0건 → 위반
+    if eval_dirs and not reports:
+        violations.append({
+            "fail_class": "COVERAGE_REPORT_MISSING",
+            "message": (f"평가 evidence {len(eval_dirs)}개 디렉토리가 검출되었으나 "
+                        f"coverage_report.json 0건 — Standard 9 는 모든 평가 "
+                        f"evidence 에 coverage_report 를 요구한다."),
+            "eval_evidence_dirs": [str(d.relative_to(root)) for d in eval_dirs],
+        })
+
     for rp in reports:
+        rel = str(rp.relative_to(root))
         try:
             cov = json.loads(rp.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as exc:
-            violations.append({"file": str(rp.relative_to(root)),
-                               "issues": [f"읽기 실패: {exc}"]})
+            violations.append({"file": rel, "issues": [f"읽기 실패: {exc}"]})
+            audited.append({"file": rel, "ok": False})
             continue
         iss = validate_coverage_report(cov)
-        rel = str(rp.relative_to(root))
         audited.append({"file": rel, "ok": not iss})
         if iss:
             violations.append({"file": rel, "issues": iss})
+
     return {"checked": len(reports), "audited": audited,
+            "eval_evidence_dirs_count": len(eval_dirs),
             "violations": violations, "ok": not violations}
 
 

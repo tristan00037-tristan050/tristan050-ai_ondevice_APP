@@ -6,7 +6,19 @@
 - source_merge_sha: 86621dd90c83b74d80e144f5dd88c61f65c6f759 (PR #727)
 - codification_type: operating_standard
 - verdict: MEASURED_ONLY
+- correction_cycle: Codex P1 3건 정정 (CI guard implementation)
 - generated_at: 2026-05-16
+
+## Codex P1 정정 (CI guard implementation 정합)
+
+- P1-A: check_standard_12.py — variable-width lookbehind 제거,
+  `is_proceed_violation_in_text()` line/context 기반 판정 (runtime crash 차단)
+- P1-B: check_standard_12.py — scan 범위 day22 hardcoded → `evidence/day*/`
+  전체 확장 (day23+ 영구 우회 차단)
+- P1-C: check_standard_09.py — 평가 evidence 존재 + coverage_report 0건 시
+  `COVERAGE_REPORT_MISSING` fail-closed (이전 fail-open 차단)
+- 정정 영향: CI guard implementation + sentinel +3. specification /
+  PR template / 알고리즘 / main 측정값 불변.
 
 ## Scope
 
@@ -41,10 +53,12 @@ Reporting Pattern) 정착 PR. 알고리즘 / 모델 / vocabulary / safety thresh
 - .github/PULL_REQUEST_TEMPLATE/eval_pr.md — 평가 PR 전용, 운영 표준 1~12
   체크리스트 자동 적용
 
-## sentinel test (신규 10건)
+## sentinel test (신규 13건 = 정착 10 + Codex P1 정정 3)
 
-- tests/standards/test_standard_09_dataset_integrity.py — 5건 PASS
-- tests/standards/test_standard_12_honest_reporting.py — 5건 PASS
+- tests/standards/test_standard_09_dataset_integrity.py — 6건 PASS
+  (#6 coverage_report 0건 fail-closed 추가)
+- tests/standards/test_standard_12_honest_reporting.py — 7건 PASS
+  (#6 금지 verdict 필터 crash 차단 / #7 scan 범위 day* 확장 추가)
 
 ## existing PR compliance audit
 
@@ -54,9 +68,11 @@ Reporting Pattern) 정착 PR. 알고리즘 / 모델 / vocabulary / safety thresh
 
 ## expected vs observed
 
-- expected: Standard 9 + 12 정착 (문서 + CI guard + sentinel + template)
-- observed: 정착 완료 — 신규 sentinel 10건 PASS, CI guard 2종 정상 동작
-- delta: 신규 sentinel +10 (회귀 가산), main 측정값 변동 0건
+- expected: Standard 9 + 12 정착 + Codex P1 3건 정정 (CI guard 정합)
+- observed: 정착 완료 + P1 3건 정정 완료 — 신규 sentinel 13건 PASS,
+  CI guard 2종 정상 동작 (runtime crash 차단 / fail-closed 확립)
+- delta: 신규 sentinel +13 (정착 10 + P1 정정 3), CI guard runtime
+  crash 위험 제거 + fail-open 경로 차단, main 측정값 변동 0건
 
 ## main 측정값 정합 (변동 0건)
 

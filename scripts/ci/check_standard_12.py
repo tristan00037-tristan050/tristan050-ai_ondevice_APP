@@ -115,23 +115,52 @@ def requires_root_cause_reeval(expected: float, observed: float,
     return observed < expected * tol
 
 
-def main() -> int:
-    """평가 PR evidence 의 summary.md 에서 forbidden 패턴 0건 검증."""
-    summaries = sorted(ROOT.glob("evidence/day22/**/summary.md"))
+# ── PROCEED 위반 판정 — line/context 기반 (Codex P1-A 정정) ────────────────
+_PROCEED_RE = re.compile(r"\bPROCEED\b")
+_NEGATION_RE = re.compile(r"(절대|금지|불가|prohibit|forbidden)")
+
+
+def is_proceed_violation_in_text(text: str) -> bool:
+    """PROCEED 위반 검증 — variable-width lookbehind 미사용.
+
+    Python `re` 는 가변폭 lookbehind 를 지원하지 않으므로 `(?<!금지[^\n]{0,4})`
+    형태는 re.error 를 일으킨다 (Codex P1-A). 대신 line 단위로 스캔하고
+    같은 line 에 부정 단어(절대/금지/불가/prohibit/forbidden)가 있으면
+    설명문으로 간주해 위반에서 제외한다.
+
+    - "PROCEED 절대 금지" / "금지 verdict (PROCEED)" → pass (설명문)
+    - "결론: PROCEED" / "verdict: PROCEED" → violation
+    """
+    for line in text.splitlines():
+        if _PROCEED_RE.search(line) and not _NEGATION_RE.search(line):
+            return True
+    return False
+
+
+def audit_summaries(root: Path) -> Dict[str, Any]:
+    """evidence/day*/ 하위 summary.md 의 forbidden 패턴 0건 검증.
+
+    Codex P1-B 정정: day22 hardcoded → evidence/day*/ 전체로 scan 범위 확장
+    (day23+ 폴더로 영구 우회 불가).
+    """
+    summaries = sorted(root.glob("evidence/day*/**/summary.md"))
     violations: List[Dict[str, Any]] = []
     for sp in summaries:
         text = sp.read_text(encoding="utf-8")
         hits = scan_forbidden(text)
-        # "PROCEED 절대 금지" 같은 금지선 서술은 위반 아님 — 부정문 제외
-        real_hits = [h for h in hits
-                     if h != r"PROCEED"
-                     or re.search(r"(?<!절대 )(?<!금지[^\n]{0,4})PROCEED"
-                                  r"(?![^\n]{0,6}(금지|불가))", text)]
+        # PROCEED 는 line/context 기반으로 별도 판정 (설명문 제외)
+        real_hits = [h for h in hits if h != r"PROCEED"]
+        if is_proceed_violation_in_text(text):
+            real_hits.append(r"PROCEED")
         if real_hits:
-            violations.append({"file": str(sp.relative_to(ROOT)),
+            violations.append({"file": str(sp.relative_to(root)),
                                "patterns": real_hits})
-    result = {"checked": len(summaries), "violations": violations,
-              "ok": not violations}
+    return {"checked": len(summaries), "violations": violations,
+            "ok": not violations}
+
+
+def main() -> int:
+    result = audit_summaries(ROOT)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if result["ok"] else 1
 
