@@ -6,7 +6,13 @@
 - branch: D-2
 - patch_type: targeted_deadline_normalization
 - verdict: PATCH_CONTINUE
-- alignment_cycle: 1차 측정
+- alignment_cycle: 1차 측정 + Codex P1 정정 (false_deadline actionable 기준)
+
+## Codex P1 정정 (safety metric measurement integrity)
+- measure_deadline() false_deadline 산식을 mode 별 actionable 기준으로 분리
+- baseline_d1: pre-patch deadline_is_actionable / d2_targeted: d2_classify patched_actionable
+- false_deadline_rate: baseline 0.014 → d2_targeted 0.014 (count 7 → 7)
+- computed_from_d2_actionable: true (D-2 보정 actionable 반영)
 
 ## deadline 축
 - deadline_f1: 0.8438 → 0.8702 (Δ 0.0264)

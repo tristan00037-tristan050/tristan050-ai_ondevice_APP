@@ -5,7 +5,7 @@
   "branch": "D-2",
   "patch_type": "targeted_deadline_normalization",
   "verdict": "PATCH_CONTINUE",
-  "generated_at": "2026-05-16T03:22:01.365060+00:00",
+  "generated_at": "2026-05-16T03:39:31.468650+00:00",
   "total_samples": 500,
   "relative_time_mismatch_rate_before": 0.1868,
   "relative_time_mismatch_rate_after": 0.1538,

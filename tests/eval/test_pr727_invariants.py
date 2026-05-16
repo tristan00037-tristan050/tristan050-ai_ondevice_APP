@@ -9,7 +9,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 OUT = ROOT / "evidence/day21/branch_d2_targeted_deadline"
 
-from scripts.eval.pr727_branch_d2_targeted_deadline import d2_classify  # noqa
+from scripts.eval.pr727_branch_d2_targeted_deadline import (  # noqa
+    d2_classify, measure_deadline,
+)
 
 
 # ── sentinel #25: D2-A HARD strength enforcement ─────────────────────────
@@ -97,3 +99,46 @@ def test_pr727_deadline_f1_measurement():
     assert fe["deadline_f1_after"] >= fe["deadline_f1_before"], "deadline_f1 회귀"
     # delta 양수
     assert fe["deadline_f1_delta"] >= 0.0
+
+
+# ── sentinel #29: false_deadline_rate 는 D-2 patched actionable 기준 ──────
+def test_false_deadline_rate_uses_d2_actionable():
+    """Codex P1: pre-patch actionable=True 라도 D2-C INQUIRY 보정 시
+    non-actionable 로 흡수 → false_deadline 미집계."""
+    # gold NONE + pre-patch deadline_is_actionable=True + D2-C "언제까지" 패턴
+    items = [{"sample_id": "T1", "text": "마감이 언제까지인가요",
+              "deadline_type": "NONE"}]
+    preds = [{"sample_id": "T1",
+              "pred": {"deadline_type": "HARD", "deadline_is_actionable": True}}]
+    d2 = measure_deadline(items, preds, "d2_targeted")
+    # D2-C 가 INQUIRY + actionable=False 로 변환 → false_deadline 미집계
+    assert d2["false_deadline_count"] == 0
+    assert d2["false_deadline_rate"] == 0.0
+    assert d2["computed_from_d2_actionable"] is True
+    # 동일 fixture 가 baseline mode 에서는 pre-patch actionable=True → 집계
+    base = measure_deadline(items, preds, "baseline_d1")
+    assert base["false_deadline_count"] == 1
+    # evidence 정합: d2_targeted mode 명시
+    fe = json.loads((OUT / "full_eval_500_13_measurement.json").read_text(encoding="utf-8"))
+    assert fe["computed_from_d2_actionable"] is True
+    assert fe["false_deadline_mode"] == "d2_targeted"
+
+
+# ── sentinel #30: baseline mode 는 pre-patch actionable 사용 ─────────────
+def test_baseline_mode_uses_pre_patch_actionable():
+    """baseline_d1 mode 는 pre-patch deadline_is_actionable 사용 + mode 명시."""
+    items = [{"sample_id": "T1", "text": "회의록 정리해 주세요",
+              "deadline_type": "NONE"}]
+    preds = [{"sample_id": "T1",
+              "pred": {"deadline_type": "NONE", "deadline_is_actionable": True}}]
+    base = measure_deadline(items, preds, "baseline_d1")
+    assert base["mode"] == "baseline_d1"
+    assert base["computed_from_d2_actionable"] is False
+    # pre-patch actionable=True + gold NONE → false_deadline 집계
+    assert base["false_deadline_count"] == 1
+    # unknown mode 는 fail-closed
+    try:
+        measure_deadline(items, preds, "proceed_mode")
+        raise AssertionError("unknown mode 가 ValueError 미발생")
+    except ValueError:
+        pass
