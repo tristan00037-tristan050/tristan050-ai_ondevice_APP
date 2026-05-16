@@ -20,11 +20,16 @@ reusable API (sentinel test 가 import):
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+# Standard 9 의 평가 evidence 검출기 재사용 — 단일 정의 (PR #728 P1-C 정합)
+from scripts.ci.check_standard_09 import find_evaluation_evidence_dirs  # noqa: E402
 
 # ── 정착 평가 기준 — 평가 PR 에서 변경 금지 (Standard 10) ──────────────────
 METRIC_THRESHOLDS: Dict[str, float] = {
@@ -113,7 +118,13 @@ def validate_before_after(report: Dict[str, Any]) -> List[str]:
 
 
 def validate_drift_report(report: Dict[str, Any]) -> List[str]:
-    """policy drift report dict 형식 검증 → 위반 목록."""
+    """policy drift report dict 형식 검증 → 위반 목록.
+
+    PR #729 P1-B 정정: drift_rate 음수 차단. drift_rate 는 변화의 절대비율
+    이므로 항상 비음수여야 한다. 음수가 허용되면 큰 drift 가 음수 부호로
+    `OK` 등급에 은폐될 수 있다 (`classify_drift` 는 |new-old| 로 산출하나,
+    drift report 의 기록값 자체가 음수면 등급 비교가 우회된다).
+    """
     issues: List[str] = []
     for fld in DRIFT_REPORT_FIELDS:
         if fld not in report:
@@ -127,8 +138,16 @@ def validate_drift_report(report: Dict[str, Any]) -> List[str]:
             issues.append("new_policy_version 이 old 대비 미증가 (version bump 누락)")
     except ValueError as exc:
         issues.append(f"policy version SemVer 위반: {exc}")
-    # drift_class 가 drift_rate 와 정합
+    # P1-B: drift_rate 음수 차단 (NEGATIVE_DRIFT_RATE)
     rate = report["drift_rate"]
+    if not isinstance(rate, (int, float)):
+        issues.append(f"drift_rate 가 수치형이 아님: {rate!r}")
+        return issues
+    if rate < 0:
+        issues.append(f"NEGATIVE_DRIFT_RATE: drift_rate 는 절대비율(비음수) "
+                       f"이어야 한다 (실측 {rate}) — drift 가 음수 부호로 은폐될 수 있다")
+        return issues
+    # drift_class 가 drift_rate 와 정합
     expected = ("HOLD" if rate >= DRIFT_HOLD
                 else "PATCH_CONTINUE" if rate >= DRIFT_PATCH_CONTINUE
                 else "OK")
@@ -138,11 +157,51 @@ def validate_drift_report(report: Dict[str, Any]) -> List[str]:
     return issues
 
 
+# Standard 10 은 정착(PR #729, day23) 이후 평가 PR 부터 의무 적용 — 그 이전
+# 평가 evidence(day15~21)는 before/after 소급 요구 대상이 아니다. cutoff 는
+# scan 범위 제한이 아니라 적용 시점 경계 (scan 은 evidence/day*/ 전체 유지).
+STANDARD_10_ACTIVE_FROM_DAY = 24
+_DAY_RE = re.compile(r"day(\d+)")
+
+
+def _evidence_day(path: Path) -> int:
+    """경로에서 dayNN 디렉토리 번호 추출 (없으면 -1)."""
+    for part in path.parts:
+        m = _DAY_RE.fullmatch(part)
+        if m:
+            return int(m.group(1))
+    return -1
+
+
 def audit_evidence(root: Path) -> Dict[str, Any]:
-    """evidence/day*/ 의 before/after + drift report 형식 감사."""
+    """evidence/day*/ 의 before/after + drift report 형식 감사 (fail-closed).
+
+    PR #729 P1-A 정정 (PR #728 P1-C 패턴 적용): Standard 10 적용 대상 평가
+    evidence(day >= STANDARD_10_ACTIVE_FROM_DAY)가 존재하는데
+    before_after_comparison.json 이 0건이면 fail-closed (이전에는 `ok` 가
+    violations 만으로 산출되어 artifact 누락이 fail-open 으로 통과했다).
+    find_evaluation_evidence_dirs (Standard 9) 재사용 + missing_required_artifact
+    플래그 + return 라인 ok 명시 합산.
+    """
     violations: List[Dict[str, Any]] = []
     ba_files = sorted(root.glob("evidence/day*/**/before_after_comparison.json"))
     dr_files = sorted(root.glob("evidence/day*/**/policy_drift_report.json"))
+    # Standard 10 정착 이후 평가 evidence 디렉토리만 before/after 의무 대상
+    eval_dirs = [d for d in find_evaluation_evidence_dirs(root)
+                 if _evidence_day(d) >= STANDARD_10_ACTIVE_FROM_DAY]
+
+    # fail-closed #1: 적용 대상 평가 evidence 존재 + before_after 0건
+    missing_required_artifact = bool(eval_dirs) and not ba_files
+    if missing_required_artifact:
+        violations.append({
+            "fail_class": "STANDARD_10_BEFORE_AFTER_MISSING",
+            "message": (f"Standard 10 적용 평가 evidence {len(eval_dirs)}개 "
+                        f"디렉토리가 검출되었으나 before_after_comparison.json "
+                        f"0건 — Standard 10 은 평가 PR 의 before/after "
+                        f"comparison 을 요구한다."),
+            "eval_evidence_dirs": [str(d.relative_to(root)) for d in eval_dirs],
+        })
+
     for fp in ba_files:
         iss = validate_before_after(json.loads(fp.read_text(encoding="utf-8")))
         if iss:
@@ -151,9 +210,14 @@ def audit_evidence(root: Path) -> Dict[str, Any]:
         iss = validate_drift_report(json.loads(fp.read_text(encoding="utf-8")))
         if iss:
             violations.append({"file": str(fp.relative_to(root)), "issues": iss})
+
+    # fail-closed #2: ok 는 violations 부재 AND 필수 artifact 누락 아님
+    ok = (not violations) and (not missing_required_artifact)
     return {"before_after_checked": len(ba_files),
             "drift_report_checked": len(dr_files),
-            "violations": violations, "ok": not violations}
+            "eval_evidence_dirs_count": len(eval_dirs),
+            "missing_required_artifact": missing_required_artifact,
+            "violations": violations, "ok": ok}
 
 
 def main() -> int:

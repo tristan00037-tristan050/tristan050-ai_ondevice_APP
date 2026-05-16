@@ -1,4 +1,4 @@
-"""Standard 10 — Strict Policy Base Drift sentinel (5건)."""
+"""Standard 10 — Strict Policy Base Drift sentinel (8건)."""
 from __future__ import annotations
 
 import sys
@@ -9,8 +9,9 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.ci.check_standard_10 import (  # noqa: E402
     DRIFT_HOLD, DRIFT_PATCH_CONTINUE, METRIC_THRESHOLDS,
-    classify_drift, detect_metric_threshold_changes, is_version_bumped,
-    parse_semver, validate_before_after, validate_drift_report,
+    audit_evidence, classify_drift, detect_metric_threshold_changes,
+    is_version_bumped, parse_semver, validate_before_after,
+    validate_drift_report,
 )
 
 
@@ -99,3 +100,61 @@ def test_drift_report_format_정합():
     # drift_class 불일치 → 위반
     mismatch = dict(ok); mismatch["drift_class"] = "OK"
     assert any("drift_class" in i for i in validate_drift_report(mismatch))
+
+
+# ── #6 audit_evidence fail-closed — artifact 누락 (Codex P1-A) ───────────
+def test_audit_evidence_fail_closed_when_artifacts_missing(tmp_path):
+    """Standard 10 적용 평가 evidence 존재 + before_after 0건 → ok=false."""
+    d = tmp_path / "evidence" / "day99" / "branch_test"
+    d.mkdir(parents=True)
+    (d / "summary.md").write_text("eval evidence", encoding="utf-8")
+    result = audit_evidence(tmp_path)
+    assert result["ok"] is False, "fail-open — artifact 누락이 통과"
+    assert result["missing_required_artifact"] is True
+    assert any(v.get("fail_class") == "STANDARD_10_BEFORE_AFTER_MISSING"
+               for v in result["violations"])
+    assert result["eval_evidence_dirs_count"] >= 1
+    # before_after_comparison 추가 → 해소
+    (d / "before_after_comparison.json").write_text(
+        '{"comparison": [{"metric": "deadline_f1", "before": 0.84, '
+        '"after": 0.87, "delta": 0.03}]}', encoding="utf-8")
+    assert audit_evidence(tmp_path)["ok"] is True
+
+
+# ── #7 audit_evidence — codification PR / 정착 이전 evidence 통과 (P1-A) ──
+def test_audit_evidence_passes_for_codification_pr(tmp_path):
+    """정착 PR (branch_* 평가 evidence 부재) + 정착 이전 evidence 는 통과."""
+    # case 1: 정착 PR — branch_* 평가 evidence 부재
+    cod = tmp_path / "evidence" / "day23" / "standard_x_codification"
+    cod.mkdir(parents=True)
+    (cod / "summary.md").write_text("codification", encoding="utf-8")
+    result = audit_evidence(tmp_path)
+    assert result["ok"] is True
+    assert result["missing_required_artifact"] is False
+    assert result["eval_evidence_dirs_count"] == 0
+    # case 2: Standard 10 정착 이전(day<24) branch evidence 는 소급 요구 대상 아님
+    old = tmp_path / "evidence" / "day20" / "branch_old"
+    old.mkdir(parents=True)
+    (old / "summary.md").write_text("pre-standard-10 eval", encoding="utf-8")
+    result2 = audit_evidence(tmp_path)
+    assert result2["ok"] is True, "day20 evidence 가 소급 fail-closed 됨"
+    assert result2["eval_evidence_dirs_count"] == 0
+
+
+# ── #8 validate_drift_report — negative drift_rate 차단 (Codex P1-B) ─────
+def test_validate_drift_report_rejects_negative_rate():
+    """drift_rate 음수 → NEGATIVE_DRIFT_RATE 위반 (drift 은폐 차단)."""
+    neg = {
+        "policy_name": "deadline strength taxonomy",
+        "old_policy_version": "1.0.0", "new_policy_version": "1.1.0",
+        "drift_rate": -0.3, "drift_class": "OK",
+        "samples_compared": 500,
+    }
+    issues = validate_drift_report(neg)
+    assert any("NEGATIVE_DRIFT_RATE" in i for i in issues)
+    # 비음수 drift_rate 는 정상 통과
+    pos = dict(neg); pos["drift_rate"] = 0.07; pos["drift_class"] = "PATCH_CONTINUE"
+    assert validate_drift_report(pos) == []
+    # drift_rate 누락 → 필드 누락 위반
+    miss = {k: v for k, v in neg.items() if k != "drift_rate"}
+    assert any("drift_rate" in i for i in validate_drift_report(miss))
