@@ -194,6 +194,22 @@ Proof case:
 
 PR #720 cycle 5 — the diagnostic cycle confirmed that the correction was correctly applied at head `24dc8d092e61fed1782a2a7d621d623c8216cad9`. The Codex P1 #1 and P1 #2 threads remained outdated, pointing at `commit_id=025f403deaf95000bf9b356931e8d71ae21115d5` (the original first head) and `original_line=409` / `original_line=158`. The reviewer's auto-fetch surfaced these outdated comments alongside the new diff, producing an apparent "동일 재발견" report. Final outcome: PR #720 merged with merge SHA `e838543b44cfa03ab31893304547f7218de44b82`.
 
+## Standards 9–12 — separate per-standard files
+
+Standards 9 and later are codified as separate files under
+`docs/operating-standards/`:
+
+- Standard 9 — Dataset Integrity Fail-Closed: `docs/operating-standards/standard-09-dataset-integrity.md`
+  (codified by GitHub PR #728; absorbs Standard 6 coverage fail-closed).
+- Standard 11 — AB simulation variant distinctness (metric-only): proven in
+  PR #724/#726, enforced in evaluation PR sentinels.
+- Standard 12 — Honest Reporting Pattern: `docs/operating-standards/standard-12-honest-reporting.md`
+  (codified by GitHub PR #728).
+
+CI guards `scripts/ci/check_standard_09.py` and `scripts/ci/check_standard_12.py`
+enforce these. The evaluation PR template `.github/PULL_REQUEST_TEMPLATE/eval_pr.md`
+applies Standards 1–12 as a checklist.
+
 ## Required pre-merge evaluation PR checklist
 
 Every future evaluation PR must satisfy the following before merge:
@@ -203,8 +219,9 @@ Every future evaluation PR must satisfy the following before merge:
 - [ ] `expected_head_sha` squash merge is used.
 - [ ] Algorithm Branch label is separate from the GitHub PR number.
 - [ ] Multiset/weighted invariant sentinels are present when aggregates are used.
-- [ ] Coverage fail-closed sentinel is present.
+- [ ] Coverage fail-closed sentinel is present (Standard 9 — coverage_report 12 fields).
 - [ ] Stratified composition sentinel is present when A/B or sampled evaluation is used.
+- [ ] Honest reporting pattern is satisfied (Standard 12 — expected_vs_observed, delta).
 - [ ] Forbidden production wording grep passes.
 - [ ] No metric threshold lowering is present.
 - [ ] No PROCEED verdict appears outside the designated final re-measurement PR.
