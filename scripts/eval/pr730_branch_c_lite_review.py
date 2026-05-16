@@ -15,7 +15,7 @@ import re
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 ROOT     = Path(__file__).resolve().parents[2]
 DATASET  = ROOT / "tests/fixtures/card1_evalset_v1_1_500.jsonl"
@@ -76,19 +76,33 @@ def _meta() -> Dict[str, Any]:
     }
 
 
+def detect_duplicates(id_list: List[str]) -> Tuple[List[str], int]:
+    """sample_id 리스트 → (중복 id 정렬 목록, 초과 건수) — raw 기준 fail-closed.
+
+    Codex P1 정정: dict comprehension 은 duplicate sample_id 를 silently
+    collapse/overwrite 하므로, raw list 단계에서 중복을 검출해야 한다.
+    """
+    counter = Counter(id_list)
+    dups = sorted(s for s, c in counter.items() if c > 1)
+    excess = sum(c - 1 for c in counter.values() if c > 1)
+    return dups, excess
+
+
 def load_inputs():
+    """dataset items(dict) + prediction raw rows(list) + MIXED-A source.
+
+    Codex P1-B 정정: predictions 는 raw list 로 보존 — dict assignment 의
+    silent overwrite 전에 duplicate 를 검출하기 위함.
+    """
     items = {}
     for line in DATASET.open(encoding="utf-8"):
         if line.strip():
             it = json.loads(line)
             items[it["sample_id"]] = it
-    preds = {}
-    for line in PREDS.open(encoding="utf-8"):
-        if line.strip():
-            p = json.loads(line)
-            preds[p["sample_id"]] = p
+    pred_rows = [json.loads(line) for line in PREDS.open(encoding="utf-8")
+                 if line.strip()]
     mixed = json.loads(MIXED_A.read_text(encoding="utf-8"))
-    return items, preds, mixed
+    return items, pred_rows, mixed
 
 
 def build_case(sid: str, src_row: Dict, items: Dict, preds: Dict) -> Dict[str, Any]:
@@ -204,37 +218,56 @@ def select_30(cases: List[Dict]) -> Dict[str, Any]:
 
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
-    items, preds, mixed = load_inputs()
-    src_rows = {r["sample_id"]: r for r in mixed["rows"]}
+    items, pred_rows, mixed = load_inputs()
+
+    # ── Codex P1-A/B: raw 단계 duplicate 검출 (dict collapse 이전) ──
+    mixed_rows = mixed["rows"]
+    mixed_id_list = [r["sample_id"] for r in mixed_rows]
+    dup_mixed, mixed_dup_count = detect_duplicates(mixed_id_list)
+    pred_id_list = [p["sample_id"] for p in pred_rows]
+    dup_pred, pred_dup_count = detect_duplicates(pred_id_list)
+
+    src_rows = {r["sample_id"]: r for r in mixed_rows}
+    preds = {p["sample_id"]: p for p in pred_rows}
     mixed_ids = sorted(src_rows)
 
-    # ── coverage_report (Standard 9, 12 필드) ──
+    # ── coverage_report (Standard 9, 12 필드 + raw vs unique 정합) ──
     ds_ids = set(items)
     pr_ids = set(preds)
     missing = sorted(s for s in mixed_ids if s not in ds_ids or s not in pr_ids)
-    dup = [s for s, c in Counter(mixed_ids).items() if c > 1]
     coverage = {
         "coverage_checked":           True,
-        "expected_samples":           len(mixed_ids),
-        "measured_samples":           len(mixed_ids) - len(missing),
+        "expected_samples":           len(set(mixed_id_list)),
+        "measured_samples":           len(set(mixed_id_list) & pr_ids & ds_ids),
         "missing_count":              len(missing),
         "missing_ids":                missing[:20],
         "extra_count":                0,
         "extra_ids":                  [],
-        "gold_duplicate_count":       len(dup),
-        "gold_duplicate_ids":         dup[:20],
-        "prediction_duplicate_count": 0,
-        "prediction_duplicate_ids":   [],
+        "gold_duplicate_count":       mixed_dup_count,
+        "gold_duplicate_ids":         dup_mixed[:20],
+        "prediction_duplicate_count": pred_dup_count,
+        "prediction_duplicate_ids":   dup_pred[:20],
         "fail_class":                 None,
+        # 확장 필드 — raw vs unique 정합 (Codex P1 정정)
+        "source_sample_ids_count":          len(mixed_id_list),
+        "source_sample_ids_unique_count":   len(set(mixed_id_list)),
+        "prediction_sample_ids_count":        len(pred_id_list),
+        "prediction_sample_ids_unique_count": len(set(pred_id_list)),
+        "mode":                       "branch_c_lite_review",
     }
-    if dup:
-        coverage["fail_class"] = "GOLD_SAMPLE_ID_DUPLICATE"
+    # fail-closed 우선순위: source 중복 > prediction 중복 > coverage mismatch
+    if dup_mixed:
+        coverage["fail_class"] = "SOURCE_SAMPLE_ID_DUPLICATE"
+    elif dup_pred:
+        coverage["fail_class"] = "FULL_EVAL_COVERAGE_MISMATCH"
     elif missing:
         coverage["fail_class"] = "FULL_EVAL_COVERAGE_MISMATCH"
     if coverage["fail_class"]:
         (OUT / "coverage_report.json").write_text(
             json.dumps(coverage, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(json.dumps({"ok": False, "fail_class": coverage["fail_class"]},
+        print(json.dumps({"ok": False, "fail_class": coverage["fail_class"],
+                          "source_sample_id_duplicate_count": len(dup_mixed),
+                          "prediction_duplicate_count": pred_dup_count},
                          ensure_ascii=False))
         return 1
 
@@ -388,7 +421,19 @@ def main() -> int:
         "",
         f"## metadata\n- dataset_id: {DATASET_ID}\n- source_pr: 730\n"
         f"- branch: C-lite\n- patch_type: gold_action_unit_review_analysis_only\n"
-        f"- verdict: MEASURED_ONLY",
+        f"- verdict: MEASURED_ONLY\n"
+        f"- correction_cycle: Codex P1 2건 정정 (dataset integrity fail-closed)",
+        "",
+        "## Codex P1 2건 정정 (dataset integrity)",
+        "- P1-A: raw MIXED-A source rows duplicate fail-closed — "
+        "detect_duplicates() 로 dict collapse 이전 검출, 중복 시 "
+        "SOURCE_SAMPLE_ID_DUPLICATE.",
+        "- P1-B: predictions duplicate fail-closed — pred_rows raw list 보존, "
+        "prediction_duplicate_count 를 raw 기준 산출 (고정값 0 제거).",
+        f"- raw vs unique 정합: source {len(mixed_id_list)}/"
+        f"{len(set(mixed_id_list))} · prediction {len(pred_id_list)}/"
+        f"{len(set(pred_id_list))} — 중복 0건.",
+        "- 정정 후 본질적 결론 정합 유지 (A1 0/30 · A3 23/30 · A4 7/30).",
         "",
         "## 본 PR 의 본질 (정직 보고)",
         "- 분석 PR — gold / normalized_action label / 알고리즘 변경 0건.",

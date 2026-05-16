@@ -6,6 +6,13 @@
 - branch: C-lite
 - patch_type: gold_action_unit_review_analysis_only
 - verdict: MEASURED_ONLY
+- correction_cycle: Codex P1 2건 정정 (dataset integrity fail-closed)
+
+## Codex P1 2건 정정 (dataset integrity)
+- P1-A: raw MIXED-A source rows duplicate fail-closed — detect_duplicates() 로 dict collapse 이전 검출, 중복 시 SOURCE_SAMPLE_ID_DUPLICATE.
+- P1-B: predictions duplicate fail-closed — pred_rows raw list 보존, prediction_duplicate_count 를 raw 기준 산출 (고정값 0 제거).
+- raw vs unique 정합: source 67/67 · prediction 500/500 — 중복 0건.
+- 정정 후 본질적 결론 정합 유지 (A1 0/30 · A3 23/30 · A4 7/30).
 
 ## 본 PR 의 본질 (정직 보고)
 - 분석 PR — gold / normalized_action label / 알고리즘 변경 0건.

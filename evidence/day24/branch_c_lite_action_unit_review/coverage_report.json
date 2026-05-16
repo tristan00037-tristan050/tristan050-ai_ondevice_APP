@@ -10,5 +10,10 @@
   "gold_duplicate_ids": [],
   "prediction_duplicate_count": 0,
   "prediction_duplicate_ids": [],
-  "fail_class": null
+  "fail_class": null,
+  "source_sample_ids_count": 67,
+  "source_sample_ids_unique_count": 67,
+  "prediction_sample_ids_count": 500,
+  "prediction_sample_ids_unique_count": 500,
+  "mode": "branch_c_lite_review"
 }

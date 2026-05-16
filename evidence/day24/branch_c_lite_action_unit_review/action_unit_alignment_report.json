@@ -5,7 +5,7 @@
   "branch": "C-lite",
   "patch_type": "gold_action_unit_review_analysis_only",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-16T06:09:47.463801+00:00",
+  "generated_at": "2026-05-16T06:28:13.395003+00:00",
   "sample_size": 30,
   "subtype_distribution": {
     "A3_product_equivalent_prediction": 23,
