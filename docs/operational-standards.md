@@ -201,14 +201,17 @@ Standards 9 and later are codified as separate files under
 
 - Standard 9 — Dataset Integrity Fail-Closed: `docs/operating-standards/standard-09-dataset-integrity.md`
   (codified by GitHub PR #728; absorbs Standard 6 coverage fail-closed).
+- Standard 10 — Strict Policy Base Drift: `docs/operating-standards/standard-10-strict-policy-base-drift.md`
+  (codified by GitHub PR #729; metric threshold freeze, label guide SemVer
+  bump, before/after comparison, policy drift report).
 - Standard 11 — AB simulation variant distinctness (metric-only): proven in
   PR #724/#726, enforced in evaluation PR sentinels.
 - Standard 12 — Honest Reporting Pattern: `docs/operating-standards/standard-12-honest-reporting.md`
   (codified by GitHub PR #728).
 
-CI guards `scripts/ci/check_standard_09.py` and `scripts/ci/check_standard_12.py`
-enforce these. The evaluation PR template `.github/PULL_REQUEST_TEMPLATE/eval_pr.md`
-applies Standards 1–12 as a checklist.
+CI guards `scripts/ci/check_standard_09.py`, `scripts/ci/check_standard_10.py`,
+and `scripts/ci/check_standard_12.py` enforce these. The evaluation PR template
+`.github/PULL_REQUEST_TEMPLATE/eval_pr.md` applies Standards 1–12 as a checklist.
 
 ## Required pre-merge evaluation PR checklist
 

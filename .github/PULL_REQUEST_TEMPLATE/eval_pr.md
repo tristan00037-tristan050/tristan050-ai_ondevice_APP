@@ -31,6 +31,15 @@ STATUS=<MEASURED_ONLY | PATCH_CONTINUE | HOLD>
 - [ ] verdict 경계 정합 (PROCEED verdict 금지)
 - [ ] latent bug 패턴 점검 (추정 vs 실측 괴리 시 원인 재평가)
 
+## Standard 10 — Strict Policy Base Drift
+
+- [ ] metric threshold 변경 0건 (deadline_f1 / action_f1 / safety rate 등)
+- [ ] label guide 변경 시 version bump (SemVer MAJOR.MINOR.PATCH)
+- [ ] before/after comparison 표 포함 (정밀 patch PR)
+- [ ] policy drift report 작성 — drift 5%↑ 시 PATCH_CONTINUE, 20%↑ 시 HOLD
+- [ ] old policy vs new policy 비교 가능성 보증
+- [ ] CI guard `check_standard_10.py` 통과
+
 ## 회귀 monitor
 
 - [ ] Branch B-2 회귀 0건 (action_fp 234 유지)
