@@ -1,0 +1,18 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 726,
+  "source_merge_sha": "114c9481cb0dc84d11f12509273065d97d36a978",
+  "branch": "D-2",
+  "patch_type": "targeted_deadline_normalization",
+  "verdict": "PATCH_CONTINUE",
+  "generated_at": "2026-05-16T03:22:01.365447+00:00",
+  "total_samples": 500,
+  "d1_baseline_deadline_f1": 0.8438,
+  "d2_deadline_f1": 0.8702,
+  "deadline_f1_regression": false,
+  "d1_baseline_hard_soft": 5,
+  "d2_hard_soft": 5,
+  "d1_baseline_none_act": 2,
+  "d2_none_act": 2,
+  "none_act_regression": false
+}

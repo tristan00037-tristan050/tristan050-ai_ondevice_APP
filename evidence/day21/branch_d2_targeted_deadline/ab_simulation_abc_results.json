@@ -1,0 +1,40 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 726,
+  "source_merge_sha": "114c9481cb0dc84d11f12509273065d97d36a978",
+  "branch": "D-2",
+  "patch_type": "targeted_deadline_normalization",
+  "verdict": "PATCH_CONTINUE",
+  "generated_at": "2026-05-16T03:22:01.365143+00:00",
+  "total_samples": 500,
+  "results": {
+    "A_current": {
+      "variant": "A",
+      "deadline_tp": 10,
+      "deadline_fp": 7,
+      "deadline_fn": 17,
+      "deadline_f1": 0.4545
+    },
+    "B_d1": {
+      "variant": "B",
+      "deadline_tp": 16,
+      "deadline_fp": 3,
+      "deadline_fn": 11,
+      "deadline_f1": 0.6957
+    },
+    "C_d1_d2": {
+      "variant": "C",
+      "deadline_tp": 17,
+      "deadline_fp": 3,
+      "deadline_fn": 10,
+      "deadline_f1": 0.7234
+    }
+  },
+  "selected": "C_d1_d2",
+  "delta_table": {
+    "B_vs_A": 0.2412,
+    "C_vs_A": 0.2689
+  },
+  "variant_distinct": true,
+  "variant_distinct_basis": "metric-only (deadline_tp/fp/fn/f1), label 제외"
+}

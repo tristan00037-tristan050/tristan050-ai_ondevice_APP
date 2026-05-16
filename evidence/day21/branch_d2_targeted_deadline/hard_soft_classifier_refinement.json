@@ -1,0 +1,13 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 726,
+  "source_merge_sha": "114c9481cb0dc84d11f12509273065d97d36a978",
+  "branch": "D-2",
+  "patch_type": "targeted_deadline_normalization",
+  "verdict": "PATCH_CONTINUE",
+  "generated_at": "2026-05-16T03:22:01.364668+00:00",
+  "total_samples": 500,
+  "hard_soft_confusion_before": 5,
+  "hard_soft_confusion_after": 5,
+  "reduction_rate": 0.0
+}

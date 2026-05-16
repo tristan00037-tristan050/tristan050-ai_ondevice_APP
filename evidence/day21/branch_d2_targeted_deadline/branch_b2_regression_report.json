@@ -1,0 +1,15 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 726,
+  "source_merge_sha": "114c9481cb0dc84d11f12509273065d97d36a978",
+  "branch": "D-2",
+  "patch_type": "targeted_deadline_normalization",
+  "verdict": "PATCH_CONTINUE",
+  "generated_at": "2026-05-16T03:22:01.365527+00:00",
+  "total_samples": 500,
+  "b2_baseline_action_fp": 234,
+  "d2_action_fp": 234,
+  "action_fp_regression": false,
+  "b2_baseline_f1": 0.6182,
+  "d2_action_f1": 0.6182
+}
