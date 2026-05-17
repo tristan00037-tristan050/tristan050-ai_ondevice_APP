@@ -1,0 +1,13 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 732,
+  "source_merge_sha": "3978a846",
+  "branch": "B-2G",
+  "patch_type": "post_processing_over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "metric": "no_action_fp_rate",
+  "before": 0.0273,
+  "after": 0.0273,
+  "delta": 0.0,
+  "reason": "guard 는 FP action 만 제거 — no_action_fp_rate 악화 불가"
+}

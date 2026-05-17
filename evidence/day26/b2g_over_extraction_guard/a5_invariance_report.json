@@ -1,0 +1,12 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 732,
+  "source_merge_sha": "3978a846",
+  "branch": "B-2G",
+  "patch_type": "post_processing_over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "a5_total": 6,
+  "a5_affected": 0,
+  "a5_invariance_held": true,
+  "note": "A5 (gold>=1) 는 guard block 대상 아님. REPORT 마커를 declarative 현재형으로 한정해 A5 card1_100078('공유드리려고 합니다' 의도형) 과차단을 방지."
+}

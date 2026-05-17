@@ -1,0 +1,13 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 732,
+  "source_merge_sha": "3978a846",
+  "branch": "B-2G",
+  "patch_type": "post_processing_over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "a3_total": 32,
+  "a3_preserved": 32,
+  "a3_over_blocked": 0,
+  "over_block_zero": true,
+  "note": "A3 는 block 되지 않고 manual_suggestion_allowed 로 보존"
+}

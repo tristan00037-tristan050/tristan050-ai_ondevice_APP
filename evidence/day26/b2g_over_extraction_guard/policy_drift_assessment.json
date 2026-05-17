@@ -1,0 +1,16 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 732,
+  "source_merge_sha": "3978a846",
+  "branch": "B-2G",
+  "patch_type": "post_processing_over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "policy_name": "card1 action metric contract",
+  "contract_version": "2.0.0",
+  "contract_version_changed": false,
+  "drift_rate": 0.0,
+  "drift_class": "OK",
+  "samples_compared": 500,
+  "is_standard10_policy_drift_report": false,
+  "drift_note": "B-2G 는 post-processing guard — strict_action_f1 산식·metric contract(v2.0.0) 불변. contract version bump 이 없으므로 Standard 10 formal policy_drift_report 대상이 아니다. action_fp 감소는 over-extraction FP 제거 효과이며 평가 기준 drift 아님 (drift_rate 0)."
+}
