@@ -1,0 +1,18 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 738,
+  "actual_github_pr": 738,
+  "legacy_handoff_label": "PR #738+ (chat 인계 박스 표기)",
+  "source_merge_sha": "f61df6f6",
+  "branch": "Residual-A4-9-Review-Protocol",
+  "patch_type": "evaluation_protocol_separation_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "policy_name": "card1 action metric contract",
+  "contract_version": "2.0.0",
+  "contract_version_changed": false,
+  "drift_rate": 0.0,
+  "drift_class": "OK",
+  "samples_compared": 0,
+  "is_standard10_policy_drift_report": false,
+  "drift_note": "평가 protocol PR — metric contract v2.0.0 불변. v2.1.0 즉시 bump 0 (자문 6차 M-8). 후보 안건만 명세."
+}
