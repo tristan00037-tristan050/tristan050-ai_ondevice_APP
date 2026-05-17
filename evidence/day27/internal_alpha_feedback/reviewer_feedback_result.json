@@ -1,0 +1,320 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 733,
+  "source_merge_sha": "588f1db2",
+  "branch": "Internal-Alpha-Feedback",
+  "patch_type": "feedback_instrumentation_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "measurement_option": "A (deterministic reviewer-simulation proxy)",
+  "manual_suggestion_candidate_count": 32,
+  "b2g_text_marked_count": 16,
+  "b2g_marking_coverage_note": "manual_suggestion 후보 A3 32건 중 B-2G 텍스트 QUESTION 검출이 16건 표기 — 나머지는 imperative 표현('알려 주세요' 등)으로 텍스트 검출 미달.",
+  "reviewer_strict": {
+    "counts": {
+      "irrelevant": 11,
+      "accept": 15,
+      "dismiss": 6
+    },
+    "manual_suggestion_precision": 0.4688
+  },
+  "reviewer_lenient": {
+    "counts": {
+      "irrelevant": 11,
+      "accept": 21
+    },
+    "manual_suggestion_precision": 0.6562
+  },
+  "primary_msp": 0.4688,
+  "primary_msp_reviewer": "strict",
+  "honest_note": "msp 는 deterministic reviewer-simulation proxy — 실제 Internal Alpha user feedback (option C) 아님. 권위 측정은 Internal Alpha 정식 배포 후.",
+  "feedback_records": [
+    {
+      "feedback_id": "af-0000",
+      "timestamp_digest": "sha256:32e3adc25e11d938516c6f5f7ffcac62",
+      "suggestion_id": "card1_100031",
+      "user_category": "irrelevant",
+      "suggestion_context_digest": "sha256:fdf9b738e9a41cc738b0123c022ae7de",
+      "decision_envelope_link": "mixed_a::card1_100031",
+      "audit_log_id": "audit-0000"
+    },
+    {
+      "feedback_id": "af-0001",
+      "timestamp_digest": "sha256:127bb6044557ca4aaee6a4848e8b45e2",
+      "suggestion_id": "card1_100033",
+      "user_category": "irrelevant",
+      "suggestion_context_digest": "sha256:e82e0000da0bdafc65e14f754f74fe4d",
+      "decision_envelope_link": "mixed_a::card1_100033",
+      "audit_log_id": "audit-0001"
+    },
+    {
+      "feedback_id": "af-0002",
+      "timestamp_digest": "sha256:a5ff86fc469a504ab8b29fff0e1e6bde",
+      "suggestion_id": "card1_100034",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:d1a06094ce85974d2d7ac9442a4bc77a",
+      "decision_envelope_link": "mixed_a::card1_100034",
+      "audit_log_id": "audit-0002"
+    },
+    {
+      "feedback_id": "af-0003",
+      "timestamp_digest": "sha256:6be602119d656987c2606603a7618987",
+      "suggestion_id": "card1_100101",
+      "user_category": "irrelevant",
+      "suggestion_context_digest": "sha256:6303e841c85cce725689bb80a0d245e0",
+      "decision_envelope_link": "mixed_a::card1_100101",
+      "audit_log_id": "audit-0003"
+    },
+    {
+      "feedback_id": "af-0004",
+      "timestamp_digest": "sha256:c9777920e6b9fd6ee2f3c18baaeb9e62",
+      "suggestion_id": "card1_100102",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:5661dff5b6271556901226183c5aec48",
+      "decision_envelope_link": "mixed_a::card1_100102",
+      "audit_log_id": "audit-0004"
+    },
+    {
+      "feedback_id": "af-0005",
+      "timestamp_digest": "sha256:0c598d53f6af336b5f23b8d4f7c9ea82",
+      "suggestion_id": "card1_100103",
+      "user_category": "dismiss",
+      "suggestion_context_digest": "sha256:48ed52240351bdf98e3d08e800bbb45a",
+      "decision_envelope_link": "mixed_a::card1_100103",
+      "audit_log_id": "audit-0005"
+    },
+    {
+      "feedback_id": "af-0006",
+      "timestamp_digest": "sha256:e09b08afff0731a809b73ccbcb4c9c84",
+      "suggestion_id": "card1_100105",
+      "user_category": "dismiss",
+      "suggestion_context_digest": "sha256:13151d88a3419f1dfaa84d4b5af76cbf",
+      "decision_envelope_link": "mixed_a::card1_100105",
+      "audit_log_id": "audit-0006"
+    },
+    {
+      "feedback_id": "af-0007",
+      "timestamp_digest": "sha256:a2ca7f79d26571901f996264da44180c",
+      "suggestion_id": "card1_100107",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:9c9010f27282672b09015052bd597491",
+      "decision_envelope_link": "mixed_a::card1_100107",
+      "audit_log_id": "audit-0007"
+    },
+    {
+      "feedback_id": "af-0008",
+      "timestamp_digest": "sha256:f35fd8b490e594cdaa4be014aa1247b7",
+      "suggestion_id": "card1_200021",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:5661dff5b6271556901226183c5aec48",
+      "decision_envelope_link": "mixed_a::card1_200021",
+      "audit_log_id": "audit-0008"
+    },
+    {
+      "feedback_id": "af-0009",
+      "timestamp_digest": "sha256:ebb7600aadca4439c950cc386c8317c9",
+      "suggestion_id": "card1_200047",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:bebd37fcd65906817bc18d226126eb0f",
+      "decision_envelope_link": "mixed_a::card1_200047",
+      "audit_log_id": "audit-0009"
+    },
+    {
+      "feedback_id": "af-0010",
+      "timestamp_digest": "sha256:c0000177dd16e5be70c300cbc51656d4",
+      "suggestion_id": "card1_200051",
+      "user_category": "irrelevant",
+      "suggestion_context_digest": "sha256:6303e841c85cce725689bb80a0d245e0",
+      "decision_envelope_link": "mixed_a::card1_200051",
+      "audit_log_id": "audit-0010"
+    },
+    {
+      "feedback_id": "af-0011",
+      "timestamp_digest": "sha256:78c3f768ba6a3c8b2eb8d549a4222e25",
+      "suggestion_id": "card1_200053",
+      "user_category": "dismiss",
+      "suggestion_context_digest": "sha256:d1e4a915616f7bb5b52035b71e4ea583",
+      "decision_envelope_link": "mixed_a::card1_200053",
+      "audit_log_id": "audit-0011"
+    },
+    {
+      "feedback_id": "af-0012",
+      "timestamp_digest": "sha256:671cd667d3ca0dcef6ea08f6df3db0f7",
+      "suggestion_id": "card1_400059",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:80171b2af2ed42daef8699b6f5bd6287",
+      "decision_envelope_link": "mixed_a::card1_400059",
+      "audit_log_id": "audit-0012"
+    },
+    {
+      "feedback_id": "af-0013",
+      "timestamp_digest": "sha256:088d49471bcaba4f8cd3a072ec5ff3fb",
+      "suggestion_id": "card1_400061",
+      "user_category": "irrelevant",
+      "suggestion_context_digest": "sha256:d39bc1a67f0b86733e9e8f8b0571cf91",
+      "decision_envelope_link": "mixed_a::card1_400061",
+      "audit_log_id": "audit-0013"
+    },
+    {
+      "feedback_id": "af-0014",
+      "timestamp_digest": "sha256:1193e85d4bdcb110200b5521bf127c75",
+      "suggestion_id": "card1_400063",
+      "user_category": "irrelevant",
+      "suggestion_context_digest": "sha256:ce053e853bba06a08a8ba5a26232e25c",
+      "decision_envelope_link": "mixed_a::card1_400063",
+      "audit_log_id": "audit-0014"
+    },
+    {
+      "feedback_id": "af-0015",
+      "timestamp_digest": "sha256:07604d0e780464b9f07fca385309e9db",
+      "suggestion_id": "card1_400064",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:cfd577f735f0937f9d4a816c1a816d1c",
+      "decision_envelope_link": "mixed_a::card1_400064",
+      "audit_log_id": "audit-0015"
+    },
+    {
+      "feedback_id": "af-0016",
+      "timestamp_digest": "sha256:b2de4ea279b125a3f20c711002db33ea",
+      "suggestion_id": "card1_400065",
+      "user_category": "irrelevant",
+      "suggestion_context_digest": "sha256:dae48fbc810495b60a86071cfed65ab7",
+      "decision_envelope_link": "mixed_a::card1_400065",
+      "audit_log_id": "audit-0016"
+    },
+    {
+      "feedback_id": "af-0017",
+      "timestamp_digest": "sha256:b318f3ca0167f91b41ed8be8f3df46a7",
+      "suggestion_id": "card1_400067",
+      "user_category": "irrelevant",
+      "suggestion_context_digest": "sha256:8b137de52faed956f21cecde6da5034b",
+      "decision_envelope_link": "mixed_a::card1_400067",
+      "audit_log_id": "audit-0017"
+    },
+    {
+      "feedback_id": "af-0018",
+      "timestamp_digest": "sha256:bfea54a6b201620552765445d2e1b93d",
+      "suggestion_id": "card1_400068",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:38c46cfa07527157eb5bbf7470bbd881",
+      "decision_envelope_link": "mixed_a::card1_400068",
+      "audit_log_id": "audit-0018"
+    },
+    {
+      "feedback_id": "af-0019",
+      "timestamp_digest": "sha256:022fa2766ee95bb3fbc1c1f8d173848c",
+      "suggestion_id": "card1_400070",
+      "user_category": "dismiss",
+      "suggestion_context_digest": "sha256:23b0fa34c629d2411969454b1f9a9cba",
+      "decision_envelope_link": "mixed_a::card1_400070",
+      "audit_log_id": "audit-0019"
+    },
+    {
+      "feedback_id": "af-0020",
+      "timestamp_digest": "sha256:ddc71a0d342a21e4ee17d9b57aa8efa0",
+      "suggestion_id": "card1_400071",
+      "user_category": "irrelevant",
+      "suggestion_context_digest": "sha256:b159b71dbe619cdb32d25676966a2c07",
+      "decision_envelope_link": "mixed_a::card1_400071",
+      "audit_log_id": "audit-0020"
+    },
+    {
+      "feedback_id": "af-0021",
+      "timestamp_digest": "sha256:584c2f59bcaf2882566552af9afd0096",
+      "suggestion_id": "card1_400072",
+      "user_category": "dismiss",
+      "suggestion_context_digest": "sha256:08707e9b8423948417b78ecf1fed2717",
+      "decision_envelope_link": "mixed_a::card1_400072",
+      "audit_log_id": "audit-0021"
+    },
+    {
+      "feedback_id": "af-0022",
+      "timestamp_digest": "sha256:f2b28566fdc54ca7931c01172433f993",
+      "suggestion_id": "card1_400075",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:189c1c59ad77bedaa37bbcdffa7e4c74",
+      "decision_envelope_link": "mixed_a::card1_400075",
+      "audit_log_id": "audit-0022"
+    },
+    {
+      "feedback_id": "af-0023",
+      "timestamp_digest": "sha256:cdb1cfe66523864f88e9d22d1d8c927d",
+      "suggestion_id": "card1_400076",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:7ba9c8c0afe14e84fa32ebdb2cb4a919",
+      "decision_envelope_link": "mixed_a::card1_400076",
+      "audit_log_id": "audit-0023"
+    },
+    {
+      "feedback_id": "af-0024",
+      "timestamp_digest": "sha256:4b542f3763d5acc15ebb4c61b4d1010e",
+      "suggestion_id": "card1_400078",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:1d5445f63b06dd0bbbb40e4147e7e64d",
+      "decision_envelope_link": "mixed_a::card1_400078",
+      "audit_log_id": "audit-0024"
+    },
+    {
+      "feedback_id": "af-0025",
+      "timestamp_digest": "sha256:06a35aa9a28e54bf97ba90b2e39408ae",
+      "suggestion_id": "card1_500044",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:56a9c9ed0161944c7496de967261c186",
+      "decision_envelope_link": "mixed_a::card1_500044",
+      "audit_log_id": "audit-0025"
+    },
+    {
+      "feedback_id": "af-0026",
+      "timestamp_digest": "sha256:e72058114422f4dc4264345980d09198",
+      "suggestion_id": "card1_500048",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:3aaf1b6ec4b3ec6cb0f6d1f2b088cee6",
+      "decision_envelope_link": "mixed_a::card1_500048",
+      "audit_log_id": "audit-0026"
+    },
+    {
+      "feedback_id": "af-0027",
+      "timestamp_digest": "sha256:a8fe086141cdee2f01883a8ec865f37c",
+      "suggestion_id": "card1_500049",
+      "user_category": "irrelevant",
+      "suggestion_context_digest": "sha256:dae48fbc810495b60a86071cfed65ab7",
+      "decision_envelope_link": "mixed_a::card1_500049",
+      "audit_log_id": "audit-0027"
+    },
+    {
+      "feedback_id": "af-0028",
+      "timestamp_digest": "sha256:c8b4c7e7dd7f64b8dd0aa9065c952232",
+      "suggestion_id": "card1_500050",
+      "user_category": "dismiss",
+      "suggestion_context_digest": "sha256:23b0fa34c629d2411969454b1f9a9cba",
+      "decision_envelope_link": "mixed_a::card1_500050",
+      "audit_log_id": "audit-0028"
+    },
+    {
+      "feedback_id": "af-0029",
+      "timestamp_digest": "sha256:c258d24d659e80d95840a0dbcfae2bcb",
+      "suggestion_id": "card1_500101",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:461017fd7f7de12933eb59acd784f490",
+      "decision_envelope_link": "mixed_a::card1_500101",
+      "audit_log_id": "audit-0029"
+    },
+    {
+      "feedback_id": "af-0030",
+      "timestamp_digest": "sha256:8814ec15b59bcdcfd23680feee5ed2eb",
+      "suggestion_id": "card1_500102",
+      "user_category": "irrelevant",
+      "suggestion_context_digest": "sha256:8502395d199b06a54766ccd779d8f5a8",
+      "decision_envelope_link": "mixed_a::card1_500102",
+      "audit_log_id": "audit-0030"
+    },
+    {
+      "feedback_id": "af-0031",
+      "timestamp_digest": "sha256:9f994803e63f51e5ff3a2de59b695bc9",
+      "suggestion_id": "card1_500116",
+      "user_category": "accept",
+      "suggestion_context_digest": "sha256:3eb8e4bd1ad2d47065b2b53a0c52d0af",
+      "decision_envelope_link": "mixed_a::card1_500116",
+      "audit_log_id": "audit-0031"
+    }
+  ]
+}

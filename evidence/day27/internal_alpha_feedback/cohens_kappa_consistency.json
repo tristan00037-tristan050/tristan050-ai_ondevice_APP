@@ -1,0 +1,15 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 733,
+  "source_merge_sha": "588f1db2",
+  "branch": "Internal-Alpha-Feedback",
+  "patch_type": "feedback_instrumentation_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "reviewer_a": "strict",
+  "reviewer_b": "lenient",
+  "sample_count": 32,
+  "cohens_kappa": 0.6735,
+  "kappa_threshold": 0.7,
+  "kappa_meets_threshold": false,
+  "note": "strict/lenient reviewer-sim 간 일관성. κ < 0.7 시 분류 기준 재정의 필요 (PR #731 labeling guide 정합)."
+}

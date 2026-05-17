@@ -1,0 +1,77 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 733,
+  "source_merge_sha": "588f1db2",
+  "branch": "Internal-Alpha-Feedback",
+  "patch_type": "feedback_instrumentation_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "criteria_evaluation": {
+    "strict_action_f1 >= 0.90 (production gate)": {
+      "metric_value": 0.6452,
+      "threshold": 0.9,
+      "comparator": ">=",
+      "metric_source": "MAIN_METRICS",
+      "result": false
+    },
+    "manual_suggestion_precision >= 0.80": {
+      "metric_value": 0.4688,
+      "threshold": 0.8,
+      "comparator": ">=",
+      "metric_source": "reviewer_feedback_result (option A)",
+      "result": false
+    },
+    "deadline_f1 >= 0.86": {
+      "metric_value": 0.8702,
+      "threshold": 0.86,
+      "comparator": ">=",
+      "metric_source": "MAIN_METRICS",
+      "result": true
+    },
+    "false_deadline_rate <= 0.02": {
+      "metric_value": 0.014,
+      "threshold": 0.02,
+      "comparator": "<=",
+      "metric_source": "PR #732 머지 SHA 588f1db2 main 측정값 (before_after_safety_6종)",
+      "result": true
+    },
+    "no_action_fp_rate <= 0.03": {
+      "metric_value": 0.0273,
+      "threshold": 0.03,
+      "comparator": "<=",
+      "metric_source": "PR #732 머지 SHA 588f1db2 main 측정값 (before_after_safety_6종)",
+      "result": true
+    },
+    "auto_apply OFF": {
+      "metric_value": "OFF",
+      "threshold": "OFF",
+      "comparator": "==",
+      "metric_source": "instrumentation schema 구조 invariant",
+      "result": true
+    },
+    "privacy audit pass (raw text 0 / 외부 전송 0)": {
+      "metric_value": 0,
+      "threshold": 0,
+      "comparator": "==",
+      "metric_source": "privacy guard 실측 (raw_text_leak)",
+      "result": true
+    }
+  },
+  "criteria": {
+    "strict_action_f1 >= 0.90 (production gate)": false,
+    "manual_suggestion_precision >= 0.80": false,
+    "deadline_f1 >= 0.86": true,
+    "false_deadline_rate <= 0.02": true,
+    "no_action_fp_rate <= 0.03": true,
+    "auto_apply OFF": true,
+    "privacy audit pass (raw text 0 / 외부 전송 0)": true
+  },
+  "criteria_met_count": 5,
+  "criteria_total": 7,
+  "controlled_beta_ready": false,
+  "blocking_criteria": [
+    "strict_action_f1 >= 0.90 (production gate)",
+    "manual_suggestion_precision >= 0.80"
+  ],
+  "측정_integrity_정합": "모든 gate 가 실제 metric 에서 산출 — hardcoded literal True 차단 (Codex P1 정정)",
+  "decision_note": "Controlled Beta 진입 정량 결정 — 모든 기준 충족 시에만 가능. 미충족 시 STATUS=MEASURED_ONLY 유지, 진입 결정은 별도 Final Beta Readiness PR. (PROCEED 금지)"
+}
