@@ -1,0 +1,47 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 737,
+  "actual_github_pr": 737,
+  "legacy_handoff_label": "PR #735+ (chat 인계 박스 표기)",
+  "source_merge_sha": "343c1f6f",
+  "branch": "Option-C-Collection-Plan",
+  "patch_type": "collection_plan_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "conditions": [
+    {
+      "id": 1,
+      "condition": "authoritative_msp >= 0.80"
+    },
+    {
+      "id": 2,
+      "condition": "cohens_kappa >= 0.70"
+    },
+    {
+      "id": 3,
+      "condition": "unsafe_suggestion_rate <= 0.05"
+    },
+    {
+      "id": 4,
+      "condition": "dangerous_over_extraction_rate <= 0.05 또는 user-visible dangerous case 0"
+    },
+    {
+      "id": 5,
+      "condition": "false_deadline_rate <= 0.02"
+    },
+    {
+      "id": 6,
+      "condition": "no_action_fp_rate <= 0.03"
+    },
+    {
+      "id": 7,
+      "condition": "auto_apply OFF 유지"
+    },
+    {
+      "id": 8,
+      "condition": "privacy audit PASS"
+    }
+  ],
+  "condition_count": 8,
+  "entry_rule": "8 조건 모두 충족 시에만 Controlled Beta 진입 정량 결정. 권위 측정(option C) 완료 후 별도 판정 PR. PROCEED 금지.",
+  "current_status": "proxy 측정 기준 진입 불가 (PR #734) — 권위 측정 전 진입 결정 불가 (자문 6차 M-10/M-13)."
+}
