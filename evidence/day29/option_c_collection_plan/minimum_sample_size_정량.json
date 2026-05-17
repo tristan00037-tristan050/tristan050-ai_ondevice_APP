@@ -1,0 +1,16 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 735,
+  "source_merge_sha": "343c1f6f",
+  "branch": "Option-C-Collection-Plan",
+  "patch_type": "collection_plan_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "sample_size": {
+    "minimum": 100,
+    "recommended": 150,
+    "strong_recommended": 200,
+    "prior_자문5차": 50
+  },
+  "confidence_interval": "95%",
+  "correction_note": "자문 5차 6.5 (>= 50건) → 자문 6차 M-12 (최소 100 / 권장 150 / 강한 권장 200). 정정 근거: msp 비율 지표 안정성 — n=50 시 흔들림, n>=100 해석 가능."
+}

@@ -1,0 +1,16 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 735,
+  "source_merge_sha": "343c1f6f",
+  "branch": "Option-C-Collection-Plan",
+  "patch_type": "collection_plan_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "policy_name": "card1 action metric contract",
+  "contract_version": "2.0.0",
+  "contract_version_changed": false,
+  "drift_rate": 0.0,
+  "drift_class": "OK",
+  "samples_compared": 0,
+  "is_standard10_policy_drift_report": false,
+  "drift_note": "계획 PR — 측정/알고리즘 변경 0. metric contract v2.0.0 불변 (자문 6차 M-8 정합)."
+}

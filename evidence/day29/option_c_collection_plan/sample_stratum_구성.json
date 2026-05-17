@@ -1,0 +1,24 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 735,
+  "source_merge_sha": "343c1f6f",
+  "branch": "Option-C-Collection-Plan",
+  "patch_type": "collection_plan_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "stratum_150_recommended": {
+    "residual_a4_ambiguous_request_report": 30,
+    "a3_product_equivalent_suggestion": 40,
+    "ordinary_safe_request": 30,
+    "question_report_no_action_negative_controls": 30,
+    "deadline_sensitive_cases": 20
+  },
+  "stratum_150_total": 150,
+  "stratum_100_minimum": {
+    "residual_a4_a3": 40,
+    "safe_request": 20,
+    "negative_controls": 25,
+    "deadline_sensitive": 15
+  },
+  "stratum_100_total": 100,
+  "sampling_protocol": "stratum 별 결정적 추출 (sample_id 정렬) — PR #730 select_30 패턴 정합, RNG 미사용."
+}

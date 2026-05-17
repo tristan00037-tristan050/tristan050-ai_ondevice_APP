@@ -1,0 +1,20 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 735,
+  "source_merge_sha": "343c1f6f",
+  "branch": "Option-C-Collection-Plan",
+  "patch_type": "collection_plan_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "residual_a4_count": 9,
+  "자문5차_4옵션": "옵션 A/B/D 권고 (병렬)",
+  "자문6차_M5_정정": "옵션 D 1순위 (Internal Alpha feedback 후 사용자 가치 판정) → 옵션 B (metric contract review) 순서.",
+  "internal_alpha_feedback_target": true,
+  "feedback_categories": [
+    "useful",
+    "irrelevant",
+    "unsafe",
+    "needs_edit"
+  ],
+  "followup_pr": "별도 PR B (Residual A4 9 Review Protocol)",
+  "gold_label_수정": "절대 금지 유지 (자문 4/5/6 M-3 명시)"
+}
