@@ -6,6 +6,12 @@
 - branch: Internal-Alpha-Feedback
 - patch_type: feedback_instrumentation_no_algorithm_change
 - verdict: MEASURED_ONLY
+- correction_cycle: Codex P1 정정 (readiness gate measurement integrity)
+
+## Codex P1 정정 (정직 보고)
+- P1: controlled_beta_readiness 의 false_deadline_rate / no_action_fp_rate gate 가 literal True 로 hardcoded — metric regression 시 fail-open 위험.
+- 정정: `compute_readiness()` 함수로 추출, 7개 gate 전부 실제 metric(MAIN_SAFETY / MAIN_METRICS / privacy 실측)에서 비교 산출. metric regression 시 자동 fail-closed.
+- 측정값 영향: 현 metric (false_deadline_rate 0.014 <= 0.02, no_action_fp_rate 0.0273 <= 0.03) 두 gate 모두 충족 → criteria_met 5/7, controlled_beta_ready false — 분포 불변 (시나리오 1). latent 결함 선제 정정 + measurement integrity 정량 보증.
 
 ## 본 PR 의 본질
 - 계측/인프라 PR — alpha feedback schema + collection pipeline +

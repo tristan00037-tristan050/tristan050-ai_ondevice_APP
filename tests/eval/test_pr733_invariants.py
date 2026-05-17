@@ -1,4 +1,4 @@
-"""PR #733 Internal Alpha Feedback Instrumentation sentinel — #1~#12."""
+"""PR #733 Internal Alpha Feedback Instrumentation sentinel — #1~#16."""
 from __future__ import annotations
 
 import json
@@ -10,7 +10,8 @@ sys.path.insert(0, str(ROOT))
 OUT = ROOT / "evidence/day27/internal_alpha_feedback"
 
 from scripts.eval.pr733_internal_alpha_feedback import (  # noqa: E402
-    FEEDBACK_CATEGORIES, _digest, cohens_kappa, msp,
+    FEEDBACK_CATEGORIES, MAIN_SAFETY, _digest, cohens_kappa,
+    compute_readiness, msp,
 )
 
 
@@ -126,3 +127,40 @@ def test_controlled_beta_readiness_정합():
     # 미충족 시 blocking_criteria 에 정직 명시
     assert set(cb["blocking_criteria"]) == \
         {k for k, v in cb["criteria"].items() if not v}
+
+
+# ── #13 readiness gate — false_deadline_rate fail-open 차단 (Codex P1) ───
+def test_readiness_gate_false_deadline_rate_fail_open_차단():
+    # metric regression (0.021 > 0.02) → gate False, fail-closed
+    r = compute_readiness({"false_deadline_rate": 0.021,
+                           "no_action_fp_rate": 0.0273})
+    assert r["criteria"]["false_deadline_rate <= 0.02"] is False
+    assert r["controlled_beta_ready"] is False
+
+
+# ── #14 readiness gate — no_action_fp_rate fail-open 차단 (Codex P1) ─────
+def test_readiness_gate_no_action_fp_rate_fail_open_차단():
+    r = compute_readiness({"false_deadline_rate": 0.014,
+                           "no_action_fp_rate": 0.031})
+    assert r["criteria"]["no_action_fp_rate <= 0.03"] is False
+    assert r["controlled_beta_ready"] is False
+
+
+# ── #15 readiness gate — 정상 metric 값 정합 ────────────────────────────
+def test_readiness_gate_정상값_정합():
+    r = compute_readiness(MAIN_SAFETY)
+    assert r["criteria"]["false_deadline_rate <= 0.02"] is True
+    assert r["criteria"]["no_action_fp_rate <= 0.03"] is True
+    # gate 가 실제 metric 에서 산출 (hardcoded True 아님)
+    ce = r["criteria_evaluation"]["false_deadline_rate <= 0.02"]
+    assert ce["metric_value"] == MAIN_SAFETY["false_deadline_rate"]
+    assert ce["metric_source"].startswith("PR #732")
+
+
+# ── #16 controlled_beta_ready == all(criteria) 정합 ─────────────────────
+def test_controlled_beta_ready_all_criteria_정합():
+    r = compute_readiness(MAIN_SAFETY)
+    assert r["controlled_beta_ready"] == all(r["criteria"].values())
+    assert r["criteria_met_count"] == sum(r["criteria"].values())
+    # 현재: strict_action_f1 / msp 미충족 → 5/7, ready False
+    assert r["controlled_beta_ready"] is False

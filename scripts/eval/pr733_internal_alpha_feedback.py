@@ -42,10 +42,71 @@ CONTRACT_VERSION = "2.0.0"
 # main 정착 측정값 (계측 PR — 변동 0)
 MAIN_METRICS = {"deadline_f1": 0.8702, "strict_action_f1": 0.6452,
                 "action_fp": 207}
+# main safety 측정값 — PR #732 머지 SHA 588f1db2 (before_after_safety_6종)
+MAIN_SAFETY = {"false_deadline_rate": 0.014, "no_action_fp_rate": 0.0273}
+MAIN_SAFETY_SOURCE = "PR #732 머지 SHA 588f1db2 main 측정값 (before_after_safety_6종)"
 CONTROLLED_BETA_MSP_GATE = 0.80     # 자문 5차 8.2
 PRODUCTION_GATE = 0.90
 
 FEEDBACK_CATEGORIES = ["accept", "dismiss", "irrelevant", "unsafe"]
+
+
+def compute_readiness(safety: Dict[str, float],
+                      strict_action_f1: float = MAIN_METRICS["strict_action_f1"],
+                      msp_value: float = 0.0,
+                      deadline_f1: float = MAIN_METRICS["deadline_f1"],
+                      raw_text_leak: int = 0) -> Dict[str, Any]:
+    """Controlled Beta readiness — 모든 gate 를 실제 metric 에서 산출.
+
+    Codex P1 정정: false_deadline_rate / no_action_fp_rate gate 가 literal
+    True 로 hardcoded 되어 있어, 해당 metric 이 regression 해도 fail-open
+    으로 통과했다. 실제 metric 값(safety dict)에서 비교 산출하도록 정정 —
+    metric regression 시 자동 fail-closed.
+
+    auto_apply OFF 는 instrumentation schema 의 구조적 불변(regressable
+    metric 아님)이므로 구조 invariant 로 둔다.
+    """
+    crit_eval: Dict[str, Any] = {
+        "strict_action_f1 >= 0.90 (production gate)": {
+            "metric_value": strict_action_f1, "threshold": PRODUCTION_GATE,
+            "comparator": ">=", "metric_source": "MAIN_METRICS",
+            "result": strict_action_f1 >= PRODUCTION_GATE},
+        "manual_suggestion_precision >= 0.80": {
+            "metric_value": msp_value, "threshold": CONTROLLED_BETA_MSP_GATE,
+            "comparator": ">=", "metric_source": "reviewer_feedback_result (option A)",
+            "result": msp_value >= CONTROLLED_BETA_MSP_GATE},
+        "deadline_f1 >= 0.86": {
+            "metric_value": deadline_f1, "threshold": 0.86,
+            "comparator": ">=", "metric_source": "MAIN_METRICS",
+            "result": deadline_f1 >= 0.86},
+        "false_deadline_rate <= 0.02": {
+            "metric_value": safety["false_deadline_rate"], "threshold": 0.02,
+            "comparator": "<=", "metric_source": MAIN_SAFETY_SOURCE,
+            "result": safety["false_deadline_rate"] <= 0.02},
+        "no_action_fp_rate <= 0.03": {
+            "metric_value": safety["no_action_fp_rate"], "threshold": 0.03,
+            "comparator": "<=", "metric_source": MAIN_SAFETY_SOURCE,
+            "result": safety["no_action_fp_rate"] <= 0.03},
+        "auto_apply OFF": {
+            "metric_value": "OFF", "threshold": "OFF",
+            "comparator": "==", "metric_source": "instrumentation schema 구조 invariant",
+            "result": True},
+        "privacy audit pass (raw text 0 / 외부 전송 0)": {
+            "metric_value": raw_text_leak, "threshold": 0,
+            "comparator": "==", "metric_source": "privacy guard 실측 (raw_text_leak)",
+            "result": raw_text_leak == 0},
+    }
+    criteria = {k: v["result"] for k, v in crit_eval.items()}
+    return {
+        "criteria_evaluation": crit_eval,
+        "criteria": criteria,
+        "criteria_met_count": sum(criteria.values()),
+        "criteria_total": len(criteria),
+        "controlled_beta_ready": all(criteria.values()),
+        "blocking_criteria": [k for k, v in criteria.items() if not v],
+        "측정_integrity_정합": ("모든 gate 가 실제 metric 에서 산출 — "
+            "hardcoded literal True 차단 (Codex P1 정정)"),
+    }
 
 # 정보요청형 vs yes/no-status형 질문 패턴
 INFO_REQUEST = re.compile(r"알려|알 수|누가|언제|어디|무엇|어떤가요|어떻게|"
@@ -292,25 +353,16 @@ def main() -> int:
                    "알고리즘/측정 산식 미변경 → main 측정값 변동 0."),
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # ── Controlled Beta readiness (자문 5차 7개 기준) ──
-    cb = {
-        "strict_action_f1 >= 0.90 (production gate)": (
-            MAIN_METRICS["strict_action_f1"] >= PRODUCTION_GATE),
-        "manual_suggestion_precision >= 0.80": msp_strict >= CONTROLLED_BETA_MSP_GATE,
-        "deadline_f1 >= 0.86": MAIN_METRICS["deadline_f1"] >= 0.86,
-        "false_deadline_rate <= 0.02": True,
-        "no_action_fp_rate <= 0.03": True,
-        "auto_apply OFF": True,
-        "privacy audit pass (raw text 0 / 외부 전송 0)": raw_text_leak == 0,
-    }
-    cb_ready = all(cb.values())
+    # ── Controlled Beta readiness — 모든 gate 실제 metric 산출 (Codex P1) ──
+    readiness = compute_readiness(
+        MAIN_SAFETY, strict_action_f1=MAIN_METRICS["strict_action_f1"],
+        msp_value=msp_strict, deadline_f1=MAIN_METRICS["deadline_f1"],
+        raw_text_leak=raw_text_leak)
+    cb = readiness["criteria"]
+    cb_ready = readiness["controlled_beta_ready"]
     (OUT / "controlled_beta_readiness_assessment.json").write_text(json.dumps({
         **_meta(),
-        "criteria": cb,
-        "criteria_met_count": sum(cb.values()),
-        "criteria_total": len(cb),
-        "controlled_beta_ready": cb_ready,
-        "blocking_criteria": [k for k, v in cb.items() if not v],
+        **readiness,
         "decision_note": ("Controlled Beta 진입 정량 결정 — 모든 기준 충족 "
             "시에만 가능. 미충족 시 STATUS=MEASURED_ONLY 유지, 진입 결정은 "
             "별도 Final Beta Readiness PR. (PROCEED 금지)"),
@@ -322,7 +374,21 @@ def main() -> int:
         f"## metadata\n- dataset_id: {DATASET_ID}\n- source_pr: 733\n"
         f"- branch: Internal-Alpha-Feedback\n"
         f"- patch_type: feedback_instrumentation_no_algorithm_change\n"
-        f"- verdict: MEASURED_ONLY",
+        f"- verdict: MEASURED_ONLY\n"
+        f"- correction_cycle: Codex P1 정정 (readiness gate measurement integrity)",
+        "",
+        "## Codex P1 정정 (정직 보고)",
+        "- P1: controlled_beta_readiness 의 false_deadline_rate / "
+        "no_action_fp_rate gate 가 literal True 로 hardcoded — metric "
+        "regression 시 fail-open 위험.",
+        "- 정정: `compute_readiness()` 함수로 추출, 7개 gate 전부 실제 "
+        "metric(MAIN_SAFETY / MAIN_METRICS / privacy 실측)에서 비교 산출. "
+        "metric regression 시 자동 fail-closed.",
+        f"- 측정값 영향: 현 metric (false_deadline_rate "
+        f"{MAIN_SAFETY['false_deadline_rate']} <= 0.02, no_action_fp_rate "
+        f"{MAIN_SAFETY['no_action_fp_rate']} <= 0.03) 두 gate 모두 충족 → "
+        "criteria_met 5/7, controlled_beta_ready false — 분포 불변 "
+        "(시나리오 1). latent 결함 선제 정정 + measurement integrity 정량 보증.",
         "",
         "## 본 PR 의 본질",
         "- 계측/인프라 PR — alpha feedback schema + collection pipeline +",
