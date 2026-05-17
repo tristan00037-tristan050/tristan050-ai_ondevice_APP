@@ -50,8 +50,13 @@ QUESTION 케이스(A3 product_equivalent)는 차단하지 않고 보존하되,
 
 ## NO_ACTION 마커
 
-`참고만 / 확인만 / 정보 공유만 / 참고 바랍 / fyi` — 명시적 no-action
-지시. 해당 시 action 차단.
+`참고만 / 확인만 / 정보 공유만 / 참고 바랍 / 참고용 / fyi` — 명시적
+no-action 지시. 해당 시 action 차단.
+
+**Codex P2 정정 — case-insensitive**: NO_ACTION_MARKER 는 `re.IGNORECASE`
+flag 로 컴파일한다. 영어 마커 `fyi` 는 FYI / Fyi / fyi 모든 대소문자
+변형을 매칭해야 한다 (이전엔 소문자만 매칭). 한국어 마커는 case 개념이
+없어 flag 영향이 없다. 상세는 `regex_case_sensitivity_audit.md` 참조.
 
 ## guard 대상별 영향
 

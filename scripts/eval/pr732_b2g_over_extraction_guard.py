@@ -59,8 +59,10 @@ IMPERATIVE_REQUEST = re.compile(
 QUESTION_MARKER = re.compile(
     r"\?|나요|까요|어떤가요|어떻게|누가|무엇|언제|어디|왜|"
     r"있을까요|가능한가요|가능하실|되나요|됐나요|끝났나요")
-# NO_ACTION 명시 마커
-NO_ACTION_MARKER = re.compile(r"참고만|확인만|정보\s*공유만|참고\s*바랍|참고용|fyi")
+# NO_ACTION 명시 마커 — Codex P2 정정: re.IGNORECASE 로 FYI/Fyi/fyi 모두 매칭
+# (영어 마커 대소문자 변형 누락 차단. 한국어 마커는 case 개념 없어 영향 없음).
+NO_ACTION_MARKER = re.compile(
+    r"참고만|확인만|정보\s*공유만|참고\s*바랍|참고용|fyi", re.IGNORECASE)
 
 
 def _text(it: Dict) -> str:
@@ -374,7 +376,18 @@ def main() -> int:
         "",
         f"## metadata\n- dataset_id: {DATASET_ID}\n- source_pr: 732\n"
         f"- branch: B-2G\n- patch_type: post_processing_over_extraction_guard\n"
-        f"- verdict: MEASURED_ONLY",
+        f"- verdict: MEASURED_ONLY\n"
+        f"- correction_cycle: Codex P2 정정 (NO_ACTION_MARKER case-insensitive)",
+        "",
+        "## Codex P2 정정 (정직 보고)",
+        "- P2: NO_ACTION_MARKER 가 소문자 'fyi' 만 매칭 — FYI/Fyi 대문자 "
+        "변형 누락. re.IGNORECASE flag 추가로 정정 (한국어 마커는 case "
+        "개념 없어 영향 없음).",
+        "- 측정값 영향: 데이터셋 500건에 대문자 FYI/Fyi 변형 0건 → A4 차단 "
+        "20/29, action_fp 207, strict_action_f1 0.6452, dangerous rate "
+        "0.1915 — 전부 불변. P2 는 latent regex 정합 결함 정정 (시나리오 1).",
+        "- sentinel #13/#14/#15 (FYI 대문자 / Fyi title-case / fyi 소문자+"
+        "한국어 마커 정합) 추가.",
         "",
         "## 본 PR 의 본질",
         "- post-processing over-extraction guard — prompt / model weight 변경 0.",

@@ -1,4 +1,4 @@
-"""PR #732 Branch B-2G over-extraction guard sentinel — #1~#12."""
+"""PR #732 Branch B-2G over-extraction guard sentinel — #1~#15."""
 from __future__ import annotations
 
 import json
@@ -121,3 +121,22 @@ def test_no_lora_fine_tuning():
     # treatment 는 post-processing guard 효과만 (distinct)
     assert vd["variant_distinct"] is True
     assert vd["treatment_variant"]["action_fp"] < 234
+
+
+# ── #13 NO_ACTION 마커 — FYI 대문자 (Codex P2) ──────────────────────────
+def test_no_action_marker_FYI_uppercase():
+    assert guard_decision("FYI 참고 바랍니다") == "block"
+    assert guard_decision("FYI") == "block"
+
+
+# ── #14 NO_ACTION 마커 — Fyi title-case (Codex P2) ──────────────────────
+def test_no_action_marker_Fyi_titlecase():
+    assert guard_decision("Fyi 참고") == "block"
+    assert guard_decision("Fyi") == "block"
+
+
+# ── #15 NO_ACTION 마커 — fyi 소문자 + 한국어 마커 정합 유지 ──────────────
+def test_no_action_marker_fyi_lowercase_정합_유지():
+    assert guard_decision("fyi 참고") == "block"          # 기존 동작 유지
+    assert guard_decision("참고만 하세요") == "block"      # 한국어 마커 유지
+    assert guard_decision("확인만 하세요") == "block"      # 한국어 마커 유지
