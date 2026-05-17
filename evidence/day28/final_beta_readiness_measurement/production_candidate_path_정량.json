@@ -1,0 +1,14 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 734,
+  "source_merge_sha": "cc54bf25",
+  "branch": "Final-Beta-Readiness-Measurement",
+  "patch_type": "measurement_synthesis_decision_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "entry_condition_자문5차_8_3": "strict_action_f1 >= 0.90",
+  "strict_action_f1": 0.6452,
+  "strict_action_f1_ge_0_90": false,
+  "decision": "진입 불가",
+  "gap": 0.2548,
+  "followup": "잔여 A4 9건 gold/contract review + Layer 1 strict extraction 추가 개선. release/production 표현은 사용하지 않음."
+}

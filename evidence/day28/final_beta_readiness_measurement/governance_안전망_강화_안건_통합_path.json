@@ -1,0 +1,36 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 734,
+  "source_merge_sha": "cc54bf25",
+  "branch": "Final-Beta-Readiness-Measurement",
+  "patch_type": "measurement_synthesis_decision_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "enhancement_agenda": [
+    {
+      "id": "Standard 12-B",
+      "name": "Quantitative Reversal Reporting",
+      "origin": "PR #730 정량 두 번째 반전"
+    },
+    {
+      "id": "Standard 12-F",
+      "name": "regex case-sensitivity 표준",
+      "origin": "PR #732 정착 시작"
+    },
+    {
+      "id": "Standard 12-G",
+      "name": ".gitignore evidence 정합",
+      "origin": "PR #733 force-add 패턴"
+    },
+    {
+      "id": "Standard 12-H",
+      "name": "proxy vs 권위 측정 분리",
+      "origin": "PR #733 정착 시작"
+    },
+    {
+      "id": "Standard 12-I",
+      "name": "readiness gate measurement integrity",
+      "origin": "PR #733 정착 시작"
+    }
+  ],
+  "integration_recommendation": "본 PR 머지 후 별도 통합 정착 PR — 거버넌스 안전망 14차원 진입. 5 안건 동시 정착 가능."
+}

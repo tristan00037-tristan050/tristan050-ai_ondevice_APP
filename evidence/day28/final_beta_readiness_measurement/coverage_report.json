@@ -1,0 +1,21 @@
+{
+  "coverage_checked": true,
+  "expected_samples": 67,
+  "measured_samples": 67,
+  "missing_count": 0,
+  "missing_ids": [],
+  "missing_from_dataset_count": 0,
+  "missing_from_predictions_count": 0,
+  "extra_count": 0,
+  "extra_ids": [],
+  "gold_duplicate_count": 0,
+  "gold_duplicate_ids": [],
+  "prediction_duplicate_count": 0,
+  "prediction_duplicate_ids": [],
+  "fail_class": null,
+  "source_sample_ids_count": 67,
+  "source_sample_ids_unique_count": 67,
+  "prediction_sample_ids_count": 500,
+  "prediction_sample_ids_unique_count": 500,
+  "mode": "final_beta_readiness_measurement"
+}
