@@ -77,7 +77,11 @@ MAIN_METRICS = {"strict_action_f1": 0.6452, "deadline_f1": 0.8702,
 
 
 def _meta() -> Dict[str, Any]:
-    return {"dataset_id": DATASET_ID, "source_pr": 735,
+    # 메타데이터 무결성 (강화 안건 17): actual GitHub PR 번호와 chat 인계
+    # 박스 표기를 분리 기록한다. source_pr 은 실제 GitHub PR 번호.
+    return {"dataset_id": DATASET_ID, "source_pr": 737,
+            "actual_github_pr": 737,
+            "legacy_handoff_label": "PR #735+ (chat 인계 박스 표기)",
             "source_merge_sha": PR734_MERGE_SHA,
             "branch": "Option-C-Collection-Plan",
             "patch_type": "collection_plan_no_algorithm_no_measurement",
@@ -179,12 +183,23 @@ def main() -> int:
 
     # ── summary ──
     (OUT / "summary.md").write_text("\n".join([
-        "# PR #735 — option C 수집 계획 Summary",
+        "# PR #737 — option C 수집 계획 Summary",
         "",
-        f"## metadata\n- dataset_id: {DATASET_ID}\n- source_pr: 735\n"
+        f"## metadata\n- dataset_id: {DATASET_ID}\n- actual_github_pr: 737\n"
+        f"- legacy_handoff_label: PR #735+ (chat 인계 박스 표기)\n"
+        f"- source_pr: 737\n"
         f"- branch: Option-C-Collection-Plan\n"
         f"- patch_type: collection_plan_no_algorithm_no_measurement\n"
-        f"- verdict: MEASURED_ONLY",
+        f"- verdict: MEASURED_ONLY\n"
+        f"- correction_cycle: 메타데이터 정합 정정 (PR 번호 #735→#737)",
+        "",
+        "## 메타데이터 정합 정정 (강화 안건 17 — 정직 보고)",
+        "- 결함: chat 인계 박스가 'PR #735+' 표기를 사용했으나 실제 GitHub "
+        "PR 은 #737. PR title/body/evidence 의 source_pr 가 735 로 고정됨.",
+        "- 정정: actual_github_pr 737 / legacy_handoff_label 'PR #735+' 분리 "
+        "기록. source_pr 를 실제 번호 737 로 정정 (옵션 B — 파일명 유지).",
+        "- 측정값 영향 0 — 메타데이터 정정만. main 측정값 / sentinel / 회귀 "
+        "정합 유지 (시나리오 1 분포 불변).",
         "",
         "## 본 PR 의 본질 (정직 보고)",
         "- 계획 PR — 정식 Internal Alpha 배포 계획 + option C 권위 측정 "

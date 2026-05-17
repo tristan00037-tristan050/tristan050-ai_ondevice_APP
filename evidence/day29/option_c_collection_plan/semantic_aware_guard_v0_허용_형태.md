@@ -1,7 +1,7 @@
 # Semantic-aware Guard v0 허용 형태 (자문 6차 §5)
 
 ## metadata
-- source_pr: 735
+- source_pr: 737
 - branch: Option-C-Collection-Plan
 - verdict: MEASURED_ONLY
 

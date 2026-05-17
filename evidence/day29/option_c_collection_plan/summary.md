@@ -1,11 +1,19 @@
-# PR #735 — option C 수집 계획 Summary
+# PR #737 — option C 수집 계획 Summary
 
 ## metadata
 - dataset_id: card1_evalset_v1_1_500
-- source_pr: 735
+- actual_github_pr: 737
+- legacy_handoff_label: PR #735+ (chat 인계 박스 표기)
+- source_pr: 737
 - branch: Option-C-Collection-Plan
 - patch_type: collection_plan_no_algorithm_no_measurement
 - verdict: MEASURED_ONLY
+- correction_cycle: 메타데이터 정합 정정 (PR 번호 #735→#737)
+
+## 메타데이터 정합 정정 (강화 안건 17 — 정직 보고)
+- 결함: chat 인계 박스가 'PR #735+' 표기를 사용했으나 실제 GitHub PR 은 #737. PR title/body/evidence 의 source_pr 가 735 로 고정됨.
+- 정정: actual_github_pr 737 / legacy_handoff_label 'PR #735+' 분리 기록. source_pr 를 실제 번호 737 로 정정 (옵션 B — 파일명 유지).
+- 측정값 영향 0 — 메타데이터 정정만. main 측정값 / sentinel / 회귀 정합 유지 (시나리오 1 분포 불변).
 
 ## 본 PR 의 본질 (정직 보고)
 - 계획 PR — 정식 Internal Alpha 배포 계획 + option C 권위 측정 protocol 정착. 측정값 변경 0, 새 측정 알고리즘 0, 알고리즘/prompt/model 변경 0.

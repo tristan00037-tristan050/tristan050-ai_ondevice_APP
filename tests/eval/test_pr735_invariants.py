@@ -1,4 +1,8 @@
-"""PR #735 option C Collection Plan sentinel — #1~#18."""
+"""PR #737 option C Collection Plan sentinel — #1~#18.
+
+actual_github_pr: 737 / legacy_handoff_label: PR #735+ (chat 인계 박스 표기).
+파일명은 pr735_* 유지 (옵션 B — git 이력 fragmentation 회피).
+"""
 from __future__ import annotations
 
 import json

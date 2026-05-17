@@ -1,7 +1,7 @@
 # Authoritative Measurement Protocol (자문 6차 §6/§9/§11)
 
 ## metadata
-- source_pr: 735
+- source_pr: 737
 - branch: Option-C-Collection-Plan
 - verdict: MEASURED_ONLY
 
