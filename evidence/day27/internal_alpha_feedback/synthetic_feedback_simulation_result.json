@@ -1,0 +1,18 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 733,
+  "source_merge_sha": "588f1db2",
+  "branch": "Internal-Alpha-Feedback",
+  "patch_type": "feedback_instrumentation_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "measurement_option": "B (synthetic pipeline 검증)",
+  "purpose": "collection pipeline 이 feedback 을 정확히 집계하는지 검증",
+  "synthetic_input_counts": {
+    "irrelevant": 11,
+    "accept": 15,
+    "dismiss": 6
+  },
+  "pipeline_computed_msp": 0.4688,
+  "pipeline_matches_formula": true,
+  "note": "option B 는 측정 인프라 검증용 — 실제 user feedback 대체 아님"
+}
