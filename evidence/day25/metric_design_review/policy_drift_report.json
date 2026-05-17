@@ -5,7 +5,6 @@
   "branch": "Metric-Design-Review",
   "patch_type": "metric_contract_redesign_analysis_only",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-16T06:59:06.986782+00:00",
   "policy_name": "card1 action metric contract",
   "old_policy_version": "1.0.0",
   "new_policy_version": "2.0.0",

@@ -6,6 +6,12 @@
 - branch: Metric-Design-Review
 - patch_type: metric_contract_redesign_analysis_only
 - verdict: MEASURED_ONLY
+- correction_cycle: Codex P1/P2 정정 (A5 분류 계약 + evidence 재현성)
+
+## Codex P1/P2 정정 (정직 보고)
+- P1: classify_layer2() A5 조건 정정 — A5 metric_contract_gap 은 gold>=1 AND pred>=1 일 때만. 이전엔 gold>=1 만 검사하여 gold>=1/pred=0 (action 누락 — false negative) 까지 A5 로 오분류. 신규 subtype A7_false_negative 로 정직 분리.
+- P2: _meta() wall-clock generated_at 제거 — tracked evidence 는 deterministic. 동일 입력 재실행 시 diff 0 보증.
+- 데이터 영향: MIXED-A 67건에 gold>=1/pred=0 케이스 0건 → A7=0, A3/A4/A5/A6 분포 불변 (P1 은 분류 계약 정밀화, 측정값 임의 조정 아님).
 
 ## 본 PR 의 본질 (정직 보고)
 - 분석/설계 PR — 평가 계약(metric contract) 2 Layer 분리 설계.
@@ -18,6 +24,7 @@
 - A4 true_over_extraction: 29
 - A5 metric_contract_gap: 6
 - A6 unresolved_user_value: 0 (Internal Alpha feedback reserved)
+- A7 false_negative: 0 (gold>=1/pred=0 — recall 축, strict layer FN 에 이미 반영)
 
 ## 보조 지표
 - product_equivalent_action_rate: 67건 0.4776 / 30건 sample 0.5667

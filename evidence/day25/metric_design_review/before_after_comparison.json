@@ -5,7 +5,6 @@
   "branch": "Metric-Design-Review",
   "patch_type": "metric_contract_redesign_analysis_only",
   "verdict": "MEASURED_ONLY",
-  "generated_at": "2026-05-16T06:59:06.986703+00:00",
   "comparison": [
     {
       "metric": "strict_action_f1",

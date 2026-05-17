@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -48,11 +47,13 @@ MAIN_METRICS = {"strict_action_f1": STRICT_ACTION_F1,
 NON_QUESTION_INTENTS = {"REPORT", "NO_ACTION", "STATUS_UPDATE", "ACK"}
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 def _meta() -> Dict[str, Any]:
+    """tracked evidence metadata — deterministic (Codex P2 정정).
+
+    wall-clock generated_at 을 제거한다. tracked artifact 는 동일 입력에
+    대해 동일 출력이어야 하며, generated_at 은 재실행마다 diff 를 만들어
+    evidence 재현성을 훼손했다.
+    """
     return {
         "dataset_id":       DATASET_ID,
         "source_pr":        731,
@@ -60,29 +61,34 @@ def _meta() -> Dict[str, Any]:
         "branch":           "Metric-Design-Review",
         "patch_type":       "metric_contract_redesign_analysis_only",
         "verdict":          "MEASURED_ONLY",
-        "generated_at":     _now(),
     }
 
 
 def classify_layer2(case: Dict[str, Any]) -> str:
-    """Layer 2 — A3/A4/A5/A6 분류 (결정적 규칙, gold 미수정).
+    """Layer 2 — A3/A4/A5/A6/A7 분류 (결정적 규칙, gold 미수정).
+
+    Codex P1 정정: A5 는 gold>=1 AND pred>=1 (canonicalization 차이로 인한
+    false mismatch) 일 때만. 이전엔 gold>=1 만 검사하여 gold>=1/pred=0
+    (action 누락 — false negative) 까지 A5 로 오분류했다.
 
     A3 product_equivalent_prediction : gold=0/pred>=1, gold_intent=QUESTION
     A4 true_over_extraction_error    : gold=0/pred>=1, gold_intent != QUESTION
-    A5 metric_contract_gap           : gold>=1 (gold·pred 모두 action 보유)
-    A6 unresolved_user_value         : 결정적 규칙 미해결 — Internal Alpha
-                                       feedback 가 채우는 reserved 범주
+    A5 metric_contract_gap           : gold>=1 AND pred>=1
+    A6 unresolved_user_value         : Internal Alpha feedback reserved
+    A7 false_negative                : gold>=1 AND pred=0 (action 누락)
+    no_action                        : gold=0 AND pred=0 (MIXED-A 영역 아님)
     """
     gc = case["gold_action_count"]
     pc = case["pred_action_count"]
     gold_intent = case["gold_intent"]
     if gc >= 1:
-        return "A5_metric_contract_gap"
-    if gc == 0 and pc >= 1:
-        if gold_intent == "QUESTION":
-            return "A3_product_equivalent_prediction"
-        return "A4_true_over_extraction_error"
-    return "A6_unresolved_user_value"
+        return "A5_metric_contract_gap" if pc >= 1 else "A7_false_negative"
+    # gc == 0
+    if pc == 0:
+        return "no_action"
+    if gold_intent == "QUESTION":
+        return "A3_product_equivalent_prediction"
+    return "A4_true_over_extraction_error"
 
 
 def _rate(num: int, denom: int) -> float:
@@ -160,11 +166,16 @@ def main() -> int:
         a4 = dist.get("A4_true_over_extraction_error", 0)
         a5 = dist.get("A5_metric_contract_gap", 0)
         a6 = dist.get("A6_unresolved_user_value", 0)
+        a7 = dist.get("A7_false_negative", 0)
+        # 보조 지표 denom 은 over-extraction/contract 축 (A3+A4+A5+A6) 유지.
+        # A7 (false negative — recall 축) 은 별도 count 로 보고 (metric 계약
+        # 불변 — Codex P1 정정은 분류 정밀화이지 contract bump 아님).
         denom = a3 + a4 + a5 + a6
         return {
             "n": n,
             "A3_product_equivalent": a3, "A4_true_over_extraction": a4,
             "A5_metric_contract_gap": a5, "A6_unresolved_user_value": a6,
+            "A7_false_negative": a7,
             "product_equivalent_action_rate":  _rate(a3, denom),
             "dangerous_over_extraction_rate":  _rate(a4, denom),
         }
@@ -191,7 +202,8 @@ def main() -> int:
                 "A3": s30_m["A3_product_equivalent"],
                 "A4": s30_m["A4_true_over_extraction"],
                 "A5": s30_m["A5_metric_contract_gap"],
-                "A6": s30_m["A6_unresolved_user_value"]},
+                "A6": s30_m["A6_unresolved_user_value"],
+                "A7": s30_m["A7_false_negative"]},
             "note": ("PR #730 4-subtype 의 A3(23) = PR #731 2-Layer 의 A3 "
                 "product_equivalent + A5 metric_contract_gap. PR #730 A3 는 "
                 "gold>=1 동일라벨 케이스를 product_equivalent 로 포함했으나, "
@@ -294,7 +306,18 @@ def main() -> int:
         f"## metadata\n- dataset_id: {DATASET_ID}\n- source_pr: 731\n"
         f"- branch: Metric-Design-Review\n"
         f"- patch_type: metric_contract_redesign_analysis_only\n"
-        f"- verdict: MEASURED_ONLY",
+        f"- verdict: MEASURED_ONLY\n"
+        f"- correction_cycle: Codex P1/P2 정정 (A5 분류 계약 + evidence 재현성)",
+        "",
+        "## Codex P1/P2 정정 (정직 보고)",
+        "- P1: classify_layer2() A5 조건 정정 — A5 metric_contract_gap 은 "
+        "gold>=1 AND pred>=1 일 때만. 이전엔 gold>=1 만 검사하여 gold>=1/"
+        "pred=0 (action 누락 — false negative) 까지 A5 로 오분류. 신규 "
+        "subtype A7_false_negative 로 정직 분리.",
+        "- P2: _meta() wall-clock generated_at 제거 — tracked evidence 는 "
+        "deterministic. 동일 입력 재실행 시 diff 0 보증.",
+        f"- 데이터 영향: MIXED-A 67건에 gold>=1/pred=0 케이스 0건 → A7=0, "
+        f"A3/A4/A5/A6 분포 불변 (P1 은 분류 계약 정밀화, 측정값 임의 조정 아님).",
         "",
         "## 본 PR 의 본질 (정직 보고)",
         "- 분석/설계 PR — 평가 계약(metric contract) 2 Layer 분리 설계.",
@@ -308,6 +331,8 @@ def main() -> int:
         f"- A5 metric_contract_gap: {full_m['A5_metric_contract_gap']}",
         f"- A6 unresolved_user_value: {full_m['A6_unresolved_user_value']} "
         "(Internal Alpha feedback reserved)",
+        f"- A7 false_negative: {full_m['A7_false_negative']} "
+        "(gold>=1/pred=0 — recall 축, strict layer FN 에 이미 반영)",
         "",
         "## 보조 지표",
         f"- product_equivalent_action_rate: 67건 "
@@ -358,7 +383,8 @@ def main() -> int:
         "mixed_a_total": len(cases),
         "full_67": {k: full_m[k] for k in ("A3_product_equivalent",
             "A4_true_over_extraction", "A5_metric_contract_gap",
-            "A6_unresolved_user_value", "product_equivalent_action_rate",
+            "A6_unresolved_user_value", "A7_false_negative",
+            "product_equivalent_action_rate",
             "dangerous_over_extraction_rate")},
         "sample_30": {k: s30_m[k] for k in ("A3_product_equivalent",
             "A4_true_over_extraction", "product_equivalent_action_rate",

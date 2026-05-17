@@ -1,4 +1,4 @@
-"""PR #731 Metric Design Review sentinel — #1~#8."""
+"""PR #731 Metric Design Review sentinel — #1~#11."""
 from __future__ import annotations
 
 import json
@@ -12,7 +12,7 @@ OUT = ROOT / "evidence/day25/metric_design_review"
 from scripts.ci.check_standard_10 import is_version_bumped  # noqa: E402
 from scripts.eval.pr731_metric_design_review import (  # noqa: E402
     CONTRACT_VERSION_NEW, CONTRACT_VERSION_OLD, PRODUCTION_GATE,
-    STRICT_ACTION_F1, classify_layer2,
+    STRICT_ACTION_F1, _meta, classify_layer2,
 )
 
 
@@ -127,3 +127,34 @@ def test_layer_1_2_분리_원칙():
     a4 = classify_layer2({"gold_action_count": 0, "pred_action_count": 1,
                           "gold_intent": "REPORT"})
     assert a4 == "A4_true_over_extraction_error"
+
+
+# ── #9 A5 는 gold>=1 AND pred>=1 (Codex P1) ──────────────────────────────
+def test_A5_requires_gold_and_pred():
+    assert classify_layer2({"gold_action_count": 2, "pred_action_count": 2,
+                            "gold_intent": "REPORT"}) == "A5_metric_contract_gap"
+    assert classify_layer2({"gold_action_count": 1, "pred_action_count": 1,
+                            "gold_intent": "QUESTION"}) == "A5_metric_contract_gap"
+
+
+# ── #10 A5 는 gold-only (pred=0) 케이스 제외 → A7 (Codex P1) ─────────────
+def test_A5_excludes_gold_only():
+    result = classify_layer2({"gold_action_count": 2, "pred_action_count": 0,
+                              "gold_intent": "REPORT"})
+    assert result != "A5_metric_contract_gap"
+    assert result == "A7_false_negative"
+    # gold=0/pred=0 은 MIXED-A 영역 아님
+    assert classify_layer2({"gold_action_count": 0, "pred_action_count": 0,
+                            "gold_intent": "QUESTION"}) == "no_action"
+
+
+# ── #11 evidence metadata deterministic (Codex P2) ───────────────────────
+def test_evidence_metadata_deterministic():
+    meta1 = _meta()
+    meta2 = _meta()
+    assert meta1 == meta2, "동일 입력 _meta() 가 비결정적"
+    # wall-clock generated_at 의존 금지 — 제거됨
+    assert "generated_at" not in meta1
+    # tracked evidence 파일에도 generated_at 부재
+    rep = _report()
+    assert "generated_at" not in rep
