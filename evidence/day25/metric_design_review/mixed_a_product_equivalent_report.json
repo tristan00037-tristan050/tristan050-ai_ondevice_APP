@@ -1,0 +1,49 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 731,
+  "source_merge_sha": "9ed2b318",
+  "branch": "Metric-Design-Review",
+  "patch_type": "metric_contract_redesign_analysis_only",
+  "verdict": "MEASURED_ONLY",
+  "mixed_a_total": 67,
+  "full_67_classification": {
+    "n": 67,
+    "A3_product_equivalent": 32,
+    "A4_true_over_extraction": 29,
+    "A5_metric_contract_gap": 6,
+    "A6_unresolved_user_value": 0,
+    "A7_false_negative": 0,
+    "product_equivalent_action_rate": 0.4776,
+    "dangerous_over_extraction_rate": 0.4328
+  },
+  "sample_30_classification": {
+    "n": 30,
+    "A3_product_equivalent": 17,
+    "A4_true_over_extraction": 7,
+    "A5_metric_contract_gap": 6,
+    "A6_unresolved_user_value": 0,
+    "A7_false_negative": 0,
+    "product_equivalent_action_rate": 0.5667,
+    "dangerous_over_extraction_rate": 0.2333
+  },
+  "strict_action_f1": 0.6182,
+  "manual_suggestion_precision": null,
+  "manual_suggestion_precision_note": "Internal Alpha feedback 후 측정 가능 — 본 PR 시점 측정 불가 (정직 보고)",
+  "suggestion_value_adjusted_f1": null,
+  "suggestion_value_adjusted_f1_note": "연구용 보조 지표 — manual_suggestion_precision 의존, production 사용 금지",
+  "reconciliation_with_pr730": {
+    "pr730_4subtype_30sample": {
+      "A3": 23,
+      "A4": 7
+    },
+    "pr731_layer2_30sample": {
+      "A3": 17,
+      "A4": 7,
+      "A5": 6,
+      "A6": 0,
+      "A7": 0
+    },
+    "note": "PR #730 4-subtype 의 A3(23) = PR #731 2-Layer 의 A3 product_equivalent + A5 metric_contract_gap. PR #730 A3 는 gold>=1 동일라벨 케이스를 product_equivalent 로 포함했으나, 2-Layer contract 는 metric_contract_gap(A5, gold>=1) 을 별도 분리한다. 분류 정밀화이며 측정값 임의 조정이 아니다 — Standard 12 정직 보고."
+  },
+  "sampling_note": "30건 sample product_equivalent_rate 0.5667 vs 67건 전체 0.4776 — 30건 stratified 선택이 gold=0/QUESTION 케이스를 상대적으로 더 포함. 67건 전체를 권위 측정값으로 본다 (Standard 12 정직 보고)."
+}

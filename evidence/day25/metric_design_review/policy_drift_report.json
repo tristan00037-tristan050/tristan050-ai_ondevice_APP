@@ -1,0 +1,15 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 731,
+  "source_merge_sha": "9ed2b318",
+  "branch": "Metric-Design-Review",
+  "patch_type": "metric_contract_redesign_analysis_only",
+  "verdict": "MEASURED_ONLY",
+  "policy_name": "card1 action metric contract",
+  "old_policy_version": "1.0.0",
+  "new_policy_version": "2.0.0",
+  "drift_rate": 0.0,
+  "drift_class": "OK",
+  "samples_compared": 67,
+  "drift_note": "strict_action_f1 산식 변경 없음 → drift_rate 0. Layer 2 보조 지표 추가는 contract version bump (v1.0.0 → v2.0.0) 이며 strict layer drift 아님."
+}

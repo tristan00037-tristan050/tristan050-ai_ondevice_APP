@@ -1,0 +1,38 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 731,
+  "source_merge_sha": "9ed2b318",
+  "branch": "Metric-Design-Review",
+  "patch_type": "metric_contract_redesign_analysis_only",
+  "verdict": "MEASURED_ONLY",
+  "schema_name": "internal_alpha_suggestion_feedback",
+  "schema_version": "1.0.0",
+  "feedback_categories": [
+    {
+      "key": "user_accept",
+      "meaning": "suggestion 을 수동 채택"
+    },
+    {
+      "key": "user_dismiss",
+      "meaning": "suggestion 을 명시적 무시"
+    },
+    {
+      "key": "user_irrelevant",
+      "meaning": "suggestion 이 무관"
+    },
+    {
+      "key": "user_unsafe",
+      "meaning": "suggestion 이 위험/부적절"
+    }
+  ],
+  "collection_point": "suggestion 표시 후 user action 시점",
+  "storage": "redacted / digest 기반 — 외부 전송 금지",
+  "auto_apply": "OFF (manual suggestion 전용 — 자동 실행 금지)",
+  "fields": {
+    "sample_digest16": "raw_digest16 (redacted)",
+    "suggestion_subtype": "A3 / A4 / A5 / A6",
+    "feedback_category": "user_accept|user_dismiss|user_irrelevant|user_unsafe",
+    "reviewer_id": "internal alpha reviewer",
+    "collected_at": "ISO8601"
+  }
+}

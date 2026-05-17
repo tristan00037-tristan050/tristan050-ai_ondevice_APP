@@ -1,0 +1,29 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 731,
+  "source_merge_sha": "9ed2b318",
+  "branch": "Metric-Design-Review",
+  "patch_type": "metric_contract_redesign_analysis_only",
+  "verdict": "MEASURED_ONLY",
+  "comparison": [
+    {
+      "metric": "strict_action_f1",
+      "before": 0.6182,
+      "after": 0.6182,
+      "delta": 0.0
+    },
+    {
+      "metric": "deadline_f1",
+      "before": 0.8702,
+      "after": 0.8702,
+      "delta": 0.0
+    },
+    {
+      "metric": "action_fp",
+      "before": 234,
+      "after": 234,
+      "delta": 0.0
+    }
+  ],
+  "reason": "Metric Design Review PR — strict layer 유지, manual suggestion layer 추가만 (no algorithm change)"
+}
