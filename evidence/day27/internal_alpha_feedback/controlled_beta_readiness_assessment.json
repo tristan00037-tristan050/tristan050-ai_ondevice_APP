@@ -1,0 +1,25 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 733,
+  "source_merge_sha": "588f1db2",
+  "branch": "Internal-Alpha-Feedback",
+  "patch_type": "feedback_instrumentation_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "criteria": {
+    "strict_action_f1 >= 0.90 (production gate)": false,
+    "manual_suggestion_precision >= 0.80": false,
+    "deadline_f1 >= 0.86": true,
+    "false_deadline_rate <= 0.02": true,
+    "no_action_fp_rate <= 0.03": true,
+    "auto_apply OFF": true,
+    "privacy audit pass (raw text 0 / 외부 전송 0)": true
+  },
+  "criteria_met_count": 5,
+  "criteria_total": 7,
+  "controlled_beta_ready": false,
+  "blocking_criteria": [
+    "strict_action_f1 >= 0.90 (production gate)",
+    "manual_suggestion_precision >= 0.80"
+  ],
+  "decision_note": "Controlled Beta 진입 정량 결정 — 모든 기준 충족 시에만 가능. 미충족 시 STATUS=MEASURED_ONLY 유지, 진입 결정은 별도 Final Beta Readiness PR. (PROCEED 금지)"
+}

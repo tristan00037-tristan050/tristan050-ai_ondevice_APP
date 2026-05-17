@@ -1,0 +1,30 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 733,
+  "source_merge_sha": "588f1db2",
+  "branch": "Internal-Alpha-Feedback",
+  "patch_type": "feedback_instrumentation_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "comparison": [
+    {
+      "metric": "deadline_f1",
+      "before": 0.8702,
+      "after": 0.8702,
+      "delta": 0.0
+    },
+    {
+      "metric": "strict_action_f1",
+      "before": 0.6452,
+      "after": 0.6452,
+      "delta": 0.0
+    },
+    {
+      "metric": "action_fp",
+      "before": 207,
+      "after": 207,
+      "delta": 0.0
+    }
+  ],
+  "safety_6_delta_zero": true,
+  "reason": "Instrumentation PR — feedback 수집 계측만 추가. 알고리즘/측정 산식 미변경 → main 측정값 변동 0."
+}

@@ -1,0 +1,21 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 733,
+  "source_merge_sha": "588f1db2",
+  "branch": "Internal-Alpha-Feedback",
+  "patch_type": "feedback_instrumentation_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "control_variant": {
+    "name": "B-2G manual_suggestion 분류",
+    "manual_suggestion_count": 32
+  },
+  "treatment_variant": {
+    "name": "reviewer accept",
+    "accept_count": 15
+  },
+  "delta": {
+    "manual_suggestion_to_accept": 17
+  },
+  "variant_distinct": true,
+  "variant_distinct_basis": "metric-only (count 비교)"
+}

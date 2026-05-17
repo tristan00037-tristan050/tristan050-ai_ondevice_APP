@@ -1,0 +1,16 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 733,
+  "source_merge_sha": "588f1db2",
+  "branch": "Internal-Alpha-Feedback",
+  "patch_type": "feedback_instrumentation_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "policy_name": "card1 action metric contract",
+  "contract_version": "2.0.0",
+  "contract_version_changed": false,
+  "drift_rate": 0.0,
+  "drift_class": "OK",
+  "samples_compared": 500,
+  "is_standard10_policy_drift_report": false,
+  "drift_note": "계측/인프라 PR — metric contract(v2.0.0) 산식 불변. manual_suggestion_precision 은 Layer 2 보조 지표의 측정이며 strict layer drift 아님."
+}
