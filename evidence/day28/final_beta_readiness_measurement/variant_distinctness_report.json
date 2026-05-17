@@ -1,0 +1,18 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 734,
+  "source_merge_sha": "cc54bf25",
+  "branch": "Final-Beta-Readiness-Measurement",
+  "patch_type": "measurement_synthesis_decision_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "variant": "none (종합/decision PR)",
+  "pr731_733_comparison": {
+    "PR731_strict_action_f1": 0.6182,
+    "PR732_strict_action_f1": 0.6452,
+    "PR732_action_fp": 207,
+    "PR732_dangerous_over_extraction_rate": 0.1915,
+    "PR733_msp_proxy_strict": 0.4688
+  },
+  "variant_distinct": true,
+  "variant_distinct_basis": "metric-only — PR #731 vs #732 측정값 distinct"
+}

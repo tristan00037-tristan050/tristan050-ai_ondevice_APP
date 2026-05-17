@@ -1,0 +1,30 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 734,
+  "source_merge_sha": "cc54bf25",
+  "branch": "Final-Beta-Readiness-Measurement",
+  "patch_type": "measurement_synthesis_decision_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "comparison": [
+    {
+      "metric": "strict_action_f1",
+      "before": 0.6452,
+      "after": 0.6452,
+      "delta": 0.0
+    },
+    {
+      "metric": "deadline_f1",
+      "before": 0.8702,
+      "after": 0.8702,
+      "delta": 0.0
+    },
+    {
+      "metric": "action_fp",
+      "before": 207,
+      "after": 207,
+      "delta": 0.0
+    }
+  ],
+  "safety_6_delta_zero": true,
+  "reason": "Final Measurement/Decision PR — PR #731~#733 결과 종합. 측정/알고리즘 변경 0 → main 측정값 변동 0."
+}

@@ -1,0 +1,29 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 734,
+  "source_merge_sha": "cc54bf25",
+  "branch": "Final-Beta-Readiness-Measurement",
+  "patch_type": "measurement_synthesis_decision_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "entry_condition_자문5차_8_2": "strict_action_f1 < 0.75 + manual_suggestion_precision >= 0.80 + auto_apply OFF",
+  "strict_action_f1": 0.6452,
+  "strict_action_f1_lt_0_75": true,
+  "manual_suggestion_precision_proxy": {
+    "strict": 0.4688,
+    "lenient": 0.6562
+  },
+  "msp_ge_0_80": false,
+  "auto_apply_off": true,
+  "compute_readiness_reused": true,
+  "compute_readiness_result": {
+    "criteria_met_count": 5,
+    "criteria_total": 7,
+    "controlled_beta_ready": false,
+    "blocking_criteria": [
+      "strict_action_f1 >= 0.90 (production gate)",
+      "manual_suggestion_precision >= 0.80"
+    ]
+  },
+  "decision": "진입 불가",
+  "decision_reason": "manual_suggestion_precision proxy < 0.80 — 권위 측정(option C) 후 재평가. PROCEED 금지."
+}

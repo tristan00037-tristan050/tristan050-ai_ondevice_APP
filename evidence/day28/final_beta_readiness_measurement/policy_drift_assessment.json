@@ -1,0 +1,16 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 734,
+  "source_merge_sha": "cc54bf25",
+  "branch": "Final-Beta-Readiness-Measurement",
+  "patch_type": "measurement_synthesis_decision_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "policy_name": "card1 action metric contract",
+  "contract_version": "2.0.0",
+  "contract_version_changed": false,
+  "drift_rate": 0.0,
+  "drift_class": "OK",
+  "samples_compared": 500,
+  "is_standard10_policy_drift_report": false,
+  "drift_note": "종합 measurement/decision PR — 새 측정 알고리즘 0, metric contract(v2.0.0) 불변. PR #731~#733 결과 종합만."
+}
