@@ -1,0 +1,14 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 732,
+  "source_merge_sha": "3978a846",
+  "branch": "B-2G",
+  "patch_type": "post_processing_over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "metric": "dangerous_over_extraction_rate",
+  "before": 0.4328,
+  "after": 0.1915,
+  "delta": -0.2413,
+  "target": "<= 0.05",
+  "formula": "A4_after / (A3 + A4_after + A5)"
+}

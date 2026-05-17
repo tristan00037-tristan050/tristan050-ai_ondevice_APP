@@ -1,0 +1,14 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 732,
+  "source_merge_sha": "3978a846",
+  "branch": "B-2G",
+  "patch_type": "post_processing_over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "metric": "strict_action_f1",
+  "before": 0.6182,
+  "after": 0.6452,
+  "delta": 0.027,
+  "sansik_unchanged": true,
+  "production_gate": 0.9
+}

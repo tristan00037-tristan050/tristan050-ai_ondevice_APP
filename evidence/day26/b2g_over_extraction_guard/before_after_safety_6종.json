@@ -1,0 +1,41 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 732,
+  "source_merge_sha": "3978a846",
+  "branch": "B-2G",
+  "patch_type": "post_processing_over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "safety_metrics": {
+    "false_deadline_rate": {
+      "before": 0.014,
+      "after": 0.014,
+      "delta": 0.0
+    },
+    "no_action_fp_rate": {
+      "before": 0.0273,
+      "after": 0.0273,
+      "delta": 0.0
+    },
+    "g22_strict_warning_count": {
+      "before": 0,
+      "after": 0,
+      "delta": 0
+    },
+    "g23_hard_violation_count": {
+      "before": 0,
+      "after": 0,
+      "delta": 0
+    },
+    "auto_apply_precision": {
+      "before": 0.0,
+      "after": 0.0,
+      "delta": 0.0
+    },
+    "verifier_error_auto_apply_count": {
+      "before": 0,
+      "after": 0,
+      "delta": 0
+    }
+  },
+  "reason": "guard 는 action over-extraction 만 제거 — deadline / safety 축 미변경. G22/G23 hard = 0 유지."
+}

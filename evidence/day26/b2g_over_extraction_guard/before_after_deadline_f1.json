@@ -1,0 +1,13 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 732,
+  "source_merge_sha": "3978a846",
+  "branch": "B-2G",
+  "patch_type": "post_processing_over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "metric": "deadline_f1",
+  "before": 0.8702,
+  "after": 0.8702,
+  "delta": 0.0,
+  "reason": "guard 는 action 만 필터 — deadline 축 미변경, delta 0"
+}

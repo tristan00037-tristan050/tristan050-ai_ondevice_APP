@@ -1,0 +1,25 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 732,
+  "source_merge_sha": "3978a846",
+  "branch": "B-2G",
+  "patch_type": "post_processing_over_extraction_guard",
+  "verdict": "MEASURED_ONLY",
+  "control_variant": {
+    "strict_action_f1": 0.6182,
+    "action_fp": 234,
+    "dangerous_over_extraction_rate": 0.4328
+  },
+  "treatment_variant": {
+    "strict_action_f1": 0.6452,
+    "action_fp": 207,
+    "dangerous_over_extraction_rate": 0.1915
+  },
+  "delta": {
+    "action_fp": -27,
+    "dangerous_over_extraction_rate": -0.2413,
+    "strict_action_f1": 0.027
+  },
+  "variant_distinct": true,
+  "variant_distinct_basis": "metric-only (action_fp / dangerous rate / f1)"
+}
