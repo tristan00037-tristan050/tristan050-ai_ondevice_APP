@@ -48,10 +48,55 @@ def _read(path: Path) -> Dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def compute_coverage(mixed_id_list: List[str], dataset_ids: set,
+                     pred_id_list: List[str]) -> Dict[str, Any]:
+    """dataset integrity coverage — duplicate + missing samples 모두 fail-closed.
+
+    Codex P1 정정 (강화 안건 16): PR #730 detect_duplicates() 패턴은
+    duplicate ID 만 차단했고, missing samples (mixed_id_list 가 dataset /
+    predictions 에서 누락)는 hardcoded 0 으로 fail-open 이었다. PR #730
+    패턴을 확장 — missing samples 도 measured vs expected 정량 비교 후
+    FULL_EVAL_COVERAGE_MISMATCH 로 fail-closed.
+    """
+    dup_mixed, mixed_dup = detect_duplicates(mixed_id_list)
+    dup_pred, pred_dup = detect_duplicates(pred_id_list)
+    required = set(mixed_id_list)
+    pred_set = set(pred_id_list)
+    missing_from_dataset = sorted(required - dataset_ids)
+    missing_from_predictions = sorted(required - pred_set)
+    missing_ids = sorted(set(missing_from_dataset) | set(missing_from_predictions))
+    expected = len(required)
+    cov = {
+        "coverage_checked": True,
+        "expected_samples": expected,
+        "measured_samples": expected - len(missing_ids),
+        "missing_count": len(missing_ids),
+        "missing_ids": missing_ids[:20],
+        "missing_from_dataset_count": len(missing_from_dataset),
+        "missing_from_predictions_count": len(missing_from_predictions),
+        "extra_count": 0, "extra_ids": [],
+        "gold_duplicate_count": mixed_dup, "gold_duplicate_ids": dup_mixed[:20],
+        "prediction_duplicate_count": pred_dup,
+        "prediction_duplicate_ids": dup_pred[:20],
+        "fail_class": None,
+        "source_sample_ids_count": len(mixed_id_list),
+        "source_sample_ids_unique_count": expected,
+        "prediction_sample_ids_count": len(pred_id_list),
+        "prediction_sample_ids_unique_count": len(pred_set),
+        "mode": "final_beta_readiness_measurement",
+    }
+    # fail-closed 우선순위: source 중복 > prediction 중복/missing
+    if dup_mixed:
+        cov["fail_class"] = "SOURCE_SAMPLE_ID_DUPLICATE"
+    elif dup_pred or missing_ids:
+        cov["fail_class"] = "FULL_EVAL_COVERAGE_MISMATCH"
+    return cov
+
+
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
 
-    # ── dataset integrity fail-closed (PR #730 P1 패턴) ──
+    # ── dataset integrity fail-closed (PR #730 패턴 + missing 확장, 강화 16) ──
     items = {}
     for line in DATASET.open(encoding="utf-8"):
         if line.strip():
@@ -61,30 +106,8 @@ def main() -> int:
                  if line.strip()]
     mixed = json.loads(MIXED_A.read_text(encoding="utf-8"))
     mixed_id_list = [r["sample_id"] for r in mixed["rows"]]
-    dup_mixed, mixed_dup = detect_duplicates(mixed_id_list)
     pred_id_list = [p["sample_id"] for p in pred_rows]
-    dup_pred, pred_dup = detect_duplicates(pred_id_list)
-    preds = {p["sample_id"] for p in pred_rows}
-    coverage = {
-        "coverage_checked": True,
-        "expected_samples": len(set(mixed_id_list)),
-        "measured_samples": len(set(mixed_id_list) & preds & set(items)),
-        "missing_count": 0, "missing_ids": [],
-        "extra_count": 0, "extra_ids": [],
-        "gold_duplicate_count": mixed_dup, "gold_duplicate_ids": dup_mixed[:20],
-        "prediction_duplicate_count": pred_dup,
-        "prediction_duplicate_ids": dup_pred[:20],
-        "fail_class": None,
-        "source_sample_ids_count": len(mixed_id_list),
-        "source_sample_ids_unique_count": len(set(mixed_id_list)),
-        "prediction_sample_ids_count": len(pred_id_list),
-        "prediction_sample_ids_unique_count": len(set(pred_id_list)),
-        "mode": "final_beta_readiness_measurement",
-    }
-    if dup_mixed:
-        coverage["fail_class"] = "SOURCE_SAMPLE_ID_DUPLICATE"
-    elif dup_pred:
-        coverage["fail_class"] = "FULL_EVAL_COVERAGE_MISMATCH"
+    coverage = compute_coverage(mixed_id_list, set(items), pred_id_list)
     if coverage["fail_class"]:
         (OUT / "coverage_report.json").write_text(
             json.dumps(coverage, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -325,7 +348,20 @@ def main() -> int:
         f"## metadata\n- dataset_id: {DATASET_ID}\n- source_pr: 734\n"
         f"- branch: Final-Beta-Readiness-Measurement\n"
         f"- patch_type: measurement_synthesis_decision_no_algorithm_change\n"
-        f"- verdict: MEASURED_ONLY",
+        f"- verdict: MEASURED_ONLY\n"
+        f"- correction_cycle: Codex P1 정정 (dataset integrity coverage_mismatch)",
+        "",
+        "## Codex P1 정정 (정직 보고 — 거버넌스 안전망 진화)",
+        "- P1: coverage 의 missing_count / missing_ids 가 hardcoded 0/[] —"
+        " PR #730 detect_duplicates() 패턴이 duplicate ID 만 차단하고 "
+        "missing samples (mixed_id_list ⊄ dataset / predictions)는 누락 "
+        "= fail-open. 정정 cycle 패턴 6회 안정화 완성 후 첫 한계 발견.",
+        "- 정정: `compute_coverage()` 추출 — PR #730 패턴 확장. missing_from_"
+        "dataset / missing_from_predictions 계산, measured vs expected 정량 "
+        "비교, missing 발견 시 FULL_EVAL_COVERAGE_MISMATCH fail-closed.",
+        f"- 측정값 영향 (시나리오 1): MIXED-A 67건 전부 dataset / predictions "
+        "에 존재 → missing 0, expected 67 == measured 67, fail_class null — "
+        "분포 불변. latent gap 선제 정정 + Standard 9 본질적 강화.",
         "",
         "## 본 PR 의 본질 (정직 보고)",
         "- 측정 종합/Decision PR — PR #731~#733 결과 종합 + Beta 진입 path "

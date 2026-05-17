@@ -6,6 +6,12 @@
 - branch: Final-Beta-Readiness-Measurement
 - patch_type: measurement_synthesis_decision_no_algorithm_change
 - verdict: MEASURED_ONLY
+- correction_cycle: Codex P1 정정 (dataset integrity coverage_mismatch)
+
+## Codex P1 정정 (정직 보고 — 거버넌스 안전망 진화)
+- P1: coverage 의 missing_count / missing_ids 가 hardcoded 0/[] — PR #730 detect_duplicates() 패턴이 duplicate ID 만 차단하고 missing samples (mixed_id_list ⊄ dataset / predictions)는 누락 = fail-open. 정정 cycle 패턴 6회 안정화 완성 후 첫 한계 발견.
+- 정정: `compute_coverage()` 추출 — PR #730 패턴 확장. missing_from_dataset / missing_from_predictions 계산, measured vs expected 정량 비교, missing 발견 시 FULL_EVAL_COVERAGE_MISMATCH fail-closed.
+- 측정값 영향 (시나리오 1): MIXED-A 67건 전부 dataset / predictions 에 존재 → missing 0, expected 67 == measured 67, fail_class null — 분포 불변. latent gap 선제 정정 + Standard 9 본질적 강화.
 
 ## 본 PR 의 본질 (정직 보고)
 - 측정 종합/Decision PR — PR #731~#733 결과 종합 + Beta 진입 path 정량 결정. 새 측정 알고리즘 0, 측정값 임의 조정 0, 알고리즘/prompt/model 변경 0.

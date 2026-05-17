@@ -1,4 +1,4 @@
-"""PR #734 Final Beta Readiness Measurement sentinel — #1~#10."""
+"""PR #734 Final Beta Readiness Measurement sentinel — #1~#13."""
 from __future__ import annotations
 
 import json
@@ -103,3 +103,38 @@ def test_no_새_측정_알고리즘_추가():
     ba = _j("before_after_main_metrics.json")
     saf = [r for r in ba["comparison"] if r["metric"] == "strict_action_f1"][0]
     assert saf["before"] == saf["after"] == pr732, "재측정 아님 — 선행 값 종합"
+
+
+# ── #11 mixed_id_list dataset 누락 → fail-closed (Codex P1) ──────────────
+def test_mixed_id_list_missing_from_dataset_fail_closed():
+    from scripts.eval.pr734_final_beta_readiness_measurement import compute_coverage
+    # s3 가 dataset 에서 누락
+    cov = compute_coverage(["s1", "s2", "s3"], {"s1", "s2"}, ["s1", "s2", "s3"])
+    assert cov["fail_class"] == "FULL_EVAL_COVERAGE_MISMATCH"
+    assert cov["missing_count"] >= 1
+    assert cov["missing_from_dataset_count"] >= 1
+    assert "s3" in cov["missing_ids"]
+
+
+# ── #12 mixed_id_list predictions 누락 → fail-closed (Codex P1) ──────────
+def test_mixed_id_list_missing_from_predictions_fail_closed():
+    from scripts.eval.pr734_final_beta_readiness_measurement import compute_coverage
+    # s3 가 predictions 에서 누락
+    cov = compute_coverage(["s1", "s2", "s3"], {"s1", "s2", "s3"}, ["s1", "s2"])
+    assert cov["fail_class"] == "FULL_EVAL_COVERAGE_MISMATCH"
+    assert cov["missing_count"] >= 1
+    assert cov["missing_from_predictions_count"] >= 1
+
+
+# ── #13 source/prediction duplicate fail-closed 유지 (PR #730 패턴 정합) ──
+def test_source_prediction_duplicate_여전히_fail_closed_유지():
+    from scripts.eval.pr734_final_beta_readiness_measurement import compute_coverage
+    # source 중복 → SOURCE_SAMPLE_ID_DUPLICATE
+    dup_src = compute_coverage(["s1", "s2", "s2"], {"s1", "s2"}, ["s1", "s2"])
+    assert dup_src["fail_class"] == "SOURCE_SAMPLE_ID_DUPLICATE"
+    # prediction 중복 → FULL_EVAL_COVERAGE_MISMATCH
+    dup_pred = compute_coverage(["s1", "s2"], {"s1", "s2"}, ["s1", "s2", "s2"])
+    assert dup_pred["fail_class"] == "FULL_EVAL_COVERAGE_MISMATCH"
+    # 정상 → fail_class null
+    ok = compute_coverage(["s1", "s2"], {"s1", "s2"}, ["s1", "s2"])
+    assert ok["fail_class"] is None
