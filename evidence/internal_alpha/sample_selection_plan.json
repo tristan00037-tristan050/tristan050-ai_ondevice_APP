@@ -4,76 +4,32 @@
   "source_merge_sha": "343c1f6f402abe47bcabb2328d8c6dd9e9e353c6",
   "advisory_head_sha": "48ffca8fe0d8ba88cba4a38061ba65bb104faa25",
   "dataset_id": "card1_evalset_v1_1_500",
-  "raw_text_allowed": false,
+  "raw_plaintext_allowed": false,
   "evidence_mode": "digest16_or_metadata_only",
   "recommended_sample_plan": {
     "total": 150,
     "strata": [
-      {
-        "name": "residual_a4_ambiguous_request_report",
-        "count": 30,
-        "purpose": "surface-identical ambiguity review with residual A4 oversampling",
-        "oversampling_target": "residual_a4_9"
-      },
-      {
-        "name": "a3_product_equivalent_suggestion",
-        "count": 40,
-        "purpose": "manual usefulness evaluation for product-equivalent suggestions"
-      },
-      {
-        "name": "ordinary_safe_request",
-        "count": 30,
-        "purpose": "positive-control safe request usefulness"
-      },
-      {
-        "name": "question_report_no_action_negative_controls",
-        "count": 30,
-        "purpose": "negative controls for non-action and answer-only classes"
-      },
-      {
-        "name": "deadline_sensitive_cases",
-        "count": 20,
-        "purpose": "deadline-sensitive manual suggestion review"
-      }
+      {"name": "residual_a4_ambiguous_request_report", "count": 30, "purpose": "surface-identical ambiguity review with residual A4 oversampling", "oversampling_target": "residual_a4_9"},
+      {"name": "a3_product_equivalent_suggestion", "count": 40, "purpose": "manual usefulness evaluation for product-equivalent suggestions"},
+      {"name": "ordinary_safe_request", "count": 30, "purpose": "positive-control safe request usefulness"},
+      {"name": "question_report_no_action_negative_controls", "count": 30, "purpose": "negative controls for non-action and answer-only classes"},
+      {"name": "deadline_sensitive_cases", "count": 20, "purpose": "deadline-sensitive manual suggestion review"}
     ]
   },
   "fallback_sample_plan": {
     "total": 100,
     "strata": [
-      {
-        "name": "residual_a4_and_a3",
-        "count": 40,
-        "purpose": "combined high-value ambiguity and suggestion review",
-        "oversampling_target": "residual_a4_9"
-      },
-      {
-        "name": "ordinary_safe_request",
-        "count": 20,
-        "purpose": "safe request baseline"
-      },
-      {
-        "name": "negative_controls",
-        "count": 25,
-        "purpose": "QUESTION / REPORT / NO_ACTION controls"
-      },
-      {
-        "name": "deadline_sensitive_cases",
-        "count": 15,
-        "purpose": "deadline-sensitive controls"
-      }
+      {"name": "residual_a4_and_a3", "count": 40, "purpose": "combined high-value ambiguity and suggestion review", "oversampling_target": "residual_a4_9"},
+      {"name": "ordinary_safe_request", "count": 20, "purpose": "safe request baseline"},
+      {"name": "negative_controls", "count": 25, "purpose": "QUESTION / REPORT / NO_ACTION controls"},
+      {"name": "deadline_sensitive_cases", "count": 15, "purpose": "deadline-sensitive controls"}
     ]
   },
   "residual_a4_9": {
     "oversample": true,
     "known_pattern_groups": [
-      {
-        "surface_pattern": "부탁드립니다",
-        "count": 7
-      },
-      {
-        "surface_pattern": "보고드리려고 합니다",
-        "count": 2
-      }
+      {"surface_pattern_digest_group": "residual_a4_polite_request_group", "count": 7},
+      {"surface_pattern_digest_group": "residual_a4_reporting_phrase_group", "count": 2}
     ],
     "raw_surface_text_storage_allowed": false,
     "sample_ids_required": true,
@@ -84,25 +40,12 @@
     "fit_on_full_dataset_forbidden": true,
     "gold_label_mutation_forbidden": true,
     "normalized_action_label_mutation_forbidden": true,
-    "stratification_dimensions": [
-      "sample_group",
-      "intent_type",
-      "deadline_type",
-      "residual_a4_flag",
-      "safety_control_type"
-    ]
+    "stratification_dimensions": ["sample_group", "intent_type", "deadline_type", "residual_a4_flag", "safety_control_type"]
   },
-  "coverage_required_fields": [
-    "sample_id",
-    "digest16",
-    "sample_group",
-    "stratum",
-    "reviewer_assignment_count",
-    "raw_text_present"
-  ],
+  "coverage_required_fields": ["sample_id", "digest16", "sample_group", "stratum", "reviewer_assignment_count", "raw_plaintext_present"],
   "fail_classes": [
     "INTERNAL_ALPHA_SAMPLE_COUNT_MISMATCH",
-    "RAW_TEXT_PRESENT_IN_SAMPLE_PLAN",
+    "RAW_PLAINTEXT_PRESENT_IN_SAMPLE_PLAN",
     "RESIDUAL_A4_TARGET_MISSING",
     "SAMPLE_STRATIFICATION_MISMATCH",
     "FULL_DATASET_FIT_FORBIDDEN"
