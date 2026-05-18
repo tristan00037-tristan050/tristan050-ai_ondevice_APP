@@ -1,0 +1,93 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 738,
+  "actual_github_pr": 738,
+  "legacy_handoff_label": "PR #738+ (chat 인계 박스 표기)",
+  "source_merge_sha": "f61df6f6",
+  "branch": "Residual-A4-9-Review-Protocol",
+  "patch_type": "evaluation_protocol_separation_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "residual_a4_count": 9,
+  "surface_form_distribution": {
+    "intent_to_report_surface_form": 2,
+    "polite_request_surface_form": 7
+  },
+  "case_redefinition_M2": "surface-form ambiguous over-extraction cases — gold 가 REPORT/0-action 이나 표면형이 정상 요청과 구분 불가 (자문 6차 M-2).",
+  "text_only_separable": false,
+  "text_only_separable_reason": "정상 요청 / A5(gold>=1) 케이스와 표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직).",
+  "privacy": "meta-only — 원문 utterance 미저장 (강화 안건 18)",
+  "rows": [
+    {
+      "sample_id": "card1_400179",
+      "surface_form": "intent_to_report_surface_form",
+      "gold_intent": "REPORT",
+      "utterance_digest": "27f717511dc0e8f5",
+      "text_len": 18,
+      "redaction_status": "meta_only"
+    },
+    {
+      "sample_id": "card1_400180",
+      "surface_form": "intent_to_report_surface_form",
+      "gold_intent": "REPORT",
+      "utterance_digest": "27f717511dc0e8f5",
+      "text_len": 18,
+      "redaction_status": "meta_only"
+    },
+    {
+      "sample_id": "card1_500020",
+      "surface_form": "polite_request_surface_form",
+      "gold_intent": "REPORT",
+      "utterance_digest": "b26dbf4da6f280b4",
+      "text_len": 17,
+      "redaction_status": "meta_only"
+    },
+    {
+      "sample_id": "card1_500032",
+      "surface_form": "polite_request_surface_form",
+      "gold_intent": "REPORT",
+      "utterance_digest": "45463c8642396d0c",
+      "text_len": 13,
+      "redaction_status": "meta_only"
+    },
+    {
+      "sample_id": "card1_500033",
+      "surface_form": "polite_request_surface_form",
+      "gold_intent": "REPORT",
+      "utterance_digest": "0f53adff8262c599",
+      "text_len": 12,
+      "redaction_status": "meta_only"
+    },
+    {
+      "sample_id": "card1_500036",
+      "surface_form": "polite_request_surface_form",
+      "gold_intent": "REPORT",
+      "utterance_digest": "63a68d0126f61766",
+      "text_len": 9,
+      "redaction_status": "meta_only"
+    },
+    {
+      "sample_id": "card1_500104",
+      "surface_form": "polite_request_surface_form",
+      "gold_intent": "REPORT",
+      "utterance_digest": "76227b0b4222d1e1",
+      "text_len": 14,
+      "redaction_status": "meta_only"
+    },
+    {
+      "sample_id": "card1_500105",
+      "surface_form": "polite_request_surface_form",
+      "gold_intent": "REPORT",
+      "utterance_digest": "3b8d20a4693b847d",
+      "text_len": 17,
+      "redaction_status": "meta_only"
+    },
+    {
+      "sample_id": "card1_500120",
+      "surface_form": "polite_request_surface_form",
+      "gold_intent": "REPORT",
+      "utterance_digest": "613fddb701bc418d",
+      "text_len": 15,
+      "redaction_status": "meta_only"
+    }
+  ]
+}
