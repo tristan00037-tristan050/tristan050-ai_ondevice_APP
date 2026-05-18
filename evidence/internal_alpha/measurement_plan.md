@@ -40,7 +40,7 @@ Authoritative measurement:
 1. Sample selection
    - build 150 recommended samples or 100 fallback samples
    - use digest16/sample_id only in evidence
-   - do not store raw_text in measurement artifacts
+   - do not store raw plaintext in measurement artifacts
 
 2. Reviewer assignment
    - recommended: 3 reviewers
@@ -116,7 +116,7 @@ Evidence files must contain only:
 
 Evidence files must not contain:
 
-- raw_text
+- raw plaintext
 - original user input
 - raw document contents
 - company names
