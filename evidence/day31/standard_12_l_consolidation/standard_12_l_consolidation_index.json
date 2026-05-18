@@ -1,0 +1,16 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 740,
+  "actual_github_pr": 740,
+  "legacy_handoff_label": "PR #740+ (chat 인계 박스 표기)",
+  "source_merge_sha": "143498a3",
+  "branch": "Standard-12-L-Consolidation",
+  "patch_type": "standard_consolidation_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "standard_12_l": "Privacy / measurement / governance integrity 통합",
+  "standards_count": 11,
+  "standards_range": "12-B ~ 12-L",
+  "governance_dimensions": 15,
+  "self_evolution_cases": 4,
+  "handoff_box_standard_items": 10
+}
