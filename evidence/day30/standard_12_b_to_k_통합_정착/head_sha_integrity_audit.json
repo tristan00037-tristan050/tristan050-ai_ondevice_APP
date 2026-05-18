@@ -1,0 +1,15 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 739,
+  "actual_github_pr": 739,
+  "legacy_handoff_label": "PR #739+ (chat 인계 박스 표기)",
+  "branch": "Standard-12-B-to-K-Consolidation",
+  "verdict": "MEASURED_ONLY",
+  "audit_point": "PR #739 Codex P1x2 정정 cycle 직전 시점",
+  "pr_body_review_sha": "5dded81e38d61608e95c0313c71d28397e140855",
+  "actual_latest_head_sha": "5dded81e38d61608e95c0313c71d28397e140855",
+  "sha_match": true,
+  "sync_obligation": "정정 commit 후 PR body 검토 기준 SHA 를 새 head 로 갱신 (강화 안건 19)",
+  "audit_note": "본 audit 은 정정 commit 직전 시점 기록 (point-in-time snapshot). 정정 commit 후 head 는 변경되며 PR body 검토 기준 SHA 가 새 head 로 동기 갱신된다. head_sha_integrity_audit.json 은 live pointer 가 아니라 audit 기록이다.",
+  "enhancement_agenda": 19
+}

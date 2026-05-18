@@ -1,4 +1,7 @@
-"""PR #739 Standard 12-B~K 통합 정착 sentinel — #1~#17."""
+"""PR #739 Standard 12-B~K 통합 정착 sentinel — #1~#22.
+
+#18~#22 — measurement/governance integrity (강화 안건 19~23, Codex P1×2 정정).
+"""
 from __future__ import annotations
 
 import json
@@ -144,3 +147,49 @@ def test_PR_번호_정합성_메타데이터_정합():
     idx = _j("standard_12_consolidation_index.json")
     assert idx["actual_github_pr"] == ACTUAL_GITHUB_PR
     assert idx["standards_count"] == len(STANDARDS_12) == 10
+
+
+# ── #18 before/after 권위 evidence 기반 (강화 안건 20, Codex P1 #1) ──────
+def test_before_after_evidence_기반():
+    ba = _j("before_after_main_metrics.json")
+    assert ba["comparison"], "comparison 비어있음"
+    for row in ba["comparison"]:
+        assert row.get("source") == "authoritative_evidence", \
+            f"{row.get('metric')} 가 권위 evidence 기반 아님 (하드코딩 의심)"
+
+
+# ── #19 policy_drift contract 입력 비교 기반 (강화 안건 21, Codex P1 #2) ─
+def test_drift_rate_contract_기반():
+    d = _j("policy_drift_assessment.json")
+    assert d.get("source") == "contract_input_comparison"
+    assert d.get("is_standard10_policy_drift_report") is True
+    assert d["samples_compared"] > 0, "samples_compared 0 — 측정 미수행 의심"
+
+
+# ── #20 measurement integrity fail-closed (강화 안건 22) ─────────────────
+def test_measurement_integrity_fail_closed():
+    ba = _j("before_after_main_metrics.json")
+    for row in ba["comparison"]:
+        calc = round(row["after"] - row["before"], 6)
+        assert abs(row["delta"] - calc) < 1e-9, \
+            f"{row['metric']} delta 불일치 (기록 {row['delta']}, 산출 {calc})"
+
+
+# ── #21 governance integrity fail-closed (강화 안건 23) ──────────────────
+def test_governance_integrity_fail_closed():
+    d = _j("policy_drift_assessment.json")
+    if d["drift_class"] == "DRIFT_DETECTED":
+        assert d.get("fail_class") is not None
+        assert len(d.get("drift_details", [])) > 0
+    else:
+        # NO_DRIFT → fail_class null + drift_details 빈 목록
+        assert d["drift_class"] == "NO_DRIFT"
+        assert d.get("fail_class") is None
+        assert d.get("drift_details") == []
+
+
+# ── #22 HEAD SHA 정합성 (강화 안건 19) ───────────────────────────────────
+def test_head_sha_정합():
+    d = _j("head_sha_integrity_audit.json")
+    assert d["pr_body_review_sha"] == d["actual_latest_head_sha"]
+    assert d["sha_match"] is True

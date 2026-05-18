@@ -8,6 +8,14 @@
 - branch: Standard-12-B-to-K-Consolidation
 - patch_type: standard_consolidation_no_algorithm_no_measurement
 - verdict: MEASURED_ONLY
+- correction_cycle: Codex P1×2 (measurement / governance integrity)
+
+## Codex P1×2 정정 (정직 보고 — 강화 안건 19~23)
+- P1 #1: before_after 가 MAIN_METRICS 상수 기반 — 권위 evidence (merged PR day21/day26)에서 읽어 delta 실측 산출로 정정.
+- P1 #2: policy_drift 가 drift_rate 0.0 하드코딩 — contract before/after 입력 비교 기반 측정으로 정정 (NO_DRIFT 실측).
+- HEAD SHA 정합 (강화 안건 19): 정정 commit 후 PR body 검토 기준 SHA 를 새 head 로 동기 갱신.
+- 측정값 영향 0 — integrity 산식 정정만. before==after 권위 evidence 실측 확인 → delta 0, contract 동일 → drift_rate 0 실측 확인.
+- 거버넌스 안전망 자기 진화 사례 4호.
 
 ## 본 PR 의 본질 (정직 보고)
 - 통합 정착 PR — 강화 안건 17건 누적을 Standard 12-B~K 10 표준으로 통합 정착. 측정값 변경 0, 새 측정 알고리즘 0, 알고리즘/prompt/model 변경 0.

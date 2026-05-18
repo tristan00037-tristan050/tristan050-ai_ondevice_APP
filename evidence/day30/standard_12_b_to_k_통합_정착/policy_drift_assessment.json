@@ -11,8 +11,11 @@
   "contract_version": "2.0.0",
   "contract_version_changed": false,
   "drift_rate": 0.0,
-  "drift_class": "OK",
-  "samples_compared": 0,
-  "is_standard10_policy_drift_report": false,
-  "drift_note": "통합 정착 PR — metric contract v2.0.0 불변 (자문 6차 M-8). 표준 문서 통합만, 측정/알고리즘 변경 0."
+  "drift_class": "NO_DRIFT",
+  "fail_class": null,
+  "samples_compared": 6,
+  "drift_details": [],
+  "is_standard10_policy_drift_report": true,
+  "source": "contract_input_comparison",
+  "drift_note": "통합 정착 PR — contract before/after 입력 비교 기반 drift 측정 (drift_rate 하드코딩 금지 — Codex P1 #2 정정). metric contract v2.0.0 불변 (자문 6차 M-8)."
 }

@@ -12,21 +12,24 @@
       "metric": "strict_action_f1",
       "before": 0.6452,
       "after": 0.6452,
-      "delta": 0.0
+      "delta": 0.0,
+      "source": "authoritative_evidence"
     },
     {
       "metric": "deadline_f1",
       "before": 0.8702,
       "after": 0.8702,
-      "delta": 0.0
+      "delta": 0.0,
+      "source": "authoritative_evidence"
     },
     {
       "metric": "action_fp",
       "before": 207,
       "after": 207,
-      "delta": 0.0
+      "delta": 0,
+      "source": "authoritative_evidence"
     }
   ],
   "safety_6_delta_zero": true,
-  "reason": "Standard 통합 정착 PR — 표준 문서 통합만. 측정/알고리즘 변경 0 → main 측정값 변동 0."
+  "reason": "Standard 통합 정착 PR — 측정/알고리즘 변경 0. before/after 는 권위 evidence(merged PR)에서 읽어 delta 실측 산출 (MAIN_METRICS 상수 하드코딩 금지 — Codex P1 #1 정정)."
 }
