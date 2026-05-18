@@ -14,78 +14,80 @@
   },
   "case_redefinition_M2": "surface-form ambiguous over-extraction cases — gold 가 REPORT/0-action 이나 표면형이 정상 요청과 구분 불가 (자문 6차 M-2).",
   "text_only_separable": false,
+  "text_only_separable_reason": "정상 요청 / A5(gold>=1) 케이스와 표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직).",
+  "privacy": "meta-only — 원문 utterance 미저장 (강화 안건 18)",
   "rows": [
     {
       "sample_id": "card1_400179",
-      "text": "결과 정리 후 보고드리려고 합니다",
-      "gold_intent": "REPORT",
       "surface_form": "intent_to_report_surface_form",
-      "text_only_guard_separable": false,
-      "reason": "정상 요청 / A5(gold>=1) 케이스와 표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직)."
+      "gold_intent": "REPORT",
+      "utterance_digest": "27f717511dc0e8f5",
+      "text_len": 18,
+      "redaction_status": "meta_only"
     },
     {
       "sample_id": "card1_400180",
-      "text": "결과 정리 후 보고드리려고 합니다",
-      "gold_intent": "REPORT",
       "surface_form": "intent_to_report_surface_form",
-      "text_only_guard_separable": false,
-      "reason": "정상 요청 / A5(gold>=1) 케이스와 표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직)."
+      "gold_intent": "REPORT",
+      "utterance_digest": "27f717511dc0e8f5",
+      "text_len": 18,
+      "redaction_status": "meta_only"
     },
     {
       "sample_id": "card1_500020",
-      "text": "[PHONE] 연락 부탁드립니다",
-      "gold_intent": "REPORT",
       "surface_form": "polite_request_surface_form",
-      "text_only_guard_separable": false,
-      "reason": "정상 요청 / A5(gold>=1) 케이스와 표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직)."
+      "gold_intent": "REPORT",
+      "utterance_digest": "b26dbf4da6f280b4",
+      "text_len": 17,
+      "redaction_status": "meta_only"
     },
     {
       "sample_id": "card1_500032",
-      "text": "보고서 검토 부탁드립니다",
-      "gold_intent": "REPORT",
       "surface_form": "polite_request_surface_form",
-      "text_only_guard_separable": false,
-      "reason": "정상 요청 / A5(gold>=1) 케이스와 표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직)."
+      "gold_intent": "REPORT",
+      "utterance_digest": "45463c8642396d0c",
+      "text_len": 13,
+      "redaction_status": "meta_only"
     },
     {
       "sample_id": "card1_500033",
-      "text": "안건 정리 부탁드립니다",
-      "gold_intent": "REPORT",
       "surface_form": "polite_request_surface_form",
-      "text_only_guard_separable": false,
-      "reason": "정상 요청 / A5(gold>=1) 케이스와 표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직)."
+      "gold_intent": "REPORT",
+      "utterance_digest": "0f53adff8262c599",
+      "text_len": 12,
+      "redaction_status": "meta_only"
     },
     {
       "sample_id": "card1_500036",
-      "text": "회신 부탁드립니다",
-      "gold_intent": "REPORT",
       "surface_form": "polite_request_surface_form",
-      "text_only_guard_separable": false,
-      "reason": "정상 요청 / A5(gold>=1) 케이스와 표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직)."
+      "gold_intent": "REPORT",
+      "utterance_digest": "63a68d0126f61766",
+      "text_len": 9,
+      "redaction_status": "meta_only"
     },
     {
       "sample_id": "card1_500104",
-      "text": "예산 변경 안내 부탁드려요",
-      "gold_intent": "REPORT",
       "surface_form": "polite_request_surface_form",
-      "text_only_guard_separable": false,
-      "reason": "정상 요청 / A5(gold>=1) 케이스와 표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직)."
+      "gold_intent": "REPORT",
+      "utterance_digest": "76227b0b4222d1e1",
+      "text_len": 14,
+      "redaction_status": "meta_only"
     },
     {
       "sample_id": "card1_500105",
-      "text": "프로젝트 결과 보고 부탁드립니다",
-      "gold_intent": "REPORT",
       "surface_form": "polite_request_surface_form",
-      "text_only_guard_separable": false,
-      "reason": "정상 요청 / A5(gold>=1) 케이스와 표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직)."
+      "gold_intent": "REPORT",
+      "utterance_digest": "3b8d20a4693b847d",
+      "text_len": 17,
+      "redaction_status": "meta_only"
     },
     {
       "sample_id": "card1_500120",
-      "text": "주간 진행 정리 부탁드립니다",
-      "gold_intent": "REPORT",
       "surface_form": "polite_request_surface_form",
-      "text_only_guard_separable": false,
-      "reason": "정상 요청 / A5(gold>=1) 케이스와 표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직)."
+      "gold_intent": "REPORT",
+      "utterance_digest": "613fddb701bc418d",
+      "text_len": 15,
+      "redaction_status": "meta_only"
     }
   ]
 }

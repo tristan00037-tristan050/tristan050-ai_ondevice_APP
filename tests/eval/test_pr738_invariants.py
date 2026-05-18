@@ -1,10 +1,12 @@
-"""PR #738 Residual A4 9 Review Protocol sentinel — #1~#14.
+"""PR #738 Residual A4 9 Review Protocol sentinel — #1~#17.
 
 actual_github_pr 는 gh pr create 후 확정 (강화 안건 17 정합).
+#15~#17 — Privacy meta-only (강화 안건 18, Codex P1 정정).
 """
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -14,6 +16,7 @@ OUT = ROOT / "evidence/day30/residual_a4_9_review_protocol"
 
 from scripts.eval.pr738_residual_a4_9_review_protocol import (  # noqa: E402
     ACTUAL_GITHUB_PR, LEGACY_HANDOFF_LABEL, _meta, classify_residual,
+    utterance_digest,
 )
 
 
@@ -135,3 +138,35 @@ def test_PR_번호_정합성_메타데이터_정합():
     j = _j("residual_a4_9_본질_분석.json")
     assert j["actual_github_pr"] == ACTUAL_GITHUB_PR
     assert j["legacy_handoff_label"] == LEGACY_HANDOFF_LABEL
+
+
+# ── #15 rows 내 원문 utterance 키 부재 (Privacy meta-only, Codex P1) ─────
+def test_rows_내_text_키_부재():
+    """원문 utterance 키 부재 — Butler 지침서 §7 / AGENTS.md 원문0 정합."""
+    j = _j("residual_a4_9_본질_분석.json")
+    forbidden = {"text", "raw_text", "utterance", "raw_utterance",
+                 "original_text"}
+    for row in j["rows"]:
+        leak = set(row.keys()) & forbidden
+        assert leak == set(), f"Privacy 결함: {leak} 키 발견"
+
+
+# ── #16 meta-only 필드만 정합 (강화 안건 18) ────────────────────────────
+def test_meta_only_정합():
+    j = _j("residual_a4_9_본질_분석.json")
+    allowed = {"sample_id", "surface_form", "gold_intent",
+               "utterance_digest", "text_len", "redaction_status"}
+    for row in j["rows"]:
+        assert set(row.keys()) <= allowed, f"비허용 키: {set(row.keys()) - allowed}"
+        assert row["redaction_status"] == "meta_only"
+
+
+# ── #17 utterance_digest sha256 16자 정합 ────────────────────────────────
+def test_utterance_digest_정합():
+    pat = re.compile(r"^[a-f0-9]{16}$")
+    j = _j("residual_a4_9_본질_분석.json")
+    for row in j["rows"]:
+        assert pat.match(row["utterance_digest"]), row["utterance_digest"]
+    # 함수 결정성
+    assert utterance_digest("회신 부탁드립니다") == utterance_digest("회신 부탁드립니다")
+    assert pat.match(utterance_digest("test"))

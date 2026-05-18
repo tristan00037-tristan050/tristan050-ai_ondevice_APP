@@ -14,6 +14,7 @@ verdict: MEASURED_ONLY (PROCEED 금지).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -57,6 +58,14 @@ def _text(it: Dict) -> str:
     return it.get("text") or it.get("text_redacted") or ""
 
 
+def utterance_digest(text: str) -> str:
+    """원문 utterance → sha256 16자 digest (meta-only — 강화 안건 18).
+
+    원문은 evidence 산출물에 저장하지 않으며 digest 로만 기록한다.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
 def classify_residual(text: str) -> str:
     """잔여 A4 표면형 분류 — '부탁' 계열 / '보고드리려고' 계열."""
     if "부탁" in text:
@@ -93,20 +102,21 @@ def main() -> int:
     (OUT / "coverage_report.json").write_text(
         json.dumps(coverage, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # ── 잔여 A4 9건 본질 분석 ──
+    # ── 잔여 A4 9건 본질 분석 (Codex P1 정정 — meta-only, 원문 미저장) ──
+    # 원문 utterance 는 내부 계산(classify_residual)에만 사용하고 산출물에는
+    # 기록하지 않는다. 강화 안건 18 / Butler 지침서 §7 / AGENTS.md 원문0.
     residual_ids = json.loads(A4_COV.read_text(encoding="utf-8"))["a4_residual_ids"]
     rows: List[Dict[str, Any]] = []
     for sid in residual_ids:
         it = items[sid]
-        text = _text(it)
+        text = _text(it)   # 내부 계산만 — 산출물 미기록
         rows.append({
             "sample_id": sid,
-            "text": text,
-            "gold_intent": it.get("intent_type"),
             "surface_form": classify_residual(text),
-            "text_only_guard_separable": False,
-            "reason": ("정상 요청 / A5(gold>=1) 케이스와 표면 동일 — "
-                       "text-only guard 로 안전 분리 불가 (PR #732 정직)."),
+            "gold_intent": it.get("intent_type"),
+            "utterance_digest": utterance_digest(text),
+            "text_len": len(text),
+            "redaction_status": "meta_only",
         })
     from collections import Counter
     form_dist = Counter(r["surface_form"] for r in rows)
@@ -118,6 +128,9 @@ def main() -> int:
             "cases — gold 가 REPORT/0-action 이나 표면형이 정상 요청과 "
             "구분 불가 (자문 6차 M-2)."),
         "text_only_separable": False,
+        "text_only_separable_reason": ("정상 요청 / A5(gold>=1) 케이스와 "
+            "표면 동일 — text-only guard 로 안전 분리 불가 (PR #732 정직)."),
+        "privacy": "meta-only — 원문 utterance 미저장 (강화 안건 18)",
         "rows": rows,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
