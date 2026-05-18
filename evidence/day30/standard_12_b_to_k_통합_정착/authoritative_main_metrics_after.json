@@ -1,0 +1,16 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 739,
+  "actual_github_pr": 739,
+  "legacy_handoff_label": "PR #739+ (chat 인계 박스 표기)",
+  "source_merge_sha": "f61df6f6",
+  "branch": "Standard-12-B-to-K-Consolidation",
+  "patch_type": "standard_consolidation_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "metrics": {
+    "strict_action_f1": 0.6452,
+    "action_fp": 207,
+    "deadline_f1": 0.8702
+  },
+  "source": "merged PR authoritative evidence (day21 / day26)"
+}

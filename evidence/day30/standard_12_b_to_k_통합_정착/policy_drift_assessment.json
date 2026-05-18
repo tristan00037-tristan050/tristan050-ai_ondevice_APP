@@ -1,0 +1,21 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 739,
+  "actual_github_pr": 739,
+  "legacy_handoff_label": "PR #739+ (chat 인계 박스 표기)",
+  "source_merge_sha": "f61df6f6",
+  "branch": "Standard-12-B-to-K-Consolidation",
+  "patch_type": "standard_consolidation_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "policy_name": "card1 action metric contract",
+  "contract_version": "2.0.0",
+  "contract_version_changed": false,
+  "drift_rate": 0.0,
+  "drift_class": "NO_DRIFT",
+  "fail_class": null,
+  "samples_compared": 6,
+  "drift_details": [],
+  "is_standard10_policy_drift_report": true,
+  "source": "contract_input_comparison",
+  "drift_note": "통합 정착 PR — contract before/after 입력 비교 기반 drift 측정 (drift_rate 하드코딩 금지 — Codex P1 #2 정정). metric contract v2.0.0 불변 (자문 6차 M-8)."
+}
