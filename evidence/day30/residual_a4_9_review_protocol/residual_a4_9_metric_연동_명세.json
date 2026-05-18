@@ -1,0 +1,18 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 738,
+  "actual_github_pr": 738,
+  "legacy_handoff_label": "PR #738+ (chat 인계 박스 표기)",
+  "source_merge_sha": "f61df6f6",
+  "branch": "Residual-A4-9-Review-Protocol",
+  "patch_type": "evaluation_protocol_separation_no_algorithm_change",
+  "verdict": "MEASURED_ONLY",
+  "strict_extraction": "잔여 9건은 strict layer 에서 FP 로 유지 — FP→TP 처리 0 (자문 6차 정합).",
+  "layer2_candidate_metrics": [
+    "manual_suggestion_precision",
+    "suggestion_usefulness_rate",
+    "unsafe_suggestion_rate",
+    "edit_required_rate"
+  ],
+  "metric_연동_note": "잔여 9건은 Internal Alpha feedback 의 4 카테고리 수집 대상 — Layer 2 candidate metric 으로 연동. strict_action_f1 산식 불변."
+}

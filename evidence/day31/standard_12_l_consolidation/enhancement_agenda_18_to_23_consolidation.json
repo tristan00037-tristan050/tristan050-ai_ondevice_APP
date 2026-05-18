@@ -1,0 +1,57 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 740,
+  "actual_github_pr": 740,
+  "legacy_handoff_label": "PR #740+ (chat 인계 박스 표기)",
+  "source_merge_sha": "143498a3",
+  "branch": "Standard-12-L-Consolidation",
+  "patch_type": "standard_consolidation_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "agenda_count": 6,
+  "agenda": [
+    {
+      "id": 18,
+      "name": "Privacy meta-only audit",
+      "settled_pr": 738,
+      "artifact": "privacy_meta_only_audit.md",
+      "sentinel": "pr738 #15~#17"
+    },
+    {
+      "id": 19,
+      "name": "HEAD SHA 정합성 메타데이터 무결성",
+      "settled_pr": 739,
+      "artifact": "head_sha_integrity_audit.json",
+      "sentinel": "pr739 #22"
+    },
+    {
+      "id": 20,
+      "name": "MAIN_METRICS evidence 기반 검증",
+      "settled_pr": 739,
+      "artifact": "before_after_main_metrics.json",
+      "sentinel": "pr739 #18"
+    },
+    {
+      "id": 21,
+      "name": "drift_rate contract 입력 비교 기반",
+      "settled_pr": 739,
+      "artifact": "policy_drift_assessment.json",
+      "sentinel": "pr739 #19"
+    },
+    {
+      "id": 22,
+      "name": "measurement integrity fail-closed sentinel",
+      "settled_pr": 739,
+      "artifact": "measurement_governance_integrity_audit.md",
+      "sentinel": "pr739 #20"
+    },
+    {
+      "id": 23,
+      "name": "governance integrity fail-closed sentinel",
+      "settled_pr": 739,
+      "artifact": "measurement_governance_integrity_audit.md",
+      "sentinel": "pr739 #21"
+    }
+  ],
+  "consolidated_standard": "Standard 12-L",
+  "total_enhancement_agenda": 23
+}

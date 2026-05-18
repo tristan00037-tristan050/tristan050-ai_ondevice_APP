@@ -14,6 +14,7 @@
   --color-warning: #B8860B;
   --color-error: #B91C1C;
   --color-accounting-debit: #D32F2F;
+  --color-accounting-credit: #0F7B0F;
 
   /* Typography */
   --font-sans: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;

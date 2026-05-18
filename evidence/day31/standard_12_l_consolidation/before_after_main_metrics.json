@@ -1,0 +1,35 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 740,
+  "actual_github_pr": 740,
+  "legacy_handoff_label": "PR #740+ (chat 인계 박스 표기)",
+  "source_merge_sha": "143498a3",
+  "branch": "Standard-12-L-Consolidation",
+  "patch_type": "standard_consolidation_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "comparison": [
+    {
+      "metric": "strict_action_f1",
+      "before": 0.6452,
+      "after": 0.6452,
+      "delta": 0.0,
+      "source": "authoritative_evidence"
+    },
+    {
+      "metric": "deadline_f1",
+      "before": 0.8702,
+      "after": 0.8702,
+      "delta": 0.0,
+      "source": "authoritative_evidence"
+    },
+    {
+      "metric": "action_fp",
+      "before": 207,
+      "after": 207,
+      "delta": 0,
+      "source": "authoritative_evidence"
+    }
+  ],
+  "safety_6_delta_zero": true,
+  "reason": "Standard 12-L 통합 정착 PR — 권위 evidence 기반 before/after, delta 실측 (PR #739 helper 재사용)."
+}

@@ -1,0 +1,23 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 739,
+  "actual_github_pr": 739,
+  "legacy_handoff_label": "PR #739+ (chat 인계 박스 표기)",
+  "source_merge_sha": "f61df6f6",
+  "branch": "Standard-12-B-to-K-Consolidation",
+  "patch_type": "standard_consolidation_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "contract": {
+    "version": "2.0.0",
+    "layer1_metric": "strict_action_f1",
+    "production_gate": 0.9,
+    "layer2_metrics": [
+      "product_equivalent_action_rate",
+      "dangerous_over_extraction_rate",
+      "manual_suggestion_precision",
+      "suggestion_value_adjusted_f1"
+    ],
+    "deadline_metric": "deadline_f1",
+    "safety_metrics_count": 6
+  }
+}
