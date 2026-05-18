@@ -1,0 +1,45 @@
+{
+  "status": "MEASURED_ONLY_PLAN_VALIDATION",
+  "validator": "scripts/eval/validate_internal_alpha_measurement_plan.py",
+  "execution_mode": "static_authoring_review",
+  "ci_execution_required_after_pr_creation": true,
+  "ok": true,
+  "required_files": [
+    {"path": "evidence/internal_alpha/measurement_plan.md", "exists": true},
+    {"path": "evidence/internal_alpha/sample_selection_plan.json", "exists": true},
+    {"path": "evidence/internal_alpha/reviewer_guide.md", "exists": true},
+    {"path": "evidence/internal_alpha/privacy_audit.md", "exists": true},
+    {"path": "evidence/internal_alpha/msp_formula.json", "exists": true}
+  ],
+  "json_parse_static_check": {
+    "sample_selection_plan_json": true,
+    "msp_formula_json": true
+  },
+  "privacy_boundary_static_check": {
+    "raw_plaintext_allowed": false,
+    "evidence_mode": "digest16_or_metadata_only",
+    "pii_pattern_hits": 0,
+    "external_transfer_claim": false
+  },
+  "advisory_guardrails_14_static_check": {
+    "gold_label_mutation": false,
+    "normalized_action_label_mutation": false,
+    "strict_action_f1_formula_change": false,
+    "production_gate_change": false,
+    "branch_b2r_recall_prompt_strengthening": false,
+    "branch_f_lora_or_fine_tuning": false,
+    "prompt_or_model_weight_change": false,
+    "safety_threshold_change": false,
+    "auto_apply_on": false,
+    "upper_stage_approval_wording": false,
+    "text_only_guard_strengthening": false,
+    "semantic_guard_prompt_lora_model_change": false,
+    "metric_contract_v2_1_0_immediate_bump": false,
+    "proxy_msp_as_authoritative": false
+  },
+  "manual_review_required": [
+    "reviewer_guide_definition_quality",
+    "representativeness_of_sample_selection",
+    "adjudication_policy_acceptability"
+  ]
+}
