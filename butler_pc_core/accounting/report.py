@@ -32,7 +32,8 @@ def build_summary(df: "pd.DataFrame") -> dict[str, Any]:
         "classified_rows": int,
         "unclassified_rows": int,
         "categories": {
-            "급여": {"count": N, "avg_confidence": 0.95},
+            "급여": {"count": N, "avg_confidence": 0.95, "total_amount": M,
+                     "sign": "-", "section": "IV_sga"},
             ...
         },
         "avg_confidence": float,
@@ -50,16 +51,22 @@ def build_summary(df: "pd.DataFrame") -> dict[str, Any]:
     classified = int((~unclassified_mask).sum())
     unclassified = int(unclassified_mask.sum())
 
+    from .account_dict import ACCOUNT_BY_NAME
+
     categories: dict[str, Any] = {}
     for name, group in df[~unclassified_mask].groupby("분류과목"):
         conf_col = group["신뢰도"] if "신뢰도" in group.columns else None
         avg_conf = float(conf_col.mean()) if conf_col is not None else 0.0
         # _amt: classify_df가 입출금 분리 컬럼에서 미리 계산한 순액 (없으면 0)
         total_amt = int(group["_amt"].sum()) if "_amt" in group.columns else 0
+        # sign/section 메타 — UI 구분 배지([수익]/[비용]) 노출용 (PR #693 정합)
+        acc = ACCOUNT_BY_NAME.get(str(name))
         categories[str(name)] = {
             "count": int(len(group)),
             "avg_confidence": round(avg_conf, 3),
             "total_amount": total_amt,
+            "sign": acc.sign if acc else "+",
+            "section": acc.section if acc else "other",
         }
 
     overall_conf = float(df["신뢰도"].mean()) if "신뢰도" in df.columns else 0.0

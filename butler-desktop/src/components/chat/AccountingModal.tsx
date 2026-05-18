@@ -11,7 +11,13 @@ interface AccountingModalProps {
   onClose: () => void;
 }
 
-type CategoryInfo = { count: number; total_amount: number };
+type CategoryInfo = {
+  count: number;
+  total_amount: number;
+  avg_confidence?: number;
+  sign?: string;       // "+" 수익 / "-" 비용 (PR #693 sign 메타)
+  section?: string;    // 재무제표 섹션 (PR #693 section 메타)
+};
 
 type Phase =
   | { kind: 'idle' }
@@ -423,6 +429,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
                       <thead>
                         <tr style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
                           <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>분류과목</th>
+                          <th style={{ textAlign: 'center', padding: '4px 8px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>구분</th>
                           <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>건수</th>
                           {hasAmt && <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>합계금액</th>}
                           <th style={{ textAlign: 'center', padding: '4px 8px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>비율</th>
@@ -434,6 +441,27 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
                           return (
                             <tr key={name} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
                               <td style={{ padding: '4px 8px' }}>{name}</td>
+                              <td style={{ padding: '4px 8px', textAlign: 'center' }}>
+                                {(() => {
+                                  const isRevenue = (info.sign ?? '+') === '+';
+                                  return (
+                                    <span
+                                      data-testid={`accounting-gubun-${name}`}
+                                      style={{
+                                        display: 'inline-block',
+                                        padding: '1px 7px',
+                                        borderRadius: 4,
+                                        fontSize: '0.9em',
+                                        fontWeight: 600,
+                                        color: isRevenue ? 'var(--color-accounting-credit)' : 'var(--color-accounting-debit)',
+                                        background: isRevenue ? 'rgba(15,123,15,0.10)' : 'rgba(211,47,47,0.10)',
+                                      }}
+                                    >
+                                      {isRevenue ? '수익' : '비용'}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
                               <td style={{ padding: '4px 8px', textAlign: 'right' }}>{info.count}건</td>
                               {hasAmt && (
                                 <td style={{
@@ -452,6 +480,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
                       <tfoot>
                         <tr style={{ borderTop: '2px solid var(--color-border-subtle)', fontWeight: 600 }}>
                           <td style={{ padding: '4px 8px' }}>합계</td>
+                          <td style={{ padding: '4px 8px' }} />
                           <td style={{ padding: '4px 8px', textAlign: 'right' }}>{totalCount}건</td>
                           {hasAmt && (
                             <td style={{

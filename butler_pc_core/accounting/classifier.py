@@ -66,6 +66,12 @@ _RESULT_DROP_COLS = frozenset([
 ])
 
 
+def _gubun_label(name: object) -> str:
+    """계정과목명 → 재무제표 구분 라벨. sign "+"=수익, "-"=비용 (PR #693 정합)."""
+    acc = ACCOUNT_BY_NAME.get(str(name))
+    return "수익" if (acc.sign if acc else "+") == "+" else "비용"
+
+
 def _normalize_col(s: str) -> str:
     """'(원)' 제거 + 공백/유니코드 공백 제거."""
     s = re.sub(r'\(원\)', '', str(s))
@@ -267,8 +273,8 @@ def classify_file(path: Union[str, Path]) -> "pd.DataFrame":
 def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
     """분류 결과를 3시트 xlsx로 저장.
 
-    [분류결과] 원본 컬럼 + 분류과목 + 신뢰도(정수%)  — 분류 성공 행만
-    [요약]    분류과목 | 건수 | 합계 | 평균
+    [분류결과] 원본 컬럼 + 분류과목 + 구분 + 신뢰도(정수%)  — 분류 성공 행만
+    [요약]    분류과목 | 구분 | 건수 | 합계금액 | 비율
     [미분류]  원본 컬럼만  — 분류 실패 행
     """
     if not _PANDAS_OK:
@@ -299,7 +305,7 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
     # ── [요약] — 활성 시트(첫 번째) ─────────────────────────────────────────
     ws2 = wb.active
     ws2.title = "요약"
-    ws2.append(["분류과목", "건수", "합계금액", "비율"])
+    ws2.append(["분류과목", "구분", "건수", "합계금액", "비율"])
     for cell in ws2[1]:
         cell.font = bold
         if header_fill:
@@ -340,14 +346,14 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
             cnt = int(r["count"])
             amt = int(r["sum"])
             ratio = f"{cnt / t_cnt * 100:.1f}%" if t_cnt else "0%"
-            ws2.append([r["분류과목"], cnt, amt, ratio])
-            ws2.cell(row=data_start_row + i, column=3).number_format = '#,##0"원"'
+            ws2.append([r["분류과목"], _gubun_label(r["분류과목"]), cnt, amt, ratio])
+            ws2.cell(row=data_start_row + i, column=4).number_format = '#,##0"원"'
         totals_row = data_start_row + len(grp)
-        ws2.append(["총계", t_cnt, t_sum, "100%"])
-        ws2.cell(row=totals_row, column=3).number_format = '#,##0"원"'
+        ws2.append(["총계", "", t_cnt, t_sum, "100%"])
+        ws2.cell(row=totals_row, column=4).number_format = '#,##0"원"'
         # 합계 행 굵은 상단 테두리 + 볼드
         if thick_top:
-            for col_idx in range(1, 5):
+            for col_idx in range(1, 6):
                 cell = ws2.cell(row=totals_row, column=col_idx)
                 cell.border = thick_top
                 cell.font = bold
@@ -369,13 +375,14 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
 
     ws1 = wb.create_sheet("분류결과")
     before_cols, after_cols = _build_result_output_cols(orig_cols)
-    header = before_cols + ["분류과목", "신뢰도"] + after_cols
+    header = before_cols + ["분류과목", "구분", "신뢰도"] + after_cols
     ws1.append(header)
     for cell in ws1[1]:
         cell.font = bold
     for _, row in df_ok.iterrows():
         vals = [row[c] for c in before_cols]
         vals.append(row["분류과목"])
+        vals.append(_gubun_label(row["분류과목"]))
         vals.append(f"{int(round(float(row['신뢰도']) * 100))}%")
         vals.extend(row[c] for c in after_cols)
         ws1.append(vals)
