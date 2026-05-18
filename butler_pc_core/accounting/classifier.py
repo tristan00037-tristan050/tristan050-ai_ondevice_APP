@@ -66,10 +66,27 @@ _RESULT_DROP_COLS = frozenset([
 ])
 
 
-def _gubun_label(name: object) -> str:
-    """계정과목명 → 재무제표 구분 라벨. sign "+"=수익, "-"=비용 (PR #693 정합)."""
+def _gubun_label(name: object, amount: object = None) -> str:
+    """계정과목명 → 재무제표 구분 라벨. sign "+"=수익, "-"=비용 (PR #693 정합).
+
+    사전(ACCOUNT_BY_NAME) 등록 카테고리는 acc.sign 우선 — amount 부호와
+    충돌해도 acc.sign 을 따른다. 미등록 카테고리(PEFT 모델 반환 등)는
+    amount 순액 부호로 추론하며, 부호 신호가 없으면(amount None/NaN)
+    보수적으로 "미분류"로 격리해 비용을 [수익]으로 오표시할 위험을
+    차단한다 (재검토팀 HOLD 정정).
+    """
     acc = ACCOUNT_BY_NAME.get(str(name))
-    return "수익" if (acc.sign if acc else "+") == "+" else "비용"
+    if acc is not None:
+        return "수익" if acc.sign == "+" else "비용"
+    if amount is None:
+        return "미분류"
+    try:
+        amt = float(amount)
+    except (TypeError, ValueError):
+        return "미분류"
+    if amt != amt:  # NaN — 부호 신호 없음
+        return "미분류"
+    return "비용" if amt < 0 else "수익"
 
 
 def _normalize_col(s: str) -> str:
@@ -346,7 +363,7 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
             cnt = int(r["count"])
             amt = int(r["sum"])
             ratio = f"{cnt / t_cnt * 100:.1f}%" if t_cnt else "0%"
-            ws2.append([r["분류과목"], _gubun_label(r["분류과목"]), cnt, amt, ratio])
+            ws2.append([r["분류과목"], _gubun_label(r["분류과목"], amt), cnt, amt, ratio])
             ws2.cell(row=data_start_row + i, column=4).number_format = '#,##0"원"'
         totals_row = data_start_row + len(grp)
         ws2.append(["총계", "", t_cnt, t_sum, "100%"])
@@ -382,7 +399,7 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
     for _, row in df_ok.iterrows():
         vals = [row[c] for c in before_cols]
         vals.append(row["분류과목"])
-        vals.append(_gubun_label(row["분류과목"]))
+        vals.append(_gubun_label(row["분류과목"], row.get("_amt")))
         vals.append(f"{int(round(float(row['신뢰도']) * 100))}%")
         vals.extend(row[c] for c in after_cols)
         ws1.append(vals)
