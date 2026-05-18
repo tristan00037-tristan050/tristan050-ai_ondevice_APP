@@ -5,7 +5,7 @@ Scope: Card 1 Internal Alpha authoritative measurement privacy boundary
 
 ## 1. Privacy objective
 
-Internal Alpha authoritative measurement must evaluate manual suggestion usefulness without exporting or storing raw user text in evidence artifacts.
+Internal Alpha authoritative measurement must evaluate manual suggestion usefulness without exporting or storing raw user content in evidence artifacts.
 
 The measurement protocol uses digest16, sample_id, redaction class metadata, reviewer_id_digest, controlled labels, and aggregate metrics only.
 
@@ -13,10 +13,10 @@ The measurement protocol uses digest16, sample_id, redaction class metadata, rev
 
 Evidence artifacts must not contain:
 
-- raw_text
-- original_text
-- source_text
-- user_text
+- raw plaintext key fields
+- original user input key fields
+- source content key fields
+- user content key fields
 - raw document content
 - company name in plain form
 - person name in plain form
@@ -55,9 +55,9 @@ Reviewers must not receive raw plaintext or original file content through the me
 
 Personal device tier:
 
-- no accumulation of authoritative measurement raw text
+- no accumulation of authoritative measurement raw user content
 - temporary local review rendering may exist only inside the Internal Alpha client session
-- raw text must not be copied into evidence artifacts
+- raw user content must not be copied into evidence artifacts
 
 Team server tier:
 
@@ -68,7 +68,7 @@ Team server tier:
 Central server tier:
 
 - aggregate counts only
-- no raw user text
+- no raw user content
 - no tenant-specific plaintext
 - no reviewer free-text unless redacted and converted to controlled reason code
 
@@ -81,24 +81,24 @@ Every authoritative rating event must produce an audit record with:
 - sample_digest16
 - reviewer_id_digest
 - rating_label
-- raw_text_seen=false
+- raw_plaintext_seen=false
 - created_at
 - client_version
 - policy_context
 
-Audit logs must not contain raw sample text.
+Audit logs must not contain raw sample content.
 
 ## 6. Privacy audit grep rules
 
-The validation script must fail if any evidence file contains forbidden keys or obvious plaintext patterns.
+The validation script must fail if any evidence file contains forbidden raw-content keys or obvious plaintext patterns.
 
-Forbidden keys:
+Forbidden key classes:
 
-- raw_text
-- original_text
-- source_text
-- user_text
-- plaintext
+- raw plaintext key class
+- original input key class
+- source content key class
+- user content key class
+- plaintext key class
 
 Forbidden pattern classes:
 
@@ -115,7 +115,7 @@ The privacy audit must emit:
 ```json
 {
   "ok": true,
-  "raw_text_hits": 0,
+  "raw_plaintext_hits": 0,
   "forbidden_key_hits": 0,
   "pii_pattern_hits": 0,
   "external_transfer_claim": false,
