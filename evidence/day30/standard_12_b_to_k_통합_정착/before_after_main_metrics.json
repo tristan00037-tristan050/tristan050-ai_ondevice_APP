@@ -1,0 +1,32 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 739,
+  "actual_github_pr": 739,
+  "legacy_handoff_label": "PR #739+ (chat 인계 박스 표기)",
+  "source_merge_sha": "f61df6f6",
+  "branch": "Standard-12-B-to-K-Consolidation",
+  "patch_type": "standard_consolidation_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "comparison": [
+    {
+      "metric": "strict_action_f1",
+      "before": 0.6452,
+      "after": 0.6452,
+      "delta": 0.0
+    },
+    {
+      "metric": "deadline_f1",
+      "before": 0.8702,
+      "after": 0.8702,
+      "delta": 0.0
+    },
+    {
+      "metric": "action_fp",
+      "before": 207,
+      "after": 207,
+      "delta": 0.0
+    }
+  ],
+  "safety_6_delta_zero": true,
+  "reason": "Standard 통합 정착 PR — 표준 문서 통합만. 측정/알고리즘 변경 0 → main 측정값 변동 0."
+}

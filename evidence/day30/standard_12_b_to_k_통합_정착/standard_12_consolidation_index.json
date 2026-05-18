@@ -1,0 +1,94 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 739,
+  "actual_github_pr": 739,
+  "legacy_handoff_label": "PR #739+ (chat 인계 박스 표기)",
+  "source_merge_sha": "f61df6f6",
+  "branch": "Standard-12-B-to-K-Consolidation",
+  "patch_type": "standard_consolidation_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "standards_count": 10,
+  "standards": [
+    {
+      "id": "12-B",
+      "name": "Quantitative Reversal Reporting",
+      "artifact": "quantitative_reversal_reporting_standard.md",
+      "kind": "신규"
+    },
+    {
+      "id": "12-C",
+      "name": "분류 계약 명세 정합성 검증",
+      "artifact": "classification_contract_specification.md (PR #731)",
+      "kind": "기존 보강"
+    },
+    {
+      "id": "12-D",
+      "name": "분석/설계 PR evidence 재현성 의무",
+      "artifact": "evidence_reproducibility_audit.md (PR #731)",
+      "kind": "기존 보강"
+    },
+    {
+      "id": "12-E",
+      "name": "text-only post-processing guard 한계 정량 보증",
+      "artifact": "text_only_guard_limit_standard.md",
+      "kind": "기록→산출물 변환"
+    },
+    {
+      "id": "12-F",
+      "name": "regex pattern case-sensitivity 정합",
+      "artifact": "regex_case_sensitivity_audit.md (PR #732)",
+      "kind": "기존 보강"
+    },
+    {
+      "id": "12-G",
+      "name": ".gitignore evidence 정합 검증",
+      "artifact": "gitignore_evidence_compliance_standard.md",
+      "kind": "기록→산출물 변환"
+    },
+    {
+      "id": "12-H",
+      "name": "proxy 측정 vs 권위 측정 분리",
+      "artifact": "proxy_vs_authoritative_measurement_standard.md",
+      "kind": "기록→산출물 변환"
+    },
+    {
+      "id": "12-I",
+      "name": "readiness gate measurement integrity",
+      "artifact": "readiness_gate_integrity_audit.md (PR #733)",
+      "kind": "기존 보강"
+    },
+    {
+      "id": "12-J",
+      "name": "dataset integrity coverage_mismatch",
+      "artifact": "dataset_integrity_coverage_audit.md (PR #734)",
+      "kind": "기존 보강"
+    },
+    {
+      "id": "12-K",
+      "name": "PR 번호 정합성 메타데이터 무결성",
+      "artifact": "metadata_integrity_consolidated_standard.md (PR #737 보강)",
+      "kind": "신규"
+    }
+  ],
+  "reusable_helpers": [
+    {
+      "name": "detect_duplicates",
+      "origin": "PR #730",
+      "signature": "detect_duplicates(id_list) -> (dups, excess)"
+    },
+    {
+      "name": "compute_readiness",
+      "origin": "PR #733",
+      "signature": "compute_readiness(safety, ...) -> dict"
+    },
+    {
+      "name": "compute_coverage",
+      "origin": "PR #734",
+      "signature": "compute_coverage(mixed_id_list, dataset_ids, pred_id_list) -> dict"
+    }
+  ],
+  "governance_dimensions": 14,
+  "enhancement_agenda_count": 17,
+  "artifact_count_before": 7,
+  "artifact_count_after": 10
+}

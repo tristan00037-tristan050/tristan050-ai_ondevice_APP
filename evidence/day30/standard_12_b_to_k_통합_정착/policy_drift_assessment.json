@@ -1,0 +1,18 @@
+{
+  "dataset_id": "card1_evalset_v1_1_500",
+  "source_pr": 739,
+  "actual_github_pr": 739,
+  "legacy_handoff_label": "PR #739+ (chat 인계 박스 표기)",
+  "source_merge_sha": "f61df6f6",
+  "branch": "Standard-12-B-to-K-Consolidation",
+  "patch_type": "standard_consolidation_no_algorithm_no_measurement",
+  "verdict": "MEASURED_ONLY",
+  "policy_name": "card1 action metric contract",
+  "contract_version": "2.0.0",
+  "contract_version_changed": false,
+  "drift_rate": 0.0,
+  "drift_class": "OK",
+  "samples_compared": 0,
+  "is_standard10_policy_drift_report": false,
+  "drift_note": "통합 정착 PR — metric contract v2.0.0 불변 (자문 6차 M-8). 표준 문서 통합만, 측정/알고리즘 변경 0."
+}
