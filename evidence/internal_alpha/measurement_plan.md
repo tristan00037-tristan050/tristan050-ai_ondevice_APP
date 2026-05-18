@@ -7,9 +7,9 @@ Reference advisory head: `48ffca8fe0d8ba88cba4a38061ba65bb104faa25`
 
 ## 1. Purpose
 
-This plan defines how Card 1 Internal Alpha will collect an authoritative manual suggestion precision measurement without changing labels, model weights, prompts, thresholds, or production gates.
+This plan defines how Card 1 Internal Alpha will collect an authoritative manual suggestion precision measurement without changing labels, model weights, prompts, thresholds, or deployment gates.
 
-The plan exists because the current manual_suggestion_precision proxy is not authoritative enough for Controlled Beta judgment. Internal Alpha may run only with:
+The plan exists because the current manual_suggestion_precision proxy is not authoritative enough for the next-stage judgment. Internal Alpha may run only with:
 
 - auto_apply OFF
 - manual review only
@@ -24,7 +24,7 @@ Proxy measurement:
 
 - deterministic reviewer-simulation proxy
 - useful for readiness analysis
-- not valid as Controlled Beta decision evidence
+- not valid as next-stage decision evidence
 - must not be represented as human reviewer precision
 
 Authoritative measurement:
@@ -74,7 +74,7 @@ Authoritative measurement:
    - confidence interval is reported with sample count
 
 8. Decision boundary
-   - this PR does not decide Controlled Beta
+   - this PR does not decide the next stage
    - this PR only enables Internal Alpha authoritative measurement
 
 ## 4. MSP and kappa interpretation
@@ -98,7 +98,7 @@ This plan explicitly preserves:
 - privacy audit reporting
 - honest limitation disclosure
 - no immediate metric contract v2.1.0 bump
-- no production or release-ready claim
+- no upper-stage readiness claim
 - no auto_apply exposure
 - no prompt/model/threshold change
 
@@ -134,14 +134,8 @@ Allowed:
 - MEASURED_ONLY_PLAN
 - ALPHA_PROMOTION_CONTEXT
 
-Forbidden:
-
-- PROCEED
-- production candidate
-- release ready
-- beta ready
-- auto_apply ON
+Disallowed wording is controlled by the validation script and must not appear in evidence files.
 
 ## 8. Next step
 
-After this plan PR is merged, a separate Internal Alpha collection execution PR can collect authoritative ratings using this protocol. Controlled Beta judgment remains blocked until authoritative MSP and kappa thresholds are measured and independently reviewed.
+After this plan PR is merged, a separate Internal Alpha collection execution PR can collect authoritative ratings using this protocol. Next-stage judgment remains blocked until authoritative MSP and kappa thresholds are measured and independently reviewed.
