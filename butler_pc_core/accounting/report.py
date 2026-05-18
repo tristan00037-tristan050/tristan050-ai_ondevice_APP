@@ -32,7 +32,8 @@ def build_summary(df: "pd.DataFrame") -> dict[str, Any]:
         "classified_rows": int,
         "unclassified_rows": int,
         "categories": {
-            "급여": {"count": N, "avg_confidence": 0.95},
+            "급여": {"count": N, "avg_confidence": 0.95, "total_amount": M,
+                     "sign": "-", "section": "IV_sga"},
             ...
         },
         "avg_confidence": float,
@@ -50,16 +51,30 @@ def build_summary(df: "pd.DataFrame") -> dict[str, Any]:
     classified = int((~unclassified_mask).sum())
     unclassified = int(unclassified_mask.sum())
 
+    from .account_dict import ACCOUNT_BY_NAME
+
     categories: dict[str, Any] = {}
     for name, group in df[~unclassified_mask].groupby("분류과목"):
         conf_col = group["신뢰도"] if "신뢰도" in group.columns else None
         avg_conf = float(conf_col.mean()) if conf_col is not None else 0.0
         # _amt: classify_df가 입출금 분리 컬럼에서 미리 계산한 순액 (없으면 0)
         total_amt = int(group["_amt"].sum()) if "_amt" in group.columns else 0
+        # sign/section 메타 — UI 구분 배지([수익]/[비용]) 노출용 (PR #693 정합)
+        acc = ACCOUNT_BY_NAME.get(str(name))
+        if acc is not None:
+            sign, section = acc.sign, acc.section
+        else:
+            # 사전 미등록 카테고리(PEFT 모델 반환 등) — _amt 순액 부호로
+            # 추론한다. 기본값 "+"는 비용 항목을 [수익]으로 오표시할
+            # 위험이 있어, 음수 순액은 비용으로 정정한다 (Codex P2).
+            sign = "-" if total_amt < 0 else "+"
+            section = "expense" if total_amt < 0 else "revenue"
         categories[str(name)] = {
             "count": int(len(group)),
             "avg_confidence": round(avg_conf, 3),
             "total_amount": total_amt,
+            "sign": sign,
+            "section": section,
         }
 
     overall_conf = float(df["신뢰도"].mean()) if "신뢰도" in df.columns else 0.0

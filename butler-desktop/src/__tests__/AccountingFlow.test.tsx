@@ -591,9 +591,43 @@ describe('AccountingModal — 업로드 흐름', () => {
     await waitFor(() => expect(screen.getByTestId('accounting-category-table')).toBeInTheDocument(), { timeout: 5000 });
     const table = screen.getByTestId('accounting-category-table');
     expect(table.textContent).toContain('분류과목');
+    expect(table.textContent).toContain('구분');
     expect(table.textContent).toContain('건수');
     expect(table.textContent).toContain('합계금액');
     expect(table.textContent).toContain('비율');
+  });
+
+  it('test_category_table_gubun_badge_reflects_sign', async () => {
+    // sign 메타("+" 수익 / "-" 비용)가 구분 배지로 UI에 노출되어야 한다 (결함 A)
+    const signSummary = {
+      total_rows: 2,
+      classified_rows: 2,
+      unclassified_rows: 0,
+      categories: {
+        '매출': { count: 1, avg_confidence: 0.90, total_amount: 5000000, sign: '+', section: 'I_revenue' },
+        '통신비': { count: 1, avg_confidence: 0.90, total_amount: -90000, sign: '-', section: 'IV_sga' },
+      },
+      avg_confidence: 0.90,
+    };
+    const eventsSign = [
+      { event: 'phase_start', data: { status_message: '분류 중 — 회계과목 매칭' } },
+      { event: 'phase_start', data: { status_message: '보고서 생성 중 — 요약 집계' } },
+      { event: 'complete', data: { result_id: 'sign-meta', md_content: '## 보고서', summary: signSummary, row_count: 2, category_count: 2 } },
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream(eventsSign) }));
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col\nval'], 'data.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    const revBadge = await screen.findByTestId('accounting-gubun-매출', {}, { timeout: 5000 });
+    const expBadge = screen.getByTestId('accounting-gubun-통신비');
+    expect(revBadge.textContent).toBe('수익');
+    expect(expBadge.textContent).toBe('비용');
+    expect(revBadge.getAttribute('style')).toContain('--color-accounting-credit');
+    expect(expBadge.getAttribute('style')).toContain('--color-accounting-debit');
   });
 
   it('test_category_table_negative_amount_has_debit_color', async () => {

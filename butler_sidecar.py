@@ -862,9 +862,14 @@ if _FASTAPI_AVAILABLE:
                 section = acc.section if acc else "other"
                 return (SECTION_ORDER.get(section, 5), -abs(info.get("total_amount", 0)), -info["count"])
 
+            # 구분: sign 메타("+" 수익/"-" 비용) → 재무제표 구분 라벨
+            def _gubun(info):
+                return "수익" if info.get("sign", "+") == "+" else "비용"
+
             if has_amount:
                 cat_rows = "\n".join(
-                    f"| {name} | {info['count']} | {info.get('total_amount', 0):,}원 | {info['avg_confidence']:.0%} |"
+                    f"| {name} | {_gubun(info)} | {info['count']} | "
+                    f"{info.get('total_amount', 0):,}원 | {info['avg_confidence']:.0%} |"
                     for name, info in sorted(cats.items(), key=_cat_sort_key)
                 )
                 md_content = (
@@ -874,13 +879,13 @@ if _FASTAPI_AVAILABLE:
                     f"- **미분류**: {summary['unclassified_rows']}건\n"
                     f"- **평균 신뢰도**: {summary['avg_confidence']:.1%}\n\n"
                     f"### 계정과목별 분류\n\n"
-                    f"| 계정과목 | 건수 | 합계금액 | 평균신뢰도 |\n"
-                    f"|---------|------|---------|----------|\n"
+                    f"| 계정과목 | 구분 | 건수 | 합계금액 | 평균신뢰도 |\n"
+                    f"|---------|------|------|---------|----------|\n"
                     f"{cat_rows}\n"
                 )
             else:
                 cat_rows = "\n".join(
-                    f"| {name} | {info['count']} | {info['avg_confidence']:.0%} |"
+                    f"| {name} | {_gubun(info)} | {info['count']} | {info['avg_confidence']:.0%} |"
                     for name, info in sorted(cats.items(), key=_cat_sort_key)
                 )
                 md_content = (
@@ -890,8 +895,8 @@ if _FASTAPI_AVAILABLE:
                     f"- **미분류**: {summary['unclassified_rows']}건\n"
                     f"- **평균 신뢰도**: {summary['avg_confidence']:.1%}\n\n"
                     f"### 계정과목별 분류\n\n"
-                    f"| 계정과목 | 건수 | 평균신뢰도 |\n"
-                    f"|---------|------|----------|\n"
+                    f"| 계정과목 | 구분 | 건수 | 평균신뢰도 |\n"
+                    f"|---------|------|------|----------|\n"
                     f"{cat_rows}\n"
                 )
 

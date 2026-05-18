@@ -319,8 +319,13 @@ def match_account(description: str, vendor: str = "") -> Tuple[str, float]:
 
         # 신뢰도 계산 — 동점 비교에서도 참조하므로 비교 전 산출
         if kw_hit > 0:
-            kw_ratio = kw_hit / max(1, len(kw_pats))
-            conf = min(1.0, 0.50 + kw_ratio * 0.40 + (0.10 if vd_hit > 0 else 0.0))
+            # 키워드 패턴은 OR 집합 — 1건만 명중해도 규칙이 발화한
+            # 확정적 분류 신호다. 기존 kw_ratio = kw_hit / 사전_전체_
+            # 키워드수 는 짧은 적요(통상 1개 패턴만 명중)에서 분모가
+            # 커 0.05~0.20 에 수렴, 의도된 0.90 상한(0.50 base + 0.40
+            # span)이 구조적으로 도달 불가했다. 키워드 명중 = 설계
+            # 의도 상한 0.90, 벤더 동시 일치 시 +0.10 (최대 1.0).
+            conf = min(1.0, 0.90 + (0.10 if vd_hit > 0 else 0.0))
         else:
             # 벤더 단독 매칭: 임계값 미만 — 미분류로 격리됨
             conf = 0.30

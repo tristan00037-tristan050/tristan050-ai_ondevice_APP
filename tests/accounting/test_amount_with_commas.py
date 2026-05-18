@@ -36,7 +36,8 @@ def test_summary_sheet_with_comma_amounts():
         total_row = [cell.value for cell in ws[ws.max_row]]
         assert total_row[0] == "총계", f"마지막 행이 총계 행이 아님: {total_row}"
 
-        total_sum = total_row[2]
+        # [요약] 컬럼: 분류과목 | 구분 | 건수 | 합계금액 | 비율 → 합계금액=index 3
+        total_sum = total_row[3]
         assert total_sum > 0, (
             f"합계가 0 — 콤마 포함 금액 파싱 실패. 전체 요약:\n"
             + "\n".join(str([c.value for c in row]) for row in ws.iter_rows())

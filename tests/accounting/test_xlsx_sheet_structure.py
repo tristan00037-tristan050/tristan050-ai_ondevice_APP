@@ -67,9 +67,12 @@ def test_result_sheet_분류과목_in_first_columns():
             f"'분류과목' 컬럼이 너무 오른쪽에 위치 (0-based index={idx}, 기대: ≤3) — "
             f"헤더: {headers}"
         )
-        # 신뢰도도 분류과목 바로 다음에 위치해야 함
-        assert idx + 1 < len(headers) and headers[idx + 1] == "신뢰도", (
-            f"'신뢰도'가 '분류과목' 바로 다음이 아님: {headers}"
+        # 분류과목 다음은 구분, 그 다음 신뢰도 (PR #694 sign 메타 구분 컬럼)
+        assert idx + 1 < len(headers) and headers[idx + 1] == "구분", (
+            f"'구분'이 '분류과목' 바로 다음이 아님: {headers}"
+        )
+        assert idx + 2 < len(headers) and headers[idx + 2] == "신뢰도", (
+            f"'신뢰도'가 '구분' 바로 다음이 아님: {headers}"
         )
     finally:
         tmp.unlink(missing_ok=True)
