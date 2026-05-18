@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Internal Alpha Sample Selection Plan",
+  "type": "object",
+  "required": [
+    "status",
+    "source_pr",
+    "source_merge_sha",
+    "advisory_head_sha",
+    "dataset_id",
+    "raw_plaintext_allowed",
+    "evidence_mode",
+    "recommended_sample_plan",
+    "fallback_sample_plan",
+    "residual_a4_9",
+    "selection_rules",
+    "coverage_required_fields",
+    "fail_classes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "status": {"const": "MEASURED_ONLY_PLAN"},
+    "source_pr": {"const": 734},
+    "source_merge_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "advisory_head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "dataset_id": {"const": "card1_evalset_v1_1_500"},
+    "raw_plaintext_allowed": {"const": false},
+    "evidence_mode": {"const": "digest16_or_metadata_only"},
+    "recommended_sample_plan": {
+      "type": "object",
+      "required": ["total", "strata"],
+      "additionalProperties": true,
+      "properties": {"total": {"const": 150}, "strata": {"type": "array", "minItems": 5}}
+    },
+    "fallback_sample_plan": {
+      "type": "object",
+      "required": ["total", "strata"],
+      "additionalProperties": true,
+      "properties": {"total": {"const": 100}, "strata": {"type": "array", "minItems": 4}}
+    },
+    "residual_a4_9": {
+      "type": "object",
+      "required": ["oversample", "known_pattern_groups", "sample_ids_required", "digest16_required"],
+      "additionalProperties": true,
+      "properties": {"oversample": {"const": true}, "known_pattern_groups": {"type": "array"}, "sample_ids_required": {"const": true}, "digest16_required": {"const": true}}
+    },
+    "selection_rules": {"type": "object"},
+    "coverage_required_fields": {"type": "array"},
+    "fail_classes": {"type": "array"}
+  }
+}
