@@ -61,12 +61,20 @@ def build_summary(df: "pd.DataFrame") -> dict[str, Any]:
         total_amt = int(group["_amt"].sum()) if "_amt" in group.columns else 0
         # sign/section 메타 — UI 구분 배지([수익]/[비용]) 노출용 (PR #693 정합)
         acc = ACCOUNT_BY_NAME.get(str(name))
+        if acc is not None:
+            sign, section = acc.sign, acc.section
+        else:
+            # 사전 미등록 카테고리(PEFT 모델 반환 등) — _amt 순액 부호로
+            # 추론한다. 기본값 "+"는 비용 항목을 [수익]으로 오표시할
+            # 위험이 있어, 음수 순액은 비용으로 정정한다 (Codex P2).
+            sign = "-" if total_amt < 0 else "+"
+            section = "expense" if total_amt < 0 else "revenue"
         categories[str(name)] = {
             "count": int(len(group)),
             "avg_confidence": round(avg_conf, 3),
             "total_amount": total_amt,
-            "sign": acc.sign if acc else "+",
-            "section": acc.section if acc else "other",
+            "sign": sign,
+            "section": section,
         }
 
     overall_conf = float(df["신뢰도"].mean()) if "신뢰도" in df.columns else 0.0
