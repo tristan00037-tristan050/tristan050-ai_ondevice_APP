@@ -1,0 +1,5 @@
+# D-4 Card2 raw_text_retention_zero — evidence_kind=static_audit
+# measured_at=2026-05-19T08:23:18.309981+00:00
+
+eval_set_v1.jsonl 55행 raw 데이터 필드(raw_text/source_text/original_text/raw_paragraph/original_paragraph) 누출: 0건
+PASS — raw text data retention 0

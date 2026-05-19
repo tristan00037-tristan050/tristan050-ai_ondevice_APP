@@ -1,0 +1,9 @@
+# D-4 Card2 slot_integrity — evidence_kind=real_run
+# measured_at=2026-05-19T08:23:18.309981+00:00
+
+PASS  no_source_fact -> blank
+PASS  no_citation -> blank
+PASS  factpack_fail -> blank
+PASS  1.7b_l_fallback never auto_fill
+
+종합: PASS — M-52 불변식 검증

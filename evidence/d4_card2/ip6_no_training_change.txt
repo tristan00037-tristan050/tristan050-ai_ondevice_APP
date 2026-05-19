@@ -1,0 +1,7 @@
+# D-4 Card2 IP6 — training/ diff zero
+# evidence_kind=static_audit
+# measured_at=2026-05-19T08:23:18.309981+00:00
+
+git diff base..HEAD -- training/ : (empty)
+training/ 디렉터리 자체 부재 — 학습 변경 0.
+PASS

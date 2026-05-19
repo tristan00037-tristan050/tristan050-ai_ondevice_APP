@@ -1,0 +1,9 @@
+# D-4 Card2 IP3 routing — evidence_kind=real_run
+# measured_at=2026-05-19T08:23:18.309981+00:00
+
+S: model=butler-1.7b-q4_k_m auto_fill_allowed=True thr_auto=0.82 gate_fail=[]
+M: model=butler-1.7b-q4_k_m auto_fill_allowed=True thr_auto=0.82 gate_fail=[]
+L-gate-pass: model=qwen3-4b-q4_k_m auto_fill_allowed=True thr_auto=0.85 gate_fail=[]
+L-gate-fail: model=butler-1.7b-q4_k_m auto_fill_allowed=False thr_auto=None gate_fail=['not_m3_max', 'free_ram<6.0', 'battery<30', 'thermal=serious']
+
+PASS — L 게이트 3중 검증: 전수 통과시 4B, 1건 실패시 1.7B fallback(auto_fill 금지)

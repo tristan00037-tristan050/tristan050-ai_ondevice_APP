@@ -1,0 +1,11 @@
+{
+  "evidence_kind": "not_run",
+  "environment": "assistant CI-equivalent (no GGUF model)",
+  "measured_at": "2026-05-19T08:23:18.309981+00:00",
+  "reason": "mapping accuracy 측정은 1.7B/4B 모델 실행 필요 — M3 Max local 환경 요구. M-59 거짓 실측 금지.",
+  "pending_metrics": [
+    "auto_fill_precision",
+    "blank_ratio",
+    "slot_contamination"
+  ]
+}
