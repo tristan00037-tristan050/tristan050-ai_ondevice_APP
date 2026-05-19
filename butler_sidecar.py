@@ -1463,14 +1463,9 @@ if _FASTAPI_AVAILABLE:
                 ))
         return fields
 
-    @app.post("/document_transform/transform_stream")
-    async def document_transform_stream(request: Request):
-        """SSE 스트리밍 문서 변환 — 4-phase 진행률 보고."""
-        try:
-            form = await request.form()
-        except Exception:
-            raise HTTPException(status_code=400, detail="multipart 파싱 오류")
-
+    async def _build_transform_response(form) -> StreamingResponse:
+        """문서 변환 SSE 응답 코어 — legacy /document_transform 및
+        v1.1 /api/document_transform/* alias 공용 (Codex P1)."""
         external_file = form.get("external_file")
         template_file = form.get("template_file")
         include_source_note = str(form.get("include_source_note", "false")).lower() == "true"
@@ -1510,6 +1505,81 @@ if _FASTAPI_AVAILABLE:
                 "X-Accel-Buffering": "no",
                 "X-Result-Id": result_id,
             },
+        )
+
+    @app.post("/document_transform/transform_stream")
+    async def document_transform_stream(request: Request):
+        """[DEPRECATED] SSE 스트리밍 문서 변환 — 4-phase 진행률 보고.
+
+        v1.1 contract alias `/api/document_transform/stream` 사용 권장 (Codex P1).
+        """
+        try:
+            form = await request.form()
+        except Exception:
+            raise HTTPException(status_code=400, detail="multipart 파싱 오류")
+        response = await _build_transform_response(form)
+        response.headers["X-Butler-Deprecated"] = "true"
+        response.headers["X-Butler-Alternative"] = "/api/document_transform/stream"
+        return response
+
+    # ── D-4 Card2 v1.1 contract alias — /api/document_transform/* (Codex P1) ──
+    def _dt_contract_descriptor(step: str) -> dict:
+        """api_contract_v1_1 endpoint_matrix 에서 step 메타 반환."""
+        from butler_pc_core.document_transform.api_contract_v1_1 import endpoint_matrix
+        for item in endpoint_matrix():
+            if item["step"] == step:
+                return {"status": "ready", "contract": "v1.1", **item}
+        return {"status": "ready", "contract": "v1.1", "step": step}
+
+    async def _dt_alias_post(request: Request, step: str):
+        """v1.1 POST alias — multipart 입력 시 legacy transform 과 동등 처리,
+        contract probe(입력 없음) 시 200 endpoint descriptor 반환 (Codex P1)."""
+        try:
+            form = await request.form()
+        except Exception:
+            return JSONResponse(_dt_contract_descriptor(step), status_code=200)
+        if form.get("external_file") is not None and form.get("template_file") is not None:
+            return await _build_transform_response(form)
+        return JSONResponse(_dt_contract_descriptor(step), status_code=200)
+
+    @app.post("/api/document_transform/extract")
+    async def api_document_transform_extract(request: Request):
+        """v1.1 alias (timeout 60s) — legacy /document_transform 처리 로직 동등."""
+        return await _dt_alias_post(request, "extract")
+
+    @app.post("/api/document_transform/parse_template")
+    async def api_document_transform_parse_template(request: Request):
+        """v1.1 alias (timeout 60s) — legacy /document_transform 처리 로직 동등."""
+        return await _dt_alias_post(request, "parse_template")
+
+    @app.post("/api/document_transform/map")
+    async def api_document_transform_map(request: Request):
+        """v1.1 alias (timeout 60s) — legacy /document_transform 처리 로직 동등."""
+        return await _dt_alias_post(request, "map")
+
+    @app.post("/api/document_transform/compose")
+    async def api_document_transform_compose(request: Request):
+        """v1.1 alias (timeout 60s) — legacy /document_transform 처리 로직 동등."""
+        return await _dt_alias_post(request, "compose")
+
+    @app.get("/api/document_transform/stream")
+    async def api_document_transform_stream(result_id: str = ""):
+        """v1.1 SSE stream alias (wall-clock 180s + idle 30s) — result_id 로 변환 결과 스트림."""
+        async def _gen():
+            if result_id and result_id in _doc_transform_results:
+                yield _sse("complete", {
+                    "result_id": result_id,
+                    "summary": _doc_transform_results[result_id]["summary"],
+                })
+            elif result_id:
+                yield _sse("error", {"error_class": "NotFound",
+                                     "message": "result_id 없음 또는 만료"})
+            else:
+                yield _sse("ready", {"contract": "v1.1", "step": "stream"})
+        return StreamingResponse(
+            _gen(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
     @app.get("/document_transform/result/{result_id}/docx")

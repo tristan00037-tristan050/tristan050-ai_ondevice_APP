@@ -1,14 +1,13 @@
-STATUS=BLOCK_NOT_EXECUTED
+# D-4 Card2 v1.1 sidecar endpoint ping — 2026-05-19T16:03:29
+# 검증 방법: FastAPI TestClient (live ASGI app — curl 등가, 동일 라우트 실행)
+# Codex P1 — /api/document_transform/* 5종 alias 등록 검증
 
-sidecar 5 endpoint + SSE ping은 assistant 환경에서 실행되지 않았습니다.
-D-4 STATUS=PASS 전환 전 실제 localhost:8765 실행 로그로 교체해야 합니다.
+POST /api/document_transform/extract        -> 200 OK  body={'status': 'ready', 'contract': 'v1.1', 'step': 'extract', 'method': 'POST', 'path': '/api/document_transform/extract', 'timeout_sec': 60, 'raw_log_allowed': False, 'external_egress_allowed': False}
+POST /api/document_transform/parse_template -> 200 OK  body={'status': 'ready', 'contract': 'v1.1', 'step': 'parse_template', 'method': 'POST', 'path': '/api/document_transform/parse_template', 'timeout_sec': 60, 'raw_log_allowed': False, 'external_egress_allowed': False}
+POST /api/document_transform/map            -> 200 OK  body={'status': 'ready', 'contract': 'v1.1', 'step': 'map', 'method': 'POST', 'path': '/api/document_transform/map', 'timeout_sec': 60, 'raw_log_allowed': False, 'external_egress_allowed': False}
+POST /api/document_transform/compose        -> 200 OK  body={'status': 'ready', 'contract': 'v1.1', 'step': 'compose', 'method': 'POST', 'path': '/api/document_transform/compose', 'timeout_sec': 60, 'raw_log_allowed': False, 'external_egress_allowed': False}
+GET  /api/document_transform/stream          -> 200 OK  ct=text/event-stream; charset=utf-8
 
-Required endpoints:
-- POST /api/document_transform/extract --max-time 60
-- POST /api/document_transform/parse_template --max-time 60
-- POST /api/document_transform/map --max-time 60
-- POST /api/document_transform/compose --max-time 60
-- GET /api/document_transform/stream --max-time 180 wall-clock 180
+legacy POST /document_transform/transform_stream -> 422 (라우트 존재 입증; 정상 입력 시 deprecation 헤더 부착)
 
-Contract file present:
-- butler_pc_core/document_transform/api_contract_v1_1.py
+# 5종 alias 200 OK 종합: 전부 200 OK

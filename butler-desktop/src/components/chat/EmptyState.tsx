@@ -1,3 +1,8 @@
+/**
+ * @deprecated D-4 Card2 v1.1 — `src/components/v1_1/CardGrid.tsx` 로 대체됨.
+ * App.tsx 는 더 이상 본 컴포넌트를 사용하지 않는다. 기존 테스트 호환을 위해
+ * 파일만 유지하며, P3~P11 잔여 큐의 테스트 마이그레이션 후 제거 예정.
+ */
 import React, { useState } from 'react';
 import {
   Inbox,
