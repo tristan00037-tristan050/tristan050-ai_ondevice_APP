@@ -1,0 +1,17 @@
+{
+  "status": "AUTHORITATIVE_MEASUREMENT_BLOCKED_PENDING_REVIEWERS",
+  "source_plan_pr": 742,
+  "source_plan_merge_sha": "37b2b4f9f549684048d3a0199e88c164671cada8",
+  "calibration_sample_min": 10,
+  "calibration_sample_max": 20,
+  "calibration_samples": [],
+  "calibration_sample_count": 0,
+  "reviewer_count": 0,
+  "labels": ["useful", "irrelevant", "unsafe", "needs_edit"],
+  "disagreement_analysis_available": false,
+  "guide_revision_required": null,
+  "raw_plaintext_allowed": false,
+  "ok": false,
+  "fail_class": "CALIBRATION_REVIEWERS_REQUIRED",
+  "blocked_reason": "Reviewer registration is empty; calibration round cannot execute without independent reviewers."
+}

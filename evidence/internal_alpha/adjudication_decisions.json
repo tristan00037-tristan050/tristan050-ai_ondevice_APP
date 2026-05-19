@@ -1,0 +1,21 @@
+{
+  "status": "AUTHORITATIVE_MEASUREMENT_BLOCKED_PENDING_REVIEWERS",
+  "source_plan_pr": 742,
+  "source_plan_merge_sha": "37b2b4f9f549684048d3a0199e88c164671cada8",
+  "raw_plaintext_allowed": false,
+  "evidence_mode": "digest16_or_metadata_only",
+  "adjudication_protocol": {
+    "three_reviewer_rule": "majority_vote",
+    "two_reviewer_rule": "adjudicator_required_on_disagreement",
+    "unsafe_override": true,
+    "ambiguous_residual_a4_preserved": true
+  },
+  "disagreement_samples": [],
+  "disagreement_sample_count": 0,
+  "adjudication_decisions": [],
+  "adjudication_decision_count": 0,
+  "adjudicated_label_set": ["useful", "irrelevant", "unsafe", "needs_edit"],
+  "ok": false,
+  "fail_class": "ADJUDICATION_INPUT_REQUIRED",
+  "blocked_reason": "No reviewer ratings are available, so disagreement detection and adjudication cannot execute."
+}

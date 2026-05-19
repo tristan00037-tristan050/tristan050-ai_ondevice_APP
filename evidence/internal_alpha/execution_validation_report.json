@@ -1,0 +1,49 @@
+{
+  "status": "AUTHORITATIVE_MEASUREMENT_BLOCKED_PENDING_REVIEWERS",
+  "source_plan_pr": 742,
+  "source_plan_merge_sha": "37b2b4f9f549684048d3a0199e88c164671cada8",
+  "advisory_head_sha": "48ffca8fe0d8ba88cba4a38061ba65bb104faa25",
+  "raw_plaintext_allowed": false,
+  "evidence_mode": "digest16_or_metadata_only",
+  "evidence_files": [
+    "evidence/internal_alpha/reviewer_registration.json",
+    "evidence/internal_alpha/calibration_round_results.json",
+    "evidence/internal_alpha/collected_samples.json",
+    "evidence/internal_alpha/reviewer_ratings.json",
+    "evidence/internal_alpha/adjudication_decisions.json",
+    "evidence/internal_alpha/cohen_kappa.json",
+    "evidence/internal_alpha/authoritative_msp_result.json",
+    "evidence/internal_alpha/execution_validation_report.json"
+  ],
+  "automatic_validation": {
+    "evidence_8_files_present": true,
+    "json_parseability": true,
+    "digest16_meta_only_boundary": true,
+    "privacy_boundary_raw_plaintext_hits": 0,
+    "reviewer_id_duplicate_count": 0,
+    "sample_duplicate_count": 0,
+    "rating_duplicate_count": 0,
+    "one_reviewer_one_sample_one_rating_ok": false,
+    "kappa_threshold": 0.70,
+    "kappa_gate_passed": false,
+    "authoritative_msp_threshold": 0.80,
+    "authoritative_msp_gate_passed": false,
+    "advisory_14_guardrails_static_check": true,
+    "upper_stage_wording_guard": true
+  },
+  "manual_validation_required": [
+    "reviewer_suitability",
+    "adjudication_result_quality",
+    "next_stage_decision"
+  ],
+  "blocked_inputs": [
+    "representative_reviewer_metadata",
+    "digest_only_sample_selection",
+    "independent_reviewer_ratings",
+    "adjudicated_labels"
+  ],
+  "controlled_beta_decision_made": false,
+  "ok": false,
+  "fail_class": "AUTHORITATIVE_MEASUREMENT_INPUTS_REQUIRED",
+  "blocked_reason": "Execution evidence files are present and fail closed. Authoritative MSP and kappa cannot be computed until representative reviewers, selected samples, independent ratings, and adjudicated labels are provided."
+}

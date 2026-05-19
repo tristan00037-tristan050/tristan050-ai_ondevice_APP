@@ -1,0 +1,28 @@
+{
+  "status": "AUTHORITATIVE_MEASUREMENT_BLOCKED_PENDING_REVIEWERS",
+  "source_plan_pr": 742,
+  "source_plan_merge_sha": "37b2b4f9f549684048d3a0199e88c164671cada8",
+  "raw_plaintext_allowed": false,
+  "evidence_mode": "digest16_or_metadata_only",
+  "layer_separation": {
+    "layer_1": "strict_extraction_existing_metrics_unchanged",
+    "layer_2": "manual_suggestion_authoritative_review"
+  },
+  "tp": null,
+  "fp": null,
+  "fn": null,
+  "tn": null,
+  "manual_suggestion_precision_authoritative": null,
+  "manual_suggestion_precision_threshold": 0.80,
+  "confidence_interval": {
+    "method": "wilson_score_interval_preferred",
+    "confidence_level": 0.95,
+    "ci_low": null,
+    "ci_high": null
+  },
+  "authoritative_msp_gate_passed": false,
+  "controlled_beta_decision_made": false,
+  "ok": false,
+  "fail_class": "AUTHORITATIVE_MSP_INPUT_REQUIRED",
+  "blocked_reason": "Adjudicated reviewer labels are absent; authoritative MSP cannot be computed without adjudicated labels."
+}
