@@ -1,0 +1,15 @@
+STATUS=BLOCK_NOT_EXECUTED
+
+pytest 단위 9개 그룹은 assistant 환경에서 실행되지 않았습니다.
+D-4 STATUS=PASS 전환 전 실제 로컬/CI 실행 로그로 교체해야 합니다.
+
+Required groups:
+- docx parser
+- pdf parser
+- eml parser
+- slot mapping
+- docx rendering
+- slot integrity 6 tests
+- FactPack rules
+- size gates
+- IP matrix
