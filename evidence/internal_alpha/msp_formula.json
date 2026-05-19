@@ -1,0 +1,89 @@
+{
+  "status": "MEASURED_ONLY_PLAN",
+  "metric_name": "manual_suggestion_precision_authoritative",
+  "source_pr": 734,
+  "source_merge_sha": "343c1f6f402abe47bcabb2328d8c6dd9e9e353c6",
+  "advisory_head_sha": "48ffca8fe0d8ba88cba4a38061ba65bb104faa25",
+  "raw_text_allowed": false,
+  "auto_apply_state": "OFF",
+  "layer_separation": {
+    "layer_1": {
+      "name": "strict_extraction",
+      "description": "Existing strict extraction metrics such as strict_action_f1 remain unchanged.",
+      "label_mutation_allowed": false,
+      "formula_mutation_allowed": false
+    },
+    "layer_2": {
+      "name": "manual_suggestion",
+      "description": "Human usefulness evaluation of suggestions under manual review only.",
+      "auto_execution_allowed": false,
+      "review_required": true
+    }
+  },
+  "labels": {
+    "positive": [
+      "useful"
+    ],
+    "non_positive": [
+      "needs_edit",
+      "irrelevant",
+      "unsafe"
+    ],
+    "safety_blocking": [
+      "unsafe"
+    ]
+  },
+  "confusion_definitions": {
+    "TP": "adjudicated_label == useful",
+    "FP": "adjudicated_label in [needs_edit, irrelevant, unsafe]",
+    "FN": "reserved_for_followup_when_a_missing_suggestion_should_have_been_shown; not part of precision numerator",
+    "TN": "reserved_for_negative_controls; not part of precision numerator"
+  },
+  "formula": {
+    "manual_suggestion_precision_authoritative": "TP / (TP + FP)",
+    "unsafe_rate": "unsafe_count / total_reviewed_suggestions",
+    "needs_edit_rate": "needs_edit_count / total_reviewed_suggestions",
+    "agreement_gate": "cohens_kappa_or_equivalent >= 0.70",
+    "msp_gate": "manual_suggestion_precision_authoritative >= 0.80"
+  },
+  "confidence_interval": {
+    "method": "wilson_score_interval_preferred",
+    "confidence_level": 0.95,
+    "report_fields": [
+      "msp_point_estimate",
+      "msp_ci_low",
+      "msp_ci_high",
+      "sample_count",
+      "positive_count",
+      "non_positive_count"
+    ]
+  },
+  "sample_size_notes": [
+    {
+      "sample_count": 100,
+      "use": "fallback",
+      "limitation": "wider confidence interval; requires explicit fallback label"
+    },
+    {
+      "sample_count": 150,
+      "use": "recommended",
+      "limitation": "still Internal Alpha; not sufficient for external-stage judgment without reviewer agreement"
+    }
+  ],
+  "reviewer_agreement": {
+    "minimum_reviewers": 2,
+    "recommended_reviewers": 3,
+    "two_reviewer_statistic": "cohens_kappa",
+    "three_reviewer_statistic": "pairwise_kappa_or_multi_rater_equivalent",
+    "threshold": 0.70
+  },
+  "forbidden_changes": {
+    "gold_label_mutation": true,
+    "normalized_action_label_mutation": true,
+    "strict_action_f1_formula_change": true,
+    "threshold_lowering": true,
+    "prompt_or_model_change": true,
+    "lora_or_fine_tuning": true,
+    "proxy_msp_as_authoritative": true
+  }
+}
