@@ -1,0 +1,25 @@
+{
+  "status": "AUTHORITATIVE_MEASUREMENT_BLOCKED_PENDING_REVIEWERS",
+  "source_plan_pr": 742,
+  "source_plan_merge_sha": "37b2b4f9f549684048d3a0199e88c164671cada8",
+  "advisory_head_sha": "48ffca8fe0d8ba88cba4a38061ba65bb104faa25",
+  "raw_plaintext_allowed": false,
+  "evidence_mode": "digest16_or_metadata_only",
+  "minimum_reviewer_count": 2,
+  "recommended_reviewer_count": 3,
+  "registered_reviewers": [],
+  "registered_reviewer_count": 0,
+  "reviewer_identity_storage": "reviewer_id_digest_only",
+  "representative_selection_owner": "representative_manual_decision_required",
+  "ok": false,
+  "fail_class": "REVIEWER_REGISTRATION_REQUIRED",
+  "blocked_reason": "No representative reviewer metadata was provided. The main development team must not invent reviewers or reviewer qualifications.",
+  "guardrails": {
+    "auto_apply": "OFF",
+    "model_change": false,
+    "prompt_change": false,
+    "label_change": false,
+    "metric_threshold_change": false,
+    "proxy_msp_as_authoritative": false
+  }
+}
