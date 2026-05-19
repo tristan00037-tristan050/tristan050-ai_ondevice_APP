@@ -1,0 +1,35 @@
+{
+  "status": "AUTHORITATIVE_MEASUREMENT_BLOCKED_PENDING_REVIEWERS",
+  "source_plan_pr": 742,
+  "source_plan_merge_sha": "37b2b4f9f549684048d3a0199e88c164671cada8",
+  "dataset_id": "card1_evalset_v1_1_500",
+  "raw_plaintext_allowed": false,
+  "evidence_mode": "digest16_or_metadata_only",
+  "recommended_sample_total": 150,
+  "fallback_sample_total": 100,
+  "selected_plan": null,
+  "collected_samples": [],
+  "collected_sample_count": 0,
+  "residual_a4_9_oversampling_required": true,
+  "residual_a4_9_oversampling_completed": false,
+  "strata_required": {
+    "recommended": {
+      "residual_a4_ambiguous_request_report": 30,
+      "a3_product_equivalent_suggestion": 40,
+      "ordinary_safe_request": 30,
+      "question_report_no_action_negative_controls": 30,
+      "deadline_sensitive_cases": 20
+    },
+    "fallback": {
+      "residual_a4_and_a3": 40,
+      "ordinary_safe_request": 20,
+      "negative_controls": 25,
+      "deadline_sensitive_cases": 15
+    }
+  },
+  "sample_duplicate_count": 0,
+  "sample_id_digest_required": true,
+  "ok": false,
+  "fail_class": "AUTHORITATIVE_SAMPLE_SELECTION_REQUIRED",
+  "blocked_reason": "No approved digest-only sample selection was provided. The main development team must not fabricate authoritative collection samples."
+}
