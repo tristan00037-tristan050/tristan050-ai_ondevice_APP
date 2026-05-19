@@ -1,0 +1,12 @@
+STATUS=BLOCK_NOT_EXECUTED
+
+Playwright E1~E6은 assistant 환경에서 실행되지 않았습니다.
+D-4 STATUS=PASS 전환 전 실제 Playwright 로그로 교체해야 합니다.
+
+Required scenarios:
+- E1 external .docx + template .docx -> output .docx
+- E2 external text PDF + template .docx -> output .docx
+- E3 external .eml + template .md -> output .md
+- E4 multi external upload reject
+- E5 XL size gate block + Team Hub guidance
+- E6 low confidence -> blank + 확인 필요
