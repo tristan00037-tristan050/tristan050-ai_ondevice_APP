@@ -1,0 +1,19 @@
+{
+  "status": "AUTHORITATIVE_MEASUREMENT_BLOCKED_PENDING_REVIEWERS",
+  "source_plan_pr": 742,
+  "source_plan_merge_sha": "37b2b4f9f549684048d3a0199e88c164671cada8",
+  "raw_plaintext_allowed": false,
+  "evidence_mode": "digest16_or_metadata_only",
+  "rating_labels": ["useful", "irrelevant", "unsafe", "needs_edit"],
+  "rating_records": [],
+  "rating_record_count": 0,
+  "unique_reviewer_sample_pairs": 0,
+  "duplicate_reviewer_sample_rating_count": 0,
+  "one_reviewer_one_sample_one_rating_ok": false,
+  "minimum_independent_ratings_per_sample": 2,
+  "reviewer_count": 0,
+  "sample_count": 0,
+  "ok": false,
+  "fail_class": "AUTHORITATIVE_RATINGS_REQUIRED",
+  "blocked_reason": "No independent reviewer ratings were provided. MSP and agreement statistics cannot be computed without ratings."
+}
