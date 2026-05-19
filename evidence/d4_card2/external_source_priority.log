@@ -1,0 +1,14 @@
+{
+  "case_id": "card2_eval_001",
+  "slot_id": "market_tam",
+  "source_fact_present": false,
+  "wiki_lookup_used": true,
+  "auto_fill_allowed": false,
+  "reason": "WIKI_ONLY_FACT_NOT_AUTOFILLABLE",
+  "fail_class": "WIKI_ONLY_FACT_NOT_AUTOFILLABLE",
+  "confidence": 0.88,
+  "model_used": "qwen3-4b-q4_k_m",
+  "model_sha": "not_run — 모델 미로드 환경",
+  "decision": "blank",
+  "evidence_kind": "not_run"
+}

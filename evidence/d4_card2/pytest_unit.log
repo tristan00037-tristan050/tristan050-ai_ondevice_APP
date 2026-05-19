@@ -1,0 +1,28 @@
+# D-4 Card2 P5 pytest 단위 — hotfix 3차 (2026-05-19)
+# 검토 기준: PR #744 / branch feat/d4-card2-document-transform
+
+## (1) 핸드오프 지정 경로 존재 검증
+명령: pytest tests/cards/document_transform/ tests/router/ tests/policy/ tests/regression/
+결과: ERROR: file or directory not found: tests/cards/document_transform/
+      → 지정 4개 디렉터리 전부 레포에 부재. collected 0.
+
+## (2) 실제 존재하는 D-4 Card2 관련 단위 테스트 (메인 영역)
+명령: pytest tests/document_transform/ tests/test_algoteam_integration.py
+대상:
+  - tests/document_transform/test_content_extractor.py
+  - tests/document_transform/test_semantic_mapping.py
+  - tests/test_algoteam_integration.py  (card2 SSE + semantic_mapping 통합 + sidecar route)
+결과: 22 passed (0.58s)
+
+## (3) 정직 한계 — STATUS=PARTIAL
+- 핸드오프가 지정한 9개 그룹 테스트 디렉터리(cards/document_transform · router ·
+  policy · regression)는 레포에 존재하지 않는다. 알고리즘 영역 테스트 모듈
+  (mapper / factpack_rules / card2_routing / slot_integrity / derived_artifact)은
+  미구현 상태 = PENDING_ALGORITHM.
+- `api_contract_v1_1` 전용 단위 테스트 파일도 부재. 단 hotfix 2차의
+  evidence/d4_card2/sidecar_endpoint_ping.log 가 `/api/document_transform/*`
+  5종 200 OK 를 입증한다.
+- 본 hotfix 3차는 "안전한 evidence 생성만" 원칙(임의 대량 수정 0)에 따라 신규
+  테스트 suite 작성을 수행하지 않는다. 누락 테스트 모듈 작성은 알고리즘 산출물
+  도착 후 별도 hotfix(4차) 또는 알고리즘팀 영역.
+- 종합: 메인 영역 22 passed / 알고리즘 영역 PENDING_ALGORITHM.

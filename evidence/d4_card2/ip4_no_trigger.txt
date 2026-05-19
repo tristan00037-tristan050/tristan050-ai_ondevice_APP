@@ -1,0 +1,7 @@
+# D-4 Card2 IP4 — auto_finetune trigger 부재
+# evidence_kind=static_audit
+# measured_at=2026-05-19T08:23:18.309981+00:00
+
+rg "continual_learning_trigger|auto_finetune|fine_tune|lora" butler_pc_core/cards butler_pc_core/router/card2_routing.py scripts/eval/card2 -> 0건
+(tests/evaluation 매치는 manifest key 'ip4_auto_finetune_trigger' + test 단언 — M-54 허용, 부재 선언 목적)
+PASS — D-4 신규 코드에 auto-finetune trigger 0.

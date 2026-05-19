@@ -1,0 +1,67 @@
+{
+  "status": "PASS",
+  "evidence_kind": "static_audit",
+  "measured_at": "2026-05-19T08:23:57.983233+00:00",
+  "checks": [
+    {
+      "id": "HOLD_01",
+      "name": "rag_index_generated",
+      "passed": true,
+      "evidence_path": "test_rag_index_not_generated_in_d4_main_pr.py + rglob 0건"
+    },
+    {
+      "id": "HOLD_02",
+      "name": "source_fact_missing_autofill",
+      "passed": true,
+      "evidence_path": "test_no_source_fact_forces_blank_even_confidence_100"
+    },
+    {
+      "id": "HOLD_03",
+      "name": "citation_missing_autofill",
+      "passed": true,
+      "evidence_path": "test_no_citation_forces_blank_even_confidence_100"
+    },
+    {
+      "id": "HOLD_04",
+      "name": "wiki_only_autofill",
+      "passed": true,
+      "evidence_path": "test_wiki_only_fact_not_autofillable"
+    },
+    {
+      "id": "HOLD_05",
+      "name": "fallback_autofill",
+      "passed": true,
+      "evidence_path": "test_17b_l_fallback_never_auto_fills"
+    },
+    {
+      "id": "HOLD_06",
+      "name": "manifest_missing",
+      "passed": true,
+      "evidence_path": "evaluation/card2/derived_artifact_manifest.json 존재"
+    },
+    {
+      "id": "HOLD_07",
+      "name": "manifest_required_fields",
+      "passed": true,
+      "evidence_path": "test_manifest_requires_license_and_source + sha256_present"
+    },
+    {
+      "id": "HOLD_08",
+      "name": "raw_text_retention",
+      "passed": true,
+      "evidence_path": "raw_text_retention_zero.log + test_derived_artifact_raw_text_retention_zero.py"
+    },
+    {
+      "id": "HOLD_09",
+      "name": "training_diff",
+      "passed": true,
+      "evidence_path": "git diff base..HEAD -- training/ -> empty (training/ 디렉터리 부재)"
+    },
+    {
+      "id": "HOLD_10",
+      "name": "external_api_calls",
+      "passed": true,
+      "evidence_path": "openai|anthropic|gemini grep (D-4 신규 코드) -> 0건"
+    }
+  ]
+}

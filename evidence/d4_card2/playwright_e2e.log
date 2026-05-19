@@ -1,0 +1,25 @@
+# D-4 Card2 P7 Playwright E1~E6 — hotfix 3차 (2026-05-19)
+# 검토 기준: PR #744 / branch feat/d4-card2-document-transform
+
+## 인프라 존재 검증
+- butler-desktop / apps/butler-tauri / repo root: playwright.config.* 부재
+- package.json 3종: playwright 의존성 0건
+- e2e .spec.ts 파일: 0건
+→ Playwright 실행 인프라가 레포에 존재하지 않는다. E1~E6 실행 불가.
+
+## 시나리오별 정직 상태
+- E1 external .docx + template .docx -> output .docx : PENDING_ALGORITHM (mapper 미구현)
+- E2 external PDF + template .docx -> output .docx   : PENDING_ALGORITHM
+- E3 external .eml + template .md -> output .md       : PENDING_ALGORITHM
+- E4 multi external upload reject                     : BLOCK — Playwright 인프라 부재
+- E5 XL size gate block + Team Hub guidance           : BLOCK — Playwright 인프라 부재
+- E6 low confidence -> blank + 확인 필요               : BLOCK — Playwright 인프라 부재
+
+## 정직 한계 — STATUS=BLOCK_INFRA_ABSENT
+- 핸드오프는 E4·E5·E6 을 "sidecar route + UI 로 검증 가능" 으로 기술하나, 검증
+  수단인 Playwright 자체가 레포에 미설치다. Playwright 설정·스펙 작성은 신규
+  인프라 구축으로 "안전한 evidence 생성만 / 임의 대량 수정 0" 원칙 범위 밖.
+- 참고 — 동등 경로 검증: hotfix 2차 sidecar_endpoint_ping.log 가
+  /api/document_transform/* 5종 라우트(E4/E5 관련 sidecar 측)를 200 OK 로 입증.
+  UI 측은 P10 GUI T1~T5(대표 직접 영역)에서 검증.
+- Playwright 인프라 구축 + 스펙 작성은 별도 트랙으로 분리 권고.

@@ -1,0 +1,6 @@
+# D-4 Card2 factpack_zero — evidence_kind=real_run
+# measured_at=2026-05-19T08:23:18.309981+00:00
+
+audit_factpack: fail_count=0 passed=True
+fail_classes_known=['SOURCE_CITATION_MISSING', 'SOURCE_FACT_MISSING', 'TEMPLATE_PLACEHOLDER_RESIDUE', 'UNSUPPORTED_FACT_MAPPING', 'WIKI_ONLY_FACT_NOT_AUTOFILLABLE']
+PASS — factpack 위반 0

@@ -1,0 +1,102 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "purpose": "slot label matching lexicon (rule-assist, not training)",
+    "is_training_artifact": false,
+    "is_retrieval_or_eval_only": true
+  },
+  "lexicon": {
+    "market_tam": [
+      "시장",
+      "규모",
+      "tam",
+      "market",
+      "size"
+    ],
+    "funding_round": [
+      "투자",
+      "라운드",
+      "funding",
+      "round",
+      "시리즈"
+    ],
+    "team_size": [
+      "팀",
+      "인원",
+      "team",
+      "headcount",
+      "규모"
+    ],
+    "revenue": [
+      "매출",
+      "수익",
+      "revenue",
+      "sales"
+    ],
+    "net_profit": [
+      "순이익",
+      "이익",
+      "profit",
+      "net"
+    ],
+    "tax_due": [
+      "세금",
+      "납부",
+      "tax",
+      "due"
+    ],
+    "headcount": [
+      "인원",
+      "headcount",
+      "직원",
+      "employees"
+    ],
+    "payroll_total": [
+      "급여",
+      "인건비",
+      "payroll",
+      "총액"
+    ],
+    "hire_plan": [
+      "채용",
+      "계획",
+      "hire",
+      "plan"
+    ],
+    "pipeline_value": [
+      "파이프라인",
+      "pipeline",
+      "value",
+      "금액"
+    ],
+    "win_rate": [
+      "수주",
+      "win",
+      "rate",
+      "율"
+    ],
+    "quota": [
+      "할당",
+      "quota",
+      "목표",
+      "target"
+    ],
+    "lead_time": [
+      "리드",
+      "lead",
+      "time",
+      "기간"
+    ],
+    "defect_rate": [
+      "불량",
+      "defect",
+      "rate",
+      "율"
+    ],
+    "throughput": [
+      "처리량",
+      "throughput",
+      "생산"
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+# D-4 Card2 P13 IP5 — regression gates 23종 — hotfix 3차 (2026-05-19)
+# 검토 기준: PR #744 / branch feat/d4-card2-document-transform
+
+명령: pytest tests/regression/test_d4_card2_gates.py
+결과: ERROR: file or directory not found — tests/regression/ 디렉터리 및
+      test_d4_card2_gates.py 부재. collected 0 / no tests ran.
+
+STATUS: BLOCK_FILE_ABSENT
+
+## 정직 한계
+- D-4 Card2 회귀 게이트 23종 테스트는 레포에 미구현이다. 본 hotfix 3차는 신규
+  테스트 suite 작성 scope 외(임의 대량 수정 0).
+## 대체 정합 (실재 회귀 검증)
+- tests/document_transform/ + tests/test_algoteam_integration.py = 22 passed
+  (hotfix 3차 실측) — card2 SSE / semantic_mapping / sidecar route 회귀 0.
+- hotfix 2차 시점 tests/test_algoteam_integration.py 9 passed (legacy
+  document_transform 회귀 0) 와 정합 유지.
+- 회귀 23종 게이트 정식 suite 작성은 알고리즘 산출물 도착 후 hotfix 4차 영역.

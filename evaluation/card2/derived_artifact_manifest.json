@@ -1,0 +1,49 @@
+{
+  "manifest_version": "1.1",
+  "generated_at": "2026-05-19T08:19:36.309257+00:00",
+  "license": "CC-BY-SA-3.0 (Wikipedia derived) / internal (lexicon)",
+  "source_dataset": "wikipedia (2차 보조 색인) + butler card2 slot 정의",
+  "source_count": 15,
+  "raw_text_retained": false,
+  "is_training_artifact": false,
+  "is_retrieval_or_eval_only": true,
+  "artifacts": [
+    {
+      "name": "wikipedia_index.sqlite",
+      "path": "butler_pc_core/factpack/wikipedia_index.sqlite",
+      "artifact_sha256": "7986cc0d82e9bb3169f4bdeb95cc59fd528746888ed0cf90bc485bde16a3618b",
+      "source_snapshot": "lexicon_seed (실 Wikipedia 코퍼스는 코퍼스 보유 환경 재실행 필요)",
+      "source_snapshot_sha256": "4f459804217a997cbdae80f6de8181555155658deaa5c11f9bf7b6391520fb62",
+      "generator_script": "scripts/eval/card2/build_wikipedia_index.py",
+      "generator_script_sha256": "99f8ed49467bc9b5ebebcbffea3e856391dfd0cbb9be107e2352bb0f7d235d8a"
+    },
+    {
+      "name": "slot_pattern_lexicon.json",
+      "path": "butler_pc_core/cards/document_transform/slot_pattern_lexicon.json",
+      "artifact_sha256": "4f459804217a997cbdae80f6de8181555155658deaa5c11f9bf7b6391520fb62",
+      "source_snapshot": "butler card2 slot 정의 (self-defined)",
+      "source_snapshot_sha256": "da36e6a2145070bc3a526c43abddafc19899fd595bfbd307fea55deee0b8190f",
+      "generator_script": "scripts/eval/card2/build_slot_lexicon.py",
+      "generator_script_sha256": "da36e6a2145070bc3a526c43abddafc19899fd595bfbd307fea55deee0b8190f"
+    },
+    {
+      "name": "eval_set_v1.jsonl",
+      "path": "evaluation/card2/eval_set_v1.jsonl",
+      "artifact_sha256": "6f4f41c95f3fab90f9f6c0a69ad654281001b8cc49c456c6363b93d4f8d4e3bd",
+      "source_snapshot": "synthetic redacted (raw paragraph 0)",
+      "source_snapshot_sha256": "40eb6ffd56dfa95d6bac037afe626a05064305a41223927674f6065605b6576a",
+      "generator_script": "scripts/eval/card2/build_eval_set.py",
+      "generator_script_sha256": "40eb6ffd56dfa95d6bac037afe626a05064305a41223927674f6065605b6576a"
+    }
+  ],
+  "global_assertions": {
+    "ip4_auto_finetune_trigger": "absent",
+    "ip6_training_directory_diff": "zero",
+    "raw_text_external_send": "zero",
+    "openai_anthropic_gemini_calls": "zero",
+    "model_weight_changed": false,
+    "tokenizer_changed": false,
+    "prompt_training_changed": false,
+    "rag_index_generated_in_d4_main_pr": false
+  }
+}

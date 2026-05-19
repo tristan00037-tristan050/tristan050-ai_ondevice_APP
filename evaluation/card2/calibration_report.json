@@ -1,0 +1,16 @@
+{
+  "model_execution_kind": "not_run",
+  "reason": "M3 Max local measurement required — 본 환경에서 1.7B/4B GGUF 모델 미로드(BUTLER_LLM_MODEL_PATH 미설정, 모델 파일 부재). M-59 거짓 실측 금지 정합.",
+  "environment": "assistant CI-equivalent (no GGUF model, no GPU calibration)",
+  "thresholds": {
+    "1_7b_sm": 0.82,
+    "4b_l": 0.85,
+    "1_7b_l_fallback": "auto_fill_forbidden"
+  },
+  "pending_metrics": [
+    "auto_fill_precision",
+    "blank_ratio",
+    "slot_contamination",
+    "ram_peak_gb"
+  ]
+}

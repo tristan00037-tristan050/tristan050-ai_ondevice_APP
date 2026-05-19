@@ -4,13 +4,13 @@ import butlerIconStaticUrl from './assets/butler-icon-static.svg';
 import { EgressBadge } from './components/EgressBadge';
 import { EgressMonitor } from './components/chat/EgressMonitor';
 import { Sidebar } from './components/chat/Sidebar';
-import { EmptyState } from './components/chat/EmptyState';
 import { ChatInput } from './components/chat/ChatInput';
 import { MessageList } from './components/chat/MessageList';
 import { DeleteConfirmModal } from './components/chat/DeleteConfirmModal';
 import { AccountingModal } from './components/chat/AccountingModal';
 import { RequestParsingModal } from './components/chat/RequestParsingModal';
-import { DocumentTransformModal } from './components/chat/DocumentTransformModal';
+import { CardGrid } from './components/v1_1/CardGrid';
+import { Card2DocumentTransform } from './components/v1_1/Card2DocumentTransform';
 import { SIDECAR_BASE } from './constants';
 import type { SSEEvent, Conversation, Message } from './types';
 import {
@@ -486,7 +486,7 @@ export function App() {
         {/* Content area — card grid always visible; compact strip when messages present */}
         {hasMessages ? (
           <>
-            <EmptyState compact onCardSelect={handleCardSelect} />
+            <CardGrid onCardSelect={handleCardSelect} />
             <MessageList
               messages={activeConv?.messages ?? []}
               pendingBot={pendingBot}
@@ -496,7 +496,7 @@ export function App() {
             />
           </>
         ) : (
-          <EmptyState onCardSelect={handleCardSelect} />
+          <CardGrid onCardSelect={handleCardSelect} />
         )}
 
         <ChatInput
@@ -538,7 +538,7 @@ export function App() {
       )}
 
       {documentTransformModalOpen && (
-        <DocumentTransformModal
+        <Card2DocumentTransform
           onClose={() => {
             setDocumentTransformModalOpen(false);
             setCardMode('free');
