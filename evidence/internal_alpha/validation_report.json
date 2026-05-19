@@ -1,8 +1,9 @@
 {
   "status": "MEASURED_ONLY_PLAN_VALIDATION",
   "validator": "scripts/eval/validate_internal_alpha_measurement_plan.py",
-  "execution_mode": "static_authoring_review",
-  "ci_execution_required_after_pr_creation": true,
+  "validated_head_sha_before_this_commit": "108de7b2c321d8e2070f1e23c2229827fbf4c4fe",
+  "execution_mode": "static_authoring_review_plus_schema_contract_check",
+  "ci_execution_required_after_pr_body_sync": true,
   "ok": true,
   "required_files": [
     {"path": "evidence/internal_alpha/measurement_plan.md", "exists": true},
@@ -14,6 +15,17 @@
   "json_parse_static_check": {
     "sample_selection_plan_json": true,
     "msp_formula_json": true
+  },
+  "schema_validation_static_check": {
+    "schema_path": "schemas/internal_alpha/sample_selection_plan.schema.json",
+    "instance_path": "evidence/internal_alpha/sample_selection_plan.json",
+    "draft": "2020-12",
+    "ok": true,
+    "required_contract_fields_present": true,
+    "recommended_total_150": true,
+    "fallback_total_100": true,
+    "raw_plaintext_allowed_false": true,
+    "digest16_required": true
   },
   "privacy_boundary_static_check": {
     "raw_plaintext_allowed": false,
@@ -36,6 +48,11 @@
     "semantic_guard_prompt_lora_model_change": false,
     "metric_contract_v2_1_0_immediate_bump": false,
     "proxy_msp_as_authoritative": false
+  },
+  "product_verify_repo_guards_static_scope": {
+    "requires_ci_confirmation": true,
+    "local_static_result": "PASS_BY_CONTRACT_REVIEW",
+    "notes": "This PR changes documentation, schema, validation script, and evidence plan only. Final product-verify-repo-guards result must be taken from CI on the latest head."
   },
   "manual_review_required": [
     "reviewer_guide_definition_quality",
