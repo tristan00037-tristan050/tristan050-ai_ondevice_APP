@@ -1,0 +1,17 @@
+# D-4 Card2 P13 IP2 — policy DSL card2 contract — hotfix 3차 (2026-05-19)
+# 검토 기준: PR #744 / branch feat/d4-card2-document-transform
+
+명령: pytest tests/policy/test_dsl_card2_contract.py
+결과: ERROR: file or directory not found — tests/policy/ 디렉터리 및
+      test_dsl_card2_contract.py 부재. collected 0 / no tests ran.
+
+STATUS: BLOCK_FILE_ABSENT
+
+## 정직 한계
+- policy DSL card2 contract 테스트는 레포에 미구현이다. 본 hotfix 3차는
+  "안전한 evidence 생성만 / 임의 대량 수정 0" 원칙에 따라 신규 테스트 작성을
+  수행하지 않는다.
+## 대체 정합 (실재 산출물)
+- butler_pc_core/document_transform/api_contract_v1_1.py 의 assert_contract_complete()
+  가 5종 endpoint 완전성 + raw_log_allowed=False + external_egress_allowed=False
+  를 fail-closed 로 강제한다 (hotfix 1차 산출, import·실행 검증 완료).

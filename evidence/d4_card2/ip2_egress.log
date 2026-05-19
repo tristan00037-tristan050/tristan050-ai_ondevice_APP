@@ -1,0 +1,19 @@
+# D-4 Card2 P13 IP2 — egress (외부 IP 송신 0) — hotfix 3차 (2026-05-19)
+# 검토 기준: PR #744 / branch feat/d4-card2-document-transform
+
+## (1) document_transform 코드 경로 외부 호출 grep
+명령: grep -rn "requests.|urllib|httpx|http://|https://|socket." butler_pc_core/document_transform/
+결과: 외부 호출 0건 — document_transform 모듈에 외부 네트워크 호출 코드 없음.
+
+## (2) api_contract_v1_1 계약
+CARD2_ENDPOINTS_V1_1 5종(extract/parse_template/map/compose/stream) 전부
+external_egress_allowed=False. assert_contract_complete() 가 위반 시 fail-closed.
+
+## (3) onprem proof 정합 (docs/ops/PROOFS/ONPREM_REAL_WORLD_PROOF_LATEST.md)
+egress_default=deny / external_success=false / blocked_attempt_observed=true
+
+STATUS: PASS — card2 document_transform 경로 외부 IP 송신 0 (코드·계약·proof 3중 정합)
+
+## 정직 한계
+- 별도의 런타임 egress monitor 캡처 로그는 미생성 (라이브 .app 실행 대표 영역).
+  본 evidence 는 정적 코드 grep + 계약 + 기존 onprem proof 기반 정합 검증이다.
