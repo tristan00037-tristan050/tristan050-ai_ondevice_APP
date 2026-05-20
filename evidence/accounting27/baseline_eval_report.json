@@ -1,0 +1,21 @@
+{
+  "model": "qwen3-1.7b-mlx-q4 (base, v3_lora_not_applied)",
+  "model_execution_kind": "real_run",
+  "eval_set": "evaluation/card5_eval_set_v1.jsonl",
+  "eval_set_size": 50,
+  "eval_set_sha256": "a1cd2b9c01f00fafbc45c978c6f7a88da0feb0a9b2989602a1ac11743f95fa19",
+  "metrics": {
+    "account_title_accuracy": 0.1,
+    "debit_credit_direction_accuracy": 0.84,
+    "tax_relevance_accuracy": 0.54,
+    "structured_json_valid_rate": 1.0,
+    "hallucinated_account_count": 45,
+    "unsupported_tax_or_legal_assertion_count": 0,
+    "needs_review_precision": 1.0,
+    "needs_review_recall": 0.0222,
+    "wrong_high_confidence_count": 45,
+    "account_code_consistency_rate": 0.0
+  },
+  "wall_clock_seconds": 25.3,
+  "lora_compatibility_note": "PEFT v3 LoRA adapter는 mlx_lm 자체 형식과 비호환 (load_adapters num_layers 에러). 본 baseline은 base Qwen3-1.7B MLX만 평가. v3 LoRA 적용은 PEFT→MLX 변환 별도 단계 필요."
+}

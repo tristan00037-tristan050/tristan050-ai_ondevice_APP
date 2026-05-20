@@ -1,0 +1,14 @@
+{
+  "track_selected": "B",
+  "track_b_rationale": "butler-1.7b-v3 HF base safetensors 부재(GGUF only). Qwen3-1.7B HF base + v3 LoRA adapter 모두 보유 확인.",
+  "base_model_hf_path": "/Users/kimsunghoon/Desktop/butler-data/베이스모델/Qwen3-1.7B",
+  "base_model_architecture": "Qwen3ForCausalLM (hidden_size=2048, num_hidden_layers=28, vocab_size=151936)",
+  "v3_lora_adapter_path": "/Users/kimsunghoon/Desktop/butler-data/학습모델/butler-qwen3-1.7b-v3/lora_adapter",
+  "v3_lora_adapter_base_model_ref": "/workspace/.hf_cache/Qwen3-1.7B (동일 모델, 학습 시 캐시 경로)",
+  "v3_lora_alpha": 32,
+  "v3_lora_dropout": 0.05,
+  "base_model_changed": false,
+  "tokenizer_changed": false,
+  "adapter_merged_into_base": false,
+  "external_send": 0
+}

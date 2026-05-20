@@ -1,0 +1,12 @@
+{
+  "evidence_kind": "real_run",
+  "measured_at": "2026-05-20T05:10:20.712731+00:00",
+  "eval_set_size": 50,
+  "eval_train_overlap_count_strict": 0,
+  "eval_val_overlap_count_strict": 0,
+  "eval_train_overlap_count_jaccard_0_8": 0,
+  "eval_val_overlap_count_jaccard_0_8": 0,
+  "method_note": "substring overlap은 false-positive(짧은 거래 키워드 우연 매치). strict equality + Jaccard>=0.8 본질 leakage.",
+  "leakage_zero_strict": true,
+  "leakage_zero_jaccard": true
+}

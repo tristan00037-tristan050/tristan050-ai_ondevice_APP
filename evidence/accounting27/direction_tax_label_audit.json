@@ -1,0 +1,7 @@
+{
+  "evidence_kind": "static_audit",
+  "measured_at": "2026-05-20T05:41:12.449453+00:00",
+  "augmented_total": 1645,
+  "direction_violation_count": 35,
+  "passed": false
+}

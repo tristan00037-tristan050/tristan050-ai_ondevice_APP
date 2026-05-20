@@ -1,0 +1,11 @@
+{
+  "evidence_kind": "real_run",
+  "measured_at": "2026-05-20T05:41:12.449453+00:00",
+  "eval_set_size": 50,
+  "eval_train_overlap_count_strict": 0,
+  "eval_train_overlap_count_jaccard_0_8": 0,
+  "eval_val_overlap_count_strict": 0,
+  "eval_val_overlap_count_jaccard_0_8": 0,
+  "leakage_zero_strict": true,
+  "leakage_zero_jaccard": true
+}

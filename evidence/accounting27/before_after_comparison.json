@@ -1,0 +1,74 @@
+{
+  "evidence_kind": "real_run",
+  "measured_at": "2026-05-20T05:34:06.520682+00:00",
+  "baseline_model": "qwen3-1.7b-mlx-q4 (base, v3_lora_not_applied)",
+  "post_lora_model": "qwen3-1.7b-mlx-q4 + butler-1.7b-v3-card5-accounting-lora-v1",
+  "comparison": {
+    "account_title_accuracy": {
+      "baseline": 0.1,
+      "post": 0.22,
+      "delta": 0.12,
+      "adoption_min": 0.1,
+      "meets_adoption": true
+    },
+    "debit_credit_direction_accuracy": {
+      "baseline": 0.84,
+      "post": 0.64,
+      "delta": -0.2
+    },
+    "tax_relevance_accuracy": {
+      "baseline": 0.54,
+      "post": 0.46,
+      "delta": -0.08
+    },
+    "structured_json_valid_rate": {
+      "baseline": 1.0,
+      "post": 0.9,
+      "delta": -0.1,
+      "adoption_min": 0.98,
+      "meets_adoption": false
+    },
+    "hallucinated_account_count": {
+      "baseline": 45,
+      "post": 1,
+      "delta": -44,
+      "adoption_max": 0,
+      "meets_adoption": false
+    },
+    "unsupported_tax_or_legal_assertion_count": {
+      "baseline": 0,
+      "post": 0,
+      "adoption_max": 0,
+      "meets_adoption": true
+    },
+    "wrong_high_confidence_count": {
+      "baseline": 45,
+      "post": 34,
+      "delta": -11,
+      "adoption_rule": "baseline 대비 증가 0",
+      "meets_adoption": true
+    },
+    "account_code_consistency_rate": {
+      "baseline": 0.0,
+      "post": 0.2,
+      "delta": 0.2
+    }
+  },
+  "needs_review_delta_rule": {
+    "baseline_needs_review_count": 1,
+    "post_needs_review_count": 0,
+    "delta_needs_review": 1,
+    "baseline_wrong_count": 45,
+    "post_wrong_count": 39,
+    "delta_wrong_answers": -6,
+    "rule": "delta_needs_review>=0 일 때 delta_wrong_answers<=0",
+    "delta_nr_ge_zero": true,
+    "delta_wrong_le_zero": true,
+    "meets_rule": true
+  },
+  "adoption_verdict": "REJECT",
+  "adoption_blockers": [
+    "hallucinated_account_count=1 > 0 (BLOCK_07 발동)",
+    "structured_json_valid_rate=0.90 < 0.98 (채택 기준 미달)"
+  ]
+}

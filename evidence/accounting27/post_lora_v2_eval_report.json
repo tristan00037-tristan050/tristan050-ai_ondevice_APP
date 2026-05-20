@@ -1,0 +1,23 @@
+{
+  "model": "qwen3-1.7b-mlx-q4 + butler-1.7b-v3-card5-accounting-lora-v2",
+  "model_execution_kind": "real_run",
+  "eval_set": "evaluation/card5_eval_set_v1.jsonl",
+  "eval_set_size": 50,
+  "eval_set_sha256": "a1cd2b9c01f00fafbc45c978c6f7a88da0feb0a9b2989602a1ac11743f95fa19",
+  "metrics": {
+    "account_title_accuracy": 0.7,
+    "debit_credit_direction_accuracy": 0.94,
+    "tax_relevance_accuracy": 0.76,
+    "structured_json_valid_rate": 1.0,
+    "hallucinated_account_count": 10,
+    "unsupported_tax_or_legal_assertion_count": 0,
+    "needs_review_precision": 0.0,
+    "needs_review_recall": 0.0,
+    "wrong_high_confidence_count": 15,
+    "account_code_consistency_rate": 0.62
+  },
+  "wall_clock_seconds": 41.1,
+  "adapter_merged_into_base": false,
+  "base_model_changed": false,
+  "tokenizer_changed": false
+}

@@ -1,0 +1,122 @@
+{
+  "evidence_kind": "real_run",
+  "measured_at": "2026-05-20T06:39:39.725816+00:00",
+  "models": {
+    "baseline": "qwen3-1.7b-mlx-q4 (base)",
+    "v1": "+ lora-v1 (rank16, 600it)",
+    "v2": "+ lora-v2 (rank32, 1500it)",
+    "v3": "+ lora-v2 (재사용) + v3 system prompt (47 allowlist 명시) + alias 사후처리 (12건)"
+  },
+  "training_v3_executed": false,
+  "alias_map_v3_size": 12,
+  "alias_map_v3": {
+    "서비스매출": "용역매출",
+    "임대수익": "임대료수익",
+    "대출이자비용": "이자비용",
+    "사무실 월세": "지급임차료",
+    "재고자산상각비": "상품매출원가",
+    "원료비": "제품매출원가",
+    "제품비": "상품매출원가",
+    "하도급원가": "용역원가",
+    "개발비": "용역원가",
+    "보험수리적손실": "잡손실",
+    "용역수익": "용역매출",
+    "제품원가": "제품매출원가"
+  },
+  "comparison": {
+    "account_title_accuracy": {
+      "baseline": 0.1,
+      "v1": 0.22,
+      "v2": 0.7,
+      "v3": 0.84,
+      "delta_v3_baseline": 0.74
+    },
+    "debit_credit_direction_accuracy": {
+      "baseline": 0.84,
+      "v1": 0.64,
+      "v2": 0.94,
+      "v3": 0.96,
+      "delta_v3_baseline": 0.12
+    },
+    "tax_relevance_accuracy": {
+      "baseline": 0.54,
+      "v1": 0.46,
+      "v2": 0.76,
+      "v3": 0.72,
+      "delta_v3_baseline": 0.18
+    },
+    "structured_json_valid_rate": {
+      "baseline": 1.0,
+      "v1": 0.9,
+      "v2": 1.0,
+      "v3": 1.0,
+      "delta_v3_baseline": 0.0
+    },
+    "hallucinated_account_count": {
+      "baseline": 45,
+      "v1": 1,
+      "v2": 10,
+      "v3": 0,
+      "delta_v3_baseline": -45
+    },
+    "unsupported_tax_or_legal_assertion_count": {
+      "baseline": 0,
+      "v1": 0,
+      "v2": 0,
+      "v3": 0,
+      "delta_v3_baseline": 0
+    },
+    "needs_review_precision": {
+      "baseline": 1.0,
+      "v1": 0.0,
+      "v2": 0.0,
+      "v3": 0.0,
+      "delta_v3_baseline": -1.0
+    },
+    "needs_review_recall": {
+      "baseline": 0.0222,
+      "v1": 0.0,
+      "v2": 0.0,
+      "v3": 0.0,
+      "delta_v3_baseline": -0.0222
+    },
+    "wrong_high_confidence_count": {
+      "baseline": 45,
+      "v1": 34,
+      "v2": 15,
+      "v3": 8,
+      "delta_v3_baseline": -37
+    },
+    "account_code_consistency_rate": {
+      "baseline": 0.0,
+      "v1": 0.2,
+      "v2": 0.62,
+      "v3": 0.78,
+      "delta_v3_baseline": 0.78
+    }
+  },
+  "adoption_criteria_v3": {
+    "account_title_accuracy_min": 0.7,
+    "v3": 0,
+    "meets": true,
+    "hallucinated_account_count_max": 0,
+    "structured_json_valid_min": 0.98,
+    "debit_credit_min_baseline_minus_5p": 0.79,
+    "tax_relevance_min_baseline_minus_5p": 0.49,
+    "wrong_high_conf_no_increase": true,
+    "account_code_consistency_min": 0.62,
+    "unsupported_tax_max": 0
+  },
+  "adoption_verdict": "PASS",
+  "adoption_blockers": [],
+  "needs_review_delta": {
+    "baseline_nr": 1,
+    "v3_nr": 0,
+    "delta_nr": 1,
+    "baseline_wrong": 45,
+    "v3_wrong": 8,
+    "delta_wrong": -37,
+    "rule": "delta_nr<0 OR delta_wrong<=0",
+    "meets_rule": true
+  }
+}

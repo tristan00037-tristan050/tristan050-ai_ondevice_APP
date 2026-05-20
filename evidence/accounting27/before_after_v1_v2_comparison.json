@@ -1,0 +1,128 @@
+{
+  "evidence_kind": "real_run",
+  "measured_at": "2026-05-20T06:29:42.227881+00:00",
+  "models": {
+    "baseline": "qwen3-1.7b-mlx-q4 (base, v3_lora_not_applied)",
+    "v1": "+ butler-1.7b-v3-card5-accounting-lora-v1 (rank16, 600it)",
+    "v2": "+ butler-1.7b-v3-card5-accounting-lora-v2 (rank32, 1500it)"
+  },
+  "comparison": {
+    "account_title_accuracy": {
+      "baseline": 0.1,
+      "v1": 0.22,
+      "v2": 0.7,
+      "delta_v2_baseline": 0.6
+    },
+    "debit_credit_direction_accuracy": {
+      "baseline": 0.84,
+      "v1": 0.64,
+      "v2": 0.94,
+      "delta_v2_baseline": 0.1
+    },
+    "tax_relevance_accuracy": {
+      "baseline": 0.54,
+      "v1": 0.46,
+      "v2": 0.76,
+      "delta_v2_baseline": 0.22
+    },
+    "structured_json_valid_rate": {
+      "baseline": 1.0,
+      "v1": 0.9,
+      "v2": 1.0,
+      "delta_v2_baseline": 0.0
+    },
+    "hallucinated_account_count": {
+      "baseline": 45,
+      "v1": 1,
+      "v2": 10,
+      "delta_v2_baseline": -35
+    },
+    "unsupported_tax_or_legal_assertion_count": {
+      "baseline": 0,
+      "v1": 0,
+      "v2": 0,
+      "delta_v2_baseline": 0
+    },
+    "needs_review_precision": {
+      "baseline": 1.0,
+      "v1": 0.0,
+      "v2": 0.0,
+      "delta_v2_baseline": -1.0
+    },
+    "needs_review_recall": {
+      "baseline": 0.0222,
+      "v1": 0.0,
+      "v2": 0.0,
+      "delta_v2_baseline": -0.0222
+    },
+    "wrong_high_confidence_count": {
+      "baseline": 45,
+      "v1": 34,
+      "v2": 15,
+      "delta_v2_baseline": -30
+    },
+    "account_code_consistency_rate": {
+      "baseline": 0.0,
+      "v1": 0.2,
+      "v2": 0.62,
+      "delta_v2_baseline": 0.62
+    }
+  },
+  "adoption_criteria_v2": {
+    "account_title_accuracy_min": 0.2,
+    "v2_value": 0.76,
+    "meets": true,
+    "hallucinated_account_count_max": 0,
+    "unsupported_tax_assertion_max": 0,
+    "structured_json_valid_min": 0.98,
+    "debit_credit_min": 0.79,
+    "tax_relevance_min": 0.49,
+    "wrong_high_conf_no_increase": true
+  },
+  "v2_hallucination_breakdown": [
+    [
+      "서비스매출",
+      1
+    ],
+    [
+      "원료비",
+      1
+    ],
+    [
+      "재고자산상각비",
+      1
+    ],
+    [
+      "제품비",
+      1
+    ],
+    [
+      "개발비",
+      1
+    ],
+    [
+      "하도급원가",
+      1
+    ],
+    [
+      "사무실 월세",
+      1
+    ],
+    [
+      "보험수리적손실",
+      1
+    ],
+    [
+      "임대수익",
+      1
+    ],
+    [
+      "대출이자비용",
+      1
+    ]
+  ],
+  "adoption_verdict": "REJECT",
+  "adoption_blockers": [
+    "hallucinated_account_count=10 > 0 (BLOCK_07 발동)"
+  ]
+}
