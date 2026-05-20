@@ -3,15 +3,43 @@
 학습 본질 0. v2 의미 학습 재사용 + strict allowlist 강제 + alias 정규화.
 """
 from __future__ import annotations
-import hashlib, json, re, time
+import argparse, hashlib, json, os, re, sys, time
 from pathlib import Path
 from mlx_lm import generate, load
 
-ROOT = Path("/Users/kimsunghoon/Desktop/butler-data/27_accounting_train")
-MODEL = ROOT/"models/qwen3-1.7b-mlx-q4"
-ADAPTER = ROOT/"models/butler-1.7b-v3-card5-accounting-lora-v2"
-EVAL = ROOT/"evaluation/card5_eval_set_v1.jsonl"
-OUT = ROOT/"evidence/accounting27/post_v3_eval_report.json"
+# P1 정정 (codex bot review): env (CARD5_ROOT) + CLI args 본 본질 — 하드코딩 0
+DEFAULT_ROOT = Path(os.environ.get(
+    "CARD5_ROOT",
+    str(Path.home() / "Desktop/butler-data/27_accounting_train"),
+))
+
+
+def _parse_args():
+    p = argparse.ArgumentParser(description="Butler card 5 v3 evaluator")
+    p.add_argument("--root", type=Path, default=DEFAULT_ROOT,
+                   help="Work root (env: CARD5_ROOT)")
+    p.add_argument("--model", type=Path, default=None,
+                   help="MLX model dir (default: <root>/models/qwen3-1.7b-mlx-q4)")
+    p.add_argument("--adapter", type=Path, default=None,
+                   help="LoRA adapter dir (default: <root>/models/butler-1.7b-v3-card5-accounting-lora-v2)")
+    p.add_argument("--eval", type=Path, default=None, dest="eval_path",
+                   help="Eval set jsonl (default: <root>/evaluation/card5_eval_set_v1.jsonl)")
+    p.add_argument("--out", type=Path, default=None,
+                   help="Output report json (default: <root>/evidence/accounting27/post_v3_eval_report.json)")
+    return p.parse_args()
+
+
+_args = _parse_args()
+ROOT = _args.root
+MODEL = _args.model or ROOT/"models/qwen3-1.7b-mlx-q4"
+ADAPTER = _args.adapter or ROOT/"models/butler-1.7b-v3-card5-accounting-lora-v2"
+EVAL = _args.eval_path or ROOT/"evaluation/card5_eval_set_v1.jsonl"
+OUT = _args.out or ROOT/"evidence/accounting27/post_v3_eval_report.json"
+
+for _p, _n in [(ROOT, "root"), (MODEL, "model"), (ADAPTER, "adapter"), (EVAL, "eval")]:
+    if not _p.exists():
+        print(f"BLOCK: {_n} path not found: {_p}", file=sys.stderr)
+        sys.exit(2)
 
 # 47 allowlist (자료/명명 정확)
 ALLOWLIST = [
@@ -155,7 +183,7 @@ def main():
             "needs_review_precision":round(nr_tp/(nr_tp+nr_fp),4) if (nr_tp+nr_fp) else 0.0,
             "needs_review_recall":round(nr_tp/(nr_tp+nr_fn),4) if (nr_tp+nr_fn) else 0.0,
             "wrong_high_confidence_count":whc,
-            "account_code_consistency_rate":round(cc/n,4),
+            "account_code_consistency_rate":round(code/n,4),  # P2 정정 (codex bot): cc → code (코드 일치만)
         },
         "v3_alias_mapped_count": alias_count,
         "wall_clock_seconds":wall,
