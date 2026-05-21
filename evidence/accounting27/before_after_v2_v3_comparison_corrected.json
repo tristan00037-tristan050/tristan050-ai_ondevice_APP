@@ -77,5 +77,10 @@
     "hold_status": "12/12 PASS (유지)"
   },
   "adoption_verdict": "PASS",
-  "adoption_blockers": []
+  "adoption_blockers": [],
+  "account_title_code_joint_accuracy": {
+    "baseline": 0.0,
+    "v3_corrected": 0.78,
+    "definition": "title + code 동시 일치 (별도 metric, 정정 지시 3-b 신규 봉인)"
+  }
 }

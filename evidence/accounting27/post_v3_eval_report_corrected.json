@@ -23,5 +23,16 @@
   "alias_map_size": 12,
   "adapter_merged_into_base": false,
   "base_model_changed": false,
-  "tokenizer_changed": false
+  "tokenizer_changed": false,
+  "account_title_code_joint_accuracy": 0.78,
+  "metric_definitions": {
+    "account_title_accuracy": "title 일치만 (n_title_match / n)",
+    "account_code_consistency_rate": "code 일치만 (n_code_match / n) [P2 정정]",
+    "account_title_code_joint_accuracy": "title + code 동시 일치 (n_both_match / n) [신규 봉인, 정정 지시 3-b]"
+  },
+  "codex_bot_review_resolutions": {
+    "P1_path_parameterization": "resolved",
+    "P2_code_consistency_separated": "resolved",
+    "metric_3b_joint_accuracy_added": "resolved"
+  }
 }
