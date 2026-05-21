@@ -66,3 +66,27 @@ def test_inference_exact_allowlist(monkeypatch, tmp_path: Path):
     assert out.account_code == "8080"
     assert out.match_kind == "exact"
     assert out.rollback_triggered is False
+
+
+def test_inference_rejects_non_dict_json(monkeypatch, tmp_path: Path):
+    """P1 #1: JSON 출력이 객체 아닌 경우 (배열/문자열) BLOCK."""
+    adapter = tmp_path / "adapters.safetensors"
+    adapter.write_bytes(b"adapter")
+
+    monkeypatch.setattr(inference, "verify_and_locate_adapter", lambda: adapter)
+    monkeypatch.setattr(inference, "verify_invariants", lambda _: None)
+    monkeypatch.setattr(inference, "build_system_prompt", lambda transaction: "prompt")
+
+    # JSON array (not object)
+    def array_runner(prompt: str, adapter_path: Path) -> str:
+        return "[]"
+
+    with pytest.raises(RuntimeError, match="JSON output must be an object"):
+        inference.run_inference("거래", mlx_runner=array_runner)
+
+    # JSON string (not object)
+    def string_runner(prompt: str, adapter_path: Path) -> str:
+        return '"ok"'
+
+    with pytest.raises(RuntimeError, match="JSON output must be an object"):
+        inference.run_inference("거래", mlx_runner=string_runner)

@@ -32,6 +32,12 @@ def run_inference(transaction: str, mlx_runner: MlxRunner) -> InferenceResult:
     except json.JSONDecodeError as e:
         raise RuntimeError(f"BLOCK: invalid JSON output: {e}") from e
 
+    # P1 #1 정정 (codex bot review): JSON 타입 검증
+    if not isinstance(parsed, dict):
+        raise RuntimeError(
+            f"BLOCK: JSON output must be an object, got {type(parsed).__name__}"
+        )
+
     title, code, kind = apply_alias(
         parsed.get("account_title", ""),
         parsed.get("account_code", ""),
