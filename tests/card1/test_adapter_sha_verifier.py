@@ -8,7 +8,7 @@ from src.butler.card1.safety.adapter_sha_verifier import verify_adapter_sha256
 def test_adapter_sha_verifier_accepts_matching_file(tmp_path: Path):
     adapter = tmp_path / "adapters.safetensors"
     adapter.write_bytes(b"card1-adapter-fixture")
-    expected = "d161acbd119a8e7cf33cad77ae738a8e67f295a2b2d878b2b26bd9df82accd4b"
+    expected = "d22d09fadcc0a027f8d93875aab49fa89aaafe70c6eb1ffda1663faafb9f1941"
 
     result = verify_adapter_sha256(adapter, expected)
 
