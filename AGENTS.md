@@ -21,14 +21,14 @@
 
 | Service | Port | Start command | Directory |
 |---------|------|---------------|-----------|
-| Butler Sidecar (FastAPI) | 8765 | `python3 butler_sidecar.py --host 0.0.0.0 --port 8765` | `/workspace` |
+| Butler Sidecar (FastAPI) | 8765 | `python3 butler_sidecar.py --host 0.0.0.0 --port 8765` | repo root (the directory containing `butler_sidecar.py`) |
 | BFF Accounting (Express) | 8081 | `npm run dev:bff` | `webcore_appcore_starter_4_17/` |
 | Ops Console (Vite/React) | 5173 | `npm run dev:web` | `webcore_appcore_starter_4_17/` |
 | Butler Desktop (Vite/React) | 1420 | `npx vite --host 0.0.0.0 --port 1420` | `butler-desktop/` |
 
 ### Running tests
 
-- **Python tests**: `python3 -m pytest tests/ -v` (from repo root). Exclude `tests/turboq/` (requires `torch`/GPU) and some `tests/eval/` files with pre-existing import errors.
+- **Python tests**: `python3 -m pytest tests/ -v --ignore=tests/turboq/ --ignore=tests/eval/test_eval_hardcase.py --ignore=tests/eval/test_eval_judge_v3.py` (from repo root). `tests/turboq/` requires `torch`/GPU; `tests/eval/test_eval_hardcase.py` and `tests/eval/test_eval_judge_v3.py` have pre-existing import errors against `scripts/eval/eval_judge_v3.py` (`load_hardcase_records` / `run_full_eval` not exported).
 - **Butler Desktop tests**: `npx vitest run` (from `butler-desktop/`).
 - **Repo contracts**: `bash scripts/verify/verify_repo_contracts.sh` (must pass for all PRs).
 
