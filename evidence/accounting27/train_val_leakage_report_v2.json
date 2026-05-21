@@ -1,0 +1,9 @@
+{
+  "evidence_kind": "real_run",
+  "measured_at": "2026-05-20T05:41:12.449453+00:00",
+  "train_lines": 13571,
+  "val_lines": 3260,
+  "augmented_lines": 1645,
+  "augmented_split_train": 1322,
+  "augmented_split_val": 323
+}

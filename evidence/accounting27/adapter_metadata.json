@@ -1,0 +1,25 @@
+{
+  "adapter_name": "butler-1.7b-v3-card5-accounting-lora-v2",
+  "adapter_file": "adapters.safetensors",
+  "adapter_size_bytes": 79716252,
+  "adapter_sha256": "9f167c7e63825e416ee8743f78549cb51e1108e5b111f3a1eb3db07422ea2ab2",
+  "local_path": "~/Desktop/butler-data/27_accounting_train/models/butler-1.7b-v3-card5-accounting-lora-v2/adapters.safetensors",
+  "storage_policy": "on_device_local_only",
+  "rationale": "리포 정책 (.gitignore *.safetensors + models/) 본 정합. 2026-04-30 hotfix/remove-lfs-large-files 정합. Butler 온디바이스 AI 본질 정합.",
+  "base_model": "Qwen3-1.7B (MLX q4, qwen3-1.7b-mlx-q4)",
+  "training_method": "MLX LoRA adapter fine-tuning (mlx_lm.lora)",
+  "training_config": {
+    "rank": 32,
+    "iters": 1500,
+    "learning_rate": 1e-4,
+    "batch_size": 4,
+    "num_layers": 16,
+    "max_seq_length": 1024,
+    "training_time_minutes": 45
+  },
+  "base_model_changed": false,
+  "tokenizer_changed": false,
+  "adapter_merged_into_base": false,
+  "license_attribution": "AI Hub 27번 기업 회계처리 기준 데이터",
+  "license_snapshot_sha256": "7a226893707af1c9081e859d9c81fe31829998cc0d6e06c7d7f0d9db69126e22"
+}

@@ -1,0 +1,8 @@
+{
+  "evidence_kind": "real_run",
+  "measured_at": "2026-05-20T05:09:44.390943+00:00",
+  "train_lines": 12249,
+  "val_lines": 2937,
+  "train_val_doc_name_overlap_count": 0,
+  "leakage_zero": true
+}

@@ -1,0 +1,10 @@
+{
+  "evidence_kind": "real_run",
+  "total_json_files": 54715,
+  "sampled_files": 2000,
+  "top_keys": {
+    "metadata": 1688,
+    "qa_content": 1688,
+    "document": 312
+  }
+}

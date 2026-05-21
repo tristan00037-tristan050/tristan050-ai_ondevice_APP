@@ -1,0 +1,5 @@
+/Users/kimsunghoon/Desktop/butler-data/27_accounting_train/extracted/02.라벨링데이터_TL_K-IFRS_자본/K-IFRS_자본_0035_QA4.json:57:        "answer": "K-IFRS 제1001호 ‘재무제표 표시’ 113~117항에서는 자본 변동의 각 세부내역을 일목요연하게 주석으로 명시할 것을 요구합니다. 실무적으로 전기이월 미처분이익잉여금, 당기순손실, 결손금 보전을 위한 임의적립금 이입, 처분이익잉여금의 적립 및 배당 등 변동 세목을 자본변동표 또는 별도 주석에 표 형태로 상세히 공시해야 합니다. 이 중 결손금 보전 순서는 일반적으로 임의적립금→법정적립금→이익잉여금 순으로 하고 보전내용, 배당과 법정적립금의 산정과정을 명확히 기록해야 합니다. 변경 사유와 구체적 처분 내역이 주석에 함께 기재되었는지 반드시 점검해야 합니다."
+/Users/kimsunghoon/Desktop/butler-data/27_accounting_train/extracted/02.라벨링데이터_TL_K-IFRS_자본/K-IFRS_자본_0117_QA1.json:3:    "document_name": "K-IFRS_자본_0117_QA1",
+/Users/kimsunghoon/Desktop/butler-data/27_accounting_train/extracted/02.라벨링데이터_TL_K-IFRS_자본/K-IFRS_자본_0117_QA3.json:3:    "document_name": "K-IFRS_자본_0117_QA3",
+/Users/kimsunghoon/Desktop/butler-data/27_accounting_train/extracted/02.라벨링데이터_TL_K-IFRS_자본/K-IFRS_자본_0117_QA2.json:3:    "document_name": "K-IFRS_자본_0117_QA2",
+/Users/kimsunghoon/Desktop/butler-data/27_accounting_train/extracted/02.라벨링데이터_TL_K-IFRS_자본/K-IFRS_자본_0117_QA5.json:3:    "document_name": "K-IFRS_자본_0117_QA5",

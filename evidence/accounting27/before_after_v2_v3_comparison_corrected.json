@@ -1,0 +1,86 @@
+{
+  "evidence_kind": "real_run",
+  "measured_at": "2026-05-20T07:26:39.160604+00:00",
+  "metric_definition_corrected": {
+    "name": "account_code_consistency_rate",
+    "old_formula": "cc/n (title+code 결합 카운터)",
+    "new_formula": "code/n (code 일치만)",
+    "p2_fix_applied": true,
+    "codex_bot_review": "PR #745 P2"
+  },
+  "p1_p2_fixes": {
+    "P1_env_cli_args": true,
+    "P2_account_code_metric": true
+  },
+  "comparison": {
+    "account_title_accuracy": {
+      "baseline": 0.1,
+      "v3": 0.84,
+      "delta": 0.74
+    },
+    "debit_credit_direction_accuracy": {
+      "baseline": 0.84,
+      "v3": 0.96,
+      "delta": 0.12
+    },
+    "tax_relevance_accuracy": {
+      "baseline": 0.54,
+      "v3": 0.72,
+      "delta": 0.18
+    },
+    "structured_json_valid_rate": {
+      "baseline": 1.0,
+      "v3": 1.0,
+      "delta": 0.0
+    },
+    "hallucinated_account_count": {
+      "baseline": 45,
+      "v3": 0,
+      "delta": -45
+    },
+    "unsupported_tax_or_legal_assertion_count": {
+      "baseline": 0,
+      "v3": 0,
+      "delta": 0
+    },
+    "wrong_high_confidence_count": {
+      "baseline": 45,
+      "v3": 8,
+      "delta": -37
+    },
+    "account_code_consistency_rate": {
+      "baseline": 0.0,
+      "v3_old_cc_formula": 0.78,
+      "v3_corrected_code_formula": 0.8,
+      "delta_baseline_to_v3_corrected": 0.8,
+      "delta_v3_old_vs_corrected": 0.02
+    }
+  },
+  "v3_old_vs_v3_corrected_impact": {
+    "metric_changed_by_p2_fix": "account_code_consistency_rate",
+    "old_value": 0.78,
+    "corrected_value": 0.8,
+    "diff": 0.02,
+    "all_other_metrics_unchanged": true,
+    "rationale": "P2는 정의·계산 오류 본 정정. cc(title+code 결합) → code(코드 일치만)만 본 영향. title/direction/tax/json/halluc/unsupported/wrong_high_conf 본 영향 0."
+  },
+  "block_13_re_verification": {
+    "BLOCK_07_hallucinated_zero": true,
+    "BLOCK_08_unsupported_zero": true,
+    "BLOCK_09_wrong_high_conf_no_increase": true,
+    "BLOCK_13_direction_tax_within_5p": true,
+    "all_pass": true
+  },
+  "hold_12_re_verification": {
+    "HOLD_10_hallucinated_zero": true,
+    "all_other_holds_unchanged": true,
+    "hold_status": "12/12 PASS (유지)"
+  },
+  "adoption_verdict": "PASS",
+  "adoption_blockers": [],
+  "account_title_code_joint_accuracy": {
+    "baseline": 0.0,
+    "v3_corrected": 0.78,
+    "definition": "title + code 동시 일치 (별도 metric, 정정 지시 3-b 신규 봉인)"
+  }
+}

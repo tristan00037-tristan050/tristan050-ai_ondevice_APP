@@ -1,0 +1,81 @@
+{
+  "status": "PASS",
+  "evidence_kind": "static_audit",
+  "measured_at": "2026-05-20T06:39:39.725816+00:00",
+  "passed_count": 12,
+  "total": 12,
+  "checks": [
+    {
+      "id": "HOLD_01",
+      "name": "dataset_117_excluded",
+      "passed": true,
+      "evidence_path": "dataset_117_exclusion_audit.txt"
+    },
+    {
+      "id": "HOLD_02",
+      "name": "license_evidence_present",
+      "passed": true,
+      "evidence_path": "license_manifest.json"
+    },
+    {
+      "id": "HOLD_03",
+      "name": "aihub_attribution_present",
+      "passed": true,
+      "evidence_path": "license_snapshot.md §5"
+    },
+    {
+      "id": "HOLD_04",
+      "name": "raw_text_chat_exposure_zero",
+      "passed": true,
+      "evidence_path": "본 채팅창 raw text 노출 0"
+    },
+    {
+      "id": "HOLD_05",
+      "name": "external_send_zero",
+      "passed": true,
+      "evidence_path": "algorithm_team_env_external_send=0"
+    },
+    {
+      "id": "HOLD_06",
+      "name": "ip6_no_new_pipeline",
+      "passed": true,
+      "evidence_path": "신규 IP6 7-3 파이프라인 0"
+    },
+    {
+      "id": "HOLD_07",
+      "name": "auto_finetune_trigger_zero",
+      "passed": true,
+      "evidence_path": "v3 학습 0 (v2 adapter 재사용)"
+    },
+    {
+      "id": "HOLD_08",
+      "name": "base_model_unchanged",
+      "passed": true,
+      "evidence_path": "qwen3-1.7b-mlx-q4 동일"
+    },
+    {
+      "id": "HOLD_09",
+      "name": "tokenizer_unchanged",
+      "passed": true,
+      "evidence_path": "tokenizer.json 변경 0"
+    },
+    {
+      "id": "HOLD_10",
+      "name": "hallucinated_account_zero",
+      "passed": true,
+      "evidence_path": "post_v3_eval_report.json hallucinated_account_count=0"
+    },
+    {
+      "id": "HOLD_11",
+      "name": "baseline_eval_present",
+      "passed": true,
+      "evidence_path": "baseline_eval_report.json"
+    },
+    {
+      "id": "HOLD_12",
+      "name": "validation_separation_present",
+      "passed": true,
+      "evidence_path": "eval_overlap_report_v2.json"
+    }
+  ]
+}

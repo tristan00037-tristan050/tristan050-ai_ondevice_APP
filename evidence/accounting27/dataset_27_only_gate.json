@@ -1,0 +1,21 @@
+{
+  "gate_name": "dataset_27_only_gate",
+  "evidence_kind": "real_run",
+  "measured_at": "2026-05-20T05:06:46.102213+00:00",
+  "passed": true,
+  "dataset_id": "AIHUB_27",
+  "dataset_name": "기업 회계처리 기준 데이터",
+  "extracted_json_count": 54715,
+  "raw_117_grep_hits": 5,
+  "raw_117_path_hits": 228,
+  "false_positive_analysis": {
+    "117_content_5_hits_are": "K-IFRS 제1001호 113~117항 (조항 번호) + 파일 일련번호 _0117_",
+    "117_path_228_hits_are": "파일명 일련번호 _0117_*_QA*.json (sample 117번째 케이스)",
+    "ilsang_daehwa_sangdam_minwon_hits": 0,
+    "117_dataset_prefix_in_raw": 0,
+    "117_dataset_prefix_in_extracted": 0,
+    "verdict": "117 AI Hub 데이터셋(117.금융_합성데이터) 본질 hit 0 — 정규식 false-positive 확정"
+  },
+  "ban_117": true,
+  "fail_class": null
+}

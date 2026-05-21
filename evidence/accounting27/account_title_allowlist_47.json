@@ -1,0 +1,398 @@
+{
+  "all_codes": [
+    "4010",
+    "4020",
+    "4030",
+    "4040",
+    "4050",
+    "5005",
+    "5010",
+    "5015",
+    "5020",
+    "8010",
+    "8020",
+    "8030",
+    "8040",
+    "8050",
+    "8060",
+    "8070",
+    "8080",
+    "8090",
+    "8100",
+    "8110",
+    "8120",
+    "8130",
+    "8140",
+    "8150",
+    "8160",
+    "8170",
+    "8180",
+    "8190",
+    "8200",
+    "8210",
+    "8220",
+    "8230",
+    "8240",
+    "8250",
+    "8260",
+    "8270",
+    "9010",
+    "9020",
+    "9030",
+    "9040",
+    "9050",
+    "9110",
+    "9120",
+    "9130",
+    "9140",
+    "9150",
+    "9160"
+  ],
+  "all_titles": [
+    "매출",
+    "제품매출",
+    "상품매출",
+    "용역매출",
+    "임대수입",
+    "제품매출원가",
+    "상품매출원가",
+    "용역원가",
+    "매출총이익",
+    "임원급여",
+    "직원급여",
+    "상여금",
+    "퇴직급여",
+    "복리후생비",
+    "여비교통비",
+    "접대비",
+    "통신비",
+    "전력비",
+    "세금과공과금",
+    "감가상각비",
+    "지급임차료",
+    "보험료",
+    "차량유지비",
+    "경상연구개발비",
+    "운반비",
+    "교육훈련비",
+    "도서인쇄비",
+    "사무용품비",
+    "소모품비",
+    "지급수수료",
+    "광고선전비",
+    "건물관리비",
+    "수선비",
+    "대손상각비",
+    "무형자산상각비",
+    "잡비",
+    "이자수익",
+    "유형자산처분이익",
+    "잡이익",
+    "임대료수익",
+    "배당금수익",
+    "이자비용",
+    "전기오류수정손실",
+    "잡손실",
+    "외환차손",
+    "기부금",
+    "유형자산처분손실"
+  ],
+  "allowlist_sha256": "16b5403e9128944f8bebdf96649bccf9b4af30bff8716f5b17f072939d3e2c36",
+  "categories": {
+    "cost_of_sales": [
+      {
+        "code": "5005",
+        "name": "제품매출원가",
+        "section": "II_cogs",
+        "sign": "-"
+      },
+      {
+        "code": "5010",
+        "name": "상품매출원가",
+        "section": "II_cogs",
+        "sign": "-"
+      },
+      {
+        "code": "5015",
+        "name": "용역원가",
+        "section": "II_cogs",
+        "sign": "-"
+      },
+      {
+        "code": "5020",
+        "name": "매출총이익",
+        "section": "II_cogs",
+        "sign": "+"
+      }
+    ],
+    "non_operating_expense": [
+      {
+        "code": "9110",
+        "name": "이자비용",
+        "section": "VII_non_op_expense",
+        "sign": "-"
+      },
+      {
+        "code": "9120",
+        "name": "전기오류수정손실",
+        "section": "VII_non_op_expense",
+        "sign": "-"
+      },
+      {
+        "code": "9130",
+        "name": "잡손실",
+        "section": "VII_non_op_expense",
+        "sign": "-"
+      },
+      {
+        "code": "9140",
+        "name": "외환차손",
+        "section": "VII_non_op_expense",
+        "sign": "-"
+      },
+      {
+        "code": "9150",
+        "name": "기부금",
+        "section": "VII_non_op_expense",
+        "sign": "-"
+      },
+      {
+        "code": "9160",
+        "name": "유형자산처분손실",
+        "section": "VII_non_op_expense",
+        "sign": "-"
+      }
+    ],
+    "non_operating_income": [
+      {
+        "code": "4050",
+        "name": "임대수입",
+        "section": "VI_non_op_revenue",
+        "sign": "+"
+      },
+      {
+        "code": "9010",
+        "name": "이자수익",
+        "section": "VI_non_op_revenue",
+        "sign": "+"
+      },
+      {
+        "code": "9020",
+        "name": "유형자산처분이익",
+        "section": "VI_non_op_revenue",
+        "sign": "+"
+      },
+      {
+        "code": "9030",
+        "name": "잡이익",
+        "section": "VI_non_op_revenue",
+        "sign": "+"
+      },
+      {
+        "code": "9040",
+        "name": "임대료수익",
+        "section": "VI_non_op_revenue",
+        "sign": "+"
+      },
+      {
+        "code": "9050",
+        "name": "배당금수익",
+        "section": "VI_non_op_revenue",
+        "sign": "+"
+      }
+    ],
+    "sales": [
+      {
+        "code": "4010",
+        "name": "매출",
+        "section": "I_revenue",
+        "sign": "+"
+      },
+      {
+        "code": "4020",
+        "name": "제품매출",
+        "section": "I_revenue",
+        "sign": "+"
+      },
+      {
+        "code": "4030",
+        "name": "상품매출",
+        "section": "I_revenue",
+        "sign": "+"
+      },
+      {
+        "code": "4040",
+        "name": "용역매출",
+        "section": "I_revenue",
+        "sign": "+"
+      }
+    ],
+    "sga": [
+      {
+        "code": "8010",
+        "name": "임원급여",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8020",
+        "name": "직원급여",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8030",
+        "name": "상여금",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8040",
+        "name": "퇴직급여",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8050",
+        "name": "복리후생비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8060",
+        "name": "여비교통비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8070",
+        "name": "접대비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8080",
+        "name": "통신비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8090",
+        "name": "전력비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8100",
+        "name": "세금과공과금",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8110",
+        "name": "감가상각비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8120",
+        "name": "지급임차료",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8130",
+        "name": "보험료",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8140",
+        "name": "차량유지비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8150",
+        "name": "경상연구개발비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8160",
+        "name": "운반비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8170",
+        "name": "교육훈련비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8180",
+        "name": "도서인쇄비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8190",
+        "name": "사무용품비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8200",
+        "name": "소모품비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8210",
+        "name": "지급수수료",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8220",
+        "name": "광고선전비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8230",
+        "name": "건물관리비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8240",
+        "name": "수선비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8250",
+        "name": "대손상각비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8260",
+        "name": "무형자산상각비",
+        "section": "IV_sga",
+        "sign": "-"
+      },
+      {
+        "code": "8270",
+        "name": "잡비",
+        "section": "IV_sga",
+        "sign": "-"
+      }
+    ]
+  },
+  "source": "Butler Card 5 PR #741 / butler_pc_core/accounting/account_dict.py",
+  "title_count": 47,
+  "version": "card5_account_allowlist_v1"
+}

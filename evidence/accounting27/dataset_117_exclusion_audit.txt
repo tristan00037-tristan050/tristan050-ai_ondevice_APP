@@ -1,0 +1,9 @@
+# AI Hub 117번 데이터 제외 audit — 2026-05-20T05:06:46.102213+00:00
+# 대표 명시: 117번 (금융 합성데이터) 제외
+# T7 archive: download (1).tar (14.5 GB) — 본 workdir 추출 0
+# extracted/ 117 path hits: 228 (전부 false-positive — 파일 일련번호 _0117_)
+# extracted/ 117 content hits: 5 (전부 false-positive — K-IFRS 113~117항 조항 번호)
+# 일상/대화/상담/민원 hits: 0
+# 117.금융_합성데이터 prefix hits: 0
+# 117번 AI Hub 데이터셋 본질 hit: 0
+# 27번 데이터 단독 사용 정합 PASS (false-positive 분석 완료)
