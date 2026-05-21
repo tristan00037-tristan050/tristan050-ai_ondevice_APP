@@ -1,0 +1,55 @@
+name: Card 1 Tests
+
+on:
+  pull_request:
+    paths:
+      - 'butler_pc_core/card1_extraction/**'
+      - 'tests/card1_extraction/**'
+      - 'evidence/card1/dataset_117_exclusion_audit.txt'
+      - '.github/workflows/card1-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'butler_pc_core/card1_extraction/**'
+      - 'tests/card1_extraction/**'
+      - 'evidence/card1/dataset_117_exclusion_audit.txt'
+      - '.github/workflows/card1-tests.yml'
+
+jobs:
+  card1-pytest:
+    name: Card 1 pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pytest
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+
+      - name: Verify card1 source and tests
+        run: |
+          test -d butler_pc_core/card1_extraction || { echo "BLOCK: butler_pc_core/card1_extraction not found"; exit 2; }
+          test -d tests/card1_extraction || { echo "BLOCK: tests/card1_extraction not found"; exit 2; }
+          find butler_pc_core/card1_extraction -maxdepth 2 -type f | sort
+          find tests/card1_extraction -maxdepth 2 -type f | sort
+
+      - name: Compile card1 modules
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m compileall butler_pc_core/card1_extraction tests/card1_extraction
+
+      - name: Run card1 pytest
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest tests/card1_extraction -v --tb=short

@@ -1,0 +1,45 @@
+name: Card 2 Tests
+
+on:
+  pull_request:
+    paths:
+      - 'butler_pc_core/document_transform/**'
+      - 'butler_pc_core/cards/document_transform/**'
+      - 'butler_pc_core/router/card2_routing.py'
+      - 'tests/document_transform/**'
+      - 'tests/cards/document_transform/**'
+      - '.github/workflows/card2-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'butler_pc_core/document_transform/**'
+      - 'butler_pc_core/cards/document_transform/**'
+      - 'butler_pc_core/router/card2_routing.py'
+      - 'tests/document_transform/**'
+      - 'tests/cards/document_transform/**'
+      - '.github/workflows/card2-tests.yml'
+
+jobs:
+  card2-pytest:
+    name: Card 2 pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pytest and document dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest python-docx
+      - name: Compile card2 modules
+        env:
+          PYTHONPATH: .
+        run: python -m compileall butler_pc_core/document_transform butler_pc_core/router/card2_routing.py tests/document_transform tests/cards/document_transform
+      - name: Run card2 pytest
+        env:
+          PYTHONPATH: .
+        run: python -m pytest tests/document_transform tests/cards/document_transform -v --tb=short

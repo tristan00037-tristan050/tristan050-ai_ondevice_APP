@@ -1,0 +1,14 @@
+# AI Hub 117번 데이터 제외 audit — Card 2
+# 기준 SHA: d1ab746caba2ada5cd09ad06b4b57d4ed506270a
+# 범위: butler_pc_core/document_transform/ + butler_pc_core/cards/document_transform/ + butler_pc_core/router/card2_routing.py + tests/document_transform/ + tests/cards/document_transform/
+# 대표 명시: 117번 데이터 제외
+# 117번 AI Hub 데이터셋 사용 의도: 0
+# 117.금융_합성데이터 prefix dependency: 0
+# adapter_binary_committed=false 유지
+# base_model_changed=false 유지
+# tokenizer_changed=false 유지
+# license_verified_true 유지
+# raw external dataset content committed: 0
+# Card 2 document transform tests use local fixtures / redacted synthetic cases only.
+# Conclusion: Card 2 does not require or use dataset 117 for document format conversion.
+STATUS=DATASET_117_EXCLUDED
