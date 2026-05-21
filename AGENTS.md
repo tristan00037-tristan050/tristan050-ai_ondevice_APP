@@ -14,3 +14,28 @@
 
 이 파일 내용은 리포트/로그에 원문으로 남기지 않습니다.
 필요한 경우에도 해시(sha256)와 스코프만 meta-only로 기록합니다.
+
+## Cursor Cloud specific instructions
+
+### Services overview
+
+| Service | Port | Start command | Directory |
+|---------|------|---------------|-----------|
+| Butler Sidecar (FastAPI) | 8765 | `python3 butler_sidecar.py --host 0.0.0.0 --port 8765` | `/workspace` |
+| BFF Accounting (Express) | 8081 | `npm run dev:bff` | `webcore_appcore_starter_4_17/` |
+| Ops Console (Vite/React) | 5173 | `npm run dev:web` | `webcore_appcore_starter_4_17/` |
+| Butler Desktop (Vite/React) | 1420 | `npx vite --host 0.0.0.0 --port 1420` | `butler-desktop/` |
+
+### Running tests
+
+- **Python tests**: `python3 -m pytest tests/ -v` (from repo root). Exclude `tests/turboq/` (requires `torch`/GPU) and some `tests/eval/` files with pre-existing import errors.
+- **Butler Desktop tests**: `npx vitest run` (from `butler-desktop/`).
+- **Repo contracts**: `bash scripts/verify/verify_repo_contracts.sh` (must pass for all PRs).
+
+### Gotchas
+
+- `$HOME/.local/bin` must be on PATH for `pytest`, `uvicorn`, `fastapi` CLI tools installed via pip.
+- The sidecar runs without a model file (`BUTLER_MODEL_PATH` unset) in "no_model" mode — health/precheck/request_parsing endpoints still work. LLM inference endpoints return stub responses.
+- The `webcore_appcore_starter_4_17` BFF starts without `DATABASE_URL` and falls back to in-memory mode; set `DATABASE_URL=postgres://app:app@localhost:5432/app` with a running Postgres for full persistence.
+- Build webcore server packages before starting the BFF: `npm run build:packages:server` (in `webcore_appcore_starter_4_17/`).
+- Ops Console has a pre-existing syntax error in `packages/ops-console/src/pages/rollout/RolloutPage.tsx` that prevents the Vite dev server from rendering the rollout page. Other pages may work.
