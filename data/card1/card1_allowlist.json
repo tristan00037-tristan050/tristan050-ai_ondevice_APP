@@ -1,0 +1,11 @@
+{
+  "allowed_action_types": ["send", "share", "review", "organize", "revise", "submit", "upload", "confirm", "schedule", "follow_up", "none", "other"],
+  "allowed_deadline_types": ["NONE", "HARD", "SOFT", "INQUIRY", "URGENCY", "CONDITION"],
+  "allowed_intent_types": ["REQUEST", "COMMAND", "REPORT", "NO_ACTION", "QUESTION"],
+  "allowed_output_fields": ["sample_id", "intent_type", "deadline_type", "normalized_action", "action_items", "materials", "confidence", "auto_apply_allowed", "policy_flags", "source_digest16"],
+  "allowed_policy_flags": ["manual_review_only", "auto_apply_off", "deadline_needs_evidence", "content_not_retained", "no_external_egress"],
+  "card_id": "card1_request_core_extraction",
+  "default_action": "deny",
+  "model_card_mapping": "tool_call",
+  "schema_version": "card1_allowlist.v1"
+}

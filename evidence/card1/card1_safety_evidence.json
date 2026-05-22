@@ -1,0 +1,36 @@
+{
+  "status": "PARTIAL_DONE",
+  "card": "card1_request_core_extraction",
+  "base_sha": "74f501464954eaad532690e7cfa1b7340cba0795",
+  "model_card_mapping": "tool_call",
+  "safety_controls": {
+    "adapter_sha_verification": {
+      "implemented": true,
+      "adapter_path_hint": "desktop_butler_data_card1_request_core_models_adapters_safetensors",
+      "actual_adapter_verified": false,
+      "reason": "Card 1 adapter artifact path and full SHA-256 were not provided in repository or directive. Verifier is fail-closed and ready for algorithm-team artifact confirmation."
+    },
+    "allowlist": {
+      "implemented": true,
+      "path": "data/card1/card1_allowlist.json",
+      "sha256": "cf4cad675cc987178f5da479edf1633de641b1c06aa55479e01041681c0ce972",
+      "default_action": "deny"
+    },
+    "six_invariants": {
+      "implemented": true,
+      "names": ["output_is_object", "intent_present", "deadline_requires_digest", "auto_apply_guarded", "content_not_retained_flag", "no_external_egress_flag"]
+    },
+    "rollback": {
+      "implemented": true,
+      "evidence_builder": "src/butler/card1/safety/rollback.py",
+      "rollback_target": "card1_allowlist_or_adapter_contract"
+    }
+  },
+  "non_changes": {
+    "adapter_binary_committed": false,
+    "base_model_changed": false,
+    "tokenizer_changed": false,
+    "training_changed": false
+  },
+  "final_blocker": "actual Card 1 adapter artifact SHA verification still requires algorithm-team artifact path and expected SHA-256."
+}
