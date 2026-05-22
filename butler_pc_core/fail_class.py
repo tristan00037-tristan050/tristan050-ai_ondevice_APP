@@ -1,0 +1,120 @@
+from __future__ import annotations
+
+from enum import Enum
+from typing import Any
+
+
+class FailClass(str, Enum):
+    INVALID_REQUEST_SCHEMA = "INVALID_REQUEST_SCHEMA"
+    CONTRACT_VERSION_INCOMPATIBLE = "CONTRACT_VERSION_INCOMPATIBLE"
+    UNSUPPORTED_HELPER_ID = "UNSUPPORTED_HELPER_ID"
+    TIMEOUT = "TIMEOUT"
+    CANCELLED = "CANCELLED"
+    INTERNAL_RUNTIME_ERROR = "INTERNAL_RUNTIME_ERROR"
+    RESOURCE_EXHAUSTED = "RESOURCE_EXHAUSTED"
+    CONCURRENCY_LIMIT_EXCEEDED = "CONCURRENCY_LIMIT_EXCEEDED"
+    MODEL_PACK_MISSING = "MODEL_PACK_MISSING"
+    MODEL_PACK_SHA_MISMATCH = "MODEL_PACK_SHA_MISMATCH"
+    ADAPTER_SHA_MISMATCH = "ADAPTER_SHA_MISMATCH"
+    TOKENIZER_SHA_MISMATCH = "TOKENIZER_SHA_MISMATCH"
+    MANIFEST_SHA_MISMATCH = "MANIFEST_SHA_MISMATCH"
+    SIGNATURE_INVALID = "SIGNATURE_INVALID"
+    VERSION_INCOMPATIBLE = "VERSION_INCOMPATIBLE"
+    CAPABILITY_TOKEN_MISSING = "CAPABILITY_TOKEN_MISSING"
+    CAPABILITY_TOKEN_INVALID = "CAPABILITY_TOKEN_INVALID"
+    CAPABILITY_TOKEN_EXPIRED = "CAPABILITY_TOKEN_EXPIRED"
+    POLICY_DENIED = "POLICY_DENIED"
+    NETWORK_FORBIDDEN = "NETWORK_FORBIDDEN"
+    EXTERNAL_SEND_FORBIDDEN = "EXTERNAL_SEND_FORBIDDEN"
+    RAW_LOG_FORBIDDEN = "RAW_LOG_FORBIDDEN"
+    PII_NOT_REDACTED = "PII_NOT_REDACTED"
+    PROMPT_INJECTION_RISK = "PROMPT_INJECTION_RISK"
+    TOOL_CALL_FORBIDDEN = "TOOL_CALL_FORBIDDEN"
+    SANDBOX_VIOLATION = "SANDBOX_VIOLATION"
+    INPUT_DIGEST_MISMATCH = "INPUT_DIGEST_MISMATCH"
+    OUTPUT_SCHEMA_INVALID = "OUTPUT_SCHEMA_INVALID"
+    OUTPUT_DIGEST_MISMATCH = "OUTPUT_DIGEST_MISMATCH"
+    OUTPUT_UNTRUSTED = "OUTPUT_UNTRUSTED"
+    IDEMPOTENCY_REPLAY_CONFLICT = "IDEMPOTENCY_REPLAY_CONFLICT"
+    SIDECAR_NOT_READY = "SIDECAR_NOT_READY"
+    SIDECAR_RESTARTING = "SIDECAR_RESTARTING"
+    SIDECAR_UNLOADED = "SIDECAR_UNLOADED"
+    HEALTH_CHECK_FAILED = "HEALTH_CHECK_FAILED"
+    HEARTBEAT_LOST = "HEARTBEAT_LOST"
+
+
+GROUPS: dict[str, tuple[FailClass, ...]] = {
+    "core_runtime": (
+        FailClass.INVALID_REQUEST_SCHEMA,
+        FailClass.CONTRACT_VERSION_INCOMPATIBLE,
+        FailClass.UNSUPPORTED_HELPER_ID,
+        FailClass.TIMEOUT,
+        FailClass.CANCELLED,
+        FailClass.INTERNAL_RUNTIME_ERROR,
+        FailClass.RESOURCE_EXHAUSTED,
+        FailClass.CONCURRENCY_LIMIT_EXCEEDED,
+    ),
+    "integrity": (
+        FailClass.MODEL_PACK_MISSING,
+        FailClass.MODEL_PACK_SHA_MISMATCH,
+        FailClass.ADAPTER_SHA_MISMATCH,
+        FailClass.TOKENIZER_SHA_MISMATCH,
+        FailClass.MANIFEST_SHA_MISMATCH,
+        FailClass.SIGNATURE_INVALID,
+        FailClass.VERSION_INCOMPATIBLE,
+    ),
+    "policy_security": (
+        FailClass.CAPABILITY_TOKEN_MISSING,
+        FailClass.CAPABILITY_TOKEN_INVALID,
+        FailClass.CAPABILITY_TOKEN_EXPIRED,
+        FailClass.POLICY_DENIED,
+        FailClass.NETWORK_FORBIDDEN,
+        FailClass.EXTERNAL_SEND_FORBIDDEN,
+        FailClass.RAW_LOG_FORBIDDEN,
+        FailClass.PII_NOT_REDACTED,
+        FailClass.PROMPT_INJECTION_RISK,
+        FailClass.TOOL_CALL_FORBIDDEN,
+        FailClass.SANDBOX_VIOLATION,
+    ),
+    "io": (
+        FailClass.INPUT_DIGEST_MISMATCH,
+        FailClass.OUTPUT_SCHEMA_INVALID,
+        FailClass.OUTPUT_DIGEST_MISMATCH,
+        FailClass.OUTPUT_UNTRUSTED,
+        FailClass.IDEMPOTENCY_REPLAY_CONFLICT,
+    ),
+    "lifecycle": (
+        FailClass.SIDECAR_NOT_READY,
+        FailClass.SIDECAR_RESTARTING,
+        FailClass.SIDECAR_UNLOADED,
+        FailClass.HEALTH_CHECK_FAILED,
+        FailClass.HEARTBEAT_LOST,
+    ),
+}
+
+LEGACY_ALIAS: dict[str, FailClass] = {
+    "input_too_large": FailClass.INVALID_REQUEST_SCHEMA,
+    "ImportError": FailClass.INTERNAL_RUNTIME_ERROR,
+    "ParseError": FailClass.OUTPUT_SCHEMA_INVALID,
+    "TimeoutError": FailClass.TIMEOUT,
+    "CancelledError": FailClass.CANCELLED,
+    "MemoryError": FailClass.RESOURCE_EXHAUSTED,
+    "ValueError": FailClass.INVALID_REQUEST_SCHEMA,
+    "RuntimeError": FailClass.INTERNAL_RUNTIME_ERROR,
+}
+
+
+def map_legacy_to_fail_class(value: Any) -> FailClass:
+    if isinstance(value, FailClass):
+        return value
+    if isinstance(value, BaseException):
+        return LEGACY_ALIAS.get(type(value).__name__, FailClass.INTERNAL_RUNTIME_ERROR)
+    return LEGACY_ALIAS.get(str(value), FailClass.INTERNAL_RUNTIME_ERROR)
+
+
+def fail_payload(fail_class: FailClass, message: str, error_class: str | None = None) -> dict[str, str]:
+    return {
+        "fail_class": fail_class.value,
+        "error_class": error_class or fail_class.value,
+        "message": message,
+    }
