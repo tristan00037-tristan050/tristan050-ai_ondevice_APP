@@ -62,6 +62,11 @@ from butler_pc_core.runtime.timeout_controller import (
     HARD_TIMEOUT_SEC,
 )
 from butler_pc_core.inference.llm_runtime import LlmRuntime, _strip_residual_stop_tokens
+from butler_pc_core.fail_class import FailClass, fail_payload, map_legacy_to_fail_class
+from butler_pc_core.auth.capability_token import (
+    CapabilityTokenError,
+    CapabilityTokenManager,
+)
 from datetime import datetime, timezone as _tz
 
 # ---------------------------------------------------------------------------
@@ -250,6 +255,41 @@ if _FASTAPI_AVAILABLE:
         expose_headers=["X-Task-Id"],
     )
 
+    # ── v1.5 capability token middleware ──
+    _TOKEN_MANAGER = CapabilityTokenManager()
+
+    _PUBLIC_GET_PATHS = frozenset({
+        "/health",
+        "/api/sidecar/health",
+        "/api/model/status",
+        "/api/egress/report",
+    })
+
+    @app.on_event("startup")
+    async def _startup_generate_token():
+        _TOKEN_MANAGER.generate()
+
+    @app.on_event("shutdown")
+    async def _shutdown_clear_token():
+        _TOKEN_MANAGER.clear()
+
+    @app.middleware("http")
+    async def _capability_token_middleware(request, call_next):
+        if request.method == "GET" and request.url.path in _PUBLIC_GET_PATHS:
+            return await call_next(request)
+        if request.method in ("POST", "DELETE"):
+            try:
+                _TOKEN_MANAGER.verify_authorization_header(
+                    request.headers.get("Authorization")
+                )
+            except CapabilityTokenError as exc:
+                status = 401 if exc.fail_class == FailClass.CAPABILITY_TOKEN_MISSING else 403
+                return JSONResponse(
+                    status_code=status,
+                    content={"fail_class": exc.fail_class.value, "message": exc.message},
+                )
+        return await call_next(request)
+
     # -----------------------------------------------------------------------
     # 모델
     # -----------------------------------------------------------------------
@@ -430,10 +470,11 @@ if _FASTAPI_AVAILABLE:
         })
 
         if budget.route == Route.REFUSE_TEAM_HUB:
-            yield _sse("error", {
-                "error_class": "input_too_large",
-                "message": budget.user_message,
-            })
+            yield _sse("error", fail_payload(
+                FailClass.INVALID_REQUEST_SCHEMA,
+                budget.user_message,
+                error_class="input_too_large",
+            ))
             return
 
         if budget.route == Route.TEAM_HUB_RECOMMENDED:
@@ -735,10 +776,11 @@ if _FASTAPI_AVAILABLE:
                 "message": str(exc),
             })
         except Exception as exc:  # noqa: BLE001
-            yield _sse("error", {
-                "error_class": type(exc).__name__,
-                "message": str(exc)[:500],
-            })
+            yield _sse("error", fail_payload(
+                map_legacy_to_fail_class(exc),
+                str(exc)[:500],
+                error_class=type(exc).__name__,
+            ))
         finally:
             _active_controllers.pop(task_id, None)
 
@@ -839,7 +881,7 @@ if _FASTAPI_AVAILABLE:
                 from butler_pc_core.accounting.classifier import classify_file, save_classified
                 from butler_pc_core.accounting.report import build_summary
             except ImportError as exc:
-                yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
+                yield _sse("error", fail_payload(FailClass.INTERNAL_RUNTIME_ERROR, str(exc), error_class="ImportError"))
                 return
 
             df = await loop.run_in_executor(None, classify_file, file_path)
@@ -916,7 +958,7 @@ if _FASTAPI_AVAILABLE:
             })
 
         except Exception as exc:
-            yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)[:500]})
+            yield _sse("error", fail_payload(map_legacy_to_fail_class(exc), str(exc)[:500], error_class=type(exc).__name__))
         finally:
             try:
                 Path(file_path).unlink(missing_ok=True)
@@ -1003,7 +1045,7 @@ if _FASTAPI_AVAILABLE:
             from butler_pc_core.card1_extraction import extract_card1
             from butler_pc_core.card1_extraction.confidence import confidence_band as _cb
         except ImportError as exc:
-            yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
+            yield _sse("error", fail_payload(FailClass.INTERNAL_RUNTIME_ERROR, str(exc), error_class="ImportError"))
             return
 
         # Phase 1 — PII 마스킹
@@ -1026,7 +1068,7 @@ if _FASTAPI_AVAILABLE:
                 lambda: _run_card1_extraction(masked),
             )
         except Exception as exc:
-            yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)})
+            yield _sse("error", fail_payload(map_legacy_to_fail_class(exc), str(exc), error_class=type(exc).__name__))
             return
 
         # Phase 4 — verifier + 신뢰도 구간 판정
@@ -1233,7 +1275,7 @@ if _FASTAPI_AVAILABLE:
             )
             from butler_pc_core.card1_extraction.confidence import confidence_band as _cb
         except ImportError as exc:
-            yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
+            yield _sse("error", fail_payload(FailClass.INTERNAL_RUNTIME_ERROR, str(exc), error_class="ImportError"))
             return
 
         # Phase 1 — 파일 텍스트 추출
@@ -1242,7 +1284,7 @@ if _FASTAPI_AVAILABLE:
         try:
             text = extract_text_from_file_bytes(file_bytes, suffix)
         except ParseError as exc:
-            yield _sse("error", {"error_class": "ParseError", "message": str(exc)})
+            yield _sse("error", fail_payload(FailClass.OUTPUT_SCHEMA_INVALID, str(exc), error_class="ParseError"))
             return
 
         # Phase 2 — PII 마스킹
@@ -1261,7 +1303,7 @@ if _FASTAPI_AVAILABLE:
                 lambda: _run_card1_extraction(masked),
             )
         except Exception as exc:
-            yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)})
+            yield _sse("error", fail_payload(map_legacy_to_fail_class(exc), str(exc), error_class=type(exc).__name__))
             return
 
         # Phase 4 — verifier + 신뢰도 구간 판정
@@ -1374,7 +1416,7 @@ if _FASTAPI_AVAILABLE:
             from butler_pc_core.semantic_mapping import map_fields
             from butler_pc_core.semantic_mapping.slot_schema import TARGET_SLOTS
         except ImportError as exc:
-            yield _sse("error", {"error_class": "ImportError", "message": str(exc)})
+            yield _sse("error", fail_payload(FailClass.INTERNAL_RUNTIME_ERROR, str(exc), error_class="ImportError"))
             return
 
         # Phase 1 — 외부 문서 분석
@@ -1408,7 +1450,7 @@ if _FASTAPI_AVAILABLE:
                 lambda: map_fields(source_fields, TARGET_SLOTS, use_llm=False),
             )
         except Exception as exc:
-            yield _sse("error", {"error_class": type(exc).__name__, "message": str(exc)})
+            yield _sse("error", fail_payload(map_legacy_to_fail_class(exc), str(exc), error_class=type(exc).__name__))
             return
 
         # Phase 4 — 문서 생성 + 신뢰도 §11 Block 적용
@@ -1572,8 +1614,11 @@ if _FASTAPI_AVAILABLE:
                     "summary": _doc_transform_results[result_id]["summary"],
                 })
             elif result_id:
-                yield _sse("error", {"error_class": "NotFound",
-                                     "message": "result_id 없음 또는 만료"})
+                yield _sse("error", fail_payload(
+                    FailClass.INVALID_REQUEST_SCHEMA,
+                    "result_id 없음 또는 만료",
+                    error_class="NotFound",
+                ))
             else:
                 yield _sse("ready", {"contract": "v1.1", "step": "stream"})
         return StreamingResponse(
