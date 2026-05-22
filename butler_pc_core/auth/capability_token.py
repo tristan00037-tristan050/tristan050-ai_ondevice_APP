@@ -44,7 +44,18 @@ class CapabilityTokenManager:
         if self._token:
             return self._token
         if self.token_path.exists():
-            value = self.token_path.read_text(encoding="utf-8").strip()
+            try:
+                value = self.token_path.read_text(encoding="utf-8").strip()
+            except OSError as exc:
+                # fail-closed: 토큰 파일이 존재하나 읽기 불가
+                # (권한 drift / transient I/O / 손상 등).
+                # generic 500으로 escape하지 않고 CapabilityTokenError로
+                # 변환하여 인증 분류의 deterministic 본질을 유지한다.
+                raise CapabilityTokenError(
+                    FailClass.CAPABILITY_TOKEN_INVALID,
+                    f"capability token file unreadable: {self.token_path} "
+                    f"({exc.__class__.__name__})",
+                ) from exc
             self._token = value or None
         return self._token
 
