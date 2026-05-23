@@ -143,3 +143,79 @@ def test_aiohttp_importable_emits_warning(recwarn):
         if issubclass(w.category, RuntimeWarning) and "aiohttp" in str(w.message)
     ]
     assert matched, f"aiohttp RuntimeWarning 본질 미발생: {[str(w.message) for w in recwarn.list]}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 신규 회귀 방지 — Codex 재리뷰 결함 #4 (P1) IPv6-safe host parsing
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_ipv6_loopback_not_treated_as_egress():
+    """
+    Codex P1 회귀 방지 — http://[::1]:8765/... 본질의 IPv6 loopback URL이
+    external egress 위반 본질로 잘못 차단되지 0 않아야 함.
+    이전 본질: split(":", 1)[0] 본질이 "[" 본질을 host로 잘못 추출.
+    정정 본질: urllib.parse.urlparse(...).hostname 본질이 "::1" 본질 정확 추출.
+    """
+    monitor = EgressMonitorReal()
+    assert monitor._extract_host("http://[::1]:8765/health") == "::1"
+    assert monitor._is_local_only("::1") is True
+
+
+def test_ipv6_global_address_treated_as_egress():
+    """
+    Codex P1 회귀 방지 — 비-로컬 IPv6 본질 (2001:db8::/32 documentation)은
+    egress 본질로 정확 판정되어야 함.
+    """
+    monitor = EgressMonitorReal()
+    assert monitor._extract_host("http://[2001:db8::1]:443/api") == "2001:db8::1"
+    assert monitor._is_local_only("2001:db8::1") is False
+
+
+def test_ipv4_loopback_unchanged_after_helper():
+    """
+    Codex P1 회귀 방지 — IPv4 loopback / localhost 본질의 정합이
+    helper 통합 본질 후에도 유지되어야 함 (회귀 0).
+    """
+    monitor = EgressMonitorReal()
+    assert monitor._extract_host("http://127.0.0.1:8765/health") == "127.0.0.1"
+    assert monitor._is_local_only("127.0.0.1") is True
+    assert monitor._extract_host("http://localhost:8765/health") == "localhost"
+    assert monitor._is_local_only("localhost") is True
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 신규 회귀 방지 — Codex 재리뷰 결함 #5 (P2) stop lifecycle reset
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_stop_clears_started_flag():
+    """
+    Codex P2 회귀 방지 — stop() 본질이 _started 본질을 False로 클리어해야 함.
+    이전 본질: __exit__만 클리어, public stop()은 _started 본질 잔존.
+    """
+    monitor = EgressMonitorReal()
+    monitor.start()
+    try:
+        assert monitor._started is True
+    finally:
+        monitor.stop()
+    assert monitor._started is False, "stop() 본질 후 _started 잔존"
+
+
+def test_restart_after_stop_does_not_raise():
+    """
+    Codex P2 회귀 방지 — start → stop → start 본질 재시작 시
+    RuntimeError("duplicate start is forbidden") 본질 발생 0.
+    이전 본질: monitor 본질이 single-use 한계.
+    """
+    monitor = EgressMonitorReal()
+    monitor.start()
+    monitor.stop()
+    # 재시작 본질 — RuntimeError raise 0이어야 함
+    try:
+        monitor.start()
+    except RuntimeError as exc:
+        raise AssertionError(
+            f"stop() 본질 후 재시작이 RuntimeError 본질 raise: {exc}"
+        )
+    finally:
+        monitor.stop()  # 정합 cleanup

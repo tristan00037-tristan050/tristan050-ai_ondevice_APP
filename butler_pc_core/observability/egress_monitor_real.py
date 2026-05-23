@@ -7,6 +7,7 @@ import socket
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 
 class EgressMonitorReal:
@@ -52,6 +53,24 @@ class EgressMonitorReal:
             return True
         return False
 
+    def _extract_host(self, url: str) -> Optional[str]:
+        """
+        IPv6-safe URL host 추출 본질 (Codex P1 결함 정정).
+
+        - 표준 urllib.parse.urlparse 본질 사용 → IPv6 bracket 자동 제거 + lowercase 정규화
+        - 예: "http://[::1]:8765/..."     → "::1"
+        - 예: "http://localhost:8765/..." → "localhost"
+        - 예: "http://192.168.1.1/..."    → "192.168.1.1"
+        - 파싱 실패 본질 또는 host 0 → None 반환 (caller가 fail-closed 본질 결정)
+
+        이전 본질 (split(":", 1)[0])이 "[::1]:port" 본질을 "[" 본질로 잘못 추출하여
+        IPv6 loopback 본질이 external egress 본질로 잘못 차단되던 결함 정정.
+        """
+        try:
+            return urlparse(str(url)).hostname
+        except (ValueError, AttributeError):
+            return None
+
     def _detect_raw_text(self, log_text: str) -> Optional[str]:
         if re.search(r"\d{6}-\d{7}", log_text):
             return "rrn_pattern"
@@ -86,7 +105,7 @@ class EgressMonitorReal:
             self._originals["requests.sessions.Session.request"] = original
 
             def request_patch(session, method, url, *args, **kwargs):
-                host = str(url).split("//", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+                host = self._extract_host(url) or ""
                 if not self._is_local_only(host):
                     self._record_violation("requests", str(url))
                     raise PermissionError("external requests call blocked")
@@ -119,7 +138,7 @@ class EgressMonitorReal:
             self._originals["httpx.Client.request"] = original_httpx
 
             def httpx_patch(client, method, url, *args, **kwargs):
-                host = str(url).split("//", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+                host = self._extract_host(url) or ""
                 if not self._is_local_only(host):
                     self._record_violation("httpx", str(url))
                     raise PermissionError("external httpx call blocked")
@@ -154,7 +173,7 @@ class EgressMonitorReal:
         def urlopen_patch(url, *args, **kwargs):
             target = getattr(url, "full_url", url)
             text = str(target)
-            host = text.split("//", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+            host = self._extract_host(text) or ""
             if not self._is_local_only(host):
                 self._record_violation("urllib", text)
                 raise PermissionError("external urllib call blocked")
@@ -203,6 +222,10 @@ class EgressMonitorReal:
             except Exception as exc:
                 self._restore_errors.append((name, str(exc)))
         self._originals.clear()
+        # Codex P2 결함 정정: stop() 본질 종료 시 _started 클리어 본질
+        # public start()/stop() 본질 직접 사용 시 재시작 가능
+        # (__exit__ 본질은 이미 finally에서 _started=False 본질 — idempotent).
+        self._started = False
 
     def record_telemetry_attempt(self, target: str) -> None:
         self.telemetry_enabled = True
