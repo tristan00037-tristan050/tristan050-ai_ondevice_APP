@@ -58,17 +58,15 @@ class ModelPackVerifier:
 
     def _resolve_target(self, candidate: str | Path, manifest_dir: Optional[Path] = None) -> Path:
         raw = Path(candidate)
-        if raw.is_absolute():
-            resolved = raw.resolve()
-        else:
-            base = (manifest_dir or self.base_dir).resolve()
-            resolved = (base / raw).resolve()
+        base = (manifest_dir or self.base_dir).resolve()
+        pre_resolve = raw if raw.is_absolute() else base / raw
+        if pre_resolve.is_symlink() and not self.allow_symlinks:
+            raise ValueError("symlink blocked")
+        resolved = pre_resolve.resolve()
         try:
             resolved.relative_to(self.base_dir)
         except ValueError:
             raise ValueError("path traversal outside base_dir")
-        if resolved.is_symlink() and not self.allow_symlinks:
-            raise ValueError("symlink blocked")
         return resolved
 
     def load_manifest(self, manifest_path: Path) -> tuple[Optional[dict[str, Any]], VerifyResult]:
@@ -78,8 +76,6 @@ class ModelPackVerifier:
                 return None, self._result(False, FailClass.MODEL_PACK_MISSING, {"reason": "manifest_missing"}, target)
             if not target.is_file():
                 return None, self._result(False, FailClass.MODEL_PACK_MISSING, {"reason": "manifest_not_file"}, target)
-            if target.is_symlink() and not self.allow_symlinks:
-                return None, self._result(False, FailClass.SIGNATURE_INVALID, {"reason": "manifest_symlink_blocked"}, target)
             raw = target.read_bytes()
             manifest_sha = hashlib.sha256(raw).hexdigest()
             parsed = json.loads(raw.decode("utf-8"))
@@ -98,8 +94,6 @@ class ModelPackVerifier:
             return self._result(False, FailClass.SIGNATURE_INVALID, {"expected_sha": expected_sha, "reason": "expected_sha_not_lower_hex64"})
         try:
             target = self._resolve_target(path_value, manifest_dir)
-            if target.is_symlink() and not self.allow_symlinks:
-                return self._result(False, FailClass.SIGNATURE_INVALID, {"reason": "symlink_blocked"}, target)
             if not target.exists():
                 return self._result(False, FailClass.MODEL_PACK_MISSING, {"reason": "file_missing"}, target)
             if not target.is_file():
