@@ -136,3 +136,122 @@ def test_symlink_blocked_by_default(tmp_path: Path):
     assert result.ok is False
     assert result.fail_class == FailClass.SIGNATURE_INVALID
     assert result.details["reason"] == "symlink blocked"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 신규 회귀 방지 — Codex P1 #6: load_manifest base_dir resolution
+#
+# 이전 본질: load_manifest이 manifest_path.parent를 manifest_dir 인자로 전달
+#   → 상대 경로 manifest 본질이 process CWD 기준 resolve → in-scope manifest도
+#   SIGNATURE_INVALID로 잘못 거부 (false fail-closed).
+# 정정 본질: manifest_dir 인자 제거 → self.base_dir 기준 resolve (CWD 의존 0).
+# 본 5건 테스트는 정정 본질 + 정책 본질 유지 모두 검증.
+#
+# FailClass 본질 정합: PR 본질 codebase에 PATH_TRAVERSAL enum 본질 0 → 기존
+# "outside base_dir" 본질 처리에 사용되는 FailClass.SIGNATURE_INVALID 본질 사용.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_relative_manifest_resolved_against_base_dir(tmp_path: Path, monkeypatch):
+    """상대 경로 manifest 본질이 base_dir 기준 resolve (CWD 의존 0)."""
+    base_dir = tmp_path / "verifier_root"
+    base_dir.mkdir()
+    manifest_file = base_dir / "manifest.json"
+    manifest_file.write_text("{}", encoding="utf-8")
+
+    # 의도적으로 다른 CWD 본질로 chdir — CWD 의존 본질이면 실패
+    other_cwd = tmp_path / "elsewhere"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+
+    verifier = ModelPackVerifier(base_dir=base_dir)
+    parsed, result = verifier.load_manifest(Path("manifest.json"))
+
+    # base_dir 내부 정합 manifest 본질 → SIGNATURE_INVALID 거부 본질 0
+    assert result.fail_class != FailClass.SIGNATURE_INVALID, (
+        f"상대 manifest 본질이 CWD 기준 resolve로 거부됨: {result.details}"
+    )
+    assert result.ok is True, f"정합 manifest 본질이 ok=True 아님: {result}"
+    assert parsed == {}
+
+
+def test_nested_relative_manifest_no_duplicate_segments(tmp_path: Path, monkeypatch):
+    """nested 상대 경로 본질이 segment 중복 본질 0 (sub/manifest.json)."""
+    base_dir = tmp_path / "verifier_root"
+    sub_dir = base_dir / "sub"
+    sub_dir.mkdir(parents=True)
+    manifest_file = sub_dir / "manifest.json"
+    manifest_file.write_text("{}", encoding="utf-8")
+
+    monkeypatch.chdir(tmp_path)
+    verifier = ModelPackVerifier(base_dir=base_dir)
+    parsed, result = verifier.load_manifest(Path("sub/manifest.json"))
+
+    assert result.fail_class != FailClass.SIGNATURE_INVALID, (
+        f"nested 상대 manifest 본질 거부됨 (segment 중복 의심): {result.details}"
+    )
+    assert result.ok is True
+    assert parsed == {}
+
+
+def test_absolute_manifest_path_unchanged(tmp_path: Path):
+    """절대 경로 manifest 본질은 그대로 사용 — base_dir 본질 join 0 (caller 호환)."""
+    base_dir = tmp_path / "verifier_root"
+    base_dir.mkdir()
+    manifest_file = base_dir / "manifest.json"
+    manifest_file.write_text("{}", encoding="utf-8")
+
+    verifier = ModelPackVerifier(base_dir=base_dir)
+    parsed, result = verifier.load_manifest(manifest_file)  # 절대 경로 전달
+
+    assert result.fail_class != FailClass.SIGNATURE_INVALID
+    assert result.ok is True
+    assert parsed == {}
+
+
+def test_manifest_outside_base_dir_rejected(tmp_path: Path):
+    """
+    base_dir 본질 외부 manifest 본질은 거부 (fail-closed 정책 유지).
+    정정 본질이 정책 약화 0임을 보장.
+    """
+    base_dir = tmp_path / "verifier_root"
+    base_dir.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    outside_manifest = outside / "manifest.json"
+    outside_manifest.write_text("{}", encoding="utf-8")
+
+    verifier = ModelPackVerifier(base_dir=base_dir)
+    parsed, result = verifier.load_manifest(outside_manifest)
+
+    assert result.ok is False
+    assert result.fail_class == FailClass.SIGNATURE_INVALID, (
+        f"외부 manifest 본질이 거부되지 0: {result}"
+    )
+    assert "outside base_dir" in result.details["reason"]
+    assert parsed is None
+
+
+def test_relative_manifest_resolved_independent_of_cwd(tmp_path: Path, monkeypatch):
+    """동일 상대 경로 본질이 CWD 본질에 무관하게 동일 base_dir 본질로 resolve."""
+    base_dir = tmp_path / "verifier_root"
+    base_dir.mkdir()
+    (base_dir / "manifest.json").write_text("{}", encoding="utf-8")
+
+    verifier = ModelPackVerifier(base_dir=base_dir)
+
+    # CWD #1
+    monkeypatch.chdir(tmp_path)
+    parsed1, result1 = verifier.load_manifest(Path("manifest.json"))
+
+    # CWD #2
+    cwd2 = tmp_path / "another"
+    cwd2.mkdir()
+    monkeypatch.chdir(cwd2)
+    parsed2, result2 = verifier.load_manifest(Path("manifest.json"))
+
+    # 두 본질 모두 정합 manifest 본질 (CWD 본질 독립)
+    assert result1.fail_class != FailClass.SIGNATURE_INVALID
+    assert result2.fail_class != FailClass.SIGNATURE_INVALID
+    assert result1.ok is True
+    assert result2.ok is True
+    assert parsed1 == parsed2 == {}

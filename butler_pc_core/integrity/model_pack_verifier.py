@@ -71,7 +71,16 @@ class ModelPackVerifier:
 
     def load_manifest(self, manifest_path: Path) -> tuple[Optional[dict[str, Any]], VerifyResult]:
         try:
-            target = self._resolve_target(manifest_path, manifest_path.parent)
+            # Codex P1 결함 정정 (PR #751, 0198f3a7 위에 추가):
+            # 이전 본질: manifest_path.parent 를 manifest_dir 인자로 전달
+            #   → 상대 경로 manifest 본질이 process CWD 기준 resolve
+            #   → nested 상대 본질의 path segment 중복 발생
+            #   → in-scope 정합 manifest 본질이 SIGNATURE_INVALID로 잘못 거부
+            # 정정 본질: manifest_dir 인자 본질 제거 → _resolve_target 기본 동작인
+            #   self.base_dir 본질 기준 resolve 사용 (CWD 의존 0).
+            # 절대 경로 본질은 _resolve_target 내부 is_absolute 분기 본질로 그대로 사용.
+            # base_dir 외부 traversal 본질 검증 (fail-closed 정책) 유지.
+            target = self._resolve_target(manifest_path)
             if not target.exists():
                 return None, self._result(False, FailClass.MODEL_PACK_MISSING, {"reason": "manifest_missing"}, target)
             if not target.is_file():
