@@ -100,6 +100,30 @@ def test_manifest_path_traversal_blocked(tmp_path: Path):
     assert "outside base_dir" in result.details["reason"]
 
 
+def test_empty_manifest_fails_closed(tmp_path: Path):
+    """
+    Codex P1 회귀 방지 — 빈 manifest {} 본질은 ok=True 절대 0.
+    이전 본질: path_key/sha_key 누락 시 continue → ok=True 통과 (fail-open).
+    정정 본질: 즉시 fail-closed 반환.
+    """
+    result = ModelPackVerifier(tmp_path).verify_all({})
+    assert result.ok is False
+    assert result.fail_class == FailClass.MODEL_PACK_MISSING
+    assert "missing_required_keys" in result.details["reason"]
+    assert "model_path" in result.details["reason"]
+
+
+def test_partial_manifest_fails_closed(tmp_path: Path):
+    """
+    Codex P1 회귀 방지 — 필수 키 일부 누락 본질도 ok=True 절대 0.
+    path는 있으나 sha 누락 본질 (또는 그 역).
+    """
+    result = ModelPackVerifier(tmp_path).verify_all({"model_path": "model.bin"})
+    assert result.ok is False
+    assert result.fail_class == FailClass.MODEL_PACK_MISSING
+    assert "model_sha256" in result.details["reason"]
+
+
 def test_symlink_blocked_by_default(tmp_path: Path):
     target = tmp_path / "target.bin"
     target.write_bytes(b"target")

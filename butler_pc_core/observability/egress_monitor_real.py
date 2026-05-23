@@ -99,7 +99,17 @@ class EgressMonitorReal:
 
         try:
             import aiohttp  # type: ignore  # noqa: F401
-            patched.append("aiohttp")
+            # 결함 정정 (Codex P2): aiohttp 실제 monkey-patch 본질이 구현되기
+            # 전까지 patched 리스트 본질에 추가하지 않는다. import 가능 본질만으로
+            # "patched" 보고하면 false coverage 본질 — egress 경로 unguarded.
+            # 실제 patch 구현은 별도 작업 본질.
+            import warnings
+            warnings.warn(
+                "aiohttp is importable but egress monitor does not patch it; "
+                "external requests via aiohttp will NOT be intercepted",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         except ImportError:
             skipped.append("aiohttp")
 
@@ -151,7 +161,15 @@ class EgressMonitorReal:
             return original_urlopen(url, *args, **kwargs)
 
         def log_patch(logger, level, msg, args, exc_info=None, extra=None, stack_info=False, stacklevel=1):
-            text = str(msg)
+            # Python logging 표준 본질: logger.warning("acct=%s", value) — 민감 정보가
+            # args로 전달되는 일반 패턴. msg만 검사하면 누출 탐지 우회.
+            # 정정 본질 (Codex P1): msg와 args를 합쳐 최종 포맷팅 텍스트 검사.
+            # 포맷팅 실패 시 args 원본 본질도 raw 검사 (이중 안전).
+            try:
+                text = str(msg) % args if args else str(msg)
+            except (TypeError, ValueError):
+                # 포맷팅 실패 시 본질 누출 위험 본질이므로 args도 함께 raw 검사
+                text = str(msg) + " " + " ".join(repr(a) for a in (args or ()))
             reason = self._detect_raw_text(text)
             if reason:
                 self._record_raw_text(text, reason)

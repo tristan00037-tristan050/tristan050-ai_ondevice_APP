@@ -120,8 +120,16 @@ class ModelPackVerifier:
             ("tokenizer_path", "tokenizer_sha256", FailClass.TOKENIZER_SHA_MISMATCH),
         ]
         for path_key, sha_key, fail_class in targets:
-            if path_key not in manifest_dict or sha_key not in manifest_dict:
-                continue
+            # fail-closed: 필수 키 (*_path / *_sha256) 누락 본질 → 검증 통과 0
+            # 빈 manifest {} 또는 항목 누락이 ok=True로 통과하면 integrity contract 위배
+            # (Codex P1 결함 정정 — fail-open 경로 차단).
+            missing_keys = [k for k in (path_key, sha_key) if k not in manifest_dict]
+            if missing_keys:
+                return self._result(
+                    False,
+                    FailClass.MODEL_PACK_MISSING,
+                    {"reason": f"manifest_missing_required_keys:{','.join(missing_keys)}"},
+                )
             result = self.verify_file(manifest_dict[path_key], manifest_dict[sha_key], fail_class, base)
             if not result.ok:
                 return result
