@@ -1,0 +1,9 @@
+{
+  "checked_at_utc": "2026-05-24T03:44:14.908237Z",
+  "forward_verified": false,
+  "gate": "ip1_model_status_bridge_gate",
+  "model_status": "artifact_sealed",
+  "ok": true,
+  "ok_label": "IP1_MODEL_STATUS_BRIDGE_OK",
+  "routing_executable": false
+}

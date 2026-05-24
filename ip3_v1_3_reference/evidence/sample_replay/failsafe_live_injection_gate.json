@@ -1,0 +1,39 @@
+{
+  "checked_at_utc": "2026-05-24T03:44:14.915824Z",
+  "evidence_class": "sample",
+  "gate": "failsafe_live_injection_gate",
+  "ok": true,
+  "ok_label": "FAIL_SAFE_LIVE_INJECTION_OK_SAMPLE",
+  "scenarios": [
+    {
+      "scenario": "telemetry_missing",
+      "state": "blocked",
+      "target": "blocked"
+    },
+    {
+      "scenario": "ip2_policy_denied",
+      "state": "blocked",
+      "target": "blocked"
+    },
+    {
+      "scenario": "ip1_forward_not_verified",
+      "state": "failed_closed",
+      "target": "blocked"
+    },
+    {
+      "scenario": "thermal_critical",
+      "state": "failed_closed",
+      "target": "blocked"
+    },
+    {
+      "scenario": "network_unavailable",
+      "state": "failed_closed",
+      "target": "blocked"
+    },
+    {
+      "scenario": "restricted_not_executable",
+      "state": "failed_closed",
+      "target": "blocked"
+    }
+  ]
+}

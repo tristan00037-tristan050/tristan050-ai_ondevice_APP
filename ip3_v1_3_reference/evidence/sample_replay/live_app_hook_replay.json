@@ -1,0 +1,77 @@
+{
+  "checked_at_utc": "2026-05-24T03:44:14.906186Z",
+  "decisions_digest_only": true,
+  "event_count": 120,
+  "evidence_class": "sample",
+  "gate": "live_app_hook_replay",
+  "ok": true,
+  "ok_label": "LIVE_APP_ROUTING_HOOK_OK_SAMPLE",
+  "production_hook_deployed": false,
+  "raw_leaks": 0,
+  "sample_decisions": [
+    {
+      "audit_hash": "82be4a2792022537544f2c4a0ef01c2c8b6c2c0d6c38fe11651e7a63395605da",
+      "i": 0,
+      "state": "blocked",
+      "target": "blocked"
+    },
+    {
+      "audit_hash": "2190f88eead55b692cdbd95d2b2d75ef8d0310864d6b1af009066ddbc5c8ab3c",
+      "i": 1,
+      "state": "routed",
+      "target": "central_server"
+    },
+    {
+      "audit_hash": "2d4b6a04de049dc7daef78c02c3d6ed517995fb21ded44c3d7bb9990f5a00124",
+      "i": 2,
+      "state": "routed",
+      "target": "central_server"
+    },
+    {
+      "audit_hash": "842cd891a2ec92c0520cbc5b374b723a2d3f22f6e9fdd4d4e1cd10a18d8ad751",
+      "i": 3,
+      "state": "routed",
+      "target": "central_server"
+    },
+    {
+      "audit_hash": "d850b8a8670b4904943dfa4749b9385c986a6210840def45ce29fb6233296372",
+      "i": 4,
+      "state": "failed_closed",
+      "target": "blocked"
+    },
+    {
+      "audit_hash": "20b657712189e432f986d825b58d586666bfe074f04365bf28d278d378f7d3be",
+      "i": 5,
+      "state": "routed",
+      "target": "central_server"
+    },
+    {
+      "audit_hash": "868ba4a19609258dcb549cd0aa85e04230c62098cb497045f47ce2e48892b64c",
+      "i": 6,
+      "state": "routed",
+      "target": "central_server"
+    },
+    {
+      "audit_hash": "7e4fa9576e726bdbfe3a0929bf813253a65e9c638124f064d14d26e430f19eae",
+      "i": 7,
+      "state": "routed",
+      "target": "central_server"
+    },
+    {
+      "audit_hash": "c52ae0d07a91407a911ab1e2f5ece6e74daa4c20474c552a2741ae2df6f872fe",
+      "i": 8,
+      "state": "failed_closed",
+      "target": "blocked"
+    },
+    {
+      "audit_hash": "02e5b259168af0411106868c17ffaf813d6c3463e998cbe026aa91f733e10112",
+      "i": 9,
+      "state": "routed",
+      "target": "central_server"
+    }
+  ],
+  "targets": [
+    "blocked",
+    "central_server"
+  ]
+}

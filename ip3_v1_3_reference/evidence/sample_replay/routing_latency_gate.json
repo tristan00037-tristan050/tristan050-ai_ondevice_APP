@@ -1,0 +1,15 @@
+{
+  "budget": {
+    "p95_ms": 15.0,
+    "p99_ms": 40.0
+  },
+  "checked_at_utc": "2026-05-24T03:44:14.914161Z",
+  "count": 200,
+  "gate": "routing_latency_gate",
+  "max_ms": 0.0485,
+  "ok": true,
+  "ok_label": "ROUTING_LATENCY_BUDGET_OK",
+  "p50_ms": 0.0044,
+  "p95_ms": 0.005,
+  "p99_ms": 0.0211
+}

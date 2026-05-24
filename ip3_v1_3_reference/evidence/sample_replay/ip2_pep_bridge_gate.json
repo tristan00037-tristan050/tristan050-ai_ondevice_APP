@@ -1,0 +1,34 @@
+{
+  "cases": [
+    {
+      "allow": true,
+      "audit_chain_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "bridge_live_claimed": false,
+      "decision": "allow",
+      "policy_label": "Restricted",
+      "residual_pii": 0
+    },
+    {
+      "allow": false,
+      "audit_chain_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "bridge_live_claimed": false,
+      "decision": "blocked",
+      "policy_label": "Confidential",
+      "residual_pii": 1
+    },
+    {
+      "allow": false,
+      "audit_chain_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "bridge_live_claimed": false,
+      "decision": "blocked",
+      "policy_label": "Public",
+      "residual_pii": 0
+    }
+  ],
+  "checked_at_utc": "2026-05-24T03:44:14.907417Z",
+  "evidence_class": "sample",
+  "gate": "ip2_pep_live_bridge_gate",
+  "live_bridge_deployed": false,
+  "ok": true,
+  "ok_label": "IP2_PEP_LIVE_BRIDGE_OK_SAMPLE"
+}

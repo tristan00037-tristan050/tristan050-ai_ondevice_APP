@@ -1,0 +1,52 @@
+{
+  "all_platform_strict_pass_claimed": false,
+  "approval_status": "NOT_CLAIMED",
+  "ip1_model_status_bridge_ready": true,
+  "ip2_pep_contract_harness_validated_sample": true,
+  "ip2_pep_live_bridge_deployed": false,
+  "live_app_hook_deployed": false,
+  "live_app_hook_harness_validated_sample": true,
+  "local_1_7b_forward_verified": false,
+  "not_in_scope_yet": [
+    "PHYSICAL_LAB approval before separate Windows notebook evidence",
+    "PRODUCTION approval",
+    "actual Butler app production deployment hook",
+    "IP2 production/live PEP bridge deployment",
+    "IP1 forward_verified=true without v5.4 evidence",
+    "Product Candidate full replay real/production claim without actual app/bridge evidence"
+  ],
+  "operational_full_claimed": false,
+  "package_scope": "FULL_STACK_LOCAL_DEVELOPMENT_AND_CI_LAB_SEALABLE_CANDIDATE",
+  "physical_lab_claimed": false,
+  "product_candidate_full_replay_claimed": false,
+  "product_candidate_full_replay_harness_validated_sample": true,
+  "production_claimed": false,
+  "production_hook_deployed": false,
+  "reference_v1_2r_artifact": "Butler_IP3_OnDevice_Context_Routing_Engine_v1_2r_Product_Candidate_Routing_Hook_SEALED_FIXED_ASCII_ROOT.zip",
+  "reference_v1_2r_sha256": "09eb0b2358bd926563d0be85bea31bae08c555408cbb609420048d6ea9f737f7",
+  "release_claim_allowed": false,
+  "required_gates": [
+    "ROUTING_SCHEMA_GATE_OK",
+    "THREAT_MODEL_GATE_OK",
+    "WINDOWS_REAL_TELEMETRY_OK",
+    "ALL_PLATFORM_TELEMETRY_OK",
+    "LIVE_APP_ROUTING_HOOK_OK",
+    "IP2_PEP_LIVE_BRIDGE_OK",
+    "IP1_MODEL_STATUS_BRIDGE_OK",
+    "ROUTING_LATENCY_BUDGET_OK",
+    "FAIL_SAFE_LIVE_INJECTION_OK",
+    "PRODUCT_CANDIDATE_FULL_REPLAY_OK",
+    "CLAIM_GUARD_OK",
+    "CLEAN_PACKAGE_OK",
+    "SHA256_SEAL_OK"
+  ],
+  "source_artifact": "Butler_IP3_OnDevice_Context_Routing_Engine_v1_3_CI_LAB_Windows_Telemetry_Strict_Gate_SEALABLE_CANDIDATE.zip",
+  "source_artifact_sha256": "d3386b951d0a7d4dee6213613236d4ca6d61afe6d8e3a6407d15d6505dd64237",
+  "stage": "ip3_v1_3_full_stack_routing_telemetry_claim_guard",
+  "windows_telemetry_validated_by_class": {
+    "ci_lab": false,
+    "physical_lab": false,
+    "production": false,
+    "vm_lab": false
+  }
+}

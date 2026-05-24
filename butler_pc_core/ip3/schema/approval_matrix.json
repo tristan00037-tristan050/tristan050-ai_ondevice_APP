@@ -1,0 +1,22 @@
+{
+  "schema_version": "ip3.approval_matrix.v1",
+  "default_decision": "blocked",
+  "release_claim_allowed_default": false,
+  "sample": {
+    "dry_run_allowed": true,
+    "sample_replay_allowed": true,
+    "executable_routing_allowed": false
+  },
+  "ci_lab": {
+    "dry_run_allowed": true,
+    "sample_replay_allowed": true,
+    "executable_routing_allowed": false,
+    "requires_3os_ci": true
+  },
+  "physical_lab": {
+    "dry_run_allowed": true,
+    "sample_replay_allowed": true,
+    "executable_routing_allowed": false,
+    "requires_sealed_handoff": true
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "checked_at_utc": "2026-05-24T03:44:14.934494Z",
+  "fail_closed_expected": true,
+  "gate": "local_all_platform_failclosed_gate",
+  "missing_platforms": [
+    "linux",
+    "darwin",
+    "windows"
+  ],
+  "observed_platforms": [],
+  "ok": false,
+  "ok_label": null,
+  "reason": "local package does not embed external CI/VM/physical telemetry evidence",
+  "required_platforms": [
+    "linux",
+    "darwin",
+    "windows"
+  ]
+}

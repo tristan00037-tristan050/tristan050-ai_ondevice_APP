@@ -1,0 +1,15 @@
+{
+  "checked_at_utc": "2026-05-24T03:44:14.933438Z",
+  "event_count": 300,
+  "evidence_class": "sample",
+  "gate": "product_candidate_full_replay_gate",
+  "ok": true,
+  "ok_label": "PRODUCT_CANDIDATE_FULL_REPLAY_OK_SAMPLE",
+  "real_full_replay_claimed": false,
+  "state_counts": {
+    "blocked": 13,
+    "failed_closed": 72,
+    "fallback": 0,
+    "routed": 215
+  }
+}
