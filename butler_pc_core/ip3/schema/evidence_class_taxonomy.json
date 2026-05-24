@@ -1,0 +1,13 @@
+{
+  "schema_version": "ip3.evidence_class_taxonomy.v1",
+  "current_evidence_class": "sample",
+  "currently_claimable": ["sample"],
+  "prepared_not_claimable": ["ci_lab", "physical_lab"],
+  "claim_boundaries": {
+    "production_claim": false,
+    "physical_lab_claim": false,
+    "runtime_live_claim": false,
+    "local_executable_claim": false,
+    "live_bridge_claim": false
+  }
+}
