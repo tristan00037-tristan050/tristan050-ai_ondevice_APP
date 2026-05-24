@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BLOCK_MESSAGE, box3SampleReplay, requestIP3DryRun, type IP3DryRunResult } from './ip3DryRunClient';
 
 const BOX3_ADAPTER_SHA = 'ad852bbb79aee63c000000000000000000000000000000000000000000000000';
+const BOX3_APPROVAL_COPY = '반드시 우리 승인 후';
 
 export function Box3DryRunGate() {
   const [input, setInput] = useState('');
@@ -23,9 +24,10 @@ export function Box3DryRunGate() {
       <button type="button" onClick={runDryRun}>dry_run 확인</button>
       <p role="status">{result?.routing_state ?? 'dry_run 대기'}</p>
       <pre>{JSON.stringify(result?.sample_replay ?? box3SampleReplay(), null, 2)}</pre>
+      <p>{BOX3_APPROVAL_COPY}</p>
       <p>{result?.block_message ?? BLOCK_MESSAGE}</p>
     </section>
   );
 }
 
-export { BOX3_ADAPTER_SHA };
+export { BOX3_ADAPTER_SHA, BOX3_APPROVAL_COPY };
