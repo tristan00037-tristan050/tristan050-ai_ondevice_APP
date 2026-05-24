@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "ip3.routing_contract.v1.3.2",
+  "default_decision": "blocked",
+  "release_claim_allowed_default": false,
+  "raw_text_allowed": false,
+  "routing_targets": ["local_1_7b", "local_4b", "central_server", "external_api", "blocked"],
+  "routing_states": ["blocked", "dry_run", "routed", "fallback", "failed_closed"],
+  "model_status_levels": ["artifact_sealed", "forward_verified", "pipeline_verified", "runtime_live", "blocked"],
+  "privacy_flags": {
+    "raw_device_id_recorded": false,
+    "raw_hostname_recorded": false,
+    "raw_ip_recorded": false,
+    "raw_prompt_recorded": false,
+    "raw_user_text_recorded": false,
+    "raw_log_recorded": false,
+    "raw_path_recorded": false
+  },
+  "artifact_sealed_rules": {
+    "routing_executable": false,
+    "allowed_states": ["blocked", "dry_run", "failed_closed"],
+    "forbidden_state": "routed"
+  }
+}
