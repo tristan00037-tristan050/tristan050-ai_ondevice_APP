@@ -1,0 +1,16 @@
+{
+  "stage": "ip3_v1_3_windows_telemetry_strict_gate",
+  "approval_class": "ci_lab",
+  "approval_status": "NOT_CLAIMED",
+  "reason": "GitHub Actions three-platform CI telemetry has not been executed inside this local packaging environment.",
+  "production_approved": false,
+  "physical_windows_approved": false,
+  "allowed_after_external_ci_gate": "APPROVED_FOR_AI_ONDEVICE13_HANDOFF_CI_LAB",
+  "required_gate_labels_after_external_ci": [
+    "WINDOWS_REAL_TELEMETRY_OK_CI_LAB",
+    "ALL_PLATFORM_TELEMETRY_OK_CI_LAB",
+    "CLAIM_GUARD_OK",
+    "CLEAN_PACKAGE_OK",
+    "SHA256_MANIFEST_OK"
+  ]
+}

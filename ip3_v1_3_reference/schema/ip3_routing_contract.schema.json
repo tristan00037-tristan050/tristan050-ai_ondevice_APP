@@ -1,0 +1,21 @@
+{
+  "schema_version": "ip3.routing_contract.v1.3.2",
+  "types": {
+    "DeviceTelemetry": {
+      "required_dimensions": ["cpu", "memory", "battery", "thermal", "network"],
+      "privacy_flags_required_false": ["raw_device_id_recorded", "raw_hostname_recorded", "raw_ip_recorded", "raw_prompt_recorded", "raw_user_text_recorded", "raw_log_recorded", "raw_path_recorded"]
+    },
+    "DeviceClass": {"enum": ["A", "B", "C", "D"]},
+    "UserContext": {
+      "axes": ["task_type", "urgency", "accuracy_requirement", "data_sensitivity"],
+      "raw_text_allowed": false
+    },
+    "RoutingTarget": {"enum": ["local_1_7b", "local_4b", "central_server", "external_api", "blocked"]},
+    "RoutingState": {"enum": ["blocked", "dry_run", "routed", "fallback", "failed_closed"]}
+  },
+  "policy_labels": ["Restricted", "Confidential", "Internal", "Public"],
+  "model_status_levels": ["artifact_sealed", "forward_verified", "pipeline_verified", "runtime_live", "blocked"],
+  "gate_matrix": ["G3.0", "G3.0A", "G3.1", "G3.2", "G3.3", "G3.4", "G3.5", "G3.6", "G3.7", "G3.8", "G3.E", "G3.P"],
+  "default_decision": "blocked",
+  "release_claim_allowed_default": false
+}

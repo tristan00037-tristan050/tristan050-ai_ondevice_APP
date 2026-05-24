@@ -1,0 +1,65 @@
+{
+  "schema_version": "ip3.evidence_taxonomy.v1.3.2",
+  "classes": {
+    "sample": {
+      "rank": 0,
+      "currently_claimable": true,
+      "can_claim_physical_windows": false,
+      "can_claim_production": false,
+      "description": "deterministic synthetic replay or schema-only evidence",
+      "allowed_claims": ["schema_contract", "harness_behavior"],
+      "forbidden_claims": ["real_runtime_measurement", "physical_lab", "production"]
+    },
+    "ci_lab": {
+      "rank": 10,
+      "currently_claimable": false,
+      "can_claim_physical_windows": false,
+      "can_claim_production": false,
+      "description": "GitHub Actions or equivalent CI runner evidence",
+      "allowed_claims": ["os_runner_collector", "ci_gate"],
+      "forbidden_claims": ["physical_device", "production"]
+    },
+    "vm_lab": {
+      "rank": 20,
+      "currently_claimable": false,
+      "can_claim_physical_windows": false,
+      "can_claim_production": false,
+      "description": "Windows/macOS/Linux virtual machine lab evidence",
+      "allowed_claims": ["vm_runtime_measurement"],
+      "forbidden_claims": ["physical_device", "production"]
+    },
+    "physical_lab": {
+      "rank": 30,
+      "currently_claimable": false,
+      "can_claim_physical_windows": true,
+      "can_claim_production": false,
+      "description": "actual physical device lab evidence",
+      "allowed_claims": ["physical_device_runtime_measurement"],
+      "forbidden_claims": ["production_full_deployment"]
+    },
+    "production": {
+      "rank": 40,
+      "currently_claimable": false,
+      "can_claim_physical_windows": true,
+      "can_claim_production": true,
+      "description": "actual Butler production deployment evidence",
+      "allowed_claims": ["production"],
+      "forbidden_claims": []
+    }
+  },
+  "tiers": {
+    "real_runtime_measurement": {"description": "runtime telemetry from an OS/device/runner"},
+    "secure_lab": {"description": "secure internal lab evidence without production claim"},
+    "sample": {"description": "deterministic synthetic replay"}
+  },
+  "release_claim_allowed_requires": [
+    "IP1 v5.4 forward_verified evidence",
+    "IP2 v2.4 live PEP bridge evidence",
+    "Darwin/Linux/Windows strict telemetry pass",
+    "actual Butler app live routing hook",
+    "fail-safe live injection pass",
+    "Product Candidate full replay pass",
+    "rollback/canary evidence"
+  ],
+  "production_claim_default": false
+}

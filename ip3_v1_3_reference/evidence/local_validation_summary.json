@@ -1,0 +1,14 @@
+{
+  "validated_in_packaging_environment": true,
+  "validation_scope": "local self-check without external GitHub Actions telemetry",
+  "unit_tests": "UNIT_TESTS_OK",
+  "evidence_taxonomy_gate": "EVIDENCE_TAXONOMY_GATE_OK",
+  "claim_guard": "CLAIM_GUARD_OK",
+  "all_platform_expected_local_result": "ALL_PLATFORM_TELEMETRY_FAIL_CLOSED_OK",
+  "all_platform_reason": "No external linux/darwin/windows CI telemetry files are embedded in the distributed package.",
+  "clean_package_gate": "CLEAN_PACKAGE_OK",
+  "sha256_manifest": "SHA256_MANIFEST_OK",
+  "approval_status": "NOT_CLAIMED",
+  "production_approved": false,
+  "physical_windows_approved": false
+}

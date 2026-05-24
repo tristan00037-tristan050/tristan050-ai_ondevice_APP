@@ -1,0 +1,124 @@
+name: IP3 v1.3 All-Platform Telemetry CI Lab
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "tools/**"
+      - "scripts/ops/**"
+      - "windows/**"
+      - "evidence/**"
+      - "src/**"
+      - "tests/**"
+      - ".github/workflows/ip3-v13-windows-telemetry-ci-lab.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  collect-telemetry-ci-lab:
+    name: collect-${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner: ubuntu-latest
+          - platform: darwin
+            runner: macos-latest
+          - platform: windows
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run unit tests
+        run: python tools/run_unit_tests.py
+
+      - name: Collect current platform telemetry
+        run: python tools/collect_real_telemetry.py . --device-id "github-actions-${{ matrix.runner }}" --evidence-class ci_lab
+
+      - name: Validate Windows CI lab telemetry
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          python tools/windows_real_telemetry_gate.py . --expected-evidence-class ci_lab
+          python tools/evidence_taxonomy_gate.py .
+          python tools/all_platform_telemetry_gate.py . --require-platforms windows --strict --expected-evidence-class ci_lab
+          python tools/claim_guard.py .
+
+      - name: Clean generated Python cache
+        shell: pwsh
+        if: matrix.platform == 'windows'
+        run: |
+          Get-ChildItem -Path . -Recurse -Directory -Filter "__pycache__" | Remove-Item -Recurse -Force
+          Get-ChildItem -Path . -Recurse -File -Filter "*.pyc" | Remove-Item -Force
+
+      - name: Clean generated Python cache non-Windows
+        if: matrix.platform != 'windows'
+        run: |
+          find . -type d -name __pycache__ -prune -exec rm -rf {} +
+          find . -type f -name '*.pyc' -delete
+
+      - name: Package cleanliness gate
+        run: python tools/clean_package_gate.py .
+
+      - name: Upload platform telemetry evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ip3-v13-telemetry-${{ matrix.platform }}
+          path: |
+            evidence/real_telemetry_${{ matrix.platform }}.json
+            evidence/real_telemetry_current_platform.json
+            evidence/gate_results/*.json
+          if-no-files-found: error
+
+  seal-ci-lab-handoff:
+    name: seal-ci-lab-handoff
+    needs: collect-telemetry-ci-lab
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download telemetry artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: _ci_artifacts
+
+      - name: Import telemetry artifacts
+        run: python tools/import_ci_artifacts.py . _ci_artifacts --expected-evidence-class ci_lab
+
+      - name: Run CI lab all gates
+        run: bash scripts/ops/run_v13_ci_lab_all_gates.sh .
+
+      - name: Verify manifest after seal
+        run: python tools/sha256_manifest.py . --verify
+
+      - name: Upload sealed CI lab handoff evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ip3-v13-ci-lab-sealed-handoff
+          path: |
+            evidence/real_telemetry_linux.json
+            evidence/real_telemetry_darwin.json
+            evidence/real_telemetry_windows.json
+            evidence/gate_results/*.json
+            evidence/sealed_handoff_ci_lab.json
+            evidence/sha256_manifest.txt
+          if-no-files-found: error
