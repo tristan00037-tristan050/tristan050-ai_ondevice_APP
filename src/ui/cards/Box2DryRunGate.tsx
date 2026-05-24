@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BLOCK_MESSAGE, box2SampleReplay, requestIP3DryRun, type IP3DryRunResult } from './ip3DryRunClient';
 
 const BOX2_ADAPTER_SHA = '92e8454fdc01d9bb000000000000000000000000000000000000000000000000';
+const BOX2_BLOCK_MESSAGE = '현재 sample replay 모드. live 진입 시 IP1 v5.4 forward evidence + IP2 v2.4 live PEP 의무.';
 
 export function Box2DryRunGate() {
   const [input, setInput] = useState('');
@@ -24,8 +25,9 @@ export function Box2DryRunGate() {
       <p role="status">{result?.routing_state ?? 'dry_run 대기'}</p>
       <pre>{JSON.stringify(result?.sample_replay ?? box2SampleReplay(), null, 2)}</pre>
       <p>{result?.block_message ?? BLOCK_MESSAGE}</p>
+      <p>{BOX2_BLOCK_MESSAGE}</p>
     </section>
   );
 }
 
-export { BOX2_ADAPTER_SHA };
+export { BOX2_ADAPTER_SHA, BOX2_BLOCK_MESSAGE };
