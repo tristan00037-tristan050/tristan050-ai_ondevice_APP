@@ -1,0 +1,75 @@
+name: Sidecar v1.6 Foundation Tests
+
+on:
+  pull_request:
+    paths:
+      - 'butler_pc_core/integrity/**'
+      - 'butler_pc_core/runtime/weighted_lru.py'
+      - 'butler_pc_core/observability/**'
+      - 'tests/integrity/test_model_pack_verifier.py'
+      - 'tests/runtime/test_weighted_lru.py'
+      - 'tests/observability/test_egress_monitor_real.py'
+      - '.github/workflows/sidecar-v1-6-foundation-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'butler_pc_core/integrity/**'
+      - 'butler_pc_core/runtime/weighted_lru.py'
+      - 'butler_pc_core/observability/**'
+      - 'tests/integrity/test_model_pack_verifier.py'
+      - 'tests/runtime/test_weighted_lru.py'
+      - 'tests/observability/test_egress_monitor_real.py'
+      - '.github/workflows/sidecar-v1-6-foundation-tests.yml'
+
+jobs:
+  sidecar-v1-6-pytest:
+    name: Sidecar v1.6 pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pytest
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+      - name: Import check
+        env:
+          PYTHONPATH: .
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from butler_pc_core.integrity.model_pack_verifier import ModelPackVerifier
+          from butler_pc_core.runtime.weighted_lru import WeightedLRU
+          from butler_pc_core.observability.egress_monitor_real import EgressMonitorReal
+          ModelPackVerifier(Path('.'))
+          WeightedLRU([])
+          EgressMonitorReal()
+          print('IMPORT_OK')
+          PY
+      - name: Verify sidecar body untouched
+        run: |
+          if git diff --name-only origin/main...HEAD | grep -E 'butler_sidecar\.py$'; then
+            echo 'BLOCK: butler_sidecar.py modified'
+            exit 1
+          fi
+          echo 'BODY_OK'
+      - name: Run v1.6 foundation pytest
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest \
+            tests/integrity/test_model_pack_verifier.py \
+            tests/runtime/test_weighted_lru.py \
+            tests/observability/test_egress_monitor_real.py \
+            -v --tb=short
+      - name: File SHA-256
+        run: |
+          sha256sum \
+            butler_pc_core/integrity/model_pack_verifier.py \
+            butler_pc_core/runtime/weighted_lru.py \
+            butler_pc_core/observability/egress_monitor_real.py
