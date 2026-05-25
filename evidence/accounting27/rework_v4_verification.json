@@ -1,0 +1,17 @@
+{
+  "status": "PASS_REMEASURE_READY_REWORKED_V4",
+  "adapter_sha": "5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135",
+  "retraining": false,
+  "adapter_changed": false,
+  "model_weight_changed": false,
+  "real_transactions_v2_sha256": "949b1e0072345ae73dd31ff89a3b4b4945184942ac26ac77403d66b3f96b3b57",
+  "canonical_alias_map_sha256": "4a8c2b38999968a83515e6f80cc12c660d767801ea72e012254de1a0d24ad615",
+  "option_d_manifest_v3_sha256": "4ba5f8cf72e124be67e324f339363c87ff8e6f4cc66125f8050ea2b0e5619bcc",
+  "pytest": "34 passed in 2.15s",
+  "self_check": "CARD5_OPTION_D_V3_COMPAT_FIXTURE_OK=true",
+  "honest_statements": [
+    "패키지 내부 test PASS는 실제 main repo 전체 회귀 0건을 보장하지 않는다.",
+    "실제 main repo 전체 회귀 검증은 Claude Code가 repo에서 pytest tests/card5 -v 및 필요한 전체 테스트로 확인해야 한다.",
+    "다만 v4 패키지는 v2에서 실패한 apply_alias 5 호출 패턴과 manifest resolver 실패 패턴을 모두 모방 fixture로 포함했다."
+  ]
+}

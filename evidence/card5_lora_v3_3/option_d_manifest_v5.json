@@ -1,0 +1,53 @@
+{
+  "schema_version": "card5.option_d_manifest.v5",
+  "package_status": "PASS_REMEASURE_READY_REWORKED_V5",
+  "adapter_sha": "5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135",
+  "retraining": false,
+  "adapter_changed": false,
+  "model_weight_changed": false,
+  "evaluation_dataset_changed": false,
+  "alias_semantics_changed": false,
+  "real_transactions_v2_sha256": "949b1e0072345ae73dd31ff89a3b4b4945184942ac26ac77403d66b3f96b3b57",
+  "canonical_alias_map_sha256": "4a8c2b38999968a83515e6f80cc12c660d767801ea72e012254de1a0d24ad615",
+  "defects_resolved": [
+    "DEFECT_2_APPLY_ALIAS_3_TUPLE_BACKWARD_COMPAT",
+    "DEFECT_3_VERIFY_AND_LOCATE_ADAPTER_RESTORED"
+  ],
+  "apply_alias_return_contract": {
+    "dict_input": "dict",
+    "description_dict_input": "dict",
+    "title_code_input": "3_tuple"
+  },
+  "verify_and_locate_adapter_restored": true,
+  "main_repo_api_inventory_complete": true,
+  "main_repo_regression_guarantee": false,
+  "main_repo_failure_patterns_mimicked": true,
+  "honesty_statements": [
+    "패키지 내부 테스트 PASS는 실제 main repo 전체 회귀 0건을 보장하지 않는다.",
+    "다만 v5 패키지는 v4 통합 후 실제 실패한 5개 패턴을 직접 겨냥한 fixture를 포함했다.",
+    "실제 최종 회귀 검증은 Claude Code가 main repo에서 pytest tests/card5 -v로 수행해야 한다."
+  ],
+  "files": [
+    "README.md",
+    "ALGORITHM_TEAM_REPLY_V5.md",
+    "evidence/card5_lora_v3_3/api_inventory_v5.json",
+    "evidence/card5_lora_v3_3/option_d_manifest_v5.json",
+    "evidence/accounting27/real_transactions_v2.jsonl",
+    "scripts/card5/self_check_v5.py",
+    "src/butler/card5/adapter_loader.py",
+    "src/butler/card5/alias_map.py",
+    "src/butler/card5/allowlist.py",
+    "src/butler/card5/inference.py",
+    "src/butler/card5/invariants.py",
+    "src/butler/card5/manifest_resolver.py",
+    "src/butler/card5/rollback.py",
+    "src/butler/card5/system_prompt.py",
+    "src/butler/card5/canonical_alias_map.json",
+    "src/butler/card5/account_title_allowlist_47.json",
+    "tests/card5/test_apply_alias_backward_compat_v5.py",
+    "tests/card5/test_inference_backward_compat_v5.py",
+    "tests/card5/test_main_repo_regression_v5.py",
+    "tests/card5/test_option_d_manifest_resolver_v5.py",
+    "tests/card5/test_option_d_scope_seal_v5.py"
+  ]
+}

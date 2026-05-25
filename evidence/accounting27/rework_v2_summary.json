@@ -1,0 +1,25 @@
+{
+  "status": "PASS_REMEASURE_READY_REWORKED_V2",
+  "pytest_card5": "10 passed in 2.63s",
+  "pytest_all_package": "10 passed in 2.62s",
+  "chosen_options": {
+    "defect_1": "1-B manifest.files scoped 검사",
+    "defect_2": "2-A apply_alias 하위 호환 유지"
+  },
+  "sealed": {
+    "adapter_sha": "5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135",
+    "real_transactions_v2_sha256": "949b1e0072345ae73dd31ff89a3b4b4945184942ac26ac77403d66b3f96b3b57",
+    "canonical_alias_map_sha256": "4a8c2b38999968a83515e6f80cc12c660d767801ea72e012254de1a0d24ad615",
+    "retraining": false,
+    "adapter_changed": false,
+    "model_weight_changed": false
+  },
+  "changed_files": [
+    "src/butler/card5/alias_map.py",
+    "tests/card5/test_no_retraining_scope.py",
+    "tests/card5/test_alias_api_backward_compat.py",
+    "manifest.json",
+    "README.md",
+    "docs/claude_code_execution_box.md"
+  ]
+}

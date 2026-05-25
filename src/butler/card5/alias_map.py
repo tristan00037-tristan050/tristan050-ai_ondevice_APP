@@ -1,13 +1,13 @@
-"""Card 5 v3 alias map.
-
-순서:
-1. 47 allowlist exact match 우선 통과
-2. 12 alias 정규화
-3. 둘 다 아니면 hallucination
-"""
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Mapping
+
 from .allowlist import allowed_titles, title_to_code_map
+
+ALLOWED_TAX_RELEVANCE = {"taxable", "non_taxable", "exempt", "unknown"}
 
 ALIAS_MAP_12: dict[str, str] = {
     "서비스매출": "용역매출",
@@ -26,18 +26,150 @@ ALIAS_MAP_12: dict[str, str] = {
 }
 
 
-def apply_alias(predicted_title: str, predicted_code: str) -> tuple[str, str, str]:
-    title = (predicted_title or "").strip()
+@dataclass(frozen=True)
+class AliasDecision:
+    account_title: str
+    account_code: str
+    category: str
+    reason: str
+    rule_order: int | None = None
+
+
+def load_alias_map(path: str | Path | None = None) -> dict[str, Any]:
+    target = Path(path) if path is not None else Path(__file__).with_name("canonical_alias_map.json")
+    return json.loads(target.read_text(encoding="utf-8"))
+
+
+def normalize_rent_account(description: str, predicted: Mapping[str, Any]) -> AliasDecision | None:
+    desc = description or ""
+    if "임대료수익" in desc:
+        return AliasDecision("임대료수익", "9040", "non_operating_income", "description contains 임대료수익", 1)
+    if all(token in desc for token in ("일시", "정산", "임대료")):
+        return AliasDecision("임대료수익", "9040", "non_operating_income", "description contains 일시+정산+임대료", 2)
+    if "영업외" in desc and "임대" in desc:
+        return AliasDecision("임대료수익", "9040", "non_operating_income", "description contains 영업외+임대", 3)
+    if "임대수입" in desc:
+        return AliasDecision("임대수입", "4050", "sales", "description contains 임대수입", 4)
+    if "임대매출" in desc:
+        return AliasDecision("임대수입", "4050", "sales", "description contains 임대매출", 5)
+    if "임대 매출" in desc:
+        return AliasDecision("임대수입", "4050", "sales", "description contains 임대 매출", 6)
+    if "임차" in desc or "임차료" in desc:
+        return AliasDecision("지급임차료", "8120", "sga", "description contains 임차/임차료", 7)
+    return None
+
+
+def apply_canonical_alias_map(
+    description: str,
+    prediction: Mapping[str, Any],
+    alias_map: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    out = dict(prediction)
+    decision = normalize_rent_account(description, prediction)
+    if decision is not None:
+        out["account_title"] = decision.account_title
+        out["account_code"] = decision.account_code
+        out["category"] = decision.category
+        out["alias_map_applied"] = True
+        out["alias_reason"] = decision.reason
+        out["alias_rule_order"] = decision.rule_order
+        return out
+    if isinstance(alias_map, Mapping):
+        aliases = alias_map.get("aliases", {})
+        if isinstance(aliases, Mapping):
+            desc = description or ""
+            for key, spec in aliases.items():
+                if not isinstance(key, str) or not key or not isinstance(spec, Mapping):
+                    continue
+                if key in desc:
+                    out["account_title"] = spec.get("account_title", out.get("account_title"))
+                    out["account_code"] = spec.get("account_code", out.get("account_code"))
+                    if "category" in spec:
+                        out["category"] = spec["category"]
+                    out["alias_map_applied"] = True
+                    out["alias_reason"] = spec.get("reason", f"alias_map.aliases[{key}]")
+                    return out
+    out["alias_map_applied"] = False
+    return out
+
+
+def _description_from_prediction(prediction: Mapping[str, Any]) -> str:
+    for key in ("description", "description_redacted", "transaction_description", "input_description", "text"):
+        value = prediction.get(key)
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+def _apply_title_code_alias(predicted_title: Any, predicted_code: Any) -> tuple[str, str, str]:
+    title = str(predicted_title or "").strip()
+    code = str(predicted_code or "").strip()
     code_map = title_to_code_map()
     titles = allowed_titles()
-
     if title in titles:
-        expected_code = code_map[title]
-        return title, expected_code, "exact"
-
+        return title, code_map[title], "exact"
     if title in ALIAS_MAP_12:
         corrected_title = ALIAS_MAP_12[title]
-        corrected_code = code_map[corrected_title]
-        return corrected_title, corrected_code, "alias_mapped"
+        return corrected_title, code_map[corrected_title], "alias_mapped"
+    return title, code, "hallucination"
 
-    return title, predicted_code, "hallucination"
+
+def _unsupported_dict(original_title: Any = "", original_code: Any = "") -> dict[str, Any]:
+    return {
+        "account_title": str(original_title or ""),
+        "account_code": str(original_code or ""),
+        "needs_review": True,
+        "alias_applied": False,
+        "alias_map_applied": False,
+        "alias_fail_class": "UNSUPPORTED_ALIAS_INPUT",
+    }
+
+
+def apply_alias(
+    *args: Any,
+    description: str | None = None,
+    prediction: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any] | tuple[str, str, str]:
+    """Main-repo compatible Card 5 alias API.
+
+    Dict inputs preserve dict output. Title/code inputs restore the original
+    main-repo 3-tuple `(account_title, account_code, match_kind)` contract.
+    """
+    kwargs.pop("precedence_rules", None)
+    if kwargs:
+        return _unsupported_dict()
+
+    if len(args) >= 2 and not isinstance(args[1], Mapping):
+        return _apply_title_code_alias(args[0], args[1])
+
+    if prediction is not None:
+        pred = dict(prediction)
+        desc = description if description is not None else _description_from_prediction(pred)
+        return apply_canonical_alias_map(str(desc or ""), pred)
+
+    if len(args) == 1 and isinstance(args[0], Mapping):
+        pred = dict(args[0])
+        desc = description if description is not None else _description_from_prediction(pred)
+        return apply_canonical_alias_map(str(desc or ""), pred)
+
+    if len(args) >= 2 and isinstance(args[0], str) and isinstance(args[1], Mapping):
+        return apply_canonical_alias_map(args[0], dict(args[1]))
+
+    if len(args) >= 2 and isinstance(args[0], Mapping) and isinstance(args[1], str):
+        return apply_canonical_alias_map(args[1], dict(args[0]))
+
+    return _unsupported_dict()
+
+
+def apply_alias_with_precedence(description: str, prediction: Mapping[str, Any]) -> dict[str, Any]:
+    return apply_canonical_alias_map(description, prediction)
+
+
+def validate_tax_relevance(value: Any) -> str:
+    if value in ALLOWED_TAX_RELEVANCE:
+        return str(value)
+    if value == "vat":
+        return "taxable"
+    return "unknown"
+

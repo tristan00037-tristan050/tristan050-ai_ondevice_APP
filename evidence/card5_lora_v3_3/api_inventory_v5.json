@@ -1,0 +1,36 @@
+{
+  "schema_version": "card5.option_d.api_inventory.v5",
+  "apply_alias": {
+    "source_path": "origin/main:src/butler/card5/alias_map.py",
+    "signature": "def apply_alias(predicted_title: str, predicted_code: str) -> tuple[str, str, str]",
+    "return_shape_for_title_code": "3_tuple",
+    "third_value_name": "match_kind",
+    "third_value_type": "str",
+    "third_value_values": [
+      "exact",
+      "alias_mapped",
+      "hallucination"
+    ],
+    "call_patterns_found": [
+      "tests/card5/test_alias_and_rollback.py: title, code, kind = apply_alias(...)",
+      "src/butler/card5/inference.py: title, code, kind = apply_alias(parsed account_title/account_code)"
+    ]
+  },
+  "inference": {
+    "source_path": "origin/main:src/butler/card5/inference.py",
+    "verify_and_locate_adapter_present_before": true,
+    "verify_and_locate_adapter_signature": "def verify_and_locate_adapter(adapter_path: Path | None = None) -> Path",
+    "verify_and_locate_adapter_return_type": "Path",
+    "monkeypatch_callers": [
+      "tests/card5/test_inference.py::test_inference_hallucination_sets_needs_review",
+      "tests/card5/test_inference.py::test_inference_exact_allowlist",
+      "tests/card5/test_inference.py::test_inference_rejects_non_dict_json"
+    ],
+    "other_required_module_attributes": [
+      "verify_invariants",
+      "build_system_prompt"
+    ]
+  },
+  "inventory_method": "main_repo_read_before_patch via git show origin/main",
+  "inventory_complete": true
+}

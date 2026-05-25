@@ -1,4 +1,3 @@
-"""Card 5 v3 system prompt."""
 from __future__ import annotations
 
 from .allowlist import load_allowlist
@@ -23,23 +22,15 @@ ABSOLUTE RULES:
 
 def _format_categories(allowlist: dict) -> str:
     rows: list[str] = []
-    categories = allowlist.get("categories", {})
-
-    for category, items in categories.items():
-        names: list[str] = []
-        for item in items:
-            if isinstance(item, dict):
-                names.append(str(item["name"]))
-            else:
-                names.append(str(item))
+    for category, items in allowlist.get("categories", {}).items():
+        names = [str(item["name"]) if isinstance(item, dict) else str(item) for item in items]
         rows.append(f"- {category}: " + ", ".join(names))
-
     return "\n".join(rows)
 
 
 def build_system_prompt(transaction: str) -> str:
-    allowlist = load_allowlist()
     return V3_SYSTEM_PROMPT_TEMPLATE.format(
-        categories=_format_categories(allowlist),
+        categories=_format_categories(load_allowlist()),
         transaction=transaction,
     )
+

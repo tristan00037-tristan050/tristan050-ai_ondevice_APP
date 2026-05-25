@@ -1,4 +1,3 @@
-"""Card 5 v3 inference pipeline."""
 from __future__ import annotations
 
 import argparse
@@ -13,7 +12,6 @@ from .invariants import REQUIRED_INVARIANTS, verify_invariants
 from .rollback import InferenceResult, check_and_rollback
 from .system_prompt import build_system_prompt
 
-
 MlxRunner = Callable[[str, Path], str]
 
 
@@ -23,16 +21,14 @@ def run_inference(transaction: str, mlx_runner: MlxRunner) -> InferenceResult:
 
     verify_invariants(REQUIRED_INVARIANTS)
     adapter_path = verify_and_locate_adapter()
-
     prompt = build_system_prompt(transaction)
     raw_output = mlx_runner(prompt, adapter_path)
 
     try:
         parsed = json.loads(raw_output)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"BLOCK: invalid JSON output: {e}") from e
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"BLOCK: invalid JSON output: {exc}") from exc
 
-    # P1 #1 정정 (codex bot review): JSON 타입 검증
     if not isinstance(parsed, dict):
         raise RuntimeError(
             f"BLOCK: JSON output must be an object, got {type(parsed).__name__}"
@@ -42,15 +38,15 @@ def run_inference(transaction: str, mlx_runner: MlxRunner) -> InferenceResult:
         parsed.get("account_title", ""),
         parsed.get("account_code", ""),
     )
-
-    result = InferenceResult(
-        account_title=title,
-        account_code=code,
-        needs_review=bool(parsed.get("needs_review", False)),
-        match_kind=kind,
-        confidence=float(parsed.get("confidence", 0.0) or 0.0),
+    return check_and_rollback(
+        InferenceResult(
+            account_title=title,
+            account_code=code,
+            needs_review=bool(parsed.get("needs_review", False)),
+            match_kind=kind,
+            confidence=float(parsed.get("confidence", 0.0) or 0.0),
+        )
     )
-    return check_and_rollback(result)
 
 
 def main() -> None:
@@ -76,10 +72,11 @@ def main() -> None:
             args.output.write_text(text, encoding="utf-8")
         else:
             print(text)
-    except RuntimeError as e:
-        print(str(e), file=sys.stderr)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
         sys.exit(2)
 
 
 if __name__ == "__main__":
     main()
+

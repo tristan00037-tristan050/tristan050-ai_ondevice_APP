@@ -1,4 +1,3 @@
-"""Card 5 hallucination rollback."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -24,3 +23,4 @@ def check_and_rollback(result: InferenceResult) -> InferenceResult:
             f"account_title '{result.account_title}' is outside 47 allowlist and alias map"
         )
     return result
+

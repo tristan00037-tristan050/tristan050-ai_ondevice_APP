@@ -1,4 +1,3 @@
-"""Card 5 v3 제품 통합 불변량 검증."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,7 +18,6 @@ REQUIRED_INVARIANTS = Invariants()
 
 def verify_invariants(state: Invariants = REQUIRED_INVARIANTS) -> None:
     violations: list[str] = []
-
     if state.base_model_changed:
         violations.append("base_model_changed=True")
     if state.tokenizer_changed:
@@ -32,6 +30,6 @@ def verify_invariants(state: Invariants = REQUIRED_INVARIANTS) -> None:
         violations.append("data_117_used_zero=False")
     if not state.license_verified_true:
         violations.append("license_verified_true=False")
-
     if violations:
         raise RuntimeError("BLOCK: invariants violated: " + "; ".join(violations))
+

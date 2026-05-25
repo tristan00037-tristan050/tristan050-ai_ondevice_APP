@@ -1,0 +1,70 @@
+{"transaction_id":"txn_001","description":"제품 생산 원가 정산","expected_account_title":"제품매출원가","expected_account_code":"5005","expected_category":"cost_of_sales"}
+{"transaction_id":"txn_002","description":"상품 매입 원가 정산","expected_account_title":"상품매출원가","expected_account_code":"5010","expected_category":"cost_of_sales"}
+{"transaction_id":"txn_003","description":"용역 수행 원가 지급","expected_account_title":"용역원가","expected_account_code":"5015","expected_category":"cost_of_sales"}
+{"transaction_id":"txn_004","description":"차입금 이자비용 지급","expected_account_title":"이자비용","expected_account_code":"9110","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_005","description":"전기오류수정손실 반영","expected_account_title":"전기오류수정손실","expected_account_code":"9120","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_006","description":"기타 잡손실 처리","expected_account_title":"잡손실","expected_account_code":"9130","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_007","description":"외화 결제 외환차손 발생","expected_account_title":"외환차손","expected_account_code":"9140","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_008","description":"공익단체 기부금 지급","expected_account_title":"기부금","expected_account_code":"9150","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_009","description":"유형자산 처분손실 발생","expected_account_title":"유형자산처분손실","expected_account_code":"9160","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_010","description":"보유 장비 임대 수입 입금","expected_account_title":"임대수입","expected_account_code":"4050","expected_category":"non_operating_income"}
+{"transaction_id":"txn_011","description":"예금 이자수익 입금","expected_account_title":"이자수익","expected_account_code":"9010","expected_category":"non_operating_income"}
+{"transaction_id":"txn_012","description":"유형자산 처분이익 발생","expected_account_title":"유형자산처분이익","expected_account_code":"9020","expected_category":"non_operating_income"}
+{"transaction_id":"txn_013","description":"기타 잡이익 입금","expected_account_title":"잡이익","expected_account_code":"9030","expected_category":"non_operating_income"}
+{"transaction_id":"txn_014","description":"영업외 부동산 임대료수익 입금","expected_account_title":"임대료수익","expected_account_code":"9040","expected_category":"non_operating_income"}
+{"transaction_id":"txn_015","description":"배당금수익 입금","expected_account_title":"배당금수익","expected_account_code":"9050","expected_category":"non_operating_income"}
+{"transaction_id":"txn_016","description":"일반 매출 입금","expected_account_title":"매출","expected_account_code":"4010","expected_category":"sales"}
+{"transaction_id":"txn_017","description":"제품 매출 대금 입금","expected_account_title":"제품매출","expected_account_code":"4020","expected_category":"sales"}
+{"transaction_id":"txn_018","description":"상품 매출 대금 입금","expected_account_title":"상품매출","expected_account_code":"4030","expected_category":"sales"}
+{"transaction_id":"txn_019","description":"컨설팅 용역 매출 입금","expected_account_title":"용역매출","expected_account_code":"4040","expected_category":"sales"}
+{"transaction_id":"txn_020","description":"임원급여 지급","expected_account_title":"임원급여","expected_account_code":"8010","expected_category":"sga"}
+{"transaction_id":"txn_021","description":"직원급여 지급","expected_account_title":"직원급여","expected_account_code":"8020","expected_category":"sga"}
+{"transaction_id":"txn_022","description":"성과 상여금 지급","expected_account_title":"상여금","expected_account_code":"8030","expected_category":"sga"}
+{"transaction_id":"txn_023","description":"퇴직급여 지급","expected_account_title":"퇴직급여","expected_account_code":"8040","expected_category":"sga"}
+{"transaction_id":"txn_024","description":"직원 복리후생비 지급","expected_account_title":"복리후생비","expected_account_code":"8050","expected_category":"sga"}
+{"transaction_id":"txn_025","description":"출장 여비교통비 정산","expected_account_title":"여비교통비","expected_account_code":"8060","expected_category":"sga"}
+{"transaction_id":"txn_026","description":"거래처 접대비 결제","expected_account_title":"접대비","expected_account_code":"8070","expected_category":"sga"}
+{"transaction_id":"txn_027","description":"통신비 자동이체","expected_account_title":"통신비","expected_account_code":"8080","expected_category":"sga"}
+{"transaction_id":"txn_028","description":"전력비 납부","expected_account_title":"전력비","expected_account_code":"8090","expected_category":"sga"}
+{"transaction_id":"txn_029","description":"세금과공과금 납부","expected_account_title":"세금과공과금","expected_account_code":"8100","expected_category":"sga"}
+{"transaction_id":"txn_030","description":"감가상각비 월말 반영","expected_account_title":"감가상각비","expected_account_code":"8110","expected_category":"sga"}
+{"transaction_id":"txn_031","description":"사무실 임차료 지급","expected_account_title":"지급임차료","expected_account_code":"8120","expected_category":"sga"}
+{"transaction_id":"txn_032","description":"보험료 납부","expected_account_title":"보험료","expected_account_code":"8130","expected_category":"sga"}
+{"transaction_id":"txn_033","description":"차량유지비 결제","expected_account_title":"차량유지비","expected_account_code":"8140","expected_category":"sga"}
+{"transaction_id":"txn_034","description":"경상연구개발비 지급","expected_account_title":"경상연구개발비","expected_account_code":"8150","expected_category":"sga"}
+{"transaction_id":"txn_035","description":"운반비 지급","expected_account_title":"운반비","expected_account_code":"8160","expected_category":"sga"}
+{"transaction_id":"txn_036","description":"교육훈련비 지급","expected_account_title":"교육훈련비","expected_account_code":"8170","expected_category":"sga"}
+{"transaction_id":"txn_037","description":"도서인쇄비 결제","expected_account_title":"도서인쇄비","expected_account_code":"8180","expected_category":"sga"}
+{"transaction_id":"txn_038","description":"사무용품비 구매","expected_account_title":"사무용품비","expected_account_code":"8190","expected_category":"sga"}
+{"transaction_id":"txn_039","description":"소모품비 구매","expected_account_title":"소모품비","expected_account_code":"8200","expected_category":"sga"}
+{"transaction_id":"txn_040","description":"은행 송금 수수료 출금","expected_account_title":"지급수수료","expected_account_code":"8210","expected_category":"sga"}
+{"transaction_id":"txn_041","description":"광고선전비 지급","expected_account_title":"광고선전비","expected_account_code":"8220","expected_category":"sga"}
+{"transaction_id":"txn_042","description":"건물관리비 납부","expected_account_title":"건물관리비","expected_account_code":"8230","expected_category":"sga"}
+{"transaction_id":"txn_043","description":"수선비 지급","expected_account_title":"수선비","expected_account_code":"8240","expected_category":"sga"}
+{"transaction_id":"txn_044","description":"대손상각비 반영","expected_account_title":"대손상각비","expected_account_code":"8250","expected_category":"sga"}
+{"transaction_id":"txn_045","description":"무형자산상각비 반영","expected_account_title":"무형자산상각비","expected_account_code":"8260","expected_category":"sga"}
+{"transaction_id":"txn_046","description":"잡비 소액 지출","expected_account_title":"잡비","expected_account_code":"8270","expected_category":"sga"}
+{"transaction_id":"txn_047","description":"사무공간 임대 수입 정산 추가 검증","expected_account_title":"임대수입","expected_account_code":"4050","expected_category":"non_operating_income"}
+{"transaction_id":"txn_048","description":"단기 금융상품 이자수익 정산 추가 검증","expected_account_title":"이자수익","expected_account_code":"9010","expected_category":"non_operating_income"}
+{"transaction_id":"txn_049","description":"장비 매각 유형자산처분이익 추가 검증","expected_account_title":"유형자산처분이익","expected_account_code":"9020","expected_category":"non_operating_income"}
+{"transaction_id":"txn_050","description":"소액 환급 잡이익 처리 추가 검증","expected_account_title":"잡이익","expected_account_code":"9030","expected_category":"non_operating_income"}
+{"transaction_id":"txn_051","description":"일시 임대료수익 정산 추가 검증","expected_account_title":"임대료수익","expected_account_code":"9040","expected_category":"non_operating_income"}
+{"transaction_id":"txn_052","description":"투자주식 배당금수익 수취 추가 검증","expected_account_title":"배당금수익","expected_account_code":"9050","expected_category":"non_operating_income"}
+{"transaction_id":"txn_053","description":"은행 대출 이자비용 출금 추가 검증","expected_account_title":"이자비용","expected_account_code":"9110","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_054","description":"과년도 오류 수정 손실 처리 추가 검증","expected_account_title":"전기오류수정손실","expected_account_code":"9120","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_055","description":"소액 손실 잡손실 반영 추가 검증","expected_account_title":"잡손실","expected_account_code":"9130","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_056","description":"환율 변동 외환차손 추가 검증","expected_account_title":"외환차손","expected_account_code":"9140","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_057","description":"기부금 후원금 출금 추가 검증","expected_account_title":"기부금","expected_account_code":"9150","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_058","description":"장비 매각 유형자산처분손실 추가 검증","expected_account_title":"유형자산처분손실","expected_account_code":"9160","expected_category":"non_operating_expense"}
+{"transaction_id":"txn_059","description":"결제대행 수수료 지급 alias case","expected_account_title":"지급수수료","expected_account_code":"8210","expected_category":"sga"}
+{"transaction_id":"txn_060","description":"은행 송금 수수료 출금 alias case","expected_account_title":"지급수수료","expected_account_code":"8210","expected_category":"sga"}
+{"transaction_id":"txn_061","description":"법무사 수수료 지급 alias case","expected_account_title":"지급수수료","expected_account_code":"8210","expected_category":"sga"}
+{"transaction_id":"txn_062","description":"컨설팅 용역 매출 입금 alias case","expected_account_title":"용역매출","expected_account_code":"4040","expected_category":"sales"}
+{"transaction_id":"txn_063","description":"유지보수 용역 수입 alias case","expected_account_title":"용역매출","expected_account_code":"4040","expected_category":"sales"}
+{"transaction_id":"txn_064","description":"개발 용역 대금 수금 alias case","expected_account_title":"용역매출","expected_account_code":"4040","expected_category":"sales"}
+{"transaction_id":"txn_065","description":"보유 장비 임대 매출 입금 alias case","expected_account_title":"임대수입","expected_account_code":"4050","expected_category":"sales","expected_category_before_option_d":"non_operating_income","option_d_correction":{"option":1,"reason":"description contains 임대 매출 입금 and GT 임대수입/4050; sales category is the consistent correction","retraining":false}}
+{"transaction_id":"txn_066","description":"사무공간 임대 수입 alias case","expected_account_title":"임대수입","expected_account_code":"4050","expected_category":"non_operating_income"}
+{"transaction_id":"txn_067","description":"영업외 부동산 임대료수익 입금 alias case","expected_account_title":"임대료수익","expected_account_code":"9040","expected_category":"non_operating_income"}
+{"transaction_id":"txn_068","description":"일시 임대료수익 정산 alias case","expected_account_title":"임대료수익","expected_account_code":"9040","expected_category":"non_operating_income"}
+{"transaction_id":"txn_069","description":"사무실 임차료 지급 alias case","expected_account_title":"지급임차료","expected_account_code":"8120","expected_category":"sga"}
+{"transaction_id":"txn_070","description":"창고 임차료 자동이체 alias case","expected_account_title":"지급임차료","expected_account_code":"8120","expected_category":"sga"}
