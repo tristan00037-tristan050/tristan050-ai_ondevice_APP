@@ -21,9 +21,9 @@ def resolve_option_d_manifest(
         candidates.append(Path(env_path))
     candidates.extend(
         [
-            root / "evidence/card5_lora_v3_3/option_d_manifest_v5.json",
-            root / "evidence/card5_lora_v3_3/option_d_manifest_v3.json",
-            root / "evidence/card5_lora_v3_3/option_d_manifest_v2.json",
+            Path("evidence/card5_lora_v3_3/option_d_manifest_v5.json"),
+            Path("evidence/card5_lora_v3_3/option_d_manifest_v3.json"),
+            Path("evidence/card5_lora_v3_3/option_d_manifest_v2.json"),
             Path(__file__).resolve().parents[3] / "manifest.json",
         ]
     )

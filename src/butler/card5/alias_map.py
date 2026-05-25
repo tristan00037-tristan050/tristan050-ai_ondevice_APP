@@ -59,18 +59,37 @@ def normalize_rent_account(description: str, predicted: Mapping[str, Any]) -> Al
     return None
 
 
-def apply_canonical_alias_map(description: str, prediction: Mapping[str, Any]) -> dict[str, Any]:
+def apply_canonical_alias_map(
+    description: str,
+    prediction: Mapping[str, Any],
+    alias_map: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     out = dict(prediction)
     decision = normalize_rent_account(description, prediction)
-    if decision is None:
-        out["alias_map_applied"] = False
+    if decision is not None:
+        out["account_title"] = decision.account_title
+        out["account_code"] = decision.account_code
+        out["category"] = decision.category
+        out["alias_map_applied"] = True
+        out["alias_reason"] = decision.reason
+        out["alias_rule_order"] = decision.rule_order
         return out
-    out["account_title"] = decision.account_title
-    out["account_code"] = decision.account_code
-    out["category"] = decision.category
-    out["alias_map_applied"] = True
-    out["alias_reason"] = decision.reason
-    out["alias_rule_order"] = decision.rule_order
+    if isinstance(alias_map, Mapping):
+        aliases = alias_map.get("aliases", {})
+        if isinstance(aliases, Mapping):
+            desc = description or ""
+            for key, spec in aliases.items():
+                if not isinstance(key, str) or not key or not isinstance(spec, Mapping):
+                    continue
+                if key in desc:
+                    out["account_title"] = spec.get("account_title", out.get("account_title"))
+                    out["account_code"] = spec.get("account_code", out.get("account_code"))
+                    if "category" in spec:
+                        out["category"] = spec["category"]
+                    out["alias_map_applied"] = True
+                    out["alias_reason"] = spec.get("reason", f"alias_map.aliases[{key}]")
+                    return out
+    out["alias_map_applied"] = False
     return out
 
 

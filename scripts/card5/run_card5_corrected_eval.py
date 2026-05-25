@@ -60,7 +60,14 @@ def normalize_prediction(raw: dict[str, Any]) -> dict[str, Any]:
     return pred
 
 
-def score(transactions: list[dict[str, Any]], predictions: dict[str, dict[str, Any]], pairs: set[tuple[str, str]], *, postprocess: bool) -> dict[str, Any]:
+def score(
+    transactions: list[dict[str, Any]],
+    predictions: dict[str, dict[str, Any]],
+    pairs: set[tuple[str, str]],
+    *,
+    postprocess: bool,
+    alias_map: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     total = len(transactions)
     correct = 0
     hallucinated = 0
@@ -74,7 +81,11 @@ def score(transactions: list[dict[str, Any]], predictions: dict[str, dict[str, A
         if tx_id not in predictions:
             raise SystemExit(f"BLOCK: MISSING_PREDICTION {tx_id}")
         raw = normalize_prediction(predictions[tx_id])
-        pred = apply_canonical_alias_map(tx.get("description", ""), raw) if postprocess else raw
+        pred = (
+            apply_canonical_alias_map(tx.get("description", ""), raw, alias_map)
+            if postprocess
+            else raw
+        )
         pair = (str(pred.get("account_title")), str(pred.get("account_code")))
         expected = (tx["expected_account_title"], tx["expected_account_code"])
         is_pair_valid = pair in pairs
@@ -129,8 +140,9 @@ def main() -> int:
     transactions = load_jsonl(tx_path)
     predictions = {str(row["transaction_id"]): row for row in load_jsonl(pred_path)}
     pairs = canonical_pairs(allow_path)
-    raw = score(transactions, predictions, pairs, postprocess=False)
-    post = score(transactions, predictions, pairs, postprocess=True)
+    alias_map_data: dict[str, Any] = json.loads(alias_path.read_text(encoding="utf-8")) if alias_path.exists() else {}
+    raw = score(transactions, predictions, pairs, postprocess=False, alias_map=alias_map_data)
+    post = score(transactions, predictions, pairs, postprocess=True, alias_map=alias_map_data)
     base_common = {
         "adapter_sha": ADAPTER_SHA,
         "retraining": False,
