@@ -1,0 +1,28 @@
+{
+  "schema_version": "card5.option_d_manifest.v5_1",
+  "package_status": "DEFECT_1_CORRECTED_V5_1",
+  "scope": "manifest_resolver_relative_repo_root_hotfix",
+  "adapter_sha": "5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135",
+  "retraining": false,
+  "adapter_changed": false,
+  "model_weight_changed": false,
+  "train_valid_changed": false,
+  "raw_metric_changed": false,
+  "alias_map_semantics_changed": false,
+  "real_transactions_v2_sha256": "949b1e0072345ae73dd31ff89a3b4b4945184942ac26ac77403d66b3f96b3b57",
+  "canonical_alias_map_sha256": "4a8c2b38999968a83515e6f80cc12c660d767801ea72e012254de1a0d24ad615",
+  "defects_resolved": [
+    "DEFECT_1_MANIFEST_RESOLVER_RELATIVE_REPO_ROOT"
+  ],
+  "resolver_policy": {
+    "repo_root": "expanduser_resolve_once",
+    "explicit_path": "absolute_or_root_relative_resolve_once",
+    "env_path": "absolute_or_root_relative_resolve_once",
+    "evidence_candidates": "root_relative_v5_v3_v2",
+    "package_fallback": "absolute_path_no_root_join"
+  },
+  "main_repo_regression_guarantee": false,
+  "tests_added": [
+    "tests/card5/test_manifest_resolver_relative_repo_root.py"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "adapter_changed": false,
+  "adapter_sha": "5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135",
+  "alias_map_semantics_changed": false,
+  "canonical_alias_map_sha256": "4a8c2b38999968a83515e6f80cc12c660d767801ea72e012254de1a0d24ad615",
+  "claude_code_verification_required": true,
+  "created_at_unix": 1779686126,
+  "evidence_v5_v3_v2_search_order_maintained": true,
+  "explicit_env_relative_path_root_relative": true,
+  "file_sha256": {
+    "manifest_resolver": "2c950a6959633b44f39a631be6955e08811dec6db38f979e1d30609a47c27917",
+    "manifest_v5_1": "959e652b09c035f49708053556fcb95a05ae2a2552b7c14b0ca325f621cc897a",
+    "relative_test": "5c2a238065b146ba7c2aa22e8df9148d43f3c3a52091ca9526d05355695724ea"
+  },
+  "head_sha": "358c18dd9880462139d7fe95976612be9bb18e8a",
+  "main_repo_regression_guarantee": false,
+  "model_weight_changed": false,
+  "package_fallback_absolute": true,
+  "raw_metric_changed": false,
+  "real_transactions_v2_sha256": "949b1e0072345ae73dd31ff89a3b4b4945184942ac26ac77403d66b3f96b3b57",
+  "repo_repo_duplicate_blocked_by_test": true,
+  "repo_root_resolve_applied": true,
+  "retraining": false,
+  "scope": "manifest_resolver_relative_repo_root_hotfix",
+  "status": "DEFECT_1_CORRECTED_V5_1",
+  "target_pr": "#753",
+  "tests": {
+    "absolute_repo_root": "PASS",
+    "env_var_relative_path": "PASS",
+    "explicit_relative_path": "PASS",
+    "relative_repo_root": "PASS",
+    "tests_card5": "54 passed in 1.69s",
+    "typed_missing_error": "PASS"
+  },
+  "train_valid_changed": false,
+  "typed_missing_error": "CARD5_OPTION_D_MANIFEST_NOT_FOUND"
+}
