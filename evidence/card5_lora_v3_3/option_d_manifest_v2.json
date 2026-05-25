@@ -1,0 +1,80 @@
+{
+  "schema_version": "card5.option_d.remeasure_package_manifest.v1",
+  "package_status": "PASS_REMEASURE_READY_REWORKED_V2",
+  "work_scope": "evaluation_dataset_fix + canonical_alias_map_fix + remeasurement_wrapper",
+  "retraining": false,
+  "model_retraining": false,
+  "adapter_changed": false,
+  "adapter_sha": "5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135",
+  "base_sha": "16c9c14a94d0cbb55d0c8def911da9884077201a",
+  "dataset_corrected": true,
+  "txn_065_option": 1,
+  "real_transactions_v2_sha256": "949b1e0072345ae73dd31ff89a3b4b4945184942ac26ac77403d66b3f96b3b57",
+  "canonical_alias_map_sha256": "4a8c2b38999968a83515e6f80cc12c660d767801ea72e012254de1a0d24ad615",
+  "canonical_allowlist_sha256": "063b11e7004f113846af24587c1550dcb25820eb518ed4dff9e8679d8d2fe57a",
+  "allowed_claims": [
+    "evaluation_dataset_corrected",
+    "alias_map_updated",
+    "raw_and_postprocess_remeasurement_ready"
+  ],
+  "forbidden_claims": [
+    "retraining_done",
+    "adapter_improved",
+    "model_weight_changed",
+    "production_ready"
+  ],
+  "pass_gate": {
+    "raw_accuracy_min": 0.94,
+    "postprocess_accuracy_min": 0.97,
+    "raw_hallucinated_max": 2,
+    "postprocess_hallucinated": 0,
+    "canonical_invalid_code": 0,
+    "confidence_unique_min": 8,
+    "token_collapse": 0
+  },
+  "files": [
+    "docs/claude_code_execution_box.md",
+    "evidence/accounting27/real_transactions_v2.jsonl",
+    "evidence/accounting27/rework_v2_summary.json",
+    "evidence/accounting27/rework_v2_verification.txt",
+    "evidence/card5_lora_v3_3/original_v3_3_metrics.json",
+    "scripts/card5/patch_card5_option_d.py",
+    "scripts/card5/run_card5_corrected_eval.py",
+    "src/butler/card5/account_title_allowlist_47.json",
+    "src/butler/card5/alias_map.py",
+    "src/butler/card5/canonical_alias_map.json",
+    "tests/card5/test_alias_api_backward_compat.py",
+    "tests/card5/test_alias_map_json_contract.py",
+    "tests/card5/test_alias_map_rent_precedence.py",
+    "tests/card5/test_corrected_eval_metrics_contract.py",
+    "tests/card5/test_no_retraining_scope.py",
+    "tests/card5/test_option_d_dataset.py",
+    "evidence/accounting27/rework_v2_verification.json"
+  ],
+  "rework_v2": {
+    "status": "PASS_REMEASURE_READY_REWORKED_V2",
+    "defects_resolved": [
+      {
+        "id": "DEFECT_1",
+        "fail_class": "TEST_SCOPE_TOO_BROAD",
+        "chosen_option": "1-B_manifest_files_scope",
+        "summary": "test_no_adapter_or_training_script now scans manifest.files only, not whole repo fixtures."
+      },
+      {
+        "id": "DEFECT_2",
+        "fail_class": "APPLY_ALIAS_API_BREAKING_CHANGE",
+        "chosen_option": "2-A_backward_compatible_apply_alias",
+        "summary": "legacy apply_alias signatures preserved; apply_alias_with_precedence added for new seven-step rule."
+      }
+    ],
+    "sealed_invariants": {
+      "adapter_sha": "5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135",
+      "retraining": false,
+      "adapter_changed": false,
+      "model_weight_changed": false,
+      "real_transactions_v2_sha256_expected": "949b1e0072345ae73dd31ff89a3b4b4945184942ac26ac77403d66b3f96b3b57",
+      "canonical_alias_map_sha256_expected": "4a8c2b38999968a83515e6f80cc12c660d767801ea72e012254de1a0d24ad615"
+    },
+    "pytest": "10 passed in 2.52s"
+  }
+}

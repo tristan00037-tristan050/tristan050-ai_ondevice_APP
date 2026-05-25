@@ -1,0 +1,13 @@
+{
+  "schema_version": "card5.v3_3.original_metrics.v1",
+  "adapter_sha": "5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135",
+  "retraining": false,
+  "raw_accuracy": 0.9571,
+  "raw_correct": 67,
+  "total": 70,
+  "hallucinated": 3,
+  "postprocess_accuracy": 0.9571,
+  "token_collapse": 0,
+  "confidence_unique": 16,
+  "immutable_baseline": true
+}

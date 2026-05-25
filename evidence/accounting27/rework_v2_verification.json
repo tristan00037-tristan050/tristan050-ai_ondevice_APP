@@ -1,0 +1,27 @@
+{
+  "schema_version": "card5.option_d.rework_v2.verification.v1",
+  "status": "PASS_REMEASURE_READY_REWORKED_V2",
+  "created_at_unix": 1779670034,
+  "chosen_options": {
+    "defect_1": "1-B manifest.files scoped scan",
+    "defect_2": "2-A backward-compatible apply_alias API"
+  },
+  "sealed_invariants": {
+    "adapter_sha": "5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135",
+    "retraining": false,
+    "adapter_changed": false,
+    "model_weight_changed": false,
+    "real_transactions_v2_sha256_expected": "949b1e0072345ae73dd31ff89a3b4b4945184942ac26ac77403d66b3f96b3b57",
+    "canonical_alias_map_sha256_expected": "4a8c2b38999968a83515e6f80cc12c660d767801ea72e012254de1a0d24ad615"
+  },
+  "actual_sha256": {
+    "real_transactions_v2": "949b1e0072345ae73dd31ff89a3b4b4945184942ac26ac77403d66b3f96b3b57",
+    "canonical_alias_map": "4a8c2b38999968a83515e6f80cc12c660d767801ea72e012254de1a0d24ad615",
+    "account_title_allowlist": "063b11e7004f113846af24587c1550dcb25820eb518ed4dff9e8679d8d2fe57a",
+    "alias_map_py": "f300ae3f7d7399d94602f2bfea4e1a5910b78feb2ba7c702abd53f6aecc77f0b",
+    "test_no_retraining_scope": "e51173e57166b1f3f4f4e5bca66087a1d8b67ac460cc401955a6c0fa61ac7531"
+  },
+  "pytest": "10 passed in 2.52s",
+  "package_scope": "static package; Claude Code must run local M3 Max adapter remeasurement for 7-gate final PASS",
+  "release_claim_allowed": false
+}

@@ -1,0 +1,12 @@
+{
+  "status": "PASS_REMEASURE_READY_REWORKED_V5",
+  "defects_resolved": [
+    "DEFECT_2_APPLY_ALIAS_3_TUPLE_BACKWARD_COMPAT",
+    "DEFECT_3_VERIFY_AND_LOCATE_ADAPTER_RESTORED"
+  ],
+  "adapter_sha": "5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135",
+  "retraining": false,
+  "main_repo_regression_guarantee": false,
+  "main_repo_failure_patterns_mimicked": true,
+  "api_inventory_file": "evidence/card5_lora_v3_3/api_inventory_v5.json"
+}

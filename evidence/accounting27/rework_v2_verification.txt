@@ -1,0 +1,9 @@
+STATUS=PASS_REMEASURE_READY_REWORKED_V2
+pytest tests/card5 -q: 10 passed in 2.63s
+pytest tests -q: 10 passed in 2.62s
+test_alias_and_rollback: compatibility covered by tests/card5/test_alias_api_backward_compat.py
+test_inference: compatibility covered by tests/card5/test_alias_api_backward_compat.py
+adapter_sha: 5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135
+retraining: false
+adapter_changed: false
+model_weight_changed: false

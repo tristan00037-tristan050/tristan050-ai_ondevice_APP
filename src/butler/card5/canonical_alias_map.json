@@ -1,0 +1,85 @@
+{
+  "schema_version": "card5.canonical_alias_map.v2.option_d",
+  "retraining": false,
+  "adapter_sha": "5b7806bdfece1b4cee61486998a0396194562da459e23aaa2094d55474d72135",
+  "canonical_allowlist_sha256": "063b11e7004f113846af24587c1550dcb25820eb518ed4dff9e8679d8d2fe57a",
+  "aliases": {
+    "임대매출": {
+      "account_title": "임대수입",
+      "account_code": "4050",
+      "category": "sales",
+      "reason": "임대 매출/입금 문맥은 sales 계정 임대수입으로 정규화"
+    },
+    "임대 매출": {
+      "account_title": "임대수입",
+      "account_code": "4050",
+      "category": "sales",
+      "reason": "띄어쓰기 포함 임대 매출 문맥은 임대수입/4050으로 정규화"
+    }
+  },
+  "rent_precedence_rule": [
+    {
+      "order": 1,
+      "condition": "description contains 임대료수익",
+      "account_title": "임대료수익",
+      "account_code": "9040",
+      "category": "non_operating_income"
+    },
+    {
+      "order": 2,
+      "condition": "description contains 일시 and 정산 and 임대료",
+      "account_title": "임대료수익",
+      "account_code": "9040",
+      "category": "non_operating_income"
+    },
+    {
+      "order": 3,
+      "condition": "description contains 영업외 and 임대",
+      "account_title": "임대료수익",
+      "account_code": "9040",
+      "category": "non_operating_income"
+    },
+    {
+      "order": 4,
+      "condition": "description contains 임대수입",
+      "account_title": "임대수입",
+      "account_code": "4050",
+      "category": "sales"
+    },
+    {
+      "order": 5,
+      "condition": "description contains 임대매출",
+      "account_title": "임대수입",
+      "account_code": "4050",
+      "category": "sales"
+    },
+    {
+      "order": 6,
+      "condition": "description contains 임대 매출",
+      "account_title": "임대수입",
+      "account_code": "4050",
+      "category": "sales"
+    },
+    {
+      "order": 7,
+      "condition": "description contains 임차 or 임차료",
+      "account_title": "지급임차료",
+      "account_code": "8120",
+      "category": "sga"
+    }
+  ],
+  "forbidden_pairs": [
+    {
+      "account_title": "임대료수익",
+      "account_code": "4050"
+    },
+    {
+      "account_title": "임대수입",
+      "account_code": "9040"
+    },
+    {
+      "account_title": "임대매출",
+      "account_code": "4050"
+    }
+  ]
+}
