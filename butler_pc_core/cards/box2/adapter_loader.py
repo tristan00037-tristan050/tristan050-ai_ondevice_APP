@@ -134,13 +134,19 @@ def asset_contracts() -> dict[str, AssetContract]:
         ),
         "helper_3": AssetContract(
             name="helper_3",
-            path=DEFAULT_HELPER_3_PATH,
-            path_kind="directory_or_file",
-            expected_sha256=HELPER_3_REWRITE_ADAPTER_SHA,
             # sealed per evidence/box2_helper3/sha_contract_v2.json:
             # measured_sha_scope=file, measured_file_path=.../adapter_model.safetensors,
-            # measured_sha256_file == HELPER_3_REWRITE_ADAPTER_SHA. "unknown" disabled
-            # digest computation in check_asset() and prevented tamper detection.
+            # measured_sha256_file == HELPER_3_REWRITE_ADAPTER_SHA.
+            # The contract must target the measured file directly so that
+            # compute_sha_for_contract() actually computes a digest under
+            # sha_scope="file" — otherwise check_asset() emits
+            # PARTIAL_DONE_V2_SHA_SCOPE_PENDING and never reaches
+            # BLOCK_V2_SHA_MISMATCH, defeating tamper detection.
+            # DEFAULT_HELPER_3_PATH (the adapter directory) is preserved as
+            # the public constant for status payloads and evidence parity.
+            path=f"{DEFAULT_HELPER_3_PATH}/adapter_model.safetensors",
+            path_kind="file",
+            expected_sha256=HELPER_3_REWRITE_ADAPTER_SHA,
             sha_scope="file",
         ),
     }
