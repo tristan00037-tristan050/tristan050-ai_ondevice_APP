@@ -1,0 +1,48 @@
+{
+  "schema_version": "box2.helper3.sha_contract.v2",
+  "package_status": "PARTIAL_DONE_V2_LORA_SHA_SCOPE_PENDING",
+  "helper_3": {
+    "path_kind": "directory_or_file",
+    "path": "~/Desktop/도우미폴더/넘겨줄도우미모델/box2b_v5_outputs/rewrite/adapter/box2b_v5_rewrite",
+    "expected_sha256": "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0",
+    "sha_scope": "file",
+    "measured_sha_scope": "file",
+    "measured_file_path": "~/Desktop/도우미폴더/넘겨줄도우미모델/box2b_v5_outputs/rewrite/adapter/box2b_v5_rewrite/adapter_model.safetensors",
+    "measured_sha256_file": "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0",
+    "measured_sha256_directory_manifest": "d2b6f898b843ae2c40201dc156529ae8e0ff8950185d8b1493c1a2a87ede6b6a",
+    "measured_verified": true
+  },
+  "butler_v3_lora": {
+    "path_kind": "directory",
+    "path": "~/Desktop/도우미폴더/넘겨줄도우미모델/butler-qwen3-1.7b-v3/lora_adapter",
+    "expected_sha256": null,
+    "sha_scope": "unknown",
+    "pending_reason": "prior ee35fe47afb6...d284 value is abbreviated; do not seal as SHA-256",
+    "measured_sha_scope_preferred": "directory_manifest",
+    "measured_sha256_directory_manifest": "2d399bbc4f4acbb25d70d15966970559f86c77193af58c0099260dd3c307898f",
+    "measured_sha256_file_adapter_model": "ee35fe47c2421df18597dd9939a08b4ff3bf4e25b8766ba5d914060ccaedd284",
+    "measured_at_utc": "2026-05-26",
+    "measured_note": "expected_sha256 intentionally left null per v2 contract; algorithm team must seal one of the measured values to promote to PASS_V2"
+  },
+  "butler_v3_gguf_f16": {
+    "path_kind": "file",
+    "path": "~/Desktop/도우미폴더/넘겨줄도우미모델/butler-qwen3-1.7b-v3/butler-1.7b-v3-f16.gguf",
+    "expected_sha256": "46e75f40cd6b37fb26bcc7fb21fb375af05abb5b6eceeef00c7d85e4092f381d",
+    "sha_scope": "file",
+    "measured_sha256": "46e75f40cd6b37fb26bcc7fb21fb375af05abb5b6eceeef00c7d85e4092f381d",
+    "measured_verified": true
+  },
+  "butler_v3_gguf_q4_k_m": {
+    "path_kind": "file",
+    "path": "~/Desktop/도우미폴더/넘겨줄도우미모델/butler-qwen3-1.7b-v3/butler-1.7b-v3-q4_k_m.gguf",
+    "expected_sha256": "80a76db71f7218d84aadc6f1db59339b235f1eceff42be7cdbf9e4c60a5950dd",
+    "sha_scope": "file",
+    "measured_sha256": "80a76db71f7218d84aadc6f1db59339b235f1eceff42be7cdbf9e4c60a5950dd",
+    "measured_verified": true
+  },
+  "forbidden": [
+    "do_not_use_abbreviated_lora_sha_as_sealed_digest",
+    "do_not_compare_lora_directory_to_gguf_sha",
+    "do_not_compare_gguf_file_to_lora_adapter_sha"
+  ]
+}

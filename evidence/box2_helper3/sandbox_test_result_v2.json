@@ -1,0 +1,16 @@
+{
+  "schema_version": "box2.helper3.sandbox_test_result.v2",
+  "test_environment": "chatgpt_sandbox_static_contract",
+  "pytest_command": "python3 -m pytest -q tests/cards/box2",
+  "contract_script": "bash scripts/run_box2_helper3_v2_contract_tests.sh",
+  "pytest_result": "30 passed",
+  "preflight_result": "PASS_CONTRACT_SCRIPT",
+  "macbook_real_run_claimed": false,
+  "asset_sha_real_check_claimed": false,
+  "github_pr_created_claimed": false,
+  "status": "PARTIAL_DONE_V2_LORA_SHA_SCOPE_PENDING",
+  "notes": [
+    "Sandbox lacks MacBook/T7 local model assets and runtime packages.",
+    "This result validates static contract tests and digest-only eval set, not real MLX inference."
+  ]
+}
