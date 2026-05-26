@@ -1,6 +1,6 @@
 {
   "schema_version": "box2.helper3.sha_contract.v2",
-  "package_status": "PARTIAL_DONE_V2_LORA_SHA_SCOPE_PENDING",
+  "package_status": "PASS_V2",
   "helper_3": {
     "path_kind": "directory_or_file",
     "path": "~/Desktop/도우미폴더/넘겨줄도우미모델/box2b_v5_outputs/rewrite/adapter/box2b_v5_rewrite",
@@ -15,9 +15,8 @@
   "butler_v3_lora": {
     "path_kind": "directory",
     "path": "~/Desktop/도우미폴더/넘겨줄도우미모델/butler-qwen3-1.7b-v3/lora_adapter",
-    "expected_sha256": null,
-    "sha_scope": "unknown",
-    "pending_reason": "prior ee35fe47afb6...d284 value is abbreviated; do not seal as SHA-256",
+    "expected_sha256": "ee35fe47c2421df18597dd9939a08b4ff3bf4e25b8766ba5d914060ccaedd284",
+    "sha_scope": "file",
     "measured_sha_scope_preferred": "directory_manifest",
     "measured_sha256_directory_manifest": "2d399bbc4f4acbb25d70d15966970559f86c77193af58c0099260dd3c307898f",
     "measured_sha256_file_adapter_model": "ee35fe47c2421df18597dd9939a08b4ff3bf4e25b8766ba5d914060ccaedd284",

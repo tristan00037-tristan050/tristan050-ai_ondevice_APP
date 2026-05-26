@@ -15,7 +15,7 @@
       "transformers": false
     },
     "load_mode": "contract_only",
-    "status": "PARTIAL_DONE_V2_LORA_SHA_SCOPE_PENDING",
+    "status": "PARTIAL_DONE_RUNTIME_OR_ASSET_PENDING",
     "external_send": 0,
     "raw_persistence": 0,
     "retraining": false,
@@ -24,7 +24,7 @@
     "sha_mismatch_count": 0,
     "blocking_reasons": [
       "runtime_package_missing:mlx_lm,peft,transformers",
-      "butler_v3_lora:PARTIAL_DONE_V2_LORA_SHA_SCOPE_PENDING",
+      "butler_v3_lora:PARTIAL_DONE_V2_SHA_SCOPE_PENDING",
       "helper_3:PARTIAL_DONE_V2_SHA_SCOPE_PENDING"
     ]
   },

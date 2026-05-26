@@ -26,11 +26,11 @@ DEFAULT_HELPER_3_PATH = (
     f"{DEFAULT_HANDOFF_ROOT}/box2b_v5_outputs/rewrite/adapter/box2b_v5_rewrite"
 )
 
-# v2 contract: LoRA directory digest is not sealed in this package because the
-# prior ee35fe47afb6...d284 value is abbreviated. Claude Code must measure the
-# full 64-char SHA-256 and record whether the scope is a file digest or a
-# deterministic directory manifest digest.
-BUTLER_V3_LORA_ADAPTER_SHA: str | None = None
+# v2 contract: sealed with the full 64-char file SHA of adapter_model.safetensors
+# after user sealed sha_contract_v2.json with the same value. Scope: file.
+BUTLER_V3_LORA_ADAPTER_SHA: str | None = (
+    "ee35fe47c2421df18597dd9939a08b4ff3bf4e25b8766ba5d914060ccaedd284"
+)
 
 BUTLER_V3_F16_GGUF_SHA = "46e75f40cd6b37fb26bcc7fb21fb375af05abb5b6eceeef00c7d85e4092f381d"
 BUTLER_V3_Q4_K_M_GGUF_SHA = "80a76db71f7218d84aadc6f1db59339b235f1eceff42be7cdbf9e4c60a5950dd"
@@ -116,7 +116,7 @@ def asset_contracts() -> dict[str, AssetContract]:
             path=DEFAULT_BUTLER_V3_LORA_PATH,
             path_kind="directory",
             expected_sha256=BUTLER_V3_LORA_ADAPTER_SHA,
-            sha_scope="unknown" if BUTLER_V3_LORA_ADAPTER_SHA is None else "directory_manifest",
+            sha_scope="file" if BUTLER_V3_LORA_ADAPTER_SHA is not None else "unknown",
         ),
         "butler_v3_gguf_f16": AssetContract(
             name="butler_v3_gguf_f16",
