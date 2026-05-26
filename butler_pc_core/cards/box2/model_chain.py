@@ -131,6 +131,26 @@ def build_rewrite_system_prompt() -> str:
     )
 
 
+def compose_rewrite_runner_input(
+    *,
+    system_prompt: str,
+    foreign_doc_text: str,
+    our_format_text: str,
+) -> str:
+    """Compose the single-string runner input for the real-load rewrite path.
+
+    The runner is typed Callable[[str], str]; the system instruction alone
+    cannot drive a rewrite — the foreign document and the target format must
+    be present in the input or a backend can return schema-shaped JSON that
+    is unrelated to the caller's document.
+    """
+    return (
+        f"{system_prompt}\n\n"
+        f"[FOREIGN_DOCUMENT]\n{foreign_doc_text}\n\n"
+        f"[TARGET_FORMAT]\n{our_format_text}\n"
+    )
+
+
 def validate_rewrite_output(payload: Mapping[str, Any]) -> dict[str, Any]:
     missing = [field for field in REQUIRED_OUTPUT_FIELDS if field not in payload]
     extra = [field for field in payload.keys() if field not in REQUIRED_OUTPUT_FIELDS]
@@ -177,7 +197,12 @@ def contract_only_rewrite(
             "blocking_reasons": status.blocking_reasons,
         }
 
-    raw = runner(prompt)
+    runner_input = compose_rewrite_runner_input(
+        system_prompt=prompt,
+        foreign_doc_text=foreign_doc_text,
+        our_format_text=our_format_text,
+    )
+    raw = runner(runner_input)
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:

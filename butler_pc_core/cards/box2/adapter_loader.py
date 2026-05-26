@@ -137,7 +137,11 @@ def asset_contracts() -> dict[str, AssetContract]:
             path=DEFAULT_HELPER_3_PATH,
             path_kind="directory_or_file",
             expected_sha256=HELPER_3_REWRITE_ADAPTER_SHA,
-            sha_scope="unknown",
+            # sealed per evidence/box2_helper3/sha_contract_v2.json:
+            # measured_sha_scope=file, measured_file_path=.../adapter_model.safetensors,
+            # measured_sha256_file == HELPER_3_REWRITE_ADAPTER_SHA. "unknown" disabled
+            # digest computation in check_asset() and prevented tamper detection.
+            sha_scope="file",
         ),
     }
 
