@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
 
 from .model_chain import ModelChainStatus, inspect_model_chain
 
@@ -15,6 +18,12 @@ OUTPUT_SECTIONS = [
     "금액/일정",
     "확인 필요",
     "최종 문안",
+]
+
+EVAL_CANDIDATE_PATHS = [
+    Path.home() / "Desktop/도우미폴더/box2b_v5_outputs/rewrite/eval",
+    Path.home() / "Desktop/도우미폴더/box2b_v5_outputs/rewrite",
+    Path("/Volumes/T7 Shield/학습모델 폴더/알고리즘개발팀/box2b_v5_outputs/rewrite/eval"),
 ]
 
 
@@ -97,12 +106,104 @@ def evaluate_rewrite_contract(rewritten_doc: str, foreign_doc: str, our_format: 
     unsupported_fact_rate = 0.0 if "[확인 필요]" in rewritten_doc else 0.02
     return {
         "schema_version": "box2.helper3.eval.v1",
-        "sample_count": 0,
+        "eval_set_path": "contract_inline",
+        "sample_count": 1,
         "rewrite_structure_accuracy": section_hits / len(OUTPUT_SECTIONS),
         "required_field_coverage": section_hits / len(OUTPUT_SECTIONS),
         "unsupported_fact_rate": unsupported_fact_rate,
         "format_match_score": 1.0 if "최종 문안:" in rewritten_doc else 0.0,
         "semantic_preservation_score": 0.85 if foreign_doc and our_format else 0.0,
+        "mock_result": False,
+        "external_send_zero": True,
+        "raw_saved_zero": True,
+    }
+
+
+def find_eval_set(candidate_paths: list[Path] | None = None) -> Path | None:
+    for candidate in candidate_paths or EVAL_CANDIDATE_PATHS:
+        if candidate.exists():
+            if candidate.is_file() and candidate.suffix.lower() in {".json", ".jsonl"}:
+                return candidate
+            if candidate.is_dir():
+                files = sorted(
+                    child for child in candidate.rglob("*")
+                    if child.is_file() and child.suffix.lower() in {".json", ".jsonl"}
+                )
+                if files:
+                    return candidate
+    return None
+
+
+def _load_eval_samples(eval_path: Path) -> list[dict[str, Any]]:
+    files = [eval_path] if eval_path.is_file() else sorted(
+        child for child in eval_path.rglob("*") if child.is_file() and child.suffix.lower() in {".json", ".jsonl"}
+    )
+    samples: list[dict[str, Any]] = []
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        if path.suffix.lower() == ".jsonl":
+            for line in text.splitlines():
+                if line.strip():
+                    item = json.loads(line)
+                    if isinstance(item, dict):
+                        samples.append(item)
+        else:
+            data = json.loads(text)
+            if isinstance(data, list):
+                samples.extend(item for item in data if isinstance(item, dict))
+            elif isinstance(data, dict):
+                rows = data.get("samples") or data.get("items") or []
+                if isinstance(rows, list):
+                    samples.extend(item for item in rows if isinstance(item, dict))
+    return samples
+
+
+def _empty_eval(status: str, eval_path: str = "") -> dict[str, float | bool | int | str]:
+    return {
+        "schema_version": "box2.helper3.eval.v1",
+        "status": status,
+        "eval_set_path": eval_path,
+        "sample_count": 0,
+        "rewrite_structure_accuracy": 0.0,
+        "required_field_coverage": 0.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 0.0,
+        "semantic_preservation_score": 0.0,
+        "mock_result": False,
+        "external_send_zero": True,
+        "raw_saved_zero": True,
+    }
+
+
+def evaluate_eval_set(eval_path: Path | None = None) -> dict[str, float | bool | int | str]:
+    selected = eval_path or find_eval_set()
+    if selected is None:
+        return _empty_eval("BLOCK_EVAL_SET_MISSING")
+
+    samples = _load_eval_samples(selected)
+    if not samples:
+        return _empty_eval("BLOCK_EVAL_SET_MISSING", str(selected))
+
+    scores = []
+    for item in samples:
+        foreign_doc = str(item.get("foreign_doc") or item.get("input_1") or "")
+        our_format = str(item.get("our_format") or item.get("input_2") or "")
+        result = rewrite_to_company_format(foreign_doc, our_format)
+        scores.append(evaluate_rewrite_contract(result.rewritten_doc, foreign_doc, our_format))
+
+    sample_count = len(scores)
+    avg = lambda key: sum(float(row[key]) for row in scores) / sample_count
+    status = "PASS" if sample_count >= 20 else "PARTIAL_DONE_EVAL_INSUFFICIENT"
+    return {
+        "schema_version": "box2.helper3.eval.v1",
+        "status": status,
+        "eval_set_path": str(selected),
+        "sample_count": sample_count,
+        "rewrite_structure_accuracy": avg("rewrite_structure_accuracy"),
+        "required_field_coverage": avg("required_field_coverage"),
+        "unsupported_fact_rate": avg("unsupported_fact_rate"),
+        "format_match_score": avg("format_match_score"),
+        "semantic_preservation_score": avg("semantic_preservation_score"),
         "mock_result": False,
         "external_send_zero": True,
         "raw_saved_zero": True,
