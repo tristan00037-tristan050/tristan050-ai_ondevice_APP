@@ -33,11 +33,17 @@ def is_localhost_request(request: Request) -> bool:
     return host in LOCALHOST_HOSTS
 
 
+def _model_dict(model: BaseModel) -> dict[str, Any]:
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    return model.dict()
+
+
 def digest_payload(payload: Box2RewriteRequest) -> str:
     digest_source = {
         "foreign_doc_sha256": hashlib.sha256(payload.foreign_doc.encode("utf-8")).hexdigest(),
         "our_format_sha256": hashlib.sha256(payload.our_format.encode("utf-8")).hexdigest(),
-        "options": payload.options.model_dump(),
+        "options": _model_dict(payload.options),
     }
     encoded = json.dumps(digest_source, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return "sha256:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
