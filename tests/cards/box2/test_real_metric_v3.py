@@ -1,11 +1,9 @@
 import os
 from pathlib import Path
 import pytest
-pytest.importorskip("mlx_lm")
-pytest.importorskip("peft")
-pytest.importorskip("transformers")
 from butler_pc_core.cards.box2.evaluator import write_real_eval_evidence
 from butler_pc_core.cards.box2.real_load_smoke import load_real_model_chain
+
 
 def test_real_metric_v3_20_case_gate():
     if os.environ.get("BUTLER_BOX2_RUN_REAL_V3") != "1":

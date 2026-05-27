@@ -1,12 +1,10 @@
 """Regression guard for Codex P2 #1 (PR #755).
 
-runtime_loader.load_runtime() previously stored str(exc) under
-'error_message' on the import-failure path. The status exporter persists
-that payload to evidence, so native loader failures could leak local
-paths and environment details — violating the repo's meta-only /
-no-raw-output rule. The real-load path (real_load_smoke.py) already
-keeps only error_class plus an 'error_message_digest'; this module
-must match that pattern.
+runtime_loader.load_runtime() previously imported native runtime modules
+in-process and stored str(exc) under 'error_message' on the import-failure
+path. The status exporter persists that payload to evidence, so native
+loader failures could either abort pytest or leak local paths. Runtime
+imports must be probed out-of-process and persist only meta status.
 """
 
 from unittest.mock import patch
@@ -15,11 +13,8 @@ from butler_pc_core.cards.box2 import runtime_loader as rl
 from butler_pc_core.cards.box2.runtime_loader import load_runtime
 
 
-SENTINEL_PATH = "/Users/PRIVATE_HOME/local_path/marker_2026_05_27"
-
-
-def _force_runtime_available_then_fail(exc: Exception):
-    """Force detect_runtime_packages -> available=True, then make import_module raise."""
+def _force_runtime_available_then_fail(probe_payload):
+    """Force detect_runtime_packages -> available=True, then make import probe fail."""
     def _stub_detect():
         return {
             "schema_version": "box2.helper3.runtime.v3",
@@ -31,55 +26,68 @@ def _force_runtime_available_then_fail(exc: Exception):
             "fail_class": None,
         }
     return patch.object(rl, "detect_runtime_packages", side_effect=_stub_detect), \
-           patch.object(rl.importlib, "import_module", side_effect=exc)
+           patch.object(rl, "_probe_module_import", return_value=probe_payload)
 
 
 def test_import_error_does_not_leak_str_exc_in_payload():
-    """The sentinel local path embedded in the exception must not appear anywhere
-    in the returned dict (string serialization check)."""
-    exc = ImportError(f"cannot import module from {SENTINEL_PATH}")
-    p1, p2 = _force_runtime_available_then_fail(exc)
+    """Import failure payloads must not contain raw stderr/stdout/error text."""
+    p1, p2 = _force_runtime_available_then_fail({
+        "ok": False,
+        "returncode": 134,
+        "error_class": None,
+    })
     with p1, p2:
         payload = load_runtime()
-    assert SENTINEL_PATH not in str(payload), (
-        f"local path leaked into runtime payload: {payload}"
-    )
+    assert "stderr" not in payload
+    assert "stdout" not in payload
     assert "error_message" not in payload, (
-        "legacy 'error_message' key must be removed; use 'error_message_digest'"
+        "legacy 'error_message' key must be removed; use meta status only"
     )
+    assert "error_message_digest" not in payload
 
 
-def test_import_error_keeps_error_class_and_uses_digest_key():
-    """error_class is meta-only; the digest key must match the real-load path."""
-    exc = RuntimeError("any error message")
-    p1, p2 = _force_runtime_available_then_fail(exc)
+def test_import_error_keeps_meta_only_error_class_and_returncode():
+    """error_class plus returncode are meta-only and enough for diagnosis."""
+    p1, p2 = _force_runtime_available_then_fail({
+        "ok": False,
+        "returncode": None,
+        "error_class": "TimeoutExpired",
+    })
     with p1, p2:
         payload = load_runtime()
-    assert payload["error_class"] == "RuntimeError"
-    assert "error_message_digest" in payload
-    digest = payload["error_message_digest"]
-    assert digest.startswith("sha256:")
-    hex_part = digest[len("sha256:"):]
-    assert len(hex_part) == 64
-    assert all(c in "0123456789abcdef" for c in hex_part)
+    assert payload["error_class"] == "TimeoutExpired"
+    assert payload["import_returncodes"] == {"mlx_lm": None, "peft": None, "transformers": None}
 
 
-def test_import_error_redaction_matches_real_load_path():
-    """The import-error path must use the same key + digest format as
-    real_load_smoke.load_real_model_chain's exception branch."""
-    from butler_pc_core.cards.box2 import real_load_smoke as rls
-    exc = ImportError("boom")
-    p1, p2 = _force_runtime_available_then_fail(exc)
+def test_import_error_marks_failed_runtime_packages():
+    p1, p2 = _force_runtime_available_then_fail({
+        "ok": False,
+        "returncode": 134,
+        "error_class": None,
+    })
     with p1, p2:
         payload = load_runtime()
-    expected_digest = "sha256:" + rls._sha256_text(str(exc))
-    assert payload["error_message_digest"] == expected_digest
+    assert payload["runtime_packages"] == {"mlx_lm": False, "peft": False, "transformers": False}
 
 
 def test_import_error_marks_fail_class():
-    exc = ImportError("anything")
-    p1, p2 = _force_runtime_available_then_fail(exc)
+    p1, p2 = _force_runtime_available_then_fail({
+        "ok": False,
+        "returncode": 134,
+        "error_class": None,
+    })
     with p1, p2:
         payload = load_runtime()
     assert payload["fail_class"] == "PARTIAL_DONE_V3_RUNTIME_IMPORT_ERROR"
     assert payload["runtime_available"] is False
+
+
+def test_runtime_import_probe_uses_subprocess_not_inprocess_import():
+    p1, p2 = _force_runtime_available_then_fail({
+        "ok": True,
+        "returncode": 0,
+        "error_class": None,
+    })
+    with p1, p2, patch.object(rl.importlib, "import_module", side_effect=AssertionError("in-process import forbidden")):
+        payload = load_runtime()
+    assert payload["runtime_available"] is True

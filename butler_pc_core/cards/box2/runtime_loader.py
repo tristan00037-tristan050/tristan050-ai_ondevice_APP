@@ -5,6 +5,7 @@ import importlib
 import importlib.metadata
 import importlib.util
 import platform as _platform
+import subprocess
 import sys
 from typing import Any
 
@@ -27,6 +28,32 @@ def _package_version(distribution_name: str) -> str | None:
         return None
 
 
+def _probe_module_import(module_name: str, *, timeout_seconds: int = 30) -> dict[str, Any]:
+    """Import a runtime module in a child process.
+
+    Some native runtime packages can abort the Python process during import
+    before a Python exception can be caught. Keep contract tests alive by
+    probing imports out-of-process and persisting only meta status.
+    """
+    command = [
+        sys.executable,
+        "-c",
+        "import importlib, sys; importlib.import_module(sys.argv[1])",
+        module_name,
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "returncode": None, "error_class": "TimeoutExpired"}
+    return {"ok": completed.returncode == 0, "returncode": completed.returncode, "error_class": None}
+
+
 def detect_runtime_packages() -> dict[str, Any]:
     packages = {key: _module_available(module) for key, module in REQUIRED_RUNTIME_MODULES.items()}
     runtime_available = all(packages.values())
@@ -45,22 +72,16 @@ def load_runtime() -> dict[str, Any]:
     detected = detect_runtime_packages()
     if not detected["runtime_available"]:
         return detected
-    imported: dict[str, bool] = {}
-    try:
-        for key, module_name in REQUIRED_RUNTIME_MODULES.items():
-            importlib.import_module(module_name)
-            imported[key] = True
-    except Exception as exc:  # pragma: no cover
-        # Codex P2 (PR #755): str(exc) from native loader failures can carry
-        # local paths and environment details into evidence, violating the
-        # repo's meta-only/no-raw-output rule. Mirror the real-load path
-        # (real_load_smoke.py) by keeping only error_class plus a digest.
+    import_results = {key: _probe_module_import(module_name) for key, module_name in REQUIRED_RUNTIME_MODULES.items()}
+    imported = {key: bool(result["ok"]) for key, result in import_results.items()}
+    if not all(imported.values()):
+        first_error_class = next((result["error_class"] for result in import_results.values() if result["error_class"]), "SubprocessImportFailed")
         detected.update({
             "runtime_available": False,
-            "runtime_packages": {**detected["runtime_packages"], **imported},
+            "runtime_packages": imported,
             "fail_class": "PARTIAL_DONE_V3_RUNTIME_IMPORT_ERROR",
-            "error_class": exc.__class__.__name__,
-            "error_message_digest": "sha256:" + _sha256_text(str(exc)),
+            "error_class": first_error_class,
+            "import_returncodes": {key: result["returncode"] for key, result in import_results.items()},
         })
         return detected
     detected.update({"runtime_available": True, "runtime_packages": {key: True for key in REQUIRED_RUNTIME_MODULES}, "fail_class": None})

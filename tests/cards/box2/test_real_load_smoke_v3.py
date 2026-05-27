@@ -1,10 +1,8 @@
 import os
 from pathlib import Path
 import pytest
-pytest.importorskip("mlx_lm")
-pytest.importorskip("peft")
-pytest.importorskip("transformers")
 from butler_pc_core.cards.box2.real_load_smoke import run_real_load_smoke
+
 
 def test_real_load_smoke_v3_three_stage_local_run():
     if os.environ.get("BUTLER_BOX2_RUN_REAL_V3") != "1":
