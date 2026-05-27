@@ -1,0 +1,30 @@
+name: box2-helper3-v3-contract
+on:
+  pull_request:
+    paths:
+      - 'butler_pc_core/cards/box2/**'
+      - 'tests/cards/box2/**'
+      - 'data/box2_helper3_eval/**'
+      - 'evidence/box2_helper3/**'
+      - 'requirements-box2-helper3.txt'
+      - 'install_runtime.sh'
+      - '.github/workflows/box2_helper3_v3_contract.yml'
+      # Codex P2 (PR #755): the workflow runs run_box2_helper3_v3_contract_tests.sh,
+      # and run_box2_helper3_v3_real_macbook.sh wraps the same script. Without
+      # these entries a PR that only changes the harness or the wrapper skips
+      # this gate and the gate logic can drift without being executed.
+      - 'scripts/run_box2_helper3_v3_contract_tests.sh'
+      - 'scripts/run_box2_helper3_v3_real_macbook.sh'
+  workflow_dispatch:
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: python -m pip install -U pip pytest
+      - name: Run v3 contract tests
+        run: bash scripts/run_box2_helper3_v3_contract_tests.sh

@@ -1,0 +1,15 @@
+{
+  "schema_version": "box2.helper3.metric_kind_disclosure.v3_2",
+  "target_evidence_path": "evidence/box2_helper3/eval_metrics_real_v3.json",
+  "metric_is_real_rewrite_measurement": false,
+  "metric_is_digest_safe_proxy": true,
+  "proxy_reason": "raw rewrite output is not stored in evidence. Metrics are digest-safe checklist proxy metrics, not direct raw-output quality measurements.",
+  "metric_keys_disclosure": {
+    "rewrite_structure_accuracy": "digest_safe_proxy",
+    "required_field_coverage": "digest_safe_proxy",
+    "unsupported_fact_rate": "digest_safe_proxy",
+    "format_match_score": "digest_safe_proxy",
+    "semantic_preservation_score": "digest_safe_proxy"
+  },
+  "pass_v2_full_qualification": "METRIC_PROXY_CANDIDATE"
+}

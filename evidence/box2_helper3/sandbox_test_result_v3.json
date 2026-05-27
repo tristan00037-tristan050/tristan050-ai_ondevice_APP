@@ -1,0 +1,16 @@
+{
+  "schema_version": "box2.helper3.sandbox_test_result.v3_1_compat",
+  "status": "PASS_V3_1",
+  "pytest_result": "43 passed, 3 skipped",
+  "passed": 43,
+  "skipped": 3,
+  "failed": 0,
+  "error": 0,
+  "collection_error": 0,
+  "compose_rewrite_runner_input_import_ok": true,
+  "helper_3_contract_file_scope_ok": true,
+  "external_send_zero": true,
+  "raw_marker_zero": true,
+  "package_clean": true,
+  "mock_result": false
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": "box2.helper3.digest_diversity.v3_2",
+  "source_evidence_path": "evidence/box2_helper3/eval_metrics_real_v3.json",
+  "total_case_count": 20,
+  "unique_digest_count": 1,
+  "digest_diversity_ratio": 0.05,
+  "diversity_pass_threshold": 2,
+  "diversity_pass": false,
+  "status": "PARTIAL_DONE_BOX7C_DIGEST_DIVERSITY_INSUFFICIENT",
+  "duplicate_digest_groups": [
+    {
+      "digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "occurrence_count": 20,
+      "case_ids": [
+        "box2_eval_001",
+        "box2_eval_002",
+        "box2_eval_003",
+        "box2_eval_004",
+        "box2_eval_005",
+        "box2_eval_006",
+        "box2_eval_007",
+        "box2_eval_008",
+        "box2_eval_009",
+        "box2_eval_010",
+        "box2_eval_011",
+        "box2_eval_012",
+        "box2_eval_013",
+        "box2_eval_014",
+        "box2_eval_015",
+        "box2_eval_016",
+        "box2_eval_017",
+        "box2_eval_018",
+        "box2_eval_019",
+        "box2_eval_020"
+      ]
+    }
+  ],
+  "duplicate_group_count": 1
+}

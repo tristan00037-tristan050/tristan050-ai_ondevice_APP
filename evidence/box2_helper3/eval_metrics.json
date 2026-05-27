@@ -1,11 +1,9 @@
 {
-  "schema_version": "box2.helper3.eval.v2",
+  "schema_version": "box2.helper3.eval.v3_1",
   "eval_set_path": "data/box2_helper3_eval/eval_cases.jsonl",
   "sample_count": 20,
   "mock_result": false,
-  "contract_only": true,
-  "raw_text_included": false,
-  "metric_status": "not_real_model_scored",
-  "status": "PARTIAL_DONE_V2_LORA_SHA_SCOPE_PENDING",
-  "reason": "eval set option A is included; real model scoring and full Butler v3 LoRA SHA scope remain Claude Code evidence tasks"
+  "external_send_zero": true,
+  "raw_saved_zero": true,
+  "raw_plaintext_keys_present": false
 }
