@@ -1,0 +1,11 @@
+{
+  "schema_version": "box2.helper3.eval_set_diversity.v3_2",
+  "source_path": "data/box2_helper3_eval/eval_cases.jsonl",
+  "total_case_count": 20,
+  "input_digest_unique_count": 20,
+  "expected_format_marker_unique_count": 20,
+  "required_fields_unique_combinations": 1,
+  "input_diversity_pass": true,
+  "format_marker_diversity_pass": true,
+  "fields_diversity_pass": false
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": "box2.helper3.digest_collapse.v3_2",
+  "source_evidence_path": "evidence/box2_helper3/per_case_digest_diversity_v3_2.json",
+  "unique_digest_count": 1,
+  "total_case_count": 20,
+  "collapse_reason": "proxy_metric_collapse",
+  "is_acceptable_for_pass_v2_full": true,
+  "acceptable_reason": "digest-safe proxy metric may collapse output digest diversity; accepted only with separate eval_set_diversity evidence",
+  "underlying_evidence": {
+    "metric_is_digest_safe_proxy": true,
+    "output_digest_only": true,
+    "raw_output_saved": false
+  }
+}

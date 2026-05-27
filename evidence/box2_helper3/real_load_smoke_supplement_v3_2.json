@@ -1,0 +1,12 @@
+{
+  "schema_version": "box2.helper3.real_load_smoke_supplement.v3_2",
+  "target_evidence_path": "evidence/box2_helper3/real_load_smoke_v3.json",
+  "inference_count_disclosed": 1,
+  "coverage_kind": "single_smoke_inference_after_3_stage_load",
+  "not_evaluated_in_smoke": [
+    "20 case rewrite quality variance",
+    "input-dependent output divergence",
+    "long-context rewrite stability"
+  ],
+  "variance_evaluation_evidence_path": "evidence/box2_helper3/per_case_digest_diversity_v3_2.json"
+}
