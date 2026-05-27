@@ -9,6 +9,12 @@ on:
       - 'requirements-box2-helper3.txt'
       - 'install_runtime.sh'
       - '.github/workflows/box2_helper3_v3_contract.yml'
+      # Codex P2 (PR #755): the workflow runs run_box2_helper3_v3_contract_tests.sh,
+      # and run_box2_helper3_v3_real_macbook.sh wraps the same script. Without
+      # these entries a PR that only changes the harness or the wrapper skips
+      # this gate and the gate logic can drift without being executed.
+      - 'scripts/run_box2_helper3_v3_contract_tests.sh'
+      - 'scripts/run_box2_helper3_v3_real_macbook.sh'
   workflow_dispatch:
 jobs:
   contract:
