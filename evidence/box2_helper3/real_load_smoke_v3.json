@@ -1,0 +1,23 @@
+{
+  "schema_version": "box2.helper3.real_load_smoke.v3",
+  "stages_loaded": [
+    "base",
+    "butler_v3",
+    "helper_3"
+  ],
+  "runtime_packages": {
+    "mlx_lm": true,
+    "peft": true,
+    "transformers": true
+  },
+  "multi_lora_strategy": "weighted_adapter",
+  "inference_count": 1,
+  "output_digest_only": true,
+  "raw_output_saved": false,
+  "external_send_zero": true,
+  "raw_persistence_zero": true,
+  "load_time_seconds": 186.352094,
+  "fail_class": null,
+  "status": "PASS_V3_REAL_LOAD_SMOKE",
+  "output_digest": "sha256:3ded3ed6556eda959a9eecbb9345c7d017db9f02d114ce60fe5110f254110215"
+}

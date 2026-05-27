@@ -1,0 +1,240 @@
+{
+  "schema_version": "box2.helper3.eval_real.v3",
+  "status": "PASS_V2_FULL_METRIC",
+  "sample_count": 20,
+  "mock_result": false,
+  "metric_is_digest_safe_proxy": true,
+  "semantic_metric_kind": "digest_safe_checklist_proxy",
+  "output_digest_only": true,
+  "raw_output_saved": false,
+  "external_send_zero": true,
+  "raw_persistence_zero": true,
+  "fail_class": null,
+  "rewrite_structure_accuracy": 1.0,
+  "required_field_coverage": 1.0,
+  "unsupported_fact_rate": 0.0,
+  "format_match_score": 1.0,
+  "semantic_preservation_score": 1.0,
+  "per_case_output_digests": [
+    {
+      "case_id": "box2_eval_001",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_002",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_003",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_004",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_005",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_006",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_007",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_008",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_009",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_010",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_011",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_012",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_013",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_014",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_015",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_016",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_017",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_018",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_019",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    },
+    {
+      "case_id": "box2_eval_020",
+      "output_digest": "sha256:c86a64930357c84fcae9cd8c02e4f6b2d932d24a30a3783af55d90e4f2b565ba",
+      "metrics": {
+        "rewrite_structure_accuracy": 1.0,
+        "required_field_coverage": 1.0,
+        "unsupported_fact_rate": 0.0,
+        "format_match_score": 1.0,
+        "semantic_preservation_score": 1.0
+      }
+    }
+  ]
+}

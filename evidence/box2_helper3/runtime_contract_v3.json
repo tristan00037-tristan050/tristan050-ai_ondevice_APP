@@ -1,0 +1,16 @@
+{
+  "schema_version": "box2.helper3.runtime_contract.v3",
+  "required_packages": [
+    "mlx-lm",
+    "peft",
+    "transformers"
+  ],
+  "required_import_modules": {
+    "mlx_lm": "mlx_lm",
+    "peft": "peft",
+    "transformers": "transformers"
+  },
+  "break_system_packages_default": false,
+  "skip_is_not_full_pass": true,
+  "pass_state_requires_runtime_available": true
+}
