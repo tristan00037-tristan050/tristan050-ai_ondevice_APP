@@ -27,9 +27,13 @@ class LoadedBox2Helper3Chain:
         with torch.no_grad():
             generated = self.model.generate(**encoded, max_new_tokens=max_new_tokens)
         return self.tokenizer.decode(generated[0], skip_special_tokens=True)
-    def generate_case(self, case: Mapping[str, Any]) -> dict[str, str]:
-        parsed = parse_labeled_output(self.generate_text(build_digest_safe_eval_prompt(case), max_new_tokens=256))
-        return parsed if parsed is not None else {field: "확인 필요" for field in REQUIRED_OUTPUT_FIELDS}
+    def generate_case(self, case: Mapping[str, Any]) -> dict[str, str] | None:
+        # Codex P1 (2026-05-26, PR #755): fabricating {field: "확인 필요"} on parse
+        # failure scored 1.0 across all five evaluator metrics, letting the run pass
+        # PASS_V2_FULL_METRIC without ever emitting a parseable rewrite. Surface
+        # parse failure as None; evaluator._output_mapping coerces None to {} so
+        # structure/coverage/format/semantic scores fail honestly.
+        return parse_labeled_output(self.generate_text(build_digest_safe_eval_prompt(case), max_new_tokens=256))
 
 
 def _sha256_text(value: str) -> str:
