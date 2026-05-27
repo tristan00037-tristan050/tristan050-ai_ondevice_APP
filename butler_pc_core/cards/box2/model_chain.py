@@ -8,6 +8,7 @@ from typing import Any, Callable, Mapping
 
 from .adapter_loader import DEFAULT_BASE_MODEL_PATH, DEFAULT_BUTLER_V3_GGUF_F16_PATH, DEFAULT_BUTLER_V3_GGUF_Q4_K_M_PATH, DEFAULT_BUTLER_V3_LORA_PATH, DEFAULT_HANDOFF_ROOT, DEFAULT_HELPER_3_PATH, sha_mismatch_count, verify_asset_contracts
 from .runtime_loader import detect_runtime_packages as detect_runtime_packages_dict
+from .runtime_loader import load_runtime
 
 REQUIRED_OUTPUT_FIELDS = ["제목", "발행일", "담당자", "핵심 내용", "합의사항", "금액/일정", "확인 필요", "최종 문안"]
 
@@ -53,10 +54,19 @@ def detect_runtime_packages() -> RuntimePackageStatus:
     return RuntimePackageStatus(**payload["runtime_packages"])
 
 
-def determine_load_mode(runtime: RuntimePackageStatus, asset_statuses: Mapping[str, Any]) -> tuple[str, list[str]]:
+def determine_load_mode(
+    runtime: RuntimePackageStatus,
+    asset_statuses: Mapping[str, Any],
+    *,
+    runtime_fail_class: str | None = None,
+) -> tuple[str, list[str]]:
     reasons: list[str] = []
     if not runtime.all_available:
-        reasons.append("runtime_package_missing:" + ",".join([name for name, ok in runtime.to_dict().items() if not ok]))
+        missing = ",".join([name for name, ok in runtime.to_dict().items() if not ok])
+        if runtime_fail_class:
+            reasons.append(f"{runtime_fail_class}:{missing}")
+        else:
+            reasons.append("runtime_package_missing:" + missing)
     for name, check in asset_statuses.items():
         status = getattr(check, "status", "")
         if status.startswith("BLOCK_"):
@@ -73,13 +83,20 @@ def determine_load_mode(runtime: RuntimePackageStatus, asset_statuses: Mapping[s
 
 
 def build_model_chain_status(*, allow_missing_assets: bool = True) -> ModelChainStatus:
-    runtime = detect_runtime_packages()
+    runtime_payload = load_runtime()
+    runtime = RuntimePackageStatus(**runtime_payload["runtime_packages"])
     asset_statuses = verify_asset_contracts(allow_missing=allow_missing_assets)
-    load_mode, reasons = determine_load_mode(runtime, asset_statuses)
+    load_mode, reasons = determine_load_mode(
+        runtime,
+        asset_statuses,
+        runtime_fail_class=runtime_payload.get("fail_class"),
+    )
     mismatch_count = sha_mismatch_count(asset_statuses)
     if mismatch_count:
         status = "BLOCK_V3_SHA_MISMATCH"
-    elif any("runtime_package_missing" in reason for reason in reasons):
+    elif any("PARTIAL_DONE_V3_RUNTIME_IMPORT_ERROR" in reason for reason in reasons):
+        status = "PARTIAL_DONE_V3_RUNTIME_IMPORT_ERROR"
+    elif any("runtime_package_missing" in reason or "PARTIAL_DONE_V3_RUNTIME_INSTALL_FAILED" in reason for reason in reasons):
         status = "PARTIAL_DONE_V3_RUNTIME_INSTALL_FAILED"
     elif any("asset_missing_contract_only" in reason for reason in reasons):
         status = "PARTIAL_DONE_CONTRACT_ONLY_ASSET_MISSING"

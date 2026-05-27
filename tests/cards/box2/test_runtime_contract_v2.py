@@ -27,7 +27,15 @@ def test_runtime_missing_yields_contract_only_not_real_pass(monkeypatch):
     assert "PASS_V2_FULL" not in status.status
 
 def test_runtime_all_available_still_respects_asset_state(monkeypatch):
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(m, "load_runtime", lambda: {
+        "schema_version": "box2.helper3.runtime.v3",
+        "runtime_available": True,
+        "runtime_packages": {"mlx_lm": True, "peft": True, "transformers": True},
+        "package_versions": {"mlx_lm": "0", "peft": "0", "transformers": "0"},
+        "python_version": "3.x",
+        "platform": "test",
+        "fail_class": None,
+    })
     status = m.build_model_chain_status(allow_missing_assets=True)
     assert status.runtime_available is True
     assert status.runtime_packages == {"mlx_lm": True, "peft": True, "transformers": True}
