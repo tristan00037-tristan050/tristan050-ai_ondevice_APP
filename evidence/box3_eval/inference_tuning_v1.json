@@ -1,0 +1,745 @@
+{
+  "schema_version": "box3.eval_inference_tuning.v1",
+  "measured_at": "2026-05-28T15:14:55.013684",
+  "box_id": "box3-4.1",
+  "box_title": "추론 설정 분리 검증 (반복 looping 원인 분리)",
+  "evaluated_adapter_sha": "4d86414ddf74b048d6db011659e4227641257ad0d931faab690dcddeea58cf74",
+  "stack_chain": [
+    "Qwen3-1.7B",
+    "butler_v3",
+    "tool_call",
+    "box3_smoke"
+  ],
+  "device": "mps",
+  "dtype": "float16",
+  "seed": 42,
+  "eval_set_size": 10,
+  "variants_tested": [
+    "v0_baseline",
+    "v1_rep_pen_1.2",
+    "v2_rep_pen_1.3_ngram_3",
+    "v3_sampling"
+  ],
+  "variant_configs": {
+    "v0_baseline": {
+      "do_sample": false,
+      "max_new_tokens": 300
+    },
+    "v1_rep_pen_1.2": {
+      "do_sample": false,
+      "max_new_tokens": 300,
+      "repetition_penalty": 1.2
+    },
+    "v2_rep_pen_1.3_ngram_3": {
+      "do_sample": false,
+      "max_new_tokens": 300,
+      "repetition_penalty": 1.3,
+      "no_repeat_ngram_size": 3
+    },
+    "v3_sampling": {
+      "do_sample": true,
+      "max_new_tokens": 300,
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "repetition_penalty": 1.15
+    }
+  },
+  "variant_summary": {
+    "v0_baseline": {
+      "avg_duration_s": 11.33,
+      "avg_output_chars": 452,
+      "looping_count": 7,
+      "looping_rate": 0.7
+    },
+    "v1_rep_pen_1.2": {
+      "avg_duration_s": 11.55,
+      "avg_output_chars": 509,
+      "looping_count": 0,
+      "looping_rate": 0.0
+    },
+    "v2_rep_pen_1.3_ngram_3": {
+      "avg_duration_s": 11.57,
+      "avg_output_chars": 529,
+      "looping_count": 0,
+      "looping_rate": 0.0
+    },
+    "v3_sampling": {
+      "avg_duration_s": 12.46,
+      "avg_output_chars": 480,
+      "looping_count": 0,
+      "looping_rate": 0.0
+    }
+  },
+  "looping_detection_method": "heuristic: sentence_repetition_ratio > 0.3 OR ngram_3_repetition_ratio > 0.5",
+  "best_variant_for_looping": "v1_rep_pen_1.2",
+  "best_looping_rate": 0.0,
+  "diagnosis": "INFERENCE_TUNING_FIXES_LOOPING",
+  "recommendation": "v1_rep_pen_1.2 적용 시 looping 해결 (0%). 반복 결함은 추론 설정 요인 (학습 부족 아님). v0_baseline 70% looping은 repetition_penalty 미적용 탓. 본격 학습은 looping 때문이 아니라 환각(외삽)+데이터 다양성 보강 목적으로만 검토. 추론 표준에 repetition_penalty>=1.2 적용 의무.",
+  "full_results": {
+    "v0_baseline": {
+      "config": {
+        "do_sample": false,
+        "max_new_tokens": 300,
+        "pad_token_id": 151643
+      },
+      "results": [
+        {
+          "id": "case_1",
+          "category": "보고서→임원요약",
+          "output_sha256": "1f338c9d56455548c1d5622f6ea2370b71014e06beef50ed96d18160bb8e009b",
+          "output_length_chars": 426,
+          "output_chars": 426,
+          "duration_seconds": 12.09,
+          "looping_analysis": {
+            "detected": true,
+            "sentence_repetition_ratio": 0.571,
+            "ngram_repetition_ratio": 0.716,
+            "unique_sentences": 3,
+            "total_sentences": 7
+          }
+        },
+        {
+          "id": "case_2",
+          "category": "긴자료→짧은요약",
+          "output_sha256": "0e475cfd3cbecb13f1221f4646951a8de77a83e0ef2bbb39c1f7529a9fcd572a",
+          "output_length_chars": 576,
+          "output_chars": 576,
+          "duration_seconds": 11.55,
+          "looping_analysis": {
+            "detected": true,
+            "sentence_repetition_ratio": 0.6,
+            "ngram_repetition_ratio": 0.802,
+            "unique_sentences": 4,
+            "total_sentences": 10
+          }
+        },
+        {
+          "id": "case_3",
+          "category": "회의록→정식보고서",
+          "output_sha256": "36389fbbef367cf595a61d86db11d7bb59228cd52208d2d8531c27411abd3541",
+          "output_length_chars": 423,
+          "output_chars": 423,
+          "duration_seconds": 11.34,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.111,
+            "ngram_repetition_ratio": 0.411,
+            "unique_sentences": 8,
+            "total_sentences": 9
+          }
+        },
+        {
+          "id": "case_4",
+          "category": "이전보고서→새초안",
+          "output_sha256": "f10521588c37d39e3e7cc4e3c447a5b9369d9e01a1fd16bc814c34fe0ab279fc",
+          "output_length_chars": 356,
+          "output_chars": 356,
+          "duration_seconds": 10.97,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.2,
+            "ngram_repetition_ratio": 0.393,
+            "unique_sentences": 16,
+            "total_sentences": 20
+          }
+        },
+        {
+          "id": "case_5",
+          "category": "기술문서→핵심정리",
+          "output_sha256": "2c62c12da6406223f9f13876922d888476a38de7b26a654a9dfc75725ac838ff",
+          "output_length_chars": 432,
+          "output_chars": 432,
+          "duration_seconds": 11.3,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.25,
+            "ngram_repetition_ratio": 0.484,
+            "unique_sentences": 6,
+            "total_sentences": 8
+          }
+        },
+        {
+          "id": "case_6",
+          "category": "뉴스→제목",
+          "output_sha256": "16232cf9bb8f8f168b653df3008037d4cdc3f54de6dd041aa26debf91297acd5",
+          "output_length_chars": 372,
+          "output_chars": 372,
+          "duration_seconds": 11.31,
+          "looping_analysis": {
+            "detected": true,
+            "sentence_repetition_ratio": 0.833,
+            "ngram_repetition_ratio": 0.871,
+            "unique_sentences": 2,
+            "total_sentences": 12
+          }
+        },
+        {
+          "id": "case_7",
+          "category": "계약서→핵심조항",
+          "output_sha256": "37a22458689431c13b34ff0fc4cdbb89aba241c375a8e5e1d13b2bbbaf19e519",
+          "output_length_chars": 491,
+          "output_chars": 491,
+          "duration_seconds": 11.43,
+          "looping_analysis": {
+            "detected": true,
+            "sentence_repetition_ratio": 0.4,
+            "ngram_repetition_ratio": 0.472,
+            "unique_sentences": 6,
+            "total_sentences": 10
+          }
+        },
+        {
+          "id": "case_8",
+          "category": "이메일→공식문서",
+          "output_sha256": "5df2be871b5a8fbfc739066d9da5c008e70f08fe3163a20c48dbbf86d9befc89",
+          "output_length_chars": 423,
+          "output_chars": 423,
+          "duration_seconds": 11.45,
+          "looping_analysis": {
+            "detected": true,
+            "sentence_repetition_ratio": 0.6,
+            "ngram_repetition_ratio": 0.678,
+            "unique_sentences": 6,
+            "total_sentences": 15
+          }
+        },
+        {
+          "id": "case_9",
+          "category": "매뉴얼→사용자가이드",
+          "output_sha256": "ea30dc1bb1a4a3f37caf3176a7833fb987b6e62ced764f9d2be1bd802c09e8c4",
+          "output_length_chars": 566,
+          "output_chars": 566,
+          "duration_seconds": 10.87,
+          "looping_analysis": {
+            "detected": true,
+            "sentence_repetition_ratio": 0.2,
+            "ngram_repetition_ratio": 0.547,
+            "unique_sentences": 8,
+            "total_sentences": 10
+          }
+        },
+        {
+          "id": "case_10",
+          "category": "정책→직원안내",
+          "output_sha256": "7a63043e95c430c5e1d73addd92fe22d08aaed8ee2093829441e28dadba2ccd1",
+          "output_length_chars": 455,
+          "output_chars": 455,
+          "duration_seconds": 10.98,
+          "looping_analysis": {
+            "detected": true,
+            "sentence_repetition_ratio": 0.455,
+            "ngram_repetition_ratio": 0.698,
+            "unique_sentences": 6,
+            "total_sentences": 11
+          }
+        }
+      ],
+      "avg_duration_s": 11.33,
+      "avg_output_chars": 452,
+      "looping_count": 7,
+      "looping_rate": 0.7
+    },
+    "v1_rep_pen_1.2": {
+      "config": {
+        "do_sample": false,
+        "max_new_tokens": 300,
+        "repetition_penalty": 1.2,
+        "pad_token_id": 151643
+      },
+      "results": [
+        {
+          "id": "case_1",
+          "category": "보고서→임원요약",
+          "output_sha256": "c8ae4a3fd2e2013096268980bedc658cf7bee9a661186e9ed3f4cdf0640c61eb",
+          "output_length_chars": 452,
+          "output_chars": 452,
+          "duration_seconds": 13.72,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 5,
+            "total_sentences": 5
+          }
+        },
+        {
+          "id": "case_2",
+          "category": "긴자료→짧은요약",
+          "output_sha256": "41230272483919e926ff6f23718c963ca4c05bf237725ca48d8aae34bc7382e5",
+          "output_length_chars": 516,
+          "output_chars": 516,
+          "duration_seconds": 11.97,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.068,
+            "unique_sentences": 7,
+            "total_sentences": 7
+          }
+        },
+        {
+          "id": "case_3",
+          "category": "회의록→정식보고서",
+          "output_sha256": "a4728e5264cebc4beb001eec6df174f19e91c31a78c46ff6a2fa500503cdf3e2",
+          "output_length_chars": 495,
+          "output_chars": 495,
+          "duration_seconds": 11.14,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.034,
+            "unique_sentences": 9,
+            "total_sentences": 9
+          }
+        },
+        {
+          "id": "case_4",
+          "category": "이전보고서→새초안",
+          "output_sha256": "4695cb1dad192100673bc202d0950452b62bf9b04c32858ca0f56daff0ee4383",
+          "output_length_chars": 454,
+          "output_chars": 454,
+          "duration_seconds": 11.49,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 18,
+            "total_sentences": 18
+          }
+        },
+        {
+          "id": "case_5",
+          "category": "기술문서→핵심정리",
+          "output_sha256": "42c3a10e0c780d3a620bd14851e349eba9adcc1d8d058ac41b2865e092c78000",
+          "output_length_chars": 543,
+          "output_chars": 543,
+          "duration_seconds": 11.58,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 11,
+            "total_sentences": 11
+          }
+        },
+        {
+          "id": "case_6",
+          "category": "뉴스→제목",
+          "output_sha256": "098330f7d9ed51b27ca3cba1450afcbeb7e0004cc3f2662cc0b29390fb3031ac",
+          "output_length_chars": 495,
+          "output_chars": 495,
+          "duration_seconds": 11.53,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 8,
+            "total_sentences": 8
+          }
+        },
+        {
+          "id": "case_7",
+          "category": "계약서→핵심조항",
+          "output_sha256": "87dcd1fb444470257a53af1e6be3863bb4c9735cb7ee250741ae5310d154a53a",
+          "output_length_chars": 546,
+          "output_chars": 546,
+          "duration_seconds": 10.97,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.008,
+            "unique_sentences": 14,
+            "total_sentences": 14
+          }
+        },
+        {
+          "id": "case_8",
+          "category": "이메일→공식문서",
+          "output_sha256": "ead120f08e3e1738b21fb381b493d09f539145abdaa9be7641bef31367d5b416",
+          "output_length_chars": 556,
+          "output_chars": 556,
+          "duration_seconds": 10.97,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 11,
+            "total_sentences": 11
+          }
+        },
+        {
+          "id": "case_9",
+          "category": "매뉴얼→사용자가이드",
+          "output_sha256": "f377824545fe7b3bde2b3a888c09ea3d7a948529556bc87a2b074c8dd1b130fd",
+          "output_length_chars": 479,
+          "output_chars": 479,
+          "duration_seconds": 11.01,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.111,
+            "ngram_repetition_ratio": 0.081,
+            "unique_sentences": 8,
+            "total_sentences": 9
+          }
+        },
+        {
+          "id": "case_10",
+          "category": "정책→직원안내",
+          "output_sha256": "7c40d5febd64b78e77c1d2d921d4014fd6cd515caabea7604a3fa631bbe6539a",
+          "output_length_chars": 557,
+          "output_chars": 557,
+          "duration_seconds": 11.15,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 7,
+            "total_sentences": 7
+          }
+        }
+      ],
+      "avg_duration_s": 11.55,
+      "avg_output_chars": 509,
+      "looping_count": 0,
+      "looping_rate": 0.0
+    },
+    "v2_rep_pen_1.3_ngram_3": {
+      "config": {
+        "do_sample": false,
+        "max_new_tokens": 300,
+        "repetition_penalty": 1.3,
+        "no_repeat_ngram_size": 3,
+        "pad_token_id": 151643
+      },
+      "results": [
+        {
+          "id": "case_1",
+          "category": "보고서→임원요약",
+          "output_sha256": "2d508926cc0981019da798029a6bec710b962242f8b8ac974daa8caa2a598857",
+          "output_length_chars": 572,
+          "output_chars": 572,
+          "duration_seconds": 11.94,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 11,
+            "total_sentences": 11
+          }
+        },
+        {
+          "id": "case_2",
+          "category": "긴자료→짧은요약",
+          "output_sha256": "f31146bb9789b9db7d5a8542cdf948d18f447d3fa323021c24c9415420bb1ced",
+          "output_length_chars": 544,
+          "output_chars": 544,
+          "duration_seconds": 11.69,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 8,
+            "total_sentences": 8
+          }
+        },
+        {
+          "id": "case_3",
+          "category": "회의록→정식보고서",
+          "output_sha256": "0dd55b8f1e5a746d3fe394866ed0fd7997005a2d90a89ca171b177a2fe0f4205",
+          "output_length_chars": 516,
+          "output_chars": 516,
+          "duration_seconds": 11.72,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 9,
+            "total_sentences": 9
+          }
+        },
+        {
+          "id": "case_4",
+          "category": "이전보고서→새초안",
+          "output_sha256": "7d65f80a7b0cbe8a649e20d401e1afcd8956352fe4201a393049a2733ec0cca6",
+          "output_length_chars": 492,
+          "output_chars": 492,
+          "duration_seconds": 11.77,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 9,
+            "total_sentences": 9
+          }
+        },
+        {
+          "id": "case_5",
+          "category": "기술문서→핵심정리",
+          "output_sha256": "d66ed209b6d7173f60327e1b4c3b1572b6feef5d3c317523841cbe370e04717b",
+          "output_length_chars": 518,
+          "output_chars": 518,
+          "duration_seconds": 11.78,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 8,
+            "total_sentences": 8
+          }
+        },
+        {
+          "id": "case_6",
+          "category": "뉴스→제목",
+          "output_sha256": "1d10ea7f96820195722a08f283a4b47fb226a6bc259e8293d4a0286218dbd02c",
+          "output_length_chars": 463,
+          "output_chars": 463,
+          "duration_seconds": 11.21,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 6,
+            "total_sentences": 6
+          }
+        },
+        {
+          "id": "case_7",
+          "category": "계약서→핵심조항",
+          "output_sha256": "fc0c8dabc78becf0c7103290e1a336e4cfe828c3df86840a2a7a1b6368c5d3b6",
+          "output_length_chars": 609,
+          "output_chars": 609,
+          "duration_seconds": 11.32,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 17,
+            "total_sentences": 17
+          }
+        },
+        {
+          "id": "case_8",
+          "category": "이메일→공식문서",
+          "output_sha256": "6a1165646a16a978b98bb541f2a24228d6e28f092b16198a7245571212f2850e",
+          "output_length_chars": 531,
+          "output_chars": 531,
+          "duration_seconds": 11.35,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 11,
+            "total_sentences": 11
+          }
+        },
+        {
+          "id": "case_9",
+          "category": "매뉴얼→사용자가이드",
+          "output_sha256": "3a70fd8cb2f7101d7b15b6f41f389a8580318af453d418bc6f7726c93c3f8a24",
+          "output_length_chars": 561,
+          "output_chars": 561,
+          "duration_seconds": 11.44,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 15,
+            "total_sentences": 15
+          }
+        },
+        {
+          "id": "case_10",
+          "category": "정책→직원안내",
+          "output_sha256": "cf7da58af2056c2d245cffa94ba461c18956d6652e4f4d966e0a476341eacb00",
+          "output_length_chars": 485,
+          "output_chars": 485,
+          "duration_seconds": 11.5,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 11,
+            "total_sentences": 11
+          }
+        }
+      ],
+      "avg_duration_s": 11.57,
+      "avg_output_chars": 529,
+      "looping_count": 0,
+      "looping_rate": 0.0
+    },
+    "v3_sampling": {
+      "config": {
+        "do_sample": true,
+        "max_new_tokens": 300,
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "repetition_penalty": 1.15,
+        "pad_token_id": 151643
+      },
+      "results": [
+        {
+          "id": "case_1",
+          "category": "보고서→임원요약",
+          "output_sha256": "2f319e03d8a7f22e0f60a9d9b1ccd5dcd342597b44e6f6538ccd3e78ee20f573",
+          "output_length_chars": 435,
+          "output_chars": 435,
+          "duration_seconds": 15.0,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 5,
+            "total_sentences": 5
+          }
+        },
+        {
+          "id": "case_2",
+          "category": "긴자료→짧은요약",
+          "output_sha256": "66f55417e8a48c46eeae42d998e5b49ed07623a8536f74222852fa7f5778b0e3",
+          "output_length_chars": 470,
+          "output_chars": 470,
+          "duration_seconds": 12.34,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.03,
+            "unique_sentences": 8,
+            "total_sentences": 8
+          }
+        },
+        {
+          "id": "case_3",
+          "category": "회의록→정식보고서",
+          "output_sha256": "8f48e3a4fa9142a204bbe911384cd92a9e279a3dfe69ac49043c007c2a824e4a",
+          "output_length_chars": 492,
+          "output_chars": 492,
+          "duration_seconds": 12.73,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.009,
+            "unique_sentences": 9,
+            "total_sentences": 9
+          }
+        },
+        {
+          "id": "case_4",
+          "category": "이전보고서→새초안",
+          "output_sha256": "de73d3fdfbee314ec764105b7550161ebdac072f284f1672ed0b49dddf38e060",
+          "output_length_chars": 421,
+          "output_chars": 421,
+          "duration_seconds": 11.98,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 12,
+            "total_sentences": 12
+          }
+        },
+        {
+          "id": "case_5",
+          "category": "기술문서→핵심정리",
+          "output_sha256": "32919afe2b433f1c7d8ae431e9ba56964fa9bf924a20422122727b56fabdeed6",
+          "output_length_chars": 511,
+          "output_chars": 511,
+          "duration_seconds": 11.83,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.044,
+            "unique_sentences": 9,
+            "total_sentences": 9
+          }
+        },
+        {
+          "id": "case_6",
+          "category": "뉴스→제목",
+          "output_sha256": "5bb7cc73fbd265d184afc887447f126cc89570d54d1ec408635d843271f4b744",
+          "output_length_chars": 456,
+          "output_chars": 456,
+          "duration_seconds": 11.98,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 7,
+            "total_sentences": 7
+          }
+        },
+        {
+          "id": "case_7",
+          "category": "계약서→핵심조항",
+          "output_sha256": "e3c0e233d6e68db171f73873de83ce6a00f8f5c06aac0a40fe15e945b2f1b652",
+          "output_length_chars": 500,
+          "output_chars": 500,
+          "duration_seconds": 12.22,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 10,
+            "total_sentences": 10
+          }
+        },
+        {
+          "id": "case_8",
+          "category": "이메일→공식문서",
+          "output_sha256": "5352eec1df0841891603b4ee6f4c3cb93164938ed5a6665a160bcb9230bda980",
+          "output_length_chars": 446,
+          "output_chars": 446,
+          "duration_seconds": 12.08,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 7,
+            "total_sentences": 7
+          }
+        },
+        {
+          "id": "case_9",
+          "category": "매뉴얼→사용자가이드",
+          "output_sha256": "13e4f67085ca091f07ba9f43a8fcf19b8fc09c15d5c3348217c38e49dfc30646",
+          "output_length_chars": 538,
+          "output_chars": 538,
+          "duration_seconds": 12.2,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 10,
+            "total_sentences": 10
+          }
+        },
+        {
+          "id": "case_10",
+          "category": "정책→직원안내",
+          "output_sha256": "74deb49115a5dde9d5f4d831753cdbcb1b341cb64ccd4b4f96531fcda9033371",
+          "output_length_chars": 530,
+          "output_chars": 530,
+          "duration_seconds": 12.23,
+          "looping_analysis": {
+            "detected": false,
+            "sentence_repetition_ratio": 0.0,
+            "ngram_repetition_ratio": 0.0,
+            "unique_sentences": 7,
+            "total_sentences": 7
+          }
+        }
+      ],
+      "avg_duration_s": 12.46,
+      "avg_output_chars": 480,
+      "looping_count": 0,
+      "looping_rate": 0.0
+    }
+  },
+  "limitations": [
+    "반복 looping 자동 탐지 = heuristic",
+    "환각(외삽) 별도 탐지 안 함 (수동 검토 의무)",
+    "10건만 평가 = 통계 한계",
+    "MacBook MPS fp16 (학습 bf16과 차이)",
+    "v3_sampling = seed 42 고정했으나 sampling 재현성 부분 한계"
+  ]
+}

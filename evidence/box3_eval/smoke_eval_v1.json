@@ -1,0 +1,281 @@
+{
+  "schema_version": "box3.eval.v1",
+  "measured_at": "2026-05-28T14:53:44.284731",
+  "box_id": "box3-4",
+  "box_title": "알고리즘 평가 (smoke 모델 실제 능력 검증)",
+  "evaluated_adapter_sha": "4d86414ddf74b048d6db011659e4227641257ad0d931faab690dcddeea58cf74",
+  "baseline_chain": [
+    "Qwen3-1.7B",
+    "butler_v3",
+    "tool_call"
+  ],
+  "smoke_chain": [
+    "Qwen3-1.7B",
+    "butler_v3",
+    "tool_call",
+    "box3_smoke"
+  ],
+  "device": "mps",
+  "dtype": "float16",
+  "eval_set_size": 10,
+  "eval_set": [
+    {
+      "id": "case_1",
+      "category": "보고서→임원요약",
+      "input_sha256": "e47fa6b273965b3f6461473f1979b0067885c4d027dc5aae0f9aab075782aecf",
+      "input_length_chars": 216,
+      "prompt_template": "다음 보고서를 임원 보고용으로 3문장 요약하세요\n\n{input}"
+    },
+    {
+      "id": "case_2",
+      "category": "긴자료→짧은요약",
+      "input_sha256": "48389f56911b856393027e5374862f65f006c7deaf63aa82fbd311105d7c3f08",
+      "input_length_chars": 150,
+      "prompt_template": "다음 자료를 1문장으로 요약하세요\n\n{input}"
+    },
+    {
+      "id": "case_3",
+      "category": "회의록→정식보고서",
+      "input_sha256": "c0134788ac7dbcaba84cc2099970524d25194642b106b74f3bae2f398b5b232d",
+      "input_length_chars": 131,
+      "prompt_template": "다음 회의록을 정식 회의 결과 보고서로 작성하세요\n\n{input}"
+    },
+    {
+      "id": "case_4",
+      "category": "이전보고서→새초안",
+      "input_sha256": "ea72c565be23db7bbf35deec74505f58ba8d8fdc744bd7668382926886e3a33b",
+      "input_length_chars": 69,
+      "prompt_template": "다음 영업 보고서를 참고하여 2분기 영업 계획 초안을 작성하세요\n\n{input}"
+    },
+    {
+      "id": "case_5",
+      "category": "기술문서→핵심정리",
+      "input_sha256": "2fdfe7466592a61b15ba28da34278d98dcbee0968f7fe6db4013c2e801496459",
+      "input_length_chars": 119,
+      "prompt_template": "다음 기술 문서의 핵심을 3가지로 정리하세요\n\n{input}"
+    },
+    {
+      "id": "case_6",
+      "category": "뉴스→제목",
+      "input_sha256": "029890ab4e954e4fb859d0cba978fe127413999eef52271312005b4df2ac11f6",
+      "input_length_chars": 98,
+      "prompt_template": "다음 뉴스에 적합한 제목을 작성하세요\n\n{input}"
+    },
+    {
+      "id": "case_7",
+      "category": "계약서→핵심조항",
+      "input_sha256": "796a1474645c4fe09ec04339a97e23aebb1a6f860db197c917f2ce919286366a",
+      "input_length_chars": 143,
+      "prompt_template": "다음 계약서의 핵심 조항을 정리하세요\n\n{input}"
+    },
+    {
+      "id": "case_8",
+      "category": "이메일→공식문서",
+      "input_sha256": "c040db8713b29a24de8c2a492fec44ed0315b724eb73aa9071fcc6a204af2713",
+      "input_length_chars": 100,
+      "prompt_template": "다음 이메일을 공식 안내문으로 작성하세요\n\n{input}"
+    },
+    {
+      "id": "case_9",
+      "category": "매뉴얼→사용자가이드",
+      "input_sha256": "7ee72946288bad6973a33519773cfb505f194401f40f2d2cf29d66e14f775f0c",
+      "input_length_chars": 89,
+      "prompt_template": "다음 매뉴얼을 신규 사용자용 빠른 시작 가이드로 작성하세요\n\n{input}"
+    },
+    {
+      "id": "case_10",
+      "category": "정책→직원안내",
+      "input_sha256": "1d49e5621b23e77f7eb8a45ace4a98f47df1dd4ccc5682102340853a922d772e",
+      "input_length_chars": 103,
+      "prompt_template": "다음 보안 정책을 직원이 이해하기 쉬운 안내문으로 작성하세요\n\n{input}"
+    }
+  ],
+  "baseline_results": [
+    {
+      "id": "case_1",
+      "category": "보고서→임원요약",
+      "output_sha256": "ae15ca350c6f287c686267c5443c0b897364ebe85b106f1bc548317ab0d7be88",
+      "output_length_chars": 455,
+      "output_chars": 455,
+      "duration_seconds": 16.01
+    },
+    {
+      "id": "case_2",
+      "category": "긴자료→짧은요약",
+      "output_sha256": "e54cf65c90d3f390269d08dd0da8d78873ecc03b66c1f557bfeb81f91b75d290",
+      "output_length_chars": 425,
+      "output_chars": 425,
+      "duration_seconds": 11.78
+    },
+    {
+      "id": "case_3",
+      "category": "회의록→정식보고서",
+      "output_sha256": "846f432408ada649dd840d1832788f77075684badd9708ac25dc01cbab4e3d1e",
+      "output_length_chars": 343,
+      "output_chars": 343,
+      "duration_seconds": 11.4
+    },
+    {
+      "id": "case_4",
+      "category": "이전보고서→새초안",
+      "output_sha256": "5e96a5cb0db2ff763d1413ed59e56077c6df218046977d8c28d7b8a3a17a42d2",
+      "output_length_chars": 352,
+      "output_chars": 352,
+      "duration_seconds": 11.64
+    },
+    {
+      "id": "case_5",
+      "category": "기술문서→핵심정리",
+      "output_sha256": "a6a8a0f403fdfd096703ffd24d46328972d552973956c23cf3cb47f88ffcc876",
+      "output_length_chars": 434,
+      "output_chars": 434,
+      "duration_seconds": 10.96
+    },
+    {
+      "id": "case_6",
+      "category": "뉴스→제목",
+      "output_sha256": "b8961b6ad591e54c3678bdf112fe8ede381226e4a7e70ba3d0d4b0f56cef7101",
+      "output_length_chars": 426,
+      "output_chars": 426,
+      "duration_seconds": 11.17
+    },
+    {
+      "id": "case_7",
+      "category": "계약서→핵심조항",
+      "output_sha256": "8a0f5f2551b7513ed1aaaea3393fbd981a88470f8727768a216ebef885ab8f2e",
+      "output_length_chars": 374,
+      "output_chars": 374,
+      "duration_seconds": 11.28
+    },
+    {
+      "id": "case_8",
+      "category": "이메일→공식문서",
+      "output_sha256": "ecd387242def62d18a252367db62095945ab6cd2df6fe7dc163e3413033d7df2",
+      "output_length_chars": 804,
+      "output_chars": 804,
+      "duration_seconds": 11.4
+    },
+    {
+      "id": "case_9",
+      "category": "매뉴얼→사용자가이드",
+      "output_sha256": "48508d4c65fe84663b4a15403353f1b07cd2d12de106178db919d89050ae76ae",
+      "output_length_chars": 521,
+      "output_chars": 521,
+      "duration_seconds": 10.93
+    },
+    {
+      "id": "case_10",
+      "category": "정책→직원안내",
+      "output_sha256": "3f7f09b134a19054f600cb10dfae3abec36e82f7f352c416d65648d32e5e6a51",
+      "output_length_chars": 452,
+      "output_chars": 452,
+      "duration_seconds": 10.88
+    }
+  ],
+  "smoke_results": [
+    {
+      "id": "case_1",
+      "category": "보고서→임원요약",
+      "output_sha256": "1f338c9d56455548c1d5622f6ea2370b71014e06beef50ed96d18160bb8e009b",
+      "output_length_chars": 426,
+      "output_chars": 426,
+      "duration_seconds": 12.42
+    },
+    {
+      "id": "case_2",
+      "category": "긴자료→짧은요약",
+      "output_sha256": "0e475cfd3cbecb13f1221f4646951a8de77a83e0ef2bbb39c1f7529a9fcd572a",
+      "output_length_chars": 576,
+      "output_chars": 576,
+      "duration_seconds": 11.59
+    },
+    {
+      "id": "case_3",
+      "category": "회의록→정식보고서",
+      "output_sha256": "36389fbbef367cf595a61d86db11d7bb59228cd52208d2d8531c27411abd3541",
+      "output_length_chars": 423,
+      "output_chars": 423,
+      "duration_seconds": 11.36
+    },
+    {
+      "id": "case_4",
+      "category": "이전보고서→새초안",
+      "output_sha256": "f10521588c37d39e3e7cc4e3c447a5b9369d9e01a1fd16bc814c34fe0ab279fc",
+      "output_length_chars": 356,
+      "output_chars": 356,
+      "duration_seconds": 11.16
+    },
+    {
+      "id": "case_5",
+      "category": "기술문서→핵심정리",
+      "output_sha256": "2c62c12da6406223f9f13876922d888476a38de7b26a654a9dfc75725ac838ff",
+      "output_length_chars": 432,
+      "output_chars": 432,
+      "duration_seconds": 11.07
+    },
+    {
+      "id": "case_6",
+      "category": "뉴스→제목",
+      "output_sha256": "16232cf9bb8f8f168b653df3008037d4cdc3f54de6dd041aa26debf91297acd5",
+      "output_length_chars": 372,
+      "output_chars": 372,
+      "duration_seconds": 11.21
+    },
+    {
+      "id": "case_7",
+      "category": "계약서→핵심조항",
+      "output_sha256": "37a22458689431c13b34ff0fc4cdbb89aba241c375a8e5e1d13b2bbbaf19e519",
+      "output_length_chars": 491,
+      "output_chars": 491,
+      "duration_seconds": 11.47
+    },
+    {
+      "id": "case_8",
+      "category": "이메일→공식문서",
+      "output_sha256": "5df2be871b5a8fbfc739066d9da5c008e70f08fe3163a20c48dbbf86d9befc89",
+      "output_length_chars": 423,
+      "output_chars": 423,
+      "duration_seconds": 11.45
+    },
+    {
+      "id": "case_9",
+      "category": "매뉴얼→사용자가이드",
+      "output_sha256": "ea30dc1bb1a4a3f37caf3176a7833fb987b6e62ced764f9d2be1bd802c09e8c4",
+      "output_length_chars": 566,
+      "output_chars": 566,
+      "duration_seconds": 10.84
+    },
+    {
+      "id": "case_10",
+      "category": "정책→직원안내",
+      "output_sha256": "7a63043e95c430c5e1d73addd92fe22d08aaed8ee2093829441e28dadba2ccd1",
+      "output_length_chars": 455,
+      "output_chars": 455,
+      "duration_seconds": 11.02
+    }
+  ],
+  "metrics": {
+    "baseline_avg_duration_s": 11.74,
+    "smoke_avg_duration_s": 11.36,
+    "baseline_avg_output_chars": 459,
+    "smoke_avg_output_chars": 452
+  },
+  "qualitative_findings": {
+    "baseline_3stage": "tool_call 어댑터가 dominant → 박스 3 작업 미수행. 출력이 tool_call/evidence schema 오염 ([질문]/[지시]/<card:tool_call>/JSON 조각) + 환각 (입력에 없는 수치 생성: '글로벌무역 영업이익 109억원', '30억원 투자' 등). 10건 중 약 6건이 작업 무관 schema 출력",
+    "smoke_4stage": "box3_smoke 어댑터가 박스 3 작업으로 행동 전환 성공. 회의록→보고서(case_3), 영업보고→2분기초안(case_4), 계약서→핵심조항(case_7), 이메일→공식문서(case_8), 매뉴얼→가이드(case_9), 정책→안내문(case_10) 모두 요청 작업 실제 수행. 단 반복 looping 결함 존재 (case_2/5/6/8/10에서 동일 문장 다수 반복) + 일부 환각 (case_4 Q3/Q4 가짜 데이터 외삽)",
+    "verdict": "smoke >> baseline (박스 3 작업 적합도). box3_smoke 어댑터가 tool_call schema 오염을 덮고 본업 작업 수행. 단 production 미달 (반복 + 외삽 환각)"
+  },
+  "evaluation_method": "deterministic generation (do_sample=False, no repetition_penalty), 10 case eval set, baseline 3단 vs smoke 4단 직접 비교",
+  "limitations": [
+    "자동 정량 metric (BLEU/ROUGE) = 한국어 적합 안함",
+    "정성 평가 = 본 evidence 기반 수동 검토 (보강 61)",
+    "10건만 평가 = 통계적 유의성 한계",
+    "MacBook MPS = bf16 미지원, fp16 사용 (학습 bf16과 차이 가능성)",
+    "do_sample=False + repetition_penalty 미적용 → 반복 looping 증폭 가능성 (추론 설정 요인 분리 필요)"
+  ],
+  "next_step_recommendation": {
+    "decision": "(b) 본격 학습 진행 권고",
+    "rationale": "smoke가 접근법 검증 성공 (box3_smoke가 tool_call 오염을 덮고 박스 3 작업 수행). 단 1 epoch / 50K 쌍 / smoke 규모로는 production 미달 (반복+외삽). 본격 학습 (1+3+4순위 데이터 통합 + epoch 증가 + repetition 완화) 필요",
+    "inference_config_followup": "본격 평가 시 repetition_penalty=1.2~1.3 + no_repeat_ngram_size 적용하여 반복 looping 요인 분리 검증 의무"
+  }
+}
