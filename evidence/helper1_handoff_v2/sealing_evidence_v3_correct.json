@@ -1,0 +1,122 @@
+{
+  "schema_version": "helper1.full_handoff_sealing.v3",
+  "sealed_at": "2026-05-28T17:23:28.305621",
+  "sealed_by": "총괄기획팀 (본 채팅) + Claude Code (MacBook 검증)",
+  "handoff_source": "기술개발 마스터팀 (그룹 A)",
+  "handoff_date": "2026-05-28",
+  "handoff_zip_name": "도우미1_기억.zip",
+  "handoff_folder_actual": "~/Desktop/도우미폴더/넘겨줄도우미모델/도우미1_기억/",
+  "previous_incorrect_handoff": "helper1_v1_mvp_search_only_evidence_codex.zip (잘못 전달된 본문, 폐기 의무)",
+  "status_primary": "HELPER1_V1_FULL_HANDOFF_SEALED",
+  "verification_method": "총괄기획팀 측정 7파일 SHA를 Claude Code가 MacBook 실측으로 7/7 정합 검증",
+  "essential_nature": "(주)에이티링크 사내 문서 100건 기반 RAG 검색·답변 시스템",
+  "functions": {
+    "find": "검색만 (top_k=5)",
+    "ask": "RAG 답변 생성 (butler-1.7b-v4-rt-q4_k_m.gguf, llama_cpp 0.3.21)"
+  },
+  "pipeline": [
+    "BGE-M3 Dense top-100",
+    "BM25 top-100",
+    "RRF fusion top-30",
+    "BGE-reranker (weights 미다운로드 → 스킵)",
+    "butler-1.7b-v4-rt RAG 답변"
+  ],
+  "essential_assets": {
+    "BGE-M3": "/private/tmp/bge_m3_combined",
+    "butler_gguf": "/Volumes/T7 Shield/학습모델/butler-1.7b-v4-rt/butler-1.7b-v4-rt-q4_k_m.gguf",
+    "chunks_v2": "~/Desktop/기억도우미/runtime/private/helper1_chunks_v2.local.jsonl",
+    "embeddings": "~/Desktop/기억도우미/runtime/private/helper1_embeddings_v2.npy",
+    "bm25": "~/Desktop/기억도우미/runtime/private/helper1_bm25_v2.pkl"
+  },
+  "index_stats": {
+    "chunks": 1295,
+    "documents": 100,
+    "max_chars_per_chunk": 1800,
+    "embedding_shape": "1295x1024 (BGE-M3)",
+    "bm25_vocab": 6825,
+    "missing_chunks_due_to_no_mecab": 59
+  },
+  "stage_progress": {
+    "Stage_1_chunking": "1295 chunks / 100 docs (heading-aware recursive v1.1)",
+    "Stage_2_embedding": "BGE-M3 1295x1024 + BM25 vocab 6825 (319s)",
+    "Stage_3_find_sdk": "Dense->BM25->RRF 구현 완료",
+    "Stage_4_rag": "butler-1.7b-v4-rt-q4_k_m llama_cpp 0.3.21 로드 완료",
+    "Stage_5_smoke": "handoff_log PASS 3/3 vs smoke_result.json 2/3 (overall_pass=false) 불일치 정직 표명",
+    "Stage_6_packaging": "인계 폴더 + ZIP 완료"
+  },
+  "smoke_inconsistency_disclosure": {
+    "handoff_log_claim": "PASS 3/3 (p50=13s, p95=16s)",
+    "smoke_result_actual": "pass_count=2, overall_pass=false, p50=8098.6ms, p95=11630.9ms",
+    "resolution_required": "그룹 A 측 정합 표명 의무"
+  },
+  "file_sha_manifest_verified": [
+    {
+      "path": "인계서.md",
+      "sha256": "fd201fd63c7aa2dc3974edd9346d0be9fd23612bcd3370a9453cca958e5ce7d0",
+      "size_bytes": 1704
+    },
+    {
+      "path": "봉인/handoff_log.md",
+      "sha256": "66c82ca71dd0bb0cc338183f4e44bb2c7cecb1421c76da01f1b5f8b4582b0277",
+      "size_bytes": 1738
+    },
+    {
+      "path": "sdk/requirements.txt",
+      "sha256": "9fb36c44e3287a7361a8d4f975a07a8c86251ce673736c44e57b2097e6b0a18c",
+      "size_bytes": 72
+    },
+    {
+      "path": "sdk/memory_helper.py",
+      "sha256": "de92f2c6e4f40a6857da346349f251b869c7d33bd17cc6d25cd3e619b1f344d3",
+      "size_bytes": 11095
+    },
+    {
+      "path": "빌드/build_index.py",
+      "sha256": "551bd938115c80715ea125ea9fa3b14794f1bc378df011105891aa3ed352ec49",
+      "size_bytes": 839
+    },
+    {
+      "path": "동작확인/smoke_test.py",
+      "sha256": "721fd764a4819d7b6165c3b7b00b29f137b7231d74cff9c5b779b8364b214ed5",
+      "size_bytes": 7158
+    },
+    {
+      "path": "동작확인/smoke_result.json",
+      "sha256": "d492cf5133fc4f97045e355eb2686d23969e8d72539fb8465fec256d7914a938",
+      "size_bytes": 3430
+    }
+  ],
+  "limitations": [
+    "BGE-reranker-v2-m3 weights 미설치 (huggingface-cli download 의무)",
+    "FAISS 미설치 (pip install faiss-cpu 의무)",
+    "LLM 답변 품질: butler-1.7b-v4-rt 프롬프트 형식 불일치로 반복 패턴 가능",
+    "production_claim_allowed: false (사내 beta)",
+    "MeCab 미설치 (59 missing chunks)"
+  ],
+  "forbidden_claims": [
+    "production ready",
+    "회사 전체 기억 AI 완성",
+    "BGE-reranker/FAISS 적용 완료",
+    "smoke 3/3 PASS 봉인"
+  ],
+  "required_disclosures": [
+    "production ready 아님",
+    "회사 전체 기억 AI 완성 아님",
+    "BGE-reranker/FAISS 적용 완료 아님",
+    "smoke 3/3 PASS 봉인 아님 (실측 2/3)"
+  ],
+  "butler_integration_guide": {
+    "calling_locations": "Butler 8박스 중 기억 검색/답변 호출 시 (박스 1, 3, 4, 6 우선)",
+    "integration_method": "Tauri sidecar 또는 FastAPI sidecar에서 sdk.memory_helper.find() + ask() 호출",
+    "asset_dependencies": "T7 외장하드 (butler GGUF) + ~/Desktop/기억도우미/runtime/private (인덱스 자산)"
+  },
+  "ai_hub_attribution": "본 모델/서비스는 AI Hub 데이터를 활용하여 개발되었습니다.",
+  "boundary_zero": {
+    "external_send_zero": true,
+    "raw_data_in_evidence_zero": true,
+    "binary_in_git_zero": true,
+    "production_claim_zero": true,
+    "py_in_git_zero": true,
+    "honest_full_disclosure": true
+  }
+}
