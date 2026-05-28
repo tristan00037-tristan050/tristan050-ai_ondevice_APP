@@ -290,12 +290,14 @@ if _FASTAPI_AVAILABLE:
                 )
         return await call_next(request)
 
-    # ── box2/box3 card router 등록 (separate route modules) ──
+    # ── box2/box3 card + helper1 router 등록 (separate route modules) ──
     from butler_pc_core.sidecar.routes.box2_rewrite import router as box2_rewrite_router
     from butler_pc_core.sidecar.routes.box3_draft import router as box3_draft_router
+    from butler_pc_core.sidecar.routes.helper1_search import router as helper1_search_router
 
     app.include_router(box2_rewrite_router)
     app.include_router(box3_draft_router)
+    app.include_router(helper1_search_router)
 
     # -----------------------------------------------------------------------
     # 모델
