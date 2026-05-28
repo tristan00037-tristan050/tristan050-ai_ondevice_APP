@@ -94,6 +94,12 @@
     "MeCab 미설치 (59 missing chunks)"
   ],
   "forbidden_claims": [
+    "production ready",
+    "회사 전체 기억 AI 완성",
+    "BGE-reranker/FAISS 적용 완료",
+    "smoke 3/3 PASS 봉인"
+  ],
+  "required_disclosures": [
     "production ready 아님",
     "회사 전체 기억 AI 완성 아님",
     "BGE-reranker/FAISS 적용 완료 아님",
