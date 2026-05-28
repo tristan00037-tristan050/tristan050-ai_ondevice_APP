@@ -1,0 +1,140 @@
+{
+  "schema_version": "box3.runpod_smoke_training.v1",
+  "measured_at": "2026-05-28T14:23:29.376911",
+  "main_head": "e3e345a2fdb9b31dc8bf559645a092ffe5ee0900",
+  "box_id": "box3-1prime7",
+  "box_title": "RunPod smoke 학습 (Qwen3-1.7B + 3단 적층 LoRA)",
+  "training_dataset": {
+    "name": "022.요약문",
+    "source": "AI Hub",
+    "pairs": 50000,
+    "tracks_used": [
+      "TL1",
+      "VL1"
+    ],
+    "tracks_excluded": [
+      "TS1",
+      "VS1 (Annotation 미보유)"
+    ],
+    "schema_mapping": {
+      "passage": "Meta(Refine).passage",
+      "summary": "Annotation.summary1 → summary2 → summary3"
+    }
+  },
+  "input_sha_chain": {
+    "tokenizer_sha": "399e0b4259680758d4f96b760c23339e9bf1ddf75d90ff345207ced8d74a55f3",
+    "tokenizer_files": [
+      "merges.txt",
+      "tokenizer.json",
+      "tokenizer_config.json",
+      "vocab.json"
+    ],
+    "input_jsonl_sha": "157fced94f9550ca31ed84abafdf854b688894f37f2e8da271273ec32b4aecf9",
+    "input_jsonl_lines": 50000,
+    "input_jsonl_size_mb": 124.3
+  },
+  "model_stack": {
+    "base_model": "Qwen3-1.7B",
+    "stack_chain": [
+      "Qwen3-1.7B",
+      "butler_v3 (freeze)",
+      "tool_call (freeze)",
+      "box3_smoke (train)"
+    ],
+    "frozen_adapters_sha": {
+      "butler_v3": "7b4d474cba6cf8113b1402a44a490f153e3beea031ba54827c2fae848b7b4b41",
+      "tool_call": "ad852bbb79aee63cc68750eac3ebe02de372d4eb9529659ae065490c78c933ca"
+    },
+    "box3_smoke_adapter_sha": "4d86414ddf74b048d6db011659e4227641257ad0d931faab690dcddeea58cf74",
+    "lora_config": {
+      "r": 16,
+      "lora_alpha": 32,
+      "dropout": 0.05,
+      "target_modules": [
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj"
+      ]
+    },
+    "trainable_params": 17432576,
+    "total_params": 1772872704,
+    "trainable_ratio_pct": 0.9833
+  },
+  "training_config": {
+    "epochs": 1,
+    "max_length": 4096,
+    "per_device_train_batch_size": 2,
+    "gradient_accumulation_steps": 8,
+    "effective_batch_size": 16,
+    "learning_rate": 0.0002,
+    "bf16": true,
+    "total_steps": 3125,
+    "save_steps": 1000,
+    "checkpoints_saved": [
+      "checkpoint-3000",
+      "checkpoint-3125"
+    ]
+  },
+  "training_runtime": {
+    "infrastructure": "RunPod Pod (Japan region)",
+    "template": "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
+    "torch_version": "2.4.1+cu124",
+    "gpu_provisioned": "H100 SXM x4",
+    "gpu_actually_used": "H100 SXM x1 (device_map='auto' + 1.7B fits in 1 GPU)",
+    "step_time_seconds": 1.39,
+    "total_time_minutes": 70,
+    "estimated_cost_usd_range": "15-17"
+  },
+  "byte_identical_verification": {
+    "macbook_box3_smoke_sha": "4d86414ddf74b048d6db011659e4227641257ad0d931faab690dcddeea58cf74",
+    "macbook_sha_verified_this_box": true,
+    "runpod_box3_smoke_sha_reported": "4d86414ddf74b048d6db011659e4227641257ad0d931faab690dcddeea58cf74",
+    "checkpoint_3125_vs_final_match": true,
+    "frozen_adapters_unchanged": true,
+    "note": "MacBook 측 SHA는 본 박스에서 직접 검증. RunPod 측 SHA는 직전 보고값 (인스턴스 terminated로 재검증 불가) — 두 값이 expected와 동일하므로 transitive 정합"
+  },
+  "local_storage": {
+    "macbook_path": "/Users/kimsunghoon/Desktop/butler-data/학습_결과/box3_smoke/box3_smoke_adapter",
+    "runpod_instance_terminated": true,
+    "t7_backup_skipped": "User decision - MacBook local only"
+  },
+  "honest_disclosures": [
+    "직전 '18.오피스 1순위' 봉인은 schema 검증 누락 결함. 정정: 022.요약문이 (passage → summary) 학습 쌍 형식 보유 = 박스 3 정합 1순위.",
+    "RunPod template PyTorch 2.4.0/CUDA 12.4.1 사용 — 메모리 봉인 'cu1281-torch280'와 약간 다르나 transformers 4.57.6 호환 정합.",
+    "smoke 학습은 검증 단계 — 본격 학습은 별도 박스 진행 의무."
+  ],
+  "next_steps": [
+    "box3_smoke → Butler chain 통합 평가 (박스 3-4 알고리즘 평가팀)",
+    "본격 토크나이징 박스 3-1prime8",
+    "본격 학습 박스 3-1prime9 (H100 SXM x4 데이터 병렬)",
+    "박스 3-2 메인개발팀 UI",
+    "박스 3-3 sidecar (/v1/cards/3/draft)",
+    "박스 3-5~3-9 evidence/PR/재검토/머지/sync"
+  ],
+  "boundary_zero": {
+    "external_send_zero": true,
+    "raw_in_evidence_zero": true,
+    "git_added_zero_for_binary": true,
+    "raw_data_quoted_zero": true
+  },
+  "training_metadata_from_script": {
+    "smoke_completed": true,
+    "input_jsonl_sha": "157fced94f9550ca31ed84abafdf854b688894f37f2e8da271273ec32b4aecf9",
+    "input_pairs": 50000,
+    "epochs": 1,
+    "max_length": 4096,
+    "trainable_params": 17432576,
+    "total_params": 1772872704,
+    "model_chain": [
+      "Qwen3-1.7B",
+      "butler_v3",
+      "tool_call",
+      "box3_smoke"
+    ]
+  },
+  "final_adapter_size_mb": 66.5
+}
