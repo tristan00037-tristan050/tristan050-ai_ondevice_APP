@@ -58,9 +58,12 @@ def _sdk_present() -> bool:
 
 
 def integration_mode() -> str:
-    if not _sdk_present():
-        return "blocked"
-    if not _assets_present():
+    # Codex P2 #1 (2026-05-27): SDK 부재(memory_helper.py 없음)에 "blocked"를
+    # 반환하면 핸들러가 `if mode == "real"` 분기만 가져 fall through → HTTP 200 +
+    # empty/stub을 반환했고, "blocked"는 endpoint contract(real/contract_only)
+    # 밖이었다. SDK 부재를 honest fail-safe인 contract_only로 매핑해 응답이
+    # real_validation_done=false로 명시되게 한다(stub을 real처럼 위장하지 않음).
+    if not _sdk_present() or not _assets_present():
         return "contract_only"
     return "real"
 
@@ -102,19 +105,32 @@ async def helper1_search(payload: Helper1Query, request: Request) -> dict[str, A
     start = time.time()
     results: list[dict[str, Any]] = []
     real_validation_done = False
+    sdk_import_failure: dict[str, str] | None = None
 
     if mode == "real":
-        mh = _load_memory_helper()
-        raw_results = mh.find(payload.query, top_k=payload.top_k)
-        for item in raw_results:
-            results.append({
-                "chunk_id": item.get("chunk_id") or item.get("id"),
-                "score": item.get("score"),
-                "source_digest": _source_digest_for(item),
-            })
-        real_validation_done = True
+        try:
+            mh = _load_memory_helper()
+        except ImportError as exc:
+            # Codex P2 #2 (2026-05-27): SDK 파일은 있으나 로컬 의존성 결손으로
+            # import가 raise하면 HTTP 500으로 endpoint가 unusable이던 것을, 약속된
+            # contract-only로 자동 downgrade. raw 메시지 노출 0 — error_class +
+            # repr 기반 16자 digest만 (PR #755 no-raw-output 정합).
+            mode = "contract_only"
+            sdk_import_failure = {
+                "error_class": exc.__class__.__name__,
+                "error_digest": hashlib.sha256(repr(exc).encode("utf-8")).hexdigest()[:16],
+            }
+        else:
+            raw_results = mh.find(payload.query, top_k=payload.top_k)
+            for item in raw_results:
+                results.append({
+                    "chunk_id": item.get("chunk_id") or item.get("id"),
+                    "score": item.get("score"),
+                    "source_digest": _source_digest_for(item),
+                })
+            real_validation_done = True
 
-    return {
+    response: dict[str, Any] = {
         "integration_mode": mode,
         "real_validation_done": real_validation_done,
         "results": results,
@@ -123,6 +139,9 @@ async def helper1_search(payload: Helper1Query, request: Request) -> dict[str, A
         "raw_text_logged": False,
         "audit": _audit(payload.query),
     }
+    if sdk_import_failure is not None:
+        response["sdk_import_failure"] = sdk_import_failure
+    return response
 
 
 @router.post("/v1/helpers/1/ask")
@@ -135,20 +154,32 @@ async def helper1_ask(payload: Helper1Query, request: Request) -> dict[str, Any]
     answer = CONTRACT_ONLY_ANSWER
     sources: list[dict[str, Any]] = []
     real_validation_done = False
+    sdk_import_failure: dict[str, str] | None = None
 
     if mode == "real":
-        mh = _load_memory_helper()
-        produced = mh.ask(payload.query)
-        answer = produced.get("answer", "")
-        for item in produced.get("sources", []) or []:
-            sources.append({
-                "chunk_id": item.get("chunk_id") or item.get("id"),
-                "score": item.get("score"),
-                "source_digest": _source_digest_for(item),
-            })
-        real_validation_done = True
+        try:
+            mh = _load_memory_helper()
+        except ImportError as exc:
+            # Codex P2 #2 (2026-05-27): SDK import 실패를 HTTP 500 대신 contract-only로
+            # 자동 downgrade. raw 메시지 노출 0 — error_class + repr 기반 16자 digest만.
+            mode = "contract_only"
+            answer = CONTRACT_ONLY_ANSWER
+            sdk_import_failure = {
+                "error_class": exc.__class__.__name__,
+                "error_digest": hashlib.sha256(repr(exc).encode("utf-8")).hexdigest()[:16],
+            }
+        else:
+            produced = mh.ask(payload.query)
+            answer = produced.get("answer", "")
+            for item in produced.get("sources", []) or []:
+                sources.append({
+                    "chunk_id": item.get("chunk_id") or item.get("id"),
+                    "score": item.get("score"),
+                    "source_digest": _source_digest_for(item),
+                })
+            real_validation_done = True
 
-    return {
+    response: dict[str, Any] = {
         "integration_mode": mode,
         "real_validation_done": real_validation_done,
         "answer": answer,
@@ -158,3 +189,6 @@ async def helper1_ask(payload: Helper1Query, request: Request) -> dict[str, Any]
         "raw_text_logged": False,
         "audit": _audit(payload.query),
     }
+    if sdk_import_failure is not None:
+        response["sdk_import_failure"] = sdk_import_failure
+    return response
