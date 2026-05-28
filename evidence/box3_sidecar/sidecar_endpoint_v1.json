@@ -1,0 +1,93 @@
+{
+  "schema_version": "box3.sidecar_endpoint.v1",
+  "measured_at": "2026-05-28T16:08:43.628762",
+  "box_id": "box3-3",
+  "box_title": "Butler sidecar /v1/cards/3/draft endpoint 통합",
+  "base_main_head": "166571f1069f92e8cced6dc8f1d44e9fc633a2d0",
+  "branch": "feat/box3-sidecar-v1",
+  "code_paths": {
+    "service": "butler_pc_core/cards/box3/draft_service.py",
+    "endpoint": "butler_pc_core/sidecar/routes/box3_draft.py",
+    "tests": [
+      "tests/cards/box3/test_box3_draft_service.py",
+      "tests/cards/box3/test_box3_draft_endpoint.py"
+    ]
+  },
+  "endpoint": "POST /v1/cards/3/draft",
+  "pattern_alignment": "box2_rewrite.py 표준 정합 (APIRouter + pydantic BaseModel + localhost guard + request_digest + boundary flags). 모델 추론은 contract-safe default + runner 주입 시 real (box2 패턴 동일)",
+  "request_schema": {
+    "input_text": "str (1..12000)",
+    "prompt_template": "str (1..2000)",
+    "max_new_tokens": "int (1..1024, default 300)"
+  },
+  "response_schema": [
+    "draft_text",
+    "duration_ms",
+    "model_chain",
+    "inference_config",
+    "contract_only",
+    "external_send_zero",
+    "raw_saved_zero",
+    "request_digest",
+    "sealed_sha",
+    "raw_doc_logged"
+  ],
+  "inference_config_enforced": {
+    "do_sample": false,
+    "max_new_tokens": 300,
+    "repetition_penalty": 1.2,
+    "no_repeat_ngram_size": 3,
+    "enforcement": "build_draft_inference_config()가 repetition_penalty를 1.2로 floor + no_repeat_ngram_size를 3으로 고정 (보강 63, caller override 불가)"
+  },
+  "model_chain_sha": {
+    "box3_smoke": "4d86414ddf74b048d6db011659e4227641257ad0d931faab690dcddeea58cf74",
+    "tool_call": "ad852bbb79aee63cc68750eac3ebe02de372d4eb9529659ae065490c78c933ca",
+    "butler_v3": "7b4d474cba6cf8113b1402a44a490f153e3beea031ba54827c2fae848b7b4b41"
+  },
+  "tests": {
+    "service_unit_tests": 6,
+    "endpoint_tests": 4,
+    "total_passed": 10,
+    "total_skipped_when_fastapi_absent": "endpoint 4건 (importorskip fastapi)",
+    "box2_regression": "65 passed / 2 skipped (영향 0)"
+  },
+  "integration_real_inference": {
+    "executed": true,
+    "contract_only": false,
+    "duration_ms": 14612,
+    "model_chain": [
+      "base",
+      "butler_v3",
+      "tool_call",
+      "box3_smoke"
+    ],
+    "inference_config_applied": {
+      "do_sample": false,
+      "max_new_tokens": 300,
+      "repetition_penalty": 1.2,
+      "no_repeat_ngram_size": 3
+    },
+    "draft_text_preview_120": "(매출) [’24] 68 → [‘25] 79(+) / (신규 고객) [‘19~’23] 10→[‘24∼’25+] 35\n ‘25 분기 전망 및 대응방향.\n ’25 연말까지 코로나 상황이 안정화될 것으로 예상되며,\n 그간",
+    "rep_pen_applied_verified": true,
+    "no_repeat_ngram_verified": true,
+    "device": "mps",
+    "dtype": "float16"
+  },
+  "runtime_deps_installed_this_box": [
+    "fastapi 0.128.8",
+    "httpx 0.28.1",
+    "starlette 0.49.3",
+    "pydantic 2.13.4"
+  ],
+  "limitations": [
+    "endpoint는 contract-safe default (HTTP 레이어에서 real 모델 미주입). real 추론은 draft_from_existing(runner=...) 경유 — box2 패턴 정합",
+    "통합 real 추론 1건만 측정 (14.6s, MPS fp16)",
+    "MacBook MPS = bf16 미지원, fp16 사용 (학습 bf16과 차이 가능성)",
+    "production sidecar에 box3_draft.router 등록(include_router)은 별도 박스 (butler_sidecar.py wiring) — 현재 box2도 미등록, 동일 상태"
+  ],
+  "boundary_zero": {
+    "external_send_zero": true,
+    "raw_saved_zero": true,
+    "adapter_git_added_zero": true
+  }
+}
