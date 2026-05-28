@@ -1,0 +1,76 @@
+{
+  "schema_version": "box3.router_registration.v1",
+  "measured_at": "2026-05-28T16:27:54.958745",
+  "box_id": "box3-3.1",
+  "box_title": "production sidecar router 등록 (box2 + box3)",
+  "base_main_head": "dddb518556cd83558b8828436468345a276afa92",
+  "branch": "feat/box23-router-registration-v1",
+  "sidecar_file": "butler_sidecar.py",
+  "change": {
+    "import_added": [
+      "from butler_pc_core.sidecar.routes.box2_rewrite import router as box2_rewrite_router",
+      "from butler_pc_core.sidecar.routes.box3_draft import router as box3_draft_router"
+    ],
+    "include_router_added": [
+      "app.include_router(box2_rewrite_router)",
+      "app.include_router(box3_draft_router)"
+    ],
+    "insertion_point": "if _FASTAPI_AVAILABLE block, capability token middleware 직후",
+    "lines_added": 6
+  },
+  "registered_endpoints": [
+    "/v1/cards/2/rewrite",
+    "/v1/cards/3/draft"
+  ],
+  "honest_disclosure_other_boxes": {
+    "separate_router_modules_with_v1_cards": [
+      "box2_rewrite.py (/v1/cards/2/rewrite)",
+      "box3_draft.py (/v1/cards/3/draft)"
+    ],
+    "other_route_module": "chat_completions.py (non /v1/cards path)",
+    "inline_card_endpoints_in_butler_sidecar": {
+      "accounting (card5 계열)": [
+        "/accounting/classify",
+        "/accounting/result/{id}/xlsx"
+      ],
+      "document_transform (card2 계열)": [
+        "/api/document_transform/{extract,parse_template,map,compose,stream}",
+        "/document_transform/transform_stream",
+        "/document_transform/feedback"
+      ],
+      "request_parsing (card1 계열)": [
+        "/request_parsing/{parse,parse_stream,parse_file_stream,feedback}"
+      ]
+    },
+    "conclusion": "box1/4/5/6/7/8은 /v1/cards/N 별도 router 모듈 미사용 — inline @app endpoint 또는 도메인 경로(/accounting, /document_transform, /request_parsing)로 구현됨. 등록 대상 /v1/cards/N router는 box2 + box3가 전부. 본 박스 범위 완결"
+  },
+  "integration_tests": {
+    "file": "tests/test_box23_router_registration.py",
+    "tests": [
+      "test_box2_box3_routes_registered_in_production_sidecar (app.routes에 /v1/cards/2/rewrite + /v1/cards/3/draft 존재)",
+      "test_existing_routes_not_regressed (health/accounting/document_transform/request_parsing 잔존)",
+      "test_box3_draft_endpoint_200_with_capability_token (capability token POST 200, contract_only)",
+      "test_box2_rewrite_endpoint_200_with_capability_token (capability token POST 200)"
+    ],
+    "passed": 4,
+    "capability_token_middleware_path_verified": true,
+    "box2_box3_regression": "75 passed / 2 skipped"
+  },
+  "production_activation": {
+    "box2_v1_cards_2_rewrite": "활성화",
+    "box3_v1_cards_3_draft": "활성화 (contract_only default, runner 주입 시 real)",
+    "capability_token_enforced": "POST는 capability token Authorization 필수 (기존 middleware 정합)"
+  },
+  "boundary_zero": {
+    "external_send_zero": true,
+    "adapter_git_added_zero": true,
+    "binary_git_added_zero": true
+  },
+  "review_exemption_보강65": {
+    "test_pass": true,
+    "regression_zero": true,
+    "evidence_present": true,
+    "honest_disclosure_present": true,
+    "assessment": "보강 65 검토 면제 조건 4건 충족 (단순 include_router 6 line + 통합 test 4 PASS + 회귀 0 + 정직 disclosure). 대표님 직접 머지 권한 후보"
+  }
+}
