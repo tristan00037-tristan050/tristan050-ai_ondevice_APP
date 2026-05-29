@@ -94,3 +94,100 @@ def test_helper1_search_rejects_non_localhost(monkeypatch):
     )
     assert resp.status_code == 403
     assert resp.json()["detail"]["fail_class"] == "LOCALHOST_ONLY"
+
+
+def test_helper1_requires_capability_token():
+    mod = _load_sidecar()
+    from fastapi.testclient import TestClient
+    mod._TOKEN_MANAGER.generate()
+    client = TestClient(mod.app)
+    resp = client.post("/v1/helpers/1/search", json={"query": "x"})
+    assert resp.status_code in (401, 403), resp.text
+
+
+def test_helper1_rejects_bad_capability_token():
+    mod = _load_sidecar()
+    from fastapi.testclient import TestClient
+    mod._TOKEN_MANAGER.generate()
+    client = TestClient(mod.app)
+    resp = client.post(
+        "/v1/helpers/1/ask",
+        json={"query": "x"},
+        headers={"Authorization": "Bearer wrong-token-value"},
+    )
+    assert resp.status_code in (401, 403), resp.text
+
+
+def test_helper1_blocks_non_localhost(monkeypatch):
+    import butler_pc_core.sidecar.routes.helper1_search as h1
+    monkeypatch.setattr(h1, "is_localhost_request", lambda request: False)
+    client, token, _ = _client_and_token()
+    resp = client.post(
+        "/v1/helpers/1/ask",
+        json={"query": "x"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["fail_class"] == "LOCALHOST_ONLY"
+
+
+def test_helper1_contract_only_does_not_call_sdk(monkeypatch):
+    import butler_pc_core.sidecar.routes.helper1_search as h1
+
+    def _boom(*a, **k):
+        raise AssertionError("SDK must not be loaded in contract_only mode")
+
+    monkeypatch.setattr(h1, "integration_mode", lambda: "contract_only")
+    monkeypatch.setattr(h1, "_load_memory_helper", _boom)
+    client, token, _ = _client_and_token()
+    resp = client.post(
+        "/v1/helpers/1/ask",
+        json={"query": "회사 정책 요약"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["integration_mode"] == "contract_only"
+    assert data["real_validation_done"] is False
+    assert data["answer"] == "contract_only_response"
+
+
+def test_helper1_real_mode_offload(monkeypatch):
+    import butler_pc_core.sidecar.routes.helper1_search as h1
+
+    class _FakeMH:
+        @staticmethod
+        def find(query, top_k=5):
+            return [{"chunk_id": "c1", "score": 0.9}]
+
+        @staticmethod
+        def ask(query):
+            return {"answer": "real-answer", "sources": [{"chunk_id": "c1", "score": 0.9}]}
+
+    monkeypatch.setattr(h1, "integration_mode", lambda: "real")
+    monkeypatch.setattr(h1, "_load_memory_helper", lambda: _FakeMH)
+    client, token, _ = _client_and_token()
+
+    s = client.post("/v1/helpers/1/search", json={"query": "q", "top_k": 3}, headers={"Authorization": f"Bearer {token}"})
+    assert s.status_code == 200, s.text
+    sd = s.json()
+    assert sd["integration_mode"] == "real"
+    assert sd["real_validation_done"] is True
+    assert sd["results"][0]["chunk_id"] == "c1"
+    assert sd["results"][0]["source_digest"].startswith("sha256:")
+
+    a = client.post("/v1/helpers/1/ask", json={"query": "q"}, headers={"Authorization": f"Bearer {token}"})
+    assert a.status_code == 200, a.text
+    ad = a.json()
+    assert ad["integration_mode"] == "real"
+    assert ad["real_validation_done"] is True
+    assert ad["answer"] == "real-answer"
+
+
+def test_helper1_search_uses_anyio_offload_in_source():
+    import inspect
+    import butler_pc_core.sidecar.routes.helper1_search as h1
+    source = inspect.getsource(h1)
+    assert "anyio.to_thread.run_sync" in source
+    assert "raw_results = mh.find(payload.query" not in source
+    assert "produced = mh.ask(payload.query)" not in source

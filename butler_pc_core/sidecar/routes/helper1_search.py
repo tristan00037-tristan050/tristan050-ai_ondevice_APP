@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import os
 import time
+
+import anyio
 from pathlib import Path
 from typing import Any
 
@@ -121,7 +123,7 @@ async def helper1_search(payload: Helper1Query, request: Request) -> dict[str, A
                 "error_digest": hashlib.sha256(repr(exc).encode("utf-8")).hexdigest()[:16],
             }
         else:
-            raw_results = mh.find(payload.query, top_k=payload.top_k)
+            raw_results = await anyio.to_thread.run_sync(mh.find, payload.query, payload.top_k)
             for item in raw_results:
                 results.append({
                     "chunk_id": item.get("chunk_id") or item.get("id"),
@@ -169,7 +171,7 @@ async def helper1_ask(payload: Helper1Query, request: Request) -> dict[str, Any]
                 "error_digest": hashlib.sha256(repr(exc).encode("utf-8")).hexdigest()[:16],
             }
         else:
-            produced = mh.ask(payload.query)
+            produced = await anyio.to_thread.run_sync(mh.ask, payload.query)
             answer = produced.get("answer", "")
             for item in produced.get("sources", []) or []:
                 sources.append({
