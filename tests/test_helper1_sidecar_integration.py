@@ -137,7 +137,7 @@ def test_helper1_contract_only_does_not_call_sdk(monkeypatch):
     def _boom(*a, **k):
         raise AssertionError("SDK must not be loaded in contract_only mode")
 
-    monkeypatch.setattr(h1, "integration_mode", lambda: "contract_only")
+    monkeypatch.setattr(h1, "ask_integration_mode", lambda: "contract_only")
     monkeypatch.setattr(h1, "_load_memory_helper", _boom)
     client, token, _ = _client_and_token()
     resp = client.post(
@@ -164,7 +164,8 @@ def test_helper1_real_mode_offload(monkeypatch):
         def ask(query):
             return {"answer": "real-answer", "sources": [{"chunk_id": "c1", "score": 0.9}]}
 
-    monkeypatch.setattr(h1, "integration_mode", lambda: "real")
+    monkeypatch.setattr(h1, "search_integration_mode", lambda: "real")
+    monkeypatch.setattr(h1, "ask_integration_mode", lambda: "real")
     monkeypatch.setattr(h1, "_load_memory_helper", lambda: _FakeMH)
     client, token, _ = _client_and_token()
 

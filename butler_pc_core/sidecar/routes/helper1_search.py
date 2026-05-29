@@ -26,13 +26,13 @@ DEFAULT_SDK_PATH = str(
     Path.home() / "Desktop/도우미폴더/넘겨줄도우미모델/도우미1_기억/sdk"
 )
 
-_RUNTIME_ASSETS = [
+_SEARCH_ASSETS = [
     Path("/private/tmp/bge_m3_combined"),
-    Path("/Volumes/T7 Shield/학습모델/butler-1.7b-v4-rt/butler-1.7b-v4-rt-q4_k_m.gguf"),
     Path.home() / "Desktop/기억도우미/runtime/private/helper1_chunks_v2.local.jsonl",
     Path.home() / "Desktop/기억도우미/runtime/private/helper1_embeddings_v2.npy",
     Path.home() / "Desktop/기억도우미/runtime/private/helper1_bm25_v2.pkl",
 ]
+_ASK_GGUF = Path("/Volumes/T7 Shield/학습모델/butler-1.7b-v4-rt/butler-1.7b-v4-rt-q4_k_m.gguf")
 
 CONTRACT_ONLY_ANSWER = "contract_only_response"
 
@@ -51,21 +51,31 @@ def _sdk_path() -> str:
     return os.environ.get("HELPER1_SDK_PATH", DEFAULT_SDK_PATH)
 
 
-def _assets_present() -> bool:
-    return all(p.exists() for p in _RUNTIME_ASSETS)
+def _search_assets_present() -> bool:
+    return all(p.exists() for p in _SEARCH_ASSETS)
+
+
+def _ask_assets_present() -> bool:
+    return _search_assets_present() and _ASK_GGUF.exists()
 
 
 def _sdk_present() -> bool:
     return (Path(_sdk_path()) / "memory_helper.py").is_file()
 
 
-def integration_mode() -> str:
+def search_integration_mode() -> str:
     # Codex P2 #1 (2026-05-27): SDK 부재(memory_helper.py 없음)에 "blocked"를
     # 반환하면 핸들러가 `if mode == "real"` 분기만 가져 fall through → HTTP 200 +
     # empty/stub을 반환했고, "blocked"는 endpoint contract(real/contract_only)
     # 밖이었다. SDK 부재를 honest fail-safe인 contract_only로 매핑해 응답이
     # real_validation_done=false로 명시되게 한다(stub을 real처럼 위장하지 않음).
-    if not _sdk_present() or not _assets_present():
+    if not _sdk_present() or not _search_assets_present():
+        return "contract_only"
+    return "real"
+
+
+def ask_integration_mode() -> str:
+    if not _sdk_present() or not _ask_assets_present():
         return "contract_only"
     return "real"
 
@@ -103,7 +113,7 @@ async def helper1_search(payload: Helper1Query, request: Request) -> dict[str, A
     if not is_localhost_request(request):
         raise HTTPException(status_code=403, detail={"fail_class": "LOCALHOST_ONLY", "message": "localhost only"})
 
-    mode = integration_mode()
+    mode = search_integration_mode()
     start = time.time()
     results: list[dict[str, Any]] = []
     real_validation_done = False
@@ -151,7 +161,7 @@ async def helper1_ask(payload: Helper1Query, request: Request) -> dict[str, Any]
     if not is_localhost_request(request):
         raise HTTPException(status_code=403, detail={"fail_class": "LOCALHOST_ONLY", "message": "localhost only"})
 
-    mode = integration_mode()
+    mode = ask_integration_mode()
     start = time.time()
     answer = CONTRACT_ONLY_ANSWER
     sources: list[dict[str, Any]] = []
