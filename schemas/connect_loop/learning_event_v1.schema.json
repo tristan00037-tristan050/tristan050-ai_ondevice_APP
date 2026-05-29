@@ -1,0 +1,170 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/connect_loop/learning_event_v1.schema.json",
+  "title": "Connect Loop — Learning Event (v1)",
+  "description": "학습 파이프라인에 들어갈 수 있는 유일한 형태의 데이터 계약. usage_log(감사/통계/후보탐색)와 엄격히 분리된다. 정책 승인(policy_approval) + DLP 통과(dlp_result) + 보존기간(retention_days) 을 통과한 정제본/라벨/암호화참조만 담는다. 원문 입력/출력은 절대 저장 금지(raw_input_saved/raw_output_saved const false). unknown field는 fail-closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "learning_event_id",
+    "source_usage_log_id",
+    "created_at",
+    "status",
+    "tenant_scope",
+    "learning_type",
+    "raw_input_saved",
+    "raw_output_saved",
+    "approved_text_ref",
+    "approved_text_digest",
+    "sanitized_summary_digest",
+    "sanitized_summary_saved",
+    "label",
+    "policy_approval",
+    "dlp_result",
+    "retention_days",
+    "expires_at",
+    "verified_for_training",
+    "schema_version"
+  ],
+  "properties": {
+    "learning_event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_usage_log_id": {
+      "type": "string",
+      "description": "이 학습 이벤트의 출처가 된 usage_log.log_id (감사 추적).",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["CANDIDATE", "APPROVED", "REJECTED", "EXPIRED"]
+    },
+    "tenant_scope": {
+      "type": "string",
+      "description": "학습 적용 범위. device=해당 디바이스만, team=부서/팀, org=조직 전체.",
+      "enum": ["device", "team", "org"]
+    },
+    "learning_type": {
+      "type": "string",
+      "description": "학습 대상 종류(5종). 각 기능 박스/헬퍼에 대응.",
+      "enum": [
+        "intent_routing",
+        "memory_search",
+        "form_convert",
+        "draft_write",
+        "accounting_classify"
+      ]
+    },
+    "raw_input_saved": {
+      "description": "원문 입력 저장 금지 불변식. 항상 false(위반 시 스키마 실패 = BLOCK).",
+      "const": false
+    },
+    "raw_output_saved": {
+      "description": "원문 출력 저장 금지 불변식. 항상 false(위반 시 스키마 실패 = BLOCK).",
+      "const": false
+    },
+    "approved_text_ref": {
+      "type": "string",
+      "description": "승인된 정제 텍스트의 암호화 참조(vault/keyring 참조 등). 원문 평문 아님.",
+      "minLength": 1
+    },
+    "approved_text_digest": {
+      "type": "string",
+      "description": "승인된 정제 텍스트의 sha256 digest.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sanitized_summary_digest": {
+      "type": "string",
+      "description": "정제 요약본의 sha256 digest.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sanitized_summary_saved": {
+      "description": "정제 요약 '원문' 저장 금지 불변식. digest만 보관. 항상 false.",
+      "const": false
+    },
+    "label": {
+      "type": "object",
+      "description": "학습용 라벨.",
+      "additionalProperties": false,
+      "required": ["intent_label", "target_box_id", "quality"],
+      "properties": {
+        "intent_label": {
+          "type": "string",
+          "enum": [
+            "memory_search",
+            "form_convert",
+            "draft_write",
+            "accounting_classify",
+            "general_chat",
+            "unknown"
+          ]
+        },
+        "target_box_id": {
+          "type": "string",
+          "enum": ["helper1", "2", "3", "5", "chat", "none"]
+        },
+        "quality": {
+          "type": "string",
+          "description": "라벨 품질 등급.",
+          "enum": ["good", "fair", "poor"]
+        }
+      }
+    },
+    "policy_approval": {
+      "type": "object",
+      "description": "정책 승인 기록. decision 없으면 BLOCK.",
+      "additionalProperties": false,
+      "required": ["decision", "approver_role", "reason_code"],
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": ["approved", "rejected", "needs_review"]
+        },
+        "approver_role": {
+          "type": "string",
+          "description": "승인자 역할. 자동 승인은 'system'.",
+          "enum": ["manager", "admin", "system"]
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "dlp_result": {
+      "type": "object",
+      "description": "DLP 검사 결과. 없으면 BLOCK.",
+      "additionalProperties": false,
+      "required": ["passed", "pii_detected", "secret_detected", "policy_violation"],
+      "properties": {
+        "passed": { "type": "boolean" },
+        "pii_detected": { "type": "boolean" },
+        "secret_detected": { "type": "boolean" },
+        "policy_violation": { "type": "boolean" }
+      }
+    },
+    "retention_days": {
+      "type": "integer",
+      "description": "보존기간(일). 없으면 BLOCK.",
+      "minimum": 1
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "verified_for_training": {
+      "type": "boolean",
+      "description": "학습 투입 전 최종 검증 통과 여부. 기본 false.",
+      "default": false
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "learning_event.v1"
+    }
+  }
+}

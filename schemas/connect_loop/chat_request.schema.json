@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/connect_loop/chat_request.schema.json",
+  "title": "Connect Loop — Chat Request (v1)",
+  "description": "사용자 입력이 라우터로 들어가기 직전의 계약. 원문(raw_text)은 절대 담지 않으며 device-local에만 존재한다. 모든 식별자는 digest 형태로만 전달된다. unknown field는 fail-closed(additionalProperties:false).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "session_id_digest",
+    "tenant_id_digest",
+    "device_id",
+    "user_role",
+    "department_id_digest",
+    "text_ref",
+    "text_digest",
+    "attachments",
+    "created_at",
+    "schema_version"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "description": "요청 단위 상관관계 ID (UUID 권장).",
+      "minLength": 1
+    },
+    "session_id_digest": {
+      "type": "string",
+      "description": "세션 ID의 sha256 digest. 원본 세션 ID는 담지 않는다.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "tenant_id_digest": {
+      "type": "string",
+      "description": "테넌트 ID의 sha256 digest.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "device_id": {
+      "type": "string",
+      "description": "디바이스 식별자. 원문 경로/파일명이 아닌 안정적 디바이스 ID.",
+      "minLength": 1
+    },
+    "user_role": {
+      "type": "string",
+      "description": "요청자 역할.",
+      "enum": ["employee", "manager", "admin"]
+    },
+    "department_id_digest": {
+      "type": "string",
+      "description": "부서 ID의 sha256 digest.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "text_ref": {
+      "type": "string",
+      "description": "원문 텍스트는 디바이스 로컬에만 존재한다는 고정 표식. 서버/로그로 원문이 이동하지 않음을 계약으로 못박는다.",
+      "const": "device_local_only"
+    },
+    "text_digest": {
+      "type": "string",
+      "description": "입력 원문의 sha256 digest. 원문 자체는 절대 포함하지 않는다.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "attachments": {
+      "type": "array",
+      "description": "첨부 파일 목록. 파일명/경로 원문 없이 content digest만 전달한다.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["content_digest"],
+        "properties": {
+          "content_digest": {
+            "type": "string",
+            "description": "첨부 콘텐츠의 sha256 digest.",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "mime_type": {
+            "type": "string",
+            "description": "MIME 타입(선택). 원본 파일명이 아닌 형식 정보만 허용.",
+            "minLength": 1
+          },
+          "size_bytes": {
+            "type": "integer",
+            "description": "첨부 크기(선택).",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "description": "요청 생성 시각 (RFC3339 / ISO8601).",
+      "format": "date-time"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "chat_request.v1"
+    }
+  }
+}

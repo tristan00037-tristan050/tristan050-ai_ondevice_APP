@@ -1,0 +1,37 @@
+Connect Loop Contract — PR-A 검증 증거 (pytest 요약)
+======================================================
+
+명령:
+  python -m pytest tests/connect_loop/test_schema_contract.py -v
+
+결과:
+  90 passed, 6 warnings
+  (warnings: 무관한 FastAPI on_event DeprecationWarning — 리포 conftest import 부수효과, 계약과 무관)
+
+검증된 항목 (test groups):
+  - test_schema_self_validates_draft07            : 4 스키마 draft-07 self-validate + additionalProperties:false
+  - test_valid_sample_passes                      : 유효 샘플 4건 validate 통과
+  - test_forbidden_field_fails                    : 금지필드 10종 x 4스키마 = fail-closed
+  - test_bad_digest_format_fails                  : sha256 형식 위반 fail
+  - test_good_digest_format_passes                : 정상 digest 통과
+  - test_each_required_field_missing_fails        : 모든 required 필드 누락 시 fail
+  - test_learning_event_without_policy_approval_fails    : policy_approval 없으면 BLOCK
+  - test_learning_event_without_policy_decision_fails    : decision 없으면 BLOCK
+  - test_learning_event_without_dlp_result_fails         : dlp_result 없으면 BLOCK
+  - test_learning_event_without_retention_days_fails     : retention_days 없으면 BLOCK
+  - test_learning_event_raw_saved_true_blocked           : raw_input/raw_output/sanitized_summary saved=true BLOCK
+  - test_usage_log_external_send_zero_violation_fails    : external_send_zero const 위반 fail
+  - test_usage_log_raw_text_logged_violation_fails       : raw_text_logged const 위반 fail
+  - test_usage_log_retention_class_violation_fails       : retention_class const 위반 fail
+  - test_router_endpoint_enum_matches_measured_routes    : target_endpoint enum == 실측 경로 집합
+  - test_text_ref_is_device_local_only_const             : text_ref const 확인
+
+실측 엔드포인트 (코드 grep 확정, 추측 아님):
+  memory_search       -> helper1 -> POST /v1/helpers/1/search
+  form_convert        -> box 2   -> POST /v1/cards/2/rewrite
+  draft_write         -> box 3   -> POST /v1/cards/3/draft
+  accounting_classify -> box 5   -> POST /accounting/classify
+  general_chat        -> chat    -> POST /v1/chat/completions
+  unknown             -> none    -> (fallback, no endpoint)
+
+원문/로컬경로/secret 포함 여부: 0 (digest-only, 절대경로 없음, 비밀 없음)

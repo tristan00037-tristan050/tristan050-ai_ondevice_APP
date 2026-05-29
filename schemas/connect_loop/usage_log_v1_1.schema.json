@@ -1,0 +1,170 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/connect_loop/usage_log_v1_1.schema.json",
+  "title": "Connect Loop — Usage Log (v1.1)",
+  "description": "한 요청의 연결 루프 결과를 감사/통계/후보탐색 목적으로 남기는 digest-only 로그. 이것은 학습 데이터가 아니다(retention_class=audit_digest_only). 원문은 어떤 필드에도 담지 않으며 external_send_zero/raw_text_logged 상수로 fail-closed 보장. unknown field는 fail-closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "log_id",
+    "timestamp",
+    "request_id",
+    "device_id_digest",
+    "tenant_id_digest",
+    "department_id_digest",
+    "request_digest",
+    "intent_label",
+    "box_id",
+    "endpoint",
+    "routing_confidence",
+    "integration_mode",
+    "real_validation_done",
+    "result_digest",
+    "source_digests",
+    "policy_decision",
+    "policy_reason_code",
+    "latency_ms",
+    "external_send_zero",
+    "raw_text_logged",
+    "learning_candidate",
+    "learning_event_created",
+    "retention_class",
+    "created_by_component",
+    "schema_hash",
+    "schema_version"
+  ],
+  "properties": {
+    "log_id": {
+      "type": "string",
+      "description": "로그 레코드 고유 ID.",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "이벤트 발생 시각 (RFC3339 / ISO8601).",
+      "format": "date-time"
+    },
+    "request_id": {
+      "type": "string",
+      "description": "대응되는 chat_request / router_decision의 request_id.",
+      "minLength": 1
+    },
+    "device_id_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "tenant_id_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "department_id_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "request_digest": {
+      "type": "string",
+      "description": "요청 내용의 sha256 digest (원문 아님).",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "intent_label": {
+      "type": "string",
+      "enum": [
+        "memory_search",
+        "form_convert",
+        "draft_write",
+        "accounting_classify",
+        "general_chat",
+        "unknown"
+      ]
+    },
+    "box_id": {
+      "type": "string",
+      "enum": ["helper1", "2", "3", "5", "chat", "none"]
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "실측 sidecar 엔드포인트. router_decision.target_endpoint와 동일 enum.",
+      "enum": [
+        "POST /v1/helpers/1/search",
+        "POST /v1/cards/2/rewrite",
+        "POST /v1/cards/3/draft",
+        "POST /accounting/classify",
+        "POST /v1/chat/completions",
+        "none"
+      ]
+    },
+    "routing_confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "integration_mode": {
+      "type": "string",
+      "description": "real=실제 엔드포인트 호출됨, contract_only=계약만(엔드포인트 미연결/모의).",
+      "enum": ["real", "contract_only"]
+    },
+    "real_validation_done": {
+      "type": "boolean",
+      "description": "실제 엔드포인트 응답에 대한 검증 수행 여부."
+    },
+    "result_digest": {
+      "type": "string",
+      "description": "결과(응답)의 sha256 digest. 원문 응답 아님.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source_digests": {
+      "type": "array",
+      "description": "근거 소스의 sha256 digest 목록. 소스 문서명/원문 금지.",
+      "items": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      }
+    },
+    "policy_decision": {
+      "type": "string",
+      "enum": ["allow", "deny", "review_required"]
+    },
+    "policy_reason_code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "latency_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "external_send_zero": {
+      "description": "외부 전송 0건 불변식. 항상 true로 고정(위반 시 스키마 실패).",
+      "const": true
+    },
+    "raw_text_logged": {
+      "description": "원문 로깅 금지 불변식. 항상 false로 고정(위반 시 스키마 실패).",
+      "const": false
+    },
+    "learning_candidate": {
+      "type": "boolean",
+      "description": "학습 후보로 탐색되었는지(통계/후보탐색용). true라도 학습 데이터가 되는 것은 아님 — learning_event 생성은 별도 정책/DLP/보존 통과 후."
+    },
+    "learning_event_created": {
+      "type": "boolean",
+      "description": "이 로그로부터 learning_event가 실제 생성되었는지."
+    },
+    "retention_class": {
+      "description": "보존 분류 고정값. digest-only 감사 데이터임을 못박는다.",
+      "const": "audit_digest_only"
+    },
+    "created_by_component": {
+      "type": "string",
+      "description": "이 로그를 생성한 컴포넌트 식별자(예: 'connect_loop.middleware').",
+      "minLength": 1
+    },
+    "schema_hash": {
+      "type": "string",
+      "description": "사용된 스키마 본문의 sha256 digest. 계약 드리프트 감지용.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "usage_log.v1.1"
+    }
+  }
+}

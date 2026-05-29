@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/connect_loop/router_decision.schema.json",
+  "title": "Connect Loop — Router Decision (v1)",
+  "description": "라우터가 chat_request의 intent를 판정하고 어느 박스/엔드포인트로 보낼지 결정한 결과 계약. target_endpoint enum은 sidecar 실측 경로만 포함한다(코드에 없는 경로는 적지 않는다). unknown field는 fail-closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "intent_label",
+    "target_box_id",
+    "target_endpoint",
+    "routing_confidence",
+    "reason_code",
+    "fallback_required",
+    "policy_precheck",
+    "schema_version"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "description": "대응되는 chat_request.request_id.",
+      "minLength": 1
+    },
+    "intent_label": {
+      "type": "string",
+      "description": "판정된 의도. intent -> endpoint 매핑(실측):\n  memory_search       -> box 'helper1' -> POST /v1/helpers/1/search\n  form_convert        -> box '2'       -> POST /v1/cards/2/rewrite\n  draft_write         -> box '3'       -> POST /v1/cards/3/draft\n  accounting_classify -> box '5'       -> POST /accounting/classify\n  general_chat        -> box 'chat'    -> POST /v1/chat/completions\n  unknown             -> box 'none'    -> (no endpoint; fallback_required=true)",
+      "enum": [
+        "memory_search",
+        "form_convert",
+        "draft_write",
+        "accounting_classify",
+        "general_chat",
+        "unknown"
+      ]
+    },
+    "target_box_id": {
+      "type": "string",
+      "description": "대상 박스/헬퍼 식별자. 카드형은 카드번호('2','3','5'), 헬퍼는 'helper1', 일반대화는 'chat', 미상은 'none'.",
+      "enum": ["helper1", "2", "3", "5", "chat", "none"]
+    },
+    "target_endpoint": {
+      "type": "string",
+      "description": "실측 sidecar 엔드포인트(butler_pc_core/sidecar 및 butler_sidecar.py 기준). 코드에 존재하는 경로만 enum에 둔다. 'none'은 unknown intent의 라우팅 보류.",
+      "enum": [
+        "POST /v1/helpers/1/search",
+        "POST /v1/cards/2/rewrite",
+        "POST /v1/cards/3/draft",
+        "POST /accounting/classify",
+        "POST /v1/chat/completions",
+        "none"
+      ]
+    },
+    "routing_confidence": {
+      "type": "number",
+      "description": "라우팅 신뢰도 [0,1].",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "reason_code": {
+      "type": "string",
+      "description": "판정 근거 코드(자유 문자열, 원문 금지). 예: 'INTENT_KEYWORD_MATCH', 'LOW_CONFIDENCE_FALLBACK'.",
+      "minLength": 1
+    },
+    "fallback_required": {
+      "type": "boolean",
+      "description": "신뢰도 미달/unknown 등으로 fallback(예: general_chat 또는 사람 검토)이 필요한지."
+    },
+    "policy_precheck": {
+      "type": "string",
+      "description": "라우팅 직전 정책 선검사 결과.",
+      "enum": ["allow", "needs_review", "block"]
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "router_decision.v1"
+    }
+  }
+}
