@@ -5,6 +5,26 @@
   "description": "학습 파이프라인에 들어갈 수 있는 유일한 형태의 데이터 계약. usage_log(감사/통계/후보탐색)와 엄격히 분리된다. 정책 승인(policy_approval) + DLP 통과(dlp_result) + 보존기간(retention_days) 을 통과한 정제본/라벨/암호화참조만 담는다. 원문 입력/출력은 절대 저장 금지(raw_input_saved/raw_output_saved const false). unknown field는 fail-closed.",
   "type": "object",
   "additionalProperties": false,
+  "if": {
+    "properties": { "status": { "const": "APPROVED" } },
+    "required": ["status"]
+  },
+  "then": {
+    "comment": "학습 투입 가능한 APPROVED 상태는 정책 승인=approved + DLP passed=true 를 계약 수준에서 강제한다(미승인/DLP실패 데이터의 학습 유입 차단).",
+    "properties": {
+      "policy_approval": {
+        "properties": { "decision": { "const": "approved" } }
+      },
+      "dlp_result": {
+        "properties": {
+          "passed": { "const": true },
+          "pii_detected": { "const": false },
+          "secret_detected": { "const": false },
+          "policy_violation": { "const": false }
+        }
+      }
+    }
+  },
   "required": [
     "learning_event_id",
     "source_usage_log_id",
@@ -38,7 +58,8 @@
     },
     "created_at": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
     },
     "status": {
       "type": "string",
@@ -70,8 +91,10 @@
     },
     "approved_text_ref": {
       "type": "string",
-      "description": "승인된 정제 텍스트의 암호화 참조(vault/keyring 참조 등). 원문 평문 아님.",
-      "minLength": 1
+      "description": "승인된 정제 텍스트의 암호화 참조(vault/keyring 참조 등). 원문 평문이 아니라 'scheme://...' 형태의 참조만 허용.",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[a-z][a-z0-9+.-]*://[^\\s]+$"
     },
     "approved_text_digest": {
       "type": "string",
@@ -132,7 +155,8 @@
         },
         "reason_code": {
           "type": "string",
-          "minLength": 1
+          "description": "승인 사유 코드(원문 금지). 대문자 코드 형식.",
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
         }
       }
     },
@@ -155,7 +179,8 @@
     },
     "expires_at": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
     },
     "verified_for_training": {
       "type": "boolean",

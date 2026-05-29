@@ -55,6 +55,12 @@ sidecar 구현(`butler_pc_core/sidecar/routes/box2_rewrite.py`의 `digest_payloa
     - `approved_text_ref`(암호화 참조), `approved_text_digest`, `sanitized_summary_digest`, `label`.
   - **원문 저장 절대 금지 불변식**: `raw_input_saved=false`(const), `raw_output_saved=false`(const),
     `sanitized_summary_saved=false`(const) — 위반 시 BLOCK.
+  - **APPROVED 상태 양성 강제(if/then)**: `status="APPROVED"` 이면 스키마가
+    `policy_approval.decision="approved"` **및** `dlp_result.passed=true`(+ `pii_detected`/`secret_detected`/`policy_violation`=false)
+    를 강제한다. 즉 미승인·DLP실패 데이터가 APPROVED 형태로 학습에 유입되는 것을 계약 수준에서 차단한다.
+    (`CANDIDATE`/`REJECTED`/`EXPIRED` 는 검토 진행 중일 수 있으므로 이 제약을 적용하지 않는다.)
+  - **자유 텍스트 밀반입 차단**: `reason_code` 류는 대문자 코드 패턴(`^[A-Z][A-Z0-9_]{0,63}$`),
+    `approved_text_ref` 는 `scheme://...` 참조 형식(평문 금지)으로 제약한다.
   - `source_usage_log_id` 로 출처 usage_log를 역추적(감사) 가능.
 
 **왜 분리하는가**: 감사/통계는 전수 보존이 필요하지만 학습은 정책·DLP·보존기간을 통과한 정제본만 허용해야
@@ -67,6 +73,15 @@ sidecar 구현(`butler_pc_core/sidecar/routes/box2_rewrite.py`의 `digest_payloa
 
 아래 경로/박스 번호는 **추측이 아니라** 실제 코드에서 grep으로 확인한 값이다.
 근거 코드: `butler_pc_core/sidecar/routes/*.py`, `butler_sidecar.py`, `butler_pc_core/prompts/cards/*.yaml`.
+
+> **측정 기준(중요)**: 본 PR 의 베이스인 **`origin/main`** 기준으로 측정·검증했다(이 PR 워크트리에 그대로 존재).
+> 일부 피처 브랜치/오래된 워크트리는 이 라우트들이 머지되기 **이전** 커밋일 수 있으니, 검증 시 반드시 PR 베이스에서 확인할 것.
+> 재현:
+> ```bash
+> git ls-tree -r origin/main --name-only | grep sidecar/routes   # 라우트 파일 존재 확인
+> grep -n "@router.post\|@app.post" butler_pc_core/sidecar/routes/*.py butler_sidecar.py
+> ```
+> 계약 테스트 `test_router_endpoint_paths_exist_in_sidecar_source` 가 이 표의 각 경로가 소스에 실재하는지 자동 grep 한다(토톨로지 방지).
 
 | intent_label | 박스/헬퍼 (`target_box_id` / `box_id`) | 기능 | 실측 엔드포인트 (`target_endpoint` / `endpoint`) | 근거 (file:line) |
 |--------------|------------------------|------|--------------------------------------------------|------------------|
@@ -117,6 +132,11 @@ token, password, secret
 - 소스/첨부 → `source_digests[]` / `attachments[].content_digest` (sha256)
 - 식별자 → `*_id_digest` (sha256)
 
+> **`device_id` carve-out (의도적)**: `chat_request.device_id` 만 digest 가 아닌 원시 식별자다.
+> 디바이스 식별자는 PII 가 아닌 안정적 기기 ID(디바이스-로컬 라우팅/디버깅에 필요)이며, 감사 로그로 넘어갈 때는
+> `usage_log.device_id_digest` 로 digest 화된다. 즉 **원시 device_id 는 device-local 경계 안에서만 쓰이고,
+> 경계를 넘는 usage_log/learning_event 에는 digest 만 남는다.**
+
 ---
 
 ## 5. 계약 검증 테스트
@@ -130,8 +150,15 @@ token, password, secret
 5. required 필드 누락 시 fail (모든 required 필드 개별 검증)
 6. learning_event: `policy_approval` / `policy_approval.decision` / `dlp_result` / `retention_days` 없으면 BLOCK,
    `raw_input_saved`/`raw_output_saved`/`sanitized_summary_saved` = true 면 BLOCK
-7. usage_log: `external_send_zero`/`raw_text_logged`/`retention_class` const 위반 시 fail
-8. router_decision `target_endpoint` enum 이 §3 실측 경로 집합과 정확히 일치하는지 확인
+7. learning_event: `status="APPROVED"` 인데 `policy_approval.decision≠approved` 또는 `dlp_result.passed≠true`
+   (또는 PII/secret/위반 검출) 이면 BLOCK; `CANDIDATE` 는 미완료 상태 허용
+8. usage_log: `external_send_zero`/`raw_text_logged`/`retention_class` const 위반 시 fail
+9. const 위반(`schema_version`, `text_ref`) / enum 위반 / 수치 경계(`routing_confidence` 0..1, `retention_days`≥1) 위반 시 fail
+10. RFC3339 date-time pattern 위반 시 fail (`format` 미검증 환경 대비 pattern 강제)
+11. `reason_code` 류 자유 원문 / `approved_text_ref` 비참조 평문 시 fail (밀반입 채널 차단)
+12. router_decision `target_endpoint` enum 이 §3 실측 경로 집합과 일치하고, **각 경로가 실제 sidecar 소스에 존재**하는지 grep 확인(토톨로지 방지)
+
+테스트 총 136건 통과.
 
 실행:
 

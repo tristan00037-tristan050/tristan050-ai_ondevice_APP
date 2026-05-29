@@ -41,8 +41,9 @@
     },
     "timestamp": {
       "type": "string",
-      "description": "이벤트 발생 시각 (RFC3339 / ISO8601).",
-      "format": "date-time"
+      "description": "이벤트 발생 시각 (RFC3339 / ISO8601). format 미검증 환경 대비 pattern 으로도 형식 강제.",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
     },
     "request_id": {
       "type": "string",
@@ -126,7 +127,8 @@
     },
     "policy_reason_code": {
       "type": "string",
-      "minLength": 1
+      "description": "정책 판정 사유 코드(대문자 코드, 원문 금지).",
+      "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
     },
     "latency_ms": {
       "type": "number",
@@ -154,8 +156,8 @@
     },
     "created_by_component": {
       "type": "string",
-      "description": "이 로그를 생성한 컴포넌트 식별자(예: 'connect_loop.middleware').",
-      "minLength": 1
+      "description": "이 로그를 생성한 컴포넌트 식별자(예: 'connect_loop.middleware'). 원문 금지, 식별자 형식만.",
+      "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
     },
     "schema_hash": {
       "type": "string",

@@ -329,18 +329,197 @@ def test_usage_log_retention_class_violation_fails():
 # 8) 실측 엔드포인트 enum 고정 확인 (코드에 없는 경로 금지)
 # --------------------------------------------------------------------------- #
 
-def test_router_endpoint_enum_matches_measured_routes():
+# --------------------------------------------------------------------------- #
+# 9) const 위반 negative (schema_version, text_ref)
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.parametrize("key", sorted(VALID_SAMPLES))
+def test_schema_version_const_violation_fails(key):
+    schema = load_schema(key)
+    sample = copy.deepcopy(VALID_SAMPLES[key])
+    sample["schema_version"] = "wrong.version.v9"
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
+
+
+def test_chat_request_text_ref_const_violation_fails():
+    schema = load_schema("chat_request")
+    sample = copy.deepcopy(VALID_CHAT_REQUEST)
+    sample["text_ref"] = "server_copy"  # const device_local_only 위반
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
+
+
+# --------------------------------------------------------------------------- #
+# 10) enum / 수치 경계 위반 negative
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.parametrize(
+    "key,field,bad",
+    [
+        ("router_decision", "intent_label", "delete_everything"),
+        ("router_decision", "target_box_id", "99"),
+        ("router_decision", "target_endpoint", "POST /v1/cards/4/review"),
+        ("router_decision", "policy_precheck", "maybe"),
+        ("usage_log", "integration_mode", "mock"),
+        ("usage_log", "policy_decision", "perhaps"),
+        ("learning_event", "status", "MAYBE"),
+        ("learning_event", "tenant_scope", "galaxy"),
+        ("learning_event", "learning_type", "telepathy"),
+    ],
+)
+def test_enum_violation_fails(key, field, bad):
+    schema = load_schema(key)
+    sample = copy.deepcopy(VALID_SAMPLES[key])
+    sample[field] = bad
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
+
+
+@pytest.mark.parametrize(
+    "key,field,bad",
+    [
+        ("router_decision", "routing_confidence", 1.5),
+        ("router_decision", "routing_confidence", -0.1),
+        ("usage_log", "routing_confidence", 2),
+        ("usage_log", "latency_ms", -5),
+        ("learning_event", "retention_days", 0),
+        ("learning_event", "retention_days", -30),
+    ],
+)
+def test_numeric_boundary_violation_fails(key, field, bad):
+    schema = load_schema(key)
+    sample = copy.deepcopy(VALID_SAMPLES[key])
+    sample[field] = bad
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
+
+
+# --------------------------------------------------------------------------- #
+# 11) RFC3339 date-time pattern (format 미검증 환경에서도 pattern 으로 강제)
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.parametrize(
+    "key,field",
+    [
+        ("chat_request", "created_at"),
+        ("usage_log", "timestamp"),
+        ("learning_event", "created_at"),
+        ("learning_event", "expires_at"),
+    ],
+)
+@pytest.mark.parametrize("bad", ["THIS-IS-NOT-A-DATE", "2026-13-40", "2026/05/29 09:00", "29-05-2026T09:00:00Z"])
+def test_datetime_pattern_violation_fails(key, field, bad):
+    schema = load_schema(key)
+    sample = copy.deepcopy(VALID_SAMPLES[key])
+    sample[field] = bad
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
+
+
+# --------------------------------------------------------------------------- #
+# 12) reason_code / 참조 필드 형식 위반 (원문 밀반입 채널 차단)
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.parametrize(
+    "key,field",
+    [
+        ("router_decision", "reason_code"),
+        ("usage_log", "policy_reason_code"),
+    ],
+)
+def test_reason_code_freetext_blocked(key, field):
+    schema = load_schema(key)
+    sample = copy.deepcopy(VALID_SAMPLES[key])
+    sample[field] = "사용자가 입력한 자유 원문 문장입니다"  # 코드 형식 위반
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
+
+
+def test_learning_event_approved_text_ref_must_be_reference():
+    schema = load_schema("learning_event")
+    sample = copy.deepcopy(VALID_LEARNING_EVENT)
+    sample["approved_text_ref"] = "이건 그냥 원문 평문 텍스트"  # scheme:// 아님
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
+
+
+# --------------------------------------------------------------------------- #
+# 13) learning_event 분리 원칙 강제: APPROVED 면 정책 approved + DLP passed 필수
+# --------------------------------------------------------------------------- #
+
+def test_learning_event_approved_requires_policy_approved():
+    schema = load_schema("learning_event")
+    sample = copy.deepcopy(VALID_LEARNING_EVENT)
+    sample["status"] = "APPROVED"
+    sample["policy_approval"]["decision"] = "rejected"  # APPROVED 인데 미승인 -> BLOCK
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
+
+
+def test_learning_event_approved_requires_dlp_passed():
+    schema = load_schema("learning_event")
+    sample = copy.deepcopy(VALID_LEARNING_EVENT)
+    sample["status"] = "APPROVED"
+    sample["dlp_result"]["passed"] = False  # APPROVED 인데 DLP 실패 -> BLOCK
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
+
+
+@pytest.mark.parametrize("flag", ["pii_detected", "secret_detected", "policy_violation"])
+def test_learning_event_approved_blocks_dlp_detection(flag):
+    schema = load_schema("learning_event")
+    sample = copy.deepcopy(VALID_LEARNING_EVENT)
+    sample["status"] = "APPROVED"
+    sample["dlp_result"][flag] = True  # APPROVED 인데 PII/secret/위반 검출 -> BLOCK
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
+
+
+def test_learning_event_candidate_allows_pending_review():
+    # CANDIDATE 상태는 정책/ DLP 가 아직 미완료여도 통과해야 한다(if/then 이 APPROVED 에만 적용).
+    schema = load_schema("learning_event")
+    sample = copy.deepcopy(VALID_LEARNING_EVENT)
+    sample["status"] = "CANDIDATE"
+    sample["policy_approval"]["decision"] = "needs_review"
+    sample["dlp_result"]["passed"] = False
+    Draft7Validator(schema).validate(sample)
+
+
+# SSOT §3 실측표가 단언하는 (엔드포인트 -> source file) 매핑.
+# 테스트는 이 경로 문자열이 실제 sidecar 소스에 존재하는지 grep 한다(토톨로지 방지).
+MEASURED_ENDPOINT_SOURCES = {
+    "POST /v1/helpers/1/search": "butler_pc_core/sidecar/routes/helper1_search.py",
+    "POST /v1/cards/2/rewrite": "butler_pc_core/sidecar/routes/box2_rewrite.py",
+    "POST /v1/cards/3/draft": "butler_pc_core/sidecar/routes/box3_draft.py",
+    "POST /accounting/classify": "butler_sidecar.py",
+    "POST /v1/chat/completions": "butler_pc_core/sidecar/routes/chat_completions.py",
+}
+
+
+def test_router_endpoint_enum_matches_measured_set():
+    # 1) enum 이 §3 실측 집합과 정확히 일치하는지 (+ unknown 의 'none').
     schema = load_schema("router_decision")
     enum = set(schema["properties"]["target_endpoint"]["enum"])
-    measured = {
-        "POST /v1/helpers/1/search",
-        "POST /v1/cards/2/rewrite",
-        "POST /v1/cards/3/draft",
-        "POST /accounting/classify",
-        "POST /v1/chat/completions",
-        "none",
-    }
-    assert enum == measured
+    assert enum == set(MEASURED_ENDPOINT_SOURCES) | {"none"}
+
+
+def test_router_endpoint_paths_exist_in_sidecar_source():
+    # 2) 토톨로지 방지: enum 의 각 경로가 실제 sidecar 소스 코드에 존재하는지 grep.
+    #    (계약 PR 단독 체크아웃 등으로 sidecar 소스가 없으면 skip — 거짓 통과 대신 명시적 skip.)
+    missing_sources = [
+        src for src in MEASURED_ENDPOINT_SOURCES.values()
+        if not (REPO_ROOT / src).exists()
+    ]
+    if missing_sources:
+        pytest.skip(f"sidecar source not present in this checkout: {missing_sources}")
+
+    for endpoint, src in MEASURED_ENDPOINT_SOURCES.items():
+        path_only = endpoint.split(" ", 1)[1]  # 'POST /x' -> '/x'
+        text = (REPO_ROOT / src).read_text(encoding="utf-8")
+        assert f'"{path_only}"' in text or f"'{path_only}'" in text, (
+            f"실측 단언 위반: {endpoint} 경로가 {src} 에 존재하지 않음 (SSOT §3 환각 의심)"
+        )
 
 
 def test_text_ref_is_device_local_only_const():

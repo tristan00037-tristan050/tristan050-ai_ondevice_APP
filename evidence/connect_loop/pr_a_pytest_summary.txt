@@ -5,8 +5,9 @@ Connect Loop Contract — PR-A 검증 증거 (pytest 요약)
   python -m pytest tests/connect_loop/test_schema_contract.py -v
 
 결과:
-  90 passed, 6 warnings
+  136 passed, 6 warnings
   (warnings: 무관한 FastAPI on_event DeprecationWarning — 리포 conftest import 부수효과, 계약과 무관)
+  (초기 90건 -> 5단 재검토 반영 후 136건으로 강화)
 
 검증된 항목 (test groups):
   - test_schema_self_validates_draft07            : 4 스키마 draft-07 self-validate + additionalProperties:false
@@ -33,5 +34,19 @@ Connect Loop Contract — PR-A 검증 증거 (pytest 요약)
   accounting_classify -> box 5   -> POST /accounting/classify
   general_chat        -> chat    -> POST /v1/chat/completions
   unknown             -> none    -> (fallback, no endpoint)
+
+5단 재검토(18 에이전트) 반영 사항:
+  [확정 수정]
+   - learning_event: status=APPROVED -> policy_approval.decision=approved + dlp_result.passed=true
+     (+PII/secret/위반=false) if/then 강제 추가 (미승인/DLP실패 학습유입 차단)
+   - reason_code 류/created_by_component 코드 패턴, approved_text_ref scheme:// 참조 강제 (자유원문 밀반입 차단)
+   - 모든 date-time 필드 RFC3339 pattern 추가 (format 미검증 환경 대비)
+   - negative 테스트 대폭 추가: const/enum/수치경계/date-time/reason_code/APPROVED불변식
+   - endpoint enum 테스트를 '실제 sidecar 소스 grep'으로 전환 (토톨로지 제거)
+  [거짓 양성 — 환각 아님으로 확인]
+   - 재검토팀이 '엔드포인트 3종 환각'이라 지적했으나, 이는 검토 에이전트가 PR 베이스(origin/main)가
+     아닌 오래된 워크트리(16c9c14a, main 의 조상)를 grep한 탓. origin/main 에는 helper1_search.py:111,
+     box2_rewrite.py:52, box3_draft.py:45, include_router(298-300), /accounting/classify:977 모두 실재.
+     SSOT §3 인용 정확. (git ls-tree origin/main 로 검증 완료)
 
 원문/로컬경로/secret 포함 여부: 0 (digest-only, 절대경로 없음, 비밀 없음)

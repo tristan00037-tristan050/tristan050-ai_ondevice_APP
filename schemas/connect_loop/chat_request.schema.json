@@ -87,8 +87,9 @@
     },
     "created_at": {
       "type": "string",
-      "description": "요청 생성 시각 (RFC3339 / ISO8601).",
-      "format": "date-time"
+      "description": "요청 생성 시각 (RFC3339 / ISO8601). format 미검증 환경 대비 pattern 으로도 형식 강제.",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
     },
     "schema_version": {
       "type": "string",

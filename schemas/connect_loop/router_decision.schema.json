@@ -59,8 +59,8 @@
     },
     "reason_code": {
       "type": "string",
-      "description": "판정 근거 코드(자유 문자열, 원문 금지). 예: 'INTENT_KEYWORD_MATCH', 'LOW_CONFIDENCE_FALLBACK'.",
-      "minLength": 1
+      "description": "판정 근거 코드(대문자 코드, 원문 금지). 예: 'INTENT_KEYWORD_MATCH', 'LOW_CONFIDENCE_FALLBACK'.",
+      "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
     },
     "fallback_required": {
       "type": "boolean",
