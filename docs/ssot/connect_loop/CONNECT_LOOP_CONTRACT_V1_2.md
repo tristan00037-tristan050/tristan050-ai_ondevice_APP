@@ -89,7 +89,7 @@ sidecar 구현(`butler_pc_core/sidecar/routes/box2_rewrite.py`의 `digest_payloa
 | `form_convert` | `2` | 양식 변환 (외부→우리 양식) | `POST /v1/cards/2/rewrite` | `sidecar/routes/box2_rewrite.py:52` |
 | `draft_write` | `3` | 새 초안 작성 (과거기반) | `POST /v1/cards/3/draft` | `sidecar/routes/box3_draft.py:45` |
 | `accounting_classify` | `5` | **회계 분류 (은행→회계)** | `POST /accounting/classify` | `butler_sidecar.py:977` |
-| `general_chat` | `chat` | 일반 대화 (OpenAI 호환) | `POST /v1/chat/completions` | `sidecar/routes/chat_completions.py:93` (보조: `scripts/serving/butler_server_v1.py:122`) |
+| `general_chat` | `chat` | 일반 대화 (OpenAI 호환) | `none` (sidecar 미등록 → `fallback_required=true`) | chat 라우터는 `sidecar/routes/chat_completions.py:93` 에 모듈로 존재하나 `butler_sidecar.py` 에 `include_router` 되지 않음(serving server `scripts/serving/butler_server_v1.py:122` 가 동일 경로 제공). Connect Loop(sidecar)에서는 fallback (Codex P1, 2026-05-27) |
 | `unknown` | `none` | 미상 → fallback | `none` (엔드포인트 미지정, `fallback_required=true`) | — |
 
 ### 카드 ↔ 박스 ↔ 기능 정의 (근거: `butler_pc_core/prompts/cards/`)

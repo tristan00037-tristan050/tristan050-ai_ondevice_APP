@@ -24,7 +24,7 @@
     },
     "intent_label": {
       "type": "string",
-      "description": "판정된 의도. intent -> endpoint 매핑(실측):\n  memory_search       -> box 'helper1' -> POST /v1/helpers/1/search\n  form_convert        -> box '2'       -> POST /v1/cards/2/rewrite\n  draft_write         -> box '3'       -> POST /v1/cards/3/draft\n  accounting_classify -> box '5'       -> POST /accounting/classify\n  general_chat        -> box 'chat'    -> POST /v1/chat/completions\n  unknown             -> box 'none'    -> (no endpoint; fallback_required=true)",
+      "description": "판정된 의도. intent -> endpoint 매핑(실측 sidecar 등록 경로):\n  memory_search       -> box 'helper1' -> POST /v1/helpers/1/search\n  form_convert        -> box '2'       -> POST /v1/cards/2/rewrite\n  draft_write         -> box '3'       -> POST /v1/cards/3/draft\n  accounting_classify -> box '5'       -> POST /accounting/classify\n  general_chat        -> box 'chat'    -> (no sidecar endpoint; fallback_required=true) — chat은 sidecar 미등록(serving server 별도 제공), Connect Loop(sidecar)에서는 fallback\n  unknown             -> box 'none'    -> (no endpoint; fallback_required=true)",
       "enum": [
         "memory_search",
         "form_convert",
@@ -47,7 +47,6 @@
         "POST /v1/cards/2/rewrite",
         "POST /v1/cards/3/draft",
         "POST /accounting/classify",
-        "POST /v1/chat/completions",
         "none"
       ]
     },
@@ -127,6 +126,7 @@
       }
     },
     {
+      "comment": "Codex P1 정정 (2026-05-27): general_chat이 POST /v1/chat/completions로 매핑됐으나 해당 라우터는 sidecar(butler_sidecar.py)에 미등록(serving server 별도 제공)이라 port 8765에서 404. Connect Loop는 sidecar-scoped이므로 chat은 endpoint 미지정 + fallback_required=true로 처리.",
       "if": {
         "properties": { "intent_label": { "const": "general_chat" } },
         "required": ["intent_label"]
@@ -134,7 +134,8 @@
       "then": {
         "properties": {
           "target_box_id": { "const": "chat" },
-          "target_endpoint": { "const": "POST /v1/chat/completions" }
+          "target_endpoint": { "const": "none" },
+          "fallback_required": { "const": true }
         }
       }
     },

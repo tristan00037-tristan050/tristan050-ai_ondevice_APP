@@ -180,7 +180,8 @@
     "expires_at": {
       "type": "string",
       "format": "date-time",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+      "description": "RFC3339 date-time. Codex P2 정정 (2026-05-27): FormatChecker 미사용 validator(Draft7Validator(...).validate)에서도 invalid timestamp(예: 2026-13-40T99:99:99Z)를 차단하도록 pattern range 강화 — month 01-12, day 01-31, hour 00-23, minute/second 00-59.",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
     },
     "verified_for_training": {
       "type": "boolean",

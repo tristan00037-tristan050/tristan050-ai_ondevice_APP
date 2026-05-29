@@ -30,7 +30,7 @@ INTENT_MAP = {
     "form_convert": ("2", "POST /v1/cards/2/rewrite"),
     "draft_write": ("3", "POST /v1/cards/3/draft"),
     "accounting_classify": ("5", "POST /accounting/classify"),
-    "general_chat": ("chat", "POST /v1/chat/completions"),
+    "general_chat": ("chat", "none"),
     "unknown": ("none", "none"),
 }
 

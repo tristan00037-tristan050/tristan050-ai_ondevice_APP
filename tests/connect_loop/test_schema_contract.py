@@ -493,7 +493,9 @@ MEASURED_ENDPOINT_SOURCES = {
     "POST /v1/cards/2/rewrite": "butler_pc_core/sidecar/routes/box2_rewrite.py",
     "POST /v1/cards/3/draft": "butler_pc_core/sidecar/routes/box3_draft.py",
     "POST /accounting/classify": "butler_sidecar.py",
-    "POST /v1/chat/completions": "butler_pc_core/sidecar/routes/chat_completions.py",
+    # POST /v1/chat/completions 제거 (Codex P1, 2026-05-27): chat 라우터는 sidecar
+    # (butler_sidecar.py)에 include_router되지 않음 — serving server 별도 제공.
+    # 따라서 '실측 sidecar 엔드포인트' enum에서 제외, general_chat은 fallback 처리.
 }
 
 

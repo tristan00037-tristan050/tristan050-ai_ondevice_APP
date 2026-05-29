@@ -29,9 +29,11 @@ INTENT_MAPPING = {
     "form_convert": ("2", "POST /v1/cards/2/rewrite"),
     "draft_write": ("3", "POST /v1/cards/3/draft"),
     "accounting_classify": ("5", "POST /accounting/classify"),
-    "general_chat": ("chat", "POST /v1/chat/completions"),
+    "general_chat": ("chat", "none"),
     "unknown": ("none", "none"),
 }
+# chat은 sidecar 미등록 → general_chat도 unknown처럼 fallback_required=true.
+_FALLBACK_INTENTS = {"unknown", "general_chat"}
 
 
 def _decision(intent, box_id, endpoint, fallback=False):
@@ -51,7 +53,7 @@ def _decision(intent, box_id, endpoint, fallback=False):
 @pytest.mark.parametrize("intent,box_id,endpoint", [(i, b, e) for i, (b, e) in INTENT_MAPPING.items()])
 def test_correct_intent_mapping_passes(intent, box_id, endpoint):
     """매핑표대로의 조합은 통과 (over-constrain 회귀 방지)."""
-    fallback = intent == "unknown"
+    fallback = intent in _FALLBACK_INTENTS
     Draft7Validator(ROUTER_SCHEMA).validate(_decision(intent, box_id, endpoint, fallback))
 
 

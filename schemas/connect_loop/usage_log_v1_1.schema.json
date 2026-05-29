@@ -90,7 +90,6 @@
         "POST /v1/cards/2/rewrite",
         "POST /v1/cards/3/draft",
         "POST /accounting/classify",
-        "POST /v1/chat/completions",
         "none"
       ]
     },
@@ -224,10 +223,11 @@
         "properties": { "intent_label": { "const": "general_chat" } },
         "required": ["intent_label"]
       },
+      "comment": "Codex P1 정정 (2026-05-27): chat은 sidecar 미등록(serving server 별도)이라 Connect Loop sidecar 로그에서는 endpoint 'none'. box_id는 chat 의도 분류 유지.",
       "then": {
         "properties": {
           "box_id": { "const": "chat" },
-          "endpoint": { "const": "POST /v1/chat/completions" }
+          "endpoint": { "const": "none" }
         }
       }
     },
