@@ -75,5 +75,82 @@
       "type": "string",
       "const": "router_decision.v1"
     }
-  }
+  },
+  "allOf": [
+    {
+      "comment": "Codex P1 정정 (2026-05-27): intent_label/target_box_id/target_endpoint가 독립 enum이라 misroute(예: accounting_classify + helper1)가 통과하던 결함 정정. intent_label description의 실측 매핑표를 if/then/allOf로 강제하여 fail-closed SSOT로 작동.",
+      "if": {
+        "properties": { "intent_label": { "const": "memory_search" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "target_box_id": { "const": "helper1" },
+          "target_endpoint": { "const": "POST /v1/helpers/1/search" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "form_convert" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "target_box_id": { "const": "2" },
+          "target_endpoint": { "const": "POST /v1/cards/2/rewrite" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "draft_write" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "target_box_id": { "const": "3" },
+          "target_endpoint": { "const": "POST /v1/cards/3/draft" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "accounting_classify" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "target_box_id": { "const": "5" },
+          "target_endpoint": { "const": "POST /accounting/classify" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "general_chat" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "target_box_id": { "const": "chat" },
+          "target_endpoint": { "const": "POST /v1/chat/completions" }
+        }
+      }
+    },
+    {
+      "comment": "unknown intent는 라우팅 보류: target_box_id/endpoint 모두 'none' + fallback_required=true 강제.",
+      "if": {
+        "properties": { "intent_label": { "const": "unknown" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "target_box_id": { "const": "none" },
+          "target_endpoint": { "const": "none" },
+          "fallback_required": { "const": true }
+        }
+      }
+    }
+  ]
 }
