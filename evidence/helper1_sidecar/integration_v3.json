@@ -1,0 +1,28 @@
+{
+  "schema_version": "helper1.sidecar_integration.v3",
+  "sealed_at": "2026-05-29T09:09:11.459935",
+  "status": "HELPER1_SIDECAR_CONTRACT_ONLY_SEALED",
+  "git_head_before_commit": "84bd59e03cb7875c6dd68fc78d06bea17a374eb7",
+  "branch": "feat/box3-3-2-helper1-sidecar-integration",
+  "pr_number": 761,
+  "partial_corrections_applied": [
+    "real mode memory_helper.find/ask anyio.to_thread.run_sync 오프로딩 (보강 81)",
+    "token 없음/잘못된 token 403 회귀 test 추가",
+    "PR body head SHA 정합화 (push 후 새 head)"
+  ],
+  "endpoints_registered": [
+    "/v1/helpers/1/search",
+    "/v1/helpers/1/ask"
+  ],
+  "integration_mode": "contract_only",
+  "real_validation_done": false,
+  "event_loop_offload": "anyio.to_thread.run_sync (real mode find/ask only; contract_only 미적용)",
+  "test_results": "12 passed (helper1 integration)",
+  "regression": "85 passed / 2 skipped",
+  "external_send_zero": "VERIFIED_BY_TEST_AND_GREP",
+  "raw_text_logged_zero": "VERIFIED_BY_TEST",
+  "production_claim_allowed": false,
+  "release_claim_allowed": false,
+  "binary_in_git_zero": true,
+  "codex_p2_resolution": "real mode event loop 차단 정정 (threadpool 오프로딩) + SDK absent/ImportError contract_only downgrade (선행 commit)"
+}

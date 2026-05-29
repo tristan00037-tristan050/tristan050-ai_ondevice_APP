@@ -1,0 +1,29 @@
+{
+  "schema_version": "helper1.sidecar_integration.v2",
+  "sealed_at": "2026-05-29T08:06:45.015632",
+  "status": "HELPER1_SIDECAR_CONTRACT_ONLY_SEALED",
+  "git_head_before_commit": "eef94e03c861e58ad212bbcb94c2435f4b74380a",
+  "branch": "feat/box3-3-2-helper1-sidecar-integration",
+  "base_main_head": "eef94e03c861e58ad212bbcb94c2435f4b74380a",
+  "endpoints_registered": [
+    "/v1/helpers/1/search",
+    "/v1/helpers/1/ask"
+  ],
+  "integration_mode": "contract_only",
+  "real_validation_done": false,
+  "asset_preflight_path": "evidence/helper1_sidecar/asset_preflight_v1.json",
+  "asset_status": "5 runtime assets (bge_m3/butler_gguf/chunks_v2/embeddings/bm25) 전건 MISSING, SDK만 present -> contract_only",
+  "sdk_interface": "memory_helper.find(query, top_k=5) + memory_helper.ask(query) (lazy load, real mode 한정)",
+  "test_results": "6 passed (helper1 integration)",
+  "regression": "box2/box3/router-registration/helper1 회귀 0",
+  "external_send_zero": "VERIFIED_BY_TEST_AND_GREP",
+  "raw_text_logged_zero": "VERIFIED_BY_TEST (audit keys = query_digest/policy_decision/reason only)",
+  "production_claim_allowed": false,
+  "release_claim_allowed": false,
+  "binary_in_git_zero": true,
+  "disclosure": {
+    "contract_only_notice": true,
+    "real_validation_pending": true,
+    "note": "5 runtime assets 부재로 real 검증 미수행. SDK present로 contract_only endpoint 활성. 자산 확보 후 real 검증 별도 박스 의무"
+  }
+}

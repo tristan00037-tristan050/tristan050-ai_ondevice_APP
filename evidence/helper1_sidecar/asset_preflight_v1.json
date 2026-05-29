@@ -1,0 +1,42 @@
+{
+  "schema_version": "helper1.asset_preflight.v1",
+  "status": "ASSET_PARTIAL_OR_MISSING",
+  "integration_mode": "contract_only",
+  "assets": {
+    "bge_m3": {
+      "path": "/private/tmp/bge_m3_combined",
+      "exists": false,
+      "kind": "missing",
+      "size_bytes": null
+    },
+    "butler_gguf": {
+      "path": "/Volumes/T7 Shield/학습모델/butler-1.7b-v4-rt/butler-1.7b-v4-rt-q4_k_m.gguf",
+      "exists": false,
+      "kind": "missing",
+      "size_bytes": null
+    },
+    "chunks_v2": {
+      "path": "/Users/kimsunghoon/Desktop/기억도우미/runtime/private/helper1_chunks_v2.local.jsonl",
+      "exists": false,
+      "kind": "missing",
+      "size_bytes": null
+    },
+    "embeddings": {
+      "path": "/Users/kimsunghoon/Desktop/기억도우미/runtime/private/helper1_embeddings_v2.npy",
+      "exists": false,
+      "kind": "missing",
+      "size_bytes": null
+    },
+    "bm25": {
+      "path": "/Users/kimsunghoon/Desktop/기억도우미/runtime/private/helper1_bm25_v2.pkl",
+      "exists": false,
+      "kind": "missing",
+      "size_bytes": null
+    },
+    "sdk": {
+      "path": "/Users/kimsunghoon/Desktop/도우미폴더/넘겨줄도우미모델/도우미1_기억/sdk/memory_helper.py",
+      "exists": true
+    }
+  },
+  "real_validation_allowed": false
+}
