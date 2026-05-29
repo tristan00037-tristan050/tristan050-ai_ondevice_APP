@@ -116,6 +116,9 @@ def _le_expires(ts: str) -> dict:
     "2026-05-15T10:60:00Z",  # minute > 59
     "2026-05-15T10:00:60Z",  # second > 59
     "2026-13-40T99:99:99Z",  # Codex 예시
+    "2026-05-15T10:00:00+99:99",  # offset hour/minute invalid
+    "2026-05-15T10:00:00+24:00",  # offset hour > 23
+    "2026-05-15T10:00:00+09:60",  # offset minute > 59
 ])
 def test_expires_at_invalid_range_rejected(bad_ts):
     with pytest.raises(ValidationError):
@@ -128,6 +131,7 @@ def test_expires_at_invalid_range_rejected(bad_ts):
     "2026-01-01T00:00:00Z",
     "2026-05-15T10:00:00.123Z",
     "2026-05-15T10:00:00+09:00",
+    "2026-05-15T10:00:00+09:30",
     "2026-05-15T10:00:00-05:00",
 ])
 def test_expires_at_valid_passes(good_ts):

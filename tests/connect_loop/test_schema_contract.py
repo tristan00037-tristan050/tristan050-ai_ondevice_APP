@@ -477,13 +477,35 @@ def test_learning_event_approved_blocks_dlp_detection(flag):
 
 
 def test_learning_event_candidate_allows_pending_review():
-    # CANDIDATE 상태는 정책/ DLP 가 아직 미완료여도 통과해야 한다(if/then 이 APPROVED 에만 적용).
+    # CANDIDATE 상태는 최종 학습 투입 전(verified=false)이라면 정책/DLP 가 아직 미완료여도 통과한다.
     schema = load_schema("learning_event")
     sample = copy.deepcopy(VALID_LEARNING_EVENT)
     sample["status"] = "CANDIDATE"
+    sample["verified_for_training"] = False
     sample["policy_approval"]["decision"] = "needs_review"
     sample["dlp_result"]["passed"] = False
     Draft7Validator(schema).validate(sample)
+
+
+def test_learning_event_verified_training_requires_approved_gate():
+    schema = load_schema("learning_event")
+    sample = copy.deepcopy(VALID_LEARNING_EVENT)
+    sample["status"] = "CANDIDATE"
+    sample["verified_for_training"] = True
+    sample["policy_approval"]["decision"] = "needs_review"
+    sample["dlp_result"]["passed"] = False
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
+
+
+@pytest.mark.parametrize("flag", ["pii_detected", "secret_detected", "policy_violation"])
+def test_learning_event_verified_training_blocks_dlp_detection(flag):
+    schema = load_schema("learning_event")
+    sample = copy.deepcopy(VALID_LEARNING_EVENT)
+    sample["verified_for_training"] = True
+    sample["dlp_result"][flag] = True
+    with pytest.raises(ValidationError):
+        Draft7Validator(schema).validate(sample)
 
 
 # SSOT §3 실측표가 단언하는 (엔드포인트 -> source file) 매핑.

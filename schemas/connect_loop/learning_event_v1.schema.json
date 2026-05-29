@@ -180,8 +180,8 @@
     "expires_at": {
       "type": "string",
       "format": "date-time",
-      "description": "RFC3339 date-time. Codex P2 정정 (2026-05-27): FormatChecker 미사용 validator(Draft7Validator(...).validate)에서도 invalid timestamp(예: 2026-13-40T99:99:99Z)를 차단하도록 pattern range 강화 — month 01-12, day 01-31, hour 00-23, minute/second 00-59.",
-      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+      "description": "RFC3339 date-time. Codex P2 정정 (2026-05-29): FormatChecker 미사용 validator(Draft7Validator(...).validate)에서도 invalid timestamp(예: 2026-13-40T99:99:99Z)와 invalid offset(예: +99:99, +09:60)을 차단하도록 pattern range 강화 — month 01-12, day 01-31, hour 00-23, minute/second 00-59, offset hour 00-23, offset minute 00-59.",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
     },
     "verified_for_training": {
       "type": "boolean",
@@ -194,6 +194,29 @@
     }
   },
   "allOf": [
+    {
+      "comment": "Codex P1 정정 (2026-05-29): verified_for_training=true 는 최종 학습 투입 readiness 신호이므로 status=APPROVED + policy_approval.decision=approved + DLP passed/검출 플래그 false 를 독립적으로 강제한다. CANDIDATE/needs_review/DLP 실패 record 가 trainer filter(verified_for_training=true)만으로 유입되는 결함 차단.",
+      "if": {
+        "properties": { "verified_for_training": { "const": true } },
+        "required": ["verified_for_training"]
+      },
+      "then": {
+        "properties": {
+          "status": { "const": "APPROVED" },
+          "policy_approval": {
+            "properties": { "decision": { "const": "approved" } }
+          },
+          "dlp_result": {
+            "properties": {
+              "passed": { "const": true },
+              "pii_detected": { "const": false },
+              "secret_detected": { "const": false },
+              "policy_violation": { "const": false }
+            }
+          }
+        }
+      }
+    },
     {
       "comment": "Codex P1 정정 (2026-05-27): label.intent_label과 label.target_box_id가 독립 enum이라 mislabel(예: accounting_classify + helper1)이 학습 파이프라인 유일 shape로 유입되던 결함 정정. router_decision.schema의 intent→box 매핑을 label 객체에 mirror. (learning_type은 intent_label과 권위 매핑이 없고 enum 집합이 달라 일관성 검사 미포함 — 추정 방지.) 상단 if(status==APPROVED) 게이트는 그대로 병행 적용된다.",
       "if": {
