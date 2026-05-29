@@ -168,5 +168,80 @@
       "type": "string",
       "const": "usage_log.v1.1"
     }
-  }
+  },
+  "allOf": [
+    {
+      "comment": "Codex P2 정정 (2026-05-27): intent_label/box_id/endpoint가 독립 enum이라 router_decision validation 없이 독립 ingest될 때 inconsistent record(예: accounting_classify + helper1 + /v1/helpers/1/search)가 통과해 audit/statistics를 오염시키던 결함 정정. router_decision.schema의 intent→box/endpoint 매핑을 box_id/endpoint 필드명으로 mirror.",
+      "if": {
+        "properties": { "intent_label": { "const": "memory_search" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "box_id": { "const": "helper1" },
+          "endpoint": { "const": "POST /v1/helpers/1/search" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "form_convert" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "box_id": { "const": "2" },
+          "endpoint": { "const": "POST /v1/cards/2/rewrite" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "draft_write" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "box_id": { "const": "3" },
+          "endpoint": { "const": "POST /v1/cards/3/draft" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "accounting_classify" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "box_id": { "const": "5" },
+          "endpoint": { "const": "POST /accounting/classify" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "general_chat" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "box_id": { "const": "chat" },
+          "endpoint": { "const": "POST /v1/chat/completions" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "unknown" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "box_id": { "const": "none" },
+          "endpoint": { "const": "none" }
+        }
+      }
+    }
+  ]
 }

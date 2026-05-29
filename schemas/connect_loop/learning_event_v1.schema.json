@@ -191,5 +191,62 @@
       "type": "string",
       "const": "learning_event.v1"
     }
-  }
+  },
+  "allOf": [
+    {
+      "comment": "Codex P1 정정 (2026-05-27): label.intent_label과 label.target_box_id가 독립 enum이라 mislabel(예: accounting_classify + helper1)이 학습 파이프라인 유일 shape로 유입되던 결함 정정. router_decision.schema의 intent→box 매핑을 label 객체에 mirror. (learning_type은 intent_label과 권위 매핑이 없고 enum 집합이 달라 일관성 검사 미포함 — 추정 방지.) 상단 if(status==APPROVED) 게이트는 그대로 병행 적용된다.",
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "memory_search" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "helper1" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "form_convert" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "2" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "draft_write" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "3" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "accounting_classify" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "5" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "general_chat" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "chat" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "unknown" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "none" } } } }
+      }
+    }
+  ]
 }
