@@ -63,7 +63,7 @@ def test_ask_sdk_absent_returns_contract_only(monkeypatch):
 def test_search_sdk_import_failure_downgrades_to_contract_only(monkeypatch):
     import butler_pc_core.sidecar.routes.helper1_search as h1
     monkeypatch.setattr(h1, "_sdk_present", lambda: True)
-    monkeypatch.setattr(h1, "_assets_present", lambda: True)
+    monkeypatch.setattr(h1, "_search_assets_present", lambda: True)
 
     def _boom():
         raise ImportError("dep missing")
@@ -83,7 +83,7 @@ def test_search_sdk_import_failure_downgrades_to_contract_only(monkeypatch):
 def test_ask_sdk_import_failure_downgrades_to_contract_only(monkeypatch):
     import butler_pc_core.sidecar.routes.helper1_search as h1
     monkeypatch.setattr(h1, "_sdk_present", lambda: True)
-    monkeypatch.setattr(h1, "_assets_present", lambda: True)
+    monkeypatch.setattr(h1, "_ask_assets_present", lambda: True)
 
     def _boom():
         raise ImportError("dep missing")
@@ -102,7 +102,7 @@ def test_sdk_import_error_does_not_leak_raw_path(monkeypatch):
     import butler_pc_core.sidecar.routes.helper1_search as h1
     sentinel = "/Users/SECRET_LOCAL_2026_05_27/broken_dep"
     monkeypatch.setattr(h1, "_sdk_present", lambda: True)
-    monkeypatch.setattr(h1, "_assets_present", lambda: True)
+    monkeypatch.setattr(h1, "_search_assets_present", lambda: True)
 
     def _boom():
         raise ImportError(f"missing dep at {sentinel}")
