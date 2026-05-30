@@ -5,23 +5,25 @@ Connect Loop Contract — PR-A 검증 증거 (pytest 요약, 전체 디렉터리
   python -m pytest tests/connect_loop -v
 
 결과:
-  262 passed, 6 warnings in 0.34s
+  302 passed, 6 warnings in 0.36s
   (warnings: 무관한 FastAPI on_event DeprecationWarning — 리포 conftest import 부수효과, 계약과 무관)
   (이전 증거의 "test_schema_contract.py 단일 실행 136 passed"를 tests/connect_loop 전체 실행 원문으로 교체.
-   136(단일) -> 204 -> 256 -> 262(전체): Codex 재리뷰 P2 2건(required date-time range / none-endpoint non-real) 반영으로 회귀 추가.)
+   136(단일) -> 204 -> 256 -> 262 -> 302(전체): Codex 재리뷰 P2 3건(required date-time range / none-endpoint non-real / 월별 일수 calendar range) 반영으로 회귀 추가.)
 
-파일별 통과 분포 (4개 파일, 합계 262):
-  test_schema_contract.py                  : 192  (스키마 self-validate / fail-closed / const·enum·경계 / reason_code / APPROVED·verified_for_training 불변식 / endpoint grep / date-time range)
+파일별 통과 분포 (4개 파일, 합계 302):
+  test_schema_contract.py                  : 232  (스키마 self-validate / fail-closed / const·enum·경계 / reason_code / APPROVED·verified_for_training 불변식 / endpoint grep / date-time calendar range)
   test_chat_fallback_and_expires_range.py  :  33  (general_chat sidecar fallback + expires_at range + none-endpoint non-real: invalid 차단 / valid 통과)
   test_mapping_mirror_le_ul.py             :  22  (intent->box->endpoint mirror: learning_event.label + usage_log)
   test_router_decision_intent_mapping.py   :  15  (router_decision intent->box->endpoint if/then 정합)
 
-date-time / expires_at offset 정책 회귀 (allowlist 미도입, syntactic range 확정):
+date-time 검증 경계 정책 회귀 (allowlist 미도입; 달력=계약 regex, 윤년=런타임 FormatChecker):
   적용 필드 (required, 4개): chat_request.created_at / usage_log.timestamp / learning_event.created_at / learning_event.expires_at
-  차단(ValidationError): 2026-13-40T99:99:99Z , month 00/13 , day 00/32 , hour 25 , minute 60 , +99:99 , +24:00 , +09:60
-  통과: Z , +09:00 , -05:00 , +05:45(Nepal) , .123Z
-  -> FormatChecker 미사용 Draft7Validator.validate 경로에서도 차단/통과가 pattern range만으로 성립.
-  -> 음수 offset/+05:45 offset 등 정당 타임존은 통과 (allowlist 도입 시 차단될 위험을 피함).
+  차단(ValidationError): 2026-13-40T99:99:99Z , month 00/13 , day 00/32 , hour 25 , minute 60 , +99:99 , +24:00 , +09:60 ,
+                        2026-02-31 , 2026-02-30 , 2026-04-31 , 2026-06-31 , 2026-11-31 (월별 일수 초과)
+  통과: Z , +09:00 , -05:00 , +05:45(Nepal) , .123Z , 2026-01-31 , 2026-04-30 , 2026-02-28 , 2024-02-29(윤년)
+  경계: 2026-02-29(평년)는 계약 regex 통과 — 연도 의존 윤년 유효성은 런타임 FormatChecker 책임(윤년의 정당한 2-29 차단 방지).
+  -> FormatChecker 미사용 Draft7Validator.validate 경로에서도 어떤 해에도 불가능한 값은 pattern 만으로 차단.
+  -> 음수 offset/+05:45 등 정당 타임존은 통과 (allowlist 도입 시 차단될 위험을 피함).
 
 Codex P1/P2 재리뷰 대응 (스키마 반영 위치):
   P1 approved-policy-decision gate    -> learning_event_v1.schema.json if/then (status==APPROVED -> decision approved + DLP)
@@ -34,5 +36,6 @@ Codex P1/P2 재리뷰 대응 (스키마 반영 위치):
   P2 timezone offset bound            -> learning_event_v1.schema.json expires_at offset range (시 00-23 : 분 00-59)
   P2 required date-time range (재리뷰) -> chat_request.created_at / usage_log.timestamp / learning_event.created_at 에 동일 range pattern 적용
   P2 none-endpoint non-real (재리뷰)  -> usage_log_v1_1.schema.json allOf (endpoint==none -> integration_mode contract_only + real_validation_done false)
+  P2 calendar 월별 일수 (재리뷰)       -> 4개 date-time 필드 pattern 에 31/30/2월 일수 enforce (2026-02-31 등 차단, 윤년은 FormatChecker)
 
 원문/로컬경로/secret 포함 여부: 0 (digest-only, 절대경로 없음, 비밀 없음, pytest 결과 요약만)

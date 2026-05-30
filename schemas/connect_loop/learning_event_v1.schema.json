@@ -60,7 +60,7 @@
       "type": "string",
       "description": "생성 시각 (RFC3339). Codex P2 정정 (2026-05-30): format 미검증 validator 에서도 impossible timestamp/invalid offset 을 차단하도록 expires_at 과 동일한 range pattern 적용.",
       "format": "date-time",
-      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
+      "pattern": "^\\d{4}-((0[13578]|1[02])-(0[1-9]|[12]\\d|3[01])|(0[469]|11)-(0[1-9]|[12]\\d|30)|02-(0[1-9]|[12]\\d))T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
     },
     "status": {
       "type": "string",
@@ -182,7 +182,7 @@
       "type": "string",
       "format": "date-time",
       "description": "RFC3339 date-time. Codex P2 정정 (2026-05-29): FormatChecker 미사용 validator(Draft7Validator(...).validate)에서도 invalid timestamp(예: 2026-13-40T99:99:99Z)와 invalid offset(예: +99:99, +09:60)을 차단하도록 pattern range 강화 — month 01-12, day 01-31, hour 00-23, minute/second 00-59, offset hour 00-23, offset minute 00-59.",
-      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
+      "pattern": "^\\d{4}-((0[13578]|1[02])-(0[1-9]|[12]\\d|3[01])|(0[469]|11)-(0[1-9]|[12]\\d|30)|02-(0[1-9]|[12]\\d))T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
     },
     "verified_for_training": {
       "type": "boolean",

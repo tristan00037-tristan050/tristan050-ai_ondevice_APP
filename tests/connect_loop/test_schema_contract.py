@@ -419,6 +419,12 @@ def test_numeric_boundary_violation_fails(key, field, bad):
     "2026-05-15T10:60:00Z",       # minute 60
     "2026-05-15T10:00:00+24:00",  # offset hour 24
     "2026-05-15T10:00:00+09:60",  # offset minute 60
+    # Codex P2 (2026-05-30, 옵션1): 어떤 해에도 불가능한 달력 날짜는 계약 regex 로 차단.
+    "2026-02-31T10:00:00Z",       # 2월 31일 (어떤 해도 불가)
+    "2026-02-30T10:00:00Z",       # 2월 30일 (어떤 해도 불가)
+    "2026-04-31T10:00:00Z",       # 4월 31일 (30일 월)
+    "2026-06-31T10:00:00Z",       # 6월 31일 (30일 월)
+    "2026-11-31T10:00:00Z",       # 11월 31일 (30일 월)
 ])
 def test_datetime_pattern_violation_fails(key, field, bad):
     schema = load_schema(key)
@@ -440,6 +446,11 @@ def test_datetime_pattern_violation_fails(key, field, bad):
 @pytest.mark.parametrize("good", [
     "2026-05-15T10:00:00Z", "2026-12-31T23:59:59Z", "2026-05-15T10:00:00.123Z",
     "2026-05-15T10:00:00+09:00", "2026-05-15T10:00:00-05:00", "2026-05-15T10:00:00+05:45",
+    # Codex P2 (2026-05-30, 옵션1): 정당한 월말 날짜는 통과 (정당 입력 차단 0).
+    "2026-01-31T10:00:00Z",       # 1월 31일 (31일 월)
+    "2026-04-30T10:00:00Z",       # 4월 30일 (30일 월 말일)
+    "2026-02-28T10:00:00Z",       # 2월 28일
+    "2024-02-29T10:00:00Z",       # 윤년 2월 29일 (정당)
 ])
 def test_datetime_pattern_valid_passes(key, field, good):
     # allowlist 미도입: 음수/+05:45 등 정당 offset 은 모든 required date-time 에서 통과.
@@ -447,6 +458,20 @@ def test_datetime_pattern_valid_passes(key, field, good):
     sample = copy.deepcopy(VALID_SAMPLES[key])
     sample[field] = good
     Draft7Validator(schema).validate(sample)
+
+
+@pytest.mark.parametrize("key,field", [
+    ("chat_request", "created_at"), ("usage_log", "timestamp"),
+    ("learning_event", "created_at"), ("learning_event", "expires_at"),
+])
+def test_datetime_nonleap_feb29_is_contract_pass_formatchecker_boundary(key, field):
+    # 설계 경계 (Codex P2 2026-05-30, 옵션1): 2026-02-29 는 평년이라 semantic 으로 무효지만
+    # 계약 regex 는 02-(01-29) 를 허용하므로 통과한다. 윤년 의존(해당 연도의 2-29 유효성)은
+    # 런타임 FormatChecker 책임 — 윤년의 정당한 2-29 를 계약에서 차단하지 않기 위한 의도적 경계.
+    schema = load_schema(key)
+    sample = copy.deepcopy(VALID_SAMPLES[key])
+    sample[field] = "2026-02-29T10:00:00Z"
+    Draft7Validator(schema).validate(sample)  # 계약 통과 (FormatChecker 미사용 경로)
 
 
 # --------------------------------------------------------------------------- #

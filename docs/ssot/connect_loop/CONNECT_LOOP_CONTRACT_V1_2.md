@@ -154,14 +154,18 @@ token, password, secret
    (또는 PII/secret/위반 검출) 이면 BLOCK; `CANDIDATE` 는 미완료 상태 허용
 8. usage_log: `external_send_zero`/`raw_text_logged`/`retention_class` const 위반 시 fail
 9. const 위반(`schema_version`, `text_ref`) / enum 위반 / 수치 경계(`routing_confidence` 0..1, `retention_days`≥1) 위반 시 fail
-10. RFC3339 date-time pattern 위반 시 fail (`format` 미검증 환경 대비 pattern 강제). **모든 required date-time 필드**(`chat_request.created_at` / `usage_log.timestamp` / `learning_event.created_at` / `learning_event.expires_at`)에 동일한 range pattern 적용 — impossible timestamp(예: `2026-13-40T99:99:99Z`)·invalid offset 차단 (Codex P2 재리뷰 2026-05-30 반영)
+10. RFC3339 date-time pattern 위반 시 fail (`format` 미검증 환경 대비 pattern 강제). **모든 required date-time 필드**(`chat_request.created_at` / `usage_log.timestamp` / `learning_event.created_at` / `learning_event.expires_at`)에 동일한 range pattern 적용 — **어떤 해에도 불가능한 달력/시계 값**(`2026-13-40T99:99:99Z`, `2026-02-31`, `2026-04-31`, 시 24, 분 60, offset +24:00 등) 차단. 월별 일수(31일 월 / 30일 월 / 2월 01-29)까지 enforce (Codex P2 재리뷰 2026-05-30 반영)
 11. `reason_code` 류 자유 원문 / `approved_text_ref` 비참조 평문 시 fail (밀반입 채널 차단)
 12. router_decision `target_endpoint` enum 이 §3 실측 경로 집합과 일치하고, **각 경로가 실제 sidecar 소스에 존재**하는지 grep 확인(토톨로지 방지)
 13. usage_log `endpoint="none"`(general_chat/unknown fallback) 레코드는 `integration_mode="contract_only"` + `real_validation_done=false` 강제 — fallback/no-endpoint 가 측정된 `real` validation 으로 위장해 audit/통계를 오염시키는 것 차단 (Codex P2 재리뷰 2026-05-30 반영)
 
-> **date-time / `expires_at` 타임존 offset 정책 (확정, 2026-05-29; required 필드 전체로 확장 2026-05-30)**: 모든 required date-time 필드는 계약 수준에서 RFC3339 *syntactic range* 만 검증한다(자릿수 + 월 01-12 / 일 01-31 / 시 00-23 / 분·초 00-59 / offset 시 00-23 : 분 00-59). 실제 타임존 *semantic* 유효성(존재하는 offset인지 등)은 런타임 `FormatChecker` 책임이다. **운영 allowlist(+00:00~+14:00 등)는 도입하지 않는다** — 음수 offset(-05:00)·:45 offset(+05:45, Nepal) 등 정당한 타임존을 계약 단계에서 차단할 위험이 있기 때문이다. negative(+99:99 / +24:00 / +09:60 / impossible timestamp 차단) + positive(+09:00 / Z / -05:00 / +05:45 통과) 회귀 테스트로 이 범위를 4개 필드 모두에 대해 고정한다.
+> **date-time 검증 경계 정책 (확정 2026-05-29; required 필드 전체 확장 + 월별 일수 강화 2026-05-30)**: 모든 required date-time 필드는 다음 기준으로 검증한다.
+> - **계약 regex (1차 fail-closed)** = *어떤 해에도 불가능한* 달력/시계 값을 차단한다: 월 01-12, 월별 일수(31일 월 01-31 / 30일 월 01-30 / 2월 01-29), 시 00-23, 분·초 00-59, offset 시 00-23 : 분 00-59. → `2026-02-31`, `2026-04-31`, 시 24, 분 60, `+24:00` 등은 계약에서 거부.
+> - **런타임 `FormatChecker` (semantic)** = *연도 의존* 유효성을 담당한다: 윤년별 2월 29일의 해당 연도 유효성(예: 평년 `2026-02-29`). 계약 regex 는 `02-29` 를 통과시키며, 이는 **윤년의 정당한 `2024-02-29` 를 계약에서 차단하지 않기 위한 의도적 경계**다.
+> - **allowlist 미도입**: 운영상 드문 정당 offset(음수 `-05:00`·`+05:45` Nepal 등)은 계약에서 차단하지 않는다 — 정당 입력 차단 방지. (timezone allowlist 도입 안 함.)
+> negative(+99:99 / +24:00 / +09:60 / `2026-02-31` / `2026-04-31` 차단) + positive(+09:00 / Z / -05:00 / +05:45 / `2026-01-31` / `2026-04-30` / `2024-02-29` 통과) + 경계(`2026-02-29` 계약 통과·FormatChecker 책임) 회귀로 4개 필드 모두 고정한다.
 
-테스트 총 262건 통과 (`tests/connect_loop` 디렉터리 전체).
+테스트 총 302건 통과 (`tests/connect_loop` 디렉터리 전체).
 
 실행:
 
