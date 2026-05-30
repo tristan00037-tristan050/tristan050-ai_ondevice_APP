@@ -113,6 +113,37 @@ def test_usage_log_none_endpoint_contract_only_passes(intent, box):
     Draft7Validator(USAGE_LOG).validate(_usage_log(intent, box, "none"))
 
 
+# ── #3b deny/review_required usage log은 측정된 real 호출 주장 불가 (Codex P2 재리뷰 2026-05-30) ──
+
+@pytest.mark.parametrize("decision", ["deny", "review_required"])
+def test_usage_log_non_allow_decision_real_mode_fails(decision):
+    """routed intent 라도 policy_decision!=allow 면 integration_mode=real 차단."""
+    bad = _usage_log("memory_search", "helper1", "POST /v1/helpers/1/search")  # real/True
+    bad["policy_decision"] = decision
+    with pytest.raises(ValidationError):
+        Draft7Validator(USAGE_LOG).validate(bad)
+
+
+@pytest.mark.parametrize("decision", ["deny", "review_required"])
+def test_usage_log_non_allow_decision_real_validation_done_true_fails(decision):
+    bad = _usage_log("memory_search", "helper1", "POST /v1/helpers/1/search")
+    bad["policy_decision"] = decision
+    bad["integration_mode"] = "contract_only"
+    bad["real_validation_done"] = True  # contract_only 인데 real_validation_done=true → 차단
+    with pytest.raises(ValidationError):
+        Draft7Validator(USAGE_LOG).validate(bad)
+
+
+@pytest.mark.parametrize("decision", ["deny", "review_required"])
+def test_usage_log_non_allow_decision_contract_only_preserves_endpoint_passes(decision):
+    """deny/review_required + contract_only/false 면 의도 endpoint 를 보존한 채 통과(감사 충실성)."""
+    ok = _usage_log("memory_search", "helper1", "POST /v1/helpers/1/search")
+    ok["policy_decision"] = decision
+    ok["integration_mode"] = "contract_only"
+    ok["real_validation_done"] = False
+    Draft7Validator(USAGE_LOG).validate(ok)
+
+
 # ── #2 expires_at pattern range ──
 
 _LE_BASE = {

@@ -159,6 +159,7 @@ token, password, secret
 12. router_decision `target_endpoint` enum 이 §3 실측 경로 집합과 일치하고, **각 경로가 실제 sidecar 소스에 존재**하는지 grep 확인(토톨로지 방지)
 13. usage_log `endpoint="none"`(general_chat/unknown fallback) 레코드는 `integration_mode="contract_only"` + `real_validation_done=false` 강제 — fallback/no-endpoint 가 측정된 `real` validation 으로 위장해 audit/통계를 오염시키는 것 차단 (Codex P2 재리뷰 2026-05-30 반영)
 14. router_decision `policy_precheck != "allow"`(`block`/`needs_review`) 이면 `target_endpoint="none"` + `fallback_required=true` 강제 — **정책 우선(Policy Gate first)**: 정책이 막은/검토대기 결정이 호출 가능한 sidecar route 로 표현돼 그대로 실행되는 것을 계약 단계에서 fail-closed 차단. **callable endpoint 매핑만** `policy_precheck="allow"` 조건으로 gate 하고, **intent→`target_box_id`(분류) 매핑은 정책과 무관하게 항상 강제**한다 — blocked/검토대기 결정에서도 box mislabel(예: `accounting_classify`+`helper1`)을 막기 위함 (Codex P1+P2 재리뷰 2026-05-30 반영)
+15. usage_log `policy_decision != "allow"`(`deny`/`review_required`) 이면 `integration_mode="contract_only"` + `real_validation_done=false` 강제 — 차단/검토대기 요청이 측정된 `real` 엔드포인트 호출로 통계 카운트되는 것을 차단(항목 13의 `endpoint="none"` 규칙과 독립: routed intent 라도 deny 면 non-real). 의도된 `endpoint` 는 감사 충실성을 위해 보존 (Codex P2 재리뷰 2026-05-30 반영)
 
 > **date-time 검증 경계 정책 (확정 2026-05-29; required 필드 전체 확장 + 월별 일수 강화 2026-05-30)**: 모든 required date-time 필드는 다음 기준으로 검증한다.
 > - **계약 regex (1차 fail-closed)** = *어떤 해에도 불가능한* 달력/시계 값을 차단한다: 월 01-12, 월별 일수(31일 월 01-31 / 30일 월 01-30 / 2월 01-29), 시 00-23, 분·초 00-59, offset 시 00-23 : 분 00-59. → `2026-02-31`, `2026-04-31`, 시 24, 분 60, `+24:00` 등은 계약에서 거부.
@@ -166,9 +167,9 @@ token, password, secret
 > - **allowlist 미도입**: 운영상 드문 정당 offset(음수 `-05:00`·`+05:45` Nepal 등)은 계약에서 차단하지 않는다 — 정당 입력 차단 방지. (timezone allowlist 도입 안 함.)
 > negative(+99:99 / +24:00 / +09:60 / `2026-02-31` / `2026-04-31` 차단) + positive(+09:00 / Z / -05:00 / +05:45 / `2026-01-31` / `2026-04-30` / `2024-02-29` 통과) + 경계(`2026-02-29` 계약 통과·FormatChecker 책임) 회귀로 4개 필드 모두 고정한다.
 
-> **정책 게이트 vs 감사 기록 경계 (2026-05-30)**: `router_decision` 은 *실행 이전의 라우팅 결정*이므로 `policy_precheck != allow` 면 호출 가능한 endpoint 를 가질 수 없다(항목 14, fail-closed). 반면 `usage_log` 는 *사후 감사 기록*이라 `policy_decision="deny"` 라도 의도된 `endpoint` 를 보존할 수 있다(감사 충실성 — "무엇이 거부됐는지"를 남기기 위함). 실제 호출 수행 여부는 `endpoint` 가 아니라 `integration_mode`/`real_validation_done`(+ 항목 13의 `endpoint="none"`→non-real 규칙)으로 구분하므로, deny 기록이 측정된 real 호출로 오인되지 않는다. `learning_event` 는 별도로 `status="APPROVED"`/`verified_for_training` 게이트(항목 6·7)로 정책 미승인·DLP 실패 데이터의 학습 유입을 이미 차단한다.
+> **정책 게이트 vs 감사 기록 경계 (2026-05-30)**: `router_decision` 은 *실행 이전의 라우팅 결정*이므로 `policy_precheck != allow` 면 호출 가능한 endpoint 를 가질 수 없다(항목 14, fail-closed). `usage_log` 는 *사후 감사 기록*이라 `policy_decision="deny"`/`"review_required"` 라도 의도된 `endpoint` 를 보존하지만(감사 충실성 — "무엇이 거부됐는지"를 남기기 위함), **그 경우 `integration_mode="contract_only"` + `real_validation_done=false` 가 계약 수준에서 강제된다(항목 15)** — 즉 endpoint 는 보존하되 측정된 real 호출로 카운트되는 것은 차단한다. 실제 호출 수행 여부는 `endpoint` 가 아니라 `integration_mode`/`real_validation_done`(항목 13·15)으로 판별되며, 이 두 규칙으로 deny/검토대기/fallback 기록이 real 통계를 오염시키지 않음이 *계약으로 보장*된다. `learning_event` 는 별도로 `status="APPROVED"`/`verified_for_training` 게이트(항목 6·7)로 정책 미승인·DLP 실패 데이터의 학습 유입을 이미 차단한다.
 
-테스트 총 313건 통과 (`tests/connect_loop` 디렉터리 전체).
+테스트 총 319건 통과 (`tests/connect_loop` 디렉터리 전체).
 
 실행:
 

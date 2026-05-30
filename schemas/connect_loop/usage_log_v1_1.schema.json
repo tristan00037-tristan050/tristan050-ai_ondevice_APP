@@ -255,6 +255,19 @@
           "real_validation_done": { "const": false }
         }
       }
+    },
+    {
+      "comment": "Codex P2 정정 (2026-05-30): policy_decision 이 'allow' 가 아니면(deny/review_required) 그 요청은 측정된 real 엔드포인트 호출로 카운트될 수 없다. integration_mode='contract_only' + real_validation_done=false 강제. 의도된 endpoint 는 감사 충실성을 위해 보존하되(어떤 박스로 가려 했는지 기록), 차단/검토대기 요청이 'real 호출 수행됨'으로 통계 오염되는 것을 차단한다. (endpoint='none' 규칙과 독립 — routed intent 라도 deny 면 non-real.)",
+      "if": {
+        "properties": { "policy_decision": { "enum": ["deny", "review_required"] } },
+        "required": ["policy_decision"]
+      },
+      "then": {
+        "properties": {
+          "integration_mode": { "const": "contract_only" },
+          "real_validation_done": { "const": false }
+        }
+      }
     }
   ]
 }
