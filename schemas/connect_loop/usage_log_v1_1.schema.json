@@ -244,29 +244,26 @@
       }
     },
     {
-      "comment": "Codex P2 정정 (2026-05-30): endpoint 'none'(general_chat/unknown fallback)은 실제 sidecar 호출이 아니므로 integration_mode='real' / real_validation_done=true 를 주장할 수 없다. fallback/no-endpoint 레코드가 측정된 real validation 으로 위장해 audit/통계(real vs fallback/contract-only 구분)를 오염시키는 것을 차단한다. endpoint 기준으로 강제하여 general_chat·unknown 양쪽을 모두 커버한다.",
+      "comment": "Codex P2 통첨 불변식 (2026-05-30): real/contract_only 일관성 truth-table 을 한 쌍의 불변식으로 닫는다(개별 endpoint='none'·deny/review_required·contract_only 행 if/then 을 대체·정리). (X) integration_mode='real'(실제 엔드포인트 호출됨)이면 policy_decision='allow' 이고 endpoint != 'none' 여야 한다 — real 은 정책 허용 + 실제 callable endpoint 컨텍스트에서만 성립. 이 대우로 endpoint='none'/deny/review_required 는 자동으로 integration_mode='real' 불가(→ contract_only). 의도된 endpoint 자체는 감사 충실성을 위해 보존한다.",
       "if": {
-        "properties": { "endpoint": { "const": "none" } },
-        "required": ["endpoint"]
+        "properties": { "integration_mode": { "const": "real" } },
+        "required": ["integration_mode"]
       },
       "then": {
         "properties": {
-          "integration_mode": { "const": "contract_only" },
-          "real_validation_done": { "const": false }
+          "policy_decision": { "const": "allow" },
+          "endpoint": { "not": { "const": "none" } }
         }
       }
     },
     {
-      "comment": "Codex P2 정정 (2026-05-30): policy_decision 이 'allow' 가 아니면(deny/review_required) 그 요청은 측정된 real 엔드포인트 호출로 카운트될 수 없다. integration_mode='contract_only' + real_validation_done=false 강제. 의도된 endpoint 는 감사 충실성을 위해 보존하되(어떤 박스로 가려 했는지 기록), 차단/검토대기 요청이 'real 호출 수행됨'으로 통계 오염되는 것을 차단한다. (endpoint='none' 규칙과 독립 — routed intent 라도 deny 면 non-real.)",
+      "comment": "Codex P2 통첨 불변식 (Y, 2026-05-30): integration_mode='contract_only'(실제 호출 없음)이면 real_validation_done=false. (X)와 함께 'real_validation_done=true ⟹ integration_mode=real ∧ policy_decision=allow ∧ endpoint!=none' 를 함의하여 모순 레코드(contract_only+true, none/deny+real)를 모두 차단한다. real/contract_only truth-table 은 이 두 불변식으로 닫힌다 — 추가 파생 행은 PR-B(런타임) 책임.",
       "if": {
-        "properties": { "policy_decision": { "enum": ["deny", "review_required"] } },
-        "required": ["policy_decision"]
+        "properties": { "integration_mode": { "const": "contract_only" } },
+        "required": ["integration_mode"]
       },
       "then": {
-        "properties": {
-          "integration_mode": { "const": "contract_only" },
-          "real_validation_done": { "const": false }
-        }
+        "properties": { "real_validation_done": { "const": false } }
       }
     }
   ]

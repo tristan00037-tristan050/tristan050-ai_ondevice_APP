@@ -144,6 +144,35 @@ def test_usage_log_non_allow_decision_contract_only_preserves_endpoint_passes(de
     Draft7Validator(USAGE_LOG).validate(ok)
 
 
+# ── #3c real/contract_only 통첨 불변식 (Codex P2 재리뷰 2026-05-30, 축 마감) ──
+
+def test_usage_log_contract_only_with_real_validation_done_true_fails():
+    """allow + routed endpoint 라도 integration_mode=contract_only 면 real_validation_done=true 차단."""
+    bad = _usage_log("memory_search", "helper1", "POST /v1/helpers/1/search")  # allow, real/True
+    bad["integration_mode"] = "contract_only"  # real_validation_done 은 True 유지 → 모순
+    with pytest.raises(ValidationError):
+        Draft7Validator(USAGE_LOG).validate(bad)
+
+
+def test_usage_log_real_mode_requires_allow_and_real_endpoint():
+    """integration_mode=real 은 policy_decision=allow + endpoint!=none 컨텍스트에서만 성립."""
+    # real + endpoint=none → 차단
+    bad_none = _usage_log("general_chat", "chat", "none")
+    bad_none["integration_mode"] = "real"
+    bad_none["real_validation_done"] = True
+    with pytest.raises(ValidationError):
+        Draft7Validator(USAGE_LOG).validate(bad_none)
+    # real + deny → 차단
+    bad_deny = _usage_log("memory_search", "helper1", "POST /v1/helpers/1/search")
+    bad_deny["policy_decision"] = "deny"
+    with pytest.raises(ValidationError):
+        Draft7Validator(USAGE_LOG).validate(bad_deny)
+    # real + allow + 정합 endpoint → 통과
+    Draft7Validator(USAGE_LOG).validate(
+        _usage_log("memory_search", "helper1", "POST /v1/helpers/1/search")
+    )
+
+
 # ── #2 expires_at pattern range ──
 
 _LE_BASE = {
