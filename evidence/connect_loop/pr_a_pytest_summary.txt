@@ -5,16 +5,16 @@ Connect Loop Contract — PR-A 검증 증거 (pytest 요약, 전체 디렉터리
   python -m pytest tests/connect_loop -v
 
 결과:
-  309 passed, 6 warnings in 0.36s
+  313 passed, 6 warnings in 0.36s
   (warnings: 무관한 FastAPI on_event DeprecationWarning — 리포 conftest import 부수효과, 계약과 무관)
   (이전 증거의 "test_schema_contract.py 단일 실행 136 passed"를 tests/connect_loop 전체 실행 원문으로 교체.
-   136(단일) -> 204 -> 256 -> 262 -> 302 -> 309(전체): Codex 재리뷰 P2 3건(required date-time range / none-endpoint non-real / 월별 일수 calendar range) + P1 1건(non-allow precheck non-routable) 반영으로 회귀 추가.)
+   136(단일) -> 204 -> 256 -> 262 -> 302 -> 309 -> 313(전체): Codex 재리뷰 P2 4건(date-time range / none-endpoint non-real / 월별 일수 / blocked-decision box 유지) + P1 1건(non-allow precheck non-routable) 반영으로 회귀 추가.)
 
-파일별 통과 분포 (4개 파일, 합계 309):
+파일별 통과 분포 (4개 파일, 합계 313):
   test_schema_contract.py                  : 232  (스키마 self-validate / fail-closed / const·enum·경계 / reason_code / APPROVED·verified_for_training 불변식 / endpoint grep / date-time calendar range)
   test_chat_fallback_and_expires_range.py  :  33  (general_chat sidecar fallback + expires_at range + none-endpoint non-real: invalid 차단 / valid 통과)
   test_mapping_mirror_le_ul.py             :  22  (intent->box->endpoint mirror: learning_event.label + usage_log)
-  test_router_decision_intent_mapping.py   :  22  (router_decision intent->box->endpoint if/then 정합 + policy_precheck gate)
+  test_router_decision_intent_mapping.py   :  26  (router_decision intent->box->endpoint if/then 정합 + policy_precheck gate + blocked-decision box 유지)
 
 date-time 검증 경계 정책 회귀 (allowlist 미도입; 달력=계약 regex, 윤년=런타임 FormatChecker):
   적용 필드 (required, 4개): chat_request.created_at / usage_log.timestamp / learning_event.created_at / learning_event.expires_at

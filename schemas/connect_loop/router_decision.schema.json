@@ -77,7 +77,44 @@
   },
   "allOf": [
     {
-      "comment": "Codex P1 정정 (2026-05-27): intent_label/target_box_id/target_endpoint가 독립 enum이라 misroute(예: accounting_classify + helper1)가 통과하던 결함 정정. intent_label description의 실측 매핑표를 if/then/allOf로 강제하여 fail-closed SSOT로 작동. Codex P1 (2026-05-30): 정책 우선 원칙 — intent→endpoint 매핑은 policy_precheck=='allow' 일 때만 적용(아래 non-allow 규칙이 block/needs_review 를 endpoint none+fallback 으로 강제).",
+      "comment": "Codex P1 정정 (2026-05-27): intent_label/target_box_id/target_endpoint가 독립 enum이라 misroute(예: accounting_classify + helper1)가 통과하던 결함 정정. intent_label→target_box_id 매핑은 정책과 무관하게 항상 강제(분류 일관성). Codex P2 정정 (2026-05-30): box 매핑을 endpoint 매핑과 분리 — box const 는 precheck 와 무관하게 항상 적용해 blocked 결정에서도 box mislabel(예: accounting_classify + helper1)을 차단한다.",
+      "if": {
+        "properties": { "intent_label": { "const": "memory_search" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": { "target_box_id": { "const": "helper1" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "form_convert" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": { "target_box_id": { "const": "2" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "draft_write" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": { "target_box_id": { "const": "3" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "accounting_classify" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": { "target_box_id": { "const": "5" } }
+      }
+    },
+    {
+      "comment": "Codex P1 (2026-05-30): callable endpoint 매핑만 policy_precheck=='allow' 조건으로 gate (정책 우선). non-allow precheck 는 아래 규칙이 endpoint none+fallback 으로 강제하므로, 두 분기는 상호배타. box 매핑(위)은 정책과 무관하게 항상 적용된다.",
       "if": {
         "properties": {
           "intent_label": { "const": "memory_search" },
@@ -86,10 +123,7 @@
         "required": ["intent_label", "policy_precheck"]
       },
       "then": {
-        "properties": {
-          "target_box_id": { "const": "helper1" },
-          "target_endpoint": { "const": "POST /v1/helpers/1/search" }
-        }
+        "properties": { "target_endpoint": { "const": "POST /v1/helpers/1/search" } }
       }
     },
     {
@@ -101,10 +135,7 @@
         "required": ["intent_label", "policy_precheck"]
       },
       "then": {
-        "properties": {
-          "target_box_id": { "const": "2" },
-          "target_endpoint": { "const": "POST /v1/cards/2/rewrite" }
-        }
+        "properties": { "target_endpoint": { "const": "POST /v1/cards/2/rewrite" } }
       }
     },
     {
@@ -116,10 +147,7 @@
         "required": ["intent_label", "policy_precheck"]
       },
       "then": {
-        "properties": {
-          "target_box_id": { "const": "3" },
-          "target_endpoint": { "const": "POST /v1/cards/3/draft" }
-        }
+        "properties": { "target_endpoint": { "const": "POST /v1/cards/3/draft" } }
       }
     },
     {
@@ -131,10 +159,7 @@
         "required": ["intent_label", "policy_precheck"]
       },
       "then": {
-        "properties": {
-          "target_box_id": { "const": "5" },
-          "target_endpoint": { "const": "POST /accounting/classify" }
-        }
+        "properties": { "target_endpoint": { "const": "POST /accounting/classify" } }
       }
     },
     {

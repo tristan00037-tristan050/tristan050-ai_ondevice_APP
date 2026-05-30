@@ -132,3 +132,20 @@ def test_allow_precheck_real_endpoint_still_passes():
     Draft7Validator(ROUTER_SCHEMA).validate(
         _decision("accounting_classify", "5", "POST /accounting/classify", fallback=False)
     )
+
+
+@pytest.mark.parametrize("precheck", ["block", "needs_review"])
+def test_non_allow_precheck_still_enforces_box_mapping(precheck):
+    """Codex P2 (2026-05-30): blocked/검토대기 결정에서도 intent→target_box_id const 는 유지.
+    endpoint 만 allow-gate, box 매핑은 정책과 무관하게 항상 강제 → box mislabel 차단."""
+    bad = _with_precheck("accounting_classify", "helper1", "none", precheck, fallback=True)
+    with pytest.raises(ValidationError):
+        Draft7Validator(ROUTER_SCHEMA).validate(bad)
+
+
+@pytest.mark.parametrize("precheck", ["block", "needs_review"])
+def test_non_allow_precheck_correct_box_none_endpoint_passes(precheck):
+    """blocked 결정 + 정합 box + endpoint=none + fallback=true 는 통과."""
+    Draft7Validator(ROUTER_SCHEMA).validate(
+        _with_precheck("accounting_classify", "5", "none", precheck, fallback=True)
+    )
