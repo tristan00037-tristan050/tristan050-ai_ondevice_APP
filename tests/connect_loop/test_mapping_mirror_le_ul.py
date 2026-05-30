@@ -79,6 +79,10 @@ def _ul(intent, box, endpoint):
     d["intent_label"] = intent
     d["box_id"] = box
     d["endpoint"] = endpoint
+    if endpoint == "none":
+        # Codex P2 (2026-05-30): no-endpoint(fallback)은 real validation 불가 → contract_only/false 강제.
+        d["integration_mode"] = "contract_only"
+        d["real_validation_done"] = False
     return d
 
 

@@ -65,11 +65,15 @@ def test_router_general_chat_without_fallback_fails():
 
 
 def _usage_log(intent, box, endpoint):
+    # Codex P2 (2026-05-30): endpoint 'none'(fallback)은 real validation 불가 → contract_only/false.
+    real = endpoint != "none"
     return {
         "log_id": "l1", "timestamp": "2026-05-29T00:00:00Z", "request_id": "r1",
         "device_id_digest": _digest("d"), "tenant_id_digest": _digest("t"), "department_id_digest": _digest("dep"),
         "request_digest": _digest("req"), "intent_label": intent, "box_id": box, "endpoint": endpoint,
-        "routing_confidence": 0.9, "integration_mode": "real", "real_validation_done": True,
+        "routing_confidence": 0.9,
+        "integration_mode": "real" if real else "contract_only",
+        "real_validation_done": real,
         "result_digest": _digest("res"), "source_digests": [_digest("s")], "policy_decision": "allow",
         "policy_reason_code": "OK", "latency_ms": 10.0, "external_send_zero": True, "raw_text_logged": False,
         "learning_candidate": True, "learning_event_created": False, "retention_class": "audit_digest_only",
@@ -84,6 +88,29 @@ def test_usage_log_general_chat_to_none_passes():
 def test_usage_log_general_chat_to_old_chat_endpoint_fails():
     with pytest.raises(ValidationError):
         Draft7Validator(USAGE_LOG).validate(_usage_log("general_chat", "chat", "POST /v1/chat/completions"))
+
+
+# ── #3 endpoint 'none'(fallback)은 real validation 으로 위장 불가 (Codex P2 재리뷰 2026-05-30) ──
+
+@pytest.mark.parametrize("intent,box", [("general_chat", "chat"), ("unknown", "none")])
+def test_usage_log_none_endpoint_real_mode_fails(intent, box):
+    bad = _usage_log(intent, box, "none")
+    bad["integration_mode"] = "real"
+    with pytest.raises(ValidationError):
+        Draft7Validator(USAGE_LOG).validate(bad)
+
+
+@pytest.mark.parametrize("intent,box", [("general_chat", "chat"), ("unknown", "none")])
+def test_usage_log_none_endpoint_real_validation_done_true_fails(intent, box):
+    bad = _usage_log(intent, box, "none")
+    bad["real_validation_done"] = True
+    with pytest.raises(ValidationError):
+        Draft7Validator(USAGE_LOG).validate(bad)
+
+
+@pytest.mark.parametrize("intent,box", [("general_chat", "chat"), ("unknown", "none")])
+def test_usage_log_none_endpoint_contract_only_passes(intent, box):
+    Draft7Validator(USAGE_LOG).validate(_usage_log(intent, box, "none"))
 
 
 # ── #2 expires_at pattern range ──

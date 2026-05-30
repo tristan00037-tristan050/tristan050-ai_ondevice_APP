@@ -242,6 +242,19 @@
           "endpoint": { "const": "none" }
         }
       }
+    },
+    {
+      "comment": "Codex P2 정정 (2026-05-30): endpoint 'none'(general_chat/unknown fallback)은 실제 sidecar 호출이 아니므로 integration_mode='real' / real_validation_done=true 를 주장할 수 없다. fallback/no-endpoint 레코드가 측정된 real validation 으로 위장해 audit/통계(real vs fallback/contract-only 구분)를 오염시키는 것을 차단한다. endpoint 기준으로 강제하여 general_chat·unknown 양쪽을 모두 커버한다.",
+      "if": {
+        "properties": { "endpoint": { "const": "none" } },
+        "required": ["endpoint"]
+      },
+      "then": {
+        "properties": {
+          "integration_mode": { "const": "contract_only" },
+          "real_validation_done": { "const": false }
+        }
+      }
     }
   ]
 }
