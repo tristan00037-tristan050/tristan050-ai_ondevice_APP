@@ -8,9 +8,14 @@ PR-B Usage Accumulator Middleware — 검증 증거 (pytest 요약)
 명령:
   python -m pytest tests/connect_loop/test_usage_accumulator_middleware.py -v
 
-결과:
-  20 passed (real helper1 통합 테스트 포함; skip 0)
-  regression: python -m pytest tests/test_helper1_sidecar_integration.py tests/connect_loop/ -q -> 무회귀
+결과 (실측, 2026-05-30 HOLD 보완 — 추정 아님):
+  [PR-B 단위] python -m pytest tests/connect_loop/test_usage_accumulator_middleware.py -v
+    -> 20 passed (real helper1 통합 테스트 포함; skip 0)
+  [전체 무회귀] python -m pytest tests/test_helper1_sidecar_integration.py tests/connect_loop -q
+    -> 353 passed (skip 0)
+    파일별: test_schema_contract.py 232 / test_chat_fallback_and_expires_range.py 41 /
+            test_router_decision_intent_mapping.py 26 / test_mapping_mirror_le_ul.py 22 /
+            test_usage_accumulator_middleware.py 20 / test_helper1_sidecar_integration.py 12  (합계 353)
 
 Codex P2 재리뷰(2026-05-30) 반영:
   - 메서드 게이팅: 경로가 같아도 POST 가 아니면(OPTIONS preflight/GET 405 등) usage_log 미생성
