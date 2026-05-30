@@ -58,8 +58,9 @@
     },
     "created_at": {
       "type": "string",
+      "description": "생성 시각 (RFC3339). Codex P2 정정 (2026-05-30): format 미검증 validator 에서도 impossible timestamp/invalid offset 을 차단하도록 expires_at 과 동일한 range pattern 적용.",
       "format": "date-time",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
     },
     "status": {
       "type": "string",

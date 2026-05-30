@@ -408,13 +408,45 @@ def test_numeric_boundary_violation_fails(key, field, bad):
         ("learning_event", "expires_at"),
     ],
 )
-@pytest.mark.parametrize("bad", ["THIS-IS-NOT-A-DATE", "2026-13-40", "2026/05/29 09:00", "29-05-2026T09:00:00Z"])
+@pytest.mark.parametrize("bad", [
+    "THIS-IS-NOT-A-DATE", "2026-13-40", "2026/05/29 09:00", "29-05-2026T09:00:00Z",
+    # Codex P2 (2026-05-30): FormatChecker 미사용 경로에서 loose \d{2} 가 통과시키던
+    # impossible-but-well-formed timestamp 를 모든 required date-time 필드에서 차단 확인.
+    "2026-13-40T99:99:99Z",       # month/day/hour/min/sec 전부 범위 초과
+    "2026-00-15T10:00:00Z",       # month 00
+    "2026-05-32T10:00:00Z",       # day 32
+    "2026-05-15T25:00:00Z",       # hour 25
+    "2026-05-15T10:60:00Z",       # minute 60
+    "2026-05-15T10:00:00+24:00",  # offset hour 24
+    "2026-05-15T10:00:00+09:60",  # offset minute 60
+])
 def test_datetime_pattern_violation_fails(key, field, bad):
     schema = load_schema(key)
     sample = copy.deepcopy(VALID_SAMPLES[key])
     sample[field] = bad
     with pytest.raises(ValidationError):
         Draft7Validator(schema).validate(sample)
+
+
+@pytest.mark.parametrize(
+    "key,field",
+    [
+        ("chat_request", "created_at"),
+        ("usage_log", "timestamp"),
+        ("learning_event", "created_at"),
+        ("learning_event", "expires_at"),
+    ],
+)
+@pytest.mark.parametrize("good", [
+    "2026-05-15T10:00:00Z", "2026-12-31T23:59:59Z", "2026-05-15T10:00:00.123Z",
+    "2026-05-15T10:00:00+09:00", "2026-05-15T10:00:00-05:00", "2026-05-15T10:00:00+05:45",
+])
+def test_datetime_pattern_valid_passes(key, field, good):
+    # allowlist 미도입: 음수/+05:45 등 정당 offset 은 모든 required date-time 에서 통과.
+    schema = load_schema(key)
+    sample = copy.deepcopy(VALID_SAMPLES[key])
+    sample[field] = good
+    Draft7Validator(schema).validate(sample)
 
 
 # --------------------------------------------------------------------------- #

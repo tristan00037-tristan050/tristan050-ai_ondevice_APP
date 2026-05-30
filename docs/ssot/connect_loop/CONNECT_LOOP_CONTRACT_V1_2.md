@@ -154,13 +154,13 @@ token, password, secret
    (또는 PII/secret/위반 검출) 이면 BLOCK; `CANDIDATE` 는 미완료 상태 허용
 8. usage_log: `external_send_zero`/`raw_text_logged`/`retention_class` const 위반 시 fail
 9. const 위반(`schema_version`, `text_ref`) / enum 위반 / 수치 경계(`routing_confidence` 0..1, `retention_days`≥1) 위반 시 fail
-10. RFC3339 date-time pattern 위반 시 fail (`format` 미검증 환경 대비 pattern 강제)
+10. RFC3339 date-time pattern 위반 시 fail (`format` 미검증 환경 대비 pattern 강제). **모든 required date-time 필드**(`chat_request.created_at` / `usage_log.timestamp` / `learning_event.created_at` / `learning_event.expires_at`)에 동일한 range pattern 적용 — impossible timestamp(예: `2026-13-40T99:99:99Z`)·invalid offset 차단 (Codex P2 재리뷰 2026-05-30 반영)
 11. `reason_code` 류 자유 원문 / `approved_text_ref` 비참조 평문 시 fail (밀반입 채널 차단)
 12. router_decision `target_endpoint` enum 이 §3 실측 경로 집합과 일치하고, **각 경로가 실제 sidecar 소스에 존재**하는지 grep 확인(토톨로지 방지)
 
-> **`expires_at` 타임존 offset 정책 (확정, 2026-05-29)**: `expires_at` 은 계약 수준에서 RFC3339 *syntactic range* 만 검증한다(자릿수 + 월 01-12 / 일 01-31 / 시 00-23 / 분·초 00-59 / offset 시 00-23 : 분 00-59). 실제 타임존 *semantic* 유효성(존재하는 offset인지 등)은 런타임 `FormatChecker` 책임이다. **운영 allowlist(+00:00~+14:00 등)는 도입하지 않는다** — 음수 offset(-05:00)·:45 offset(+05:45, Nepal) 등 정당한 타임존을 계약 단계에서 차단할 위험이 있기 때문이다. negative(+99:99 / +24:00 / +09:60 차단) + positive(+09:00 / Z / -05:00 / +05:45 통과) 회귀 테스트로 이 범위를 고정한다.
+> **date-time / `expires_at` 타임존 offset 정책 (확정, 2026-05-29; required 필드 전체로 확장 2026-05-30)**: 모든 required date-time 필드는 계약 수준에서 RFC3339 *syntactic range* 만 검증한다(자릿수 + 월 01-12 / 일 01-31 / 시 00-23 / 분·초 00-59 / offset 시 00-23 : 분 00-59). 실제 타임존 *semantic* 유효성(존재하는 offset인지 등)은 런타임 `FormatChecker` 책임이다. **운영 allowlist(+00:00~+14:00 등)는 도입하지 않는다** — 음수 offset(-05:00)·:45 offset(+05:45, Nepal) 등 정당한 타임존을 계약 단계에서 차단할 위험이 있기 때문이다. negative(+99:99 / +24:00 / +09:60 / impossible timestamp 차단) + positive(+09:00 / Z / -05:00 / +05:45 통과) 회귀 테스트로 이 범위를 4개 필드 모두에 대해 고정한다.
 
-테스트 총 204건 통과 (`tests/connect_loop` 디렉터리 전체).
+테스트 총 256건 통과 (`tests/connect_loop` 디렉터리 전체).
 
 실행:
 

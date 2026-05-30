@@ -5,20 +5,21 @@ Connect Loop Contract — PR-A 검증 증거 (pytest 요약, 전체 디렉터리
   python -m pytest tests/connect_loop -v
 
 결과:
-  204 passed, 6 warnings in 0.30s
+  256 passed, 6 warnings in 0.34s
   (warnings: 무관한 FastAPI on_event DeprecationWarning — 리포 conftest import 부수효과, 계약과 무관)
   (이전 증거의 "test_schema_contract.py 단일 실행 136 passed"를 tests/connect_loop 전체 실행 원문으로 교체.
-   단일 파일 136 -> 전체 204: 단일 파일 자체도 강화로 140건이 되었고, 나머지 3개 회귀 파일 64건이 더해짐.)
+   136(단일) -> 204(전체) -> 256(전체): Codex 재리뷰 P2(required date-time range) 반영으로 회귀 추가.)
 
-파일별 통과 분포 (4개 파일, 합계 204):
-  test_schema_contract.py                  : 140  (스키마 self-validate / fail-closed / const·enum·경계 / reason_code / APPROVED·verified_for_training 불변식 / endpoint grep)
-  test_chat_fallback_and_expires_range.py  :  32  (general_chat sidecar fallback + expires_at range: invalid 차단 / valid 통과)
+파일별 통과 분포 (4개 파일, 합계 256):
+  test_schema_contract.py                  : 192  (스키마 self-validate / fail-closed / const·enum·경계 / reason_code / APPROVED·verified_for_training 불변식 / endpoint grep / date-time range)
+  test_chat_fallback_and_expires_range.py  :  27  (general_chat sidecar fallback + expires_at range: invalid 차단 / valid 통과)
   test_mapping_mirror_le_ul.py             :  22  (intent->box->endpoint mirror: learning_event.label + usage_log)
   test_router_decision_intent_mapping.py   :  15  (router_decision intent->box->endpoint if/then 정합)
 
-expires_at offset 정책 회귀 (allowlist 미도입, syntactic range 확정):
-  차단(ValidationError): +99:99 , +24:00 , +09:60 , 2026-13-40T99:99:99Z (및 월/일/시/분/초 범위 위반)
-  통과: Z , +09:00 , +09:30 , -05:00 , +05:45(Nepal)
+date-time / expires_at offset 정책 회귀 (allowlist 미도입, syntactic range 확정):
+  적용 필드 (required, 4개): chat_request.created_at / usage_log.timestamp / learning_event.created_at / learning_event.expires_at
+  차단(ValidationError): 2026-13-40T99:99:99Z , month 00/13 , day 00/32 , hour 25 , minute 60 , +99:99 , +24:00 , +09:60
+  통과: Z , +09:00 , -05:00 , +05:45(Nepal) , .123Z
   -> FormatChecker 미사용 Draft7Validator.validate 경로에서도 차단/통과가 pattern range만으로 성립.
   -> 음수 offset/+05:45 offset 등 정당 타임존은 통과 (allowlist 도입 시 차단될 위험을 피함).
 
@@ -31,5 +32,6 @@ Codex P1/P2 재리뷰 대응 (스키마 반영 위치):
   P2 usage_log route consistency      -> usage_log_v1_1.schema.json allOf (intent_label -> box_id/endpoint)
   P2 impossible expiration timestamp  -> learning_event_v1.schema.json expires_at pattern range
   P2 timezone offset bound            -> learning_event_v1.schema.json expires_at offset range (시 00-23 : 분 00-59)
+  P2 required date-time range (재리뷰) -> chat_request.created_at / usage_log.timestamp / learning_event.created_at 에 동일 range pattern 적용
 
 원문/로컬경로/secret 포함 여부: 0 (digest-only, 절대경로 없음, 비밀 없음, pytest 결과 요약만)
