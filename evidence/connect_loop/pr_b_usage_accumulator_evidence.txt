@@ -1,0 +1,45 @@
+PR-B Usage Accumulator Middleware — 검증 증거 (pytest 요약)
+==========================================================
+
+범위: PR-A 머지본 계약 usage_log.v1.1 을 "소비". 계약(스키마) 변경 없음.
+구현: butler_pc_core/sidecar/middleware/usage_accumulator.py (공통 1곳),
+      butler_sidecar.py 에서 add_usage_accumulator_middleware(app) 1회 등록(capability token 미들웨어보다 먼저 → auth outermost → 인증 통과 요청만 기록).
+
+명령:
+  python -m pytest tests/connect_loop/test_usage_accumulator_middleware.py -v
+
+결과:
+  18 passed (real helper1 통합 테스트 포함; skip 0)
+  regression: python -m pytest tests/test_helper1_sidecar_integration.py tests/connect_loop/ -q -> 351 passed (기존 계약/사이드카 테스트 무회귀)
+
+real 검증 (helper1 /search 실제 1회 호출, integration_mode=real 확인):
+  - usage_log 정확히 1건 생성 (store.records == 1, dropped == 0) — 공통 미들웨어 1곳, 박스별 중복 logging 0
+  - 호출 2회 -> 정확히 2건 (호출당 1건, 중복 0)
+  - 계약 schema(usage_log.v1.1) Draft7Validator.validate 통과
+  - raw_text_logged = false , external_send_zero = true
+  - 원문 query/answer/source text 0 (레코드 직렬화에 secret 문자열 부재), 로컬 절대경로 0
+  - policy_decision = allow (2xx) , intent_label=memory_search / box_id=helper1 / endpoint="POST /v1/helpers/1/search"
+  - integration_mode = real , real_validation_done = true , source_digests 존재(sha256: 형식)
+  - 통첨 불변식 위반 0: real_validation_done=true => integration_mode=real ∧ policy_decision=allow ∧ endpoint!=none
+
+순수 빌더 단위 테스트(통첨 불변식 강제 — 엔드포인트가 모순 보고해도 미들웨어가 교정):
+  - integration_mode=contract_only => real_validation_done=false 강제
+  - 비 2xx(차단) => policy_decision=deny + contract_only + real_validation_done=false
+  - real+allow+routed => real 유지, source_digests 수집
+  - 매핑: /v1/helpers/1/search->memory_search/helper1 , /v1/cards/2/rewrite->form_convert/2 , /v1/cards/3/draft->draft_write/3
+  - 비매칭 경로(/health 등) => usage_log 미생성(None)
+  - const 필드: external_send_zero=true / raw_text_logged=false / learning_event_created=false /
+    retention_class=audit_digest_only / created_by_component=connect_loop.usage_accumulator / schema_version=usage_log.v1.1
+  - request_digest/result_digest = sha256: (원문 아님)
+
+기록 필드(계약 26종): log_id, timestamp(RFC3339 UTC), request_id, device_id_digest, tenant_id_digest,
+  department_id_digest, request_digest, intent_label, box_id, endpoint, routing_confidence,
+  integration_mode, real_validation_done, result_digest, source_digests[], policy_decision,
+  policy_reason_code, latency_ms, external_send_zero, raw_text_logged, learning_candidate,
+  learning_event_created, retention_class, created_by_component, schema_hash, schema_version.
+  (device/tenant/department/request_id 는 요청 헤더에서 취득 시 digest 화, 미존재 시 device-local 기본값 digest. 원시값 저장 0.)
+
+비고: /accounting/classify 는 SSE StreamingResponse 이므로 본 미들웨어 버퍼링 대상에서 제외
+  (스트리밍 엔드포인트의 usage_log 화는 후속 작업 — 버퍼링 시 스트리밍이 깨짐). JSON connect_loop 라우트 3종 공통 처리.
+
+원문/로컬경로/secret 포함 여부: 0 (digest-only, 절대경로 없음, 비밀 없음, pytest 결과 요약만)
