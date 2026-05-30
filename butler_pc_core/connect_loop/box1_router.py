@@ -7,6 +7,7 @@ card/helper endpoint.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -93,6 +94,28 @@ def _score_intents(text: str) -> list[_IntentScore]:
     return sorted(scores, key=lambda item: item.score, reverse=True)
 
 
+def canonical_sha256(text: str) -> str:
+    """chat_request.text_digest 와 동일 규칙으로 원문 digest 를 만든다.
+
+    계약(chat_request.v1)의 text_digest 는 '입력 원문의 sha256' 이며 형식은
+    `sha256:<64 hex>`. 정규화 없이 **원문 UTF-8 바이트**를 해시한다(생성·검증 양측이
+    동일 규칙을 써야 false mismatch 가 발생하지 않는다).
+    """
+    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def runtime_text_digest_ok(runtime_text: str | None, chat_request: dict[str, Any]) -> bool | None:
+    """runtime_text 와 chat_request.text_digest 의 일치 여부.
+
+    반환: None = 대조 스킵(runtime_text 또는 text_digest 부재), True/False = 일치 여부.
+    (text_digest 는 chat_request.v1 에서 required 이므로 스킵 경로는 방어적 분기다.)
+    """
+    text_digest = chat_request.get("text_digest")
+    if not runtime_text or not text_digest:
+        return None
+    return canonical_sha256(runtime_text) == text_digest
+
+
 def _classify(runtime_text: str | None) -> tuple[str, float, str]:
     if runtime_text is None or not runtime_text.strip():
         return "unknown", 0.0, "RUNTIME_TEXT_MISSING"
@@ -116,6 +139,13 @@ class RuleBasedBox1Router:
         policy = ensure_policy_precheck(runtime.policy_precheck)
 
         intent_label, confidence, reason_code = _classify(runtime.runtime_text)
+
+        # Codex P2 (2026-05-30): runtime_text ↔ chat_request.text_digest fail-closed 대조.
+        # 로컬 runtime context 가 다른 대기 요청과 잘못 짝지어지면 wrong text 를 다른
+        # request_id/digest 로 라우팅해 감사 추적을 오염시킨다. 불일치 시 fail-closed.
+        if runtime_text_digest_ok(runtime.runtime_text, chat_request) is False:
+            intent_label, confidence, reason_code = "unknown", 0.0, "TEXT_DIGEST_MISMATCH"
+
         target_box_id, target_endpoint = ROUTE_TABLE[intent_label]
         fallback_required = intent_label in FALLBACK_INTENTS
 

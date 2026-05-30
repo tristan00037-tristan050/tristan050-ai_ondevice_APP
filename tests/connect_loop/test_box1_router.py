@@ -9,6 +9,7 @@ from jsonschema.exceptions import ValidationError
 from butler_pc_core.connect_loop.box1_router import (
     RouterRuntimeContext,
     RuleBasedBox1Router,
+    canonical_sha256,
 )
 from butler_pc_core.connect_loop.schema_validator import load_schema
 
@@ -17,7 +18,7 @@ def _digest(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _chat_request() -> dict:
+def _chat_request(text_digest: str | None = None) -> dict:
     return {
         "request_id": "req-box1-router-001",
         "session_id_digest": _digest("session"),
@@ -26,7 +27,8 @@ def _chat_request() -> dict:
         "user_role": "employee",
         "department_id_digest": _digest("department"),
         "text_ref": "device_local_only",
-        "text_digest": _digest("message"),
+        # text_digest 는 실제 runtime_text 의 digest 와 일치해야 한다(유효한 요청).
+        "text_digest": text_digest or _digest("message"),
         "attachments": [],
         "created_at": "2026-05-30T10:00:00+09:00",
         "schema_version": "chat_request.v1",
@@ -35,7 +37,10 @@ def _chat_request() -> dict:
 
 def _decide(text: str | None, policy: str = "allow") -> dict:
     router = RuleBasedBox1Router()
-    return router.decide(_chat_request(), RouterRuntimeContext(runtime_text=text, policy_precheck=policy))
+    # 유효 요청: text_digest = runtime_text 의 canonical digest (text 있을 때).
+    text_digest = canonical_sha256(text) if text else None
+    chat_request = _chat_request(text_digest=text_digest)
+    return router.decide(chat_request, RouterRuntimeContext(runtime_text=text, policy_precheck=policy))
 
 
 def test_memory_search_routes_to_helper1_search():
