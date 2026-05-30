@@ -1,52 +1,35 @@
-Connect Loop Contract — PR-A 검증 증거 (pytest 요약)
-======================================================
+Connect Loop Contract — PR-A 검증 증거 (pytest 요약, 전체 디렉터리)
+================================================================
 
 명령:
-  python -m pytest tests/connect_loop/test_schema_contract.py -v
+  python -m pytest tests/connect_loop -v
 
 결과:
-  136 passed, 6 warnings
+  204 passed, 6 warnings in 0.30s
   (warnings: 무관한 FastAPI on_event DeprecationWarning — 리포 conftest import 부수효과, 계약과 무관)
-  (초기 90건 -> 5단 재검토 반영 후 136건으로 강화)
+  (이전 증거의 "test_schema_contract.py 단일 실행 136 passed"를 tests/connect_loop 전체 실행 원문으로 교체.
+   단일 파일 136 -> 전체 204: 단일 파일 자체도 강화로 140건이 되었고, 나머지 3개 회귀 파일 64건이 더해짐.)
 
-검증된 항목 (test groups):
-  - test_schema_self_validates_draft07            : 4 스키마 draft-07 self-validate + additionalProperties:false
-  - test_valid_sample_passes                      : 유효 샘플 4건 validate 통과
-  - test_forbidden_field_fails                    : 금지필드 10종 x 4스키마 = fail-closed
-  - test_bad_digest_format_fails                  : sha256 형식 위반 fail
-  - test_good_digest_format_passes                : 정상 digest 통과
-  - test_each_required_field_missing_fails        : 모든 required 필드 누락 시 fail
-  - test_learning_event_without_policy_approval_fails    : policy_approval 없으면 BLOCK
-  - test_learning_event_without_policy_decision_fails    : decision 없으면 BLOCK
-  - test_learning_event_without_dlp_result_fails         : dlp_result 없으면 BLOCK
-  - test_learning_event_without_retention_days_fails     : retention_days 없으면 BLOCK
-  - test_learning_event_raw_saved_true_blocked           : raw_input/raw_output/sanitized_summary saved=true BLOCK
-  - test_usage_log_external_send_zero_violation_fails    : external_send_zero const 위반 fail
-  - test_usage_log_raw_text_logged_violation_fails       : raw_text_logged const 위반 fail
-  - test_usage_log_retention_class_violation_fails       : retention_class const 위반 fail
-  - test_router_endpoint_enum_matches_measured_routes    : target_endpoint enum == 실측 경로 집합
-  - test_text_ref_is_device_local_only_const             : text_ref const 확인
+파일별 통과 분포 (4개 파일, 합계 204):
+  test_schema_contract.py                  : 140  (스키마 self-validate / fail-closed / const·enum·경계 / reason_code / APPROVED·verified_for_training 불변식 / endpoint grep)
+  test_chat_fallback_and_expires_range.py  :  32  (general_chat sidecar fallback + expires_at range: invalid 차단 / valid 통과)
+  test_mapping_mirror_le_ul.py             :  22  (intent->box->endpoint mirror: learning_event.label + usage_log)
+  test_router_decision_intent_mapping.py   :  15  (router_decision intent->box->endpoint if/then 정합)
 
-실측 엔드포인트 (코드 grep 확정, 추측 아님):
-  memory_search       -> helper1 -> POST /v1/helpers/1/search
-  form_convert        -> box 2   -> POST /v1/cards/2/rewrite
-  draft_write         -> box 3   -> POST /v1/cards/3/draft
-  accounting_classify -> box 5   -> POST /accounting/classify
-  general_chat        -> chat    -> POST /v1/chat/completions
-  unknown             -> none    -> (fallback, no endpoint)
+expires_at offset 정책 회귀 (allowlist 미도입, syntactic range 확정):
+  차단(ValidationError): +99:99 , +24:00 , +09:60 , 2026-13-40T99:99:99Z (및 월/일/시/분/초 범위 위반)
+  통과: Z , +09:00 , +09:30 , -05:00 , +05:45(Nepal)
+  -> FormatChecker 미사용 Draft7Validator.validate 경로에서도 차단/통과가 pattern range만으로 성립.
+  -> 음수 offset/+05:45 offset 등 정당 타임존은 통과 (allowlist 도입 시 차단될 위험을 피함).
 
-5단 재검토(18 에이전트) 반영 사항:
-  [확정 수정]
-   - learning_event: status=APPROVED -> policy_approval.decision=approved + dlp_result.passed=true
-     (+PII/secret/위반=false) if/then 강제 추가 (미승인/DLP실패 학습유입 차단)
-   - reason_code 류/created_by_component 코드 패턴, approved_text_ref scheme:// 참조 강제 (자유원문 밀반입 차단)
-   - 모든 date-time 필드 RFC3339 pattern 추가 (format 미검증 환경 대비)
-   - negative 테스트 대폭 추가: const/enum/수치경계/date-time/reason_code/APPROVED불변식
-   - endpoint enum 테스트를 '실제 sidecar 소스 grep'으로 전환 (토톨로지 제거)
-  [거짓 양성 — 환각 아님으로 확인]
-   - 재검토팀이 '엔드포인트 3종 환각'이라 지적했으나, 이는 검토 에이전트가 PR 베이스(origin/main)가
-     아닌 오래된 워크트리(16c9c14a, main 의 조상)를 grep한 탓. origin/main 에는 helper1_search.py:111,
-     box2_rewrite.py:52, box3_draft.py:45, include_router(298-300), /accounting/classify:977 모두 실재.
-     SSOT §3 인용 정확. (git ls-tree origin/main 로 검증 완료)
+Codex P1/P2 재리뷰 대응 (스키마 반영 위치):
+  P1 approved-policy-decision gate    -> learning_event_v1.schema.json if/then (status==APPROVED -> decision approved + DLP)
+  P1 intent->endpoint pairs           -> router_decision.schema.json allOf
+  P1 label->box consistency           -> learning_event_v1.schema.json allOf (label.intent_label -> target_box_id)
+  P1 general_chat sidecar 미등록       -> router_decision.schema.json (general_chat -> endpoint none + fallback_required true)
+  P1 verified_for_training gate       -> learning_event_v1.schema.json allOf (verified_for_training true -> APPROVED+approved+DLP)
+  P2 usage_log route consistency      -> usage_log_v1_1.schema.json allOf (intent_label -> box_id/endpoint)
+  P2 impossible expiration timestamp  -> learning_event_v1.schema.json expires_at pattern range
+  P2 timezone offset bound            -> learning_event_v1.schema.json expires_at offset range (시 00-23 : 분 00-59)
 
-원문/로컬경로/secret 포함 여부: 0 (digest-only, 절대경로 없음, 비밀 없음)
+원문/로컬경로/secret 포함 여부: 0 (digest-only, 절대경로 없음, 비밀 없음, pytest 결과 요약만)

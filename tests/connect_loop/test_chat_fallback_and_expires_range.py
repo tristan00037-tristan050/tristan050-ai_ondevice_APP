@@ -133,6 +133,7 @@ def test_expires_at_invalid_range_rejected(bad_ts):
     "2026-05-15T10:00:00+09:00",
     "2026-05-15T10:00:00+09:30",
     "2026-05-15T10:00:00-05:00",
+    "2026-05-15T10:00:00+05:45",  # Nepal (+05:45) — 정당한 :45 offset minute 통과 확인 (allowlist 미도입 근거)
 ])
 def test_expires_at_valid_passes(good_ts):
     Draft7Validator(LEARNING_EVENT).validate(_le_expires(good_ts))

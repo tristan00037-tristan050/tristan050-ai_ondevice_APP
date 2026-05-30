@@ -141,7 +141,7 @@ token, password, secret
 
 ## 5. 계약 검증 테스트
 
-`tests/connect_loop/test_schema_contract.py` (pytest + jsonschema, draft-07) 가 다음을 강제한다:
+`tests/connect_loop/` (pytest + jsonschema, draft-07) 가 다음을 강제한다. 핵심 계약 검증은 `test_schema_contract.py`, intent→box→endpoint mirror·general_chat fallback·expires_at range 회귀는 `test_router_decision_intent_mapping.py` / `test_mapping_mirror_le_ul.py` / `test_chat_fallback_and_expires_range.py` 가 담당한다:
 
 1. 4개 스키마 self-validate (draft-07 meta) 통과 + `additionalProperties:false` 확인
 2. 유효 샘플 4건 validate 통과
@@ -158,12 +158,14 @@ token, password, secret
 11. `reason_code` 류 자유 원문 / `approved_text_ref` 비참조 평문 시 fail (밀반입 채널 차단)
 12. router_decision `target_endpoint` enum 이 §3 실측 경로 집합과 일치하고, **각 경로가 실제 sidecar 소스에 존재**하는지 grep 확인(토톨로지 방지)
 
-테스트 총 136건 통과.
+> **`expires_at` 타임존 offset 정책 (확정, 2026-05-29)**: `expires_at` 은 계약 수준에서 RFC3339 *syntactic range* 만 검증한다(자릿수 + 월 01-12 / 일 01-31 / 시 00-23 / 분·초 00-59 / offset 시 00-23 : 분 00-59). 실제 타임존 *semantic* 유효성(존재하는 offset인지 등)은 런타임 `FormatChecker` 책임이다. **운영 allowlist(+00:00~+14:00 등)는 도입하지 않는다** — 음수 offset(-05:00)·:45 offset(+05:45, Nepal) 등 정당한 타임존을 계약 단계에서 차단할 위험이 있기 때문이다. negative(+99:99 / +24:00 / +09:60 차단) + positive(+09:00 / Z / -05:00 / +05:45 통과) 회귀 테스트로 이 범위를 고정한다.
+
+테스트 총 204건 통과 (`tests/connect_loop` 디렉터리 전체).
 
 실행:
 
 ```bash
-python -m pytest tests/connect_loop/test_schema_contract.py -v
+python -m pytest tests/connect_loop -v
 ```
 
 ---
