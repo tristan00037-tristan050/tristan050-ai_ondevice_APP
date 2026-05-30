@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
@@ -107,17 +108,49 @@ class RuleBasedBox1Router:
         validate_chat_request(chat_request)
         policy = ensure_policy_precheck(runtime.policy_precheck)
 
+        if not _runtime_text_matches_request_digest(runtime.runtime_text, chat_request["text_digest"]):
+            return self._build_decision(
+                request_id=chat_request["request_id"],
+                intent="unknown",
+                confidence=0.0,
+                reason="TEXT_DIGEST_MISMATCH_FALLBACK",
+                policy=policy,
+                force_endpoint_none=True,
+            )
+
         intent, confidence, reason = classify_intent(runtime.runtime_text)
+        return self._build_decision(
+            request_id=chat_request["request_id"],
+            intent=intent,
+            confidence=confidence,
+            reason=reason,
+            policy=policy,
+            force_endpoint_none=not is_executable_policy(policy),
+        )
+
+    def _build_decision(
+        self,
+        *,
+        request_id: str,
+        intent: str,
+        confidence: float,
+        reason: str,
+        policy: PolicyPrecheck,
+        force_endpoint_none: bool,
+    ) -> dict[str, Any]:
         box_id, endpoint = INTENT_ROUTE_MAP[intent]
         fallback = intent in FALLBACK_INTENTS
 
-        if not is_executable_policy(policy):
+        if force_endpoint_none:
             endpoint = "none"
             fallback = True
-            reason = "POLICY_REVIEW_FALLBACK" if policy == "needs_review" else "POLICY_BLOCK_FALLBACK"
+            if policy == "needs_review":
+                reason = "POLICY_REVIEW_FALLBACK"
+            elif policy == "block":
+                reason = "POLICY_BLOCK_FALLBACK"
 
         decision = {
-            "request_id": chat_request["request_id"],
+            "request_id": request_id,
             "intent_label": intent,
             "target_box_id": box_id,
             "target_endpoint": endpoint,
@@ -148,6 +181,16 @@ def classify_intent(runtime_text: str | None) -> tuple[str, float, str]:
         return "unknown", best.score, "AMBIGUOUS_INTENT_FALLBACK"
 
     return best.intent_label, best.score, _reason_for_intent(best.intent_label)
+
+
+def _runtime_text_matches_request_digest(runtime_text: str | None, expected_text_digest: str) -> bool:
+    if runtime_text is None or not runtime_text.strip():
+        return True
+    return _sha256_text(runtime_text) == expected_text_digest
+
+
+def _sha256_text(value: str) -> str:
+    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def _score_intent(intent: str, text: str) -> IntentScore:
