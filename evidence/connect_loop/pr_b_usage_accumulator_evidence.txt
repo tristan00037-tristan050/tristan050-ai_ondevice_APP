@@ -9,8 +9,14 @@ PR-B Usage Accumulator Middleware — 검증 증거 (pytest 요약)
   python -m pytest tests/connect_loop/test_usage_accumulator_middleware.py -v
 
 결과:
-  18 passed (real helper1 통합 테스트 포함; skip 0)
-  regression: python -m pytest tests/test_helper1_sidecar_integration.py tests/connect_loop/ -q -> 351 passed (기존 계약/사이드카 테스트 무회귀)
+  20 passed (real helper1 통합 테스트 포함; skip 0)
+  regression: python -m pytest tests/test_helper1_sidecar_integration.py tests/connect_loop/ -q -> 무회귀
+
+Codex P2 재리뷰(2026-05-30) 반영:
+  - 메서드 게이팅: 경로가 같아도 POST 가 아니면(OPTIONS preflight/GET 405 등) usage_log 미생성
+    (endpoint 미도달 요청이 POST usage_log 로 오염되는 것 차단).
+  - fail-closed 검증: jsonschema 미설치/스키마 로드 실패로 검증 불가 시 저장하지 않음(드롭+카운트).
+    검증되지 않은 레코드 영속 0(계약 위반/드리프트 은폐 차단).
 
 real 검증 (helper1 /search 실제 1회 호출, integration_mode=real 확인):
   - usage_log 정확히 1건 생성 (store.records == 1, dropped == 0) — 공통 미들웨어 1곳, 박스별 중복 logging 0

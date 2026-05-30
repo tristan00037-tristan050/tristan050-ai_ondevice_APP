@@ -261,11 +261,15 @@ def record_usage(
         latency_ms=latency_ms,
     )
     validator = _validator()
-    if validator is not None:
-        errors = sorted(validator.iter_errors(record), key=lambda e: e.path)
-        if errors:
-            store.dropped += 1
-            return None
+    if validator is None:
+        # fail-closed: jsonschema 미설치/스키마 로드 실패로 '검증 불가' 면 저장하지 않는다.
+        # (검증되지 않은 레코드 영속 = 계약 위반 + 드리프트 은폐 → 차단.)
+        store.dropped += 1
+        return None
+    errors = sorted(validator.iter_errors(record), key=lambda e: e.path)
+    if errors:
+        store.dropped += 1
+        return None
     store.append(record)
     return record
 
@@ -282,7 +286,10 @@ def add_usage_accumulator_middleware(app: Any) -> None:
     @app.middleware("http")
     async def _usage_accumulator(request, call_next):  # type: ignore[no-untyped-def]
         path = request.url.path
-        if path not in _ROUTE_MAP:
+        # connect_loop 라우트는 모두 POST. 경로+메서드 둘 다 일치할 때만 기록한다 —
+        # OPTIONS(CORS preflight)/GET(405) 등 endpoint 미도달 요청이 POST usage_log 로
+        # 오염되는 것을 차단.
+        if request.method != "POST" or path not in _ROUTE_MAP:
             return await call_next(request)
 
         # 요청 본문은 미리 읽어둔다(Starlette 가 캐시 → 다운스트림 핸들러도 그대로 읽음).

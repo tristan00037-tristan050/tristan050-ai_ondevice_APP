@@ -241,3 +241,34 @@ def test_real_helper1_search_no_duplicate_across_two_calls():
         assert r.status_code == 200, r.text
     # 호출 2회 → 정확히 2건(호출당 1건, 박스별 중복 0)
     assert len(store.records) == 2, f"호출당 1건이어야 함 (got {len(store.records)})"
+
+
+# ── Codex P2 재리뷰 (2026-05-30) 회귀 ────────────────────────────────────────
+
+def test_fail_closed_when_validator_unavailable(monkeypatch):
+    """jsonschema 미설치/스키마 로드 실패로 검증 불가하면 저장하지 않는다(fail-closed)."""
+    import butler_pc_core.sidecar.middleware.usage_accumulator as ua
+    monkeypatch.setattr(ua, "_validator", lambda: None)
+    store = ua.UsageLogStore()
+    rec = ua.record_usage(
+        path="/v1/helpers/1/search", status_code=200, request_body=b"{}",
+        response_body=b'{"integration_mode":"real","real_validation_done":true,"results":[]}',
+        headers={}, latency_ms=1.0, store=store,
+    )
+    assert rec is None
+    assert len(store.records) == 0
+    assert store.dropped == 1
+
+
+def test_non_post_method_on_route_creates_no_log():
+    """경로는 같아도 POST 가 아니면(GET/OPTIONS 등) usage_log 미생성 — 메서드 게이팅."""
+    from fastapi.testclient import TestClient
+    from butler_pc_core.sidecar.middleware.usage_accumulator import get_store
+    mod = _load_sidecar()
+    token = mod._TOKEN_MANAGER.generate()
+    client = TestClient(mod.app)
+    store = get_store()
+    store.clear()
+    r = client.get("/v1/helpers/1/search", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code in (404, 405), f"POST-only 라우트에 GET (got {r.status_code})"
+    assert len(store.records) == 0, "메서드 불일치 요청이 usage_log 로 기록됨"
