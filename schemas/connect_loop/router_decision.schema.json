@@ -77,10 +77,13 @@
   },
   "allOf": [
     {
-      "comment": "Codex P1 정정 (2026-05-27): intent_label/target_box_id/target_endpoint가 독립 enum이라 misroute(예: accounting_classify + helper1)가 통과하던 결함 정정. intent_label description의 실측 매핑표를 if/then/allOf로 강제하여 fail-closed SSOT로 작동.",
+      "comment": "Codex P1 정정 (2026-05-27): intent_label/target_box_id/target_endpoint가 독립 enum이라 misroute(예: accounting_classify + helper1)가 통과하던 결함 정정. intent_label description의 실측 매핑표를 if/then/allOf로 강제하여 fail-closed SSOT로 작동. Codex P1 (2026-05-30): 정책 우선 원칙 — intent→endpoint 매핑은 policy_precheck=='allow' 일 때만 적용(아래 non-allow 규칙이 block/needs_review 를 endpoint none+fallback 으로 강제).",
       "if": {
-        "properties": { "intent_label": { "const": "memory_search" } },
-        "required": ["intent_label"]
+        "properties": {
+          "intent_label": { "const": "memory_search" },
+          "policy_precheck": { "const": "allow" }
+        },
+        "required": ["intent_label", "policy_precheck"]
       },
       "then": {
         "properties": {
@@ -91,8 +94,11 @@
     },
     {
       "if": {
-        "properties": { "intent_label": { "const": "form_convert" } },
-        "required": ["intent_label"]
+        "properties": {
+          "intent_label": { "const": "form_convert" },
+          "policy_precheck": { "const": "allow" }
+        },
+        "required": ["intent_label", "policy_precheck"]
       },
       "then": {
         "properties": {
@@ -103,8 +109,11 @@
     },
     {
       "if": {
-        "properties": { "intent_label": { "const": "draft_write" } },
-        "required": ["intent_label"]
+        "properties": {
+          "intent_label": { "const": "draft_write" },
+          "policy_precheck": { "const": "allow" }
+        },
+        "required": ["intent_label", "policy_precheck"]
       },
       "then": {
         "properties": {
@@ -115,8 +124,11 @@
     },
     {
       "if": {
-        "properties": { "intent_label": { "const": "accounting_classify" } },
-        "required": ["intent_label"]
+        "properties": {
+          "intent_label": { "const": "accounting_classify" },
+          "policy_precheck": { "const": "allow" }
+        },
+        "required": ["intent_label", "policy_precheck"]
       },
       "then": {
         "properties": {
@@ -148,6 +160,19 @@
       "then": {
         "properties": {
           "target_box_id": { "const": "none" },
+          "target_endpoint": { "const": "none" },
+          "fallback_required": { "const": true }
+        }
+      }
+    },
+    {
+      "comment": "Codex P1 정정 (2026-05-30): 정책 우선(Policy Gate first). policy_precheck 가 'allow' 가 아니면(block/needs_review) 라우터 결정이 호출 가능한 route 로 표현돼선 안 된다. non-allow precheck → target_endpoint 'none' + fallback_required true 강제(fail-closed). blocked/검토대기 precheck 가 실행 가능한 sidecar 호출로 소비되는 것을 계약 단계에서 차단. (위 intent→endpoint 매핑은 precheck=='allow' 조건이라 non-allow 와 상호배타적으로 작동.)",
+      "if": {
+        "properties": { "policy_precheck": { "enum": ["block", "needs_review"] } },
+        "required": ["policy_precheck"]
+      },
+      "then": {
+        "properties": {
           "target_endpoint": { "const": "none" },
           "fallback_required": { "const": true }
         }

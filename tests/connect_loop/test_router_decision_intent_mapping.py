@@ -94,3 +94,41 @@ def test_unknown_with_fallback_false_fails():
     bad = _decision("unknown", "none", "none", fallback=False)
     with pytest.raises(ValidationError):
         Draft7Validator(ROUTER_SCHEMA).validate(bad)
+
+
+# ── Codex P1 (2026-05-30): 정책 우선 — non-allow precheck는 callable route 불가 ──
+
+def _with_precheck(intent, box_id, endpoint, precheck, fallback=False):
+    d = _decision(intent, box_id, endpoint, fallback)
+    d["policy_precheck"] = precheck
+    return d
+
+
+@pytest.mark.parametrize("precheck", ["block", "needs_review"])
+def test_non_allow_precheck_with_real_endpoint_fails(precheck):
+    """blocked/검토대기 precheck 가 실제 endpoint(호출 가능 route)로 표현되면 차단."""
+    bad = _with_precheck("accounting_classify", "5", "POST /accounting/classify", precheck, fallback=False)
+    with pytest.raises(ValidationError):
+        Draft7Validator(ROUTER_SCHEMA).validate(bad)
+
+
+@pytest.mark.parametrize("precheck", ["block", "needs_review"])
+def test_non_allow_precheck_requires_fallback_true(precheck):
+    """non-allow precheck 는 fallback_required=true 강제(false면 차단)."""
+    bad = _with_precheck("accounting_classify", "5", "none", precheck, fallback=False)
+    with pytest.raises(ValidationError):
+        Draft7Validator(ROUTER_SCHEMA).validate(bad)
+
+
+@pytest.mark.parametrize("precheck", ["block", "needs_review"])
+def test_non_allow_precheck_to_none_with_fallback_passes(precheck):
+    """non-allow precheck + endpoint=none + fallback_required=true 는 통과(정당한 blocked 결정)."""
+    ok = _with_precheck("accounting_classify", "5", "none", precheck, fallback=True)
+    Draft7Validator(ROUTER_SCHEMA).validate(ok)
+
+
+def test_allow_precheck_real_endpoint_still_passes():
+    """precheck=allow + 정합 endpoint 는 그대로 통과(over-constrain 회귀 방지)."""
+    Draft7Validator(ROUTER_SCHEMA).validate(
+        _decision("accounting_classify", "5", "POST /accounting/classify", fallback=False)
+    )
