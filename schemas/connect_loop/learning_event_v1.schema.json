@@ -1,0 +1,277 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/connect_loop/learning_event_v1.schema.json",
+  "title": "Connect Loop — Learning Event (v1)",
+  "description": "학습 파이프라인에 들어갈 수 있는 유일한 형태의 데이터 계약. usage_log(감사/통계/후보탐색)와 엄격히 분리된다. 정책 승인(policy_approval) + DLP 통과(dlp_result) + 보존기간(retention_days) 을 통과한 정제본/라벨/암호화참조만 담는다. 원문 입력/출력은 절대 저장 금지(raw_input_saved/raw_output_saved const false). unknown field는 fail-closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "if": {
+    "properties": { "status": { "const": "APPROVED" } },
+    "required": ["status"]
+  },
+  "then": {
+    "comment": "학습 투입 가능한 APPROVED 상태는 정책 승인=approved + DLP passed=true 를 계약 수준에서 강제한다(미승인/DLP실패 데이터의 학습 유입 차단).",
+    "properties": {
+      "policy_approval": {
+        "properties": { "decision": { "const": "approved" } }
+      },
+      "dlp_result": {
+        "properties": {
+          "passed": { "const": true },
+          "pii_detected": { "const": false },
+          "secret_detected": { "const": false },
+          "policy_violation": { "const": false }
+        }
+      }
+    }
+  },
+  "required": [
+    "learning_event_id",
+    "source_usage_log_id",
+    "created_at",
+    "status",
+    "tenant_scope",
+    "learning_type",
+    "raw_input_saved",
+    "raw_output_saved",
+    "approved_text_ref",
+    "approved_text_digest",
+    "sanitized_summary_digest",
+    "sanitized_summary_saved",
+    "label",
+    "policy_approval",
+    "dlp_result",
+    "retention_days",
+    "expires_at",
+    "verified_for_training",
+    "schema_version"
+  ],
+  "properties": {
+    "learning_event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_usage_log_id": {
+      "type": "string",
+      "description": "이 학습 이벤트의 출처가 된 usage_log.log_id (감사 추적).",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "description": "생성 시각 (RFC3339). Codex P2 정정 (2026-05-30): format 미검증 validator 에서도 impossible timestamp/invalid offset 을 차단하도록 expires_at 과 동일한 range pattern 적용.",
+      "format": "date-time",
+      "pattern": "^\\d{4}-((0[13578]|1[02])-(0[1-9]|[12]\\d|3[01])|(0[469]|11)-(0[1-9]|[12]\\d|30)|02-(0[1-9]|[12]\\d))T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["CANDIDATE", "APPROVED", "REJECTED", "EXPIRED"]
+    },
+    "tenant_scope": {
+      "type": "string",
+      "description": "학습 적용 범위. device=해당 디바이스만, team=부서/팀, org=조직 전체.",
+      "enum": ["device", "team", "org"]
+    },
+    "learning_type": {
+      "type": "string",
+      "description": "학습 대상 종류(5종). 각 기능 박스/헬퍼에 대응.",
+      "enum": [
+        "intent_routing",
+        "memory_search",
+        "form_convert",
+        "draft_write",
+        "accounting_classify"
+      ]
+    },
+    "raw_input_saved": {
+      "description": "원문 입력 저장 금지 불변식. 항상 false(위반 시 스키마 실패 = BLOCK).",
+      "const": false
+    },
+    "raw_output_saved": {
+      "description": "원문 출력 저장 금지 불변식. 항상 false(위반 시 스키마 실패 = BLOCK).",
+      "const": false
+    },
+    "approved_text_ref": {
+      "type": "string",
+      "description": "승인된 정제 텍스트의 암호화 참조(vault/keyring 참조 등). 원문 평문이 아니라 'scheme://...' 형태의 참조만 허용.",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[a-z][a-z0-9+.-]*://[^\\s]+$"
+    },
+    "approved_text_digest": {
+      "type": "string",
+      "description": "승인된 정제 텍스트의 sha256 digest.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sanitized_summary_digest": {
+      "type": "string",
+      "description": "정제 요약본의 sha256 digest.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sanitized_summary_saved": {
+      "description": "정제 요약 '원문' 저장 금지 불변식. digest만 보관. 항상 false.",
+      "const": false
+    },
+    "label": {
+      "type": "object",
+      "description": "학습용 라벨.",
+      "additionalProperties": false,
+      "required": ["intent_label", "target_box_id", "quality"],
+      "properties": {
+        "intent_label": {
+          "type": "string",
+          "enum": [
+            "memory_search",
+            "form_convert",
+            "draft_write",
+            "accounting_classify",
+            "general_chat",
+            "unknown"
+          ]
+        },
+        "target_box_id": {
+          "type": "string",
+          "enum": ["helper1", "2", "3", "5", "chat", "none"]
+        },
+        "quality": {
+          "type": "string",
+          "description": "라벨 품질 등급.",
+          "enum": ["good", "fair", "poor"]
+        }
+      }
+    },
+    "policy_approval": {
+      "type": "object",
+      "description": "정책 승인 기록. decision 없으면 BLOCK.",
+      "additionalProperties": false,
+      "required": ["decision", "approver_role", "reason_code"],
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": ["approved", "rejected", "needs_review"]
+        },
+        "approver_role": {
+          "type": "string",
+          "description": "승인자 역할. 자동 승인은 'system'.",
+          "enum": ["manager", "admin", "system"]
+        },
+        "reason_code": {
+          "type": "string",
+          "description": "승인 사유 코드(원문 금지). 대문자 코드 형식.",
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+        }
+      }
+    },
+    "dlp_result": {
+      "type": "object",
+      "description": "DLP 검사 결과. 없으면 BLOCK.",
+      "additionalProperties": false,
+      "required": ["passed", "pii_detected", "secret_detected", "policy_violation"],
+      "properties": {
+        "passed": { "type": "boolean" },
+        "pii_detected": { "type": "boolean" },
+        "secret_detected": { "type": "boolean" },
+        "policy_violation": { "type": "boolean" }
+      }
+    },
+    "retention_days": {
+      "type": "integer",
+      "description": "보존기간(일). 없으면 BLOCK.",
+      "minimum": 1
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 date-time. Codex P2 정정 (2026-05-29): FormatChecker 미사용 validator(Draft7Validator(...).validate)에서도 invalid timestamp(예: 2026-13-40T99:99:99Z)와 invalid offset(예: +99:99, +09:60)을 차단하도록 pattern range 강화 — month 01-12, day 01-31, hour 00-23, minute/second 00-59, offset hour 00-23, offset minute 00-59.",
+      "pattern": "^\\d{4}-((0[13578]|1[02])-(0[1-9]|[12]\\d|3[01])|(0[469]|11)-(0[1-9]|[12]\\d|30)|02-(0[1-9]|[12]\\d))T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
+    },
+    "verified_for_training": {
+      "type": "boolean",
+      "description": "학습 투입 전 최종 검증 통과 여부. 기본 false.",
+      "default": false
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "learning_event.v1"
+    }
+  },
+  "allOf": [
+    {
+      "comment": "Codex P1 정정 (2026-05-29): verified_for_training=true 는 최종 학습 투입 readiness 신호이므로 status=APPROVED + policy_approval.decision=approved + DLP passed/검출 플래그 false 를 독립적으로 강제한다. CANDIDATE/needs_review/DLP 실패 record 가 trainer filter(verified_for_training=true)만으로 유입되는 결함 차단.",
+      "if": {
+        "properties": { "verified_for_training": { "const": true } },
+        "required": ["verified_for_training"]
+      },
+      "then": {
+        "properties": {
+          "status": { "const": "APPROVED" },
+          "policy_approval": {
+            "properties": { "decision": { "const": "approved" } }
+          },
+          "dlp_result": {
+            "properties": {
+              "passed": { "const": true },
+              "pii_detected": { "const": false },
+              "secret_detected": { "const": false },
+              "policy_violation": { "const": false }
+            }
+          }
+        }
+      }
+    },
+    {
+      "comment": "Codex P1 정정 (2026-05-27): label.intent_label과 label.target_box_id가 독립 enum이라 mislabel(예: accounting_classify + helper1)이 학습 파이프라인 유일 shape로 유입되던 결함 정정. router_decision.schema의 intent→box 매핑을 label 객체에 mirror. (learning_type은 intent_label과 권위 매핑이 없고 enum 집합이 달라 일관성 검사 미포함 — 추정 방지.) 상단 if(status==APPROVED) 게이트는 그대로 병행 적용된다.",
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "memory_search" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "helper1" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "form_convert" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "2" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "draft_write" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "3" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "accounting_classify" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "5" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "general_chat" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "chat" } } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "label": { "properties": { "intent_label": { "const": "unknown" } }, "required": ["intent_label"] } },
+        "required": ["label"]
+      },
+      "then": {
+        "properties": { "label": { "properties": { "target_box_id": { "const": "none" } } } }
+      }
+    }
+  ]
+}

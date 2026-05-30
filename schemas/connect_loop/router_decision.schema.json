@@ -1,0 +1,207 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/connect_loop/router_decision.schema.json",
+  "title": "Connect Loop — Router Decision (v1)",
+  "description": "라우터가 chat_request의 intent를 판정하고 어느 박스/엔드포인트로 보낼지 결정한 결과 계약. target_endpoint enum은 sidecar 실측 경로만 포함한다(코드에 없는 경로는 적지 않는다). unknown field는 fail-closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "intent_label",
+    "target_box_id",
+    "target_endpoint",
+    "routing_confidence",
+    "reason_code",
+    "fallback_required",
+    "policy_precheck",
+    "schema_version"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "description": "대응되는 chat_request.request_id.",
+      "minLength": 1
+    },
+    "intent_label": {
+      "type": "string",
+      "description": "판정된 의도. intent -> endpoint 매핑(실측 sidecar 등록 경로):\n  memory_search       -> box 'helper1' -> POST /v1/helpers/1/search\n  form_convert        -> box '2'       -> POST /v1/cards/2/rewrite\n  draft_write         -> box '3'       -> POST /v1/cards/3/draft\n  accounting_classify -> box '5'       -> POST /accounting/classify\n  general_chat        -> box 'chat'    -> (no sidecar endpoint; fallback_required=true) — chat은 sidecar 미등록(serving server 별도 제공), Connect Loop(sidecar)에서는 fallback\n  unknown             -> box 'none'    -> (no endpoint; fallback_required=true)",
+      "enum": [
+        "memory_search",
+        "form_convert",
+        "draft_write",
+        "accounting_classify",
+        "general_chat",
+        "unknown"
+      ]
+    },
+    "target_box_id": {
+      "type": "string",
+      "description": "대상 박스/헬퍼 식별자. 카드형은 카드번호('2','3','5'), 헬퍼는 'helper1', 일반대화는 'chat', 미상은 'none'.",
+      "enum": ["helper1", "2", "3", "5", "chat", "none"]
+    },
+    "target_endpoint": {
+      "type": "string",
+      "description": "실측 sidecar 엔드포인트(butler_pc_core/sidecar 및 butler_sidecar.py 기준). 코드에 존재하는 경로만 enum에 둔다. 'none'은 unknown intent의 라우팅 보류.",
+      "enum": [
+        "POST /v1/helpers/1/search",
+        "POST /v1/cards/2/rewrite",
+        "POST /v1/cards/3/draft",
+        "POST /accounting/classify",
+        "none"
+      ]
+    },
+    "routing_confidence": {
+      "type": "number",
+      "description": "라우팅 신뢰도 [0,1].",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "reason_code": {
+      "type": "string",
+      "description": "판정 근거 코드(대문자 코드, 원문 금지). 예: 'INTENT_KEYWORD_MATCH', 'LOW_CONFIDENCE_FALLBACK'.",
+      "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+    },
+    "fallback_required": {
+      "type": "boolean",
+      "description": "신뢰도 미달/unknown 등으로 fallback(예: general_chat 또는 사람 검토)이 필요한지."
+    },
+    "policy_precheck": {
+      "type": "string",
+      "description": "라우팅 직전 정책 선검사 결과.",
+      "enum": ["allow", "needs_review", "block"]
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "router_decision.v1"
+    }
+  },
+  "allOf": [
+    {
+      "comment": "Codex P1 정정 (2026-05-27): intent_label/target_box_id/target_endpoint가 독립 enum이라 misroute(예: accounting_classify + helper1)가 통과하던 결함 정정. intent_label→target_box_id 매핑은 정책과 무관하게 항상 강제(분류 일관성). Codex P2 정정 (2026-05-30): box 매핑을 endpoint 매핑과 분리 — box const 는 precheck 와 무관하게 항상 적용해 blocked 결정에서도 box mislabel(예: accounting_classify + helper1)을 차단한다.",
+      "if": {
+        "properties": { "intent_label": { "const": "memory_search" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": { "target_box_id": { "const": "helper1" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "form_convert" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": { "target_box_id": { "const": "2" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "draft_write" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": { "target_box_id": { "const": "3" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "intent_label": { "const": "accounting_classify" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": { "target_box_id": { "const": "5" } }
+      }
+    },
+    {
+      "comment": "Codex P1 (2026-05-30): callable endpoint 매핑만 policy_precheck=='allow' 조건으로 gate (정책 우선). non-allow precheck 는 아래 규칙이 endpoint none+fallback 으로 강제하므로, 두 분기는 상호배타. box 매핑(위)은 정책과 무관하게 항상 적용된다.",
+      "if": {
+        "properties": {
+          "intent_label": { "const": "memory_search" },
+          "policy_precheck": { "const": "allow" }
+        },
+        "required": ["intent_label", "policy_precheck"]
+      },
+      "then": {
+        "properties": { "target_endpoint": { "const": "POST /v1/helpers/1/search" } }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "intent_label": { "const": "form_convert" },
+          "policy_precheck": { "const": "allow" }
+        },
+        "required": ["intent_label", "policy_precheck"]
+      },
+      "then": {
+        "properties": { "target_endpoint": { "const": "POST /v1/cards/2/rewrite" } }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "intent_label": { "const": "draft_write" },
+          "policy_precheck": { "const": "allow" }
+        },
+        "required": ["intent_label", "policy_precheck"]
+      },
+      "then": {
+        "properties": { "target_endpoint": { "const": "POST /v1/cards/3/draft" } }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "intent_label": { "const": "accounting_classify" },
+          "policy_precheck": { "const": "allow" }
+        },
+        "required": ["intent_label", "policy_precheck"]
+      },
+      "then": {
+        "properties": { "target_endpoint": { "const": "POST /accounting/classify" } }
+      }
+    },
+    {
+      "comment": "Codex P1 정정 (2026-05-27): general_chat이 POST /v1/chat/completions로 매핑됐으나 해당 라우터는 sidecar(butler_sidecar.py)에 미등록(serving server 별도 제공)이라 port 8765에서 404. Connect Loop는 sidecar-scoped이므로 chat은 endpoint 미지정 + fallback_required=true로 처리.",
+      "if": {
+        "properties": { "intent_label": { "const": "general_chat" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "target_box_id": { "const": "chat" },
+          "target_endpoint": { "const": "none" },
+          "fallback_required": { "const": true }
+        }
+      }
+    },
+    {
+      "comment": "unknown intent는 라우팅 보류: target_box_id/endpoint 모두 'none' + fallback_required=true 강제.",
+      "if": {
+        "properties": { "intent_label": { "const": "unknown" } },
+        "required": ["intent_label"]
+      },
+      "then": {
+        "properties": {
+          "target_box_id": { "const": "none" },
+          "target_endpoint": { "const": "none" },
+          "fallback_required": { "const": true }
+        }
+      }
+    },
+    {
+      "comment": "Codex P1 정정 (2026-05-30): 정책 우선(Policy Gate first). policy_precheck 가 'allow' 가 아니면(block/needs_review) 라우터 결정이 호출 가능한 route 로 표현돼선 안 된다. non-allow precheck → target_endpoint 'none' + fallback_required true 강제(fail-closed). blocked/검토대기 precheck 가 실행 가능한 sidecar 호출로 소비되는 것을 계약 단계에서 차단. (위 intent→endpoint 매핑은 precheck=='allow' 조건이라 non-allow 와 상호배타적으로 작동.)",
+      "if": {
+        "properties": { "policy_precheck": { "enum": ["block", "needs_review"] } },
+        "required": ["policy_precheck"]
+      },
+      "then": {
+        "properties": {
+          "target_endpoint": { "const": "none" },
+          "fallback_required": { "const": true }
+        }
+      }
+    }
+  ]
+}
