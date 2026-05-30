@@ -1,0 +1,33 @@
+PR-C Box1 Router Minimal — sandbox verification evidence
+BASE_MAIN_HEAD=78665e23c72c3be201f7bc3d6a2c7ded0bdd7e62
+BRANCH=feat/connect-loop-box1-router-prc-v1-2-alg8
+
+COMMAND: python -m py_compile butler_pc_core/connect_loop/box1_router.py butler_pc_core/connect_loop/policy_precheck.py butler_pc_core/connect_loop/schema_validator.py
+PY_COMPILE_PASS=true
+
+COMMAND: PYTHONDONTWRITEBYTECODE=1 python -m pytest tests/connect_loop -q
+RESULT: 19 passed in 2.04s
+
+ASSERTIONS:
+- chat_request validate: PASS
+- router_decision validate: PASS
+- 5 known intent mappings: PASS
+- general_chat fallback: PASS
+- unknown fallback: PASS
+- low confidence fallback: PASS
+- ambiguous input fallback: PASS
+- policy block endpoint none: PASS
+- policy needs_review endpoint none: PASS
+- misroute validate-fail guard: PASS
+- runtime text sentinel absent from RouterDecision: PASS
+- runtime text sentinel absent from evidence: PASS
+- external send reference scan on butler_pc_core/connect_loop: PASS
+- PR-A schema modified: 0
+
+DISCLOSURE:
+- This is PR-C router-only evidence.
+- Router does not call any endpoint.
+- Usage accumulator persistence remains PR-B scope.
+- Chat UI remains PR-D scope.
+- Learning event creation remains PR-E scope.
+- GitHub Actions real CI status is not claimed by this file.
