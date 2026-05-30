@@ -255,6 +255,14 @@ if _FASTAPI_AVAILABLE:
         expose_headers=["X-Task-Id"],
     )
 
+    # ── PR-B: Connect Loop usage accumulator (공통 1곳) ──
+    # capability token 미들웨어보다 먼저 등록 → Starlette 역순 적용으로 auth 가 outermost.
+    # 즉 인증을 통과해 endpoint 가 실제 응답한 요청에 대해서만 usage_log 1건을 생성한다.
+    from butler_pc_core.sidecar.middleware.usage_accumulator import (
+        add_usage_accumulator_middleware,
+    )
+    add_usage_accumulator_middleware(app)
+
     # ── v1.5 capability token middleware ──
     _TOKEN_MANAGER = CapabilityTokenManager()
 
