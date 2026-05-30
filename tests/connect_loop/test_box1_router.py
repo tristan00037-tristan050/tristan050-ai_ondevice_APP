@@ -23,16 +23,22 @@ BASE_CHAT_REQUEST = {
     "user_role": "employee",
     "department_id_digest": _digest("department"),
     "text_ref": "device_local_only",
-    "text_digest": _digest("input"),
+    "text_digest": _digest(""),
     "attachments": [],
     "created_at": "2026-05-30T09:00:00Z",
     "schema_version": "chat_request.v1",
 }
 
 
-def _decide(text: str | None, policy: str = "allow") -> dict:
+def _request_for_text(text: str | None) -> dict:
+    request = copy.deepcopy(BASE_CHAT_REQUEST)
+    request["text_digest"] = _digest(text or "")
+    return request
+
+
+def _decide(text: str | None, policy: str = "allow", *, request_text: str | None = None) -> dict:
     return RuleBasedBox1Router().decide(
-        copy.deepcopy(BASE_CHAT_REQUEST),
+        _request_for_text(text if request_text is None else request_text),
         RouterRuntimeContext(runtime_text=text, policy_precheck=policy),
     )
 
@@ -103,6 +109,19 @@ def test_runtime_text_missing_becomes_unknown():
     d = _decide(None)
     _assert_route(d, "unknown", "none", "none", True)
     assert d["routing_confidence"] == 0.0
+
+
+def test_runtime_text_digest_mismatch_falls_back_to_unknown():
+    d = _decide("은행거래 거래내역 계정과목 회계분류 분개", request_text="다른 원문")
+    _assert_route(d, "unknown", "none", "none", True)
+    assert d["routing_confidence"] == 0.0
+    assert d["reason_code"] == "TEXT_DIGEST_MISMATCH_FALLBACK"
+
+
+def test_runtime_text_digest_mismatch_never_exposes_callable_endpoint():
+    d = _decide("이전 과거 문서 자료를 찾아줘 검색", request_text="다른 원문")
+    assert d["target_endpoint"] == "none"
+    assert d["fallback_required"] is True
 
 
 def test_decision_self_validates_against_schema():
