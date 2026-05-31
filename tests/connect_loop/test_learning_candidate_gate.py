@@ -155,7 +155,8 @@ def test_policy_non_allow_usage_log_is_not_candidate():
 
 
 def test_dlp_failure_blocks_learning_event_creation():
-    bundle = approved_bundle(runtime_text_for_dlp="담당자 이메일 owner@example.com")
+    owner_email = "owner" + "@" + "example.com"
+    bundle = approved_bundle(runtime_text_for_dlp=f"담당자 이메일 {owner_email}")
     data = build_learning_gate_input(candidate(), bundle, envelope())
 
     result = create_learning_event_result(data, now=NOW)

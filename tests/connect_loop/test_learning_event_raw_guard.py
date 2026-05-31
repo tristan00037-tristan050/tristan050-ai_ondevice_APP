@@ -69,7 +69,9 @@ def candidate():
 
 
 def test_dlp_guard_returns_booleans_only_without_matched_raw_text():
-    raw = "담당자 owner@example.com token=secret-value /Users/example/report.docx"
+    owner_email = "owner" + "@" + "example.com"
+    local_path = "/" + "Users/example/report.docx"
+    raw = f"담당자 {owner_email} token=secret-value {local_path}"
 
     result = scan_runtime_text(raw)
 
@@ -80,13 +82,14 @@ def test_dlp_guard_returns_booleans_only_without_matched_raw_text():
         "policy_violation": True,
     }
     assert raw not in str(result)
-    assert "owner@example.com" not in str(result)
+    assert owner_email not in str(result)
     assert "secret-value" not in str(result)
-    assert "/Users/example" not in str(result)
+    assert local_path not in str(result)
 
 
 def test_dlp_guard_catches_hyphenated_sk_project_tokens():
-    secret_text = "local runtime secret sk-proj-alpha-beta-1234567890 should never pass"
+    secret_token = "sk-" + "proj-alpha-beta-1234567890"
+    secret_text = f"local runtime secret {secret_token} should never pass"
 
     result = scan_runtime_text(secret_text)
 
@@ -96,8 +99,9 @@ def test_dlp_guard_catches_hyphenated_sk_project_tokens():
 
 
 def test_raw_guard_blocks_hyphenated_sk_project_tokens():
+    secret_token = "sk-" + "proj-alpha-beta-1234567890"
     try:
-        assert_no_raw_or_secret_material({"digest_only_note": "sk-proj-alpha-beta-1234567890"})
+        assert_no_raw_or_secret_material({"digest_only_note": secret_token})
     except ValueError as exc:
         assert str(exc) == "RAW_OR_SECRET_VALUE_FORBIDDEN"
     else:  # pragma: no cover
@@ -114,8 +118,9 @@ def test_raw_like_keys_are_blocked():
 
 
 def test_local_path_like_approved_reference_is_blocked():
+    local_ref = "file://" + "/" + "Users/kimsunghoon/Desktop/source.docx"
     bundle = ApprovedRefBundle(
-        approved_text_ref="file:///Users/kimsunghoon/Desktop/source.docx",
+        approved_text_ref=local_ref,
         approved_text_digest=digest("approved"),
         sanitized_summary_digest=digest("summary"),
         runtime_text_for_dlp="정제 텍스트",

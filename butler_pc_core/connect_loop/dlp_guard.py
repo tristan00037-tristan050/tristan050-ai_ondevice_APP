@@ -58,7 +58,14 @@ def scan_runtime_text(text: str) -> dict[str, bool]:
 def _contains_forbidden_scalar(value: Any) -> bool:
     if not isinstance(value, str):
         return False
-    return bool(_SECRET_RE.search(value) or _LOCAL_PATH_RE.search(value))
+    return bool(
+        _EMAIL_RE.search(value)
+        or _PHONE_RE.search(value)
+        or _KOREAN_RRN_RE.search(value)
+        or _CARD_OR_ACCOUNT_RE.search(value)
+        or _SECRET_RE.search(value)
+        or _LOCAL_PATH_RE.search(value)
+    )
 
 
 def assert_no_raw_or_secret_material(value: Any) -> None:

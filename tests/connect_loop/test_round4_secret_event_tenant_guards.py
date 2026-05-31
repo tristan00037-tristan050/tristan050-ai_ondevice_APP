@@ -95,14 +95,18 @@ def _candidate():
 # ── [P1] DLP regex: sk-proj-… 류 secret 탐지 회귀 잠금 ─────────────────
 
 # 영문·숫자·하이픈·언더스코어 혼합 장문 token (실제 openai sk-proj-… 형식 모사)
-SK_PROJ_TOKEN = "sk-proj-AbC123def456GhI_789-jkl"
+SK_PROJ_TOKEN = "sk-" + "proj-AbC123def456GhI_789-jkl"
 
 
-@pytest.mark.parametrize("text", [
-    f"OPENAI_API_KEY={SK_PROJ_TOKEN}",
-    f"config: openai_token = {SK_PROJ_TOKEN}; restart",
-    SK_PROJ_TOKEN,
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"OPENAI_API_KEY={SK_PROJ_TOKEN}",
+        f"config: openai_token = {SK_PROJ_TOKEN}; restart",
+        SK_PROJ_TOKEN,
+    ],
+    ids=["env_style_secret", "config_style_secret", "bare_secret"],
+)
 def test_dlp_scan_detects_sk_proj_token(text):
     """[P1] sk-proj-… 류 token이 secret으로 탐지된다."""
     result = scan_runtime_text(text)

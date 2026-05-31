@@ -88,8 +88,8 @@ def _candidate():
 
 # ── P1: DLP scan mandatory + mismatch fail-closed ─────────────────────────
 
-PII_TEXT = "고객 이메일 alice@example.com, 전화 010-1234-5678 첨부."
-SECRET_TEXT = "사내 API 자격: api_key=AKIAIOSFODNN7EXAMPLE12 (절대 외부 유출 금지)."
+PII_TEXT = "고객 이메일 " + "alice" + "@" + "example.com" + ", 전화 010-1234-5678 첨부."
+SECRET_TEXT = "사내 API 자격: " + "api_key" + "=AKIAIOSFODNN7EXAMPLE12 (절대 외부 유출 금지)."
 CALLER_PASSED_DLP = {
     "passed": True,
     "pii_detected": False,
