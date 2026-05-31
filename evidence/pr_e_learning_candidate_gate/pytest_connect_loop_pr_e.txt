@@ -1,7 +1,58 @@
-........................................................................ [ 18%]
-........................................................................ [ 36%]
-........................................................................ [ 54%]
-........................................................................ [ 72%]
-........................................................................ [ 90%]
-.....................................                                    [100%]
-397 passed in 9.73s
+........................................................................ [ 17%]
+........................................................................ [ 35%]
+........................................................................ [ 53%]
+........................................................................ [ 71%]
+........................................................................ [ 89%]
+..........................................                               [100%]
+=============================== warnings summary ===============================
+tests/connect_loop/test_box1_router.py::test_memory_search_routes_to_helper1_search
+  /Users/kimsunghoon/Desktop/butler/connect-loop-usage-accumulator/butler_sidecar.py:276: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/connect_loop/test_box1_router.py::test_memory_search_routes_to_helper1_search
+tests/connect_loop/test_box1_router.py::test_memory_search_routes_to_helper1_search
+tests/connect_loop/test_box1_router.py::test_memory_search_routes_to_helper1_search
+  /Users/kimsunghoon/Library/Python/3.9/lib/python/site-packages/fastapi/applications.py:4579: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+tests/connect_loop/test_box1_router.py::test_memory_search_routes_to_helper1_search
+  /Users/kimsunghoon/Desktop/butler/connect-loop-usage-accumulator/butler_sidecar.py:280: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+tests/connect_loop/test_box1_router.py::test_memory_search_routes_to_helper1_search
+  /Users/kimsunghoon/Desktop/butler/connect-loop-usage-accumulator/butler_sidecar.py:337: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/connect_loop/test_sidecar_router_decide_integration.py::test_router_to_helper1_box_usage_log_request_id_e2e
+  /Users/kimsunghoon/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+    warnings.warn(
+
+tests/connect_loop/test_sidecar_router_decide_integration.py::test_router_to_helper1_box_usage_log_request_id_e2e
+  <frozen importlib._bootstrap>:228: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+tests/connect_loop/test_sidecar_router_decide_integration.py::test_router_to_helper1_box_usage_log_request_id_e2e
+  <frozen importlib._bootstrap>:228: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+402 passed, 9 warnings in 9.53s
+sys:1: DeprecationWarning: builtin type swigvarlink has no __module__ attribute

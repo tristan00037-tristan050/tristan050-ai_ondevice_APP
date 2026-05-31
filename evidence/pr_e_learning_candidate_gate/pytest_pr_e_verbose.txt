@@ -1,15 +1,69 @@
-tests/connect_loop/test_learning_candidate_gate.py::test_select_learning_candidates_requires_digest_only_allow_real_record PASSED [  7%]
-tests/connect_loop/test_learning_candidate_gate.py::test_learning_allowed_false_drops_without_event PASSED [ 14%]
-tests/connect_loop/test_learning_candidate_gate.py::test_approved_text_ref_missing_drops_even_with_digest PASSED [ 21%]
-tests/connect_loop/test_learning_candidate_gate.py::test_policy_non_allow_usage_log_is_not_candidate PASSED [ 28%]
-tests/connect_loop/test_learning_candidate_gate.py::test_dlp_failure_blocks_learning_event_creation PASSED [ 35%]
-tests/connect_loop/test_learning_candidate_gate.py::test_learning_event_schema_self_validates_and_unknown_field_fails PASSED [ 42%]
-tests/connect_loop/test_learning_candidate_gate.py::test_verified_for_training_only_after_approved_policy_and_dlp_pass PASSED [ 50%]
-tests/connect_loop/test_learning_candidate_gate.py::test_mislabel_is_blocked_by_learning_event_schema PASSED [ 57%]
-tests/connect_loop/test_learning_candidate_gate.py::test_reject_transition_never_verifies_training PASSED [ 64%]
-tests/connect_loop/test_learning_candidate_gate.py::test_usage_log_is_immutable_and_link_index_is_separate PASSED [ 71%]
-tests/connect_loop/test_learning_event_raw_guard.py::test_dlp_guard_returns_booleans_only_without_matched_raw_text PASSED [ 78%]
-tests/connect_loop/test_learning_event_raw_guard.py::test_raw_like_keys_are_blocked PASSED [ 85%]
-tests/connect_loop/test_learning_event_raw_guard.py::test_local_path_like_approved_reference_is_blocked PASSED [ 92%]
-tests/connect_loop/test_learning_event_raw_guard.py::test_learning_gate_source_contains_no_training_or_model_artifact_code PASSED [100%]
-============================== 14 passed in 0.21s ==============================
+============================= test session starts ==============================
+platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0 -- /Library/Developer/CommandLineTools/usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /Users/kimsunghoon/Desktop/butler/connect-loop-usage-accumulator
+configfile: pytest.ini
+plugins: anyio-4.12.1
+collecting ... collected 19 items
+
+tests/connect_loop/test_learning_candidate_gate.py::test_select_learning_candidates_requires_digest_only_allow_real_record PASSED [  5%]
+tests/connect_loop/test_learning_candidate_gate.py::test_learning_allowed_false_drops_without_event PASSED [ 10%]
+tests/connect_loop/test_learning_candidate_gate.py::test_approved_text_ref_missing_drops_even_with_digest PASSED [ 15%]
+tests/connect_loop/test_learning_candidate_gate.py::test_policy_non_allow_usage_log_is_not_candidate PASSED [ 21%]
+tests/connect_loop/test_learning_candidate_gate.py::test_dlp_failure_blocks_learning_event_creation PASSED [ 26%]
+tests/connect_loop/test_learning_candidate_gate.py::test_learning_event_schema_self_validates_and_unknown_field_fails PASSED [ 31%]
+tests/connect_loop/test_learning_candidate_gate.py::test_verified_for_training_only_after_approved_policy_and_dlp_pass PASSED [ 36%]
+tests/connect_loop/test_learning_candidate_gate.py::test_mislabel_is_blocked_by_learning_event_schema PASSED [ 42%]
+tests/connect_loop/test_learning_candidate_gate.py::test_reject_transition_never_verifies_training PASSED [ 47%]
+tests/connect_loop/test_learning_candidate_gate.py::test_usage_log_is_immutable_and_link_index_is_separate PASSED [ 52%]
+tests/connect_loop/test_learning_event_raw_guard.py::test_dlp_guard_returns_booleans_only_without_matched_raw_text PASSED [ 57%]
+tests/connect_loop/test_learning_event_raw_guard.py::test_raw_like_keys_are_blocked PASSED [ 63%]
+tests/connect_loop/test_learning_event_raw_guard.py::test_local_path_like_approved_reference_is_blocked PASSED [ 68%]
+tests/connect_loop/test_learning_event_raw_guard.py::test_learning_gate_source_contains_no_training_or_model_artifact_code PASSED [ 73%]
+tests/connect_loop/test_learning_candidate_gate_label_drift.py::test_happy_path_label_matches_source_passes PASSED [ 78%]
+tests/connect_loop/test_learning_candidate_gate_label_drift.py::test_label_intent_drift_drops_with_label_source_drift PASSED [ 84%]
+tests/connect_loop/test_learning_candidate_gate_label_drift.py::test_label_target_box_drift_drops_with_label_source_drift PASSED [ 89%]
+tests/connect_loop/test_learning_candidate_gate_label_drift.py::test_label_intent_drift_only_drops_with_label_source_drift PASSED [ 94%]
+tests/connect_loop/test_learning_candidate_gate_label_drift.py::test_missing_label_drops_with_label_missing PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/connect_loop/test_learning_candidate_gate.py::test_select_learning_candidates_requires_digest_only_allow_real_record
+  /Users/kimsunghoon/Desktop/butler/connect-loop-usage-accumulator/butler_sidecar.py:276: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/connect_loop/test_learning_candidate_gate.py::test_select_learning_candidates_requires_digest_only_allow_real_record
+tests/connect_loop/test_learning_candidate_gate.py::test_select_learning_candidates_requires_digest_only_allow_real_record
+tests/connect_loop/test_learning_candidate_gate.py::test_select_learning_candidates_requires_digest_only_allow_real_record
+  /Users/kimsunghoon/Library/Python/3.9/lib/python/site-packages/fastapi/applications.py:4579: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+tests/connect_loop/test_learning_candidate_gate.py::test_select_learning_candidates_requires_digest_only_allow_real_record
+  /Users/kimsunghoon/Desktop/butler/connect-loop-usage-accumulator/butler_sidecar.py:280: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+tests/connect_loop/test_learning_candidate_gate.py::test_select_learning_candidates_requires_digest_only_allow_real_record
+  /Users/kimsunghoon/Desktop/butler/connect-loop-usage-accumulator/butler_sidecar.py:337: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 19 passed, 6 warnings in 0.21s ========================
