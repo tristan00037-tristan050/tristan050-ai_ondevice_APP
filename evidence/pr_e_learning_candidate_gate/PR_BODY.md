@@ -4,7 +4,7 @@
 
 ## Base 정합
 - MAIN_HEAD=`de63a90674edfe7f5fc1c86e61e2fc979b9a8328`
-- 최신 검증 코드 head=`eedea77fb228999da72ce76298ab53ea29a918d3`
+- 최신 검증 코드 head=`ea67d5a9fa31c601b862172a1b3ff95c6314df15`
 - 브랜치=`feat/connect-loop-learning-candidate-gate`
 - 계약 정본 `schemas/connect_loop/*`: 수정 0
 
@@ -21,7 +21,8 @@
 ## v2.2 근본 재검토 정정
 - `persisted_safety.py` 단일 guard 추가: secret/path/PII/raw-field를 한 곳에서 전수 스캔
 - create/approve/reject/expire/store append 전 경로가 `_safe_return_event` 또는 `_enforce_persisted_safety` 통과
-- OS 무관 path matrix 포함: macOS/Linux temp/private temp/volume/Windows/UNC/file URL
+- OS 무관 path matrix 포함: macOS/Linux temp/private temp/volume/Windows backslash/Windows slash/UNC/file URL
+- 국제/미국식/KR 전화번호 PII matrix 포함
 - reject/expire/expired approval path의 persisted-scalar DLP 우회 차단
 
 ## Scope
@@ -41,8 +42,8 @@
 - production / release claim 0
 
 ## Evidence
-- PR-E v2.2 묶음: `83 passed`
-- 전체 `tests/connect_loop`: `466 passed`
+- PR-E v2.2 묶음: `87 passed`
+- 전체 `tests/connect_loop`: `470 passed`
 - `py_compile`: PASS
 - `git diff --check`: PASS
 - `CONTRACT_MODIFIED_ZERO=true`

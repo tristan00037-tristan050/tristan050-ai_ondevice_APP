@@ -1,8 +1,8 @@
 {
   "schema_version": "pr_e.learning_candidate_gate.test_results.v1",
-  "generated_at": "2026-06-01T08:19:44+09:00",
+  "generated_at": "2026-06-01T08:31:03+09:00",
   "base_head": "de63a90674edfe7f5fc1c86e61e2fc979b9a8328",
-  "code_head_under_test": "eedea77fb228999da72ce76298ab53ea29a918d3",
+  "code_head_under_test": "ea67d5a9fa31c601b862172a1b3ff95c6314df15",
   "schema_sha256": {
     "learning_event_v1.schema.json": "82a6aa7489aa39ac36ab7f07109c7a4f69374a962f3c9642d5e93d0948e97fef",
     "usage_log_v1_1.schema.json": "fb3b6fb49a054b235451a0b9f924456d519a86a388bcc2ddd0b73f9f2bd87368"
@@ -20,17 +20,19 @@
   "v2_2_root_review_fixes": {
     "single_persisted_safety_guard": "PASS",
     "os_agnostic_path_matrix": "PASS",
+    "international_phone_pii_matrix": "PASS",
+    "windows_slash_drive_path_matrix": "PASS",
     "create_approve_reject_expire_store_all_guarded": "PASS",
     "reject_expire_bypass_blocked": "PASS"
   },
   "commands": [
     {
       "command": "PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/connect_loop/test_learning_candidate_gate.py tests/connect_loop/test_learning_event_raw_guard.py tests/connect_loop/test_learning_candidate_gate_label_drift.py tests/connect_loop/test_learning_candidate_gate_dlp_and_expires_guards.py tests/connect_loop/test_round4_secret_event_tenant_guards.py tests/connect_loop/test_round5_store_and_persisted_scalar_guards.py tests/connect_loop/test_persisted_safety_v2_2.py -v --disable-warnings -p no:cacheprovider",
-      "result": "83 passed"
+      "result": "87 passed"
     },
     {
       "command": "PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/connect_loop -q --disable-warnings -p no:cacheprovider",
-      "result": "466 passed"
+      "result": "470 passed"
     },
     {
       "command": "PYTHONPYCACHEPREFIX=<tmp>/pr_e_pycache python3 -m py_compile butler_pc_core/connect_loop/learning_candidate_gate.py butler_pc_core/connect_loop/dlp_guard.py butler_pc_core/connect_loop/learning_event_store.py butler_pc_core/connect_loop/learning_event_schema.py butler_pc_core/connect_loop/persisted_safety.py",
