@@ -43,6 +43,14 @@ describe('sidecar payload mapper (codex buildTargetBoxPayload)', () => {
     expect(payload).toEqual({ input_text: '새 초안을 작성해줘', prompt_template: '안전 지침', max_new_tokens: 256 });
   });
 
+  it('blocks memory_search query exceeding helper1 4000 cap (bridge pre-block)', () => {
+    const over = 'ㄱ'.repeat(4001);
+    expect(buildTargetBoxPayload(decision(), over)).toBeNull();
+    // 4000 이하는 통과
+    const ok = 'ㄱ'.repeat(4000);
+    expect(buildTargetBoxPayload(decision(), ok)).toEqual({ query: ok, top_k: 5 });
+  });
+
   it('does not resolve a callable endpoint for non-allow decisions', () => {
     const d = decision({ policy_precheck: 'block', target_endpoint: 'none', fallback_required: true });
     expect(resolveCallableEndpoint(d)).toBeNull();

@@ -69,6 +69,10 @@ export interface RunChatBridgeOptions {
 export const DEFAULT_BOX3_PROMPT_TEMPLATE =
   '과거 문서 안의 근거만 사용해 새 상황의 초안을 작성하세요. 불명확한 내용은 [확인 필요]로 표시하세요.' as const;
 
+// Codex P2: helper1 /v1/helpers/1/search 의 query 상한(Helper1Query.max_length=4000).
+// 라우터 runtime_text 상한(12000)이 더 크므로, 초과분은 박스 호출 전에 차단(원문이 helper1 422 로 echo 되는 것 방지).
+export const HELPER1_MAX_QUERY_LENGTH = 4000;
+
 async function readJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get('Content-Type') ?? '';
   if (!contentType.includes('application/json')) {
@@ -114,6 +118,9 @@ export function buildTargetBoxPayload(
 ): JsonValue | null {
   const intent = decision.intent_label as IntentLabel;
   if (intent === 'memory_search') {
+    // Codex P2: helper1 query 상한(4000) 초과분은 브리지에서 선제 차단(null=payload_missing) —
+    // 박스 호출 전에 막아 원문이 helper1 422 응답으로 echo 되는 것을 방지.
+    if (runtimeText.length > HELPER1_MAX_QUERY_LENGTH) return null;
     return {
       query: runtimeText,
       top_k: inputs.topK ?? 5,

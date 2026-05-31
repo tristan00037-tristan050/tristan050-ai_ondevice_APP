@@ -6,7 +6,7 @@ PR-D Sidecar Integration (후속 통합 PR) — 검증 증거 (실측)
 
 명령 / 결과:
   python -m pytest tests/connect_loop -q            -> 383 passed (0 fail)  [목표 370+]
-  npm test -- --run                                  -> 214 passed (22 files, 0 fail)  [목표 207+]
+  npm test -- --run                                  -> 215 passed (22 files, 0 fail)  [목표 207+]
   ./node_modules/.bin/tsc --noEmit                   -> exit 0 (PASS)
   bash scripts/verify_pr_d_sidecar_integration.sh    -> PASS
      (contract/ssot·storage·non-local·token·claim·router_decide-external·binary 0)
@@ -39,6 +39,9 @@ Codex 재리뷰 정정 2건 (2026-05-31):
   P2 verify 스크립트 verdict-only: per-check 라벨/카운트 제거 → 단일 verdict(PR_D_SIDECAR_INTEGRATION=PASS|FAIL codes=...).
   P2 runtime/chat_request Any 수신: runtime 이 string/list 로 와도 Pydantic 기본 422 가 원문 echo 하지 않도록 Any 수신 후 sanitized 타입 검증(CONNECT_LOOP_RUNTIME_INVALID / CONNECT_LOOP_CHAT_REQUEST_INVALID).
   P2 Box3 draft_text 표시: extractDisplayText 가 DraftResult.to_dict()의 draft_text 키 인식(executed 시 실제 초안 노출).
+  P2 memory_search query bound: buildTargetBoxPayload 가 helper1 query 상한(4000) 초과 runtime_text 를
+     박스 호출 전 차단(null=payload_missing) — 원문이 helper1 422 로 echo 되는 것 선제 방지(브리지측).
+     (박스 endpoint 자체의 422 meta-only 근본수정은 박스 보안 후속으로 추적 — known-gap.)
   P2 schema 오류 sanitize: _raise_schema_error 가 jsonschema exc.message(rejected value 포함 가능) 대신
      정적 메시지 + schema_path(필드명) + validator(키워드)만 반환 — pattern/enum 위반 시 원문/secret echo 차단.
 
