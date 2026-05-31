@@ -97,6 +97,21 @@ def test_router_decide_overlong_runtime_text_sanitized_error_no_raw_echo():
     assert "RAWPROMPT_" not in response.text  # 원문 미echo
 
 
+def test_router_decide_schema_error_does_not_echo_rejected_value():
+    """Codex P2: pattern/enum 위반 시 jsonschema 메시지의 rejected value(원문/secret)를 echo 하지 않는다."""
+    cr = _chat_request("정상 본문")
+    cr["text_digest"] = "RAWPROMPT_SECRET_NOT_A_DIGEST"  # sha256 pattern 위반
+    response = _client().post(
+        "/v1/router/decide",
+        json={"chat_request": cr, "runtime": {"runtime_text": "정상 본문"}},
+    )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["fail_class"] == "CONNECT_LOOP_SCHEMA_VALIDATION_FAILED"
+    assert detail["schema_path"] == "text_digest"  # 위치(필드명)만 — 값 아님
+    assert "RAWPROMPT_SECRET_NOT_A_DIGEST" not in response.text  # rejected value 미echo
+
+
 def test_router_decide_runtime_as_string_sanitized_no_echo():
     """Codex P2: runtime 이 객체가 아닌 string(원문)으로 와도 sanitized 422 — 원문 미echo."""
     cr = _chat_request("정상 본문")

@@ -56,13 +56,18 @@ def _server_side_policy_precheck(
 
 
 def _raise_schema_error(exc: ValidationError) -> None:
+    # Codex P2: jsonschema exc.message 는 pattern/enum 실패 시 rejected value(원문/secret 가능)를
+    # 포함한다. no-raw-output 불변식을 위해 message 는 정적 문자열로, 위치는 schema_path(필드 경로,
+    # 값 아님)만 노출한다. (validator_path 는 실패한 검증 키워드로 값이 아님.)
     path = ".".join(str(item) for item in exc.path) or "<root>"
+    validator = str(getattr(exc, "validator", "") or "")
     raise HTTPException(
         status_code=422,
         detail={
             "fail_class": "CONNECT_LOOP_SCHEMA_VALIDATION_FAILED",
             "schema_path": path,
-            "message": exc.message,
+            "validator": validator,
+            "message": "chat_request failed contract validation",
         },
     ) from exc
 
