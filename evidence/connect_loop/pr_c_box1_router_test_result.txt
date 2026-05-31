@@ -1,0 +1,33 @@
+PR-C Box1 Router — 검증 증거 (pytest 요약, 실측)
+================================================
+
+범위: PR-C = Box1 router (chat_request → router_decision.v1). 계약 변경 없음(PR-A/PR-B 소비).
+main 기준 재정렬(rebase --onto origin/main) 후 측정.
+
+명령 / 결과:
+  [focused] python -m pytest tests/connect_loop/test_box1_router.py tests/connect_loop/test_box1_router_security.py -q
+    -> 22 passed
+  [전체 무회귀] python -m pytest tests/connect_loop -q
+    -> 363 passed (skip 0)
+    파일별: test_schema_contract.py 232 / test_chat_fallback_and_expires_range.py 41 /
+            test_router_decision_intent_mapping.py 26 / test_mapping_mirror_le_ul.py 22 /
+            test_usage_accumulator_middleware.py 20 / test_box1_router.py 13 /
+            test_box1_router_security.py 9  (합계 363)
+
+Codex P2 (2026-05-30) 반영 — runtime_text ↔ chat_request.text_digest fail-closed 대조:
+  - box1_router.decide(): runtime_text 제공 시 canonical_sha256(runtime_text) 와
+    chat_request.text_digest 대조. 불일치면 fail-closed:
+      intent_label=unknown / target_box_id=none / target_endpoint=none /
+      fallback_required=true / routing_confidence=0.0 / reason_code=TEXT_DIGEST_MISMATCH
+    (잘못 짝지어진 runtime context 가 wrong text 를 다른 request_id/digest 로 라우팅해
+     감사 추적을 오염시키는 것을 차단. router_decision self-validate 로 reason_code 계약 정합 확인.)
+  - canonical_sha256 = chat_request digest 생성과 동일 규칙(원문 UTF-8 sha256, 정규화 없음).
+    생성·검증 양측 동일 함수 사용 → false mismatch 0.
+  - 신규 회귀 4건:
+      test_text_digest_match_allows_routing      (일치 → 정상 라우팅)
+      test_text_digest_mismatch_forces_unknown   (불일치 → unknown/none/fallback/TEXT_DIGEST_MISMATCH + schema validate)
+      test_no_text_digest_skips_check            (text_digest 부재 → 대조 스킵=None)
+      test_digest_check_uses_same_normalization  (공백/줄바꿈/유니코드 포함 동일 원문 false mismatch 0)
+  - 기존 functional fixture 의 text_digest 를 runtime_text 의 canonical digest 로 정합(유효 요청화) → 무회귀 유지.
+
+원문/로컬경로/secret 포함 여부: 0 (device-local runtime_text 는 router_decision/evidence 어디에도 미포함, digest만).
