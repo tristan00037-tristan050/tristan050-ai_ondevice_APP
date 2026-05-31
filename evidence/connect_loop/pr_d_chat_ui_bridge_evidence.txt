@@ -1,0 +1,46 @@
+PR-D Connect Loop Chat UI Bridge — 검증 증거 (실측)
+==================================================
+
+베이스: 코덱스 v1.2 (butler-desktop/src connect_loop chat UI) on main(PR-A·B·C 머지본).
+이식: 메인팀 v1.3 보안 3건. 계약(PR-A schema)/PR-B·C 변경 0.
+
+명령 / 결과:
+  ./node_modules/.bin/tsc --noEmit          -> exit 0 (PASS)
+  npm test -- --run                          -> 202 passed (20 test files), 0 failed
+                                                (코덱스 v1.2 192 + 신규 보안 10 = 202, 무회귀 유지)
+  bash scripts/verify_pr_d_security.sh       -> PASS: storage 0 / non-local 0 / token 0 / claim 0
+
+Codex 재리뷰 정정 3건 (2026-05-31):
+  P1 raw-log 미입증 fail-closed: validateBoxResponseSecurity 가 raw_text_logged/raw_doc_logged
+     누락 시(미입증) 통과하던 것을 차단 — 최소 하나가 명시적 false 여야 통과.
+  P2 차단 상태 zero-leak 배지 금지: SecurityBadges 가 security_blocked/decision_invalid/
+     endpoint_failed 에서 '원문 미반출/비로컬 전송 0' 단정 표기하던 것을 '보안 미검증 — 결과 차단'
+     으로 대체(거짓 PASS 방지). status prop 추가.
+  P2 verify 스크립트 verdict-only: 실패 시 매칭 소스 라인 echo 제거(민감 문자열 CI 노출 방지),
+     라벨+count 만 출력.
+
+Codex 재리뷰 2라운드 정정 2건 (2026-05-31):
+  P2 requestOverride 검증 우회 차단: runChatBridge 가 requestOverride 도 assertValidChatRequest
+     (스키마/첨부 5·10MB 가드)를 거치게 함 — override 가 가드를 우회해 라우터로 전송되던 경로 차단.
+  P1 verify 스크립트 verdict-only 강화: clean 실행에서도 스캔 파일 목록을 출력하던 것 제거
+     (AGENTS.md verify-output 규칙 — verdict/error-code 만).
+
+이식한 보안 3건 (client.ts / contracts.ts / ChatUIBridge.tsx / SecurityBadges.tsx):
+  1) validateBoxResponseSecurity(): box response 의 external_send_zero!==true 이거나(누락 포함)
+     raw_text_logged/raw_doc_logged===true 면 결과 표시 차단(status='security_blocked',
+     boxResponse=null) — 배지가 안전한 것처럼 보이는 것 방지.
+  2) usageLogVerifier 주입 경계: request_id 기준 usage_log 1건 이상 독립 확인.
+     미주입 시 usageLogVerification='not_configured'(거짓 PASS 금지), 주입 시 verified/missing.
+     SecurityBadges 가 검증 상태를 명시 표기.
+  3) 첨부 가드: 개수 5개(MAX_ATTACHMENTS) + 총량 10MB(MAX_TOTAL_ATTACHMENT_BYTES) 상한.
+     assertValidChatRequest 에서 CHAT_ATTACHMENTS_TOO_MANY / CHAT_ATTACHMENTS_TOTAL_TOO_LARGE.
+
+신규 보안 테스트 8건:
+  validateBoxResponseSecurity affirmative 플래그 / 보안 플래그 누락 시 security_blocked /
+  raw_text_logged=true 차단 / 미주입 not_configured / verifier verified·missing /
+  첨부 6개 거부 / 총 10MB 초과 거부 / 5개·10MB 이내 허용.
+
+보안 경계 (코덱스 v1.2 유지): assertLocalSidecarUrl(127.0.0.1:8765 만) / endpoint allowlist /
+  policy_precheck fail-closed / digest-only(text_digest, 원문 미반출) / external_send 0.
+
+원문/로컬경로/secret/토큰: 0 (digest-only, 영속 스토리지 0, 비로컬 전송 0).
