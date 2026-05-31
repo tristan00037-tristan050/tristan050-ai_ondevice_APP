@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::{env, fs, path::Path, sync::Mutex};
 use tauri::Manager;
 use tauri_plugin_shell::{
     process::{CommandChild, CommandEvent},
@@ -47,6 +47,19 @@ async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
     Ok(child)
 }
 
+#[tauri::command]
+fn get_sidecar_capability_token() -> Result<String, String> {
+    let home = env::var("HOME").map_err(|_| "HOME_UNAVAILABLE".to_string())?;
+    let token_path = Path::new(&home).join(".butler").join("sidecar_token");
+    let token = fs::read_to_string(&token_path)
+        .map_err(|_| "CAPABILITY_TOKEN_UNAVAILABLE".to_string())?;
+    let trimmed = token.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("CAPABILITY_TOKEN_EMPTY".to_string());
+    }
+    Ok(trimmed)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -92,7 +105,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![])
+        .invoke_handler(tauri::generate_handler![get_sidecar_capability_token])
         .run(tauri::generate_context!())
         .expect("Tauri 앱 실행 실패");
 }

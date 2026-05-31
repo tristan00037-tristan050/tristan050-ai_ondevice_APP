@@ -12,7 +12,12 @@ import {
   createChatRequest,
   resolveCallableEndpoint,
 } from '../lib/connect_loop/contracts';
-import { runChatBridge, validateBoxResponseSecurity } from '../lib/connect_loop/client';
+import {
+  DEFAULT_BOX3_PROMPT_TEMPLATE,
+  buildTargetBoxPayload,
+  runChatBridge,
+  validateBoxResponseSecurity,
+} from '../lib/connect_loop/client';
 
 const zeroDigest = `sha256:${'0'.repeat(64)}` as const;
 const testDirname = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +26,9 @@ const prdSourceFiles = [
   'components/connect_loop/SecurityBadges.tsx',
   'lib/connect_loop/client.ts',
   'lib/connect_loop/contracts.ts',
+  'lib/connect_loop/sidecarAuth.ts',
 ] as const;
+const tokenProvider = async () => 'test-capability-token';
 
 async function stableHash(value: string): Promise<`sha256:${string}`> {
   const seed = Array.from(value).reduce((sum, char) => sum + char.charCodeAt(0), 0);
@@ -122,7 +129,11 @@ describe('PR-D Chat UI Bridge contracts', () => {
       });
     });
 
-    const result = await runChatBridge('새 상황 보고서 초안 작성', { hashText: stableHash, fetcher });
+    const result = await runChatBridge('새 상황 보고서 초안 작성', {
+      hashText: stableHash,
+      fetcher,
+      capabilityTokenProvider: tokenProvider,
+    });
     expect(result.status).toBe('executed');
     expect(result.displayText).toBe('새 상황에 맞춘 초안입니다.');
     expect(result.usageLogCount).toBe(1);
@@ -130,6 +141,48 @@ describe('PR-D Chat UI Bridge contracts', () => {
       'http://127.0.0.1:8765/v1/router/decide',
       'http://127.0.0.1:8765/v1/cards/3/draft',
     ]);
+    const routerHeaders = fetcher.mock.calls[0][1].headers as Record<string, string>;
+    const boxHeaders = fetcher.mock.calls[1][1].headers as Record<string, string>;
+    const boxPayload = JSON.parse(String(fetcher.mock.calls[1][1].body));
+    expect(routerHeaders.Authorization).toBe('Bearer test-capability-token');
+    expect(boxHeaders.Authorization).toBe('Bearer test-capability-token');
+    expect(boxHeaders['x-request-id']).toBe(result.requestId);
+    expect(boxHeaders['x-routing-confidence']).toBe('0.91');
+    expect(boxHeaders['x-learning-candidate']).toBe('0');
+    expect(boxPayload).toEqual({
+      input_text: '새 상황 보고서 초안 작성',
+      prompt_template: DEFAULT_BOX3_PROMPT_TEMPLATE,
+      max_new_tokens: 512,
+    });
+  });
+
+  it('builds exact box payloads instead of sending generic bridge envelopes', () => {
+    expect(buildTargetBoxPayload(
+      decision({ intent_label: 'memory_search', target_box_id: 'helper1', target_endpoint: 'POST /v1/helpers/1/search' }),
+      '이전 문서 찾아줘 검색',
+    )).toEqual({ query: '이전 문서 찾아줘 검색', top_k: 5 });
+    expect(buildTargetBoxPayload(
+      decision({ intent_label: 'form_convert', target_box_id: '2', target_endpoint: 'POST /v1/cards/2/rewrite' }),
+      '우리 양식 변환',
+      { foreignDoc: '외부 문서', ourFormat: '우리 양식' },
+    )).toEqual({
+      foreign_doc: '외부 문서',
+      our_format: '우리 양식',
+      options: {
+        tone: 'company_standard',
+        preserve_numbers: true,
+        redact_sensitive: true,
+      },
+    });
+    expect(buildTargetBoxPayload(decision(), '새 상황 보고서 초안 작성')).toEqual({
+      input_text: '새 상황 보고서 초안 작성',
+      prompt_template: DEFAULT_BOX3_PROMPT_TEMPLATE,
+      max_new_tokens: 512,
+    });
+    expect(buildTargetBoxPayload(
+      decision({ intent_label: 'accounting_classify', target_box_id: '5', target_endpoint: 'POST /accounting/classify' }),
+      '거래내역 분류',
+    )).toBeNull();
   });
 
   it('does not call box endpoint for unknown intent', async () => {
@@ -148,7 +201,7 @@ describe('PR-D Chat UI Bridge contracts', () => {
       });
     });
 
-    const result = await runChatBridge('검토', { hashText: stableHash, fetcher });
+    const result = await runChatBridge('검토', { hashText: stableHash, fetcher, capabilityTokenProvider: tokenProvider });
     expect(result.status).toBe('fallback');
     expect(result.displayText).toBe('요청을 안전하게 분류하지 못했습니다. 더 구체화해 주세요.');
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -170,7 +223,7 @@ describe('PR-D Chat UI Bridge contracts', () => {
       });
     });
 
-    const result = await runChatBridge('안녕하세요', { hashText: stableHash, fetcher });
+    const result = await runChatBridge('안녕하세요', { hashText: stableHash, fetcher, capabilityTokenProvider: tokenProvider });
     expect(result.status).toBe('fallback');
     expect(result.displayText).toBe('일반 대화는 별도 실행 대상으로 등록되지 않았습니다.');
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -190,7 +243,7 @@ describe('PR-D Chat UI Bridge contracts', () => {
       });
     });
 
-    const result = await runChatBridge('차단 대상 요청', { hashText: stableHash, fetcher });
+    const result = await runChatBridge('차단 대상 요청', { hashText: stableHash, fetcher, capabilityTokenProvider: tokenProvider });
     expect(result.status).toBe('policy_closed');
     expect(result.displayText).toBe('정책상 처리할 수 없는 요청입니다.');
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -199,9 +252,104 @@ describe('PR-D Chat UI Bridge contracts', () => {
   it('fails closed when router decision request_id does not match chat_request', async () => {
     const fetcher = vi.fn(async () => jsonResponse({ decision: decision({ request_id: 'different-request-id' }) }));
 
-    const result = await runChatBridge('새 상황 보고서 초안 작성', { hashText: stableHash, fetcher });
+    const result = await runChatBridge('새 상황 보고서 초안 작성', {
+      hashText: stableHash,
+      fetcher,
+      capabilityTokenProvider: tokenProvider,
+    });
     expect(result.status).toBe('decision_invalid');
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call box2 when required box-specific inputs are absent', async () => {
+    const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      return jsonResponse({
+        decision: decision({
+          request_id: body.chat_request.request_id,
+          intent_label: 'form_convert',
+          target_box_id: '2',
+          target_endpoint: 'POST /v1/cards/2/rewrite',
+        }),
+      });
+    });
+
+    const result = await runChatBridge('우리 양식 변환', { hashText: stableHash, fetcher, capabilityTokenProvider: tokenProvider });
+    expect(result.status).toBe('payload_missing');
+    expect(result.displayText).toBe('실행에 필요한 입력이 부족하여 박스를 호출하지 않았습니다.');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends box2 schema payload when box2 inputs are present', async () => {
+    const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      if (url.endsWith('/v1/router/decide')) {
+        return jsonResponse({
+          decision: decision({
+            request_id: body.chat_request.request_id,
+            intent_label: 'form_convert',
+            target_box_id: '2',
+            target_endpoint: 'POST /v1/cards/2/rewrite',
+          }),
+        });
+      }
+      return jsonResponse({ rewritten_doc: '변환 결과', external_send_zero: true, raw_doc_logged: false });
+    });
+
+    const result = await runChatBridge('우리 양식 변환', {
+      hashText: stableHash,
+      fetcher,
+      capabilityTokenProvider: tokenProvider,
+      boxInputs: { foreignDoc: '외부 문서', ourFormat: '우리 양식' },
+    });
+
+    expect(result.status).toBe('executed');
+    expect(JSON.parse(String(fetcher.mock.calls[1][1].body))).toEqual({
+      foreign_doc: '외부 문서',
+      our_format: '우리 양식',
+      options: {
+        tone: 'company_standard',
+        preserve_numbers: true,
+        redact_sensitive: true,
+      },
+    });
+  });
+
+  it('does not call accounting SSE endpoint from the PR-D bridge', async () => {
+    const fetcher = vi.fn(async (url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      return jsonResponse({
+        decision: decision({
+          request_id: body.chat_request.request_id,
+          intent_label: 'accounting_classify',
+          target_box_id: '5',
+          target_endpoint: 'POST /accounting/classify',
+        }),
+      });
+    });
+
+    const result = await runChatBridge('거래내역 계정과목 회계분류', {
+      hashText: stableHash,
+      fetcher,
+      capabilityTokenProvider: tokenProvider,
+    });
+    expect(result.status).toBe('payload_missing');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed before router call when capability token is unavailable', async () => {
+    const fetcher = vi.fn();
+
+    const result = await runChatBridge('새 상황 보고서 초안 작성', {
+      hashText: stableHash,
+      fetcher,
+      capabilityTokenProvider: async () => {
+        throw new Error('CAPABILITY_TOKEN_UNAVAILABLE');
+      },
+    });
+
+    expect(result.status).toBe('endpoint_failed');
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it('keeps PR-D source free of persistent browser storage and token exposure', () => {
@@ -332,7 +480,11 @@ describe('PR-D security hardening (mainteam v1.3)', () => {
 
   it('blocks result display when box response lacks security flags', async () => {
     const fetcher = executedFetcher({ draft: '민감 결과', integration_mode: 'real', usage_log_count: 1 });
-    const result = await runChatBridge('새 상황 보고서 초안 작성', { hashText: stableHash, fetcher });
+    const result = await runChatBridge('새 상황 보고서 초안 작성', {
+      hashText: stableHash,
+      fetcher,
+      capabilityTokenProvider: tokenProvider,
+    });
     expect(result.status).toBe('security_blocked');
     expect(result.displayText).toBe('응답 보안 검증에 실패하여 결과를 표시하지 않습니다.');
     expect(result.boxResponse).toBeNull();
@@ -341,14 +493,22 @@ describe('PR-D security hardening (mainteam v1.3)', () => {
 
   it('blocks when raw_text_logged is true', async () => {
     const fetcher = executedFetcher({ draft: 'x', external_send_zero: true, raw_text_logged: true });
-    const result = await runChatBridge('새 상황 보고서 초안 작성', { hashText: stableHash, fetcher });
+    const result = await runChatBridge('새 상황 보고서 초안 작성', {
+      hashText: stableHash,
+      fetcher,
+      capabilityTokenProvider: tokenProvider,
+    });
     expect(result.status).toBe('security_blocked');
   });
 
   // (2) usageLogVerifier 주입 경계 — 미구성은 not_configured(거짓 PASS 금지)
   it('marks usage_log verification not_configured when no verifier injected', async () => {
     const fetcher = executedFetcher({ draft: 'ok', external_send_zero: true, raw_text_logged: false, usage_log_count: 1 });
-    const result = await runChatBridge('새 상황 보고서 초안 작성', { hashText: stableHash, fetcher });
+    const result = await runChatBridge('새 상황 보고서 초안 작성', {
+      hashText: stableHash,
+      fetcher,
+      capabilityTokenProvider: tokenProvider,
+    });
     expect(result.status).toBe('executed');
     expect(result.usageLogVerification).toBe('not_configured');
   });
@@ -356,11 +516,17 @@ describe('PR-D security hardening (mainteam v1.3)', () => {
   it('verifies usage_log via injected verifier (verified / missing)', async () => {
     const box = { draft: 'ok', external_send_zero: true, raw_text_logged: false };
     const verified = await runChatBridge('새 상황 보고서 초안 작성', {
-      hashText: stableHash, fetcher: executedFetcher(box), usageLogVerifier: async () => 1,
+      hashText: stableHash,
+      fetcher: executedFetcher(box),
+      capabilityTokenProvider: tokenProvider,
+      usageLogVerifier: async () => 1,
     });
     expect(verified.usageLogVerification).toBe('verified');
     const missing = await runChatBridge('새 상황 보고서 초안 작성', {
-      hashText: stableHash, fetcher: executedFetcher(box), usageLogVerifier: async () => 0,
+      hashText: stableHash,
+      fetcher: executedFetcher(box),
+      capabilityTokenProvider: tokenProvider,
+      usageLogVerifier: async () => 0,
     });
     expect(missing.usageLogVerification).toBe('missing');
   });
