@@ -1,0 +1,38 @@
+PR-D Sidecar Integration (후속 통합 PR) — 검증 증거 (실측)
+========================================================
+
+베이스: 코덱스 followup 패키지(pr_d_followup_sidecar_integration) on 깨끗한 main(2c689092, PR-A·B·C·D 머지본).
+이식: 메인팀 maindev v1.2 세분 테스트 5종 + verify 스크립트 (충돌은 코덱스 구현 기준 조정).
+
+명령 / 결과:
+  python -m pytest tests/connect_loop -q            -> 379 passed (0 fail)  [목표 370+]
+  npm test -- --run                                  -> 213 passed (22 files, 0 fail)  [목표 207+]
+  ./node_modules/.bin/tsc --noEmit                   -> exit 0 (PASS)
+  bash scripts/verify_pr_d_sidecar_integration.sh    -> PASS
+     (contract/ssot·storage·non-local·token·claim·router_decide-external·binary 0)
+  보안 스캔(non-local·storage·token·binary 0): verify 스크립트로 강제.
+
+코덱스 followup (commit 1) — 실제 sidecar 연동 레이어:
+  - butler_pc_core/sidecar/routes/router_decide.py: POST /v1/router/decide. 서버측 정책 precheck
+    (클라이언트 allow 무시; host+text_ref 기준), 422 fail_class=CONNECT_LOOP_SCHEMA_VALIDATION_FAILED,
+    RuleBasedBox1Router 재사용(외부 전송 0).
+  - butler_sidecar.py: router_decide_router include_router 직접 등록(새 FastAPI 앱 미생성).
+  - butler-desktop/src/lib/connect_loop/sidecarAuth.ts: Tauri invoke('get_sidecar_capability_token').
+  - butler-desktop/src-tauri/src/lib.rs: 토큰 command.
+  - client.ts: auth Bearer 헤더 부착 + buildTargetBoxPayload(박스별 요청 스키마 매핑), payload_missing 상태.
+
+maindev v1.2 이식 (commit 2) — 코덱스 구현 기준 조정:
+  tests/connect_loop/test_router_decide_endpoint.py        (4) — fail_class 를 코덱스값으로 조정
+  tests/connect_loop/test_sidecar_router_registration_patch.py (3) — patch파일 대신 직접 등록 검증으로 조정
+  tests/connect_loop/test_sidecar_usage_log_correlation.py (2) — PR-B build_usage_log 소비, real_validation_done=응답값 기준
+  butler-desktop/src/__tests__/connect_loop/connect_loop_payload_mappers.test.ts (4)
+      — buildBoxCallPlan({kind}) → buildTargetBoxPayload(payload|null), non-allow 는 resolveCallableEndpoint
+  butler-desktop/src/__tests__/connect_loop/connect_loop_sidecar_guards.test.ts (2)
+      — isRouterDecisionV1 → assertValidRouterDecision(throws)
+  scripts/verify_pr_d_sidecar_integration.sh — connect_loop 스코프로 조정(전체 src 오탐 방지),
+      non-local 은 런타임 소스만(테스트의 비로컬 거부 픽스처 제외).
+
+real 정책: 실제 네트워크 real 은 connection_e2e_real 테스트에 한정(본 패키지 테스트는 TestClient/mock,
+  실제 호출 0). endpoint 의 real_validation_done 은 가정이 아니라 응답값 기준으로 기록/검증.
+
+계약/PR-A·B·C 변경 0(verify contract_ssot gate). 원문/로컬경로/secret/토큰/binary 0.
