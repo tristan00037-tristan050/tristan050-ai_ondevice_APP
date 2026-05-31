@@ -33,7 +33,7 @@ _PHONE_RE = re.compile(r"\b(?:\+?82[-.\s]?)?0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}\b
 _KOREAN_RRN_RE = re.compile(r"\b\d{6}-[1-4]\d{6}\b")
 _CARD_OR_ACCOUNT_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
 _SECRET_RE = re.compile(
-    r"(?i)(bearer\s+[a-z0-9._~+/=-]{10,}|api[_-]?key\s*[:=]|token\s*[:=]|secret\s*[:=]|password\s*[:=]|sk-[a-z0-9]{12,})"
+    r"(?i)(bearer\s+[a-z0-9._~+/=-]{10,}|api[_-]?key\s*[:=]|token\s*[:=]|secret\s*[:=]|password\s*[:=]|sk-[a-z0-9][a-z0-9._-]{10,})"
 )
 _LOCAL_PATH_RE = re.compile(r"(/Users/|/Volumes/|[A-Za-z]:\\|file://|\.docx\b|\.pdf\b|\.xlsx\b|\.jsonl\b)")
 

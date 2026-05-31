@@ -95,6 +95,7 @@ def test_select_learning_candidates_requires_digest_only_allow_real_record():
     logs = [
         usage_log(),
         usage_log(log_id="ulog-no-candidate", learning_candidate=False),
+        usage_log(log_id="ulog-already-linked", learning_event_created=True),
         usage_log(log_id="ulog-policy-deny", policy_decision="deny", integration_mode="contract_only", real_validation_done=False),
         usage_log(log_id="ulog-contract-only", integration_mode="contract_only", real_validation_done=False),
         usage_log(log_id="ulog-raw", raw_text_logged=True),
@@ -117,6 +118,17 @@ def test_learning_allowed_false_drops_without_event():
 
     assert result.event is None
     assert result.drop_reason == "LEARNING_NOT_ALLOWED"
+
+
+def test_missing_tenant_scope_drops_without_keyerror():
+    broken_envelope = envelope()
+    broken_envelope.pop("tenant_scope")
+    data = build_learning_gate_input(candidate(), approved_bundle(), broken_envelope)
+
+    result = create_learning_event_result(data, now=NOW)
+
+    assert result.event is None
+    assert result.drop_reason == "TENANT_SCOPE_INVALID"
 
 
 def test_approved_text_ref_missing_drops_even_with_digest():

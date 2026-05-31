@@ -99,6 +99,7 @@ def _is_candidate_usage_log(usage_log: dict[str, Any]) -> bool:
         and usage_log.get("real_validation_done") is True
         and usage_log.get("external_send_zero") is True
         and usage_log.get("raw_text_logged") is False
+        and usage_log.get("learning_event_created") is False
         and usage_log.get("retention_class") == "audit_digest_only"
     )
 
@@ -185,6 +186,8 @@ def _drop_reason(gate_input: dict[str, Any], now: datetime) -> str | None:
         return "POLICY_ENVELOPE_MISSING"
     if envelope.get("learning_allowed") is not True:
         return "LEARNING_NOT_ALLOWED"
+    if envelope.get("tenant_scope") not in {"device", "team", "org"}:
+        return "TENANT_SCOPE_INVALID"
 
     approved_text_ref = gate_input.get("approved_text_ref")
     if not isinstance(approved_text_ref, str) or not approved_text_ref:

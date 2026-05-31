@@ -85,6 +85,25 @@ def test_dlp_guard_returns_booleans_only_without_matched_raw_text():
     assert "/Users/example" not in str(result)
 
 
+def test_dlp_guard_catches_hyphenated_sk_project_tokens():
+    secret_text = "local runtime secret sk-proj-alpha-beta-1234567890 should never pass"
+
+    result = scan_runtime_text(secret_text)
+
+    assert result["passed"] is False
+    assert result["secret_detected"] is True
+    assert "sk-proj-alpha" not in str(result)
+
+
+def test_raw_guard_blocks_hyphenated_sk_project_tokens():
+    try:
+        assert_no_raw_or_secret_material({"digest_only_note": "sk-proj-alpha-beta-1234567890"})
+    except ValueError as exc:
+        assert str(exc) == "RAW_OR_SECRET_VALUE_FORBIDDEN"
+    else:  # pragma: no cover
+        raise AssertionError("hyphenated sk token was not blocked")
+
+
 def test_raw_like_keys_are_blocked():
     try:
         assert_no_raw_or_secret_material({"raw_text": "not allowed"})
