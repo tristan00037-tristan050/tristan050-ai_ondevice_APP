@@ -82,6 +82,21 @@ def test_router_decide_rejects_raw_field_unknown_contract():
     assert response.json()["detail"]["fail_class"] == "CONNECT_LOOP_SCHEMA_VALIDATION_FAILED"
 
 
+def test_router_decide_overlong_runtime_text_sanitized_error_no_raw_echo():
+    """Codex P1: runtime_text 초과 시 sanitized 422(meta-only) — 원문이 응답에 echo 되지 않는다."""
+    text = "정상 본문"
+    cr = _chat_request(text)
+    secret = "RAWPROMPT_" + "가" * 13000  # > MAX_RUNTIME_TEXT_LENGTH
+    response = _client().post(
+        "/v1/router/decide",
+        json={"chat_request": cr, "runtime": {"runtime_text": secret}},
+    )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["fail_class"] == "CONNECT_LOOP_RUNTIME_TEXT_INVALID"
+    assert "RAWPROMPT_" not in response.text  # 원문 미echo
+
+
 def test_router_decide_non_local_text_ref_blocks_endpoint():
     """서버측 정책: text_ref 가 device_local_only 가 아니면 fail-closed(endpoint none)."""
     text = "지난 회의 기록 찾아줘. 문서 검색으로 확인해줘."

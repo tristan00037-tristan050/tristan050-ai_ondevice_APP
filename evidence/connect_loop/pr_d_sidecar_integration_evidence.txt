@@ -5,7 +5,7 @@ PR-D Sidecar Integration (후속 통합 PR) — 검증 증거 (실측)
 이식: 메인팀 maindev v1.2 세분 테스트 5종 + verify 스크립트 (충돌은 코덱스 구현 기준 조정).
 
 명령 / 결과:
-  python -m pytest tests/connect_loop -q            -> 379 passed (0 fail)  [목표 370+]
+  python -m pytest tests/connect_loop -q            -> 380 passed (0 fail)  [목표 370+]
   npm test -- --run                                  -> 213 passed (22 files, 0 fail)  [목표 207+]
   ./node_modules/.bin/tsc --noEmit                   -> exit 0 (PASS)
   bash scripts/verify_pr_d_sidecar_integration.sh    -> PASS
@@ -31,6 +31,12 @@ maindev v1.2 이식 (commit 2) — 코덱스 구현 기준 조정:
       — isRouterDecisionV1 → assertValidRouterDecision(throws)
   scripts/verify_pr_d_sidecar_integration.sh — connect_loop 스코프로 조정(전체 src 오탐 방지),
       non-local 은 런타임 소스만(테스트의 비로컬 거부 픽스처 제외).
+
+Codex 재리뷰 정정 2건 (2026-05-31):
+  P1 router_decide runtime_text sanitized: Pydantic max_length 의 기본 422 가 원문 runtime_text 를
+     echo 하던 것을 차단 — runtime 을 dict 로 받아 라우트 내부에서 길이/타입 검증, meta-only 오류
+     (fail_class=CONNECT_LOOP_RUNTIME_TEXT_INVALID, 원문 미echo). 회귀 테스트 추가(380 passed).
+  P2 verify 스크립트 verdict-only: per-check 라벨/카운트 제거 → 단일 verdict(PR_D_SIDECAR_INTEGRATION=PASS|FAIL codes=...).
 
 real 정책: 실제 네트워크 real 은 connection_e2e_real 테스트에 한정(본 패키지 테스트는 TestClient/mock,
   실제 호출 0). endpoint 의 real_validation_done 은 가정이 아니라 응답값 기준으로 기록/검증.

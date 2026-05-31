@@ -18,14 +18,14 @@ CL_PY=("butler_pc_core/connect_loop" "butler_pc_core/sidecar/routes/router_decid
 TS_TARGETS=()
 for p in "${CL_TS_DIRS[@]}" "${CL_TS_FILES[@]}"; do [ -e "$p" ] && TS_TARGETS+=("$p"); done
 
+# Codex P2: verdict-only — per-check 라벨/카운트를 출력하지 않고, 실패 코드만 누적해 최종 1줄 verdict 로 emit.
 fail=0
+FAILED=""
 gate() {  # label, grep-output
   local label="$1" hits="$2" n
   n=$(printf '%s' "$hits" | grep -c . || true)
-  if [ "$n" -ne 0 ]; then echo "[FAIL] $label: $n"; fail=1; else echo "[ OK ] $label: 0"; fi
+  if [ "$n" -ne 0 ]; then fail=1; FAILED="${FAILED}${FAILED:+,}${label}"; fi
 }
-
-echo "=== PR-D sidecar integration security gate (connect_loop scope) ==="
 
 # 계약/SSOT 미변경
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -59,6 +59,5 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   gate "binary" "$(git diff --cached --name-only 2>/dev/null | grep -E '\.(safetensors|gguf|bin|npy|pkl)$' || true)"
 fi
 
-echo
-if [ "$fail" -ne 0 ]; then echo "RESULT: FAIL"; exit 1; fi
-echo "RESULT: PASS — contract/ssot·storage·non-local·token·claim·router-external·binary 0"
+if [ "$fail" -ne 0 ]; then echo "PR_D_SIDECAR_INTEGRATION=FAIL codes=${FAILED}"; exit 1; fi
+echo "PR_D_SIDECAR_INTEGRATION=PASS"
