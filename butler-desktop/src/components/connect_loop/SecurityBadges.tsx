@@ -1,5 +1,5 @@
 import type { RouterDecisionV1 } from '../../lib/connect_loop/contracts';
-import type { UsageLogVerification } from '../../lib/connect_loop/client';
+import type { BridgeStatus, UsageLogVerification } from '../../lib/connect_loop/client';
 
 interface SecurityBadgesProps {
   decision: RouterDecisionV1 | null;
@@ -7,7 +7,11 @@ interface SecurityBadgesProps {
   integrationMode: string | null;
   usageLogCount: number | null;
   usageLogVerification?: UsageLogVerification;
+  status?: BridgeStatus;
 }
+
+// Codex P2: 보안이 입증되지 않은 상태에서는 zero-leak 배지를 단정 표기하지 않는다(거짓 PASS 방지).
+const UNVERIFIED_STATUSES = new Set<BridgeStatus>(['security_blocked', 'decision_invalid', 'endpoint_failed']);
 
 function badge(label: string, value: string): string {
   return `${label}: ${value}`;
@@ -19,10 +23,12 @@ export function SecurityBadges({
   integrationMode,
   usageLogCount,
   usageLogVerification = 'not_configured',
+  status,
 }: SecurityBadgesProps) {
+  const securityVerified = status === undefined ? true : !UNVERIFIED_STATUSES.has(status);
   const entries = [
-    '원문 미반출',
-    '비로컬 전송 0',
+    // zero-leak 단정은 검증된 상태에서만. 미검증(차단/무효/실패)이면 명시적 미검증 배지.
+    ...(securityVerified ? ['원문 미반출', '비로컬 전송 0'] : ['보안 미검증 — 결과 차단']),
     badge('정책', decision?.policy_precheck ?? '대기'),
     badge('대상', decision?.target_box_id ?? '대기'),
     fallbackRequired ? '안전 처리됨' : '직접 실행',

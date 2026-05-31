@@ -148,6 +148,7 @@ export function ChatUIBridge({ runBridge = runChatBridge }: ChatUIBridgeProps) {
                   integrationMode={message.result.integrationMode}
                   usageLogCount={message.result.usageLogCount}
                   usageLogVerification={message.result.usageLogVerification}
+                  status={message.result.status}
                 />
               )}
             </article>

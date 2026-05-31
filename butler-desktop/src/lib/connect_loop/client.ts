@@ -127,8 +127,12 @@ export function validateBoxResponseSecurity(response: unknown): boolean {
   if (typeof response !== 'object' || response === null) return false;
   const record = response as Record<string, unknown>;
   if (record.external_send_zero !== true) return false;
-  if (record.raw_text_logged === true) return false;
-  if (record.raw_doc_logged === true) return false;
+  // raw 로깅 플래그가 true 면 차단.
+  if (record.raw_text_logged === true || record.raw_doc_logged === true) return false;
+  // Codex P1: raw 로깅 플래그 누락은 '입증되지 않은' 보안이므로 fail-closed.
+  // 최소 하나의 raw-log 플래그가 명시적으로 false 여야 통과(빈/부분 응답 차단).
+  const explicitRawFalse = record.raw_text_logged === false || record.raw_doc_logged === false;
+  if (!explicitRawFalse) return false;
   return true;
 }
 

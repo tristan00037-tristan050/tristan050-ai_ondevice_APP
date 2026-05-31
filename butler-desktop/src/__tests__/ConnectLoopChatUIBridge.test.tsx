@@ -321,8 +321,10 @@ describe('PR-D security hardening (mainteam v1.3)', () => {
   // (1) validateBoxResponseSecurity — affirmative 안전 플래그 없으면 차단
   it('validateBoxResponseSecurity requires affirmative safe flags', () => {
     expect(validateBoxResponseSecurity({ external_send_zero: true, raw_text_logged: false })).toBe(true);
+    expect(validateBoxResponseSecurity({ external_send_zero: true, raw_doc_logged: false })).toBe(true); // box2/3 style
     expect(validateBoxResponseSecurity({ raw_text_logged: false })).toBe(false); // external_send_zero 누락
     expect(validateBoxResponseSecurity({ external_send_zero: false })).toBe(false); // false
+    expect(validateBoxResponseSecurity({ external_send_zero: true })).toBe(false); // raw-log 미입증(누락) → fail-closed
     expect(validateBoxResponseSecurity({ external_send_zero: true, raw_text_logged: true })).toBe(false);
     expect(validateBoxResponseSecurity({ external_send_zero: true, raw_doc_logged: true })).toBe(false);
     expect(validateBoxResponseSecurity(null)).toBe(false);
@@ -383,5 +385,33 @@ describe('PR-D security hardening (mainteam v1.3)', () => {
       hashText: stableHash, attachments: Array.from({ length: 5 }, () => attachment(2 * 1024 * 1024)),
     });
     expect(req.attachments).toHaveLength(5);
+  });
+
+  // Codex P2: 차단/미검증 상태에서 zero-leak 배지를 단정 표기하지 않는다.
+  it('hides zero-leak badges and shows unverified badge on security_blocked', async () => {
+    const runBridge = vi.fn(async (): Promise<Awaited<ReturnType<typeof runChatBridge>>> => ({
+      status: 'security_blocked',
+      displayText: '응답 보안 검증에 실패하여 결과를 표시하지 않습니다.',
+      chatRequest: await createChatRequest('차단', {
+        hashText: stableHash, requestId: 'req-sec-1', now: new Date('2026-05-30T00:00:00Z'),
+      }),
+      decision: decision(),
+      boxResponse: null,
+      requestId: 'req-sec-1',
+      usageLogCount: null,
+      usageLogVerification: 'not_configured',
+      integrationMode: null,
+      rawSavedZero: true,
+      externalSendZero: true,
+    }));
+    render(<ChatUIBridge runBridge={runBridge} />);
+    fireEvent.change(screen.getByTestId('connect-loop-input'), { target: { value: '차단 테스트' } });
+    fireEvent.click(screen.getByTestId('connect-loop-send'));
+    await waitFor(() =>
+      expect(screen.getByText('응답 보안 검증에 실패하여 결과를 표시하지 않습니다.')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText('원문 미반출')).toBeNull();
+    expect(screen.queryByText('비로컬 전송 0')).toBeNull();
+    expect(screen.getByText('보안 미검증 — 결과 차단')).toBeInTheDocument();
   });
 });

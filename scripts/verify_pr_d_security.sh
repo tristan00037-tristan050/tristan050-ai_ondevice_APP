@@ -17,8 +17,8 @@ report() {  # label, matched-lines
   local label="$1" hits="$2" count
   count=$(printf '%s' "$hits" | grep -c . || true)
   if [ "$count" -ne 0 ]; then
-    echo "[FAIL] $label: $count"
-    printf '%s\n' "$hits" | sed 's/^/    /'
+    # Codex P2: verdict-only — 매칭된 소스 라인(민감 문자열 가능)을 CI 출력에 echo 하지 않는다.
+    echo "[FAIL] $label: $count (verdict-only; 위치는 로컬에서 grep 으로 확인)"
     fail=1
   else
     echo "[ OK ] $label: 0"
