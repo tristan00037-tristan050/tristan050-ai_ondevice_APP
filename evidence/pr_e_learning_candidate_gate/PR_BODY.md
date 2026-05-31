@@ -4,7 +4,7 @@
 
 ## Base 정합
 - MAIN_HEAD=`de63a90674edfe7f5fc1c86e61e2fc979b9a8328`
-- 최신 검증 코드 head=`ca5309c44efd07c1c68e93613112401b08d9030d`
+- 최신 검증 코드/evidence head=`503b4c960d514eae8300ce80b23d7be955997041`
 - 브랜치=`feat/connect-loop-learning-candidate-gate`
 - 계약 정본 `schemas/connect_loop/*`: 수정 0
 
@@ -30,8 +30,8 @@
 - production / release claim 0
 
 ## Evidence
-- PR-E 묶음: `33 passed`
-- 전체 `tests/connect_loop`: `416 passed`
+- PR-E 묶음: `50 passed`
+- 전체 `tests/connect_loop`: `433 passed`
 - `py_compile`: PASS
 - `git diff --check`: PASS
 - `CONTRACT_MODIFIED_ZERO=true`
