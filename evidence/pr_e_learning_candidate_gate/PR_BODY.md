@@ -4,8 +4,8 @@
 
 ## Base 정합
 - MAIN_HEAD=`de63a90674edfe7f5fc1c86e61e2fc979b9a8328`
-- 테스트 실행 head=`0933579f6a2fe80fac615f7c20c6f0e006b30639`
-- 구현 정정 head=`ea67d5a9fa31c601b862172a1b3ff95c6314df15`
+- 테스트 실행 head=`3eddc3e12c4a6e9a0b020b9f7dfff159bc35d07b`
+- 구현 정정 head=`3eddc3e12c4a6e9a0b020b9f7dfff159bc35d07b`
 - 브랜치=`feat/connect-loop-learning-candidate-gate`
 - 계약 정본 `schemas/connect_loop/*`: 수정 0
 
@@ -24,6 +24,7 @@
 - create/approve/reject/expire/store append 전 경로가 `_safe_return_event` 또는 `_enforce_persisted_safety` 통과
 - OS 무관 path matrix 포함: macOS/Linux temp/private temp/volume/Windows backslash/Windows slash/UNC/file URL
 - 국제/미국식/KR 전화번호 PII matrix 포함
+- canonical `+82` 국제 전화번호 PII matrix 포함
 - reject/expire/expired approval path의 persisted-scalar DLP 우회 차단
 
 ## Scope
@@ -43,9 +44,9 @@
 - production / release claim 0
 
 ## Evidence
-- targeted safety: `37 passed`
-- PR-E v2.2 묶음: `87 passed`
-- 전체 `tests/connect_loop`: `470 passed`
+- targeted safety: `39 passed`
+- PR-E v2.2 묶음: `89 passed`
+- 전체 `tests/connect_loop`: `472 passed`
 - `py_compile`: PASS
 - `git diff --check`: PASS
 - `CONTRACT_MODIFIED_ZERO=true`
