@@ -7,8 +7,8 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
-from .dlp_guard import assert_no_raw_or_secret_material
 from .learning_event_schema import validate_learning_event
+from .persisted_safety import _enforce_persisted_safety
 
 
 class LearningEventStore:
@@ -37,14 +37,14 @@ class LearningEventStore:
                 if not line.strip():
                     continue
                 stored = json.loads(line)
+                _enforce_persisted_safety(stored)
                 validate_learning_event(stored)
-                assert_no_raw_or_secret_material(stored)
                 self._index_stored_event(stored)
 
     def append(self, event: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
+            _enforce_persisted_safety(event)
             validate_learning_event(event)
-            assert_no_raw_or_secret_material(event)
             stored = copy.deepcopy(event)
             self._index_stored_event(stored)
             if self.jsonl_path is not None:

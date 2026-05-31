@@ -18,6 +18,7 @@ from jsonschema.exceptions import ValidationError
 
 from .dlp_guard import assert_no_raw_or_secret_material, scan_runtime_text
 from .learning_event_schema import validate_learning_event, validate_usage_log
+from .persisted_safety import PersistedSafetyViolation, _enforce_persisted_safety
 
 SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 APPROVED_REF_RE = re.compile(r"^(vault|keyring)://[^\s]{1,240}$")
@@ -51,6 +52,13 @@ class ApprovedRefBundle:
 class GateResult:
     event: dict[str, Any] | None
     drop_reason: str | None
+
+
+def _safe_return_event(event: dict[str, Any]) -> dict[str, Any]:
+    validate_learning_event(event)
+    _enforce_persisted_safety(event)
+    validate_learning_event(event)
+    return copy.deepcopy(event)
 
 
 def _utc_now() -> datetime:
@@ -273,11 +281,10 @@ def create_learning_event_result(
         "schema_version": "learning_event.v1",
     }
     try:
-        assert_no_raw_or_secret_material(event)
-        validate_learning_event(event)
-    except (ValueError, ValidationError):
+        safe_event = _safe_return_event(event)
+    except (PersistedSafetyViolation, ValidationError):
         return GateResult(event=None, drop_reason="SCHEMA_VALIDATION_FAILED")
-    return GateResult(event=event, drop_reason=None)
+    return GateResult(event=safe_event, drop_reason=None)
 
 
 def create_learning_event(gate_input: dict[str, Any]) -> dict[str, Any] | None:
@@ -316,11 +323,9 @@ def approve_learning_event(
     approved["policy_approval"] = copy.deepcopy(approval)
     approved["verified_for_training"] = True
     try:
-        assert_no_raw_or_secret_material(approved)
-        validate_learning_event(approved)
-    except (ValueError, ValidationError):
+        return _safe_return_event(approved)
+    except (PersistedSafetyViolation, ValidationError):
         return None
-    return approved
 
 
 def reject_learning_event(event: dict[str, Any], reason_code: str = "LEARNING_REJECTED") -> dict[str, Any]:
@@ -332,8 +337,7 @@ def reject_learning_event(event: dict[str, Any], reason_code: str = "LEARNING_RE
         "approver_role": "manager",
         "reason_code": reason_code,
     }
-    validate_learning_event(rejected)
-    return rejected
+    return _safe_return_event(rejected)
 
 
 def expire_learning_event(event: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
@@ -345,5 +349,4 @@ def expire_learning_event(event: dict[str, Any], *, now: datetime | None = None)
         "approver_role": "system",
         "reason_code": "RETENTION_EXPIRED",
     }
-    validate_learning_event(expired)
-    return expired
+    return _safe_return_event(expired)
