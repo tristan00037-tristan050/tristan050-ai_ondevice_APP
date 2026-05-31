@@ -8,6 +8,11 @@ export default defineConfig({
   test: {
     globals: false,
     environment: 'jsdom',
+    environmentOptions: {
+      jsdom: {
+        url: 'http://127.0.0.1:8765/',
+      },
+    },
     setupFiles: ['./src/test-setup.ts'],
   },
 });

@@ -57,7 +57,7 @@ export function Card2DocumentTransform({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div data-testid="card2-document-transform-modal" role="dialog" aria-modal="true" aria-label="남의 문서에서 우리 양식 보고서로 변환" style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={event => event.target === event.currentTarget && onClose()}>
+    <div data-testid="document-transform-modal" role="dialog" aria-modal="true" aria-label="남의 문서에서 우리 양식 보고서로 변환" style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={event => event.target === event.currentTarget && onClose()}>
       <section style={{ width: 'min(1100px, calc(100vw - 32px))', maxHeight: '90vh', overflow: 'auto', background: 'white', borderRadius: 18, padding: 24 }}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
           <ArrowRightLeft aria-hidden size={24} />

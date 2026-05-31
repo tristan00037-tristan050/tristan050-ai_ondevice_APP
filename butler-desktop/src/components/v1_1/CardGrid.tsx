@@ -25,7 +25,7 @@ const CARDS: Card[] = [
 
 export function CardGrid({ onCardSelect }: { onCardSelect: (mode: CardMode) => void }) {
   return (
-    <section aria-label="Butler card grid" data-testid="d4-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+    <section aria-label="Butler card grid" data-testid="card-grid" data-card-grid-version="d4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
       {CARDS.map(({ id, mode, title, desc, active, Icon }) => (
         <button
           key={id}

@@ -24,18 +24,22 @@ interface RequestParsingModalProps {
 }
 
 interface Card1Action {
-  action_text: string;
-  source_evidence: string;
-  confidence: number;
+  action_text?: string;
+  text?: string;
+  source_evidence?: string;
+  rationale?: string;
+  confidence?: number;
+  priority?: 'P1' | 'P2' | 'P3' | string;
 }
 
 // Card1Extraction 결과 형식 (알고리즘 팀 §6 — 단계 8 통합)
 interface ParseResult {
-  intent: string;
+  intent: string | { summary?: string; tone?: string; expected_response?: string };
   intent_type: string;
-  deadline: string | null;
-  deadline_raw: string;
-  materials: string[];
+  deadline: string | null | { raw_text?: string; parsed_date?: string; time_text?: string; confidence?: number };
+  deadline_raw?: string;
+  materials?: string[];
+  required_materials?: Array<string | { name?: string; is_optional?: boolean; rationale?: string }>;
   actions: Card1Action[];
   sentence_type: string;
   confidence: number;
@@ -71,6 +75,75 @@ const INTENT_LABELS: Record<string, string> = {
 };
 
 const ACCEPT_FORMATS = '.txt,.md,.docx,.pdf,.eml';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function intentText(intent: ParseResult['intent']): string {
+  if (typeof intent === 'string') return intent;
+  if (isRecord(intent) && typeof intent.summary === 'string') return intent.summary;
+  return '';
+}
+
+function deadlineRaw(result: ParseResult): string {
+  if (typeof result.deadline_raw === 'string') return result.deadline_raw;
+  if (isRecord(result.deadline) && typeof result.deadline.raw_text === 'string') return result.deadline.raw_text;
+  return '';
+}
+
+function deadlineDisplay(result: ParseResult): string | null {
+  if (typeof result.deadline === 'string') return result.deadline;
+  if (isRecord(result.deadline) && typeof result.deadline.parsed_date === 'string') {
+    const timeText = typeof result.deadline.time_text === 'string' && result.deadline.time_text.trim()
+      ? ` ${result.deadline.time_text.trim()}`
+      : '';
+    return `${result.deadline.parsed_date}${timeText}`;
+  }
+  return null;
+}
+
+function actionText(action: Card1Action): string {
+  return action.action_text ?? action.text ?? '';
+}
+
+function actionEvidence(action: Card1Action): string {
+  return action.source_evidence ?? action.rationale ?? '';
+}
+
+function actionConfidence(action: Card1Action): number {
+  if (typeof action.confidence === 'number') return action.confidence;
+  if (action.priority === 'P1') return 0.92;
+  if (action.priority === 'P2') return 0.78;
+  if (action.priority === 'P3') return 0.66;
+  return 0.75;
+}
+
+function priorityLabel(priority: Card1Action['priority']): string | null {
+  if (priority === 'P1') return 'P1 긴급';
+  if (priority === 'P2') return 'P2 권장';
+  if (priority === 'P3') return 'P3 선택';
+  return typeof priority === 'string' && priority ? priority : null;
+}
+
+function priorityClass(priority: Card1Action['priority']): string {
+  if (priority === 'P1') return 'border rounded-xl text-red-600';
+  if (priority === 'P2') return 'border rounded-xl text-orange-600';
+  if (priority === 'P3') return 'border rounded-xl text-slate-600';
+  return 'border rounded-xl text-sky-700';
+}
+
+function materialNames(result: ParseResult): string[] {
+  if (Array.isArray(result.materials) && result.materials.length > 0) return result.materials;
+  if (!Array.isArray(result.required_materials)) return [];
+  return result.required_materials
+    .map(item => {
+      if (typeof item === 'string') return item;
+      if (isRecord(item) && typeof item.name === 'string') return item.name;
+      return '';
+    })
+    .filter(Boolean);
+}
 
 function parseSseBlock(block: string): { event: string; data: Record<string, unknown> } | null {
   const eventLine = block.split('\n').find((l) => l.startsWith('event:'));
@@ -594,12 +667,12 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                   </span>
                 </div>
                 <p style={{ fontSize: '14px', color: '#111827', fontWeight: 500, lineHeight: 1.5, margin: 0 }}>
-                  {phase.result.intent}
+                  {intentText(phase.result.intent)}
                 </p>
               </div>
 
               {/* Deadline 카드 */}
-              {phase.result.deadline_raw && (
+              {deadlineRaw(phase.result) && (
                 <div style={{
                   backgroundColor: '#fffbeb', border: '1px solid #fcd34d',
                   borderRadius: '10px', padding: '14px 16px',
@@ -609,11 +682,11 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: '12px', fontWeight: 600, color: '#92400e', margin: 0 }}>마감일</p>
                     <p style={{ fontSize: '14px', color: '#111827', fontWeight: 500, marginTop: '2px', marginBottom: 0 }}>
-                      {phase.result.deadline_raw}
+                      {deadlineRaw(phase.result)}
                     </p>
-                    {phase.result.deadline && (
+                    {deadlineDisplay(phase.result) && (
                       <p style={{ fontSize: '12px', color: '#a16207', marginTop: '2px', marginBottom: 0 }}>
-                        {phase.result.deadline}
+                        {deadlineDisplay(phase.result)}
                       </p>
                     )}
                   </div>
@@ -628,30 +701,40 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {phase.result.actions.map((action, i) => (
-                      <div key={i} style={{
+                      <div key={i} className={priorityClass(action.priority)} style={{
                         backgroundColor: 'white', border: '1px solid #e0f2fe',
                         borderRadius: '8px', padding: '10px 12px',
                       }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                           <AlertCircle size={14} style={{ color: '#0284c7', flexShrink: 0, marginTop: '2px' }} />
                           <p style={{ flex: 1, fontSize: '13px', color: '#111827', lineHeight: 1.5, margin: 0 }}>
-                            {action.action_text}
+                            {actionText(action)}
                           </p>
+                          {priorityLabel(action.priority) && (
+                            <span style={{
+                              fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap',
+                              padding: '2px 8px', borderRadius: '9999px',
+                              backgroundColor: action.priority === 'P1' ? '#fee2e2' : action.priority === 'P2' ? '#ffedd5' : '#f1f5f9',
+                              color: action.priority === 'P1' ? '#dc2626' : action.priority === 'P2' ? '#ea580c' : '#475569',
+                            }}>
+                              {priorityLabel(action.priority)}
+                            </span>
+                          )}
                           <span style={{
                             fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap',
                             padding: '2px 8px', borderRadius: '9999px',
-                            backgroundColor: action.confidence >= 0.75 ? '#dcfce7' : '#fef3c7',
-                            color: action.confidence >= 0.75 ? '#15803d' : '#92400e',
+                            backgroundColor: actionConfidence(action) >= 0.75 ? '#dcfce7' : '#fef3c7',
+                            color: actionConfidence(action) >= 0.75 ? '#15803d' : '#92400e',
                           }}>
-                            {Math.round(action.confidence * 100)}%
+                            {Math.round(actionConfidence(action) * 100)}%
                           </span>
                         </div>
-                        {action.source_evidence && action.source_evidence !== action.action_text && (
+                        {actionEvidence(action) && actionEvidence(action) !== actionText(action) && (
                           <p style={{
                             fontSize: '11px', color: '#94a3b8', marginTop: '6px', marginLeft: '22px',
                             marginBottom: 0, fontStyle: 'italic',
                           }}>
-                            "{action.source_evidence.slice(0, 80)}"
+                            "{actionEvidence(action).slice(0, 80)}"
                           </p>
                         )}
                       </div>
@@ -665,19 +748,19 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                   <Paperclip size={14} style={{ color: '#64748b', flexShrink: 0 }} />
                   <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>필요 자료</span>
-                  {phase.result.materials.length > 0 && (
+                  {materialNames(phase.result).length > 0 && (
                     <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                      ({phase.result.materials.length}건)
+                      ({materialNames(phase.result).length}건)
                     </span>
                   )}
                 </div>
-                {phase.result.materials.length === 0 ? (
+                {materialNames(phase.result).length === 0 ? (
                   <p style={{ fontSize: '13px', color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>
                     필요 자료 명시 X
                   </p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {phase.result.materials.map((mat, i) => (
+                    {materialNames(phase.result).map((mat, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
                         <span style={{ color: '#cbd5e1', fontWeight: 700 }}>•</span>
                         <span style={{ color: '#334155' }}>{mat}</span>
