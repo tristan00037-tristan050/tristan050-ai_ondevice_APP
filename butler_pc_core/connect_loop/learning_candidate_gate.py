@@ -63,10 +63,19 @@ def _format_rfc3339(value: datetime) -> str:
 
 
 def _parse_rfc3339(value: str) -> datetime | None:
+    """Parse RFC3339 datetime, returning None for naive or malformed values.
+
+    Codex P2 정정 (2026-05-31, PR #769): tzinfo가 없는(naive) datetime은 None을
+    반환한다. 그렇지 않으면 caller가 `parsed <= now`(aware) 비교에서 TypeError로
+    crash한다. `_drop_reason`은 None을 EXPIRES_AT_INVALID로 처리한다.
+    """
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if dt.tzinfo is None or dt.utcoffset() is None:
+        return None
+    return dt
 
 
 def _quality_for(usage_log: dict[str, Any]) -> str:
@@ -122,9 +131,14 @@ def build_learning_gate_input(
     policy_approval: dict[str, str] | None = None,
     dlp_result: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
-    resolved_dlp = dlp_result
-    if resolved_dlp is None and approved_ref_bundle and approved_ref_bundle.runtime_text_for_dlp is not None:
-        resolved_dlp = scan_runtime_text(approved_ref_bundle.runtime_text_for_dlp)
+    # Codex P1 정정 (2026-05-31, PR #769): runtime_text_for_dlp가 있으면 caller가
+    # dlp_result를 제공했더라도 *항상* scan_runtime_text를 수행한다. caller 제공
+    # dlp_result는 _drop_reason 단계에서 scan 결과와 일치 여부를 검증(DLP_RESULT_MISMATCH).
+    # 즉 caller dlp_result 맹신 금지, fail-closed.
+    runtime_scan: dict[str, bool] | None = None
+    if approved_ref_bundle is not None and approved_ref_bundle.runtime_text_for_dlp is not None:
+        runtime_scan = scan_runtime_text(approved_ref_bundle.runtime_text_for_dlp)
+    resolved_dlp = dlp_result if dlp_result is not None else runtime_scan
     return {
         "source_usage_log": copy.deepcopy(candidate.usage_log),
         "policy_task_envelope": copy.deepcopy(policy_task_envelope),
@@ -140,6 +154,9 @@ def build_learning_gate_input(
             "reason_code": "LEARNING_CANDIDATE_CREATED",
         },
         "dlp_result": copy.deepcopy(resolved_dlp),
+        # 내부 비교용 키. _drop_reason이 caller dlp_result와 비교. event 빌드 시
+        # 명시 필드만 선택하므로 schema에는 노출되지 않는다.
+        "dlp_runtime_scan": copy.deepcopy(runtime_scan),
     }
 
 
@@ -190,6 +207,15 @@ def _drop_reason(gate_input: dict[str, Any], now: datetime) -> str | None:
         and dlp_result.get("policy_violation") is False
     ):
         return "DLP_FAILED"
+    # Codex P1 정정 (2026-05-31, PR #769): runtime_text 기반 scan과 caller가 제공한
+    # dlp_result는 반드시 일치해야 한다. 불일치는 caller가 거짓 통과를 주장하는
+    # 케이스(예: runtime_text에 PII가 있는데 caller dlp_result.passed=True) →
+    # fail-closed로 DLP_RESULT_MISMATCH 드롭.
+    runtime_scan = gate_input.get("dlp_runtime_scan")
+    if isinstance(runtime_scan, dict):
+        _dlp_keys = ("passed", "pii_detected", "secret_detected", "policy_violation")
+        if any(runtime_scan.get(k) != dlp_result.get(k) for k in _dlp_keys):
+            return "DLP_RESULT_MISMATCH"
 
     retention_days = envelope.get("retention_days")
     if not isinstance(retention_days, int) or retention_days < 1:
