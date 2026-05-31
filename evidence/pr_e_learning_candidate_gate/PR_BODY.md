@@ -2,37 +2,46 @@
 
 **STATUS=PASS_PR_E_LEARNING_CANDIDATE_GATE_CANDIDATE**
 
-- MAIN_HEAD=`de63a90674edfe7f5fc1c86e61e2fc979b9a8328` (PR #768 머지본, 지시서 전제 일치)
-- 작업 트리: `connect-loop-usage-accumulator` @ `feat/connect-loop-learning-candidate-gate`
-- 계약 정본: `schemas/connect_loop/learning_event_v1.schema.json`, `usage_log_v1_1.schema.json` (main 머지본, **수정 0**)
+## Base 정합
+- MAIN_HEAD=`de63a90674edfe7f5fc1c86e61e2fc979b9a8328`
+- 최신 검증 코드 head=`ca5309c44efd07c1c68e93613112401b08d9030d`
+- 브랜치=`feat/connect-loop-learning-candidate-gate`
+- 계약 정본 `schemas/connect_loop/*`: 수정 0
 
-## Scope (포함)
-- usage_log.v1.1 digest-only → 학습 후보 식별 (`learning_candidate=true` + `policy_decision=allow` + `integration_mode=real` + `real_validation_done=true` + raw/external 불변식)
-- `LearningGateInput.v1` 내부 계약 빌드 (PR-A schema 수정 아님)
-- DLP guard: PII/secret/policy_violation 을 **boolean만** 저장 (원문/토큰/경로 미반환·미저장)
-- `learning_event.v1` 생성 + 정본 schema self-validate
-- 상태기계: CANDIDATE / APPROVED / REJECTED / EXPIRED 전이 함수 + 불변식
-- `verified_for_training`: 승인 전 false, `status=APPROVED + policy approved + DLP pass` 일 때만 true (스키마 if/then 이중 강제)
-- raw leak guard: raw 필드명·파일명·로컬경로·token·secret 0
-- usage_log 불변 + `learning_event_link_index` (source_usage_log_id ↔ learning_event_id)
+## 4라운드 정정
+- P1 DLP regex: `sk-proj-...` 포함 hyphenated `sk` 토큰을 secret으로 탐지하도록 보강
+- P2 idempotency: `learning_event_created=true` usage_log는 후보 재선정에서 제외
+- P2 tenant_scope: 누락 또는 enum 외 값은 event 빌드 전 `TENANT_SCOPE_INVALID`로 fail-closed
 
-## Non-scope (제외 — 그룹A / 후속)
-- 실제 모델 학습 0 / LoRA·adapter 0 / GGUF·safetensors 등 모델 artifact 0
-- Verified Company Adapter 승격 0 / Company DNA Graph 0 / AI Action Receipt 0
-- PR-A/B/C/D 계약·schema 파일 수정 0 (BLOCK)
+## Scope
+- usage_log.v1.1 digest-only에서 학습 후보 식별
+- `LearningGateInput.v1` 내부 계약 빌드
+- DLP guard는 boolean만 저장하고 매칭 원문은 반환하지 않음
+- `learning_event.v1` 생성과 정본 schema self-validate
+- CANDIDATE / APPROVED / REJECTED / EXPIRED 상태 전이
+- `verified_for_training=true`는 APPROVED + policy approved + DLP pass에서만 허용
+- usage_log immutable 유지, `learning_event_link_index`만 별도 생성
 
-## Evidence (실측)
-- `heads.txt` — MAIN_HEAD / PR_HEAD / BRANCH
-- `pytest_connect_loop_pr_e.txt` — **397 passed** (전체 connect_loop 무회귀)
-- `pytest_pr_e_verbose.txt` — PR-E 신규 **14 passed** (지시서 §10 테스트 1~12 커버)
-- `guard_scans.txt`:
-  - `CONTRACT_MODIFIED_ZERO=true`
-  - `MODEL_BINARY_ARTIFACT_ZERO=true`
-  - `TRAINING_SCOPE_CREEP_ZERO=true`
-  - `RAW_SECRET_FIELD_ZERO=true`
+## Non-scope
+- 실제 모델 학습 0
+- LoRA, adapter, GGUF, safetensors 등 모델 artifact 0
+- Verified Company Adapter 승격 0
+- Company DNA Graph / AI Action Receipt 구현 0
+- production / release claim 0
+
+## Evidence
+- PR-E 묶음: `33 passed`
+- 전체 `tests/connect_loop`: `416 passed`
+- `py_compile`: PASS
+- `git diff --check`: PASS
+- `CONTRACT_MODIFIED_ZERO=true`
+- `MODEL_BINARY_ARTIFACT_ZERO=true`
+- `TRAINING_SCOPE_CREEP_ZERO=true`
+- `RAW_SECRET_FIELD_ZERO=true`
+- `ABSOLUTE_PATH_LEAK_ZERO=true`
 
 ## Disclosure
-- usage_log 는 학습 데이터가 아니다 (digest-only, immutable).
-- learning_event 는 approved_text_ref/digest + 정책 승인 + DLP pass + 보존기간을 모두 통과한 경우에만 생성된다.
-- `verified_for_training=true` 는 `APPROVED + policy approved + DLP pass` 일 때만 성립한다.
-- 실제 회사화 학습·adapter 승격·배포는 그룹A Verified Company Adapter 범위 (본 PR 아님).
+- usage_log는 학습 데이터가 아니다.
+- learning_event는 approved_text_ref/digest + 정책 승인 + DLP pass + 보존기간을 모두 통과한 경우에만 생성된다.
+- 실제 회사화 학습과 adapter 승격은 후속 그룹A 범위다.
+- 머지는 금지한다. Codex 재검토 unresolved=0과 CI green 확인 전까지 보류한다.

@@ -2,21 +2,27 @@
   "schema_version": "pr_e.learning_candidate_gate.test_results.v1",
   "generated_at": "2026-05-31T00:00:00+09:00",
   "base_head": "de63a90674edfe7f5fc1c86e61e2fc979b9a8328",
+  "code_head_under_test": "ca5309c44efd07c1c68e93613112401b08d9030d",
   "schema_sha256": {
     "learning_event_v1.schema.json": "82a6aa7489aa39ac36ab7f07109c7a4f69374a962f3c9642d5e93d0948e97fef",
     "usage_log_v1_1.schema.json": "fb3b6fb49a054b235451a0b9f924456d519a86a388bcc2ddd0b73f9f2bd87368"
   },
+  "round_4_review_fixes": {
+    "dlp_hyphenated_sk_tokens": "PASS",
+    "already_created_usage_log_excluded": "PASS",
+    "tenant_scope_missing_fail_closed": "PASS"
+  },
   "commands": [
     {
-      "command": "PYTHONPATH=. python3 -m pytest tests/connect_loop/test_learning_candidate_gate.py tests/connect_loop/test_learning_event_raw_guard.py -v",
-      "result": "14 passed"
+      "command": "PYTHONPATH=. python3 -m pytest tests/connect_loop/test_learning_candidate_gate.py tests/connect_loop/test_learning_event_raw_guard.py tests/connect_loop/test_learning_candidate_gate_label_drift.py tests/connect_loop/test_learning_candidate_gate_dlp_and_expires_guards.py -v --disable-warnings",
+      "result": "33 passed"
     },
     {
-      "command": "PYTHONPATH=. python3 -m pytest tests/connect_loop -q",
-      "result": "397 passed"
+      "command": "PYTHONPATH=. python3 -m pytest tests/connect_loop -q --disable-warnings",
+      "result": "416 passed"
     },
     {
-      "command": "PYTHONPYCACHEPREFIX=/private/tmp/pr_e_pycache python3 -m py_compile butler_pc_core/connect_loop/learning_candidate_gate.py butler_pc_core/connect_loop/dlp_guard.py butler_pc_core/connect_loop/learning_event_store.py butler_pc_core/connect_loop/learning_event_schema.py",
+      "command": "PYTHONPYCACHEPREFIX=<tmp>/pr_e_pycache python3 -m py_compile butler_pc_core/connect_loop/learning_candidate_gate.py butler_pc_core/connect_loop/dlp_guard.py butler_pc_core/connect_loop/learning_event_store.py butler_pc_core/connect_loop/learning_event_schema.py",
       "result": "PASS"
     },
     {
@@ -34,6 +40,10 @@
     {
       "command": "training scope creep scan",
       "result": "TRAINING_SCOPE_CREEP_ZERO=true"
+    },
+    {
+      "command": "absolute path leak scan",
+      "result": "ABSOLUTE_PATH_LEAK_ZERO=true"
     }
   ],
   "honesty_boundary": {
@@ -42,7 +52,6 @@
     "actual_training_performed": false,
     "model_or_adapter_artifact_created": false,
     "schema_modified": false,
-    "commit_created": false,
-    "pr_created": false
+    "merge_performed": false
   }
 }
