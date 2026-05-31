@@ -148,6 +148,21 @@ def _drop_reason(gate_input: dict[str, Any], now: datetime) -> str | None:
     if not isinstance(source_usage_log, dict) or not _is_candidate_usage_log(source_usage_log):
         return "SOURCE_USAGE_LOG_NOT_ELIGIBLE"
 
+    # Codex P1 정정 (2026-05-31): caller가 gate_input["label"]을 schema-consistent하지만
+    # source usage_log와 다른 값으로 주입/변형(예: memory_search 출처 로그 + form_convert
+    # 라벨)하면 learning_event 스키마는 label 내부 일관성만 보므로 통과한다. 그러면
+    # source_usage_log_id가 가리키는 audited log와 학습된 task가 어긋나 wrong task로
+    # 학습되고 audit 추적이 깨진다. 게이트 단계에서 label.intent_label/target_box_id가
+    # source_usage_log.intent_label/box_id와 정확히 일치하는지 강제한다.
+    label = gate_input.get("label")
+    if not isinstance(label, dict):
+        return "LABEL_MISSING"
+    if (
+        label.get("intent_label") != source_usage_log.get("intent_label")
+        or label.get("target_box_id") != source_usage_log.get("box_id")
+    ):
+        return "LABEL_SOURCE_DRIFT"
+
     envelope = gate_input.get("policy_task_envelope")
     if not isinstance(envelope, dict):
         return "POLICY_ENVELOPE_MISSING"

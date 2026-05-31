@@ -193,7 +193,11 @@ def test_mislabel_is_blocked_by_learning_event_schema():
     result = create_learning_event_result(data, now=NOW)
 
     assert result.event is None
-    assert result.drop_reason == "SCHEMA_VALIDATION_FAILED"
+    # Codex P1 정정(2026-05-31, PR #769): mislabel은 이제 게이트의 LABEL_SOURCE_DRIFT
+    # 단계에서 차단된다(source usage_log.intent_label/box_id와 라벨 불일치).
+    # 스키마의 intent→target_box 매핑 검사는 fallback 가드로 남아있지만 게이트가
+    # 먼저 잡는다. 테스트 이름은 호환 유지를 위해 그대로 두고 단언만 갱신.
+    assert result.drop_reason == "LABEL_SOURCE_DRIFT"
 
 
 def test_reject_transition_never_verifies_training():
