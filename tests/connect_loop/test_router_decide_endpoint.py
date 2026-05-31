@@ -97,6 +97,29 @@ def test_router_decide_overlong_runtime_text_sanitized_error_no_raw_echo():
     assert "RAWPROMPT_" not in response.text  # 원문 미echo
 
 
+def test_router_decide_runtime_as_string_sanitized_no_echo():
+    """Codex P2: runtime 이 객체가 아닌 string(원문)으로 와도 sanitized 422 — 원문 미echo."""
+    cr = _chat_request("정상 본문")
+    secret = "RAWPROMPT_STRING_RUNTIME_LEAK"
+    response = _client().post(
+        "/v1/router/decide",
+        json={"chat_request": cr, "runtime": secret},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["fail_class"] == "CONNECT_LOOP_RUNTIME_INVALID"
+    assert "RAWPROMPT_STRING_RUNTIME_LEAK" not in response.text
+
+
+def test_router_decide_chat_request_as_string_sanitized():
+    """chat_request 가 객체가 아니면 sanitized 422(원문 echo 없음)."""
+    response = _client().post(
+        "/v1/router/decide",
+        json={"chat_request": "not-an-object", "runtime": {"runtime_text": "x"}},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["fail_class"] == "CONNECT_LOOP_CHAT_REQUEST_INVALID"
+
+
 def test_router_decide_non_local_text_ref_blocks_endpoint():
     """서버측 정책: text_ref 가 device_local_only 가 아니면 fail-closed(endpoint none)."""
     text = "지난 회의 기록 찾아줘. 문서 검색으로 확인해줘."

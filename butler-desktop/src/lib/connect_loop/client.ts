@@ -153,7 +153,8 @@ function extractDecision(payload: unknown): unknown {
 function extractDisplayText(payload: unknown): string {
   if (typeof payload === 'object' && payload !== null) {
     const record = payload as Record<string, unknown>;
-    for (const key of ['answer', 'draft', 'result', 'message', 'rewritten_doc']) {
+    // Codex P2: Box3 실제 응답(DraftResult.to_dict())은 'draft_text' 키를 사용한다.
+    for (const key of ['answer', 'draft_text', 'draft', 'result', 'message', 'rewritten_doc']) {
       if (typeof record[key] === 'string' && record[key].trim()) {
         return record[key];
       }

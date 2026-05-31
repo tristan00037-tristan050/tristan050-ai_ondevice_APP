@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from jsonschema.exceptions import ValidationError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from butler_pc_core.connect_loop.box1_router import (
     RouterRuntimeContext,
@@ -29,11 +29,12 @@ MAX_RUNTIME_TEXT_LENGTH = 12_000
 
 
 class RouterDecidePayload(BaseModel):
-    # Codex P1: runtime 을 dict 로 받아 runtime_text 길이/타입 검증을 라우트 내부에서 수행한다.
-    # Pydantic 필드 제약(max_length 등)의 기본 422 응답은 offending input(=원문 runtime_text)을
-    # 그대로 echo 하므로, raw-output/meta-only 불변식 위반을 막기 위해 모델 단 제약을 두지 않는다.
-    chat_request: dict[str, Any]
-    runtime: dict[str, Any] = Field(default_factory=dict)
+    # Codex P1+P2: chat_request/runtime 을 Any 로 받아 타입/내용 검증을 라우트 내부에서 수행한다.
+    # Pydantic 필드 타입 제약(dict/str/max_length)의 기본 422 응답은 rejected input(=원문 runtime_text
+    # 가 string/list 로 온 경우 포함)을 echo 하므로, raw-output/meta-only 불변식 위반을 막기 위해
+    # 모델 단 타입 제약을 두지 않고 모두 sanitized 오류로 처리한다.
+    chat_request: Any = None
+    runtime: Any = None
 
 
 def _server_side_policy_precheck(
@@ -68,6 +69,18 @@ def _raise_schema_error(exc: ValidationError) -> None:
 
 @router.post("/v1/router/decide")
 async def decide_router(payload: RouterDecidePayload, request: Request) -> dict[str, Any]:
+    # Codex P2: chat_request/runtime 의 타입 자체를 sanitized 오류로 검증(rejected input echo 차단).
+    if not isinstance(payload.chat_request, dict):
+        raise HTTPException(
+            status_code=422,
+            detail={"fail_class": "CONNECT_LOOP_CHAT_REQUEST_INVALID", "message": "chat_request must be an object"},
+        )
+    if not isinstance(payload.runtime, dict):
+        raise HTTPException(
+            status_code=422,
+            detail={"fail_class": "CONNECT_LOOP_RUNTIME_INVALID", "message": "runtime must be an object"},
+        )
+
     chat_request = dict(payload.chat_request)
     try:
         validate_chat_request(chat_request)
