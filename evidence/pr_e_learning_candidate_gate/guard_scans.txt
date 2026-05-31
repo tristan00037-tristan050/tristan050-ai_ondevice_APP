@@ -1,4 +1,4 @@
-# PR-E 4라운드 가드 스캔 — 2026-05-31
+# PR-E 5라운드 가드 스캔 — 2026-06-01
 
 ## 1) CONTRACT_MODIFIED
 CONTRACT_MODIFIED_ZERO=true

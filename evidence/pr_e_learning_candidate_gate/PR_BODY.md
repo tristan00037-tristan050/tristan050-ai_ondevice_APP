@@ -4,7 +4,7 @@
 
 ## Base 정합
 - MAIN_HEAD=`de63a90674edfe7f5fc1c86e61e2fc979b9a8328`
-- 최신 검증 코드/evidence head=`503b4c960d514eae8300ce80b23d7be955997041`
+- 최신 검증 코드 head=`ae2a78ffd93f523042988e3d07fdabdeb2264d8a`
 - 브랜치=`feat/connect-loop-learning-candidate-gate`
 - 계약 정본 `schemas/connect_loop/*`: 수정 0
 
@@ -12,6 +12,11 @@
 - P1 DLP regex: `sk-proj-...` 포함 hyphenated `sk` 토큰을 secret으로 탐지하도록 보강
 - P2 idempotency: `learning_event_created=true` usage_log는 후보 재선정에서 제외
 - P2 tenant_scope: 누락 또는 enum 외 값은 event 빌드 전 `TENANT_SCOPE_INVALID`로 fail-closed
+
+## 5라운드 정정
+- P2 store idempotency: 동일 `source_usage_log_id`의 두 번째 learning_event append는 `DUPLICATE_SOURCE_USAGE_LOG`로 fail-closed
+- P2 persisted scalar DLP: 저장 필드 scalar에서도 email/phone/RRN/card PII를 secret/local path와 동일하게 차단
+- JSONL restart idempotency: 기존 JSONL을 hydrate해 retry/backfill 중복 append를 차단
 
 ## Scope
 - usage_log.v1.1 digest-only에서 학습 후보 식별
@@ -30,8 +35,8 @@
 - production / release claim 0
 
 ## Evidence
-- PR-E 묶음: `50 passed`
-- 전체 `tests/connect_loop`: `433 passed`
+- PR-E 묶음: `55 passed`
+- 전체 `tests/connect_loop`: `438 passed`
 - `py_compile`: PASS
 - `git diff --check`: PASS
 - `CONTRACT_MODIFIED_ZERO=true`
