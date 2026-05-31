@@ -199,9 +199,17 @@ def test_enforce_persisted_safety_blocks_secret_path_pii_scalars(value_factory):
     [
         "+1 415-555-1212",
         "(415) 555-1212",
+        "+82 10-1234-5678",
+        "+8210-1234-5678",
         "010-1234-5678",
     ],
-    ids=["intl_plus_one", "us_parenthesized", "korean_mobile"],
+    ids=[
+        "intl_plus_one",
+        "us_parenthesized",
+        "korean_canonical_plus82",
+        "korean_compact_plus82",
+        "korean_mobile",
+    ],
 )
 def test_scan_runtime_text_blocks_international_phone_pii(phone_text):
     result = scan_runtime_text("정제 후보 연락처 " + phone_text)
