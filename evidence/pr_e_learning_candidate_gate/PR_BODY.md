@@ -4,12 +4,12 @@
 
 ## Base 정합
 - MAIN_HEAD=`de63a90674edfe7f5fc1c86e61e2fc979b9a8328`
-- 최신 검증 코드 head=`ae2a78ffd93f523042988e3d07fdabdeb2264d8a`
+- 최신 검증 코드 head=`eedea77fb228999da72ce76298ab53ea29a918d3`
 - 브랜치=`feat/connect-loop-learning-candidate-gate`
 - 계약 정본 `schemas/connect_loop/*`: 수정 0
 
 ## 4라운드 정정
-- P1 DLP regex: `sk-proj-...` 포함 hyphenated `sk` 토큰을 secret으로 탐지하도록 보강
+- P1 DLP regex: 프로젝트 스코프 포함 hyphenated `sk-` 계열 토큰을 secret으로 탐지하도록 보강(패턴 리터럴은 evidence 마스킹)
 - P2 idempotency: `learning_event_created=true` usage_log는 후보 재선정에서 제외
 - P2 tenant_scope: 누락 또는 enum 외 값은 event 빌드 전 `TENANT_SCOPE_INVALID`로 fail-closed
 
@@ -17,6 +17,12 @@
 - P2 store idempotency: 동일 `source_usage_log_id`의 두 번째 learning_event append는 `DUPLICATE_SOURCE_USAGE_LOG`로 fail-closed
 - P2 persisted scalar DLP: 저장 필드 scalar에서도 email/phone/RRN/card PII를 secret/local path와 동일하게 차단
 - JSONL restart idempotency: 기존 JSONL을 hydrate해 retry/backfill 중복 append를 차단
+
+## v2.2 근본 재검토 정정
+- `persisted_safety.py` 단일 guard 추가: secret/path/PII/raw-field를 한 곳에서 전수 스캔
+- create/approve/reject/expire/store append 전 경로가 `_safe_return_event` 또는 `_enforce_persisted_safety` 통과
+- OS 무관 path matrix 포함: macOS/Linux temp/private temp/volume/Windows/UNC/file URL
+- reject/expire/expired approval path의 persisted-scalar DLP 우회 차단
 
 ## Scope
 - usage_log.v1.1 digest-only에서 학습 후보 식별
@@ -35,8 +41,8 @@
 - production / release claim 0
 
 ## Evidence
-- PR-E 묶음: `55 passed`
-- 전체 `tests/connect_loop`: `438 passed`
+- PR-E v2.2 묶음: `83 passed`
+- 전체 `tests/connect_loop`: `466 passed`
 - `py_compile`: PASS
 - `git diff --check`: PASS
 - `CONTRACT_MODIFIED_ZERO=true`
@@ -44,6 +50,7 @@
 - `TRAINING_SCOPE_CREEP_ZERO=true`
 - `RAW_SECRET_FIELD_ZERO=true`
 - `ABSOLUTE_PATH_LEAK_ZERO=true`
+- `EVIDENCE_LEAK_ZERO=true`
 
 ## Disclosure
 - usage_log는 학습 데이터가 아니다.
