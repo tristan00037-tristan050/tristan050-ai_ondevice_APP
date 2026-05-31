@@ -3,6 +3,7 @@ import {
   type ChatRequestV1,
   type RouterDecisionV1,
   assertLocalSidecarUrl,
+  assertValidChatRequest,
   assertValidRouterDecision,
   createChatRequest,
   resolveCallableEndpoint,
@@ -168,7 +169,12 @@ export function fallbackMessage(decision: RouterDecisionV1 | null, status: Bridg
 export async function runChatBridge(runtimeTextInput: string, options: RunChatBridgeOptions = {}): Promise<ChatBridgeResult> {
   let runtimeText: string | null = runtimeTextInput.trim();
   const hashText = options.hashText ?? sha256TextDigest;
+  // Codex P2: requestOverride 도 createChatRequest 와 동일한 fail-closed 스키마/첨부 가드를 거친다
+  // (override 가 검증을 우회해 schema drift·첨부 초과 등이 라우터로 전송되는 것 차단).
   const chatRequest = options.requestOverride ?? await createChatRequest(runtimeText, { hashText });
+  if (options.requestOverride) {
+    assertValidChatRequest(chatRequest);
+  }
   try {
     const digestMatches = await verifyChatRequestDigest(runtimeText, chatRequest, hashText);
     if (!digestMatches) {

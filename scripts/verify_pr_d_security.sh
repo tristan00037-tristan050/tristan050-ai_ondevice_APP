@@ -25,9 +25,8 @@ report() {  # label, matched-lines
   fi
 }
 
+# Codex P1: verdict-only (AGENTS.md). 스캔 대상 파일 목록 등 비-verdict 출력은 하지 않는다.
 echo "=== PR-D security gate (connect_loop source) ==="
-echo "files:"; printf '%s\n' "$FILES" | sed 's#^#    #'
-echo
 
 # 1) storage 0 — 영속 브라우저 스토리지 금지
 report "storage" "$(grep -nE 'localStorage|sessionStorage|indexedDB' $FILES 2>/dev/null || true)"

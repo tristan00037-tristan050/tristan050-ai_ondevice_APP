@@ -387,6 +387,20 @@ describe('PR-D security hardening (mainteam v1.3)', () => {
     expect(req.attachments).toHaveLength(5);
   });
 
+  // Codex P2: requestOverride 도 fail-closed 스키마/첨부 가드를 거친다(우회 금지).
+  it('validates requestOverride through fail-closed guards', async () => {
+    const base = await createChatRequest('요청', { hashText: stableHash });
+    const override = {
+      ...base,
+      attachments: Array.from({ length: 6 }, () => attachment(1)),
+    };
+    const fetcher = vi.fn();
+    await expect(
+      runChatBridge('요청', { hashText: stableHash, requestOverride: override, fetcher }),
+    ).rejects.toThrow('CHAT_ATTACHMENTS_TOO_MANY');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   // Codex P2: 차단/미검증 상태에서 zero-leak 배지를 단정 표기하지 않는다.
   it('hides zero-leak badges and shows unverified badge on security_blocked', async () => {
     const runBridge = vi.fn(async (): Promise<Awaited<ReturnType<typeof runChatBridge>>> => ({

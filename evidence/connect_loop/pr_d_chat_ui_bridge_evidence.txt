@@ -6,8 +6,8 @@ PR-D Connect Loop Chat UI Bridge — 검증 증거 (실측)
 
 명령 / 결과:
   ./node_modules/.bin/tsc --noEmit          -> exit 0 (PASS)
-  npm test -- --run                          -> 201 passed (20 test files), 0 failed
-                                                (코덱스 v1.2 192 + 신규 보안 9 = 201, 무회귀 유지)
+  npm test -- --run                          -> 202 passed (20 test files), 0 failed
+                                                (코덱스 v1.2 192 + 신규 보안 10 = 202, 무회귀 유지)
   bash scripts/verify_pr_d_security.sh       -> PASS: storage 0 / non-local 0 / token 0 / claim 0
 
 Codex 재리뷰 정정 3건 (2026-05-31):
@@ -18,6 +18,12 @@ Codex 재리뷰 정정 3건 (2026-05-31):
      으로 대체(거짓 PASS 방지). status prop 추가.
   P2 verify 스크립트 verdict-only: 실패 시 매칭 소스 라인 echo 제거(민감 문자열 CI 노출 방지),
      라벨+count 만 출력.
+
+Codex 재리뷰 2라운드 정정 2건 (2026-05-31):
+  P2 requestOverride 검증 우회 차단: runChatBridge 가 requestOverride 도 assertValidChatRequest
+     (스키마/첨부 5·10MB 가드)를 거치게 함 — override 가 가드를 우회해 라우터로 전송되던 경로 차단.
+  P1 verify 스크립트 verdict-only 강화: clean 실행에서도 스캔 파일 목록을 출력하던 것 제거
+     (AGENTS.md verify-output 규칙 — verdict/error-code 만).
 
 이식한 보안 3건 (client.ts / contracts.ts / ChatUIBridge.tsx / SecurityBadges.tsx):
   1) validateBoxResponseSecurity(): box response 의 external_send_zero!==true 이거나(누락 포함)
