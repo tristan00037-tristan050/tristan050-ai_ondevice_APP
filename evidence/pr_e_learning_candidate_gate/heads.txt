@@ -1,0 +1,3 @@
+MAIN_HEAD=de63a90674edfe7f5fc1c86e61e2fc979b9a8328
+PR_HEAD=de63a90674edfe7f5fc1c86e61e2fc979b9a8328
+BRANCH=feat/connect-loop-learning-candidate-gate

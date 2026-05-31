@@ -1,0 +1,48 @@
+{
+  "schema_version": "pr_e.learning_candidate_gate.test_results.v1",
+  "generated_at": "2026-05-31T00:00:00+09:00",
+  "base_head": "de63a90674edfe7f5fc1c86e61e2fc979b9a8328",
+  "schema_sha256": {
+    "learning_event_v1.schema.json": "82a6aa7489aa39ac36ab7f07109c7a4f69374a962f3c9642d5e93d0948e97fef",
+    "usage_log_v1_1.schema.json": "fb3b6fb49a054b235451a0b9f924456d519a86a388bcc2ddd0b73f9f2bd87368"
+  },
+  "commands": [
+    {
+      "command": "PYTHONPATH=. python3 -m pytest tests/connect_loop/test_learning_candidate_gate.py tests/connect_loop/test_learning_event_raw_guard.py -v",
+      "result": "14 passed"
+    },
+    {
+      "command": "PYTHONPATH=. python3 -m pytest tests/connect_loop -q",
+      "result": "397 passed"
+    },
+    {
+      "command": "PYTHONPYCACHEPREFIX=/private/tmp/pr_e_pycache python3 -m py_compile butler_pc_core/connect_loop/learning_candidate_gate.py butler_pc_core/connect_loop/dlp_guard.py butler_pc_core/connect_loop/learning_event_store.py butler_pc_core/connect_loop/learning_event_schema.py",
+      "result": "PASS"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    },
+    {
+      "command": "contract modified scan",
+      "result": "CONTRACT_MODIFIED_ZERO=true"
+    },
+    {
+      "command": "model artifact scan",
+      "result": "MODEL_BINARY_ARTIFACT_ZERO=true"
+    },
+    {
+      "command": "training scope creep scan",
+      "result": "TRAINING_SCOPE_CREEP_ZERO=true"
+    }
+  ],
+  "honesty_boundary": {
+    "usage_log_is_learning_data": false,
+    "learning_event_is_only_candidate_after_policy_gate": true,
+    "actual_training_performed": false,
+    "model_or_adapter_artifact_created": false,
+    "schema_modified": false,
+    "commit_created": false,
+    "pr_created": false
+  }
+}
