@@ -131,6 +131,10 @@ def _windows_path() -> str:
     return "C:" + "\\Users\\alice\\customer_notes.txt"
 
 
+def _windows_slash_path() -> str:
+    return "C:" + "/Projects/customer_notes.txt"
+
+
 def _unc_path() -> str:
     return "\\\\" + "server\\share\\customer_notes.txt"
 
@@ -148,10 +152,21 @@ def _file_url() -> str:
         _private_tmp_path,
         _volume_path,
         _windows_path,
+        _windows_slash_path,
         _unc_path,
         _file_url,
     ],
-    ids=["mac_users", "linux_home", "linux_tmp", "private_tmp", "volume", "windows", "unc", "file_url"],
+    ids=[
+        "mac_users",
+        "linux_home",
+        "linux_tmp",
+        "private_tmp",
+        "volume",
+        "windows",
+        "windows_slash",
+        "unc",
+        "file_url",
+    ],
 )
 def test_scan_runtime_text_blocks_os_agnostic_paths(path_factory):
     result = scan_runtime_text("정제 후보 " + path_factory())
@@ -177,6 +192,22 @@ def test_scan_runtime_text_blocks_os_agnostic_paths(path_factory):
 def test_enforce_persisted_safety_blocks_secret_path_pii_scalars(value_factory):
     with pytest.raises(PersistedSafetyViolation, match="PERSISTED_SCALAR_DLP_BLOCK"):
         _enforce_persisted_safety({"approved_text_ref": value_factory()})
+
+
+@pytest.mark.parametrize(
+    "phone_text",
+    [
+        "+1 415-555-1212",
+        "(415) 555-1212",
+        "010-1234-5678",
+    ],
+    ids=["intl_plus_one", "us_parenthesized", "korean_mobile"],
+)
+def test_scan_runtime_text_blocks_international_phone_pii(phone_text):
+    result = scan_runtime_text("정제 후보 연락처 " + phone_text)
+
+    assert result["passed"] is False
+    assert result["pii_detected"] is True
 
 
 @pytest.mark.parametrize(

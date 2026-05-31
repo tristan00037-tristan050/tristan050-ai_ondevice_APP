@@ -36,7 +36,12 @@ RAW_SAVED_FALSE_KEYS = {
 }
 
 _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
-_PHONE_RE = re.compile(r"\b(?:\+?82[-.\s]?)?0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}\b")
+_PHONE_RE = re.compile(
+    r"(?x)(?<!\w)(?:"
+    r"(?:\+?82[-.\s]?)?0\d{1,2}[-.\s]?\d{3,4}[-.\s]?\d{4}|"
+    r"(?:\+?[1-9]\d{0,2}[-.\s]?)?(?:\(\d{3}\)|\d{3})[-.\s]?\d{3}[-.\s]?\d{4}"
+    r")(?!\w)"
+)
 _KOREAN_RRN_RE = re.compile(r"\b\d{6}-[1-4]\d{6}\b")
 _CARD_OR_ACCOUNT_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
 _SECRET_RE = re.compile(
@@ -55,7 +60,7 @@ _LOCAL_PATH_RE = re.compile(
     r"/tmp(?:/|$)|"
     r"/private/tmp(?:/|$)|"
     r"/Volumes(?:/|$)|"
-    r"[A-Z]:\\|"
+    r"(?<![A-Za-z0-9])[A-Z]:[\\/]|"
     r"\\\\[A-Za-z0-9._$-]+\\[A-Za-z0-9._$-]+|"
     r"\.(?:docx|pdf|xlsx|jsonl)\b)"
 )
