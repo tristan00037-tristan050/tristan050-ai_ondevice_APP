@@ -74,6 +74,10 @@ export const INTENT_ENDPOINT: Record<Exclude<IntentLabel, 'general_chat' | 'unkn
   accounting_classify: 'POST /accounting/classify',
 };
 
+// 첨부 가드 (메인팀 v1.3): 개수 5개 + 총량 10MB 상한.
+export const MAX_ATTACHMENTS = 5;
+export const MAX_TOTAL_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
 const DIGEST_RE = /^sha256:[0-9a-f]{64}$/;
 const DATE_TIME_RE = /^\d{4}-((0[13578]|1[02])-(0[1-9]|[12]\d|3[01])|(0[469]|11)-(0[1-9]|[12]\d|30)|02-(0[1-9]|[12]\d))T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d+)?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)$/;
 const REASON_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
@@ -163,6 +167,9 @@ export function assertValidChatRequest(value: unknown): asserts value is ChatReq
   assert(['employee', 'manager', 'admin'].includes(request.user_role as string), 'CHAT_REQUEST_USER_ROLE_INVALID');
   assert(request.text_ref === 'device_local_only', 'CHAT_REQUEST_TEXT_REF_INVALID');
   assert(Array.isArray(request.attachments), 'CHAT_REQUEST_ATTACHMENTS_INVALID');
+  // 메인팀 v1.3: 개수 상한(5) + 총 바이트 상한(10MB). size_bytes 미기재는 0으로 계산.
+  assert(request.attachments.length <= MAX_ATTACHMENTS, 'CHAT_ATTACHMENTS_TOO_MANY');
+  let totalAttachmentBytes = 0;
   for (const attachment of request.attachments) {
     assert(typeof attachment === 'object' && attachment !== null && !Array.isArray(attachment), 'CHAT_ATTACHMENT_INVALID');
     const keys = Object.keys(attachment);
@@ -171,7 +178,9 @@ export function assertValidChatRequest(value: unknown): asserts value is ChatReq
     assert(typeof item.content_digest === 'string' && DIGEST_RE.test(item.content_digest), 'CHAT_ATTACHMENT_DIGEST_INVALID');
     if ('mime_type' in item) assert(typeof item.mime_type === 'string' && item.mime_type.length > 0, 'CHAT_ATTACHMENT_MIME_INVALID');
     if ('size_bytes' in item) assert(Number.isInteger(item.size_bytes) && Number(item.size_bytes) >= 0, 'CHAT_ATTACHMENT_SIZE_INVALID');
+    totalAttachmentBytes += typeof item.size_bytes === 'number' ? item.size_bytes : 0;
   }
+  assert(totalAttachmentBytes <= MAX_TOTAL_ATTACHMENT_BYTES, 'CHAT_ATTACHMENTS_TOTAL_TOO_LARGE');
   assert(typeof request.created_at === 'string' && DATE_TIME_RE.test(request.created_at), 'CHAT_REQUEST_CREATED_AT_INVALID');
   assert(request.schema_version === 'chat_request.v1', 'CHAT_REQUEST_SCHEMA_VERSION_INVALID');
 }

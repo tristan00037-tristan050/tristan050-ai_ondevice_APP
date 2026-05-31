@@ -1,10 +1,12 @@
 import type { RouterDecisionV1 } from '../../lib/connect_loop/contracts';
+import type { UsageLogVerification } from '../../lib/connect_loop/client';
 
 interface SecurityBadgesProps {
   decision: RouterDecisionV1 | null;
   fallbackRequired: boolean;
   integrationMode: string | null;
   usageLogCount: number | null;
+  usageLogVerification?: UsageLogVerification;
 }
 
 function badge(label: string, value: string): string {
@@ -16,6 +18,7 @@ export function SecurityBadges({
   fallbackRequired,
   integrationMode,
   usageLogCount,
+  usageLogVerification = 'not_configured',
 }: SecurityBadgesProps) {
   const entries = [
     '원문 미반출',
@@ -28,6 +31,8 @@ export function SecurityBadges({
   if (usageLogCount !== null) {
     entries.push(`usage_log ${usageLogCount}건`);
   }
+  // 거짓 PASS 금지: usage_log 독립 검증 상태를 명시(미구성은 not_configured).
+  entries.push(badge('usage_log 검증', usageLogVerification));
 
   return (
     <div

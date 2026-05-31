@@ -68,6 +68,7 @@ export function ChatUIBridge({ runBridge = runChatBridge }: ChatUIBridgeProps) {
         boxResponse: null,
         requestId: 'unavailable',
         usageLogCount: null,
+        usageLogVerification: 'not_configured',
         integrationMode: null,
         rawSavedZero: true,
         externalSendZero: true,
@@ -146,6 +147,7 @@ export function ChatUIBridge({ runBridge = runChatBridge }: ChatUIBridgeProps) {
                   fallbackRequired={message.result.decision?.fallback_required ?? message.result.status !== 'executed'}
                   integrationMode={message.result.integrationMode}
                   usageLogCount={message.result.usageLogCount}
+                  usageLogVerification={message.result.usageLogVerification}
                 />
               )}
             </article>

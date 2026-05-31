@@ -19,7 +19,14 @@ export type BridgeStatus =
   | 'policy_closed'
   | 'digest_mismatch'
   | 'decision_invalid'
-  | 'endpoint_failed';
+  | 'endpoint_failed'
+  | 'security_blocked';
+
+// 메인팀 v1.3: usage_log 독립 검증 결과. 미구성은 PASS 가 아니라 'not_configured'(거짓 PASS 금지).
+export type UsageLogVerification = 'verified' | 'missing' | 'not_configured';
+
+// request_id 기준 usage_log 건수를 독립적으로 확인하는 주입 경계.
+export type UsageLogVerifier = (requestId: string) => Promise<number | null>;
 
 export interface ChatBridgeResult {
   status: BridgeStatus;
@@ -29,6 +36,7 @@ export interface ChatBridgeResult {
   boxResponse: unknown;
   requestId: string;
   usageLogCount: number | null;
+  usageLogVerification: UsageLogVerification;
   integrationMode: string | null;
   rawSavedZero: true;
   externalSendZero: true;
@@ -39,6 +47,8 @@ export interface RunChatBridgeOptions {
   timeoutMs?: number;
   requestOverride?: ChatRequestV1;
   hashText?: (value: string) => Promise<`sha256:${string}`>;
+  // 주입 시 request_id 로 usage_log 1건 이상을 독립 확인. 미주입 시 'not_configured'.
+  usageLogVerifier?: UsageLogVerifier;
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -108,7 +118,39 @@ function extractIntegrationMode(payload: unknown): string | null {
   return typeof record.integration_mode === 'string' ? record.integration_mode : null;
 }
 
+/**
+ * 메인팀 v1.3: box response 의 보안 플래그를 affirmative 하게 확인한다.
+ * external_send_zero 가 명시적으로 true 가 아니거나(누락 포함), raw_text_logged/raw_doc_logged
+ * 가 true 면 안전을 입증하지 못한 것이므로 결과 표시를 차단한다(배지가 안전한 것처럼 보이는 것 방지).
+ */
+export function validateBoxResponseSecurity(response: unknown): boolean {
+  if (typeof response !== 'object' || response === null) return false;
+  const record = response as Record<string, unknown>;
+  if (record.external_send_zero !== true) return false;
+  if (record.raw_text_logged === true) return false;
+  if (record.raw_doc_logged === true) return false;
+  return true;
+}
+
+/**
+ * 메인팀 v1.3: usage_log 독립 검증. verifier 미주입 시 'not_configured'(거짓 PASS 금지).
+ * 주입 시 request_id 기준 1건 이상이면 'verified', 아니면 'missing'.
+ */
+async function verifyUsageLog(
+  requestId: string,
+  verifier: UsageLogVerifier | undefined,
+): Promise<UsageLogVerification> {
+  if (!verifier) return 'not_configured';
+  try {
+    const count = await verifier(requestId);
+    return typeof count === 'number' && count >= 1 ? 'verified' : 'missing';
+  } catch {
+    return 'missing';
+  }
+}
+
 export function fallbackMessage(decision: RouterDecisionV1 | null, status: BridgeStatus): string {
+  if (status === 'security_blocked') return '응답 보안 검증에 실패하여 결과를 표시하지 않습니다.';
   if (status === 'digest_mismatch') return '요청 검증에 실패했습니다. 다시 입력해 주세요.';
   if (status === 'decision_invalid') return '요청 라우팅 검증에 실패했습니다. 다시 입력해 주세요.';
   if (status === 'endpoint_failed') return '실행에 실패했습니다. 다시 시도하거나 문의해 주세요.';
@@ -134,6 +176,7 @@ export async function runChatBridge(runtimeTextInput: string, options: RunChatBr
         boxResponse: null,
         requestId: chatRequest.request_id,
         usageLogCount: null,
+        usageLogVerification: 'not_configured',
         integrationMode: null,
         rawSavedZero: true,
         externalSendZero: true,
@@ -161,6 +204,7 @@ export async function runChatBridge(runtimeTextInput: string, options: RunChatBr
         boxResponse: null,
         requestId: chatRequest.request_id,
         usageLogCount: null,
+        usageLogVerification: 'not_configured',
         integrationMode: null,
         rawSavedZero: true,
         externalSendZero: true,
@@ -179,6 +223,7 @@ export async function runChatBridge(runtimeTextInput: string, options: RunChatBr
         boxResponse: null,
         requestId: chatRequest.request_id,
         usageLogCount: null,
+        usageLogVerification: 'not_configured',
         integrationMode: null,
         rawSavedZero: true,
         externalSendZero: true,
@@ -191,6 +236,27 @@ export async function runChatBridge(runtimeTextInput: string, options: RunChatBr
       runtime: { runtime_text: runtimeText },
     };
     const boxResponse = await postLocalJson(callableUrl, boxPayload as unknown as JsonValue, options);
+
+    // 메인팀 v1.3: box response 보안 플래그 미입증 시 결과 표시 차단(security_blocked).
+    if (!validateBoxResponseSecurity(boxResponse)) {
+      return {
+        status: 'security_blocked',
+        displayText: fallbackMessage(null, 'security_blocked'),
+        chatRequest,
+        decision,
+        boxResponse: null,
+        requestId: chatRequest.request_id,
+        usageLogCount: null,
+        usageLogVerification: 'not_configured',
+        integrationMode: null,
+        rawSavedZero: true,
+        externalSendZero: true,
+      };
+    }
+
+    // 메인팀 v1.3: usage_log 독립 검증(미주입 시 not_configured — 거짓 PASS 금지).
+    const usageLogVerification = await verifyUsageLog(chatRequest.request_id, options.usageLogVerifier);
+
     return {
       status: 'executed',
       displayText: extractDisplayText(boxResponse),
@@ -199,6 +265,7 @@ export async function runChatBridge(runtimeTextInput: string, options: RunChatBr
       boxResponse,
       requestId: chatRequest.request_id,
       usageLogCount: extractUsageLogCount(boxResponse),
+      usageLogVerification,
       integrationMode: extractIntegrationMode(boxResponse),
       rawSavedZero: true,
       externalSendZero: true,
@@ -212,6 +279,7 @@ export async function runChatBridge(runtimeTextInput: string, options: RunChatBr
       boxResponse: null,
       requestId: chatRequest.request_id,
       usageLogCount: null,
+      usageLogVerification: 'not_configured',
       integrationMode: null,
       rawSavedZero: true,
       externalSendZero: true,

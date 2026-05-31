@@ -12,7 +12,7 @@ import {
   createChatRequest,
   resolveCallableEndpoint,
 } from '../lib/connect_loop/contracts';
-import { runChatBridge } from '../lib/connect_loop/client';
+import { runChatBridge, validateBoxResponseSecurity } from '../lib/connect_loop/client';
 
 const zeroDigest = `sha256:${'0'.repeat(64)}` as const;
 const testDirname = dirname(fileURLToPath(import.meta.url));
@@ -117,6 +117,8 @@ describe('PR-D Chat UI Bridge contracts', () => {
         draft: '새 상황에 맞춘 초안입니다.',
         integration_mode: 'real',
         usage_log_count: 1,
+        external_send_zero: true,
+        raw_text_logged: false,
       });
     });
 
@@ -249,6 +251,7 @@ describe('PR-D Chat UI Bridge component', () => {
       boxResponse: { draft: '작성된 초안입니다.' },
       requestId: 'req-connect-loop-001',
       usageLogCount: 1,
+      usageLogVerification: 'verified',
       integrationMode: 'real',
       rawSavedZero: true,
       externalSendZero: true,
@@ -286,6 +289,7 @@ describe('PR-D Chat UI Bridge component', () => {
       boxResponse: null,
       requestId: 'req-connect-loop-002',
       usageLogCount: null,
+      usageLogVerification: 'not_configured',
       integrationMode: null,
       rawSavedZero: true,
       externalSendZero: true,
@@ -300,5 +304,84 @@ describe('PR-D Chat UI Bridge component', () => {
     await waitFor(() => expect(screen.getByText('정책 검토가 필요한 요청입니다. 관리자 확인 후 진행됩니다.')).toBeInTheDocument());
     expect(screen.getByText('정책: needs_review')).toBeInTheDocument();
     expect(screen.getByText('안전 처리됨')).toBeInTheDocument();
+  });
+});
+
+describe('PR-D security hardening (mainteam v1.3)', () => {
+  function executedFetcher(boxBody: Record<string, unknown>) {
+    return vi.fn(async (url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      if (url.endsWith('/v1/router/decide')) {
+        return jsonResponse({ decision: { ...decision(), request_id: body.chat_request.request_id } });
+      }
+      return jsonResponse(boxBody);
+    });
+  }
+
+  // (1) validateBoxResponseSecurity — affirmative 안전 플래그 없으면 차단
+  it('validateBoxResponseSecurity requires affirmative safe flags', () => {
+    expect(validateBoxResponseSecurity({ external_send_zero: true, raw_text_logged: false })).toBe(true);
+    expect(validateBoxResponseSecurity({ raw_text_logged: false })).toBe(false); // external_send_zero 누락
+    expect(validateBoxResponseSecurity({ external_send_zero: false })).toBe(false); // false
+    expect(validateBoxResponseSecurity({ external_send_zero: true, raw_text_logged: true })).toBe(false);
+    expect(validateBoxResponseSecurity({ external_send_zero: true, raw_doc_logged: true })).toBe(false);
+    expect(validateBoxResponseSecurity(null)).toBe(false);
+  });
+
+  it('blocks result display when box response lacks security flags', async () => {
+    const fetcher = executedFetcher({ draft: '민감 결과', integration_mode: 'real', usage_log_count: 1 });
+    const result = await runChatBridge('새 상황 보고서 초안 작성', { hashText: stableHash, fetcher });
+    expect(result.status).toBe('security_blocked');
+    expect(result.displayText).toBe('응답 보안 검증에 실패하여 결과를 표시하지 않습니다.');
+    expect(result.boxResponse).toBeNull();
+    expect(result.displayText).not.toContain('민감 결과');
+  });
+
+  it('blocks when raw_text_logged is true', async () => {
+    const fetcher = executedFetcher({ draft: 'x', external_send_zero: true, raw_text_logged: true });
+    const result = await runChatBridge('새 상황 보고서 초안 작성', { hashText: stableHash, fetcher });
+    expect(result.status).toBe('security_blocked');
+  });
+
+  // (2) usageLogVerifier 주입 경계 — 미구성은 not_configured(거짓 PASS 금지)
+  it('marks usage_log verification not_configured when no verifier injected', async () => {
+    const fetcher = executedFetcher({ draft: 'ok', external_send_zero: true, raw_text_logged: false, usage_log_count: 1 });
+    const result = await runChatBridge('새 상황 보고서 초안 작성', { hashText: stableHash, fetcher });
+    expect(result.status).toBe('executed');
+    expect(result.usageLogVerification).toBe('not_configured');
+  });
+
+  it('verifies usage_log via injected verifier (verified / missing)', async () => {
+    const box = { draft: 'ok', external_send_zero: true, raw_text_logged: false };
+    const verified = await runChatBridge('새 상황 보고서 초안 작성', {
+      hashText: stableHash, fetcher: executedFetcher(box), usageLogVerifier: async () => 1,
+    });
+    expect(verified.usageLogVerification).toBe('verified');
+    const missing = await runChatBridge('새 상황 보고서 초안 작성', {
+      hashText: stableHash, fetcher: executedFetcher(box), usageLogVerifier: async () => 0,
+    });
+    expect(missing.usageLogVerification).toBe('missing');
+  });
+
+  // (3) 첨부 총 10MB + 5개 가드
+  const attachment = (size: number) => ({ content_digest: `sha256:${'a'.repeat(64)}` as `sha256:${string}`, size_bytes: size });
+
+  it('rejects more than 5 attachments', async () => {
+    await expect(
+      createChatRequest('요청', { hashText: stableHash, attachments: Array.from({ length: 6 }, () => attachment(1)) }),
+    ).rejects.toThrow('CHAT_ATTACHMENTS_TOO_MANY');
+  });
+
+  it('rejects attachments exceeding 10MB total', async () => {
+    await expect(
+      createChatRequest('요청', { hashText: stableHash, attachments: [attachment(6 * 1024 * 1024), attachment(5 * 1024 * 1024)] }),
+    ).rejects.toThrow('CHAT_ATTACHMENTS_TOTAL_TOO_LARGE');
+  });
+
+  it('allows 5 attachments within 10MB total', async () => {
+    const req = await createChatRequest('요청', {
+      hashText: stableHash, attachments: Array.from({ length: 5 }, () => attachment(2 * 1024 * 1024)),
+    });
+    expect(req.attachments).toHaveLength(5);
   });
 });
