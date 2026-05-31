@@ -93,4 +93,4 @@ tests/connect_loop/test_persisted_safety_v2_2.py::test_expired_approval_path_can
 tests/connect_loop/test_persisted_safety_v2_2.py::test_store_append_path_blocks_mutated_candidate_before_jsonl_write PASSED [ 98%]
 tests/connect_loop/test_persisted_safety_v2_2.py::test_safe_lifecycle_paths_still_return_copies_and_pass_store PASSED [100%]
 
-======================== 87 passed, 6 warnings in 0.34s ========================
+======================== 87 passed, 6 warnings in 0.32s ========================

@@ -4,7 +4,8 @@
 
 ## Base 정합
 - MAIN_HEAD=`de63a90674edfe7f5fc1c86e61e2fc979b9a8328`
-- 최신 검증 코드 head=`ea67d5a9fa31c601b862172a1b3ff95c6314df15`
+- 테스트 실행 head=`0933579f6a2fe80fac615f7c20c6f0e006b30639`
+- 구현 정정 head=`ea67d5a9fa31c601b862172a1b3ff95c6314df15`
 - 브랜치=`feat/connect-loop-learning-candidate-gate`
 - 계약 정본 `schemas/connect_loop/*`: 수정 0
 
@@ -42,6 +43,7 @@
 - production / release claim 0
 
 ## Evidence
+- targeted safety: `37 passed`
 - PR-E v2.2 묶음: `87 passed`
 - 전체 `tests/connect_loop`: `470 passed`
 - `py_compile`: PASS
