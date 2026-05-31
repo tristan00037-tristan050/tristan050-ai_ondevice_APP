@@ -1,6 +1,7 @@
 import {
   ROUTER_DECIDE_URL,
   type ChatRequestV1,
+  type IntentLabel,
   type RouterDecisionV1,
   assertLocalSidecarUrl,
   assertValidChatRequest,
@@ -10,9 +11,11 @@ import {
   sha256TextDigest,
   verifyChatRequestDigest,
 } from './contracts';
+import { getSidecarCapabilityToken, type CapabilityTokenProvider } from './sidecarAuth';
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
+type HeaderMap = Record<string, string>;
 
 export type BridgeStatus =
   | 'executed'
@@ -21,6 +24,7 @@ export type BridgeStatus =
   | 'digest_mismatch'
   | 'decision_invalid'
   | 'endpoint_failed'
+  | 'payload_missing'
   | 'security_blocked';
 
 // 메인팀 v1.3: usage_log 독립 검증 결과. 미구성은 PASS 가 아니라 'not_configured'(거짓 PASS 금지).
@@ -28,6 +32,14 @@ export type UsageLogVerification = 'verified' | 'missing' | 'not_configured';
 
 // request_id 기준 usage_log 건수를 독립적으로 확인하는 주입 경계.
 export type UsageLogVerifier = (requestId: string) => Promise<number | null>;
+
+export interface BoxRuntimeInputs {
+  foreignDoc?: string;
+  ourFormat?: string;
+  promptTemplate?: string;
+  maxNewTokens?: number;
+  topK?: number;
+}
 
 export interface ChatBridgeResult {
   status: BridgeStatus;
@@ -48,9 +60,18 @@ export interface RunChatBridgeOptions {
   timeoutMs?: number;
   requestOverride?: ChatRequestV1;
   hashText?: (value: string) => Promise<`sha256:${string}`>;
+  capabilityTokenProvider?: CapabilityTokenProvider;
+  boxInputs?: BoxRuntimeInputs;
   // 주입 시 request_id 로 usage_log 1건 이상을 독립 확인. 미주입 시 'not_configured'.
   usageLogVerifier?: UsageLogVerifier;
 }
+
+export const DEFAULT_BOX3_PROMPT_TEMPLATE =
+  '과거 문서 안의 근거만 사용해 새 상황의 초안을 작성하세요. 불명확한 내용은 [확인 필요]로 표시하세요.' as const;
+
+// Codex P2: helper1 /v1/helpers/1/search 의 query 상한(Helper1Query.max_length=4000).
+// 라우터 runtime_text 상한(12000)이 더 크므로, 초과분은 박스 호출 전에 차단(원문이 helper1 422 로 echo 되는 것 방지).
+export const HELPER1_MAX_QUERY_LENGTH = 4000;
 
 async function readJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get('Content-Type') ?? '';
@@ -63,16 +84,21 @@ async function readJson(response: Response): Promise<unknown> {
 async function postLocalJson(
   url: string,
   body: JsonValue,
-  options: { fetcher?: FetchLike; timeoutMs?: number } = {},
+  options: { fetcher?: FetchLike; timeoutMs?: number; authToken: string; extraHeaders?: HeaderMap },
 ): Promise<unknown> {
   assertLocalSidecarUrl(url);
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), options.timeoutMs ?? 30_000);
   const activeFetch = options.fetcher ?? globalThis.fetch.bind(globalThis);
+  const headers: HeaderMap = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${options.authToken}`,
+    ...(options.extraHeaders ?? {}),
+  };
   try {
     const response = await activeFetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
       signal: controller.signal,
     });
@@ -85,6 +111,45 @@ async function postLocalJson(
   }
 }
 
+export function buildTargetBoxPayload(
+  decision: Pick<RouterDecisionV1, 'intent_label'>,
+  runtimeText: string,
+  inputs: BoxRuntimeInputs = {},
+): JsonValue | null {
+  const intent = decision.intent_label as IntentLabel;
+  if (intent === 'memory_search') {
+    // Codex P2: helper1 query 상한(4000) 초과분은 브리지에서 선제 차단(null=payload_missing) —
+    // 박스 호출 전에 막아 원문이 helper1 422 응답으로 echo 되는 것을 방지.
+    if (runtimeText.length > HELPER1_MAX_QUERY_LENGTH) return null;
+    return {
+      query: runtimeText,
+      top_k: inputs.topK ?? 5,
+    };
+  }
+  if (intent === 'form_convert') {
+    const foreignDoc = inputs.foreignDoc?.trim();
+    const ourFormat = inputs.ourFormat?.trim();
+    if (!foreignDoc || !ourFormat) return null;
+    return {
+      foreign_doc: foreignDoc,
+      our_format: ourFormat,
+      options: {
+        tone: 'company_standard',
+        preserve_numbers: true,
+        redact_sensitive: true,
+      },
+    };
+  }
+  if (intent === 'draft_write') {
+    return {
+      input_text: runtimeText,
+      prompt_template: inputs.promptTemplate?.trim() || DEFAULT_BOX3_PROMPT_TEMPLATE,
+      max_new_tokens: inputs.maxNewTokens ?? 512,
+    };
+  }
+  return null;
+}
+
 function extractDecision(payload: unknown): unknown {
   if (typeof payload === 'object' && payload !== null && 'decision' in payload) {
     return (payload as { decision: unknown }).decision;
@@ -95,7 +160,8 @@ function extractDecision(payload: unknown): unknown {
 function extractDisplayText(payload: unknown): string {
   if (typeof payload === 'object' && payload !== null) {
     const record = payload as Record<string, unknown>;
-    for (const key of ['answer', 'draft', 'result', 'message', 'rewritten_doc']) {
+    // Codex P2: Box3 실제 응답(DraftResult.to_dict())은 'draft_text' 키를 사용한다.
+    for (const key of ['answer', 'draft_text', 'draft', 'result', 'message', 'rewritten_doc']) {
       if (typeof record[key] === 'string' && record[key].trim()) {
         return record[key];
       }
@@ -159,6 +225,7 @@ export function fallbackMessage(decision: RouterDecisionV1 | null, status: Bridg
   if (status === 'digest_mismatch') return '요청 검증에 실패했습니다. 다시 입력해 주세요.';
   if (status === 'decision_invalid') return '요청 라우팅 검증에 실패했습니다. 다시 입력해 주세요.';
   if (status === 'endpoint_failed') return '실행에 실패했습니다. 다시 시도하거나 문의해 주세요.';
+  if (status === 'payload_missing') return '실행에 필요한 입력이 부족하여 박스를 호출하지 않았습니다.';
   if (!decision) return '요청을 안전하게 처리하지 못했습니다. 더 구체화해 주세요.';
   if (decision.policy_precheck === 'needs_review') return '정책 검토가 필요한 요청입니다. 관리자 확인 후 진행됩니다.';
   if (decision.policy_precheck === 'block') return '정책상 처리할 수 없는 요청입니다.';
@@ -193,12 +260,17 @@ export async function runChatBridge(runtimeTextInput: string, options: RunChatBr
       };
     }
 
+    const authToken = await (options.capabilityTokenProvider ?? getSidecarCapabilityToken)();
     const routerPayload = {
       chat_request: chatRequest,
       runtime: { runtime_text: runtimeText },
     };
     const routerPayloadJson = routerPayload as unknown as JsonValue;
-    const routerResponse = await postLocalJson(ROUTER_DECIDE_URL, routerPayloadJson, options);
+    const routerResponse = await postLocalJson(ROUTER_DECIDE_URL, routerPayloadJson, {
+      fetcher: options.fetcher,
+      timeoutMs: options.timeoutMs,
+      authToken,
+    });
     const decisionCandidate = extractDecision(routerResponse);
     try {
       assertValidRouterDecision(decisionCandidate);
@@ -240,12 +312,32 @@ export async function runChatBridge(runtimeTextInput: string, options: RunChatBr
       };
     }
 
-    const boxPayload = {
-      chat_request: chatRequest,
-      router_decision: decision,
-      runtime: { runtime_text: runtimeText },
-    };
-    const boxResponse = await postLocalJson(callableUrl, boxPayload as unknown as JsonValue, options);
+    const boxPayload = buildTargetBoxPayload(decision, runtimeText, options.boxInputs);
+    if (!boxPayload) {
+      return {
+        status: 'payload_missing',
+        displayText: fallbackMessage(decision, 'payload_missing'),
+        chatRequest,
+        decision,
+        boxResponse: null,
+        requestId: chatRequest.request_id,
+        usageLogCount: null,
+        usageLogVerification: 'not_configured',
+        integrationMode: null,
+        rawSavedZero: true,
+        externalSendZero: true,
+      };
+    }
+    const boxResponse = await postLocalJson(callableUrl, boxPayload, {
+      fetcher: options.fetcher,
+      timeoutMs: options.timeoutMs,
+      authToken,
+      extraHeaders: {
+        'x-request-id': chatRequest.request_id,
+        'x-routing-confidence': String(decision.routing_confidence),
+        'x-learning-candidate': '0',
+      },
+    });
 
     // 메인팀 v1.3: box response 보안 플래그 미입증 시 결과 표시 차단(security_blocked).
     if (!validateBoxResponseSecurity(boxResponse)) {
