@@ -25,6 +25,7 @@ from butler_pc_core.cards.box3.grounding.pipeline import (
 
 # ── #3: pipeline (Box3Request 계약 + 주입 runner) ──────────────────────────────
 from butler_pc_core.cards.box3.pipeline import run_box3_pipeline
+from butler_pc_core.cards.box3.asset_manifest import manifest_allows_real
 from butler_pc_core.cards.box3.types import Box3Request
 
 # ── #2: draft_service digest-only 계약 ─────────────────────────────────────────
@@ -170,3 +171,40 @@ def test_draft_service_raw_prose_blocked_before_real_runner():
     assert calls == [], "raw input 이 real_model_runner 에 도달하면 안 된다"
     # error 에 raw input 원문이 새지 않아야 한다(no-raw-output 정합).
     assert "매출" not in str(exc.value)
+
+
+# ───────────────────────────────────────────────────────────────────────────────
+# Codex 재리뷰 신규 (head 9e35e290) — empty real draft + manifest PASS gate
+# ───────────────────────────────────────────────────────────────────────────────
+def test_pipeline_empty_real_draft_blocks_real_status():
+    """real runner 가 빈 문자열을 반환하면 contract placeholder 로 status="real" 승격 금지(신규 #A)."""
+    def runner(prompt, max_new_tokens):
+        return ""
+
+    result = run_box3_pipeline(_request(), asset_manifest=_passing_real_manifest(), real_model_runner=runner)
+    assert result["status"] == "contract_only"
+    assert result["fail_class"] == "REAL_DRAFT_EMPTY"
+    assert result["real_claim_allowed"] is False
+    assert result["draft_text"] is None
+
+
+def test_manifest_allows_real_requires_pass_status():
+    """top-level status 가 ASSET_INVENTORY_PASS 가 아니면(드리프트) real 불가(신규 #B)."""
+    drifted = _passing_real_manifest()
+    drifted["status"] = "PARTIAL_ASSET_INVENTORY_PENDING"  # real_claim_allowed 는 true 로 드리프트
+    assert manifest_allows_real(drifted) is False
+    # 정합 PASS manifest 는 여전히 허용(무회귀)
+    assert manifest_allows_real(_passing_real_manifest()) is True
+
+
+def test_pipeline_drifted_manifest_does_not_enable_real_runner():
+    """status=PENDING 인데 real_claim_allowed=true 인 드리프트 manifest + good runner → real 불가."""
+    drifted = _passing_real_manifest()
+    drifted["status"] = "PARTIAL_ASSET_INVENTORY_PENDING"
+
+    def runner(prompt, max_new_tokens):
+        return _CLEAN_REAL_DRAFT
+
+    result = run_box3_pipeline(_request(), asset_manifest=drifted, real_model_runner=runner)
+    assert result["status"] == "contract_only"
+    assert result["real_claim_allowed"] is False

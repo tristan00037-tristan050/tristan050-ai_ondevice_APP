@@ -125,6 +125,12 @@ def load_asset_manifest(path: Path) -> dict[str, Any]:
 
 
 def manifest_allows_real(manifest: dict[str, Any]) -> bool:
+    # Codex P2 정정 (2026-06-01, PR #770): asset rows 만 보고 top-level inventory 상태를
+    # 무시하면, status/state_gate 가 pending/blocked 인 드리프트 manifest 가 real_claim_allowed:true
+    # 만으로 real runner 를 활성화하던 fail-open 결함. manifest 수준 status 가 ASSET_INVENTORY_PASS
+    # 일 때만 real 을 허용한다(fail-closed asset inventory gate).
+    if manifest.get("status") != "ASSET_INVENTORY_PASS":
+        return False
     if manifest.get("real_claim_allowed") is not True:
         return False
     assets = manifest.get("assets", [])

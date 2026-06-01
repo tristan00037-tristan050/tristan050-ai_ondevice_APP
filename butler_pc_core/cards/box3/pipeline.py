@@ -64,6 +64,10 @@ def run_box3_pipeline(
         and draft_response.get("contract_only") is False
         and draft_response.get("real_claim_allowed") is True
     )
+    # Codex P1 정정 (2026-06-01, PR #770): real runner 가 빈/공백 draft 를 반환하면 contract
+    # placeholder(_contract_draft_text)가 format/style 을 통과해 status="real" 로 잘못 승격되던
+    # 결함. real 경로에서 실제 draft 가 비어 있으면 fail-closed(REAL_DRAFT_EMPTY) 처리한다.
+    real_draft_empty = draft_was_real and not str(draft_response.get("draft_text") or "").strip()
     draft_basis_text = (
         str(draft_response["draft_text"])
         if draft_was_real and draft_response.get("draft_text")
@@ -88,7 +92,12 @@ def run_box3_pipeline(
     # fail-closed 신호(required_sections_present=False, forbidden_style_zero=False)를 무시한 채
     # status="real" 을 통과시키던 결함. format/style adapter 결과를 fail_class 산정에 명시 포함한다.
     format_style_fail = _format_style_fail_class(format_result, style_result)
-    fail_class = grounding_fail or draft_response.get("fail_class") or format_style_fail
+    fail_class = (
+        grounding_fail
+        or draft_response.get("fail_class")
+        or format_style_fail
+        or ("REAL_DRAFT_EMPTY" if real_draft_empty else None)
+    )
     status = "real" if real_allowed and draft_was_real and fail_class is None else "contract_only"
     if grounding_fail:
         status = "needs_review" if grounding_fail != "GROUNDING_REFERENCE_COVERAGE_LOW" else "blocked"
