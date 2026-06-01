@@ -1,0 +1,5 @@
+MAIN_HEAD=de63a90674edfe7f5fc1c86e61e2fc979b9a8328
+TEST_EXECUTION_HEAD=3eddc3e12c4a6e9a0b020b9f7dfff159bc35d07b
+IMPLEMENTATION_HEAD=3eddc3e12c4a6e9a0b020b9f7dfff159bc35d07b
+BRANCH=feat/connect-loop-learning-candidate-gate
+MERGE_PERFORMED=false

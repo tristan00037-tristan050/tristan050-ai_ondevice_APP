@@ -1,0 +1,34 @@
+{
+  "schema_version": "pr_e.learning_candidate_gate.package_manifest.v1",
+  "package_name": "pr_e_learning_candidate_gate_v1_2",
+  "status": "PASS_LEARNING_CANDIDATE_GATE_PACKAGE",
+  "base_head": "de63a90674edfe7f5fc1c86e61e2fc979b9a8328",
+  "included_files": [
+    "butler_pc_core/connect_loop/learning_candidate_gate.py",
+    "butler_pc_core/connect_loop/dlp_guard.py",
+    "butler_pc_core/connect_loop/learning_event_schema.py",
+    "butler_pc_core/connect_loop/learning_event_store.py",
+    "tests/connect_loop/test_learning_candidate_gate.py",
+    "tests/connect_loop/test_learning_event_raw_guard.py",
+    "evidence/pr_e_learning_candidate_gate/test_results.json",
+    "ALGORITHM_TEAM_REPLY_PR_E_V1_2.md",
+    "CLAUDE_CODE_APPLY_PR_E_V1_2.md",
+    "PACKAGE_SHA256SUMS.txt"
+  ],
+  "scope": {
+    "candidate_selector": true,
+    "learning_gate_input_builder": true,
+    "dlp_boolean_guard": true,
+    "learning_event_factory": true,
+    "state_machine": true,
+    "link_index": true,
+    "schema_consumer_only": true
+  },
+  "excluded": {
+    "schema_changes": true,
+    "actual_training": true,
+    "model_or_adapter_binary": true,
+    "usage_log_mutation": true,
+    "production_release_claim": true
+  }
+}
