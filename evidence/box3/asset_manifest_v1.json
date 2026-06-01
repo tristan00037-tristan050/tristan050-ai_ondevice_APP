@@ -16,7 +16,7 @@
       "measured_by": "codex_local_shasum",
       "real_claim_allowed": false,
       "role": "company_format_application",
-      "sha256_full": "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0",
+      "sha256_full": "sha256:92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0",
       "sha_scope": "file",
       "source_metadata_files": [
         "adapter_config.json"
@@ -24,51 +24,60 @@
     },
     {
       "asset_name": "helper4_grounding",
-      "asset_path": null,
+      "asset_path": "~/Desktop/butler-data/넘겨줄도우미/근거확인도우미.zip",
       "display_sha_prefix": "b7b1af0e...",
-      "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
-      "interface_inventory_status": "missing_asset_path",
-      "measured_at": null,
-      "measured_by": "not_measured",
+      "fail_class": "INTERFACE_INVENTORY_PENDING",
+      "interface_inventory_status": "contract_sample_only",
+      "measured_at": "2026-06-01T01:50:20.630721+00:00",
+      "measured_by": "claude_code_local_python3_hashlib_sha256",
       "real_claim_allowed": false,
       "role": "grounding_verification",
-      "sha256_full": null,
-      "sha_scope": "unknown",
-      "source_metadata_files": []
+      "sha256_full": "sha256:b7b1af0ebfddc17bf9164ab124f8b598d97954f1a9fa067abf1e68f020c95e40",
+      "sha_scope": "file",
+      "source_metadata_files": [
+        "봉인/전체파일_sha256.txt",
+        "config/grounding_config.json"
+      ]
     },
     {
       "asset_name": "helper7_table_figure",
-      "asset_path": null,
+      "asset_path": "~/Desktop/butler-data/넘겨줄도우미/표그림읽기_v2.1_r1.zip",
       "display_sha_prefix": "8b034549...",
-      "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
-      "interface_inventory_status": "missing_asset_path",
-      "measured_at": null,
-      "measured_by": "not_measured",
+      "fail_class": "INTERFACE_INVENTORY_PENDING",
+      "interface_inventory_status": "contract_sample_only",
+      "measured_at": "2026-06-01T01:50:20.630721+00:00",
+      "measured_by": "claude_code_local_python3_hashlib_sha256",
       "real_claim_allowed": false,
       "role": "evidence_extraction",
-      "sha256_full": null,
-      "sha_scope": "unknown",
-      "source_metadata_files": []
+      "sha256_full": "sha256:8b03454967a9f16d12e408ea85ab3b27efe5a3e053c8150480cb70646fa4dfb0",
+      "sha_scope": "file",
+      "source_metadata_files": [
+        "봉인/전체파일_sha256.txt",
+        "config/vision_config.json"
+      ]
     },
     {
       "asset_name": "helper8_company_style",
-      "asset_path": null,
+      "asset_path": "~/Desktop/butler-data/넘겨줄도우미/도우미8_회사별맞춤_v1.0.zip",
       "display_sha_prefix": "7d4f8311...",
-      "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
-      "interface_inventory_status": "missing_asset_path",
-      "measured_at": null,
-      "measured_by": "not_measured",
+      "fail_class": "INTERFACE_INVENTORY_PENDING",
+      "interface_inventory_status": "contract_sample_only",
+      "measured_at": "2026-06-01T01:50:20.630721+00:00",
+      "measured_by": "claude_code_local_python3_hashlib_sha256",
       "real_claim_allowed": false,
       "role": "company_style_application",
-      "sha256_full": null,
-      "sha_scope": "unknown",
-      "source_metadata_files": []
+      "sha256_full": "sha256:7d4f8311ab427e4b609e2d22d7aff6e89a19085eaaa788677c7ed24d789d6d52",
+      "sha_scope": "file",
+      "source_metadata_files": [
+        "SHA256_MANIFEST.json",
+        "config/adapter_config.json"
+      ]
     }
   ],
-  "created_at": "2026-06-01T01:16:05+00:00",
-  "honest_disclosure": "helper3 file SHA was measured locally; helper4/helper7/helper8 full SHA and interface inventory are not available in the provided Box3 folder.",
+  "created_at": "2026-06-01T01:50:20.630721+00:00",
+  "honest_disclosure": "Helper3/4/7/8 모두 full SHA-256 64자가 본 worktree에서 실측되어 ASSET_INVENTORY_PASS로 승격. 단 interface wrapper 정합(helper3/4/7/8 SDK 호출 → codex pipeline 정합)은 별도 검증 미수행이므로 interface_inventory_status는 contract_sample_only로 유지, real_claim_allowed=false / state_gate=CONTRACT_ONLY 정직 유지. helper3 codex 측정값 92e8454f... 보존; helper4/7/8은 인계 zip의 SHA-256 실측 (~/Desktop/butler-data/넘겨줄도우미/{근거확인도우미,표그림읽기_v2.1_r1,도우미8_회사별맞춤_v1.0}.zip).",
   "real_claim_allowed": false,
   "schema_version": "box3.asset_manifest.v1",
   "state_gate": "CONTRACT_ONLY",
-  "status": "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING"
+  "status": "ASSET_INVENTORY_PASS_CONTRACT_ONLY"
 }
