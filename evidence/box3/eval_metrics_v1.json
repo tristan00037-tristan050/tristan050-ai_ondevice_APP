@@ -1,0 +1,23 @@
+{
+  "averages": {
+    "format_match_score": 1.0,
+    "grounding_pass_rate": 1.0,
+    "reference_coverage": 1.0,
+    "source_digest_coverage": 1.0,
+    "style_match_score": 1.0,
+    "table_figure_reflection": 1.0,
+    "unsupported_claim_rate": 0.0
+  },
+  "contract_only": true,
+  "external_send_zero": true,
+  "metric_is_digest_safe_contract_proxy": true,
+  "metric_is_real_rewrite_measurement": false,
+  "mock_result": false,
+  "pass_thresholds_met_by_proxy": true,
+  "raw_leak_zero": true,
+  "sample_count": 40,
+  "schema_version": "box3.verdict_only_eval.v1",
+  "status": "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING",
+  "table_figure_case_count": 13,
+  "verdicts_digest": "sha256:2106c682c80a6e8c3d050bccdbcba0379534c0e34daddfb56551a782309d3bcc"
+}

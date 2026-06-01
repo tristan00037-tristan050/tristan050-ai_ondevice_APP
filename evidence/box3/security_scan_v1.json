@@ -1,0 +1,11 @@
+{
+  "credential_in_evidence": false,
+  "evidence_raw_key_scan": "PASS",
+  "external_send_zero": true,
+  "local_absolute_path_in_evidence": false,
+  "pii_in_evidence": false,
+  "pytest_returncode": 0,
+  "raw_doc_logged": false,
+  "raw_saved_zero": true,
+  "schema_version": "box3.security_scan.v1"
+}

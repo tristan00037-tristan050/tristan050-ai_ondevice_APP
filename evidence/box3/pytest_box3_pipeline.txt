@@ -1,0 +1,29 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0 -- /Library/Developer/CommandLineTools/usr/bin/python3
+cachedir: .pytest_cache
+rootdir: [PACKAGE_ROOT]
+configfile: pytest.ini
+plugins: anyio-4.12.1
+collecting ... collected 19 items
+
+tests/connect_loop/test_box3_asset_manifest.py::test_asset_manifest_requires_full_sha_for_real_claim PASSED [  5%]
+tests/connect_loop/test_box3_asset_manifest.py::test_contract_only_manifest_is_honest_partial_not_real PASSED [ 10%]
+tests/connect_loop/test_box3_current_contract.py::test_box3_current_main_endpoint_contract_is_preserved PASSED [ 15%]
+tests/connect_loop/test_box3_current_contract.py::test_box3_current_contract_rejects_unsafe_text PASSED [ 21%]
+tests/connect_loop/test_box3_current_contract.py::test_box3_current_contract_bounds_max_new_units PASSED [ 26%]
+tests/connect_loop/test_box3_eval_verdict_only.py::test_eval_40_cases_are_digest_only_and_cover_required_slices PASSED [ 31%]
+tests/connect_loop/test_box3_eval_verdict_only.py::test_eval_summary_is_verdict_only_proxy_not_real_claim PASSED [ 36%]
+tests/connect_loop/test_box3_interface_inventory.py::test_helper_wrappers_have_contract_samples_without_real_claim PASSED [ 42%]
+tests/connect_loop/test_box3_no_training_artifact.py::test_box3_package_adds_no_binary_model_or_training_artifacts PASSED [ 47%]
+tests/connect_loop/test_box3_pipeline_contract.py::test_pipeline_smoke_runs_five_steps_contract_only PASSED [ 52%]
+tests/connect_loop/test_box3_pipeline_contract.py::test_grounding_fail_closed_when_unsupported_claims_injected PASSED [ 57%]
+tests/connect_loop/test_box3_raw_leak_guard.py::test_forbidden_runtime_text_patterns[[EMAIL_SAMPLE_REDACTED]-PII_EMAIL] PASSED [ 63%]
+tests/connect_loop/test_box3_raw_leak_guard.py::test_forbidden_runtime_text_patterns[[RRN_SAMPLE_REDACTED]-PII_KOREAN_RRN] PASSED [ 68%]
+tests/connect_loop/test_box3_raw_leak_guard.py::test_forbidden_runtime_text_patterns[[SECRET_SAMPLE_REDACTED]-SECRET] PASSED [ 73%]
+tests/connect_loop/test_box3_raw_leak_guard.py::test_forbidden_runtime_text_patterns[[SECRET_SAMPLE_REDACTED]-SECRET] PASSED [ 78%]
+tests/connect_loop/test_box3_raw_leak_guard.py::test_forbidden_runtime_text_patterns[[LOCAL_PATH_SAMPLE_REDACTED]-LOCAL_PATH] PASSED [ 84%]
+tests/connect_loop/test_box3_raw_leak_guard.py::test_forbidden_runtime_text_patterns[[LOCAL_PATH_SAMPLE_REDACTED]-LOCAL_PATH] PASSED [ 89%]
+tests/connect_loop/test_box3_raw_leak_guard.py::test_forbidden_persistence_keys_are_blocked PASSED [ 94%]
+tests/connect_loop/test_box3_raw_leak_guard.py::test_evidence_directory_contains_no_forbidden_scalars PASSED [100%]
+
+============================== 19 passed in 0.06s ==============================
