@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
 from .asset_manifest import build_default_manifest, manifest_digest
-from ..draft_service import DEFAULT_MAX_NEW_TOKENS, draft_from_existing
+from ..draft_service import DEFAULT_MAX_NEW_TOKENS, Box3ContractError, draft_from_existing
 from .adapters.helper3_format_adapter import apply_format
 from .adapters.helper4_grounding_adapter import verify_grounding
 from .adapters.helper7_extract_adapter import extract_evidence_units
@@ -57,6 +57,13 @@ def run_box3_pipeline(
     runner: Callable[[str, dict[str, Any]], str] | None = None,
     force_draft_text: str | None = None,
 ) -> Box3PipelineResult:
+    # Codex P1 정정 (2026-06-01, PR #770): grounding 파이프라인의 runner 경로는 draft_from_existing
+    # 에 raw(merged request_text + runtime_text) 를 전달하여 digest-only/canonical 가드를 우회,
+    # 모델 runner 에 평문 기밀 텍스트를 누출했다. 본 파이프라인은 grounding 검증 전용
+    # (force_draft_text)이며 real 생성은 pipeline.py 단일 진입 게이트만 담당하므로(근본 재검토 정합),
+    # real_model_runner 주입을 fail-closed 로 차단한다 — raw 누출 원천 차단.
+    if runner is not None:
+        raise Box3ContractError("GROUNDING_REAL_RUNNER_NOT_SUPPORTED_DIGEST_ONLY")
     manifest = build_default_manifest()
     refs = [asdict(doc) for doc in payload.reference_docs]
     evidence = extract_evidence_units(refs)

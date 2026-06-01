@@ -76,23 +76,23 @@ def _request() -> Box3Request:
 # ───────────────────────────────────────────────────────────────────────────────
 # 결함 #1 (P2) — grounding/pipeline contract_only demote 시 draft_text suppress
 # ───────────────────────────────────────────────────────────────────────────────
-def test_grounding_runner_path_demoted_to_contract_only_suppresses_draft_text():
-    """runner 가 주입되어 contract_only 변수는 False 지만, default manifest 가 incomplete 라
-    final status 가 contract_only 로 demote 되는 경로. draft_text 가 누출되면 안 된다(#1 핵심)."""
+def test_grounding_real_runner_is_blocked_no_raw_leak():
+    """grounding 파이프라인은 real runner 를 받지 않는다 — 주입 시 raw(merged request_text+runtime_text)
+    가 runner 에 도달하기 전에 fail-closed. real 생성은 pipeline.py 단일 게이트만 담당(#8 차단)."""
+    calls = []
+
     def runner(prompt, config):
-        return "제목\n목적\n근거\n초안\n확인 필요\n본문 합니다"  # grounding/format/style 통과 입력
+        calls.append(prompt)
+        return "제목\n목적\n근거\n초안\n확인 필요\n본문 합니다"
 
     payload = Box3PipelineInput(
-        request_text="새 초안 작성",
-        reference_docs=[Box3ReferenceDoc(source_digest=digest_text("source"), runtime_text="근거 문서")],
+        request_text="기밀 사업 산문 request",
+        reference_docs=[Box3ReferenceDoc(source_digest=digest_text("source"), runtime_text="기밀 근거 문서 원문")],
     )
-    result = run_grounding_box3_pipeline(payload, runner=runner).to_dict()
-
-    assert result["status"] == "contract_only"
-    # Codex P2: 결과 contract_only 필드도 final status 기준이어야 함(demotion 시 True).
-    assert result["contract_only"] is True
-    assert result["draft_text"] is None, f"contract_only demote 시 draft_text 누출: {result['draft_text']!r}"
-    assert result["draft_digest"] is not None  # digest/meta 는 유지
+    with pytest.raises(Box3ContractError) as exc:
+        run_grounding_box3_pipeline(payload, runner=runner)
+    assert "GROUNDING_REAL_RUNNER_NOT_SUPPORTED" in str(exc.value)
+    assert calls == [], "raw text 가 grounding runner 에 도달하면 안 된다"
 
 
 def test_grounding_force_draft_text_path_still_suppresses():
