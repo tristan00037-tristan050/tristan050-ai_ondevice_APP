@@ -15,7 +15,9 @@ Box3Status = Literal[
 class Box3Citation(TypedDict):
     source_digest: str
     evidence_unit_digest: str
-    support_level: Literal["supported", "partial", "unsupported"]
+    # digest_linked: CONTRACT_ONLY 스코프에서 citation 은 digest 연결만 의미(실제 grounding 추출
+    # supported/unsupported 실판정은 real 단계 후속). 검증 없는 "supported" 과대주장 방지.
+    support_level: Literal["supported", "partial", "unsupported", "digest_linked"]
 
 
 class Box3Grounding(TypedDict):

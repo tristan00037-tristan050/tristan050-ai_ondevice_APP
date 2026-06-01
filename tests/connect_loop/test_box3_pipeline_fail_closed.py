@@ -131,6 +131,15 @@ def test_grounding_receipt_and_citations_exclude_non_digest_source():
         assert all(re.fullmatch(r"sha256:[0-9a-f]{64}", str(x)) for x in bucket)
 
 
+def test_pipeline_citations_are_digest_linked_not_supported():
+    """CONTRACT_ONLY 스코프: pipeline citation 은 검증 없는 'supported' 가 아닌 'digest_linked'(과대주장 0).
+    draft claim 추출·evidence 대조(실제 grounding 추출)는 real 단계 후속(신규 #2 최소 정직)."""
+    result = run_box3_pipeline(_request())
+    assert result["citations"]
+    assert all(c["support_level"] == "digest_linked" for c in result["citations"])
+    assert not any(c["support_level"] == "supported" for c in result["citations"])
+
+
 # ───────────────────────────────────────────────────────────────────────────────
 # 결함 #3 (P1) — pipeline format/style fail-closed gate
 # ───────────────────────────────────────────────────────────────────────────────

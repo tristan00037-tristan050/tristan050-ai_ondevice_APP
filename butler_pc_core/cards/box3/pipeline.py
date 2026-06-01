@@ -103,11 +103,16 @@ def run_box3_pipeline(
         if draft_was_real and draft_response.get("draft_text")
         else _contract_draft_text(len(evidence_units))
     )
+    # Codex P2 정정 (2026-06-01, PR #770): draft 검사 전 모든 evidence 를 "supported" 로 제조하면
+    # verify_grounding 이 합성 citation 만 보고 unsupported claim 을 탐지 못한 채 status="real" 을
+    # 내주는 과대주장이 된다. CONTRACT_ONLY 스코프에서 citation 은 digest 연결만 의미하므로
+    # "digest_linked" 로 표기한다. draft claim 추출·evidence 대조 supported/unsupported 실판정(real
+    # grounding 추출)은 real 단계 후속 PR 범위다(runner 차단 + digest_linked = 실제 검증 0, real 후속).
     citations: list[Box3Citation] = [
         {
             "source_digest": unit.source_digest,
             "evidence_unit_digest": unit.unit_digest,
-            "support_level": "supported",
+            "support_level": "digest_linked",
         }
         for unit in evidence_units
     ]

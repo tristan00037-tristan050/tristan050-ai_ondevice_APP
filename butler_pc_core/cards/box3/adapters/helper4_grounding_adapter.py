@@ -11,12 +11,17 @@ def verify_grounding(
 ) -> tuple[Box3Grounding, str | None]:
     evidence_digest_set = {unit.unit_digest for unit in evidence_units}
     source_digest_set = {unit.source_digest for unit in evidence_units}
+    # Codex P2 정정 (2026-06-01, PR #770): CONTRACT_ONLY 스코프에서 citation 은 digest_linked
+    # (검증 없는 digest 연결)이며, 여기서 산출되는 reference/source coverage 는 'digest-link coverage'
+    # 를 의미한다(claim-level supported/unsupported 실판정 = real 단계 후속). digest_linked 를
+    # supported 와 동일하게 digest-link coverage 에 포함한다 — citation label 과대주장은 제거하되
+    # coverage 계산은 보존.
     supported = [
         citation
         for citation in citations
         if citation["evidence_unit_digest"] in evidence_digest_set
         and citation["source_digest"] in source_digest_set
-        and citation["support_level"] == "supported"
+        and citation["support_level"] in ("supported", "digest_linked")
     ]
     total_units = max(len(evidence_units), 1)
     reference_coverage = len({item["evidence_unit_digest"] for item in supported}) / total_units
