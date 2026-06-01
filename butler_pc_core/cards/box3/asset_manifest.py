@@ -163,6 +163,10 @@ def manifest_allows_real(manifest: dict[str, Any]) -> bool:
             return False
         if record.interface_inventory_status != "pass":
             return False
+        # Codex P1 정정 (2026-06-01, PR #770): top-level real_claim_allowed=true 여도 개별 row 가
+        # real_claim_allowed=false 거나 blocking fail_class 를 가지면 real 불가(row 수준 fail-closed).
+        if not record.real_claim_allowed or record.fail_class is not None:
+            return False
         names.append(record.asset_name)
     if len(names) != len(set(names)) or set(names) != set(REQUIRED_ASSET_NAMES):
         return False

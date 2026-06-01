@@ -238,6 +238,24 @@ def test_real_runner_requires_canonical_prompt_template():
     assert calls == [], "비정본 template 이 real_model_runner 에 도달하면 안 된다"
 
 
+def test_digest_only_input_rejects_duplicate_fields():
+    """digest-only 입력의 중복 필드명은 거부 — 앞선 raw 라인이 runner 로 전송되는 우회 차단(신규)."""
+    from butler_pc_core.cards.box3.draft_service import validate_digest_only_contract_input
+
+    dup_input = "\n".join(
+        [
+            "BOX3_DIGEST_ONLY_INPUT",
+            "request_digest=평문 기밀 prose 가 담긴 라인",  # 중복 1 (raw)
+            "request_digest=sha256:" + "a" * 64,            # 중복 2 (valid)
+            "reference_doc_digests=sha256:" + "b" * 64,
+            "format_hint_digest=sha256:" + "c" * 64,
+        ]
+    )
+    with pytest.raises(Box3ContractError) as exc:
+        validate_digest_only_contract_input(dup_input)
+    assert "DIGEST_ONLY_INPUT_DUPLICATE_FIELD" in str(exc.value)
+
+
 # ───────────────────────────────────────────────────────────────────────────────
 # Codex 재리뷰 신규 (head 9e35e290) — empty real draft + manifest PASS gate
 # ───────────────────────────────────────────────────────────────────────────────
@@ -335,6 +353,17 @@ def test_manifest_allows_real_requires_interface_pass():
     m = _passing_real_manifest()
     m["assets"][1]["interface_inventory_status"] = "full_sha_and_interface_inventory_required"
     assert manifest_allows_real(m) is False
+
+
+def test_manifest_allows_real_requires_each_row_real_claim_and_no_fail_class():
+    """row 수준 fail-closed: top-level real_claim_allowed=true 여도 개별 row 가 real_claim_allowed=false
+    거나 blocking fail_class 면 real 불가(신규)."""
+    m = _passing_real_manifest()
+    m["assets"][2]["real_claim_allowed"] = False
+    assert manifest_allows_real(m) is False
+    m2 = _passing_real_manifest()
+    m2["assets"][1]["fail_class"] = "BLOCK_FULL_SHA_NOT_MEASURED"
+    assert manifest_allows_real(m2) is False
 
 
 def test_grounding_asset_status_gates_on_interface_inventory():

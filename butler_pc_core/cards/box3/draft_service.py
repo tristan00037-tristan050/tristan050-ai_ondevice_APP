@@ -175,6 +175,11 @@ def validate_digest_only_contract_input(input_text: str) -> dict[str, object]:
         if "=" not in line:
             raise Box3ContractError("DIGEST_ONLY_INPUT_FIELD_INVALID")
         key, value = line.split("=", 1)
+        # Codex P1 정정 (2026-06-01, PR #770): 중복 필드명을 silently overwrite 하면 앞선 raw 라인
+        # (예: request_digest=<평문 prose>)이 input_text 에 남아 runner prompt 로 전송되는데,
+        # set(fields) 검사는 마지막 값만 보아 통과하던 우회. 중복 필드는 거부(fail-closed).
+        if key in fields:
+            raise Box3ContractError("DIGEST_ONLY_INPUT_DUPLICATE_FIELD")
         fields[key] = value
     required = {"request_digest", "reference_doc_digests", "format_hint_digest"}
     if set(fields) != required:
