@@ -13,6 +13,8 @@
 """
 from __future__ import annotations
 
+import re
+
 import pytest
 
 # ── #1: grounding/pipeline (force/runner 입력 + Box3PipelineInput 계약) ──────────
@@ -105,23 +107,28 @@ def test_grounding_force_draft_text_path_still_suppresses():
     assert result["draft_text"] is None
 
 
-def test_grounding_receipt_excludes_non_digest_source():
-    """receipt_hook.source_digests 는 sha256 검증된 값만 포함 — caller 의 raw(email 등) echo 0(신규 #1)."""
+def test_grounding_receipt_and_citations_exclude_non_digest_source():
+    """receipt_hook.source_digests 와 citations 모두 sha256:<64hex> 검증된 값만 포함 —
+    caller 의 raw(email) 및 malformed(sha256:alice@example.com) echo 0(신규 #1)."""
     good = digest_text("source")
     payload = Box3PipelineInput(
         request_text="새 초안 작성",
         reference_docs=[
             Box3ReferenceDoc(source_digest=good, runtime_text="근거 문서"),
-            Box3ReferenceDoc(source_digest="alice@example.com", runtime_text="raw"),  # 비-digest
+            Box3ReferenceDoc(source_digest="alice@example.com", runtime_text="raw"),  # prefix 없음
+            Box3ReferenceDoc(source_digest="sha256:alice@example.com", runtime_text="raw"),  # malformed
         ],
     )
     result = run_grounding_box3_pipeline(
         payload, force_draft_text="제목\n목적\n근거\n초안\n확인 필요"
     ).to_dict()
     source_digests = result["receipt_hook"]["source_digests"]
-    assert good in source_digests
-    assert "alice@example.com" not in source_digests
-    assert all(str(x).startswith("sha256:") for x in source_digests)
+    citation_sources = [c["source_digest"] for c in result["citations"]]
+    for bucket in (source_digests, citation_sources):
+        assert good in bucket
+        assert "alice@example.com" not in bucket
+        assert "sha256:alice@example.com" not in bucket
+        assert all(re.fullmatch(r"sha256:[0-9a-f]{64}", str(x)) for x in bucket)
 
 
 # ───────────────────────────────────────────────────────────────────────────────

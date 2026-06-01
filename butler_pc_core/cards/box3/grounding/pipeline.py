@@ -148,6 +148,9 @@ def _merge_runtime_only_text(payload: Box3PipelineInput) -> str:
     return "\n\n".join(part for part in parts if part)
 
 def _build_citations(evidence_units: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    # Codex P1 정정 (2026-06-01, PR #770): startswith("sha256:") 만 보면 sha256:alice@example.com
+    # 같은 malformed digest 가 citations 에 유입되어 plaintext_persisted=False 와 모순되게 raw/PII 를
+    # persist 한다. is_sha256_digest(sha256:<64hex>) 로 완전 검증된 값만 포함(fail-closed).
     return [
         {
             "source_digest": unit["source_digest"],
@@ -155,7 +158,7 @@ def _build_citations(evidence_units: list[dict[str, Any]]) -> list[dict[str, Any
             "support_level": "digest_linked",
         }
         for unit in evidence_units
-        if str(unit.get("source_digest", "")).startswith("sha256:")
+        if is_sha256_digest(unit.get("source_digest"))
     ]
 
 def _source_digest_coverage(citations: list[dict[str, Any]]) -> float:
