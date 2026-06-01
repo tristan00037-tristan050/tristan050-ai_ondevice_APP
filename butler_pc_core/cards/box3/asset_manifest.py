@@ -46,6 +46,8 @@ def validate_asset_record(record: Box3AssetRecord) -> list[str]:
     if record.sha_scope not in {"file", "directory_manifest", "unknown"}:
         errors.append("SHA_SCOPE_INVALID")
     if record.real_claim_allowed:
+        if record.sha_scope not in {"file", "directory_manifest"}:
+            errors.append("SHA_SCOPE_REQUIRED_FOR_REAL")
         if not is_full_sha256(record.sha256_full):
             errors.append("FULL_SHA_REQUIRED_FOR_REAL")
         if record.interface_inventory_status != "pass":
@@ -171,4 +173,3 @@ def manifest_allows_real(manifest: dict[str, Any]) -> bool:
     if len(names) != len(set(names)) or set(names) != set(REQUIRED_ASSET_NAMES):
         return False
     return True
-

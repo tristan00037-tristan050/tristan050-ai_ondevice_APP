@@ -372,6 +372,13 @@ def test_manifest_allows_real_requires_interface_pass():
     assert manifest_allows_real(m) is False
 
 
+def test_manifest_allows_real_rejects_unknown_sha_scope():
+    """real row 는 full SHA뿐 아니라 SHA scope(file/directory_manifest)도 확정되어야 한다."""
+    m = _passing_real_manifest()
+    m["assets"][0]["sha_scope"] = "unknown"
+    assert manifest_allows_real(m) is False
+
+
 def test_manifest_allows_real_requires_each_row_real_claim_and_no_fail_class():
     """row 수준 fail-closed: top-level real_claim_allowed=true 여도 개별 row 가 real_claim_allowed=false
     거나 blocking fail_class 면 real 불가(신규)."""
