@@ -58,7 +58,10 @@ def test_real_runner_requires_composed_digest_only_input():
     assert "DIGEST_ONLY_INPUT_REQUIRED_FOR_REAL_RUNNER" in str(exc.value)
 
 
-def test_real_runner_accepts_only_composed_digest_shape():
+def test_real_runner_blocked_until_claim_grounding():
+    # Codex P1 (PR #770): claim-level grounding 미구현(CLAIM_LEVEL_GROUNDING_IMPLEMENTED=False) 시
+    # 공개 헬퍼 draft_from_current_contract 직접 호출도 runner 미실행 + contract_only 로 반환 —
+    # status="real" 우회 차단(본 PR 은 어떤 경로로도 real 을 내지 않는 진짜 CONTRACT_ONLY).
     payload = compose_box3_current_contract_input(
         reference_doc_digests=["sha256:" + "a" * 64],
         request_digest="sha256:" + "b" * 64,
@@ -67,12 +70,14 @@ def test_real_runner_accepts_only_composed_digest_shape():
     parsed = validate_digest_only_contract_input(payload["input_text"])
     assert parsed["request_digest"] == "sha256:" + "b" * 64
 
+    calls = []
+
     def runner(prompt, max_new_tokens):
-        assert "BOX3_DIGEST_ONLY_INPUT" in prompt
-        assert "ordinary business prose" not in prompt
+        calls.append(prompt)
         return "제목\n배경\n핵심 내용\n근거\n확인 필요\n최종 문안\n합니다"
 
     result = draft_from_current_contract(**payload, real_model_runner=runner)
-    assert result["status"] == "real"
-    assert result["contract_only"] is False
-    assert result["real_claim_allowed"] is True
+    assert calls == [], "claim-level grounding 미구현 시 real_model_runner 가 호출되면 안 된다"
+    assert result["status"] == "contract_only"
+    assert result["contract_only"] is True
+    assert result["real_claim_allowed"] is False

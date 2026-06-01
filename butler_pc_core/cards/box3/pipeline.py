@@ -5,7 +5,11 @@ from .adapters.helper4_grounding_adapter import verify_grounding
 from .adapters.helper7_extract_adapter import extract_evidence_units
 from .adapters.helper8_style_adapter import apply_style_contract
 from .asset_manifest import build_contract_only_asset_manifest, manifest_allows_real
-from .draft_service import compose_box3_current_contract_input, draft_from_current_contract
+from .draft_service import (
+    CLAIM_LEVEL_GROUNDING_IMPLEMENTED,
+    compose_box3_current_contract_input,
+    draft_from_current_contract,
+)
 from .security import assert_no_raw_persistence, assert_runtime_text_safe, sha256_digest
 from .types import Box3Citation, Box3Format, Box3PipelineResult, Box3Request, Box3Style
 
@@ -37,15 +41,9 @@ def _format_style_fail_class(format_result: Box3Format, style_result: Box3Style)
     return None
 
 
-# Codex P1 정정 (2026-06-01, PR #770): pipeline 의 verify_grounding 은 reference digest 로 만든
-# synthetic citation(digest-link)만 검사하고 생성된 draft 의 claim 을 evidence 와 대조하지 않는다.
-# 그 상태에서 real status 를 부여하면 unsupported claim 이 든 draft 도 real 로 통과한다. 따라서
-# claim-level grounding(draft claim 추출·evidence 대조 실판정)이 구현되기 전까지 real path 를
-# fail-closed 로 막는다(remain fail-closed). 실제 추출은 real 단계 후속 PR 범위 → 본 PR 은 진짜
-# CONTRACT_ONLY 다. 후속 PR 이 claim-level grounding 을 붙이면 이 상수를 True 로 승격한다.
-CLAIM_LEVEL_GROUNDING_IMPLEMENTED = False
-
-
+# real 진입은 claim-level grounding 이 구현(CLAIM_LEVEL_GROUNDING_IMPLEMENTED=True)된 뒤에만 가능
+# 하다(draft_service 정의). pipeline 의 verify_grounding 은 synthetic citation(digest-link)만
+# 검사하고 draft claim 을 evidence 와 대조하지 않으므로, 그 전까지 real path 를 fail-closed 로 막는다.
 def box3_real_claim_allowed(
     *,
     real_allowed: bool,

@@ -142,6 +142,13 @@ CANONICAL_PROMPT_TEMPLATE = (
     "Return a draft with citations by source_digest. Input: {input}"
 )
 
+# Codex P1 정정 (2026-06-01, PR #770): Box3 의 grounding 은 아직 draft 의 claim 을 evidence 와
+# 대조하는 claim-level 검증을 구현하지 않았다. 그 전까지는 real_model_runner 를 실제 실행하거나
+# status="real" 을 부여하지 않는다(fail-closed). pipeline.run_box3_pipeline 의 게이트와 동일하게,
+# 공개 헬퍼 draft_from_current_contract 의 직접 호출 경로도 이 상수로 게이트한다(우회 차단).
+# 본 PR 은 진짜 CONTRACT_ONLY 이며, claim-level grounding 구현 시 후속 PR 이 True 로 승격한다.
+CLAIM_LEVEL_GROUNDING_IMPLEMENTED = False
+
 
 class Box3ContractError(ValueError):
     """Raised for current endpoint contract violations."""
@@ -253,12 +260,31 @@ def draft_from_current_contract(
             "raw_doc_logged": False,
             "fail_class": "ASSET_INTERFACE_PENDING",
         }
+    # runner 가 주입된 경우: 실제 실행 전에 입력 계약을 먼저 강제한다.
+    # (1) digest-only 검사 — input_text 가 BOX3_DIGEST_ONLY_INPUT + sha256 shape 인지(raw 차단).
     validate_digest_only_contract_input(input_text)
-    # Codex P1 정정 (2026-06-01, PR #770): digest-only 검사는 input_text 만 보장하므로, prompt_template
-    # 에 평문 confidential prose 가 담기면 그대로 runner 에 도달하던 결함. real 실행 전 prompt_template
-    # 이 정본(CANONICAL_PROMPT_TEMPLATE)인지 강제하여 전체 prompt 의 no-raw-text 를 보장한다.
+    # (2) Codex P1 정정: digest-only 검사는 input_text 만 보장하므로, prompt_template 에 평문 prose 가
+    #     담기면 runner 에 도달하던 결함. real 실행 전 prompt_template 이 정본인지 강제.
     if prompt_template != CANONICAL_PROMPT_TEMPLATE:
         raise Box3ContractError("NON_CANONICAL_PROMPT_TEMPLATE_FOR_REAL_RUNNER")
+    # (3) Codex P1 정정 (2026-06-01, PR #770): 입력 계약을 통과했더라도 claim-level grounding 이
+    #     미구현이면 runner 를 실행하지 않고 contract_only 로 반환한다(공개 헬퍼 직접 호출의 real 우회
+    #     차단). pipeline 게이트와 동일 불변식 — 본 PR 은 어떤 경로로도 status="real"/모델 실행을 내지 않는다.
+    if not CLAIM_LEVEL_GROUNDING_IMPLEMENTED:
+        draft_text = "[CONTRACT_ONLY_BOX3_DRAFT_NOT_EXECUTED]"
+        return {
+            "status": "contract_only",
+            "draft_text": draft_text,
+            "draft_digest": sha256_digest(draft_text),
+            "request_digest": request_digest,
+            "mock_result": False,
+            "contract_only": True,
+            "real_claim_allowed": False,
+            "external_send_zero": True,
+            "raw_saved_zero": True,
+            "raw_doc_logged": False,
+            "fail_class": "CLAIM_LEVEL_GROUNDING_PENDING",
+        }
     draft_text = real_model_runner(
         prompt_template.replace("{input}", input_text),
         max_new_tokens=max_new_tokens,
