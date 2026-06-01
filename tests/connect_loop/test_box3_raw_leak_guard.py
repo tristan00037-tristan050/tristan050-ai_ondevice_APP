@@ -1,3 +1,4 @@
+import importlib.util
 import json
 from pathlib import Path
 
@@ -46,3 +47,25 @@ def test_evidence_directory_contains_no_forbidden_scalars():
                 if not line.strip():
                     continue
                 assert_no_raw_persistence(json.loads(line))
+        if path.is_file() and path.suffix in {".md", ".txt"}:
+            findings = scan_forbidden_text(path.read_text(encoding="utf-8"))
+            assert findings == [], f"{path} contains forbidden evidence text: {findings}"
+
+
+def test_self_check_sanitizes_local_interpreter_paths():
+    script_path = Path(__file__).resolve().parents[2] / "scripts" / "run_box3_self_check.py"
+    spec = importlib.util.spec_from_file_location("run_box3_self_check", script_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    output = (
+        "platform darwin -- Python 3.9.6 -- "
+        "/Library/Developer/CommandLineTools/usr/bin/python3\n"
+        "rootdir: /Users/person/Desktop/butler\n"
+    )
+    sanitized = module.sanitize_test_log(output)
+
+    assert "/Library/" not in sanitized
+    assert "/Users/" not in sanitized
+    assert "[LOCAL_PATH_REDACTED]" in sanitized

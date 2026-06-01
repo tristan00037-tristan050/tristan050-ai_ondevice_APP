@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +21,12 @@ EVIDENCE = ROOT / "evidence" / "box3"
 # Codex P2 정정 (2026-06-01, PR #770): evidence 결정성(self-check 재실행 dirty tree 0)을 위해
 # measured_at 을 고정한다. SHA 측정값이 정본이며 측정 시각은 재현용 메타.
 EVIDENCE_MEASURED_AT = "2026-06-01T00:00:00+00:00"
+LOCAL_EVIDENCE_PATH_RE = re.compile(
+    r"(?<![\w:/])(?:"
+    r"/(?:Users|home|Library|System|Applications|opt|private|var|tmp|Volumes)(?:/[^\s,;)]*)?"
+    r"|[A-Za-z]:[\\/][^\s,;)]*"
+    r")"
+)
 
 
 def write_json(path: Path, payload: object) -> None:
@@ -49,6 +56,7 @@ def sanitize_test_log(value: str) -> str:
     }
     for needle, replacement in replacements.items():
         value = value.replace(needle, replacement)
+    value = LOCAL_EVIDENCE_PATH_RE.sub("[LOCAL_PATH_REDACTED]", value)
     return value
 
 
