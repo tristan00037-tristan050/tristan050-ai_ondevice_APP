@@ -3,17 +3,17 @@
     {
       "evidence_unit_digest": "sha256:3a47490b8b1641896c6dcb4bf4e014e8431b183979e53ebf881d8bd6177b1c08",
       "source_digest": "sha256:dad2a38fee9e189f7be1c3a9a2cc1bf51ae9f9e205a11c7969dd7c76d9a484bd",
-      "support_level": "supported"
+      "support_level": "digest_linked"
     },
     {
       "evidence_unit_digest": "sha256:5f4a44f2b6536a898b7ada47591332d7e30ea96413c1498fcf186233be5f8e9e",
       "source_digest": "sha256:b76e6def08610c7d6d7b39faf3093eaa95d948f1c4e8f37a087943256325eb50",
-      "support_level": "supported"
+      "support_level": "digest_linked"
     },
     {
       "evidence_unit_digest": "sha256:3be257b91b38873b62447e270c5cc35d45cbfcd327b9fbbcc45209dc3a8b5dde",
       "source_digest": "sha256:982d44439b6acd3f88061af538f7164989037055e442330330bbba07c17ec2bd",
-      "support_level": "supported"
+      "support_level": "digest_linked"
     }
   ],
   "contract_only": true,

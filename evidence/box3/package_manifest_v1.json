@@ -1,6 +1,6 @@
 {
   "directive_version": "Butler Box3 v1.2 합본",
-  "evidence_digest": "sha256:472e2b6f419a449a1fa5bd051e0e71ac946c5b268a86dc893ec8b06786f8b390",
+  "evidence_digest": "sha256:64248a1d5d483b610304d43d2e76e3c42bb3f2ad8c43123ef2dcaf74d865c10d",
   "full_sha_assets_pending": [
     "helper4_grounding",
     "helper7_table_figure",

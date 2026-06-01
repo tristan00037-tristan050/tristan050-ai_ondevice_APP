@@ -5,6 +5,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from butler_pc_core.cards.box3.asset_manifest import build_contract_only_asset_manifest
 from butler_pc_core.cards.box3.eval.evaluate_box3_verdict_only import evaluate_cases, load_eval_cases
 from butler_pc_core.cards.box3.pipeline import run_box3_pipeline
@@ -12,7 +16,6 @@ from butler_pc_core.cards.box3.security import assert_no_raw_persistence, stable
 from butler_pc_core.cards.box3.types import Box3Request
 
 
-ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "evidence" / "box3"
 # Codex P2 정정 (2026-06-01, PR #770): evidence 결정성(self-check 재실행 dirty tree 0)을 위해
 # measured_at 을 고정한다. SHA 측정값이 정본이며 측정 시각은 재현용 메타.
@@ -77,16 +80,33 @@ def main() -> int:
     write_json(EVIDENCE / "eval_metrics_v1.json", eval_result["summary"])
     write_jsonl(EVIDENCE / "eval_verdict_only_v1.jsonl", eval_result["verdicts"])
 
+    box3_test_files = [
+        str(path.relative_to(ROOT))
+        for path in sorted((ROOT / "tests" / "connect_loop").glob("test_box3*.py"))
+    ]
+    pytest_command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        *box3_test_files,
+        "tests/cards/box3",
+        "-v",
+        "--disable-warnings",
+    ]
     pytest_result = subprocess.run(
-        [sys.executable, "-m", "pytest", "tests/connect_loop", "-v"],
+        pytest_command,
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=False,
     )
+    pytest_command_label = (
+        "python3 -m pytest tests/connect_loop/test_box3*.py "
+        "tests/cards/box3 -v --disable-warnings"
+    )
     (EVIDENCE / "pytest_box3_pipeline.txt").write_text(
-        sanitize_test_log(pytest_result.stdout),
+        f"# command: {pytest_command_label}\n" + sanitize_test_log(pytest_result.stdout),
         encoding="utf-8",
     )
 
