@@ -94,7 +94,11 @@ def test_incomplete_manifest_suppresses_forced_real_runner_output():
     assert result["real_claim_allowed"] is False
 
 
-def test_passing_manifest_with_runner_is_the_only_real_claim_path():
+def test_passing_manifest_with_runner_stays_contract_only_until_claim_grounding():
+    # Codex P1 (PR #770): pipeline 의 grounding 은 synthetic citation(digest-link)만 검사하고
+    # draft claim 을 evidence 와 대조하지 않으므로, claim-level grounding 이 구현되기 전까지 real
+    # status 를 fail-closed 로 막는다(CLAIM_LEVEL_GROUNDING_IMPLEMENTED=False). 본 PR 은 진짜
+    # CONTRACT_ONLY 이며 real 승격은 후속 PR.
     def runner(prompt, max_new_tokens):
         assert "BOX3_DIGEST_ONLY_INPUT" in prompt
         return "제목\n배경\n핵심 내용\n근거\n확인 필요\n최종 문안\n합니다"
@@ -104,7 +108,7 @@ def test_passing_manifest_with_runner_is_the_only_real_claim_path():
         asset_manifest=_passing_real_manifest(),
         real_model_runner=runner,
     )
-    assert result["status"] == "real"
-    assert result["contract_only"] is False
-    assert result["real_claim_allowed"] is True
-    assert result["draft_text"] is not None
+    assert result["status"] == "contract_only"
+    assert result["contract_only"] is True
+    assert result["real_claim_allowed"] is False
+    assert result["draft_text"] is None

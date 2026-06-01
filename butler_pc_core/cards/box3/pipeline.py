@@ -37,6 +37,15 @@ def _format_style_fail_class(format_result: Box3Format, style_result: Box3Style)
     return None
 
 
+# Codex P1 정정 (2026-06-01, PR #770): pipeline 의 verify_grounding 은 reference digest 로 만든
+# synthetic citation(digest-link)만 검사하고 생성된 draft 의 claim 을 evidence 와 대조하지 않는다.
+# 그 상태에서 real status 를 부여하면 unsupported claim 이 든 draft 도 real 로 통과한다. 따라서
+# claim-level grounding(draft claim 추출·evidence 대조 실판정)이 구현되기 전까지 real path 를
+# fail-closed 로 막는다(remain fail-closed). 실제 추출은 real 단계 후속 PR 범위 → 본 PR 은 진짜
+# CONTRACT_ONLY 다. 후속 PR 이 claim-level grounding 을 붙이면 이 상수를 True 로 승격한다.
+CLAIM_LEVEL_GROUNDING_IMPLEMENTED = False
+
+
 def box3_real_claim_allowed(
     *,
     real_allowed: bool,
@@ -45,6 +54,7 @@ def box3_real_claim_allowed(
     grounding_fail,
     format_result: Box3Format,
     style_result: Box3Style,
+    claim_level_grounding_verified: bool = CLAIM_LEVEL_GROUNDING_IMPLEMENTED,
 ) -> bool:
     """box3 real 진입 단일 게이트 (Codex 근본 재검토, 2026-06-01, PR #770).
 
@@ -62,7 +72,8 @@ def box3_real_claim_allowed(
     흡수되므로, CONTRACT_ONLY(asset PENDING)에서는 real 내부 엣지에 도달하지 않는다.
     """
     return bool(
-        real_allowed
+        claim_level_grounding_verified  # claim-level grounding 미구현 시 real 차단(fail-closed)
+        and real_allowed
         and draft_was_real
         and grounding_fail is None
         and str(real_draft_text or "").strip()

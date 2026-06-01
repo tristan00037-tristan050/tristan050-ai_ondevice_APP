@@ -169,17 +169,17 @@ def test_pipeline_forbidden_style_blocks_real_status():
     assert result["style"]["forbidden_style_zero"] is False
 
 
-def test_pipeline_clean_draft_with_passing_manifest_is_real():
-    """format/style/grounding 모두 통과 + passing manifest + runner → 유일한 real 경로(무회귀)."""
+def test_pipeline_clean_draft_stays_contract_only_until_claim_grounding():
+    """format/style/digest-link grounding 모두 통과 + passing manifest + runner 라도, claim-level
+    grounding 미구현(CLAIM_LEVEL_GROUNDING_IMPLEMENTED=False) 이므로 real 차단 → contract_only(신규 B)."""
     def runner(prompt, max_new_tokens):
         assert "BOX3_DIGEST_ONLY_INPUT" in prompt
         return _CLEAN_REAL_DRAFT
 
     result = run_box3_pipeline(_request(), asset_manifest=_passing_real_manifest(), real_model_runner=runner)
-    assert result["status"] == "real"
-    assert result["fail_class"] is None
-    assert result["real_claim_allowed"] is True
-    assert result["draft_text"] is not None
+    assert result["status"] == "contract_only"
+    assert result["real_claim_allowed"] is False
+    assert result["draft_text"] is None
 
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -307,9 +307,10 @@ def _gate(**over):
         real_allowed=True,            # asset PASS + manifest 유효 + interface PASS 응축
         draft_was_real=True,          # runner 실행
         real_draft_text=_CLEAN_REAL_DRAFT,  # non-empty
-        grounding_fail=None,          # grounding pass
+        grounding_fail=None,          # grounding pass(digest-link)
         format_result=_PASS_FORMAT,   # format pass
         style_result=_PASS_STYLE,     # style pass
+        claim_level_grounding_verified=True,  # claim-level grounding 축(아래 별도 테스트로 검증)
     )
     base.update(over)
     return box3_real_claim_allowed(**base)
@@ -317,6 +318,21 @@ def _gate(**over):
 
 def test_real_gate_baseline_all_axes_pass_is_real():
     assert _gate() is True
+
+
+def test_real_gate_blocks_real_until_claim_level_grounding():
+    """claim-level grounding 미구현(기본값) 시 다른 축이 모두 통과해도 real 불가(신규 B fail-closed)."""
+    # 기본 인자(claim_level_grounding_verified 미지정) → 모듈 상수 False → real 차단
+    assert box3_real_claim_allowed(
+        real_allowed=True,
+        draft_was_real=True,
+        real_draft_text=_CLEAN_REAL_DRAFT,
+        grounding_fail=None,
+        format_result=_PASS_FORMAT,
+        style_result=_PASS_STYLE,
+    ) is False
+    # 명시적으로 claim-level 미검증을 주어도 False
+    assert _gate(claim_level_grounding_verified=False) is False
 
 
 def test_real_gate_each_single_axis_failure_blocks_real():
