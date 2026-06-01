@@ -18,7 +18,7 @@
   ],
   "contract_only": true,
   "draft_digest": "sha256:569889a04633b4ee93089a63299fc9dfb1cfd942c02cad185cfb07e0ae023cf9",
-  "draft_text": "제목: [확인 필요: 제목]\n배경: 참고 문서의 digest-linked evidence만 사용합니다.\n핵심 내용: 3개 evidence unit 기준으로 초안 후보를 구성합니다.\n근거: 각 핵심 문장은 source_digest citation을 요구합니다.\n확인 필요: 날짜, 금액, 담당자, 계약 조건은 확정하지 않습니다.\n최종 문안: [CONTRACT_ONLY_BOX3_DRAFT_NOT_EXECUTED]",
+  "draft_text": null,
   "external_send_zero": true,
   "fail_class": "ASSET_INTERFACE_PENDING",
   "format": {

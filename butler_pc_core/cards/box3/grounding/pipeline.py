@@ -63,8 +63,12 @@ def run_box3_pipeline(
 
     merged_runtime = _merge_runtime_only_text(payload)
     if force_draft_text is not None:
+        # Codex v1.2.1 정정: force_draft_text는 grounding 검증용 입력으로만 사용.
+        # runner가 실제 호출되지 않았으므로 asset manifest가 PASS여도 real claim 0
+        # (claim boundary). demotion 시 draft_text=None은 아래 line의
+        # `draft_text if not contract_only else None`이 처리.
         draft_text = force_draft_text
-        contract_only = False
+        contract_only = True
     else:
         draft = draft_from_existing(
             merged_runtime,
@@ -144,8 +148,9 @@ def _determine_status(
     style: dict[str, Any],
     contract_only: bool,
 ) -> tuple[str, str | None]:
-    if contract_only:
-        return "contract_only", asset_status
+    # Codex v1.2.1: grounding/format/style fail-closed가 claim boundary(contract_only)
+    # 보다 우선. fail-closed는 안전성 결정으로 contract_only 여부와 무관하게 적용되어야
+    # status="needs_review"/"blocked"가 표면화되도록 한다. real claim 결정은 마지막 단계.
     if grounding["status"] == "blocked":
         return "blocked", grounding.get("fail_class") or "GROUNDING_BLOCKED"
     if grounding["status"] == "needs_review":
@@ -154,6 +159,11 @@ def _determine_status(
         return "needs_review", "FORMAT_NEEDS_REVIEW"
     if style["status"] == "needs_review":
         return "needs_review", "STYLE_NEEDS_REVIEW"
+    # 여기까지 도달했다면 grounding/format/style은 모두 통과. real 자격은 contract_only가
+    # false이고 asset_status가 PASS여야 성립(force_draft_text 경로는 contract_only=True로
+    # 강제되어 real claim 0).
+    if contract_only:
+        return "contract_only", asset_status
     if asset_status != "ASSET_INVENTORY_PASS":
         return "contract_only", asset_status
     return "real", None

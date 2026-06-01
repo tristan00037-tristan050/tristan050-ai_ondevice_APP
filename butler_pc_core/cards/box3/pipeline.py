@@ -28,6 +28,7 @@ def run_box3_pipeline(
     *,
     asset_manifest: dict | None = None,
     injected_unsupported_claim_count: int = 0,
+    real_model_runner=None,
 ) -> Box3PipelineResult:
     for raw_doc in request.reference_docs:
         assert_runtime_text_safe(raw_doc)
@@ -42,8 +43,18 @@ def run_box3_pipeline(
         format_hint=request.format_hint,
         max_new_tokens=request.max_new_tokens,
     )
-    draft_response = draft_from_current_contract(**contract_input)
-    draft_text = _contract_draft_text(len(evidence_units))
+    runner = real_model_runner if real_allowed else None
+    draft_response = draft_from_current_contract(**contract_input, real_model_runner=runner)
+    draft_was_real = (
+        draft_response.get("status") == "real"
+        and draft_response.get("contract_only") is False
+        and draft_response.get("real_claim_allowed") is True
+    )
+    draft_basis_text = (
+        str(draft_response["draft_text"])
+        if draft_was_real and draft_response.get("draft_text")
+        else _contract_draft_text(len(evidence_units))
+    )
     citations: list[Box3Citation] = [
         {
             "source_digest": unit.source_digest,
@@ -57,16 +68,18 @@ def run_box3_pipeline(
         evidence_units=evidence_units,
         injected_unsupported_claim_count=injected_unsupported_claim_count,
     )
-    format_result = apply_format_contract(draft_text)
-    style_result = apply_style_contract(draft_text)
+    format_result = apply_format_contract(draft_basis_text)
+    style_result = apply_style_contract(draft_basis_text)
     fail_class = grounding_fail or draft_response.get("fail_class")
-    status = "real" if real_allowed and fail_class is None else "contract_only"
+    status = "real" if real_allowed and draft_was_real and fail_class is None else "contract_only"
     if grounding_fail:
         status = "needs_review" if grounding_fail != "GROUNDING_REFERENCE_COVERAGE_LOW" else "blocked"
+    real_claim_allowed = status == "real" and real_allowed and draft_was_real and fail_class is None
+    contract_only = not real_claim_allowed
     result: Box3PipelineResult = {
         "status": status,
-        "draft_text": draft_text if status != "blocked" else None,
-        "draft_digest": sha256_digest(draft_text),
+        "draft_text": draft_basis_text if real_claim_allowed else None,
+        "draft_digest": sha256_digest(draft_basis_text),
         "citations": citations,
         "grounding": grounding,
         "format": format_result,
@@ -75,9 +88,8 @@ def run_box3_pipeline(
         "raw_saved_zero": True,
         "raw_doc_logged": False,
         "fail_class": fail_class,
-        "contract_only": not real_allowed,
-        "real_claim_allowed": real_allowed,
+        "contract_only": contract_only,
+        "real_claim_allowed": real_claim_allowed,
     }
     assert_no_raw_persistence(result)
     return result
-

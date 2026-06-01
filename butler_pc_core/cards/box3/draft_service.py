@@ -20,7 +20,7 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
-from .security import assert_runtime_text_safe, sha256_digest, stable_json_digest
+from .security import assert_runtime_text_safe, is_sha256_digest, sha256_digest, stable_json_digest
 
 
 # ── v1.0 endpoint contract (무회귀 의무) ──────────────────────────────────
@@ -153,6 +153,37 @@ def validate_current_contract_input(
     assert_runtime_text_safe(prompt_template.replace("{input}", ""))
 
 
+def validate_digest_only_contract_input(input_text: str) -> dict[str, object]:
+    """Codex v1.2.1 P0: real runner 호출 전 BOX3_DIGEST_ONLY_INPUT + sha256:<hex>
+    형식 강제. 자유 텍스트(평문 문서/사용자 입력)가 runner에 도달하지 못하게 한다.
+    호출자: compose_box3_current_contract_input(self-validation) + draft_from_current_contract
+    real_runner 경로(강제 차단)."""
+    lines = [line.strip() for line in input_text.splitlines() if line.strip()]
+    if not lines or lines[0] != "BOX3_DIGEST_ONLY_INPUT":
+        raise Box3ContractError("DIGEST_ONLY_INPUT_REQUIRED_FOR_REAL_RUNNER")
+    fields: dict[str, str] = {}
+    for line in lines[1:]:
+        if "=" not in line:
+            raise Box3ContractError("DIGEST_ONLY_INPUT_FIELD_INVALID")
+        key, value = line.split("=", 1)
+        fields[key] = value
+    required = {"request_digest", "reference_doc_digests", "format_hint_digest"}
+    if set(fields) != required:
+        raise Box3ContractError("DIGEST_ONLY_INPUT_FIELDS_MISMATCH")
+    if not is_sha256_digest(fields["request_digest"]):
+        raise Box3ContractError("REQUEST_DIGEST_INVALID")
+    if not is_sha256_digest(fields["format_hint_digest"]):
+        raise Box3ContractError("FORMAT_HINT_DIGEST_INVALID")
+    reference_doc_digests = [value for value in fields["reference_doc_digests"].split(",") if value]
+    if not reference_doc_digests or not all(is_sha256_digest(value) for value in reference_doc_digests):
+        raise Box3ContractError("REFERENCE_DOC_DIGESTS_INVALID")
+    return {
+        "request_digest": fields["request_digest"],
+        "reference_doc_digests": reference_doc_digests,
+        "format_hint_digest": fields["format_hint_digest"],
+    }
+
+
 def compose_box3_current_contract_input(
     *,
     reference_doc_digests: list[str],
@@ -174,6 +205,7 @@ def compose_box3_current_contract_input(
         "Return a draft with citations by source_digest. Input: {input}"
     )
     validate_current_contract_input(input_text, prompt_template, max_new_tokens)
+    validate_digest_only_contract_input(input_text)
     return {
         "input_text": input_text,
         "prompt_template": prompt_template,
@@ -211,6 +243,7 @@ def draft_from_current_contract(
             "raw_doc_logged": False,
             "fail_class": "ASSET_INTERFACE_PENDING",
         }
+    validate_digest_only_contract_input(input_text)
     draft_text = real_model_runner(
         prompt_template.replace("{input}", input_text),
         max_new_tokens=max_new_tokens,
