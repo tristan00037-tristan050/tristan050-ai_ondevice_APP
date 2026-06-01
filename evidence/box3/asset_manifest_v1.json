@@ -7,7 +7,7 @@
       "role": "company_format_application",
       "sha256_full": "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0",
       "sha_scope": "file",
-      "sha_status": "PASS",
+      "sha_status": "INTERFACE_INVENTORY_PENDING",
       "source_metadata_files": [
         "adapter_config.json",
         "README.md"
@@ -56,9 +56,8 @@
       ]
     }
   ],
-  "created_at": "2026-06-01T03:34:14.463277+00:00",
-  "honest_disclosure": "build_default_manifest() 런타임 반환값과 1:1 정합하도록 재생성(거짓 PASS 제거). helper3_format 만 full SHA-256 실측(92e8454f...). helper4_grounding/helper7_extract/helper8_company_style 는 sha256_full=null, sha_status=FULL_SHA_PENDING → status=PARTIAL_ASSET_INVENTORY_PENDING, real_claim_allowed=false, state_gate=CONTRACT_ONLY. ASSET_INVENTORY_PASS 승격은 helper4/7/8 full SHA 를 manifest 함수에 반영 + interface wrapper 정합 검증 후 별도 commit 으로 진행한다. (이전 evidence 의 ASSET_INVENTORY_PASS_CONTRACT_ONLY 주장 및 로컬 zip 경로는 런타임 코드와 불일치하여 정정·제거.)",
-  "manifest_digest": "sha256:c6d6b7592adfd9a6d73db42e836f8ba9d24f436e18004aede89c48c5b7d7fa62",
+  "honest_disclosure": "build_default_manifest() 런타임과 1:1 정합(거짓 PASS 0, 로컬경로 0). helper3_format 만 full SHA 실측, helper4/helper7/helper8 은 sha256_full=null (FULL_SHA_PENDING) → status=PARTIAL_ASSET_INVENTORY_PENDING / real_claim_allowed=false / state_gate=CONTRACT_ONLY. ASSET_INVENTORY_PASS 승격은 helper4/7/8 full SHA 반영 + interface inventory 정합 후 별도 commit.",
+  "manifest_digest": "sha256:3ae2d4e7158cee9379fbedacd919a5d6cb8fb54a1407b2b992522e8a5df3e50e",
   "model_artifact_included": false,
   "real_claim_allowed": false,
   "schema_version": "box3.asset_manifest.v1",

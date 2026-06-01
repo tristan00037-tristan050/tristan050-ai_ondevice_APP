@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from butler_pc_core.cards.box3.asset_manifest import build_contract_only_asset_manifest
+from butler_pc_core.cards.box3.grounding.asset_manifest import build_box3_asset_manifest_evidence
 from butler_pc_core.cards.box3.eval.evaluate_box3_verdict_only import evaluate_cases, load_eval_cases
 from butler_pc_core.cards.box3.pipeline import run_box3_pipeline
 from butler_pc_core.cards.box3.security import assert_no_raw_persistence, stable_json_digest
@@ -49,7 +50,11 @@ def sanitize_test_log(value: str) -> str:
 def main() -> int:
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     manifest = build_contract_only_asset_manifest()
-    write_json(EVIDENCE / "asset_manifest_v1.json", manifest)
+    # Codex P2 정정 (2026-06-01, PR #770): asset_manifest_v1.json 은 committed evidence 와 동일한
+    # grounding builder(build_box3_asset_manifest_evidence — asset_path_ref, 로컬경로 0, 결정적)로
+    # 기록한다. 이전엔 build_contract_only(로컬 절대경로 포함) 로 써서 tracked evidence 를
+    # 다른 schema 로 덮어쓰고 로컬경로를 재유입(dirty tree)하던 결함.
+    write_json(EVIDENCE / "asset_manifest_v1.json", build_box3_asset_manifest_evidence())
 
     smoke_request = Box3Request(
         reference_docs=[

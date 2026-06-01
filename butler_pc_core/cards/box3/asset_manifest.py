@@ -62,7 +62,9 @@ def build_contract_only_asset_manifest(measured_at: str | None = None) -> dict[s
             asset_name="helper3_format",
             role="company_format_application",
             display_sha_prefix="92e8454f...",
-            asset_path="~/Desktop/도우미폴더/넘겨줄도우미모델/box2b_v5_outputs/rewrite/adapter/box2b_v5_rewrite/adapter_model.safetensors",
+            # Codex P2 정정 (2026-06-01, PR #770): 인계 폴더의 로컬 절대경로/모델 파일명 평문 누출 제거.
+            # 자산 위치는 ref 로만 표기하고 로컬경로·모델 파일명을 소스·evidence 에 두지 않는다.
+            asset_path="ref:BUTLER_HELPER3_FORMAT_PATH",
             sha256_full=HELPER3_SHA,
             sha_scope="file",
             measured_at=now,
