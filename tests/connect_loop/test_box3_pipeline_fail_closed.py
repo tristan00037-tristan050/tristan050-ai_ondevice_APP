@@ -23,8 +23,8 @@ from butler_pc_core.cards.box3.grounding.pipeline import (
     run_box3_pipeline as run_grounding_box3_pipeline,
 )
 
-# ── #3: pipeline (Box3Request 계약 + 주입 runner) ──────────────────────────────
-from butler_pc_core.cards.box3.pipeline import run_box3_pipeline
+# ── #3: pipeline (Box3Request 계약 + 주입 runner) + 단일 real 게이트 ──────────────
+from butler_pc_core.cards.box3.pipeline import run_box3_pipeline, box3_real_claim_allowed
 from butler_pc_core.cards.box3.asset_manifest import manifest_allows_real
 from butler_pc_core.cards.box3.types import Box3Request
 
@@ -208,3 +208,68 @@ def test_pipeline_drifted_manifest_does_not_enable_real_runner():
     result = run_box3_pipeline(_request(), asset_manifest=drifted, real_model_runner=runner)
     assert result["status"] == "contract_only"
     assert result["real_claim_allowed"] is False
+
+
+# ───────────────────────────────────────────────────────────────────────────────
+# 근본 재검토: 단일 real 게이트 8축 매트릭스 (각 축 단독 실패 → real false 전수)
+# ───────────────────────────────────────────────────────────────────────────────
+_PASS_FORMAT = {"format_match_score": 1.0, "required_sections_present": True, "required_sections": []}
+_FAIL_FORMAT = {"format_match_score": 0.0, "required_sections_present": False, "required_sections": []}
+_PASS_STYLE = {"style_match_score": 0.9, "forbidden_style_zero": True}
+_FAIL_STYLE = {"style_match_score": 0.4, "forbidden_style_zero": False}
+
+
+def _gate(**over):
+    base = dict(
+        real_allowed=True,            # asset PASS + manifest 유효 + interface PASS 응축
+        draft_was_real=True,          # runner 실행
+        real_draft_text=_CLEAN_REAL_DRAFT,  # non-empty
+        grounding_fail=None,          # grounding pass
+        format_result=_PASS_FORMAT,   # format pass
+        style_result=_PASS_STYLE,     # style pass
+    )
+    base.update(over)
+    return box3_real_claim_allowed(**base)
+
+
+def test_real_gate_baseline_all_axes_pass_is_real():
+    assert _gate() is True
+
+
+def test_real_gate_each_single_axis_failure_blocks_real():
+    # 8축 → 게이트 입력 6슬롯(asset/manifest/interface 3축은 real_allowed 로 응축)
+    assert _gate(real_allowed=False) is False              # axis 1/7/8 (manifest 계열)
+    assert _gate(draft_was_real=False) is False            # axis 2 runner
+    assert _gate(grounding_fail="GROUNDING_X") is False    # axis 3 grounding
+    assert _gate(real_draft_text="") is False              # axis 6 empty
+    assert _gate(real_draft_text="   \n ") is False        # axis 6 whitespace
+    assert _gate(format_result=_FAIL_FORMAT) is False      # axis 4 format
+    assert _gate(style_result=_FAIL_STYLE) is False        # axis 5 style
+
+
+def test_manifest_allows_real_rejects_duplicate_assets():
+    """#C: 동일 helper3 4중복(이름 집합 미충족·중복)이면 real 불가."""
+    dup = _passing_real_manifest()
+    only = dup["assets"][0]
+    dup["assets"] = [dict(only) for _ in range(4)]  # helper3_format 4중복
+    assert manifest_allows_real(dup) is False
+
+
+def test_manifest_allows_real_requires_interface_pass():
+    """#8/#D(pipeline manifest): 한 자산이라도 interface_inventory_status != pass 면 real 불가."""
+    m = _passing_real_manifest()
+    m["assets"][1]["interface_inventory_status"] = "full_sha_and_interface_inventory_required"
+    assert manifest_allows_real(m) is False
+
+
+def test_grounding_asset_status_gates_on_interface_inventory():
+    """#D(grounding): Box3Asset 가 sha/scope valid 여도 interface_status != pass 면 PASS 아님."""
+    from butler_pc_core.cards.box3.grounding.asset_manifest import Box3Asset
+
+    full_sha = "a" * 64
+    pending = Box3Asset(asset_name="x", role="r", asset_path_ref="REF", sha256_full=full_sha,
+                        sha_scope="file", interface_status="full_sha_and_interface_inventory_required")
+    assert pending.status() == "INTERFACE_INVENTORY_PENDING"
+    passed = Box3Asset(asset_name="x", role="r", asset_path_ref="REF", sha256_full=full_sha,
+                       sha_scope="file", interface_status="pass")
+    assert passed.status() == "PASS"

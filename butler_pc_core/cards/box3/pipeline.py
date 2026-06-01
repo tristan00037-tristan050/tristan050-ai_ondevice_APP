@@ -37,6 +37,40 @@ def _format_style_fail_class(format_result: Box3Format, style_result: Box3Style)
     return None
 
 
+def box3_real_claim_allowed(
+    *,
+    real_allowed: bool,
+    draft_was_real: bool,
+    real_draft_text,
+    grounding_fail,
+    format_result: Box3Format,
+    style_result: Box3Style,
+) -> bool:
+    """box3 real 진입 단일 게이트 (Codex 근본 재검토, 2026-06-01, PR #770).
+
+    real 주장은 아래 축이 모두 충족될 때만 허용된다(AND). 하나라도 미충족이면 False →
+    호출부는 contract_only / real_claim=false / draft_text=None 으로 fail-closed 한다.
+      (1) asset_status == ASSET_INVENTORY_PASS  ┐
+      (7) manifest 유효: 4개 필수 자산 정확 1회 + 각 row 유효  ├ real_allowed = manifest_allows_real
+      (8) interface_inventory_status == "pass"  ┘
+      (2) runner 실제 실행: draft_was_real
+      (3) grounding pass: grounding_fail is None
+      (6) non-empty real draft
+      (4) format pass: required_sections_present
+      (5) style pass: forbidden_style_zero
+    개별 엣지(#A empty / #B status drift / #C 자산이름·중복 / #D interface)는 모두 본 축으로
+    흡수되므로, CONTRACT_ONLY(asset PENDING)에서는 real 내부 엣지에 도달하지 않는다.
+    """
+    return bool(
+        real_allowed
+        and draft_was_real
+        and grounding_fail is None
+        and str(real_draft_text or "").strip()
+        and format_result["required_sections_present"]
+        and style_result["forbidden_style_zero"]
+    )
+
+
 def run_box3_pipeline(
     request: Box3Request,
     *,
@@ -64,10 +98,6 @@ def run_box3_pipeline(
         and draft_response.get("contract_only") is False
         and draft_response.get("real_claim_allowed") is True
     )
-    # Codex P1 정정 (2026-06-01, PR #770): real runner 가 빈/공백 draft 를 반환하면 contract
-    # placeholder(_contract_draft_text)가 format/style 을 통과해 status="real" 로 잘못 승격되던
-    # 결함. real 경로에서 실제 draft 가 비어 있으면 fail-closed(REAL_DRAFT_EMPTY) 처리한다.
-    real_draft_empty = draft_was_real and not str(draft_response.get("draft_text") or "").strip()
     draft_basis_text = (
         str(draft_response["draft_text"])
         if draft_was_real and draft_response.get("draft_text")
@@ -88,20 +118,33 @@ def run_box3_pipeline(
     )
     format_result = apply_format_contract(draft_basis_text)
     style_result = apply_style_contract(draft_basis_text)
-    # Codex P1 정정 (2026-06-01, PR #770): fail_class 가 grounding + draft 만 고려하여 helper3/helper8
-    # fail-closed 신호(required_sections_present=False, forbidden_style_zero=False)를 무시한 채
-    # status="real" 을 통과시키던 결함. format/style adapter 결과를 fail_class 산정에 명시 포함한다.
-    format_style_fail = _format_style_fail_class(format_result, style_result)
-    fail_class = (
-        grounding_fail
-        or draft_response.get("fail_class")
-        or format_style_fail
-        or ("REAL_DRAFT_EMPTY" if real_draft_empty else None)
+    # Codex 근본 재검토 (2026-06-01, PR #770): real 진입을 단일 게이트(box3_real_claim_allowed)로
+    # 중앙화. 8축(asset PASS + manifest 유효 + interface PASS ← real_allowed / runner 실행 /
+    # grounding / non-empty / format / style)을 AND. 하나라도 미충족이면 real 불가 → contract_only
+    # / real_claim=false / draft_text=None. 개별 엣지(#A~#D)는 본 게이트 축으로 흡수.
+    real_claim_allowed = box3_real_claim_allowed(
+        real_allowed=real_allowed,
+        draft_was_real=draft_was_real,
+        real_draft_text=draft_response.get("draft_text"),
+        grounding_fail=grounding_fail,
+        format_result=format_result,
+        style_result=style_result,
     )
-    status = "real" if real_allowed and draft_was_real and fail_class is None else "contract_only"
-    if grounding_fail:
-        status = "needs_review" if grounding_fail != "GROUNDING_REFERENCE_COVERAGE_LOW" else "blocked"
-    real_claim_allowed = status == "real" and real_allowed and draft_was_real and fail_class is None
+    # fail_class 는 보고용(우선순위 보존: grounding > draft 계약 > format/style > empty-real).
+    real_draft_empty = draft_was_real and not str(draft_response.get("draft_text") or "").strip()
+    if real_claim_allowed:
+        status, fail_class = "real", None
+    else:
+        fail_class = (
+            grounding_fail
+            or draft_response.get("fail_class")
+            or _format_style_fail_class(format_result, style_result)
+            or ("REAL_DRAFT_EMPTY" if real_draft_empty else None)
+        )
+        if grounding_fail:
+            status = "needs_review" if grounding_fail != "GROUNDING_REFERENCE_COVERAGE_LOW" else "blocked"
+        else:
+            status = "contract_only"
     contract_only = not real_claim_allowed
     result: Box3PipelineResult = {
         "status": status,

@@ -8,7 +8,13 @@ from pathlib import Path
 from typing import Any, Literal
 
 ShaScope = Literal["file", "directory_manifest"]
-AssetStatus = Literal["PASS", "FULL_SHA_PENDING", "BLOCK_SHA_INVALID", "BLOCK_SCOPE_INVALID"]
+AssetStatus = Literal[
+    "PASS",
+    "FULL_SHA_PENDING",
+    "INTERFACE_INVENTORY_PENDING",
+    "BLOCK_SHA_INVALID",
+    "BLOCK_SCOPE_INVALID",
+]
 
 _SHA64 = set("0123456789abcdef")
 
@@ -31,6 +37,12 @@ class Box3Asset:
             return "BLOCK_SHA_INVALID"
         if self.sha_scope not in ("file", "directory_manifest"):
             return "BLOCK_SCOPE_INVALID"
+        # Codex P1 정정 (2026-06-01, PR #770): SHA/scope 만 보고 PASS 를 반환하면, 해시가 채워져도
+        # interface inventory 가 미완(예: "full_sha_and_interface_inventory_required")인 자산이
+        # manifest.status=ASSET_INVENTORY_PASS 로 승격되어 real 로 반환되던 결함. interface_status 가
+        # "pass" 가 아니면 PASS 가 아니라 INTERFACE_INVENTORY_PENDING 으로 fail-closed.
+        if self.interface_status != "pass":
+            return "INTERFACE_INVENTORY_PENDING"
         return "PASS"
 
     def to_dict(self) -> dict[str, Any]:
@@ -50,7 +62,7 @@ class Box3AssetManifest:
         statuses = [asset.status() for asset in self.assets]
         if any(status.startswith("BLOCK") for status in statuses):
             return "BLOCK_ASSET_MANIFEST"
-        if any(status == "FULL_SHA_PENDING" for status in statuses):
+        if any(status in ("FULL_SHA_PENDING", "INTERFACE_INVENTORY_PENDING") for status in statuses):
             return "PARTIAL_ASSET_INVENTORY_PENDING"
         return "ASSET_INVENTORY_PASS"
 

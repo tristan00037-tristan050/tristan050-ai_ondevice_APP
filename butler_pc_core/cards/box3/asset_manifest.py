@@ -12,6 +12,14 @@ FULL_SHA_RE = re.compile(r"^[a-f0-9]{64}$")
 
 HELPER3_SHA = "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0"
 
+# real 모드에 필요한 4개 필수 helper 자산. manifest_allows_real 이 정확히 1회씩 존재(중복 0)를 강제.
+REQUIRED_ASSET_NAMES = (
+    "helper3_format",
+    "helper4_grounding",
+    "helper7_table_figure",
+    "helper8_company_style",
+)
+
 
 @dataclass(frozen=True)
 class Box3AssetRecord:
@@ -136,9 +144,21 @@ def manifest_allows_real(manifest: dict[str, Any]) -> bool:
     assets = manifest.get("assets", [])
     if len(assets) != 4:
         return False
+    # Codex P1 정정 (2026-06-01, PR #770): asset count 만 보면 동일 helper 4중복도 통과하여
+    # helper4/7/8 미인벤토리 상태로 real 이 활성화되던 fail-open. 4개 필수 자산이 정확히 1회씩
+    # 존재하고(이름 집합·중복 검사), 각 row 가 유효하며, interface inventory 가 pass 여야 real 허용.
+    names: list[str] = []
     for item in assets:
-        record = Box3AssetRecord(**item)
+        try:
+            record = Box3AssetRecord(**item)
+        except TypeError:
+            return False
         if validate_asset_record(record):
             return False
+        if record.interface_inventory_status != "pass":
+            return False
+        names.append(record.asset_name)
+    if len(names) != len(set(names)) or set(names) != set(REQUIRED_ASSET_NAMES):
+        return False
     return True
 
