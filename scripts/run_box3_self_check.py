@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 from butler_pc_core.cards.box3.asset_manifest import build_contract_only_asset_manifest
-from butler_pc_core.cards.box3.grounding.asset_manifest import build_box3_asset_manifest_evidence
 from butler_pc_core.cards.box3.eval.evaluate_box3_verdict_only import evaluate_cases, load_eval_cases
 from butler_pc_core.cards.box3.pipeline import run_box3_pipeline
 from butler_pc_core.cards.box3.security import assert_no_raw_persistence, stable_json_digest
@@ -15,6 +14,9 @@ from butler_pc_core.cards.box3.types import Box3Request
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "evidence" / "box3"
+# Codex P2 정정 (2026-06-01, PR #770): evidence 결정성(self-check 재실행 dirty tree 0)을 위해
+# measured_at 을 고정한다. SHA 측정값이 정본이며 측정 시각은 재현용 메타.
+EVIDENCE_MEASURED_AT = "2026-06-01T00:00:00+00:00"
 
 
 def write_json(path: Path, payload: object) -> None:
@@ -49,12 +51,13 @@ def sanitize_test_log(value: str) -> str:
 
 def main() -> int:
     EVIDENCE.mkdir(parents=True, exist_ok=True)
-    manifest = build_contract_only_asset_manifest()
-    # Codex P2 정정 (2026-06-01, PR #770): asset_manifest_v1.json 은 committed evidence 와 동일한
-    # grounding builder(build_box3_asset_manifest_evidence — asset_path_ref, 로컬경로 0, 결정적)로
-    # 기록한다. 이전엔 build_contract_only(로컬 절대경로 포함) 로 써서 tracked evidence 를
-    # 다른 schema 로 덮어쓰고 로컬경로를 재유입(dirty tree)하던 결함.
-    write_json(EVIDENCE / "asset_manifest_v1.json", build_box3_asset_manifest_evidence())
+    # Codex P2 정정 (2026-06-01, PR #770): evidence 를 real-gate canonical builder 로 통일.
+    # build_contract_only_asset_manifest 는 run_box3_pipeline 이 실제 소비하는 manifest 이며,
+    # manifest_allows_real 의 REQUIRED_ASSET_NAMES(helper7_table_figure/helper8_company_style)와
+    # 자산 이름이 일치한다(grounding builder 의 helper7_extract/helper8_style 이름 분기 제거).
+    # 로컬경로는 round-5 에서 ref 화로 제거됨. measured_at 고정으로 재실행 dirty tree 0.
+    manifest = build_contract_only_asset_manifest(measured_at=EVIDENCE_MEASURED_AT)
+    write_json(EVIDENCE / "asset_manifest_v1.json", manifest)
 
     smoke_request = Box3Request(
         reference_docs=[

@@ -125,34 +125,6 @@ def manifest_digest(manifest: Box3AssetManifest) -> str:
     encoded = json.dumps(manifest.to_dict(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return "sha256:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
-
-def build_box3_asset_manifest_evidence() -> dict[str, Any]:
-    """self-check evidence(asset_manifest_v1.json)용 결정적 manifest 표현 (Codex P2, PR #770).
-
-    build_default_manifest() 런타임과 1:1(PARTIAL_ASSET_INVENTORY_PENDING, asset_path_ref →
-    로컬경로 0). created_at 등 비결정 필드를 두지 않으므로 self-check 재실행 시 dirty tree 0.
-    self-check 스크립트와 committed evidence 가 동일 builder 를 공유하여 schema 불일치 0.
-    """
-    manifest = build_default_manifest()
-    payload = manifest.to_dict()
-    return {
-        "schema_version": payload["schema_version"],
-        "status": payload["status"],
-        "manifest_digest": manifest_digest(manifest),
-        "real_claim_allowed": False,
-        "state_gate": "CONTRACT_ONLY",
-        "model_artifact_included": payload["model_artifact_included"],
-        "training_scope_included": payload["training_scope_included"],
-        "assets": payload["assets"],
-        "honest_disclosure": (
-            "build_default_manifest() 런타임과 1:1 정합(거짓 PASS 0, 로컬경로 0). "
-            "helper3_format 만 full SHA 실측, helper4/helper7/helper8 은 sha256_full=null "
-            "(FULL_SHA_PENDING) → status=PARTIAL_ASSET_INVENTORY_PENDING / real_claim_allowed=false "
-            "/ state_gate=CONTRACT_ONLY. ASSET_INVENTORY_PASS 승격은 helper4/7/8 full SHA 반영 + "
-            "interface inventory 정합 후 별도 commit."
-        ),
-    }
-
 def validate_manifest_payload(payload: dict[str, Any]) -> tuple[str, list[str]]:
     reasons: list[str] = []
     if payload.get("schema_version") != "box3.asset_manifest.v1":
