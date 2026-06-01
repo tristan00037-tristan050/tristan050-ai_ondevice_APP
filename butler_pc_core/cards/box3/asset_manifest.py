@@ -137,6 +137,10 @@ def manifest_allows_real(manifest: dict[str, Any]) -> bool:
     # 무시하면, status/state_gate 가 pending/blocked 인 드리프트 manifest 가 real_claim_allowed:true
     # 만으로 real runner 를 활성화하던 fail-open 결함. manifest 수준 status 가 ASSET_INVENTORY_PASS
     # 일 때만 real 을 허용한다(fail-closed asset inventory gate).
+    # Codex P1 정정 (2026-06-01, PR #770): schema drift fail-closed — 계약 버전이 정본과
+    # 다르거나 누락된 manifest(disk/API 주입 포함)는 real 모드 입력으로 받지 않는다.
+    if manifest.get("schema_version") != "box3.asset_manifest.v1":
+        return False
     if manifest.get("status") != "ASSET_INVENTORY_PASS":
         return False
     if manifest.get("real_claim_allowed") is not True:

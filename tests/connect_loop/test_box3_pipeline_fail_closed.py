@@ -255,6 +255,16 @@ def test_manifest_allows_real_rejects_duplicate_assets():
     assert manifest_allows_real(dup) is False
 
 
+def test_manifest_allows_real_rejects_schema_drift():
+    """axis 7 보강: schema_version 이 정본(box3.asset_manifest.v1)과 다르거나 누락이면 real 불가."""
+    wrong = _passing_real_manifest()
+    wrong["schema_version"] = "box3.asset_manifest.v2"
+    assert manifest_allows_real(wrong) is False
+    missing = _passing_real_manifest()
+    del missing["schema_version"]
+    assert manifest_allows_real(missing) is False
+
+
 def test_manifest_allows_real_requires_interface_pass():
     """#8/#D(pipeline manifest): 한 자산이라도 interface_inventory_status != pass 면 real 불가."""
     m = _passing_real_manifest()
