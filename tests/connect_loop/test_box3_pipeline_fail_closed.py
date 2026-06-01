@@ -124,11 +124,32 @@ def test_grounding_receipt_and_citations_exclude_non_digest_source():
     ).to_dict()
     source_digests = result["receipt_hook"]["source_digests"]
     citation_sources = [c["source_digest"] for c in result["citations"]]
+    assert result["evidence"]["evidence_unit_count"] == 1
     for bucket in (source_digests, citation_sources):
         assert good in bucket
         assert "alice@example.com" not in bucket
         assert "sha256:alice@example.com" not in bucket
         assert all(re.fullmatch(r"sha256:[0-9a-f]{64}", str(x)) for x in bucket)
+
+
+def test_grounding_malformed_source_digest_produces_no_evidence_unit():
+    """helper7 extraction 단계부터 sha256:<64hex> full digest 만 evidence 로 인정한다."""
+    payload = Box3PipelineInput(
+        request_text="새 초안 작성",
+        reference_docs=[
+            Box3ReferenceDoc(source_digest="sha256:alice@example.com", runtime_text="raw"),
+        ],
+    )
+    result = run_grounding_box3_pipeline(
+        payload, force_draft_text="제목\n목적\n근거\n초안\n확인 필요"
+    ).to_dict()
+
+    assert result["evidence"]["evidence_unit_count"] == 0
+    assert result["evidence"]["status"] == "NEEDS_REVIEW_NO_EVIDENCE"
+    assert result["grounding"]["status"] == "needs_review"
+    assert result["grounding"]["fail_class"] == "NO_EVIDENCE_UNITS"
+    assert result["citations"] == []
+    assert result["receipt_hook"]["source_digests"] == []
 
 
 def test_pipeline_citations_are_digest_linked_not_supported():

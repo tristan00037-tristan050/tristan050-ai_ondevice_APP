@@ -5,6 +5,9 @@ import hashlib
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from ...security import is_sha256_digest
+
+
 def _digest_text(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -24,7 +27,7 @@ def extract_evidence_units(reference_docs: list[dict[str, Any]]) -> dict[str, An
         source_digest = str(doc.get("source_digest", ""))
         runtime_text = doc.get("runtime_text")
         unit_type = str(doc.get("unit_type", "text"))
-        if not source_digest.startswith("sha256:"):
+        if not is_sha256_digest(source_digest):
             continue
         if isinstance(runtime_text, str) and runtime_text.strip():
             unit_seed = f"{source_digest}|{idx}|{runtime_text[:256]}"
