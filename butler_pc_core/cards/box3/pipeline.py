@@ -102,7 +102,11 @@ def run_box3_pipeline(
         format_hint=request.format_hint,
         max_new_tokens=request.max_new_tokens,
     )
-    runner = real_model_runner if real_allowed else None
+    # Codex P1 정정 (2026-06-01, PR #770): real 이 구조적으로 불가(claim-level grounding 미구현)인데
+    # runner 를 호출하면 결과가 어차피 contract_only 로 demote 됨에도 모델이 실제 실행되어
+    # external_send_zero 가 runner 동작에 좌우된다. real 승격 가능 조건(real_allowed AND
+    # CLAIM_LEVEL_GROUNDING_IMPLEMENTED)에서만 runner 를 선택한다 — 그 전엔 runner 미호출(fail-closed).
+    runner = real_model_runner if (real_allowed and CLAIM_LEVEL_GROUNDING_IMPLEMENTED) else None
     draft_response = draft_from_current_contract(**contract_input, real_model_runner=runner)
     draft_was_real = (
         draft_response.get("status") == "real"

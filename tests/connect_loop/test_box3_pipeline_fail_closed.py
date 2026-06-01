@@ -141,32 +141,24 @@ def test_pipeline_citations_are_digest_linked_not_supported():
 
 
 # ───────────────────────────────────────────────────────────────────────────────
-# 결함 #3 (P1) — pipeline format/style fail-closed gate
+# pipeline runner 게이팅 (claim-level grounding 미구현 시 runner 미호출 = fail-closed)
+# format/style/empty 게이트 로직 자체는 단위 매트릭스(test_real_gate_*)가 전수 검증한다.
 # ───────────────────────────────────────────────────────────────────────────────
-def test_pipeline_format_fail_blocks_real_status():
-    """필수 섹션 누락(format_match_score 미달) → status="real" 차단(#3 핵심)."""
+def test_pipeline_runner_not_invoked_until_claim_grounding():
+    """passing manifest + runner 라도 claim-level grounding 미구현이면 runner 를 호출하지 않고
+    contract_only — 모델 미실행으로 external_send_zero 가 runner 동작에 좌우되지 않음(신규)."""
+    calls = []
+
     def runner(prompt, max_new_tokens):
-        return "오늘 회의 결과를 정리한 내용입니다"  # 섹션 미충족, PII/forbidden 0
+        calls.append(prompt)
+        return _CLEAN_REAL_DRAFT
 
     result = run_box3_pipeline(_request(), asset_manifest=_passing_real_manifest(), real_model_runner=runner)
+    assert calls == [], "claim-level grounding 미구현 시 real_model_runner 가 호출되면 안 된다"
     assert result["status"] == "contract_only"
-    assert result["fail_class"] == "FORMAT_MATCH_BELOW_GATE"
     assert result["real_claim_allowed"] is False
     assert result["draft_text"] is None
-    assert result["format"]["required_sections_present"] is False
-
-
-def test_pipeline_forbidden_style_blocks_real_status():
-    """forbidden_style_zero=false → status="real" 차단."""
-    def runner(prompt, max_new_tokens):
-        return "제목\n배경\n핵심 내용\n근거\n확인 필요\n최종 문안\n확정합니다"  # '확정합니다' = forbidden
-
-    result = run_box3_pipeline(_request(), asset_manifest=_passing_real_manifest(), real_model_runner=runner)
-    assert result["status"] == "contract_only"
-    assert result["fail_class"] == "FORBIDDEN_STYLE_DETECTED"
-    assert result["real_claim_allowed"] is False
-    assert result["draft_text"] is None
-    assert result["style"]["forbidden_style_zero"] is False
+    assert result["external_send_zero"] is True
 
 
 def test_pipeline_clean_draft_stays_contract_only_until_claim_grounding():
@@ -257,20 +249,8 @@ def test_digest_only_input_rejects_duplicate_fields():
 
 
 # ───────────────────────────────────────────────────────────────────────────────
-# Codex 재리뷰 신규 (head 9e35e290) — empty real draft + manifest PASS gate
+# manifest PASS gate (empty real draft 축은 단위 매트릭스 test_real_gate_* 가 검증)
 # ───────────────────────────────────────────────────────────────────────────────
-def test_pipeline_empty_real_draft_blocks_real_status():
-    """real runner 가 빈 문자열을 반환하면 contract placeholder 로 status="real" 승격 금지(신규 #A)."""
-    def runner(prompt, max_new_tokens):
-        return ""
-
-    result = run_box3_pipeline(_request(), asset_manifest=_passing_real_manifest(), real_model_runner=runner)
-    assert result["status"] == "contract_only"
-    assert result["fail_class"] == "REAL_DRAFT_EMPTY"
-    assert result["real_claim_allowed"] is False
-    assert result["draft_text"] is None
-
-
 def test_manifest_allows_real_requires_pass_status():
     """top-level status 가 ASSET_INVENTORY_PASS 가 아니면(드리프트) real 불가(신규 #B)."""
     drifted = _passing_real_manifest()
