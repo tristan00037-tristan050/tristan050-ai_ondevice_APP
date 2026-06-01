@@ -65,8 +65,8 @@ def run_box3_pipeline(
     if force_draft_text is not None:
         # Codex v1.2.1 정정: force_draft_text는 grounding 검증용 입력으로만 사용.
         # runner가 실제 호출되지 않았으므로 asset manifest가 PASS여도 real claim 0
-        # (claim boundary). demotion 시 draft_text=None은 아래 line의
-        # `draft_text if not contract_only else None`이 처리.
+        # (claim boundary). demotion 시 draft_text=None 은 아래 return 의
+        # `final_is_contract_only`(status != "real") gate 가 처리.
         draft_text = force_draft_text
         contract_only = True
     else:
@@ -96,10 +96,16 @@ def run_box3_pipeline(
         "external_send_zero": True,
         "plaintext_persisted": False,
     }
+    # Codex P2 정정 (2026-06-01, PR #770): contract_only 변수는 draft origin(force/runner)만
+    # 반영하므로, _determine_status 가 manifest incomplete(asset_status != ASSET_INVENTORY_PASS)
+    # 로 status 를 "contract_only" 로 demote 해도 contract_only=False 인 경우 draft_text 가 그대로
+    # 노출되던 결함. final status 가 "real" 이 아니면 draft_text 를 suppress 하여 pending asset 의
+    # digest/meta-only 정합을 회복한다(sibling pipeline.py 의 real_claim_allowed gate 와 정합).
+    final_is_contract_only = status != "real"
     return Box3PipelineResult(
         schema_version="box3.pipeline_result.v1",
         status=status,
-        draft_text=draft_text if not contract_only else None,
+        draft_text=draft_text if not final_is_contract_only else None,
         draft_digest=draft_digest,
         citations=citations,
         grounding=grounding,

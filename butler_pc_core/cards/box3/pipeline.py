@@ -7,7 +7,7 @@ from .adapters.helper8_style_adapter import apply_style_contract
 from .asset_manifest import build_contract_only_asset_manifest, manifest_allows_real
 from .draft_service import compose_box3_current_contract_input, draft_from_current_contract
 from .security import assert_no_raw_persistence, assert_runtime_text_safe, sha256_digest
-from .types import Box3Citation, Box3PipelineResult, Box3Request
+from .types import Box3Citation, Box3Format, Box3PipelineResult, Box3Request, Box3Style
 
 
 def _contract_draft_text(evidence_count: int) -> str:
@@ -21,6 +21,20 @@ def _contract_draft_text(evidence_count: int) -> str:
             "최종 문안: [CONTRACT_ONLY_BOX3_DRAFT_NOT_EXECUTED]",
         ]
     )
+
+
+def _format_style_fail_class(format_result: Box3Format, style_result: Box3Style) -> str | None:
+    """helper3 format / helper8 style fail-closed gate (Codex P1 정정, 2026-06-01, PR #770).
+
+    adapter 가 이미 계산한 boolean(required_sections_present / forbidden_style_zero)만으로
+    판정한다 — 새 threshold 를 추정하지 않는다. format_match_score: 0.0 또는
+    forbidden_style_zero: false 인 draft 가 status="real" 로 통과하던 결함을 차단한다.
+    """
+    if not format_result["required_sections_present"]:
+        return "FORMAT_MATCH_BELOW_GATE"
+    if not style_result["forbidden_style_zero"]:
+        return "FORBIDDEN_STYLE_DETECTED"
+    return None
 
 
 def run_box3_pipeline(
@@ -70,7 +84,11 @@ def run_box3_pipeline(
     )
     format_result = apply_format_contract(draft_basis_text)
     style_result = apply_style_contract(draft_basis_text)
-    fail_class = grounding_fail or draft_response.get("fail_class")
+    # Codex P1 정정 (2026-06-01, PR #770): fail_class 가 grounding + draft 만 고려하여 helper3/helper8
+    # fail-closed 신호(required_sections_present=False, forbidden_style_zero=False)를 무시한 채
+    # status="real" 을 통과시키던 결함. format/style adapter 결과를 fail_class 산정에 명시 포함한다.
+    format_style_fail = _format_style_fail_class(format_result, style_result)
+    fail_class = grounding_fail or draft_response.get("fail_class") or format_style_fail
     status = "real" if real_allowed and draft_was_real and fail_class is None else "contract_only"
     if grounding_fail:
         status = "needs_review" if grounding_fail != "GROUNDING_REFERENCE_COVERAGE_LOW" else "blocked"
