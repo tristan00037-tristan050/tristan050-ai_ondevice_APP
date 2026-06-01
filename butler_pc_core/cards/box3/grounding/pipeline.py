@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from .asset_manifest import build_default_manifest, manifest_digest
 from ..draft_service import DEFAULT_MAX_NEW_TOKENS, Box3ContractError, draft_from_existing
+from ..security import is_sha256_digest
 from .adapters.helper3_format_adapter import apply_format
 from .adapters.helper4_grounding_adapter import verify_grounding
 from .adapters.helper7_extract_adapter import extract_evidence_units
@@ -98,7 +99,12 @@ def run_box3_pipeline(
         "schema_version": "box3.receipt_hook.v1",
         "request_digest": digest_text(payload.request_text),
         "draft_digest": draft_digest,
-        "source_digests": sorted({doc.source_digest for doc in payload.reference_docs}),
+        # Codex P1 정정 (2026-06-01, PR #770): caller 가 넣은 source_digest 를 sha256 검증 없이
+        # receipt_hook 에 echo 하면 raw(email 등)가 새어 plaintext_persisted=False 와 모순.
+        # digest 형식(sha256:<64hex>)으로 검증된 값만 포함하여 fail-closed.
+        "source_digests": sorted(
+            {doc.source_digest for doc in payload.reference_docs if is_sha256_digest(doc.source_digest)}
+        ),
         "asset_manifest_digest": manifest_digest(manifest),
         "external_send_zero": True,
         "plaintext_persisted": False,

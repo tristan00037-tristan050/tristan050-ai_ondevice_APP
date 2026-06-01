@@ -108,7 +108,9 @@ def main() -> int:
         "package_name": "butler_box3_draft_from_reference_v1_2_worldclass",
         "status": "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING",
         "directive_version": "Butler Box3 v1.2 합본",
-        "pytest_connect_loop": "19 passed" if pytest_result.returncode == 0 else "FAILED",
+        # Codex P2 정정 (2026-06-01, PR #770): 테스트 개수 고정 카운트 하드코딩은 실제 수와 어긋나
+        # stale evidence 를 만든다. count-independent PASS/FAILED 로 기록(소비자 오인 방지).
+        "pytest_connect_loop": "PASS" if pytest_result.returncode == 0 else "FAILED",
         "real_claim_allowed": False,
         "full_sha_assets_verified": ["helper3_format"],
         "full_sha_assets_pending": ["helper4_grounding", "helper7_table_figure", "helper8_company_style"],

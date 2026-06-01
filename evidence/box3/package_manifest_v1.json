@@ -10,7 +10,7 @@
     "helper3_format"
   ],
   "package_name": "butler_box3_draft_from_reference_v1_2_worldclass",
-  "pytest_connect_loop": "19 passed",
+  "pytest_connect_loop": "PASS",
   "real_claim_allowed": false,
   "schema_version": "box3.package_manifest.v1",
   "status": "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING"
