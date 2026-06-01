@@ -89,7 +89,8 @@ def test_grounding_runner_path_demoted_to_contract_only_suppresses_draft_text():
     result = run_grounding_box3_pipeline(payload, runner=runner).to_dict()
 
     assert result["status"] == "contract_only"
-    assert result["contract_only"] is False  # 변수는 origin(runner) 기준 그대로 False
+    # Codex P2: 결과 contract_only 필드도 final status 기준이어야 함(demotion 시 True).
+    assert result["contract_only"] is True
     assert result["draft_text"] is None, f"contract_only demote 시 draft_text 누출: {result['draft_text']!r}"
     assert result["draft_digest"] is not None  # digest/meta 는 유지
 
@@ -171,6 +172,35 @@ def test_draft_service_raw_prose_blocked_before_real_runner():
     assert calls == [], "raw input 이 real_model_runner 에 도달하면 안 된다"
     # error 에 raw input 원문이 새지 않아야 한다(no-raw-output 정합).
     assert "매출" not in str(exc.value)
+
+
+def test_real_runner_requires_canonical_prompt_template():
+    """digest-only input 이라도 custom prose template 은 real runner 도달 전 BLOCK(신규 #1)."""
+    from butler_pc_core.cards.box3.draft_service import (
+        compose_box3_current_contract_input,
+        draft_from_current_contract,
+    )
+
+    payload = compose_box3_current_contract_input(
+        reference_doc_digests=["sha256:" + "a" * 64],
+        request_digest="sha256:" + "b" * 64,
+        max_new_tokens=128,
+    )
+    calls = []
+
+    def runner(prompt, max_new_tokens):
+        calls.append(prompt)
+        return "제목\n배경\n핵심 내용\n근거\n확인 필요\n최종 문안\n합니다"
+
+    with pytest.raises(Box3ContractError) as exc:
+        draft_from_current_contract(
+            input_text=payload["input_text"],  # 유효 digest-only input
+            prompt_template="기밀 사업 산문이 담긴 사용자 정의 템플릿. Input: {input}",  # 비정본
+            max_new_tokens=128,
+            real_model_runner=runner,
+        )
+    assert "NON_CANONICAL_PROMPT_TEMPLATE_FOR_REAL_RUNNER" in str(exc.value)
+    assert calls == [], "비정본 template 이 real_model_runner 에 도달하면 안 된다"
 
 
 # ───────────────────────────────────────────────────────────────────────────────

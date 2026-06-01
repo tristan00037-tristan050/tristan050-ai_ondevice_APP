@@ -133,6 +133,15 @@ DEFAULT_REQUIRED_SECTIONS = [
     "최종 문안",
 ]
 
+# real_model_runner 에 전달 가능한 유일한 정본 prompt template. digest-only 입력과 함께
+# 전체 prompt 의 no-raw-text 를 보장한다(평문 prose 가 담긴 custom template 차단). {input} 자리에는
+# BOX3_DIGEST_ONLY_INPUT(sha256 digest) 만 치환된다.
+CANONICAL_PROMPT_TEMPLATE = (
+    "You are Butler Box 3. Use only digest-linked evidence units. "
+    "Do not invent dates, amounts, names, or legal conclusions. "
+    "Return a draft with citations by source_digest. Input: {input}"
+)
+
 
 class Box3ContractError(ValueError):
     """Raised for current endpoint contract violations."""
@@ -199,11 +208,7 @@ def compose_box3_current_contract_input(
             f"format_hint_digest={sha256_digest(format_hint)}",
         ]
     )
-    prompt_template = (
-        "You are Butler Box 3. Use only digest-linked evidence units. "
-        "Do not invent dates, amounts, names, or legal conclusions. "
-        "Return a draft with citations by source_digest. Input: {input}"
-    )
+    prompt_template = CANONICAL_PROMPT_TEMPLATE
     validate_current_contract_input(input_text, prompt_template, max_new_tokens)
     validate_digest_only_contract_input(input_text)
     return {
@@ -244,6 +249,11 @@ def draft_from_current_contract(
             "fail_class": "ASSET_INTERFACE_PENDING",
         }
     validate_digest_only_contract_input(input_text)
+    # Codex P1 정정 (2026-06-01, PR #770): digest-only 검사는 input_text 만 보장하므로, prompt_template
+    # 에 평문 confidential prose 가 담기면 그대로 runner 에 도달하던 결함. real 실행 전 prompt_template
+    # 이 정본(CANONICAL_PROMPT_TEMPLATE)인지 강제하여 전체 prompt 의 no-raw-text 를 보장한다.
+    if prompt_template != CANONICAL_PROMPT_TEMPLATE:
+        raise Box3ContractError("NON_CANONICAL_PROMPT_TEMPLATE_FOR_REAL_RUNNER")
     draft_text = real_model_runner(
         prompt_template.replace("{input}", input_text),
         max_new_tokens=max_new_tokens,

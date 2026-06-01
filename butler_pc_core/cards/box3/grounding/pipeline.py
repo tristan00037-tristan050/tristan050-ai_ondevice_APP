@@ -122,7 +122,11 @@ def run_box3_pipeline(
         asset_manifest_status=manifest.status,
         receipt_hook=receipt_hook,
         fail_class=fail_class,
-        contract_only=contract_only,
+        # Codex P2 정정 (2026-06-01, PR #770): 결과의 contract_only 필드를 draft-origin 변수가 아닌
+        # final status 기준(final_is_contract_only)으로 노출. asset-pending demotion 시 draft_text
+        # suppress 와 일관되게 contract_only=True 로 보고하여, 이 필드로 게이트하는 caller 가
+        # demotion 을 real-origin 으로 오인하지 않게 한다.
+        contract_only=final_is_contract_only,
     )
 
 def _merge_runtime_only_text(payload: Box3PipelineInput) -> str:
