@@ -50,6 +50,29 @@ def test_contract_only_path_fails_closed_on_leaked_reference():
     assert audit.stage_trace[0]["stage"] == "input_runtime_safety"
 
 
+def test_format_hint_leak_fails_closed():
+    # format_hint 도 DLP 스캔 대상 — path/secret 포함 시 fail-closed.
+    verdict, _ = run_box3_real_pipeline(
+        reference_docs=["정상 참고문서"], drafting_request="요약",
+        format_hint="/Users/secret/style.md",
+    )
+    assert verdict.status == "blocked"
+    assert verdict.fail_class == "BLOCK_BOX3_REAL_SECURITY_RISK"
+    assert verdict.contract_only is False
+
+
+def test_runner_exception_becomes_blocked_verdict():
+    def boom(_env):
+        raise RuntimeError("model exploded")
+
+    verdict, _ = run_box3_real_followup(
+        passing_envelope(), asset_manifest=passing_asset_manifest(), real_model_runner=boom,
+    )
+    assert verdict.status == "blocked"
+    assert verdict.fail_class == "BLOCK_BOX3_REAL_RUNNER_ERROR"
+    assert verdict.draft_text is None
+
+
 def test_runner_missing_blocks_after_asset_pass():
     verdict, audit = run_box3_real_followup(
         passing_envelope(), asset_manifest=passing_asset_manifest(), real_model_runner=None,

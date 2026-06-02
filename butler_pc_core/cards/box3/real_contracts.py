@@ -172,6 +172,7 @@ class Box3RealRuntimeEnvelope:
         for text in [
             *self.reference_text_runtime_only,
             self.drafting_request_runtime,
+            self.format_hint,
             self.draft_text_runtime or "",
         ]:
             reason = scan_runtime_security_risk(text)

@@ -32,6 +32,7 @@ from .real_contracts import (
 )
 from .real_fail_class import (
     ASSET_INTERFACE_PENDING,
+    BLOCK_BOX3_REAL_RUNNER_ERROR,
     BLOCK_BOX3_REAL_RUNNER_MISSING,
     BLOCK_BOX3_REAL_RUNNER_TIMEOUT,
     BLOCK_BOX3_REAL_SECURITY_RISK,
@@ -179,6 +180,12 @@ def _run(
     except concurrent.futures.TimeoutError:
         stage_trace.append(_stage("draft_runner", "blocked", BLOCK_BOX3_REAL_RUNNER_TIMEOUT))
         return _finalize(envelope, status="blocked", fail_class=BLOCK_BOX3_REAL_RUNNER_TIMEOUT, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=True, contract_only=False, real_claim_allowed=False)
+    except Exception:
+        # 러너의 일반 추론/모델 예외도 fail-closed blocked verdict 로 변환(미처리 500 방지).
+        # 예외 메시지는 원문 누출 위험이 있어 reason code 만 기록한다.
+        stage_trace.append(_stage("draft_runner", "blocked", BLOCK_BOX3_REAL_RUNNER_ERROR))
+        return _finalize(envelope, status="blocked", fail_class=BLOCK_BOX3_REAL_RUNNER_ERROR, manifest_digest=manifest_digest,
                          stage_trace=stage_trace, real_runner_executed=True, contract_only=False, real_claim_allowed=False)
     if not isinstance(envelope.draft_text_runtime, str) or not envelope.draft_text_runtime.strip():
         stage_trace.append(_stage("draft_runner", "blocked", _REAL_DRAFT_EMPTY))
