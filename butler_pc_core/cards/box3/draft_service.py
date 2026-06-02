@@ -1,8 +1,17 @@
-"""Box 3 draft service: compose a new draft from an existing document.
+"""Box 3 draft service: v1.0 endpoint contract + v1.2 reference pipeline.
 
-Contract-safe by default. Real model execution happens only when Claude Code
-injects a local runner after the 4-stage adapter stack and assets are verified.
-No raw input text is persisted; no network calls are made here.
+기존(v1.0) 엔드포인트 계약과 codex v1.2 reference-from-existing 파이프라인을
+동일 모듈에 병행 노출한다. 두 인터페이스는 독립적으로 작동한다:
+
+- v1.0 (무회귀 의무): MODEL_CHAIN / SEALED_SHA / DEFAULT_MAX_NEW_TOKENS /
+  MAX_NEW_TOKENS_LIMIT / build_draft_inference_config / draft_from_existing /
+  DraftResult / digest_text — sidecar route /v1/cards/3/draft가 import.
+- v1.2 (codex 베이스): Box3ContractError / validate_current_contract_input /
+  compose_box3_current_contract_input / draft_from_current_contract — digest-only
+  계약, security 모듈의 raw-text 가드와 함께 fail-closed.
+
+Contract-safe by default. Real model execution은 caller가 runner를 주입했을 때만.
+원문 입력 텍스트를 디스크에 저장하지 않으며 네트워크 호출 0.
 """
 from __future__ import annotations
 
@@ -10,6 +19,11 @@ import hashlib
 import time
 from dataclasses import asdict, dataclass
 from typing import Any, Callable
+
+from .security import assert_runtime_text_safe, is_sha256_digest, sha256_digest, stable_json_digest
+
+
+# ── v1.0 endpoint contract (무회귀 의무) ──────────────────────────────────
 
 MODEL_CHAIN = ["base", "butler_v3", "tool_call", "box3_smoke"]
 
@@ -104,3 +118,188 @@ def draft_from_existing(
         external_send_zero=True,
         raw_saved_zero=True,
     )
+
+
+# ── v1.2 reference pipeline contract (codex 베이스) ──────────────────────
+
+BOX3_DRAFT_ENDPOINT = "/v1/cards/3/draft"
+BOX3_CURRENT_CONTRACT_FIELDS = ("input_text", "prompt_template", "max_new_tokens")
+DEFAULT_REQUIRED_SECTIONS = [
+    "제목",
+    "배경",
+    "핵심 내용",
+    "근거",
+    "확인 필요",
+    "최종 문안",
+]
+
+# real_model_runner 에 전달 가능한 유일한 정본 prompt template. digest-only 입력과 함께
+# 전체 prompt 의 no-raw-text 를 보장한다(평문 prose 가 담긴 custom template 차단). {input} 자리에는
+# BOX3_DIGEST_ONLY_INPUT(sha256 digest) 만 치환된다.
+CANONICAL_PROMPT_TEMPLATE = (
+    "You are Butler Box 3. Use only digest-linked evidence units. "
+    "Do not invent dates, amounts, names, or legal conclusions. "
+    "Return a draft with citations by source_digest. Input: {input}"
+)
+
+# Codex P1 정정 (2026-06-01, PR #770): Box3 의 grounding 은 아직 draft 의 claim 을 evidence 와
+# 대조하는 claim-level 검증을 구현하지 않았다. 그 전까지는 real_model_runner 를 실제 실행하거나
+# status="real" 을 부여하지 않는다(fail-closed). pipeline.run_box3_pipeline 의 게이트와 동일하게,
+# 공개 헬퍼 draft_from_current_contract 의 직접 호출 경로도 이 상수로 게이트한다(우회 차단).
+# 본 PR 은 진짜 CONTRACT_ONLY 이며, claim-level grounding 구현 시 후속 PR 이 True 로 승격한다.
+CLAIM_LEVEL_GROUNDING_IMPLEMENTED = False
+
+
+class Box3ContractError(ValueError):
+    """Raised for current endpoint contract violations."""
+
+
+def validate_current_contract_input(
+    input_text: str,
+    prompt_template: str,
+    max_new_tokens: int,
+) -> None:
+    if not isinstance(input_text, str) or not input_text:
+        raise Box3ContractError("INPUT_TEXT_REQUIRED")
+    if not isinstance(prompt_template, str) or "{input}" not in prompt_template:
+        raise Box3ContractError("PROMPT_TEMPLATE_REQUIRES_INPUT_PLACEHOLDER")
+    if not isinstance(max_new_tokens, int) or not 1 <= max_new_tokens <= 1024:
+        raise Box3ContractError("MAX_NEW_TOKENS_OUT_OF_RANGE")
+    assert_runtime_text_safe(input_text)
+    assert_runtime_text_safe(prompt_template.replace("{input}", ""))
+
+
+def validate_digest_only_contract_input(input_text: str) -> dict[str, object]:
+    """Codex v1.2.1 P0: real runner 호출 전 BOX3_DIGEST_ONLY_INPUT + sha256:<hex>
+    형식 강제. 자유 텍스트(평문 문서/사용자 입력)가 runner에 도달하지 못하게 한다.
+    호출자: compose_box3_current_contract_input(self-validation) + draft_from_current_contract
+    real_runner 경로(강제 차단)."""
+    lines = [line.strip() for line in input_text.splitlines() if line.strip()]
+    if not lines or lines[0] != "BOX3_DIGEST_ONLY_INPUT":
+        raise Box3ContractError("DIGEST_ONLY_INPUT_REQUIRED_FOR_REAL_RUNNER")
+    fields: dict[str, str] = {}
+    for line in lines[1:]:
+        if "=" not in line:
+            raise Box3ContractError("DIGEST_ONLY_INPUT_FIELD_INVALID")
+        key, value = line.split("=", 1)
+        # Codex P1 정정 (2026-06-01, PR #770): 중복 필드명을 silently overwrite 하면 앞선 raw 라인
+        # (예: request_digest=<평문 prose>)이 input_text 에 남아 runner prompt 로 전송되는데,
+        # set(fields) 검사는 마지막 값만 보아 통과하던 우회. 중복 필드는 거부(fail-closed).
+        if key in fields:
+            raise Box3ContractError("DIGEST_ONLY_INPUT_DUPLICATE_FIELD")
+        fields[key] = value
+    required = {"request_digest", "reference_doc_digests", "format_hint_digest"}
+    if set(fields) != required:
+        raise Box3ContractError("DIGEST_ONLY_INPUT_FIELDS_MISMATCH")
+    if not is_sha256_digest(fields["request_digest"]):
+        raise Box3ContractError("REQUEST_DIGEST_INVALID")
+    if not is_sha256_digest(fields["format_hint_digest"]):
+        raise Box3ContractError("FORMAT_HINT_DIGEST_INVALID")
+    reference_doc_digests = [value for value in fields["reference_doc_digests"].split(",") if value]
+    if not reference_doc_digests or not all(is_sha256_digest(value) for value in reference_doc_digests):
+        raise Box3ContractError("REFERENCE_DOC_DIGESTS_INVALID")
+    return {
+        "request_digest": fields["request_digest"],
+        "reference_doc_digests": reference_doc_digests,
+        "format_hint_digest": fields["format_hint_digest"],
+    }
+
+
+def compose_box3_current_contract_input(
+    *,
+    reference_doc_digests: list[str],
+    request_digest: str,
+    format_hint: str = "freeform",
+    max_new_tokens: int = 512,
+) -> dict[str, object]:
+    input_text = "\n".join(
+        [
+            "BOX3_DIGEST_ONLY_INPUT",
+            f"request_digest={request_digest}",
+            "reference_doc_digests=" + ",".join(reference_doc_digests),
+            f"format_hint_digest={sha256_digest(format_hint)}",
+        ]
+    )
+    prompt_template = CANONICAL_PROMPT_TEMPLATE
+    validate_current_contract_input(input_text, prompt_template, max_new_tokens)
+    validate_digest_only_contract_input(input_text)
+    return {
+        "input_text": input_text,
+        "prompt_template": prompt_template,
+        "max_new_tokens": max_new_tokens,
+    }
+
+
+def draft_from_current_contract(
+    *,
+    input_text: str,
+    prompt_template: str,
+    max_new_tokens: int = 512,
+    real_model_runner=None,
+) -> dict[str, object]:
+    validate_current_contract_input(input_text, prompt_template, max_new_tokens)
+    request_digest = stable_json_digest(
+        {
+            "input_text_digest": sha256_digest(input_text),
+            "prompt_template_digest": sha256_digest(prompt_template),
+            "max_new_tokens": max_new_tokens,
+        }
+    )
+    if real_model_runner is None:
+        draft_text = "[CONTRACT_ONLY_BOX3_DRAFT_NOT_EXECUTED]"
+        return {
+            "status": "contract_only",
+            "draft_text": draft_text,
+            "draft_digest": sha256_digest(draft_text),
+            "request_digest": request_digest,
+            "mock_result": False,
+            "contract_only": True,
+            "real_claim_allowed": False,
+            "external_send_zero": True,
+            "raw_saved_zero": True,
+            "raw_doc_logged": False,
+            "fail_class": "ASSET_INTERFACE_PENDING",
+        }
+    # runner 가 주입된 경우: 실제 실행 전에 입력 계약을 먼저 강제한다.
+    # (1) digest-only 검사 — input_text 가 BOX3_DIGEST_ONLY_INPUT + sha256 shape 인지(raw 차단).
+    validate_digest_only_contract_input(input_text)
+    # (2) Codex P1 정정: digest-only 검사는 input_text 만 보장하므로, prompt_template 에 평문 prose 가
+    #     담기면 runner 에 도달하던 결함. real 실행 전 prompt_template 이 정본인지 강제.
+    if prompt_template != CANONICAL_PROMPT_TEMPLATE:
+        raise Box3ContractError("NON_CANONICAL_PROMPT_TEMPLATE_FOR_REAL_RUNNER")
+    # (3) Codex P1 정정 (2026-06-01, PR #770): 입력 계약을 통과했더라도 claim-level grounding 이
+    #     미구현이면 runner 를 실행하지 않고 contract_only 로 반환한다(공개 헬퍼 직접 호출의 real 우회
+    #     차단). pipeline 게이트와 동일 불변식 — 본 PR 은 어떤 경로로도 status="real"/모델 실행을 내지 않는다.
+    if not CLAIM_LEVEL_GROUNDING_IMPLEMENTED:
+        draft_text = "[CONTRACT_ONLY_BOX3_DRAFT_NOT_EXECUTED]"
+        return {
+            "status": "contract_only",
+            "draft_text": draft_text,
+            "draft_digest": sha256_digest(draft_text),
+            "request_digest": request_digest,
+            "mock_result": False,
+            "contract_only": True,
+            "real_claim_allowed": False,
+            "external_send_zero": True,
+            "raw_saved_zero": True,
+            "raw_doc_logged": False,
+            "fail_class": "CLAIM_LEVEL_GROUNDING_PENDING",
+        }
+    draft_text = real_model_runner(
+        prompt_template.replace("{input}", input_text),
+        max_new_tokens=max_new_tokens,
+    )
+    assert_runtime_text_safe(draft_text)
+    return {
+        "status": "real",
+        "draft_text": draft_text,
+        "draft_digest": sha256_digest(draft_text),
+        "request_digest": request_digest,
+        "mock_result": False,
+        "contract_only": False,
+        "real_claim_allowed": True,
+        "external_send_zero": True,
+        "raw_saved_zero": True,
+        "raw_doc_logged": False,
+        "fail_class": None,
+    }

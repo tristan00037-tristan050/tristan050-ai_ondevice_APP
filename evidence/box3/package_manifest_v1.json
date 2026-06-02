@@ -1,0 +1,17 @@
+{
+  "directive_version": "Butler Box3 v1.2 합본",
+  "evidence_digest": "sha256:64248a1d5d483b610304d43d2e76e3c42bb3f2ad8c43123ef2dcaf74d865c10d",
+  "full_sha_assets_pending": [
+    "helper4_grounding",
+    "helper7_table_figure",
+    "helper8_company_style"
+  ],
+  "full_sha_assets_verified": [
+    "helper3_format"
+  ],
+  "package_name": "butler_box3_draft_from_reference_v1_2_worldclass",
+  "pytest_connect_loop": "PASS",
+  "real_claim_allowed": false,
+  "schema_version": "box3.package_manifest.v1",
+  "status": "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING"
+}
