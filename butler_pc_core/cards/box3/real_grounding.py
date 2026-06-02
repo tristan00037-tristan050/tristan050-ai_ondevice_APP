@@ -257,7 +257,9 @@ def summarize_grounding(verdicts: list[ClaimVerdict]) -> ClaimGroundingSummary:
         fail_class: str | None = "BLOCK_NO_FACTUAL_CLAIMS"
     elif unsupported:
         fail_class = "BLOCK_UNSUPPORTED_CLAIM"
-    elif no_evidence:
+    elif no_evidence_rate > 0.05:
+        # SSOT 임계(≤0.05)와 일치 — 허용 한도 내 no_evidence 는 요약을 blocked 로 표시하지
+        # 않는다(metric_fail_class 와 동일 정책 → stage_trace 모순 방지).
         fail_class = "NEEDS_REVIEW_NO_EVIDENCE_CLAIM"
     else:
         fail_class = None

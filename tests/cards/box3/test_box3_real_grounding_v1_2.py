@@ -1,6 +1,7 @@
 """융합 grounding — 4판정(supported/unsupported/no_evidence/non_claim) + 사실대조."""
 from __future__ import annotations
 
+from butler_pc_core.cards.box3.real_contracts import ClaimVerdict, sha256_text
 from butler_pc_core.cards.box3.real_grounding import (
     extract_claims,
     extract_evidence_units,
@@ -50,6 +51,33 @@ def test_non_factual_section_is_non_claim():
     assert all(
         v.support_level == "non_claim" and v.reason_code == "NON_FACTUAL" for v in verdicts
     )
+
+
+def test_summary_no_evidence_within_threshold_is_verified():
+    # 1/20 = 0.05 → SSOT 임계 내 → 요약 fail_class None(stage_trace 모순 방지).
+    supported = [
+        ClaimVerdict(f"c{i}", sha256_text(f"c{i}"), "supported", ["sha256:" + "a" * 64], 0.9, "EVIDENCE_ENTAILS")
+        for i in range(19)
+    ]
+    no_evidence = [ClaimVerdict("c19", sha256_text("c19"), "no_evidence", [], 0.0, "NO_MATCHING_EVIDENCE")]
+    summary = summarize_grounding(supported + no_evidence)
+    assert summary.no_evidence_rate == 0.05
+    assert summary.fail_class is None
+    assert summary.claim_grounding_verified is True
+
+
+def test_summary_no_evidence_above_threshold_flags_review():
+    supported = [
+        ClaimVerdict(f"c{i}", sha256_text(f"c{i}"), "supported", ["sha256:" + "a" * 64], 0.9, "EVIDENCE_ENTAILS")
+        for i in range(18)
+    ]
+    no_evidence = [
+        ClaimVerdict(f"n{i}", sha256_text(f"n{i}"), "no_evidence", [], 0.0, "NO_MATCHING_EVIDENCE")
+        for i in range(2)
+    ]
+    summary = summarize_grounding(supported + no_evidence)
+    assert summary.no_evidence_rate > 0.05
+    assert summary.fail_class == "NEEDS_REVIEW_NO_EVIDENCE_CLAIM"
 
 
 def test_summary_counts_and_citation_accuracy():

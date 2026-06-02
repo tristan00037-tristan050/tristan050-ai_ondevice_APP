@@ -138,6 +138,15 @@ def _run(
     manifest = asset_manifest if asset_manifest is not None else build_contract_only_asset_manifest()
     manifest_digest = stable_json_digest(manifest) if isinstance(manifest, dict) else sha256_text("invalid-manifest")
 
+    # 입력 런타임 안전성(DLP) 사전 검증 — 모든 종료 경로(contract_only 포함)가 raw/path/
+    # secret/PII 누출에 fail-closed 가 되도록 asset 게이트보다 먼저 검사한다.
+    try:
+        envelope.assert_runtime_safe()
+    except Box3SecurityError:
+        stage_trace.append(_stage("input_runtime_safety", "blocked", BLOCK_BOX3_REAL_SECURITY_RISK))
+        return _finalize(envelope, status="blocked", fail_class=BLOCK_BOX3_REAL_SECURITY_RISK, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=False, contract_only=False, real_claim_allowed=False)
+
     # Stage 1 — asset inventory (골격 #770 manifest 재사용).
     manifest_fail = manifest_block_reason(manifest)
     if manifest_fail:
@@ -151,13 +160,7 @@ def _run(
                          stage_trace=stage_trace, real_runner_executed=False, contract_only=True, real_claim_allowed=False)
     stage_trace.append(_stage("asset_inventory", "pass"))
 
-    # Stage 2 — helper7 evidence extraction (+ runtime DLP 완곡 fail-closed).
-    try:
-        envelope.assert_runtime_safe()
-    except Box3SecurityError:
-        stage_trace.append(_stage("helper7_evidence_extraction", "blocked", BLOCK_BOX3_REAL_SECURITY_RISK))
-        return _finalize(envelope, status="blocked", fail_class=BLOCK_BOX3_REAL_SECURITY_RISK, manifest_digest=manifest_digest,
-                         stage_trace=stage_trace, real_runner_executed=False, contract_only=False, real_claim_allowed=False)
+    # Stage 2 — helper7 evidence extraction (입력 DLP 는 위에서 이미 fail-closed 검증됨).
     envelope.evidence_units_runtime = extract_evidence_units(envelope.reference_text_runtime_only)
     if not envelope.evidence_units_runtime:
         stage_trace.append(_stage("helper7_evidence_extraction", "blocked", BLOCK_EVIDENCE_EXTRACTION_FAILED))

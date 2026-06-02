@@ -37,6 +37,19 @@ def test_default_manifest_is_contract_only_and_never_calls_runner():
     assert [s["stage"] for s in audit.stage_trace] == ["asset_inventory"]
 
 
+def test_contract_only_path_fails_closed_on_leaked_reference():
+    # asset PENDING(기본) 경로라도 reference 에 local path/secret 이 있으면 contract_only 가
+    # 아니라 fail-closed(blocked)여야 한다.
+    verdict, audit = run_box3_real_pipeline(
+        reference_docs=["참고 /Users/secret/plan.docx 를 보라"],
+        drafting_request="요약",
+    )
+    assert verdict.status == "blocked"
+    assert verdict.fail_class == "BLOCK_BOX3_REAL_SECURITY_RISK"
+    assert verdict.contract_only is False
+    assert audit.stage_trace[0]["stage"] == "input_runtime_safety"
+
+
 def test_runner_missing_blocks_after_asset_pass():
     verdict, audit = run_box3_real_followup(
         passing_envelope(), asset_manifest=passing_asset_manifest(), real_model_runner=None,
