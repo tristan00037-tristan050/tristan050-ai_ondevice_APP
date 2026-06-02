@@ -315,6 +315,44 @@ def test_pipeline_drifted_manifest_does_not_enable_real_runner():
     assert calls == []
 
 
+def test_pipeline_contract_only_manifest_with_real_rows_blocks():
+    """top-level contract-only/PENDING 과 row real-eligible 신호가 모순이면 demotion 이 아니라 BLOCK."""
+    contradictory = _passing_real_manifest()
+    contradictory["status"] = "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING"
+    contradictory["real_claim_allowed"] = False
+    calls = []
+
+    def runner(prompt, max_new_tokens):
+        calls.append(prompt)
+        return _CLEAN_REAL_DRAFT
+
+    assert manifest_allows_real(contradictory) is False
+    result = run_box3_pipeline(_request(), asset_manifest=contradictory, real_model_runner=runner)
+    assert result["status"] == "blocked"
+    assert result["fail_class"] == "BLOCK_ASSET_MANIFEST_CONTRADICTORY_ROWS"
+    assert result["real_claim_allowed"] is False
+    assert result["contract_only"] is True
+    assert result["draft_text"] is None
+    assert calls == []
+
+
+def test_pipeline_contract_only_manifest_with_missing_row_fail_class_blocks():
+    """row real_claim_allowed=false 여도 fail_class=None 이면 contract-only row 로는 모순."""
+    contradictory = _passing_real_manifest()
+    contradictory["status"] = "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING"
+    contradictory["real_claim_allowed"] = False
+    for row in contradictory["assets"]:
+        row["real_claim_allowed"] = False
+        row["fail_class"] = None
+
+    result = run_box3_pipeline(_request(), asset_manifest=contradictory)
+    assert result["status"] == "blocked"
+    assert result["fail_class"] == "BLOCK_ASSET_MANIFEST_CONTRADICTORY_ROWS"
+    assert result["real_claim_allowed"] is False
+    assert result["contract_only"] is True
+    assert result["draft_text"] is None
+
+
 def test_pipeline_bad_schema_manifest_blocks_instead_of_demoting():
     """caller supplied schema drift 는 ASSET_INTERFACE_PENDING 으로 숨기지 않고 BLOCK 으로 표면화."""
     bad = _passing_real_manifest()

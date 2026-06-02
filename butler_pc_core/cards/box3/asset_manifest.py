@@ -181,6 +181,7 @@ def manifest_block_reason(manifest: dict[str, Any]) -> str | None:
         return "BLOCK_ASSET_MANIFEST_INVALID"
 
     names: list[str] = []
+    records: list[Box3AssetRecord] = []
     for item in assets:
         try:
             record = Box3AssetRecord(**item)
@@ -189,10 +190,13 @@ def manifest_block_reason(manifest: dict[str, Any]) -> str | None:
         if validate_asset_record(record):
             return "BLOCK_ASSET_MANIFEST_INVALID"
         names.append(record.asset_name)
+        records.append(record)
     if len(names) != len(set(names)) or set(names) != set(REQUIRED_ASSET_NAMES):
         return "BLOCK_ASSET_MANIFEST_INVALID"
 
     if status == CONTRACT_ONLY_ASSET_STATUS and real_claim_allowed is False:
+        if any(record.real_claim_allowed or record.fail_class is None for record in records):
+            return "BLOCK_ASSET_MANIFEST_CONTRADICTORY_ROWS"
         return None
     if status != ASSET_INVENTORY_PASS_STATUS:
         return "BLOCK_ASSET_MANIFEST_STATUS_DRIFT"
