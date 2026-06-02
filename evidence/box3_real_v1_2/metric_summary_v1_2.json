@@ -1,0 +1,22 @@
+{
+  "citation_accuracy": 1.0,
+  "factual_claim_count": 3,
+  "fixed_eval_sample_count": 40,
+  "format_match_score": 1.0,
+  "metric_basis": "claim_level_grounding_real_verification",
+  "no_evidence_rate": 0.0,
+  "pass": true,
+  "schema_version": "box3.real_metrics.v1_2",
+  "style_match_score": 1.0,
+  "table_figure_grounding_score": 1.0,
+  "thresholds": {
+    "citation_accuracy": 0.95,
+    "fixed_eval_sample_count": 40,
+    "format_match_score": 0.85,
+    "no_evidence_rate": 0.05,
+    "style_match_score": 0.7,
+    "table_figure_grounding_score": 0.7,
+    "unsupported_claim_rate": 0.0
+  },
+  "unsupported_claim_rate": 0.0
+}

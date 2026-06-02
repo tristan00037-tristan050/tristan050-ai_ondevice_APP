@@ -1,0 +1,31 @@
+{
+  "actual_asset_pending": [
+    "helper4_grounding",
+    "helper7_table_figure",
+    "helper8_company_style"
+  ],
+  "actual_pass_box3_real_claim": false,
+  "claim_grounding_fixture_pass": true,
+  "directive_version": "Butler Box3 real follow-up v1.2 합본",
+  "evidence_digest": "sha256:a9b08212b4196d6dd9d80f0f6b6de82046b952123f44a9282f04ea5f6a85a44a",
+  "external_send_zero": true,
+  "pipeline_stages": [
+    "asset_inventory",
+    "helper7_evidence_extraction",
+    "draft_runner",
+    "claim_extraction",
+    "helper4_claim_grounding",
+    "helper3_helper8_format_style",
+    "final_real_gate"
+  ],
+  "pr770_precondition": "MERGED",
+  "pytest_returncode": 0,
+  "raw_persistence_zero": true,
+  "schema_version": "box3.real_followup.package_manifest.v1_2",
+  "single_contract_objects": [
+    "Box3RealRuntimeEnvelope",
+    "Box3RealVerdict",
+    "Box3RealAuditRecord"
+  ],
+  "status": "PARTIAL_REAL_GATED_ASSET_PENDING"
+}

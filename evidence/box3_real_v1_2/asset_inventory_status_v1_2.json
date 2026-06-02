@@ -1,0 +1,81 @@
+{
+  "actual_manifest": {
+    "asset_errors": {
+      "helper3_format": [],
+      "helper4_grounding": [],
+      "helper7_table_figure": [],
+      "helper8_company_style": []
+    },
+    "assets": [
+      {
+        "asset_name": "helper3_format",
+        "asset_path": "ref:BUTLER_HELPER3_FORMAT_PATH",
+        "display_sha_prefix": "92e8454f...",
+        "fail_class": "INTERFACE_INVENTORY_PENDING",
+        "interface_inventory_status": "contract_sample_only",
+        "measured_at": "2026-06-02T00:00:00+00:00",
+        "measured_by": "codex_local_shasum",
+        "real_claim_allowed": false,
+        "role": "company_format_application",
+        "sha256_full": "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0",
+        "sha_scope": "file",
+        "source_metadata_files": [
+          "adapter_config.json"
+        ]
+      },
+      {
+        "asset_name": "helper4_grounding",
+        "asset_path": null,
+        "display_sha_prefix": "b7b1af0e...",
+        "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
+        "interface_inventory_status": "missing_asset_path",
+        "measured_at": null,
+        "measured_by": "not_measured",
+        "real_claim_allowed": false,
+        "role": "grounding_verification",
+        "sha256_full": null,
+        "sha_scope": "unknown",
+        "source_metadata_files": []
+      },
+      {
+        "asset_name": "helper7_table_figure",
+        "asset_path": null,
+        "display_sha_prefix": "8b034549...",
+        "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
+        "interface_inventory_status": "missing_asset_path",
+        "measured_at": null,
+        "measured_by": "not_measured",
+        "real_claim_allowed": false,
+        "role": "evidence_extraction",
+        "sha256_full": null,
+        "sha_scope": "unknown",
+        "source_metadata_files": []
+      },
+      {
+        "asset_name": "helper8_company_style",
+        "asset_path": null,
+        "display_sha_prefix": "7d4f8311...",
+        "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
+        "interface_inventory_status": "missing_asset_path",
+        "measured_at": null,
+        "measured_by": "not_measured",
+        "real_claim_allowed": false,
+        "role": "company_style_application",
+        "sha256_full": null,
+        "sha_scope": "unknown",
+        "source_metadata_files": []
+      }
+    ],
+    "created_at": "2026-06-02T00:00:00+00:00",
+    "honest_disclosure": "helper3 file SHA was measured locally; helper4/helper7/helper8 full SHA and interface inventory are not available in the provided Box3 folder.",
+    "real_claim_allowed": false,
+    "schema_version": "box3.asset_manifest.v1",
+    "state_gate": "CONTRACT_ONLY",
+    "status": "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING"
+  },
+  "fixture_manifest_used_for_gate_tests": true,
+  "pass_box3_real_claim": false,
+  "reason": "helper4/helper7/helper8 full SHA and interface smoke are not measured in this repo state",
+  "schema_version": "box3.real_asset_inventory_status.v1_2",
+  "status": "PARTIAL_REAL_GATED_ASSET_PENDING"
+}

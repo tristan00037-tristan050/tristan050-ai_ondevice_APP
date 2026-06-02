@@ -1,0 +1,148 @@
+{
+  "audit": {
+    "company_format_digest": "sha256:d71ab38735fdf0e658831eadf3b8fc8ffea59f863a3ec7968b56f2102d43c39f",
+    "draft_digest": "sha256:a4566b364ead7e8a4f710657b380124142373a3164f6528a6a75372b8ebdd61c",
+    "external_send_zero": true,
+    "fail_class": null,
+    "raw_saved_zero": true,
+    "reference_digests": [
+      "sha256:36d8bc3a35c860c936fe3bb0c2951cb46da4d34ad2140acbc384ef5cf3df9239",
+      "sha256:9f8fd888cdc2a2b1f46962eeacf648b9da9f6d1834562b0de5692d75b8657c9b"
+    ],
+    "request_digest": "sha256:94e442c78d060138ad0baf37b0749c6932f1dec7c81643a70627a8da926cb505",
+    "schema_version": "box3.real_audit.v1_2",
+    "stage_trace": [
+      {
+        "fail_class": null,
+        "stage": "asset_inventory",
+        "status": "pass"
+      },
+      {
+        "evidence_unit_count": 2,
+        "fail_class": null,
+        "output_digest_only": true,
+        "stage": "helper7_evidence_extraction",
+        "status": "pass"
+      },
+      {
+        "draft_digest": "sha256:a4566b364ead7e8a4f710657b380124142373a3164f6528a6a75372b8ebdd61c",
+        "duration_ms": 0,
+        "fail_class": null,
+        "stage": "draft_runner",
+        "status": "pass"
+      },
+      {
+        "factual_claim_count": 3,
+        "fail_class": null,
+        "no_evidence_rate": 0.0,
+        "stage": "helper4_claim_grounding",
+        "status": "pass",
+        "unsupported_claim_rate": 0.0
+      },
+      {
+        "fail_class": null,
+        "format_match_score": 1.0,
+        "stage": "helper3_helper8_format_style",
+        "status": "pass",
+        "style_match_score": 1.0
+      },
+      {
+        "fail_class": null,
+        "metrics_pass": true,
+        "stage": "final_real_gate",
+        "status": "pass"
+      }
+    ],
+    "status": "real"
+  },
+  "verdict": {
+    "claim_verdicts": [
+      {
+        "claim_digest": "sha256:a64b157f9fd11b954fbe6947568a0e8f45259c73a637072f124df8407bd9ddbb",
+        "claim_id": "claim_001",
+        "confidence": 1.0,
+        "evidence_digests": [],
+        "reason_code": "SECTION_NON_FACTUAL",
+        "support_level": "non_claim"
+      },
+      {
+        "claim_digest": "sha256:a7b1af6b674314994cefe44591f9be935d241ffe91793b2a895adbb8500ab92a",
+        "claim_id": "claim_002",
+        "confidence": 1.0,
+        "evidence_digests": [
+          "sha256:36d8bc3a35c860c936fe3bb0c2951cb46da4d34ad2140acbc384ef5cf3df9239",
+          "sha256:9f8fd888cdc2a2b1f46962eeacf648b9da9f6d1834562b0de5692d75b8657c9b"
+        ],
+        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED",
+        "support_level": "supported"
+      },
+      {
+        "claim_digest": "sha256:29b172d7bece967988947a97a3fe17ba3fa03479b7e8a3f186413e0d3027027d",
+        "claim_id": "claim_003",
+        "confidence": 1.0,
+        "evidence_digests": [
+          "sha256:36d8bc3a35c860c936fe3bb0c2951cb46da4d34ad2140acbc384ef5cf3df9239"
+        ],
+        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED",
+        "support_level": "supported"
+      },
+      {
+        "claim_digest": "sha256:92f6b412a4b8cb4825f4a598fbe134bb1a917897c42ebc81549aa803cacc2d02",
+        "claim_id": "claim_004",
+        "confidence": 1.0,
+        "evidence_digests": [],
+        "reason_code": "SECTION_NON_FACTUAL",
+        "support_level": "non_claim"
+      },
+      {
+        "claim_digest": "sha256:ee176681e32f65813c13a373c8fdd772d3ab29a7086e85dfaf57809db2bdf978",
+        "claim_id": "claim_005",
+        "confidence": 1.0,
+        "evidence_digests": [],
+        "reason_code": "SECTION_NON_FACTUAL",
+        "support_level": "non_claim"
+      },
+      {
+        "claim_digest": "sha256:03ef526577d7ee41c3efeb85de1c85cfd6aaee47e66bb6440bd33efa6074c121",
+        "claim_id": "claim_006",
+        "confidence": 1.0,
+        "evidence_digests": [
+          "sha256:36d8bc3a35c860c936fe3bb0c2951cb46da4d34ad2140acbc384ef5cf3df9239",
+          "sha256:9f8fd888cdc2a2b1f46962eeacf648b9da9f6d1834562b0de5692d75b8657c9b"
+        ],
+        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED",
+        "support_level": "supported"
+      }
+    ],
+    "contract_only": false,
+    "draft_digest": "sha256:a4566b364ead7e8a4f710657b380124142373a3164f6528a6a75372b8ebdd61c",
+    "external_send_zero": true,
+    "fail_class": null,
+    "metrics": {
+      "citation_accuracy": 1.0,
+      "factual_claim_count": 3,
+      "fixed_eval_sample_count": 40,
+      "format_match_score": 1.0,
+      "metric_basis": "claim_level_grounding_real_verification",
+      "no_evidence_rate": 0.0,
+      "pass": true,
+      "schema_version": "box3.real_metrics.v1_2",
+      "style_match_score": 1.0,
+      "table_figure_grounding_score": 1.0,
+      "thresholds": {
+        "citation_accuracy": 0.95,
+        "fixed_eval_sample_count": 40,
+        "format_match_score": 0.85,
+        "no_evidence_rate": 0.05,
+        "style_match_score": 0.7,
+        "table_figure_grounding_score": 0.7,
+        "unsupported_claim_rate": 0.0
+      },
+      "unsupported_claim_rate": 0.0
+    },
+    "raw_saved_zero": true,
+    "real_claim_allowed": true,
+    "schema_version": "box3.real_verdict.v1_2",
+    "status": "real"
+  }
+}
