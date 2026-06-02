@@ -10,6 +10,12 @@ from .storage import PolicyLoadError, PolicyStore
 
 DEFAULT_ROUTE_OPERATION: dict[str, tuple[str, str]] = {
     "/v1/helpers/1/search": ("helper1", "memory_search"),
+    # helper1 `/v1/helpers/1/ask` 라우트 누락 정정 (fix(policy): helper1/ask PolicyGate 포함):
+    # search 와 동일 사이드카 모듈에서 등록되며 동일한 메모리 자산을 사용하지만 ask 는
+    # chat-form 응답 — PolicyGate 적용 누락 시 정책·테넌트·외부전송 검증이 우회되어
+    # fail-closed 의무 위반. 본 라인 추가로 모든 박스/헬퍼 진입 라우트가 중앙 게이트 1벌
+    # 으로 평가된다.
+    "/v1/helpers/1/ask": ("helper1", "memory_ask"),
     "/v1/cards/2/rewrite": ("2", "form_convert"),
     "/v1/cards/3/draft": ("3", "draft_write"),
     "/accounting/classify": ("5", "accounting_classify"),

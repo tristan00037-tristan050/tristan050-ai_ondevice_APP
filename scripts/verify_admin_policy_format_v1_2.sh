@@ -129,10 +129,38 @@ for path in files():
             errors.append(f"BLOCK_CLAUDE_FOOTER:{path.relative_to(root)}")
             break
 
+# verify key=0/1 정정: 각 검증 key 의 *위반 카운트* 를 0/1+ 정수로 보고한다 (0=PASS,
+# >0=FAIL). boolean true/false 대신 카운트 단위로 명시하여 grep/awk 파이프라인이 정확히
+# 위반 수를 추출 가능. 카운트 0 = ZERO 의무 충족.
+def _count(prefix: str) -> int:
+    return sum(1 for line in errors if line.startswith(prefix))
+
+connect_loop_count = sum(
+    1
+    for line in errors
+    if line in {
+        "BLOCK_CONNECT_LOOP_CONTRACT_REFERENCED_IN_PR_SCOPE",
+        "BLOCK_DOCS_SSOT_CONNECT_LOOP_REFERENCED_IN_PR_SCOPE",
+    }
+)
+token_count = _count("BLOCK_TOKEN_STORAGE_OR_LOG:")
+network_count = _count("BLOCK_NON_LOCAL_NETWORK:")
+raw_count = _count("BLOCK_RAW_SECRET_PATH:")
+training_count = _count("BLOCK_TRAINING_MODEL_ARTIFACT:")
+footer_count = _count("BLOCK_CLAUDE_FOOTER:")
+
+print(f"CONNECT_LOOP_CONTRACT_MODIFIED={connect_loop_count}")
+print(f"TOKEN_STORAGE_LOG={token_count}")
+print(f"NON_LOCAL_NETWORK={network_count}")
+print(f"RAW_SECRET_PATH_SCAN={raw_count}")
+print(f"TRAINING_MODEL_ARTIFACT={training_count}")
+print(f"CLAUDE_FOOTER={footer_count}")
+
 if errors:
     print("\n".join(errors))
     raise SystemExit(1)
 
+# Backward-compat ZERO=true 라인은 grep 기존 파이프라인 호환 유지.
 print("CONNECT_LOOP_CONTRACT_MODIFIED_ZERO=true")
 print("TOKEN_STORAGE_LOG_ZERO=true")
 print("NON_LOCAL_NETWORK_ZERO=true")
