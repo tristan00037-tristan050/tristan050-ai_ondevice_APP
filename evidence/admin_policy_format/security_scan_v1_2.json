@@ -1,0 +1,12 @@
+{
+  "all_zero": true,
+  "checks": {
+    "CONNECT_LOOP_CONTRACT_MODIFIED_ZERO": true,
+    "NON_LOCAL_NETWORK_ZERO": true,
+    "RAW_SECRET_PATH_SCAN_ZERO": true,
+    "TOKEN_STORAGE_LOG_ZERO": true,
+    "TRAINING_MODEL_ARTIFACT_ZERO": true
+  },
+  "schema_version": "admin_policy_format.security_scan.v1_2",
+  "scope_note": "본 PR 범위(PR_PATHS) 한정 5 ZERO 검증. verifier-self-exclude 적용. 박스 3 머지본의 기존 자산(schemas/connect_loop, docs/ssot, butler-desktop 등)은 본 PR 패키지 외부 — 본 PR 이 그 경로를 수정/포함하지 않음을 텍스트 검사로 확인."
+}

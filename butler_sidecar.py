@@ -303,11 +303,21 @@ if _FASTAPI_AVAILABLE:
     from butler_pc_core.sidecar.routes.box3_draft import router as box3_draft_router
     from butler_pc_core.sidecar.routes.helper1_search import router as helper1_search_router
     from butler_pc_core.sidecar.routes.router_decide import router as router_decide_router
+    # 관리자 정책·양식 등록 v1.2 (MAINDEV patches/0001 본질 흡수): admin RBAC route +
+    # 중앙 PolicyGate middleware 등록. middleware 는 모든 박스/헬퍼 라우트보다 *먼저*
+    # 실행되며(fail-closed), 정책 미정의·로딩 실패 시 admin setup 외 모든 박스/헬퍼는
+    # 차단된다(bootstrap 게이트).
+    from butler_pc_core.sidecar.routes.admin_policy_format import router as admin_policy_format_router
+    from butler_pc_core.company_policy.middleware import add_policy_gate_middleware
+    from butler_pc_core.company_policy.storage import PolicyStore
+
+    add_policy_gate_middleware(app, policy_store=PolicyStore())
 
     app.include_router(router_decide_router)
     app.include_router(box2_rewrite_router)
     app.include_router(box3_draft_router)
     app.include_router(helper1_search_router)
+    app.include_router(admin_policy_format_router)
 
     # -----------------------------------------------------------------------
     # 모델
