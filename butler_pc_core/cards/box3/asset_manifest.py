@@ -46,7 +46,31 @@ def is_full_sha256(value: Any) -> bool:
 
 def validate_asset_record(record: Box3AssetRecord) -> list[str]:
     errors: list[str] = []
-    if record.sha_scope not in {"file", "directory_manifest", "unknown"}:
+    if not isinstance(record.asset_name, str):
+        errors.append("ASSET_NAME_INVALID")
+    if not isinstance(record.role, str):
+        errors.append("ASSET_ROLE_INVALID")
+    if not isinstance(record.display_sha_prefix, str):
+        errors.append("DISPLAY_SHA_PREFIX_INVALID")
+    if record.asset_path is not None and not isinstance(record.asset_path, str):
+        errors.append("ASSET_PATH_INVALID")
+    if record.sha256_full is not None and not isinstance(record.sha256_full, str):
+        errors.append("SHA256_FULL_INVALID")
+    if record.measured_at is not None and not isinstance(record.measured_at, str):
+        errors.append("MEASURED_AT_INVALID")
+    if not isinstance(record.measured_by, str):
+        errors.append("MEASURED_BY_INVALID")
+    if not isinstance(record.source_metadata_files, list) or not all(
+        isinstance(item, str) for item in record.source_metadata_files
+    ):
+        errors.append("SOURCE_METADATA_FILES_INVALID")
+    if not isinstance(record.interface_inventory_status, str):
+        errors.append("INTERFACE_INVENTORY_STATUS_INVALID")
+    if not isinstance(record.real_claim_allowed, bool):
+        errors.append("REAL_CLAIM_ALLOWED_INVALID")
+    if record.fail_class is not None and not isinstance(record.fail_class, str):
+        errors.append("FAIL_CLASS_INVALID")
+    if not isinstance(record.sha_scope, str) or record.sha_scope not in {"file", "directory_manifest", "unknown"}:
         errors.append("SHA_SCOPE_INVALID")
     if record.real_claim_allowed:
         if record.sha_scope not in {"file", "directory_manifest"}:

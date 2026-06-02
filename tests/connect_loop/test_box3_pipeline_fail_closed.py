@@ -348,6 +348,19 @@ def test_pipeline_malformed_asset_scalar_type_blocks_without_typeerror():
     assert calls == []
 
 
+def test_pipeline_malformed_asset_name_type_blocks_without_typeerror():
+    """asset_name list 같은 non-scalar 식별자는 set(names) TypeError 전 BLOCK."""
+    bad = _passing_real_manifest()
+    bad["assets"][0]["asset_name"] = ["helper3_format"]
+
+    result = run_box3_pipeline(_request(), asset_manifest=bad)
+    assert result["status"] == "blocked"
+    assert result["fail_class"] == "BLOCK_ASSET_MANIFEST_INVALID"
+    assert result["contract_only"] is True
+    assert result["real_claim_allowed"] is False
+    assert result["draft_text"] is None
+
+
 # ───────────────────────────────────────────────────────────────────────────────
 # 근본 재검토: 단일 real 게이트 8축 매트릭스 (각 축 단독 실패 → real false 전수)
 # ───────────────────────────────────────────────────────────────────────────────
