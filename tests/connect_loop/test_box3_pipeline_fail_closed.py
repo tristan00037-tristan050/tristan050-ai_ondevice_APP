@@ -414,6 +414,20 @@ def test_pipeline_malformed_asset_name_type_blocks_without_typeerror():
     assert result["draft_text"] is None
 
 
+def test_pipeline_malformed_sha_scope_type_blocks_without_typeerror():
+    """real row 의 sha_scope list 같은 unhashable 값은 membership TypeError 대신 BLOCK."""
+    bad = _passing_real_manifest()
+    bad["assets"][0]["sha_scope"] = ["file"]
+
+    assert manifest_allows_real(bad) is False
+    result = run_box3_pipeline(_request(), asset_manifest=bad)
+    assert result["status"] == "blocked"
+    assert result["fail_class"] == "BLOCK_ASSET_MANIFEST_INVALID"
+    assert result["contract_only"] is True
+    assert result["real_claim_allowed"] is False
+    assert result["draft_text"] is None
+
+
 def test_manifest_allows_real_rejects_non_list_assets_without_typeerror():
     """direct gate 호출에서도 assets=null/scalar 는 예외가 아니라 False."""
     for malformed_assets in (None, "helper3_format", 123):
