@@ -7,7 +7,7 @@
   "actual_pass_box3_real_claim": false,
   "claim_grounding_fixture_pass": true,
   "directive_version": "Butler Box3 real follow-up v1.2 합본",
-  "evidence_digest": "sha256:a9b08212b4196d6dd9d80f0f6b6de82046b952123f44a9282f04ea5f6a85a44a",
+  "evidence_digest": "sha256:d237ec9f532398c82086a831aa37212431b4d271af6250e615bc19c1b3898d86",
   "external_send_zero": true,
   "pipeline_stages": [
     "asset_inventory",

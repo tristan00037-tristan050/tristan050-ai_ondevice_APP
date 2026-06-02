@@ -7,7 +7,7 @@
   "no_evidence_rate": 0.0,
   "pass": true,
   "schema_version": "box3.real_metrics.v1_2",
-  "style_match_score": 1.0,
+  "style_match_score": 0.9,
   "table_figure_grounding_score": 1.0,
   "thresholds": {
     "citation_accuracy": 0.95,

@@ -1,7 +1,7 @@
 {
   "audit": {
     "company_format_digest": "sha256:d71ab38735fdf0e658831eadf3b8fc8ffea59f863a3ec7968b56f2102d43c39f",
-    "draft_digest": "sha256:a4566b364ead7e8a4f710657b380124142373a3164f6528a6a75372b8ebdd61c",
+    "draft_digest": "sha256:0a70730b78397b98d24e9eb6029d212a265a99ef073511d36ff7c5394da6260d",
     "external_send_zero": true,
     "fail_class": null,
     "raw_saved_zero": true,
@@ -25,7 +25,7 @@
         "status": "pass"
       },
       {
-        "draft_digest": "sha256:a4566b364ead7e8a4f710657b380124142373a3164f6528a6a75372b8ebdd61c",
+        "draft_digest": "sha256:0a70730b78397b98d24e9eb6029d212a265a99ef073511d36ff7c5394da6260d",
         "duration_ms": 0,
         "fail_class": null,
         "stage": "draft_runner",
@@ -44,7 +44,7 @@
         "format_match_score": 1.0,
         "stage": "helper3_helper8_format_style",
         "status": "pass",
-        "style_match_score": 1.0
+        "style_match_score": 0.9
       },
       {
         "fail_class": null,
@@ -73,7 +73,7 @@
           "sha256:36d8bc3a35c860c936fe3bb0c2951cb46da4d34ad2140acbc384ef5cf3df9239",
           "sha256:9f8fd888cdc2a2b1f46962eeacf648b9da9f6d1834562b0de5692d75b8657c9b"
         ],
-        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED",
+        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED_WITH_CITATION",
         "support_level": "supported"
       },
       {
@@ -83,11 +83,11 @@
         "evidence_digests": [
           "sha256:36d8bc3a35c860c936fe3bb0c2951cb46da4d34ad2140acbc384ef5cf3df9239"
         ],
-        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED",
+        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED_WITH_CITATION",
         "support_level": "supported"
       },
       {
-        "claim_digest": "sha256:92f6b412a4b8cb4825f4a598fbe134bb1a917897c42ebc81549aa803cacc2d02",
+        "claim_digest": "sha256:32c577466a5f23cb894c269fa86407577154f70f645716dfaffaeae30b1ba47d",
         "claim_id": "claim_004",
         "confidence": 1.0,
         "evidence_digests": [],
@@ -110,12 +110,12 @@
           "sha256:36d8bc3a35c860c936fe3bb0c2951cb46da4d34ad2140acbc384ef5cf3df9239",
           "sha256:9f8fd888cdc2a2b1f46962eeacf648b9da9f6d1834562b0de5692d75b8657c9b"
         ],
-        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED",
+        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED_WITH_CITATION",
         "support_level": "supported"
       }
     ],
     "contract_only": false,
-    "draft_digest": "sha256:a4566b364ead7e8a4f710657b380124142373a3164f6528a6a75372b8ebdd61c",
+    "draft_digest": "sha256:0a70730b78397b98d24e9eb6029d212a265a99ef073511d36ff7c5394da6260d",
     "external_send_zero": true,
     "fail_class": null,
     "metrics": {
@@ -127,7 +127,7 @@
       "no_evidence_rate": 0.0,
       "pass": true,
       "schema_version": "box3.real_metrics.v1_2",
-      "style_match_score": 1.0,
+      "style_match_score": 0.9,
       "table_figure_grounding_score": 1.0,
       "thresholds": {
         "citation_accuracy": 0.95,

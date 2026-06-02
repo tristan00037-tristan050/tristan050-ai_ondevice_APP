@@ -30,6 +30,39 @@ def test_claim_grounding_supported_unsupported_and_non_claim_levels():
     assert all("신규 예산" not in item.to_dict().get("claim_digest", "") for item in verdicts)
 
 
+def test_claim_grounding_requires_source_digest_marker_for_citation_accuracy():
+    evidence_text = "프로젝트 알파는 내부 검토를 완료했습니다. 담당 조직은 운영팀입니다."
+    evidence_digest = sha256_digest(evidence_text)
+    uncited_draft = "\n".join(
+        [
+            "배경: 프로젝트 알파는 내부 검토를 완료했습니다.",
+            "핵심 내용: 담당 조직은 운영팀입니다.",
+            "근거: 참고 문서를 기반으로 작성합니다.",
+        ]
+    )
+    _, uncited_summary = ground_claims(
+        draft_text=uncited_draft,
+        evidence_texts=[evidence_text],
+        evidence_digests=[evidence_digest],
+    )
+    assert uncited_summary.supported_claim_count == 2
+    assert uncited_summary.citation_accuracy == 0.0
+
+    cited_draft = "\n".join(
+        [
+            "배경: 프로젝트 알파는 내부 검토를 완료했습니다.",
+            "핵심 내용: 담당 조직은 운영팀입니다.",
+            f"근거: source_digest={evidence_digest}",
+        ]
+    )
+    _, cited_summary = ground_claims(
+        draft_text=cited_draft,
+        evidence_texts=[evidence_text],
+        evidence_digests=[evidence_digest],
+    )
+    assert cited_summary.citation_accuracy == 1.0
+
+
 def test_claim_grounding_no_evidence_is_needs_review_not_supported():
     draft_text = "배경: 프로젝트 알파는 내부 검토를 완료했습니다."
 

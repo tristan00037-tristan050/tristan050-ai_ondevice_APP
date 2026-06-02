@@ -12,6 +12,7 @@ ClaimSupportLevel = Literal["supported", "unsupported", "no_evidence", "non_clai
 NON_FACTUAL_SECTIONS = {"제목", "근거", "확인 필요"}
 FACTUAL_SECTIONS = {"배경", "핵심 내용", "합의사항", "금액/일정", "최종 문안"}
 SECTION_RE = re.compile(r"^\s*(?P<section>[^:\n]{1,24})\s*:\s*(?P<body>.*)\s*$")
+SHA256_DIGEST_RE = re.compile(r"sha256:[a-f0-9]{64}")
 
 
 @dataclass(frozen=True)
@@ -110,7 +111,9 @@ def ground_claims(
 
     claims = extract_runtime_claims(draft_text)
     normalized_evidence = [normalize_claim_text(text) for text in evidence_texts]
+    cited_digest_set = set(SHA256_DIGEST_RE.findall(draft_text))
     verdicts: list[ClaimVerdict] = []
+    cited_supported_count = 0
 
     for claim in claims:
         if not claim.factual:
@@ -146,14 +149,21 @@ def ground_claims(
             if normalized_claim and normalized_claim in evidence
         ]
         if matched:
+            cited_matches = [digest for digest in matched if digest in cited_digest_set]
+            if cited_matches:
+                cited_supported_count += 1
             verdicts.append(
                 ClaimVerdict(
                     claim_id=claim.claim_id,
                     claim_digest=claim.claim_digest,
                     support_level="supported",
                     evidence_digests=matched,
-                    confidence=1.0,
-                    reason_code="CLAIM_TEXT_EXACTLY_GROUNDED",
+                    confidence=1.0 if cited_matches else 0.5,
+                    reason_code=(
+                        "CLAIM_TEXT_EXACTLY_GROUNDED_WITH_CITATION"
+                        if cited_matches
+                        else "CLAIM_TEXT_GROUNDED_BUT_CITATION_MISSING"
+                    ),
                 )
             )
         else:
@@ -175,7 +185,7 @@ def ground_claims(
     factual_count = len(factual)
     unsupported_rate = len(unsupported) / max(factual_count, 1)
     no_evidence_rate = len(no_evidence) / max(factual_count, 1)
-    citation_accuracy = len(supported) / max(factual_count, 1)
+    citation_accuracy = cited_supported_count / max(factual_count, 1)
 
     if factual_count == 0:
         fail_class = "BLOCK_NO_FACTUAL_CLAIMS"

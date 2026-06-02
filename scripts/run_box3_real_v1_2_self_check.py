@@ -84,13 +84,14 @@ def passing_manifest_fixture() -> dict:
     return manifest
 
 
-def supported_draft(_: Box3RealRuntimeEnvelope) -> str:
+def supported_draft(envelope: Box3RealRuntimeEnvelope) -> str:
+    citation = envelope.reference_digests[0] if envelope.reference_digests else "sha256:" + "0" * 64
     return "\n".join(
         [
             "제목: 프로젝트 알파 실행 초안",
             "배경: 프로젝트 알파는 내부 검토를 완료했습니다.",
             "핵심 내용: 담당 조직은 운영팀입니다.",
-            "근거: source_digest 기준으로만 표시합니다.",
+            f"근거: source_digest={citation}",
             "확인 필요: 추가 일정은 확인 필요입니다.",
             "최종 문안: 프로젝트 알파는 내부 검토를 완료했습니다.",
         ]

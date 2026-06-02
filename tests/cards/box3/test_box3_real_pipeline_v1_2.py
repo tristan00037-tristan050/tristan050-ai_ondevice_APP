@@ -59,12 +59,13 @@ def _envelope(reference_texts: list[str] | None = None) -> Box3RealRuntimeEnvelo
 
 
 def _supported_draft(_envelope: Box3RealRuntimeEnvelope) -> str:
+    citation = _envelope.reference_digests[0] if _envelope.reference_digests else "sha256:" + "0" * 64
     return "\n".join(
         [
             "제목: 프로젝트 알파 실행 초안",
             "배경: 프로젝트 알파는 내부 검토를 완료했습니다.",
             "핵심 내용: 담당 조직은 운영팀입니다.",
-            "근거: source_digest 기준으로만 표시합니다.",
+            f"근거: source_digest={citation}",
             "확인 필요: 추가 일정은 확인 필요입니다.",
             "최종 문안: 프로젝트 알파는 내부 검토를 완료했습니다.",
         ]
@@ -146,6 +147,33 @@ def test_real_pipeline_needs_review_when_fixed_eval_gate_not_met():
     assert output.verdict.fail_class == "FIXED_EVAL_SAMPLE_COUNT_BELOW_GATE"
     assert output.verdict.draft_text is None
     assert output.verdict.metrics["fixed_eval_sample_count"] == 39
+
+
+def test_real_pipeline_requires_citation_marker_before_real_status():
+    def uncited_runner(_envelope: Box3RealRuntimeEnvelope) -> str:
+        return "\n".join(
+            [
+                "제목: 프로젝트 알파 실행 초안",
+                "배경: 프로젝트 알파는 내부 검토를 완료했습니다.",
+                "핵심 내용: 담당 조직은 운영팀입니다.",
+                "근거: 참고 문서를 기반으로 작성합니다.",
+                "확인 필요: 추가 일정은 확인 필요입니다.",
+                "최종 문안: 프로젝트 알파는 내부 검토를 완료했습니다.",
+            ]
+        )
+
+    output = run_box3_real_followup(
+        _envelope(),
+        asset_manifest=_passing_manifest(),
+        real_model_runner=uncited_runner,
+        fixed_eval_sample_count=40,
+    )
+
+    assert output.verdict.status == "needs_review"
+    assert output.verdict.fail_class == "CITATION_ACCURACY_BELOW_GATE"
+    assert output.verdict.draft_text is None
+    assert output.verdict.real_claim_allowed is False
+    assert output.verdict.metrics["citation_accuracy"] == 0.0
 
 
 def test_real_pipeline_passes_only_when_assets_runner_claims_and_metrics_pass():

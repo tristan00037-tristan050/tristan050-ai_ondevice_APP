@@ -19,8 +19,8 @@ STATUS=PARTIAL_REAL_GATED_ASSET_PENDING
 
 ## Verification
 
-- Focused real follow-up tests: 11 passed
-- Box3 regression set: 79 passed
+- Focused real follow-up tests: 13 passed
+- Box3 regression set: 81 passed
 - `external_send_zero=true`
 - `raw_persistence_zero=true`
 - new binary artifacts: 0
