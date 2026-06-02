@@ -19,7 +19,7 @@
     "reference_digests": [
       "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a"
     ],
-    "request_digest": "sha256:5c3cd4fe52340bfffaf86e7afc9199619309f96b5fac0c9f8b3d7eee44b1187a",
+    "request_digest": "sha256:785b52a9a9a454e453c8bd26ef248d6786bb3b88e2389e18142ee2dfba4398ad",
     "result_digest": "sha256:bd1a476da57b4f88b2a2da51f459289bf56236faa0c9081e3e3c990161966ddd",
     "schema_version": "box3.real_audit.v1_2",
     "stage_trace": [
@@ -191,7 +191,7 @@
     "raw_text_logged": false,
     "real_claim_allowed": true,
     "real_runner_executed": true,
-    "request_digest": "sha256:5c3cd4fe52340bfffaf86e7afc9199619309f96b5fac0c9f8b3d7eee44b1187a",
+    "request_digest": "sha256:785b52a9a9a454e453c8bd26ef248d6786bb3b88e2389e18142ee2dfba4398ad",
     "schema_version": "box3.real_verdict.v1_2",
     "status": "real"
   }

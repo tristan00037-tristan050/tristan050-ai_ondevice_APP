@@ -115,9 +115,15 @@ def main() -> int:
         "reason": "helper4/helper7/helper8 full SHA and interface smoke are not measured in this repo state",
     })
 
+    # 박스 3 real 융합 v1.0 정정: envelope.request_id 를 결정적 고정값으로 주입한다.
+    # default 인 new_request_id() 는 매 실행 시 UUID4 를 생성하여 envelope.request_digest
+    # (request_id 가 SSOT 입력) 와 그 파생 verdict.request_digest 가 비결정적으로 갱신되어
+    # evidence/box3_real_v1_2/pipeline_smoke_v1_2.json 이 self-check 재실행마다 dirty 가
+    # 된다. dirty-tree 0 (재현 결정성) 보장을 위해 self_check 전용 결정적 ID 를 고정한다.
     envelope = Box3RealRuntimeEnvelope.from_raw(
         drafting_request="프로젝트 알파 납품 보고서를 작성하라",
         reference_texts=[PASSING_REF],
+        request_id="box3-real-fusion-v1-0-self-check",
     )
     verdict, audit = run_box3_real_followup(
         envelope,

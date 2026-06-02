@@ -38,4 +38,4 @@ tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_real_candidate_without_hu
 tests/cards/box3/test_box3_real_eval_v1_2.py::test_fixed_eval_set_has_forty_cases_with_table_figure_coverage PASSED [ 96%]
 tests/cards/box3/test_box3_real_eval_v1_2.py::test_fixed_eval_is_verdict_only_and_leak_zero PASSED [100%]
 
-======================== 30 passed, 6 warnings in 0.38s ========================
+======================== 30 passed, 6 warnings in 0.37s ========================
