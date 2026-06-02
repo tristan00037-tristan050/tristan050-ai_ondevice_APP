@@ -92,29 +92,28 @@ for path in files():
     except UnicodeDecodeError:
         continue
     pr_text_acc.append(text)
+    # AGENTS.md 의무(line 6): "verify 출력은 판정만 — 키=0/1 + 짧은 ERROR_CODE 만 허용".
+    # 본 verify 가 path/pattern/line 디테일을 노출하지 않도록 짧은 ERROR_CODE 만 보유.
     for pattern in token_patterns:
         if pattern.search(text):
-            errors.append(f"BLOCK_TOKEN_STORAGE_OR_LOG:{path.relative_to(root)}:{pattern.pattern}")
+            errors.append("BLOCK_TOKEN_STORAGE_OR_LOG")
     for pattern in network_patterns:
         for match in pattern.finditer(text):
             line = text[:match.start()].count("\n") + 1
             line_text = text.splitlines()[line - 1] if 1 <= line <= len(text.splitlines()) else ""
             if "127.0.0.1:8765" not in line_text:
-                errors.append(f"BLOCK_NON_LOCAL_NETWORK:{path.relative_to(root)}:{line}")
+                errors.append("BLOCK_NON_LOCAL_NETWORK")
     for pattern in raw_patterns:
         if pattern.search(text):
-            errors.append(f"BLOCK_RAW_SECRET_PATH:{path.relative_to(root)}:{pattern.pattern}")
+            errors.append("BLOCK_RAW_SECRET_PATH")
 
 joined = "\n".join(pr_text_acc)
-if "schemas/connect_loop" in joined:
-    errors.append("BLOCK_CONNECT_LOOP_CONTRACT_REFERENCED_IN_PR_SCOPE")
-if "docs/ssot/connect_loop" in joined:
-    errors.append("BLOCK_DOCS_SSOT_CONNECT_LOOP_REFERENCED_IN_PR_SCOPE")
+if "schemas/connect_loop" in joined or "docs/ssot/connect_loop" in joined:
+    errors.append("BLOCK_CONNECT_LOOP_CONTRACT")
 
-# 본 PR 범위 안 training-artifact / claude footer 검사
 for path in files():
     if path.suffix in {".safetensors", ".gguf", ".bin", ".npy", ".pkl"}:
-        errors.append(f"BLOCK_TRAINING_MODEL_ARTIFACT:{path.relative_to(root)}")
+        errors.append("BLOCK_TRAINING_MODEL_ARTIFACT")
 
 bad_footer = ["Generated with " + "Claude Code", "Co-Authored-By: " + "Claude"]
 for path in files():
@@ -126,45 +125,23 @@ for path in files():
         continue
     for needle in bad_footer:
         if needle in text:
-            errors.append(f"BLOCK_CLAUDE_FOOTER:{path.relative_to(root)}")
+            errors.append("BLOCK_CLAUDE_FOOTER")
             break
 
-# verify key=0/1 정정: 각 검증 key 의 *위반 카운트* 를 0/1+ 정수로 보고한다 (0=PASS,
-# >0=FAIL). boolean true/false 대신 카운트 단위로 명시하여 grep/awk 파이프라인이 정확히
-# 위반 수를 추출 가능. 카운트 0 = ZERO 의무 충족.
-def _count(prefix: str) -> int:
-    return sum(1 for line in errors if line.startswith(prefix))
+# AGENTS.md 의무: 각 key 는 *판정만* — 0/1 정수만 허용 (count 가 아니라 boolean).
+def _has(code: str) -> int:
+    return 1 if code in errors else 0
 
-connect_loop_count = sum(
-    1
-    for line in errors
-    if line in {
-        "BLOCK_CONNECT_LOOP_CONTRACT_REFERENCED_IN_PR_SCOPE",
-        "BLOCK_DOCS_SSOT_CONNECT_LOOP_REFERENCED_IN_PR_SCOPE",
-    }
-)
-token_count = _count("BLOCK_TOKEN_STORAGE_OR_LOG:")
-network_count = _count("BLOCK_NON_LOCAL_NETWORK:")
-raw_count = _count("BLOCK_RAW_SECRET_PATH:")
-training_count = _count("BLOCK_TRAINING_MODEL_ARTIFACT:")
-footer_count = _count("BLOCK_CLAUDE_FOOTER:")
-
-print(f"CONNECT_LOOP_CONTRACT_MODIFIED={connect_loop_count}")
-print(f"TOKEN_STORAGE_LOG={token_count}")
-print(f"NON_LOCAL_NETWORK={network_count}")
-print(f"RAW_SECRET_PATH_SCAN={raw_count}")
-print(f"TRAINING_MODEL_ARTIFACT={training_count}")
-print(f"CLAUDE_FOOTER={footer_count}")
+print(f"CONNECT_LOOP_CONTRACT_MODIFIED={_has('BLOCK_CONNECT_LOOP_CONTRACT')}")
+print(f"TOKEN_STORAGE_LOG={_has('BLOCK_TOKEN_STORAGE_OR_LOG')}")
+print(f"NON_LOCAL_NETWORK={_has('BLOCK_NON_LOCAL_NETWORK')}")
+print(f"RAW_SECRET_PATH_SCAN={_has('BLOCK_RAW_SECRET_PATH')}")
+print(f"TRAINING_MODEL_ARTIFACT={_has('BLOCK_TRAINING_MODEL_ARTIFACT')}")
+print(f"CLAUDE_FOOTER={_has('BLOCK_CLAUDE_FOOTER')}")
 
 if errors:
-    print("\n".join(errors))
+    # 짧은 ERROR_CODE 만 노출 (중복 제거 + 정렬). path/pattern/line 노출 0.
+    for code in sorted(set(errors)):
+        print(code)
     raise SystemExit(1)
-
-# Backward-compat ZERO=true 라인은 grep 기존 파이프라인 호환 유지.
-print("CONNECT_LOOP_CONTRACT_MODIFIED_ZERO=true")
-print("TOKEN_STORAGE_LOG_ZERO=true")
-print("NON_LOCAL_NETWORK_ZERO=true")
-print("RAW_SECRET_PATH_SCAN_ZERO=true")
-print("TRAINING_MODEL_ARTIFACT_ZERO=true")
-print("CLAUDE_FOOTER_ZERO=true")
 PY
