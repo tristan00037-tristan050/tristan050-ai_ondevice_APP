@@ -5,7 +5,7 @@ import json
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from butler_pc_core.cards.box3.draft_service import (
     DEFAULT_MAX_NEW_TOKENS,
@@ -33,6 +33,15 @@ class Box3DraftRequest(BaseModel):
     drafting_request: Optional[str] = Field(default=None, max_length=MAX_PROMPT_TEMPLATE_LENGTH)
     format_hint: str = "자유형"
     max_new_tokens: int = Field(default=DEFAULT_MAX_NEW_TOKENS, ge=1, le=MAX_NEW_TOKENS_LIMIT)
+
+    @field_validator("reference_docs")
+    @classmethod
+    def _bound_reference_docs(cls, value: List[str]) -> List[str]:
+        # legacy input_text(12KB) 와 동일하게 real 참고문서도 항목별로 fail-closed 상한을 적용한다.
+        for doc in value:
+            if len(doc) > MAX_REFERENCE_LENGTH:
+                raise ValueError("REFERENCE_DOC_TOO_LARGE")
+        return value
 
 
 def is_localhost_request(request: Request) -> bool:

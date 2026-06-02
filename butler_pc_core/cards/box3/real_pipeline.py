@@ -75,9 +75,15 @@ def _stage(name: str, status: str, fail_class: str | None = None, **extra: Any) 
 
 
 def _call_runner_with_timeout(runner: RealRunner, envelope: Box3RealRuntimeEnvelope, timeout_sec: float) -> str:
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(runner, envelope)
+    # `with ThreadPoolExecutor` 의 __exit__ 는 shutdown(wait=True) 라 timeout 후에도 hung
+    # 러너 종료를 기다려 sidecar 가 블로킹된다. shutdown(wait=False, cancel_futures=True)로
+    # 즉시 반환해 timeout 을 실질 적용한다(러너 스레드는 백그라운드에 남지만 응답은 막지 않음).
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(runner, envelope)
+    try:
         return str(future.result(timeout=timeout_sec))
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def _finalize(

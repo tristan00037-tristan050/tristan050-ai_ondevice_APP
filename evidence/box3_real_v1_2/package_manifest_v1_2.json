@@ -6,7 +6,7 @@
   ],
   "actual_pass_box3_real_claim": false,
   "directive_version": "Butler 박스3 real 융합 v1.0",
-  "evidence_digest": "sha256:9160854550c4f9b371d0bd80d146adb1be41d070a99b4f7eab94eb32a4121b54",
+  "evidence_digest": "sha256:55d091c534da1ced3669fd6f45af8b96ae1bb1de2e38f4be9ec6955f041eba1b",
   "external_send_zero": true,
   "pipeline_stages": [
     "asset_inventory",

@@ -59,17 +59,21 @@ def test_no_evidence_blocks_before_runner():
     assert called["n"] == 0
 
 
-def test_runner_timeout_is_fail_closed():
-    def slow(_env):
-        time.sleep(0.3)
+def test_runner_timeout_is_fail_closed_and_does_not_block_on_hung_runner():
+    def hung(_env):
+        time.sleep(5.0)  # 러너가 멈춘 상황
         return "draft"
 
+    start = time.time()
     verdict, _ = run_box3_real_followup(
-        passing_envelope(), asset_manifest=passing_asset_manifest(), real_model_runner=slow,
-        config=Box3RealPipelineConfig(timeout_sec=0.05),
+        passing_envelope(), asset_manifest=passing_asset_manifest(), real_model_runner=hung,
+        config=Box3RealPipelineConfig(timeout_sec=0.1),
     )
+    elapsed = time.time() - start
     assert verdict.status == "blocked"
     assert verdict.fail_class == "BLOCK_BOX3_REAL_RUNNER_TIMEOUT"
+    # executor shutdown(wait=False) 로 hung 러너를 기다리지 않고 즉시 반환(비블로킹).
+    assert elapsed < 2.0
 
 
 def test_unsupported_claim_blocks_and_suppresses_draft_text():
