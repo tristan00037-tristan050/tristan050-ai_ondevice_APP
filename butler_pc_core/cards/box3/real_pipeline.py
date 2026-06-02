@@ -107,6 +107,7 @@ def _finalize(
     verdict = Box3RealVerdict(
         schema_version=SCHEMA_VERDICT,
         request_id=envelope.request_id,
+        request_digest=envelope.request_digest,
         status=status,  # type: ignore[arg-type]
         draft_text=draft_text,
         draft_digest=draft_digest,

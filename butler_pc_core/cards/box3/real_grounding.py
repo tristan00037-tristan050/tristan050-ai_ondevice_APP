@@ -29,6 +29,8 @@ _NUM_RE = re.compile(r"[0-9]+(?:[,.][0-9]+)*(?:원|만원|억원|%|일|월|년)?
 # alg 흡수 — 단위 포함 숫자 + 날짜를 사실단위로 추출(maindev numeric_tokens 의 상위집합).
 _FACT_NUM_RE = re.compile(r"\d+(?:[.,]\d+)?\s*(?:억원|억|만원|만|%|개사|개|명|일|월|년)?")
 _FACT_DATE_RE = re.compile(r"\d{4}년\s*\d{1,2}월(?:\s*\d{1,2}일)?|\d{1,2}월\s*\d{1,2}일")
+_FULL_DATE_RE = re.compile(r"(?P<year>\d{4})년\s*(?P<month>\d{1,2})월(?:\s*(?P<day>\d{1,2})일)?")
+_MONTH_DAY_RE = re.compile(r"(?P<month>\d{1,2})월\s*(?P<day>\d{1,2})일")
 _NON_CLAIM_PREFIXES = ("제목", "목차", "인사말", "감사합니다", "안녕하세요")
 _FACT_HINTS = (
     "계약", "금액", "일정", "담당", "발행", "합의", "납품", "보고", "완료", "검토",
@@ -53,6 +55,20 @@ def _facts(text: str) -> set[str]:
     """alg 흡수 — 단위 포함 숫자/날짜 사실단위 집합(공백 제거)."""
     nums = {m.group(0).replace(" ", "") for m in _FACT_NUM_RE.finditer(text) if m.group(0).strip()}
     dates = {m.group(0).replace(" ", "") for m in _FACT_DATE_RE.finditer(text)}
+    # Evidence 가 "2026년 6월 1일"처럼 더 구체적인 날짜를 담으면
+    # "6월 1일" 수준의 claim 도 포섭된다. 반대로 claim 이 연도까지 명시했는데
+    # evidence 가 월/일만 가진 경우는 full-date fact 가 빠져 계속 차단된다.
+    for match in _FULL_DATE_RE.finditer(text):
+        month = match.group("month")
+        day = match.group("day")
+        dates.add(f"{match.group('year')}년{month}월")
+        dates.add(f"{month}월")
+        if day is not None:
+            dates.add(f"{match.group('year')}년{month}월{day}일")
+            dates.add(f"{month}월{day}일")
+            dates.add(f"{day}일")
+    for match in _MONTH_DAY_RE.finditer(text):
+        dates.add(f"{match.group('month')}월{match.group('day')}일")
     return nums | dates
 
 

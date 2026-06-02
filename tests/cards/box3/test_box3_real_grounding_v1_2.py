@@ -32,6 +32,22 @@ def test_numeric_or_fact_mismatch_is_unsupported_contradicts():
     )
 
 
+def test_more_specific_evidence_date_entails_month_day_claim():
+    ref = "납품 기한은 2026년 6월 1일입니다."
+    verdicts = _verdicts(ref, "핵심 내용: 납품 기한은 6월 1일입니다")
+    assert any(
+        v.support_level == "supported" and v.reason_code == "EVIDENCE_ENTAILS" for v in verdicts
+    )
+
+
+def test_different_specific_year_date_still_contradicts():
+    ref = "납품 기한은 2026년 6월 1일입니다."
+    verdicts = _verdicts(ref, "핵심 내용: 납품 기한은 2025년 6월 1일입니다")
+    assert any(
+        v.support_level == "unsupported" and v.reason_code == "EVIDENCE_CONTRADICTS" for v in verdicts
+    )
+
+
 def test_negation_contradiction_is_unsupported():
     ref = "프로젝트 알파 납품 일정 계약 금액 담당자 검토 완료 승인되었다."
     verdicts = _verdicts(ref, "핵심 내용: 프로젝트 알파 납품 일정 계약 금액 담당자 검토 완료 승인 불가")

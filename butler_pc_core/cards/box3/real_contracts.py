@@ -211,6 +211,7 @@ class Box3RealMetrics:
 class Box3RealVerdict:
     schema_version: str
     request_id: str
+    request_digest: Digest
     status: PipelineStatus
     draft_text: str | None
     draft_digest: Digest | None
@@ -240,8 +241,9 @@ class Box3RealVerdict:
         """영속용 — draft_text 제외, digest-only. raw 누출 fail-closed 검증."""
         payload = {
             "schema_version": self.schema_version,
-            # 영속 시 raw uuid 대신 digest 만 둔다(단일 보안 모듈 DLP 와 충돌 회피, digest-only).
-            "request_digest": sha256_text(self.request_id),
+            # 영속 시 caller supplied id 가 아니라 envelope 전체 입력 digest 를 둔다.
+            # request_id 재사용 retry/group run 에서 입력이 달라져도 audit key 가 충돌하지 않는다.
+            "request_digest": self.request_digest,
             "status": self.status,
             "draft_digest": self.draft_digest,
             "citations": self.citations,
@@ -300,7 +302,7 @@ def build_audit_record(
     result_digest = sha256_text(verdict.draft_text) if verdict.draft_text else None
     return Box3RealAuditRecord(
         schema_version="box3.real_audit.v1_2",
-        request_digest=sha256_text(envelope.request_id),
+        request_digest=envelope.request_digest,
         reference_digests=envelope.reference_digests,
         result_digest=result_digest,
         unsupported_count=int(metrics.get("unsupported_count", 0)),

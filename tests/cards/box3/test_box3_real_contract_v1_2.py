@@ -66,3 +66,32 @@ def test_audit_record_is_digest_only_enforced():
     assert data["request_digest"].startswith("sha256:")
     assert all(d.startswith("sha256:") for d in data["reference_digests"])
     assert "draft_text" not in data
+
+
+def test_persisted_request_digest_uses_full_envelope_not_request_id_only():
+    same_request_id = "retry-group-001"
+    first = Box3RealRuntimeEnvelope.from_raw(
+        request_id=same_request_id,
+        drafting_request="납품 보고서를 작성하라",
+        reference_texts=["납품 기한은 2026년 6월 1일입니다."],
+        format_hint="보고서",
+        max_new_tokens=256,
+    )
+    second = Box3RealRuntimeEnvelope.from_raw(
+        request_id=same_request_id,
+        drafting_request="회의 안건을 작성하라",
+        reference_texts=["회의 일정은 2026년 7월 2일입니다."],
+        format_hint="회의 안건",
+        max_new_tokens=512,
+    )
+
+    first_verdict, first_audit = run_box3_real_followup(first)
+    second_verdict, second_audit = run_box3_real_followup(second)
+
+    assert first.request_id == second.request_id
+    assert first.request_digest != second.request_digest
+    assert first_verdict.to_persistable_dict()["request_digest"] == first.request_digest
+    assert second_verdict.to_persistable_dict()["request_digest"] == second.request_digest
+    assert first_audit.to_dict()["request_digest"] == first.request_digest
+    assert second_audit.to_dict()["request_digest"] == second.request_digest
+    assert first_audit.to_dict()["request_digest"] != second_audit.to_dict()["request_digest"]
