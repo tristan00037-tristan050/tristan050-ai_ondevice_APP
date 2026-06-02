@@ -11,6 +11,9 @@ import re
 FULL_SHA_RE = re.compile(r"^[a-f0-9]{64}$")
 
 HELPER3_SHA = "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0"
+EXPECTED_ASSET_MANIFEST_SCHEMA_VERSION = "box3.asset_manifest.v1"
+ASSET_INVENTORY_PASS_STATUS = "ASSET_INVENTORY_PASS"
+CONTRACT_ONLY_ASSET_STATUS = "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING"
 
 # real 모드에 필요한 4개 필수 helper 자산. manifest_allows_real 이 정확히 1회씩 존재(중복 0)를 강제.
 REQUIRED_ASSET_NAMES = (
@@ -121,8 +124,8 @@ def build_contract_only_asset_manifest(measured_at: str | None = None) -> dict[s
     ]
     asset_errors = {record.asset_name: validate_asset_record(record) for record in records}
     return {
-        "schema_version": "box3.asset_manifest.v1",
-        "status": "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING",
+        "schema_version": EXPECTED_ASSET_MANIFEST_SCHEMA_VERSION,
+        "status": CONTRACT_ONLY_ASSET_STATUS,
         "real_claim_allowed": False,
         "state_gate": "CONTRACT_ONLY",
         "created_at": now,
@@ -136,6 +139,46 @@ def load_asset_manifest(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def manifest_block_reason(manifest: dict[str, Any]) -> str | None:
+    """Return a blocking fail_class for malformed/drifted manifests, otherwise None.
+
+    CONTRACT_ONLY 상태 자체는 허용하지만, caller 가 주입한 manifest 의 schema/status/row shape
+    drift 는 조용히 demotion 하지 않고 pipeline 이 BLOCK 으로 표면화해야 한다.
+    """
+    if not isinstance(manifest, dict):
+        return "BLOCK_ASSET_MANIFEST_INVALID"
+    if manifest.get("schema_version") != EXPECTED_ASSET_MANIFEST_SCHEMA_VERSION:
+        return "BLOCK_ASSET_MANIFEST_SCHEMA_DRIFT"
+
+    status = manifest.get("status")
+    real_claim_allowed = manifest.get("real_claim_allowed")
+    assets = manifest.get("assets")
+    if not isinstance(assets, list):
+        return "BLOCK_ASSET_MANIFEST_INVALID"
+
+    names: list[str] = []
+    for item in assets:
+        try:
+            record = Box3AssetRecord(**item)
+        except TypeError:
+            return "BLOCK_ASSET_MANIFEST_INVALID"
+        if validate_asset_record(record):
+            return "BLOCK_ASSET_MANIFEST_INVALID"
+        names.append(record.asset_name)
+    if len(names) != len(set(names)) or set(names) != set(REQUIRED_ASSET_NAMES):
+        return "BLOCK_ASSET_MANIFEST_INVALID"
+
+    if status == CONTRACT_ONLY_ASSET_STATUS and real_claim_allowed is False:
+        return None
+    if status != ASSET_INVENTORY_PASS_STATUS:
+        return "BLOCK_ASSET_MANIFEST_STATUS_DRIFT"
+    if real_claim_allowed is not True:
+        return "BLOCK_ASSET_MANIFEST_REAL_FLAG_DRIFT"
+    if not manifest_allows_real(manifest):
+        return "BLOCK_ASSET_MANIFEST_INVALID"
+    return None
+
+
 def manifest_allows_real(manifest: dict[str, Any]) -> bool:
     # Codex P2 정정 (2026-06-01, PR #770): asset rows 만 보고 top-level inventory 상태를
     # 무시하면, status/state_gate 가 pending/blocked 인 드리프트 manifest 가 real_claim_allowed:true
@@ -143,9 +186,9 @@ def manifest_allows_real(manifest: dict[str, Any]) -> bool:
     # 일 때만 real 을 허용한다(fail-closed asset inventory gate).
     # Codex P1 정정 (2026-06-01, PR #770): schema drift fail-closed — 계약 버전이 정본과
     # 다르거나 누락된 manifest(disk/API 주입 포함)는 real 모드 입력으로 받지 않는다.
-    if manifest.get("schema_version") != "box3.asset_manifest.v1":
+    if manifest.get("schema_version") != EXPECTED_ASSET_MANIFEST_SCHEMA_VERSION:
         return False
-    if manifest.get("status") != "ASSET_INVENTORY_PASS":
+    if manifest.get("status") != ASSET_INVENTORY_PASS_STATUS:
         return False
     if manifest.get("real_claim_allowed") is not True:
         return False

@@ -282,16 +282,41 @@ def test_manifest_allows_real_requires_pass_status():
 
 
 def test_pipeline_drifted_manifest_does_not_enable_real_runner():
-    """status=PENDING 인데 real_claim_allowed=true 인 드리프트 manifest + good runner → real 불가."""
+    """status=PENDING 인데 real_claim_allowed=true 인 드리프트 manifest 는 demotion 이 아니라 BLOCK."""
     drifted = _passing_real_manifest()
     drifted["status"] = "PARTIAL_ASSET_INVENTORY_PENDING"
+    calls = []
 
     def runner(prompt, max_new_tokens):
+        calls.append(prompt)
         return _CLEAN_REAL_DRAFT
 
     result = run_box3_pipeline(_request(), asset_manifest=drifted, real_model_runner=runner)
-    assert result["status"] == "contract_only"
+    assert result["status"] == "blocked"
+    assert result["fail_class"] == "BLOCK_ASSET_MANIFEST_STATUS_DRIFT"
     assert result["real_claim_allowed"] is False
+    assert result["contract_only"] is True
+    assert result["draft_text"] is None
+    assert calls == []
+
+
+def test_pipeline_bad_schema_manifest_blocks_instead_of_demoting():
+    """caller supplied schema drift 는 ASSET_INTERFACE_PENDING 으로 숨기지 않고 BLOCK 으로 표면화."""
+    bad = _passing_real_manifest()
+    bad["schema_version"] = "box3.asset_manifest.v2"
+    calls = []
+
+    def runner(prompt, max_new_tokens):
+        calls.append(prompt)
+        return _CLEAN_REAL_DRAFT
+
+    result = run_box3_pipeline(_request(), asset_manifest=bad, real_model_runner=runner)
+    assert result["status"] == "blocked"
+    assert result["fail_class"] == "BLOCK_ASSET_MANIFEST_SCHEMA_DRIFT"
+    assert result["contract_only"] is True
+    assert result["real_claim_allowed"] is False
+    assert result["draft_text"] is None
+    assert calls == []
 
 
 # ───────────────────────────────────────────────────────────────────────────────

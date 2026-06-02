@@ -4,7 +4,7 @@ from .adapters.helper3_format_adapter import apply_format_contract
 from .adapters.helper4_grounding_adapter import verify_grounding
 from .adapters.helper7_extract_adapter import extract_evidence_units
 from .adapters.helper8_style_adapter import apply_style_contract
-from .asset_manifest import build_contract_only_asset_manifest, manifest_allows_real
+from .asset_manifest import build_contract_only_asset_manifest, manifest_allows_real, manifest_block_reason
 from .draft_service import (
     CLAIM_LEVEL_GROUNDING_IMPLEMENTED,
     compose_box3_current_contract_input,
@@ -91,6 +91,31 @@ def run_box3_pipeline(
         assert_runtime_text_safe(raw_doc)
     assert_runtime_text_safe(request.draft_request)
     manifest = asset_manifest or build_contract_only_asset_manifest()
+    manifest_fail_class = manifest_block_reason(manifest)
+    if manifest_fail_class:
+        result: Box3PipelineResult = {
+            "status": "blocked",
+            "draft_text": None,
+            "draft_digest": None,
+            "citations": [],
+            "grounding": {
+                "reference_coverage": 0.0,
+                "grounding_pass_rate": 0.0,
+                "unsupported_claim_rate": 0.0,
+                "contradiction_count": 0,
+                "source_digest_coverage": 0.0,
+            },
+            "format": apply_format_contract(None),
+            "style": apply_style_contract(None),
+            "external_send_zero": True,
+            "raw_saved_zero": True,
+            "raw_doc_logged": False,
+            "fail_class": manifest_fail_class,
+            "contract_only": True,
+            "real_claim_allowed": False,
+        }
+        assert_no_raw_persistence(result)
+        return result
     real_allowed = manifest_allows_real(manifest)
     evidence_units = extract_evidence_units(request.reference_docs)
     reference_doc_digests = [unit.source_digest for unit in evidence_units]
