@@ -1,24 +1,70 @@
+"""Box3 real 융합 — 7단계 fail-closed real 파이프라인(단일 계약 출력).
+
+- 베이스: codex run_box3_real_followup(stage_trace 관찰성 + 골격 PR #770
+  asset_manifest 재사용: manifest_allows_real / manifest_block_reason).
+- 흡수: maindev _call_runner_with_timeout(ThreadPoolExecutor 타임아웃) + 7단계
+  fail-closed 게이트, alg 단계별 contract_only 분기 + table_figure coverage.
+
+7단계 고정: asset_inventory → helper7_evidence_extraction → draft_runner(timeout)
+→ claim_extraction → helper4_claim_grounding → helper3_helper8_format_style →
+final_real_gate. 출력 verdict 는 stage_trace(audit) + contract_only +
+real_claim_allowed 을 담는다. asset 이 PENDING 이면 real claim 은 닫힌다(contract_only).
+"""
 from __future__ import annotations
 
-import time
-from collections.abc import Callable
-from typing import Any
+import concurrent.futures
+from dataclasses import dataclass
+from typing import Any, Callable
 
-from .adapters.helper3_format_adapter import apply_format_contract
-from .adapters.helper8_style_adapter import apply_style_contract
-from .asset_manifest import build_contract_only_asset_manifest, manifest_allows_real, manifest_block_reason
-from .claim_grounding import ground_claims
-from .real_contract import (
+from .asset_manifest import (
+    build_contract_only_asset_manifest,
+    manifest_allows_real,
+    manifest_block_reason,
+)
+from .real_contracts import (
     Box3RealAuditRecord,
-    Box3RealPipelineOutput,
     Box3RealRuntimeEnvelope,
     Box3RealVerdict,
+    assert_audit_record_is_digest_only,
+    build_audit_record,
+    new_request_id,
+    sha256_text,
 )
-from .real_metrics import build_real_metrics, metric_fail_class
-from .security import assert_no_raw_persistence, assert_runtime_text_safe, sha256_digest
+from .real_fail_class import (
+    ASSET_INTERFACE_PENDING,
+    BLOCK_BOX3_REAL_RUNNER_MISSING,
+    BLOCK_BOX3_REAL_RUNNER_TIMEOUT,
+    BLOCK_BOX3_REAL_SECURITY_RISK,
+    BLOCK_CLAIM_EXTRACTION_EMPTY,
+    BLOCK_EVIDENCE_EXTRACTION_FAILED,
+)
+from .real_grounding import extract_claims, extract_evidence_units, ground_claims, summarize_grounding
+from .real_metrics import build_metrics, fixed_eval_metric_pass, metric_fail_class
+from .security import Box3SecurityError, assert_no_raw_persistence, stable_json_digest
+
+RealRunner = Callable[[Box3RealRuntimeEnvelope], str]
+SCHEMA_VERDICT = "box3.real_verdict.v1_2"
+_REAL_DRAFT_EMPTY = "BLOCK_BOX3_REAL_DRAFT_EMPTY"
+
+_ZERO_METRICS: dict[str, Any] = {
+    "unsupported_claim_rate": 0.0,
+    "no_evidence_claim_rate": 0.0,
+    "citation_accuracy": 0.0,
+    "format_compliance": 0.0,
+    "style_compliance": 0.0,
+    "table_figure_coverage": 0.0,
+    "factual_claim_count": 0,
+    "unsupported_count": 0,
+    "no_evidence_count": 0,
+    "supported_count": 0,
+}
 
 
-RealModelRunner = Callable[[Box3RealRuntimeEnvelope], str]
+@dataclass(frozen=True)
+class Box3RealPipelineConfig:
+    timeout_sec: float = 30.0
+    fixed_eval_pass: bool = False
+    allow_pass_box3_real_after_human_approval: bool = False
 
 
 def _stage(name: str, status: str, fail_class: str | None = None, **extra: Any) -> dict[str, Any]:
@@ -28,198 +74,212 @@ def _stage(name: str, status: str, fail_class: str | None = None, **extra: Any) 
     return payload
 
 
-def _blocked_output(
-    *,
+def _call_runner_with_timeout(runner: RealRunner, envelope: Box3RealRuntimeEnvelope, timeout_sec: float) -> str:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(runner, envelope)
+        return str(future.result(timeout=timeout_sec))
+
+
+def _finalize(
     envelope: Box3RealRuntimeEnvelope,
+    *,
     status: str,
-    fail_class: str,
+    fail_class: str | None,
+    manifest_digest: str,
     stage_trace: list[dict[str, Any]],
+    real_runner_executed: bool,
+    contract_only: bool,
+    real_claim_allowed: bool,
     metrics: dict[str, Any] | None = None,
     claim_verdicts: list[dict[str, Any]] | None = None,
-    draft_digest: str | None = None,
-) -> Box3RealPipelineOutput:
+    citations: list[dict[str, str]] | None = None,
+    draft_text: str | None = None,
+) -> tuple[Box3RealVerdict, Box3RealAuditRecord]:
+    metric_payload = metrics or dict(_ZERO_METRICS)
+    draft_digest = sha256_text(draft_text) if draft_text else None
     verdict = Box3RealVerdict(
-        schema_version="box3.real_verdict.v1_2",
+        schema_version=SCHEMA_VERDICT,
+        request_id=envelope.request_id,
         status=status,  # type: ignore[arg-type]
-        draft_text=None,
+        draft_text=draft_text,
         draft_digest=draft_digest,
+        citations=citations or [],
         claim_verdicts=claim_verdicts or [],
-        metrics=metrics or {},
+        metrics=metric_payload,
+        needs_review=status == "needs_review",
         fail_class=fail_class,
-        contract_only=status == "contract_only",
-        real_claim_allowed=False,
-        external_send_zero=True,
-        raw_saved_zero=True,
+        model_chain=envelope.model_chain,
+        asset_manifest_digest=manifest_digest,
+        real_runner_executed=real_runner_executed,
+        contract_only=contract_only,
+        real_claim_allowed=real_claim_allowed,
     )
-    audit = Box3RealAuditRecord(
-        schema_version="box3.real_audit.v1_2",
-        status=status,  # type: ignore[arg-type]
-        request_digest=envelope.request_digest,
-        reference_digests=list(envelope.reference_digests),
-        company_format_digest=envelope.company_format_digest,
-        draft_digest=draft_digest,
-        stage_trace=stage_trace,
-        fail_class=fail_class,
-        external_send_zero=True,
-        raw_saved_zero=True,
+    audit = build_audit_record(envelope=envelope, verdict=verdict, stage_trace=stage_trace)
+    # fail-closed 영속 검증 — raw/path/secret/PII 누출 시 예외.
+    verdict.to_persistable_dict()
+    assert_audit_record_is_digest_only(audit)
+    return verdict, audit
+
+
+def _run(
+    envelope: Box3RealRuntimeEnvelope,
+    *,
+    asset_manifest: dict[str, Any] | None,
+    real_model_runner: RealRunner | None,
+    cfg: Box3RealPipelineConfig,
+) -> tuple[Box3RealVerdict, Box3RealAuditRecord]:
+    stage_trace: list[dict[str, Any]] = []
+    manifest = asset_manifest if asset_manifest is not None else build_contract_only_asset_manifest()
+    manifest_digest = stable_json_digest(manifest) if isinstance(manifest, dict) else sha256_text("invalid-manifest")
+
+    # Stage 1 — asset inventory (골격 #770 manifest 재사용).
+    manifest_fail = manifest_block_reason(manifest)
+    if manifest_fail:
+        stage_trace.append(_stage("asset_inventory", "blocked", manifest_fail))
+        return _finalize(envelope, status="blocked", fail_class=manifest_fail, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=False, contract_only=False, real_claim_allowed=False)
+    if not manifest_allows_real(manifest):
+        # 자산 인벤토리 PENDING — real claim 을 닫고 contract_only 로 정직하게 보류.
+        stage_trace.append(_stage("asset_inventory", "contract_only", ASSET_INTERFACE_PENDING))
+        return _finalize(envelope, status="contract_only", fail_class=ASSET_INTERFACE_PENDING, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=False, contract_only=True, real_claim_allowed=False)
+    stage_trace.append(_stage("asset_inventory", "pass"))
+
+    # Stage 2 — helper7 evidence extraction (+ runtime DLP 완곡 fail-closed).
+    try:
+        envelope.assert_runtime_safe()
+    except Box3SecurityError:
+        stage_trace.append(_stage("helper7_evidence_extraction", "blocked", BLOCK_BOX3_REAL_SECURITY_RISK))
+        return _finalize(envelope, status="blocked", fail_class=BLOCK_BOX3_REAL_SECURITY_RISK, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=False, contract_only=False, real_claim_allowed=False)
+    envelope.evidence_units_runtime = extract_evidence_units(envelope.reference_text_runtime_only)
+    if not envelope.evidence_units_runtime:
+        stage_trace.append(_stage("helper7_evidence_extraction", "blocked", BLOCK_EVIDENCE_EXTRACTION_FAILED))
+        return _finalize(envelope, status="blocked", fail_class=BLOCK_EVIDENCE_EXTRACTION_FAILED, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=False, contract_only=False, real_claim_allowed=False)
+    stage_trace.append(_stage("helper7_evidence_extraction", "pass",
+                              evidence_unit_count=len(envelope.evidence_units_runtime), output_digest_only=True))
+
+    # Stage 3 — real runner (timeout). 러너와 asset pass 가 모두 있어야 real; 아니면 fail-closed.
+    if real_model_runner is None:
+        stage_trace.append(_stage("draft_runner", "blocked", BLOCK_BOX3_REAL_RUNNER_MISSING))
+        return _finalize(envelope, status="blocked", fail_class=BLOCK_BOX3_REAL_RUNNER_MISSING, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=False, contract_only=False, real_claim_allowed=False)
+    try:
+        envelope.draft_text_runtime = _call_runner_with_timeout(real_model_runner, envelope, cfg.timeout_sec)
+    except concurrent.futures.TimeoutError:
+        stage_trace.append(_stage("draft_runner", "blocked", BLOCK_BOX3_REAL_RUNNER_TIMEOUT))
+        return _finalize(envelope, status="blocked", fail_class=BLOCK_BOX3_REAL_RUNNER_TIMEOUT, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=True, contract_only=False, real_claim_allowed=False)
+    if not isinstance(envelope.draft_text_runtime, str) or not envelope.draft_text_runtime.strip():
+        stage_trace.append(_stage("draft_runner", "blocked", _REAL_DRAFT_EMPTY))
+        return _finalize(envelope, status="blocked", fail_class=_REAL_DRAFT_EMPTY, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=True, contract_only=False, real_claim_allowed=False)
+    try:
+        envelope.assert_runtime_safe()
+    except Box3SecurityError:
+        stage_trace.append(_stage("draft_runner", "blocked", BLOCK_BOX3_REAL_SECURITY_RISK))
+        return _finalize(envelope, status="blocked", fail_class=BLOCK_BOX3_REAL_SECURITY_RISK, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=True, contract_only=False, real_claim_allowed=False)
+    stage_trace.append(_stage("draft_runner", "pass", draft_digest=sha256_text(envelope.draft_text_runtime)))
+
+    # Stage 4 — claim extraction. 사실 claim 0 이면 분모 0 → fail-closed.
+    envelope.draft_claims_runtime = extract_claims(envelope.draft_text_runtime or "")
+    factual_count = sum(1 for claim in envelope.draft_claims_runtime if claim.is_factual)
+    if factual_count == 0:
+        stage_trace.append(_stage("claim_extraction", "blocked", BLOCK_CLAIM_EXTRACTION_EMPTY))
+        return _finalize(envelope, status="blocked", fail_class=BLOCK_CLAIM_EXTRACTION_EMPTY, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=True, contract_only=False, real_claim_allowed=False)
+    stage_trace.append(_stage("claim_extraction", "pass", factual_claim_count=factual_count))
+
+    # Stage 5 — helper4 claim grounding + citation 연결.
+    claim_verdicts = ground_claims(envelope.draft_claims_runtime, envelope.evidence_units_runtime)
+    summary = summarize_grounding(claim_verdicts)
+    citations: list[dict[str, str]] = []
+    for verdict in claim_verdicts:
+        if verdict.support_level == "supported":
+            for digest in verdict.evidence_digests:
+                unit = next((u for u in envelope.evidence_units_runtime if u.evidence_digest == digest), None)
+                if unit:
+                    citations.append(unit.citation())
+    claim_dicts = [verdict.to_dict() for verdict in claim_verdicts]
+    stage_trace.append(_stage(
+        "helper4_claim_grounding",
+        "pass" if summary.fail_class is None else "blocked",
+        summary.fail_class,
+        factual_claim_count=summary.factual_claim_count,
+        unsupported_claim_rate=summary.unsupported_claim_rate,
+        no_evidence_rate=summary.no_evidence_rate,
+    ))
+
+    # Stage 6 — helper3/helper8 format·style 지표.
+    metrics = build_metrics(
+        draft_text=envelope.draft_text_runtime or "",
+        verdicts=claim_verdicts,
+        evidence_units=envelope.evidence_units_runtime,
+        citations=citations,
     )
-    output = Box3RealPipelineOutput(verdict=verdict, audit=audit)
-    output.to_persistable_dict()
-    return output
+    metrics_dict = metrics.to_dict()
+    format_style_ok = metrics.format_compliance >= 0.85 and metrics.style_compliance >= 0.70
+    stage_trace.append(_stage(
+        "helper3_helper8_format_style",
+        "pass" if format_style_ok else "needs_review",
+        None if format_style_ok else "FORMAT_OR_STYLE_BELOW_GATE",
+        format_match_score=metrics.format_compliance,
+        style_match_score=metrics.style_compliance,
+    ))
+
+    # Stage 7 — final gate.
+    fail_class = metric_fail_class(metrics)
+    if fail_class:
+        status = "blocked" if fail_class.startswith("BLOCK_") else "needs_review"
+        stage_trace.append(_stage("final_real_gate", status, fail_class, metrics_pass=False))
+        return _finalize(envelope, status=status, fail_class=fail_class, manifest_digest=manifest_digest,
+                         stage_trace=stage_trace, real_runner_executed=True, contract_only=False, real_claim_allowed=False,
+                         metrics=metrics_dict, claim_verdicts=claim_dicts, citations=citations, draft_text=None)
+
+    stage_trace.append(_stage("final_real_gate", "pass", metrics_pass=True))
+    final_real = (
+        cfg.fixed_eval_pass
+        and cfg.allow_pass_box3_real_after_human_approval
+        and fixed_eval_metric_pass(metrics)
+    )
+    status = "real" if final_real else "real_candidate"
+    return _finalize(envelope, status=status, fail_class=None, manifest_digest=manifest_digest,
+                     stage_trace=stage_trace, real_runner_executed=True, contract_only=False, real_claim_allowed=final_real,
+                     metrics=metrics_dict, claim_verdicts=claim_dicts, citations=citations,
+                     draft_text=envelope.draft_text_runtime)
+
+
+def run_box3_real_pipeline(
+    *,
+    reference_docs: list[str],
+    drafting_request: str,
+    format_hint: str = "자유형",
+    max_new_tokens: int = 512,
+    request_id: str | None = None,
+    asset_manifest: dict[str, Any] | None = None,
+    real_model_runner: RealRunner | None = None,
+    config: Box3RealPipelineConfig | None = None,
+) -> tuple[Box3RealVerdict, Box3RealAuditRecord]:
+    envelope = Box3RealRuntimeEnvelope(
+        request_id=request_id or new_request_id(),
+        reference_text_runtime_only=list(reference_docs),
+        drafting_request_runtime=drafting_request,
+        format_hint=format_hint,
+        max_new_tokens=max_new_tokens,
+    )
+    return _run(envelope, asset_manifest=asset_manifest, real_model_runner=real_model_runner,
+                cfg=config or Box3RealPipelineConfig())
 
 
 def run_box3_real_followup(
     envelope: Box3RealRuntimeEnvelope,
     *,
     asset_manifest: dict[str, Any] | None = None,
-    real_model_runner: RealModelRunner | None = None,
-    fixed_eval_sample_count: int = 0,
-    table_figure_grounding_score: float = 1.0,
-) -> Box3RealPipelineOutput:
-    """Run the Box 3 real follow-up pipeline with fail-closed gates.
-
-    The runner receives raw text only through Box3RealRuntimeEnvelope in memory.
-    Persisted verdict/audit records carry only digests and metrics.
-    """
-
-    stage_trace: list[dict[str, Any]] = []
-    manifest = asset_manifest or build_contract_only_asset_manifest()
-    manifest_fail = manifest_block_reason(manifest)
-    if manifest_fail:
-        stage_trace.append(_stage("asset_inventory", "blocked", manifest_fail))
-        return _blocked_output(
-            envelope=envelope,
-            status="blocked",
-            fail_class=manifest_fail,
-            stage_trace=stage_trace,
-        )
-    if not manifest_allows_real(manifest):
-        stage_trace.append(_stage("asset_inventory", "contract_only", "ASSET_INTERFACE_PENDING"))
-        return _blocked_output(
-            envelope=envelope,
-            status="contract_only",
-            fail_class="ASSET_INTERFACE_PENDING",
-            stage_trace=stage_trace,
-        )
-    stage_trace.append(_stage("asset_inventory", "pass"))
-
-    if not envelope.reference_texts:
-        stage_trace.append(_stage("helper7_evidence_extraction", "needs_review", "NO_EVIDENCE_UNITS"))
-        return _blocked_output(
-            envelope=envelope,
-            status="needs_review",
-            fail_class="NO_EVIDENCE_UNITS",
-            stage_trace=stage_trace,
-        )
-
-    if real_model_runner is None:
-        stage_trace.append(_stage("draft_runner", "blocked", "BLOCK_REAL_MODEL_RUNNER_MISSING"))
-        return _blocked_output(
-            envelope=envelope,
-            status="blocked",
-            fail_class="BLOCK_REAL_MODEL_RUNNER_MISSING",
-            stage_trace=stage_trace,
-        )
-
-    stage_trace.append(
-        _stage(
-            "helper7_evidence_extraction",
-            "pass",
-            evidence_unit_count=len(envelope.reference_digests),
-            output_digest_only=True,
-        )
-    )
-    start = time.time()
-    draft_text = real_model_runner(envelope)
-    load_time_ms = int((time.time() - start) * 1000)
-    if not isinstance(draft_text, str) or not draft_text.strip():
-        stage_trace.append(_stage("draft_runner", "blocked", "REAL_DRAFT_EMPTY", duration_ms=load_time_ms))
-        return _blocked_output(
-            envelope=envelope,
-            status="blocked",
-            fail_class="REAL_DRAFT_EMPTY",
-            stage_trace=stage_trace,
-        )
-    assert_runtime_text_safe(draft_text)
-    draft_digest = sha256_digest(draft_text)
-    stage_trace.append(_stage("draft_runner", "pass", duration_ms=load_time_ms, draft_digest=draft_digest))
-
-    claim_verdicts, claim_summary = ground_claims(
-        draft_text=draft_text,
-        evidence_texts=list(envelope.reference_texts),
-        evidence_digests=list(envelope.reference_digests),
-    )
-    claim_dicts = [item.to_dict() for item in claim_verdicts]
-    stage_trace.append(
-        _stage(
-            "helper4_claim_grounding",
-            "pass" if claim_summary.fail_class is None else "blocked",
-            claim_summary.fail_class,
-            factual_claim_count=claim_summary.factual_claim_count,
-            unsupported_claim_rate=claim_summary.unsupported_claim_rate,
-            no_evidence_rate=claim_summary.no_evidence_rate,
-        )
-    )
-
-    format_result = apply_format_contract(draft_text)
-    style_result = apply_style_contract(draft_text)
-    metrics = build_real_metrics(
-        claim_summary=claim_summary,
-        format_result=format_result,
-        style_result=style_result,
-        fixed_eval_sample_count=fixed_eval_sample_count,
-        table_figure_grounding_score=table_figure_grounding_score,
-    )
-    stage_trace.append(
-        _stage(
-            "helper3_helper8_format_style",
-            "pass" if format_result["required_sections_present"] and style_result["forbidden_style_zero"] else "blocked",
-            None if format_result["required_sections_present"] and style_result["forbidden_style_zero"] else "FORMAT_OR_STYLE_GATE_FAILED",
-            format_match_score=format_result["format_match_score"],
-            style_match_score=style_result["style_match_score"],
-        )
-    )
-
-    fail_class = claim_summary.fail_class or metric_fail_class(metrics)
-    if fail_class:
-        status = "blocked" if fail_class.startswith("BLOCK_") else "needs_review"
-        stage_trace.append(_stage("final_real_gate", status, fail_class, metrics_pass=False))
-        return _blocked_output(
-            envelope=envelope,
-            status=status,
-            fail_class=fail_class,
-            stage_trace=stage_trace,
-            metrics=metrics,
-            claim_verdicts=claim_dicts,
-            draft_digest=draft_digest,
-        )
-
-    stage_trace.append(_stage("final_real_gate", "pass", metrics_pass=True))
-    verdict = Box3RealVerdict(
-        schema_version="box3.real_verdict.v1_2",
-        status="real",
-        draft_text=draft_text,
-        draft_digest=draft_digest,
-        claim_verdicts=claim_dicts,
-        metrics=metrics,
-        fail_class=None,
-        contract_only=False,
-        real_claim_allowed=True,
-        external_send_zero=True,
-        raw_saved_zero=True,
-    )
-    audit = Box3RealAuditRecord(
-        schema_version="box3.real_audit.v1_2",
-        status="real",
-        request_digest=envelope.request_digest,
-        reference_digests=list(envelope.reference_digests),
-        company_format_digest=envelope.company_format_digest,
-        draft_digest=draft_digest,
-        stage_trace=stage_trace,
-        fail_class=None,
-        external_send_zero=True,
-        raw_saved_zero=True,
-    )
-    output = Box3RealPipelineOutput(verdict=verdict, audit=audit)
-    output.to_persistable_dict()
-    return output
+    real_model_runner: RealRunner | None = None,
+    config: Box3RealPipelineConfig | None = None,
+) -> tuple[Box3RealVerdict, Box3RealAuditRecord]:
+    """codex 명명 호환 진입점 — 이미 구성된 envelope 로 동일 파이프라인을 실행한다."""
+    return _run(envelope, asset_manifest=asset_manifest, real_model_runner=real_model_runner,
+                cfg=config or Box3RealPipelineConfig())

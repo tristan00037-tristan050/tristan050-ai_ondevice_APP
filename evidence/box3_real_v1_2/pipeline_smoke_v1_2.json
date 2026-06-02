@@ -1,15 +1,26 @@
 {
   "audit": {
-    "company_format_digest": "sha256:d71ab38735fdf0e658831eadf3b8fc8ffea59f863a3ec7968b56f2102d43c39f",
-    "draft_digest": "sha256:0a70730b78397b98d24e9eb6029d212a265a99ef073511d36ff7c5394da6260d",
+    "asset_manifest_digest": "sha256:f4851b4c9ec7bc86067a0c5f2a8ded49332b044c3b1f7c61c8d77e629eb6db68",
+    "citation_accuracy": 1.0,
     "external_send_zero": true,
-    "fail_class": null,
-    "raw_saved_zero": true,
-    "reference_digests": [
-      "sha256:36d8bc3a35c860c936fe3bb0c2951cb46da4d34ad2140acbc384ef5cf3df9239",
-      "sha256:9f8fd888cdc2a2b1f46962eeacf648b9da9f6d1834562b0de5692d75b8657c9b"
+    "format_compliance": 1.0,
+    "model_chain": [
+      "butler-1.7b-v3",
+      "butler_v3_lora",
+      "helper3_format",
+      "helper4_grounding",
+      "helper7_table_figure",
+      "helper8_company_style"
     ],
-    "request_digest": "sha256:94e442c78d060138ad0baf37b0749c6932f1dec7c81643a70627a8da926cb505",
+    "no_evidence_claim_rate": 0.0,
+    "no_evidence_count": 0,
+    "raw_saved_zero": true,
+    "raw_text_logged": false,
+    "reference_digests": [
+      "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a"
+    ],
+    "request_digest": "sha256:ddace4c3333a64301c44b5f4d4bfabd7f47ddda411b6b917b322d7f0ebc7976b",
+    "result_digest": "sha256:bd1a476da57b4f88b2a2da51f459289bf56236faa0c9081e3e3c990161966ddd",
     "schema_version": "box3.real_audit.v1_2",
     "stage_trace": [
       {
@@ -18,21 +29,26 @@
         "status": "pass"
       },
       {
-        "evidence_unit_count": 2,
+        "evidence_unit_count": 1,
         "fail_class": null,
         "output_digest_only": true,
         "stage": "helper7_evidence_extraction",
         "status": "pass"
       },
       {
-        "draft_digest": "sha256:0a70730b78397b98d24e9eb6029d212a265a99ef073511d36ff7c5394da6260d",
-        "duration_ms": 0,
+        "draft_digest": "sha256:bd1a476da57b4f88b2a2da51f459289bf56236faa0c9081e3e3c990161966ddd",
         "fail_class": null,
         "stage": "draft_runner",
         "status": "pass"
       },
       {
-        "factual_claim_count": 3,
+        "factual_claim_count": 4,
+        "fail_class": null,
+        "stage": "claim_extraction",
+        "status": "pass"
+      },
+      {
+        "factual_claim_count": 4,
         "fail_class": null,
         "no_evidence_rate": 0.0,
         "stage": "helper4_claim_grounding",
@@ -44,7 +60,7 @@
         "format_match_score": 1.0,
         "stage": "helper3_helper8_format_style",
         "status": "pass",
-        "style_match_score": 0.9
+        "style_match_score": 1.0
       },
       {
         "fail_class": null,
@@ -53,95 +69,129 @@
         "status": "pass"
       }
     ],
-    "status": "real"
+    "style_compliance": 1.0,
+    "support_counts": {
+      "factual_claim_count": 4,
+      "no_evidence": 0,
+      "supported": 4,
+      "unsupported": 0
+    },
+    "table_figure_coverage": 1.0,
+    "unsupported_claim_rate": 0.0,
+    "unsupported_count": 0
   },
   "verdict": {
+    "asset_manifest_digest": "sha256:f4851b4c9ec7bc86067a0c5f2a8ded49332b044c3b1f7c61c8d77e629eb6db68",
+    "citations": [
+      {
+        "evidence_digest": "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a",
+        "source_digest": "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a",
+        "span_label": "runtime_only"
+      },
+      {
+        "evidence_digest": "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a",
+        "source_digest": "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a",
+        "span_label": "runtime_only"
+      },
+      {
+        "evidence_digest": "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a",
+        "source_digest": "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a",
+        "span_label": "runtime_only"
+      },
+      {
+        "evidence_digest": "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a",
+        "source_digest": "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a",
+        "span_label": "runtime_only"
+      }
+    ],
     "claim_verdicts": [
       {
-        "claim_digest": "sha256:a64b157f9fd11b954fbe6947568a0e8f45259c73a637072f124df8407bd9ddbb",
-        "claim_id": "claim_001",
+        "claim_digest": "sha256:08b17e433630742bc70022e9e0e1e11a91bd43383b33226afab9a5bdaf778bbf",
+        "claim_id": "c1",
         "confidence": 1.0,
         "evidence_digests": [],
-        "reason_code": "SECTION_NON_FACTUAL",
+        "reason_code": "NON_FACTUAL",
         "support_level": "non_claim"
       },
       {
-        "claim_digest": "sha256:a7b1af6b674314994cefe44591f9be935d241ffe91793b2a895adbb8500ab92a",
-        "claim_id": "claim_002",
-        "confidence": 1.0,
+        "claim_digest": "sha256:82b8f8c7ea15b410b921a85d0bf4001b00ed979bb0c819dcf92fa21549456c2d",
+        "claim_id": "c2",
+        "confidence": 0.99,
         "evidence_digests": [
-          "sha256:36d8bc3a35c860c936fe3bb0c2951cb46da4d34ad2140acbc384ef5cf3df9239",
-          "sha256:9f8fd888cdc2a2b1f46962eeacf648b9da9f6d1834562b0de5692d75b8657c9b"
+          "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a"
         ],
-        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED_WITH_CITATION",
+        "reason_code": "EVIDENCE_ENTAILS",
         "support_level": "supported"
       },
       {
-        "claim_digest": "sha256:29b172d7bece967988947a97a3fe17ba3fa03479b7e8a3f186413e0d3027027d",
-        "claim_id": "claim_003",
-        "confidence": 1.0,
+        "claim_digest": "sha256:24308aa4358a0536e1ec763b26f1cd1ed855b9f535e3d0761c1c5e99b7e7fe40",
+        "claim_id": "c3",
+        "confidence": 0.99,
         "evidence_digests": [
-          "sha256:36d8bc3a35c860c936fe3bb0c2951cb46da4d34ad2140acbc384ef5cf3df9239"
+          "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a"
         ],
-        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED_WITH_CITATION",
+        "reason_code": "EVIDENCE_ENTAILS",
         "support_level": "supported"
       },
       {
-        "claim_digest": "sha256:32c577466a5f23cb894c269fa86407577154f70f645716dfaffaeae30b1ba47d",
-        "claim_id": "claim_004",
-        "confidence": 1.0,
-        "evidence_digests": [],
-        "reason_code": "SECTION_NON_FACTUAL",
-        "support_level": "non_claim"
-      },
-      {
-        "claim_digest": "sha256:ee176681e32f65813c13a373c8fdd772d3ab29a7086e85dfaf57809db2bdf978",
-        "claim_id": "claim_005",
-        "confidence": 1.0,
-        "evidence_digests": [],
-        "reason_code": "SECTION_NON_FACTUAL",
-        "support_level": "non_claim"
-      },
-      {
-        "claim_digest": "sha256:03ef526577d7ee41c3efeb85de1c85cfd6aaee47e66bb6440bd33efa6074c121",
-        "claim_id": "claim_006",
-        "confidence": 1.0,
+        "claim_digest": "sha256:73cafde325f5581e5b4229a8fb5405e9785c651ace6e0d9f2b6f93cd5aed3c52",
+        "claim_id": "c4",
+        "confidence": 0.99,
         "evidence_digests": [
-          "sha256:36d8bc3a35c860c936fe3bb0c2951cb46da4d34ad2140acbc384ef5cf3df9239",
-          "sha256:9f8fd888cdc2a2b1f46962eeacf648b9da9f6d1834562b0de5692d75b8657c9b"
+          "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a"
         ],
-        "reason_code": "CLAIM_TEXT_EXACTLY_GROUNDED_WITH_CITATION",
+        "reason_code": "EVIDENCE_ENTAILS",
+        "support_level": "supported"
+      },
+      {
+        "claim_digest": "sha256:84dd6e381dca36d81eda5139158d8ffa127b575093b679ce4b4f7228f33e187c",
+        "claim_id": "c5",
+        "confidence": 1.0,
+        "evidence_digests": [],
+        "reason_code": "NON_FACTUAL",
+        "support_level": "non_claim"
+      },
+      {
+        "claim_digest": "sha256:86615a2ffc69b650348fe829b0a08634da6315a57fb48fe30bb34b219d425966",
+        "claim_id": "c6",
+        "confidence": 0.99,
+        "evidence_digests": [
+          "sha256:fbb0e039df588f3c8166036f8eed58bc9198d403ce8e41654f585e1cb824393a"
+        ],
+        "reason_code": "EVIDENCE_ENTAILS",
         "support_level": "supported"
       }
     ],
     "contract_only": false,
-    "draft_digest": "sha256:0a70730b78397b98d24e9eb6029d212a265a99ef073511d36ff7c5394da6260d",
+    "draft_digest": "sha256:bd1a476da57b4f88b2a2da51f459289bf56236faa0c9081e3e3c990161966ddd",
     "external_send_zero": true,
     "fail_class": null,
     "metrics": {
       "citation_accuracy": 1.0,
-      "factual_claim_count": 3,
-      "fixed_eval_sample_count": 40,
-      "format_match_score": 1.0,
-      "metric_basis": "claim_level_grounding_real_verification",
-      "no_evidence_rate": 0.0,
-      "pass": true,
-      "schema_version": "box3.real_metrics.v1_2",
-      "style_match_score": 0.9,
-      "table_figure_grounding_score": 1.0,
-      "thresholds": {
-        "citation_accuracy": 0.95,
-        "fixed_eval_sample_count": 40,
-        "format_match_score": 0.85,
-        "no_evidence_rate": 0.05,
-        "style_match_score": 0.7,
-        "table_figure_grounding_score": 0.7,
-        "unsupported_claim_rate": 0.0
-      },
-      "unsupported_claim_rate": 0.0
+      "factual_claim_count": 4,
+      "format_compliance": 1.0,
+      "no_evidence_claim_rate": 0.0,
+      "no_evidence_count": 0,
+      "style_compliance": 1.0,
+      "supported_count": 4,
+      "table_figure_coverage": 1.0,
+      "unsupported_claim_rate": 0.0,
+      "unsupported_count": 0
     },
+    "model_chain": [
+      "butler-1.7b-v3",
+      "butler_v3_lora",
+      "helper3_format",
+      "helper4_grounding",
+      "helper7_table_figure",
+      "helper8_company_style"
+    ],
+    "needs_review": false,
     "raw_saved_zero": true,
+    "raw_text_logged": false,
     "real_claim_allowed": true,
+    "real_runner_executed": true,
+    "request_digest": "sha256:ddace4c3333a64301c44b5f4d4bfabd7f47ddda411b6b917b322d7f0ebc7976b",
     "schema_version": "box3.real_verdict.v1_2",
     "status": "real"
   }

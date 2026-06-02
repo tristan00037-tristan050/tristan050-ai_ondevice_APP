@@ -1,3 +1,9 @@
+"""Box3 real 융합 self-check — repo-root 실행, sys.path 가드, evidence 마스킹.
+
+베이스: codex run_box3_real_self_check(자가점검). 융합 단일 계약/7단계명 기준으로
+갱신. 실제 자산은 PENDING 이므로 actual_pass_box3_real_claim=False(정직).
+fixture manifest 는 real 경로 게이트 검증 전용이며 production 자산이 아니다.
+"""
 from __future__ import annotations
 
 import json
@@ -17,8 +23,11 @@ from butler_pc_core.cards.box3.asset_manifest import (  # noqa: E402
     REQUIRED_ASSET_NAMES,
     build_contract_only_asset_manifest,
 )
-from butler_pc_core.cards.box3.real_contract import Box3RealRuntimeEnvelope  # noqa: E402
-from butler_pc_core.cards.box3.real_pipeline import run_box3_real_followup  # noqa: E402
+from butler_pc_core.cards.box3.real_contracts import Box3RealRuntimeEnvelope  # noqa: E402
+from butler_pc_core.cards.box3.real_pipeline import (  # noqa: E402
+    Box3RealPipelineConfig,
+    run_box3_real_followup,
+)
 from butler_pc_core.cards.box3.security import assert_no_raw_persistence, stable_json_digest  # noqa: E402
 
 
@@ -33,6 +42,19 @@ LOCAL_PATH_RE = re.compile(
     + r")"
 )
 
+# real 경로 게이트를 모두 통과하는 fixture 입력(단일 표 청크 + 근접 echo draft).
+PASSING_REF = (
+    "프로젝트 알파 납품 일정 표 | 납품일 2026년 3월 31일 | 계약 금액 1억원 | 담당자 검토 완료 | 합의 완료 보고"
+)
+PASSING_DRAFT = (
+    "제목: 프로젝트 알파 납품 보고\n"
+    "배경: 프로젝트 알파 납품 일정 보고\n"
+    "핵심 내용: 납품일 2026년 3월 31일 계약 금액 1억원\n"
+    "근거: 담당자 검토 완료 합의 완료\n"
+    "확인 필요: 없음\n"
+    "최종 문안: 프로젝트 알파 납품 일정 계약 금액 담당자 검토 완료 보고\n"
+)
+
 
 def write_json(path: Path, payload: object) -> None:
     assert_no_raw_persistence(payload)
@@ -40,11 +62,7 @@ def write_json(path: Path, payload: object) -> None:
 
 
 def sanitize_log(value: str) -> str:
-    replacements = {
-        str(ROOT): "[PACKAGE_ROOT]",
-    }
-    for needle, replacement in replacements.items():
-        value = value.replace(needle, replacement)
+    value = value.replace(str(ROOT), "[PACKAGE_ROOT]")
     return LOCAL_PATH_RE.sub("[LOCAL_PATH_REDACTED]", value)
 
 
@@ -52,24 +70,20 @@ def passing_manifest_fixture() -> dict:
     assets = []
     for index, name in enumerate(REQUIRED_ASSET_NAMES):
         sha_char = "abcdef0123456789"[index]
-        assets.append(
-            asdict(
-                Box3AssetRecord(
-                    asset_name=name,
-                    role=f"{name}_role",
-                    display_sha_prefix=f"{sha_char * 8}...",
-                    asset_path=f"ref:BOX3_{name.upper()}_PATH",
-                    sha256_full=sha_char * 64,
-                    sha_scope="file",
-                    measured_at="2026-06-02T00:00:00+00:00",
-                    measured_by="self_check_fixture",
-                    source_metadata_files=["adapter_config.json"],
-                    interface_inventory_status="pass",
-                    real_claim_allowed=True,
-                    fail_class=None,
-                )
-            )
-        )
+        assets.append(asdict(Box3AssetRecord(
+            asset_name=name,
+            role=f"{name}_role",
+            display_sha_prefix=f"{sha_char * 8}...",
+            asset_path=f"ref:BOX3_{name.upper()}_PATH",
+            sha256_full=sha_char * 64,
+            sha_scope="file",
+            measured_at="2026-06-02T00:00:00+00:00",
+            measured_by="self_check_fixture",
+            source_metadata_files=["adapter_config.json"],
+            interface_inventory_status="pass",
+            real_claim_allowed=True,
+            fail_class=None,
+        )))
     manifest = {
         "schema_version": "box3.asset_manifest.v1",
         "status": ASSET_INVENTORY_PASS_STATUS,
@@ -77,25 +91,14 @@ def passing_manifest_fixture() -> dict:
         "state_gate": "ASSET_INVENTORY_PASS",
         "created_at": "2026-06-02T00:00:00+00:00",
         "assets": assets,
-        "asset_errors": {},
         "fixture_only": True,
     }
     assert_no_raw_persistence(manifest)
     return manifest
 
 
-def supported_draft(envelope: Box3RealRuntimeEnvelope) -> str:
-    citation = envelope.reference_digests[0] if envelope.reference_digests else "sha256:" + "0" * 64
-    return "\n".join(
-        [
-            "제목: 프로젝트 알파 실행 초안",
-            "배경: 프로젝트 알파는 내부 검토를 완료했습니다.",
-            "핵심 내용: 담당 조직은 운영팀입니다.",
-            f"근거: source_digest={citation}",
-            "확인 필요: 추가 일정은 확인 필요입니다.",
-            "최종 문안: 프로젝트 알파는 내부 검토를 완료했습니다.",
-        ]
-    )
+def supported_draft(_envelope: Box3RealRuntimeEnvelope) -> str:
+    return PASSING_DRAFT
 
 
 def main() -> int:
@@ -113,57 +116,49 @@ def main() -> int:
     })
 
     envelope = Box3RealRuntimeEnvelope.from_raw(
-        request_text="프로젝트 알파 실행 초안을 작성합니다",
-        reference_texts=[
-            "프로젝트 알파는 내부 검토를 완료했습니다. 담당 조직은 운영팀입니다.",
-            "프로젝트 알파는 내부 검토를 완료했습니다.",
-        ],
-        company_format_text="제목, 배경, 핵심 내용, 근거, 확인 필요, 최종 문안 순서",
+        drafting_request="프로젝트 알파 납품 보고서를 작성하라",
+        reference_texts=[PASSING_REF],
     )
-    smoke = run_box3_real_followup(
+    verdict, audit = run_box3_real_followup(
         envelope,
         asset_manifest=fixture_manifest,
         real_model_runner=supported_draft,
-        fixed_eval_sample_count=40,
+        config=Box3RealPipelineConfig(fixed_eval_pass=True, allow_pass_box3_real_after_human_approval=True),
     )
-    write_json(EVIDENCE / "pipeline_smoke_v1_2.json", smoke.to_persistable_dict())
-    write_json(EVIDENCE / "metric_summary_v1_2.json", smoke.verdict.metrics)
+    write_json(EVIDENCE / "pipeline_smoke_v1_2.json", {
+        "verdict": verdict.to_persistable_dict(),
+        "audit": audit.to_dict(),
+    })
+    write_json(EVIDENCE / "metric_summary_v1_2.json", verdict.metrics)
 
     pytest_command = [
-        sys.executable,
-        "-m",
-        "pytest",
+        sys.executable, "-m", "pytest",
         "tests/cards/box3/test_box3_real_contract_v1_2.py",
-        "tests/cards/box3/test_box3_claim_grounding_v1_2.py",
+        "tests/cards/box3/test_box3_real_grounding_v1_2.py",
         "tests/cards/box3/test_box3_real_metrics_v1_2.py",
         "tests/cards/box3/test_box3_real_pipeline_v1_2.py",
-        "-v",
-        "--disable-warnings",
+        "tests/cards/box3/test_box3_real_eval_v1_2.py",
+        "-v", "--disable-warnings",
     ]
     result = subprocess.run(
-        pytest_command,
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
+        pytest_command, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
     )
     (EVIDENCE / "pytest_box3_real_v1_2.txt").write_text(
-        "# command: python3 -m pytest tests/cards/box3/test_box3_real*_v1_2.py "
-        "tests/cards/box3/test_box3_claim_grounding_v1_2.py -v --disable-warnings\n"
+        "# command: python3 -m pytest tests/cards/box3/test_box3_real_*_v1_2.py -v --disable-warnings\n"
         + sanitize_log(result.stdout),
         encoding="utf-8",
     )
 
     package_manifest = {
-        "schema_version": "box3.real_followup.package_manifest.v1_2",
+        "schema_version": "box3.real_fusion.package_manifest.v1_0",
         "status": "PARTIAL_REAL_GATED_ASSET_PENDING" if result.returncode == 0 else "BLOCK_BOX3_REAL_TEST_FAILED",
-        "directive_version": "Butler Box3 real follow-up v1.2 합본",
+        "directive_version": "Butler 박스3 real 융합 v1.0",
         "pr770_precondition": "MERGED",
         "single_contract_objects": [
             "Box3RealRuntimeEnvelope",
             "Box3RealVerdict",
             "Box3RealAuditRecord",
+            "ClaimVerdict",
         ],
         "pipeline_stages": [
             "asset_inventory",
@@ -174,19 +169,17 @@ def main() -> int:
             "helper3_helper8_format_style",
             "final_real_gate",
         ],
-        "claim_grounding_fixture_pass": smoke.verdict.status == "real",
+        "real_path_fixture_pass": verdict.status == "real",
         "actual_pass_box3_real_claim": False,
         "actual_asset_pending": ["helper4_grounding", "helper7_table_figure", "helper8_company_style"],
         "raw_persistence_zero": True,
         "external_send_zero": True,
         "pytest_returncode": result.returncode,
-        "evidence_digest": stable_json_digest(
-            {
-                "asset_inventory_status": contract_manifest,
-                "pipeline_smoke": smoke.to_persistable_dict(),
-                "metrics": smoke.verdict.metrics,
-            }
-        ),
+        "evidence_digest": stable_json_digest({
+            "asset_inventory_status": contract_manifest,
+            "pipeline_smoke": {"verdict": verdict.to_persistable_dict(), "audit": audit.to_dict()},
+            "metrics": verdict.metrics,
+        }),
     }
     write_json(EVIDENCE / "package_manifest_v1_2.json", package_manifest)
     print(json.dumps(package_manifest, ensure_ascii=False, sort_keys=True))

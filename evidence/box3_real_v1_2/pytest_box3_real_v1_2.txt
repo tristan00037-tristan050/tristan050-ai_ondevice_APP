@@ -1,24 +1,34 @@
-# command: python3 -m pytest tests/cards/box3/test_box3_real*_v1_2.py tests/cards/box3/test_box3_claim_grounding_v1_2.py -v --disable-warnings
+# command: python3 -m pytest tests/cards/box3/test_box3_real_*_v1_2.py -v --disable-warnings
 ============================= test session starts ==============================
 platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0 -- [LOCAL_PATH_REDACTED]
 cachedir: .pytest_cache
 rootdir: [PACKAGE_ROOT]
 configfile: pytest.ini
 plugins: anyio-4.12.1
-collecting ... collected 13 items
+collecting ... collected 23 items
 
-tests/cards/box3/test_box3_real_contract_v1_2.py::test_runtime_envelope_keeps_raw_out_of_repr_and_audit_seed PASSED [  7%]
-tests/cards/box3/test_box3_real_contract_v1_2.py::test_runtime_envelope_rejects_secrets_and_local_paths PASSED [ 15%]
-tests/cards/box3/test_box3_claim_grounding_v1_2.py::test_claim_grounding_supported_unsupported_and_non_claim_levels PASSED [ 23%]
-tests/cards/box3/test_box3_claim_grounding_v1_2.py::test_claim_grounding_requires_source_digest_marker_for_citation_accuracy PASSED [ 30%]
-tests/cards/box3/test_box3_claim_grounding_v1_2.py::test_claim_grounding_no_evidence_is_needs_review_not_supported PASSED [ 38%]
-tests/cards/box3/test_box3_real_metrics_v1_2.py::test_real_metrics_require_fixed_eval_40_cases_and_zero_unsupported PASSED [ 46%]
-tests/cards/box3/test_box3_real_metrics_v1_2.py::test_real_metrics_fail_closed_for_proxy_insufficient_counts PASSED [ 53%]
-tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_real_pipeline_contract_only_manifest_does_not_call_runner PASSED [ 61%]
-tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_real_pipeline_blocks_no_evidence_before_runner PASSED [ 69%]
-tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_real_pipeline_blocks_unsupported_claim_and_suppresses_draft_text PASSED [ 76%]
-tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_real_pipeline_needs_review_when_fixed_eval_gate_not_met PASSED [ 84%]
-tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_real_pipeline_requires_citation_marker_before_real_status PASSED [ 92%]
-tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_real_pipeline_passes_only_when_assets_runner_claims_and_metrics_pass PASSED [100%]
+tests/cards/box3/test_box3_real_contract_v1_2.py::test_from_raw_builds_runtime_only_envelope_with_digests PASSED [  4%]
+tests/cards/box3/test_box3_real_contract_v1_2.py::test_from_raw_fails_closed_on_local_path_and_secret PASSED [  8%]
+tests/cards/box3/test_box3_real_contract_v1_2.py::test_post_init_rejects_invalid_max_new_tokens PASSED [ 13%]
+tests/cards/box3/test_box3_real_contract_v1_2.py::test_verdict_persistable_is_digest_only_and_suppresses_draft_text PASSED [ 17%]
+tests/cards/box3/test_box3_real_contract_v1_2.py::test_audit_record_is_digest_only_enforced PASSED [ 21%]
+tests/cards/box3/test_box3_real_grounding_v1_2.py::test_supported_claim_is_evidence_entails_with_citation PASSED [ 26%]
+tests/cards/box3/test_box3_real_grounding_v1_2.py::test_numeric_or_fact_mismatch_is_unsupported_contradicts PASSED [ 30%]
+tests/cards/box3/test_box3_real_grounding_v1_2.py::test_negation_contradiction_is_unsupported PASSED [ 34%]
+tests/cards/box3/test_box3_real_grounding_v1_2.py::test_unrelated_factual_claim_is_no_evidence PASSED [ 39%]
+tests/cards/box3/test_box3_real_grounding_v1_2.py::test_non_factual_section_is_non_claim PASSED [ 43%]
+tests/cards/box3/test_box3_real_grounding_v1_2.py::test_summary_counts_and_citation_accuracy PASSED [ 47%]
+tests/cards/box3/test_box3_real_metrics_v1_2.py::test_clean_supported_draft_passes_all_gates PASSED [ 52%]
+tests/cards/box3/test_box3_real_metrics_v1_2.py::test_unsupported_claim_blocks_final_gate PASSED [ 56%]
+tests/cards/box3/test_box3_real_metrics_v1_2.py::test_uncited_table_figure_below_coverage_gate PASSED [ 60%]
+tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_default_manifest_is_contract_only_and_never_calls_runner PASSED [ 65%]
+tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_runner_missing_blocks_after_asset_pass PASSED [ 69%]
+tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_no_evidence_blocks_before_runner PASSED [ 73%]
+tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_runner_timeout_is_fail_closed PASSED [ 78%]
+tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_unsupported_claim_blocks_and_suppresses_draft_text PASSED [ 82%]
+tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_clean_real_path_passes_all_seven_stages PASSED [ 86%]
+tests/cards/box3/test_box3_real_pipeline_v1_2.py::test_real_candidate_without_human_approval PASSED [ 91%]
+tests/cards/box3/test_box3_real_eval_v1_2.py::test_fixed_eval_set_has_forty_cases_with_table_figure_coverage PASSED [ 95%]
+tests/cards/box3/test_box3_real_eval_v1_2.py::test_fixed_eval_is_verdict_only_and_leak_zero PASSED [100%]
 
-======================== 13 passed, 6 warnings in 0.26s ========================
+======================== 23 passed, 6 warnings in 0.58s ========================
