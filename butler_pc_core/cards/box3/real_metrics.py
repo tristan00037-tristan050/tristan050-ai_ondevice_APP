@@ -100,7 +100,9 @@ def metric_fail_class(metrics: Box3RealMetrics) -> str | None:
     """final gate 에서 첫 위반 사유를 reason code 로 반환(없으면 None)."""
     if metrics.unsupported_count > 0 or metrics.unsupported_claim_rate > 0.0:
         return BLOCK_FINAL_GATE_UNSUPPORTED
-    if metrics.no_evidence_count > 0 or metrics.no_evidence_claim_rate > 0.05:
+    # SSOT 임계(no_evidence_claim_rate ≤ 0.05)와 일치 — 허용 한도(예: 1/20=0.05) 내의
+    # no_evidence 는 게이트를 통과시킨다. count>0 만으로 막으면 동일 모듈 임계보다 엄격해진다.
+    if metrics.no_evidence_claim_rate > 0.05:
         return NEEDS_REVIEW_NO_EVIDENCE
     if metrics.citation_accuracy < 0.95:
         return CITATION_ACCURACY_BELOW_GATE

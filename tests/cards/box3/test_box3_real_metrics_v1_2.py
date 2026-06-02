@@ -30,6 +30,31 @@ def test_clean_supported_draft_passes_all_gates():
     assert metric_fail_class(metrics) is None
 
 
+def _no_evidence(claim_id: str) -> ClaimVerdict:
+    return ClaimVerdict(claim_id, sha256_text(claim_id), "no_evidence", [], 0.0, "NO_MATCHING_EVIDENCE")
+
+
+def test_no_evidence_within_five_percent_passes_gate():
+    # 1/20 = 0.05 → SSOT 임계(≤0.05) 내 → 게이트 통과(NEEDS_REVIEW 아님).
+    unit = _unit("표 | 납품일 2026년 3월 31일", "table")
+    verdicts = [_supported(f"c{i}", unit.evidence_digest) for i in range(19)] + [_no_evidence("c19")]
+    citations = [unit.citation()]
+    full_format = "제목:x\n배경:x\n핵심 내용:x\n근거:x\n확인 필요:x\n최종 문안:x"
+    metrics = build_metrics(draft_text=full_format, verdicts=verdicts, evidence_units=[unit], citations=citations)
+    assert metrics.no_evidence_claim_rate == 0.05
+    assert metric_fail_class(metrics) is None
+
+
+def test_no_evidence_above_five_percent_needs_review():
+    # 2/20 = 0.10 → 임계 초과 → NEEDS_REVIEW.
+    unit = _unit("표 | 납품일 2026년 3월 31일", "table")
+    verdicts = [_supported(f"c{i}", unit.evidence_digest) for i in range(18)] + [_no_evidence("c18"), _no_evidence("c19")]
+    metrics = build_metrics(draft_text="제목:x\n배경:x\n핵심 내용:x\n근거:x\n확인 필요:x\n최종 문안:x",
+                            verdicts=verdicts, evidence_units=[unit], citations=[unit.citation()])
+    assert metrics.no_evidence_claim_rate > 0.05
+    assert metric_fail_class(metrics) == "NEEDS_REVIEW_NO_EVIDENCE"
+
+
 def test_unsupported_claim_blocks_final_gate():
     verdicts = [ClaimVerdict("c1", sha256_text("c1"), "unsupported", [], 0.9, "EVIDENCE_CONTRADICTS")]
     metrics = build_metrics(draft_text="제목:x", verdicts=verdicts, evidence_units=[], citations=[])
