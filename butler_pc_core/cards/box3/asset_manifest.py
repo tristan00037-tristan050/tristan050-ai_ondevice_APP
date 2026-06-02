@@ -40,8 +40,8 @@ class Box3AssetRecord:
     fail_class: str | None
 
 
-def is_full_sha256(value: str | None) -> bool:
-    return bool(value and FULL_SHA_RE.fullmatch(value))
+def is_full_sha256(value: Any) -> bool:
+    return isinstance(value, str) and bool(FULL_SHA_RE.fullmatch(value))
 
 
 def validate_asset_record(record: Box3AssetRecord) -> list[str]:

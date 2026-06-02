@@ -319,6 +319,35 @@ def test_pipeline_bad_schema_manifest_blocks_instead_of_demoting():
     assert calls == []
 
 
+def test_pipeline_empty_supplied_manifest_blocks_instead_of_defaulting():
+    """asset_manifest={} 는 caller supplied malformed manifest 이므로 default manifest 로 대체 금지."""
+    result = run_box3_pipeline(_request(), asset_manifest={})
+    assert result["status"] == "blocked"
+    assert result["fail_class"] == "BLOCK_ASSET_MANIFEST_SCHEMA_DRIFT"
+    assert result["contract_only"] is True
+    assert result["real_claim_allowed"] is False
+    assert result["draft_text"] is None
+
+
+def test_pipeline_malformed_asset_scalar_type_blocks_without_typeerror():
+    """row scalar type drift(예: sha256_full number)는 uncaught TypeError 가 아니라 BLOCK."""
+    bad = _passing_real_manifest()
+    bad["assets"][0]["sha256_full"] = 123
+    calls = []
+
+    def runner(prompt, max_new_tokens):
+        calls.append(prompt)
+        return _CLEAN_REAL_DRAFT
+
+    result = run_box3_pipeline(_request(), asset_manifest=bad, real_model_runner=runner)
+    assert result["status"] == "blocked"
+    assert result["fail_class"] == "BLOCK_ASSET_MANIFEST_INVALID"
+    assert result["contract_only"] is True
+    assert result["real_claim_allowed"] is False
+    assert result["draft_text"] is None
+    assert calls == []
+
+
 # ───────────────────────────────────────────────────────────────────────────────
 # 근본 재검토: 단일 real 게이트 8축 매트릭스 (각 축 단독 실패 → real false 전수)
 # ───────────────────────────────────────────────────────────────────────────────

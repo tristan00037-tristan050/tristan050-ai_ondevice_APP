@@ -90,7 +90,7 @@ def run_box3_pipeline(
     for raw_doc in request.reference_docs:
         assert_runtime_text_safe(raw_doc)
     assert_runtime_text_safe(request.draft_request)
-    manifest = asset_manifest or build_contract_only_asset_manifest()
+    manifest = build_contract_only_asset_manifest() if asset_manifest is None else asset_manifest
     manifest_fail_class = manifest_block_reason(manifest)
     if manifest_fail_class:
         result: Box3PipelineResult = {
