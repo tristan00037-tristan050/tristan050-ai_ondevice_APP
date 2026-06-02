@@ -75,6 +75,10 @@ def _request() -> Box3Request:
     return Box3Request(reference_docs=["digest-safe reference"], draft_request="digest-safe request")
 
 
+def _empty_reference_request() -> Box3Request:
+    return Box3Request(reference_docs=[], draft_request="digest-safe request")
+
+
 # ───────────────────────────────────────────────────────────────────────────────
 # 결함 #1 (P2) — grounding/pipeline contract_only demote 시 draft_text suppress
 # ───────────────────────────────────────────────────────────────────────────────
@@ -159,6 +163,17 @@ def test_pipeline_citations_are_digest_linked_not_supported():
     assert result["citations"]
     assert all(c["support_level"] == "digest_linked" for c in result["citations"])
     assert not any(c["support_level"] == "supported" for c in result["citations"])
+
+
+def test_pipeline_empty_reference_docs_returns_no_evidence_verdict():
+    """빈 reference_docs 는 compose 단계 예외가 아니라 NO_EVIDENCE_UNITS verdict 로 반환."""
+    result = run_box3_pipeline(_empty_reference_request(), real_model_runner=lambda *_args, **_kwargs: _CLEAN_REAL_DRAFT)
+    assert result["status"] == "needs_review"
+    assert result["fail_class"] == "NO_EVIDENCE_UNITS"
+    assert result["contract_only"] is True
+    assert result["real_claim_allowed"] is False
+    assert result["draft_text"] is None
+    assert result["citations"] == []
 
 
 # ───────────────────────────────────────────────────────────────────────────────
@@ -359,6 +374,14 @@ def test_pipeline_malformed_asset_name_type_blocks_without_typeerror():
     assert result["contract_only"] is True
     assert result["real_claim_allowed"] is False
     assert result["draft_text"] is None
+
+
+def test_manifest_allows_real_rejects_non_list_assets_without_typeerror():
+    """direct gate 호출에서도 assets=null/scalar 는 예외가 아니라 False."""
+    for malformed_assets in (None, "helper3_format", 123):
+        bad = _passing_real_manifest()
+        bad["assets"] = malformed_assets
+        assert manifest_allows_real(bad) is False
 
 
 # ───────────────────────────────────────────────────────────────────────────────

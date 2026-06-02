@@ -210,13 +210,17 @@ def manifest_allows_real(manifest: dict[str, Any]) -> bool:
     # 일 때만 real 을 허용한다(fail-closed asset inventory gate).
     # Codex P1 정정 (2026-06-01, PR #770): schema drift fail-closed — 계약 버전이 정본과
     # 다르거나 누락된 manifest(disk/API 주입 포함)는 real 모드 입력으로 받지 않는다.
+    if not isinstance(manifest, dict):
+        return False
     if manifest.get("schema_version") != EXPECTED_ASSET_MANIFEST_SCHEMA_VERSION:
         return False
     if manifest.get("status") != ASSET_INVENTORY_PASS_STATUS:
         return False
     if manifest.get("real_claim_allowed") is not True:
         return False
-    assets = manifest.get("assets", [])
+    assets = manifest.get("assets")
+    if not isinstance(assets, list):
+        return False
     if len(assets) != 4:
         return False
     # Codex P1 정정 (2026-06-01, PR #770): asset count 만 보면 동일 helper 4중복도 통과하여

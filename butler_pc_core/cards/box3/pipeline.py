@@ -119,6 +119,30 @@ def run_box3_pipeline(
     real_allowed = manifest_allows_real(manifest)
     evidence_units = extract_evidence_units(request.reference_docs)
     reference_doc_digests = [unit.source_digest for unit in evidence_units]
+    if not reference_doc_digests:
+        result: Box3PipelineResult = {
+            "status": "needs_review",
+            "draft_text": None,
+            "draft_digest": None,
+            "citations": [],
+            "grounding": {
+                "reference_coverage": 0.0,
+                "grounding_pass_rate": 0.0,
+                "unsupported_claim_rate": 0.0,
+                "contradiction_count": 0,
+                "source_digest_coverage": 0.0,
+            },
+            "format": apply_format_contract(None),
+            "style": apply_style_contract(None),
+            "external_send_zero": True,
+            "raw_saved_zero": True,
+            "raw_doc_logged": False,
+            "fail_class": "NO_EVIDENCE_UNITS",
+            "contract_only": True,
+            "real_claim_allowed": False,
+        }
+        assert_no_raw_persistence(result)
+        return result
     contract_input = compose_box3_current_contract_input(
         reference_doc_digests=reference_doc_digests,
         request_digest=sha256_digest(request.draft_request),
