@@ -196,6 +196,10 @@ class Box3RealRuntimeEnvelope:
     drafting_request_runtime: str = field(default="", repr=False)
     format_hint: str = "자유형"
     max_new_tokens: int = 512
+    # 박스 3 real follow-up v1.2 (2026-06-04) — enablement pipeline 의 policy gate 분기에서
+    # caller (sidecar route + admin policy middleware) 가 본 필드로 정책 결과를 전달한다.
+    # 본진 v1.0 본질 약화 0 (default True 로 기존 호출 회로 무회귀).
+    policy_gate_allowed: bool = True
     evidence_units_runtime: list[EvidenceUnit] = field(default_factory=list, repr=False)
     draft_text_runtime: str | None = field(default=None, repr=False)
     draft_claims_runtime: list[DraftClaim] = field(default_factory=list, repr=False)
@@ -225,6 +229,7 @@ class Box3RealRuntimeEnvelope:
         format_hint: str = "자유형",
         max_new_tokens: int = 512,
         request_id: str | None = None,
+        policy_gate_allowed: bool = True,
     ) -> "Box3RealRuntimeEnvelope":
         """raw 입력에서 envelope 를 구성한다. 각 텍스트는 DLP fail-closed 검증을 거친다."""
         assert_runtime_text_safe(drafting_request)
@@ -237,7 +242,13 @@ class Box3RealRuntimeEnvelope:
             drafting_request_runtime=drafting_request,
             format_hint=format_hint,
             max_new_tokens=max_new_tokens,
+            policy_gate_allowed=policy_gate_allowed,
         )
+
+    @property
+    def reference_docs_runtime_only(self) -> list[str]:
+        # 박스 3 real follow-up v1.2 — backward-compat read alias (본진 약화 0).
+        return self.reference_text_runtime_only
 
     @property
     def reference_digests(self) -> list[Digest]:
@@ -313,6 +324,36 @@ class Box3RealVerdict:
     external_send_zero: Literal[True] = True
     raw_saved_zero: Literal[True] = True
     raw_text_logged: Literal[False] = False
+    # 박스 3 real follow-up v1.2 (2026-06-04) — enablement pipeline 이 채우는 추가 메타.
+    # 본진 v1.0 본질 약화 0 (default 로 기존 호출 회로 무회귀).
+    stage_trace: list[dict[str, Any]] = field(default_factory=list)
+    human_approval_required: bool = False
+    runner_asset_digest: Digest | None = None
+    human_approval_digest: Digest | None = None
+
+    def build_audit_record(self, envelope: "Box3RealRuntimeEnvelope | None" = None) -> "Box3RealAuditRecord":
+        """박스 3 real follow-up v1.2 (2026-06-04) — 본진 build_audit_record 모듈 함수의
+        method shortcut. envelope 미공급 시 verdict 안 단독 audit (raw 0 / digest only).
+        """
+        if envelope is None:
+            # envelope 부재 시 verdict.request_digest 만으로 audit 본질을 구성
+            # (raw 누출 0). reference_digests 비움.
+            return Box3RealAuditRecord(
+                schema_version="box3.real_audit.v1_2",
+                request_digest=self.request_digest,
+                reference_digests=[],
+                result_digest=self.draft_digest,
+                unsupported_count=int(self.metrics.get("unsupported_count", 0) if isinstance(self.metrics, dict) else 0),
+                no_evidence_count=int(self.metrics.get("no_evidence_count", 0) if isinstance(self.metrics, dict) else 0),
+                citation_accuracy=float(self.metrics.get("citation_accuracy", 0.0) if isinstance(self.metrics, dict) else 0.0),
+                format_compliance=float(self.metrics.get("format_compliance", 0.0) if isinstance(self.metrics, dict) else 0.0),
+                style_compliance=float(self.metrics.get("style_compliance", 0.0) if isinstance(self.metrics, dict) else 0.0),
+                table_figure_coverage=float(self.metrics.get("table_figure_coverage", 0.0) if isinstance(self.metrics, dict) else 0.0),
+                asset_manifest_digest=self.asset_manifest_digest,
+                fail_class=self.fail_class,
+                stage_trace=list(self.stage_trace),
+            )
+        return build_audit_record(envelope=envelope, verdict=self, stage_trace=self.stage_trace)
 
     def to_dict(self) -> dict[str, Any]:
         # 무회귀용 별칭 — 전체(응답) 표현.

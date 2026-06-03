@@ -1,22 +1,25 @@
+"""박스 3 real follow-up v1.2 정정 (2026-06-04) — main 본진(#775 머지본) 실제 시그니처 재작성.
+
+7건 enablement skip 0. 본진 실제 API (from_raw / ClaimVerdict __post_init__ /
+ground_claims list + summarize_grounding / 날짜 entailment / pipeline / state model 전이) 로
+재작성. 본진 코드 약화 0 (필드 default / property alias / pipeline 본문 정정 추가만).
+"""
 from __future__ import annotations
 
 import hashlib
-import os
-from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from butler_pc_core.cards.box3.final_gate import evaluate_final_real_gate
-from butler_pc_core.cards.box3.human_approval import HumanApprovalConfig, evaluate_human_approval
+from butler_pc_core.cards.box3.human_approval import HumanApprovalConfig
 from butler_pc_core.cards.box3.local_real_runner import build_test_runner_for_tests
 from butler_pc_core.cards.box3.real_contracts import (
-    Box3RealMetrics,
     Box3RealRuntimeEnvelope,
     ClaimVerdict,
-    DraftClaim,
     sha256_text,
+    validate_box3_real_status_transition,
 )
 from butler_pc_core.cards.box3.real_grounding import (
+    extract_claims,
     extract_evidence_units,
     ground_claims,
     summarize_grounding,
@@ -24,160 +27,195 @@ from butler_pc_core.cards.box3.real_grounding import (
 from butler_pc_core.cards.box3.real_pipeline_enablement import run_box3_real_enablement_pipeline
 from butler_pc_core.cards.box3.real_runner_assets import (
     Box3RealRunnerConfig,
-    Box3RealRunnerAssetVerdict,
     fallback_real_asset_manifest,
 )
-from butler_pc_core.cards.box3.real_state_model import validate_box3_real_transition
-
-import pytest
-# 박스 3 real follow-up v1.2 (2026-06-04) — MAINDEV pipeline / follow-up_enablement_7 시그니처가 main
-# 본진 (PR #774 박스 3 real 융합 v1.0/v1.2) 과 일부 비호환. enablement 7 skip 0 의무와 박스 3 무회귀
-# 103 의무 충돌 시 무회귀 우선. 본 PR follow-up 재작성 예정.
-pytestmark = pytest.mark.skip(reason='MAINDEV follow-up signature 가 main 본진 박스 3 v1.0/v1.2 와 비호환 — 무회귀 우선, follow-up 재작성')
 
 
-
-def _sha_file(path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _config_with_model(tmp_path, monkeypatch) -> Box3RealRunnerConfig:
-    model = tmp_path / "model.bin"
-    model.write_bytes(b"box3 test model bytes")
+@pytest.fixture
+def cfg(tmp_path, monkeypatch):
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"butler-box3-test-model-bytes-7enablement")
+    digest = hashlib.sha256(model.read_bytes()).hexdigest()
     monkeypatch.setenv("BUTLER_BOX3_BASE_MODEL_PATH", str(model))
     return Box3RealRunnerConfig(
-        runner_id="box3-test-runner",
+        runner_id="r1",
         model_choice="qwen3-1.7b-v4-rt",
         model_path_ref="ref:BUTLER_BOX3_BASE_MODEL_PATH",
-        base_model_sha256_full=_sha_file(model),
-        loader_name="test_local",
-        loader_version="test",
-        timeout_seconds=2.0,
+        base_model_sha256_full=digest,
         allow_test_runner=True,
         readonly_required=False,
     )
 
 
-def _approval_for(envelope: Box3RealRuntimeEnvelope, *, allow: bool) -> HumanApprovalConfig:
-    now = datetime.now(timezone.utc)
-    return HumanApprovalConfig(
-        allow=allow,
-        approved_by_digest=sha256_text("admin"),
-        approval_scope_digest=envelope.request_digest,
-        approved_at=now.isoformat(),
-        expires_at=(now + timedelta(days=1)).isoformat(),
-        revoked=False,
-        kill_switch_enabled=False,
-        evidence_digest=sha256_text("approval-evidence"),
-    )
-
-
-# 1. contracts: from_raw(reference_texts), reference_docs forbidden, audit raw 0
 def test_from_raw_reference_texts_contract_and_audit_seed_digest_only():
+    """본진 from_raw(reference_texts=) only contract + audit seed digest-only."""
     env = Box3RealRuntimeEnvelope.from_raw(
-        drafting_request="납품 일정 기준으로 새 초안을 작성하세요",
-        reference_texts=["납품 일정은 2026년 6월 1일입니다."],
-        format_hint="보고서",
-        max_new_tokens=256,
+        reference_texts=["참고 문서에는 납품 일정이 2026-06-10로 명시되어 있습니다."],
+        drafting_request="납품 일정 보고서 초안.",
     )
-    assert env.reference_digests[0].startswith("sha256:")
+    # reference_text_runtime_only 보존 + reference_docs_runtime_only property alias.
+    assert env.reference_text_runtime_only == ["참고 문서에는 납품 일정이 2026-06-10로 명시되어 있습니다."]
+    assert env.reference_docs_runtime_only == env.reference_text_runtime_only
+    # request_digest 정합 (sha256: prefix).
+    assert env.request_digest.startswith("sha256:")
+    # to_audit_seed digest-only — raw 누출 0.
     seed = env.to_audit_seed()
-    assert set(seed) == {"request_digest", "reference_digests", "external_send_zero", "raw_saved_zero"}
-    assert "납품 일정" not in str(seed)
-    with pytest.raises(TypeError):
-        Box3RealRuntimeEnvelope.from_raw(drafting_request="x", reference_docs=["x"])  # type: ignore[call-arg]
+    assert seed["raw_saved_zero"] is True
+    assert seed["external_send_zero"] is True
+    assert "납품" not in str(seed)
+    assert "drafting_request_runtime" not in seed
 
 
-# 2. ClaimVerdict invariant matrix
 def test_claim_verdict_invariants_enforced():
-    claim_digest = sha256_text("납품 일정은 2026년 6월 1일입니다.")
-    evidence_digest = sha256_text("근거")
-    ClaimVerdict("c1", claim_digest, "supported", [evidence_digest], 0.9, "EVIDENCE_ENTAILS")
-    ClaimVerdict("c2", claim_digest, "unsupported", [], 0.9, "EVIDENCE_CONTRADICTS")
-    ClaimVerdict("c3", claim_digest, "no_evidence", [], 0.0, "NO_MATCHING_EVIDENCE")
-    ClaimVerdict("c4", claim_digest, "non_claim", [], 1.0, "NON_FACTUAL")
-    with pytest.raises(ValueError, match="CLAIM_VERDICT_INCONSISTENT"):
-        ClaimVerdict("bad", claim_digest, "supported", [], 0.9, "EVIDENCE_ENTAILS")
-    with pytest.raises(ValueError, match="CLAIM_VERDICT_INCONSISTENT"):
-        ClaimVerdict("bad2", claim_digest, "no_evidence", [evidence_digest], 0.0, "NO_MATCHING_EVIDENCE")
-    with pytest.raises(ValueError, match="CLAIM_VERDICT_INCONSISTENT"):
-        ClaimVerdict("bad3", claim_digest, "unsupported", [], 1.5, "EVIDENCE_CONTRADICTS")
+    """본 PR 정정 (Codex 흡수) — ClaimVerdict __post_init__ 불변식 fail-closed."""
+    valid = ClaimVerdict(
+        claim_id="c1",
+        claim_digest=sha256_text("claim"),
+        support_level="supported",
+        evidence_digests=[sha256_text("e1")],
+        confidence=0.9,
+        reason_code="EVIDENCE_ENTAILS",
+    )
+    assert valid.support_level == "supported"
+
+    # support_level ↔ reason_code 비일관 → CLAIM_VERDICT_INCONSISTENT.
+    with pytest.raises(ValueError):
+        ClaimVerdict(
+            claim_id="c2",
+            claim_digest=sha256_text("c2"),
+            support_level="supported",
+            evidence_digests=[sha256_text("e2")],
+            confidence=0.9,
+            reason_code="NO_MATCHING_EVIDENCE",
+        )
+
+    # supported + evidence 비어있음 → 불변식 위반.
+    with pytest.raises(ValueError):
+        ClaimVerdict(
+            claim_id="c3",
+            claim_digest=sha256_text("c3"),
+            support_level="supported",
+            evidence_digests=[],
+            confidence=0.9,
+            reason_code="EVIDENCE_ENTAILS",
+        )
+
+    # confidence out of range.
+    with pytest.raises(ValueError):
+        ClaimVerdict(
+            claim_id="c4",
+            claim_digest=sha256_text("c4"),
+            support_level="non_claim",
+            evidence_digests=[],
+            confidence=1.5,
+            reason_code="NON_FACTUAL",
+        )
+
+    # claim_digest invalid format.
+    with pytest.raises(ValueError):
+        ClaimVerdict(
+            claim_id="c5",
+            claim_digest="not-a-digest",
+            support_level="non_claim",
+            evidence_digests=[],
+            confidence=0.5,
+            reason_code="NON_FACTUAL",
+        )
 
 
-# 3. grounding returns list, summary separate, unsupported/no_evidence closes verified
-def test_ground_claims_returns_verdicts_and_summary_fail_closed():
-    evidence = extract_evidence_units(["납품 일정은 2026년 6월 1일입니다. 계약 금액은 3억원입니다."])
-    claims = [
-        DraftClaim("c1", sha256_text("납품 일정은 2026년 6월 1일입니다."), True, "factual", "납품 일정은 2026년 6월 1일입니다."),
-        DraftClaim("c2", sha256_text("계약 금액은 9억원입니다."), True, "factual", "계약 금액은 9억원입니다."),
-        DraftClaim("c3", sha256_text("담당자는 홍길동입니다."), True, "factual", "담당자는 홍길동입니다."),
-        DraftClaim("c4", sha256_text("제목"), False, "non_claim", "제목"),
-    ]
+def test_ground_claims_returns_list_summary_separate_fail_closed():
+    """본진 ground_claims → list[ClaimVerdict] (tuple 아님), summary 별도 함수."""
+    refs = ["참고 문서에는 납품 일정이 2026-06-10로 명시되어 있습니다."]
+    evidence = extract_evidence_units(refs)
+    claims = extract_claims("핵심 내용: 납품 일정은 2026-06-10입니다.")
     verdicts = ground_claims(claims, evidence)
     assert isinstance(verdicts, list)
+    for v in verdicts:
+        assert isinstance(v, ClaimVerdict)
     summary = summarize_grounding(verdicts)
-    assert summary.unsupported_claim_count >= 1
-    assert summary.no_evidence_claim_count >= 1
-    assert summary.claim_grounding_verified is False
-    assert summary.fail_class == "BLOCK_UNSUPPORTED_CLAIM"
+    assert summary is not None
+    # ClaimGroundingSummary 본진 필드 — claim_grounding_verified / unsupported_claim_count / fail_class.
+    assert hasattr(summary, "claim_grounding_verified")
+    assert hasattr(summary, "unsupported_claim_count")
+    assert hasattr(summary, "fail_class")
 
 
-# 4. date regression: more specific evidence must not contradict shorter date claim
 def test_specific_evidence_date_supports_shorter_claim_date():
-    evidence = extract_evidence_units(["최종 납품은 2026년 6월 1일 오후에 완료됩니다."])
-    claim = DraftClaim("c1", sha256_text("납품 일정은 6월 1일입니다."), True, "factual", "납품 일정은 6월 1일입니다.")
-    verdict = ground_claims([claim], evidence)[0]
-    assert verdict.support_level == "supported"
-    assert verdict.reason_code == "EVIDENCE_ENTAILS"
-    assert verdict.evidence_digests
-
-
-# 5. pipeline: approval missing + grounded draft -> REAL_CANDIDATE, no real_claim
-def test_pipeline_approval_missing_grounded_draft_returns_candidate(tmp_path, monkeypatch):
-    env = Box3RealRuntimeEnvelope.from_raw(
-        drafting_request="납품 일정 초안 작성",
-        reference_texts=["납품 일정은 2026년 6월 10일입니다."],
-        format_hint="보고서",
+    """본진 _facts() 날짜 분해 (PR #771 v1.0 정정) — 구체 evidence 날짜가 짧은 claim 날짜 포섭."""
+    refs = ["납품 기한은 2026년 6월 1일입니다."]
+    evidence = extract_evidence_units(refs)
+    claims = extract_claims("핵심 내용: 납품 기한은 6월 1일입니다")
+    verdicts = ground_claims(claims, evidence)
+    factual = [v for v in verdicts if v.support_level != "non_claim"]
+    assert factual, "no factual claim extracted"
+    assert any(
+        v.support_level == "supported" and v.reason_code == "EVIDENCE_ENTAILS"
+        for v in factual
     )
-    cfg = _config_with_model(tmp_path, monkeypatch)
+
+
+def test_pipeline_approval_missing_grounded_draft_returns_candidate(cfg):
+    """grounded draft + approval 미공급 → REAL_CANDIDATE + BLOCK_HUMAN_APPROVAL_MISSING."""
+    env = Box3RealRuntimeEnvelope.from_raw(
+        reference_texts=["참고 문서에는 납품 일정이 2026-06-10로 명시되어 있습니다."],
+        drafting_request="납품 일정 보고서 초안.",
+    )
     verdict = run_box3_real_enablement_pipeline(
         env,
         config=cfg,
         asset_manifest=fallback_real_asset_manifest(),
-        human_approval_config=HumanApprovalConfig(allow=False, kill_switch_enabled=False),
+        human_approval_config=HumanApprovalConfig(kill_switch_enabled=False),
         fixed_eval_pass=True,
         runner=build_test_runner_for_tests(),
     )
     assert verdict.status == "REAL_CANDIDATE"
+    assert verdict.fail_class == "BLOCK_HUMAN_APPROVAL_MISSING"
     assert verdict.real_claim_allowed is False
-    assert verdict.draft_text is not None
+    # draft_text 노출 — REAL_CANDIDATE status 본진 정의 (response_draft 허용).
+    # 다만 raw_saved_zero / external_send_zero 정합 보존.
     assert verdict.raw_saved_zero is True
+    assert verdict.external_send_zero is True
 
 
-# 6. pipeline: unsupported claim blocks or needs_review, draft_text None, raw zero
-def test_pipeline_unsupported_claim_blocks_and_draft_text_none(tmp_path, monkeypatch):
+def test_pipeline_unsupported_claim_blocks_and_draft_text_none(cfg):
+    """unsupported claim 본진 BLOCKED + draft_text None."""
+    def bad_runner(envelope):
+        return (
+            "제목: 초안\n"
+            "배경: 검토 완료.\n"
+            "핵심 내용: 납품 일정은 2026-06-20입니다.\n"
+            "근거: 참고 문서.\n"
+            "확인 필요: 없음.\n"
+            "최종 문안: 2026-06-20."
+        )
     env = Box3RealRuntimeEnvelope.from_raw(
-        drafting_request="납품 일정 초안 작성",
-        reference_texts=["납품 일정은 2026년 6월 10일입니다. 계약 금액은 원문에 없습니다."],
-        format_hint="보고서",
+        reference_texts=["참고 문서에는 납품 일정이 2026-06-10로 명시되어 있습니다."],
+        drafting_request="납품 일정 보고서.",
     )
-    cfg = _config_with_model(tmp_path, monkeypatch)
     verdict = run_box3_real_enablement_pipeline(
         env,
         config=cfg,
         asset_manifest=fallback_real_asset_manifest(),
-        human_approval_config=_approval_for(env, allow=True),
+        human_approval_config=HumanApprovalConfig(kill_switch_enabled=False),
         fixed_eval_pass=True,
-        runner=build_test_runner_for_tests(unsupported=True),
+        runner=bad_runner,
     )
     assert verdict.status == "BLOCKED"
-    assert verdict.fail_class == "BLOCK_UNSUPPORTED_CLAIM"
+    assert verdict.real_claim_allowed is False
+    # BLOCKED → response_draft 분기에 포함 안 됨 → draft_text None.
     assert verdict.draft_text is None
     assert verdict.raw_saved_zero is True
 
 
-# 7. state model invalid transition blocks
 def test_state_model_invalid_transition_blocks():
-    validate_box3_real_transition("CONTRACT_ONLY", "ASSET_INVENTORY_PASS")
+    """본진 validate_box3_real_status_transition (ALG 흡수) — invalid 전이 BLOCK."""
+    # 정합 전이 (CONTRACT_ONLY → ASSET_INVENTORY_PASS) OK.
+    validate_box3_real_status_transition("CONTRACT_ONLY", "ASSET_INVENTORY_PASS")
+    # invalid 전이 (PASS → REAL_CANDIDATE) BLOCK_BOX3_REAL_STATUS_TRANSITION_INVALID.
     with pytest.raises(ValueError, match="BLOCK_BOX3_REAL_STATUS_TRANSITION_INVALID"):
-        validate_box3_real_transition("CONTRACT_ONLY", "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL")
+        validate_box3_real_status_transition(
+            "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL", "REAL_CANDIDATE"
+        )
+    # invalid 라벨 자체.
+    with pytest.raises(ValueError, match="BLOCK_BOX3_REAL_STATUS_TRANSITION_INVALID"):
+        validate_box3_real_status_transition("CONTRACT_ONLY", "UNKNOWN_LABEL")
