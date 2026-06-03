@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 import tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from butler_pc_core.company_policy.contracts import AccessRule, AdminContext, make_company_policy, sha256_text
 from butler_pc_core.company_policy.policy_gate import PolicyGate, build_policy_task_envelope
@@ -57,13 +62,13 @@ def main() -> None:
         assert adapter["needs_review"] is False
         assert adapter["raw_saved_zero"] is True
         assert adapter["external_send_zero"] is True
-        print("SELF_CHECK_PASS=true")
+        print("SELF_CHECK_PASS=1")
         print(f"policy_digest={policy.policy_digest}")
         print(f"format_digest={fmt.format_digest}")
         print(f"template_digest={fmt.template_digest}")
-        print(f"policy_gate_allowed={gate.allowed}")
-        print(f"audit_raw_saved_zero={audit['raw_saved_zero']}")
-        print("external_send_zero=true")
+        print(f"policy_gate_allowed={1 if gate.allowed else 0}")
+        print(f"audit_raw_saved_zero={1 if audit['raw_saved_zero'] else 0}")
+        print("external_send_zero=1")
 
 
 if __name__ == "__main__":

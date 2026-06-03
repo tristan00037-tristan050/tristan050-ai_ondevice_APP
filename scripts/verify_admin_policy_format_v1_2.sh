@@ -61,7 +61,15 @@ def files():
             yield path
 
 
-errors = []
+CHECK_ORDER = [
+    ("CONNECT_LOOP_CONTRACT_MODIFIED_ZERO", "BLOCK_CONNECT_LOOP_CONTRACT"),
+    ("TOKEN_STORAGE_LOG_ZERO", "BLOCK_TOKEN_STORAGE_OR_LOG"),
+    ("NON_LOCAL_NETWORK_ZERO", "BLOCK_NON_LOCAL_NETWORK"),
+    ("RAW_SECRET_PATH_SCAN_ZERO", "BLOCK_RAW_SECRET_PATH"),
+    ("TRAINING_MODEL_ARTIFACT_ZERO", "BLOCK_TRAINING_MODEL_ARTIFACT"),
+    ("CLAUDE_FOOTER_ZERO", "BLOCK_CLAUDE_FOOTER"),
+]
+errors: set[str] = set()
 
 token_patterns = [
     re.compile(r"localStorage.*token", re.I),
@@ -96,24 +104,24 @@ for path in files():
     # 본 verify 가 path/pattern/line 디테일을 노출하지 않도록 짧은 ERROR_CODE 만 보유.
     for pattern in token_patterns:
         if pattern.search(text):
-            errors.append("BLOCK_TOKEN_STORAGE_OR_LOG")
+            errors.add("BLOCK_TOKEN_STORAGE_OR_LOG")
     for pattern in network_patterns:
         for match in pattern.finditer(text):
             line = text[:match.start()].count("\n") + 1
             line_text = text.splitlines()[line - 1] if 1 <= line <= len(text.splitlines()) else ""
             if "127.0.0.1:8765" not in line_text:
-                errors.append("BLOCK_NON_LOCAL_NETWORK")
+                errors.add("BLOCK_NON_LOCAL_NETWORK")
     for pattern in raw_patterns:
         if pattern.search(text):
-            errors.append("BLOCK_RAW_SECRET_PATH")
+            errors.add("BLOCK_RAW_SECRET_PATH")
 
 joined = "\n".join(pr_text_acc)
 if "schemas/connect_loop" in joined or "docs/ssot/connect_loop" in joined:
-    errors.append("BLOCK_CONNECT_LOOP_CONTRACT")
+    errors.add("BLOCK_CONNECT_LOOP_CONTRACT")
 
 for path in files():
     if path.suffix in {".safetensors", ".gguf", ".bin", ".npy", ".pkl"}:
-        errors.append("BLOCK_TRAINING_MODEL_ARTIFACT")
+        errors.add("BLOCK_TRAINING_MODEL_ARTIFACT")
 
 bad_footer = ["Generated with " + "Claude Code", "Co-Authored-By: " + "Claude"]
 for path in files():
@@ -125,23 +133,16 @@ for path in files():
         continue
     for needle in bad_footer:
         if needle in text:
-            errors.append("BLOCK_CLAUDE_FOOTER")
+            errors.add("BLOCK_CLAUDE_FOOTER")
             break
 
-# AGENTS.md 의무: 각 key 는 *판정만* — 0/1 정수만 허용 (count 가 아니라 boolean).
-def _has(code: str) -> int:
-    return 1 if code in errors else 0
-
-print(f"CONNECT_LOOP_CONTRACT_MODIFIED={_has('BLOCK_CONNECT_LOOP_CONTRACT')}")
-print(f"TOKEN_STORAGE_LOG={_has('BLOCK_TOKEN_STORAGE_OR_LOG')}")
-print(f"NON_LOCAL_NETWORK={_has('BLOCK_NON_LOCAL_NETWORK')}")
-print(f"RAW_SECRET_PATH_SCAN={_has('BLOCK_RAW_SECRET_PATH')}")
-print(f"TRAINING_MODEL_ARTIFACT={_has('BLOCK_TRAINING_MODEL_ARTIFACT')}")
-print(f"CLAUDE_FOOTER={_has('BLOCK_CLAUDE_FOOTER')}")
+# AGENTS.md 의무: 각 key 는 *판정만* — PASS=1 / FAIL=0.
+for key, code in CHECK_ORDER:
+    print(f"{key}={0 if code in errors else 1}")
 
 if errors:
     # 짧은 ERROR_CODE 만 노출 (중복 제거 + 정렬). path/pattern/line 노출 0.
-    for code in sorted(set(errors)):
+    for code in sorted(errors):
         print(code)
     raise SystemExit(1)
 PY
