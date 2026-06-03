@@ -33,15 +33,42 @@ SupportLevel = Literal["supported", "unsupported", "no_evidence", "non_claim"]
 ClaimSupportLevel = SupportLevel
 EvidenceKind = Literal["text", "table", "figure"]
 
-# 박스 3 real 실제 켜기 v1.3 (2026-06-03) — enablement 상태 Literal SSOT.
-# Codex 보완 5 정합: PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL 명시 라벨 + PARTIAL/CANDIDATE.
+# 박스 3 real 실제 켜기 v1.3 (2026-06-03) + follow-up v1.2 (2026-06-04) — 상태 SSOT 6.
+# 사용자 명시 "상태 SSOT 6 (PASS_BOX3_REAL 금지)" — ASSET_INVENTORY_PASS 포함 6 label.
 Box3RealStatus = Literal[
     "CONTRACT_ONLY",
+    "ASSET_INVENTORY_PASS",
     "REAL_CANDIDATE",
     "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL",
     "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE",
     "BLOCKED",
 ]
+
+# ALG real_state_model 본질 흡수 (단일 모듈 경로, real_state_model.py 는 alias 만 노출).
+_ALLOWED_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "CONTRACT_ONLY": {"ASSET_INVENTORY_PASS", "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE", "BLOCKED"},
+    "ASSET_INVENTORY_PASS": {"REAL_CANDIDATE", "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE", "BLOCKED"},
+    "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE": {"ASSET_INVENTORY_PASS", "REAL_CANDIDATE", "BLOCKED"},
+    "REAL_CANDIDATE": {"PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL", "BLOCKED", "REAL_CANDIDATE"},
+    "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL": {"PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL"},
+    "BLOCKED": {"BLOCKED"},
+}
+
+
+def validate_box3_real_status(status: str) -> str:
+    from typing import get_args as _get_args
+    if status not in _get_args(Box3RealStatus):
+        from .real_fail_class import BLOCK_BOX3_REAL_STATUS_TRANSITION_INVALID
+        raise ValueError(f"{BLOCK_BOX3_REAL_STATUS_TRANSITION_INVALID}:{status}")
+    return status
+
+
+def validate_box3_real_status_transition(previous: str, current: str) -> None:
+    validate_box3_real_status(previous)
+    validate_box3_real_status(current)
+    if current not in _ALLOWED_STATUS_TRANSITIONS[previous]:
+        from .real_fail_class import BLOCK_BOX3_REAL_STATUS_TRANSITION_INVALID
+        raise ValueError(f"{BLOCK_BOX3_REAL_STATUS_TRANSITION_INVALID}:{previous}->{current}")
 
 
 def is_bare_sha256(value: object) -> bool:
@@ -116,6 +143,41 @@ class ClaimVerdict:
         "NO_MATCHING_EVIDENCE",
         "NON_FACTUAL",
     ]
+
+    def __post_init__(self) -> None:
+        # Codex follow-up v1.2 (2026-06-04): ClaimVerdict 불변식 fail-closed (post_init).
+        # support_level ↔ reason_code 일관성 + evidence_digests 형식 + confidence 범위.
+        if not is_sha256_digest(self.claim_digest):
+            raise ValueError("CLAIM_DIGEST_INVALID")
+        try:
+            confidence = float(self.confidence)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("CLAIM_CONFIDENCE_INVALID") from exc
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError("CLAIM_CONFIDENCE_OUT_OF_RANGE")
+        if not isinstance(self.evidence_digests, list):
+            raise ValueError("EVIDENCE_DIGEST_INVALID")
+        if not all(is_sha256_digest(item) for item in self.evidence_digests):
+            raise ValueError("EVIDENCE_DIGEST_INVALID")
+        # ClaimVerdict 불변식 — support_level ↔ reason_code 의 정합 enum 매핑.
+        expected = {
+            "supported": ("EVIDENCE_ENTAILS", True),
+            "unsupported": ("EVIDENCE_CONTRADICTS", False),
+            "no_evidence": ("NO_MATCHING_EVIDENCE", False),
+            "non_claim": ("NON_FACTUAL", False),
+        }
+        if self.support_level not in expected:
+            from .real_fail_class import CLAIM_VERDICT_INCONSISTENT
+            raise ValueError(CLAIM_VERDICT_INCONSISTENT)
+        expected_reason, evidence_required = expected[self.support_level]
+        inconsistent = self.reason_code != expected_reason
+        if evidence_required and not self.evidence_digests:
+            inconsistent = True
+        if self.support_level in {"no_evidence", "non_claim"} and self.evidence_digests:
+            inconsistent = True
+        if inconsistent:
+            from .real_fail_class import CLAIM_VERDICT_INCONSISTENT
+            raise ValueError(CLAIM_VERDICT_INCONSISTENT)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

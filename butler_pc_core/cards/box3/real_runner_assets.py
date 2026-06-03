@@ -232,3 +232,6 @@ def verify_box3_real_runner_assets(config: Box3RealRunnerConfig, *, helper_manif
             })
     digest = stable_json_digest({"config": config.to_digest_dict(), "rows": rows})
     return Box3RealRunnerAssetVerdict(True, None, digest, helper_manifest_digest, rows, measured={"measured_at_ms": int(time.time() * 1000)})
+
+# 박스 3 real follow-up v1.2 (2026-06-04) — ALG public alias 흡수.
+fallback_real_asset_manifest = _fallback_real_asset_manifest
