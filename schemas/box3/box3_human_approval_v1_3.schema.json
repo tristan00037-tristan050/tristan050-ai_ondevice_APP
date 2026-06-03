@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Box3 sealed human approval v1.3",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "allow_pass_box3_real_after_human_approval",
+    "approved_by_digest",
+    "approval_scope_digest",
+    "approved_at_utc",
+    "expires_at_utc",
+    "revoked",
+    "kill_switch_enabled"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "box3.human_approval.v1_3"
+    },
+    "allow_pass_box3_real_after_human_approval": {
+      "type": "boolean",
+      "default": false
+    },
+    "approved_by_digest": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "approval_scope_digest": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "approved_at_utc": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "expires_at_utc": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revoked": {
+      "type": "boolean"
+    },
+    "kill_switch_enabled": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}
