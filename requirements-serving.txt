@@ -4,6 +4,9 @@ pydantic
 python-multipart
 pytest
 httpx
+# 관리자 정책·양식 등록 v1.2 (MAINDEV company_policy/vault.py): device-local
+# encrypted company format vault (AES-GCM via cryptography.hazmat) 의무.
+cryptography>=42.0.0
 openpyxl>=3.0.0
 xlrd>=2.0.0
 python-docx>=1.1.0
