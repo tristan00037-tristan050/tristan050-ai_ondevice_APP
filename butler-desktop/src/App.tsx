@@ -11,6 +11,8 @@ import { AccountingModal } from './components/chat/AccountingModal';
 import { RequestParsingModal } from './components/chat/RequestParsingModal';
 import { CardGrid } from './components/v1_1/CardGrid';
 import { Card2DocumentTransform } from './components/v1_1/Card2DocumentTransform';
+import { AdminPolicyConsole } from './components/v1_1/AdminPolicyConsole';
+import { CompanyFormatConsole } from './components/v1_1/CompanyFormatConsole';
 import { SIDECAR_BASE } from './constants';
 import type { SSEEvent, Conversation, Message } from './types';
 import {
@@ -55,6 +57,8 @@ export function App() {
   const [accountingModalOpen, setAccountingModalOpen] = useState(false);
   const [requestParsingModalOpen, setRequestParsingModalOpen] = useState(false);
   const [documentTransformModalOpen, setDocumentTransformModalOpen] = useState(false);
+  const [adminPolicyConsoleOpen, setAdminPolicyConsoleOpen] = useState(false);
+  const [companyFormatConsoleOpen, setCompanyFormatConsoleOpen] = useState(false);
   const [egressMonitorOpen, setEgressMonitorOpen] = useState(false);
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarElapsed, setSidecarElapsed] = useState(0);
@@ -465,6 +469,36 @@ export function App() {
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <button
+              data-testid="admin-policy-console-btn"
+              onClick={() => setAdminPolicyConsoleOpen(true)}
+              style={{
+                background: 'none',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 6,
+                padding: '3px 10px',
+                cursor: 'pointer',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              정책 등록
+            </button>
+            <button
+              data-testid="company-format-console-btn"
+              onClick={() => setCompanyFormatConsoleOpen(true)}
+              style={{
+                background: 'none',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 6,
+                padding: '3px 10px',
+                cursor: 'pointer',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              양식 등록
+            </button>
+            <button
               data-testid="egress-monitor-btn"
               onClick={() => setEgressMonitorOpen(true)}
               style={{
@@ -544,6 +578,12 @@ export function App() {
             setCardMode('free');
           }}
         />
+      )}
+      {adminPolicyConsoleOpen && (
+        <AdminPolicyConsole onClose={() => setAdminPolicyConsoleOpen(false)} />
+      )}
+      {companyFormatConsoleOpen && (
+        <CompanyFormatConsole onClose={() => setCompanyFormatConsoleOpen(false)} />
       )}
       {/* Sidecar readiness overlay */}
       {!sidecarReady && !sidecarFailed && (
