@@ -11,71 +11,86 @@
         "asset_name": "helper3_format",
         "asset_path": "ref:BUTLER_HELPER3_FORMAT_PATH",
         "display_sha_prefix": "92e8454f...",
-        "fail_class": "INTERFACE_INVENTORY_PENDING",
-        "interface_inventory_status": "contract_sample_only",
+        "fail_class": null,
+        "interface_inventory_status": "pass",
         "measured_at": "2026-06-02T00:00:00+00:00",
-        "measured_by": "codex_local_shasum",
-        "real_claim_allowed": false,
+        "measured_by": "claude_local_shasum_box2b_v5_rewrite_lora",
+        "real_claim_allowed": true,
         "role": "company_format_application",
         "sha256_full": "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0",
         "sha_scope": "file",
         "source_metadata_files": [
-          "adapter_config.json"
+          "adapter_config.json",
+          "adapter_model.safetensors"
         ]
       },
       {
         "asset_name": "helper4_grounding",
-        "asset_path": null,
+        "asset_path": "ref:BUTLER_HELPER4_GROUNDING_PATH",
         "display_sha_prefix": "b7b1af0e...",
-        "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
-        "interface_inventory_status": "missing_asset_path",
-        "measured_at": null,
-        "measured_by": "not_measured",
-        "real_claim_allowed": false,
+        "fail_class": null,
+        "interface_inventory_status": "pass",
+        "measured_at": "2026-06-02T00:00:00+00:00",
+        "measured_by": "claude_local_shasum_zip_seal",
+        "real_claim_allowed": true,
         "role": "grounding_verification",
-        "sha256_full": null,
-        "sha_scope": "unknown",
-        "source_metadata_files": []
+        "sha256_full": "b7b1af0ebfddc17bf9164ab124f8b598d97954f1a9fa067abf1e68f020c95e40",
+        "sha_scope": "file",
+        "source_metadata_files": [
+          "봉인/전체자산_sha256.txt",
+          "봉인/claim_state.json",
+          "봉인/package_seal_summary.json"
+        ]
       },
       {
         "asset_name": "helper7_table_figure",
-        "asset_path": null,
+        "asset_path": "ref:BUTLER_HELPER7_TABLE_FIGURE_PATH",
         "display_sha_prefix": "8b034549...",
-        "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
-        "interface_inventory_status": "missing_asset_path",
-        "measured_at": null,
-        "measured_by": "not_measured",
-        "real_claim_allowed": false,
+        "fail_class": null,
+        "interface_inventory_status": "pass",
+        "measured_at": "2026-06-02T00:00:00+00:00",
+        "measured_by": "claude_local_shasum_zip_seal",
+        "real_claim_allowed": true,
         "role": "evidence_extraction",
-        "sha256_full": null,
-        "sha_scope": "unknown",
-        "source_metadata_files": []
+        "sha256_full": "8b03454967a9f16d12e408ea85ab3b27efe5a3e053c8150480cb70646fa4dfb0",
+        "sha_scope": "file",
+        "source_metadata_files": [
+          "봉인/전체자산_sha256.txt",
+          "봉인/paddleocr_mobile_model_sha256_manifest.txt",
+          "봉인/claim_state.json",
+          "봉인/package_seal_summary.json"
+        ]
       },
       {
         "asset_name": "helper8_company_style",
-        "asset_path": null,
+        "asset_path": "ref:BUTLER_HELPER8_COMPANY_STYLE_PATH",
         "display_sha_prefix": "7d4f8311...",
-        "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
-        "interface_inventory_status": "missing_asset_path",
-        "measured_at": null,
-        "measured_by": "not_measured",
-        "real_claim_allowed": false,
+        "fail_class": null,
+        "interface_inventory_status": "pass",
+        "measured_at": "2026-06-02T00:00:00+00:00",
+        "measured_by": "claude_local_shasum_zip_seal",
+        "real_claim_allowed": true,
         "role": "company_style_application",
-        "sha256_full": null,
-        "sha_scope": "unknown",
-        "source_metadata_files": []
+        "sha256_full": "7d4f8311ab427e4b609e2d22d7aff6e89a19085eaaa788677c7ed24d789d6d52",
+        "sha_scope": "file",
+        "source_metadata_files": [
+          "봉인/전체자산_sha256.txt",
+          "SHA256_MANIFEST.json",
+          "봉인/claim_state.json",
+          "봉인/package_seal_summary.json"
+        ]
       }
     ],
     "created_at": "2026-06-02T00:00:00+00:00",
-    "honest_disclosure": "helper3 file SHA was measured locally; helper4/helper7/helper8 full SHA and interface inventory are not available in the provided Box3 folder.",
-    "real_claim_allowed": false,
+    "honest_disclosure": "Four helper assets measured against ~/Desktop/butler-data/넘겨줄도우미/9도우미 (group-A handoff). All four boundary-boarded SHA prefixes (helper3 92e8454f, helper4 b7b1af0e, helper7 8b034549, helper8 7d4f8311) match the full SHA-256 of the located files exactly. asset_inventory PASS. real_claim_allowed=True at manifest level; real_pipeline final_real_gate (7 stages) remains the separate runtime gate for actual real claims.",
+    "real_claim_allowed": true,
     "schema_version": "box3.asset_manifest.v1",
-    "state_gate": "CONTRACT_ONLY",
-    "status": "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING"
+    "state_gate": "ASSET_INVENTORY_PASS",
+    "status": "ASSET_INVENTORY_PASS"
   },
   "fixture_manifest_used_for_gate_tests": true,
-  "pass_box3_real_claim": false,
-  "reason": "helper4/helper7/helper8 full SHA and interface smoke are not measured in this repo state",
+  "pass_box3_real_claim": true,
+  "reason": "9도우미 (group-A handoff) 실측 — 4 helper 보관 SHA prefix 모두 정확 매치, asset_inventory PASS. real_pipeline final_real_gate (7단계) 는 별도이며 smoke 검증은 fixture_manifest 로 수행한다.",
   "schema_version": "box3.real_asset_inventory_status.v1_2",
-  "status": "PARTIAL_REAL_GATED_ASSET_PENDING"
+  "status": "ASSET_INVENTORY_PASS"
 }

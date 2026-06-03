@@ -42,6 +42,11 @@ _LOCAL_PATH_RE = re.compile(
 )
 _DIGEST_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
 _DIGEST_INLINE_RE = re.compile(r"sha256:[a-f0-9]{64}")
+# 박스 3 real asset 최종 (2026-06-03): asset_manifest 의 helper SHA 상수(HELPER{3,4,7,8}_SHA)는
+# 64-hex 만으로 저장되어 `sha256:` prefix 가 없다. evidence persist 시 PII regex(특히 PHONE)와
+# false-positive 가 발생해 자체 SHA 가 차단되던 결함을 해소하기 위해 64-hex 단독 문자열도
+# SHA 인식 대상으로 추가한다 (보안 완화 아님 — sha256 인식 형식 확장).
+_BARE_SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
 
 
 class Box3SecurityError(ValueError):
@@ -90,7 +95,7 @@ def assert_no_raw_persistence(payload: Any, path: str = "$") -> None:
         return
     if isinstance(payload, str):
         findings = scan_forbidden_text(payload)
-        if findings and not is_sha256_digest(payload):
+        if findings and not is_sha256_digest(payload) and not _BARE_SHA256_HEX_RE.fullmatch(payload):
             raise Box3SecurityError(f"BLOCK_FORBIDDEN_SCALAR:{path}:{','.join(findings)}")
         return
     if isinstance(payload, Sequence) and not isinstance(payload, (bytes, bytearray)):

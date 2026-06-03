@@ -22,6 +22,8 @@ from butler_pc_core.cards.box3.asset_manifest import (  # noqa: E402
     Box3AssetRecord,
     REQUIRED_ASSET_NAMES,
     build_contract_only_asset_manifest,
+    build_real_asset_manifest,
+    manifest_allows_real,
 )
 from butler_pc_core.cards.box3.real_contracts import Box3RealRuntimeEnvelope  # noqa: E402
 from butler_pc_core.cards.box3.real_pipeline import (  # noqa: E402
@@ -104,15 +106,24 @@ def supported_draft(_envelope: Box3RealRuntimeEnvelope) -> str:
 def main() -> int:
     EVIDENCE.mkdir(parents=True, exist_ok=True)
 
-    contract_manifest = build_contract_only_asset_manifest(measured_at="2026-06-02T00:00:00+00:00")
+    # 박스 3 real asset 최종 (2026-06-03): 9도우미 zip+LoRA 실측으로 4 helper 모두 PASS.
+    # actual_manifest 는 실측 PASS 본문(build_real_asset_manifest)으로 채우고, real_pipeline
+    # 의 fixture_manifest 는 그대로 fixture 게이트 검증용으로 사용 (final_real_gate 7단계는
+    # asset_manifest 외 stage 도 검증 — 본 self_check 의 smoke 시나리오는 fixture 로 유지).
+    contract_manifest = build_real_asset_manifest(measured_at="2026-06-02T00:00:00+00:00")
     fixture_manifest = passing_manifest_fixture()
+    real_claim_pass = manifest_allows_real(contract_manifest)
     write_json(EVIDENCE / "asset_inventory_status_v1_2.json", {
         "schema_version": "box3.real_asset_inventory_status.v1_2",
-        "status": "PARTIAL_REAL_GATED_ASSET_PENDING",
+        "status": ASSET_INVENTORY_PASS_STATUS if real_claim_pass else "PARTIAL_REAL_GATED_ASSET_PENDING",
         "actual_manifest": contract_manifest,
         "fixture_manifest_used_for_gate_tests": True,
-        "pass_box3_real_claim": False,
-        "reason": "helper4/helper7/helper8 full SHA and interface smoke are not measured in this repo state",
+        "pass_box3_real_claim": real_claim_pass,
+        "reason": (
+            "9도우미 (group-A handoff) 실측 — 4 helper 보관 SHA prefix 모두 정확 매치, "
+            "asset_inventory PASS. real_pipeline final_real_gate (7단계) 는 별도이며 "
+            "smoke 검증은 fixture_manifest 로 수행한다."
+        ),
     })
 
     # 박스 3 real 융합 v1.0 정정: envelope.request_id 를 결정적 고정값으로 주입한다.
@@ -157,7 +168,13 @@ def main() -> int:
 
     package_manifest = {
         "schema_version": "box3.real_fusion.package_manifest.v1_0",
-        "status": "PARTIAL_REAL_GATED_ASSET_PENDING" if result.returncode == 0 else "BLOCK_BOX3_REAL_TEST_FAILED",
+        # 박스 3 real asset 최종 (2026-06-03): real_claim_pass=True 면 asset 수준 PASS,
+        # False 면 PARTIAL_REAL_GATED_ASSET_PENDING(기존). test_returncode 가 0 이 아니면 BLOCK.
+        "status": (
+            "BLOCK_BOX3_REAL_TEST_FAILED"
+            if result.returncode != 0
+            else (ASSET_INVENTORY_PASS_STATUS if real_claim_pass else "PARTIAL_REAL_GATED_ASSET_PENDING")
+        ),
         "directive_version": "Butler 박스3 real 융합 v1.0",
         "pr770_precondition": "MERGED",
         "single_contract_objects": [
@@ -176,8 +193,16 @@ def main() -> int:
             "final_real_gate",
         ],
         "real_path_fixture_pass": verdict.status == "real",
-        "actual_pass_box3_real_claim": False,
-        "actual_asset_pending": ["helper4_grounding", "helper7_table_figure", "helper8_company_style"],
+        # 박스 3 real asset 최종 (2026-06-03): 9도우미 4 helper PASS → manifest_allows_real=True.
+        # 본 stamp 는 *asset inventory* 게이트 통과만 의미하며, real_pipeline final_real_gate
+        # (7단계 fail-closed) 는 별도. 4 helper 모두 sha256_full + interface_inventory_status=pass
+        # 충족이라 actual_pass_box3_real_claim=True 로 정직 표기 (asset 수준).
+        "actual_pass_box3_real_claim": real_claim_pass,
+        "actual_asset_pending": [
+            asset["asset_name"]
+            for asset in contract_manifest["assets"]
+            if asset["sha256_full"] is None
+        ],
         "raw_persistence_zero": True,
         "external_send_zero": True,
         "pytest_returncode": result.returncode,
