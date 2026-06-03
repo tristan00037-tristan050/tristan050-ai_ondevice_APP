@@ -11,6 +11,12 @@ import re
 FULL_SHA_RE = re.compile(r"^[a-f0-9]{64}$")
 
 HELPER3_SHA = "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0"
+# 박스 3 real asset 재시도 (2026-06-03): helper 산출물 위치 ~/Desktop/butler-data/넘겨줄도우미/9도우미
+# 실측 결과를 본 상수로 반영한다. helper4·helper8 zip 봉인 패키지의 전체 파일 SHA 가
+# 본 채팅 보관 prefix (b7b1af0e / 7d4f8311) 와 정확 매치되어 PASS. helper7 은 보관 prefix
+# 8b034549 매치 0 (zip 미보관, old final 3e8266d1 만 존재) — PENDING 유지(fail-closed).
+HELPER4_SHA = "b7b1af0ebfddc17bf9164ab124f8b598d97954f1a9fa067abf1e68f020c95e40"
+HELPER8_SHA = "7d4f8311ab427e4b609e2d22d7aff6e89a19085eaaa788677c7ed24d789d6d52"
 EXPECTED_ASSET_MANIFEST_SCHEMA_VERSION = "box3.asset_manifest.v1"
 ASSET_INVENTORY_PASS_STATUS = "ASSET_INVENTORY_PASS"
 CONTRACT_ONLY_ASSET_STATUS = "PARTIAL_CONTRACT_ONLY_ASSET_INVENTORY_PENDING"
@@ -107,20 +113,24 @@ def build_contract_only_asset_manifest(measured_at: str | None = None) -> dict[s
             asset_name="helper4_grounding",
             role="grounding_verification",
             display_sha_prefix="b7b1af0e...",
-            asset_path=None,
-            sha256_full=None,
-            sha_scope="unknown",
-            measured_at=None,
-            measured_by="not_measured",
-            source_metadata_files=[],
-            interface_inventory_status="missing_asset_path",
+            # ref 표기 (로컬 절대경로/zip 명 평문 누출 0). 실 자산: 9도우미 zip 봉인 패키지.
+            asset_path="ref:BUTLER_HELPER4_GROUNDING_PATH",
+            sha256_full=HELPER4_SHA,
+            sha_scope="file",
+            measured_at=now,
+            measured_by="claude_local_shasum",
+            source_metadata_files=["봉인/전체자산_sha256.txt"],
+            interface_inventory_status="contract_sample_only",
             real_claim_allowed=False,
-            fail_class="BLOCK_FULL_SHA_NOT_MEASURED",
+            fail_class="INTERFACE_INVENTORY_PENDING",
         ),
         Box3AssetRecord(
             asset_name="helper7_table_figure",
             role="evidence_extraction",
             display_sha_prefix="8b034549...",
+            # 9도우미 폴더에 보관 prefix 8b034549 매치 zip 부재 (old final 3e8266d1 만 존재).
+            # 봉인 폴더는 풀려 있고 paddleocr_mobile_model_sha256_manifest.txt 등 메타만 보유 —
+            # 본 채팅 보관 SHA 와 일치하는 봉인 패키지 자체는 미보관. fail-closed PENDING 유지.
             asset_path=None,
             sha256_full=None,
             sha_scope="unknown",
@@ -135,15 +145,15 @@ def build_contract_only_asset_manifest(measured_at: str | None = None) -> dict[s
             asset_name="helper8_company_style",
             role="company_style_application",
             display_sha_prefix="7d4f8311...",
-            asset_path=None,
-            sha256_full=None,
-            sha_scope="unknown",
-            measured_at=None,
-            measured_by="not_measured",
-            source_metadata_files=[],
-            interface_inventory_status="missing_asset_path",
+            asset_path="ref:BUTLER_HELPER8_COMPANY_STYLE_PATH",
+            sha256_full=HELPER8_SHA,
+            sha_scope="file",
+            measured_at=now,
+            measured_by="claude_local_shasum",
+            source_metadata_files=["봉인/전체자산_sha256.txt", "SHA256_MANIFEST.json"],
+            interface_inventory_status="contract_sample_only",
             real_claim_allowed=False,
-            fail_class="BLOCK_FULL_SHA_NOT_MEASURED",
+            fail_class="INTERFACE_INVENTORY_PENDING",
         ),
     ]
     asset_errors = {record.asset_name: validate_asset_record(record) for record in records}

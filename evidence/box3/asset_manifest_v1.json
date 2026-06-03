@@ -12,7 +12,7 @@
       "display_sha_prefix": "92e8454f...",
       "fail_class": "INTERFACE_INVENTORY_PENDING",
       "interface_inventory_status": "contract_sample_only",
-      "measured_at": "2026-06-01T00:00:00+00:00",
+      "measured_at": "2026-06-03T00:00:00+00:00",
       "measured_by": "codex_local_shasum",
       "real_claim_allowed": false,
       "role": "company_format_application",
@@ -24,17 +24,19 @@
     },
     {
       "asset_name": "helper4_grounding",
-      "asset_path": null,
+      "asset_path": "ref:BUTLER_HELPER4_GROUNDING_PATH",
       "display_sha_prefix": "b7b1af0e...",
-      "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
-      "interface_inventory_status": "missing_asset_path",
-      "measured_at": null,
-      "measured_by": "not_measured",
+      "fail_class": "INTERFACE_INVENTORY_PENDING",
+      "interface_inventory_status": "contract_sample_only",
+      "measured_at": "2026-06-03T00:00:00+00:00",
+      "measured_by": "claude_local_shasum",
       "real_claim_allowed": false,
       "role": "grounding_verification",
-      "sha256_full": null,
-      "sha_scope": "unknown",
-      "source_metadata_files": []
+      "sha256_full": "b7b1af0ebfddc17bf9164ab124f8b598d97954f1a9fa067abf1e68f020c95e40",
+      "sha_scope": "file",
+      "source_metadata_files": [
+        "봉인/전체자산_sha256.txt"
+      ]
     },
     {
       "asset_name": "helper7_table_figure",
@@ -52,21 +54,24 @@
     },
     {
       "asset_name": "helper8_company_style",
-      "asset_path": null,
+      "asset_path": "ref:BUTLER_HELPER8_COMPANY_STYLE_PATH",
       "display_sha_prefix": "7d4f8311...",
-      "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
-      "interface_inventory_status": "missing_asset_path",
-      "measured_at": null,
-      "measured_by": "not_measured",
+      "fail_class": "INTERFACE_INVENTORY_PENDING",
+      "interface_inventory_status": "contract_sample_only",
+      "measured_at": "2026-06-03T00:00:00+00:00",
+      "measured_by": "claude_local_shasum",
       "real_claim_allowed": false,
       "role": "company_style_application",
-      "sha256_full": null,
-      "sha_scope": "unknown",
-      "source_metadata_files": []
+      "sha256_full": "7d4f8311ab427e4b609e2d22d7aff6e89a19085eaaa788677c7ed24d789d6d52",
+      "sha_scope": "file",
+      "source_metadata_files": [
+        "봉인/전체자산_sha256.txt",
+        "SHA256_MANIFEST.json"
+      ]
     }
   ],
-  "created_at": "2026-06-01T00:00:00+00:00",
-  "honest_disclosure": "helper3 file SHA was measured locally; helper4/helper7/helper8 full SHA and interface inventory are not available in the provided Box3 folder.",
+  "created_at": "2026-06-03T00:00:00+00:00",
+  "honest_disclosure": "helper4_grounding(b7b1af0e) + helper8_company_style(7d4f8311) full SHA measured against ~/Desktop/butler-data/넘겨줄도우미/9도우미 zip 봉인 패키지 — boundary boarded SHA prefix exact match. helper3_format(92e8454f) SHA constant retained from prior codex measurement (source file in 9도우미 not located). helper7_table_figure(8b034549) PENDING — sealed v2.1 package not present in 9도우미 (only old final 3e8266d1 zip + extracted folder). asset_inventory_status: PARTIAL — helper4 + helper8 inventory satisfied at file-sha level, helper3 + helper7 still PENDING (real_claim_allowed=False).",
   "real_claim_allowed": false,
   "schema_version": "box3.asset_manifest.v1",
   "state_gate": "CONTRACT_ONLY",

@@ -1,6 +1,8 @@
 from butler_pc_core.cards.box3.asset_manifest import (
     Box3AssetRecord,
     HELPER3_SHA,
+    HELPER4_SHA,
+    HELPER8_SHA,
     build_contract_only_asset_manifest,
     is_full_sha256,
     manifest_allows_real,
@@ -37,10 +39,18 @@ def test_contract_only_manifest_is_honest_partial_not_real():
     assert helper3["sha256_full"] == HELPER3_SHA
     assert is_full_sha256(helper3["sha256_full"])
     assert helper3["real_claim_allowed"] is False
+    # 박스 3 real asset 재시도 (2026-06-03, 9도우미 zip 봉인 패키지 실측):
+    # helper4·helper8 실측 SHA 반영, helper7 만 PENDING.
+    helper4 = next(item for item in manifest["assets"] if item["asset_name"] == "helper4_grounding")
+    assert helper4["sha256_full"] == HELPER4_SHA
+    assert is_full_sha256(helper4["sha256_full"])
+    assert helper4["real_claim_allowed"] is False
+    assert helper4["fail_class"] == "INTERFACE_INVENTORY_PENDING"
+    helper8 = next(item for item in manifest["assets"] if item["asset_name"] == "helper8_company_style")
+    assert helper8["sha256_full"] == HELPER8_SHA
+    assert is_full_sha256(helper8["sha256_full"])
+    assert helper8["real_claim_allowed"] is False
+    assert helper8["fail_class"] == "INTERFACE_INVENTORY_PENDING"
     missing = [item for item in manifest["assets"] if item["sha256_full"] is None]
-    assert {item["asset_name"] for item in missing} == {
-        "helper4_grounding",
-        "helper7_table_figure",
-        "helper8_company_style",
-    }
+    assert {item["asset_name"] for item in missing} == {"helper7_table_figure"}
 

@@ -177,7 +177,13 @@ def main() -> int:
         ],
         "real_path_fixture_pass": verdict.status == "real",
         "actual_pass_box3_real_claim": False,
-        "actual_asset_pending": ["helper4_grounding", "helper7_table_figure", "helper8_company_style"],
+        # 박스 3 real asset 재시도 (2026-06-03): 9도우미 zip 실측으로 helper4·helper8 sha256_full
+        # 충족. 본 list 는 contract_manifest 기준으로 *동적 계산* (sha256_full 미충족 자산만).
+        "actual_asset_pending": [
+            asset["asset_name"]
+            for asset in contract_manifest["assets"]
+            if asset["sha256_full"] is None
+        ],
         "raw_persistence_zero": True,
         "external_send_zero": True,
         "pytest_returncode": result.returncode,

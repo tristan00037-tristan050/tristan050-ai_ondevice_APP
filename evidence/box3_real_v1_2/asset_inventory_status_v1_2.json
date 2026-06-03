@@ -25,17 +25,19 @@
       },
       {
         "asset_name": "helper4_grounding",
-        "asset_path": null,
+        "asset_path": "ref:BUTLER_HELPER4_GROUNDING_PATH",
         "display_sha_prefix": "b7b1af0e...",
-        "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
-        "interface_inventory_status": "missing_asset_path",
-        "measured_at": null,
-        "measured_by": "not_measured",
+        "fail_class": "INTERFACE_INVENTORY_PENDING",
+        "interface_inventory_status": "contract_sample_only",
+        "measured_at": "2026-06-02T00:00:00+00:00",
+        "measured_by": "claude_local_shasum",
         "real_claim_allowed": false,
         "role": "grounding_verification",
-        "sha256_full": null,
-        "sha_scope": "unknown",
-        "source_metadata_files": []
+        "sha256_full": "b7b1af0ebfddc17bf9164ab124f8b598d97954f1a9fa067abf1e68f020c95e40",
+        "sha_scope": "file",
+        "source_metadata_files": [
+          "봉인/전체자산_sha256.txt"
+        ]
       },
       {
         "asset_name": "helper7_table_figure",
@@ -53,17 +55,20 @@
       },
       {
         "asset_name": "helper8_company_style",
-        "asset_path": null,
+        "asset_path": "ref:BUTLER_HELPER8_COMPANY_STYLE_PATH",
         "display_sha_prefix": "7d4f8311...",
-        "fail_class": "BLOCK_FULL_SHA_NOT_MEASURED",
-        "interface_inventory_status": "missing_asset_path",
-        "measured_at": null,
-        "measured_by": "not_measured",
+        "fail_class": "INTERFACE_INVENTORY_PENDING",
+        "interface_inventory_status": "contract_sample_only",
+        "measured_at": "2026-06-02T00:00:00+00:00",
+        "measured_by": "claude_local_shasum",
         "real_claim_allowed": false,
         "role": "company_style_application",
-        "sha256_full": null,
-        "sha_scope": "unknown",
-        "source_metadata_files": []
+        "sha256_full": "7d4f8311ab427e4b609e2d22d7aff6e89a19085eaaa788677c7ed24d789d6d52",
+        "sha_scope": "file",
+        "source_metadata_files": [
+          "봉인/전체자산_sha256.txt",
+          "SHA256_MANIFEST.json"
+        ]
       }
     ],
     "created_at": "2026-06-02T00:00:00+00:00",
