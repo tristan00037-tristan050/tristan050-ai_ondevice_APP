@@ -106,7 +106,14 @@ def run_box3_real_enablement_pipeline(
     stage_trace.append({"stage": "final_gate", "status": decision.status, "real_claim_allowed": decision.real_claim_allowed, "fail_class": decision.fail_class})
     stage_trace.extend(c.to_dict() for c in decision.conditions)
 
-    response_draft = draft_text if decision.status in {"REAL_CANDIDATE", "REAL_APPROVED", "RUNNER_SMOKE_PASS"} else None
+    # Codex HOLD 정정 (2026-06-03, PR #775): Box3RealStatus Literal 정합 — 이전 임시 라벨을
+    # SSOT 라벨 PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL 로 통일 (drift 0).
+    response_draft = (
+        draft_text
+        if decision.status
+        in {"REAL_CANDIDATE", "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL", "RUNNER_SMOKE_PASS"}
+        else None
+    )
     draft_digest = sha256_text(draft_text) if draft_text else None
     citations = []
     for unit in evidence_units:

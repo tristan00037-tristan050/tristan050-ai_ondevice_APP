@@ -64,7 +64,9 @@ PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE: Final = "PARTIAL_REAL_RUNNER_RUNTIME_UN
 # 무시·proxy eval ↔ real_runner_eval 분리·prompt/output digest only·HELPER_REAL_USE_GUARD
 # PENDING 가드 충족 시).
 PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL: Final = "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL"
-REAL_APPROVED: Final = PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL  # backward-compat alias
+# Codex HOLD 정정 (2026-06-03, PR #775): 이전 임시 alias 제거 — Box3RealStatus Literal 정합
+# 위해 단일 SSOT 라벨만 사용 (drift 0). 이전 라벨 문자열은 코드·테스트·evidence 어디에도
+# 등장하지 않음을 grep 0 으로 검증.
 
 
 ALL_BOX3_REAL_FAIL_CLASSES: Final = frozenset(

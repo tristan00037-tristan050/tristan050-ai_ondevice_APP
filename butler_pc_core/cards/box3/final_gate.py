@@ -98,6 +98,11 @@ def evaluate_final_real_gate(
         return FinalGateDecision("REAL_CANDIDATE", False, human_approval.fail_class, True, conditions)
 
     if all(c.passed for c in conditions):
-        return FinalGateDecision("REAL_APPROVED", True, None, False, conditions)
+        # Codex HOLD 정정 (2026-06-03, PR #775): Box3RealStatus Literal 정합 — 모든 9조건 +
+        # human approval 통과 시 SSOT 라벨 PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL 반환.
+        # 이전 임시 라벨은 Literal 에 부재로 상태 드리프트 야기.
+        return FinalGateDecision(
+            "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL", True, None, False, conditions
+        )
     soft = next((c for c in conditions if not c.passed), None)
     return FinalGateDecision("REAL_CANDIDATE", False, soft.fail_class if soft else None, True, conditions)
