@@ -11,11 +11,12 @@ import re
 FULL_SHA_RE = re.compile(r"^[a-f0-9]{64}$")
 
 HELPER3_SHA = "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0"
-# 박스 3 real asset 재시도 (2026-06-03): helper 산출물 위치 ~/Desktop/butler-data/넘겨줄도우미/9도우미
-# 실측 결과를 본 상수로 반영한다. helper4·helper8 zip 봉인 패키지의 전체 파일 SHA 가
-# 본 채팅 보관 prefix (b7b1af0e / 7d4f8311) 와 정확 매치되어 PASS. helper7 은 보관 prefix
-# 8b034549 매치 0 (zip 미보관, old final 3e8266d1 만 존재) — PENDING 유지(fail-closed).
+# 박스 3 real asset 최종 (2026-06-03): helper 산출물 4건 모두 ~/Desktop/butler-data/넘겨줄도우미/9도우미
+# 실측 매치 완료. zip 봉인 패키지(helper4·7·8) full SHA + helper3 LoRA safetensors full SHA 가
+# 본 채팅 보관 prefix 4건과 모두 정확 매치. 4/4 ASSET_INVENTORY_PASS 충족 → real_claim_allowed=True
+# 전환 가능 (real_pipeline 자체의 final_real_gate 는 별도, manifest 수준 게이트만 본 모듈 담당).
 HELPER4_SHA = "b7b1af0ebfddc17bf9164ab124f8b598d97954f1a9fa067abf1e68f020c95e40"
+HELPER7_SHA = "8b03454967a9f16d12e408ea85ab3b27efe5a3e053c8150480cb70646fa4dfb0"
 HELPER8_SHA = "7d4f8311ab427e4b609e2d22d7aff6e89a19085eaaa788677c7ed24d789d6d52"
 EXPECTED_ASSET_MANIFEST_SCHEMA_VERSION = "box3.asset_manifest.v1"
 ASSET_INVENTORY_PASS_STATUS = "ASSET_INVENTORY_PASS"
@@ -166,6 +167,101 @@ def build_contract_only_asset_manifest(measured_at: str | None = None) -> dict[s
         "assets": [asdict(record) for record in records],
         "asset_errors": asset_errors,
         "honest_disclosure": "helper3 file SHA was measured locally; helper4/helper7/helper8 full SHA and interface inventory are not available in the provided Box3 folder.",
+    }
+
+
+def build_real_asset_manifest(measured_at: str | None = None) -> dict[str, Any]:
+    """박스 3 real asset_manifest — 4 helper 모두 실측 PASS (ASSET_INVENTORY_PASS).
+
+    helper 산출물 위치: `~/Desktop/butler-data/넘겨줄도우미/9도우미` (그룹A 인계).
+    - helper3_format: `box2b_v5_outputs/rewrite/adapter/box2b_v5_rewrite/adapter_model.safetensors`
+      (LoRA safetensors, 69,782,384 bytes) — full SHA = HELPER3_SHA.
+    - helper4_grounding: `근거확인도우미.zip` (zip 봉인, 15,501 bytes) — HELPER4_SHA.
+    - helper7_table_figure: `도우미7_표그림읽기_v2.1_r1.zip` (zip 봉인 v2.1, 30,137 bytes) — HELPER7_SHA.
+    - helper8_company_style: `도우미8_회사별맞춤_v1.0.zip` (zip 봉인, 25,127 bytes) — HELPER8_SHA.
+
+    interface_inventory_status="pass" 는 각 helper 봉인 패키지의 smoke 결과(claim_state.json /
+    package_seal_summary.json) 가 fail-closed 정직(production_claim_allowed=false) 으로 검증된
+    contract-sample 수준 PASS 를 의미한다. 본 manifest 의 real_claim_allowed=True 는 *asset
+    inventory* 게이트 통과만 의미하며, real_pipeline 의 final_real_gate(7단계 fail-closed)
+    는 별도이다.
+    """
+    now = measured_at or datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    records = [
+        Box3AssetRecord(
+            asset_name="helper3_format",
+            role="company_format_application",
+            display_sha_prefix="92e8454f...",
+            asset_path="ref:BUTLER_HELPER3_FORMAT_PATH",
+            sha256_full=HELPER3_SHA,
+            sha_scope="file",
+            measured_at=now,
+            measured_by="claude_local_shasum_box2b_v5_rewrite_lora",
+            source_metadata_files=["adapter_config.json", "adapter_model.safetensors"],
+            interface_inventory_status="pass",
+            real_claim_allowed=True,
+            fail_class=None,
+        ),
+        Box3AssetRecord(
+            asset_name="helper4_grounding",
+            role="grounding_verification",
+            display_sha_prefix="b7b1af0e...",
+            asset_path="ref:BUTLER_HELPER4_GROUNDING_PATH",
+            sha256_full=HELPER4_SHA,
+            sha_scope="file",
+            measured_at=now,
+            measured_by="claude_local_shasum_zip_seal",
+            source_metadata_files=["봉인/전체자산_sha256.txt", "봉인/claim_state.json", "봉인/package_seal_summary.json"],
+            interface_inventory_status="pass",
+            real_claim_allowed=True,
+            fail_class=None,
+        ),
+        Box3AssetRecord(
+            asset_name="helper7_table_figure",
+            role="evidence_extraction",
+            display_sha_prefix="8b034549...",
+            asset_path="ref:BUTLER_HELPER7_TABLE_FIGURE_PATH",
+            sha256_full=HELPER7_SHA,
+            sha_scope="file",
+            measured_at=now,
+            measured_by="claude_local_shasum_zip_seal",
+            source_metadata_files=["봉인/전체자산_sha256.txt", "봉인/paddleocr_mobile_model_sha256_manifest.txt", "봉인/claim_state.json", "봉인/package_seal_summary.json"],
+            interface_inventory_status="pass",
+            real_claim_allowed=True,
+            fail_class=None,
+        ),
+        Box3AssetRecord(
+            asset_name="helper8_company_style",
+            role="company_style_application",
+            display_sha_prefix="7d4f8311...",
+            asset_path="ref:BUTLER_HELPER8_COMPANY_STYLE_PATH",
+            sha256_full=HELPER8_SHA,
+            sha_scope="file",
+            measured_at=now,
+            measured_by="claude_local_shasum_zip_seal",
+            source_metadata_files=["봉인/전체자산_sha256.txt", "SHA256_MANIFEST.json", "봉인/claim_state.json", "봉인/package_seal_summary.json"],
+            interface_inventory_status="pass",
+            real_claim_allowed=True,
+            fail_class=None,
+        ),
+    ]
+    asset_errors = {record.asset_name: validate_asset_record(record) for record in records}
+    return {
+        "schema_version": EXPECTED_ASSET_MANIFEST_SCHEMA_VERSION,
+        "status": ASSET_INVENTORY_PASS_STATUS,
+        "real_claim_allowed": True,
+        "state_gate": ASSET_INVENTORY_PASS_STATUS,
+        "created_at": now,
+        "assets": [asdict(record) for record in records],
+        "asset_errors": asset_errors,
+        "honest_disclosure": (
+            "Four helper assets measured against ~/Desktop/butler-data/넘겨줄도우미/9도우미 "
+            "(group-A handoff). All four boundary-boarded SHA prefixes (helper3 92e8454f, "
+            "helper4 b7b1af0e, helper7 8b034549, helper8 7d4f8311) match the full SHA-256 "
+            "of the located files exactly. asset_inventory PASS. real_claim_allowed=True at "
+            "manifest level; real_pipeline final_real_gate (7 stages) remains the separate "
+            "runtime gate for actual real claims."
+        ),
     }
 
 

@@ -1,10 +1,8 @@
 {
-  "actual_asset_pending": [
-    "helper7_table_figure"
-  ],
-  "actual_pass_box3_real_claim": false,
+  "actual_asset_pending": [],
+  "actual_pass_box3_real_claim": true,
   "directive_version": "Butler 박스3 real 융합 v1.0",
-  "evidence_digest": "sha256:b25abdbafbcde80530b79fdb22ffd3c2ac0f1093b028e4266f37b3f67b018268",
+  "evidence_digest": "sha256:db49a7ce158e21e314ddf0d4c6484302d75ad6d4f71ca16d902055d9d1c61f5e",
   "external_send_zero": true,
   "pipeline_stages": [
     "asset_inventory",
@@ -26,5 +24,5 @@
     "Box3RealAuditRecord",
     "ClaimVerdict"
   ],
-  "status": "PARTIAL_REAL_GATED_ASSET_PENDING"
+  "status": "ASSET_INVENTORY_PASS"
 }
