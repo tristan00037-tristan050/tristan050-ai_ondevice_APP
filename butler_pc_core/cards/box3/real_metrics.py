@@ -113,3 +113,66 @@ def metric_fail_class(metrics: Box3RealMetrics) -> str | None:
     if metrics.table_figure_coverage < 0.70:
         return TABLE_FIGURE_COVERAGE_BELOW_GATE
     return None
+
+
+# 박스 3 real 실제 켜기 v1.3 (2026-06-03) — MAINDEV enablement 5 모듈이 호출하는 3 함수.
+# main 본진 Box3RealMetrics dataclass · EvidenceUnit.kind 와 시그니처 정합.
+def compute_claim_metrics(
+    claim_verdicts,
+    *,
+    format_compliance: float = 0.0,
+    style_compliance: float = 0.0,
+    evidence_units=None,
+) -> Box3RealMetrics:
+    verdicts = list(claim_verdicts)
+    factual = [v for v in verdicts if v.support_level != "non_claim"]
+    supported = [v for v in factual if v.support_level == "supported"]
+    unsupported = [v for v in factual if v.support_level == "unsupported"]
+    no_evidence = [v for v in factual if v.support_level == "no_evidence"]
+    factual_count = len(factual)
+    citation_accuracy = (
+        1.0
+        if not supported
+        else sum(1 for v in supported if v.evidence_digests) / len(supported)
+    )
+    if evidence_units:
+        kinds = {unit.kind for unit in evidence_units}
+        needed = {"table", "figure"}
+        if kinds & needed:
+            covered = 0
+            for kind in needed:
+                if kind not in kinds:
+                    continue
+                digests = {u.evidence_digest for u in evidence_units if u.kind == kind}
+                if any(set(v.evidence_digests) & digests for v in supported):
+                    covered += 1
+            table_figure_coverage = covered / max(1, len(kinds & needed))
+        else:
+            table_figure_coverage = 1.0
+    else:
+        table_figure_coverage = 0.0
+    return Box3RealMetrics(
+        unsupported_claim_rate=0.0 if factual_count == 0 else len(unsupported) / factual_count,
+        no_evidence_claim_rate=0.0 if factual_count == 0 else len(no_evidence) / factual_count,
+        citation_accuracy=citation_accuracy,
+        format_compliance=max(0.0, min(1.0, format_compliance)),
+        style_compliance=max(0.0, min(1.0, style_compliance)),
+        table_figure_coverage=max(0.0, min(1.0, table_figure_coverage)),
+        factual_claim_count=factual_count,
+        unsupported_count=len(unsupported),
+        no_evidence_count=len(no_evidence),
+        supported_count=len(supported),
+    )
+
+
+def estimate_format_compliance(draft_text: str) -> float:
+    required = ["제목", "배경", "핵심 내용", "근거", "확인 필요", "최종 문안"]
+    hits = sum(1 for item in required if f"{item}:" in draft_text)
+    return hits / len(required)
+
+
+def estimate_style_compliance(draft_text: str) -> float:
+    forbidden = ["무조건", "반드시 법적으로 확정", "보장합니다", "책임 없습니다"]
+    if any(term in draft_text for term in forbidden):
+        return 0.0
+    return 0.75

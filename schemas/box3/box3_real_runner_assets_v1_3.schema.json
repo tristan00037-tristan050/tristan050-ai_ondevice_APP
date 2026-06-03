@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Box3 real runner asset evidence v1.3",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "assets",
+    "all_required_assets_verified",
+    "raw_path_leak_zero"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "box3.real_runner_assets.v1_3"
+    },
+    "all_required_assets_verified": {
+      "type": "boolean"
+    },
+    "raw_path_leak_zero": {
+      "const": true
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "required": [
+          "asset_name",
+          "path_ref",
+          "path_digest",
+          "sha256_full",
+          "sha_scope",
+          "readonly_verified",
+          "fail_class"
+        ],
+        "properties": {
+          "asset_name": {
+            "type": "string"
+          },
+          "path_ref": {
+            "type": "string",
+            "pattern": "^ref:[A-Z0-9_]+$"
+          },
+          "path_digest": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "sha256_full": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sha_scope": {
+            "enum": [
+              "file",
+              "directory_manifest"
+            ]
+          },
+          "readonly_verified": {
+            "type": "boolean"
+          },
+          "fail_class": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

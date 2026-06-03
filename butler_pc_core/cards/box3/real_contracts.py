@@ -33,6 +33,29 @@ SupportLevel = Literal["supported", "unsupported", "no_evidence", "non_claim"]
 ClaimSupportLevel = SupportLevel
 EvidenceKind = Literal["text", "table", "figure"]
 
+# 박스 3 real 실제 켜기 v1.3 (2026-06-03) — enablement 상태 Literal SSOT.
+# Codex 보완 5 정합: PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL 명시 라벨 + PARTIAL/CANDIDATE.
+Box3RealStatus = Literal[
+    "CONTRACT_ONLY",
+    "REAL_CANDIDATE",
+    "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL",
+    "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE",
+    "BLOCKED",
+]
+
+
+def is_bare_sha256(value: object) -> bool:
+    """64-hex 단독 문자열만의 SHA-256 표기 검증 (sha256: prefix 없음).
+
+    helper SHA 상수(HELPER{3,4,7,8}_SHA)가 prefix 없이 저장되어 있어 evidence persist 시
+    PII 가드 false-positive 회피용 인식 + asset_manifest 검증 공통 활용.
+    """
+    if not isinstance(value, str):
+        return False
+    if len(value) != 64:
+        return False
+    return all(c in "0123456789abcdef" for c in value)
+
 
 def sha256_text(text: str) -> Digest:
     """단일 보안 모듈의 sha256 다이제스트(``sha256:<hex>``)를 재사용한다."""

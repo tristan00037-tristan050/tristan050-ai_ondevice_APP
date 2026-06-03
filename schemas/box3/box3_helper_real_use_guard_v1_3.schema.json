@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Box3 helper real-use guard v1.3",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "helpers",
+    "all_component_use_allowed"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "box3.helper_real_use_guard.v1_3"
+    },
+    "all_component_use_allowed": {
+      "type": "boolean"
+    },
+    "helpers": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "required": [
+          "helper_name",
+          "production_claim_allowed",
+          "component_use_allowed",
+          "sha256_full",
+          "fail_class"
+        ],
+        "properties": {
+          "helper_name": {
+            "enum": [
+              "helper3_format",
+              "helper4_grounding",
+              "helper7_table_figure",
+              "helper8_company_style"
+            ]
+          },
+          "production_claim_allowed": {
+            "type": "boolean"
+          },
+          "component_use_allowed": {
+            "type": "boolean"
+          },
+          "sha256_full": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "fail_class": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

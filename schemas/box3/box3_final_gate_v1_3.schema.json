@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Box3 final real gate v1.3",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "real_claim_allowed",
+    "gates",
+    "proxy_eval_is_sufficient_for_final_real"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "box3.final_gate.v1_3"
+    },
+    "status": {
+      "enum": [
+        "blocked",
+        "contract_only",
+        "asset_inventory_pass",
+        "runner_smoke_pass",
+        "real_candidate_local",
+        "pass_box3_real_local_after_human_approval"
+      ]
+    },
+    "real_claim_allowed": {
+      "type": "boolean"
+    },
+    "proxy_eval_is_sufficient_for_final_real": {
+      "const": false
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 9,
+      "items": {
+        "type": "object",
+        "required": [
+          "gate_id",
+          "name",
+          "status",
+          "fail_class"
+        ],
+        "properties": {
+          "gate_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "blocked",
+              "needs_review",
+              "partial"
+            ]
+          },
+          "fail_class": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
