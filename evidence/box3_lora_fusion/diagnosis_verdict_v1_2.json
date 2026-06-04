@@ -1,0 +1,87 @@
+{
+  "base_artifact": {
+    "expected_sha256_full": "60b9baee17696ca8e3a3aa0950a4d441ad3c4baa80bbd73ec9fa33c17cba0c1f",
+    "name_ref": "ref:butler-1.7b-v4-rt-q4_k_m.gguf",
+    "sha256_match": true
+  },
+  "diagnosis_code_letter": "C",
+  "diagnosis_verdict": {
+    "action": "FUSION_FORBIDDEN_REMEASURE",
+    "agreed_axes": [
+      "gguf_metadata",
+      "behavior_probe"
+    ],
+    "axis_counts": {
+      "already_fused": 1,
+      "inconclusive": 2,
+      "not_fused": 1
+    },
+    "contradictory_axes": [
+      "gguf_metadata",
+      "behavior_probe"
+    ],
+    "diagnosis_digest": "sha256:811bdbb2b26e208f3181b64a72c476f64fd98c526e76727d1bb84c11dcf3cf61",
+    "diagnosis_status": "INCONCLUSIVE",
+    "external_send_zero": true,
+    "fail_class": "PARTIAL_DIAGNOSIS_CONFLICTING_EVIDENCE",
+    "fusion_allowed": false,
+    "raw_saved_zero": true,
+    "schema_version": "box3.helper35_lora_fusion.diagnosis.v1",
+    "status": "PASS_DIAGNOSIS_ONLY"
+  },
+  "evidence_axes": [
+    {
+      "axis": "lineage_build",
+      "confidence": 0.3,
+      "counters": {
+        "file_count": 0,
+        "fused_hits": 0,
+        "not_fused_hits": 0
+      },
+      "evidence_digest": "sha256:7f07f381ef0da5c66850717436ca4137a57e3746413614cd9be55445be1cfdca",
+      "verdict": "inconclusive"
+    },
+    {
+      "axis": "gguf_metadata",
+      "confidence": 0.65,
+      "counters": {
+        "general_finetune_digest": "sha256:9e7661752ac27ebb02d4afb9591b2f0f3cdd8907b94171492cd356da4aa2e758",
+        "general_name_digest": "sha256:099f31593b5d1605f38090a30b80196cdae0e41eb4f57f108be2895987f12af9",
+        "has_merged_label": true,
+        "lora_or_adapter_key_count": 0,
+        "total_metadata_key_count": 29
+      },
+      "evidence_digest": "sha256:3f2406c786a1fbc62ae374b4186388d41bfc027ca69686fdf712c67aca78d789",
+      "verdict": "already_fused"
+    },
+    {
+      "axis": "runner_code",
+      "confidence": 0.55,
+      "counters": {
+        "declared_only_marker": true,
+        "direct_lora_call_detected": false,
+        "runner_path_digest": "sha256:44c4d8fc54f7f6983b5751c1782ff1e4f548c1b2bdadc9fbf5a6bf548c478c65"
+      },
+      "evidence_digest": "sha256:85e3ef9e0fed52582c0e6c2617e202f6e99b2e365cb93e3d1194f3f6e73291cc",
+      "verdict": "inconclusive"
+    },
+    {
+      "axis": "behavior_probe",
+      "confidence": 0.85,
+      "counters": {
+        "helper3_sections_present_count": 0,
+        "helper3_sections_total": 6,
+        "helper5_json_shape_detected": false,
+        "probe_format_output_digest": "sha256:9cd6d923a43099da3906f59507d4a8edaa3cac6fb1cd2ff9f0321266aa844878",
+        "probe_tool_output_digest": "sha256:47d6055e142a59b04bd60e0716c8119ca61c0e98619cd4f6406d96a5ac8306bc"
+      },
+      "evidence_digest": "sha256:908aa7fb3879a184d1dbb1870ddea340445aedf934a42f09168a58a9165d00c5",
+      "verdict": "not_fused"
+    }
+  ],
+  "external_send_zero": true,
+  "fusion_allowed": false,
+  "next_action": "FUSION_FORBIDDEN_REMEASURE",
+  "raw_saved_zero": true,
+  "schema_version": "box3.helper35_lora_fusion.smoke.v1_2"
+}

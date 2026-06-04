@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/box3/fusion_diagnosis_verdict_v1_2.schema.json",
+  "title": "Box3 helper3/5 LoRA Fusion Diagnosis Verdict v1.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "evidence_axes",
+    "axis_count",
+    "already_fused_count",
+    "not_fused_count",
+    "inconclusive_count",
+    "conflict_count",
+    "min_axis_agreement_required",
+    "decision_reason_code",
+    "fail_class",
+    "raw_saved_zero",
+    "external_send_zero"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "box3.helper35_fusion_diagnosis.v1_2"
+    },
+    "status": {
+      "enum": [
+        "DIAGNOSIS_PENDING",
+        "ALREADY_FUSED_CONFIRMED",
+        "NOT_FUSED_CONFIRMED",
+        "INCONCLUSIVE",
+        "BLOCKED"
+      ]
+    },
+    "evidence_axes": {
+      "type": "array",
+      "minItems": 0
+    },
+    "axis_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "already_fused_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "not_fused_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inconclusive_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "conflict_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "min_axis_agreement_required": {
+      "const": 3
+    },
+    "decision_reason_code": {
+      "type": "string"
+    },
+    "fail_class": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "raw_saved_zero": {
+      "const": true
+    },
+    "external_send_zero": {
+      "const": true
+    }
+  }
+}
