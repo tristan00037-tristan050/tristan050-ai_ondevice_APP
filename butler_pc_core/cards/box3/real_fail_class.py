@@ -57,7 +57,8 @@ FIXED_EVAL_PENDING: Final = "FIXED_EVAL_PENDING"
 # 정직 상태 라벨 (출력 status). 박스 3 real candidate vs 인간 승인 후 PASS 구분.
 CONTRACT_ONLY: Final = "CONTRACT_ONLY"
 REAL_CANDIDATE: Final = "REAL_CANDIDATE"
-RUNNER_SMOKE_PASS: Final = "RUNNER_SMOKE_PASS"
+# Codex HOLD 정정 (2026-06-04, PR #776): 이전 비정본 상태 라벨 제거 —
+# Box3RealStatus Literal SSOT 6 정합 (drift 0). 본 라벨은 Literal 에 부재로 status drift.
 ASSET_INVENTORY_PASS: Final = "ASSET_INVENTORY_PASS"
 PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE: Final = "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE"
 # Codex 보완 5 정합: 상태명 PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL (sealed config flag

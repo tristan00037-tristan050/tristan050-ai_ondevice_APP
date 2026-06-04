@@ -123,12 +123,15 @@ def run_box3_real_enablement_pipeline(
     stage_trace.append({"stage": "final_gate", "status": decision.status, "real_claim_allowed": decision.real_claim_allowed, "fail_class": decision.fail_class})
     stage_trace.extend(c.to_dict() for c in decision.conditions)
 
-    # Codex HOLD 정정 (2026-06-03, PR #775): Box3RealStatus Literal 정합 — 이전 임시 라벨을
-    # SSOT 라벨 PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL 로 통일 (drift 0).
+    # Codex HOLD 정정 (2026-06-03, PR #775 → 2026-06-04, PR #776 재정정): Box3RealStatus
+    # Literal SSOT 6 정합 — response_draft 허용 set 을 본진 Literal 안에서만 구성한다.
+    # 이전 set 안의 비정본 상태 문자열(Literal 부재 라벨)은 status 라벨 drift 였다. 본
+    # 정정에서 inline set 으로 Literal 정합 status 만 허용 (정적 분석/grep 검증 가능):
+    #   - REAL_CANDIDATE: 9조건 + approval 미충족 (정직 candidate).
+    #   - PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL: 9조건 + approval 충족 (PASS).
     response_draft = (
         draft_text
-        if decision.status
-        in {"REAL_CANDIDATE", "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL", "RUNNER_SMOKE_PASS"}
+        if decision.status in {"REAL_CANDIDATE", "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL"}
         else None
     )
     draft_digest = sha256_text(draft_text) if draft_text else None
