@@ -31,7 +31,7 @@ def test_helper_component_use_guard_blocks_when_not_allowed():
 
 
 def test_helper_component_use_guard_passes_only_when_allowed_and_stack_supported():
-    guard = build_example_component_use_guard(allow=True, stack_supported=True)
+    guard = build_example_component_use_guard(allow=True, stack_supported=True, sdk_call_supported=True, embedder_provider="helper2_sdk")
     verdict = verify_helper_component_use_guard(guard)
     assert verdict.allowed is True
     assert verdict.fail_class is None

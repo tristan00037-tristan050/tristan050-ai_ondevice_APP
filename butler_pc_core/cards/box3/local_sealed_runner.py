@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import os
 import time
 from dataclasses import asdict, dataclass
 from typing import Callable
@@ -10,14 +11,26 @@ from .actual_fail_class import (
     BLOCK_MOCK_RUNNER_FOR_REAL,
     BLOCK_RUNNER_ERROR,
     BLOCK_RUNNER_TIMEOUT,
+    PARTIAL_MODEL_ADAPTER_STACK_UNSUPPORTED,
     PARTIAL_PEAK_MEMORY_UNMEASURED,
     PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE,
 )
 from .actual_runner_assets import ActualRunnerAssetConfig, verify_base_model_asset
+from .helper_component_guard import verify_helper_component_use_guard
 from .peak_memory import measure_peak_memory
 
 RealRunner = Callable[[Box3ActualRuntimeEnvelope], str]
 
+@dataclass(frozen=True)
+class AdapterStackProbeVerdict:
+    allowed: bool
+    fail_class: str | None
+    model_adapters: list[str]
+    helper_sdk_stack_attempt_zero: bool
+    detail: dict
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
 @dataclass(frozen=True)
 class ActualRunnerSmokeResult:
@@ -33,6 +46,7 @@ class ActualRunnerSmokeResult:
     model_digest: str | None
     engine: str
     output_digest: str | None
+    adapter_stack: dict | None = None
     test_only_runner: bool = False
 
     def to_dict(self) -> dict:
@@ -40,11 +54,8 @@ class ActualRunnerSmokeResult:
         data.pop("draft_text", None)
         return data
 
-
 def compose_runner_prompt(envelope: Box3ActualRuntimeEnvelope) -> str:
-    refs = "\n\n".join(
-        f"[REF {idx + 1}]\n{text}" for idx, text in enumerate(envelope.reference_text_runtime_only)
-    )
+    refs = "\n\n".join(f"[REF {idx + 1}]\n{text}" for idx, text in enumerate(envelope.reference_text_runtime_only))
     return (
         "Use only the provided references. Do not invent dates, amounts, people, or legal conclusions.\n"
         "Return Korean sections: 제목, 배경, 핵심 내용, 근거, 확인 필요, 최종 문안.\n"
@@ -53,8 +64,32 @@ def compose_runner_prompt(envelope: Box3ActualRuntimeEnvelope) -> str:
         f"REFERENCES:\n{refs}\n"
     )
 
+def probe_helper3_helper5_adapter_stack(helper_guard: dict | None = None) -> AdapterStackProbeVerdict:
+    """Probe only helper3/helper5 model-adapter stack capability.
 
-def build_local_sealed_real_runner(config: ActualRunnerAssetConfig | None = None) -> RealRunner:
+    helper4/helper7/helper8 are SDK modules and must never be stacked into the model.
+    """
+    guard = verify_helper_component_use_guard(helper_guard)
+    if not guard.allowed:
+        return AdapterStackProbeVerdict(False, guard.fail_class, [], True, guard.to_dict())
+    if os.environ.get("BUTLER_BOX3_ALLOW_HELPER35_MULTI_LORA_STACK") != "1":
+        return AdapterStackProbeVerdict(
+            False,
+            PARTIAL_MODEL_ADAPTER_STACK_UNSUPPORTED,
+            ["helper3_format", "helper5_tool_call"],
+            True,
+            {"reason": "multi_lora_stack_not_enabled_or_unmeasured"},
+        )
+    return AdapterStackProbeVerdict(True, None, ["helper3_format", "helper5_tool_call"], True, {"stack_capability": "declared_by_local_probe"})
+
+def build_local_sealed_real_runner(
+    config: ActualRunnerAssetConfig | None = None,
+    *,
+    helper_guard: dict | None = None,
+) -> RealRunner:
+    stack = probe_helper3_helper5_adapter_stack(helper_guard)
+    if not stack.allowed:
+        raise RuntimeError(stack.fail_class or PARTIAL_MODEL_ADAPTER_STACK_UNSUPPORTED)
     asset = verify_base_model_asset(config)
     if not asset.allowed:
         raise RuntimeError(asset.fail_class or PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE)
@@ -64,11 +99,11 @@ def build_local_sealed_real_runner(config: ActualRunnerAssetConfig | None = None
         from llama_cpp import Llama  # type: ignore
     except Exception as exc:  # pragma: no cover - runtime dependent
         raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE) from exc
-    import os
     model_path = os.environ.get((config or ActualRunnerAssetConfig()).model_path_env)
     if not model_path:
         raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE)
     start = time.perf_counter()
+    # Keep helper4/7/8 out of the model constructor. Only helper3/5 LoRA stack is eligible.
     llm = Llama(model_path=model_path, verbose=False)
     load_ms = (time.perf_counter() - start) * 1000
 
@@ -82,8 +117,8 @@ def build_local_sealed_real_runner(config: ActualRunnerAssetConfig | None = None
 
     setattr(_runner, "_box3_model_load_ms", load_ms)
     setattr(_runner, "_box3_runner_engine", "llama_cpp")
+    setattr(_runner, "_box3_adapter_stack", stack.to_dict())
     return _runner
-
 
 def _call_with_timeout(runner: RealRunner, envelope: Box3ActualRuntimeEnvelope, timeout_seconds: float) -> str:
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
@@ -94,17 +129,17 @@ def _call_with_timeout(runner: RealRunner, envelope: Box3ActualRuntimeEnvelope, 
             future.cancel()
             raise TimeoutError(BLOCK_RUNNER_TIMEOUT) from exc
 
-
 def run_actual_runner_smoke(
     envelope: Box3ActualRuntimeEnvelope,
     *,
     runner: RealRunner | None = None,
     timeout_seconds: float = 30.0,
     config: ActualRunnerAssetConfig | None = None,
+    helper_guard: dict | None = None,
 ) -> ActualRunnerSmokeResult:
     if runner is None:
         try:
-            runner = build_local_sealed_real_runner(config)
+            runner = build_local_sealed_real_runner(config, helper_guard=helper_guard)
         except RuntimeError as exc:
             return ActualRunnerSmokeResult(
                 False, None, str(exc) or PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE,
@@ -136,7 +171,7 @@ def run_actual_runner_smoke(
             False, None, PARTIAL_PEAK_MEMORY_UNMEASURED, latency_ms,
             getattr(runner, "_box3_model_load_ms", None), 0, 0, None,
             "box3-local-sealed-runner", None, getattr(runner, "_box3_runner_engine", "unknown"), None,
-            test_only_runner=test_only,
+            adapter_stack=getattr(runner, "_box3_adapter_stack", None), test_only_runner=test_only,
         )
     return ActualRunnerSmokeResult(
         ok=bool(draft),
@@ -151,9 +186,9 @@ def run_actual_runner_smoke(
         model_digest=None,
         engine=getattr(runner, "_box3_runner_engine", "custom"),
         output_digest=sha256_text(draft) if draft else None,
+        adapter_stack=getattr(runner, "_box3_adapter_stack", None),
         test_only_runner=test_only,
     )
-
 
 def build_deterministic_test_runner() -> RealRunner:
     def _runner(envelope: Box3ActualRuntimeEnvelope) -> str:
@@ -168,4 +203,5 @@ def build_deterministic_test_runner() -> RealRunner:
     setattr(_runner, "_box3_test_only", True)
     setattr(_runner, "_box3_runner_engine", "test_only")
     setattr(_runner, "_box3_model_load_ms", 0.0)
+    setattr(_runner, "_box3_adapter_stack", {"model_adapters": ["helper3_format", "helper5_tool_call"], "test_only": True})
     return _runner

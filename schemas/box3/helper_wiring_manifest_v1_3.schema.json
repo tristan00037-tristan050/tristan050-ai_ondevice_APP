@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "box3.helper_wiring_manifest.v1.3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "helpers"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "box3.helper_wiring_manifest.v1.3"
+    },
+    "helpers": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": [
+          "helper_id",
+          "component_type"
+        ],
+        "properties": {
+          "helper_id": {
+            "enum": [
+              "helper3_format",
+              "helper5_tool_call",
+              "helper4_grounding",
+              "helper7_table_figure",
+              "helper8_company_style"
+            ]
+          },
+          "component_type": {
+            "enum": [
+              "model_adapter",
+              "sdk_module"
+            ]
+          },
+          "stack_required": {
+            "type": "boolean"
+          },
+          "stack_allowed": {
+            "type": "boolean"
+          },
+          "sdk_call_allowed": {
+            "type": "boolean"
+          },
+          "sha256_full": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sha_scope": {
+            "enum": [
+              "file",
+              "zip",
+              "directory_manifest",
+              "unknown"
+            ]
+          },
+          "dependency_helpers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "not": {
+    "required": [
+      "adapter_stack_supported"
+    ]
+  }
+}

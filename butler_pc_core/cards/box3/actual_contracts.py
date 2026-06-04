@@ -16,28 +16,49 @@ ActualStatus = Literal[
     "PARTIAL_REAL_ASSET_VOLUME_MISSING",
     "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE",
     "PARTIAL_HELPER_STACK_UNSUPPORTED",
+    "PARTIAL_MODEL_ADAPTER_STACK_UNSUPPORTED",
+    "PARTIAL_HELPER_SDK_UNAVAILABLE",
+    "PARTIAL_EMBEDDER_UNAVAILABLE",
+    "PARTIAL_BGE_M3_FALLBACK_USED",
     "REAL_CANDIDATE",
     "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL",
     "BLOCKED",
 ]
 
 _SHA_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
-_FORBIDDEN_SCALARS = ("/" + "Users/", "/" + "home/", "/" + "Volumes/", "sk-" + "proj-", "BEGIN" + " PRIVATE KEY", "api_key")
-_FORBIDDEN_KEYS = ("raw", "prompt", "reference_text", "draft_text_runtime", "absolute_path", "file_path")
-
+_BARE_SHA_RE = re.compile(r"^[a-f0-9]{64}$")
+_FORBIDDEN_SCALARS = (
+    "/" + "Users/",
+    "/" + "home/",
+    "/" + "Volumes/",
+    "sk-" + "proj-",
+    "BEGIN" + " PRIVATE KEY",
+    "api_key",
+)
+_FORBIDDEN_KEYS = (
+    "raw",
+    "prompt",
+    "reference_text",
+    "draft_text_runtime",
+    "absolute_path",
+    "file_path",
+)
 
 def sha256_text(text: str) -> Digest:
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
+def sha256_bytes(data: bytes) -> Digest:
+    return "sha256:" + hashlib.sha256(data).hexdigest()
 
 def stable_json_digest(value: Any) -> Digest:
-    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     return sha256_text(encoded)
 
-
 def is_sha256_digest(value: object) -> bool:
-    return isinstance(value, str) and bool(_SHA_RE.match(value))
+    return isinstance(value, str) and bool(_SHA_RE.fullmatch(value))
 
+def is_bare_sha256(value: object) -> bool:
+    return isinstance(value, str) and bool(_BARE_SHA_RE.fullmatch(value))
 
 def assert_persistable_digest_only(value: Any) -> None:
     encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
@@ -48,7 +69,6 @@ def assert_persistable_digest_only(value: Any) -> None:
     for item in _FORBIDDEN_SCALARS:
         if item in encoded:
             raise AssertionError(f"forbidden scalar leaked: {item}")
-
 
 @dataclass
 class Box3ActualRuntimeEnvelope:
@@ -72,8 +92,13 @@ class Box3ActualRuntimeEnvelope:
     ) -> "Box3ActualRuntimeEnvelope":
         if not reference_texts:
             raise ValueError("REFERENCE_TEXTS_REQUIRED")
-        if max_new_tokens < 1:
+        if not isinstance(drafting_request, str) or not drafting_request.strip():
+            raise ValueError("DRAFTING_REQUEST_REQUIRED")
+        if not isinstance(max_new_tokens, int) or max_new_tokens < 1:
             raise ValueError("MAX_NEW_TOKENS_INVALID")
+        for text in [drafting_request, format_hint, *reference_texts]:
+            if not isinstance(text, str):
+                raise ValueError("RUNTIME_TEXT_INVALID")
         return cls(
             request_id=request_id or str(uuid.uuid4()),
             reference_text_runtime_only=list(reference_texts),
@@ -106,13 +131,12 @@ class Box3ActualRuntimeEnvelope:
         assert_persistable_digest_only(payload)
         return payload
 
-
 @dataclass(frozen=True)
 class Box3ActualOperationVerdict:
     schema_version: str
     request_id: str
     request_digest: Digest
-    status: ActualStatus
+    status: ActualStatus | str
     draft_text: str | None
     draft_digest: Digest | None
     metrics: dict[str, Any]
@@ -123,6 +147,7 @@ class Box3ActualOperationVerdict:
     human_approval_required: bool
     runner_measurements: dict[str, Any]
     asset_measurements: dict[str, Any]
+    helper_sdk_receipts: dict[str, Any] | None = None
     external_send_zero: Literal[True] = True
     raw_saved_zero: Literal[True] = True
     raw_text_logged: Literal[False] = False
