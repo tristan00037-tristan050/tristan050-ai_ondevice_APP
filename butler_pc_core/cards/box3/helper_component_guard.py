@@ -3,19 +3,17 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from .actual_fail_class import (
-    BLOCK_HELPER_ASSET_DRIFT,
-    BLOCK_HELPER_REAL_USE_GUARD_PENDING,
-    PARTIAL_HELPER_STACK_UNSUPPORTED,
+from .actual_fail_class import BLOCK_HELPER_REAL_USE_GUARD_PENDING
+from .helper_wiring_manifest import (
+    HELPER_SHA,
+    REQUIRED_MODEL_ADAPTERS,
+    REQUIRED_SDK_MODULES,
+    build_example_helper_wiring_manifest,
+    validate_helper_wiring_manifest,
 )
 
-HELPER_EXPECTED_SHA = {
-    "helper3_format": "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0",
-    "helper4_grounding": "b7b1af0ebfddc17bf9164ab124f8b598d97954f1a9fa067abf1e68f020c95e40",
-    "helper7_table_figure": "8b03454967a9f16d12e408ea85ab3b27efe5a3e053c8150480cb70646fa4dfb0",
-    "helper8_company_style": "7d4f8311ab427e4b609e2d22d7aff6e89a19085eaaa788677c7ed24d789d6d52",
-}
-
+# Backward-compatible expected SHA map. helper5 is now required for model-adapter stack.
+HELPER_EXPECTED_SHA = dict(HELPER_SHA)
 
 @dataclass(frozen=True)
 class HelperComponentGuardVerdict:
@@ -24,50 +22,115 @@ class HelperComponentGuardVerdict:
     component_use_allowed_count: int
     helper_count: int
     helper_stack_supported: bool
+    sdk_call_supported: bool
+    embedder_provider: str | None
     helper_digests: dict[str, str]
+    role_detail: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
-
-def verify_helper_component_use_guard(guard: dict[str, Any] | None) -> HelperComponentGuardVerdict:
-    if not isinstance(guard, dict):
-        return HelperComponentGuardVerdict(False, BLOCK_HELPER_REAL_USE_GUARD_PENDING, 0, 0, False, {})
+def _from_legacy_guard(guard: dict[str, Any]) -> dict[str, Any] | None:
+    """Translate PR #778 helper list shape into HelperWiringManifest v1.2 if possible."""
     helpers = guard.get("helpers")
     if not isinstance(helpers, list):
-        return HelperComponentGuardVerdict(False, BLOCK_HELPER_REAL_USE_GUARD_PENDING, 0, 0, False, {})
+        return None
     by_name = {row.get("asset_name"): row for row in helpers if isinstance(row, dict)}
-    if set(by_name) != set(HELPER_EXPECTED_SHA):
-        return HelperComponentGuardVerdict(False, BLOCK_HELPER_REAL_USE_GUARD_PENDING, 0, len(by_name), False, {})
-    digests: dict[str, str] = {}
-    allowed_count = 0
-    for name, expected in HELPER_EXPECTED_SHA.items():
-        row = by_name[name]
-        digest = row.get("sha256_full")
-        digests[name] = str(digest)
-        if digest != expected:
-            return HelperComponentGuardVerdict(False, BLOCK_HELPER_ASSET_DRIFT, allowed_count, len(by_name), False, digests)
-        if row.get("component_use_allowed") is not True:
-            return HelperComponentGuardVerdict(False, BLOCK_HELPER_REAL_USE_GUARD_PENDING, allowed_count, len(by_name), False, digests)
-        allowed_count += 1
-    stack_supported = guard.get("helper_stacking_supported") is True
-    if not stack_supported:
-        return HelperComponentGuardVerdict(False, PARTIAL_HELPER_STACK_UNSUPPORTED, allowed_count, len(by_name), False, digests)
-    return HelperComponentGuardVerdict(True, None, allowed_count, len(by_name), True, digests)
-
-
-def build_example_component_use_guard(*, allow: bool = False, stack_supported: bool = False) -> dict[str, Any]:
+    # Legacy guard only had helper3/4/7/8. In v1.2 helper5 is required; do not fabricate it.
+    if "helper5_tool_call" not in by_name:
+        return None
     return {
-        "schema_version": "box3.helper_component_use_guard.v1",
-        "helper_stacking_supported": stack_supported,
-        "helpers": [
+        "schema_version": "box3.helper_wiring_manifest.v1.2",
+        "model_stack_supported": guard.get("helper_stacking_supported") is True or guard.get("model_stack_supported") is True,
+        "sdk_call_allowed": guard.get("sdk_call_supported") is True,
+        "raw_saved_zero": True,
+        "model_adapters": [
             {
                 "asset_name": name,
-                "sha256_full": digest,
-                "component_use_allowed": allow,
-                "production_claim_allowed": False,
-                "evidence_digest": "sha256:" + digest,
+                "component_type": "model_adapter",
+                "sha256_full": by_name.get(name, {}).get("sha256_full"),
+                "component_use_allowed": by_name.get(name, {}).get("component_use_allowed") is True,
+                "model_stack_supported": guard.get("helper_stacking_supported") is True or guard.get("model_stack_supported") is True,
+                "sdk_call_allowed": False,
+                "adapter_path_ref": by_name.get(name, {}).get("path_ref") or f"ref:BUTLER_{name.upper()}_PATH",
             }
-            for name, digest in HELPER_EXPECTED_SHA.items()
+            for name in REQUIRED_MODEL_ADAPTERS
+        ],
+        "sdk_modules": [
+            {
+                "asset_name": name,
+                "component_type": "sdk_module",
+                "sha256_full": by_name.get(name, {}).get("sha256_full"),
+                "component_use_allowed": by_name.get(name, {}).get("component_use_allowed") is True,
+                "model_stack_supported": False,
+                "sdk_call_allowed": guard.get("sdk_call_supported") is True,
+                "requires": ["helper2_embedding"] if name == "helper4_grounding" else [],
+                "sdk_module_ref": by_name.get(name, {}).get("path_ref") or f"ref:BUTLER_{name.upper()}_SDK",
+            }
+            for name in REQUIRED_SDK_MODULES
+        ],
+        "embedding_dependencies": [
+            {
+                "asset_name": "helper2_embedding",
+                "provider": guard.get("embedder_provider") or "missing",
+                "component_type": "embedding_dependency",
+                "component_use_allowed": bool(guard.get("embedder_provider")),
+                "sdk_call_allowed": bool(guard.get("embedder_provider")),
+            }
         ],
     }
+
+def verify_helper_component_use_guard(guard: dict[str, Any] | None) -> HelperComponentGuardVerdict:
+    manifest = guard
+    if isinstance(guard, dict) and guard.get("schema_version") != "box3.helper_wiring_manifest.v1.2":
+        manifest = _from_legacy_guard(guard)
+    verdict = validate_helper_wiring_manifest(manifest if isinstance(manifest, dict) else None)
+    if not verdict.allowed:
+        return HelperComponentGuardVerdict(
+            False,
+            verdict.fail_class or BLOCK_HELPER_REAL_USE_GUARD_PENDING,
+            0,
+            0,
+            False,
+            False,
+            None,
+            {},
+            verdict.detail,
+        )
+
+    detail = verdict.detail
+    model_adapters = detail.get("model_adapters", {})
+    sdk_modules = detail.get("sdk_modules", {})
+    embeddings = detail.get("embedding_dependencies", {})
+    digests: dict[str, str] = {}
+    for name, row in {**model_adapters, **sdk_modules}.items():
+        if isinstance(row, dict) and isinstance(row.get("sha256_full"), str):
+            digests[name] = row["sha256_full"]
+    provider = None
+    if isinstance(embeddings.get("helper2_embedding"), dict):
+        provider = embeddings["helper2_embedding"].get("provider")
+    return HelperComponentGuardVerdict(
+        True,
+        None,
+        len(model_adapters) + len(sdk_modules),
+        len(model_adapters) + len(sdk_modules),
+        True,
+        True,
+        provider,
+        digests,
+        detail,
+    )
+
+def build_example_component_use_guard(
+    *,
+    allow: bool = False,
+    stack_supported: bool = False,
+    sdk_call_supported: bool = False,
+    embedder_provider: str | None = None,
+) -> dict[str, Any]:
+    return build_example_helper_wiring_manifest(
+        component_use_allowed=allow,
+        adapter_stack_supported=stack_supported,
+        sdk_call_supported=sdk_call_supported,
+        embedder_provider=embedder_provider,
+    )

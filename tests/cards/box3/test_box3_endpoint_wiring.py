@@ -108,7 +108,7 @@ def test_valid_approval_and_helper_guard_allows_test_runner_candidate_only():
         reference_docs=[REFERENCE],
         drafting_request=REQUEST,
         approval_config=_approval(scope),
-        helper_component_guard=build_example_component_use_guard(allow=True, stack_supported=True),
+        helper_component_guard=build_example_component_use_guard(allow=True, stack_supported=True, sdk_call_supported=True, embedder_provider="helper2_sdk"),
         fixed_eval_pass=True,
         runner=build_deterministic_test_runner(),
     )
@@ -131,7 +131,7 @@ def test_response_is_digest_only_except_runtime_draft_text():
         reference_docs=[REFERENCE],
         drafting_request=REQUEST,
         approval_config=_approval(scope),
-        helper_component_guard=build_example_component_use_guard(allow=True, stack_supported=True),
+        helper_component_guard=build_example_component_use_guard(allow=True, stack_supported=True, sdk_call_supported=True, embedder_provider="helper2_sdk"),
         fixed_eval_pass=True,
         runner=build_deterministic_test_runner(),
     )
