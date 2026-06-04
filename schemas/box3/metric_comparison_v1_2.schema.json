@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/box3/metric_comparison_v1_2.schema.json",
+  "title": "Box3 Metric Comparison v1.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "before",
+    "after",
+    "status",
+    "fail_class",
+    "unsupported_delta",
+    "citation_accuracy_delta",
+    "supported_count_delta",
+    "raw_saved_zero",
+    "external_send_zero"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "box3.metric_comparison.v1_2"
+    },
+    "status": {
+      "enum": [
+        "PASS_DIAGNOSIS_ONLY",
+        "PASS_FUSION_EVAL",
+        "FUSION_PRODUCED",
+        "FUSION_EVAL_NO_GAIN",
+        "PARTIAL",
+        "BLOCKED"
+      ]
+    },
+    "before": {
+      "type": "object"
+    },
+    "after": {
+      "type": "object"
+    },
+    "fail_class": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "unsupported_delta": {
+      "type": "integer"
+    },
+    "citation_accuracy_delta": {
+      "type": "number"
+    },
+    "supported_count_delta": {
+      "type": "integer"
+    },
+    "raw_saved_zero": {
+      "const": true
+    },
+    "external_send_zero": {
+      "const": true
+    }
+  }
+}

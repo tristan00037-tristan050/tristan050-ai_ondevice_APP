@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/box3/lora_fusion_manifest_v1.schema.json",
+  "title": "Box3 LoRA Fusion Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "diagnosis_status",
+    "base_model",
+    "adapters",
+    "fusion_method",
+    "output_model",
+    "rollback_ref",
+    "raw_saved_zero",
+    "external_send_zero"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "box3.lora_fusion_manifest.v1"
+    },
+    "diagnosis_status": {
+      "enum": [
+        "NOT_FUSED_CONFIRMED",
+        "ALREADY_FUSED_CONFIRMED",
+        "INCONCLUSIVE"
+      ]
+    },
+    "fusion_method": {
+      "enum": [
+        "runtime_lora",
+        "merge_to_gguf",
+        "already_fused",
+        "inconclusive",
+        "none"
+      ]
+    },
+    "base_model": {
+      "type": "object"
+    },
+    "adapters": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "output_model": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "rollback_ref": {
+      "type": "object"
+    },
+    "raw_saved_zero": {
+      "const": true
+    },
+    "external_send_zero": {
+      "const": true
+    }
+  }
+}
