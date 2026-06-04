@@ -33,15 +33,42 @@ SupportLevel = Literal["supported", "unsupported", "no_evidence", "non_claim"]
 ClaimSupportLevel = SupportLevel
 EvidenceKind = Literal["text", "table", "figure"]
 
-# 박스 3 real 실제 켜기 v1.3 (2026-06-03) — enablement 상태 Literal SSOT.
-# Codex 보완 5 정합: PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL 명시 라벨 + PARTIAL/CANDIDATE.
+# 박스 3 real 실제 켜기 v1.3 (2026-06-03) + follow-up v1.2 (2026-06-04) — 상태 SSOT 6.
+# 사용자 명시 "상태 SSOT 6 (PASS_BOX3_REAL 금지)" — ASSET_INVENTORY_PASS 포함 6 label.
 Box3RealStatus = Literal[
     "CONTRACT_ONLY",
+    "ASSET_INVENTORY_PASS",
     "REAL_CANDIDATE",
     "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL",
     "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE",
     "BLOCKED",
 ]
+
+# ALG real_state_model 본질 흡수 (단일 모듈 경로, real_state_model.py 는 alias 만 노출).
+_ALLOWED_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "CONTRACT_ONLY": {"ASSET_INVENTORY_PASS", "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE", "BLOCKED"},
+    "ASSET_INVENTORY_PASS": {"REAL_CANDIDATE", "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE", "BLOCKED"},
+    "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE": {"ASSET_INVENTORY_PASS", "REAL_CANDIDATE", "BLOCKED"},
+    "REAL_CANDIDATE": {"PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL", "BLOCKED", "REAL_CANDIDATE"},
+    "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL": {"PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL"},
+    "BLOCKED": {"BLOCKED"},
+}
+
+
+def validate_box3_real_status(status: str) -> str:
+    from typing import get_args as _get_args
+    if status not in _get_args(Box3RealStatus):
+        from .real_fail_class import BLOCK_BOX3_REAL_STATUS_TRANSITION_INVALID
+        raise ValueError(f"{BLOCK_BOX3_REAL_STATUS_TRANSITION_INVALID}:{status}")
+    return status
+
+
+def validate_box3_real_status_transition(previous: str, current: str) -> None:
+    validate_box3_real_status(previous)
+    validate_box3_real_status(current)
+    if current not in _ALLOWED_STATUS_TRANSITIONS[previous]:
+        from .real_fail_class import BLOCK_BOX3_REAL_STATUS_TRANSITION_INVALID
+        raise ValueError(f"{BLOCK_BOX3_REAL_STATUS_TRANSITION_INVALID}:{previous}->{current}")
 
 
 def is_bare_sha256(value: object) -> bool:
@@ -117,6 +144,41 @@ class ClaimVerdict:
         "NON_FACTUAL",
     ]
 
+    def __post_init__(self) -> None:
+        # Codex follow-up v1.2 (2026-06-04): ClaimVerdict 불변식 fail-closed (post_init).
+        # support_level ↔ reason_code 일관성 + evidence_digests 형식 + confidence 범위.
+        if not is_sha256_digest(self.claim_digest):
+            raise ValueError("CLAIM_DIGEST_INVALID")
+        try:
+            confidence = float(self.confidence)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("CLAIM_CONFIDENCE_INVALID") from exc
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError("CLAIM_CONFIDENCE_OUT_OF_RANGE")
+        if not isinstance(self.evidence_digests, list):
+            raise ValueError("EVIDENCE_DIGEST_INVALID")
+        if not all(is_sha256_digest(item) for item in self.evidence_digests):
+            raise ValueError("EVIDENCE_DIGEST_INVALID")
+        # ClaimVerdict 불변식 — support_level ↔ reason_code 의 정합 enum 매핑.
+        expected = {
+            "supported": ("EVIDENCE_ENTAILS", True),
+            "unsupported": ("EVIDENCE_CONTRADICTS", False),
+            "no_evidence": ("NO_MATCHING_EVIDENCE", False),
+            "non_claim": ("NON_FACTUAL", False),
+        }
+        if self.support_level not in expected:
+            from .real_fail_class import CLAIM_VERDICT_INCONSISTENT
+            raise ValueError(CLAIM_VERDICT_INCONSISTENT)
+        expected_reason, evidence_required = expected[self.support_level]
+        inconsistent = self.reason_code != expected_reason
+        if evidence_required and not self.evidence_digests:
+            inconsistent = True
+        if self.support_level in {"no_evidence", "non_claim"} and self.evidence_digests:
+            inconsistent = True
+        if inconsistent:
+            from .real_fail_class import CLAIM_VERDICT_INCONSISTENT
+            raise ValueError(CLAIM_VERDICT_INCONSISTENT)
+
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
@@ -134,6 +196,10 @@ class Box3RealRuntimeEnvelope:
     drafting_request_runtime: str = field(default="", repr=False)
     format_hint: str = "자유형"
     max_new_tokens: int = 512
+    # 박스 3 real follow-up v1.2 (2026-06-04) — enablement pipeline 의 policy gate 분기에서
+    # caller (sidecar route + admin policy middleware) 가 본 필드로 정책 결과를 전달한다.
+    # 본진 v1.0 본질 약화 0 (default True 로 기존 호출 회로 무회귀).
+    policy_gate_allowed: bool = True
     evidence_units_runtime: list[EvidenceUnit] = field(default_factory=list, repr=False)
     draft_text_runtime: str | None = field(default=None, repr=False)
     draft_claims_runtime: list[DraftClaim] = field(default_factory=list, repr=False)
@@ -163,6 +229,7 @@ class Box3RealRuntimeEnvelope:
         format_hint: str = "자유형",
         max_new_tokens: int = 512,
         request_id: str | None = None,
+        policy_gate_allowed: bool = True,
     ) -> "Box3RealRuntimeEnvelope":
         """raw 입력에서 envelope 를 구성한다. 각 텍스트는 DLP fail-closed 검증을 거친다."""
         assert_runtime_text_safe(drafting_request)
@@ -175,7 +242,13 @@ class Box3RealRuntimeEnvelope:
             drafting_request_runtime=drafting_request,
             format_hint=format_hint,
             max_new_tokens=max_new_tokens,
+            policy_gate_allowed=policy_gate_allowed,
         )
+
+    @property
+    def reference_docs_runtime_only(self) -> list[str]:
+        # 박스 3 real follow-up v1.2 — backward-compat read alias (본진 약화 0).
+        return self.reference_text_runtime_only
 
     @property
     def reference_digests(self) -> list[Digest]:
@@ -251,6 +324,36 @@ class Box3RealVerdict:
     external_send_zero: Literal[True] = True
     raw_saved_zero: Literal[True] = True
     raw_text_logged: Literal[False] = False
+    # 박스 3 real follow-up v1.2 (2026-06-04) — enablement pipeline 이 채우는 추가 메타.
+    # 본진 v1.0 본질 약화 0 (default 로 기존 호출 회로 무회귀).
+    stage_trace: list[dict[str, Any]] = field(default_factory=list)
+    human_approval_required: bool = False
+    runner_asset_digest: Digest | None = None
+    human_approval_digest: Digest | None = None
+
+    def build_audit_record(self, envelope: "Box3RealRuntimeEnvelope | None" = None) -> "Box3RealAuditRecord":
+        """박스 3 real follow-up v1.2 (2026-06-04) — 본진 build_audit_record 모듈 함수의
+        method shortcut. envelope 미공급 시 verdict 안 단독 audit (raw 0 / digest only).
+        """
+        if envelope is None:
+            # envelope 부재 시 verdict.request_digest 만으로 audit 본질을 구성
+            # (raw 누출 0). reference_digests 비움.
+            return Box3RealAuditRecord(
+                schema_version="box3.real_audit.v1_2",
+                request_digest=self.request_digest,
+                reference_digests=[],
+                result_digest=self.draft_digest,
+                unsupported_count=int(self.metrics.get("unsupported_count", 0) if isinstance(self.metrics, dict) else 0),
+                no_evidence_count=int(self.metrics.get("no_evidence_count", 0) if isinstance(self.metrics, dict) else 0),
+                citation_accuracy=float(self.metrics.get("citation_accuracy", 0.0) if isinstance(self.metrics, dict) else 0.0),
+                format_compliance=float(self.metrics.get("format_compliance", 0.0) if isinstance(self.metrics, dict) else 0.0),
+                style_compliance=float(self.metrics.get("style_compliance", 0.0) if isinstance(self.metrics, dict) else 0.0),
+                table_figure_coverage=float(self.metrics.get("table_figure_coverage", 0.0) if isinstance(self.metrics, dict) else 0.0),
+                asset_manifest_digest=self.asset_manifest_digest,
+                fail_class=self.fail_class,
+                stage_trace=list(self.stage_trace),
+            )
+        return build_audit_record(envelope=envelope, verdict=self, stage_trace=self.stage_trace)
 
     def to_dict(self) -> dict[str, Any]:
         # 무회귀용 별칭 — 전체(응답) 표현.

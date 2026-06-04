@@ -6,7 +6,7 @@ from .final_gate import evaluate_final_real_gate
 from .human_approval import HumanApprovalConfig, evaluate_human_approval
 from .local_real_runner import RealRunner, run_box3_real_enablement_smoke
 from .real_contracts import Box3RealRuntimeEnvelope, Box3RealVerdict, sha256_text, stable_json_digest
-from .real_grounding import extract_claims, extract_evidence_units, ground_claims
+from .real_grounding import extract_claims, extract_evidence_units, ground_claims, summarize_grounding
 from .real_metrics import compute_claim_metrics, estimate_format_compliance, estimate_style_compliance
 from .real_runner_assets import Box3RealRunnerConfig, verify_box3_real_runner_assets
 
@@ -45,19 +45,32 @@ def run_box3_real_enablement_pipeline(
             human_approval=approval,
         )
         return Box3RealVerdict(
-            status=decision.status,
+            # 박스 3 real follow-up v1.2 정정 (2026-06-04): 본진 Verdict required 필드 모두 채움.
+            schema_version="box3.real_verdict.v1_2",
             request_id=envelope.request_id,
             request_digest=envelope.request_digest,
+            status=decision.status,
             draft_text=None,
             draft_digest=None,
-            claim_verdicts=[],
             citations=[],
-            metrics=metrics,
-            stage_trace=stage_trace + [c.to_dict() for c in decision.conditions],
+            claim_verdicts=[],
+            metrics={
+                "unsupported_count": metrics.unsupported_count,
+                "no_evidence_count": metrics.no_evidence_count,
+                "citation_accuracy": metrics.citation_accuracy,
+                "format_compliance": metrics.format_compliance,
+                "style_compliance": metrics.style_compliance,
+                "table_figure_coverage": metrics.table_figure_coverage,
+            },
+            needs_review=False,
             fail_class=decision.fail_class,
-            real_claim_allowed=False,
-            human_approval_required=True,
+            model_chain=list(envelope.model_chain),
             asset_manifest_digest=asset_verdict.asset_manifest_digest,
+            real_runner_executed=False,
+            contract_only=False,
+            real_claim_allowed=False,
+            stage_trace=stage_trace + [c.to_dict() for c in decision.conditions],
+            human_approval_required=True,
             runner_asset_digest=asset_verdict.runner_asset_digest,
             human_approval_digest=approval.config_digest,
         )
@@ -78,12 +91,16 @@ def run_box3_real_enablement_pipeline(
     envelope.draft_claims_runtime = claims
     stage_trace.append({"stage": "claim_extraction", "passed": bool(claims), "claim_count": len(claims)})
 
-    verdicts, grounding_summary = ground_claims(claims, evidence_units) if claims else ([], None)
+    # 박스 3 real follow-up v1.2 정정: 본진 ground_claims 는 list[ClaimVerdict] 반환,
+    # summary 는 별도 함수 summarize_grounding (test_ground_claims_returns_list_not_tuple_and_summary_is_separate).
+    # 본진 약화 0 — pipeline 본문이 tuple unpacking 하던 결함을 list + 별도 summary 호출로 정정.
+    verdicts = ground_claims(claims, evidence_units) if claims else []
+    grounding_summary = summarize_grounding(verdicts) if verdicts else None
     stage_trace.append({
         "stage": "claim_grounding",
-        "passed": bool(verdicts) and (grounding_summary.unsupported_count == 0 if grounding_summary else False),
-        "unsupported_count": grounding_summary.unsupported_count if grounding_summary else 0,
-        "no_evidence_count": grounding_summary.no_evidence_count if grounding_summary else 0,
+        "passed": bool(verdicts) and (grounding_summary.unsupported_claim_count == 0 if grounding_summary else False),
+        "unsupported_count": grounding_summary.unsupported_claim_count if grounding_summary else 0,
+        "no_evidence_count": grounding_summary.no_evidence_claim_count if grounding_summary else 0,
     })
 
     format_score = estimate_format_compliance(draft_text) if draft_text else 0.0
@@ -106,12 +123,15 @@ def run_box3_real_enablement_pipeline(
     stage_trace.append({"stage": "final_gate", "status": decision.status, "real_claim_allowed": decision.real_claim_allowed, "fail_class": decision.fail_class})
     stage_trace.extend(c.to_dict() for c in decision.conditions)
 
-    # Codex HOLD 정정 (2026-06-03, PR #775): Box3RealStatus Literal 정합 — 이전 임시 라벨을
-    # SSOT 라벨 PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL 로 통일 (drift 0).
+    # Codex HOLD 정정 (2026-06-03, PR #775 → 2026-06-04, PR #776 재정정): Box3RealStatus
+    # Literal SSOT 6 정합 — response_draft 허용 set 을 본진 Literal 안에서만 구성한다.
+    # 이전 set 안의 비정본 상태 문자열(Literal 부재 라벨)은 status 라벨 drift 였다. 본
+    # 정정에서 inline set 으로 Literal 정합 status 만 허용 (정적 분석/grep 검증 가능):
+    #   - REAL_CANDIDATE: 9조건 + approval 미충족 (정직 candidate).
+    #   - PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL: 9조건 + approval 충족 (PASS).
     response_draft = (
         draft_text
-        if decision.status
-        in {"REAL_CANDIDATE", "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL", "RUNNER_SMOKE_PASS"}
+        if decision.status in {"REAL_CANDIDATE", "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL"}
         else None
     )
     draft_digest = sha256_text(draft_text) if draft_text else None
@@ -120,23 +140,40 @@ def run_box3_real_enablement_pipeline(
         citations.append({
             "source_digest": unit.source_digest,
             "evidence_digest": unit.evidence_digest,
-            "evidence_kind": unit.evidence_kind,
+            "evidence_kind": unit.kind,
             "span_label": "runtime_only",
         })
+    # 박스 3 real follow-up v1.2 정정 (2026-06-04): 본진 Verdict required 필드 모두 채움.
     return Box3RealVerdict(
-        status=decision.status,
+        schema_version="box3.real_verdict.v1_2",
         request_id=envelope.request_id,
         request_digest=envelope.request_digest,
+        status=decision.status,
         draft_text=response_draft,
         draft_digest=draft_digest if response_draft else None,
-        claim_verdicts=verdicts,
         citations=citations,
-        metrics=metrics,
-        stage_trace=stage_trace,
+        claim_verdicts=[v.to_dict() if hasattr(v, "to_dict") else v for v in verdicts],
+        metrics={
+            "unsupported_count": metrics.unsupported_count,
+            "no_evidence_count": metrics.no_evidence_count,
+            "citation_accuracy": metrics.citation_accuracy,
+            "format_compliance": metrics.format_compliance,
+            "style_compliance": metrics.style_compliance,
+            "table_figure_coverage": metrics.table_figure_coverage,
+            "factual_claim_count": metrics.factual_claim_count,
+            "unsupported_claim_rate": metrics.unsupported_claim_rate,
+            "no_evidence_claim_rate": metrics.no_evidence_claim_rate,
+            "supported_count": metrics.supported_count,
+        },
+        needs_review=decision.status in {"REAL_CANDIDATE", "BLOCKED"} and decision.real_claim_allowed is False,
         fail_class=decision.fail_class,
-        real_claim_allowed=decision.real_claim_allowed,
-        human_approval_required=decision.human_approval_required,
+        model_chain=list(envelope.model_chain),
         asset_manifest_digest=asset_verdict.asset_manifest_digest,
+        real_runner_executed=runner_result.ok,
+        contract_only=not decision.real_claim_allowed,
+        real_claim_allowed=decision.real_claim_allowed,
+        stage_trace=stage_trace,
+        human_approval_required=decision.human_approval_required,
         runner_asset_digest=asset_verdict.runner_asset_digest,
         human_approval_digest=approval.config_digest,
     )
