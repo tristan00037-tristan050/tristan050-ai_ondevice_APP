@@ -176,7 +176,17 @@ class HelperSdkBridge:
         if self._helper2 is not None:
             return self._helper2, self._embedder_provider
         try:
-            self._helper2 = _import_from_env(HELPER2_SDK_PATH_ENV, "helper2_embedding_sdk")
+            module = _import_from_env(HELPER2_SDK_PATH_ENV, "helper2_embedding_sdk")
+            # 박스 3 v1.3 real activation (2026-06-04): module 이 .embed() 직접 노출하지 않고
+            # Helper2Embedder/Embedder 클래스만 노출하는 경우, 자동으로 인스턴스화 (digest-only).
+            embedder_obj = module
+            if not callable(getattr(module, "embed", None)):
+                for cls_name in ("Helper2Embedder", "Embedder", "BgeM3Embedder"):
+                    cls = getattr(module, cls_name, None)
+                    if isinstance(cls, type):
+                        embedder_obj = cls()
+                        break
+            self._helper2 = embedder_obj
             self._embedder_provider = "helper2_sdk"
             return self._helper2, self._embedder_provider
         except Exception:
@@ -267,7 +277,15 @@ class HelperSdkBridge:
 
         try:
             if hasattr(helper4, "ground_claims"):
-                produced = helper4.ground_claims(draft_text, evidence_bundle, embedder=embedder)
+                # 박스 3 v1.3 (2026-06-04, real activation): bundled helper4 SDK 는 second arg
+                # 로 EvidenceUnit 리스트 (iterable) 를 기대한다. 일부 외부 helper4 구현은
+                # EvidenceBundle 자체를 기대할 수 있으므로 list 호출이 TypeError 면 bundle 로
+                # 한 번 더 시도한다.
+                evidence_records = evidence_bundle.evidence_units_runtime
+                try:
+                    produced = helper4.ground_claims(draft_text, evidence_records, embedder=embedder)
+                except TypeError:
+                    produced = helper4.ground_claims(draft_text, evidence_bundle, embedder=embedder)
             elif hasattr(helper4, "verify_grounding"):
                 produced = helper4.verify_grounding(draft_text, evidence_bundle)
             else:
@@ -288,6 +306,20 @@ class HelperSdkBridge:
                     for item in produced["claim_verdicts"]
                     if isinstance(item, dict)
                 ]
+            elif isinstance(produced, list):
+                # bundled helper4 SDK 가 GroundedClaim 리스트를 반환하는 경로.
+                verdicts = []
+                for idx, item in enumerate(produced, start=1):
+                    if isinstance(item, ClaimVerdict):
+                        verdicts.append(item)
+                        continue
+                    claim_digest = getattr(item, "claim_digest", None) or sha256_text(str(item))
+                    support_level = getattr(item, "support_level", "no_evidence")
+                    evidence_digests = list(getattr(item, "evidence_digests", []) or [])
+                    reason_code = getattr(item, "reason_code", "NO_MATCHING_EVIDENCE")
+                    confidence = float(getattr(item, "confidence", 0.0))
+                    claim_id = getattr(item, "claim_id", None) or f"h4-{idx}"
+                    verdicts.append(ClaimVerdict(claim_id, claim_digest, support_level, evidence_digests, confidence, reason_code))
             else:
                 claims = extract_claims(draft_text)
                 verdicts = ground_claims(claims, evidence_bundle.evidence_units_runtime)
