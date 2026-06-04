@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Box3 endpoint wiring response v1.2",
+  "type": "object",
+  "required": [
+    "status",
+    "real_claim_allowed",
+    "human_approval_required",
+    "raw_saved_zero",
+    "external_send_zero",
+    "raw_text_logged"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "CONTRACT_ONLY",
+        "REAL_CANDIDATE",
+        "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE",
+        "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL",
+        "BLOCKED"
+      ]
+    },
+    "fail_class": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "real_claim_allowed": {
+      "type": "boolean"
+    },
+    "human_approval_required": {
+      "type": "boolean"
+    },
+    "draft_text": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "draft_digest": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "raw_saved_zero": {
+      "const": true
+    },
+    "external_send_zero": {
+      "const": true
+    },
+    "raw_text_logged": {
+      "const": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "real_claim_allowed": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL"
+          },
+          "human_approval_required": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "CONTRACT_ONLY",
+              "BLOCKED",
+              "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "real_claim_allowed": {
+            "const": false
+          },
+          "draft_text": {
+            "const": null
+          }
+        }
+      }
+    }
+  ]
+}
