@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Box3 Grounded Prompt v1.2.1 Evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "prompt_digest",
+    "decode_config_digest",
+    "fewshot_digest",
+    "context_digest",
+    "evidence_unit_count",
+    "raw_prompt_saved",
+    "raw_saved_zero"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "box3.grounded_prompt.v1_2_1"
+    },
+    "prompt_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "decode_config_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "fewshot_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "context_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "evidence_unit_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "unsupported_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "supported_claim_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "abstained_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "raw_prompt_saved": {
+      "const": false
+    },
+    "raw_saved_zero": {
+      "const": true
+    }
+  }
+}

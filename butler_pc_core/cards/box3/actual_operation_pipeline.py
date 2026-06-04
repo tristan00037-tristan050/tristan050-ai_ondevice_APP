@@ -18,10 +18,12 @@ from .actual_fail_class import (
     REAL_CANDIDATE,
 )
 from .actual_runner_assets import ActualRunnerAssetConfig, verify_base_model_asset
+from .grounded_prompt import evaluate_usefulness_gate
 from .helper_component_guard import verify_helper_component_use_guard
 from .helper_sdk_bridge import HelperSdkBridge
 from .human_approval_sealed import evaluate_human_approval_sealed
 from .local_sealed_runner import RealRunner, run_actual_runner_smoke
+from .rag_prompt_integration import build_rag_grounded_prompt_runtime
 from .real_metrics import compute_claim_metrics, estimate_format_compliance, estimate_style_compliance, metric_fail_class
 
 def _status_from_gate(
@@ -109,6 +111,13 @@ def run_box3_actual_operation(
         "evidence_count": envelope_evidence_count,
     })
 
+    # Box3 RAG·Prompt activation v1.2 (2026-06-04): helper7 parse 직후 runner 전에
+    # build_rag_context_packet + build_grounded_prompt_packet 을 1회 삽입하여
+    # grounded_prompt_runtime_only 를 envelope 에 부착한다. helper4 grounding
+    # 임계는 완화 0 (본 단계는 입력 프롬프트만 강화).
+    rag_prompt = build_rag_grounded_prompt_runtime(envelope, evidence_bundle)
+    stage_trace.append(rag_prompt.to_stage_trace_entry())
+
     if base.allowed and helper.allowed and evidence_bundle.parse_success:
         smoke = run_actual_runner_smoke(envelope, runner=runner, config=base_config, helper_guard=helper_component_guard)
     else:
@@ -146,8 +155,12 @@ def run_box3_actual_operation(
         format_score = estimate_format_compliance(draft)
         style_score = estimate_style_compliance(draft)
         metrics = compute_claim_metrics(verdicts, format_compliance=format_score, style_compliance=style_score, evidence_units=evidence_bundle.evidence_units_runtime)
+        usefulness = evaluate_usefulness_gate(draft, verdicts)
+        if usefulness.status != "PASS" and bridge_fail is None:
+            bridge_fail = usefulness.fail_class
         grounding_receipt = grounding_bundle.persistable_dict()
         stage_trace.append({"stage": "helper4_grounding", "passed": grounding_bundle.summary.unsupported_claim_count == 0, "fail_class": grounding_bundle.fail_class, "embedder_provider": grounding_bundle.embedder_provider})
+        stage_trace.append({"stage": "usefulness_gate", **usefulness.to_dict()})
         stage_trace.append({"stage": "helper8_company_style", "passed": styled.style_applied, "fail_class": styled.fail_class})
 
     approval = evaluate_human_approval_sealed(human_approval_config, expected_scope_digest=envelope.request_digest)

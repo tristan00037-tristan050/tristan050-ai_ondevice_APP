@@ -55,6 +55,12 @@ class ActualRunnerSmokeResult:
         return data
 
 def compose_runner_prompt(envelope: Box3ActualRuntimeEnvelope) -> str:
+    # Box3 RAG·Prompt activation v1.2 (2026-06-04): pipeline 이 helper7 parse 직후
+    # build_grounded_prompt_packet 으로 envelope.grounded_prompt_runtime_only 를
+    # 미리 부착하면 그것을 우선 사용한다. 부재 시에만 legacy 폴백 (raw 0 유지).
+    grounded = getattr(envelope, "grounded_prompt_runtime_only", None)
+    if isinstance(grounded, str) and grounded.strip():
+        return grounded
     refs = "\n\n".join(f"[REF {idx + 1}]\n{text}" for idx, text in enumerate(envelope.reference_text_runtime_only))
     return (
         "Use only the provided references. Do not invent dates, amounts, people, or legal conclusions.\n"
@@ -104,12 +110,29 @@ def build_local_sealed_real_runner(
         raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE)
     start = time.perf_counter()
     # Keep helper4/7/8 out of the model constructor. Only helper3/5 LoRA stack is eligible.
-    llm = Llama(model_path=model_path, verbose=False)
+    # PR #781 (Box3 RAG·Prompt v1.2): grounded prompt 가 1k-2k 토큰 수준이 될 수 있으므로
+    # 충분한 context window 를 확보 (env override 가능). 기본 4096 = grounded prompt + 출력
+    # max_new_tokens(<=1024) 여유. n_ctx 환경변수가 설정되면 그것을 사용한다.
+    try:
+        n_ctx = int(os.environ.get("BUTLER_BOX3_RUNNER_N_CTX", "4096"))
+    except ValueError:
+        n_ctx = 4096
+    llm = Llama(model_path=model_path, n_ctx=n_ctx, verbose=False)
     load_ms = (time.perf_counter() - start) * 1000
 
     def _runner(envelope: Box3ActualRuntimeEnvelope) -> str:
         prompt = compose_runner_prompt(envelope)
-        result = llm(prompt, max_tokens=envelope.max_new_tokens, temperature=0.0, stop=["</s>"])
+        # PR #781: temperature/top_p/repeat_penalty/stop 는 grounded_prompt.DecodeConfig 가
+        # decode_config_digest 로 잠그지만, 본 runner 는 model-level 실제 디코딩 파라미터로
+        # 보수적 기본값을 적용 (temperature=0.0 / top_p=0.85 / repeat_penalty=1.15).
+        result = llm(
+            prompt,
+            max_tokens=envelope.max_new_tokens,
+            temperature=0.0,
+            top_p=0.85,
+            repeat_penalty=1.15,
+            stop=["</s>", "<|im_end|>"],
+        )
         choices = result.get("choices") or []
         if not choices:
             return ""
