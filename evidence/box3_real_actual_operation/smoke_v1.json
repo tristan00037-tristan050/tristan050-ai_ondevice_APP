@@ -1,0 +1,18 @@
+{
+  "base_model_sha256_full": "60b9baee17696ca8e3a3aa0950a4d441ad3c4baa80bbd73ec9fa33c17cba0c1f",
+  "engine": "llama_cpp",
+  "engine_available": true,
+  "external_send_zero": true,
+  "fail_class": null,
+  "latency_ms": 5398.762,
+  "model_format": "GGUF",
+  "model_load_ms": 529.8265,
+  "ok": true,
+  "output_digest": "sha256:854071bcf9503844a1ff9adfb8881d3ab98caee7d7fb96cdee0308b2b2dc39a0",
+  "peak_memory_backend": "psutil_rss",
+  "peak_memory_mb": 2279.1094,
+  "raw_saved_zero": true,
+  "schema_version": "box3.actual_runner_smoke.v1",
+  "tokens_in": 43,
+  "tokens_out": 128
+}
