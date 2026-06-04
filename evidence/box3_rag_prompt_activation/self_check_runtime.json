@@ -1,0 +1,13 @@
+{
+  "SELF_CHECK_PASS": true,
+  "prompt_digest": "sha256:f9d7b97094c3107fe4062e2603dee0c055afc76cbbdff5ace9d0fde5848f7aa4",
+  "decode_config_digest": "sha256:dbe57adc9a073bc5824980ee081c69c7b2b0fd1caf5316b9564c9c6422b416db",
+  "context_digest": "sha256:73bfb2307799910579c66235298137e539a07ca33402e6dbca75dc7f17391605",
+  "evidence_marker_count": 1,
+  "absent_slots": [
+    "owner"
+  ],
+  "usefulness_status": "PASS",
+  "raw_saved_zero": true,
+  "external_send_zero": true
+}
