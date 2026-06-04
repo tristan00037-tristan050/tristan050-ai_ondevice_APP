@@ -1,0 +1,17 @@
+{
+  "actual_status": "PARTIAL_HELPER_STACK_UNSUPPORTED",
+  "approval_pre_gate_passed": true,
+  "contract_only": true,
+  "draft_digest": null,
+  "external_send_zero": true,
+  "fail_class": "PARTIAL_HELPER_STACK_UNSUPPORTED",
+  "legacy_status": "contract_only",
+  "output_chars": 0,
+  "raw_saved_zero": true,
+  "real_claim_allowed": false,
+  "request_digest": "sha256:f6c8766579415ff8741957b87efe3c04b8640e39788aef6bfa5a97fcb763e701",
+  "request_flag_used_for_real": false,
+  "runner_injected": false,
+  "schema_version": "box3.endpoint_wiring.smoke.v1",
+  "ui_flag_used_for_real": false
+}

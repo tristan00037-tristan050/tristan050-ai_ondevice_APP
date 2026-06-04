@@ -14,6 +14,10 @@ from butler_pc_core.cards.box3.draft_service import (
     draft_from_existing,
 )
 from butler_pc_core.cards.box3.real_pipeline import run_box3_real_pipeline
+from butler_pc_core.cards.box3.endpoint_wiring import (
+    Box3EndpointWiringError,
+    run_box3_endpoint_wiring,
+)
 from butler_pc_core.cards.box3.security import Box3SecurityError
 
 router = APIRouter()
@@ -68,24 +72,30 @@ async def draft_box3(payload: Box3DraftRequest, request: Request) -> dict[str, A
     if not is_localhost_request(request):
         raise HTTPException(status_code=403, detail={"fail_class": "LOCALHOST_ONLY", "message": "localhost only"})
 
-    # real 융합 경로 — 참고문서 + 작성요청이 있으면 단일 계약 파이프라인을 실행한다.
-    # real_model_runner 를 주입하지 않으므로 asset PENDING 상태에서는 contract_only 로 닫힌다.
+    # actual endpoint wiring 경로 (PR #778 정정): sealed approval pre-gate 가 runner 연결을
+    # 결정한다 — request/UI flag 는 real 승인으로 사용하지 않음. approval false → contract_only,
+    # approval true + 9 조건 + helper_component_use → PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL,
+    # runtime unavailable → PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE. 본진 legacy contract /
+    # response 필드 보존 (response.request_digest · raw_doc_logged 등).
     if payload.reference_docs and payload.drafting_request:
         try:
-            verdict, audit = run_box3_real_pipeline(
+            response = run_box3_endpoint_wiring(
                 reference_docs=list(payload.reference_docs),
                 drafting_request=payload.drafting_request,
                 format_hint=payload.format_hint,
                 max_new_tokens=payload.max_new_tokens,
-                real_model_runner=None,
+                policy_gate_allowed=bool(getattr(request.state, "policy_gate_allowed", True)),
             )
         except Box3SecurityError as exc:
             raise HTTPException(
                 status_code=422,
                 detail={"fail_class": "BLOCK_BOX3_REAL_SECURITY_RISK", "reason_code": str(exc)},
             )
-        response = verdict.to_response_dict()
-        response["audit"] = audit.to_dict()
+        except (Box3EndpointWiringError, ValueError) as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={"fail_class": str(exc) or exc.__class__.__name__},
+            ) from exc
         response["request_digest"] = digest_payload(payload)
         response["raw_doc_logged"] = False
         return response
