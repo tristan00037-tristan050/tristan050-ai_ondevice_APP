@@ -1,0 +1,137 @@
+{
+  "comparison": {
+    "reason": "그룹A 조건에서도 unsupported>0 → 시나리오 정렬 문제 아님. v5 base 모델 단독으로는 PASS 도달 불가 — 그룹A 재확인 또는 qwen3-4b 이관 검토 필요.",
+    "recommended_action": "ESCALATE_TO_GROUPA_REREVIEW_OR_4B_MIGRATION",
+    "scenario_1_unsupported_count": 1,
+    "scenario_2_unsupported_count": 1,
+    "verdict": "V5_BASE_MODEL_LIMIT"
+  },
+  "constraints": {
+    "degeneration_gate_active": true,
+    "grounding_threshold_relaxation_zero": true,
+    "raw_draft_persisted": false
+  },
+  "external_send_zero": true,
+  "raw_saved_zero": true,
+  "scenario_1_current_smoke": {
+    "degeneration_probe": {
+      "degeneration_detected": false,
+      "fail_class": null,
+      "leaked_prompt_marker": false,
+      "repeated_line_ratio": 0.0,
+      "repeated_ngram_ratio": 0.0,
+      "too_short": false
+    },
+    "evidence_bundle": {
+      "evidence_unit_count": 2,
+      "parse_success": true
+    },
+    "helper4_grounding": {
+      "embedder_provider": "helper2_sdk",
+      "factual_claim_count": 1,
+      "fail_class": "BLOCK_UNSUPPORTED_CLAIM",
+      "no_evidence_count": 0,
+      "supported_count": 0,
+      "unsupported_count": 1,
+      "unsupported_verdicts": [
+        {
+          "claim_digest": "sha256:c6cb8b0d44054059099b66af42b64128c3464dd12326028b930c8284e06259ef",
+          "claim_id": "h4-1",
+          "evidence_digests_attached": [],
+          "reason_code": "EVIDENCE_CONTRADICTS"
+        }
+      ]
+    },
+    "input_summary": {
+      "drafting_request_digest": "sha256:6922ab477e1ad5ff01f871a7c4a4ec0b3f8e0f14e076ad069bbdf4e138306bdf",
+      "drafting_request_snippet": "납품 일정을 반영해 보고서 초안을 작성하세요.",
+      "reference_digests": [
+        "sha256:91c58a2903be8f26656d4b00e9c3d6e06eff3e4b2307aadb603fcd1ce4e47322"
+      ],
+      "reference_doc_count": 1,
+      "reference_snippets": [
+        "참고 문서에는 납품 일정이 2026년 6월 10일로 명시되어 있습니다. 납품 책임자는 운영팀이며, 추가 비용은 명시되지 않았습니다."
+      ]
+    },
+    "rag_grounded_prompt": {
+      "absent_slot_count": 0,
+      "context_digest": "sha256:3f7bed528613c2c863ac2f7020475965f8c90078cdeeffc1595b575e130dcee1",
+      "evidence_marker_count": 2,
+      "prompt_digest": "sha256:25785c0a174824419f752c5637776b3cd3b3cd6f15d8d6a18b6081ac0c492b97"
+    },
+    "runner_output": {
+      "draft_digest": "sha256:204ff93bb56f39d42420bc6a6d451be1ab2ecd38f997f9a775e41b3dab74612f",
+      "draft_present": true,
+      "draft_snippet_first_80": "[출력 형식] JSON object only. No markdown.\\n\\n{\"completion\": \"[답변]\\n\\n[보고일자: 2026-1…",
+      "draft_token_count_approx": 47,
+      "runner_error": null
+    },
+    "scenario": "scenario_1_pr783_current_smoke"
+  },
+  "scenario_2_groupA_condition": {
+    "degeneration_probe": {
+      "degeneration_detected": false,
+      "fail_class": null,
+      "leaked_prompt_marker": false,
+      "repeated_line_ratio": 0.0,
+      "repeated_ngram_ratio": 0.1538,
+      "too_short": false
+    },
+    "evidence_bundle": {
+      "evidence_unit_count": 4,
+      "parse_success": true
+    },
+    "helper4_grounding": {
+      "embedder_provider": "helper2_sdk",
+      "factual_claim_count": 1,
+      "fail_class": "BLOCK_UNSUPPORTED_CLAIM",
+      "no_evidence_count": 0,
+      "supported_count": 0,
+      "unsupported_count": 1,
+      "unsupported_verdicts": [
+        {
+          "claim_digest": "sha256:0acd1b310c6524efcfd77da236296c0aba585c82ee80383cfcaa5723bc6f91d2",
+          "claim_id": "h4-1",
+          "evidence_digests_attached": [],
+          "reason_code": "EVIDENCE_CONTRADICTS"
+        }
+      ]
+    },
+    "input_summary": {
+      "drafting_request_digest": "sha256:6ff64a9e15d1fa644ea5c471940144555ed96b82392224a4388f9e1244e8dd75",
+      "drafting_request_snippet": "위 4 항목을 표로 정리해 1 문장씩 보고서에 인용하세요. 참고문서에 없는 내용은 절대 추가하지 말고 [문서에 근거 없음] 으로 표시하세요.",
+      "reference_digests": [
+        "sha256:5e5003cae740c90463a07e0b35041f3db5782c2b123f0320f95c574c474883e6",
+        "sha256:14c894d77b8f6011c67da410cffc2a09c61f05696e8113988739af49a1b48ab3",
+        "sha256:24f8f49b80dacb524a44f7b4c12045bf75ae0f4c9a19040dea58e678c5d0cdcb",
+        "sha256:1e57ff83ee51adadb497807a66ca24b5ced8dedf01d1ea97c257cfaa3f6ba02e"
+      ],
+      "reference_doc_count": 4,
+      "reference_snippets": [
+        "납품 일정: 2026년 6월 10일 (목요일).",
+        "납품 책임자: 운영팀 (담당 부서명만 문서에 기재).",
+        "납품 장소: 본사 1층 자재 창고.",
+        "추가 비용: 문서에 명시되지 않음."
+      ]
+    },
+    "rag_grounded_prompt": {
+      "absent_slot_count": 0,
+      "context_digest": "sha256:04e21db1016a306049115ff67c57c12dc03a264ecce254f200a952fdff13e8a5",
+      "evidence_marker_count": 3,
+      "prompt_digest": "sha256:346b4eb2caf9fd03ddea6d5f451096d3090d64494ffd860100f6cd2a6bfe388e"
+    },
+    "runner_output": {
+      "draft_digest": "sha256:1842de9e5398a3ea870873332a812eb3720b7f90dfbb7fbac1839fe825811aec",
+      "draft_present": true,
+      "draft_snippet_first_80": "[출력 형식] JSON object only. No markdown, no explanation.\\n\\n```json\\n{\\n \\\"meetin…",
+      "draft_token_count_approx": 61,
+      "runner_error": null
+    },
+    "scenario": "scenario_2_groupA_zero_hallucination"
+  },
+  "schema_version": "box3.v5_endpoint_smoke_audit.v1",
+  "v5_asset": {
+    "expected_sha256_full": "5e233aab773d0cdb2b188649edbd36633f3dbb58be7ff4c4295a83de648212d2",
+    "model_choice": "butler-1.7b-v5-q4_k_m.gguf"
+  }
+}
