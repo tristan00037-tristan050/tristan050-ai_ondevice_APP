@@ -53,14 +53,9 @@ def _digest(text: str) -> str:
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _snip(text: str, max_chars: int = 80) -> str:
-    """라벨용 최소 snippet — 본 라벨링은 보고용으로만 사용 (영구화 0).
-
-    grouping 의도가 명확하도록 첫 max_chars 문자만 노출. 본 snippet 은 digest 가
-    동봉되므로 그룹 식별이 가능하다.
-    """
-    flat = " ".join(text.split())
-    return flat if len(flat) <= max_chars else flat[: max_chars - 1] + "…"
+# PR #786 정정 (2026-06-05): raw snippet 영구화 제거 — digest sha256 만 보고.
+# 이전 _snip(text, 80) 출력은 영구 evidence 에 raw 문장이 흘러들어 디지트-온리 원칙
+# 위배. 본 정정에서는 evidence/PR body 어디에도 raw text 0.
 
 
 # ─── Scenario 1: PR #783 current smoke (kept verbatim) ──────────────────────
@@ -132,9 +127,7 @@ def _run_scenario(name: str, refs: list[str], request: str, runner) -> dict:
         "input_summary": {
             "reference_doc_count": len(refs),
             "reference_digests": [_digest(r) for r in refs],
-            "reference_snippets": [_snip(r) for r in refs],
             "drafting_request_digest": _digest(request),
-            "drafting_request_snippet": _snip(request, 120),
         },
         "evidence_bundle": {
             "parse_success": evidence.parse_success,
@@ -150,7 +143,6 @@ def _run_scenario(name: str, refs: list[str], request: str, runner) -> dict:
             "draft_present": bool(draft),
             "draft_digest": _digest(draft) if draft else None,
             "draft_token_count_approx": len(draft.split()) if draft else 0,
-            "draft_snippet_first_80": _snip(draft, 80) if draft else None,
             "runner_error": runner_err,
         },
         "helper4_grounding": {
