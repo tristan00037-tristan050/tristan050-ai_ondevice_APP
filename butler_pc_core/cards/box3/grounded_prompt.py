@@ -221,6 +221,13 @@ def build_grounded_prompt_packet(
 마커 없는 사실 문장은 금지됩니다.
 unsupported claim은 최종 게이트에서 차단됩니다.
 
+OUTPUT_FORMAT_STRICT (PR #785 v1.2.2 추가, 2026-06-05):
+반드시 한국어 산문 보고서로만 출력하세요.
+JSON·tool_call·코드블록·function 호출·markdown·XML·YAML 형식은 일절 금지합니다.
+"{{", "}}", "```", "<", "/>", "function(", "tool:" 같은 구조형 토큰을 사용하지 마세요.
+출력은 아래 OUTPUT_SECTIONS 의 한국어 라벨(제목·배경·핵심 내용·근거·확인 필요·최종 문안)
+6 줄로 시작하는 산문 형태만 허용됩니다.
+
 OUTPUT_SECTIONS:
 제목:
 배경:
