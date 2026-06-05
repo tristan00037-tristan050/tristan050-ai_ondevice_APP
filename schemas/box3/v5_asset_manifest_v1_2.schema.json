@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/box3/v5_asset_manifest_v1_2.schema.json",
+  "title": "Butler Box3 v5 Asset Manifest v1.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "model_choice", "model_lineage", "asset", "v4_default_reference_zero", "raw_saved_zero", "external_send_zero"],
+  "properties": {
+    "schema_version": {"const": "box3.v5_asset_manifest.v1_2"},
+    "status": {"enum": ["ASSET_INVENTORY_PASS", "PARTIAL_REAL_ASSET_VOLUME_MISSING", "BLOCKED"]},
+    "model_choice": {"const": "butler-1.7b-v5-q4_k_m.gguf"},
+    "model_lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "merge_method", "weights", "included_adapters", "runtime_lora_stack_allowed", "production_claim_allowed"],
+      "properties": {
+        "base": {"const": "butler-1.7b-v5"},
+        "merge_method": {"const": "linear"},
+        "weights": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+        "included_adapters": {"type": "array", "items": {"enum": ["butler_v3", "helper3_format", "helper5_tool_call"]}, "minItems": 3, "maxItems": 3},
+        "runtime_lora_stack_allowed": {"const": false},
+        "production_claim_allowed": {"const": false}
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset_name", "role", "path_ref", "path_digest", "sha256_full", "sha_scope", "size_bytes", "readonly_verified", "measured_at", "fail_class"],
+      "properties": {
+        "asset_name": {"const": "box3_v5_base_model"},
+        "role": {"const": "base_model"},
+        "path_ref": {"const": "ref:BUTLER_BOX3_BASE_MODEL_PATH"},
+        "path_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sha256_full": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "sha_scope": {"enum": ["file", "unknown"]},
+        "size_bytes": {"type": ["integer", "null"], "minimum": 1},
+        "readonly_verified": {"type": "boolean"},
+        "measured_at": {"type": ["string", "null"]},
+        "fail_class": {"type": ["string", "null"]}
+      }
+    },
+    "v4_default_reference_zero": {"type": "boolean"},
+    "raw_saved_zero": {"const": true},
+    "external_send_zero": {"const": true}
+  }
+}

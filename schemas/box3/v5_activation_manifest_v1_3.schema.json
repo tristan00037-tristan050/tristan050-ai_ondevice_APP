@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/box3/v5_activation_manifest_v1_3.schema.json",
+  "title": "Box3 v5 activation manifest v1.3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "model_choice",
+    "model_sha256_full",
+    "model_size_bytes",
+    "helper35_embedded",
+    "runtime_adapter_stack_attempted",
+    "v4_default_reference_zero",
+    "raw_saved_zero",
+    "external_send_zero",
+    "production_claim_allowed"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "box3.v5_activation_manifest.v1.3"
+    },
+    "status": {
+      "enum": [
+        "PASS_BOX3_V5_CANONICAL_APPLY",
+        "PARTIAL_V5_ENDPOINT_SMOKE_PENDING",
+        "PARTIAL_V5_ABSTAIN_EXCESS",
+        "PARTIAL_V5_SUMMARY_COMPRESSION_LIMIT",
+        "BLOCK_MODEL_ASSET_SHA_MISMATCH",
+        "BLOCK_V4_RT_RUNTIME_RESIDUE",
+        "BLOCK_HELPER35_DOUBLE_STACK_RISK",
+        "BLOCK_UNSUPPORTED_CLAIM",
+        "BLOCK_DEGENERATION",
+        "BLOCK_RAW_EVIDENCE_LEAK"
+      ]
+    },
+    "model_choice": {
+      "const": "butler-1.7b-v5-q4_k_m.gguf"
+    },
+    "model_sha256_full": {
+      "const": "5e233aab773d0cdb2b188649edbd36633f3dbb58be7ff4c4295a83de648212d2"
+    },
+    "f16_sha256_full": {
+      "const": "9594280709d47ffc48b5e0e69e9b3d3f77589991f9950749db1955761042fc37"
+    },
+    "model_size_bytes": {
+      "type": "integer",
+      "minimum": 1107408608,
+      "maximum": 1107408608
+    },
+    "helper35_embedded": {
+      "const": true
+    },
+    "runtime_adapter_stack_attempted": {
+      "const": false
+    },
+    "v4_default_reference_zero": {
+      "const": true
+    },
+    "raw_saved_zero": {
+      "const": true
+    },
+    "external_send_zero": {
+      "const": true
+    },
+    "production_claim_allowed": {
+      "const": false
+    },
+    "endpoint_smoke": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "degeneration_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unsupported_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "citation_accuracy": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "memory_backend": {
+          "enum": [
+            "psutil_rss",
+            "resource_ru_maxrss"
+          ]
+        }
+      }
+    }
+  }
+}

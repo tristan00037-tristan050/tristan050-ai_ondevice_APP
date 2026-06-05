@@ -1,0 +1,59 @@
+{
+  "degeneration_probe": {
+    "degeneration_detected": false,
+    "fail_class": null,
+    "leaked_prompt_marker": false,
+    "repeated_line_ratio": 0.0,
+    "repeated_ngram_ratio": 0.0,
+    "too_short": false
+  },
+  "direct_runner_probe": {
+    "draft_digest": "sha256:fbcaa57fff73fced3767dc1e46d2536b2db0d63074d6bd1922c62b626a9604ef",
+    "draft_token_count": 44
+  },
+  "endpoint_smoke": {
+    "draft_digest": null,
+    "draft_text_present": false,
+    "external_send_zero": true,
+    "fail_class": "BLOCK_UNSUPPORTED_CLAIM",
+    "metrics": {
+      "citation_accuracy": 1.0,
+      "factual_claim_count": 1,
+      "format_compliance": 0.0,
+      "no_evidence_claim_rate": 0.0,
+      "no_evidence_count": 0,
+      "style_compliance": 0.75,
+      "supported_count": 0,
+      "table_figure_coverage": 0.0,
+      "unsupported_claim_rate": 1.0,
+      "unsupported_count": 1
+    },
+    "raw_saved_zero": true,
+    "raw_text_logged": false,
+    "real_claim_allowed": false,
+    "runner_adapter_stack_capability": "embedded_in_v5_base_model",
+    "runner_build_fail_class": null,
+    "runner_engine": "llama_cpp",
+    "runner_latency_ms": 5546.853,
+    "runner_peak_memory_mb": 2777.5625,
+    "runner_tokens_in": 207,
+    "runner_tokens_out": 44,
+    "status": "BLOCKED"
+  },
+  "external_send_zero": true,
+  "raw_saved_zero": true,
+  "schema_version": "box3.v5_canonical_apply.smoke.v1_2",
+  "sealed_approval": {
+    "approved_by_digest": "sha256:d9be4eeefdc9056796f0e1f410741f1801c67352704f6dda8388e6912e65e5ad",
+    "scope_digest": "sha256:d78445bd3973acc6b71d1c8cf2394a70b647c708af58edfc64aac77f614f30e7"
+  },
+  "v4_default_reference_zero": true,
+  "v4_v5_comparison_note": "PR #780 baseline (v4-rt 1.7B): status=BLOCKED, fail_class=BLOCK_UNSUPPORTED_CLAIM, tokens_out~32, peak_memory~2300MB, sections 0/6, json_shape=False (환각). 본 v5 측정과 비교 — 동일 sealed approval 위에서 unsupported_count 와 degeneration 변화 확인.",
+  "v5_asset_verification": {
+    "expected_sha256_full": "5e233aab773d0cdb2b188649edbd36633f3dbb58be7ff4c4295a83de648212d2",
+    "measured_sha256_full": "5e233aab773d0cdb2b188649edbd36633f3dbb58be7ff4c4295a83de648212d2",
+    "model_choice": "butler-1.7b-v5-q4_k_m.gguf",
+    "sha_match": true,
+    "size_bytes_measured": 1107408608
+  }
+}
