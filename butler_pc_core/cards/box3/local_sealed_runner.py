@@ -71,22 +71,44 @@ def compose_runner_prompt(envelope: Box3ActualRuntimeEnvelope) -> str:
     )
 
 def probe_helper3_helper5_adapter_stack(helper_guard: dict | None = None) -> AdapterStackProbeVerdict:
-    """Probe only helper3/helper5 model-adapter stack capability.
+    """v5 base model 에 helper3/5 가 embedded — runtime LoRA re-stack 금지 (PR #783).
 
     helper4/helper7/helper8 are SDK modules and must never be stacked into the model.
+
+    - env BUTLER_BOX3_ALLOW_HELPER35_MULTI_LORA_STACK=1 시 BLOCK_HELPER35_DOUBLE_STACK_RISK
+      (v5 가 이미 lineage 에 helper3/5 를 포함하므로 runtime 재stack 은 double fusion 위험).
+    - 미설정 시 embedded mode 로 PASS (model_adapters 에 embedded prefix).
     """
-    guard = verify_helper_component_use_guard(helper_guard)
-    if not guard.allowed:
-        return AdapterStackProbeVerdict(False, guard.fail_class, [], True, guard.to_dict())
-    if os.environ.get("BUTLER_BOX3_ALLOW_HELPER35_MULTI_LORA_STACK") != "1":
+    from .v5_asset_manifest import MODEL_LINEAGE as _V5_LINEAGE
+
+    if os.environ.get("BUTLER_BOX3_ALLOW_HELPER35_MULTI_LORA_STACK") == "1":
         return AdapterStackProbeVerdict(
             False,
-            PARTIAL_MODEL_ADAPTER_STACK_UNSUPPORTED,
+            "BLOCK_HELPER35_DOUBLE_STACK_RISK",
             ["helper3_format", "helper5_tool_call"],
             True,
-            {"reason": "multi_lora_stack_not_enabled_or_unmeasured"},
+            {
+                "reason": "v5 embeds helper3/helper5; runtime re-stack is forbidden",
+                "model_lineage": dict(_V5_LINEAGE),
+            },
         )
-    return AdapterStackProbeVerdict(True, None, ["helper3_format", "helper5_tool_call"], True, {"stack_capability": "declared_by_local_probe"})
+    # PR #783: helper_guard 가 명시적으로 주어진 경우에만 검증 (PR #779 호환 경로).
+    # 미지정 시 v5 embedded SSOT 로 직행 (MAINDEV 정본).
+    if helper_guard is not None:
+        guard = verify_helper_component_use_guard(helper_guard)
+        if not guard.allowed:
+            return AdapterStackProbeVerdict(False, guard.fail_class, [], True, guard.to_dict())
+    return AdapterStackProbeVerdict(
+        True,
+        None,
+        ["embedded_in_v5_base_model:helper3_format", "embedded_in_v5_base_model:helper5_tool_call"],
+        True,
+        {
+            "stack_capability": "embedded_in_v5_base_model",
+            "runtime_lora_stack_allowed": False,
+            "model_lineage": dict(_V5_LINEAGE),
+        },
+    )
 
 def build_local_sealed_real_runner(
     config: ActualRunnerAssetConfig | None = None,

@@ -12,12 +12,32 @@ from .actual_fail_class import (
     BLOCK_MODEL_ASSET_SHA_SCOPE_INVALID,
     PARTIAL_REAL_ASSET_VOLUME_MISSING,
 )
-from .actual_contracts import sha256_text
+from .actual_contracts import sha256_text, stable_json_digest as _stable_json_digest
+# Box3 v5 canonical apply v1.2 (2026-06-05, PR #783): MAINDEV v5_asset_manifest SSOT
+# 로부터 v5 정본 상수를 흡수한다. v4 (60b9baee…) 는 historical/fixture 전용으로만
+# 유지되며 운영 default 0 (`V4_RT_SHA256_HISTORICAL_REFERENCE_ONLY` 라벨).
+from .v5_asset_manifest import (
+    MODEL_LINEAGE,
+    V5_F16_SHA256_FULL,
+    V5_MODEL_NAME,
+    V5_Q4_K_M_SHA256_FULL,
+    build_v5_asset_manifest as _build_v5_asset_manifest_obj,
+    manifest_allows_v5_real,
+)
 
-BASE_MODEL_SHA256_FULL = "60b9baee17696ca8e3a3aa0950a4d441ad3c4baa80bbd73ec9fa33c17cba0c1f"
-BASE_MODEL_NAME = "butler-1.7b-v4-rt-q4_k_m.gguf"
+BASE_MODEL_SHA256_FULL = V5_Q4_K_M_SHA256_FULL
+BASE_MODEL_F16_SHA256_FULL = V5_F16_SHA256_FULL
+BASE_MODEL_NAME = V5_MODEL_NAME
+BASE_MODEL_SIZE_BYTES = 1_073_741_824
 BASE_MODEL_PATH_ENV = "BUTLER_BOX3_BASE_MODEL_PATH"
 BASE_MODEL_SHA_ENV = "BUTLER_BOX3_BASE_MODEL_SHA256_FULL"
+# v4-rt 는 historical/fixture 전용 — 운영 default 어디에도 사용 0.
+V4_RT_SHA256_HISTORICAL_REFERENCE_ONLY = "60b9baee17696ca8e3a3aa0950a4d441ad3c4baa80bbd73ec9fa33c17cba0c1f"
+
+
+def v5_manifest_digest(manifest: dict[str, Any]) -> str:
+    """ALG 측 SSOT 호환 — v5 asset manifest 의 결정론적 digest 를 반환."""
+    return _stable_json_digest(manifest)
 
 HELPER_EXPECTED_SHA = {
     "helper3_format": "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0",
@@ -100,18 +120,31 @@ def check_engine_model_compatibility(model_format: str):
     return Compat("none", False, False, "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE")
 
 def build_helper_asset_rows() -> list[dict[str, Any]]:
-    return [
-        {
+    # PR #783 (v5 canonical apply): helper3/5 는 v5 base model 에 embedded —
+    # runtime LoRA stack 대상이 아니다. component_type 으로 표시한다.
+    rows = []
+    for name, digest in HELPER_EXPECTED_SHA.items():
+        embedded = name in {"helper3_format", "helper5_tool_call"}
+        rows.append({
             "asset_name": name,
-            "path_ref": f"ref:BUTLER_{name.upper()}_PATH",
-            "path_digest": sha256_text(f"ref:BUTLER_{name.upper()}_PATH"),
+            "path_ref": f"embedded_in_base_model:{BASE_MODEL_NAME}" if embedded else f"ref:BUTLER_{name.upper()}_PATH",
+            "path_digest": sha256_text(
+                f"embedded:{name}:{BASE_MODEL_SHA256_FULL}" if embedded else f"ref:BUTLER_{name.upper()}_PATH"
+            ),
             "sha256_full": digest,
-            "sha_scope": "file",
+            "sha_scope": "embedded_adapter" if embedded else "file",
             "readonly_verified": True,
+            "runtime_lora_stack_allowed": False if embedded else None,
+            "component_type": "embedded_model_adapter" if embedded else "sdk_module",
             "fail_class": None,
-        }
-        for name, digest in HELPER_EXPECTED_SHA.items()
-    ]
+        })
+    return rows
+
+
+def _path_has_v4_reference(path_value: str) -> bool:
+    lowered = path_value.casefold()
+    return any(token in lowered for token in ("v4-rt", "v4_rt", "butler-1.7b-v4"))
+
 
 def verify_base_model_asset(config: ActualRunnerAssetConfig | None = None) -> BaseModelAssetVerdict:
     cfg = config or ActualRunnerAssetConfig.from_env()
@@ -125,6 +158,9 @@ def verify_base_model_asset(config: ActualRunnerAssetConfig | None = None) -> Ba
         return BaseModelAssetVerdict(False, "BLOCKED", BLOCK_MODEL_ASSET_SHA_SCOPE_INVALID, model_format, engine.required_engine, engine.import_available, f"ref:{cfg.model_path_env}", path_digest, expected_sha, False, helper_rows)
     if expected_sha != BASE_MODEL_SHA256_FULL and not cfg.allow_test_asset:
         return BaseModelAssetVerdict(False, "BLOCKED", BLOCK_MODEL_ASSET_SHA_MISMATCH, model_format, engine.required_engine, engine.import_available, f"ref:{cfg.model_path_env}", path_digest, expected_sha, False, helper_rows)
+    # PR #783: v4-rt 경로를 운영 default 로 사용 0 — env 가 v4-rt 를 가리키면 BLOCK.
+    if path_value and _path_has_v4_reference(path_value):
+        return BaseModelAssetVerdict(False, "BLOCKED", "BLOCK_V4_DEFAULT_REFERENCE", model_format, engine.required_engine, engine.import_available, f"ref:{cfg.model_path_env}", path_digest, expected_sha, False, helper_rows)
     if not path_value:
         return BaseModelAssetVerdict(False, "PARTIAL_REAL_ASSET_VOLUME_MISSING", PARTIAL_REAL_ASSET_VOLUME_MISSING, model_format, engine.required_engine, engine.import_available, f"ref:{cfg.model_path_env}", None, expected_sha, False, helper_rows)
     path = Path(path_value)

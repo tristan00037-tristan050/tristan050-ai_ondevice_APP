@@ -158,10 +158,14 @@ def test_sdk_bridge_with_helper2_and_fake_sdks_passes(tmp_path, monkeypatch):
 
 
 def test_model_adapter_stack_probe_never_stacks_sdk_modules(monkeypatch):
+    # PR #783 (v5 canonical apply): helper3/5 는 v5 base 에 embedded — runtime
+    # multi-LoRA stack env=1 시 BLOCK_HELPER35_DOUBLE_STACK_RISK. helper_sdk_stack_attempt_zero
+    # 는 SDK helper(4/7/8) 가 model stack 에 끼지 않았음을 유지한다.
     guard = build_example_component_use_guard(allow=True, stack_supported=True, sdk_call_supported=True, embedder_provider="helper2_sdk")
     monkeypatch.setenv("BUTLER_BOX3_ALLOW_HELPER35_MULTI_LORA_STACK", "1")
     verdict = probe_helper3_helper5_adapter_stack(guard)
-    assert verdict.allowed is True
+    assert verdict.allowed is False
+    assert verdict.fail_class == "BLOCK_HELPER35_DOUBLE_STACK_RISK"
     assert verdict.model_adapters == ["helper3_format", "helper5_tool_call"]
     assert verdict.helper_sdk_stack_attempt_zero is True
 
