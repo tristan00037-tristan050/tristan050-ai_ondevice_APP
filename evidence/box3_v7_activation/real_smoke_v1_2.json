@@ -1,0 +1,64 @@
+{
+  "comparison_v5_blocked_baseline": "PR #783 v5 baseline: status=BLOCKED, fail_class=BLOCK_UNSUPPORTED_CLAIM, tokens_out=44, peak=2732MB, degen=false. PR #784 audit: v5 가 JSON tool_call 출력 over-fit → 두 시나리오 모두 unsupported=1. PR #785 absorb 후 v7 비교: 본 측정 참조.",
+  "direct_runner_probe": {
+    "draft_digest": "sha256:61e336d8f85b3d3597b934fd201b3143b664efc7511c06e01ff1530aa6d06bed",
+    "draft_token_count": 64
+  },
+  "endpoint_smoke": {
+    "draft_digest": null,
+    "draft_text_present": false,
+    "external_send_zero": true,
+    "fail_class": "BLOCK_UNSUPPORTED_CLAIM",
+    "metrics": {
+      "citation_accuracy": 1.0,
+      "factual_claim_count": 4,
+      "format_compliance": 1.0,
+      "no_evidence_claim_rate": 0.5,
+      "no_evidence_count": 2,
+      "style_compliance": 0.75,
+      "supported_count": 0,
+      "table_figure_coverage": 0.0,
+      "unsupported_claim_rate": 0.5,
+      "unsupported_count": 2
+    },
+    "raw_saved_zero": true,
+    "raw_text_logged": false,
+    "real_claim_allowed": false,
+    "runner_adapter_stack_capability": "embedded_in_v7_base_model",
+    "runner_build_fail_class": null,
+    "runner_engine": "llama_cpp",
+    "runner_latency_ms": 5474.309,
+    "runner_peak_memory_mb": 2751.0938,
+    "runner_tokens_in": 321,
+    "runner_tokens_out": 64,
+    "status": "BLOCKED"
+  },
+  "external_send_zero": true,
+  "raw_saved_zero": true,
+  "schema_version": "box3.v7_canonical_apply.smoke.v1_2",
+  "sealed_approval": {
+    "approved_by_digest": "sha256:fda5b9b579006b65d3716e40ca44ce9fde998647c8eae3c09eab46260f81480c",
+    "scope_digest": "sha256:835ad859f97a74799c6268478ed3668243b4cb41874ec7c9314da89570bebb7b"
+  },
+  "v4_default_reference_zero": true,
+  "v5_default_reference_zero": true,
+  "v7_asset_verification": {
+    "expected_sha256_full": "a8440e984a2d0899049df7166aeff32d9bfb2881e614aa55b029b4a7eead5621",
+    "measured_sha256_full": "a8440e984a2d0899049df7166aeff32d9bfb2881e614aa55b029b4a7eead5621",
+    "model_choice": "butler-1.7b-v7-q4_k_m.gguf",
+    "sha_match": true,
+    "size_bytes_measured": 1107408608
+  },
+  "v7_degeneration_probe": {
+    "detected": false,
+    "fail_class": null,
+    "forbidden_label_detected": false,
+    "json_or_tool_leak": false,
+    "ngram_ratio": 0.0,
+    "prompt_marker_leak": false,
+    "raw_or_path_leak": false,
+    "repeated_label_detected": false,
+    "repeated_line_count": 0,
+    "too_short": false
+  }
+}

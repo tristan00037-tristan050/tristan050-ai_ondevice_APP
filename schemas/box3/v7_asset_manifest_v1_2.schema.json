@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/box3/v7_asset_manifest_v1_2.schema.json",
+  "title": "Box3 v7 asset manifest v1.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "model_version",
+    "model_name",
+    "sha256_full",
+    "sha_scope",
+    "path_ref",
+    "path_digest",
+    "readonly_verified",
+    "production_claim_allowed"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "box3.v7_asset_manifest.v1_2"
+    },
+    "model_version": {
+      "const": "butler-1.7b-v7"
+    },
+    "model_name": {
+      "const": "butler-1.7b-v7-q4_k_m.gguf"
+    },
+    "sha256_full": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sha_scope": {
+      "const": "file"
+    },
+    "path_ref": {
+      "const": "ref:BUTLER_BOX3_V7_Q4_MODEL_PATH"
+    },
+    "path_digest": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "readonly_verified": {
+      "type": "boolean"
+    },
+    "production_claim_allowed": {
+      "const": false
+    }
+  }
+}

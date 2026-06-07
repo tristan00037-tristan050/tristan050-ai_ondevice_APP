@@ -101,10 +101,10 @@ def probe_helper3_helper5_adapter_stack(helper_guard: dict | None = None) -> Ada
     return AdapterStackProbeVerdict(
         True,
         None,
-        ["embedded_in_v5_base_model:helper3_format", "embedded_in_v5_base_model:helper5_tool_call"],
+        ["embedded_in_v7_base_model:helper3_format", "embedded_in_v7_base_model:helper5_tool_call"],
         True,
         {
-            "stack_capability": "embedded_in_v5_base_model",
+            "stack_capability": "embedded_in_v7_base_model",
             "runtime_lora_stack_allowed": False,
             "model_lineage": dict(_V5_LINEAGE),
         },

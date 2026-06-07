@@ -1,0 +1,104 @@
+{
+  "asset": {
+    "allowed": false,
+    "expected_sha256_full": "a8440e984a2d0899049df7166aeff32d9bfb2881e614aa55b029b4a7eead5621",
+    "f16_reference_sha256_full": "6ff70adf08130c11a4ece523f33b2b8d4d2118187805a458661fe7c62d5be7f1",
+    "fail_class": "PARTIAL_REAL_ASSET_VOLUME_MISSING",
+    "helper3_5_embedded_in_base": true,
+    "helper3_5_runtime_stack_allowed": false,
+    "measured_at": null,
+    "model_lineage_digest": "sha256:caa603ab91272595cccf0f1998546a123f2229266c7b5e473c3f19969ed36b45",
+    "model_name": "butler-1.7b-v7-q4_k_m.gguf",
+    "model_version": "butler-1.7b-v7",
+    "path_digest": null,
+    "path_ref": "ref:BUTLER_BOX3_V7_Q4_MODEL_PATH",
+    "production_claim_allowed": false,
+    "readonly_verified": false,
+    "sha256_full": null,
+    "sha_scope": "file",
+    "size_bytes": null,
+    "status": "PARTIAL_REAL_ASSET_VOLUME_MISSING"
+  },
+  "decision": {
+    "conditions": [
+      {
+        "fail_class": null,
+        "name": "pr785_precondition",
+        "passed": true
+      },
+      {
+        "fail_class": "PARTIAL_REAL_ASSET_VOLUME_MISSING",
+        "name": "v7_asset",
+        "passed": false
+      },
+      {
+        "fail_class": null,
+        "name": "unsupported_zero",
+        "passed": true
+      },
+      {
+        "fail_class": null,
+        "name": "degeneration_false",
+        "ngram_ratio": 0.0,
+        "passed": true
+      },
+      {
+        "abstain_ratio": 0.2,
+        "fail_class": null,
+        "name": "abstain_valid",
+        "passed": true
+      },
+      {
+        "fail_class": null,
+        "name": "citation_accuracy",
+        "passed": true
+      },
+      {
+        "fail_class": null,
+        "name": "section_completeness",
+        "passed": true,
+        "section_completeness": 1.0
+      },
+      {
+        "fail_class": null,
+        "name": "table_normal",
+        "passed": true
+      },
+      {
+        "fail_class": null,
+        "name": "raw_external",
+        "passed": true
+      },
+      {
+        "fail_class": null,
+        "name": "production_claim_false",
+        "passed": true
+      },
+      {
+        "fail_class": "BLOCK_HUMAN_APPROVAL_MISSING",
+        "name": "human_approval",
+        "passed": false
+      }
+    ],
+    "external_send_zero": true,
+    "fail_class": "BLOCK_HUMAN_APPROVAL_MISSING",
+    "metrics_digest": "sha256:5e341a4f8cd22337ccbf8d1f261462460fe93b4dd53cbae007a39425f0d4fd41",
+    "production_claim_allowed": false,
+    "raw_saved_zero": true,
+    "real_claim_allowed": false,
+    "request_digest": "sha256:da0f8ba4e1b6787e3da6a925095b18be549a96ac899272e979cd43a651bb6a1f",
+    "status": "BLOCK_HUMAN_APPROVAL_MISSING"
+  },
+  "external_send_zero": true,
+  "note": "Package self-check does not claim endpoint PASS; v7 model file SHA and endpoint smoke must be measured in the target repo.",
+  "precondition": {
+    "fail_class": null,
+    "missing_tokens": [],
+    "passed": true,
+    "source_digest": "sha256:272633affd227335b23293ab2cea1d1ca9e8722bb29ce5d199cae35db1d8abbc"
+  },
+  "production_claim_allowed": false,
+  "raw_saved_zero": true,
+  "schema_version": "box3.v7.self_check.v1_2",
+  "self_check_pass": true
+}

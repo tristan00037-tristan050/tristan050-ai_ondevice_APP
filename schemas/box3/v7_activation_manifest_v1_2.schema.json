@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "sha_match": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "BLOCK_V7_SHA_MISMATCH"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime_helper35_stack_allowed": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "BLOCK_HELPER35_DOUBLE_STACK_RISK"
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "absolute_path_leak_zero": {
+      "type": "boolean"
+    },
+    "actual_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "expected_sha256": {
+      "const": "a8440e984a2d0899049df7166aeff32d9bfb2881e614aa55b029b4a7eead5621"
+    },
+    "f16_local_file_found": {
+      "type": "boolean"
+    },
+    "helper35_embedded": {
+      "const": true
+    },
+    "model_choice": {
+      "const": "butler-1.7b-v7-q4_k_m.gguf"
+    },
+    "path_digest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "production_claim_allowed": {
+      "const": false
+    },
+    "raw_saved_zero": {
+      "type": "boolean"
+    },
+    "runtime_helper35_stack_allowed": {
+      "const": false
+    },
+    "schema_version": {
+      "const": "box3.v7_activation_manifest.v1_1"
+    },
+    "sha_match": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "model_choice",
+    "expected_sha256",
+    "actual_sha256",
+    "sha_match",
+    "helper35_embedded",
+    "runtime_helper35_stack_allowed",
+    "production_claim_allowed",
+    "path_digest_sha256"
+  ],
+  "title": "Box3 v7 activation manifest v1.1",
+  "type": "object"
+}

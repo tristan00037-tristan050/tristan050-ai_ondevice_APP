@@ -16,7 +16,8 @@ def test_test_asset_sha_can_be_verified_without_real_claim(monkeypatch, tmp_path
     model = tmp_path / "model.gguf"
     model.write_bytes(b"test-model")
     sha = sha256_file(model)
-    monkeypatch.setenv("BUTLER_BOX3_BASE_MODEL_PATH", str(model))
+    # PR #787 (v7 canonical apply): default model_path_env = BUTLER_BOX3_V7_Q4_MODEL_PATH.
+    monkeypatch.setenv("BUTLER_BOX3_V7_Q4_MODEL_PATH", str(model))
     verdict = verify_base_model_asset(ActualRunnerAssetConfig(expected_base_sha256_full=sha, allow_test_asset=True, readonly_required=False))
     # Engine may be partial if llama_cpp is not installed; SHA itself must be measured.
     assert verdict.sha256_full == sha
