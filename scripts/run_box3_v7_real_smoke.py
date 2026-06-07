@@ -31,7 +31,9 @@ from butler_pc_core.cards.box3.actual_runner_assets import (
     ActualRunnerAssetConfig,
 )
 from butler_pc_core.cards.box3.helper_component_guard import build_example_component_use_guard
+from butler_pc_core.cards.box3.helper_sdk_bridge import HelperSdkBridge
 from butler_pc_core.cards.box3.local_sealed_runner import build_local_sealed_real_runner
+from butler_pc_core.cards.box3.rag_prompt_integration import build_rag_grounded_prompt_runtime
 from butler_pc_core.cards.box3.v7_degeneration_gate import evaluate_degeneration
 
 V7_GGUF_PATH = Path(
@@ -96,6 +98,31 @@ def main() -> int:
     guard = build_example_component_use_guard(
         allow=True, stack_supported=True, sdk_call_supported=True, embedder_provider="helper2_sdk"
     )
+
+    # PR #786 evidence schema 보강: RAG injection digest + evidence_marker_count 를 표면화한다.
+    # pipeline 안에서도 동일 build 가 다시 호출되지만 (idempotent), 본 호출은 evidence 에
+    # 흔적을 명시 노출하기 위한 probe 다 (raw 0 — digest/count 만).
+    bridge_probe = HelperSdkBridge()
+    evidence_bundle_probe = bridge_probe.parse_evidence(envelope.reference_text_runtime_only)
+    rag_probe = build_rag_grounded_prompt_runtime(envelope, evidence_bundle_probe)
+    reference_digests = [
+        "sha256:" + hashlib.sha256(r.encode("utf-8")).hexdigest()
+        for r in envelope.reference_text_runtime_only
+    ]
+    rag_evidence_block = {
+        "reference_doc_count": len(envelope.reference_text_runtime_only),
+        "reference_digests": reference_digests,
+        "drafting_request_digest": "sha256:" + hashlib.sha256(envelope.drafting_request_runtime_only.encode("utf-8")).hexdigest(),
+        "evidence_unit_count": len(evidence_bundle_probe.evidence_units_runtime),
+        "evidence_parse_success": evidence_bundle_probe.parse_success,
+        "rag_grounded_prompt": {
+            "evidence_marker_count": rag_probe.grounded_prompt.evidence_marker_count,
+            "absent_slot_count": len(rag_probe.grounded_prompt.absent_slots),
+            "prompt_digest": rag_probe.grounded_prompt.prompt_digest,
+            "context_digest": rag_probe.rag_context.context_digest,
+            "decode_config_digest": rag_probe.grounded_prompt.decode_config_digest,
+        },
+    }
     cfg = ActualRunnerAssetConfig(
         expected_base_sha256_full=BASE_MODEL_SHA256_FULL,
         readonly_required=False,  # dev smoke
@@ -131,6 +158,20 @@ def main() -> int:
         if draft_for_probe else None
     )
     direct_draft_token_count = len(draft_for_probe.split()) if draft_for_probe else 0
+
+    # Helper4 grounding 재호출 — direct draft 에서 unsupported 가 어느 reference 와 매칭
+    # 시도 됐는지 (evidence_digests_attached) 를 evidence 에 명시한다 (digest 만).
+    helper4_verdicts_per_claim = []
+    if draft_for_probe:
+        grounding_probe = bridge_probe.ground_claims(draft_for_probe, evidence_bundle_probe)
+        for v in grounding_probe.claim_verdicts:
+            helper4_verdicts_per_claim.append({
+                "claim_id": v.claim_id,
+                "claim_digest": v.claim_digest,
+                "support_level": v.support_level,
+                "reason_code": v.reason_code,
+                "evidence_digests_attached": list(v.evidence_digests),
+            })
 
     runner_meas = dict(verdict.runner_measurements or {})
     runner_meas.pop("draft_text", None)
@@ -171,6 +212,8 @@ def main() -> int:
             "draft_digest": direct_draft_digest,
             "draft_token_count": direct_draft_token_count,
         },
+        "rag_evidence_block": rag_evidence_block,
+        "helper4_verdicts_per_claim": helper4_verdicts_per_claim,
         "v4_default_reference_zero": "v4-rt" not in str(V7_GGUF_PATH).casefold(),
         "v5_default_reference_zero": "1.7b-v5" not in str(V7_GGUF_PATH).casefold(),
         "comparison_v5_blocked_baseline": (
