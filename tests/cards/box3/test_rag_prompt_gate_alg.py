@@ -22,10 +22,10 @@ class V:
 
 GOOD_DRAFT = """제목: 참고 기반 초안 (근거1)
 배경: 납품 일정은 2026년 6월 10일입니다. (근거1)
-핵심 내용: 일정은 근거 문서 기준으로 검토합니다. (근거1)
+핵심내용: 일정은 근거 문서 기준으로 검토합니다. (근거1)
 근거: [근거1] source_digest citation
-확인 필요: 담당자는 [문서에 근거 없음]
-최종 문안: 납품 일정 기준으로 진행합니다. (근거1)
+확인필요: 담당자는 [문서에 근거 없음]
+최종문안: 납품 일정 기준으로 진행합니다. (근거1)
 """
 
 
@@ -48,7 +48,7 @@ def test_unsupported_claim_blocks_even_if_sections_present():
 
 
 def test_abstain_overuse_is_partial_not_pass():
-    abstain_lines = "\n".join(f"확인 필요: {ABSTAINED_SLOT_TEXT}" for _ in range(6))
+    abstain_lines = "\n".join(f"확인필요: {ABSTAINED_SLOT_TEXT}" for _ in range(6))
     draft = GOOD_DRAFT + "\n" + abstain_lines
     verdict = evaluate_usefulness_gate(
         draft,
