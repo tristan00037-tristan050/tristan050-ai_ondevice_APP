@@ -17,9 +17,10 @@ from butler_pc_core.cards.box3.v5_activation_gate import V5EndpointMetricSnapsho
 
 
 def test_v5_constants_historical_reference_only_after_v7_switch():
-    # PR #787 v7 canonical apply 후: v7 operational default + v5 historical 보존.
-    assert BASE_MODEL_NAME == "butler-1.7b-v7-q4_k_m.gguf"
+    # v9.1 canonical apply 후: v9.1 operational default + v5 historical 보존.
+    assert BASE_MODEL_NAME == "butler-1.7b-v9-1-q4_k_m.gguf"
     assert "v4" not in BASE_MODEL_NAME
+    assert "v5" not in BASE_MODEL_NAME
     # v5 historical SSOT 는 v5_asset_manifest 모듈에 그대로 유지된다 (회귀 0).
     assert V5_MODEL_NAME == "butler-1.7b-v5-q4_k_m.gguf"
     assert V5_Q4_K_M_SHA256_FULL == (

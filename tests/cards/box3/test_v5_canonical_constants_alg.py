@@ -1,8 +1,8 @@
 """ALG v5 canonical constants 정합 (PR #783, 2026-06-05; PR #787 v7 전환 정정 2026-06-07).
 
-PR #787 v7 canonical apply 후 v5 는 historical reference 로 격리 — 본 테스트는 v5
+v9.1 canonical apply 후 v5 는 historical reference 로 격리 — 본 테스트는 v5
 상수가 ``actual_runner_assets`` 의 `V5_*_HISTORICAL_REFERENCE_ONLY` 상수 + 별도
-`v5_asset_manifest` 모듈에 그대로 보존되었음을 잠근다 (회귀 0). 운영 default 는 v7.
+`v5_asset_manifest` 모듈에 그대로 보존되었음을 잠근다 (회귀 0). 운영 default 는 v9.1.
 """
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from butler_pc_core.cards.box3 import actual_runner_assets as assets
 
 
 def test_v5_constants_preserved_as_historical_reference_only():
-    # v7 operational default 0 검증: 현재 BASE_MODEL_* 는 v7 정본.
-    assert assets.BASE_MODEL_NAME == "butler-1.7b-v7-q4_k_m.gguf"
+    # v9.1 operational default 0 검증: 현재 BASE_MODEL_* 는 v9.1 정본.
+    assert assets.BASE_MODEL_NAME == "butler-1.7b-v9-1-q4_k_m.gguf"
     assert "v5" not in assets.BASE_MODEL_NAME
     # v5 상수는 historical 라벨로만 보존 — 운영 default 어디에도 사용 0.
     assert assets.V5_BASE_MODEL_NAME_HISTORICAL_REFERENCE_ONLY == (

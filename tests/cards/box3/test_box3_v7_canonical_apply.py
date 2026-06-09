@@ -16,6 +16,7 @@ from butler_pc_core.cards.box3.v7_constants import (
     HELPER3_5_EMBEDDED_IN_BASE,
     HELPER3_5_RUNTIME_STACK_ALLOWED,
     PRODUCTION_CLAIM_ALLOWED,
+    V9_1_Q4_K_M_SHA256_FULL,
     V7_F16_SHA256_FULL,
     V7_Q4_K_M_SHA256_FULL,
 )
@@ -39,17 +40,18 @@ def _good_draft() -> str:
     return "\n".join([
         "제목: 참고 문서 기반 초안입니다.",
         "배경: 참고 문서의 근거에 따라 작성했습니다. (근거1)",
-        "핵심 내용: 납품 일정은 2026년 6월 10일입니다. (근거1)",
+        "핵심내용: 납품 일정은 2026년 6월 10일입니다. (근거1)",
         "근거: source_digest와 evidence_digest로 확인합니다.",
-        f"확인 필요: 담당자는 {ABSTAINED_SLOT_TEXT}입니다.",
-        "최종 문안: 납품 일정 기준으로 검토합니다. (근거1)",
+        f"확인필요: 담당자는 {ABSTAINED_SLOT_TEXT}입니다.",
+        "최종문안: 납품 일정 기준으로 검토합니다. (근거1)",
     ])
 
 
 def test_v7_constants_are_canonical():
-    assert BASE_MODEL_NAME == "butler-1.7b-v7-q4_k_m.gguf"
-    assert BASE_MODEL_SHA256_FULL == V7_Q4_K_M_SHA256_FULL
-    assert BASE_MODEL_SHA256_FULL == "a8440e984a2d0899049df7166aeff32d9bfb2881e614aa55b029b4a7eead5621"
+    assert BASE_MODEL_NAME == "butler-1.7b-v9-1-q4_k_m.gguf"
+    assert BASE_MODEL_SHA256_FULL == V9_1_Q4_K_M_SHA256_FULL
+    assert BASE_MODEL_SHA256_FULL == "4ac03239fd374a55f691ddde6599f3ed488ca5cdec79103a0bdcec40a5b96d38"
+    assert V7_Q4_K_M_SHA256_FULL == "a8440e984a2d0899049df7166aeff32d9bfb2881e614aa55b029b4a7eead5621"
     assert V7_F16_SHA256_FULL == "6ff70adf08130c11a4ece523f33b2b8d4d2118187805a458661fe7c62d5be7f1"
     assert HELPER3_5_EMBEDDED_IN_BASE is True
     assert HELPER3_5_RUNTIME_STACK_ALLOWED is False

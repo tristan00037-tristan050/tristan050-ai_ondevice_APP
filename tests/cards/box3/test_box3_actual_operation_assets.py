@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from butler_pc_core.cards.box3.actual_runner_assets import ActualRunnerAssetConfig, sha256_file, verify_base_model_asset
+from butler_pc_core.cards.box3.actual_runner_assets import BASE_MODEL_PATH_ENV, ActualRunnerAssetConfig, sha256_file, verify_base_model_asset
 from butler_pc_core.cards.box3.helper_component_guard import build_example_component_use_guard, verify_helper_component_use_guard
 
 
@@ -16,8 +16,8 @@ def test_test_asset_sha_can_be_verified_without_real_claim(monkeypatch, tmp_path
     model = tmp_path / "model.gguf"
     model.write_bytes(b"test-model")
     sha = sha256_file(model)
-    # PR #787 (v7 canonical apply): default model_path_env = BUTLER_BOX3_V7_Q4_MODEL_PATH.
-    monkeypatch.setenv("BUTLER_BOX3_V7_Q4_MODEL_PATH", str(model))
+    # v9.1 canonical apply: use the active BASE_MODEL_PATH_ENV instead of stale v7 env.
+    monkeypatch.setenv(BASE_MODEL_PATH_ENV, str(model))
     verdict = verify_base_model_asset(ActualRunnerAssetConfig(expected_base_sha256_full=sha, allow_test_asset=True, readonly_required=False))
     # Engine may be partial if llama_cpp is not installed; SHA itself must be measured.
     assert verdict.sha256_full == sha
