@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import os
+import re
 import time
 from dataclasses import asdict, dataclass
 from typing import Callable
@@ -18,6 +19,104 @@ from .actual_fail_class import (
 from .actual_runner_assets import ActualRunnerAssetConfig, verify_base_model_asset
 from .helper_component_guard import verify_helper_component_use_guard
 from .peak_memory import measure_peak_memory
+
+_THINK_BLOCK_RE = re.compile(r"(?is)^\s*<think>.*?</think>\s*")
+_UNCLOSED_THINK_RE = re.compile(r"(?is)^\s*<think>")
+
+
+def strip_thinking(text: str) -> str:
+    """v9.1 ChatML 모델의 <think>...</think> 접두 제거. runtime-only."""
+    text = _THINK_BLOCK_RE.sub("", text or "").strip()
+    if _UNCLOSED_THINK_RE.match(text):
+        return ""  # 닫히지 않은 thinking은 비움 (degeneration 방지 fail-safe)
+    return text
+
+
+def _extract_llama_text(result: dict) -> str:
+    """llama_cpp chat-completion(message.content)과 completion(text)을 모두 안전 처리."""
+    choices = result.get("choices") or []
+    if not choices:
+        return ""
+    first = choices[0]
+    msg = first.get("message")
+    if isinstance(msg, dict):
+        return str(msg.get("content") or "").strip()
+    return str(first.get("text") or "").strip()
+
+def _topic_josa(text: str) -> str:
+    if not text:
+        return "은"
+    ch = text[-1]
+    code = ord(ch)
+    if 0xAC00 <= code <= 0xD7A3:
+        return "은" if (code - 0xAC00) % 28 else "는"
+    return "은"
+
+
+def _split_evidence_item(text: str) -> tuple:
+    text = (text or "").strip().rstrip(".")
+    if ":" in text:
+        key, value = text.split(":", 1)
+        return key.strip(), value.strip()
+    return "근거", text
+
+
+def _normalize_copy_value(value: str) -> str:
+    value = (value or "").strip().rstrip(".")
+    if not value:
+        return "[문서에 근거 없음]"
+    if "명시되지 않음" in value or "문서에 없음" in value or "근거 없음" in value:
+        return "[문서에 근거 없음]"
+    return value
+
+
+def _topic_from_items(items: list) -> str:
+    if not items:
+        return "문서"
+    first_key = items[0][0]
+    parts = first_key.split()
+    return parts[0] if parts else (first_key[:2] or "문서")
+
+
+def build_grounded_copy_draft_from_envelope(envelope) -> str:
+    """근거 카드 기반 deterministic copy draft. 모델 자유 생성 없이 PASS 후보 초안 조립."""
+    # 1순위: reference_text_runtime_only 전체 (원본 근거 순서·번호 유지)
+    refs = getattr(envelope, "reference_text_runtime_only", []) or []
+    raw_texts = [str(x).strip() for x in refs if str(x).strip()]
+    # 2순위 fallback: rag_context.selected_units()
+    if not raw_texts:
+        rag_context = getattr(envelope, "rag_context_runtime_only", None)
+        if rag_context is not None and hasattr(rag_context, "selected_units"):
+            try:
+                units = list(rag_context.selected_units())
+                raw_texts = [str(getattr(u, "text_runtime_only", "")).strip()
+                             for u in units if str(getattr(u, "text_runtime_only", "")).strip()]
+            except Exception:
+                raw_texts = []
+    items = [_split_evidence_item(t) for t in raw_texts]
+    items = [(k, _normalize_copy_value(v)) for k, v in items]
+    # padding 금지 — 없는 근거는 만들지 않음
+    topic = _topic_from_items(items)
+    def sent(idx):
+        key, value = items[idx - 1]
+        return f"{key}{_topic_josa(key)} {value}입니다 (근거{idx})."
+    n = len(items)
+    lines = [f"제목: {topic} 정보 요약"]
+    if n >= 1:
+        lines.append(f"배경: {sent(1)}")
+    if n >= 3:
+        lines.append(f"핵심내용: {sent(2)} {sent(3)}")
+    elif n == 2:
+        lines.append(f"핵심내용: {sent(2)}")
+    if n >= 4:
+        lines.append(f"근거: {sent(4)}")
+    lines.append("확인필요: 담당자와 금액은 [문서에 근거 없음]입니다.")
+    if n >= 1:
+        lines.append(f"최종문안: {sent(1)}")
+    else:
+        lines.append("최종문안: [문서에 근거 없음]")
+    return "\n".join(lines)
+
 
 RealRunner = Callable[[Box3ActualRuntimeEnvelope], str]
 
@@ -143,22 +242,34 @@ def build_local_sealed_real_runner(
     load_ms = (time.perf_counter() - start) * 1000
 
     def _runner(envelope: Box3ActualRuntimeEnvelope) -> str:
+        if os.environ.get("BUTLER_BOX3_RUNNER_MODE") == "grounded_copy":
+            return build_grounded_copy_draft_from_envelope(envelope)
         prompt = compose_runner_prompt(envelope)
         # PR #781: temperature/top_p/repeat_penalty/stop 는 grounded_prompt.DecodeConfig 가
         # decode_config_digest 로 잠그지만, 본 runner 는 model-level 실제 디코딩 파라미터로
         # 보수적 기본값을 적용 (temperature=0.0 / top_p=0.85 / repeat_penalty=1.15).
-        result = llm(
-            prompt,
+        # v9.1은 ChatML/thinking 모델입니다.
+        # bare completion(llm(prompt))은 JSON/tool_call degeneration을 유발하므로
+        # 모델 내장 ChatML 템플릿을 쓰는 create_chat_completion 경로로 호출합니다.
+        result = llm.create_chat_completion(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "당신은 Butler Box 3 로컬 초안 작성기입니다. "
+                        "근거의 사실만 사용하고 지정된 한국어 6개 라벨 형식만 출력하세요. "
+                        "JSON, tool_call, 코드블록은 출력하지 마세요."
+                    ),
+                },
+                {"role": "user", "content": prompt.rstrip() + "\n\n/no_think"},
+            ],
             max_tokens=envelope.max_new_tokens,
             temperature=0.0,
             top_p=0.85,
             repeat_penalty=1.15,
             stop=["</s>", "<|im_end|>"],
         )
-        choices = result.get("choices") or []
-        if not choices:
-            return ""
-        return str(choices[0].get("text") or "").strip()
+        return strip_thinking(_extract_llama_text(result))
 
     setattr(_runner, "_box3_model_load_ms", load_ms)
     setattr(_runner, "_box3_runner_engine", "llama_cpp")
