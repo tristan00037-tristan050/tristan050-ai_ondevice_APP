@@ -37,7 +37,16 @@ from butler_pc_core.cards.box3.rag_prompt_integration import build_rag_grounded_
 from butler_pc_core.cards.box3.v7_degeneration_gate import evaluate_degeneration
 
 V7_GGUF_PATH = Path(
-    "/Users/kimsunghoon/Desktop/butler-data/8박스/m3max/butler-1.7b-v7/butler-1.7b-v7-q4_k_m.gguf"
+    os.environ.get(
+        "BUTLER_BOX3_V9_Q4_MODEL_PATH",
+        os.environ.get(
+            "BUTLER_BOX3_V8_Q4_MODEL_PATH",
+            os.environ.get(
+                "BUTLER_BOX3_V7_Q4_MODEL_PATH",
+                str(Path.home() / "Desktop/butler-data/8박스/butler-1.7b-v9-1/butler-1.7b-v9-1-q4_k_m.gguf"),
+            ),
+        ),
+    )
 )
 SEALED_APPROVAL_PATH = Path.home() / ".butler" / "box3" / "human_approval_v1.json"
 
@@ -63,7 +72,7 @@ def _build_envelope() -> Box3ActualRuntimeEnvelope:
             "참고문서에 없는 내용은 절대 추가하지 말고 [문서에 근거 없음] 으로 표시하세요."
         ),
         format_hint="보고서",
-        max_new_tokens=220,
+        max_new_tokens=512,
         request_id="box3-v7-canonical-real-smoke",
     )
 
