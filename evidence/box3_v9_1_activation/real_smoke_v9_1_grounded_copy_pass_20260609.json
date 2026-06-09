@@ -1,0 +1,99 @@
+{
+  "comparison_v5_blocked_baseline": "PR #783 v5 baseline: status=BLOCKED, fail_class=BLOCK_UNSUPPORTED_CLAIM, tokens_out=44, peak=2732MB, degen=false. PR #784 audit: v5 가 JSON tool_call 출력 over-fit → 두 시나리오 모두 unsupported=1. PR #785 absorb 후 v7 비교: 본 측정 참조.",
+  "direct_probe_helper4_verdicts_per_claim": [
+    {
+      "claim_digest": "sha256:cdce1b87565e9ae7ae7edd5af5583e5382e0ac74cce7fb9044997de079523d0c",
+      "claim_id": "h4-1",
+      "evidence_digests_attached": [],
+      "reason_code": "EVIDENCE_CONTRADICTS",
+      "support_level": "unsupported"
+    },
+    {
+      "claim_digest": "sha256:09f40e73ba0ee08210b58851b983aac049ae0c39e5ff6035b4c69c9cc6e25b74",
+      "claim_id": "h4-2",
+      "evidence_digests_attached": [],
+      "reason_code": "EVIDENCE_CONTRADICTS",
+      "support_level": "unsupported"
+    }
+  ],
+  "direct_runner_probe": {
+    "draft_digest": "sha256:3ec66ad33eee2c7f9e5000069aaa34c1575ac04e19bbcf6ca0875a5350154327",
+    "draft_token_count": 46
+  },
+  "endpoint_smoke": {
+    "draft_digest": "sha256:3ec66ad33eee2c7f9e5000069aaa34c1575ac04e19bbcf6ca0875a5350154327",
+    "draft_text_present": true,
+    "external_send_zero": true,
+    "fail_class": null,
+    "metrics": {
+      "citation_accuracy": 1.0,
+      "factual_claim_count": 4,
+      "format_compliance": 1.0,
+      "no_evidence_claim_rate": 0.0,
+      "no_evidence_count": 0,
+      "style_compliance": 0.75,
+      "supported_count": 4,
+      "table_figure_coverage": 1.0,
+      "unsupported_claim_rate": 0.0,
+      "unsupported_count": 0
+    },
+    "raw_saved_zero": true,
+    "raw_text_logged": false,
+    "real_claim_allowed": true,
+    "runner_adapter_stack_capability": "embedded_in_v7_base_model",
+    "runner_build_fail_class": null,
+    "runner_engine": "llama_cpp",
+    "runner_latency_ms": 4.796,
+    "runner_peak_memory_mb": 2656.4844,
+    "runner_tokens_in": 430,
+    "runner_tokens_out": 49,
+    "status": "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL"
+  },
+  "external_send_zero": true,
+  "rag_evidence_block": {
+    "drafting_request_digest": "sha256:9e7ed825554cf8d30a29c7a939caa0b3ed5b54276e0e03dab9a199567f754baa",
+    "evidence_parse_success": true,
+    "evidence_unit_count": 4,
+    "rag_grounded_prompt": {
+      "absent_slot_count": 0,
+      "context_digest": "sha256:037826c701fe2eec4cf4a3361e044db8875e7309735438d2356cea5721fe7d5f",
+      "decode_config_digest": "sha256:dbe57adc9a073bc5824980ee081c69c7b2b0fd1caf5316b9564c9c6422b416db",
+      "evidence_marker_count": 2,
+      "prompt_digest": "sha256:08cc9b0ea2ee812e7ffacdf6b47a7d825a398aa2f1c068eaf808592ec9efdd27"
+    },
+    "reference_digests": [
+      "sha256:5e5003cae740c90463a07e0b35041f3db5782c2b123f0320f95c574c474883e6",
+      "sha256:14c894d77b8f6011c67da410cffc2a09c61f05696e8113988739af49a1b48ab3",
+      "sha256:24f8f49b80dacb524a44f7b4c12045bf75ae0f4c9a19040dea58e678c5d0cdcb",
+      "sha256:1e57ff83ee51adadb497807a66ca24b5ced8dedf01d1ea97c257cfaa3f6ba02e"
+    ],
+    "reference_doc_count": 4
+  },
+  "raw_saved_zero": true,
+  "schema_version": "box3.v7_canonical_apply.smoke.v1_2",
+  "sealed_approval": {
+    "approved_by_digest": "sha256:fda5b9b579006b65d3716e40ca44ce9fde998647c8eae3c09eab46260f81480c",
+    "scope_digest": "sha256:59a02c439885c6cf38d9312b2ad8a8ec0b2e964923686f6234c7a297b9b14e0f"
+  },
+  "v4_default_reference_zero": true,
+  "v5_default_reference_zero": true,
+  "v7_asset_verification": {
+    "expected_sha256_full": "4ac03239fd374a55f691ddde6599f3ed488ca5cdec79103a0bdcec40a5b96d38",
+    "measured_sha256_full": "4ac03239fd374a55f691ddde6599f3ed488ca5cdec79103a0bdcec40a5b96d38",
+    "model_choice": "butler-1.7b-v9-1-q4_k_m.gguf",
+    "sha_match": true,
+    "size_bytes_measured": 1107408608
+  },
+  "v7_degeneration_probe": {
+    "detected": false,
+    "fail_class": null,
+    "forbidden_label_detected": false,
+    "json_or_tool_leak": false,
+    "ngram_ratio": 0.0893,
+    "prompt_marker_leak": false,
+    "raw_or_path_leak": false,
+    "repeated_label_detected": false,
+    "repeated_line_count": 0,
+    "too_short": false
+  }
+}
