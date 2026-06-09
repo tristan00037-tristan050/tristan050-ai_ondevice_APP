@@ -166,9 +166,19 @@ def compute_claim_metrics(
 
 
 def estimate_format_compliance(draft_text: str) -> float:
-    required = ["제목", "배경", "핵심 내용", "근거", "확인 필요", "최종 문안"]
-    hits = sum(1 for item in required if f"{item}:" in draft_text)
-    return hits / len(required)
+    required_groups = [
+        ("제목",),
+        ("배경",),
+        ("핵심내용", "핵심 내용"),
+        ("근거",),
+        ("확인필요", "확인 필요"),
+        ("최종문안", "최종 문안"),
+    ]
+    hits = sum(
+        1 for group in required_groups
+        if any(f"{item}:" in draft_text for item in group)
+    )
+    return hits / len(required_groups)
 
 
 def estimate_style_compliance(draft_text: str) -> float:

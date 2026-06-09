@@ -161,11 +161,11 @@ def main() -> int:
 
     # Helper4 grounding 재호출 — direct draft 에서 unsupported 가 어느 reference 와 매칭
     # 시도 됐는지 (evidence_digests_attached) 를 evidence 에 명시한다 (digest 만).
-    helper4_verdicts_per_claim = []
+    direct_probe_helper4_verdicts_per_claim = []
     if draft_for_probe:
         grounding_probe = bridge_probe.ground_claims(draft_for_probe, evidence_bundle_probe)
         for v in grounding_probe.claim_verdicts:
-            helper4_verdicts_per_claim.append({
+            direct_probe_helper4_verdicts_per_claim.append({
                 "claim_id": v.claim_id,
                 "claim_digest": v.claim_digest,
                 "support_level": v.support_level,
@@ -213,7 +213,7 @@ def main() -> int:
             "draft_token_count": direct_draft_token_count,
         },
         "rag_evidence_block": rag_evidence_block,
-        "helper4_verdicts_per_claim": helper4_verdicts_per_claim,
+        "direct_probe_helper4_verdicts_per_claim": direct_probe_helper4_verdicts_per_claim,
         "v4_default_reference_zero": "v4-rt" not in str(V7_GGUF_PATH).casefold(),
         "v5_default_reference_zero": "1.7b-v5" not in str(V7_GGUF_PATH).casefold(),
         "comparison_v5_blocked_baseline": (
