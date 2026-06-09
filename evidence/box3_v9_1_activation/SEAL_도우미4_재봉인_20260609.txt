@@ -1,0 +1,26 @@
+[도우미4 grounding checker 재봉인 — 2026-06-09]
+
+checker_sha: cc9eca87ecdf8101 → 6842ef05a4b40a88
+adapter_sha: 5f730e78b5a8e955
+
+변경 성격 (그룹A 승인, 문제점검팀 검증):
+- exact [문서에 근거 없음] 문장을 ABSTAIN으로 분리
+- adapter에서 ABSTAIN → non_claim / NON_FACTUAL 매핑
+- malformed abstain([문서에 근거 없임], [문서에 근거없음])은 UNSUPPORTED로 hard-block
+- 숫자·금액이 섞인 abstain은 UNSUPPORTED 유지
+- year-less anchor(_FACT_DATE_MD_RE) 및 tau threshold(0.65/0.45) 변경 없음
+
+성격: 채점 완화 아님 — abstain 계약 정합 + 오타·우회 차단 강화
+
+검증:
+- exact abstain → ABSTAIN PASS
+- typo abstain → UNSUPPORTED PASS
+- compact typo abstain → UNSUPPORTED PASS
+- numeric abstain → UNSUPPORTED PASS
+- endpoint PASS 3회 연속 (PASS_STABLE_3X_GROUNDED_COPY)
+
+불변 확인:
+- tau_supported = 0.65 (유지)
+- tau_weak = 0.45 (유지)
+- year-less anchor 게이트 (유지)
+- fallback 정책 (유지)

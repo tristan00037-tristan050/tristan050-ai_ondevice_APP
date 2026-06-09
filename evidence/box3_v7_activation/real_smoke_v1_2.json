@@ -1,0 +1,218 @@
+{
+  "comparison_v5_blocked_baseline": "PR #783 v5 baseline: status=BLOCKED, fail_class=BLOCK_UNSUPPORTED_CLAIM, tokens_out=44, peak=2732MB, degen=false. PR #784 audit: v5 가 JSON tool_call 출력 over-fit → 두 시나리오 모두 unsupported=1. PR #785 absorb 후 v7 비교: 본 측정 참조.",
+  "direct_runner_probe": {
+    "draft_digest": "sha256:61e336d8f85b3d3597b934fd201b3143b664efc7511c06e01ff1530aa6d06bed",
+    "draft_token_count": 64
+  },
+  "endpoint_smoke": {
+    "draft_digest": null,
+    "draft_text_present": false,
+    "external_send_zero": true,
+    "fail_class": "BLOCK_UNSUPPORTED_CLAIM",
+    "metrics": {
+      "citation_accuracy": 1.0,
+      "factual_claim_count": 4,
+      "format_compliance": 1.0,
+      "no_evidence_claim_rate": 0.5,
+      "no_evidence_count": 2,
+      "style_compliance": 0.75,
+      "supported_count": 0,
+      "table_figure_coverage": 0.0,
+      "unsupported_claim_rate": 0.5,
+      "unsupported_count": 2
+    },
+    "raw_saved_zero": true,
+    "raw_text_logged": false,
+    "real_claim_allowed": false,
+    "runner_adapter_stack_capability": "embedded_in_v7_base_model",
+    "runner_build_fail_class": null,
+    "runner_engine": "llama_cpp",
+    "runner_latency_ms": 5373.625,
+    "runner_peak_memory_mb": 2760.375,
+    "runner_tokens_in": 321,
+    "runner_tokens_out": 64,
+    "status": "BLOCKED"
+  },
+  "external_send_zero": true,
+  "helper4_verdicts_per_claim": [
+    {
+      "claim_digest": "sha256:940e2269cdb20880214bba8855d5a7e8b930a3dcaa6191140fe938efb89a7128",
+      "claim_id": "h4-1",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:f4101b58adcf14ffbf666df4b19bc9d0f3a1de52c736236232cccb1d9ef0892c",
+      "claim_id": "h4-2",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:ecaa9339ae06e3fa175c4537e4effb901f964fb14193daeec5bf6aeea24b535d",
+      "claim_id": "h4-3",
+      "evidence_digests_attached": [],
+      "reason_code": "EVIDENCE_CONTRADICTS",
+      "support_level": "unsupported"
+    },
+    {
+      "claim_digest": "sha256:7c5990cc0aa68283acacf10424e4c7200d845564fc688e92a5fda1ebdc81b5b4",
+      "claim_id": "h4-4",
+      "evidence_digests_attached": [],
+      "reason_code": "NO_MATCHING_EVIDENCE",
+      "support_level": "no_evidence"
+    },
+    {
+      "claim_digest": "sha256:8a86f6a9e18e07163b80c6407d6063c3d458ae45a49333d7bf7ee867d9bff972",
+      "claim_id": "h4-5",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:294fd3691b9ac8974053da82878b943da415ce6e42edcccb30200d696e084a48",
+      "claim_id": "h4-6",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:294fd3691b9ac8974053da82878b943da415ce6e42edcccb30200d696e084a48",
+      "claim_id": "h4-7",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:294fd3691b9ac8974053da82878b943da415ce6e42edcccb30200d696e084a48",
+      "claim_id": "h4-8",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:294fd3691b9ac8974053da82878b943da415ce6e42edcccb30200d696e084a48",
+      "claim_id": "h4-9",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:294fd3691b9ac8974053da82878b943da415ce6e42edcccb30200d696e084a48",
+      "claim_id": "h4-10",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:3ec86a1d7736205f6cb8326d2c0edf285bfe67d16bc7de71342c6bf2c037004e",
+      "claim_id": "h4-11",
+      "evidence_digests_attached": [],
+      "reason_code": "NO_MATCHING_EVIDENCE",
+      "support_level": "no_evidence"
+    },
+    {
+      "claim_digest": "sha256:8a86f6a9e18e07163b80c6407d6063c3d458ae45a49333d7bf7ee867d9bff972",
+      "claim_id": "h4-12",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:294fd3691b9ac8974053da82878b943da415ce6e42edcccb30200d696e084a48",
+      "claim_id": "h4-13",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:f1b901847390b0ed7e374e7c1e464ec17b46a427c487a5ad6cbd2906405083d5",
+      "claim_id": "h4-14",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:363bbf984fb157b0a9643f3a44cfbc7a26352c6fbd783172a0910b260e3ba883",
+      "claim_id": "h4-15",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:294fd3691b9ac8974053da82878b943da415ce6e42edcccb30200d696e084a48",
+      "claim_id": "h4-16",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:f1b901847390b0ed7e374e7c1e464ec17b46a427c487a5ad6cbd2906405083d5",
+      "claim_id": "h4-17",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:c2a6daf6db87e5e6e1a32431fb202cfc2b477a664c080312a41cd2fb41272415",
+      "claim_id": "h4-18",
+      "evidence_digests_attached": [],
+      "reason_code": "NON_FACTUAL",
+      "support_level": "non_claim"
+    },
+    {
+      "claim_digest": "sha256:f30ed9cc7077d466c36ab137995f4cf10a8ccff558b08a30203af8f218ee1e37",
+      "claim_id": "h4-19",
+      "evidence_digests_attached": [],
+      "reason_code": "EVIDENCE_CONTRADICTS",
+      "support_level": "unsupported"
+    }
+  ],
+  "rag_evidence_block": {
+    "drafting_request_digest": "sha256:9e7ed825554cf8d30a29c7a939caa0b3ed5b54276e0e03dab9a199567f754baa",
+    "evidence_parse_success": true,
+    "evidence_unit_count": 4,
+    "rag_grounded_prompt": {
+      "absent_slot_count": 0,
+      "context_digest": "sha256:06cd1be7adef606c664f3390b07cf800d58e65e5836ecf407eed2ca5a20b31fb",
+      "decode_config_digest": "sha256:3730c684f6c0cde601ddc87c3b6ff4a041fd19348ca4c2eff29ff264c2616d8e",
+      "evidence_marker_count": 2,
+      "prompt_digest": "sha256:cdc600659e145914e5d3bfd92f99e54678eed5db2692e49d9590f19b6ccebbd0"
+    },
+    "reference_digests": [
+      "sha256:5e5003cae740c90463a07e0b35041f3db5782c2b123f0320f95c574c474883e6",
+      "sha256:14c894d77b8f6011c67da410cffc2a09c61f05696e8113988739af49a1b48ab3",
+      "sha256:24f8f49b80dacb524a44f7b4c12045bf75ae0f4c9a19040dea58e678c5d0cdcb",
+      "sha256:1e57ff83ee51adadb497807a66ca24b5ced8dedf01d1ea97c257cfaa3f6ba02e"
+    ],
+    "reference_doc_count": 4
+  },
+  "raw_saved_zero": true,
+  "schema_version": "box3.v7_canonical_apply.smoke.v1_2",
+  "sealed_approval": {
+    "approved_by_digest": "sha256:fda5b9b579006b65d3716e40ca44ce9fde998647c8eae3c09eab46260f81480c",
+    "scope_digest": "sha256:835ad859f97a74799c6268478ed3668243b4cb41874ec7c9314da89570bebb7b"
+  },
+  "v4_default_reference_zero": true,
+  "v5_default_reference_zero": true,
+  "v7_asset_verification": {
+    "expected_sha256_full": "a8440e984a2d0899049df7166aeff32d9bfb2881e614aa55b029b4a7eead5621",
+    "measured_sha256_full": "a8440e984a2d0899049df7166aeff32d9bfb2881e614aa55b029b4a7eead5621",
+    "model_choice": "butler-1.7b-v7-q4_k_m.gguf",
+    "sha_match": true,
+    "size_bytes_measured": 1107408608
+  },
+  "v7_degeneration_probe": {
+    "detected": false,
+    "fail_class": null,
+    "forbidden_label_detected": false,
+    "json_or_tool_leak": false,
+    "ngram_ratio": 0.0,
+    "prompt_marker_leak": false,
+    "raw_or_path_leak": false,
+    "repeated_label_detected": false,
+    "repeated_line_count": 0,
+    "too_short": false
+  }
+}

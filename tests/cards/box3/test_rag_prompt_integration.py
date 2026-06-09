@@ -33,7 +33,8 @@ def test_integration_attaches_runtime_prompt_to_envelope():
     result = build_rag_grounded_prompt_runtime(env, Bundle())
     assert result.grounded_prompt.evidence_marker_count == 1
     assert hasattr(env, "grounded_prompt_runtime_only")
-    assert "각 사실 문장 끝" in env.grounded_prompt_runtime_only
+    assert "모든 사실 문장 끝" in env.grounded_prompt_runtime_only
+    assert "[근거 카드]" in env.grounded_prompt_runtime_only
     assert result.to_stage_trace_entry()["raw_saved_zero"] is True
 
 

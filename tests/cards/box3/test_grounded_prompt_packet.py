@@ -52,14 +52,14 @@ def test_grounded_prompt_persistable_is_digest_only():
 
 def test_usefulness_gate_blocks_unsupported_and_partial_for_empty():
     blocked = evaluate_usefulness_gate(
-        "제목: 초안\n배경: x\n핵심 내용: x\n근거: x\n확인 필요: x\n최종 문안: x",
+        "제목: 초안\n배경: x\n핵심내용: x\n근거: x\n확인필요: x\n최종문안: x",
         [Verdict("unsupported")],
     )
     assert blocked.status == "BLOCK"
     partial = evaluate_usefulness_gate("제목: 초안", [Verdict("supported")])
     assert partial.status == "PARTIAL"
     ok = evaluate_usefulness_gate(
-        "제목: 초안\n배경: x\n핵심 내용: x\n근거: x\n확인 필요: x\n최종 문안: x",
+        "제목: 초안\n배경: x\n핵심내용: x\n근거: x\n확인필요: x\n최종문안: x",
         [Verdict("supported")],
     )
     assert ok.status == "PASS"

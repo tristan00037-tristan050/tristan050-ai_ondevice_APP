@@ -16,10 +16,16 @@ from butler_pc_core.cards.box3.v5_degeneration_gate import detect_v5_degeneratio
 from butler_pc_core.cards.box3.v5_activation_gate import V5EndpointMetricSnapshot, evaluate_v5_activation_gate
 
 
-def test_v5_constants_replace_v4_defaults():
-    assert BASE_MODEL_NAME == V5_MODEL_NAME
-    assert BASE_MODEL_SHA256_FULL == V5_Q4_K_M_SHA256_FULL
+def test_v5_constants_historical_reference_only_after_v7_switch():
+    # v9.1 canonical apply 후: v9.1 operational default + v5 historical 보존.
+    assert BASE_MODEL_NAME == "butler-1.7b-v9-1-q4_k_m.gguf"
     assert "v4" not in BASE_MODEL_NAME
+    assert "v5" not in BASE_MODEL_NAME
+    # v5 historical SSOT 는 v5_asset_manifest 모듈에 그대로 유지된다 (회귀 0).
+    assert V5_MODEL_NAME == "butler-1.7b-v5-q4_k_m.gguf"
+    assert V5_Q4_K_M_SHA256_FULL == (
+        "5e233aab773d0cdb2b188649edbd36633f3dbb58be7ff4c4295a83de648212d2"
+    )
     assert MODEL_LINEAGE["runtime_lora_stack_allowed"] is False
     assert MODEL_LINEAGE["included_adapters"] == ["butler_v3", "helper3_format", "helper5_tool_call"]
 
@@ -58,11 +64,13 @@ def test_runtime_helper35_stack_env_is_blocked(monkeypatch):
 
 
 def test_runtime_helper35_stack_default_reports_embedded(monkeypatch):
+    # PR #787 v7 canonical apply 후: probe 의 embedded 라벨이 v7 정본 base 를 가리킨다.
+    # v5 embedded label 은 historical; runtime SSOT 는 v7.
     monkeypatch.delenv("BUTLER_BOX3_ALLOW_HELPER35_MULTI_LORA_STACK", raising=False)
     verdict = probe_helper3_helper5_adapter_stack()
     assert verdict.allowed is True
     assert verdict.detail["runtime_lora_stack_allowed"] is False
-    assert "embedded_in_v5_base_model" in verdict.model_adapters[0]
+    assert "embedded_in_v7_base_model" in verdict.model_adapters[0]
 
 
 def test_degradation_gate_blocks_looping_and_prompt_leak():
