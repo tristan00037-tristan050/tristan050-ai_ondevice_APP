@@ -1,0 +1,22 @@
+{
+  "decision": {
+    "fail_class": "PARTIAL_REAL_ASSET_VOLUME_MISSING",
+    "model_choice": "butler-1.7b-v5-q4_k_m.gguf",
+    "pass_allowed": false,
+    "reason": "v5 asset manifest is not ready",
+    "status": "PARTIAL"
+  },
+  "degeneration": {
+    "degeneration_detected": false,
+    "fail_class": null,
+    "leaked_prompt_marker": false,
+    "repeated_line_ratio": 0.0,
+    "repeated_ngram_ratio": 0.0222,
+    "too_short": false
+  },
+  "external_send_zero": true,
+  "manifest_allows_real": false,
+  "manifest_status": "PARTIAL_REAL_ASSET_VOLUME_MISSING",
+  "raw_saved_zero": true,
+  "schema_version": "box3.v5.self_check.v1_2"
+}
