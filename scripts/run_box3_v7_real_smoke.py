@@ -39,13 +39,7 @@ from butler_pc_core.cards.box3.v7_degeneration_gate import evaluate_degeneration
 V7_GGUF_PATH = Path(
     os.environ.get(
         "BUTLER_BOX3_V9_Q4_MODEL_PATH",
-        os.environ.get(
-            "BUTLER_BOX3_V8_Q4_MODEL_PATH",
-            os.environ.get(
-                "BUTLER_BOX3_V7_Q4_MODEL_PATH",
-                str(Path.home() / "Desktop/butler-data/8박스/butler-1.7b-v9-1/butler-1.7b-v9-1-q4_k_m.gguf"),
-            ),
-        ),
+        str(Path.home() / "Desktop/butler-data/8박스/m3max/V9/butler-1.7b-v9-2-r2b-q4_k_m.gguf"),
     )
 )
 SEALED_APPROVAL_PATH = Path.home() / ".butler" / "box3" / "human_approval_v1.json"

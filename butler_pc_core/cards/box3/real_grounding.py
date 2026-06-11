@@ -108,6 +108,10 @@ def _is_non_claim(sentence: str) -> bool:
     if any(stripped.startswith(prefix) for prefix in _NON_CLAIM_PREFIXES):
         return True
     normalized = normalize_text(stripped)
+    if "[문서에 근거 없음]" in stripped:
+        return True
+    if "근거 범위에서 확인" in normalized:
+        return True
     if (
         len(tokens(stripped)) < 3
         and not numeric_tokens(stripped)
@@ -134,13 +138,17 @@ def extract_claims(draft_text: str) -> list[DraftClaim]:
         if not line:
             continue
         if ":" in line and len(line.split(":", 1)[0]) <= 20:
-            # 제목/확인 필요 등 라벨은 표현 메타데이터이므로 사실 분모를 부풀리지 않는다.
+            # 제목/확인필요 등 라벨은 표현 메타데이터이므로 사실 분모를 부풀리지 않는다.
+            # 배경/핵심내용/최종문안처럼 한 라벨 안에 여러 사실문이 들어오면 문장 단위로 다시 쪼갠다.
             label, content = line.split(":", 1)
             label = label.strip()
-            if label in {"제목", "확인 필요"}:
+            label_norm = label.replace(" ", "")
+            content = content.strip()
+
+            if label_norm in {"제목", "확인필요"}:
                 raw_parts.append(label)
-            elif content.strip():
-                raw_parts.append(content.strip())
+            elif content:
+                raw_parts.extend(part.strip() for part in _SENTENCE_SPLIT_RE.split(content) if part.strip())
             else:
                 raw_parts.append(label)
         else:

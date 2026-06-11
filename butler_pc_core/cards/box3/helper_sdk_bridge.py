@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import os
+import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -57,6 +58,48 @@ class DigestOnlyReceipt:
             "status": self.status,
             "fail_class": self.fail_class,
         }
+
+
+
+_HELPER4_MARKER_RE = re.compile(r"\s*\(근거\d+\)\s*$")
+_HELPER4_KO_FACT_RE = re.compile(
+    r"^(?P<item>[A-Za-z0-9가-힣\s]+?)(?:은|는|이|가)\s+(?P<value>.+?)입니다$"
+)
+
+
+def _normalize_claim_line_for_helper4(claim_text: str) -> str:
+    """Normalize one factual Korean sentence into evidence-like item:value form.
+
+    This preserves the claim's own value. It does not replace the claim with
+    evidence text, so contradictions remain detectable by helper4.
+    """
+    text = claim_text.strip()
+    text = _HELPER4_MARKER_RE.sub("", text).strip()
+    text = text.rstrip(".。").strip()
+    m = _HELPER4_KO_FACT_RE.match(text)
+    if not m:
+        return text
+    item = " ".join(m.group("item").split())
+    value = " ".join(m.group("value").split())
+    return f"{item}: {value}"
+
+
+def _draft_text_for_helper4_grounding(draft_text: str) -> str:
+    """Normalize draft into one factual claim per line before helper4 grounding.
+
+    This does not change the final draft text.
+    This does not relax helper4 thresholds.
+    Compact labels, abstain rows, and multi-sentence label content are filtered
+    by real_grounding.extract_claims(); each remaining factual claim is normalized
+    into evidence-like item:value form while preserving its own value.
+    """
+    claims = extract_claims(draft_text)
+    factual_lines = [
+        _normalize_claim_line_for_helper4(c.claim_text_runtime_only)
+        for c in claims
+        if c.is_factual and c.claim_text_runtime_only.strip()
+    ]
+    return "\n".join(factual_lines) if factual_lines else draft_text
 
 
 @dataclass
@@ -282,10 +325,11 @@ class HelperSdkBridge:
                 # EvidenceBundle 자체를 기대할 수 있으므로 list 호출이 TypeError 면 bundle 로
                 # 한 번 더 시도한다.
                 evidence_records = evidence_bundle.evidence_units_runtime
+                grounding_text = _draft_text_for_helper4_grounding(draft_text)
                 try:
-                    produced = helper4.ground_claims(draft_text, evidence_records, embedder=embedder)
+                    produced = helper4.ground_claims(grounding_text, evidence_records, embedder=embedder)
                 except TypeError:
-                    produced = helper4.ground_claims(draft_text, evidence_bundle, embedder=embedder)
+                    produced = helper4.ground_claims(grounding_text, evidence_bundle, embedder=embedder)
             elif hasattr(helper4, "verify_grounding"):
                 produced = helper4.verify_grounding(draft_text, evidence_bundle)
             else:
