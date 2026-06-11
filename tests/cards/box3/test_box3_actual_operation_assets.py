@@ -7,7 +7,7 @@ from butler_pc_core.cards.box3.helper_component_guard import build_example_compo
 
 
 def test_missing_model_env_returns_partial(monkeypatch):
-    monkeypatch.delenv("BUTLER_BOX3_BASE_MODEL_PATH", raising=False)
+    monkeypatch.delenv(BASE_MODEL_PATH_ENV, raising=False)
     verdict = verify_base_model_asset(ActualRunnerAssetConfig())
     assert verdict.status == "PARTIAL_REAL_ASSET_VOLUME_MISSING"
 

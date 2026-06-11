@@ -11,7 +11,7 @@ from butler_pc_core.cards.box3 import actual_runner_assets as assets
 
 def test_v5_constants_preserved_as_historical_reference_only():
     # v9.1 operational default 0 검증: 현재 BASE_MODEL_* 는 v9.1 정본.
-    assert assets.BASE_MODEL_NAME == "butler-1.7b-v9-1-q4_k_m.gguf"
+    assert assets.BASE_MODEL_NAME == "butler-1.7b-v9-2-r2b-q4_k_m.gguf"
     assert "v5" not in assets.BASE_MODEL_NAME
     # v5 상수는 historical 라벨로만 보존 — 운영 default 어디에도 사용 0.
     assert assets.V5_BASE_MODEL_NAME_HISTORICAL_REFERENCE_ONLY == (
