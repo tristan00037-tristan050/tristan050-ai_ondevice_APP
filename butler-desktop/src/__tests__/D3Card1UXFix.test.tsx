@@ -1,5 +1,11 @@
 vi.mock('@tauri-apps/plugin-dialog', () => ({ save: vi.fn() }));
 vi.mock('@tauri-apps/plugin-fs', () => ({ writeFile: vi.fn() }));
+vi.mock('@tauri-apps/api/core', () => ({
+  // plain 함수 — vi.resetAllMocks()/restoreAllMocks() 에 영향받지 않도록(테스트 beforeEach 리셋 후에도
+  // sidecarFetch 의 token 획득이 항상 성공해야 한다).
+  invoke: async (command: string) =>
+    command === 'get_sidecar_capability_token' ? 'test-capability-token' : undefined,
+}));
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
