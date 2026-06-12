@@ -8,6 +8,12 @@ from .contracts import ContractValidationError, sha256_text
 from .policy_gate import PolicyGate, build_policy_task_envelope
 from .storage import PolicyLoadError, PolicyStore
 
+_LOCAL_UI_ORIGINS = frozenset({
+    "tauri://localhost",
+    "http://localhost:1420",
+    "http://127.0.0.1:1420",
+})
+
 DEFAULT_ROUTE_OPERATION: dict[str, tuple[str, str]] = {
     "/v1/helpers/1/search": ("helper1", "memory_search"),
     # helper1 `/v1/helpers/1/ask` 라우트 누락 정정 (fix(policy): helper1/ask PolicyGate 포함):
@@ -24,6 +30,20 @@ DEFAULT_ROUTE_OPERATION: dict[str, tuple[str, str]] = {
 
 def _header_bool(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes"}
+
+
+def _policy_json_response(
+    request: Any,
+    *,
+    status_code: int,
+    content: dict[str, Any],
+) -> JSONResponse:
+    response = JSONResponse(status_code=status_code, content=content)
+    origin = request.headers.get("origin")
+    if origin in _LOCAL_UI_ORIGINS:
+        response.headers["access-control-allow-origin"] = origin
+        response.headers["vary"] = "Origin"
+    return response
 
 
 def add_policy_gate_middleware(
@@ -48,7 +68,8 @@ def add_policy_gate_middleware(
         try:
             policy = policy_store.load_active_policy()
         except PolicyLoadError:
-            return JSONResponse(
+            return _policy_json_response(
+                request,
                 status_code=503,
                 content={
                     "schema_version": "policy_gate_result.v1",
@@ -79,7 +100,8 @@ def add_policy_gate_middleware(
             )
             gate = PolicyGate.evaluate(env, policy)
         except (ContractValidationError, ValueError):
-            return JSONResponse(
+            return _policy_json_response(
+                request,
                 status_code=403,
                 content={
                     "schema_version": "policy_gate_result.v1",
@@ -94,7 +116,7 @@ def add_policy_gate_middleware(
             )
 
         if not gate.allowed:
-            return JSONResponse(status_code=403, content=gate.to_dict())
+            return _policy_json_response(request, status_code=403, content=gate.to_dict())
 
         response = await call_next(request)
         response.headers["x-policy-audit-ref"] = gate.audit_ref
