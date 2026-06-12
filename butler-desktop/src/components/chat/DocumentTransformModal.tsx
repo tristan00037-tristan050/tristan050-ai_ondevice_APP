@@ -20,6 +20,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { SIDECAR_BASE } from '../../constants';
+import { sidecarFetch } from '../../lib/sidecarFetch';
 
 interface DocumentTransformModalProps {
   onClose: () => void;
@@ -197,7 +198,7 @@ export function DocumentTransformModal({ onClose }: DocumentTransformModalProps)
         form.append('external_file', externalFile);
         form.append('template_file', templateFile);
         form.append('include_source_note', String(includeSourceNote));
-        resp = await fetch(`${SIDECAR_BASE}/document_transform/transform_stream`, {
+        resp = await sidecarFetch('/document_transform/transform_stream', {
           method: 'POST',
           body: form,
           signal: ctrl.signal,
@@ -261,7 +262,7 @@ export function DocumentTransformModal({ onClose }: DocumentTransformModalProps)
   const handleFeedback = async (value: 'positive' | 'negative') => {
     if (phase.kind !== 'done') return;
     setFeedback(value);
-    await fetch(`${SIDECAR_BASE}/document_transform/feedback`, {
+    await sidecarFetch('/document_transform/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ result_id: phase.resultId, feedback: value }),

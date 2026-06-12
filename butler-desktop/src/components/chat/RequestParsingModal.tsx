@@ -18,6 +18,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { SIDECAR_BASE } from '../../constants';
+import { sidecarFetch, uiSafeSidecarErrorMessage } from '../../lib/sidecarFetch';
 
 interface RequestParsingModalProps {
   onClose: () => void;
@@ -198,7 +199,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
       try {
         const form = new FormData();
         form.append('file', file);
-        const resp = await fetch(`${SIDECAR_BASE}/request_parsing/parse_file_stream`, {
+        const resp = await sidecarFetch('/request_parsing/parse_file_stream', {
           method: 'POST',
           body: form,
           signal: ctrl.signal,
@@ -234,7 +235,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
         }
       } catch (err: unknown) {
         if ((err as { name?: string }).name === 'AbortError') return;
-        setPhase({ kind: 'error', message: String(err) });
+        setPhase({ kind: 'error', message: uiSafeSidecarErrorMessage(err) });
       }
     } else {
       setPhase({ kind: 'error', message: `.${ext} 파일은 지원되지 않습니다. (.txt .md .docx .pdf .eml)` });
@@ -264,7 +265,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
     setFeedback(null);
 
     try {
-      const resp = await fetch(`${SIDECAR_BASE}/request_parsing/parse_stream`, {
+      const resp = await sidecarFetch('/request_parsing/parse_stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: trimmed, input_format: 'text' }),
@@ -307,7 +308,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
       }
     } catch (err: unknown) {
       if ((err as { name?: string }).name === 'AbortError') return;
-      setPhase({ kind: 'error', message: String(err) });
+      setPhase({ kind: 'error', message: uiSafeSidecarErrorMessage(err) });
     }
   }, [text]);
 
@@ -319,7 +320,7 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
   const handleFeedback = async (value: 'positive' | 'negative') => {
     if (phase.kind !== 'done') return;
     setFeedback(value);
-    await fetch(`${SIDECAR_BASE}/request_parsing/feedback`, {
+    await sidecarFetch('/request_parsing/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ result_id: phase.resultId, feedback: value }),
