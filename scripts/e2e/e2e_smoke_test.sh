@@ -5,18 +5,25 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 DMG="${REPO_ROOT}/butler-desktop/src-tauri/target/release/bundle/dmg/Butler_0.1.0_aarch64.dmg"
+APP_PATH="${BUTLER_APP_PATH:-/Applications/Butler.app}"
+APP_SMOKE_REQUIRED="${BUTLER_REQUIRE_INSTALLED_APP_SMOKE:-0}"
+APP_LOG="${HOME}/Library/Logs/Butler/sidecar-launch.log"
 PORT=5903
 SIDECAR_PID=""
 TEMP_VENV=""
+OPEN_APP_LAUNCHED=0
 
 cleanup() {
     [[ -n "$SIDECAR_PID" ]] && kill "$SIDECAR_PID" 2>/dev/null || true
+    if [[ "$OPEN_APP_LAUNCHED" -eq 1 ]]; then
+        osascript -e 'tell application "Butler" to quit' >/dev/null 2>&1 || true
+    fi
     hdiutil detach /tmp/Butler_smoke 2>/dev/null || true
     [[ -n "$TEMP_VENV" ]] && rm -rf "$TEMP_VENV" || true
 }
 trap cleanup EXIT
 
-echo "=== Butler E2E Smoke Test (v2 — FastAPI 모드 포함) ==="
+echo "=== Butler E2E Smoke Test (v3 — open 실행 + FastAPI 모드 포함) ==="
 echo "Repo: ${REPO_ROOT}"
 echo ""
 
@@ -48,8 +55,51 @@ else
     echo "  SKIP: DMG 미존재 (npm run tauri build 먼저 실행)"
 fi
 
+# ── 3. 설치된 .app GUI open smoke (존재할 때만) ───────────────────────────
+echo "[3/7] 설치된 Butler.app codesign + open smoke..."
+if [[ "$(uname -s)" != "Darwin" ]]; then
+    if [[ "$APP_SMOKE_REQUIRED" == "1" ]]; then
+        echo "  FAIL: installed app smoke는 macOS에서만 실행 가능"
+        exit 1
+    fi
+    echo "  SKIP: macOS 아님"
+elif [[ -d "$APP_PATH" ]]; then
+    codesign --verify --deep --strict "$APP_PATH"
+    echo "  codesign: OK"
+    rm -f "$APP_LOG"
+    open -n "$APP_PATH"
+    OPEN_APP_LAUNCHED=1
+    READY=0
+    for i in $(seq 1 60); do
+        if curl -sf "http://127.0.0.1:8765/health" > /dev/null 2>&1; then
+            READY=1
+            echo "  open health: OK (${i}초 내 응답)"
+            break
+        fi
+        sleep 1
+    done
+    if [[ $READY -eq 0 ]]; then
+        echo "  FAIL: open 실행 sidecar가 60초 내에 응답하지 않음"
+        echo "  log: ${APP_LOG}"
+        [[ -f "$APP_LOG" ]] && tail -80 "$APP_LOG" || true
+        exit 1
+    fi
+    if [[ -f "$APP_LOG" ]]; then
+        echo "  sidecar launch log: OK"
+    else
+        echo "  FAIL: sidecar launch log 미생성 (${APP_LOG})"
+        exit 1
+    fi
+else
+    if [[ "$APP_SMOKE_REQUIRED" == "1" ]]; then
+        echo "  FAIL: ${APP_PATH} 없음"
+        exit 1
+    fi
+    echo "  SKIP: ${APP_PATH} 없음"
+fi
+
 # ── 3. FastAPI 환경 준비 ──────────────────────────────────────────────────
-echo "[3/6] FastAPI 환경 준비..."
+echo "[4/7] FastAPI 환경 준비..."
 if python3 -c "import fastapi, uvicorn" 2>/dev/null; then
     echo "  OK (기존 환경 사용)"
     PYTHON_CMD="python3"
@@ -64,7 +114,7 @@ else
 fi
 
 # ── 4. FastAPI 모드 sidecar 기동 ──────────────────────────────────────────
-echo "[4/6] sidecar 기동 (포트 ${PORT})..."
+echo "[5/7] sidecar 기동 (포트 ${PORT})..."
 cd "$REPO_ROOT"
 ${PYTHON_CMD} butler_sidecar.py --port "$PORT" --host 127.0.0.1 &
 SIDECAR_PID=$!
@@ -85,7 +135,7 @@ if [[ $READY -eq 0 ]]; then
 fi
 
 # ── 5. FastAPI 엔드포인트 검증 ────────────────────────────────────────────
-echo "[5/6] 엔드포인트 검증..."
+echo "[6/7] 엔드포인트 검증..."
 
 # /health
 HEALTH=$(curl -sf "http://127.0.0.1:${PORT}/health" || echo "")
@@ -123,7 +173,7 @@ else
 fi
 
 # ── 6. Python 회귀 테스트 (sidecar_lifecycle) ─────────────────────────────
-echo "[6/6] 회귀 테스트 실행..."
+echo "[7/7] 회귀 테스트 실행..."
 cd "$REPO_ROOT"
 RESULT=$(${PYTHON_CMD} -m pytest tests/test_sidecar_lifecycle.py -v --tb=short 2>&1 | tail -15)
 echo "$RESULT"
@@ -134,4 +184,4 @@ else
 fi
 
 echo ""
-echo "=== E2E 스모크 PASS (FastAPI 모드 검증 포함) ==="
+echo "=== E2E 스모크 PASS (open 실행 + FastAPI 모드 검증 포함) ==="

@@ -176,3 +176,57 @@ def test_adv_wrapper_no_orphan_after_kill():
     assert lsof_result.stdout.strip() == "", (
         f"orphan sidecar 발견 (포트 5911 점유): {lsof_result.stdout.strip()}"
     )
+
+
+def test_wrapper_uses_product_python_resolution_without_old_repo_venv():
+    """GUI open 회귀: wrapper가 옛 repo .venv 또는 개발 repo .venv에 의존하지 않는다."""
+    wrapper = (
+        _REPO_ROOT
+        / "butler-desktop"
+        / "src-tauri"
+        / "binaries"
+        / "butler-sidecar-aarch64-apple-darwin"
+    )
+    text = wrapper.read_text(encoding="utf-8")
+
+    assert '"${HOME}/Desktop/butler/tristan050-ai_ondevice_APP/.venv/bin/python"' not in text
+    assert "HOME 영역 일반 후보" not in text
+    assert "WORK_DIR에서 위쪽 영역 .venv" not in text
+    assert "Application Support/com.butler.desktop" in text
+    assert "ignoring stale BUTLER_PYTHON" in text
+    assert 'cd "$RUN_DIR"' in text
+    assert 'export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"' in text
+    assert 'export PYTHONPATH="$WORK_DIR:${PYTHONPATH:-}"' in text
+    assert "BUTLER_PYTHON" in text
+    assert "command -v python3" in text
+
+
+def test_tauri_sidecar_spawn_writes_launch_log_and_injects_model_env():
+    """GUI open 회귀: Tauri spawn은 env를 주입하고 파일 로그를 남긴다."""
+    lib_rs = _REPO_ROOT / "butler-desktop" / "src-tauri" / "src" / "lib.rs"
+    text = lib_rs.read_text(encoding="utf-8")
+
+    assert "sidecar-launch.log" in text
+    assert "BUTLER_MODEL_PATH" in text
+    assert "BUTLER_BOX3_V9_Q4_MODEL_PATH" in text
+    assert "sidecar-env.json" in text
+    assert ".envs(sidecar_env)" in text
+    assert "append_sidecar_launch_log(\"spawn_sidecar=start\")" in text
+    assert "append_sidecar_launch_log(\"spawn_sidecar=ok\")" in text
+    assert "fn stop_sidecar" in text
+    assert "WindowEvent::CloseRequested" in text
+    assert "WindowEvent::Destroyed" in text
+    assert "RunEvent::ExitRequested" in text
+    assert "RunEvent::Exit" in text
+    assert "stop_sidecar reason=" in text
+
+
+def test_e2e_smoke_covers_codesign_open_and_health():
+    """배포 가드 회귀: 직접 바이너리 실행이 아니라 open 실행 경로를 검증한다."""
+    smoke = _REPO_ROOT / "scripts" / "e2e" / "e2e_smoke_test.sh"
+    text = smoke.read_text(encoding="utf-8")
+
+    assert "codesign --verify --deep --strict" in text
+    assert 'open -n "$APP_PATH"' in text
+    assert "http://127.0.0.1:8765/health" in text
+    assert "sidecar-launch.log" in text
