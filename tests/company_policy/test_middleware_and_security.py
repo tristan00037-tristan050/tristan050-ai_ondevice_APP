@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
 from butler_pc_core.company_policy.contracts import AccessRule, sha256_text, make_company_policy
@@ -45,6 +46,32 @@ def _client(tmp_path, with_policy=True, decision="allow"):
     return TestClient(app), calls
 
 
+def _client_with_sidecar_cors_order(tmp_path, with_policy=True, decision="allow"):
+    store = PolicyStore(root=tmp_path / "policy")
+    if with_policy:
+        policy = make_company_policy(
+            registered_by_digest=sha256_text("admin"),
+            access_rules=[AccessRule(dept_digest=sha256_text("dept"), role="employee", doc_grade="internal", decision=decision, reason_code="RULE_MATCHED")],
+        )
+        store.save_policy(policy, admin())
+    app = FastAPI()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["tauri://localhost", "http://localhost:1420", "http://127.0.0.1:1420"],
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+    )
+    add_policy_gate_middleware(app, policy_store=store)
+    calls = {"accounting": 0}
+
+    @app.post("/accounting/classify")
+    async def accounting():
+        calls["accounting"] += 1
+        return {"ok": True}
+
+    return TestClient(app), calls
+
+
 def test_policy_gate_middleware_allow_calls_box(tmp_path):
     client, calls = _client(tmp_path, with_policy=True, decision="allow")
     response = client.post(
@@ -76,6 +103,27 @@ def test_policy_gate_middleware_bootstrap_blocks_box_call_zero(tmp_path):
     assert response.status_code == 403
     assert response.json()["block_reason"] == "POLICY_BOOTSTRAP_REQUIRED"
     assert calls["count"] == 0
+
+
+def test_policy_gate_bootstrap_block_keeps_tauri_cors_headers(tmp_path):
+    client, calls = _client_with_sidecar_cors_order(tmp_path, with_policy=False)
+    response = client.post(
+        "/accounting/classify",
+        headers={
+            "origin": "tauri://localhost",
+            "x-request-id": "req",
+            "x-tenant-digest": sha256_text("tenant"),
+            "x-dept-digest": sha256_text("dept"),
+            "x-user-role": "employee",
+            "x-doc-grade": "internal",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["block_reason"] == "POLICY_BOOTSTRAP_REQUIRED"
+    assert response.headers["access-control-allow-origin"] == "tauri://localhost"
+    assert response.headers["vary"] == "Origin"
+    assert calls["accounting"] == 0
 
 
 def test_policy_gate_middleware_bootstrap_blocks_helper1_ask_call_zero(tmp_path):
