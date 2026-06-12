@@ -6,6 +6,7 @@ import { save as tauriSave } from '@tauri-apps/plugin-dialog';
 import { writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
 import butlerIconAnimatedUrl from '../../assets/butler-icon-animated.svg';
 import { SIDECAR_BASE } from '../../constants';
+import { getSidecarCapabilityToken } from '../../lib/connect_loop/sidecarAuth';
 
 interface AccountingModalProps {
   onClose: () => void;
@@ -42,6 +43,60 @@ function parseSseBlock(block: string): { event: string; data: Record<string, unk
   }
 }
 
+type SidecarErrorInfo = {
+  fail_class?: string;
+  block_reason?: string;
+  message?: string;
+  detail?: string;
+};
+
+async function readSidecarErrorBody(response: Response): Promise<string> {
+  const textReader = (response as Response & { text?: () => Promise<string> }).text;
+  if (typeof textReader !== 'function') return response.statusText || '';
+  try {
+    return await textReader.call(response);
+  } catch {
+    return response.statusText || '';
+  }
+}
+
+function parseSidecarErrorInfo(rawBody: string): SidecarErrorInfo {
+  try {
+    const parsed = JSON.parse(rawBody) as SidecarErrorInfo;
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch {
+    // Non-JSON error bodies are still shown through the generic server error path.
+  }
+  return {};
+}
+
+function formatSidecarError(status: number, rawBody: string, statusText = ''): string {
+  const info = parseSidecarErrorInfo(rawBody);
+  const reason = info.fail_class ?? info.block_reason;
+  if (reason === 'CAPABILITY_TOKEN_MISSING') {
+    return '권한 토큰이 없어 요청이 차단되었습니다 (CAPABILITY_TOKEN_MISSING). 앱을 다시 실행한 뒤 다시 시도하세요.';
+  }
+  if (reason === 'CAPABILITY_TOKEN_INVALID') {
+    return '권한 토큰이 유효하지 않습니다 (CAPABILITY_TOKEN_INVALID). 앱을 다시 실행한 뒤 다시 시도하세요.';
+  }
+  if (reason === 'POLICY_BOOTSTRAP_REQUIRED') {
+    return '정책 등록이 필요합니다 (POLICY_BOOTSTRAP_REQUIRED). 관리자 정책을 활성화한 뒤 다시 시도하세요.';
+  }
+  const detail = info.message ?? info.detail ?? rawBody ?? statusText;
+  return `서버 오류 (${status}): ${detail || statusText || '응답 본문 없음'}`;
+}
+
+function formatRequestFailure(err: unknown, fallback: string): string {
+  if (!(err instanceof Error)) return fallback;
+  if (err.message === 'CAPABILITY_TOKEN_EMPTY' || err.message.includes('capability')) {
+    return `권한 토큰을 가져오지 못했습니다: ${err.message}`;
+  }
+  if (err.message === 'Load failed' || err.message === 'Failed to fetch') {
+    return `Butler AI 엔진 연결 실패: ${err.message}`;
+  }
+  return err.message;
+}
+
 export function AccountingModal({ onClose }: AccountingModalProps) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [dragging, setDragging] = useState(false);
@@ -65,16 +120,20 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
     try {
       const form = new FormData();
       form.append('file', file);
+      const capabilityToken = await getSidecarCapabilityToken();
 
       const res = await fetch(`${SIDECAR_BASE}/accounting/classify`, {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${capabilityToken}`,
+        },
         body: form,
         signal: ctrl.signal,
       });
 
       if (!res.ok) {
-        const detail = await res.text().catch(() => res.statusText);
-        setPhase({ kind: 'error', message: `서버 오류 (${res.status}): ${detail}` });
+        const detail = await readSidecarErrorBody(res);
+        setPhase({ kind: 'error', message: formatSidecarError(res.status, detail, res.statusText) });
         return;
       }
 
@@ -158,7 +217,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
-      setPhase({ kind: 'error', message: err instanceof Error ? err.message : '요청 오류' });
+      setPhase({ kind: 'error', message: formatRequestFailure(err, '요청 오류') });
     }
   };
 
@@ -178,9 +237,15 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
   const handleDownload = useCallback(async () => {
     if (phase.kind !== 'done') return;
     try {
-      const res = await fetch(`${SIDECAR_BASE}/accounting/result/${phase.resultId}/xlsx`);
+      const capabilityToken = await getSidecarCapabilityToken();
+      const res = await fetch(`${SIDECAR_BASE}/accounting/result/${phase.resultId}/xlsx`, {
+        headers: {
+          Authorization: `Bearer ${capabilityToken}`,
+        },
+      });
       if (!res.ok) {
-        setPhase({ kind: 'error', message: `다운로드 오류 (${res.status})` });
+        const detail = await readSidecarErrorBody(res);
+        setPhase({ kind: 'error', message: `다운로드 오류: ${formatSidecarError(res.status, detail, res.statusText)}` });
         return;
       }
       const buffer = await res.arrayBuffer();
@@ -196,7 +261,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
         await tauriWriteFile(filePath, new Uint8Array(buffer));
       }
     } catch (err: unknown) {
-      setPhase({ kind: 'error', message: err instanceof Error ? err.message : '다운로드 오류' });
+      setPhase({ kind: 'error', message: formatRequestFailure(err, '다운로드 오류') });
     }
   }, [phase]);
 

@@ -8,6 +8,12 @@ from pathlib import Path
 import pytest
 
 
+def test_serving_requirements_include_pandas():
+    """회계 분류 런타임은 pandas를 직접 사용하므로 serving requirements에 고정되어야 한다."""
+    requirements = Path("requirements-serving.txt").read_text(encoding="utf-8")
+    assert "pandas" in requirements
+
+
 def test_openpyxl_importable():
     """openpyxl이 ImportError 없이 임포트 가능해야 한다."""
     import openpyxl  # noqa: F401
