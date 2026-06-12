@@ -1,4 +1,11 @@
+const { mockTauriInvoke } = vi.hoisted(() => ({
+  mockTauriInvoke: vi.fn(),
+}));
+
 // Tauri plugin 모킹 — vi.mock은 Vitest에 의해 import보다 먼저 hoisting됨
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: mockTauriInvoke,
+}));
 vi.mock('@tauri-apps/plugin-dialog', () => ({
   save: vi.fn(),
 }));
@@ -55,6 +62,11 @@ const SSE_EVENTS_OK = [
 describe('AccountingModal — 업로드 흐름', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
+    mockTauriInvoke.mockReset();
+    mockTauriInvoke.mockImplementation(async (command: string) => {
+      if (command === 'get_sidecar_capability_token') return 'test-capability-token';
+      throw new Error(`UNEXPECTED_TAURI_COMMAND:${command}`);
+    });
     vi.mocked(tauriSave).mockReset();
     vi.mocked(tauriWriteFile).mockReset();
   });
@@ -120,6 +132,26 @@ describe('AccountingModal — 업로드 흐름', () => {
     const [url, opts] = mockFetch.mock.calls[0] as [string, RequestInit & { body: FormData }];
     expect(url).toContain('/accounting/classify');
     expect(opts.method).toBe('POST');
+    expect((opts.headers as Record<string, string>).Authorization).toBe('Bearer test-capability-token');
+    expect(opts.body).toBeInstanceOf(FormData);
+  });
+
+  it('test_accounting_classify_requires_capability_token_before_fetch', async () => {
+    mockTauriInvoke.mockRejectedValueOnce(new Error('CAPABILITY_TOKEN_EMPTY'));
+    const mockFetch = vi.fn();
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['col1\nval1'], 'transactions.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('accounting-error')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('accounting-error').textContent).toContain('권한 토큰');
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('test_processing_state_shows_loading_icon', async () => {
@@ -204,6 +236,61 @@ describe('AccountingModal — 업로드 흐름', () => {
     await waitFor(() => {
       expect(screen.getByTestId('accounting-error')).toBeInTheDocument();
     });
+  });
+
+  it('test_policy_bootstrap_error_is_explicit_not_load_failed', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () => JSON.stringify({
+        schema_version: 'policy_gate_result.v1',
+        allowed: false,
+        decision: 'block',
+        block_reason: 'POLICY_BOOTSTRAP_REQUIRED',
+      }),
+      statusText: 'Forbidden',
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['data'], 'test.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('accounting-error')).toBeInTheDocument();
+    });
+    const message = screen.getByTestId('accounting-error').textContent ?? '';
+    expect(message).toContain('정책 등록');
+    expect(message).toContain('POLICY_BOOTSTRAP_REQUIRED');
+    expect(message).not.toContain('Load failed');
+  });
+
+  it('test_invalid_capability_token_error_is_explicit', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () => JSON.stringify({
+        fail_class: 'CAPABILITY_TOKEN_INVALID',
+        message: 'invalid token',
+      }),
+      statusText: 'Forbidden',
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(<AccountingModal onClose={() => {}} />);
+    const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
+    const file = new File(['data'], 'test.csv', { type: 'text/csv' });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('accounting-error')).toBeInTheDocument();
+    });
+    const message = screen.getByTestId('accounting-error').textContent ?? '';
+    expect(message).toContain('권한 토큰');
+    expect(message).toContain('CAPABILITY_TOKEN_INVALID');
   });
 
   it('test_retry_button_resets_to_idle', async () => {
@@ -314,8 +401,9 @@ describe('AccountingModal — 업로드 흐름', () => {
 
     // fetch 2회: classify + xlsx download
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
-    const [xlsxUrl] = mockFetch.mock.calls[1] as [string];
+    const [xlsxUrl, xlsxOptions] = mockFetch.mock.calls[1] as [string, RequestInit];
     expect(xlsxUrl).toContain('/accounting/result/test-uuid-1234/xlsx');
+    expect((xlsxOptions.headers as Record<string, string>).Authorization).toBe('Bearer test-capability-token');
 
     // tauriSave: defaultPath + filters 검증
     await waitFor(() => expect(tauriSave).toHaveBeenCalledOnce());
