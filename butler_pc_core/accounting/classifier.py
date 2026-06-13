@@ -39,8 +39,9 @@ _VENDOR_CANDIDATES = [
     "보낸분/받는분", "받는분", "보내는분", "상대계좌예금주명", "상대처",
 ]
 _ACCOUNT_NUMBER_CANDIDATES = [
-    "상대계좌번호", "상대계좌", "계좌번호", "입금계좌번호", "출금계좌번호",
-    "받는계좌", "보내는계좌",
+    "상대계좌번호", "상대계좌", "상대방계좌번호", "상대방계좌",
+    "거래상대계좌번호", "거래상대계좌",
+    "counterparty_account", "counterparty_account_no", "counterparty_account_number",
 ]
 _AMOUNT_CANDIDATES = [
     "금액", "출금액", "입금액", "amount", "출금", "입금", "거래금액", "변동금액",
@@ -274,6 +275,7 @@ def classify_df(df: "pd.DataFrame", company_profile=None) -> "pd.DataFrame":
     # 입출금 분리 컬럼 → _amt = 입금 - 출금
     withdrawal_col = _detect_col(columns, _WITHDRAWAL_CANDIDATES)
     deposit_col = _detect_col(columns, _DEPOSIT_CANDIDATES)
+    amount_col = _detect_col(columns, _AMOUNT_CANDIDATES)
     if withdrawal_col and deposit_col and withdrawal_col != deposit_col:
         df["_amt"] = df.apply(
             lambda r: _parse_numeric(r[deposit_col]) - _parse_numeric(r[withdrawal_col]),
@@ -293,12 +295,17 @@ def classify_df(df: "pd.DataFrame", company_profile=None) -> "pd.DataFrame":
         else:
             direction = None
         account_no = str(row[account_col]).strip() if account_col and account_col in row.index else ""
+        guard_amount = (
+            amt
+            if "_amt" in row.index
+            else (_parse_numeric(row[amount_col]) if amount_col and amount_col in row.index else amt)
+        )
         if company_profile is not None:
             guard_reason = _self_transfer_guard_reason(
                 desc=desc,
                 vendor=vendor,
                 account_no=account_no,
-                amount=amt,
+                amount=guard_amount,
                 company_profile=company_profile,
             )
             if guard_reason:

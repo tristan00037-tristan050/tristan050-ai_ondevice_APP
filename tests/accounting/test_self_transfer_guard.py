@@ -25,6 +25,14 @@ def _profile():
     )
 
 
+def _profile_with_account():
+    return make_runtime_profile(
+        own_bank_holder_aliases=["주식회사 에이티링크", "(주)에이티링크"],
+        own_company_aliases=["주식회사 에이티링크", "(주)에이티링크", "에이티링크"],
+        own_account_numbers=["123-456789-01-029"],
+    )
+
+
 def _classify(rows, *, profile=None):
     from butler_pc_core.accounting.classifier import classify_df
 
@@ -143,6 +151,82 @@ def test_vendor_only_self_alias_income_is_guarded():
 
     assert out.iloc[0]["분류과목"] == "미분류"
     assert out.iloc[0]["_guard_reason"] == "SELF_HOLDER_MATCH"
+
+
+def test_generic_statement_account_number_does_not_guard_external_income():
+    out = _classify(
+        [
+            {
+                "적요": "ABC컨설팅 용역 수입",
+                "입금": "1000000",
+                "출금": "",
+                "상대계좌예금주명": "ABC컨설팅",
+                "계좌번호": "123-456789-01-029",
+            }
+        ],
+        profile=_profile_with_account(),
+    )
+
+    row = out.iloc[0]
+    assert row["분류과목"] == "용역매출"
+    assert row["_guard_reason"] == ""
+    assert bool(row["_pnl_excluded"]) is False
+
+
+def test_explicit_counterparty_account_number_can_guard():
+    out = _classify(
+        [
+            {
+                "적요": "타행이체",
+                "입금": "50000",
+                "출금": "",
+                "상대계좌예금주명": "외부표기",
+                "상대계좌번호": "123-456789-01-029",
+            }
+        ],
+        profile=_profile_with_account(),
+    )
+
+    row = out.iloc[0]
+    assert row["분류과목"] == "미분류"
+    assert row["_guard_reason"] == "OWN_ACCOUNT_MATCH"
+    assert bool(row["_pnl_excluded"]) is True
+
+
+def test_single_amount_account_verification_uses_real_amount_threshold():
+    out = _classify(
+        [
+            {
+                "적요": "외부 인증 서비스 수수료 지급",
+                "거래처": "외부인증서비스",
+                "금액": "100000",
+            }
+        ],
+        profile=_profile(),
+    )
+
+    row = out.iloc[0]
+    assert row["분류과목"] == "지급수수료"
+    assert row["_guard_reason"] == ""
+    assert bool(row["_pnl_excluded"]) is False
+
+
+def test_single_amount_one_won_account_verification_still_guards():
+    out = _classify(
+        [
+            {
+                "적요": "계좌인증",
+                "거래처": "외부표기",
+                "금액": "1",
+            }
+        ],
+        profile=_profile(),
+    )
+
+    row = out.iloc[0]
+    assert row["분류과목"] == "미분류"
+    assert row["_guard_reason"] == "ACCOUNT_VERIFICATION"
+    assert bool(row["_pnl_excluded"]) is True
 
 
 def test_profile_none_preserves_existing_classification_path():
