@@ -5,7 +5,7 @@ import json
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from butler_pc_core.company_profile.contracts import make_runtime_profile
+from butler_pc_core.company_profile.contracts import make_runtime_profile, sha256_text
 from butler_pc_core.company_profile.storage import CompanyProfileStore
 from butler_pc_core.sidecar.routes import company_profile as route_module
 
@@ -13,6 +13,15 @@ from butler_pc_core.sidecar.routes import company_profile as route_module
 HOLDER_ALIAS = "주식회사 에이티링크"
 COMPANY_ALIAS = "에이티링크"
 ACCOUNT_NUMBER = "123-456789-01-029"
+
+
+def _admin_headers() -> dict[str, str]:
+    return {
+        "x-admin-role": "admin",
+        "x-admin-id-digest": sha256_text("local-admin:company-profile-test"),
+        "x-admin-session-digest": sha256_text("local-session:company-profile-test"),
+        "x-admin-auth-method": "test_only",
+    }
 
 
 def _assert_plaintext_absent(encoded: str) -> None:
@@ -62,13 +71,23 @@ def test_company_profile_register_and_status_routes_digest_only(tmp_path, monkey
     assert empty_status.status_code == 200
     assert empty_status.json()["active"] is False
 
+    payload = {
+        "own_bank_holder_aliases": [HOLDER_ALIAS],
+        "own_company_aliases": [COMPANY_ALIAS],
+        "own_account_numbers": [ACCOUNT_NUMBER],
+    }
+    missing_admin = client.post(
+        "/v1/company-profile/register",
+        json=payload,
+    )
+    assert missing_admin.status_code == 403
+    assert missing_admin.json()["detail"]["fail_class"] == "ADMIN_AUTH_REQUIRED"
+    assert store.load_active_index() is None
+
     response = client.post(
         "/v1/company-profile/register",
-        json={
-            "own_bank_holder_aliases": [HOLDER_ALIAS],
-            "own_company_aliases": [COMPANY_ALIAS],
-            "own_account_numbers": [ACCOUNT_NUMBER],
-        },
+        json=payload,
+        headers=_admin_headers(),
     )
     assert response.status_code == 200
     body = response.json()
@@ -79,7 +98,9 @@ def test_company_profile_register_and_status_routes_digest_only(tmp_path, monkey
     assert body["external_send_zero"] is True
     _assert_plaintext_absent(json.dumps(body, ensure_ascii=False))
 
-    status = client.get("/v1/company-profile/status").json()
+    status_response = client.get("/v1/company-profile/status")
+    assert status_response.status_code == 200
+    status = status_response.json()
     assert status["active"] is True
     assert status["display_hints"]
     _assert_plaintext_absent(json.dumps(status, ensure_ascii=False))

@@ -4,9 +4,11 @@ import csv
 from io import StringIO
 from typing import Any, Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
+from butler_pc_core.company_policy.admin_auth import AdminAuthError, admin_error_payload, verify_admin_context
+from butler_pc_core.company_policy.contracts import AdminContext
 from butler_pc_core.company_profile.contracts import (
     ContractValidationError,
     make_runtime_profile,
@@ -31,6 +33,22 @@ def get_company_profile_store() -> CompanyProfileStore:
     if _STORE is None:
         _STORE = CompanyProfileStore()
     return _STORE
+
+
+def _admin_context(
+    x_admin_role: Optional[str],
+    x_admin_id_digest: Optional[str],
+    x_admin_session_digest: Optional[str],
+    x_admin_auth_method: Optional[str],
+) -> AdminContext:
+    if not x_admin_id_digest or not x_admin_session_digest:
+        raise AdminAuthError("ADMIN_AUTH_REQUIRED", "admin digest headers required")
+    return AdminContext(
+        admin_id_digest=x_admin_id_digest,
+        role=x_admin_role or "employee",  # type: ignore[arg-type]
+        admin_session_digest=x_admin_session_digest,
+        auth_method=x_admin_auth_method or "tauri_secure_invoke",  # type: ignore[arg-type]
+    )
 
 
 @router.get("/v1/company-profile/status")
@@ -61,14 +79,26 @@ async def company_profile_status() -> dict[str, Any]:
 
 
 @router.post("/v1/company-profile/register")
-async def register_company_profile(payload: CompanyProfileRegisterRequest) -> dict[str, Any]:
+async def register_company_profile(
+    payload: CompanyProfileRegisterRequest,
+    x_admin_role: Optional[str] = Header(default=None),
+    x_admin_id_digest: Optional[str] = Header(default=None),
+    x_admin_session_digest: Optional[str] = Header(default=None),
+    x_admin_auth_method: Optional[str] = Header(default=None),
+) -> dict[str, Any]:
     try:
+        verify_admin_context(
+            _admin_context(x_admin_role, x_admin_id_digest, x_admin_session_digest, x_admin_auth_method),
+            operation="register_company_profile",
+        )
         runtime = make_runtime_profile(
             own_bank_holder_aliases=payload.own_bank_holder_aliases,
             own_company_aliases=payload.own_company_aliases,
             own_account_numbers=payload.own_account_numbers,
         )
         entry = get_company_profile_store().save_profile(runtime)
+    except AdminAuthError as exc:
+        raise HTTPException(status_code=403, detail=admin_error_payload(exc)) from exc
     except ContractValidationError as exc:
         raise HTTPException(status_code=422, detail={"fail_class": str(exc)}) from exc
     return {
