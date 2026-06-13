@@ -24,6 +24,12 @@ def _admin_headers() -> dict[str, str]:
     }
 
 
+def _capability_headers(monkeypatch) -> dict[str, str]:
+    token = "company-profile-status-test-token"
+    monkeypatch.setattr(route_module._TOKEN_MANAGER, "_token", token)
+    return {"Authorization": f"Bearer {token}"}
+
+
 def _assert_plaintext_absent(encoded: str) -> None:
     for forbidden in (HOLDER_ALIAS, COMPANY_ALIAS, ACCOUNT_NUMBER, "12345678901029"):
         assert forbidden not in encoded
@@ -66,8 +72,13 @@ def test_company_profile_register_and_status_routes_digest_only(tmp_path, monkey
     app = FastAPI()
     app.include_router(route_module.router)
     client = TestClient(app)
+    client.headers.pop("Authorization", None)
 
     empty_status = client.get("/v1/company-profile/status")
+    assert empty_status.status_code == 401
+    assert empty_status.json()["detail"]["fail_class"] == "CAPABILITY_TOKEN_MISSING"
+
+    empty_status = client.get("/v1/company-profile/status", headers=_capability_headers(monkeypatch))
     assert empty_status.status_code == 200
     assert empty_status.json()["active"] is False
 
@@ -98,12 +109,34 @@ def test_company_profile_register_and_status_routes_digest_only(tmp_path, monkey
     assert body["external_send_zero"] is True
     _assert_plaintext_absent(json.dumps(body, ensure_ascii=False))
 
-    status_response = client.get("/v1/company-profile/status")
+    status_response = client.get("/v1/company-profile/status", headers=_capability_headers(monkeypatch))
     assert status_response.status_code == 200
     status = status_response.json()
     assert status["active"] is True
     assert status["display_hints"]
     _assert_plaintext_absent(json.dumps(status, ensure_ascii=False))
+
+
+def test_company_profile_status_fails_closed_when_vault_item_is_missing(tmp_path, monkeypatch):
+    store = CompanyProfileStore(root=tmp_path / "broken_vault_store")
+    monkeypatch.setattr(route_module, "_STORE", store)
+    app = FastAPI()
+    app.include_router(route_module.router)
+    client = TestClient(app)
+
+    runtime = make_runtime_profile(
+        own_bank_holder_aliases=[HOLDER_ALIAS],
+        own_company_aliases=[COMPANY_ALIAS],
+        own_account_numbers=[ACCOUNT_NUMBER],
+    )
+    entry = store.save_profile(runtime)
+    vault_item = tmp_path / "broken_vault_store" / "vault" / "company_profile" / f"{entry.profile_id}.json"
+    vault_item.unlink()
+
+    response = client.get("/v1/company-profile/status", headers=_capability_headers(monkeypatch))
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["fail_class"] == "COMPANY_PROFILE_LOAD_FAILED"
 
 
 def test_suggest_from_accounting_file_is_runtime_only(tmp_path, monkeypatch):

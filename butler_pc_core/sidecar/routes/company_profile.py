@@ -7,6 +7,11 @@ from typing import Any, Optional
 from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
+from butler_pc_core.auth.capability_token import (
+    CapabilityTokenError,
+    CapabilityTokenManager,
+    auth_error_payload,
+)
 from butler_pc_core.company_policy.admin_auth import AdminAuthError, admin_error_payload, verify_admin_context
 from butler_pc_core.company_policy.contracts import AdminContext
 from butler_pc_core.company_profile.contracts import (
@@ -20,6 +25,7 @@ from butler_pc_core.company_profile.storage import CompanyProfileStore, ProfileL
 
 router = APIRouter()
 _STORE: CompanyProfileStore | None = None
+_TOKEN_MANAGER = CapabilityTokenManager()
 
 
 class CompanyProfileRegisterRequest(BaseModel):
@@ -52,9 +58,19 @@ def _admin_context(
 
 
 @router.get("/v1/company-profile/status")
-async def company_profile_status() -> dict[str, Any]:
+async def company_profile_status(authorization: Optional[str] = Header(default=None)) -> dict[str, Any]:
+    try:
+        _TOKEN_MANAGER.verify_authorization_header(authorization)
+    except CapabilityTokenError as exc:
+        status = 401 if exc.fail_class.value == "CAPABILITY_TOKEN_MISSING" else 403
+        raise HTTPException(status_code=status, detail=auth_error_payload(exc)) from exc
+
     try:
         entry = get_company_profile_store().load_active_index()
+        if entry is not None:
+            runtime = get_company_profile_store().load_active_profile()
+            if runtime is None:
+                raise ProfileLoadError("COMPANY_PROFILE_LOAD_FAILED")
     except ProfileLoadError as exc:
         raise HTTPException(status_code=503, detail={"fail_class": "COMPANY_PROFILE_LOAD_FAILED"}) from exc
     if entry is None:
