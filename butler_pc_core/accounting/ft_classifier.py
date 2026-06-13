@@ -1,6 +1,6 @@
-"""ft_classifier.py — 방향 인식 + QLoRA PEFT 통합 분류기.
+"""ft_classifier.py — 방향 인식 + QLoRA PEFT opt-in 통합 분류기.
 
-우선순위: PEFT(로드 성공 시) > 방향 오버라이드(D-2 C/D 결함 수정) > 규칙 기반.
+우선순위: PEFT(명시 opt-in + 로드 성공 시) > 방향 오버라이드(D-2 C/D 결함 수정) > 규칙 기반.
 PEFT base model(Qwen/Qwen3-4B ~8GB) 미캐시 시 graceful fail → 규칙+오버라이드로 동작.
 """
 from __future__ import annotations
@@ -47,6 +47,17 @@ _peft_loaded: bool = False
 _peft_attempted: bool = False
 
 
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes"}
+
+
+def _peft_enabled() -> bool:
+    # Backward compatibility: any non-empty ACCOUNTING_NO_PEFT disables PEFT.
+    if os.environ.get("ACCOUNTING_NO_PEFT"):
+        return False
+    return _env_truthy("ACCOUNTING_ENABLE_PEFT")
+
+
 @dataclass
 class ClassifyResult:
     category: str
@@ -64,12 +75,12 @@ def _find_adapter() -> Optional[Path]:
 
 
 def load_peft() -> bool:
-    """PEFT 어댑터를 lazy 로드. 성공 시 True, 실패(base 미캐시 포함) 시 False."""
+    """PEFT 어댑터를 명시 opt-in일 때만 lazy 로드한다."""
     global _peft_model, _peft_tokenizer, _peft_loaded, _peft_attempted
     if _peft_attempted:
         return _peft_loaded
     _peft_attempted = True
-    if os.environ.get("ACCOUNTING_NO_PEFT"):
+    if not _peft_enabled():
         return False
 
     adapter_path = _find_adapter()
