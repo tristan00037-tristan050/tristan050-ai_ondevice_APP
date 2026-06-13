@@ -13,6 +13,11 @@ except ImportError:
 
 from .account_dict import match_account, ACCOUNT_BY_NAME, SECTION_ORDER
 from .ft_classifier import ft_classify
+from butler_pc_core.company_profile.matcher import (
+    is_account_verification,
+    is_own_account,
+    is_self_holder,
+)
 
 # ── 헤더 자동 감지 키워드 ────────────────────────────────────────────────────
 HEADER_KEYWORDS: frozenset[str] = frozenset({
@@ -32,6 +37,11 @@ _DESC_CANDIDATES = [
 _VENDOR_CANDIDATES = [
     "거래처", "상호", "vendor", "payee", "대상", "상대방", "입금처", "출금처",
     "보낸분/받는분", "받는분", "보내는분", "상대계좌예금주명", "상대처",
+]
+_ACCOUNT_NUMBER_CANDIDATES = [
+    "상대계좌번호", "상대계좌", "상대방계좌번호", "상대방계좌",
+    "거래상대계좌번호", "거래상대계좌",
+    "counterparty_account", "counterparty_account_no", "counterparty_account_number",
 ]
 _AMOUNT_CANDIDATES = [
     "금액", "출금액", "입금액", "amount", "출금", "입금", "거래금액", "변동금액",
@@ -56,7 +66,7 @@ _MEMO_CANDIDATES = [
 ]
 
 # classify_df가 내부적으로 추가하는 컬럼 — orig_cols에서 제외
-_INTERNAL_COLS = {"분류과목", "신뢰도", "_amt", "_datetime"}
+_INTERNAL_COLS = {"분류과목", "신뢰도", "_amt", "_datetime", "_guard_reason", "_pnl_excluded"}
 
 # [분류결과] 시트 컬럼 순서: [번호] → [분류과목, 신뢰도] → [아래 순서] → [나머지]
 _RESULT_COL_BEFORE_CLASS = ["번호"]
@@ -215,7 +225,25 @@ def _build_classify_text(
     return desc, vendor
 
 
-def classify_df(df: "pd.DataFrame") -> "pd.DataFrame":
+def _self_transfer_guard_reason(
+    *,
+    desc: str,
+    vendor: str,
+    account_no: str,
+    amount: float,
+    company_profile: object,
+) -> str | None:
+    combined = f"{desc} {vendor}".strip()
+    if is_account_verification(combined, abs(amount)):
+        return "ACCOUNT_VERIFICATION"
+    if is_self_holder(vendor, company_profile):  # type: ignore[arg-type]
+        return "SELF_HOLDER_MATCH"
+    if is_own_account(account_no, company_profile):  # type: ignore[arg-type]
+        return "OWN_ACCOUNT_MATCH"
+    return None
+
+
+def classify_df(df: "pd.DataFrame", company_profile=None) -> "pd.DataFrame":
     """DataFrame에 [분류과목, 신뢰도] 컬럼을 추가해 반환.
 
     - 결정적: 동일 입력 → 동일 출력 (랜덤 없음)
@@ -232,6 +260,7 @@ def classify_df(df: "pd.DataFrame") -> "pd.DataFrame":
 
     desc_col = _detect_col(columns, _DESC_CANDIDATES)
     vendor_col = _detect_col(columns, _VENDOR_CANDIDATES)
+    account_col = _detect_col(columns, _ACCOUNT_NUMBER_CANDIDATES)
     memo_col = _detect_col(columns, _MEMO_CANDIDATES)
     # 동일 컬럼 중복 방지
     if memo_col == desc_col:
@@ -246,6 +275,7 @@ def classify_df(df: "pd.DataFrame") -> "pd.DataFrame":
     # 입출금 분리 컬럼 → _amt = 입금 - 출금
     withdrawal_col = _detect_col(columns, _WITHDRAWAL_CANDIDATES)
     deposit_col = _detect_col(columns, _DEPOSIT_CANDIDATES)
+    amount_col = _detect_col(columns, _AMOUNT_CANDIDATES)
     if withdrawal_col and deposit_col and withdrawal_col != deposit_col:
         df["_amt"] = df.apply(
             lambda r: _parse_numeric(r[deposit_col]) - _parse_numeric(r[withdrawal_col]),
@@ -254,6 +284,8 @@ def classify_df(df: "pd.DataFrame") -> "pd.DataFrame":
 
     labels: list[str] = []
     confs: list[float] = []
+    guard_reasons: list[str] = []
+    pnl_excluded: list[bool] = []
 
     for _, row in df.iterrows():
         desc, vendor = _build_classify_text(row, desc_col, vendor_col, memo_col)
@@ -262,12 +294,36 @@ def classify_df(df: "pd.DataFrame") -> "pd.DataFrame":
             direction: Optional[str] = "입금" if amt > 0 else ("출금" if amt < 0 else None)
         else:
             direction = None
+        account_no = str(row[account_col]).strip() if account_col and account_col in row.index else ""
+        guard_amount = (
+            amt
+            if "_amt" in row.index
+            else (_parse_numeric(row[amount_col]) if amount_col and amount_col in row.index else amt)
+        )
+        if company_profile is not None:
+            guard_reason = _self_transfer_guard_reason(
+                desc=desc,
+                vendor=vendor,
+                account_no=account_no,
+                amount=guard_amount,
+                company_profile=company_profile,
+            )
+            if guard_reason:
+                labels.append("미분류")
+                confs.append(0.2)
+                guard_reasons.append(guard_reason)
+                pnl_excluded.append(True)
+                continue
         result = ft_classify(desc, vendor, abs(amt), direction)
         labels.append(result.category)
         confs.append(result.confidence)
+        guard_reasons.append("")
+        pnl_excluded.append(False)
 
     df["분류과목"] = labels
     df["신뢰도"] = confs
+    df["_guard_reason"] = guard_reasons
+    df["_pnl_excluded"] = pnl_excluded
 
     # 계정과목 부호 강제: 비용 계정(_amt > 0)은 음수로 정정
     if "_amt" in df.columns:
@@ -281,10 +337,10 @@ def classify_df(df: "pd.DataFrame") -> "pd.DataFrame":
     return df
 
 
-def classify_file(path: Union[str, Path]) -> "pd.DataFrame":
+def classify_file(path: Union[str, Path], company_profile=None) -> "pd.DataFrame":
     """파일 경로 → 분류 결과 DataFrame."""
     df = _read_file(path)
-    return classify_df(df)
+    return classify_df(df, company_profile=company_profile)
 
 
 def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:

@@ -45,11 +45,23 @@ def build_summary(df: "pd.DataFrame") -> dict[str, Any]:
     total = len(df)
     if "분류과목" not in df.columns:
         return {"total_rows": total, "classified_rows": 0, "unclassified_rows": total,
-                "categories": {}, "avg_confidence": 0.0}
+                "categories": {}, "guarded_rows": {}, "avg_confidence": 0.0}
 
-    unclassified_mask = df["분류과목"] == "미분류"
+    guarded_mask = (
+        df.get("_pnl_excluded", False).eq(True)
+        if "_pnl_excluded" in df.columns
+        else df["분류과목"].map(lambda _value: False)
+    )
+    unclassified_mask = (df["분류과목"] == "미분류") | guarded_mask
     classified = int((~unclassified_mask).sum())
     unclassified = int(unclassified_mask.sum())
+    guarded_rows: dict[str, int] = {}
+    if "_guard_reason" in df.columns:
+        reasons = df.loc[guarded_mask, "_guard_reason"].fillna("").astype(str)
+        guarded_rows = {
+            reason: int(count)
+            for reason, count in reasons[reasons != ""].value_counts().sort_index().items()
+        }
 
     from .account_dict import ACCOUNT_BY_NAME
 
@@ -83,6 +95,7 @@ def build_summary(df: "pd.DataFrame") -> dict[str, Any]:
         "total_rows": total,
         "classified_rows": classified,
         "unclassified_rows": unclassified,
+        "guarded_rows": guarded_rows,
         "categories": categories,
         "avg_confidence": round(overall_conf, 3),
     }

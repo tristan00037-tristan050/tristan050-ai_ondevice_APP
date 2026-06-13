@@ -911,11 +911,28 @@ if _FASTAPI_AVAILABLE:
             try:
                 from butler_pc_core.accounting.classifier import classify_file, save_classified
                 from butler_pc_core.accounting.report import build_summary
+                from butler_pc_core.company_profile.storage import CompanyProfileStore, ProfileLoadError
             except ImportError as exc:
                 yield _sse("error", fail_payload(FailClass.INTERNAL_RUNTIME_ERROR, str(exc), error_class="ImportError"))
                 return
 
-            df = await loop.run_in_executor(None, classify_file, file_path)
+            try:
+                company_profile = CompanyProfileStore().load_active_profile()
+            except ProfileLoadError as exc:
+                yield _sse(
+                    "error",
+                    fail_payload(
+                        FailClass.INTERNAL_RUNTIME_ERROR,
+                        "COMPANY_PROFILE_LOAD_FAILED",
+                        error_class=type(exc).__name__,
+                    ),
+                )
+                return
+
+            df = await loop.run_in_executor(
+                None,
+                lambda: classify_file(file_path, company_profile=company_profile),
+            )
 
             yield _sse("phase_start", {"status_message": "보고서 생성 중 — 요약 집계"})
             await asyncio.sleep(0)
