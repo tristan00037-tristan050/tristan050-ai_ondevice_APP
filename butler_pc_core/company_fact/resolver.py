@@ -17,6 +17,11 @@ class CompanyKnowledgeResolveResult:
     provenance: str
     fact_id: str | None
     fact_digest: str | None
+    fact_source: str | None
+    source_url: str | None
+    source_doc: str | None
+    verified_at: str | None
+    expires_at: str | None
     confidence: float
     fail_class: str | None
     raw_text_logged: bool = False
@@ -30,6 +35,11 @@ class CompanyKnowledgeResolveResult:
             "provenance": self.provenance,
             "fact_id": self.fact_id,
             "fact_digest": self.fact_digest,
+            "fact_source": self.fact_source,
+            "source_url": self.source_url,
+            "source_doc": self.source_doc,
+            "verified_at": self.verified_at,
+            "expires_at": self.expires_at,
             "confidence": self.confidence,
             "fail_class": self.fail_class,
             "raw_text_logged": self.raw_text_logged,
@@ -96,6 +106,11 @@ class CompanyKnowledgeResolver:
                 provenance="company",
                 fact_id=company_match.fact.id,
                 fact_digest=_base_fact_digest(company_match),
+                fact_source=company_match.fact.source,
+                source_url=company_match.fact.source_url,
+                source_doc=company_match.fact.source_doc,
+                verified_at=company_match.fact.verified_at.isoformat(),
+                expires_at=company_match.fact.expires_at.isoformat() if company_match.fact.expires_at else None,
                 confidence=company_match.fact.confidence,
                 fail_class=fail_class,
             )
@@ -106,6 +121,11 @@ class CompanyKnowledgeResolver:
                 provenance="base",
                 fact_id=base_match.fact.id,
                 fact_digest=_base_fact_digest(base_match),
+                fact_source=base_match.fact.source,
+                source_url=base_match.fact.source_url,
+                source_doc=base_match.fact.source_doc,
+                verified_at=base_match.fact.verified_at.isoformat(),
+                expires_at=base_match.fact.expires_at.isoformat() if base_match.fact.expires_at else None,
                 confidence=base_match.fact.confidence,
                 fail_class=fail_class,
             )
@@ -115,6 +135,11 @@ class CompanyKnowledgeResolver:
             provenance="none",
             fact_id=None,
             fact_digest=None,
+            fact_source=None,
+            source_url=None,
+            source_doc=None,
+            verified_at=None,
+            expires_at=None,
             confidence=0.0,
             fail_class=fail_class,
         )

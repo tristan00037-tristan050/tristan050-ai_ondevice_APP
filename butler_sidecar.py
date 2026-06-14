@@ -113,6 +113,10 @@ if _FASTAPI_AVAILABLE:
     from butler_pc_core.factpack import FactPack
     from butler_pc_core.factpack.schema import FactPackAuditEntry
     from butler_pc_core.company_policy.contracts import sha256_text
+    from butler_pc_core.company_fact.resolver import (
+        CompanyKnowledgeResolver,
+        CompanyKnowledgeResolveResult,
+    )
 
     # FactPack — 기동 시 1회 로드 (수~수십 ms, 메모리 ~수 MB)
     FACT_PACK = FactPack.from_default_facts_dir()
@@ -470,6 +474,25 @@ if _FASTAPI_AVAILABLE:
             lines.append(f"※ 본 답변은 {fact.expires_at}까지 유효 (이후 재검증 필요)")
         return "\n".join(lines)
 
+    def _format_company_knowledge_answer(result: "CompanyKnowledgeResolveResult") -> str:
+        """CompanyKnowledgeResolver 결과를 기존 FactPack 답변 흐름에 맞춰 포맷."""
+        lines = [str(result.answer or "").rstrip(), "", "─────────"]
+        if result.provenance == "company":
+            label = "회사 검증 사실"
+        else:
+            label = "기본 FactPack"
+        verified = f" ({result.verified_at} 기준)" if result.verified_at else ""
+        lines.append(f"출처: {label}{verified}")
+        if result.fact_source:
+            lines.append(f"근거 출처: {result.fact_source}")
+        if result.source_doc:
+            lines.append(f"근거 문서: {result.source_doc}")
+        if result.source_url:
+            lines.append(result.source_url)
+        if result.expires_at:
+            lines.append(f"※ 본 답변은 {result.expires_at}까지 유효 (이후 재검증 필요)")
+        return "\n".join(lines)
+
     # -----------------------------------------------------------------------
     # SSE helpers
     # -----------------------------------------------------------------------
@@ -537,14 +560,24 @@ if _FASTAPI_AVAILABLE:
             })
             return
 
-        # ── (1) FactPack 1차 매칭 — HIT 시 LLM 호출 없이 즉시 응답 ──
-        fp_match = FACT_PACK.lookup(params.query)
-        if fp_match is not None:
-            answer = _format_factpack_answer(fp_match.fact)
+        # ── (1) CompanyKnowledgeResolver 1차 매칭 — HIT 시 LLM 호출 없이 즉시 응답 ──
+        knowledge_result = CompanyKnowledgeResolver(base_pack=FACT_PACK).resolve(params.query)
+        if knowledge_result.fail_class:
             yield _sse("meta", {
-                "source": "factpack",
-                "fact_id": fp_match.fact.id,
-                "score": round(fp_match.score, 3),
+                "source": "company_knowledge",
+                "fail_class": knowledge_result.fail_class,
+                "company_facts_available": False,
+            })
+        if knowledge_result.answer is not None:
+            answer = _format_company_knowledge_answer(knowledge_result)
+            yield _sse("meta", {
+                "source": "company_knowledge",
+                "provenance": knowledge_result.provenance,
+                "fact_id": knowledge_result.fact_id,
+                "fact_digest": knowledge_result.fact_digest,
+                "confidence": knowledge_result.confidence,
+                "raw_text_logged": False,
+                "external_send_zero": True,
             })
             yield _sse("complete", {
                 "result_text": answer,
@@ -553,9 +586,9 @@ if _FASTAPI_AVAILABLE:
             })
             _factpack_audit_log.append(FactPackAuditEntry(
                 query_digest=sha256_text(params.query),
-                source="factpack",
-                fact_id=fp_match.fact.id,
-                score=fp_match.score,
+                source="company_fact" if knowledge_result.provenance == "company" else "factpack",
+                fact_id=knowledge_result.fact_id,
+                score=knowledge_result.confidence,
                 threshold_used=FACT_PACK.matcher.threshold,
                 timestamp_iso=datetime.now(_tz.utc).isoformat(),
                 pack_version=_PACK_VERSION,
@@ -918,6 +951,7 @@ if _FASTAPI_AVAILABLE:
                     build_summary,
                     should_block_requested_accounting_format,
                 )
+                from butler_pc_core.company_fact.read_only import resolve_read_only_company_knowledge
                 from butler_pc_core.company_profile.storage import CompanyProfileStore, ProfileLoadError
             except ImportError as exc:
                 yield _sse("error", fail_payload(FailClass.INTERNAL_RUNTIME_ERROR, str(exc), error_class="ImportError"))
@@ -945,6 +979,13 @@ if _FASTAPI_AVAILABLE:
             await asyncio.sleep(0)
 
             summary = await loop.run_in_executor(None, build_summary, df)
+            summary["company_knowledge"] = await loop.run_in_executor(
+                None,
+                lambda: resolve_read_only_company_knowledge(
+                    "accounting report company policy",
+                    consumer="box5_accounting_report",
+                ),
+            )
 
             out_xlsx = Path(tempfile.gettempdir()) / f"butler_accounting_{result_id}.xlsx"
             await loop.run_in_executor(None, save_classified, df, out_xlsx)
@@ -1496,6 +1537,7 @@ if _FASTAPI_AVAILABLE:
         """카드 2 문서 변환 SSE 4-phase — semantic_mapping 통합 (단계 8)."""
         try:
             from butler_pc_core.document_transform import transform_document
+            from butler_pc_core.company_fact.read_only import resolve_read_only_company_knowledge
             from butler_pc_core.semantic_mapping import map_fields
             from butler_pc_core.semantic_mapping.slot_schema import TARGET_SLOTS
         except ImportError as exc:
@@ -1554,6 +1596,13 @@ if _FASTAPI_AVAILABLE:
         overall_needs_review = any(
             d.mapped and d.confidence < 0.70 for d in sm_decisions
         )
+        company_knowledge = await loop.run_in_executor(
+            None,
+            lambda: resolve_read_only_company_knowledge(
+                "document transform company policy",
+                consumer="box2_document_transform",
+            ),
+        )
 
         _doc_transform_results[result_id] = {
             "docx_bytes": result.output_docx_bytes,
@@ -1565,6 +1614,7 @@ if _FASTAPI_AVAILABLE:
                 "unmapped_sections": result.unmapped_sections,
                 "slot_results": slot_results,
                 "needs_review": overall_needs_review,
+                "company_knowledge": company_knowledge,
             },
             "created_at": time.monotonic(),
         }
