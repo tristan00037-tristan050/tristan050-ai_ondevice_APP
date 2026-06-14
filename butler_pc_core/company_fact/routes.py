@@ -133,7 +133,10 @@ async def resolve_company_facts(
 ) -> dict[str, Any]:
     _verify_token(authorization)
     resolver = CompanyKnowledgeResolver(company_store=get_company_fact_store())
-    return resolver.resolve(payload.query).to_dict()
+    result = resolver.resolve(payload.query)
+    if result.fail_class and result.source == "none":
+        raise HTTPException(status_code=503, detail=result.to_dict())
+    return result.to_dict()
 
 
 @router.post("/v1/company-facts/candidates")

@@ -5,6 +5,7 @@ import json
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from butler_pc_core.company_fact.resolver import CompanyKnowledgeResolveResult
 from butler_pc_core.company_fact.storage import CompanyFactStore
 from butler_pc_core.company_policy.contracts import sha256_text
 from butler_pc_core.company_fact import routes as route_module
@@ -138,6 +139,84 @@ def test_resolve_excludes_candidate_and_serves_active_only(tmp_path, monkeypatch
     assert active_result.json()["answer"] == ANSWER_TEXT
     assert active_result.json()["raw_text_logged"] is False
     assert active_result.json()["external_send_zero"] is True
+
+
+def test_resolve_fail_class_with_source_none_returns_503_without_query_text(tmp_path, monkeypatch):
+    client, _store = _app_with_store(tmp_path, monkeypatch)
+    query_text = "sensitive company lookup"
+
+    class FakeResolver:
+        def __init__(self, **_kwargs):
+            pass
+
+        def resolve(self, query_runtime_text: str) -> CompanyKnowledgeResolveResult:
+            assert query_runtime_text == query_text
+            return CompanyKnowledgeResolveResult(
+                answer=None,
+                source="none",
+                provenance="none",
+                fact_id=None,
+                fact_digest=None,
+                fact_source=None,
+                source_url=None,
+                source_doc=None,
+                verified_at=None,
+                expires_at=None,
+                confidence=0.0,
+                fail_class="COMPANY_FACT_STORE_LOAD_FAILED",
+            )
+
+    monkeypatch.setattr(route_module, "CompanyKnowledgeResolver", FakeResolver)
+    response = client.post(
+        "/v1/company-facts/resolve",
+        headers=_token_headers(monkeypatch),
+        json={"query": query_text},
+    )
+
+    assert response.status_code == 503
+    encoded = json.dumps(response.json(), ensure_ascii=False)
+    assert response.json()["detail"]["fail_class"] == "COMPANY_FACT_STORE_LOAD_FAILED"
+    assert response.json()["detail"]["source"] == "none"
+    assert query_text not in encoded
+
+
+def test_resolve_fail_class_with_base_source_returns_200_with_degraded_meta(tmp_path, monkeypatch):
+    client, _store = _app_with_store(tmp_path, monkeypatch)
+    query_text = "base company lookup"
+
+    class FakeResolver:
+        def __init__(self, **_kwargs):
+            pass
+
+        def resolve(self, query_runtime_text: str) -> CompanyKnowledgeResolveResult:
+            assert query_runtime_text == query_text
+            return CompanyKnowledgeResolveResult(
+                answer="Base answer remains available.",
+                source="base",
+                provenance="base",
+                fact_id="base-fact",
+                fact_digest=sha256_text("base-fact"),
+                fact_source="base_factpack",
+                source_url=None,
+                source_doc="base-doc",
+                verified_at="2026-06-14",
+                expires_at=None,
+                confidence=1.0,
+                fail_class="COMPANY_FACT_STORE_LOAD_FAILED",
+            )
+
+    monkeypatch.setattr(route_module, "CompanyKnowledgeResolver", FakeResolver)
+    response = client.post(
+        "/v1/company-facts/resolve",
+        headers=_token_headers(monkeypatch),
+        json={"query": query_text},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "base"
+    assert body["answer"] == "Base answer remains available."
+    assert body["fail_class"] == "COMPANY_FACT_STORE_LOAD_FAILED"
 
 
 def test_status_fails_closed_for_corrupted_index(tmp_path, monkeypatch):

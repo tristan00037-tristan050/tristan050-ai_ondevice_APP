@@ -295,3 +295,37 @@ def test_box5_read_only_note_does_not_change_accounting_categories(tmp_path):
     assert summary_after["categories"] == summary_before["categories"]
     assert summary_after["total_rows"] == summary_before["total_rows"]
     assert summary_after["classified_rows"] == summary_before["classified_rows"]
+
+
+def test_box2_and_box5_read_only_consumers_degrade_without_substituting_authority():
+    class FakeResolver:
+        def resolve(self, _query_runtime_text: str) -> CompanyKnowledgeResolveResult:
+            return CompanyKnowledgeResolveResult(
+                answer=None,
+                source="none",
+                provenance="none",
+                fact_id=None,
+                fact_digest=None,
+                fact_source=None,
+                source_url=None,
+                source_doc=None,
+                verified_at=None,
+                expires_at=None,
+                confidence=0.0,
+                fail_class="COMPANY_FACT_STORE_LOAD_FAILED",
+            )
+
+    for consumer in ("box2_document_transform", "box5_accounting_report"):
+        note = resolve_read_only_company_knowledge(
+            "degraded company knowledge",
+            consumer=consumer,
+            resolver=FakeResolver(),  # type: ignore[arg-type]
+        )
+
+        assert note["consumer"] == consumer
+        assert note["fail_class"] == "COMPANY_FACT_STORE_LOAD_FAILED"
+        assert note["source"] == "none"
+        assert note["answer_runtime_text"] is None
+        assert note["answer_digest"] is None
+        assert note["mutation_performed"] is False
+        assert note["raw_text_logged"] is False
