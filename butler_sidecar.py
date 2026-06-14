@@ -112,6 +112,7 @@ async def _ensure_shared_llm() -> "LlmRuntime":
 if _FASTAPI_AVAILABLE:
     from butler_pc_core.factpack import FactPack
     from butler_pc_core.factpack.schema import FactPackAuditEntry
+    from butler_pc_core.company_policy.contracts import sha256_text
 
     # FactPack — 기동 시 1회 로드 (수~수십 ms, 메모리 ~수 MB)
     FACT_PACK = FactPack.from_default_facts_dir()
@@ -549,7 +550,7 @@ if _FASTAPI_AVAILABLE:
                 "total_elapsed_sec": 0.0,
             })
             _factpack_audit_log.append(FactPackAuditEntry(
-                query=params.query,
+                query_digest=sha256_text(params.query),
                 source="factpack",
                 fact_id=fp_match.fact.id,
                 score=fp_match.score,
@@ -562,7 +563,7 @@ if _FASTAPI_AVAILABLE:
         # ── (2) FactPack 미스 → 기존 LLM 파이프라인 ──
         yield _sse("meta", {"source": "llm"})
         _factpack_audit_log.append(FactPackAuditEntry(
-            query=params.query,
+            query_digest=sha256_text(params.query),
             source="llm",
             fact_id=None,
             score=None,
