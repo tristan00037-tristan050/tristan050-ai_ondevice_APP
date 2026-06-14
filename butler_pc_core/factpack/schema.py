@@ -97,7 +97,7 @@ class FactMatch(BaseModel):
 class FactPackAuditEntry(BaseModel):
     """감사 로그 항목 (Butler 통합 정책 준수)."""
 
-    query: str
+    query_digest: str = Field(..., pattern=r"^sha256:[0-9a-f]{64}$")
     source: str  # "factpack" | "llm"
     fact_id: Optional[str] = None
     score: Optional[float] = None
