@@ -113,7 +113,7 @@ async def company_facts_status(authorization: Optional[str] = Header(default=Non
     _verify_token(authorization)
     store = get_company_fact_store()
     try:
-        active_count = len(store.list_index_entries(status="ACTIVE"))
+        active_count = len(store.load_active_facts())
         candidate_count = len(store.list_index_entries(status="CANDIDATE"))
     except CompanyFactLoadError as exc:
         raise HTTPException(status_code=503, detail={"fail_class": "COMPANY_FACT_LOAD_FAILED"}) from exc

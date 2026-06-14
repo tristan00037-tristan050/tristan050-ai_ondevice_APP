@@ -48,6 +48,9 @@ def test_candidate_is_encrypted_and_index_is_digest_only(tmp_path):
     assert entry.confidence < 1.0
     assert ANSWER_SENTINEL not in index_text
     assert SOURCE_SENTINEL not in index_text
+    assert "회사 승인 사실" not in index_text
+    assert "company-source" not in index_text
+    assert "digest:" in index_text
     assert ANSWER_SENTINEL not in audit_text
     assert SOURCE_SENTINEL not in audit_text
     assert entry.field_digests["answer"] == sha256_text(ANSWER_SENTINEL)
@@ -105,3 +108,14 @@ def test_index_corruption_raises_load_error(tmp_path):
 
     with pytest.raises(CompanyFactLoadError):
         store.list_index_entries()
+
+
+def test_active_vault_corruption_raises_load_error(tmp_path):
+    store = CompanyFactStore(root=tmp_path / "facts")
+    entry, _audit = _candidate(store)
+    store.approve_candidate(entry.fact_id, _admin())
+    vault_item = tmp_path / "facts" / "vault" / "company_facts" / f"{entry.fact_id}.json"
+    vault_item.unlink()
+
+    with pytest.raises(CompanyFactLoadError, match="COMPANY_FACT_ACTIVE_LOAD_FAILED"):
+        store.load_active_facts()

@@ -195,6 +195,6 @@ class CompanyFactStore:
         for entry in self.list_index_entries(status="ACTIVE"):
             try:
                 active.append(self.load_fact(entry.fact_id))
-            except CompanyFactLoadError:
-                continue
+            except CompanyFactLoadError as exc:
+                raise CompanyFactLoadError("COMPANY_FACT_ACTIVE_LOAD_FAILED") from exc
         return active

@@ -4,6 +4,7 @@ import json
 from datetime import date
 
 from butler_pc_core.company_fact.resolver import CompanyKnowledgeResolver
+from butler_pc_core.company_fact import resolver as resolver_module
 from butler_pc_core.company_fact.storage import CompanyFactStore
 from butler_pc_core.company_policy.contracts import AdminContext, sha256_text
 from butler_pc_core.factpack import Fact, FactPack
@@ -81,7 +82,7 @@ def test_active_company_fact_overrides_base_fact(tmp_path):
     assert result.fact_id == candidate.fact_id
     assert result.answer == "Company approved travel policy answer."
     assert result.confidence == 1.0
-    assert result.fact_digest and result.fact_digest.startswith("sha256:")
+    assert result.fact_digest == store.load_fact(candidate.fact_id).fact_digest
 
 
 def test_broken_company_fact_is_excluded_while_base_continues(tmp_path):
@@ -97,6 +98,7 @@ def test_broken_company_fact_is_excluded_while_base_continues(tmp_path):
 
     assert result.source == "base"
     assert result.answer == "Base travel policy answer."
+    assert result.fail_class == "COMPANY_FACT_STORE_LOAD_FAILED"
 
 
 def test_company_store_load_failure_exposes_fail_class_and_serves_base(tmp_path):
@@ -110,3 +112,21 @@ def test_company_store_load_failure_exposes_fail_class_and_serves_base(tmp_path)
     assert result.source == "base"
     assert result.answer == "Base travel policy answer."
     assert result.fail_class == "COMPANY_FACT_STORE_LOAD_FAILED"
+
+
+def test_company_fact_conversion_failure_exposes_fail_class_and_serves_base(tmp_path, monkeypatch):
+    store = CompanyFactStore(root=tmp_path / "facts")
+    candidate = _save_candidate(store)
+    store.approve_candidate(candidate.fact_id, _admin())
+
+    def _raise_conversion(_record):
+        raise ValueError("conversion failed")
+
+    monkeypatch.setattr(resolver_module, "company_record_to_fact", _raise_conversion)
+    result = CompanyKnowledgeResolver(base_pack=_base_pack(), company_store=store).resolve(
+        "travel reimbursement policy"
+    )
+
+    assert result.source == "base"
+    assert result.answer == "Base travel policy answer."
+    assert result.fail_class == "COMPANY_FACT_CONVERSION_FAILED"

@@ -55,3 +55,22 @@ def test_active_requires_approval_digest_and_confidence_one():
     assert active.status == "ACTIVE"
     assert active.confidence == 1.0
     assert active.approved_by_digest == sha256_text("admin")
+
+
+def test_candidate_rejects_duplicate_patterns_and_invalid_dates():
+    with pytest.raises(CompanyFactContractError, match="QUESTION_PATTERNS_DUPLICATE"):
+        make_company_fact_record(
+            status="CANDIDATE",
+            **{
+                **_fact_kwargs(),
+                "question_patterns": ["same question", "same question"],
+            },
+        )
+    with pytest.raises(CompanyFactContractError, match="VERIFIED_AT_DATE_INVALID"):
+        make_company_fact_record(
+            status="CANDIDATE",
+            **{
+                **_fact_kwargs(),
+                "verified_at": "not-a-date",
+            },
+        )

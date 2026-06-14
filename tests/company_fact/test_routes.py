@@ -150,6 +150,25 @@ def test_status_fails_closed_for_corrupted_index(tmp_path, monkeypatch):
     assert response.json()["detail"]["fail_class"] == "COMPANY_FACT_LOAD_FAILED"
 
 
+def test_status_fails_closed_when_active_vault_item_is_missing(tmp_path, monkeypatch):
+    client, store = _app_with_store(tmp_path, monkeypatch)
+    submit = client.post(
+        "/v1/company-facts/candidates",
+        headers=_token_headers(monkeypatch),
+        json=_candidate_payload(),
+    )
+    fact_id = submit.json()["fact_id"]
+    approve = client.post(f"/v1/company-facts/candidates/{fact_id}/approve", headers=_admin_headers())
+    assert approve.status_code == 200
+    vault_item = tmp_path / "company_fact_store" / "vault" / "company_facts" / f"{fact_id}.json"
+    vault_item.unlink()
+
+    response = client.get("/v1/company-facts/status", headers=_token_headers(monkeypatch))
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["fail_class"] == "COMPANY_FACT_LOAD_FAILED"
+
+
 def test_company_fact_routes_registered_in_sidecar():
     from butler_sidecar import app
 

@@ -88,6 +88,23 @@ def _clean_text_list(values: Any, field_name: str, *, min_items: int = 0) -> lis
     return cleaned
 
 
+def _require_unique(values: list[str], field_name: str) -> None:
+    if len(set(values)) != len(values):
+        raise CompanyFactContractError(f"{field_name}_DUPLICATE")
+
+
+def _normalize_iso_date(value: Any, field_name: str, *, required: bool = False) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        if required:
+            raise CompanyFactContractError(f"{field_name}_REQUIRED")
+        return None
+    try:
+        return date.fromisoformat(text[:10]).isoformat()
+    except Exception as exc:
+        raise CompanyFactContractError(f"{field_name}_DATE_INVALID") from exc
+
+
 def _require_nonempty(value: Any, field_name: str) -> str:
     text = str(value or "").strip()
     if not text:
@@ -125,11 +142,11 @@ def _field_digests(record: CompanyFactVaultRecord) -> dict[str, list[str] | str 
 
 
 def _display_hints(record: CompanyFactVaultRecord) -> dict[str, str]:
-    answer = record.answer_runtime_text.strip()
-    source = record.source.strip()
+    answer_digest = sha256_text(record.answer_runtime_text)
+    source_digest = sha256_text(record.source)
     return {
-        "answer_hint": (answer[:16] + "…") if len(answer) > 16 else answer,
-        "source_hint": (source[:16] + "…") if len(source) > 16 else source,
+        "answer_hint": f"digest:{answer_digest[7:15]}…",
+        "source_hint": f"digest:{source_digest[7:15]}…",
     }
 
 
@@ -155,6 +172,7 @@ def make_company_fact_record(
     if status not in STATUS_VALUES:
         raise CompanyFactContractError("COMPANY_FACT_STATUS_INVALID")
     patterns = _clean_text_list(question_patterns, "QUESTION_PATTERNS", min_items=2)
+    _require_unique(patterns, "QUESTION_PATTERNS")
     required = _clean_text_list(keywords_required or [], "KEYWORDS_REQUIRED")
     any_values = _clean_text_list(keywords_any or [], "KEYWORDS_ANY")
     answer = _require_nonempty(answer_runtime_text, "ANSWER")
@@ -189,8 +207,8 @@ def make_company_fact_record(
         "source": source_value,
         "source_url": str(source_url).strip() if source_url else None,
         "source_doc": str(source_doc).strip() if source_doc else None,
-        "verified_at": verified_at or today_iso(),
-        "expires_at": expires_at,
+        "verified_at": _normalize_iso_date(verified_at or today_iso(), "VERIFIED_AT", required=True),
+        "expires_at": _normalize_iso_date(expires_at, "EXPIRES_AT"),
         "confidence": float(confidence),
         "approved_by_digest": approved_by_digest,
         "approved_at": approved_at,
@@ -240,7 +258,8 @@ def validate_vault_record_dict(data: dict[str, Any]) -> dict[str, Any]:
         raise CompanyFactContractError("COMPANY_FACT_STATUS_INVALID")
     _require_nonempty(data.get("fact_id"), "FACT_ID")
     _require_nonempty(data.get("category"), "CATEGORY")
-    _clean_text_list(data.get("question_patterns"), "QUESTION_PATTERNS", min_items=2)
+    patterns = _clean_text_list(data.get("question_patterns"), "QUESTION_PATTERNS", min_items=2)
+    _require_unique(patterns, "QUESTION_PATTERNS")
     _clean_text_list(data.get("keywords_required"), "KEYWORDS_REQUIRED")
     _clean_text_list(data.get("keywords_any"), "KEYWORDS_ANY")
     _require_nonempty(data.get("answer_runtime_text"), "ANSWER")
@@ -259,6 +278,8 @@ def validate_vault_record_dict(data: dict[str, Any]) -> dict[str, Any]:
         require_digest(data["approved_by_digest"], "approved_by")
     if data.get("previous_fact_digest") is not None:
         require_digest(data["previous_fact_digest"], "previous_fact")
+    _normalize_iso_date(data.get("verified_at"), "VERIFIED_AT", required=True)
+    _normalize_iso_date(data.get("expires_at"), "EXPIRES_AT")
     require_digest(data.get("fact_digest"), "fact")
     _assert_bool_flags(data, "COMPANY_FACT")
     if data["fact_digest"] != compute_fact_digest(data):

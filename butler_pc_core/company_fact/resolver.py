@@ -84,19 +84,27 @@ class CompanyKnowledgeResolver:
         self.base_pack = base_pack or FactPack.from_default_facts_dir()
         self.company_store = company_store or CompanyFactStore()
 
-    def _company_pack(self) -> tuple[FactPack | None, str | None]:
+    def _company_pack(self) -> tuple[FactPack | None, dict[str, str], str | None]:
         try:
             records = self.company_store.load_active_facts()
         except CompanyFactLoadError:
-            return None, "COMPANY_FACT_STORE_LOAD_FAILED"
-        facts = [company_record_to_fact(record) for record in records if record.status == "ACTIVE"]
+            return None, {}, "COMPANY_FACT_STORE_LOAD_FAILED"
+        try:
+            facts = [company_record_to_fact(record) for record in records if record.status == "ACTIVE"]
+        except Exception:
+            return None, {}, "COMPANY_FACT_CONVERSION_FAILED"
         if not facts:
-            return None, None
-        return FactPack(facts=facts, threshold=self.base_pack.matcher.threshold), None
+            return None, {}, None
+        try:
+            pack = FactPack(facts=facts, threshold=self.base_pack.matcher.threshold)
+        except Exception:
+            return None, {}, "COMPANY_FACT_CONVERSION_FAILED"
+        digest_by_fact_id = {record.fact_id: record.fact_digest for record in records if record.status == "ACTIVE"}
+        return pack, digest_by_fact_id, None
 
     def resolve(self, query_runtime_text: str) -> CompanyKnowledgeResolveResult:
         base_match = self.base_pack.lookup(query_runtime_text)
-        company_pack, fail_class = self._company_pack()
+        company_pack, company_digests, fail_class = self._company_pack()
         company_match = company_pack.lookup(query_runtime_text) if company_pack is not None else None
 
         if company_match is not None:
@@ -105,7 +113,7 @@ class CompanyKnowledgeResolver:
                 source="company",
                 provenance="company",
                 fact_id=company_match.fact.id,
-                fact_digest=_base_fact_digest(company_match),
+                fact_digest=company_digests.get(company_match.fact.id) or _base_fact_digest(company_match),
                 fact_source=company_match.fact.source,
                 source_url=company_match.fact.source_url,
                 source_doc=company_match.fact.source_doc,
