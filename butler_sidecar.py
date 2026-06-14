@@ -568,6 +568,15 @@ if _FASTAPI_AVAILABLE:
                 "fail_class": knowledge_result.fail_class,
                 "company_facts_available": False,
             })
+            if knowledge_result.answer is None:
+                error_payload = fail_payload(
+                    FailClass.INTERNAL_RUNTIME_ERROR,
+                    knowledge_result.fail_class,
+                    error_class=knowledge_result.fail_class,
+                )
+                error_payload["query_digest"] = sha256_text(params.query)
+                yield _sse("error", error_payload)
+                return
         if knowledge_result.answer is not None:
             answer = _format_company_knowledge_answer(knowledge_result)
             yield _sse("meta", {

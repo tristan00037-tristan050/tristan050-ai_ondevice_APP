@@ -44,17 +44,28 @@ def _active_store(tmp_path) -> CompanyFactStore:
     return store
 
 
+def _parse_sse(raw: str) -> dict:
+    event = None
+    data = None
+    for line in raw.splitlines():
+        if line.startswith("event:"):
+            event = line.split(":", 1)[1].strip()
+        if line.startswith("data:"):
+            data = json.loads(line.split(":", 1)[1].strip())
+    return {"event": event, "data": data}
+
+
 def test_chat_stream_uses_company_resolver_and_audit_digest_only(monkeypatch):
     import butler_sidecar
 
-    raw_query = "company resolver policy"
+    query_text = "company resolver policy"
 
     class FakeResolver:
         def __init__(self, **_kwargs):
             pass
 
         def resolve(self, query_runtime_text: str) -> CompanyKnowledgeResolveResult:
-            assert query_runtime_text == raw_query
+            assert query_runtime_text == query_text
             return CompanyKnowledgeResolveResult(
                 answer=ANSWER_TEXT,
                 source="company",
@@ -72,7 +83,7 @@ def test_chat_stream_uses_company_resolver_and_audit_digest_only(monkeypatch):
 
     monkeypatch.setattr(butler_sidecar, "CompanyKnowledgeResolver", FakeResolver)
     butler_sidecar._factpack_audit_log.clear()
-    params = butler_sidecar._AnalyzeParams(query=raw_query)
+    params = butler_sidecar._AnalyzeParams(query=query_text)
 
     async def _collect() -> list[str]:
         return [event async for event in butler_sidecar._stream_analyze(params, "company-knowledge-test")]
@@ -85,9 +96,159 @@ def test_chat_stream_uses_company_resolver_and_audit_digest_only(monkeypatch):
     assert "event: complete" in joined
     assert butler_sidecar._factpack_audit_log
     audit = butler_sidecar._factpack_audit_log[-1].model_dump()
-    assert audit["query_digest"] == sha256_text(raw_query)
-    assert raw_query not in json.dumps(audit, ensure_ascii=False)
+    assert audit["query_digest"] == sha256_text(query_text)
+    assert query_text not in json.dumps(audit, ensure_ascii=False)
     assert audit["source"] == "company_fact"
+
+
+def test_chat_blocks_company_fail_without_answer_before_llm_fallback(monkeypatch):
+    import butler_sidecar
+
+    query_text = "company private broken fact"
+
+    class FakeResolver:
+        def __init__(self, **_kwargs):
+            pass
+
+        def resolve(self, query_runtime_text: str) -> CompanyKnowledgeResolveResult:
+            assert query_runtime_text == query_text
+            return CompanyKnowledgeResolveResult(
+                answer=None,
+                source="none",
+                provenance="none",
+                fact_id=None,
+                fact_digest=None,
+                fact_source=None,
+                source_url=None,
+                source_doc=None,
+                verified_at=None,
+                expires_at=None,
+                confidence=0.0,
+                fail_class="COMPANY_FACT_STORE_LOAD_FAILED",
+            )
+
+    monkeypatch.setattr(butler_sidecar, "CompanyKnowledgeResolver", FakeResolver)
+    butler_sidecar._factpack_audit_log.clear()
+    params = butler_sidecar._AnalyzeParams(query=query_text)
+
+    async def _collect() -> list[dict]:
+        parsed = []
+        async for event in butler_sidecar._stream_analyze(params, "company-knowledge-fail-test"):
+            parsed.append(_parse_sse(event))
+        return parsed
+
+    events = asyncio.run(_collect())
+    encoded = json.dumps(events, ensure_ascii=False)
+
+    assert any(event["event"] == "error" for event in events)
+    error = [event for event in events if event["event"] == "error"][-1]["data"]
+    assert error["error_class"] == "COMPANY_FACT_STORE_LOAD_FAILED"
+    assert error["query_digest"] == sha256_text(query_text)
+    assert query_text not in json.dumps(error, ensure_ascii=False)
+    assert '"source": "llm"' not in encoded
+    assert not any(event["event"] == "chunk" for event in events)
+    assert butler_sidecar._factpack_audit_log == []
+
+
+def test_chat_preserves_base_answer_with_degraded_meta(monkeypatch):
+    import butler_sidecar
+
+    query_text = "base matched but company degraded"
+
+    class FakeResolver:
+        def __init__(self, **_kwargs):
+            pass
+
+        def resolve(self, query_runtime_text: str) -> CompanyKnowledgeResolveResult:
+            assert query_runtime_text == query_text
+            return CompanyKnowledgeResolveResult(
+                answer="Base answer remains available.",
+                source="base",
+                provenance="base",
+                fact_id="base-fact-1",
+                fact_digest=sha256_text("base-fact-1"),
+                fact_source="base_factpack",
+                source_url=None,
+                source_doc="base-doc",
+                verified_at="2026-06-14",
+                expires_at=None,
+                confidence=1.0,
+                fail_class="COMPANY_FACT_STORE_LOAD_FAILED",
+            )
+
+    monkeypatch.setattr(butler_sidecar, "CompanyKnowledgeResolver", FakeResolver)
+    butler_sidecar._factpack_audit_log.clear()
+    params = butler_sidecar._AnalyzeParams(query=query_text)
+
+    async def _collect() -> list[dict]:
+        return [
+            _parse_sse(event)
+            async for event in butler_sidecar._stream_analyze(params, "company-knowledge-degraded-test")
+        ]
+
+    events = asyncio.run(_collect())
+
+    assert any(event["event"] == "complete" for event in events)
+    assert not any(event["event"] == "error" for event in events)
+    assert any(
+        event["event"] == "meta"
+        and event["data"].get("fail_class") == "COMPANY_FACT_STORE_LOAD_FAILED"
+        for event in events
+    )
+    complete = [event for event in events if event["event"] == "complete"][-1]["data"]
+    assert "Base answer remains available." in complete["result_text"]
+
+
+def test_chat_clean_miss_still_enters_llm_fallback(monkeypatch):
+    import butler_sidecar
+
+    query_text = "clean miss should use llm"
+
+    class FakeResolver:
+        def __init__(self, **_kwargs):
+            pass
+
+        def resolve(self, query_runtime_text: str) -> CompanyKnowledgeResolveResult:
+            assert query_runtime_text == query_text
+            return CompanyKnowledgeResolveResult(
+                answer=None,
+                source="none",
+                provenance="none",
+                fact_id=None,
+                fact_digest=None,
+                fact_source=None,
+                source_url=None,
+                source_doc=None,
+                verified_at=None,
+                expires_at=None,
+                confidence=0.0,
+                fail_class=None,
+            )
+
+    monkeypatch.setattr(butler_sidecar, "CompanyKnowledgeResolver", FakeResolver)
+    butler_sidecar._factpack_audit_log.clear()
+    params = butler_sidecar._AnalyzeParams(query=query_text)
+
+    async def _collect_until_llm() -> list[dict]:
+        parsed = []
+        stream = butler_sidecar._stream_analyze(params, "company-knowledge-clean-miss-test")
+        try:
+            async for event in stream:
+                current = _parse_sse(event)
+                parsed.append(current)
+                if current["event"] == "meta" and current["data"].get("source") == "llm":
+                    break
+        finally:
+            await stream.aclose()
+        return parsed
+
+    events = asyncio.run(_collect_until_llm())
+
+    assert any(
+        event["event"] == "meta" and event["data"].get("source") == "llm"
+        for event in events
+    )
+    assert not any(event["event"] == "error" for event in events)
 
 
 def test_box2_read_only_company_knowledge_note_serves_active_only(tmp_path):
