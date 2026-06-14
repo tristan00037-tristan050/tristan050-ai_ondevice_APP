@@ -3,7 +3,14 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from typing import Any, Callable
+
+from butler_pc_core.accounting.format_kinds import is_accounting_format_kind
+from butler_pc_core.cards.box3.adapters.company_format_adapter import CompanyFormatApplication
+from butler_pc_core.company_policy.contracts import sha256_text
+from butler_pc_core.company_policy.storage import CompanyFormatStore
+from butler_pc_core.company_policy.vault import VaultError
 
 try:
     import pandas as pd
@@ -99,6 +106,126 @@ def build_summary(df: "pd.DataFrame") -> dict[str, Any]:
         "categories": categories,
         "avg_confidence": round(overall_conf, 3),
     }
+
+
+@dataclass(frozen=True)
+class AccountingReportFormatResult:
+    report_text_runtime: str
+    application: CompanyFormatApplication
+
+
+def _format_not_applied(
+    *,
+    report_text_runtime: str,
+    format_id: str | None,
+    fail_class: str,
+    format_digest: str | None = None,
+    template_digest: str | None = None,
+) -> AccountingReportFormatResult:
+    return AccountingReportFormatResult(
+        report_text_runtime=report_text_runtime,
+        application=CompanyFormatApplication(
+            format_id=format_id,
+            format_applied=False,
+            needs_review=True,
+            formatted_digest=None,
+            format_digest=format_digest,
+            template_digest=template_digest,
+            fail_class=fail_class,
+        ),
+    )
+
+
+def apply_company_format_to_report(
+    report_text_runtime: str,
+    format_id: str | None,
+    store: CompanyFormatStore | None = None,
+) -> AccountingReportFormatResult:
+    """Apply a registered accounting company format to an in-memory report.
+
+    The plaintext report and template stay runtime-only. Persistable output is
+    limited to CompanyFormatApplication digests and fail_class metadata.
+    """
+    if not format_id:
+        return _format_not_applied(
+            report_text_runtime=report_text_runtime,
+            format_id=None,
+            fail_class="FORMAT_ID_MISSING",
+        )
+
+    format_store = store or CompanyFormatStore()
+    try:
+        company_format = format_store.get_format(format_id)
+    except Exception:
+        return _format_not_applied(
+            report_text_runtime=report_text_runtime,
+            format_id=format_id,
+            fail_class="FORMAT_STORE_LOAD_FAILED",
+        )
+    if company_format is None or company_format.status != "ACTIVE":
+        return _format_not_applied(
+            report_text_runtime=report_text_runtime,
+            format_id=format_id,
+            fail_class="FORMAT_NOT_REGISTERED",
+        )
+
+    if not is_accounting_format_kind(company_format.format_kind):
+        return _format_not_applied(
+            report_text_runtime=report_text_runtime,
+            format_id=format_id,
+            fail_class="ACCOUNTING_FORMAT_KIND_MISMATCH",
+            format_digest=company_format.format_digest,
+            template_digest=company_format.template_digest,
+        )
+
+    try:
+        template_runtime = format_store.load_template_runtime_only(company_format)
+    except VaultError as exc:
+        return _format_not_applied(
+            report_text_runtime=report_text_runtime,
+            format_id=format_id,
+            fail_class=str(exc),
+            format_digest=company_format.format_digest,
+            template_digest=company_format.template_digest,
+        )
+    except Exception:
+        return _format_not_applied(
+            report_text_runtime=report_text_runtime,
+            format_id=format_id,
+            fail_class="FORMAT_TEMPLATE_LOAD_FAILED",
+            format_digest=company_format.format_digest,
+            template_digest=company_format.template_digest,
+        )
+
+    formatted_runtime = (
+        template_runtime.replace("{draft}", report_text_runtime)
+        if "{draft}" in template_runtime
+        else f"{template_runtime}\n\n{report_text_runtime}"
+    )
+    return AccountingReportFormatResult(
+        report_text_runtime=formatted_runtime,
+        application=CompanyFormatApplication(
+            format_id=format_id,
+            format_applied=True,
+            needs_review=False,
+            formatted_digest=sha256_text(formatted_runtime),
+            format_digest=company_format.format_digest,
+            template_digest=company_format.template_digest,
+            fail_class=None,
+        ),
+    )
+
+
+def should_block_requested_accounting_format(
+    format_id: str | None,
+    application: CompanyFormatApplication,
+) -> bool:
+    """Requested accounting formats must fail closed when unusable.
+
+    No format_id means the caller did not request company-format application,
+    so the base accounting report may complete normally.
+    """
+    return bool(format_id) and not application.format_applied
 
 
 def validate_report(report_text: str, summary: dict[str, Any]) -> list[str]:

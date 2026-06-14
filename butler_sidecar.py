@@ -900,7 +900,7 @@ if _FASTAPI_AVAILABLE:
                     except Exception:
                         pass
 
-    async def _stream_accounting(file_path: str, result_id: str):
+    async def _stream_accounting(file_path: str, result_id: str, format_id: str | None = None):
         """회계 분류 SSE 제너레이터."""
         try:
             yield _sse("phase_start", {"status_message": "분류 중 — 회계과목 매칭"})
@@ -910,7 +910,11 @@ if _FASTAPI_AVAILABLE:
 
             try:
                 from butler_pc_core.accounting.classifier import classify_file, save_classified
-                from butler_pc_core.accounting.report import build_summary
+                from butler_pc_core.accounting.report import (
+                    apply_company_format_to_report,
+                    build_summary,
+                    should_block_requested_accounting_format,
+                )
                 from butler_pc_core.company_profile.storage import CompanyProfileStore, ProfileLoadError
             except ImportError as exc:
                 yield _sse("error", fail_payload(FailClass.INTERNAL_RUNTIME_ERROR, str(exc), error_class="ImportError"))
@@ -990,10 +994,33 @@ if _FASTAPI_AVAILABLE:
                     f"{cat_rows}\n"
                 )
 
+            format_result = await loop.run_in_executor(
+                None,
+                lambda: apply_company_format_to_report(md_content, format_id),
+            )
+            format_application = format_result.application.to_dict()
+            if should_block_requested_accounting_format(format_id, format_result.application):
+                try:
+                    out_xlsx.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                error_class = str(format_application.get("fail_class") or "ACCOUNTING_FORMAT_UNUSABLE")
+                yield _sse(
+                    "error",
+                    fail_payload(
+                        FailClass.INVALID_REQUEST_SCHEMA,
+                        error_class,
+                        error_class=error_class,
+                    ),
+                )
+                return
+            md_content = format_result.report_text_runtime
+
             _accounting_results[result_id] = {
                 "xlsx_path": str(out_xlsx),
                 "md_content": md_content,
                 "summary": summary,
+                "format_application": format_application,
                 "created_at": time.monotonic(),
             }
 
@@ -1001,6 +1028,7 @@ if _FASTAPI_AVAILABLE:
                 "result_id": result_id,
                 "md_content": md_content,
                 "summary": summary,
+                "format_application": format_application,
                 "row_count": summary["total_rows"],
                 "category_count": len(cats),
             })
@@ -1024,6 +1052,10 @@ if _FASTAPI_AVAILABLE:
         upload = form.get("file")
         if upload is None or not hasattr(upload, "read"):
             raise HTTPException(status_code=422, detail="file 필드가 없습니다.")
+        raw_format_id = form.get("format_id")
+        format_id = str(raw_format_id).strip() if raw_format_id is not None else None
+        if not format_id:
+            format_id = None
 
         fname = getattr(upload, "filename", "") or "upload"
         suffix = Path(fname).suffix if fname else ".xlsx"
@@ -1040,7 +1072,7 @@ if _FASTAPI_AVAILABLE:
 
         result_id = str(uuid.uuid4())
         return StreamingResponse(
-            _stream_accounting(tmp_path, result_id),
+            _stream_accounting(tmp_path, result_id, format_id=format_id),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

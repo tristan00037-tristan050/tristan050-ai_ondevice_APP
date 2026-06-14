@@ -20,7 +20,13 @@ export type FormatKind =
   | 'summary'
   | 'contract_review'
   | 'meeting_agenda'
-  | 'freeform';
+  | 'freeform'
+  | 'cash_flow_daily'
+  | 'cash_flow_weekly'
+  | 'cash_flow_monthly'
+  | 'voucher'
+  | 'financial_statement'
+  | 'pnl_summary';
 
 export const DOC_GRADES: readonly DocGrade[] = ['restricted', 'confidential', 'internal', 'public'];
 export const POLICY_DECISIONS: readonly PolicyDecision[] = ['allow', 'needs_review', 'block'];
@@ -34,6 +40,12 @@ export const FORMAT_KINDS: readonly FormatKind[] = [
   'contract_review',
   'meeting_agenda',
   'freeform',
+  'cash_flow_daily',
+  'cash_flow_weekly',
+  'cash_flow_monthly',
+  'voucher',
+  'financial_statement',
+  'pnl_summary',
 ];
 
 export const FORMAT_KIND_LABELS: Record<FormatKind, string> = {
@@ -44,6 +56,12 @@ export const FORMAT_KIND_LABELS: Record<FormatKind, string> = {
   contract_review: '계약 검토',
   meeting_agenda: '회의 안건',
   freeform: '자유형',
+  cash_flow_daily: '일간 현금흐름',
+  cash_flow_weekly: '주간 현금흐름',
+  cash_flow_monthly: '월간 현금흐름',
+  voucher: '전표',
+  financial_statement: '재무제표',
+  pnl_summary: '손익 요약',
 };
 
 export const DOC_GRADE_LABELS: Record<DocGrade, string> = {
