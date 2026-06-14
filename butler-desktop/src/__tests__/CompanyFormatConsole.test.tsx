@@ -1,7 +1,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CompanyFormatConsole } from '../components/v1_1/CompanyFormatConsole';
-import { ADMIN_POLICY_ENDPOINTS, ADMIN_POLICY_SIDECAR_ORIGIN } from '../lib/admin_policy/contracts';
+import {
+  ADMIN_POLICY_ENDPOINTS,
+  ADMIN_POLICY_SIDECAR_ORIGIN,
+  FORMAT_KIND_LABELS,
+  FORMAT_KINDS,
+} from '../lib/admin_policy/contracts';
 
 const DIGEST = 'sha256:' + 'b'.repeat(64);
 const RAW_TEMPLATE = 'CONFIDENTIAL_COMPANY_FORMAT_SENTINEL';
@@ -61,6 +66,15 @@ describe('CompanyFormatConsole v1.2', () => {
 
     expect(screen.getByText(/목록·롤백 endpoint는 #772에 없습니다/)).toBeInTheDocument();
     expect(screen.getByText(/박스 2 연동은 별도 검증 전까지 미지원/)).toBeInTheDocument();
+  });
+
+  it('offers accounting format kinds for Box5 report registration', () => {
+    render(<CompanyFormatConsole onClose={() => undefined} />);
+
+    expect(FORMAT_KINDS).toContain('cash_flow_monthly');
+    expect(FORMAT_KIND_LABELS.cash_flow_monthly).toBe('월간 현금흐름');
+    expect(screen.getByRole('option', { name: '월간 현금흐름 (cash_flow_monthly)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '손익 요약 (pnl_summary)' })).toBeInTheDocument();
   });
 
   it('blocks submit until admin digest and template fields are valid', () => {

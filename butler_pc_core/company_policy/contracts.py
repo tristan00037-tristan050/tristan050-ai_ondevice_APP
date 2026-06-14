@@ -16,7 +16,21 @@ ROLE_VALUES = {"employee", "manager", "admin"}
 DOC_GRADE_VALUES = {"restricted", "confidential", "internal", "public"}
 POLICY_STATUS_VALUES = {"DRAFT", "ACTIVE", "DEPRECATED"}
 DECISION_VALUES = {"allow", "needs_review", "block"}
-FORMAT_KIND_VALUES = {"report", "proposal", "official_letter", "summary", "contract_review", "meeting_agenda", "freeform"}
+FORMAT_KIND_VALUES = {
+    "report",
+    "proposal",
+    "official_letter",
+    "summary",
+    "contract_review",
+    "meeting_agenda",
+    "freeform",
+    "cash_flow_daily",
+    "cash_flow_weekly",
+    "cash_flow_monthly",
+    "voucher",
+    "financial_statement",
+    "pnl_summary",
+}
 FORMAT_STATUS_VALUES = {"DRAFT", "ACTIVE", "DEPRECATED"}
 RAW_FORBIDDEN_KEYS = {
     "raw",
