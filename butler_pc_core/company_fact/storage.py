@@ -8,7 +8,7 @@ from butler_pc_core.company_policy.admin_auth import verify_admin_context
 from butler_pc_core.company_policy.contracts import AdminContext
 from butler_pc_core.company_policy.vault import LocalEncryptedVault, VaultError
 
-from .audit import GLOBAL_COMPANY_FACT_AUDIT_STORE
+from .audit import CompanyFactAuditStore
 from .contracts import (
     CompanyFactContractError,
     CompanyFactIndexEntry,
@@ -26,11 +26,17 @@ class CompanyFactLoadError(RuntimeError):
 
 
 class CompanyFactStore:
-    def __init__(self, root: Path | None = None, vault: LocalEncryptedVault | None = None) -> None:
+    def __init__(
+        self,
+        root: Path | None = None,
+        vault: LocalEncryptedVault | None = None,
+        audit_store: CompanyFactAuditStore | None = None,
+    ) -> None:
         self.root = root or Path(".butler_company_fact_store")
         self.root.mkdir(parents=True, exist_ok=True)
         self.vault = vault or LocalEncryptedVault(root=self.root / "vault", key_path=self.root / "vault.key")
         self.index_path = self.root / "company_facts_index.json"
+        self.audit_store = audit_store or CompanyFactAuditStore(root=self.root)
 
     def _empty_index(self) -> dict[str, Any]:
         return {"schema_version": "company_fact.index_file.v1", "facts": {}}
@@ -73,7 +79,7 @@ class CompanyFactStore:
         data = self._load_index_data()
         data["facts"][entry.fact_id] = entry.to_dict()
         self._save_index_data(data)
-        audit = GLOBAL_COMPANY_FACT_AUDIT_STORE.append(
+        audit = self.audit_store.append(
             action=f"company_fact.{record.status.lower()}",
             fact_digest=record.fact_digest,
             actor_digest=actor_digest,
