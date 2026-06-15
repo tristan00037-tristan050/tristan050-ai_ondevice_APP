@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from butler_pc_core.connect_loop.box1_router import canonical_sha256
@@ -115,7 +116,7 @@ def test_router_decide_server_policy_blocks_non_local_host(monkeypatch) -> None:
     assert decision["fallback_required"] is True
     assert decision["reason_code"] == "LOCALHOST_ONLY"
 
-
+@pytest.mark.active_policy
 def test_router_to_helper1_box_usage_log_request_id_e2e() -> None:
     client = _client()
     store = get_store()
@@ -154,6 +155,7 @@ def test_router_to_helper1_box_usage_log_request_id_e2e() -> None:
     assert "/Users/" not in serialized
 
 
+@pytest.mark.active_policy
 def test_box2_and_box3_payload_shapes_are_real_endpoint_json() -> None:
     client = _client()
 

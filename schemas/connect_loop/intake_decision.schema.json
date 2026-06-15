@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/connect_loop/intake_decision.schema.json",
+  "title": "Box1 Intake Decision v1",
+  "description": "Attachment-aware destination decision. Dispatchers must use target_endpoint only. candidate_endpoint_hint is non-dispatchable guidance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "decision_id", "primary_destination", "destination", "target_box_id", "target_endpoint", "candidate_endpoint_hint", "candidate_payload_ready", "policy_callable", "fallback_required", "fail_class", "next_action", "routing_confidence", "reason_code", "candidate_destinations", "feature_set_digest", "attachments", "attachment_count", "attachment_evidence", "meta", "raw_text_logged", "sample_values_logged", "external_send_zero"],
+  "properties": {
+    "schema_version": {"const": "intake_decision.v1"},
+    "request_id": {"type": "string", "minLength": 1},
+    "decision_id": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "primary_destination": {"$ref": "#/definitions/destination"},
+    "destination": {"$ref": "#/definitions/destination"},
+    "target_box_id": {"type": "string"},
+    "target_endpoint": {"type": "string", "enum": ["none", "POST /accounting/classify", "POST /v1/cards/3/draft", "POST /v1/cards/2/rewrite", "POST /v1/company-facts/candidates"]},
+    "candidate_endpoint_hint": {"type": ["string", "null"], "description": "Non-dispatchable route hint. Dispatchers must never execute this field."},
+    "candidate_payload_ready": {"type": "boolean"},
+    "candidate_payload_digest": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+    "policy_callable": {"type": "boolean"},
+    "policy_bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ready", "method", "fail_class"],
+      "properties": {
+        "ready": {"type": "boolean"},
+        "method": {"type": "string"},
+        "fail_class": {"type": ["string", "null"]}
+      }
+    },
+    "fallback_required": {"type": "boolean"},
+    "fail_class": {"type": "string"},
+    "next_action": {"type": "string", "enum": ["CALL_BOX_ENDPOINT", "STRUCTURE_COMPANY_FACT_CANDIDATE_REQUIRED", "ADMIN_FORMAT_REGISTRATION_REQUIRED", "POLICY_BOOTSTRAP_REQUIRED", "ASK_FOLLOWUP", "BLOCK"]},
+    "routing_confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+    "reason_code": {"type": "string", "minLength": 1},
+    "candidate_destinations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["destination", "score", "reason_code"],
+        "properties": {
+          "destination": {"$ref": "#/definitions/destination"},
+          "score": {"type": "number", "minimum": 0, "maximum": 1},
+          "reason_code": {"type": "string"}
+        }
+      }
+    },
+    "feature_set_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "attachments": {"type": "array", "items": {"$ref": "#/definitions/attachment_summary"}},
+    "attachment_count": {"type": "integer", "minimum": 0},
+    "attachment_evidence": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["attachment_count", "attachments", "feature_set_digest", "unsupported_files", "raw_text_logged", "sample_values_logged", "external_send_zero"],
+      "properties": {
+        "attachment_count": {"type": "integer"},
+        "attachments": {"type": "array", "items": {"$ref": "#/definitions/attachment_summary"}},
+        "feature_set_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "unsupported_files": {"type": "array"},
+        "raw_text_logged": {"const": false},
+        "sample_values_logged": {"const": false},
+        "external_send_zero": {"const": true}
+      }
+    },
+    "unsupported_files": {"type": "array"},
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature_set_digest", "raw_text_logged", "sample_values_logged", "external_send_zero", "dispatcher_contract"],
+      "properties": {
+        "feature_set_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "raw_text_logged": {"const": false},
+        "sample_values_logged": {"const": false},
+        "external_send_zero": {"const": true},
+        "dispatcher_contract": {"const": "DISPATCH_TARGET_ENDPOINT_ONLY"}
+      }
+    },
+    "raw_text_logged": {"const": false},
+    "sample_values_logged": {"const": false},
+    "external_send_zero": {"const": true}
+  },
+  "allOf": [
+    {"if": {"properties": {"destination": {"const": "company_fact_candidate"}, "candidate_payload_ready": {"const": false}}}, "then": {"properties": {"target_endpoint": {"const": "none"}, "next_action": {"enum": ["STRUCTURE_COMPANY_FACT_CANDIDATE_REQUIRED", "POLICY_BOOTSTRAP_REQUIRED", "BLOCK"]}}}},
+    {"if": {"properties": {"destination": {"const": "company_format_candidate"}}}, "then": {"properties": {"target_endpoint": {"const": "none"}, "next_action": {"enum": ["ADMIN_FORMAT_REGISTRATION_REQUIRED", "POLICY_BOOTSTRAP_REQUIRED"]}}}}
+  ],
+  "definitions": {
+    "destination": {"type": "string", "enum": ["box2_form_convert", "box3_draft_from_material", "box5_accounting_classify", "box4_edit_attachment", "box6_fill_external_form", "box7_meeting_minutes", "box8_data_insight", "company_fact_candidate", "company_format_candidate", "ask_followup", "none"]},
+    "attachment_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_digest", "file_kind", "feature_digest", "extractor_fail_class", "dlp_buckets", "raw_text_logged", "sample_values_logged"],
+      "properties": {
+        "file_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "file_kind": {"type": "string"},
+        "feature_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "extractor_fail_class": {"type": ["string", "null"]},
+        "dlp_buckets": {"type": "array", "items": {"type": "string"}},
+        "raw_text_logged": {"const": false},
+        "sample_values_logged": {"const": false}
+      }
+    }
+  }
+}
