@@ -104,3 +104,30 @@ def test_total_evidence_limit_exceeded_abstains():
 
     assert outcome.status == "abstain"
     assert outcome.reason_code == "EVIDENCE_LIMIT_EXCEEDED"
+
+
+def test_dict_evidence_digest_is_recomputed_from_runtime_text():
+    text = (
+        "Q: 출장비 정산 기준은?\n"
+        "A: 출장비는 3만원 이하만 영수증으로 정산합니다.\n"
+        "출처: 사내규정\n"
+    )
+    outcome = extract_company_fact_candidate(
+        {},
+        {},
+        "회사 규정",
+        evidence_units_runtime_only=[
+            {
+                "unit_id": "forged",
+                "text_runtime_only": text,
+                "source_digest": sha256_text("source"),
+                "unit_digest": sha256_text("stale-or-forged"),
+                "unit_kind": "qa",
+                "order": 0,
+            }
+        ],
+    )
+
+    assert outcome.status == "draft_ready"
+    assert outcome.evidence_digests == [sha256_text(text)]
+    assert sha256_text("stale-or-forged") not in outcome.evidence_digests

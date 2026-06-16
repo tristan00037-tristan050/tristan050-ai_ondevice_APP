@@ -25,10 +25,13 @@ _CATEGORY_VALUES = {
     "company_profile",
     "general_company_fact",
 }
-_SOURCE_LABELS = {"출처", "source", "문서", "문서명", "source_doc", "근거문서"}
-_DATE_LABELS = {"시행일", "verified_at", "검증일", "등록일", "날짜"}
+_SOURCE_LABELS = ("출처", "source", "근거문서", "문서명", "source_doc", "문서")
+_SOURCE_DOC_LABELS = ("문서명", "source_doc", "문서", "근거문서")
+_SOURCE_URL_LABELS = ("source_url", "url", "링크")
+_DATE_LABELS = ("시행일", "verified_at", "검증일", "등록일", "날짜")
 _QUESTION_LABELS = {"q", "질문", "question"}
 _ANSWER_LABELS = {"a", "답변", "answer"}
+_EXCLUDED_FACT_LABELS = set(_SOURCE_LABELS) | set(_SOURCE_DOC_LABELS) | set(_SOURCE_URL_LABELS) | set(_DATE_LABELS)
 
 _EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
 _LOCAL_PATH_RE = re.compile(r"(/Users/|/home/|/Volumes/|[A-Za-z]:\\|file://)", re.I)
@@ -200,7 +203,14 @@ def _infer_category(text: str) -> str:
 
 def _coerce_evidence_unit(value: Any, index: int, source_digest: str) -> EvidenceUnitRuntime:
     if isinstance(value, EvidenceUnitRuntime):
-        return value
+        return EvidenceUnitRuntime(
+            unit_id=value.unit_id,
+            text_runtime_only=value.text_runtime_only,
+            source_digest=value.source_digest,
+            unit_digest=sha256_text(value.text_runtime_only),
+            unit_kind=value.unit_kind,
+            order=value.order,
+        )
     if isinstance(value, str):
         text = value
         return EvidenceUnitRuntime(
@@ -217,7 +227,7 @@ def _coerce_evidence_unit(value: Any, index: int, source_digest: str) -> Evidenc
             unit_id=str(value.get("unit_id") or f"unit-{index + 1}"),
             text_runtime_only=text,
             source_digest=str(value.get("source_digest") or source_digest),
-            unit_digest=str(value.get("unit_digest") or sha256_text(text)),
+            unit_digest=sha256_text(text),
             unit_kind=value.get("unit_kind") if value.get("unit_kind") in {"qa", "label_value", "paragraph", "table_header_value"} else "paragraph",  # type: ignore[arg-type]
             order=int(value.get("order") or index),
         )
@@ -284,7 +294,7 @@ def _label_map(text: str) -> dict[str, list[str]]:
     return labels
 
 
-def _first_label(labels: dict[str, list[str]], names: set[str]) -> str | None:
+def _first_label(labels: dict[str, list[str]], names: Sequence[str]) -> str | None:
     for name in names:
         values = labels.get(name.casefold())
         if values:
@@ -293,8 +303,7 @@ def _first_label(labels: dict[str, list[str]], names: set[str]) -> str | None:
 
 
 def _extract_qa(text: str) -> tuple[list[str], str | None]:
-    questions: list[str] = []
-    answers: list[str] = []
+    pending_question: str | None = None
     for line in text.splitlines():
         match = _QA_RE.match(line)
         if not match:
@@ -302,17 +311,18 @@ def _extract_qa(text: str) -> tuple[list[str], str | None]:
         label = match.group(1).casefold()
         value = _normalize_space(match.group(2))
         if label in _QUESTION_LABELS and value:
-            questions.append(value)
+            pending_question = value
         elif label in _ANSWER_LABELS and value:
-            answers.append(value)
-    answer = answers[0] if answers else None
-    return questions, answer
+            if pending_question:
+                return [pending_question], value
+            return [], value
+    return ([pending_question] if pending_question else []), None
 
 
 def _extract_label_value(labels: dict[str, list[str]]) -> tuple[str | None, str | None]:
     for raw_label, values in labels.items():
         label = _normalize_space(raw_label)
-        if label.casefold() in _SOURCE_LABELS or label.casefold() in _DATE_LABELS:
+        if label.casefold() in _EXCLUDED_FACT_LABELS:
             continue
         if label.casefold() in _QUESTION_LABELS or label.casefold() in _ANSWER_LABELS:
             continue
@@ -375,8 +385,8 @@ def _candidate_draft(
         "keywords_any": [],
         "answer_runtime_text": _normalize_space(answer),
         "source": _normalize_space(source),
-        "source_url": _first_label(labels, {"source_url", "url", "링크"}),
-        "source_doc": _first_label(labels, {"문서명", "source_doc", "문서"}),
+        "source_url": _first_label(labels, _SOURCE_URL_LABELS),
+        "source_doc": _first_label(labels, _SOURCE_DOC_LABELS),
         "verified_at": verified_at,
         "expires_at": None,
         "confidence": round(float(confidence), 4),

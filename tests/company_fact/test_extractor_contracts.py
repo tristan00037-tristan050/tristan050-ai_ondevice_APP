@@ -83,3 +83,41 @@ def test_invalid_date_is_left_empty_not_raw_preserved():
     assert outcome.candidate_draft is not None
     assert outcome.candidate_draft["verified_at"] is None
     assert "곧 시행" not in str(outcome.candidate_draft)
+
+
+def test_multi_qa_uses_only_question_paired_with_selected_answer():
+    text = (
+        "Q: 출장비 정산 기준은?\n"
+        "A: 출장비는 3만원 이하만 영수증으로 정산합니다.\n"
+        "Q: 보안 비밀번호 기준은?\n"
+        "A: 비밀번호는 90일마다 변경해야 합니다.\n"
+        "출처: 사내규정\n"
+    )
+    outcome = extract_company_fact_candidate({}, {}, "회사 규정", evidence_units_runtime_only=[_unit(text)])
+
+    assert outcome.status == "draft_ready"
+    assert outcome.candidate_draft is not None
+    assert outcome.candidate_draft["answer_runtime_text"] == "출장비는 3만원 이하만 영수증으로 정산합니다."
+    assert "출장비 정산 기준은?" in outcome.candidate_draft["question_patterns"]
+    assert "보안 비밀번호 기준은?" not in outcome.candidate_draft["question_patterns"]
+
+
+def test_label_priority_is_deterministic_for_source_and_source_doc():
+    text = (
+        "Q: 출장비 정산 기준은?\n"
+        "A: 출장비는 3만원 이하만 영수증으로 정산합니다.\n"
+        "문서명: 보조문서\n"
+        "출처: 우선출처\n"
+        "source: 영문출처\n"
+        "시행일: 2026/06/16\n"
+    )
+    first = extract_company_fact_candidate({}, {}, "회사 규정", evidence_units_runtime_only=[_unit(text)])
+    second = extract_company_fact_candidate({}, {}, "회사 규정", evidence_units_runtime_only=[_unit(text)])
+
+    assert first.status == "draft_ready"
+    assert second.status == "draft_ready"
+    assert first.candidate_draft is not None
+    assert second.candidate_draft is not None
+    assert first.candidate_draft["source"] == "우선출처"
+    assert first.candidate_draft["source_doc"] == "보조문서"
+    assert first.draft_digest == second.draft_digest
