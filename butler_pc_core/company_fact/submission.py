@@ -18,6 +18,21 @@ from .storage import CompanyFactStore
 
 SCHEMA_VERSION = "company_fact.submission_outcome.v1"
 PROVENANCE_ORIGIN = "AUTO_EXTRACTION_CONFIRMED"
+_CANDIDATE_DRAFT_KEYS = frozenset(
+    {
+        "category",
+        "question_patterns",
+        "keywords_required",
+        "keywords_any",
+        "answer_runtime_text",
+        "source",
+        "source_url",
+        "source_doc",
+        "verified_at",
+        "expires_at",
+        "confidence",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -91,6 +106,35 @@ def _validate_optional_digest(value: str | None, field_name: str) -> str | None:
         raise ValueError(str(exc)) from exc
 
 
+def _validate_digest_inputs(
+    *,
+    extraction_draft_digest: str | None,
+    confirmed_draft_digest: str | None,
+    confirmed_by_digest: str | None,
+) -> tuple[str | None, str | None, str | None, bool]:
+    invalid_found = False
+    validated: dict[str, str | None] = {
+        "extraction_draft": None,
+        "confirmed_draft": None,
+        "confirmed_by": None,
+    }
+    for field_name, value in (
+        ("extraction_draft", extraction_draft_digest),
+        ("confirmed_draft", confirmed_draft_digest),
+        ("confirmed_by", confirmed_by_digest),
+    ):
+        try:
+            validated[field_name] = _validate_optional_digest(value, field_name)
+        except ValueError:
+            invalid_found = True
+    return (
+        validated["extraction_draft"],
+        validated["confirmed_draft"],
+        validated["confirmed_by"],
+        invalid_found,
+    )
+
+
 def _make_provenance(
     *,
     extraction_draft_digest: str | None,
@@ -118,16 +162,17 @@ def submit_confirmed_candidate(
     store: CompanyFactStore | None = None,
 ) -> SubmissionOutcome:
     computed_confirmed_digest = stable_json_digest(confirmed_draft)
-    try:
-        extraction_digest = _validate_optional_digest(extraction_draft_digest, "extraction_draft")
-        supplied_confirmed_digest = _validate_optional_digest(confirmed_draft_digest, "confirmed_draft")
-        confirmer_digest = _validate_optional_digest(confirmed_by_digest, "confirmed_by")
-    except ValueError as exc:
+    extraction_digest, supplied_confirmed_digest, confirmer_digest, digest_invalid = _validate_digest_inputs(
+        extraction_draft_digest=extraction_draft_digest,
+        confirmed_draft_digest=confirmed_draft_digest,
+        confirmed_by_digest=confirmed_by_digest,
+    )
+    if digest_invalid:
         return _invalid(
             "DIGEST_INVALID",
-            extraction_draft_digest=extraction_draft_digest,
-            confirmed_draft_digest=confirmed_draft_digest,
-            confirmed_by_digest=confirmed_by_digest,
+            extraction_draft_digest=extraction_digest,
+            confirmed_draft_digest=supplied_confirmed_digest,
+            confirmed_by_digest=confirmer_digest,
         )
 
     final_confirmed_digest = supplied_confirmed_digest or computed_confirmed_digest
@@ -144,6 +189,14 @@ def submit_confirmed_candidate(
             schema_version=SCHEMA_VERSION,
             status="not_confirmed",
             reason_code="CONFIRMATION_REQUIRED",
+            extraction_draft_digest=extraction_digest,
+            confirmed_draft_digest=final_confirmed_digest,
+            confirmed_by_digest=confirmer_digest,
+        )
+
+    if set(confirmed_draft) - _CANDIDATE_DRAFT_KEYS:
+        return _invalid(
+            "CANDIDATE_SCHEMA_EXTRA_FIELDS",
             extraction_draft_digest=extraction_digest,
             confirmed_draft_digest=final_confirmed_digest,
             confirmed_by_digest=confirmer_digest,

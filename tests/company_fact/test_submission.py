@@ -19,6 +19,9 @@ RAW_VALUES = [
     "사내규정",
     "policy.xlsx",
     "/Users/private/policy.xlsx",
+    "/Users/private/raw-token.txt",
+    "alice@example.com",
+    "sk-proj-raw-secret-token",
     "셀값",
 ]
 
@@ -168,6 +171,46 @@ def test_confirmed_digest_mismatch_blocks_store_call():
     assert outcome.status == "invalid_draft"
     assert outcome.reason_code == "CONFIRMED_DRAFT_DIGEST_MISMATCH"
     assert store.calls == []
+
+
+def test_malformed_digest_inputs_are_sanitized_before_returning():
+    store = _SpyStore()
+    draft = _draft()
+    outcome = submit_confirmed_candidate(
+        draft,
+        confirmed=True,
+        extraction_draft_digest="/Users/private/raw-token.txt",
+        confirmed_draft_digest="alice@example.com",
+        confirmed_by_digest="sk-proj-raw-secret-token",
+        store=store,  # type: ignore[arg-type]
+    )
+
+    assert outcome.status == "invalid_draft"
+    assert outcome.reason_code == "DIGEST_INVALID"
+    assert outcome.extraction_draft_digest is None
+    assert outcome.confirmed_draft_digest is None
+    assert outcome.confirmed_by_digest is None
+    assert store.calls == []
+    _assert_raw_free(outcome.to_dict())
+    _assert_raw_free(outcome.to_audit_dict())
+
+
+def test_confirmed_draft_with_extra_raw_key_is_rejected_before_save():
+    store = _SpyStore()
+    draft = _draft(raw_text="/Users/private/policy.xlsx")
+    outcome = submit_confirmed_candidate(
+        draft,
+        confirmed=True,
+        confirmed_draft_digest=stable_json_digest(draft),
+        confirmed_by_digest=sha256_text("reviewer"),
+        store=store,  # type: ignore[arg-type]
+    )
+
+    assert outcome.status == "invalid_draft"
+    assert outcome.reason_code == "CANDIDATE_SCHEMA_EXTRA_FIELDS"
+    assert store.calls == []
+    _assert_raw_free(outcome.to_dict())
+    _assert_raw_free(outcome.to_audit_dict())
 
 
 def test_real_store_creates_candidate_only_and_audit_ref(tmp_path):
