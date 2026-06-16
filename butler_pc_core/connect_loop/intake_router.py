@@ -326,6 +326,7 @@ def _next_action_for_non_callable(destination: str) -> str:
 def _initial_decision(
     *,
     request_id: str,
+    runtime_text: str | None,
     destination: str,
     target_box_id: str,
     target_endpoint: str,
@@ -344,7 +345,7 @@ def _initial_decision(
     decision_id = stable_json_digest(_decision_id_payload(
         request_id=request_id,
         bundle=bundle,
-        runtime_text=None,
+        runtime_text=runtime_text,
         destination=destination,
         candidate_payload_digest=candidate_payload_digest,
     ))
@@ -409,6 +410,7 @@ def decide_intake(
             target_box, _ = _endpoint_for_destination(destination)
             return _initial_decision(
                 request_id=request_id,
+                runtime_text=runtime_text,
                 destination=destination,
                 target_box_id=target_box,
                 target_endpoint="none",
@@ -429,6 +431,7 @@ def decide_intake(
     if not policy.ready:
         return _initial_decision(
             request_id=request_id,
+            runtime_text=runtime_text,
             destination=destination,
             target_box_id=target_box,
             target_endpoint="none",
@@ -447,6 +450,7 @@ def decide_intake(
     if destination == DEST_COMPANY_FACT and not candidate_payload_ready:
         return _initial_decision(
             request_id=request_id,
+            runtime_text=runtime_text,
             destination=destination,
             target_box_id=target_box,
             target_endpoint="none",
@@ -467,6 +471,7 @@ def decide_intake(
         action = "ASK_FOLLOWUP" if destination not in {DEST_COMPANY_FORMAT, DEST_COMPANY_FACT} else _next_action_for_non_callable(destination)
         return _initial_decision(
             request_id=request_id,
+            runtime_text=runtime_text,
             destination=destination,
             target_box_id=target_box,
             target_endpoint="none",
@@ -486,6 +491,7 @@ def decide_intake(
         raise IntakeContractError("INTAKE_TARGET_ENDPOINT_INVALID")
     return _initial_decision(
         request_id=request_id,
+        runtime_text=runtime_text,
         destination=destination,
         target_box_id=target_box,
         target_endpoint=real_endpoint,

@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import zipfile
+import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, field
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -19,6 +20,7 @@ from typing import Any, Iterable, Sequence
 SCHEMA_VERSION = "attachment_features.v1"
 MAX_TEXT_PREVIEW_BYTES = 64 * 1024
 MAX_CSV_ROWS = 40
+MAX_XLSX_XML_BYTES = 2 * 1024 * 1024
 
 _SHA_PREFIX = "sha256:"
 _EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
@@ -156,6 +158,49 @@ def _spreadsheet_from_csv(text: str) -> tuple[list[str], int]:
     return [str(item).strip() for item in rows[0]], max(0, len(rows) - 1)
 
 
+def _xlsx_texts(element: ET.Element) -> str:
+    return "".join(text for text in element.itertext()).strip()
+
+
+def _read_xlsx_xml(zf: zipfile.ZipFile, name: str) -> ET.Element:
+    info = zf.getinfo(name)
+    if info.file_size > MAX_XLSX_XML_BYTES:
+        raise RuntimeError("INTAKE_XLSX_XML_TOO_LARGE")
+    return ET.fromstring(zf.read(name))
+
+
+def _load_xlsx_shared_strings(zf: zipfile.ZipFile) -> list[str]:
+    try:
+        root = _read_xlsx_xml(zf, "xl/sharedStrings.xml")
+    except KeyError:
+        return []
+    return [_xlsx_texts(item) for item in root.iter() if item.tag.endswith("}si") or item.tag == "si"]
+
+
+def _xlsx_column_index(cell_ref: str | None) -> int:
+    letters = "".join(ch for ch in str(cell_ref or "") if ch.isalpha()).upper()
+    value = 0
+    for ch in letters:
+        value = value * 26 + (ord(ch) - ord("A") + 1)
+    return value
+
+
+def _xlsx_cell_text(cell: ET.Element, shared_strings: Sequence[str]) -> str:
+    cell_type = cell.attrib.get("t")
+    if cell_type == "inlineStr":
+        return _xlsx_texts(cell)
+    value_node = next((child for child in cell if child.tag.endswith("}v") or child.tag == "v"), None)
+    if value_node is None or value_node.text is None:
+        return ""
+    raw_value = value_node.text.strip()
+    if cell_type == "s":
+        try:
+            return shared_strings[int(raw_value)]
+        except (ValueError, IndexError):
+            return ""
+    return raw_value
+
+
 def _spreadsheet_from_xlsx(data: bytes) -> tuple[list[str], int, str | None]:
     # Macro workbooks are not accepted by the intake router because their embedded
     # macro surface is irrelevant to destination routing and should be fail-closed.
@@ -166,12 +211,20 @@ def _spreadsheet_from_xlsx(data: bytes) -> tuple[list[str], int, str | None]:
             names = zf.namelist()
             if any(name.casefold().endswith("vbaProject.bin".casefold()) for name in names):
                 return [], 0, "INTAKE_MACRO_WORKBOOK_UNSUPPORTED"
-            shared = " ".join(names[:50])
-            # We do not parse cells here to avoid persisting or accidentally logging
-            # values. Headers are approximated via sheet metadata; actual production
-            # may use openpyxl runtime-only and then discard cell values.
-            if "xl/worksheets" in shared or "xl/workbook.xml" in shared:
-                return [], 1, None
+            worksheet_names = sorted(name for name in names if name.startswith("xl/worksheets/") and name.endswith(".xml"))
+            if worksheet_names:
+                shared_strings = _load_xlsx_shared_strings(zf)
+                sheet = _read_xlsx_xml(zf, worksheet_names[0])
+                rows = [row for row in sheet.iter() if row.tag.endswith("}row") or row.tag == "row"]
+                if not rows:
+                    return [], 0, None
+                first_cells = [
+                    (_xlsx_column_index(cell.attrib.get("r")), _xlsx_cell_text(cell, shared_strings))
+                    for cell in rows[0]
+                    if cell.tag.endswith("}c") or cell.tag == "c"
+                ]
+                headers = [text.strip() for _, text in sorted(first_cells, key=lambda item: item[0]) if text.strip()]
+                return headers, max(0, len(rows) - 1), None
             return [], 0, "INTAKE_SPREADSHEET_STRUCTURE_UNKNOWN"
     except zipfile.BadZipFile:
         return [], 0, "INTAKE_CORRUPT_OR_UNREADABLE_ATTACHMENT"

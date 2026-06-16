@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import zipfile
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -48,6 +51,55 @@ def bank_bundle():
     return extract_attachment_features([RuntimeAttachment(raw, filename="bank.csv", content_type="text/csv")])
 
 
+def bank_xlsx_bundle():
+    shared_strings = [
+        "거래일자",
+        "입금",
+        "출금",
+        "잔액",
+        "적요",
+        "상대계좌예금주명",
+        "2026-01-01",
+        "1000",
+        "0",
+        "테스트",
+        "홍길동",
+    ]
+    shared_xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        + "".join(f"<si><t>{text}</t></si>" for text in shared_strings)
+        + "</sst>"
+    )
+    sheet_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    <row r="1">
+      <c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c>
+      <c r="C1" t="s"><v>2</v></c><c r="D1" t="s"><v>3</v></c>
+      <c r="E1" t="s"><v>4</v></c><c r="F1" t="s"><v>5</v></c>
+    </row>
+    <row r="2">
+      <c r="A2" t="s"><v>6</v></c><c r="B2" t="s"><v>7</v></c>
+      <c r="C2" t="s"><v>8</v></c><c r="D2" t="s"><v>7</v></c>
+      <c r="E2" t="s"><v>9</v></c><c r="F2" t="s"><v>10</v></c>
+    </row>
+  </sheetData>
+</worksheet>"""
+    out = BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("xl/workbook.xml", "<workbook/>")
+        zf.writestr("xl/sharedStrings.xml", shared_xml)
+        zf.writestr("xl/worksheets/sheet1.xml", sheet_xml)
+    return extract_attachment_features([
+        RuntimeAttachment(
+            out.getvalue(),
+            filename="bank.xlsx",
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    ])
+
+
 def dataset_bundle():
     raw = "측정일,온도,습도,수량\n2026-01-01,10,20,30\n".encode("utf-8")
     return extract_attachment_features([RuntimeAttachment(raw, filename="data.csv", content_type="text/csv")])
@@ -90,6 +142,20 @@ def test_policy_on_box5_is_callable_but_router_does_not_call():
     assert decision["policy_callable"] is True
     assert decision["fallback_required"] is False
     assert dispatchable_endpoint(decision) == "POST /accounting/classify"
+    Draft7Validator(_schema("intake_decision.schema.json")).validate(decision)
+
+
+def test_xlsx_bank_headers_route_to_box5_without_cell_value_surface():
+    bundle = bank_xlsx_bundle()
+    assert bundle.attachments[0]["file_kind"] == "bank_statement_table"
+    assert bundle.attachments[0]["column_role_flags"]["has_date_column"] is True
+    assert bundle.attachments[0]["column_role_flags"]["has_amount_column"] is True
+    decision = decide_intake(request_id="req-xlsx", attachment_bundle=bundle, runtime_text="분개", policy_ready_override=True)
+    assert decision["primary_destination"] == "box5_accounting_classify"
+    assert decision["target_endpoint"] == "POST /accounting/classify"
+    encoded = json.dumps(decision, ensure_ascii=False)
+    assert "2026-01-01" not in encoded
+    assert "홍길동" not in encoded
     Draft7Validator(_schema("intake_decision.schema.json")).validate(decision)
 
 
@@ -202,6 +268,12 @@ def test_decision_id_is_order_invariant_for_attachments():
     assert d1["decision_id"] == d2["decision_id"]
 
 
+def test_decision_id_includes_runtime_text_digest():
+    d1 = decide_intake(request_id="req-runtime", attachment_bundle=bank_bundle(), runtime_text="분개", policy_ready_override=True)
+    d2 = decide_intake(request_id="req-runtime", attachment_bundle=bank_bundle(), runtime_text="데이터 분석", policy_ready_override=True)
+    assert d1["decision_id"] != d2["decision_id"]
+
+
 def test_dlp_bucket_records_signal_without_raw_value():
     raw = "거래일자,입금,출금\n/Users/private/path,sk-proj-secret-like-token\n".encode()
     bundle = extract_attachment_features([RuntimeAttachment(raw, filename="bank.csv", content_type="text/csv")])
@@ -247,6 +319,19 @@ def test_no_raw_keys_in_persisted_decision_surface():
     encoded = json.dumps(decision, ensure_ascii=False)
     forbidden = ["sample_cell_value", "source_text_runtime", "runtime_file_text", "filename", "file_path"]
     assert not any(item in encoded for item in forbidden)
+
+
+def test_raw_zero_verifier_failure_message_is_raw_free():
+    script = ROOT / "scripts" / "verify_intake_router_raw_zero.py"
+    spec = importlib.util.spec_from_file_location("verify_intake_router_raw_zero", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with pytest.raises(module.RawZeroVerifierFailure) as excinfo:
+        module._assert_no_forbidden_surface({"surface": "/Users/private/path"})
+    assert str(excinfo.value) == "FORBIDDEN_VALUE"
+    assert "/Users/private/path" not in str(excinfo.value)
+
 
 def test_policy_bootstrap_status_fail_closed_without_store():
     from butler_pc_core.connect_loop.intake_router import policy_bootstrap_status
