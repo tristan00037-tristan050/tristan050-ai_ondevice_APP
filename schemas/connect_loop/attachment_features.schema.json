@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/connect_loop/attachment_features.schema.json",
+  "title": "Attachment Features v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "attachment_count", "attachments", "feature_set_digest", "unsupported_files", "raw_text_logged", "sample_values_logged", "external_send_zero"],
+  "properties": {
+    "schema_version": {"const": "attachment_features.v1"},
+    "attachment_count": {"type": "integer", "minimum": 0, "maximum": 12},
+    "feature_set_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "unsupported_files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file_digest", "file_kind", "extractor_fail_class"],
+        "properties": {
+          "file_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+          "file_kind": {"type": "string"},
+          "extractor_fail_class": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,96}$"}
+        }
+      }
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file_digest", "file_kind", "feature_digest", "extension_bucket", "mime_bucket", "size_bucket", "raw_text_logged", "sample_values_logged", "external_send_zero"],
+        "properties": {
+          "file_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+          "file_kind": {"type": "string", "enum": ["bank_statement_table", "generic_dataset", "company_policy_doc", "company_format_template", "external_doc_to_convert", "draft_source_material", "audio_meeting", "generic_document", "unsupported_file_kind", "unknown_binary"]},
+          "feature_digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+          "extension_bucket": {"type": "string"},
+          "mime_bucket": {"type": "string"},
+          "size_bucket": {"type": "string"},
+          "table_header_digest_set": {"type": "array", "items": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}},
+          "column_role_flags": {"type": "object", "additionalProperties": {"type": "boolean"}},
+          "document_kind_flags": {"type": "object", "additionalProperties": {"type": "boolean"}},
+          "row_count_bucket": {"type": ["string", "null"]},
+          "page_count_bucket": {"type": ["string", "null"]},
+          "audio_duration_bucket": {"type": ["string", "null"]},
+          "extractor_fail_class": {"type": ["string", "null"]},
+          "dlp_buckets": {"type": "array", "items": {"type": "string", "enum": ["DLP_SIGNAL_PRESENT"]}},
+          "raw_text_logged": {"const": false},
+          "sample_values_logged": {"const": false},
+          "external_send_zero": {"const": true}
+        }
+      }
+    },
+    "raw_text_logged": {"const": false},
+    "sample_values_logged": {"const": false},
+    "external_send_zero": {"const": true}
+  }
+}
