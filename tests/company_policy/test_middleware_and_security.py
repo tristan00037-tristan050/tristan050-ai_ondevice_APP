@@ -17,7 +17,7 @@ def admin():
         admin_id_digest=sha256_text("admin"),
         role="admin",
         admin_session_digest=sha256_text("session"),
-        auth_method="test_only",
+        auth_method="tauri_secure_invoke",
     )
 
 

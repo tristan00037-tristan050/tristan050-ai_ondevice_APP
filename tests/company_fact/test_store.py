@@ -19,7 +19,7 @@ def _admin(role: str = "admin") -> AdminContext:
         admin_id_digest=sha256_text(f"company-fact-{role}"),
         role=role,  # type: ignore[arg-type]
         admin_session_digest=sha256_text("company-fact-session"),
-        auth_method="test_only",
+        auth_method="tauri_secure_invoke",
     )
 
 
