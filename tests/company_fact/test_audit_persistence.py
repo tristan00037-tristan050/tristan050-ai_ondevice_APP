@@ -21,7 +21,7 @@ def _admin() -> AdminContext:
         admin_id_digest=sha256_text("company-fact-audit-admin"),
         role="admin",
         admin_session_digest=sha256_text("company-fact-audit-session"),
-        auth_method="test_only",
+        auth_method="tauri_secure_invoke",
     )
 
 
