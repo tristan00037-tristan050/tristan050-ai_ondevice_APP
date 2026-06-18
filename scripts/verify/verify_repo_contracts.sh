@@ -23,6 +23,7 @@ ONPREM_PROOF_LATEST_PRESENT_OK=0
 ONPREM_PROOF_ARCHIVE_LINKED_OK=0
 ONPREM_PROOF_SENSITIVE_SCAN_OK=0
 ONPREM_PROOF_LATEST_FRESH_OK=0
+ONPREM_PROOF_LATEST_FRESH_SKIPPED=0
 
 OK_CONTAMINATION_REPO_GUARD_OK=0
 REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=0
@@ -664,6 +665,7 @@ cleanup(){
   echo "ONPREM_PROOF_ARCHIVE_LINKED_OK=${ONPREM_PROOF_ARCHIVE_LINKED_OK}"
   echo "ONPREM_PROOF_SENSITIVE_SCAN_OK=${ONPREM_PROOF_SENSITIVE_SCAN_OK}"
   echo "ONPREM_PROOF_LATEST_FRESH_OK=${ONPREM_PROOF_LATEST_FRESH_OK}"
+  echo "ONPREM_PROOF_LATEST_FRESH_SKIPPED=${ONPREM_PROOF_LATEST_FRESH_SKIPPED}"
   echo "OK_CONTAMINATION_REPO_GUARD_OK=${OK_CONTAMINATION_REPO_GUARD_OK}"
   echo "REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK=${REQUIRED_CHECK_MERGE_GROUP_COVERAGE_OK}"
   echo "SSOT_PLACEHOLDER_GUARD_OK=${SSOT_PLACEHOLDER_GUARD_OK}"
@@ -1540,8 +1542,23 @@ ONPREM_LATEST_SENSITIVE_SCAN_V1_OK=1
 ONPREM_LATEST_LONG_LINE_BLOCK_V1_OK=1
 
 echo "== guard: onprem proof freshness =="
-run_guard "onprem proof freshness" bash scripts/verify/verify_onprem_proof_freshness.sh
-ONPREM_PROOF_LATEST_FRESH_OK=1
+CURRENT_GUARD="onprem proof freshness"
+if ! freshness_output="$(bash scripts/verify/verify_onprem_proof_freshness.sh)"; then
+  echo "$freshness_output"
+  echo "FAIL: onprem proof freshness"
+  emit_failed_guard_once
+  exit 1
+fi
+echo "$freshness_output"
+if echo "$freshness_output" | grep -q '^ONPREM_PROOF_LATEST_FRESH_OK=1$'; then
+  ONPREM_PROOF_LATEST_FRESH_OK=1
+elif echo "$freshness_output" | grep -q '^ONPREM_PROOF_LATEST_FRESH_SKIPPED=1$'; then
+  ONPREM_PROOF_LATEST_FRESH_SKIPPED=1
+else
+  echo "FAIL: onprem proof freshness"
+  emit_failed_guard_once
+  exit 1
+fi
 
 echo "== guard: forbid log-grep verdict patterns =="
 run_guard "forbid log-grep verdict patterns" bash scripts/verify/verify_no_log_grep_verdict.sh
@@ -2324,4 +2341,3 @@ run_guard "mcp capabilities ssot v1" bash scripts/verify/verify_mcp_capabilities
 run_guard "mcp zero trust enforced v1" bash scripts/verify/verify_mcp_zero_trust_enforced_v1.sh
 run_guard "mcp zero trust drift contract v1" bash scripts/verify/verify_mcp_zero_trust_drift_contract_v1.sh
 exit 0
-
