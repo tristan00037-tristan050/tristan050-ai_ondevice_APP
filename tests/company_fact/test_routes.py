@@ -36,7 +36,7 @@ def _admin_headers() -> dict[str, str]:
         "x-admin-role": "admin",
         "x-admin-id-digest": sha256_text("company-fact-route-admin"),
         "x-admin-session-digest": sha256_text("company-fact-route-session"),
-        "x-admin-auth-method": "test_only",
+        "x-admin-auth-method": "tauri_secure_invoke",
     }
 
 

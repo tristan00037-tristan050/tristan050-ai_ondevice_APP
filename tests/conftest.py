@@ -36,7 +36,7 @@ def _install_active_policy(tmp_path, monkeypatch):
         admin_id_digest=sha256_text("test-admin"),
         role="admin",
         admin_session_digest=sha256_text("test-session"),
-        auth_method="test_only",
+        auth_method="tauri_secure_invoke",
     )
     rule = AccessRule(
         dept_digest=sha256_text("dept-unknown"),

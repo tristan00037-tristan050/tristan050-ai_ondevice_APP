@@ -38,7 +38,7 @@ def admin(role: str = "admin") -> AdminContext:
         admin_id_digest=ADMIN_DIGEST if role == "admin" else EMPLOYEE_DIGEST,
         role=role,  # type: ignore[arg-type]
         admin_session_digest=SESSION_DIGEST,
-        auth_method="test_only",
+        auth_method="tauri_secure_invoke",
     )
 
 
