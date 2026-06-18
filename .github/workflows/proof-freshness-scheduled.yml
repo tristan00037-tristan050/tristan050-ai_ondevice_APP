@@ -13,13 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GIT_LFS_SKIP_SMUDGE: "1"
+      ONPREM_PROOF_FRESHNESS_ENFORCE: "1"
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: false
           fetch-depth: 0
-      - name: Verify proof freshness (check only)
+      - name: Verify proof freshness (enforce)
         run: |
           set -euo pipefail
           bash scripts/verify/verify_onprem_proof_freshness.sh
-
