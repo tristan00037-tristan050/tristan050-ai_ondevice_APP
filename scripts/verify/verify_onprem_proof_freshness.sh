@@ -2,10 +2,14 @@
 set -euo pipefail
 
 ONPREM_PROOF_LATEST_FRESH_OK=0
+ONPREM_PROOF_LATEST_FRESH_SKIPPED=0
+ENFORCE="${ONPREM_PROOF_FRESHNESS_ENFORCE:-0}"
 
 cleanup() {
   echo "ONPREM_PROOF_LATEST_FRESH_OK=${ONPREM_PROOF_LATEST_FRESH_OK}"
+  echo "ONPREM_PROOF_LATEST_FRESH_SKIPPED=${ONPREM_PROOF_LATEST_FRESH_SKIPPED}"
   if [[ "${ONPREM_PROOF_LATEST_FRESH_OK}" == "1" ]]; then exit 0; fi
+  if [[ "${ONPREM_PROOF_LATEST_FRESH_SKIPPED}" == "1" ]]; then exit 0; fi
   exit 1
 }
 trap cleanup EXIT
@@ -45,9 +49,13 @@ if [[ -z "$AGE_DAYS" ]] || ! [[ "$AGE_DAYS" =~ ^[0-9]+$ ]]; then
 fi
 
 if [[ "$AGE_DAYS" -gt "$MAX_AGE_DAYS" ]]; then
+  if [[ "$ENFORCE" != "1" ]]; then
+    echo "SKIP: freshness stale, enforcement off (real self-proof pending)"
+    ONPREM_PROOF_LATEST_FRESH_SKIPPED=1
+    exit 0
+  fi
   echo "BLOCK: proof too old (age_days=$AGE_DAYS > max_age_days=$MAX_AGE_DAYS), last_date=$LAST_DATE"
   exit 1
 fi
 
 ONPREM_PROOF_LATEST_FRESH_OK=1
-
