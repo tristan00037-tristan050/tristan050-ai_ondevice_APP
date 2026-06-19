@@ -27,8 +27,10 @@ from .known_bad import (
     KnownBadVaultEntry,
     build_known_bad_vault_entry,
     make_known_bad_index_entry,
+    make_known_bad_override_record,
     match_known_bad_candidate,
     validate_known_bad_index_entry,
+    validate_known_bad_override_record,
     validate_known_bad_vault_entry,
 )
 
@@ -91,8 +93,10 @@ class CompanyFactStore:
             for value in data["entries"].values():
                 validate_known_bad_index_entry(value)
             return data
-        except (CompanyFactLoadError, KnownBadContractError):
+        except CompanyFactLoadError:
             raise
+        except KnownBadContractError as exc:
+            raise CompanyFactLoadError("KNOWN_BAD_INDEX_LOAD_FAILED") from exc
         except Exception as exc:
             raise CompanyFactLoadError("KNOWN_BAD_INDEX_LOAD_FAILED") from exc
 
@@ -108,13 +112,19 @@ class CompanyFactStore:
                 raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_SCHEMA_INVALID")
             if not isinstance(data.get("overrides"), dict):
                 raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_MAP_INVALID")
+            for value in data["overrides"].values():
+                validate_known_bad_override_record(value)
             return data
         except CompanyFactLoadError:
             raise
+        except KnownBadContractError as exc:
+            raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_LOAD_FAILED") from exc
         except Exception as exc:
             raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_LOAD_FAILED") from exc
 
     def _save_override_data(self, data: dict[str, Any]) -> None:
+        for value in data.get("overrides", {}).values():
+            validate_known_bad_override_record(value)
         self.known_bad_override_path.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True), encoding="utf-8")
 
     def load_known_bad_entries(self) -> list[KnownBadVaultEntry]:
@@ -122,20 +132,52 @@ class CompanyFactStore:
         entries: list[KnownBadVaultEntry] = []
         for entry_data in data["entries"].values():
             index_entry = KnownBadIndexEntry(**entry_data)
-            value = self.vault.decrypt_json(index_entry.known_bad_ref, aad=index_entry.bad_entry_digest)
-            validate_known_bad_vault_entry(value)
-            entries.append(KnownBadVaultEntry(**value))
+            try:
+                value = self.vault.decrypt_json(index_entry.known_bad_ref, aad=index_entry.bad_entry_digest)
+                validate_known_bad_vault_entry(value)
+                entries.append(KnownBadVaultEntry(**value))
+            except (VaultError, KnownBadContractError, TypeError) as exc:
+                raise CompanyFactLoadError("KNOWN_BAD_ENTRY_LOAD_FAILED") from exc
         return entries
 
-    def _candidate_has_known_bad_override(self, fact_id: str) -> bool:
-        data = self._load_override_data()
-        value = data["overrides"].get(fact_id)
-        return isinstance(value, dict) and value.get("status") == "ACTIVE"
+    def _candidate_has_known_bad_override(
+        self,
+        record: CompanyFactVaultRecord,
+        *,
+        bad_entry_id: str | None = None,
+        bad_fact_digest: str | None = None,
+    ) -> bool:
+        try:
+            data = self._load_override_data()
+        except CompanyFactLoadError:
+            # Drifted overrides must never clear known_bad_suspected. The loader
+            # remains fail-closed for direct callers, while candidate approval
+            # treats malformed override state as no usable override.
+            return False
+        value = data["overrides"].get(record.fact_id)
+        if value is None:
+            return False
+        validate_known_bad_override_record(value)
+        if value.get("status") != "ACTIVE":
+            return False
+        if value.get("fact_id") != record.fact_id:
+            raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_FACT_ID_MISMATCH")
+        if value.get("candidate_fact_digest") != record.fact_digest:
+            return False
+        if bad_entry_id is not None and value.get("bad_entry_id") != bad_entry_id:
+            raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_BAD_ENTRY_MISMATCH")
+        if bad_fact_digest is not None and value.get("bad_fact_digest") != bad_fact_digest:
+            raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_BAD_FACT_DIGEST_MISMATCH")
+        return True
 
     def known_bad_flags_for_candidate(self, record: CompanyFactVaultRecord) -> dict[str, Any]:
         # matcher는 핵심어/패턴 유사만 본다(키워드/패턴 매칭 한정, 뜻 단정 금지).
         match = match_known_bad_candidate(record, self.load_known_bad_entries())
-        override_active = self._candidate_has_known_bad_override(record.fact_id)
+        override_active = self._candidate_has_known_bad_override(
+            record,
+            bad_entry_id=(match.bad_entry_id if match else None),
+            bad_fact_digest=(match.bad_fact_digest if match else None),
+        )
         suspected = match is not None and not override_active
         return {
             "known_bad_suspected": suspected,
@@ -325,17 +367,15 @@ class CompanyFactStore:
         if not flags["bad_entry_id"]:
             raise CompanyFactContractError("KNOWN_BAD_OVERRIDE_MATCH_NOT_FOUND")
         data = self._load_override_data()
-        data["overrides"][fact_id] = {
-            "schema_version": "company_fact.known_bad_override.v1",
-            "fact_id": fact_id,
-            "candidate_fact_digest": current.fact_digest,
-            "bad_entry_id": flags["bad_entry_id"],
-            "approved_by_digest": verified_admin.admin_id_digest,
-            "approved_at": now_iso(),
-            "status": "ACTIVE",
-            "raw_text_logged": False,
-            "external_send_zero": True,
-        }
+        override = make_known_bad_override_record(
+            fact_id=fact_id,
+            candidate_fact_digest=current.fact_digest,
+            bad_entry_id=flags["bad_entry_id"],
+            bad_fact_digest=flags["bad_fact_digest"],
+            approved_by_digest=verified_admin.admin_id_digest,
+            approved_at=now_iso(),
+        )
+        data["overrides"][fact_id] = override.to_dict()
         self._save_override_data(data)
         audit = self.audit_store.append(
             action="company_fact.known_bad_override",

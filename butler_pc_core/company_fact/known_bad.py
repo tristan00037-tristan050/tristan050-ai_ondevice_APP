@@ -90,6 +90,26 @@ class KnownBadIndexEntry:
 
 
 @dataclass(frozen=True)
+class KnownBadOverrideRecord:
+    schema_version: Literal["company_fact.known_bad_override.v1"]
+    fact_id: str
+    candidate_fact_digest: str
+    bad_entry_id: str
+    bad_fact_digest: str
+    approved_by_digest: str
+    approved_at: str
+    status: Literal["ACTIVE", "REVOKED"]
+    override_digest: str
+    raw_text_logged: Literal[False]
+    external_send_zero: Literal[True]
+
+    def to_dict(self) -> dict[str, Any]:
+        data = dataclasses.asdict(self)
+        validate_known_bad_override_record(data)
+        return data
+
+
+@dataclass(frozen=True)
 class KnownBadMatch:
     bad_entry_id: str
     bad_fact_digest: str
@@ -126,6 +146,12 @@ def compute_known_bad_digest(data: dict[str, Any]) -> str:
     return stable_json_digest(unsigned)
 
 
+def compute_known_bad_override_digest(data: dict[str, Any]) -> str:
+    unsigned = dict(data)
+    unsigned.pop("override_digest", None)
+    return stable_json_digest(unsigned)
+
+
 def build_known_bad_vault_entry(*, record: Any, actor_digest: str, created_at: str) -> KnownBadVaultEntry:
     require_digest(actor_digest, 'actor')
     data = {
@@ -154,6 +180,36 @@ def build_known_bad_vault_entry(*, record: Any, actor_digest: str, created_at: s
     entry = KnownBadVaultEntry(**data)  # type: ignore[arg-type]
     validate_known_bad_vault_entry(entry.to_vault_dict())
     return entry
+
+
+def make_known_bad_override_record(
+    *,
+    fact_id: str,
+    candidate_fact_digest: str,
+    bad_entry_id: str,
+    bad_fact_digest: str,
+    approved_by_digest: str,
+    approved_at: str,
+) -> KnownBadOverrideRecord:
+    require_digest(candidate_fact_digest, "candidate_fact")
+    require_digest(bad_fact_digest, "bad_fact")
+    require_digest(approved_by_digest, "approved_by")
+    data = {
+        "schema_version": "company_fact.known_bad_override.v1",
+        "fact_id": str(fact_id or "").strip(),
+        "candidate_fact_digest": candidate_fact_digest,
+        "bad_entry_id": str(bad_entry_id or "").strip(),
+        "bad_fact_digest": bad_fact_digest,
+        "approved_by_digest": approved_by_digest,
+        "approved_at": str(approved_at or "").strip(),
+        "status": "ACTIVE",
+        "raw_text_logged": False,
+        "external_send_zero": True,
+    }
+    data["override_digest"] = compute_known_bad_override_digest(data)
+    record = KnownBadOverrideRecord(**data)  # type: ignore[arg-type]
+    validate_known_bad_override_record(record.to_dict())
+    return record
 
 
 def make_known_bad_index_entry(*, entry: KnownBadVaultEntry, known_bad_ref: str) -> KnownBadIndexEntry:
@@ -223,6 +279,36 @@ def match_known_bad_candidate(candidate: Any, entries: list[KnownBadVaultEntry],
         matched_pattern_digest=sha256_text(best.matched_pattern),
         matched_keywords_count=len(best.matched_keywords),
     )
+
+
+def validate_known_bad_override_record(data: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "schema_version", "fact_id", "candidate_fact_digest", "bad_entry_id",
+        "bad_fact_digest", "approved_by_digest", "approved_at", "status",
+        "override_digest", "raw_text_logged", "external_send_zero",
+    }
+    if not isinstance(data, dict):
+        raise KnownBadContractError("KNOWN_BAD_OVERRIDE_NOT_OBJECT")
+    if set(data) - allowed:
+        raise KnownBadContractError("KNOWN_BAD_OVERRIDE_UNKNOWN_FIELD")
+    if data.get("schema_version") != "company_fact.known_bad_override.v1":
+        raise KnownBadContractError("KNOWN_BAD_OVERRIDE_SCHEMA_INVALID")
+    if not str(data.get("fact_id") or "").strip():
+        raise KnownBadContractError("KNOWN_BAD_OVERRIDE_FACT_ID_REQUIRED")
+    if not str(data.get("bad_entry_id") or "").strip():
+        raise KnownBadContractError("KNOWN_BAD_OVERRIDE_BAD_ENTRY_REQUIRED")
+    if not str(data.get("approved_at") or "").strip():
+        raise KnownBadContractError("KNOWN_BAD_OVERRIDE_APPROVED_AT_REQUIRED")
+    if data.get("status") not in {"ACTIVE", "REVOKED"}:
+        raise KnownBadContractError("KNOWN_BAD_OVERRIDE_STATUS_INVALID")
+    for field in ["candidate_fact_digest", "bad_fact_digest", "approved_by_digest", "override_digest"]:
+        _require_digest(data.get(field), field)
+    expected = compute_known_bad_override_digest(data)
+    if expected != data.get("override_digest"):
+        raise KnownBadContractError("KNOWN_BAD_OVERRIDE_DIGEST_MISMATCH")
+    if data.get("raw_text_logged") is not False or data.get("external_send_zero") is not True:
+        raise KnownBadContractError("KNOWN_BAD_OVERRIDE_FLAGS_INVALID")
+    return data
 
 
 def validate_known_bad_vault_entry(data: dict[str, Any]) -> dict[str, Any]:

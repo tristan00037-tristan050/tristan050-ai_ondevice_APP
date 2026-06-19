@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from butler_pc_core.company_policy.contracts import AdminContext, sha256_text
+from butler_pc_core.company_fact.known_bad import compute_known_bad_override_digest
 from butler_pc_core.company_fact.storage import CompanyFactStore
 
 
@@ -97,3 +100,59 @@ def test_superseeded_deprecate_does_not_register_known_bad(tmp_path):
     active, _ = store.approve_candidate(entry.fact_id, _admin())
     store.deprecate_fact(active.fact_id, _admin(), reason_code="SUPERSEDED")
     assert store.load_known_bad_entries() == []
+
+
+def test_malformed_override_record_does_not_clear_suspected_flag(tmp_path):
+    store = CompanyFactStore(root=tmp_path)
+    entry, _ = store.save_candidate(**_candidate_payload())
+    active, _ = store.approve_candidate(entry.fact_id, _admin())
+    store.deprecate_fact(active.fact_id, _admin(), reason_code="WRONG")
+
+    new_entry, _ = store.save_candidate(**_candidate_payload(answer="수정된 답변입니다. malformed override 차단 테스트 문장입니다."))
+    store.known_bad_override_path.write_text(
+        '{"schema_version":"company_fact.known_bad_override_file.v1","overrides":{"%s":{"status":"ACTIVE"}}}' % new_entry.fact_id,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(Exception) as exc_info:
+        store._load_override_data()
+    assert "KNOWN_BAD_OVERRIDE_LOAD_FAILED" in str(exc_info.value)
+
+    flags = store.known_bad_flags_for_candidate(store.load_fact(new_entry.fact_id))
+    assert flags["known_bad_suspected"] is True
+    assert flags["override_active"] is False
+    with pytest.raises(Exception) as approve_exc:
+        store.approve_candidate(new_entry.fact_id, _admin())
+    assert "KNOWN_BAD_APPROVAL_BLOCKED" in str(approve_exc.value)
+
+
+def test_stale_override_digest_does_not_apply_to_changed_candidate(tmp_path):
+    store = CompanyFactStore(root=tmp_path)
+    entry, _ = store.save_candidate(**_candidate_payload())
+    active, _ = store.approve_candidate(entry.fact_id, _admin())
+    store.deprecate_fact(active.fact_id, _admin(), reason_code="WRONG")
+
+    new_entry, _ = store.save_candidate(**_candidate_payload(answer="수정된 답변입니다. stale override 차단 테스트 문장입니다."))
+    override = store.override_known_bad_candidate(new_entry.fact_id, _admin())
+    override["candidate_fact_digest"] = sha256_text("stale-candidate")
+    override["override_digest"] = compute_known_bad_override_digest(override)
+    store.known_bad_override_path.write_text(
+        '{"schema_version":"company_fact.known_bad_override_file.v1","overrides":{"%s":%s}}'
+        % (new_entry.fact_id, json.dumps(override, ensure_ascii=False, sort_keys=True)),
+        encoding="utf-8",
+    )
+
+    flags = store.known_bad_flags_for_candidate(store.load_fact(new_entry.fact_id))
+    assert flags["known_bad_suspected"] is True
+    assert flags["override_active"] is False
+
+
+def test_malformed_known_bad_index_wraps_as_load_failure(tmp_path):
+    store = CompanyFactStore(root=tmp_path)
+    store.known_bad_index_path.write_text(
+        '{"schema_version":"company_fact.known_bad_index_file.v1","entries":{"bad":{"schema_version":"bad"}}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(Exception) as exc_info:
+        store.load_known_bad_entries()
+    assert "KNOWN_BAD_INDEX_LOAD_FAILED" in str(exc_info.value)
