@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,17 @@ from .contracts import (
     validate_index_entry_dict,
     validate_vault_record_dict,
 )
+from .known_bad import (
+    DEPRECATE_REASON_CODES,
+    KnownBadContractError,
+    KnownBadIndexEntry,
+    KnownBadVaultEntry,
+    build_known_bad_vault_entry,
+    make_known_bad_index_entry,
+    match_known_bad_candidate,
+    validate_known_bad_index_entry,
+    validate_known_bad_vault_entry,
+)
 
 
 class CompanyFactLoadError(RuntimeError):
@@ -36,7 +48,10 @@ class CompanyFactStore:
         self.root.mkdir(parents=True, exist_ok=True)
         self.vault = vault or LocalEncryptedVault(root=self.root / "vault", key_path=self.root / "vault.key")
         self.index_path = self.root / "company_facts_index.json"
+        self.known_bad_index_path = self.root / "company_fact_known_bad_index.json"
+        self.known_bad_override_path = self.root / "company_fact_known_bad_overrides.json"
         self.audit_store = audit_store or CompanyFactAuditStore(root=self.root)
+        self._mutation_lock = threading.RLock()
 
     def _empty_index(self) -> dict[str, Any]:
         return {"schema_version": "company_fact.index_file.v1", "facts": {}}
@@ -60,6 +75,100 @@ class CompanyFactStore:
 
     def _save_index_data(self, data: dict[str, Any]) -> None:
         self.index_path.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+
+    def _empty_known_bad_index(self) -> dict[str, Any]:
+        return {"schema_version": "company_fact.known_bad_index_file.v1", "entries": {}}
+
+    def _load_known_bad_index_data(self) -> dict[str, Any]:
+        if not self.known_bad_index_path.exists():
+            return self._empty_known_bad_index()
+        try:
+            data = json.loads(self.known_bad_index_path.read_text(encoding="utf-8"))
+            if data.get("schema_version") != "company_fact.known_bad_index_file.v1":
+                raise CompanyFactLoadError("KNOWN_BAD_INDEX_SCHEMA_INVALID")
+            if not isinstance(data.get("entries"), dict):
+                raise CompanyFactLoadError("KNOWN_BAD_INDEX_ENTRIES_INVALID")
+            for value in data["entries"].values():
+                validate_known_bad_index_entry(value)
+            return data
+        except (CompanyFactLoadError, KnownBadContractError):
+            raise
+        except Exception as exc:
+            raise CompanyFactLoadError("KNOWN_BAD_INDEX_LOAD_FAILED") from exc
+
+    def _save_known_bad_index_data(self, data: dict[str, Any]) -> None:
+        self.known_bad_index_path.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+
+    def _load_override_data(self) -> dict[str, Any]:
+        if not self.known_bad_override_path.exists():
+            return {"schema_version": "company_fact.known_bad_override_file.v1", "overrides": {}}
+        try:
+            data = json.loads(self.known_bad_override_path.read_text(encoding="utf-8"))
+            if data.get("schema_version") != "company_fact.known_bad_override_file.v1":
+                raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_SCHEMA_INVALID")
+            if not isinstance(data.get("overrides"), dict):
+                raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_MAP_INVALID")
+            return data
+        except CompanyFactLoadError:
+            raise
+        except Exception as exc:
+            raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_LOAD_FAILED") from exc
+
+    def _save_override_data(self, data: dict[str, Any]) -> None:
+        self.known_bad_override_path.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+
+    def load_known_bad_entries(self) -> list[KnownBadVaultEntry]:
+        data = self._load_known_bad_index_data()
+        entries: list[KnownBadVaultEntry] = []
+        for entry_data in data["entries"].values():
+            index_entry = KnownBadIndexEntry(**entry_data)
+            value = self.vault.decrypt_json(index_entry.known_bad_ref, aad=index_entry.bad_entry_digest)
+            validate_known_bad_vault_entry(value)
+            entries.append(KnownBadVaultEntry(**value))
+        return entries
+
+    def _candidate_has_known_bad_override(self, fact_id: str) -> bool:
+        data = self._load_override_data()
+        value = data["overrides"].get(fact_id)
+        return isinstance(value, dict) and value.get("status") == "ACTIVE"
+
+    def known_bad_flags_for_candidate(self, record: CompanyFactVaultRecord) -> dict[str, Any]:
+        # matcher는 핵심어/패턴 유사만 본다(키워드/패턴 매칭 한정, 뜻 단정 금지).
+        match = match_known_bad_candidate(record, self.load_known_bad_entries())
+        override_active = self._candidate_has_known_bad_override(record.fact_id)
+        suspected = match is not None and not override_active
+        return {
+            "known_bad_suspected": suspected,
+            "override_available": suspected,
+            "override_active": override_active,
+            "match_score": match.score if match else None,
+            "matched_keywords_count": match.matched_keywords_count if match else 0,
+            "matched_pattern_digest": match.matched_pattern_digest if match else None,
+            "bad_entry_id": match.bad_entry_id if match else None,
+            "bad_fact_digest": match.bad_fact_digest if match else None,
+            "raw_text_logged": False,
+            "external_send_zero": True,
+        }
+
+    def register_known_bad(self, record: CompanyFactVaultRecord, *, actor_digest: str) -> tuple[KnownBadIndexEntry, dict[str, Any]]:
+        known_bad = build_known_bad_vault_entry(record=record, actor_digest=actor_digest, created_at=now_iso())
+        ref, _digest = self.vault.encrypt_json(
+            "company_fact_known_bad",
+            known_bad.bad_entry_id,
+            known_bad.to_vault_dict(),
+            aad=known_bad.bad_entry_digest,
+        )
+        index_entry = make_known_bad_index_entry(entry=known_bad, known_bad_ref=ref)
+        data = self._load_known_bad_index_data()
+        data["entries"][index_entry.bad_entry_id] = index_entry.to_dict()
+        self._save_known_bad_index_data(data)
+        audit = self.audit_store.append(
+            action="company_fact.known_bad_registered",
+            fact_digest=known_bad.bad_entry_digest,
+            actor_digest=actor_digest,
+            reason_code="WRONG",
+        )
+        return index_entry, audit
 
     def list_index_entries(self, *, status: str | None = None) -> list[CompanyFactIndexEntry]:
         data = self._load_index_data()
@@ -139,6 +248,9 @@ class CompanyFactStore:
         current = self.load_fact(fact_id)
         if current.status != "CANDIDATE":
             raise CompanyFactContractError("COMPANY_FACT_APPROVE_REQUIRES_CANDIDATE")
+        flags = self.known_bad_flags_for_candidate(current)
+        if flags["known_bad_suspected"]:
+            raise CompanyFactContractError("KNOWN_BAD_APPROVAL_BLOCKED")
         active = make_company_fact_record(
             status="ACTIVE",
             fact_id=current.fact_id,
@@ -163,38 +275,140 @@ class CompanyFactStore:
             actor_digest=verified_admin.admin_id_digest,
         )
 
-    def deprecate_fact(self, fact_id: str, admin: AdminContext) -> tuple[CompanyFactIndexEntry, dict[str, Any]]:
+    def deprecate_fact(self, fact_id: str, admin: AdminContext, *, reason_code: str = "MANUAL_DEPRECATED") -> tuple[CompanyFactIndexEntry, dict[str, Any]]:
+        if reason_code not in DEPRECATE_REASON_CODES:
+            raise CompanyFactContractError("DEPRECATE_REASON_CODE_INVALID")
         verified_admin = verify_admin_context(admin, operation="deprecate_company_fact")
-        current = self.load_fact(fact_id)
-        if current.status == "DEPRECATED":
-            return self._write_record(
-                current,
-                reason_code="ALREADY_DEPRECATED",
+        # 락은 load_fact 부터 _write_record + (WRONG 시) register_known_bad 까지 임계영역 전체를 감싼다.
+        with self._mutation_lock:
+            current = self.load_fact(fact_id)
+            if current.status == "DEPRECATED":
+                return self._write_record(
+                    current,
+                    reason_code="ALREADY_DEPRECATED",
+                    actor_digest=verified_admin.admin_id_digest,
+                )
+            deprecated = make_company_fact_record(
+                status="DEPRECATED",
+                fact_id=current.fact_id,
+                category=current.category,
+                question_patterns=current.question_patterns,
+                keywords_required=current.keywords_required,
+                keywords_any=current.keywords_any,
+                answer_runtime_text=current.answer_runtime_text,
+                source=current.source,
+                source_url=current.source_url,
+                source_doc=current.source_doc,
+                verified_at=current.verified_at,
+                expires_at=current.expires_at,
+                confidence=0.0,
+                approved_by_digest=current.approved_by_digest,
+                approved_at=current.approved_at,
+                previous_fact_digest=current.fact_digest,
+            )
+            entry, audit = self._write_record(
+                deprecated,
+                reason_code=reason_code,
                 actor_digest=verified_admin.admin_id_digest,
             )
-        deprecated = make_company_fact_record(
-            status="DEPRECATED",
-            fact_id=current.fact_id,
-            category=current.category,
-            question_patterns=current.question_patterns,
-            keywords_required=current.keywords_required,
-            keywords_any=current.keywords_any,
-            answer_runtime_text=current.answer_runtime_text,
-            source=current.source,
-            source_url=current.source_url,
-            source_doc=current.source_doc,
-            verified_at=current.verified_at,
-            expires_at=current.expires_at,
-            confidence=0.0,
-            approved_by_digest=current.approved_by_digest,
-            approved_at=current.approved_at,
-            previous_fact_digest=current.fact_digest,
-        )
-        return self._write_record(
-            deprecated,
-            reason_code="ACTIVE_DEPRECATED",
+            # WRONG deprecate만 known-bad를 등록한다. SUPERSEDED/MANUAL_DEPRECATED는 등록하지 않는다.
+            if reason_code == "WRONG":
+                self.register_known_bad(current, actor_digest=verified_admin.admin_id_digest)
+            return entry, audit
+
+    def override_known_bad_candidate(self, fact_id: str, admin: AdminContext) -> dict[str, Any]:
+        verified_admin = verify_admin_context(admin, operation="override_known_bad_company_fact")
+        current = self.load_fact(fact_id)
+        if current.status != "CANDIDATE":
+            raise CompanyFactContractError("KNOWN_BAD_OVERRIDE_REQUIRES_CANDIDATE")
+        flags = self.known_bad_flags_for_candidate(current)
+        if not flags["bad_entry_id"]:
+            raise CompanyFactContractError("KNOWN_BAD_OVERRIDE_MATCH_NOT_FOUND")
+        data = self._load_override_data()
+        data["overrides"][fact_id] = {
+            "schema_version": "company_fact.known_bad_override.v1",
+            "fact_id": fact_id,
+            "candidate_fact_digest": current.fact_digest,
+            "bad_entry_id": flags["bad_entry_id"],
+            "approved_by_digest": verified_admin.admin_id_digest,
+            "approved_at": now_iso(),
+            "status": "ACTIVE",
+            "raw_text_logged": False,
+            "external_send_zero": True,
+        }
+        self._save_override_data(data)
+        audit = self.audit_store.append(
+            action="company_fact.known_bad_override",
+            fact_digest=current.fact_digest,
             actor_digest=verified_admin.admin_id_digest,
+            reason_code="KNOWN_BAD_OVERRIDE_APPROVED",
         )
+        return {"audit_ref": audit["audit_id"], **data["overrides"][fact_id]}
+
+    def supersede_fact(self, fact_id: str, replacement: dict[str, Any], admin: AdminContext) -> dict[str, Any]:
+        verified_admin = verify_admin_context(admin, operation="supersede_company_fact")
+        with self._mutation_lock:
+            current = self.load_fact(fact_id)
+            if current.status != "ACTIVE":
+                raise CompanyFactContractError("SUPERSEDE_REQUIRES_ACTIVE")
+            replacement_record = make_company_fact_record(
+                status="ACTIVE",
+                category=replacement.get("category", current.category),
+                question_patterns=replacement.get("question_patterns", current.question_patterns),
+                keywords_required=replacement.get("keywords_required", current.keywords_required),
+                keywords_any=replacement.get("keywords_any", current.keywords_any),
+                answer_runtime_text=replacement.get("answer_runtime_text", current.answer_runtime_text),
+                source=replacement.get("source", current.source),
+                source_url=replacement.get("source_url", current.source_url),
+                source_doc=replacement.get("source_doc", current.source_doc),
+                verified_at=replacement.get("verified_at", current.verified_at),
+                expires_at=replacement.get("expires_at", current.expires_at),
+                confidence=1.0,
+                approved_by_digest=verified_admin.admin_id_digest,
+                approved_at=now_iso(),
+                previous_fact_digest=current.fact_digest,
+            )
+            old_deprecated = make_company_fact_record(
+                status="DEPRECATED",
+                fact_id=current.fact_id,
+                category=current.category,
+                question_patterns=current.question_patterns,
+                keywords_required=current.keywords_required,
+                keywords_any=current.keywords_any,
+                answer_runtime_text=current.answer_runtime_text,
+                source=current.source,
+                source_url=current.source_url,
+                source_doc=current.source_doc,
+                verified_at=current.verified_at,
+                expires_at=current.expires_at,
+                confidence=0.0,
+                approved_by_digest=current.approved_by_digest,
+                approved_at=current.approved_at,
+                previous_fact_digest=current.fact_digest,
+            )
+            # 롤백 한계(직접성): 실패 시 index 스냅샷만 복원한다. 이미 기록된 vault 항목은
+            # index에서 참조되지 않아 노출/서빙되지 않지만 물리적으로 잔존할 수 있고, audit 로그는
+            # append-only(변조 탐지)라 시도 기록이 남을 수 있다. 본 한계는 PR에 명시한다.
+            old_index_snapshot = self._load_index_data()
+            try:
+                old_entry, old_audit = self._write_record(old_deprecated, reason_code="SUPERSEDED", actor_digest=verified_admin.admin_id_digest)
+                new_entry, new_audit = self._write_record(replacement_record, reason_code="SUPERSEDE_REPLACEMENT_ACTIVE", actor_digest=verified_admin.admin_id_digest)
+            except Exception:
+                self._save_index_data(old_index_snapshot)
+                raise
+        return {
+            "schema_version": "company_fact.supersede.result.v1",
+            "old_fact_id": old_entry.fact_id,
+            "old_status": old_entry.status,
+            "old_fact_digest": old_entry.fact_digest,
+            "new_fact_id": new_entry.fact_id,
+            "new_status": new_entry.status,
+            "new_fact_digest": new_entry.fact_digest,
+            "previous_fact_digest": current.fact_digest,
+            "audit_refs": [old_audit["audit_id"], new_audit["audit_id"]],
+            "raw_text_logged": False,
+            "external_send_zero": True,
+        }
 
     def load_active_facts(self) -> list[CompanyFactVaultRecord]:
         active: list[CompanyFactVaultRecord] = []
