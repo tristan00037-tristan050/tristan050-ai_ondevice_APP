@@ -4,9 +4,11 @@ import json
 
 import pytest
 
+from butler_pc_core.company_policy import admin_auth
 from butler_pc_core.company_policy.admin_auth import AdminAuthError, verify_admin_context
 from butler_pc_core.company_policy.audit import GLOBAL_ADMIN_AUDIT_STORE
 from butler_pc_core.company_policy.contracts import AdminContext, sha256_text
+from butler_pc_core.company_policy.role_registry import RoleRegistryStore
 from butler_pc_core.company_policy.storage import CompanyFormatStore
 # helper3 format adapter 위치 정합 (표준 156, 박스 3 real adapter 위치): MAINDEV
 # `company_policy/format_adapter.py` 위치 폐기, ALG `cards/box3/adapters/company_format_adapter`
@@ -23,12 +25,20 @@ def admin(role="admin"):
     )
 
 
+def _seed_role_registry(tmp_path, monkeypatch):
+    registry = RoleRegistryStore(root=tmp_path / "role_registry")
+    registry.bootstrap_self_admin(admin())
+    monkeypatch.setattr(admin_auth, "get_default_role_registry_store", lambda: registry)
+    return registry
+
+
 def test_admin_auth_rejects_non_admin():
     with pytest.raises(AdminAuthError):
         verify_admin_context(admin("manager"), operation="register_format")
 
 
-def test_format_registration_admin_only_raw_audit_zero(tmp_path):
+def test_format_registration_admin_only_raw_audit_zero(tmp_path, monkeypatch):
+    _seed_role_registry(tmp_path, monkeypatch)
     GLOBAL_ADMIN_AUDIT_STORE.clear()
     store = CompanyFormatStore(root=tmp_path / "formats")
     fmt, audit = store.register_format(
@@ -60,7 +70,8 @@ def test_helper3_format_unregistered_needs_review(tmp_path):
     assert result["fail_class"] == "FORMAT_NOT_REGISTERED"
 
 
-def test_helper3_format_registered_digest_only(tmp_path):
+def test_helper3_format_registered_digest_only(tmp_path, monkeypatch):
+    _seed_role_registry(tmp_path, monkeypatch)
     store = CompanyFormatStore(root=tmp_path / "formats")
     fmt, _ = store.register_format(
         template_runtime_text="양식 원문은 암호화 저장",
