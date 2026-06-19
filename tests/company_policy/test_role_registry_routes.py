@@ -119,3 +119,16 @@ def test_status_fails_closed_for_corrupted_index(tmp_path, monkeypatch):
 
     assert response.status_code == 503
     assert response.json()["detail"]["fail_class"] == "ADMIN_ROLE_REGISTRY_LOAD_FAILED"
+
+
+def test_status_fails_closed_when_populated_audit_files_are_missing(tmp_path, monkeypatch):
+    client, store = _app(tmp_path, monkeypatch)
+    headers = {**_token_headers(monkeypatch), **_admin_headers()}
+    assert client.post("/v1/admin/role-registry/bootstrap", headers=headers, json={}).status_code == 200
+    (tmp_path / "registry" / "role_registry_audit_log.jsonl").unlink()
+    (tmp_path / "registry" / "role_registry_audit_head.json").unlink()
+
+    response = client.get("/v1/admin/role-registry/status", headers=headers)
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["fail_class"] == "ADMIN_ROLE_REGISTRY_LOAD_FAILED"

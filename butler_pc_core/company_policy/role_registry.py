@@ -12,7 +12,7 @@ try:
 except ImportError:  # pragma: no cover - Windows fallback keeps tests importable.
     fcntl = None  # type: ignore[assignment]
 
-from .contracts import AdminContext, ROLE_VALUES, require_digest
+from .contracts import AdminContext, ROLE_VALUES, ContractValidationError, require_digest
 from .role_registry_audit import RoleRegistryAuditLoadError, RoleRegistryAuditStore
 from .role_registry_contracts import (
     ROLE_REGISTRY_INDEX_FILE_SCHEMA,
@@ -106,7 +106,7 @@ class RoleRegistryStore:
             if entry.role != index_entry.role or entry.status != index_entry.status:
                 raise RoleRegistryLoadError("ADMIN_ROLE_REGISTRY_INDEX_ENTRY_MISMATCH")
             return entry
-        except (VaultError, RoleRegistryContractError, TypeError) as exc:
+        except (VaultError, RoleRegistryContractError, ContractValidationError, TypeError) as exc:
             raise RoleRegistryLoadError("ADMIN_ROLE_REGISTRY_LOAD_FAILED") from exc
 
     def _load_entries_locked(self, data: dict[str, Any]) -> dict[str, RoleRegistryEntry]:
@@ -116,9 +116,18 @@ class RoleRegistryStore:
             entries[key] = self._load_entry_locked(index_entry)
         return entries
 
-    def _audit_health_locked(self) -> None:
+    def _audit_health_locked(self, data: dict[str, Any]) -> None:
         try:
+            members = data.get("members")
+            audit_required = isinstance(members, dict) and bool(members)
+            if audit_required:
+                log_path = self.audit_store.log_path
+                head_path = self.audit_store.head_path
+                if log_path is None or head_path is None or not log_path.exists() or not head_path.exists():
+                    raise RoleRegistryAuditLoadError("ROLE_REGISTRY_AUDIT_MISSING")
             self.audit_store._load_from_disk()
+            if audit_required and not self.audit_store.records:
+                raise RoleRegistryAuditLoadError("ROLE_REGISTRY_AUDIT_EMPTY_FOR_POPULATED_REGISTRY")
         except RoleRegistryAuditLoadError as exc:
             raise RoleRegistryLoadError("ADMIN_ROLE_REGISTRY_LOAD_FAILED") from exc
 
@@ -129,14 +138,14 @@ class RoleRegistryStore:
     def is_empty(self) -> bool:
         with self._registry_lock():
             data = self._load_index_data_locked()
-            self._audit_health_locked()
+            self._audit_health_locked(data)
             return not any(value.get("status") == "ACTIVE" for value in data["members"].values())
 
     def lookup_active(self, target_admin_id_digest: str) -> RoleRegistryEntry | None:
         require_digest(target_admin_id_digest, "target_admin_id")
         with self._registry_lock():
             data = self._load_index_data_locked()
-            self._audit_health_locked()
+            self._audit_health_locked(data)
             entry_data = data["members"].get(target_admin_id_digest)
             if not isinstance(entry_data, dict):
                 return None
@@ -148,7 +157,7 @@ class RoleRegistryStore:
     def status_summary(self) -> dict[str, Any]:
         with self._registry_lock():
             data = self._load_index_data_locked()
-            self._audit_health_locked()
+            self._audit_health_locked(data)
             entries = self._load_entries_locked(data)
             active_entries = [entry for entry in entries.values() if entry.status == "ACTIVE"]
             return {
@@ -197,7 +206,7 @@ class RoleRegistryStore:
         require_digest(actor.admin_id_digest, "actor")
         with self._registry_lock():
             data = self._load_index_data_locked()
-            self._audit_health_locked()
+            self._audit_health_locked(data)
             entries = self._load_entries_locked(data)
             if any(entry.status == "ACTIVE" for entry in entries.values()):
                 raise RoleRegistryMutationError("ADMIN_ROLE_REGISTRY_ALREADY_INITIALIZED")
@@ -230,7 +239,7 @@ class RoleRegistryStore:
             raise RoleRegistryMutationError("ADMIN_ROLE_REGISTRY_ROLE_INVALID")
         with self._registry_lock():
             data = self._load_index_data_locked()
-            self._audit_health_locked()
+            self._audit_health_locked(data)
             entries = self._load_entries_locked(data)
             current = entries.get(target_admin_id_digest)
             version = 1 if current is None else current.version + 1
@@ -267,7 +276,7 @@ class RoleRegistryStore:
         require_digest(target_admin_id_digest, "target_admin_id")
         with self._registry_lock():
             data = self._load_index_data_locked()
-            self._audit_health_locked()
+            self._audit_health_locked(data)
             entries = self._load_entries_locked(data)
             current = entries.get(target_admin_id_digest)
             if current is None:
