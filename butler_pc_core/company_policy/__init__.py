@@ -16,6 +16,7 @@ from .contracts import (
 )
 from .policy_gate import PolicyGate, build_policy_task_envelope
 from .admin_auth import verify_admin_context, AdminAuthError
+from .role_registry import RoleRegistryStore, RoleRegistryLoadError
 
 # helper3 format adapter 위치 정합 (표준 156): MAINDEV `company_policy/format_adapter.py`
 # 위치는 폐기되었고, ALG 의 `butler_pc_core/cards/box3/adapters/company_format_adapter.py`
@@ -31,5 +32,7 @@ __all__ = [
     "build_policy_task_envelope",
     "verify_admin_context",
     "AdminAuthError",
+    "RoleRegistryStore",
+    "RoleRegistryLoadError",
     "stable_json_digest",
 ]

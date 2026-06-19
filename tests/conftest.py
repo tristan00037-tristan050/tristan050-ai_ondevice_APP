@@ -30,6 +30,8 @@ def _install_active_policy(tmp_path, monkeypatch):
         make_company_policy,
         sha256_text,
     )
+    from butler_pc_core.company_policy import admin_auth
+    from butler_pc_core.company_policy.role_registry import RoleRegistryStore
     from butler_pc_core.company_policy.storage import PolicyStore
 
     admin = AdminContext(
@@ -38,6 +40,9 @@ def _install_active_policy(tmp_path, monkeypatch):
         admin_session_digest=sha256_text("test-session"),
         auth_method="tauri_secure_invoke",
     )
+    registry = RoleRegistryStore(root=tmp_path / ".butler_role_registry_store")
+    registry.bootstrap_self_admin(admin)
+    monkeypatch.setattr(admin_auth, "get_default_role_registry_store", lambda: registry)
     rule = AccessRule(
         dept_digest=sha256_text("dept-unknown"),
         role="employee",

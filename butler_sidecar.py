@@ -316,6 +316,7 @@ if _FASTAPI_AVAILABLE:
     # 실행되며(fail-closed), 정책 미정의·로딩 실패 시 admin setup 외 모든 박스/헬퍼는
     # 차단된다(bootstrap 게이트).
     from butler_pc_core.sidecar.routes.admin_policy_format import router as admin_policy_format_router
+    from butler_pc_core.sidecar.routes.admin_role_registry import router as admin_role_registry_router
     from butler_pc_core.company_policy.middleware import add_policy_gate_middleware
     from butler_pc_core.company_policy.storage import PolicyStore
 
@@ -327,6 +328,7 @@ if _FASTAPI_AVAILABLE:
     app.include_router(box3_draft_router)
     app.include_router(helper1_search_router)
     app.include_router(admin_policy_format_router)
+    app.include_router(admin_role_registry_router)
     app.include_router(company_profile_router)
     app.include_router(company_fact_router)
 

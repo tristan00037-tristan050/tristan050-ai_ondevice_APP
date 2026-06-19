@@ -5,6 +5,9 @@ import json
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from butler_pc_core.company_policy import admin_auth
+from butler_pc_core.company_policy.contracts import AdminContext
+from butler_pc_core.company_policy.role_registry import RoleRegistryStore
 from butler_pc_core.company_profile.contracts import make_runtime_profile, sha256_text
 from butler_pc_core.company_profile.storage import CompanyProfileStore
 from butler_pc_core.sidecar.routes import company_profile as route_module
@@ -22,6 +25,22 @@ def _admin_headers() -> dict[str, str]:
         "x-admin-session-digest": sha256_text("local-session:company-profile-test"),
         "x-admin-auth-method": "tauri_secure_invoke",
     }
+
+
+def _admin_context() -> AdminContext:
+    return AdminContext(
+        admin_id_digest=sha256_text("local-admin:company-profile-test"),
+        role="admin",
+        admin_session_digest=sha256_text("local-session:company-profile-test"),
+        auth_method="tauri_secure_invoke",
+    )
+
+
+def _seed_role_registry(tmp_path, monkeypatch) -> RoleRegistryStore:
+    registry = RoleRegistryStore(root=tmp_path / "role_registry")
+    registry.bootstrap_self_admin(_admin_context())
+    monkeypatch.setattr(admin_auth, "get_default_role_registry_store", lambda: registry)
+    return registry
 
 
 def _capability_headers(monkeypatch) -> dict[str, str]:
@@ -68,6 +87,7 @@ def test_company_profile_store_vault_load_and_digest_only_index(tmp_path):
 
 def test_company_profile_register_and_status_routes_digest_only(tmp_path, monkeypatch):
     store = CompanyProfileStore(root=tmp_path / "route_store")
+    _seed_role_registry(tmp_path, monkeypatch)
     monkeypatch.setattr(route_module, "_STORE", store)
     app = FastAPI()
     app.include_router(route_module.router)

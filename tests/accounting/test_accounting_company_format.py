@@ -12,6 +12,7 @@ from butler_pc_core.accounting.report import (
     apply_company_format_to_report,
     should_block_requested_accounting_format,
 )
+from butler_pc_core.company_policy import admin_auth
 from butler_pc_core.company_policy.contracts import (
     AdminContext,
     ContractValidationError,
@@ -19,6 +20,7 @@ from butler_pc_core.company_policy.contracts import (
     make_company_format,
     sha256_text,
 )
+from butler_pc_core.company_policy.role_registry import RoleRegistryStore
 from butler_pc_core.company_policy.storage import CompanyFormatStore
 
 
@@ -31,13 +33,22 @@ def _admin() -> AdminContext:
     )
 
 
+def _seed_role_registry(store: CompanyFormatStore, monkeypatch) -> None:
+    registry = RoleRegistryStore(root=store.root.parent / "role_registry")
+    if registry.is_empty():
+        registry.bootstrap_self_admin(_admin())
+    monkeypatch.setattr(admin_auth, "get_default_role_registry_store", lambda: registry)
+
+
 def _register_format(
     store: CompanyFormatStore,
+    monkeypatch,
     *,
     template: str,
     kind: str,
     title: str = "테스트 양식",
 ):
+    _seed_role_registry(store, monkeypatch)
     fmt, _audit = store.register_format(
         template_runtime_text=template,
         format_kind=kind,
@@ -49,10 +60,11 @@ def _register_format(
     return fmt
 
 
-def test_accounting_company_format_cash_flow_monthly_applies_report_runtime_text(tmp_path):
+def test_accounting_company_format_cash_flow_monthly_applies_report_runtime_text(tmp_path, monkeypatch):
     store = CompanyFormatStore(root=tmp_path / "formats")
     fmt = _register_format(
         store,
+        monkeypatch,
         template="=== 우리회사 월간 현금흐름 ===\n{draft}\n=== 끝 ===",
         kind="cash_flow_monthly",
         title="우리회사 월간 현금흐름",
@@ -95,9 +107,9 @@ def test_accounting_company_format_unregistered_preserves_report(tmp_path):
 
 
 @pytest.mark.parametrize("kind", ["report", "official_letter"])
-def test_accounting_company_format_rejects_document_format_kind(tmp_path, kind):
+def test_accounting_company_format_rejects_document_format_kind(tmp_path, monkeypatch, kind):
     store = CompanyFormatStore(root=tmp_path / "formats")
-    fmt = _register_format(store, template="문서 양식\n{draft}", kind=kind)
+    fmt = _register_format(store, monkeypatch, template="문서 양식\n{draft}", kind=kind)
     report = "기본 회계 리포트"
 
     result = apply_company_format_to_report(report, fmt.format_id, store=store)
@@ -110,11 +122,11 @@ def test_accounting_company_format_rejects_document_format_kind(tmp_path, kind):
     assert payload["template_digest"] == fmt.template_digest
 
 
-def test_accounting_company_format_application_payload_is_digest_only(tmp_path):
+def test_accounting_company_format_application_payload_is_digest_only(tmp_path, monkeypatch):
     store = CompanyFormatStore(root=tmp_path / "formats")
     template = "회계 양식 원문 {draft}"
     report = "거래 row runtime text와 총 거래건수"
-    fmt = _register_format(store, template=template, kind="pnl_summary")
+    fmt = _register_format(store, monkeypatch, template=template, kind="pnl_summary")
 
     result = apply_company_format_to_report(report, fmt.format_id, store=store)
     encoded = json.dumps(result.application.to_dict(), ensure_ascii=False, sort_keys=True)
@@ -130,15 +142,15 @@ def test_accounting_company_format_application_payload_is_digest_only(tmp_path):
     assert result.application.to_dict()["raw_saved_zero"] is True
 
 
-def test_accounting_company_format_kind_contract_is_append_only(tmp_path):
+def test_accounting_company_format_kind_contract_is_append_only(tmp_path, monkeypatch):
     assert {"report", "freeform"}.issubset(FORMAT_KIND_VALUES)
     assert ACCOUNTING_FORMAT_KINDS.issubset(FORMAT_KIND_VALUES)
     assert is_accounting_format_kind("cash_flow_daily") is True
     assert is_accounting_format_kind("report") is False
 
     store = CompanyFormatStore(root=tmp_path / "formats")
-    report_fmt = _register_format(store, template="보고서 {draft}", kind="report")
-    freeform_fmt = _register_format(store, template="자유형 {draft}", kind="freeform")
+    report_fmt = _register_format(store, monkeypatch, template="보고서 {draft}", kind="report")
+    freeform_fmt = _register_format(store, monkeypatch, template="자유형 {draft}", kind="freeform")
 
     assert report_fmt.format_kind == "report"
     assert freeform_fmt.format_kind == "freeform"

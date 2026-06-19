@@ -6,8 +6,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
+from butler_pc_core.company_policy import admin_auth
 from butler_pc_core.company_policy.contracts import AccessRule, sha256_text, make_company_policy
 from butler_pc_core.company_policy.middleware import add_policy_gate_middleware
+from butler_pc_core.company_policy.role_registry import RoleRegistryStore
 from butler_pc_core.company_policy.storage import PolicyStore
 from butler_pc_core.company_policy.contracts import AdminContext
 
@@ -21,9 +23,16 @@ def admin():
     )
 
 
-def _client(tmp_path, with_policy=True, decision="allow"):
+def _seed_role_registry(tmp_path, monkeypatch):
+    registry = RoleRegistryStore(root=tmp_path / "role_registry")
+    registry.bootstrap_self_admin(admin())
+    monkeypatch.setattr(admin_auth, "get_default_role_registry_store", lambda: registry)
+
+
+def _client(tmp_path, monkeypatch, with_policy=True, decision="allow"):
     store = PolicyStore(root=tmp_path / "policy")
     if with_policy:
+        _seed_role_registry(tmp_path, monkeypatch)
         policy = make_company_policy(
             registered_by_digest=sha256_text("admin"),
             access_rules=[AccessRule(dept_digest=sha256_text("dept"), role="employee", doc_grade="internal", decision=decision, reason_code="RULE_MATCHED")],
@@ -46,9 +55,10 @@ def _client(tmp_path, with_policy=True, decision="allow"):
     return TestClient(app), calls
 
 
-def _client_with_sidecar_cors_order(tmp_path, with_policy=True, decision="allow"):
+def _client_with_sidecar_cors_order(tmp_path, monkeypatch, with_policy=True, decision="allow"):
     store = PolicyStore(root=tmp_path / "policy")
     if with_policy:
+        _seed_role_registry(tmp_path, monkeypatch)
         policy = make_company_policy(
             registered_by_digest=sha256_text("admin"),
             access_rules=[AccessRule(dept_digest=sha256_text("dept"), role="employee", doc_grade="internal", decision=decision, reason_code="RULE_MATCHED")],
@@ -72,8 +82,8 @@ def _client_with_sidecar_cors_order(tmp_path, with_policy=True, decision="allow"
     return TestClient(app), calls
 
 
-def test_policy_gate_middleware_allow_calls_box(tmp_path):
-    client, calls = _client(tmp_path, with_policy=True, decision="allow")
+def test_policy_gate_middleware_allow_calls_box(tmp_path, monkeypatch):
+    client, calls = _client(tmp_path, monkeypatch, with_policy=True, decision="allow")
     response = client.post(
         "/v1/cards/3/draft",
         headers={
@@ -88,8 +98,8 @@ def test_policy_gate_middleware_allow_calls_box(tmp_path):
     assert calls["count"] == 1
 
 
-def test_policy_gate_middleware_bootstrap_blocks_box_call_zero(tmp_path):
-    client, calls = _client(tmp_path, with_policy=False)
+def test_policy_gate_middleware_bootstrap_blocks_box_call_zero(tmp_path, monkeypatch):
+    client, calls = _client(tmp_path, monkeypatch, with_policy=False)
     response = client.post(
         "/v1/cards/3/draft",
         headers={
@@ -105,8 +115,8 @@ def test_policy_gate_middleware_bootstrap_blocks_box_call_zero(tmp_path):
     assert calls["count"] == 0
 
 
-def test_policy_gate_bootstrap_block_keeps_tauri_cors_headers(tmp_path):
-    client, calls = _client_with_sidecar_cors_order(tmp_path, with_policy=False)
+def test_policy_gate_bootstrap_block_keeps_tauri_cors_headers(tmp_path, monkeypatch):
+    client, calls = _client_with_sidecar_cors_order(tmp_path, monkeypatch, with_policy=False)
     response = client.post(
         "/accounting/classify",
         headers={
@@ -126,8 +136,8 @@ def test_policy_gate_bootstrap_block_keeps_tauri_cors_headers(tmp_path):
     assert calls["accounting"] == 0
 
 
-def test_policy_gate_middleware_bootstrap_blocks_helper1_ask_call_zero(tmp_path):
-    client, calls = _client(tmp_path, with_policy=False)
+def test_policy_gate_middleware_bootstrap_blocks_helper1_ask_call_zero(tmp_path, monkeypatch):
+    client, calls = _client(tmp_path, monkeypatch, with_policy=False)
     response = client.post(
         "/v1/helpers/1/ask",
         headers={
@@ -144,8 +154,8 @@ def test_policy_gate_middleware_bootstrap_blocks_helper1_ask_call_zero(tmp_path)
     assert calls["helper1_ask"] == 0
 
 
-def test_policy_gate_middleware_deny_calls_zero(tmp_path):
-    client, calls = _client(tmp_path, with_policy=True, decision="block")
+def test_policy_gate_middleware_deny_calls_zero(tmp_path, monkeypatch):
+    client, calls = _client(tmp_path, monkeypatch, with_policy=True, decision="block")
     response = client.post(
         "/v1/cards/3/draft",
         headers={
@@ -160,8 +170,8 @@ def test_policy_gate_middleware_deny_calls_zero(tmp_path):
     assert calls["count"] == 0
 
 
-def test_audit_raw_zero_after_format_and_policy(tmp_path):
-    client, calls = _client(tmp_path, with_policy=True, decision="allow")
+def test_audit_raw_zero_after_format_and_policy(tmp_path, monkeypatch):
+    client, calls = _client(tmp_path, monkeypatch, with_policy=True, decision="allow")
     response = client.post(
         "/v1/cards/3/draft",
         headers={

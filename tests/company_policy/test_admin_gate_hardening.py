@@ -7,15 +7,18 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from butler_pc_core.company_fact import routes as route_module
+from butler_pc_core.company_policy import admin_auth
 from butler_pc_core.company_fact.storage import CompanyFactStore
 from butler_pc_core.company_policy.admin_auth import (
     AdminAuthError,
     TEST_ADMIN_AUTH_ENV,
     ZERO_DIGEST,
+    _verify_admin_context_base,
     admin_error_payload,
     verify_admin_context,
 )
 from butler_pc_core.company_policy.contracts import AdminContext, sha256_text
+from butler_pc_core.company_policy.role_registry import RoleRegistryStore
 
 
 def _admin_context(
@@ -44,11 +47,22 @@ def _assert_error_is_raw_zero(exc: AdminAuthError) -> None:
     assert set(payload) == {"fail_class", "message"}
 
 
+def _seed_role_registry(tmp_path, monkeypatch, *names: str) -> RoleRegistryStore:
+    store = RoleRegistryStore(root=tmp_path / "role_registry")
+    root_name = names[0] if names else "company-fact-route-admin"
+    root = _admin_context(admin_id_digest=sha256_text(root_name))
+    store.bootstrap_self_admin(root)
+    for name in names[1:]:
+        store.upsert_member(actor=root, target_admin_id_digest=sha256_text(name), role="admin")
+    monkeypatch.setattr(admin_auth, "get_default_role_registry_store", lambda: store)
+    return store
+
+
 @pytest.mark.parametrize("field", ["admin_id_digest", "admin_session_digest"])
 def test_verify_admin_context_rejects_placeholder_zero_digest(field: str):
     kwargs = {field: ZERO_DIGEST}
     with pytest.raises(AdminAuthError) as raised:
-        verify_admin_context(_admin_context(**kwargs), operation="approve_company_fact")
+        _verify_admin_context_base(_admin_context(**kwargs), operation="approve_company_fact")
 
     assert raised.value.fail_class == "ADMIN_DIGEST_PLACEHOLDER"
     _assert_error_is_raw_zero(raised.value)
@@ -58,7 +72,7 @@ def test_verify_admin_context_rejects_test_only_without_local_opt_in(monkeypatch
     monkeypatch.delenv(TEST_ADMIN_AUTH_ENV, raising=False)
 
     with pytest.raises(AdminAuthError) as raised:
-        verify_admin_context(_admin_context(auth_method="test_only"), operation="approve_company_fact")
+        _verify_admin_context_base(_admin_context(auth_method="test_only"), operation="approve_company_fact")
 
     assert raised.value.fail_class == "ADMIN_AUTH_METHOD_NOT_ALLOWED"
     _assert_error_is_raw_zero(raised.value)
@@ -67,7 +81,7 @@ def test_verify_admin_context_rejects_test_only_without_local_opt_in(monkeypatch
 def test_verify_admin_context_allows_test_only_only_with_local_opt_in(monkeypatch):
     monkeypatch.setenv(TEST_ADMIN_AUTH_ENV, "1")
 
-    verified = verify_admin_context(_admin_context(auth_method="test_only"), operation="approve_company_fact")
+    verified = _verify_admin_context_base(_admin_context(auth_method="test_only"), operation="approve_company_fact")
 
     assert verified.auth_method == "test_only"
 
@@ -77,25 +91,39 @@ def test_verify_admin_context_rejects_test_only_when_flag_is_set_outside_pytest(
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
     with pytest.raises(AdminAuthError) as raised:
-        verify_admin_context(_admin_context(auth_method="test_only"), operation="approve_company_fact")
+        _verify_admin_context_base(_admin_context(auth_method="test_only"), operation="approve_company_fact")
 
     assert raised.value.fail_class == "ADMIN_AUTH_METHOD_NOT_ALLOWED"
     _assert_error_is_raw_zero(raised.value)
 
 
-def test_verify_admin_context_allows_real_admin_methods_and_keeps_regressions():
-    verified = verify_admin_context(_admin_context(auth_method="tauri_secure_invoke"), operation="approve_company_fact")
+def test_verify_admin_context_base_allows_real_admin_methods_and_keeps_regressions():
+    verified = _verify_admin_context_base(_admin_context(auth_method="tauri_secure_invoke"), operation="approve_company_fact")
     assert verified.role == "admin"
-    verified_keychain = verify_admin_context(_admin_context(auth_method="os_keychain"), operation="approve_company_fact")
+    verified_keychain = _verify_admin_context_base(_admin_context(auth_method="os_keychain"), operation="approve_company_fact")
     assert verified_keychain.auth_method == "os_keychain"
 
     with pytest.raises(AdminAuthError) as denied:
-        verify_admin_context(_admin_context(role="manager"), operation="approve_company_fact")
+        _verify_admin_context_base(_admin_context(role="manager"), operation="approve_company_fact")
     assert denied.value.fail_class == "ADMIN_RBAC_DENIED"
 
     with pytest.raises(AdminAuthError) as invalid:
-        verify_admin_context(_admin_context(admin_id_digest="sha256:bad"), operation="approve_company_fact")
+        _verify_admin_context_base(_admin_context(admin_id_digest="sha256:bad"), operation="approve_company_fact")
     assert invalid.value.fail_class == "ADMIN_CONTEXT_INVALID"
+
+
+def test_verify_admin_context_requires_role_registry_registration(tmp_path, monkeypatch):
+    store = _seed_role_registry(tmp_path, monkeypatch, "registered-admin")
+
+    verified = verify_admin_context(
+        _admin_context(admin_id_digest=sha256_text("registered-admin")),
+        operation="approve_company_fact",
+    )
+    assert verified.admin_id_digest == sha256_text("registered-admin")
+
+    with pytest.raises(AdminAuthError) as missing:
+        verify_admin_context(_admin_context(admin_id_digest=sha256_text("unregistered-admin")), operation="approve_company_fact")
+    assert missing.value.fail_class == "ADMIN_ROLE_NOT_REGISTERED"
 
 
 def _app_with_store(tmp_path, monkeypatch) -> tuple[TestClient, CompanyFactStore]:
@@ -137,6 +165,7 @@ def _admin_headers(*, auth_method: str = "tauri_secure_invoke", zero_id: bool = 
 
 def test_company_fact_admin_routes_use_hardened_gate(tmp_path, monkeypatch):
     client, store = _app_with_store(tmp_path, monkeypatch)
+    _seed_role_registry(tmp_path, monkeypatch, "company-fact-route-admin")
     submit = client.post("/v1/company-facts/candidates", headers=_token_headers(monkeypatch), json=_candidate_payload())
     assert submit.status_code == 200
     fact_id = submit.json()["fact_id"]
