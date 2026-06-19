@@ -156,9 +156,11 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
       } else {
         await deprecateCompanyFact(factId, admin);
       }
-      // 성공 후 목록/status 재조회 + 상세 재조회.
+      // 성공 후 상태가 CANDIDATE가 아니므로 후보 상세 endpoint를 다시 호출하지 않는다.
+      // 목록/status만 재조회하고, 로컬 상세 pane은 비워 "성공 후 404처럼 보이는" UX를 막는다.
+      setDetail(null);
+      setDetailError(null);
       await refreshListAndStatus(admin);
-      await handleSelectCandidate(factId);
     } catch (error) {
       setActionError(uiErrorMessage(error));
     } finally {

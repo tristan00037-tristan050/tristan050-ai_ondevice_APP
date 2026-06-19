@@ -83,6 +83,12 @@ function countPost(fetchMock: ReturnType<typeof vi.fn>, marker: string): number 
   ).length;
 }
 
+function countCandidateDetailGets(fetchMock: ReturnType<typeof vi.fn>): number {
+  return fetchMock.mock.calls.filter(
+    ([url, init]) => /\/v1\/company-facts\/candidates\/F1$/.test(String(url)) && (init as RequestInit | undefined)?.method === 'GET',
+  ).length;
+}
+
 describe('CompanyFactApprovalConsole', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -122,12 +128,15 @@ describe('CompanyFactApprovalConsole', () => {
     expect(countPost(fetchMock, '/approve')).toBe(0);
 
     const statusCallsBefore = fetchMock.mock.calls.filter(([u]) => String(u).includes('/status')).length;
+    const detailGetsBefore = countCandidateDetailGets(fetchMock);
     fireEvent.click(screen.getByTestId('confirm-ok-btn'));
 
     await waitFor(() => expect(countPost(fetchMock, '/approve')).toBe(1));
     await waitFor(() =>
       expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/status')).length).toBeGreaterThan(statusCallsBefore),
     );
+    expect(countCandidateDetailGets(fetchMock)).toBe(detailGetsBefore);
+    expect(screen.queryByTestId('candidate-detail')).not.toBeInTheDocument();
   });
 
   it('deprecate modal: 0 POST before confirm, 1 POST after confirm', async () => {
