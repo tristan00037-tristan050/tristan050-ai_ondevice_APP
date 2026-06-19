@@ -25,8 +25,6 @@ export const COMPANY_FACT_ENDPOINTS = {
   deprecateFact: (factId: string) => `/v1/company-facts/${encodeURIComponent(factId)}/deprecate`,
   /** GET — capability token. active_count/candidate_count. */
   status: '/v1/company-facts/status',
-  /** POST — capability token. ACTIVE 지식이 답변에 쓰이는지 확인. */
-  resolve: '/v1/company-facts/resolve',
 } as const;
 
 export type CompanyFactStatus = 'CANDIDATE' | 'ACTIVE' | 'DEPRECATED';
@@ -89,13 +87,6 @@ export type CompanyFactDeprecateResponse = RawZeroFlags & {
 export type CompanyFactsStatusResponse = RawZeroFlags & {
   active_count: number;
   candidate_count: number;
-};
-
-export type CompanyFactResolveResponse = RawZeroFlags & {
-  matched: boolean;
-  fact_id: string | null;
-  answer_runtime_text: string | null;
-  status: CompanyFactStatus | null;
 };
 
 /** backend 오류 표준 페이로드(allowlist 렌더링용 — fail_class와 안전 메시지만). */

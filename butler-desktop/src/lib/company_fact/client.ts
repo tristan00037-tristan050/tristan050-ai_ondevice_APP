@@ -8,7 +8,6 @@ import {
   type CompanyFactCandidateDetail,
   type CompanyFactCandidatesResponse,
   type CompanyFactDeprecateResponse,
-  type CompanyFactResolveResponse,
   type CompanyFactsStatusResponse,
   type SidecarErrorPayload,
 } from './contracts';
@@ -214,15 +213,6 @@ export function deprecateCompanyFact(
 export function getCompanyFactsStatus(options: CompanyFactRequestOptions = {}): Promise<CompanyFactsStatusResponse> {
   return requestJson<CompanyFactsStatusResponse>(COMPANY_FACT_ENDPOINTS.status, {
     method: 'GET',
-    options,
-  });
-}
-
-/** #7 공식 지식 반영 확인 — capability token. */
-export function resolveCompanyFact(query: string, options: CompanyFactRequestOptions = {}): Promise<CompanyFactResolveResponse> {
-  return requestJson<CompanyFactResolveResponse>(COMPANY_FACT_ENDPOINTS.resolve, {
-    method: 'POST',
-    body: { query },
     options,
   });
 }

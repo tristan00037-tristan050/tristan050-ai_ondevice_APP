@@ -89,10 +89,16 @@ describe('company_fact client', () => {
     const fetcher = vi.fn(async () =>
       jsonResponse({ detail: { fail_class: 'ADMIN_ROLE_NOT_REGISTERED', message: 'not a registered admin' } }, 403),
     );
-    const error = await listCompanyFactCandidates(ADMIN, { fetcher, tokenProvider }).catch(
-      (e: unknown) => e as CompanyFactClientError,
-    );
+    let error: unknown;
+    try {
+      await listCompanyFactCandidates(ADMIN, { fetcher, tokenProvider });
+    } catch (caught) {
+      error = caught;
+    }
     expect(error).toBeInstanceOf(CompanyFactClientError);
+    if (!(error instanceof CompanyFactClientError)) {
+      throw new Error('EXPECTED_COMPANY_FACT_CLIENT_ERROR');
+    }
     expect(error.failClass).toBe('ADMIN_ROLE_NOT_REGISTERED');
     expect(error.status).toBe(403);
   });
