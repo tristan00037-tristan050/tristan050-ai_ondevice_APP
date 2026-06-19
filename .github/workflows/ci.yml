@@ -317,7 +317,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --upgrade pip
-          python3 -m pip install pytest pydantic cryptography fastapi httpx python-multipart
+          python3 -m pip install pytest pydantic cryptography fastapi httpx python-multipart jsonschema
 
       - name: Run company_fact B supersede known-bad tests
         run: |
