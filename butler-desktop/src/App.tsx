@@ -13,6 +13,7 @@ import { CardGrid } from './components/v1_1/CardGrid';
 import { Card2DocumentTransform } from './components/v1_1/Card2DocumentTransform';
 import { AdminPolicyConsole } from './components/v1_1/AdminPolicyConsole';
 import { CompanyFormatConsole } from './components/v1_1/CompanyFormatConsole';
+import { CompanyFactApprovalConsole } from './components/v1_1/CompanyFactApprovalConsole';
 import { SIDECAR_BASE } from './constants';
 import type { SSEEvent, Conversation, Message } from './types';
 import {
@@ -59,6 +60,7 @@ export function App() {
   const [documentTransformModalOpen, setDocumentTransformModalOpen] = useState(false);
   const [adminPolicyConsoleOpen, setAdminPolicyConsoleOpen] = useState(false);
   const [companyFormatConsoleOpen, setCompanyFormatConsoleOpen] = useState(false);
+  const [companyFactConsoleOpen, setCompanyFactConsoleOpen] = useState(false);
   const [egressMonitorOpen, setEgressMonitorOpen] = useState(false);
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarElapsed, setSidecarElapsed] = useState(0);
@@ -499,6 +501,21 @@ export function App() {
               양식 등록
             </button>
             <button
+              data-testid="company-fact-console-btn"
+              onClick={() => setCompanyFactConsoleOpen(true)}
+              style={{
+                background: 'none',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 6,
+                padding: '3px 10px',
+                cursor: 'pointer',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              회사 지식 승인
+            </button>
+            <button
               data-testid="egress-monitor-btn"
               onClick={() => setEgressMonitorOpen(true)}
               style={{
@@ -584,6 +601,9 @@ export function App() {
       )}
       {companyFormatConsoleOpen && (
         <CompanyFormatConsole onClose={() => setCompanyFormatConsoleOpen(false)} />
+      )}
+      {companyFactConsoleOpen && (
+        <CompanyFactApprovalConsole onClose={() => setCompanyFactConsoleOpen(false)} />
       )}
       {/* Sidecar readiness overlay */}
       {!sidecarReady && !sidecarFailed && (
