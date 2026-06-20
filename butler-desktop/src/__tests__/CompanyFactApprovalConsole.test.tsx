@@ -111,7 +111,7 @@ function makeKnownBadFetchRouter() {
     if (url.includes('/known-bad/override') && method === 'POST') {
       overridePosted = true;
       return jsonResponse({
-        schema_version: 'company_fact.known_bad_override.response.v1',
+        schema_version: 'company_fact.known_bad_override.v1',
         fact_id: 'F1',
         candidate_fact_digest: DETAIL.fact_digest,
         bad_entry_id: 'bad-1',

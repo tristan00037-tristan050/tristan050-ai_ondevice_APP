@@ -145,7 +145,7 @@ describe('company_fact client', () => {
   it('posts known-bad override to the candidate-scoped endpoint with admin headers', async () => {
     const fetcher = vi.fn().mockResolvedValue(
       jsonResponse({
-        schema_version: 'company_fact.known_bad_override.response.v1',
+        schema_version: 'company_fact.known_bad_override.v1',
         fact_id: 'F1',
         candidate_fact_digest: `sha256:${'b'.repeat(64)}`,
         bad_entry_id: 'bad-1',

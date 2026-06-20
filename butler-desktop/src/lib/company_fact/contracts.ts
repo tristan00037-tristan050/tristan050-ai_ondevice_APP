@@ -134,7 +134,7 @@ export type CompanyFactSupersedeResponse = RawZeroFlags & {
 };
 
 export type CompanyFactKnownBadOverrideResponse = RawZeroFlags & {
-  schema_version: 'company_fact.known_bad_override.response.v1';
+  schema_version: 'company_fact.known_bad_override.v1';
   fact_id: string;
   candidate_fact_digest: string;
   bad_entry_id: string;
