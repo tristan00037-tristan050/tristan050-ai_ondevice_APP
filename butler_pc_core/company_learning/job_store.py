@@ -69,8 +69,9 @@ class CompanyLearningJobStore:
             existing_id = self._folder_to_job.get(result.folder_digest)
             if existing_id:
                 existing = self._jobs.get(existing_id)
-                if existing is not None:
+                if existing is not None and existing.ingest_digest == result.ingest_digest:
                     return existing
+                self._jobs.pop(existing_id, None)
 
             job = CompanyLearningJob(
                 job_id="clj-" + uuid.uuid4().hex,

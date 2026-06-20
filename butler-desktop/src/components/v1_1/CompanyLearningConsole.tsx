@@ -101,6 +101,9 @@ export function CompanyLearningConsole({ onClose }: { onClose: () => void }) {
       const selected = await openDialog({ directory: true, multiple: false });
       const selectedPath = typeof selected === 'string' ? selected : null;
       if (!selectedPath) return;
+      setConnectResult(null);
+      setStatus(null);
+      setUnderstanding(null);
       const connected = await connectCompanyLearningFolder(selectedPath, admin);
       setConnectResult(connected);
       const latestStatus = await getCompanyLearningStatus(connected.job_id, admin);

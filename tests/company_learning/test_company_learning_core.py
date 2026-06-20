@@ -98,6 +98,41 @@ def test_total_extracted_char_limit_skips_later_files(tmp_path):
     assert result.counters.skipped_limit == 1
 
 
+def test_pruned_traversal_does_not_descend_into_skipped_directories(tmp_path):
+    folder = tmp_path / "docs"
+    folder.mkdir()
+    skipped = folder / "node_modules"
+    skipped.mkdir()
+    (skipped / "bad.docx").write_bytes(b"not-a-zip-document")
+    _write_text(folder / "supported.txt", "정상 업무 정책 자료")
+
+    result = ingest_folder(str(folder))
+
+    assert result.counters.processed_files == 1
+    assert result.counters.scanned_files == 1
+    assert result.counters.skipped_hidden == 1
+    assert result.counters.failed_extract == 0
+
+
+def test_job_store_reuses_only_matching_ingest_digest(tmp_path):
+    folder = tmp_path / "docs"
+    folder.mkdir()
+    target = folder / "policy.txt"
+    _write_text(target, "첫 번째 업무 정책 자료")
+    store = CompanyLearningJobStore()
+
+    first = store.create_completed(ingest_folder(str(folder)))
+    same = store.create_completed(ingest_folder(str(folder)))
+    _write_text(target, "두 번째 업무 정책 자료로 변경")
+    changed = store.create_completed(ingest_folder(str(folder)))
+
+    assert same.job_id == first.job_id
+    assert changed.job_id != first.job_id
+    assert changed.ingest_digest != first.ingest_digest
+    assert store.get(first.job_id) is None
+    assert store.get(changed.job_id) is changed
+
+
 def test_chunk_source_id_is_digest_based_and_index_retrieves(tmp_path):
     folder = tmp_path / "docs"
     folder.mkdir()

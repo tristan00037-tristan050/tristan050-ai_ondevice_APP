@@ -13,6 +13,7 @@
         { "url": "http://localhost:8765/**" }
       ]
     },
+    "dialog:allow-open",
     "dialog:allow-save",
     "fs:allow-write-file",
     "fs:scope-download-recursive",

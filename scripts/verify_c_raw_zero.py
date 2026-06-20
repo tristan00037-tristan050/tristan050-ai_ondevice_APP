@@ -96,6 +96,8 @@ for required in ("_TOKEN_MANAGER.verify_authorization_header", "verify_admin_con
         errors.add(f"ROUTE_AUTH_PATTERN_MISSING:{required}")
 
 ingest_text = read_target("butler_pc_core/company_learning/folder_ingest.py")
+if ".rglob(" in ingest_text:
+    errors.add("INGEST_RGLOBAL_TRAVERSAL_PRESENT")
 for required in (
     "MAX_OOXML_MEMBERS",
     "MAX_OOXML_UNCOMPRESSED_BYTES",
@@ -108,6 +110,10 @@ for required in (
 ):
     if required not in ingest_text:
         errors.add(f"INGEST_BACKPORT_PATTERN_MISSING:{required}")
+
+capability_text = read_target("butler-desktop/src-tauri/capabilities/default.json")
+if '"dialog:allow-open"' not in capability_text:
+    errors.add("TAURI_DIALOG_OPEN_PERMISSION_MISSING")
 
 handoff_text = read_target("butler_pc_core/company_learning/handoff.py")
 for required in ("schema_version\": \"learning_event.v1", "verified_for_training\": False", "target_box_id\": \"helper1"):

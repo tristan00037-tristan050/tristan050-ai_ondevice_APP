@@ -5,7 +5,7 @@ import zipfile
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from butler_pc_core.company_policy.contracts import sha256_bytes, sha256_text, stable_json_digest
 from butler_pc_core.retrieval.chunkers import Chunk, get_chunker
@@ -296,6 +296,41 @@ def _should_skip_hidden_or_system(path: Path, root: Path) -> bool:
     return path.name.lower().endswith(_SKIP_SUFFIXES)
 
 
+def _walk_runtime_entries(root: Path, max_depth: int) -> Iterator[tuple[str, Path]]:
+    stack: list[tuple[Path, int]] = [(root, 0)]
+    while stack:
+        current, depth = stack.pop()
+        try:
+            entries = sorted(current.iterdir(), key=lambda item: item.name.lower())
+        except OSError:
+            continue
+
+        child_dirs: list[Path] = []
+        for child in entries:
+            if child.is_symlink():
+                yield "skipped_symlink", child
+                continue
+            if _should_skip_hidden_or_system(child, root):
+                yield "skipped_hidden", child
+                continue
+            try:
+                is_dir = child.is_dir()
+                is_file = child.is_file()
+            except OSError:
+                yield "failed_extract", child
+                continue
+            if is_dir:
+                if depth >= max_depth:
+                    yield "skipped_limit", child
+                    continue
+                child_dirs.append(child)
+            elif is_file:
+                yield "file", child
+
+        for child_dir in reversed(child_dirs):
+            stack.append((child_dir, depth + 1))
+
+
 def _source_id_for(file_digest: str) -> str:
     return "file:" + file_digest.split(":", 1)[1][:16]
 
@@ -328,18 +363,20 @@ def ingest_folder(
     total_bytes = 0
     total_extracted_chars = 0
 
-    for path in sorted(root.rglob("*")):
-        if path.is_symlink():
+    for entry_kind, path in _walk_runtime_entries(root, max_depth):
+        if entry_kind == "skipped_symlink":
             counters = _mutate_counter(counters, skipped_symlink=1)
             continue
-        if not path.is_file():
+        if entry_kind == "skipped_hidden":
+            counters = _mutate_counter(counters, skipped_hidden=1)
             continue
-        rel = _safe_relative(path.resolve(), root)
-        if len(rel.parts) - 1 > max_depth:
+        if entry_kind == "skipped_limit":
             counters = _mutate_counter(counters, skipped_limit=1)
             continue
-        if _should_skip_hidden_or_system(path, root):
-            counters = _mutate_counter(counters, skipped_hidden=1)
+        if entry_kind == "failed_extract":
+            counters = _mutate_counter(counters, failed_extract=1)
+            continue
+        if entry_kind != "file":
             continue
 
         counters = _mutate_counter(counters, scanned_files=1)
@@ -400,6 +437,8 @@ def ingest_folder(
             total_bytes=size,
             chunk_count=len(produced),
         )
+        if processed_files >= max_files:
+            break
 
     if not chunks:
         raise CompanyLearningIngestError("NO_INDEXABLE_FILES")
