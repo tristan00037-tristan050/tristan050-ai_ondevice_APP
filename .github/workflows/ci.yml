@@ -293,6 +293,29 @@ jobs:
       - name: Run tests
         run: npm test --workspaces --if-present
 
+  butler-desktop-vitest:
+    name: Butler Desktop Vitest
+    runs-on: ubuntu-latest
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: butler-desktop/package-lock.json
+
+      - name: Install butler-desktop dependencies
+        working-directory: butler-desktop
+        run: npm ci
+
+      - name: Run butler-desktop vitest
+        working-directory: butler-desktop
+        run: npm test -- --run
+
   company-fact-pytest:
     name: Company Fact Python Tests
     runs-on: ubuntu-latest
