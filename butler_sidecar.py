@@ -307,6 +307,7 @@ if _FASTAPI_AVAILABLE:
     from butler_pc_core.sidecar.routes.box2_rewrite import router as box2_rewrite_router
     from butler_pc_core.sidecar.routes.box3_draft import router as box3_draft_router
     from butler_pc_core.company_fact.routes import router as company_fact_router
+    from butler_pc_core.sidecar.routes.company_learning import router as company_learning_router
     from butler_pc_core.sidecar.routes.company_profile import router as company_profile_router
     from butler_pc_core.sidecar.routes.helper1_search import router as helper1_search_router
     from butler_pc_core.sidecar.routes.router_decide import router as router_decide_router
@@ -331,6 +332,7 @@ if _FASTAPI_AVAILABLE:
     app.include_router(admin_role_registry_router)
     app.include_router(company_profile_router)
     app.include_router(company_fact_router)
+    app.include_router(company_learning_router)
 
     # -----------------------------------------------------------------------
     # 모델

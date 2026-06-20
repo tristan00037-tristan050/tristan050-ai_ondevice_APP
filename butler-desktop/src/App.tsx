@@ -14,6 +14,7 @@ import { Card2DocumentTransform } from './components/v1_1/Card2DocumentTransform
 import { AdminPolicyConsole } from './components/v1_1/AdminPolicyConsole';
 import { CompanyFormatConsole } from './components/v1_1/CompanyFormatConsole';
 import { CompanyFactApprovalConsole } from './components/v1_1/CompanyFactApprovalConsole';
+import { CompanyLearningConsole } from './components/v1_1/CompanyLearningConsole';
 import { SIDECAR_BASE } from './constants';
 import type { SSEEvent, Conversation, Message } from './types';
 import {
@@ -61,6 +62,7 @@ export function App() {
   const [adminPolicyConsoleOpen, setAdminPolicyConsoleOpen] = useState(false);
   const [companyFormatConsoleOpen, setCompanyFormatConsoleOpen] = useState(false);
   const [companyFactConsoleOpen, setCompanyFactConsoleOpen] = useState(false);
+  const [companyLearningConsoleOpen, setCompanyLearningConsoleOpen] = useState(false);
   const [egressMonitorOpen, setEgressMonitorOpen] = useState(false);
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarElapsed, setSidecarElapsed] = useState(0);
@@ -516,6 +518,21 @@ export function App() {
               회사 지식 승인
             </button>
             <button
+              data-testid="company-learning-console-btn"
+              onClick={() => setCompanyLearningConsoleOpen(true)}
+              style={{
+                background: 'none',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 6,
+                padding: '3px 10px',
+                cursor: 'pointer',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              폴더 학습 후보
+            </button>
+            <button
               data-testid="egress-monitor-btn"
               onClick={() => setEgressMonitorOpen(true)}
               style={{
@@ -604,6 +621,9 @@ export function App() {
       )}
       {companyFactConsoleOpen && (
         <CompanyFactApprovalConsole onClose={() => setCompanyFactConsoleOpen(false)} />
+      )}
+      {companyLearningConsoleOpen && (
+        <CompanyLearningConsole onClose={() => setCompanyLearningConsoleOpen(false)} />
       )}
       {/* Sidecar readiness overlay */}
       {!sidecarReady && !sidecarFailed && (

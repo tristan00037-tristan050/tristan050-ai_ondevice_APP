@@ -351,3 +351,39 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pytest tests/company_fact -q
+
+  company-learning-pytest:
+    name: Company Learning Python Tests
+    runs-on: ubuntu-latest
+    env:
+      GIT_LFS_SKIP_SMUDGE: "1"
+      BUTLER_ALLOW_TEST_ADMIN_AUTH: "1"
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install company_learning test dependencies
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pytest pydantic cryptography fastapi==0.128.8 starlette==0.49.3 httpx python-multipart jsonschema python-docx openpyxl pdfminer.six
+
+      - name: Run company_learning tests
+        run: |
+          set -euo pipefail
+          python3 -m pytest tests/company_learning -q
+
+      - name: Run company_learning raw-zero verifier
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_c_raw_zero.py
