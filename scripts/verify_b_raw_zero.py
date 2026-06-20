@@ -12,18 +12,20 @@ Exit 0 and print *_=1 lines on success; exit 1 and print *=0 lines on any violat
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 TARGETS = [
     "butler_pc_core/company_fact/known_bad.py",
     "butler_pc_core/company_fact/storage.py",
     "butler_pc_core/company_fact/routes.py",
+    "butler-desktop/src/lib/company_fact/contracts.ts",
+    "butler-desktop/src/lib/company_fact/client.ts",
+    "butler-desktop/src/components/v1_1/CompanyFactApprovalConsole.tsx",
     "tests/company_fact/test_b_supersede_known_bad.py",
+    "butler-desktop/src/__tests__/companyFactClient.test.ts",
+    "butler-desktop/src/__tests__/CompanyFactApprovalConsole.test.tsx",
 ]
 
 FORBIDDEN_RAW_PATTERNS = [
@@ -42,40 +44,44 @@ FORBIDDEN_CLAIMS = [
     "같은 뜻",
 ]
 
-errors: list[str] = []
+errors: set[str] = set()
 
 for rel in TARGETS:
     path = ROOT / rel
     if not path.is_file():
-        errors.append(f"TARGET_MISSING:{rel}")
+        errors.add("TARGET_MISSING")
         continue
     text = path.read_text(encoding="utf-8", errors="ignore")
     for pattern in FORBIDDEN_RAW_PATTERNS:
         if pattern.search(text):
-            errors.append(f"RAW_PATTERN_PRESENT:{rel}")
+            errors.add("RAW_PATTERN_PRESENT")
             break
     for token in FORBIDDEN_STATUS_ENUM:
         if token in text:
-            errors.append(f"FORBIDDEN_STATUS_ENUM_PRESENT:{rel}")
+            errors.add("FORBIDDEN_STATUS_ENUM_PRESENT")
             break
     for claim in FORBIDDEN_CLAIMS:
         if claim in text:
-            errors.append(f"FORBIDDEN_SEMANTIC_CLAIM_PRESENT:{rel}")
+            errors.add("FORBIDDEN_SEMANTIC_CLAIM_PRESENT")
             break
 
 # Positive assertion: status enum is still the sealed 3-value set.
-try:
-    from butler_pc_core.company_fact.contracts import STATUS_VALUES
-
-    if set(STATUS_VALUES) != {"CANDIDATE", "ACTIVE", "DEPRECATED"}:
-        errors.append("STATUS_ENUM_EXTENDED")
-except Exception as exc:  # pragma: no cover - import failure is itself a violation
-    errors.append(f"STATUS_ENUM_IMPORT_FAILED:{exc}")
+# Static-only: do not import butler_pc_core here because repo guards may run
+# without serving dependencies installed.
+contracts_path = ROOT / "butler_pc_core/company_fact/contracts.py"
+contracts_text = contracts_path.read_text(encoding="utf-8", errors="ignore")
+status_match = re.search(r"STATUS_VALUES\s*=\s*\{(?P<body>[^}]+)\}", contracts_text, flags=re.MULTILINE)
+if not status_match:
+    errors.add("STATUS_ENUM_NOT_FOUND")
+else:
+    values = set(re.findall(r"['\"]([A-Z_]+)['\"]", status_match.group("body")))
+    if values != {"CANDIDATE", "ACTIVE", "DEPRECATED"}:
+        errors.add("STATUS_ENUM_EXTENDED")
 
 if errors:
-    for code in sorted(set(errors)):
+    for code in sorted(errors):
         print(f"{code}=0")
-    sys.exit(1)
+    raise SystemExit(1)
 
 print("RAW_ZERO_REPO_VERIFY=1")
 print("FORBIDDEN_STATUS_ENUM_ZERO=1")

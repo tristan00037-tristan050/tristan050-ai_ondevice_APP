@@ -17,14 +17,16 @@ const DETAIL = {
   fact_id: 'F1',
   status: 'CANDIDATE',
   category: '휴가 규정',
-  question_patterns: ['연차 며칠'],
+  question_patterns: ['연차 며칠', '연차 일수'],
   keywords_required: ['연차'],
   keywords_any: ['휴가'],
   source: '인사팀',
+  source_url: null,
   source_doc: 'hr.pdf',
   verified_at: null,
   expires_at: null,
   confidence: 0.9,
+  fact_digest: `sha256:${'b'.repeat(64)}`,
   answer_runtime_text: '연차는 15일입니다.',
   raw_text_logged: false,
   external_send_zero: true,
@@ -38,10 +40,25 @@ const INDEX_ROW = {
   keywords_required: ['연차'],
   keywords_any: ['휴가'],
   source: '인사팀',
+  source_url: null,
   source_doc: 'hr.pdf',
   verified_at: null,
   expires_at: null,
   confidence: 0.9,
+  fact_digest: `sha256:${'b'.repeat(64)}`,
+};
+
+const KNOWN_BAD = {
+  known_bad_suspected: true,
+  override_available: true,
+  override_active: false,
+  match_score: 0.7,
+  matched_keywords_count: 1,
+  matched_pattern_digest: `sha256:${'c'.repeat(64)}`,
+  bad_entry_id: 'bad-1',
+  bad_fact_digest: `sha256:${'d'.repeat(64)}`,
+  raw_text_logged: false,
+  external_send_zero: true,
 };
 
 /** url/method 기반 응답 라우터. */
@@ -55,6 +72,21 @@ function makeFetchRouter(overrides: { listStatus?: number; listBody?: unknown } 
     if (url.includes('/deprecate') && method === 'POST') {
       return jsonResponse({ fact_id: 'F1', status: 'DEPRECATED', raw_text_logged: false, external_send_zero: true });
     }
+    if (url.includes('/supersede') && method === 'POST') {
+      return jsonResponse({
+        schema_version: 'company_fact.supersede.result.v1',
+        old_fact_id: 'F1',
+        old_status: 'DEPRECATED',
+        old_fact_digest: DETAIL.fact_digest,
+        new_fact_id: 'F2',
+        new_status: 'ACTIVE',
+        new_fact_digest: `sha256:${'9'.repeat(64)}`,
+        previous_fact_digest: DETAIL.fact_digest,
+        audit_refs: [`sha256:${'8'.repeat(64)}`],
+        raw_text_logged: false,
+        external_send_zero: true,
+      });
+    }
     if (url.includes('/v1/company-facts/status')) {
       return jsonResponse({ active_count: 1, candidate_count: 1, raw_text_logged: false, external_send_zero: true });
     }
@@ -66,6 +98,47 @@ function makeFetchRouter(overrides: { listStatus?: number; listBody?: unknown } 
         return jsonResponse(overrides.listBody ?? {}, overrides.listStatus);
       }
       return jsonResponse({ candidates: [INDEX_ROW], raw_text_logged: false, external_send_zero: true });
+    }
+    return jsonResponse({}, 404);
+  });
+}
+
+function makeKnownBadFetchRouter() {
+  let overridePosted = false;
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (url.includes('/known-bad/override') && method === 'POST') {
+      overridePosted = true;
+      return jsonResponse({
+        schema_version: 'company_fact.known_bad_override.v1',
+        fact_id: 'F1',
+        candidate_fact_digest: DETAIL.fact_digest,
+        bad_entry_id: 'bad-1',
+        bad_fact_digest: KNOWN_BAD.bad_fact_digest,
+        approved_by_digest: DIGEST,
+        approved_at: '2026-06-20T00:00:00Z',
+        status: 'ACTIVE',
+        override_digest: `sha256:${'e'.repeat(64)}`,
+        audit_ref: `sha256:${'f'.repeat(64)}`,
+        raw_text_logged: false,
+        external_send_zero: true,
+      });
+    }
+    if (url.includes('/approve') && method === 'POST') {
+      if (!overridePosted) {
+        return jsonResponse({ detail: { fail_class: 'KNOWN_BAD_APPROVAL_BLOCKED', message: 'blocked' } }, 409);
+      }
+      return jsonResponse({ fact_id: 'F1', status: 'ACTIVE', raw_text_logged: false, external_send_zero: true });
+    }
+    if (url.includes('/v1/company-facts/status')) {
+      return jsonResponse({ active_count: 1, candidate_count: overridePosted ? 0 : 1, raw_text_logged: false, external_send_zero: true });
+    }
+    if (/\/v1\/company-facts\/candidates\/F1$/.test(url)) {
+      return jsonResponse({ ...DETAIL, known_bad: { ...KNOWN_BAD, override_active: overridePosted } });
+    }
+    if (url.includes('/v1/company-facts/candidates')) {
+      return jsonResponse({ candidates: [{ ...INDEX_ROW, known_bad: KNOWN_BAD }], raw_text_logged: false, external_send_zero: true });
     }
     return jsonResponse({}, 404);
   });
@@ -152,10 +225,69 @@ describe('CompanyFactApprovalConsole', () => {
     fireEvent.click(screen.getByTestId('deprecate-btn'));
     const modal = await screen.findByTestId('confirm-modal');
     expect(within(modal).getByText(/폐기하시겠습니까/)).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId('deprecate-reason-select'), { target: { value: 'WRONG' } });
     expect(countPost(fetchMock, '/deprecate')).toBe(0);
 
     fireEvent.click(screen.getByTestId('confirm-ok-btn'));
     await waitFor(() => expect(countPost(fetchMock, '/deprecate')).toBe(1));
+    const deprecateCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/deprecate'));
+    const parsed = JSON.parse(String((deprecateCall?.[1] as RequestInit).body));
+    expect(parsed).toEqual({ reason_code: 'WRONG' });
+  });
+
+  it('known-bad approve 409 keeps confirmation open, then override reloads detail and approves', async () => {
+    const fetchMock = makeKnownBadFetchRouter();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<CompanyFactApprovalConsole onClose={() => undefined} />);
+    applyAuth();
+    await waitFor(() => expect(screen.getByTestId('candidate-row-F1')).toBeInTheDocument());
+    expect(screen.getByTestId('known-bad-badge-F1')).toHaveTextContent('재검토 필요');
+    fireEvent.click(screen.getByTestId('candidate-row-F1'));
+    await waitFor(() => expect(screen.getByTestId('candidate-detail')).toBeInTheDocument());
+    expect(screen.getByTestId('known-bad-warning-F1')).toHaveTextContent(
+      '재검토 필요: 이전에 WRONG으로 표시된 항목과 핵심어/패턴이 유사합니다.',
+    );
+    expect(screen.queryByTestId('detail-override-and-approve-btn')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('approve-btn'));
+    fireEvent.click(await screen.findByTestId('confirm-ok-btn'));
+
+    const modal = await screen.findByTestId('confirm-modal');
+    expect(modal).toBeInTheDocument();
+    expect(await screen.findByTestId('override-and-approve-btn')).toBeInTheDocument();
+    expect(countPost(fetchMock, '/approve')).toBe(1);
+
+    fireEvent.click(screen.getByTestId('override-and-approve-btn'));
+    await waitFor(() => expect(countPost(fetchMock, '/known-bad/override')).toBe(1));
+    await waitFor(() => expect(countPost(fetchMock, '/approve')).toBe(2));
+    await waitFor(() => expect(screen.getByTestId('session-active-fact-panel')).toBeInTheDocument());
+    expect(countCandidateDetailGets(fetchMock)).toBeGreaterThanOrEqual(2);
+  });
+
+  it('supersede is available only for the just-approved active fact and sends confidence 1.0', async () => {
+    const fetchMock = makeFetchRouter();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<CompanyFactApprovalConsole onClose={() => undefined} />);
+    applyAuth();
+    await waitFor(() => expect(screen.getByTestId('candidate-row-F1')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('candidate-row-F1'));
+    await waitFor(() => expect(screen.getByTestId('candidate-detail')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('approve-btn'));
+    fireEvent.click(await screen.findByTestId('confirm-ok-btn'));
+    await waitFor(() => expect(screen.getByTestId('session-active-fact-panel')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('open-supersede-btn'));
+    await waitFor(() => expect(screen.getByTestId('supersede-modal')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('answer_runtime_text'), { target: { value: '연차는 입사일 기준으로 15일입니다.' } });
+    fireEvent.click(screen.getByTestId('supersede-submit-btn'));
+
+    await waitFor(() => expect(countPost(fetchMock, '/supersede')).toBe(1));
+    const supersedeCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/supersede'));
+    const parsed = JSON.parse(String((supersedeCall?.[1] as RequestInit).body));
+    expect(parsed.confidence).toBe(1.0);
+    expect(parsed.question_patterns).toEqual(['연차 며칠', '연차 일수']);
   });
 
   it('maps backend fail_class to a human message', async () => {
