@@ -41,6 +41,14 @@ class CompanyFactResolveRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
 
 
+class CompanyFactDeprecateRequest(BaseModel):
+    reason_code: str = Field(default="MANUAL_DEPRECATED", pattern=r"^(WRONG|SUPERSEDED|MANUAL_DEPRECATED)$")
+
+
+class CompanyFactSupersedeRequest(CompanyFactCandidateRequest):
+    confidence: float = Field(default=1.0, ge=1.0, le=1.0)
+
+
 def get_company_fact_store() -> CompanyFactStore:
     global _STORE
     if _STORE is None:
@@ -108,6 +116,12 @@ def _candidate_detail(record) -> dict[str, Any]:
     }
 
 
+def _candidate_detail_with_known_bad(store: CompanyFactStore, record) -> dict[str, Any]:
+    data = _candidate_detail(record)
+    data["known_bad"] = store.known_bad_flags_for_candidate(record)
+    return data
+
+
 @router.get("/v1/company-facts/status")
 async def company_facts_status(authorization: Optional[str] = Header(default=None)) -> dict[str, Any]:
     _verify_token(authorization)
@@ -169,14 +183,20 @@ async def list_company_fact_candidates(
 ) -> dict[str, Any]:
     try:
         _verify_admin(x_admin_role, x_admin_id_digest, x_admin_session_digest, x_admin_auth_method, operation="list_company_fact_candidates")
-        entries = get_company_fact_store().list_index_entries(status="CANDIDATE")
+        store = get_company_fact_store()
+        entries = store.list_index_entries(status="CANDIDATE")
+        rows = []
+        for entry in entries:
+            row = entry.to_dict()
+            row["known_bad"] = store.known_bad_flags_for_candidate(store.load_fact(entry.fact_id))
+            rows.append(row)
     except AdminAuthError as exc:
         raise HTTPException(status_code=403, detail=admin_error_payload(exc)) from exc
     except CompanyFactLoadError as exc:
         raise HTTPException(status_code=503, detail={"fail_class": "COMPANY_FACT_LOAD_FAILED"}) from exc
     return {
         "schema_version": "company_fact.candidates.response.v1",
-        "candidates": [entry.to_dict() for entry in entries],
+        "candidates": rows,
         "candidate_count": len(entries),
         "raw_text_logged": False,
         "external_send_zero": True,
@@ -193,14 +213,15 @@ async def get_company_fact_candidate(
 ) -> dict[str, Any]:
     try:
         _verify_admin(x_admin_role, x_admin_id_digest, x_admin_session_digest, x_admin_auth_method, operation="get_company_fact_candidate")
-        record = get_company_fact_store().load_fact(fact_id)
+        store = get_company_fact_store()
+        record = store.load_fact(fact_id)
     except AdminAuthError as exc:
         raise HTTPException(status_code=403, detail=admin_error_payload(exc)) from exc
     except CompanyFactLoadError as exc:
         raise HTTPException(status_code=404, detail={"fail_class": str(exc)}) from exc
     if record.status != "CANDIDATE":
         raise HTTPException(status_code=404, detail={"fail_class": "COMPANY_FACT_CANDIDATE_NOT_FOUND"})
-    return _candidate_detail(record)
+    return _candidate_detail_with_known_bad(store, record)
 
 
 @router.post("/v1/company-facts/candidates/{fact_id}/approve")
@@ -217,7 +238,8 @@ async def approve_company_fact_candidate(
     except AdminAuthError as exc:
         raise HTTPException(status_code=403, detail=admin_error_payload(exc)) from exc
     except (CompanyFactContractError, CompanyFactLoadError) as exc:
-        raise HTTPException(status_code=422, detail={"fail_class": str(exc)}) from exc
+        status = 409 if str(exc) == "KNOWN_BAD_APPROVAL_BLOCKED" else 422
+        raise HTTPException(status_code=status, detail={"fail_class": str(exc), "raw_text_logged": False, "external_send_zero": True}) from exc
     return {
         "schema_version": "company_fact.approve.response.v1",
         "fact_id": entry.fact_id,
@@ -232,6 +254,7 @@ async def approve_company_fact_candidate(
 @router.post("/v1/company-facts/{fact_id}/deprecate")
 async def deprecate_company_fact(
     fact_id: str,
+    payload: Optional[CompanyFactDeprecateRequest] = None,
     x_admin_role: Optional[str] = Header(default=None),
     x_admin_id_digest: Optional[str] = Header(default=None),
     x_admin_session_digest: Optional[str] = Header(default=None),
@@ -239,11 +262,13 @@ async def deprecate_company_fact(
 ) -> dict[str, Any]:
     try:
         admin = _verify_admin(x_admin_role, x_admin_id_digest, x_admin_session_digest, x_admin_auth_method, operation="deprecate_company_fact")
-        entry, audit = get_company_fact_store().deprecate_fact(fact_id, admin)
+        entry, audit = get_company_fact_store().deprecate_fact(
+            fact_id, admin, reason_code=(payload.reason_code if payload else "MANUAL_DEPRECATED")
+        )
     except AdminAuthError as exc:
         raise HTTPException(status_code=403, detail=admin_error_payload(exc)) from exc
     except (CompanyFactContractError, CompanyFactLoadError) as exc:
-        raise HTTPException(status_code=422, detail={"fail_class": str(exc)}) from exc
+        raise HTTPException(status_code=422, detail={"fail_class": str(exc), "raw_text_logged": False, "external_send_zero": True}) from exc
     return {
         "schema_version": "company_fact.deprecate.response.v1",
         "fact_id": entry.fact_id,
@@ -253,3 +278,39 @@ async def deprecate_company_fact(
         "raw_text_logged": False,
         "external_send_zero": True,
     }
+
+
+@router.post("/v1/company-facts/{fact_id}/supersede")
+async def supersede_company_fact(
+    fact_id: str,
+    payload: CompanyFactSupersedeRequest,
+    x_admin_role: Optional[str] = Header(default=None),
+    x_admin_id_digest: Optional[str] = Header(default=None),
+    x_admin_session_digest: Optional[str] = Header(default=None),
+    x_admin_auth_method: Optional[str] = Header(default=None),
+) -> dict[str, Any]:
+    try:
+        admin = _verify_admin(x_admin_role, x_admin_id_digest, x_admin_session_digest, x_admin_auth_method, operation="supersede_company_fact")
+        return get_company_fact_store().supersede_fact(fact_id, payload.model_dump(), admin)
+    except AdminAuthError as exc:
+        raise HTTPException(status_code=403, detail=admin_error_payload(exc)) from exc
+    except (CompanyFactContractError, CompanyFactLoadError) as exc:
+        raise HTTPException(status_code=422, detail={"fail_class": str(exc), "raw_text_logged": False, "external_send_zero": True}) from exc
+
+
+@router.post("/v1/company-facts/candidates/{fact_id}/known-bad/override")
+async def override_known_bad_company_fact_candidate(
+    fact_id: str,
+    x_admin_role: Optional[str] = Header(default=None),
+    x_admin_id_digest: Optional[str] = Header(default=None),
+    x_admin_session_digest: Optional[str] = Header(default=None),
+    x_admin_auth_method: Optional[str] = Header(default=None),
+) -> dict[str, Any]:
+    try:
+        admin = _verify_admin(x_admin_role, x_admin_id_digest, x_admin_session_digest, x_admin_auth_method, operation="override_known_bad_company_fact")
+        result = get_company_fact_store().override_known_bad_candidate(fact_id, admin)
+    except AdminAuthError as exc:
+        raise HTTPException(status_code=403, detail=admin_error_payload(exc)) from exc
+    except (CompanyFactContractError, CompanyFactLoadError) as exc:
+        raise HTTPException(status_code=422, detail={"fail_class": str(exc), "raw_text_logged": False, "external_send_zero": True}) from exc
+    return {"schema_version": "company_fact.known_bad_override.response.v1", **result}
