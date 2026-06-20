@@ -5,12 +5,16 @@ import {
   getCompanyFactCandidate,
   getCompanyFactsStatus,
   listCompanyFactCandidates,
+  overrideKnownBadCandidate,
+  supersedeCompanyFact,
 } from '../../lib/company_fact/client';
 import type {
   AdminContextForSidecar,
   CompanyFactCandidateDetail,
   CompanyFactCandidateIndexEntry,
+  CompanyFactSupersedeRequest,
   CompanyFactsStatusResponse,
+  DeprecateReasonCode,
 } from '../../lib/company_fact/contracts';
 import {
   getExistingAdminContextForA2,
@@ -35,6 +39,9 @@ const FAIL_CLASS_MESSAGES: Record<string, string> = {
   ADMIN_ROLE_REGISTRY_LOAD_FAILED: '직급 등록 정보를 불러오지 못했습니다. 보안상 승인을 중단했습니다.',
   COMPANY_FACT_LOAD_FAILED: '회사 지식 저장소를 불러오지 못했습니다.',
   COMPANY_FACT_CANDIDATE_NOT_FOUND: '후보를 찾을 수 없습니다. 목록을 새로고침해 주세요.',
+  KNOWN_BAD_APPROVAL_BLOCKED: '재검토가 필요한 후보입니다. 관리자 override 후 다시 승인할 수 있습니다.',
+  KNOWN_BAD_OVERRIDE_MATCH_NOT_FOUND: 'override 대상 경고를 찾을 수 없습니다. 상세를 새로고침해 주세요.',
+  SUPERSEDE_REQUIRES_ACTIVE: 'ACTIVE 회사 지식만 교체할 수 있습니다.',
 };
 
 /** error에서 fail_class만 안전하게 추출(allowlist). raw 메시지/원문은 렌더링하지 않는다. */
@@ -66,16 +73,91 @@ type ConfirmTarget = { kind: 'approve' | 'deprecate'; factId: string };
 
 const CONFIRM_TEXT = {
   approve: '이 후보를 회사 공식 지식으로 승인하시겠습니까? 승인 후 답변에 사용될 수 있습니다.',
-  deprecate: '이 후보를 폐기하시겠습니까? 기록은 남지만 공식 답변에는 사용되지 않습니다.',
+  deprecate: '이 회사 지식을 폐기하시겠습니까? 기록은 남지만 공식 답변에는 사용되지 않습니다.',
 } as const;
 
-function fieldText(value: string | number | null): string {
+const KNOWN_BAD_WARNING_TEXT =
+  '재검토 필요: 이전에 WRONG으로 표시된 항목과 핵심어/패턴이 유사합니다.';
+
+const DEPRECATE_REASON_COPY: Record<DeprecateReasonCode, string> = {
+  WRONG: '향후 핵심어/패턴이 유사한 후보는 관리자 override가 필요합니다.',
+  SUPERSEDED: '대체/과거 버전 폐기입니다. known-bad 경고를 만들지 않습니다.',
+  MANUAL_DEPRECATED: '기록만 남기는 일반 폐기입니다.',
+};
+
+type SupersedeFormState = {
+  category: string;
+  questionPatterns: string;
+  keywordsRequired: string;
+  keywordsAny: string;
+  answerRuntimeText: string;
+  source: string;
+  sourceUrl: string;
+  sourceDoc: string;
+  verifiedAt: string;
+  expiresAt: string;
+};
+
+function fieldText(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '—';
   return String(value);
 }
 
-function listText(values: string[]): string {
+function listText(values?: string[] | null): string {
   return values && values.length > 0 ? values.join(', ') : '—';
+}
+
+function splitLines(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function splitCommaOrLines(value: string): string[] {
+  return value
+    .split(/[\n,]/)
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function buildSupersedeForm(detail: CompanyFactCandidateDetail): SupersedeFormState {
+  return {
+    category: detail.category ?? '',
+    questionPatterns: (detail.question_patterns ?? []).join('\n'),
+    keywordsRequired: (detail.keywords_required ?? []).join(', '),
+    keywordsAny: (detail.keywords_any ?? []).join(', '),
+    answerRuntimeText: detail.answer_runtime_text,
+    source: detail.source ?? '',
+    sourceUrl: detail.source_url ?? '',
+    sourceDoc: detail.source_doc ?? '',
+    verifiedAt: detail.verified_at ?? '',
+    expiresAt: detail.expires_at ?? '',
+  };
+}
+
+function toSupersedePayload(form: SupersedeFormState): CompanyFactSupersedeRequest {
+  return {
+    category: form.category.trim(),
+    question_patterns: splitLines(form.questionPatterns),
+    keywords_required: splitCommaOrLines(form.keywordsRequired),
+    keywords_any: splitCommaOrLines(form.keywordsAny),
+    answer_runtime_text: form.answerRuntimeText.trim(),
+    source: form.source.trim(),
+    source_url: form.sourceUrl.trim() || null,
+    source_doc: form.sourceDoc.trim() || null,
+    verified_at: form.verifiedAt.trim() || null,
+    expires_at: form.expiresAt.trim() || null,
+    confidence: 1.0,
+  };
+}
+
+function validateSupersedePayload(payload: CompanyFactSupersedeRequest): string | null {
+  if (!payload.category) return 'category를 입력해 주세요.';
+  if (payload.question_patterns.length < 2) return 'question_patterns는 2개 이상이어야 합니다.';
+  if (payload.answer_runtime_text.length < 10) return 'answer_runtime_text는 10자 이상이어야 합니다.';
+  if (payload.source.length < 3) return 'source는 3자 이상이어야 합니다.';
+  return null;
 }
 
 export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void }) {
@@ -93,8 +175,14 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
   const [detailLoading, setDetailLoading] = useState(false);
 
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
+  const [deprecateReason, setDeprecateReason] = useState<DeprecateReasonCode>('MANUAL_DEPRECATED');
+  const [knownBadBlockedFactId, setKnownBadBlockedFactId] = useState<string | null>(null);
   const [inFlightFactId, setInFlightFactId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [sessionActiveFact, setSessionActiveFact] = useState<CompanyFactCandidateDetail | null>(null);
+  const [supersedeTarget, setSupersedeTarget] = useState<CompanyFactCandidateDetail | null>(null);
+  const [supersedeForm, setSupersedeForm] = useState<SupersedeFormState | null>(null);
+  const [supersedeError, setSupersedeError] = useState<string | null>(null);
 
   async function refreshListAndStatus(ctx: AdminContextForSidecar): Promise<void> {
     setListLoading(true);
@@ -123,6 +211,9 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
     setAdmin(ctx);
     setDetail(null);
     setDetailError(null);
+    setSessionActiveFact(null);
+    setSupersedeTarget(null);
+    setSupersedeForm(null);
     await refreshListAndStatus(ctx);
   }
 
@@ -134,6 +225,7 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
     try {
       const next = await getCompanyFactCandidate(factId, admin);
       setDetail(next);
+      setKnownBadBlockedFactId(null);
     } catch (error) {
       setDetail(null);
       setDetailError(uiErrorMessage(error));
@@ -147,22 +239,107 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
     const { kind, factId } = confirmTarget;
     // 중복 실행 방지: 같은 fact_id에 대한 POST가 진행 중이면 무시.
     if (inFlightFactId === factId) return;
-    setConfirmTarget(null);
     setInFlightFactId(factId);
     setActionError(null);
     try {
       if (kind === 'approve') {
+        const approvedSource = detail?.fact_id === factId ? detail : null;
         await approveCompanyFactCandidate(factId, admin);
+        if (approvedSource) {
+          setSessionActiveFact({ ...approvedSource, status: 'ACTIVE' });
+        }
+        setKnownBadBlockedFactId(null);
       } else {
-        await deprecateCompanyFact(factId, admin);
+        await deprecateCompanyFact(factId, deprecateReason, admin);
+        if (sessionActiveFact?.fact_id === factId) {
+          setSessionActiveFact(null);
+        }
       }
+      setConfirmTarget(null);
       // 성공 후 상태가 CANDIDATE가 아니므로 후보 상세 endpoint를 다시 호출하지 않는다.
       // 목록/status만 재조회하고, 로컬 상세 pane은 비워 "성공 후 404처럼 보이는" UX를 막는다.
       setDetail(null);
       setDetailError(null);
       await refreshListAndStatus(admin);
     } catch (error) {
-      setActionError(uiErrorMessage(error));
+      const failClass = extractFailClass(error);
+      if (kind === 'approve' && failClass === 'KNOWN_BAD_APPROVAL_BLOCKED') {
+        setKnownBadBlockedFactId(factId);
+        setActionError(mapFailClassToMessage(failClass));
+      } else {
+        setConfirmTarget(null);
+        setActionError(uiErrorMessage(error));
+      }
+    } finally {
+      setInFlightFactId(null);
+    }
+  }
+
+  async function handleOverrideAndApprove(factId: string): Promise<void> {
+    if (!admin) return;
+    if (inFlightFactId === factId) return;
+    setInFlightFactId(factId);
+    setActionError(null);
+    let overrideRecorded = false;
+    try {
+      await overrideKnownBadCandidate(factId, admin);
+      overrideRecorded = true;
+      const refreshed = await getCompanyFactCandidate(factId, admin);
+      setDetail(refreshed);
+      if (!refreshed.known_bad?.override_active) {
+        throw new Error('KNOWN_BAD_OVERRIDE_NOT_ACTIVE');
+      }
+      await approveCompanyFactCandidate(factId, admin);
+      setSessionActiveFact({ ...refreshed, status: 'ACTIVE' });
+      setKnownBadBlockedFactId(null);
+      setConfirmTarget(null);
+      setDetail(null);
+      setDetailError(null);
+      await refreshListAndStatus(admin);
+    } catch (error) {
+      setActionError(
+        !overrideRecorded
+          ? uiErrorMessage(error)
+          : error instanceof Error && error.message === 'KNOWN_BAD_OVERRIDE_NOT_ACTIVE'
+          ? 'override 상태를 확인하지 못했습니다. 상세를 새로고침해 주세요.'
+          : 'override는 기록되었으나 승인에 실패했습니다(후보 변경 또는 권한/계약 오류).',
+      );
+      try {
+        const refreshed = await getCompanyFactCandidate(factId, admin);
+        setDetail(refreshed);
+      } catch {
+        setDetail(null);
+      }
+      await refreshListAndStatus(admin);
+    } finally {
+      setInFlightFactId(null);
+    }
+  }
+
+  function openSupersedeModal(activeFact: CompanyFactCandidateDetail): void {
+    setSupersedeTarget(activeFact);
+    setSupersedeForm(buildSupersedeForm(activeFact));
+    setSupersedeError(null);
+  }
+
+  async function handleSupersedeSubmit(): Promise<void> {
+    if (!admin || !supersedeTarget || !supersedeForm) return;
+    const payload = toSupersedePayload(supersedeForm);
+    const validationError = validateSupersedePayload(payload);
+    if (validationError) {
+      setSupersedeError(validationError);
+      return;
+    }
+    setInFlightFactId(supersedeTarget.fact_id);
+    setSupersedeError(null);
+    try {
+      await supersedeCompanyFact(supersedeTarget.fact_id, payload, admin);
+      setSessionActiveFact(null);
+      setSupersedeTarget(null);
+      setSupersedeForm(null);
+      await refreshListAndStatus(admin);
+    } catch (error) {
+      setSupersedeError(uiErrorMessage(error));
     } finally {
       setInFlightFactId(null);
     }
@@ -290,6 +467,14 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
                       <div style={{ fontSize: 12, color: '#64748B' }}>
                         {row.fact_id} · {row.status}
                       </div>
+                      {row.known_bad?.known_bad_suspected && (
+                        <div
+                          data-testid={`known-bad-badge-${row.fact_id}`}
+                          style={{ marginTop: 6, color: '#B45309', fontSize: 12, fontWeight: 600 }}
+                        >
+                          재검토 필요
+                        </div>
+                      )}
                     </button>
                   </li>
                 ))}
@@ -314,10 +499,19 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
                   <Row label="keywords_required" value={listText(detail.keywords_required)} />
                   <Row label="keywords_any" value={listText(detail.keywords_any)} />
                   <Row label="source" value={fieldText(detail.source)} />
+                  <Row label="source_url" value={fieldText(detail.source_url)} />
                   <Row label="source_doc" value={fieldText(detail.source_doc)} />
                   <Row label="verified_at" value={fieldText(detail.verified_at)} />
                   <Row label="expires_at" value={fieldText(detail.expires_at)} />
                   <Row label="confidence" value={fieldText(detail.confidence)} />
+                  {detail.known_bad?.known_bad_suspected && (
+                    <KnownBadWarningPanel
+                      factId={detail.fact_id}
+                      disabled={busy}
+                      showOverride={knownBadBlockedFactId === detail.fact_id}
+                      onOverride={() => handleOverrideAndApprove(detail.fact_id)}
+                    />
+                  )}
                   <div style={{ marginTop: 6 }}>
                     <div style={{ color: '#64748B' }}>answer_runtime_text</div>
                     <div data-testid="answer-runtime-text" style={{ whiteSpace: 'pre-wrap', background: '#F8FAFC', borderRadius: 6, padding: 8 }}>
@@ -342,7 +536,10 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
                     <button
                       data-testid="deprecate-btn"
                       disabled={busy}
-                      onClick={() => setConfirmTarget({ kind: 'deprecate', factId: detail.fact_id })}
+                      onClick={() => {
+                        setDeprecateReason('MANUAL_DEPRECATED');
+                        setConfirmTarget({ kind: 'deprecate', factId: detail.fact_id });
+                      }}
                     >
                       폐기
                     </button>
@@ -352,6 +549,33 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
               )}
             </section>
           </div>
+        )}
+
+        {sessionActiveFact && (
+          <section
+            data-testid="session-active-fact-panel"
+            style={{ border: '1px solid #BBF7D0', borderRadius: 8, padding: 12, marginTop: 12, background: '#F0FDF4' }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>방금 승인한 ACTIVE 지식</div>
+            <div style={{ fontSize: 13, color: '#166534', marginBottom: 8 }}>
+              {sessionActiveFact.fact_id} · 이 세션에서 승인한 항목만 즉시 교체/폐기할 수 있습니다.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button data-testid="open-supersede-btn" disabled={busy} onClick={() => openSupersedeModal(sessionActiveFact)}>
+                교체
+              </button>
+              <button
+                data-testid="active-deprecate-btn"
+                disabled={busy}
+                onClick={() => {
+                  setDeprecateReason('SUPERSEDED');
+                  setConfirmTarget({ kind: 'deprecate', factId: sessionActiveFact.fact_id });
+                }}
+              >
+                폐기
+              </button>
+            </div>
+          </section>
         )}
 
         {/* 확인 모달 */}
@@ -372,17 +596,195 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
           >
             <div style={{ background: '#fff', borderRadius: 10, padding: 20, width: 'min(440px, 92vw)' }}>
               <p style={{ marginTop: 0 }}>{CONFIRM_TEXT[confirmTarget.kind]}</p>
+              {confirmTarget.kind === 'deprecate' && (
+                <div style={{ display: 'grid', gap: 6, marginBottom: 12 }}>
+                  <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+                    폐기 사유
+                    <select
+                      data-testid="deprecate-reason-select"
+                      value={deprecateReason}
+                      onChange={event => setDeprecateReason(event.target.value as DeprecateReasonCode)}
+                    >
+                      <option value="WRONG">WRONG</option>
+                      <option value="SUPERSEDED">SUPERSEDED</option>
+                      <option value="MANUAL_DEPRECATED">MANUAL_DEPRECATED</option>
+                    </select>
+                  </label>
+                  <div data-testid="deprecate-reason-copy" style={{ fontSize: 12, color: '#475569' }}>
+                    {DEPRECATE_REASON_COPY[deprecateReason]}
+                  </div>
+                </div>
+              )}
+              {confirmTarget.kind === 'approve' && knownBadBlockedFactId === confirmTarget.factId && (
+                <div style={{ border: '1px solid #FDE68A', background: '#FFFBEB', borderRadius: 8, padding: 10, marginBottom: 12 }}>
+                  <div style={{ color: '#92400E', fontSize: 13, fontWeight: 700 }}>{KNOWN_BAD_WARNING_TEXT}</div>
+                  <button
+                    data-testid="override-and-approve-btn"
+                    style={{ marginTop: 8 }}
+                    disabled={busy}
+                    onClick={() => handleOverrideAndApprove(confirmTarget.factId)}
+                  >
+                    override 후 승인 재시도
+                  </button>
+                </div>
+              )}
+              {actionError && (
+                <div role="alert" style={{ color: '#B91C1C', fontSize: 13, marginBottom: 12 }}>
+                  {actionError}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button data-testid="confirm-cancel-btn" onClick={() => setConfirmTarget(null)}>
                   취소
                 </button>
-                <button data-testid="confirm-ok-btn" onClick={handleConfirm}>
+                <button data-testid="confirm-ok-btn" onClick={handleConfirm} disabled={busy}>
                   확인
                 </button>
               </div>
             </div>
           </div>
         )}
+        {supersedeTarget && supersedeForm && (
+          <SupersedeModal
+            form={supersedeForm}
+            error={supersedeError}
+            busy={busy}
+            onChange={setSupersedeForm}
+            onCancel={() => {
+              setSupersedeTarget(null);
+              setSupersedeForm(null);
+              setSupersedeError(null);
+            }}
+            onSubmit={handleSupersedeSubmit}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KnownBadWarningPanel({
+  factId,
+  disabled,
+  showOverride,
+  onOverride,
+}: {
+  factId: string;
+  disabled: boolean;
+  showOverride: boolean;
+  onOverride: () => void;
+}) {
+  return (
+    <div
+      data-testid={`known-bad-warning-${factId}`}
+      style={{ border: '1px solid #FDE68A', background: '#FFFBEB', borderRadius: 8, padding: 10, marginTop: 6 }}
+    >
+      <div style={{ color: '#92400E', fontSize: 13, fontWeight: 700 }}>{KNOWN_BAD_WARNING_TEXT}</div>
+      {showOverride && (
+        <button data-testid="detail-override-and-approve-btn" style={{ marginTop: 8 }} disabled={disabled} onClick={onOverride}>
+          override 후 승인 재시도
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SupersedeModal({
+  form,
+  error,
+  busy,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  form: SupersedeFormState;
+  error: string | null;
+  busy: boolean;
+  onChange: (next: SupersedeFormState) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  function update<K extends keyof SupersedeFormState>(key: K, value: SupersedeFormState[K]): void {
+    onChange({ ...form, [key]: value });
+  }
+
+  return (
+    <div
+      data-testid="supersede-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="supersede-title"
+      aria-describedby="supersede-description"
+      onKeyDown={event => {
+        if (event.key === 'Escape') onCancel();
+      }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 10002,
+        background: 'rgba(15,23,42,0.55)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div style={{ background: '#fff', borderRadius: 10, padding: 20, width: 'min(640px, 94vw)', maxHeight: '90vh', overflow: 'auto' }}>
+        <h3 id="supersede-title" style={{ marginTop: 0 }}>ACTIVE 회사 지식 교체</h3>
+        <p id="supersede-description" style={{ color: '#475569', fontSize: 13 }}>
+          confidence는 입력하지 않습니다. 승인된 교체 지식은 항상 1.0으로 전송됩니다.
+        </p>
+        <div style={{ display: 'grid', gap: 8 }}>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            category
+            <input value={form.category} onChange={event => update('category', event.target.value)} />
+          </label>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            question_patterns (줄바꿈으로 2개 이상)
+            <textarea value={form.questionPatterns} onChange={event => update('questionPatterns', event.target.value)} rows={3} />
+          </label>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            keywords_required
+            <input value={form.keywordsRequired} onChange={event => update('keywordsRequired', event.target.value)} />
+          </label>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            keywords_any
+            <input value={form.keywordsAny} onChange={event => update('keywordsAny', event.target.value)} />
+          </label>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            answer_runtime_text
+            <textarea value={form.answerRuntimeText} onChange={event => update('answerRuntimeText', event.target.value)} rows={5} />
+          </label>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            source
+            <input value={form.source} onChange={event => update('source', event.target.value)} />
+          </label>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            source_url
+            <input value={form.sourceUrl} onChange={event => update('sourceUrl', event.target.value)} />
+          </label>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            source_doc
+            <input value={form.sourceDoc} onChange={event => update('sourceDoc', event.target.value)} />
+          </label>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            verified_at
+            <input value={form.verifiedAt} onChange={event => update('verifiedAt', event.target.value)} placeholder="YYYY-MM-DD" />
+          </label>
+          <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+            expires_at
+            <input value={form.expiresAt} onChange={event => update('expiresAt', event.target.value)} placeholder="YYYY-MM-DD" />
+          </label>
+        </div>
+        {error && (
+          <div role="alert" style={{ color: '#B91C1C', fontSize: 13, marginTop: 10 }}>
+            {error}
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+          <button data-testid="supersede-cancel-btn" onClick={onCancel}>취소</button>
+          <button data-testid="supersede-submit-btn" disabled={busy} onClick={onSubmit}>교체 실행</button>
+        </div>
       </div>
     </div>
   );

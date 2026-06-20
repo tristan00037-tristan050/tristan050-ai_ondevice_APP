@@ -23,11 +23,17 @@ export const COMPANY_FACT_ENDPOINTS = {
   approveCandidate: (factId: string) => `/v1/company-facts/candidates/${encodeURIComponent(factId)}/approve`,
   /** POST — capability token + admin headers. CANDIDATE/ACTIVE -> DEPRECATED. */
   deprecateFact: (factId: string) => `/v1/company-facts/${encodeURIComponent(factId)}/deprecate`,
+  /** POST — capability token + admin headers. ACTIVE -> DEPRECATED + replacement ACTIVE. */
+  supersedeFact: (factId: string) => `/v1/company-facts/${encodeURIComponent(factId)}/supersede`,
+  /** POST — capability token + admin headers. known-bad warning override for one candidate digest. */
+  overrideKnownBad: (factId: string) =>
+    `/v1/company-facts/candidates/${encodeURIComponent(factId)}/known-bad/override`,
   /** GET — capability token. active_count/candidate_count. */
   status: '/v1/company-facts/status',
 } as const;
 
 export type CompanyFactStatus = 'CANDIDATE' | 'ACTIVE' | 'DEPRECATED';
+export type DeprecateReasonCode = 'WRONG' | 'SUPERSEDED' | 'MANUAL_DEPRECATED';
 
 /**
  * A-2 client가 요구하는 admin-context shape.
@@ -47,6 +53,17 @@ export type RawZeroFlags = {
   external_send_zero?: true;
 };
 
+export type KnownBadWarning = RawZeroFlags & {
+  known_bad_suspected: boolean;
+  override_available: boolean;
+  override_active: boolean;
+  match_score: number | null;
+  matched_keywords_count: number;
+  matched_pattern_digest: string | null;
+  bad_entry_id: string | null;
+  bad_fact_digest: string | null;
+};
+
 /** 목록 row — 원문 preview 없음(raw-0). */
 export type CompanyFactCandidateIndexEntry = {
   fact_id: string;
@@ -56,16 +73,20 @@ export type CompanyFactCandidateIndexEntry = {
   keywords_required: string[];
   keywords_any: string[];
   source: string | null;
+  source_url: string | null;
   source_doc: string | null;
   verified_at: string | null;
   expires_at: string | null;
   confidence: number | null;
+  fact_digest?: string;
+  known_bad?: KnownBadWarning;
 };
 
 /** 상세 — answer_runtime_text는 여기에만 존재. */
 export type CompanyFactCandidateDetail = CompanyFactCandidateIndexEntry &
   RawZeroFlags & {
     answer_runtime_text: string;
+    fact_digest: string;
   };
 
 export type CompanyFactCandidatesResponse = RawZeroFlags & {
@@ -82,6 +103,47 @@ export type CompanyFactApproveResponse = RawZeroFlags & {
 export type CompanyFactDeprecateResponse = RawZeroFlags & {
   fact_id: string;
   status: CompanyFactStatus;
+  fact_digest?: string;
+  audit_ref?: string;
+};
+
+export type CompanyFactSupersedeRequest = {
+  category: string;
+  question_patterns: string[];
+  keywords_required: string[];
+  keywords_any: string[];
+  answer_runtime_text: string;
+  source: string;
+  source_url?: string | null;
+  source_doc?: string | null;
+  verified_at?: string | null;
+  expires_at?: string | null;
+  confidence: 1.0;
+};
+
+export type CompanyFactSupersedeResponse = RawZeroFlags & {
+  schema_version: 'company_fact.supersede.result.v1';
+  old_fact_id: string;
+  old_status: CompanyFactStatus;
+  old_fact_digest: string;
+  new_fact_id: string;
+  new_status: CompanyFactStatus;
+  new_fact_digest: string;
+  previous_fact_digest: string;
+  audit_refs: string[];
+};
+
+export type CompanyFactKnownBadOverrideResponse = RawZeroFlags & {
+  schema_version: 'company_fact.known_bad_override.response.v1';
+  fact_id: string;
+  candidate_fact_digest: string;
+  bad_entry_id: string;
+  bad_fact_digest: string;
+  approved_by_digest: string;
+  approved_at: string;
+  status: 'ACTIVE';
+  override_digest: string;
+  audit_ref: string;
 };
 
 export type CompanyFactsStatusResponse = RawZeroFlags & {
@@ -105,8 +167,10 @@ export const COMPANY_FACT_DISPLAY_FIELDS = [
   'keywords_any',
   'answer_runtime_text',
   'source',
+  'source_url',
   'source_doc',
   'verified_at',
   'expires_at',
   'confidence',
+  'known_bad',
 ] as const;

@@ -8,7 +8,11 @@ import {
   type CompanyFactCandidateDetail,
   type CompanyFactCandidatesResponse,
   type CompanyFactDeprecateResponse,
+  type CompanyFactKnownBadOverrideResponse,
+  type CompanyFactSupersedeRequest,
+  type CompanyFactSupersedeResponse,
   type CompanyFactsStatusResponse,
+  type DeprecateReasonCode,
   type SidecarErrorPayload,
 } from './contracts';
 
@@ -199,10 +203,40 @@ export function approveCompanyFactCandidate(
 /** #5 후보/지식 폐기 — capability token + admin headers. -> DEPRECATED. */
 export function deprecateCompanyFact(
   factId: string,
+  reasonCode: DeprecateReasonCode,
   admin: AdminContextForSidecar,
   options: CompanyFactRequestOptions = {},
 ): Promise<CompanyFactDeprecateResponse> {
   return requestJson<CompanyFactDeprecateResponse>(COMPANY_FACT_ENDPOINTS.deprecateFact(factId), {
+    method: 'POST',
+    body: { reason_code: reasonCode },
+    admin,
+    options,
+  });
+}
+
+/** #8 ACTIVE 지식 교체 — capability token + admin headers. confidence는 항상 1.0으로 고정. */
+export function supersedeCompanyFact(
+  factId: string,
+  payload: CompanyFactSupersedeRequest,
+  admin: AdminContextForSidecar,
+  options: CompanyFactRequestOptions = {},
+): Promise<CompanyFactSupersedeResponse> {
+  return requestJson<CompanyFactSupersedeResponse>(COMPANY_FACT_ENDPOINTS.supersedeFact(factId), {
+    method: 'POST',
+    body: { ...payload, confidence: 1.0 },
+    admin,
+    options,
+  });
+}
+
+/** #9 known-bad 후보 override — override 자체는 승인 재시도 전 상세 재조회로 검증한다. */
+export function overrideKnownBadCandidate(
+  factId: string,
+  admin: AdminContextForSidecar,
+  options: CompanyFactRequestOptions = {},
+): Promise<CompanyFactKnownBadOverrideResponse> {
+  return requestJson<CompanyFactKnownBadOverrideResponse>(COMPANY_FACT_ENDPOINTS.overrideKnownBad(factId), {
     method: 'POST',
     admin,
     options,
