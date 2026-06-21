@@ -28,6 +28,11 @@ describe('CompanyFormatConsole v1.2', () => {
   });
 
   it('posts raw template only to 127.0.0.1 #772 company-format endpoint and clears runtime state after success', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
     const fetcher = vi.spyOn(global, 'fetch').mockResolvedValue(
       jsonResponse({
         schema_version: 'admin.company_format_register.response.v1',
@@ -58,8 +63,12 @@ describe('CompanyFormatConsole v1.2', () => {
     expect(String(init.body)).toContain(RAW_TEMPLATE);
     const success = await screen.findByTestId('company-format-success');
     expect(success).toHaveTextContent('회사 양식 등록 완료');
+    expect(screen.getByLabelText('등록된 양식 ID')).toHaveValue('format-001');
     expect(success).not.toHaveTextContent('local-vault://formats/templates/template-001');
     expect(success).not.toHaveTextContent(/sha256:|format_digest|template_digest|template_ref/i);
+    fireEvent.click(screen.getByRole('button', { name: '양식 ID 복사' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('format-001'));
+    expect(await screen.findByRole('status')).toHaveTextContent('양식 ID를 복사했습니다.');
     await waitFor(() => expect(screen.getByLabelText('양식 원문')).toHaveValue(''));
     expect(screen.queryByDisplayValue(RAW_TEMPLATE)).not.toBeInTheDocument();
   });

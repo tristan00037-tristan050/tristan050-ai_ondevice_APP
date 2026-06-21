@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, FileText, ShieldCheck, X } from 'lucide-react';
+import { CheckCircle2, Copy, FileText, ShieldCheck, X } from 'lucide-react';
 import { registerCompanyFormat, type AdminPolicyClientError } from '../../lib/admin_policy/client';
 import {
   FORMAT_KIND_LABELS,
@@ -41,7 +41,18 @@ const initialState: FormatConsoleState = {
   deptDigest: EMPTY_DIGEST,
 };
 
-function ResultPanel() {
+function ResultPanel({ response }: { response: CompanyFormatRegisterResponse }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyFormatId() {
+    try {
+      await navigator.clipboard.writeText(response.format_id);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
     <div data-testid="company-format-success" style={{ border: '1px solid #86EFAC', background: '#F0FDF4', color: '#14532D', borderRadius: 8, padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
@@ -49,6 +60,16 @@ function ResultPanel() {
         회사 양식 등록 완료
       </div>
       <p style={{ margin: '8px 0 0', fontSize: 13 }}>양식이 이 기기 안에 안전하게 저장되었습니다.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8, alignItems: 'center', marginTop: 10 }}>
+        <label style={{ display: 'grid', gap: 4, fontSize: 12, fontWeight: 700 }}>
+          양식 ID
+          <input aria-label="등록된 양식 ID" readOnly value={response.format_id} style={{ width: '100%', boxSizing: 'border-box' }} />
+        </label>
+        <button type="button" aria-label="양식 ID 복사" onClick={copyFormatId} style={{ border: '1px solid #86EFAC', background: '#FFFFFF', color: '#14532D', borderRadius: 8, padding: 8, alignSelf: 'end' }}>
+          <Copy size={16} aria-hidden />
+        </button>
+      </div>
+      {copied && <p role="status" style={{ margin: '6px 0 0', fontSize: 12 }}>양식 ID를 복사했습니다.</p>}
     </div>
   );
 }
@@ -196,7 +217,7 @@ export function CompanyFormatConsole({ onClose }: { onClose: () => void }) {
 
           {validationErrors.length > 0 && <div role="alert" style={{ color: '#7C2D12', background: '#FFFBEB', padding: 12, borderRadius: 8 }}>입력 검증: {validationErrors.join(', ')}</div>}
           {error && <div role="alert" style={{ color: '#7C2D12', background: '#FFFBEB', padding: 12, borderRadius: 8 }}>{error}</div>}
-          {response && <ResultPanel />}
+          {response && <ResultPanel response={response} />}
 
           <button type="submit" disabled={!canSubmit} style={{ padding: 14, borderRadius: 10, border: 0, background: canSubmit ? '#0F766E' : '#CBD5E1', color: '#FFFFFF', fontWeight: 700 }}>
             {submitting ? '등록 중' : '양식 등록'}
