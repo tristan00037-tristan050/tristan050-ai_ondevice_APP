@@ -48,7 +48,10 @@ describe('AdminPolicyConsole v1.2', () => {
     expect((init.headers as Record<string, string>)['Authorization']).toBeUndefined();
     expect(String(init.body)).toContain('"masking_engine_verified":false');
     expect(String(init.body)).not.toContain('external_send_rules');
-    expect(await screen.findByTestId('admin-policy-success')).toHaveTextContent(DIGEST);
+    const success = await screen.findByTestId('admin-policy-success');
+    expect(success).toHaveTextContent('회사 보안 규칙 등록 완료');
+    expect(success).not.toHaveTextContent(DIGEST);
+    expect(success).not.toHaveTextContent(/sha256:|policy_digest|audit_ref/i);
   });
 
   it('keeps external_send_rules read-only because #772 POST payload does not support editing', () => {
@@ -58,7 +61,22 @@ describe('AdminPolicyConsole v1.2', () => {
     expect(screen.getByLabelText('confidential external send')).toHaveValue('차단');
     expect(screen.getByLabelText('internal external send')).toHaveValue('검토 필요');
     expect(screen.getByLabelText('public external send')).toHaveValue('허용');
-    expect(screen.getByText(/external_send_rules가 없습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/외부 전송 기준은 현재 기본값으로 적용됩니다/)).toBeInTheDocument();
+  });
+
+  it('shows only easy Korean labels: no developer notes, digests, or English enums', () => {
+    render(<AdminPolicyConsole onClose={() => undefined} />);
+
+    // 개발자 메모/내부 코드가 화면 텍스트로 보이지 않는다.
+    expect(screen.queryByText(/#772|SSOT|capability token|policy_digest|audit_ref|sha256:/i)).not.toBeInTheDocument();
+    // 상태/등급/처리 방법 옵션은 한국어로 보인다.
+    expect(screen.getByRole('option', { name: '사용 중' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '매우 민감' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '검토 필요' })).toBeInTheDocument();
+    // 영어 상태 enum 은 화면 텍스트로 보이지 않는다(option value 속성은 제외).
+    expect(screen.queryByText(/^ACTIVE$|^DRAFT$|^DEPRECATED$/)).not.toBeInTheDocument();
+    // 운영 화면 선택지에서 test_only 는 제거된다(타입/계약은 유지).
+    expect(screen.queryByRole('option', { name: 'test_only' })).not.toBeInTheDocument();
   });
 
   it('shows admin permission error on backend AdminAuthError without retrying', async () => {
