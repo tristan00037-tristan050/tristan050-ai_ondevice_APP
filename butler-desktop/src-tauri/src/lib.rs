@@ -123,7 +123,12 @@ fn stop_sidecar(app: &tauri::AppHandle, reason: &str) {
     }
 }
 
-async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
+async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<Option<CommandChild>, String> {
+    // dev 외부 sidecar 모드: 앱이 자체 sidecar를 띄우지 않고 외부(수동) sidecar를 사용
+    if env::var("BUTLER_SIDECAR_EXTERNAL").ok().as_deref() == Some("1") {
+        append_sidecar_launch_log("spawn_sidecar=external_skip");
+        return Ok(None);
+    }
     append_sidecar_launch_log("spawn_sidecar=start");
     let sidecar_env = resolve_sidecar_env(app);
     let (mut rx, child) = app
@@ -174,7 +179,7 @@ async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         }
     });
 
-    Ok(child)
+    Ok(Some(child))
 }
 
 #[tauri::command]
@@ -204,13 +209,17 @@ pub fn run() {
             let app_handle = app.handle().clone();
             tauri::async_runtime::block_on(async move {
                 match spawn_sidecar(&app_handle).await {
-                    Ok(child) => {
+                    Ok(Some(child)) => {
                         // 명시적 블록으로 MutexGuard를 state보다 먼저 drop
                         {
                             let state = app_handle.state::<SidecarState>();
                             *state.child.lock().unwrap() = Some(child);
                         }
                         println!("[main] sidecar 시작 완료 (포트 8765)");
+                    }
+                    Ok(None) => {
+                        append_sidecar_launch_log("setup_spawn_sidecar=external");
+                        println!("[main] 외부 sidecar 사용 모드 (BUTLER_SIDECAR_EXTERNAL=1)");
                     }
                     Err(e) => {
                         append_sidecar_launch_log(&format!("setup_spawn_sidecar=failed {}", e));
