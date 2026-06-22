@@ -13,6 +13,10 @@ def pytest_configure(config):
         "markers",
         "active_policy: install ACTIVE company policy before butler_sidecar import",
     )
+    config.addinivalue_line(
+        "markers",
+        "no_sidecar_token: skip automatic TestClient capability-token injection for tests that do not import the sidecar",
+    )
 
 
 def _install_active_policy(tmp_path, monkeypatch):
@@ -64,6 +68,8 @@ def _v15_inject_capability_token(request, monkeypatch, tmp_path):
     tests/auth/ 본문은 middleware 본질 검증이므로 제외."""
     fspath = str(request.fspath)
     if "/tests/auth/" in fspath:
+        return
+    if request.node.get_closest_marker("no_sidecar_token"):
         return
     if request.node.get_closest_marker("active_policy"):
         _install_active_policy(tmp_path, monkeypatch)
