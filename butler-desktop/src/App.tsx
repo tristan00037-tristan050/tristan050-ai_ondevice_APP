@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { flushSync } from 'react-dom';
+import { getVersion } from '@tauri-apps/api/app';
 import butlerIconStaticUrl from './assets/butler-icon-static.svg';
 import { EgressBadge } from './components/EgressBadge';
 import { EgressMonitor } from './components/chat/EgressMonitor';
@@ -67,6 +68,9 @@ export function App() {
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarElapsed, setSidecarElapsed] = useState(0);
   const [sidecarFailed, setSidecarFailed] = useState(false);
+  // 헤더 버전 표시: 앱 버전(getVersion, 실패 시 빌드시 주입값으로 폴백), 엔진 버전(/health)
+  const [appVersion, setAppVersion] = useState<string>(__APP_VERSION__);
+  const [engineVersion, setEngineVersion] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -88,6 +92,15 @@ export function App() {
         if (!cancelled && res.ok) {
           isReady = true;
           setSidecarReady(true);
+          // 엔진 버전 표시용. 파싱 실패해도 앱 흐름에는 영향 없음.
+          try {
+            const body = (await res.json()) as { version?: string };
+            if (!cancelled && typeof body.version === 'string') {
+              setEngineVersion(body.version);
+            }
+          } catch {
+            // version 파싱 실패 — 헤더는 "엔진 –" 로 표시
+          }
           return;
         }
       } catch {
@@ -111,6 +124,22 @@ export function App() {
     return () => {
       cancelled = true;
       clearTimeout(failTimer);
+    };
+  }, []);
+
+  // 앱 버전: Tauri 런타임에서 getVersion() 조회. 비-Tauri(브라우저/테스트) 환경에서는
+  // 실패하므로 빌드시 주입된 package.json version 폴백을 그대로 둔다.
+  useEffect(() => {
+    let cancelled = false;
+    getVersion()
+      .then(v => {
+        if (!cancelled && v) setAppVersion(v);
+      })
+      .catch(() => {
+        // 비-Tauri 환경 — __APP_VERSION__ 폴백 유지
+      });
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -469,6 +498,18 @@ export function App() {
               }}
             >
               Butler
+            </span>
+            <span
+              data-testid="app-version-info"
+              title="앱 버전 · 빌드(브랜치 커밋) · 엔진 버전"
+              style={{
+                fontSize: 'var(--text-xs)',
+                color: 'var(--color-text-secondary)',
+                opacity: 0.7,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              v{appVersion} · {__BUILD_BRANCH__} {__BUILD_COMMIT__} · 엔진 {engineVersion ?? '–'}
             </span>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
