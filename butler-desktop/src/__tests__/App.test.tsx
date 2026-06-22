@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+
+// sidecarFetch 가 POST /api/analyze/stream 에 capability token 을 첨부한다 → token 획득(invoke)이
+// 항상 성공해야 한다. plain 함수로 둬서 beforeEach 의 restoreAllMocks 에 영향받지 않게 한다.
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: async (command: string) =>
+    command === 'get_sidecar_capability_token' ? 'test-capability-token' : undefined,
+}));
+
 import { App } from '../App';
 
 beforeEach(() => {
@@ -94,9 +102,15 @@ describe('App integration', () => {
         String(url).includes('/api/analyze/stream')
       );
       expect(streamCall).toBeDefined();
-      const body = streamCall![1].body as FormData;
+      const init = streamCall![1] as RequestInit;
+      const body = init.body as FormData;
       expect(body.has('file_0')).toBe(true);
       expect((body.get('file_0') as File).name).toBe('bank.pdf');
+      // 채팅 401 회귀 가드: analyze 요청에 capability token(Authorization: Bearer) 이 붙어야 한다.
+      // Content-Type 은 직접 지정하지 않는다(FormData boundary 자동 설정).
+      const headers = init.headers as Record<string, string>;
+      expect(headers.Authorization).toBe('Bearer test-capability-token');
+      expect(headers['Content-Type']).toBeUndefined();
     });
   });
 
