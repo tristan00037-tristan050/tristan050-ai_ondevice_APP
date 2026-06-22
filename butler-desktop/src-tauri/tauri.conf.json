@@ -1,6 +1,6 @@
 {
   "productName": "Butler",
-  "version": "0.1.0",
+  "version": "../package.json",
   "identifier": "com.butler.desktop",
   "build": {
     "frontendDist": "../dist",

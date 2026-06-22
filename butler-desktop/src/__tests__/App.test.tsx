@@ -32,6 +32,33 @@ describe('App integration', () => {
     expect(screen.getByTestId('butler-header-icon').tagName).toBe('IMG');
   });
 
+  it('test_header_shows_app_build_engine_version', async () => {
+    // 헤더에 "v<앱버전> · <브랜치> <커밋> · 엔진 <엔진버전>" 표시.
+    // 엔진 버전은 /health 응답의 version 으로 채워진다.
+    vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
+      if (String(url).includes('/health')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ status: 'ok', version: '0.9.0' }), {
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      }
+      return Promise.resolve(new Response(new ReadableStream({ start(c) { c.close(); } }), { status: 200 }));
+    });
+
+    render(<App />);
+
+    const info = screen.getByTestId('app-version-info');
+    // 앱 버전: getVersion()은 비-Tauri 환경에서 실패하므로 빌드시 주입된 0.9.0 폴백 사용
+    expect(info).toHaveTextContent('v0.9.0');
+    // 빌드 커밋(브랜치 + 짧은 해시 또는 dev) 구간 존재
+    expect(info.textContent).toMatch(/v0\.9\.0 · .+ · 엔진/);
+    // 엔진 버전: /health 응답 후 비동기로 0.9.0 채워짐
+    await waitFor(() => {
+      expect(screen.getByTestId('app-version-info')).toHaveTextContent('엔진 0.9.0');
+    }, { timeout: 2000 });
+  });
+
   it('test_adv_attached_files_sent_to_backend', async () => {
     // P1 회귀: 첨부 파일이 /api/analyze/stream 요청의 FormData에 포함돼야 한다
     const fetchMock = makeFetchMock();
@@ -302,6 +329,12 @@ describe('App integration', () => {
     vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
       if (String(url).includes('/api/precheck')) {
         return Promise.resolve(new Response(JSON.stringify({ grade: 'S' }), {
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      // /health 는 JSON 으로 응답(공유 스트림을 잠그지 않도록). 실제 sidecar 동작과 동일.
+      if (String(url).includes('/health')) {
+        return Promise.resolve(new Response(JSON.stringify({ status: 'ok', version: '0.9.0' }), {
           headers: { 'Content-Type': 'application/json' },
         }));
       }
