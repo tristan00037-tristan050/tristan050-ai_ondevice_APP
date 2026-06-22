@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, FileText, ShieldCheck, X } from 'lucide-react';
+import { CheckCircle2, Copy, FileText, ShieldCheck, X } from 'lucide-react';
 import { registerCompanyFormat, type AdminPolicyClientError } from '../../lib/admin_policy/client';
 import {
   FORMAT_KIND_LABELS,
@@ -13,6 +13,7 @@ import {
   isSha256Digest,
   validateCompanyFormatRegisterRequest,
 } from '../../lib/admin_policy/contracts';
+import { ROLE_LABELS } from '../../lib/admin_display/copy';
 
 const EMPTY_DIGEST = 'sha256:'.padEnd(71, '0') as Sha256Digest;
 
@@ -41,24 +42,34 @@ const initialState: FormatConsoleState = {
 };
 
 function ResultPanel({ response }: { response: CompanyFormatRegisterResponse }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyFormatId() {
+    try {
+      await navigator.clipboard.writeText(response.format_id);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
     <div data-testid="company-format-success" style={{ border: '1px solid #86EFAC', background: '#F0FDF4', color: '#14532D', borderRadius: 8, padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
         <CheckCircle2 size={18} aria-hidden />
         회사 양식 등록 완료
       </div>
-      <dl style={{ display: 'grid', gridTemplateColumns: '140px minmax(0, 1fr)', gap: 6, margin: '10px 0 0', fontSize: 12 }}>
-        <dt>format_id</dt>
-        <dd style={{ margin: 0, overflowWrap: 'anywhere' }}>{response.format_id}</dd>
-        <dt>format_digest</dt>
-        <dd style={{ margin: 0, overflowWrap: 'anywhere' }}>{response.format_digest}</dd>
-        <dt>template_digest</dt>
-        <dd style={{ margin: 0, overflowWrap: 'anywhere' }}>{response.template_digest}</dd>
-        <dt>template_ref</dt>
-        <dd style={{ margin: 0, overflowWrap: 'anywhere' }}>{response.template_ref}</dd>
-        <dt>encrypted_store</dt>
-        <dd style={{ margin: 0 }}>{String(response.encrypted_store)}</dd>
-      </dl>
+      <p style={{ margin: '8px 0 0', fontSize: 13 }}>양식이 이 기기 안에 안전하게 저장되었습니다.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 8, alignItems: 'center', marginTop: 10 }}>
+        <label style={{ display: 'grid', gap: 4, fontSize: 12, fontWeight: 700 }}>
+          양식 ID
+          <input aria-label="등록된 양식 ID" readOnly value={response.format_id} style={{ width: '100%', boxSizing: 'border-box' }} />
+        </label>
+        <button type="button" aria-label="양식 ID 복사" onClick={copyFormatId} style={{ border: '1px solid #86EFAC', background: '#FFFFFF', color: '#14532D', borderRadius: 8, padding: 8, alignSelf: 'end' }}>
+          <Copy size={16} aria-hidden />
+        </button>
+      </div>
+      {copied && <p role="status" style={{ margin: '6px 0 0', fontSize: 12 }}>양식 ID를 복사했습니다.</p>}
     </div>
   );
 }
@@ -123,7 +134,7 @@ export function CompanyFormatConsole({ onClose }: { onClose: () => void }) {
           <FileText size={24} aria-hidden />
           <div style={{ flex: 1 }}>
             <h2 style={{ margin: 0, fontSize: 20 }}>회사 양식 등록</h2>
-            <p style={{ margin: '4px 0 0', color: '#64748B', fontSize: 13 }}>양식 원문은 화면 메모리에만 두고, backend가 device-local encrypted vault에 저장합니다.</p>
+            <p style={{ margin: '4px 0 0', color: '#64748B', fontSize: 13 }}>양식 파일은 이 기기 안에 안전하게 저장됩니다.</p>
           </div>
           <button type="button" aria-label="닫기" onClick={onClose} style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', borderRadius: 8, padding: 6 }}>
             <X size={18} aria-hidden />
@@ -132,33 +143,32 @@ export function CompanyFormatConsole({ onClose }: { onClose: () => void }) {
 
         <form onSubmit={submitFormat} style={{ display: 'grid', gap: 18 }}>
           <fieldset style={{ border: '1px solid #E2E8F0', borderRadius: 10, padding: 16 }}>
-            <legend style={{ padding: '0 6px', fontWeight: 700 }}>Admin RBAC</legend>
+            <legend style={{ padding: '0 6px', fontWeight: 700 }}>관리자 확인</legend>
             <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 1fr', gap: 12 }}>
               <label>
                 역할
                 <select aria-label="관리자 역할" value={state.adminRole} onChange={event => setState(s => ({ ...s, adminRole: event.target.value as AdminRole }))}>
-                  <option value="admin">admin</option>
-                  <option value="manager">manager</option>
-                  <option value="employee">employee</option>
+                  <option value="admin">{ROLE_LABELS.admin}</option>
+                  <option value="manager">{ROLE_LABELS.manager}</option>
+                  <option value="employee">{ROLE_LABELS.employee}</option>
                 </select>
               </label>
               <label>
-                Admin ID digest
-                <input aria-label="Admin ID digest" value={state.adminIdDigest} onChange={event => setState(s => ({ ...s, adminIdDigest: event.target.value }))} />
+                관리자 인증값
+                <input aria-label="Admin ID digest" type="password" autoComplete="off" value={state.adminIdDigest} onChange={event => setState(s => ({ ...s, adminIdDigest: event.target.value }))} />
               </label>
               <label>
-                Admin session digest
-                <input aria-label="Admin session digest" value={state.adminSessionDigest} onChange={event => setState(s => ({ ...s, adminSessionDigest: event.target.value }))} />
+                로그인 확인값
+                <input aria-label="Admin session digest" type="password" autoComplete="off" value={state.adminSessionDigest} onChange={event => setState(s => ({ ...s, adminSessionDigest: event.target.value }))} />
               </label>
               <label>
-                Auth method
+                인증 방식
                 <select aria-label="Admin auth method" value={state.authMethod} onChange={event => setState(s => ({ ...s, authMethod: event.target.value as AdminAuthMethod }))}>
-                  <option value="tauri_secure_invoke">tauri_secure_invoke</option>
-                  <option value="os_keychain">os_keychain</option>
-                  <option value="test_only">test_only</option>
+                  <option value="tauri_secure_invoke">보안 인증</option>
+                  <option value="os_keychain">기기 암호 보관함</option>
                 </select>
               </label>
-              <p style={{ gridColumn: 'span 2', margin: 0, color: '#64748B', fontSize: 12 }}>token을 admin 권한으로 간주하지 않습니다. 관리자 digest header만 사용합니다.</p>
+              <p style={{ gridColumn: 'span 2', margin: 0, color: '#64748B', fontSize: 12 }}>관리자 인증값만 사용합니다. 로그인 토큰을 관리자 권한으로 쓰지 않습니다.</p>
             </div>
           </fieldset>
 
@@ -166,43 +176,43 @@ export function CompanyFormatConsole({ onClose }: { onClose: () => void }) {
             <legend style={{ padding: '0 6px', fontWeight: 700 }}>양식 본문</legend>
             <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr 1fr', gap: 12, marginBottom: 12 }}>
               <label>
-                format_kind
+                양식 종류
                 <select aria-label="양식 종류" value={state.formatKind} onChange={event => setState(s => ({ ...s, formatKind: event.target.value as FormatKind }))}>
-                  {FORMAT_KINDS.map(kind => <option key={kind} value={kind}>{FORMAT_KIND_LABELS[kind]} ({kind})</option>)}
+                  {FORMAT_KINDS.map(kind => <option key={kind} value={kind}>{FORMAT_KIND_LABELS[kind]}</option>)}
                 </select>
               </label>
               <label>
-                title_runtime_text
+                양식 이름
                 <input aria-label="양식 제목" value={state.titleRuntimeText} onChange={event => setState(s => ({ ...s, titleRuntimeText: event.target.value }))} />
               </label>
               <label>
-                dept_digest
-                <input aria-label="부서 digest" value={state.deptDigest} onChange={event => setState(s => ({ ...s, deptDigest: event.target.value }))} />
+                부서
+                <input aria-label="부서 digest" type="password" autoComplete="off" value={state.deptDigest} onChange={event => setState(s => ({ ...s, deptDigest: event.target.value }))} />
               </label>
               <label>
-                language
+                언어
                 <input aria-label="language" value={state.language} onChange={event => setState(s => ({ ...s, language: event.target.value }))} />
               </label>
             </div>
             <label style={{ display: 'grid', gap: 6 }}>
-              template_runtime_text
+              양식 내용
               <textarea
                 aria-label="양식 원문"
                 value={state.templateRuntimeText}
                 onChange={event => setState(s => ({ ...s, templateRuntimeText: event.target.value }))}
                 rows={10}
-                placeholder="회사 양식 원문을 붙여넣으세요. 제출 후 화면 state에서 즉시 제거됩니다."
+                placeholder="회사 양식 내용을 붙여넣으세요. 등록 후 화면에서 바로 지워집니다."
               />
             </label>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, color: '#0F766E', fontSize: 13 }}>
               <ShieldCheck size={16} aria-hidden />
-              브라우저 저장소 사용 0 · raw log 0 · 127.0.0.1 sidecar only
+              이 기기 안에서만 처리됩니다.
             </div>
           </fieldset>
 
           <section style={{ border: '1px solid #E2E8F0', borderRadius: 10, padding: 16 }}>
-            <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>v1.2 한계</h3>
-            <p style={{ margin: 0, color: '#64748B', fontSize: 13 }}>목록·롤백 endpoint는 #772에 없습니다. 이번 UI는 등록과 adapter digest preview 준비까지만 claim합니다. 박스 2 연동은 별도 검증 전까지 미지원입니다.</p>
+            <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>안내</h3>
+            <p style={{ margin: 0, color: '#64748B', fontSize: 13 }}>지금은 등록까지 됩니다.</p>
           </section>
 
           {validationErrors.length > 0 && <div role="alert" style={{ color: '#7C2D12', background: '#FFFBEB', padding: 12, borderRadius: 8 }}>입력 검증: {validationErrors.join(', ')}</div>}

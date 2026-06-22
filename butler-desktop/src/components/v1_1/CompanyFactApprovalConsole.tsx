@@ -20,6 +20,11 @@ import {
   getExistingAdminContextForA2,
   type ExistingAdminContextInput,
 } from '../../lib/admin_policy/adminContext';
+import {
+  DEPRECATE_REASON_DISPLAY,
+  DEPRECATE_REASON_HELP,
+  statusLabel,
+} from '../../lib/admin_display/copy';
 
 /**
  * A-2 회사 지식 후보 승인 콘솔.
@@ -39,8 +44,8 @@ const FAIL_CLASS_MESSAGES: Record<string, string> = {
   ADMIN_ROLE_REGISTRY_LOAD_FAILED: '직급 등록 정보를 불러오지 못했습니다. 보안상 승인을 중단했습니다.',
   COMPANY_FACT_LOAD_FAILED: '회사 지식 저장소를 불러오지 못했습니다.',
   COMPANY_FACT_CANDIDATE_NOT_FOUND: '후보를 찾을 수 없습니다. 목록을 새로고침해 주세요.',
-  KNOWN_BAD_APPROVAL_BLOCKED: '재검토가 필요한 후보입니다. 관리자 override 후 다시 승인할 수 있습니다.',
-  KNOWN_BAD_OVERRIDE_MATCH_NOT_FOUND: 'override 대상 경고를 찾을 수 없습니다. 상세를 새로고침해 주세요.',
+  KNOWN_BAD_APPROVAL_BLOCKED: '재검토가 필요한 후보입니다. 관리자가 확인한 뒤 다시 승인할 수 있습니다.',
+  KNOWN_BAD_OVERRIDE_MATCH_NOT_FOUND: '확인 대상 경고를 찾을 수 없습니다. 상세를 새로고침해 주세요.',
   SUPERSEDE_REQUIRES_ACTIVE: 'ACTIVE 회사 지식만 교체할 수 있습니다.',
 };
 
@@ -77,13 +82,7 @@ const CONFIRM_TEXT = {
 } as const;
 
 const KNOWN_BAD_WARNING_TEXT =
-  '재검토 필요: 이전에 WRONG으로 표시된 항목과 핵심어/패턴이 유사합니다.';
-
-const DEPRECATE_REASON_COPY: Record<DeprecateReasonCode, string> = {
-  WRONG: '향후 핵심어/패턴이 유사한 후보는 관리자 override가 필요합니다.',
-  SUPERSEDED: '대체/과거 버전 폐기입니다. known-bad 경고를 만들지 않습니다.',
-  MANUAL_DEPRECATED: '기록만 남기는 일반 폐기입니다.',
-};
+  '재검토 필요: 이전에 틀린 정보로 표시된 항목과 핵심어/패턴이 비슷합니다.';
 
 type SupersedeFormState = {
   category: string;
@@ -153,10 +152,10 @@ function toSupersedePayload(form: SupersedeFormState): CompanyFactSupersedeReque
 }
 
 function validateSupersedePayload(payload: CompanyFactSupersedeRequest): string | null {
-  if (!payload.category) return 'category를 입력해 주세요.';
-  if (payload.question_patterns.length < 2) return 'question_patterns는 2개 이상이어야 합니다.';
-  if (payload.answer_runtime_text.length < 10) return 'answer_runtime_text는 10자 이상이어야 합니다.';
-  if (payload.source.length < 3) return 'source는 3자 이상이어야 합니다.';
+  if (!payload.category) return '분류를 입력해 주세요.';
+  if (payload.question_patterns.length < 2) return '예상 질문을 2개 이상 입력해 주세요.';
+  if (payload.answer_runtime_text.length < 10) return '답변 내용을 10자 이상 입력해 주세요.';
+  if (payload.source.length < 3) return '출처를 3자 이상 입력해 주세요.';
   return null;
 }
 
@@ -256,8 +255,8 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
         }
       }
       setConfirmTarget(null);
-      // 성공 후 상태가 CANDIDATE가 아니므로 후보 상세 endpoint를 다시 호출하지 않는다.
-      // 목록/status만 재조회하고, 로컬 상세 pane은 비워 "성공 후 404처럼 보이는" UX를 막는다.
+      // 성공 후에는 후보 상태가 더 이상 후보가 아니므로 상세를 다시 조회하지 않는다.
+      // 목록/status만 재조회하고, 로컬 상세 영역은 비워 "성공 후 404처럼 보이는" UX를 막는다.
       setDetail(null);
       setDetailError(null);
       await refreshListAndStatus(admin);
@@ -301,8 +300,8 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
         !overrideRecorded
           ? uiErrorMessage(error)
           : error instanceof Error && error.message === 'KNOWN_BAD_OVERRIDE_NOT_ACTIVE'
-          ? 'override 상태를 확인하지 못했습니다. 상세를 새로고침해 주세요.'
-          : 'override는 기록되었으나 승인에 실패했습니다(후보 변경 또는 권한/계약 오류).',
+          ? '관리자 확인 상태를 확인하지 못했습니다. 상세를 새로고침해 주세요.'
+          : '관리자 확인은 기록되었으나 승인에 실패했습니다. 후보가 바뀌었거나 권한 문제일 수 있습니다.',
       );
       try {
         const refreshed = await getCompanyFactCandidate(factId, admin);
@@ -414,7 +413,7 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
           </div>
           <div style={{ marginTop: 8, fontSize: 13 }} data-testid="auth-status">
             {admin ? (
-              <span style={{ color: '#15803D' }}>인증 적용됨 (role: admin)</span>
+              <span style={{ color: '#15803D' }}>관리자로 인증됨</span>
             ) : (
               <span style={{ color: '#9A3412' }}>인증되지 않음</span>
             )}
@@ -429,7 +428,7 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
         {/* status */}
         {status && (
           <div data-testid="company-fact-status" style={{ marginBottom: 12, fontSize: 13, color: '#334155' }}>
-            ACTIVE {status.active_count} · CANDIDATE {status.candidate_count}
+            사용 중 {status.active_count}개 · 승인 대기 {status.candidate_count}개
           </div>
         )}
 
@@ -465,7 +464,7 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
                     >
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{fieldText(row.category)}</div>
                       <div style={{ fontSize: 12, color: '#64748B' }}>
-                        {row.fact_id} · {row.status}
+                        상태: {statusLabel(row.status)}
                       </div>
                       {row.known_bad?.known_bad_suspected && (
                         <div
@@ -492,18 +491,17 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
               )}
               {detail && !detailLoading && (
                 <div data-testid="candidate-detail" style={{ fontSize: 13, display: 'grid', gap: 6 }}>
-                  <Row label="fact_id" value={fieldText(detail.fact_id)} />
-                  <Row label="status" value={fieldText(detail.status)} />
-                  <Row label="category" value={fieldText(detail.category)} />
-                  <Row label="question_patterns" value={listText(detail.question_patterns)} />
-                  <Row label="keywords_required" value={listText(detail.keywords_required)} />
-                  <Row label="keywords_any" value={listText(detail.keywords_any)} />
-                  <Row label="source" value={fieldText(detail.source)} />
-                  <Row label="source_url" value={fieldText(detail.source_url)} />
-                  <Row label="source_doc" value={fieldText(detail.source_doc)} />
-                  <Row label="verified_at" value={fieldText(detail.verified_at)} />
-                  <Row label="expires_at" value={fieldText(detail.expires_at)} />
-                  <Row label="confidence" value={fieldText(detail.confidence)} />
+                  <Row label="상태" value={statusLabel(detail.status)} />
+                  <Row label="분류" value={fieldText(detail.category)} />
+                  <Row label="예상 질문" value={listText(detail.question_patterns)} />
+                  <Row label="필수 핵심어" value={listText(detail.keywords_required)} />
+                  <Row label="관련 핵심어" value={listText(detail.keywords_any)} />
+                  <Row label="출처" value={fieldText(detail.source)} />
+                  <Row label="출처 링크" value={fieldText(detail.source_url)} />
+                  <Row label="출처 문서" value={fieldText(detail.source_doc)} />
+                  <Row label="확인 날짜" value={fieldText(detail.verified_at)} />
+                  <Row label="만료일" value={fieldText(detail.expires_at)} />
+                  <Row label="신뢰도" value={fieldText(detail.confidence)} />
                   {detail.known_bad?.known_bad_suspected && (
                     <KnownBadWarningPanel
                       factId={detail.fact_id}
@@ -513,7 +511,7 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
                     />
                   )}
                   <div style={{ marginTop: 6 }}>
-                    <div style={{ color: '#64748B' }}>answer_runtime_text</div>
+                    <div style={{ color: '#64748B' }}>답변 내용</div>
                     <div data-testid="answer-runtime-text" style={{ whiteSpace: 'pre-wrap', background: '#F8FAFC', borderRadius: 6, padding: 8 }}>
                       {detail.answer_runtime_text}
                     </div>
@@ -556,9 +554,9 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
             data-testid="session-active-fact-panel"
             style={{ border: '1px solid #BBF7D0', borderRadius: 8, padding: 12, marginTop: 12, background: '#F0FDF4' }}
           >
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>방금 승인한 ACTIVE 지식</div>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>방금 승인한 회사 지식</div>
             <div style={{ fontSize: 13, color: '#166534', marginBottom: 8 }}>
-              {sessionActiveFact.fact_id} · 이 세션에서 승인한 항목만 즉시 교체/폐기할 수 있습니다.
+              이번에 승인한 항목만 바로 수정하거나 사용 중지할 수 있습니다.
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button data-testid="open-supersede-btn" disabled={busy} onClick={() => openSupersedeModal(sessionActiveFact)}>
@@ -605,13 +603,13 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
                       value={deprecateReason}
                       onChange={event => setDeprecateReason(event.target.value as DeprecateReasonCode)}
                     >
-                      <option value="WRONG">WRONG</option>
-                      <option value="SUPERSEDED">SUPERSEDED</option>
-                      <option value="MANUAL_DEPRECATED">MANUAL_DEPRECATED</option>
+                      <option value="WRONG">{DEPRECATE_REASON_DISPLAY.WRONG}</option>
+                      <option value="SUPERSEDED">{DEPRECATE_REASON_DISPLAY.SUPERSEDED}</option>
+                      <option value="MANUAL_DEPRECATED">{DEPRECATE_REASON_DISPLAY.MANUAL_DEPRECATED}</option>
                     </select>
                   </label>
                   <div data-testid="deprecate-reason-copy" style={{ fontSize: 12, color: '#475569' }}>
-                    {DEPRECATE_REASON_COPY[deprecateReason]}
+                    {DEPRECATE_REASON_HELP[deprecateReason]}
                   </div>
                 </div>
               )}
@@ -624,7 +622,7 @@ export function CompanyFactApprovalConsole({ onClose }: { onClose: () => void })
                     disabled={busy}
                     onClick={() => handleOverrideAndApprove(confirmTarget.factId)}
                   >
-                    override 후 승인 재시도
+                    관리자가 확인하고 승인
                   </button>
                 </div>
               )}
@@ -682,7 +680,7 @@ function KnownBadWarningPanel({
       <div style={{ color: '#92400E', fontSize: 13, fontWeight: 700 }}>{KNOWN_BAD_WARNING_TEXT}</div>
       {showOverride && (
         <button data-testid="detail-override-and-approve-btn" style={{ marginTop: 8 }} disabled={disabled} onClick={onOverride}>
-          override 후 승인 재시도
+          관리자가 확인하고 승인
         </button>
       )}
     </div>
@@ -730,49 +728,49 @@ function SupersedeModal({
       }}
     >
       <div style={{ background: '#fff', borderRadius: 10, padding: 20, width: 'min(640px, 94vw)', maxHeight: '90vh', overflow: 'auto' }}>
-        <h3 id="supersede-title" style={{ marginTop: 0 }}>ACTIVE 회사 지식 교체</h3>
+        <h3 id="supersede-title" style={{ marginTop: 0 }}>사용 중인 회사 지식 수정</h3>
         <p id="supersede-description" style={{ color: '#475569', fontSize: 13 }}>
-          confidence는 입력하지 않습니다. 승인된 교체 지식은 항상 1.0으로 전송됩니다.
+          신뢰도는 입력하지 않아도 됩니다. 수정한 지식은 항상 가장 높은 신뢰도로 저장됩니다.
         </p>
         <div style={{ display: 'grid', gap: 8 }}>
           <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-            category
+            분류
             <input value={form.category} onChange={event => update('category', event.target.value)} />
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-            question_patterns (줄바꿈으로 2개 이상)
+            예상 질문 (줄바꿈으로 2개 이상)
             <textarea value={form.questionPatterns} onChange={event => update('questionPatterns', event.target.value)} rows={3} />
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-            keywords_required
+            필수 핵심어
             <input value={form.keywordsRequired} onChange={event => update('keywordsRequired', event.target.value)} />
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-            keywords_any
+            관련 핵심어
             <input value={form.keywordsAny} onChange={event => update('keywordsAny', event.target.value)} />
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-            answer_runtime_text
+            답변 내용
             <textarea value={form.answerRuntimeText} onChange={event => update('answerRuntimeText', event.target.value)} rows={5} />
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-            source
+            출처
             <input value={form.source} onChange={event => update('source', event.target.value)} />
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-            source_url
+            출처 링크
             <input value={form.sourceUrl} onChange={event => update('sourceUrl', event.target.value)} />
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-            source_doc
+            출처 문서
             <input value={form.sourceDoc} onChange={event => update('sourceDoc', event.target.value)} />
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-            verified_at
+            확인 날짜
             <input value={form.verifiedAt} onChange={event => update('verifiedAt', event.target.value)} placeholder="YYYY-MM-DD" />
           </label>
           <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-            expires_at
+            만료일
             <input value={form.expiresAt} onChange={event => update('expiresAt', event.target.value)} placeholder="YYYY-MM-DD" />
           </label>
         </div>

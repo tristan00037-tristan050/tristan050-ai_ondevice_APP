@@ -178,11 +178,21 @@ describe('CompanyFactApprovalConsole', () => {
     applyAuth();
 
     await waitFor(() => expect(screen.getByTestId('candidate-row-F1')).toBeInTheDocument());
-    expect(screen.getByTestId('company-fact-status')).toHaveTextContent('ACTIVE 1');
+    expect(screen.getByTestId('company-fact-status')).toHaveTextContent('사용 중 1개 · 승인 대기 1개');
 
     fireEvent.click(screen.getByTestId('candidate-row-F1'));
     await waitFor(() => expect(screen.getByTestId('candidate-detail')).toBeInTheDocument());
     expect(screen.getByTestId('answer-runtime-text')).toHaveTextContent('연차는 15일입니다.');
+
+    // 쉬운 용어: 내부 ID/영어 enum/개발자 용어가 화면에 보이지 않는다.
+    const detail = screen.getByTestId('candidate-detail');
+    expect(detail).toHaveTextContent('상태');
+    expect(detail).toHaveTextContent('승인 대기');
+    expect(detail).not.toHaveTextContent('fact_id');
+    expect(detail).not.toHaveTextContent('F1');
+    expect(detail).not.toHaveTextContent(/CANDIDATE|answer_runtime_text|confidence/);
+    expect(screen.getByTestId('company-fact-status')).not.toHaveTextContent(/ACTIVE|CANDIDATE/);
+    expect(screen.getByTestId('auth-status')).not.toHaveTextContent('role: admin');
   });
 
   it('approve modal: 0 POST before confirm, 1 POST after confirm, then status refetch', async () => {
@@ -226,6 +236,10 @@ describe('CompanyFactApprovalConsole', () => {
     const modal = await screen.findByTestId('confirm-modal');
     expect(within(modal).getByText(/폐기하시겠습니까/)).toBeInTheDocument();
     fireEvent.change(screen.getByTestId('deprecate-reason-select'), { target: { value: 'WRONG' } });
+    // 사유 옵션과 안내는 한국어로 보인다(영문 enum 비노출).
+    expect(within(modal).getByRole('option', { name: '틀린 정보' })).toBeInTheDocument();
+    expect(within(modal).queryByRole('option', { name: 'WRONG' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('deprecate-reason-copy')).toHaveTextContent('앞으로 비슷한 후보가 들어오면 다시 확인합니다.');
     expect(countPost(fetchMock, '/deprecate')).toBe(0);
 
     fireEvent.click(screen.getByTestId('confirm-ok-btn'));
@@ -246,8 +260,10 @@ describe('CompanyFactApprovalConsole', () => {
     fireEvent.click(screen.getByTestId('candidate-row-F1'));
     await waitFor(() => expect(screen.getByTestId('candidate-detail')).toBeInTheDocument());
     expect(screen.getByTestId('known-bad-warning-F1')).toHaveTextContent(
-      '재검토 필요: 이전에 WRONG으로 표시된 항목과 핵심어/패턴이 유사합니다.',
+      '재검토 필요: 이전에 틀린 정보로 표시된 항목과 핵심어/패턴이 비슷합니다.',
     );
+    // 'override' 같은 개발자 용어는 화면에 보이지 않는다.
+    expect(screen.getByTestId('known-bad-warning-F1')).not.toHaveTextContent(/WRONG|override/i);
     expect(screen.queryByTestId('detail-override-and-approve-btn')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('approve-btn'));
@@ -280,7 +296,10 @@ describe('CompanyFactApprovalConsole', () => {
 
     fireEvent.click(screen.getByTestId('open-supersede-btn'));
     await waitFor(() => expect(screen.getByTestId('supersede-modal')).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText('answer_runtime_text'), { target: { value: '연차는 입사일 기준으로 15일입니다.' } });
+    // 교체 모달은 쉬운 한국어 라벨만 노출한다(answer_runtime_text 등 내부 용어 없음).
+    const supersede = screen.getByTestId('supersede-modal');
+    expect(supersede).not.toHaveTextContent(/answer_runtime_text|question_patterns|ACTIVE|confidence/);
+    fireEvent.change(screen.getByLabelText('답변 내용'), { target: { value: '연차는 입사일 기준으로 15일입니다.' } });
     fireEvent.click(screen.getByTestId('supersede-submit-btn'));
 
     await waitFor(() => expect(countPost(fetchMock, '/supersede')).toBe(1));
