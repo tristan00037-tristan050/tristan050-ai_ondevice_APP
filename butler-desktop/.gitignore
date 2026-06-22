@@ -3,3 +3,8 @@ dist/
 src-tauri/target/
 src-tauri/gen/
 .vite/
+
+# 자립(self-contained) 빌드 산출물 — 커밋 금지 (scripts/build_runtime.sh 로 재생성)
+# 번들 파이썬 런타임 + llama-cpp-python, 그리고 내장 4B 모델 gguf (~3.5GB)
+src-tauri/python-runtime/
+src-tauri/models/
