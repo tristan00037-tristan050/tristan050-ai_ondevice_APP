@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { flushSync } from 'react-dom';
 import { getVersion } from '@tauri-apps/api/app';
+import { sidecarFetch, uiSafeSidecarErrorMessage } from './lib/sidecarFetch';
 import butlerIconStaticUrl from './assets/butler-icon-static.svg';
 import { EgressBadge } from './components/EgressBadge';
 import { EgressMonitor } from './components/chat/EgressMonitor';
@@ -278,7 +279,12 @@ export function App() {
       files.forEach((file, idx) => formData.append(`file_${idx}`, file));
       formData.append('file_count', String(files.length));
 
-      const res = await fetch(`${SIDECAR_BASE}/api/analyze/stream`, {
+      // 비공개 sidecar 요청(POST /api/analyze/stream)에는 capability token 이 필요하다.
+      // sidecarFetch 가 Authorization: Bearer <token> 을 자동 첨부한다(GET /health·/api/model/status 은
+      // 토큰 불필요라 별도 fetch 유지). Content-Type 은 직접 지정하지 않는다 — FormData 가 multipart
+      // boundary 까지 자동 설정하므로 건드리면 깨진다. token 미가용 시 fetch 전에 fail-closed 로 throw 되어
+      // 아래 catch 에서 사용자 메시지로 처리된다(앱은 죽지 않음).
+      const res = await sidecarFetch('/api/analyze/stream', {
         method: 'POST',
         body: formData,
         signal: ctrl.signal,
@@ -404,8 +410,9 @@ export function App() {
     } catch (err: unknown) {
       const isAbort = err instanceof Error && err.name === 'AbortError';
       if (!isAbort) {
+        // token 미가용(CAPABILITY_TOKEN_EMPTY)·연결 실패 등을 토큰/원문 노출 없이 사용자 메시지로 변환.
         setPendingBot(prev => prev
-          ? { ...prev, content: '요청 중 오류가 발생했습니다.', isError: true, loadingStatus: '', streamBuffer: '' }
+          ? { ...prev, content: uiSafeSidecarErrorMessage(err), isError: true, loadingStatus: '', streamBuffer: '' }
           : prev
         );
       } else {
