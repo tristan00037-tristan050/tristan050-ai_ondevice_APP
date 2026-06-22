@@ -222,19 +222,29 @@ describe('CompanyLearningConsole', () => {
     fireEvent.click(screen.getByTestId('choose-learning-folder-btn'));
 
     await waitFor(() => expect(screen.getByTestId('learning-understanding-panel')).toBeInTheDocument());
-    expect(screen.getByTestId('learning-job-panel')).toHaveTextContent('지원 파일');
+    const jobPanel = screen.getByTestId('learning-job-panel');
+    expect(jobPanel).toHaveTextContent('지원 파일');
+    // folder/ingest digest 와 영어 처리명은 화면에 보이지 않는다.
+    expect(jobPanel).not.toHaveTextContent(/folder |ingest |sha256:/i);
+    expect(screen.getByTestId('learning-understanding-panel')).not.toHaveTextContent(/local_only|LLM|evidence /);
     expect(screen.queryByText(SELECTED_PATH)).not.toBeInTheDocument();
     expect(screen.queryByText(/very-secret-client-folder/)).not.toBeInTheDocument();
     expect(screen.queryByText('학습완료')).not.toBeInTheDocument();
     expect(storageSpy).not.toHaveBeenCalled();
 
     const chips = screen.getAllByTestId('learning-evidence-chip');
-    expect(chips[0]).toHaveTextContent('file:aaaaaaaaaaaaaaaa');
+    // 근거 칩은 순번과 문서 위치만 노출하고 source_id/digest 는 보이지 않는다.
+    expect(chips[0]).toHaveTextContent('근거 1');
+    expect(chips[0]).toHaveTextContent('문서 위치');
+    expect(chips[0]).not.toHaveTextContent('file:aaaaaaaaaaaaaaaa');
+    expect(chips[0]).not.toHaveTextContent('sha256:');
     expect(chips[0]).not.toHaveTextContent('very-secret-client-folder');
 
     fireEvent.click(screen.getByTestId('learning-handoff-btn'));
     await waitFor(() => expect(screen.getByTestId('learning-handoff-result')).toBeInTheDocument());
-    expect(screen.getByTestId('learning-handoff-result')).toHaveTextContent('CANDIDATE');
+    const handoffResult = screen.getByTestId('learning-handoff-result');
+    expect(handoffResult).toHaveTextContent('후보 등록 완료 (학습 실행 아님)');
+    expect(handoffResult).not.toHaveTextContent(/CANDIDATE|learning_event_id|verified_for_training|sha256:/i);
 
     const dialog = screen.getByTestId('company-learning-console');
     expect(within(dialog).queryByText(/모든 업무 완전 이해/)).not.toBeInTheDocument();

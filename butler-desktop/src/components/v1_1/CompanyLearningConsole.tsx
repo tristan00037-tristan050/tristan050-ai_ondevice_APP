@@ -54,12 +54,6 @@ function uiErrorMessage(error: unknown): string {
   return FAIL_CLASS_MESSAGES[failClass] ?? `작업을 완료하지 못했습니다. 오류 코드: ${failClass}`;
 }
 
-function shortDigest(value: string | null | undefined): string {
-  if (!value) return '—';
-  if (!value.startsWith('sha256:')) return value;
-  return `${value.slice(0, 13)}…${value.slice(-8)}`;
-}
-
 function CounterRow({ label, value }: { label: string; value: number }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
@@ -189,17 +183,21 @@ export function CompanyLearningConsole({ onClose }: { onClose: () => void }) {
           <div style={{ fontWeight: 600, marginBottom: 8 }}>관리자 인증</div>
           <div style={{ display: 'grid', gap: 8 }}>
             <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-              Admin ID digest
+              관리자 인증값
               <input
                 aria-label="Learning Admin ID digest"
+                type="password"
+                autoComplete="off"
                 value={form.adminIdDigest}
                 onChange={event => setForm(s => ({ ...s, adminIdDigest: event.target.value }))}
               />
             </label>
             <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-              Admin session digest
+              로그인 확인값
               <input
                 aria-label="Learning Admin session digest"
+                type="password"
+                autoComplete="off"
                 value={form.adminSessionDigest}
                 onChange={event => setForm(s => ({ ...s, adminSessionDigest: event.target.value }))}
               />
@@ -241,16 +239,15 @@ export function CompanyLearningConsole({ onClose }: { onClose: () => void }) {
 
         {connectResult && (
           <section data-testid="learning-job-panel" style={{ border: '1px solid #E2E8F0', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>인덱싱 작업</div>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>폴더 분석</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, fontSize: 13 }}>
               <CounterRow label="지원 파일" value={connectResult.counters.processed_files} />
-              <CounterRow label="청크" value={connectResult.counters.chunk_count} />
-              <CounterRow label="미지원 skip" value={connectResult.counters.skipped_unsupported} />
-              <CounterRow label="추출 skip" value={connectResult.counters.skipped_extractor} />
+              <CounterRow label="분석 조각" value={connectResult.counters.chunk_count} />
+              <CounterRow label="건너뛴 파일" value={connectResult.counters.skipped_unsupported} />
+              <CounterRow label="읽지 못한 파일" value={connectResult.counters.skipped_extractor} />
             </div>
             <div style={{ marginTop: 8, fontSize: 12, color: '#475569' }}>
-              folder {shortDigest(connectResult.folder_digest)} · ingest {shortDigest(connectResult.ingest_digest)}
-              {status ? ` · ${status.status} ${status.progress}%` : ''}
+              {status ? `분석 준비 완료 · ${status.progress}%` : '폴더 연결 완료'}
             </div>
           </section>
         )}
@@ -260,7 +257,7 @@ export function CompanyLearningConsole({ onClose }: { onClose: () => void }) {
             <div style={{ fontWeight: 700, marginBottom: 8 }}>업무 파악</div>
             <div style={{ fontSize: 13, marginBottom: 8 }}>{understanding.summary_runtime_text}</div>
             <div style={{ fontSize: 12, color: '#1D4ED8', marginBottom: 8 }}>
-              local_only · LLM {understanding.llm_status} · evidence {understanding.evidence_chip_count}
+              이 기기 안에서만 처리됨 · 근거 {understanding.evidence_chip_count}개
             </div>
             {understanding.needs_review && (
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, fontSize: 13 }}>
@@ -278,13 +275,13 @@ export function CompanyLearningConsole({ onClose }: { onClose: () => void }) {
                 <div key={claim.claim_id} style={{ background: '#fff', border: '1px solid #DBEAFE', borderRadius: 8, padding: 10 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{claim.claim_runtime_text}</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {claim.evidence_chips.map(chip => (
+                    {claim.evidence_chips.map((chip, chipIndex) => (
                       <span
                         data-testid="learning-evidence-chip"
                         key={`${claim.claim_id}-${chip.chunk_digest}`}
                         style={{ fontSize: 11, border: '1px solid #CBD5E1', borderRadius: 999, padding: '2px 8px', background: '#F8FAFC' }}
                       >
-                        {chip.source_id} · {shortDigest(chip.chunk_digest)} · {chip.char_span[0]}-{chip.char_span[1]}
+                        근거 {chipIndex + 1} · 문서 위치 {chip.char_span[0]}-{chip.char_span[1]}
                       </span>
                     ))}
                   </div>
@@ -301,9 +298,9 @@ export function CompanyLearningConsole({ onClose }: { onClose: () => void }) {
 
         {handoff && (
           <section data-testid="learning-handoff-result" style={{ border: '1px solid #BBF7D0', borderRadius: 8, padding: 12, background: '#F0FDF4' }}>
-            <div style={{ fontWeight: 700, color: '#166534' }}>후보 등록됨</div>
+            <div style={{ fontWeight: 700, color: '#166534' }}>후보 등록 완료</div>
             <div style={{ fontSize: 13, color: '#166534' }}>
-              {handoff.learning_event_id} · {handoff.status} · verified_for_training=false
+              후보 등록 완료 (학습 실행 아님)
             </div>
           </section>
         )}

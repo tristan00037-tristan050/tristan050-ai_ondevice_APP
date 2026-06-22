@@ -28,6 +28,11 @@ describe('CompanyFormatConsole v1.2', () => {
   });
 
   it('posts raw template only to 127.0.0.1 #772 company-format endpoint and clears runtime state after success', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
     const fetcher = vi.spyOn(global, 'fetch').mockResolvedValue(
       jsonResponse({
         schema_version: 'admin.company_format_register.response.v1',
@@ -56,25 +61,35 @@ describe('CompanyFormatConsole v1.2', () => {
     expect(url).toBe(`${ADMIN_POLICY_SIDECAR_ORIGIN}${ADMIN_POLICY_ENDPOINTS.registerFormat}`);
     expect((init.headers as Record<string, string>)['X-Admin-Role']).toBe('admin');
     expect(String(init.body)).toContain(RAW_TEMPLATE);
-    expect(await screen.findByTestId('company-format-success')).toHaveTextContent('local-vault://formats/templates/template-001');
+    const success = await screen.findByTestId('company-format-success');
+    expect(success).toHaveTextContent('회사 양식 등록 완료');
+    expect(screen.getByLabelText('등록된 양식 ID')).toHaveValue('format-001');
+    expect(success).not.toHaveTextContent('local-vault://formats/templates/template-001');
+    expect(success).not.toHaveTextContent(/sha256:|format_digest|template_digest|template_ref/i);
+    fireEvent.click(screen.getByRole('button', { name: '양식 ID 복사' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('format-001'));
+    expect(await screen.findByRole('status')).toHaveTextContent('양식 ID를 복사했습니다.');
     await waitFor(() => expect(screen.getByLabelText('양식 원문')).toHaveValue(''));
     expect(screen.queryByDisplayValue(RAW_TEMPLATE)).not.toBeInTheDocument();
   });
 
-  it('does not claim list, rollback, or Box2 format application support', () => {
+  it('does not show developer notes, vault, endpoint, or digest copy on screen', () => {
     render(<CompanyFormatConsole onClose={() => undefined} />);
 
-    expect(screen.getByText(/목록·롤백 endpoint는 #772에 없습니다/)).toBeInTheDocument();
-    expect(screen.getByText(/박스 2 연동은 별도 검증 전까지 미지원/)).toBeInTheDocument();
+    expect(screen.getByText(/지금은 등록까지 됩니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/endpoint|vault|adapter|backend|v1\.2|#772|raw log/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'test_only' })).not.toBeInTheDocument();
   });
 
-  it('offers accounting format kinds for Box5 report registration', () => {
+  it('offers accounting format kinds with Korean-only option text (no internal value suffix)', () => {
     render(<CompanyFormatConsole onClose={() => undefined} />);
 
     expect(FORMAT_KINDS).toContain('cash_flow_monthly');
     expect(FORMAT_KIND_LABELS.cash_flow_monthly).toBe('월간 현금흐름');
-    expect(screen.getByRole('option', { name: '월간 현금흐름 (cash_flow_monthly)' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '손익 요약 (pnl_summary)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '월간 현금흐름' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '손익 요약' })).toBeInTheDocument();
+    // 괄호 안 내부값(영문 enum)은 화면에서 제거된다.
+    expect(screen.queryByRole('option', { name: /\(cash_flow_monthly\)|\(pnl_summary\)|\(report\)/ })).not.toBeInTheDocument();
   });
 
   it('blocks submit until admin digest and template fields are valid', () => {
