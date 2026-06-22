@@ -6,7 +6,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "npm run build && ../scripts/build_runtime.sh"
   },
   "app": {
     "windows": [
@@ -36,7 +36,9 @@
     "resources": {
       "../../butler_sidecar.py": "butler_sidecar.py",
       "../../butler_pc_core": "butler_pc_core",
-      "../../requirements-serving.txt": "requirements-serving.txt"
+      "../../requirements-serving.txt": "requirements-serving.txt",
+      "python-runtime": "python",
+      "models": "models"
     }
   }
 }
