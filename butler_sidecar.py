@@ -62,6 +62,7 @@ from butler_pc_core.runtime.timeout_controller import (
     HARD_TIMEOUT_SEC,
 )
 from butler_pc_core.inference.llm_runtime import LlmRuntime, _strip_residual_stop_tokens
+from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.fail_class import FailClass, fail_payload, map_legacy_to_fail_class
 from butler_pc_core.auth.capability_token import (
     CapabilityTokenError,
@@ -194,12 +195,11 @@ async def _real_chunk_work_inprocess(
         "굵게(**) 강조도 최소화하세요. "
         "간결하고 읽기 쉬운 문장 구성을 우선하세요."
     )
-    user_tmpl = "{{ query }}"
+    card: dict[str, object] = {"user_prompt_template": "{{ query }}"}
     try:
         from butler_pc_core.prompts.cards import load_card_prompt
         card = load_card_prompt(params.card_mode)
         system_prompt = card.get("system_prompt", system_prompt)
-        user_tmpl = card.get("user_prompt_template", user_tmpl)
     except Exception:
         pass
 
@@ -210,9 +210,7 @@ async def _real_chunk_work_inprocess(
         except Exception:
             pass
 
-    user_content = user_tmpl.replace("{{ query }}", params.query)
-    if file_texts:
-        user_content += "\n\n## 첨부 파일 내용\n" + "\n\n---\n".join(file_texts)
+    user_content = render_card_user_prompt(card, query=params.query, file_texts=file_texts)
 
     prompt = (
         f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
@@ -667,12 +665,11 @@ if _FASTAPI_AVAILABLE:
                     "굵게(**) 강조도 최소화하세요. "
                     "간결하고 읽기 쉬운 문장 구성을 우선하세요."
                 )
-                _user_tmpl = "{{ query }}"
+                _card: dict[str, object] = {"user_prompt_template": "{{ query }}"}
                 try:
                     from butler_pc_core.prompts.cards import load_card_prompt
-                    card = load_card_prompt(params.card_mode)
-                    _sys_prompt = card.get("system_prompt", _sys_prompt)
-                    _user_tmpl = card.get("user_prompt_template", _user_tmpl)
+                    _card = load_card_prompt(params.card_mode)
+                    _sys_prompt = _card.get("system_prompt", _sys_prompt)
                 except Exception:
                     pass
 
@@ -683,9 +680,7 @@ if _FASTAPI_AVAILABLE:
                     except Exception:
                         pass
 
-                _user_content = _user_tmpl.replace("{{ query }}", params.query)
-                if _file_texts:
-                    _user_content += "\n\n## 첨부 파일 내용\n" + "\n\n---\n".join(_file_texts)
+                _user_content = render_card_user_prompt(_card, query=params.query, file_texts=_file_texts)
 
                 _prompt = (
                     f"<|im_start|>system\n{_sys_prompt}<|im_end|>\n"

@@ -18,6 +18,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from butler_pc_core.inference.llm_runtime import LlmRuntime
+from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 
 
 def _default_model_path() -> str:
@@ -35,12 +36,11 @@ def main() -> None:
 
     # 카드 프롬프트 로드
     system_prompt = "당신은 유능한 사무 보조 AI입니다."
-    user_tmpl = "{{ query }}"
+    card: dict[str, object] = {"user_prompt_template": "{{ query }}"}
     try:
         from butler_pc_core.prompts.cards import load_card_prompt
         card = load_card_prompt(params.get("card_mode", "free"))
         system_prompt = card.get("system_prompt", system_prompt)
-        user_tmpl = card.get("user_prompt_template", user_tmpl)
     except Exception:
         pass
 
@@ -53,9 +53,7 @@ def main() -> None:
             pass
 
     query: str = params.get("query", "")
-    user_content = user_tmpl.replace("{{ query }}", query)
-    if file_texts:
-        user_content += "\n\n## 첨부 파일 내용\n" + "\n\n---\n".join(file_texts)
+    user_content = render_card_user_prompt(card, query=query, file_texts=file_texts)
 
     # Qwen3 ChatML — /no_think 로 thinking 블록 비활성화 (속도 우선)
     prompt = (
