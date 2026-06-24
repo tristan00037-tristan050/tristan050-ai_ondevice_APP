@@ -45,6 +45,19 @@ def test_card_04_renders_draft_and_reference_docs_without_jinja_literals() -> No
     assert_no_jinja_literals(rendered)
 
 
+def test_card_04_file_only_uses_first_attachment_as_draft() -> None:
+    rendered = render_card_user_prompt(
+        load_card_prompt("4"),
+        query="",
+        file_texts=["첨부 초안 본문", "참고 문서 본문"],
+    )
+
+    assert "## 검토 대상 문서\n첨부 초안 본문" in rendered
+    assert "### 참고 1\n참고 문서 본문" in rendered
+    assert "### 참고 1\n첨부 초안 본문" not in rendered
+    assert_no_jinja_literals(rendered)
+
+
 def test_renderer_falls_back_when_jinja_import_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     real_import = builtins.__import__
 
@@ -109,3 +122,10 @@ def test_runtime_paths_use_common_renderer_without_direct_query_replace() -> Non
     assert worker.count("render_card_user_prompt") >= 2
     assert '.replace("{{ query }}"' not in sidecar
     assert '.replace("{{ query }}"' not in worker
+
+
+def test_serving_requirements_bundle_template_parsers() -> None:
+    requirements = (REPO_ROOT / "requirements-serving.txt").read_text(encoding="utf-8")
+
+    assert "Jinja2>=3.1.0" in requirements
+    assert "PyYAML>=6.0.0" in requirements

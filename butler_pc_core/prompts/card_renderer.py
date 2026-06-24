@@ -11,8 +11,19 @@ def _joined_file_texts(file_texts: Sequence[str]) -> str:
     return "\n\n---\n".join(file_texts)
 
 
-def _build_context(query: str, file_texts: Sequence[str]) -> dict[str, Any]:
+def _card_04_documents(
+    card: Mapping[str, Any],
+    query: str,
+    file_texts: Sequence[str],
+) -> tuple[str, list[str]]:
+    if _card_id(card) == "card_04_document_review" and file_texts and not query.strip():
+        return file_texts[0], list(file_texts[1:])
+    return query, list(file_texts)
+
+
+def _build_context(card: Mapping[str, Any], query: str, file_texts: Sequence[str]) -> dict[str, Any]:
     first_file = file_texts[0] if file_texts else ""
+    draft_document, reference_documents = _card_04_documents(card, query, file_texts)
 
     return {
         "query": query,
@@ -29,9 +40,9 @@ def _build_context(query: str, file_texts: Sequence[str]) -> dict[str, Any]:
         "draft_type": "",
         "length_guide": "",
         # Card 4
-        "draft_document": query,
+        "draft_document": draft_document,
         "review_criteria": [],
-        "reference_documents": list(file_texts),
+        "reference_documents": reference_documents,
         # Card 5
         "transaction_text": query,
         "account_code_map": {},
@@ -84,10 +95,11 @@ def _manual_fallback_render(
         return "\n".join(parts).strip()
 
     if card_id == "card_04_document_review" or "draft_document" in tmpl or "reference_documents" in tmpl:
-        parts = ["## 검토 대상 문서", query]
-        if file_texts:
+        draft_document, reference_documents = _card_04_documents(card, query, file_texts)
+        parts = ["## 검토 대상 문서", draft_document]
+        if reference_documents:
             parts.extend(["", "## 참고 문서"])
-            for idx, text in enumerate(file_texts, start=1):
+            for idx, text in enumerate(reference_documents, start=1):
                 parts.extend([f"### 참고 {idx}", text])
         parts.append("위 문서를 검토하여 JSON 형식으로 출력하십시오.")
         return "\n".join(parts).strip()
@@ -157,7 +169,7 @@ def render_card_user_prompt(
     tmpl = str(card.get("user_prompt_template") or "{{ query }}")
     query_text = query or ""
     file_text_list = _coerce_file_texts(file_texts)
-    context = _build_context(query_text, file_text_list)
+    context = _build_context(card, query_text, file_text_list)
 
     try:
         from jinja2 import StrictUndefined
