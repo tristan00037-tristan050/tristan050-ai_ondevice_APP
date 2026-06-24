@@ -47,8 +47,14 @@ const CARD_MODE_MAP: Record<number, string> = {
   6: 'form_fill',
 };
 
-// Suppress unused import warning — CARD_MODE_MAP used below
-void CARD_MODE_MAP;
+const CARD_MODE_ID_BY_MODE: Record<string, string> = Object.fromEntries(
+  Object.entries(CARD_MODE_MAP).map(([id, mode]) => [mode, id])
+);
+
+export function sidecarCardMode(mode: string): string {
+  if (mode === 'free') return 'free';
+  return CARD_MODE_ID_BY_MODE[mode] ?? 'free';
+}
 
 export function App() {
   const [conversations, setConversations] = useState<Conversation[]>(() => loadConversations());
@@ -274,7 +280,7 @@ export function App() {
     try {
       const formData = new FormData();
       formData.append('query', text);
-      formData.append('card_mode', mode || 'free');
+      formData.append('card_mode', sidecarCardMode(mode || 'free'));
       formData.append('total_chunks', '1');
       files.forEach((file, idx) => formData.append(`file_${idx}`, file));
       formData.append('file_count', String(files.length));

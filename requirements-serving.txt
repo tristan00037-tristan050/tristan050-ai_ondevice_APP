@@ -9,6 +9,8 @@ httpx
 cryptography>=42.0.0
 # 회사 폴더 학습 핸드오프(butler_pc_core/company_learning/handoff.py) 스키마 검증 의무.
 jsonschema>=4.0.0
+Jinja2>=3.1.0
+PyYAML>=6.0.0
 pandas>=2.0.0
 openpyxl>=3.0.0
 xlrd>=2.0.0

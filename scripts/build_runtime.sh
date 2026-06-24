@@ -110,6 +110,10 @@ if [[ "${MODEL_ONLY}" != "1" ]]; then
   log "설치할 서빙 라이브러리:"
   sed 's/^/[build_runtime]   /' "${FILTERED_REQ}"
   "${PYBIN}" -m pip install -r "${FILTERED_REQ}"
+  "${PYBIN}" - <<'PY'
+from jinja2.sandbox import SandboxedEnvironment
+print("JINJA2_SANDBOX_IMPORT_OK=1")
+PY
   rm -f "${FILTERED_REQ}"
   log "서빙 라이브러리 설치 완료 (llama-cpp-python 은 단계 [2]에서)"
 fi
