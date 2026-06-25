@@ -16,6 +16,22 @@ use tauri_plugin_shell::{
 const SIDECAR_ENV_CONFIG: &str = "sidecar-env.json";
 const BUTLER_MODEL_PATH_ENV: &str = "BUTLER_MODEL_PATH";
 const BOX3_V9_MODEL_PATH_ENV: &str = "BUTLER_BOX3_V9_Q4_MODEL_PATH";
+const HELPER4_SDK_ENV: &str = "BUTLER_HELPER4_GROUNDING_SDK_PATH";
+const HELPER7_SDK_ENV: &str = "BUTLER_HELPER7_TABLE_FIGURE_SDK_PATH";
+const HELPER8_SDK_ENV: &str = "BUTLER_HELPER8_COMPANY_STYLE_SDK_PATH";
+const HELPER2_EMBEDDING_ENV: &str = "BUTLER_HELPER2_EMBEDDING_SDK_PATH";
+const BOX3_HUMAN_APPROVAL_ENV: &str = "BUTLER_BOX3_HUMAN_APPROVAL_CONFIG_PATH";
+const BOX3_HELPER_GUARD_ENV: &str = "BUTLER_BOX3_HELPER_COMPONENT_GUARD_PATH";
+const BOX3_FIXED_EVAL_ENV: &str = "BUTLER_BOX3_FIXED_EVAL_REPORT_PATH";
+const BOX3_EXTRA_ENV_KEYS: [&str; 7] = [
+    HELPER4_SDK_ENV,
+    HELPER7_SDK_ENV,
+    HELPER8_SDK_ENV,
+    HELPER2_EMBEDDING_ENV,
+    BOX3_HUMAN_APPROVAL_ENV,
+    BOX3_HELPER_GUARD_ENV,
+    BOX3_FIXED_EVAL_ENV,
+];
 
 struct SidecarState {
     child: Mutex<Option<CommandChild>>,
@@ -64,7 +80,17 @@ fn read_sidecar_env_config(app: &tauri::AppHandle) -> HashMap<String, String> {
         append_sidecar_launch_log("sidecar_env_config=not_object");
         return values;
     };
-    for key in [BUTLER_MODEL_PATH_ENV, BOX3_V9_MODEL_PATH_ENV] {
+    for key in [
+        BUTLER_MODEL_PATH_ENV,
+        BOX3_V9_MODEL_PATH_ENV,
+        HELPER4_SDK_ENV,
+        HELPER7_SDK_ENV,
+        HELPER8_SDK_ENV,
+        HELPER2_EMBEDDING_ENV,
+        BOX3_HUMAN_APPROVAL_ENV,
+        BOX3_HELPER_GUARD_ENV,
+        BOX3_FIXED_EVAL_ENV,
+    ] {
         if let Some(value) = object.get(key).and_then(|v| v.as_str()) {
             let trimmed = value.trim();
             if !trimmed.is_empty() {
@@ -81,6 +107,36 @@ fn env_value_or_config(config: &HashMap<String, String>, key: &str) -> Option<St
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
         .or_else(|| config.get(key).cloned())
+}
+
+fn push_if_resource_exists_and_unset(values: &mut Vec<(String, String)>, key: &str, path: PathBuf) {
+    if path.exists() && !values.iter().any(|(k, _)| k == key) {
+        values.push((key.to_string(), path.to_string_lossy().to_string()));
+    }
+}
+
+fn push_box3_resource_env(app: &tauri::AppHandle, values: &mut Vec<(String, String)>) {
+    let Ok(resource_dir) = app.path().resource_dir() else {
+        append_sidecar_launch_log("box3_resource_dir=unavailable");
+        return;
+    };
+    let models_box3 = resource_dir.join("models").join("box3");
+    let model_path = models_box3.join("butler-1.7b-v9-2-r2b-q4_k_m.gguf");
+    let core_box3_sdk = resource_dir
+        .join("butler_pc_core")
+        .join("cards")
+        .join("box3")
+        .join("sdk");
+
+    push_if_resource_exists_and_unset(values, BOX3_V9_MODEL_PATH_ENV, model_path.clone());
+    push_if_resource_exists_and_unset(values, BUTLER_MODEL_PATH_ENV, model_path);
+    push_if_resource_exists_and_unset(values, HELPER4_SDK_ENV, core_box3_sdk.join("helper4_grounding"));
+    push_if_resource_exists_and_unset(values, HELPER7_SDK_ENV, core_box3_sdk.join("helper7_table_figure"));
+    push_if_resource_exists_and_unset(values, HELPER8_SDK_ENV, core_box3_sdk.join("helper8_company_style"));
+    push_if_resource_exists_and_unset(values, HELPER2_EMBEDDING_ENV, models_box3.join("helper2_embedding"));
+    push_if_resource_exists_and_unset(values, BOX3_HUMAN_APPROVAL_ENV, models_box3.join("config").join("human_approval_v1.json"));
+    push_if_resource_exists_and_unset(values, BOX3_HELPER_GUARD_ENV, models_box3.join("config").join("helper_component_guard_v1.json"));
+    push_if_resource_exists_and_unset(values, BOX3_FIXED_EVAL_ENV, models_box3.join("eval").join("fixed_eval_report_v1.json"));
 }
 
 fn resolve_sidecar_env(app: &tauri::AppHandle) -> Vec<(String, String)> {
@@ -102,6 +158,18 @@ fn resolve_sidecar_env(app: &tauri::AppHandle) -> Vec<(String, String)> {
     if let Some(value) = box3_v9_model_path {
         values.push((BOX3_V9_MODEL_PATH_ENV.to_string(), value));
     }
+
+    for key in BOX3_EXTRA_ENV_KEYS {
+        if values.iter().any(|(existing, _)| existing == key) {
+            continue;
+        }
+        if let Some(value) = env_value_or_config(&config, key) {
+            values.push((key.to_string(), value));
+        }
+    }
+
+    push_box3_resource_env(app, &mut values);
+
     append_sidecar_launch_log(&format!(
         "resolved_env butler_model_path={} box3_v9_model_path={}",
         values.iter().any(|(k, _)| k == BUTLER_MODEL_PATH_ENV),

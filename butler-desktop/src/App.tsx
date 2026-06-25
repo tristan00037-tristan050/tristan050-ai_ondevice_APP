@@ -13,6 +13,7 @@ import { AccountingModal } from './components/chat/AccountingModal';
 import { RequestParsingModal } from './components/chat/RequestParsingModal';
 import { CardGrid } from './components/v1_1/CardGrid';
 import { Card2DocumentTransform } from './components/v1_1/Card2DocumentTransform';
+import { Box3DraftModal } from './components/v1_1/Box3DraftModal';
 import { AdminPolicyConsole } from './components/v1_1/AdminPolicyConsole';
 import { CompanyFormatConsole } from './components/v1_1/CompanyFormatConsole';
 import { CompanyFactApprovalConsole } from './components/v1_1/CompanyFactApprovalConsole';
@@ -67,6 +68,7 @@ export function App() {
   const [accountingModalOpen, setAccountingModalOpen] = useState(false);
   const [requestParsingModalOpen, setRequestParsingModalOpen] = useState(false);
   const [documentTransformModalOpen, setDocumentTransformModalOpen] = useState(false);
+  const [box3DraftModalOpen, setBox3DraftModalOpen] = useState(false);
   const [adminPolicyConsoleOpen, setAdminPolicyConsoleOpen] = useState(false);
   const [companyFormatConsoleOpen, setCompanyFormatConsoleOpen] = useState(false);
   const [companyFactConsoleOpen, setCompanyFactConsoleOpen] = useState(false);
@@ -443,6 +445,8 @@ export function App() {
       setRequestParsingModalOpen(true);
     } else if (m === 'format_convert') {
       setDocumentTransformModalOpen(true);
+    } else if (m === 'new_draft') {
+      setBox3DraftModalOpen(true);
     }
   };
 
@@ -663,6 +667,14 @@ export function App() {
         <Card2DocumentTransform
           onClose={() => {
             setDocumentTransformModalOpen(false);
+            setCardMode('free');
+          }}
+        />
+      )}
+      {box3DraftModalOpen && (
+        <Box3DraftModal
+          onClose={() => {
+            setBox3DraftModalOpen(false);
             setCardMode('free');
           }}
         />
