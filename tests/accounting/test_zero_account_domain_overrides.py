@@ -1,4 +1,5 @@
 from butler_pc_core.accounting.ft_classifier import ft_classify
+from butler_pc_core.accounting.account_dict import ACCOUNT_BY_NAME
 
 
 def test_zero_account_domain_overrides():
@@ -15,3 +16,10 @@ def test_zero_account_domain_overrides():
         assert r.sign == exp_sign
         assert r.source == "domain_override"
         assert r.confidence >= 0.95
+
+
+def test_sudogwangyeol_registered_for_downstream_summary():
+    acc = ACCOUNT_BY_NAME["수도광열비"]
+    assert acc.code == ACCOUNT_BY_NAME["전력비"].code
+    assert acc.sign == "-"
+    assert acc.section == "IV_sga"
