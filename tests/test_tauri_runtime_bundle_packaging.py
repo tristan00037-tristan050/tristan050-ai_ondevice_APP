@@ -65,8 +65,10 @@ def test_build_runtime_allows_missing_model_only_when_explicitly_requested(tmp_p
     proc = _run_build_runtime(tmp_path, missing_model, BUTLER_ALLOW_MISSING_BUNDLE_MODEL="1")
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "model-only 모드: Box3 runtime resource stage 건너뜁니다." in proc.stdout
     assert "명시적으로 건너뜁니다" in proc.stdout
     assert (tmp_path / "models").is_dir()
+    assert not (tmp_path / "models/box3").exists()
 
 
 def test_build_runtime_copies_model_from_configured_source(tmp_path: Path) -> None:
@@ -76,4 +78,17 @@ def test_build_runtime_copies_model_from_configured_source(tmp_path: Path) -> No
     proc = _run_build_runtime(tmp_path, model_src)
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "model-only 모드: Box3 runtime resource stage 건너뜁니다." in proc.stdout
     assert (tmp_path / "models/qwen3-4b-q4_k_m.gguf").read_bytes() == b"fake-gguf"
+    assert not (tmp_path / "models/box3").exists()
+
+
+def test_tauri_sidecar_box3_helper_envs_point_to_bundled_sdk_files() -> None:
+    lib_rs = (ROOT / "butler-desktop/src-tauri/src/lib.rs").read_text(encoding="utf-8")
+
+    assert 'core_box3_sdk.join("helper4_grounding_sdk.py")' in lib_rs
+    assert 'core_box3_sdk.join("helper7_table_figure_sdk.py")' in lib_rs
+    assert 'core_box3_sdk.join("helper8_company_style_sdk.py")' in lib_rs
+    assert 'core_box3_sdk.join("helper4_grounding")' not in lib_rs
+    assert 'core_box3_sdk.join("helper7_table_figure")' not in lib_rs
+    assert 'core_box3_sdk.join("helper8_company_style")' not in lib_rs

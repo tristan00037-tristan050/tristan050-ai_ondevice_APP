@@ -15,7 +15,7 @@ type Card = {
 const CARDS: Card[] = [
   { id: 1, mode: 'request_organize', title: '요청 핵심 파악·정리', desc: '받은 요청을 액션·마감·자료로 정리', active: true, Icon: Inbox },
   { id: 2, mode: 'format_convert', title: '남의 문서 → 우리 양식 보고서', desc: '외부 문서와 우리 양식으로 보고서 생성', active: true, Icon: ArrowRightLeft },
-  { id: 3, mode: 'new_draft', title: '기존 문서 → 새 초안', desc: '우리 과거 자료 기반 새 초안', active: false, Icon: FilePlus },
+  { id: 3, mode: 'new_draft', title: '기존 문서 → 새 초안', desc: '우리 과거 자료 기반 새 초안', active: true, Icon: FilePlus },
   { id: 4, mode: 'attachment_edit', title: '첨부 문서 수정·보완', desc: '작성 중 문서 보완', active: true, Icon: FileEdit },
   { id: 5, mode: 'accounting_classify', title: '통장·거래내역 → 회계 분류', desc: '계정과목 자동 분류', active: true, Icon: Calculator },
   { id: 6, mode: 'form_fill', title: '상대 양식에 우리 자료', desc: '빈 양식 채우기', active: false, Icon: ClipboardList },
