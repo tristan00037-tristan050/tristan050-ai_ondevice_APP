@@ -77,15 +77,18 @@ if [[ ! -f "${MODEL_DEST}" && ! -f "${MODEL_SRC}" ]] && ! is_truthy "${BUTLER_AL
 fi
 
 # ── [4] Box3 v9.2-r2b grounded runtime resources ─────────────
-BOX3_MODEL_NAME="butler-1.7b-v9-2-r2b-q4_k_m.gguf"
-BOX3_MODEL_SHA256="aae4ea7a4ebe0586db3317d5209b5565abcd326ea73decb7ffa99f433c218847"
-BOX3_MODELS_DIR="${MODELS_DIR}/box3"
-BOX3_MODEL_DEST="${BOX3_MODELS_DIR}/${BOX3_MODEL_NAME}"
-BOX3_MODEL_SRC="${BUTLER_BOX3_V9_Q4_MODEL_SRC:-${BUTLER_BUNDLE_BOX3_MODEL_SRC:-}}"
-BOX3_ALLOW_MISSING="${BUTLER_ALLOW_MISSING_BOX3_RUNTIME_ASSETS:-0}"
+if [[ "${MODEL_ONLY}" == "1" ]]; then
+  log "model-only 모드: Box3 runtime resource stage 건너뜁니다."
+else
+  BOX3_MODEL_NAME="butler-1.7b-v9-2-r2b-q4_k_m.gguf"
+  BOX3_MODEL_SHA256="aae4ea7a4ebe0586db3317d5209b5565abcd326ea73decb7ffa99f433c218847"
+  BOX3_MODELS_DIR="${MODELS_DIR}/box3"
+  BOX3_MODEL_DEST="${BOX3_MODELS_DIR}/${BOX3_MODEL_NAME}"
+  BOX3_MODEL_SRC="${BUTLER_BOX3_V9_Q4_MODEL_SRC:-${BUTLER_BUNDLE_BOX3_MODEL_SRC:-}}"
+  BOX3_ALLOW_MISSING="${BUTLER_ALLOW_MISSING_BOX3_RUNTIME_ASSETS:-0}"
 
-sha256_file() {
-  python3 - "$1" <<'PYHASH'
+  sha256_file() {
+    python3 - "$1" <<'PYHASH'
 import hashlib, sys
 h = hashlib.sha256()
 with open(sys.argv[1], 'rb') as handle:
@@ -93,79 +96,79 @@ with open(sys.argv[1], 'rb') as handle:
         h.update(chunk)
 print(h.hexdigest())
 PYHASH
-}
+  }
 
-mkdir -p "${BOX3_MODELS_DIR}/config" "${BOX3_MODELS_DIR}/eval"
-if [[ -f "${BOX3_MODEL_DEST}" ]]; then
-  log "Box3 v9.2-r2b 모델 이미 존재: ${BOX3_MODEL_DEST}"
-elif [[ -n "${BOX3_MODEL_SRC}" && -f "${BOX3_MODEL_SRC}" ]]; then
-  log "Box3 v9.2-r2b 모델 복사 중… ${BOX3_MODEL_SRC}"
-  cp "${BOX3_MODEL_SRC}" "${BOX3_MODEL_DEST}"
-else
-  if is_truthy "${BOX3_ALLOW_MISSING}"; then
-    log "WARN: BUTLER_ALLOW_MISSING_BOX3_RUNTIME_ASSETS=1 이므로 Box3 모델 복사를 건너뜁니다."
+  mkdir -p "${BOX3_MODELS_DIR}/config" "${BOX3_MODELS_DIR}/eval"
+  if [[ -f "${BOX3_MODEL_DEST}" ]]; then
+    log "Box3 v9.2-r2b 모델 이미 존재: ${BOX3_MODEL_DEST}"
+  elif [[ -n "${BOX3_MODEL_SRC}" && -f "${BOX3_MODEL_SRC}" ]]; then
+    log "Box3 v9.2-r2b 모델 복사 중… ${BOX3_MODEL_SRC}"
+    cp "${BOX3_MODEL_SRC}" "${BOX3_MODEL_DEST}"
   else
-    log "ERROR: BUTLER_BOX3_V9_Q4_MODEL_SRC가 ${BOX3_MODEL_NAME}을 가리켜야 합니다."
+    if is_truthy "${BOX3_ALLOW_MISSING}"; then
+      log "WARN: BUTLER_ALLOW_MISSING_BOX3_RUNTIME_ASSETS=1 이므로 Box3 모델 복사를 건너뜁니다."
+    else
+      log "ERROR: BUTLER_BOX3_V9_Q4_MODEL_SRC가 ${BOX3_MODEL_NAME}을 가리켜야 합니다."
+      exit 1
+    fi
+  fi
+
+  if [[ -f "${BOX3_MODEL_DEST}" ]]; then
+    BOX3_ACTUAL_SHA="$(sha256_file "${BOX3_MODEL_DEST}")"
+    if [[ "${BOX3_ACTUAL_SHA}" != "${BOX3_MODEL_SHA256}" ]]; then
+      log "ERROR: Box3 v9.2-r2b SHA mismatch expected=${BOX3_MODEL_SHA256} actual=${BOX3_ACTUAL_SHA}"
+      exit 1
+    fi
+    log "Box3 v9.2-r2b SHA OK: ${BOX3_ACTUAL_SHA}"
+  fi
+
+  if find "${BOX3_MODELS_DIR}" -type f \( -iname '*helper3*.safetensors' -o -iname '*helper5*.safetensors' -o -iname '*format*adapter*.safetensors' -o -iname '*tool*call*.safetensors' \) | grep -q .; then
+    log "ERROR: HELPER35_RUNTIME_STACK_BUNDLE_FORBIDDEN"
     exit 1
   fi
-fi
 
-if [[ -f "${BOX3_MODEL_DEST}" ]]; then
-  BOX3_ACTUAL_SHA="$(sha256_file "${BOX3_MODEL_DEST}")"
-  if [[ "${BOX3_ACTUAL_SHA}" != "${BOX3_MODEL_SHA256}" ]]; then
-    log "ERROR: Box3 v9.2-r2b SHA mismatch expected=${BOX3_MODEL_SHA256} actual=${BOX3_ACTUAL_SHA}"
-    exit 1
-  fi
-  log "Box3 v9.2-r2b SHA OK: ${BOX3_ACTUAL_SHA}"
-fi
+  BOX3_INTERNAL_SDK_DIR="${REPO_ROOT}/butler_pc_core/cards/box3/sdk"
+  for sdk in helper4_grounding helper7_table_figure helper8_company_style; do
+    if [[ ! -d "${BOX3_INTERNAL_SDK_DIR}/${sdk}" \
+          && ! -f "${BOX3_INTERNAL_SDK_DIR}/${sdk}.py" \
+          && ! -f "${BOX3_INTERNAL_SDK_DIR}/${sdk}_sdk.py" ]]; then
+      log "ERROR: repo 내부 Box3 helper SDK 누락: ${BOX3_INTERNAL_SDK_DIR}/${sdk}"
+      exit 1
+    fi
+  done
 
-if find "${BOX3_MODELS_DIR}" -type f \( -iname '*helper3*.safetensors' -o -iname '*helper5*.safetensors' -o -iname '*format*adapter*.safetensors' -o -iname '*tool*call*.safetensors' \) | grep -q .; then
-  log "ERROR: HELPER35_RUNTIME_STACK_BUNDLE_FORBIDDEN"
-  exit 1
-fi
-
-BOX3_INTERNAL_SDK_DIR="${REPO_ROOT}/butler_pc_core/cards/box3/sdk"
-for sdk in helper4_grounding helper7_table_figure helper8_company_style; do
-  if [[ ! -d "${BOX3_INTERNAL_SDK_DIR}/${sdk}" \
-        && ! -f "${BOX3_INTERNAL_SDK_DIR}/${sdk}.py" \
-        && ! -f "${BOX3_INTERNAL_SDK_DIR}/${sdk}_sdk.py" ]]; then
-    log "ERROR: repo 내부 Box3 helper SDK 누락: ${BOX3_INTERNAL_SDK_DIR}/${sdk}"
-    exit 1
-  fi
-done
-
-if [[ -n "${BUTLER_HELPER2_EMBEDDING_SRC:-}" && -e "${BUTLER_HELPER2_EMBEDDING_SRC}" ]]; then
-  rm -rf "${BOX3_MODELS_DIR}/helper2_embedding"
-  cp -R "${BUTLER_HELPER2_EMBEDDING_SRC}" "${BOX3_MODELS_DIR}/helper2_embedding"
-elif ! is_truthy "${BOX3_ALLOW_MISSING}"; then
-  log "ERROR: BUTLER_HELPER2_EMBEDDING_SRC가 helper2 embedding 자산을 가리켜야 합니다."
-  exit 1
-else
-  log "WARN: helper2 embedding 자산 누락 — verifier pass_ready=false 예정."
-fi
-
-copy_json_asset() {
-  local src_var="$1"
-  local dest="$2"
-  local label="$3"
-  local src="${!src_var:-}"
-  if [[ -n "${src}" && -f "${src}" ]]; then
-    cp "${src}" "${dest}"
+  if [[ -n "${BUTLER_HELPER2_EMBEDDING_SRC:-}" && -e "${BUTLER_HELPER2_EMBEDDING_SRC}" ]]; then
+    rm -rf "${BOX3_MODELS_DIR}/helper2_embedding"
+    cp -R "${BUTLER_HELPER2_EMBEDDING_SRC}" "${BOX3_MODELS_DIR}/helper2_embedding"
   elif ! is_truthy "${BOX3_ALLOW_MISSING}"; then
-    log "ERROR: ${src_var}가 ${label} JSON을 가리켜야 합니다."
+    log "ERROR: BUTLER_HELPER2_EMBEDDING_SRC가 helper2 embedding 자산을 가리켜야 합니다."
     exit 1
   else
-    log "WARN: ${label} JSON 누락 — verifier pass_ready=false 예정."
+    log "WARN: helper2 embedding 자산 누락 — verifier pass_ready=false 예정."
   fi
-}
 
-copy_json_asset BUTLER_BOX3_HUMAN_APPROVAL_CONFIG_SRC "${BOX3_MODELS_DIR}/config/human_approval_v1.json" "human approval"
-copy_json_asset BUTLER_BOX3_HELPER_COMPONENT_GUARD_SRC "${BOX3_MODELS_DIR}/config/helper_component_guard_v1.json" "helper component guard"
-copy_json_asset BUTLER_BOX3_FIXED_EVAL_REPORT_SRC "${BOX3_MODELS_DIR}/eval/fixed_eval_report_v1.json" "fixed eval report"
+  copy_json_asset() {
+    local src_var="$1"
+    local dest="$2"
+    local label="$3"
+    local src="${!src_var:-}"
+    if [[ -n "${src}" && -f "${src}" ]]; then
+      cp "${src}" "${dest}"
+    elif ! is_truthy "${BOX3_ALLOW_MISSING}"; then
+      log "ERROR: ${src_var}가 ${label} JSON을 가리켜야 합니다."
+      exit 1
+    else
+      log "WARN: ${label} JSON 누락 — verifier pass_ready=false 예정."
+    fi
+  }
 
-if [[ -f "${BOX3_MODELS_DIR}/eval/fixed_eval_report_v1.json" ]]; then
-  BOX3_EVAL_PY="${PYBIN}"; [[ -x "${BOX3_EVAL_PY}" ]] || BOX3_EVAL_PY="$(command -v python3)"
-  "${BOX3_EVAL_PY}" - "${BOX3_MODELS_DIR}/eval/fixed_eval_report_v1.json" <<'PYEVAL'
+  copy_json_asset BUTLER_BOX3_HUMAN_APPROVAL_CONFIG_SRC "${BOX3_MODELS_DIR}/config/human_approval_v1.json" "human approval"
+  copy_json_asset BUTLER_BOX3_HELPER_COMPONENT_GUARD_SRC "${BOX3_MODELS_DIR}/config/helper_component_guard_v1.json" "helper component guard"
+  copy_json_asset BUTLER_BOX3_FIXED_EVAL_REPORT_SRC "${BOX3_MODELS_DIR}/eval/fixed_eval_report_v1.json" "fixed eval report"
+
+  if [[ -f "${BOX3_MODELS_DIR}/eval/fixed_eval_report_v1.json" ]]; then
+    BOX3_EVAL_PY="${PYBIN}"; [[ -x "${BOX3_EVAL_PY}" ]] || BOX3_EVAL_PY="$(command -v python3)"
+    "${BOX3_EVAL_PY}" - "${BOX3_MODELS_DIR}/eval/fixed_eval_report_v1.json" <<'PYEVAL'
 import json, sys
 data = json.load(open(sys.argv[1], encoding='utf-8'))
 if data.get('unsupported_count') != 0:
@@ -174,8 +177,9 @@ if data.get('degen_detected') is not False:
     raise SystemExit('FIXED_EVAL_DEGEN_DETECTED')
 print('BOX3_FIXED_EVAL_REPORT_OK=1')
 PYEVAL
+  fi
+  log "BOX3_V9_2_R2B_BUNDLE_STAGE_DONE"
 fi
-log "BOX3_V9_2_R2B_BUNDLE_STAGE_DONE"
 
 # ── [1a] 독립 파이썬 다운로드/배치 ────────────────────────────
 if [[ "${MODEL_ONLY}" == "1" ]]; then

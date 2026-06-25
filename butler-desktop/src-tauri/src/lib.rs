@@ -130,9 +130,9 @@ fn push_box3_resource_env(app: &tauri::AppHandle, values: &mut Vec<(String, Stri
 
     push_if_resource_exists_and_unset(values, BOX3_V9_MODEL_PATH_ENV, model_path.clone());
     push_if_resource_exists_and_unset(values, BUTLER_MODEL_PATH_ENV, model_path);
-    push_if_resource_exists_and_unset(values, HELPER4_SDK_ENV, core_box3_sdk.join("helper4_grounding"));
-    push_if_resource_exists_and_unset(values, HELPER7_SDK_ENV, core_box3_sdk.join("helper7_table_figure"));
-    push_if_resource_exists_and_unset(values, HELPER8_SDK_ENV, core_box3_sdk.join("helper8_company_style"));
+    push_if_resource_exists_and_unset(values, HELPER4_SDK_ENV, core_box3_sdk.join("helper4_grounding_sdk.py"));
+    push_if_resource_exists_and_unset(values, HELPER7_SDK_ENV, core_box3_sdk.join("helper7_table_figure_sdk.py"));
+    push_if_resource_exists_and_unset(values, HELPER8_SDK_ENV, core_box3_sdk.join("helper8_company_style_sdk.py"));
     push_if_resource_exists_and_unset(values, HELPER2_EMBEDDING_ENV, models_box3.join("helper2_embedding"));
     push_if_resource_exists_and_unset(values, BOX3_HUMAN_APPROVAL_ENV, models_box3.join("config").join("human_approval_v1.json"));
     push_if_resource_exists_and_unset(values, BOX3_HELPER_GUARD_ENV, models_box3.join("config").join("helper_component_guard_v1.json"));
