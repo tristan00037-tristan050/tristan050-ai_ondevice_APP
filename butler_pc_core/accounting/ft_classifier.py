@@ -1,6 +1,7 @@
 """ft_classifier.py — 방향 인식 + QLoRA PEFT opt-in 통합 분류기.
 
-우선순위: PEFT(명시 opt-in + 로드 성공 시) > 방향 오버라이드(D-2 C/D 결함 수정) > 규칙 기반.
+우선순위: 한국 회계 결정 규칙(0% 계정 보정) > PEFT(명시 opt-in + 로드 성공 시)
+> 방향 오버라이드(D-2 C/D 결함 수정) > 규칙 기반.
 PEFT base model(Qwen/Qwen3-4B ~8GB) 미캐시 시 graceful fail → 규칙+오버라이드로 동작.
 """
 from __future__ import annotations
@@ -27,6 +28,61 @@ _INCOME_OVERRIDE: dict[str, Tuple[str, str, str]] = {
     "지급수수료": ("용역매출", "I_revenue", "+"),
     "지급임차료": ("임대수입", "VI_non_op_revenue", "+"),
 }
+
+# ── 한국 회계 0% 계정 결정 규칙 ───────────────────────────────────────────────
+# 그룹A 공유 저장소 2026-06-25 우선순위: 무형자산상각비·외환차익·배당금수익·수도광열비.
+# 모델/일반 사전보다 먼저 적용한다. 이 네 계정은 한국 회계 명칭 자체가 차별성
+# 핵심이므로, 명확한 키워드가 있을 때 일반 계정(감가상각비/잡이익/전력비 등)으로
+# 흘러가지 않도록 fail-closed가 아니라 deterministic override로 고정한다.
+_DOMAIN_OVERRIDES: tuple[tuple[str, str, str, float, tuple[str, ...]], ...] = (
+    (
+        "무형자산상각비", "IV_sga", "-", 0.97,
+        (
+            r"무형자산\s*상각(?:비)?",
+            r"무형자산상각비",
+            r"(소프트웨어|SW|특허권|상표권|영업권|개발비|사용권자산|라이선스|라이센스).{0,20}상각",
+            r"상각.{0,20}(소프트웨어|SW|특허권|상표권|영업권|개발비|사용권자산|라이선스|라이센스)",
+        ),
+    ),
+    (
+        "외환차익", "VI_non_op_revenue", "+", 0.97,
+        (
+            r"외환\s*차익",
+            r"환율\s*차익",
+            r"환차익",
+            r"외환\s*이익",
+            r"(USD|JPY|EUR|달러|엔화|유로|외화|환전).{0,24}(차익|이익|환율이익|외환이익)",
+            r"(차익|이익).{0,24}(USD|JPY|EUR|달러|엔화|유로|외화|환전)",
+        ),
+    ),
+    (
+        "배당금수익", "VI_non_op_revenue", "+", 0.97,
+        (
+            r"배당금\s*수익",
+            r"배당\s*수익",
+            r"배당\s*수입",
+            r"배당금\s*(입금|수령|수취|받음)",
+            r"(주식|지분|투자주식|관계회사).{0,16}배당",
+        ),
+    ),
+    (
+        "수도광열비", "IV_sga", "-", 0.97,
+        (
+            r"수도\s*광열(?:비)?",
+            r"수도광열비",
+            r"전기\s*요금",
+            r"전력\s*요금",
+            r"수도\s*요금",
+            r"상하수도",
+            r"도시가스\s*요금",
+            r"가스\s*요금",
+            r"난방비",
+            r"열요금",
+            r"광열비",
+            r"한국전력|한전|서울도시가스|코원에너지|수원시상하수도|동건에너지",
+        ),
+    ),
+)
 
 # ── PEFT 어댑터 경로 후보 ─────────────────────────────────────────────────────
 _MODEL_DIR = Path(__file__).parent / "models" / "qwen3_4b_accounting_v1"
@@ -64,7 +120,7 @@ class ClassifyResult:
     section: str
     sign: str
     confidence: float
-    source: str  # "peft" | "direction_override" | "rule_base"
+    source: str  # "domain_override" | "peft" | "direction_override" | "rule_base"
 
 
 def _find_adapter() -> Optional[Path]:
@@ -164,6 +220,24 @@ def _detect_direction(text: str) -> Optional[str]:
     return None  # 모호 또는 신호 없음
 
 
+def _domain_override(description: str, vendor: str) -> Optional[ClassifyResult]:
+    """그룹A 0% 계정 보정용 고정밀 한국 회계 결정 규칙."""
+    combined = f"{description} {vendor}".strip()
+    if not combined:
+        return None
+
+    for category, section, sign, confidence, patterns in _DOMAIN_OVERRIDES:
+        if any(re.search(pattern, combined, re.IGNORECASE) for pattern in patterns):
+            return ClassifyResult(
+                category=category,
+                section=section,
+                sign=sign,
+                confidence=confidence,
+                source="domain_override",
+            )
+    return None
+
+
 def ft_classify(
     description: str,
     vendor: str = "",
@@ -181,6 +255,12 @@ def ft_classify(
         direction = _detect_direction(combined) or "출금"  # 기본값: 출금(비용)
 
     is_income = direction == "입금"
+
+    # 0. 한국 회계 0% 계정 결정 규칙 — 모델/일반 사전보다 우선
+    # 명확한 회계 명칭·거래처 신호가 있으면 PEFT가 다른 일반 계정으로 끌고 가지 못하게 한다.
+    domain_result = _domain_override(description, vendor)
+    if domain_result is not None:
+        return domain_result
 
     # 1. PEFT 추론 (lazy load, graceful fail)
     if not _peft_attempted:
