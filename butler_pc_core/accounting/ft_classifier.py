@@ -84,6 +84,23 @@ _DOMAIN_OVERRIDES: tuple[tuple[str, str, str, float, tuple[str, ...]], ...] = (
     ),
 )
 
+
+def _register_domain_account_aliases() -> None:
+    """분류 결과명이 후속 저장/집계에서 미등록 계정으로 떨어지지 않게 별칭 등록."""
+    base = ACCOUNT_BY_NAME.get("전력비")
+    if base is not None and "수도광열비" not in ACCOUNT_BY_NAME:
+        ACCOUNT_BY_NAME["수도광열비"] = type(base)(
+            code=base.code,
+            name="수도광열비",
+            keywords=[],
+            vendor_patterns=[],
+            sign=base.sign,
+            section=base.section,
+        )
+
+
+_register_domain_account_aliases()
+
 # ── PEFT 어댑터 경로 후보 ─────────────────────────────────────────────────────
 _MODEL_DIR = Path(__file__).parent / "models" / "qwen3_4b_accounting_v1"
 _T7_DIR = Path(
