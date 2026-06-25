@@ -9,8 +9,9 @@ Tests:
   6. d2_imdaeryo_expense             — D-2 Case3: 임대료 지급 → IV_sga / (-)
   7. d2_imdae_income                 — D-2 Case4: 임대 수입 입금 → VI_non_op_revenue / (+)
   8. d2_resolution_rate_above_80pct  — D-2 4건 모두 통과 ≥80%
-  9. labeled_section_accuracy_sample — 200개 샘플 section 정확도 ≥75%
- 10. labeled_sign_accuracy_sample    — 200개 샘플 sign 정확도 ≥85%
+  9. zero_account_domain_overrides   — 그룹A 0% 계정 4종 deterministic override
+ 10. labeled_section_accuracy_sample — 200개 샘플 section 정확도 ≥75%
+ 11. labeled_sign_accuracy_sample    — 200개 샘플 sign 정확도 ≥85%
 """
 from __future__ import annotations
 
@@ -124,7 +125,29 @@ def test_d2_resolution_rate_above_80pct(classifier):
     assert rate >= 0.80, f"D-2 해소율 {rate:.0%} < 80% ({passed}/{len(cases)})"
 
 
-# ── 9–10. test_labeled.jsonl 샘플 정확도 ─────────────────────────────────────
+# ── 9. 그룹A 0% 계정 deterministic override ───────────────────────────────────
+def test_zero_account_domain_overrides(classifier):
+    """그룹A가 지목한 0% 계정 4종은 모델보다 먼저 결정 규칙으로 고정한다."""
+    cases = [
+        ("특허권 무형자산 상각비 300,000원 계상", "", 300_000, "출금",
+         "무형자산상각비", "IV_sga", "-"),
+        ("USD 외화예금 환율 차익 120,000원 입금", "국민은행", 120_000, "입금",
+         "외환차익", "VI_non_op_revenue", "+"),
+        ("보유 주식 배당금 500,000원 입금", "한국예탁결제원", 500_000, "입금",
+         "배당금수익", "VI_non_op_revenue", "+"),
+        ("전기요금 220,000원 납부", "한국전력", 220_000, "출금",
+         "수도광열비", "IV_sga", "-"),
+    ]
+    for desc, vendor, amt, direction, exp_cat, exp_sec, exp_sign in cases:
+        r = classifier(desc, vendor, amt, direction)
+        assert r.category == exp_cat, f"{desc}: category={r.category}"
+        assert r.section == exp_sec, f"{desc}: section={r.section}"
+        assert r.sign == exp_sign, f"{desc}: sign={r.sign}"
+        assert r.source == "domain_override", f"{desc}: source={r.source}"
+        assert r.confidence >= 0.95, f"{desc}: confidence={r.confidence}"
+
+
+# ── 10–11. test_labeled.jsonl 샘플 정확도 ─────────────────────────────────────
 @pytest.fixture(scope="module")
 def labeled_sample():
     if not _LABELED.exists():
