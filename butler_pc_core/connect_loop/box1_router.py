@@ -8,6 +8,7 @@ card/helper endpoint.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -21,6 +22,30 @@ from .schema_validator import validate_chat_request, validate_router_decision
 
 KNOWN_INTENT_THRESHOLD = 0.62
 AMBIGUITY_DELTA = 0.12
+ACCOUNTING_GUARD_REASON = "ACCOUNTING_SIGNAL_REQUIRES_CARD"
+BUSINESS_GUARD_REASON = "BUSINESS_SIGNAL_REQUIRES_CARD"
+EXPLANATION_GENERAL_CHAT_REASON = "EXPLANATION_GENERAL_CHAT_FALLBACK"
+LOW_CONFIDENCE_GENERAL_CHAT_REASON = "LOW_CONFIDENCE_GENERAL_CHAT_FALLBACK"
+
+_AMOUNT_RE = re.compile(r"\d[\d,]*(?:\s?원|\s?만원|\s?억원)")
+_ACCOUNTING_NOUN_TERMS = (
+    "지급임차료",
+    "임차료",
+    "감가상각",
+    "감가상각비",
+    "세금계산서",
+    "부가세",
+    "매입",
+    "미지급금",
+    "미수금",
+    "선급금",
+    "예수금",
+    "손익",
+    "결산",
+)
+_ACCOUNTING_ACTION_TERMS = ("회계처리", "회계 처리", "분개", "처리", "분류", "계산", "정산")
+_EXPLANATION_TERMS = ("설명", "궁금", "뭐야", "무엇", "목표", "소개", "가능", "사용법")
+_EXECUTION_PATTERNS = ("작성해줘", "써줘", "만들어줘", "변환해줘", "분류해줘", "처리해줘")
 
 ROUTE_TABLE: dict[str, tuple[str, str]] = {
     "memory_search": ("helper1", "POST /v1/helpers/1/search"),
@@ -47,12 +72,50 @@ _SIGNALS: dict[str, dict[str, tuple[str, ...]]] = {
         "weak": ("문안", "써줘", "정리해서 보내", "새 상황"),
     },
     "accounting_classify": {
-        "strong": ("거래내역", "계정과목", "회계분류", "분개", "매출", "비용 분류"),
-        "weak": ("비용", "수입", "통장", "입금", "출금"),
+        "strong": (
+            "거래내역",
+            "계정과목",
+            "회계분류",
+            "분개",
+            "매출",
+            "비용 분류",
+            "회계처리",
+            "회계 처리",
+            "지급임차료",
+            "임차료",
+            "감가상각",
+            "감가상각비",
+            "대변",
+            "차변",
+            "전표",
+            "세금계산서",
+            "부가세",
+            "매입",
+            "미지급금",
+            "미수금",
+            "선급금",
+            "예수금",
+            "손익",
+            "결산",
+        ),
+        "weak": ("비용", "수입", "통장", "입금", "출금", "정산"),
     },
     "general_chat": {
-        "strong": ("안녕하세요", "무엇을 할 수", "기능 설명", "도움말", "사용법"),
-        "weak": ("고마워", "감사", "질문", "설명해"),
+        "strong": (
+            "안녕하세요",
+            "무엇을 할 수",
+            "기능 설명",
+            "도움말",
+            "사용법",
+            "소개",
+            "너를 소개",
+            "자기소개",
+            "무엇을 목표",
+            "목표로 만들어",
+            "자유대화",
+            "대화 가능",
+        ),
+        "weak": ("고마워", "감사", "질문", "설명해", "말해줘", "알려줘", "궁금", "대화"),
     },
 }
 
@@ -94,6 +157,25 @@ def _score_intents(text: str) -> list[_IntentScore]:
     return sorted(scores, key=lambda item: item.score, reverse=True)
 
 
+def _has_accounting_risk(text: str, accounting_score: _IntentScore) -> bool:
+    if accounting_score.strong_count > 0:
+        return True
+    if accounting_score.weak_count >= 2:
+        return True
+    has_amount = bool(_AMOUNT_RE.search(text))
+    has_noun = any(term in text for term in _ACCOUNTING_NOUN_TERMS)
+    has_action = any(term in text for term in _ACCOUNTING_ACTION_TERMS)
+    return has_amount and (has_noun or has_action)
+
+
+def _is_explanation_question(text: str) -> bool:
+    return any(term in text for term in _EXPLANATION_TERMS)
+
+
+def _is_execution_request(text: str) -> bool:
+    return any(pattern in text for pattern in _EXECUTION_PATTERNS)
+
+
 def canonical_sha256(text: str) -> str:
     """chat_request.text_digest 와 동일 규칙으로 원문 digest 를 만든다.
 
@@ -120,17 +202,36 @@ def _classify(runtime_text: str | None) -> tuple[str, float, str]:
     if runtime_text is None or not runtime_text.strip():
         return "unknown", 0.0, "RUNTIME_TEXT_MISSING"
 
+    normalized = " ".join(runtime_text.casefold().split())
     scores = _score_intents(runtime_text)
+    by_intent = {score.intent_label: score for score in scores}
     best = scores[0]
     second = scores[1] if len(scores) > 1 else _IntentScore("unknown", 0.0, 0, 0)
+    accounting = by_intent.get("accounting_classify", _IntentScore("accounting_classify", 0.0, 0, 0))
+    general = by_intent.get("general_chat", _IntentScore("general_chat", 0.0, 0, 0))
 
-    if best.score < KNOWN_INTENT_THRESHOLD:
-        return "unknown", best.score, "LOW_CONFIDENCE_FALLBACK"
-    if second.score > 0 and (best.score - second.score) < AMBIGUITY_DELTA:
-        return "unknown", best.score, "AMBIGUOUS_INTENT_FALLBACK"
-    if best.intent_label == "general_chat":
-        return "general_chat", best.score, "GENERAL_CHAT_FALLBACK"
-    return best.intent_label, best.score, "INTENT_KEYWORD_MATCH"
+    if _has_accounting_risk(normalized, accounting):
+        if accounting.score >= KNOWN_INTENT_THRESHOLD:
+            return "accounting_classify", accounting.score, "INTENT_KEYWORD_MATCH"
+        return "unknown", accounting.score, ACCOUNTING_GUARD_REASON
+
+    if best.score >= KNOWN_INTENT_THRESHOLD:
+        if second.score > 0 and (best.score - second.score) < AMBIGUITY_DELTA:
+            return "unknown", best.score, "AMBIGUOUS_INTENT_FALLBACK"
+        if best.intent_label == "general_chat":
+            return "general_chat", best.score, "GENERAL_CHAT_FALLBACK"
+        return best.intent_label, best.score, "INTENT_KEYWORD_MATCH"
+
+    if best.strong_count > 0 and best.intent_label != "general_chat":
+        if _is_explanation_question(normalized) and not _is_execution_request(normalized):
+            return "general_chat", max(general.score, 0.35), EXPLANATION_GENERAL_CHAT_REASON
+        return "unknown", best.score, BUSINESS_GUARD_REASON
+
+    biz_signal = best.strong_count + best.weak_count
+    gen_signal = general.strong_count + general.weak_count
+    if _is_explanation_question(normalized) or gen_signal > 0 or biz_signal == 0:
+        return "general_chat", max(general.score, 0.35), LOW_CONFIDENCE_GENERAL_CHAT_REASON
+    return "unknown", best.score, "LOW_CONFIDENCE_FALLBACK"
 
 
 class RuleBasedBox1Router:

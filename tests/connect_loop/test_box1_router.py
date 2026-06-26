@@ -14,6 +14,23 @@ from butler_pc_core.connect_loop.box1_router import (
 from butler_pc_core.connect_loop.schema_validator import load_schema
 
 
+GENERAL_CHAT_CASES = [
+    "너를 소개해줘",
+    "무엇을 목표로 만들어졌나",
+    "자유대화 가능해?",
+]
+
+ACCOUNTING_SIGNAL_CASES = [
+    "거래내역 좀 봐줘",
+    "계정과목 알려줘",
+    "매출은 어떻게 봐?",
+    "지급임차료 1,200만원 회계처리 알려줘",
+    "감가상각비 계산해줘",
+    "세금계산서 부가세 처리",
+    "통장 입금 출금 확인해줘",
+]
+
+
 def _digest(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -80,6 +97,54 @@ def test_general_chat_has_no_endpoint_and_fallback():
     assert decision["fallback_required"] is True
 
 
+@pytest.mark.parametrize("text", GENERAL_CHAT_CASES)
+def test_general_chat_intro_question_routes_to_general_chat(text):
+    decision = _decide(text)
+    assert decision["intent_label"] == "general_chat"
+    assert decision["target_box_id"] == "chat"
+    assert decision["target_endpoint"] == "none"
+    assert decision["fallback_required"] is True
+    assert decision["reason_code"] in {
+        "GENERAL_CHAT_FALLBACK",
+        "LOW_CONFIDENCE_GENERAL_CHAT_FALLBACK",
+    }
+
+
+def test_low_confidence_without_business_or_accounting_signal_becomes_general_chat():
+    decision = _decide("검토")
+    assert decision["intent_label"] == "general_chat"
+    assert decision["target_endpoint"] == "none"
+    assert decision["fallback_required"] is True
+    assert decision["reason_code"] == "LOW_CONFIDENCE_GENERAL_CHAT_FALLBACK"
+
+
+def test_amount_alone_no_false_block():
+    decision = _decide("1만원짜리 영화 추천해줘")
+    assert decision["intent_label"] == "general_chat"
+    assert decision["target_box_id"] == "chat"
+    assert decision["target_endpoint"] == "none"
+    assert decision["fallback_required"] is True
+    assert decision["reason_code"] == "LOW_CONFIDENCE_GENERAL_CHAT_FALLBACK"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "문서 작성 방식이 궁금해. 설명해줘",
+        "보고서가 일반적으로 뭔지 설명해줘",
+    ],
+)
+def test_explanation_allows_general_chat(text):
+    decision = _decide(text)
+    assert decision["intent_label"] == "general_chat"
+    assert decision["target_endpoint"] == "none"
+    assert decision["fallback_required"] is True
+    assert decision["reason_code"] in {
+        "EXPLANATION_GENERAL_CHAT_FALLBACK",
+        "LOW_CONFIDENCE_GENERAL_CHAT_FALLBACK",
+    }
+
+
 def test_unknown_has_no_endpoint_and_fallback():
     decision = _decide(None)
     assert decision["intent_label"] == "unknown"
@@ -88,11 +153,31 @@ def test_unknown_has_no_endpoint_and_fallback():
     assert decision["fallback_required"] is True
 
 
-def test_low_confidence_becomes_unknown():
-    decision = _decide("검토")
+def test_strong_business_signal_below_threshold_stays_unknown():
+    decision = _decide("메일 써")
     assert decision["intent_label"] == "unknown"
     assert decision["target_endpoint"] == "none"
     assert decision["fallback_required"] is True
+    assert decision["reason_code"] == "BUSINESS_SIGNAL_REQUIRES_CARD"
+
+
+@pytest.mark.parametrize("text", ["문서 작성해줘", "양식 변환해줘"])
+def test_execution_still_card(text):
+    decision = _decide(text)
+    assert decision["intent_label"] == "unknown"
+    assert decision["target_endpoint"] == "none"
+    assert decision["fallback_required"] is True
+    assert decision["reason_code"] == "BUSINESS_SIGNAL_REQUIRES_CARD"
+
+
+@pytest.mark.parametrize("text", ACCOUNTING_SIGNAL_CASES)
+def test_accounting_signal_never_general_chat(text):
+    decision = _decide(text)
+    assert decision["intent_label"] != "general_chat"
+    assert decision["reason_code"] in {
+        "INTENT_KEYWORD_MATCH",
+        "ACCOUNTING_SIGNAL_REQUIRES_CARD",
+    }
 
 
 def test_ambiguous_input_becomes_unknown():
