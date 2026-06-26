@@ -16,6 +16,7 @@ except ImportError:
     _DEPS_OK = False
 
 _skip = pytest.mark.skipif(not _DEPS_OK, reason="fastapi/pandas/openpyxl 미설치")
+pytestmark = pytest.mark.active_policy
 
 
 def _make_app():

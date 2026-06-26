@@ -14,6 +14,7 @@ except ImportError:
     _DEPS_OK = False
 
 _skip = pytest.mark.skipif(not _DEPS_OK, reason="fastapi 미설치")
+pytestmark = pytest.mark.active_policy
 
 _CSV = "적요,거래처,금액\n급여 지급,,1000000\n통신비 납부,KT,88000\n".encode("utf-8")
 

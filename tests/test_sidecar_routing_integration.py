@@ -63,7 +63,7 @@ def test_sidecar_emits_route_check_event(client_sidecar):
     with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None):
         resp = client.post(
             "/api/analyze/stream",
-            data={"query": "안녕", "card_mode": "free", "total_chunks": "1", "output_dir": "/tmp"},
+            data={"query": "안녕", "card_mode": "3", "total_chunks": "1", "output_dir": "/tmp"},
         )
 
     events = _parse_events(resp.text)
@@ -93,7 +93,7 @@ def test_sidecar_team_hub_recommended_message(client_sidecar):
     with patch("butler_sidecar.decide_task_budget", return_value=stub_budget):
         resp = client.post(
             "/api/analyze/stream",
-            data={"query": "대용량 파일", "total_chunks": "1", "output_dir": "/tmp"},
+            data={"query": "대용량 파일", "card_mode": "3", "total_chunks": "1", "output_dir": "/tmp"},
         )
 
     events = _parse_events(resp.text)
@@ -124,7 +124,7 @@ def test_sidecar_refuse_with_team_hub_message(client_sidecar):
     with patch("butler_sidecar.decide_task_budget", return_value=stub_budget):
         resp = client.post(
             "/api/analyze/stream",
-            data={"query": "초대용량", "total_chunks": "1", "output_dir": "/tmp"},
+            data={"query": "초대용량", "card_mode": "3", "total_chunks": "1", "output_dir": "/tmp"},
         )
 
     events = _parse_events(resp.text)
@@ -141,7 +141,7 @@ def test_sidecar_factpack_bypasses_router(client_sidecar):
     with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None):
         resp = client.post(
             "/api/analyze/stream",
-            data={"query": "테스트 자유 질문", "total_chunks": "1", "output_dir": "/tmp"},
+            data={"query": "테스트 카드 질문", "card_mode": "3", "total_chunks": "1", "output_dir": "/tmp"},
         )
 
     events = _parse_events(resp.text)
@@ -177,7 +177,7 @@ def test_sidecar_pc_preview_with_partial_result(client_sidecar):
     with patch("butler_sidecar.decide_task_budget", return_value=stub_budget):
         resp = client.post(
             "/api/analyze/stream",
-            data={"query": "중간 파일 미리보기", "total_chunks": "1", "output_dir": "/tmp"},
+            data={"query": "중간 파일 미리보기", "card_mode": "3", "total_chunks": "1", "output_dir": "/tmp"},
         )
 
     events = _parse_events(resp.text)

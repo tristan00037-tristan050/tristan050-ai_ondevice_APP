@@ -14,6 +14,7 @@ except ImportError:
     _DEPS_OK = False
 
 _skip = pytest.mark.skipif(not _DEPS_OK, reason="fastapi/openpyxl 미설치")
+pytestmark = pytest.mark.active_policy
 
 _FIXTURE = Path(__file__).parent.parent / "fixtures" / "banks" / "nh_sample.xlsx"
 
