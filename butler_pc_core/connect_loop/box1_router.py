@@ -44,8 +44,9 @@ _ACCOUNTING_NOUN_TERMS = (
     "결산",
 )
 _ACCOUNTING_ACTION_TERMS = ("회계처리", "회계 처리", "분개", "처리", "분류", "계산", "정산")
-_EXPLANATION_TERMS = ("설명", "궁금", "뭐야", "무엇", "목표", "소개", "가능", "사용법")
-_EXECUTION_PATTERNS = ("작성해줘", "써줘", "만들어줘", "변환해줘", "분류해줘", "처리해줘")
+_EXPLANATION_TERMS = ("설명", "궁금", "뭐야", "무엇", "목표", "소개", "사용법")
+_CAPABILITY_QUESTION_PATTERNS = ("가능해", "가능한가", "가능합니까", "가능하나요", "가능할까", "할 수 있")
+_EXECUTION_PATTERNS = ("작성해줘", "써줘", "만들어줘", "변환해줘", "분류해줘", "처리해줘", "메일 써")
 
 ROUTE_TABLE: dict[str, tuple[str, str]] = {
     "memory_search": ("helper1", "POST /v1/helpers/1/search"),
@@ -169,7 +170,9 @@ def _has_accounting_risk(text: str, accounting_score: _IntentScore) -> bool:
 
 
 def _is_explanation_question(text: str) -> bool:
-    return any(term in text for term in _EXPLANATION_TERMS)
+    return any(term in text for term in _EXPLANATION_TERMS) or any(
+        pattern in text for pattern in _CAPABILITY_QUESTION_PATTERNS
+    )
 
 
 def _is_execution_request(text: str) -> bool:

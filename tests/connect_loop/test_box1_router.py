@@ -216,3 +216,13 @@ def test_misroute_fixture_fails_schema_validation():
     decision["target_endpoint"] = "POST /v1/helpers/1/search"
     with pytest.raises(ValidationError):
         Draft7Validator(load_schema("router_decision.schema.json")).validate(decision)
+
+
+def test_capability_question_vs_execution_with_possibility_prefix():
+    """'가능' prefix가 실행 요청 가드를 우회하지 못하게 한다 (Codex 리뷰 반영)."""
+    from butler_pc_core.connect_loop.box1_router import _classify
+    # 능력 질문은 general_chat 허용
+    assert _classify("자유대화 가능해?")[0] == "general_chat"
+    assert _classify("문서 작성 가능해?")[0] == "general_chat"
+    # '가능하면' + 실행 요청은 general_chat 금지
+    assert _classify("가능하면 메일 써")[0] != "general_chat"
