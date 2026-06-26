@@ -161,7 +161,7 @@ def test_strong_business_signal_below_threshold_stays_unknown():
     assert decision["reason_code"] == "BUSINESS_SIGNAL_REQUIRES_CARD"
 
 
-@pytest.mark.parametrize("text", ["문서 작성해줘", "양식 변환해줘"])
+@pytest.mark.parametrize("text", ["문서 작성해줘", "양식 변환해줘", "가능하면 메일 써"])
 def test_execution_still_card(text):
     decision = _decide(text)
     assert decision["intent_label"] == "unknown"

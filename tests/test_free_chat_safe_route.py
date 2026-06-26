@@ -321,7 +321,7 @@ def test_accounting_terms_do_not_reach_safe_chat(tmp_path, monkeypatch, query):
     assert not [event for event in events if event["event"] == "chunk"]
 
 
-@pytest.mark.parametrize("query", ["메일 써", "문서 작성해줘", "양식 변환해줘"])
+@pytest.mark.parametrize("query", ["메일 써", "문서 작성해줘", "양식 변환해줘", "가능하면 메일 써"])
 def test_strong_business_signal_does_not_reach_safe_chat(tmp_path, monkeypatch, query):
     client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM(["이 토큰은 호출되면 안 됩니다."]))
 
