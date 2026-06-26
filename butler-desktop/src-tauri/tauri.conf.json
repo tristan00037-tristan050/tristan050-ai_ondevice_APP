@@ -38,7 +38,8 @@
       "../../butler_pc_core": "butler_pc_core",
       "../../requirements-serving.txt": "requirements-serving.txt",
       "python-runtime": "python",
-      "models": "models"
+      "models": "models",
+      "../../schemas": "schemas"
     }
   }
 }
