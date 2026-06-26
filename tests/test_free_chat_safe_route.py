@@ -270,10 +270,62 @@ def test_general_chat_intro_queries_reach_safe_chat(tmp_path, monkeypatch, query
     assert complete["data"]["llm_invoked"] is True
 
 
-def test_strong_business_signal_does_not_reach_safe_chat(tmp_path, monkeypatch):
+def test_explanation_question_reaches_safe_chat(tmp_path, monkeypatch):
+    client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM(["설명 응답"]))
+
+    response = _free_request(client, "문서 작성 방식이 궁금해. 설명해줘")
+
+    events = _parse_events(response.text)
+    router_meta = next(
+        event for event in events if event["event"] == "meta" and event["data"].get("source") == "router"
+    )
+    complete = next(event for event in events if event["event"] == "complete")
+    assert router_meta["data"]["intent_label"] == "general_chat"
+    assert complete["data"]["source"] == "safe_chat"
+    assert complete["data"]["llm_invoked"] is True
+
+
+def test_amount_alone_reaches_safe_chat_without_accounting_false_positive(tmp_path, monkeypatch):
+    client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM(["추천 응답"]))
+
+    response = _free_request(client, "1만원짜리 영화 추천해줘")
+
+    events = _parse_events(response.text)
+    router_meta = next(
+        event for event in events if event["event"] == "meta" and event["data"].get("source") == "router"
+    )
+    complete = next(event for event in events if event["event"] == "complete")
+    assert router_meta["data"]["intent_label"] == "general_chat"
+    assert complete["data"]["source"] == "safe_chat"
+    assert complete["data"]["llm_invoked"] is True
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "지급임차료 1,200만원 회계처리 알려줘",
+        "감가상각비 계산해줘",
+        "세금계산서 부가세 처리",
+    ],
+)
+def test_accounting_terms_do_not_reach_safe_chat(tmp_path, monkeypatch, query):
     client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM(["이 토큰은 호출되면 안 됩니다."]))
 
-    response = _free_request(client, "메일 써")
+    response = _free_request(client, query)
+
+    events = _parse_events(response.text)
+    complete = next(event for event in events if event["event"] == "complete")
+    assert complete["data"]["source"] == "router"
+    assert complete["data"]["intent_label"] != "general_chat"
+    assert complete["data"]["llm_invoked"] is False
+    assert not [event for event in events if event["event"] == "chunk"]
+
+
+@pytest.mark.parametrize("query", ["메일 써", "문서 작성해줘", "양식 변환해줘"])
+def test_strong_business_signal_does_not_reach_safe_chat(tmp_path, monkeypatch, query):
+    client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM(["이 토큰은 호출되면 안 됩니다."]))
+
+    response = _free_request(client, query)
 
     events = _parse_events(response.text)
     complete = next(event for event in events if event["event"] == "complete")
