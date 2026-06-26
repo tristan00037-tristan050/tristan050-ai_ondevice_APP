@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 import json
 from typing import Any
@@ -35,6 +36,14 @@ class FakeLLM:
             if cancel_event.is_set():
                 return
             yield token
+
+
+class RaisingLLM(FakeLLM):
+    def generate_stream_with_cancel(self, prompt, cancel_event, max_tokens=512, temperature=0.2, stop=None):
+        self.calls += 1
+        self.prompts.append(prompt)
+        raise RuntimeError("/Users/private/model-crash.log")
+        yield  # pragma: no cover - keeps this method a generator
 
 
 def _parse_events(raw: str) -> list[dict[str, Any]]:
@@ -145,6 +154,44 @@ def test_policy_load_failure_blocks_sse_safe_error(tmp_path, monkeypatch):
     assert "application/json" not in response.headers["content-type"]
 
 
+def test_json_file_path_is_rejected_before_local_read(tmp_path, monkeypatch):
+    client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True)
+
+    response = client.post(
+        "/api/analyze/stream",
+        json={
+            "query": "첨부를 검토해줘",
+            "file_path": "/etc/passwd",
+            "card_mode": "3",
+            "total_chunks": 1,
+            "output_dir": "/tmp",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "file_path/file_paths" in response.text
+    assert "/etc/passwd" not in response.text
+
+
+def test_json_file_paths_are_rejected_before_local_read(tmp_path, monkeypatch):
+    client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True)
+
+    response = client.post(
+        "/api/analyze/stream",
+        json={
+            "query": "첨부를 검토해줘",
+            "file_paths": ["/etc/passwd"],
+            "card_mode": "3",
+            "total_chunks": 1,
+            "output_dir": "/tmp",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "file_path/file_paths" in response.text
+    assert "/etc/passwd" not in response.text
+
+
 def test_analyze_stream_calls_box1_before_task_budget_for_free(tmp_path, monkeypatch):
     client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM(["좋습니다."]))
     order: list[str] = []
@@ -178,6 +225,39 @@ def test_analyze_stream_calls_box1_before_task_budget_for_free(tmp_path, monkeyp
         "task_budget",
         "safe_chat",
     ]
+
+
+def test_free_chat_timeout_emits_cancelled_sse(tmp_path, monkeypatch):
+    client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM(["늦은 응답"]))
+
+    async def _timeout(*args, **kwargs):
+        raise asyncio.TimeoutError()
+
+    with patch(
+        "butler_pc_core.sidecar.analyze_orchestrator.SafeGeneralChatController.run_buffered",
+        side_effect=_timeout,
+    ):
+        response = _free_request(client)
+
+    events = _parse_events(response.text)
+    assert response.status_code == 200
+    assert events[-1]["event"] == "cancelled"
+    assert events[-1]["data"]["reason"] == "safe_chat_timeout"
+    assert events[-1]["data"]["llm_invoked"] is True
+    assert not [event for event in events if event["event"] == "chunk"]
+
+
+def test_free_chat_generation_exception_emits_error_sse_without_raw_path(tmp_path, monkeypatch):
+    client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=RaisingLLM())
+
+    response = _free_request(client)
+
+    events = _parse_events(response.text)
+    assert response.status_code == 200
+    assert events[-1]["event"] == "error"
+    assert events[-1]["data"]["fail_class"] == "SAFE_CHAT_GENERATION_FAILED"
+    assert events[-1]["data"]["error_class"] == "RuntimeError"
+    assert "/Users/private" not in response.text
 
 
 def test_card_mode_does_not_get_reclassified_by_box1(tmp_path, monkeypatch):

@@ -7,6 +7,7 @@ and calls task budgeting only after a safe route has been selected.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import uuid
 from collections.abc import AsyncGenerator, Awaitable, Callable
@@ -212,18 +213,56 @@ class AnalyzeStreamOrchestrator:
             )
             return
 
-        llm = await llm_factory()
+        try:
+            llm = await llm_factory()
+        except Exception as exc:  # noqa: BLE001
+            yield sse(
+                "error",
+                {
+                    "fail_class": "SAFE_CHAT_LLM_UNAVAILABLE",
+                    "message": "일반 대화 모델을 준비하지 못했습니다.",
+                    "error_class": type(exc).__name__,
+                    "llm_invoked": False,
+                },
+            )
+            return
+
         prompt = build_safe_general_chat_prompt(params.query)
 
         def _tokens(cancel_event):
             return llm.generate_stream_with_cancel(prompt, cancel_event, max_tokens=1024)
 
         yield sse("meta", {"source": "safe_chat", "llm_invoked": True})
-        result = await self.safe_chat.run_buffered(
-            _tokens,
-            timeout_sec=float(budget.max_wall_time_sec),
-            context=GuardContext(route="general_chat", profile="free_general_chat"),
-        )
+        try:
+            result = await self.safe_chat.run_buffered(
+                _tokens,
+                timeout_sec=float(budget.max_wall_time_sec),
+                context=GuardContext(route="general_chat", profile="free_general_chat"),
+            )
+        except asyncio.TimeoutError:
+            yield sse(
+                "cancelled",
+                {
+                    "reason": "safe_chat_timeout",
+                    "partial_path": "",
+                    "partial_result_path": "",
+                    "completed_chunks": 0,
+                    "message": "일반 대화 생성 시간이 초과되었습니다.",
+                    "llm_invoked": True,
+                },
+            )
+            return
+        except Exception as exc:  # noqa: BLE001
+            yield sse(
+                "error",
+                {
+                    "fail_class": "SAFE_CHAT_GENERATION_FAILED",
+                    "message": "일반 대화 생성에 실패했습니다.",
+                    "error_class": type(exc).__name__,
+                    "llm_invoked": True,
+                },
+            )
+            return
         if result.text is None:
             yield sse(
                 "error",

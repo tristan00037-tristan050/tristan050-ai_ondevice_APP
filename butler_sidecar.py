@@ -924,15 +924,18 @@ if _FASTAPI_AVAILABLE:
             body = await request.json()
             if not isinstance(body, dict):
                 body = {}
-            query = str(body.get("query") or body.get("file_path") or "")
+            if "file_path" in body or "file_paths" in body:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "JSON file_path/file_paths are not accepted; "
+                        "upload attachments as multipart/form-data."
+                    ),
+                )
+            query = str(body.get("query") or "")
             card_mode = str(body.get("card_mode") or "free")
             total_chunks = max(1, int(body.get("total_chunks") or 1))
             output_dir = str(body.get("output_dir") or ".")
-            raw_file_paths = body.get("file_paths")
-            if isinstance(raw_file_paths, list):
-                file_paths.extend(str(path) for path in raw_file_paths if path)
-            elif body.get("file_path"):
-                file_paths.append(str(body["file_path"]))
         else:
             form = await request.form()
             query = str(form.get("query") or "")

@@ -47,7 +47,7 @@ def _parse_events(raw: str) -> list[dict[str, Any]]:
     return events
 
 
-_STREAM_PAYLOAD = {"file_path": "/tmp/test.txt", "card_mode": "3", "total_chunks": 3, "output_dir": "/tmp"}
+_STREAM_PAYLOAD = {"query": "테스트 입력", "card_mode": "3", "total_chunks": 3, "output_dir": "/tmp"}
 _PARTIAL_PATH = Path("/tmp/p.json")
 
 
@@ -86,7 +86,7 @@ def test_happy_normal_completion(client_and_deps):
 def test_happy_chunk_progress_order(client_and_deps):
     """chunk_progress 이벤트의 current 값이 1부터 total까지 순서대로 증가한다."""
     client, *_ = client_and_deps
-    _form = {"file_path": "/tmp/test.txt", "card_mode": "3", "total_chunks": "3", "output_dir": "/tmp"}
+    _form = {"query": "테스트 입력", "card_mode": "3", "total_chunks": "3", "output_dir": "/tmp"}
     with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None):
         resp = client.post("/api/analyze/stream", data=_form)
 
@@ -102,7 +102,7 @@ def test_boundary_chunk_events_present_during_streaming(client_and_deps):
     with patch("butler_sidecar.TimeoutController.check_hard_timeout", return_value=None):
         resp = client.post(
             "/api/analyze/stream",
-            json={"file_path": "/tmp/f.txt", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
+            json={"query": "테스트 입력", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
         )
 
     events = _parse_events(resp.text)
@@ -221,7 +221,7 @@ def test_adv_chunk_timeout_actually_cancels_slow_chunk(client_and_deps):
          patch.object(_LR, "generate_stream_with_cancel", _slow_streaming_gen):
         resp = client.post(
             "/api/analyze/stream",
-            json={"file_path": "/tmp/f.txt", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
+            json={"query": "테스트 입력", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
         )
     elapsed = time.time() - start
 
@@ -297,7 +297,7 @@ def test_adv_think_block_tokens_not_in_chunk_events(client_and_deps):
          patch.object(_LR, "generate_stream_with_cancel", _think_streaming_gen):
         resp = client.post(
             "/api/analyze/stream",
-            json={"file_path": "/tmp/f.txt", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
+            json={"query": "테스트 입력", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
         )
 
     assert resp.status_code == 200
@@ -336,7 +336,7 @@ def test_adv_chunk_flush_each_token_separate_event(client_and_deps):
          patch.object(_LR, "generate_stream_with_cancel", _multi_token_gen):
         resp = client.post(
             "/api/analyze/stream",
-            json={"file_path": "/tmp/f.txt", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
+            json={"query": "테스트 입력", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
         )
 
     events = _parse_events(resp.text)
@@ -370,7 +370,7 @@ def test_adv_think_post_tag_text_emitted(client_and_deps):
          patch.object(_LR, "generate_stream_with_cancel", _gen):
         resp = client.post(
             "/api/analyze/stream",
-            json={"file_path": "/tmp/f.txt", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
+            json={"query": "테스트 입력", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
         )
 
     events = _parse_events(resp.text)
@@ -407,7 +407,7 @@ def test_adv_think_pre_tag_text_emitted(client_and_deps):
          patch.object(_LR, "generate_stream_with_cancel", _gen):
         resp = client.post(
             "/api/analyze/stream",
-            json={"file_path": "/tmp/f.txt", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
+            json={"query": "테스트 입력", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
         )
 
     events = _parse_events(resp.text)
@@ -440,7 +440,7 @@ def test_adv_think_single_token_with_full_block(client_and_deps):
          patch.object(_LR, "generate_stream_with_cancel", _gen):
         resp = client.post(
             "/api/analyze/stream",
-            json={"file_path": "/tmp/f.txt", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
+            json={"query": "테스트 입력", "card_mode": "3", "total_chunks": 1, "output_dir": "/tmp"},
         )
 
     events = _parse_events(resp.text)
