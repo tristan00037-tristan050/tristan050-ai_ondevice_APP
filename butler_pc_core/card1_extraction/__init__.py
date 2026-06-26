@@ -11,6 +11,7 @@ from .contracts import (
     IntentType,
     SentenceType,
 )
+from .deadline_relative import extract_deadlines
 from .llm_extractor import extract_with_llm
 from .parser import (
     ACTION_VERBS,
@@ -19,7 +20,6 @@ from .parser import (
     _ACTION_VERB_RE,
     classify_sentence_type,
     extract_actions_candidates,
-    extract_deadlines,
     extract_materials,
 )
 from .verifier import verify_card1_extraction
