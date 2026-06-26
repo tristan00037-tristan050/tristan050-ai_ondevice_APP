@@ -10,6 +10,7 @@ except ImportError:
     _DEPS_OK = False
 
 _skip = pytest.mark.skipif(not _DEPS_OK, reason="fastapi 미설치")
+pytestmark = pytest.mark.active_policy
 
 # 입출금 분리 컬럼 CSV → _amt = 입금 - 출금 → total_amount가 실제 양수/음수로 계산됨
 _CSV_MIXED = (

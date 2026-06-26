@@ -68,6 +68,14 @@ from butler_pc_core.auth.capability_token import (
     CapabilityTokenError,
     CapabilityTokenManager,
 )
+from butler_pc_core.sidecar.analyze_orchestrator import (
+    AnalyzeStreamOrchestrator,
+    AnalyzeStreamRequest,
+)
+from butler_pc_core.sidecar.analyze_policy_preflight import (
+    is_free_chat_mode,
+    is_known_card_mode,
+)
 from datetime import datetime, timezone as _tz
 
 # ---------------------------------------------------------------------------
@@ -510,6 +518,44 @@ if _FASTAPI_AVAILABLE:
         task_id: str,
     ) -> AsyncGenerator[str, None]:
         """진행률 SSE 제너레이터."""
+        if is_free_chat_mode(params.card_mode):
+            orchestrator = AnalyzeStreamOrchestrator(task_budget_func=decide_task_budget)
+
+            async def _llm_factory():
+                return await _ensure_shared_llm()
+
+            async for event in orchestrator.stream_free_chat(
+                AnalyzeStreamRequest(
+                    query=params.query,
+                    card_mode=params.card_mode,
+                    total_chunks=params.total_chunks,
+                    output_dir=params.output_dir,
+                    file_paths=list(params.file_paths),
+                ),
+                task_id=task_id,
+                sse=_sse,
+                hub_paired=_is_hub_paired,
+                llm_factory=_llm_factory,
+            ):
+                yield event
+            return
+
+        if not is_known_card_mode(params.card_mode):
+            yield _sse("meta", {
+                "source": "policy_gate",
+                "route": "blocked",
+                "target_endpoint": "none",
+                "llm_invoked": False,
+                "external_send_zero": True,
+                "raw_text_logged": False,
+            })
+            yield _sse("error", {
+                "fail_class": "UNKNOWN_CARD_MODE",
+                "message": "알 수 없는 카드 모드입니다.",
+                "llm_invoked": False,
+            })
+            return
+
         # ── (0) Task Budget Router — 자료 크기 기반 라우팅 ──
         total_file_bytes = sum(
             Path(fp).stat().st_size for fp in params.file_paths if Path(fp).is_file()
@@ -872,24 +918,38 @@ if _FASTAPI_AVAILABLE:
                 reduce_start / verify_start / complete /
                 error / cancelled / heartbeat
         """
-        form = await request.form()
-
-        query = str(form.get("query") or "")
-        card_mode = str(form.get("card_mode") or "free")
-        total_chunks = max(1, int(form.get("total_chunks") or 1))
-        output_dir = str(form.get("output_dir") or ".")
-        file_count = max(0, int(form.get("file_count") or 0))
-
+        content_type = request.headers.get("content-type", "")
         file_paths: list[str] = []
-        for i in range(file_count):
-            upload = form.get(f"file_{i}")
-            if upload is not None and hasattr(upload, "read"):
-                fname = getattr(upload, "filename", "") or ""
-                suffix = Path(fname).suffix if fname else ""
-                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                    content = await upload.read()
-                    tmp.write(content)
-                    file_paths.append(tmp.name)
+        if content_type.startswith("application/json"):
+            body = await request.json()
+            if not isinstance(body, dict):
+                body = {}
+            query = str(body.get("query") or body.get("file_path") or "")
+            card_mode = str(body.get("card_mode") or "free")
+            total_chunks = max(1, int(body.get("total_chunks") or 1))
+            output_dir = str(body.get("output_dir") or ".")
+            raw_file_paths = body.get("file_paths")
+            if isinstance(raw_file_paths, list):
+                file_paths.extend(str(path) for path in raw_file_paths if path)
+            elif body.get("file_path"):
+                file_paths.append(str(body["file_path"]))
+        else:
+            form = await request.form()
+            query = str(form.get("query") or "")
+            card_mode = str(form.get("card_mode") or "free")
+            total_chunks = max(1, int(form.get("total_chunks") or 1))
+            output_dir = str(form.get("output_dir") or ".")
+            file_count = max(0, int(form.get("file_count") or 0))
+
+            for i in range(file_count):
+                upload = form.get(f"file_{i}")
+                if upload is not None and hasattr(upload, "read"):
+                    fname = getattr(upload, "filename", "") or ""
+                    suffix = Path(fname).suffix if fname else ""
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                        content = await upload.read()
+                        tmp.write(content)
+                        file_paths.append(tmp.name)
 
         params = _AnalyzeParams(
             query=query,
