@@ -14,6 +14,22 @@ from butler_pc_core.connect_loop.box1_router import (
 from butler_pc_core.connect_loop.schema_validator import load_schema
 
 
+GENERAL_CHAT_CASES = [
+    "너를 소개해줘",
+    "무엇을 목표로 만들어졌나",
+    "자유대화 가능해?",
+]
+
+ACCOUNTING_SIGNAL_CASES = [
+    "거래내역 좀 봐줘",
+    "계정과목 알려줘",
+    "매출은 어떻게 봐?",
+    "비용 알려줘",
+    "입금 확인해줘",
+    "출금 내역이 궁금해",
+]
+
+
 def _digest(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -80,6 +96,24 @@ def test_general_chat_has_no_endpoint_and_fallback():
     assert decision["fallback_required"] is True
 
 
+@pytest.mark.parametrize("text", GENERAL_CHAT_CASES)
+def test_general_chat_intro_question_routes_to_general_chat(text):
+    decision = _decide(text)
+    assert decision["intent_label"] == "general_chat"
+    assert decision["target_box_id"] == "chat"
+    assert decision["target_endpoint"] == "none"
+    assert decision["fallback_required"] is True
+    assert decision["reason_code"] == "GENERAL_CHAT_SAFE_DEFAULT"
+
+
+def test_low_confidence_without_business_or_accounting_signal_becomes_general_chat():
+    decision = _decide("검토")
+    assert decision["intent_label"] == "general_chat"
+    assert decision["target_endpoint"] == "none"
+    assert decision["fallback_required"] is True
+    assert decision["reason_code"] == "GENERAL_CHAT_SAFE_DEFAULT"
+
+
 def test_unknown_has_no_endpoint_and_fallback():
     decision = _decide(None)
     assert decision["intent_label"] == "unknown"
@@ -88,11 +122,21 @@ def test_unknown_has_no_endpoint_and_fallback():
     assert decision["fallback_required"] is True
 
 
-def test_low_confidence_becomes_unknown():
-    decision = _decide("검토")
+def test_strong_business_signal_below_threshold_stays_unknown():
+    decision = _decide("메일 써")
     assert decision["intent_label"] == "unknown"
     assert decision["target_endpoint"] == "none"
     assert decision["fallback_required"] is True
+    assert decision["reason_code"] == "BUSINESS_SIGNAL_REQUIRES_CARD"
+
+
+@pytest.mark.parametrize("text", ACCOUNTING_SIGNAL_CASES)
+def test_accounting_signal_never_general_chat(text):
+    decision = _decide(text)
+    assert decision["intent_label"] != "general_chat"
+    assert decision["target_endpoint"] == "none"
+    assert decision["fallback_required"] is True
+    assert decision["reason_code"] == "ACCOUNTING_SIGNAL_REQUIRES_CARD"
 
 
 def test_ambiguous_input_becomes_unknown():

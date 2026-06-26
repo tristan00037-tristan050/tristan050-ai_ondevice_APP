@@ -21,6 +21,11 @@ from .schema_validator import validate_chat_request, validate_router_decision
 
 KNOWN_INTENT_THRESHOLD = 0.62
 AMBIGUITY_DELTA = 0.12
+BUSINESS_INTENTS = {"memory_search", "form_convert", "draft_write", "accounting_classify"}
+HIGH_RISK_INTENTS = {"accounting_classify"}
+LOW_CONFIDENCE_GENERAL_CHAT_REASON = "GENERAL_CHAT_SAFE_DEFAULT"
+ACCOUNTING_GUARD_REASON = "ACCOUNTING_SIGNAL_REQUIRES_CARD"
+BUSINESS_GUARD_REASON = "BUSINESS_SIGNAL_REQUIRES_CARD"
 
 ROUTE_TABLE: dict[str, tuple[str, str]] = {
     "memory_search": ("helper1", "POST /v1/helpers/1/search"),
@@ -51,8 +56,21 @@ _SIGNALS: dict[str, dict[str, tuple[str, ...]]] = {
         "weak": ("비용", "수입", "통장", "입금", "출금"),
     },
     "general_chat": {
-        "strong": ("안녕하세요", "무엇을 할 수", "기능 설명", "도움말", "사용법"),
-        "weak": ("고마워", "감사", "질문", "설명해"),
+        "strong": (
+            "안녕하세요",
+            "무엇을 할 수",
+            "기능 설명",
+            "도움말",
+            "사용법",
+            "소개",
+            "너를 소개",
+            "자기소개",
+            "무엇을 목표",
+            "목표로 만들어",
+            "자유대화",
+            "대화 가능",
+        ),
+        "weak": ("고마워", "감사", "질문", "설명해", "말해줘", "알려줘", "궁금", "대화"),
     },
 }
 
@@ -94,6 +112,10 @@ def _score_intents(text: str) -> list[_IntentScore]:
     return sorted(scores, key=lambda item: item.score, reverse=True)
 
 
+def _has_signal(score: _IntentScore) -> bool:
+    return score.strong_count > 0 or score.weak_count > 0
+
+
 def canonical_sha256(text: str) -> str:
     """chat_request.text_digest 와 동일 규칙으로 원문 digest 를 만든다.
 
@@ -121,16 +143,45 @@ def _classify(runtime_text: str | None) -> tuple[str, float, str]:
         return "unknown", 0.0, "RUNTIME_TEXT_MISSING"
 
     scores = _score_intents(runtime_text)
-    best = scores[0]
-    second = scores[1] if len(scores) > 1 else _IntentScore("unknown", 0.0, 0, 0)
+    by_intent = {score.intent_label: score for score in scores}
+    empty = _IntentScore("unknown", 0.0, 0, 0)
 
-    if best.score < KNOWN_INTENT_THRESHOLD:
-        return "unknown", best.score, "LOW_CONFIDENCE_FALLBACK"
-    if second.score > 0 and (best.score - second.score) < AMBIGUITY_DELTA:
-        return "unknown", best.score, "AMBIGUOUS_INTENT_FALLBACK"
-    if best.intent_label == "general_chat":
-        return "general_chat", best.score, "GENERAL_CHAT_FALLBACK"
-    return best.intent_label, best.score, "INTENT_KEYWORD_MATCH"
+    # 회계는 weak 신호 하나라도 일반대화로 보내지 않는다. 임계 이상이면 Box5,
+    # 미달이면 카드 안내로 남겨 금액/계정 환각을 막는다.
+    accounting = by_intent.get("accounting_classify", empty)
+    if accounting.intent_label in HIGH_RISK_INTENTS and _has_signal(accounting):
+        if accounting.score >= KNOWN_INTENT_THRESHOLD:
+            second = max(
+                (
+                    score
+                    for score in scores
+                    if score.intent_label in BUSINESS_INTENTS and score.intent_label != "accounting_classify"
+                ),
+                key=lambda item: item.score,
+                default=empty,
+            )
+            if second.score > 0 and (accounting.score - second.score) < AMBIGUITY_DELTA:
+                return "unknown", accounting.score, "AMBIGUOUS_INTENT_FALLBACK"
+            return "accounting_classify", accounting.score, "INTENT_KEYWORD_MATCH"
+        return "unknown", accounting.score, ACCOUNTING_GUARD_REASON
+
+    business_scores = sorted(
+        [score for score in scores if score.intent_label in BUSINESS_INTENTS],
+        key=lambda item: item.score,
+        reverse=True,
+    )
+    best = business_scores[0]
+    second = business_scores[1] if len(business_scores) > 1 else empty
+
+    if best.score >= KNOWN_INTENT_THRESHOLD:
+        if second.score > 0 and (best.score - second.score) < AMBIGUITY_DELTA:
+            return "unknown", best.score, "AMBIGUOUS_INTENT_FALLBACK"
+        return best.intent_label, best.score, "INTENT_KEYWORD_MATCH"
+    if best.strong_count > 0:
+        return "unknown", best.score, BUSINESS_GUARD_REASON
+
+    general = by_intent.get("general_chat", _IntentScore("general_chat", 0.0, 0, 0))
+    return "general_chat", max(general.score, 0.35), LOW_CONFIDENCE_GENERAL_CHAT_REASON
 
 
 class RuleBasedBox1Router:
