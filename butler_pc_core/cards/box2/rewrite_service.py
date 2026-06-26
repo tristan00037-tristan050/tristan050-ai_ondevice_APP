@@ -26,6 +26,8 @@ EVAL_CANDIDATE_PATHS = [
     Path("/Volumes/T7 Shield/학습모델 폴더/알고리즘개발팀/box2b_v5_outputs/rewrite/eval"),
 ]
 
+CHECK_REQUIRED = "[확인 필요]"
+
 
 @dataclass(frozen=True)
 class RewriteOptions:
@@ -45,21 +47,143 @@ class RewriteResult:
     model_chain_status: dict
 
 
+@dataclass(frozen=True)
+class SourceValueExtraction:
+    vendor: str = CHECK_REQUIRED
+    item: str = CHECK_REQUIRED
+    quantity: str = CHECK_REQUIRED
+    unit_price: str = CHECK_REQUIRED
+    amount: str = CHECK_REQUIRED
+    schedule: str = CHECK_REQUIRED
+
+
 def digest_inputs(foreign_doc: str, our_format: str) -> str:
     payload = f"foreign={hashlib.sha256(foreign_doc.encode('utf-8')).hexdigest()}|format={hashlib.sha256(our_format.encode('utf-8')).hexdigest()}"
     return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def _normalize_space(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def _clean_value(value: str) -> str:
+    value = _normalize_space(value)
+    value = value.strip(" :-–—|\t")
+    return value[:500] if value else CHECK_REQUIRED
+
+
 def _extract_first_number(text: str) -> str:
     match = re.search(r"[0-9][0-9,]*(?:원|만원|억원)?", text)
-    return match.group(0) if match else "[확인 필요]"
+    return match.group(0) if match else CHECK_REQUIRED
 
 
 def _line_or_check(text: str, keyword: str) -> str:
     for line in text.splitlines():
         if keyword in line and line.strip():
             return line.strip()[:500]
-    return "[확인 필요]"
+    return CHECK_REQUIRED
+
+
+def _extract_labeled_value(text: str, labels: tuple[str, ...]) -> str:
+    label_alt = "|".join(re.escape(label) for label in labels)
+    pattern = re.compile(
+        rf"(?:^|[\n;])\s*(?:{label_alt})\s*(?:[:：=\-]|\s+)\s*([^\n;]+)",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(text):
+        value = _clean_value(match.group(1))
+        if value != CHECK_REQUIRED:
+            return value
+    return CHECK_REQUIRED
+
+
+def _extract_amount(text: str) -> str:
+    amount_labels = ("합계", "총액", "총 금액", "청구금액", "금액", "공급가액", "견적금액")
+    labeled = _extract_labeled_value(text, amount_labels)
+    if labeled != CHECK_REQUIRED:
+        money = _extract_money_value(labeled)
+        return money if money != CHECK_REQUIRED else labeled
+
+    # Prefer currency-looking values over arbitrary numbers so quantity/date do not become amount.
+    money_values = re.findall(
+        r"(?:₩\s*)?\d{1,3}(?:,\d{3})+(?:\s*원)?|\d+(?:\.\d+)?\s*(?:원|만원|억원)",
+        text,
+    )
+    if money_values:
+        return _clean_value(money_values[-1])
+    return CHECK_REQUIRED
+
+
+def _extract_money_value(text: str) -> str:
+    match = re.search(
+        r"(?:₩\s*)?\d{1,3}(?:,\d{3})+(?:\s*원)?|\d+(?:\.\d+)?\s*(?:원|만원|억원)",
+        text,
+    )
+    return _clean_value(match.group(0)) if match else CHECK_REQUIRED
+
+
+def _extract_schedule(text: str) -> str:
+    labeled = _extract_labeled_value(text, ("납품 일정", "납기", "일정", "마감", "기한", "납품일"))
+    if labeled != CHECK_REQUIRED:
+        return labeled
+    date_match = re.search(
+        r"\d{4}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2}\s*(?:일)?|\d{1,2}\s*월\s*\d{1,2}\s*일",
+        text,
+    )
+    return _clean_value(date_match.group(0)) if date_match else CHECK_REQUIRED
+
+
+def _extract_structured_values(foreign_doc: str) -> SourceValueExtraction:
+    vendor = _extract_labeled_value(
+        foreign_doc,
+        ("거래처", "공급자", "공급처", "업체명", "회사명", "상호", "수신", "발신", "vendor"),
+    )
+    item = _extract_labeled_value(
+        foreign_doc,
+        ("품목", "제품", "항목", "서비스", "내용", "상품명", "item"),
+    )
+    quantity = _extract_labeled_value(
+        foreign_doc,
+        ("수량", "qty", "quantity"),
+    )
+    unit_price = _extract_labeled_value(
+        foreign_doc,
+        ("단가", "unit price", "unit_price"),
+    )
+    unit_money = _extract_money_value(unit_price)
+    if unit_money != CHECK_REQUIRED:
+        unit_price = unit_money
+
+    return SourceValueExtraction(
+        vendor=vendor,
+        item=item,
+        quantity=quantity,
+        unit_price=unit_price,
+        amount=_extract_amount(foreign_doc),
+        schedule=_extract_schedule(foreign_doc),
+    )
+
+
+def _format_key_values(values: SourceValueExtraction) -> str:
+    return (
+        f"거래처={values.vendor}; 품목={values.item}; 수량={values.quantity}; "
+        f"단가={values.unit_price}; 금액={values.amount}; 일정={values.schedule}"
+    )
+
+
+def _missing_fields(values: SourceValueExtraction) -> list[str]:
+    missing = []
+    for field_name, label in [
+        ("vendor", "거래처"),
+        ("item", "품목"),
+        ("quantity", "수량"),
+        ("unit_price", "단가"),
+        ("amount", "금액"),
+        ("schedule", "일정"),
+    ]:
+        if getattr(values, field_name) == CHECK_REQUIRED:
+            missing.append(label)
+    return missing
 
 
 def rewrite_to_company_format(foreign_doc: str, our_format: str, options: RewriteOptions | None = None, status: ModelChainStatus | None = None) -> RewriteResult:
@@ -70,17 +194,19 @@ def rewrite_to_company_format(foreign_doc: str, our_format: str, options: Rewrit
     title = _line_or_check(foreign_doc, "제목")
     issue_date = _line_or_check(foreign_doc, "발행")
     owner = _line_or_check(foreign_doc, "담당")
-    amount = _extract_first_number(foreign_doc)
     agreement = _line_or_check(foreign_doc, "합의")
+    values = _extract_structured_values(foreign_doc)
+    missing = _missing_fields(values)
+    missing_text = ", ".join(missing) if missing else "없음"
 
     rewritten = "\n".join([
         f"제목: {title}",
         f"발행일: {issue_date}",
         f"담당자: {owner}",
-        "핵심 내용: 외부 문서의 의미를 유지하되 우리 양식 문체에 맞춰 재작성했습니다.",
+        f"핵심 내용: 원문 확인값을 보존하여 전사했습니다. {_format_key_values(values)}",
         f"합의사항: {agreement}",
-        f"금액/일정: {amount}",
-        "확인 필요: 원문에 명확히 없는 항목은 [확인 필요]로 남겼습니다.",
+        f"금액/일정: 금액 {values.amount} / 일정 {values.schedule}",
+        f"확인 필요: 원문에 명확히 없는 항목은 [확인 필요]로 남겼습니다. 누락={missing_text}",
         "최종 문안: 존재하지 않는 금액, 날짜, 담당자, 계약 조건은 새로 만들지 않습니다.",
     ])
 
@@ -89,6 +215,8 @@ def rewrite_to_company_format(foreign_doc: str, our_format: str, options: Rewrit
         confidence -= 0.05
     if not opts.redact_sensitive:
         confidence -= 0.05
+    if missing:
+        confidence -= min(0.18, len(missing) * 0.03)
 
     return RewriteResult(
         rewritten_doc=rewritten,
