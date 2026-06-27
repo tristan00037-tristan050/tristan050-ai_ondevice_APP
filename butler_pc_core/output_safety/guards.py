@@ -66,6 +66,9 @@ _PRIVACY_REVERSAL_PATTERNS = (
     re.compile(r"기기\s*밖(?:으로)?\s*보냅니다"),
     re.compile(r"외부\s*(?:서버|클라우드)(?:로|에)\s*(?:전송|보냅니다|업로드)"),
     re.compile(r"회사\s*데이터를\s*외부(?:로|에)\s*(?:전송|보냅니다|업로드)"),
+    re.compile(r"기기\s*밖(?:으로)?\s*(?:보낼\s*수|전송할\s*수|보낼|전송|업로드)", re.IGNORECASE),
+    re.compile(r"(?:외부|밖)(?:로|으로|에)\s*(?:보낼\s*수|전송할\s*수|업로드할\s*수)", re.IGNORECASE),
+    re.compile(r"데이터를\s*(?:외부|밖)(?:로|으로|에).{0,16}(?:보낼|전송|업로드|가능)", re.IGNORECASE),
 )
 
 _ACCOUNTING_OUTPUT_PATTERNS = (
@@ -79,12 +82,23 @@ _UNSUPPORTED_DATE_PATTERNS = (
     re.compile(r"\d{4}-\d{1,2}-\d{1,2}"),
 )
 
+_UNSUPPORTED_NUMBER_PATTERNS = (
+    re.compile(r"\d[\d,]*(?:\s?(?:만|억|조))?\s*(?:달러|USD|\$)", re.IGNORECASE),
+    re.compile(r"\d[\d,]*\s*(?:개|톤|kg|건)\s*/\s*(?:일|월|년)", re.IGNORECASE),
+    re.compile(r"\d[\d,]*(?:\s?(?:만|억|조))?\s*(?:달러|원|만원|억원)\s*/\s*(?:일|월|년)", re.IGNORECASE),
+    re.compile(r"(?:재고량|수출액|생산량|매출액|수입액)\s*[:：]?\s*\d"),
+)
+
+_SELF_JUDGMENT_PATTERNS = (re.compile(r"사실값|임의값|otherwise", re.IGNORECASE),)
+
 _SECRET_ECHO_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY"),
     re.compile(r"/Users/[^\s]+"),
     re.compile(r"[A-Za-z]:\\[^\s]+"),
 )
+
+_ALLOWED_LATIN_TERMS = {"butler", "ai", "os", "llm", "qwen", "qwen3"}
 
 
 class SafeChatGuard:
@@ -118,6 +132,17 @@ class SafeChatGuard:
                     CONFIRM_REQUIRED_TEXT,
                     {"unsupported_numbers": self._count_unsupported_numbers(normalized)},
                 )
+            if not ctx.grounded_evidence and self._matches(normalized, _UNSUPPORTED_NUMBER_PATTERNS):
+                return GuardVerdict(
+                    GuardAction.REPLACE,
+                    "UNSUPPORTED_NUMBER_REPLACED",
+                    CONFIRM_REQUIRED_TEXT,
+                    {"unsupported_numbers": self._count_unsupported_numbers(normalized)},
+                )
+            if self._matches(normalized, _SELF_JUDGMENT_PATTERNS):
+                return GuardVerdict(GuardAction.REPLACE, "SELF_JUDGMENT_LEAK_BLOCKED", SAFE_FIXED_TEXT)
+            if _has_language_mix(normalized):
+                return GuardVerdict(GuardAction.REPLACE, "LANGUAGE_MIX_BLOCKED", SAFE_FIXED_TEXT)
 
         return GuardVerdict(
             GuardAction.ALLOW,
@@ -134,4 +159,18 @@ class SafeChatGuard:
     def _count_unsupported_numbers(text: str) -> int:
         amount_hits = len(re.findall(r"\d[\d,]*(?:\s?원|\s?만원|\s?억원)", text))
         date_hits = len(re.findall(r"\d{4}(?:년|-)\s?\d{1,2}(?:월|-)\s?\d{1,2}", text))
-        return amount_hits + date_hits
+        unsupported_hits = sum(len(pattern.findall(text)) for pattern in _UNSUPPORTED_NUMBER_PATTERNS)
+        return amount_hits + date_hits + unsupported_hits
+
+
+def _has_language_mix(text: str) -> bool:
+    hangul = len(re.findall(r"[가-힣]", text))
+    cjk = len(re.findall(r"[\u4e00-\u9fff]", text))
+    latin = [
+        word
+        for word in re.findall(r"[A-Za-z][A-Za-z0-9]{3,}", text)
+        if word.casefold() not in _ALLOWED_LATIN_TERMS
+    ]
+    if hangul == 0:
+        return False
+    return cjk >= 2 or len(latin) >= 3

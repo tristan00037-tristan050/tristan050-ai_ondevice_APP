@@ -7,39 +7,24 @@ unit-testable.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 
-from .guards import GuardAction, GuardContext, GuardVerdict, SafeChatGuard
+from .guards import SAFE_FIXED_TEXT, GuardAction, GuardContext, GuardVerdict, SafeChatGuard
+
+
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
+_UNCLOSED_THINK_RE = re.compile(r"<think>.*$", re.IGNORECASE | re.DOTALL)
+
+
+def strip_think_blocks(text: str) -> str:
+    cleaned = _THINK_BLOCK_RE.sub("", text or "")
+    cleaned = _UNCLOSED_THINK_RE.sub("", cleaned)
+    return cleaned.strip()
 
 
 def strip_leading_think_blocks(tokens: Iterable[str]) -> str:
-    state = "before"
-    output: list[str] = []
-    for token in tokens:
-        if state == "before":
-            if "<think>" in token:
-                pre, _sep, rest = token.partition("<think>")
-                if pre:
-                    output.append(pre)
-                state = "in_think"
-                if "</think>" in rest:
-                    _ignored, _end, post = rest.partition("</think>")
-                    if post:
-                        output.append(post)
-                    state = "after"
-                continue
-            state = "after"
-
-        if state == "in_think":
-            if "</think>" in token:
-                _ignored, _end, post = token.partition("</think>")
-                if post:
-                    output.append(post)
-                state = "after"
-            continue
-
-        output.append(token)
-    return "".join(output)
+    return strip_think_blocks("".join(str(token) for token in tokens))
 
 
 def guard_buffered_tokens(
@@ -48,7 +33,11 @@ def guard_buffered_tokens(
     guard: SafeChatGuard | None = None,
     context: GuardContext | None = None,
 ) -> tuple[str | None, GuardVerdict]:
-    text = strip_leading_think_blocks(tokens).strip()
+    raw_text = "".join(str(token) for token in tokens)
+    text = strip_think_blocks(raw_text)
+    if not text:
+        verdict = GuardVerdict(GuardAction.REPLACE, "EMPTY_AFTER_THINK_STRIP", SAFE_FIXED_TEXT)
+        return verdict.allowed_text, verdict
     verdict = (guard or SafeChatGuard()).evaluate(text, context)
     if verdict.action == GuardAction.ALLOW:
         return text, verdict
