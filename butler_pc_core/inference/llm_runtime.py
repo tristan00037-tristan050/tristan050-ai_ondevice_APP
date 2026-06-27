@@ -101,6 +101,15 @@ class LlmRuntime:
             self._llm = None
             self._load()
 
+    def _reset_llama_kv_cache(self) -> bool:
+        if self._llm is None:
+            return False
+        reset = getattr(self._llm, "reset", None)
+        if not callable(reset):
+            return False
+        reset()
+        return True
+
     # ------------------------------------------------------------------
     def generate(
         self,
@@ -187,6 +196,10 @@ class LlmRuntime:
             return
         stop_tokens = stop if stop is not None else DEFAULT_STOP_TOKENS
         with self._lock:
+            try:
+                self._reset_llama_kv_cache()
+            except Exception:
+                pass
             for chunk in self._llm(
                 prompt,
                 max_tokens=max_tokens,
