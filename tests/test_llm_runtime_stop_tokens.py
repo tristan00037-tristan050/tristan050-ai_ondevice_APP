@@ -88,3 +88,78 @@ def test_boundary_strip_token_at_position_zero_preserved():
     leading_token = "<|im_end|>본문 텍스트"
     result = _strip_residual_stop_tokens(leading_token)
     assert result == leading_token.strip()
+
+
+def test_generate_stream_with_cancel_resets_llama_kv_cache_before_stream():
+    """generate_stream_with_cancel은 같은 Llama 인스턴스의 이전 KV 캐시를 먼저 비운다."""
+    import threading
+
+    events: list[str] = []
+
+    class FakeLlama:
+        def reset(self):
+            events.append("reset")
+
+        def __call__(self, *args, **kwargs):
+            events.append("call")
+            assert kwargs["stream"] is True
+            yield {"choices": [{"text": "안전"}]}
+            yield {"choices": [{"text": " 응답"}]}
+
+    rt = LlmRuntime.__new__(LlmRuntime)
+    rt._llm = FakeLlama()
+    rt._status = "ready"
+    rt._lock = threading.Lock()
+
+    tokens = list(rt.generate_stream_with_cancel("프롬프트", threading.Event()))
+
+    assert tokens == ["안전", " 응답"]
+    assert events == ["reset", "call"]
+
+
+def test_generate_stream_with_cancel_fails_closed_when_reset_missing():
+    """reset() 메서드가 없으면 오염 가능 스트리밍을 시작하지 않는다."""
+    import threading
+
+    events: list[str] = []
+
+    class ResetMissingLlama:
+        def __call__(self, *args, **kwargs):
+            events.append("call")
+            yield {"choices": [{"text": "오염 가능 응답"}]}
+
+    rt = LlmRuntime.__new__(LlmRuntime)
+    rt._llm = ResetMissingLlama()
+    rt._status = "ready"
+    rt._lock = threading.Lock()
+
+    tokens = list(rt.generate_stream_with_cancel("프롬프트", threading.Event()))
+
+    assert tokens == [LlmRuntime._kv_reset_failed_response()]
+    assert events == []
+
+
+def test_generate_stream_with_cancel_fails_closed_when_reset_raises():
+    """reset() 예외가 나면 오염 가능 스트리밍을 시작하지 않는다."""
+    import threading
+
+    events: list[str] = []
+
+    class ResetFailingLlama:
+        def reset(self):
+            events.append("reset")
+            raise RuntimeError("reset failed")
+
+        def __call__(self, *args, **kwargs):
+            events.append("call")
+            yield {"choices": [{"text": "오염 가능 응답"}]}
+
+    rt = LlmRuntime.__new__(LlmRuntime)
+    rt._llm = ResetFailingLlama()
+    rt._status = "ready"
+    rt._lock = threading.Lock()
+
+    tokens = list(rt.generate_stream_with_cancel("프롬프트", threading.Event()))
+
+    assert tokens == [LlmRuntime._kv_reset_failed_response()]
+    assert events == ["reset"]

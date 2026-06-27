@@ -101,6 +101,15 @@ class LlmRuntime:
             self._llm = None
             self._load()
 
+    def _reset_llama_kv_cache(self) -> bool:
+        if self._llm is None:
+            return False
+        reset = getattr(self._llm, "reset", None)
+        if not callable(reset):
+            return False
+        reset()
+        return True
+
     # ------------------------------------------------------------------
     def generate(
         self,
@@ -187,6 +196,15 @@ class LlmRuntime:
             return
         stop_tokens = stop if stop is not None else DEFAULT_STOP_TOKENS
         with self._lock:
+            reset_ok = False
+            try:
+                reset_ok = self._reset_llama_kv_cache()
+            except Exception:
+                reset_ok = False
+            if not reset_ok:
+                # fail-closed: 세션 격리(KV reset) 확인 불가 → 오염 가능 출력 차단
+                yield self._kv_reset_failed_response()
+                return
             for chunk in self._llm(
                 prompt,
                 max_tokens=max_tokens,
@@ -206,3 +224,7 @@ class LlmRuntime:
             "[stub] 모델 미설치 — BUTLER_MODEL_PATH 환경변수에 .gguf 경로를 설정하고 "
             f"llama-cpp-python을 설치한 뒤 재시작하세요. (prompt_len={len(prompt)})"
         )
+
+    @staticmethod
+    def _kv_reset_failed_response() -> str:
+        return "[격리 미확인] 세션 상태를 초기화하지 못해 안전을 위해 응답을 생성하지 않았습니다."
