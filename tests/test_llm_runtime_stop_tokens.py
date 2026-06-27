@@ -117,8 +117,30 @@ def test_generate_stream_with_cancel_resets_llama_kv_cache_before_stream():
     assert events == ["reset", "call"]
 
 
-def test_generate_stream_with_cancel_continues_when_reset_fails():
-    """reset() 실패는 세션 격리 best-effort 실패일 뿐 스트림 자체를 중단하지 않는다."""
+def test_generate_stream_with_cancel_fails_closed_when_reset_missing():
+    """reset() 메서드가 없으면 오염 가능 스트리밍을 시작하지 않는다."""
+    import threading
+
+    events: list[str] = []
+
+    class ResetMissingLlama:
+        def __call__(self, *args, **kwargs):
+            events.append("call")
+            yield {"choices": [{"text": "오염 가능 응답"}]}
+
+    rt = LlmRuntime.__new__(LlmRuntime)
+    rt._llm = ResetMissingLlama()
+    rt._status = "ready"
+    rt._lock = threading.Lock()
+
+    tokens = list(rt.generate_stream_with_cancel("프롬프트", threading.Event()))
+
+    assert tokens == [LlmRuntime._kv_reset_failed_response()]
+    assert events == []
+
+
+def test_generate_stream_with_cancel_fails_closed_when_reset_raises():
+    """reset() 예외가 나면 오염 가능 스트리밍을 시작하지 않는다."""
     import threading
 
     events: list[str] = []
@@ -130,7 +152,7 @@ def test_generate_stream_with_cancel_continues_when_reset_fails():
 
         def __call__(self, *args, **kwargs):
             events.append("call")
-            yield {"choices": [{"text": "계속"}]}
+            yield {"choices": [{"text": "오염 가능 응답"}]}
 
     rt = LlmRuntime.__new__(LlmRuntime)
     rt._llm = ResetFailingLlama()
@@ -139,5 +161,5 @@ def test_generate_stream_with_cancel_continues_when_reset_fails():
 
     tokens = list(rt.generate_stream_with_cancel("프롬프트", threading.Event()))
 
-    assert tokens == ["계속"]
-    assert events == ["reset", "call"]
+    assert tokens == [LlmRuntime._kv_reset_failed_response()]
+    assert events == ["reset"]
