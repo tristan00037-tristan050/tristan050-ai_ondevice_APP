@@ -55,8 +55,24 @@ def test_privacy_reversal_variants_blocked(text):
 @pytest.mark.parametrize(
     "text",
     [
+        "Butler는 회사 데이터를 기기 밖으로 보낼 수 없습니다.",
+        "Butler는 회사 데이터를 외부로 전송할 수 없도록 설계되었습니다.",
+    ],
+)
+def test_negated_privacy_statements_allowed(text):
+    verdict = SafeChatGuard().evaluate(text, GuardContext(profile="free_general_chat"))
+
+    assert verdict.action == GuardAction.ALLOW
+    assert verdict.code == "OK"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
         "수출액은 300억 달러입니다.",
         "재고량: 7,000개/일",
+        "재고량은 7,000개입니다.",
+        "생산량은 12,000건입니다.",
         "운영 비용은 5,000달러/월입니다.",
         "생산량 12,000건/년을 처리합니다.",
     ],
