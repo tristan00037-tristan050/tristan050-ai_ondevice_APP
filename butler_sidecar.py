@@ -62,6 +62,11 @@ from butler_pc_core.runtime.timeout_controller import (
     HARD_TIMEOUT_SEC,
 )
 from butler_pc_core.inference.llm_runtime import LlmRuntime, _strip_residual_stop_tokens
+from butler_pc_core.inference.model_identity import (
+    MAIN_MODEL_PATH_ENV,
+    assert_main_not_box3,
+    sidecar_model_status_payload,
+)
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.fail_class import FailClass, fail_payload, map_legacy_to_fail_class
 from butler_pc_core.auth.capability_token import (
@@ -88,7 +93,8 @@ _LLM_INIT_LOCK = threading.Lock()
 def _init_shared_llm() -> None:
     """BUTLER_MODEL_PATH 로 모델을 강제 로드(기존 인스턴스 교체). startup 이벤트에서 호출."""
     global _SHARED_LLM
-    model_path = os.environ.get("BUTLER_MODEL_PATH", "") or None
+    assert_main_not_box3()
+    model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "") or None
     _SHARED_LLM = LlmRuntime(model_path=model_path)
 
 
@@ -98,7 +104,8 @@ def _init_if_none_sync() -> "LlmRuntime":
     if _SHARED_LLM is None:
         with _LLM_INIT_LOCK:
             if _SHARED_LLM is None:
-                model_path = os.environ.get("BUTLER_MODEL_PATH", "") or None
+                assert_main_not_box3()
+                model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "") or None
                 _SHARED_LLM = LlmRuntime(model_path=model_path)
     return _SHARED_LLM  # type: ignore[return-value]
 
@@ -140,7 +147,6 @@ else:
 
 # task_id → TimeoutController マップ (キャンセル用)
 _active_controllers: dict[str, TimeoutController] = {}
-_controllers_lock = asyncio.Lock() if _FASTAPI_AVAILABLE else None  # type: ignore[assignment]
 
 _CHUNK_WORKER = Path(__file__).resolve().parent / "butler_pc_core" / "inference" / "chunk_worker.py"
 
@@ -368,6 +374,7 @@ if _FASTAPI_AVAILABLE:
     @app.on_event("startup")
     async def _startup_load_model():
         """sidecar 기동 시 모델 로드 + 결과 eviction 태스크 등록."""
+        assert_main_not_box3()
         loop = asyncio.get_running_loop()
         loop.run_in_executor(None, _init_shared_llm)
         asyncio.create_task(_cleanup_accounting_results())
@@ -382,32 +389,37 @@ if _FASTAPI_AVAILABLE:
     def sidecar_health():
         if _SHARED_LLM is not None:
             llm_status = _SHARED_LLM.status
+            last_error = _SHARED_LLM.last_error
         else:
-            model_path = os.environ.get("BUTLER_MODEL_PATH", "")
+            model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "")
             llm_status = "loading" if model_path else "no_model"
+            last_error = "" if model_path else "BUTLER_MODEL_PATH 미설정"
+        model_payload = sidecar_model_status_payload(status=llm_status, last_error=last_error)
         return {
             "status": "ok",
             "service": "butler-pc-core-sidecar",
             "version": "0.9.0",
-            "model_status": llm_status,
+            "model_status": model_payload["status"],
+            "model_role": model_payload["model_role"],
+            "model_family": model_payload["model_family"],
+            "model_path_digest": model_payload["model_path_digest"],
+            "model_path_conflict": model_payload["model_path_conflict"],
+            "model_path_conflict_reason": model_payload["model_path_conflict_reason"],
+            "box3_model": model_payload["box3_model"],
             "active_tasks": len(_active_controllers),
         }
 
     @app.get("/api/model/status")
     def model_status():
-        model_path = os.environ.get("BUTLER_MODEL_PATH", "")
+        model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "")
         if _SHARED_LLM is not None:
-            return {
-                "status": _SHARED_LLM.status,
-                "model_path": model_path,
-                "last_error": _SHARED_LLM.last_error,
-            }
+            return sidecar_model_status_payload(status=_SHARED_LLM.status, last_error=_SHARED_LLM.last_error)
         if not model_path:
-            return {"status": "no_model", "model_path": "", "last_error": "BUTLER_MODEL_PATH 미설정"}
+            return sidecar_model_status_payload(status="no_model", last_error="BUTLER_MODEL_PATH 미설정")
         p = Path(model_path)
         if not p.exists():
-            return {"status": "no_model", "model_path": model_path, "last_error": "파일 없음"}
-        return {"status": "loading", "model_path": model_path, "last_error": ""}
+            return sidecar_model_status_payload(status="no_model", last_error="파일 없음")
+        return sidecar_model_status_payload(status="loading", last_error="")
 
     @app.get("/api/egress/report")
     def egress_report():
@@ -1902,16 +1914,16 @@ else:
 
         def do_GET(self):
             if self.path in ("/health", "/api/model/status", "/api/sidecar/health"):
-                model_path = os.environ.get("BUTLER_MODEL_PATH", "")
+                model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "")
                 if self.path == "/health":
                     self._send_json(200, {"status": "ok", "service": "butler-pc-core-sidecar", "version": "0.9.0"})
                 elif self.path == "/api/model/status":
                     if not model_path:
-                        self._send_json(200, {"status": "no_model", "model_path": "", "last_error": "BUTLER_MODEL_PATH 미설정"})
+                        self._send_json(200, sidecar_model_status_payload(status="no_model", last_error="BUTLER_MODEL_PATH 미설정"))
                     elif not Path(model_path).exists():
-                        self._send_json(200, {"status": "no_model", "model_path": model_path, "last_error": "파일 없음"})
+                        self._send_json(200, sidecar_model_status_payload(status="no_model", last_error="파일 없음"))
                     else:
-                        self._send_json(200, {"status": "ready", "model_path": model_path, "last_error": ""})
+                        self._send_json(200, sidecar_model_status_payload(status="ready", last_error=""))
                 else:
                     self._send_json(200, {"status": "ok", "service": "butler-pc-core-sidecar", "version": "0.9.0"})
             else:

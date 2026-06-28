@@ -22,6 +22,7 @@ from butler_pc_core.connect_loop.box1_router import (
     canonical_sha256,
 )
 from butler_pc_core.output_safety.guards import GuardContext
+from butler_pc_core.inference.model_identity import MAIN_MODEL_PATH_ENV, model_identity, model_path_conflict_reason
 from butler_pc_core.router.task_budget_router import Route, TaskBudget, decide_task_budget
 from butler_pc_core.sidecar.analyze_policy_preflight import policy_bootstrap_state
 from butler_pc_core.sidecar.safe_general_chat import (
@@ -232,7 +233,17 @@ class AnalyzeStreamOrchestrator:
         def _tokens(cancel_event):
             return llm.generate_stream_with_cancel(prompt, cancel_event, max_tokens=1024)
 
-        yield sse("meta", {"source": "safe_chat", "llm_invoked": True})
+        model_conflict_reason = model_path_conflict_reason()
+        yield sse(
+            "meta",
+            {
+                "source": "safe_chat",
+                "llm_invoked": True,
+                **model_identity(role="free_chat", env_key=MAIN_MODEL_PATH_ENV),
+                "model_path_conflict": model_conflict_reason is not None,
+                "model_path_conflict_reason": model_conflict_reason or "",
+            },
+        )
         try:
             result = await self.safe_chat.run_buffered(
                 _tokens,
