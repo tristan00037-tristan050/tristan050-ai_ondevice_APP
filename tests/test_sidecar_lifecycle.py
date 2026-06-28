@@ -209,6 +209,11 @@ def test_tauri_sidecar_spawn_writes_launch_log_and_injects_model_env():
     assert "sidecar-launch.log" in text
     assert "BUTLER_MODEL_PATH" in text
     assert "BUTLER_BOX3_V9_Q4_MODEL_PATH" in text
+    assert "push_free_chat_resource_env" in text
+    assert "validate_model_path_invariants" in text
+    assert "BUTLER_MODEL_PATH_ENV, model_path" not in text
+    assert "butler_model_path = box3_v9_model_path" not in text
+    assert "box3_v9_model_path = butler_model_path" not in text
     assert "sidecar-env.json" in text
     assert ".envs(sidecar_env)" in text
     assert "append_sidecar_launch_log(\"spawn_sidecar=start\")" in text

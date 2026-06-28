@@ -266,6 +266,8 @@ def test_general_chat_intro_queries_reach_safe_chat(tmp_path, monkeypatch, query
     complete = next(event for event in events if event["event"] == "complete")
     assert router_meta["data"]["intent_label"] == "general_chat"
     assert safe_chat_meta["data"]["llm_invoked"] is True
+    assert safe_chat_meta["data"]["model_role"] == "free_chat"
+    assert "model_path" not in safe_chat_meta["data"]
     assert complete["data"]["source"] == "safe_chat"
     assert complete["data"]["llm_invoked"] is True
 
