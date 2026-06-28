@@ -193,6 +193,133 @@ def test_explicit_counterparty_account_number_can_guard():
     assert bool(row["_pnl_excluded"]) is True
 
 
+@pytest.mark.parametrize(
+    "memo",
+    [
+        "사내 자금이동",
+        "예금 대체입금",
+        "운영자금 이체",
+        "자금이동 보통예금",
+        "내부이체 본사운영자금",
+    ],
+)
+def test_strong_internal_memo_guards_without_account_or_holder(memo):
+    out = _classify(
+        [
+            {
+                "적요": memo,
+                "입금": "1000000",
+                "출금": "",
+                "상대계좌예금주명": "외부표기",
+            }
+        ],
+        profile=_profile(),
+    )
+
+    row = out.iloc[0]
+    assert row["분류과목"] == "미분류"
+    assert row["_guard_reason"] == "STRONG_INTERNAL_MEMO"
+    assert bool(row["_pnl_excluded"]) is True
+
+
+@pytest.mark.parametrize(
+    "memo",
+    [
+        "타사 송금",
+        "계좌이체 외주대금",
+        "예금대체 외주대금",
+        "보통예금 통신비",
+    ],
+)
+def test_weak_transfer_memo_alone_does_not_guard(memo):
+    out = _classify(
+        [
+            {
+                "적요": memo,
+                "입금": "",
+                "출금": "12000",
+                "상대계좌예금주명": "외부거래처",
+            }
+        ],
+        profile=_profile(),
+    )
+
+    row = out.iloc[0]
+    assert row["_guard_reason"] == ""
+    assert bool(row["_pnl_excluded"]) is False
+
+
+@pytest.mark.parametrize("memo", ["사내식당", "사내복지비", "사내교육비", "사내 식당 비용"])
+def test_internal_company_substrings_without_transfer_context_do_not_guard(memo):
+    out = _classify(
+        [
+            {
+                "적요": memo,
+                "입금": "",
+                "출금": "12000",
+                "상대계좌예금주명": "외부거래처",
+            }
+        ],
+        profile=_profile(),
+    )
+
+    row = out.iloc[0]
+    assert row["_guard_reason"] == ""
+    assert bool(row["_pnl_excluded"]) is False
+
+
+def test_standalone_replacement_word_does_not_guard_or_count_as_weak_hint():
+    from butler_pc_core.company_profile.matcher import is_strong_internal_memo, is_weak_transfer_memo
+
+    assert is_strong_internal_memo("대체") is False
+    assert is_weak_transfer_memo("대체") is False
+    assert is_strong_internal_memo("예금대체 외주대금") is False
+    assert is_weak_transfer_memo("예금대체 외주대금") is True
+    assert is_strong_internal_memo("대체입금") is True
+
+
+def test_self_transfer_guard_priority_preserves_existing_order_before_strong_memo():
+    rows = [
+        {
+            "적요": "계좌인증 내부이체",
+            "입금": "1",
+            "출금": "",
+            "상대계좌예금주명": "(주)에이티링크",
+            "상대계좌번호": "123-456789-01-029",
+        },
+        {
+            "적요": "내부이체 본사운영자금",
+            "입금": "50000",
+            "출금": "",
+            "상대계좌예금주명": "(주)에이티링크",
+            "상대계좌번호": "123-456789-01-029",
+        },
+        {
+            "적요": "내부이체 본사운영자금",
+            "입금": "50000",
+            "출금": "",
+            "상대계좌예금주명": "외부표기",
+            "상대계좌번호": "123-456789-01-029",
+        },
+        {
+            "적요": "내부이체 본사운영자금",
+            "입금": "50000",
+            "출금": "",
+            "상대계좌예금주명": "외부표기",
+            "상대계좌번호": "",
+        },
+    ]
+
+    out = _classify(rows, profile=_profile_with_account())
+
+    assert list(out["_guard_reason"]) == [
+        "ACCOUNT_VERIFICATION",
+        "SELF_HOLDER_MATCH",
+        "OWN_ACCOUNT_MATCH",
+        "STRONG_INTERNAL_MEMO",
+    ]
+
+
 def test_single_amount_account_verification_uses_real_amount_threshold():
     out = _classify(
         [
@@ -307,3 +434,28 @@ def test_guarded_rows_do_not_call_ft_classify(monkeypatch):
     )
 
     assert out.iloc[0]["_guard_reason"] == "SELF_HOLDER_MATCH"
+
+
+def test_strong_internal_memo_guarded_rows_do_not_call_ft_classify(monkeypatch):
+    import butler_pc_core.accounting.classifier as classifier
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("ft_classify must not run for strong internal memo rows")
+
+    monkeypatch.setattr(classifier, "ft_classify", fail_if_called)
+
+    out = classifier.classify_df(
+        pd.DataFrame(
+            [
+                {
+                    "적요": "사내 자금이동",
+                    "입금": "10000",
+                    "출금": "",
+                    "상대계좌예금주명": "외부표기",
+                }
+            ]
+        ).fillna(""),
+        company_profile=_profile(),
+    )
+
+    assert out.iloc[0]["_guard_reason"] == "STRONG_INTERNAL_MEMO"

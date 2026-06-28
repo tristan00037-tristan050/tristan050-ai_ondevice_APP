@@ -17,6 +17,7 @@ from butler_pc_core.company_profile.matcher import (
     is_account_verification,
     is_own_account,
     is_self_holder,
+    is_strong_internal_memo,
 )
 
 # ── 헤더 자동 감지 키워드 ────────────────────────────────────────────────────
@@ -240,6 +241,8 @@ def _self_transfer_guard_reason(
         return "SELF_HOLDER_MATCH"
     if is_own_account(account_no, company_profile):  # type: ignore[arg-type]
         return "OWN_ACCOUNT_MATCH"
+    if is_strong_internal_memo(combined):
+        return "STRONG_INTERNAL_MEMO"
     return None
 
 

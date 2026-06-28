@@ -7,7 +7,13 @@ from .contracts import (
     validate_index_entry_dict,
     validate_runtime_profile_dict,
 )
-from .matcher import is_account_verification, is_own_account, is_self_holder
+from .matcher import (
+    is_account_verification,
+    is_own_account,
+    is_self_holder,
+    is_strong_internal_memo,
+    is_weak_transfer_memo,
+)
 from .storage import CompanyProfileStore, ProfileLoadError
 
 __all__ = [
@@ -20,6 +26,8 @@ __all__ = [
     "is_account_verification",
     "is_own_account",
     "is_self_holder",
+    "is_strong_internal_memo",
+    "is_weak_transfer_memo",
     "make_runtime_profile",
     "validate_index_entry_dict",
     "validate_runtime_profile_dict",
