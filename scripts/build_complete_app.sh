@@ -29,6 +29,15 @@ M17="$RES/models/box3/butler-1.7b-v9-2-r2b-q4_k_m.gguf"
 [[ -f "$M4" ]] && echo "  ✅ 4B: $(du -h "$M4" | cut -f1)" || { echo "❌ 4B 없음"; exit 1; }
 [[ -f "$M17" ]] && echo "  ✅ 1.7B: $(du -h "$M17" | cut -f1)" || { echo "❌ 1.7B 없음"; exit 1; }
 
+echo "[3.5/5] 회계 adapter 배치 (박스5 4B 회계)"
+ACC_SRC="$HOME/Desktop/butler-data/엔진모델/회계어댑터_박스5/qwen3_4b_accounting_v1"
+ACC_DST="$ROOT/butler_pc_core/accounting/models/qwen3_4b_accounting_v1"
+if [[ -d "$ACC_SRC" && ! -d "$ACC_DST" ]]; then
+  mkdir -p "$(dirname "$ACC_DST")"; cp -R "$ACC_SRC" "$ACC_DST"
+  echo "  ✅ 회계 adapter 배치"
+elif [[ -d "$ACC_DST" ]]; then echo "  ✅ 회계 adapter 이미 존재"
+else echo "  ⚠️ 회계 adapter 소스 없음 (별건)"; fi
+
 echo "[4/5] 모델 경로 계약 검증 (verifier)"
 python3 "$ROOT/scripts/verify_model_path_contract.py" "$ROOT" || { echo "❌ 계약 위반"; exit 1; }
 
