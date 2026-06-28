@@ -61,6 +61,17 @@ def main() -> int:
     for pat in REQUIRED_SIDECAR:
         if pat not in side_text:
             failures.append(f"required sidecar pattern missing: {pat}")
+    # wrapper(externalBin)가 box3 fallback으로 invariant를 우회하지 않는지
+    wrapper = repo / "butler-desktop" / "src-tauri" / "binaries" / "butler-sidecar-aarch64-apple-darwin"
+    if wrapper.exists():
+        wtext = wrapper.read_text(encoding="utf-8")
+        # "첫 gguf 아무거나" fallback 금지 (box3가 잡힐 수 있음)
+        if "*.gguf" in wtext and "head -n 1" in wtext and "qwen3-4b" not in wtext:
+            failures.append("wrapper forbidden: picks first *.gguf (box3 bypass risk)")
+        # 4B 전용 fallback이 있어야 함
+        if "BUTLER_MODEL_PATH" in wtext and "qwen3-4b-q4_k_m.gguf" not in wtext:
+            failures.append("wrapper required: free-chat 4B explicit default missing")
+
     result = {"ok": not failures, "failures": failures}
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if not failures else 1
