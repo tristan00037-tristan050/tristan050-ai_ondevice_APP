@@ -28,6 +28,14 @@ EVAL_CANDIDATE_PATHS = [
 
 CHECK_REQUIRED = "[확인 필요]"
 
+VENDOR_LABELS = ("거래처", "공급자", "공급처", "업체명", "회사명", "상호", "수신", "발신", "vendor", "client")
+ITEM_LABELS = ("품목", "제품", "항목", "서비스", "내용", "상품명", "item", "product")
+QUANTITY_LABELS = ("수량", "qty", "quantity")
+UNIT_PRICE_LABELS = ("단가", "unit price", "unit_price", "unitprice")
+AMOUNT_LABELS = ("합계", "총액", "총 금액", "청구금액", "금액", "공급가액", "견적금액", "total", "amount")
+SCHEDULE_LABELS = ("납품 일정", "납기", "일정", "마감", "기한", "납품일", "due", "deadline")
+ALL_VALUE_LABELS = VENDOR_LABELS + ITEM_LABELS + QUANTITY_LABELS + UNIT_PRICE_LABELS + AMOUNT_LABELS + SCHEDULE_LABELS
+
 
 @dataclass(frozen=True)
 class RewriteOptions:
@@ -68,8 +76,30 @@ def _normalize_space(value: str) -> str:
 
 def _clean_value(value: str) -> str:
     value = _normalize_space(value)
-    value = value.strip(" :-–—|\t")
+    value = value.strip(" :-–—|\t,，")
     return value[:500] if value else CHECK_REQUIRED
+
+
+def _label_alt(labels: tuple[str, ...]) -> str:
+    # Longer labels first keeps compound labels such as "총 금액" intact.
+    return "|".join(re.escape(label) for label in sorted(labels, key=len, reverse=True))
+
+
+def _trim_labeled_segment(value: str) -> str:
+    """Keep one source value from inline key/value runs without inventing facts."""
+
+    segment = value
+    for pattern in (r"\s+[\/|·]\s+", r"\t+", r";+"):
+        segment = re.split(pattern, segment, maxsplit=1)[0]
+
+    all_labels = _label_alt(ALL_VALUE_LABELS)
+    segment = re.split(
+        rf"\s*[,，]?\s+(?:{all_labels})\s*(?:\([^)]*\))?\s*(?:[:：=\-]|\s+)",
+        segment,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0]
+    return _clean_value(segment)
 
 
 def _extract_first_number(text: str) -> str:
@@ -85,21 +115,20 @@ def _line_or_check(text: str, keyword: str) -> str:
 
 
 def _extract_labeled_value(text: str, labels: tuple[str, ...]) -> str:
-    label_alt = "|".join(re.escape(label) for label in labels)
+    label_alt = _label_alt(labels)
     pattern = re.compile(
-        rf"(?:^|[\n;])\s*(?:{label_alt})\s*(?:[:：=\-]|\s+)\s*([^\n;]+)",
+        rf"(?:^|[\n;|/,，])\s*(?:{label_alt})\s*(?:\([^)]*\))?\s*(?:[:：=\-]|\s+)\s*([^\n;|]+)",
         re.IGNORECASE,
     )
     for match in pattern.finditer(text):
-        value = _clean_value(match.group(1))
+        value = _trim_labeled_segment(match.group(1))
         if value != CHECK_REQUIRED:
             return value
     return CHECK_REQUIRED
 
 
 def _extract_amount(text: str) -> str:
-    amount_labels = ("합계", "총액", "총 금액", "청구금액", "금액", "공급가액", "견적금액")
-    labeled = _extract_labeled_value(text, amount_labels)
+    labeled = _extract_labeled_value(text, AMOUNT_LABELS)
     if labeled != CHECK_REQUIRED:
         money = _extract_money_value(labeled)
         return money if money != CHECK_REQUIRED else labeled
@@ -123,7 +152,7 @@ def _extract_money_value(text: str) -> str:
 
 
 def _extract_schedule(text: str) -> str:
-    labeled = _extract_labeled_value(text, ("납품 일정", "납기", "일정", "마감", "기한", "납품일"))
+    labeled = _extract_labeled_value(text, SCHEDULE_LABELS)
     if labeled != CHECK_REQUIRED:
         return labeled
     date_match = re.search(
@@ -133,34 +162,98 @@ def _extract_schedule(text: str) -> str:
     return _clean_value(date_match.group(0)) if date_match else CHECK_REQUIRED
 
 
+def _table_cells(line: str) -> list[str]:
+    if "|" in line:
+        return [_clean_value(cell) for cell in line.strip().strip("|").split("|")]
+    if "\t" in line:
+        return [_clean_value(cell) for cell in line.split("\t")]
+    return []
+
+
+def _is_table_separator(cells: list[str]) -> bool:
+    return bool(cells) and all(re.fullmatch(r":?-{2,}:?", cell or "") for cell in cells)
+
+
+def _field_from_header(header: str) -> str | None:
+    normalized = re.sub(r"[\s_()/]", "", header).lower()
+    label_map = [
+        ("vendor", VENDOR_LABELS),
+        ("item", ITEM_LABELS),
+        ("quantity", QUANTITY_LABELS),
+        ("unit_price", UNIT_PRICE_LABELS),
+        ("amount", AMOUNT_LABELS),
+        ("schedule", SCHEDULE_LABELS),
+    ]
+    for field_name, labels in label_map:
+        for label in labels:
+            label_norm = re.sub(r"[\s_()/]", "", label).lower()
+            if label_norm and label_norm in normalized:
+                return field_name
+    return None
+
+
+def _extract_table_values(text: str) -> SourceValueExtraction:
+    rows = [_table_cells(line) for line in text.splitlines()]
+    rows = [row for row in rows if row and not _is_table_separator(row)]
+
+    for header, values in zip(rows, rows[1:]):
+        if len(values) < 2:
+            continue
+
+        extracted: dict[str, str] = {}
+        for idx, header_cell in enumerate(header):
+            field_name = _field_from_header(header_cell)
+            if not field_name or idx >= len(values):
+                continue
+            value = values[idx]
+            if value != CHECK_REQUIRED:
+                extracted[field_name] = value
+
+        if len(extracted) >= 2:
+            unit_price = extracted.get("unit_price", CHECK_REQUIRED)
+            unit_money = _extract_money_value(unit_price)
+            if unit_money != CHECK_REQUIRED:
+                unit_price = unit_money
+
+            amount = extracted.get("amount", CHECK_REQUIRED)
+            amount_money = _extract_money_value(amount)
+            if amount_money != CHECK_REQUIRED:
+                amount = amount_money
+
+            return SourceValueExtraction(
+                vendor=extracted.get("vendor", CHECK_REQUIRED),
+                item=extracted.get("item", CHECK_REQUIRED),
+                quantity=extracted.get("quantity", CHECK_REQUIRED),
+                unit_price=unit_price,
+                amount=amount,
+                schedule=extracted.get("schedule", CHECK_REQUIRED),
+            )
+
+    return SourceValueExtraction()
+
+
+def _prefer_extracted(primary: str, fallback: str) -> str:
+    return primary if primary != CHECK_REQUIRED else fallback
+
+
 def _extract_structured_values(foreign_doc: str) -> SourceValueExtraction:
-    vendor = _extract_labeled_value(
-        foreign_doc,
-        ("거래처", "공급자", "공급처", "업체명", "회사명", "상호", "수신", "발신", "vendor"),
-    )
-    item = _extract_labeled_value(
-        foreign_doc,
-        ("품목", "제품", "항목", "서비스", "내용", "상품명", "item"),
-    )
-    quantity = _extract_labeled_value(
-        foreign_doc,
-        ("수량", "qty", "quantity"),
-    )
-    unit_price = _extract_labeled_value(
-        foreign_doc,
-        ("단가", "unit price", "unit_price"),
-    )
+    table_values = _extract_table_values(foreign_doc)
+
+    vendor = _extract_labeled_value(foreign_doc, VENDOR_LABELS)
+    item = _extract_labeled_value(foreign_doc, ITEM_LABELS)
+    quantity = _extract_labeled_value(foreign_doc, QUANTITY_LABELS)
+    unit_price = _extract_labeled_value(foreign_doc, UNIT_PRICE_LABELS)
     unit_money = _extract_money_value(unit_price)
     if unit_money != CHECK_REQUIRED:
         unit_price = unit_money
 
     return SourceValueExtraction(
-        vendor=vendor,
-        item=item,
-        quantity=quantity,
-        unit_price=unit_price,
-        amount=_extract_amount(foreign_doc),
-        schedule=_extract_schedule(foreign_doc),
+        vendor=_prefer_extracted(vendor, table_values.vendor),
+        item=_prefer_extracted(item, table_values.item),
+        quantity=_prefer_extracted(quantity, table_values.quantity),
+        unit_price=_prefer_extracted(unit_price, table_values.unit_price),
+        amount=_prefer_extracted(_extract_amount(foreign_doc), table_values.amount),
+        schedule=_prefer_extracted(_extract_schedule(foreign_doc), table_values.schedule),
     )
 
 
