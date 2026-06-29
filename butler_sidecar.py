@@ -89,6 +89,37 @@ from datetime import datetime, timezone as _tz
 _SHARED_LLM: LlmRuntime | None = None
 _LLM_INIT_LOCK = threading.Lock()
 
+# 수정1: 박스5 회계 SSE 의 complete 이후 digest-only usage_log 를 background 로 기록할 때
+# 사용하는 task 참조 보관소(GC 방지). 스트림 흐름·응답에는 영향 0.
+_ACCOUNTING_USAGE_TASKS: set = set()
+
+
+def _schedule_accounting_usage_log(result_id: str, summary: dict, latency_ms: float) -> None:
+    """회계 SSE complete 직후 호출. usage_log 기록을 background 로 떼어내 응답에 영향 0.
+
+    - SSE chunk 를 버퍼링/가로채지 않는다. 이미 yield 된 complete 이후에만 동작.
+    - record_accounting_usage 는 digest-only(원문 0) + 스키마 검증 후 저장 + 학습 자동연결.
+    - to_thread 로 파일 IO 를 이벤트 루프 밖에서 수행. 실패는 응답을 깨뜨리지 않는다.
+    """
+    try:
+        from butler_pc_core.sidecar.middleware.usage_accumulator import (
+            record_accounting_usage,
+        )
+
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(
+            asyncio.to_thread(
+                record_accounting_usage,
+                result_id=result_id,
+                summary=summary,
+                latency_ms=latency_ms,
+            )
+        )
+        _ACCOUNTING_USAGE_TASKS.add(task)
+        task.add_done_callback(_ACCOUNTING_USAGE_TASKS.discard)
+    except Exception:
+        pass
+
 
 def _init_shared_llm() -> None:
     """BUTLER_MODEL_PATH 로 모델을 강제 로드(기존 인스턴스 교체). startup 이벤트에서 호출."""
@@ -1023,6 +1054,7 @@ if _FASTAPI_AVAILABLE:
 
     async def _stream_accounting(file_path: str, result_id: str, format_id: str | None = None):
         """회계 분류 SSE 제너레이터."""
+        _usage_t0 = time.monotonic()
         try:
             yield _sse("phase_start", {"status_message": "분류 중 — 회계과목 매칭"})
             await asyncio.sleep(0)
@@ -1161,6 +1193,13 @@ if _FASTAPI_AVAILABLE:
                 "row_count": summary["total_rows"],
                 "category_count": len(cats),
             })
+
+            # 수정1: complete yield 직후 background 로 digest-only usage_log 1건 기록.
+            # await 하지 않으므로 스트림 흐름·응답 지연에 영향 0. 원문(summary/md)은
+            # 저장하지 않고 digest 만 남긴다.
+            _schedule_accounting_usage_log(
+                result_id, summary, (time.monotonic() - _usage_t0) * 1000.0
+            )
 
         except Exception as exc:
             yield _sse("error", fail_payload(map_legacy_to_fail_class(exc), str(exc)[:500], error_class=type(exc).__name__))

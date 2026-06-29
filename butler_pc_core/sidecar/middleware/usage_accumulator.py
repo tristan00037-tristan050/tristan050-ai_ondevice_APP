@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
@@ -88,13 +89,50 @@ def _validator():
     return Draft7Validator(_SCHEMA)
 
 
-# ── usage_log 저장소 (in-memory; 선택적 JSONL 싱크 — device-local, digest-only) ─
+# ── usage_log 기본 저장 경로 (device-local, digest-only) ─────────────────────
+# 수정3: BUTLER_USAGE_LOG_PATH 미설정 시에도 device-local 기본 경로에 영속한다.
+# 우선순위:
+#   1) BUTLER_USAGE_LOG_PATH 있으면 그 경로
+#   2) BUTLER_USAGE_LOG_DISABLE_PERSIST=1 이면 비활성(None)
+#   3) BUTLER_USER_DATA_DIR 하위
+#   4) macOS ~/Library/Application Support/com.butler.desktop/connect_loop/
+#   5) fallback ~/.butler/connect_loop/
+# 어떤 경우에도 원문/external 전송 0 — record 자체가 digest-only 계약이다.
+ENV_USAGE_LOG_PATH = "BUTLER_USAGE_LOG_PATH"
+ENV_USAGE_LOG_DISABLE_PERSIST = "BUTLER_USAGE_LOG_DISABLE_PERSIST"
+ENV_USER_DATA_DIR = "BUTLER_USER_DATA_DIR"
+_DEFAULT_LOG_RELPATH = Path("connect_loop") / "usage_log.jsonl"
+_BUNDLE_ID = "com.butler.desktop"
+
+
+def _truthy(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def resolve_usage_log_path() -> Path | None:
+    """현재 환경에서 usage_log JSONL을 영속할 경로(또는 비활성 시 None)를 해석한다."""
+    explicit = os.environ.get(ENV_USAGE_LOG_PATH)
+    if explicit:
+        return Path(explicit)
+    if _truthy(os.environ.get(ENV_USAGE_LOG_DISABLE_PERSIST)):
+        return None
+    user_data = os.environ.get(ENV_USER_DATA_DIR)
+    if user_data:
+        return Path(user_data) / _DEFAULT_LOG_RELPATH
+    home = Path.home()
+    if sys.platform == "darwin":
+        return home / "Library" / "Application Support" / _BUNDLE_ID / _DEFAULT_LOG_RELPATH
+    return home / ".butler" / _DEFAULT_LOG_RELPATH
+
+
+# ── usage_log 저장소 (in-memory; device-local JSONL 싱크 — digest-only) ────────
 class UsageLogStore:
     """생성된 usage_log 레코드를 모으는 공통 저장소.
 
     - in-memory `records` (감사/테스트 조회용)
-    - 환경변수 `BUTLER_USAGE_LOG_PATH` 가 설정되면 해당 경로에 JSONL append(디바이스 로컬).
-      미설정 시 파일 사이드이펙트 없음. 어떤 경우에도 원문/external 전송 0.
+    - `resolve_usage_log_path()` 가 가리키는 device-local JSONL 에 append.
+      BUTLER_USAGE_LOG_DISABLE_PERSIST=1 이면 파일 사이드이펙트 없음.
+      어떤 경우에도 원문/external 전송 0.
     """
 
     def __init__(self) -> None:
@@ -107,15 +145,21 @@ class UsageLogStore:
 
     def append(self, record: dict[str, Any]) -> None:
         self.records.append(record)
-        path = os.environ.get("BUTLER_USAGE_LOG_PATH")
-        if path:
+        path = resolve_usage_log_path()
+        if path is None:
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            line = json.dumps(record, ensure_ascii=False) + "\n"
+            # 새 파일은 0600(소유자 전용)으로 생성 시도. 기존 파일 권한은 건드리지 않는다.
+            # 저장 실패는 응답을 깨뜨리지 않는다(fail-safe on persistence only).
+            fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
             try:
-                p = Path(path)
-                p.parent.mkdir(parents=True, exist_ok=True)
-                with p.open("a", encoding="utf-8") as f:
-                    f.write(json.dumps(record, ensure_ascii=False) + "\n")
-            except OSError:
-                pass  # 저장 실패가 응답을 깨뜨리지 않는다
+                os.write(fd, line.encode("utf-8"))
+            finally:
+                os.close(fd)
+        except OSError:
+            pass
 
 
 _STORE = UsageLogStore()
@@ -271,7 +315,127 @@ def record_usage(
         store.dropped += 1
         return None
     store.append(record)
+    _auto_connect_learning(record)
     return record
+
+
+# ── 박스5 회계 SSE usage_log (수정1) ─────────────────────────────────────────
+# /accounting/classify 는 SSE StreamingResponse 이므로 미들웨어 버퍼링 대상이 아니다.
+# (_ROUTE_MAP 에 절대 넣지 않는다 — body_iterator 소진 → 스트리밍 깨짐.)
+# 대신 complete event yield 직후 background 로 본 함수가 digest-only usage_log 1건을
+# 만든다. 같은 schema validator 와 UsageLogStore.append() 를 JSON 경로와 공유한다.
+ACCOUNTING_INTENT = "accounting_classify"
+ACCOUNTING_BOX_ID = "5"
+ACCOUNTING_ENDPOINT = "POST /accounting/classify"
+
+
+def build_accounting_usage_log(
+    *,
+    result_id: str,
+    summary: dict[str, Any],
+    latency_ms: float,
+    routing_confidence: float = 1.0,
+    learning_candidate: bool = False,
+    source_digests: list[str] | None = None,
+    request_id: str | None = None,
+) -> dict[str, Any]:
+    """박스5 회계 분류 결과로 digest-only usage_log 1건을 만든다.
+
+    원문/요약 객체(summary, md_content, 파일명, temp path)는 어떤 필드에도 담지 않는다.
+    최종 summary/result object 는 digest(sha256)로만 기록한다.
+    """
+    # 최종 result object 는 digest 로만. summary 자체는 저장하지 않는다.
+    result_digest = _sha256(
+        json.dumps(summary, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+    )
+    # request 상관키도 digest-only(원문/파일명 금지). result_id(uuid) digest 로 상관만 남긴다.
+    request_digest = _digest_text(str(result_id))
+    return {
+        "log_id": "ulog-" + uuid.uuid4().hex,
+        "timestamp": _now_rfc3339(),
+        "request_id": request_id or ("req-" + uuid.uuid4().hex),
+        "device_id_digest": _digest_text("device-local"),
+        "tenant_id_digest": _digest_text("tenant-local"),
+        "department_id_digest": _digest_text("department-local"),
+        "request_digest": request_digest,
+        "intent_label": ACCOUNTING_INTENT,
+        "box_id": ACCOUNTING_BOX_ID,
+        "endpoint": ACCOUNTING_ENDPOINT,
+        "routing_confidence": routing_confidence,
+        "integration_mode": "real",
+        "real_validation_done": True,
+        "result_digest": result_digest,
+        "source_digests": list(source_digests or []),
+        "policy_decision": "allow",
+        "policy_reason_code": "OK",
+        "latency_ms": round(latency_ms, 2),
+        "external_send_zero": True,
+        "raw_text_logged": False,
+        "learning_candidate": learning_candidate,
+        "learning_event_created": False,
+        "retention_class": "audit_digest_only",
+        "created_by_component": CREATED_BY,
+        "schema_hash": _SCHEMA_HASH,
+        "schema_version": SCHEMA_VERSION,
+    }
+
+
+def record_accounting_usage(
+    *,
+    result_id: str,
+    summary: dict[str, Any],
+    latency_ms: float,
+    routing_confidence: float = 1.0,
+    learning_candidate: bool = False,
+    source_digests: list[str] | None = None,
+    request_id: str | None = None,
+    store: UsageLogStore | None = None,
+) -> dict[str, Any] | None:
+    """회계 SSE usage_log 생성 → 스키마 validate → 저장 → 학습 자동연결 hook.
+
+    검증 실패 시 저장하지 않고 connector 도 호출하지 않는다(비계약 레코드/학습 0).
+    반환: 저장된 레코드(또는 None).
+    """
+    store = store or _STORE
+    record = build_accounting_usage_log(
+        result_id=result_id,
+        summary=summary,
+        latency_ms=latency_ms,
+        routing_confidence=routing_confidence,
+        learning_candidate=learning_candidate,
+        source_digests=source_digests,
+        request_id=request_id,
+    )
+    validator = _validator()
+    if validator is None:
+        store.dropped += 1
+        return None
+    errors = sorted(validator.iter_errors(record), key=lambda e: e.path)
+    if errors:
+        store.dropped += 1
+        return None
+    store.append(record)
+    _auto_connect_learning(record)
+    return record
+
+
+# ── 학습 자동연결 hook (수정2 와 연결) ───────────────────────────────────────
+def _auto_connect_learning(record: dict[str, Any]) -> None:
+    """usage_log 저장 후 학습 게이트로 안전 래핑한다(우회 0·위조 0).
+
+    현 런타임은 ApprovedRefBundle·policy envelope 공급자가 없으므로 항상 안전 drop
+    (APPROVED_REF_OR_POLICY_ENVELOPE_MISSING) 된다. 승인 컨텍스트가 주입되는 경로에서만
+    learning_event 가 생성된다. 어떤 경우에도 gate 내부 DLP/expires/drift 규칙을 우회하지 않는다.
+    learning 연결 실패가 사용자 응답/usage_log 저장을 깨뜨리지 않는다.
+    """
+    try:
+        from butler_pc_core.connect_loop.learning_auto_connector import (
+            run_learning_auto_connection,
+        )
+
+        run_learning_auto_connection(record)
+    except Exception:
+        pass
 
 
 # ── FastAPI 등록 (공통 1곳) ──────────────────────────────────────────────────
