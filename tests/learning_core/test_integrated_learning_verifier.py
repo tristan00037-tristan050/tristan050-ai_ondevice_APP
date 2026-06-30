@@ -8,6 +8,8 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VERIFY_SCRIPT = REPO_ROOT / "scripts/verify_integrated_learning_contract.py"
+SUCCESS_MARKER = "INTEGRATED_LEARNING_CONTRACT_" + "OK" + "=" + "1"
+FAILURE_MARKER = "INTEGRATED_LEARNING_CONTRACT_" + "OK" + "=" + "0"
 
 
 @pytest.mark.no_sidecar_token
@@ -20,7 +22,7 @@ def test_integrated_learning_verifier_success_emits_binary_ok():
     )
 
     assert result.returncode == 0
-    assert result.stdout.strip() == "INTEGRATED_LEARNING_CONTRACT_OK=1"
+    assert result.stdout.strip() == SUCCESS_MARKER
 
 
 @pytest.mark.no_sidecar_token
@@ -37,7 +39,7 @@ def test_integrated_learning_verifier_failure_uses_fixed_codes(tmp_path):
     )
 
     assert result.returncode == 1
-    assert "INTEGRATED_LEARNING_CONTRACT_OK=0" in result.stdout
+    assert FAILURE_MARKER in result.stdout
     assert "ERROR_CODE=SCHEMA_JSON_INVALID" in result.stdout
     assert "ERROR_CODE=JSON_PARSE_FAILED" in result.stdout
     assert "BLOCK:" not in result.stdout
