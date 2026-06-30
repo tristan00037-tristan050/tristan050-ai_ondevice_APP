@@ -164,9 +164,9 @@ def _extract_schedule(text: str) -> str:
 
 def _table_cells(line: str) -> list[str]:
     if "|" in line:
-        return [_clean_value(cell) for cell in line.strip().strip("|").split("|")]
+        return [cell.strip() for cell in line.strip().strip("|").split("|")]
     if "\t" in line:
-        return [_clean_value(cell) for cell in line.split("\t")]
+        return [cell.strip() for cell in line.split("\t")]
     return []
 
 
@@ -205,7 +205,7 @@ def _extract_table_values(text: str) -> SourceValueExtraction:
             field_name = _field_from_header(header_cell)
             if not field_name or idx >= len(values):
                 continue
-            value = values[idx]
+            value = _clean_value(values[idx])
             if value != CHECK_REQUIRED:
                 extracted[field_name] = value
 
