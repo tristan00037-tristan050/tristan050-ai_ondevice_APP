@@ -20,7 +20,11 @@ class FolderDocAdapter:
             return GateResult.drop("FOLDER_INGEST_NOT_APPROVED")
         if payload.get("traversal_pruned") is not True:
             return GateResult.drop("TRAVERSAL_PRUNE_REQUIRED")
-        if payload.get("max_depth", 0) > 5 or payload.get("max_files", 0) > 5000:
+        max_depth = payload.get("max_depth", 0)
+        max_files = payload.get("max_files", 0)
+        if type(max_depth) is not int or type(max_files) is not int:
+            return GateResult.drop("TRAVERSAL_LIMIT_TYPE_INVALID")
+        if max_depth > 5 or max_files > 5000:
             return GateResult.drop("TRAVERSAL_LIMIT_INVALID")
         extension = payload.get("extension")
         if extension not in ALLOWED_EXTENSIONS:

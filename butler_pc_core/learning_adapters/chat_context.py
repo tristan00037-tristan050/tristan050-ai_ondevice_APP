@@ -21,7 +21,10 @@ class ChatContextAdapter:
             return GateResult.drop("CHAT_BUSINESS_CONFIRMATION_REQUIRED")
         if payload.get("manager_or_admin_approved") is not True:
             return GateResult.drop("CHAT_MANAGER_APPROVAL_REQUIRED")
-        if payload.get("shadow_eval_cases", 0) < 100:
+        shadow_eval_cases = payload.get("shadow_eval_cases")
+        if type(shadow_eval_cases) is not int:
+            return GateResult.drop("CHAT_SHADOW_EVAL_CASES_INVALID")
+        if shadow_eval_cases < 100:
             return GateResult.drop("CHAT_SHADOW_EVAL_INSUFFICIENT")
         if payload.get("pii_zero") is not True or payload.get("false_learning_zero") is not True:
             return GateResult.drop("CHAT_SHADOW_EVAL_FAILED")

@@ -68,7 +68,7 @@ class ArtifactQueue:
             "candidate_digest": candidate_digest,
             "payload_digest": candidate["payload_digest"],
             "expected_effect_digest": candidate["expected_effect_digest"],
-            "queue_status": status if previous_digest is None else "replaced",
+            "queue_status": "replaced" if previous_digest is not None and status == "active" else status,
             "previous_candidate_digest": previous_digest,
             "human_review_required": True,
             "auto_apply_to_runtime": False,

@@ -39,6 +39,23 @@ def test_artifact_queue_marks_same_id_new_digest_as_replaced(tmp_path: Path):
     assert records[-1]["previous_candidate_digest"] == records[0]["candidate_digest"]
 
 
+def test_artifact_queue_preserves_removed_status_for_retraction(tmp_path: Path):
+    queue = ArtifactQueue(tmp_path / "queue.jsonl")
+    candidate = _candidate()
+    queue.append_candidate(candidate)
+    removed = _candidate()
+    removed["payload"] = dict(removed["payload"], tests_to_run=["python3 -m pytest tests/accounting -q"])
+    removed["payload_digest"] = stable_json_digest(removed["payload"])
+
+    result = queue.append_candidate(removed, status="removed")
+
+    assert result.appended is True
+    records = queue.read_records()
+    assert len(records) == 2
+    assert records[-1]["queue_status"] == "removed"
+    assert records[-1]["previous_candidate_digest"] == records[0]["candidate_digest"]
+
+
 def test_index_manifest_has_previous_pointer_and_digest():
     manifest = IndexManifest.build(
         manifest_id="ilm-001",

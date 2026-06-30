@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from butler_pc_core.learning_core.contracts import GateResult, is_sha256
+from butler_pc_core.learning_core.contracts import GateResult, is_sha256, stable_json_digest
 
 ALLOWED_RULE_TARGETS = frozenset(
     {
@@ -64,7 +64,8 @@ def build_pr_candidate_manifest(candidate: dict[str, Any], *, proposed_diff_dige
         "rule_target": payload.get("rule_target"),
         "changed_files": list(payload.get("changed_files") or []),
         "tests_to_run": list(payload.get("tests_to_run") or []),
-        "candidate_digest": candidate["payload_digest"],
+        "candidate_digest": stable_json_digest(candidate),
+        "payload_digest": candidate["payload_digest"],
         "proposed_diff_digest": proposed_diff_digest,
         "human_review_required": True,
         "auto_apply_to_runtime": False,

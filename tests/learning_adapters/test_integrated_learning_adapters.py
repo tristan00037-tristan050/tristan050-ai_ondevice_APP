@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 
+from butler_pc_core.learning_adapters.box_rule_patch import build_pr_candidate_manifest
 from butler_pc_core.learning_core import UnifiedLearningIntakeGate
 from butler_pc_core.learning_core.contracts import stable_json_digest
 from tests.learning_core.test_integrated_learning_gate import _candidate, _digest
@@ -57,6 +58,22 @@ def test_folder_doc_requires_pruned_traversal_and_chunk_digest():
     assert verdict.accepted is True
 
 
+def test_folder_doc_drops_non_numeric_traversal_limits():
+    payload = {
+        "folder_ingest_approved": True,
+        "traversal_pruned": True,
+        "max_depth": "4",
+        "max_files": 100,
+        "extension": ".pdf",
+        "chunk_digest": _digest("chunk"),
+    }
+    candidate = _with_payload(_candidate("folder_doc", {}), payload, "verified_folder_doc")
+    candidate["adapter_version"] = "folder_doc.v1.2.0"
+    verdict = UnifiedLearningIntakeGate.with_default_adapters().evaluate(candidate)
+    assert verdict.accepted is False
+    assert verdict.drop_reason == "TRAVERSAL_LIMIT_TYPE_INVALID"
+
+
 def test_chat_context_default_disabled():
     payload = {
         "explicit_business_confirmation": True,
@@ -86,3 +103,27 @@ def test_chat_context_can_be_enabled_only_with_shadow_eval_and_admin_approval():
     candidate["adapter_version"] = "chat_context.v1.2.0"
     verdict = UnifiedLearningIntakeGate.with_default_adapters(enable_chat=True).evaluate(candidate)
     assert verdict.accepted is True
+
+
+def test_chat_context_drops_non_numeric_shadow_eval_cases_when_enabled():
+    payload = {
+        "explicit_business_confirmation": True,
+        "manager_or_admin_approved": True,
+        "shadow_eval_cases": "100",
+        "pii_zero": True,
+        "false_learning_zero": True,
+        "context_digest": _digest("chat"),
+    }
+    candidate = _with_payload(_candidate("chat_context", {}), payload, "verified_chat_context")
+    candidate["adapter_version"] = "chat_context.v1.2.0"
+    verdict = UnifiedLearningIntakeGate.with_default_adapters(enable_chat=True).evaluate(candidate)
+    assert verdict.accepted is False
+    assert verdict.drop_reason == "CHAT_SHADOW_EVAL_CASES_INVALID"
+
+
+def test_box_rule_patch_manifest_binds_full_candidate_digest():
+    candidate = _candidate()
+    manifest = build_pr_candidate_manifest(candidate, proposed_diff_digest=_digest("diff"))
+
+    assert manifest["candidate_digest"] == stable_json_digest(candidate)
+    assert manifest["payload_digest"] == candidate["payload_digest"]
