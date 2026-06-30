@@ -1,0 +1,6 @@
+--- a/butler_pc_core/company_profile/matcher.py
++++ b/butler_pc_core/company_profile/matcher.py
+@@ -1 +1 @@
+-SAFE_SYMBOL = 'old'
+
++SAFE_SYMBOL = 'new'

@@ -1,0 +1,29 @@
+{
+  "approved_rule_token_digest": "sha256:159204649ebbea7547c996be181d9e8b91af76f15985c5e1b0126d1b402e4b4b",
+  "auto_apply_to_runtime": false,
+  "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "candidate_id": "vrb-0000000000aa",
+  "changed_paths": [
+    "butler_pc_core/company_profile/matcher.py"
+  ],
+  "expected_effect_digest": "sha256:03e9b36b11f5d7c850e165e1b8bd1c94a586dadf8458def416ab873dc0bdba8a",
+  "external_send_zero": true,
+  "group_a_report_digest": "sha256:65f929fc46f5ec7116455b821b16150d88bce7f399fb7d7aa6e037de9a54f363",
+  "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "human_review_required": true,
+  "learning_source_type": "verified_rule_base",
+  "manifest_version": "box5_rule_patch_pr_candidate.v1",
+  "model_training": false,
+  "peft_training": false,
+  "proposed_diff_digest": "sha256:0113e5067b2b7b196c4917eeb34c7ed380f981d129206e04be0fbb676f1600c5",
+  "raw_text_logged": false,
+  "retention_class": "audit_digest_only",
+  "rule_patch_created": true,
+  "source_usage_log_ids": [
+    "ulog-box5-verified-ssot-demo"
+  ],
+  "target": "box5_self_transfer_guard",
+  "tests_to_run": [
+    "python3 -m pytest tests/accounting/test_rulebase_learning_autoflow.py -q"
+  ]
+}

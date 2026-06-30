@@ -1,0 +1,19 @@
+{
+  "current_repo_guard_eval": {
+    "cases_total": 49,
+    "recall": 1.0,
+    "recall_fraction": "34/34",
+    "specificity": 1.0,
+    "specificity_fraction": "15/15",
+    "trap_caught_fraction": "0/8"
+  },
+  "current_repo_matcher_sha256": "sha256:7fe67ab666887bdf6fc81b6d0e3f0c85a268d40ea15e9c297964559388270e6a",
+  "guard_eval_script_sha256": "sha256:1a5dd390dbe91b9306cf14822b88141a48155875ab399f7a0cd6790131dbf1f7",
+  "guard_eval_script_source": "butler-ct-shared/code_archive/box5_transfer_guard/eval/guard_eval.py",
+  "matcher_sha_note": "current repo matcher SHA differs from the guard-v2 SSOT copy, but live guard logic was not modified in this task and current repo evaluates 1.000/1.000 on the official fixed set",
+  "official_group_a_eval_sha256": "sha256:b0f29f1bf8c580c539caaf2857a29982b5c3f4e81d79199047e074996ad8ecd8",
+  "official_group_a_eval_source": "butler-ct-shared/code_archive/box5_transfer_guard/eval/box5_guard_eval.json",
+  "raw_copy_policy": "not copied into this branch SSOT because the official fixed set contains account-number-like evaluation examples; SHA reference is recorded to preserve L6 raw-zero for branch artifacts",
+  "recorded_at_utc": "2026-06-30T04:29:19.623992+00:00",
+  "ssot_guard_v2_matcher_sha256": "sha256:6a78ce73c3e49c60ce01799123de3f29625d54ee542305cec4c7db4d5c839af5"
+}

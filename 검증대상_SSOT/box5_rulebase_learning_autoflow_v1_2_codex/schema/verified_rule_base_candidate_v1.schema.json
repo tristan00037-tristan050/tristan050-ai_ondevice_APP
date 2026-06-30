@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://butler.local/schemas/box5/verified_rule_base_candidate_v1.schema.json",
+  "title": "Box5 Verified Rule Base Candidate v1",
+  "description": "Digest-only candidate contract for verified Box5 rule-base learning. This is not usage_log.v1.1, not learning_event.v1, and never stores raw transaction text.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "candidate_id",
+    "learning_source_type",
+    "target",
+    "candidate_kind",
+    "rule_patch_created",
+    "model_training",
+    "peft_training",
+    "raw_text_logged",
+    "external_send_zero",
+    "group_a_verified",
+    "human_review_required",
+    "auto_apply_to_runtime",
+    "retention_class",
+    "policy_decision",
+    "approved_rule_token_ref",
+    "approved_rule_token_digest",
+    "group_a_report_digest",
+    "source_usage_log_ids",
+    "expected_effect_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "verified_rule_base_candidate.v1"
+    },
+    "candidate_id": {
+      "type": "string",
+      "pattern": "^vrb-[0-9a-f]{12,64}$"
+    },
+    "learning_source_type": {
+      "const": "verified_rule_base"
+    },
+    "target": {
+      "const": "box5_self_transfer_guard"
+    },
+    "candidate_kind": {
+      "const": "deterministic_rule_patch"
+    },
+    "rule_patch_created": {
+      "const": false
+    },
+    "model_training": {
+      "const": false
+    },
+    "peft_training": {
+      "const": false
+    },
+    "raw_text_logged": {
+      "const": false
+    },
+    "external_send_zero": {
+      "const": true
+    },
+    "group_a_verified": {
+      "const": true
+    },
+    "human_review_required": {
+      "const": true
+    },
+    "auto_apply_to_runtime": {
+      "const": false
+    },
+    "retention_class": {
+      "const": "audit_digest_only"
+    },
+    "policy_decision": {
+      "const": "allow"
+    },
+    "approved_rule_token_ref": {
+      "type": "string",
+      "pattern": "^(vault|keyring)://[^\\s]{1,240}$"
+    },
+    "approved_rule_token_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "group_a_report_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source_usage_log_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_.:-]{1,120}$"
+      }
+    },
+    "expected_effect_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "proposed_diff_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "tests_to_run": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 240
+      },
+      "default": []
+    }
+  }
+}
