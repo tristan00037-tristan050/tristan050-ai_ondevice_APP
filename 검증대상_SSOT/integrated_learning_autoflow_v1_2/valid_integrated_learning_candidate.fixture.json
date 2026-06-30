@@ -1,0 +1,44 @@
+{
+  "adapter_version": "box_rule_patch.v1.2.0",
+  "auto_apply_to_runtime": false,
+  "candidate_id": "ilc-11111111111111111111111111111111",
+  "expected_effect_digest": "sha256:50bcba9471acd273a682718eefbd5716e9271345f552cf45f121470ccc867418",
+  "external_send_zero": true,
+  "group_a_verified": true,
+  "human_review_required": true,
+  "learning_source_type": "verified_box_rule_patch",
+  "model_training": false,
+  "payload": {
+    "changed_files": [
+      "butler_pc_core/company_profile/matcher.py",
+      "tests/accounting/test_self_transfer_guard.py"
+    ],
+    "expected_current_digest": "sha256:5b9b143d9a4f1c4afb9c30d0784c0fc3d3f1bc3dba235c77858990534385e316",
+    "group_a_fixed_eval_passed": true,
+    "rule_target": "box5_self_transfer_guard",
+    "runtime_hotpatch": false,
+    "tests_to_run": [
+      "python3 -m pytest tests/accounting/test_self_transfer_guard.py -q"
+    ]
+  },
+  "payload_digest": "sha256:5b98633fb8430d8ce42e02a178be3300009d641e98f9cdda5ff0de3fee6f44be",
+  "peft_training": false,
+  "policy_decision": "allow",
+  "raw_text_logged": false,
+  "retention_class": "audit_digest_only",
+  "schema_version": "integrated_learning_candidate.v1",
+  "source_refs": [
+    {
+      "ref_id_digest": "sha256:3a92b3f83229a4ce90ccca9dede6fdb4addd888d8e500d6cbcaf2315795d0e26",
+      "ref_type": "usage_log"
+    }
+  ],
+  "target_kind": "box_rule_patch",
+  "verification": {
+    "evidence_digest": "sha256:81533353ab2db09aa274a49463fb5760d915549610ac2f574ac604de2b16372f",
+    "evidence_ref": "digest-only-fixture",
+    "verified_at": "2026-06-30T00:00:00Z",
+    "verified_by": "group_a"
+  },
+  "verified": true
+}
