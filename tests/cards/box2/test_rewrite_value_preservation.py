@@ -98,3 +98,52 @@ def test_rewrite_preserves_markdown_table_values() -> None:
     assert "단가=₩80,000" in doc
     assert "금액=₩400,000" in doc
     assert "일정=2026.07.20" in doc
+
+
+def test_rewrite_preserves_nonstandard_quote_anchor_vendor() -> None:
+    foreign_doc = """
+견적서 - 주식회사 한빛테크
+거래명세: 클라우드 전환 용역 / 수량 4건 / 단가 250,000원 / 총액 1,000,000원 / 납기 2026-08-01
+""".strip()
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "거래처=주식회사 한빛테크" in doc
+    assert "품목=클라우드 전환 용역" in doc
+    assert "수량=4건" in doc
+    assert "단가=250,000원" in doc
+    assert "금액=1,000,000원" in doc
+    assert "일정=2026-08-01" in doc
+
+
+def test_rewrite_preserves_trade_counterparty_and_company_sentence() -> None:
+    foreign_doc = """
+거래상대방: 주식회사 미래상사
+주식회사 미래상사에서 보안 라이선스 2식을 단가 150,000원, 총액 300,000원으로 2026년 7월 31일까지 납품
+""".strip()
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "거래처=주식회사 미래상사" in doc
+    assert "품목=보안 라이선스" in doc
+    assert "수량=2식" in doc
+    assert "단가=150,000원" in doc
+    assert "금액=300,000원" in doc
+    assert "일정=2026년 7월 31일" in doc
+
+
+def test_rewrite_does_not_treat_trade_detail_item_as_vendor_without_company_hint() -> None:
+    foreign_doc = """
+거래명세: 유지보수 서비스
+수량: 1건
+금액: 120,000원
+""".strip()
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/금액")
+    doc = result.rewritten_doc
+
+    assert "거래처=[확인 필요]" in doc
+    assert "품목=유지보수 서비스" in doc
+    assert "금액=120,000원" in doc
