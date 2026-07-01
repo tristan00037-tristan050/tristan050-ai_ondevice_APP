@@ -48,6 +48,7 @@ UNIT_PRICE_LABELS = ("단가", "공급단가", "개당", "건당", "unit price",
 AMOUNT_LABELS = ("합계", "총액", "총 금액", "청구금액", "금액", "공급가액", "견적금액", "total", "amount")
 SCHEDULE_LABELS = ("납품 일정", "납기", "일정", "마감", "기한", "납품일", "due", "deadline")
 ALL_VALUE_LABELS = VENDOR_LABELS + ITEM_LABELS + QUANTITY_LABELS + UNIT_PRICE_LABELS + AMOUNT_LABELS + SCHEDULE_LABELS
+GENERIC_ITEM_LABELS = {"서비스", "내용"}
 
 COMPANY_NAME_HINTS = (
     "주식회사",
@@ -99,6 +100,15 @@ class SourceValueExtraction:
     schedule: str = CHECK_REQUIRED
 
 
+@dataclass(frozen=True)
+class LabeledSpan:
+    field_name: str
+    label: str
+    value: str
+    start: int
+    end: int
+
+
 def digest_inputs(foreign_doc: str, our_format: str) -> str:
     payload = f"foreign={hashlib.sha256(foreign_doc.encode('utf-8')).hexdigest()}|format={hashlib.sha256(our_format.encode('utf-8')).hexdigest()}"
     return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -117,6 +127,67 @@ def _clean_value(value: str) -> str:
 def _label_alt(labels: tuple[str, ...]) -> str:
     # Longer labels first keeps compound labels such as "총 금액" intact.
     return "|".join(re.escape(label) for label in sorted(labels, key=len, reverse=True))
+
+
+def _label_field_index() -> dict[str, str]:
+    index: dict[str, str] = {}
+    for field_name, labels in (
+        ("vendor", VENDOR_LABELS),
+        ("item", ITEM_LABELS),
+        ("quantity", QUANTITY_LABELS),
+        ("unit_price", UNIT_PRICE_LABELS),
+        ("amount", AMOUNT_LABELS),
+        ("schedule", SCHEDULE_LABELS),
+    ):
+        for label in labels:
+            index[re.sub(r"[\s_]", "", label).lower()] = field_name
+    return index
+
+
+def _iter_labeled_spans(text: str) -> list[LabeledSpan]:
+    label_index = _label_field_index()
+    label_alt = _label_alt(ALL_VALUE_LABELS)
+    label_re = re.compile(
+        rf"(?:^|(?<=[\s\n/|;,，]))(?P<label>{label_alt})\s*(?:\([^)]*\))?(?:[:：=\-]\s*|\s+)",
+        re.IGNORECASE,
+    )
+    matches = []
+    for match in label_re.finditer(text):
+        label = match.group("label")
+        if label in GENERIC_ITEM_LABELS:
+            prev = match.start() - 1
+            while prev >= 0 and text[prev].isspace():
+                prev -= 1
+            if prev >= 0 and text[prev] not in "\n/|;,，":
+                continue
+        matches.append(match)
+    spans: list[LabeledSpan] = []
+    for idx, match in enumerate(matches):
+        label = match.group("label")
+        value_start = match.end()
+        next_label_start = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+        separator = re.search(r"\s+[\/|;]\s+|[|;]", text[value_start:next_label_start])
+        value_end = value_start + separator.start() if separator else next_label_start
+        value = _clean_value(text[value_start:value_end])
+        if value == CHECK_REQUIRED:
+            continue
+        normalized_label = re.sub(r"[\s_]", "", label).lower()
+        field_name = label_index.get(normalized_label)
+        if field_name:
+            spans.append(LabeledSpan(field_name, label, value, value_start, value_end))
+    return spans
+
+
+def _pick_labeled_span_value(text: str, labels: tuple[str, ...]) -> str:
+    wanted = {
+        _label_field_index()[re.sub(r"[\s_]", "", label).lower()]
+        for label in labels
+        if re.sub(r"[\s_]", "", label).lower() in _label_field_index()
+    }
+    for span in _iter_labeled_spans(text):
+        if span.field_name in wanted:
+            return span.value
+    return CHECK_REQUIRED
 
 
 def _trim_labeled_segment(value: str) -> str:
@@ -149,6 +220,10 @@ def _line_or_check(text: str, keyword: str) -> str:
 
 
 def _extract_labeled_value(text: str, labels: tuple[str, ...]) -> str:
+    span_value = _pick_labeled_span_value(text, labels)
+    if span_value != CHECK_REQUIRED:
+        return span_value
+
     label_alt = _label_alt(labels)
     pattern = re.compile(
         rf"(?:^|[\n;|/,，])\s*(?:{label_alt})\s*(?:\([^)]*\))?\s*(?:[:：=\-]|\s+)\s*([^\n;|]+)",
@@ -212,6 +287,14 @@ def _extract_nonstandard_item(text: str) -> str:
     item_from_trade_detail = _extract_candidate((r"(?:^|\n)\s*거래명세(?:서)?\s*[-:：]\s*([^\n|/;]+)",), text)
     if item_from_trade_detail != CHECK_REQUIRED and not _looks_like_company_name(item_from_trade_detail):
         return item_from_trade_detail
+
+    slash_segments = [segment.strip() for segment in re.split(r"\s+/\s+", text) if segment.strip()]
+    if len(slash_segments) >= 2:
+        first = slash_segments[0]
+        if re.search(r"(?:견적서|거래명세(?:서)?)\s*[-:：]", first):
+            candidate = _clean_value(slash_segments[1])
+            if candidate != CHECK_REQUIRED and not _looks_like_company_name(candidate):
+                return candidate
 
     sentence_item = _extract_candidate(
         (
@@ -355,8 +438,9 @@ def _extract_structured_values(foreign_doc: str) -> SourceValueExtraction:
     )
     quantity = _extract_quantity_value(foreign_doc)
     unit_price = _extract_unit_price_value(foreign_doc)
+    item, quantity = _split_item_tail_quantity(item, quantity)
 
-    return SourceValueExtraction(
+    values = SourceValueExtraction(
         vendor=_prefer_extracted(vendor, table_values.vendor),
         item=_prefer_extracted(item, table_values.item),
         quantity=_prefer_extracted(quantity, table_values.quantity),
@@ -364,6 +448,34 @@ def _extract_structured_values(foreign_doc: str) -> SourceValueExtraction:
         amount=_prefer_extracted(_extract_amount(foreign_doc), table_values.amount),
         schedule=_prefer_extracted(_extract_schedule(foreign_doc), table_values.schedule),
     )
+    return _validate_source_spans(foreign_doc, values)
+
+
+def _split_item_tail_quantity(item: str, quantity: str) -> tuple[str, str]:
+    if item == CHECK_REQUIRED:
+        return item, quantity
+    match = re.fullmatch(rf"(.+?)\s+(\d[\d,]*\s*(?:{QUANTITY_UNITS}|석))", item, flags=re.IGNORECASE)
+    if not match:
+        return item, quantity
+    item_head = _clean_value(match.group(1))
+    tail_quantity = _clean_value(match.group(2))
+    if item_head == CHECK_REQUIRED or re.search(MONEY_PATTERN, tail_quantity):
+        return item, quantity
+    return item_head, tail_quantity if quantity == CHECK_REQUIRED else quantity
+
+
+def _source_span_exists(raw_text: str, value: str) -> bool:
+    if value == CHECK_REQUIRED:
+        return True
+    return _normalize_space(value) in _normalize_space(raw_text)
+
+
+def _validate_source_spans(raw_text: str, values: SourceValueExtraction) -> SourceValueExtraction:
+    cleaned: dict[str, str] = {}
+    for field_name in ("vendor", "item", "quantity", "unit_price", "amount", "schedule"):
+        value = getattr(values, field_name)
+        cleaned[field_name] = value if _source_span_exists(raw_text, value) else CHECK_REQUIRED
+    return SourceValueExtraction(**cleaned)
 
 
 def _format_key_values(values: SourceValueExtraction) -> str:
