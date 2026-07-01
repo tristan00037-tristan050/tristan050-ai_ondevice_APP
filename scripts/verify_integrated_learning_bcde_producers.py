@@ -72,6 +72,8 @@ def main() -> int:
             _add_failure(failures, "SOURCE_REFS_FAIL_CLOSED_MISSING")
         if "runner.ingest(candidate)" not in common_text:
             _add_failure(failures, "RUNNER_INGEST_HELPER_MISSING")
+        if "ARTIFACT_UNKNOWN_FIELD:" in common_text or "FORBIDDEN_FIELD:" in common_text:
+            _add_failure(failures, "DROP_REASON_DETAIL_FORBIDDEN")
 
     for target_kind, rel in PRODUCER_FILES.items():
         path = repo / rel

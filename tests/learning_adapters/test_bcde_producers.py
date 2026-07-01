@@ -282,7 +282,21 @@ def test_raw_material_fields_drop_before_runner(tmp_path):
     )
 
     assert result["accepted"] is False
-    assert "FORBIDDEN_FIELD" in result["drop_reason"]
+    assert result["drop_reason"] == "FORBIDDEN_FIELD"
+    assert result["queue_appended"] is False
+    assert not (tmp_path / "queue.jsonl").exists()
+
+
+def test_unknown_artifact_fields_return_code_only_drop_reason(tmp_path):
+    raw_key = "/Users/acme/private/customer-ledger.xlsx"
+    result = ingest_verified_policy_rule(
+        _policy(**{raw_key: "do not echo this key"}),
+        _runner(PolicyRuleAdapter(), tmp_path / "queue.jsonl"),
+    )
+
+    assert result["accepted"] is False
+    assert result["drop_reason"] == "ARTIFACT_UNKNOWN_FIELD"
+    assert raw_key not in result["drop_reason"]
     assert result["queue_appended"] is False
     assert not (tmp_path / "queue.jsonl").exists()
 

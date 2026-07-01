@@ -89,14 +89,14 @@ def sha_hex(value: str) -> str:
 def ensure_no_forbidden_keys(value: Any) -> None:
     try:
         assert_no_forbidden_fields(value)
-    except IntegratedLearningError as exc:
-        fail(str(exc))
+    except IntegratedLearningError:
+        fail("FORBIDDEN_FIELD")
 
     def walk(node: Any, path: str = "$") -> None:
         if isinstance(node, Mapping):
             for key, child in node.items():
                 if key in _LOCAL_FORBIDDEN_ARTIFACT_FIELDS:
-                    fail(f"FORBIDDEN_FIELD:{path}.{key}")
+                    fail("FORBIDDEN_FIELD")
                 walk(child, f"{path}.{key}")
         elif isinstance(node, (list, tuple)):
             for index, child in enumerate(node):
@@ -117,7 +117,7 @@ def ensure_exact_fields(data: Mapping[str, Any], artifact_type: type[Any]) -> No
     allowed = {field.name for field in fields(artifact_type)}
     unknown = sorted(set(data) - allowed)
     if unknown:
-        fail(f"ARTIFACT_UNKNOWN_FIELD:{unknown[0]}")
+        fail("ARTIFACT_UNKNOWN_FIELD")
 
 
 def str_field(data: Mapping[str, Any], field_name: str, error_code: str) -> str:
