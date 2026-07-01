@@ -28,13 +28,47 @@ EVAL_CANDIDATE_PATHS = [
 
 CHECK_REQUIRED = "[확인 필요]"
 
-VENDOR_LABELS = ("거래처", "공급자", "공급처", "업체명", "회사명", "상호", "수신", "발신", "vendor", "client")
-ITEM_LABELS = ("품목", "제품", "항목", "서비스", "내용", "상품명", "item", "product")
-QUANTITY_LABELS = ("수량", "qty", "quantity")
-UNIT_PRICE_LABELS = ("단가", "unit price", "unit_price", "unitprice")
+VENDOR_LABELS = (
+    "거래처",
+    "거래상대방",
+    "협력사",
+    "공급자",
+    "공급처",
+    "업체명",
+    "회사명",
+    "상호",
+    "수신",
+    "발신",
+    "vendor",
+    "client",
+)
+ITEM_LABELS = ("품목", "제품", "제품명", "항목", "서비스", "내용", "상품명", "물품", "거래품목", "용역명", "item", "product")
+QUANTITY_LABELS = ("수량", "개수", "qty", "quantity")
+UNIT_PRICE_LABELS = ("단가", "공급단가", "개당", "건당", "unit price", "unit_price", "unitprice")
 AMOUNT_LABELS = ("합계", "총액", "총 금액", "청구금액", "금액", "공급가액", "견적금액", "total", "amount")
 SCHEDULE_LABELS = ("납품 일정", "납기", "일정", "마감", "기한", "납품일", "due", "deadline")
 ALL_VALUE_LABELS = VENDOR_LABELS + ITEM_LABELS + QUANTITY_LABELS + UNIT_PRICE_LABELS + AMOUNT_LABELS + SCHEDULE_LABELS
+
+COMPANY_NAME_HINTS = (
+    "주식회사",
+    "(주)",
+    "㈜",
+    "상사",
+    "테크",
+    "솔루션",
+    "시스템즈",
+    "유통",
+    "전자",
+    "산업",
+    "컴퍼니",
+    "파트너스",
+    "물산",
+    "정보통신",
+    "글로벌",
+)
+QUANTITY_UNITS = "개|건|식|대|명|개월|회|박스|세트|EA|ea"
+MONEY_PATTERN = r"(?:₩\s*)?\d{1,3}(?:,\d{3})+(?:\s*원)?|\d+(?:\.\d+)?\s*(?:원|만원|억원)"
+DATE_PATTERN = r"\d{4}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2}\s*(?:일)?|\d{1,2}\s*월\s*\d{1,2}\s*일"
 
 
 @dataclass(frozen=True)
@@ -127,6 +161,87 @@ def _extract_labeled_value(text: str, labels: tuple[str, ...]) -> str:
     return CHECK_REQUIRED
 
 
+def _looks_like_company_name(value: str) -> bool:
+    cleaned = _clean_value(value)
+    if cleaned == CHECK_REQUIRED:
+        return False
+    if re.search(MONEY_PATTERN, cleaned) or re.search(rf"\d+\s*(?:{QUANTITY_UNITS})", cleaned):
+        return False
+    return any(hint in cleaned for hint in COMPANY_NAME_HINTS)
+
+
+def _extract_candidate(patterns: tuple[str, ...], text: str) -> str:
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE | re.MULTILINE)
+        if match:
+            value = _clean_value(match.group(1))
+            if value != CHECK_REQUIRED:
+                return value
+    return CHECK_REQUIRED
+
+
+def _extract_nonstandard_vendor(text: str) -> str:
+    strong_anchor_patterns = (
+        r"(?:^|\n)\s*견적서\s*[-:：]\s*([^\n|/;]+)",
+        r"(?:^|\n)\s*거래상대방\s*(?:[:：=\-]|\s+)\s*([^\n|/;]+)",
+        r"(?:^|\n)\s*협력사\s*(?:[:：=\-]|\s+)\s*([^\n|/;]+)",
+    )
+    candidate = _extract_candidate(strong_anchor_patterns, text)
+    if candidate != CHECK_REQUIRED:
+        return candidate
+
+    # "거래명세: <회사>" is a weak vendor anchor because 거래명세 can also describe the item.
+    # Use it only when the captured value itself has a company-name signal.
+    weak_vendor = _extract_candidate((r"(?:^|\n)\s*거래명세(?:서)?\s*[-:：]\s*([^\n|/;]+)",), text)
+    if _looks_like_company_name(weak_vendor):
+        return weak_vendor
+
+    sentence_vendor = _extract_candidate(
+        (
+            r"((?:주식회사|㈜|\(주\))\s*[^\n,;|/]{1,40}?)(?:에서|로부터|에게)",
+            r"([^\n,;|/]{2,40}?(?:상사|테크|솔루션|시스템즈|유통|전자|산업|컴퍼니|파트너스|물산|정보통신|글로벌))(?:에서|로부터|에게)",
+        ),
+        text,
+    )
+    if _looks_like_company_name(sentence_vendor):
+        return sentence_vendor
+    return CHECK_REQUIRED
+
+
+def _extract_nonstandard_item(text: str) -> str:
+    item_from_trade_detail = _extract_candidate((r"(?:^|\n)\s*거래명세(?:서)?\s*[-:：]\s*([^\n|/;]+)",), text)
+    if item_from_trade_detail != CHECK_REQUIRED and not _looks_like_company_name(item_from_trade_detail):
+        return item_from_trade_detail
+
+    sentence_item = _extract_candidate(
+        (
+            rf"(?:에서|로부터)\s*([^\n,;|/]{{2,80}}?)\s+\d[\d,]*\s*(?:{QUANTITY_UNITS})",
+            rf"(?:납품|구매|발주|견적)\s*대상\s*[:：=\-]?\s*([^\n,;|/]{{2,80}}?)\s+\d[\d,]*\s*(?:{QUANTITY_UNITS})",
+        ),
+        text,
+    )
+    return sentence_item
+
+
+def _extract_quantity_value(text: str) -> str:
+    labeled = _extract_labeled_value(text, QUANTITY_LABELS)
+    if labeled != CHECK_REQUIRED:
+        return labeled
+    match = re.search(rf"\d[\d,]*\s*(?:{QUANTITY_UNITS})", text)
+    return _clean_value(match.group(0)) if match else CHECK_REQUIRED
+
+
+def _extract_unit_price_value(text: str) -> str:
+    labeled = _extract_labeled_value(text, UNIT_PRICE_LABELS)
+    money = _extract_money_value(labeled)
+    if money != CHECK_REQUIRED:
+        return money
+    if labeled != CHECK_REQUIRED:
+        return labeled
+    match = re.search(rf"(?:단가|공급단가|개당|건당)\s*(?:[:：=\-]|\s+)?\s*({MONEY_PATTERN})", text)
+    return _clean_value(match.group(1)) if match else CHECK_REQUIRED
+
+
 def _extract_amount(text: str) -> str:
     labeled = _extract_labeled_value(text, AMOUNT_LABELS)
     if labeled != CHECK_REQUIRED:
@@ -134,20 +249,14 @@ def _extract_amount(text: str) -> str:
         return money if money != CHECK_REQUIRED else labeled
 
     # Prefer currency-looking values over arbitrary numbers so quantity/date do not become amount.
-    money_values = re.findall(
-        r"(?:₩\s*)?\d{1,3}(?:,\d{3})+(?:\s*원)?|\d+(?:\.\d+)?\s*(?:원|만원|억원)",
-        text,
-    )
+    money_values = re.findall(MONEY_PATTERN, text)
     if money_values:
         return _clean_value(money_values[-1])
     return CHECK_REQUIRED
 
 
 def _extract_money_value(text: str) -> str:
-    match = re.search(
-        r"(?:₩\s*)?\d{1,3}(?:,\d{3})+(?:\s*원)?|\d+(?:\.\d+)?\s*(?:원|만원|억원)",
-        text,
-    )
+    match = re.search(MONEY_PATTERN, text)
     return _clean_value(match.group(0)) if match else CHECK_REQUIRED
 
 
@@ -155,10 +264,7 @@ def _extract_schedule(text: str) -> str:
     labeled = _extract_labeled_value(text, SCHEDULE_LABELS)
     if labeled != CHECK_REQUIRED:
         return labeled
-    date_match = re.search(
-        r"\d{4}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2}\s*(?:일)?|\d{1,2}\s*월\s*\d{1,2}\s*일",
-        text,
-    )
+    date_match = re.search(DATE_PATTERN, text)
     return _clean_value(date_match.group(0)) if date_match else CHECK_REQUIRED
 
 
@@ -239,13 +345,16 @@ def _prefer_extracted(primary: str, fallback: str) -> str:
 def _extract_structured_values(foreign_doc: str) -> SourceValueExtraction:
     table_values = _extract_table_values(foreign_doc)
 
-    vendor = _extract_labeled_value(foreign_doc, VENDOR_LABELS)
-    item = _extract_labeled_value(foreign_doc, ITEM_LABELS)
-    quantity = _extract_labeled_value(foreign_doc, QUANTITY_LABELS)
-    unit_price = _extract_labeled_value(foreign_doc, UNIT_PRICE_LABELS)
-    unit_money = _extract_money_value(unit_price)
-    if unit_money != CHECK_REQUIRED:
-        unit_price = unit_money
+    vendor = _prefer_extracted(
+        _extract_labeled_value(foreign_doc, VENDOR_LABELS),
+        _extract_nonstandard_vendor(foreign_doc),
+    )
+    item = _prefer_extracted(
+        _extract_labeled_value(foreign_doc, ITEM_LABELS),
+        _extract_nonstandard_item(foreign_doc),
+    )
+    quantity = _extract_quantity_value(foreign_doc)
+    unit_price = _extract_unit_price_value(foreign_doc)
 
     return SourceValueExtraction(
         vendor=_prefer_extracted(vendor, table_values.vendor),
