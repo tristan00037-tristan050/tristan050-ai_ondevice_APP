@@ -104,6 +104,8 @@ def main() -> int:
             _add_failure(failures, "UNSAFE_OUTPUT_FORBIDDEN")
         if "source_refs_from_mapping(data)" not in text:
             _add_failure(failures, "SOURCE_REFS_COERCE_MISSING")
+        if "ARTIFACT_FIELD_REQUIRED:" in text or ("_fail(f" in text and ":{" in text):
+            _add_failure(failures, "ARTIFACT_FIELD_REQUIRED_DETAIL_FORBIDDEN")
 
     # Producer modules must not define raw-carrying field names themselves. The
     # common helper is allowed to list forbidden keys because it enforces them.

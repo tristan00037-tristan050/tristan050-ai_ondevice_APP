@@ -70,8 +70,8 @@ def coerce_policy_rule_artifact(artifact: PolicyRuleLearningArtifact | Mapping[s
             evidence_digest=(None if data.get("evidence_digest") is None else str(data.get("evidence_digest")).strip()),
             evidence_ref=str(data.get("evidence_ref", DIGEST_ONLY_EVIDENCE_REF)).strip(),
         )
-    except KeyError as exc:
-        _fail(f"ARTIFACT_FIELD_REQUIRED:{exc.args[0]}")
+    except KeyError:
+        _fail("ARTIFACT_FIELD_REQUIRED")
 
 
 def build_policy_rule_candidate(artifact: PolicyRuleLearningArtifact | Mapping[str, Any]) -> dict[str, Any]:
