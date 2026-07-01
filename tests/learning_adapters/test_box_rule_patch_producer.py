@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 import json
 
 from butler_pc_core.learning_adapters.box_rule_patch import BoxRulePatchAdapter
@@ -41,6 +42,12 @@ def _artifact(**overrides):
     }
     data.update(overrides)
     return Box5RulePatchArtifact(**data)
+
+
+def _artifact_mapping(**overrides):
+    data = asdict(_artifact())
+    data.update(overrides)
+    return data
 
 
 def test_verified_box5_artifact_ingests_via_runner_and_queue(tmp_path):
@@ -85,6 +92,18 @@ def test_unverified_group_a_report_drops_before_queue(tmp_path):
     assert result["drop_reason"] == "GROUP_A_FIXED_EVAL_NOT_PASSED"
     assert result["queue_appended"] is False
     assert not (tmp_path / "queue.jsonl").exists() or not (tmp_path / "queue.jsonl").read_text(encoding="utf-8")
+
+
+def test_string_group_a_flag_is_rejected_not_truthy_coerced(tmp_path):
+    result = ingest_verified_box5_rule_patch(
+        _artifact_mapping(group_a_fixed_eval_passed="false"),
+        _runner(tmp_path / "queue.jsonl"),
+    )
+
+    assert result["accepted"] is False
+    assert result["drop_reason"] == "GROUP_A_FIXED_EVAL_PASSED_INVALID"
+    assert result["queue_appended"] is False
+    assert not (tmp_path / "queue.jsonl").exists()
 
 
 def test_rule_token_config_filename_mismatch_is_locked_as_diff_file_not_allowed(tmp_path):
@@ -144,6 +163,35 @@ def test_integration_mode_injection_never_reaches_queue(tmp_path):
     assert result["accepted"] is False
     assert "INTEGRATION_MODE" in result["drop_reason"] or "FORBIDDEN_FIELD" in result["drop_reason"]
     assert result["queue_appended"] is False
+
+
+def test_source_refs_single_object_is_rejected_with_controlled_drop(tmp_path):
+    result = ingest_verified_box5_rule_patch(
+        _artifact_mapping(
+            source_refs={
+                "ref_type": "usage_log",
+                "ref_id_digest": _digest("usage-log"),
+            }
+        ),
+        _runner(tmp_path / "queue.jsonl"),
+    )
+
+    assert result["accepted"] is False
+    assert result["drop_reason"] == "SOURCE_REFS_NOT_SEQUENCE"
+    assert result["queue_appended"] is False
+    assert not (tmp_path / "queue.jsonl").exists()
+
+
+def test_source_refs_non_object_item_is_rejected_with_controlled_drop(tmp_path):
+    result = ingest_verified_box5_rule_patch(
+        _artifact_mapping(source_refs=["not-a-ref-object"]),
+        _runner(tmp_path / "queue.jsonl"),
+    )
+
+    assert result["accepted"] is False
+    assert result["drop_reason"] == "SOURCE_REF_NOT_OBJECT"
+    assert result["queue_appended"] is False
+    assert not (tmp_path / "queue.jsonl").exists()
 
 
 def test_vrb_candidate_is_repackaged_to_ilc_candidate_and_vrb_id_is_not_reused():

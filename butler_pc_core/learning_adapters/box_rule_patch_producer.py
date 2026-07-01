@@ -133,6 +133,29 @@ def _tuple_of_str(values: Sequence[str] | tuple[str, ...], field_name: str) -> t
     return cleaned
 
 
+def _bool_field(data: Mapping[str, Any], field_name: str, *, default: bool, error_code: str) -> bool:
+    if field_name not in data:
+        return default
+    value = data[field_name]
+    if not isinstance(value, bool):
+        _fail(error_code)
+    return value
+
+
+def _source_refs_from_mapping(data: Mapping[str, Any]) -> tuple[dict[str, str], ...]:
+    raw = data.get("source_refs", ())
+    if raw is None:
+        return ()
+    if isinstance(raw, Mapping) or not isinstance(raw, (list, tuple)):
+        _fail("SOURCE_REFS_NOT_SEQUENCE")
+    refs: list[dict[str, str]] = []
+    for ref in raw:
+        if not isinstance(ref, Mapping):
+            _fail("SOURCE_REF_NOT_OBJECT")
+        refs.append(dict(ref))
+    return tuple(refs)
+
+
 def _validate_digest_or_drop(value: str | None, field_name: str, *, required: bool = True) -> str | None:
     if value is None:
         if required:
@@ -185,13 +208,23 @@ def coerce_box5_rule_patch_artifact(artifact: Box5RulePatchArtifact | Mapping[st
             rule_tokens_digest=str(data["rule_tokens_digest"]).strip(),
             fixed_eval_report_digest=str(data["fixed_eval_report_digest"]).strip(),
             expected_effect_digest=str(data["expected_effect_digest"]).strip(),
-            group_a_fixed_eval_passed=bool(data.get("group_a_fixed_eval_passed", True)),
-            runtime_hotpatch=bool(data.get("runtime_hotpatch", False)),
+            group_a_fixed_eval_passed=_bool_field(
+                data,
+                "group_a_fixed_eval_passed",
+                default=True,
+                error_code="GROUP_A_FIXED_EVAL_PASSED_INVALID",
+            ),
+            runtime_hotpatch=_bool_field(
+                data,
+                "runtime_hotpatch",
+                default=False,
+                error_code="RUNTIME_HOTPATCH_INVALID",
+            ),
             proposed_diff_digest=(None if data.get("proposed_diff_digest") is None else str(data.get("proposed_diff_digest")).strip()),
             approved_rule_token_digest=(
                 None if data.get("approved_rule_token_digest") is None else str(data.get("approved_rule_token_digest")).strip()
             ),
-            source_refs=tuple(dict(item) for item in data.get("source_refs", ()) or ()),
+            source_refs=_source_refs_from_mapping(data),
             verified_by=str(data.get("verified_by", "group_a")).strip() or "group_a",
             verified_at=str(data.get("verified_at", DEFAULT_VERIFIED_AT)).strip(),
             evidence_digest=(None if data.get("evidence_digest") is None else str(data.get("evidence_digest")).strip()),
@@ -297,6 +330,9 @@ def box5_artifact_from_verified_rule_base_candidate(
         _fail("VRB_TARGET_INVALID")
     if candidate.get("group_a_verified") is not True:
         _fail("VRB_GROUP_A_NOT_VERIFIED")
+    runtime_hotpatch = candidate.get("runtime_hotpatch", False)
+    if not isinstance(runtime_hotpatch, bool):
+        _fail("RUNTIME_HOTPATCH_INVALID")
     source_refs: list[dict[str, str]] = []
     for source_id in candidate.get("source_usage_log_ids", []) or []:
         text = str(source_id).strip()
@@ -315,7 +351,7 @@ def box5_artifact_from_verified_rule_base_candidate(
         proposed_diff_digest=candidate.get("proposed_diff_digest"),
         approved_rule_token_digest=str(candidate.get("approved_rule_token_digest", "")).strip(),
         group_a_fixed_eval_passed=bool(candidate.get("group_a_verified")),
-        runtime_hotpatch=bool(candidate.get("runtime_hotpatch", False)),
+        runtime_hotpatch=runtime_hotpatch,
         source_refs=tuple(source_refs),
         evidence_digest=str(candidate.get("group_a_report_digest", "")).strip(),
     )
