@@ -12,8 +12,10 @@ class UnifiedLearningIntakeGate:
     registry: AdapterRegistry
 
     @classmethod
-    def with_default_adapters(cls, *, enable_chat: bool = False) -> "UnifiedLearningIntakeGate":
-        return cls(register_default_adapters(enable_chat=enable_chat))
+    def with_default_adapters(
+        cls, *, enable_chat: bool = False, chat_fixture_mode: bool = True
+    ) -> "UnifiedLearningIntakeGate":
+        return cls(register_default_adapters(enable_chat=enable_chat, chat_fixture_mode=chat_fixture_mode))
 
     def evaluate(self, candidate: dict[str, Any]) -> GateResult:
         try:
