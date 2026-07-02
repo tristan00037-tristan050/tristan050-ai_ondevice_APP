@@ -70,6 +70,10 @@ COMPANY_NAME_HINTS = (
 QUANTITY_UNITS = "개|건|식|대|명|개월|회|박스|세트|EA|ea"
 MONEY_PATTERN = r"(?:₩\s*)?\d{1,3}(?:,\d{3})+(?:\s*원)?|\d+(?:\.\d+)?\s*(?:원|만원|억원)"
 DATE_PATTERN = r"\d{4}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2}\s*(?:일)?|\d{1,2}\s*월\s*\d{1,2}\s*일"
+_VALUE_END_SEPARATOR_RE = re.compile(r"\r?\n|(?<!\d)\s*/\s*(?!\d)|\s*[|;，]\s*")
+_QUANTITY_VALUE_RE = re.compile(rf"^\d[\d,]*(?:\s*(?:{QUANTITY_UNITS}|석))?$", re.IGNORECASE)
+_UNIT_PRICE_VALUE_RE = re.compile(r"^(?:₩\s*)?\d[\d,]*(?:\s*원)?$|^\d+(?:\.\d+)?\s*(?:원|만원|억원)$")
+_AMOUNT_VALUE_RE = re.compile(MONEY_PATTERN)
 
 
 @dataclass(frozen=True)
@@ -166,7 +170,7 @@ def _iter_labeled_spans(text: str) -> list[LabeledSpan]:
         label = match.group("label")
         value_start = match.end()
         next_label_start = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
-        separator = re.search(r"\s+[\/|;]\s+|[|;]", text[value_start:next_label_start])
+        separator = _VALUE_END_SEPARATOR_RE.search(text[value_start:next_label_start])
         value_end = value_start + separator.start() if separator else next_label_start
         value = _clean_value(text[value_start:value_end])
         if value == CHECK_REQUIRED:
@@ -348,7 +352,16 @@ def _extract_schedule(text: str) -> str:
     if labeled != CHECK_REQUIRED:
         return labeled
     date_match = re.search(DATE_PATTERN, text)
+    if date_match and not _date_has_schedule_context(text, date_match.start(), date_match.end()):
+        return CHECK_REQUIRED
     return _clean_value(date_match.group(0)) if date_match else CHECK_REQUIRED
+
+
+def _date_has_schedule_context(text: str, start: int, end: int) -> bool:
+    window = text[max(0, start - 24): min(len(text), end + 24)]
+    return bool(re.search(_label_alt(SCHEDULE_LABELS), window, flags=re.IGNORECASE)) or bool(
+        re.search(r"납품|마감|기한|까지", window)
+    )
 
 
 def _table_cells(line: str) -> list[str]:
@@ -470,11 +483,36 @@ def _source_span_exists(raw_text: str, value: str) -> bool:
     return _normalize_space(value) in _normalize_space(raw_text)
 
 
+def _is_date_like(value: str) -> bool:
+    cleaned = value.strip()
+    return bool(re.fullmatch(DATE_PATTERN, cleaned)) or bool(re.fullmatch(r"\d{4}-\d{1,2}-\d{1,2}", cleaned))
+
+
+def _field_semantic_valid(field_name: str, value: str) -> bool:
+    if value == CHECK_REQUIRED:
+        return True
+    cleaned = _clean_value(value)
+    if cleaned == CHECK_REQUIRED:
+        return False
+    if field_name == "quantity":
+        return not _is_date_like(cleaned) and bool(_QUANTITY_VALUE_RE.fullmatch(cleaned))
+    if field_name == "unit_price":
+        return not _is_date_like(cleaned) and bool(_UNIT_PRICE_VALUE_RE.fullmatch(cleaned))
+    if field_name == "amount":
+        return not _is_date_like(cleaned) and bool(_AMOUNT_VALUE_RE.fullmatch(cleaned))
+    if field_name == "schedule":
+        return bool(re.search(DATE_PATTERN, cleaned))
+    return True
+
+
 def _validate_source_spans(raw_text: str, values: SourceValueExtraction) -> SourceValueExtraction:
     cleaned: dict[str, str] = {}
     for field_name in ("vendor", "item", "quantity", "unit_price", "amount", "schedule"):
         value = getattr(values, field_name)
-        cleaned[field_name] = value if _source_span_exists(raw_text, value) else CHECK_REQUIRED
+        if _source_span_exists(raw_text, value) and _field_semantic_valid(field_name, value):
+            cleaned[field_name] = value
+        else:
+            cleaned[field_name] = CHECK_REQUIRED
     return SourceValueExtraction(**cleaned)
 
 

@@ -230,3 +230,48 @@ def test_box2_quantity_unit_price_amount_and_schedule_boundaries_do_not_cross() 
     assert "일정=2026-07-01" in doc
     assert "금액=12개월" not in doc
     assert "일정=50,000원" not in doc
+
+
+def test_box2_item_label_stops_at_newline_before_note() -> None:
+    foreign_doc = "품목: A4용지\n비고: 빠른 납품 요청"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "품목=A4용지" in doc
+    assert "품목=A4용지 비고" not in doc
+    assert "빠른 납품 요청" not in doc
+
+
+def test_box2_quantity_rejects_date_like_value() -> None:
+    foreign_doc = "품목: A4용지\n수량 2026-07-01"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "품목=A4용지" in doc
+    assert "수량=[확인 필요]" in doc
+    assert "일정=[확인 필요]" in doc
+    assert "수량=2026-07-01" not in doc
+
+
+def test_box2_schedule_accepts_date_like_value() -> None:
+    foreign_doc = "품목: A4용지\n납기 2026-07-01"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "품목=A4용지" in doc
+    assert "일정=2026-07-01" in doc
+
+
+def test_box2_annual_amount_does_not_become_unit_price() -> None:
+    foreign_doc = "견적서 - (주)미래상사 / 클라우드 라이선스 10석 / 연 12,000,000원"
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "수량=10석" in doc
+    assert "금액=12,000,000원" in doc
+    assert "단가=[확인 필요]" in doc
+    assert "단가=12,000,000원" not in doc
