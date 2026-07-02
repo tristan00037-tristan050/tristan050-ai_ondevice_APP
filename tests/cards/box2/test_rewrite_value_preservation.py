@@ -255,6 +255,19 @@ def test_box2_quantity_rejects_date_like_value() -> None:
     assert "수량=2026-07-01" not in doc
 
 
+def test_box2_quantity_rejects_spaced_slash_date() -> None:
+    foreign_doc = "품목 A4용지 수량 2026 / 07 / 01"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "품목=A4용지" in doc
+    assert "수량=[확인 필요]" in doc
+    assert "일정=[확인 필요]" in doc
+    assert "수량=2026" not in doc
+    assert "수량=2026 / 07 / 01" not in doc
+
+
 def test_box2_schedule_accepts_date_like_value() -> None:
     foreign_doc = "품목: A4용지\n납기 2026-07-01"
 
@@ -263,6 +276,17 @@ def test_box2_schedule_accepts_date_like_value() -> None:
 
     assert "품목=A4용지" in doc
     assert "일정=2026-07-01" in doc
+
+
+def test_box2_schedule_accepts_spaced_slash_date() -> None:
+    foreign_doc = "품목 A4용지 납기 2026 / 07 / 15"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "품목=A4용지" in doc
+    assert "수량=[확인 필요]" in doc
+    assert "일정=2026 / 07 / 15" in doc
 
 
 def test_box2_annual_amount_does_not_become_unit_price() -> None:
