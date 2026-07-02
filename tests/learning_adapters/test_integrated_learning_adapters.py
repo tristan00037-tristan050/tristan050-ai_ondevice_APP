@@ -87,7 +87,7 @@ def test_chat_context_default_disabled():
     candidate["adapter_version"] = "chat_context.v1.2.0"
     verdict = UnifiedLearningIntakeGate.with_default_adapters().evaluate(candidate)
     assert verdict.accepted is False
-    assert verdict.drop_reason == "CHAT_LEARNING_DISABLED"
+    assert verdict.drop_reason == "CHAT_CONTEXT_DISABLED"
 
 
 def test_chat_context_can_be_enabled_only_with_shadow_eval_and_admin_approval():
@@ -118,7 +118,7 @@ def test_chat_context_drops_non_numeric_shadow_eval_cases_when_enabled():
     candidate["adapter_version"] = "chat_context.v1.2.0"
     verdict = UnifiedLearningIntakeGate.with_default_adapters(enable_chat=True).evaluate(candidate)
     assert verdict.accepted is False
-    assert verdict.drop_reason == "CHAT_SHADOW_EVAL_CASES_INVALID"
+    assert verdict.drop_reason == "SHADOW_EVAL_CASES_TOO_LOW"
 
 
 def test_box_rule_patch_manifest_binds_full_candidate_digest():
