@@ -69,8 +69,8 @@ COMPANY_NAME_HINTS = (
 )
 QUANTITY_UNITS = "개|건|식|대|명|개월|회|박스|세트|EA|ea"
 MONEY_PATTERN = r"(?:₩\s*)?\d{1,3}(?:,\d{3})+(?:\s*원)?|\d+(?:\.\d+)?\s*(?:원|만원|억원)"
-DATE_PATTERN = r"\d{4}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2}\s*(?:일)?|\d{1,2}\s*월\s*\d{1,2}\s*일"
-_VALUE_END_SEPARATOR_RE = re.compile(r"\r?\n|(?<!\d)\s*/\s*(?!\d)|\s*[|;，]\s*")
+DATE_PATTERN = r"\d{4}\s*(?:[-./]|년)\s*\d{1,2}\s*(?:[-./]|월)\s*\d{1,2}\s*(?:일)?|\d{1,2}\s*월\s*\d{1,2}\s*일"
+_SEPARATOR_RE = re.compile(r"\r?\n|[|;，]|/")
 _QUANTITY_VALUE_RE = re.compile(rf"^\d[\d,]*(?:\s*(?:{QUANTITY_UNITS}|석))?$", re.IGNORECASE)
 _UNIT_PRICE_VALUE_RE = re.compile(r"^(?:₩\s*)?\d[\d,]*(?:\s*원)?$|^\d+(?:\.\d+)?\s*(?:원|만원|억원)$")
 _AMOUNT_VALUE_RE = re.compile(MONEY_PATTERN)
@@ -148,6 +148,20 @@ def _label_field_index() -> dict[str, str]:
     return index
 
 
+def _is_numeric_slash_context(window: str, slash_start: int, slash_end: int) -> bool:
+    left = window[:slash_start].rstrip()
+    right = window[slash_end:].lstrip()
+    return bool(left and right and left[-1].isdigit() and right[0].isdigit())
+
+
+def _find_value_end_separator(window: str) -> re.Match[str] | None:
+    for match in _SEPARATOR_RE.finditer(window):
+        if match.group() == "/" and _is_numeric_slash_context(window, match.start(), match.end()):
+            continue
+        return match
+    return None
+
+
 def _iter_labeled_spans(text: str) -> list[LabeledSpan]:
     label_index = _label_field_index()
     label_alt = _label_alt(ALL_VALUE_LABELS)
@@ -170,7 +184,7 @@ def _iter_labeled_spans(text: str) -> list[LabeledSpan]:
         label = match.group("label")
         value_start = match.end()
         next_label_start = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
-        separator = _VALUE_END_SEPARATOR_RE.search(text[value_start:next_label_start])
+        separator = _find_value_end_separator(text[value_start:next_label_start])
         value_end = value_start + separator.start() if separator else next_label_start
         value = _clean_value(text[value_start:value_end])
         if value == CHECK_REQUIRED:
