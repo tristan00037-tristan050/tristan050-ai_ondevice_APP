@@ -11,16 +11,17 @@ from typing import Any, Protocol
 SCHEMA_VERSION = "integrated_learning_candidate.v1"
 RETENTION_CLASS = "audit_digest_only"
 SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-REF_RE = re.compile(
-    r"^(?:digest-only-fixture|sha256:[0-9a-f]{64}|"
-    r"vault://butler/evidence/[A-Za-z0-9_-]{1,128}|"
-    r"keyring://butler/evidence/[A-Za-z0-9_-]{1,128})$"
+EVIDENCE_REF_RE = re.compile(
+    r"^(?:sha256:[0-9a-f]{64}|"
+    r"(?:vault|keyring)://butler/evidence/[A-Za-z0-9._=-]{16,128})$"
 )
+REF_RE = EVIDENCE_REF_RE
 RFC3339_Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 CANDIDATE_ID_RE = re.compile(r"^ilc-[0-9a-f]{16,64}$")
-EVIDENCE_REF_DENY_RE = re.compile(
-    r"https?://|file://|s3://|gs://|/Users/|/home/|[A-Za-z]:\\|\\\\|\.\.|~|@|\s"
+DENY_EVIDENCE_REF_RE = re.compile(
+    r"(?:^/|^[A-Za-z]:\\|\\\\|\.\.|\s|https?://|file://|s3://|gs://|@|/Users/|/home/|~)"
 )
+EVIDENCE_REF_DENY_RE = DENY_EVIDENCE_REF_RE
 
 TARGET_KINDS = frozenset(
     {
@@ -54,13 +55,17 @@ FORBIDDEN_FIELD_NAMES = frozenset(
         "transaction_text",
         "prompt",
         "prompt_text",
+        "response",
         "response_text",
+        "user_name",
         "speaker",
         "employee_name",
+        "timestamp",
         "timestamp_raw",
         "path",
         "url",
         "message_id",
+        "messenger",
         "customer_name",
         "account_number_plain",
         "amount_plain",
@@ -153,6 +158,29 @@ def is_sha256(value: Any) -> bool:
     return isinstance(value, str) and bool(SHA256_RE.fullmatch(value))
 
 
+def canonical_digest(value: str) -> str:
+    if not is_sha256(value):
+        raise IntegratedLearningError("EVIDENCE_DIGEST_INVALID")
+    return value.lower()
+
+
+def validate_digest_or_drop(value: Any, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise IntegratedLearningError(f"{field_name}_INVALID")
+    if value.strip() != value or not value:
+        raise IntegratedLearningError(f"{field_name}_INVALID")
+    if not is_sha256(value):
+        raise IntegratedLearningError(f"{field_name}_INVALID")
+    return value
+
+
+def _require_evidence_digest(raw_value: Any, *, context_digest: str) -> str:
+    digest = validate_digest_or_drop(raw_value, "EVIDENCE_DIGEST")
+    if canonical_digest(digest) == canonical_digest(context_digest):
+        raise IntegratedLearningError("EVIDENCE_DIGEST_INVALID")
+    return digest
+
+
 def assert_no_forbidden_fields(value: Any, *, path: str = "$", allow_payload_keys: bool = False) -> None:
     """Fail on banned field names anywhere in candidates, queues, manifests, or evidence.
 
@@ -206,21 +234,40 @@ def validate_verified_at(value: Any) -> str:
 
 def validate_evidence_ref(value: Any) -> str:
     evidence_ref = _require_plain_string(value, "EVIDENCE_REF_INVALID")
-    if EVIDENCE_REF_DENY_RE.search(evidence_ref):
+    if evidence_ref == "digest-only-fixture":
         raise IntegratedLearningError("EVIDENCE_REF_INVALID")
-    if not REF_RE.fullmatch(evidence_ref):
+    if DENY_EVIDENCE_REF_RE.search(evidence_ref):
+        raise IntegratedLearningError("EVIDENCE_REF_INVALID")
+    if not EVIDENCE_REF_RE.fullmatch(evidence_ref):
         raise IntegratedLearningError("EVIDENCE_REF_INVALID")
     return evidence_ref
 
 
+def validate_evidence_ref_for_test_fixture(value: Any) -> str:
+    evidence_ref = _require_plain_string(value, "EVIDENCE_REF_INVALID")
+    if evidence_ref == "digest-only-fixture":
+        return evidence_ref
+    return validate_evidence_ref(evidence_ref)
+
+
 def _validate_verification(value: Any) -> None:
-    if not isinstance(value, dict) or set(value) != ALLOWED_VERIFICATION_FIELDS:
+    if not isinstance(value, dict):
         raise IntegratedLearningError("SCHEMA_KEYS_INVALID")
-    validate_verified_by(value.get("verified_by"))
-    validate_verified_at(value.get("verified_at"))
-    if not is_sha256(value.get("evidence_digest")):
+    unknown = set(value) - ALLOWED_VERIFICATION_FIELDS
+    if unknown:
+        raise IntegratedLearningError("SCHEMA_KEYS_INVALID")
+    if "verified_by" not in value:
+        raise IntegratedLearningError("VERIFIED_BY_INVALID")
+    if "verified_at" not in value:
+        raise IntegratedLearningError("VERIFIED_AT_INVALID")
+    if "evidence_ref" not in value:
+        raise IntegratedLearningError("EVIDENCE_REF_INVALID")
+    if "evidence_digest" not in value:
         raise IntegratedLearningError("EVIDENCE_DIGEST_INVALID")
-    validate_evidence_ref(value.get("evidence_ref"))
+    validate_verified_by(value["verified_by"])
+    validate_verified_at(value["verified_at"])
+    validate_evidence_ref_for_test_fixture(value["evidence_ref"])
+    validate_digest_or_drop(value["evidence_digest"], "EVIDENCE_DIGEST")
 
 
 def _validate_source_refs(value: Any) -> None:
@@ -231,9 +278,9 @@ def _validate_source_refs(value: Any) -> None:
     for item in value:
         if not isinstance(item, dict) or set(item) != ALLOWED_SOURCE_REF_FIELDS:
             raise IntegratedLearningError("SOURCE_REF_INVALID")
-        if item.get("ref_type") not in ALLOWED_SOURCE_REF_TYPES:
+        if item["ref_type"] not in ALLOWED_SOURCE_REF_TYPES:
             raise IntegratedLearningError("SOURCE_REF_INVALID")
-        if not is_sha256(item.get("ref_id_digest")):
+        if not is_sha256(item["ref_id_digest"]):
             raise IntegratedLearningError("SOURCE_REF_INVALID")
 
 
