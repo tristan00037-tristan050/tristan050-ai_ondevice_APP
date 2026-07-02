@@ -299,3 +299,40 @@ def test_box2_annual_amount_does_not_become_unit_price() -> None:
     assert "금액=12,000,000원" in doc
     assert "단가=[확인 필요]" in doc
     assert "단가=12,000,000원" not in doc
+
+
+def test_box2_unit_price_only_won_does_not_become_amount() -> None:
+    foreign_doc = "품목: 문서정리용역\n수량: 1건\n단가: 120,000원"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액")
+    doc = result.rewritten_doc
+
+    assert "품목=문서정리용역" in doc
+    assert "수량=1건" in doc
+    assert "단가=120,000원" in doc
+    assert "금액=[확인 필요]" in doc
+    assert "금액=120,000원" not in doc
+
+
+def test_box2_unit_price_only_comma_does_not_become_amount() -> None:
+    foreign_doc = "품목: 문서정리용역\n수량: 1건\n단가: 120,000"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액")
+    doc = result.rewritten_doc
+
+    assert "품목=문서정리용역" in doc
+    assert "수량=1건" in doc
+    assert "단가=120,000" in doc
+    assert "금액=[확인 필요]" in doc
+    assert "금액=120,000" not in doc
+
+
+def test_box2_annual_unlabeled_amount_still_allowed_when_not_unit_price() -> None:
+    foreign_doc = "견적서 - (주)미래상사 / 클라우드 라이선스 10석 / 연 12,000,000원"
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "금액=12,000,000원" in doc
+    assert "단가=[확인 필요]" in doc
+    assert "금액=[확인 필요]" not in doc

@@ -343,17 +343,36 @@ def _extract_unit_price_value(text: str) -> str:
     return _clean_value(match.group(1)) if match else CHECK_REQUIRED
 
 
-def _extract_amount(text: str) -> str:
+def _normalize_money_for_compare(value: str) -> str:
+    if value == CHECK_REQUIRED:
+        return ""
+    return re.sub(r"[₩,\s원]", "", str(value)).strip()
+
+
+def _money_has_amount_context(text: str, start: int, end: int) -> bool:
+    window = text[max(0, start - 24): min(len(text), end + 24)]
+    amount_context = r"합계|총액|총\s*금액|청구금액|견적금액|공급가액|금액|부가세\s*포함|연\s*|월\s*"
+    has_amount_context = bool(re.search(amount_context, window, flags=re.IGNORECASE))
+    if re.search(_label_alt(UNIT_PRICE_LABELS), window, flags=re.IGNORECASE) and not has_amount_context:
+        return False
+    return has_amount_context
+
+
+def _extract_amount(text: str, *, unit_price: str = CHECK_REQUIRED) -> str:
     labeled = _extract_labeled_value(text, AMOUNT_LABELS)
     if labeled != CHECK_REQUIRED:
         money = _extract_money_value(labeled)
         return money if money != CHECK_REQUIRED else labeled
 
-    # Prefer currency-looking values over arbitrary numbers so quantity/date do not become amount.
-    money_values = re.findall(MONEY_PATTERN, text)
-    if money_values:
-        return _clean_value(money_values[-1])
-    return CHECK_REQUIRED
+    unit_norm = _normalize_money_for_compare(unit_price)
+    candidates = []
+    for match in re.finditer(MONEY_PATTERN, text):
+        money = _clean_value(match.group(0))
+        if unit_norm and _normalize_money_for_compare(money) == unit_norm:
+            continue
+        if _money_has_amount_context(text, match.start(), match.end()):
+            candidates.append(money)
+    return candidates[-1] if candidates else CHECK_REQUIRED
 
 
 def _extract_money_value(text: str) -> str:
@@ -467,12 +486,14 @@ def _extract_structured_values(foreign_doc: str) -> SourceValueExtraction:
     unit_price = _extract_unit_price_value(foreign_doc)
     item, quantity = _split_item_tail_quantity(item, quantity)
 
+    final_unit_price = _prefer_extracted(unit_price, table_values.unit_price)
+
     values = SourceValueExtraction(
         vendor=_prefer_extracted(vendor, table_values.vendor),
         item=_prefer_extracted(item, table_values.item),
         quantity=_prefer_extracted(quantity, table_values.quantity),
-        unit_price=_prefer_extracted(unit_price, table_values.unit_price),
-        amount=_prefer_extracted(_extract_amount(foreign_doc), table_values.amount),
+        unit_price=final_unit_price,
+        amount=_prefer_extracted(_extract_amount(foreign_doc, unit_price=final_unit_price), table_values.amount),
         schedule=_prefer_extracted(_extract_schedule(foreign_doc), table_values.schedule),
     )
     return _validate_source_spans(foreign_doc, values)
