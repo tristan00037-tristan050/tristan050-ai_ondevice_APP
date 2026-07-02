@@ -5,14 +5,22 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Protocol
 
 SCHEMA_VERSION = "integrated_learning_candidate.v1"
 RETENTION_CLASS = "audit_digest_only"
 SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-REF_RE = re.compile(r"^(?:vault|keyring)://[^\s]{1,240}$|^digest-only-fixture$")
-CANDIDATE_ID_RE = re.compile(r"^ilc-[0-9a-f]{16,64}$")
+REF_RE = re.compile(
+    r"^(?:digest-only-fixture|sha256:[0-9a-f]{64}|"
+    r"vault://butler/evidence/[A-Za-z0-9_-]{1,128}|"
+    r"keyring://butler/evidence/[A-Za-z0-9_-]{1,128})$"
+)
 RFC3339_Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+CANDIDATE_ID_RE = re.compile(r"^ilc-[0-9a-f]{16,64}$")
+EVIDENCE_REF_DENY_RE = re.compile(
+    r"https?://|file://|s3://|gs://|/Users/|/home/|[A-Za-z]:\\|\\\\|\.\.|~|@|\s"
+)
 
 TARGET_KINDS = frozenset(
     {
@@ -45,7 +53,14 @@ FORBIDDEN_FIELD_NAMES = frozenset(
         "md_content",
         "transaction_text",
         "prompt",
+        "prompt_text",
         "response_text",
+        "speaker",
+        "employee_name",
+        "timestamp_raw",
+        "path",
+        "url",
+        "message_id",
         "customer_name",
         "account_number_plain",
         "amount_plain",
@@ -89,7 +104,9 @@ ALLOWED_TOP_LEVEL_FIELDS = frozenset(
 ALLOWED_VERIFICATION_FIELDS = frozenset(
     {"verified_by", "verified_at", "evidence_digest", "evidence_ref"}
 )
-ALLOWED_VERIFIED_BY = frozenset({"group_a", "admin", "manager", "system_contract"})
+ALLOWED_VERIFIED_BY = frozenset(
+    {"group_a", "integrated_learning_verifier", "privacy_officer", "security_reviewer"}
+)
 ALLOWED_SOURCE_REF_FIELDS = frozenset({"ref_type", "ref_id_digest"})
 ALLOWED_SOURCE_REF_TYPES = frozenset({"usage_log", "approval", "folder", "format", "policy"})
 
@@ -159,33 +176,65 @@ def _validate_exact_fields(data: dict[str, Any], allowed: frozenset[str], code: 
         raise IntegratedLearningError(f"{code}:{unknown[0]}")
 
 
-def _validate_verification(value: Any) -> None:
-    if not isinstance(value, dict):
-        raise IntegratedLearningError("VERIFICATION_NOT_OBJECT")
-    _validate_exact_fields(value, ALLOWED_VERIFICATION_FIELDS, "VERIFICATION_UNKNOWN_FIELD")
-    if value.get("verified_by") not in ALLOWED_VERIFIED_BY:
+def _require_plain_string(value: Any, code: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise IntegratedLearningError(code)
+    if value.strip() != value:
+        raise IntegratedLearningError(code)
+    if any(ord(ch) < 32 for ch in value):
+        raise IntegratedLearningError(code)
+    return value
+
+
+def validate_verified_by(value: Any) -> str:
+    verified_by = _require_plain_string(value, "VERIFIED_BY_INVALID")
+    if verified_by not in ALLOWED_VERIFIED_BY:
         raise IntegratedLearningError("VERIFIED_BY_INVALID")
-    if not isinstance(value.get("verified_at"), str) or not RFC3339_Z_RE.fullmatch(value["verified_at"]):
+    return verified_by
+
+
+def validate_verified_at(value: Any) -> str:
+    verified_at = _require_plain_string(value, "VERIFIED_AT_INVALID")
+    if not RFC3339_Z_RE.fullmatch(verified_at):
         raise IntegratedLearningError("VERIFIED_AT_INVALID")
+    try:
+        datetime.strptime(verified_at, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError as exc:
+        raise IntegratedLearningError("VERIFIED_AT_INVALID") from exc
+    return verified_at
+
+
+def validate_evidence_ref(value: Any) -> str:
+    evidence_ref = _require_plain_string(value, "EVIDENCE_REF_INVALID")
+    if EVIDENCE_REF_DENY_RE.search(evidence_ref):
+        raise IntegratedLearningError("EVIDENCE_REF_INVALID")
+    if not REF_RE.fullmatch(evidence_ref):
+        raise IntegratedLearningError("EVIDENCE_REF_INVALID")
+    return evidence_ref
+
+
+def _validate_verification(value: Any) -> None:
+    if not isinstance(value, dict) or set(value) != ALLOWED_VERIFICATION_FIELDS:
+        raise IntegratedLearningError("SCHEMA_KEYS_INVALID")
+    validate_verified_by(value.get("verified_by"))
+    validate_verified_at(value.get("verified_at"))
     if not is_sha256(value.get("evidence_digest")):
         raise IntegratedLearningError("EVIDENCE_DIGEST_INVALID")
-    if not isinstance(value.get("evidence_ref"), str) or not REF_RE.fullmatch(value["evidence_ref"]):
-        raise IntegratedLearningError("EVIDENCE_REF_INVALID")
+    validate_evidence_ref(value.get("evidence_ref"))
 
 
 def _validate_source_refs(value: Any) -> None:
     if not isinstance(value, list) or not value:
-        raise IntegratedLearningError("SOURCE_REFS_REQUIRED")
+        raise IntegratedLearningError("SOURCE_REF_INVALID")
     if len(value) > 64:
-        raise IntegratedLearningError("SOURCE_REFS_TOO_MANY")
+        raise IntegratedLearningError("SOURCE_REF_INVALID")
     for item in value:
-        if not isinstance(item, dict):
-            raise IntegratedLearningError("SOURCE_REF_NOT_OBJECT")
-        _validate_exact_fields(item, ALLOWED_SOURCE_REF_FIELDS, "SOURCE_REF_UNKNOWN_FIELD")
+        if not isinstance(item, dict) or set(item) != ALLOWED_SOURCE_REF_FIELDS:
+            raise IntegratedLearningError("SOURCE_REF_INVALID")
         if item.get("ref_type") not in ALLOWED_SOURCE_REF_TYPES:
-            raise IntegratedLearningError("SOURCE_REF_TYPE_INVALID")
+            raise IntegratedLearningError("SOURCE_REF_INVALID")
         if not is_sha256(item.get("ref_id_digest")):
-            raise IntegratedLearningError("SOURCE_REF_DIGEST_INVALID")
+            raise IntegratedLearningError("SOURCE_REF_INVALID")
 
 
 def validate_candidate_contract(candidate: dict[str, Any]) -> None:
