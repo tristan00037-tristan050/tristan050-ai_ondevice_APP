@@ -1,0 +1,4 @@
+butler_pc_core/learning_adapters/chat_context_producer.py
+butler_pc_core/learning_core/contracts.py
+scripts/verify_integrated_learning_chat_context_producer.py
+tests/learning_adapters/test_chat_context_producer.py

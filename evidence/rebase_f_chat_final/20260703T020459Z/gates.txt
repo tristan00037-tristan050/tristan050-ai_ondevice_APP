@@ -1,0 +1,20 @@
+== R-G1: base ==
+base(HEAD~1)=6be59f8ea32ddeaa9158f322bf1538f1c84cdb18 expected 6be59f8e
+R-G1 PASS
+== R-G2: 8a63529a 부재 ==
+R-G2 PASS (BCDE 없음)
+== R-G2b: BCDE producer 파일 변경 0 ==
+R-G2b PASS
+== R-G3: 비계약 3파일 byte identity vs c610cffb ==
+identical butler_pc_core/learning_adapters/chat_context_producer.py
+identical scripts/verify_integrated_learning_chat_context_producer.py
+identical tests/learning_adapters/test_chat_context_producer.py
+== R-G4: contracts.py diff ==
+hunks=3
+R-G4 PASS (BCDE 삭제 0)
+== R-G6: F producer test ==
+== R-G6: learning_core+adapters 회귀 ==
+== R-G8: verifiers ==
+CHAT_CONTEXT_PRODUCER_CONTRACT_OK=1
+BCDE_PRODUCER_CONTRACT_OK=1
+== R-G5 allowlist / R-G9 scope ==
