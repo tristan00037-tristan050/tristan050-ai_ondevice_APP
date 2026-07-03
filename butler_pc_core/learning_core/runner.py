@@ -14,8 +14,13 @@ class LearningIntakeRunner:
     queue: ArtifactQueue
 
     @classmethod
-    def default(cls, queue_path: str | Path, *, enable_chat: bool = False) -> "LearningIntakeRunner":
-        return cls(UnifiedLearningIntakeGate.with_default_adapters(enable_chat=enable_chat), ArtifactQueue(queue_path))
+    def default(
+        cls, queue_path: str | Path, *, enable_chat: bool = False, chat_run_mode: str = "production"
+    ) -> "LearningIntakeRunner":
+        return cls(
+            UnifiedLearningIntakeGate.with_default_adapters(enable_chat=enable_chat, chat_run_mode=chat_run_mode),
+            ArtifactQueue(queue_path),
+        )
 
     def ingest(self, candidate: dict[str, Any]) -> dict[str, Any]:
         verdict = self.gate.evaluate(candidate)
