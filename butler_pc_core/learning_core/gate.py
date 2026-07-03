@@ -13,9 +13,9 @@ class UnifiedLearningIntakeGate:
 
     @classmethod
     def with_default_adapters(
-        cls, *, enable_chat: bool = False, chat_fixture_mode: bool = True
+        cls, *, enable_chat: bool = False, chat_run_mode: str = "production"
     ) -> "UnifiedLearningIntakeGate":
-        return cls(register_default_adapters(enable_chat=enable_chat, chat_fixture_mode=chat_fixture_mode))
+        return cls(register_default_adapters(enable_chat=enable_chat, chat_run_mode=chat_run_mode))
 
     def evaluate(self, candidate: dict[str, Any]) -> GateResult:
         try:
