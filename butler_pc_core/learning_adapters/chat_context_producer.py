@@ -61,35 +61,39 @@ def coerce_chat_context_artifact(artifact: ChatContextArtifact | Mapping[str, An
         fail("ARTIFACT_UNKNOWN_FIELD")
 
     try:
+        verified_by = data["verified_by"] if "verified_by" in data else "group_a"
+        verified_at = data["verified_at"] if "verified_at" in data else DEFAULT_VERIFIED_AT
+        evidence_ref = data["evidence_ref"] if "evidence_ref" in data else DIGEST_ONLY_EVIDENCE_REF
+        source_refs = data["source_refs"] if "source_refs" in data else ()
         return ChatContextArtifact(
             context_digest=data["context_digest"],
             expected_effect_digest=data["expected_effect_digest"],
             evidence_digest=data["evidence_digest"],
             evidence_report_sha256=data["evidence_report_sha256"],
             dlp_result=dict(data["dlp_result"]),
-            source_refs=tuple(dict(ref) for ref in data.get("source_refs", ())),
+            source_refs=tuple(dict(ref) for ref in source_refs),
             explicit_business_confirmation=_bool_value(data, "explicit_business_confirmation", True),
             manager_or_admin_approved=_bool_value(data, "manager_or_admin_approved", True),
             shadow_eval_cases=_int_value(data, "shadow_eval_cases", 100),
             pii_zero=_bool_value(data, "pii_zero", True),
             false_learning_zero=_bool_value(data, "false_learning_zero", True),
-            verified_by=data.get("verified_by", "group_a"),
-            verified_at=data.get("verified_at", DEFAULT_VERIFIED_AT),
-            evidence_ref=data.get("evidence_ref", DIGEST_ONLY_EVIDENCE_REF),
+            verified_by=verified_by,
+            verified_at=verified_at,
+            evidence_ref=evidence_ref,
         )
     except KeyError as exc:
         fail(f"ARTIFACT_FIELD_REQUIRED:{exc.args[0]}")
 
 
 def _bool_value(data: Mapping[str, Any], name: str, default: bool) -> bool:
-    value = data.get(name, default)
+    value = data[name] if name in data else default
     if not isinstance(value, bool):
         fail(f"{name.upper()}_INVALID")
     return value
 
 
 def _int_value(data: Mapping[str, Any], name: str, default: int) -> int:
-    value = data.get(name, default)
+    value = data[name] if name in data else default
     if type(value) is not int:
         fail(f"{name.upper()}_INVALID")
     return value
