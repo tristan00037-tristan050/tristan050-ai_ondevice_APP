@@ -10,7 +10,7 @@ from typing import Any, Protocol
 SCHEMA_VERSION = "integrated_learning_candidate.v1"
 RETENTION_CLASS = "audit_digest_only"
 SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-REF_RE = re.compile(r"^(?:vault|keyring)://[^\s]{1,240}$|^digest-only-fixture$")
+REF_RE = re.compile(r"^(?:(?:vault|keyring)://[^\s]{1,240}|digest-only-fixture|sha256:[0-9a-f]{64})$")
 CANDIDATE_ID_RE = re.compile(r"^ilc-[0-9a-f]{16,64}$")
 RFC3339_Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
@@ -87,9 +87,19 @@ ALLOWED_TOP_LEVEL_FIELDS = frozenset(
 )
 
 ALLOWED_VERIFICATION_FIELDS = frozenset(
-    {"verified_by", "verified_at", "evidence_digest", "evidence_ref"}
+    {"verified_by", "verified_at", "evidence_digest", "evidence_ref", "evidence_report_sha256"}
 )
-ALLOWED_VERIFIED_BY = frozenset({"group_a", "admin", "manager", "system_contract"})
+ALLOWED_VERIFIED_BY = frozenset(
+    {
+        "group_a",
+        "admin",
+        "manager",
+        "system_contract",
+        "integrated_learning_verifier",
+        "privacy_officer",
+        "security_reviewer",
+    }
+)
 ALLOWED_SOURCE_REF_FIELDS = frozenset({"ref_type", "ref_id_digest"})
 ALLOWED_SOURCE_REF_TYPES = frozenset({"usage_log", "approval", "folder", "format", "policy"})
 
@@ -171,6 +181,11 @@ def _validate_verification(value: Any) -> None:
         raise IntegratedLearningError("EVIDENCE_DIGEST_INVALID")
     if not isinstance(value.get("evidence_ref"), str) or not REF_RE.fullmatch(value["evidence_ref"]):
         raise IntegratedLearningError("EVIDENCE_REF_INVALID")
+    if "evidence_report_sha256" in value:
+        if not is_sha256(value.get("evidence_report_sha256")):
+            raise IntegratedLearningError("EVIDENCE_REPORT_BINDING_INVALID")
+        if value["evidence_report_sha256"] != value["evidence_digest"]:
+            raise IntegratedLearningError("EVIDENCE_REPORT_BINDING_INVALID")
 
 
 def _validate_source_refs(value: Any) -> None:

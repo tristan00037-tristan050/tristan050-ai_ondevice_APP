@@ -1,0 +1,43 @@
+........................................................................ [ 78%]
+....................                                                     [100%]
+=============================== warnings summary ===============================
+tests/learning_core/test_integrated_learning_gate.py::test_box_rule_patch_candidate_is_accepted
+  /Users/kimsunghoon/Desktop/butler/butler-f-chat-final-6be59f8e/butler_sidecar.py:293: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/learning_core/test_integrated_learning_gate.py::test_box_rule_patch_candidate_is_accepted
+tests/learning_core/test_integrated_learning_gate.py::test_box_rule_patch_candidate_is_accepted
+tests/learning_core/test_integrated_learning_gate.py::test_box_rule_patch_candidate_is_accepted
+  /Users/kimsunghoon/Library/Python/3.9/lib/python/site-packages/fastapi/applications.py:4579: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+tests/learning_core/test_integrated_learning_gate.py::test_box_rule_patch_candidate_is_accepted
+  /Users/kimsunghoon/Desktop/butler/butler-f-chat-final-6be59f8e/butler_sidecar.py:297: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+tests/learning_core/test_integrated_learning_gate.py::test_box_rule_patch_candidate_is_accepted
+  /Users/kimsunghoon/Desktop/butler/butler-f-chat-final-6be59f8e/butler_sidecar.py:374: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+92 passed, 6 warnings in 0.60s

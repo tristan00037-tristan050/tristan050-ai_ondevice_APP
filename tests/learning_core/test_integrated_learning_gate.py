@@ -62,6 +62,16 @@ def test_box_rule_patch_candidate_is_accepted():
     assert verdict.drop_reason is None
 
 
+def test_existing_vault_evidence_ref_scope_is_preserved_for_non_chat_candidates():
+    candidate = _candidate()
+    candidate["verification"]["evidence_ref"] = "vault://audit/policy-20260703"
+
+    verdict = UnifiedLearningIntakeGate.with_default_adapters().evaluate(candidate)
+
+    assert verdict.accepted is True
+    assert verdict.drop_reason is None
+
+
 def test_unknown_field_fails_closed():
     candidate = _candidate()
     candidate["unexpected"] = True
