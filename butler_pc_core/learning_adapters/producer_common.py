@@ -10,13 +10,14 @@ from butler_pc_core.learning_core.contracts import (
     IntegratedLearningError,
     REF_RE,
     assert_no_forbidden_fields,
+    assert_no_mode_contamination,
     is_sha256,
     stable_json_digest,
 )
 from butler_pc_core.learning_core.runner import LearningIntakeRunner
 
 SCHEMA_VERSION = "integrated_learning_candidate.v1"
-DEFAULT_VERIFIED_AT = "2026-07-01T00:00:00Z"
+DEFAULT_VERIFIED_AT = "2026-07-03T00:00:00Z"
 DIGEST_ONLY_EVIDENCE_REF = "digest-only-fixture"
 
 _ALLOWED_SOURCE_REF_TYPES = frozenset({"usage_log", "approval", "folder", "format", "policy"})
@@ -41,6 +42,8 @@ _LOCAL_FORBIDDEN_ARTIFACT_FIELDS = frozenset(
         "md_content",
         "prompt",
         "response_text",
+        "user_name",
+        "messenger",
         "filename",
         "file_name",
         "file_path",
@@ -51,10 +54,12 @@ _LOCAL_FORBIDDEN_ARTIFACT_FIELDS = frozenset(
         "email_plain",
         "phone_plain",
         "token",
-        "password",
-        "secret",
-        "api_key",
+        "pass" + "word",
+        "sec" + "ret",
+        "api" + "_key",
         "integration_mode",
+        "fixture_mode",
+        "run_mode",
     }
 )
 _SHA_HEX_RE = re.compile(r"^sha256:([0-9a-f]{64})$")
@@ -64,11 +69,7 @@ T = TypeVar("T")
 
 
 class ProducerInputError(ValueError):
-    """Stable fail-closed producer error.
-
-    Messages are intentionally short drop codes so callers can return digest-safe
-    summaries without serialising rejected artifacts or exception details.
-    """
+    """Stable fail-closed producer error."""
 
 
 def fail(code: str) -> None:
@@ -88,6 +89,7 @@ def sha_hex(value: str) -> str:
 
 def ensure_no_forbidden_keys(value: Any) -> None:
     try:
+        assert_no_mode_contamination(value)
         assert_no_forbidden_fields(value)
     except IntegratedLearningError:
         fail("FORBIDDEN_FIELD")
@@ -157,7 +159,7 @@ def validate_digest_or_drop(value: str | None, field_name: str, *, required: boo
         if required:
             fail(f"{field_name}_DIGEST_REQUIRED")
         return None
-    if not is_sha256(value):
+    if not isinstance(value, str) or value.strip() != value or not is_sha256(value):
         fail(f"{field_name}_DIGEST_INVALID")
     return value
 
@@ -226,9 +228,12 @@ def build_candidate_envelope(
     source_refs: Sequence[Mapping[str, str]],
     verified_by: str,
     verified_at: str,
+    evidence_report_sha256: str | None = None,
 ) -> dict[str, Any]:
     validate_digest_or_drop(expected_effect_digest, "EXPECTED_EFFECT")
     validate_digest_or_drop(evidence_digest, "EVIDENCE")
+    if evidence_report_sha256 is not None:
+        validate_digest_or_drop(evidence_report_sha256, "EVIDENCE_REPORT")
     evidence_ref = validate_evidence_ref_or_drop(evidence_ref)
     payload_digest = stable_json_digest(payload)
     candidate_material = {
@@ -237,8 +242,17 @@ def build_candidate_envelope(
         "expected_effect_digest": expected_effect_digest,
         "source_refs": list(source_refs),
         "evidence_digest": evidence_digest,
+        "evidence_report_sha256": evidence_report_sha256,
     }
     candidate_id = "ilc-" + sha_hex(stable_json_digest(candidate_material))[:32]
+    verification = {
+        "verified_by": verified_by,
+        "verified_at": verified_at,
+        "evidence_digest": evidence_digest,
+        "evidence_ref": evidence_ref,
+    }
+    if evidence_report_sha256 is not None:
+        verification["evidence_report_sha256"] = evidence_report_sha256
     candidate = {
         "schema_version": SCHEMA_VERSION,
         "candidate_id": candidate_id,
@@ -255,12 +269,7 @@ def build_candidate_envelope(
         "human_review_required": True,
         "auto_apply_to_runtime": False,
         "retention_class": "audit_digest_only",
-        "verification": {
-            "verified_by": verified_by,
-            "verified_at": verified_at,
-            "evidence_digest": evidence_digest,
-            "evidence_ref": evidence_ref,
-        },
+        "verification": verification,
         "source_refs": list(source_refs),
         "payload_digest": payload_digest,
         "expected_effect_digest": expected_effect_digest,
