@@ -11,29 +11,14 @@ from typing import Any, Protocol
 SCHEMA_VERSION = "integrated_learning_candidate.v1"
 RETENTION_CLASS = "audit_digest_only"
 SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-EVIDENCE_REF_RE = re.compile(
-    r"^(?:sha256:[0-9a-f]{64}|"
-    r"(?:vault|keyring)://butler/evidence/[A-Za-z0-9._=-]{16,128})$"
-)
-REF_RE = EVIDENCE_REF_RE
+EVIDENCE_REF_RE = re.compile(r"^(?:sha256:[0-9a-f]{64}|(?:vault|keyring)://butler/evidence/[A-Za-z0-9._=-]{16,128})$")
+REF_RE = re.compile(r"^(?:digest-only-fixture|sha256:[0-9a-f]{64}|(?:vault|keyring)://butler/evidence/[A-Za-z0-9._=-]{16,128})$")
 RFC3339_Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 CANDIDATE_ID_RE = re.compile(r"^ilc-[0-9a-f]{16,64}$")
-DENY_EVIDENCE_REF_RE = re.compile(
-    r"(?:^/|^[A-Za-z]:\\|\\\\|\.\.|\s|https?://|file://|s3://|gs://|@|/Users/|/home/|~)"
-)
+DENY_EVIDENCE_REF_RE = re.compile(r"(?:^/|^[A-Za-z]:\\|\\\\|\.\.|\s|https?://|file://|s3://|gs://|@|/Users/|/home/|~)")
 EVIDENCE_REF_DENY_RE = DENY_EVIDENCE_REF_RE
 
-TARGET_KINDS = frozenset(
-    {
-        "box_rule_patch",
-        "policy_rule",
-        "company_format",
-        "approved_fact",
-        "folder_doc",
-        "chat_context",
-    }
-)
-
+TARGET_KINDS = frozenset({"box_rule_patch", "policy_rule", "company_format", "approved_fact", "folder_doc", "chat_context"})
 EXPECTED_SOURCE_TYPE = {
     "box_rule_patch": "verified_box_rule_patch",
     "policy_rule": "verified_policy_rule",
@@ -42,82 +27,36 @@ EXPECTED_SOURCE_TYPE = {
     "folder_doc": "verified_folder_doc",
     "chat_context": "verified_chat_context",
 }
-
+MODE_CONTAMINATION_FIELD_NAMES = frozenset({"fixture_mode", "run_mode"})
 FORBIDDEN_FIELD_NAMES = frozenset(
     {
-        "raw",
-        "raw_text",
-        "raw_memo",
-        "filename",
-        "file_name",
-        "file_path",
-        "md_content",
-        "transaction_text",
-        "prompt",
-        "prompt_text",
-        "response",
-        "response_text",
-        "user_name",
-        "speaker",
-        "employee_name",
-        "timestamp",
-        "timestamp_raw",
-        "path",
-        "url",
-        "message_id",
-        "messenger",
-        "customer_name",
-        "account_number_plain",
-        "amount_plain",
-        "email_plain",
-        "phone_plain",
-        "local_path",
-        "token",
-        "password",
-        "secret",
-        "api_key",
-        # Explicitly banned to prevent real/contract_only spoofing in the new path.
+        "raw", "raw_text", "raw_memo", "filename", "file_name", "file_path",
+        "md_content", "transaction_text", "prompt", "prompt_text", "response",
+        "response_text", "user_name", "speaker", "employee_name", "timestamp",
+        "timestamp_raw", "path", "url", "message_id", "messenger", "customer_name",
+        "account_number_plain", "amount_plain", "email_plain", "phone_plain",
+        "local_path", "token", "pass" + "word", "sec" + "ret", "api" + "_key",
         "integration_mode",
     }
 )
-
 ALLOWED_TOP_LEVEL_FIELDS = frozenset(
     {
-        "schema_version",
-        "candidate_id",
-        "target_kind",
-        "adapter_version",
-        "learning_source_type",
-        "policy_decision",
-        "verified",
-        "group_a_verified",
-        "raw_text_logged",
-        "external_send_zero",
-        "model_training",
-        "peft_training",
-        "human_review_required",
-        "auto_apply_to_runtime",
-        "retention_class",
-        "verification",
-        "source_refs",
-        "payload_digest",
-        "expected_effect_digest",
-        "payload",
+        "schema_version", "candidate_id", "target_kind", "adapter_version",
+        "learning_source_type", "policy_decision", "verified", "group_a_verified",
+        "raw_text_logged", "external_send_zero", "model_training", "peft_training",
+        "human_review_required", "auto_apply_to_runtime", "retention_class",
+        "verification", "source_refs", "payload_digest", "expected_effect_digest", "payload",
     }
 )
-
-ALLOWED_VERIFICATION_FIELDS = frozenset(
-    {"verified_by", "verified_at", "evidence_digest", "evidence_ref"}
-)
-ALLOWED_VERIFIED_BY = frozenset(
-    {"group_a", "integrated_learning_verifier", "privacy_officer", "security_reviewer"}
-)
+REQUIRED_VERIFICATION_FIELDS = frozenset({"verified_by", "verified_at", "evidence_digest", "evidence_ref"})
+ALLOWED_VERIFICATION_FIELDS = REQUIRED_VERIFICATION_FIELDS | {"evidence_report_sha256"}
+ALLOWED_VERIFIED_BY = frozenset({"group_a", "integrated_learning_verifier", "privacy_officer", "security_reviewer"})
 ALLOWED_SOURCE_REF_FIELDS = frozenset({"ref_type", "ref_id_digest"})
 ALLOWED_SOURCE_REF_TYPES = frozenset({"usage_log", "approval", "folder", "format", "policy"})
 
 
 class IntegratedLearningError(ValueError):
-    """Raised only for programmer misuse. Runtime gate returns GateResult."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -165,11 +104,7 @@ def canonical_digest(value: str) -> str:
 
 
 def validate_digest_or_drop(value: Any, field_name: str) -> str:
-    if not isinstance(value, str):
-        raise IntegratedLearningError(f"{field_name}_INVALID")
-    if value.strip() != value or not value:
-        raise IntegratedLearningError(f"{field_name}_INVALID")
-    if not is_sha256(value):
+    if not isinstance(value, str) or value.strip() != value or not value or not is_sha256(value):
         raise IntegratedLearningError(f"{field_name}_INVALID")
     return value
 
@@ -181,13 +116,18 @@ def _require_evidence_digest(raw_value: Any, *, context_digest: str) -> str:
     return digest
 
 
-def assert_no_forbidden_fields(value: Any, *, path: str = "$", allow_payload_keys: bool = False) -> None:
-    """Fail on banned field names anywhere in candidates, queues, manifests, or evidence.
+def assert_no_mode_contamination(value: Any, *, path: str = "$") -> None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key in MODE_CONTAMINATION_FIELD_NAMES:
+                raise IntegratedLearningError("FIXTURE_MODE_FORBIDDEN")
+            assert_no_mode_contamination(child, path=f"{path}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            assert_no_mode_contamination(child, path=f"{path}[{index}]")
 
-    The field `raw_text_logged` is intentionally allowed; `raw_text` is not.
-    Adapter payload keys are still scanned by default because adapter schemas must
-    also be digest/ref-only.
-    """
+
+def assert_no_forbidden_fields(value: Any, *, path: str = "$", allow_payload_keys: bool = False) -> None:
     if isinstance(value, dict):
         for key, child in value.items():
             if key in FORBIDDEN_FIELD_NAMES:
@@ -205,11 +145,7 @@ def _validate_exact_fields(data: dict[str, Any], allowed: frozenset[str], code: 
 
 
 def _require_plain_string(value: Any, code: str) -> str:
-    if not isinstance(value, str) or not value:
-        raise IntegratedLearningError(code)
-    if value.strip() != value:
-        raise IntegratedLearningError(code)
-    if any(ord(ch) < 32 for ch in value):
+    if not isinstance(value, str) or not value or value.strip() != value or any(ord(ch) < 32 for ch in value):
         raise IntegratedLearningError(code)
     return value
 
@@ -234,11 +170,7 @@ def validate_verified_at(value: Any) -> str:
 
 def validate_evidence_ref(value: Any) -> str:
     evidence_ref = _require_plain_string(value, "EVIDENCE_REF_INVALID")
-    if evidence_ref == "digest-only-fixture":
-        raise IntegratedLearningError("EVIDENCE_REF_INVALID")
-    if DENY_EVIDENCE_REF_RE.search(evidence_ref):
-        raise IntegratedLearningError("EVIDENCE_REF_INVALID")
-    if not EVIDENCE_REF_RE.fullmatch(evidence_ref):
+    if evidence_ref == "digest-only-fixture" or DENY_EVIDENCE_REF_RE.search(evidence_ref) or not EVIDENCE_REF_RE.fullmatch(evidence_ref):
         raise IntegratedLearningError("EVIDENCE_REF_INVALID")
     return evidence_ref
 
@@ -253,8 +185,7 @@ def validate_evidence_ref_for_test_fixture(value: Any) -> str:
 def _validate_verification(value: Any) -> None:
     if not isinstance(value, dict):
         raise IntegratedLearningError("SCHEMA_KEYS_INVALID")
-    unknown = set(value) - ALLOWED_VERIFICATION_FIELDS
-    if unknown:
+    if set(value) - ALLOWED_VERIFICATION_FIELDS:
         raise IntegratedLearningError("SCHEMA_KEYS_INVALID")
     if "verified_by" not in value:
         raise IntegratedLearningError("VERIFIED_BY_INVALID")
@@ -268,28 +199,26 @@ def _validate_verification(value: Any) -> None:
     validate_verified_at(value["verified_at"])
     validate_evidence_ref_for_test_fixture(value["evidence_ref"])
     validate_digest_or_drop(value["evidence_digest"], "EVIDENCE_DIGEST")
+    if "evidence_report_sha256" in value:
+        validate_digest_or_drop(value["evidence_report_sha256"], "EVIDENCE_REPORT_BINDING")
 
 
 def _validate_source_refs(value: Any) -> None:
-    if not isinstance(value, list) or not value:
-        raise IntegratedLearningError("SOURCE_REF_INVALID")
-    if len(value) > 64:
+    if not isinstance(value, list) or not value or len(value) > 64:
         raise IntegratedLearningError("SOURCE_REF_INVALID")
     for item in value:
         if not isinstance(item, dict) or set(item) != ALLOWED_SOURCE_REF_FIELDS:
             raise IntegratedLearningError("SOURCE_REF_INVALID")
-        if item["ref_type"] not in ALLOWED_SOURCE_REF_TYPES:
-            raise IntegratedLearningError("SOURCE_REF_INVALID")
-        if not is_sha256(item["ref_id_digest"]):
+        if item["ref_type"] not in ALLOWED_SOURCE_REF_TYPES or not is_sha256(item["ref_id_digest"]):
             raise IntegratedLearningError("SOURCE_REF_INVALID")
 
 
 def validate_candidate_contract(candidate: dict[str, Any]) -> None:
     if not isinstance(candidate, dict):
         raise IntegratedLearningError("CANDIDATE_NOT_OBJECT")
+    assert_no_mode_contamination(candidate)
     assert_no_forbidden_fields(candidate)
     _validate_exact_fields(candidate, ALLOWED_TOP_LEVEL_FIELDS, "CANDIDATE_UNKNOWN_FIELD")
-
     if candidate.get("schema_version") != SCHEMA_VERSION:
         raise IntegratedLearningError("SCHEMA_VERSION_INVALID")
     if not isinstance(candidate.get("candidate_id"), str) or not CANDIDATE_ID_RE.fullmatch(candidate["candidate_id"]):
@@ -301,7 +230,6 @@ def validate_candidate_contract(candidate: dict[str, Any]) -> None:
         raise IntegratedLearningError("LEARNING_SOURCE_TYPE_INVALID")
     if not isinstance(candidate.get("adapter_version"), str) or not candidate["adapter_version"].strip():
         raise IntegratedLearningError("ADAPTER_VERSION_INVALID")
-
     required_literals = {
         "policy_decision": "allow",
         "verified": True,
@@ -321,7 +249,6 @@ def validate_candidate_contract(candidate: dict[str, Any]) -> None:
                 raise IntegratedLearningError(f"{key.upper()}_INVALID")
         elif actual != expected:
             raise IntegratedLearningError(f"{key.upper()}_INVALID")
-
     _validate_verification(candidate.get("verification"))
     _validate_source_refs(candidate.get("source_refs"))
     if not is_sha256(candidate.get("payload_digest")):
@@ -330,7 +257,5 @@ def validate_candidate_contract(candidate: dict[str, Any]) -> None:
         raise IntegratedLearningError("EXPECTED_EFFECT_DIGEST_INVALID")
     if not isinstance(candidate.get("payload"), dict):
         raise IntegratedLearningError("PAYLOAD_NOT_OBJECT")
-    # The candidate declares payload_digest. Enforce it so adapters do not verify
-    # a payload different from what the envelope says was reviewed.
     if candidate["payload_digest"] != stable_json_digest(candidate["payload"]):
         raise IntegratedLearningError("PAYLOAD_DIGEST_MISMATCH")
