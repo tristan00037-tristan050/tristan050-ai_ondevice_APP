@@ -27,7 +27,7 @@ class AdapterRegistry:
         return adapter.verify(candidate)
 
 
-def register_default_adapters(*, enable_chat: bool = False, chat_fixture_mode: bool = True) -> AdapterRegistry:
+def register_default_adapters(*, enable_chat: bool = False, chat_run_mode: str = "production") -> AdapterRegistry:
     # Imports are local to keep learning_core independent from adapter business rules.
     from butler_pc_core.learning_adapters.approved_fact import ApprovedFactAdapter
     from butler_pc_core.learning_adapters.box_rule_patch import BoxRulePatchAdapter
@@ -42,5 +42,5 @@ def register_default_adapters(*, enable_chat: bool = False, chat_fixture_mode: b
     registry.register(CompanyFormatAdapter())
     registry.register(ApprovedFactAdapter())
     registry.register(FolderDocAdapter())
-    registry.register(ChatContextAdapter(enabled=enable_chat, fixture_mode=chat_fixture_mode))
+    registry.register(ChatContextAdapter(enabled=enable_chat, run_mode=chat_run_mode))
     return registry
