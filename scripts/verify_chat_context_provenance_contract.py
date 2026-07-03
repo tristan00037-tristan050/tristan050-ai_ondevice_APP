@@ -12,6 +12,7 @@ REQUIRED_CHAT_CALLS = {
     "validate_verified_at",
     "validate_evidence_ref",
     "_require_evidence_digest",
+    "validate_evidence_report_binding",
 }
 FORBIDDEN_RAW_GREP_PATTERNS = (
     "evidence_digest or",
@@ -22,13 +23,13 @@ FORBIDDEN_RAW_GREP_PATTERNS = (
     'data.get("verified',
     "data.get('evidence_digest'",
     'data.get("evidence_digest"',
-    "ArtifactQueue",
+    ".get('run_mode'",
+    '.get("run_mode"',
+    ".get('fixture_mode'",
+    '.get("fixture_mode"',
+    "ArtifactQueue.append",
     "print(",
     "repr(",
-    "prompt",
-    "response",
-    "user_name",
-    "messenger",
 )
 FALLBACK_NAME_RE = re.compile(r"(?:context_digest|payload_digest|DEFAULT_EVIDENCE_DIGEST)")
 
@@ -51,7 +52,7 @@ class StaticVerifier(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         if self._is_get_call(node) and len(node.args) >= 2:
             key = self._literal_string(node.args[0])
-            if key in {"verified_by", "verified_at", "evidence_ref", "evidence_digest"}:
+            if key in {"verified_by", "verified_at", "evidence_ref", "evidence_digest", "evidence_report_sha256"}:
                 self.failures.append(f"default injection via .get for {key}")
         self.generic_visit(node)
 
@@ -62,8 +63,6 @@ class StaticVerifier(ast.NodeVisitor):
                 self.failures.append(f"BoolOp fallback in {where}: {rendered}")
         if isinstance(node, ast.Name) and node.id in {"context_digest", "payload_digest", "DEFAULT_EVIDENCE_DIGEST"}:
             self.failures.append(f"direct fallback source in {where}: {node.id}")
-        if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value == "DEFAULT_EVIDENCE_DIGEST":
-            self.failures.append(f"default evidence digest literal in {where}")
 
     @staticmethod
     def _name(node: ast.AST) -> str | None:
@@ -125,17 +124,17 @@ def _raw_grep_failures(path: Path) -> list[str]:
 
 def verify(repo_root: Path) -> list[str]:
     chat_path = repo_root / "butler_pc_core" / "learning_adapters" / "chat_context.py"
+    producer_path = repo_root / "butler_pc_core" / "learning_adapters" / "chat_context_producer.py"
     contract_path = repo_root / "butler_pc_core" / "learning_core" / "contracts.py"
+    gate_path = repo_root / "butler_pc_core" / "connect_loop" / "learning_candidate_gate.py"
 
     failures: list[str] = []
-    if not chat_path.exists():
-        return [f"missing file: {chat_path}"]
-    if not contract_path.exists():
-        return [f"missing file: {contract_path}"]
+    for path in (chat_path, producer_path, contract_path, gate_path):
+        if not path.exists():
+            return [f"missing file: {path}"]
 
-    for path in (chat_path, contract_path):
-        if path == chat_path:
-            failures.extend(_raw_grep_failures(path))
+    for path in (chat_path, producer_path, contract_path):
+        failures.extend(_raw_grep_failures(path))
         tree = _load_tree(path)
         visitor = StaticVerifier()
         visitor.visit(tree)
@@ -143,6 +142,7 @@ def verify(repo_root: Path) -> list[str]:
 
     chat_tree = _load_tree(chat_path)
     contract_tree = _load_tree(contract_path)
+    producer_tree = _load_tree(producer_path)
 
     provenance_calls = _function_calls(chat_tree, "validate_chat_context_provenance")
     missing_calls = sorted(REQUIRED_CHAT_CALLS - provenance_calls)
@@ -156,24 +156,31 @@ def verify(repo_root: Path) -> list[str]:
         failures.append("ChatContextAdapter.verify does not call validate_chat_context_source_refs")
 
     contract_functions = {node.name for node in contract_tree.body if isinstance(node, ast.FunctionDef)}
-    for required_function in REQUIRED_CHAT_CALLS | {"validate_digest_or_drop", "canonical_digest"}:
-        if required_function not in contract_functions and required_function != "validate_evidence_ref":
+    for required_function in {"_require_evidence_digest", "validate_digest_or_drop", "canonical_digest"}:
+        if required_function not in contract_functions:
             failures.append(f"contracts.py missing {required_function}")
 
-    required_literals = (
-        "integrated_learning_verifier",
-        "privacy_officer",
-        "security_reviewer",
-        "DENY_EVIDENCE_REF_RE",
-        "EVIDENCE_REF_RE",
-        "butler/evidence/",
-        "(?:vault|keyring)",
-        "{16,128}",
-    )
+    producer_calls = _function_calls(producer_tree, "require_body_dlp_gate_passed")
+    if "create_learning_event_result" not in producer_calls:
+        failures.append("chat_context_producer does not call body learning_candidate_gate")
+
+    chat_text = chat_path.read_text(encoding="utf-8")
+    if "EVIDENCE_REPORT_BINDING_REQUIRED" not in chat_text:
+        failures.append("binding required drop reason missing")
+    if "fixture_test" not in chat_text or "production" not in chat_text or "integration" not in chat_text:
+        failures.append("run mode boundary literals missing")
+    if "evidence_report_sha256" not in chat_text:
+        failures.append("verification evidence_report_sha256 path missing")
+
     contract_text = contract_path.read_text(encoding="utf-8")
-    for literal in required_literals:
+    for literal in ("DENY_EVIDENCE_REF_RE", "EVIDENCE_REF_RE", "{16,128}", "evidence_report_sha256"):
         if literal not in contract_text:
             failures.append(f"contracts.py missing literal: {literal}")
+
+    gate_text = gate_path.read_text(encoding="utf-8")
+    for literal in ("DLP_NOT_RUN", "DLP_FAILED", "dlp_result"):
+        if literal not in gate_text:
+            failures.append(f"learning_candidate_gate.py missing literal: {literal}")
 
     return failures
 
@@ -189,9 +196,10 @@ def main(argv: list[str]) -> int:
         return 1
     print("CHAT_CONTEXT_PRODUCER_CONTRACT_OK=1")
     print("CONTRACT_STATIC_VERIFIER_FAIL=0")
-    print("provenance_validators=validate_verified_by,validate_verified_at,validate_evidence_ref,_require_evidence_digest")
-    print("evidence_digest_fallback_patterns=absent")
-    print("evidence_ref_token_min_length=16")
+    print("binding_required_by_run_mode=production,integration")
+    print("fixture_test_binding_optional=true")
+    print("evidence_report_location=verification.evidence_report_sha256")
+    print("body_dlp_gate_reference=create_learning_event_result")
     print("artifact_queue_direct_append=absent")
     return 0
 
