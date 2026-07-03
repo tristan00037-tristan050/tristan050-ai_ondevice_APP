@@ -1,6 +1,15 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+from butler_pc_core.cards.box2 import rewrite_service
 from butler_pc_core.cards.box2.rewrite_service import rewrite_to_company_format
+from butler_pc_core.cards.box2.rewrite_service import (
+    FORBIDDEN_REPORT_KEYS,
+    evaluate_eval_set,
+    score_rewrite_against_gold,
+)
 
 
 def _assert_expected_values_are_source_backed(foreign_doc: str, *values: str) -> None:
@@ -336,3 +345,112 @@ def test_box2_annual_unlabeled_amount_still_allowed_when_not_unit_price() -> Non
     assert "금액=12,000,000원" in doc
     assert "단가=[확인 필요]" in doc
     assert "금액=[확인 필요]" not in doc
+
+
+def test_box2_gold_scorer_full_preservation_scores_one() -> None:
+    score = score_rewrite_against_gold(
+        "거래처=라온상사; 품목=A4용지; 수량=50박스; 금액=120,000원",
+        must_keep=["라온상사", "A4용지", "50박스", "120,000원"],
+        fields={"거래처": "라온상사", "품목": "A4용지", "수량": "50박스", "금액": "120,000원"},
+        format_value="거래처/품목/수량/금액",
+    )
+
+    assert score["value_exact_preservation"] == 1.0
+    assert score["value_canonical_preservation"] == 1.0
+    assert score["field_precision"] == 1.0
+    assert score["field_recall"] == 1.0
+
+
+def test_box2_gold_scorer_missing_value_counts_false_negative() -> None:
+    score = score_rewrite_against_gold(
+        "거래처=라온상사; 품목=A4용지; 금액=[확인 필요]",
+        must_keep=["라온상사", "A4용지", "120,000원"],
+        fields={"거래처": "라온상사", "품목": "A4용지", "금액": "120,000원"},
+        format_value="거래처/품목/금액",
+    )
+
+    assert score["value_canonical_preservation"] < 1.0
+    assert score["false_negative_total"] == 1
+    assert score["field_recall"] < 1.0
+
+
+def test_box2_gold_scorer_separates_exact_and_canonical_values() -> None:
+    score = score_rewrite_against_gold(
+        "수량=50",
+        must_keep=["50박스"],
+        fields={"수량": "50박스"},
+        format_value="수량",
+    )
+
+    assert score["value_exact_preservation"] == 0.0
+    assert score["value_canonical_preservation"] == 1.0
+    assert score["field_precision"] == 1.0
+
+
+def test_box2_gold_scorer_wrong_fill_counts_false_positive() -> None:
+    score = score_rewrite_against_gold(
+        "금액=999,000원",
+        must_keep=["120,000원"],
+        fields={"금액": "120,000원"},
+        format_value="금액",
+    )
+
+    assert score["false_positive_total"] == 1
+    assert score["false_negative_total"] == 1
+    assert score["field_precision"] == 0.0
+
+
+def test_box2_gold_eval_reads_real_keys_and_reports_digest_safe_summary(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(rewrite_service, "EXPECTED_EVAL_SHA256_PREFIX", "")
+    eval_path = tmp_path / "box2_eval.json"
+    case = {
+        "foreign": "거래처: 라온상사\n품목: A4용지\n수량: 50박스\n단가: 1,000원\n금액: 50,000원\n납품 일정: 2026-07-03",
+        "format": "거래처/품목/수량/단가/금액/일정",
+        "must_keep": ["라온상사", "A4용지", "50박스", "1,000원", "50,000원", "2026-07-03"],
+        "fields": {
+            "거래처": "라온상사",
+            "품목": "A4용지",
+            "수량": "50박스",
+            "단가": "1,000원",
+            "금액": "50,000원",
+            "일정": "2026-07-03",
+        },
+    }
+    eval_path.write_text(json.dumps([case for _ in range(10)], ensure_ascii=False), encoding="utf-8")
+
+    report = evaluate_eval_set(eval_path)
+
+    assert report["schema_version"] == "box2.eval.v3_gold"
+    assert report["scorer_version"] == "box2.eval.v3_gold"
+    assert report["status"] == "PASS"
+    assert report["n"] == 10
+    assert report["new_score"] == 1.0
+    assert report["value_exact_preservation"] == 1.0
+    assert report["eval_set_sha256"]
+    assert report["baseline_score"] == 0.30
+    assert report["delta"] == 0.70
+    assert report["field_precision"] == 1.0
+    assert report["field_recall"] == 1.0
+    assert report["false_positive_total"] == 0
+    assert report["false_negative_total"] == 0
+    assert report["external_send_zero"] is True
+    assert report["raw_saved_zero"] is True
+    assert FORBIDDEN_REPORT_KEYS.isdisjoint(report)
+
+
+def test_box2_gold_eval_rejects_legacy_keys_without_raw_echo(tmp_path: Path) -> None:
+    eval_path = tmp_path / "box2_eval_legacy.json"
+    eval_path.write_text(json.dumps([{"foreign_doc": "raw", "our_format": "raw"}]), encoding="utf-8")
+
+    report = evaluate_eval_set(eval_path)
+
+    assert report["status"] == "CASE_1_LEGACY_KEYS_FORBIDDEN"
+    assert FORBIDDEN_REPORT_KEYS.isdisjoint(report)
+
+
+def test_box2_gold_scorer_source_has_no_constant_metric_shortcut() -> None:
+    source = Path(rewrite_service.__file__).read_text(encoding="utf-8")
+
+    assert "semantic_preservation_score\": 0.85" not in source
+    assert "0.85 if" not in source
+    assert "+ 0.02" not in source

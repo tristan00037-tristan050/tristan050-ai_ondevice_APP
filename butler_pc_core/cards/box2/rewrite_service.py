@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -27,6 +29,22 @@ EVAL_CANDIDATE_PATHS = [
 ]
 
 CHECK_REQUIRED = "[확인 필요]"
+SCORER_VERSION = "box2.eval.v3_gold"
+BASELINE_SCORE = 0.30
+EXPECTED_GOLD_CASE_COUNT = 10
+EXPECTED_EVAL_SHA256_PREFIX = "1e0f2766"
+FORBIDDEN_REPORT_KEYS = {
+    "foreign",
+    "foreign_doc",
+    "our_format",
+    "input_1",
+    "input_2",
+    "must_keep",
+    "fields",
+    "rewritten_doc",
+    "raw",
+    "raw_text",
+}
 
 VENDOR_LABELS = (
     "거래처",
@@ -616,18 +634,137 @@ def rewrite_to_company_format(foreign_doc: str, our_format: str, options: Rewrit
     )
 
 
-def evaluate_rewrite_contract(rewritten_doc: str, foreign_doc: str, our_format: str) -> dict[str, float | bool | int | str]:
-    section_hits = sum(1 for section in OUTPUT_SECTIONS if f"{section}:" in rewritten_doc)
-    unsupported_fact_rate = 0.0 if "[확인 필요]" in rewritten_doc else 0.02
+def _canon_value(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", str(value))
+    normalized = re.sub(r"\s+", "", normalized)
+    normalized = re.sub(r"[,，₩￦]", "", normalized)
+    normalized = re.sub(r"(?:KRW|원)", "", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(rf"(?<=\d)(?:{QUANTITY_UNITS}|석)\b", "", normalized, flags=re.IGNORECASE)
+    return normalized.lower()
+
+
+def _format_label_set(format_value: Any, candidate_labels: set[str]) -> set[str]:
+    if isinstance(format_value, Mapping):
+        return {str(label) for label in format_value if str(label) in candidate_labels}
+    if isinstance(format_value, list):
+        return {str(label) for label in format_value if str(label) in candidate_labels}
+
+    format_text = str(format_value)
+    return {label for label in candidate_labels if re.search(rf"(?<!\w){re.escape(label)}(?!\w)", format_text)}
+
+
+def _allowed_gold_labels(fields: Mapping[str, str], format_value: Any) -> list[str]:
+    field_labels = {str(label).strip() for label in fields if str(label).strip()}
+    format_labels = _format_label_set(format_value, field_labels)
+    return sorted(field_labels & format_labels, key=len, reverse=True)
+
+
+def _parse_allowed_label_values(rewritten_doc: str, allowed_labels: list[str]) -> dict[str, str]:
+    if not allowed_labels:
+        return {}
+
+    label_alt = "|".join(re.escape(label) for label in sorted(allowed_labels, key=len, reverse=True))
+    label_re = re.compile(
+        rf"(?:^|(?<=[\s\n/|;]))(?P<label>{label_alt})\s*(?:[:：=]\s*)",
+        flags=re.IGNORECASE,
+    )
+    matches = list(label_re.finditer(rewritten_doc))
+    values: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        label = match.group("label")
+        value_start = match.end()
+        next_label_start = matches[index + 1].start() if index + 1 < len(matches) else len(rewritten_doc)
+        segment = rewritten_doc[value_start:next_label_start]
+        stop_match = re.search(r"\n|/|\||;", segment)
+        value_end = value_start + stop_match.start() if stop_match else next_label_start
+        value = _clean_value(rewritten_doc[value_start:value_end])
+        if value and value != CHECK_REQUIRED and label not in values:
+            values[label] = value
+    return values
+
+
+def score_rewrite_against_gold(
+    rewritten_doc: str,
+    *,
+    must_keep: list[str],
+    fields: Mapping[str, str],
+    format_value: Any,
+) -> dict[str, float | int]:
+    allowed_labels = _allowed_gold_labels(fields, format_value)
+    observed = _parse_allowed_label_values(rewritten_doc, allowed_labels)
+    canon_doc = _canon_value(rewritten_doc)
+    keep_values = [value for value in must_keep if isinstance(value, str) and value]
+
+    exact_hits = sum(1 for value in keep_values if value in rewritten_doc)
+    canonical_hits = sum(1 for value in keep_values if _canon_value(value) and _canon_value(value) in canon_doc)
+
+    true_positive = 0
+    false_positive = 0
+    false_negative = 0
+    exact_field_hits = 0
+    for label in allowed_labels:
+        gold_value = str(fields[label])
+        observed_value = observed.get(label, "")
+        if not observed_value or observed_value == CHECK_REQUIRED:
+            false_negative += 1
+            continue
+        if _canon_value(observed_value) == _canon_value(gold_value):
+            true_positive += 1
+            if observed_value == gold_value:
+                exact_field_hits += 1
+        else:
+            false_positive += 1
+            false_negative += 1
+
+    precision_denominator = true_positive + false_positive
+    recall_denominator = true_positive + false_negative
+    keep_denominator = len(keep_values) or 1
+
     return {
-        "schema_version": "box2.helper3.eval.v1",
+        "value_exact_preservation": exact_hits / keep_denominator,
+        "value_canonical_preservation": canonical_hits / keep_denominator,
+        "field_precision": 1.0 if precision_denominator == 0 else true_positive / precision_denominator,
+        "field_recall": 1.0 if recall_denominator == 0 else true_positive / recall_denominator,
+        "false_positive_total": false_positive,
+        "false_negative_total": false_negative,
+        "field_exact_hits": exact_field_hits,
+        "field_total": len(allowed_labels),
+    }
+
+
+def evaluate_rewrite_contract(
+    rewritten_doc: str,
+    foreign_doc: str,
+    our_format: Any,
+    *,
+    must_keep: list[str] | None = None,
+    fields: Mapping[str, str] | None = None,
+) -> dict[str, float | bool | int | str]:
+    gold_values = must_keep or []
+    gold_fields = fields or {}
+    gold_score = score_rewrite_against_gold(
+        rewritten_doc,
+        must_keep=gold_values,
+        fields=gold_fields,
+        format_value=our_format,
+    )
+    section_hits = sum(1 for section in OUTPUT_SECTIONS if f"{section}:" in rewritten_doc)
+    return {
+        "schema_version": SCORER_VERSION,
+        "scorer_version": SCORER_VERSION,
         "eval_set_path": "contract_inline",
         "sample_count": 1,
         "rewrite_structure_accuracy": section_hits / len(OUTPUT_SECTIONS),
-        "required_field_coverage": section_hits / len(OUTPUT_SECTIONS),
-        "unsupported_fact_rate": unsupported_fact_rate,
+        "required_field_coverage": gold_score["field_recall"],
+        "unsupported_fact_rate": float(gold_score["false_positive_total"]),
         "format_match_score": 1.0 if "최종 문안:" in rewritten_doc else 0.0,
-        "semantic_preservation_score": 0.85 if foreign_doc and our_format else 0.0,
+        "semantic_preservation_score": gold_score["value_canonical_preservation"],
+        "value_exact_preservation": gold_score["value_exact_preservation"],
+        "value_canonical_preservation": gold_score["value_canonical_preservation"],
+        "field_precision": gold_score["field_precision"],
+        "field_recall": gold_score["field_recall"],
+        "false_positive_total": gold_score["false_positive_total"],
+        "false_negative_total": gold_score["false_negative_total"],
         "mock_result": False,
         "external_send_zero": True,
         "raw_saved_zero": True,
@@ -673,21 +810,125 @@ def _load_eval_samples(eval_path: Path) -> list[dict[str, Any]]:
     return samples
 
 
-def _empty_eval(status: str, eval_path: str = "") -> dict[str, float | bool | int | str]:
-    return {
-        "schema_version": "box2.helper3.eval.v1",
+def _eval_set_sha256(eval_path: Path) -> str:
+    hasher = hashlib.sha256()
+    files = [eval_path] if eval_path.is_file() else sorted(
+        child for child in eval_path.rglob("*") if child.is_file() and child.suffix.lower() in {".json", ".jsonl"}
+    )
+    for path in files:
+        hasher.update(path.name.encode("utf-8"))
+        hasher.update(b"\0")
+        hasher.update(path.read_bytes())
+        hasher.update(b"\0")
+    return hasher.hexdigest()
+
+
+def _validate_case_schema(item: Mapping[str, Any], *, index: int) -> tuple[str | None, tuple[str, Any, list[str], dict[str, str]] | None]:
+    legacy_keys = {"foreign_doc", "our_format", "input_1", "input_2"}
+    if legacy_keys.intersection(item):
+        return f"CASE_{index}_LEGACY_KEYS_FORBIDDEN", None
+
+    foreign = item.get("foreign")
+    if not isinstance(foreign, str) or not foreign.strip():
+        return f"CASE_{index}_FOREIGN_MISSING", None
+
+    format_value = item.get("format")
+    if format_value is None:
+        return f"CASE_{index}_FORMAT_MISSING", None
+
+    must_keep_raw = item.get("must_keep")
+    if (
+        not isinstance(must_keep_raw, list)
+        or not must_keep_raw
+        or any(not isinstance(value, str) or not value for value in must_keep_raw)
+    ):
+        return f"CASE_{index}_MUST_KEEP_INVALID", None
+
+    fields_raw = item.get("fields")
+    if (
+        not isinstance(fields_raw, Mapping)
+        or not fields_raw
+        or any(not isinstance(label, str) or not isinstance(value, str) or not label or not value for label, value in fields_raw.items())
+    ):
+        return f"CASE_{index}_FIELDS_INVALID", None
+
+    fields = {str(label): str(value) for label, value in fields_raw.items()}
+    if not _allowed_gold_labels(fields, format_value):
+        return f"CASE_{index}_ALLOWED_LABELS_EMPTY", None
+
+    return None, (foreign, format_value, list(must_keep_raw), fields)
+
+
+def _assert_digest_safe_report(report: Mapping[str, Any]) -> None:
+    if FORBIDDEN_REPORT_KEYS.intersection(report):
+        raise ValueError("REPORT_FORBIDDEN_KEY")
+
+
+def _empty_eval(status: str, eval_path: str = "", eval_set_sha256: str = "") -> dict[str, float | bool | int | str]:
+    report = {
+        "schema_version": SCORER_VERSION,
+        "scorer_version": SCORER_VERSION,
         "status": status,
         "eval_set_path": eval_path,
+        "eval_set_sha256": eval_set_sha256,
+        "baseline_score": BASELINE_SCORE,
+        "new_score": 0.0,
+        "value_exact_preservation": 0.0,
+        "value_canonical_preservation": 0.0,
+        "delta": -BASELINE_SCORE,
+        "n": 0,
         "sample_count": 0,
-        "rewrite_structure_accuracy": 0.0,
-        "required_field_coverage": 0.0,
-        "unsupported_fact_rate": 0.0,
-        "format_match_score": 0.0,
-        "semantic_preservation_score": 0.0,
-        "mock_result": False,
+        "field_precision": 0.0,
+        "field_recall": 0.0,
+        "false_positive_total": 0,
+        "false_negative_total": 0,
         "external_send_zero": True,
         "raw_saved_zero": True,
+        "mock_result": False,
     }
+    _assert_digest_safe_report(report)
+    return report
+
+
+def _aggregate_scores(
+    *,
+    selected: Path,
+    eval_set_sha256: str,
+    scores: list[dict[str, float | bool | int | str]],
+) -> dict[str, float | bool | int | str]:
+    sample_count = len(scores)
+    avg = lambda key: sum(float(row[key]) for row in scores) / sample_count
+    false_positive_total = sum(int(row["false_positive_total"]) for row in scores)
+    false_negative_total = sum(int(row["false_negative_total"]) for row in scores)
+    canonical_score = avg("value_canonical_preservation")
+    exact_score = avg("value_exact_preservation")
+    status = "PASS" if sample_count == EXPECTED_GOLD_CASE_COUNT else "PARTIAL"
+    if not eval_set_sha256.startswith(EXPECTED_EVAL_SHA256_PREFIX):
+        status = "PARTIAL_EVAL_SHA_MISMATCH"
+
+    report = {
+        "schema_version": SCORER_VERSION,
+        "scorer_version": SCORER_VERSION,
+        "status": status,
+        "eval_set_path": str(selected),
+        "eval_set_sha256": eval_set_sha256,
+        "baseline_score": BASELINE_SCORE,
+        "new_score": canonical_score,
+        "value_exact_preservation": exact_score,
+        "value_canonical_preservation": canonical_score,
+        "delta": canonical_score - BASELINE_SCORE,
+        "n": sample_count,
+        "sample_count": sample_count,
+        "field_precision": avg("field_precision"),
+        "field_recall": avg("field_recall"),
+        "false_positive_total": false_positive_total,
+        "false_negative_total": false_negative_total,
+        "external_send_zero": True,
+        "raw_saved_zero": True,
+        "mock_result": False,
+    }
+    _assert_digest_safe_report(report)
+    return report
 
 
 def evaluate_eval_set(eval_path: Path | None = None) -> dict[str, float | bool | int | str]:
@@ -697,29 +938,34 @@ def evaluate_eval_set(eval_path: Path | None = None) -> dict[str, float | bool |
 
     samples = _load_eval_samples(selected)
     if not samples:
-        return _empty_eval("BLOCK_EVAL_SET_MISSING", str(selected))
+        return _empty_eval("BLOCK_EVAL_SET_MISSING", str(selected), _eval_set_sha256(selected))
 
-    scores = []
-    for item in samples:
-        foreign_doc = str(item.get("foreign_doc") or item.get("input_1") or "")
-        our_format = str(item.get("our_format") or item.get("input_2") or "")
-        result = rewrite_to_company_format(foreign_doc, our_format)
-        scores.append(evaluate_rewrite_contract(result.rewritten_doc, foreign_doc, our_format))
+    eval_set_sha256 = _eval_set_sha256(selected)
+    scores: list[dict[str, float | bool | int | str]] = []
+    for index, item in enumerate(samples, start=1):
+        code, validated = _validate_case_schema(item, index=index)
+        if code is not None or validated is None:
+            return _empty_eval(code or "SCHEMA_INVALID", str(selected), eval_set_sha256)
+        foreign_doc, format_value, must_keep, fields = validated
+        result = rewrite_to_company_format(foreign_doc, str(format_value))
+        scores.append(
+            evaluate_rewrite_contract(
+                result.rewritten_doc,
+                foreign_doc,
+                format_value,
+                must_keep=must_keep,
+                fields=fields,
+            )
+        )
 
-    sample_count = len(scores)
-    avg = lambda key: sum(float(row[key]) for row in scores) / sample_count
-    status = "PASS" if sample_count >= 20 else "PARTIAL_DONE_EVAL_INSUFFICIENT"
-    return {
-        "schema_version": "box2.helper3.eval.v1",
-        "status": status,
-        "eval_set_path": str(selected),
-        "sample_count": sample_count,
-        "rewrite_structure_accuracy": avg("rewrite_structure_accuracy"),
-        "required_field_coverage": avg("required_field_coverage"),
-        "unsupported_fact_rate": avg("unsupported_fact_rate"),
-        "format_match_score": avg("format_match_score"),
-        "semantic_preservation_score": avg("semantic_preservation_score"),
-        "mock_result": False,
-        "external_send_zero": True,
-        "raw_saved_zero": True,
-    }
+    return _aggregate_scores(selected=selected, eval_set_sha256=eval_set_sha256, scores=scores)
+
+
+def write_value_preservation_eval_summary(
+    evidence_path: Path = Path("evidence/box2/value_preservation_eval_summary.json"),
+    eval_path: Path | None = None,
+) -> dict[str, float | bool | int | str]:
+    payload = evaluate_eval_set(eval_path)
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return payload

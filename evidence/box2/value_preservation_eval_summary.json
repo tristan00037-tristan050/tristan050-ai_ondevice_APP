@@ -1,0 +1,21 @@
+{
+  "baseline_score": 0.3,
+  "delta": -0.3,
+  "eval_set_path": "",
+  "eval_set_sha256": "",
+  "external_send_zero": true,
+  "false_negative_total": 0,
+  "false_positive_total": 0,
+  "field_precision": 0.0,
+  "field_recall": 0.0,
+  "mock_result": false,
+  "n": 0,
+  "new_score": 0.0,
+  "raw_saved_zero": true,
+  "sample_count": 0,
+  "schema_version": "box2.eval.v3_gold",
+  "scorer_version": "box2.eval.v3_gold",
+  "status": "BLOCK_EVAL_SET_MISSING",
+  "value_canonical_preservation": 0.0,
+  "value_exact_preservation": 0.0
+}
