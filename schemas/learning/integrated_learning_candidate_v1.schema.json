@@ -27,138 +27,48 @@
     "payload"
   ],
   "properties": {
-    "schema_version": {
-      "const": "integrated_learning_candidate.v1"
-    },
-    "candidate_id": {
-      "type": "string",
-      "pattern": "^ilc-[0-9a-f]{16,64}$"
-    },
-    "target_kind": {
-      "enum": [
-        "box_rule_patch",
-        "policy_rule",
-        "company_format",
-        "approved_fact",
-        "folder_doc",
-        "chat_context"
-      ]
-    },
-    "adapter_version": {
-      "type": "string",
-      "minLength": 3,
-      "maxLength": 96
-    },
-    "learning_source_type": {
-      "enum": [
-        "verified_box_rule_patch",
-        "verified_policy_rule",
-        "verified_company_format",
-        "verified_approved_fact",
-        "verified_folder_doc",
-        "verified_chat_context"
-      ]
-    },
-    "policy_decision": {
-      "const": "allow"
-    },
-    "verified": {
-      "const": true
-    },
-    "group_a_verified": {
-      "const": true
-    },
-    "raw_text_logged": {
-      "const": false
-    },
-    "external_send_zero": {
-      "const": true
-    },
-    "model_training": {
-      "const": false
-    },
-    "peft_training": {
-      "const": false
-    },
-    "human_review_required": {
-      "const": true
-    },
-    "auto_apply_to_runtime": {
-      "const": false
-    },
-    "retention_class": {
-      "const": "audit_digest_only"
-    },
+    "schema_version": {"const": "integrated_learning_candidate.v1"},
+    "candidate_id": {"type": "string", "pattern": "^ilc-[0-9a-f]{16,64}$"},
+    "target_kind": {"enum": ["box_rule_patch", "policy_rule", "company_format", "approved_fact", "folder_doc", "chat_context"]},
+    "adapter_version": {"type": "string", "minLength": 3, "maxLength": 96},
+    "learning_source_type": {"enum": ["verified_box_rule_patch", "verified_policy_rule", "verified_company_format", "verified_approved_fact", "verified_folder_doc", "verified_chat_context"]},
+    "policy_decision": {"const": "allow"},
+    "verified": {"const": true},
+    "group_a_verified": {"const": true},
+    "raw_text_logged": {"const": false},
+    "external_send_zero": {"const": true},
+    "model_training": {"const": false},
+    "peft_training": {"const": false},
+    "human_review_required": {"const": true},
+    "auto_apply_to_runtime": {"const": false},
+    "retention_class": {"const": "audit_digest_only"},
     "verification": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "verified_by",
-        "verified_at",
-        "evidence_digest",
-        "evidence_ref"
-      ],
+      "required": ["verified_by", "verified_at", "evidence_digest", "evidence_ref"],
       "properties": {
-        "verified_by": {
-          "enum": [
-            "group_a",
-            "integrated_learning_verifier",
-            "privacy_officer",
-            "security_reviewer"
-          ]
-        },
-        "verified_at": {
-          "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
-        },
-        "evidence_digest": {
-          "type": "string",
-          "pattern": "^sha256:[0-9a-f]{64}$"
-        },
+        "verified_by": {"enum": ["group_a", "integrated_learning_verifier", "privacy_officer", "security_reviewer"]},
+        "verified_at": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"},
+        "evidence_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "evidence_report_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
         "evidence_ref": {
           "type": "string",
           "pattern": "^(sha256:[0-9a-f]{64}|(?:vault|keyring)://butler/evidence/[A-Za-z0-9._=-]{16,128}|digest-only-fixture)$",
           "not": {
             "anyOf": [
-              {
-                "pattern": "^/"
-              },
-              {
-                "pattern": "^[A-Za-z]:\\\\"
-              },
-              {
-                "pattern": "\\\\\\\\"
-              },
-              {
-                "pattern": "\\.\\."
-              },
-              {
-                "pattern": "\\s"
-              },
-              {
-                "pattern": "https?://"
-              },
-              {
-                "pattern": "file://"
-              },
-              {
-                "pattern": "s3://"
-              },
-              {
-                "pattern": "gs://"
-              },
-              {
-                "pattern": "@"
-              },
-              {
-                "pattern": "/Users/"
-              },
-              {
-                "pattern": "/home/"
-              },
-              {
-                "pattern": "~"
-              }
+              {"pattern": "^/"},
+              {"pattern": "^[A-Za-z]:\\\\"},
+              {"pattern": "\\\\\\\\"},
+              {"pattern": "\\.\\."},
+              {"pattern": "\\s"},
+              {"pattern": "https?://"},
+              {"pattern": "file://"},
+              {"pattern": "s3://"},
+              {"pattern": "gs://"},
+              {"pattern": "@"},
+              {"pattern": "/Users/"},
+              {"pattern": "/home/"},
+              {"pattern": "~"}
             ]
           }
         }
@@ -171,134 +81,46 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "ref_type",
-          "ref_id_digest"
-        ],
+        "required": ["ref_type", "ref_id_digest"],
         "properties": {
-          "ref_type": {
-            "enum": [
-              "usage_log",
-              "approval",
-              "folder",
-              "format",
-              "policy"
-            ]
-          },
-          "ref_id_digest": {
-            "type": "string",
-            "pattern": "^sha256:[0-9a-f]{64}$"
-          }
+          "ref_type": {"enum": ["usage_log", "approval", "folder", "format", "policy"]},
+          "ref_id_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
         }
       }
     },
-    "payload_digest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "expected_effect_digest": {
-      "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "payload": {
-      "type": "object"
-    }
+    "payload_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "expected_effect_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "payload": {"type": "object"}
   },
   "allOf": [
     {
-      "if": {
-        "properties": {
-          "target_kind": {
-            "const": "chat_context"
-          }
-        },
-        "required": [
-          "target_kind"
-        ]
-      },
+      "if": {"properties": {"target_kind": {"const": "chat_context"}}, "required": ["target_kind"]},
       "then": {
         "properties": {
-          "learning_source_type": {
-            "const": "verified_chat_context"
-          },
+          "learning_source_type": {"const": "verified_chat_context"},
           "source_refs": {
-            "contains": {
-              "type": "object",
-              "required": [
-                "ref_type"
-              ],
-              "properties": {
-                "ref_type": {
-                  "const": "usage_log"
-                }
-              }
-            },
+            "contains": {"type": "object", "required": ["ref_type"], "properties": {"ref_type": {"const": "usage_log"}}},
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "ref_type",
-                "ref_id_digest"
-              ],
+              "required": ["ref_type", "ref_id_digest"],
               "properties": {
-                "ref_type": {
-                  "enum": [
-                    "usage_log",
-                    "approval"
-                  ]
-                },
-                "ref_id_digest": {
-                  "type": "string",
-                  "pattern": "^sha256:[0-9a-f]{64}$"
-                }
+                "ref_type": {"enum": ["usage_log", "approval"]},
+                "ref_id_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
               }
             }
           },
           "payload": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "explicit_business_confirmation",
-              "manager_or_admin_approved",
-              "shadow_eval_cases",
-              "pii_zero",
-              "false_learning_zero",
-              "context_digest"
-            ],
+            "required": ["explicit_business_confirmation", "manager_or_admin_approved", "shadow_eval_cases", "pii_zero", "false_learning_zero", "context_digest"],
             "properties": {
-              "explicit_business_confirmation": {
-                "const": true
-              },
-              "manager_or_admin_approved": {
-                "const": true
-              },
-              "shadow_eval_cases": {
-                "type": "integer",
-                "minimum": 100
-              },
-              "pii_zero": {
-                "const": true
-              },
-              "false_learning_zero": {
-                "const": true
-              },
-              "context_digest": {
-                "type": "string",
-                "pattern": "^sha256:[0-9a-f]{64}$"
-              },
-              "shadow_eval": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "evidence_report_sha256"
-                ],
-                "properties": {
-                  "evidence_report_sha256": {
-                    "type": "string",
-                    "pattern": "^sha256:[0-9a-f]{64}$"
-                  }
-                }
-              }
+              "explicit_business_confirmation": {"const": true},
+              "manager_or_admin_approved": {"const": true},
+              "shadow_eval_cases": {"type": "integer", "minimum": 100},
+              "pii_zero": {"const": true},
+              "false_learning_zero": {"const": true},
+              "context_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
             }
           }
         }
@@ -307,166 +129,40 @@
   ],
   "not": {
     "anyOf": [
-      {
-        "required": [
-          "integration_mode"
-        ]
-      },
-      {
-        "required": [
-          "raw"
-        ]
-      },
-      {
-        "required": [
-          "raw_text"
-        ]
-      },
-      {
-        "required": [
-          "raw_memo"
-        ]
-      },
-      {
-        "required": [
-          "filename"
-        ]
-      },
-      {
-        "required": [
-          "file_name"
-        ]
-      },
-      {
-        "required": [
-          "file_path"
-        ]
-      },
-      {
-        "required": [
-          "md_content"
-        ]
-      },
-      {
-        "required": [
-          "transaction_text"
-        ]
-      },
-      {
-        "required": [
-          "prompt"
-        ]
-      },
-      {
-        "required": [
-          "prompt_text"
-        ]
-      },
-      {
-        "required": [
-          "response"
-        ]
-      },
-      {
-        "required": [
-          "response_text"
-        ]
-      },
-      {
-        "required": [
-          "user_name"
-        ]
-      },
-      {
-        "required": [
-          "speaker"
-        ]
-      },
-      {
-        "required": [
-          "employee_name"
-        ]
-      },
-      {
-        "required": [
-          "timestamp"
-        ]
-      },
-      {
-        "required": [
-          "timestamp_raw"
-        ]
-      },
-      {
-        "required": [
-          "path"
-        ]
-      },
-      {
-        "required": [
-          "url"
-        ]
-      },
-      {
-        "required": [
-          "message_id"
-        ]
-      },
-      {
-        "required": [
-          "messenger"
-        ]
-      },
-      {
-        "required": [
-          "customer_name"
-        ]
-      },
-      {
-        "required": [
-          "account_number_plain"
-        ]
-      },
-      {
-        "required": [
-          "amount_plain"
-        ]
-      },
-      {
-        "required": [
-          "email_plain"
-        ]
-      },
-      {
-        "required": [
-          "phone_plain"
-        ]
-      },
-      {
-        "required": [
-          "local_path"
-        ]
-      },
-      {
-        "required": [
-          "token"
-        ]
-      },
-      {
-        "required": [
-          "password"
-        ]
-      },
-      {
-        "required": [
-          "secret"
-        ]
-      },
-      {
-        "required": [
-          "api_key"
-        ]
-      }
+      {"required": ["integration_mode"]},
+      {"required": ["fixture_mode"]},
+      {"required": ["run_mode"]},
+      {"required": ["raw"]},
+      {"required": ["raw_text"]},
+      {"required": ["raw_memo"]},
+      {"required": ["filename"]},
+      {"required": ["file_name"]},
+      {"required": ["file_path"]},
+      {"required": ["md_content"]},
+      {"required": ["transaction_text"]},
+      {"required": ["prompt"]},
+      {"required": ["prompt_text"]},
+      {"required": ["response"]},
+      {"required": ["response_text"]},
+      {"required": ["user_name"]},
+      {"required": ["speaker"]},
+      {"required": ["employee_name"]},
+      {"required": ["timestamp"]},
+      {"required": ["timestamp_raw"]},
+      {"required": ["path"]},
+      {"required": ["url"]},
+      {"required": ["message_id"]},
+      {"required": ["messenger"]},
+      {"required": ["customer_name"]},
+      {"required": ["account_number_plain"]},
+      {"required": ["amount_plain"]},
+      {"required": ["email_plain"]},
+      {"required": ["phone_plain"]},
+      {"required": ["local_path"]},
+      {"required": ["token"]},
+      {"required": ["password"]},
+      {"required": ["secret"]},
+      {"required": ["api_key"]}
     ]
   }
 }
