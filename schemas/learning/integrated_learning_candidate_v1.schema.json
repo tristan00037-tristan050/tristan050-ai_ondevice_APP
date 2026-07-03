@@ -117,9 +117,24 @@
         },
         "evidence_ref": {
           "type": "string",
-          "pattern": "^(digest-only-fixture|sha256:[0-9a-f]{64}|vault://butler/evidence/[A-Za-z0-9_-]{1,128}|keyring://butler/evidence/[A-Za-z0-9_-]{1,128})$",
+          "pattern": "^(sha256:[0-9a-f]{64}|(?:vault|keyring)://butler/evidence/[A-Za-z0-9._=-]{16,128}|digest-only-fixture)$",
           "not": {
             "anyOf": [
+              {
+                "pattern": "^/"
+              },
+              {
+                "pattern": "^[A-Za-z]:\\\\"
+              },
+              {
+                "pattern": "\\\\\\\\"
+              },
+              {
+                "pattern": "\\.\\."
+              },
+              {
+                "pattern": "\\s"
+              },
               {
                 "pattern": "https?://"
               },
@@ -133,28 +148,16 @@
                 "pattern": "gs://"
               },
               {
+                "pattern": "@"
+              },
+              {
                 "pattern": "/Users/"
               },
               {
                 "pattern": "/home/"
               },
               {
-                "pattern": "[A-Za-z]:\\\\"
-              },
-              {
-                "pattern": "\\\\\\\\"
-              },
-              {
-                "pattern": "\\.\\."
-              },
-              {
                 "pattern": "~"
-              },
-              {
-                "pattern": "@"
-              },
-              {
-                "pattern": "\\s"
               }
             ]
           }
@@ -282,6 +285,19 @@
               "context_digest": {
                 "type": "string",
                 "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "shadow_eval": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "evidence_report_sha256"
+                ],
+                "properties": {
+                  "evidence_report_sha256": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  }
+                }
               }
             }
           }
@@ -348,7 +364,17 @@
       },
       {
         "required": [
+          "response"
+        ]
+      },
+      {
+        "required": [
           "response_text"
+        ]
+      },
+      {
+        "required": [
+          "user_name"
         ]
       },
       {
@@ -359,6 +385,11 @@
       {
         "required": [
           "employee_name"
+        ]
+      },
+      {
+        "required": [
+          "timestamp"
         ]
       },
       {
@@ -379,6 +410,11 @@
       {
         "required": [
           "message_id"
+        ]
+      },
+      {
+        "required": [
+          "messenger"
         ]
       },
       {
