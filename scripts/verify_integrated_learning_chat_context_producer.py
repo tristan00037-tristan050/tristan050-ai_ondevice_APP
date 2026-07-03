@@ -8,6 +8,7 @@ from pathlib import Path
 PRODUCER_FILE = "butler_pc_core/learning_adapters/chat_context_producer.py"
 COMMON_FILE = "butler_pc_core/learning_adapters/producer_common.py"
 CONTRACT_FILE = "butler_pc_core/learning_core/contracts.py"
+SCHEMA_FILE = "schemas/learning/integrated_learning_candidate_v1.schema.json"
 EXPECTED_PAYLOAD_KEYS = {
     "explicit_business_confirmation",
     "manager_or_admin_approved",
@@ -18,6 +19,15 @@ EXPECTED_PAYLOAD_KEYS = {
 }
 EXPECTED_VERIFIED_BY = {
     "group_a",
+    "integrated_learning_verifier",
+    "privacy_officer",
+    "security_reviewer",
+}
+EXPECTED_CORE_VERIFIED_BY = {
+    "group_a",
+    "admin",
+    "manager",
+    "system_contract",
     "integrated_learning_verifier",
     "privacy_officer",
     "security_reviewer",
@@ -189,6 +199,32 @@ def main() -> int:
         contract_text = contract.read_text(encoding="utf-8")
         if '"evidence_report_sha256"' not in contract_text or "EVIDENCE_REPORT_BINDING_INVALID" not in contract_text:
             _add_failure(failures, "EVIDENCE_REPORT_CONTRACT_MISSING")
+        if "vault|keyring)://[^\\s]{1,240}" not in contract_text or "sha256:[0-9a-f]{64}" not in contract_text:
+            _add_failure(failures, "EVIDENCE_REF_CONTRACT_SCOPE_DRIFT")
+        try:
+            contract_tree = ast.parse(contract_text)
+            contract_values = _literal_assignments(contract_tree)
+            if values := contract_values.get("ALLOWED_VERIFIED_BY"):
+                if values != frozenset(EXPECTED_CORE_VERIFIED_BY):
+                    _add_failure(failures, "CORE_VERIFIED_BY_SCOPE_MISMATCH")
+            else:
+                _add_failure(failures, "CORE_VERIFIED_BY_SCOPE_MISMATCH")
+        except SyntaxError:
+            _add_failure(failures, "CONTRACT_SYNTAX_INVALID")
+
+    schema = repo / SCHEMA_FILE
+    if not schema.exists():
+        _add_failure(failures, "SCHEMA_MISSING")
+    else:
+        schema_text = schema.read_text(encoding="utf-8")
+        if '"evidence_report_sha256"' not in schema_text:
+            _add_failure(failures, "SCHEMA_EVIDENCE_REPORT_FIELD_MISSING")
+        for role in EXPECTED_CORE_VERIFIED_BY:
+            if f'"{role}"' not in schema_text:
+                _add_failure(failures, "SCHEMA_VERIFIED_BY_SCOPE_MISMATCH")
+                break
+        if "sha256:[0-9a-f]{64}" not in schema_text or "vault|keyring)://[^\\\\s]{1,240}" not in schema_text:
+            _add_failure(failures, "SCHEMA_EVIDENCE_REF_SCOPE_MISMATCH")
 
     producer = repo / PRODUCER_FILE
     if not producer.exists():

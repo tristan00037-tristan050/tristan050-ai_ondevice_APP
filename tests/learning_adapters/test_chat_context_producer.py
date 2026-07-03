@@ -407,6 +407,26 @@ def test_verified_by_accepts_only_controlled_roles():
         assert candidate["verification"]["verified_by"] == role
 
 
+def test_verified_by_roles_survive_unified_gate_ingest(tmp_path):
+    for role in ("group_a", "integrated_learning_verifier", "privacy_officer", "security_reviewer"):
+        result = ingest_verified_chat_context(
+            _artifact(verified_by=role, source_refs=(_usage_ref(role),)),
+            _runner(tmp_path / f"{role}.jsonl"),
+        )
+
+        assert result["accepted"] is True
+        assert result["drop_reason"] is None
+
+
+def test_published_schema_accepts_chat_binding_field_and_sha256_ref():
+    import jsonschema
+
+    schema = json.loads(Path("schemas/learning/integrated_learning_candidate_v1.schema.json").read_text(encoding="utf-8"))
+    candidate = build_chat_context_candidate(_artifact(evidence_ref=_digest("evidence-ref")))
+
+    jsonschema.Draft7Validator(schema).validate(candidate)
+
+
 def test_verified_at_rejects_non_rfc3339_value(tmp_path):
     result = _drop({"verified_at": "2026/07/03 00:00:00"}, tmp_path)
 
