@@ -96,6 +96,35 @@ def _check_no_constant_scorer(source: str) -> None:
             _fail("CONSTANT_SCORER_FORBIDDEN")
 
 
+def _check_eval_path_and_sha_binding(source: str) -> None:
+    if 'butler-ct-shared/code_archive/box2_eval' not in source:
+        _fail("BOX2_EVALSET_PATH_NOT_REGISTERED")
+    if 'EXPECTED_EVAL_SHA256 = "1e0f2766be37586e16b3e63495dec7a8955d155b33c9a2ebd3f73243377b429d"' not in source:
+        _fail("BOX2_EVALSET_FULL_SHA_MISSING")
+    if "EXPECTED_EVAL_SHA256_PREFIX" in source or ".startswith(EXPECTED_EVAL_SHA256" in source:
+        _fail("BOX2_EVALSET_PREFIX_SHA_FORBIDDEN")
+    if "BOX2_EVALSET_SHA_DRIFT" not in source:
+        _fail("BOX2_EVALSET_SHA_DRIFT_CODE_MISSING")
+
+
+def _check_money_and_date_guards(source: str, tree: ast.Module) -> None:
+    if "CURRENCY_MAP" not in source or "_money_preserved" not in source:
+        _fail("MONEY_PRESERVATION_GUARD_MISSING")
+    money_node = _function_node(tree, "_money_preserved")
+    money_source = ast.get_source_segment(source, money_node) or ""
+    if "gold_currency != observed_currency" not in money_source:
+        _fail("MONEY_CURRENCY_MISMATCH_NOT_BLOCKED")
+    if "_find_gold_value_stop" not in source or "_is_slash_date_context" not in source:
+        _fail("SLASH_DATE_RECALL_GUARD_MISSING")
+
+
+def _check_recursive_digest_safe(source: str, tree: ast.Module) -> None:
+    node = _function_node(tree, "_assert_digest_safe_report")
+    guard_source = ast.get_source_segment(source, node) or ""
+    if "Mapping" not in guard_source or "list" not in guard_source or "check(child)" not in guard_source:
+        _fail("RECURSIVE_DIGEST_SAFE_GUARD_MISSING")
+
+
 def _check_gold_references(tree: ast.Module) -> None:
     node = _function_node(tree, "score_rewrite_against_gold")
     names = {child.id for child in ast.walk(node) if isinstance(child, ast.Name)}
@@ -139,6 +168,9 @@ def main() -> int:
     tree = _parse(source)
     _check_version(source)
     _check_no_constant_scorer(source)
+    _check_eval_path_and_sha_binding(source)
+    _check_money_and_date_guards(source, tree)
+    _check_recursive_digest_safe(source, tree)
     _check_gold_references(tree)
     _check_report_keys(tree)
     _check_extraction_functions_unchanged(root, source)

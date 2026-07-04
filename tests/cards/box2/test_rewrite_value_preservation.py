@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 
 from butler_pc_core.cards.box2 import rewrite_service
@@ -8,6 +9,7 @@ from butler_pc_core.cards.box2.rewrite_service import rewrite_to_company_format
 from butler_pc_core.cards.box2.rewrite_service import (
     FORBIDDEN_REPORT_KEYS,
     evaluate_eval_set,
+    find_eval_set,
     score_rewrite_against_gold,
 )
 
@@ -400,12 +402,9 @@ def test_box2_gold_scorer_wrong_fill_counts_false_positive() -> None:
     assert score["field_precision"] == 0.0
 
 
-def test_box2_gold_eval_reads_real_keys_and_reports_digest_safe_summary(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(rewrite_service, "EXPECTED_EVAL_SHA256_PREFIX", "")
-    eval_path = tmp_path / "box2_eval.json"
+def _write_gold_eval(path: Path) -> str:
     case = {
         "foreign": "거래처: 라온상사\n품목: A4용지\n수량: 50박스\n단가: 1,000원\n금액: 50,000원\n납품 일정: 2026-07-03",
-        "format": "거래처/품목/수량/단가/금액/일정",
         "must_keep": ["라온상사", "A4용지", "50박스", "1,000원", "50,000원", "2026-07-03"],
         "fields": {
             "거래처": "라온상사",
@@ -416,7 +415,19 @@ def test_box2_gold_eval_reads_real_keys_and_reports_digest_safe_summary(tmp_path
             "일정": "2026-07-03",
         },
     }
-    eval_path.write_text(json.dumps([case for _ in range(10)], ensure_ascii=False), encoding="utf-8")
+    payload = {
+        "format": "거래처/품목/수량/단가/금액/일정",
+        "cases": [case for _ in range(10)],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_box2_gold_eval_reads_real_keys_and_reports_digest_safe_summary(tmp_path: Path, monkeypatch) -> None:
+    eval_path = tmp_path / "box2_eval.json"
+    expected_sha = _write_gold_eval(eval_path)
+    monkeypatch.setattr(rewrite_service, "EXPECTED_EVAL_SHA256", expected_sha)
 
     report = evaluate_eval_set(eval_path)
 
@@ -438,7 +449,82 @@ def test_box2_gold_eval_reads_real_keys_and_reports_digest_safe_summary(tmp_path
     assert FORBIDDEN_REPORT_KEYS.isdisjoint(report)
 
 
-def test_box2_gold_eval_rejects_legacy_keys_without_raw_echo(tmp_path: Path) -> None:
+def test_box2_eval_set_found_via_repo_root_registered_path(tmp_path: Path, monkeypatch) -> None:
+    eval_dir = tmp_path / "butler-ct-shared/code_archive/box2_eval"
+    expected_sha = _write_gold_eval(eval_dir / "box2_eval.json")
+    monkeypatch.setattr(rewrite_service, "EVAL_CANDIDATE_PATHS", [eval_dir])
+    monkeypatch.setattr(rewrite_service, "EXPECTED_EVAL_SHA256", expected_sha)
+
+    selected = find_eval_set()
+    report = evaluate_eval_set()
+
+    assert selected == eval_dir
+    assert report["n"] == 10
+    assert report["status"] == "PASS"
+
+
+def test_box2_full_sha_binding_blocks_drift(tmp_path: Path, monkeypatch) -> None:
+    eval_path = tmp_path / "box2_eval.json"
+    _write_gold_eval(eval_path)
+    monkeypatch.setattr(
+        rewrite_service,
+        "EXPECTED_EVAL_SHA256",
+        "0" * 64,
+    )
+
+    report = evaluate_eval_set(eval_path)
+
+    assert report["status"] == "BOX2_EVALSET_SHA_DRIFT"
+    assert report["n"] == 0
+
+
+def test_box2_money_krw_vs_usd_is_not_preserved() -> None:
+    score = score_rewrite_against_gold(
+        "금액=1000달러",
+        must_keep=["1,000원"],
+        fields={"금액": "1,000원"},
+        format_value="금액",
+    )
+
+    assert score["value_canonical_preservation"] == 0.0
+    assert score["false_positive_total"] == 1
+
+
+def test_box2_money_same_currency_notation_is_preserved() -> None:
+    score = score_rewrite_against_gold(
+        "단가=18000원",
+        must_keep=["18,000원"],
+        fields={"단가": "18,000원"},
+        format_value="단가",
+    )
+
+    assert score["value_canonical_preservation"] == 1.0
+    assert score["field_precision"] == 1.0
+
+
+def test_box2_slash_date_recall_keeps_full_date() -> None:
+    score = score_rewrite_against_gold(
+        "일정=2026 / 07 / 15",
+        must_keep=["2026 / 07 / 15"],
+        fields={"일정": "2026 / 07 / 15"},
+        format_value="일정",
+    )
+
+    assert score["field_recall"] == 1.0
+    assert score["false_negative_total"] == 0
+
+
+def test_box2_digest_safe_guard_is_recursive() -> None:
+    try:
+        rewrite_service._assert_digest_safe_report({"nested": [{"raw_text": "blocked"}]})
+    except ValueError as exc:
+        assert str(exc) == "REPORT_FORBIDDEN_KEY"
+    else:
+        raise AssertionError("recursive digest-safe guard did not block nested raw key")
+
+
+def test_box2_gold_eval_rejects_legacy_keys_without_raw_echo(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(rewrite_service, "EXPECTED_EVAL_SHA256", "")
     eval_path = tmp_path / "box2_eval_legacy.json"
     eval_path.write_text(json.dumps([{"foreign_doc": "raw", "our_format": "raw"}]), encoding="utf-8")
 
@@ -454,3 +540,5 @@ def test_box2_gold_scorer_source_has_no_constant_metric_shortcut() -> None:
     assert "semantic_preservation_score\": 0.85" not in source
     assert "0.85 if" not in source
     assert "+ 0.02" not in source
+    assert "EXPECTED_EVAL_SHA256_PREFIX" not in source
+    assert ".startswith(EXPECTED_EVAL_SHA256" not in source

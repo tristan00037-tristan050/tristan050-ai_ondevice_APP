@@ -22,7 +22,12 @@ OUTPUT_SECTIONS = [
     "최종 문안",
 ]
 
+_THIS = Path(__file__).resolve()
+_REPO_ROOT = _THIS.parents[3]
+
 EVAL_CANDIDATE_PATHS = [
+    _REPO_ROOT / "butler-ct-shared/code_archive/box2_eval",
+    _REPO_ROOT / "butler-ct-shared/code_archive/box2_eval/box2_eval.json",
     Path.home() / "Desktop/도우미폴더/box2b_v5_outputs/rewrite/eval",
     Path.home() / "Desktop/도우미폴더/box2b_v5_outputs/rewrite",
     Path("/Volumes/T7 Shield/학습모델 폴더/알고리즘개발팀/box2b_v5_outputs/rewrite/eval"),
@@ -32,7 +37,7 @@ CHECK_REQUIRED = "[확인 필요]"
 SCORER_VERSION = "box2.eval.v3_gold"
 BASELINE_SCORE = 0.30
 EXPECTED_GOLD_CASE_COUNT = 10
-EXPECTED_EVAL_SHA256_PREFIX = "1e0f2766"
+EXPECTED_EVAL_SHA256 = "1e0f2766be37586e16b3e63495dec7a8955d155b33c9a2ebd3f73243377b429d"
 FORBIDDEN_REPORT_KEYS = {
     "foreign",
     "foreign_doc",
@@ -44,6 +49,20 @@ FORBIDDEN_REPORT_KEYS = {
     "rewritten_doc",
     "raw",
     "raw_text",
+}
+CURRENCY_MAP = {
+    "원": "KRW",
+    "₩": "KRW",
+    "￦": "KRW",
+    "krw": "KRW",
+    "달러": "USD",
+    "$": "USD",
+    "usd": "USD",
+    "불": "USD",
+    "엔": "JPY",
+    "¥": "JPY",
+    "유로": "EUR",
+    "€": "EUR",
 }
 
 VENDOR_LABELS = (
@@ -643,6 +662,45 @@ def _canon_value(value: str) -> str:
     return normalized.lower()
 
 
+def _extract_money_token(value: str) -> tuple[str, str]:
+    normalized = unicodedata.normalize("NFKC", str(value or "")).strip()
+    lower = normalized.lower()
+    currency = ""
+    for token, code in CURRENCY_MAP.items():
+        if token.lower() in lower:
+            currency = code
+            break
+    number_match = re.search(r"\d[\d,]*(?:\.\d+)?", normalized)
+    number = re.sub(r"[^\d.]", "", number_match.group(0)) if number_match else ""
+    return number, currency
+
+
+def _money_preserved(gold: str, observed: str) -> bool:
+    gold_number, gold_currency = _extract_money_token(gold)
+    if not gold_number:
+        gold_canon = re.sub(r"[\s,]", "", unicodedata.normalize("NFKC", str(gold)))
+        observed_canon = re.sub(r"[\s,]", "", unicodedata.normalize("NFKC", str(observed)))
+        return bool(gold_canon and gold_canon in observed_canon)
+
+    for match in re.finditer(r"\d[\d,]*(?:\.\d+)?", str(observed)):
+        observed_number = re.sub(r"[^\d.]", "", match.group(0))
+        if observed_number != gold_number:
+            continue
+        window = str(observed)[max(0, match.start() - 8): min(len(str(observed)), match.end() + 8)]
+        _, observed_currency = _extract_money_token(window)
+        if gold_currency and observed_currency and gold_currency != observed_currency:
+            return False
+        return True
+    return False
+
+
+def _value_preserved(gold: str, observed: str) -> bool:
+    _, gold_currency = _extract_money_token(gold)
+    if gold_currency:
+        return _money_preserved(gold, observed)
+    return bool(_canon_value(gold) and _canon_value(gold) in _canon_value(observed))
+
+
 def _format_label_set(format_value: Any, candidate_labels: set[str]) -> set[str]:
     if isinstance(format_value, Mapping):
         return {str(label) for label in format_value if str(label) in candidate_labels}
@@ -657,6 +715,20 @@ def _allowed_gold_labels(fields: Mapping[str, str], format_value: Any) -> list[s
     field_labels = {str(label).strip() for label in fields if str(label).strip()}
     format_labels = _format_label_set(format_value, field_labels)
     return sorted(field_labels & format_labels, key=len, reverse=True)
+
+
+def _is_slash_date_context(value: str, slash_start: int, slash_end: int) -> bool:
+    left = value[:slash_start].rstrip()
+    right = value[slash_end:].lstrip()
+    return bool(left and right and left[-1].isdigit() and right[0].isdigit())
+
+
+def _find_gold_value_stop(segment: str) -> re.Match[str] | None:
+    for match in re.finditer(r"\n|/|\||;", segment):
+        if match.group() == "/" and _is_slash_date_context(segment, match.start(), match.end()):
+            continue
+        return match
+    return None
 
 
 def _parse_allowed_label_values(rewritten_doc: str, allowed_labels: list[str]) -> dict[str, str]:
@@ -675,7 +747,7 @@ def _parse_allowed_label_values(rewritten_doc: str, allowed_labels: list[str]) -
         value_start = match.end()
         next_label_start = matches[index + 1].start() if index + 1 < len(matches) else len(rewritten_doc)
         segment = rewritten_doc[value_start:next_label_start]
-        stop_match = re.search(r"\n|/|\||;", segment)
+        stop_match = _find_gold_value_stop(segment)
         value_end = value_start + stop_match.start() if stop_match else next_label_start
         value = _clean_value(rewritten_doc[value_start:value_end])
         if value and value != CHECK_REQUIRED and label not in values:
@@ -692,11 +764,10 @@ def score_rewrite_against_gold(
 ) -> dict[str, float | int]:
     allowed_labels = _allowed_gold_labels(fields, format_value)
     observed = _parse_allowed_label_values(rewritten_doc, allowed_labels)
-    canon_doc = _canon_value(rewritten_doc)
     keep_values = [value for value in must_keep if isinstance(value, str) and value]
 
     exact_hits = sum(1 for value in keep_values if value in rewritten_doc)
-    canonical_hits = sum(1 for value in keep_values if _canon_value(value) and _canon_value(value) in canon_doc)
+    canonical_hits = sum(1 for value in keep_values if _value_preserved(value, rewritten_doc))
 
     true_positive = 0
     false_positive = 0
@@ -708,7 +779,7 @@ def score_rewrite_against_gold(
         if not observed_value or observed_value == CHECK_REQUIRED:
             false_negative += 1
             continue
-        if _canon_value(observed_value) == _canon_value(gold_value):
+        if _value_preserved(gold_value, observed_value):
             true_positive += 1
             if observed_value == gold_value:
                 exact_field_hits += 1
@@ -804,17 +875,26 @@ def _load_eval_samples(eval_path: Path) -> list[dict[str, Any]]:
             if isinstance(data, list):
                 samples.extend(item for item in data if isinstance(item, dict))
             elif isinstance(data, dict):
-                rows = data.get("samples") or data.get("items") or []
+                rows = data.get("cases") or data.get("samples") or data.get("items") or []
                 if isinstance(rows, list):
-                    samples.extend(item for item in rows if isinstance(item, dict))
+                    for item in rows:
+                        if not isinstance(item, dict):
+                            continue
+                        sample = dict(item)
+                        if "format" not in sample and isinstance(data.get("format"), str):
+                            sample["format"] = data["format"]
+                        samples.append(sample)
     return samples
 
 
 def _eval_set_sha256(eval_path: Path) -> str:
+    if eval_path.is_dir() and (eval_path / "box2_eval.json").is_file():
+        eval_path = eval_path / "box2_eval.json"
+    if eval_path.is_file():
+        return hashlib.sha256(eval_path.read_bytes()).hexdigest()
+
     hasher = hashlib.sha256()
-    files = [eval_path] if eval_path.is_file() else sorted(
-        child for child in eval_path.rglob("*") if child.is_file() and child.suffix.lower() in {".json", ".jsonl"}
-    )
+    files = sorted(child for child in eval_path.rglob("*") if child.is_file() and child.suffix.lower() in {".json", ".jsonl"})
     for path in files:
         hasher.update(path.name.encode("utf-8"))
         hasher.update(b"\0")
@@ -860,8 +940,17 @@ def _validate_case_schema(item: Mapping[str, Any], *, index: int) -> tuple[str |
 
 
 def _assert_digest_safe_report(report: Mapping[str, Any]) -> None:
-    if FORBIDDEN_REPORT_KEYS.intersection(report):
-        raise ValueError("REPORT_FORBIDDEN_KEY")
+    def check(value: Any) -> None:
+        if isinstance(value, Mapping):
+            if FORBIDDEN_REPORT_KEYS.intersection(value):
+                raise ValueError("REPORT_FORBIDDEN_KEY")
+            for child in value.values():
+                check(child)
+        elif isinstance(value, list):
+            for child in value:
+                check(child)
+
+    check(report)
 
 
 def _empty_eval(status: str, eval_path: str = "", eval_set_sha256: str = "") -> dict[str, float | bool | int | str]:
@@ -903,8 +992,6 @@ def _aggregate_scores(
     canonical_score = avg("value_canonical_preservation")
     exact_score = avg("value_exact_preservation")
     status = "PASS" if sample_count == EXPECTED_GOLD_CASE_COUNT else "PARTIAL"
-    if not eval_set_sha256.startswith(EXPECTED_EVAL_SHA256_PREFIX):
-        status = "PARTIAL_EVAL_SHA_MISMATCH"
 
     report = {
         "schema_version": SCORER_VERSION,
@@ -941,6 +1028,9 @@ def evaluate_eval_set(eval_path: Path | None = None) -> dict[str, float | bool |
         return _empty_eval("BLOCK_EVAL_SET_MISSING", str(selected), _eval_set_sha256(selected))
 
     eval_set_sha256 = _eval_set_sha256(selected)
+    if EXPECTED_EVAL_SHA256 and eval_set_sha256 != EXPECTED_EVAL_SHA256:
+        return _empty_eval("BOX2_EVALSET_SHA_DRIFT", str(selected), eval_set_sha256)
+
     scores: list[dict[str, float | bool | int | str]] = []
     for index, item in enumerate(samples, start=1):
         code, validated = _validate_case_schema(item, index=index)
