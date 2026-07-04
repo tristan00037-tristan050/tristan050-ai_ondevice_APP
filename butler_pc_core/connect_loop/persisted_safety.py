@@ -6,6 +6,7 @@ matched raw text, local paths, tokens, or snippets.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Iterator
 
@@ -45,6 +46,12 @@ _PHONE_RE = re.compile(
 )
 _KOREAN_RRN_RE = re.compile(r"\b\d{6}-[1-4]\d{6}\b")
 _CARD_OR_ACCOUNT_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
+_HYPHEN_CHARS = r"[-‐‑‒–—―﹣－]"
+_ACCOUNT_HYPHEN_RE = re.compile(
+    rf"(?<!\d)(?P<g1>\d{{2,6}}){_HYPHEN_CHARS}"
+    rf"(?P<g2>\d{{2,6}}){_HYPHEN_CHARS}"
+    rf"(?P<g3>\d{{2,8}})(?!\d)"
+)
 _SECRET_RE = re.compile(
     r"(?i)(bearer\s+[a-z0-9._~+/=-]{10,}|"
     r"api[_-]?key\s*[:=]|"
@@ -54,6 +61,8 @@ _SECRET_RE = re.compile(
     r"AKIA[0-9A-Z]{16}|"
     r"sk-[a-z0-9][a-z0-9._-]{10,})"
 )
+_KO_SECRET_RE = re.compile(r"(비밀번호|비번|암호)\s*(?:는|은|:|=|->)?\s*(?P<secret>\S+)")
+_KO_SECRET_SAFE_START = ("정책", "규칙", "변경", "초기화", "재설정", "관리", "설정")
 _LOCAL_PATH_RE = re.compile(
     r"(?i)(file://|"
     r"/Users(?:/|$)|"
@@ -92,15 +101,35 @@ class DlpScanResult:
         )
 
 
+def _has_hyphenated_account(value: str) -> bool:
+    for match in _ACCOUNT_HYPHEN_RE.finditer(value):
+        digit_count = sum(len(match.group(group)) for group in ("g1", "g2", "g3"))
+        if 10 <= digit_count <= 20:
+            return True
+    return False
+
+
+def _has_ko_secret(value: str) -> bool:
+    for match in _KO_SECRET_RE.finditer(value):
+        token = match.group("secret").strip("'\"`“”‘’()[]{}")
+        if token.startswith(_KO_SECRET_SAFE_START):
+            continue
+        if any(char.isdigit() or (char.isascii() and char.isalnum()) or char in "!@#$%^&*_" for char in token):
+            return True
+    return False
+
+
 def _dlp_scan_all(value: str) -> DlpScanResult:
+    scan_value = unicodedata.normalize("NFKC", value)
     pii = bool(
-        _EMAIL_RE.search(value)
-        or _PHONE_RE.search(value)
-        or _KOREAN_RRN_RE.search(value)
-        or _CARD_OR_ACCOUNT_RE.search(value)
+        _EMAIL_RE.search(scan_value)
+        or _PHONE_RE.search(scan_value)
+        or _KOREAN_RRN_RE.search(scan_value)
+        or _CARD_OR_ACCOUNT_RE.search(scan_value)
+        or _has_hyphenated_account(scan_value)
     )
-    secret = bool(_SECRET_RE.search(value))
-    local_path = bool(_LOCAL_PATH_RE.search(value))
+    secret = bool(_SECRET_RE.search(scan_value) or _has_ko_secret(scan_value))
+    local_path = bool(_LOCAL_PATH_RE.search(scan_value))
     return DlpScanResult(
         pii_detected=pii,
         secret_detected=secret,
