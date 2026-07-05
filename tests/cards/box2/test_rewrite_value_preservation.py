@@ -1,6 +1,25 @@
 from __future__ import annotations
 
+import json
+import hashlib
+from pathlib import Path
+
+from butler_pc_core.cards.box2 import rewrite_service
 from butler_pc_core.cards.box2.rewrite_service import rewrite_to_company_format
+from butler_pc_core.cards.box2.rewrite_service import (
+    FORBIDDEN_REPORT_KEYS,
+    evaluate_eval_set,
+    find_eval_set,
+    score_rewrite_against_gold,
+)
+
+
+def _assert_expected_values_are_source_backed(foreign_doc: str, *values: str) -> None:
+    normalized_doc = " ".join(foreign_doc.split())
+    for value in values:
+        if value == "[확인 필요]":
+            continue
+        assert " ".join(value.split()) in normalized_doc, f"expected value is not in source: {value}"
 
 
 def test_rewrite_preserves_vendor_item_quantity_price_amount_and_schedule() -> None:
@@ -62,3 +81,464 @@ def test_rewrite_missing_amount_does_not_invent_value() -> None:
     assert "품목=분석 보고서" in doc
     assert "금액=[확인 필요]" in doc
     assert "존재하지 않는 금액" in doc
+
+
+def test_rewrite_preserves_inline_slash_separated_key_values() -> None:
+    foreign_doc = """
+제목: 구매 요청
+공급자 주식회사 라온테크 / 상품명 온디바이스 라이선스 / 수량 2식 / 단가 150,000원 / 총액 300,000원 / 납기 2026/07/15
+""".strip()
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "거래처=주식회사 라온테크" in doc
+    assert "품목=온디바이스 라이선스" in doc
+    assert "수량=2식" in doc
+    assert "단가=150,000원" in doc
+    assert "금액=300,000원" in doc
+    assert "일정=2026/07/15" in doc
+    assert "라온테크 / 상품명" not in doc
+
+
+def test_rewrite_preserves_markdown_table_values() -> None:
+    foreign_doc = """
+| vendor | product | qty | unit price | total | due |
+|---|---|---:|---:|---:|---|
+| 주식회사 비전상사 | 데이터 정제 용역 | 5건 | ₩80,000 | ₩400,000 | 2026.07.20 |
+""".strip()
+
+    result = rewrite_to_company_format(foreign_doc, "표 원문을 회사 양식으로 전사")
+    doc = result.rewritten_doc
+
+    assert "거래처=주식회사 비전상사" in doc
+    assert "품목=데이터 정제 용역" in doc
+    assert "수량=5건" in doc
+    assert "단가=₩80,000" in doc
+    assert "금액=₩400,000" in doc
+    assert "일정=2026.07.20" in doc
+
+
+def test_box2_nonstandard_quote_anchor_extracts_item_tail_quantity_and_amount_only() -> None:
+    foreign_doc = "견적서 - (주)미래상사 / 클라우드 라이선스 10석 / 연 12,000,000원"
+    _assert_expected_values_are_source_backed(foreign_doc, "(주)미래상사", "클라우드 라이선스", "10석", "12,000,000원")
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "거래처=(주)미래상사" in doc
+    assert "품목=클라우드 라이선스" in doc
+    assert "수량=10석" in doc
+    assert "단가=[확인 필요]" in doc
+    assert "금액=12,000,000원" in doc
+    assert "단가=12,000,000원" not in doc
+
+
+def test_box2_slash_separated_trade_detail_extracts_item_quantity_unit_price_and_total() -> None:
+    foreign_doc = "거래명세: 라온유통 / 사무용 의자 25EA / 단가 89,000 / 합계 2,225,000원"
+    _assert_expected_values_are_source_backed(foreign_doc, "라온유통", "사무용 의자", "25EA", "89,000", "2,225,000원")
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "거래처=라온유통" in doc
+    assert "품목=사무용 의자" in doc
+    assert "수량=25EA" in doc
+    assert "단가=89,000" in doc
+    assert "금액=2,225,000원" in doc
+    assert "품목=라온유통" not in doc
+
+
+def test_box2_space_separated_labels_extract_item_quantity_unit_price_without_amount_hallucination() -> None:
+    foreign_doc = "거래상대방: 대한물산  품목 A4용지  수량 50  단가 18000"
+    _assert_expected_values_are_source_backed(foreign_doc, "대한물산", "A4용지", "50", "18000")
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "거래처=대한물산" in doc
+    assert "품목=A4용지" in doc
+    assert "수량=50" in doc
+    assert "단가=18000" in doc
+    assert "금액=[확인 필요]" in doc
+    assert "금액=18000" not in doc
+
+
+def test_box2_missing_price_and_amount_stays_check_required() -> None:
+    foreign_doc = "거래처: 해오름상사\n품목: 문서 정리 용역\n수량: 1건"
+    _assert_expected_values_are_source_backed(foreign_doc, "해오름상사", "문서 정리 용역", "1건")
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액")
+    doc = result.rewritten_doc
+
+    assert "거래처=해오름상사" in doc
+    assert "품목=문서 정리 용역" in doc
+    assert "수량=1건" in doc
+    assert "단가=[확인 필요]" in doc
+    assert "금액=[확인 필요]" in doc
+
+
+def test_rewrite_preserves_nonstandard_quote_anchor_vendor() -> None:
+    foreign_doc = """
+견적서 - 주식회사 한빛테크
+거래명세: 클라우드 전환 용역 / 수량 4건 / 단가 250,000원 / 총액 1,000,000원 / 납기 2026-08-01
+""".strip()
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "거래처=주식회사 한빛테크" in doc
+    assert "품목=클라우드 전환 용역" in doc
+    assert "수량=4건" in doc
+    assert "단가=250,000원" in doc
+    assert "금액=1,000,000원" in doc
+    assert "일정=2026-08-01" in doc
+
+
+def test_rewrite_preserves_trade_counterparty_and_company_sentence() -> None:
+    foreign_doc = """
+거래상대방: 주식회사 미래상사
+주식회사 미래상사에서 보안 라이선스 2식을 단가 150,000원, 총액 300,000원으로 2026년 7월 31일까지 납품
+""".strip()
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "거래처=주식회사 미래상사" in doc
+    assert "품목=보안 라이선스" in doc
+    assert "수량=2식" in doc
+    assert "단가=150,000원" in doc
+    assert "금액=300,000원" in doc
+    assert "일정=2026년 7월 31일" in doc
+
+
+def test_rewrite_does_not_treat_trade_detail_item_as_vendor_without_company_hint() -> None:
+    foreign_doc = """
+거래명세: 유지보수 서비스
+수량: 1건
+금액: 120,000원
+""".strip()
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/금액")
+    doc = result.rewritten_doc
+
+    assert "거래처=[확인 필요]" in doc
+    assert "품목=유지보수 서비스" in doc
+    assert "금액=120,000원" in doc
+
+
+def test_box2_quantity_unit_price_amount_and_schedule_boundaries_do_not_cross() -> None:
+    foreign_doc = "품목 복합 서비스  수량 12개월  단가 50,000원  합계 600,000원  일정 2026-07-01"
+    _assert_expected_values_are_source_backed(foreign_doc, "복합 서비스", "12개월", "50,000원", "600,000원", "2026-07-01")
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "품목=복합 서비스" in doc
+    assert "수량=12개월" in doc
+    assert "단가=50,000원" in doc
+    assert "금액=600,000원" in doc
+    assert "일정=2026-07-01" in doc
+    assert "금액=12개월" not in doc
+    assert "일정=50,000원" not in doc
+
+
+def test_box2_item_label_stops_at_newline_before_note() -> None:
+    foreign_doc = "품목: A4용지\n비고: 빠른 납품 요청"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "품목=A4용지" in doc
+    assert "품목=A4용지 비고" not in doc
+    assert "빠른 납품 요청" not in doc
+
+
+def test_box2_quantity_rejects_date_like_value() -> None:
+    foreign_doc = "품목: A4용지\n수량 2026-07-01"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "품목=A4용지" in doc
+    assert "수량=[확인 필요]" in doc
+    assert "일정=[확인 필요]" in doc
+    assert "수량=2026-07-01" not in doc
+
+
+def test_box2_quantity_rejects_spaced_slash_date() -> None:
+    foreign_doc = "품목 A4용지 수량 2026 / 07 / 01"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "품목=A4용지" in doc
+    assert "수량=[확인 필요]" in doc
+    assert "일정=[확인 필요]" in doc
+    assert "수량=2026" not in doc
+    assert "수량=2026 / 07 / 01" not in doc
+
+
+def test_box2_schedule_accepts_date_like_value() -> None:
+    foreign_doc = "품목: A4용지\n납기 2026-07-01"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "품목=A4용지" in doc
+    assert "일정=2026-07-01" in doc
+
+
+def test_box2_schedule_accepts_spaced_slash_date() -> None:
+    foreign_doc = "품목 A4용지 납기 2026 / 07 / 15"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "품목=A4용지" in doc
+    assert "수량=[확인 필요]" in doc
+    assert "일정=2026 / 07 / 15" in doc
+
+
+def test_box2_annual_amount_does_not_become_unit_price() -> None:
+    foreign_doc = "견적서 - (주)미래상사 / 클라우드 라이선스 10석 / 연 12,000,000원"
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "수량=10석" in doc
+    assert "금액=12,000,000원" in doc
+    assert "단가=[확인 필요]" in doc
+    assert "단가=12,000,000원" not in doc
+
+
+def test_box2_unit_price_only_won_does_not_become_amount() -> None:
+    foreign_doc = "품목: 문서정리용역\n수량: 1건\n단가: 120,000원"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액")
+    doc = result.rewritten_doc
+
+    assert "품목=문서정리용역" in doc
+    assert "수량=1건" in doc
+    assert "단가=120,000원" in doc
+    assert "금액=[확인 필요]" in doc
+    assert "금액=120,000원" not in doc
+
+
+def test_box2_unit_price_only_comma_does_not_become_amount() -> None:
+    foreign_doc = "품목: 문서정리용역\n수량: 1건\n단가: 120,000"
+
+    result = rewrite_to_company_format(foreign_doc, "품목/수량/단가/금액")
+    doc = result.rewritten_doc
+
+    assert "품목=문서정리용역" in doc
+    assert "수량=1건" in doc
+    assert "단가=120,000" in doc
+    assert "금액=[확인 필요]" in doc
+    assert "금액=120,000" not in doc
+
+
+def test_box2_annual_unlabeled_amount_still_allowed_when_not_unit_price() -> None:
+    foreign_doc = "견적서 - (주)미래상사 / 클라우드 라이선스 10석 / 연 12,000,000원"
+
+    result = rewrite_to_company_format(foreign_doc, "거래처/품목/수량/단가/금액/일정")
+    doc = result.rewritten_doc
+
+    assert "금액=12,000,000원" in doc
+    assert "단가=[확인 필요]" in doc
+    assert "금액=[확인 필요]" not in doc
+
+
+def test_box2_gold_scorer_full_preservation_scores_one() -> None:
+    score = score_rewrite_against_gold(
+        "거래처=라온상사; 품목=A4용지; 수량=50박스; 금액=120,000원",
+        must_keep=["라온상사", "A4용지", "50박스", "120,000원"],
+        fields={"거래처": "라온상사", "품목": "A4용지", "수량": "50박스", "금액": "120,000원"},
+        format_value="거래처/품목/수량/금액",
+    )
+
+    assert score["value_exact_preservation"] == 1.0
+    assert score["value_canonical_preservation"] == 1.0
+    assert score["field_precision"] == 1.0
+    assert score["field_recall"] == 1.0
+
+
+def test_box2_gold_scorer_missing_value_counts_false_negative() -> None:
+    score = score_rewrite_against_gold(
+        "거래처=라온상사; 품목=A4용지; 금액=[확인 필요]",
+        must_keep=["라온상사", "A4용지", "120,000원"],
+        fields={"거래처": "라온상사", "품목": "A4용지", "금액": "120,000원"},
+        format_value="거래처/품목/금액",
+    )
+
+    assert score["value_canonical_preservation"] < 1.0
+    assert score["false_negative_total"] == 1
+    assert score["field_recall"] < 1.0
+
+
+def test_box2_gold_scorer_separates_exact_and_canonical_values() -> None:
+    score = score_rewrite_against_gold(
+        "수량=50",
+        must_keep=["50박스"],
+        fields={"수량": "50박스"},
+        format_value="수량",
+    )
+
+    assert score["value_exact_preservation"] == 0.0
+    assert score["value_canonical_preservation"] == 1.0
+    assert score["field_precision"] == 1.0
+
+
+def test_box2_gold_scorer_wrong_fill_counts_false_positive() -> None:
+    score = score_rewrite_against_gold(
+        "금액=999,000원",
+        must_keep=["120,000원"],
+        fields={"금액": "120,000원"},
+        format_value="금액",
+    )
+
+    assert score["false_positive_total"] == 1
+    assert score["false_negative_total"] == 1
+    assert score["field_precision"] == 0.0
+
+
+def _write_gold_eval(path: Path) -> str:
+    case = {
+        "foreign": "거래처: 라온상사\n품목: A4용지\n수량: 50박스\n단가: 1,000원\n금액: 50,000원\n납품 일정: 2026-07-03",
+        "must_keep": ["라온상사", "A4용지", "50박스", "1,000원", "50,000원", "2026-07-03"],
+        "fields": {
+            "거래처": "라온상사",
+            "품목": "A4용지",
+            "수량": "50박스",
+            "단가": "1,000원",
+            "금액": "50,000원",
+            "일정": "2026-07-03",
+        },
+    }
+    payload = {
+        "format": "거래처/품목/수량/단가/금액/일정",
+        "cases": [case for _ in range(10)],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_box2_gold_eval_reads_real_keys_and_reports_digest_safe_summary(tmp_path: Path, monkeypatch) -> None:
+    eval_path = tmp_path / "box2_eval.json"
+    expected_sha = _write_gold_eval(eval_path)
+    monkeypatch.setattr(rewrite_service, "EXPECTED_EVAL_SHA256", expected_sha)
+
+    report = evaluate_eval_set(eval_path)
+
+    assert report["schema_version"] == "box2.eval.v3_gold"
+    assert report["scorer_version"] == "box2.eval.v3_gold"
+    assert report["status"] == "PASS"
+    assert report["n"] == 10
+    assert report["new_score"] == 1.0
+    assert report["value_exact_preservation"] == 1.0
+    assert report["eval_set_sha256"]
+    assert report["baseline_score"] == 0.30
+    assert report["delta"] == 0.70
+    assert report["field_precision"] == 1.0
+    assert report["field_recall"] == 1.0
+    assert report["false_positive_total"] == 0
+    assert report["false_negative_total"] == 0
+    assert report["external_send_zero"] is True
+    assert report["raw_saved_zero"] is True
+    assert FORBIDDEN_REPORT_KEYS.isdisjoint(report)
+
+
+def test_box2_eval_set_found_via_repo_root_registered_path(tmp_path: Path, monkeypatch) -> None:
+    eval_dir = tmp_path / "butler-ct-shared/code_archive/box2_eval"
+    expected_sha = _write_gold_eval(eval_dir / "box2_eval.json")
+    monkeypatch.setattr(rewrite_service, "EVAL_CANDIDATE_PATHS", [eval_dir])
+    monkeypatch.setattr(rewrite_service, "EXPECTED_EVAL_SHA256", expected_sha)
+
+    selected = find_eval_set()
+    report = evaluate_eval_set()
+
+    assert selected == eval_dir
+    assert report["n"] == 10
+    assert report["status"] == "PASS"
+
+
+def test_box2_full_sha_binding_blocks_drift(tmp_path: Path, monkeypatch) -> None:
+    eval_path = tmp_path / "box2_eval.json"
+    _write_gold_eval(eval_path)
+    monkeypatch.setattr(
+        rewrite_service,
+        "EXPECTED_EVAL_SHA256",
+        "0" * 64,
+    )
+
+    report = evaluate_eval_set(eval_path)
+
+    assert report["status"] == "BOX2_EVALSET_SHA_DRIFT"
+    assert report["n"] == 0
+
+
+def test_box2_money_krw_vs_usd_is_not_preserved() -> None:
+    score = score_rewrite_against_gold(
+        "금액=1000달러",
+        must_keep=["1,000원"],
+        fields={"금액": "1,000원"},
+        format_value="금액",
+    )
+
+    assert score["value_canonical_preservation"] == 0.0
+    assert score["false_positive_total"] == 1
+
+
+def test_box2_money_same_currency_notation_is_preserved() -> None:
+    score = score_rewrite_against_gold(
+        "단가=18000원",
+        must_keep=["18,000원"],
+        fields={"단가": "18,000원"},
+        format_value="단가",
+    )
+
+    assert score["value_canonical_preservation"] == 1.0
+    assert score["field_precision"] == 1.0
+
+
+def test_box2_slash_date_recall_keeps_full_date() -> None:
+    score = score_rewrite_against_gold(
+        "일정=2026 / 07 / 15",
+        must_keep=["2026 / 07 / 15"],
+        fields={"일정": "2026 / 07 / 15"},
+        format_value="일정",
+    )
+
+    assert score["field_recall"] == 1.0
+    assert score["false_negative_total"] == 0
+
+
+def test_box2_digest_safe_guard_is_recursive() -> None:
+    try:
+        rewrite_service._assert_digest_safe_report({"nested": [{"raw_text": "blocked"}]})
+    except ValueError as exc:
+        assert str(exc) == "REPORT_FORBIDDEN_KEY"
+    else:
+        raise AssertionError("recursive digest-safe guard did not block nested raw key")
+
+
+def test_box2_gold_eval_rejects_legacy_keys_without_raw_echo(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(rewrite_service, "EXPECTED_EVAL_SHA256", "")
+    eval_path = tmp_path / "box2_eval_legacy.json"
+    eval_path.write_text(json.dumps([{"foreign_doc": "raw", "our_format": "raw"}]), encoding="utf-8")
+
+    report = evaluate_eval_set(eval_path)
+
+    assert report["status"] == "CASE_1_LEGACY_KEYS_FORBIDDEN"
+    assert FORBIDDEN_REPORT_KEYS.isdisjoint(report)
+
+
+def test_box2_gold_scorer_source_has_no_constant_metric_shortcut() -> None:
+    source = Path(rewrite_service.__file__).read_text(encoding="utf-8")
+
+    assert "semantic_preservation_score\": 0.85" not in source
+    assert "0.85 if" not in source
+    assert "+ 0.02" not in source
+    assert "EXPECTED_EVAL_SHA256_PREFIX" not in source
+    assert ".startswith(EXPECTED_EVAL_SHA256" not in source

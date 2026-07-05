@@ -1,0 +1,21 @@
+{
+  "baseline_score": 0.3,
+  "delta": 0.43,
+  "eval_set_path": "/Users/kimsunghoon/Desktop/butler/tristan050-ai_ondevice_APP/butler-ct-shared/code_archive/box2_eval/box2_eval.json",
+  "eval_set_sha256": "1e0f2766be37586e16b3e63495dec7a8955d155b33c9a2ebd3f73243377b429d",
+  "external_send_zero": true,
+  "false_negative_total": 39,
+  "false_positive_total": 0,
+  "field_precision": 1.0,
+  "field_recall": 0.22999999999999998,
+  "mock_result": false,
+  "n": 10,
+  "new_score": 0.73,
+  "raw_saved_zero": true,
+  "sample_count": 10,
+  "schema_version": "box2.eval.v3_gold",
+  "scorer_version": "box2.eval.v3_gold",
+  "status": "PASS",
+  "value_canonical_preservation": 0.73,
+  "value_exact_preservation": 0.73
+}
