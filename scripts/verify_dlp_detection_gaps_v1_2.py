@@ -17,6 +17,7 @@ REQUIRED_SOURCE_TOKENS = (
     "_has_hyphenated_account",
     "_KO_SECRET_RE",
     "_KO_SECRET_SAFE_START",
+    "_has_ko_secret_signal",
     "_has_ko_secret",
     'unicodedata.normalize("NFKC", value)',
     "_CARD_OR_ACCOUNT_RE.search(scan_value)",
@@ -28,6 +29,8 @@ REQUIRED_TEST_TOKENS = (
     "110‐234‐567890",
     "2026-07-04",
     "비밀번호는 1234야",
+    "비밀번호는 정책1234야",
+    "비번: 관리자1234",
     "비밀번호 정책을 변경합니다",
     "test_existing_dlp_patterns_keep_detecting",
     "test_dlp_hyphen_helper_linear_time",
@@ -54,7 +57,10 @@ def _read(root: Path, rel: Path) -> str:
 
 
 def _function_segment(source: str, name: str) -> str:
-    tree = ast.parse(source)
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        _fail("SOURCE_PARSE_ERROR")
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and node.name == name:
             return ast.get_source_segment(source, node) or ""
@@ -86,9 +92,10 @@ def _check_digit_count_helper(source: str) -> None:
 
 def _check_secret_safe_word_helper(source: str) -> None:
     helper = _function_segment(source, "_has_ko_secret")
-    if "token.startswith(_KO_SECRET_SAFE_START)" not in helper:
+    if "token.startswith(_KO_SECRET_SAFE_START) and not _has_ko_secret_signal(token)" not in helper:
         _fail("KO_SECRET_SAFE_WORD_GUARD_MISSING")
-    if not re.search(r"char\.isdigit\(\).*char\.isascii\(\).*isalnum", helper, flags=re.S):
+    signal_helper = _function_segment(source, "_has_ko_secret_signal")
+    if not re.search(r"char\.isdigit\(\).*char\.isascii\(\).*isalnum", signal_helper, flags=re.S):
         _fail("KO_SECRET_SIGNAL_GUARD_MISSING")
 
 

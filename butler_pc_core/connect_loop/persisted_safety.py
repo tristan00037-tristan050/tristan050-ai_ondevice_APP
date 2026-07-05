@@ -109,12 +109,16 @@ def _has_hyphenated_account(value: str) -> bool:
     return False
 
 
+def _has_ko_secret_signal(token: str) -> bool:
+    return any(char.isdigit() or (char.isascii() and char.isalnum()) or char in "!@#$%^&*_" for char in token)
+
+
 def _has_ko_secret(value: str) -> bool:
     for match in _KO_SECRET_RE.finditer(value):
         token = match.group("secret").strip("'\"`“”‘’()[]{}")
-        if token.startswith(_KO_SECRET_SAFE_START):
+        if token.startswith(_KO_SECRET_SAFE_START) and not _has_ko_secret_signal(token):
             continue
-        if any(char.isdigit() or (char.isascii() and char.isalnum()) or char in "!@#$%^&*_" for char in token):
+        if _has_ko_secret_signal(token):
             return True
     return False
 
