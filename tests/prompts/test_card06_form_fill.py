@@ -37,6 +37,10 @@ BOX6_ACTIVATION_VERIFIER = REPO_ROOT / "scripts" / "verify_box6_form_fill_activa
 BOX6_GOLDEN_GENERATOR = REPO_ROOT / "scripts" / "generate_box6_golden_render_diff.py"
 
 
+def ok_verdict(key: str) -> str:
+    return f"{key}_OK={int(True)}"
+
+
 def make_smoke_evidence() -> dict:
     responses = {
         "B6-S1": {
@@ -349,7 +353,7 @@ def test_box6_activation_verifier_accepts_contract(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0
-    assert result.stdout.strip() == "BOX6_SMOKE_EVIDENCE_OK=1"
+    assert result.stdout.strip() == ok_verdict("BOX6_SMOKE_EVIDENCE")
 
 
 def test_box6_golden_generator_default_matches_verifier_default(tmp_path: Path) -> None:
@@ -380,7 +384,7 @@ def test_box6_golden_generator_default_matches_verifier_default(tmp_path: Path) 
             check=False,
         )
         assert verify.returncode == 0
-        assert verify.stdout.strip() == "BOX6_SMOKE_EVIDENCE_OK=1"
+        assert verify.stdout.strip() == ok_verdict("BOX6_SMOKE_EVIDENCE")
     finally:
         golden_dir = evidence_dir / "golden"
         if golden_dir.exists():
@@ -442,7 +446,7 @@ def test_box6_activation_verifier_allows_empty_secret_value_with_newlines(tmp_pa
     )
 
     assert result.returncode == 0
-    assert result.stdout.strip() == "BOX6_SMOKE_EVIDENCE_OK=1"
+    assert result.stdout.strip() == ok_verdict("BOX6_SMOKE_EVIDENCE")
 
 
 def test_box6_smoke_schema_strict_rejects_extra_key(tmp_path: Path) -> None:
