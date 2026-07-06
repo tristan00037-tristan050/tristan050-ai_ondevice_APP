@@ -43,7 +43,7 @@ const CARD_MODE_MAP: Record<number, string> = {
   1: 'request_organize',
   2: 'format_convert',
   3: 'new_draft',
-  4: 'attachment_edit',
+  4: 'document_review',
   5: 'accounting_classify',
   6: 'form_fill',
 };
@@ -51,6 +51,7 @@ const CARD_MODE_MAP: Record<number, string> = {
 const CARD_MODE_ID_BY_MODE: Record<string, string> = Object.fromEntries(
   Object.entries(CARD_MODE_MAP).map(([id, mode]) => [mode, id])
 );
+CARD_MODE_ID_BY_MODE.attachment_edit = '4';
 
 export function sidecarCardMode(mode: string): string {
   if (mode === 'free') return 'free';

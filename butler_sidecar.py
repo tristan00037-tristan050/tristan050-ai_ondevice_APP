@@ -73,6 +73,10 @@ from butler_pc_core.auth.capability_token import (
     CapabilityTokenError,
     CapabilityTokenManager,
 )
+from butler_pc_core.cards.box4.review_service import (
+    DocumentReviewInput,
+    review_document,
+)
 from butler_pc_core.sidecar.analyze_orchestrator import (
     AnalyzeStreamOrchestrator,
     AnalyzeStreamRequest,
@@ -80,6 +84,7 @@ from butler_pc_core.sidecar.analyze_orchestrator import (
 from butler_pc_core.sidecar.analyze_policy_preflight import (
     is_free_chat_mode,
     is_known_card_mode,
+    normalize_card_mode,
 )
 from datetime import datetime, timezone as _tz
 
@@ -568,6 +573,15 @@ if _FASTAPI_AVAILABLE:
             })
             return
 
+        def _uploaded_file_texts() -> list[str]:
+            texts: list[str] = []
+            for fp in params.file_paths:
+                try:
+                    texts.append(Path(fp).read_text(encoding="utf-8", errors="replace"))
+                except Exception:
+                    pass
+            return texts
+
         # ── (0) Task Budget Router — 자료 크기 기반 라우팅 ──
         total_file_bytes = sum(
             Path(fp).stat().st_size for fp in params.file_paths if Path(fp).is_file()
@@ -617,6 +631,50 @@ if _FASTAPI_AVAILABLE:
             })
             yield _sse("complete", {
                 "result_text": budget.user_message,
+                "result_path": "",
+                "total_elapsed_sec": 0.0,
+            })
+            return
+
+        if normalize_card_mode(params.card_mode) == "4":
+            file_texts = _uploaded_file_texts()
+            if params.query.strip():
+                target_document = params.query
+                reference_documents = file_texts
+            elif file_texts:
+                target_document = file_texts[0]
+                reference_documents = file_texts[1:]
+            else:
+                target_document = ""
+                reference_documents = []
+
+            llm_invoked = bool(target_document.strip())
+            yield _sse("meta", {
+                "source": "box4_document_review",
+                "route": budget.route,
+                "schema_version": "card_04.document_review.v1",
+                "llm_invoked": llm_invoked,
+                "external_send_zero": True,
+                "raw_text_logged": False,
+            })
+            request_payload = DocumentReviewInput(
+                target_document=target_document,
+                reference_documents=reference_documents,
+                strict_mode=True,
+                request_id=task_id,
+                source_kind="ui",
+            )
+            if llm_invoked:
+                llm = await _ensure_shared_llm()
+                result = await asyncio.to_thread(
+                    review_document,
+                    request_payload,
+                    model_client=llm,
+                )
+            else:
+                result = review_document(request_payload, model_client=None)
+            yield _sse("complete", {
+                "result_text": json.dumps(result.to_payload(), ensure_ascii=False, sort_keys=True),
                 "result_path": "",
                 "total_elapsed_sec": 0.0,
             })
