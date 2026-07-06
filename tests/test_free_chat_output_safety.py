@@ -10,7 +10,7 @@ from butler_pc_core.output_safety.guards import (
     GuardContext,
     SafeChatGuard,
 )
-from butler_pc_core.sidecar.safe_general_chat import build_safe_general_chat_prompt
+from butler_pc_core.sidecar.safe_general_chat import build_benign_free_chat_fallback, build_safe_general_chat_prompt
 
 
 def test_safe_general_chat_prompt_is_strong():
@@ -21,7 +21,38 @@ def test_safe_general_chat_prompt_is_strong():
     assert "회사 데이터를 외부로 보낼 수 있다는 취지의 표현을 절대 하지 않습니다" in prompt
     assert "일반 대화에서 회사DB/회계자료/검색/메모리/내부문서에 접근하지 않습니다" in prompt
     assert "자기소개 요청에는 Butler의 역할과 안전 원칙만 2~3문장으로 답합니다" in prompt
+    assert "인사하거나 자유대화 가능 여부를 물으면 자연스럽고 짧게 답합니다" in prompt
     assert "/no_think" in prompt
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "안녕",
+        "자유대화는 불가능한가?",
+        "무엇을 할 수 있나요?",
+    ],
+)
+def test_benign_free_chat_fallback_is_guard_allowed(query):
+    fallback = build_benign_free_chat_fallback(query)
+
+    assert fallback is not None
+    assert "안전 기준과 맞지 않아 표시하지 않았습니다" not in fallback
+    verdict = SafeChatGuard().evaluate(fallback, GuardContext(profile="free_general_chat"))
+    assert verdict.action == GuardAction.ALLOW
+    assert verdict.code == "OK"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "거래내역 계정과목 회계분류를 해줘",
+        "메일 써",
+        "회사 매출액 알려줘",
+    ],
+)
+def test_benign_free_chat_fallback_does_not_apply_to_business_requests(query):
+    assert build_benign_free_chat_fallback(query) is None
 
 
 def test_strip_think_blocks_global_and_unclosed():

@@ -27,6 +27,7 @@ from butler_pc_core.router.task_budget_router import Route, TaskBudget, decide_t
 from butler_pc_core.sidecar.analyze_policy_preflight import policy_bootstrap_state
 from butler_pc_core.sidecar.safe_general_chat import (
     SafeGeneralChatController,
+    build_benign_free_chat_fallback,
     build_safe_general_chat_prompt,
 )
 
@@ -284,16 +285,30 @@ class AnalyzeStreamOrchestrator:
             )
             return
 
-        yield sse("chunk", {"token": result.text})
+        output_text = result.text
+        fallback_applied = False
+        if result.replaced:
+            fallback_text = build_benign_free_chat_fallback(params.query)
+            if fallback_text is not None:
+                fallback_verdict = self.safe_chat.guard.evaluate(
+                    fallback_text,
+                    GuardContext(route="general_chat", profile="free_general_chat"),
+                )
+                if fallback_verdict.action.value == "allow":
+                    output_text = fallback_text
+                    fallback_applied = True
+
+        yield sse("chunk", {"token": output_text})
         yield sse(
             "complete",
             {
                 "source": "safe_chat",
-                "result_text": result.text,
+                "result_text": output_text,
                 "result_path": "",
                 "total_elapsed_sec": result.elapsed_sec,
                 "llm_invoked": result.llm_invoked,
                 "replaced": result.replaced,
+                "benign_fallback_applied": fallback_applied,
                 "fail_class": None if result.action == "allow" else result.fail_class,
                 "unsupported_numbers": result.unsupported_numbers,
                 "system_prompt_leak": False,
