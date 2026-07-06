@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 from typing import Any, Mapping, Sequence
 
-from markupsafe import Markup
-
 
 def _coerce_file_texts(file_texts: Sequence[str] | None) -> list[str]:
     return [str(text) for text in (file_texts or []) if str(text).strip()]
@@ -14,8 +12,8 @@ def _joined_file_texts(file_texts: Sequence[str]) -> str:
     return "\n\n---\n".join(file_texts)
 
 
-def _box6_json(value: Any) -> Markup:
-    return Markup(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+def _box6_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def _card_04_documents(
