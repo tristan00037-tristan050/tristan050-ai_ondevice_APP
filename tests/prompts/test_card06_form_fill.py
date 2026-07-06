@@ -352,6 +352,46 @@ def test_box6_activation_verifier_accepts_contract(tmp_path: Path) -> None:
     assert result.stdout.strip() == "BOX6_SMOKE_EVIDENCE_OK=1"
 
 
+def test_box6_golden_generator_default_matches_verifier_default(tmp_path: Path) -> None:
+    evidence_dir = REPO_ROOT / "evidence" / "box6"
+    evidence_path = evidence_dir / "box6_form_fill_smoke_evidence.json"
+    if evidence_dir.exists():
+        pytest.skip("default evidence directory already exists in the working tree")
+    try:
+        evidence_dir.mkdir(parents=True)
+        evidence_path.write_text(json.dumps(make_smoke_evidence(), ensure_ascii=False), encoding="utf-8")
+        result = subprocess.run(
+            [sys.executable, str(BOX6_GOLDEN_GENERATOR), str(REPO_ROOT)],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 0
+        assert result.stdout.strip() == "BOX6_GOLDEN_RENDER_DIFF_GENERATED=1"
+        for mode in ("2", "3", "5"):
+            assert (evidence_dir / "golden" / f"card_{mode}_render_diff.json").is_file()
+
+        verify = subprocess.run(
+            [sys.executable, str(BOX6_ACTIVATION_VERIFIER), str(REPO_ROOT)],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert verify.returncode == 0
+        assert verify.stdout.strip() == "BOX6_SMOKE_EVIDENCE_OK=1"
+    finally:
+        golden_dir = evidence_dir / "golden"
+        if golden_dir.exists():
+            for path in sorted(golden_dir.glob("*"), reverse=True):
+                path.unlink(missing_ok=True)
+            golden_dir.rmdir()
+        evidence_path.unlink(missing_ok=True)
+        if evidence_dir.exists():
+            evidence_dir.rmdir()
+
+
 def test_box6_activation_verifier_rejects_bad_confidence(tmp_path: Path) -> None:
     evidence = make_smoke_evidence()
     evidence["cases"][0]["response"]["field_mappings"][0]["confidence"] = "CERTAIN"
@@ -372,6 +412,37 @@ def test_box6_activation_verifier_rejects_bad_confidence(tmp_path: Path) -> None
         "BOX6_SMOKE_EVIDENCE_OK=0",
         "ERROR_CODE=CONFIDENCE_INVALID",
     ]
+
+
+def test_box6_activation_verifier_allows_empty_secret_value_with_newlines(tmp_path: Path) -> None:
+    evidence = make_smoke_evidence()
+    case = next(item for item in evidence["cases"] if item["case_id"] == "B6-S6")
+    case["response"]["field_mappings"] = [
+        {
+            "target_label": "API key:",
+            "output_value": "",
+            "confidence": "UNFILLED",
+            "source_ref": "",
+            "reason_code": "FORBIDDEN_SECRET_FIELD",
+        }
+    ]
+    case["response"]["filled_form"] = "API key:\n___"
+    case["response"]["unfilled_fields"] = ["API key:"]
+    case["response"]["review_required"] = ["API key:"]
+    evidence_path = tmp_path / "box6_smoke_secret_empty.json"
+    evidence_path.write_text(json.dumps(evidence, ensure_ascii=False), encoding="utf-8")
+    write_golden_diff_files(evidence_path)
+
+    result = subprocess.run(
+        [sys.executable, str(BOX6_ACTIVATION_VERIFIER), str(REPO_ROOT), str(evidence_path)],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "BOX6_SMOKE_EVIDENCE_OK=1"
 
 
 def test_box6_smoke_schema_strict_rejects_extra_key(tmp_path: Path) -> None:

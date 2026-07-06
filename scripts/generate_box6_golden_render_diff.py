@@ -110,7 +110,7 @@ def _write_diff(root: Path, output_dir: Path, mode: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("root", nargs="?", default=".")
-    parser.add_argument("output_dir", nargs="?", default="evidence/box6/contract_fixture/golden")
+    parser.add_argument("output_dir", nargs="?", default="evidence/box6/golden")
     args = parser.parse_args()
     root = Path(args.root).resolve()
     output_dir = Path(args.output_dir)

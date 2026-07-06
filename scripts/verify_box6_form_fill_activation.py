@@ -67,12 +67,12 @@ INJECTION_RE = re.compile(
     re.IGNORECASE,
 )
 SECRET_LABEL_RE = re.compile(
-    r"(?:비밀번호|패스워드|password|api\s*key|api_key|apikey|토큰|token|개인키|private\s*key|seed\s*phrase|시드\s*문구|secret|보안키)",
+    r"(?:비밀번호|패스워드|password|api[ \t]*key|api_key|apikey|토큰|token|개인키|private[ \t]*key|seed[ \t]*phrase|시드[ \t]*문구|secret|보안키)",
     re.IGNORECASE,
 )
 SECRET_VALUE_RE = re.compile(
-    r"(?:sk-[A-Za-z0-9._-]{10,}|AKIA[0-9A-Z]{16}|-----BEGIN\s+[A-Z ]*PRIVATE KEY-----|"
-    r"(?:비밀번호|password|token|api\s*key)\s*[:=：]\s*[^\s,;]{4,})",
+    r"(?:sk-[A-Za-z0-9._-]{10,}|AKIA[0-9A-Z]{16}|-----BEGIN[ \t]+[A-Z ]*PRIVATE KEY-----|"
+    r"(?:비밀번호|password|token|api[ \t]*key)[ \t]*[:=：][ \t]*[^\s,;]{4,})",
     re.IGNORECASE,
 )
 
