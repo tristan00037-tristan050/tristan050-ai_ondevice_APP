@@ -18,6 +18,10 @@ from butler_pc_core.prompts.cards import load_card_prompt
 SCHEMA_VERSION = "card_04.document_review.v1"
 ISSUE_TYPES = frozenset({"MISSING", "ERROR", "INCONSISTENCY", "STYLE", "SUGGESTION"})
 CONFIDENCES = frozenset({"HIGH", "MEDIUM", "LOW"})
+REQUIRED_TOP_LEVEL_KEYS = frozenset(
+    {"schema_version", "issues", "overall_score", "summary", "review_required", "warnings"}
+)
+REQUIRED_ISSUE_KEYS = frozenset({"location", "issue_type", "original_text", "suggestion", "confidence"})
 MAX_ISSUES = 50
 MAX_TEXT_CHARS = 300
 MAX_SUMMARY_CHARS = 1200
@@ -120,34 +124,41 @@ def _redact_secret_value(value: str) -> str:
     return _SECRET_VALUE_RE.sub(SAFE_SECRET_REPLACEMENT, value)
 
 
+def _require_exact_keys(obj: dict[str, Any], required: frozenset[str], reason_code: str) -> None:
+    if set(obj.keys()) != set(required):
+        raise ValueError(reason_code)
+
+
 def _validate_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    if payload.get("schema_version") != SCHEMA_VERSION:
+    _require_exact_keys(payload, REQUIRED_TOP_LEVEL_KEYS, "SCHEMA_KEYS_INVALID")
+
+    if payload["schema_version"] != SCHEMA_VERSION:
         raise ValueError("SCHEMA_VERSION_INVALID")
 
-    raw_score = payload.get("overall_score")
+    raw_score = payload["overall_score"]
     if isinstance(raw_score, bool) or not isinstance(raw_score, int):
         raise ValueError("OVERALL_SCORE_INVALID")
     if raw_score < 0 or raw_score > 100:
         raise ValueError("OVERALL_SCORE_OUT_OF_RANGE")
 
     summary = _require_string(
-        payload.get("summary"),
+        payload["summary"],
         "SUMMARY_INVALID",
         max_len=MAX_SUMMARY_CHARS,
     )
 
-    raw_review_required = payload.get("review_required")
+    raw_review_required = payload["review_required"]
     if not isinstance(raw_review_required, bool):
         raise ValueError("REVIEW_REQUIRED_INVALID")
 
-    raw_warnings = payload.get("warnings")
+    raw_warnings = payload["warnings"]
     if not isinstance(raw_warnings, list):
         raise ValueError("WARNINGS_INVALID")
     warnings: list[str] = []
     for item in raw_warnings:
         warnings.append(_require_string(item, "WARNING_INVALID", max_len=120))
 
-    raw_issues = payload.get("issues")
+    raw_issues = payload["issues"]
     if not isinstance(raw_issues, list):
         raise ValueError("ISSUES_INVALID")
     if len(raw_issues) > MAX_ISSUES:
@@ -157,18 +168,19 @@ def _validate_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
     for item in raw_issues:
         if not isinstance(item, dict):
             raise ValueError("ISSUE_INVALID")
-        issue_type = item.get("issue_type")
+        _require_exact_keys(item, REQUIRED_ISSUE_KEYS, "ISSUE_KEYS_INVALID")
+        issue_type = item["issue_type"]
         if issue_type not in ISSUE_TYPES:
             raise ValueError("ISSUE_TYPE_INVALID")
-        confidence = item.get("confidence")
+        confidence = item["confidence"]
         if confidence not in CONFIDENCES:
             raise ValueError("CONFIDENCE_INVALID")
         issues.append(
             {
-                "location": _require_string(item.get("location"), "LOCATION_INVALID"),
+                "location": _require_string(item["location"], "LOCATION_INVALID"),
                 "issue_type": str(issue_type),
-                "original_text": _require_string(item.get("original_text"), "ORIGINAL_TEXT_INVALID"),
-                "suggestion": _require_string(item.get("suggestion"), "SUGGESTION_INVALID"),
+                "original_text": _require_string(item["original_text"], "ORIGINAL_TEXT_INVALID"),
+                "suggestion": _require_string(item["suggestion"], "SUGGESTION_INVALID"),
                 "confidence": str(confidence),
             }
         )

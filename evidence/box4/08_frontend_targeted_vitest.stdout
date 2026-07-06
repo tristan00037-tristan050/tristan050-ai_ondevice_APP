@@ -1,0 +1,14 @@
+
+> butler-desktop@0.9.0 test
+> vitest --run src/__tests__/Box4CardMode.test.tsx src/components/v1_1/CardGrid.test.tsx
+
+
+ RUN  v2.1.9 /private/tmp/wt_box4_document_review/butler-desktop
+
+ ✓ src/components/v1_1/CardGrid.test.tsx (4 tests) 376ms
+ ✓ src/__tests__/Box4CardMode.test.tsx (3 tests) 377ms
+
+ Test Files  2 passed (2)
+      Tests  7 passed (7)
+   Start at  16:22:50
+   Duration  790ms (transform 181ms, setup 110ms, collect 39ms, tests 754ms, environment 298ms, prepare 57ms)

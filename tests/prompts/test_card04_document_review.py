@@ -14,6 +14,7 @@ from butler_pc_core.sidecar.analyze_policy_preflight import is_known_card_mode
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BOX4_ACTIVATION_VERIFIER = REPO_ROOT / "scripts" / "verify_box4_document_review_activation.py"
+BOX4_SMOKE_VALIDATOR = REPO_ROOT / "scripts" / "validate_box4_document_review_smoke.py"
 
 
 def success_verdict(key: str) -> str:
@@ -82,7 +83,7 @@ def test_card04_output_examples_match_schema_contract() -> None:
         assert isinstance(output["warnings"], list)
         assert isinstance(output["overall_score"], int)
         for issue in output["issues"]:
-            assert {"location", "issue_type", "original_text", "suggestion", "confidence"}.issubset(issue)
+            assert set(issue) == {"location", "issue_type", "original_text", "suggestion", "confidence"}
 
 
 def test_card04_known_card_mode_contract() -> None:
@@ -158,3 +159,16 @@ def test_box4_activation_verifier_accepts_contract() -> None:
 
     assert result.returncode == 0
     assert result.stdout.strip() == success_verdict("BOX4_DOCUMENT_REVIEW_CONTRACT")
+
+
+def test_box4_smoke_validator_accepts_contract() -> None:
+    result = subprocess.run(
+        [sys.executable, str(BOX4_SMOKE_VALIDATOR)],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == success_verdict("BOX4_DOCUMENT_REVIEW_SMOKE")

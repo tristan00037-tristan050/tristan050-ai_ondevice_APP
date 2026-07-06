@@ -122,6 +122,31 @@ def test_review_document_rejects_bad_enum_fail_closed() -> None:
     assert result.warnings == ["ISSUE_TYPE_INVALID"]
 
 
+def test_review_document_rejects_top_level_extra_key_fail_closed() -> None:
+    result = review_document(
+        DocumentReviewInput(target_document="검토 대상", reference_documents=[]),
+        model_client=FakeModelClient(valid_payload(raw_secret="숨겨진 원문")),
+    )
+
+    assert result.review_required is True
+    assert result.issues == []
+    assert result.warnings == ["SCHEMA_KEYS_INVALID"]
+
+
+def test_review_document_rejects_issue_extra_key_fail_closed() -> None:
+    issue = dict(valid_payload()["issues"][0])  # type: ignore[index]
+    issue["raw_response"] = "숨겨진 원문"
+
+    result = review_document(
+        DocumentReviewInput(target_document="검토 대상", reference_documents=[]),
+        model_client=FakeModelClient(valid_payload(issues=[issue])),
+    )
+
+    assert result.review_required is True
+    assert result.issues == []
+    assert result.warnings == ["ISSUE_KEYS_INVALID"]
+
+
 def test_review_document_rejects_original_text_length_fail_closed() -> None:
     issue = dict(valid_payload()["issues"][0])  # type: ignore[index]
     issue["original_text"] = "가" * 301

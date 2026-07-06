@@ -1,0 +1,13 @@
+
+> butler-desktop@0.9.0 build
+> tsc && vite build
+
+vite v6.4.2 building for production...
+transforming...
+✓ 2038 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.73 kB │ gzip:   0.38 kB
+dist/assets/index-V9H0PXaC.css    1.47 kB │ gzip:   0.67 kB
+dist/assets/index-C-gWcpxa.js   461.34 kB │ gzip: 135.14 kB
+✓ built in 943ms
