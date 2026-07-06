@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Mapping, Sequence
 
 
@@ -9,6 +10,10 @@ def _coerce_file_texts(file_texts: Sequence[str] | None) -> list[str]:
 
 def _joined_file_texts(file_texts: Sequence[str]) -> str:
     return "\n\n---\n".join(file_texts)
+
+
+def _box6_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def _card_04_documents(
@@ -25,7 +30,7 @@ def _build_context(card: Mapping[str, Any], query: str, file_texts: Sequence[str
     first_file = file_texts[0] if file_texts else ""
     draft_document, reference_documents = _card_04_documents(card, query, file_texts)
 
-    return {
+    context = {
         "query": query,
         # Card 1
         "message_text": query,
@@ -53,6 +58,9 @@ def _build_context(card: Mapping[str, Any], query: str, file_texts: Sequence[str
         "form_type": "",
         "strict_mode": True,
     }
+    if _card_id(card) == "card_06_fill_external_form":
+        context["our_data_json"] = _box6_json(context.get("our_data", {}))
+    return context
 
 
 def _card_id(card: Mapping[str, Any]) -> str:
