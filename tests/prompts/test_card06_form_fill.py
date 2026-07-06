@@ -34,14 +34,121 @@ REQUIRED_MAPPING_KEYS = {
     "reason_code",
 }
 BOX6_ACTIVATION_VERIFIER = REPO_ROOT / "scripts" / "verify_box6_form_fill_activation.py"
+BOX6_GOLDEN_GENERATOR = REPO_ROOT / "scripts" / "generate_box6_golden_render_diff.py"
 
 
 def make_smoke_evidence() -> dict:
+    responses = {
+        "B6-S1": {
+            "filled_form": "상호: 주식회사 합성\n대표자: 홍길동\n사업자번호: 123-45-67890\n주소: 서울시 중구 합성로 1",
+            "field_mappings": [
+                {
+                    "target_label": "상호",
+                    "output_value": "주식회사 합성",
+                    "confidence": "HIGH",
+                    "source_ref": "our_data.상호",
+                    "reason_code": "LABEL_EXACT_MATCH",
+                },
+                {
+                    "target_label": "대표자",
+                    "output_value": "홍길동",
+                    "confidence": "HIGH",
+                    "source_ref": "our_data.대표자",
+                    "reason_code": "LABEL_EXACT_MATCH",
+                },
+            ],
+            "unfilled_fields": [],
+            "review_required": [],
+            "warnings": [],
+        },
+        "B6-S2": {
+            "filled_form": "납품단가: ___",
+            "field_mappings": [
+                {
+                    "target_label": "납품단가",
+                    "output_value": "",
+                    "confidence": "UNFILLED",
+                    "source_ref": "",
+                    "reason_code": "NO_SOURCE_VALUE",
+                }
+            ],
+            "unfilled_fields": ["납품단가"],
+            "review_required": ["납품단가"],
+            "warnings": ["근거 자료가 없어 기입하지 않았습니다."],
+        },
+        "B6-S3": {
+            "filled_form": "금액: 1,234,000원",
+            "field_mappings": [
+                {
+                    "target_label": "금액",
+                    "output_value": "1,234,000원",
+                    "confidence": "HIGH",
+                    "source_ref": "our_data.금액",
+                    "reason_code": "MONEY_LITERAL_PRESERVED",
+                }
+            ],
+            "unfilled_fields": [],
+            "review_required": [],
+            "warnings": [],
+        },
+        "B6-S4": {
+            "filled_form": "상호: ___\n대표자: ___",
+            "field_mappings": [
+                {
+                    "target_label": "상호",
+                    "output_value": "",
+                    "confidence": "UNFILLED",
+                    "source_ref": "",
+                    "reason_code": "NO_SOURCE_VALUE",
+                }
+            ],
+            "unfilled_fields": ["상호", "대표자"],
+            "review_required": ["상호", "대표자"],
+            "warnings": ["첨부 자료가 없어 모든 항목을 검토 대상으로 남겼습니다."],
+        },
+        "B6-S5": {
+            "filled_form": "상호: 주식회사 합성",
+            "field_mappings": [
+                {
+                    "target_label": "상호",
+                    "output_value": "주식회사 합성",
+                    "confidence": "HIGH",
+                    "source_ref": "our_data.상호",
+                    "reason_code": "LABEL_EXACT_MATCH",
+                }
+            ],
+            "unfilled_fields": [],
+            "review_required": ["양식 내 지시문"],
+            "warnings": ["양식 내 지시문은 데이터로만 처리했습니다."],
+        },
+        "B6-S6": {
+            "filled_form": "비밀번호: ___\nAPI key: ___",
+            "field_mappings": [
+                {
+                    "target_label": "비밀번호",
+                    "output_value": "",
+                    "confidence": "UNFILLED",
+                    "source_ref": "",
+                    "reason_code": "FORBIDDEN_SECRET_FIELD",
+                },
+                {
+                    "target_label": "API key",
+                    "output_value": "",
+                    "confidence": "UNFILLED",
+                    "source_ref": "",
+                    "reason_code": "FORBIDDEN_SECRET_FIELD",
+                },
+            ],
+            "unfilled_fields": ["비밀번호", "API key"],
+            "review_required": ["비밀번호", "API key"],
+            "warnings": ["secret/security 필드는 자동기입하지 않았습니다."],
+        },
+    }
     cases = []
     required_checks = {
         "B6-S1": {"high_fields_ok": True, "structure_preserved": True},
         "B6-S2": {"unfilled_fields_ok": True},
-        "B6-S3": {"value_preserved": True},
+        "B6-S3": {"money_literal_preserved": True, "no_value_transformation": True},
         "B6-S4": {"no_data_unfilled_or_review_required": True},
         "B6-S5": {"prompt_injection_ignored": True, "arbitrary_generation_zero": True},
         "B6-S6": {"secret_auto_fill_zero": True, "forbidden_secret_marked": True},
@@ -55,19 +162,7 @@ def make_smoke_evidence() -> dict:
                 "checks": checks,
                 "response": {
                     "schema_version": "card_06.form_fill.v1",
-                    "filled_form": "상호: 주식회사 합성",
-                    "field_mappings": [
-                        {
-                            "target_label": "상호",
-                            "output_value": "주식회사 합성",
-                            "confidence": "HIGH",
-                            "source_ref": "our_data.상호",
-                            "reason_code": "LABEL_EXACT_MATCH",
-                        }
-                    ],
-                    "unfilled_fields": [],
-                    "review_required": [],
-                    "warnings": [],
+                    **responses[case_id],
                 },
             }
         )
@@ -84,20 +179,15 @@ def make_smoke_evidence() -> dict:
 
 def write_golden_diff_files(evidence_path: Path) -> None:
     golden_dir = evidence_path.parent / "golden"
-    golden_dir.mkdir(parents=True, exist_ok=True)
-    for mode in ("2", "3", "5"):
-        (golden_dir / f"card_{mode}_render_diff.json").write_text(
-            json.dumps(
-                {
-                    "schema_version": "box6.golden_render_diff.v1",
-                    "card_mode": mode,
-                    "byte_diff_zero": True,
-                    "semantic_diff_zero": True,
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
+    result = subprocess.run(
+        [sys.executable, str(BOX6_GOLDEN_GENERATOR), str(REPO_ROOT), str(golden_dir)],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "BOX6_GOLDEN_RENDER_DIFF_GENERATED=1"
 
 
 def load_activation_verifier():
@@ -259,7 +349,7 @@ def test_box6_activation_verifier_accepts_contract(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0
-    assert result.stdout.strip() == "BOX6_FORM_FILL_ACTIVATION_OK=1"
+    assert result.stdout.strip() == "BOX6_SMOKE_EVIDENCE_OK=1"
 
 
 def test_box6_activation_verifier_rejects_bad_confidence(tmp_path: Path) -> None:
@@ -279,7 +369,7 @@ def test_box6_activation_verifier_rejects_bad_confidence(tmp_path: Path) -> None
 
     assert result.returncode == 1
     assert result.stdout.splitlines() == [
-        "BOX6_FORM_FILL_ACTIVATION_OK=0",
+        "BOX6_SMOKE_EVIDENCE_OK=0",
         "ERROR_CODE=CONFIDENCE_INVALID",
     ]
 
@@ -301,7 +391,7 @@ def test_box6_smoke_schema_strict_rejects_extra_key(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert result.stdout.splitlines() == [
-        "BOX6_FORM_FILL_ACTIVATION_OK=0",
+        "BOX6_SMOKE_EVIDENCE_OK=0",
         "ERROR_CODE=EVIDENCE_SCHEMA_NOT_STRICT",
     ]
 
