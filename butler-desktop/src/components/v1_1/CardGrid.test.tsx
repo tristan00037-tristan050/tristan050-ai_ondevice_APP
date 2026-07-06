@@ -5,7 +5,7 @@ async function renderCardGridWithFlag(value?: string) {
   vi.resetModules();
   vi.unstubAllEnvs();
   if (value !== undefined) {
-    vi.stubEnv('VITE_BOX6_FORM_FILL_ENABLED', value);
+    vi.stubEnv('VITE_BUTLER_BOX6_FORM_FILL', value);
   }
   const { CardGrid } = await import('./CardGrid');
   const onCardSelect = vi.fn();
@@ -28,7 +28,7 @@ describe('Box6 form fill feature flag', () => {
     expect(onCardSelect).not.toHaveBeenCalled();
   });
 
-  it('enables card 6 only when VITE_BOX6_FORM_FILL_ENABLED is 1', async () => {
+  it('enables card 6 only when VITE_BUTLER_BOX6_FORM_FILL is 1', async () => {
     const { onCardSelect } = await renderCardGridWithFlag('1');
 
     const card6 = screen.getByTestId('card-6');
