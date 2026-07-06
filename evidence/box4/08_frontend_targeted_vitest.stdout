@@ -5,10 +5,10 @@
 
  RUN  v2.1.9 /private/tmp/wt_box4_document_review/butler-desktop
 
- ✓ src/components/v1_1/CardGrid.test.tsx (4 tests) 376ms
- ✓ src/__tests__/Box4CardMode.test.tsx (3 tests) 377ms
+ ✓ src/components/v1_1/CardGrid.test.tsx (4 tests) 365ms
+ ✓ src/__tests__/Box4CardMode.test.tsx (3 tests) 366ms
 
  Test Files  2 passed (2)
       Tests  7 passed (7)
-   Start at  16:22:50
-   Duration  790ms (transform 181ms, setup 110ms, collect 39ms, tests 754ms, environment 298ms, prepare 57ms)
+   Start at  16:48:50
+   Duration  781ms (transform 174ms, setup 116ms, collect 38ms, tests 731ms, environment 301ms, prepare 57ms)

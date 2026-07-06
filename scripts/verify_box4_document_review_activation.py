@@ -143,8 +143,18 @@ def _check_prompt(root: Path) -> None:
 
 def _check_wiring(root: Path) -> None:
     sidecar = _read(root, SIDECAR)
-    if "review_document" not in sidecar or 'normalize_card_mode(params.card_mode) == "4"' not in sidecar:
+    if "review_document" not in sidecar:
         _fail("SIDECAR_CARD4_WIRING_MISSING")
+    if "_BOX4_DOCUMENT_REVIEW_MODES" not in sidecar or '"document_review"' not in sidecar:
+        _fail("SIDECAR_BOX4_ALIAS_MISSING")
+    if "normalize_card_mode(params.card_mode) in _BOX4_DOCUMENT_REVIEW_MODES" not in sidecar:
+        _fail("SIDECAR_CARD4_ALIAS_WIRING_MISSING")
+    if "_run_box4_review_with_timeout" not in sidecar or "_Box4TimeoutModelClient" not in sidecar:
+        _fail("SIDECAR_BOX4_TIMEOUT_WRAPPER_MISSING")
+    if "TimeoutController(" not in sidecar or "_active_controllers[task_id]" not in sidecar:
+        _fail("SIDECAR_BOX4_ACTIVE_TIMEOUT_MISSING")
+    if "asyncio.to_thread(\n                    review_document" in sidecar:
+        _fail("SIDECAR_BOX4_DIRECT_TO_THREAD_FORBIDDEN")
     if "CompanyKnowledgeResolver" not in sidecar:
         _fail("SIDECAR_BASELINE_DRIFT")
 
@@ -181,6 +191,9 @@ def _check_tests(root: Path) -> None:
     test_source = _read(root, Path("tests/cards/box4/test_review_service.py"))
     if "raw_secret" not in test_source or "raw_response" not in test_source:
         _fail("EXACT_KEY_REGRESSION_TEST_MISSING")
+    prompt_test_source = _read(root, Path("tests/prompts/test_card04_document_review.py"))
+    if '"document_review"' not in prompt_test_source or "chunk_timeout" not in prompt_test_source:
+        _fail("SIDECAR_ALIAS_TIMEOUT_REGRESSION_TEST_MISSING")
 
 
 def _check_smoke_validator(root: Path) -> None:

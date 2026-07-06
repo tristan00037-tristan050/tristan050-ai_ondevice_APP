@@ -128,24 +128,83 @@ def test_box4_sidecar_stream_routes_to_review_service(monkeypatch) -> None:
 
     monkeypatch.setattr(butler_sidecar, "_ensure_shared_llm", fake_ensure_shared_llm)
 
-    async def collect() -> list[str]:
+    async def collect(card_mode: str) -> list[str]:
         params = butler_sidecar._AnalyzeParams(
             query="검토 대상 문서입니다.",
-            card_mode="4",
+            card_mode=card_mode,
             total_chunks=1,
             output_dir=".",
             file_paths=[],
         )
         return [event async for event in butler_sidecar._stream_analyze(params, "box4-test")]
 
+    for card_mode in ("4", "document_review"):
+        events = asyncio.run(collect(card_mode))
+        assert any('"source": "box4_document_review"' in event for event in events)
+        complete = next(event for event in events if event.startswith("event: complete"))
+        payload = json.loads(complete.split("data: ", 1)[1])
+        result = json.loads(payload["result_text"])
+        assert result["schema_version"] == SCHEMA_VERSION
+        assert result["external_send_zero"] is True
+        assert result["raw_log_zero"] is True
+
+
+def test_box4_sidecar_slow_review_times_out_and_cancels(monkeypatch, tmp_path) -> None:
+    import butler_sidecar
+    from butler_pc_core.runtime.timeout_controller import TimeoutController as BaseTimeoutController
+
+    class FastTimeoutController(BaseTimeoutController):
+        def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+            super().__init__(*args, **kwargs)
+            self.chunk_timeout = 0.05
+            self.hard_timeout = 1.0
+
+    class SlowLlm:
+        def __init__(self) -> None:
+            self.cancel_event = None
+
+        def generate_with_cancel(self, prompt: str, cancel_event, max_tokens: int = 2048) -> str:  # type: ignore[no-untyped-def]
+            self.cancel_event = cancel_event
+            cancel_event.wait(timeout=5)
+            return json.dumps(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "issues": [],
+                    "overall_score": 100,
+                    "summary": "추가 지적 사항이 없습니다.",
+                    "review_required": False,
+                    "warnings": [],
+                },
+                ensure_ascii=False,
+            )
+
+    slow_llm = SlowLlm()
+
+    async def fake_ensure_shared_llm() -> SlowLlm:
+        return slow_llm
+
+    monkeypatch.setattr(butler_sidecar, "_ensure_shared_llm", fake_ensure_shared_llm)
+    monkeypatch.setattr(butler_sidecar, "TimeoutController", FastTimeoutController)
+
+    async def collect() -> list[str]:
+        params = butler_sidecar._AnalyzeParams(
+            query="검토 대상 문서입니다.",
+            card_mode="document_review",
+            total_chunks=1,
+            output_dir=str(tmp_path),
+            file_paths=[],
+        )
+        return [event async for event in butler_sidecar._stream_analyze(params, "box4-timeout-test")]
+
     events = asyncio.run(collect())
-    assert any('"source": "box4_document_review"' in event for event in events)
-    complete = next(event for event in events if event.startswith("event: complete"))
-    payload = json.loads(complete.split("data: ", 1)[1])
-    result = json.loads(payload["result_text"])
-    assert result["schema_version"] == SCHEMA_VERSION
-    assert result["external_send_zero"] is True
-    assert result["raw_log_zero"] is True
+    cancelled = next(event for event in events if event.startswith("event: cancelled"))
+    payload = json.loads(cancelled.split("data: ", 1)[1])
+
+    assert payload["reason"] == "chunk_timeout"
+    assert payload["partial_result_path"]
+    assert not any(event.startswith("event: complete") for event in events)
+    assert slow_llm.cancel_event is not None
+    assert slow_llm.cancel_event.is_set()
 
 
 def test_box4_activation_verifier_accepts_contract() -> None:
