@@ -12,7 +12,7 @@ type Card = {
   Icon: LucideIcon;
 };
 
-export const BOX6_FORM_FILL_ENABLED = import.meta.env.VITE_BOX6_FORM_FILL_ENABLED === '1';
+export const BOX6_FORM_FILL_ENABLED = import.meta.env.VITE_BUTLER_BOX6_FORM_FILL === '1';
 
 const CARDS: Card[] = [
   { id: 1, mode: 'request_organize', title: '요청 핵심 파악·정리', desc: '받은 요청을 액션·마감·자료로 정리', active: true, Icon: Inbox },

@@ -90,7 +90,7 @@ user_prompt_template: |
   {{ blank_form }}
 
   ## 우리 회사 보유 데이터
-  {{ our_data | tojson(indent=2) }}
+  {{ our_data_json }}
 
   {% if form_type %}
   ## 양식 유형

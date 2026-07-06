@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 import sys
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -32,28 +33,25 @@ REQUIRED_MAPPING_KEYS = {
     "source_ref",
     "reason_code",
 }
-BOX6_SMOKE_VERIFIER = REPO_ROOT / "scripts" / "verify_box6_form_fill_smoke_evidence.py"
+BOX6_ACTIVATION_VERIFIER = REPO_ROOT / "scripts" / "verify_box6_form_fill_activation.py"
 
 
 def make_smoke_evidence() -> dict:
-    digest = "sha256:" + ("0" * 64)
     cases = []
     required_checks = {
-        1: {"high_fields_ok": True, "filled_form_structure_ok": True},
-        2: {"unfilled_truthful": True},
-        3: {"value_preserved": True},
-        4: {"no_data_all_unfilled_or_review": True},
-        5: {"prompt_injection_ignored": True},
-        6: {"secret_auto_fill_zero": True},
+        "B6-S1": {"high_fields_ok": True, "structure_preserved": True},
+        "B6-S2": {"unfilled_fields_ok": True},
+        "B6-S3": {"value_preserved": True},
+        "B6-S4": {"no_data_unfilled_or_review_required": True},
+        "B6-S5": {"prompt_injection_ignored": True, "arbitrary_generation_zero": True},
+        "B6-S6": {"secret_auto_fill_zero": True, "forbidden_secret_marked": True},
     }
     for case_id, checks in required_checks.items():
         cases.append(
             {
                 "case_id": case_id,
                 "synthetic_only": True,
-                "input_digest": digest,
-                "output_digest": digest,
-                "pass": True,
+                "passed": True,
                 "checks": checks,
                 "response": {
                     "schema_version": "card_06.form_fill.v1",
@@ -74,22 +72,54 @@ def make_smoke_evidence() -> dict:
             }
         )
     return {
-        "schema_version": "box6.smoke.v1",
+        "schema_version": "box6.form_fill.smoke.v1",
         "app_build_sha": "42971a1",
         "model_bundle_sha256": "sha256:" + ("1" * 64),
-        "feature_flag": "VITE_BOX6_FORM_FILL_ENABLED=1",
-        "sample_count": 6,
-        "pass_count": 6,
-        "raw_text_logged": False,
+        "feature_flag": "VITE_BUTLER_BOX6_FORM_FILL=1",
         "external_send_zero": True,
+        "raw_log_zero": True,
         "cases": cases,
     }
+
+
+def write_golden_diff_files(evidence_path: Path) -> None:
+    golden_dir = evidence_path.parent / "golden"
+    golden_dir.mkdir(parents=True, exist_ok=True)
+    for mode in ("2", "3", "5"):
+        (golden_dir / f"card_{mode}_render_diff.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "box6.golden_render_diff.v1",
+                    "card_mode": mode,
+                    "byte_diff_zero": True,
+                    "semantic_diff_zero": True,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+
+def load_activation_verifier():
+    spec = importlib.util.spec_from_file_location(
+        "verify_box6_form_fill_activation",
+        BOX6_ACTIVATION_VERIFIER,
+    )
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def assert_no_jinja_literals(rendered: str) -> None:
     assert "{{" not in rendered
     assert "{%" not in rendered
     assert "%}" not in rendered
+
+
+def semantic_text(text: str) -> str:
+    return " ".join(text.split())
 
 
 def test_card06_render_blank_form_and_our_data_attachment() -> None:
@@ -105,6 +135,31 @@ def test_card06_render_blank_form_and_our_data_attachment() -> None:
     assert "주식회사 합성" in rendered
     assert "strict_mode: True" in rendered
     assert_no_jinja_literals(rendered)
+
+
+def test_card06_korean_our_data_not_ascii_escaped() -> None:
+    rendered = render_card_user_prompt(
+        load_card_prompt("6"),
+        query="상호: ___",
+        file_texts=["상호: 주식회사 합성"],
+    )
+
+    assert "주식회사 합성" in rendered
+    assert "\\uc8fc\\uc2dd\\ud68c\\uc0ac" not in rendered
+
+
+def test_card06_no_global_jinja_env_mutation() -> None:
+    from jinja2.sandbox import SandboxedEnvironment
+
+    before = dict(SandboxedEnvironment().policies["json.dumps_kwargs"])
+    render_card_user_prompt(
+        load_card_prompt("6"),
+        query="상호: ___",
+        file_texts=["상호: 주식회사 합성"],
+    )
+    after = dict(SandboxedEnvironment().policies["json.dumps_kwargs"])
+
+    assert after == before
 
 
 def test_card06_render_no_files_keeps_empty_data_object() -> None:
@@ -133,6 +188,8 @@ def test_card06_prompt_contract_schema_and_confidence() -> None:
     assert set(mapping_props["confidence"]["enum"]) == CONFIDENCES
     assert "strict_mode" in card["input_schema"]
     assert card["input_schema"]["strict_mode"]["default"] is True
+    assert "{{ our_data_json }}" in card["user_prompt_template"]
+    assert "our_data | tojson" not in card["user_prompt_template"]
 
 
 def test_card06_known_card_mode_contract() -> None:
@@ -179,21 +236,22 @@ def test_card06_raw_log_zero_static_contract() -> None:
     source_paths = [
         REPO_ROOT / "butler_pc_core" / "prompts" / "card_renderer.py",
         REPO_ROOT / "butler_pc_core" / "prompts" / "cards" / "card_06_fill_external_form.yaml",
-        REPO_ROOT / "scripts" / "verify_box6_form_fill_smoke_evidence.py",
+        REPO_ROOT / "scripts" / "verify_box6_form_fill_activation.py",
     ]
-    forbidden = re.compile(r"raw_text(?!_logged)|raw_prompt|raw_response|/Users/|/home/|/Volumes/|sk-proj-|BEGIN .*PRIVATE KEY")
+    forbidden = re.compile(r"raw_text|raw_prompt|raw_response|/Users/|/home/|/Volumes/|sk-proj-|BEGIN .*PRIVATE KEY")
 
     for path in source_paths:
         if path.exists():
             assert not forbidden.search(path.read_text(encoding="utf-8"))
 
 
-def test_box6_smoke_evidence_verifier_accepts_contract(tmp_path: Path) -> None:
+def test_box6_activation_verifier_accepts_contract(tmp_path: Path) -> None:
     evidence_path = tmp_path / "box6_smoke.json"
     evidence_path.write_text(json.dumps(make_smoke_evidence(), ensure_ascii=False), encoding="utf-8")
+    write_golden_diff_files(evidence_path)
 
     result = subprocess.run(
-        [sys.executable, str(BOX6_SMOKE_VERIFIER), str(evidence_path)],
+        [sys.executable, str(BOX6_ACTIVATION_VERIFIER), str(REPO_ROOT), str(evidence_path)],
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
@@ -201,17 +259,18 @@ def test_box6_smoke_evidence_verifier_accepts_contract(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 0
-    assert result.stdout.strip() == "BOX6_SMOKE_EVIDENCE_OK=1"
+    assert result.stdout.strip() == "BOX6_FORM_FILL_ACTIVATION_OK=1"
 
 
-def test_box6_smoke_evidence_verifier_rejects_bad_confidence(tmp_path: Path) -> None:
+def test_box6_activation_verifier_rejects_bad_confidence(tmp_path: Path) -> None:
     evidence = make_smoke_evidence()
     evidence["cases"][0]["response"]["field_mappings"][0]["confidence"] = "CERTAIN"
     evidence_path = tmp_path / "box6_smoke_bad.json"
     evidence_path.write_text(json.dumps(evidence, ensure_ascii=False), encoding="utf-8")
+    write_golden_diff_files(evidence_path)
 
     result = subprocess.run(
-        [sys.executable, str(BOX6_SMOKE_VERIFIER), str(evidence_path)],
+        [sys.executable, str(BOX6_ACTIVATION_VERIFIER), str(REPO_ROOT), str(evidence_path)],
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
@@ -220,9 +279,45 @@ def test_box6_smoke_evidence_verifier_rejects_bad_confidence(tmp_path: Path) -> 
 
     assert result.returncode == 1
     assert result.stdout.splitlines() == [
-        "BOX6_SMOKE_EVIDENCE_OK=0",
+        "BOX6_FORM_FILL_ACTIVATION_OK=0",
         "ERROR_CODE=CONFIDENCE_INVALID",
     ]
+
+
+def test_box6_smoke_schema_strict_rejects_extra_key(tmp_path: Path) -> None:
+    evidence = make_smoke_evidence()
+    evidence["extra"] = "not allowed"
+    evidence_path = tmp_path / "box6_smoke_bad_schema.json"
+    evidence_path.write_text(json.dumps(evidence, ensure_ascii=False), encoding="utf-8")
+    write_golden_diff_files(evidence_path)
+
+    result = subprocess.run(
+        [sys.executable, str(BOX6_ACTIVATION_VERIFIER), str(REPO_ROOT), str(evidence_path)],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert result.stdout.splitlines() == [
+        "BOX6_FORM_FILL_ACTIVATION_OK=0",
+        "ERROR_CODE=EVIDENCE_SCHEMA_NOT_STRICT",
+    ]
+
+
+def test_static_verifier_rejects_env_policy_assignment() -> None:
+    verifier = load_activation_verifier()
+    bad_source = """
+def _box6_json(value):
+    return value
+
+def render_card_user_prompt(card, *, query, file_texts):
+    env.policies["json.dumps_kwargs"] = {"ensure_ascii": False}
+"""
+
+    with pytest.raises(SystemExit):
+        verifier._check_static_contract_source_for_test(bad_source)
 
 
 def test_card06_regression_other_cards_still_render() -> None:
@@ -242,3 +337,20 @@ def test_card06_regression_other_cards_still_render() -> None:
         )
         assert expected in rendered
         assert_no_jinja_literals(rendered)
+
+
+def test_card02_03_05_golden_render_diff_zero() -> None:
+    goldens = {
+        "2": "## 외부 문서\n카드 2 본문\n\n## 우리 회사 보고서 양식\n첨부 자료\n\n\n위 외부 문서를 우리 양식에 맞게 변환하여 JSON으로 출력하십시오.",
+        "3": "## 새 상황·요구사항\n카드 3 본문\n\n\n\n## 참고 과거 문서\n### 과거 문서 1\n첨부 자료\n\n위 정보를 바탕으로 새 초안을 JSON 형식으로 출력하십시오.",
+        "5": "## 거래내역\n카드 5 본문\n\n\n통화: KRW\n\n위 거래내역을 분류하여 JSON 형식으로 출력하십시오.\n\n## 첨부 파일 내용\n첨부 자료",
+    }
+
+    for mode, expected in goldens.items():
+        rendered = render_card_user_prompt(
+            load_card_prompt(mode),
+            query=f"카드 {mode} 본문",
+            file_texts=["첨부 자료"],
+        )
+        assert rendered == expected
+        assert semantic_text(rendered) == semantic_text(expected)

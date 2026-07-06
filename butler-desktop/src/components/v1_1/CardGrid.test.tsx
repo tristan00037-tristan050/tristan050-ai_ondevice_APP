@@ -25,7 +25,7 @@ async function loadCardGrid(flag: '0' | '1' | undefined = undefined) {
   if (flag === undefined) {
     vi.unstubAllEnvs();
   } else {
-    vi.stubEnv('VITE_BOX6_FORM_FILL_ENABLED', flag);
+    vi.stubEnv('VITE_BUTLER_BOX6_FORM_FILL', flag);
   }
   return import('./CardGrid');
 }
@@ -50,7 +50,7 @@ describe('Box6 form_fill feature flag', () => {
     expect(onCardSelect).not.toHaveBeenCalled();
   });
 
-  it('enables card 6 only when VITE_BOX6_FORM_FILL_ENABLED is 1', async () => {
+  it('enables card 6 only when VITE_BUTLER_BOX6_FORM_FILL is 1', async () => {
     const { CardGrid, BOX6_FORM_FILL_ENABLED } = await loadCardGrid('1');
     const onCardSelect = vi.fn();
 
@@ -74,7 +74,7 @@ describe('Box6 form_fill feature flag', () => {
 
   it('sends form_fill to the sidecar as numeric card_mode 6', async () => {
     vi.resetModules();
-    vi.stubEnv('VITE_BOX6_FORM_FILL_ENABLED', '1');
+    vi.stubEnv('VITE_BUTLER_BOX6_FORM_FILL', '1');
     const fetchMock = makeFetchMock();
     vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
     const { App, sidecarCardMode } = await import('../../App');
