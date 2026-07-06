@@ -181,6 +181,7 @@ def render_card_user_prompt(
             lstrip_blocks=True,
             undefined=StrictUndefined,
         )
+        env.policies["json.dumps_kwargs"] = {"ensure_ascii": False}
         rendered = env.from_string(tmpl).render(**context).strip()
     except Exception:
         rendered = _manual_fallback_render(

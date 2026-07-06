@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/box6/form_fill_smoke_v1.schema.json",
+  "title": "Box6 form_fill smoke evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "app_build_sha",
+    "model_bundle_sha256",
+    "feature_flag",
+    "sample_count",
+    "pass_count",
+    "raw_text_logged",
+    "external_send_zero",
+    "cases"
+  ],
+  "properties": {
+    "schema_version": { "const": "box6.smoke.v1" },
+    "app_build_sha": { "type": "string", "minLength": 7 },
+    "model_bundle_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "feature_flag": { "const": "VITE_BOX6_FORM_FILL_ENABLED=1" },
+    "sample_count": { "const": 6 },
+    "pass_count": { "const": 6 },
+    "raw_text_logged": { "const": false },
+    "external_send_zero": { "const": true },
+    "cases": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "synthetic_only",
+          "input_digest",
+          "output_digest",
+          "pass",
+          "checks",
+          "response"
+        ],
+        "properties": {
+          "case_id": { "type": "integer", "minimum": 1, "maximum": 6 },
+          "synthetic_only": { "const": true },
+          "input_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "output_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "pass": { "const": true },
+          "checks": {
+            "type": "object",
+            "additionalProperties": { "type": "boolean" }
+          },
+          "response": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "schema_version",
+              "filled_form",
+              "field_mappings",
+              "unfilled_fields",
+              "review_required",
+              "warnings"
+            ],
+            "properties": {
+              "schema_version": { "const": "card_06.form_fill.v1" },
+              "filled_form": { "type": "string" },
+              "field_mappings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["target_label", "output_value", "confidence", "source_ref", "reason_code"],
+                  "properties": {
+                    "target_label": { "type": "string" },
+                    "output_value": { "type": "string" },
+                    "confidence": { "enum": ["HIGH", "MEDIUM", "LOW", "UNFILLED"] },
+                    "source_ref": { "type": "string" },
+                    "reason_code": { "type": "string" }
+                  }
+                }
+              },
+              "unfilled_fields": { "type": "array", "items": { "type": "string" } },
+              "review_required": { "type": "array", "items": { "type": "string" } },
+              "warnings": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
