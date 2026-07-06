@@ -1,0 +1,66 @@
+
+> butler-desktop@0.9.0 test
+> vitest --run
+
+
+ RUN  v2.1.9 /private/tmp/wt_box4_document_review/butler-desktop
+
+ ✓ src/__tests__/companyFactClient.test.ts (9 tests) 8ms
+ ✓ src/__tests__/companyLearningClient.test.ts (5 tests) 7ms
+ ✓ src/__tests__/ConnectLoopChatUIBridge.test.tsx (30 tests) 87ms
+ ✓ src/__tests__/CompanyLearningConsole.test.tsx (3 tests) 113ms
+ ✓ src/__tests__/BotMessage.test.tsx (31 tests) 110ms
+ ✓ src/__tests__/RequestParsingFlow.test.tsx (7 tests) 175ms
+ ✓ src/__tests__/D4Card2SidecarRetry.test.tsx (3 tests) 159ms
+ ✓ src/__tests__/AdminPolicyConsole.test.tsx (5 tests) 178ms
+ ✓ src/__tests__/CompanyFormatConsole.test.tsx (4 tests) 202ms
+ ✓ src/__tests__/CompanyFactApprovalConsole.test.tsx (8 tests) 293ms
+ ✓ src/__tests__/D3Card1UXFix.test.tsx (11 tests) 302ms
+ ✓ src/__tests__/D2D3Fix698.test.tsx (6 tests) 147ms
+ ✓ src/__tests__/D3Card1Integration.test.tsx (6 tests) 216ms
+ ✓ src/__tests__/ChatInput.test.tsx (9 tests) 71ms
+ ✓ src/__tests__/App.test.tsx (13 tests) 362ms
+ ✓ src/__tests__/connect_loop/connect_loop_sidecar_guards.test.ts (3 tests) 11ms
+ ✓ src/__tests__/ProgressOverlay.test.tsx (6 tests) 44ms
+ ✓ src/__tests__/ConversationItem.test.tsx (6 tests) 70ms
+ ✓ src/__tests__/EgressMonitor.test.tsx (8 tests) 126ms
+ ✓ src/__tests__/D3Card1OverlayFix.test.tsx (5 tests) 145ms
+ ✓ src/__tests__/InputBar.test.tsx (5 tests) 89ms
+ ✓ src/__tests__/adminContextAdapter.test.ts (5 tests) 4ms
+ ✓ src/__tests__/EmptyState.test.tsx (6 tests) 156ms
+ ✓ src/__tests__/D4Card2DocumentTransform.test.tsx (5 tests) 121ms
+ ✓ src/components/v1_1/CardGrid.test.tsx (4 tests) 361ms
+ ✓ src/__tests__/connect_loop/connect_loop_payload_mappers.test.ts (5 tests) 4ms
+ ✓ src/__tests__/Box4CardMode.test.tsx (3 tests) 372ms
+ ✓ src/__tests__/MessageList.test.tsx (3 tests) 42ms
+ ✓ src/__tests__/EgressBadge.test.tsx (5 tests) 41ms
+ ✓ src/__tests__/box3DraftClient.test.ts (2 tests) 3ms
+ ✓ src/__tests__/HomeScreen.test.tsx (5 tests) 74ms
+ ✓ src/__tests__/Box3DraftModal.test.tsx (1 test) 40ms
+ ✓ src/__tests__/AccountingFlow.test.tsx (41 tests) 62175ms
+   ✓ AccountingModal — 업로드 흐름 > test_complete_event_shows_result 3039ms
+   ✓ AccountingModal — 업로드 흐름 > test_report_toggle_shows_markdown 3038ms
+   ✓ AccountingModal — 업로드 흐름 > test_download_btn_uses_tauri_dialog_and_fs 3019ms
+   ✓ AccountingModal — 업로드 흐름 > test_download_cancel_does_not_write_file 3024ms
+   ✓ AccountingModal — 업로드 흐름 > test_download_fetch_failure_shows_error 3018ms
+   ✓ AccountingModal — 업로드 흐름 > test_category_summary_shows_amount 3017ms
+   ✓ AccountingModal — 업로드 흐름 > test_category_summary_hides_zero_amount 3022ms
+   ✓ AccountingModal — 업로드 흐름 > test_category_amount_negative_preserves_sign 3021ms
+   ✓ AccountingModal — 업로드 흐름 > test_category_amount_positive_no_sign 3022ms
+   ✓ AccountingModal — 업로드 흐름 > test_category_table_renders_with_headers 3019ms
+   ✓ AccountingModal — 업로드 흐름 > test_category_table_gubun_badge_reflects_sign 3023ms
+   ✓ AccountingModal — 업로드 흐름 > test_category_table_negative_amount_has_debit_color 3023ms
+   ✓ AccountingModal — 업로드 흐름 > test_category_table_totals_row_present 3018ms
+   ✓ AccountingModal — 업로드 흐름 > test_category_table_zero_amount_hides_column 3021ms
+   ✓ AccountingModal — 업로드 흐름 > test_download_buffer_passed_exactly_to_writefile 3019ms
+   ✓ AccountingModal — 업로드 흐름 > test_download_small_buffer_shows_error_no_writefile 3017ms
+   ✓ AccountingModal — 업로드 흐름 > test_report_markdown_td_debit_color_for_negative_amount 3022ms
+   ✓ AccountingModal — 업로드 흐름 > test_result_table_positive_categories_before_negative 3017ms
+   ✓ AccountingModal — 업로드 흐름 > test_report_table_has_collapse_border_style 3031ms
+   ✓ AccountingModal — 업로드 흐름 > test_report_th_has_padding_style 3027ms
+   ✓ AccountingModal — 업로드 흐름 > category_table_revenue_before_expense — 매출(rank 0)이 판관비(rank 2)보다 앞에 렌더링 1520ms
+
+ Test Files  33 passed (33)
+      Tests  268 passed (268)
+   Start at  16:48:51
+   Duration  63.00s (transform 1.46s, setup 2.27s, collect 4.92s, tests 66.31s, environment 7.09s, prepare 1.26s)
