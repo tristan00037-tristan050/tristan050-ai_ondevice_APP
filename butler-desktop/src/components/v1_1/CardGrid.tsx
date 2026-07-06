@@ -1,7 +1,7 @@
 import React from 'react';
-import { Inbox, ArrowRightLeft, FilePlus, FileEdit, Calculator, ClipboardList, Mic, BarChart3, type LucideIcon } from 'lucide-react';
+import { Inbox, ArrowRightLeft, FilePlus, FileSearch, Calculator, ClipboardList, Mic, BarChart3, type LucideIcon } from 'lucide-react';
 
-type CardMode = 'request_organize' | 'format_convert' | 'new_draft' | 'attachment_edit' | 'accounting_classify' | 'form_fill' | 'meeting_notes' | 'data_insight';
+type CardMode = 'request_organize' | 'format_convert' | 'new_draft' | 'document_review' | 'accounting_classify' | 'form_fill' | 'meeting_notes' | 'data_insight';
 
 type Card = {
   id: number;
@@ -12,13 +12,14 @@ type Card = {
   Icon: LucideIcon;
 };
 
+export const BOX4_DOCUMENT_REVIEW_ENABLED = import.meta.env.VITE_BUTLER_BOX4_DOCUMENT_REVIEW === '1';
 export const BOX6_FORM_FILL_ENABLED = import.meta.env.VITE_BUTLER_BOX6_FORM_FILL === '1';
 
 const CARDS: Card[] = [
   { id: 1, mode: 'request_organize', title: '요청 핵심 파악·정리', desc: '받은 요청을 액션·마감·자료로 정리', active: true, Icon: Inbox },
   { id: 2, mode: 'format_convert', title: '남의 문서 → 우리 양식 보고서', desc: '외부 문서와 우리 양식으로 보고서 생성', active: true, Icon: ArrowRightLeft },
   { id: 3, mode: 'new_draft', title: '기존 문서 → 새 초안', desc: '우리 과거 자료 기반 새 초안', active: true, Icon: FilePlus },
-  { id: 4, mode: 'attachment_edit', title: '첨부 문서 수정·보완', desc: '작성 중 문서 보완', active: true, Icon: FileEdit },
+  { id: 4, mode: 'document_review', title: '첨부 문서 수정·보완', desc: '작성 중 문서 보완', active: BOX4_DOCUMENT_REVIEW_ENABLED, Icon: FileSearch },
   { id: 5, mode: 'accounting_classify', title: '통장·거래내역 → 회계 분류', desc: '계정과목 자동 분류', active: true, Icon: Calculator },
   { id: 6, mode: 'form_fill', title: '상대 양식에 우리 자료', desc: '빈 양식 채우기', active: BOX6_FORM_FILL_ENABLED, Icon: ClipboardList },
   { id: 7, mode: 'meeting_notes', title: '회의 음성 → 회의록', desc: '녹음 기반 회의록', active: false, Icon: Mic },
