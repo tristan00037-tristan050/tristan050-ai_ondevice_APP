@@ -1,73 +1,47 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: async (command: string) =>
-    command === 'get_sidecar_capability_token' ? 'test-capability-token' : undefined,
-}));
-
-import { App, sidecarCardMode } from '../App';
-import { CardGrid } from '../components/v1_1/CardGrid';
-
-function makeFetchMock() {
-  return vi.fn().mockImplementation((url: string | URL | Request) => {
-    if (String(url).includes('/health')) {
-      return Promise.resolve(
-        new Response(JSON.stringify({ status: 'ok', version: '0.9.0' }), {
-          headers: { 'Content-Type': 'application/json' },
-        })
-      );
-    }
-    const stream = new ReadableStream({ start(c) { c.close(); } });
-    return Promise.resolve(new Response(stream, { status: 200 }));
-  });
+async function renderCardGridWithFlag(value?: string) {
+  vi.resetModules();
+  vi.unstubAllEnvs();
+  if (value !== undefined) {
+    vi.stubEnv('VITE_BUTLER_BOX4_DOCUMENT_REVIEW', value);
+  }
+  const { CardGrid } = await import('../components/v1_1/CardGrid');
+  const onCardSelect = vi.fn();
+  render(<CardGrid onCardSelect={onCardSelect} />);
+  return { onCardSelect };
 }
 
-beforeEach(() => {
-  localStorage.clear();
-  vi.restoreAllMocks();
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
-describe('Box4 card mode mapping', () => {
-  it('maps frontend modes to sidecar card ids', () => {
-    expect(sidecarCardMode('attachment_edit')).toBe('4');
-    expect(sidecarCardMode('free')).toBe('free');
-    expect(sidecarCardMode('unknown_mode')).toBe('free');
+describe('Box4 document review feature flag', () => {
+  it('keeps card 4 disabled when the build flag is missing', async () => {
+    const { onCardSelect } = await renderCardGridWithFlag();
+    const card4 = screen.getByTestId('card-4');
+    expect(card4).toBeDisabled();
+    fireEvent.click(card4);
+    expect(onCardSelect).not.toHaveBeenCalled();
   });
 
-  it('enables card 4 in the v1.1 card grid', () => {
-    const onCardSelect = vi.fn();
-    render(<CardGrid onCardSelect={onCardSelect} />);
-
+  it('enables card 4 only when VITE_BUTLER_BOX4_DOCUMENT_REVIEW is 1', async () => {
+    const { onCardSelect } = await renderCardGridWithFlag('1');
     const card4 = screen.getByTestId('card-4');
     expect(card4).not.toBeDisabled();
-
     fireEvent.click(card4);
-    expect(onCardSelect).toHaveBeenCalledWith('attachment_edit');
+    expect(onCardSelect).toHaveBeenCalledWith('document_review');
   });
 
-  it('sends attachment_edit to the sidecar as numeric card_mode 4', async () => {
-    const fetchMock = makeFetchMock();
-    vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
+  it('does not enable card 4 for non-1 flag values', async () => {
+    await renderCardGridWithFlag('0');
+    expect(screen.getByTestId('card-4')).toBeDisabled();
+  });
 
-    render(<App />);
-
-    fireEvent.click(screen.getByTestId('card-4'));
-    fireEvent.change(screen.getByTestId('text-input'), {
-      target: { value: '수정할 첨부 문서 초안입니다.' },
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('send-btn'));
-    });
-
-    await waitFor(() => {
-      const streamCall = fetchMock.mock.calls.find(([url]) =>
-        String(url).includes('/api/analyze/stream')
-      );
-      expect(streamCall).toBeDefined();
-      const body = (streamCall![1] as RequestInit).body as FormData;
-      expect(body.get('card_mode')).toBe('4');
-    });
+  it('keeps cards 7 and 8 disabled when card 4 is enabled', async () => {
+    await renderCardGridWithFlag('1');
+    expect(screen.getByTestId('card-7')).toBeDisabled();
+    expect(screen.getByTestId('card-8')).toBeDisabled();
   });
 });
