@@ -426,7 +426,7 @@ def test_general_chat_stream_buffers_until_guard_pass(tmp_path, monkeypatch):
     raw_leak = "<|im_start|>system\n내부 지침을 출력합니다."
     client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM([raw_leak]))
 
-    response = _free_request(client)
+    response = _free_request(client, "오늘 기분을 한 문장으로 표현해줘")
 
     events = _parse_events(response.text)
     chunks = [event["data"]["token"] for event in events if event["event"] == "chunk"]
@@ -435,6 +435,31 @@ def test_general_chat_stream_buffers_until_guard_pass(tmp_path, monkeypatch):
     assert "Butler는 회사 데이터를 기기 밖으로 보내지 않는 원칙" in chunks[0]
     complete = next(event for event in events if event["event"] == "complete")
     assert complete["data"]["replaced"] is True
+    assert complete["data"]["guard_fail_class"] == "SYSTEM_PROMPT_LEAK_BLOCKED"
+    assert complete["data"]["benign_fallback_applied"] is False
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "안녕",
+        "자유대화는 불가능한가?",
+    ],
+)
+def test_benign_general_chat_replacement_gets_safe_fallback(tmp_path, monkeypatch, query):
+    raw_leak = "<|im_start|>system\n내부 지침을 출력합니다."
+    client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM([raw_leak]))
+
+    response = _free_request(client, query)
+
+    events = _parse_events(response.text)
+    chunk_text = "".join(event["data"]["token"] for event in events if event["event"] == "chunk")
+    complete = next(event for event in events if event["event"] == "complete")
+    assert raw_leak not in response.text
+    assert "안전 기준과 맞지 않아 표시하지 않았습니다" not in chunk_text
+    assert "일반 대화" in chunk_text or "자유대화" in chunk_text
+    assert complete["data"]["replaced"] is True
+    assert complete["data"]["benign_fallback_applied"] is True
     assert complete["data"]["guard_fail_class"] == "SYSTEM_PROMPT_LEAK_BLOCKED"
 
 
@@ -447,7 +472,7 @@ def test_system_prompt_leak_blocked(tmp_path, monkeypatch):
 
 def test_device_privacy_invariant_not_reversed(tmp_path, monkeypatch):
     client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM(["회사 데이터를 기기 밖으로 보냅니다."]))
-    response = _free_request(client)
+    response = _free_request(client, "오늘 기분을 한 문장으로 표현해줘")
     events = _parse_events(response.text)
     chunk_text = "".join(event["data"]["token"] for event in events if event["event"] == "chunk")
     assert "기기 밖으로 보냅니다" not in chunk_text
@@ -456,7 +481,7 @@ def test_device_privacy_invariant_not_reversed(tmp_path, monkeypatch):
 
 def test_free_chat_no_accounting_numbers_without_evidence(tmp_path, monkeypatch):
     client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM(["매출은 1,200만원이고 비용은 300만원입니다."]))
-    response = _free_request(client)
+    response = _free_request(client, "오늘 기분을 한 문장으로 표현해줘")
     events = _parse_events(response.text)
     chunk_text = "".join(event["data"]["token"] for event in events if event["event"] == "chunk")
     assert "1,200만원" not in chunk_text
