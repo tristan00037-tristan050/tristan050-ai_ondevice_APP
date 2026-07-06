@@ -12,7 +12,7 @@ type Card = {
   Icon: LucideIcon;
 };
 
-const BOX6_FORM_FILL_ENABLED = import.meta.env.VITE_BOX6_FORM_FILL_ENABLED === '1';
+const BOX6_ENABLED = import.meta.env.VITE_BUTLER_BOX6_FORM_FILL === '1';
 
 const CARDS: Card[] = [
   { id: 1, mode: 'request_organize', title: '요청 핵심 파악·정리', desc: '받은 요청을 액션·마감·자료로 정리', active: true, Icon: Inbox },
@@ -20,7 +20,7 @@ const CARDS: Card[] = [
   { id: 3, mode: 'new_draft', title: '기존 문서 → 새 초안', desc: '우리 과거 자료 기반 새 초안', active: true, Icon: FilePlus },
   { id: 4, mode: 'attachment_edit', title: '첨부 문서 수정·보완', desc: '작성 중 문서 보완', active: true, Icon: FileEdit },
   { id: 5, mode: 'accounting_classify', title: '통장·거래내역 → 회계 분류', desc: '계정과목 자동 분류', active: true, Icon: Calculator },
-  { id: 6, mode: 'form_fill', title: '상대 양식에 우리 자료', desc: '빈 양식 채우기', active: BOX6_FORM_FILL_ENABLED, Icon: ClipboardList },
+  { id: 6, mode: 'form_fill', title: '상대 양식에 우리 자료', desc: '빈 양식 채우기', active: BOX6_ENABLED, Icon: ClipboardList },
   { id: 7, mode: 'meeting_notes', title: '회의 음성 → 회의록', desc: '녹음 기반 회의록', active: false, Icon: Mic },
   { id: 8, mode: 'data_insight', title: '데이터 → 인사이트', desc: '수치 요약·분석', active: false, Icon: BarChart3 },
 ];
