@@ -12,6 +12,7 @@ REQUIRED_FILES = [
     Path("butler-desktop/src/lib/cards/fileText.ts"),
     Path("butler-desktop/src/lib/box6/box6FormFillClient.ts"),
     Path("butler-desktop/src/lib/box4/box4ReviewClient.ts"),
+    Path("butler-desktop/src/components/v1_1/ModalFrame.tsx"),
     Path("butler-desktop/src/components/v1_1/FormFillModal.tsx"),
     Path("butler-desktop/src/components/v1_1/DocumentReviewModal.tsx"),
     Path("butler-desktop/src/__tests__/Box4Box6FrontendModals.test.tsx"),
@@ -22,6 +23,7 @@ STATIC_SCAN_FILES = [
     Path("butler-desktop/src/lib/cards/fileText.ts"),
     Path("butler-desktop/src/lib/box6/box6FormFillClient.ts"),
     Path("butler-desktop/src/lib/box4/box4ReviewClient.ts"),
+    Path("butler-desktop/src/components/v1_1/ModalFrame.tsx"),
     Path("butler-desktop/src/components/v1_1/FormFillModal.tsx"),
     Path("butler-desktop/src/components/v1_1/DocumentReviewModal.tsx"),
 ]
@@ -56,6 +58,7 @@ def main() -> int:
     box4_client = read(Path("butler-desktop/src/lib/box4/box4ReviewClient.ts"))
     file_text = read(Path("butler-desktop/src/lib/cards/fileText.ts"))
     parser = read(Path("butler-desktop/src/lib/cards/analyzeStreamResult.ts"))
+    modal_frame = read(Path("butler-desktop/src/components/v1_1/ModalFrame.tsx"))
     form_modal = read(Path("butler-desktop/src/components/v1_1/FormFillModal.tsx"))
     review_modal = read(Path("butler-desktop/src/components/v1_1/DocumentReviewModal.tsx"))
     tests = read(Path("butler-desktop/src/__tests__/Box4Box6FrontendModals.test.tsx"))
@@ -81,7 +84,11 @@ def main() -> int:
         [
             "sidecarFetch('/api/analyze/stream'",
             "formData.append('card_mode', '6')",
+            "formData.append(`file_${index}`, item.file)",
+            "formData.append('file_count'",
             "parseAnalyzeStreamResult",
+            "source_excerpt",
+            "review_required",
             "hasBox6SecretAutofill",
             "보안 항목 자동기입이 감지되어 결과를 표시하지 않았습니다.",
         ],
@@ -89,7 +96,15 @@ def main() -> int:
     )
     require_contains(
         box4_client,
-        ["sidecarFetch('/api/analyze/stream'", "formData.append('card_mode', '4')", "parseAnalyzeStreamResult"],
+        [
+            "sidecarFetch('/api/analyze/stream'",
+            "formData.append('card_mode', '4')",
+            "formData.append(`file_${index}`, item.file)",
+            "formData.append('file_count'",
+            "parseAnalyzeStreamResult",
+            "hasBox4SecretLeak",
+            "민감정보가 포함되어 결과를 표시하지 않았습니다.",
+        ],
         "BOX4_CLIENT_CONTRACT_MISSING",
     )
 
@@ -111,19 +126,35 @@ def main() -> int:
         "PARSER_FAIL_SAFE_CONTRACT_MISSING",
     )
     require_contains(
-        box6_client + box4_client + form_modal + review_modal,
-        ['role="dialog"', 'aria-modal="true"', "Escape", "previous?.focus()", "uiSafeSidecarErrorMessage", "safeExcerpt"],
+        modal_frame + box6_client + box4_client + form_modal + review_modal,
+        [
+            'role="dialog"',
+            'aria-modal="true"',
+            "Escape",
+            "previous?.focus()",
+            "setAttribute('inert'",
+            "event.key !== 'Tab'",
+            "uiSafeSidecarErrorMessage",
+            "safeExcerpt",
+        ],
         "MODAL_ACCESSIBILITY_OR_REDACTION_MISSING",
     )
     require_contains(
         tests,
         [
             "card_mode')).toBe('6')",
+            "body.get('file_0')",
+            "body.get('files')).toBeNull()",
             "card_mode') === '4'",
             "unsupported_type",
             "too_many",
             "sk-test-secret-value-123456",
             "MAX_BYTES_PER_CHAR",
+            "source_excerpt",
+            "review_required",
+            "민감정보가 포함되어 결과를 표시하지 않았습니다.",
+            "document.querySelector('[inert]')",
+            "shiftKey: true",
             "toHaveLength(0)",
         ],
         "REGRESSION_TEST_CONTRACT_MISSING",

@@ -18,14 +18,16 @@ const box6Payload = {
       target_label: '상호',
       output_value: '주식회사 합성',
       confidence: 'HIGH',
-      source_ref: 'our_data.상호',
+      source_excerpt: '상호: 주식회사 합성',
+      review_required: false,
       reason_code: 'LABEL_EXACT_MATCH',
     },
     {
       target_label: 'API key',
       output_value: '',
       confidence: 'UNFILLED',
-      source_ref: '',
+      source_excerpt: '',
+      review_required: true,
       reason_code: 'FORBIDDEN_SECRET_FIELD',
     },
   ],
@@ -43,7 +45,8 @@ const unsafeBox6SecretPayload = {
       target_label: 'API key',
       output_value: 'sk-test-secret-value-123456',
       confidence: 'HIGH',
-      source_ref: 'our_data.api_key',
+      source_excerpt: 'api_key',
+      review_required: false,
       reason_code: 'LABEL_EXACT_MATCH',
     },
   ],
@@ -80,6 +83,17 @@ const box4NoIssuesPayload = {
   warnings: [],
   raw_log_zero: true,
   external_send_zero: true,
+};
+
+const unsafeBox4SecretPayload = {
+  ...box4Payload,
+  issues: [
+    {
+      ...box4Payload.issues[0],
+      original_text: 'api key: sk-test-secret-value-123456',
+      suggestion: '문서에서 api key: sk-test-secret-value-123456 값을 제거하세요.',
+    },
+  ],
 };
 
 function completeSse(payload: unknown): string {
@@ -128,6 +142,7 @@ describe('Box4/Box6 analyze stream parser', () => {
 
     expect(parsed.schema_version).toBe('card_06.form_fill.v1');
     expect(parsed.field_mappings[1].confidence).toBe('UNFILLED');
+    expect(parsed.field_mappings[0].source_excerpt).toBe('상호: 주식회사 합성');
   });
 
   it('accepts fenced JSON and rejects invalid Box4 enums fail-safe', () => {
@@ -139,6 +154,25 @@ describe('Box4/Box6 analyze stream parser', () => {
       issues: [{ ...box4Payload.issues[0], issue_type: 'SECURITY' }],
     };
     expect(() => parseAnalyzeStreamResult(JSON.stringify(invalid), validateBox4DocumentReviewResult)).toThrow(
+      '결과 형식을 확인하지 못했습니다.'
+    );
+  });
+
+  it('rejects incomplete Box6 mappings without source_excerpt and review_required', () => {
+    const invalid = {
+      ...box6Payload,
+      field_mappings: [
+        {
+          target_label: '상호',
+          output_value: '주식회사 합성',
+          confidence: 'HIGH',
+          source_ref: 'legacy field',
+          reason_code: 'LABEL_EXACT_MATCH',
+        },
+      ],
+    };
+
+    expect(() => parseAnalyzeStreamResult(JSON.stringify(invalid), validateBox6FormFillResult)).toThrow(
       '결과 형식을 확인하지 못했습니다.'
     );
   });
@@ -205,6 +239,9 @@ describe('Box4/Box6 frontend modals', () => {
     fireEvent.change(screen.getByTestId('box6-blank-form-input'), {
       target: { value: '상호: ___\nAPI key: ___' },
     });
+    fireEvent.change(screen.getByTestId('box6-file-input'), {
+      target: { files: [new File(['상호: 주식회사 합성'], 'company.txt', { type: 'text/plain' })] },
+    });
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('box6-submit-btn'));
@@ -217,6 +254,9 @@ describe('Box4/Box6 frontend modals', () => {
     expect(streamCall).toBeDefined();
     const body = (streamCall![1] as RequestInit).body as FormData;
     expect(body.get('card_mode')).toBe('6');
+    expect(body.get('file_count')).toBe('1');
+    expect(body.get('file_0')).toBeInstanceOf(File);
+    expect(body.get('files')).toBeNull();
     expect((streamCall![1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer test-capability-token' });
   });
 
@@ -244,7 +284,31 @@ describe('Box4/Box6 frontend modals', () => {
     expect(screen.queryByText('sk-test-secret-value-123456')).not.toBeInTheDocument();
   });
 
-  it('opens Box4 modal, submits card_mode 4, and closes with Escape returning focus', async () => {
+  it('blocks Box4 secret text before rendering returned issues', async () => {
+    const fetchMock = makeFetchMock({ box4: unsafeBox4SecretPayload });
+    vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
+    const { App } = await loadApp();
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.queryByTestId('sidecar-loading')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('card-4'));
+    fireEvent.change(screen.getByTestId('box4-target-document-input'), {
+      target: { value: '검토할 첨부 문서 초안입니다.' },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('box4-submit-btn'));
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('box4-error')).toHaveTextContent('민감정보가 포함되어 결과를 표시하지 않았습니다.')
+    );
+    expect(screen.queryByTestId('box4-result')).not.toBeInTheDocument();
+    expect(screen.queryByText('sk-test-secret-value-123456')).not.toBeInTheDocument();
+  });
+
+  it('opens Box4 modal, traps focus, submits card_mode 4, and closes with Escape returning focus', async () => {
     const fetchMock = makeFetchMock();
     vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
     const { App } = await loadApp();
@@ -256,7 +320,15 @@ describe('Box4/Box6 frontend modals', () => {
     card4.focus();
     fireEvent.click(card4);
     expect(screen.getByTestId('box4-document-review-modal')).toBeInTheDocument();
+    expect(document.querySelector('[inert]')).not.toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: '첨부 문서 수정·보완' })));
+
+    const closeButtons = screen.getAllByRole('button', { name: '닫기' });
+    closeButtons[0].focus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(closeButtons[1]);
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(closeButtons[0]);
 
     fireEvent.change(screen.getByTestId('box4-target-document-input'), {
       target: { value: '검토할 첨부 문서 초안입니다.' },
@@ -277,5 +349,6 @@ describe('Box4/Box6 frontend modals', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByTestId('box4-document-review-modal')).not.toBeInTheDocument());
     expect(document.activeElement).toBe(card4);
+    expect(document.querySelector('[inert]')).toBeNull();
   });
 });

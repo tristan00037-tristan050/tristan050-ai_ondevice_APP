@@ -37,6 +37,9 @@ export type Box4DocumentReviewResponse = {
 
 const ISSUE_TYPES = new Set<Box4IssueType>(['MISSING', 'ERROR', 'INCONSISTENCY', 'STYLE', 'SUGGESTION']);
 const CONFIDENCES = new Set<Box4Confidence>(['HIGH', 'MEDIUM', 'LOW']);
+const REDACTED_SECRET_PLACEHOLDER = '[민감정보 원문 생략]';
+const SECRET_TEXT_RE =
+  /(?:sk-[A-Za-z0-9._-]{10,}|AKIA[0-9A-Z]{16}|-----BEGIN\s+[A-Z ]*PRIVATE KEY-----|(?:password|token|api\s*key|비밀번호|비번|암호|패스워드)\s*[:=：]\s*[^\s,;]{4,})/i;
 
 function stringArray(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
@@ -101,6 +104,14 @@ export function validateBox4DocumentReviewResult(value: unknown): Box4DocumentRe
   };
 }
 
+function hasUnredactedSecretText(value: string): boolean {
+  return value !== REDACTED_SECRET_PLACEHOLDER && SECRET_TEXT_RE.test(value);
+}
+
+export function hasBox4SecretLeak(result: Box4DocumentReviewResult): boolean {
+  return result.issues.some(issue => hasUnredactedSecretText(issue.original_text) || hasUnredactedSecretText(issue.suggestion));
+}
+
 export async function createBox4DocumentReview(request: Box4DocumentReviewRequest): Promise<Box4DocumentReviewResponse> {
   const targetDocument = request.targetDocument.trim();
   if (!targetDocument) {
@@ -125,10 +136,11 @@ export async function createBox4DocumentReview(request: Box4DocumentReviewReques
       throw new Error('BOX4_ANALYZE_STREAM_FAILED');
     }
     const body = await response.text();
-    return {
-      result: parseAnalyzeStreamResult(body, validateBox4DocumentReviewResult),
-      preparedFiles: prepared.files,
-    };
+    const result = parseAnalyzeStreamResult(body, validateBox4DocumentReviewResult);
+    if (hasBox4SecretLeak(result)) {
+      throw new Error('민감정보가 포함되어 결과를 표시하지 않았습니다.');
+    }
+    return { result, preparedFiles: prepared.files };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw error;
     const message = uiSafeSidecarErrorMessage(error);
@@ -138,4 +150,3 @@ export async function createBox4DocumentReview(request: Box4DocumentReviewReques
     throw error;
   }
 }
-

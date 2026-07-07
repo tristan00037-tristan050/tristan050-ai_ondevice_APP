@@ -1,33 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ClipboardList, X } from 'lucide-react';
 import {
   createBox6FormFill,
+  isBox6SecretLikeMapping,
   type Box6Confidence,
   type Box6FormFillResult,
 } from '../../lib/box6/box6FormFillClient';
 import { formatFileSize, MAX_FILES, MAX_CHARS_PER_FILE, MAX_TOTAL_CHARS } from '../../lib/cards/fileText';
+import { ModalFrame } from './ModalFrame';
 
 type Props = {
   onClose: () => void;
 };
-
-function useModalFocus(onClose: () => void, focusRef: React.RefObject<HTMLElement>) {
-  useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    window.setTimeout(() => focusRef.current?.focus(), 0);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previous?.focus();
-    };
-  }, [focusRef, onClose]);
-}
 
 function confidenceColor(confidence: Box6Confidence): { bg: string; fg: string; label: string } {
   if (confidence === 'HIGH') return { bg: '#DCFCE7', fg: '#166534', label: 'HIGH' };
@@ -73,7 +57,7 @@ function ResultPanel({ result }: { result: Box6FormFillResult }) {
           <tbody>
             {result.field_mappings.map((mapping, index) => {
               const isUnfilled = mapping.confidence === 'UNFILLED' || !mapping.output_value.trim();
-              const isSecret = mapping.reason_code.toUpperCase().includes('SECRET') || mapping.reason_code.toUpperCase().includes('FORBIDDEN');
+              const isSecret = isBox6SecretLikeMapping(mapping) || mapping.review_required;
               return (
                 <tr key={`${mapping.target_label}-${index}`}>
                   <td style={{ borderBottom: '1px solid #E2E8F0', padding: '8px 6px', verticalAlign: 'top' }}>{mapping.target_label}</td>
@@ -84,7 +68,7 @@ function ResultPanel({ result }: { result: Box6FormFillResult }) {
                     <ConfidenceBadge confidence={mapping.confidence} />
                   </td>
                   <td style={{ borderBottom: '1px solid #E2E8F0', padding: '8px 6px', verticalAlign: 'top', color: '#475569' }}>
-                    {safeExcerpt(mapping.source_ref || mapping.reason_code)}
+                    {safeExcerpt(mapping.source_excerpt)}
                   </td>
                   <td style={{ borderBottom: '1px solid #E2E8F0', padding: '8px 6px', verticalAlign: 'top', color: isSecret || isUnfilled ? '#92400E' : '#166534' }}>
                     {isSecret || isUnfilled ? '검토 필요' : '자동 기입'}
@@ -119,8 +103,6 @@ export function FormFillModal({ onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useModalFocus(onClose, titleRef);
-
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!blankForm.trim()) {
@@ -145,7 +127,7 @@ export function FormFillModal({ onClose }: Props) {
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="box6-title" data-testid="box6-form-fill-modal" style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(15, 23, 42, 0.48)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+    <ModalFrame labelledBy="box6-title" testId="box6-form-fill-modal" onClose={onClose} initialFocusRef={titleRef}>
       <section style={{ width: 'min(1040px, 100%)', maxHeight: '92vh', overflow: 'auto', background: '#FFFFFF', borderRadius: 8, padding: 24, boxShadow: '0 20px 60px rgba(15, 23, 42, 0.24)' }}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <ClipboardList size={24} aria-hidden />
@@ -209,7 +191,6 @@ export function FormFillModal({ onClose }: Props) {
 
         {result && <ResultPanel result={result} />}
       </section>
-    </div>
+    </ModalFrame>
   );
 }
-

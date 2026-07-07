@@ -8,8 +8,9 @@ export type Box6FieldMapping = {
   target_label: string;
   output_value: string;
   confidence: Box6Confidence;
-  source_ref: string;
-  reason_code: string;
+  source_excerpt: string;
+  review_required: boolean;
+  reason_code?: string;
 };
 
 export type Box6FormFillResult = {
@@ -53,8 +54,9 @@ function validateMapping(value: unknown): Box6FieldMapping | null {
     typeof record.output_value !== 'string' ||
     typeof confidence !== 'string' ||
     !CONFIDENCES.has(confidence as Box6Confidence) ||
-    typeof record.source_ref !== 'string' ||
-    typeof record.reason_code !== 'string'
+    typeof record.source_excerpt !== 'string' ||
+    typeof record.review_required !== 'boolean' ||
+    (record.reason_code !== undefined && typeof record.reason_code !== 'string')
   ) {
     return null;
   }
@@ -62,12 +64,14 @@ function validateMapping(value: unknown): Box6FieldMapping | null {
     target_label: record.target_label,
     output_value: record.output_value,
     confidence: confidence as Box6Confidence,
-    source_ref: record.source_ref,
+    source_excerpt: record.source_excerpt,
+    review_required: record.review_required,
     reason_code: record.reason_code,
   };
 }
 
-function hasSecretReason(reasonCode: string): boolean {
+function hasSecretReason(reasonCode: string | undefined): boolean {
+  if (!reasonCode) return false;
   return /\b(?:SECRET|FORBIDDEN|SECURITY|PASSWORD|TOKEN|API[_-]?KEY|CREDENTIAL)\b/i.test(reasonCode);
 }
 
@@ -79,10 +83,22 @@ export function isBox6SecretLikeMapping(mapping: Box6FieldMapping): boolean {
   );
 }
 
+function isAllowedSecretPlaceholder(value: string): boolean {
+  return ['', 'UNFILLED', '미기입', '[민감정보 원문 생략]'].includes(value.trim());
+}
+
 export function hasBox6SecretAutofill(result: Box6FormFillResult): boolean {
-  return result.field_mappings.some(
-    mapping => mapping.output_value.trim().length > 0 && mapping.confidence !== 'UNFILLED' && isBox6SecretLikeMapping(mapping)
-  );
+  return result.field_mappings.some(mapping => {
+    const labelIsSecret = SECRET_LABEL_RE.test(mapping.target_label) || hasSecretReason(mapping.reason_code);
+    if (labelIsSecret) {
+      return (
+        !isAllowedSecretPlaceholder(mapping.output_value) ||
+        mapping.confidence !== 'UNFILLED' ||
+        mapping.review_required !== true
+      );
+    }
+    return mapping.output_value.trim().length > 0 && SECRET_VALUE_RE.test(mapping.output_value);
+  });
 }
 
 export function validateBox6FormFillResult(value: unknown): Box6FormFillResult | null {

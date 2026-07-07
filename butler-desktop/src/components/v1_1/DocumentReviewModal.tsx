@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, FileSearch, X } from 'lucide-react';
 import {
   createBox4DocumentReview,
@@ -6,28 +6,11 @@ import {
   type Box4IssueType,
 } from '../../lib/box4/box4ReviewClient';
 import { formatFileSize, MAX_FILES, MAX_CHARS_PER_FILE, MAX_TOTAL_CHARS } from '../../lib/cards/fileText';
+import { ModalFrame } from './ModalFrame';
 
 type Props = {
   onClose: () => void;
 };
-
-function useModalFocus(onClose: () => void, focusRef: React.RefObject<HTMLElement>) {
-  useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    window.setTimeout(() => focusRef.current?.focus(), 0);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
-      previous?.focus();
-    };
-  }, [focusRef, onClose]);
-}
 
 function issueLabel(type: Box4IssueType): string {
   const labels: Record<Box4IssueType, string> = {
@@ -101,8 +84,6 @@ export function DocumentReviewModal({ onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useModalFocus(onClose, titleRef);
-
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!targetDocument.trim()) {
@@ -127,7 +108,7 @@ export function DocumentReviewModal({ onClose }: Props) {
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="box4-title" data-testid="box4-document-review-modal" style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(15, 23, 42, 0.48)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+    <ModalFrame labelledBy="box4-title" testId="box4-document-review-modal" onClose={onClose} initialFocusRef={titleRef}>
       <section style={{ width: 'min(1040px, 100%)', maxHeight: '92vh', overflow: 'auto', background: '#FFFFFF', borderRadius: 8, padding: 24, boxShadow: '0 20px 60px rgba(15, 23, 42, 0.24)' }}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
           <FileSearch size={24} aria-hidden />
@@ -191,7 +172,6 @@ export function DocumentReviewModal({ onClose }: Props) {
 
         {result && <ResultPanel result={result} />}
       </section>
-    </div>
+    </ModalFrame>
   );
 }
-
