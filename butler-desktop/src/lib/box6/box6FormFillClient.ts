@@ -1,6 +1,7 @@
 import { sidecarFetch, uiSafeSidecarErrorMessage } from '../sidecarFetch';
 import { parseAnalyzeStreamResult } from '../cards/analyzeStreamResult';
 import { prepareCardTextFiles, type PreparedCardFile } from '../cards/fileText';
+import { SECRET_PATTERN_SOURCE, containsSecretLikeText } from '../cards/secretPatterns';
 
 export type Box6Confidence = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNFILLED';
 
@@ -35,17 +36,7 @@ export type Box6FormFillResponse = {
 const CONFIDENCES = new Set<Box6Confidence>(['HIGH', 'MEDIUM', 'LOW', 'UNFILLED']);
 const SECRET_LABEL_RE =
   /\b(?:api\s*key|token|secret|password|passwd|credential|access\s*key|private\s*key|client\s*secret|auth(?:entication)?\s*key)\b|(?:비밀번호|비번|암호|패스워드|토큰|인증\s*키|보안\s*키|개인\s*키|시크릿|API\s*키|에이피아이\s*키)/i;
-const SECRET_VALUE_RE = new RegExp(
-  [
-    String.raw`sk-[A-Za-z0-9_-]{12,}`,
-    String.raw`AKIA[0-9A-Z]{16}`,
-    String.raw`(?:api[_-]?key|token|password|secret|private[_-]?key)\s*[:=]\s*[^\s,;]{6,}`,
-    String.raw`(?:비밀번호|비번|암호|패스워드)\s*(?:는|은|:|=|->)\s*[^\s,;]{2,}`,
-    String.raw`-----BEGIN\s+(?:OPENSSH\s+)?PRIVATE\s+KEY-----`,
-    String.raw`seed\s*phrase\s*[:=]\s*(?:\w+\s+){5,}\w+`,
-  ].join('|'),
-  'i'
-);
+const SECRET_VALUE_RE = new RegExp(SECRET_PATTERN_SOURCE, 'i');
 const UNFILLED_VALUES = new Set(['', 'UNFILLED', '[미기입]', '[확인 필요]', '검토 필요', '미기입', '[민감정보 원문 생략]']);
 const LEGACY_SOURCE_KEY = ['source', 'excerpt'].join('_');
 const SECRET_GUARD_ERROR = 'BOX6_SECRET_GUARD_BLOCKED';
@@ -109,7 +100,7 @@ function isAllowedSecretPlaceholder(value: string): boolean {
 }
 
 function hasUnredactedSecretText(value: string): boolean {
-  return !isAllowedSecretPlaceholder(value) && SECRET_VALUE_RE.test(value);
+  return !isAllowedSecretPlaceholder(value) && containsSecretLikeText(value);
 }
 
 function renderedStrings(value: unknown): string[] {

@@ -1,6 +1,7 @@
 import { sidecarFetch, uiSafeSidecarErrorMessage } from '../sidecarFetch';
 import { parseAnalyzeStreamResult } from '../cards/analyzeStreamResult';
 import { prepareCardTextFiles, type PreparedCardFile } from '../cards/fileText';
+import { SECRET_PATTERN_SOURCE, containsSecretLikeText } from '../cards/secretPatterns';
 
 export type Box4IssueType = 'MISSING' | 'ERROR' | 'INCONSISTENCY' | 'STYLE' | 'SUGGESTION';
 export type Box4Confidence = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -38,8 +39,7 @@ export type Box4DocumentReviewResponse = {
 const ISSUE_TYPES = new Set<Box4IssueType>(['MISSING', 'ERROR', 'INCONSISTENCY', 'STYLE', 'SUGGESTION']);
 const CONFIDENCES = new Set<Box4Confidence>(['HIGH', 'MEDIUM', 'LOW']);
 const REDACTED_SECRET_PLACEHOLDER = '[민감정보 원문 생략]';
-const SECRET_TEXT_RE =
-  /(?:sk-[A-Za-z0-9._-]{10,}|AKIA[0-9A-Z]{16}|-----BEGIN\s+[A-Z ]*PRIVATE KEY-----|(?:password|token|api\s*key|비밀번호|비번|암호|패스워드)\s*[:=：]\s*[^\s,;]{4,})/i;
+const SECRET_TEXT_RE = new RegExp(SECRET_PATTERN_SOURCE, 'i');
 const ISSUE_KEYS = new Set(['location', 'issue_type', 'original_text', 'suggestion', 'confidence']);
 const REQUIRED_RESULT_KEYS = new Set(['schema_version', 'issues', 'overall_score', 'summary', 'review_required', 'warnings']);
 const OPTIONAL_RESULT_KEYS = new Set(['raw_log_zero', 'external_send_zero']);
@@ -123,7 +123,7 @@ export function validateBox4DocumentReviewResult(value: unknown): Box4DocumentRe
 }
 
 function hasUnredactedSecretText(value: string): boolean {
-  return value !== REDACTED_SECRET_PLACEHOLDER && SECRET_TEXT_RE.test(value);
+  return value !== REDACTED_SECRET_PLACEHOLDER && containsSecretLikeText(value);
 }
 
 function renderedStrings(value: unknown): string[] {

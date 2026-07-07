@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { parseAnalyzeStreamResult } from '../lib/cards/analyzeStreamResult';
 import { MAX_BYTES_PER_CHAR, MAX_CHARS_PER_FILE, prepareCardTextFiles } from '../lib/cards/fileText';
+import { SECRET_TEXT_RE, containsSecretLikeText } from '../lib/cards/secretPatterns';
 import { hasBox4SecretLeak, validateBox4DocumentReviewResult } from '../lib/box4/box4ReviewClient';
 import { hasBox6SecretAutofill, validateBox6FormFillResult } from '../lib/box6/box6FormFillClient';
+import { SECRET_NEGATIVE_FIXTURES, SECRET_POSITIVE_FIXTURES } from './fixtures/secretFixtures';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: async (command: string) =>
@@ -145,6 +147,24 @@ afterEach(() => {
 });
 
 describe('Box4/Box6 analyze stream parser', () => {
+  it('blocks every shared positive fixture and allows every shared negative fixture in the regex layer', () => {
+    for (const fixture of SECRET_POSITIVE_FIXTURES) {
+      expect(containsSecretLikeText(fixture), fixture).toBe(true);
+    }
+    for (const fixture of SECRET_NEGATIVE_FIXTURES) {
+      expect(containsSecretLikeText(fixture), fixture).toBe(false);
+    }
+  });
+
+  it('secret regex does not hang on long non-secret input', () => {
+    const input = '가'.repeat(100_000);
+    expect(() => containsSecretLikeText(input)).not.toThrow();
+  });
+
+  it('secret regex has no global flag state', () => {
+    expect(SECRET_TEXT_RE.global).toBe(false);
+  });
+
   it('prefers the last valid SSE JSON and parses nested result_text', () => {
     const body = `event: complete\ndata: {"result_text":"not json"}\n\n${completeSse(box6Payload)}`;
     const parsed = parseAnalyzeStreamResult(body, validateBox6FormFillResult);
@@ -402,6 +422,106 @@ describe('Box4/Box6 analyze stream parser', () => {
     };
     const parsed = parseAnalyzeStreamResult(JSON.stringify(safeReferences), validateBox6FormFillResult);
     expect(hasBox6SecretAutofill(parsed)).toBe(false);
+  });
+
+  it('blocks shared positive fixtures across Box6 rendered output paths', () => {
+    const builders = [
+      (fixture: string) => ({ ...box6Payload, filled_form: `상호: 주식회사 합성\n${fixture}` }),
+      (fixture: string) => ({
+        ...box6Payload,
+        field_mappings: [{ ...box6Payload.field_mappings[0], output_value: fixture }, box6Payload.field_mappings[1]],
+      }),
+      (fixture: string) => ({
+        ...box6Payload,
+        field_mappings: [{ ...box6Payload.field_mappings[0], source_ref: fixture }, box6Payload.field_mappings[1]],
+      }),
+      (fixture: string) => ({
+        ...box6Payload,
+        field_mappings: [{ ...box6Payload.field_mappings[0], reason_code: fixture }, box6Payload.field_mappings[1]],
+      }),
+      (fixture: string) => ({ ...box6Payload, unfilled_fields: [fixture] }),
+      (fixture: string) => ({ ...box6Payload, warnings: [fixture] }),
+    ];
+
+    for (const fixture of SECRET_POSITIVE_FIXTURES) {
+      for (const build of builders) {
+        const parsed = parseAnalyzeStreamResult(JSON.stringify(build(fixture)), validateBox6FormFillResult);
+        expect(hasBox6SecretAutofill(parsed), fixture).toBe(true);
+      }
+    }
+  });
+
+  it('allows Box6 secret target labels when they are unfilled and listed for review', () => {
+    const safeSecretLabel = {
+      ...box6Payload,
+      field_mappings: [
+        {
+          target_label: 'API 키',
+          output_value: '',
+          confidence: 'UNFILLED',
+          source_ref: 'our_data.api_key',
+          reason_code: 'FORBIDDEN_SECRET_FIELD',
+        },
+      ],
+      unfilled_fields: ['API 키'],
+      review_required: ['API 키'],
+      warnings: [],
+    };
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(safeSecretLabel), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsed)).toBe(false);
+  });
+
+  it('blocks Box6 secret target labels when a value is autofilled', () => {
+    const unsafeSecretLabel = {
+      ...box6Payload,
+      field_mappings: [
+        {
+          target_label: 'API 키',
+          output_value: 'manual-value',
+          confidence: 'HIGH',
+          source_ref: 'our_data.api_key',
+          reason_code: 'LABEL_EXACT_MATCH',
+        },
+      ],
+      unfilled_fields: [],
+      review_required: [],
+      warnings: [],
+    };
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(unsafeSecretLabel), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsed)).toBe(true);
+  });
+
+  it('blocks shared positive fixtures across Box4 rendered output paths', () => {
+    const builders = [
+      (fixture: string) => ({ ...box4Payload, summary: fixture }),
+      (fixture: string) => ({ ...box4Payload, warnings: [fixture] }),
+      (fixture: string) => ({
+        ...box4Payload,
+        issues: [{ ...box4Payload.issues[0], location: fixture }],
+      }),
+      (fixture: string) => ({
+        ...box4Payload,
+        issues: [{ ...box4Payload.issues[0], original_text: fixture }],
+      }),
+      (fixture: string) => ({
+        ...box4Payload,
+        issues: [{ ...box4Payload.issues[0], suggestion: fixture }],
+      }),
+    ];
+
+    for (const fixture of SECRET_POSITIVE_FIXTURES) {
+      for (const build of builders) {
+        const parsed = parseAnalyzeStreamResult(JSON.stringify(build(fixture)), validateBox4DocumentReviewResult);
+        expect(hasBox4SecretLeak(parsed), fixture).toBe(true);
+      }
+    }
+  });
+
+  it('allows shared negative fixtures in Box4 rendered output paths', () => {
+    for (const fixture of SECRET_NEGATIVE_FIXTURES) {
+      const parsed = parseAnalyzeStreamResult(JSON.stringify({ ...box4Payload, summary: fixture }), validateBox4DocumentReviewResult);
+      expect(hasBox4SecretLeak(parsed), fixture).toBe(false);
+    }
   });
 });
 
