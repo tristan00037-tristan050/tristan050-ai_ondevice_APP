@@ -14,6 +14,8 @@ import { RequestParsingModal } from './components/chat/RequestParsingModal';
 import { CardGrid } from './components/v1_1/CardGrid';
 import { Card2DocumentTransform } from './components/v1_1/Card2DocumentTransform';
 import { Box3DraftModal } from './components/v1_1/Box3DraftModal';
+import { FormFillModal } from './components/v1_1/FormFillModal';
+import { DocumentReviewModal } from './components/v1_1/DocumentReviewModal';
 import { AdminPolicyConsole } from './components/v1_1/AdminPolicyConsole';
 import { CompanyFormatConsole } from './components/v1_1/CompanyFormatConsole';
 import { CompanyFactApprovalConsole } from './components/v1_1/CompanyFactApprovalConsole';
@@ -70,6 +72,8 @@ export function App() {
   const [requestParsingModalOpen, setRequestParsingModalOpen] = useState(false);
   const [documentTransformModalOpen, setDocumentTransformModalOpen] = useState(false);
   const [box3DraftModalOpen, setBox3DraftModalOpen] = useState(false);
+  const [formFillModalOpen, setFormFillModalOpen] = useState(false);
+  const [documentReviewModalOpen, setDocumentReviewModalOpen] = useState(false);
   const [adminPolicyConsoleOpen, setAdminPolicyConsoleOpen] = useState(false);
   const [companyFormatConsoleOpen, setCompanyFormatConsoleOpen] = useState(false);
   const [companyFactConsoleOpen, setCompanyFactConsoleOpen] = useState(false);
@@ -437,9 +441,19 @@ export function App() {
     setPendingBot(null);
   };
 
+  const closeAllCardModals = () => {
+    setAccountingModalOpen(false);
+    setRequestParsingModalOpen(false);
+    setDocumentTransformModalOpen(false);
+    setBox3DraftModalOpen(false);
+    setFormFillModalOpen(false);
+    setDocumentReviewModalOpen(false);
+  };
+
   const handleCardSelect = (mode: string | null) => {
     const m = mode ?? 'free';
     setCardMode(m);
+    closeAllCardModals();
     if (m === 'accounting_classify') {
       setAccountingModalOpen(true);
     } else if (m === 'request_organize') {
@@ -448,6 +462,10 @@ export function App() {
       setDocumentTransformModalOpen(true);
     } else if (m === 'new_draft') {
       setBox3DraftModalOpen(true);
+    } else if (m === 'form_fill') {
+      setFormFillModalOpen(true);
+    } else if (m === 'document_review') {
+      setDocumentReviewModalOpen(true);
     }
   };
 
@@ -676,6 +694,22 @@ export function App() {
         <Box3DraftModal
           onClose={() => {
             setBox3DraftModalOpen(false);
+            setCardMode('free');
+          }}
+        />
+      )}
+      {formFillModalOpen && (
+        <FormFillModal
+          onClose={() => {
+            setFormFillModalOpen(false);
+            setCardMode('free');
+          }}
+        />
+      )}
+      {documentReviewModalOpen && (
+        <DocumentReviewModal
+          onClose={() => {
+            setDocumentReviewModalOpen(false);
             setCardMode('free');
           }}
         />
