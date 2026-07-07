@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { parseAnalyzeStreamResult } from '../lib/cards/analyzeStreamResult';
-import { prepareCardTextFiles } from '../lib/cards/fileText';
+import { MAX_BYTES_PER_CHAR, MAX_CHARS_PER_FILE, prepareCardTextFiles } from '../lib/cards/fileText';
 import { validateBox4DocumentReviewResult } from '../lib/box4/box4ReviewClient';
 import { validateBox6FormFillResult } from '../lib/box6/box6FormFillClient';
 
@@ -32,6 +32,24 @@ const box6Payload = {
   unfilled_fields: ['API key'],
   review_required: ['API key'],
   warnings: ['secret/security 필드는 자동기입하지 않았습니다.'],
+};
+
+const unsafeBox6SecretPayload = {
+  ...box6Payload,
+  filled_form: '상호: 주식회사 합성\nAPI key: sk-test-secret-value-123456',
+  field_mappings: [
+    box6Payload.field_mappings[0],
+    {
+      target_label: 'API key',
+      output_value: 'sk-test-secret-value-123456',
+      confidence: 'HIGH',
+      source_ref: 'our_data.api_key',
+      reason_code: 'LABEL_EXACT_MATCH',
+    },
+  ],
+  unfilled_fields: [],
+  review_required: [],
+  warnings: [],
 };
 
 const box4Payload = {
@@ -70,7 +88,7 @@ function completeSse(payload: unknown): string {
   })}\n\n`;
 }
 
-function makeFetchMock() {
+function makeFetchMock(payloads: { box6?: unknown; box4?: unknown } = {}) {
   return vi.fn().mockImplementation((url: string | URL | Request, init?: RequestInit) => {
     if (String(url).includes('/health')) {
       return Promise.resolve(
@@ -82,7 +100,7 @@ function makeFetchMock() {
     if (String(url).includes('/api/analyze/stream')) {
       const body = init?.body as FormData | undefined;
       const mode = body?.get('card_mode');
-      const payload = mode === '6' ? box6Payload : box4Payload;
+      const payload = mode === '6' ? payloads.box6 ?? box6Payload : payloads.box4 ?? box4Payload;
       return Promise.resolve(new Response(completeSse(payload), { status: 200 }));
     }
     return Promise.resolve(new Response('', { status: 404 }));
@@ -148,6 +166,29 @@ describe('Box4/Box6 file limits', () => {
     expect(result.files).toHaveLength(5);
     expect(result.rejected[0]).toMatchObject({ name: 'doc-5.txt', reason: 'too_many' });
   });
+
+  it('slices large allowed files before reading text', async () => {
+    const originalText = vi.fn(async () => 'SHOULD_NOT_READ_ORIGINAL');
+    const slicedText = vi.fn(async () => 'x'.repeat(MAX_CHARS_PER_FILE + 5000));
+    const slicedBlob = { text: slicedText } as unknown as Blob;
+    const slice = vi.fn(() => slicedBlob);
+    const file = {
+      name: 'large-export.csv',
+      size: 100000,
+      type: 'text/csv',
+      lastModified: 0,
+      text: originalText,
+      slice,
+    } as unknown as File;
+
+    const result = await prepareCardTextFiles([file]);
+
+    expect(slice).toHaveBeenCalledWith(0, MAX_CHARS_PER_FILE * MAX_BYTES_PER_CHAR);
+    expect(originalText).not.toHaveBeenCalled();
+    expect(slicedText).toHaveBeenCalled();
+    expect(result.files[0].chars).toBe(MAX_CHARS_PER_FILE);
+    expect(result.files[0].truncated).toBe(true);
+  });
 });
 
 describe('Box4/Box6 frontend modals', () => {
@@ -177,6 +218,30 @@ describe('Box4/Box6 frontend modals', () => {
     const body = (streamCall![1] as RequestInit).body as FormData;
     expect(body.get('card_mode')).toBe('6');
     expect((streamCall![1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer test-capability-token' });
+  });
+
+  it('blocks secret-labeled Box6 autofill before rendering returned values', async () => {
+    const fetchMock = makeFetchMock({ box6: unsafeBox6SecretPayload });
+    vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
+    const { App } = await loadApp();
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.queryByTestId('sidecar-loading')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('card-6'));
+    fireEvent.change(screen.getByTestId('box6-blank-form-input'), {
+      target: { value: '상호: ___\nAPI key: ___' },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('box6-submit-btn'));
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('box6-error')).toHaveTextContent('보안 항목 자동기입이 감지되어 결과를 표시하지 않았습니다.')
+    );
+    expect(screen.queryByTestId('box6-result')).not.toBeInTheDocument();
+    expect(screen.queryByText('sk-test-secret-value-123456')).not.toBeInTheDocument();
   });
 
   it('opens Box4 modal, submits card_mode 4, and closes with Escape returning focus', async () => {

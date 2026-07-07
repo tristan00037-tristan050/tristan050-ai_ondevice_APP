@@ -1,6 +1,7 @@
 export const MAX_FILES = 5;
 export const MAX_CHARS_PER_FILE = 20000;
 export const MAX_TOTAL_CHARS = 60000;
+export const MAX_BYTES_PER_CHAR = 4;
 export const ALLOWED_TEXT_EXT = ['.txt', '.md', '.csv', '.json', '.yaml', '.yml', '.xml', '.html'] as const;
 
 export type PreparedCardFile = {
@@ -41,15 +42,23 @@ function makeTextFile(original: File, text: string): File {
   });
 }
 
-function readFileText(file: File): Promise<string> {
-  if (typeof file.text === 'function') {
-    return file.text();
+function sliceBlobForRead(file: File, maxChars: number): { blob: Blob; sliced: boolean } {
+  const byteLimit = Math.min(file.size, maxChars * MAX_BYTES_PER_CHAR);
+  return {
+    blob: file.slice(0, byteLimit),
+    sliced: byteLimit < file.size,
+  };
+}
+
+function readBlobText(blob: Blob): Promise<string> {
+  if (typeof blob.text === 'function') {
+    return blob.text();
   }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('FILE_READ_FAILED'));
     reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-    reader.readAsText(file);
+    reader.readAsText(blob);
   });
 }
 
@@ -73,10 +82,12 @@ export async function prepareCardTextFiles(inputFiles: File[]): Promise<Prepared
     }
 
     try {
-      const rawText = await readFileText(file);
       const remaining = MAX_TOTAL_CHARS - totalChars;
-      const text = rawText.slice(0, Math.min(MAX_CHARS_PER_FILE, remaining));
-      const truncated = rawText.length > text.length;
+      const maxChars = Math.min(MAX_CHARS_PER_FILE, remaining);
+      const { blob, sliced } = sliceBlobForRead(file, maxChars);
+      const rawText = await readBlobText(blob);
+      const text = rawText.slice(0, maxChars);
+      const truncated = sliced || rawText.length > text.length;
       totalChars += text.length;
       files.push({
         file: makeTextFile(file, text),

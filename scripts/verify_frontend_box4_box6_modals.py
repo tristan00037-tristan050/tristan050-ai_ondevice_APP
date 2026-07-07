@@ -78,7 +78,13 @@ def main() -> int:
 
     require_contains(
         box6_client,
-        ["sidecarFetch('/api/analyze/stream'", "formData.append('card_mode', '6')", "parseAnalyzeStreamResult"],
+        [
+            "sidecarFetch('/api/analyze/stream'",
+            "formData.append('card_mode', '6')",
+            "parseAnalyzeStreamResult",
+            "hasBox6SecretAutofill",
+            "보안 항목 자동기입이 감지되어 결과를 표시하지 않았습니다.",
+        ],
         "BOX6_CLIENT_CONTRACT_MISSING",
     )
     require_contains(
@@ -89,7 +95,14 @@ def main() -> int:
 
     require_contains(
         file_text,
-        ["MAX_FILES = 5", "MAX_CHARS_PER_FILE = 20000", "MAX_TOTAL_CHARS = 60000", "ALLOWED_TEXT_EXT"],
+        [
+            "MAX_FILES = 5",
+            "MAX_CHARS_PER_FILE = 20000",
+            "MAX_TOTAL_CHARS = 60000",
+            "MAX_BYTES_PER_CHAR = 4",
+            "ALLOWED_TEXT_EXT",
+            "slice(0, byteLimit)",
+        ],
         "FILE_LIMIT_CONTRACT_MISSING",
     )
     require_contains(
@@ -104,7 +117,15 @@ def main() -> int:
     )
     require_contains(
         tests,
-        ["card_mode')).toBe('6')", "card_mode') === '4'", "unsupported_type", "too_many", "toHaveLength(0)"],
+        [
+            "card_mode')).toBe('6')",
+            "card_mode') === '4'",
+            "unsupported_type",
+            "too_many",
+            "sk-test-secret-value-123456",
+            "MAX_BYTES_PER_CHAR",
+            "toHaveLength(0)",
+        ],
         "REGRESSION_TEST_CONTRACT_MISSING",
     )
 

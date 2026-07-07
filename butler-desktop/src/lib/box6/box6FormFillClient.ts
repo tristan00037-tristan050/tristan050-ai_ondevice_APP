@@ -33,6 +33,10 @@ export type Box6FormFillResponse = {
 };
 
 const CONFIDENCES = new Set<Box6Confidence>(['HIGH', 'MEDIUM', 'LOW', 'UNFILLED']);
+const SECRET_LABEL_RE =
+  /\b(?:api\s*key|token|secret|password|passwd|credential|access\s*key|private\s*key|client\s*secret|auth(?:entication)?\s*key)\b|(?:비밀번호|비번|암호|패스워드|토큰|인증\s*키|보안\s*키|개인\s*키|시크릿|API\s*키|에이피아이\s*키)/i;
+const SECRET_VALUE_RE =
+  /(?:sk-[A-Za-z0-9._-]{10,}|AKIA[0-9A-Z]{16}|-----BEGIN\s+[A-Z ]*PRIVATE KEY-----|(?:password|token|api\s*key|비밀번호|비번|암호)\s*[:=：]\s*[^\s,;]{4,})/i;
 
 function stringArray(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
@@ -61,6 +65,24 @@ function validateMapping(value: unknown): Box6FieldMapping | null {
     source_ref: record.source_ref,
     reason_code: record.reason_code,
   };
+}
+
+function hasSecretReason(reasonCode: string): boolean {
+  return /\b(?:SECRET|FORBIDDEN|SECURITY|PASSWORD|TOKEN|API[_-]?KEY|CREDENTIAL)\b/i.test(reasonCode);
+}
+
+export function isBox6SecretLikeMapping(mapping: Box6FieldMapping): boolean {
+  return (
+    hasSecretReason(mapping.reason_code) ||
+    SECRET_LABEL_RE.test(mapping.target_label) ||
+    SECRET_VALUE_RE.test(mapping.output_value)
+  );
+}
+
+export function hasBox6SecretAutofill(result: Box6FormFillResult): boolean {
+  return result.field_mappings.some(
+    mapping => mapping.output_value.trim().length > 0 && mapping.confidence !== 'UNFILLED' && isBox6SecretLikeMapping(mapping)
+  );
 }
 
 export function validateBox6FormFillResult(value: unknown): Box6FormFillResult | null {
@@ -113,10 +135,11 @@ export async function createBox6FormFill(request: Box6FormFillRequest): Promise<
       throw new Error('BOX6_ANALYZE_STREAM_FAILED');
     }
     const body = await response.text();
-    return {
-      result: parseAnalyzeStreamResult(body, validateBox6FormFillResult),
-      preparedFiles: prepared.files,
-    };
+    const result = parseAnalyzeStreamResult(body, validateBox6FormFillResult);
+    if (hasBox6SecretAutofill(result)) {
+      throw new Error('보안 항목 자동기입이 감지되어 결과를 표시하지 않았습니다.');
+    }
+    return { result, preparedFiles: prepared.files };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw error;
     const message = uiSafeSidecarErrorMessage(error);
@@ -126,4 +149,3 @@ export async function createBox6FormFill(request: Box6FormFillRequest): Promise<
     throw error;
   }
 }
-
