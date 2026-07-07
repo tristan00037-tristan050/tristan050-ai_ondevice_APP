@@ -86,7 +86,7 @@ function isAllowedSecretPlaceholder(value: string): boolean {
 }
 
 function isSecretTargetLabel(label: string): boolean {
-  return /(?:비밀번호|비번|암호|패스워드|API\s*키|에이피아이\s*키|토큰|인증\s*키|보안\s*키|개인\s*키|secret|password|token|api\s*key|client\s*secret)/i.test(label);
+  return /(?:비밀번호|비번|암호|패스워드|API\s*키|에이피아이\s*키|토큰|인증\s*(?:키|정보)|보안\s*키|개인\s*키|secret|password|token|api\s*key|client\s*secret)/i.test(label);
 }
 
 function hasUnredactedSecretText(value: string): boolean {
