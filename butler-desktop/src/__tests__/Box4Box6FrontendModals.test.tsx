@@ -307,6 +307,30 @@ describe('Box4/Box6 analyze stream parser', () => {
     expect(hasBox6SecretAutofill(parsed)).toBe(true);
   });
 
+  it('blocks Box6 expanded secret values embedded in filled_form', () => {
+    const filledFormSecret = {
+      ...box6Payload,
+      filled_form: '상호: 주식회사 합성\napi_key=abcdef123456',
+    };
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(filledFormSecret), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsed)).toBe(true);
+  });
+
+  it('blocks Box6 expanded secret values embedded in source_ref', () => {
+    const sourceRefSecret = {
+      ...box6Payload,
+      field_mappings: [
+        {
+          ...box6Payload.field_mappings[0],
+          source_ref: 'private_key: xyz123456',
+        },
+        box6Payload.field_mappings[1],
+      ],
+    };
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(sourceRefSecret), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsed)).toBe(true);
+  });
+
   it('blocks Box6 secret values embedded in reason_code', () => {
     const reasonCodeSecret = {
       ...box6Payload,
@@ -322,6 +346,21 @@ describe('Box4/Box6 analyze stream parser', () => {
     expect(hasBox6SecretAutofill(parsed)).toBe(true);
   });
 
+  it('blocks Box6 expanded secret values embedded in reason_code', () => {
+    const reasonCodeSecret = {
+      ...box6Payload,
+      field_mappings: [
+        box6Payload.field_mappings[0],
+        {
+          ...box6Payload.field_mappings[1],
+          reason_code: 'token=abcdef123456',
+        },
+      ],
+    };
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(reasonCodeSecret), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsed)).toBe(true);
+  });
+
   it('blocks Box6 secret values embedded in unfilled_fields', () => {
     const unfilledFieldSecret = {
       ...box6Payload,
@@ -329,6 +368,40 @@ describe('Box4/Box6 analyze stream parser', () => {
     };
     const parsed = parseAnalyzeStreamResult(JSON.stringify(unfilledFieldSecret), validateBox6FormFillResult);
     expect(hasBox6SecretAutofill(parsed)).toBe(true);
+  });
+
+  it('blocks Box6 Korean spoken secret values embedded in unfilled_fields', () => {
+    const unfilledFieldSecret = {
+      ...box6Payload,
+      unfilled_fields: ['비밀번호는 1234야'],
+    };
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(unfilledFieldSecret), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsed)).toBe(true);
+  });
+
+  it('blocks Box6 Korean spoken secret values embedded in warnings', () => {
+    const warningSecret = {
+      ...box6Payload,
+      warnings: ['암호은 secret99'],
+    };
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(warningSecret), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsed)).toBe(true);
+  });
+
+  it('allows safe Box6 source references and secret reason codes without values', () => {
+    const safeReferences = {
+      ...box6Payload,
+      field_mappings: [
+        box6Payload.field_mappings[0],
+        {
+          ...box6Payload.field_mappings[1],
+          source_ref: 'our_data.api_key',
+          reason_code: 'FORBIDDEN_SECRET_FIELD',
+        },
+      ],
+    };
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(safeReferences), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsed)).toBe(false);
   });
 });
 
