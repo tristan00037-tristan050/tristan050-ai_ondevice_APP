@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { parseAnalyzeStreamResult } from '../lib/cards/analyzeStreamResult';
 import { MAX_BYTES_PER_CHAR, MAX_CHARS_PER_FILE, prepareCardTextFiles } from '../lib/cards/fileText';
-import { validateBox4DocumentReviewResult } from '../lib/box4/box4ReviewClient';
+import { hasBox4SecretLeak, validateBox4DocumentReviewResult } from '../lib/box4/box4ReviewClient';
 import { hasBox6SecretAutofill, validateBox6FormFillResult } from '../lib/box6/box6FormFillClient';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -32,7 +32,7 @@ const box6Payload = {
     },
   ],
   unfilled_fields: ['API key'],
-  review_required: true,
+  review_required: ['API key'],
   warnings: ['secret/security 필드는 자동기입하지 않았습니다.'],
 };
 
@@ -50,8 +50,13 @@ const unsafeBox6SecretPayload = {
     },
   ],
   unfilled_fields: [],
-  review_required: false,
+  review_required: [],
   warnings: [],
+};
+
+const unsafeBox6FilledFormOnlyPayload = {
+  ...box6Payload,
+  filled_form: '상호: 주식회사 합성\nAPI key: sk-test-secret-value-123456',
 };
 
 const box4Payload = {
@@ -93,6 +98,11 @@ const unsafeBox4SecretPayload = {
       suggestion: '문서에서 api key: sk-test-secret-value-123456 값을 제거하세요.',
     },
   ],
+};
+
+const unsafeBox4SummarySecretPayload = {
+  ...box4Payload,
+  summary: '검토 중 api key: sk-test-secret-value-123456 값이 발견됐습니다.',
 };
 
 function completeSse(payload: unknown): string {
@@ -142,7 +152,7 @@ describe('Box4/Box6 analyze stream parser', () => {
     expect(parsed.schema_version).toBe('card_06.form_fill.v1');
     expect(parsed.field_mappings[1].confidence).toBe('UNFILLED');
     expect(parsed.field_mappings[0].source_ref).toBe('our_data.company_name');
-    expect(parsed.review_required).toBe(true);
+    expect(parsed.review_required).toEqual(['API key']);
   });
 
   it('accepts fenced JSON and rejects invalid Box4 enums fail-safe', () => {
@@ -193,6 +203,56 @@ describe('Box4/Box6 analyze stream parser', () => {
     );
   });
 
+  it('rejects Box6 extra keys and non-list review_required fail-safe', () => {
+    const topLevelExtra = { ...box6Payload, raw_secret: 'hidden' };
+    expect(() => parseAnalyzeStreamResult(JSON.stringify(topLevelExtra), validateBox6FormFillResult)).toThrow(
+      '결과 형식을 확인하지 못했습니다.'
+    );
+
+    const mappingExtra = {
+      ...box6Payload,
+      field_mappings: [{ ...box6Payload.field_mappings[0], raw_secret: 'hidden' }],
+    };
+    expect(() => parseAnalyzeStreamResult(JSON.stringify(mappingExtra), validateBox6FormFillResult)).toThrow(
+      '결과 형식을 확인하지 못했습니다.'
+    );
+
+    const booleanReview = { ...box6Payload, review_required: true };
+    expect(() => parseAnalyzeStreamResult(JSON.stringify(booleanReview), validateBox6FormFillResult)).toThrow(
+      '결과 형식을 확인하지 못했습니다.'
+    );
+  });
+
+  it('rejects Box4 extra keys and recursively scans rendered strings for secrets', () => {
+    const topLevelExtra = { ...box4Payload, raw_secret: 'hidden' };
+    expect(() => parseAnalyzeStreamResult(JSON.stringify(topLevelExtra), validateBox4DocumentReviewResult)).toThrow(
+      '결과 형식을 확인하지 못했습니다.'
+    );
+
+    const issueExtra = {
+      ...box4Payload,
+      issues: [{ ...box4Payload.issues[0], raw_secret: 'hidden' }],
+    };
+    expect(() => parseAnalyzeStreamResult(JSON.stringify(issueExtra), validateBox4DocumentReviewResult)).toThrow(
+      '결과 형식을 확인하지 못했습니다.'
+    );
+
+    const parsedSummarySecret = parseAnalyzeStreamResult(
+      JSON.stringify(unsafeBox4SummarySecretPayload),
+      validateBox4DocumentReviewResult
+    );
+    expect(hasBox4SecretLeak(parsedSummarySecret)).toBe(true);
+
+    const parsedLocationSecret = parseAnalyzeStreamResult(
+      JSON.stringify({
+        ...box4Payload,
+        issues: [{ ...box4Payload.issues[0], location: 'api key: sk-test-secret-value-123456' }],
+      }),
+      validateBox4DocumentReviewResult
+    );
+    expect(hasBox4SecretLeak(parsedLocationSecret)).toBe(true);
+  });
+
   it('allows reviewed secret placeholders and flags secret reason autofill', () => {
     const reviewedSecret = {
       ...box6Payload,
@@ -206,7 +266,7 @@ describe('Box4/Box6 analyze stream parser', () => {
         },
       ],
       unfilled_fields: ['인증 정보'],
-      review_required: false,
+      review_required: [],
     };
     const parsedReviewedSecret = parseAnalyzeStreamResult(JSON.stringify(reviewedSecret), validateBox6FormFillResult);
     expect(hasBox6SecretAutofill(parsedReviewedSecret)).toBe(false);
@@ -224,6 +284,12 @@ describe('Box4/Box6 analyze stream parser', () => {
     };
     const parsedUnsafeSecret = parseAnalyzeStreamResult(JSON.stringify(unsafeSecret), validateBox6FormFillResult);
     expect(hasBox6SecretAutofill(parsedUnsafeSecret)).toBe(true);
+
+    const parsedFilledFormSecret = parseAnalyzeStreamResult(
+      JSON.stringify(unsafeBox6FilledFormOnlyPayload),
+      validateBox6FormFillResult
+    );
+    expect(hasBox6SecretAutofill(parsedFilledFormSecret)).toBe(true);
   });
 });
 
@@ -334,8 +400,56 @@ describe('Box4/Box6 frontend modals', () => {
     expect(screen.queryByText('sk-test-secret-value-123456')).not.toBeInTheDocument();
   });
 
+  it('blocks Box6 filled_form secret echo before rendering returned values', async () => {
+    const fetchMock = makeFetchMock({ box6: unsafeBox6FilledFormOnlyPayload });
+    vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
+    const { App } = await loadApp();
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.queryByTestId('sidecar-loading')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('card-6'));
+    fireEvent.change(screen.getByTestId('box6-blank-form-input'), {
+      target: { value: '상호: ___\nAPI key: ___' },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('box6-submit-btn'));
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('box6-error')).toHaveTextContent('보안 항목 자동기입이 감지되어 결과를 표시하지 않았습니다.')
+    );
+    expect(screen.queryByTestId('box6-result')).not.toBeInTheDocument();
+    expect(screen.queryByText('sk-test-secret-value-123456')).not.toBeInTheDocument();
+  });
+
   it('blocks Box4 secret text before rendering returned issues', async () => {
     const fetchMock = makeFetchMock({ box4: unsafeBox4SecretPayload });
+    vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
+    const { App } = await loadApp();
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.queryByTestId('sidecar-loading')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('card-4'));
+    fireEvent.change(screen.getByTestId('box4-target-document-input'), {
+      target: { value: '검토할 첨부 문서 초안입니다.' },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('box4-submit-btn'));
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId('box4-error')).toHaveTextContent('민감정보가 포함되어 결과를 표시하지 않았습니다.')
+    );
+    expect(screen.queryByTestId('box4-result')).not.toBeInTheDocument();
+    expect(screen.queryByText('sk-test-secret-value-123456')).not.toBeInTheDocument();
+  });
+
+  it('blocks Box4 summary secret before rendering returned issues', async () => {
+    const fetchMock = makeFetchMock({ box4: unsafeBox4SummarySecretPayload });
     vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
     const { App } = await loadApp();
 

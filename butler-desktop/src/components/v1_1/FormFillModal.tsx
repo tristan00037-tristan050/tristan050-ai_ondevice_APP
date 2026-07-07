@@ -57,7 +57,10 @@ function ResultPanel({ result }: { result: Box6FormFillResult }) {
           <tbody>
             {result.field_mappings.map((mapping, index) => {
               const isUnfilled = mapping.confidence === 'UNFILLED' || !mapping.output_value.trim();
-              const isSecret = isBox6SecretLikeMapping(mapping) || result.unfilled_fields.includes(mapping.target_label);
+              const requiresReview =
+                result.unfilled_fields.includes(mapping.target_label) ||
+                result.review_required.includes(mapping.target_label);
+              const isSecret = isBox6SecretLikeMapping(mapping) || requiresReview;
               return (
                 <tr key={`${mapping.target_label}-${index}`}>
                   <td style={{ borderBottom: '1px solid #E2E8F0', padding: '8px 6px', verticalAlign: 'top' }}>{mapping.target_label}</td>

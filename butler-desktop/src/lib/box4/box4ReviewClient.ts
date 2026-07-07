@@ -40,6 +40,20 @@ const CONFIDENCES = new Set<Box4Confidence>(['HIGH', 'MEDIUM', 'LOW']);
 const REDACTED_SECRET_PLACEHOLDER = '[민감정보 원문 생략]';
 const SECRET_TEXT_RE =
   /(?:sk-[A-Za-z0-9._-]{10,}|AKIA[0-9A-Z]{16}|-----BEGIN\s+[A-Z ]*PRIVATE KEY-----|(?:password|token|api\s*key|비밀번호|비번|암호|패스워드)\s*[:=：]\s*[^\s,;]{4,})/i;
+const ISSUE_KEYS = new Set(['location', 'issue_type', 'original_text', 'suggestion', 'confidence']);
+const REQUIRED_RESULT_KEYS = new Set(['schema_version', 'issues', 'overall_score', 'summary', 'review_required', 'warnings']);
+const OPTIONAL_RESULT_KEYS = new Set(['raw_log_zero', 'external_send_zero']);
+
+function hasOnlyAllowedKeys(
+  record: Record<string, unknown>,
+  required: ReadonlySet<string>,
+  optional: ReadonlySet<string> = new Set()
+): boolean {
+  for (const key of required) {
+    if (!(key in record)) return false;
+  }
+  return Object.keys(record).every(key => required.has(key) || optional.has(key));
+}
 
 function stringArray(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
@@ -50,6 +64,7 @@ function stringArray(value: unknown): string[] | null {
 function validateIssue(value: unknown): Box4Issue | null {
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
+  if (!hasOnlyAllowedKeys(record, ISSUE_KEYS)) return null;
   const issueType = record.issue_type;
   const confidence = record.confidence;
   if (
@@ -77,6 +92,7 @@ export function validateBox4DocumentReviewResult(value: unknown): Box4DocumentRe
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
   if (
+    !hasOnlyAllowedKeys(record, REQUIRED_RESULT_KEYS, OPTIONAL_RESULT_KEYS) ||
     record.schema_version !== 'card_04.document_review.v1' ||
     !Array.isArray(record.issues) ||
     typeof record.overall_score !== 'number' ||
@@ -84,7 +100,9 @@ export function validateBox4DocumentReviewResult(value: unknown): Box4DocumentRe
     record.overall_score < 0 ||
     record.overall_score > 100 ||
     typeof record.summary !== 'string' ||
-    typeof record.review_required !== 'boolean'
+    typeof record.review_required !== 'boolean' ||
+    (record.raw_log_zero !== undefined && typeof record.raw_log_zero !== 'boolean') ||
+    (record.external_send_zero !== undefined && typeof record.external_send_zero !== 'boolean')
   ) {
     return null;
   }
@@ -108,8 +126,17 @@ function hasUnredactedSecretText(value: string): boolean {
   return value !== REDACTED_SECRET_PLACEHOLDER && SECRET_TEXT_RE.test(value);
 }
 
+function renderedStrings(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(renderedStrings);
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).flatMap(renderedStrings);
+  }
+  return [];
+}
+
 export function hasBox4SecretLeak(result: Box4DocumentReviewResult): boolean {
-  return result.issues.some(issue => hasUnredactedSecretText(issue.original_text) || hasUnredactedSecretText(issue.suggestion));
+  return renderedStrings(result).some(hasUnredactedSecretText);
 }
 
 export async function createBox4DocumentReview(request: Box4DocumentReviewRequest): Promise<Box4DocumentReviewResponse> {

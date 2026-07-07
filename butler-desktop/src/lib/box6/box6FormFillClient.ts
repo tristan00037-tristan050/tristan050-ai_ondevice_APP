@@ -13,11 +13,11 @@ export type Box6FieldMapping = {
 };
 
 export type Box6FormFillResult = {
-  schema_version?: 'card_06.form_fill.v1';
+  schema_version: 'card_06.form_fill.v1';
   filled_form: string;
   field_mappings: Box6FieldMapping[];
   unfilled_fields: string[];
-  review_required: boolean;
+  review_required: string[];
   warnings: string[];
 };
 
@@ -40,6 +40,13 @@ const SECRET_VALUE_RE =
 const UNFILLED_VALUES = new Set(['', 'UNFILLED', '[미기입]', '[확인 필요]', '검토 필요', '미기입', '[민감정보 원문 생략]']);
 const LEGACY_SOURCE_KEY = ['source', 'excerpt'].join('_');
 const SECRET_GUARD_ERROR = 'BOX6_SECRET_GUARD_BLOCKED';
+const RESULT_KEYS = new Set(['schema_version', 'filled_form', 'field_mappings', 'unfilled_fields', 'review_required', 'warnings']);
+const MAPPING_KEYS = new Set(['target_label', 'output_value', 'confidence', 'source_ref', 'reason_code']);
+
+function hasExactKeys(record: Record<string, unknown>, expected: ReadonlySet<string>): boolean {
+  if (Object.keys(record).length !== expected.size) return false;
+  return Object.keys(record).every(key => expected.has(key));
+}
 
 function stringArray(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
@@ -52,6 +59,9 @@ function validateMapping(value: unknown): Box6FieldMapping | null {
   const record = value as Record<string, unknown>;
   if (LEGACY_SOURCE_KEY in record || 'review_required' in record) {
     throw new Error('BOX6_LEGACY_MAPPING_SCHEMA');
+  }
+  if (!hasExactKeys(record, MAPPING_KEYS)) {
+    return null;
   }
   const confidence = record.confidence;
   if (
@@ -89,16 +99,24 @@ function isAllowedSecretPlaceholder(value: string): boolean {
   return UNFILLED_VALUES.has(value.trim());
 }
 
+function hasUnredactedSecretText(value: string): boolean {
+  return !isAllowedSecretPlaceholder(value) && SECRET_VALUE_RE.test(value);
+}
+
 export function hasBox6SecretAutofill(result: Box6FormFillResult): boolean {
   const unfilled = new Set(result.unfilled_fields.map(value => value.trim()));
+  const reviewRequired = new Set(result.review_required.map(value => value.trim()));
+  if (hasUnredactedSecretText(result.filled_form) || result.warnings.some(hasUnredactedSecretText)) {
+    return true;
+  }
   return result.field_mappings.some(mapping => {
     const labelIsSecret = SECRET_LABEL_RE.test(mapping.target_label) || hasSecretReason(mapping.reason_code);
     if (labelIsSecret) {
       const safeUnfilled = isAllowedSecretPlaceholder(mapping.output_value) || mapping.confidence === 'UNFILLED';
-      const topLevelReview = result.review_required === true || unfilled.has(mapping.target_label.trim());
+      const topLevelReview = reviewRequired.has(mapping.target_label.trim()) || unfilled.has(mapping.target_label.trim());
       return !safeUnfilled || !topLevelReview;
     }
-    return mapping.output_value.trim().length > 0 && SECRET_VALUE_RE.test(mapping.output_value);
+    return hasUnredactedSecretText(mapping.output_value);
   });
 }
 
@@ -112,24 +130,25 @@ export function validateBox6FormFillResult(value: unknown): Box6FormFillResult |
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
   if (
-    (record.schema_version !== undefined && record.schema_version !== 'card_06.form_fill.v1') ||
+    !hasExactKeys(record, RESULT_KEYS) ||
+    record.schema_version !== 'card_06.form_fill.v1' ||
     typeof record.filled_form !== 'string' ||
-    !Array.isArray(record.field_mappings) ||
-    typeof record.review_required !== 'boolean'
+    !Array.isArray(record.field_mappings)
   ) {
     return null;
   }
   const fieldMappings = record.field_mappings.map(validateMapping);
   if (fieldMappings.some(item => item === null)) return null;
   const unfilledFields = stringArray(record.unfilled_fields);
+  const reviewRequired = stringArray(record.review_required);
   const warnings = stringArray(record.warnings);
-  if (!unfilledFields || !warnings) return null;
+  if (!unfilledFields || !reviewRequired || !warnings) return null;
   return {
-    schema_version: record.schema_version as 'card_06.form_fill.v1' | undefined,
+    schema_version: 'card_06.form_fill.v1',
     filled_form: record.filled_form,
     field_mappings: fieldMappings as Box6FieldMapping[],
     unfilled_fields: unfilledFields,
-    review_required: record.review_required,
+    review_required: reviewRequired,
     warnings,
   };
 }
