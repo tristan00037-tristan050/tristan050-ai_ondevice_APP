@@ -1,6 +1,7 @@
 import { sidecarFetch, uiSafeSidecarErrorMessage } from '../sidecarFetch';
 import { parseAnalyzeStreamResult } from '../cards/analyzeStreamResult';
 import { prepareCardTextFiles, type PreparedCardFile } from '../cards/fileText';
+import { SECRET_PATTERN_SOURCE, assertNoSecretLikeText, containsSecretLikeText } from '../cards/secretPatterns';
 
 export type Box6Confidence = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNFILLED';
 
@@ -33,19 +34,7 @@ export type Box6FormFillResponse = {
 };
 
 const CONFIDENCES = new Set<Box6Confidence>(['HIGH', 'MEDIUM', 'LOW', 'UNFILLED']);
-const SECRET_LABEL_RE =
-  /\b(?:api\s*key|token|secret|password|passwd|credential|access\s*key|private\s*key|client\s*secret|auth(?:entication)?\s*key)\b|(?:비밀번호|비번|암호|패스워드|토큰|인증\s*키|보안\s*키|개인\s*키|시크릿|API\s*키|에이피아이\s*키)/i;
-const SECRET_VALUE_RE = new RegExp(
-  [
-    String.raw`sk-[A-Za-z0-9_-]{12,}`,
-    String.raw`AKIA[0-9A-Z]{16}`,
-    String.raw`(?:api[_-]?key|token|password|secret|private[_-]?key)\s*[:=]\s*[^\s,;]{6,}`,
-    String.raw`(?:비밀번호|비번|암호|패스워드)\s*(?:는|은|:|=|->)\s*[^\s,;]{2,}`,
-    String.raw`-----BEGIN\s+(?:OPENSSH\s+)?PRIVATE\s+KEY-----`,
-    String.raw`seed\s*phrase\s*[:=]\s*(?:\w+\s+){5,}\w+`,
-  ].join('|'),
-  'i'
-);
+const SECRET_VALUE_RE = new RegExp(SECRET_PATTERN_SOURCE, 'i');
 const UNFILLED_VALUES = new Set(['', 'UNFILLED', '[미기입]', '[확인 필요]', '검토 필요', '미기입', '[민감정보 원문 생략]']);
 const LEGACY_SOURCE_KEY = ['source', 'excerpt'].join('_');
 const SECRET_GUARD_ERROR = 'BOX6_SECRET_GUARD_BLOCKED';
@@ -92,50 +81,55 @@ function validateMapping(value: unknown): Box6FieldMapping | null {
   };
 }
 
-function hasSecretReason(reasonCode: string): boolean {
-  return /(?:SECRET|FORBIDDEN|SECURITY|PASSWORD|TOKEN|API[_-]?KEY|CREDENTIAL)/i.test(reasonCode);
-}
-
-export function isBox6SecretLikeMapping(mapping: Box6FieldMapping): boolean {
-  return (
-    hasSecretReason(mapping.reason_code) ||
-    SECRET_LABEL_RE.test(mapping.target_label) ||
-    SECRET_VALUE_RE.test(mapping.output_value)
-  );
-}
-
 function isAllowedSecretPlaceholder(value: string): boolean {
   return UNFILLED_VALUES.has(value.trim());
+}
+
+function isSecretTargetLabel(label: string): boolean {
+  return /(?:비밀번호|비번|암호|패스워드|API\s*키|에이피아이\s*키|토큰|인증\s*키|보안\s*키|개인\s*키|secret|password|token|api\s*key|client\s*secret)/i.test(label);
 }
 
 function hasUnredactedSecretText(value: string): boolean {
   return !isAllowedSecretPlaceholder(value) && SECRET_VALUE_RE.test(value);
 }
 
-function renderedStrings(value: unknown): string[] {
-  if (typeof value === 'string') return [value];
-  if (Array.isArray(value)) return value.flatMap(renderedStrings);
-  if (value && typeof value === 'object') {
-    return Object.values(value as Record<string, unknown>).flatMap(renderedStrings);
+function assertNoResultSecretText(result: Box6FormFillResult): void {
+  assertNoSecretLikeText(result.filled_form, 'filled_form');
+  result.field_mappings.forEach((mapping, index) => {
+    assertNoSecretLikeText(mapping.output_value, `field_mappings.${index}.output_value`);
+    assertNoSecretLikeText(mapping.source_ref, `field_mappings.${index}.source_ref`);
+    assertNoSecretLikeText(mapping.reason_code, `field_mappings.${index}.reason_code`);
+  });
+  result.unfilled_fields.forEach((value, index) => assertNoSecretLikeText(value, `unfilled_fields.${index}`));
+  result.warnings.forEach((value, index) => assertNoSecretLikeText(value, `warnings.${index}`));
+}
+
+function validateSecretFieldPolicy(result: Box6FormFillResult): void {
+  for (const mapping of result.field_mappings) {
+    if (!isSecretTargetLabel(mapping.target_label)) continue;
+    const isUnfilled = !mapping.output_value || /^(UNFILLED|\[?확인 필요\]?|미기입|\[민감정보 원문 생략\])$/i.test(mapping.output_value.trim());
+    const listed = result.unfilled_fields.some(value => value === mapping.target_label) || result.review_required.some(value => value === mapping.target_label);
+    if (!isUnfilled || !listed) {
+      throw new Error('SENSITIVE_FIELD_AUTOFILL_BLOCKED');
+    }
   }
-  return [];
+}
+
+export function isBox6SecretLikeMapping(mapping: Box6FieldMapping): boolean {
+  return containsSecretLikeText(mapping.output_value) || containsSecretLikeText(mapping.source_ref) || containsSecretLikeText(mapping.reason_code);
 }
 
 export function hasBox6SecretAutofill(result: Box6FormFillResult): boolean {
-  const unfilled = new Set(result.unfilled_fields.map(value => value.trim()));
-  const reviewRequired = new Set(result.review_required.map(value => value.trim()));
-  if (renderedStrings(result).some(hasUnredactedSecretText)) {
-    return true;
-  }
-  return result.field_mappings.some(mapping => {
-    const labelIsSecret = SECRET_LABEL_RE.test(mapping.target_label) || hasSecretReason(mapping.reason_code);
-    if (labelIsSecret) {
-      const safeUnfilled = isAllowedSecretPlaceholder(mapping.output_value) || mapping.confidence === 'UNFILLED';
-      const topLevelReview = reviewRequired.has(mapping.target_label.trim()) || unfilled.has(mapping.target_label.trim());
-      return !safeUnfilled || !topLevelReview;
+  try {
+    assertNoResultSecretText(result);
+    validateSecretFieldPolicy(result);
+    return result.field_mappings.some(mapping => hasUnredactedSecretText(mapping.output_value));
+  } catch (error) {
+    if (error instanceof Error && (error.name === 'SensitiveOutputBlockedError' || error.message === 'SENSITIVE_FIELD_AUTOFILL_BLOCKED')) {
+      return true;
     }
-    return hasUnredactedSecretText(mapping.output_value);
-  });
+    throw error;
+  }
 }
 
 export function enforceBox6SecretGuard(result: Box6FormFillResult): void {
