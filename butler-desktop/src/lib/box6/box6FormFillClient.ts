@@ -103,10 +103,19 @@ function hasUnredactedSecretText(value: string): boolean {
   return !isAllowedSecretPlaceholder(value) && SECRET_VALUE_RE.test(value);
 }
 
+function renderedStrings(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(renderedStrings);
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).flatMap(renderedStrings);
+  }
+  return [];
+}
+
 export function hasBox6SecretAutofill(result: Box6FormFillResult): boolean {
   const unfilled = new Set(result.unfilled_fields.map(value => value.trim()));
   const reviewRequired = new Set(result.review_required.map(value => value.trim()));
-  if (hasUnredactedSecretText(result.filled_form) || result.warnings.some(hasUnredactedSecretText)) {
+  if (renderedStrings(result).some(hasUnredactedSecretText)) {
     return true;
   }
   return result.field_mappings.some(mapping => {

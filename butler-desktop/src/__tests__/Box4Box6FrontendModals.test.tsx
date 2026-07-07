@@ -291,6 +291,45 @@ describe('Box4/Box6 analyze stream parser', () => {
     );
     expect(hasBox6SecretAutofill(parsedFilledFormSecret)).toBe(true);
   });
+
+  it('blocks Box6 secret values embedded in source_ref', () => {
+    const sourceRefSecret = {
+      ...box6Payload,
+      field_mappings: [
+        {
+          ...box6Payload.field_mappings[0],
+          source_ref: 'api key: sk-test-secret-value-123456',
+        },
+        box6Payload.field_mappings[1],
+      ],
+    };
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(sourceRefSecret), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsed)).toBe(true);
+  });
+
+  it('blocks Box6 secret values embedded in reason_code', () => {
+    const reasonCodeSecret = {
+      ...box6Payload,
+      field_mappings: [
+        box6Payload.field_mappings[0],
+        {
+          ...box6Payload.field_mappings[1],
+          reason_code: 'FORBIDDEN_SECRET_FIELD sk-test-secret-value-123456',
+        },
+      ],
+    };
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(reasonCodeSecret), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsed)).toBe(true);
+  });
+
+  it('blocks Box6 secret values embedded in unfilled_fields', () => {
+    const unfilledFieldSecret = {
+      ...box6Payload,
+      unfilled_fields: ['API key: sk-test-secret-value-123456'],
+    };
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(unfilledFieldSecret), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsed)).toBe(true);
+  });
 });
 
 describe('Box4/Box6 file limits', () => {
