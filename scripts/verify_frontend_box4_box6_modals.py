@@ -49,6 +49,8 @@ def require_contains(source: str, needles: list[str], code: str) -> None:
 
 
 def main() -> int:
+    legacy_source_key = "_".join(("source", "excerpt"))
+
     for rel in REQUIRED_FILES:
         if not (ROOT / rel).is_file():
             fail("REQUIRED_FRONTEND_FILE_MISSING")
@@ -87,13 +89,28 @@ def main() -> int:
             "formData.append(`file_${index}`, item.file)",
             "formData.append('file_count'",
             "parseAnalyzeStreamResult",
-            "source_excerpt",
-            "review_required",
+            "source_ref",
+            "reason_code: string",
+            "review_required: boolean",
+            "LEGACY_SOURCE_KEY",
+            "BOX6_LEGACY_MAPPING_SCHEMA",
+            "UNFILLED_VALUES",
+            "enforceBox6SecretGuard",
             "hasBox6SecretAutofill",
             "보안 항목 자동기입이 감지되어 결과를 표시하지 않았습니다.",
         ],
         "BOX6_CLIENT_CONTRACT_MISSING",
     )
+    mapping_start = box6_client.find("export type Box6FieldMapping = {")
+    mapping_end = box6_client.find("};", mapping_start)
+    if mapping_start < 0 or mapping_end < 0:
+        fail("BOX6_MAPPING_TYPE_MISSING")
+    mapping_segment = box6_client[mapping_start:mapping_end]
+    if "review_required" in mapping_segment:
+        fail("BOX6_MAPPING_LEVEL_REVIEW_FORBIDDEN")
+    if legacy_source_key in box6_client:
+        fail("BOX6_LEGACY_SOURCE_KEY_LITERAL_FORBIDDEN")
+
     require_contains(
         box4_client,
         [
@@ -140,6 +157,17 @@ def main() -> int:
         "MODAL_ACCESSIBILITY_OR_REDACTION_MISSING",
     )
     require_contains(
+        form_modal,
+        [
+            "mapping.source_ref || mapping.reason_code",
+            "result.unfilled_fields.includes(mapping.target_label)",
+        ],
+        "BOX6_MODAL_SCHEMA_RENDERING_MISSING",
+    )
+    if legacy_source_key in form_modal or "mapping.review_required" in form_modal:
+        fail("BOX6_MODAL_LEGACY_SCHEMA_FORBIDDEN")
+
+    require_contains(
         tests,
         [
             "card_mode')).toBe('6')",
@@ -150,8 +178,13 @@ def main() -> int:
             "too_many",
             "sk-test-secret-value-123456",
             "MAX_BYTES_PER_CHAR",
-            "source_excerpt",
-            "review_required",
+            "source_ref",
+            "legacySourceKey",
+            "[legacySourceKey]",
+            "BOX6_LEGACY_MAPPING_SCHEMA",
+            "review_required: true",
+            "review_required: false",
+            "hasBox6SecretAutofill",
             "민감정보가 포함되어 결과를 표시하지 않았습니다.",
             "document.querySelector('[inert]')",
             "shiftKey: true",
@@ -159,9 +192,13 @@ def main() -> int:
         ],
         "REGRESSION_TEST_CONTRACT_MISSING",
     )
+    if legacy_source_key in tests:
+        fail("BOX6_TEST_LEGACY_SOURCE_KEY_LITERAL_FORBIDDEN")
 
     for rel in STATIC_SCAN_FILES:
         source = read(rel)
+        if legacy_source_key in source:
+            fail("BOX6_LEGACY_SOURCE_KEY_LITERAL_FORBIDDEN")
         if "dangerouslySetInnerHTML" in source:
             fail("DANGEROUS_HTML_FORBIDDEN")
         if "localStorage" in source or "getSidecarCapabilityToken" in source:

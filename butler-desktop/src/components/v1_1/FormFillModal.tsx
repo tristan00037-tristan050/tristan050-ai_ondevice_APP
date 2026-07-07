@@ -30,7 +30,7 @@ function ConfidenceBadge({ confidence }: { confidence: Box6Confidence }) {
 
 function safeExcerpt(value: string): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
-  return normalized.length > 80 ? `${normalized.slice(0, 80)}...` : normalized;
+  return normalized.length > 120 ? `${normalized.slice(0, 120)}...` : normalized;
 }
 
 function ResultPanel({ result }: { result: Box6FormFillResult }) {
@@ -57,7 +57,7 @@ function ResultPanel({ result }: { result: Box6FormFillResult }) {
           <tbody>
             {result.field_mappings.map((mapping, index) => {
               const isUnfilled = mapping.confidence === 'UNFILLED' || !mapping.output_value.trim();
-              const isSecret = isBox6SecretLikeMapping(mapping) || mapping.review_required;
+              const isSecret = isBox6SecretLikeMapping(mapping) || result.unfilled_fields.includes(mapping.target_label);
               return (
                 <tr key={`${mapping.target_label}-${index}`}>
                   <td style={{ borderBottom: '1px solid #E2E8F0', padding: '8px 6px', verticalAlign: 'top' }}>{mapping.target_label}</td>
@@ -68,7 +68,7 @@ function ResultPanel({ result }: { result: Box6FormFillResult }) {
                     <ConfidenceBadge confidence={mapping.confidence} />
                   </td>
                   <td style={{ borderBottom: '1px solid #E2E8F0', padding: '8px 6px', verticalAlign: 'top', color: '#475569' }}>
-                    {safeExcerpt(mapping.source_excerpt)}
+                    {safeExcerpt(mapping.source_ref || mapping.reason_code)}
                   </td>
                   <td style={{ borderBottom: '1px solid #E2E8F0', padding: '8px 6px', verticalAlign: 'top', color: isSecret || isUnfilled ? '#92400E' : '#166534' }}>
                     {isSecret || isUnfilled ? '검토 필요' : '자동 기입'}

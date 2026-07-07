@@ -3,12 +3,14 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { parseAnalyzeStreamResult } from '../lib/cards/analyzeStreamResult';
 import { MAX_BYTES_PER_CHAR, MAX_CHARS_PER_FILE, prepareCardTextFiles } from '../lib/cards/fileText';
 import { validateBox4DocumentReviewResult } from '../lib/box4/box4ReviewClient';
-import { validateBox6FormFillResult } from '../lib/box6/box6FormFillClient';
+import { hasBox6SecretAutofill, validateBox6FormFillResult } from '../lib/box6/box6FormFillClient';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: async (command: string) =>
     command === 'get_sidecar_capability_token' ? 'test-capability-token' : undefined,
 }));
+
+const legacySourceKey = ['source', 'excerpt'].join('_');
 
 const box6Payload = {
   schema_version: 'card_06.form_fill.v1',
@@ -18,21 +20,19 @@ const box6Payload = {
       target_label: '상호',
       output_value: '주식회사 합성',
       confidence: 'HIGH',
-      source_excerpt: '상호: 주식회사 합성',
-      review_required: false,
+      source_ref: 'our_data.company_name',
       reason_code: 'LABEL_EXACT_MATCH',
     },
     {
       target_label: 'API key',
       output_value: '',
       confidence: 'UNFILLED',
-      source_excerpt: '',
-      review_required: true,
+      source_ref: '',
       reason_code: 'FORBIDDEN_SECRET_FIELD',
     },
   ],
   unfilled_fields: ['API key'],
-  review_required: ['API key'],
+  review_required: true,
   warnings: ['secret/security 필드는 자동기입하지 않았습니다.'],
 };
 
@@ -45,13 +45,12 @@ const unsafeBox6SecretPayload = {
       target_label: 'API key',
       output_value: 'sk-test-secret-value-123456',
       confidence: 'HIGH',
-      source_excerpt: 'api_key',
-      review_required: false,
+      source_ref: 'our_data.api_key',
       reason_code: 'LABEL_EXACT_MATCH',
     },
   ],
   unfilled_fields: [],
-  review_required: [],
+  review_required: false,
   warnings: [],
 };
 
@@ -142,7 +141,8 @@ describe('Box4/Box6 analyze stream parser', () => {
 
     expect(parsed.schema_version).toBe('card_06.form_fill.v1');
     expect(parsed.field_mappings[1].confidence).toBe('UNFILLED');
-    expect(parsed.field_mappings[0].source_excerpt).toBe('상호: 주식회사 합성');
+    expect(parsed.field_mappings[0].source_ref).toBe('our_data.company_name');
+    expect(parsed.review_required).toBe(true);
   });
 
   it('accepts fenced JSON and rejects invalid Box4 enums fail-safe', () => {
@@ -158,7 +158,7 @@ describe('Box4/Box6 analyze stream parser', () => {
     );
   });
 
-  it('rejects incomplete Box6 mappings without source_excerpt and review_required', () => {
+  it('rejects Box6 legacy mapping source field', () => {
     const invalid = {
       ...box6Payload,
       field_mappings: [
@@ -166,15 +166,64 @@ describe('Box4/Box6 analyze stream parser', () => {
           target_label: '상호',
           output_value: '주식회사 합성',
           confidence: 'HIGH',
-          source_ref: 'legacy field',
+          [legacySourceKey]: 'legacy field',
           reason_code: 'LABEL_EXACT_MATCH',
         },
       ],
     };
 
     expect(() => parseAnalyzeStreamResult(JSON.stringify(invalid), validateBox6FormFillResult)).toThrow(
+      'BOX6_LEGACY_MAPPING_SCHEMA'
+    );
+  });
+
+  it('rejects Box6 mapping-level review flag and requires top-level review flag', () => {
+    const mappingLevelReview = {
+      ...box6Payload,
+      field_mappings: [{ ...box6Payload.field_mappings[0], review_required: false }],
+    };
+    expect(() => parseAnalyzeStreamResult(JSON.stringify(mappingLevelReview), validateBox6FormFillResult)).toThrow(
+      'BOX6_LEGACY_MAPPING_SCHEMA'
+    );
+
+    const missingTopLevelReview = { ...box6Payload } as Record<string, unknown>;
+    delete missingTopLevelReview.review_required;
+    expect(() => parseAnalyzeStreamResult(JSON.stringify(missingTopLevelReview), validateBox6FormFillResult)).toThrow(
       '결과 형식을 확인하지 못했습니다.'
     );
+  });
+
+  it('allows reviewed secret placeholders and flags secret reason autofill', () => {
+    const reviewedSecret = {
+      ...box6Payload,
+      field_mappings: [
+        {
+          target_label: '인증 정보',
+          output_value: '',
+          confidence: 'UNFILLED',
+          source_ref: '',
+          reason_code: 'FORBIDDEN_SECRET_FIELD',
+        },
+      ],
+      unfilled_fields: ['인증 정보'],
+      review_required: false,
+    };
+    const parsedReviewedSecret = parseAnalyzeStreamResult(JSON.stringify(reviewedSecret), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsedReviewedSecret)).toBe(false);
+
+    const unsafeSecret = {
+      ...reviewedSecret,
+      field_mappings: [
+        {
+          ...reviewedSecret.field_mappings[0],
+          output_value: '관리자1234',
+          confidence: 'HIGH',
+        },
+      ],
+      unfilled_fields: [],
+    };
+    const parsedUnsafeSecret = parseAnalyzeStreamResult(JSON.stringify(unsafeSecret), validateBox6FormFillResult);
+    expect(hasBox6SecretAutofill(parsedUnsafeSecret)).toBe(true);
   });
 });
 
@@ -248,6 +297,7 @@ describe('Box4/Box6 frontend modals', () => {
     });
 
     await waitFor(() => expect(screen.getByTestId('box6-result')).toBeInTheDocument());
+    expect(screen.getByText('our_data.company_name')).toBeInTheDocument();
     expect(screen.getByText('미기입')).toBeInTheDocument();
     expect(screen.getByText('검토 필요')).toBeInTheDocument();
     const streamCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/api/analyze/stream'));
