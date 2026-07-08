@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, FilePlus, X } from 'lucide-react';
 import {
   createBox3Draft,
@@ -6,8 +6,34 @@ import {
   type Box3DraftResponse,
   type Box3FormatHint,
 } from '../../lib/box3/box3DraftClient';
+import { MAX_CHARS_PER_FILE, prepareCardTextFiles } from '../../lib/cards/fileText';
 
 const FORMAT_HINTS: Box3FormatHint[] = ['보고서', '이메일', '계약 검토', '회의 안건', '자유형'];
+
+// #842(box4·box6) 검증본과 동일한 시각적 숨김 input 스타일 — 네이티브 Choose Files 미노출.
+const hiddenFileInputStyle: React.CSSProperties = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  margin: -1,
+  padding: 0,
+  border: 0,
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+};
+
+// prepareCardTextFiles 로 정규화된 File 의 텍스트를 읽는다(#842 재사용, 20000/60000자 제한 일관).
+function readPreparedFileText(file: File): Promise<string> {
+  if (typeof file.text === 'function') return file.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('FILE_READ_FAILED'));
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.readAsText(file);
+  });
+}
 
 function safeDraftText(response: Box3DraftResponse): string {
   return response.draft ?? response.draft_text ?? '';
@@ -22,23 +48,39 @@ function ErrorBox({ message }: { message: string }) {
 }
 
 export function Box3DraftModal({ onClose }: { onClose: () => void }) {
+  const referenceFileInputRef = useRef<HTMLInputElement>(null);
   const [referenceText, setReferenceText] = useState('');
   const [draftingRequest, setDraftingRequest] = useState('');
   const [formatHint, setFormatHint] = useState<Box3FormatHint>('자유형');
+  const [loadingReferenceFile, setLoadingReferenceFile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [response, setResponse] = useState<Box3DraftResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // 채움형: 선택한 과거 문서 파일 1건의 텍스트로 '과거 참고 문서' textarea 를 채운다.
+  // '과거 참고 문서' 는 reference_docs 단일 원소(≤ MAX_CHARS_PER_FILE)로 제출되므로,
+  // box4·box6 의 main-file-load 와 동일하게 파일 1건만 불러온다. prepareCardTextFiles 가
+  // 문서당 MAX_CHARS_PER_FILE 로 캡하므로 제출 검증(REFERENCE_DOC_TOO_LARGE)을 항상 만족한다.
   async function handleReferenceFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    if (!files.length) return;
-    const chunks: string[] = [];
-    for (const file of files.slice(0, 5)) {
-      const text = await file.text();
-      chunks.push(text.slice(0, 20000));
-    }
-    setReferenceText(chunks.join('\\n\\n---\\n\\n'));
+    const file = event.target.files?.[0];
     event.target.value = '';
+    if (!file) return;
+
+    setLoadingReferenceFile(true);
+    setError(null);
+    try {
+      const prepared = await prepareCardTextFiles([file]);
+      const text = prepared.files[0]?.file ? await readPreparedFileText(prepared.files[0].file) : '';
+      if (text.trim()) {
+        setReferenceText(text);
+      } else {
+        setError('파일에서 텍스트를 추출하지 못했습니다.');
+      }
+    } catch {
+      setError('파일에서 텍스트를 추출하지 못했습니다.');
+    } finally {
+      setLoadingReferenceFile(false);
+    }
   }
 
   async function submit(event: React.FormEvent) {
@@ -83,32 +125,64 @@ export function Box3DraftModal({ onClose }: { onClose: () => void }) {
         </header>
 
         <form onSubmit={submit} style={{ display: 'grid', gap: 14 }}>
-          <label>
-            과거 참고 문서
+          <div style={{ display: 'grid', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <label htmlFor="box3-reference-input" style={{ fontWeight: 700 }}>과거 참고 문서</label>
+              <span>
+                <input
+                  ref={referenceFileInputRef}
+                  aria-label="과거 문서 파일"
+                  data-testid="box3-reference-file-input"
+                  type="file"
+                  accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.html,text/*,application/json"
+                  onChange={handleReferenceFile}
+                  tabIndex={-1}
+                  style={hiddenFileInputStyle}
+                />
+                <button
+                  type="button"
+                  data-testid="box3-reference-file-load-btn"
+                  onClick={() => referenceFileInputRef.current?.click()}
+                  disabled={loadingReferenceFile}
+                  style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: loadingReferenceFile ? 'wait' : 'pointer' }}
+                >
+                  {loadingReferenceFile ? '불러오는 중...' : '파일에서 불러오기'}
+                </button>
+              </span>
+            </div>
+            <span style={{ color: '#64748B', fontSize: 12 }}>
+              새 초안의 바탕이 될 기존 문서(계획서·공문·보고서 등)의 내용입니다. 직접 붙여넣거나 파일에서 불러오세요.
+            </span>
             <textarea
-              aria-label="과거 참고 문서"
+              id="box3-reference-input"
+              data-testid="box3-reference-input"
               value={referenceText}
               onChange={event => setReferenceText(event.target.value)}
               rows={9}
-              placeholder="참고할 과거 문서 내용을 붙여넣으세요. 원문은 요청 runtime에만 사용됩니다."
-              style={{ width: '100%' }}
+              placeholder="예: 작년 사업계획서, 지난달 공문 등 참고할 문서 내용을 붙여넣으세요."
+              style={{ width: '100%', resize: 'vertical', border: '1px solid #CBD5E1', borderRadius: 6, padding: 10, font: 'inherit' }}
             />
-          </label>
-          <label>
-            텍스트 파일 불러오기
-            <input aria-label="과거 문서 파일" type="file" multiple accept=".txt,.md,.csv" onChange={handleReferenceFile} />
-          </label>
-          <label>
-            새 상황·요구사항
+            <span style={{ color: '#94A3B8', fontSize: 11 }}>
+              파일 1개의 텍스트로 채웁니다 · 최대 {MAX_CHARS_PER_FILE.toLocaleString()}자. PDF/DOCX/이미지는 제외됩니다.
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label htmlFor="box3-request-input" style={{ fontWeight: 700 }}>새 상황·요구사항</label>
+            <span style={{ color: '#64748B', fontSize: 12 }}>
+              어떤 문서를 만들지와 반영할 변경사항을 적어주세요.
+            </span>
             <textarea
-              aria-label="새 상황"
+              id="box3-request-input"
+              data-testid="box3-request-input"
               value={draftingRequest}
               onChange={event => setDraftingRequest(event.target.value)}
               rows={5}
-              placeholder="새 초안에 반영할 상황과 요구사항을 입력하세요."
-              style={{ width: '100%' }}
+              placeholder="예: 첨부한 문서를 기반으로 2026년 사업계획서 초안을 구성해줘"
+              style={{ width: '100%', resize: 'vertical', border: '1px solid #CBD5E1', borderRadius: 6, padding: 10, font: 'inherit' }}
             />
-          </label>
+          </div>
+
           <label>
             초안 유형
             <select aria-label="초안 유형" value={formatHint} onChange={event => setFormatHint(event.target.value as Box3FormatHint)}>
