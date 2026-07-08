@@ -9,9 +9,12 @@ from typing import Any, Mapping
 
 try:
     from llama_cpp import LlamaGrammar  # type: ignore[import]
-    from llama_cpp.llama_grammar import json_schema_to_gbnf  # type: ignore[import]
 except Exception:  # pragma: no cover - exercised in environments without llama-cpp
     LlamaGrammar = None  # type: ignore[assignment]
+
+try:
+    from llama_cpp.llama_grammar import json_schema_to_gbnf  # type: ignore[import]
+except Exception:  # pragma: no cover - exercised by llama-cpp builds without the helper module
     json_schema_to_gbnf = None  # type: ignore[assignment]
 
 

@@ -252,6 +252,39 @@ def test_fill_form_quarantines_secret_real_value_when_review_listed() -> None:
     assert "plain-secret-1234" not in json.dumps(result.to_payload(), ensure_ascii=False)
 
 
+def test_fill_form_redacts_secret_label_values_in_filled_form_and_warnings() -> None:
+    mapping = dict(valid_payload()["field_mappings"][0])  # type: ignore[index]
+    mapping.update(
+        {
+            "target_label": "API 키",
+            "output_value": "UNFILLED",
+            "confidence": "UNFILLED",
+            "source_ref": "",
+            "reason_code": "SENSITIVE_FIELD_REQUIRES_MANUAL_INPUT",
+        }
+    )
+
+    result = fill_form(
+        FormFillInput(blank_form="API 키: ___\nclient secret: ___", data_documents=[]),
+        model_client=FakeModelClient(
+            valid_payload(
+                filled_form="API 키: plain-secret-1234\nclient secret: abcdef123456",
+                field_mappings=[mapping],
+                unfilled_fields=["API 키"],
+                review_required=["API 키"],
+                warnings=["seed phrase: correct horse battery staple 값은 수동 확인 필요"],
+            )
+        ),
+    )
+
+    dumped = json.dumps(result.to_payload(), ensure_ascii=False)
+    assert result.warnings != ["SENSITIVE_FIELD_AUTOFILL_BLOCKED"]
+    assert "plain-secret-1234" not in dumped
+    assert "abcdef123456" not in dumped
+    assert "correct horse battery staple" not in dumped
+    assert dumped.count(SAFE_SECRET_REPLACEMENT) >= 3
+
+
 def test_box6_json_schema_matches_backend_contract() -> None:
     assert set(BOX6_JSON_SCHEMA["required"]) == REQUIRED_TOP_LEVEL_KEYS
     mapping_schema = BOX6_JSON_SCHEMA["properties"]["field_mappings"]["items"]  # type: ignore[index]

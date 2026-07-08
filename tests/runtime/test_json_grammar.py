@@ -48,6 +48,26 @@ def test_optional_grammar_returns_none_when_unavailable(monkeypatch) -> None:
         build_json_schema_grammar(BOX4_JSON_SCHEMA, required=True)
 
 
+def test_fallback_uses_llama_from_json_schema_when_converter_helper_is_missing(monkeypatch) -> None:
+    import butler_pc_core.runtime.json_grammar as json_grammar
+
+    class DummyGrammar:
+        calls: list[tuple[str, bool]] = []
+
+        @classmethod
+        def from_json_schema(cls, schema_json: str, *, verbose: bool = False):  # type: ignore[no-untyped-def]
+            cls.calls.append((schema_json, verbose))
+            return {"schema_json": schema_json, "verbose": verbose}
+
+    monkeypatch.setattr(json_grammar, "json_schema_to_gbnf", None)
+    monkeypatch.setattr(json_grammar, "LlamaGrammar", DummyGrammar)
+
+    grammar = json_grammar.build_json_schema_grammar({"type": "object"}, required=True)
+
+    assert grammar["verbose"] is False
+    assert DummyGrammar.calls
+
+
 def test_box_schemas_use_supported_subset_only() -> None:
     for schema in (BOX4_JSON_SCHEMA, BOX6_JSON_SCHEMA):
         assert_supported_schema_subset(schema)

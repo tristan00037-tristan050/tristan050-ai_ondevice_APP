@@ -63,25 +63,23 @@ BOX6_JSON_SCHEMA: dict[str, Any] = {
 }
 BOX6_SCHEMA_DIGEST = stable_schema_digest(BOX6_JSON_SCHEMA)
 
-_SECRET_VALUE_RE = re.compile(
-    r"(?:"
-    r"sk-[A-Za-z0-9._-]{10,}|"
-    r"AKIA[0-9A-Z]{16}|"
-    r"-----BEGIN[ \t]+[A-Z ]*PRIVATE KEY-----|"
-    r"(?:비밀번호|비번|암호|password|token|api[ \t_-]*key)[ \t]*(?:는|은|[:=：])[ \t]*[^\s,;]{4,}|"
-    r"\b\d{6}-\d{7}\b"
-    r")",
-    re.IGNORECASE,
-)
-_SECRET_LABEL_RE = re.compile(
-    r"(?:"
+_SECRET_LABEL_PATTERN = (
     r"비밀번호|비번|암호|패스워드|토큰|시크릿|"
     r"API[ \t_-]*키|에이피아이[ \t_-]*키|인증[ \t_-]*키|보안[ \t_-]*키|개인[ \t_-]*키|"
     r"secret|password|token|api[ \t_-]*key|access[ \t_-]*key|auth[ \t_-]*key|"
     r"client[ \t_-]*secret|private[ \t_-]*key|seed[ \t_-]*phrase"
-    r")",
+)
+_SECRET_VALUE_RE = re.compile(
+    rf"(?:"
+    rf"sk-[A-Za-z0-9._-]{{10,}}|"
+    rf"AKIA[0-9A-Z]{{16}}|"
+    rf"-----BEGIN[ \t]+[A-Z ]*PRIVATE KEY-----|"
+    rf"(?:{_SECRET_LABEL_PATTERN})[ \t]*(?:는|은|[:=：])[ \t]*[^\n\r,;]{{4,}}|"
+    rf"\b\d{{6}}-\d{{7}}\b"
+    rf")",
     re.IGNORECASE,
 )
+_SECRET_LABEL_RE = re.compile(rf"(?:{_SECRET_LABEL_PATTERN})", re.IGNORECASE)
 _UNFILLED_VALUE_RE = re.compile(r"^(?:UNFILLED|\[?확인\s*필요\]?|미기입)$", re.IGNORECASE)
 
 
