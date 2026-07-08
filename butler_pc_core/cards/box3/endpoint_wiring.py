@@ -10,10 +10,20 @@ from .actual_fail_class import CONTRACT_ONLY
 from .actual_operation_pipeline import run_box3_actual_operation
 from .actual_runner_assets import ActualRunnerAssetConfig
 from .helper_component_guard import verify_helper_component_use_guard
-from .human_approval_sealed import default_locked_human_approval, evaluate_human_approval_sealed, load_human_approval_config
+from .human_approval_sealed import (
+    APPROVAL_CONTEXT_DESKTOP_APP,
+    APPROVAL_MODE_MODEL,
+    ApprovalScopeError,
+    HumanApprovalSealedVerdict,
+    default_locked_human_approval,
+    evaluate_human_approval_sealed,
+    load_human_approval_config,
+    resolve_expected_scope_digest,
+)
 from .local_sealed_runner import RealRunner
+from .model_identity import Box3ModelIdentity, get_box3_model_identity_from_runtime_cache, get_runtime_device_id_digest
 
-DEFAULT_APPROVAL_PATH = Path.home() / ".butler" / "box3" / "human_approval_v1.json"
+DEFAULT_APPROVAL_PATH = Path.home() / ".butler" / "box3" / "human_approval_v2.json"
 APPROVAL_PATH_ENV = "BUTLER_BOX3_HUMAN_APPROVAL_CONFIG_PATH"
 HELPER_GUARD_PATH_ENV = "BUTLER_BOX3_HELPER_COMPONENT_GUARD_PATH"
 FIXED_EVAL_REPORT_PATH_ENV = "BUTLER_BOX3_FIXED_EVAL_REPORT_PATH"
@@ -33,13 +43,16 @@ _LEGACY_STATUS_MAP = {
     "BLOCKED": "blocked",
 }
 
+
 class Box3EndpointWiringError(RuntimeError):
     """Endpoint-wiring only error. Message is a fail_class/reason code, never raw input."""
+
 
 def _to_legacy_status(actual_status: str | None) -> str:
     if not actual_status:
         return "contract_only"
     return _LEGACY_STATUS_MAP.get(actual_status, "contract_only")
+
 
 def _read_json_file(path: Path) -> dict[str, Any] | None:
     try:
@@ -50,15 +63,18 @@ def _read_json_file(path: Path) -> dict[str, Any] | None:
         return None
     return data if isinstance(data, dict) else None
 
+
 def load_server_local_sealed_approval(path: Path | None = None) -> dict[str, Any] | None:
     selected = path or Path(os.environ.get(APPROVAL_PATH_ENV, str(DEFAULT_APPROVAL_PATH)))
     return load_human_approval_config(selected) if selected.exists() else None
+
 
 def load_helper_component_guard(path: Path | None = None) -> dict[str, Any] | None:
     selected_raw = str(path) if path else os.environ.get(HELPER_GUARD_PATH_ENV)
     if not selected_raw:
         return None
     return _read_json_file(Path(selected_raw))
+
 
 def load_fixed_eval_pass(path: Path | None = None) -> bool:
     selected_raw = str(path) if path else os.environ.get(FIXED_EVAL_REPORT_PATH_ENV)
@@ -71,7 +87,19 @@ def load_fixed_eval_pass(path: Path | None = None) -> bool:
         return True
     return report.get("status") == "FIXED_EVAL_PASS" and int(report.get("case_count", 0)) >= 40 and int(report.get("failed_count", 1)) == 0
 
-def _contract_only_actual_response(envelope: Box3ActualRuntimeEnvelope, *, fail_class: str | None, approval_digest: str | None, approval_allowed: bool, approval_fail_class: str | None) -> dict[str, Any]:
+
+def _contract_only_actual_response(
+    envelope: Box3ActualRuntimeEnvelope,
+    *,
+    fail_class: str | None,
+    approval_digest: str | None,
+    approval_allowed: bool,
+    approval_fail_class: str | None,
+    approval_mode: str = APPROVAL_MODE_MODEL,
+    approval_scope_kind: str | None = None,
+    model_digest_status: str = "blocked",
+    model_digest_prefix: str | None = None,
+) -> dict[str, Any]:
     response = {
         "schema_version": "box3.draft.response.v1_2",
         "status": _to_legacy_status(CONTRACT_ONLY),
@@ -90,28 +118,46 @@ def _contract_only_actual_response(envelope: Box3ActualRuntimeEnvelope, *, fail_
         "raw_text_logged": False,
         "request_digest": envelope.request_digest,
         "audit": {
-            "schema_version": "box3.draft.audit.v1_2",
+            "schema_version": "box3.draft.audit.v1_3",
             "request_digest": envelope.request_digest,
             "external_send_zero": True,
             "raw_saved_zero": True,
             "raw_text_logged": False,
             "fail_class": fail_class,
             "approval_config_digest": approval_digest,
+            "approval_mode": approval_mode,
+            "approval_scope_kind": approval_scope_kind,
+            "model_digest_status": model_digest_status,
+            "model_digest_prefix": model_digest_prefix,
+            "raw_path_logged": False,
         },
         "actual_wiring": {
-            "schema_version": "box3.endpoint_wiring.v1_2",
+            "schema_version": "box3.endpoint_wiring.v1_3",
             "actual_status": CONTRACT_ONLY,
             "approval_pre_gate_passed": bool(approval_allowed),
             "approval_config_digest": approval_digest,
             "runner_injected": False,
             "request_flag_used_for_real": False,
             "ui_flag_used_for_real": False,
+            "approval_mode": approval_mode,
+            "approval_scope_kind": approval_scope_kind,
+            "model_digest_status": model_digest_status,
         },
     }
     assert_persistable_digest_only({k: v for k, v in response.items() if k != "draft_text"})
     return response
 
-def normalize_actual_verdict_to_legacy_response(result: Any, *, envelope: Box3ActualRuntimeEnvelope, approval_config_digest: str | None, runner_injected: bool) -> dict[str, Any]:
+
+def normalize_actual_verdict_to_legacy_response(
+    result: Any,
+    *,
+    envelope: Box3ActualRuntimeEnvelope,
+    approval_config_digest: str | None,
+    runner_injected: bool,
+    approval_mode: str,
+    approval_scope_kind: str | None,
+    model_digest_prefix: str | None,
+) -> dict[str, Any]:
     raw = result.to_response_dict() if hasattr(result, "to_response_dict") else dict(result)
     actual_status = raw.get("status")
     response = {
@@ -132,7 +178,7 @@ def normalize_actual_verdict_to_legacy_response(result: Any, *, envelope: Box3Ac
         "raw_text_logged": False,
         "request_digest": envelope.request_digest,
         "audit": {
-            "schema_version": "box3.draft.audit.v1_2",
+            "schema_version": "box3.draft.audit.v1_3",
             "request_digest": envelope.request_digest,
             "external_send_zero": True,
             "raw_saved_zero": True,
@@ -140,21 +186,34 @@ def normalize_actual_verdict_to_legacy_response(result: Any, *, envelope: Box3Ac
             "fail_class": raw.get("fail_class"),
             "approval_config_digest": approval_config_digest,
             "actual_status": actual_status,
+            "approval_mode": approval_mode,
+            "approval_scope_kind": approval_scope_kind,
+            "model_digest_status": "matched" if approval_mode == APPROVAL_MODE_MODEL else "not_applicable",
+            "model_digest_prefix": model_digest_prefix,
+            "raw_path_logged": False,
         },
         "actual_operation": raw,
         "actual_wiring": {
-            "schema_version": "box3.endpoint_wiring.v1_2",
+            "schema_version": "box3.endpoint_wiring.v1_3",
             "actual_status": actual_status,
             "approval_pre_gate_passed": True,
             "approval_config_digest": approval_config_digest,
             "runner_injected": bool(runner_injected),
             "request_flag_used_for_real": False,
             "ui_flag_used_for_real": False,
+            "approval_mode": approval_mode,
+            "approval_scope_kind": approval_scope_kind,
+            "model_digest_status": "matched" if approval_mode == APPROVAL_MODE_MODEL else "not_applicable",
         },
     }
     persist_probe = {k: v for k, v in response.items() if k not in {"draft_text", "actual_operation"}}
     assert_persistable_digest_only(persist_probe)
     return response
+
+
+def _safe_digest_prefix(value: str | None) -> str | None:
+    return value[:23] if isinstance(value, str) and value.startswith("sha256:") else None
+
 
 def run_box3_endpoint_wiring(
     *,
@@ -169,6 +228,8 @@ def run_box3_endpoint_wiring(
     fixed_eval_pass: bool | None = None,
     base_config: ActualRunnerAssetConfig | None = None,
     runner: RealRunner | None = None,
+    model_identity: Box3ModelIdentity | None = None,
+    runtime_device_digest: str | None = None,
 ) -> dict[str, Any]:
     if not reference_docs or not drafting_request:
         raise Box3EndpointWiringError("BOX3_REAL_CONTRACT_INPUT_MISSING")
@@ -183,7 +244,33 @@ def run_box3_endpoint_wiring(
     selected_approval = approval_config if approval_config is not None else load_server_local_sealed_approval()
     if selected_approval is None:
         selected_approval = default_locked_human_approval(envelope.request_digest)
-    approval = evaluate_human_approval_sealed(selected_approval, expected_scope_digest=envelope.request_digest)
+
+    resolved_identity = model_identity if model_identity is not None else get_box3_model_identity_from_runtime_cache()
+    model_digest = resolved_identity.model_path_digest if resolved_identity else None
+    device_digest = runtime_device_digest if runtime_device_digest is not None else get_runtime_device_id_digest()
+    model_digest_prefix = _safe_digest_prefix(model_digest)
+
+    try:
+        expected_digest, approval_mode = resolve_expected_scope_digest(
+            selected_approval,
+            request_digest=envelope.request_digest,
+            model_digest=model_digest,
+            context=APPROVAL_CONTEXT_DESKTOP_APP,
+            runtime_device_digest=device_digest,
+        )
+    except ApprovalScopeError as exc:
+        approval = HumanApprovalSealedVerdict.blocked(
+            fail_class=str(exc),
+            config_digest=None,
+            approved_by_digest=selected_approval.get("approved_by_digest") if isinstance(selected_approval, dict) else None,
+            scope_digest=selected_approval.get("approval_scope_digest") if isinstance(selected_approval, dict) else None,
+            mode=APPROVAL_MODE_MODEL,
+            approval_scope_kind=selected_approval.get("approval_scope_kind") if isinstance(selected_approval, dict) else None,
+            model_digest_status="blocked",
+        )
+    else:
+        approval = evaluate_human_approval_sealed(selected_approval, expected_scope_digest=expected_digest, mode=approval_mode)
+
     if not approval.allowed:
         return _contract_only_actual_response(
             envelope,
@@ -191,6 +278,10 @@ def run_box3_endpoint_wiring(
             approval_digest=approval.config_digest,
             approval_allowed=False,
             approval_fail_class=approval.fail_class,
+            approval_mode=approval.mode,
+            approval_scope_kind=approval.approval_scope_kind,
+            model_digest_status=approval.model_digest_status,
+            model_digest_prefix=model_digest_prefix,
         )
     selected_guard = helper_component_guard if helper_component_guard is not None else load_helper_component_guard()
     helper_guard_verdict = verify_helper_component_use_guard(selected_guard)
@@ -203,4 +294,12 @@ def run_box3_endpoint_wiring(
         fixed_eval_pass=load_fixed_eval_pass() if fixed_eval_pass is None else bool(fixed_eval_pass),
         runner=runner_for_pipeline,
     )
-    return normalize_actual_verdict_to_legacy_response(result, envelope=envelope, approval_config_digest=approval.config_digest, runner_injected=runner_for_pipeline is not None)
+    return normalize_actual_verdict_to_legacy_response(
+        result,
+        envelope=envelope,
+        approval_config_digest=approval.config_digest,
+        runner_injected=runner_for_pipeline is not None,
+        approval_mode=approval.mode,
+        approval_scope_kind=approval.approval_scope_kind,
+        model_digest_prefix=model_digest_prefix,
+    )
