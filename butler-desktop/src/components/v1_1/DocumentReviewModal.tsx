@@ -5,12 +5,35 @@ import {
   type Box4DocumentReviewResult,
   type Box4IssueType,
 } from '../../lib/box4/box4ReviewClient';
-import { formatFileSize, MAX_FILES, MAX_CHARS_PER_FILE, MAX_TOTAL_CHARS } from '../../lib/cards/fileText';
+import { formatFileSize, MAX_FILES, MAX_CHARS_PER_FILE, MAX_TOTAL_CHARS, prepareCardTextFiles } from '../../lib/cards/fileText';
 import { ModalFrame } from './ModalFrame';
 
 type Props = {
   onClose: () => void;
 };
+
+const hiddenFileInputStyle: React.CSSProperties = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  margin: -1,
+  padding: 0,
+  border: 0,
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+};
+
+function readPreparedFileText(file: File): Promise<string> {
+  if (typeof file.text === 'function') return file.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('FILE_READ_FAILED'));
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.readAsText(file);
+  });
+}
 
 function issueLabel(type: Box4IssueType): string {
   const labels: Record<Box4IssueType, string> = {
@@ -78,11 +101,36 @@ function ResultPanel({ result }: { result: Box4DocumentReviewResult }) {
 export function DocumentReviewModal({ onClose }: Props) {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const mainFileInputRef = useRef<HTMLInputElement>(null);
+  const referenceFileInputRef = useRef<HTMLInputElement>(null);
   const [targetDocument, setTargetDocument] = useState('');
   const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
   const [result, setResult] = useState<Box4DocumentReviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadingMainFile, setLoadingMainFile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  async function handleMainFileLoad(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setLoadingMainFile(true);
+    setError(null);
+    try {
+      const prepared = await prepareCardTextFiles([file]);
+      const text = prepared.files[0]?.file ? await readPreparedFileText(prepared.files[0].file) : '';
+      if (text) {
+        setTargetDocument(text);
+      } else {
+        setError('파일에서 텍스트를 추출하지 못했습니다.');
+      }
+    } catch {
+      setError('파일에서 텍스트를 추출하지 못했습니다.');
+    } finally {
+      setLoadingMainFile(false);
+    }
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -122,9 +170,33 @@ export function DocumentReviewModal({ onClose }: Props) {
         </header>
 
         <form onSubmit={submit} style={{ display: 'grid', gap: 14 }}>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 700 }}>검토 대상 문서</span>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <label htmlFor="box4-target-document-input" style={{ fontWeight: 700 }}>검토 대상 문서</label>
+              <span>
+                <input
+                  ref={mainFileInputRef}
+                  aria-label="검토 대상 문서 파일 불러오기"
+                  data-testid="box4-main-file-input"
+                  type="file"
+                  accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.html,text/*,application/json"
+                  onChange={handleMainFileLoad}
+                  tabIndex={-1}
+                  style={hiddenFileInputStyle}
+                />
+                <button
+                  type="button"
+                  data-testid="box4-main-file-load-btn"
+                  onClick={() => mainFileInputRef.current?.click()}
+                  disabled={loadingMainFile}
+                  style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: loadingMainFile ? 'wait' : 'pointer' }}
+                >
+                  {loadingMainFile ? '불러오는 중...' : '파일에서 불러오기'}
+                </button>
+              </span>
+            </div>
             <textarea
+              id="box4-target-document-input"
               data-testid="box4-target-document-input"
               value={targetDocument}
               onChange={event => setTargetDocument(event.target.value)}
@@ -132,18 +204,38 @@ export function DocumentReviewModal({ onClose }: Props) {
               placeholder="검토할 문서 초안을 붙여넣으세요."
               style={{ width: '100%', resize: 'vertical', border: '1px solid #CBD5E1', borderRadius: 6, padding: 10, font: 'inherit' }}
             />
-          </label>
+          </div>
 
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 700 }}>참고 규정 첨부</span>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label htmlFor="box4-file-input-control" style={{ fontWeight: 700 }}>참고 규정 첨부</label>
+            <span style={{ color: '#64748B', fontSize: 12 }}>
+              검토 대상 문서와 비교할 사내 규정·매뉴얼 등 참고 자료입니다. (선택 사항)
+            </span>
             <input
+              id="box4-file-input-control"
+              ref={referenceFileInputRef}
               data-testid="box4-file-input"
               type="file"
               multiple
               accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.html,text/*,application/json"
               onChange={event => setReferenceFiles(Array.from(event.target.files ?? []))}
+              tabIndex={-1}
+              style={hiddenFileInputStyle}
             />
-          </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                data-testid="box4-reference-file-select-btn"
+                onClick={() => referenceFileInputRef.current?.click()}
+                style={{ border: '1px solid #10367D', background: '#FFFFFF', color: '#10367D', borderRadius: 6, padding: '8px 14px', cursor: 'pointer', fontWeight: 700 }}
+              >
+                파일 선택
+              </button>
+              <span style={{ color: '#64748B', fontSize: 13 }}>
+                {referenceFiles.length > 0 ? `${referenceFiles.length}개 파일 선택됨` : '선택된 파일 없음'}
+              </span>
+            </div>
+          </div>
 
           {referenceFiles.length > 0 && (
             <ul aria-label="참고 파일 목록" style={{ margin: 0, paddingLeft: 18, color: '#475569', fontSize: 13 }}>

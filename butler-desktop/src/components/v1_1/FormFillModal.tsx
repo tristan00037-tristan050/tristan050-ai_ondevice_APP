@@ -6,12 +6,35 @@ import {
   type Box6Confidence,
   type Box6FormFillResult,
 } from '../../lib/box6/box6FormFillClient';
-import { formatFileSize, MAX_FILES, MAX_CHARS_PER_FILE, MAX_TOTAL_CHARS } from '../../lib/cards/fileText';
+import { formatFileSize, MAX_FILES, MAX_CHARS_PER_FILE, MAX_TOTAL_CHARS, prepareCardTextFiles } from '../../lib/cards/fileText';
 import { ModalFrame } from './ModalFrame';
 
 type Props = {
   onClose: () => void;
 };
+
+const hiddenFileInputStyle: React.CSSProperties = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  margin: -1,
+  padding: 0,
+  border: 0,
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+};
+
+function readPreparedFileText(file: File): Promise<string> {
+  if (typeof file.text === 'function') return file.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('FILE_READ_FAILED'));
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.readAsText(file);
+  });
+}
 
 function confidenceColor(confidence: Box6Confidence): { bg: string; fg: string; label: string } {
   if (confidence === 'HIGH') return { bg: '#DCFCE7', fg: '#166534', label: 'HIGH' };
@@ -100,11 +123,36 @@ function ResultPanel({ result }: { result: Box6FormFillResult }) {
 export function FormFillModal({ onClose }: Props) {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const blankFormFileInputRef = useRef<HTMLInputElement>(null);
+  const supportingFileInputRef = useRef<HTMLInputElement>(null);
   const [blankForm, setBlankForm] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [result, setResult] = useState<Box6FormFillResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadingBlankFormFile, setLoadingBlankFormFile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  async function handleBlankFormFileLoad(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setLoadingBlankFormFile(true);
+    setError(null);
+    try {
+      const prepared = await prepareCardTextFiles([file]);
+      const text = prepared.files[0]?.file ? await readPreparedFileText(prepared.files[0].file) : '';
+      if (text) {
+        setBlankForm(text);
+      } else {
+        setError('파일에서 텍스트를 추출하지 못했습니다.');
+      }
+    } catch {
+      setError('파일에서 텍스트를 추출하지 못했습니다.');
+    } finally {
+      setLoadingBlankFormFile(false);
+    }
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -144,9 +192,33 @@ export function FormFillModal({ onClose }: Props) {
         </header>
 
         <form onSubmit={submit} style={{ display: 'grid', gap: 14 }}>
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 700 }}>빈 양식</span>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <label htmlFor="box6-blank-form-input" style={{ fontWeight: 700 }}>빈 양식</label>
+              <span>
+                <input
+                  ref={blankFormFileInputRef}
+                  aria-label="빈 양식 파일 불러오기"
+                  data-testid="box6-main-file-input"
+                  type="file"
+                  accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.html,text/*,application/json"
+                  onChange={handleBlankFormFileLoad}
+                  tabIndex={-1}
+                  style={hiddenFileInputStyle}
+                />
+                <button
+                  type="button"
+                  data-testid="box6-main-file-load-btn"
+                  onClick={() => blankFormFileInputRef.current?.click()}
+                  disabled={loadingBlankFormFile}
+                  style={{ border: '1px solid #CBD5E1', background: '#FFFFFF', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: loadingBlankFormFile ? 'wait' : 'pointer' }}
+                >
+                  {loadingBlankFormFile ? '불러오는 중...' : '파일에서 불러오기'}
+                </button>
+              </span>
+            </div>
             <textarea
+              id="box6-blank-form-input"
               data-testid="box6-blank-form-input"
               value={blankForm}
               onChange={event => setBlankForm(event.target.value)}
@@ -154,18 +226,38 @@ export function FormFillModal({ onClose }: Props) {
               placeholder="채워야 할 외부 양식의 빈 항목을 붙여넣으세요."
               style={{ width: '100%', resize: 'vertical', border: '1px solid #CBD5E1', borderRadius: 6, padding: 10, font: 'inherit' }}
             />
-          </label>
+          </div>
 
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 700 }}>우리 자료 첨부</span>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label htmlFor="box6-file-input-control" style={{ fontWeight: 700 }}>우리 자료 첨부</label>
+            <span style={{ color: '#64748B', fontSize: 12 }}>
+              빈 양식에 채울 사내 자료·매뉴얼 등 참고 자료입니다. (선택 사항)
+            </span>
             <input
+              id="box6-file-input-control"
+              ref={supportingFileInputRef}
               data-testid="box6-file-input"
               type="file"
               multiple
               accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.html,text/*,application/json"
               onChange={event => setFiles(Array.from(event.target.files ?? []))}
+              tabIndex={-1}
+              style={hiddenFileInputStyle}
             />
-          </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                data-testid="box6-supporting-file-select-btn"
+                onClick={() => supportingFileInputRef.current?.click()}
+                style={{ border: '1px solid #10367D', background: '#FFFFFF', color: '#10367D', borderRadius: 6, padding: '8px 14px', cursor: 'pointer', fontWeight: 700 }}
+              >
+                파일 선택
+              </button>
+              <span style={{ color: '#64748B', fontSize: 13 }}>
+                {files.length > 0 ? `${files.length}개 파일 선택됨` : '선택된 파일 없음'}
+              </span>
+            </div>
+          </div>
 
           {files.length > 0 && (
             <ul aria-label="첨부 파일 목록" style={{ margin: 0, paddingLeft: 18, color: '#475569', fontSize: 13 }}>
