@@ -13,7 +13,9 @@ from __future__ import annotations
 import os
 import threading
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
+
+from butler_pc_core.runtime.json_grammar import normalize_model_response_to_text
 
 try:
     from llama_cpp import Llama  # type: ignore[import]
@@ -117,20 +119,25 @@ class LlmRuntime:
         max_tokens: int = 512,
         temperature: float = 0.2,
         stop: list[str] | None = None,
+        grammar: Any | None = None,
     ) -> str:
         if self._status != "ready" or self._llm is None:
             return self._stub_response(prompt)
 
         stop_tokens = stop if stop is not None else DEFAULT_STOP_TOKENS
+        call_kwargs: dict[str, Any] = {
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stop": stop_tokens,
+            "echo": False,
+        }
+        if grammar is not None:
+            call_kwargs["grammar"] = grammar
+            call_kwargs["temperature"] = min(float(temperature), 0.1)
+            call_kwargs["top_p"] = 0.95
         with self._lock:
-            output = self._llm(
-                prompt,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                stop=stop_tokens,
-                echo=False,
-            )
-        text = output["choices"][0]["text"].strip()
+            output = self._llm(prompt, **call_kwargs)
+        text = normalize_model_response_to_text(output).strip()
         return _strip_residual_stop_tokens(text)
 
     def generate_stream(
@@ -139,21 +146,26 @@ class LlmRuntime:
         max_tokens: int = 512,
         temperature: float = 0.2,
         stop: list[str] | None = None,
+        grammar: Any | None = None,
     ) -> Iterator[str]:
         if self._status != "ready" or self._llm is None:
             yield self._stub_response(prompt)
             return
 
         stop_tokens = stop if stop is not None else DEFAULT_STOP_TOKENS
-        for chunk in self._llm(  # type: ignore[union-attr]
-            prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            stop=stop_tokens,
-            echo=False,
-            stream=True,
-        ):
-            yield chunk["choices"][0]["text"]
+        call_kwargs: dict[str, Any] = {
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stop": stop_tokens,
+            "echo": False,
+            "stream": True,
+        }
+        if grammar is not None:
+            call_kwargs["grammar"] = grammar
+            call_kwargs["temperature"] = min(float(temperature), 0.1)
+            call_kwargs["top_p"] = 0.95
+        for chunk in self._llm(prompt, **call_kwargs):  # type: ignore[union-attr]
+            yield normalize_model_response_to_text(chunk)
 
     def generate_with_cancel(
         self,
@@ -162,24 +174,29 @@ class LlmRuntime:
         max_tokens: int = 512,
         temperature: float = 0.2,
         stop: list[str] | None = None,
+        grammar: Any | None = None,
     ) -> str:
         """per-token cancel_event 확인 — asyncio timeout 시 executor thread 조기 종료."""
         if self._status != "ready" or self._llm is None:
             return self._stub_response(prompt)
         stop_tokens = stop if stop is not None else DEFAULT_STOP_TOKENS
+        call_kwargs: dict[str, Any] = {
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stop": stop_tokens,
+            "echo": False,
+            "stream": True,
+        }
+        if grammar is not None:
+            call_kwargs["grammar"] = grammar
+            call_kwargs["temperature"] = min(float(temperature), 0.1)
+            call_kwargs["top_p"] = 0.95
         tokens: list[str] = []
         with self._lock:
-            for chunk in self._llm(
-                prompt,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                stop=stop_tokens,
-                echo=False,
-                stream=True,
-            ):
+            for chunk in self._llm(prompt, **call_kwargs):
                 if cancel_event.is_set():
                     break
-                tokens.append(chunk["choices"][0]["text"])
+                tokens.append(normalize_model_response_to_text(chunk))
         return _strip_residual_stop_tokens("".join(tokens))
 
     def generate_stream_with_cancel(
@@ -189,12 +206,24 @@ class LlmRuntime:
         max_tokens: int = 512,
         temperature: float = 0.2,
         stop: list[str] | None = None,
+        grammar: Any | None = None,
     ) -> Iterator[str]:
         """Token-by-token streaming with cancel_event support."""
         if self._status != "ready" or self._llm is None:
             yield self._stub_response(prompt)
             return
         stop_tokens = stop if stop is not None else DEFAULT_STOP_TOKENS
+        call_kwargs: dict[str, Any] = {
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stop": stop_tokens,
+            "echo": False,
+            "stream": True,
+        }
+        if grammar is not None:
+            call_kwargs["grammar"] = grammar
+            call_kwargs["temperature"] = min(float(temperature), 0.1)
+            call_kwargs["top_p"] = 0.95
         with self._lock:
             reset_ok = False
             try:
@@ -205,17 +234,10 @@ class LlmRuntime:
                 # fail-closed: 세션 격리(KV reset) 확인 불가 → 오염 가능 출력 차단
                 yield self._kv_reset_failed_response()
                 return
-            for chunk in self._llm(
-                prompt,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                stop=stop_tokens,
-                echo=False,
-                stream=True,
-            ):
+            for chunk in self._llm(prompt, **call_kwargs):
                 if cancel_event.is_set():
                     break
-                yield chunk["choices"][0]["text"]
+                yield normalize_model_response_to_text(chunk)
 
     # ------------------------------------------------------------------
     @staticmethod

@@ -29,7 +29,9 @@ class FakeModelClient:
     def __init__(self, payload: dict[str, Any]) -> None:
         self.payload = payload
 
-    def generate(self, prompt: str, *, max_tokens: int = 2048) -> str:
+    def generate(self, prompt: str, *, max_tokens: int = 2048, grammar: object | None = None) -> str:
+        if grammar is None:
+            raise RuntimeError("GRAMMAR_REQUIRED")
         return json.dumps(self.payload, ensure_ascii=False)
 
 

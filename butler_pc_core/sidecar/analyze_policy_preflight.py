@@ -29,6 +29,7 @@ KNOWN_CARD_MODES = {
     "form_convert",
     "request_parse",
     "external_form",
+    "form_fill",
 }
 
 

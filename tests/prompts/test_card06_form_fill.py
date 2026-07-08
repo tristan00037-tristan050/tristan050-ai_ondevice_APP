@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import subprocess
@@ -288,7 +289,7 @@ def test_card06_prompt_contract_schema_and_confidence() -> None:
 
 def test_card06_known_card_mode_contract() -> None:
     assert is_known_card_mode("6") is True
-    assert is_known_card_mode("form_fill") is False
+    assert is_known_card_mode("form_fill") is True
 
 
 def test_card06_prompt_injection_rule_present() -> None:
@@ -519,3 +520,55 @@ def test_card02_03_05_golden_render_diff_zero() -> None:
         )
         assert rendered == expected
         assert semantic_text(rendered) == semantic_text(expected)
+
+
+def test_box6_sidecar_stream_routes_to_form_fill_service(monkeypatch) -> None:
+    import butler_sidecar
+    from butler_pc_core.cards.box6.form_fill_service import SCHEMA_VERSION
+
+    class FakeLlm:
+        def generate(self, prompt: str, *, max_tokens: int = 2048, grammar=None) -> str:  # type: ignore[no-untyped-def]
+            assert grammar is not None
+            return json.dumps(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "filled_form": "법인명: 주식회사 버틀러",
+                    "field_mappings": [
+                        {
+                            "target_label": "법인명",
+                            "output_value": "주식회사 버틀러",
+                            "confidence": "HIGH",
+                            "source_ref": "our_data.회사명",
+                            "reason_code": "LABEL_SEMANTIC_MATCH",
+                        }
+                    ],
+                    "unfilled_fields": [],
+                    "review_required": [],
+                    "warnings": [],
+                },
+                ensure_ascii=False,
+            )
+
+    async def fake_ensure_shared_llm() -> FakeLlm:
+        return FakeLlm()
+
+    monkeypatch.setattr(butler_sidecar, "_ensure_shared_llm", fake_ensure_shared_llm)
+
+    async def collect(card_mode: str) -> list[str]:
+        params = butler_sidecar._AnalyzeParams(
+            query="법인명: ___",
+            card_mode=card_mode,
+            total_chunks=1,
+            output_dir=".",
+            file_paths=[],
+        )
+        return [event async for event in butler_sidecar._stream_analyze(params, "box6-test")]
+
+    for card_mode in ("6", "external_form", "form_fill"):
+        events = asyncio.run(collect(card_mode))
+        assert any('"source": "box6_form_fill"' in event for event in events)
+        complete = next(event for event in events if event.startswith("event: complete"))
+        payload = json.loads(complete.split("data: ", 1)[1])
+        result = json.loads(payload["result_text"])
+        assert result["schema_version"] == SCHEMA_VERSION
+        assert result["field_mappings"][0]["source_ref"] == "our_data.회사명"

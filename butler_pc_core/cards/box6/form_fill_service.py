@@ -1,8 +1,4 @@
-"""Fail-closed Box4 document review service.
-
-The service treats document contents as untrusted data and validates the local
-model output before returning anything to the UI.
-"""
+"""Fail-closed Box6 form-fill service with JSON Schema grammar enforcement."""
 from __future__ import annotations
 
 import json
@@ -26,47 +22,46 @@ from butler_pc_core.runtime.json_grammar import (
 
 _LOG = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "card_04.document_review.v1"
-ISSUE_TYPES = frozenset({"MISSING", "ERROR", "INCONSISTENCY", "STYLE", "SUGGESTION"})
-CONFIDENCES = frozenset({"HIGH", "MEDIUM", "LOW"})
+SCHEMA_VERSION = "card_06.form_fill.v1"
+CONFIDENCES = frozenset({"HIGH", "MEDIUM", "LOW", "UNFILLED"})
 REQUIRED_TOP_LEVEL_KEYS = frozenset(
-    {"schema_version", "issues", "overall_score", "summary", "review_required", "warnings"}
+    {"schema_version", "filled_form", "field_mappings", "unfilled_fields", "review_required", "warnings"}
 )
-REQUIRED_ISSUE_KEYS = frozenset({"location", "issue_type", "original_text", "suggestion", "confidence"})
-MAX_ISSUES = 50
-MAX_TEXT_CHARS = 300
-MAX_SUMMARY_CHARS = 1200
+REQUIRED_MAPPING_KEYS = frozenset({"target_label", "output_value", "confidence", "source_ref", "reason_code"})
+MAX_MAPPINGS = 80
+MAX_TEXT_CHARS = 20000
+MAX_FIELD_CHARS = 2000
 SAFE_SECRET_REPLACEMENT = "[민감정보 원문 생략]"
 
-BOX4_JSON_SCHEMA: dict[str, Any] = {
+BOX6_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "schema_version": {"type": "string", "enum": [SCHEMA_VERSION]},
-        "issues": {
+        "filled_form": {"type": "string"},
+        "field_mappings": {
             "type": "array",
-            "maxItems": MAX_ISSUES,
+            "maxItems": MAX_MAPPINGS,
             "items": {
                 "type": "object",
                 "properties": {
-                    "location": {"type": "string"},
-                    "issue_type": {"type": "string", "enum": sorted(ISSUE_TYPES)},
-                    "original_text": {"type": "string"},
-                    "suggestion": {"type": "string"},
+                    "target_label": {"type": "string"},
+                    "output_value": {"type": "string"},
                     "confidence": {"type": "string", "enum": sorted(CONFIDENCES)},
+                    "source_ref": {"type": "string"},
+                    "reason_code": {"type": "string"},
                 },
-                "required": sorted(REQUIRED_ISSUE_KEYS),
+                "required": sorted(REQUIRED_MAPPING_KEYS),
                 "additionalProperties": False,
             },
         },
-        "overall_score": {"type": "integer", "minimum": 0, "maximum": 100},
-        "summary": {"type": "string"},
-        "review_required": {"type": "boolean"},
+        "unfilled_fields": {"type": "array", "items": {"type": "string"}},
+        "review_required": {"type": "array", "items": {"type": "string"}},
         "warnings": {"type": "array", "items": {"type": "string"}},
     },
     "required": sorted(REQUIRED_TOP_LEVEL_KEYS),
     "additionalProperties": False,
 }
-BOX4_SCHEMA_DIGEST = stable_schema_digest(BOX4_JSON_SCHEMA)
+BOX6_SCHEMA_DIGEST = stable_schema_digest(BOX6_JSON_SCHEMA)
 
 _SECRET_VALUE_RE = re.compile(
     r"(?:"
@@ -74,44 +69,51 @@ _SECRET_VALUE_RE = re.compile(
     r"AKIA[0-9A-Z]{16}|"
     r"-----BEGIN[ \t]+[A-Z ]*PRIVATE KEY-----|"
     r"(?:비밀번호|비번|암호|password|token|api[ \t_-]*key)[ \t]*(?:는|은|[:=：])[ \t]*[^\s,;]{4,}|"
-    r"\b\d{6}-\d{7}\b|"
-    r"\b\d{2,6}-\d{2,6}-\d{2,8}\b"
+    r"\b\d{6}-\d{7}\b"
     r")",
     re.IGNORECASE,
 )
+_SECRET_LABEL_RE = re.compile(
+    r"(?:"
+    r"비밀번호|비번|암호|패스워드|토큰|시크릿|"
+    r"API[ \t_-]*키|에이피아이[ \t_-]*키|인증[ \t_-]*키|보안[ \t_-]*키|개인[ \t_-]*키|"
+    r"secret|password|token|api[ \t_-]*key|access[ \t_-]*key|auth[ \t_-]*key|"
+    r"client[ \t_-]*secret|private[ \t_-]*key|seed[ \t_-]*phrase"
+    r")",
+    re.IGNORECASE,
+)
+_UNFILLED_VALUE_RE = re.compile(r"^(?:UNFILLED|\[?확인\s*필요\]?|미기입)$", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
-class DocumentReviewInput:
-    target_document: str
-    reference_documents: List[str]
+class FormFillInput:
+    blank_form: str
+    data_documents: List[str]
     strict_mode: bool = True
     request_id: Optional[str] = None
     source_kind: str = "ui"
 
 
 @dataclass(frozen=True)
-class DocumentReviewResult:
+class FormFillResult:
     schema_version: str
-    issues: List[dict[str, str]]
-    overall_score: int
-    summary: str
-    review_required: bool
+    filled_form: str
+    field_mappings: List[dict[str, str]]
+    unfilled_fields: List[str]
+    review_required: List[str]
     warnings: List[str]
-    raw_log_zero: bool = True
-    external_send_zero: bool = True
 
     def to_payload(self) -> dict[str, Any]:
         return asdict(self)
 
 
-def _safe_error_result(reason_code: str) -> DocumentReviewResult:
-    return DocumentReviewResult(
+def _safe_error_result(reason_code: str) -> FormFillResult:
+    return FormFillResult(
         schema_version=SCHEMA_VERSION,
-        issues=[],
-        overall_score=0,
-        summary="문서검토 결과를 안전하게 확정하지 못했습니다.",
-        review_required=True,
+        filled_form="",
+        field_mappings=[],
+        unfilled_fields=[],
+        review_required=["결과 형식 확인"],
         warnings=[reason_code],
     )
 
@@ -132,9 +134,9 @@ def _emit_structured_generation_telemetry(
         structured_generation_telemetry(
             response_text,
             event="structured_generation",
-            card_mode="4",
+            card_mode="6",
             schema_id=SCHEMA_VERSION,
-            schema_digest=BOX4_SCHEMA_DIGEST,
+            schema_digest=BOX6_SCHEMA_DIGEST,
             grammar_required=True,
             grammar_applied=grammar_applied,
             method_selected=method_selected,
@@ -159,6 +161,18 @@ def _normalize_and_emit_model_response(
         grammar_applied=grammar is not None,
     )
     return text
+
+
+def _redact_secret_value(value: str) -> str:
+    return _SECRET_VALUE_RE.sub(SAFE_SECRET_REPLACEMENT, value)
+
+
+def _is_secret_target_label(value: str) -> bool:
+    return bool(_SECRET_LABEL_RE.search(value or ""))
+
+
+def _label_key(value: str) -> str:
+    return re.sub(r"\s+", "", value).casefold()
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
@@ -198,7 +212,12 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     raise ValueError("MODEL_JSON_UNCLOSED")
 
 
-def _require_string(value: Any, reason_code: str, *, max_len: int = MAX_TEXT_CHARS) -> str:
+def _require_exact_keys(obj: dict[str, Any], required: frozenset[str], reason_code: str) -> None:
+    if set(obj.keys()) != set(required):
+        raise ValueError(reason_code)
+
+
+def _require_string(value: Any, reason_code: str, *, max_len: int = MAX_FIELD_CHARS) -> str:
     if not isinstance(value, str):
         raise ValueError(reason_code)
     if len(value) > max_len:
@@ -206,77 +225,71 @@ def _require_string(value: Any, reason_code: str, *, max_len: int = MAX_TEXT_CHA
     return _redact_secret_value(value)
 
 
-def _redact_secret_value(value: str) -> str:
-    return _SECRET_VALUE_RE.sub(SAFE_SECRET_REPLACEMENT, value)
-
-
-def _require_exact_keys(obj: dict[str, Any], required: frozenset[str], reason_code: str) -> None:
-    if set(obj.keys()) != set(required):
+def _require_string_list(value: Any, reason_code: str) -> list[str]:
+    if not isinstance(value, list):
         raise ValueError(reason_code)
+    return [_require_string(item, f"{reason_code}_ITEM_INVALID") for item in value]
 
 
-def _validate_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _validate_form_fill_payload(payload: dict[str, Any]) -> dict[str, Any]:
     _require_exact_keys(payload, REQUIRED_TOP_LEVEL_KEYS, "SCHEMA_KEYS_INVALID")
-
     if payload["schema_version"] != SCHEMA_VERSION:
         raise ValueError("SCHEMA_VERSION_INVALID")
 
-    raw_score = payload["overall_score"]
-    if isinstance(raw_score, bool) or not isinstance(raw_score, int):
-        raise ValueError("OVERALL_SCORE_INVALID")
-    if raw_score < 0 or raw_score > 100:
-        raise ValueError("OVERALL_SCORE_OUT_OF_RANGE")
+    filled_form = _require_string(payload["filled_form"], "FILLED_FORM_INVALID", max_len=MAX_TEXT_CHARS)
+    unfilled_fields = _require_string_list(payload["unfilled_fields"], "UNFILLED_FIELDS_INVALID")
+    review_required = _require_string_list(payload["review_required"], "REVIEW_REQUIRED_INVALID")
+    warnings = _require_string_list(payload["warnings"], "WARNINGS_INVALID")
+    unfilled_field_keys = {_label_key(item) for item in unfilled_fields}
+    review_required_keys = {_label_key(item) for item in review_required}
 
-    summary = _require_string(
-        payload["summary"],
-        "SUMMARY_INVALID",
-        max_len=MAX_SUMMARY_CHARS,
-    )
+    raw_mappings = payload["field_mappings"]
+    if not isinstance(raw_mappings, list):
+        raise ValueError("FIELD_MAPPINGS_INVALID")
+    if len(raw_mappings) > MAX_MAPPINGS:
+        raise ValueError("FIELD_MAPPINGS_TOO_MANY")
 
-    raw_review_required = payload["review_required"]
-    if not isinstance(raw_review_required, bool):
-        raise ValueError("REVIEW_REQUIRED_INVALID")
-
-    raw_warnings = payload["warnings"]
-    if not isinstance(raw_warnings, list):
-        raise ValueError("WARNINGS_INVALID")
-    warnings: list[str] = []
-    for item in raw_warnings:
-        warnings.append(_require_string(item, "WARNING_INVALID", max_len=120))
-
-    raw_issues = payload["issues"]
-    if not isinstance(raw_issues, list):
-        raise ValueError("ISSUES_INVALID")
-    if len(raw_issues) > MAX_ISSUES:
-        raise ValueError("ISSUES_TOO_MANY")
-
-    issues: list[dict[str, str]] = []
-    for item in raw_issues:
+    field_mappings: list[dict[str, str]] = []
+    for item in raw_mappings:
         if not isinstance(item, dict):
-            raise ValueError("ISSUE_INVALID")
-        _require_exact_keys(item, REQUIRED_ISSUE_KEYS, "ISSUE_KEYS_INVALID")
-        issue_type = item["issue_type"]
-        if issue_type not in ISSUE_TYPES:
-            raise ValueError("ISSUE_TYPE_INVALID")
+            raise ValueError("FIELD_MAPPING_INVALID")
+        if "source_excerpt" in item or "review_required" in item:
+            raise ValueError("LEGACY_MAPPING_SCHEMA")
+        _require_exact_keys(item, REQUIRED_MAPPING_KEYS, "FIELD_MAPPING_KEYS_INVALID")
         confidence = item["confidence"]
         if confidence not in CONFIDENCES:
             raise ValueError("CONFIDENCE_INVALID")
-        issues.append(
+        target_label = _require_string(item["target_label"], "TARGET_LABEL_INVALID")
+        output_value = _require_string(item["output_value"], "OUTPUT_VALUE_INVALID")
+        if _is_secret_target_label(target_label):
+            raw_output_value = str(item["output_value"]).strip()
+            label_key = _label_key(target_label)
+            is_unfilled_value = not raw_output_value or bool(_UNFILLED_VALUE_RE.match(raw_output_value))
+            is_listed_unfilled = label_key in unfilled_field_keys
+            is_review_listed = label_key in review_required_keys
+            is_quarantined = is_listed_unfilled and (is_review_listed or bool(review_required))
+            if not is_unfilled_value and not is_quarantined:
+                raise ValueError("SENSITIVE_FIELD_AUTOFILL_BLOCKED")
+            if not review_required and not is_listed_unfilled:
+                raise ValueError("SENSITIVE_FIELD_AUTOFILL_BLOCKED")
+            if not is_unfilled_value:
+                output_value = SAFE_SECRET_REPLACEMENT
+        field_mappings.append(
             {
-                "location": _require_string(item["location"], "LOCATION_INVALID"),
-                "issue_type": str(issue_type),
-                "original_text": _require_string(item["original_text"], "ORIGINAL_TEXT_INVALID"),
-                "suggestion": _require_string(item["suggestion"], "SUGGESTION_INVALID"),
+                "target_label": target_label,
+                "output_value": output_value,
                 "confidence": str(confidence),
+                "source_ref": _require_string(item["source_ref"], "SOURCE_REF_INVALID"),
+                "reason_code": _require_string(item["reason_code"], "REASON_CODE_INVALID"),
             }
         )
 
     return {
         "schema_version": SCHEMA_VERSION,
-        "issues": issues,
-        "overall_score": raw_score,
-        "summary": summary,
-        "review_required": raw_review_required,
+        "filled_form": filled_form,
+        "field_mappings": field_mappings,
+        "unfilled_fields": unfilled_fields,
+        "review_required": review_required,
         "warnings": warnings,
     }
 
@@ -338,9 +351,9 @@ def _call_model_client(model_client: Any, prompt: str, *, grammar: Any | None = 
     raise ValueError("MODEL_CLIENT_UNSUPPORTED")
 
 
-def _generate_review_json(model_client: Any, prompt: str) -> str:
+def _generate_form_fill_json(model_client: Any, prompt: str) -> str:
     try:
-        grammar = build_json_schema_grammar(BOX4_JSON_SCHEMA, required=True)
+        grammar = build_json_schema_grammar(BOX6_JSON_SCHEMA, required=True)
     except GrammarUnavailable as exc:
         raise ValueError("GRAMMAR_UNAVAILABLE") from exc
     try:
@@ -349,21 +362,21 @@ def _generate_review_json(model_client: Any, prompt: str) -> str:
         raise ValueError("GRAMMAR_UNAVAILABLE") from exc
 
 
-def review_document(req: DocumentReviewInput, *, model_client: Any) -> DocumentReviewResult:
-    if not isinstance(req, DocumentReviewInput):
+def fill_form(req: FormFillInput, *, model_client: Any) -> FormFillResult:
+    if not isinstance(req, FormFillInput):
         return _safe_error_result("REQUEST_SCHEMA_INVALID")
-    target_document = str(req.target_document or "")
-    reference_documents = [str(item) for item in (req.reference_documents or []) if str(item).strip()]
-    if not target_document.strip():
-        return _safe_error_result("TARGET_DOCUMENT_EMPTY")
+    blank_form = str(req.blank_form or "")
+    data_documents = [str(item) for item in (req.data_documents or []) if str(item).strip()]
+    if not blank_form.strip():
+        return _safe_error_result("BLANK_FORM_EMPTY")
 
     model_output = ""
     try:
-        card = load_card_prompt("4")
+        card = load_card_prompt("6")
         user_prompt = render_card_user_prompt(
             card,
-            query=target_document,
-            file_texts=reference_documents,
+            query=blank_form,
+            file_texts=data_documents,
         )
         system_prompt = str(card.get("system_prompt") or "")
         prompt = (
@@ -371,10 +384,10 @@ def review_document(req: DocumentReviewInput, *, model_client: Any) -> DocumentR
             f"<|im_start|>user\n/no_think\n{user_prompt}<|im_end|>\n"
             f"<|im_start|>assistant\n"
         )
-        model_output = _generate_review_json(model_client, prompt)
-        payload = _validate_review_payload(_extract_json_object(model_output))
+        model_output = _generate_form_fill_json(model_client, prompt)
+        payload = _validate_form_fill_payload(_extract_json_object(model_output))
     except ValueError as exc:
-        reason_code = str(exc) or "DOCUMENT_REVIEW_FAILED"
+        reason_code = str(exc) or "FORM_FILL_FAILED"
         _emit_structured_generation_telemetry(
             model_output,
             method_selected="validation",
@@ -389,8 +402,8 @@ def review_document(req: DocumentReviewInput, *, model_client: Any) -> DocumentR
             method_selected="validation",
             model_client=model_client,
             grammar_applied=bool(model_output),
-            reason_code="DOCUMENT_REVIEW_FAILED",
+            reason_code="FORM_FILL_FAILED",
         )
-        return _safe_error_result("DOCUMENT_REVIEW_FAILED")
+        return _safe_error_result("FORM_FILL_FAILED")
 
-    return DocumentReviewResult(**payload)
+    return FormFillResult(**payload)

@@ -81,6 +81,27 @@ def test_adv_generate_passes_stop_tokens_to_llama():
     assert mock_llm.call_args.kwargs.get("stop") == DEFAULT_STOP_TOKENS, (
         f"stop token이 Llama에 전달되지 않음: {mock_llm.call_args}"
     )
+    assert "grammar" not in mock_llm.call_args.kwargs
+    assert mock_llm.call_args.kwargs.get("temperature") == 0.2
+
+
+def test_generate_passes_grammar_only_when_provided():
+    """grammar 경로에서만 structured kwargs를 추가한다."""
+    mock_llm = MagicMock()
+    mock_llm.return_value = {"choices": [{"text": "{\"ok\": true}"}]}
+
+    rt = LlmRuntime.__new__(LlmRuntime)
+    import threading
+    rt._llm = mock_llm
+    rt._status = "ready"
+    rt._lock = threading.Lock()
+
+    grammar = object()
+    rt.generate("프롬프트", grammar=grammar)
+
+    assert mock_llm.call_args.kwargs["grammar"] is grammar
+    assert mock_llm.call_args.kwargs["temperature"] == 0.1
+    assert mock_llm.call_args.kwargs["top_p"] == 0.95
 
 
 def test_boundary_strip_token_at_position_zero_preserved():
@@ -115,6 +136,31 @@ def test_generate_stream_with_cancel_resets_llama_kv_cache_before_stream():
 
     assert tokens == ["안전", " 응답"]
     assert events == ["reset", "call"]
+
+
+def test_generate_with_cancel_passes_grammar_to_streaming_llama():
+    """structured Box4/Box6 경로가 streaming completion에도 grammar를 전달한다."""
+    import threading
+
+    seen_kwargs = {}
+
+    class FakeLlama:
+        def __call__(self, *args, **kwargs):
+            seen_kwargs.update(kwargs)
+            yield {"choices": [{"text": "{\"ok\":"}]}
+            yield {"choices": [{"text": "true}"}]}
+
+    rt = LlmRuntime.__new__(LlmRuntime)
+    rt._llm = FakeLlama()
+    rt._status = "ready"
+    rt._lock = threading.Lock()
+
+    grammar = object()
+    assert rt.generate_with_cancel("프롬프트", threading.Event(), grammar=grammar) == '{"ok":true}'
+    assert seen_kwargs["grammar"] is grammar
+    assert seen_kwargs["stream"] is True
+    assert seen_kwargs["temperature"] == 0.1
+    assert seen_kwargs["top_p"] == 0.95
 
 
 def test_generate_stream_with_cancel_fails_closed_when_reset_missing():

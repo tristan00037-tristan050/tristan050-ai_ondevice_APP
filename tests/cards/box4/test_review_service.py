@@ -3,22 +3,30 @@ from __future__ import annotations
 import json
 
 from butler_pc_core.cards.box4.review_service import (
+    BOX4_JSON_SCHEMA,
     CONFIDENCES,
     ISSUE_TYPES,
+    REQUIRED_ISSUE_KEYS,
+    REQUIRED_TOP_LEVEL_KEYS,
     SCHEMA_VERSION,
     DocumentReviewInput,
     _extract_json_object,
     review_document,
 )
+from butler_pc_core.runtime.json_grammar import GrammarUnavailable
 
 
 class FakeModelClient:
     def __init__(self, response: object) -> None:
         self.response = response
         self.prompts: list[str] = []
+        self.grammars: list[object] = []
 
-    def generate(self, prompt: str, *, max_tokens: int = 2048) -> str:
+    def generate(self, prompt: str, *, max_tokens: int = 2048, grammar: object | None = None) -> str:
         self.prompts.append(prompt)
+        if grammar is None:
+            raise AssertionError("Box4 structured path must pass grammar")
+        self.grammars.append(grammar)
         if isinstance(self.response, str):
             return self.response
         return json.dumps(self.response, ensure_ascii=False)
@@ -62,6 +70,28 @@ def test_review_document_accepts_valid_schema() -> None:
     assert result.raw_log_zero is True
     assert result.external_send_zero is True
     assert "발주서" in client.prompts[0]
+    assert client.grammars
+
+
+def test_review_document_emits_raw_zero_telemetry_on_success(monkeypatch) -> None:
+    events: list[dict[str, object]] = []
+    monkeypatch.setattr("butler_pc_core.cards.box4.review_service._log_structured_telemetry", events.append)
+
+    result = review_document(
+        DocumentReviewInput(target_document="검토 대상", reference_documents=["참고 문서"]),
+        model_client=FakeModelClient(valid_payload()),
+    )
+
+    assert result.schema_version == SCHEMA_VERSION
+    assert events
+    event = events[0]
+    assert event["card_mode"] == "4"
+    assert event["grammar_required"] is True
+    assert event["grammar_applied"] is True
+    assert event["reason_code"] == ""
+    assert event["raw_text_logged"] is False
+    assert event["external_send_zero"] is True
+    assert "참고 문서와 납품일" not in json.dumps(event, ensure_ascii=False)
 
 
 def test_review_document_allows_no_issue_json_only() -> None:
@@ -98,6 +128,50 @@ def test_review_document_rejects_invalid_json_fail_closed() -> None:
     assert result.issues == []
     assert result.warnings == ["MODEL_JSON_NOT_FOUND"]
     assert result.raw_log_zero is True
+
+
+def test_review_document_emits_reason_code_telemetry_on_schema_failure(monkeypatch) -> None:
+    events: list[dict[str, object]] = []
+    monkeypatch.setattr("butler_pc_core.cards.box4.review_service._log_structured_telemetry", events.append)
+
+    result = review_document(
+        DocumentReviewInput(target_document="검토 대상", reference_documents=[]),
+        model_client=FakeModelClient(valid_payload(raw_secret="숨겨진 원문")),
+    )
+
+    assert result.warnings == ["SCHEMA_KEYS_INVALID"]
+    assert any(event["reason_code"] == "SCHEMA_KEYS_INVALID" for event in events)
+    assert all(event["raw_text_logged"] is False for event in events)
+    assert "숨겨진 원문" not in json.dumps(events, ensure_ascii=False)
+
+
+def test_review_document_fails_closed_when_grammar_unavailable(monkeypatch) -> None:
+    def unavailable(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise GrammarUnavailable("LLAMA_GRAMMAR_IMPORT_FAILED")
+
+    monkeypatch.setattr("butler_pc_core.cards.box4.review_service.build_json_schema_grammar", unavailable)
+
+    result = review_document(
+        DocumentReviewInput(target_document="검토 대상", reference_documents=[]),
+        model_client=FakeModelClient(valid_payload()),
+    )
+
+    assert result.review_required is True
+    assert result.warnings == ["GRAMMAR_UNAVAILABLE"]
+
+
+def test_review_document_fails_closed_when_model_client_cannot_accept_grammar() -> None:
+    class LegacyClient:
+        def generate(self, prompt: str, *, max_tokens: int = 2048) -> str:
+            return json.dumps(valid_payload(), ensure_ascii=False)
+
+    result = review_document(
+        DocumentReviewInput(target_document="검토 대상", reference_documents=[]),
+        model_client=LegacyClient(),
+    )
+
+    assert result.review_required is True
+    assert result.warnings == ["GRAMMAR_UNAVAILABLE"]
 
 
 def test_review_document_rejects_bad_enum_fail_closed() -> None:
@@ -179,3 +253,11 @@ def test_review_document_redacts_secret_echoes() -> None:
 def test_review_contract_enums_are_sealed() -> None:
     assert ISSUE_TYPES == {"MISSING", "ERROR", "INCONSISTENCY", "STYLE", "SUGGESTION"}
     assert CONFIDENCES == {"HIGH", "MEDIUM", "LOW"}
+
+
+def test_box4_json_schema_matches_validator_contract() -> None:
+    assert set(BOX4_JSON_SCHEMA["required"]) == REQUIRED_TOP_LEVEL_KEYS
+    issue_schema = BOX4_JSON_SCHEMA["properties"]["issues"]["items"]  # type: ignore[index]
+    assert set(issue_schema["required"]) == REQUIRED_ISSUE_KEYS
+    assert BOX4_JSON_SCHEMA["additionalProperties"] is False
+    assert issue_schema["additionalProperties"] is False
