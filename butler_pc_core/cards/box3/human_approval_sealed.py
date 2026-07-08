@@ -90,16 +90,7 @@ class HumanApprovalSealedVerdict:
         approval_scope_kind: str | None = None,
         model_digest_status: str = "blocked",
     ) -> "HumanApprovalSealedVerdict":
-        return cls(
-            False,
-            fail_class,
-            config_digest,
-            approved_by_digest,
-            scope_digest,
-            mode,
-            approval_scope_kind,
-            model_digest_status,
-        )
+        return cls(False, fail_class, config_digest, approved_by_digest, scope_digest, mode, approval_scope_kind, model_digest_status)
 
 
 def _parse_time(value: str | None):
@@ -114,7 +105,13 @@ def _parse_time(value: str | None):
 
 
 def _validate_model_scope_schema(config: dict[str, Any]) -> None:
-    if set(config) != MODEL_SCOPE_REQUIRED_KEYS:
+    unknown = set(config) - MODEL_SCOPE_REQUIRED_KEYS
+    if unknown:
+        raise ApprovalScopeError("APPROVAL_SCHEMA_INVALID")
+    missing = MODEL_SCOPE_REQUIRED_KEYS - set(config)
+    if "device_id_digest" in missing:
+        raise ApprovalScopeError("APPROVAL_DEVICE_MISSING")
+    if missing:
         raise ApprovalScopeError("APPROVAL_SCHEMA_INVALID")
     if config.get("schema_version") != APPROVAL_SCHEMA_V2:
         raise ApprovalScopeError("APPROVAL_SCHEMA_INVALID")
@@ -151,12 +148,10 @@ def resolve_expected_scope_digest(
 ) -> tuple[str, str]:
     cfg = config or {}
     mode = cfg.get("approval_mode", APPROVAL_MODE_REQUEST)
-
     if context == APPROVAL_CONTEXT_EVAL_PIPELINE:
         if mode in (None, "", APPROVAL_MODE_REQUEST):
             return display_sha256_digest(request_digest, prefix=True), APPROVAL_MODE_REQUEST
         raise ApprovalScopeError("APPROVAL_MODE_INVALID")
-
     if context == APPROVAL_CONTEXT_DESKTOP_APP:
         if mode != APPROVAL_MODE_MODEL:
             raise ApprovalScopeError("APPROVAL_MODE_REQUIRED")
@@ -174,7 +169,6 @@ def resolve_expected_scope_digest(
         except ValueError as exc:
             raise ApprovalScopeError("APPROVAL_DEVICE_MISMATCH") from exc
         return display_sha256_digest(model_digest, prefix=True), APPROVAL_MODE_MODEL
-
     raise ApprovalScopeError("APPROVAL_CONTEXT_INVALID")
 
 
@@ -188,7 +182,6 @@ def evaluate_human_approval_sealed(
         return HumanApprovalSealedVerdict.blocked(fail_class="BLOCK_HUMAN_APPROVAL_MISSING", mode=mode)
     digest = stable_json_digest(config)
     approval_scope_kind = config.get("approval_scope_kind") if isinstance(config.get("approval_scope_kind"), str) else None
-
     if config.get("kill_switch_enabled", True) is True:
         return HumanApprovalSealedVerdict.blocked(
             fail_class=BLOCK_HUMAN_APPROVAL_KILL_SWITCH,
@@ -207,7 +200,6 @@ def evaluate_human_approval_sealed(
             mode=mode,
             approval_scope_kind=approval_scope_kind,
         )
-
     scope = config.get("approval_scope_digest")
     try:
         scope_matches = canonical_sha256_digest(scope) == canonical_sha256_digest(expected_scope_digest)
@@ -223,7 +215,6 @@ def evaluate_human_approval_sealed(
             approval_scope_kind=approval_scope_kind,
             model_digest_status="mismatch" if mode == APPROVAL_MODE_MODEL else "not_applicable",
         )
-
     expires = _parse_time(config.get("expires_at"))
     if expires is None or expires <= datetime.now(timezone.utc):
         return HumanApprovalSealedVerdict.blocked(
@@ -244,7 +235,18 @@ def evaluate_human_approval_sealed(
             approval_scope_kind=approval_scope_kind,
         )
     approved_by = config.get("approved_by_digest")
-    if not is_sha256_digest(display_sha256_digest(str(approved_by or ""), prefix=True)):
+    try:
+        approved_by_display = display_sha256_digest(str(approved_by or ""), prefix=True)
+    except ValueError:
+        return HumanApprovalSealedVerdict.blocked(
+            fail_class="BLOCK_HUMAN_APPROVAL_MISSING",
+            config_digest=digest,
+            approved_by_digest=approved_by,
+            scope_digest=scope,
+            mode=mode,
+            approval_scope_kind=approval_scope_kind,
+        )
+    if not is_sha256_digest(approved_by_display):
         return HumanApprovalSealedVerdict.blocked(
             fail_class="BLOCK_HUMAN_APPROVAL_MISSING",
             config_digest=digest,
@@ -257,7 +259,7 @@ def evaluate_human_approval_sealed(
         True,
         None,
         digest,
-        display_sha256_digest(approved_by, prefix=True),
+        approved_by_display,
         display_sha256_digest(scope, prefix=True),
         mode,
         approval_scope_kind,
