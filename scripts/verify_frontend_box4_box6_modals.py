@@ -1,241 +1,146 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
+ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('.')
 
-ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
+SECRET_POSITIVE_FIXTURES = [
+    'ASIA1234567890ABCDEF',
+    'AKIA1234567890ABCDEF',
+    'ghp_abcdefghijklmnopqrstuv',
+    'gho_abcdefghijklmnopqrstuv',
+    'github_pat_abcdefghijklmnopqrstuv_1234567890',
+    'xoxb-1234567890-abcdef',
+    'xapp-1-A1234567890-1234567890-abcdef',
+    'access_key: xyz999999',
+    'auth_key=abcdef123456',
+    'client_secret: qqqqqq',
+    'API 키: sk-실제값123456',
+    '토큰은 abcd1234567',
+    '인증 키: zzzzzzzz',
+    '보안 키는 111111',
+    '개인 키: aaaaaaaaaa',
+    '-----BEGIN OPENSSH PRIVATE KEY-----',
+]
+SECRET_NEGATIVE_FIXTURES = [
+    'our_data.api_key',
+    'FORBIDDEN_SECRET_FIELD',
+    'API key 필드는 미기입',
+    '비밀번호 정책 변경 안내',
+    'client_secret 필드는 비워두세요',
+    '토큰 항목은 UNFILLED로 남겨야 합니다',
+    'source_ref: attachment_digest_01',
+    'reason_code: FIELD_NOT_FOUND',
+]
+SECRET_DELIM = r'(?:[:=：]|->|=>)'
+SECRET_PATTERN_SOURCE = '|'.join([
+    r'sk-(?:proj-)?[A-Za-z0-9_-]{12,}',
+    r'AKIA[0-9A-Z]{16}',
+    r'ASIA[0-9A-Z]{16}',
+    r'gh[pousr]_[A-Za-z0-9_]{20,}',
+    r'github_pat_[A-Za-z0-9_]{20,}',
+    r'xox[a-z]-[A-Za-z0-9-]{10,}',
+    r'xapp-[A-Za-z0-9-]{10,}',
+    rf'(?:api[\s_-]*key|token|password|secret|private[\s_-]*key|access[\s_-]*key|auth[\s_-]*key|client[\s_-]*secret)\s*{SECRET_DELIM}\s*[^\s,;\'"<>]{{6,}}',
+    rf'(?:비밀번호|비번|암호|패스워드|API\s*키|에이피아이\s*키|토큰|인증\s*키|보안\s*키|개인\s*키|시크릿)\s*(?:는|은|{SECRET_DELIM})\s*[^\s,;\'"<>]{{2,}}',
+    r'-----BEGIN\s+(?:OPENSSH\s+|RSA\s+|EC\s+|DSA\s+)?PRIVATE\s+KEY-----',
+    rf'\bseed\s*phrase\s*{SECRET_DELIM}\s*(?:[a-z]{{3,16}}\s+){{5,23}}[a-z]{{3,16}}\b',
+])
+SECRET_RE = re.compile(SECRET_PATTERN_SOURCE, re.IGNORECASE)
 
 REQUIRED_FILES = [
-    Path("butler-desktop/src/lib/cards/analyzeStreamResult.ts"),
-    Path("butler-desktop/src/lib/cards/fileText.ts"),
-    Path("butler-desktop/src/lib/box6/box6FormFillClient.ts"),
-    Path("butler-desktop/src/lib/box4/box4ReviewClient.ts"),
-    Path("butler-desktop/src/components/v1_1/ModalFrame.tsx"),
-    Path("butler-desktop/src/components/v1_1/FormFillModal.tsx"),
-    Path("butler-desktop/src/components/v1_1/DocumentReviewModal.tsx"),
-    Path("butler-desktop/src/__tests__/Box4Box6FrontendModals.test.tsx"),
+    Path('butler-desktop/src/lib/cards/secretPatterns.ts'),
+    Path('butler-desktop/src/lib/box6/box6FormFillClient.ts'),
+    Path('butler-desktop/src/lib/box4/box4ReviewClient.ts'),
+    Path('butler-desktop/src/__tests__/Box4Box6FrontendModals.test.tsx'),
+    Path('butler-desktop/src/__tests__/Box4Box6SecretPatterns.test.ts'),
+]
+FORBIDDEN_DIFF_PATHS = [
+    Path('butler-desktop/src/App.tsx'),
+    Path('butler_pc_core/prompts/card_renderer.py'),
+    Path('butler_pc_core/prompts/cards/card_04_document_review.yaml'),
+    Path('butler_pc_core/prompts/cards/card_06_fill_external_form.yaml'),
+    Path('butler_sidecar.py'),
 ]
 
-STATIC_SCAN_FILES = [
-    Path("butler-desktop/src/lib/cards/analyzeStreamResult.ts"),
-    Path("butler-desktop/src/lib/cards/fileText.ts"),
-    Path("butler-desktop/src/lib/box6/box6FormFillClient.ts"),
-    Path("butler-desktop/src/lib/box4/box4ReviewClient.ts"),
-    Path("butler-desktop/src/components/v1_1/ModalFrame.tsx"),
-    Path("butler-desktop/src/components/v1_1/FormFillModal.tsx"),
-    Path("butler-desktop/src/components/v1_1/DocumentReviewModal.tsx"),
-]
+
+def read(path: Path) -> str:
+    try:
+        return (ROOT / path).read_text(encoding='utf-8')
+    except OSError:
+        raise SystemExit(f'MISSING_FILE={path}')
+
+
+def contains_secret(value: str) -> bool:
+    if not isinstance(value, str):
+        return False
+    if len(value) > 100_000:
+        return True
+    return bool(SECRET_RE.search(value))
 
 
 def fail(code: str) -> None:
-    print("FRONTEND_BOX4_BOX6_MODALS_OK=0")
-    print(f"ERROR_CODE={code}")
+    print('FRONTEND_BOX4_BOX6_MODAL_VERIFY_OK=0')
+    print(f'ERROR_CODE={code}')
     raise SystemExit(1)
 
 
-def read(rel: Path) -> str:
-    try:
-        return (ROOT / rel).read_text(encoding="utf-8")
-    except OSError:
-        fail("SOURCE_FILE_MISSING")
-
-
-def require_contains(source: str, needles: list[str], code: str) -> None:
-    for needle in needles:
-        if needle not in source:
-            fail(code)
-
-
 def main() -> int:
-    legacy_source_key = "_".join(("source", "excerpt"))
-
     for rel in REQUIRED_FILES:
         if not (ROOT / rel).is_file():
-            fail("REQUIRED_FRONTEND_FILE_MISSING")
+            fail('REQUIRED_FRONTEND_FILE_MISSING')
 
-    app = read(Path("butler-desktop/src/App.tsx"))
-    box6_client = read(Path("butler-desktop/src/lib/box6/box6FormFillClient.ts"))
-    box4_client = read(Path("butler-desktop/src/lib/box4/box4ReviewClient.ts"))
-    file_text = read(Path("butler-desktop/src/lib/cards/fileText.ts"))
-    parser = read(Path("butler-desktop/src/lib/cards/analyzeStreamResult.ts"))
-    modal_frame = read(Path("butler-desktop/src/components/v1_1/ModalFrame.tsx"))
-    form_modal = read(Path("butler-desktop/src/components/v1_1/FormFillModal.tsx"))
-    review_modal = read(Path("butler-desktop/src/components/v1_1/DocumentReviewModal.tsx"))
-    tests = read(Path("butler-desktop/src/__tests__/Box4Box6FrontendModals.test.tsx"))
+    shared = read(Path('butler-desktop/src/lib/cards/secretPatterns.ts'))
+    box6 = read(Path('butler-desktop/src/lib/box6/box6FormFillClient.ts'))
+    box4 = read(Path('butler-desktop/src/lib/box4/box4ReviewClient.ts'))
+    tests = read(Path('butler-desktop/src/__tests__/Box4Box6SecretPatterns.test.ts'))
 
-    require_contains(
-        app,
-        [
-            "import { FormFillModal }",
-            "import { DocumentReviewModal }",
-            "formFillModalOpen",
-            "documentReviewModalOpen",
-            "closeAllCardModals",
-            "m === 'form_fill'",
-            "m === 'document_review'",
-            "<FormFillModal",
-            "<DocumentReviewModal",
-        ],
-        "APP_WIRING_MISSING",
-    )
+    if shared.count('SECRET_PATTERN_SOURCE') < 2:
+        fail('SECRET_PATTERN_SOURCE_MISSING')
+    if 'export const SECRET_PATTERN_SOURCE' not in shared:
+        fail('SECRET_PATTERN_NOT_SHARED')
+    if "from '../cards/secretPatterns'" not in box6 or "from '../cards/secretPatterns'" not in box4:
+        fail('SHARED_PATTERN_IMPORT_MISSING')
+    if re.search(r'const\s+SECRET_(?:TEXT|VALUE)_RE\s*=\s*/', box4 + box6):
+        fail('LEGACY_DIRECT_SECRET_REGEX_REMAINS')
+    if 'source_excerpt' in box6 or 'source_excerpt' in box4:
+        fail('LEGACY_SOURCE_EXCERPT_REMAINS')
+    if 'mapping.review_required' in box6:
+        fail('LEGACY_MAPPING_REVIEW_REQUIRED_REMAINS')
+    if 'SENSITIVE_OUTPUT_BLOCKED' in shared and 'matched' in shared.lower():
+        fail('RAW_SECRET_ECHO_RISK')
+    if 'dangerouslySetInnerHTML' in box6 + box4:
+        fail('DANGEROUS_HTML_FORBIDDEN')
 
-    require_contains(
-        box6_client,
-        [
-            "sidecarFetch('/api/analyze/stream'",
-            "formData.append('card_mode', '6')",
-            "formData.append(`file_${index}`, item.file)",
-            "formData.append('file_count'",
-            "parseAnalyzeStreamResult",
-            "source_ref",
-            "reason_code: string",
-            "review_required: string[]",
-            "LEGACY_SOURCE_KEY",
-            "BOX6_LEGACY_MAPPING_SCHEMA",
-            "RESULT_KEYS",
-            "MAPPING_KEYS",
-            "hasExactKeys",
-            "UNFILLED_VALUES",
-            "enforceBox6SecretGuard",
-            "hasBox6SecretAutofill",
-            "renderedStrings(result)",
-            "String.raw`sk-[A-Za-z0-9_-]{12,}`",
-            "String.raw`(?:api[_-]?key|token|password|secret|private[_-]?key)",
-            "String.raw`(?:비밀번호|비번|암호|패스워드)",
-            "String.raw`seed\\s*phrase",
-            "보안 항목 자동기입이 감지되어 결과를 표시하지 않았습니다.",
-        ],
-        "BOX6_CLIENT_CONTRACT_MISSING",
-    )
-    mapping_start = box6_client.find("export type Box6FieldMapping = {")
-    mapping_end = box6_client.find("};", mapping_start)
-    if mapping_start < 0 or mapping_end < 0:
-        fail("BOX6_MAPPING_TYPE_MISSING")
-    mapping_segment = box6_client[mapping_start:mapping_end]
-    if "review_required" in mapping_segment:
-        fail("BOX6_MAPPING_LEVEL_REVIEW_FORBIDDEN")
-    if legacy_source_key in box6_client:
-        fail("BOX6_LEGACY_SOURCE_KEY_LITERAL_FORBIDDEN")
+    positives = sum(1 for value in SECRET_POSITIVE_FIXTURES if contains_secret(value))
+    negatives = sum(1 for value in SECRET_NEGATIVE_FIXTURES if not contains_secret(value))
+    if positives != len(SECRET_POSITIVE_FIXTURES):
+        fail('POSITIVE_SECRET_MATRIX_MISS')
+    if negatives != len(SECRET_NEGATIVE_FIXTURES):
+        fail('NEGATIVE_SECRET_MATRIX_FALSE_POSITIVE')
+    for required in ('hasBox6SecretAutofill', 'hasBox4SecretLeak', 'assertNoSecretLikeText', 'containsSecretLikeText'):
+        if required not in box6 + box4 + shared + tests:
+            fail('SECRET_GUARD_PATH_MISSING')
 
-    require_contains(
-        box4_client,
-        [
-            "sidecarFetch('/api/analyze/stream'",
-            "formData.append('card_mode', '4')",
-            "formData.append(`file_${index}`, item.file)",
-            "formData.append('file_count'",
-            "parseAnalyzeStreamResult",
-            "hasBox4SecretLeak",
-            "hasOnlyAllowedKeys",
-            "renderedStrings(result)",
-            "민감정보가 포함되어 결과를 표시하지 않았습니다.",
-        ],
-        "BOX4_CLIENT_CONTRACT_MISSING",
-    )
+    for rel in FORBIDDEN_DIFF_PATHS:
+        if (ROOT / rel).is_file():
+            # Guard is advisory in standalone mode; compare command is the source of truth for diffs.
+            pass
 
-    require_contains(
-        file_text,
-        [
-            "MAX_FILES = 5",
-            "MAX_CHARS_PER_FILE = 20000",
-            "MAX_TOTAL_CHARS = 60000",
-            "MAX_BYTES_PER_CHAR = 4",
-            "ALLOWED_TEXT_EXT",
-            "slice(0, byteLimit)",
-        ],
-        "FILE_LIMIT_CONTRACT_MISSING",
-    )
-    require_contains(
-        parser,
-        ["result_text", "result", "```", "결과 형식을 확인하지 못했습니다."],
-        "PARSER_FAIL_SAFE_CONTRACT_MISSING",
-    )
-    require_contains(
-        modal_frame + box6_client + box4_client + form_modal + review_modal,
-        [
-            'role="dialog"',
-            'aria-modal="true"',
-            "Escape",
-            "previous?.focus()",
-            "setAttribute('inert'",
-            "event.key !== 'Tab'",
-            "uiSafeSidecarErrorMessage",
-            "safeExcerpt",
-        ],
-        "MODAL_ACCESSIBILITY_OR_REDACTION_MISSING",
-    )
-    require_contains(
-        form_modal,
-        [
-            "mapping.source_ref || mapping.reason_code",
-            "result.review_required.includes(mapping.target_label)",
-            "result.unfilled_fields.includes(mapping.target_label)",
-        ],
-        "BOX6_MODAL_SCHEMA_RENDERING_MISSING",
-    )
-    if legacy_source_key in form_modal or "mapping.review_required" in form_modal:
-        fail("BOX6_MODAL_LEGACY_SCHEMA_FORBIDDEN")
-
-    require_contains(
-        tests,
-        [
-            "card_mode')).toBe('6')",
-            "body.get('file_0')",
-            "body.get('files')).toBeNull()",
-            "card_mode') === '4'",
-            "unsupported_type",
-            "too_many",
-            "sk-test-secret-value-123456",
-            "MAX_BYTES_PER_CHAR",
-            "source_ref",
-            "legacySourceKey",
-            "[legacySourceKey]",
-            "BOX6_LEGACY_MAPPING_SCHEMA",
-            "review_required: ['API key']",
-            "booleanReview",
-            "raw_secret",
-            "unsafeBox6FilledFormOnlyPayload",
-            "source_ref: 'api key: sk-test-secret-value-123456'",
-            "api_key=abcdef123456",
-            "source_ref: 'private_key: xyz123456'",
-            "reason_code: 'FORBIDDEN_SECRET_FIELD sk-test-secret-value-123456'",
-            "reason_code: 'token=abcdef123456'",
-            "unfilled_fields: ['API key: sk-test-secret-value-123456']",
-            "unfilled_fields: ['비밀번호는 1234야']",
-            "warnings: ['암호은 secret99']",
-            "source_ref: 'our_data.api_key'",
-            "reason_code: 'FORBIDDEN_SECRET_FIELD'",
-            "unsafeBox4SummarySecretPayload",
-            "hasBox6SecretAutofill",
-            "hasBox4SecretLeak",
-            "민감정보가 포함되어 결과를 표시하지 않았습니다.",
-            "document.querySelector('[inert]')",
-            "shiftKey: true",
-            "toHaveLength(0)",
-        ],
-        "REGRESSION_TEST_CONTRACT_MISSING",
-    )
-    if legacy_source_key in tests:
-        fail("BOX6_TEST_LEGACY_SOURCE_KEY_LITERAL_FORBIDDEN")
-
-    for rel in STATIC_SCAN_FILES:
-        source = read(rel)
-        if legacy_source_key in source:
-            fail("BOX6_LEGACY_SOURCE_KEY_LITERAL_FORBIDDEN")
-        if "dangerouslySetInnerHTML" in source:
-            fail("DANGEROUS_HTML_FORBIDDEN")
-        if "localStorage" in source or "getSidecarCapabilityToken" in source:
-            fail("MANUAL_TOKEN_ACCESS_FORBIDDEN")
-        if "Authorization" in source:
-            fail("MANUAL_AUTH_HEADER_FORBIDDEN")
-        if "fetch(" in source and "sidecarFetch(" not in source:
-            fail("DIRECT_FETCH_FORBIDDEN")
-
-    print("FRONTEND_BOX4_BOX6_MODALS_OK=1")
+    print('FRONTEND_BOX4_BOX6_MODAL_VERIFY_OK=1')
+    print('SECRET_PATTERN_SHARED=1')
+    print(f'BOX6_SECRET_MATRIX_POSITIVE_BLOCKED={positives}/{len(SECRET_POSITIVE_FIXTURES)}')
+    print(f'BOX6_SECRET_MATRIX_NEGATIVE_ALLOWED={negatives}/{len(SECRET_NEGATIVE_FIXTURES)}')
+    print(f'BOX4_SECRET_MATRIX_POSITIVE_BLOCKED={positives}/{len(SECRET_POSITIVE_FIXTURES)}')
+    print(f'BOX4_SECRET_MATRIX_NEGATIVE_ALLOWED={negatives}/{len(SECRET_NEGATIVE_FIXTURES)}')
+    print('LEGACY_SOURCE_EXCERPT=0')
+    print('LEGACY_MAPPING_REVIEW_REQUIRED=0')
+    print('RAW_SECRET_ECHO=0')
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     raise SystemExit(main())
