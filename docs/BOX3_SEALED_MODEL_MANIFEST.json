@@ -1,0 +1,10 @@
+{
+  "schema_version": "butler.box3.sealed_model_manifest.v1",
+  "model_id": "box3_v9.2-r2b",
+  "model_role": "box3_draft",
+  "model_sha256": "sha256:aae4ea7a00000000000000000000000000000000000000000000000000000000",
+  "status": "SEALED",
+  "approved_for_runtime": true,
+  "eval_summary_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "note": "Replace model_sha256 and eval_summary_sha256 with raw verified sealed artifacts before generating a representative approval file. The generator refuses mismatched model digests."
+}
