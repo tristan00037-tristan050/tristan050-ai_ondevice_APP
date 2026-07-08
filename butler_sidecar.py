@@ -78,6 +78,10 @@ from butler_pc_core.cards.box4.review_service import (
     DocumentReviewInput,
     review_document,
 )
+from butler_pc_core.cards.box6.form_fill_service import (
+    FormFillInput,
+    fill_form,
+)
 from butler_pc_core.sidecar.analyze_orchestrator import (
     AnalyzeStreamOrchestrator,
     AnalyzeStreamRequest,
@@ -532,20 +536,23 @@ if _FASTAPI_AVAILABLE:
         return f"event: {event}\ndata: {payload}\n\n"
 
     _BOX4_DOCUMENT_REVIEW_MODES = {"4", "document_review"}
+    _BOX6_FORM_FILL_MODES = {"6", "external_form", "form_fill"}
 
     class _Box4TimeoutModelClient:
         def __init__(self, llm: object, cancel_event: threading.Event) -> None:
             self._llm = llm
             self._cancel_event = cancel_event
 
-        def generate(self, prompt: str, *, max_tokens: int = 2048) -> str:
+        def generate(self, prompt: str, *, max_tokens: int = 2048, grammar: object | None = None) -> str:
             generate_with_cancel = getattr(self._llm, "generate_with_cancel", None)
             if callable(generate_with_cancel):
-                return str(generate_with_cancel(prompt, self._cancel_event, max_tokens=max_tokens))
+                return generate_with_cancel(prompt, self._cancel_event, max_tokens=max_tokens, grammar=grammar)
             generate = getattr(self._llm, "generate", None)
             if callable(generate):
-                return str(generate(prompt, max_tokens=max_tokens))
+                return generate(prompt, max_tokens=max_tokens, grammar=grammar)
             if callable(self._llm):
+                if grammar is not None:
+                    raise ValueError("MODEL_CLIENT_GRAMMAR_UNSUPPORTED")
                 return str(self._llm(prompt))
             raise ValueError("MODEL_CLIENT_UNSUPPORTED")
 
@@ -561,6 +568,39 @@ if _FASTAPI_AVAILABLE:
         future = loop.run_in_executor(
             None,
             lambda: review_document(request_payload, model_client=model_client),
+        )
+        deadline = time.monotonic() + max(0.001, min(ctrl.chunk_timeout, ctrl.hard_timeout))
+
+        while True:
+            try:
+                ctrl.check_hard_timeout()
+            except (HardTimeoutError, UserCancelledError):
+                cancel_event.set()
+                raise
+
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                cancel_event.set()
+                ctrl._abort("chunk_timeout")
+
+            try:
+                result = await asyncio.wait_for(asyncio.shield(future), timeout=min(remaining, 0.5))
+            except asyncio.TimeoutError:
+                continue
+            return result
+
+    async def _run_box6_form_fill_with_timeout(
+        request_payload: FormFillInput,
+        *,
+        llm: object,
+        ctrl: TimeoutController,
+    ):
+        cancel_event = threading.Event()
+        model_client = _Box4TimeoutModelClient(llm, cancel_event)
+        loop = asyncio.get_running_loop()
+        future = loop.run_in_executor(
+            None,
+            lambda: fill_form(request_payload, model_client=model_client),
         )
         deadline = time.monotonic() + max(0.001, min(ctrl.chunk_timeout, ctrl.hard_timeout))
 
@@ -769,6 +809,85 @@ if _FASTAPI_AVAILABLE:
                     "partial_result_path": partial_path,
                     "completed_chunks": 0,
                     "message": "사용자 요청으로 문서검토를 중단했습니다.",
+                })
+            finally:
+                _active_controllers.pop(task_id, None)
+            return
+
+        if normalize_card_mode(params.card_mode) in _BOX6_FORM_FILL_MODES:
+            file_texts = _uploaded_file_texts()
+            blank_form = params.query
+
+            llm_invoked = bool(blank_form.strip())
+            yield _sse("meta", {
+                "source": "box6_form_fill",
+                "route": budget.route,
+                "schema_version": "card_06.form_fill.v1",
+                "grammar_required": True,
+                "llm_invoked": llm_invoked,
+                "external_send_zero": True,
+                "raw_text_logged": False,
+            })
+            request_payload = FormFillInput(
+                blank_form=blank_form,
+                data_documents=file_texts,
+                strict_mode=True,
+                request_id=task_id,
+                source_kind="ui",
+            )
+            timeout_sec = max(1.0, min(float(budget.max_wall_time_sec), HARD_TIMEOUT_SEC))
+            ctrl = TimeoutController(
+                task_id=task_id,
+                output_dir=params.output_dir,
+                hard_timeout=timeout_sec,
+                chunk_timeout=min(CHUNK_TIMEOUT_SEC, timeout_sec),
+            )
+            async with asyncio.Lock():
+                _active_controllers[task_id] = ctrl
+            start = time.monotonic()
+
+            try:
+                if llm_invoked:
+                    ctrl.check_hard_timeout()
+                    llm = await _ensure_shared_llm()
+                    result = await _run_box6_form_fill_with_timeout(
+                        request_payload,
+                        llm=llm,
+                        ctrl=ctrl,
+                    )
+                else:
+                    result = fill_form(request_payload, model_client=None)
+                yield _sse("complete", {
+                    "result_text": json.dumps(result.to_payload(), ensure_ascii=False, sort_keys=True),
+                    "result_path": "",
+                    "total_elapsed_sec": round(time.monotonic() - start, 2),
+                })
+            except ChunkTimeoutError as exc:
+                partial_path = str(exc.partial_path)
+                yield _sse("cancelled", {
+                    "reason": "chunk_timeout",
+                    "partial_path": partial_path,
+                    "partial_result_path": partial_path,
+                    "completed_chunks": 0,
+                    "message": "양식채우기 생성 시간이 초과되어 안전하게 중단했습니다.",
+                })
+            except HardTimeoutError as exc:
+                partial_path = str(exc.partial_path)
+                yield _sse("cancelled", {
+                    "reason": "hard_timeout",
+                    "partial_path": partial_path,
+                    "partial_result_path": partial_path,
+                    "completed_chunks": 0,
+                    "message": "양식채우기 전체 시간이 초과되어 안전하게 중단했습니다.",
+                })
+            except UserCancelledError as exc:
+                partial_path = str(exc.partial_path)
+                yield _sse("cancelled", {
+                    "reason": "user_cancel",
+                    "partial_path": partial_path,
+                    "partial_result_path": partial_path,
+                    "completed_chunks": 0,
+                    "message": "사용자 요청으로 양식채우기를 중단했습니다.",
                 })
             finally:
                 _active_controllers.pop(task_id, None)

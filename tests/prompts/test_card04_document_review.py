@@ -110,7 +110,8 @@ def test_box4_sidecar_stream_routes_to_review_service(monkeypatch) -> None:
     import butler_sidecar
 
     class FakeLlm:
-        def generate(self, prompt: str, *, max_tokens: int = 2048) -> str:
+        def generate(self, prompt: str, *, max_tokens: int = 2048, grammar=None) -> str:  # type: ignore[no-untyped-def]
+            assert grammar is not None
             return json.dumps(
                 {
                     "schema_version": SCHEMA_VERSION,
@@ -163,7 +164,8 @@ def test_box4_sidecar_slow_review_times_out_and_cancels(monkeypatch, tmp_path) -
         def __init__(self) -> None:
             self.cancel_event = None
 
-        def generate_with_cancel(self, prompt: str, cancel_event, max_tokens: int = 2048) -> str:  # type: ignore[no-untyped-def]
+        def generate_with_cancel(self, prompt: str, cancel_event, max_tokens: int = 2048, grammar=None) -> str:  # type: ignore[no-untyped-def]
+            assert grammar is not None
             self.cancel_event = cancel_event
             cancel_event.wait(timeout=5)
             return json.dumps(
