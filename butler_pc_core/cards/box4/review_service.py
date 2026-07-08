@@ -13,6 +13,7 @@ from typing import Any, List, Optional
 
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.prompts.cards import load_card_prompt
+from butler_pc_core.runtime.json_grammar import GrammarUnavailable, build_json_schema_grammar, stable_schema_digest
 
 
 SCHEMA_VERSION = "card_04.document_review.v1"
@@ -26,6 +27,36 @@ MAX_ISSUES = 50
 MAX_TEXT_CHARS = 300
 MAX_SUMMARY_CHARS = 1200
 SAFE_SECRET_REPLACEMENT = "[민감정보 원문 생략]"
+
+BOX4_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "schema_version": {"type": "string", "enum": [SCHEMA_VERSION]},
+        "issues": {
+            "type": "array",
+            "maxItems": MAX_ISSUES,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string"},
+                    "issue_type": {"type": "string", "enum": sorted(ISSUE_TYPES)},
+                    "original_text": {"type": "string"},
+                    "suggestion": {"type": "string"},
+                    "confidence": {"type": "string", "enum": sorted(CONFIDENCES)},
+                },
+                "required": ["location", "issue_type", "original_text", "suggestion", "confidence"],
+                "additionalProperties": False,
+            },
+        },
+        "overall_score": {"type": "integer", "minimum": 0, "maximum": 100},
+        "summary": {"type": "string"},
+        "review_required": {"type": "boolean"},
+        "warnings": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["schema_version", "issues", "overall_score", "summary", "review_required", "warnings"],
+    "additionalProperties": False,
+}
+BOX4_SCHEMA_DIGEST = stable_schema_digest(BOX4_JSON_SCHEMA)
 
 _SECRET_VALUE_RE = re.compile(
     r"(?:"
@@ -112,6 +143,25 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     raise ValueError("MODEL_JSON_UNCLOSED")
 
 
+def normalize_model_response_to_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, dict):
+        raise ValueError("MODEL_RESPONSE_UNSUPPORTED")
+    choices = value.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise ValueError("MODEL_RESPONSE_CHOICES_MISSING")
+    first = choices[0]
+    if not isinstance(first, dict):
+        raise ValueError("MODEL_RESPONSE_CHOICE_INVALID")
+    if isinstance(first.get("text"), str):
+        return first["text"]
+    message = first.get("message")
+    if isinstance(message, dict) and isinstance(message.get("content"), str):
+        return message["content"]
+    raise ValueError("MODEL_RESPONSE_TEXT_MISSING")
+
+
 def _require_string(value: Any, reason_code: str, *, max_len: int = MAX_TEXT_CHARS) -> str:
     if not isinstance(value, str):
         raise ValueError(reason_code)
@@ -195,18 +245,20 @@ def _validate_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _call_model_client(model_client: Any, prompt: str) -> str:
+def _generate_review_json(model_client: Any, prompt: str) -> str:
+    try:
+        grammar = build_json_schema_grammar(BOX4_JSON_SCHEMA, required=True)
+    except GrammarUnavailable as exc:
+        raise ValueError("GRAMMAR_UNAVAILABLE") from exc
     if model_client is None:
         raise ValueError("MODEL_CLIENT_REQUIRED")
-    if hasattr(model_client, "generate"):
-        return str(model_client.generate(prompt, max_tokens=2048))
-    if hasattr(model_client, "generate_text"):
-        return str(model_client.generate_text(prompt, max_new_tokens=2048))
     if hasattr(model_client, "generate_with_cancel"):
-        return str(model_client.generate_with_cancel(prompt, threading.Event(), max_tokens=2048))
-    if callable(model_client):
-        return str(model_client(prompt))
-    raise ValueError("MODEL_CLIENT_UNSUPPORTED")
+        return normalize_model_response_to_text(
+            model_client.generate_with_cancel(prompt, threading.Event(), max_tokens=2048, grammar=grammar)
+        )
+    if hasattr(model_client, "generate"):
+        return normalize_model_response_to_text(model_client.generate(prompt, max_tokens=2048, grammar=grammar))
+    raise ValueError("GRAMMAR_UNAVAILABLE")
 
 
 def review_document(req: DocumentReviewInput, *, model_client: Any) -> DocumentReviewResult:
@@ -230,7 +282,7 @@ def review_document(req: DocumentReviewInput, *, model_client: Any) -> DocumentR
             f"<|im_start|>user\n/no_think\n{user_prompt}<|im_end|>\n"
             f"<|im_start|>assistant\n"
         )
-        model_output = _call_model_client(model_client, prompt)
+        model_output = _generate_review_json(model_client, prompt)
         payload = _validate_review_payload(_extract_json_object(model_output))
     except ValueError as exc:
         reason_code = str(exc) or "DOCUMENT_REVIEW_FAILED"
