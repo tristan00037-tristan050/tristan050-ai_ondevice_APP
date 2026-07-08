@@ -1,15 +1,15 @@
 """Single fail-closed safety gate for persisted connect-loop learning data.
 
 The scanner reports booleans and reason codes only. It must never return
-matched raw text, local paths, tokens, or snippets.
+matched raw text, local paths, tokens, normalized variants, or snippets.
 """
 from __future__ import annotations
 
 import re
-import unicodedata
 from dataclasses import dataclass
 from typing import Any, Iterator
 
+from .scan_normalization import detect_any
 
 FORBIDDEN_RAW_KEYS = {
     "raw",
@@ -89,6 +89,7 @@ class DlpScanResult:
     local_path_detected: bool = False
     raw_field_detected: bool = False
     policy_violation: bool = False
+    scan_too_long: bool = False
 
     @property
     def any_detected(self) -> bool:
@@ -98,6 +99,7 @@ class DlpScanResult:
             or self.local_path_detected
             or self.raw_field_detected
             or self.policy_violation
+            or self.scan_too_long
         )
 
 
@@ -123,22 +125,34 @@ def _has_ko_secret(value: str) -> bool:
     return False
 
 
+_PII_PATTERNS = {
+    "email": _EMAIL_RE,
+    "phone": _PHONE_RE,
+    "korean_rrn": _KOREAN_RRN_RE,
+    "card_or_account": _CARD_OR_ACCOUNT_RE,
+    "hyphenated_account": _has_hyphenated_account,
+}
+_SECRET_PATTERNS = {
+    "secret": _SECRET_RE,
+    "ko_secret": _has_ko_secret,
+}
+_LOCAL_PATH_PATTERNS = {
+    "local_path": _LOCAL_PATH_RE,
+}
+
+
 def _dlp_scan_all(value: str) -> DlpScanResult:
-    scan_value = unicodedata.normalize("NFKC", value)
-    pii = bool(
-        _EMAIL_RE.search(scan_value)
-        or _PHONE_RE.search(scan_value)
-        or _KOREAN_RRN_RE.search(scan_value)
-        or _CARD_OR_ACCOUNT_RE.search(scan_value)
-        or _has_hyphenated_account(scan_value)
-    )
-    secret = bool(_SECRET_RE.search(scan_value) or _has_ko_secret(scan_value))
-    local_path = bool(_LOCAL_PATH_RE.search(scan_value))
+    raw = str(value or "")
+    pii = detect_any(_PII_PATTERNS, raw)
+    secret = detect_any(_SECRET_PATTERNS, raw)
+    local_path = detect_any(_LOCAL_PATH_PATTERNS, raw)
+    too_long = pii.too_long or secret.too_long or local_path.too_long
     return DlpScanResult(
-        pii_detected=pii,
-        secret_detected=secret,
-        local_path_detected=local_path,
-        policy_violation=local_path,
+        pii_detected=pii.detected and not pii.too_long,
+        secret_detected=secret.detected and not secret.too_long,
+        local_path_detected=local_path.detected and not local_path.too_long,
+        policy_violation=(local_path.detected or too_long),
+        scan_too_long=too_long,
     )
 
 
