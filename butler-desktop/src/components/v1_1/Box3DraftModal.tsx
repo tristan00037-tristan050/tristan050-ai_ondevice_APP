@@ -6,12 +6,7 @@ import {
   type Box3DraftResponse,
   type Box3FormatHint,
 } from '../../lib/box3/box3DraftClient';
-import {
-  MAX_CHARS_PER_FILE,
-  MAX_FILES,
-  MAX_TOTAL_CHARS,
-  prepareCardTextFiles,
-} from '../../lib/cards/fileText';
+import { MAX_CHARS_PER_FILE, prepareCardTextFiles } from '../../lib/cards/fileText';
 
 const FORMAT_HINTS: Box3FormatHint[] = ['보고서', '이메일', '계약 검토', '회의 안건', '자유형'];
 
@@ -62,24 +57,22 @@ export function Box3DraftModal({ onClose }: { onClose: () => void }) {
   const [response, setResponse] = useState<Box3DraftResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // 채움형: 선택한 과거 문서 파일 텍스트로 '과거 참고 문서' textarea 를 채운다.
-  // 파일 읽기는 prepareCardTextFiles(#842 공통)로 통일 — 20000자/파일·총 60000자 제한 일관.
+  // 채움형: 선택한 과거 문서 파일 1건의 텍스트로 '과거 참고 문서' textarea 를 채운다.
+  // '과거 참고 문서' 는 reference_docs 단일 원소(≤ MAX_CHARS_PER_FILE)로 제출되므로,
+  // box4·box6 의 main-file-load 와 동일하게 파일 1건만 불러온다. prepareCardTextFiles 가
+  // 문서당 MAX_CHARS_PER_FILE 로 캡하므로 제출 검증(REFERENCE_DOC_TOO_LARGE)을 항상 만족한다.
   async function handleReferenceFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
+    const file = event.target.files?.[0];
     event.target.value = '';
-    if (!files.length) return;
+    if (!file) return;
 
     setLoadingReferenceFile(true);
     setError(null);
     try {
-      const prepared = await prepareCardTextFiles(files);
-      const texts: string[] = [];
-      for (const item of prepared.files) {
-        const text = await readPreparedFileText(item.file);
-        if (text.trim()) texts.push(text);
-      }
-      if (texts.length) {
-        setReferenceText(texts.join('\n\n---\n\n'));
+      const prepared = await prepareCardTextFiles([file]);
+      const text = prepared.files[0]?.file ? await readPreparedFileText(prepared.files[0].file) : '';
+      if (text.trim()) {
+        setReferenceText(text);
       } else {
         setError('파일에서 텍스트를 추출하지 못했습니다.');
       }
@@ -141,7 +134,6 @@ export function Box3DraftModal({ onClose }: { onClose: () => void }) {
                   aria-label="과거 문서 파일"
                   data-testid="box3-reference-file-input"
                   type="file"
-                  multiple
                   accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.html,text/*,application/json"
                   onChange={handleReferenceFile}
                   tabIndex={-1}
@@ -171,7 +163,7 @@ export function Box3DraftModal({ onClose }: { onClose: () => void }) {
               style={{ width: '100%', resize: 'vertical', border: '1px solid #CBD5E1', borderRadius: 6, padding: 10, font: 'inherit' }}
             />
             <span style={{ color: '#94A3B8', fontSize: 11 }}>
-              파일 불러오기: 최대 {MAX_FILES}개 · 파일당 {MAX_CHARS_PER_FILE.toLocaleString()}자 · 총 {MAX_TOTAL_CHARS.toLocaleString()}자. PDF/DOCX/이미지는 제외됩니다.
+              파일 1개의 텍스트로 채웁니다 · 최대 {MAX_CHARS_PER_FILE.toLocaleString()}자. PDF/DOCX/이미지는 제외됩니다.
             </span>
           </div>
 

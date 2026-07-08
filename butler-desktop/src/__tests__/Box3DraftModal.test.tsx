@@ -72,4 +72,21 @@ describe('Box3DraftModal', () => {
     fireEvent.change(textarea, { target: { value: '파일 로드 후 수동 수정' } });
     expect(textarea).toHaveValue('파일 로드 후 수동 수정');
   });
+
+  // 리뷰 반영: '과거 참고 문서'는 reference_docs 단일 원소이므로, 큰 파일을 불러와도
+  // 문서당 20,000자 제한(REFERENCE_DOC_TOO_LARGE) 이하로 캡되어 제출 가능해야 한다.
+  it('caps a loaded file to the per-doc limit so it stays submittable', async () => {
+    render(<Box3DraftModal onClose={() => {}} />);
+    const textarea = screen.getByTestId('box3-reference-input') as HTMLTextAreaElement;
+
+    const bigText = '가'.repeat(25000);
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('box3-reference-file-input'), {
+        target: { files: [new File([bigText], 'big.txt', { type: 'text/plain' })] },
+      });
+    });
+
+    await waitFor(() => expect((textarea.value ?? '').length).toBeGreaterThan(0));
+    expect(textarea.value.length).toBeLessThanOrEqual(20000);
+  });
 });
