@@ -607,6 +607,7 @@ describe('Box4/Box6 frontend modals', () => {
     await waitFor(() => expect(screen.queryByTestId('sidecar-loading')).not.toBeInTheDocument());
     fireEvent.click(screen.getByTestId('card-4'));
     const textarea = screen.getByTestId('box4-target-document-input');
+    expect(screen.getByLabelText('검토 대상 문서')).toBe(textarea);
 
     fireEvent.change(textarea, { target: { value: '직접 붙여넣은 초안' } });
     expect(textarea).toHaveValue('직접 붙여넣은 초안');
@@ -635,6 +636,7 @@ describe('Box4/Box6 frontend modals', () => {
     await waitFor(() => expect(screen.queryByTestId('sidecar-loading')).not.toBeInTheDocument());
     fireEvent.click(screen.getByTestId('card-6'));
     const textarea = screen.getByTestId('box6-blank-form-input');
+    expect(screen.getByLabelText('빈 양식')).toBe(textarea);
 
     expect(screen.getByText('빈 양식에 채울 사내 자료·매뉴얼 등 참고 자료입니다. (선택 사항)')).toBeInTheDocument();
     expect(screen.getByText('선택된 파일 없음')).toBeInTheDocument();

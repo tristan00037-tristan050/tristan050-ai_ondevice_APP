@@ -170,12 +170,13 @@ export function DocumentReviewModal({ onClose }: Props) {
         </header>
 
         <form onSubmit={submit} style={{ display: 'grid', gap: 14 }}>
-          <label style={{ display: 'grid', gap: 6 }}>
+          <div style={{ display: 'grid', gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontWeight: 700 }}>검토 대상 문서</span>
+              <label htmlFor="box4-target-document-input" style={{ fontWeight: 700 }}>검토 대상 문서</label>
               <span>
                 <input
                   ref={mainFileInputRef}
+                  aria-label="검토 대상 문서 파일 불러오기"
                   data-testid="box4-main-file-input"
                   type="file"
                   accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.html,text/*,application/json"
@@ -195,6 +196,7 @@ export function DocumentReviewModal({ onClose }: Props) {
               </span>
             </div>
             <textarea
+              id="box4-target-document-input"
               data-testid="box4-target-document-input"
               value={targetDocument}
               onChange={event => setTargetDocument(event.target.value)}
@@ -202,14 +204,15 @@ export function DocumentReviewModal({ onClose }: Props) {
               placeholder="검토할 문서 초안을 붙여넣으세요."
               style={{ width: '100%', resize: 'vertical', border: '1px solid #CBD5E1', borderRadius: 6, padding: 10, font: 'inherit' }}
             />
-          </label>
+          </div>
 
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 700 }}>참고 규정 첨부</span>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label htmlFor="box4-file-input-control" style={{ fontWeight: 700 }}>참고 규정 첨부</label>
             <span style={{ color: '#64748B', fontSize: 12 }}>
               검토 대상 문서와 비교할 사내 규정·매뉴얼 등 참고 자료입니다. (선택 사항)
             </span>
             <input
+              id="box4-file-input-control"
               ref={referenceFileInputRef}
               data-testid="box4-file-input"
               type="file"
@@ -232,7 +235,7 @@ export function DocumentReviewModal({ onClose }: Props) {
                 {referenceFiles.length > 0 ? `${referenceFiles.length}개 파일 선택됨` : '선택된 파일 없음'}
               </span>
             </div>
-          </label>
+          </div>
 
           {referenceFiles.length > 0 && (
             <ul aria-label="참고 파일 목록" style={{ margin: 0, paddingLeft: 18, color: '#475569', fontSize: 13 }}>

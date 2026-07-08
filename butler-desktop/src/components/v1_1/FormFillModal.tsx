@@ -192,12 +192,13 @@ export function FormFillModal({ onClose }: Props) {
         </header>
 
         <form onSubmit={submit} style={{ display: 'grid', gap: 14 }}>
-          <label style={{ display: 'grid', gap: 6 }}>
+          <div style={{ display: 'grid', gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontWeight: 700 }}>빈 양식</span>
+              <label htmlFor="box6-blank-form-input" style={{ fontWeight: 700 }}>빈 양식</label>
               <span>
                 <input
                   ref={blankFormFileInputRef}
+                  aria-label="빈 양식 파일 불러오기"
                   data-testid="box6-main-file-input"
                   type="file"
                   accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.html,text/*,application/json"
@@ -217,6 +218,7 @@ export function FormFillModal({ onClose }: Props) {
               </span>
             </div>
             <textarea
+              id="box6-blank-form-input"
               data-testid="box6-blank-form-input"
               value={blankForm}
               onChange={event => setBlankForm(event.target.value)}
@@ -224,14 +226,15 @@ export function FormFillModal({ onClose }: Props) {
               placeholder="채워야 할 외부 양식의 빈 항목을 붙여넣으세요."
               style={{ width: '100%', resize: 'vertical', border: '1px solid #CBD5E1', borderRadius: 6, padding: 10, font: 'inherit' }}
             />
-          </label>
+          </div>
 
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 700 }}>우리 자료 첨부</span>
+          <div style={{ display: 'grid', gap: 6 }}>
+            <label htmlFor="box6-file-input-control" style={{ fontWeight: 700 }}>우리 자료 첨부</label>
             <span style={{ color: '#64748B', fontSize: 12 }}>
               빈 양식에 채울 사내 자료·매뉴얼 등 참고 자료입니다. (선택 사항)
             </span>
             <input
+              id="box6-file-input-control"
               ref={supportingFileInputRef}
               data-testid="box6-file-input"
               type="file"
@@ -254,7 +257,7 @@ export function FormFillModal({ onClose }: Props) {
                 {files.length > 0 ? `${files.length}개 파일 선택됨` : '선택된 파일 없음'}
               </span>
             </div>
-          </label>
+          </div>
 
           {files.length > 0 && (
             <ul aria-label="첨부 파일 목록" style={{ margin: 0, paddingLeft: 18, color: '#475569', fontSize: 13 }}>
