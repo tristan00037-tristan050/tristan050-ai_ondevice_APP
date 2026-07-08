@@ -573,6 +573,94 @@ describe('Box4/Box6 file limits', () => {
 });
 
 describe('Box4/Box6 frontend modals', () => {
+  it('renders Box4 custom attachment controls and keeps the selected reference filename visible', async () => {
+    const fetchMock = makeFetchMock();
+    vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
+    const inputClickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+    const { App } = await loadApp();
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.queryByTestId('sidecar-loading')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('card-4'));
+
+    expect(screen.getByText('검토 대상 문서와 비교할 사내 규정·매뉴얼 등 참고 자료입니다. (선택 사항)')).toBeInTheDocument();
+    expect(screen.getByText('선택된 파일 없음')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('box4-reference-file-select-btn'));
+    expect(inputClickSpy).toHaveBeenCalled();
+
+    fireEvent.change(screen.getByTestId('box4-file-input'), {
+      target: { files: [new File(['내부 규정'], 'policy.txt', { type: 'text/plain' })] },
+    });
+
+    expect(screen.getByText('1개 파일 선택됨')).toBeInTheDocument();
+    expect(screen.getByText(/policy\.txt ·/)).toBeInTheDocument();
+  });
+
+  it('loads Box4 target document from a text file with existing truncation limits and keeps manual typing working', async () => {
+    const fetchMock = makeFetchMock();
+    vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
+    const { App } = await loadApp();
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.queryByTestId('sidecar-loading')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('card-4'));
+    const textarea = screen.getByTestId('box4-target-document-input');
+
+    fireEvent.change(textarea, { target: { value: '직접 붙여넣은 초안' } });
+    expect(textarea).toHaveValue('직접 붙여넣은 초안');
+
+    const longText = '가'.repeat(MAX_CHARS_PER_FILE + 5000);
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('box4-main-file-input'), {
+        target: { files: [new File([longText], 'draft.txt', { type: 'text/plain' })] },
+      });
+    });
+
+    await waitFor(() => expect(textarea).toHaveValue(longText.slice(0, MAX_CHARS_PER_FILE)));
+
+    fireEvent.change(textarea, { target: { value: '파일 로드 후 수동 수정' } });
+    expect(textarea).toHaveValue('파일 로드 후 수동 수정');
+  });
+
+  it('loads Box6 blank form from a text file and renders custom supporting-file controls', async () => {
+    const fetchMock = makeFetchMock();
+    vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
+    const inputClickSpy = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+    const { App } = await loadApp();
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.queryByTestId('sidecar-loading')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('card-6'));
+    const textarea = screen.getByTestId('box6-blank-form-input');
+
+    expect(screen.getByText('빈 양식에 채울 사내 자료·매뉴얼 등 참고 자료입니다. (선택 사항)')).toBeInTheDocument();
+    expect(screen.getByText('선택된 파일 없음')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('box6-supporting-file-select-btn'));
+    expect(inputClickSpy).toHaveBeenCalled();
+
+    fireEvent.change(screen.getByTestId('box6-file-input'), {
+      target: { files: [new File(['상호: 주식회사 합성'], 'company.txt', { type: 'text/plain' })] },
+    });
+    expect(screen.getByText('1개 파일 선택됨')).toBeInTheDocument();
+    expect(screen.getByText(/company\.txt ·/)).toBeInTheDocument();
+
+    fireEvent.change(textarea, { target: { value: '직접 붙여넣은 빈 양식' } });
+    expect(textarea).toHaveValue('직접 붙여넣은 빈 양식');
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('box6-main-file-input'), {
+        target: { files: [new File(['상호: ___\n담당자: ___'], 'blank-form.txt', { type: 'text/plain' })] },
+      });
+    });
+    await waitFor(() => expect(textarea).toHaveValue('상호: ___\n담당자: ___'));
+
+    fireEvent.change(textarea, { target: { value: '파일 로드 후 수동 수정' } });
+    expect(textarea).toHaveValue('파일 로드 후 수동 수정');
+  });
+
   it('opens Box6 modal and submits to analyze stream with card_mode 6', async () => {
     const fetchMock = makeFetchMock();
     vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
