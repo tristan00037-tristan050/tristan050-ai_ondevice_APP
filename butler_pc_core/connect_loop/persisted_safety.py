@@ -6,9 +6,10 @@ matched raw text, local paths, tokens, or snippets.
 from __future__ import annotations
 
 import re
-import unicodedata
 from dataclasses import dataclass
 from typing import Any, Iterator
+
+from .scan_normalization import detect_any
 
 
 FORBIDDEN_RAW_KEYS = {
@@ -63,6 +64,10 @@ _SECRET_RE = re.compile(
 )
 _KO_SECRET_RE = re.compile(r"(비밀번호|비번|암호)\s*(?:는|은|:|=|->)?\s*(?P<secret>\S+)")
 _KO_SECRET_SAFE_START = ("정책", "규칙", "변경", "초기화", "재설정", "관리", "설정")
+_ACCOUNT_CONTEXT_RE = re.compile(r"(?i)(계좌|입금|상환|예금|account|acct)")
+_CARD_CONTEXT_RE = re.compile(r"(?i)(카드|card)")
+_PHONE_CONTEXT_RE = re.compile(r"(?i)(전화|연락|휴대폰|phone|tel|mobile)")
+_RRN_CONTEXT_RE = re.compile(r"(?i)(주민|주민등록|rrn|resident)")
 _LOCAL_PATH_RE = re.compile(
     r"(?i)(file://|"
     r"/Users(?:/|$)|"
@@ -109,6 +114,40 @@ def _has_hyphenated_account(value: str) -> bool:
     return False
 
 
+def _has_compact_account_digits(value: str) -> bool:
+    stripped = value.strip()
+    if re.fullmatch(r"\d{10,20}", stripped):
+        return True
+    if not _ACCOUNT_CONTEXT_RE.search(value):
+        return False
+    return any(10 <= match.end() - match.start() <= 20 for match in re.finditer(r"(?<!\d)\d{10,20}(?!\d)", value))
+
+
+def _has_compact_card_digits(value: str) -> bool:
+    stripped = value.strip()
+    if re.fullmatch(r"\d{13,19}", stripped):
+        return True
+    if not _CARD_CONTEXT_RE.search(value):
+        return False
+    return any(13 <= match.end() - match.start() <= 19 for match in re.finditer(r"(?<!\d)\d{13,19}(?!\d)", value))
+
+
+def _has_compact_phone_digits(value: str) -> bool:
+    stripped = value.strip()
+    if re.fullmatch(r"(?:0\d{9,10}|82\d{8,10})", stripped):
+        return True
+    if not _PHONE_CONTEXT_RE.search(value):
+        return False
+    return bool(re.search(r"(?<!\d)(?:0\d{9,10}|82\d{8,10})(?!\d)", value))
+
+
+def _has_compact_korean_rrn(value: str) -> bool:
+    stripped = value.strip()
+    if re.fullmatch(r"\d{6}[1-4]\d{6}", stripped):
+        return True
+    return bool(_RRN_CONTEXT_RE.search(value) and re.search(r"(?<!\d)\d{6}[1-4]\d{6}(?!\d)", value))
+
+
 def _has_ko_secret_signal(token: str) -> bool:
     return any(char.isdigit() or (char.isascii() and char.isalnum()) or char in "!@#$%^&*_" for char in token)
 
@@ -123,22 +162,39 @@ def _has_ko_secret(value: str) -> bool:
     return False
 
 
+_PII_PATTERNS = {
+    "email": _EMAIL_RE,
+    "phone": _PHONE_RE,
+    "korean_rrn": _KOREAN_RRN_RE,
+    "korean_rrn_compact": _has_compact_korean_rrn,
+    "card_or_account": _CARD_OR_ACCOUNT_RE,
+    "card_compact": _has_compact_card_digits,
+    "phone_compact": _has_compact_phone_digits,
+    "account_hyphenated": _has_hyphenated_account,
+    "account_compact": _has_compact_account_digits,
+}
+_SECRET_PATTERNS = {
+    "secret": _SECRET_RE,
+    "ko_secret": _has_ko_secret,
+}
+_LOCAL_PATH_PATTERNS = {
+    "local_path": _LOCAL_PATH_RE,
+}
+
+
 def _dlp_scan_all(value: str) -> DlpScanResult:
-    scan_value = unicodedata.normalize("NFKC", value)
-    pii = bool(
-        _EMAIL_RE.search(scan_value)
-        or _PHONE_RE.search(scan_value)
-        or _KOREAN_RRN_RE.search(scan_value)
-        or _CARD_OR_ACCOUNT_RE.search(scan_value)
-        or _has_hyphenated_account(scan_value)
-    )
-    secret = bool(_SECRET_RE.search(scan_value) or _has_ko_secret(scan_value))
-    local_path = bool(_LOCAL_PATH_RE.search(scan_value))
+    pii_scan = detect_any(_PII_PATTERNS, value)
+    secret_scan = detect_any(_SECRET_PATTERNS, value)
+    local_path_scan = detect_any(_LOCAL_PATH_PATTERNS, value)
+    too_long = pii_scan.too_long or secret_scan.too_long or local_path_scan.too_long
+    pii = pii_scan.detected and not pii_scan.too_long
+    secret = secret_scan.detected and not secret_scan.too_long
+    local_path = local_path_scan.detected and not local_path_scan.too_long
     return DlpScanResult(
         pii_detected=pii,
         secret_detected=secret,
         local_path_detected=local_path,
-        policy_violation=local_path,
+        policy_violation=local_path or too_long,
     )
 
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
-import re
 import zipfile
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, field
@@ -17,15 +16,14 @@ from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+from .persisted_safety import _dlp_scan_all
+
 SCHEMA_VERSION = "attachment_features.v1"
 MAX_TEXT_PREVIEW_BYTES = 64 * 1024
 MAX_CSV_ROWS = 40
 MAX_XLSX_XML_BYTES = 2 * 1024 * 1024
 
 _SHA_PREFIX = "sha256:"
-_EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
-_SECRET_RE = re.compile(r"(sk-[A-Za-z0-9_-]{12,}|BEGIN\s+PRIVATE\s+KEY|Bearer\s+[A-Za-z0-9._-]{10,}|api[_-]?key)", re.I)
-_PATH_RE = re.compile(r"(/Users/|/home/|/Volumes/|[A-Za-z]:\\\\|file://)", re.I)
 
 _AUDIO_EXT = {".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg"}
 _SPREADSHEET_EXT = {".csv", ".tsv", ".xlsx", ".xls", ".xlsm"}
@@ -109,7 +107,8 @@ def _decode_preview(data: bytes) -> str:
 
 
 def _dlp_buckets(text: str) -> list[str]:
-    if _EMAIL_RE.search(text) or _SECRET_RE.search(text) or _PATH_RE.search(text):
+    result = _dlp_scan_all(text)
+    if result.any_detected:
         return ["DLP_SIGNAL_PRESENT"]
     return []
 

@@ -216,6 +216,10 @@ def _combine_scores(bundle: AttachmentFeatureBundle, runtime_text: str | None) -
     return str(best["destination"]), float(best["score"]), str(best["reason_code"]), candidates, False
 
 
+def _bundle_has_dlp_signal(bundle: AttachmentFeatureBundle) -> bool:
+    return any("DLP_SIGNAL_PRESENT" in (feature.get("dlp_buckets") or []) for feature in bundle.attachments)
+
+
 def policy_bootstrap_status(policy_ready_override: bool | None = None) -> PolicyBootstrapStatus:
     """Return whether box endpoints can pass the bootstrap gate.
 
@@ -399,6 +403,25 @@ def decide_intake(
 ) -> dict[str, Any]:
     destination, confidence, reason_code, candidates, ambiguous = _combine_scores(attachment_bundle, runtime_text)
     policy = policy_bootstrap_status(policy_ready_override)
+
+    if _bundle_has_dlp_signal(attachment_bundle):
+        return _initial_decision(
+            request_id=request_id,
+            runtime_text=runtime_text,
+            destination=DEST_ASK,
+            target_box_id="none",
+            target_endpoint="none",
+            routing_confidence=0.0,
+            reason_code="INTAKE_DLP_SIGNAL_BLOCKED",
+            candidate_destinations=candidates,
+            bundle=attachment_bundle,
+            candidate_payload_ready=False,
+            candidate_payload_digest=None,
+            policy_status=policy,
+            fallback_required=True,
+            fail_class="INTAKE_DLP_SIGNAL_BLOCKED",
+            next_action="BLOCK",
+        )
 
     candidate_payload_ready = False
     candidate_payload_digest: str | None = None
