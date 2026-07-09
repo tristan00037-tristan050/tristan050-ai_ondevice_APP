@@ -171,7 +171,16 @@ def _import_from_env(path_env: str, module_name: str):
             spec = importlib.util.spec_from_file_location(module_name, str(p))
             if spec and spec.loader:
                 module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)  # type: ignore[union-attr]
+                previous_module = sys.modules.get(module_name)
+                sys.modules[module_name] = module
+                try:
+                    spec.loader.exec_module(module)  # type: ignore[union-attr]
+                except Exception:
+                    if previous_module is None:
+                        sys.modules.pop(module_name, None)
+                    else:
+                        sys.modules[module_name] = previous_module
+                    raise
                 return module
         elif p.is_dir():
             sys.path.insert(0, str(p))
