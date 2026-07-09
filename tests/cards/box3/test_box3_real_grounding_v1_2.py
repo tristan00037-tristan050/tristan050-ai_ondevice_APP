@@ -54,6 +54,12 @@ def test_negation_contradiction_is_unsupported():
     assert any(v.support_level == "unsupported" for v in verdicts)
 
 
+def test_summary_unsupported_claim_flags_needs_review_not_block():
+    unsupported = [ClaimVerdict("c1", sha256_text("c1"), "unsupported", [], 0.9, "EVIDENCE_CONTRADICTS")]
+    summary = summarize_grounding(unsupported)
+    assert summary.fail_class == "NEEDS_REVIEW_UNSUPPORTED_CLAIM"
+
+
 def test_unrelated_factual_claim_is_no_evidence():
     ref = "프로젝트 알파 납품 일정 보고."
     verdicts = _verdicts(ref, "핵심 내용: 신규 채용 계획 인원 수량 매출 목표 검토 요청")

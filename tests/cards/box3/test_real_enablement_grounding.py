@@ -29,7 +29,7 @@ def test_grounding_contradiction_is_unsupported():
     factual = [v for v in verdicts if v.support_level != "non_claim"]
     assert factual[0].support_level == "unsupported"
     assert summary.unsupported_claim_count == 1
-    assert summary.fail_class == "BLOCK_UNSUPPORTED_CLAIM"
+    assert summary.fail_class == "NEEDS_REVIEW_UNSUPPORTED_CLAIM"
 
 
 def test_ground_claims_returns_list_not_tuple_and_summary_is_separate():

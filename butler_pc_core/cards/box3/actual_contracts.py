@@ -167,6 +167,11 @@ class Box3ActualOperationVerdict:
     runner_measurements: dict[str, Any]
     asset_measurements: dict[str, Any]
     helper_sdk_receipts: dict[str, Any] | None = None
+    needs_review: bool = False
+    review_reason_code: str | None = None
+    unsupported_claim_count: int = 0
+    annotated_claim_count: int = 0
+    label_coverage_ok: bool = True
     external_send_zero: Literal[True] = True
     raw_saved_zero: Literal[True] = True
     raw_text_logged: Literal[False] = False

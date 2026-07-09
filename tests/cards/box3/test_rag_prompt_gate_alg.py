@@ -38,13 +38,13 @@ def test_pass_requires_useful_supported_claims_and_sections():
     assert verdict.fail_class is None
 
 
-def test_unsupported_claim_blocks_even_if_sections_present():
+def test_unsupported_claim_needs_review_even_if_sections_present():
     verdict = evaluate_usefulness_gate(
         GOOD_DRAFT,
         claim_verdicts=[V("supported"), V("unsupported")],
     )
-    assert verdict.status == "BLOCK"
-    assert verdict.fail_class == "BLOCK_UNSUPPORTED_CLAIM"
+    assert verdict.status == "PARTIAL"
+    assert verdict.fail_class == "NEEDS_REVIEW_UNSUPPORTED_CLAIM"
 
 
 def test_abstain_overuse_is_partial_not_pass():

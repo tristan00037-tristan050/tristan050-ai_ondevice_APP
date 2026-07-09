@@ -308,7 +308,7 @@ def evaluate_usefulness_gate(
     abstain_ratio = _abstain_ratio(draft_text)
 
     if unsupported:
-        return UsefulnessGateResult("BLOCK", "BLOCK_UNSUPPORTED_CLAIM", len(supported), len(factual), completeness, abstain_ratio)
+        return UsefulnessGateResult("PARTIAL", "NEEDS_REVIEW_UNSUPPORTED_CLAIM", len(supported), len(factual), completeness, abstain_ratio)
     if len(supported) < min_supported_claim_count:
         return UsefulnessGateResult("PARTIAL", "PARTIAL_SUPPORTED_CLAIM_COUNT_LOW", len(supported), len(factual), completeness, abstain_ratio)
     if completeness < min_section_completeness:
@@ -393,4 +393,3 @@ V9_1_OUTPUT_SKELETON = (
     "주의: '계약', '확정함', '작성 기준', '검토 기준'은 [근거 카드]에 직접 없으면 출력하지 않습니다.\n"
     "주의: '[문서에 근거 없음]' 문구는 한 글자도 바꾸지 않습니다.\n"
 )
-

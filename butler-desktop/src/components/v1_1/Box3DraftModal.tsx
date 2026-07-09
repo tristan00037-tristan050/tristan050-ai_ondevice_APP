@@ -39,6 +39,36 @@ function safeDraftText(response: Box3DraftResponse): string {
   return response.draft ?? response.draft_text ?? '';
 }
 
+function unsupportedCount(response: Box3DraftResponse): number {
+  return typeof response.unsupported_claim_count === 'number' ? response.unsupported_claim_count : 0;
+}
+
+function DraftTextView({ text }: { text: string }) {
+  const lines = text ? text.split('\n') : ['(초안 없음)'];
+  return (
+    <div style={{ whiteSpace: 'pre-wrap', background: '#F8FAFC', padding: 12, borderRadius: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, lineHeight: 1.55 }}>
+      {lines.map((line, index) => {
+        const needsReview = line.includes('[근거 확인 필요]') || line.includes('[전체 검토 필요]');
+        return (
+          <span
+            key={`${index}-${line.slice(0, 12)}`}
+            data-testid={needsReview ? 'box3-unsupported-label-line' : undefined}
+            style={{
+              display: 'block',
+              background: needsReview ? '#FEF3C7' : 'transparent',
+              color: needsReview ? '#7C2D12' : '#0F172A',
+              borderLeft: needsReview ? '3px solid #F97316' : '3px solid transparent',
+              padding: needsReview ? '2px 6px' : '2px 0',
+            }}
+          >
+            {line || ' '}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function ErrorBox({ message }: { message: string }) {
   return (
     <div role="alert" data-testid="box3-error" style={{ border: '1px solid #F59E0B', background: '#FFFBEB', borderRadius: 8, padding: 12 }}>
@@ -201,14 +231,29 @@ export function Box3DraftModal({ onClose }: { onClose: () => void }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#14532D', fontWeight: 700 }}>
               <CheckCircle2 size={18} aria-hidden /> 응답 수신
             </div>
-            <dl style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 6, fontSize: 12 }}>
-              <dt>status</dt><dd>{response.status ?? 'unknown'}</dd>
-              <dt>fail_class</dt><dd>{response.fail_class ?? '없음'}</dd>
-              <dt>request_digest</dt><dd style={{ overflowWrap: 'anywhere' }}>{response.request_digest ?? '없음'}</dd>
-              <dt>raw_doc_logged</dt><dd>{String(response.raw_doc_logged === false)}</dd>
-            </dl>
+            {response.needs_review && unsupportedCount(response) > 0 && (
+              <div
+                role="alert"
+                aria-live="assertive"
+                data-testid="box3-needs-review-banner"
+                style={{ marginTop: 12, border: '1px solid #FDBA74', background: '#FFF7ED', color: '#7C2D12', borderRadius: 8, padding: 12, fontWeight: 700 }}
+              >
+                근거가 확인되지 않은 문장이 {unsupportedCount(response)}건 있습니다. [근거 확인 필요] 표시가 있는 줄은 사람이 반드시 검토해야 합니다.
+              </div>
+            )}
+            <details style={{ marginTop: 12 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 12, color: '#475569', fontWeight: 700 }}>개발자 세부정보</summary>
+              <dl style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 6, fontSize: 12 }}>
+                <dt>status</dt><dd>{response.status ?? 'unknown'}</dd>
+                <dt>fail_class</dt><dd>{response.fail_class ?? '없음'}</dd>
+                <dt>review_reason_code</dt><dd>{response.review_reason_code ?? '없음'}</dd>
+                <dt>label_coverage_ok</dt><dd>{String(response.label_coverage_ok !== false)}</dd>
+                <dt>request_digest</dt><dd style={{ overflowWrap: 'anywhere' }}>{response.request_digest ?? '없음'}</dd>
+                <dt>raw_doc_logged</dt><dd>{String(response.raw_doc_logged === false)}</dd>
+              </dl>
+            </details>
             <h3>초안</h3>
-            <pre style={{ whiteSpace: 'pre-wrap', background: '#F8FAFC', padding: 12, borderRadius: 8 }}>{safeDraftText(response) || '(초안 없음)'}</pre>
+            <DraftTextView text={safeDraftText(response)} />
             {response.citations && response.citations.length > 0 && (
               <>
                 <h3>근거</h3>

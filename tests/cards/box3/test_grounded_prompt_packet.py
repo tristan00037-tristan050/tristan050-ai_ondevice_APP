@@ -50,12 +50,13 @@ def test_grounded_prompt_persistable_is_digest_only():
     assert ABSTAINED_SLOT_TEXT in packet.prompt_runtime_only
 
 
-def test_usefulness_gate_blocks_unsupported_and_partial_for_empty():
-    blocked = evaluate_usefulness_gate(
+def test_usefulness_gate_marks_unsupported_for_review_and_partial_for_empty():
+    review = evaluate_usefulness_gate(
         "제목: 초안\n배경: x\n핵심내용: x\n근거: x\n확인필요: x\n최종문안: x",
         [Verdict("unsupported")],
     )
-    assert blocked.status == "BLOCK"
+    assert review.status == "PARTIAL"
+    assert review.fail_class == "NEEDS_REVIEW_UNSUPPORTED_CLAIM"
     partial = evaluate_usefulness_gate("제목: 초안", [Verdict("supported")])
     assert partial.status == "PARTIAL"
     ok = evaluate_usefulness_gate(
