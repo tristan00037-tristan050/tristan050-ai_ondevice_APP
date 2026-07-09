@@ -127,6 +127,32 @@ def test_scan_variants_are_deduplicated() -> None:
     assert [variant.variant_id for variant in variants] == ["v0_raw"]
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        # §5-①: 공백삽입 회피(원시 숫자 토큰만 공백으로 분리) — v5 조건부 병합으로 반드시 탐지.
+        "계좌 110 234 567890 으로 보내주세요",
+        "계좌 110 234 567890",
+        "계좌 1 1 0 2 3 4 5 6 7 8 9 0 확인",
+        "카드 4111 1111 1111 1111 결제",
+    ],
+)
+def test_whitespace_inserted_account_is_detected(text: str) -> None:
+    assert scan_runtime_text(text)["passed"] is False
+
+
+def test_conditional_merge_v5_raw_tokens_merge_structured_are_boundaries() -> None:
+    # 함수를 직접 호출한다 — v5 결과가 v4 와 같으면 scan_variants 에서 dedup 되므로.
+    from butler_pc_core.connect_loop.scan_normalization import _strip_separators_conditional_merge as v5
+
+    # 원시 숫자 토큰끼리는 공백을 넘어 병합된다.
+    assert v5("110 234 567890") == "110234567890"
+    # 구조화된 토큰(내부에 - 또는 :)은 병합 경계 — 무관한 날짜·시각이 합쳐지지 않는다.
+    assert v5("2026-07-04 12:30") == "20260704 1230"
+    # 혼합: 구조화 토큰이 경계로 작동해 앞뒤 원시 토큰과 합쳐지지 않는다(원래 동작 유지).
+    assert v5("123-456 7890") == "123456 7890"
+
+
 def test_separator_normalization_preserves_whitespace_boundaries() -> None:
     # 리뷰 P2: 공백으로 분리된 무관한 필드는 하나의 숫자열로 병합되지 않는다.
     v4 = [v.text for v in scan_variants("2026-07-04 12:30") if v.variant_id == "v4_separators_removed"]

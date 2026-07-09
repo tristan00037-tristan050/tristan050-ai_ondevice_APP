@@ -120,18 +120,46 @@ def _strip_separators(text: str) -> str:
     return " ".join(_INTRA_TOKEN_SEPARATOR_RE.sub("", token) for token in tokens)
 
 
+def _strip_separators_conditional_merge(text: str) -> str:
+    """v5: 공백으로 나뉜 '원시 숫자 토큰'끼리만 병합한다.
+
+    구조화된 토큰(내부에 -._/: 등 구분자가 있었던 토큰)은 병합 경계로 작동한다.
+    이렇게 하면 '110 234 567890'(원시 토큰 3개)은 병합되어 탐지되고,
+    '2026-07-04 12:30'(둘 다 구조화된 토큰)은 병합되지 않아 오탐이 없다.
+    새 정규식·날짜 판별 없이 기존 신호(_INTRA_TOKEN_SEPARATOR_RE 매치 여부)만 사용한다.
+    """
+    tokens = _WHITESPACE_RE.split(text)
+    groups: list[list[str]] = []
+    current: list[str] = []
+    for token in tokens:
+        stripped = _INTRA_TOKEN_SEPARATOR_RE.sub("", token)
+        is_structured = stripped != token  # 내부에 구분자가 있었으면 구조화된 토큰
+        if is_structured:
+            if current:
+                groups.append(current)
+                current = []
+            groups.append([stripped])  # 구조화된 토큰은 단독 그룹(경계)
+        else:
+            current.append(stripped)   # 원시 토큰은 이어붙임 후보
+    if current:
+        groups.append(current)
+    return " ".join("".join(g) for g in groups)
+
+
 def scan_variants(text: str) -> list[ScanVariant]:
     raw = str(text or "")
     v1 = _unicode_decimal_digits(_strip_zero_width(unicodedata.normalize("NFKC", raw).translate(_CONSERVATIVE_CONFUSABLES)))
     v2 = _strip_visual_noise(v1)
     v3 = _map_korean_digits(v2)
     v4 = _strip_separators(v3)
+    v5 = _strip_separators_conditional_merge(v3)
     candidates = (
         ScanVariant("v0_raw", raw),
         ScanVariant("v1_nfkc_zero_width_decimal", v1),
         ScanVariant("v2_visual_noise_removed", v2),
         ScanVariant("v3_korean_digits", v3),
         ScanVariant("v4_separators_removed", v4),
+        ScanVariant("v5_conditional_merge", v5),
     )
     variants: list[ScanVariant] = []
     seen: set[str] = set()
