@@ -60,6 +60,25 @@ def is_sha256_digest(value: object) -> bool:
 def is_bare_sha256(value: object) -> bool:
     return isinstance(value, str) and bool(_BARE_SHA_RE.fullmatch(value))
 
+def is_canonical_sha256(value: object) -> bool:
+    """`sha256:<64 lowerhex>` 정규형 여부(is_sha256_digest 와 동일 계약의 명시 별칭)."""
+    return is_sha256_digest(value)
+
+def canonical_sha256(value: str) -> str:
+    """이미 계산된 digest(bare hex 또는 sha256:hex)를 정규형 `sha256:<64 lowerhex>` 로 만든다.
+
+    원문을 재해싱하지 않는다 — 파일 sha256 hexdigest 를 manifest/런타임과 동일 규칙으로
+    비교하기 위한 정규화 전용이다. 형식 위반은 ValueError('NON_CANONICAL_SHA256').
+    """
+    if not isinstance(value, str):
+        raise ValueError("NON_CANONICAL_SHA256")
+    lowered = value.strip().lower()
+    if lowered.startswith("sha256:"):
+        lowered = lowered[len("sha256:") :]
+    if not _BARE_SHA_RE.fullmatch(lowered):
+        raise ValueError("NON_CANONICAL_SHA256")
+    return "sha256:" + lowered
+
 def assert_persistable_digest_only(value: Any) -> None:
     encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
     lowered = encoded.casefold()
