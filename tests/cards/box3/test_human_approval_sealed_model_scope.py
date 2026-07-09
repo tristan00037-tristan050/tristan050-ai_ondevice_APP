@@ -134,6 +134,27 @@ def test_desktop_rejects_request_scope():
     assert str(exc.value) == "APP_MODEL_SCOPE_REQUIRED"
 
 
+@pytest.mark.parametrize("bad_config", [[1], "sha256:x", 7, ("a",)])
+def test_non_dict_approval_config_fails_closed_not_500(bad_config):
+    """non-dict 승인 config 는 AttributeError(500) 없이 fail-closed 로 강등된다."""
+    with pytest.raises(HumanApprovalError) as exc:
+        resolve_expected_scope_digest(
+            bad_config,
+            request_digest=canonical_sha256("a" * 64),
+            model_digest=canonical_sha256("b" * 64),
+            context=APPROVAL_CONTEXT_DESKTOP_APP,
+        )
+    assert str(exc.value) == "APP_MODEL_SCOPE_REQUIRED"
+    # eval context 에서는 request_scope 로 강등되어 통과한다(그 외 모드 요구 없이).
+    digest, mode = resolve_expected_scope_digest(
+        bad_config,
+        request_digest=canonical_sha256("a" * 64),
+        model_digest=None,
+        context=APPROVAL_CONTEXT_EVAL_PIPELINE,
+    )
+    assert mode == APPROVAL_MODE_REQUEST and digest == canonical_sha256("a" * 64)
+
+
 def test_eval_pipeline_request_scope_unchanged():
     digest, mode = resolve_expected_scope_digest(
         {},

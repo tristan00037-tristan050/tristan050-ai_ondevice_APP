@@ -152,10 +152,13 @@ def verify(approval_path: Path, manifest_path: Path, model_path: Path, eval_summ
     validate_sealed_manifest(manifest)
 
     # 물리 GGUF 재해싱 (fd 기반 TOCTOU-hardened). symlink/변경/swap 은 고정 reason 으로 raise.
+    # 파일 부재/읽기 불가(OSError)도 raw traceback·경로 노출 없이 고정 reason 으로 fail-closed.
     try:
         identity = hash_model_file_for_security(str(model_path))
     except ValueError as exc:
         raise VerifyError(str(exc)) from exc
+    except OSError as exc:
+        raise VerifyError("PHYSICAL_MODEL_DIGEST_MISMATCH") from exc
     if identity.model_digest != manifest["model_digest"]:
         raise VerifyError("PHYSICAL_MODEL_DIGEST_MISMATCH")
 

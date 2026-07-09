@@ -54,7 +54,9 @@ def resolve_expected_scope_digest(
     - eval_pipeline: 기존 request_scope 를 유지(그 외 모드는 EVAL_REQUEST_SCOPE_REQUIRED).
     - 그 외 context 는 APPROVAL_CONTEXT_INVALID.
     """
-    mode = (config or {}).get("approval_mode", APPROVAL_MODE_REQUEST)
+    # non-dict(예: JSON [1]/스칼라)도 승인 부재로 취급해 fail-closed 한다(500 방지).
+    # request_scope 로 강등 → desktop_app 이면 APP_MODEL_SCOPE_REQUIRED, eval 이면 request_scope.
+    mode = config.get("approval_mode", APPROVAL_MODE_REQUEST) if isinstance(config, dict) else APPROVAL_MODE_REQUEST
 
     if context == APPROVAL_CONTEXT_DESKTOP_APP:
         if mode != APPROVAL_MODE_MODEL:

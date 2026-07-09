@@ -102,6 +102,20 @@ def test_manifest_physical_rehash_matches(tmp_path):
     assert hash_model_file_for_security(str(model)).model_digest == manifest["model_digest"]
 
 
+def test_verify_missing_model_is_meta_only_reason(tmp_path):
+    """--model 이 없는 파일이어도 raw traceback/경로 노출 없이 고정 reason 으로 fail-closed."""
+    manifest_path = _REPO_ROOT / "docs" / "BOX3_SEALED_MODEL_MANIFEST.json"
+    approval = _valid_approval("sha256:" + "e" * 64)
+    approval_path = tmp_path / "approval.json"
+    approval_path.write_text(json.dumps(approval), encoding="utf-8")
+    approval_path.chmod(0o600)
+    missing_model = tmp_path / "does_not_exist.gguf"
+    with pytest.raises(V.VerifyError) as exc:
+        V.verify(approval_path, manifest_path, missing_model, missing_model)
+    # OSError 가 raw 로 새지 않고 고정 enum 으로 변환된다.
+    assert str(exc.value) == "PHYSICAL_MODEL_DIGEST_MISMATCH"
+
+
 def test_no_git_add_all_pollution_manifest():
     """git add -A 금지: 변경/신규 파일이 v1.2 허용 범위 밖으로 새지 않는다."""
     result = subprocess.run(
