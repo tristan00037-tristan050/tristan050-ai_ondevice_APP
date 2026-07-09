@@ -153,6 +153,8 @@ def _status_from_gate(
         return BLOCKED if str(runner_fail or "").startswith("BLOCK_") else ASSET_INVENTORY_PASS, False, runner_fail, True
     if test_only_runner:
         return REAL_CANDIDATE, False, "TEST_ONLY_RUNNER_NOT_REAL_APPROVAL", True
+    if not approval_allowed and approval_fail != "BLOCK_HUMAN_APPROVAL_MISSING":
+        return BLOCKED, False, approval_fail, True
     if bridge_fail:
         if bridge_fail in {PARTIAL_HELPER_SDK_UNAVAILABLE, PARTIAL_EMBEDDER_UNAVAILABLE, PARTIAL_BGE_M3_FALLBACK_USED}:
             return REAL_CANDIDATE, False, bridge_fail, True

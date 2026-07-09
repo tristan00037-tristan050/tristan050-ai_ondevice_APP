@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from butler_pc_core.cards.box3.actual_contracts import Box3ActualRuntimeEnvelope, sha256_text
 from butler_pc_core.cards.box3.actual_fail_class import (
     BLOCK_DLP_OUTBOUND_DRAFT,
+    BLOCK_HUMAN_APPROVAL_KILL_SWITCH,
     NEEDS_REVIEW_UNSUPPORTED_CLAIM,
     NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL,
     is_blocking_actual_fail_class,
@@ -156,6 +157,30 @@ def test_outbound_dlp_guard_prevents_labeled_draft_output(tmp_path, monkeypatch)
 
     assert verdict.status == "BLOCKED"
     assert verdict.fail_class == BLOCK_DLP_OUTBOUND_DRAFT
+    assert verdict.draft_text is None
+
+
+def test_hard_approval_failure_blocks_before_unsupported_review_candidate(tmp_path, monkeypatch):
+    model_digest = _write_model(tmp_path, monkeypatch)
+    approval = _approval(model_digest)
+    approval["kill_switch_enabled"] = True
+    env = Box3ActualRuntimeEnvelope.from_raw(
+        reference_texts=[REFERENCE],
+        drafting_request="납품 일정을 반영해 보고서 초안을 작성하세요.",
+        format_hint="보고서",
+    )
+
+    verdict = run_box3_actual_operation(
+        env,
+        base_config=ActualRunnerAssetConfig(allow_test_asset=True),
+        helper_component_guard=_guard(),
+        human_approval_config=approval,
+        fixed_eval_pass=True,
+        runner=_unsupported_runner,
+    )
+
+    assert verdict.status == "BLOCKED"
+    assert verdict.fail_class == BLOCK_HUMAN_APPROVAL_KILL_SWITCH
     assert verdict.draft_text is None
 
 
