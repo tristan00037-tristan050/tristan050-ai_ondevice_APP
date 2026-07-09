@@ -89,6 +89,10 @@ def _contract_only_actual_response(envelope: Box3ActualRuntimeEnvelope, *, fail_
         "stage_trace": [{"stage": "approval_pre_gate", "passed": bool(approval_allowed), "fail_class": approval_fail_class, "runner_injected": False}],
         "fail_class": fail_class,
         "needs_review": True,
+        "review_reason_code": fail_class,
+        "unsupported_claim_count": 0,
+        "annotated_claim_count": 0,
+        "label_coverage_ok": True,
         "human_approval_required": True,
         "real_claim_allowed": False,
         "contract_only": True,
@@ -121,6 +125,7 @@ def _contract_only_actual_response(envelope: Box3ActualRuntimeEnvelope, *, fail_
 def normalize_actual_verdict_to_legacy_response(result: Any, *, envelope: Box3ActualRuntimeEnvelope, approval_config_digest: str | None, runner_injected: bool) -> dict[str, Any]:
     raw = result.to_response_dict() if hasattr(result, "to_response_dict") else dict(result)
     actual_status = raw.get("status")
+    review_reason_code = raw.get("review_reason_code") or raw.get("fail_class")
     response = {
         "schema_version": "box3.draft.response.v1_2",
         "status": _to_legacy_status(actual_status),
@@ -131,6 +136,10 @@ def normalize_actual_verdict_to_legacy_response(result: Any, *, envelope: Box3Ac
         "stage_trace": raw.get("stage_trace", []),
         "fail_class": raw.get("fail_class"),
         "needs_review": raw.get("status") in {"CONTRACT_ONLY", "REAL_CANDIDATE", "BLOCKED"} and raw.get("real_claim_allowed") is not True,
+        "review_reason_code": review_reason_code,
+        "unsupported_claim_count": int(raw.get("unsupported_claim_count") or 0),
+        "annotated_claim_count": int(raw.get("annotated_claim_count") or 0),
+        "label_coverage_ok": raw.get("label_coverage_ok") is not False,
         "human_approval_required": raw.get("human_approval_required", True),
         "real_claim_allowed": raw.get("real_claim_allowed") is True,
         "contract_only": raw.get("real_claim_allowed") is not True,
@@ -147,6 +156,9 @@ def normalize_actual_verdict_to_legacy_response(result: Any, *, envelope: Box3Ac
             "fail_class": raw.get("fail_class"),
             "approval_config_digest": approval_config_digest,
             "actual_status": actual_status,
+            "unsupported_claim_count": int(raw.get("unsupported_claim_count") or 0),
+            "annotated_claim_count": int(raw.get("annotated_claim_count") or 0),
+            "label_coverage_ok": raw.get("label_coverage_ok") is not False,
         },
         "actual_operation": raw,
         "actual_wiring": {
