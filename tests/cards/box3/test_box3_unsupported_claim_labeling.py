@@ -184,6 +184,35 @@ def test_hard_approval_failure_blocks_before_unsupported_review_candidate(tmp_pa
     assert verdict.draft_text is None
 
 
+def test_hard_approval_failure_beats_unsupported_demotion_for_direct_callers():
+    # P2-1(코덱스): run_box3_actual_operation 직접 호출(엔드포인트 pre-gate 우회) 시에도
+    # kill-switch/revoked/expired/scope-mismatch 승인 실패는 unsupported 강등(REAL_CANDIDATE)
+    # 보다 우선해 BLOCKED 여야 한다. 승인 우선순위 게이트가 bridge_fail 강등 분기보다 앞선다.
+    from butler_pc_core.cards.box3.actual_fail_class import BLOCKED
+
+    for approval_fail in (
+        "BLOCK_HUMAN_APPROVAL_KILL_SWITCH",
+        "BLOCK_HUMAN_APPROVAL_REVOKED",
+        "BLOCK_HUMAN_APPROVAL_EXPIRED",
+        "BLOCK_HUMAN_APPROVAL_SCOPE_MISMATCH",
+    ):
+        status, real_allowed, fail_class, _ = _gate(
+            bridge_fail=NEEDS_REVIEW_UNSUPPORTED_CLAIM,
+            approval_allowed=False,
+            approval_fail=approval_fail,
+        )
+        assert status == BLOCKED, approval_fail
+        assert real_allowed is False, approval_fail
+        assert fail_class == approval_fail
+    # MISSING 은 설계상 검토후보(REAL_CANDIDATE)로 남는다 — 보안 차단이 아니라 미설정 상태.
+    status_missing, _, _, _ = _gate(
+        bridge_fail=NEEDS_REVIEW_UNSUPPORTED_CLAIM,
+        approval_allowed=False,
+        approval_fail="BLOCK_HUMAN_APPROVAL_MISSING",
+    )
+    assert status_missing == "REAL_CANDIDATE"
+
+
 def test_known_needs_review_fail_classes_are_not_blocking():
     assert is_blocking_actual_fail_class(NEEDS_REVIEW_UNSUPPORTED_CLAIM) is False
     assert is_blocking_actual_fail_class(NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL) is False

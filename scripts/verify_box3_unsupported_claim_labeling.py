@@ -18,9 +18,10 @@ BASE_REF = "origin/main"
 
 
 def _read(path: str) -> str:
+    # fail-safe: surrogate-escape/quoted 경로나 비-utf8 내용도 판정 출력 전 크래시 없이 ""로.
     try:
-        return (ROOT / path).read_text(encoding="utf-8")
-    except OSError:
+        return (ROOT / path).read_text(encoding="utf-8", errors="ignore")
+    except (OSError, ValueError):
         return ""
 
 
@@ -53,11 +54,13 @@ def _changed_paths() -> set[str]:
 
 def _read_changed_text(path: str) -> str | None:
     candidate = ROOT / path
+    # fail-safe: is_file()/read_text 가 surrogate-escape 경로에서 ValueError/UnicodeError 를
+    # 낼 수 있으므로(예: git-quoted 비-ASCII untracked 경로) 판정 출력 전 크래시를 막는다.
     try:
         if not candidate.is_file():
             return None
         return candidate.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
+    except (OSError, ValueError):
         return None
 
 
