@@ -167,6 +167,12 @@ class Box3ActualOperationVerdict:
     runner_measurements: dict[str, Any]
     asset_measurements: dict[str, Any]
     helper_sdk_receipts: dict[str, Any] | None = None
+    review_reason_code: str | None = None
+    unsupported_claim_count: int = 0
+    annotated_claim_count: int = 0
+    label_coverage_ok: bool = True
+    labeling_applied: bool = False
+    label_banner_applied: bool = False
     external_send_zero: Literal[True] = True
     raw_saved_zero: Literal[True] = True
     raw_text_logged: Literal[False] = False
@@ -177,9 +183,3 @@ class Box3ActualOperationVerdict:
 
     def to_response_dict(self) -> dict[str, Any]:
         return asdict(self)
-
-    def to_persistable_dict(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload.pop("draft_text", None)
-        assert_persistable_digest_only(payload)
-        return payload
