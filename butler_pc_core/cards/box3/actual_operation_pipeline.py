@@ -3,13 +3,17 @@ from __future__ import annotations
 from typing import Any
 
 from .actual_contracts import Box3ActualOperationVerdict, Box3ActualRuntimeEnvelope, sha256_text
+from .real_contracts import scan_runtime_security_risk
 from .actual_fail_class import (
     APPROVED_MODEL_RUNTIME_MISMATCH,
     ASSET_INVENTORY_PASS,
     BLOCKED,
+    BLOCK_DLP_OUTBOUND_DRAFT,
     BLOCK_POLICY_GATE,
     Box3SecurityError,
     FIXED_EVAL_PENDING,
+    NEEDS_REVIEW_UNSUPPORTED_CLAIM,
+    NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL,
     PARTIAL_BGE_M3_FALLBACK_USED,
     PARTIAL_EMBEDDER_UNAVAILABLE,
     PARTIAL_HELPER_SDK_UNAVAILABLE,
@@ -18,16 +22,110 @@ from .actual_fail_class import (
     PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE,
     PASS_STATUS,
     REAL_CANDIDATE,
+    is_blocking_actual_fail_class,
 )
 from .actual_runner_assets import ActualRunnerAssetConfig, verify_base_model_asset
 from .grounded_prompt import evaluate_usefulness_gate
 from .helper_component_guard import verify_helper_component_use_guard
-from .helper_sdk_bridge import HelperSdkBridge
+from .helper_sdk_bridge import HelperSdkBridge, _normalize_claim_line_for_helper4
 from .human_approval_sealed import evaluate_human_approval_sealed
 from .local_sealed_runner import RealRunner, run_actual_runner_smoke
 from .model_identity import Box3ModelIdentity, assert_runtime_model_identity_matches_approval
 from .rag_prompt_integration import build_rag_grounded_prompt_runtime
+from .real_grounding import extract_claims
 from .real_metrics import compute_claim_metrics, estimate_format_compliance, estimate_style_compliance, metric_fail_class
+
+UNSUPPORTED_CLAIM_LABEL = "[근거 확인 필요]"
+UNSUPPORTED_CLAIM_LABEL_FAILSAFE_BANNER = (
+    "[전체 검토 필요] 근거 확인 라벨 매칭이 일부 실패하여 모든 사실 문장을 사람이 검토해야 합니다."
+)
+
+
+def normalize_draft_claim_line(line: str) -> str:
+    value = str(line or "").strip()
+    if not value:
+        return ""
+    return _normalize_claim_line_for_helper4(value)
+
+
+def _helper4_digest_candidates(claim_text: str) -> set[str]:
+    normalized = normalize_draft_claim_line(claim_text)
+    if not normalized:
+        return set()
+    value_only = normalized.split(":", 1)[-1].strip() if ":" in normalized else normalized
+    return {
+        sha256_text(claim_text.strip()),
+        sha256_text(normalized),
+        sha256_text(value_only),
+    }
+
+
+def _line_claim_digest_candidates(line: str) -> tuple[set[str], bool]:
+    claims = extract_claims(line)
+    candidates: set[str] = set()
+    factual_seen = False
+    for claim in claims:
+        if not claim.is_factual or not claim.claim_text_runtime_only.strip():
+            continue
+        factual_seen = True
+        candidates.update(_helper4_digest_candidates(claim.claim_text_runtime_only))
+    return candidates, factual_seen
+
+
+def annotate_unsupported_lines(draft_text: str, unsupported_digests: set[str]) -> tuple[str, dict[str, Any]]:
+    unsupported = {str(item) for item in unsupported_digests if str(item).strip()}
+    if not draft_text or not unsupported:
+        return draft_text, {
+            "unsupported_claim_count": len(unsupported),
+            "annotated_claim_count": 0,
+            "label_coverage_ok": True,
+            "review_reason_code": None,
+        }
+
+    lines = draft_text.splitlines()
+    annotated_lines: list[str] = []
+    matched: set[str] = set()
+    factual_line_indexes: list[int] = []
+    matched_line_indexes: set[int] = set()
+    for idx, line in enumerate(lines):
+        candidates, factual_seen = _line_claim_digest_candidates(line)
+        if factual_seen:
+            factual_line_indexes.append(idx)
+        matched_here = candidates & unsupported
+        if matched_here:
+            matched.update(matched_here)
+            matched_line_indexes.add(idx)
+        annotated_lines.append(line)
+
+    label_coverage_ok = matched == unsupported
+    if not label_coverage_ok:
+        target_indexes = set(factual_line_indexes)
+        reason = NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL
+    else:
+        target_indexes = matched_line_indexes
+        reason = NEEDS_REVIEW_UNSUPPORTED_CLAIM
+
+    annotated_count = 0
+    for idx, line in enumerate(annotated_lines):
+        if idx not in target_indexes:
+            continue
+        stripped = line.lstrip()
+        if stripped.startswith(UNSUPPORTED_CLAIM_LABEL):
+            continue
+        prefix_ws = line[: len(line) - len(stripped)]
+        annotated_lines[idx] = f"{prefix_ws}{UNSUPPORTED_CLAIM_LABEL} {stripped}"
+        annotated_count += 1
+
+    annotated = "\n".join(annotated_lines)
+    if not label_coverage_ok:
+        annotated = f"{UNSUPPORTED_CLAIM_LABEL_FAILSAFE_BANNER}\n{annotated}"
+
+    return annotated, {
+        "unsupported_claim_count": len(unsupported),
+        "annotated_claim_count": annotated_count,
+        "label_coverage_ok": label_coverage_ok,
+        "review_reason_code": reason,
+    }
 
 def _status_from_gate(
     *,
@@ -58,10 +156,10 @@ def _status_from_gate(
     if bridge_fail:
         if bridge_fail in {PARTIAL_HELPER_SDK_UNAVAILABLE, PARTIAL_EMBEDDER_UNAVAILABLE, PARTIAL_BGE_M3_FALLBACK_USED}:
             return REAL_CANDIDATE, False, bridge_fail, True
-        return BLOCKED, False, bridge_fail, True
+        return (BLOCKED if is_blocking_actual_fail_class(bridge_fail) else REAL_CANDIDATE), False, bridge_fail, True
     metric_fail = metric_fail_class(metrics)
     if metric_fail:
-        return BLOCKED if metric_fail.startswith("BLOCK_") else REAL_CANDIDATE, False, metric_fail, True
+        return (BLOCKED if is_blocking_actual_fail_class(metric_fail) else REAL_CANDIDATE), False, metric_fail, True
     if not fixed_eval_pass:
         return REAL_CANDIDATE, False, FIXED_EVAL_PENDING, True
     if not approval_allowed:
@@ -194,10 +292,33 @@ def run_box3_actual_operation(
         usefulness = evaluate_usefulness_gate(draft, verdicts)
         if usefulness.status != "PASS" and bridge_fail is None:
             bridge_fail = usefulness.fail_class
+        unsupported_digests = {
+            verdict.claim_digest
+            for verdict in verdicts
+            if getattr(verdict, "support_level", None) == "unsupported"
+        }
+        draft, label_meta = annotate_unsupported_lines(draft, unsupported_digests)
+        if label_meta["review_reason_code"] == NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL:
+            bridge_fail = NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL
         grounding_receipt = grounding_bundle.persistable_dict()
         stage_trace.append({"stage": "helper4_grounding", "passed": grounding_bundle.summary.unsupported_claim_count == 0, "fail_class": grounding_bundle.fail_class, "embedder_provider": grounding_bundle.embedder_provider})
         stage_trace.append({"stage": "usefulness_gate", **usefulness.to_dict()})
+        stage_trace.append({
+            "stage": "unsupported_claim_labeling",
+            "passed": label_meta["label_coverage_ok"],
+            "fail_class": None if label_meta["label_coverage_ok"] else NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL,
+            "unsupported_claim_count": label_meta["unsupported_claim_count"],
+            "annotated_claim_count": label_meta["annotated_claim_count"],
+            "label_coverage_ok": label_meta["label_coverage_ok"],
+        })
         stage_trace.append({"stage": "helper8_company_style", "passed": styled.style_applied, "fail_class": styled.fail_class})
+    if grounding_bundle is None:
+        label_meta = {
+            "unsupported_claim_count": 0,
+            "annotated_claim_count": 0,
+            "label_coverage_ok": True,
+            "review_reason_code": None,
+        }
 
     approval = evaluate_human_approval_sealed(
         human_approval_config,
@@ -221,6 +342,33 @@ def run_box3_actual_operation(
         test_only_runner=test_only,
     )
     draft_text = draft if status in {REAL_CANDIDATE, PASS_STATUS} else None
+    if draft_text:
+        dlp_reason = scan_runtime_security_risk(draft_text)
+        if dlp_reason:
+            stage_trace.append({"stage": "dlp_pre_output_guard", "passed": False, "fail_class": BLOCK_DLP_OUTBOUND_DRAFT, "reason_code": dlp_reason})
+            return Box3ActualOperationVerdict(
+                schema_version="box3.actual_operation.v1_2",
+                request_id=envelope.request_id,
+                request_digest=envelope.request_digest,
+                status=BLOCKED,
+                draft_text=None,
+                draft_digest=None,
+                metrics=metrics.to_dict(),
+                citations=citations,
+                stage_trace=stage_trace + [{"stage": "final_gate", "status": BLOCKED, "real_claim_allowed": False, "fail_class": BLOCK_DLP_OUTBOUND_DRAFT}],
+                fail_class=BLOCK_DLP_OUTBOUND_DRAFT,
+                real_claim_allowed=False,
+                human_approval_required=True,
+                runner_measurements=runner_measurements,
+                asset_measurements={"base": base.to_dict(), "helper": helper.to_dict()},
+                helper_sdk_receipts={"evidence": evidence_bundle.persistable_dict(), "grounding": grounding_receipt},
+                needs_review=True,
+                review_reason_code=BLOCK_DLP_OUTBOUND_DRAFT,
+                unsupported_claim_count=label_meta["unsupported_claim_count"],
+                annotated_claim_count=label_meta["annotated_claim_count"],
+                label_coverage_ok=label_meta["label_coverage_ok"],
+            )
+        stage_trace.append({"stage": "dlp_pre_output_guard", "passed": True, "fail_class": None})
     helper_receipts = {
         "evidence": evidence_bundle.persistable_dict(),
         "grounding": grounding_receipt,
@@ -241,4 +389,9 @@ def run_box3_actual_operation(
         runner_measurements=runner_measurements,
         asset_measurements={"base": base.to_dict(), "helper": helper.to_dict()},
         helper_sdk_receipts=helper_receipts,
+        needs_review=bool(fail_class) or real_allowed is not True,
+        review_reason_code=label_meta["review_reason_code"] or fail_class,
+        unsupported_claim_count=label_meta["unsupported_claim_count"],
+        annotated_claim_count=label_meta["annotated_claim_count"],
+        label_coverage_ok=label_meta["label_coverage_ok"],
     )

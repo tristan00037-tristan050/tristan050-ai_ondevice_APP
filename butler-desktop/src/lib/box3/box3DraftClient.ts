@@ -19,6 +19,11 @@ export type Box3DraftResponse = {
   metrics?: Record<string, unknown>;
   status?: string;
   fail_class?: string | null;
+  needs_review?: boolean;
+  review_reason_code?: string | null;
+  unsupported_claim_count?: number;
+  annotated_claim_count?: number;
+  label_coverage_ok?: boolean;
   request_digest?: string;
   raw_doc_logged?: false;
   raw_text_logged?: false;

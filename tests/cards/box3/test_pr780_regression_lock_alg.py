@@ -55,7 +55,7 @@ def test_pr780_no_name_hallucination_prompt_forces_absent_slot():
     assert any(slot in result.rag_context.absent_slots for slot in ("name", "approval", "owner"))
 
 
-def test_pr780_unsupported_name_claim_remains_blocked_by_gate():
+def test_pr780_unsupported_name_claim_is_labeled_for_review_by_gate():
     draft = (
         "제목: 초안\n"
         "배경: 김철수 부장이 결재합니다. (근거1)\n"
@@ -68,8 +68,8 @@ def test_pr780_unsupported_name_claim_remains_blocked_by_gate():
         draft,
         claim_verdicts=[V("unsupported"), V("supported"), V("supported")],
     )
-    assert verdict.status == "BLOCK"
-    assert verdict.fail_class == "BLOCK_UNSUPPORTED_CLAIM"
+    assert verdict.status == "PARTIAL"
+    assert verdict.fail_class == "NEEDS_REVIEW_UNSUPPORTED_CLAIM"
 
 
 def test_pr780_fewshot_pack_contains_three_purposes():
