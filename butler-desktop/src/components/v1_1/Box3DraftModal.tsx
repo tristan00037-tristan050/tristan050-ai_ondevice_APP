@@ -9,6 +9,7 @@ import {
 import { MAX_CHARS_PER_FILE, prepareCardTextFiles } from '../../lib/cards/fileText';
 
 const FORMAT_HINTS: Box3FormatHint[] = ['보고서', '이메일', '계약 검토', '회의 안건', '자유형'];
+const UNSUPPORTED_LABEL = '[근거 확인 필요]';
 
 // #842(box4·box6) 검증본과 동일한 시각적 숨김 input 스타일 — 네이티브 Choose Files 미노출.
 const hiddenFileInputStyle: React.CSSProperties = {
@@ -37,6 +38,35 @@ function readPreparedFileText(file: File): Promise<string> {
 
 function safeDraftText(response: Box3DraftResponse): string {
   return response.draft ?? response.draft_text ?? '';
+}
+
+function needsReviewNotice(response: Box3DraftResponse): string | null {
+  if (!response.needs_review && !response.unsupported_claim_count) return null;
+  const count = Number(response.unsupported_claim_count ?? 0);
+  if (count > 0) {
+    return `근거가 확인되지 않은 문장이 ${count}건 있습니다. ${UNSUPPORTED_LABEL} 표시가 있는 줄은 사람이 반드시 검토해야 합니다.`;
+  }
+  return '검토가 필요한 초안입니다. 표시된 사유를 확인한 뒤 사용하십시오.';
+}
+
+function DraftTextView({ text }: { text: string }) {
+  const lines = text.split('\n');
+  return (
+    <div data-testid="box3-draft-text" style={{ whiteSpace: 'pre-wrap', background: '#F8FAFC', padding: 12, borderRadius: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: 13 }}>
+      {lines.map((line, index) => {
+        const highlighted = line.trimStart().startsWith(UNSUPPORTED_LABEL) || line.trimStart().startsWith('[전체 검토 필요]');
+        return (
+          <div
+            key={index}
+            data-testid={highlighted ? 'box3-needs-review-line' : undefined}
+            style={highlighted ? { background: '#FFEDD5', borderLeft: '4px solid #F97316', padding: '2px 6px', margin: '2px 0' } : undefined}
+          >
+            {line || ' '}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function ErrorBox({ message }: { message: string }) {
@@ -201,14 +231,23 @@ export function Box3DraftModal({ onClose }: { onClose: () => void }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#14532D', fontWeight: 700 }}>
               <CheckCircle2 size={18} aria-hidden /> 응답 수신
             </div>
-            <dl style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 6, fontSize: 12 }}>
+            {needsReviewNotice(response) && (
+              <div role="alert" data-testid="box3-needs-review-banner" style={{ marginTop: 12, border: '1px solid #FDBA74', background: '#FFF7ED', color: '#9A3412', borderRadius: 8, padding: 12, fontSize: 13 }}>
+                <AlertTriangle size={16} aria-hidden /> {needsReviewNotice(response)}
+              </div>
+            )}
+            <dl style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 6, fontSize: 12 }}>
               <dt>status</dt><dd>{response.status ?? 'unknown'}</dd>
               <dt>fail_class</dt><dd>{response.fail_class ?? '없음'}</dd>
+              <dt>review_reason_code</dt><dd>{response.review_reason_code ?? '없음'}</dd>
+              <dt>unsupported_claim_count</dt><dd>{response.unsupported_claim_count ?? 0}</dd>
+              <dt>annotated_claim_count</dt><dd>{response.annotated_claim_count ?? 0}</dd>
+              <dt>label_coverage_ok</dt><dd>{String(response.label_coverage_ok !== false)}</dd>
               <dt>request_digest</dt><dd style={{ overflowWrap: 'anywhere' }}>{response.request_digest ?? '없음'}</dd>
               <dt>raw_doc_logged</dt><dd>{String(response.raw_doc_logged === false)}</dd>
             </dl>
             <h3>초안</h3>
-            <pre style={{ whiteSpace: 'pre-wrap', background: '#F8FAFC', padding: 12, borderRadius: 8 }}>{safeDraftText(response) || '(초안 없음)'}</pre>
+            {safeDraftText(response) ? <DraftTextView text={safeDraftText(response)} /> : <pre style={{ whiteSpace: 'pre-wrap', background: '#F8FAFC', padding: 12, borderRadius: 8 }}>(초안 없음)</pre>}
             {response.citations && response.citations.length > 0 && (
               <>
                 <h3>근거</h3>
