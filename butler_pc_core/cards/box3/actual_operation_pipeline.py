@@ -7,17 +7,16 @@ from .actual_fail_class import (
     APPROVED_MODEL_RUNTIME_MISMATCH,
     ASSET_INVENTORY_PASS,
     BLOCKED,
+    BLOCK_DLP_OUTBOUND_DRAFT,
     BLOCK_POLICY_GATE,
     Box3SecurityError,
     FIXED_EVAL_PENDING,
-    PARTIAL_BGE_M3_FALLBACK_USED,
-    PARTIAL_EMBEDDER_UNAVAILABLE,
-    PARTIAL_HELPER_SDK_UNAVAILABLE,
     PARTIAL_MODEL_ADAPTER_STACK_UNSUPPORTED,
     PARTIAL_REAL_ASSET_VOLUME_MISSING,
     PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE,
     PASS_STATUS,
     REAL_CANDIDATE,
+    is_blocking_actual_fail_class,
 )
 from .actual_runner_assets import ActualRunnerAssetConfig, verify_base_model_asset
 from .grounded_prompt import evaluate_usefulness_gate
@@ -28,6 +27,13 @@ from .local_sealed_runner import RealRunner, run_actual_runner_smoke
 from .model_identity import Box3ModelIdentity, assert_runtime_model_identity_matches_approval
 from .rag_prompt_integration import build_rag_grounded_prompt_runtime
 from .real_metrics import compute_claim_metrics, estimate_format_compliance, estimate_style_compliance, metric_fail_class
+from .unsupported_labeling import (
+    UnsupportedLabelMeta,
+    annotate_unsupported_lines,
+    scan_outbound_text_for_pii_or_secret,
+    unsupported_digest_set,
+)
+
 
 def _status_from_gate(
     *,
@@ -46,27 +52,61 @@ def _status_from_gate(
     if base_status in {PARTIAL_REAL_ASSET_VOLUME_MISSING, PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE} and not test_only_runner:
         return base_status, False, base_status, True
     if helper_fail:
-        return helper_fail if str(helper_fail).startswith("PARTIAL_") else BLOCKED, False, helper_fail, True
+        return (BLOCKED if is_blocking_actual_fail_class(helper_fail) else helper_fail), False, helper_fail, True
     if parse_fail:
-        return parse_fail if str(parse_fail).startswith("PARTIAL_") else BLOCKED, False, parse_fail, True
+        return (BLOCKED if is_blocking_actual_fail_class(parse_fail) else parse_fail), False, parse_fail, True
     if not runner_ok:
         if runner_fail in {PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE, PARTIAL_MODEL_ADAPTER_STACK_UNSUPPORTED}:
             return runner_fail, False, runner_fail, True
-        return BLOCKED if str(runner_fail or "").startswith("BLOCK_") else ASSET_INVENTORY_PASS, False, runner_fail, True
+        return BLOCKED if is_blocking_actual_fail_class(runner_fail) else ASSET_INVENTORY_PASS, False, runner_fail, True
     if test_only_runner:
         return REAL_CANDIDATE, False, "TEST_ONLY_RUNNER_NOT_REAL_APPROVAL", True
     if bridge_fail:
-        if bridge_fail in {PARTIAL_HELPER_SDK_UNAVAILABLE, PARTIAL_EMBEDDER_UNAVAILABLE, PARTIAL_BGE_M3_FALLBACK_USED}:
-            return REAL_CANDIDATE, False, bridge_fail, True
-        return BLOCKED, False, bridge_fail, True
+        return (BLOCKED if is_blocking_actual_fail_class(bridge_fail) else REAL_CANDIDATE), False, bridge_fail, True
     metric_fail = metric_fail_class(metrics)
     if metric_fail:
-        return BLOCKED if metric_fail.startswith("BLOCK_") else REAL_CANDIDATE, False, metric_fail, True
+        return (BLOCKED if is_blocking_actual_fail_class(metric_fail) else REAL_CANDIDATE), False, metric_fail, True
     if not fixed_eval_pass:
         return REAL_CANDIDATE, False, FIXED_EVAL_PENDING, True
     if not approval_allowed:
         return REAL_CANDIDATE if approval_fail == "BLOCK_HUMAN_APPROVAL_MISSING" else BLOCKED, False, approval_fail, True
     return PASS_STATUS, True, None, False
+
+
+def _blocked_after_output_guard(
+    *,
+    envelope: Box3ActualRuntimeEnvelope,
+    stage_trace: list[dict[str, Any]],
+    base,
+    helper,
+    runner_measurements: dict[str, Any],
+    helper_receipts: dict[str, Any] | None,
+    label_meta: UnsupportedLabelMeta,
+) -> Box3ActualOperationVerdict:
+    return Box3ActualOperationVerdict(
+        schema_version="box3.actual_operation.v1_2",
+        request_id=envelope.request_id,
+        request_digest=envelope.request_digest,
+        status=BLOCKED,
+        draft_text=None,
+        draft_digest=None,
+        metrics={},
+        citations=[],
+        stage_trace=stage_trace + [{"stage": "final_gate", "status": BLOCKED, "real_claim_allowed": False, "fail_class": BLOCK_DLP_OUTBOUND_DRAFT}],
+        fail_class=BLOCK_DLP_OUTBOUND_DRAFT,
+        real_claim_allowed=False,
+        human_approval_required=True,
+        runner_measurements=runner_measurements,
+        asset_measurements={"base": base.to_dict(), "helper": helper.to_dict()},
+        helper_sdk_receipts=helper_receipts,
+        review_reason_code=BLOCK_DLP_OUTBOUND_DRAFT,
+        unsupported_claim_count=label_meta.unsupported_claim_count,
+        annotated_claim_count=label_meta.annotated_claim_count,
+        label_coverage_ok=label_meta.label_coverage_ok,
+        labeling_applied=label_meta.annotated_claim_count > 0,
+        label_banner_applied=label_meta.label_banner_applied,
+    )
+
 
 def run_box3_actual_operation(
     envelope: Box3ActualRuntimeEnvelope,
@@ -172,6 +212,7 @@ def run_box3_actual_operation(
         test_only = smoke.test_only_runner
     stage_trace.append({"stage": "draft_runner_helper3_helper5_stack", "passed": runner_ok, "fail_class": runner_fail, **runner_measurements})
 
+    label_meta = UnsupportedLabelMeta(0, 0, True, False, None)
     grounding_bundle = bridge.ground_claims(draft, evidence_bundle) if draft else None
     if grounding_bundle is None:
         verdicts = []
@@ -179,6 +220,10 @@ def run_box3_actual_operation(
         citations = []
         metrics = compute_claim_metrics([], format_compliance=0.0, style_compliance=0.0, evidence_units=evidence_bundle.evidence_units_runtime)
         grounding_receipt = None
+        helper_receipts = {
+            "evidence": evidence_bundle.persistable_dict(),
+            "grounding": grounding_receipt,
+        }
     else:
         verdicts = grounding_bundle.claim_verdicts
         bridge_fail = grounding_bundle.fail_class
@@ -194,10 +239,31 @@ def run_box3_actual_operation(
         usefulness = evaluate_usefulness_gate(draft, verdicts)
         if usefulness.status != "PASS" and bridge_fail is None:
             bridge_fail = usefulness.fail_class
+        unsupported_digests = unsupported_digest_set(verdicts)
+        draft, label_meta = annotate_unsupported_lines(draft, unsupported_digests)
+        if label_meta.review_reason_code and bridge_fail is None:
+            bridge_fail = label_meta.review_reason_code
         grounding_receipt = grounding_bundle.persistable_dict()
+        helper_receipts = {
+            "evidence": evidence_bundle.persistable_dict(),
+            "grounding": grounding_receipt,
+        }
         stage_trace.append({"stage": "helper4_grounding", "passed": grounding_bundle.summary.unsupported_claim_count == 0, "fail_class": grounding_bundle.fail_class, "embedder_provider": grounding_bundle.embedder_provider})
         stage_trace.append({"stage": "usefulness_gate", **usefulness.to_dict()})
         stage_trace.append({"stage": "helper8_company_style", "passed": styled.style_applied, "fail_class": styled.fail_class})
+        stage_trace.append({"stage": "unsupported_claim_labeling", **label_meta.to_dict()})
+        outbound = scan_outbound_text_for_pii_or_secret(draft)
+        stage_trace.append({"stage": "dlp_pre_output_guard", **outbound.to_dict()})
+        if outbound.blocked:
+            return _blocked_after_output_guard(
+                envelope=envelope,
+                stage_trace=stage_trace,
+                base=base,
+                helper=helper,
+                runner_measurements=runner_measurements,
+                helper_receipts=helper_receipts,
+                label_meta=label_meta,
+            )
 
     approval = evaluate_human_approval_sealed(
         human_approval_config,
@@ -221,10 +287,7 @@ def run_box3_actual_operation(
         test_only_runner=test_only,
     )
     draft_text = draft if status in {REAL_CANDIDATE, PASS_STATUS} else None
-    helper_receipts = {
-        "evidence": evidence_bundle.persistable_dict(),
-        "grounding": grounding_receipt,
-    }
+    review_reason_code = fail_class if approval_required else None
     return Box3ActualOperationVerdict(
         schema_version="box3.actual_operation.v1_2",
         request_id=envelope.request_id,
@@ -241,4 +304,10 @@ def run_box3_actual_operation(
         runner_measurements=runner_measurements,
         asset_measurements={"base": base.to_dict(), "helper": helper.to_dict()},
         helper_sdk_receipts=helper_receipts,
+        review_reason_code=review_reason_code,
+        unsupported_claim_count=label_meta.unsupported_claim_count,
+        annotated_claim_count=label_meta.annotated_claim_count,
+        label_coverage_ok=label_meta.label_coverage_ok,
+        labeling_applied=label_meta.annotated_claim_count > 0,
+        label_banner_applied=label_meta.label_banner_applied,
     )
