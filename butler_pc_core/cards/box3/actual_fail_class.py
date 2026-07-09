@@ -21,8 +21,11 @@ BLOCK_HUMAN_APPROVAL_REVOKED = "BLOCK_HUMAN_APPROVAL_REVOKED"
 BLOCK_HUMAN_APPROVAL_EXPIRED = "BLOCK_HUMAN_APPROVAL_EXPIRED"
 BLOCK_HUMAN_APPROVAL_SCOPE_MISMATCH = "BLOCK_HUMAN_APPROVAL_SCOPE_MISMATCH"
 BLOCK_UNSUPPORTED_CLAIM = "BLOCK_UNSUPPORTED_CLAIM"
+NEEDS_REVIEW_UNSUPPORTED_CLAIM = "NEEDS_REVIEW_UNSUPPORTED_CLAIM"
+NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL = "NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL"
 NEEDS_REVIEW_NO_EVIDENCE_CLAIM = "NEEDS_REVIEW_NO_EVIDENCE_CLAIM"
 FIXED_EVAL_PENDING = "FIXED_EVAL_PENDING"
+BLOCK_DLP_OUTBOUND_DRAFT = "BLOCK_DLP_OUTBOUND_DRAFT"
 BLOCK_RAW_OR_PATH_LEAK = "BLOCK_RAW_OR_PATH_LEAK"
 
 PASS_STATUS = "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL"
@@ -62,6 +65,49 @@ ALLOWED_ACTUAL_OPERATION_STATUSES = {
     PASS_STATUS,
     BLOCKED,
 }
+
+# ── Box3 unsupported-claim B-plan severity map (2026-07-09) ──
+# Unknown fail_class remains blocking. Existing partial/needs-review labels are explicitly registered
+# so the helper does not accidentally turn historical nonblocking gates into hard BLOCKED states.
+FAIL_CLASS_SEVERITY: dict[str, str] = {
+    BLOCK_UNSUPPORTED_CLAIM: "block",  # enum 유지, 발행만 중단
+    "BLOCK_FINAL_GATE_UNSUPPORTED": "needs_review",
+    NEEDS_REVIEW_UNSUPPORTED_CLAIM: "needs_review",
+    NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL: "needs_review",
+    NEEDS_REVIEW_NO_EVIDENCE_CLAIM: "needs_review",
+    "NEEDS_REVIEW_NO_EVIDENCE": "needs_review",
+    "NEEDS_REVIEW_NO_EVIDENCE_CLAIMS": "needs_review",
+    "NEEDS_REVIEW_FORMAT_STYLE_GATE": "needs_review",
+    FIXED_EVAL_PENDING: "needs_review",
+    "FIXED_EVAL_INSUFFICIENT": "needs_review",
+    "FIXED_EVAL_BELOW_GATE": "needs_review",
+    "CITATION_ACCURACY_BELOW_GATE": "needs_review",
+    "FORMAT_MATCH_BELOW_GATE": "needs_review",
+    "STYLE_MATCH_BELOW_GATE": "needs_review",
+    "TABLE_FIGURE_COVERAGE_BELOW_GATE": "needs_review",
+    "PARTIAL_SUPPORTED_CLAIM_COUNT_LOW": "needs_review",
+    "PARTIAL_SECTION_COMPLETENESS_LOW": "needs_review",
+    "PARTIAL_ABSTAIN_OVERUSE": "needs_review",
+    PARTIAL_REAL_ASSET_VOLUME_MISSING: "needs_review",
+    PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE: "needs_review",
+    PARTIAL_HELPER_STACK_UNSUPPORTED: "needs_review",
+    PARTIAL_PEAK_MEMORY_UNMEASURED: "needs_review",
+    PARTIAL_MODEL_ADAPTER_STACK_UNSUPPORTED: "needs_review",
+    PARTIAL_HELPER_SDK_UNAVAILABLE: "needs_review",
+    PARTIAL_EMBEDDER_UNAVAILABLE: "needs_review",
+    PARTIAL_BGE_M3_FALLBACK_USED: "needs_review",
+}
+
+
+def is_blocking_actual_fail_class(fail_class: str | None) -> bool:
+    value = str(fail_class or "").strip()
+    if not value:
+        return False
+    if value in FAIL_CLASS_SEVERITY:
+        return FAIL_CLASS_SEVERITY[value] == "block"
+    if value.startswith("BLOCK_"):
+        return True
+    return True
 
 # ── Box3 model-scope approval P0 TOCTOU 하드닝 v1.2 (보완팀4) — reason enum SSOT ──
 # append-only, 본진 보존(약화 0). verify/generate 스크립트와 approval/identity 경로가
