@@ -1,0 +1,13 @@
+{
+  "schema_version": "box3.sealed_model_manifest.v1",
+  "model_role": "box3_draft",
+  "model_name": "butler-1.7b-v9-2-r2b",
+  "model_version": "v9.2-r2b-q4_k_m",
+  "model_digest": "sha256:aae4ea7a4ebe0586db3317d5209b5565abcd326ea73decb7ffa99f433c218847",
+  "model_size_bytes": 1107408640,
+  "eval_summary_sha256": "sha256:dd8af459b0c547b5e79a321a4be26590650d4dab9cd743a314e951860be4b4e4",
+  "eval_suite": "box3.fixed_eval_report.v1",
+  "sealed_at": "2026-07-09T00:00:00Z",
+  "sealed_by_digest": "sha256:f72bfe330b3dfb31514cf5ac205c1d3592e94d4ae9fd00c2ec81bf25b5a3c661",
+  "source_commit": "96ec99f66a77f1a0f77e7d9dbee77b13e62394a1"
+}

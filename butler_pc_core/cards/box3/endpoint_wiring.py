@@ -6,11 +6,18 @@ from pathlib import Path
 from typing import Any
 
 from .actual_contracts import Box3ActualRuntimeEnvelope, assert_persistable_digest_only
-from .actual_fail_class import CONTRACT_ONLY
+from .actual_fail_class import CONTRACT_ONLY, Box3ApprovalError
 from .actual_operation_pipeline import run_box3_actual_operation
 from .actual_runner_assets import ActualRunnerAssetConfig
 from .helper_component_guard import verify_helper_component_use_guard
-from .human_approval_sealed import default_locked_human_approval, evaluate_human_approval_sealed, load_human_approval_config
+from .human_approval_sealed import (
+    APPROVAL_CONTEXT_DESKTOP_APP,
+    default_locked_human_approval,
+    evaluate_human_approval_sealed,
+    load_human_approval_config,
+    resolve_expected_scope_digest,
+)
+from .model_identity import get_box3_model_identity_for_approval
 from .local_sealed_runner import RealRunner
 
 DEFAULT_APPROVAL_PATH = Path.home() / ".butler" / "box3" / "human_approval_v1.json"
@@ -183,7 +190,33 @@ def run_box3_endpoint_wiring(
     selected_approval = approval_config if approval_config is not None else load_server_local_sealed_approval()
     if selected_approval is None:
         selected_approval = default_locked_human_approval(envelope.request_digest)
-    approval = evaluate_human_approval_sealed(selected_approval, expected_scope_digest=envelope.request_digest)
+
+    # v1.2 §3.1/§3.4: desktop app 경로는 model_scope 만 허용한다(request_scope fallback 0).
+    # 승인 전용 identity 를 매번 full rehash 하여 얻고, 그 model_digest 를 기대 scope 로 고정한다.
+    model_identity = get_box3_model_identity_for_approval()
+    try:
+        expected_digest, approval_mode = resolve_expected_scope_digest(
+            selected_approval,
+            request_digest=envelope.request_digest,
+            model_digest=model_identity.model_digest if model_identity else None,
+            context=APPROVAL_CONTEXT_DESKTOP_APP,
+        )
+    except Box3ApprovalError as exc:
+        # APP_MODEL_SCOPE_REQUIRED / MODEL_DIGEST_UNAVAILABLE 등 고정 reason 으로 contract_only 차단.
+        return _contract_only_actual_response(
+            envelope,
+            fail_class=str(exc) or "BLOCK_HUMAN_APPROVAL_MISSING",
+            approval_digest=None,
+            approval_allowed=False,
+            approval_fail_class=str(exc),
+        )
+
+    approval = evaluate_human_approval_sealed(
+        selected_approval,
+        expected_scope_digest=expected_digest,
+        approval_mode=approval_mode,
+        approval_context=APPROVAL_CONTEXT_DESKTOP_APP,
+    )
     if not approval.allowed:
         return _contract_only_actual_response(
             envelope,
@@ -202,5 +235,9 @@ def run_box3_endpoint_wiring(
         human_approval_config=selected_approval,
         fixed_eval_pass=load_fixed_eval_pass() if fixed_eval_pass is None else bool(fixed_eval_pass),
         runner=runner_for_pipeline,
+        approval_expected_scope_digest=expected_digest,
+        approval_mode=approval_mode,
+        approval_context=APPROVAL_CONTEXT_DESKTOP_APP,
+        approved_model_identity=model_identity,
     )
     return normalize_actual_verdict_to_legacy_response(result, envelope=envelope, approval_config_digest=approval.config_digest, runner_injected=runner_for_pipeline is not None)

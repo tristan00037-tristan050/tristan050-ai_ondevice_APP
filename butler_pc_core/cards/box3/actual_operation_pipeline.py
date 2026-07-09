@@ -4,9 +4,11 @@ from typing import Any
 
 from .actual_contracts import Box3ActualOperationVerdict, Box3ActualRuntimeEnvelope, sha256_text
 from .actual_fail_class import (
+    APPROVED_MODEL_RUNTIME_MISMATCH,
     ASSET_INVENTORY_PASS,
     BLOCKED,
     BLOCK_POLICY_GATE,
+    Box3SecurityError,
     FIXED_EVAL_PENDING,
     PARTIAL_BGE_M3_FALLBACK_USED,
     PARTIAL_EMBEDDER_UNAVAILABLE,
@@ -23,6 +25,7 @@ from .helper_component_guard import verify_helper_component_use_guard
 from .helper_sdk_bridge import HelperSdkBridge
 from .human_approval_sealed import evaluate_human_approval_sealed
 from .local_sealed_runner import RealRunner, run_actual_runner_smoke
+from .model_identity import Box3ModelIdentity, assert_runtime_model_identity_matches_approval
 from .rag_prompt_integration import build_rag_grounded_prompt_runtime
 from .real_metrics import compute_claim_metrics, estimate_format_compliance, estimate_style_compliance, metric_fail_class
 
@@ -74,7 +77,14 @@ def run_box3_actual_operation(
     fixed_eval_pass: bool = False,
     runner: RealRunner | None = None,
     sdk_bridge: HelperSdkBridge | None = None,
+    approval_expected_scope_digest: str | None = None,
+    approval_mode: str | None = None,
+    approval_context: str | None = None,
+    approved_model_identity: Box3ModelIdentity | None = None,
 ) -> Box3ActualOperationVerdict:
+    # v1.2 §3.4: desktop 경로에서 endpoint 가 넘긴 승인 identity 를 생성 직전 재대조한다.
+    # 미전달(eval/test 직접 호출)이면 재대조를 건너뛴다 — 기존 request_scope 경로 diff 0.
+    expected_scope_digest = approval_expected_scope_digest or envelope.request_digest
     stage_trace: list[dict[str, Any]] = []
     if not envelope.policy_gate_allowed:
         return Box3ActualOperationVerdict(
@@ -117,6 +127,32 @@ def run_box3_actual_operation(
     # 임계는 완화 0 (본 단계는 입력 프롬프트만 강화).
     rag_prompt = build_rag_grounded_prompt_runtime(envelope, evidence_bundle)
     stage_trace.append(rag_prompt.to_stage_trace_entry())
+
+    # v1.2 §3.4: 실제 생성 직전, 승인된 model identity 와 런타임 모델을 재대조한다(TOCTOU 결속).
+    if approved_model_identity is not None:
+        try:
+            assert_runtime_model_identity_matches_approval(approved_model_identity, runtime=runner)
+            stage_trace.append({"stage": "approved_model_runtime_recheck", "passed": True, "fail_class": None})
+        except Box3SecurityError as exc:
+            reason = str(exc) or APPROVED_MODEL_RUNTIME_MISMATCH
+            stage_trace.append({"stage": "approved_model_runtime_recheck", "passed": False, "fail_class": reason})
+            return Box3ActualOperationVerdict(
+                schema_version="box3.actual_operation.v1_2",
+                request_id=envelope.request_id,
+                request_digest=envelope.request_digest,
+                status=BLOCKED,
+                draft_text=None,
+                draft_digest=None,
+                metrics={},
+                citations=[],
+                stage_trace=stage_trace,
+                fail_class=reason,
+                real_claim_allowed=False,
+                human_approval_required=True,
+                runner_measurements={},
+                asset_measurements={"base": base.to_dict(), "helper": helper.to_dict()},
+                helper_sdk_receipts={},
+            )
 
     if base.allowed and helper.allowed and evidence_bundle.parse_success:
         smoke = run_actual_runner_smoke(envelope, runner=runner, config=base_config, helper_guard=helper_component_guard)
@@ -163,8 +199,13 @@ def run_box3_actual_operation(
         stage_trace.append({"stage": "usefulness_gate", **usefulness.to_dict()})
         stage_trace.append({"stage": "helper8_company_style", "passed": styled.style_applied, "fail_class": styled.fail_class})
 
-    approval = evaluate_human_approval_sealed(human_approval_config, expected_scope_digest=envelope.request_digest)
-    stage_trace.append({"stage": "human_approval", "passed": approval.allowed, "fail_class": approval.fail_class, "config_digest": approval.config_digest})
+    approval = evaluate_human_approval_sealed(
+        human_approval_config,
+        expected_scope_digest=expected_scope_digest,
+        approval_mode=approval_mode,
+        approval_context=approval_context,
+    )
+    stage_trace.append({"stage": "human_approval", "passed": approval.allowed, "fail_class": approval.fail_class, "config_digest": approval.config_digest, "approval_mode": approval.approval_mode, "approval_context": approval.approval_context})
 
     status, real_allowed, fail_class, approval_required = _status_from_gate(
         base_status=base.status,
