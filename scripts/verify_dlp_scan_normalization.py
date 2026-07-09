@@ -152,7 +152,8 @@ def _run_tests(root: Path) -> None:
         timeout=120,
     )
     if result.returncode != 0:
-        print(result.stdout, end="")
+        # AGENTS.md verifier 계약: 실패 경로도 고정 KEY=0/1 + ERROR_CODE 만 출력한다.
+        # pytest 원문(샘플 문자열·traceback·긴 덤프)을 절대 stdout 으로 흘리지 않는다.
         _fail("DLP_SCAN_NORMALIZATION_TESTS_FAILED")
 
 

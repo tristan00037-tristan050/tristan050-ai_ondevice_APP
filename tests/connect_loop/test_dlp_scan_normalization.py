@@ -95,6 +95,9 @@ def test_standard_sensitive_forms_keep_detecting(text: str) -> None:
         "계좌라는 단어만 있고 숫자는 없습니다",
         "카드 디자인 시안을 검토합니다",
         "주민 의견 수렴 회의록입니다",
+        # 리뷰 P2: 계좌 문맥 + 무관한 날짜·시각이 공백 경계를 넘어 하나의 긴 숫자열로
+        # 병합되어 계좌번호로 오탐되면 안 된다.
+        "계좌 양식 검토. 보고일은 2026-07-04 12:30입니다",
     ],
 )
 def test_false_positive_control_group_passes(text: str) -> None:
@@ -122,6 +125,22 @@ def test_scan_variants_are_deduplicated() -> None:
     variants = scan_variants("plainsafetext")
 
     assert [variant.variant_id for variant in variants] == ["v0_raw"]
+
+
+def test_separator_normalization_preserves_whitespace_boundaries() -> None:
+    # 리뷰 P2: 공백으로 분리된 무관한 필드는 하나의 숫자열로 병합되지 않는다.
+    v4 = [v.text for v in scan_variants("2026-07-04 12:30") if v.variant_id == "v4_separators_removed"]
+    assert v4 == ["20260704 1230"]
+    # 반면 토큰 내부 구분자 위장 계좌는 그대로 붙어 탐지 가능해야 한다.
+    v4_acct = [v.text for v in scan_variants("123-456-7890") if v.variant_id == "v4_separators_removed"]
+    assert v4_acct and "1234567890" in v4_acct[0]
+
+
+def test_verifier_failure_path_emits_only_fixed_keys() -> None:
+    # 리뷰 P1: 검증기 실패 경로가 pytest 원문(샘플·traceback·긴 덤프)을 stdout 으로 흘리면 안 된다.
+    source = (Path(__file__).resolve().parents[2] / "scripts" / "verify_dlp_scan_normalization.py").read_text(encoding="utf-8")
+    assert "print(result.stdout" not in source
+    assert "result.stdout" not in source
 
 
 def test_normalized_only_result_exposes_ids_not_text() -> None:

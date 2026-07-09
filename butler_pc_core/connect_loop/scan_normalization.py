@@ -38,7 +38,11 @@ _ZERO_WIDTH_CHARS = {
     "\ufe0f",
 }
 _NOISE_CATEGORIES = {"So", "Sk", "Cf", "Cs", "Co", "Mn", "Me"}
-_SEPARATOR_RE = re.compile(r"[\s.\-_/:\u058a\u05be\u1400\u1806\u2010-\u2015\u2e17\u2e1a\u2e3a\u2e3b\u30a0\ufe31\ufe32\ufe58\ufe63\uff0d]+")
+# \ud1a0\ud070 \ub0b4\ubd80 \uad6c\ubd84\uc790(\uacc4\uc88c/\uce74\ub4dc \ubc88\ud638 \uc704\uc7a5\uc5d0 \uc4f0\uc774\ub294 . - _ / : \ubc0f \uac01\uc885 \ub300\uc2dc)\ub9cc \uc81c\uac70\ud55c\ub2e4.
+# \uacf5\ubc31\ub958(\s)\ub294 \uc5ec\uae30 \ud3ec\ud568\ud558\uc9c0 \uc54a\ub294\ub2e4 \u2014 \uacf5\ubc31 \uacbd\uacc4\ub97c \uc9c0\uc6cc \ubb34\uad00\ud55c \ud544\ub4dc(\ub0a0\uc9dc\u00b7\uc2dc\uac01\u00b7\ub2e8\uc5b4)\uac00
+# \ud558\ub098\uc758 \uae34 \uc22b\uc790\uc5f4\ub85c \ubcd1\ud569\ub418\ub294 \uac83\uc744 \ub9c9\uae30 \uc704\ud568(\uc608: "2026-07-04 12:30" \u2192 "202607041230" \uc624\ud0d0).
+_INTRA_TOKEN_SEPARATOR_RE = re.compile(r"[.\-_/:\u058a\u05be\u1400\u1806\u2010-\u2015\u2e17\u2e1a\u2e3a\u2e3b\u30a0\ufe31\ufe32\ufe58\ufe63\uff0d]+")
+_WHITESPACE_RE = re.compile(r"\s+")
 _KOREAN_DIGIT_TOKENS = (
     ("아홉", "9"),
     ("여덟", "8"),
@@ -109,7 +113,11 @@ def _map_korean_digits(text: str) -> str:
 
 
 def _strip_separators(text: str) -> str:
-    return _SEPARATOR_RE.sub("", text)
+    # 공백류로 구분된 토큰 각각에서만 내부 구분자를 제거하고, 토큰 사이 경계는 단일 공백으로
+    # 보존한다. 이렇게 하면 "123-456-7890" 같은 위장 계좌는 그대로 붙지만, 공백으로 분리된
+    # 무관한 숫자 필드(날짜·시각 등)는 하나의 긴 숫자열로 병합되지 않는다.
+    tokens = _WHITESPACE_RE.split(text)
+    return " ".join(_INTRA_TOKEN_SEPARATOR_RE.sub("", token) for token in tokens)
 
 
 def scan_variants(text: str) -> list[ScanVariant]:
