@@ -212,3 +212,49 @@ def test_unregistered_runner_fail_is_conservatively_blocked():
     assert status == BLOCKED
     assert real_allowed is False
     assert fail_class == "UNREGISTERED_RUNNER_FAIL_XYZ"
+
+
+def _gate(**overrides):
+    from butler_pc_core.cards.box3.actual_operation_pipeline import _status_from_gate
+
+    kwargs = dict(
+        base_status="ASSET_INVENTORY_PASS",
+        helper_fail=None,
+        parse_fail=None,
+        runner_ok=True,
+        runner_fail=None,
+        bridge_fail=None,
+        metrics=None,
+        fixed_eval_pass=True,
+        approval_allowed=True,
+        approval_fail=None,
+        test_only_runner=False,
+    )
+    kwargs.update(overrides)
+    return _status_from_gate(**kwargs)
+
+
+def test_unregistered_helper_fail_is_conservatively_blocked():
+    from butler_pc_core.cards.box3.actual_fail_class import BLOCKED
+
+    status, real_allowed, fail_class, _ = _gate(helper_fail="UNREGISTERED_HELPER_FAIL_XYZ")
+    assert status == BLOCKED
+    assert real_allowed is False
+    assert fail_class == "UNREGISTERED_HELPER_FAIL_XYZ"
+
+
+def test_unregistered_parse_fail_is_conservatively_blocked():
+    from butler_pc_core.cards.box3.actual_fail_class import BLOCKED
+
+    status, real_allowed, fail_class, _ = _gate(parse_fail="UNREGISTERED_PARSE_FAIL_XYZ")
+    assert status == BLOCKED
+    assert real_allowed is False
+    assert fail_class == "UNREGISTERED_PARSE_FAIL_XYZ"
+
+
+def test_partial_helper_and_parse_fail_still_pass_through():
+    # 회귀 방지: 등록된 PARTIAL_ 계열은 여전히 그 status 로 통과(하드블록 아님).
+    status_h, _, fc_h, _ = _gate(helper_fail="PARTIAL_HELPER_STACK_UNSUPPORTED")
+    assert status_h == "PARTIAL_HELPER_STACK_UNSUPPORTED" and fc_h == "PARTIAL_HELPER_STACK_UNSUPPORTED"
+    status_p, _, fc_p, _ = _gate(parse_fail="PARTIAL_HELPER_SDK_UNAVAILABLE")
+    assert status_p == "PARTIAL_HELPER_SDK_UNAVAILABLE" and fc_p == "PARTIAL_HELPER_SDK_UNAVAILABLE"

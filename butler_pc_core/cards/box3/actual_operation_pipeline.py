@@ -144,9 +144,12 @@ def _status_from_gate(
     if base_status in {PARTIAL_REAL_ASSET_VOLUME_MISSING, PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE} and not test_only_runner:
         return base_status, False, base_status, True
     if helper_fail:
-        return helper_fail if str(helper_fail).startswith("PARTIAL_") else BLOCKED, False, helper_fail, True
+        # 원래 의도: PARTIAL_ 계열만 soft(그 status 로 통과), 그 외는 하드블록. severity map 등가
+        # 검증(모든 helper fail 값에서 is_blocking ≡ not PARTIAL_) 후 helper 경유로 통일 — 미등록/
+        # 새 fail_class 는 보수적으로 BLOCKED.
+        return (BLOCKED if is_blocking_actual_fail_class(helper_fail) else helper_fail), False, helper_fail, True
     if parse_fail:
-        return parse_fail if str(parse_fail).startswith("PARTIAL_") else BLOCKED, False, parse_fail, True
+        return (BLOCKED if is_blocking_actual_fail_class(parse_fail) else parse_fail), False, parse_fail, True
     if not runner_ok:
         if runner_fail in {PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE, PARTIAL_MODEL_ADAPTER_STACK_UNSUPPORTED}:
             return runner_fail, False, runner_fail, True

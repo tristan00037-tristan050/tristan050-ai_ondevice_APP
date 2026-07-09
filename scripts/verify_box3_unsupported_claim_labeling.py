@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+# fail_class 류(대문자 상수) 문자열 접두에 .startswith(...) 를 직접 적용하는 패턴.
+# 특정 접두어(BLOCK_/PARTIAL_...) 나열이 아니라 패턴 자체를 잡아, 세 번째 잔존이 생겨도
+# verifier 가 스스로 검출한다. 인자가 대문자로 시작하는 문자열 리터럴인 경우만 매칭하므로
+# .startswith(UNSUPPORTED_CLAIM_LABEL)(변수 인자) 같은 정당한 라벨 검사는 걸리지 않는다.
+_PIPELINE_PREFIX_CHECK_RE = re.compile(r'\.startswith\(\s*[\'"][A-Z][A-Z0-9_]*[\'"]')
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,9 +83,11 @@ def main() -> int:
         errors.append("B3_USEFULNESS_ISSUANCE_NOT_DEMOTED")
     if "is_blocking_actual_fail_class" not in pipeline:
         errors.append("B3_PIPELINE_SEVERITY_HELPER_UNUSED")
-    # P1-1: 파이프라인의 모든 하드블록 판정은 severity helper 로만 한다. prefix 직접 체크가
-    # 하나라도 남아 있으면(새 BLOCK_ 아닌 차단명이 조용히 통과할 위험) 검출한다.
-    if '.startswith("BLOCK_")' in pipeline:
+    # P1-1: 파이프라인의 모든 하드블록 판정은 severity helper(is_blocking_actual_fail_class)로만
+    # 한다. fail_class 류 문자열 접두에 .startswith(...) 를 직접 적용하는 패턴이 하나라도 남아
+    # 있으면(BLOCK_/PARTIAL_/NEEDS_REVIEW_ 등 어떤 접두든) 검출한다 — 특정 접두 나열이 아니라
+    # 패턴 자체를 잡아 세 번째 잔존도 스스로 검출한다.
+    if _PIPELINE_PREFIX_CHECK_RE.search(pipeline):
         errors.append("B3_PIPELINE_PREFIX_BLOCK_CHECK_REMAINS")
     if "annotate_unsupported_lines" not in pipeline or "[근거 확인 필요]" not in pipeline:
         errors.append("B3_RUNTIME_LABELING_MISSING")
