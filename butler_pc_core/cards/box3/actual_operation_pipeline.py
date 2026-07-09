@@ -150,7 +150,7 @@ def _status_from_gate(
     if not runner_ok:
         if runner_fail in {PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE, PARTIAL_MODEL_ADAPTER_STACK_UNSUPPORTED}:
             return runner_fail, False, runner_fail, True
-        return BLOCKED if str(runner_fail or "").startswith("BLOCK_") else ASSET_INVENTORY_PASS, False, runner_fail, True
+        return (BLOCKED if is_blocking_actual_fail_class(runner_fail) else ASSET_INVENTORY_PASS), False, runner_fail, True
     if test_only_runner:
         return REAL_CANDIDATE, False, "TEST_ONLY_RUNNER_NOT_REAL_APPROVAL", True
     if not approval_allowed and approval_fail != "BLOCK_HUMAN_APPROVAL_MISSING":

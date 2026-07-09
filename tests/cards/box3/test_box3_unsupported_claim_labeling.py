@@ -188,3 +188,27 @@ def test_known_needs_review_fail_classes_are_not_blocking():
     assert is_blocking_actual_fail_class(NEEDS_REVIEW_UNSUPPORTED_CLAIM) is False
     assert is_blocking_actual_fail_class(NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL) is False
     assert is_blocking_actual_fail_class("UNKNOWN_NEW_FAIL_CLASS") is True
+
+
+def test_unregistered_runner_fail_is_conservatively_blocked():
+    # P1-1: severity map 에 없고 BLOCK_ 접두도 아닌 runner_fail 도 보수적으로 BLOCKED 되어야 한다
+    # (runner 실패 경로가 prefix-only 체크에서 조용히 ASSET_INVENTORY_PASS 로 통과하던 잔존 결함).
+    from butler_pc_core.cards.box3.actual_fail_class import BLOCKED
+    from butler_pc_core.cards.box3.actual_operation_pipeline import _status_from_gate
+
+    status, real_allowed, fail_class, _ = _status_from_gate(
+        base_status="ASSET_INVENTORY_PASS",
+        helper_fail=None,
+        parse_fail=None,
+        runner_ok=False,
+        runner_fail="UNREGISTERED_RUNNER_FAIL_XYZ",
+        bridge_fail=None,
+        metrics=None,
+        fixed_eval_pass=False,
+        approval_allowed=False,
+        approval_fail=None,
+        test_only_runner=False,
+    )
+    assert status == BLOCKED
+    assert real_allowed is False
+    assert fail_class == "UNREGISTERED_RUNNER_FAIL_XYZ"

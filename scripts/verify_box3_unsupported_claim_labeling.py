@@ -76,6 +76,10 @@ def main() -> int:
         errors.append("B3_USEFULNESS_ISSUANCE_NOT_DEMOTED")
     if "is_blocking_actual_fail_class" not in pipeline:
         errors.append("B3_PIPELINE_SEVERITY_HELPER_UNUSED")
+    # P1-1: 파이프라인의 모든 하드블록 판정은 severity helper 로만 한다. prefix 직접 체크가
+    # 하나라도 남아 있으면(새 BLOCK_ 아닌 차단명이 조용히 통과할 위험) 검출한다.
+    if '.startswith("BLOCK_")' in pipeline:
+        errors.append("B3_PIPELINE_PREFIX_BLOCK_CHECK_REMAINS")
     if "annotate_unsupported_lines" not in pipeline or "[근거 확인 필요]" not in pipeline:
         errors.append("B3_RUNTIME_LABELING_MISSING")
     if "scan_runtime_security_risk" not in pipeline or "BLOCK_DLP_OUTBOUND_DRAFT" not in pipeline:
