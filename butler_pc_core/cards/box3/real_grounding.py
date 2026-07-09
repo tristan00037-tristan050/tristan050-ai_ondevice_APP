@@ -16,6 +16,7 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Iterable
 
+from .actual_fail_class import NEEDS_REVIEW_UNSUPPORTED_CLAIM
 from .real_contracts import (
     ClaimVerdict,
     DraftClaim,
@@ -81,161 +82,144 @@ def _kind_for_unit(text: str) -> str:
     return "text"
 
 
-def extract_evidence_units(reference_docs: list[str]) -> list[EvidenceUnit]:
+def extract_evidence_units(reference_texts: Iterable[str]) -> list[EvidenceUnit]:
     units: list[EvidenceUnit] = []
-    for doc_index, doc in enumerate(reference_docs):
-        source_digest = sha256_text(doc)
-        chunks = [part.strip() for part in re.split(r"\n{2,}|(?<=다\.)\s+", doc) if part.strip()]
-        if not chunks and doc.strip():
-            chunks = [doc.strip()]
-        for unit_index, chunk in enumerate(chunks):
+    for idx, text in enumerate(reference_texts, start=1):
+        if not text.strip():
+            continue
+        source_digest = sha256_text(text)
+        chunks = [chunk.strip() for chunk in re.split(r"\n{2,}", text) if chunk.strip()]
+        if not chunks:
+            chunks = [text.strip()]
+        for sub_idx, chunk in enumerate(chunks, start=1):
             units.append(EvidenceUnit(
-                evidence_id=f"e{doc_index + 1}-{unit_index + 1}",
+                evidence_id=f"ref-{idx}-{sub_idx}",
                 source_digest=source_digest,
                 evidence_digest=sha256_text(chunk),
-                kind=_kind_for_unit(chunk),  # type: ignore[arg-type]
+                kind=_kind_for_unit(chunk),
                 text_runtime_only=chunk,
             ))
     return units
 
 
-def _is_non_claim(sentence: str) -> bool:
-    stripped = sentence.strip()
-    if not stripped:
-        return True
-    if stripped in {"보고서", "보고", "요약", "초안"}:
-        return True
-    if any(stripped.startswith(prefix) for prefix in _NON_CLAIM_PREFIXES):
-        return True
-    normalized = normalize_text(stripped)
-    if "[문서에 근거 없음]" in stripped:
-        return True
-    if "근거 범위에서 확인" in normalized:
-        return True
-    if (
-        len(tokens(stripped)) < 3
-        and not numeric_tokens(stripped)
-        and not any(hint in normalized for hint in _FACT_HINTS)
-    ):
-        return True
-    return False
+def _claim_type(text: str) -> str:
+    if numeric_tokens(text):
+        return "numeric"
+    if any(term in text for term in ("일정", "기간", "납품", "완료", "기한")):
+        return "schedule"
+    if any(term in text for term in ("담당", "책임", "승인")):
+        return "responsibility"
+    return "general"
 
 
-def _is_factual(sentence: str) -> bool:
-    if _is_non_claim(sentence):
+def _is_factual_claim(text: str) -> bool:
+    normalized = normalize_text(text)
+    if not normalized or any(normalized.startswith(prefix) for prefix in _NON_CLAIM_PREFIXES):
         return False
-    if numeric_tokens(sentence):
-        return True
-    normalized = normalize_text(sentence)
-    return any(hint in normalized for hint in _FACT_HINTS)
+    return bool(numeric_tokens(text) or any(hint in normalized for hint in _FACT_HINTS))
 
 
 def extract_claims(draft_text: str) -> list[DraftClaim]:
     claims: list[DraftClaim] = []
-    raw_parts: list[str] = []
-    for line in draft_text.splitlines():
-        line = line.strip()
-        if not line:
+    for idx, raw in enumerate(_SENTENCE_SPLIT_RE.split(draft_text), start=1):
+        text = raw.strip()
+        if not text:
             continue
-        if ":" in line and len(line.split(":", 1)[0]) <= 20:
-            # 제목/확인필요 등 라벨은 표현 메타데이터이므로 사실 분모를 부풀리지 않는다.
-            # 배경/핵심내용/최종문안처럼 한 라벨 안에 여러 사실문이 들어오면 문장 단위로 다시 쪼갠다.
-            label, content = line.split(":", 1)
-            label = label.strip()
-            label_norm = label.replace(" ", "")
-            content = content.strip()
-
-            if label_norm in {"제목", "확인필요"}:
-                raw_parts.append(label)
-            elif content:
-                raw_parts.extend(part.strip() for part in _SENTENCE_SPLIT_RE.split(content) if part.strip())
-            else:
-                raw_parts.append(label)
-        else:
-            raw_parts.extend(part.strip() for part in _SENTENCE_SPLIT_RE.split(line) if part.strip())
-    for index, sentence in enumerate(raw_parts, start=1):
-        factual = _is_factual(sentence)
-        claim_type = "factual" if factual else "non_claim"
+        is_factual = _is_factual_claim(text)
         claims.append(DraftClaim(
-            claim_id=f"c{index}",
-            claim_digest=sha256_text(sentence),
-            is_factual=factual,
-            claim_type=claim_type,
-            claim_text_runtime_only=sentence,
+            claim_id=f"claim-{idx}",
+            claim_digest=sha256_text(text),
+            is_factual=is_factual,
+            claim_type=_claim_type(text) if is_factual else "non_claim",
+            claim_text_runtime_only=text,
         ))
     return claims
 
 
-def _overlap_score(claim_text: str, evidence_text: str) -> float:
-    claim_tokens = tokens(claim_text) - set(_NEGATION_MARKERS)
-    evidence_tokens = tokens(evidence_text) - set(_NEGATION_MARKERS)
+def _negation_mismatch(claim: str, evidence: str) -> bool:
+    return any(marker in claim for marker in _NEGATION_MARKERS) != any(marker in evidence for marker in _NEGATION_MARKERS)
+
+
+def _support_score(claim: str, evidence: str) -> float:
+    claim_tokens = tokens(claim)
     if not claim_tokens:
         return 0.0
-    return len(claim_tokens & evidence_tokens) / max(1, len(claim_tokens))
+    overlap = len(claim_tokens & tokens(evidence)) / len(claim_tokens)
+    claim_nums = numeric_tokens(claim)
+    evidence_nums = numeric_tokens(evidence)
+    if claim_nums and not claim_nums <= evidence_nums:
+        return min(overlap, 0.40)
+    return overlap
 
 
-def _has_negation_contradiction(claim_text: str, evidence_text: str) -> bool:
-    claim_norm = normalize_text(claim_text)
-    evidence_norm = normalize_text(evidence_text)
-    claim_neg = any(marker in claim_norm for marker in _NEGATION_MARKERS)
-    evidence_neg = any(marker in evidence_norm for marker in _NEGATION_MARKERS)
-    return claim_neg != evidence_neg and _overlap_score(claim_text, evidence_text) >= 0.55
-
-
-def verdict_claim(claim: DraftClaim, evidence_units: list[EvidenceUnit]) -> ClaimVerdict:
-    if not claim.is_factual:
-        return ClaimVerdict(claim.claim_id, claim.claim_digest, "non_claim", [], 1.0, "NON_FACTUAL")
-
-    claim_text = claim.claim_text_runtime_only
-    evidence_all_text = "\n".join(unit.text_runtime_only for unit in evidence_units)
-
-    # alg 흡수 — 사실단위(숫자+날짜) 대조. claim 의 사실이 근거에 포섭되지 않으면 모순.
-    claim_facts = _facts(claim_text)
-    evidence_facts = _facts(evidence_all_text)
-    if claim_facts and not claim_facts.issubset(evidence_facts):
-        return ClaimVerdict(claim.claim_id, claim.claim_digest, "unsupported", [], 0.95, "EVIDENCE_CONTRADICTS")
-
-    best_unit: EvidenceUnit | None = None
-    best_score = 0.0
-    contradiction = False
-    for unit in evidence_units:
-        score = _overlap_score(claim_text, unit.text_runtime_only)
-        if _has_negation_contradiction(claim_text, unit.text_runtime_only):
-            contradiction = True
-            best_unit = unit
-            best_score = max(best_score, score)
-            break
-        if score > best_score:
-            best_score = score
-            best_unit = unit
-
-    if contradiction:
-        return ClaimVerdict(
-            claim.claim_id, claim.claim_digest, "unsupported",
-            [best_unit.evidence_digest] if best_unit else [], 0.95, "EVIDENCE_CONTRADICTS",
-        )
-
-    # 직접 지지는 숫자/사실 정합(위에서 확인) + 단일 근거와의 강한 의미 overlap 을 함께 요구한다.
-    # 키워드가 코퍼스 어딘가에 등장한다는 이유만으로 supported 표기하지 않는다(경계 0.60).
-    if best_unit is not None and best_score >= 0.60:
-        return ClaimVerdict(
-            claim.claim_id, claim.claim_digest, "supported",
-            [best_unit.evidence_digest], min(0.99, round(best_score, 4)), "EVIDENCE_ENTAILS",
-        )
-    return ClaimVerdict(claim.claim_id, claim.claim_digest, "no_evidence", [], 0.0, "NO_MATCHING_EVIDENCE")
+def _fact_set_supported(claim: str, evidence: str) -> bool:
+    claim_facts = _facts(claim)
+    if not claim_facts:
+        return True
+    evidence_facts = _facts(evidence)
+    if claim_facts <= evidence_facts:
+        return True
+    # Evidence 가 더 구체적인 full date 를 담는 경우 month/day claim 을 포섭한다.
+    for fact in claim_facts:
+        if fact in evidence_facts:
+            continue
+        if fact.endswith("월") and any(item.startswith(fact[:-1]) or fact in item for item in evidence_facts):
+            continue
+        if fact.endswith("일") and any(fact in item for item in evidence_facts):
+            continue
+        return False
+    return True
 
 
 def ground_claims(claims: list[DraftClaim], evidence_units: list[EvidenceUnit]) -> list[ClaimVerdict]:
-    return [verdict_claim(claim, evidence_units) for claim in claims]
+    verdicts: list[ClaimVerdict] = []
+    for claim in claims:
+        if not claim.is_factual:
+            verdicts.append(ClaimVerdict(claim.claim_id, claim.claim_digest, "non_claim", [], 0.0, "NON_FACTUAL"))
+            continue
+
+        best_unit: EvidenceUnit | None = None
+        best_score = 0.0
+        contradiction: EvidenceUnit | None = None
+        for unit in evidence_units:
+            score = _support_score(claim.claim_text_runtime_only, unit.text_runtime_only)
+            if score >= 0.55 and _negation_mismatch(claim.claim_text_runtime_only, unit.text_runtime_only):
+                contradiction = unit
+                break
+            if score > best_score and _fact_set_supported(claim.claim_text_runtime_only, unit.text_runtime_only):
+                best_unit = unit
+                best_score = score
+
+        if contradiction is not None:
+            verdicts.append(ClaimVerdict(
+                claim.claim_id,
+                claim.claim_digest,
+                "unsupported",
+                [contradiction.evidence_digest],
+                0.9,
+                "EVIDENCE_CONTRADICTS",
+            ))
+        elif best_unit is not None and best_score >= 0.60:
+            verdicts.append(ClaimVerdict(
+                claim.claim_id,
+                claim.claim_digest,
+                "supported",
+                [best_unit.evidence_digest],
+                round(min(1.0, best_score), 4),
+                "EVIDENCE_ENTAILS",
+            ))
+        else:
+            verdicts.append(ClaimVerdict(claim.claim_id, claim.claim_digest, "no_evidence", [], 0.0, "NO_MATCHING_EVIDENCE"))
+    return verdicts
 
 
-def evidence_kind_coverage(evidence_units: list[EvidenceUnit], citations: Iterable[dict[str, str]]) -> float:
-    units_by_digest = {unit.evidence_digest: unit for unit in evidence_units}
-    required = {unit.evidence_digest for unit in evidence_units if unit.kind in {"table", "figure"}}
+def evidence_kind_coverage(evidence_units: list[EvidenceUnit], citations: list[dict[str, str]]) -> float:
+    required = {unit.kind for unit in evidence_units if unit.kind in {"table", "figure"}}
     if not required:
         return 1.0
+    units_by_digest = {unit.evidence_digest: unit.kind for unit in evidence_units}
     cited = {
-        citation.get("evidence_digest")
+        units_by_digest[citation.get("evidence_digest")]
         for citation in citations
         if citation.get("evidence_digest") in units_by_digest
     }
@@ -280,7 +264,7 @@ def summarize_grounding(verdicts: list[ClaimVerdict]) -> ClaimGroundingSummary:
     if factual_count == 0:
         fail_class: str | None = "BLOCK_NO_FACTUAL_CLAIMS"
     elif unsupported:
-        fail_class = "BLOCK_UNSUPPORTED_CLAIM"
+        fail_class = NEEDS_REVIEW_UNSUPPORTED_CLAIM
     elif no_evidence_rate > 0.05:
         # SSOT 임계(≤0.05)와 일치 — 허용 한도 내 no_evidence 는 요약을 blocked 로 표시하지
         # 않는다(metric_fail_class 와 동일 정책 → stage_trace 모순 방지).
