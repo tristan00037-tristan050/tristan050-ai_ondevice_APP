@@ -1,0 +1,1 @@
+5724a964 feat: Box3 model-scope approval P0 TOCTOU hardening
