@@ -67,7 +67,9 @@ def _derive_terminal_stage(stage_trace: Any, fail_class: Any) -> str | None:
         entry_fail = entry.get("fail_class")
         if entry_fail == fail_class:
             matching.append(stage)
-        if entry_fail or entry.get("passed") is False:
+        # fallback 은 순수하게 "실행이 실패로 표시된 단계"(passed is False)만 대상으로 한다.
+        # matching 에서 이미 fail_class 일치를 걸렀으므로 entry_fail 단독 조건은 too broad.
+        if entry.get("passed") is False:
             fallback.append(stage)
 
     for stage in reversed(matching):

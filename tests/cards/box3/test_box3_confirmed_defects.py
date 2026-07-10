@@ -8,6 +8,7 @@ from butler_pc_core.cards.box3.actual_fail_class import (
 from butler_pc_core.cards.box3.actual_contracts import Box3ActualRuntimeEnvelope
 from butler_pc_core.cards.box3.endpoint_wiring import (
     _contract_only_actual_response,
+    _derive_terminal_stage,
     normalize_actual_verdict_to_legacy_response,
 )
 
@@ -86,3 +87,37 @@ def test_contract_only_response_populates_approval_pre_gate_terminal_stage():
     )
 
     assert response["terminal_stage"] == "approval_pre_gate"
+
+
+# === _derive_terminal_stage fallback 조건 정정 (재검토팀 HOLD) ===
+# fallback 은 'passed is False' 인 단계만 대상 — entry_fail 단독 조건(too broad) 제거 회귀 방지.
+
+def test_terminal_stage_fallback_returns_passed_false_stage_when_no_fail_class_match():
+    # 지시1: top fail_class 와 정확히 일치하는 stage 가 trace 에 하나도 없음
+    # 지시2: passed=False 단계가 하나 존재 → 그 단계가 반환된다
+    trace = [
+        {"stage": "helper7_parse", "passed": True, "fail_class": None},
+        {"stage": "helper4_grounding", "passed": False, "fail_class": "SOME_STAGE_FAIL"},
+    ]
+    assert _derive_terminal_stage(trace, "TOP_LEVEL_FAIL_NO_STAGE_MATCH") == "helper4_grounding"
+
+
+def test_terminal_stage_fallback_excludes_final_gate_without_passed_false():
+    # 지시3: final_gate 가 fail_class 는 갖되 passed 필드가 없는 경우 → final_gate 가 아니라
+    # 실제 passed=False 단계가 선택되어야 한다(entry_fail 단독 fallback 이면 final_gate 오선택).
+    trace = [
+        {"stage": "helper4_grounding", "passed": False, "fail_class": "GROUNDING_FAIL"},
+        {"stage": "final_gate", "fail_class": "FINAL_GATE_FAIL"},  # passed 필드 없음
+    ]
+    result = _derive_terminal_stage(trace, "TOP_LEVEL_FAIL_NO_STAGE_MATCH")
+    assert result == "helper4_grounding"
+    assert result != "final_gate"
+
+
+def test_terminal_stage_fallback_excludes_final_gate_with_passed_not_false():
+    # 지시3 변형: final_gate 가 fail_class 를 갖고 passed 가 다른 값(True)이어도 fallback 제외.
+    trace = [
+        {"stage": "helper4_grounding", "passed": False, "fail_class": "GROUNDING_FAIL"},
+        {"stage": "final_gate", "passed": True, "fail_class": "FINAL_GATE_FAIL"},
+    ]
+    assert _derive_terminal_stage(trace, "TOP_LEVEL_FAIL_NO_STAGE_MATCH") == "helper4_grounding"
