@@ -46,10 +46,6 @@ PARTIAL_BGE_M3_FALLBACK_USED = "PARTIAL_BGE_M3_FALLBACK_USED"
 BLOCK_HELPER_SDK_STACK_ATTEMPT = "BLOCK_HELPER_SDK_STACK_ATTEMPT"
 BLOCK_HELPER8_NON_CANONICAL_SHA = "BLOCK_HELPER8_NON_CANONICAL_SHA"
 BLOCK_GROUNDING_EMBEDDER_MISSING = "BLOCK_GROUNDING_EMBEDDER_MISSING"
-# helper8 이 인식 불가한 형태(문자열/딕셔너리/알려진 dataclass 속성이 아닌 객체)를 반환한 경우.
-# 원문을 repr 로 오염시키는 대신 fail-closed: 스타일 미적용 원문 유지 + 이 코드로 표면화.
-# 스타일은 부가기능이라 초안을 차단하지 않는다(nonblocking).
-PARTIAL_HELPER8_STYLE_OUTPUT_UNSUPPORTED = "PARTIAL_HELPER8_STYLE_OUTPUT_UNSUPPORTED"
 
 # 박스 3 v5 canonical apply v1.2 (2026-06-05, PR #783) — 신규 fail_class.
 # append-only, 본진 v1.2/v1.3 보존 (약화 0).
@@ -127,7 +123,6 @@ FAIL_CLASS_SEVERITY: dict[str, str] = {
     PARTIAL_HELPER_SDK_UNAVAILABLE: "nonblocking",
     PARTIAL_EMBEDDER_UNAVAILABLE: "nonblocking",
     PARTIAL_BGE_M3_FALLBACK_USED: "nonblocking",
-    PARTIAL_HELPER8_STYLE_OUTPUT_UNSUPPORTED: "nonblocking",
     "BLOCK_FINAL_GATE_UNSUPPORTED": "needs_review",
 }
 
