@@ -102,6 +102,25 @@ def _draft_text_for_helper4_grounding(draft_text: str) -> str:
     return "\n".join(factual_lines) if factual_lines else draft_text
 
 
+def _factual_digests_for_helper4(draft_text: str) -> set[str]:
+    """Return factual digests in both core and bundled-helper4 forms.
+
+    The bundled SDK hashes only the value after the first colon in each
+    normalized line. Keep the original claim digest for external helper4
+    implementations and add the exact value digest used by the bundled SDK.
+    """
+    digests: set[str] = set()
+    for claim in extract_claims(draft_text):
+        if not claim.is_factual:
+            continue
+        digests.add(claim.claim_digest)
+        normalized_line = _normalize_claim_line_for_helper4(claim.claim_text_runtime_only)
+        helper4_claim = normalized_line.split(":", 1)[-1].strip()
+        if helper4_claim:
+            digests.add(sha256_text(helper4_claim))
+    return digests
+
+
 def _promoted_verdict(verdict: ClaimVerdict, factual_digests: set[str]) -> ClaimVerdict:
     """SDK 판정 보강 — 승격만 허용(약화 금지).
 
@@ -414,9 +433,9 @@ class HelperSdkBridge:
             elif isinstance(produced, list):
                 # bundled helper4 SDK 가 GroundedClaim 리스트를 반환하는 경로.
                 # #852: SDK 의 좁은 factual 사전이 non_claim 오분류한 것을 real_grounding 의
-                # (넓은) _is_factual 판정으로 승격한다. claim_digest 로 매칭(양쪽 동일 문장을
-                # sha256_text 로 해싱 — feasibility 실측 확인). draft_text 는 이 메서드 인자.
-                factual_digests = {c.claim_digest for c in extract_claims(draft_text) if c.is_factual}
+                # (넓은) _is_factual 판정으로 승격한다. 외부 helper4 의 원문 digest 와 bundled
+                # helper4 가 item:value 중 value 만 해싱한 digest 를 모두 허용한다.
+                factual_digests = _factual_digests_for_helper4(draft_text)
                 verdicts = []
                 for idx, item in enumerate(produced, start=1):
                     if isinstance(item, ClaimVerdict):

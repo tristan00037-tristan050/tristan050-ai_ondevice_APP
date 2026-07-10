@@ -13,8 +13,12 @@ from butler_pc_core.cards.box3.actual_operation_pipeline import (
     _is_output_skeleton_echo,
     _status_from_gate,
 )
-from butler_pc_core.cards.box3.helper_sdk_bridge import HelperSdkBridge, _promoted_verdict
-from butler_pc_core.cards.box3.real_contracts import ClaimVerdict, EvidenceUnit
+from butler_pc_core.cards.box3.helper_sdk_bridge import (
+    HelperSdkBridge,
+    _factual_digests_for_helper4,
+    _promoted_verdict,
+)
+from butler_pc_core.cards.box3.real_contracts import ClaimVerdict, EvidenceUnit, sha256_text
 
 DIGEST_A = "sha256:" + "a" * 64
 DIGEST_B = "sha256:" + "b" * 64
@@ -48,6 +52,26 @@ def test_furniture_input_factual_claim_count_recovers_above_zero():
     gb = bridge.ground_claims(draft, eb)
     assert gb.summary.factual_claim_count >= 1
     assert gb.fail_class != BLOCK_NO_FACTUAL_CLAIMS
+
+
+def test_promotion_matches_bundled_helper4_value_only_digest():
+    draft = "핵심내용: 납품 장소는 본사 1층 자재 창고입니다"
+    value_digest = sha256_text("본사 1층 자재 창고")
+
+    assert value_digest in _factual_digests_for_helper4(draft)
+
+    bridge = HelperSdkBridge.from_env()
+    evidence = bridge.parse_evidence(["납품 장소는 본사 1층 자재 창고입니다"])
+    grounded = bridge.ground_claims(draft, evidence)
+
+    assert grounded.summary.factual_claim_count == 1
+    assert grounded.fail_class != BLOCK_NO_FACTUAL_CLAIMS
+    assert any(
+        verdict.claim_digest == value_digest
+        and verdict.support_level == "no_evidence"
+        and verdict.reason_code == "NO_MATCHING_EVIDENCE"
+        for verdict in grounded.claim_verdicts
+    )
 
 
 def test_promotion_only_lifts_non_claim_to_no_evidence():
