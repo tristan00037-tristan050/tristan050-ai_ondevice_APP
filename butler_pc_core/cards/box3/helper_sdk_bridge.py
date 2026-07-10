@@ -102,6 +102,24 @@ def _draft_text_for_helper4_grounding(draft_text: str) -> str:
     return "\n".join(factual_lines) if factual_lines else draft_text
 
 
+def _promoted_verdict(verdict: ClaimVerdict, factual_digests: set[str]) -> ClaimVerdict:
+    """SDK 판정 보강 — 승격만 허용(약화 금지).
+
+    SDK 가 non_claim 으로 본 claim 이라도, real_grounding.extract_claims 의 _is_factual
+    (SDK 의 좁은 키워드 사전보다 넓은 정의: 숫자·사실 힌트 포함)이 factual 로 보면
+    no_evidence 로 승격한다 — "책상 50개"·"서울시청" 류가 전부 non_claim 처리되어
+    factual_claim_count=0 → vacuous BLOCK_NO_FACTUAL_CLAIMS 가 되는 것을 막는다.
+    근거 매칭 방향(unsupported/supported/no_evidence)은 SDK 판정을 그대로 신뢰하므로
+    절대 바꾸지 않는다. 오직 non_claim → no_evidence 승격만 한다.
+    ClaimVerdict 계약상 no_evidence ↔ NO_MATCHING_EVIDENCE · evidence_digests 는 비어야 한다.
+    """
+    if verdict.support_level == "non_claim" and verdict.claim_digest in factual_digests:
+        return ClaimVerdict(
+            verdict.claim_id, verdict.claim_digest, "no_evidence", [], verdict.confidence, "NO_MATCHING_EVIDENCE",
+        )
+    return verdict
+
+
 def _extract_helper8_styled_text(styled: Any, *, original_draft: str) -> tuple[str, str | None]:
     """helper8 산출물에서 초안 텍스트만 안전 추출한다 (fail-closed).
 
@@ -395,10 +413,14 @@ class HelperSdkBridge:
                 ]
             elif isinstance(produced, list):
                 # bundled helper4 SDK 가 GroundedClaim 리스트를 반환하는 경로.
+                # #852: SDK 의 좁은 factual 사전이 non_claim 오분류한 것을 real_grounding 의
+                # (넓은) _is_factual 판정으로 승격한다. claim_digest 로 매칭(양쪽 동일 문장을
+                # sha256_text 로 해싱 — feasibility 실측 확인). draft_text 는 이 메서드 인자.
+                factual_digests = {c.claim_digest for c in extract_claims(draft_text) if c.is_factual}
                 verdicts = []
                 for idx, item in enumerate(produced, start=1):
                     if isinstance(item, ClaimVerdict):
-                        verdicts.append(item)
+                        verdicts.append(_promoted_verdict(item, factual_digests))
                         continue
                     claim_digest = getattr(item, "claim_digest", None) or sha256_text(str(item))
                     support_level = getattr(item, "support_level", "no_evidence")
@@ -406,7 +428,10 @@ class HelperSdkBridge:
                     reason_code = getattr(item, "reason_code", "NO_MATCHING_EVIDENCE")
                     confidence = float(getattr(item, "confidence", 0.0))
                     claim_id = getattr(item, "claim_id", None) or f"h4-{idx}"
-                    verdicts.append(ClaimVerdict(claim_id, claim_digest, support_level, evidence_digests, confidence, reason_code))
+                    verdicts.append(_promoted_verdict(
+                        ClaimVerdict(claim_id, claim_digest, support_level, evidence_digests, confidence, reason_code),
+                        factual_digests,
+                    ))
             else:
                 claims = extract_claims(draft_text)
                 verdicts = ground_claims(claims, evidence_bundle.evidence_units_runtime)
