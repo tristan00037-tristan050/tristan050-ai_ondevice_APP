@@ -27,6 +27,9 @@ NEEDS_REVIEW_NO_EVIDENCE_CLAIM = "NEEDS_REVIEW_NO_EVIDENCE_CLAIM"
 FIXED_EVAL_PENDING = "FIXED_EVAL_PENDING"
 BLOCK_RAW_OR_PATH_LEAK = "BLOCK_RAW_OR_PATH_LEAK"
 BLOCK_DLP_OUTBOUND_DRAFT = "BLOCK_DLP_OUTBOUND_DRAFT"
+# real_grounding 이 사실 문장 0건일 때 내는 판정. 지금까지 문자열 리터럴로만 존재해
+# FAIL_CLASS_SEVERITY 미등록(unknown→보수적 block)이었다. SSOT 상수로 승격.
+BLOCK_NO_FACTUAL_CLAIMS = "BLOCK_NO_FACTUAL_CLAIMS"
 
 PASS_STATUS = "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL"
 REAL_CANDIDATE = "REAL_CANDIDATE"
@@ -43,6 +46,10 @@ PARTIAL_BGE_M3_FALLBACK_USED = "PARTIAL_BGE_M3_FALLBACK_USED"
 BLOCK_HELPER_SDK_STACK_ATTEMPT = "BLOCK_HELPER_SDK_STACK_ATTEMPT"
 BLOCK_HELPER8_NON_CANONICAL_SHA = "BLOCK_HELPER8_NON_CANONICAL_SHA"
 BLOCK_GROUNDING_EMBEDDER_MISSING = "BLOCK_GROUNDING_EMBEDDER_MISSING"
+# helper8 이 인식 불가한 형태(문자열/딕셔너리/알려진 dataclass 속성이 아닌 객체)를 반환한 경우.
+# 원문을 repr 로 오염시키는 대신 fail-closed: 스타일 미적용 원문 유지 + 이 코드로 표면화.
+# 스타일은 부가기능이라 초안을 차단하지 않는다(nonblocking).
+PARTIAL_HELPER8_STYLE_OUTPUT_UNSUPPORTED = "PARTIAL_HELPER8_STYLE_OUTPUT_UNSUPPORTED"
 
 # 박스 3 v5 canonical apply v1.2 (2026-06-05, PR #783) — 신규 fail_class.
 # append-only, 본진 v1.2/v1.3 보존 (약화 0).
@@ -88,6 +95,9 @@ FAIL_CLASS_SEVERITY: dict[str, str] = {
     BLOCK_UNSUPPORTED_CLAIM: "block",
     BLOCK_RAW_OR_PATH_LEAK: "block",
     BLOCK_DLP_OUTBOUND_DRAFT: "block",
+    # 잠정 block — 현행 동작(unknown→보수적 block)을 명시화해 보존만 한다.
+    # 최종 severity(block vs needs_review)는 §3/§4 계측 결과 확인 후 별도 지시로 확정.
+    BLOCK_NO_FACTUAL_CLAIMS: "block",
     BLOCK_HELPER_SDK_STACK_ATTEMPT: "block",
     BLOCK_HELPER8_NON_CANONICAL_SHA: "block",
     BLOCK_GROUNDING_EMBEDDER_MISSING: "block",
@@ -117,6 +127,7 @@ FAIL_CLASS_SEVERITY: dict[str, str] = {
     PARTIAL_HELPER_SDK_UNAVAILABLE: "nonblocking",
     PARTIAL_EMBEDDER_UNAVAILABLE: "nonblocking",
     PARTIAL_BGE_M3_FALLBACK_USED: "nonblocking",
+    PARTIAL_HELPER8_STYLE_OUTPUT_UNSUPPORTED: "nonblocking",
     "BLOCK_FINAL_GATE_UNSUPPORTED": "needs_review",
 }
 

@@ -43,6 +43,10 @@ function unsupportedCount(response: Box3DraftResponse): number {
   return typeof response.unsupported_claim_count === 'number' ? response.unsupported_claim_count : 0;
 }
 
+function hasDraftText(response: Box3DraftResponse): boolean {
+  return safeDraftText(response).trim().length > 0;
+}
+
 function DraftTextView({ text }: { text: string }) {
   const lines = text ? text.split('\n') : ['(초안 없음)'];
   return (
@@ -231,6 +235,30 @@ export function Box3DraftModal({ onClose }: { onClose: () => void }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#14532D', fontWeight: 700 }}>
               <CheckCircle2 size={18} aria-hidden /> 응답 수신
             </div>
+            {!hasDraftText(response) && (
+              <div
+                role="alert"
+                aria-live="assertive"
+                data-testid="box3-blocked-banner"
+                style={{ marginTop: 12, border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#7F1D1D', borderRadius: 8, padding: 12 }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, marginBottom: 6 }}>
+                  <AlertTriangle size={16} aria-hidden /> 초안 생성이 차단되었습니다
+                </div>
+                <dl style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 4, fontSize: 13, margin: 0 }}>
+                  <dt>status</dt>
+                  <dd data-testid="box3-blocked-status" style={{ margin: 0, overflowWrap: 'anywhere' }}>{response.status ?? 'unknown'}</dd>
+                  <dt>사유(fail_class)</dt>
+                  <dd data-testid="box3-blocked-fail-class" style={{ margin: 0, overflowWrap: 'anywhere' }}>{response.fail_class ?? '없음'}</dd>
+                  {response.terminal_stage ? (
+                    <>
+                      <dt>중단 단계</dt>
+                      <dd data-testid="box3-blocked-terminal-stage" style={{ margin: 0, overflowWrap: 'anywhere' }}>{response.terminal_stage}</dd>
+                    </>
+                  ) : null}
+                </dl>
+              </div>
+            )}
             {response.needs_review && unsupportedCount(response) > 0 && (
               <div
                 role="alert"

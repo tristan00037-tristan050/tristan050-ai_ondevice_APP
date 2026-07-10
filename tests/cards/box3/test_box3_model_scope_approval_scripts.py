@@ -134,6 +134,7 @@ def test_no_git_add_all_pollution_manifest():
         "butler-desktop/src/components/v1_1/Box3DraftModal.tsx",
         "butler-desktop/src/lib/box3/",
         "butler-desktop/src/__tests__/Box3DraftModalUnsupportedLabel.test.tsx",
+        "butler-desktop/src/__tests__/Box3DraftModalBlockedBanner.test.tsx",
         "docs/BOX3_SEALED_MODEL_MANIFEST.json",
         "tests/cards/box3/",
         "tests/test_model_path_identity.py",
