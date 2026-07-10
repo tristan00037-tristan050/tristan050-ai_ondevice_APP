@@ -102,6 +102,40 @@ def _draft_text_for_helper4_grounding(draft_text: str) -> str:
     return "\n".join(factual_lines) if factual_lines else draft_text
 
 
+def _extract_helper8_styled_text(styled: Any, *, original_draft: str) -> tuple[str, str | None]:
+    """helper8 산출물에서 초안 텍스트만 안전 추출한다 (fail-closed).
+
+    지원 형태: str · dict(draft_text|draft_text_runtime|text) · 객체(.draft_text|
+    .draft_text_runtime|.text). bridge 내부 계약은 draft_text_runtime, 외부 SDK 객체는
+    draft_text 를 쓸 수 있어 양쪽 다 지원한다.
+
+    금지: str(styled)/repr(styled)/getattr 강제 문자열화. 알 수 없는 타입·빈 값·값 자체가
+    "StyledDraft(" repr 문자열인 경우는 원본 draft 를 유지하고
+    PARTIAL_HELPER_SDK_UNAVAILABLE 로 fail-closed 한다(원문 repr 오염 0).
+    """
+    if isinstance(styled, str):
+        value = styled
+    elif isinstance(styled, dict):
+        value = None
+        for key in ("draft_text", "draft_text_runtime", "text"):
+            candidate = styled.get(key)
+            if isinstance(candidate, str):
+                value = candidate
+                break
+    else:
+        value = None
+        for attr in ("draft_text", "draft_text_runtime", "text"):
+            candidate = getattr(styled, attr, None)
+            if isinstance(candidate, str):
+                value = candidate
+                break
+    if not isinstance(value, str) or not value.strip():
+        return original_draft, PARTIAL_HELPER_SDK_UNAVAILABLE
+    if value.lstrip().startswith("StyledDraft("):
+        return original_draft, PARTIAL_HELPER_SDK_UNAVAILABLE
+    return value, None
+
+
 @dataclass
 class EvidenceBundle:
     evidence_units_runtime: list[EvidenceUnit]
@@ -412,10 +446,11 @@ class HelperSdkBridge:
                 styled = helper8.apply_profile(draft_text, profile_ref)
             else:
                 styled = draft_text
-            if isinstance(styled, dict):
-                styled_text = str(styled.get("draft_text") or styled.get("text") or draft_text)
-            else:
-                styled_text = str(styled)
+            styled_text, style_fail = _extract_helper8_styled_text(styled, original_draft=draft_text)
+            if style_fail is not None:
+                # 인식 불가/빈 값/ repr 문자열 → repr 오염 대신 원본 draft 유지(fail-closed).
+                receipt = DigestOnlyReceipt("box3.helper_sdk.receipt.v1_2", request_digest, "helper8_style", {}, "partial", style_fail)
+                return StyledDraft(styled_text, False, style_fail, receipt)
             receipt = DigestOnlyReceipt("box3.helper_sdk.receipt.v1_2", request_digest, "helper8_style", {"draft_digest_present": 1}, "pass", None)
             return StyledDraft(styled_text, True, None, receipt)
         except Exception:
