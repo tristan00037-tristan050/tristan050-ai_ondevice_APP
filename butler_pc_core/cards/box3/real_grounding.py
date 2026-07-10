@@ -16,6 +16,7 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Iterable
 
+from .actual_fail_class import BLOCK_NO_FACTUAL_CLAIMS
 from .real_contracts import (
     ClaimVerdict,
     DraftClaim,
@@ -278,7 +279,7 @@ def summarize_grounding(verdicts: list[ClaimVerdict]) -> ClaimGroundingSummary:
     citation_accuracy = 0.0 if not supported else len(cited_supported) / len(supported)
 
     if factual_count == 0:
-        fail_class: str | None = "BLOCK_NO_FACTUAL_CLAIMS"
+        fail_class: str | None = BLOCK_NO_FACTUAL_CLAIMS
     elif unsupported:
         fail_class = "NEEDS_REVIEW_UNSUPPORTED_CLAIM"
     elif no_evidence_rate > 0.05:

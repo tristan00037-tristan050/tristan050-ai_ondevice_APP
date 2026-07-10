@@ -48,6 +48,38 @@ def _to_legacy_status(actual_status: str | None) -> str:
         return "contract_only"
     return _LEGACY_STATUS_MAP.get(actual_status, "contract_only")
 
+
+def _derive_terminal_stage(stage_trace: Any, fail_class: Any) -> str | None:
+    """Return the actionable failure stage without exposing runtime text."""
+    if not isinstance(fail_class, str) or not fail_class:
+        return None
+    if not isinstance(stage_trace, list):
+        return None
+
+    matching: list[str] = []
+    fallback: list[str] = []
+    for entry in stage_trace:
+        if not isinstance(entry, dict):
+            continue
+        stage = entry.get("stage")
+        if not isinstance(stage, str) or not stage:
+            continue
+        entry_fail = entry.get("fail_class")
+        if entry_fail == fail_class:
+            matching.append(stage)
+        # fallback 은 순수하게 "실행이 실패로 표시된 단계"(passed is False)만 대상으로 한다.
+        # matching 에서 이미 fail_class 일치를 걸렀으므로 entry_fail 단독 조건은 too broad.
+        if entry.get("passed") is False:
+            fallback.append(stage)
+
+    for stage in reversed(matching):
+        if stage != "final_gate":
+            return stage
+    if matching:
+        return matching[-1]
+    return fallback[-1] if fallback else None
+
+
 def _read_json_file(path: Path) -> dict[str, Any] | None:
     try:
         if not path.exists() or not path.is_file():
@@ -79,6 +111,7 @@ def load_fixed_eval_pass(path: Path | None = None) -> bool:
     return report.get("status") == "FIXED_EVAL_PASS" and int(report.get("case_count", 0)) >= 40 and int(report.get("failed_count", 1)) == 0
 
 def _contract_only_actual_response(envelope: Box3ActualRuntimeEnvelope, *, fail_class: str | None, approval_digest: str | None, approval_allowed: bool, approval_fail_class: str | None) -> dict[str, Any]:
+    stage_trace = [{"stage": "approval_pre_gate", "passed": bool(approval_allowed), "fail_class": approval_fail_class, "runner_injected": False}]
     response = {
         "schema_version": "box3.draft.response.v1_2",
         "status": _to_legacy_status(CONTRACT_ONLY),
@@ -86,8 +119,9 @@ def _contract_only_actual_response(envelope: Box3ActualRuntimeEnvelope, *, fail_
         "draft_digest": None,
         "citations": [],
         "metrics": {},
-        "stage_trace": [{"stage": "approval_pre_gate", "passed": bool(approval_allowed), "fail_class": approval_fail_class, "runner_injected": False}],
+        "stage_trace": stage_trace,
         "fail_class": fail_class,
+        "terminal_stage": _derive_terminal_stage(stage_trace, fail_class) or "approval_pre_gate",
         "needs_review": True,
         "review_reason_code": fail_class,
         "unsupported_claim_count": 0,
@@ -125,6 +159,8 @@ def _contract_only_actual_response(envelope: Box3ActualRuntimeEnvelope, *, fail_
 def normalize_actual_verdict_to_legacy_response(result: Any, *, envelope: Box3ActualRuntimeEnvelope, approval_config_digest: str | None, runner_injected: bool) -> dict[str, Any]:
     raw = result.to_response_dict() if hasattr(result, "to_response_dict") else dict(result)
     actual_status = raw.get("status")
+    stage_trace = raw.get("stage_trace", [])
+    fail_class = raw.get("fail_class")
     response = {
         "schema_version": "box3.draft.response.v1_2",
         "status": _to_legacy_status(actual_status),
@@ -132,8 +168,9 @@ def normalize_actual_verdict_to_legacy_response(result: Any, *, envelope: Box3Ac
         "draft_digest": raw.get("draft_digest"),
         "citations": raw.get("citations", []),
         "metrics": raw.get("metrics", {}),
-        "stage_trace": raw.get("stage_trace", []),
-        "fail_class": raw.get("fail_class"),
+        "stage_trace": stage_trace,
+        "fail_class": fail_class,
+        "terminal_stage": _derive_terminal_stage(stage_trace, fail_class),
         "needs_review": raw.get("needs_review") is True or (raw.get("status") in {"CONTRACT_ONLY", "REAL_CANDIDATE", "BLOCKED"} and raw.get("real_claim_allowed") is not True),
         "review_reason_code": raw.get("review_reason_code") or raw.get("fail_class"),
         "unsupported_claim_count": int(raw.get("unsupported_claim_count") or 0),

@@ -27,6 +27,9 @@ NEEDS_REVIEW_NO_EVIDENCE_CLAIM = "NEEDS_REVIEW_NO_EVIDENCE_CLAIM"
 FIXED_EVAL_PENDING = "FIXED_EVAL_PENDING"
 BLOCK_RAW_OR_PATH_LEAK = "BLOCK_RAW_OR_PATH_LEAK"
 BLOCK_DLP_OUTBOUND_DRAFT = "BLOCK_DLP_OUTBOUND_DRAFT"
+# real_grounding 이 사실 문장 0건일 때 내는 판정. 지금까지 문자열 리터럴로만 존재해
+# FAIL_CLASS_SEVERITY 미등록(unknown→보수적 block)이었다. SSOT 상수로 승격.
+BLOCK_NO_FACTUAL_CLAIMS = "BLOCK_NO_FACTUAL_CLAIMS"
 
 PASS_STATUS = "PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL"
 REAL_CANDIDATE = "REAL_CANDIDATE"
@@ -88,6 +91,9 @@ FAIL_CLASS_SEVERITY: dict[str, str] = {
     BLOCK_UNSUPPORTED_CLAIM: "block",
     BLOCK_RAW_OR_PATH_LEAK: "block",
     BLOCK_DLP_OUTBOUND_DRAFT: "block",
+    # 잠정 block — 현행 동작(unknown→보수적 block)을 명시화해 보존만 한다.
+    # 최종 severity(block vs needs_review)는 §3/§4 계측 결과 확인 후 별도 지시로 확정.
+    BLOCK_NO_FACTUAL_CLAIMS: "block",
     BLOCK_HELPER_SDK_STACK_ATTEMPT: "block",
     BLOCK_HELPER8_NON_CANONICAL_SHA: "block",
     BLOCK_GROUNDING_EMBEDDER_MISSING: "block",
