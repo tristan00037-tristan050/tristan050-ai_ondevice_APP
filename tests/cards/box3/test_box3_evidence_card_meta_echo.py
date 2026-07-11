@@ -38,6 +38,12 @@ def test_evidence_card_meta_echo_detected_when_scaffolding_leaks():
     assert _is_evidence_card_meta_echo(draft, ev) is True
 
 
+def test_shortened_rewrite_meta_echo_is_detected_in_isolation():
+    ev = _EvidenceStub("납품처는 서울시청이다.")
+    draft = "확인필요: 바꿔쓰기: 예"
+    assert _is_evidence_card_meta_echo(draft, ev) is True
+
+
 def test_normal_draft_is_not_flagged_as_meta_echo():
     ev = _EvidenceStub("납품처는 서울시청이다.")
     normal = "핵심내용: 납품처는 서울시청입니다. (근거1)"
