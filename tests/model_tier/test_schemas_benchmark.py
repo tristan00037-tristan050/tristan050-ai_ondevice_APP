@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from dataclasses import asdict
 from pathlib import Path
 
@@ -136,3 +139,36 @@ def test_benchmark_requires_cold_three_warm_ten_and_emits_p50_p95() -> None:
     assert result["fixture_count"] == 30
     assert result["metrics"]["total_latency_ms_p95"] >= result["metrics"]["total_latency_ms_p50"]
     jsonschema.validate(result, _schema("benchmark_result_v1.schema.json"))
+
+
+def test_benchmark_cli_runs_from_repo_root_without_pythonpath(tmp_path: Path) -> None:
+    sample_path = tmp_path / "samples.jsonl"
+    sample_path.write_text(
+        json.dumps(
+            asdict(
+                _sample(
+                    "warm",
+                    0,
+                    fixture_id="fixture-00",
+                    complexity_bucket="short",
+                )
+            ),
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    env = dict(os.environ)
+    env.pop("PYTHONPATH", None)
+    completed = subprocess.run(
+        [sys.executable, "scripts/benchmark_model_tier_phase0.py", str(sample_path)],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 2
+    assert '"schema_version": "butler.model_tier_benchmark_result.v1"' in completed.stdout
+    assert "MODEL_TIER_BENCHMARK_OK=1" in completed.stderr
+    assert "ModuleNotFoundError" not in completed.stderr
