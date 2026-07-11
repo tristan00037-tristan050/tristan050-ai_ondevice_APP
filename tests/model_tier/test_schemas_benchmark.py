@@ -170,5 +170,10 @@ def test_benchmark_cli_runs_from_repo_root_without_pythonpath(tmp_path: Path) ->
     )
     assert completed.returncode == 2
     assert '"schema_version": "butler.model_tier_benchmark_result.v1"' in completed.stdout
-    assert "MODEL_TIER_BENCHMARK_OK=1" in completed.stderr
+    markers = dict(
+        line.split("=", 1)
+        for line in completed.stderr.splitlines()
+        if "=" in line
+    )
+    assert markers.get("MODEL_TIER_BENCHMARK_OK") == "1"
     assert "ModuleNotFoundError" not in completed.stderr
