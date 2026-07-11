@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/model_tier/benchmark_result.schema.json",
+  "title": "Butler model tier benchmark result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "box_id", "device_id_digest", "variant_id", "model_digest", "build_sha", "sample_count", "fixture_count", "complexity_counts", "cold_count", "warm_count", "protocol_complete", "raw_text_logged", "external_send_zero", "metrics", "result_digest"],
+  "properties": {
+    "schema_version": {"const": "butler.model_tier_benchmark_result.v1"},
+    "box_id": {"enum": ["1", "3"]},
+    "device_id_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "variant_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "model_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "build_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sample_count": {"type": "integer", "minimum": 1},
+    "fixture_count": {"type": "integer", "minimum": 1},
+    "complexity_counts": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "integer", "minimum": 1}
+    },
+    "cold_count": {"type": "integer", "minimum": 0},
+    "warm_count": {"type": "integer", "minimum": 0},
+    "protocol_complete": {"type": "boolean"},
+    "raw_text_logged": {"const": false},
+    "external_send_zero": {"const": true},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["load_ms_p50", "load_ms_p95", "ttft_ms_p50", "ttft_ms_p95", "total_latency_ms_p50", "total_latency_ms_p95", "tokens_per_second_p50", "tokens_per_second_p95", "tokens_in_p50", "tokens_out_p50", "rss_peak_bytes_p50", "rss_peak_bytes_p95", "failure_rate", "quality_pass_rate", "schema_pass_rate", "dlp_pass_rate", "grounding_pass_rate", "escalation_recommendation_rate", "device_profile_invalid_rate", "available_memory_drop_bytes_p95"],
+      "properties": {
+        "load_ms_p50": {"type": "number", "minimum": 0},
+        "load_ms_p95": {"type": "number", "minimum": 0},
+        "ttft_ms_p50": {"type": "number", "minimum": 0},
+        "ttft_ms_p95": {"type": "number", "minimum": 0},
+        "total_latency_ms_p50": {"type": "number", "minimum": 0},
+        "total_latency_ms_p95": {"type": "number", "minimum": 0},
+        "tokens_per_second_p50": {"type": "number", "minimum": 0},
+        "tokens_per_second_p95": {"type": "number", "minimum": 0},
+        "tokens_in_p50": {"type": "number", "minimum": 0},
+        "tokens_out_p50": {"type": "number", "minimum": 0},
+        "rss_peak_bytes_p50": {"type": "number", "minimum": 0},
+        "rss_peak_bytes_p95": {"type": "number", "minimum": 0},
+        "failure_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "quality_pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "schema_pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "dlp_pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "grounding_pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "escalation_recommendation_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "device_profile_invalid_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "available_memory_drop_bytes_p95": {"type": "number", "minimum": 0}
+      }
+    },
+    "result_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

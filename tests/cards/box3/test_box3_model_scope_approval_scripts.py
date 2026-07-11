@@ -138,6 +138,17 @@ def test_no_git_add_all_pollution_manifest():
         "docs/BOX3_SEALED_MODEL_MANIFEST.json",
         "tests/cards/box3/",
         "tests/test_model_path_identity.py",
+        # Model-tier Phase 0 approved shadow-only scope (2026-07-11 directive v2.0).
+        "butler_pc_core/model_tier/",
+        "schemas/model_tier/",
+        "scripts/benchmark_model_tier_phase0.py",
+        "scripts/verify_model_tier_phase0.py",
+        "tests/model_tier/",
+        "butler_pc_core/sidecar/routes/router_decide.py",
+        "butler_pc_core/sidecar/routes/router_intake_decide.py",
+        "butler_pc_core/sidecar/routes/box3_draft.py",
+        "butler_sidecar.py",
+        "butler-desktop/src-tauri/src/lib.rs",
         "evidence/",
     )
     stray = []

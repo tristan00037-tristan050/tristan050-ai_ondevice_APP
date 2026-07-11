@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/model_tier/model_variant.schema.json",
+  "title": "Butler model variant v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "variant_id", "role", "family", "tier", "quantization", "path_env_key", "allowed_boxes", "embedded_adapters", "external_helpers", "supports_json_grammar", "supports_chat_template", "max_context_tokens", "sealed_model_digest", "availability", "general_purpose"],
+  "properties": {
+    "schema_version": {"const": "butler.model_variant.v1"},
+    "variant_id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._-]+$"},
+    "role": {"type": "string", "minLength": 1},
+    "family": {"type": "string", "minLength": 1},
+    "tier": {"enum": ["TIER_1P7B", "TIER_4B"]},
+    "quantization": {"type": "string", "minLength": 1},
+    "path_env_key": {"type": "string"},
+    "allowed_boxes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "embedded_adapters": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "external_helpers": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "supports_json_grammar": {"type": "boolean"},
+    "supports_chat_template": {"type": "boolean"},
+    "max_context_tokens": {"type": ["integer", "null"], "minimum": 1},
+    "sealed_model_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "availability": {"enum": ["AVAILABLE", "UNAVAILABLE", "UNVERIFIED", "DISABLED"]},
+    "general_purpose": {"type": "boolean"}
+  }
+}

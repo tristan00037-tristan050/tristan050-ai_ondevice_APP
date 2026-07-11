@@ -21,6 +21,10 @@ from butler_pc_core.connect_loop.schema_validator import (
     validate_chat_request,
     validate_router_decision,
 )
+from butler_pc_core.model_tier.shadow_observer import (
+    observe_box1_best_effort,
+    response_digest_best_effort,
+)
 
 router = APIRouter()
 
@@ -116,4 +120,25 @@ async def decide_router(payload: RouterDecidePayload, request: Request) -> dict[
         validate_router_decision(decision)
     except ValidationError as exc:
         _raise_schema_error(exc)
+    observe_box1_best_effort(
+        request_digest=str(chat_request["text_digest"]),
+        actual_response_digest=response_digest_best_effort(decision),
+        facts={
+            "payload_digest": str(chat_request["text_digest"]),
+            "input_chars": len(runtime_text),
+            "attachment_count": 0,
+            "total_attachment_bytes": 0,
+            "requested_output_tokens": 0,
+            "reference_count": 0,
+            "structured_output_required": False,
+            "deterministic_path_available": bool(
+                not decision["fallback_required"]
+                and float(decision["routing_confidence"]) >= 0.75
+            ),
+            "ambiguity_score": max(
+                0.0,
+                min(1.0, 1.0 - float(decision["routing_confidence"])),
+            ),
+        },
+    )
     return decision

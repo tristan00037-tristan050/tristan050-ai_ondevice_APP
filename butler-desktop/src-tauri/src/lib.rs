@@ -4,6 +4,7 @@ use std::{
     fs::{self, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
+    process::Command,
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -14,6 +15,7 @@ use tauri_plugin_shell::{
 };
 
 const SIDECAR_ENV_CONFIG: &str = "sidecar-env.json";
+const MODEL_TIER_NATIVE_TELEMETRY_ENV: &str = "BUTLER_MODEL_TIER_NATIVE_TELEMETRY_JSON";
 const BUTLER_MODEL_PATH_ENV: &str = "BUTLER_MODEL_PATH";
 const BOX3_V9_MODEL_PATH_ENV: &str = "BUTLER_BOX3_V9_Q4_MODEL_PATH";
 const FREE_CHAT_MODEL_NAME: &str = "qwen3-4b-q4_k_m.gguf";
@@ -179,6 +181,85 @@ fn push_box3_resource_env(app: &tauri::AppHandle, values: &mut Vec<(String, Stri
     );
 }
 
+fn parse_positive_u64(text: &str) -> Option<u64> {
+    let value = text.trim().parse::<u64>().ok()?;
+    (value > 0).then_some(value)
+}
+
+fn parse_vm_stat_available_bytes(text: &str) -> Option<u64> {
+    let page_size = text
+        .lines()
+        .next()
+        .and_then(|line| line.split("page size of ").nth(1))
+        .and_then(|tail| tail.split_whitespace().next())
+        .and_then(parse_positive_u64)
+        .unwrap_or(4096);
+    let allowed = [
+        "Pages free",
+        "Pages inactive",
+        "Pages speculative",
+        "Pages purgeable",
+    ];
+    let mut pages = 0_u64;
+    let mut found = false;
+    for line in text.lines() {
+        let Some((label, raw_value)) = line.split_once(':') else {
+            continue;
+        };
+        if !allowed.contains(&label.trim()) {
+            continue;
+        }
+        let digits: String = raw_value.chars().filter(char::is_ascii_digit).collect();
+        if let Ok(value) = digits.parse::<u64>() {
+            pages = pages.saturating_add(value);
+            found = true;
+        }
+    }
+    found.then(|| pages.saturating_mul(page_size))
+}
+
+fn command_stdout(program: &str, args: &[&str]) -> Option<String> {
+    let output = Command::new(program).args(args).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8(output.stdout).ok()
+}
+
+fn collect_model_tier_native_telemetry_json() -> Option<String> {
+    let total = command_stdout("/usr/sbin/sysctl", &["-n", "hw.memsize"])
+        .and_then(|text| parse_positive_u64(&text));
+    let available = command_stdout("/usr/bin/vm_stat", &[])
+        .and_then(|text| parse_vm_stat_available_bytes(&text));
+    let chip_family = command_stdout("/usr/sbin/sysctl", &["-n", "machdep.cpu.brand_string"])
+        .map(|value| value.trim().chars().take(80).collect::<String>())
+        .filter(|value| !value.is_empty());
+    if total.is_none() && available.is_none() && chip_family.is_none() {
+        return None;
+    }
+    let memory_pressure = match (total, available) {
+        (Some(total), Some(available)) if available <= total => {
+            let ratio = available as f64 / total as f64;
+            if ratio < 0.10 {
+                "CRITICAL"
+            } else if ratio < 0.20 {
+                "WARN"
+            } else {
+                "NORMAL"
+            }
+        }
+        _ => "UNKNOWN",
+    };
+    serde_json::to_string(&serde_json::json!({
+        "total_memory_bytes": total,
+        "available_memory_bytes": available,
+        "memory_pressure": memory_pressure,
+        "thermal_state": "UNKNOWN",
+        "chip_family": chip_family,
+    }))
+    .ok()
+}
+
 fn env_value<'a>(values: &'a [(String, String)], key: &str) -> Option<&'a str> {
     values
         .iter()
@@ -234,6 +315,9 @@ fn resolve_sidecar_env(app: &tauri::AppHandle) -> Result<Vec<(String, String)>, 
 
     push_free_chat_resource_env(app, &mut values);
     push_box3_resource_env(app, &mut values);
+    if let Some(telemetry) = collect_model_tier_native_telemetry_json() {
+        values.push((MODEL_TIER_NATIVE_TELEMETRY_ENV.to_string(), telemetry));
+    }
     validate_model_path_invariants(&values)?;
 
     append_sidecar_launch_log(&format!(
@@ -368,6 +452,23 @@ mod tests {
     fn model_path_detects_box3_model_name_without_raw_path_dependency() {
         assert!(is_box3_model_path(BOX3_MODEL_NAME));
         assert!(!is_box3_model_path(FREE_CHAT_MODEL_NAME));
+    }
+
+    #[test]
+    fn vm_stat_parser_sums_only_available_page_classes() {
+        let sample = "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n\
+Pages free: 10.\n\
+Pages active: 900.\n\
+Pages inactive: 20.\n\
+Pages speculative: 3.\n\
+Pages purgeable: 2.\n";
+        assert_eq!(parse_vm_stat_available_bytes(sample), Some(35 * 16_384));
+    }
+
+    #[test]
+    fn vm_stat_parser_rejects_missing_available_measurements() {
+        assert_eq!(parse_vm_stat_available_bytes("Pages active: 900.\n"), None);
+        assert_eq!(parse_positive_u64("0"), None);
     }
 }
 
