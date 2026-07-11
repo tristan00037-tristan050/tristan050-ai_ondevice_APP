@@ -28,6 +28,9 @@ NEEDS_REVIEW_NO_EVIDENCE_CLAIM = "NEEDS_REVIEW_NO_EVIDENCE_CLAIM"
 # 그대로 출력한 경우. #848/#849 라벨강등 정책과 일관되게 하드블록이 아니라 needs_review 로
 # 라벨 붙여 전달한다(BLOCK_NO_FACTUAL_CLAIMS 하드블록을 이 사유로 강등).
 NEEDS_REVIEW_OUTPUT_SKELETON_ECHO = "NEEDS_REVIEW_OUTPUT_SKELETON_ECHO"
+# 모델이 [근거 카드] 스캐폴딩 메타 문구("바꿔쓰기 금지: 예"·"보존할 문구:"·"반드시 복사할 값:")를
+# 실제 내용으로 착각해 에코한 경우(#852 3차 유출, 골격 에코의 형제). 동일하게 needs_review 강등.
+NEEDS_REVIEW_EVIDENCE_CARD_META_ECHO = "NEEDS_REVIEW_EVIDENCE_CARD_META_ECHO"
 FIXED_EVAL_PENDING = "FIXED_EVAL_PENDING"
 BLOCK_RAW_OR_PATH_LEAK = "BLOCK_RAW_OR_PATH_LEAK"
 BLOCK_DLP_OUTBOUND_DRAFT = "BLOCK_DLP_OUTBOUND_DRAFT"
@@ -108,6 +111,7 @@ FAIL_CLASS_SEVERITY: dict[str, str] = {
     NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL: "needs_review",
     NEEDS_REVIEW_NO_EVIDENCE_CLAIM: "needs_review",
     NEEDS_REVIEW_OUTPUT_SKELETON_ECHO: "needs_review",
+    NEEDS_REVIEW_EVIDENCE_CARD_META_ECHO: "needs_review",
     "NEEDS_REVIEW_NO_EVIDENCE": "needs_review",
     "NEEDS_REVIEW_NO_EVIDENCE_CLAIMS": "needs_review",
     "NEEDS_REVIEW_FORMAT_STYLE_GATE": "needs_review",

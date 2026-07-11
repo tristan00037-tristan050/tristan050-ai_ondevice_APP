@@ -13,6 +13,7 @@ from .actual_fail_class import (
     BLOCK_POLICY_GATE,
     Box3SecurityError,
     FIXED_EVAL_PENDING,
+    NEEDS_REVIEW_EVIDENCE_CARD_META_ECHO,
     NEEDS_REVIEW_OUTPUT_SKELETON_ECHO,
     NEEDS_REVIEW_UNSUPPORTED_CLAIM,
     NEEDS_REVIEW_UNSUPPORTED_CLAIM_LABEL_COVERAGE_PARTIAL,
@@ -27,7 +28,11 @@ from .actual_fail_class import (
     is_blocking_actual_fail_class,
 )
 from .actual_runner_assets import ActualRunnerAssetConfig, verify_base_model_asset
-from .grounded_prompt import OUTPUT_SKELETON_ECHO_MARKERS, evaluate_usefulness_gate
+from .grounded_prompt import (
+    EVIDENCE_CARD_META_ECHO_MARKERS,
+    OUTPUT_SKELETON_ECHO_MARKERS,
+    evaluate_usefulness_gate,
+)
 from .helper_component_guard import verify_helper_component_use_guard
 from .helper_sdk_bridge import HelperSdkBridge, _normalize_claim_line_for_helper4
 from .human_approval_sealed import evaluate_human_approval_sealed
@@ -130,21 +135,28 @@ def annotate_unsupported_lines(draft_text: str, unsupported_digests: set[str]) -
     }
 
 
-def _is_output_skeleton_echo(draft_text: str, evidence_bundle: Any) -> bool:
-    """모델이 V9_1_OUTPUT_SKELETON 플레이스홀더 문구를 실제 내용으로 에코했는지 감지.
+def _markers_echoed(draft_text: str, evidence_bundle: Any, markers: tuple[str, ...]) -> bool:
+    """프롬프트 스캐폴딩 마커가 draft 에 그대로 등장하면서 실제 근거(evidence)에는 없는지.
 
-    few-shot 리터럴 가드(#849)와 같은 계열 — 이번엔 골격 문구가 새는 경우. 골격 마커가
-    draft 에 그대로 등장하면서 실제 근거 텍스트(evidence)에는 없으면 에코로 본다.
+    few-shot 리터럴 가드(#849)와 같은 계열. 마커가 정당한 근거 텍스트에도 있으면 에코가
+    아니므로(오탐 방지) evidence 미포함 조건을 함께 본다.
     """
     if not draft_text:
         return False
     evidence_text = "\n".join(
         getattr(unit, "text_runtime_only", "") for unit in getattr(evidence_bundle, "evidence_units_runtime", [])
     )
-    return any(
-        marker in draft_text and marker not in evidence_text
-        for marker in OUTPUT_SKELETON_ECHO_MARKERS
-    )
+    return any(marker in draft_text and marker not in evidence_text for marker in markers)
+
+
+def _is_output_skeleton_echo(draft_text: str, evidence_bundle: Any) -> bool:
+    """모델이 V9_1_OUTPUT_SKELETON 플레이스홀더 문구를 실제 내용으로 에코했는지 감지(#853)."""
+    return _markers_echoed(draft_text, evidence_bundle, OUTPUT_SKELETON_ECHO_MARKERS)
+
+
+def _is_evidence_card_meta_echo(draft_text: str, evidence_bundle: Any) -> bool:
+    """모델이 [근거 카드] 스캐폴딩 메타 문구("바꿔쓰기 금지: 예" 등)를 에코했는지 감지(#852 3차)."""
+    return _markers_echoed(draft_text, evidence_bundle, EVIDENCE_CARD_META_ECHO_MARKERS)
 
 
 def _status_from_gate(
@@ -298,6 +310,9 @@ def run_box3_actual_operation(
     # #852 작업2: runner 초안 생성 직후·grounding 이전에 골격 문구 에코를 감지한다(원본 draft 기준).
     skeleton_echo = _is_output_skeleton_echo(draft, evidence_bundle)
     stage_trace.append({"stage": "output_skeleton_echo_scan", "passed": not skeleton_echo, "fail_class": NEEDS_REVIEW_OUTPUT_SKELETON_ECHO if skeleton_echo else None})
+    # #852 3차: [근거 카드] 스캐폴딩 메타 문구("바꿔쓰기 금지: 예" 등) 에코 감지(골격 에코의 형제).
+    meta_echo = _is_evidence_card_meta_echo(draft, evidence_bundle)
+    stage_trace.append({"stage": "evidence_card_meta_echo_scan", "passed": not meta_echo, "fail_class": NEEDS_REVIEW_EVIDENCE_CARD_META_ECHO if meta_echo else None})
 
     grounding_bundle = bridge.ground_claims(draft, evidence_bundle) if draft else None
     if grounding_bundle is None:
@@ -309,10 +324,12 @@ def run_box3_actual_operation(
     else:
         verdicts = grounding_bundle.claim_verdicts
         bridge_fail = grounding_bundle.fail_class
-        # #852 작업2: 골격 에코가 원인인 vacuous BLOCK_NO_FACTUAL_CLAIMS 는 하드블록 대신
-        # needs_review(NEEDS_REVIEW_OUTPUT_SKELETON_ECHO)로 강등해 라벨 붙여 전달한다.
+        # #852 작업2/3차: 골격 에코 또는 근거카드 메타 에코가 원인인 vacuous BLOCK_NO_FACTUAL_CLAIMS
+        # (또는 무결함)를 하드블록 대신 needs_review 로 강등해 라벨 붙여 전달한다. 골격 에코 우선.
         if skeleton_echo and bridge_fail in (None, BLOCK_NO_FACTUAL_CLAIMS):
             bridge_fail = NEEDS_REVIEW_OUTPUT_SKELETON_ECHO
+        elif meta_echo and bridge_fail in (None, BLOCK_NO_FACTUAL_CLAIMS):
+            bridge_fail = NEEDS_REVIEW_EVIDENCE_CARD_META_ECHO
         citations = [unit.citation() for unit in evidence_bundle.evidence_units_runtime]
         styled = bridge.apply_company_style(draft)
         if styled.style_applied:
