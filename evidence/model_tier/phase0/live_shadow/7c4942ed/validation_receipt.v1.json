@@ -1,0 +1,26 @@
+{
+  "case_count": 4,
+  "case_ids": [
+    "box1_ambiguous",
+    "box1_simple",
+    "box3_pass",
+    "box3_review"
+  ],
+  "counter_delta": {
+    "dropped": 0,
+    "failures": 0,
+    "submitted": 4,
+    "written": 4
+  },
+  "digest_equal_pair_count": 4,
+  "evidence_file_sha256": "sha256:8febae050d6c17d89b61fcff44d62b5f69c79d92459396780e5274790bdfcc25",
+  "existing_validator_pass": true,
+  "feature_head_sha": "7c4942ed9b68ebe7865557126d136ba91f27c138",
+  "http_200_pair_count": 4,
+  "raw_key_findings": 0,
+  "raw_text_logged": false,
+  "runtime_logic_changed": false,
+  "schema_version": "butler.model_tier_live_shadow_validation_receipt.v1",
+  "supplemental_exact_key_pass": true,
+  "validated_at_utc": "2026-07-12T03:06:47.671901Z"
+}

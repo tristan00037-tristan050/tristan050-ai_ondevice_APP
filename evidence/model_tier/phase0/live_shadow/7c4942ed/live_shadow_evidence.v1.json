@@ -1,0 +1,44 @@
+{
+  "app_executable_digest": "sha256:e910405d733623e1918308cc7ef7782ccb6460c1217b1f77404324422ab56a90",
+  "capture_source": "butler_app_live_http",
+  "cases": [
+    {
+      "case_id": "box1_ambiguous",
+      "hook_off_http_status": 200,
+      "hook_off_response_digest": "sha256:fc3d4c4844bbb08521fe433beebad7f91961c990898cbbc85b41bfac4424e2d9",
+      "hook_on_http_status": 200,
+      "hook_on_response_digest": "sha256:fc3d4c4844bbb08521fe433beebad7f91961c990898cbbc85b41bfac4424e2d9"
+    },
+    {
+      "case_id": "box1_simple",
+      "hook_off_http_status": 200,
+      "hook_off_response_digest": "sha256:4235bba8615fe61a357a93c03ebdbd006d2e8ae573e1a0b6ecc31e004a258b52",
+      "hook_on_http_status": 200,
+      "hook_on_response_digest": "sha256:4235bba8615fe61a357a93c03ebdbd006d2e8ae573e1a0b6ecc31e004a258b52"
+    },
+    {
+      "case_id": "box3_pass",
+      "hook_off_http_status": 200,
+      "hook_off_response_digest": "sha256:66684a4713f480627cc77a260481f4292d445594bd3b9d50f9bcf4a18efc5644",
+      "hook_on_http_status": 200,
+      "hook_on_response_digest": "sha256:66684a4713f480627cc77a260481f4292d445594bd3b9d50f9bcf4a18efc5644"
+    },
+    {
+      "case_id": "box3_review",
+      "hook_off_http_status": 200,
+      "hook_off_response_digest": "sha256:94e52bcd077893f9117a13a2cc90f4773cf0082e3333472715417572bc26330b",
+      "hook_on_http_status": 200,
+      "hook_on_response_digest": "sha256:94e52bcd077893f9117a13a2cc90f4773cf0082e3333472715417572bc26330b"
+    }
+  ],
+  "chip_family": "Apple M3 Max",
+  "hook_on_counter_delta": {
+    "dropped": 0,
+    "failures": 0,
+    "submitted": 4,
+    "written": 4
+  },
+  "raw_key_findings": 0,
+  "schema_version": "butler.model_tier_live_shadow_evidence.v1",
+  "synthetic": false
+}
