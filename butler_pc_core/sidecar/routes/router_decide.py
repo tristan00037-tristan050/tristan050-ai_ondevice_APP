@@ -21,6 +21,11 @@ from butler_pc_core.connect_loop.schema_validator import (
     validate_chat_request,
     validate_router_decision,
 )
+from butler_pc_core.model_tier.shadow_observer import (
+    complete_box1_shadow_best_effort,
+    prepare_box1_shadow_best_effort,
+    response_digest_best_effort,
+)
 
 router = APIRouter()
 
@@ -104,6 +109,24 @@ async def decide_router(payload: RouterDecidePayload, request: Request) -> dict[
         )
 
     policy_precheck, reason_code = _server_side_policy_precheck(chat_request, request)
+    request_digest = str(chat_request["text_digest"])
+    try:
+        shadow_pre_context = prepare_box1_shadow_best_effort(
+            request_digest=request_digest,
+            facts={
+            "payload_digest": request_digest,
+            "input_chars": len(runtime_text),
+            "attachment_count": 0,
+            "total_attachment_bytes": 0,
+            "requested_output_tokens": 0,
+            "reference_count": 0,
+            "structured_output_required": False,
+            "deterministic_path_available": False,
+            "ambiguity_score": 0.5,
+            },
+        )
+    except Exception:
+        shadow_pre_context = None
     decision = RuleBasedBox1Router().decide(
         chat_request,
         RouterRuntimeContext(
@@ -116,4 +139,11 @@ async def decide_router(payload: RouterDecidePayload, request: Request) -> dict[
         validate_router_decision(decision)
     except ValidationError as exc:
         _raise_schema_error(exc)
+    try:
+        complete_box1_shadow_best_effort(
+            pre_context=shadow_pre_context,
+            actual_response_digest=response_digest_best_effort(decision),
+        )
+    except Exception:
+        pass
     return decision

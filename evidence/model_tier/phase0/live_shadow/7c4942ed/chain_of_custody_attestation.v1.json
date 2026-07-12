@@ -1,0 +1,16 @@
+{
+  "capture_script_git_blob_sha": "d643db9ee1839cfee8e9cc652509046f826ad60d",
+  "capture_source": "butler_app_live_http",
+  "evidence_file": "live_shadow_evidence.v1.json",
+  "evidence_file_sha256": "sha256:8febae050d6c17d89b61fcff44d62b5f69c79d92459396780e5274790bdfcc25",
+  "evidence_file_size_bytes": 1740,
+  "evidence_schema_version": "butler.model_tier_live_shadow_evidence.v1",
+  "feature_head_sha": "7c4942ed9b68ebe7865557126d136ba91f27c138",
+  "pr_branch": "feat/model-tier-phase0",
+  "pr_number": 855,
+  "raw_payload_embedded": false,
+  "runtime_logic_changed": false,
+  "schema_version": "butler.model_tier_live_shadow_attestation.v1",
+  "synthetic": false,
+  "validator_git_blob_sha": "8d3138d7f590dc516f0666b5bc6e67af46db79f8"
+}

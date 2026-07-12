@@ -91,6 +91,21 @@ from butler_pc_core.sidecar.analyze_policy_preflight import (
     is_known_card_mode,
     normalize_card_mode,
 )
+from butler_pc_core.model_tier.capability_registry import (
+    BOX3_1P7B_VARIANT_ID,
+    MAIN_4B_VARIANT_ID,
+)
+from butler_pc_core.model_tier.device_profiler import DeviceProfileSampler
+from butler_pc_core.model_tier.runtime_state import (
+    RuntimeProbe,
+    RuntimeStateMonitor,
+    runtime_lifecycle_snapshot,
+)
+from butler_pc_core.model_tier.shadow_observer import (
+    initialize_phase0_shadow,
+    phase0_shadow_status,
+    shutdown_phase0_shadow,
+)
 from datetime import datetime, timezone as _tz
 
 # ---------------------------------------------------------------------------
@@ -98,6 +113,8 @@ from datetime import datetime, timezone as _tz
 # ---------------------------------------------------------------------------
 _SHARED_LLM: LlmRuntime | None = None
 _LLM_INIT_LOCK = threading.Lock()
+_MODEL_TIER_RUNTIME_MONITOR: RuntimeStateMonitor | None = None
+_MODEL_TIER_DEVICE_SAMPLER: DeviceProfileSampler | None = None
 
 
 def _init_shared_llm() -> None:
@@ -132,6 +149,64 @@ async def _ensure_shared_llm() -> "LlmRuntime":
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _init_if_none_sync)
     return _SHARED_LLM  # type: ignore[return-value]
+
+
+def _model_tier_runtime_probes() -> tuple[RuntimeProbe, ...]:
+    main_status = str(getattr(_SHARED_LLM, "status", "")) if _SHARED_LLM else ""
+    box3_path = os.environ.get("BUTLER_BOX3_V9_Q4_MODEL_PATH")
+    box3_lifecycle = runtime_lifecycle_snapshot().get(BOX3_1P7B_VARIANT_ID)
+    return (
+        RuntimeProbe(
+            variant_id=MAIN_4B_VARIANT_ID,
+            model_path=os.environ.get(MAIN_MODEL_PATH_ENV),
+            loaded=_SHARED_LLM is not None,
+            ready=main_status == "ready",
+            process_id=os.getpid(),
+        ),
+        RuntimeProbe(
+            variant_id=BOX3_1P7B_VARIANT_ID,
+            model_path=(box3_lifecycle.model_path if box3_lifecycle else None) or box3_path,
+            loaded=bool(box3_lifecycle and box3_lifecycle.loaded),
+            ready=bool(box3_lifecycle and box3_lifecycle.ready),
+            process_id=box3_lifecycle.process_id if box3_lifecycle else os.getpid(),
+        ),
+    )
+
+
+def _start_model_tier_phase0_shadow() -> None:
+    """Start isolated Phase 0 observers; failures never affect sidecar startup."""
+    global _MODEL_TIER_RUNTIME_MONITOR, _MODEL_TIER_DEVICE_SAMPLER
+    if os.environ.get("BUTLER_MODEL_TIER_SHADOW_ENABLED", "1").strip().lower() in {"0", "false", "no"}:
+        return
+    try:
+        runtime_monitor = RuntimeStateMonitor(_model_tier_runtime_probes)
+        device_sampler = DeviceProfileSampler()
+        runtime_monitor.start()
+        device_sampler.start()
+        if initialize_phase0_shadow(
+            runtime_monitor=runtime_monitor,
+            device_sampler=device_sampler,
+        ) is None:
+            runtime_monitor.stop()
+            device_sampler.stop()
+            return
+        _MODEL_TIER_RUNTIME_MONITOR = runtime_monitor
+        _MODEL_TIER_DEVICE_SAMPLER = device_sampler
+    except Exception:
+        return
+
+
+def _stop_model_tier_phase0_shadow() -> None:
+    global _MODEL_TIER_RUNTIME_MONITOR, _MODEL_TIER_DEVICE_SAMPLER
+    shutdown_phase0_shadow()
+    runtime_monitor = _MODEL_TIER_RUNTIME_MONITOR
+    device_sampler = _MODEL_TIER_DEVICE_SAMPLER
+    _MODEL_TIER_RUNTIME_MONITOR = None
+    _MODEL_TIER_DEVICE_SAMPLER = None
+    if runtime_monitor is not None:
+        runtime_monitor.stop()
+    if device_sampler is not None:
+        device_sampler.stop()
 
 # FactPack 관련 import 및 초기화는 FastAPI/Pydantic 가용성에 의존.
 # (Pydantic 미설치 환경에서도 stdlib fallback 모드가 import 단계에서 깨지지 않도록 가드)
@@ -298,14 +373,21 @@ if _FASTAPI_AVAILABLE:
         "/api/sidecar/health",
         "/api/model/status",
         "/api/egress/report",
+        "/api/model-tier/shadow/status",
     })
+
+    @app.get("/api/model-tier/shadow/status")
+    async def _model_tier_shadow_status():
+        return phase0_shadow_status()
 
     @app.on_event("startup")
     async def _startup_generate_token():
         _TOKEN_MANAGER.generate()
+        _start_model_tier_phase0_shadow()
 
     @app.on_event("shutdown")
     async def _shutdown_clear_token():
+        _stop_model_tier_phase0_shadow()
         _TOKEN_MANAGER.clear()
 
     @app.middleware("http")

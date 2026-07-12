@@ -21,6 +21,11 @@ except Exception:  # pragma: no cover - import failure is handled at app import 
 
 from butler_pc_core.connect_loop.attachment_features import RuntimeAttachment, extract_attachment_features
 from butler_pc_core.connect_loop.intake_router import IntakeContractError, decide_intake
+from butler_pc_core.model_tier.shadow_observer import (
+    complete_box1_shadow_best_effort,
+    prepare_box1_shadow_best_effort,
+    response_digest_best_effort,
+)
 
 try:
     from butler_pc_core.auth.capability_token import CapabilityTokenError, CapabilityTokenManager, auth_error_payload
@@ -112,8 +117,26 @@ if router is not None:
         _validate_local_request(chat_request, request)
         attachments = await _read_runtime_attachments(files)
         bundle = extract_attachment_features(attachments)
+        request_digest = str(chat_request.get("text_digest", ""))
         try:
-            return decide_intake(
+            shadow_pre_context = prepare_box1_shadow_best_effort(
+                request_digest=request_digest,
+                facts={
+                "payload_digest": request_digest,
+                "input_chars": len(runtime_text),
+                "attachment_count": len(attachments),
+                "total_attachment_bytes": sum(len(item.data) for item in attachments),
+                "requested_output_tokens": 0,
+                "reference_count": len(attachments),
+                "structured_output_required": bool(attachments),
+                "deterministic_path_available": False,
+                "ambiguity_score": 0.5,
+                },
+            )
+        except Exception:
+            shadow_pre_context = None
+        try:
+            decision = decide_intake(
                 request_id=str(chat_request.get("request_id", "")),
                 attachment_bundle=bundle,
                 runtime_text=runtime_text,
@@ -121,3 +144,11 @@ if router is not None:
             )
         except IntakeContractError as exc:
             _raise(422, exc.fail_class, "intake contract rejected")
+        try:
+            complete_box1_shadow_best_effort(
+                pre_context=shadow_pre_context,
+                actual_response_digest=response_digest_best_effort(decision),
+            )
+        except Exception:
+            pass
+        return decision

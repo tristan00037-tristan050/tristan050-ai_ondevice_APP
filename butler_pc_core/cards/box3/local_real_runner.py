@@ -3,6 +3,7 @@ from __future__ import annotations
 import concurrent.futures
 import os
 import time
+import weakref
 from dataclasses import asdict, dataclass
 from typing import Callable, Optional
 
@@ -65,6 +66,16 @@ def build_box3_local_real_runner(config: Box3RealRunnerConfig) -> RealRunner:
         raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE)
     load_start = time.perf_counter()
     llm = Llama(model_path=str(model_path), verbose=False)  # local file only, no network
+    from butler_pc_core.model_tier.capability_registry import BOX3_1P7B_VARIANT_ID
+    from butler_pc_core.model_tier.runtime_state import publish_runtime_lifecycle
+
+    publish_runtime_lifecycle(
+        BOX3_1P7B_VARIANT_ID,
+        model_path=str(model_path),
+        loaded=True,
+        ready=True,
+        process_id=os.getpid(),
+    )
     load_ms = (time.perf_counter() - load_start) * 1000.0
 
     def _runner(envelope: Box3RealRuntimeEnvelope) -> str:
@@ -76,6 +87,15 @@ def build_box3_local_real_runner(config: Box3RealRunnerConfig) -> RealRunner:
         return str(choices[0].get("text") or "").strip()
 
     setattr(_runner, "_box3_load_ms", load_ms)
+    weakref.finalize(
+        _runner,
+        publish_runtime_lifecycle,
+        BOX3_1P7B_VARIANT_ID,
+        model_path=str(model_path),
+        loaded=False,
+        ready=False,
+        process_id=os.getpid(),
+    )
     return _runner
 
 

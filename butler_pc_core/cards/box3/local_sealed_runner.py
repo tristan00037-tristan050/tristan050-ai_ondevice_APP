@@ -4,6 +4,7 @@ import concurrent.futures
 import os
 import re
 import time
+import weakref
 from dataclasses import asdict, dataclass
 from typing import Callable
 
@@ -239,6 +240,16 @@ def build_local_sealed_real_runner(
     except ValueError:
         n_ctx = 4096
     llm = Llama(model_path=model_path, n_ctx=n_ctx, verbose=False)
+    from butler_pc_core.model_tier.capability_registry import BOX3_1P7B_VARIANT_ID
+    from butler_pc_core.model_tier.runtime_state import publish_runtime_lifecycle
+
+    publish_runtime_lifecycle(
+        BOX3_1P7B_VARIANT_ID,
+        model_path=model_path,
+        loaded=True,
+        ready=True,
+        process_id=os.getpid(),
+    )
     load_ms = (time.perf_counter() - start) * 1000
 
     def _runner(envelope: Box3ActualRuntimeEnvelope) -> str:
@@ -274,6 +285,15 @@ def build_local_sealed_real_runner(
     setattr(_runner, "_box3_model_load_ms", load_ms)
     setattr(_runner, "_box3_runner_engine", "llama_cpp")
     setattr(_runner, "_box3_adapter_stack", stack.to_dict())
+    weakref.finalize(
+        _runner,
+        publish_runtime_lifecycle,
+        BOX3_1P7B_VARIANT_ID,
+        model_path=model_path,
+        loaded=False,
+        ready=False,
+        process_id=os.getpid(),
+    )
     return _runner
 
 def _call_with_timeout(runner: RealRunner, envelope: Box3ActualRuntimeEnvelope, timeout_seconds: float) -> str:
