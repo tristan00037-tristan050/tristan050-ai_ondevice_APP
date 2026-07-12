@@ -1,0 +1,35 @@
+{
+  "schema_version": "butler.dlp.verification_receipt.v1",
+  "head_sha": "e17f6a4d7cc0824b46a361f387959c79933b6230",
+  "commands": [
+    {
+      "cmd": "python3 scripts/verify_dlp_runtime_unification.py --run-suite",
+      "exit_code": 0
+    },
+    {
+      "cmd": "python3 scripts/eval/dlp_mutation_matrix.py",
+      "exit_code": 0
+    }
+  ],
+  "supporting_commands": [
+    {
+      "cmd": "PYTHONWARNINGS=ignore python3 -m pytest tests/dlp tests/connect_loop tests/cards/box3 tests/cards/box4/test_review_service.py tests/cards/box6/test_form_fill_service.py -q",
+      "exit_code": 0,
+      "purpose": "verifier captures pytest output internally; this preserves the same suite stdout while suppressing local-path warning text"
+    }
+  ],
+  "deselected": 0,
+  "passed": 1018,
+  "skipped": 2,
+  "mutation_checks_passed": 216,
+  "mutation_checks_total": 216,
+  "stdout_file": "verification_stdout.txt",
+  "stdout_sha256": "75dd5e94c863b91017869156d9731bfc1b5f039d9255b0625d4785763fd90d76",
+  "raw_text_logged": false,
+  "captured_at_utc": "2026-07-12T22:36:49Z",
+  "directive_count_erratum": {
+    "expected_passed": 1017,
+    "measured_passed": 1018,
+    "reason": "repository test collection at the immutable feature head produced one additional passing test; measured stdout is authoritative"
+  }
+}

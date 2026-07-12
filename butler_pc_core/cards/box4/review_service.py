@@ -12,6 +12,10 @@ import threading
 from dataclasses import asdict, dataclass
 from typing import Any, List, Optional
 
+from butler_pc_core.dlp.runtime import (
+    SAFE_SECRET_REPLACEMENT,
+    redact_fail_closed as _redact_secret_value,
+)
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.prompts.cards import load_card_prompt
 from butler_pc_core.runtime.json_grammar import (
@@ -36,7 +40,6 @@ REQUIRED_ISSUE_KEYS = frozenset({"location", "issue_type", "original_text", "sug
 MAX_ISSUES = 50
 MAX_TEXT_CHARS = 300
 MAX_SUMMARY_CHARS = 1200
-SAFE_SECRET_REPLACEMENT = "[민감정보 원문 생략]"
 
 BOX4_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -67,19 +70,6 @@ BOX4_JSON_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 BOX4_SCHEMA_DIGEST = stable_schema_digest(BOX4_JSON_SCHEMA)
-
-_SECRET_VALUE_RE = re.compile(
-    r"(?:"
-    r"sk-[A-Za-z0-9._-]{10,}|"
-    r"AKIA[0-9A-Z]{16}|"
-    r"-----BEGIN[ \t]+[A-Z ]*PRIVATE KEY-----|"
-    r"(?:비밀번호|비번|암호|password|token|api[ \t_-]*key)[ \t]*(?:는|은|[:=：])[ \t]*[^\s,;]{4,}|"
-    r"\b\d{6}-\d{7}\b|"
-    r"\b\d{2,6}-\d{2,6}-\d{2,8}\b"
-    r")",
-    re.IGNORECASE,
-)
-
 
 @dataclass(frozen=True)
 class DocumentReviewInput:
@@ -204,10 +194,6 @@ def _require_string(value: Any, reason_code: str, *, max_len: int = MAX_TEXT_CHA
     if len(value) > max_len:
         raise ValueError(f"{reason_code}_TOO_LONG")
     return _redact_secret_value(value)
-
-
-def _redact_secret_value(value: str) -> str:
-    return _SECRET_VALUE_RE.sub(SAFE_SECRET_REPLACEMENT, value)
 
 
 def _require_exact_keys(obj: dict[str, Any], required: frozenset[str], reason_code: str) -> None:

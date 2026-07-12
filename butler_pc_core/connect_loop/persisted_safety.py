@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any, Iterator
+from typing import Any, Iterator, Literal
 
-from .scan_normalization import detect_any
+from .scan_normalization import MAX_SCAN_CHARS, detect_any, detect_any_variants, scan_variants
 
 
 FORBIDDEN_RAW_KEYS = {
@@ -55,14 +55,19 @@ _ACCOUNT_HYPHEN_RE = re.compile(
 )
 _SECRET_RE = re.compile(
     r"(?i)(bearer\s+[a-z0-9._~+/=-]{10,}|"
-    r"api[_-]?key\s*[:=]|"
-    r"token\s*[:=]|"
-    r"secret\s*[:=]|"
-    r"password\s*[:=]|"
+    r"-----BEGIN[ \t]+[A-Z ]*PRIVATE KEY-----|"
+    r"(?:api[ \t_-]*key|token|secret|password)\s*[:=：]|"
+    r"(?:api[ \t_-]*key|token|secret|password|client[ \t_-]*secret|"
+    r"private[ \t_-]*key|access[ \t_-]*key|auth[ \t_-]*key|"
+    r"seed[ \t_-]*phrase)\s*[:=：]\s*[^\n\r,;]{4,}|"
     r"AKIA[0-9A-Z]{16}|"
     r"sk-[a-z0-9][a-z0-9._-]{10,})"
 )
-_KO_SECRET_RE = re.compile(r"(비밀번호|비번|암호)\s*(?:는|은|:|=|->)?\s*(?P<secret>\S+)")
+_KO_SECRET_RE = re.compile(
+    r"(?:비밀번호|비번|암호|패스워드|토큰|시크릿|API[ \t_-]*키|에이피아이[ \t_-]*키|"
+    r"인증[ \t_-]*키|보안[ \t_-]*키|개인[ \t_-]*키)"
+    r"\s*(?:는|은|:|=|->)?\s*(?P<secret>\S+)"
+)
 _KO_SECRET_SAFE_START = ("정책", "규칙", "변경", "초기화", "재설정", "관리", "설정")
 _ACCOUNT_CONTEXT_RE = re.compile(r"(?i)(계좌|입금|상환|예금|account|acct)")
 _CARD_CONTEXT_RE = re.compile(r"(?i)(카드|card)")
@@ -106,9 +111,35 @@ class DlpScanResult:
         )
 
 
+DlpCategory = Literal["email", "phone", "korean_rrn", "card_or_account", "secret", "local_path"]
+DlpOrigin = Literal["raw", "normalized"]
+
+
+@dataclass(frozen=True)
+class DlpCategoryFinding:
+    category: DlpCategory
+    variant_id: str
+    pattern_id: str
+    origin: DlpOrigin
+    partial_redaction_safe: bool
+
+
+@dataclass(frozen=True)
+class DlpCategoryScanResult:
+    findings: tuple[DlpCategoryFinding, ...] = ()
+    too_long: bool = False
+    policy_violation: bool = False
+
+    @property
+    def any_detected(self) -> bool:
+        return bool(self.findings) or self.too_long or self.policy_violation
+
+
 def _has_hyphenated_account(value: str) -> bool:
     for match in _ACCOUNT_HYPHEN_RE.finditer(value):
         digit_count = sum(len(match.group(group)) for group in ("g1", "g2", "g3"))
+        if _PHONE_RE.fullmatch(match.group(0)):
+            continue
         if 10 <= digit_count <= 20:
             return True
     return False
@@ -162,16 +193,64 @@ def _has_ko_secret(value: str) -> bool:
     return False
 
 
-_PII_PATTERNS = {
+_CATEGORY_PATTERNS = {
+    "email": {"email": _EMAIL_RE},
+    "phone": {"phone": _PHONE_RE, "phone_compact": _has_compact_phone_digits},
+    "korean_rrn": {"korean_rrn": _KOREAN_RRN_RE, "korean_rrn_compact": _has_compact_korean_rrn},
+    "card_or_account": {
+        "card_or_account": _CARD_OR_ACCOUNT_RE,
+        "card_compact": _has_compact_card_digits,
+        "account_hyphenated": _has_hyphenated_account,
+        "account_compact": _has_compact_account_digits,
+    },
+    "secret": {
+        "secret": _SECRET_RE,
+        "ko_secret": _has_ko_secret,
+    },
+    "local_path": {"local_path": _LOCAL_PATH_RE},
+}
+_PARTIAL_REDACTION_PATTERNS = {
     "email": _EMAIL_RE,
     "phone": _PHONE_RE,
     "korean_rrn": _KOREAN_RRN_RE,
-    "korean_rrn_compact": _has_compact_korean_rrn,
     "card_or_account": _CARD_OR_ACCOUNT_RE,
-    "card_compact": _has_compact_card_digits,
-    "phone_compact": _has_compact_phone_digits,
-    "account_hyphenated": _has_hyphenated_account,
-    "account_compact": _has_compact_account_digits,
+    "account_hyphenated": _ACCOUNT_HYPHEN_RE,
+}
+_CANONICAL_SHA256_RE = re.compile(r"sha256:[a-f0-9]{64}")
+_BARE_SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
+_DECIMAL_DIGIT_RE = re.compile(r"\d")
+_SECRET_PREFILTER_MARKERS = (
+    "bearer",
+    "api",
+    "token",
+    "secret",
+    "password",
+    "client",
+    "private",
+    "access",
+    "auth",
+    "seed",
+    "-----begin",
+    "akia",
+    "sk-",
+    "비밀번호",
+    "비번",
+    "암호",
+    "패스워드",
+    "토큰",
+    "시크릿",
+    "에이피아이",
+    "인증",
+    "보안",
+    "개인",
+)
+
+# Compatibility exports used by focused normalization tests. New runtime callers
+# consume scan_text_categories() through butler_pc_core.dlp instead.
+_PII_PATTERNS = {
+    pattern_id: pattern
+    for category in ("email", "phone", "korean_rrn", "card_or_account")
+    for pattern_id, pattern in _CATEGORY_PATTERNS[category].items()
 }
 _SECRET_PATTERNS = {
     "secret": _SECRET_RE,
@@ -182,19 +261,89 @@ _LOCAL_PATH_PATTERNS = {
 }
 
 
+def _shield_sha256_digests(value: str) -> str:
+    if _BARE_SHA256_RE.fullmatch(value):
+        return "SHA256_DIGEST"
+    return _CANONICAL_SHA256_RE.sub("sha256:DIGEST", value)
+
+
+def _eligible_variants(category: str, variants: list[Any]) -> list[Any]:
+    eligible: list[Any] = []
+    for variant in variants:
+        text = variant.text
+        if category == "email" and "@" not in text:
+            continue
+        if category in {"phone", "card_or_account"} and len(_DECIMAL_DIGIT_RE.findall(text)) < 10:
+            continue
+        if category == "korean_rrn" and len(_DECIMAL_DIGIT_RE.findall(text)) < 13:
+            continue
+        if category == "secret" and not any(marker in text.casefold() for marker in _SECRET_PREFILTER_MARKERS):
+            continue
+        if category == "local_path" and "/" not in text and "\\" not in text and not re.search(
+            r"(?i)\.(?:docx|pdf|xlsx|jsonl)\b", text
+        ):
+            continue
+        eligible.append(variant)
+    return eligible
+
+
+def scan_text_categories(value: str, *, shield_digests: bool = True) -> DlpCategoryScanResult:
+    """Return raw-zero category evidence from the canonical normalized scanner."""
+    raw = str(value or "")
+    if len(raw) > MAX_SCAN_CHARS:
+        return DlpCategoryScanResult(too_long=True, policy_violation=True)
+    scan_value = raw
+    if shield_digests:
+        scan_value = _shield_sha256_digests(scan_value)
+
+    findings: list[DlpCategoryFinding] = []
+    variants = scan_variants(scan_value, runtime_optimized=True)
+    for category, patterns in _CATEGORY_PATTERNS.items():
+        result = detect_any_variants(patterns, _eligible_variants(category, variants))
+        if not result.detected:
+            continue
+        variant_id = result.variant_id or "v0_raw"
+        pattern_id = result.pattern_id or "unknown"
+        findings.append(
+            DlpCategoryFinding(
+                category=category,
+                variant_id=variant_id,
+                pattern_id=pattern_id,
+                origin="raw" if variant_id == "v0_raw" else "normalized",
+                partial_redaction_safe=(
+                    variant_id == "v0_raw"
+                    and category not in {"secret", "local_path"}
+                    and pattern_id in _PARTIAL_REDACTION_PATTERNS
+                ),
+            )
+        )
+    local_path = any(item.category == "local_path" for item in findings)
+    return DlpCategoryScanResult(
+        findings=tuple(findings),
+        too_long=False,
+        policy_violation=local_path,
+    )
+
+
+def redact_safe_raw_spans(value: str, replacement: str) -> str:
+    """Redact only raw regex spans explicitly classified as offset-safe."""
+    redacted = str(value or "")
+    for pattern in _PARTIAL_REDACTION_PATTERNS.values():
+        redacted = pattern.sub(replacement, redacted)
+    return redacted
+
+
 def _dlp_scan_all(value: str) -> DlpScanResult:
-    pii_scan = detect_any(_PII_PATTERNS, value)
-    secret_scan = detect_any(_SECRET_PATTERNS, value)
-    local_path_scan = detect_any(_LOCAL_PATH_PATTERNS, value)
-    too_long = pii_scan.too_long or secret_scan.too_long or local_path_scan.too_long
-    pii = pii_scan.detected and not pii_scan.too_long
-    secret = secret_scan.detected and not secret_scan.too_long
-    local_path = local_path_scan.detected and not local_path_scan.too_long
+    detailed = scan_text_categories(value)
+    categories = {item.category for item in detailed.findings}
+    pii = bool(categories & {"email", "phone", "korean_rrn", "card_or_account"})
+    secret = "secret" in categories
+    local_path = "local_path" in categories
     return DlpScanResult(
         pii_detected=pii,
         secret_detected=secret,
         local_path_detected=local_path,
-        policy_violation=local_path or too_long,
+        policy_violation=detailed.policy_violation,
     )
 
 
