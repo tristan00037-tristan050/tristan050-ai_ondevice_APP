@@ -49,6 +49,30 @@ def test_normalized_only_is_true_for_zero_width_bypass():
     assert result.findings[0].origin == "normalized"
 
 
+def test_too_long_is_mapped_to_stable_box3_legacy_block_code():
+    text = "x" * 200_001
+    result = scan_runtime(text)
+    assert result.too_long is True
+    assert result.policy_violation is True
+    assert result.findings == ()
+    assert scan_reason_codes(text) == ["SECRET"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        (("sha256:" + "a" * 64 + " ") * 4_000).strip(),
+        (("b" * 64 + " ") * 4_000).strip(),
+    ],
+    ids=["canonical_sha", "bare_sha"],
+)
+def test_raw_length_limit_runs_before_digest_shielding(text):
+    assert len(text) > 200_000
+    result = scan_runtime(text)
+    assert result.too_long is True
+    assert result.policy_violation is True
+
+
 @pytest.mark.parametrize(
     "text",
     [

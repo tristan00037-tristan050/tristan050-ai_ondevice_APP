@@ -150,6 +150,20 @@ def test_no_git_add_all_pollution_manifest():
         "butler_sidecar.py",
         "butler-desktop/src-tauri/src/lib.rs",
         "evidence/",
+        # DLP runtime unification P0/P1 approved scope (2026-07-12 directive).
+        "butler_pc_core/cards/box4/review_service.py",
+        "butler_pc_core/cards/box6/form_fill_service.py",
+        "butler_pc_core/connect_loop/attachment_features.py",
+        "butler_pc_core/connect_loop/dlp_guard.py",
+        "butler_pc_core/connect_loop/persisted_safety.py",
+        "butler_pc_core/connect_loop/scan_normalization.py",
+        "butler_pc_core/connect_loop/observed_confusable_codepoints.v1.json",
+        "butler_pc_core/dlp/",
+        "scripts/eval/dlp_corpus_schema_probe.py",
+        "scripts/eval/dlp_mutation_matrix.py",
+        "scripts/verify_dlp_runtime_unification.py",
+        "tests/cards/box6/test_form_fill_service.py",
+        "tests/dlp/",
     )
     stray = []
     for line in result.stdout.splitlines():

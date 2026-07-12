@@ -72,8 +72,12 @@ def scan_runtime(text: str, *, shield_digests: bool = True) -> RuntimeDlpScanRes
 
 
 def scan_reason_codes(text: str) -> list[str]:
-    categories = {item.category for item in scan_runtime(text).findings}
-    return [reason for category, reason in _LEGACY_REASON_ORDER if category in categories]
+    result = scan_runtime(text)
+    categories = {item.category for item in result.findings}
+    codes = [reason for category, reason in _LEGACY_REASON_ORDER if category in categories]
+    if result.too_long or (result.policy_violation and not codes):
+        codes.append("SECRET")
+    return list(dict.fromkeys(codes))
 
 
 def _must_full_scalar_redact(result: RuntimeDlpScanResult) -> bool:
@@ -87,16 +91,26 @@ def _must_full_scalar_redact(result: RuntimeDlpScanResult) -> bool:
     )
 
 
+def _validated_replacement(replacement: str) -> str:
+    value = str(replacement)
+    if value == SAFE_SECRET_REPLACEMENT:
+        return value
+    if scan_runtime(value).any_detected:
+        return SAFE_SECRET_REPLACEMENT
+    return value
+
+
 def redact_fail_closed(text: str, replacement: str = SAFE_SECRET_REPLACEMENT) -> str:
     first = scan_runtime(text)
     if not first.any_detected:
         return text
+    safe_replacement = _validated_replacement(replacement)
     if _must_full_scalar_redact(first):
-        return replacement
+        return safe_replacement
 
-    candidate = redact_safe_raw_spans(text, replacement)
+    candidate = redact_safe_raw_spans(text, safe_replacement)
     if candidate == text:
-        return replacement
+        return SAFE_SECRET_REPLACEMENT
     if scan_runtime(candidate).any_detected:
-        return replacement
+        return SAFE_SECRET_REPLACEMENT
     return candidate

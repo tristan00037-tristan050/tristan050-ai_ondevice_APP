@@ -1,10 +1,13 @@
 """Raw-zero DLP scan normalization for connect-loop ingress points."""
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Iterable, Mapping, Sequence
 
 MAX_SCAN_CHARS = 200_000
 
@@ -82,10 +85,116 @@ _KOREAN_DIGIT_RUN_RE = re.compile(
 _CONFUSABLE_CONTEXT_RE = re.compile(
     r"(?i)(계좌|카드|전화|연락|휴대폰|주민|주민등록|account|acct|card|phone|tel|mobile|rrn|resident)"
 )
-# Production mappings are admitted only from a measured corpus allowlist. The
-# handoff contains no raw corpus, so the default remains intentionally empty.
-_OBSERVED_CONFUSABLE_DIGITS: dict[str, str] = {}
-_FORBIDDEN_ASCII_CONFUSABLES = frozenset({"O", "I", "l"})
+_CONFUSABLE_SCHEMA_VERSION = "butler.dlp.observed_confusables.v1"
+_CONFUSABLE_PATH = Path(__file__).with_name("observed_confusable_codepoints.v1.json")
+_CONFUSABLE_EXACT_KEYS = {"schema_version", "corpus_digest", "mappings", "raw_text_logged", "status"}
+_CONFUSABLE_MAPPING_KEYS = {"codepoint", "ascii_digit", "categories", "count"}
+_ALLOWED_CONFUSABLE_CATEGORIES = frozenset({"phone", "korean_rrn", "card_or_account"})
+_FORBIDDEN_ASCII_CONFUSABLE_CODEPOINTS = frozenset({
+    ord("O"), ord("o"), ord("I"), ord("i"), ord("L"), ord("l"),
+})
+_CONFUSABLE_CONTEXT_TERMS: dict[str, tuple[str, ...]] = {
+    "phone": ("전화", "연락", "휴대폰", "phone", "tel", "mobile"),
+    "korean_rrn": ("주민", "주민등록", "rrn", "resident"),
+    "card_or_account": ("계좌", "입금", "상환", "예금", "account", "acct", "카드", "card"),
+}
+ObservedConfusableMapping = tuple[str, str, tuple[str, ...]]
+
+
+def _already_normalized_to_digit(char: str) -> bool:
+    normalized = unicodedata.normalize("NFKC", char)
+    try:
+        converted = str(unicodedata.decimal(normalized)) if len(normalized) == 1 else normalized
+    except (TypeError, ValueError):
+        converted = normalized
+    return len(converted) == 1 and converted.isascii() and converted.isdigit()
+
+
+def _parse_observed_confusable_asset(data: Any) -> tuple[ObservedConfusableMapping, ...]:
+    if not isinstance(data, dict) or set(data) != _CONFUSABLE_EXACT_KEYS:
+        raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+    if data["schema_version"] != _CONFUSABLE_SCHEMA_VERSION or data["raw_text_logged"] is not False:
+        raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+    status = data["status"]
+    corpus_digest = data["corpus_digest"]
+    rows = data["mappings"]
+    if not isinstance(rows, list):
+        raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+    if status == "GROUP_A_CORPUS_PROBE_PENDING":
+        if corpus_digest is not None or rows:
+            raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+    elif status == "MEASURED":
+        if not isinstance(corpus_digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", corpus_digest):
+            raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+    else:
+        raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+
+    parsed: list[ObservedConfusableMapping] = []
+    seen: set[int] = set()
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != _CONFUSABLE_MAPPING_KEYS:
+            raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+        codepoint = row["codepoint"]
+        digit = row["ascii_digit"]
+        categories = row["categories"]
+        count = row["count"]
+        if not isinstance(codepoint, str) or not re.fullmatch(r"U\+[0-9A-F]{4,6}", codepoint):
+            raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+        value = int(codepoint[2:], 16)
+        if value <= 0x7F or value in seen or value in _FORBIDDEN_ASCII_CONFUSABLE_CODEPOINTS:
+            raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+        if not isinstance(digit, str) or not re.fullmatch(r"[0-9]", digit):
+            raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+        if not isinstance(categories, list) or not categories:
+            raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+        category_tuple = tuple(sorted(set(categories)))
+        if not set(category_tuple) <= _ALLOWED_CONFUSABLE_CATEGORIES:
+            raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+        if isinstance(count, bool) or not isinstance(count, int) or count <= 0:
+            raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+        char = chr(value)
+        if _already_normalized_to_digit(char):
+            raise ValueError("CONFUSABLE_ALLOWLIST_INVALID")
+        seen.add(value)
+        parsed.append((char, digit, category_tuple))
+    return tuple(parsed)
+
+
+@lru_cache(maxsize=4)
+def load_observed_confusable_mappings(path_text: str | None = None) -> tuple[ObservedConfusableMapping, ...]:
+    """Load a codepoint-only allowlist; malformed or absent assets disable only this optional mapping."""
+    path = Path(path_text) if path_text else _CONFUSABLE_PATH
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return _parse_observed_confusable_asset(data)
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError, OverflowError):
+        return ()
+
+
+def _has_confusable_context(text: str, categories: Sequence[str], start: int, end: int) -> bool:
+    context = text[max(0, start - 24) : min(len(text), end + 24)].casefold()
+    return any(term in context for category in categories for term in _CONFUSABLE_CONTEXT_TERMS[category])
+
+
+def _apply_observed_confusables_contextual(
+    text: str,
+    mappings: Sequence[ObservedConfusableMapping],
+) -> str:
+    if not text or not mappings:
+        return text
+    by_source = {source: (digit, categories) for source, digit, categories in mappings}
+    output = list(text)
+    for index, char in enumerate(text):
+        mapped = by_source.get(char)
+        if mapped is None:
+            continue
+        digit, categories = mapped
+        start = max(0, index - 12)
+        end = min(len(text), start + 24)
+        decimal_count = sum(item.isdecimal() for item in text[start:end])
+        if decimal_count >= 6 or (decimal_count >= 4 and _has_confusable_context(text, categories, start, end)):
+            output[index] = digit
+    return "".join(output)
 
 
 def _map_observed_digit_confusables(text: str, mapping: Mapping[str, str] | None = None) -> str:
@@ -95,28 +204,15 @@ def _map_observed_digit_confusables(text: str, mapping: Mapping[str, str] | None
     characters, or at least four when a DLP context word is present. ASCII
     O/I/l are never accepted as digit aliases.
     """
-    allowed = {
-        source: target
-        for source, target in (mapping or _OBSERVED_CONFUSABLE_DIGITS).items()
-        if source not in _FORBIDDEN_ASCII_CONFUSABLES
-        and not source.isascii()
-        and target in "0123456789"
-    }
-    if not allowed:
-        return text
-
-    chars = list(text)
-    for index, char in enumerate(chars):
-        if char not in allowed:
-            continue
-        start = max(0, index - 12)
-        end = min(len(chars), index + 12)
-        window = "".join(chars[start:end])
-        digit_count = sum(item.isdecimal() or item in allowed for item in window)
-        has_context = bool(_CONFUSABLE_CONTEXT_RE.search(window))
-        if digit_count >= 6 or (has_context and digit_count >= 4):
-            chars[index] = allowed[char]
-    return "".join(chars)
+    if mapping is None:
+        mappings = load_observed_confusable_mappings()
+    else:
+        mappings = tuple(
+            (source, target, tuple(_CONFUSABLE_CONTEXT_TERMS))
+            for source, target in mapping.items()
+            if not source.isascii() and target in "0123456789"
+        )
+    return _apply_observed_confusables_contextual(text, mappings)
 
 
 def _unicode_decimal_digits(text: str) -> str:

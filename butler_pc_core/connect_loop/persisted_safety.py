@@ -289,11 +289,12 @@ def _eligible_variants(category: str, variants: list[Any]) -> list[Any]:
 
 def scan_text_categories(value: str, *, shield_digests: bool = True) -> DlpCategoryScanResult:
     """Return raw-zero category evidence from the canonical normalized scanner."""
-    scan_value = str(value or "")
+    raw = str(value or "")
+    if len(raw) > MAX_SCAN_CHARS:
+        return DlpCategoryScanResult(too_long=True, policy_violation=True)
+    scan_value = raw
     if shield_digests:
         scan_value = _shield_sha256_digests(scan_value)
-    if len(scan_value) > MAX_SCAN_CHARS:
-        return DlpCategoryScanResult(too_long=True, policy_violation=True)
 
     findings: list[DlpCategoryFinding] = []
     variants = scan_variants(scan_value, runtime_optimized=True)

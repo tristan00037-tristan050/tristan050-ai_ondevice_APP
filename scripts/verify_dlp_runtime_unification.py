@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -27,9 +30,79 @@ def _parse(path: Path) -> ast.AST:
     return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
 
+def _run_dynamic_probes(root: Path) -> dict[str, bool]:
+    sys.path.insert(0, str(root))
+    try:
+        from butler_pc_core.connect_loop.dlp_guard import scan_runtime_text
+        from butler_pc_core.connect_loop.scan_normalization import (
+            _parse_observed_confusable_asset,
+            load_observed_confusable_mappings,
+        )
+        from butler_pc_core.dlp.runtime import (
+            SAFE_SECRET_REPLACEMENT,
+            redact_fail_closed,
+            scan_reason_codes,
+            scan_runtime,
+        )
+
+        too_long = "x" * 200_001
+        digest_rich = (("sha256:" + "a" * 64 + " ") * 4_000).strip()
+        unsafe_replacement = "token: abcdefghijklmno1"
+        asset = root / "butler_pc_core/connect_loop/observed_confusable_codepoints.v1.json"
+        asset_data = json.loads(asset.read_text(encoding="utf-8"))
+        asset_parsed = _parse_observed_confusable_asset(asset_data)
+        load_observed_confusable_mappings.cache_clear()
+
+        redacted = redact_fail_closed("alice@example.com", replacement=unsafe_replacement)
+        return {
+            "DLP_TOO_LONG_BOX3_BLOCK": (
+                scan_reason_codes(too_long) == ["SECRET"]
+                and scan_runtime_text(too_long)["passed"] is False
+            ),
+            "DLP_RAW_LENGTH_LIMIT_ORDER_OK": (
+                len(digest_rich) == 287_999 and scan_runtime(digest_rich).too_long is True
+            ),
+            "DLP_UNSAFE_REPLACEMENT_OUTPUT_ZERO": (
+                redacted == SAFE_SECRET_REPLACEMENT
+                and unsafe_replacement not in redacted
+                and not scan_runtime(redacted).any_detected
+            ),
+            "DLP_OBSERVED_CONFUSABLE_ASSET_OK": (
+                asset_parsed == () and load_observed_confusable_mappings() == ()
+            ),
+        }
+    except Exception:
+        return {
+            "DLP_TOO_LONG_BOX3_BLOCK": False,
+            "DLP_RAW_LENGTH_LIMIT_ORDER_OK": False,
+            "DLP_UNSAFE_REPLACEMENT_OUTPUT_ZERO": False,
+            "DLP_OBSERVED_CONFUSABLE_ASSET_OK": False,
+        }
+    finally:
+        if sys.path and sys.path[0] == str(root):
+            sys.path.pop(0)
+
+
+def _run_full_suite_without_deselect(root: Path) -> bool:
+    command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "tests/dlp",
+        "tests/connect_loop",
+        "tests/cards/box3",
+        "tests/cards/box4/test_review_service.py",
+        "tests/cards/box6/test_form_fill_service.py",
+        "-q",
+    ]
+    result = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
+    return result.returncode == 0 and "deselect" not in result.stdout.casefold()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    parser.add_argument("--run-suite", action="store_true")
     args = parser.parse_args()
     root = args.repo_root.resolve()
     errors: list[str] = []
@@ -89,7 +162,17 @@ def main() -> int:
         if "logging" in text or "print(" in text:
             errors.append("RUNTIME_RAW_LOG_SURFACE_PRESENT")
 
+    dynamic = _run_dynamic_probes(root)
+    errors.extend(name for name, passed in dynamic.items() if not passed)
+    full_suite_passed = _run_full_suite_without_deselect(root) if args.run_suite else None
+    if full_suite_passed is False:
+        errors.append("DLP_FULL_SUITE_NO_DESELECT")
+
     print(f"DLP_RUNTIME_UNIFICATION_VERIFY={0 if errors else 1}")
+    for name, passed in dynamic.items():
+        print(f"{name}={1 if passed else 0}")
+    if full_suite_passed is not None:
+        print(f"DLP_FULL_SUITE_NO_DESELECT={1 if full_suite_passed else 0}")
     for error in errors:
         print(f"ERROR_CODE={error}")
     return 1 if errors else 0

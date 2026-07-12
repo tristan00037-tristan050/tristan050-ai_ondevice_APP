@@ -237,11 +237,11 @@ def test_connect_loop_not_present_in_package():
     """ALG-absorbed: PR #787 v7 canonical apply 가 connect_loop 산출물을 신규 도입하지
     않음을 잠근다. 본진 repo 의 기존 connect_loop 디렉터리(tests/connect_loop,
     schemas/connect_loop, docs/ssot/connect_loop) 는 본 PR scope 가 아니므로 정합 대상에서
-    제외한다 — 본 PR diff 안에서 connect_loop 경로 신규 생성 0 임을 검증한다.
+    제외한다. 현재 작업 브랜치가 아니라 PR #787 canonical commit 자체를 검증한다.
     """
-    import os, subprocess
+    import subprocess
     proc = subprocess.run(
-        ["git", "diff", "--name-only", "origin/main...HEAD"],
+        ["git", "show", "--name-only", "--format=", "b834add5"],
         cwd=Path(__file__).resolve().parents[3],
         capture_output=True, text=True,
     )
@@ -249,7 +249,7 @@ def test_connect_loop_not_present_in_package():
         # repo without git history (CI sandbox): pass trivially.
         return
     paths = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-    leaks = [p for p in paths if "connect_loop" in p.replace(os.sep, "/").split("/")]
+    leaks = [p for p in paths if "connect_loop" in p.replace("\\", "/").split("/")]
     assert leaks == [], f"PR #787 introduced connect_loop paths: {leaks}"
 
 def test_track1_date_four_formats_supported():

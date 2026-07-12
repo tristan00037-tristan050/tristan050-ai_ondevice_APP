@@ -38,3 +38,17 @@ def test_no_hit_is_byte_identical():
 
 def test_too_long_input_fails_closed():
     assert redact_fail_closed("가" * 200_001) == SAFE_SECRET_REPLACEMENT
+
+
+def test_unsafe_custom_replacement_never_escapes_after_residual_hit():
+    unsafe = "token: abcdefghijklmno1"
+    assert redact_fail_closed("alice@example.com", replacement=unsafe) == SAFE_SECRET_REPLACEMENT
+
+
+def test_unsafe_custom_replacement_never_handles_full_scalar_branch():
+    unsafe = "/Users/person/private.txt"
+    assert redact_fail_closed("token: abcdefghijklmno", replacement=unsafe) == SAFE_SECRET_REPLACEMENT
+
+
+def test_clean_custom_replacement_remains_supported():
+    assert redact_fail_closed("alice@example.com", replacement="[REDACTED]") == "[REDACTED]"
