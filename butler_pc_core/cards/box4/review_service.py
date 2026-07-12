@@ -1,17 +1,13 @@
-"""Fail-closed Box4 document review service.
-
-The service treats document contents as untrusted data and validates the local
-model output before returning anything to the UI.
-"""
+"""Fail-closed Box4 document review service."""
 from __future__ import annotations
 
 import json
 import logging
-import re
 import threading
 from dataclasses import asdict, dataclass
 from typing import Any, List, Optional
 
+from butler_pc_core.dlp.runtime import SAFE_SECRET_REPLACEMENT, redact_fail_closed as _redact_secret_value
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.prompts.cards import load_card_prompt
 from butler_pc_core.runtime.json_grammar import (
@@ -23,20 +19,15 @@ from butler_pc_core.runtime.json_grammar import (
     structured_generation_telemetry,
 )
 
-
 _LOG = logging.getLogger(__name__)
-
 SCHEMA_VERSION = "card_04.document_review.v1"
 ISSUE_TYPES = frozenset({"MISSING", "ERROR", "INCONSISTENCY", "STYLE", "SUGGESTION"})
 CONFIDENCES = frozenset({"HIGH", "MEDIUM", "LOW"})
-REQUIRED_TOP_LEVEL_KEYS = frozenset(
-    {"schema_version", "issues", "overall_score", "summary", "review_required", "warnings"}
-)
+REQUIRED_TOP_LEVEL_KEYS = frozenset({"schema_version", "issues", "overall_score", "summary", "review_required", "warnings"})
 REQUIRED_ISSUE_KEYS = frozenset({"location", "issue_type", "original_text", "suggestion", "confidence"})
 MAX_ISSUES = 50
 MAX_TEXT_CHARS = 300
 MAX_SUMMARY_CHARS = 1200
-SAFE_SECRET_REPLACEMENT = "[민감정보 원문 생략]"
 
 BOX4_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -67,18 +58,6 @@ BOX4_JSON_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 BOX4_SCHEMA_DIGEST = stable_schema_digest(BOX4_JSON_SCHEMA)
-
-_SECRET_VALUE_RE = re.compile(
-    r"(?:"
-    r"sk-[A-Za-z0-9._-]{10,}|"
-    r"AKIA[0-9A-Z]{16}|"
-    r"-----BEGIN[ \t]+[A-Z ]*PRIVATE KEY-----|"
-    r"(?:비밀번호|비번|암호|password|token|api[ \t_-]*key)[ \t]*(?:는|은|[:=：])[ \t]*[^\s,;]{4,}|"
-    r"\b\d{6}-\d{7}\b|"
-    r"\b\d{2,6}-\d{2,6}-\d{2,8}\b"
-    r")",
-    re.IGNORECASE,
-)
 
 
 @dataclass(frozen=True)
@@ -144,13 +123,7 @@ def _emit_structured_generation_telemetry(
     )
 
 
-def _normalize_and_emit_model_response(
-    raw: Any,
-    *,
-    model_client: Any,
-    method_selected: str,
-    grammar: Any | None,
-) -> str:
+def _normalize_and_emit_model_response(raw: Any, *, model_client: Any, method_selected: str, grammar: Any | None) -> str:
     text = normalize_model_response_to_text(raw)
     _emit_structured_generation_telemetry(
         text,
@@ -166,12 +139,11 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     start = source.find("{")
     if start < 0:
         raise ValueError("MODEL_JSON_NOT_FOUND")
-
     depth = 0
     in_string = False
     escape = False
-    for idx in range(start, len(source)):
-        char = source[idx]
+    for index in range(start, len(source)):
+        char = source[index]
         if in_string:
             if escape:
                 escape = False
@@ -187,9 +159,8 @@ def _extract_json_object(text: str) -> dict[str, Any]:
         elif char == "}":
             depth -= 1
             if depth == 0:
-                candidate = source[start : idx + 1]
                 try:
-                    parsed = json.loads(candidate)
+                    parsed = json.loads(source[start : index + 1])
                 except json.JSONDecodeError as exc:
                     raise ValueError("MODEL_JSON_INVALID") from exc
                 if not isinstance(parsed, dict):
@@ -206,59 +177,42 @@ def _require_string(value: Any, reason_code: str, *, max_len: int = MAX_TEXT_CHA
     return _redact_secret_value(value)
 
 
-def _redact_secret_value(value: str) -> str:
-    return _SECRET_VALUE_RE.sub(SAFE_SECRET_REPLACEMENT, value)
-
-
 def _require_exact_keys(obj: dict[str, Any], required: frozenset[str], reason_code: str) -> None:
-    if set(obj.keys()) != set(required):
+    if set(obj) != set(required):
         raise ValueError(reason_code)
 
 
 def _validate_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
     _require_exact_keys(payload, REQUIRED_TOP_LEVEL_KEYS, "SCHEMA_KEYS_INVALID")
-
     if payload["schema_version"] != SCHEMA_VERSION:
         raise ValueError("SCHEMA_VERSION_INVALID")
-
-    raw_score = payload["overall_score"]
-    if isinstance(raw_score, bool) or not isinstance(raw_score, int):
+    score = payload["overall_score"]
+    if isinstance(score, bool) or not isinstance(score, int):
         raise ValueError("OVERALL_SCORE_INVALID")
-    if raw_score < 0 or raw_score > 100:
+    if not 0 <= score <= 100:
         raise ValueError("OVERALL_SCORE_OUT_OF_RANGE")
-
-    summary = _require_string(
-        payload["summary"],
-        "SUMMARY_INVALID",
-        max_len=MAX_SUMMARY_CHARS,
-    )
-
-    raw_review_required = payload["review_required"]
-    if not isinstance(raw_review_required, bool):
+    summary = _require_string(payload["summary"], "SUMMARY_INVALID", max_len=MAX_SUMMARY_CHARS)
+    review_required = payload["review_required"]
+    if not isinstance(review_required, bool):
         raise ValueError("REVIEW_REQUIRED_INVALID")
-
     raw_warnings = payload["warnings"]
     if not isinstance(raw_warnings, list):
         raise ValueError("WARNINGS_INVALID")
-    warnings: list[str] = []
-    for item in raw_warnings:
-        warnings.append(_require_string(item, "WARNING_INVALID", max_len=120))
-
+    warnings = [_require_string(item, "WARNING_INVALID", max_len=120) for item in raw_warnings]
     raw_issues = payload["issues"]
     if not isinstance(raw_issues, list):
         raise ValueError("ISSUES_INVALID")
     if len(raw_issues) > MAX_ISSUES:
         raise ValueError("ISSUES_TOO_MANY")
-
     issues: list[dict[str, str]] = []
     for item in raw_issues:
         if not isinstance(item, dict):
             raise ValueError("ISSUE_INVALID")
         _require_exact_keys(item, REQUIRED_ISSUE_KEYS, "ISSUE_KEYS_INVALID")
         issue_type = item["issue_type"]
+        confidence = item["confidence"]
         if issue_type not in ISSUE_TYPES:
             raise ValueError("ISSUE_TYPE_INVALID")
-        confidence = item["confidence"]
         if confidence not in CONFIDENCES:
             raise ValueError("CONFIDENCE_INVALID")
         issues.append(
@@ -270,13 +224,12 @@ def _validate_review_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "confidence": str(confidence),
             }
         )
-
     return {
         "schema_version": SCHEMA_VERSION,
         "issues": issues,
-        "overall_score": raw_score,
+        "overall_score": score,
         "summary": summary,
-        "review_required": raw_review_required,
+        "review_required": review_required,
         "warnings": warnings,
     }
 
@@ -286,22 +239,12 @@ def _call_model_client(model_client: Any, prompt: str, *, grammar: Any | None = 
         raise ValueError("MODEL_CLIENT_REQUIRED")
     if hasattr(model_client, "generate_with_cancel"):
         try:
-            raw = model_client.generate_with_cancel(
-                prompt,
-                threading.Event(),
-                max_tokens=2048,
-                grammar=grammar,
-            )
+            raw = model_client.generate_with_cancel(prompt, threading.Event(), max_tokens=2048, grammar=grammar)
         except TypeError as exc:
             if grammar is not None:
                 raise GrammarUnavailable("MODEL_CLIENT_GRAMMAR_UNSUPPORTED") from exc
             raise
-        return _normalize_and_emit_model_response(
-            raw,
-            model_client=model_client,
-            method_selected="generate_with_cancel",
-            grammar=grammar,
-        )
+        return _normalize_and_emit_model_response(raw, model_client=model_client, method_selected="generate_with_cancel", grammar=grammar)
     if hasattr(model_client, "generate"):
         try:
             raw = model_client.generate(prompt, max_tokens=2048, grammar=grammar)
@@ -309,41 +252,22 @@ def _call_model_client(model_client: Any, prompt: str, *, grammar: Any | None = 
             if grammar is not None:
                 raise GrammarUnavailable("MODEL_CLIENT_GRAMMAR_UNSUPPORTED") from exc
             raise
-        return _normalize_and_emit_model_response(
-            raw,
-            model_client=model_client,
-            method_selected="generate",
-            grammar=grammar,
-        )
+        return _normalize_and_emit_model_response(raw, model_client=model_client, method_selected="generate", grammar=grammar)
     if hasattr(model_client, "generate_text"):
         if grammar is not None:
             raise GrammarUnavailable("MODEL_CLIENT_GRAMMAR_UNSUPPORTED")
         raw = model_client.generate_text(prompt, max_new_tokens=2048)
-        return _normalize_and_emit_model_response(
-            raw,
-            model_client=model_client,
-            method_selected="generate_text",
-            grammar=grammar,
-        )
+        return _normalize_and_emit_model_response(raw, model_client=model_client, method_selected="generate_text", grammar=grammar)
     if callable(model_client):
         if grammar is not None:
             raise GrammarUnavailable("MODEL_CLIENT_GRAMMAR_UNSUPPORTED")
-        raw = model_client(prompt)
-        return _normalize_and_emit_model_response(
-            raw,
-            model_client=model_client,
-            method_selected="callable",
-            grammar=grammar,
-        )
+        return _normalize_and_emit_model_response(model_client(prompt), model_client=model_client, method_selected="callable", grammar=grammar)
     raise ValueError("MODEL_CLIENT_UNSUPPORTED")
 
 
 def _generate_review_json(model_client: Any, prompt: str) -> str:
     try:
         grammar = build_json_schema_grammar(BOX4_JSON_SCHEMA, required=True)
-    except GrammarUnavailable as exc:
-        raise ValueError("GRAMMAR_UNAVAILABLE") from exc
-    try:
         return _call_model_client(model_client, prompt, grammar=grammar)
     except GrammarUnavailable as exc:
         raise ValueError("GRAMMAR_UNAVAILABLE") from exc
@@ -353,18 +277,13 @@ def review_document(req: DocumentReviewInput, *, model_client: Any) -> DocumentR
     if not isinstance(req, DocumentReviewInput):
         return _safe_error_result("REQUEST_SCHEMA_INVALID")
     target_document = str(req.target_document or "")
-    reference_documents = [str(item) for item in (req.reference_documents or []) if str(item).strip()]
+    references = [str(item) for item in (req.reference_documents or []) if str(item).strip()]
     if not target_document.strip():
         return _safe_error_result("TARGET_DOCUMENT_EMPTY")
-
     model_output = ""
     try:
         card = load_card_prompt("4")
-        user_prompt = render_card_user_prompt(
-            card,
-            query=target_document,
-            file_texts=reference_documents,
-        )
+        user_prompt = render_card_user_prompt(card, query=target_document, file_texts=references)
         system_prompt = str(card.get("system_prompt") or "")
         prompt = (
             f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
@@ -375,22 +294,9 @@ def review_document(req: DocumentReviewInput, *, model_client: Any) -> DocumentR
         payload = _validate_review_payload(_extract_json_object(model_output))
     except ValueError as exc:
         reason_code = str(exc) or "DOCUMENT_REVIEW_FAILED"
-        _emit_structured_generation_telemetry(
-            model_output,
-            method_selected="validation",
-            model_client=model_client,
-            grammar_applied=bool(model_output),
-            reason_code=reason_code,
-        )
+        _emit_structured_generation_telemetry(model_output, method_selected="validation", model_client=model_client, grammar_applied=bool(model_output), reason_code=reason_code)
         return _safe_error_result(reason_code)
     except Exception:
-        _emit_structured_generation_telemetry(
-            model_output,
-            method_selected="validation",
-            model_client=model_client,
-            grammar_applied=bool(model_output),
-            reason_code="DOCUMENT_REVIEW_FAILED",
-        )
+        _emit_structured_generation_telemetry(model_output, method_selected="validation", model_client=model_client, grammar_applied=bool(model_output), reason_code="DOCUMENT_REVIEW_FAILED")
         return _safe_error_result("DOCUMENT_REVIEW_FAILED")
-
     return DocumentReviewResult(**payload)
