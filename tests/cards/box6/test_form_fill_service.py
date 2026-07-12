@@ -282,7 +282,8 @@ def test_fill_form_redacts_secret_label_values_in_filled_form_and_warnings() -> 
     assert "plain-secret-1234" not in dumped
     assert "abcdef123456" not in dumped
     assert "correct horse battery staple" not in dumped
-    assert dumped.count(SAFE_SECRET_REPLACEMENT) >= 3
+    assert result.filled_form == SAFE_SECRET_REPLACEMENT
+    assert dumped.count(SAFE_SECRET_REPLACEMENT) >= 2
 
 
 def test_box6_json_schema_matches_backend_contract() -> None:

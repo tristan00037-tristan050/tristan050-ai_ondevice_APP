@@ -8,6 +8,10 @@ import threading
 from dataclasses import asdict, dataclass
 from typing import Any, List, Optional
 
+from butler_pc_core.dlp.runtime import (
+    SAFE_SECRET_REPLACEMENT,
+    redact_fail_closed as _redact_secret_value,
+)
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.prompts.cards import load_card_prompt
 from butler_pc_core.runtime.json_grammar import (
@@ -31,7 +35,6 @@ REQUIRED_MAPPING_KEYS = frozenset({"target_label", "output_value", "confidence",
 MAX_MAPPINGS = 80
 MAX_TEXT_CHARS = 20000
 MAX_FIELD_CHARS = 2000
-SAFE_SECRET_REPLACEMENT = "[민감정보 원문 생략]"
 
 BOX6_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -68,16 +71,6 @@ _SECRET_LABEL_PATTERN = (
     r"API[ \t_-]*키|에이피아이[ \t_-]*키|인증[ \t_-]*키|보안[ \t_-]*키|개인[ \t_-]*키|"
     r"secret|password|token|api[ \t_-]*key|access[ \t_-]*key|auth[ \t_-]*key|"
     r"client[ \t_-]*secret|private[ \t_-]*key|seed[ \t_-]*phrase"
-)
-_SECRET_VALUE_RE = re.compile(
-    rf"(?:"
-    rf"sk-[A-Za-z0-9._-]{{10,}}|"
-    rf"AKIA[0-9A-Z]{{16}}|"
-    rf"-----BEGIN[ \t]+[A-Z ]*PRIVATE KEY-----|"
-    rf"(?:{_SECRET_LABEL_PATTERN})[ \t]*(?:는|은|[:=：])[ \t]*[^\n\r,;]{{4,}}|"
-    rf"\b\d{{6}}-\d{{7}}\b"
-    rf")",
-    re.IGNORECASE,
 )
 _SECRET_LABEL_RE = re.compile(rf"(?:{_SECRET_LABEL_PATTERN})", re.IGNORECASE)
 _UNFILLED_VALUE_RE = re.compile(r"^(?:UNFILLED|\[?확인\s*필요\]?|미기입)$", re.IGNORECASE)
@@ -159,10 +152,6 @@ def _normalize_and_emit_model_response(
         grammar_applied=grammar is not None,
     )
     return text
-
-
-def _redact_secret_value(value: str) -> str:
-    return _SECRET_VALUE_RE.sub(SAFE_SECRET_REPLACEMENT, value)
 
 
 def _is_secret_target_label(value: str) -> bool:

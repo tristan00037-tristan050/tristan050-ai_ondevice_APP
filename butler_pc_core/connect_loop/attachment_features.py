@@ -16,7 +16,7 @@ from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from .persisted_safety import _dlp_scan_all
+from butler_pc_core.dlp.runtime import scan_runtime
 
 SCHEMA_VERSION = "attachment_features.v1"
 MAX_TEXT_PREVIEW_BYTES = 64 * 1024
@@ -107,7 +107,7 @@ def _decode_preview(data: bytes) -> str:
 
 
 def _dlp_buckets(text: str) -> list[str]:
-    result = _dlp_scan_all(text)
+    result = scan_runtime(text)
     if result.any_detected:
         return ["DLP_SIGNAL_PRESENT"]
     return []

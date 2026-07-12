@@ -6,6 +6,8 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from butler_pc_core.dlp.runtime import scan_reason_codes
+
 
 FORBIDDEN_RAW_KEYS = {
     "raw",
@@ -27,21 +29,7 @@ FORBIDDEN_RAW_KEYS = {
     "our_format",
 }
 
-_EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
-_KOREAN_RRN_RE = re.compile(r"\b\d{6}-[1-4]\d{6}\b")
-_PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d{1,3}[- .]?)?(?:\(?0?\d{1,3}\)?[- .]?)?\d{3,4}[- .]?\d{4}(?!\d)")
-_CARD_OR_ACCOUNT_RE = re.compile(r"\b(?:\d[ -]?){13,19}\b")
-_SECRET_RE = re.compile(
-    r"(?i)(bearer\s+[a-z0-9._~+/=-]{10,}|api[_-]?key\s*[:=]\s*\S+|"
-    r"token\s*[:=]\s*\S+|secret\s*[:=]\s*\S+|password\s*[:=]\s*\S+|"
-    r"sk-[a-z0-9][a-z0-9_-]{10,})"
-)
-_LOCAL_PATH_RE = re.compile(
-    r"(?i)(file://|/Users/|/home/|/private/tmp|/tmp/|/Volumes/|"
-    r"(?<![A-Za-z0-9])[A-Z]:[\\/]|\\\\[A-Za-z0-9_.-]+\\)"
-)
 _DIGEST_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
-_DIGEST_INLINE_RE = re.compile(r"sha256:[a-f0-9]{64}")
 # 박스 3 real asset 최종 (2026-06-03): asset_manifest 의 helper SHA 상수(HELPER{3,4,7,8}_SHA)는
 # 64-hex 만으로 저장되어 `sha256:` prefix 가 없다. evidence persist 시 PII regex(특히 PHONE)와
 # false-positive 가 발생해 자체 SHA 가 차단되던 결함을 해소하기 위해 64-hex 단독 문자열도
@@ -64,20 +52,7 @@ def is_sha256_digest(value: Any) -> bool:
 
 
 def scan_forbidden_text(value: str) -> list[str]:
-    findings: list[str] = []
-    scan_value = _DIGEST_INLINE_RE.sub("sha256:DIGEST", value)
-    checks = (
-        ("PII_EMAIL", _EMAIL_RE),
-        ("PII_KOREAN_RRN", _KOREAN_RRN_RE),
-        ("PII_PHONE", _PHONE_RE),
-        ("PII_CARD_OR_ACCOUNT", _CARD_OR_ACCOUNT_RE),
-        ("SECRET", _SECRET_RE),
-        ("LOCAL_PATH", _LOCAL_PATH_RE),
-    )
-    for name, pattern in checks:
-        if pattern.search(scan_value):
-            findings.append(name)
-    return findings
+    return scan_reason_codes(value)
 
 
 def assert_runtime_text_safe(value: str) -> None:

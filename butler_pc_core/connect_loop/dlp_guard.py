@@ -7,16 +7,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from .persisted_safety import PersistedSafetyViolation, _dlp_scan_all, _enforce_persisted_safety
+from butler_pc_core.dlp.runtime import scan_runtime
+
+from .persisted_safety import PersistedSafetyViolation, _enforce_persisted_safety
 
 
 def scan_runtime_text(text: str) -> dict[str, bool]:
-    scan = _dlp_scan_all(text)
-    policy_violation = scan.policy_violation or scan.local_path_detected
+    scan = scan_runtime(text)
+    categories = {item.category for item in scan.findings}
+    pii_detected = bool(categories & {"email", "phone", "korean_rrn", "card_or_account"})
+    secret_detected = "secret" in categories
+    policy_violation = scan.policy_violation or "local_path" in categories
     return {
-        "passed": not (scan.pii_detected or scan.secret_detected or policy_violation),
-        "pii_detected": scan.pii_detected,
-        "secret_detected": scan.secret_detected,
+        "passed": not (pii_detected or secret_detected or policy_violation),
+        "pii_detected": pii_detected,
+        "secret_detected": secret_detected,
         "policy_violation": policy_violation,
     }
 
@@ -24,7 +29,7 @@ def scan_runtime_text(text: str) -> dict[str, bool]:
 def _contains_forbidden_scalar(value: Any) -> bool:
     if not isinstance(value, str):
         return False
-    return _dlp_scan_all(value).any_detected
+    return scan_runtime(value).any_detected
 
 
 def assert_no_raw_or_secret_material(value: Any) -> None:
