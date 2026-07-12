@@ -96,9 +96,14 @@ from butler_pc_core.model_tier.capability_registry import (
     MAIN_4B_VARIANT_ID,
 )
 from butler_pc_core.model_tier.device_profiler import DeviceProfileSampler
-from butler_pc_core.model_tier.runtime_state import RuntimeProbe, RuntimeStateMonitor
+from butler_pc_core.model_tier.runtime_state import (
+    RuntimeProbe,
+    RuntimeStateMonitor,
+    runtime_lifecycle_snapshot,
+)
 from butler_pc_core.model_tier.shadow_observer import (
     initialize_phase0_shadow,
+    phase0_shadow_status,
     shutdown_phase0_shadow,
 )
 from datetime import datetime, timezone as _tz
@@ -149,6 +154,7 @@ async def _ensure_shared_llm() -> "LlmRuntime":
 def _model_tier_runtime_probes() -> tuple[RuntimeProbe, ...]:
     main_status = str(getattr(_SHARED_LLM, "status", "")) if _SHARED_LLM else ""
     box3_path = os.environ.get("BUTLER_BOX3_V9_Q4_MODEL_PATH")
+    box3_lifecycle = runtime_lifecycle_snapshot().get(BOX3_1P7B_VARIANT_ID)
     return (
         RuntimeProbe(
             variant_id=MAIN_4B_VARIANT_ID,
@@ -159,10 +165,10 @@ def _model_tier_runtime_probes() -> tuple[RuntimeProbe, ...]:
         ),
         RuntimeProbe(
             variant_id=BOX3_1P7B_VARIANT_ID,
-            model_path=box3_path,
-            loaded=bool(box3_path),
-            ready=bool(box3_path),
-            process_id=os.getpid(),
+            model_path=(box3_lifecycle.model_path if box3_lifecycle else None) or box3_path,
+            loaded=bool(box3_lifecycle and box3_lifecycle.loaded),
+            ready=bool(box3_lifecycle and box3_lifecycle.ready),
+            process_id=box3_lifecycle.process_id if box3_lifecycle else os.getpid(),
         ),
     )
 
@@ -170,6 +176,8 @@ def _model_tier_runtime_probes() -> tuple[RuntimeProbe, ...]:
 def _start_model_tier_phase0_shadow() -> None:
     """Start isolated Phase 0 observers; failures never affect sidecar startup."""
     global _MODEL_TIER_RUNTIME_MONITOR, _MODEL_TIER_DEVICE_SAMPLER
+    if os.environ.get("BUTLER_MODEL_TIER_SHADOW_ENABLED", "1").strip().lower() in {"0", "false", "no"}:
+        return
     try:
         runtime_monitor = RuntimeStateMonitor(_model_tier_runtime_probes)
         device_sampler = DeviceProfileSampler()
@@ -365,7 +373,12 @@ if _FASTAPI_AVAILABLE:
         "/api/sidecar/health",
         "/api/model/status",
         "/api/egress/report",
+        "/api/model-tier/shadow/status",
     })
+
+    @app.get("/api/model-tier/shadow/status")
+    async def _model_tier_shadow_status():
+        return phase0_shadow_status()
 
     @app.on_event("startup")
     async def _startup_generate_token():

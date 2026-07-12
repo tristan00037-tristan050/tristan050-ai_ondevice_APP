@@ -153,6 +153,7 @@ class RuntimeVariantState:
     model_digest: str | None
     model_path_digest: str | None
     process_id_digest: str | None = None
+    asset_available: bool = False
 
     def validate(self) -> None:
         if not self.variant_id:
@@ -162,6 +163,10 @@ class RuntimeVariantState:
                 raise ValueError("RUNTIME_VARIANT_DIGEST_INVALID")
         if self.ready and self.model_digest is None:
             raise ValueError("RUNTIME_READY_MODEL_DIGEST_REQUIRED")
+        if self.ready and not self.loaded:
+            raise ValueError("RUNTIME_READY_REQUIRES_LOADED")
+        if self.loaded and not self.asset_available:
+            raise ValueError("RUNTIME_LOADED_REQUIRES_ASSET")
 
     @property
     def resident(self) -> bool:

@@ -22,7 +22,8 @@ except Exception:  # pragma: no cover - import failure is handled at app import 
 from butler_pc_core.connect_loop.attachment_features import RuntimeAttachment, extract_attachment_features
 from butler_pc_core.connect_loop.intake_router import IntakeContractError, decide_intake
 from butler_pc_core.model_tier.shadow_observer import (
-    observe_box1_best_effort,
+    complete_box1_shadow_best_effort,
+    prepare_box1_shadow_best_effort,
     response_digest_best_effort,
 )
 
@@ -116,6 +117,24 @@ if router is not None:
         _validate_local_request(chat_request, request)
         attachments = await _read_runtime_attachments(files)
         bundle = extract_attachment_features(attachments)
+        request_digest = str(chat_request.get("text_digest", ""))
+        try:
+            shadow_pre_context = prepare_box1_shadow_best_effort(
+                request_digest=request_digest,
+                facts={
+                "payload_digest": request_digest,
+                "input_chars": len(runtime_text),
+                "attachment_count": len(attachments),
+                "total_attachment_bytes": sum(len(item.data) for item in attachments),
+                "requested_output_tokens": 0,
+                "reference_count": len(attachments),
+                "structured_output_required": bool(attachments),
+                "deterministic_path_available": False,
+                "ambiguity_score": 0.5,
+                },
+            )
+        except Exception:
+            shadow_pre_context = None
         try:
             decision = decide_intake(
                 request_id=str(chat_request.get("request_id", "")),
@@ -125,31 +144,11 @@ if router is not None:
             )
         except IntakeContractError as exc:
             _raise(422, exc.fail_class, "intake contract rejected")
-        request_digest = str(chat_request.get("text_digest", ""))
-        observe_box1_best_effort(
-            request_digest=request_digest,
-            actual_response_digest=response_digest_best_effort(decision),
-            facts={
-                "payload_digest": request_digest,
-                "input_chars": len(runtime_text),
-                "attachment_count": len(attachments),
-                "total_attachment_bytes": sum(len(item.data) for item in attachments),
-                "requested_output_tokens": 0,
-                "reference_count": len(attachments),
-                "structured_output_required": bool(attachments),
-                "deterministic_path_available": bool(
-                    not decision["fallback_required"]
-                    and float(decision["routing_confidence"]) >= 0.75
-                ),
-                "ambiguity_score": max(
-                    0.0,
-                    min(1.0, 1.0 - float(decision["routing_confidence"])),
-                ),
-                "security_risk_flags": (
-                    ["INTAKE_DLP_SIGNAL_BLOCKED"]
-                    if decision.get("fail_class") == "INTAKE_DLP_SIGNAL_BLOCKED"
-                    else []
-                ),
-            },
-        )
+        try:
+            complete_box1_shadow_best_effort(
+                pre_context=shadow_pre_context,
+                actual_response_digest=response_digest_best_effort(decision),
+            )
+        except Exception:
+            pass
         return decision

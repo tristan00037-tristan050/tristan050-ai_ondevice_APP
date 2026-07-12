@@ -58,6 +58,7 @@ def _states() -> dict[str, RuntimeVariantState]:
             ready=True,
             model_digest=MAIN_QWEN3_4B_MODEL_DIGEST,
             model_path_digest=sha256_text("/models/main.gguf"),
+            asset_available=True,
         ),
         BOX3_1P7B_VARIANT_ID: RuntimeVariantState(
             variant_id=BOX3_1P7B_VARIANT_ID,
@@ -65,6 +66,7 @@ def _states() -> dict[str, RuntimeVariantState]:
             ready=True,
             model_digest=BOX3_V9_2_R2B_MODEL_DIGEST,
             model_path_digest=sha256_text("/models/box3.gguf"),
+            asset_available=True,
         ),
     }
 

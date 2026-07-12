@@ -33,14 +33,26 @@ def test_box1_response_bytes_unchanged_when_shadow_observer_runs(monkeypatch) ->
         },
         runtime={"runtime_text": runtime_text},
     )
-    monkeypatch.setattr(router_decide, "observe_box1_best_effort", lambda **_kwargs: None)
+    monkeypatch.setattr(router_decide, "prepare_box1_shadow_best_effort", lambda **_kwargs: None)
+    monkeypatch.setattr(router_decide, "complete_box1_shadow_best_effort", lambda **_kwargs: None)
     baseline = asyncio.run(router_decide.decide_router(payload, _request()))
     seen = []
-    monkeypatch.setattr(router_decide, "observe_box1_best_effort", lambda **kwargs: seen.append(kwargs))
+    sentinel = object()
+    monkeypatch.setattr(
+        router_decide,
+        "prepare_box1_shadow_best_effort",
+        lambda **kwargs: seen.append(("pre", kwargs)) or sentinel,
+    )
+    monkeypatch.setattr(
+        router_decide,
+        "complete_box1_shadow_best_effort",
+        lambda **kwargs: seen.append(("post", kwargs)),
+    )
     observed = asyncio.run(router_decide.decide_router(payload, _request()))
     assert json.dumps(observed, sort_keys=True) == json.dumps(baseline, sort_keys=True)
-    assert len(seen) == 1
-    assert "runtime_text" not in seen[0]
+    assert [stage for stage, _ in seen] == ["pre", "post"]
+    assert "runtime_text" not in seen[0][1]
+    assert seen[1][1]["pre_context"] is sentinel
 
 
 def test_box3_response_bytes_unchanged_when_shadow_observer_runs(monkeypatch) -> None:
@@ -56,16 +68,28 @@ def test_box3_response_bytes_unchanged_when_shadow_observer_runs(monkeypatch) ->
         reference_docs=["합성 참고문서"],
         drafting_request="합성 초안을 작성해줘",
     )
-    monkeypatch.setattr(box3_draft, "observe_box3_best_effort", lambda **_kwargs: None)
+    monkeypatch.setattr(box3_draft, "prepare_box3_shadow_best_effort", lambda **_kwargs: None)
+    monkeypatch.setattr(box3_draft, "complete_box3_shadow_best_effort", lambda **_kwargs: None)
     baseline = asyncio.run(box3_draft.draft_box3(payload, _request()))
     seen = []
-    monkeypatch.setattr(box3_draft, "observe_box3_best_effort", lambda **kwargs: seen.append(kwargs))
+    sentinel = object()
+    monkeypatch.setattr(
+        box3_draft,
+        "prepare_box3_shadow_best_effort",
+        lambda **kwargs: seen.append(("pre", kwargs)) or sentinel,
+    )
+    monkeypatch.setattr(
+        box3_draft,
+        "complete_box3_shadow_best_effort",
+        lambda **kwargs: seen.append(("post", kwargs)),
+    )
     observed = asyncio.run(box3_draft.draft_box3(payload, _request()))
     assert json.dumps(observed, ensure_ascii=False, sort_keys=True) == json.dumps(
         baseline,
         ensure_ascii=False,
         sort_keys=True,
     )
-    assert len(seen) == 1
-    assert "reference_docs" not in seen[0]
-    assert "draft_text" not in seen[0]
+    assert [stage for stage, _ in seen] == ["pre", "post"]
+    assert "reference_docs" not in seen[0][1]
+    assert "draft_text" not in seen[1][1]
+    assert seen[1][1]["pre_context"] is sentinel

@@ -25,7 +25,10 @@ ALLOWED_CHANGED_PREFIXES = (
     "schemas/model_tier/",
     "tests/model_tier/",
     "scripts/benchmark_model_tier_phase0.py",
+    "scripts/capture_model_tier_phase0_live.py",
     "scripts/verify_model_tier_phase0.py",
+    "butler_pc_core/cards/box3/local_real_runner.py",
+    "butler_pc_core/cards/box3/local_sealed_runner.py",
     "butler_pc_core/sidecar/routes/router_decide.py",
     "butler_pc_core/sidecar/routes/router_intake_decide.py",
     "butler_pc_core/sidecar/routes/box3_draft.py",
@@ -109,6 +112,9 @@ def main() -> int:
     )
     v2 = v2 and "actual_model_selection_unchanged" in production_text
     v2 = v2 and "actual_model_invocations=0" in production_text
+    v2 = v2 and "ShadowPreContext" in production_text
+    v2 = v2 and "prepare_box1_shadow_best_effort" in production_text
+    v2 = v2 and "complete_box3_shadow_best_effort" in production_text
     if not v2:
         errors.append("MT0_V2_SHADOW_INVARIANT_MISSING")
 
@@ -197,6 +203,14 @@ def main() -> int:
                 and stat.S_IMODE(path.parent.stat().st_mode) == 0o700
                 and stat.S_IMODE(path.stat().st_mode) == 0o600
             )
+            last_digest = rows[-1]["record_digest"]
+            rotated = path.with_name(path.name + ".1")
+            os.replace(path, rotated)
+            path.write_bytes(b'{"partial":')
+            recovered = HashChainJsonlWriter(path)
+            recovered.append(_record(3))
+            recovered_row = json.loads(path.read_text(encoding="utf-8").splitlines()[-1])
+            v6 = v6 and recovered_row["previous_record_digest"] == last_digest
     except Exception:
         v6 = False
     if not v6:

@@ -26,6 +26,23 @@ class ShadowRecorderStats:
     failures: int
 
 
+@dataclass(frozen=True)
+class ShadowPreContext:
+    """Immutable, digest-only routing observation captured before product work."""
+
+    schema_version: str
+    box_id: str
+    request_digest: str
+    task_profile_digest: str
+    device_profile_digest: str
+    policy_digest: str
+    decision_digest: str
+    recommended_tier: str
+    recommended_variant_id: str | None
+    reason_codes: tuple[str, ...]
+    high_eligible: bool
+
+
 class NonBlockingShadowRecorder:
     """Bounded, daemon-backed audit writer that never blocks product requests."""
 
@@ -141,27 +158,47 @@ class Phase0ShadowObserver:
     def close(self) -> None:
         self._recorder.close()
 
-    def observe_box1(
+    def prepare_box1(
         self,
         *,
         request_digest: str,
-        actual_response_digest: str,
         facts: Mapping[str, Any],
-    ) -> None:
-        self._observe(
+    ) -> ShadowPreContext:
+        return self._prepare(
             box_id="1",
             request_digest=request_digest,
-            actual_response_digest=actual_response_digest,
             facts=facts,
+        )
+
+    def prepare_box3(
+        self,
+        *,
+        request_digest: str,
+        facts: Mapping[str, Any],
+    ) -> ShadowPreContext:
+        return self._prepare(
+            box_id="3",
+            request_digest=request_digest,
+            facts=facts,
+        )
+
+    def complete_box1(
+        self,
+        *,
+        pre_context: ShadowPreContext,
+        actual_response_digest: str,
+    ) -> None:
+        self._complete(
+            pre_context=pre_context,
+            actual_response_digest=actual_response_digest,
             gate=None,
         )
 
-    def observe_box3(
+    def complete_box3(
         self,
         *,
-        request_digest: str,
+        pre_context: ShadowPreContext,
         actual_response_digest: str,
-        facts: Mapping[str, Any],
         fail_class: str | None,
         quality_vector: Mapping[str, float | int | bool] | None = None,
     ) -> None:
@@ -180,23 +217,19 @@ class Phase0ShadowObserver:
             quality_vector=dict(quality_vector or {}),
             result_digest=stable_digest(gate_payload),
         )
-        self._observe(
-            box_id="3",
-            request_digest=request_digest,
+        self._complete(
+            pre_context=pre_context,
             actual_response_digest=actual_response_digest,
-            facts=facts,
             gate=gate,
         )
 
-    def _observe(
+    def _prepare(
         self,
         *,
         box_id: str,
         request_digest: str,
-        actual_response_digest: str,
         facts: Mapping[str, Any],
-        gate: GateResult | None,
-    ) -> None:
+    ) -> ShadowPreContext:
         task = classify_task_complexity(box_id, facts)
         device = self._device_sampler.latest()
         if device.validity is ProfileValidity.INVALID:
@@ -209,30 +242,54 @@ class Phase0ShadowObserver:
             registry=self._registry,
             runtime_states=self._runtime_monitor.snapshot(),
         )
+        return ShadowPreContext(
+            schema_version="butler.model_tier_shadow_pre_context.v1",
+            box_id=box_id,
+            request_digest=request_digest,
+            task_profile_digest=task.task_digest,
+            device_profile_digest=device.profile_digest,
+            policy_digest=policy.policy_digest,
+            decision_digest=decision.decision_digest,
+            recommended_tier=decision.recommended_tier.value,
+            recommended_variant_id=decision.recommended_variant_id,
+            reason_codes=decision.reason_codes,
+            high_eligible=decision.high_eligible,
+        )
+
+    def _complete(
+        self,
+        *,
+        pre_context: ShadowPreContext,
+        actual_response_digest: str,
+        gate: GateResult | None,
+    ) -> None:
+        if pre_context.schema_version != "butler.model_tier_shadow_pre_context.v1":
+            raise ValueError("SHADOW_PRE_CONTEXT_SCHEMA_INVALID")
+        policy = self._policies[pre_context.box_id]
         gate_reason: str | None = None
         would_escalate = False
         if gate is not None:
             plan = plan_shadow_cascade(
-                box_id=box_id,
+                box_id=pre_context.box_id,
                 gate=gate,
                 policy=policy,
-                high_eligible=decision.high_eligible,
+                high_eligible=pre_context.high_eligible,
             )
             gate_reason = gate.reason_code
             would_escalate = plan.would_escalate
         observe_best_effort(
             lambda: build_shadow_record(
                 timestamp_epoch_ms=int(time.time() * 1000),
-                request_digest=request_digest,
-                box_id=box_id,
-                task_profile_digest=task.task_digest,
-                device_profile_digest=device.profile_digest,
-                policy_digest=policy.policy_digest,
-                decision_digest=decision.decision_digest,
-                recommended_tier=decision.recommended_tier.value,
-                recommended_variant_id=decision.recommended_variant_id,
-                reason_codes=decision.reason_codes,
-                high_eligible=decision.high_eligible,
+                request_digest=pre_context.request_digest,
+                box_id=pre_context.box_id,
+                task_profile_digest=pre_context.task_profile_digest,
+                device_profile_digest=pre_context.device_profile_digest,
+                policy_digest=pre_context.policy_digest,
+                decision_digest=pre_context.decision_digest,
+                recommended_tier=pre_context.recommended_tier,
+                recommended_variant_id=pre_context.recommended_variant_id,
+                reason_codes=pre_context.reason_codes,
+                high_eligible=pre_context.high_eligible,
                 gate_reason_code=gate_reason,
                 would_escalate=would_escalate,
                 actual_response_digest=actual_response_digest,
@@ -281,23 +338,94 @@ def shutdown_phase0_shadow() -> None:
         observer.close()
 
 
-def observe_box1_best_effort(**kwargs: Any) -> None:
+def phase0_shadow_status() -> dict[str, Any]:
     with _GLOBAL_LOCK:
         observer = _GLOBAL_OBSERVER
     if observer is None:
+        return {
+            "schema_version": "butler.model_tier_shadow_status.v1",
+            "active": False,
+            "submitted": 0,
+            "written": 0,
+            "dropped": 0,
+            "failures": 0,
+        }
+    stats = observer._recorder.stats()
+    return {
+        "schema_version": "butler.model_tier_shadow_status.v1",
+        "active": True,
+        "submitted": stats.submitted,
+        "written": stats.written,
+        "dropped": stats.dropped,
+        "failures": stats.failures,
+    }
+
+
+def prepare_box1_shadow_best_effort(**kwargs: Any) -> ShadowPreContext | None:
+    with _GLOBAL_LOCK:
+        observer = _GLOBAL_OBSERVER
+    if observer is None:
+        return None
+    try:
+        return observer.prepare_box1(**kwargs)
+    except Exception:
+        return None
+
+
+def prepare_box3_shadow_best_effort(**kwargs: Any) -> ShadowPreContext | None:
+    with _GLOBAL_LOCK:
+        observer = _GLOBAL_OBSERVER
+    if observer is None:
+        return None
+    try:
+        return observer.prepare_box3(**kwargs)
+    except Exception:
+        return None
+
+
+def complete_box1_shadow_best_effort(**kwargs: Any) -> None:
+    with _GLOBAL_LOCK:
+        observer = _GLOBAL_OBSERVER
+    if observer is None or kwargs.get("pre_context") is None:
         return
     try:
-        observer.observe_box1(**kwargs)
+        observer.complete_box1(**kwargs)
     except Exception:
         return
+
+
+def complete_box3_shadow_best_effort(**kwargs: Any) -> None:
+    with _GLOBAL_LOCK:
+        observer = _GLOBAL_OBSERVER
+    if observer is None or kwargs.get("pre_context") is None:
+        return
+    try:
+        observer.complete_box3(**kwargs)
+    except Exception:
+        return
+
+
+def observe_box1_best_effort(**kwargs: Any) -> None:
+    """Compatibility wrapper for non-route callers; new routes use PRE/POST."""
+    actual_response_digest = kwargs.pop("actual_response_digest", None)
+    pre_context = prepare_box1_shadow_best_effort(**kwargs)
+    if actual_response_digest is not None:
+        complete_box1_shadow_best_effort(
+            pre_context=pre_context,
+            actual_response_digest=actual_response_digest,
+        )
 
 
 def observe_box3_best_effort(**kwargs: Any) -> None:
-    with _GLOBAL_LOCK:
-        observer = _GLOBAL_OBSERVER
-    if observer is None:
-        return
-    try:
-        observer.observe_box3(**kwargs)
-    except Exception:
-        return
+    """Compatibility wrapper for non-route callers; new routes use PRE/POST."""
+    actual_response_digest = kwargs.pop("actual_response_digest", None)
+    fail_class = kwargs.pop("fail_class", None)
+    quality_vector = kwargs.pop("quality_vector", None)
+    pre_context = prepare_box3_shadow_best_effort(**kwargs)
+    if actual_response_digest is not None:
+        complete_box3_shadow_best_effort(
+            pre_context=pre_context,
+            actual_response_digest=actual_response_digest,
+            fail_class=fail_class,
+            quality_vector=quality_vector,
+        )

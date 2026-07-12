@@ -20,7 +20,8 @@ from butler_pc_core.cards.box3.endpoint_wiring import (
 )
 from butler_pc_core.cards.box3.security import Box3SecurityError
 from butler_pc_core.model_tier.shadow_observer import (
-    observe_box3_best_effort,
+    complete_box3_shadow_best_effort,
+    prepare_box3_shadow_best_effort,
     response_digest_best_effort,
 )
 
@@ -76,6 +77,37 @@ async def draft_box3(payload: Box3DraftRequest, request: Request) -> dict[str, A
     if not is_localhost_request(request):
         raise HTTPException(status_code=403, detail={"fail_class": "LOCALHOST_ONLY", "message": "localhost only"})
 
+    request_digest = digest_payload(payload)
+    reference_count = len(payload.reference_docs) if payload.reference_docs else int(bool(payload.input_text))
+    input_chars = (
+        sum(len(doc) for doc in payload.reference_docs) + len(payload.drafting_request or "")
+        if payload.reference_docs
+        else len(payload.input_text or "") + len(payload.prompt_template or "")
+    )
+    try:
+        shadow_pre_context = prepare_box3_shadow_best_effort(
+            request_digest=request_digest,
+            facts={
+            "payload_digest": request_digest,
+            "input_chars": input_chars,
+            "attachment_count": reference_count,
+            "total_attachment_bytes": (
+                sum(len(doc.encode("utf-8")) for doc in payload.reference_docs)
+                if payload.reference_docs
+                else len((payload.input_text or "").encode("utf-8"))
+            ),
+            "requested_output_tokens": payload.max_new_tokens,
+            "reference_count": reference_count,
+            "structured_output_required": bool(
+                payload.reference_docs and payload.format_hint != "자유형"
+            ),
+            "deterministic_path_available": False,
+            "ambiguity_score": 0.5,
+            },
+        )
+    except Exception:
+        shadow_pre_context = None
+
     # actual endpoint wiring 경로 (PR #778 정정): sealed approval pre-gate 가 runner 연결을
     # 결정한다 — request/UI flag 는 real 승인으로 사용하지 않음. approval false → contract_only,
     # approval true + 9 조건 + helper_component_use → PASS_BOX3_REAL_LOCAL_AFTER_HUMAN_APPROVAL,
@@ -100,32 +132,21 @@ async def draft_box3(payload: Box3DraftRequest, request: Request) -> dict[str, A
                 status_code=422,
                 detail={"fail_class": str(exc) or exc.__class__.__name__},
             ) from exc
-        response["request_digest"] = digest_payload(payload)
+        response["request_digest"] = request_digest
         response["raw_doc_logged"] = False
-        observe_box3_best_effort(
-            request_digest=response["request_digest"],
-            actual_response_digest=response_digest_best_effort(response),
-            facts={
-                "payload_digest": response["request_digest"],
-                "input_chars": sum(len(doc) for doc in payload.reference_docs)
-                + len(payload.drafting_request or ""),
-                "attachment_count": len(payload.reference_docs),
-                "total_attachment_bytes": sum(
-                    len(doc.encode("utf-8")) for doc in payload.reference_docs
-                ),
-                "requested_output_tokens": payload.max_new_tokens,
-                "reference_count": len(payload.reference_docs),
-                "structured_output_required": payload.format_hint != "자유형",
-                "deterministic_path_available": False,
-                "ambiguity_score": 0.5,
-            },
-            fail_class=str(response.get("fail_class") or "") or None,
-            quality_vector={
-                "citation_count": len(response.get("citations") or []),
-                "draft_present": bool(response.get("draft_text") or response.get("초안")),
-                "needs_review": bool(response.get("needs_review")),
-            },
-        )
+        try:
+            complete_box3_shadow_best_effort(
+                pre_context=shadow_pre_context,
+                actual_response_digest=response_digest_best_effort(response),
+                fail_class=str(response.get("fail_class") or "") or None,
+                quality_vector={
+                    "citation_count": len(response.get("citations") or []),
+                    "draft_present": bool(response.get("draft_text") or response.get("초안")),
+                    "needs_review": bool(response.get("needs_review")),
+                },
+            )
+        except Exception:
+            pass
         return response
 
     # legacy(무회귀) 경로 — 기존 contract 유지.
@@ -140,24 +161,16 @@ async def draft_box3(payload: Box3DraftRequest, request: Request) -> dict[str, A
         max_new_tokens=payload.max_new_tokens,
     )
     result_dict = result.to_dict()
-    result_dict["request_digest"] = digest_payload(payload)
+    result_dict["request_digest"] = request_digest
     result_dict["sealed_sha"] = SEALED_SHA
     result_dict["raw_doc_logged"] = False
-    observe_box3_best_effort(
-        request_digest=result_dict["request_digest"],
-        actual_response_digest=response_digest_best_effort(result_dict),
-        facts={
-            "payload_digest": result_dict["request_digest"],
-            "input_chars": len(payload.input_text) + len(payload.prompt_template),
-            "attachment_count": 1,
-            "total_attachment_bytes": len(payload.input_text.encode("utf-8")),
-            "requested_output_tokens": payload.max_new_tokens,
-            "reference_count": 1,
-            "structured_output_required": False,
-            "deterministic_path_available": False,
-            "ambiguity_score": 0.5,
-        },
-        fail_class=str(result_dict.get("fail_class") or "") or None,
-        quality_vector={"draft_present": bool(result_dict.get("draft_text"))},
-    )
+    try:
+        complete_box3_shadow_best_effort(
+            pre_context=shadow_pre_context,
+            actual_response_digest=response_digest_best_effort(result_dict),
+            fail_class=str(result_dict.get("fail_class") or "") or None,
+            quality_vector={"draft_present": bool(result_dict.get("draft_text"))},
+        )
+    except Exception:
+        pass
     return result_dict

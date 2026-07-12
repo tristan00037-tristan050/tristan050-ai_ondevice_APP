@@ -172,23 +172,56 @@ class HashChainJsonlWriter:
         os.chmod(self.path.parent, 0o700)
 
     def _recover_previous_digest(self) -> None:
-        if not self.path.exists():
+        rotated = self.path.with_name(self.path.name + ".1")
+        current_digest = self._recover_tail(self.path, repair_partial=True)
+        if current_digest is not None:
+            self._previous_digest = current_digest
             return
-        if self.path.is_symlink() or not self.path.is_file():
+        rotated_digest = self._recover_tail(rotated, repair_partial=False)
+        if rotated_digest is not None:
+            self._previous_digest = rotated_digest
+
+    def _recover_tail(self, candidate: Path, *, repair_partial: bool) -> str | None:
+        if not candidate.exists():
+            return None
+        if candidate.is_symlink() or not candidate.is_file():
             raise ValueError("AUDIT_PATH_INVALID")
-        with self.path.open("rb") as handle:
-            handle.seek(0, os.SEEK_END)
-            size = handle.tell()
-            handle.seek(max(0, size - 131_072))
-            lines = handle.read().splitlines()
+        flags = os.O_RDWR if repair_partial else os.O_RDONLY
+        flags |= getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(candidate, flags)
+        try:
+            stat_result = os.fstat(fd)
+            if not stat.S_ISREG(stat_result.st_mode):
+                raise ValueError("AUDIT_PATH_INVALID")
+            size = stat_result.st_size
+            os.lseek(fd, max(0, size - 131_072), os.SEEK_SET)
+            tail = os.read(fd, min(size, 131_072))
+            if repair_partial and tail and not tail.endswith(b"\n"):
+                last_newline = tail.rfind(b"\n")
+                physical_offset = max(0, size - len(tail))
+                truncate_at = physical_offset + last_newline + 1 if last_newline >= 0 else 0
+                os.ftruncate(fd, truncate_at)
+                os.fsync(fd)
+                tail = tail[: last_newline + 1] if last_newline >= 0 else b""
+            lines = tail.splitlines()
+        finally:
+            os.close(fd)
         if not lines:
-            return
+            return None
         try:
             last = json.loads(lines[-1].decode("utf-8"))
+            validate_shadow_record(last)
         except Exception as exc:
             raise ValueError("AUDIT_TAIL_INVALID") from exc
-        validate_shadow_record(last)
-        self._previous_digest = last["record_digest"]
+        return str(last["record_digest"])
+
+    def _fsync_parent(self) -> None:
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+        directory_fd = os.open(self.path.parent, flags)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
 
     def _rotate_if_needed(self, incoming_bytes: int) -> None:
         if incoming_bytes > self.max_bytes:
@@ -202,6 +235,7 @@ class HashChainJsonlWriter:
             raise ValueError("AUDIT_ROTATION_TARGET_INVALID")
         os.replace(self.path, rotated)
         os.chmod(rotated, 0o600)
+        self._fsync_parent()
 
     def append(self, record: dict[str, Any]) -> str:
         with self._lock:
@@ -220,6 +254,7 @@ class HashChainJsonlWriter:
             flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
             flags |= getattr(os, "O_CLOEXEC", 0)
             flags |= getattr(os, "O_NOFOLLOW", 0)
+            created = not self.path.exists()
             fd = os.open(self.path, flags, 0o600)
             try:
                 mode = os.fstat(fd).st_mode
@@ -230,5 +265,7 @@ class HashChainJsonlWriter:
                 os.fsync(fd)
             finally:
                 os.close(fd)
+            if created:
+                self._fsync_parent()
             self._previous_digest = str(base["record_digest"])
             return self._previous_digest
