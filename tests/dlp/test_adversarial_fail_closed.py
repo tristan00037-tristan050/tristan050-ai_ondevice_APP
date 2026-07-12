@@ -47,10 +47,10 @@ def test_dynamic_verifier_reports_all_adversarial_gates_safe():
         text=True,
     )
     assert result.returncode == 0
-    lines = set(result.stdout.splitlines())
-    assert "DLP_RUNTIME_UNIFICATION_VERIFY=1" in lines
-    assert "DLP_TOO_LONG_BOX3_BLOCK=1" in lines
-    assert "DLP_RAW_LENGTH_LIMIT_ORDER_OK=1" in lines
-    assert "DLP_UNSAFE_REPLACEMENT_OUTPUT_ZERO=1" in lines
-    assert "DLP_OBSERVED_CONFUSABLE_ASSET_OK=1" in lines
+    values = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+    assert values["DLP_RUNTIME_UNIFICATION_VERIFY"] == "1"
+    assert values["DLP_TOO_LONG_BOX3_BLOCK"] == "1"
+    assert values["DLP_RAW_LENGTH_LIMIT_ORDER_OK"] == "1"
+    assert values["DLP_UNSAFE_REPLACEMENT_OUTPUT_ZERO"] == "1"
+    assert values["DLP_OBSERVED_CONFUSABLE_ASSET_OK"] == "1"
     assert result.stderr == ""
