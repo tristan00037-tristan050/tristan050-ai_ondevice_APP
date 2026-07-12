@@ -1,18 +1,15 @@
-"""Runtime-only DLP guard for PR-E.
-
-The guard returns booleans only. It never returns matched raw text, file names,
-local paths, tokens, or snippets.
-"""
+"""Runtime-only DLP guard backed by the public Butler DLP facade."""
 from __future__ import annotations
 
 from typing import Any
 
-from .persisted_safety import PersistedSafetyViolation, _dlp_scan_all, _enforce_persisted_safety
+from butler_pc_core.dlp.runtime import scan_runtime
+from .persisted_safety import PersistedSafetyViolation, _enforce_persisted_safety
 
 
 def scan_runtime_text(text: str) -> dict[str, bool]:
-    scan = _dlp_scan_all(text)
-    policy_violation = scan.policy_violation or scan.local_path_detected
+    scan = scan_runtime(text)
+    policy_violation = scan.policy_violation or scan.local_path_detected or scan.too_long
     return {
         "passed": not (scan.pii_detected or scan.secret_detected or policy_violation),
         "pii_detected": scan.pii_detected,
@@ -22,13 +19,10 @@ def scan_runtime_text(text: str) -> dict[str, bool]:
 
 
 def _contains_forbidden_scalar(value: Any) -> bool:
-    if not isinstance(value, str):
-        return False
-    return _dlp_scan_all(value).any_detected
+    return isinstance(value, str) and scan_runtime(value).any_detected
 
 
 def assert_no_raw_or_secret_material(value: Any) -> None:
-    """Fail closed if an object contains raw-like keys or forbidden strings."""
     try:
         _enforce_persisted_safety(value)
     except PersistedSafetyViolation as exc:
