@@ -32,6 +32,7 @@ def _request() -> SimpleNamespace:
     return SimpleNamespace(
         client=SimpleNamespace(host="testclient"),
         state=SimpleNamespace(policy_gate_allowed=True),
+        headers={},
     )
 
 
@@ -121,6 +122,26 @@ def test_pre_context_created_before_box3_product_boundary(monkeypatch) -> None:
     payload = box3_draft.Box3DraftRequest(reference_docs=["참고"], drafting_request="작성")
     asyncio.run(box3_draft.draft_box3(payload, _request()))
     assert order == ["pre", "product", "post"]
+
+
+def test_box3_live_request_id_is_forwarded_only_when_safe(monkeypatch) -> None:
+    seen: list[str | None] = []
+    monkeypatch.setattr(box3_draft, "prepare_box3_shadow_best_effort", lambda **_kwargs: None)
+    monkeypatch.setattr(box3_draft, "complete_box3_shadow_best_effort", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        box3_draft,
+        "run_box3_endpoint_wiring",
+        lambda **kwargs: seen.append(kwargs.get("request_id"))
+        or {"status": "real_candidate", "draft_text": "초안", "citations": []},
+    )
+    payload = box3_draft.Box3DraftRequest(reference_docs=["참고"], drafting_request="작성")
+    safe_request = _request()
+    safe_request.headers = {"x-request-id": "phase0-live-box3-pass-001"}
+    asyncio.run(box3_draft.draft_box3(payload, safe_request))
+    unsafe_request = _request()
+    unsafe_request.headers = {"x-request-id": "raw text is forbidden"}
+    asyncio.run(box3_draft.draft_box3(payload, unsafe_request))
+    assert seen == ["phase0-live-box3-pass-001", None]
 
 
 @pytest.mark.parametrize("failing_hook", ["pre", "post"])

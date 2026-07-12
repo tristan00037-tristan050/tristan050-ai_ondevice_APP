@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -31,6 +32,7 @@ LOCALHOST_HOSTS = {"127.0.0.1", "localhost", "::1", "testclient"}
 MAX_INPUT_LENGTH = 12000
 MAX_PROMPT_TEMPLATE_LENGTH = 2000
 MAX_REFERENCE_LENGTH = 20000
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{8,128}$")
 
 
 class Box3DraftRequest(BaseModel):
@@ -70,6 +72,12 @@ def digest_payload(payload: Box3DraftRequest) -> str:
     }
     encoded = json.dumps(digest_source, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return "sha256:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _trusted_request_id(request: Request) -> str | None:
+    headers = getattr(request, "headers", {})
+    value = str(headers.get("x-request-id", "") if headers is not None else "").strip()
+    return value if _REQUEST_ID_RE.fullmatch(value) else None
 
 
 @router.post("/v1/cards/3/draft")
@@ -121,6 +129,7 @@ async def draft_box3(payload: Box3DraftRequest, request: Request) -> dict[str, A
                 format_hint=payload.format_hint,
                 max_new_tokens=payload.max_new_tokens,
                 policy_gate_allowed=bool(getattr(request.state, "policy_gate_allowed", True)),
+                request_id=_trusted_request_id(request),
             )
         except Box3SecurityError as exc:
             raise HTTPException(

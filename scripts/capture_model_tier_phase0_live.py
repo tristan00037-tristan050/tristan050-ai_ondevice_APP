@@ -22,11 +22,15 @@ def _digest(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def _post(url: str, payload: dict[str, Any], token: str) -> tuple[int, bytes]:
+def _post(url: str, payload: dict[str, Any], token: str, request_id: str) -> tuple[int, bytes]:
     request = urllib.request.Request(
         url,
         data=json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "X-Request-ID": request_id,
+        },
         method="POST",
     )
     try:
@@ -34,6 +38,45 @@ def _post(url: str, payload: dict[str, Any], token: str) -> tuple[int, bytes]:
             return response.status, response.read()
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read()
+
+
+def _field_digests(body: bytes) -> dict[str, str]:
+    try:
+        payload = json.loads(body)
+    except Exception:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        str(key): _digest(
+            json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        )
+        for key, value in payload.items()
+    }
+
+
+def _leaf_digests(body: bytes) -> dict[str, str]:
+    try:
+        payload = json.loads(body)
+    except Exception:
+        return {}
+    output: dict[str, str] = {}
+
+    def visit(value: Any, path: str) -> None:
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                visit(nested, f"{path}.{key}" if path else str(key))
+            return
+        if isinstance(value, list):
+            for index, nested in enumerate(value):
+                visit(nested, f"{path}[{index}]")
+            return
+        output[path] = _digest(
+            json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        )
+
+    visit(payload, "")
+    return output
 
 
 def _get_json(url: str) -> dict[str, Any]:
@@ -120,8 +163,16 @@ def capture(mode: str, base_url: str, app_executable: Path, output: Path) -> Non
     before_rows = len(_audit_rows())
     case_rows = []
     for case_id, endpoint, payload in _cases():
-        status, body = _post(base_url + endpoint, payload, token)
-        case_rows.append({"case_id": case_id, "http_status": status, "response_digest": _digest(body)})
+        status, body = _post(base_url + endpoint, payload, token, f"phase0-live-{case_id}-001")
+        case_rows.append(
+            {
+                "case_id": case_id,
+                "http_status": status,
+                "response_digest": _digest(body),
+                "response_field_digests": _field_digests(body),
+                "response_leaf_digests": _leaf_digests(body),
+            }
+        )
     deadline = time.monotonic() + 5
     while mode == "on" and time.monotonic() < deadline:
         status = _get_json(base_url + "/api/model-tier/shadow/status")
