@@ -11,6 +11,7 @@ from typing import Any, List, Optional
 from butler_pc_core.dlp.runtime import (
     SAFE_SECRET_REPLACEMENT,
     redact_fail_closed as _redact_secret_value,
+    scan_runtime as _scan_runtime,
 )
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.prompts.cards import load_card_prompt
@@ -166,6 +167,41 @@ def _label_key(value: str) -> str:
     return re.sub(r"\s+", "", value).casefold()
 
 
+def _rebuild_safe_filled_form(value: Any) -> str:
+    """Rebuild ``filled_form`` so sensitive-label lines are masked while general
+    lines are preserved, then fail-closed verify with the runtime DLP scanner.
+
+    The prior behavior ran ``filled_form`` through the shared scalar DLP redactor,
+    which collapses the *entire* body to a single ``SAFE_SECRET_REPLACEMENT`` when
+    any secret is present — losing every general field in a mixed form. Here we
+    only replace whole lines that carry a secret label (a bare placeholder line,
+    not ``label: value`` — the latter still reads as a secret to the frontend
+    scanner). A final ``scan_runtime`` pass guarantees no raw secret survives; any
+    residual detected line (e.g. a raw token on a non-secret-label line) is masked
+    wholesale and the body re-verified. Detection reuses ``_is_secret_target_label``
+    and the DLP scanner unchanged — only the handling differs.
+    """
+    if not isinstance(value, str):
+        raise ValueError("FILLED_FORM_INVALID")
+    if len(value) > MAX_TEXT_CHARS:
+        raise ValueError("FILLED_FORM_INVALID_TOO_LONG")
+
+    candidate = "\n".join(
+        SAFE_SECRET_REPLACEMENT if (line.strip() and _is_secret_target_label(line)) else line
+        for line in value.split("\n")
+    )
+    if _scan_runtime(candidate).any_detected:
+        candidate = "\n".join(
+            SAFE_SECRET_REPLACEMENT
+            if (line.strip() and _scan_runtime(line).any_detected)
+            else line
+            for line in candidate.split("\n")
+        )
+    if _scan_runtime(candidate).any_detected:
+        return SAFE_SECRET_REPLACEMENT
+    return candidate
+
+
 def _extract_json_object(text: str) -> dict[str, Any]:
     source = str(text or "")
     start = source.find("{")
@@ -227,7 +263,9 @@ def _validate_form_fill_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if payload["schema_version"] != SCHEMA_VERSION:
         raise ValueError("SCHEMA_VERSION_INVALID")
 
-    filled_form = _require_string(payload["filled_form"], "FILLED_FORM_INVALID", max_len=MAX_TEXT_CHARS)
+    # Do not wholesale-redact filled_form (that collapses general fields too);
+    # rebuild it line-wise, masking only secret-label lines, then fail-closed verify.
+    filled_form = _rebuild_safe_filled_form(payload["filled_form"])
     unfilled_fields = _require_string_list(payload["unfilled_fields"], "UNFILLED_FIELDS_INVALID")
     review_required = _require_string_list(payload["review_required"], "REVIEW_REQUIRED_INVALID")
     warnings = _require_string_list(payload["warnings"], "WARNINGS_INVALID")
@@ -268,6 +306,11 @@ def _validate_form_fill_payload(payload: dict[str, Any]) -> dict[str, Any]:
             if autofill_blocked or not_review_isolated:
                 output_value = SAFE_SECRET_REPLACEMENT
                 override_reason_code = SENSITIVE_FIELD_MASKED_REASON
+                # Enroll the masked field into top-level review_required so the
+                # frontend guard treats it as reviewed (not a whole-form block).
+                if label_key not in review_required_keys:
+                    review_required.append(target_label)
+                    review_required_keys.add(label_key)
             elif not is_unfilled_value:
                 output_value = SAFE_SECRET_REPLACEMENT
         field_mappings.append(

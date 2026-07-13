@@ -4,7 +4,11 @@ import { parseAnalyzeStreamResult } from '../lib/cards/analyzeStreamResult';
 import { MAX_BYTES_PER_CHAR, MAX_CHARS_PER_FILE, prepareCardTextFiles } from '../lib/cards/fileText';
 import { SECRET_TEXT_RE, containsSecretLikeText } from '../lib/cards/secretPatterns';
 import { hasBox4SecretLeak, validateBox4DocumentReviewResult } from '../lib/box4/box4ReviewClient';
-import { hasBox6SecretAutofill, validateBox6FormFillResult } from '../lib/box6/box6FormFillClient';
+import {
+  enforceBox6SecretGuard,
+  hasBox6SecretAutofill,
+  validateBox6FormFillResult,
+} from '../lib/box6/box6FormFillClient';
 import { SECRET_NEGATIVE_FIXTURES, SECRET_POSITIVE_FIXTURES } from './fixtures/secretFixtures';
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -59,6 +63,30 @@ const unsafeBox6SecretPayload = {
 const unsafeBox6FilledFormOnlyPayload = {
   ...box6Payload,
   filled_form: '상호: 주식회사 합성\nAPI key: sk-test-secret-value-123456',
+};
+
+// Faithful shape of the 2nd-round backend output for a mixed form (6 general +
+// 2 sensitive) after field-level masking + review_required enrollment + safe
+// filled_form rebuild. Secret lines in filled_form are collapsed to the safe
+// placeholder (label dropped), general lines preserved, and the sensitive labels
+// are enrolled into review_required. This must NOT be treated as a whole-form block.
+const maskedMixedBox6Payload = {
+  schema_version: 'card_06.form_fill.v1',
+  filled_form:
+    '납품업체명: 주식회사 버틀러\n대표이사: 김대표\n주소: 서울시 강남구\n담당부서: 영업1팀\n고용형태: 정규직\n등급: 우수\n[민감정보 원문 생략]\n[민감정보 원문 생략]',
+  field_mappings: [
+    { target_label: '납품업체명', output_value: '주식회사 버틀러', confidence: 'HIGH', source_ref: 'our_data.company', reason_code: 'LABEL_SEMANTIC_MATCH' },
+    { target_label: '대표이사', output_value: '김대표', confidence: 'HIGH', source_ref: 'our_data.ceo', reason_code: 'LABEL_SEMANTIC_MATCH' },
+    { target_label: '주소', output_value: '서울시 강남구', confidence: 'HIGH', source_ref: 'our_data.addr', reason_code: 'LABEL_SEMANTIC_MATCH' },
+    { target_label: '담당부서', output_value: '영업1팀', confidence: 'HIGH', source_ref: 'our_data.dept', reason_code: 'LABEL_SEMANTIC_MATCH' },
+    { target_label: '고용형태', output_value: '정규직', confidence: 'HIGH', source_ref: 'our_data.emp', reason_code: 'LABEL_SEMANTIC_MATCH' },
+    { target_label: '등급', output_value: '우수', confidence: 'HIGH', source_ref: 'our_data.grade', reason_code: 'LABEL_SEMANTIC_MATCH' },
+    { target_label: 'API 키', output_value: '[민감정보 원문 생략]', confidence: 'HIGH', source_ref: 'our_data.api_key', reason_code: 'SENSITIVE_FIELD_MASKED' },
+    { target_label: '비밀번호', output_value: '[민감정보 원문 생략]', confidence: 'HIGH', source_ref: 'our_data.password', reason_code: 'SENSITIVE_FIELD_MASKED' },
+  ],
+  unfilled_fields: [],
+  review_required: ['API 키', '비밀번호'],
+  warnings: [],
 };
 
 const box4Payload = {
@@ -422,6 +450,29 @@ describe('Box4/Box6 analyze stream parser', () => {
     };
     const parsed = parseAnalyzeStreamResult(JSON.stringify(safeReferences), validateBox6FormFillResult);
     expect(hasBox6SecretAutofill(parsed)).toBe(false);
+  });
+
+  it('does not whole-form-block a mixed form that was field-level masked by the backend', () => {
+    // Gap ①/②: the 2nd-round backend output (masked sensitive fields + sensitive
+    // labels enrolled in review_required + safe rebuilt filled_form) must pass the
+    // frontend guard so the 6 general fields are shown instead of blocking everything.
+    const parsed = parseAnalyzeStreamResult(JSON.stringify(maskedMixedBox6Payload), validateBox6FormFillResult);
+
+    // No whole-form block (covers both the renderedStrings global scan and the
+    // per-field secret-label check).
+    expect(hasBox6SecretAutofill(parsed)).toBe(false);
+    // enforceBox6SecretGuard() must not throw for this masked-but-reviewed result.
+    expect(() => enforceBox6SecretGuard(parsed)).not.toThrow();
+
+    // The 8 fields survive; the 2 sensitive ones are masked and enrolled for review.
+    expect(parsed.field_mappings).toHaveLength(8);
+    expect(parsed.review_required).toContain('API 키');
+    expect(parsed.review_required).toContain('비밀번호');
+
+    // No raw secret text anywhere in the rendered result.
+    const rendered = JSON.stringify(parsed);
+    expect(SECRET_TEXT_RE.test(rendered)).toBe(false);
+    expect(containsSecretLikeText(parsed.filled_form)).toBe(false);
   });
 
   it('blocks shared positive fixtures across Box6 rendered output paths', () => {

@@ -13,6 +13,7 @@ from butler_pc_core.cards.box6.form_fill_service import (
     FormFillInput,
     fill_form,
 )
+from butler_pc_core.dlp.runtime import scan_runtime as _scan_runtime
 from butler_pc_core.runtime.json_grammar import GrammarUnavailable
 
 
@@ -278,10 +279,95 @@ def test_fill_form_mixed_form_masks_only_sensitive_fields_no_whole_form_block() 
         assert by_label[s["target_label"]]["output_value"] == SAFE_SECRET_REPLACEMENT
         assert by_label[s["target_label"]]["reason_code"] == SENSITIVE_FIELD_MASKED_REASON
 
+    # Gap ①: masked sensitive fields are auto-enrolled into review_required so the
+    # frontend guard treats them as reviewed rather than blocking the whole form.
+    for s in sensitive_fields:
+        assert s["target_label"] in result.review_required
+
     # No sensitive value leaks anywhere in the returned payload.
     dumped = json.dumps(result.to_payload(), ensure_ascii=False)
     assert "plain-secret-aaaa" not in dumped
     assert "plain-secret-bbbb" not in dumped
+
+
+def test_fill_form_mixed_filled_form_preserves_general_lines_and_masks_secret_lines() -> None:
+    # Gap ③ real scenario: the secret real values live in filled_form itself
+    # (6 general lines + 2 secret lines). The 1st-round test omitted this and so
+    # dodged the whole-form filled_form collapse. Expected: general lines preserved
+    # verbatim, secret lines shown only as the safe replacement, no raw leak.
+    filled_form = (
+        "납품업체명: 주식회사 버틀러\n"
+        "대표이사: 김대표\n"
+        "주소: 서울시 강남구 테헤란로 1\n"
+        "담당부서: 영업1팀\n"
+        "고용형태: 정규직\n"
+        "등급: 우수\n"
+        "API 키: plain-secret-aaaa\n"
+        "비밀번호: plain-secret-bbbb"
+    )
+    general_lines = [
+        "납품업체명: 주식회사 버틀러",
+        "대표이사: 김대표",
+        "주소: 서울시 강남구 테헤란로 1",
+        "담당부서: 영업1팀",
+        "고용형태: 정규직",
+        "등급: 우수",
+    ]
+    field_mappings = [
+        {
+            "target_label": tl,
+            "output_value": ov,
+            "confidence": "HIGH",
+            "source_ref": f"our_data.{i}",
+            "reason_code": "LABEL_SEMANTIC_MATCH",
+        }
+        for i, (tl, ov) in enumerate(
+            [
+                ("납품업체명", "주식회사 버틀러"),
+                ("대표이사", "김대표"),
+                ("주소", "서울시 강남구 테헤란로 1"),
+                ("담당부서", "영업1팀"),
+                ("고용형태", "정규직"),
+                ("등급", "우수"),
+                ("API 키", "plain-secret-aaaa"),
+                ("비밀번호", "plain-secret-bbbb"),
+            ]
+        )
+    ]
+
+    result = fill_form(
+        FormFillInput(blank_form="납품업체명: ___\nAPI 키: ___\n비밀번호: ___", data_documents=[]),
+        model_client=FakeModelClient(
+            valid_payload(
+                filled_form=filled_form,
+                field_mappings=field_mappings,
+                unfilled_fields=[],
+                review_required=[],
+                warnings=[],
+            )
+        ),
+    )
+
+    # 1) General 6 lines preserved verbatim in filled_form.
+    for line in general_lines:
+        assert line in result.filled_form
+    # ... and the 2 secret lines appear only as the safe replacement (label gone).
+    assert "API 키: " not in result.filled_form
+    assert "비밀번호: " not in result.filled_form
+    assert result.filled_form.count(SAFE_SECRET_REPLACEMENT) == 2
+
+    # 2) field_mappings keeps all 8 entries (general kept, sensitive masked).
+    assert len(result.field_mappings) == 8
+
+    # 3) review_required includes the 2 sensitive fields.
+    assert "API 키" in result.review_required
+    assert "비밀번호" in result.review_required
+
+    # 5) No raw secret anywhere — payload grep AND runtime DLP re-scan on filled_form.
+    dumped = json.dumps(result.to_payload(), ensure_ascii=False)
+    assert "plain-secret-aaaa" not in dumped
+    assert "plain-secret-bbbb" not in dumped
+    assert not _scan_runtime(result.filled_form).any_detected
 
 
 def test_fill_form_allows_secret_label_only_when_unfilled_and_listed() -> None:
@@ -371,7 +457,9 @@ def test_fill_form_redacts_secret_label_values_in_filled_form_and_warnings() -> 
     assert "plain-secret-1234" not in dumped
     assert "abcdef123456" not in dumped
     assert "correct horse battery staple" not in dumped
-    assert result.filled_form == SAFE_SECRET_REPLACEMENT
+    # filled_form is rebuilt line-wise: both lines carry secret labels, so each
+    # collapses to the safe replacement (no single wholesale collapse, no leak).
+    assert result.filled_form.split("\n") == [SAFE_SECRET_REPLACEMENT, SAFE_SECRET_REPLACEMENT]
     assert dumped.count(SAFE_SECRET_REPLACEMENT) >= 2
 
 
