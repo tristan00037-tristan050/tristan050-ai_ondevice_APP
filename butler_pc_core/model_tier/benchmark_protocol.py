@@ -136,7 +136,7 @@ class RunSpec:
 
     @property
     def physical_model_key(self) -> str:
-        return MODEL_PHYSICAL_KEY[self.candidate_id]
+        return MODEL_PHYSICAL_KEY;self.candidate_id]
 
 
 def validate_role(box_id: str, candidate_id: str) -> None:
@@ -175,6 +175,55 @@ def load_fixtures(fixture_dir: Path) -> list[FixtureV2]:
         counts = {bucket: sum(item.complexity_bucket == bucket for item in rows) for bucket in expected_buckets}
         if any(value != 10 for value in counts.values()):
             raise ValueError(f"BOX{box_id}_FIXTURE_BUCKET_COUNT_INVALID")
+    manifest_path = fixture_dir / "fixture_pack_manifest.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        required_manifest = {
+            "schema_version", "canonical_fixture_pack_digest", "fixture_count",
+            "subject_app_sha", "synthetic_only", "runtime_activation_allowed",
+            "files", "fixture_pack_file_digest", "raw_text_logged", "external_send_zero",
+        }
+        if set(manifest) != required_manifest:
+            raise ValueError("FIXTURE_MANIFEST_EXACT_KEYS_REQUIRED")
+        if manifest["schema_version"] != "butler.model_tier_fixture_pack_manifest.v2":
+            raise ValueError("FIXTURE_MANIFEST_SCHEMA_INVALID")
+        if manifest["fixture_count"] != len(fixtures):
+            raise ValueError("FIXTURE_MANIFEST_COUNT_MISMATCH")
+        canonical = stable_digest([asdict(item) for item in sorted(fixtures, key=lambda x: x.fixture_id)])
+        if manifest["canonical_fixture_pack_digest"] != canonical:
+            raise ValueError("FIXTURE_MANIFEST_CANONICAL_DIGEST_MISMATCH")
+        if manifest["subject_app_sha"] != SUBJECT_APP_SHA:
+            raise ValueError("FIXTURE_MANIFEST_SUBJECT_SHA_MISMATCH")
+        if manifest["synthetic_only"] is not True or manifest["runtime_activation_allowed"] is not False:
+            raise ValueError("FIXTURE_MANIFEST_SAFETY_INVALID")
+        if manifest["raw_text_logged"] is not False or manifest["external_send_zero"] is not True:
+            raise ValueError("FIXTURE_MANIFEST_RAW_ZERO_INVALID")
+        listed = manifest["files"]
+        data_paths = sorted(path for path in paths if path.name != "fixture_pack_manifest.json")
+        if not isinstance(listed, list) or len(listed) != len(data_paths):
+            raise ValueError("FIXTURE_MANIFEST_FILES_INVALID")
+        expected_relative_paths = {str(path.relative_to(fixture_dir)) for path in data_paths}
+        observed_relative_paths: set[str] = set()
+        verified_file_digests: list[str] = []
+        for entry in listed:
+            if not isinstance(entry, dict) or set(entry) != {"path", "sha256"}:
+                raise ValueEError("FIXTURE_MANIFEST_FILE_ENTRY_INVALID")
+            rel = entry["path"]
+            if not isinstance(rel, str) or rel in observed_relative_paths:
+                raise ValueError("FIXTURE_MANIFEST_FILE_PATH_INVALID")
+            observed_relative_paths.add(rel)
+            file_path = fixture_dir / rel
+            if not file_path.is_file():
+                raise ValueError("FIXTURE_MANIFEST_FILE_MISSING")
+            digest = "sha256:" + hashlib.sha256(file_path.read_bytes()).hexdigest()
+            if entry["sha256"] != digest:
+                raise ValueError("FIXTURE_MANIFEST_FILE_DIGEST_MISMATCH")
+            verified_file_digests.append(digest)
+        if observed_relative_paths != expected_relative_paths:
+            raise ValueError("FIXTURE_MANIFEST_FILE_SET_MISMATCH")
+        file_digest = "sha256:" + hashlib.sha256("".join(verified_file_digests).encode("utf-8")).hexdigest()
+        if manifest["fixture_pack_file_digest"] != file_digest:
+            raise ValueError("FIXTURE_MANIFEST_PACK_FILE_DIGEST_MISMATCH")
     return fixtures
 
 
@@ -183,6 +232,11 @@ def fixture_pack_digest(fixtures: list[FixtureV2]) -> str:
 
 
 def build_plan(fixtures: list[FixtureV2], protocol: ProtocolConfigV2) -> list[RunSpec]:
+    """Build a deterministic thermally interleaved 1,206-run plan.
+
+    Process-cold is physical-model-level. Warm runs alternate boxes, candidates,
+    and iterations so one bucket/model does not monopolize a long thermal window.
+    """
     protocol.validate()
     box1 = sorted((item for item in fixtures if item.box_id == "1"), key=lambda x: x.fixture_id)
     box3 = sorted((item for item in fixtures if item.box_id == "3"), key=lambda x: x.fixture_id)
@@ -195,19 +249,32 @@ def build_plan(fixtures: list[FixtureV2], protocol: ProtocolConfigV2) -> list[Ru
     ):
         for index in range(protocol.cold_repetitions):
             runs.append(RunSpec(box_id, candidate, canary, "process_cold", index))
+
     rng = random.Random(protocol.seeded_shuffle)
     shuffled1, shuffled3 = list(box1), list(box3)
     rng.shuffle(shuffled1)
     rng.shuffle(shuffled3)
-    for left, right in zip(shuffled1, shuffled3):
-        for fixture, candidates in (
-            (left, ("box1_rule_model_none", "main_4b_general")),
-            (right, ("box3_1p7_v9_2_r2b", "box3_4b_repair")),
-        ):
-            for candidate in candidates:
-                validate_role(fixture.box_id, candidate)
-                for index in range(protocol.warm_repetitions):
-                    runs.append(RunSpec(fixture.box_id, candidate, fixture.fixture_id, "warm", index))
+    pairs = list(zip(shuffled1, shuffled3))
+    for iteration in range(protocol.warm_repetitions):
+        cycle = pairs if iteration % 2 == 0 else list(reversed(pairs))
+        for pair_index, (left, right) in enumerate(cycle):
+            box1_candidates = ("box1_rule_model_none", "main_4b_general")
+            box3_candidates = ("box3_1p7_v9_2_r2b", "box3_4b_repair")
+            if (iteration + pair_index) % 2:
+                box1_candidates = tuple(reversed(box1_candidates))
+                box3_candidates = tuple(reversed(box3_candidates))
+            for fixture, candidates in ((left, box1_candidates), (right, box3_candidates)):
+                for candidate in candidates:
+                    validate_role(fixture.box_id, candidate)
+                    runs.append(
+                        RunSpec(
+                            fixture.box_id,
+                            candidate,
+                            fixture.fixture_id,
+                            "warm",
+                            iteration,
+                        )
+                    )
     return runs
 
 
