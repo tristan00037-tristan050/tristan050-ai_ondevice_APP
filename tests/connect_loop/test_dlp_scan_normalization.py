@@ -98,6 +98,9 @@ def test_standard_sensitive_forms_keep_detecting(text: str) -> None:
         # 리뷰 P2: 계좌 문맥 + 무관한 날짜·시각이 공백 경계를 넘어 하나의 긴 숫자열로
         # 병합되어 계좌번호로 오탐되면 안 된다.
         "계좌 양식 검토. 보고일은 2026-07-04 12:30입니다",
+        # #858 병합 후 P1: 문장 종결어가 없어도 날짜와 시각 자체가 병합 경계여야 한다.
+        "계좌 보고일은 2026-07-04 12:30",
+        "카드 갱신일은 04/07/2026 12:30:45",
     ],
 )
 def test_false_positive_control_group_passes(text: str) -> None:
@@ -165,6 +168,14 @@ def test_conditional_merge_v5_context_gated_space_hyphen_account() -> None:
     assert v5("110 - 234 - 567890") == "110 - 234 - 567890"
     # 계좌 문맥 X: 날짜·시각은 여전히 경계로 남아 오탐이 없다.
     assert v5("2026-07-04 12:30") == "20260704 1230"
+    # 계좌 문맥 O여도 날짜·시각은 구조화 계좌 조각으로 승격하지 않는다.
+    assert v5("계좌 보고일은 2026-07-04 12:30") == "계좌 보고일은 20260704 1230"
+
+
+def test_runtime_gate_excludes_date_time_tokens_even_with_account_context() -> None:
+    variants = scan_variants("계좌 보고일은 2026-07-04 12:30", runtime_optimized=True)
+
+    assert [variant.variant_id for variant in variants] == ["v0_raw"]
 
 
 @pytest.mark.parametrize(
