@@ -261,6 +261,8 @@ def _is_standalone_date_or_time_token(token: str) -> bool:
     values = tuple(int(part) for part in parts)
     lengths = tuple(len(part) for part in parts)
     if ":" in token:
+        if token != ":".join(parts):
+            return False
         if len(parts) not in {2, 3} or lengths not in {(1, 2), (2, 2), (1, 2, 2), (2, 2, 2)}:
             return False
         hour, minute, *seconds = values

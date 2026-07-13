@@ -178,6 +178,16 @@ def test_runtime_gate_excludes_date_time_tokens_even_with_account_context() -> N
     assert [variant.variant_id for variant in variants] == ["v0_raw"]
 
 
+def test_mixed_separator_account_with_colon_is_not_exempted_as_time() -> None:
+    text = "계좌 12-34:56 7890"
+
+    assert scan_runtime_text(text)["passed"] is False
+    assert any(
+        variant.variant_id == "v5_conditional_merge" and "1234567890" in variant.text
+        for variant in scan_variants(text, runtime_optimized=True)
+    )
+
+
 @pytest.mark.parametrize(
     "text",
     [
