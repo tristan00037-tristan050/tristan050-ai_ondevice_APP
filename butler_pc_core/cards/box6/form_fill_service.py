@@ -32,6 +32,10 @@ REQUIRED_TOP_LEVEL_KEYS = frozenset(
     {"schema_version", "filled_form", "field_mappings", "unfilled_fields", "review_required", "warnings"}
 )
 REQUIRED_MAPPING_KEYS = frozenset({"target_label", "output_value", "confidence", "source_ref", "reason_code"})
+# reason_code stamped on a sensitive field that was masked at field level (the
+# field's value is replaced with SAFE_SECRET_REPLACEMENT) instead of aborting the
+# whole form. Kept as an explicit constant so downstream consumers can key on it.
+SENSITIVE_FIELD_MASKED_REASON = "SENSITIVE_FIELD_MASKED"
 MAX_MAPPINGS = 80
 MAX_TEXT_CHARS = 20000
 MAX_FIELD_CHARS = 2000
@@ -248,6 +252,7 @@ def _validate_form_fill_payload(payload: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("CONFIDENCE_INVALID")
         target_label = _require_string(item["target_label"], "TARGET_LABEL_INVALID")
         output_value = _require_string(item["output_value"], "OUTPUT_VALUE_INVALID")
+        override_reason_code: Optional[str] = None
         if _is_secret_target_label(target_label):
             raw_output_value = str(item["output_value"]).strip()
             label_key = _label_key(target_label)
@@ -255,11 +260,15 @@ def _validate_form_fill_payload(payload: dict[str, Any]) -> dict[str, Any]:
             is_listed_unfilled = label_key in unfilled_field_keys
             is_review_listed = label_key in review_required_keys
             is_quarantined = is_listed_unfilled and (is_review_listed or bool(review_required))
-            if not is_unfilled_value and not is_quarantined:
-                raise ValueError("SENSITIVE_FIELD_AUTOFILL_BLOCKED")
-            if not review_required and not is_listed_unfilled:
-                raise ValueError("SENSITIVE_FIELD_AUTOFILL_BLOCKED")
-            if not is_unfilled_value:
+            # Same detection as before — unchanged. Only the *handling* differs:
+            # a blocked sensitive field is masked at field level and the reason is
+            # recorded, rather than aborting the whole (possibly mixed) form.
+            autofill_blocked = not is_unfilled_value and not is_quarantined
+            not_review_isolated = not review_required and not is_listed_unfilled
+            if autofill_blocked or not_review_isolated:
+                output_value = SAFE_SECRET_REPLACEMENT
+                override_reason_code = SENSITIVE_FIELD_MASKED_REASON
+            elif not is_unfilled_value:
                 output_value = SAFE_SECRET_REPLACEMENT
         field_mappings.append(
             {
@@ -267,7 +276,9 @@ def _validate_form_fill_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "output_value": output_value,
                 "confidence": str(confidence),
                 "source_ref": _require_string(item["source_ref"], "SOURCE_REF_INVALID"),
-                "reason_code": _require_string(item["reason_code"], "REASON_CODE_INVALID"),
+                "reason_code": override_reason_code
+                if override_reason_code is not None
+                else _require_string(item["reason_code"], "REASON_CODE_INVALID"),
             }
         )
 
