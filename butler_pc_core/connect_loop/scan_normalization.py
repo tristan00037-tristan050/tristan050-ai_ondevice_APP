@@ -252,6 +252,39 @@ def _strip_separators(text: str) -> str:
     return _NUMERIC_SEPARATOR_RE.sub("", text)
 
 
+def _is_standalone_date_or_time_token(token: str) -> bool:
+    """Return True for complete calendar/time tokens that must remain boundaries."""
+    parts = _INTRA_TOKEN_SEPARATOR_RE.split(token)
+    if not parts or any(not part.isdecimal() for part in parts):
+        return False
+
+    values = tuple(int(part) for part in parts)
+    lengths = tuple(len(part) for part in parts)
+    if ":" in token:
+        if len(parts) not in {2, 3} or lengths not in {(1, 2), (2, 2), (1, 2, 2), (2, 2, 2)}:
+            return False
+        hour, minute, *seconds = values
+        return 0 <= hour <= 23 and 0 <= minute <= 59 and (not seconds or 0 <= seconds[0] <= 59)
+
+    if len(parts) != 3:
+        return False
+    if lengths[0] == 4 and lengths[1] in {1, 2} and lengths[2] in {1, 2}:
+        _year, month, day = values
+        return 1 <= month <= 12 and 1 <= day <= 31
+    if lengths[2] == 4 and lengths[0] in {1, 2} and lengths[1] in {1, 2}:
+        day, month, _year = values
+        return 1 <= month <= 12 and 1 <= day <= 31
+    return False
+
+
+def _mergeable_structured_numeric_token(token: str) -> str | None:
+    """Return compact digits only for structured account/card candidates."""
+    stripped = _NUMERIC_SEPARATOR_RE.sub("", token)
+    if stripped == token or not stripped.isdecimal() or _is_standalone_date_or_time_token(token):
+        return None
+    return stripped
+
+
 def _strip_separators_conditional_merge(text: str) -> str:
     """v5: 공백으로 나뉜 '원시 숫자 토큰'끼리만 병합한다.
 
@@ -283,10 +316,11 @@ def _strip_separators_conditional_merge(text: str) -> str:
         stripped = _NUMERIC_SEPARATOR_RE.sub("", token)
         is_structured = stripped != token  # 숫자 사이에 구분자가 있었으면 구조화된 토큰
         if is_structured:
-            if account_context and stripped.isdecimal():
+            mergeable = _mergeable_structured_numeric_token(token)
+            if account_context and mergeable is not None:
                 # 계좌 문맥 하에서만: 내부 구분자 제거 후 순수 숫자인 구조화 토큰도
-                # 이어붙임 후보로 포함한다(문맥 없으면 아래처럼 경계로 유지).
-                current.append(stripped)
+                # 이어붙임 후보로 포함한다. 날짜·시각 토큰은 항상 경계로 유지한다.
+                current.append(mergeable)
                 continue
             if current:
                 groups.append(current)
@@ -331,8 +365,8 @@ def _has_runtime_numeric_candidate(text: str) -> bool:
         for token in _WHITESPACE_RE.split(text):
             if token and not _INTRA_TOKEN_SEPARATOR_RE.sub("", token):
                 continue  # 순수 구분자 토큰("-" 등)은 병합 경계가 아니다.
-            stripped = _NUMERIC_SEPARATOR_RE.sub("", token)
-            if stripped.isdecimal():
+            stripped = token if token.isdecimal() else _mergeable_structured_numeric_token(token)
+            if stripped is not None:
                 digit_run += len(stripped)
                 if digit_run >= 10:
                     return True
