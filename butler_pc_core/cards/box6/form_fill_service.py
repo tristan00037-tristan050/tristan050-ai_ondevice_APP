@@ -11,6 +11,7 @@ from typing import Any, List, Optional
 from butler_pc_core.dlp.runtime import (
     SAFE_SECRET_REPLACEMENT,
     redact_fail_closed as _redact_secret_value,
+    scan_runtime as _scan_runtime,
 )
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.prompts.cards import load_card_prompt
@@ -32,6 +33,10 @@ REQUIRED_TOP_LEVEL_KEYS = frozenset(
     {"schema_version", "filled_form", "field_mappings", "unfilled_fields", "review_required", "warnings"}
 )
 REQUIRED_MAPPING_KEYS = frozenset({"target_label", "output_value", "confidence", "source_ref", "reason_code"})
+# reason_code stamped on a sensitive field that was masked at field level (the
+# field's value is replaced with SAFE_SECRET_REPLACEMENT) instead of aborting the
+# whole form. Kept as an explicit constant so downstream consumers can key on it.
+SENSITIVE_FIELD_MASKED_REASON = "SENSITIVE_FIELD_MASKED"
 MAX_MAPPINGS = 80
 MAX_TEXT_CHARS = 20000
 MAX_FIELD_CHARS = 2000
@@ -162,6 +167,41 @@ def _label_key(value: str) -> str:
     return re.sub(r"\s+", "", value).casefold()
 
 
+def _rebuild_safe_filled_form(value: Any) -> str:
+    """Rebuild ``filled_form`` so sensitive-label lines are masked while general
+    lines are preserved, then fail-closed verify with the runtime DLP scanner.
+
+    The prior behavior ran ``filled_form`` through the shared scalar DLP redactor,
+    which collapses the *entire* body to a single ``SAFE_SECRET_REPLACEMENT`` when
+    any secret is present — losing every general field in a mixed form. Here we
+    only replace whole lines that carry a secret label (a bare placeholder line,
+    not ``label: value`` — the latter still reads as a secret to the frontend
+    scanner). A final ``scan_runtime`` pass guarantees no raw secret survives; any
+    residual detected line (e.g. a raw token on a non-secret-label line) is masked
+    wholesale and the body re-verified. Detection reuses ``_is_secret_target_label``
+    and the DLP scanner unchanged — only the handling differs.
+    """
+    if not isinstance(value, str):
+        raise ValueError("FILLED_FORM_INVALID")
+    if len(value) > MAX_TEXT_CHARS:
+        raise ValueError("FILLED_FORM_INVALID_TOO_LONG")
+
+    candidate = "\n".join(
+        SAFE_SECRET_REPLACEMENT if (line.strip() and _is_secret_target_label(line)) else line
+        for line in value.split("\n")
+    )
+    if _scan_runtime(candidate).any_detected:
+        candidate = "\n".join(
+            SAFE_SECRET_REPLACEMENT
+            if (line.strip() and _scan_runtime(line).any_detected)
+            else line
+            for line in candidate.split("\n")
+        )
+    if _scan_runtime(candidate).any_detected:
+        return SAFE_SECRET_REPLACEMENT
+    return candidate
+
+
 def _extract_json_object(text: str) -> dict[str, Any]:
     source = str(text or "")
     start = source.find("{")
@@ -223,7 +263,9 @@ def _validate_form_fill_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if payload["schema_version"] != SCHEMA_VERSION:
         raise ValueError("SCHEMA_VERSION_INVALID")
 
-    filled_form = _require_string(payload["filled_form"], "FILLED_FORM_INVALID", max_len=MAX_TEXT_CHARS)
+    # Do not wholesale-redact filled_form (that collapses general fields too);
+    # rebuild it line-wise, masking only secret-label lines, then fail-closed verify.
+    filled_form = _rebuild_safe_filled_form(payload["filled_form"])
     unfilled_fields = _require_string_list(payload["unfilled_fields"], "UNFILLED_FIELDS_INVALID")
     review_required = _require_string_list(payload["review_required"], "REVIEW_REQUIRED_INVALID")
     warnings = _require_string_list(payload["warnings"], "WARNINGS_INVALID")
@@ -248,6 +290,7 @@ def _validate_form_fill_payload(payload: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("CONFIDENCE_INVALID")
         target_label = _require_string(item["target_label"], "TARGET_LABEL_INVALID")
         output_value = _require_string(item["output_value"], "OUTPUT_VALUE_INVALID")
+        override_reason_code: Optional[str] = None
         if _is_secret_target_label(target_label):
             raw_output_value = str(item["output_value"]).strip()
             label_key = _label_key(target_label)
@@ -255,11 +298,20 @@ def _validate_form_fill_payload(payload: dict[str, Any]) -> dict[str, Any]:
             is_listed_unfilled = label_key in unfilled_field_keys
             is_review_listed = label_key in review_required_keys
             is_quarantined = is_listed_unfilled and (is_review_listed or bool(review_required))
-            if not is_unfilled_value and not is_quarantined:
-                raise ValueError("SENSITIVE_FIELD_AUTOFILL_BLOCKED")
-            if not review_required and not is_listed_unfilled:
-                raise ValueError("SENSITIVE_FIELD_AUTOFILL_BLOCKED")
-            if not is_unfilled_value:
+            # Same detection as before — unchanged. Only the *handling* differs:
+            # a blocked sensitive field is masked at field level and the reason is
+            # recorded, rather than aborting the whole (possibly mixed) form.
+            autofill_blocked = not is_unfilled_value and not is_quarantined
+            not_review_isolated = not review_required and not is_listed_unfilled
+            if autofill_blocked or not_review_isolated:
+                output_value = SAFE_SECRET_REPLACEMENT
+                override_reason_code = SENSITIVE_FIELD_MASKED_REASON
+                # Enroll the masked field into top-level review_required so the
+                # frontend guard treats it as reviewed (not a whole-form block).
+                if label_key not in review_required_keys:
+                    review_required.append(target_label)
+                    review_required_keys.add(label_key)
+            elif not is_unfilled_value:
                 output_value = SAFE_SECRET_REPLACEMENT
         field_mappings.append(
             {
@@ -267,7 +319,9 @@ def _validate_form_fill_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "output_value": output_value,
                 "confidence": str(confidence),
                 "source_ref": _require_string(item["source_ref"], "SOURCE_REF_INVALID"),
-                "reason_code": _require_string(item["reason_code"], "REASON_CODE_INVALID"),
+                "reason_code": override_reason_code
+                if override_reason_code is not None
+                else _require_string(item["reason_code"], "REASON_CODE_INVALID"),
             }
         )
 

@@ -9,9 +9,11 @@ from butler_pc_core.cards.box6.form_fill_service import (
     REQUIRED_TOP_LEVEL_KEYS,
     SAFE_SECRET_REPLACEMENT,
     SCHEMA_VERSION,
+    SENSITIVE_FIELD_MASKED_REASON,
     FormFillInput,
     fill_form,
 )
+from butler_pc_core.dlp.runtime import scan_runtime as _scan_runtime
 from butler_pc_core.runtime.json_grammar import GrammarUnavailable
 
 
@@ -173,7 +175,10 @@ def test_fill_form_rejects_top_level_extra_key() -> None:
     assert result.warnings == ["SCHEMA_KEYS_INVALID"]
 
 
-def test_fill_form_blocks_secret_label_real_value_without_review_markers() -> None:
+def test_fill_form_masks_secret_label_real_value_without_review_markers() -> None:
+    # A sensitive field with a real value and no review markers is now masked at
+    # field level (not a whole-form abort): its value is replaced and the reason
+    # recorded, while the rest of the form keeps processing.
     mapping = dict(valid_payload()["field_mappings"][0])  # type: ignore[index]
     mapping.update(
         {
@@ -191,8 +196,178 @@ def test_fill_form_blocks_secret_label_real_value_without_review_markers() -> No
         ),
     )
 
-    assert result.filled_form == ""
-    assert result.warnings == ["SENSITIVE_FIELD_AUTOFILL_BLOCKED"]
+    # No whole-form abort: the form is still produced and no block warning is set.
+    assert result.filled_form != ""
+    assert result.warnings != ["SENSITIVE_FIELD_AUTOFILL_BLOCKED"]
+    # The sensitive field itself is masked with the explicit reason_code.
+    assert result.field_mappings[0]["output_value"] == SAFE_SECRET_REPLACEMENT
+    assert result.field_mappings[0]["reason_code"] == SENSITIVE_FIELD_MASKED_REASON
+    # The real secret value never appears anywhere in the output.
+    assert "plain-secret-1234" not in json.dumps(result.to_payload(), ensure_ascii=False)
+
+
+def test_fill_form_mixed_form_masks_only_sensitive_fields_no_whole_form_block() -> None:
+    # Mixed form: 6 general fields + 2 sensitive fields (both carrying real values
+    # and no review markers, i.e. the case that previously aborted the ENTIRE form).
+    # Expected new behavior: the 6 general fields fill normally, only the 2
+    # sensitive fields are masked, and there is zero whole-form block.
+    # General values are chosen to be non-PII so the DLP (#856) layer leaves them
+    # intact — this test isolates the field-level sensitive-label masking, not DLP.
+    general_fields = [
+        {"target_label": "납품업체명", "output_value": "주식회사 버틀러", "source_ref": "our_data.회사명"},
+        {"target_label": "대표이사", "output_value": "김대표", "source_ref": "our_data.대표"},
+        {"target_label": "주소", "output_value": "서울시 강남구 테헤란로 1", "source_ref": "our_data.주소"},
+        {"target_label": "담당부서", "output_value": "영업1팀", "source_ref": "our_data.부서"},
+        {"target_label": "고용형태", "output_value": "정규직", "source_ref": "our_data.고용"},
+        {"target_label": "등급", "output_value": "우수", "source_ref": "our_data.등급"},
+    ]
+    field_mappings = [
+        {
+            "target_label": g["target_label"],
+            "output_value": g["output_value"],
+            "confidence": "HIGH",
+            "source_ref": g["source_ref"],
+            "reason_code": "LABEL_SEMANTIC_MATCH",
+        }
+        for g in general_fields
+    ]
+    sensitive_fields = [
+        {"target_label": "API 키", "output_value": "plain-secret-aaaa", "source_ref": "our_data.api_key"},
+        {"target_label": "비밀번호", "output_value": "plain-secret-bbbb", "source_ref": "our_data.password"},
+    ]
+    field_mappings.extend(
+        {
+            "target_label": s["target_label"],
+            "output_value": s["output_value"],
+            "confidence": "HIGH",
+            "source_ref": s["source_ref"],
+            "reason_code": "LABEL_SEMANTIC_MATCH",
+        }
+        for s in sensitive_fields
+    )
+
+    result = fill_form(
+        FormFillInput(
+            blank_form="납품업체명: ___\nAPI 키: ___\n비밀번호: ___",
+            data_documents=["회사명: 주식회사 버틀러"],
+        ),
+        model_client=FakeModelClient(
+            valid_payload(
+                filled_form="납품업체명: 주식회사 버틀러\n대표이사: 김대표",
+                field_mappings=field_mappings,
+                unfilled_fields=[],
+                review_required=[],
+                warnings=[],
+            )
+        ),
+    )
+
+    # Zero whole-form block: all 8 fields survive and the form is produced.
+    assert result.filled_form != ""
+    assert result.warnings != ["SENSITIVE_FIELD_AUTOFILL_BLOCKED"]
+    assert len(result.field_mappings) == 8
+
+    by_label = {m["target_label"]: m for m in result.field_mappings}
+
+    # The 6 general fields keep their real values, untouched.
+    for g in general_fields:
+        assert by_label[g["target_label"]]["output_value"] == g["output_value"]
+        assert by_label[g["target_label"]]["reason_code"] != SENSITIVE_FIELD_MASKED_REASON
+
+    # The 2 sensitive fields are masked with the explicit reason_code.
+    for s in sensitive_fields:
+        assert by_label[s["target_label"]]["output_value"] == SAFE_SECRET_REPLACEMENT
+        assert by_label[s["target_label"]]["reason_code"] == SENSITIVE_FIELD_MASKED_REASON
+
+    # Gap ①: masked sensitive fields are auto-enrolled into review_required so the
+    # frontend guard treats them as reviewed rather than blocking the whole form.
+    for s in sensitive_fields:
+        assert s["target_label"] in result.review_required
+
+    # No sensitive value leaks anywhere in the returned payload.
+    dumped = json.dumps(result.to_payload(), ensure_ascii=False)
+    assert "plain-secret-aaaa" not in dumped
+    assert "plain-secret-bbbb" not in dumped
+
+
+def test_fill_form_mixed_filled_form_preserves_general_lines_and_masks_secret_lines() -> None:
+    # Gap ③ real scenario: the secret real values live in filled_form itself
+    # (6 general lines + 2 secret lines). The 1st-round test omitted this and so
+    # dodged the whole-form filled_form collapse. Expected: general lines preserved
+    # verbatim, secret lines shown only as the safe replacement, no raw leak.
+    filled_form = (
+        "납품업체명: 주식회사 버틀러\n"
+        "대표이사: 김대표\n"
+        "주소: 서울시 강남구 테헤란로 1\n"
+        "담당부서: 영업1팀\n"
+        "고용형태: 정규직\n"
+        "등급: 우수\n"
+        "API 키: plain-secret-aaaa\n"
+        "비밀번호: plain-secret-bbbb"
+    )
+    general_lines = [
+        "납품업체명: 주식회사 버틀러",
+        "대표이사: 김대표",
+        "주소: 서울시 강남구 테헤란로 1",
+        "담당부서: 영업1팀",
+        "고용형태: 정규직",
+        "등급: 우수",
+    ]
+    field_mappings = [
+        {
+            "target_label": tl,
+            "output_value": ov,
+            "confidence": "HIGH",
+            "source_ref": f"our_data.{i}",
+            "reason_code": "LABEL_SEMANTIC_MATCH",
+        }
+        for i, (tl, ov) in enumerate(
+            [
+                ("납품업체명", "주식회사 버틀러"),
+                ("대표이사", "김대표"),
+                ("주소", "서울시 강남구 테헤란로 1"),
+                ("담당부서", "영업1팀"),
+                ("고용형태", "정규직"),
+                ("등급", "우수"),
+                ("API 키", "plain-secret-aaaa"),
+                ("비밀번호", "plain-secret-bbbb"),
+            ]
+        )
+    ]
+
+    result = fill_form(
+        FormFillInput(blank_form="납품업체명: ___\nAPI 키: ___\n비밀번호: ___", data_documents=[]),
+        model_client=FakeModelClient(
+            valid_payload(
+                filled_form=filled_form,
+                field_mappings=field_mappings,
+                unfilled_fields=[],
+                review_required=[],
+                warnings=[],
+            )
+        ),
+    )
+
+    # 1) General 6 lines preserved verbatim in filled_form.
+    for line in general_lines:
+        assert line in result.filled_form
+    # ... and the 2 secret lines appear only as the safe replacement (label gone).
+    assert "API 키: " not in result.filled_form
+    assert "비밀번호: " not in result.filled_form
+    assert result.filled_form.count(SAFE_SECRET_REPLACEMENT) == 2
+
+    # 2) field_mappings keeps all 8 entries (general kept, sensitive masked).
+    assert len(result.field_mappings) == 8
+
+    # 3) review_required includes the 2 sensitive fields.
+    assert "API 키" in result.review_required
+    assert "비밀번호" in result.review_required
+
+    # 5) No raw secret anywhere — payload grep AND runtime DLP re-scan on filled_form.
+    dumped = json.dumps(result.to_payload(), ensure_ascii=False)
+    assert "plain-secret-aaaa" not in dumped
+    assert "plain-secret-bbbb" not in dumped
+    assert not _scan_runtime(result.filled_form).any_detected
 
 
 def test_fill_form_allows_secret_label_only_when_unfilled_and_listed() -> None:
@@ -282,7 +457,9 @@ def test_fill_form_redacts_secret_label_values_in_filled_form_and_warnings() -> 
     assert "plain-secret-1234" not in dumped
     assert "abcdef123456" not in dumped
     assert "correct horse battery staple" not in dumped
-    assert result.filled_form == SAFE_SECRET_REPLACEMENT
+    # filled_form is rebuilt line-wise: both lines carry secret labels, so each
+    # collapses to the safe replacement (no single wholesale collapse, no leak).
+    assert result.filled_form.split("\n") == [SAFE_SECRET_REPLACEMENT, SAFE_SECRET_REPLACEMENT]
     assert dumped.count(SAFE_SECRET_REPLACEMENT) >= 2
 
 
