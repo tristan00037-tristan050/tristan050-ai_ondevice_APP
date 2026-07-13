@@ -259,14 +259,35 @@ def _strip_separators_conditional_merge(text: str) -> str:
     이렇게 하면 '110 234 567890'(원시 토큰 3개)은 병합되어 탐지되고,
     '2026-07-04 12:30'(둘 다 구조화된 토큰)은 병합되지 않아 오탐이 없다.
     새 정규식·날짜 판별 없이 기존 신호(_INTRA_TOKEN_SEPARATOR_RE 매치 여부)만 사용한다.
+
+    단, 계좌/카드 문맥 단어(_CONFUSABLE_CONTEXT_TERMS["card_or_account"])가 텍스트에
+    있을 때만 병합을 완화하여 공백+하이픈 혼합 계좌도 탐지한다:
+      · 공백으로 분리된 순수 구분자 토큰("-" 등)은 병합 경계가 아니라 건너뛴다
+        ('입금 계좌 110 - 234 - 567890' → '...110234567890').
+      · 내부 구분자를 제거하면 순수 숫자가 되는 구조화 토큰도 이어붙임 후보로 포함한다
+        ('계좌 110-234 567890' → '계좌 110234567890').
+    문맥이 없으면 완화하지 않으므로(문맥 게이트) 날짜·시각 오탐은 0으로 유지된다.
+    여기서도 새 정규식·날짜 판별은 쓰지 않고 기존 문맥 단어 목록만 사용한다.
     """
+    account_context = any(
+        term in text.casefold() for term in _CONFUSABLE_CONTEXT_TERMS["card_or_account"]
+    )
     tokens = _WHITESPACE_RE.split(text)
     groups: list[list[str]] = []
     current: list[str] = []
     for token in tokens:
+        if account_context and token and not _INTRA_TOKEN_SEPARATOR_RE.sub("", token):
+            # 계좌 문맥 하에서만: 공백으로 분리된 순수 구분자 토큰("-" 등)은 병합 경계가
+            # 아니라 건너뛴다. 문맥이 없으면 아래 원래 경로로 떨어져 경계로 작동한다.
+            continue
         stripped = _NUMERIC_SEPARATOR_RE.sub("", token)
         is_structured = stripped != token  # 숫자 사이에 구분자가 있었으면 구조화된 토큰
         if is_structured:
+            if account_context and stripped.isdecimal():
+                # 계좌 문맥 하에서만: 내부 구분자 제거 후 순수 숫자인 구조화 토큰도
+                # 이어붙임 후보로 포함한다(문맥 없으면 아래처럼 경계로 유지).
+                current.append(stripped)
+                continue
             if current:
                 groups.append(current)
                 current = []
@@ -299,6 +320,24 @@ def _has_runtime_numeric_candidate(text: str) -> bool:
                 return True
         else:
             digit_run = 0
+
+    # 계좌/카드 문맥 하에서는 v5 조건부 병합이 공백+하이픈 혼합 계좌를 하나의 숫자열로
+    # 합치므로, 이 런타임 사전 게이트도 v5와 동일한 완화 규칙(순수 구분자 토큰은 건너뛰고,
+    # 내부 구분자 제거 후 순수 숫자가 되는 구조화 토큰은 이어 세기)으로 후보를 인정해야
+    # v5가 실제로 계산·탐지된다. 문맥이 없으면 완화하지 않아 날짜·시각 오탐은 0으로 유지된다.
+    # 새 정규식·날짜 판별 없이 기존 신호·문맥 단어 목록만 사용한다.
+    if any(term in text.casefold() for term in _CONFUSABLE_CONTEXT_TERMS["card_or_account"]):
+        digit_run = 0
+        for token in _WHITESPACE_RE.split(text):
+            if token and not _INTRA_TOKEN_SEPARATOR_RE.sub("", token):
+                continue  # 순수 구분자 토큰("-" 등)은 병합 경계가 아니다.
+            stripped = _NUMERIC_SEPARATOR_RE.sub("", token)
+            if stripped.isdecimal():
+                digit_run += len(stripped)
+                if digit_run >= 10:
+                    return True
+            else:
+                digit_run = 0
     return False
 
 

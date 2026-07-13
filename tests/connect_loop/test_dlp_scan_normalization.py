@@ -153,6 +153,55 @@ def test_conditional_merge_v5_raw_tokens_merge_structured_are_boundaries() -> No
     assert v5("123-456 7890") == "123456 7890"
 
 
+def test_conditional_merge_v5_context_gated_space_hyphen_account() -> None:
+    # 마지막 구멍: 공백+하이픈 혼합 계좌. 계좌 문맥이 있을 때만 병합을 완화한다.
+    from butler_pc_core.connect_loop.scan_normalization import _strip_separators_conditional_merge as v5
+
+    # 계좌 문맥 O: 공백으로 분리된 단독 구분자('-')는 건너뛰고 원시 토큰이 병합된다.
+    assert v5("입금 계좌 110 - 234 - 567890") == "입금 계좌 110234567890"
+    # 계좌 문맥 O: 내부 구분자 제거 후 순수 숫자인 구조화 토큰도 이어붙임 후보가 된다.
+    assert v5("계좌 110-234 567890") == "계좌 110234567890"
+    # 계좌 문맥 X: 완화하지 않으므로 병합되지 않는다(문맥 게이트).
+    assert v5("110 - 234 - 567890") == "110 - 234 - 567890"
+    # 계좌 문맥 X: 날짜·시각은 여전히 경계로 남아 오탐이 없다.
+    assert v5("2026-07-04 12:30") == "20260704 1230"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # 검증1: 계좌 문맥 + 공백/하이픈 혼합 계좌 → 반드시 탐지된다.
+        "입금 계좌 110 - 234 - 567890",
+        "계좌 110-234 567890",
+    ],
+)
+def test_space_hyphen_mixed_account_with_context_is_detected(text: str) -> None:
+    assert scan_runtime_text(text)["passed"] is False
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # 검증2: 날짜·시각(계좌 문맥 없음) → 병합/오탐 0.
+        "2026-07-04 12:30",
+        # 검증5: 공백+하이픈 숫자열이지만 계좌 문맥이 없으면 → 병합/탐지 안 함(문맥 게이트).
+        "110 - 234 - 567890",
+    ],
+)
+def test_space_hyphen_without_account_context_stays_clean(text: str) -> None:
+    assert scan_runtime_text(text) == {
+        "passed": True,
+        "pii_detected": False,
+        "secret_detected": False,
+        "policy_violation": False,
+    }
+
+
+def test_space_hyphen_fix_does_not_regress_pure_space_account() -> None:
+    # 검증3: 기존 순수 공백 삽입 계좌는 회귀 없이 계속 탐지된다.
+    assert scan_runtime_text("계좌 110 234 567890")["passed"] is False
+
+
 def test_separator_normalization_preserves_whitespace_boundaries() -> None:
     # 리뷰 P2: 공백으로 분리된 무관한 필드는 하나의 숫자열로 병합되지 않는다.
     v4 = [v.text for v in scan_variants("2026-07-04 12:30") if v.variant_id == "v4_separators_removed"]
