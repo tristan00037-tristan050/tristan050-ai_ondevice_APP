@@ -69,6 +69,7 @@ from butler_pc_core.inference.model_identity import (
     sidecar_model_status_payload,
 )
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
+from butler_pc_core.build_info import build_info
 from butler_pc_core.fail_class import FailClass, fail_payload, map_legacy_to_fail_class
 from butler_pc_core.auth.capability_token import (
     CapabilityTokenError,
@@ -475,7 +476,14 @@ if _FASTAPI_AVAILABLE:
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "service": "butler-pc-core-sidecar", "version": "0.9.0"}
+        info = build_info()
+        return {
+            "status": "ok",
+            "service": "butler-pc-core-sidecar",
+            "version": "0.9.0",
+            "build_base_commit_oid": info["build_base_commit_oid"],
+            "build_timestamp_utc": info["build_timestamp_utc"],
+        }
 
     @app.get("/api/sidecar/health")
     def sidecar_health():
@@ -491,6 +499,7 @@ if _FASTAPI_AVAILABLE:
             "status": "ok",
             "service": "butler-pc-core-sidecar",
             "version": "0.9.0",
+            "build_base_commit_oid": build_info()["build_base_commit_oid"],
             "model_status": model_payload["status"],
             "model_role": model_payload["model_role"],
             "model_family": model_payload["model_family"],
