@@ -1,0 +1,158 @@
+name: Model Tier B Bench Harness
+
+# Adapted from Algorithm Team 12 v2.8.0's 12-job contract
+# (bench/model_tier_b/ci-reference/model-tier-b-v28.full-contract.yml) to the
+# product repository: bench isolated under bench/model_tier_b/, Linux-runnable
+# authoritative subset only, plus audit v2.9 repo-level additions
+# (F-004 git blob-in-tree self-check, F-003 structural/semantic split,
+# F-012 raw-log/JUnit/coverage retention + OIDC build provenance attestation).
+# Jobs needing macOS runners, cosign secrets, or the real product module are kept
+# in the reference contract and run by the owner at M3 time; they are not part of
+# this always-green PR pipeline. RUNTIME_ACTIVATION_ALLOWED stays 0 throughout.
+
+on:
+  pull_request:
+    paths:
+      - "bench/model_tier_b/**"
+      - ".github/workflows/model-tier-b-bench.yml"
+  push:
+    branches: ["feat/model-tier-b-bench-harness"]
+    paths:
+      - "bench/model_tier_b/**"
+      - ".github/workflows/model-tier-b-bench.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+    working-directory: bench/model_tier_b
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONPATH: ".:tests"
+
+jobs:
+  source_provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Committed tree is clean
+        run: test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      - name: Git object integrity
+        run: git fsck --full && git rev-parse HEAD^{commit} HEAD^{tree} --show-object-format
+
+  compile_type_lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Byte-compile all bench sources
+        run: python -m compileall -q butler_bench offline_verifier scripts tests
+      - name: Offline verifier imports no producer module
+        run: python -c 'from pathlib import Path; from butler_bench.independence import assert_offline_verifier_independent; assert_offline_verifier_independent(Path("offline_verifier/verify.py"))'
+
+  unit_and_attack_matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Install test/report tooling (CI-only; package stays dependency-free)
+        run: python -m pip install --quiet pytest pytest-cov
+      - name: Run full bench suite with raw log, JUnit XML, coverage
+        run: |
+          mkdir -p reports
+          set -o pipefail
+          python -m pytest tests/ \
+            --junitxml=reports/junit.xml \
+            --cov=butler_bench --cov=offline_verifier \
+            --cov-report=xml:reports/coverage.xml \
+            --cov-report=term 2>&1 | tee reports/pytest-raw.log
+      - name: Preserve raw log + JUnit + coverage (F-012)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-test-evidence
+          path: bench/model_tier_b/reports/
+          if-no-files-found: error
+
+  git_blob_in_tree_selfcheck:
+    # Audit F-004: prove a committed bench blob is actually contained in the
+    # HEAD commit tree via git plumbing (git cat-file / ls-tree / rev-parse),
+    # exercising the same verify_blob_in_commit_tree path the M3 preflight uses.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Verify blob-in-commit-tree binding
+        env:
+          HEAD_OID: ${{ github.sha }}
+        run: |
+          FULL_OID="$(git rev-parse HEAD^{commit})"
+          python - "$FULL_OID" <<'PY'
+          import sys
+          from pathlib import Path
+          from butler_bench.product_bridge import verify_blob_in_commit_tree
+          commit_oid = sys.argv[1]
+          target = Path("butler_bench/product_bridge.py").resolve(strict=True)
+          binding = verify_blob_in_commit_tree(target, commit_oid)
+          assert binding["git_toplevel_relative_path"].endswith("bench/model_tier_b/butler_bench/product_bridge.py"), binding
+          print("GIT_BLOB_MATCH=1", binding["object_format"], binding["commit_tree_blob_oid"])
+          PY
+
+  offline_semantic_split:
+    # Audit F-003: structural and semantic verdicts are reported separately and
+    # M3_EVIDENCE_VALID stays 0 until external-observer semantics are supplied.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Structural/semantic split unit + end-to-end
+        run: python -m unittest -v test_repo_level_p0_v29
+
+  package_from_git_object:
+    runs-on: ubuntu-latest
+    needs: [source_provenance, compile_type_lint, unit_and_attack_matrix, git_blob_in_tree_selfcheck, offline_semantic_split]
+    outputs:
+      release_sha256: ${{ steps.digest.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Deterministic package from the git commit object
+        run: ./scripts/package_from_git.sh "$(git rev-parse HEAD^{commit})" release-package
+      - id: digest
+        run: echo "sha256=$(sha256sum release-package/release.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-payload
+          path: bench/model_tier_b/release-package/
+          if-no-files-found: error
+
+  provenance_attestation:
+    # Audit F-012 / v2.9(9): GitHub OIDC build-provenance attestation over the
+    # packaged release artifact. "가능 시" — runs on same-repo events where an
+    # OIDC token is available.
+    runs-on: ubuntu-latest
+    needs: [package_from_git_object]
+    if: github.event.pull_request.head.repo.fork == false
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Rebuild release artifact for attestation
+        run: ./scripts/package_from_git.sh "$(git rev-parse HEAD^{commit})" release-package
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: bench/model_tier_b/release-package/release.tar.gz

@@ -1,0 +1,1 @@
+{"contract_rows_valid":60,"expected_rows":60,"matrix_sha256":"115c63be51ef5d12ad1f11e72c3633c7f931d94a99af8b4d90820d83d26f96dd","observed_rows":60,"problems":[],"schema_version":"butler.model-tier-b.attack-contract-lint.v2.8.1","scope":"contract-lint-not-target-execution","status":"PASS","target_attacks_executed":0}

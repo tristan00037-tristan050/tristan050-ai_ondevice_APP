@@ -1,0 +1,14 @@
+{
+  "schema_version": "butler.model-tier-b.delivery-source-provenance.v2.8.1",
+  "repository_object_format": "sha1",
+  "base_commit_oid": "d19badcd587970d172043c38322dfee02be1a3d8",
+  "base_tree_oid": "2e0fde951bc2ac66f64ad7c6eb4ecf1ddac42e8a",
+  "v2_6_commit_oid": "66fd83e6a18c9f72b9f5f6a453892277048138c6",
+  "v2_8_1_commit_oid": "c119ba8f36ea8300620f9420c34f55202a810b01",
+  "v2_8_1_tree_oid": "6fdb22fccdb81a5b73f219fcfcf7d2041d8f7361",
+  "patch_subject_sha256": "1479a0a6030a17c724bd77bc1e04aabff5ff82c2453fafa3c04c75b4250db80a",
+  "fresh_apply_result": "PASS",
+  "full_tree_equivalence_claimed": false,
+  "full_tree_equivalence_reason": "archive reconstruction cannot preserve every gitlink/symlink object identity; file patch apply and tests are the accepted evidence",
+  "preexisting_unrelated_checkout_changes_preserved": 6
+}

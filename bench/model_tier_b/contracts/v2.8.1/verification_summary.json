@@ -1,0 +1,18 @@
+{
+  "schema_version": "butler.model-tier-b.delivery-verification.v2.8.1",
+  "verified_at_utc": "2026-07-14T00:00:00Z",
+  "base_commit_oid": "d19badcd587970d172043c38322dfee02be1a3d8",
+  "base_tree_oid": "2e0fde951bc2ac66f64ad7c6eb4ecf1ddac42e8a",
+  "implementation_commit_oid": "c119ba8f36ea8300620f9420c34f55202a810b01",
+  "implementation_tree_oid": "6fdb22fccdb81a5b73f219fcfcf7d2041d8f7361",
+  "cumulative_patch_sha256": "1479a0a6030a17c724bd77bc1e04aabff5ff82c2453fafa3c04c75b4250db80a",
+  "cumulative_files_changed": 40,
+  "cumulative_insertions": 3862,
+  "fresh_apply_check": "PASS",
+  "fresh_apply_local_tests": {"status": "PASS", "passed": 38, "failed": 0},
+  "json_contract_parse": {"status": "PASS", "files": 6},
+  "acceptance_contract": {"rows": 90, "target_executed": 0},
+  "attack_contract": {"rows": 60, "lint_passed": 60, "target_executed": 0},
+  "defects": {"total": 46, "p0": 28, "p1": 18, "closed_with_required_evidence": 0},
+  "claims": {"spec_pass": true, "local_contract_pass": true, "code_pass": false, "merge_ready": false, "m3_evidence_valid": false, "g1_ready": false, "runtime_activation_allowed": 0, "raw_persistence_count": 0, "external_send_count": 0}
+}

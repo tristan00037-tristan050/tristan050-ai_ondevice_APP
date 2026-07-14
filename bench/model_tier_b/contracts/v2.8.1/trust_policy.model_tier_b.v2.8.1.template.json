@@ -1,0 +1,11 @@
+{
+  "schema_version": "butler.model-tier-b.trust-policy.v2.8.1",
+  "mode": "keyless",
+  "issuer": "UNSET",
+  "identity": "UNSET",
+  "repository": "UNSET",
+  "workflow": "UNSET",
+  "ref": "UNSET",
+  "commit_oid": "UNSET",
+  "subject_sha256": "UNSET"
+}

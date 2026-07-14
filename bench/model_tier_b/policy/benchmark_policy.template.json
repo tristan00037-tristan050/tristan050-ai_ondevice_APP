@@ -1,0 +1,35 @@
+{
+  "schema_version": "butler.model-tier-b.benchmark-policy.v2.8",
+  "approval_status": "UNSET",
+  "approver_identity": "UNSET",
+  "approval_expiry_utc": "UNSET",
+  "fixture_manifest_sha256": "UNSET",
+  "candidates": {
+    "A": {
+      "variant_id": "UNSET",
+      "model_manifest_sha256": "UNSET",
+      "runtime_config_sha256": "UNSET"
+    },
+    "B": {
+      "variant_id": "UNSET",
+      "model_manifest_sha256": "UNSET",
+      "runtime_config_sha256": "UNSET"
+    }
+  },
+  "quality_floor_by_task": "UNSET",
+  "quality_noninferiority_margin_by_task": "UNSET",
+  "ttft_slo_ms_by_task": "UNSET",
+  "p95_e2e_slo_ms_by_task": "UNSET",
+  "peak_rss_limit_bytes": "UNSET",
+  "available_memory_floor_bytes": "UNSET",
+  "max_repair_rate": "UNSET",
+  "max_cascade_rate": "UNSET",
+  "worker_deadline_seconds": "UNSET",
+  "min_co_residency_seconds": "UNSET",
+  "sampler_interval_ms": "UNSET",
+  "max_missed_sample_ratio": "UNSET",
+  "tokenizer_manifest_sha256": "UNSET",
+  "bootstrap_seed": "UNSET",
+  "bootstrap_iterations": "UNSET",
+  "energy_required": false
+}

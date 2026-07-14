@@ -1,0 +1,14 @@
+{
+  "schema_version": "butler.model-tier-b.trust-policy.v2.8",
+  "mode": "UNSET",
+  "certificate_oidc_issuer": "UNSET",
+  "certificate_identity": "UNSET",
+  "repository": "UNSET",
+  "workflow": "UNSET",
+  "ref": "UNSET",
+  "commit_sha": "UNSET",
+  "subject_name": "release.tar.gz",
+  "subject_sha256": "UNSET",
+  "trusted_root_source": "UNSET",
+  "expiry_utc": "UNSET"
+}

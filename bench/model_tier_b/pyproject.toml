@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "butler-model-tier-b-bench"
+version = "2.8.0"
+description = "Fail-closed Butler on-device model-tier benchmark and evidence verifier"
+requires-python = ">=3.11"
+license = {text = "Proprietary - MyPuppy/AT Link internal use"}
+authors = [{name = "Butler Algorithm Team 12"}]
+dependencies = []
+
+[project.scripts]
+butler-model-tier-b = "butler_bench.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["butler_bench*"]
