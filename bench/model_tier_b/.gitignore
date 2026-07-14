@@ -1,7 +1,7 @@
-# generated coverage / profiler artifacts (R2-P1-013)
 .coverage
 .coverage.*
 reports/
 htmlcov/
 __pycache__/
 *.pyc
+owner_e2e/_run_output/
