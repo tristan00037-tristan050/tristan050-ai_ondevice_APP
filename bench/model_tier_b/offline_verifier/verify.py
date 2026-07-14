@@ -360,20 +360,65 @@ def _unavailable(present_types: list[str], external_required: list[str]) -> dict
     }
 
 
+TRUST_POLICY_SCHEMA = "butler.m3.trust-policy.v1"
+TRUST_POLICY_KEYS = {
+    "schema_version", "policy_id", "policy_version", "signature_algorithm",
+    "public_key_encoding", "public_key", "public_key_sha256",
+    "accepted_key_ids", "revoked_key_ids", "payload_type",
+}
+
+
+def _load_trust_policy(path: Path, expected_sha256: str) -> dict[str, Any]:
+    """PR861-R3 P0-A: the trust anchor is an EXTERNAL, SHA-pinned closed-world policy.
+
+    The verifier NEVER trusts a caller-supplied public key or the artifact's own copy.
+    The policy file's raw digest must equal the externally fixed expected_sha256; the
+    approved Ed25519 public key comes only from this policy; wildcard/empty accepted
+    sets are rejected.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        block(EXIT_PROTOCOL, "INDEPENDENT_VERIFY", "TRUST_POLICY_READ")
+    if not hmac.compare_digest(digest_bytes(raw), expected_sha256):
+        block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "TRUST_POLICY_DIGEST")
+    policy = read_json(path)
+    validate_json(policy)
+    if not isinstance(policy, dict) or set(policy) != TRUST_POLICY_KEYS or policy["schema_version"] != TRUST_POLICY_SCHEMA:
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "TRUST_POLICY_SCHEMA")
+    if policy["signature_algorithm"] != "Ed25519":
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "TRUST_POLICY_ALG")
+    approved = policy["public_key"]
+    if not isinstance(approved, str) or not re.fullmatch(r"[0-9a-f]{64}", approved):
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "TRUST_POLICY_KEY")
+    if not hmac.compare_digest(policy["public_key_sha256"], digest_bytes(bytes.fromhex(approved))):
+        block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "TRUST_POLICY_KEY_DIGEST")
+    for field in ("accepted_key_ids", "revoked_key_ids"):
+        value = policy[field]
+        if not isinstance(value, list) or any(not isinstance(item, str) or not re.fullmatch(r"[0-9a-f]{64}", item) for item in value):
+            block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "TRUST_POLICY_KEY_IDS")
+    if not policy["accepted_key_ids"] or "*" in policy["accepted_key_ids"]:
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "TRUST_POLICY_WILDCARD")
+    if digest_bytes(bytes.fromhex(approved)) not in set(policy["accepted_key_ids"]):
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "TRUST_POLICY_APPROVED_NOT_ACCEPTED")
+    return policy
+
+
 def verify_m3_semantic(
     receipts: dict[str, dict[str, Any]],
     *,
     bundle_path: Path | None = None,
-    expected_signer_public_key: str | None = None,
+    trust_policy_path: Path | None = None,
+    trust_policy_sha256: str | None = None,
 ) -> dict[str, Any]:
-    """PR861-R2 P0-006..009: trust-bounded semantic re-verification.
+    """PR861-R3 P0-A + R2 P0-006..009: trust-bounded semantic re-verification.
 
     Fail-closed to SEMANTIC_REVERIFICATION_UNAVAILABLE without a bundle. With a bundle:
 
-    - The signer public key pin is MANDATORY (R2-P0-009): the verifier holds only the
-      pinned Ed25519 public key and rejects any bundle key that differs. There is no
-      caller-supplied HMAC secret.
-    - The Ed25519 signature over the canonical unsigned bundle must verify.
+    - The approved signer public key comes ONLY from an external SHA-pinned trust
+      policy (P0-A). Caller-supplied keys and the artifact's own key are never trusted;
+      a revoked key id (e.g. the exposed owner seed) can never verify.
+    - The Ed25519 signature is verified against the APPROVED policy key.
     - bundle.run_id must equal EVERY receipt's run_id (R2-P0-007).
     - Every external-observer receipt DIGEST needs exactly one observation; extras,
       duplicates, and unobserved same-type receipts are blocked (R2-P0-008).
@@ -386,22 +431,32 @@ def verify_m3_semantic(
     if bundle_path is None:
         return _unavailable(present_types, external_required)
 
-    # Signer pin is mandatory and asymmetric — no optional path, no caller secret.
-    if not isinstance(expected_signer_public_key, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_signer_public_key):
-        block(EXIT_PROTOCOL, "INDEPENDENT_VERIFY", "SIGNER_PIN_REQUIRED")
-    public_key = bytes.fromhex(expected_signer_public_key)
+    # P0-A: external SHA-pinned trust policy is mandatory. No caller public key.
+    if trust_policy_path is None or not isinstance(trust_policy_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", trust_policy_sha256):
+        block(EXIT_PROTOCOL, "INDEPENDENT_VERIFY", "TRUST_POLICY_PIN_REQUIRED")
+    policy = _load_trust_policy(trust_policy_path, trust_policy_sha256)
+    approved_pub_hex = policy["public_key"]
+    approved_key = bytes.fromhex(approved_pub_hex)
+    revoked_ids = set(policy["revoked_key_ids"])
 
     bundle = read_json(bundle_path)
     validate_json(bundle)
     if not isinstance(bundle, dict) or set(bundle) != OBSERVATION_KEYS or bundle["schema_version"] != OBSERVATION_SCHEMA:
         block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_KEYS")
-    if not isinstance(bundle["signer_public_key_ed25519"], str) or not hmac.compare_digest(bundle["signer_public_key_ed25519"], expected_signer_public_key):
+    bundle_pub_hex = bundle["signer_public_key_ed25519"]
+    if not isinstance(bundle_pub_hex, str) or not re.fullmatch(r"[0-9a-f]{64}", bundle_pub_hex):
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_SIGNER_FORMAT")
+    bundle_key_id = digest_bytes(bytes.fromhex(bundle_pub_hex))
+    if bundle_key_id in revoked_ids:
+        block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "REVOKED_SIGNER")
+    if not hmac.compare_digest(bundle_pub_hex, approved_pub_hex) or bundle_key_id not in set(policy["accepted_key_ids"]):
         block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "OBSERVATION_SIGNER_UNTRUSTED")
     declared_sig = bundle["signature_ed25519"]
     if not isinstance(declared_sig, str) or not re.fullmatch(r"[0-9a-f]{128}", declared_sig):
         block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_SIGNATURE_FORMAT")
     unsigned = {name: value for name, value in bundle.items() if name != "signature_ed25519"}
-    if not ed25519_verify(public_key, canonical_bytes(unsigned), bytes.fromhex(declared_sig)):
+    # Verify against the APPROVED policy key, not the bundle's self-declared key.
+    if not ed25519_verify(approved_key, canonical_bytes(unsigned), bytes.fromhex(declared_sig)):
         block(EXIT_SECURITY, "SECURITY_PRIVACY", "FORGED_OBSERVATION_SIGNATURE")
 
     run_id = bundle["run_id"]
@@ -463,7 +518,8 @@ def verify_m3(
     root: Path,
     *,
     bundle_path: Path | None = None,
-    expected_signer_public_key: str | None = None,
+    trust_policy_path: Path | None = None,
+    trust_policy_sha256: str | None = None,
 ) -> dict[str, Any]:
     manifest = verify_manifest(root)
     graph = verify_receipts(root)
@@ -477,7 +533,8 @@ def verify_m3(
     semantic = verify_m3_semantic(
         graph["receipts"],
         bundle_path=bundle_path,
-        expected_signer_public_key=expected_signer_public_key,
+        trust_policy_path=trust_policy_path,
+        trust_policy_sha256=trust_policy_sha256,
     )
     m3_evidence_valid = 1 if structural["status"] == "M3_ARTIFACT_STRUCTURE_PASS" and semantic["status"] == "M3_SEMANTIC_PASS" else 0
     return {
@@ -508,7 +565,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("root", type=Path)
     parser.add_argument("--mode", choices=("m3-evidence", "code-delivery"), default="m3-evidence")
     parser.add_argument("--observation-bundle", type=Path, default=None)
-    parser.add_argument("--expected-signer-public-key", default=None)
+    parser.add_argument("--trust-policy", type=Path, default=None)
+    parser.add_argument("--trust-policy-sha256", default=None)
     args = parser.parse_args(argv)
     try:
         root = args.root.resolve(strict=True)
@@ -516,7 +574,8 @@ def main(argv: list[str] | None = None) -> int:
             result = verify_m3(
                 root,
                 bundle_path=args.observation_bundle.resolve(strict=True) if args.observation_bundle else None,
-                expected_signer_public_key=args.expected_signer_public_key,
+                trust_policy_path=args.trust_policy.resolve(strict=True) if args.trust_policy else None,
+                trust_policy_sha256=args.trust_policy_sha256,
             )
         else:
             result = verify_code_delivery(root)

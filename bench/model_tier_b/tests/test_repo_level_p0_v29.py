@@ -218,13 +218,28 @@ class SignedObservationSemanticTests(unittest.TestCase):
         bundle["signature_ed25519"] = signature
         return bundle, public
 
-    def _run(self, root: Path, tmp: Path, bundle: dict, pinned_pub: str):
+    def _trust_policy(self, tmp: Path, approved_pub: str, revoked_ids=()):  # ephemeral external SHA-pinned policy
+        approved_id = hashlib.sha256(bytes.fromhex(approved_pub)).hexdigest()
+        policy = {
+            "schema_version": "butler.m3.trust-policy.v1", "policy_id": "test", "policy_version": 1,
+            "signature_algorithm": "Ed25519", "public_key_encoding": "hex-raw-32",
+            "public_key": approved_pub, "public_key_sha256": approved_id,
+            "accepted_key_ids": [approved_id], "revoked_key_ids": list(revoked_ids),
+            "payload_type": "application/vnd.butler.m3-observation.v1+json",
+        }
+        text = json.dumps(policy, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        path = tmp / "trust_policy.json"
+        path.write_text(text, encoding="utf-8")
+        return path, hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    def _run(self, root: Path, tmp: Path, bundle: dict, approved_pub, *, revoked_ids=(), no_policy=False):
         bundle_path = tmp / "observation_bundle.json"
         bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
         argv = [sys.executable, str(ROOT / "offline_verifier" / "verify.py"), str(root), "--mode", "m3-evidence",
                 "--observation-bundle", str(bundle_path)]
-        if pinned_pub is not None:
-            argv += ["--expected-signer-public-key", pinned_pub]
+        if not no_policy and approved_pub is not None:
+            policy_path, policy_sha = self._trust_policy(tmp, approved_pub, revoked_ids)
+            argv += ["--trust-policy", str(policy_path), "--trust-policy-sha256", policy_sha]
         return subprocess.run(argv, capture_output=True, text=True, check=False, stdin=subprocess.DEVNULL)
 
     def _assert_blocked(self, completed, detail: str) -> None:
@@ -276,13 +291,63 @@ class SignedObservationSemanticTests(unittest.TestCase):
             tmp = Path(directory).resolve(); root = tmp / "evidence"; root.mkdir()
             verifier = _load_offline_verifier()
             meta = self._build_evidence(root)
-            # (a) verifier given no pin at all -> mandatory pin block
+            # (a) no external trust policy at all -> mandatory pin block (TRUST-ATK-02: caller key removed)
             bundle, pub = self._sign(verifier, meta)
-            self._assert_blocked(self._run(root, tmp, bundle, None), "SIGNER_PIN_REQUIRED")
-            # (b) attacker signs with their own key; verifier pinned to a different key
+            self._assert_blocked(self._run(root, tmp, bundle, None, no_policy=True), "TRUST_POLICY_PIN_REQUIRED")
+            # (b) attacker signs with their own key; policy approves a different key
             attacker, attacker_pub = self._sign(verifier, meta, seed=bytes(range(2, 34)))
             legit_pub = verifier.ed25519_publickey(_SIGNER_SEED).hex()
             self._assert_blocked(self._run(root, tmp, attacker, legit_pub), "OBSERVATION_SIGNER_UNTRUSTED")
+
+    # The exposed round-3 owner PUBLIC key (public value; the private seed is NOT in the
+    # repository). Revocation is checked before signature verification, so proving the
+    # block needs only the public key + any signature.
+    _COMPROMISED_OLD_PUBLIC_KEY = "7b242f9778bbf9d1baa38a8026268be5566dff341e59bb3798db471c4cb282fa"
+
+    def _bundle_claiming_key(self, verifier, meta, pub_hex: str) -> dict:
+        observations = []
+        for receipt_type, entries in meta.items():
+            if receipt_type not in _EXTERNAL_TYPES:
+                continue
+            for info in entries:
+                receipt = json.loads(Path(info["path"]).read_text(encoding="utf-8"))
+                observations.append(self._observation(verifier, info["digest"], receipt_type, receipt))
+        return {
+            "schema_version": _OBSERVATION_SCHEMA, "run_id": "run",
+            "signer_public_key_ed25519": pub_hex, "observations": observations,
+            "signature_ed25519": "0" * 128,  # signature irrelevant: revocation blocks first
+        }
+
+    def test_TRUST_ATK_01_revoked_compromised_owner_key_block(self) -> None:
+        # A bundle claiming the exposed owner key is REVOKED before any signature check
+        # (§2.3 / verification 2) — no private seed needed to demonstrate the block.
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory).resolve(); root = tmp / "evidence"; root.mkdir()
+            verifier = _load_offline_verifier()
+            meta = self._build_evidence(root)
+            bundle = self._bundle_claiming_key(verifier, meta, self._COMPROMISED_OLD_PUBLIC_KEY)
+            old_id = hashlib.sha256(bytes.fromhex(self._COMPROMISED_OLD_PUBLIC_KEY)).hexdigest()
+            legit_pub = verifier.ed25519_publickey(_SIGNER_SEED).hex()
+            self._assert_blocked(self._run(root, tmp, bundle, legit_pub, revoked_ids=[old_id]), "REVOKED_SIGNER")
+
+    def test_TRUST_ATK_forge_against_committed_production_policy_block(self) -> None:
+        # The auditor forge against the COMMITTED production policy (approved key
+        # unprovisioned, old key revoked): a bundle claiming the old key BLOCKS.
+        policy_path = ROOT / "policy" / "m3_owner_trust_policy.json"
+        policy_sha = hashlib.sha256(policy_path.read_bytes()).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory).resolve(); root = tmp / "evidence"; root.mkdir()
+            verifier = _load_offline_verifier()
+            meta = self._build_evidence(root)
+            bundle = self._bundle_claiming_key(verifier, meta, self._COMPROMISED_OLD_PUBLIC_KEY)
+            bundle_path = tmp / "observation_bundle.json"
+            bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "offline_verifier" / "verify.py"), str(root), "--mode", "m3-evidence",
+                 "--observation-bundle", str(bundle_path), "--trust-policy", str(policy_path), "--trust-policy-sha256", policy_sha],
+                capture_output=True, text=True, check=False, stdin=subprocess.DEVNULL,
+            )
+            self._assert_blocked(completed, "REVOKED_SIGNER")
 
     def test_ATK_068_extra_observation_not_in_receipts_block(self) -> None:
         def tamper(obs, meta, v):

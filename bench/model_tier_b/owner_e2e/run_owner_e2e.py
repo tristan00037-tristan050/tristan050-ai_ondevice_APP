@@ -35,8 +35,39 @@ MANDATORY = [
     "runtime_config_A", "runtime_config_B", "fixture_manifest", "schedule", "worker_event_stream_index",
     "cold_worker", "live_semantic_verify", "epoch", "dual_resident", "os_egress", "ci", "raw_scan", "final_verdict",
 ]
-_OWNER_SEED = bytes.fromhex("b7" * 32)  # owner/parent-observer Ed25519 seed (local-owner trust anchor)
+# P0-A: NO signing seed in the repository. The production private key lives only in an
+# external, owner-owned 0600 file outside the repo (Keychain/HSM at M3); its path is
+# passed via BUTLER_BENCH_SIGNING_KEY_FILE. Absent it, the observation bundle cannot be
+# produced and this run is a structural-only DIAGNOSTIC (no semantic PASS).
 _SHA = "0" * 64
+
+
+def _load_external_signing_seed():
+    env = os.environ.get("BUTLER_BENCH_SIGNING_KEY_FILE")
+    if not env:
+        return None
+    path = Path(env)
+    if path.is_symlink():
+        raise OwnerBlock("BLOCKED_SIGNING_KEY_NOT_PROVISIONED:symlink")
+    resolved = path.resolve(strict=True)
+    if REPO_ROOT == resolved or REPO_ROOT in resolved.parents:
+        raise OwnerBlock("BLOCKED_SIGNING_KEY_NOT_PROVISIONED:inside_repo")
+    stat = resolved.stat()
+    if not resolved.is_file() or stat.st_uid != os.getuid() or stat.st_nlink != 1 or (stat.st_mode & 0o077) != 0:
+        raise OwnerBlock("BLOCKED_SIGNING_KEY_NOT_PROVISIONED:file_constraints")
+    raw = resolved.read_text(encoding="utf-8").strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", raw):
+        raise OwnerBlock("BLOCKED_SIGNING_KEY_NOT_PROVISIONED:format")
+    return bytes.fromhex(raw)
+
+
+def _resolve_trust_policy():
+    env_path = os.environ.get("BUTLER_BENCH_TRUST_POLICY")
+    env_sha = os.environ.get("BUTLER_BENCH_TRUST_POLICY_SHA256")
+    if env_path and env_sha:
+        return Path(env_path).resolve(strict=True), env_sha
+    default = BENCH_ROOT / "policy" / "m3_owner_trust_policy.json"
+    return default, hashlib.sha256(default.read_bytes()).hexdigest()
 
 
 class OwnerBlock(RuntimeError):
@@ -183,26 +214,34 @@ def run(output_root: Path) -> dict:
     observations = [
         _observation(verifier, meta[t]["digest"], t, meta[t]["subject"], raw_by_type[t]) for t in EXTERNAL_TYPES
     ]
-    public = verifier.ed25519_publickey(_OWNER_SEED).hex()
-    unsigned = {"schema_version": verifier.OBSERVATION_SCHEMA, "run_id": run_id, "signer_public_key_ed25519": public, "observations": observations}
-    signature = verifier.ed25519_sign(_OWNER_SEED, verifier.canonical_bytes(unsigned)).hex()
-    bundle = dict(unsigned)
-    bundle["signature_ed25519"] = signature
-    bundle_path = evidence_root.parent / f"observation_bundle-{run_id}.json"
-    bundle_path.write_text(json.dumps(bundle, ensure_ascii=False), encoding="utf-8")
+    build_artifact_manifest(evidence_root)  # manifests receipts+profile+pointer only (bundle is outside the root)
 
-    build_artifact_manifest(evidence_root)
+    # P0-A: sign only with an EXTERNAL provisioned key; verify against an EXTERNAL
+    # SHA-pinned trust policy (never a caller-supplied key). No provisioned key =>
+    # no bundle => semantic UNAVAILABLE (structural-only diagnostic, never M3 PASS).
+    signing_seed = _load_external_signing_seed()
+    trust_policy_path, trust_policy_sha256 = _resolve_trust_policy()
+    production_signing_key_ready = signing_seed is not None
 
-    completed = subprocess.run(
-        [sys.executable, str(BENCH_ROOT / "offline_verifier" / "verify.py"), str(evidence_root), "--mode", "m3-evidence",
-         "--observation-bundle", str(bundle_path), "--expected-signer-public-key", public],
-        capture_output=True, text=True, check=False, stdin=subprocess.DEVNULL,
-    )
+    verifier_argv = [sys.executable, str(BENCH_ROOT / "offline_verifier" / "verify.py"), str(evidence_root), "--mode", "m3-evidence"]
+    if production_signing_key_ready:
+        public = verifier.ed25519_publickey(signing_seed).hex()
+        unsigned = {"schema_version": verifier.OBSERVATION_SCHEMA, "run_id": run_id, "signer_public_key_ed25519": public, "observations": observations}
+        signature = verifier.ed25519_sign(signing_seed, verifier.canonical_bytes(unsigned)).hex()
+        bundle = dict(unsigned)
+        bundle["signature_ed25519"] = signature
+        bundle_path = evidence_root.parent / f"observation_bundle-{run_id}.json"
+        bundle_path.write_text(json.dumps(bundle, ensure_ascii=False), encoding="utf-8")
+        verifier_argv += ["--observation-bundle", str(bundle_path), "--trust-policy", str(trust_policy_path), "--trust-policy-sha256", trust_policy_sha256]
+
+    completed = subprocess.run(verifier_argv, capture_output=True, text=True, check=False, stdin=subprocess.DEVNULL)
     verdict = json.loads(completed.stdout)
     structural_pass = verdict.get("structural", {}).get("status") == "M3_ARTIFACT_STRUCTURE_PASS"
-    semantic_pass = verdict.get("semantic", {}).get("status") == "M3_SEMANTIC_PASS"
-    # The independent verifier PASSED this smoke's evidence artifact (structural+semantic).
-    smoke_verifier_pass = completed.returncode == 0 and structural_pass and semantic_pass and verdict.get("m3_evidence_valid") == 1
+    semantic_status = verdict.get("semantic", {}).get("status")
+    semantic_pass = semantic_status == "M3_SEMANTIC_PASS"
+    # Owner E2E "passes" when the real path ran and structural evidence verified. Semantic
+    # PASS additionally requires a provisioned external key + external trust policy.
+    smoke_verifier_pass = completed.returncode == 0 and structural_pass
 
     return {
         "schema_version": "butler.bench.owner-result.v3",
@@ -213,7 +252,9 @@ def run(output_root: Path) -> dict:
         "artifact_manifest_sha256": json.loads((evidence_root / "artifact_manifest.jcs.json").read_text())["artifact_manifest_sha256"],
         "offline_verifier_exit_code": completed.returncode,
         "structural_verify": "PASS" if structural_pass else "FAIL",
-        "semantic_verify": "PASS" if semantic_pass else "FAIL",
+        "semantic_verify": "PASS" if semantic_pass else ("UNAVAILABLE_NO_PROVISIONED_KEY" if not production_signing_key_ready else "FAIL"),
+        "production_signing_key_ready": production_signing_key_ready,
+        "committed_signing_seed": False,
         "smoke_evidence_verifier_pass": bool(smoke_verifier_pass),
         "owner_e2e_pass": bool(smoke_verifier_pass),
         "imported_product_module_count": imported_product_count,
