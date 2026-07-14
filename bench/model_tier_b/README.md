@@ -4,25 +4,39 @@
 
 ## 현재 사실 판정
 
+이 하네스는 실제 저장소(`tristan00037-tristan050/tristan050-ai_ondevice_APP`)의 PR로
+적용됐고, 전용 GitHub Actions 워크플로가 raw pytest 로그·JUnit·coverage를 보존하며
+green입니다. base full SHA도 확인됐습니다. 제품 어댑터가 실제 Box3/DLP 함수에 도달하고
+관측 hook이 off/on byte-동일임을 통합시험으로 증명합니다. 아래 저장소 수준 사실은
+갱신하되, **M3 실측·G1은 여전히 BLOCK**이며 `RUNTIME_ACTIVATION_ALLOWED=0`을 유지합니다.
+
 ```text
-STATUS=HARNESS_LOCAL_VALIDATED_PRODUCT_AND_M3_BLOCKED
+STATUS=HARNESS_APPLIED_CI_GREEN_PRODUCT_ADAPTER_REACHED_M3_BLOCKED
 SPEC_REVIEW_PASS=YES
 HARNESS_LOCAL_CONTRACT_PASS=YES
-CODE_IMPLEMENTATION_PASS=NO
-BASE_FULL_SHA_RESOLVED=NO
+BASE_FULL_SHA_RESOLVED=YES
+CI_GREEN=YES
+CI_RAW_EVIDENCE_RETAINED=YES
+ACTUAL_PRODUCT_ADAPTER_PRESENT=YES
+ACTUAL_INTEGRATION_TEST_RUNNABLE=YES
+ENTRYPOINT_OWNER_BLOB_IN_TREE=YES
+SEMANTIC_SUCCESS_PATH_IMPLEMENTED=YES
+RELEASE_ARTIFACT_DSSE_BOUND=YES
 BENCHMARK_POLICY_COMPLETE=NO
 TRUST_POLICY_CONFIGURED=NO
-CI_GREEN=NO
 TARGET_M3_PREFLIGHT_PASS=NO
 M3_START_ALLOWED=NO
-ALL_46_DEFECTS_CLOSED=NO
+M3_PRODUCT_SAMPLE_COUNT=0
 M3_EVIDENCE_PASS=NO
 INDEPENDENT_M3_VERIFY_PASS=NO
 G1_READY=NO
 RUNTIME_ACTIVATION_ALLOWED=0
 ```
 
-`CODE_IMPLEMENTATION_PASS=NO`는 로컬 하네스가 없다는 뜻이 아닙니다. 실제 Butler 제품 저장소·전체 Git OID·승인 정책·승인 모델·서명 trust root·12-job CI 원본·M3 Max 실측 자료가 첨부되지 않았으므로, 지시서가 요구하는 제품 통합 완료를 주장하지 않는다는 뜻입니다.
+M3 관련 항목(`M3_*`, `G1_READY`, `TARGET_M3_PREFLIGHT_PASS`)이 여전히 `NO`인 것은,
+실제 Apple Silicon M3 실측·승인 정책값 확정·서명된 외부 관측 bundle이 이 PR 범위 밖
+(머지 후 대표가 직접 수행)이기 때문입니다. 벤치는 측정 도구이며 성능·품질 결론을 내리지
+않습니다.
 
 ## v2.8 핵심 구현
 

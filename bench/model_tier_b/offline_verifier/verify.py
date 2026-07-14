@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import json
 import re
 import sys
@@ -237,21 +238,99 @@ EXTERNAL_OBSERVER_RECEIPTS = frozenset({
 })
 
 
-def verify_m3_semantic(receipts: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    """F-003: semantic verification, reported separately from structural.
+OBSERVATION_SCHEMA = "butler.model-tier-b.external-observation.v2.9"
+OBSERVATION_KEYS = {"schema_version", "run_id", "signer_key_id", "observations", "observation_signature_hmac_sha256"}
+OBSERVATION_ENTRY_KEYS = {"receipt_sha256", "subject_sha256", "recomputed_digest", "observation_gap"}
 
-    Each receipt type is classified. Types that require external signed observation
-    cannot be re-executed offline and are marked EXTERNAL_OBSERVER_REQUIRED. The
-    semantic verdict is PASS only when every present receipt type has been semantically
-    re-executed and passed; otherwise it is fail-closed as UNAVAILABLE (never PASS on
-    structure alone).
+
+def _load_signer_key(path: Path) -> bytes:
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        block(EXIT_PROTOCOL, "INDEPENDENT_VERIFY", "SIGNER_KEY_READ")
+    if not re.fullmatch(r"[0-9a-f]{64}", raw):
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "SIGNER_KEY_FORMAT")
+    return bytes.fromhex(raw)
+
+
+def _unavailable(present_types: list[str], external_required: list[str]) -> dict[str, Any]:
+    return {
+        "status": "SEMANTIC_REVERIFICATION_UNAVAILABLE",
+        "receipt_type_results": {
+            receipt_type: ("EXTERNAL_OBSERVER_REQUIRED" if receipt_type in EXTERNAL_OBSERVER_RECEIPTS else "STRUCTURE_ONLY_RECHECKED")
+            for receipt_type in present_types
+        },
+        "external_observer_required": external_required,
+        "semantic_reexecuted": False,
+    }
+
+
+def verify_m3_semantic(
+    receipts: dict[str, dict[str, Any]],
+    *,
+    bundle_path: Path | None = None,
+    signer_key_path: Path | None = None,
+    expected_signer_key_id: str | None = None,
+) -> dict[str, Any]:
+    """F-003 / PR861-F002: semantic verification with a real success path.
+
+    Without a signed external observation bundle the verdict is fail-closed as
+    SEMANTIC_REVERIFICATION_UNAVAILABLE. With a bundle, the signer identity, HMAC
+    signature, per-receipt subject binding, and gap flags are all re-verified; only
+    when every present receipt type is re-executed against a matching, signed, gap-free
+    observation does the verdict become M3_SEMANTIC_PASS. Any missing observation,
+    forged signature, subject mismatch, or gap is a fail-closed BLOCK.
     """
     present_types = sorted({receipt["receipt_type"] for receipt in receipts.values()})
     external_required = sorted(set(present_types) & EXTERNAL_OBSERVER_RECEIPTS)
-    per_type = {
-        receipt_type: ("EXTERNAL_OBSERVER_REQUIRED" if receipt_type in EXTERNAL_OBSERVER_RECEIPTS else "STRUCTURE_ONLY_RECHECKED")
-        for receipt_type in present_types
-    }
+    if bundle_path is None:
+        return _unavailable(present_types, external_required)
+
+    if signer_key_path is None:
+        block(EXIT_PROTOCOL, "INDEPENDENT_VERIFY", "SIGNER_KEY_REQUIRED")
+    key = _load_signer_key(signer_key_path)
+    key_id = digest_bytes(key)
+    if expected_signer_key_id is not None and not hmac.compare_digest(str(expected_signer_key_id), key_id):
+        block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "OBSERVATION_SIGNER_UNTRUSTED")
+
+    bundle = read_json(bundle_path)
+    validate_json(bundle)
+    if not isinstance(bundle, dict) or set(bundle) != OBSERVATION_KEYS or bundle["schema_version"] != OBSERVATION_SCHEMA:
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_KEYS")
+    if not isinstance(bundle["signer_key_id"], str) or not hmac.compare_digest(bundle["signer_key_id"], key_id):
+        block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "OBSERVATION_SIGNER_IDENTITY")
+    unsigned = {name: value for name, value in bundle.items() if name != "observation_signature_hmac_sha256"}
+    expected_sig = hmac.new(key, canonical_bytes(unsigned), hashlib.sha256).hexdigest()
+    declared_sig = bundle["observation_signature_hmac_sha256"]
+    if not isinstance(declared_sig, str) or not hmac.compare_digest(expected_sig, declared_sig):
+        block(EXIT_SECURITY, "SECURITY_PRIVACY", "FORGED_OBSERVATION_SIGNATURE")
+
+    observations = bundle["observations"]
+    if not isinstance(observations, dict):
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_MAP")
+    receipts_by_type: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    for digest, receipt in receipts.items():
+        receipts_by_type.setdefault(receipt["receipt_type"], []).append((digest, receipt))
+
+    per_type: dict[str, str] = {}
+    for receipt_type in present_types:
+        entry = observations.get(receipt_type)
+        if entry is None:
+            block(EXIT_EVIDENCE, "INDEPENDENT_VERIFY", "MISSING_EXTERNAL_OBSERVATION")
+        if not isinstance(entry, dict) or set(entry) != OBSERVATION_ENTRY_KEYS:
+            block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_ENTRY_KEYS")
+        matched = [receipt for digest, receipt in receipts_by_type[receipt_type] if digest == entry["receipt_sha256"]]
+        if not matched:
+            block(EXIT_EVIDENCE, "INDEPENDENT_VERIFY", "OBSERVATION_RECEIPT_UNKNOWN")
+        subject_digest = digest_bytes(canonical_bytes(matched[0]["subject"]))
+        if not isinstance(entry["subject_sha256"], str) or not hmac.compare_digest(entry["subject_sha256"], subject_digest):
+            block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "OBSERVATION_SUBJECT_MISMATCH")
+        if not isinstance(entry["recomputed_digest"], str) or not SHA256.fullmatch(entry["recomputed_digest"]):
+            block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_RECOMPUTE")
+        if entry["observation_gap"] is not False:
+            block(EXIT_ENVIRONMENT, "ENVIRONMENT_MEMORY", "OBSERVATION_GAP")
+        per_type[receipt_type] = "SEMANTIC_REEXECUTED_PASS"
+
     reexecuted = bool(present_types) and all(status == "SEMANTIC_REEXECUTED_PASS" for status in per_type.values())
     return {
         "status": "M3_SEMANTIC_PASS" if reexecuted else "SEMANTIC_REVERIFICATION_UNAVAILABLE",
@@ -261,7 +340,13 @@ def verify_m3_semantic(receipts: dict[str, dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def verify_m3(root: Path) -> dict[str, Any]:
+def verify_m3(
+    root: Path,
+    *,
+    bundle_path: Path | None = None,
+    signer_key_path: Path | None = None,
+    expected_signer_key_id: str | None = None,
+) -> dict[str, Any]:
     manifest = verify_manifest(root)
     graph = verify_receipts(root)
     scanned = scan_runtime(root)
@@ -271,7 +356,12 @@ def verify_m3(root: Path) -> dict[str, Any]:
         "receipt_count": graph["receipt_count"],
         "files_scanned": scanned,
     }
-    semantic = verify_m3_semantic(graph["receipts"])
+    semantic = verify_m3_semantic(
+        graph["receipts"],
+        bundle_path=bundle_path,
+        signer_key_path=signer_key_path,
+        expected_signer_key_id=expected_signer_key_id,
+    )
     m3_evidence_valid = 1 if structural["status"] == "M3_ARTIFACT_STRUCTURE_PASS" and semantic["status"] == "M3_SEMANTIC_PASS" else 0
     return {
         "status": "M3_EVIDENCE_VALID" if m3_evidence_valid == 1 else "M3_ARTIFACT_STRUCTURE_PASS_SEMANTIC_REVIEW_REQUIRED",
@@ -297,10 +387,21 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("root", type=Path)
     parser.add_argument("--mode", choices=("m3-evidence", "code-delivery"), default="m3-evidence")
+    parser.add_argument("--observation-bundle", type=Path, default=None)
+    parser.add_argument("--signer-key", type=Path, default=None)
+    parser.add_argument("--expected-signer-key-id", default=None)
     args = parser.parse_args(argv)
     try:
         root = args.root.resolve(strict=True)
-        result = verify_m3(root) if args.mode == "m3-evidence" else verify_code_delivery(root)
+        if args.mode == "m3-evidence":
+            result = verify_m3(
+                root,
+                bundle_path=args.observation_bundle.resolve(strict=True) if args.observation_bundle else None,
+                signer_key_path=args.signer_key.resolve(strict=True) if args.signer_key else None,
+                expected_signer_key_id=args.expected_signer_key_id,
+            )
+        else:
+            result = verify_code_delivery(root)
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
     except Block as exc:

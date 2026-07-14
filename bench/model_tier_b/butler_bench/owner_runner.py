@@ -56,7 +56,17 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     if output not in evidence_root.parents:
         _block("EVIDENCE_PATH_ESCAPE", ExitCode.SECURITY)
     verifier = Path(__file__).resolve().parents[1] / "offline_verifier" / "verify.py"
-    completed = subprocess.run([sys.executable, str(verifier), str(evidence_root), "--mode", "m3-evidence"], stdin=subprocess.DEVNULL, capture_output=True, text=True, check=False)
+    verifier_argv = [sys.executable, str(verifier), str(evidence_root), "--mode", "m3-evidence"]
+    # P0-2: forward the signed external observation bundle so the independent verifier
+    # can re-execute semantics. Absent a bundle it stays fail-closed and the runner
+    # returns an explicit non-zero HOLD below (never a silent exit-0 pass).
+    if args.observation_bundle is not None:
+        verifier_argv += ["--observation-bundle", str(args.observation_bundle.resolve(strict=True))]
+    if args.observation_signer_key is not None:
+        verifier_argv += ["--signer-key", str(args.observation_signer_key.resolve(strict=True))]
+    if args.observation_signer_key_id is not None:
+        verifier_argv += ["--expected-signer-key-id", str(args.observation_signer_key_id)]
+    completed = subprocess.run(verifier_argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, check=False)
     if completed.returncode != 0:
         raise GateError(FailClass.INDEPENDENT_VERIFY, "OFFLINE_VERIFIER_BLOCK", exit_code=completed.returncode)
     # F-003: consume the verifier's separated structural/semantic verdicts. Emit
@@ -91,12 +101,25 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--model-a-root", type=Path, required=True); value.add_argument("--model-b-root", type=Path, required=True)
     value.add_argument("--product-module", required=True); value.add_argument("--product-root", type=Path, required=True); value.add_argument("--product-module-sha256", required=True); value.add_argument("--product-commit-oid", required=True)
     value.add_argument("--output", type=Path, required=True)
+    # P0-2: signed external observation inputs for M3 semantic re-execution (optional;
+    # absent => explicit non-zero HOLD, never a false M3 evidence pass).
+    value.add_argument("--observation-bundle", type=Path, default=None)
+    value.add_argument("--observation-signer-key", type=Path, default=None)
+    value.add_argument("--observation-signer-key-id", default=None)
     return value
+
+
+# P0-2: explicit non-zero HOLD exit when structure passes but M3 semantics were not
+# re-executed. Distinct from block codes (10-15/20) so callers can tell "not yet
+# valid, awaiting signed observation" apart from an integrity failure.
+M3_SEMANTIC_HOLD_EXIT = 16
 
 
 def main(argv: list[str] | None = None) -> int:
     try:
-        print(json.dumps(run(parser().parse_args(argv)), ensure_ascii=False, sort_keys=True, separators=(",", ":"))); return 0
+        result = run(parser().parse_args(argv))
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        return 0 if result.get("m3_evidence_valid") == 1 else M3_SEMANTIC_HOLD_EXIT
     except GateError as exc:
         print(json.dumps(exc.as_safe_dict(), sort_keys=True, separators=(",", ":"))); return int(exc.exit_code)
     except Exception:

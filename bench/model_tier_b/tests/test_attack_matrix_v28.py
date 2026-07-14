@@ -37,6 +37,8 @@ from butler_bench.schedule import build_schedule, validate_cooldown, validate_ep
 from butler_bench.terminal_gate import Stage, TerminalDecisionMachine, verify_terminal_evidence
 from butler_bench.worker_protocol import EVENT_ORDER, PAYLOAD_KEYS, verify_worker_stream
 
+from entrypoint_owner_attack_kit import run_entrypoint_owner_attack as _entrypoint_owner_attack
+
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / "spec" / "v2.8" / "02_구현계약" / "attack_matrix_v2.8.csv"
 SHA = "a" * 64
@@ -100,6 +102,7 @@ def _dispatch(name: str, root: Path) -> None:
         ({"warmup_in_metrics", "abba_schedule_violation", "cooldown_config_not_elapsed", "invalid_epoch_cherry_pick"}, _schedule_attack),
         ({"sampler_gap_hidden", "rss_wrong_pid_scope", "thermal_critical_accepted", "metal_receipt_forged"}, _memory_attack),
         ({"energy_estimated_without_meter"}, _energy_attack),
+        ({"entrypoint_owner_tamper_after_commit", "entrypoint_owner_untracked_file", "entrypoint_rebound_at_runtime"}, _entrypoint_owner_attack),
     )
     for names, handler in groups:
         if name in names:
@@ -412,9 +415,9 @@ def _environment_receipt() -> dict[str, Any]:
 
 
 class AttackMatrixCompletenessTests(unittest.TestCase):
-    def test_matrix_exactly_sixty_and_all_must_block(self) -> None:
-        self.assertEqual(60, len(MATRIX_ROWS))
-        self.assertEqual([f"ATK-{index:03d}" for index in range(1, 61)], sorted(MATRIX_ROWS))
+    def test_matrix_exactly_sixty_three_and_all_must_block(self) -> None:
+        self.assertEqual(63, len(MATRIX_ROWS))
+        self.assertEqual([f"ATK-{index:03d}" for index in range(1, 64)], sorted(MATRIX_ROWS))
         self.assertTrue(all(row["must_block"] == "YES" for row in MATRIX_ROWS.values()))
 
 

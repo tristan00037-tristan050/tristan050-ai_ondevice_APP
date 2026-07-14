@@ -21,11 +21,13 @@ on:
   pull_request:
     paths:
       - "bench/model_tier_b/**"
+      - "butler_pc_core/model_tier_bench/**"
       - ".github/workflows/model-tier-b-bench.yml"
   push:
     branches: ["feat/model-tier-b-bench-harness"]
     paths:
       - "bench/model_tier_b/**"
+      - "butler_pc_core/model_tier_bench/**"
       - ".github/workflows/model-tier-b-bench.yml"
   workflow_dispatch: {}
 
@@ -75,7 +77,7 @@ jobs:
         run: |
           mkdir -p reports
           set -o pipefail
-          python -m pytest tests/ \
+          python -m pytest tests/ --ignore=tests/integration \
             --junitxml=reports/junit.xml \
             --cov=butler_bench --cov=offline_verifier \
             --cov-report=xml:reports/coverage.xml \
@@ -125,9 +127,24 @@ jobs:
       - name: Structural/semantic split unit + end-to-end
         run: python -m unittest -v test_repo_level_p0_v29
 
+  actual_product_integration:
+    # P0-3/P0-4: run the real product integration — imports the actual
+    # butler_pc_core adapter, calls the six entrypoints against real Box3/DLP
+    # functions, and proves the observer hook is byte-identical off/on.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Install minimal product import dependency
+        run: python -m pip install --quiet jsonschema
+      - name: Run actual product integration (real import + entrypoint reach)
+        run: ./scripts/ci_actual_integration.sh
+
   package_from_git_object:
     runs-on: ubuntu-latest
-    needs: [source_provenance, compile_type_lint, unit_and_attack_matrix, git_blob_in_tree_selfcheck, offline_semantic_split]
+    needs: [source_provenance, compile_type_lint, unit_and_attack_matrix, git_blob_in_tree_selfcheck, offline_semantic_split, actual_product_integration]
     outputs:
       release_sha256: ${{ steps.digest.outputs.sha256 }}
     steps:

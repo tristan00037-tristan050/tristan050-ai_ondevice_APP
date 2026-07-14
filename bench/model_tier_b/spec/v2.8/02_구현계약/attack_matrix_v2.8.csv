@@ -59,3 +59,6 @@ ATK-057,energy_estimated_without_meter,energy,construct artifact/runtime with en
 ATK-058,secret_in_exception_trace,artifact scanner,construct artifact/runtime with secret_in_exception_trace,nonzero,SECURITY_PRIVACY,YES,AC-SCN-01;AC-SCN-02;AC-SCN-03
 ATK-059,casefold_filename_collision,artifact scanner,construct artifact/runtime with casefold_filename_collision,nonzero,SECURITY_PRIVACY,YES,AC-SCN-01;AC-SCN-02;AC-SCN-03
 ATK-060,unsigned_ci_artifact_swap,CI/package,construct artifact/runtime with unsigned_ci_artifact_swap,nonzero,ATTESTATION,YES,AC-CI-01;AC-CI-02;AC-CI-03
+ATK-061,entrypoint_owner_tamper_after_commit,product gate,construct artifact/runtime with entrypoint_owner_tamper_after_commit,nonzero,PRODUCT_GATE,YES,AC-PRD-01;AC-PRD-02;AC-PRD-03
+ATK-062,entrypoint_owner_untracked_file,product gate,construct artifact/runtime with entrypoint_owner_untracked_file,nonzero,PRODUCT_GATE,YES,AC-PRD-01;AC-PRD-02;AC-PRD-03
+ATK-063,entrypoint_rebound_at_runtime,product gate,construct artifact/runtime with entrypoint_rebound_at_runtime,nonzero,PRODUCT_GATE,YES,AC-PRD-01;AC-PRD-02;AC-PRD-03

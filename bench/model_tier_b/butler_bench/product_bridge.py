@@ -51,14 +51,41 @@ def validate_product_module(
     # path in the approved commit tree (git cat-file / ls-tree / rev-parse).
     blob_binding = verify_blob_in_commit_tree(module_path, expected_commit_oid)
     entrypoints: list[dict[str, str]] = []
+    # P0-1 (PR861-F001): every required entrypoint's *currently bound* source owner
+    # file — not just the import facade module — must itself be the blob recorded in
+    # the approved commit tree. This closes the "committed facade + tampered helper"
+    # bypass and runtime rebinding to an untracked/tampered owner.
+    owner_bindings: dict[str, dict[str, str]] = {}
     for name in (*REQUIRED_ENTRYPOINTS, ADAPTER_ENTRYPOINT):
         value = getattr(module, name, None)
         if not callable(value):
             _block("PRODUCT_ENTRYPOINT_MISSING")
-        owner_path = Path(inspect.getsourcefile(value) or "").resolve(strict=True)
+        try:
+            source = inspect.getsourcefile(value)
+        except TypeError:
+            source = None
+        if not source:
+            _block("PRODUCT_ENTRYPOINT_OWNER")
+        try:
+            owner_path = Path(source).resolve(strict=True)
+        except OSError:
+            _block("PRODUCT_ENTRYPOINT_OWNER")
         if root not in owner_path.parents or {part.casefold() for part in owner_path.parts} & {"tests", "fixtures", "mocks"}:
             _block("PRODUCT_ENTRYPOINT_OWNER")
-        entrypoints.append({"name": name, "owner_relative_path": owner_path.relative_to(root).as_posix(), "owner_sha256": sha256_file(owner_path)})
+        rel = owner_path.relative_to(root).as_posix()
+        if rel not in owner_bindings:
+            owner_binding = verify_blob_in_commit_tree(owner_path, expected_commit_oid)
+            owner_bindings[rel] = {
+                "owner_relative_path": rel,
+                "owner_sha256": sha256_file(owner_path),
+                "commit_tree_blob_oid": owner_binding["commit_tree_blob_oid"],
+                "git_commit_tree_path": owner_binding["git_toplevel_relative_path"],
+            }
+        entrypoints.append({"name": name, "owner_relative_path": rel, "owner_sha256": owner_bindings[rel]["owner_sha256"]})
+    # P0-1: reject any dirty tracked file or untracked python module under the
+    # approved product root so nothing outside the approved commit can enter the
+    # import graph or execute during measurement.
+    _assert_clean_product_tree(root)
     payload = {
         "schema_version": "butler.model-tier-b.product-entrypoints.v2.8",
         "module": module.__name__,
@@ -69,6 +96,7 @@ def validate_product_module(
         "git_commit_tree_path": blob_binding["git_toplevel_relative_path"],
         "git_commit_tree_blob_oid": blob_binding["commit_tree_blob_oid"],
         "entrypoints": entrypoints,
+        "entrypoint_owner_bindings": [owner_bindings[key] for key in sorted(owner_bindings)],
         "runtime_activation_allowed": 0,
     }
     payload["product_identity_sha256"] = canonical_sha256(payload)
@@ -105,6 +133,28 @@ def verify_blob_in_commit_tree(file_path: Path, commit_oid: str) -> dict[str, st
     if len(ls_tree) < 3 or ls_tree[1] != "blob" or ls_tree[2] != tree_blob:
         _block("PRODUCT_COMMIT_TREE_MISMATCH")
     return {"git_toplevel_relative_path": relative, "commit_tree_blob_oid": tree_blob, "object_format": object_format}
+
+
+def _assert_clean_product_tree(root: Path) -> None:
+    """P0-1: block a dirty or untracked-module product tree.
+
+    verify_blob_in_commit_tree already rejects a tampered or untracked *owner* file;
+    this adds a root-wide guard so no other tracked file is modified and no untracked
+    ``.py`` (which could shadow or be imported at measurement time) is present under
+    the approved product root. Fail-closed on any git failure.
+    """
+    toplevel = Path(_git(["rev-parse", "--show-toplevel"], cwd=root, detail="PRODUCT_GIT_TOPLEVEL")).resolve(strict=True)
+    if toplevel != root and toplevel not in root.parents:
+        _block("PRODUCT_GIT_WORKTREE")
+    root_rel = "." if root == toplevel else root.relative_to(toplevel).as_posix()
+    tracked = _git(["status", "--porcelain=v1", "--untracked-files=no", "--", root_rel], cwd=toplevel, detail="PRODUCT_GIT_STATUS")
+    if tracked.strip():
+        _block("PRODUCT_TREE_DIRTY")
+    others = _git(["ls-files", "--others", "--exclude-standard", "--", root_rel], cwd=toplevel, detail="PRODUCT_GIT_STATUS")
+    for line in others.splitlines():
+        name = line.strip().strip('"')
+        if name.endswith(".py") and "__pycache__" not in name:
+            _block("PRODUCT_UNTRACKED_MODULE")
 
 
 def _git(args: list[str], *, cwd: Path, detail: str) -> str:
