@@ -5,10 +5,17 @@ name: Model Tier B Bench Harness
 # product repository: bench isolated under bench/model_tier_b/, Linux-runnable
 # authoritative subset only, plus audit v2.9 repo-level additions
 # (F-004 git blob-in-tree self-check, F-003 structural/semantic split,
-# F-012 raw-log/JUnit/coverage retention + OIDC build provenance attestation).
+# F-012 raw-log/JUnit/coverage retention).
 # Jobs needing macOS runners, cosign secrets, or the real product module are kept
 # in the reference contract and run by the owner at M3 time; they are not part of
 # this always-green PR pipeline. RUNTIME_ACTIVATION_ALLOWED stays 0 throughout.
+#
+# F-012 OIDC build-provenance signing ("가능 시"): this repo centralizes all
+# supply-chain signing under .github/workflows/product-verify-supplychain.yml
+# (the P4-P0-02 scoped-permissions guard forbids OIDC signing tokens and the
+# provenance step in every other workflow). So the bench release artifact produced
+# by package_from_git_object is signed there at release time, not here; this
+# workflow only produces the deterministic artifact for that central signer.
 
 on:
   pull_request:
@@ -135,24 +142,3 @@ jobs:
           name: release-payload
           path: bench/model_tier_b/release-package/
           if-no-files-found: error
-
-  provenance_attestation:
-    # Audit F-012 / v2.9(9): GitHub OIDC build-provenance attestation over the
-    # packaged release artifact. "가능 시" — runs on same-repo events where an
-    # OIDC token is available.
-    runs-on: ubuntu-latest
-    needs: [package_from_git_object]
-    if: github.event.pull_request.head.repo.fork == false
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/checkout@v4
-        with: {fetch-depth: 0}
-      - name: Rebuild release artifact for attestation
-        run: ./scripts/package_from_git.sh "$(git rev-parse HEAD^{commit})" release-package
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: bench/model_tier_b/release-package/release.tar.gz
