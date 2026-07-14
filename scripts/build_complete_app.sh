@@ -46,21 +46,26 @@ echo "[4/5] 모델 경로 계약 검증 (verifier)"
 python3 "$ROOT/scripts/verify_model_path_contract.py" "$ROOT" || { echo "❌ 계약 위반"; exit 1; }
 
 echo "[4.5/5] 빌드 표식 기록 (BUILD_INFO.json — 앱 내부 commit OID 표식)"
-BUILD_OID="$(cd "$ROOT" && git rev-parse HEAD 2>/dev/null || echo unknown)"
+BUILD_OID="$(cd "$ROOT" && git rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" || {
+  echo "❌ git commit OID 확인 실패 — provenance 없는 앱 생성 차단"
+  exit 1
+}
 BUILD_DESC="$(cd "$ROOT" && git describe --always --dirty 2>/dev/null || echo unknown)"
 BUILD_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-APP_VER="$(cd "$ROOT/butler-desktop" && node -p "require('./package.json').version" 2>/dev/null || echo unknown)"
-cat > "$RES/BUILD_INFO.json" <<JSON
-{
-  "app": "Butler",
-  "build_base_commit_oid": "$BUILD_OID",
-  "git_describe": "$BUILD_DESC",
-  "build_timestamp_utc": "$BUILD_TS",
-  "app_version": "$APP_VER",
-  "builder": "build_complete_app.sh"
+APP_VER="$(cd "$ROOT/butler-desktop" && node -p "require('./package.json').version" 2>/dev/null)" || {
+  echo "❌ 앱 버전 확인 실패 — provenance 없는 앱 생성 차단"
+  exit 1
 }
-JSON
-[[ "$BUILD_OID" != "unknown" ]] && echo "  ✅ BUILD_INFO.json (OID $BUILD_OID)" || echo "  ⚠️ git OID 확인불가 — BUILD_INFO.json에 unknown 기록"
+if ! "$APP_PY" "$ROOT/scripts/write_build_info.py" \
+  --output "$RES/BUILD_INFO.json" \
+  --build-oid "$BUILD_OID" \
+  --git-describe "$BUILD_DESC" \
+  --timestamp-utc "$BUILD_TS" \
+  --app-version "$APP_VER"; then
+  echo "❌ BUILD_INFO.json 기록·검증 실패 — 불완전 앱 생성 차단"
+  exit 1
+fi
+echo "  ✅ BUILD_INFO.json (OID $BUILD_OID)"
 
 echo "[5/5] 완성품 준비 완료"
 echo "  앱: $ROOT/butler-desktop/src-tauri/$APP"

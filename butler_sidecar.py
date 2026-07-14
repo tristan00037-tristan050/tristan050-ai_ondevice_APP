@@ -335,6 +335,25 @@ async def _real_chunk_work_inprocess(
     return result
 
 
+def _health_payload() -> dict[str, object]:
+    """Return the build-bound fields shared by every health transport."""
+    info = build_info()
+    return {
+        "status": "ok",
+        "service": "butler-pc-core-sidecar",
+        "version": "0.9.0",
+        "build_base_commit_oid": str(info["build_base_commit_oid"]),
+        "build_timestamp_utc": str(info["build_timestamp_utc"]),
+    }
+
+
+def _fallback_health_payload(path: str) -> dict[str, object]:
+    """Keep stdlib fallback health routes on the canonical health contract."""
+    if path not in {"/health", "/api/sidecar/health"}:
+        raise ValueError("UNSUPPORTED_FALLBACK_HEALTH_PATH")
+    return _health_payload()
+
+
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
@@ -476,14 +495,7 @@ if _FASTAPI_AVAILABLE:
 
     @app.get("/health")
     def health():
-        info = build_info()
-        return {
-            "status": "ok",
-            "service": "butler-pc-core-sidecar",
-            "version": "0.9.0",
-            "build_base_commit_oid": info["build_base_commit_oid"],
-            "build_timestamp_utc": info["build_timestamp_utc"],
-        }
+        return _health_payload()
 
     @app.get("/api/sidecar/health")
     def sidecar_health():
@@ -495,20 +507,20 @@ if _FASTAPI_AVAILABLE:
             llm_status = "loading" if model_path else "no_model"
             last_error = "" if model_path else "BUTLER_MODEL_PATH 미설정"
         model_payload = sidecar_model_status_payload(status=llm_status, last_error=last_error)
-        return {
-            "status": "ok",
-            "service": "butler-pc-core-sidecar",
-            "version": "0.9.0",
-            "build_base_commit_oid": build_info()["build_base_commit_oid"],
-            "model_status": model_payload["status"],
-            "model_role": model_payload["model_role"],
-            "model_family": model_payload["model_family"],
-            "model_path_digest": model_payload["model_path_digest"],
-            "model_path_conflict": model_payload["model_path_conflict"],
-            "model_path_conflict_reason": model_payload["model_path_conflict_reason"],
-            "box3_model": model_payload["box3_model"],
-            "active_tasks": len(_active_controllers),
-        }
+        payload = _health_payload()
+        payload.update(
+            {
+                "model_status": model_payload["status"],
+                "model_role": model_payload["model_role"],
+                "model_family": model_payload["model_family"],
+                "model_path_digest": model_payload["model_path_digest"],
+                "model_path_conflict": model_payload["model_path_conflict"],
+                "model_path_conflict_reason": model_payload["model_path_conflict_reason"],
+                "box3_model": model_payload["box3_model"],
+                "active_tasks": len(_active_controllers),
+            }
+        )
+        return payload
 
     @app.get("/api/model/status")
     def model_status():
@@ -2278,7 +2290,7 @@ else:
             if self.path in ("/health", "/api/model/status", "/api/sidecar/health"):
                 model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "")
                 if self.path == "/health":
-                    self._send_json(200, {"status": "ok", "service": "butler-pc-core-sidecar", "version": "0.9.0"})
+                    self._send_json(200, _fallback_health_payload(self.path))
                 elif self.path == "/api/model/status":
                     if not model_path:
                         self._send_json(200, sidecar_model_status_payload(status="no_model", last_error="BUTLER_MODEL_PATH 미설정"))
@@ -2287,7 +2299,7 @@ else:
                     else:
                         self._send_json(200, sidecar_model_status_payload(status="ready", last_error=""))
                 else:
-                    self._send_json(200, {"status": "ok", "service": "butler-pc-core-sidecar", "version": "0.9.0"})
+                    self._send_json(200, _fallback_health_payload(self.path))
             else:
                 self._send_json(404, {"detail": "not found"})
 
