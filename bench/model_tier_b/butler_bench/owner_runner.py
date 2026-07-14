@@ -11,6 +11,7 @@ from .attestation import load_trust_policy
 from .canonical import canonical_sha256, read_json_closed, write_canonical_json
 from .errors import ExitCode, FailClass, GateError
 from .model_manifest import verify_model_manifest
+from .governance import assert_governance_invariants
 from .policy import load_approved_policy
 from .preflight import validate_m3_gate_receipts
 from .product_bridge import ADAPTER_ENTRYPOINT, validate_product_module
@@ -62,10 +63,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     # returns an explicit non-zero HOLD below (never a silent exit-0 pass).
     if args.observation_bundle is not None:
         verifier_argv += ["--observation-bundle", str(args.observation_bundle.resolve(strict=True))]
-    if args.observation_signer_key is not None:
-        verifier_argv += ["--signer-key", str(args.observation_signer_key.resolve(strict=True))]
-    if args.observation_signer_key_id is not None:
-        verifier_argv += ["--expected-signer-key-id", str(args.observation_signer_key_id)]
+    if args.observation_signer_public_key is not None:
+        verifier_argv += ["--expected-signer-public-key", str(args.observation_signer_public_key)]
     completed = subprocess.run(verifier_argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, check=False)
     if completed.returncode != 0:
         raise GateError(FailClass.INDEPENDENT_VERIFY, "OFFLINE_VERIFIER_BLOCK", exit_code=completed.returncode)
@@ -81,15 +80,20 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     structural_pass = isinstance(structural, dict) and structural.get("status") == "M3_ARTIFACT_STRUCTURE_PASS"
     semantic_pass = isinstance(semantic, dict) and semantic.get("status") == "M3_SEMANTIC_PASS"
     m3_evidence_valid = 1 if structural_pass and semantic_pass and verdict.get("m3_evidence_valid") == 1 else 0
-    return {
-        "status": "M3_EVIDENCE_VALID" if m3_evidence_valid == 1 else "M3_ARTIFACT_STRUCTURE_PASS_SEMANTIC_REVIEW_REQUIRED",
+    # R2-P0-010 / §13: even a fully valid M3 evidence set is only M4-pending. g1_ready
+    # is ALWAYS false here; G1 is a separate downstream gate. runtime_activation stays 0.
+    owner_result = {
+        "status": "M3_EVIDENCE_VALID_M4_PENDING" if m3_evidence_valid == 1 else "M3_ARTIFACT_STRUCTURE_PASS_SEMANTIC_REVIEW_REQUIRED",
         "run_id": result["run_id"],
         "structural_pass": structural_pass,
         "semantic_pass": semantic_pass,
         "m3_evidence_valid": m3_evidence_valid,
-        "g1_ready": bool(m3_evidence_valid),
+        "m4_ready": False,
+        "g1_ready": False,
         "runtime_activation_allowed": 0,
     }
+    assert_governance_invariants(owner_result)  # fail-closed if any g1/activation leak
+    return owner_result
 
 
 def parser() -> argparse.ArgumentParser:
@@ -104,8 +108,7 @@ def parser() -> argparse.ArgumentParser:
     # P0-2: signed external observation inputs for M3 semantic re-execution (optional;
     # absent => explicit non-zero HOLD, never a false M3 evidence pass).
     value.add_argument("--observation-bundle", type=Path, default=None)
-    value.add_argument("--observation-signer-key", type=Path, default=None)
-    value.add_argument("--observation-signer-key-id", default=None)
+    value.add_argument("--observation-signer-public-key", default=None)
     return value
 
 

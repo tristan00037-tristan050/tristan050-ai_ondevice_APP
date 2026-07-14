@@ -30,11 +30,10 @@ from butler_pc_core.dlp.runtime import scan_runtime
 
 from butler_pc_core.model_tier_bench.observer import observe
 
-# Deploy-time identity injection point. The harness verifies the *committed blob* of
-# this file (and every entrypoint owner) against the approved commit tree, so this
-# placeholder is replaced with the approved commit oid at deploy time; it is never
-# trusted on its own.
-__butler_product_commit_oid__ = "0" * 40
+# R2-P0-002 / §3.1: this module does NOT declare its own commit oid. Product identity
+# is computed externally by the owner bootstrap and offline verifier from the Git
+# object database (git cat-file / ls-tree / rev-parse of this file and every
+# entrypoint owner blob) — a module-internal constant is spoofable and is not trusted.
 
 # Fixed, non-sensitive runtime-only reference/draft text used to exercise the real
 # grounding path deterministically. No PII; the observer only ever sees digests.

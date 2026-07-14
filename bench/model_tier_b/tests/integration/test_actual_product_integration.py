@@ -83,6 +83,26 @@ class ActualProductIntegrationTests(unittest.TestCase):
         forbidden = {"synthetic_runner", "fake_verdict", "mock_run", "stub_pipeline"}
         self.assertEqual(set(), forbidden & set(dir(self.adapter)))
 
+    def test_observer_exception_is_isolated_and_invalidates_measurement(self) -> None:
+        # R2-P1-011: an observer callback that raises must NOT change the product
+        # response or crash the product; it is recorded so measurement is invalid.
+        baseline = self.adapter.butler_bench_run_v2()  # observer off
+        self.observer.reset_failures()
+
+        def raising(_event):
+            raise RuntimeError("observer boom")
+
+        self.observer.set_observer(raising)
+        with_failure = self.adapter.butler_bench_run_v2()  # observer on, raises internally
+        self.observer.clear_observer()
+
+        self.assertEqual(baseline, with_failure)  # product response byte-identical
+        failures = self.observer.emit_failures()
+        self.assertTrue(failures)  # measurement flagged invalid
+        self.assertEqual("OBSERVER_EMIT_FAILED", failures[0]["code"])
+        self.assertEqual("RuntimeError", failures[0]["exception_type"])
+        self.observer.reset_failures()
+
 
 if __name__ == "__main__":
     unittest.main()

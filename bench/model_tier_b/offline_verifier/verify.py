@@ -238,19 +238,114 @@ EXTERNAL_OBSERVER_RECEIPTS = frozenset({
 })
 
 
-OBSERVATION_SCHEMA = "butler.model-tier-b.external-observation.v2.9"
-OBSERVATION_KEYS = {"schema_version", "run_id", "signer_key_id", "observations", "observation_signature_hmac_sha256"}
-OBSERVATION_ENTRY_KEYS = {"receipt_sha256", "subject_sha256", "recomputed_digest", "observation_gap"}
+# --- Minimal, dependency-free Ed25519 (RFC 8032) for asymmetric observation trust ---
+# The independent verifier holds only the pinned PUBLIC key; the external observer
+# signs with a private key it never shares. This removes the previous symmetric-HMAC
+# hole where the caller handed the verifier the signing secret (R2-P0-009).
+_ED_Q = 2 ** 255 - 19
+_ED_L = 2 ** 252 + 27742317777372353535851937790883648493
 
 
-def _load_signer_key(path: Path) -> bytes:
+def _ed_inv(x: int) -> int:
+    return pow(x, _ED_Q - 2, _ED_Q)
+
+
+_ED_D = (-121665 * _ed_inv(121666)) % _ED_Q
+_ED_I = pow(2, (_ED_Q - 1) // 4, _ED_Q)
+
+
+def _ed_xrecover(y: int) -> int:
+    xx = (y * y - 1) * _ed_inv(_ED_D * y * y + 1)
+    x = pow(xx, (_ED_Q + 3) // 8, _ED_Q)
+    if (x * x - xx) % _ED_Q != 0:
+        x = (x * _ED_I) % _ED_Q
+    if x % 2 != 0:
+        x = _ED_Q - x
+    return x
+
+
+_ED_BY = (4 * _ed_inv(5)) % _ED_Q
+_ED_B = (_ed_xrecover(_ED_BY) % _ED_Q, _ED_BY % _ED_Q)
+
+
+def _ed_edwards(p: tuple[int, int], q: tuple[int, int]) -> tuple[int, int]:
+    x1, y1 = p
+    x2, y2 = q
+    x3 = (x1 * y2 + x2 * y1) * _ed_inv(1 + _ED_D * x1 * x2 * y1 * y2)
+    y3 = (y1 * y2 + x1 * x2) * _ed_inv(1 - _ED_D * x1 * x2 * y1 * y2)
+    return (x3 % _ED_Q, y3 % _ED_Q)
+
+
+def _ed_scalarmult(p: tuple[int, int], e: int) -> tuple[int, int]:
+    result = (0, 1)
+    addend = p
+    while e > 0:
+        if e & 1:
+            result = _ed_edwards(result, addend)
+        addend = _ed_edwards(addend, addend)
+        e >>= 1
+    return result
+
+
+def _ed_bit(h: bytes, i: int) -> int:
+    return (h[i // 8] >> (i % 8)) & 1
+
+
+def _ed_hint(m: bytes) -> int:
+    h = hashlib.sha512(m).digest()
+    return sum(2 ** i * _ed_bit(h, i) for i in range(512))
+
+
+def _ed_encodepoint(p: tuple[int, int]) -> bytes:
+    x, y = p
+    return ((y & ((1 << 255) - 1)) | ((x & 1) << 255)).to_bytes(32, "little")
+
+
+def _ed_decodepoint(s: bytes) -> tuple[int, int]:
+    y = int.from_bytes(s, "little") & ((1 << 255) - 1)
+    x = _ed_xrecover(y)
+    if (x & 1) != _ed_bit(s, 255):
+        x = _ED_Q - x
+    if (-x * x + y * y - 1 - _ED_D * x * x * y * y) % _ED_Q != 0:
+        raise ValueError("point not on curve")
+    return (x, y)
+
+
+def ed25519_publickey(secret_seed: bytes) -> bytes:
+    h = hashlib.sha512(secret_seed).digest()
+    a = 2 ** 254 + sum(2 ** i * _ed_bit(h, i) for i in range(3, 254))
+    return _ed_encodepoint(_ed_scalarmult(_ED_B, a))
+
+
+def ed25519_sign(secret_seed: bytes, message: bytes) -> bytes:
+    h = hashlib.sha512(secret_seed).digest()
+    a = 2 ** 254 + sum(2 ** i * _ed_bit(h, i) for i in range(3, 254))
+    public = _ed_encodepoint(_ed_scalarmult(_ED_B, a))
+    r = _ed_hint(h[32:64] + message)
+    upper = _ed_encodepoint(_ed_scalarmult(_ED_B, r))
+    s = (r + _ed_hint(upper + public + message) * a) % _ED_L
+    return upper + s.to_bytes(32, "little")
+
+
+def ed25519_verify(public_key: bytes, message: bytes, signature: bytes) -> bool:
+    if len(signature) != 64 or len(public_key) != 32:
+        return False
     try:
-        raw = path.read_text(encoding="utf-8").strip()
-    except (OSError, UnicodeError):
-        block(EXIT_PROTOCOL, "INDEPENDENT_VERIFY", "SIGNER_KEY_READ")
-    if not re.fullmatch(r"[0-9a-f]{64}", raw):
-        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "SIGNER_KEY_FORMAT")
-    return bytes.fromhex(raw)
+        upper = _ed_decodepoint(signature[:32])
+        point = _ed_decodepoint(public_key)
+    except ValueError:
+        return False
+    s = int.from_bytes(signature[32:], "little")
+    h = _ed_hint(signature[:32] + public_key + message)
+    left = _ed_scalarmult(_ED_B, s)
+    right = _ed_edwards(upper, _ed_scalarmult(point, h))
+    return left == right
+
+
+OBSERVATION_SCHEMA = "butler.model-tier-b.external-observation.v3"
+OBSERVATION_KEYS = {"schema_version", "run_id", "signer_public_key_ed25519", "observations", "signature_ed25519"}
+OBSERVATION_ENTRY_KEYS = {"receipt_sha256", "receipt_type", "subject_sha256", "raw_safe_observation", "observation_digest"}
+_OBSERVATION_FIELD_RE = re.compile(r"^[a-z0-9_]{1,48}$")
 
 
 def _unavailable(present_types: list[str], external_required: list[str]) -> dict[str, Any]:
@@ -269,69 +364,93 @@ def verify_m3_semantic(
     receipts: dict[str, dict[str, Any]],
     *,
     bundle_path: Path | None = None,
-    signer_key_path: Path | None = None,
-    expected_signer_key_id: str | None = None,
+    expected_signer_public_key: str | None = None,
 ) -> dict[str, Any]:
-    """F-003 / PR861-F002: semantic verification with a real success path.
+    """PR861-R2 P0-006..009: trust-bounded semantic re-verification.
 
-    Without a signed external observation bundle the verdict is fail-closed as
-    SEMANTIC_REVERIFICATION_UNAVAILABLE. With a bundle, the signer identity, HMAC
-    signature, per-receipt subject binding, and gap flags are all re-verified; only
-    when every present receipt type is re-executed against a matching, signed, gap-free
-    observation does the verdict become M3_SEMANTIC_PASS. Any missing observation,
-    forged signature, subject mismatch, or gap is a fail-closed BLOCK.
+    Fail-closed to SEMANTIC_REVERIFICATION_UNAVAILABLE without a bundle. With a bundle:
+
+    - The signer public key pin is MANDATORY (R2-P0-009): the verifier holds only the
+      pinned Ed25519 public key and rejects any bundle key that differs. There is no
+      caller-supplied HMAC secret.
+    - The Ed25519 signature over the canonical unsigned bundle must verify.
+    - bundle.run_id must equal EVERY receipt's run_id (R2-P0-007).
+    - Every external-observer receipt DIGEST needs exactly one observation; extras,
+      duplicates, and unobserved same-type receipts are blocked (R2-P0-008).
+    - The observation digest is RECOMPUTED from the raw-safe observation fields and
+      must equal the declared digest; arbitrary declared digests are rejected
+      (R2-P0-006). Subject digests are re-bound to each receipt.
     """
     present_types = sorted({receipt["receipt_type"] for receipt in receipts.values()})
     external_required = sorted(set(present_types) & EXTERNAL_OBSERVER_RECEIPTS)
     if bundle_path is None:
         return _unavailable(present_types, external_required)
 
-    if signer_key_path is None:
-        block(EXIT_PROTOCOL, "INDEPENDENT_VERIFY", "SIGNER_KEY_REQUIRED")
-    key = _load_signer_key(signer_key_path)
-    key_id = digest_bytes(key)
-    if expected_signer_key_id is not None and not hmac.compare_digest(str(expected_signer_key_id), key_id):
-        block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "OBSERVATION_SIGNER_UNTRUSTED")
+    # Signer pin is mandatory and asymmetric — no optional path, no caller secret.
+    if not isinstance(expected_signer_public_key, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_signer_public_key):
+        block(EXIT_PROTOCOL, "INDEPENDENT_VERIFY", "SIGNER_PIN_REQUIRED")
+    public_key = bytes.fromhex(expected_signer_public_key)
 
     bundle = read_json(bundle_path)
     validate_json(bundle)
     if not isinstance(bundle, dict) or set(bundle) != OBSERVATION_KEYS or bundle["schema_version"] != OBSERVATION_SCHEMA:
         block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_KEYS")
-    if not isinstance(bundle["signer_key_id"], str) or not hmac.compare_digest(bundle["signer_key_id"], key_id):
-        block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "OBSERVATION_SIGNER_IDENTITY")
-    unsigned = {name: value for name, value in bundle.items() if name != "observation_signature_hmac_sha256"}
-    expected_sig = hmac.new(key, canonical_bytes(unsigned), hashlib.sha256).hexdigest()
-    declared_sig = bundle["observation_signature_hmac_sha256"]
-    if not isinstance(declared_sig, str) or not hmac.compare_digest(expected_sig, declared_sig):
+    if not isinstance(bundle["signer_public_key_ed25519"], str) or not hmac.compare_digest(bundle["signer_public_key_ed25519"], expected_signer_public_key):
+        block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "OBSERVATION_SIGNER_UNTRUSTED")
+    declared_sig = bundle["signature_ed25519"]
+    if not isinstance(declared_sig, str) or not re.fullmatch(r"[0-9a-f]{128}", declared_sig):
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_SIGNATURE_FORMAT")
+    unsigned = {name: value for name, value in bundle.items() if name != "signature_ed25519"}
+    if not ed25519_verify(public_key, canonical_bytes(unsigned), bytes.fromhex(declared_sig)):
         block(EXIT_SECURITY, "SECURITY_PRIVACY", "FORGED_OBSERVATION_SIGNATURE")
 
-    observations = bundle["observations"]
-    if not isinstance(observations, dict):
-        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_MAP")
-    receipts_by_type: dict[str, list[tuple[str, dict[str, Any]]]] = {}
-    for digest, receipt in receipts.items():
-        receipts_by_type.setdefault(receipt["receipt_type"], []).append((digest, receipt))
+    run_id = bundle["run_id"]
+    if not isinstance(run_id, str) or not run_id:
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_RUN_ID")
+    for receipt in receipts.values():
+        if receipt.get("run_id") != run_id:
+            block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "OBSERVATION_RUN_ID_MISMATCH")
 
+    observations = bundle["observations"]
+    if not isinstance(observations, list):
+        block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_LIST")
+
+    # Exactly one observation per external-observer receipt digest.
+    external_digests = {digest for digest, receipt in receipts.items() if receipt["receipt_type"] in EXTERNAL_OBSERVER_RECEIPTS}
+    observed_digests: set[str] = set()
     per_type: dict[str, str] = {}
-    for receipt_type in present_types:
-        entry = observations.get(receipt_type)
-        if entry is None:
-            block(EXIT_EVIDENCE, "INDEPENDENT_VERIFY", "MISSING_EXTERNAL_OBSERVATION")
+    for entry in observations:
         if not isinstance(entry, dict) or set(entry) != OBSERVATION_ENTRY_KEYS:
             block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_ENTRY_KEYS")
-        matched = [receipt for digest, receipt in receipts_by_type[receipt_type] if digest == entry["receipt_sha256"]]
-        if not matched:
+        digest = entry["receipt_sha256"]
+        if digest not in receipts:
             block(EXIT_EVIDENCE, "INDEPENDENT_VERIFY", "OBSERVATION_RECEIPT_UNKNOWN")
-        subject_digest = digest_bytes(canonical_bytes(matched[0]["subject"]))
+        if digest not in external_digests:
+            block(EXIT_EVIDENCE, "INDEPENDENT_VERIFY", "OBSERVATION_EXTRA_NON_EXTERNAL")
+        if digest in observed_digests:
+            block(EXIT_EVIDENCE, "INDEPENDENT_VERIFY", "OBSERVATION_DUPLICATE")
+        observed_digests.add(digest)
+        receipt = receipts[digest]
+        if entry["receipt_type"] != receipt["receipt_type"]:
+            block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "OBSERVATION_TYPE_MISMATCH")
+        subject_digest = digest_bytes(canonical_bytes(receipt["subject"]))
         if not isinstance(entry["subject_sha256"], str) or not hmac.compare_digest(entry["subject_sha256"], subject_digest):
             block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "OBSERVATION_SUBJECT_MISMATCH")
-        if not isinstance(entry["recomputed_digest"], str) or not SHA256.fullmatch(entry["recomputed_digest"]):
-            block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_RECOMPUTE")
-        if entry["observation_gap"] is not False:
-            block(EXIT_ENVIRONMENT, "ENVIRONMENT_MEMORY", "OBSERVATION_GAP")
-        per_type[receipt_type] = "SEMANTIC_REEXECUTED_PASS"
+        raw_safe = entry["raw_safe_observation"]
+        if not isinstance(raw_safe, dict) or not raw_safe or any(not _OBSERVATION_FIELD_RE.fullmatch(str(key)) for key in raw_safe):
+            block(EXIT_SCHEMA, "INDEPENDENT_VERIFY", "OBSERVATION_RAW_SCHEMA")
+        recomputed = digest_bytes(canonical_bytes(raw_safe))
+        if not isinstance(entry["observation_digest"], str) or not hmac.compare_digest(entry["observation_digest"], recomputed):
+            block(EXIT_DIGEST, "INDEPENDENT_VERIFY", "OBSERVATION_DIGEST_MISMATCH")
+        per_type[receipt["receipt_type"]] = "SEMANTIC_REEXECUTED_PASS"
 
-    reexecuted = bool(present_types) and all(status == "SEMANTIC_REEXECUTED_PASS" for status in per_type.values())
+    missing = external_digests - observed_digests
+    if missing:
+        block(EXIT_EVIDENCE, "INDEPENDENT_VERIFY", "MISSING_EXTERNAL_OBSERVATION")
+
+    for receipt_type in present_types:
+        per_type.setdefault(receipt_type, "STRUCTURE_ONLY_RECHECKED")
+    reexecuted = bool(external_digests) and observed_digests == external_digests
     return {
         "status": "M3_SEMANTIC_PASS" if reexecuted else "SEMANTIC_REVERIFICATION_UNAVAILABLE",
         "receipt_type_results": per_type,
@@ -344,8 +463,7 @@ def verify_m3(
     root: Path,
     *,
     bundle_path: Path | None = None,
-    signer_key_path: Path | None = None,
-    expected_signer_key_id: str | None = None,
+    expected_signer_public_key: str | None = None,
 ) -> dict[str, Any]:
     manifest = verify_manifest(root)
     graph = verify_receipts(root)
@@ -359,8 +477,7 @@ def verify_m3(
     semantic = verify_m3_semantic(
         graph["receipts"],
         bundle_path=bundle_path,
-        signer_key_path=signer_key_path,
-        expected_signer_key_id=expected_signer_key_id,
+        expected_signer_public_key=expected_signer_public_key,
     )
     m3_evidence_valid = 1 if structural["status"] == "M3_ARTIFACT_STRUCTURE_PASS" and semantic["status"] == "M3_SEMANTIC_PASS" else 0
     return {
@@ -369,6 +486,9 @@ def verify_m3(
         "semantic": semantic,
         "m3_evidence_valid": m3_evidence_valid,
         "producer_imported": False,
+        # G1/M4 governance stays fail-closed regardless of evidence validity.
+        "g1_ready": False,
+        "m4_ready": False,
         "runtime_activation_allowed": 0,
     }
 
@@ -388,8 +508,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("root", type=Path)
     parser.add_argument("--mode", choices=("m3-evidence", "code-delivery"), default="m3-evidence")
     parser.add_argument("--observation-bundle", type=Path, default=None)
-    parser.add_argument("--signer-key", type=Path, default=None)
-    parser.add_argument("--expected-signer-key-id", default=None)
+    parser.add_argument("--expected-signer-public-key", default=None)
     args = parser.parse_args(argv)
     try:
         root = args.root.resolve(strict=True)
@@ -397,8 +516,7 @@ def main(argv: list[str] | None = None) -> int:
             result = verify_m3(
                 root,
                 bundle_path=args.observation_bundle.resolve(strict=True) if args.observation_bundle else None,
-                signer_key_path=args.signer_key.resolve(strict=True) if args.signer_key else None,
-                expected_signer_key_id=args.expected_signer_key_id,
+                expected_signer_public_key=args.expected_signer_public_key,
             )
         else:
             result = verify_code_delivery(root)

@@ -14,6 +14,7 @@ from typing import Any, Callable, Mapping, Optional
 
 _LOCK = threading.Lock()
 _OBSERVER: Optional[Callable[[Mapping[str, Any]], None]] = None
+_EMIT_FAILURES: list[dict[str, str]] = []
 
 
 def set_observer(callback: Callable[[Mapping[str, Any]], None]) -> None:
@@ -35,14 +36,34 @@ def observer_active() -> bool:
         return _OBSERVER is not None
 
 
+def emit_failures() -> list[dict[str, str]]:
+    """Safe error sink for observer emit failures (R2-P1-011). Non-empty means the
+    measurement for this run is invalid even though the product response was not
+    affected — product safety and benchmark validity are kept separate."""
+    with _LOCK:
+        return list(_EMIT_FAILURES)
+
+
+def reset_failures() -> None:
+    with _LOCK:
+        _EMIT_FAILURES.clear()
+
+
 def observe(event: Mapping[str, Any]) -> None:
     """Forward an observation event to the registered callback, if any.
 
-    Never raises into and never alters the caller: a snapshot of the observer is
-    taken under lock and invoked outside the caller's return path. Callers must pass
-    digest/count metadata only (no raw text, paths, or user identifiers).
+    R2-P1-011: fully isolated. An observer callback exception NEVER propagates into
+    the caller and NEVER crashes the product process; it is recorded (code +
+    exception type only, no raw) in the safe error sink so the measurement can be
+    marked invalid without altering the authoritative product response. Callers must
+    pass digest/count metadata only (no raw text, paths, or user identifiers).
     """
     with _LOCK:
         callback = _OBSERVER
-    if callback is not None:
+    if callback is None:
+        return
+    try:
         callback(dict(event))
+    except Exception as exc:  # noqa: BLE001 - deliberate: isolate all observer errors
+        with _LOCK:
+            _EMIT_FAILURES.append({"code": "OBSERVER_EMIT_FAILED", "exception_type": type(exc).__name__})

@@ -55,9 +55,9 @@ def _init_repo(root: Path) -> None:
 
 
 def _facade_source(imports_from: dict[str, str]) -> str:
-    lines = ["__butler_product_commit_oid__ = 'PLACEHOLDER'"]
-    for name in _ENTRYPOINTS:
-        lines.append(f"from {imports_from[name]} import {name}")
+    # No self-declared commit constant (R2-P0-002): identity is proven from the Git
+    # object database by verify_blob_in_commit_tree, not from a module attribute.
+    lines = [f"from {imports_from[name]} import {name}" for name in _ENTRYPOINTS]
     return "\n".join(lines) + "\n"
 
 
@@ -95,7 +95,6 @@ def build_and_validate(root: Path, variant: str) -> dict[str, object]:
         sys.path.insert(0, str(root))
         module = importlib.import_module(facade_name)
         added = facade_name
-        module.__butler_product_commit_oid__ = commit  # deploy-time identity injection
 
         if variant == "runtime_rebind":
             rebind_name = f"prod_rebind_{variant}"

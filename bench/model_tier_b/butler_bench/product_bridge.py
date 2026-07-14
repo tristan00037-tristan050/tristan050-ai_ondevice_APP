@@ -44,9 +44,10 @@ def validate_product_module(
         _block("PRODUCT_MODULE_PATH")
     if sha256_file(module_path) != expected_module_sha256:
         _block("PRODUCT_MODULE_DIGEST")
-    if getattr(module, "__butler_product_commit_oid__", None) != expected_commit_oid:
-        _block("PRODUCT_COMMIT_BINDING")
-    # F-004: do not trust the module-internal commit constant alone. Prove via git
+    # R2-P0-002 / §3.1: git is the sole source of truth for product identity. We do
+    # NOT read a module-internal __butler_product_commit_oid__ (spoofable self-claim);
+    # verify_blob_in_commit_tree below proves the module blob — and every entrypoint
+    # owner blob — is exactly what the approved commit tree records.
     # plumbing that the on-disk module blob is actually the blob recorded for this
     # path in the approved commit tree (git cat-file / ls-tree / rev-parse).
     blob_binding = verify_blob_in_commit_tree(module_path, expected_commit_oid)

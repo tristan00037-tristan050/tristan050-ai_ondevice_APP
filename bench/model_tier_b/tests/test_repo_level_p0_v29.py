@@ -165,110 +165,153 @@ class StructuralSemanticSplitTests(unittest.TestCase):
             self.assertEqual(0, verdict["runtime_activation_allowed"])
 
 
-_OBSERVATION_SCHEMA = "butler.model-tier-b.external-observation.v2.9"
-_SIGNER_KEY = bytes(range(1, 33))  # 32-byte deterministic test key
+_OBSERVATION_SCHEMA = "butler.model-tier-b.external-observation.v3"
+_SIGNER_SEED = bytes(range(1, 33))  # 32-byte deterministic Ed25519 secret seed (test-only)
+_EXTERNAL_TYPES = {"environment", "worker_event_stream_index", "cold_worker", "dual_resident", "os_egress", "epoch", "live_semantic_verify"}
 
 
 class SignedObservationSemanticTests(unittest.TestCase):
-    """P0-2 (PR861-F002): signed external observation gives a real semantic PASS path."""
+    """PR861-R2 P0-006..009: asymmetric, run-bound, per-receipt-digest, recomputed
+    semantic verification. Covers ATK-064..069 (all BLOCK) and the happy path."""
 
-    def _build_evidence(self, root: Path) -> dict[str, dict[str, object]]:
+    def _build_evidence(self, root: Path, *, duplicate_type: str | None = None):
+        order = list(MANDATORY)
+        if duplicate_type:
+            order.insert(order.index("final_verdict"), duplicate_type)  # 2nd receipt of same type
         writer = EvidenceWriter(root / "receipts", "run")
         parent: list[str] = []
-        meta: dict[str, dict[str, object]] = {}
-        for receipt_type in MANDATORY:
-            path, digest = writer.write_receipt(receipt_type, subject=[{"name": receipt_type, "sha256": SHA}], parents=parent, payload={"count": 1})
+        meta: dict[str, list[dict]] = {}
+        for index, receipt_type in enumerate(order):
+            path, digest = writer.write_receipt(receipt_type, subject=[{"name": f"{receipt_type}-{index}", "sha256": SHA}], parents=parent, payload={"count": 1})
             parent = [digest]
-            meta[receipt_type] = {"digest": digest, "path": path}
+            meta.setdefault(receipt_type, []).append({"digest": digest, "path": path})
         pointer = f"receipts/{parent[0]}.json"
         (root / "final_receipt_path.txt").write_text(pointer + "\n", encoding="ascii")
-        write_canonical_json(root / "artifact_profile.json", {"profile_version": "v2.8", "mandatory_receipts": MANDATORY, "final_pointer": pointer, "max_receipts": 100})
+        write_canonical_json(root / "artifact_profile.json", {"profile_version": "v2.8", "mandatory_receipts": sorted(set(order)), "final_pointer": pointer, "max_receipts": 100})
         build_artifact_manifest(root)
         return meta
 
-    def _sign_bundle(self, verifier, meta, *, omit=None, wrong_subject_for=None, forge=False):
-        observations: dict[str, object] = {}
-        for receipt_type, info in meta.items():
-            if receipt_type == omit:
-                continue
-            receipt = json.loads(Path(info["path"]).read_text(encoding="utf-8"))
-            subject_sha = verifier.digest_bytes(verifier.canonical_bytes(receipt["subject"]))
-            if receipt_type == wrong_subject_for:
-                subject_sha = "0" * 64
-            observations[receipt_type] = {
-                "receipt_sha256": info["digest"],
-                "subject_sha256": subject_sha,
-                "recomputed_digest": "e" * 64,
-                "observation_gap": False,
-            }
-        key_id = verifier.digest_bytes(_SIGNER_KEY)
-        unsigned = {"schema_version": _OBSERVATION_SCHEMA, "run_id": "run", "signer_key_id": key_id, "observations": observations}
-        signature = hmac.new(_SIGNER_KEY, verifier.canonical_bytes(unsigned), hashlib.sha256).hexdigest()
-        if forge:
-            signature = "f" * 64
-        bundle = dict(unsigned)
-        bundle["observation_signature_hmac_sha256"] = signature
-        return bundle, key_id
+    def _observation(self, verifier, digest, receipt_type, receipt):
+        raw = {"stream_digest": SHA, "sample_count": 3}
+        return {
+            "receipt_sha256": digest,
+            "receipt_type": receipt_type,
+            "subject_sha256": verifier.digest_bytes(verifier.canonical_bytes(receipt["subject"])),
+            "raw_safe_observation": raw,
+            "observation_digest": verifier.digest_bytes(verifier.canonical_bytes(raw)),
+        }
 
-    def _run_verifier(self, root: Path, tmp: Path, bundle: dict, key_id: str):
+    def _sign(self, verifier, meta, *, seed=_SIGNER_SEED, run_id="run", tamper=None):
+        observations = []
+        for receipt_type, entries in meta.items():
+            if receipt_type not in _EXTERNAL_TYPES:
+                continue
+            for info in entries:
+                receipt = json.loads(Path(info["path"]).read_text(encoding="utf-8"))
+                observations.append(self._observation(verifier, info["digest"], receipt_type, receipt))
+        if tamper is not None:
+            tamper(observations, meta, verifier)
+        public = verifier.ed25519_publickey(seed).hex()
+        unsigned = {"schema_version": _OBSERVATION_SCHEMA, "run_id": run_id, "signer_public_key_ed25519": public, "observations": observations}
+        signature = verifier.ed25519_sign(seed, verifier.canonical_bytes(unsigned)).hex()
+        bundle = dict(unsigned)
+        bundle["signature_ed25519"] = signature
+        return bundle, public
+
+    def _run(self, root: Path, tmp: Path, bundle: dict, pinned_pub: str):
         bundle_path = tmp / "observation_bundle.json"
         bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
-        key_path = tmp / "signer_key.hex"
-        key_path.write_text(_SIGNER_KEY.hex(), encoding="utf-8")
-        return subprocess.run(
-            [sys.executable, str(ROOT / "offline_verifier" / "verify.py"), str(root), "--mode", "m3-evidence",
-             "--observation-bundle", str(bundle_path), "--signer-key", str(key_path), "--expected-signer-key-id", key_id],
-            capture_output=True, text=True, check=False, stdin=subprocess.DEVNULL,
-        )
+        argv = [sys.executable, str(ROOT / "offline_verifier" / "verify.py"), str(root), "--mode", "m3-evidence",
+                "--observation-bundle", str(bundle_path)]
+        if pinned_pub is not None:
+            argv += ["--expected-signer-public-key", pinned_pub]
+        return subprocess.run(argv, capture_output=True, text=True, check=False, stdin=subprocess.DEVNULL)
+
+    def _assert_blocked(self, completed, detail: str) -> None:
+        self.assertNotEqual(0, completed.returncode, completed.stdout)
+        verdict = json.loads(completed.stdout)
+        self.assertEqual("BLOCKED", verdict["status"])
+        self.assertEqual(detail, verdict["detail_id"], completed.stdout)
 
     def test_signed_external_observation_happy_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            tmp = Path(directory).resolve()
-            root = tmp / "evidence"
-            root.mkdir()
-            meta = self._build_evidence(root)
+            tmp = Path(directory).resolve(); root = tmp / "evidence"; root.mkdir()
             verifier = _load_offline_verifier()
-            bundle, key_id = self._sign_bundle(verifier, meta)
-            completed = self._run_verifier(root, tmp, bundle, key_id)
+            bundle, pub = self._sign(verifier, self._build_evidence(root))
+            completed = self._run(root, tmp, bundle, pub)
             self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
             verdict = json.loads(completed.stdout)
             self.assertEqual("M3_SEMANTIC_PASS", verdict["semantic"]["status"])
             self.assertTrue(verdict["semantic"]["semantic_reexecuted"])
             self.assertEqual(1, verdict["m3_evidence_valid"])
             self.assertEqual("M3_EVIDENCE_VALID", verdict["status"])
+            self.assertIs(False, verdict["g1_ready"])
 
-    def _assert_blocked(self, completed, detail: str) -> None:
-        self.assertNotEqual(0, completed.returncode)
-        verdict = json.loads(completed.stdout)
-        self.assertEqual("BLOCKED", verdict["status"])
-        self.assertEqual(detail, verdict["detail_id"])
-
-    def test_missing_external_observation_block(self) -> None:
+    def test_ATK_064_arbitrary_recomputed_digest_block(self) -> None:
+        def tamper(obs, meta, v): obs[0]["observation_digest"] = "0" * 64
         with tempfile.TemporaryDirectory() as directory:
-            tmp = Path(directory).resolve()
-            root = tmp / "evidence"; root.mkdir()
-            meta = self._build_evidence(root)
+            tmp = Path(directory).resolve(); root = tmp / "evidence"; root.mkdir()
             verifier = _load_offline_verifier()
-            bundle, key_id = self._sign_bundle(verifier, meta, omit="dual_resident")
-            self._assert_blocked(self._run_verifier(root, tmp, bundle, key_id), "MISSING_EXTERNAL_OBSERVATION")
+            bundle, pub = self._sign(verifier, self._build_evidence(root), tamper=tamper)
+            self._assert_blocked(self._run(root, tmp, bundle, pub), "OBSERVATION_DIGEST_MISMATCH")
 
-    def test_forged_observation_signature_block(self) -> None:
+    def test_ATK_065_run_id_mismatch_block(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            tmp = Path(directory).resolve()
-            root = tmp / "evidence"; root.mkdir()
-            meta = self._build_evidence(root)
+            tmp = Path(directory).resolve(); root = tmp / "evidence"; root.mkdir()
             verifier = _load_offline_verifier()
-            bundle, key_id = self._sign_bundle(verifier, meta, forge=True)
-            self._assert_blocked(self._run_verifier(root, tmp, bundle, key_id), "FORGED_OBSERVATION_SIGNATURE")
+            bundle, pub = self._sign(verifier, self._build_evidence(root), run_id="a-different-run")
+            self._assert_blocked(self._run(root, tmp, bundle, pub), "OBSERVATION_RUN_ID_MISMATCH")
 
-    def test_observation_subject_mismatch_block(self) -> None:
+    def test_ATK_066_duplicate_type_partial_observation_block(self) -> None:
+        def tamper(obs, meta, v):
+            obs.pop()  # drop one os_egress observation, leaving its receipt unobserved
         with tempfile.TemporaryDirectory() as directory:
-            tmp = Path(directory).resolve()
-            root = tmp / "evidence"; root.mkdir()
-            meta = self._build_evidence(root)
+            tmp = Path(directory).resolve(); root = tmp / "evidence"; root.mkdir()
             verifier = _load_offline_verifier()
-            bundle, key_id = self._sign_bundle(verifier, meta, wrong_subject_for="os_egress")
-            self._assert_blocked(self._run_verifier(root, tmp, bundle, key_id), "OBSERVATION_SUBJECT_MISMATCH")
+            bundle, pub = self._sign(verifier, self._build_evidence(root, duplicate_type="os_egress"), tamper=tamper)
+            self._assert_blocked(self._run(root, tmp, bundle, pub), "MISSING_EXTERNAL_OBSERVATION")
+
+    def test_ATK_067_unpinned_or_untrusted_signer_block(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory).resolve(); root = tmp / "evidence"; root.mkdir()
+            verifier = _load_offline_verifier()
+            meta = self._build_evidence(root)
+            # (a) verifier given no pin at all -> mandatory pin block
+            bundle, pub = self._sign(verifier, meta)
+            self._assert_blocked(self._run(root, tmp, bundle, None), "SIGNER_PIN_REQUIRED")
+            # (b) attacker signs with their own key; verifier pinned to a different key
+            attacker, attacker_pub = self._sign(verifier, meta, seed=bytes(range(2, 34)))
+            legit_pub = verifier.ed25519_publickey(_SIGNER_SEED).hex()
+            self._assert_blocked(self._run(root, tmp, attacker, legit_pub), "OBSERVATION_SIGNER_UNTRUSTED")
+
+    def test_ATK_068_extra_observation_not_in_receipts_block(self) -> None:
+        def tamper(obs, meta, v):
+            sched = meta["schedule"][0]  # non-external receipt digest
+            receipt = json.loads(Path(sched["path"]).read_text(encoding="utf-8"))
+            obs.append(self._observation(v, sched["digest"], "schedule", receipt))
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory).resolve(); root = tmp / "evidence"; root.mkdir()
+            verifier = _load_offline_verifier()
+            bundle, pub = self._sign(verifier, self._build_evidence(root), tamper=tamper)
+            self._assert_blocked(self._run(root, tmp, bundle, pub), "OBSERVATION_EXTRA_NON_EXTERNAL")
+
+    def test_ATK_069_observation_raw_artifact_digest_mismatch_block(self) -> None:
+        def tamper(obs, meta, v):
+            obs[0]["raw_safe_observation"] = {"stream_digest": SHA, "sample_count": 99}  # content changed, digest stale
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory).resolve(); root = tmp / "evidence"; root.mkdir()
+            verifier = _load_offline_verifier()
+            bundle, pub = self._sign(verifier, self._build_evidence(root), tamper=tamper)
+            self._assert_blocked(self._run(root, tmp, bundle, pub), "OBSERVATION_DIGEST_MISMATCH")
+
+    def test_forged_signature_block(self) -> None:
+        def flip(sig): return sig[:-2] + ("00" if sig[-2:] != "00" else "11")
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory).resolve(); root = tmp / "evidence"; root.mkdir()
+            verifier = _load_offline_verifier()
+            bundle, pub = self._sign(verifier, self._build_evidence(root))
+            bundle["signature_ed25519"] = flip(bundle["signature_ed25519"])
+            self._assert_blocked(self._run(root, tmp, bundle, pub), "FORGED_OBSERVATION_SIGNATURE")
 
     def test_semantic_unavailable_forces_nonzero_hold_exit(self) -> None:
         # owner_runner must return an explicit non-zero HOLD, never a silent exit 0,
@@ -289,6 +332,23 @@ class SignedObservationSemanticTests(unittest.TestCase):
         self.assertEqual(owner_runner.M3_SEMANTIC_HOLD_EXIT, code_hold)
         self.assertNotEqual(0, code_hold)
         self.assertEqual(0, code_ok)
+
+
+class GovernanceInvariantTests(unittest.TestCase):
+    """R2-P0-010 / §13: g1_ready const false, runtime_activation const 0, enforced in code."""
+
+    def test_valid_governance_passes(self) -> None:
+        from butler_bench.governance import assert_governance_invariants
+
+        assert_governance_invariants({"g1_ready": False, "m4_ready": False, "runtime_activation_allowed": 0})
+
+    def test_g1_true_and_activation_mutations_block(self) -> None:
+        from butler_bench.governance import assert_governance_invariants
+
+        for mutation in ({"g1_ready": True}, {"m4_ready": True}, {"runtime_activation_allowed": 1}):
+            with self.assertRaises(GateError) as ctx:
+                assert_governance_invariants(mutation)
+            self.assertEqual(FailClass.PREFLIGHT, ctx.exception.fail_class)
 
 
 if __name__ == "__main__":

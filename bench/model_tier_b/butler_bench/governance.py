@@ -1,13 +1,27 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Mapping
 
 from .canonical import canonical_sha256
 from .errors import ExitCode, FailClass, GateError
 from .preflight import GATE_NAMES
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def assert_governance_invariants(result: Mapping[str, Any]) -> None:
+    """R2-P0-010 / §13: g1_ready is const false, runtime_activation_allowed is const 0,
+    and m4_ready is const false at this stage. Any deviation — however produced,
+    including a successful M3 handler mutating the value — is a governance BLOCK.
+    Enforced in code (not only grep) so serialization can never emit g1_ready=true.
+    """
+    if result.get("g1_ready", False) is not False:
+        _block("GOVERNANCE_G1_READY_TRUE")
+    if result.get("m4_ready", False) is not False:
+        _block("GOVERNANCE_M4_READY_TRUE")
+    if result.get("runtime_activation_allowed", 0) != 0:
+        _block("GOVERNANCE_RUNTIME_ACTIVATION_NONZERO")
 
 
 def build_final_status(*, gate_receipts: dict[str, dict[str, Any]], status: str) -> dict[str, Any]:
