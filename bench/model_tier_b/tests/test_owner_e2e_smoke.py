@@ -41,12 +41,15 @@ class OwnerE2ESmokeTest(unittest.TestCase):
             self.assertEqual(0, completed.returncode, completed.stderr[-2000:])
             result = json.loads(completed.stdout.strip().splitlines()[-1])
 
-            # Owner orchestrator + independent verifier both PASS.
+            # Owner orchestrator + independent verifier both PASS on the smoke evidence.
             self.assertTrue(result["owner_e2e_pass"])
             self.assertEqual("PASS", result["structural_verify"])
             self.assertEqual("PASS", result["semantic_verify"])
             self.assertEqual(0, result["offline_verifier_exit_code"])
-            self.assertTrue(result["m3_evidence_valid"])
+            self.assertTrue(result["smoke_evidence_verifier_pass"])
+            # ...but governance M3 validity is NOT auto-promoted by a single smoke.
+            self.assertIs(False, result["m3_evidence_valid"])
+            self.assertEqual(0, result["m3_smoke_auto_promotion_count"])
 
             # Single real physical execution on Metal with a first token.
             smoke = result["real_smoke"]

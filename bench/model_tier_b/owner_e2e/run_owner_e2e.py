@@ -201,7 +201,8 @@ def run(output_root: Path) -> dict:
     verdict = json.loads(completed.stdout)
     structural_pass = verdict.get("structural", {}).get("status") == "M3_ARTIFACT_STRUCTURE_PASS"
     semantic_pass = verdict.get("semantic", {}).get("status") == "M3_SEMANTIC_PASS"
-    m3_evidence_valid = completed.returncode == 0 and structural_pass and semantic_pass and verdict.get("m3_evidence_valid") == 1
+    # The independent verifier PASSED this smoke's evidence artifact (structural+semantic).
+    smoke_verifier_pass = completed.returncode == 0 and structural_pass and semantic_pass and verdict.get("m3_evidence_valid") == 1
 
     return {
         "schema_version": "butler.bench.owner-result.v3",
@@ -213,7 +214,8 @@ def run(output_root: Path) -> dict:
         "offline_verifier_exit_code": completed.returncode,
         "structural_verify": "PASS" if structural_pass else "FAIL",
         "semantic_verify": "PASS" if semantic_pass else "FAIL",
-        "owner_e2e_pass": bool(m3_evidence_valid),
+        "smoke_evidence_verifier_pass": bool(smoke_verifier_pass),
+        "owner_e2e_pass": bool(smoke_verifier_pass),
         "imported_product_module_count": imported_product_count,
         "real_smoke": {k: trace[k] for k in (
             "model_sha256", "model_size_bytes", "metal_backend_initialized", "actual_offloaded_layer_count",
@@ -224,7 +226,11 @@ def run(output_root: Path) -> dict:
         "measurement_class": "NON_BENCHMARK_SMOKE_DIAGNOSTIC",
         "sample_count": 1,
         "performance_comparison": "NOT_PERFORMED",
-        "m3_evidence_valid": bool(m3_evidence_valid),
+        # §0/§17: a single NON_BENCHMARK smoke never auto-promotes governance M3 validity.
+        # The verifier PASS above is about this smoke's evidence artifact only; formal
+        # M3_EVIDENCE_VALID stays false until the owner's full M3 run (cold3/warm10/...).
+        "m3_evidence_valid": False,
+        "m3_smoke_auto_promotion_count": 0,
         "m4_ready": False,
         "g1_ready": False,
         "runtime_activation_allowed": 0,
