@@ -12,7 +12,11 @@ echo " Butler 완성품 빌드 시작"
 echo "════════════════════════════════════════"
 
 echo "[1/5] Tauri 빌드 (.app)"
-( cd "$ROOT/butler-desktop" && npm run tauri build 2>&1 | tail -3 ) || true
+# pipefail(4행)로 npm 실패는 파이프 종료코드에 반영된다. 과거 `|| true` 가 이를 가려
+# beforeBuildCommand(build_runtime.sh) 실패 시 STALE 번들을 성공으로 오인했다 — 제거한다.
+( cd "$ROOT/butler-desktop" && npm run tauri build 2>&1 | tail -30 )
+TAURI_RC=$?
+[[ $TAURI_RC -eq 0 ]] || { echo "❌ tauri build 실패 (exit $TAURI_RC) — STALE 번들 방지 위해 중단"; exit 1; }
 [[ -d "$APP" ]] || { echo "❌ .app 생성 실패"; exit 1; }
 echo "  ✅ .app 생성"
 
@@ -41,8 +45,31 @@ else echo "  ⚠️ 회계 adapter 소스 없음 (별건)"; fi
 echo "[4/5] 모델 경로 계약 검증 (verifier)"
 python3 "$ROOT/scripts/verify_model_path_contract.py" "$ROOT" || { echo "❌ 계약 위반"; exit 1; }
 
+echo "[4.5/5] 빌드 표식 기록 (BUILD_INFO.json — 앱 내부 commit OID 표식)"
+BUILD_OID="$(cd "$ROOT" && git rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" || {
+  echo "❌ git commit OID 확인 실패 — provenance 없는 앱 생성 차단"
+  exit 1
+}
+BUILD_DESC="$(cd "$ROOT" && git describe --always --dirty 2>/dev/null || echo unknown)"
+BUILD_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+APP_VER="$(cd "$ROOT/butler-desktop" && node -p "require('./package.json').version" 2>/dev/null)" || {
+  echo "❌ 앱 버전 확인 실패 — provenance 없는 앱 생성 차단"
+  exit 1
+}
+if ! "$APP_PY" "$ROOT/scripts/write_build_info.py" \
+  --output "$RES/BUILD_INFO.json" \
+  --build-oid "$BUILD_OID" \
+  --git-describe "$BUILD_DESC" \
+  --timestamp-utc "$BUILD_TS" \
+  --app-version "$APP_VER"; then
+  echo "❌ BUILD_INFO.json 기록·검증 실패 — 불완전 앱 생성 차단"
+  exit 1
+fi
+echo "  ✅ BUILD_INFO.json (OID $BUILD_OID)"
+
 echo "[5/5] 완성품 준비 완료"
 echo "  앱: $ROOT/butler-desktop/src-tauri/$APP"
+echo "  빌드 표식: $RES/BUILD_INFO.json (OID $BUILD_OID)"
 echo "  대치: rm -rf /Applications/Butler.app && cp -R '$APP' /Applications/Butler.app"
 echo "════════════════════════════════════════"
 echo " ✅ Butler 완성품 빌드 완료"
