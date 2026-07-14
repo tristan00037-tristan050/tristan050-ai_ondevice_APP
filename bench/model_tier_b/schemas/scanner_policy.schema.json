@@ -1,0 +1,12 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"urn:butler:model-tier-b:scanner-policy:v2.8",
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","unregistered_file_action","unregistered_binary_action","encodings","max_depth","max_entries","max_total_expanded_bytes","max_single_file_bytes","max_compression_ratio","registered_binary_profiles","forbidden_path_kinds"],
+  "properties":{
+    "schema_version":{"const":"butler.model-tier-b.scanner-policy.v2.8"},"unregistered_file_action":{"const":"BLOCK"},"unregistered_binary_action":{"const":"BLOCK"},
+    "encodings":{"const":["ASCII","UTF-8","UTF-16LE","UTF-16BE"]},"max_depth":{"type":"integer","minimum":1},"max_entries":{"type":"integer","minimum":1},"max_total_expanded_bytes":{"type":"integer","minimum":1},"max_single_file_bytes":{"type":"integer","minimum":1},"max_compression_ratio":{"type":"integer","minimum":1},
+    "registered_binary_profiles":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["relative_path","magic_hex","mime","sha256","max_bytes","archive"],"properties":{"relative_path":{"type":"string","minLength":1},"magic_hex":{"type":"string","pattern":"^[0-9a-fA-F]{2,64}$"},"mime":{"type":"string","minLength":1},"sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},"max_bytes":{"type":"integer","minimum":1},"archive":{"type":"boolean"}}}},
+    "forbidden_path_kinds":{"type":"array","uniqueItems":true,"items":{"enum":["absolute","parent_traversal","symlink","special","casefold_collision"]}}
+  }
+}

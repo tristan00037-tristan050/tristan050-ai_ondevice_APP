@@ -1,0 +1,106 @@
+name: Butler Model Tier B v2.8
+
+on:
+  pull_request:
+    paths: ["butler_bench/**", "offline_verifier/**", "schemas/**", "policy/**", "scripts/**", "tests/**", ".github/workflows/model-tier-b-v28.yml"]
+
+permissions:
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  source_provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {fetch-depth: 0, lfs: true, submodules: recursive}
+      - run: test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      - run: git fsck --full && git lfs fsck && git rev-parse HEAD^{commit} HEAD^{tree} --show-object-format
+
+  policy_complete:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: ./scripts/ci_policy_complete.sh
+
+  compile_type_lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m compileall -q butler_bench offline_verifier scripts tests
+      - run: python -m unittest discover -s tests -p 'test_core_v28.py' -v
+
+  unit_contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python -m unittest discover -s tests -p 'test_core_v28.py' -v
+
+  actual_integration:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {fetch-depth: 0, lfs: true, submodules: recursive}
+      - run: ./scripts/ci_actual_integration.sh
+
+  mutation_adversarial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python -m unittest discover -s tests -p 'test_attack_matrix_v28.py' -v
+
+  closed_world_schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.:tests python -m unittest test_core_v28.TrustEvidenceTests.test_complete_receipt_dag -v
+
+  raw_path_secret_scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=.:tests python -m unittest test_core_v28.EnvironmentSecurityTests.test_scanner_safe_closed_tree -v
+
+  nonactivation_route_diff:
+    runs-on: macos-14
+    needs: [actual_integration]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: ./scripts/ci_route_diff.sh
+
+  package_from_git_object:
+    runs-on: ubuntu-latest
+    needs: [source_provenance, policy_complete, compile_type_lint, unit_contract, actual_integration, mutation_adversarial, closed_world_schema, raw_path_secret_scan, nonactivation_route_diff]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {fetch-depth: 0, lfs: true, submodules: recursive}
+      - run: ./scripts/package_from_git.sh "$(git rev-parse HEAD^{commit})" release-package
+      - uses: actions/upload-artifact@v4
+        with: {name: release-payload, path: release-package/, if-no-files-found: error}
+
+  swift_metal_typecheck:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - run: xcrun swiftc -typecheck swift/EnvironmentProbe.swift swift/MetalProbe.swift
+
+  signed_attestation_replay:
+    runs-on: ubuntu-latest
+    needs: [package_from_git_object, swift_metal_typecheck]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/download-artifact@v4
+        with: {name: release-payload, path: release-package}
+      - run: sha256sum -c release-package/SHA256SUMS
+      - run: test -n "${BUTLER_COSIGN_BINARY_SHA256:-}" && test -f release-package/release.bundle && test -f release-package/release.intoto.json
+      - run: python -m butler_bench.cli trust-check --trust-policy policy/trust_policy.json --expected-sha256 "$BUTLER_TRUST_POLICY_SHA256"

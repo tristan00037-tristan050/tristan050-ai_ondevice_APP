@@ -1,0 +1,7 @@
+.coverage
+.coverage.*
+reports/
+htmlcov/
+__pycache__/
+*.pyc
+owner_e2e/_run_output/

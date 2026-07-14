@@ -1,0 +1,4 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema","$id":"urn:butler:model-tier-b:artifact-manifest:v2.8","type":"object","additionalProperties":false,
+  "required":["schema_version","self_exclusion","files","artifact_manifest_sha256"],"properties":{"schema_version":{"const":"butler.model-tier-b.artifact-manifest.v2.8"},"self_exclusion":{"const":"artifact_manifest.jcs.json"},"files":{"type":"array","uniqueItems":true,"items":{"type":"object","additionalProperties":false,"required":["relative_path","size_bytes","sha256"],"properties":{"relative_path":{"type":"string","minLength":1},"size_bytes":{"type":"integer","minimum":0},"sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}},"artifact_manifest_sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"}}
+}

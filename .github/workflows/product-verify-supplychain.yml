@@ -131,24 +131,35 @@ jobs:
           set -euo pipefail
           echo "SKIP: attestation is main-only (to avoid PR/merge_group network flakiness)"
 
-      - name: Prepare subject for attestation (main only)
+      - name: Prepare deterministic bench release + subject for attestation (main only)
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .artifacts
+          # P0-5 (PR861-F005): rebuild the deterministic model-tier-B bench release
+          # payload from the committed tree and bind its digest to the DSSE subject,
+          # instead of signing only generic repo/sha text.
+          git archive --format=tar --prefix=bench-model-tier-b/ "${GITHUB_SHA}:bench/model_tier_b" \
+            | gzip -n > .artifacts/bench_model_tier_b_release.tar.gz
+          RELEASE_SHA="$(sha256sum .artifacts/bench_model_tier_b_release.tar.gz | cut -d' ' -f1)"
           {
             echo "repo=${GITHUB_REPOSITORY}"
             echo "sha=${GITHUB_SHA}"
             echo "run_id=${GITHUB_RUN_ID}"
             echo "run_attempt=${GITHUB_RUN_ATTEMPT:-0}"
+            echo "bench_model_tier_b_release_sha256=${RELEASE_SHA}"
           } > .artifacts/supplychain_subject.txt
 
       - name: Generate DSSE provenance attestation (main only)
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         uses: actions/attest-build-provenance@v3
         with:
-          subject-path: .artifacts/supplychain_subject.txt
+          # Sign the deterministic bench release payload itself (subject 1) and the
+          # subject manifest that records its digest (subject 2).
+          subject-path: |
+            .artifacts/bench_model_tier_b_release.tar.gz
+            .artifacts/supplychain_subject.txt
 
       - name: Install deps for verify (jq) (main only)
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}

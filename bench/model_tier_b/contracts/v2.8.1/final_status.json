@@ -1,0 +1,25 @@
+{
+  "schema_version": "butler.model-tier-b.final-status.v2.8.1",
+  "status": "BLOCKED",
+  "subject_sha256": "1479a0a6030a17c724bd77bc1e04aabff5ff82c2453fafa3c04c75b4250db80a",
+  "runtime_activation_allowed": 0,
+  "code_pass": false,
+  "spec_pass": true,
+  "m3_evidence_valid": false,
+  "independent_verification_valid": false,
+  "live_semantic_verification_valid": false,
+  "offline_verification_valid": false,
+  "gates": {
+    "P0_CODE_CLOSED": {"value": false, "receipt_sha256": null, "reason_code": "P0_CI_AND_INDEPENDENT_REPLAY_MISSING"},
+    "ALL_46_DEFECTS_CLOSED": {"value": false, "receipt_sha256": null, "reason_code": "DEFECT_CLOSURE_EVIDENCE_MISSING"},
+    "CLEAN_COMMITTED_TREE": {"value": false, "receipt_sha256": null, "reason_code": "OWNER_CHECKOUT_HAS_PREEXISTING_UNRELATED_DELETIONS"},
+    "GIT_BLOB_MATCH": {"value": false, "receipt_sha256": null, "reason_code": "SIGNED_BLOB_RECEIPT_MISSING"},
+    "CI_GREEN": {"value": false, "receipt_sha256": null, "reason_code": "CI_NOT_RUN"},
+    "OS_EGRESS_RECEIPT_VALID": {"value": false, "receipt_sha256": null, "reason_code": "OWNER_M3_OS_RECEIPT_MISSING"},
+    "PRODUCT_PREFLIGHT_PASS": {"value": false, "receipt_sha256": null, "reason_code": "APPROVED_REAL_PRODUCT_PREFLIGHT_NOT_RUN"},
+    "INDEPENDENT_PREFLIGHT_VERIFY": {"value": false, "receipt_sha256": null, "reason_code": "INDEPENDENT_VERIFIER_NOT_RUN"},
+    "TRUST_POLICY_CONFIGURED": {"value": false, "receipt_sha256": null, "reason_code": "TRUST_POLICY_UNSET"},
+    "BASE_FULL_SHA_RESOLVED": {"value": false, "receipt_sha256": null, "reason_code": "SIGNED_BASE_RECEIPT_MISSING"},
+    "BENCHMARK_POLICY_COMPLETE": {"value": false, "receipt_sha256": null, "reason_code": "BENCHMARK_POLICY_UNSET"}
+  }
+}

@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:model-tier-b:final-status:v2.8",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "gates",
+    "subject_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.model-tier-b.final-status.v2.8"
+    },
+    "status": {
+      "enum": [
+        "BLOCKED",
+        "SPEC_READY",
+        "CODE_READY_FOR_AUDIT",
+        "READY_FOR_OWNER_M3_RUN",
+        "M3_EVIDENCE_VALID_M4_PENDING"
+      ]
+    },
+    "subject_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "P0_CODE_CLOSED",
+        "ALL_46_DEFECTS_CLOSED",
+        "CLEAN_COMMITTED_TREE",
+        "GIT_BLOB_MATCH",
+        "CI_GREEN",
+        "OS_EGRESS_RECEIPT_VALID",
+        "PRODUCT_PREFLIGHT_PASS",
+        "INDEPENDENT_PREFLIGHT_VERIFY",
+        "TRUST_POLICY_CONFIGURED",
+        "BASE_FULL_SHA_RESOLVED",
+        "BENCHMARK_POLICY_COMPLETE"
+      ],
+      "properties": {
+        "P0_CODE_CLOSED": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "receipt_sha256"
+          ],
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "receipt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "ALL_46_DEFECTS_CLOSED": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "receipt_sha256"
+          ],
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "receipt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "CLEAN_COMMITTED_TREE": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "receipt_sha256"
+          ],
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "receipt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "GIT_BLOB_MATCH": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "receipt_sha256"
+          ],
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "receipt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "CI_GREEN": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "receipt_sha256"
+          ],
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "receipt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "OS_EGRESS_RECEIPT_VALID": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "receipt_sha256"
+          ],
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "receipt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "PRODUCT_PREFLIGHT_PASS": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "receipt_sha256"
+          ],
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "receipt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "INDEPENDENT_PREFLIGHT_VERIFY": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "receipt_sha256"
+          ],
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "receipt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "TRUST_POLICY_CONFIGURED": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "receipt_sha256"
+          ],
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "receipt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "BASE_FULL_SHA_RESOLVED": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "receipt_sha256"
+          ],
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "receipt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "BENCHMARK_POLICY_COMPLETE": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "receipt_sha256"
+          ],
+          "properties": {
+            "value": {
+              "type": "boolean"
+            },
+            "receipt_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

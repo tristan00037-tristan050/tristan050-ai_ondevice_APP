@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:model-tier-b:artifact-profile:v2.8.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile_version", "mandatory_receipt_counts", "receipt_schema_sha256", "final_receipt_sha256", "max_receipts"],
+  "properties": {
+    "profile_version": {"const": "v2.8.1"},
+    "receipt_schema_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "final_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "max_receipts": {"type": "integer", "minimum": 16, "maximum": 100000},
+    "mandatory_receipt_counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_provenance", "approval", "trust_verification", "benchmark_policy", "fixture_manifest", "model_manifest_A", "model_manifest_B", "worker_A", "worker_B", "memory", "metal", "egress", "product_preflight", "live_semantic_verification", "offline_verification", "final_status"],
+      "properties": {
+        "source_provenance": {"const": 1}, "approval": {"const": 1}, "trust_verification": {"const": 1}, "benchmark_policy": {"const": 1}, "fixture_manifest": {"const": 1}, "model_manifest_A": {"const": 1}, "model_manifest_B": {"const": 1}, "worker_A": {"const": 1}, "worker_B": {"const": 1}, "memory": {"const": 1}, "metal": {"const": 1}, "egress": {"const": 1}, "product_preflight": {"const": 1}, "live_semantic_verification": {"const": 1}, "offline_verification": {"const": 1}, "final_status": {"const": 1}
+      }
+    }
+  }
+}

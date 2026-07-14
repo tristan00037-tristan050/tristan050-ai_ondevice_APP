@@ -1,0 +1,16 @@
+{
+  "schema_version": "butler.model-tier-b.scanner-policy.v2.8.1",
+  "status": "DRAFT",
+  "max_files": 100000,
+  "max_file_bytes": 536870912,
+  "max_total_uncompressed_bytes": 2147483648,
+  "max_archive_depth": 3,
+  "max_expansion_ratio_ppm": 100000000,
+  "scan_encodings": ["bytes", "utf-8", "utf-16-le", "utf-16-be"],
+  "reject_symlinks": true,
+  "reject_hardlinks": true,
+  "reject_duplicate_archive_entries": true,
+  "reject_casefold_collisions": true,
+  "reject_nfkc_path_changes": true,
+  "reject_archive_traversal": true
+}

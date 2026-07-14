@@ -1,0 +1,64 @@
+﻿attack_id,name,area,mutation,expected_exit,expected_fail_class,must_block,linked_acceptance_ids
+ATK-001,manifest_only_no_receipts,evidence DAG,construct artifact/runtime with manifest_only_no_receipts,nonzero,EVIDENCE,YES,AC-EVD-01;AC-EVD-02;AC-EVD-03
+ATK-002,secret_payload_bin,artifact scanner,construct artifact/runtime with secret_payload_bin,nonzero,SECURITY_PRIVACY,YES,AC-SCN-01;AC-SCN-02;AC-SCN-03
+ATK-003,nul_secret_file,artifact scanner,construct artifact/runtime with nul_secret_file,nonzero,SECURITY_PRIVACY,YES,AC-SCN-01;AC-SCN-02;AC-SCN-03
+ATK-004,archive_zip_bomb,artifact scanner,construct artifact/runtime with archive_zip_bomb,nonzero,SECURITY_PRIVACY,YES,AC-SCN-01;AC-SCN-02;AC-SCN-03
+ATK-005,archive_path_traversal,artifact scanner,construct artifact/runtime with archive_path_traversal,nonzero,SECURITY_PRIVACY,YES,AC-SCN-01;AC-SCN-02;AC-SCN-03
+ATK-006,utf16_secret,artifact scanner,construct artifact/runtime with utf16_secret,nonzero,SECURITY_PRIVACY,YES,AC-SCN-01;AC-SCN-02;AC-SCN-03
+ATK-007,forged_mock_egress,OS egress,construct artifact/runtime with forged_mock_egress,nonzero,EGRESS,YES,AC-EGR-01;AC-EGR-02;AC-EGR-03
+ATK-008,nonexistent_pid_egress,OS egress,construct artifact/runtime with nonexistent_pid_egress,nonzero,EGRESS,YES,AC-EGR-01;AC-EGR-02;AC-EGR-03
+ATK-009,ipv6_only_escape,OS egress,construct artifact/runtime with ipv6_only_escape,nonzero,EGRESS,YES,AC-EGR-01;AC-EGR-02;AC-EGR-03
+ATK-010,dns_subprocess_escape,OS egress,construct artifact/runtime with dns_subprocess_escape,nonzero,EGRESS,YES,AC-EGR-01;AC-EGR-02;AC-EGR-03
+ATK-011,controller_interval_gap,OS egress,construct artifact/runtime with controller_interval_gap,nonzero,EGRESS,YES,AC-EGR-01;AC-EGR-02;AC-EGR-03
+ATK-012,forged_dual_receipt,dual resident,construct artifact/runtime with forged_dual_receipt,nonzero,DUAL_RESIDENT,YES,AC-DUAL-01;AC-DUAL-02;AC-DUAL-03
+ATK-013,same_model_both_candidates,dual resident,construct artifact/runtime with same_model_both_candidates,nonzero,DUAL_RESIDENT,YES,AC-DUAL-01;AC-DUAL-02;AC-DUAL-03
+ATK-014,no_inference_overlap,dual resident,construct artifact/runtime with no_inference_overlap,nonzero,DUAL_RESIDENT,YES,AC-DUAL-01;AC-DUAL-02;AC-DUAL-03
+ATK-015,synthetic_worker_events,worker/timing,construct artifact/runtime with synthetic_worker_events,nonzero,PROTOCOL,YES,AC-WRK-01;AC-WRK-02;AC-WRK-03
+ATK-016,worker_replays_nonce,worker/timing,construct artifact/runtime with worker_replays_nonce,nonzero,PROTOCOL,YES,AC-WRK-01;AC-WRK-02;AC-WRK-03
+ATK-017,parent_first_byte_forged,worker/timing,construct artifact/runtime with parent_first_byte_forged,nonzero,PROTOCOL,YES,AC-WRK-01;AC-WRK-02;AC-WRK-03
+ATK-018,stdout_flood,worker/timing,construct artifact/runtime with stdout_flood,nonzero,PROTOCOL,YES,AC-WRK-01;AC-WRK-02;AC-WRK-03
+ATK-019,partial_jsonl_tail,worker/timing,construct artifact/runtime with partial_jsonl_tail,nonzero,PROTOCOL,YES,AC-WRK-01;AC-WRK-02;AC-WRK-03
+ATK-020,descendant_process_leak,worker/timing,construct artifact/runtime with descendant_process_leak,nonzero,PROTOCOL,YES,AC-WRK-01;AC-WRK-02;AC-WRK-03
+ATK-021,model_swap_after_hash,model identity,construct artifact/runtime with model_swap_after_hash,nonzero,IDENTITY,YES,AC-MOD-01;AC-MOD-02;AC-MOD-03
+ATK-022,model_symlink,model identity,construct artifact/runtime with model_symlink,nonzero,IDENTITY,YES,AC-MOD-01;AC-MOD-02;AC-MOD-03
+ATK-023,external_hardlink,model identity,construct artifact/runtime with external_hardlink,nonzero,IDENTITY,YES,AC-MOD-01;AC-MOD-02;AC-MOD-03
+ATK-024,tokenizer_omitted,model identity,construct artifact/runtime with tokenizer_omitted,nonzero,IDENTITY,YES,AC-MOD-01;AC-MOD-02;AC-MOD-03
+ATK-025,lfs_pointer_as_model,source/provenance,construct artifact/runtime with lfs_pointer_as_model,nonzero,PROVENANCE,YES,AC-SRC-01;AC-SRC-02;AC-SRC-03
+ATK-026,short_commit_oid,source/provenance,construct artifact/runtime with short_commit_oid,nonzero,PROVENANCE,YES,AC-SRC-01;AC-SRC-02;AC-SRC-03
+ATK-027,dirty_worktree,source/provenance,construct artifact/runtime with dirty_worktree,nonzero,PROVENANCE,YES,AC-SRC-01;AC-SRC-02;AC-SRC-03
+ATK-028,submodule_commit_mismatch,source/provenance,construct artifact/runtime with submodule_commit_mismatch,nonzero,PROVENANCE,YES,AC-SRC-01;AC-SRC-02;AC-SRC-03
+ATK-029,git_blob_vs_sha_confusion,source/provenance,construct artifact/runtime with git_blob_vs_sha_confusion,nonzero,PROVENANCE,YES,AC-SRC-01;AC-SRC-02;AC-SRC-03
+ATK-030,duplicate_yaml_key,policy/trust,construct artifact/runtime with duplicate_yaml_key,nonzero,POLICY_TRUST,YES,AC-POL-01;AC-POL-02;AC-POL-03
+ATK-031,policy_unset_default,policy/trust,construct artifact/runtime with policy_unset_default,nonzero,POLICY_TRUST,YES,AC-POL-01;AC-POL-02;AC-POL-03
+ATK-032,wildcard_signing_identity,policy/trust,construct artifact/runtime with wildcard_signing_identity,nonzero,POLICY_TRUST,YES,AC-POL-01;AC-POL-02;AC-POL-03
+ATK-033,wrong_oidc_issuer,policy/trust,construct artifact/runtime with wrong_oidc_issuer,nonzero,POLICY_TRUST,YES,AC-POL-01;AC-POL-02;AC-POL-03
+ATK-034,attestation_wrong_subject,policy/trust,construct artifact/runtime with attestation_wrong_subject,nonzero,POLICY_TRUST,YES,AC-POL-01;AC-POL-02;AC-POL-03
+ATK-035,outer_zip_self_signature_claim,CI/package,construct artifact/runtime with outer_zip_self_signature_claim,nonzero,ATTESTATION,YES,AC-CI-01;AC-CI-02;AC-CI-03
+ATK-036,fake_product_module,product/repair,construct artifact/runtime with fake_product_module,nonzero,PRODUCT_GATE,YES,AC-BOX-01;AC-BOX-02;AC-BOX-03
+ATK-037,repair_on_dlp_failure,product/repair,construct artifact/runtime with repair_on_dlp_failure,nonzero,PRODUCT_GATE,YES,AC-BOX-01;AC-BOX-02;AC-BOX-03
+ATK-038,repair_twice,product/repair,construct artifact/runtime with repair_twice,nonzero,PRODUCT_GATE,YES,AC-BOX-01;AC-BOX-02;AC-BOX-03
+ATK-039,stale_primary_final,product/repair,construct artifact/runtime with stale_primary_final,nonzero,PRODUCT_GATE,YES,AC-BOX-01;AC-BOX-02;AC-BOX-03
+ATK-040,terminal_before_dlp,product/repair,construct artifact/runtime with terminal_before_dlp,nonzero,PRODUCT_GATE,YES,AC-BOX-01;AC-BOX-02;AC-BOX-03
+ATK-041,caller_supplied_validator,independent verifier,construct artifact/runtime with caller_supplied_validator,nonzero,INDEPENDENT_VERIFY,YES,AC-VER-01;AC-VER-02;AC-VER-03
+ATK-042,producer_import_in_verifier,independent verifier,construct artifact/runtime with producer_import_in_verifier,nonzero,INDEPENDENT_VERIFY,YES,AC-VER-01;AC-VER-02;AC-VER-03
+ATK-043,all_true_preflight_json,governance/status,construct artifact/runtime with all_true_preflight_json,nonzero,PREFLIGHT,YES,AC-GOV-01;AC-GOV-02;AC-GOV-03
+ATK-044,p0_only_m3_start,governance/status,construct artifact/runtime with p0_only_m3_start,nonzero,PREFLIGHT,YES,AC-GOV-01;AC-GOV-02;AC-GOV-03
+ATK-045,receipt_orphan,evidence DAG,construct artifact/runtime with receipt_orphan,nonzero,EVIDENCE,YES,AC-EVD-01;AC-EVD-02;AC-EVD-03
+ATK-046,receipt_cycle,evidence DAG,construct artifact/runtime with receipt_cycle,nonzero,EVIDENCE,YES,AC-EVD-01;AC-EVD-02;AC-EVD-03
+ATK-047,duplicate_receipt_digest,evidence DAG,construct artifact/runtime with duplicate_receipt_digest,nonzero,EVIDENCE,YES,AC-EVD-01;AC-EVD-02;AC-EVD-03
+ATK-048,unknown_schema_field,evidence DAG,construct artifact/runtime with unknown_schema_field,nonzero,EVIDENCE,YES,AC-EVD-01;AC-EVD-02;AC-EVD-03
+ATK-049,warmup_in_metrics,schedule/statistics,construct artifact/runtime with warmup_in_metrics,nonzero,SCHEDULE,YES,AC-SCH-01;AC-SCH-02;AC-SCH-03
+ATK-050,abba_schedule_violation,schedule/statistics,construct artifact/runtime with abba_schedule_violation,nonzero,SCHEDULE,YES,AC-SCH-01;AC-SCH-02;AC-SCH-03
+ATK-051,cooldown_config_not_elapsed,schedule/statistics,construct artifact/runtime with cooldown_config_not_elapsed,nonzero,SCHEDULE,YES,AC-SCH-01;AC-SCH-02;AC-SCH-03
+ATK-052,invalid_epoch_cherry_pick,schedule/statistics,construct artifact/runtime with invalid_epoch_cherry_pick,nonzero,SCHEDULE,YES,AC-SCH-01;AC-SCH-02;AC-SCH-03
+ATK-053,sampler_gap_hidden,memory/Metal,construct artifact/runtime with sampler_gap_hidden,nonzero,ENVIRONMENT_MEMORY,YES,AC-MEM-01;AC-MEM-02;AC-MEM-03
+ATK-054,rss_wrong_pid_scope,memory/Metal,construct artifact/runtime with rss_wrong_pid_scope,nonzero,ENVIRONMENT_MEMORY,YES,AC-MEM-01;AC-MEM-02;AC-MEM-03
+ATK-055,thermal_critical_accepted,memory/Metal,construct artifact/runtime with thermal_critical_accepted,nonzero,ENVIRONMENT_MEMORY,YES,AC-MEM-01;AC-MEM-02;AC-MEM-03
+ATK-056,metal_receipt_forged,memory/Metal,construct artifact/runtime with metal_receipt_forged,nonzero,ENVIRONMENT_MEMORY,YES,AC-MEM-01;AC-MEM-02;AC-MEM-03
+ATK-057,energy_estimated_without_meter,energy,construct artifact/runtime with energy_estimated_without_meter,nonzero,MEASUREMENT,YES,AC-ENG-01;AC-ENG-02;AC-ENG-03
+ATK-058,secret_in_exception_trace,artifact scanner,construct artifact/runtime with secret_in_exception_trace,nonzero,SECURITY_PRIVACY,YES,AC-SCN-01;AC-SCN-02;AC-SCN-03
+ATK-059,casefold_filename_collision,artifact scanner,construct artifact/runtime with casefold_filename_collision,nonzero,SECURITY_PRIVACY,YES,AC-SCN-01;AC-SCN-02;AC-SCN-03
+ATK-060,unsigned_ci_artifact_swap,CI/package,construct artifact/runtime with unsigned_ci_artifact_swap,nonzero,ATTESTATION,YES,AC-CI-01;AC-CI-02;AC-CI-03
+ATK-061,entrypoint_owner_tamper_after_commit,product gate,construct artifact/runtime with entrypoint_owner_tamper_after_commit,nonzero,PRODUCT_GATE,YES,AC-PRD-01;AC-PRD-02;AC-PRD-03
+ATK-062,entrypoint_owner_untracked_file,product gate,construct artifact/runtime with entrypoint_owner_untracked_file,nonzero,PRODUCT_GATE,YES,AC-PRD-01;AC-PRD-02;AC-PRD-03
+ATK-063,entrypoint_rebound_at_runtime,product gate,construct artifact/runtime with entrypoint_rebound_at_runtime,nonzero,PRODUCT_GATE,YES,AC-PRD-01;AC-PRD-02;AC-PRD-03

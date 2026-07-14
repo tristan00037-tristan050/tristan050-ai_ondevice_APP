@@ -1,0 +1,15 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"urn:butler:model-tier-b:trust-policy:v2.8",
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","mode","certificate_oidc_issuer","certificate_identity","repository","workflow","ref","commit_sha","subject_name","subject_sha256","trusted_root_source","expiry_utc"],
+  "properties":{
+    "schema_version":{"const":"butler.model-tier-b.trust-policy.v2.8"},
+    "mode":{"enum":["keyless","key","kms"]},
+    "certificate_oidc_issuer":{"$ref":"#/$defs/fixed"},"certificate_identity":{"$ref":"#/$defs/fixed"},"repository":{"$ref":"#/$defs/fixed"},"workflow":{"$ref":"#/$defs/fixed"},"ref":{"$ref":"#/$defs/fixed"},
+    "commit_sha":{"type":"string","pattern":"^(?:[0-9a-f]{40}|[0-9a-f]{64})$"},
+    "subject_name":{"const":"release.tar.gz"},"subject_sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "trusted_root_source":{"$ref":"#/$defs/fixed"},"expiry_utc":{"type":"string","format":"date-time"}
+  },
+  "$defs":{"fixed":{"type":"string","minLength":1,"pattern":"^[^*?]+$"}}
+}

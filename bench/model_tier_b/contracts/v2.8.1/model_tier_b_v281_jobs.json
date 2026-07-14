@@ -1,0 +1,7 @@
+{
+  "schema_version": "butler.model-tier-b.ci-jobs.v2.8.1",
+  "activation": "REFERENCE_ONLY",
+  "runtime_activation_allowed": 0,
+  "jobs": ["schema-contract", "strict-json", "unit-security", "attack-contract-60", "source-provenance", "model-materials", "artifact-scanner", "worker-protocol", "product-preflight", "macos-m3-benchmark", "independent-offline-verify", "attestation-trust-verify"],
+  "activation_preconditions": ["approved benchmark policy", "approved trust policy", "pinned runner labels", "pinned action SHAs", "owner authorization"]
+}

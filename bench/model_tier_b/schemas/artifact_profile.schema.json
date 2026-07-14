@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile_version",
+    "mandatory_receipts",
+    "final_pointer",
+    "max_receipts"
+  ],
+  "properties": {
+    "profile_version": {
+      "const": "v2.8"
+    },
+    "mandatory_receipts": {
+      "type": "array",
+      "minItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "final_pointer": {
+      "type": "string",
+      "pattern": "^receipts/[0-9a-f]{64}\\.json$"
+    },
+    "max_receipts": {
+      "type": "integer",
+      "minimum": 16,
+      "maximum": 100000
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:model-tier-b:final-status:v2.8.1",
+  "$defs": {
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "receipt_sha256", "reason_code"],
+      "properties": {
+        "value": {"type": "boolean"},
+        "receipt_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "reason_code": {"type": ["string", "null"], "minLength": 1}
+      },
+      "allOf": [
+        {"if": {"properties": {"value": {"const": true}}}, "then": {"properties": {"receipt_sha256": {"type": "string"}, "reason_code": {"const": null}}}},
+        {"if": {"properties": {"value": {"const": false}}}, "then": {"properties": {"receipt_sha256": {"const": null}, "reason_code": {"type": "string", "minLength": 1}}}}
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "subject_sha256", "runtime_activation_allowed", "code_pass", "spec_pass", "m3_evidence_valid", "independent_verification_valid", "live_semantic_verification_valid", "offline_verification_valid", "gates"],
+  "properties": {
+    "schema_version": {"const": "butler.model-tier-b.final-status.v2.8.1"},
+    "status": {"enum": ["BLOCKED", "SPEC_READY", "CODE_READY_FOR_AUDIT", "READY_FOR_OWNER_M3_RUN", "M3_EVIDENCE_VALID_M4_PENDING"]},
+    "subject_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "runtime_activation_allowed": {"const": 0},
+    "code_pass": {"type": "boolean"}, "spec_pass": {"type": "boolean"}, "m3_evidence_valid": {"type": "boolean"},
+    "independent_verification_valid": {"type": "boolean"}, "live_semantic_verification_valid": {"type": "boolean"}, "offline_verification_valid": {"type": "boolean"},
+    "gates": {
+      "type": "object", "additionalProperties": false,
+      "required": ["P0_CODE_CLOSED", "ALL_46_DEFECTS_CLOSED", "CLEAN_COMMITTED_TREE", "GIT_BLOB_MATCH", "CI_GREEN", "OS_EGRESS_RECEIPT_VALID", "PRODUCT_PREFLIGHT_PASS", "INDEPENDENT_PREFLIGHT_VERIFY", "TRUST_POLICY_CONFIGURED", "BASE_FULL_SHA_RESOLVED", "BENCHMARK_POLICY_COMPLETE"],
+      "properties": {
+        "P0_CODE_CLOSED": {"$ref": "#/$defs/gate"}, "ALL_46_DEFECTS_CLOSED": {"$ref": "#/$defs/gate"}, "CLEAN_COMMITTED_TREE": {"$ref": "#/$defs/gate"}, "GIT_BLOB_MATCH": {"$ref": "#/$defs/gate"}, "CI_GREEN": {"$ref": "#/$defs/gate"}, "OS_EGRESS_RECEIPT_VALID": {"$ref": "#/$defs/gate"}, "PRODUCT_PREFLIGHT_PASS": {"$ref": "#/$defs/gate"}, "INDEPENDENT_PREFLIGHT_VERIFY": {"$ref": "#/$defs/gate"}, "TRUST_POLICY_CONFIGURED": {"$ref": "#/$defs/gate"}, "BASE_FULL_SHA_RESOLVED": {"$ref": "#/$defs/gate"}, "BENCHMARK_POLICY_COMPLETE": {"$ref": "#/$defs/gate"}
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"enum": ["READY_FOR_OWNER_M3_RUN", "M3_EVIDENCE_VALID_M4_PENDING"]}}}, "then": {"properties": {"gates": {"properties": {"P0_CODE_CLOSED": {"properties": {"value": {"const": true}}}, "ALL_46_DEFECTS_CLOSED": {"properties": {"value": {"const": true}}}, "CLEAN_COMMITTED_TREE": {"properties": {"value": {"const": true}}}, "GIT_BLOB_MATCH": {"properties": {"value": {"const": true}}}, "CI_GREEN": {"properties": {"value": {"const": true}}}, "OS_EGRESS_RECEIPT_VALID": {"properties": {"value": {"const": true}}}, "PRODUCT_PREFLIGHT_PASS": {"properties": {"value": {"const": true}}}, "INDEPENDENT_PREFLIGHT_VERIFY": {"properties": {"value": {"const": true}}}, "TRUST_POLICY_CONFIGURED": {"properties": {"value": {"const": true}}}, "BASE_FULL_SHA_RESOLVED": {"properties": {"value": {"const": true}}}, "BENCHMARK_POLICY_COMPLETE": {"properties": {"value": {"const": true}}}}}}}},
+    {"if": {"properties": {"status": {"const": "M3_EVIDENCE_VALID_M4_PENDING"}}}, "then": {"properties": {"m3_evidence_valid": {"const": true}, "independent_verification_valid": {"const": true}, "live_semantic_verification_valid": {"const": true}, "offline_verification_valid": {"const": true}}}}
+  ]
+}
