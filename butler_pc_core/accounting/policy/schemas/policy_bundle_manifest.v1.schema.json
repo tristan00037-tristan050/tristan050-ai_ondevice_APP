@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/policy_bundle_manifest.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_profile_id",
+    "bundle_version",
+    "status",
+    "canonicalization",
+    "artifacts",
+    "approval_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.box5.policy_bundle_manifest.v1"
+    },
+    "policy_profile_id": {
+      "const": "atlink.smb.v1"
+    },
+    "bundle_version": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "BLOCKED_PENDING_FINANCE_APPROVAL",
+        "APPROVED"
+      ]
+    },
+    "canonicalization": {
+      "enum": [
+        "RFC8785"
+      ]
+    },
+    "approval_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "logical_id",
+          "relative_path",
+          "raw_sha256",
+          "size"
+        ],
+        "properties": {
+          "logical_id": {
+            "type": "string"
+          },
+          "relative_path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*\\.\\.).+$"
+          },
+          "raw_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/cash_flow_event_policy.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_profile_id",
+    "status",
+    "rules",
+    "approval_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.box5.cash_flow_event_policy.v1"
+    },
+    "policy_profile_id": {
+      "const": "atlink.smb.v1"
+    },
+    "status": {
+      "enum": [
+        "BLOCKED_PENDING_FINANCE_APPROVAL",
+        "APPROVED"
+      ]
+    },
+    "approval_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cash_flow_policy_id",
+          "economic_event_type",
+          "cash_account_role",
+          "activity",
+          "evidence_requirements",
+          "effective_from"
+        ],
+        "properties": {
+          "cash_flow_policy_id": {
+            "type": "string"
+          },
+          "economic_event_type": {
+            "type": "string"
+          },
+          "cash_account_role": {
+            "type": "string"
+          },
+          "activity": {
+            "enum": [
+              "OPERATING",
+              "INVESTING",
+              "FINANCING",
+              "EXCLUDED_INTERNAL_TRANSFER",
+              "NON_CASH"
+            ]
+          },
+          "evidence_requirements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      }
+    }
+  }
+}

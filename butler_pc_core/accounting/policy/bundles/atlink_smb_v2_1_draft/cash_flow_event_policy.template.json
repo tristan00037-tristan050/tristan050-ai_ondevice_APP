@@ -1,0 +1,7 @@
+{
+  "schema_version": "butler.box5.cash_flow_event_policy.v1",
+  "policy_profile_id": "atlink.smb.v1",
+  "status": "BLOCKED_PENDING_FINANCE_APPROVAL",
+  "rules": [],
+  "approval_id": null
+}

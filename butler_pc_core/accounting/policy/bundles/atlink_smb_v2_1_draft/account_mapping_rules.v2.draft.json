@@ -1,0 +1,162 @@
+{
+  "schema_version": "butler.box5.account_mapping_rules.v2",
+  "policy_profile_id": "atlink.smb.v1",
+  "bundle_version": "2.1-draft",
+  "status": "BLOCKED_PENDING_FINANCE_APPROVAL",
+  "chart_registry_raw_sha256_ref": "b80d79bd54a0d4e54d6c9b5abe87d811032b78fd7f072ea5961baf37f221e6a0",
+  "priority_semantics": "LOWER_NUMBER_EVALUATES_FIRST",
+  "rules": [
+    {
+      "rule_id": "MAP-SAAS-EXC-PREPAID-V2",
+      "priority": 90,
+      "management_tags_any": [
+        "SAAS",
+        "CLOUD",
+        "SUBSCRIPTION"
+      ],
+      "bank_direction": "OUTFLOW",
+      "purpose_codes_any": [
+        "INTERNAL_OPERATION",
+        "EXTERNAL_MARKETING"
+      ],
+      "predicate": {
+        "all": [
+          {
+            "field": "vendor_descriptor_id",
+            "op": "PRESENT"
+          },
+          {
+            "field": "service_period_end",
+            "op": "DATE_CROSSES_PERIOD_END"
+          },
+          {
+            "field": "evidence_type",
+            "op": "IN",
+            "value": [
+              "INVOICE",
+              "CONTRACT",
+              "RECEIPT"
+            ]
+          }
+        ]
+      },
+      "target_account_id": "BS.CA.QUICK.PREPAID_EXP",
+      "posting_eligibility": "BLOCKED_PENDING_POSTABILITY_MATERIALITY_TAX_APPROVAL",
+      "on_missing_evidence": "FINANCE_REVIEW_REQUIRED"
+    },
+    {
+      "rule_id": "MAP-SAAS-EXC-ADV-V2",
+      "priority": 100,
+      "management_tags_any": [
+        "SAAS",
+        "SUBSCRIPTION"
+      ],
+      "bank_direction": "OUTFLOW",
+      "purpose_codes_any": [
+        "EXTERNAL_MARKETING"
+      ],
+      "predicate": {
+        "all": [
+          {
+            "field": "vendor_descriptor_id",
+            "op": "PRESENT"
+          },
+          {
+            "field": "purpose_evidence_id",
+            "op": "PRESENT"
+          }
+        ]
+      },
+      "target_account_id": "PL.SGA.ADVERTISING",
+      "posting_eligibility": "BLOCKED_PENDING_TAX_APPROVAL",
+      "on_missing_evidence": "UNCLASSIFIED"
+    },
+    {
+      "rule_id": "MAP-TELECOM-V2",
+      "priority": 200,
+      "management_tags_any": [
+        "TELECOM"
+      ],
+      "bank_direction": "OUTFLOW",
+      "purpose_codes_any": [
+        "INTERNAL_OPERATION"
+      ],
+      "predicate": {
+        "all": [
+          {
+            "field": "vendor_descriptor_id",
+            "op": "PRESENT"
+          },
+          {
+            "field": "service_kind",
+            "op": "EQ",
+            "value": "TELECOMMUNICATION_SERVICE"
+          }
+        ]
+      },
+      "target_account_id": "PL.SGA.COMMUNICATION",
+      "posting_eligibility": "BLOCKED_PENDING_TAX_APPROVAL",
+      "on_missing_evidence": "UNCLASSIFIED"
+    },
+    {
+      "rule_id": "MAP-SAAS-DEFAULT-V2",
+      "priority": 300,
+      "management_tags_any": [
+        "SAAS",
+        "CLOUD",
+        "SUBSCRIPTION"
+      ],
+      "bank_direction": "OUTFLOW",
+      "purpose_codes_any": [
+        "INTERNAL_OPERATION"
+      ],
+      "predicate": {
+        "all": [
+          {
+            "field": "vendor_descriptor_id",
+            "op": "PRESENT"
+          },
+          {
+            "field": "purpose_evidence_id",
+            "op": "PRESENT"
+          }
+        ]
+      },
+      "target_account_id": "PL.SGA.PAYMENT_FEE",
+      "posting_eligibility": "BLOCKED_PENDING_TAX_APPROVAL",
+      "on_missing_evidence": "UNCLASSIFIED"
+    }
+  ],
+  "post_mapping_guards": [
+    {
+      "guard_id": "GUARD-CONSISTENCY-001",
+      "effect": "FINANCE_POLICY_CONFLICT",
+      "requires": [
+        "vendor_descriptor_id",
+        "purpose_code",
+        "historical_approval_id"
+      ]
+    },
+    {
+      "guard_id": "GUARD-POSTABILITY-001",
+      "effect": "BLOCK",
+      "requires": [
+        "posting_overlay_approval_id"
+      ]
+    },
+    {
+      "guard_id": "GUARD-TAX-001",
+      "effect": "NO_AUTO_POST",
+      "requires": [
+        "tax_policy_id"
+      ]
+    }
+  ],
+  "open_decisions": [
+    "PREPAID_EXP bank_txn_candidate=false conflict",
+    "85 account tax policies",
+    "cash-flow event policy",
+    "SaaS historical voucher treatment",
+    "prepaid materiality and amortization policy"
+  ]
+}

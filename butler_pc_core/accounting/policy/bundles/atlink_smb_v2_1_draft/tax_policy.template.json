@@ -1,0 +1,7 @@
+{
+  "schema_version": "butler.box5.tax_policy.v1",
+  "policy_profile_id": "atlink.smb.v1",
+  "status": "BLOCKED_PENDING_TAX_REVIEW",
+  "policies": [],
+  "approval_id": null
+}

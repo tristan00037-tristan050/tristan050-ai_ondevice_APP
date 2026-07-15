@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/finance_approval.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "approval_id",
+    "policy_profile_id",
+    "bundle_raw_sha256",
+    "scope",
+    "decision",
+    "approved_by_role",
+    "signer_key_id",
+    "approved_at",
+    "effective_from",
+    "change_reason",
+    "retroactivity"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.box5.finance_approval.v1"
+    },
+    "approval_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "policy_profile_id": {
+      "const": "atlink.smb.v1"
+    },
+    "bundle_raw_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "scope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "decision": {
+      "enum": [
+        "PENDING",
+        "APPROVED",
+        "REJECTED"
+      ]
+    },
+    "approved_by_role": {
+      "const": "ACCOUNTING_GOLDEN_OWNER"
+    },
+    "signer_key_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "approved_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "effective_from": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date"
+    },
+    "change_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "retroactivity": {
+      "enum": [
+        "UNDECIDED",
+        "PROSPECTIVE",
+        "RETROSPECTIVE_WITH_RESTATEMENT",
+        "RETROSPECTIVE_NO_RESTATEMENT_APPROVED"
+      ]
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "schema_version": "butler.box5.vendor_descriptor_registry.v1",
+  "policy_profile_id": "atlink.smb.v1",
+  "status": "BLOCKED_EMPTY_REGISTRY",
+  "descriptors": [],
+  "approval_id": null
+}

@@ -1,0 +1,859 @@
+{
+  "schema_version": "butler.box5.posting_policy_overlay.v1",
+  "policy_profile_id": "atlink.smb.v1",
+  "status": "BLOCKED_PENDING_FINANCE_APPROVAL",
+  "chart_registry_raw_sha256_ref": "b80d79bd54a0d4e54d6c9b5abe87d811032b78fd7f072ea5961baf37f221e6a0",
+  "approval_id": null,
+  "decisions": [
+    {
+      "account_id": "PL.REV",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.REV.SALES",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.COGS",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.COGS.GOODS",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.COGS.GOODS.BEGIN",
+      "node_kind": "CALCULATED",
+      "posting_allowed": false,
+      "posting_evidence_ref": "OWNER_ANSWER_Q3: 기초=전기 기말 이월. 계산행 — 직접 기표 대상 아님",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.COGS.GOODS.PURCH",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q3: ★18건 중 유일한 자동 기표 후보. 통장에 매입 대금이 실제로 찍힘. AUTO_POST=CANDIDATE",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.COGS.GOODS.END",
+      "node_kind": "CALCULATED",
+      "posting_allowed": false,
+      "posting_evidence_ref": "OWNER_ANSWER_Q3: ★기말재고는 창고 실사(사람이 셈)로만 확정. 계산행 — 자동 산출 불가",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.EXEC_SALARY",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.STAFF_SALARY",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.BONUS",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.SEVERANCE",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.WELFARE",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.TRAVEL",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.ENTERTAIN",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.COMMUNICATION",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.ELECTRICITY",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.TAX_DUES",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.DEPRECIATION",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q1: 결산 전용(추정항목). 비현금이라 통장에 없음. AUTO_POST=FORBIDDEN",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.RENT",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.INSURANCE",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.VEHICLE",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.RND",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.FREIGHT",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.TRAINING",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.PRINTING",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.OFFICE_SUPPLY",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.CONSUMABLE",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.PAYMENT_FEE",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.ADVERTISING",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.BUILDING_MGMT",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOI",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOI.INTEREST",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOI.PPE_GAIN",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q6: 사람이 계산. 통장엔 처분가액만, 취득가액·감가상각누계액은 고정자산대장에. AUTO_POST=FORBIDDEN",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOI.MISC",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOE",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOE.INTEREST",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOE.PRIOR_ERR",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q1: 성격 다름 — 사람이 오류를 발견해야 생김. AUTO_POST=FORBIDDEN",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOE.PPE_LOSS",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q6: 동일. AUTO_POST=FORBIDDEN",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOE.MISC",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.TAX",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_FINAL_20260715: 결산·세무조정 산출 계정 — 다른 결산 계정과 동일 취급. 참고: 승인 재무제표상 법인세등은 제8·7기 모두 0원(당기순손실). AUTO_POST=FORBIDDEN(결산 시 사람이 기표)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.CASH",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.BANK",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.AR",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.OTHER_RECV",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.DEPOSIT_ST",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.PREPAID",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.PREPAID_EXP",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q1: 결산 전용(이연항목) — 교과서적 결산수정분개 대상. AUTO_POST=FORBIDDEN(사람이 결산 시 기표)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.VAT_IN",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q2: ★결산계정 아님 — 거래마다 발생(세금계산서 발행 시점). 단 통장엔 합계만 찍히고 세액 미분리라 3단계 원천 불가. AUTO_POST=BLOCKED_UNTIL_STAGE4_OCR_TAX_AMOUNT",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.PREPAID_TAX",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.HQ_BRANCH",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_CORRECTION_20260715: 에이티링크에 지점이 있었음 — 본·지점은 실제 사용 계정. 승인 시산표 차변 본·지점 178,639,964 는 정상 데이터(총괄이 '지점 없음'으로 오해해 잠갔던 것을 정정). 본지점 결합 시 내부거래 상계용이며 결산 때 제거되므로 재무상태표에 나타나지 않음. AUTO_POST=FORBIDDEN(내부거래 대체는 사람이 판단 — 지점 간 자금이동을 통장만 보고 자동 기표하면 self-transfer guard 와 성격이 겹쳐 오분류 위험)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.INV",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.INV.GOODS",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.PPE",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.PPE.VEHICLE",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.PPE.ACC_DEP",
+      "node_kind": "CONTRA",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q7: ★기표 대상 맞음. CONTRA 는 표시 방법일 뿐 기표 가부와 별개 축. 감가상각 결산분개의 대변. AUTO_POST=FORBIDDEN(결산 전용)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.PPE.EQUIP",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.PPE.FACILITY",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.INTANG",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.INTANG.PATENT",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.INTANG.DEV",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.OTHER",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.OTHER.LEASE_DEP",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.OTHER.OTHER_DEP",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.AP",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.OTHER_PAY",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.WITHHOLD",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.VAT_OUT",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q2: 동일 — 거래 시점 계정. 3단계 불가. AUTO_POST=BLOCKED_UNTIL_STAGE4_OCR_TAX_AMOUNT",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.OFFICER_ST",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.UNEARNED",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.ST_BORROW",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.ACCRUED",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q1: 결산 전용(발생항목). AUTO_POST=FORBIDDEN",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCL",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCL.LT_BORROW",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 말단 계정(하위 없음) → 게시 대상 | AUTO_POST=CANDIDATE(말단 계정, 통장 거래 대상)",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.CAPITAL",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q5: ★자동 기표 절대 금지. 입금 시점엔 자본금이 아니라 주식청약증거금(임시계정)이며 등기 완료 후에야 자본금. AUTO_POST=FORBIDDEN",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.SURPLUS",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.SURPLUS.SHARE_PREM",
+      "node_kind": "POSTING",
+      "posting_allowed": true,
+      "posting_evidence_ref": "OWNER_ANSWER_Q5: 동일 — 등기 완료 후 확정. AUTO_POST=FORBIDDEN",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.RE",
+      "node_kind": "GROUP",
+      "posting_allowed": false,
+      "posting_evidence_ref": "TOTAL_PLANNING_DRAFT: registry 상 하위 계정 존재 → 집계행. 직접 게시 시 이중집계 발생",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.RE.CARRY_DEF",
+      "node_kind": "CALCULATED",
+      "posting_allowed": false,
+      "posting_evidence_ref": "OWNER_ANSWER_Q4: 결산 대체 계산행(국세청 용어사전). AUTO_POST=FORBIDDEN",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.RE.UNAPPR_DEF",
+      "node_kind": "CALCULATED",
+      "posting_allowed": false,
+      "posting_evidence_ref": "OWNER_ANSWER_Q4: 이월결손금 + 당기순손실 = 계산 결과. AUTO_POST=FORBIDDEN",
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ]
+}

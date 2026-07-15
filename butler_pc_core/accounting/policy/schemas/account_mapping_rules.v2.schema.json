@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/account_mapping_rules.v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_profile_id",
+    "bundle_version",
+    "status",
+    "chart_registry_raw_sha256_ref",
+    "priority_semantics",
+    "rules",
+    "post_mapping_guards",
+    "open_decisions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.box5.account_mapping_rules.v2"
+    },
+    "policy_profile_id": {
+      "const": "atlink.smb.v1"
+    },
+    "bundle_version": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "BLOCKED_PENDING_FINANCE_APPROVAL",
+        "APPROVED"
+      ]
+    },
+    "chart_registry_raw_sha256_ref": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "priority_semantics": {
+      "const": "LOWER_NUMBER_EVALUATES_FIRST"
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    },
+    "post_mapping_guards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["guard_id", "effect", "requires"],
+        "properties": {
+          "guard_id": {"type": "string", "minLength": 1},
+          "effect": {"enum": ["FINANCE_POLICY_CONFLICT", "BLOCK", "NO_AUTO_POST"]},
+          "requires": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "open_decisions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "atom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field",
+        "op"
+      ],
+      "properties": {
+        "field": {
+          "enum": [
+            "bank_direction",
+            "management_tags",
+            "purpose_code",
+            "purpose_evidence_id",
+            "vendor_descriptor_id",
+            "service_kind",
+            "service_period_start",
+            "service_period_end",
+            "evidence_type",
+            "company_profile_id"
+          ]
+        },
+        "op": {
+          "enum": [
+            "EQ",
+            "IN",
+            "PRESENT",
+            "DATE_CROSSES_PERIOD_END"
+          ]
+        },
+        "value": {}
+      }
+    },
+    "predicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "all"
+      ],
+      "properties": {
+        "all": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/atom"
+          }
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_id",
+        "priority",
+        "management_tags_any",
+        "bank_direction",
+        "purpose_codes_any",
+        "predicate",
+        "target_account_id",
+        "posting_eligibility",
+        "on_missing_evidence"
+      ],
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_-]+$"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "management_tags_any": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "SAAS",
+              "CLOUD",
+              "SUBSCRIPTION",
+              "TELECOM",
+              "IT"
+            ]
+          }
+        },
+        "bank_direction": {
+          "enum": [
+            "INFLOW",
+            "OUTFLOW"
+          ]
+        },
+        "purpose_codes_any": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "INTERNAL_OPERATION",
+              "EXTERNAL_MARKETING"
+            ]
+          }
+        },
+        "predicate": {
+          "$ref": "#/$defs/predicate"
+        },
+        "target_account_id": {
+          "type": "string"
+        },
+        "posting_eligibility": {
+          "type": "string"
+        },
+        "on_missing_evidence": {
+          "enum": [
+            "UNCLASSIFIED",
+            "FINANCE_REVIEW_REQUIRED"
+          ]
+        }
+      }
+    }
+  }
+}

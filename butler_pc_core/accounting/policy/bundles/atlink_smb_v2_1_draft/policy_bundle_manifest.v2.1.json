@@ -1,0 +1,64 @@
+{
+  "schema_version": "butler.box5.policy_bundle_manifest.v1",
+  "policy_profile_id": "atlink.smb.v1",
+  "bundle_version": "2.1-draft",
+  "status": "BLOCKED_PENDING_FINANCE_APPROVAL",
+  "canonicalization": "RFC8785",
+  "artifacts": [
+    {
+      "logical_id": "CHART_UPSTREAM",
+      "relative_path": "upstream/chart_of_accounts.atlink.v1.json",
+      "raw_sha256": "b80d79bd54a0d4e54d6c9b5abe87d811032b78fd7f072ea5961baf37f221e6a0",
+      "size": 47367
+    },
+    {
+      "logical_id": "MAPPING_V1_UPSTREAM",
+      "relative_path": "upstream/account_mapping_rules.v1.json",
+      "raw_sha256": "14bdaad6a4362b051021f25afa982110868d08f27dbf8b2f57dfc01610f04b14",
+      "size": 5463
+    },
+    {
+      "logical_id": "MAPPING_V2_DRAFT",
+      "relative_path": "account_mapping_rules.v2.draft.json",
+      "raw_sha256": "dc0ca710925d4d93dd9d51bd782fad06e69d47ae5c9632131c29f2b3c6407c94",
+      "size": 4101
+    },
+    {
+      "logical_id": "POSTING_OVERLAY_TEMPLATE",
+      "relative_path": "posting_policy_overlay.template.json",
+      "raw_sha256": "347c991b6b521b7c1dc64e09b6ff2b08480fa220e73e70c8015d7c5de7455d94",
+      "size": 23474
+    },
+    {
+      "logical_id": "REPORT_MAPPING_TEMPLATE",
+      "relative_path": "report_mapping.template.json",
+      "raw_sha256": "70911dbe86d3a716bf790b1ad2aed8774ebcc07909d80ca9febfc9e67d7687a6",
+      "size": 269
+    },
+    {
+      "logical_id": "VENDOR_REGISTRY_TEMPLATE",
+      "relative_path": "vendor_descriptor_registry.template.json",
+      "raw_sha256": "0c18f0fe4c5337dcd4f08a9f7cf40ec352b17c5c0dbd68bd2cf33a38975db93e",
+      "size": 190
+    },
+    {
+      "logical_id": "TAX_POLICY_TEMPLATE",
+      "relative_path": "tax_policy.template.json",
+      "raw_sha256": "15f9f2531fc666d69401446f3086e27f9fb95f69f98e235947098911db084ffc",
+      "size": 175
+    },
+    {
+      "logical_id": "CASH_FLOW_POLICY_TEMPLATE",
+      "relative_path": "cash_flow_event_policy.template.json",
+      "raw_sha256": "4438a0e6f110808b807e0825c1c184843136499a7c34c80ca60315e0224d1b86",
+      "size": 190
+    },
+    {
+      "logical_id": "BINDING_STATUS",
+      "relative_path": "binding_status.v2.1.json",
+      "raw_sha256": "64d8068c66a99744abef8353b8a9638ec57082d23febcbe0c07c34854851bf09",
+      "size": 1064
+    }
+  ],
+  "approval_id": null
+}
