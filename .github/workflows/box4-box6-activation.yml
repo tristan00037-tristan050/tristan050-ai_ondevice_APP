@@ -1,0 +1,82 @@
+name: Box4/Box6 Activation
+
+# box4(document_review)·box6(form_fill) are product-default ON (CardGrid flags promoted from
+# strict opt-in to default-on kill-switch). This gate keeps them activatable and contract-clean:
+# the box4 activation/contract verifier + the box6 form-fill activation verifier (driven by its
+# prompt test which generates a smoke-evidence bundle and runs the verifier as a subprocess) +
+# the frontend feature-flag tests. box7/box8 stay unimplemented and are unaffected.
+
+on:
+  pull_request:
+    paths:
+      - 'butler-desktop/src/components/v1_1/CardGrid.tsx'
+      - 'butler-desktop/src/components/v1_1/CardGrid.test.tsx'
+      - 'butler-desktop/src/__tests__/Box4CardMode.test.tsx'
+      - 'butler-desktop/src/components/v1_1/FormFillModal.tsx'
+      - 'butler-desktop/src/components/v1_1/DocumentReviewModal.tsx'
+      - 'butler_pc_core/cards/box4/**'
+      - 'butler_pc_core/cards/box6/**'
+      - 'butler_pc_core/prompts/cards/card_04_document_review.yaml'
+      - 'butler_pc_core/prompts/cards/card_06_form_fill.yaml'
+      - 'tests/prompts/test_card04_document_review.py'
+      - 'tests/prompts/test_card06_form_fill.py'
+      - 'scripts/verify_box4_document_review_activation.py'
+      - 'scripts/verify_box6_form_fill_activation.py'
+      - '.github/workflows/box4-box6-activation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'butler-desktop/src/components/v1_1/CardGrid.tsx'
+      - 'butler_pc_core/cards/box4/**'
+      - 'butler_pc_core/cards/box6/**'
+      - 'scripts/verify_box4_document_review_activation.py'
+      - 'scripts/verify_box6_form_fill_activation.py'
+      - '.github/workflows/box4-box6-activation.yml'
+
+jobs:
+  backend-activation:
+    name: box4/box6 activation verifiers (python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install light serving deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest pydantic cryptography fastapi==0.128.8 starlette==0.49.3 httpx python-multipart jsonschema jinja2
+      - name: Box4 document_review activation/contract verifier
+        run: |
+          python scripts/verify_box4_document_review_activation.py | tee /tmp/box4_activation.log
+          grep -q "BOX4_DOCUMENT_REVIEW_CONTRACT_OK=1" /tmp/box4_activation.log
+      - name: Card04/Card06 prompt tests (drive box6 activation verifier)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m pytest tests/prompts/test_card04_document_review.py tests/prompts/test_card06_form_fill.py -q --tb=short
+
+  frontend-cards:
+    name: box4/box6 feature-flag tests (vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: butler-desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: npm ci (retry)
+        run: |
+          for i in 1 2 3; do
+            echo "== npm ci attempt $i/3 =="
+            if npm ci; then exit 0; fi
+            echo "WARN: npm ci failed. retrying..."
+          done
+          echo "FAIL: npm ci failed after retries"; exit 1
+      - name: CardGrid + Box4CardMode feature-flag tests
+        run: |
+          npx vitest run src/components/v1_1/CardGrid.test.tsx src/__tests__/Box4CardMode.test.tsx

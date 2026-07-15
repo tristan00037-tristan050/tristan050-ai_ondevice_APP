@@ -163,8 +163,10 @@ def _check_card_grid(root: Path) -> None:
     source = _read(root, CARD_GRID)
     if "BOX4_DOCUMENT_REVIEW_ENABLED" not in source:
         _fail("BOX4_FLAG_MISSING")
-    if "VITE_BUTLER_BOX4_DOCUMENT_REVIEW" not in source or "=== '1'" not in source:
-        _fail("BOX4_FLAG_NOT_STRICT")
+    # Product default is ON (promoted from strict opt-in): unset/'1' => on, explicit '0' => off
+    # (kill switch). The card must still be gated by the env-derived flag, never hardcoded on.
+    if "VITE_BUTLER_BOX4_DOCUMENT_REVIEW" not in source or "!== '0'" not in source:
+        _fail("BOX4_FLAG_NOT_DEFAULT_ON")
     card4_segment = re.search(r"\{\s*id:\s*4,.*?\}", source, re.DOTALL)
     if not card4_segment:
         _fail("BOX4_CARD_MISSING")
