@@ -71,10 +71,22 @@ def prove_zero_regression(
             after.state is DecisionState.AUTO_PROPOSE
             and after.account_id == before.account_id
             and after.rule_id == before.rule_id
+            # F022: an account match alone is not zero-regression. A silent change of the
+            # applied rule, its digest, the reason, or the confidence must be detected.
+            and after.rule_digest == before.rule_digest
+            and after.reason_code is before.reason_code
+            and after.confidence_bp == before.confidence_bp
         ):
             raise RegressionViolation(f"REGRESSION_AUTO_PROPOSAL_CHANGED_{index}")
         if before.state is DecisionState.BLOCKED and after.state is not DecisionState.BLOCKED:
             raise RegressionViolation(f"REGRESSION_BLOCK_WEAKENED_{index}")
+        # F023-adjacent / self-transfer guard: a review (ISOLATED) baseline must stay review
+        # with the same reason so a self-transfer cannot silently become a weaker review.
+        if before.state is DecisionState.REVIEW_REQUIRED and not (
+            after.state is DecisionState.REVIEW_REQUIRED
+            and after.reason_code is before.reason_code
+        ):
+            raise RegressionViolation(f"REGRESSION_REVIEW_WEAKENED_{index}")
         if before.state is not DecisionState.AUTO_PROPOSE and after.state is DecisionState.AUTO_PROPOSE:
             raise RegressionViolation(f"REGRESSION_NEW_AUTO_PROPOSAL_{index}")
 

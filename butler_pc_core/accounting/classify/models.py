@@ -21,6 +21,13 @@ _HEX_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 _CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 _CODE_RE = re.compile(r"^[A-Z][A-Z0-9_]{1,63}$")
 
+# Box5 v3.2 stage-3 hardening — 문제점검팀 재현 결함 폐쇄 (F020).
+# amount_minor 는 signed 64-bit 정수 경계와 승인 정책 상한(1조원) 안에 있어야 한다.
+# 상한은 posting overlay 가 회계승인되면 정책에서 읽는다(현재 overlay=BLOCKED_PENDING_FINANCE_APPROVAL).
+_AMOUNT_MIN_MINOR = -(2**63)
+_AMOUNT_MAX_MINOR = (2**63) - 1
+_AMOUNT_BUSINESS_CAP_MINOR = 1_000_000_000_000
+
 
 class ClassificationContractError(ValueError):
     """A canonical input or unverified draft violates the Area-B contract."""
@@ -157,7 +164,8 @@ class CanonicalTransactionV2:
     def __post_init__(self) -> None:
         for name in ("tenant_id", "company_id", "request_id", "transaction_id", "source_bank_id"):
             _require_id(getattr(self, name), name.upper())
-        if not isinstance(self.booked_date, date) or not isinstance(self.value_date, date):
+        # F019: datetime is a subclass of date and must NOT satisfy a date field.
+        if type(self.booked_date) is not date or type(self.value_date) is not date:
             raise ClassificationContractError("TRANSACTION_DATE_INVALID")
         if not isinstance(self.direction, BankDirection):
             raise ClassificationContractError("BANK_DIRECTION_INVALID")
@@ -169,6 +177,11 @@ class CanonicalTransactionV2:
             raise ClassificationContractError("OUTFLOW_AMOUNT_SIGN_INVALID")
         if self.direction is BankDirection.INFLOW and self.amount_minor <= 0:
             raise ClassificationContractError("INFLOW_AMOUNT_SIGN_INVALID")
+        # F020: bound amount to signed 64-bit and the approved business cap.
+        if not (_AMOUNT_MIN_MINOR <= self.amount_minor <= _AMOUNT_MAX_MINOR):
+            raise ClassificationContractError("AMOUNT_OUT_OF_RANGE_64BIT")
+        if abs(self.amount_minor) > _AMOUNT_BUSINESS_CAP_MINOR:
+            raise ClassificationContractError("AMOUNT_EXCEEDS_BUSINESS_CAP")
         if not isinstance(self.currency, str) or not _CURRENCY_RE.fullmatch(self.currency):
             raise ClassificationContractError("CURRENCY_INVALID")
         _require_id(self.currency_registry_version, "CURRENCY_REGISTRY_VERSION")
@@ -185,7 +198,8 @@ class CanonicalTransactionV2:
         _require_digest_tuple(self.evidence_digests, "EVIDENCE_DIGEST")
         for name in ("service_period_start", "service_period_end", "accounting_period_end"):
             value = getattr(self, name)
-            if value is not None and not isinstance(value, date):
+            # F019: datetime is a subclass of date and must not satisfy these date fields.
+            if value is not None and type(value) is not date:
                 raise ClassificationContractError(f"{name.upper()}_INVALID")
         if (
             self.service_period_start is not None
@@ -256,6 +270,9 @@ class UnverifiedClassificationDraft:
                 raise ClassificationContractError("AUTO_PROPOSE_REQUIRES_ACCOUNT_RULE")
             if self.confidence_bp != 10_000:
                 raise ClassificationContractError("AUTO_PROPOSE_REQUIRES_EXACT_CONFIDENCE")
+            # F021: an auto proposal must not carry a review warning.
+            if self.warnings:
+                raise ClassificationContractError("AUTO_PROPOSE_HAS_WARNING")
             if self.blockers or self.transcript_digest is None or self.currency_exponent is None:
                 raise ClassificationContractError("AUTO_PROPOSE_HAS_UNVERIFIED_INPUT")
             if self.reason_code is not ReasonCode.AUTO_PROPOSE_EXACT_RULE:
