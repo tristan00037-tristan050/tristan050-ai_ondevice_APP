@@ -1,0 +1,85 @@
+{
+  "schema_version": "butler.box5.account_mapping_rules.v1",
+  "policy_profile_id": "atlink.smb.v1",
+  "chart_registry_sha256_ref": "b80d79bd54a0d4e54d6c9b5abe87d811032b78fd7f072ea5961baf37f221e6a0",
+  "principles": [
+    "관리 분석 태그(management_tag)와 법정 회계 계정(account_id)을 분리한다. 태그는 보고·분석용이며 원장 게시 계정을 결정하지 않는다.",
+    "self-transfer hard guard가 모든 계정분류보다 먼저 실행된다(company_profile 필수).",
+    "카드출금·타행이체·CMS·체크카드는 bank_event_type이며 비용 계정이 아니다.",
+    "승인된 vendor descriptor의 exact match + 방향 + 문맥이 모두 충족될 때만 계정 후보를 만든다.",
+    "generic 상호명(Google·Microsoft·Naver·KT 등)만으로 특정 비용을 확정하지 않는다.",
+    "부분문자열·광범위 regex·모델 추측으로 최종 계정을 만들지 않는다.",
+    "충돌·증거부족·방향불명·미등록은 UNCLASSIFIED로 보수적 격리한다(회계 안전장치, 완화 금지)."
+  ],
+  "management_tags": [
+    "SAAS",
+    "CLOUD",
+    "SUBSCRIPTION",
+    "TELECOM",
+    "IT"
+  ],
+  "rules": [
+    {
+      "rule_id": "MAP-SAAS-001",
+      "management_tag": "SAAS|CLOUD|SUBSCRIPTION",
+      "target_account_id": "PL.SGA.PAYMENT_FEE",
+      "target_name_ko": "지급수수료",
+      "direction": "DEBIT",
+      "purpose": "INTERNAL_OPERATION",
+      "condition": "승인 vendor descriptor exact match AND 출금 AND 업무용 내부 운영 목적",
+      "basis": "대표 확정(2026-07-15): 'IT·소프트웨어 구독료는 보통 지급수수료 항목에 포함된다'. 총괄 웹검색 교차확인: SaaS·클라우드는 소유가 아닌 이용권이라 자산 아닌 비용으로 인식하며 일반적으로 지급수수료(회계법인·세무실무 다수 일치).",
+      "template_evidence": "승인 재무제표 판관비에 '지급수수료' 실재"
+    },
+    {
+      "rule_id": "MAP-TELECOM-001",
+      "management_tag": "TELECOM",
+      "target_account_id": "PL.SGA.COMMUNICATION",
+      "target_name_ko": "통신비",
+      "direction": "DEBIT",
+      "purpose": "INTERNAL_OPERATION",
+      "condition": "승인 통신사 billing descriptor exact match AND 출금 AND 통신役務 문맥. ★상호명만으로 확정 금지 — 동일 사업자의 클라우드/IT 상품은 MAP-SAAS-001 대상이므로 descriptor로 구분한다.",
+      "basis": "승인 재무제표 판관비에 '통신비' 실재",
+      "template_evidence": "통신비 계정 실재"
+    },
+    {
+      "rule_id": "MAP-SAAS-EXC-ADV",
+      "management_tag": "SAAS|SUBSCRIPTION",
+      "target_account_id": "PL.SGA.ADVERTISING",
+      "target_name_ko": "광고선전비",
+      "direction": "DEBIT",
+      "purpose": "EXTERNAL_MARKETING",
+      "condition": "동일 구독이라도 목적이 외부 마케팅·광고 집행이면 지급수수료가 아니라 광고선전비. 목적 판정 근거가 없으면 UNCLASSIFIED.",
+      "basis": "총괄 웹검색 확인: 동일 구독형 서비스도 사용 목적에 따라 계정과목이 달라지며, 내부 운영 vs 외부 마케팅에 따라 지급수수료/광고선전비로 갈린다."
+    },
+    {
+      "rule_id": "MAP-SAAS-EXC-PREPAID",
+      "management_tag": "SAAS|SUBSCRIPTION",
+      "target_account_id": "BS.CA.QUICK.PREPAID_EXP",
+      "target_name_ko": "선급비용",
+      "direction": "DEBIT",
+      "purpose": "ANY",
+      "condition": "구독기간 1년 이상 또는 결제시점과 사용기간 불일치가 증빙으로 확인될 때 자산(선급비용) 계상 후 기간 상각. 기간 정보가 없으면 이 규칙을 적용하지 않고 기본 규칙으로 간다.",
+      "basis": "총괄 웹검색 확인: 구독기간 1년 이상이거나 결제 시점과 사용기간이 다른 경우 선급비용(자산) 계상 후 기간경과에 따라 상각.",
+      "template_evidence": "승인 재무제표 당좌자산에 '선급비용' 실재"
+    },
+    {
+      "rule_id": "MAP-CONSISTENCY",
+      "management_tag": "*",
+      "target_account_id": null,
+      "condition": "동일 vendor·동일 목적은 항상 동일 계정으로 간다. 과거 승인 이력과 다른 계정을 제안하면 CONFLICT로 차단하고 사람 승인을 요구한다.",
+      "basis": "총괄 웹검색 확인: 어떤 방식을 택하든 회사 내에서 동일한 기준을 유지하는 일관성이 핵심."
+    }
+  ],
+  "prohibitions": [
+    "IT·소프트웨어구독료 등 승인 재무제표에 없는 계정과목을 신설하지 않는다.",
+    "8215·8280 등 승인 재무제표에 없는 계정 코드 번호를 사용·발명하지 않는다.",
+    "관리 태그(SAAS 등)를 회계 계정처럼 원장에 게시하지 않는다.",
+    "generic 상호명 부분일치로 계정을 확정하지 않는다.",
+    "신뢰도 임계값 완화·'애매해도 분류' 금지."
+  ],
+  "unresolved_requires_finance_approval": [
+    "각 계정의 tax_behavior(부가세 처리)는 미검증 — 회계검증 담당 승인 전 사용 금지.",
+    "이자수익·이자비용·잡이익·잡손실의 현금흐름 활동 구분(영업/투자/재무)은 UNVERIFIED.",
+    "에이티링크가 실제로 AWS·클라우드 요금을 어느 계정으로 처리해 왔는지는 전표 미확인 — 본 registry는 '지급수수료' 규칙을 기본으로 하되, 실제 전표와 다르면 전표가 정본이다."
+  ]
+}

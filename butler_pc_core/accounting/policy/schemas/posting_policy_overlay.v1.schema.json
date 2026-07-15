@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/posting_policy_overlay.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_profile_id",
+    "status",
+    "chart_registry_raw_sha256_ref",
+    "approval_id",
+    "decisions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.box5.posting_policy_overlay.v1"
+    },
+    "policy_profile_id": {
+      "const": "atlink.smb.v1"
+    },
+    "status": {
+      "enum": [
+        "BLOCKED_PENDING_FINANCE_APPROVAL",
+        "APPROVED"
+      ]
+    },
+    "chart_registry_raw_sha256_ref": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "approval_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "decisions": {
+      "type": "array",
+      "minItems": 85,
+      "maxItems": 85,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "account_id",
+          "node_kind",
+          "posting_allowed",
+          "posting_evidence_ref",
+          "tax_policy_id",
+          "cash_flow_policy_id",
+          "effective_from",
+          "effective_to"
+        ],
+        "properties": {
+          "account_id": {
+            "type": "string"
+          },
+          "node_kind": {
+            "enum": [
+              "GROUP",
+              "POSTING",
+              "CALCULATED",
+              "CONTRA",
+              "UNVERIFIED"
+            ]
+          },
+          "posting_allowed": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "posting_evidence_ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tax_policy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cash_flow_policy_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_from": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "effective_to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          }
+        }
+      }
+    }
+  }
+}

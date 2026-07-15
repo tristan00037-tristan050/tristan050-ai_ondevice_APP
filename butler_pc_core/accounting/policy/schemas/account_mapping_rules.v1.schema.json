@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/account_mapping_rules.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_profile_id",
+    "chart_registry_sha256_ref",
+    "management_tags",
+    "principles",
+    "prohibitions",
+    "rules",
+    "unresolved_requires_finance_approval"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.box5.account_mapping_rules.v1"},
+    "policy_profile_id": {"const": "atlink.smb.v1"},
+    "chart_registry_sha256_ref": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "management_tags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "principles": {"$ref": "#/$defs/nonemptyStrings"},
+    "prohibitions": {"$ref": "#/$defs/nonemptyStrings"},
+    "unresolved_requires_finance_approval": {"$ref": "#/$defs/nonemptyStrings"},
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule_id", "management_tag", "target_account_id", "condition", "basis"],
+        "properties": {
+          "rule_id": {"type": "string", "minLength": 1},
+          "management_tag": {"type": "string", "minLength": 1},
+          "target_account_id": {"type": ["string", "null"]},
+          "target_name_ko": {"type": "string", "minLength": 1},
+          "direction": {"enum": ["DEBIT", "CREDIT"]},
+          "purpose": {"type": "string", "minLength": 1},
+          "condition": {"type": "string", "minLength": 1},
+          "basis": {"type": "string", "minLength": 1},
+          "template_evidence": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonemptyStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

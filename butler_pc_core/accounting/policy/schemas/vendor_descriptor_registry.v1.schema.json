@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/vendor_descriptor_registry.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_profile_id",
+    "status",
+    "descriptors",
+    "approval_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.box5.vendor_descriptor_registry.v1"
+    },
+    "policy_profile_id": {
+      "const": "atlink.smb.v1"
+    },
+    "status": {
+      "enum": [
+        "BLOCKED_EMPTY_REGISTRY",
+        "APPROVED"
+      ]
+    },
+    "approval_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "descriptors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "descriptor_id",
+          "normalized_exact_value_hmac",
+          "bank_direction",
+          "service_kind",
+          "management_tags",
+          "evidence_ref"
+        ],
+        "properties": {
+          "descriptor_id": {
+            "type": "string"
+          },
+          "normalized_exact_value_hmac": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "bank_direction": {
+            "enum": [
+              "INFLOW",
+              "OUTFLOW"
+            ]
+          },
+          "service_kind": {
+            "type": "string"
+          },
+          "management_tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence_ref": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

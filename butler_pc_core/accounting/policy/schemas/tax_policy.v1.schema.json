@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/tax_policy.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_profile_id",
+    "status",
+    "policies",
+    "approval_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.box5.tax_policy.v1"
+    },
+    "policy_profile_id": {
+      "const": "atlink.smb.v1"
+    },
+    "status": {
+      "enum": [
+        "BLOCKED_PENDING_TAX_REVIEW",
+        "APPROVED"
+      ]
+    },
+    "approval_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "policies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tax_policy_id",
+          "account_ids",
+          "evidence_requirements",
+          "journal_template_id",
+          "effective_from"
+        ],
+        "properties": {
+          "tax_policy_id": {
+            "type": "string"
+          },
+          "account_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence_requirements": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "journal_template_id": {
+            "type": "string"
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      }
+    }
+  }
+}

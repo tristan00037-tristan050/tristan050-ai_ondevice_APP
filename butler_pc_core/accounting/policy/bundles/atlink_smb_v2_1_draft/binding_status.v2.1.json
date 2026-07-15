@@ -1,0 +1,26 @@
+{
+  "schema_version": "butler.box5.binding_status.v2.1",
+  "observed_at": "2026-07-15T00:00:00+09:00",
+  "source_zip_integrity_pass": true,
+  "chart_registry_file_bound": true,
+  "chart_registry_raw_sha256": "b80d79bd54a0d4e54d6c9b5abe87d811032b78fd7f072ea5961baf37f221e6a0",
+  "mapping_rules_v1_raw_sha256": "14bdaad6a4362b051021f25afa982110868d08f27dbf8b2f57dfc01610f04b14",
+  "chart_source_lineage_verified": false,
+  "posting_policy_approved": false,
+  "tax_policy_approved": false,
+  "cash_flow_policy_approved": false,
+  "report_mapping_golden_bound": false,
+  "financial_template_golden_bound": false,
+  "journal_auto_post_allowed": false,
+  "operation_ready": false,
+  "block_reasons": [
+    "MISSING_APPROVED_SOURCE_FINANCIAL_STATEMENTS",
+    "MISSING_SOURCE_ROW_CELL_PROVENANCE",
+    "MISSING_POSTING_POLICY_FOR_85_ACCOUNTS",
+    "TAX_POLICY_UNVERIFIED_FOR_85_ACCOUNTS",
+    "MISSING_CASH_FLOW_EVENT_POLICY",
+    "PREPAID_TARGET_CONFLICTS_WITH_BANK_CANDIDATE_FLAG",
+    "MISSING_REPORT_MAPPING_AND_OPENING_BALANCES",
+    "MISSING_FINANCE_APPROVAL"
+  ]
+}

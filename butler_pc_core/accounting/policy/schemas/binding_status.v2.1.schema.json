@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/binding_status.v2.1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "observed_at",
+    "source_zip_integrity_pass",
+    "chart_registry_file_bound",
+    "chart_registry_raw_sha256",
+    "mapping_rules_v1_raw_sha256",
+    "chart_source_lineage_verified",
+    "posting_policy_approved",
+    "tax_policy_approved",
+    "cash_flow_policy_approved",
+    "report_mapping_golden_bound",
+    "financial_template_golden_bound",
+    "journal_auto_post_allowed",
+    "operation_ready",
+    "block_reasons"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.box5.binding_status.v2.1"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_zip_integrity_pass": {
+      "type": "boolean"
+    },
+    "chart_registry_file_bound": {
+      "type": "boolean"
+    },
+    "chart_registry_raw_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "mapping_rules_v1_raw_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "chart_source_lineage_verified": {
+      "type": "boolean"
+    },
+    "posting_policy_approved": {
+      "type": "boolean"
+    },
+    "tax_policy_approved": {
+      "type": "boolean"
+    },
+    "cash_flow_policy_approved": {
+      "type": "boolean"
+    },
+    "report_mapping_golden_bound": {
+      "type": "boolean"
+    },
+    "financial_template_golden_bound": {
+      "type": "boolean"
+    },
+    "journal_auto_post_allowed": {
+      "type": "boolean"
+    },
+    "operation_ready": {
+      "type": "boolean"
+    },
+    "block_reasons": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

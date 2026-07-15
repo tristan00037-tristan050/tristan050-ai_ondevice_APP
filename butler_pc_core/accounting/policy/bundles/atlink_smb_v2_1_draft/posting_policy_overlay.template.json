@@ -1,0 +1,859 @@
+{
+  "schema_version": "butler.box5.posting_policy_overlay.v1",
+  "policy_profile_id": "atlink.smb.v1",
+  "status": "BLOCKED_PENDING_FINANCE_APPROVAL",
+  "chart_registry_raw_sha256_ref": "b80d79bd54a0d4e54d6c9b5abe87d811032b78fd7f072ea5961baf37f221e6a0",
+  "approval_id": null,
+  "decisions": [
+    {
+      "account_id": "PL.REV",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.REV.SALES",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.COGS",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.COGS.GOODS",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.COGS.GOODS.BEGIN",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.COGS.GOODS.PURCH",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.COGS.GOODS.END",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.EXEC_SALARY",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.STAFF_SALARY",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.BONUS",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.SEVERANCE",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.WELFARE",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.TRAVEL",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.ENTERTAIN",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.COMMUNICATION",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.ELECTRICITY",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.TAX_DUES",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.DEPRECIATION",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.RENT",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.INSURANCE",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.VEHICLE",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.RND",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.FREIGHT",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.TRAINING",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.PRINTING",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.OFFICE_SUPPLY",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.CONSUMABLE",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.PAYMENT_FEE",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.ADVERTISING",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.SGA.BUILDING_MGMT",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOI",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOI.INTEREST",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOI.PPE_GAIN",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOI.MISC",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOE",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOE.INTEREST",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOE.PRIOR_ERR",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOE.PPE_LOSS",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.NOE.MISC",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "PL.TAX",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.CASH",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.BANK",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.AR",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.OTHER_RECV",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.DEPOSIT_ST",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.PREPAID",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.PREPAID_EXP",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.VAT_IN",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.PREPAID_TAX",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.QUICK.HQ_BRANCH",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.INV",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CA.INV.GOODS",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.PPE",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.PPE.VEHICLE",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.PPE.ACC_DEP",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.PPE.EQUIP",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.PPE.FACILITY",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.INTANG",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.INTANG.PATENT",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.INTANG.DEV",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.OTHER",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.OTHER.LEASE_DEP",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCA.OTHER.OTHER_DEP",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.AP",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.OTHER_PAY",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.WITHHOLD",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.VAT_OUT",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.OFFICER_ST",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.UNEARNED",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.ST_BORROW",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.CL.ACCRUED",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCL",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.NCL.LT_BORROW",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.CAPITAL",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.SURPLUS",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.SURPLUS.SHARE_PREM",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.RE",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.RE.CARRY_DEF",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    },
+    {
+      "account_id": "BS.EQ.RE.UNAPPR_DEF",
+      "node_kind": "UNVERIFIED",
+      "posting_allowed": null,
+      "posting_evidence_ref": null,
+      "tax_policy_id": null,
+      "cash_flow_policy_id": null,
+      "effective_from": null,
+      "effective_to": null
+    }
+  ]
+}

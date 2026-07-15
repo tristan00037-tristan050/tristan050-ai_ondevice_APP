@@ -1,0 +1,9 @@
+{
+  "schema_version": "butler.box5.report_mapping.v1",
+  "policy_profile_id": "atlink.smb.v1",
+  "status": "BLOCKED_MISSING_SOURCE_STATEMENTS_AND_APPROVAL",
+  "source_statement_assets": [],
+  "line_mappings": [],
+  "opening_balance_assets": [],
+  "approval_id": null
+}

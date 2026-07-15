@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/report_mapping.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_profile_id",
+    "status",
+    "source_statement_assets",
+    "line_mappings",
+    "opening_balance_assets",
+    "approval_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.box5.report_mapping.v1"
+    },
+    "policy_profile_id": {
+      "const": "atlink.smb.v1"
+    },
+    "status": {
+      "enum": [
+        "BLOCKED_MISSING_SOURCE_STATEMENTS_AND_APPROVAL",
+        "APPROVED"
+      ]
+    },
+    "source_statement_assets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/asset"
+      }
+    },
+    "line_mappings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/line"
+      }
+    },
+    "opening_balance_assets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/asset"
+      }
+    },
+    "approval_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "logical_id",
+        "sha256",
+        "size"
+      ],
+      "properties": {
+        "logical_id": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "statement_id",
+        "line_id",
+        "source_locator",
+        "account_ids",
+        "aggregation",
+        "sign_policy"
+      ],
+      "properties": {
+        "statement_id": {
+          "enum": [
+            "BALANCE_SHEET",
+            "INCOME_STATEMENT",
+            "DEFICIT_DISPOSITION",
+            "TRIAL_BALANCE"
+          ]
+        },
+        "line_id": {
+          "type": "string"
+        },
+        "source_locator": {
+          "type": "string"
+        },
+        "account_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "aggregation": {
+          "enum": [
+            "SUM",
+            "ROLL_FORWARD",
+            "FORMULA"
+          ]
+        },
+        "sign_policy": {
+          "enum": [
+            "NATURAL",
+            "INVERT"
+          ]
+        }
+      }
+    }
+  }
+}

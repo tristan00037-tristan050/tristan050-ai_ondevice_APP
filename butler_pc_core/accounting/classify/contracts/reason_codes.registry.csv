@@ -1,0 +1,13 @@
+code,layer,severity,meaning
+BLOCK_POLICY_CLOSURE,policy,block,승인 정책 subject 집합 또는 digest 불일치
+BLOCK_PROFILE_PROVENANCE,profile,block,회사 프로필 provenance 미검증
+BLOCK_AUTHORITY_BINDING,authority,block,권한 바인딩·검증 실패
+BLOCK_TRANSCRIPT_MISMATCH,authority,block,세션 transcript 불일치
+BLOCK_RECEIPT_INVALID,authority,block,결정 receipt 검증 실패
+BLOCK_CURRENCY_EXPONENT,currency,block,통화 지수 계약 위반
+BLOCK_CLASSIFIER_CONTRACT,classifier,block,AC-006 분류기 계약 위반(결정성/정수금액/사유/검토)
+AUTO_PROPOSE_EXACT_RULE,classify,auto_propose,정확 규칙 일치 자동 제안
+REVIEW_SELF_TRANSFER,classify,review,자기이체 의심 — 사람 검토 필요
+REVIEW_NON_ACCOUNT_EVENT,classify,review,비회계 이벤트(카드출금·타행이체·CMS 등)
+REVIEW_EVIDENCE_INSUFFICIENT,classify,review,근거 불충분 — 사람 검토 필요
+REVIEW_CLASSIFICATION_AMBIGUOUS,classify,review,분류 모호 — 사람 검토 필요

@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "butler.box5.decision_receipt.v1",
+  "title": "Box5 stage-3 decision receipt (proposal only — never a posting authority)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "state",
+    "reason_code",
+    "confidence_bp",
+    "currency",
+    "currency_exponent",
+    "transaction_digest",
+    "transcript_digest",
+    "blockers",
+    "warnings",
+    "account_id",
+    "rule_id",
+    "rule_digest",
+    "transaction_canonical_digest",
+    "reason_registry_closure_digest",
+    "journal_auto_post_allowed"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.box5.classifier_draft.v1"},
+    "state": {"enum": ["AUTO_PROPOSE", "REVIEW_REQUIRED", "BLOCKED"]},
+    "reason_code": {"$ref": "#/$defs/reason"},
+    "confidence_bp": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "currency_exponent": {"anyOf": [{"type": "null"}, {"type": "integer", "minimum": 0, "maximum": 3}]},
+    "transaction_digest": {"$ref": "#/$defs/digest"},
+    "transcript_digest": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]},
+    "account_id": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/id"}]},
+    "rule_id": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/id"}]},
+    "rule_digest": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]},
+    "blockers": {"type": "array", "items": {"$ref": "#/$defs/reason"}, "uniqueItems": true},
+    "warnings": {"type": "array", "items": {"$ref": "#/$defs/reason"}, "uniqueItems": true},
+    "transaction_canonical_digest": {"$ref": "#/$defs/digest"},
+    "reason_registry_closure_digest": {"$ref": "#/$defs/digest"},
+    "journal_auto_post_allowed": {"const": false}
+  },
+  "allOf": [
+    {
+      "comment": "F015/F021 — AUTO_PROPOSE must carry a verified account+rule, exact confidence, and no blocker/warning.",
+      "if": {"properties": {"state": {"const": "AUTO_PROPOSE"}}},
+      "then": {
+        "properties": {
+          "account_id": {"$ref": "#/$defs/id"},
+          "rule_id": {"$ref": "#/$defs/id"},
+          "rule_digest": {"$ref": "#/$defs/digest"},
+          "confidence_bp": {"const": 10000},
+          "reason_code": {"const": "AUTO_PROPOSE_EXACT_RULE"},
+          "blockers": {"maxItems": 0},
+          "warnings": {"maxItems": 0},
+          "transcript_digest": {"$ref": "#/$defs/digest"},
+          "currency_exponent": {"type": "integer"}
+        }
+      }
+    },
+    {
+      "comment": "F015 — a non-auto decision must not carry an account/rule proposal.",
+      "if": {"properties": {"state": {"enum": ["REVIEW_REQUIRED", "BLOCKED"]}}},
+      "then": {"properties": {"account_id": {"type": "null"}, "rule_id": {"type": "null"}, "rule_digest": {"type": "null"}}}
+    },
+    {
+      "comment": "F015 — a BLOCKED decision must record a matching blocker.",
+      "if": {"properties": {"state": {"const": "BLOCKED"}}},
+      "then": {
+        "oneOf": [
+          {
+            "required": ["reason_code", "blockers"],
+            "properties": {
+              "reason_code": {"const": "BLOCK_POLICY_CLOSURE"},
+              "blockers": {"contains": {"const": "BLOCK_POLICY_CLOSURE"}}
+            }
+          },
+          {
+            "required": ["reason_code", "blockers"],
+            "properties": {
+              "reason_code": {"const": "BLOCK_PROFILE_PROVENANCE"},
+              "blockers": {"contains": {"const": "BLOCK_PROFILE_PROVENANCE"}}
+            }
+          },
+          {
+            "required": ["reason_code", "blockers"],
+            "properties": {
+              "reason_code": {"const": "BLOCK_AUTHORITY_BINDING"},
+              "blockers": {"contains": {"const": "BLOCK_AUTHORITY_BINDING"}}
+            }
+          },
+          {
+            "required": ["reason_code", "blockers"],
+            "properties": {
+              "reason_code": {"const": "BLOCK_TRANSCRIPT_MISMATCH"},
+              "blockers": {"contains": {"const": "BLOCK_TRANSCRIPT_MISMATCH"}}
+            }
+          },
+          {
+            "required": ["reason_code", "blockers"],
+            "properties": {
+              "reason_code": {"const": "BLOCK_RECEIPT_INVALID"},
+              "blockers": {"contains": {"const": "BLOCK_RECEIPT_INVALID"}}
+            }
+          },
+          {
+            "required": ["reason_code", "blockers"],
+            "properties": {
+              "reason_code": {"const": "BLOCK_CURRENCY_EXPONENT"},
+              "blockers": {"contains": {"const": "BLOCK_CURRENCY_EXPONENT"}}
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "reason": {
+      "enum": [
+        "BLOCK_POLICY_CLOSURE", "BLOCK_PROFILE_PROVENANCE", "BLOCK_AUTHORITY_BINDING",
+        "BLOCK_TRANSCRIPT_MISMATCH", "BLOCK_RECEIPT_INVALID", "BLOCK_CURRENCY_EXPONENT",
+        "BLOCK_CLASSIFIER_CONTRACT", "AUTO_PROPOSE_EXACT_RULE", "REVIEW_SELF_TRANSFER",
+        "REVIEW_NON_ACCOUNT_EVENT", "REVIEW_EVIDENCE_INSUFFICIENT", "REVIEW_CLASSIFICATION_AMBIGUOUS"
+      ]
+    }
+  }
+}
