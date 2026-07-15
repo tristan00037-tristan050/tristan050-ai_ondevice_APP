@@ -11,6 +11,7 @@ from .models import (
     UnverifiedClassificationDraft,
 )
 from .port import (
+    CurrencyExponentReply,
     PolicyPort,
     PolicyPortError,
     RuleBasis,
@@ -89,6 +90,24 @@ class Stage3Classifier:
             raise PolicyPortError(ReasonCode.BLOCK_TRANSCRIPT_MISMATCH)
         return digest
 
+    @staticmethod
+    def _read_currency_exponent(
+        port: PolicyPort,
+        currency: str,
+        registry_version: str,
+    ) -> int:
+        reply = port.currency_exponent(currency, registry_version)
+        if not isinstance(reply, CurrencyExponentReply):
+            raise PolicyPortError(ReasonCode.BLOCK_AUTHORITY_BINDING)
+        candidate = reply.exponent
+        if (
+            isinstance(candidate, bool)
+            or not isinstance(candidate, int)
+            or not 0 <= candidate <= 3
+        ):
+            raise PolicyPortError(ReasonCode.BLOCK_CURRENCY_EXPONENT)
+        return candidate
+
     def classify(
         self,
         tx: CanonicalTransactionV2,
@@ -101,7 +120,11 @@ class Stage3Classifier:
         """
         exponent: int | None = None
         try:
-            exponent = port.currency_exponent(tx.currency, tx.currency_registry_version).exponent
+            exponent = self._read_currency_exponent(
+                port,
+                tx.currency,
+                tx.currency_registry_version,
+            )
             if tx.currency == "KRW" and exponent != 0:
                 return self._blocked(
                     tx,

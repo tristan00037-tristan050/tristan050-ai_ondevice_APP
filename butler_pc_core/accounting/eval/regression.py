@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
@@ -17,6 +18,7 @@ from butler_pc_core.accounting.classify.port import PolicyPort
 
 
 PortFactory = Callable[[CanonicalTransactionV2], PolicyPort]
+_HEX_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 class RegressionViolation(AssertionError):
@@ -31,6 +33,16 @@ class ExpectedDraft:
     reason_code: ReasonCode
     account_id: str | None = None
     rule_id: str | None = None
+    rule_digest: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.state is DecisionState.AUTO_PROPOSE and (
+            not self.account_id
+            or not self.rule_id
+            or not isinstance(self.rule_digest, str)
+            or not _HEX_DIGEST_RE.fullmatch(self.rule_digest)
+        ):
+            raise ValueError("REGRESSION_AUTO_PROPOSE_RULE_BINDING_REQUIRED")
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +124,7 @@ def evaluate_regression(
             and draft.reason_code is case.reason_code
             and draft.account_id == case.account_id
             and draft.rule_id == case.rule_id
+            and draft.rule_digest == case.rule_digest
         )
         if not passed:
             failed_ids.append(case.case_id)
@@ -125,6 +138,7 @@ def evaluate_regression(
                 "expected_reason": case.reason_code.value,
                 "expected_account_id": case.account_id,
                 "expected_rule_id": case.rule_id,
+                "expected_rule_digest": case.rule_digest,
             }
         )
     failed = len(failed_ids)

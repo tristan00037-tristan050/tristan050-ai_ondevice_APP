@@ -58,6 +58,7 @@ def regression_cases():
                 reason_code=ReasonCode.AUTO_PROPOSE_EXACT_RULE,
                 account_id="PL.SGA.ADVERTISING",
                 rule_id="MAP-SAAS-ADVERTISING",
+                rule_digest=digest("rule-advertising"),
             )
         )
     for index in range(10):
@@ -136,6 +137,48 @@ def test_actual_draft_replay_is_semantically_deterministic():
         for _ in range(100)
     }
     assert len(digests) == 1
+
+
+def test_auto_propose_regression_case_requires_rule_digest():
+    tx = make_transaction(transaction_digest=digest("missing-rule-digest"))
+    with pytest.raises(ValueError, match="REGRESSION_AUTO_PROPOSE_RULE_BINDING_REQUIRED"):
+        ExpectedDraft(
+            case_id="missing-rule-digest",
+            transaction=tx,
+            state=DecisionState.AUTO_PROPOSE,
+            reason_code=ReasonCode.AUTO_PROPOSE_EXACT_RULE,
+            account_id="PL.SGA.ADVERTISING",
+            rule_id="MAP-SAAS-ADVERTISING",
+        )
+
+
+def test_evaluate_regression_detects_silent_rule_body_drift():
+    tx = make_transaction(transaction_digest=digest("rule-body-drift"))
+    case = ExpectedDraft(
+        case_id="rule-body-drift",
+        transaction=tx,
+        state=DecisionState.AUTO_PROPOSE,
+        reason_code=ReasonCode.AUTO_PROPOSE_EXACT_RULE,
+        account_id="PL.SGA.ADVERTISING",
+        rule_id="MAP-SAAS-ADVERTISING",
+        rule_digest=digest("rule-advertising"),
+    )
+    selection = RuleSelectionReply(
+        basis=RuleBasis.EXACT_DETERMINISTIC,
+        account_id="PL.SGA.ADVERTISING",
+        rule_id="MAP-SAAS-ADVERTISING",
+        rule_digest=digest("rule-advertising-mutated"),
+        score_bp=10_000,
+        evidence_complete=True,
+    )
+    receipt = evaluate_regression(
+        Stage3Classifier(),
+        [case],
+        port_factory=lambda _: RecordingPort(selection=selection),
+    )
+    assert receipt.failed == 1
+    assert receipt.failed_case_ids == ("rule-body-drift",)
+    assert receipt.zero_regression is False
 
 
 def test_regression_rejects_block_weakening():

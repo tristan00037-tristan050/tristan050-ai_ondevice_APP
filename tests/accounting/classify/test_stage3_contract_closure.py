@@ -117,3 +117,24 @@ def test_f015_blocked_receipt_must_not_carry_account():
     )
     with pytest.raises(ReasonRegistryError, match="DECISION_RECEIPT_SCHEMA_INVALID"):
         validate_decision_receipt(receipt)
+
+
+def test_f015_blocked_receipt_requires_reason_in_blockers():
+    receipt = _valid_auto_receipt()
+    receipt.update(
+        state="BLOCKED", reason_code="BLOCK_CURRENCY_EXPONENT",
+        blockers=["BLOCK_POLICY_CLOSURE"], warnings=[],
+        confidence_bp=0, account_id=None, rule_id=None, rule_digest=None,
+    )
+    with pytest.raises(ReasonRegistryError, match="DECISION_RECEIPT_SCHEMA_INVALID"):
+        validate_decision_receipt(receipt)
+
+
+def test_f015_blocked_receipt_accepts_matching_reason_blocker():
+    receipt = _valid_auto_receipt()
+    receipt.update(
+        state="BLOCKED", reason_code="BLOCK_CURRENCY_EXPONENT",
+        blockers=["BLOCK_CURRENCY_EXPONENT"], warnings=[],
+        confidence_bp=0, account_id=None, rule_id=None, rule_digest=None,
+    )
+    validate_decision_receipt(receipt)

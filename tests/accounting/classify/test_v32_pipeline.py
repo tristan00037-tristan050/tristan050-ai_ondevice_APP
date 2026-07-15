@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from butler_pc_core.accounting.classify.models import DecisionState, ReasonCode
 from butler_pc_core.accounting.classify.pipeline import Stage3Classifier
 from butler_pc_core.accounting.classify.port import (
+    CurrencyExponentReply,
     RuleBasis,
     RuleSelectionReply,
     VendorMatchReply,
@@ -112,6 +115,42 @@ def test_usd_exponent_two_is_accepted():
     draft = Stage3Classifier().classify(tx, RecordingPort(exponent=2))
     assert draft.state is DecisionState.AUTO_PROPOSE
     assert draft.currency_exponent == 2
+
+
+def test_non_contract_currency_exponent_reply_is_fail_closed(transaction):
+    class NonContractExponentPort(RecordingPort):
+        def currency_exponent(self, currency, registry_version):
+            self._record(
+                "currency_exponent",
+                {"currency": currency, "registry_version": registry_version},
+            )
+            return type("ForeignReply", (), {"exponent": 0})()
+
+    draft = Stage3Classifier().classify(transaction, NonContractExponentPort())
+    assert draft.state is DecisionState.BLOCKED
+    assert draft.reason_code is ReasonCode.BLOCK_AUTHORITY_BINDING
+    assert draft.currency_exponent is None
+
+
+@pytest.mark.parametrize("malformed_exponent", [True, 99, "0"])
+def test_malformed_contract_currency_exponent_is_cleared_before_blocking(
+    transaction,
+    malformed_exponent,
+):
+    class MalformedExponentPort(RecordingPort):
+        def currency_exponent(self, currency, registry_version):
+            self._record(
+                "currency_exponent",
+                {"currency": currency, "registry_version": registry_version},
+            )
+            reply = object.__new__(CurrencyExponentReply)
+            object.__setattr__(reply, "exponent", malformed_exponent)
+            return reply
+
+    draft = Stage3Classifier().classify(transaction, MalformedExponentPort())
+    assert draft.state is DecisionState.BLOCKED
+    assert draft.reason_code is ReasonCode.BLOCK_CURRENCY_EXPONENT
+    assert draft.currency_exponent is None
 
 
 def test_port_binding_error_is_fail_closed(transaction):
