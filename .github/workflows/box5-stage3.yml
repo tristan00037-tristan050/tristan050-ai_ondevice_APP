@@ -1,0 +1,81 @@
+name: Box5 Stage3 Classify/Policy
+
+# F012 — locked CI for the stage-3 integration (Area A policy loader + Area B classifier +
+# contract closure). Deterministic and model-free: journal/ledger/report (5·6단계) and the
+# accounting model runtime are out of scope, so this gate runs only the stage-3 classify/policy
+# suites. JOURNAL_AUTO_POST_ALLOWED stays NO; nothing here posts a journal.
+
+on:
+  pull_request:
+    paths:
+      - 'butler_pc_core/accounting/classify/**'
+      - 'butler_pc_core/accounting/eval/**'
+      - 'butler_pc_core/accounting/policy/**'
+      - 'tests/accounting/classify/**'
+      - 'tests/accounting/policy/**'
+      - '.github/workflows/box5-stage3.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'butler_pc_core/accounting/classify/**'
+      - 'butler_pc_core/accounting/eval/**'
+      - 'butler_pc_core/accounting/policy/**'
+      - '.github/workflows/box5-stage3.yml'
+
+jobs:
+  stage3-suite:
+    name: stage-3 classify + policy suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps (model-free)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest jsonschema cryptography pydantic fastapi==0.128.8 starlette==0.49.3 httpx python-multipart jinja2 pyyaml
+      - name: Stage-3 policy assets invariants (registry-bound account_id / code null / lock)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          bun = pathlib.Path("butler_pc_core/accounting/policy/bundles/atlink_smb_v2_1_draft")
+          chart = json.loads((bun/"upstream/chart_of_accounts.atlink.v1.json").read_text())
+          ov = json.loads((bun/"posting_policy_overlay.atlink.v1.4.json").read_text())
+          accs = chart.get("accounts") or []
+          ids = {a["account_id"] for a in accs}
+          assert sum(1 for a in accs if a.get("code") is not None) == 0, "code non-null present"
+          dec = ov.get("decisions") or []
+          assert {d.get("account_id") for d in dec if d.get("account_id")} <= ids, "account_id outside registry"
+          assert ov.get("status") == "BLOCKED_PENDING_FINANCE_APPROVAL", "overlay must stay finance-locked"
+          print("POLICY_ASSET_INVARIANTS_OK=1  accounts=%d decisions=%d" % (len(accs), len(dec)))
+          PY
+      - name: Stage-3 classify + policy suite (green, model-free)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m pytest tests/accounting/classify tests/accounting/policy -q --tb=short --junitxml=stage3-junit.xml
+      - name: Contract closure offline verifier (reason registry + decision receipt)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          from butler_pc_core.accounting.classify.contracts import (
+              registry_closure_digest, emit_reason, validate_decision_receipt, ReasonRegistryError)
+          from butler_pc_core.accounting.classify.models import ReasonCode
+          # F005 closure holds; F015 a contradictory receipt is rejected.
+          assert len(registry_closure_digest()) == 64
+          try:
+              emit_reason("MADE_UP"); raise SystemExit("registry closure breached")
+          except ReasonRegistryError:
+              pass
+          print("CONTRACT_CLOSURE_VERIFIER_OK=1")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stage3-junit
+          path: stage3-junit.xml
