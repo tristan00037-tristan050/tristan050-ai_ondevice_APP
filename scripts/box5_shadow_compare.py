@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""그룹A용 — 통장 엑셀 한 개를 넣으면 '기존 분류기 vs 새 분류기(shadow)' 비교표를 만든다.
+
+새 분류기 결과는 기록만 한다. 기존 분류(제품)에는 아무 영향이 없다. 원문·상호명·계좌번호는
+저장하지 않고 필요한 것만 digest(해시)로 남긴다. 자동기표는 잠긴 상태(JOURNAL_AUTO_POST_ALLOWED=NO).
+
+사용법:
+    python3 scripts/box5_shadow_compare.py 통장.xlsx
+    python3 scripts/box5_shadow_compare.py 통장.xlsx --out 결과폴더
+
+산출:
+    <out>/box5_shadow_compare.csv    ← 사람이 보는 비교표(엑셀로 열림)
+    <out>/box5_shadow_compare.jsonl  ← 기계가 읽는 원자료
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import sys
+from pathlib import Path
+
+# 저장소 루트를 import 경로에 추가(앱 번들/저장소 어디서 실행하든 동작)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from butler_pc_core.accounting.classifier import classify_file  # noqa: E402
+from butler_pc_core.accounting.classify.shadow import run_shadow_over_dataframe  # noqa: E402
+
+_FIELDS = [
+    "transaction_key", "legacy_status", "legacy_account_id",
+    "shadow_status", "shadow_account_id", "shadow_rule_id",
+    "shadow_rule_digest", "shadow_reason_code", "agreement", "shadow_error_code",
+]
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Box5 3단계 shadow 비교표 생성 (관찰 전용)")
+    ap.add_argument("excel", help="통장 거래내역 파일 (.xlsx/.xls/.csv)")
+    ap.add_argument("--out", default=".", help="결과를 저장할 폴더 (기본: 현재 폴더)")
+    args = ap.parse_args()
+
+    src = Path(args.excel)
+    if not src.is_file():
+        print(f"❌ 파일을 찾을 수 없습니다: {src}")
+        return 1
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    print("1) 기존 분류기 실행(제품과 동일 경로)…")
+    df = classify_file(str(src))  # 기존 제품 분류. 결과에 영향 주지 않음.
+
+    print("2) 새 분류기를 나란히 실행(shadow, 기록만)…")
+    records = run_shadow_over_dataframe(df)
+
+    csv_path = out_dir / "box5_shadow_compare.csv"
+    jsonl_path = out_dir / "box5_shadow_compare.jsonl"
+    with csv_path.open("w", encoding="utf-8-sig", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=_FIELDS)
+        writer.writeheader()
+        for rec in records:
+            row = rec.to_safe_dict()
+            writer.writerow({k: row.get(k, "") for k in _FIELDS})
+    with jsonl_path.open("w", encoding="utf-8") as fh:
+        fh.write("".join(rec.to_jsonl() + "\n" for rec in records))
+
+    # 요약 집계
+    tally: dict[str, int] = {}
+    for rec in records:
+        tally[rec.agreement] = tally.get(rec.agreement, 0) + 1
+    print(f"\n✅ 완료 — 거래 {len(records)}건")
+    print(f"   비교표(csv):  {csv_path}")
+    print(f"   원자료(jsonl): {jsonl_path}")
+    print("   일치 요약:")
+    for key in sorted(tally):
+        print(f"     {key}: {tally[key]}건")
+    print("\n※ 새 분류기 결과는 기록만 했습니다. 기존 분류 결과·엑셀은 바뀌지 않았습니다.")
+    print("※ 원문·상호명·계좌번호는 저장하지 않았습니다(필요분만 digest).")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
