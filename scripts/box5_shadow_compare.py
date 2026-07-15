@@ -20,8 +20,24 @@ import csv
 import sys
 from pathlib import Path
 
-# 저장소 루트를 import 경로에 추가(앱 번들/저장소 어디서 실행하든 동작)
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# butler_pc_core 를 자동 탐색: 저장소 루트 → 설치된 앱 Resources → 환경변수.
+# (그룹A가 PYTHONPATH 를 몰라도 실행되게 한다.)
+def _bootstrap_import_path() -> None:
+    candidates = [
+        Path(__file__).resolve().parents[1],  # 저장소 루트 (scripts/ 의 부모)
+        Path("/Applications/Butler.app/Contents/Resources"),  # 설치된 앱 번들
+    ]
+    env_root = __import__("os").environ.get("BUTLER_PC_CORE_ROOT")
+    if env_root:
+        candidates.insert(0, Path(env_root))
+    for root in candidates:
+        if (root / "butler_pc_core" / "__init__.py").is_file():
+            sys.path.insert(0, str(root))
+            return
+    # 없으면 기본 동작(현재 sys.path)에 맡긴다.
+
+
+_bootstrap_import_path()
 
 from butler_pc_core.accounting.classifier import classify_file  # noqa: E402
 from butler_pc_core.accounting.classify.shadow import run_shadow_over_dataframe  # noqa: E402
