@@ -12,8 +12,12 @@ type Card = {
   Icon: LucideIcon;
 };
 
-export const BOX6_FORM_FILL_ENABLED = import.meta.env.VITE_BUTLER_BOX6_FORM_FILL === '1';
-export const BOX4_DOCUMENT_REVIEW_ENABLED = import.meta.env.VITE_BUTLER_BOX4_DOCUMENT_REVIEW === '1';
+// box6/box4 are activated by default (product default ON) so any build ships them on —
+// no build-time env needed. An explicit VITE_BUTLER_BOX{6,4}_* === '0' still force-disables
+// (kill switch). #839/#840 landed these feature-complete but flag-off; this promotes the
+// default to on. box7/box8 remain unimplemented (active:false) and are unaffected.
+export const BOX6_FORM_FILL_ENABLED = import.meta.env.VITE_BUTLER_BOX6_FORM_FILL !== '0';
+export const BOX4_DOCUMENT_REVIEW_ENABLED = import.meta.env.VITE_BUTLER_BOX4_DOCUMENT_REVIEW !== '0';
 
 const CARDS: Card[] = [
   { id: 1, mode: 'request_organize', title: '요청 핵심 파악·정리', desc: '받은 요청을 액션·마감·자료로 정리', active: true, Icon: Inbox },

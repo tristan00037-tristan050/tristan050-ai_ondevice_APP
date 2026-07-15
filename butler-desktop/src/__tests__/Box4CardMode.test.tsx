@@ -37,20 +37,21 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('Box4 document_review feature flag', () => {
-  it('keeps card 4 disabled when the flag is missing', async () => {
+describe('Box4 document_review feature flag (default ON)', () => {
+  it('enables card 4 by default when the flag is missing', async () => {
     const { CardGrid, BOX4_DOCUMENT_REVIEW_ENABLED } = await loadCardGrid();
     const onCardSelect = vi.fn();
 
     render(<CardGrid onCardSelect={onCardSelect} />);
 
-    expect(BOX4_DOCUMENT_REVIEW_ENABLED).toBe(false);
-    expect(screen.getByTestId('card-4')).toBeDisabled();
-    fireEvent.click(screen.getByTestId('card-4'));
-    expect(onCardSelect).not.toHaveBeenCalled();
+    expect(BOX4_DOCUMENT_REVIEW_ENABLED).toBe(true);
+    const card4 = screen.getByTestId('card-4');
+    expect(card4).not.toBeDisabled();
+    fireEvent.click(card4);
+    expect(onCardSelect).toHaveBeenCalledWith('document_review');
   });
 
-  it('enables card 4 only when VITE_BUTLER_BOX4_DOCUMENT_REVIEW is 1', async () => {
+  it('stays enabled when VITE_BUTLER_BOX4_DOCUMENT_REVIEW is 1', async () => {
     const { CardGrid, BOX4_DOCUMENT_REVIEW_ENABLED } = await loadCardGrid('1');
     const onCardSelect = vi.fn();
 
@@ -61,6 +62,18 @@ describe('Box4 document_review feature flag', () => {
     expect(card4).not.toBeDisabled();
     fireEvent.click(card4);
     expect(onCardSelect).toHaveBeenCalledWith('document_review');
+  });
+
+  it('force-disables card 4 only when VITE_BUTLER_BOX4_DOCUMENT_REVIEW is 0 (kill switch)', async () => {
+    const { CardGrid, BOX4_DOCUMENT_REVIEW_ENABLED } = await loadCardGrid('0');
+    const onCardSelect = vi.fn();
+
+    render(<CardGrid onCardSelect={onCardSelect} />);
+
+    expect(BOX4_DOCUMENT_REVIEW_ENABLED).toBe(false);
+    expect(screen.getByTestId('card-4')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('card-4'));
+    expect(onCardSelect).not.toHaveBeenCalled();
   });
 
   it('sends document_review to the sidecar as numeric card_mode 4', async () => {

@@ -37,20 +37,21 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('Box6 form_fill feature flag', () => {
-  it('keeps card 6 disabled when the flag is missing', async () => {
+describe('Box6 form_fill feature flag (default ON)', () => {
+  it('enables card 6 by default when the flag is missing', async () => {
     const { CardGrid, BOX6_FORM_FILL_ENABLED } = await loadCardGrid();
     const onCardSelect = vi.fn();
 
     render(<CardGrid onCardSelect={onCardSelect} />);
 
-    expect(BOX6_FORM_FILL_ENABLED).toBe(false);
-    expect(screen.getByTestId('card-6')).toBeDisabled();
-    fireEvent.click(screen.getByTestId('card-6'));
-    expect(onCardSelect).not.toHaveBeenCalled();
+    expect(BOX6_FORM_FILL_ENABLED).toBe(true);
+    const card6 = screen.getByTestId('card-6');
+    expect(card6).not.toBeDisabled();
+    fireEvent.click(card6);
+    expect(onCardSelect).toHaveBeenCalledWith('form_fill');
   });
 
-  it('enables card 6 only when VITE_BUTLER_BOX6_FORM_FILL is 1', async () => {
+  it('stays enabled when VITE_BUTLER_BOX6_FORM_FILL is 1', async () => {
     const { CardGrid, BOX6_FORM_FILL_ENABLED } = await loadCardGrid('1');
     const onCardSelect = vi.fn();
 
@@ -63,8 +64,20 @@ describe('Box6 form_fill feature flag', () => {
     expect(onCardSelect).toHaveBeenCalledWith('form_fill');
   });
 
-  it('keeps cards 7 and 8 disabled even when card 6 is enabled', async () => {
-    const { CardGrid } = await loadCardGrid('1');
+  it('force-disables card 6 only when VITE_BUTLER_BOX6_FORM_FILL is 0 (kill switch)', async () => {
+    const { CardGrid, BOX6_FORM_FILL_ENABLED } = await loadCardGrid('0');
+    const onCardSelect = vi.fn();
+
+    render(<CardGrid onCardSelect={onCardSelect} />);
+
+    expect(BOX6_FORM_FILL_ENABLED).toBe(false);
+    expect(screen.getByTestId('card-6')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('card-6'));
+    expect(onCardSelect).not.toHaveBeenCalled();
+  });
+
+  it('keeps cards 7 and 8 disabled (unimplemented) regardless of card 6', async () => {
+    const { CardGrid } = await loadCardGrid();
 
     render(<CardGrid onCardSelect={vi.fn()} />);
 
