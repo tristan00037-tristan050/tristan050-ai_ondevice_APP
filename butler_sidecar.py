@@ -1434,6 +1434,21 @@ if _FASTAPI_AVAILABLE:
                 lambda: classify_file(file_path, company_profile=company_profile),
             )
 
+            # ── Box5 stage-3 shadow observation (observe-only, isolated, non-blocking) ────
+            # Runs the new Stage3Classifier alongside the legacy result and records a PII-free
+            # comparison to a side JSONL for Group A's 295-case review. It reads df only, never
+            # mutates it, never touches this response, and can only fail silently. ★It is
+            # fire-and-forget on a worker thread and is NOT awaited, so even a slow shadow cannot
+            # delay the product response. Same verified company_profile drives the self-transfer
+            # guard. Nothing is auto-consumed; JOURNAL_AUTO_POST_ALLOWED stays NO.
+            try:
+                from butler_pc_core.accounting.classify.shadow.runner import run_and_write_shadow
+
+                _shadow_out = str(Path(tempfile.gettempdir()) / f"butler_box5_shadow_{result_id}.jsonl")
+                loop.run_in_executor(None, run_and_write_shadow, df, _shadow_out, company_profile)
+            except Exception:  # noqa: BLE001 — shadow must never affect the product path
+                pass
+
             yield _sse("phase_start", {"status_message": "보고서 생성 중 — 요약 집계"})
             await asyncio.sleep(0)
 
