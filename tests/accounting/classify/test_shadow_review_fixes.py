@@ -59,12 +59,14 @@ def test_cli_baseline_loads_and_passes_active_profile(monkeypatch):
     monkeypatch.setattr(box5_shadow_compare, "CompanyProfileStore", Store)
     monkeypatch.setattr(box5_shadow_compare, "classify_file", fake_classify_file)
 
-    result = box5_shadow_compare._classify_product_baseline(Path("group-a.csv"))
+    profile = box5_shadow_compare._load_active_profile()
+    result = box5_shadow_compare._classify_product_baseline(Path("group-a.csv"), profile)
     assert result == "classified"
     assert captured == {
         "path": "group-a.csv",
         "company_profile": active_profile,
     }
+    assert profile is active_profile
 
 
 def _approved_bundle(rel: str) -> dict:

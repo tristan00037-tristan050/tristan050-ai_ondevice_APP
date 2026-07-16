@@ -50,8 +50,11 @@ _FIELDS = [
 ]
 
 
-def _classify_product_baseline(src: Path):
-    company_profile = CompanyProfileStore().load_active_profile()
+def _load_active_profile():
+    return CompanyProfileStore().load_active_profile()
+
+
+def _classify_product_baseline(src: Path, company_profile):
     return classify_file(str(src), company_profile=company_profile)
 
 
@@ -70,13 +73,16 @@ def main() -> int:
 
     print("1) 기존 분류기 실행(제품과 동일 경로)…")
     try:
-        df = _classify_product_baseline(src)
+        # ★ 활성 profile 을 한 번만 로드해 legacy·shadow 양쪽에 같은 객체로 전달한다.
+        company_profile = _load_active_profile()
     except ProfileLoadError:
         print("ERROR_CODE=COMPANY_PROFILE_LOAD_FAILED", file=sys.stderr)
         return 1
+    df = _classify_product_baseline(src, company_profile)
 
     print("2) 새 분류기를 나란히 실행(shadow, 기록만)…")
-    records = run_shadow_over_dataframe(df)
+    # ★ shadow 에도 동일 profile 전달 → self-transfer guard 가 CLI 경로에서도 작동.
+    records = run_shadow_over_dataframe(df, company_profile)
 
     csv_path = out_dir / "box5_shadow_compare.csv"
     jsonl_path = out_dir / "box5_shadow_compare.jsonl"
