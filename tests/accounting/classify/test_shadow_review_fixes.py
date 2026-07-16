@@ -119,9 +119,9 @@ def _facts(direction: BankDirection) -> RuleFacts:
 
 def test_approved_registry_uses_schema_descriptor_fields(monkeypatch):
     monkeypatch.setattr(AtlinkShadowPort, "_read", staticmethod(_approved_bundle))
-    port = AtlinkShadowPort(vendor_text="승인상호")
+    port = AtlinkShadowPort()
 
-    matched = port.match_vendor_exact(None)
+    matched = port.match_vendor_exact("tok_" + descriptor_hmac("승인상호", policy_profile_id="atlink.smb.v1"))
     assert matched.state is VendorMatchState.EXACT
     assert matched.match_id == "vendor.saas.approved"
 

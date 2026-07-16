@@ -41,7 +41,7 @@ def _tx(**o):
 # ── Blocker 1: self-transfer guard ────────────────────────────────────────
 
 def test_blocker1_own_account_becomes_review_self_transfer_and_skips_rule():
-    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="123-456-789", vendor_text="아무개")
+    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="123-456-789")
     draft = Stage3Classifier().classify(_tx(), port)
     assert draft.state is DecisionState.REVIEW_REQUIRED
     assert draft.reason_code is ReasonCode.REVIEW_SELF_TRANSFER
@@ -51,13 +51,13 @@ def test_blocker1_own_account_becomes_review_self_transfer_and_skips_rule():
 
 
 def test_blocker1_non_own_account_does_not_trigger_self_transfer():
-    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="999-888-777", vendor_text="아무개")
+    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="999-888-777")
     draft = Stage3Classifier().classify(_tx(), port)
     assert draft.reason_code is not ReasonCode.REVIEW_SELF_TRANSFER
 
 
 def test_blocker1_no_profile_stays_conservative_no_crash():
-    port = AtlinkShadowPort(company_profile=None, counterparty_account_no="123-456-789", vendor_text="아무개")
+    port = AtlinkShadowPort(company_profile=None, counterparty_account_no="123-456-789")
     draft = Stage3Classifier().classify(_tx(), port)
     assert draft.state is not DecisionState.AUTO_PROPOSE  # empty registry → review
 
@@ -87,19 +87,21 @@ def _approved_registry(vendor: str) -> dict:
 def test_blocker2_real_transaction_token_matches_registry_and_auto_proposes(monkeypatch):
     vendor = "케이티 서버 이용료"
     real_read = AtlinkShadowPort._read
-
-    def fake_read(rel):
-        if rel == "vendor_descriptor_registry.template.json":
-            return _approved_registry(vendor)
-        return real_read(rel)
-
-    monkeypatch.setattr(AtlinkShadowPort, "_read", staticmethod(fake_read))
-    # a live OUTFLOW transaction whose vendor normalizes to the approved descriptor
-    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="999-888-777", vendor_text=vendor)
-    draft = Stage3Classifier().classify(_tx(vendor_text=vendor), port)
+    monkeypatch.setattr(
+        AtlinkShadowPort, "_read",
+        staticmethod(lambda rel: _approved_registry(vendor) if rel == "vendor_descriptor_registry.template.json" else real_read(rel)),
+    )
+    # ★ REAL product path: build_canonical_transaction produces vendor_token; classify() makes the
+    # pipeline call port.match_vendor_exact(tx.vendor_token). No direct descriptor_hmac shortcut.
+    tx = _tx(vendor_text=vendor)
+    assert tx.vendor_token == "tok_" + descriptor_hmac(vendor, policy_profile_id="atlink.smb.v1")
+    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="999-888-777")
+    draft = Stage3Classifier().classify(tx, port)
     assert draft.state is DecisionState.AUTO_PROPOSE
     assert draft.account_id == "PL.SGA.COMMUNICATION"   # TELECOM → 통신비 (registry-bound)
     assert draft.reason_code is ReasonCode.AUTO_PROPOSE_EXACT_RULE
+    # match_vendor_exact was actually reached WITH the tx token (a real hmac prefix, not "vendor:-")
+    assert any(c.startswith("vendor:") and c != "vendor:-" for c in port._calls)
 
 
 def test_blocker2_non_approved_vendor_still_reviews(monkeypatch):
@@ -108,8 +110,9 @@ def test_blocker2_non_approved_vendor_still_reviews(monkeypatch):
         AtlinkShadowPort, "_read",
         staticmethod(lambda rel: _approved_registry("케이티 서버 이용료") if rel == "vendor_descriptor_registry.template.json" else real_read(rel)),
     )
-    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="999-888-777", vendor_text="전혀다른상호")
-    draft = Stage3Classifier().classify(_tx(vendor_text="전혀다른상호"), port)
+    tx = _tx(vendor_text="전혀다른상호")   # token differs → no registry hit
+    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="999-888-777")
+    draft = Stage3Classifier().classify(tx, port)
     assert draft.state is not DecisionState.AUTO_PROPOSE
 
 

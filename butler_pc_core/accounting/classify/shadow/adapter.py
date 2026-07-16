@@ -13,8 +13,11 @@ import hashlib
 import json
 import re
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+from butler_pc_core.accounting.policy.vendor_descriptor import descriptor_hmac
 
 from butler_pc_core.accounting.classify.models import (
     BankDirection,
@@ -47,12 +50,22 @@ _ACCOUNTING_DIRECTION = {
 }
 
 
-def _tok(text: object) -> str | None:
-    """PII-free synthetic token (tok_<32 hex>) from a hash, or None for empty."""
-    s = str(text if text is not None else "").strip()
+@lru_cache(maxsize=1)
+def _bundle_policy_profile_id() -> str:
+    rules = json.loads((_BUNDLE / "upstream/account_mapping_rules.v1.json").read_text(encoding="utf-8"))
+    return str(rules.get("policy_profile_id") or "atlink.smb.v1")
+
+
+def _vendor_token(vendor_text: object) -> str | None:
+    """Vendor token = the registry-consistent descriptor HMAC (``tok_<64hex>``), or None if empty.
+
+    This is the SINGLE tokenization used by both the approved registry and the live matching path,
+    so ``match_vendor_exact`` can look the token up directly.
+    """
+    s = str(vendor_text if vendor_text is not None else "").strip()
     if not s:
         return None
-    return "tok_" + hashlib.sha256(s.encode("utf-8")).hexdigest()[:40]
+    return "tok_" + descriptor_hmac(s, policy_profile_id=_bundle_policy_profile_id())
 
 
 def build_canonical_transaction(
@@ -85,8 +98,10 @@ def build_canonical_transaction(
         currency_registry_version=_CURRENCY_REGISTRY_VERSION,
         transaction_digest=row_digest,
         source_record_digest=row_digest,
-        counterparty_account_token=_tok(counterparty_text),
-        vendor_token=_tok(vendor_text),
+        # self-transfer uses the port's raw counterparty account number (in-memory), so the
+        # canonical view keeps no counterparty token; vendor token is the registry-consistent HMAC.
+        counterparty_account_token=None,
+        vendor_token=_vendor_token(vendor_text),
         description_feature_digests=(feature,),
         evidence_digests=(feature,),
     )
@@ -105,21 +120,14 @@ class AtlinkShadowPort:
         *,
         company_profile: Any = None,
         counterparty_account_no: str | None = None,
-        vendor_text: object = "",
     ) -> None:
         self._chart_ids = self._load_chart_ids()
-        self._profile_id = self._load_profile_id()
         self._approved_vendors, self._descriptor_tags = self._load_approved_vendors()
         self._rules = self._load_rules()
         # Per-row context (in-memory only; never logged/stored — the record output is digest-only).
         self._profile = company_profile
         self._counterparty_account_no = counterparty_account_no
-        self._vendor_text = vendor_text
         self._calls: list[str] = []
-
-    def _load_profile_id(self) -> str:
-        rules = self._read("upstream/account_mapping_rules.v1.json")
-        return str(rules.get("policy_profile_id") or "atlink.smb.v1")
 
     @staticmethod
     def _read(rel: str) -> dict[str, Any]:
@@ -181,16 +189,14 @@ class AtlinkShadowPort:
         return bool(_profile_is_own(self._counterparty_account_no, self._profile))
 
     def match_vendor_exact(self, vendor_token: str | None) -> VendorMatchReply:
-        # ★ tokenize the live vendor with the SAME normalize+HMAC the registry uses, then look up.
-        from butler_pc_core.accounting.policy.vendor_descriptor import descriptor_hmac
-
-        text = str(self._vendor_text or "").strip()
-        if not text:
+        # ★ consume the transaction's HMAC vendor token (produced in build_canonical_transaction via
+        # the SAME normalize+HMAC the registry uses) and look it up in the approved registry.
+        if not vendor_token or not str(vendor_token).startswith("tok_"):
             self._calls.append("vendor:-")
             return VendorMatchReply(VendorMatchState.NO_MATCH)
-        token = descriptor_hmac(text, policy_profile_id=self._profile_id)
-        self._calls.append(f"vendor:{token[:8]}")
-        match_id = self._approved_vendors.get(token)
+        hmac_value = str(vendor_token)[4:]
+        self._calls.append(f"vendor:{hmac_value[:8]}")
+        match_id = self._approved_vendors.get(hmac_value)
         if match_id is None:
             return VendorMatchReply(VendorMatchState.NO_MATCH)
         return VendorMatchReply(VendorMatchState.EXACT, match_id)

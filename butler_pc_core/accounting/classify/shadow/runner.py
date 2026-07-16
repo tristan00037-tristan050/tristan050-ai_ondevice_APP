@@ -110,12 +110,12 @@ def shadow_one(row: dict[str, Any], company_profile: Any = None) -> ShadowCompar
             vendor_text=row.get("vendor_text", ""),
             counterparty_text=row.get("counterparty_text", ""),
         )
-        # ★ self-transfer guard + registry vendor match need the verified profile, the raw
-        # counterparty account number, and the raw vendor text (in-memory only, never recorded).
+        # ★ self-transfer guard needs the verified profile + the raw counterparty account number
+        # (in-memory only, never recorded). Vendor matching flows through tx.vendor_token, which
+        # build_canonical_transaction already produced with the registry-consistent HMAC.
         port = AtlinkShadowPort(
             company_profile=company_profile,
             counterparty_account_no=row.get("counterparty_account_no"),
-            vendor_text=row.get("vendor_text", ""),
         )
         draft = Stage3Classifier().classify(tx, port)
         shadow_classified = draft.state is DecisionState.AUTO_PROPOSE
