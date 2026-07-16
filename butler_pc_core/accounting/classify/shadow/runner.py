@@ -7,6 +7,8 @@ product path. Nothing here mutates the legacy DataFrame or the product response.
 from __future__ import annotations
 
 from datetime import date, datetime
+import math
+import re
 from typing import Any, Iterable
 
 from butler_pc_core.accounting.classify.models import DecisionState
@@ -30,6 +32,7 @@ def _legacy_classified(legacy_account: object) -> bool:
 
 
 _DATE_COL_KEYWORDS = ("거래일시", "거래일자", "거래일", "거래날짜", "일자", "날짜", "date", "일시")
+_SINGLE_AMOUNT_COLUMNS = ("금액", "거래금액", "amount", "변동금액")
 
 
 def _to_date(value: object) -> date:
@@ -55,6 +58,40 @@ def _detect_date_column(columns: list[str]) -> str | None:
         if any(kw in str(col) or kw in low for kw in _DATE_COL_KEYWORDS):
             return col
     return None
+
+
+def _normalized_column_name(value: object) -> str:
+    return re.sub(r"[\s　 ]+|\(원\)", "", str(value)).casefold()
+
+
+def _detect_single_amount_column(columns: list[str]) -> str | None:
+    by_normalized = {_normalized_column_name(column): column for column in columns}
+    for candidate in _SINGLE_AMOUNT_COLUMNS:
+        found = by_normalized.get(_normalized_column_name(candidate))
+        if found is not None:
+            return found
+    return None
+
+
+def _to_minor_amount(value: object) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    text = str(value).strip()
+    if not text or text.casefold() in {"nan", "none", "null"}:
+        return None
+    negative_parentheses = text.startswith("(") and text.endswith(")")
+    if negative_parentheses:
+        text = text[1:-1]
+    cleaned = re.sub(r"[,￦원\s]", "", text)
+    try:
+        number = float(cleaned)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    if negative_parentheses:
+        number = -abs(number)
+    return int(round(number))
 
 
 def shadow_one(row: dict[str, Any]) -> ShadowComparisonRecord:
@@ -117,9 +154,12 @@ def rows_from_dataframe(df: Any) -> list[dict[str, Any]]:
     internal = {"분류과목", "신뢰도", "_amt", "_datetime", "_guard_reason", "_pnl_excluded"}
     columns = list(df.columns)
     date_col = _detect_date_column(columns)
+    amount_col = _detect_single_amount_column(columns)
     non_internal = [c for c in columns if c not in internal]
     for i, (_, r) in enumerate(df.iterrows()):
-        amt = r.get("_amt")
+        amt = _to_minor_amount(r.get("_amt"))
+        if amt is None and amount_col is not None:
+            amt = _to_minor_amount(r.get(amount_col))
         if amt is None:
             continue
         booked = r.get("_datetime")
@@ -129,7 +169,7 @@ def rows_from_dataframe(df: Any) -> list[dict[str, Any]]:
         desc = " ".join(str(r.get(c, "")) for c in non_internal)
         rows.append({
             "index": i,
-            "amount_minor": int(round(float(amt))),
+            "amount_minor": amt,
             "booked_date": booked,
             "value_date": booked,
             "desc_text": desc,

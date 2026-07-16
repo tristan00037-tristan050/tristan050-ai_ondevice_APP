@@ -41,12 +41,18 @@ _bootstrap_import_path()
 
 from butler_pc_core.accounting.classifier import classify_file  # noqa: E402
 from butler_pc_core.accounting.classify.shadow import run_shadow_over_dataframe  # noqa: E402
+from butler_pc_core.company_profile.storage import CompanyProfileStore, ProfileLoadError  # noqa: E402
 
 _FIELDS = [
     "transaction_key", "legacy_status", "legacy_account_id",
     "shadow_status", "shadow_account_id", "shadow_rule_id",
     "shadow_rule_digest", "shadow_reason_code", "agreement", "shadow_error_code",
 ]
+
+
+def _classify_product_baseline(src: Path):
+    company_profile = CompanyProfileStore().load_active_profile()
+    return classify_file(str(src), company_profile=company_profile)
 
 
 def main() -> int:
@@ -63,7 +69,11 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print("1) 기존 분류기 실행(제품과 동일 경로)…")
-    df = classify_file(str(src))  # 기존 제품 분류. 결과에 영향 주지 않음.
+    try:
+        df = _classify_product_baseline(src)
+    except ProfileLoadError:
+        print("ERROR_CODE=COMPANY_PROFILE_LOAD_FAILED", file=sys.stderr)
+        return 1
 
     print("2) 새 분류기를 나란히 실행(shadow, 기록만)…")
     records = run_shadow_over_dataframe(df)

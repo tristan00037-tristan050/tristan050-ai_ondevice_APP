@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -38,6 +39,12 @@ _SHADOW_TENANT = "shadow-observe"
 _SHADOW_COMPANY = "shadow-observe"
 _SHADOW_BANK = "shadow-bank"
 _CURRENCY_REGISTRY_VERSION = "atlink-krw-v1"
+_DESCRIPTOR_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_HMAC_RE = re.compile(r"^[0-9a-f]{64}$")
+_ACCOUNTING_DIRECTION = {
+    BankDirection.OUTFLOW: "DEBIT",
+    BankDirection.INFLOW: "CREDIT",
+}
 
 
 def _tok(text: object) -> str | None:
@@ -111,13 +118,29 @@ class AtlinkShadowPort:
     def _load_approved_vendors(self) -> dict[str, str]:
         reg = self._read("vendor_descriptor_registry.template.json")
         # Only APPROVED (non-empty) registries contribute matches. Currently BLOCKED_EMPTY_REGISTRY.
-        if str(reg.get("status", "")).upper() != "APPROVED":
+        if (
+            str(reg.get("status", "")).upper() != "APPROVED"
+            or not isinstance(reg.get("approval_id"), str)
+            or not str(reg["approval_id"]).strip()
+        ):
             return {}
         out: dict[str, str] = {}
         for d in reg.get("descriptors") or []:
-            token, match_id = d.get("descriptor_token"), d.get("match_id")
-            if token and match_id:
-                out[str(token)] = str(match_id)
+            if not isinstance(d, dict):
+                continue
+            token = d.get("normalized_exact_value_hmac")
+            match_id = d.get("descriptor_id")
+            if (
+                not isinstance(token, str)
+                or not _HMAC_RE.fullmatch(token)
+                or not isinstance(match_id, str)
+                or not _DESCRIPTOR_ID_RE.fullmatch(match_id)
+            ):
+                continue
+            previous = out.get(token)
+            if previous is not None and previous != match_id:
+                raise ValueError("VENDOR_DESCRIPTOR_HMAC_CONFLICT")
+            out[token] = match_id
         return out
 
     def _load_rules(self) -> list[dict[str, Any]]:
@@ -146,9 +169,20 @@ class AtlinkShadowPort:
         # Rules require an approved vendor-descriptor exact match. Without one → NO_MATCH (review).
         if facts.vendor_match_id is None:
             return RuleSelectionReply(RuleBasis.NO_MATCH)
+        expected_direction = _ACCOUNTING_DIRECTION[facts.direction]
         for rule in self._rules:
             acct = rule.get("target_account_id")
-            if acct in self._chart_ids and str(rule.get("direction", "")) == facts.direction.value:
+            rule_direction = (
+                str(rule.get("bank_direction", ""))
+                if "bank_direction" in rule
+                else str(rule.get("direction", ""))
+            )
+            direction_matches = (
+                rule_direction == facts.direction.value
+                if "bank_direction" in rule
+                else rule_direction == expected_direction
+            )
+            if acct in self._chart_ids and direction_matches:
                 rule_id = str(rule.get("rule_id"))
                 rdigest = hashlib.sha256(
                     json.dumps(rule, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
