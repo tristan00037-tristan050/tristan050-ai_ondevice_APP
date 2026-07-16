@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Callable
 
 from fastapi.responses import JSONResponse
@@ -26,6 +27,24 @@ DEFAULT_ROUTE_OPERATION: dict[str, tuple[str, str]] = {
     "/v1/cards/3/draft": ("3", "draft_write"),
     "/accounting/classify": ("5", "accounting_classify"),
 }
+
+_ACCOUNTING_ASSIGNMENT_MUTATION_RE = re.compile(
+    r"^/v1/accounting/(?:unaccounted/[A-Za-z0-9_-]{16,128}/assign|"
+    r"learned-rules/[A-Za-z0-9_-]{16,128}/deactivate|"
+    r"rule-conflicts/[A-Za-z0-9_-]{16,128}/resolve)$"
+)
+
+
+def _route_operation(path: str, routes: dict[str, tuple[str, str]]) -> tuple[str, str] | None:
+    exact = routes.get(path)
+    if exact is not None:
+        return exact
+    if _ACCOUNTING_ASSIGNMENT_MUTATION_RE.fullmatch(path):
+        # Assignment is not journal posting, but it consumes the same Box5
+        # company-policy envelope as classification until a versioned policy
+        # operation registry adds a narrower accounting_review operation.
+        return ("5", "accounting_classify")
+    return None
 
 
 def _header_bool(value: str | None) -> bool:
@@ -61,10 +80,11 @@ def add_policy_gate_middleware(
 
     @app.middleware("http")
     async def _company_policy_gate(request, call_next):  # type: ignore[no-untyped-def]
-        if request.method != "POST" or request.url.path not in routes:
+        operation_binding = _route_operation(request.url.path, routes)
+        if request.method != "POST" or operation_binding is None:
             return await call_next(request)
 
-        box_id, operation = routes[request.url.path]
+        box_id, operation = operation_binding
         try:
             policy = policy_store.load_active_policy()
         except PolicyLoadError:

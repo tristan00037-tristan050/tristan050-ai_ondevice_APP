@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/custom-instruction-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "instruction_id",
+    "tenant_digest",
+    "version",
+    "text",
+    "text_digest",
+    "enabled",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.custom_instruction.v1"
+    },
+    "instruction_id": {
+      "type": "string",
+      "minLength": 8
+    },
+    "tenant_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "text": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "text_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

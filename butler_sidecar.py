@@ -433,6 +433,7 @@ if _FASTAPI_AVAILABLE:
     from butler_pc_core.company_fact.routes import router as company_fact_router
     from butler_pc_core.sidecar.routes.company_learning import router as company_learning_router
     from butler_pc_core.sidecar.routes.company_profile import router as company_profile_router
+    from butler_pc_core.accounting.assignment.router import router as accounting_assignment_router
     from butler_pc_core.sidecar.routes.helper1_search import router as helper1_search_router
     from butler_pc_core.sidecar.routes.router_decide import router as router_decide_router
     from butler_pc_core.sidecar.routes.router_intake_decide import router as router_intake_decide_router
@@ -455,6 +456,7 @@ if _FASTAPI_AVAILABLE:
     app.include_router(admin_policy_format_router)
     app.include_router(admin_role_registry_router)
     app.include_router(company_profile_router)
+    app.include_router(accounting_assignment_router)
     app.include_router(company_fact_router)
     app.include_router(company_learning_router)
 
@@ -1394,8 +1396,19 @@ if _FASTAPI_AVAILABLE:
                         Path(entry["xlsx_path"]).unlink(missing_ok=True)
                     except Exception:
                         pass
+                try:
+                    from butler_pc_core.accounting.assignment.runtime import get_accounting_review_runtime
 
-    async def _stream_accounting(file_path: str, result_id: str, format_id: str | None = None):
+                    get_accounting_review_runtime().remove_batch(rid)
+                except Exception:
+                    pass
+
+    async def _stream_accounting(
+        file_path: str,
+        result_id: str,
+        format_id: str | None = None,
+        account_column: str | None = None,
+    ):
         """회계 분류 SSE 제너레이터."""
         try:
             yield _sse("phase_start", {"status_message": "분류 중 — 회계과목 매칭"})
@@ -1433,6 +1446,24 @@ if _FASTAPI_AVAILABLE:
                 None,
                 lambda: classify_file(file_path, company_profile=company_profile),
             )
+
+            # Register the actual classified rows with the canonical review runtime.
+            # Raw descriptors remain in this request-local in-memory projection; the
+            # persistent assignment store receives only opaque IDs, digests, and HMACs.
+            try:
+                from butler_pc_core.accounting.assignment.runtime import get_accounting_review_runtime
+
+                await loop.run_in_executor(
+                    None,
+                    lambda: get_accounting_review_runtime().ingest_dataframe(
+                        result_id,
+                        df,
+                        company_profile,
+                        selected_account_column=account_column,
+                    ),
+                )
+            except Exception:  # Review registration must never alter the legacy response bytes.
+                pass
 
             # ── Box5 stage-3 shadow observation (observe-only, isolated, non-blocking) ────
             # Runs the new Stage3Classifier alongside the legacy result and records a PII-free
@@ -1574,6 +1605,10 @@ if _FASTAPI_AVAILABLE:
         format_id = str(raw_format_id).strip() if raw_format_id is not None else None
         if not format_id:
             format_id = None
+        raw_account_column = form.get("account_column")
+        account_column = str(raw_account_column).strip() if raw_account_column is not None else None
+        if not account_column:
+            account_column = None
 
         fname = getattr(upload, "filename", "") or "upload"
         suffix = Path(fname).suffix if fname else ".xlsx"
@@ -1590,7 +1625,12 @@ if _FASTAPI_AVAILABLE:
 
         result_id = str(uuid.uuid4())
         return StreamingResponse(
-            _stream_accounting(tmp_path, result_id, format_id=format_id),
+            _stream_accounting(
+                tmp_path,
+                result_id,
+                format_id=format_id,
+                account_column=account_column,
+            ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/fact-context-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "tenant_digest",
+    "retriever_version",
+    "facts",
+    "token_count",
+    "context_digest",
+    "selection_reason"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.fact_context.v1"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 8
+    },
+    "tenant_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "retriever_version": {
+      "type": "string"
+    },
+    "facts": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fact_id",
+          "version",
+          "digest",
+          "kind",
+          "score_bp"
+        ],
+        "properties": {
+          "fact_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "kind": {
+            "enum": [
+              "COMPANY_FACT",
+              "CONTACT",
+              "OPERATING_DATA"
+            ]
+          },
+          "score_bp": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          }
+        }
+      }
+    },
+    "token_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 800
+    },
+    "context_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "selection_reason": {
+      "enum": [
+        "EXACT_HIT",
+        "RELATED_CONTEXT",
+        "NO_MATCH",
+        "UNAVAILABLE"
+      ]
+    }
+  }
+}

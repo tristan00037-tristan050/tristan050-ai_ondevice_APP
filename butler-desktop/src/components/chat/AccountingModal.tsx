@@ -8,6 +8,11 @@ import butlerIconAnimatedUrl from '../../assets/butler-icon-animated.svg';
 import { SIDECAR_BASE } from '../../constants';
 import { getSidecarCapabilityToken } from '../../lib/connect_loop/sidecarAuth';
 
+const AccountingReviewPage = React.lazy(async () => {
+  const module = await import('../accounting_review/AccountingReviewPage');
+  return { default: module.AccountingReviewPage };
+});
+
 interface AccountingModalProps {
   onClose: () => void;
 }
@@ -23,7 +28,20 @@ type CategoryInfo = {
 type Phase =
   | { kind: 'idle' }
   | { kind: 'processing'; status: string; fileName: string }
-  | { kind: 'done'; resultId: string; mdContent: string; rowCount: number; categoryCount: number; categories: Record<string, CategoryInfo> }
+  | {
+      kind: 'done';
+      resultId: string;
+      mdContent: string;
+      rowCount: number;
+      categoryCount: number;
+      categories: Record<string, CategoryInfo>;
+      reviewProjection: {
+        available: boolean;
+        batchId: string | null;
+        reviewRequiredCount: number;
+        reasonCode: string | null;
+      };
+    }
   | { kind: 'error'; message: string };
 
 const ACCEPT = '.xlsx,.xls,.csv';
@@ -101,6 +119,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [dragging, setDragging] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastPhaseStartMs = useRef<number>(0);
@@ -116,6 +135,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
     abortRef.current = ctrl;
     setPhase({ kind: 'processing', status: '파일 업로드 중...', fileName: file.name });
     setReportOpen(false);
+    setReviewOpen(false);
 
     try {
       const form = new FormData();
@@ -195,6 +215,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
             }
             if (ctrl.signal.aborted) return;
             const summary = data.summary as { categories: Record<string, CategoryInfo> } | null;
+            const review = data.review_projection as Record<string, unknown> | null;
             setPhase({
               kind: 'done',
               resultId: (data.result_id as string) ?? '',
@@ -202,6 +223,12 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
               rowCount: (data.row_count as number) ?? 0,
               categoryCount: (data.category_count as number) ?? 0,
               categories: summary?.categories ?? {},
+              reviewProjection: {
+                available: review?.available === true,
+                batchId: typeof review?.batch_id === 'string' ? review.batch_id : null,
+                reviewRequiredCount: typeof review?.review_required_count === 'number' ? review.review_required_count : 0,
+                reasonCode: typeof review?.reason_code === 'string' ? review.reason_code : null,
+              },
             });
             return;
           } else if (event === 'error') {
@@ -286,7 +313,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
         style={{
           background: 'var(--color-bg-app)',
           borderRadius: 16,
-          width: 520,
+          width: reviewOpen ? 1040 : 520,
           maxWidth: '92vw',
           maxHeight: '85vh',
           overflowY: 'auto',
@@ -320,8 +347,14 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
           </button>
         </div>
 
+        {reviewOpen && phase.kind === 'done' && phase.reviewProjection.batchId && (
+          <React.Suspense fallback={<p role="status">미분류 검토 화면을 불러오는 중입니다.</p>}>
+            <AccountingReviewPage batchId={phase.reviewProjection.batchId} onBack={() => setReviewOpen(false)} />
+          </React.Suspense>
+        )}
+
         {/* Upload zone */}
-        {phase.kind === 'idle' && (
+        {!reviewOpen && phase.kind === 'idle' && (
           <div
             data-testid="accounting-drop-zone"
             onDragOver={e => { e.preventDefault(); setDragging(true); }}
@@ -357,7 +390,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
         )}
 
         {/* Processing */}
-        {phase.kind === 'processing' && (
+        {!reviewOpen && phase.kind === 'processing' && (
           <div
             data-testid="accounting-processing"
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-6) 0' }}
@@ -419,7 +452,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
         )}
 
         {/* Error */}
-        {phase.kind === 'error' && (
+        {!reviewOpen && phase.kind === 'error' && (
           <div data-testid="accounting-error" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             <p style={{ margin: 0, color: 'var(--color-error)', fontSize: 'var(--text-sm)' }}>
               오류: {phase.message}
@@ -442,7 +475,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
         )}
 
         {/* Result */}
-        {phase.kind === 'done' && (
+        {!reviewOpen && phase.kind === 'done' && (
           <div data-testid="accounting-result" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             <div style={{
               padding: 'var(--space-3)',
@@ -566,6 +599,19 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
             </div>
 
             <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              {phase.reviewProjection.available && phase.reviewProjection.batchId && phase.reviewProjection.reviewRequiredCount > 0 && (
+                <button
+                  data-testid="accounting-review-open"
+                  onClick={() => setReviewOpen(true)}
+                  style={{
+                    padding: '8px 16px', fontSize: 'var(--text-sm)', fontWeight: 600,
+                    background: 'var(--color-brand-primary)', color: '#fff',
+                    border: 'none', borderRadius: 8, cursor: 'pointer',
+                  }}
+                >
+                  계정 확인 필요 {phase.reviewProjection.reviewRequiredCount}건
+                </button>
+              )}
               <button
                 data-testid="accounting-download-btn"
                 onClick={handleDownload}
@@ -603,6 +649,12 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
                 새 파일
               </button>
             </div>
+
+            {!phase.reviewProjection.available && (
+              <p data-testid="accounting-review-unavailable" style={{ margin: 0, color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
+                계정 검토 목록은 안전하게 생성되지 않아 열지 않았습니다. 분류 결과 파일은 그대로 내려받을 수 있습니다.
+              </p>
+            )}
 
             {reportOpen && (
               <div

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting/review-summary-2.0.json",
+  "title": "Accounting Review Summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "batch_id", "batch_version", "registry_digest", "overlay_digest", "counts", "generated_at", "evidence_digest"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "batch_id": {"$ref": "#/$defs/opaqueId"},
+    "batch_version": {"type": "integer", "minimum": 1},
+    "registry_digest": {"$ref": "#/$defs/sha256"},
+    "overlay_digest": {"$ref": "#/$defs/sha256"},
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_declared_valid", "auto_propose", "user_rule_suggested", "review_required", "non_expense_bank_event", "user_assigned"],
+      "properties": {
+        "source_declared_valid": {"type": "integer", "minimum": 0},
+        "auto_propose": {"type": "integer", "minimum": 0},
+        "user_rule_suggested": {"type": "integer", "minimum": 0},
+        "review_required": {"type": "integer", "minimum": 0},
+        "non_expense_bank_event": {"type": "integer", "minimum": 0},
+        "user_assigned": {"type": "integer", "minimum": 0}
+      }
+    },
+    "generated_at": {"type": "string", "format": "date-time"},
+    "evidence_digest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "opaqueId": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

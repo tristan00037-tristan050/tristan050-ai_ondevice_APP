@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting/assignment-event-2.0.json",
+  "title": "Append-Only Assignment Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "event_type", "tenant_digest", "txn_id", "actor_id", "occurred_at", "resource_version", "registry_digest", "overlay_digest", "reason_code", "previous_event_hash", "event_hash"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "event_id": {"$ref": "#/$defs/opaqueId"},
+    "event_type": {"enum": ["ASSIGNMENT_CREATED", "ASSIGNMENT_SUPERSEDED", "RULE_CREATED", "RULE_SUGGESTED", "RULE_DEACTIVATED", "RULE_CONFLICT_DETECTED", "RULE_CONFLICT_RESOLVED", "REGISTRY_INVALIDATED"]},
+    "tenant_digest": {"$ref": "#/$defs/sha256"},
+    "batch_id": {"type": ["string", "null"], "maxLength": 128},
+    "txn_id": {"$ref": "#/$defs/opaqueId"},
+    "assignment_id": {"type": ["string", "null"], "maxLength": 128},
+    "supersedes_assignment_id": {"type": ["string", "null"], "maxLength": 128},
+    "rule_id": {"type": ["string", "null"], "maxLength": 128},
+    "account_id": {"type": ["string", "null"], "maxLength": 128},
+    "scope": {"type": ["string", "null"], "enum": ["THIS_ONLY", "SAME_VENDOR_FUTURE", null]},
+    "actor_id": {"$ref": "#/$defs/opaqueId"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "resource_version": {"type": "integer", "minimum": 1},
+    "registry_digest": {"$ref": "#/$defs/sha256"},
+    "overlay_digest": {"$ref": "#/$defs/sha256"},
+    "match_key_id": {"type": ["string", "null"], "maxLength": 80},
+    "normalization_version": {"type": ["string", "null"], "maxLength": 40},
+    "reason_code": {"type": "string", "minLength": 1, "maxLength": 80},
+    "previous_event_hash": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "event_hash": {"$ref": "#/$defs/sha256"},
+    "checkpoint_id": {"type": ["string", "null"], "maxLength": 128}
+  },
+  "$defs": {
+    "opaqueId": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}
