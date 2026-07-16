@@ -13,6 +13,7 @@ from butler_pc_core.accounting.classify.port import (
     RuleFacts,
     VendorMatchState,
 )
+from butler_pc_core.accounting.policy.vendor_descriptor import descriptor_hmac
 from butler_pc_core.accounting.classify.shadow.adapter import AtlinkShadowPort
 from butler_pc_core.accounting.classify.shadow.runner import (
     rows_from_dataframe,
@@ -76,7 +77,8 @@ def _approved_bundle(rel: str) -> dict:
             "descriptors": [
                 {
                     "descriptor_id": "vendor.saas.approved",
-                    "normalized_exact_value_hmac": "a" * 64,
+                    # ★ real HMAC of the approved vendor via the SAME function a producer uses.
+                    "normalized_exact_value_hmac": descriptor_hmac("승인상호", policy_profile_id="atlink.smb.v1"),
                     "bank_direction": "OUTFLOW",
                     "service_kind": "SAAS",
                     "management_tags": ["SAAS"],
@@ -91,6 +93,7 @@ def _approved_bundle(rel: str) -> dict:
             "rules": [
                 {
                     "rule_id": "MAP-SAAS-001",
+                    "management_tag": "SAAS",
                     "target_account_id": "PL.SGA.PAYMENT_FEE",
                     "direction": "DEBIT",
                 }
@@ -116,9 +119,9 @@ def _facts(direction: BankDirection) -> RuleFacts:
 
 def test_approved_registry_uses_schema_descriptor_fields(monkeypatch):
     monkeypatch.setattr(AtlinkShadowPort, "_read", staticmethod(_approved_bundle))
-    port = AtlinkShadowPort()
+    port = AtlinkShadowPort(vendor_text="승인상호")
 
-    matched = port.match_vendor_exact("a" * 64)
+    matched = port.match_vendor_exact(None)
     assert matched.state is VendorMatchState.EXACT
     assert matched.match_id == "vendor.saas.approved"
 

@@ -94,7 +94,7 @@ def _to_minor_amount(value: object) -> int | None:
     return int(round(number))
 
 
-def shadow_one(row: dict[str, Any]) -> ShadowComparisonRecord:
+def shadow_one(row: dict[str, Any], company_profile: Any = None) -> ShadowComparisonRecord:
     """Classify one row via the shadow classifier. Isolated: never raises."""
     legacy_account = row.get("legacy_account")
     legacy_status = "분류됨" if _legacy_classified(legacy_account) else "미분류"
@@ -110,7 +110,14 @@ def shadow_one(row: dict[str, Any]) -> ShadowComparisonRecord:
             vendor_text=row.get("vendor_text", ""),
             counterparty_text=row.get("counterparty_text", ""),
         )
-        draft = Stage3Classifier().classify(tx, AtlinkShadowPort())
+        # ★ self-transfer guard + registry vendor match need the verified profile, the raw
+        # counterparty account number, and the raw vendor text (in-memory only, never recorded).
+        port = AtlinkShadowPort(
+            company_profile=company_profile,
+            counterparty_account_no=row.get("counterparty_account_no"),
+            vendor_text=row.get("vendor_text", ""),
+        )
+        draft = Stage3Classifier().classify(tx, port)
         shadow_classified = draft.state is DecisionState.AUTO_PROPOSE
         shadow_account_id = draft.account_id if shadow_classified else None
         return ShadowComparisonRecord(
@@ -144,8 +151,10 @@ def shadow_one(row: dict[str, Any]) -> ShadowComparisonRecord:
         )
 
 
-def run_shadow_over_rows(rows: Iterable[dict[str, Any]]) -> list[ShadowComparisonRecord]:
-    return [shadow_one(row) for row in rows]
+def run_shadow_over_rows(
+    rows: Iterable[dict[str, Any]], company_profile: Any = None
+) -> list[ShadowComparisonRecord]:
+    return [shadow_one(row, company_profile) for row in rows]
 
 
 def rows_from_dataframe(df: Any) -> list[dict[str, Any]]:
@@ -175,14 +184,17 @@ def rows_from_dataframe(df: Any) -> list[dict[str, Any]]:
             "desc_text": desc,
             "vendor_text": str(r.get("상대계좌예금주명", r.get("거래처", ""))),
             "counterparty_text": str(r.get("상대계좌예금주명", "")),
+            # raw counterparty account number for the self-transfer own-account check
+            # (in-memory only; never written to the shadow record).
+            "counterparty_account_no": str(r.get("상대계좌번호", r.get("상대계좌", "")) or ""),
             "legacy_account": r.get("분류과목"),
         })
     return rows
 
 
-def run_shadow_over_dataframe(df: Any) -> list[ShadowComparisonRecord]:
+def run_shadow_over_dataframe(df: Any, company_profile: Any = None) -> list[ShadowComparisonRecord]:
     """Top-level entry used by the isolated sidecar hook."""
-    return run_shadow_over_rows(rows_from_dataframe(df))
+    return run_shadow_over_rows(rows_from_dataframe(df), company_profile)
 
 
 def shadow_enabled() -> bool:
@@ -192,7 +204,7 @@ def shadow_enabled() -> bool:
     return os.environ.get("BUTLER_BOX5_SHADOW_DISABLED", "").strip() != "1"
 
 
-def run_and_write_shadow(df: Any, out_path: str) -> int:
+def run_and_write_shadow(df: Any, out_path: str, company_profile: Any = None) -> int:
     """Self-contained, fully isolated sink for the sidecar hook.
 
     Runs the shadow over the legacy DataFrame and appends one JSONL record per row to out_path.
@@ -202,7 +214,7 @@ def run_and_write_shadow(df: Any, out_path: str) -> int:
     try:
         if not shadow_enabled():
             return 0
-        records = run_shadow_over_dataframe(df)
+        records = run_shadow_over_dataframe(df, company_profile)
         lines = "".join(r.to_jsonl() + "\n" for r in records)
         with open(out_path, "w", encoding="utf-8") as handle:
             handle.write(lines)

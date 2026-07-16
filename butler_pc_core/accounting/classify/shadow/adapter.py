@@ -100,11 +100,26 @@ def transaction_key(tx: CanonicalTransactionV2) -> str:
 class AtlinkShadowPort:
     """Deterministic PolicyPort over the committed atlink bundle. No network, no PII."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        company_profile: Any = None,
+        counterparty_account_no: str | None = None,
+        vendor_text: object = "",
+    ) -> None:
         self._chart_ids = self._load_chart_ids()
-        self._approved_vendors = self._load_approved_vendors()
+        self._profile_id = self._load_profile_id()
+        self._approved_vendors, self._descriptor_tags = self._load_approved_vendors()
         self._rules = self._load_rules()
+        # Per-row context (in-memory only; never logged/stored — the record output is digest-only).
+        self._profile = company_profile
+        self._counterparty_account_no = counterparty_account_no
+        self._vendor_text = vendor_text
         self._calls: list[str] = []
+
+    def _load_profile_id(self) -> str:
+        rules = self._read("upstream/account_mapping_rules.v1.json")
+        return str(rules.get("policy_profile_id") or "atlink.smb.v1")
 
     @staticmethod
     def _read(rel: str) -> dict[str, Any]:
@@ -115,7 +130,7 @@ class AtlinkShadowPort:
         accs = chart.get("accounts") or []
         return frozenset(a["account_id"] for a in accs if isinstance(a, dict) and a.get("account_id"))
 
-    def _load_approved_vendors(self) -> dict[str, str]:
+    def _load_approved_vendors(self) -> tuple[dict[str, str], dict[str, frozenset[str]]]:
         reg = self._read("vendor_descriptor_registry.template.json")
         # Only APPROVED (non-empty) registries contribute matches. Currently BLOCKED_EMPTY_REGISTRY.
         if (
@@ -123,8 +138,9 @@ class AtlinkShadowPort:
             or not isinstance(reg.get("approval_id"), str)
             or not str(reg["approval_id"]).strip()
         ):
-            return {}
+            return {}, {}
         out: dict[str, str] = {}
+        tags: dict[str, frozenset[str]] = {}
         for d in reg.get("descriptors") or []:
             if not isinstance(d, dict):
                 continue
@@ -141,7 +157,8 @@ class AtlinkShadowPort:
             if previous is not None and previous != match_id:
                 raise ValueError("VENDOR_DESCRIPTOR_HMAC_CONFLICT")
             out[token] = match_id
-        return out
+            tags[match_id] = frozenset(str(t).strip().upper() for t in (d.get("management_tags") or []) if str(t).strip())
+        return out, tags
 
     def _load_rules(self) -> list[dict[str, Any]]:
         rules = self._read("upstream/account_mapping_rules.v1.json").get("rules") or []
@@ -153,13 +170,27 @@ class AtlinkShadowPort:
         return CurrencyExponentReply(0)  # KRW bank statements
 
     def is_own_account(self, counterparty_account_token: str | None) -> bool:
-        # Shadow has no verified company own-account registry → conservative (never asserts own).
-        self._calls.append(f"own:{counterparty_account_token or '-'}")
-        return False
+        # ★ self-transfer guard: compare the row's actual counterparty account number against the
+        # verified company profile (same matcher the legacy product path uses). Own account → True
+        # → the classifier returns REVIEW_SELF_TRANSFER and never reaches rule selection.
+        self._calls.append("own")
+        if self._profile is None or not self._counterparty_account_no:
+            return False
+        from butler_pc_core.company_profile.matcher import is_own_account as _profile_is_own
+
+        return bool(_profile_is_own(self._counterparty_account_no, self._profile))
 
     def match_vendor_exact(self, vendor_token: str | None) -> VendorMatchReply:
-        self._calls.append(f"vendor:{vendor_token or '-'}")
-        match_id = self._approved_vendors.get(str(vendor_token)) if vendor_token else None
+        # ★ tokenize the live vendor with the SAME normalize+HMAC the registry uses, then look up.
+        from butler_pc_core.accounting.policy.vendor_descriptor import descriptor_hmac
+
+        text = str(self._vendor_text or "").strip()
+        if not text:
+            self._calls.append("vendor:-")
+            return VendorMatchReply(VendorMatchState.NO_MATCH)
+        token = descriptor_hmac(text, policy_profile_id=self._profile_id)
+        self._calls.append(f"vendor:{token[:8]}")
+        match_id = self._approved_vendors.get(token)
         if match_id is None:
             return VendorMatchReply(VendorMatchState.NO_MATCH)
         return VendorMatchReply(VendorMatchState.EXACT, match_id)
@@ -169,9 +200,14 @@ class AtlinkShadowPort:
         # Rules require an approved vendor-descriptor exact match. Without one → NO_MATCH (review).
         if facts.vendor_match_id is None:
             return RuleSelectionReply(RuleBasis.NO_MATCH)
+        # Match the rule whose management_tag overlaps the approved descriptor's tags (correct
+        # account for the vendor's service kind), and whose direction matches.
+        descriptor_tags = self._descriptor_tags.get(facts.vendor_match_id, frozenset())
         expected_direction = _ACCOUNTING_DIRECTION[facts.direction]
         for rule in self._rules:
             acct = rule.get("target_account_id")
+            rule_tags = {t.strip().upper() for t in str(rule.get("management_tag", "")).split("|") if t.strip()}
+            tag_matches = bool(descriptor_tags & rule_tags)
             rule_direction = (
                 str(rule.get("bank_direction", ""))
                 if "bank_direction" in rule
@@ -182,7 +218,7 @@ class AtlinkShadowPort:
                 if "bank_direction" in rule
                 else rule_direction == expected_direction
             )
-            if acct in self._chart_ids and direction_matches:
+            if acct in self._chart_ids and direction_matches and tag_matches:
                 rule_id = str(rule.get("rule_id"))
                 rdigest = hashlib.sha256(
                     json.dumps(rule, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
