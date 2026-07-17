@@ -58,6 +58,10 @@ class RegistrySnapshot:
     def from_policy(cls, snapshot: PolicyBundleSnapshot) -> "RegistrySnapshot":
         chart = snapshot.documents["CHART_UPSTREAM"]
         overlay = snapshot.documents["POSTING_OVERLAY_TEMPLATE"]
+        # ★ RI-P0-001: overlay status 가 APPROVED 가 아니면(회계승인 전) 어떤 계정도
+        # assignable 이 될 수 없다. posting_allowed 데이터만으로 노출하지 않는다. 승인 부재
+        # 상태의 fail-closed(assignable=0) 를 registry 계약에서 강제한다.
+        overlay_approved = str(overlay.get("status")) == "APPROVED"
         decisions = {item["account_id"]: item for item in overlay["decisions"]}
         accounts = {item["account_id"]: item for item in chart["accounts"]}
 
@@ -80,7 +84,17 @@ class RegistrySnapshot:
             if decision is None:
                 raise AssignmentError("REGISTRY_INVALID", 503, "The account registry overlay is incomplete.")
             node_kind = str(decision["node_kind"])
-            assignable = node_kind in {"POSTING", "CONTRA"} and decision["posting_allowed"] is True
+            assignable = (
+                overlay_approved
+                and node_kind in {"POSTING", "CONTRA"}
+                and decision["posting_allowed"] is True
+            )
+            if not assignable and not overlay_approved:
+                disabled_reason = "REGISTRY_OVERLAY_UNAPPROVED"
+            elif not assignable:
+                disabled_reason = f"ACCOUNT_NODE_{node_kind}_NOT_ASSIGNABLE"
+            else:
+                disabled_reason = None
             projected.append(
                 RegistryEntry(
                     account_id=str(account["account_id"]),
@@ -89,7 +103,7 @@ class RegistrySnapshot:
                     category_path=path_for(str(account["account_id"])),
                     node_kind=node_kind,
                     assignable=assignable,
-                    disabled_reason=None if assignable else f"ACCOUNT_NODE_{node_kind}_NOT_ASSIGNABLE",
+                    disabled_reason=disabled_reason,
                     sort_order=int(account["display_order"]),
                 )
             )

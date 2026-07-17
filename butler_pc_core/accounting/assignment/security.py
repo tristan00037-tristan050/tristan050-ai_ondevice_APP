@@ -28,7 +28,10 @@ class SecureKeyStore(Protocol):
 
 @dataclass(slots=True)
 class MemoryKeyStore:
-    """Tests only. Production wiring rejects this class."""
+    """Tests only. Production wiring rejects this class (see is_production_provider)."""
+
+    # ★ RI-P0-006/015: file/memory provider 는 test 전용. 제품 조립은 이 provider 를 거부한다.
+    is_production_provider: bool = field(default=False, init=False)
 
     key: bytes = field(default_factory=lambda: secrets.token_bytes(32))
     key_id: str = "test-memory-key-v1"
@@ -39,6 +42,9 @@ class MemoryKeyStore:
 
 @dataclass(slots=True)
 class MacOSKeychainStore:
+    # ★ RI-P0-006: 제품 기본 키 저장소는 macOS Keychain only (홈의 평문 파일이 아니다).
+    is_production_provider: bool = field(default=True, init=False)
+
     service: str = "com.butler.accounting.vendor-match.v1"
     account: str = "device-root"
 

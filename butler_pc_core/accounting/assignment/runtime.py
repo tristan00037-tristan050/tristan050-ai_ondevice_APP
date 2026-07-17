@@ -18,6 +18,8 @@ from butler_pc_core.accounting.classify.account_column_compiler import (
     resolve_account_cell,
     resolve_account_column,
 )
+from butler_pc_core.accounting.policy.errors import PolicyLoadError
+from butler_pc_core.accounting.policy.money import parse_krw, source_text_sha256
 from butler_pc_core.connect_loop.dlp_guard import scan_runtime_text
 
 from .domain import (
@@ -60,16 +62,23 @@ def _digest(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _to_date(value: object) -> date:
+def _parse_booked_date(value: object) -> date | None:
+    """★ RI-P0-010: valid → date, invalid/missing → None (격리 대상).
+
+    1970-01-01·오늘 날짜·파일 mtime 같은 fallback 을 절대 넣지 않는다. 파싱 실패는
+    호출부에서 REVIEW_QUARANTINE 으로 격리한다.
+    """
     if isinstance(value, datetime):
         return value.date()
     if type(value) is date:
         return value
     text = str(value or "").strip()[:10]
+    if not text:
+        return None
     try:
         return date.fromisoformat(text)
     except ValueError:
-        return date(1970, 1, 1)
+        return None
 
 
 def _to_amount(row: Any) -> int | None:
@@ -78,20 +87,22 @@ def _to_amount(row: Any) -> int | None:
         value = next((row.get(column) for column in _SINGLE_AMOUNT_COLUMNS if column in row.index), None)
     if value is None or isinstance(value, bool):
         return None
-    text = str(value).strip().replace(",", "").replace("원", "").replace("₩", "")
+    # ★ RI-P0-003/011: float() 완전 제거. 통화 장식만 벗기고 Decimal/int-only 정본
+    # parse_krw 로만 해석한다. 2^53 초과 정수는 보존되고 exponent·NaN·Infinity·leading +·
+    # fraction 은 거부(→ None, 거래 아님/격리 대상). 콤마 자릿점은 parse_krw 가 허용한다.
+    text = str(value).strip().replace("원", "").replace("₩", "").replace(" ", "")
     if not text:
         return None
     negative = text.startswith("(") and text.endswith(")")
     if negative:
         text = text[1:-1]
+    if text.startswith("+"):
+        return None
     try:
-        number = float(text)
-    except ValueError:
+        money = parse_krw(text, digest=source_text_sha256(text))
+    except PolicyLoadError:
         return None
-    if not math.isfinite(number):
-        return None
-    result = int(round(number))
-    return -abs(result) if negative else result
+    return -abs(money.minor_units) if negative else money.minor_units
 
 
 def _cell_text(value: object) -> str:
@@ -134,6 +145,7 @@ class ReviewBatch:
     batch_version: int
     transactions: dict[str, CanonicalReviewTransaction]
     ambiguous_account_columns: tuple[str, ...]
+    quarantined: tuple[dict[str, Any], ...] = ()
 
 
 class AccountingReviewRuntime:
@@ -154,10 +166,28 @@ class AccountingReviewRuntime:
 
     @classmethod
     def product_default(cls) -> "AccountingReviewRuntime":
-        return cls(
+        return cls.for_production(
             db_path=Path.home() / ".butler" / "accounting" / "assignment_v2.sqlite3",
             key_store=MacOSKeychainStore(),
         )
+
+    @classmethod
+    def for_production(
+        cls,
+        *,
+        db_path: Path,
+        key_store: SecureKeyStore,
+        registry: RegistrySnapshot | None = None,
+    ) -> "AccountingReviewRuntime":
+        # ★ RI-P0-006/015: 제품 경로는 production 키 provider(macOS Keychain)만 허용한다.
+        # file/memory provider 로 제품을 조립하려는 시도는 fail-closed 로 거부한다.
+        if not getattr(key_store, "is_production_provider", False):
+            raise AssignmentError(
+                "SECURE_KEY_PROVIDER_NOT_PRODUCTION",
+                503,
+                "Production accounting requires the platform Keychain key store.",
+            )
+        return cls(db_path=db_path, key_store=key_store, registry=registry)
 
     @staticmethod
     def context_from_profile(profile: Any) -> TenantContext:
@@ -188,11 +218,27 @@ class AccountingReviewRuntime:
         )
         account_by_name = {entry.display_name: entry for entry in self.registry.entries if entry.assignable}
         transactions: dict[str, CanonicalReviewTransaction] = {}
+        quarantined: list[dict[str, Any]] = []
+        key_id: str | None = None
         for sequence, (_, row) in enumerate(frame.iterrows()):
             amount = _to_amount(row)
             if amount is None or amount == 0:
                 continue
             descriptor, descriptor_display, display_policy = _descriptor(row)
+            booked_date = _parse_booked_date(
+                next((row.get(c) for c in _DATE_COLUMNS if c in row.index), None)
+            )
+            if booked_date is None:
+                # ★ RI-P0-010: 잘못된/누락 날짜는 1970 대체 없이 격리하고 사용자 수정을 요구한다.
+                quarantined.append(
+                    {
+                        "source_sequence": sequence,
+                        "reason_code": "INVALID_TRANSACTION_DATE",
+                        "descriptor_display": descriptor_display,
+                        "display_policy": display_policy,
+                    }
+                )
+                continue
             adapter_family = "bank_dataframe_v1"
             key_id, vendor_token = self.tokens.vendor_token(context.tenant_id, adapter_family, descriptor)
             source_payload = {
@@ -234,7 +280,7 @@ class AccountingReviewRuntime:
                 batch_id=batch_id,
                 txn_id=txn_id,
                 source_sequence=sequence,
-                booked_date=_to_date(next((row.get(c) for c in _DATE_COLUMNS if c in row.index), None)),
+                booked_date=booked_date,
                 amount_minor=amount,
                 currency="KRW",
                 bank_direction="OUTFLOW" if amount < 0 else "INFLOW",
@@ -257,6 +303,7 @@ class AccountingReviewRuntime:
             batch_version=1,
             transactions=transactions,
             ambiguous_account_columns=resolution.ambiguous_columns,
+            quarantined=tuple(quarantined),
         )
         with self._lock:
             self._batches[batch_id] = batch
@@ -266,6 +313,7 @@ class AccountingReviewRuntime:
                 tx.review_state not in {ReviewState.SOURCE_DECLARED_VALID, ReviewState.NON_EXPENSE_BANK_EVENT}
                 for tx in transactions.values()
             ),
+            "quarantine_count": len(quarantined),
             "account_column_status": (
                 "SELECTION_REQUIRED" if resolution.ambiguous_columns else "RESOLVED"
             ),
@@ -302,6 +350,7 @@ class AccountingReviewRuntime:
             "auto_propose": 0,
             "user_rule_suggested": 0,
             "review_required": 0,
+            "review_quarantine": len(batch.quarantined),
             "non_expense_bank_event": 0,
             "user_assigned": 0,
         }
