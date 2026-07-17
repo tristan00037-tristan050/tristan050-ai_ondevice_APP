@@ -9,9 +9,14 @@ import os
 import platform
 import secrets
 import subprocess
-import unicodedata
 from dataclasses import dataclass, field
 from typing import Protocol
+
+from butler_pc_core.accounting.classify.vendor_match import (
+    VENDOR_NORMALIZATION_VERSION,
+    VendorMatchContractError,
+    normalize_vendor_descriptor,
+)
 
 from .domain import AssignmentError
 
@@ -19,7 +24,9 @@ from .domain import AssignmentError
 MATCH_CONTEXT = b"butler/accounting/vendor-match/v1"
 CHECKPOINT_CONTEXT = b"butler/accounting/event-checkpoint/v1"
 CURSOR_CONTEXT = b"butler/accounting/review-cursor/v1"
-NORMALIZATION_VERSION = "vendor_descriptor_nfkc_ws_casefold_v1"
+# ★ RI-P0-014: ONE_VENDOR_TOKEN_CONTRACT. 세 팀(P1/P2/P3)이 같은 거래처를 같은 토큰으로
+# 상호 판독하도록 정규화를 P3 정본 하나로 통일한다("nfkc-ws-latin-casefold-v1").
+NORMALIZATION_VERSION = VENDOR_NORMALIZATION_VERSION
 
 
 class SecureKeyStore(Protocol):
@@ -98,10 +105,12 @@ class MacOSKeychainStore:
 
 
 def normalize_descriptor(value: str) -> str:
-    if not isinstance(value, str):
-        raise AssignmentError("CANONICAL_TRANSACTION_INVALID", 422, "Descriptor is invalid.")
-    normalized = " ".join(unicodedata.normalize("NFKC", value).strip().split()).casefold()
-    if not normalized or len(normalized) > 500:
+    # ★ RI-P0-014: 독자 casefold 를 제거하고 P3 정본 정규화(Latin-only casefold)에 위임한다.
+    try:
+        normalized = normalize_vendor_descriptor(value)
+    except VendorMatchContractError as exc:
+        raise AssignmentError("CANONICAL_TRANSACTION_INVALID", 422, "Descriptor is invalid.") from exc
+    if len(normalized) > 500:
         raise AssignmentError("CANONICAL_TRANSACTION_INVALID", 422, "Descriptor is invalid.")
     return normalized
 

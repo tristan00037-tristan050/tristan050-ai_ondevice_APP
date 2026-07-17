@@ -134,3 +134,23 @@ def test_production_runtime_rejects_test_key_provider(tmp_path: Path):
             db_path=tmp_path / "prod.sqlite3",
             key_store=MemoryKeyStore(key=b"a" * 32),
         )
+
+
+# ── RI-P0-014: ONE_VENDOR_TOKEN_CONTRACT — 세 팀 정규화 통일 ───────────────
+
+def test_vendor_normalization_version_and_algorithm_are_unified():
+    from butler_pc_core.accounting.assignment import security
+    from butler_pc_core.accounting.classify import vendor_match
+
+    # 버전 문자열이 P3 정본 하나로 통일됐다.
+    assert (
+        security.NORMALIZATION_VERSION
+        == vendor_match.VENDOR_NORMALIZATION_VERSION
+        == "nfkc-ws-latin-casefold-v1"
+    )
+    # 같은 거래처 텍스트에 대해 assignment(P2) 와 classify(P3) 정규화 결과가 동일하다.
+    for descriptor in ["KT 통신비", "AWS", "Google Ads 광고비", "네이버클라우드", "우리 CLOUD"]:
+        assert security.normalize_descriptor(descriptor) == vendor_match.normalize_vendor_descriptor(descriptor)
+    # Latin-only casefold: 대문자 Latin 은 접히고 CJK 는 보존된다(전체 casefold 와 구별).
+    assert security.normalize_descriptor("KT") == "kt"
+    assert "통신비" in security.normalize_descriptor("KT 통신비")
