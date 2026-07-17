@@ -4,7 +4,7 @@
   "title": "User Learned Suggestion Rule",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "rule_id", "account_id", "source_assignment_id", "state", "registry_digest", "overlay_digest", "match_key_id", "normalization_version", "created_at", "resource_version"],
+  "required": ["schema_version", "rule_id", "account_id", "source_assignment_id", "state", "registry_digest", "overlay_digest", "match_key_id", "normalization_version", "created_at", "resource_version", "descriptor_display"],
   "properties": {
     "schema_version": {"const": "2.0"},
     "rule_id": {"$ref": "#/$defs/opaqueId"},
@@ -17,7 +17,8 @@
     "normalization_version": {"type": "string", "minLength": 1, "maxLength": 40},
     "created_at": {"type": "string", "format": "date-time"},
     "deactivated_at": {"type": ["string", "null"], "format": "date-time"},
-    "resource_version": {"type": "integer", "minimum": 1}
+    "resource_version": {"type": "integer", "minimum": 1},
+    "descriptor_display": {"type": "string", "minLength": 1, "maxLength": 200}
   },
   "$defs": {
     "opaqueId": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$"},

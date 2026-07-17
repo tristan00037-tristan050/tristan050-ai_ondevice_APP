@@ -343,6 +343,10 @@ class SQLiteAssignmentStore:
                             "An existing suggestion rule conflicts with this account.",
                             actions=(f"RESOLVE_CONFLICT:{conflict_id}",),
                             current_version=1,
+                            conflict_id=conflict_id,
+                            conflict_version=1,
+                            existing_account_id=str(conflict["account_id"]),
+                            proposed_account_id=account_id,
                         )
 
                 now = utc_now()

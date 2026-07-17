@@ -102,3 +102,19 @@ def test_bundled_unapproved_registry_and_capability_match_wire_schemas(tmp_path:
     for schema_name, payload in pairs:
         schema = json.loads((CONTRACTS / schema_name).read_text(encoding="utf-8"))
         jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(payload)
+
+
+def test_conflict_problem_extensions_match_wire_schema():
+    problem = AssignmentError(
+        "LEARNED_RULE_CONFLICT",
+        409,
+        "A suggestion rule conflicts with the selected account.",
+        actions=("RESOLVE_CONFLICT:conflict_1234567890123456",),
+        current_version=1,
+        conflict_id="conflict_1234567890123456",
+        conflict_version=1,
+        existing_account_id="POSTING.EXISTING",
+        proposed_account_id="POSTING.PROPOSED",
+    ).problem("request_12345678")
+    schema = json.loads((CONTRACTS / "problem_detail.schema.json").read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(problem)

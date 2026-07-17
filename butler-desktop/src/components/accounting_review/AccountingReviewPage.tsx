@@ -3,9 +3,9 @@ import {
   AccountingReviewApiError,
   assignAccount,
   createAssignmentIntentKey,
+  getAccountingReviewCapability,
   getChartRegistry,
   getReviewSummary,
-  getRuntimeCapabilities,
   getUnaccountedPage,
   resolveRuleConflict,
 } from '../../lib/accounting_review/client';
@@ -15,7 +15,7 @@ import type {
   ProblemDetail,
   ReviewItem,
   ReviewSummary,
-  RuntimeCapabilities,
+  AccountingReviewCapabilityStatus,
 } from '../../lib/accounting_review/contracts';
 import { AccountCombobox } from './AccountCombobox';
 import { LearnedRuleSettings } from './LearnedRuleSettings';
@@ -32,8 +32,11 @@ interface ConflictState {
   problem: ProblemDetail;
 }
 
-function capabilityConsumed(capabilities: RuntimeCapabilities, capabilityId: string): boolean {
-  return capabilities.capabilities.some(item => item.capability_id === capabilityId && item.status === 'CONSUMED');
+function capabilityOperational(capability: AccountingReviewCapabilityStatus): boolean {
+  return capability.registered
+    && capability.self_test === 'PASS'
+    && capability.covered_routes === capability.required_routes
+    && ['PARTIALLY_CONSUMED', 'CONSUMED'].includes(capability.status);
 }
 
 function formatMoney(item: ReviewItem): string {
@@ -51,7 +54,7 @@ const STATE_LABEL: Record<ReviewItem['review_state'], string> = {
 };
 
 export function AccountingReviewPage({ batchId, onBack }: AccountingReviewPageProps) {
-  const [capabilities, setCapabilities] = useState<RuntimeCapabilities | null>(null);
+  const [capability, setCapability] = useState<AccountingReviewCapabilityStatus | null>(null);
   const [summary, setSummary] = useState<ReviewSummary | null>(null);
   const [registry, setRegistry] = useState<ChartRegistryView | null>(null);
   const [items, setItems] = useState<ReviewItem[]>([]);
@@ -88,10 +91,7 @@ export function AccountingReviewPage({ batchId, onBack }: AccountingReviewPagePr
     setLoading(true);
     setError(null);
     try {
-      const nextCapabilities = await getRuntimeCapabilities();
-      if (!capabilityConsumed(nextCapabilities, 'accounting.review_projection')) {
-        throw new Error('REVIEW_PROJECTION_UNAVAILABLE');
-      }
+      const nextCapability = await getAccountingReviewCapability();
       const [nextSummary, firstPage] = await Promise.all([
         getReviewSummary(batchId),
         getUnaccountedPage(batchId),
@@ -101,7 +101,7 @@ export function AccountingReviewPage({ batchId, onBack }: AccountingReviewPagePr
       }
       const nextRegistry = await getChartRegistry(firstPage.registry_digest);
       if (nextRegistry.overlay_digest !== firstPage.overlay_digest) throw new Error('REGISTRY_OVERLAY_MISMATCH');
-      setCapabilities(nextCapabilities);
+      setCapability(nextCapability);
       setSummary(nextSummary);
       setRegistry(nextRegistry);
       setItems(firstPage.items);
@@ -119,9 +119,9 @@ export function AccountingReviewPage({ batchId, onBack }: AccountingReviewPagePr
 
   useEffect(() => { void load(); }, [load]);
 
-  const assignmentEnabled = capabilities ? capabilityConsumed(capabilities, 'accounting.user_assignment') : false;
-  const ruleEnabled = capabilities ? capabilityConsumed(capabilities, 'accounting.user_rule_suggestion') : false;
-  const ruleManagementEnabled = capabilities ? capabilityConsumed(capabilities, 'accounting.rule_management') : false;
+  const assignmentEnabled = capability ? capabilityOperational(capability) : false;
+  const ruleEnabled = assignmentEnabled;
+  const ruleManagementEnabled = assignmentEnabled;
   const accountById = useMemo(() => new Map(registry?.entries.map(entry => [entry.account_id, entry]) ?? []), [registry]);
 
   const completeTxn = (txnId: string, accountId: string) => {
@@ -240,7 +240,7 @@ export function AccountingReviewPage({ batchId, onBack }: AccountingReviewPagePr
   };
 
   if (loading) return <div className="accounting-review-page" role="status">계정 검토 목록을 불러오는 중입니다.</div>;
-  if (!summary || !registry || !capabilities) {
+  if (!summary || !registry || !capability) {
     return (
       <div className="accounting-review-page">
         <p role="alert" className="review-error">{error}</p>

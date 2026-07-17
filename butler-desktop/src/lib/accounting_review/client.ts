@@ -1,7 +1,7 @@
 import { sidecarFetch } from '../sidecarFetch';
 import {
   parseAssignment,
-  parseCapabilities,
+  parseAccountingReviewCapability,
   parsePage,
   parseProblem,
   parseRegistry,
@@ -12,7 +12,7 @@ import {
   type ChartRegistryView,
   type LearnedRule,
   type ProblemDetail,
-  type RuntimeCapabilities,
+  type AccountingReviewCapabilityStatus,
   type UnaccountedPage,
   type ReviewSummary,
 } from './contracts';
@@ -49,8 +49,13 @@ export function createAssignmentIntentKey(): string {
   return idempotencyKey();
 }
 
-export function getRuntimeCapabilities(): Promise<RuntimeCapabilities> {
-  return request('/v1/runtime/capabilities', parseCapabilities);
+function ifMatch(version: number): string {
+  if (!Number.isSafeInteger(version) || version < 1) throw new Error('RESOURCE_VERSION_INVALID');
+  return `W/"${version}"`;
+}
+
+export function getAccountingReviewCapability(): Promise<AccountingReviewCapabilityStatus> {
+  return request('/v1/accounting/review-capability', parseAccountingReviewCapability);
 }
 
 export function getReviewSummary(batchId: string): Promise<ReviewSummary> {
@@ -92,7 +97,7 @@ export function assignAccount(input: {
       headers: {
         'Content-Type': 'application/json',
         'Idempotency-Key': input.intentKey,
-        'If-Match': `W/"txn-${input.transactionVersion}"`,
+        'If-Match': ifMatch(input.transactionVersion),
       },
       body: JSON.stringify(body),
     },
@@ -105,11 +110,15 @@ export function resolveRuleConflict(input: {
   decision: 'KEEP_EXISTING' | 'REPLACE_WITH_NEW';
 }): Promise<AssignmentResponse> {
   return request(
-    `/v1/accounting/learned-rule-conflicts/${encodeURIComponent(input.conflictId)}/resolve`,
+    `/v1/accounting/rule-conflicts/${encodeURIComponent(input.conflictId)}/resolve`,
     parseAssignment,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey() },
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey(),
+        'If-Match': ifMatch(input.conflictVersion),
+      },
       body: JSON.stringify({
         schema_version: '2.0',
         decision: input.decision,
@@ -131,7 +140,7 @@ export async function deactivateLearnedRule(rule: LearnedRule): Promise<void> {
       method: 'POST',
       headers: {
         'Idempotency-Key': idempotencyKey(),
-        'If-Match': `W/"rule-${rule.resource_version}"`,
+        'If-Match': ifMatch(rule.resource_version),
       },
     },
   );

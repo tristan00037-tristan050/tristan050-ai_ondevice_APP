@@ -1403,6 +1403,46 @@ if _FASTAPI_AVAILABLE:
                 except Exception:
                     pass
 
+    def _register_accounting_review_projection(
+        result_id: str,
+        frame,
+        company_profile,
+        account_column: str | None,
+    ) -> dict[str, object]:
+        unavailable = {
+            "available": False,
+            "batch_id": None,
+            "review_required_count": 0,
+            "reason_code": "ACCOUNTING_REVIEW_PROJECTION_UNAVAILABLE",
+        }
+        try:
+            from butler_pc_core.accounting.assignment.runtime import get_accounting_review_runtime
+
+            projection = get_accounting_review_runtime().ingest_dataframe(
+                result_id,
+                frame,
+                company_profile,
+                selected_account_column=account_column,
+            )
+            batch_id = projection.get("batch_id")
+            review_count = projection.get("review_count")
+            if (
+                batch_id != result_id
+                or isinstance(review_count, bool)
+                or not isinstance(review_count, int)
+                or review_count < 0
+            ):
+                return unavailable
+            return {
+                "available": True,
+                "batch_id": batch_id,
+                "review_required_count": review_count,
+                "reason_code": None,
+            }
+        except Exception:
+            # Review projection failure must not suppress the established report result.
+            return unavailable
+
     async def _stream_accounting(
         file_path: str,
         result_id: str,
@@ -1450,20 +1490,14 @@ if _FASTAPI_AVAILABLE:
             # Register the actual classified rows with the canonical review runtime.
             # Raw descriptors remain in this request-local in-memory projection; the
             # persistent assignment store receives only opaque IDs, digests, and HMACs.
-            try:
-                from butler_pc_core.accounting.assignment.runtime import get_accounting_review_runtime
-
-                await loop.run_in_executor(
-                    None,
-                    lambda: get_accounting_review_runtime().ingest_dataframe(
-                        result_id,
-                        df,
-                        company_profile,
-                        selected_account_column=account_column,
-                    ),
-                )
-            except Exception:  # Review registration must never alter the legacy response bytes.
-                pass
+            review_projection = await loop.run_in_executor(
+                None,
+                _register_accounting_review_projection,
+                result_id,
+                df,
+                company_profile,
+                account_column,
+            )
 
             # ── Box5 stage-3 shadow observation (observe-only, isolated, non-blocking) ────
             # Runs the new Stage3Classifier alongside the legacy result and records a PII-free
@@ -1580,6 +1614,7 @@ if _FASTAPI_AVAILABLE:
                 "format_application": format_application,
                 "row_count": summary["total_rows"],
                 "category_count": len(cats),
+                "review_projection": review_projection,
             })
 
         except Exception as exc:

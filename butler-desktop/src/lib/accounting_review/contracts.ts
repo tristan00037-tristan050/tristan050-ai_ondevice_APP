@@ -6,22 +6,20 @@ export type CapabilityState =
   | 'DEGRADED'
   | 'UNAVAILABLE';
 
-export type ReviewCapabilityId =
-  | 'accounting.review_projection'
-  | 'accounting.user_assignment'
-  | 'accounting.user_rule_suggestion'
-  | 'accounting.account_column_mapping'
-  | 'accounting.rule_management';
-
-export interface RuntimeCapabilities {
-  schema_version: 'butler.runtime_capabilities.v2';
-  build_commit: string;
-  route_inventory_digest: string;
-  capabilities: Array<{
-    capability_id: ReviewCapabilityId;
-    status: CapabilityState;
-    reason_codes: string[];
-  }>;
+export interface AccountingReviewCapabilityStatus {
+  schema_version: 'butler.accounting_capability_status.v2';
+  capability_id: 'accounting.user_assignment';
+  status: CapabilityState;
+  registered: boolean;
+  required_routes: number;
+  covered_routes: number;
+  self_test: 'PASS' | 'FAIL' | 'NOT_RUN';
+  reason_codes: string[];
+  verified_at: string;
+  registry_digest: string;
+  overlay_digest: string;
+  event_count: number;
+  evidence_digest: string;
 }
 
 export interface ReviewSummary {
@@ -102,7 +100,7 @@ export interface AssignmentResponse {
   state: 'USER_ASSIGNED';
   account_id: string;
   scope: AssignmentScope;
-  rule_effect: 'NONE' | 'SUGGESTION_CREATED';
+  rule_effect: 'NONE' | 'SUGGESTION_CREATED' | 'EXISTING_SUGGESTION_KEPT' | 'SUGGESTION_REPLACED';
   rule_id: string | null;
   transaction_version: number;
   receipt_digest: string;
@@ -171,29 +169,26 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], code: st
   return value as T;
 }
 
-export function parseCapabilities(value: unknown): RuntimeCapabilities {
+export function parseAccountingReviewCapability(value: unknown): AccountingReviewCapabilityStatus {
   const root = object(value, 'CAPABILITY_RESPONSE_INVALID');
-  if (root.schema_version !== 'butler.runtime_capabilities.v2') throw new ContractError('CAPABILITY_SCHEMA_INVALID');
-  const capabilities = array(root.capabilities, 'CAPABILITY_LIST_INVALID').map(item => {
-    const entry = object(item, 'CAPABILITY_ENTRY_INVALID');
-    return {
-      capability_id: oneOf(entry.capability_id, [
-        'accounting.review_projection', 'accounting.user_assignment',
-        'accounting.user_rule_suggestion', 'accounting.account_column_mapping',
-        'accounting.rule_management',
-      ] as const, 'CAPABILITY_ID_INVALID'),
-      status: oneOf(entry.status, [
-        'NOT_REGISTERED', 'REGISTERED_NOT_CONSUMED', 'PARTIALLY_CONSUMED',
-        'CONSUMED', 'DEGRADED', 'UNAVAILABLE',
-      ] as const, 'CAPABILITY_STATUS_INVALID'),
-      reason_codes: array(entry.reason_codes, 'CAPABILITY_REASONS_INVALID').map(reason => string(reason, 'CAPABILITY_REASON_INVALID')),
-    };
-  });
+  if (root.schema_version !== 'butler.accounting_capability_status.v2') throw new ContractError('CAPABILITY_SCHEMA_INVALID');
   return {
-    schema_version: 'butler.runtime_capabilities.v2',
-    build_commit: string(root.build_commit, 'CAPABILITY_BUILD_INVALID'),
-    route_inventory_digest: string(root.route_inventory_digest, 'CAPABILITY_ROUTE_DIGEST_INVALID'),
-    capabilities,
+    schema_version: 'butler.accounting_capability_status.v2',
+    capability_id: oneOf(root.capability_id, ['accounting.user_assignment'] as const, 'CAPABILITY_ID_INVALID'),
+    status: oneOf(root.status, [
+      'NOT_REGISTERED', 'REGISTERED_NOT_CONSUMED', 'PARTIALLY_CONSUMED',
+      'CONSUMED', 'DEGRADED', 'UNAVAILABLE',
+    ] as const, 'CAPABILITY_STATUS_INVALID'),
+    registered: root.registered === true,
+    required_routes: number(root.required_routes, 'CAPABILITY_REQUIRED_ROUTES_INVALID'),
+    covered_routes: number(root.covered_routes, 'CAPABILITY_COVERED_ROUTES_INVALID'),
+    self_test: oneOf(root.self_test, ['PASS', 'FAIL', 'NOT_RUN'] as const, 'CAPABILITY_SELF_TEST_INVALID'),
+    reason_codes: array(root.reason_codes, 'CAPABILITY_REASONS_INVALID').map(reason => string(reason, 'CAPABILITY_REASON_INVALID')),
+    verified_at: string(root.verified_at, 'CAPABILITY_VERIFIED_AT_INVALID'),
+    registry_digest: string(root.registry_digest, 'CAPABILITY_REGISTRY_INVALID'),
+    overlay_digest: string(root.overlay_digest, 'CAPABILITY_OVERLAY_INVALID'),
+    event_count: number(root.event_count, 'CAPABILITY_EVENT_COUNT_INVALID'),
+    evidence_digest: string(root.evidence_digest, 'CAPABILITY_EVIDENCE_INVALID'),
   };
 }
 
@@ -298,7 +293,9 @@ export function parseAssignment(value: unknown): AssignmentResponse {
     state: 'USER_ASSIGNED',
     account_id: string(root.account_id, 'ASSIGNMENT_ACCOUNT_INVALID'),
     scope: oneOf(root.scope, ['THIS_ONLY', 'SAME_VENDOR_FUTURE'] as const, 'ASSIGNMENT_SCOPE_INVALID'),
-    rule_effect: oneOf(root.rule_effect, ['NONE', 'SUGGESTION_CREATED'] as const, 'ASSIGNMENT_RULE_EFFECT_INVALID'),
+    rule_effect: oneOf(root.rule_effect, [
+      'NONE', 'SUGGESTION_CREATED', 'EXISTING_SUGGESTION_KEPT', 'SUGGESTION_REPLACED',
+    ] as const, 'ASSIGNMENT_RULE_EFFECT_INVALID'),
     rule_id: root.rule_id == null ? null : string(root.rule_id, 'ASSIGNMENT_RULE_INVALID'),
     transaction_version: number(root.transaction_version, 'ASSIGNMENT_VERSION_INVALID'),
     receipt_digest: string(root.receipt_digest, 'ASSIGNMENT_RECEIPT_INVALID'),

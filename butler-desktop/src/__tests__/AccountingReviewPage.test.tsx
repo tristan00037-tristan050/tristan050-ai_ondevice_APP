@@ -18,18 +18,19 @@ function jsonResponse(body: object, status = 200): Response {
 }
 
 const capabilities = {
-  schema_version: 'butler.runtime_capabilities.v2',
-  build_commit: '55d0f315e2b375d58c9c2a0263b606e5a757b59e',
-  route_inventory_digest: 'c'.repeat(64),
-  capabilities: [
-    ...[
-      'accounting.review_projection',
-      'accounting.user_assignment',
-      'accounting.user_rule_suggestion',
-      'accounting.rule_management',
-    ].map(capability_id => ({ capability_id, status: 'CONSUMED', reason_codes: [] as string[] })),
-    { capability_id: 'accounting.account_column_mapping', status: 'UNAVAILABLE', reason_codes: ['NOT_CONNECTED'] },
-  ],
+  schema_version: 'butler.accounting_capability_status.v2',
+  capability_id: 'accounting.user_assignment',
+  status: 'PARTIALLY_CONSUMED',
+  registered: true,
+  required_routes: 8,
+  covered_routes: 8,
+  self_test: 'PASS',
+  reason_codes: ['INDEPENDENT_PRODUCT_E2E_REQUIRED'],
+  verified_at: '2026-07-17T00:00:00Z',
+  registry_digest: DIGEST,
+  overlay_digest: OVERLAY,
+  event_count: 0,
+  evidence_digest: 'c'.repeat(64),
 };
 
 function summary(assigned = false) {
@@ -83,7 +84,7 @@ describe('AccountingReviewPage product flow', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       requests.push({ url, init });
-      if (url.endsWith('/v1/runtime/capabilities')) return jsonResponse(capabilities);
+      if (url.endsWith('/v1/accounting/review-capability')) return jsonResponse(capabilities);
       if (url.endsWith(`/v1/accounting/unaccounted/${TXN}/assign`)) {
         assigned = true;
         return jsonResponse({
@@ -119,13 +120,13 @@ describe('AccountingReviewPage product flow', () => {
     expect(JSON.stringify(body)).not.toContain('descriptor');
     const headers = mutations[0].init?.headers as Record<string, string>;
     expect(headers['Idempotency-Key']).toMatch(/^intent:/);
-    expect(headers['If-Match']).toBe('W/"txn-1"');
+    expect(headers['If-Match']).toBe('W/"1"');
   });
 
   it('exposes disabled registry nodes but never permits selecting them', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.endsWith('/v1/runtime/capabilities')) return jsonResponse(capabilities);
+      if (url.endsWith('/v1/accounting/review-capability')) return jsonResponse(capabilities);
       if (url.includes('/review-summary')) return jsonResponse(summary());
       if (url.includes('/unaccounted')) return jsonResponse(page());
       if (url.includes('/chart-of-accounts')) return jsonResponse(registry);
@@ -141,13 +142,35 @@ describe('AccountingReviewPage product flow', () => {
     expect(screen.getByRole('button', { name: '확인 후 저장' })).toBeDisabled();
   });
 
+  it('keeps the review list readable but mutations locked when capability self-test fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/v1/accounting/review-capability')) return jsonResponse({
+        ...capabilities,
+        status: 'UNAVAILABLE',
+        self_test: 'FAIL',
+        covered_routes: 4,
+        reason_codes: ['REGISTRY_OVERLAY_UNAPPROVED'],
+      });
+      if (url.includes('/review-summary')) return jsonResponse(summary());
+      if (url.includes('/unaccounted')) return jsonResponse(page());
+      if (url.includes('/chart-of-accounts')) return jsonResponse(registry);
+      throw new Error(`UNEXPECTED_REQUEST:${url}`);
+    }));
+
+    render(<AccountingReviewPage batchId="batch_1" onBack={() => {}} />);
+    expect(await screen.findByRole('heading', { name: '계정 미확정 거래 검토' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '확인 후 저장' })).toBeDisabled();
+    expect(screen.getByText('저장 기능 상태를 확인할 수 없어 선택과 저장을 잠갔습니다.')).toBeInTheDocument();
+  });
+
   it('does not overwrite a learned rule until the user resolves the 409 conflict', async () => {
     let assigned = false;
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       requests.push({ url, init });
-      if (url.endsWith('/v1/runtime/capabilities')) return jsonResponse(capabilities);
+      if (url.endsWith('/v1/accounting/review-capability')) return jsonResponse(capabilities);
       if (url.endsWith(`/v1/accounting/unaccounted/${TXN}/assign`)) {
         return jsonResponse({
           type: 'https://butler.local/problems/accounting/learned_rule_conflict',
@@ -157,7 +180,7 @@ describe('AccountingReviewPage product flow', () => {
           existing_account_id: 'acct_group_old', proposed_account_id: 'acct_posting',
         }, 409);
       }
-      if (url.endsWith('/v1/accounting/learned-rule-conflicts/conflict_1/resolve')) {
+      if (url.endsWith('/v1/accounting/rule-conflicts/conflict_1/resolve')) {
         assigned = true;
         return jsonResponse({
           schema_version: '2.0', assignment_id: 'asg_2', txn_id: TXN,
@@ -179,10 +202,49 @@ describe('AccountingReviewPage product flow', () => {
     fireEvent.click(screen.getByRole('button', { name: '기존 제안 유지' }));
     await waitFor(() => expect(screen.getByText('검토할 거래가 없습니다.')).toBeInTheDocument());
 
-    const resolution = requests.find(request => request.url.endsWith('/v1/accounting/learned-rule-conflicts/conflict_1/resolve'));
+    const resolution = requests.find(request => request.url.endsWith('/v1/accounting/rule-conflicts/conflict_1/resolve'));
     expect(resolution).toBeDefined();
     expect(JSON.parse(String(resolution?.init?.body))).toEqual({
       schema_version: '2.0', decision: 'KEEP_EXISTING', expected_conflict_version: 1,
     });
+    const headers = resolution?.init?.headers as Record<string, string>;
+    expect(headers['If-Match']).toBe('W/"1"');
+  });
+
+  it('loads descriptor projections and deactivates a rule with the numeric resource ETag', async () => {
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      requests.push({ url, init });
+      if (url.endsWith('/v1/accounting/review-capability')) return jsonResponse(capabilities);
+      if (url.includes('/review-summary')) return jsonResponse(summary());
+      if (url.includes('/unaccounted')) return jsonResponse(page());
+      if (url.includes('/chart-of-accounts')) return jsonResponse(registry);
+      if (url.endsWith('/v1/accounting/learned-rules')) return jsonResponse({
+        schema_version: '2.0',
+        items: [{
+          schema_version: '2.0', rule_id: 'rule_1234567890abcdef', account_id: 'acct_posting',
+          source_assignment_id: 'asg_1234567890abcdef', state: 'ACTIVE_SUGGESTION',
+          registry_digest: DIGEST, overlay_digest: OVERLAY, match_key_id: 'key-v1',
+          normalization_version: 'vendor-v1', created_at: '2026-07-17T00:00:00Z',
+          deactivated_at: null, resource_version: 3, descriptor_display: '알•••점',
+        }],
+      });
+      if (url.endsWith('/v1/accounting/learned-rules/rule_1234567890abcdef/deactivate')) {
+        return jsonResponse({ schema_version: '2.0', state: 'INACTIVE_USER' });
+      }
+      throw new Error(`UNEXPECTED_REQUEST:${url}`);
+    }));
+
+    render(<AccountingReviewPage batchId="batch_1" onBack={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: '거래처 제안 규칙 관리' }));
+    expect(await screen.findByText('알•••점')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '비활성화' }));
+    await screen.findByText('제안 규칙을 비활성화했습니다.');
+
+    const mutation = requests.find(request => request.url.endsWith('/deactivate'));
+    expect(mutation).toBeDefined();
+    const headers = mutation?.init?.headers as Record<string, string>;
+    expect(headers['If-Match']).toBe('W/"3"');
   });
 });

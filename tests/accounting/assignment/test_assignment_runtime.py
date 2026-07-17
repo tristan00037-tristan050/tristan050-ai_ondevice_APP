@@ -296,6 +296,13 @@ def test_future_rule_is_suggestion_and_deactivation_stops_match(runtime: Account
     )
     assert assigned["state"] == "USER_ASSIGNED"
     assert assigned["rule_effect"] == "SUGGESTION_CREATED"
+    rules = runtime.learned_rules(context)["items"]
+    assert rules[0]["descriptor_display"] == "동일상호"
+    schema = json.loads(
+        (Path(__file__).resolve().parents[3] / "butler_pc_core/accounting/assignment/contracts/learned_rule.schema.json")
+        .read_text(encoding="utf-8")
+    )
+    jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(rules[0])
 
     runtime.ingest_dataframe("batch_rule_two_0002", _frame(descriptor="동일상호"), profile)
     suggested = runtime.unaccounted_page(context, "batch_rule_two_0002", cursor=None, page_size=50)["items"][0]
@@ -346,8 +353,13 @@ def test_conflicting_rule_blocks_assignment_and_rule_replacement(runtime: Accoun
         )
     assert runtime.store.current_assignment(context.tenant_digest, txn_b) is None
     assert len(runtime.store.list_rules(context.tenant_digest, "ACTIVE_SUGGESTION")) == 1
+    problem = caught.value.problem("request_conflict_001")
+    assert problem["conflict_id"]
+    assert problem["conflict_version"] == 1
+    assert problem["existing_account_id"] == account_a
+    assert problem["proposed_account_id"] == account_b
 
-    conflict_id = caught.value.actions[0].split(":", 1)[1]
+    conflict_id = problem["conflict_id"]
     replaced = runtime.resolve_conflict(
         context,
         conflict_id,

@@ -531,6 +531,13 @@ class AccountingReviewRuntime:
         if state is not None and state not in allowed_states:
             raise AssignmentError("INVALID_REQUEST_SCHEMA", 422, "Rule state is invalid.")
         rows = self.store.list_rules(context.tenant_digest, state)
+        with self._lock:
+            descriptor_by_txn = {
+                tx.txn_id: tx.descriptor_display
+                for batch in self._batches.values()
+                if batch.context.tenant_digest == context.tenant_digest
+                for tx in batch.transactions.values()
+            }
         return {
             "schema_version": "2.0",
             "items": [
@@ -547,6 +554,9 @@ class AccountingReviewRuntime:
                     "created_at": row["created_at"],
                     "deactivated_at": row["deactivated_at"],
                     "resource_version": row["resource_version"],
+                    "descriptor_display": descriptor_by_txn.get(
+                        str(row["source_txn_id"]), "거래처 정보 보관 기간 만료"
+                    ),
                 }
                 for row in rows
             ],

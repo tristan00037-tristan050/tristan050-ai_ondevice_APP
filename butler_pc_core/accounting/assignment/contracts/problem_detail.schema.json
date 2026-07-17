@@ -13,6 +13,10 @@
     "request_id": {"type": "string", "minLength": 8, "maxLength": 128},
     "safe_detail": {"type": "string", "maxLength": 300},
     "actions": {"type": "array", "maxItems": 5, "items": {"type": "string", "maxLength": 80}},
-    "current_version": {"type": ["integer", "null"], "minimum": 1}
+    "current_version": {"type": ["integer", "null"], "minimum": 1},
+    "conflict_id": {"type": "string", "minLength": 16, "maxLength": 128},
+    "conflict_version": {"type": "integer", "minimum": 1},
+    "existing_account_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "proposed_account_id": {"type": "string", "minLength": 1, "maxLength": 128}
   }
 }

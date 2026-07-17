@@ -114,3 +114,28 @@ def test_http_product_route_rejects_auth_and_forged_evidence(api):
         },
     )
     assert forged.status_code == 422
+
+
+def test_upload_projection_registration_exposes_review_count(api):
+    _, runtime = api
+    import butler_sidecar
+
+    profile = route_module.CompanyProfileStore().load_active_profile()
+    projection = butler_sidecar._register_accounting_review_projection(
+        "batch_upload_projection_001",
+        pd.DataFrame([
+            {"거래일": "2026-07-17", "거래내용": "업로드 검토 거래", "금액": "-7000", "분류과목": "미분류"}
+        ]),
+        profile,
+        None,
+    )
+    assert projection == {
+        "available": True,
+        "batch_id": "batch_upload_projection_001",
+        "review_required_count": 1,
+        "reason_code": None,
+    }
+    context = runtime.context_from_profile(profile)
+    assert runtime.unaccounted_page(
+        context, "batch_upload_projection_001", cursor=None, page_size=50
+    )["total_count"] == 1

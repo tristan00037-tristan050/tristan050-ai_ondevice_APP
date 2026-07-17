@@ -83,6 +83,10 @@ class AssignmentError(RuntimeError):
         *,
         actions: tuple[str, ...] = (),
         current_version: int | None = None,
+        conflict_id: str | None = None,
+        conflict_version: int | None = None,
+        existing_account_id: str | None = None,
+        proposed_account_id: str | None = None,
     ) -> None:
         super().__init__(code)
         self.code = code
@@ -90,9 +94,13 @@ class AssignmentError(RuntimeError):
         self.safe_detail = safe_detail[:300]
         self.actions = actions[:5]
         self.current_version = current_version
+        self.conflict_id = conflict_id
+        self.conflict_version = conflict_version
+        self.existing_account_id = existing_account_id
+        self.proposed_account_id = proposed_account_id
 
     def problem(self, request_id: str) -> dict[str, Any]:
-        return {
+        problem = {
             "type": f"https://butler.local/problems/{self.code.lower()}",
             "title": self.code.replace("_", " ").title(),
             "status": self.status,
@@ -102,6 +110,14 @@ class AssignmentError(RuntimeError):
             "actions": list(self.actions),
             "current_version": self.current_version,
         }
+        extensions = {
+            "conflict_id": self.conflict_id,
+            "conflict_version": self.conflict_version,
+            "existing_account_id": self.existing_account_id,
+            "proposed_account_id": self.proposed_account_id,
+        }
+        problem.update({key: value for key, value in extensions.items() if value is not None})
+        return problem
 
 
 @dataclass(frozen=True, slots=True)
