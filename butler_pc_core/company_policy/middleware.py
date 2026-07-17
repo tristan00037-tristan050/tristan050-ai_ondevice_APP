@@ -48,7 +48,9 @@ def _route_operation(path: str, routes: dict[str, tuple[str, str]]) -> tuple[str
 
 
 def _is_accounting_route(path: str) -> bool:
-    return path == "/accounting/classify" or _ACCOUNTING_ASSIGNMENT_MUTATION_RE.fullmatch(path) is not None
+    # 정책 결정 속성을 서버 고정 안전값으로 강제하는 대상은 회계검토 assignment '변경' 경로다.
+    # /accounting/classify(분류 SSE)는 mutation 이 아니며 기존 정책 흐름을 보존한다(회귀 방지).
+    return _ACCOUNTING_ASSIGNMENT_MUTATION_RE.fullmatch(path) is not None
 
 
 def _header_bool(value: str | None) -> bool:

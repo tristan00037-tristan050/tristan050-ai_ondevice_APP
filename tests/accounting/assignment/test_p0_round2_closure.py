@@ -154,3 +154,40 @@ def test_vendor_normalization_version_and_algorithm_are_unified():
     # Latin-only casefold: 대문자 Latin 은 접히고 CJK 는 보존된다(전체 casefold 와 구별).
     assert security.normalize_descriptor("KT") == "kt"
     assert "통신비" in security.normalize_descriptor("KT 통신비")
+
+
+# ── RI-P0-012: 재시작 fail-closed 안전(유출·권한상승 0) 실증 ─────────────────
+# 주의: canonical batch 를 SQLite 로 durable 복구하는 완전 구현은 raw-zero(§15) 를 지키기 위해
+# non-PII projection + vendor_token 무결성 기반 복구가 필요하며 assign 무결성 모델 확장이 따른다.
+# 본 시험은 그 후속 작업 이전에도 재시작이 보안상 안전(데이터 유출/권한 상승 0)함을 고정한다.
+
+def test_batch_restart_is_fail_closed_and_raw_zero(tmp_path: Path):
+    from butler_pc_core.accounting.assignment.registry import RegistryEntry
+
+    registry = RegistrySnapshot(
+        registry_digest="1" * 64,
+        overlay_digest="2" * 64,
+        entries=(RegistryEntry("POSTING.A", "1001", "지급수수료", ("지급수수료",), "POSTING", True, None, 20),),
+    )
+    db = tmp_path / "restart.sqlite3"
+
+    def make() -> AccountingReviewRuntime:
+        return AccountingReviewRuntime(db_path=db, key_store=MemoryKeyStore(key=b"a" * 32), registry=registry)
+
+    r1 = make()
+    r1.ingest_dataframe(
+        "batch_restart_00001",
+        pd.DataFrame([{"거래일": "2026-07-16", "거래내용": "비밀상호원문", "금액": "-1000", "분류과목": "미분류"}]),
+        _profile(),
+    )
+    context = r1.context_from_profile(_profile())
+    assert r1.unaccounted_page(context, "batch_restart_00001", cursor=None, page_size=50)["total_count"] == 1
+
+    # 재시작: 새 인스턴스, 같은 DB. 아직 durable 복구가 없으므로 조회는 fail-closed(404)다.
+    r2 = make()
+    with pytest.raises(AssignmentError, match="AUTHORIZATION_DENIED"):
+        r2.unaccounted_page(context, "batch_restart_00001", cursor=None, page_size=50)
+
+    # ★ 어떤 경우에도 raw 거래원문은 디스크(DB)에 유출되지 않는다(§15 절대불변).
+    if db.exists():
+        assert "비밀상호원문".encode() not in db.read_bytes()
