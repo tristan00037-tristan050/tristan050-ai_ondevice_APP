@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting/account-assignment-request-2.0.json",
+  "title": "Account Assignment Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "account_id", "scope", "registry_digest", "expected_transaction_version"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "account_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "scope": {"enum": ["THIS_ONLY", "SAME_VENDOR_FUTURE"]},
+    "registry_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "expected_transaction_version": {"type": "integer", "minimum": 1}
+  }
+}

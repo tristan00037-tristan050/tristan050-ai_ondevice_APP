@@ -1,0 +1,49 @@
+{
+  "schema_version": "butler.integration_lock.v1",
+  "repository": "github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP",
+  "base_commit": "55d0f315e2b375d58c9c2a0263b606e5a757b59e",
+  "base_tree": "9d21d32bca294bc9998253f7d1c2f6f88ad71114",
+  "integration_branch": "feat/accounting-review-integration",
+  "route_inventory_digest": "43bf68f9afb5ca5486a31d34667b617ae45be94063ecb4522c0d9c04f2bcc0a4",
+  "contract_closure_digest": "2548a9782558edf8dafdf7ba8f72e63b7b83d8288c1cc9d8fa3eb7eb1d59843e",
+  "ui_tokens_digest": "d7e595b0b1109515dc97d4fdb77acee6721a13b367b8ae6ce4289305889409f5",
+  "source_zip_digests": [
+    "61f226da34e635760517dc05f49453ecd1d85bdf3d409a4495e84fd670710226",
+    "ca625691eb054942ab705ea82c3b7fc70559b569e999abf5da7009b1ddc7bbd8"
+  ],
+  "allowed_paths": {
+    "integration_owner": [
+      "integration_lock.json",
+      "butler_sidecar.py",
+      "butler_pc_core/**/router*.py",
+      ".github/workflows/**"
+    ],
+    "policy_knowledge_team": [
+      "butler_pc_core/company_policy/**",
+      "butler_pc_core/company_fact/**",
+      "tests/company_policy/**",
+      "tests/company_fact/**"
+    ],
+    "assignment_team": [
+      "butler_pc_core/accounting/assignment/**",
+      "tests/accounting/assignment/**"
+    ],
+    "algorithm_team": [
+      "butler_pc_core/cards/box2/**",
+      "butler_pc_core/accounting/classify/**",
+      "tests/cards/box2/**",
+      "tests/accounting/classify/**"
+    ],
+    "data_team": [
+      "butler_pc_core/accounting/canonical/**",
+      "butler_pc_core/accounting/migration/**"
+    ],
+    "ui_team": [
+      "butler-desktop/src/**",
+      "butler-desktop/src/__tests__/**"
+    ]
+  },
+  "owner": "김성훈",
+  "created_at": "2026-07-16T03:07:18Z",
+  "expires_at": "2026-07-30T03:07:18Z"
+}

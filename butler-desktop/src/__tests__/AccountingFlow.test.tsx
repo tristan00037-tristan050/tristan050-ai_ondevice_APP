@@ -55,6 +55,12 @@ const SSE_EVENTS_OK = [
       summary: MOCK_SUMMARY,
       row_count: 10,
       category_count: 2,
+      review_projection: {
+        available: true,
+        batch_id: 'test-uuid-1234',
+        review_required_count: 1,
+        reason_code: null,
+      },
     },
   },
 ];
@@ -188,6 +194,7 @@ describe('AccountingModal — 업로드 흐름', () => {
     }, { timeout: 5000 });
     expect(screen.getByTestId('accounting-download-btn')).toBeInTheDocument();
     expect(screen.getByTestId('accounting-report-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('accounting-review-open')).toHaveTextContent('계정 확인 필요 1건');
     expect(screen.getByTestId('accounting-result').textContent).toContain('10건');
   });
 

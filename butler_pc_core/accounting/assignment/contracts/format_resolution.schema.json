@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/format-resolution-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "status",
+    "source",
+    "resolver_version",
+    "ambiguity_count",
+    "receipt_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.format_resolution.v1"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 8
+    },
+    "status": {
+      "enum": [
+        "SELECTED",
+        "NONE",
+        "SELECTION_REQUIRED",
+        "BLOCKED_UNSAFE",
+        "BLOCKED_UNSUPPORTED"
+      ]
+    },
+    "source": {
+      "enum": [
+        "REQUEST_ATTACHMENT",
+        "EXPLICIT_REGISTERED",
+        "WORKFLOW",
+        "DEPARTMENT",
+        "COMPANY",
+        "NONE"
+      ]
+    },
+    "format_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "format_version": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "format_digest": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "resolver_version": {
+      "type": "string"
+    },
+    "parser_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ambiguity_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "receipt_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

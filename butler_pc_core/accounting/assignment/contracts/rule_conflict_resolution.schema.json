@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting/rule-conflict-resolution-2.0.json",
+  "title": "Learned Rule Conflict Resolution",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "decision", "expected_conflict_version"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "decision": {"enum": ["KEEP_EXISTING", "REPLACE_WITH_NEW"]},
+    "expected_conflict_version": {"type": "integer", "minimum": 1}
+  }
+}

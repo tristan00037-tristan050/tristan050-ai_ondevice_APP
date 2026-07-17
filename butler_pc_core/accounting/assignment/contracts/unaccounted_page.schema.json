@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting/unaccounted-page-2.0.json",
+  "title": "Unaccounted Review Page",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "batch_id", "batch_version", "registry_digest", "overlay_digest", "items", "total_count", "next_cursor", "etag"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "batch_id": {"$ref": "#/$defs/opaqueId"},
+    "batch_version": {"type": "integer", "minimum": 1},
+    "registry_digest": {"$ref": "#/$defs/sha256"},
+    "overlay_digest": {"$ref": "#/$defs/sha256"},
+    "items": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/item"}},
+    "total_count": {"type": "integer", "minimum": 0},
+    "next_cursor": {"type": ["string", "null"], "maxLength": 512},
+    "etag": {"type": "string", "minLength": 8, "maxLength": 160}
+  },
+  "$defs": {
+    "opaqueId": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "money": {
+      "type": "object", "additionalProperties": false,
+      "required": ["currency", "minor_units"],
+      "properties": {"currency": {"type": "string", "pattern": "^[A-Z]{3}$"}, "minor_units": {"type": "integer"}}
+    },
+    "suggestion": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": ["account_id", "source", "safe_reason"],
+      "properties": {
+        "account_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "source": {"enum": ["AUTO_PROPOSE", "USER_RULE_SUGGESTED"]},
+        "safe_reason": {"type": "string", "maxLength": 200},
+        "rule_id": {"type": ["string", "null"], "maxLength": 128}
+      }
+    },
+    "item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["txn_id", "transaction_version", "booked_date", "money", "descriptor_display", "display_policy", "bank_direction", "review_state", "suggestion"],
+      "properties": {
+        "txn_id": {"$ref": "#/$defs/opaqueId"},
+        "transaction_version": {"type": "integer", "minimum": 1},
+        "booked_date": {"type": "string", "format": "date"},
+        "money": {"$ref": "#/$defs/money"},
+        "descriptor_display": {"type": "string", "maxLength": 200},
+        "display_policy": {"enum": ["PLAIN", "MASKED", "RESTRICTED"]},
+        "bank_direction": {"enum": ["INFLOW", "OUTFLOW"]},
+        "review_state": {"enum": ["AUTO_PROPOSE", "USER_RULE_SUGGESTED", "REVIEW_REQUIRED"]},
+        "suggestion": {"$ref": "#/$defs/suggestion"}
+      }
+    }
+  }
+}

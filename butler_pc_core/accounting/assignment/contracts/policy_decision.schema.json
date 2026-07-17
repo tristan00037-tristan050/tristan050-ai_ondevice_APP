@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/policy-decision-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "route_id",
+    "effect",
+    "http_status",
+    "policy_digest",
+    "reason_codes",
+    "model_call_allowed",
+    "issued_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.policy_decision.v1"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 8
+    },
+    "route_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "effect": {
+      "enum": [
+        "ALLOW",
+        "BLOCK_CONTENT",
+        "DENY_ACCESS",
+        "REVIEW_REQUIRED"
+      ]
+    },
+    "http_status": {
+      "enum": [
+        200,
+        403,
+        409,
+        422
+      ]
+    },
+    "policy_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "model_call_allowed": {
+      "type": "boolean"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

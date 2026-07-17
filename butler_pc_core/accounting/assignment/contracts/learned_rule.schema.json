@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting/learned-rule-2.0.json",
+  "title": "User Learned Suggestion Rule",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rule_id", "account_id", "source_assignment_id", "state", "registry_digest", "overlay_digest", "match_key_id", "normalization_version", "created_at", "resource_version", "descriptor_display"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "rule_id": {"$ref": "#/$defs/opaqueId"},
+    "account_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "source_assignment_id": {"$ref": "#/$defs/opaqueId"},
+    "state": {"enum": ["ACTIVE_SUGGESTION", "INACTIVE_USER", "INACTIVE_REGISTRY", "DEGRADED_KEY_ROTATION"]},
+    "registry_digest": {"$ref": "#/$defs/sha256"},
+    "overlay_digest": {"$ref": "#/$defs/sha256"},
+    "match_key_id": {"type": "string", "minLength": 1, "maxLength": 80},
+    "normalization_version": {"type": "string", "minLength": 1, "maxLength": 40},
+    "created_at": {"type": "string", "format": "date-time"},
+    "deactivated_at": {"type": ["string", "null"], "format": "date-time"},
+    "resource_version": {"type": "integer", "minimum": 1},
+    "descriptor_display": {"type": "string", "minLength": 1, "maxLength": 200}
+  },
+  "$defs": {
+    "opaqueId": {"type": "string", "minLength": 16, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

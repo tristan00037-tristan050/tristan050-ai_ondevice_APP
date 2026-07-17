@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting/capability-status-2.0.json",
+  "title": "Accounting Review Capability Status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "capability_id",
+    "status",
+    "registered",
+    "required_routes",
+    "covered_routes",
+    "self_test",
+    "reason_codes",
+    "verified_at",
+    "registry_digest",
+    "overlay_digest",
+    "event_count",
+    "evidence_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.accounting_capability_status.v2"},
+    "capability_id": {
+      "enum": [
+        "accounting.review_projection",
+        "accounting.user_assignment",
+        "accounting.user_rule_suggestion",
+        "accounting.account_column_mapping",
+        "accounting.rule_management"
+      ]
+    },
+    "status": {
+      "enum": [
+        "NOT_REGISTERED",
+        "REGISTERED_NOT_CONSUMED",
+        "PARTIALLY_CONSUMED",
+        "CONSUMED",
+        "DEGRADED",
+        "UNAVAILABLE"
+      ]
+    },
+    "registered": {"type": "boolean"},
+    "required_routes": {"type": "integer", "minimum": 0},
+    "covered_routes": {"type": "integer", "minimum": 0},
+    "self_test": {"enum": ["PASS", "FAIL", "NOT_RUN"]},
+    "reason_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "verified_at": {"type": "string", "format": "date-time"},
+    "registry_digest": {"$ref": "#/$defs/sha256"},
+    "overlay_digest": {"$ref": "#/$defs/sha256"},
+    "event_count": {"type": "integer", "minimum": 0},
+    "evidence_digest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

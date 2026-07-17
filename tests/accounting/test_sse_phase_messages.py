@@ -106,3 +106,14 @@ def test_sse_phase_start_order_is_correct():
     # complete 이벤트가 맨 마지막이어야 함
     last_event = events[-1]["event"]
     assert last_event == "complete", f"마지막 이벤트가 'complete'가 아님: '{last_event}'"
+
+
+@_skip
+def test_sse_complete_exposes_review_projection_contract():
+    events = _classify_and_collect_sse_events()
+    complete = next(event["data"] for event in events if event["event"] == "complete")
+    projection = complete["review_projection"]
+    assert set(projection) == {"available", "batch_id", "review_required_count", "reason_code"}
+    assert isinstance(projection["available"], bool)
+    assert type(projection["review_required_count"]) is int
+    assert projection["review_required_count"] >= 0
