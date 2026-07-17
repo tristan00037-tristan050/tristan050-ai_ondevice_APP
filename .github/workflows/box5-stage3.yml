@@ -11,8 +11,17 @@ on:
       - 'butler_pc_core/accounting/classify/**'
       - 'butler_pc_core/accounting/eval/**'
       - 'butler_pc_core/accounting/policy/**'
+      # 이번 결합 본체(assignment suite + 제품 배선 + lock)를 게이트에 포함한다.
+      - 'butler_pc_core/accounting/assignment/**'
+      - 'butler_sidecar.py'
+      - 'butler-desktop/src/lib/accounting_review/**'
+      - 'butler-desktop/src/components/accounting_review/**'
       - 'tests/accounting/classify/**'
       - 'tests/accounting/policy/**'
+      - 'tests/accounting/assignment/**'
+      - 'tests/accounting/test_sse_phase_messages.py'
+      - 'tests/company_policy/test_accounting_header_trust.py'
+      - 'integration_lock.json'
       - '.github/workflows/box5-stage3.yml'
   push:
     branches: [main]
@@ -20,6 +29,14 @@ on:
       - 'butler_pc_core/accounting/classify/**'
       - 'butler_pc_core/accounting/eval/**'
       - 'butler_pc_core/accounting/policy/**'
+      - 'butler_pc_core/accounting/assignment/**'
+      - 'butler_sidecar.py'
+      - 'butler-desktop/src/lib/accounting_review/**'
+      - 'butler-desktop/src/components/accounting_review/**'
+      - 'tests/accounting/assignment/**'
+      - 'tests/accounting/test_sse_phase_messages.py'
+      - 'tests/company_policy/test_accounting_header_trust.py'
+      - 'integration_lock.json'
       - '.github/workflows/box5-stage3.yml'
 
 jobs:
@@ -53,11 +70,31 @@ jobs:
           assert ov.get("status") == "BLOCKED_PENDING_FINANCE_APPROVAL", "overlay must stay finance-locked"
           print("POLICY_ASSET_INVARIANTS_OK=1  accounts=%d decisions=%d" % (len(accs), len(dec)))
           PY
-      - name: Stage-3 classify + policy suite (green, model-free)
+      - name: Integration lock present + schema/base bound (공급망 재현성)
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
-          python -m pytest tests/accounting/classify tests/accounting/policy -q --tb=short --junitxml=stage3-junit.xml
+          test -f integration_lock.json || { echo "integration_lock.json MISSING in repo"; exit 1; }
+          python - <<'PY'
+          import json, jsonschema
+          lock = json.load(open("integration_lock.json"))
+          schema = json.load(open("butler_pc_core/accounting/assignment/contracts/integration_lock.schema.json"))
+          jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(lock)
+          assert lock["base_commit"] == "55d0f315e2b375d58c9c2a0263b606e5a757b59e"
+          assert lock["base_tree"]   == "9d21d32bca294bc9998253f7d1c2f6f88ad71114"
+          print("INTEGRATION_LOCK_BOUND_OK=1")
+          PY
+      - name: Stage-3 classify + policy + assignment suite (green, model-free)
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python -m pytest \
+            tests/accounting/classify \
+            tests/accounting/policy \
+            tests/accounting/assignment \
+            tests/accounting/test_sse_phase_messages.py \
+            tests/company_policy/test_accounting_header_trust.py \
+            -q --tb=short --junitxml=stage3-junit.xml
       - name: Contract closure offline verifier (reason registry + decision receipt)
         env:
           PYTHONPATH: ${{ github.workspace }}
