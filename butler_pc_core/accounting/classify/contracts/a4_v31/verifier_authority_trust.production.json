@@ -1,0 +1,1 @@
+{"algorithm":"Ed25519","authority_id":"UNAPPROVED","enabled":false,"environment":"PRODUCTION","not_after_utc":"1970-01-01T00:00:00Z","not_before_utc":"1970-01-01T00:00:00Z","public_key_b64":"","revocation_epoch":-1,"schema_version":"butler.box5.a4.verifier_authority_trust.v1","signer_key_id":"UNAPPROVED","transport":"unix-scm-rights-v1"}

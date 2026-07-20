@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:butler:box5:a4:completion-status:v3.1",
+  "$id": "urn:butler:box5:a4:completion-status:v3.2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -8,7 +8,7 @@
     "runtime_activation_allowed", "canonical_base", "findings", "external_gates"
   ],
   "properties": {
-    "schema_version": {"const": "butler.box5.a4.completion_status.v3.1"},
+    "schema_version": {"const": "butler.box5.a4.completion_status.v3.2"},
     "status": {
       "enum": [
         "BLOCKED",
@@ -23,14 +23,14 @@
     "canonical_base": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "findings": {
       "type": "array",
-      "minItems": 30,
-      "maxItems": 30,
+      "minItems": 31,
+      "maxItems": 31,
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["id", "status", "evidence_digest"],
         "properties": {
-          "id": {"type": "string", "pattern": "^A4V3-AUD-P[012]-[0-9]{3}$"},
+          "id": {"type": "string", "pattern": "^A4V[35]-AUD-P[012]-[0-9]{3}$"},
           "status": {"enum": ["OPEN", "FIXED_TESTED", "BLOCKED_EXTERNAL"]},
           "evidence_digest": {
             "type": ["string", "null"],

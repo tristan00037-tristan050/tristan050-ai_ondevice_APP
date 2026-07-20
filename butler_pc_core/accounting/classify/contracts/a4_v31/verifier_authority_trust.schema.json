@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:box5:a4:verifier-authority-trust:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "enabled", "environment", "authority_id", "transport",
+    "algorithm", "signer_key_id", "public_key_b64", "revocation_epoch",
+    "not_before_utc", "not_after_utc"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.box5.a4.verifier_authority_trust.v1"},
+    "enabled": {"type": "boolean"},
+    "environment": {"enum": ["PRODUCTION", "TEST"]},
+    "authority_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
+    "transport": {"const": "unix-scm-rights-v1"},
+    "algorithm": {"const": "Ed25519"},
+    "signer_key_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
+    "public_key_b64": {"type": "string", "maxLength": 64},
+    "revocation_epoch": {"type": "integer", "minimum": -1},
+    "not_before_utc": {"type": "string", "format": "date-time"},
+    "not_after_utc": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]},
+      "then": {
+        "properties": {
+          "public_key_b64": {"type": "string", "minLength": 43, "maxLength": 44},
+          "revocation_epoch": {"type": "integer", "minimum": 0}
+        }
+      }
+    }
+  ]
+}

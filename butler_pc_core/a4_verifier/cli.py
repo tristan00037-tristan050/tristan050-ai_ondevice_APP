@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Independent, public-key-only verifier for Box5 A4 evidence.
+"""Independent verifier authority executable for Box5 A4 evidence.
 
 The file is executable under ``python -I`` and contains its own parser,
 canonicalizer, graph oracle, fee checks, and DLP rules.  Importing the producer
-package is prohibited by construction and checked again in release tests.
+package is prohibited by construction and checked again in release tests.  Only
+this isolated process receives the signing seed through a protected inherited
+descriptor; the producer receives no private key or generic signing operation.
 """
 
 from __future__ import annotations
 
 import argparse
+import array
 import base64
 import csv
 import hashlib
@@ -17,6 +20,10 @@ import io
 import json
 import os
 import re
+import socket
+import stat
+import struct
+import tempfile
 import unicodedata
 import uuid
 from dataclasses import dataclass
@@ -51,15 +58,24 @@ JSON_FILES = FILES - {"SHA256SUMS"}
 SCHEMA_DIGEST = hashlib.sha256(b"butler.box5.a4.contracts.v3.1").hexdigest()
 CODE_FILES = (
     "butler_pc_core/a4_verifier/cli.py",
-    "butler_pc_core/accounting/assignment/a4_store_schema_v31.py",
+    "butler_pc_core/accounting/assignment/a4_store_schema_v32.py",
     "butler_pc_core/accounting/classify/reconciliation_v2.py",
     "butler_pc_core/accounting/classify/reconciliation_service_v2.py",
     "butler_pc_core/accounting/classify/source_snapshot_v2_1.py",
+    "butler_pc_core/accounting/classify/verifier_authority.py",
     "butler_pc_core/accounting/classify/contracts/a4_v2/evidence_bundle.schema.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/code_dictionary.production.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/release_manifest.production.json",
+    "butler_pc_core/accounting/classify/contracts/a4_v31/verifier_authority_trust.production.json",
+    "butler_pc_core/accounting/classify/contracts/a4_v31/verifier_authority_trust.schema.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/verification_receipt.schema.json",
 )
+AUTHORITY_REQUEST_SCHEMA = "butler.box5.a4.authority_request.v1"
+AUTHORITY_RESPONSE_SCHEMA = "butler.box5.a4.authority_response.v1"
+AUTHORITY_TRUST_SCHEMA = "butler.box5.a4.verifier_authority_trust.v1"
+AUTHORITY_TRANSPORT = "unix-scm-rights-v1"
+MAX_AUTHORITY_REQUEST_BYTES = 32 * 1024 * 1024
+MAX_AUTHORITY_RESPONSE_BYTES = 256 * 1024
 MAX_MONEY = 9_000_000_000_000_000
 NAMESPACE = uuid.UUID("b8f2ceca-9183-5c4a-9750-3e0ed0f87066")
 HEADER_KEYWORDS = frozenset(
@@ -494,14 +510,7 @@ def _field(value: str) -> bytes:
     return len(raw).to_bytes(4, "big") + raw
 
 
-def _key_material(fd: int, tenant_id: str) -> dict[str, Any]:
-    os.lseek(fd, 0, os.SEEK_SET)
-    raw = bytearray()
-    while chunk := os.read(fd, 4096):
-        raw.extend(chunk)
-        if len(raw) > 16_384:
-            block("BLOCK_RESOURCE_LIMIT")
-    material = strict_load(bytes(raw))
+def _key_material(material: Any, tenant_id: str) -> dict[str, Any]:
     required = {
         "schema_version",
         "tenant_id",
@@ -510,24 +519,25 @@ def _key_material(fd: int, tenant_id: str) -> dict[str, Any]:
         "bank_reference_key_b64",
         "counterparty_account_key_b64",
         "run_transaction_key_b64",
-        "verification_signing_seed_b64",
     }
     if (
         not isinstance(material, dict)
         or set(material) != required
-        or material.get("schema_version") != "butler.box5.a4.verifier_keys.v3.1"
+        or material.get("schema_version")
+        != "butler.box5.a4.verifier_token_keys.v3.2"
         or material.get("tenant_id") != tenant_id
     ):
         block("BLOCK_TRUST_UNAVAILABLE")
+    decoded_material = dict(material)
     for name in required - {"schema_version", "tenant_id", "key_id"}:
         try:
-            decoded = base64.urlsafe_b64decode(str(material[name]))
+            decoded = base64.urlsafe_b64decode(str(decoded_material[name]))
         except Exception:
             block("BLOCK_TRUST_UNAVAILABLE")
         if len(decoded) != 32:
             block("BLOCK_TRUST_UNAVAILABLE")
-        material[name] = decoded
-    return material
+        decoded_material[name] = decoded
+    return decoded_material
 
 
 def _dictionary(path: Path, expected_digest: str) -> dict[str, Any]:
@@ -1662,7 +1672,7 @@ def verify(
     trust_path: Path,
     source_fd: int,
     source_suffix: str,
-    key_material_fd: int,
+    key_material: Mapping[str, Any],
     dictionary_path: Path,
 ) -> dict[str, Any]:
     raw = read_files(root)
@@ -1674,7 +1684,7 @@ def verify(
     verify_hashes(raw, docs)
     run, txs, expected = verify_bindings(docs)
     verify_source_snapshot(source_fd, source_suffix, docs["input_receipt.json"])
-    material = _key_material(key_material_fd, run["tenant_id"])
+    material = _key_material(key_material, run["tenant_id"])
     dictionary = _dictionary(dictionary_path, run["dictionary_digest"])
     frame = read_source_frame(source_fd, source_suffix)
     independently_compiled = independently_compile_source(
@@ -1750,8 +1760,8 @@ def verify(
     code_closure_digest = digest(closure_files)
     verified_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     receipt = {
-        "schema_version": "butler.box5.a4.verification_receipt.v3.1",
-        "contract_id": "BUTLER-BOX5-A4-V3.1-CANONICAL-DIRECTIVE",
+        "schema_version": "butler.box5.a4.verification_receipt.v3.2",
+        "contract_id": "BUTLER-BOX5-A4-V3.2-AUTHORITY-ISOLATED",
         "run_id": run["run_id"],
         "nonce": run["nonce"].lower(),
         "decision": "PASS",
@@ -1767,51 +1777,423 @@ def verify(
         "registry_digest": run["registry_digest"],
         "code_tree_oid": run["code_tree_oid"],
         "code_closure_digest": code_closure_digest,
-        "verifier_id": "BUTLER_A4_ISOLATED_RAW_COMPILER_V3.1",
-        "signer_key_id": f"{material['key_id']}.a4-verifier-v31",
+        "verifier_id": "BUTLER_A4_ISOLATED_RAW_COMPILER_V3.2",
         "verified_at_utc": verified_at,
     }
-    private = Ed25519PrivateKey.from_private_bytes(material["verification_signing_seed_b64"])
-    signature = private.sign(jcs(receipt))
-    receipt["signature"] = base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
     return receipt
+
+
+def _read_exact(connection: socket.socket, size: int) -> bytes:
+    result = bytearray()
+    while len(result) < size:
+        chunk = connection.recv(size - len(result))
+        if not chunk:
+            block("BLOCK_TRUST_UNAVAILABLE")
+        result.extend(chunk)
+    return bytes(result)
+
+
+def _receive_authority_request(connection: socket.socket) -> tuple[dict[str, Any], int]:
+    descriptor_size = array.array("i").itemsize
+    header, ancillary, _flags, _address = connection.recvmsg(
+        4, socket.CMSG_SPACE(descriptor_size)
+    )
+    if len(header) < 4:
+        header += _read_exact(connection, 4 - len(header))
+    descriptors: list[int] = []
+    for level, kind, data in ancillary:
+        if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
+            values = array.array("i")
+            values.frombytes(data[: len(data) - (len(data) % descriptor_size)])
+            descriptors.extend(values.tolist())
+    if len(descriptors) != 1:
+        for descriptor in descriptors:
+            os.close(descriptor)
+        block("BLOCK_INPUT_CLOSURE")
+    size = struct.unpack(">I", header)[0]
+    if not 0 < size <= MAX_AUTHORITY_REQUEST_BYTES:
+        os.close(descriptors[0])
+        block("BLOCK_RESOURCE_LIMIT")
+    request = strict_load(_read_exact(connection, size))
+    if not isinstance(request, dict):
+        os.close(descriptors[0])
+        block("BLOCK_SCHEMA")
+    return request, descriptors[0]
+
+
+def _send_authority_response(connection: socket.socket, response: Mapping[str, Any]) -> None:
+    payload = jcs(response)
+    if not 0 < len(payload) <= MAX_AUTHORITY_RESPONSE_BYTES:
+        block("BLOCK_RESOURCE_LIMIT")
+    connection.sendall(struct.pack(">I", len(payload)) + payload)
+
+
+def _decode_b64(value: object, *, maximum: int) -> bytes:
+    if not isinstance(value, str) or len(value) > (maximum * 4 // 3) + 8:
+        block("BLOCK_RESOURCE_LIMIT")
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (ValueError, TypeError):
+        block("BLOCK_SCHEMA")
+    if not 0 < len(decoded) <= maximum:
+        block("BLOCK_RESOURCE_LIMIT")
+    return decoded
+
+
+def _read_trust_file(path: Path) -> bytes:
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = -1
+    try:
+        descriptor = os.open(path, flags)
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_mode & 0o022
+            or not 0 < before.st_size <= 16_384
+        ):
+            block("BLOCK_TRUST_UNAVAILABLE")
+        chunks: list[bytes] = []
+        remaining = 16_385
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 4096))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        after = os.fstat(descriptor)
+        before_identity = (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        )
+        after_identity = (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+        )
+        if not 0 < len(raw) <= 16_384 or before_identity != after_identity:
+            block("BLOCK_TRUST_UNAVAILABLE")
+        return raw
+    except Block:
+        raise
+    except OSError:
+        block("BLOCK_TRUST_UNAVAILABLE")
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _authority_trust(path: Path, *, allow_test: bool) -> tuple[dict[str, Any], str]:
+    raw = _read_trust_file(path)
+    trust = strict_load(raw)
+    required = {
+        "schema_version",
+        "enabled",
+        "environment",
+        "authority_id",
+        "transport",
+        "algorithm",
+        "signer_key_id",
+        "public_key_b64",
+        "revocation_epoch",
+        "not_before_utc",
+        "not_after_utc",
+    }
+    if (
+        not isinstance(trust, dict)
+        or set(trust) != required
+        or raw not in {jcs(trust), jcs(trust) + b"\n"}
+        or trust.get("schema_version")
+        != "butler.box5.a4.verifier_authority_trust.v1"
+        or trust.get("enabled") is not True
+        or trust.get("transport") != AUTHORITY_TRANSPORT
+        or trust.get("algorithm") != "Ed25519"
+        or (
+            trust.get("environment") != "PRODUCTION"
+            and not (allow_test and trust.get("environment") == "TEST")
+        )
+        or not re.fullmatch(r"[A-Za-z0-9._-]{3,80}", str(trust.get("authority_id", "")))
+        or not re.fullmatch(r"[A-Za-z0-9._-]{3,80}", str(trust.get("signer_key_id", "")))
+        or not isinstance(trust.get("revocation_epoch"), int)
+        or isinstance(trust.get("revocation_epoch"), bool)
+        or trust["revocation_epoch"] < 0
+    ):
+        block("BLOCK_TRUST_UNAVAILABLE")
+    now = datetime.now(timezone.utc)
+    if not all(
+        isinstance(trust.get(name), str) and str(trust[name]).endswith("Z")
+        for name in ("not_before_utc", "not_after_utc")
+    ):
+        block("BLOCK_TRUST_UNAVAILABLE")
+    try:
+        not_before = datetime.fromisoformat(
+            str(trust["not_before_utc"])[:-1] + "+00:00"
+        )
+        not_after = datetime.fromisoformat(
+            str(trust["not_after_utc"])[:-1] + "+00:00"
+        )
+        public_key = base64.b64decode(str(trust["public_key_b64"]), validate=True)
+    except (ValueError, TypeError):
+        block("BLOCK_TRUST_UNAVAILABLE")
+    if (
+        len(public_key) != 32
+        or not_before.tzinfo is None
+        or not_after.tzinfo is None
+        or not not_before.astimezone(timezone.utc) <= now < not_after.astimezone(timezone.utc)
+    ):
+        block("BLOCK_TRUST_UNAVAILABLE")
+    trust["public_key_raw"] = public_key
+    return trust, hashlib.sha256(raw).hexdigest()
+
+
+def _signing_key(fd: int, expected_public_key: bytes) -> Ed25519PrivateKey:
+    try:
+        seed = bytearray()
+        while len(seed) <= 32:
+            chunk = os.read(fd, 33 - len(seed))
+            if not chunk:
+                break
+            seed.extend(chunk)
+    finally:
+        os.close(fd)
+    if len(seed) != 32:
+        block("BLOCK_TRUST_UNAVAILABLE")
+    try:
+        private_key = Ed25519PrivateKey.from_private_bytes(bytes(seed))
+    finally:
+        for index in range(len(seed)):
+            seed[index] = 0
+    if private_key.public_key().public_bytes_raw() != expected_public_key:
+        block("BLOCK_TRUST_UNAVAILABLE")
+    return private_key
+
+
+def _write_private(path: Path, payload: bytes) -> None:
+    descriptor = os.open(
+        path,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+        0o600,
+    )
+    try:
+        view = memoryview(payload)
+        while view:
+            written = os.write(descriptor, view)
+            if written <= 0:
+                block("BLOCK_INPUT_CLOSURE")
+            view = view[written:]
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _verified_unsigned_receipt(
+    request: Mapping[str, Any], source_fd: int, trust_digest: str
+) -> dict[str, Any]:
+    required = {
+        "schema_version",
+        "request_nonce",
+        "tenant_id",
+        "source_suffix",
+        "authority_trust_digest",
+        "evidence_files_b64",
+        "finance_trust_b64",
+        "dictionary_b64",
+        "key_material",
+    }
+    if (
+        set(request) != required
+        or request.get("schema_version") != AUTHORITY_REQUEST_SCHEMA
+        or not re.fullmatch(r"[0-9a-f]{64}", str(request.get("request_nonce", "")))
+        or request.get("authority_trust_digest") != trust_digest
+        or request.get("source_suffix") not in {".csv", ".xls", ".xlsx"}
+        or not isinstance(request.get("evidence_files_b64"), dict)
+        or set(request["evidence_files_b64"]) != FILES
+        or not isinstance(request.get("key_material"), dict)
+    ):
+        block("BLOCK_SCHEMA")
+    evidence = {
+        name: _decode_b64(value, maximum=8 * 1024 * 1024)
+        for name, value in request["evidence_files_b64"].items()
+    }
+    run = strict_load(evidence["run_request.json"])
+    if (
+        not isinstance(run, dict)
+        or run.get("tenant_id") != request.get("tenant_id")
+        or not re.fullmatch(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+            str(run.get("run_id", "")),
+            re.I,
+        )
+    ):
+        block("BLOCK_RUN_BINDING")
+    finance_trust = _decode_b64(request.get("finance_trust_b64"), maximum=64 * 1024)
+    dictionary = _decode_b64(request.get("dictionary_b64"), maximum=4 * 1024 * 1024)
+    with tempfile.TemporaryDirectory(prefix="butler-a4-authority-") as temporary:
+        temporary_root = Path(temporary)
+        evidence_root = temporary_root / str(run["run_id"])
+        evidence_root.mkdir(mode=0o700)
+        for name, payload in evidence.items():
+            _write_private(evidence_root / name, payload)
+        finance_path = temporary_root / "finance-trust.json"
+        dictionary_path = temporary_root / "dictionary.json"
+        _write_private(finance_path, finance_trust)
+        _write_private(dictionary_path, dictionary)
+        return verify(
+            evidence_root,
+            finance_path,
+            source_fd,
+            str(request["source_suffix"]),
+            request["key_material"],
+            dictionary_path,
+        )
+
+
+def _handle_authority_connection(
+    connection: socket.socket,
+    *,
+    trust: Mapping[str, Any],
+    trust_digest: str,
+    private_key: Ed25519PrivateKey,
+) -> None:
+    request_nonce = "0" * 64
+    source_fd = -1
+    try:
+        request, source_fd = _receive_authority_request(connection)
+        if re.fullmatch(r"[0-9a-f]{64}", str(request.get("request_nonce", ""))):
+            request_nonce = str(request["request_nonce"])
+        receipt = _verified_unsigned_receipt(request, source_fd, trust_digest)
+        receipt.update(
+            {
+                "authority_id": trust["authority_id"],
+                "signer_key_id": trust["signer_key_id"],
+                "signer_revocation_epoch": trust["revocation_epoch"],
+                "signer_trust_digest": trust_digest,
+            }
+        )
+        signature = private_key.sign(jcs(receipt))
+        receipt["signature"] = base64.urlsafe_b64encode(signature).decode(
+            "ascii"
+        ).rstrip("=")
+        response = {
+            "schema_version": AUTHORITY_RESPONSE_SCHEMA,
+            "request_nonce": request_nonce,
+            "status": "PASS",
+            "error_code": "NONE",
+            "receipt": receipt,
+        }
+    except Block as exc:
+        response = {
+            "schema_version": AUTHORITY_RESPONSE_SCHEMA,
+            "request_nonce": request_nonce,
+            "status": "BLOCK",
+            "error_code": str(exc),
+            "receipt": None,
+        }
+    except Exception:
+        response = {
+            "schema_version": AUTHORITY_RESPONSE_SCHEMA,
+            "request_nonce": request_nonce,
+            "status": "BLOCK",
+            "error_code": "BLOCK_INTERNAL",
+            "receipt": None,
+        }
+    finally:
+        if source_fd >= 0:
+            os.close(source_fd)
+    try:
+        _send_authority_response(connection, response)
+    except (BrokenPipeError, ConnectionError, OSError, TimeoutError):
+        return
+
+
+def serve_authority(
+    socket_path: Path,
+    authority_trust_path: Path,
+    signing_key_fd: int,
+    *,
+    allow_test_authority: bool,
+) -> int:
+    trust, trust_digest = _authority_trust(
+        authority_trust_path, allow_test=allow_test_authority
+    )
+    private_key = _signing_key(signing_key_fd, trust["public_key_raw"])
+    try:
+        parent = socket_path.parent.lstat()
+    except OSError:
+        block("BLOCK_TRUST_UNAVAILABLE")
+    if not stat.S_ISDIR(parent.st_mode) or parent.st_mode & 0o002:
+        block("BLOCK_TRUST_UNAVAILABLE")
+    try:
+        existing = socket_path.lstat()
+    except FileNotFoundError:
+        existing = None
+    if existing is not None:
+        if not stat.S_ISSOCK(existing.st_mode) or existing.st_uid != os.geteuid():
+            block("BLOCK_TRUST_UNAVAILABLE")
+        socket_path.unlink()
+    old_umask = os.umask(0o177)
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        server.bind(str(socket_path))
+        os.chmod(socket_path, 0o600)
+        server.listen(8)
+    finally:
+        os.umask(old_umask)
+    print("A4_VERIFIER_AUTHORITY_READY=1", flush=True)
+    try:
+        while True:
+            connection, _address = server.accept()
+            with connection:
+                connection.settimeout(35)
+                _handle_authority_connection(
+                    connection,
+                    trust=trust,
+                    trust_digest=trust_digest,
+                    private_key=private_key,
+                )
+    finally:
+        server.close()
+        try:
+            socket_path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--evidence", required=True)
-    parser.add_argument("--trust-policy", required=True)
-    parser.add_argument("--source-fd", type=int)
-    parser.add_argument("--source-suffix")
-    parser.add_argument("--key-material-fd", type=int)
-    parser.add_argument("--dictionary", required=True)
+    parser.add_argument("--serve-authority", action="store_true")
+    parser.add_argument("--socket")
+    parser.add_argument("--authority-trust")
+    parser.add_argument("--signing-key-fd", type=int)
+    parser.add_argument("--allow-test-authority", action="store_true")
     try:
         args = parser.parse_args()
-        if args.source_fd is None or args.source_suffix is None or args.key_material_fd is None:
-            block("BLOCK_INPUT_CLOSURE")
-        receipt = verify(
-            Path(args.evidence),
-            Path(args.trust_policy),
-            args.source_fd,
-            args.source_suffix,
-            args.key_material_fd,
-            Path(args.dictionary),
+        if (
+            not args.serve_authority
+            or args.socket is None
+            or args.authority_trust is None
+            or args.signing_key_fd is None
+        ):
+            block("BLOCK_TRUST_UNAVAILABLE")
+        return serve_authority(
+            Path(args.socket),
+            Path(args.authority_trust),
+            args.signing_key_fd,
+            allow_test_authority=args.allow_test_authority,
         )
     except Block as exc:
-        print("A4_VERIFY_PASS=0")
+        print("A4_VERIFIER_AUTHORITY_READY=0")
         print(f"ERROR_CODE={exc}")
         return 1
     except Exception:
-        print("A4_VERIFY_PASS=0")
+        print("A4_VERIFIER_AUTHORITY_READY=0")
         print("ERROR_CODE=BLOCK_INTERNAL")
         return 1
-    print("A4_VERIFY_PASS=1")
-    print("ERROR_CODE=NONE")
-    print(
-        "A4_VERIFICATION_RECEIPT_B64="
-        + base64.urlsafe_b64encode(jcs(receipt)).decode("ascii").rstrip("=")
-    )
-    return 0
 
 
 if __name__ == "__main__":

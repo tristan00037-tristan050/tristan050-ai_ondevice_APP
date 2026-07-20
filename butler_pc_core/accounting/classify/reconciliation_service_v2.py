@@ -6,13 +6,6 @@ import hashlib
 import os
 import secrets
 import shutil
-import base64
-import binascii
-import tempfile
-
-# Fixed argv launches only the repository-owned independent verifier.
-import subprocess  # nosec B404
-import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -20,9 +13,6 @@ from typing import Any, Mapping, Protocol
 
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError, ValidationError
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
 from butler_pc_core.build_info import build_info
 
 from .reconciliation_v2 import (
@@ -42,6 +32,7 @@ from .reconciliation_v2 import (
     tenant_uuid,
     verify_signed_policy,
 )
+from .verifier_authority import request_authority_verification
 
 
 EVIDENCE_FILES = frozenset(
@@ -83,15 +74,38 @@ VERIFICATION_RECEIPT_SCHEMA_PATH = (
     / "a4_v31"
     / "verification_receipt.schema.json"
 )
+VERIFIER_AUTHORITY_TRUST_PATH = (
+    Path(__file__).resolve().parent
+    / "contracts"
+    / "a4_v31"
+    / "verifier_authority_trust.production.json"
+)
+VERIFIER_AUTHORITY_SOCKET_PATH = Path(
+    os.environ.get(
+        "BUTLER_A4_VERIFIER_AUTHORITY_SOCKET",
+        str(
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "Butler"
+            / "Security"
+            / "a4-verifier-authority.sock"
+        ),
+    )
+)
+ALLOW_TEST_VERIFIER_AUTHORITY = False
 CODE_CLOSURE_FILES = (
     "butler_pc_core/a4_verifier/cli.py",
-    "butler_pc_core/accounting/assignment/a4_store_schema_v31.py",
+    "butler_pc_core/accounting/assignment/a4_store_schema_v32.py",
     "butler_pc_core/accounting/classify/reconciliation_v2.py",
     "butler_pc_core/accounting/classify/reconciliation_service_v2.py",
     "butler_pc_core/accounting/classify/source_snapshot_v2_1.py",
+    "butler_pc_core/accounting/classify/verifier_authority.py",
     "butler_pc_core/accounting/classify/contracts/a4_v2/evidence_bundle.schema.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/code_dictionary.production.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/release_manifest.production.json",
+    "butler_pc_core/accounting/classify/contracts/a4_v31/verifier_authority_trust.production.json",
+    "butler_pc_core/accounting/classify/contracts/a4_v31/verifier_authority_trust.schema.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/verification_receipt.schema.json",
 )
 
@@ -482,54 +496,35 @@ def verify_in_separate_process(
             or stamped_closure.get("digest") != expected_code_closure_digest
         ):
             raise A4ContractError("BLOCK_CODE_CLOSURE")
-    verifier = Path(__file__).resolve().parents[2] / "a4_verifier" / "cli.py"
-    command = [
-        sys.executable,
-        "-I",
-        str(verifier),
-        "--evidence",
-        str(evidence_dir),
-        "--trust-policy",
-        str(trust_policy_path),
-        "--source-fd",
-        str(source_fd),
-        "--source-suffix",
-        source_suffix,
-        "--dictionary",
-        str(CODE_DICTIONARY_PATH),
-    ]
     if source_suffix not in {".csv", ".xls", ".xlsx"}:
         raise A4ContractError("BLOCK_UNSUPPORTED_SOURCE_FORMAT")
     material = token_service.a4_verifier_material(tenant_id)
-    with tempfile.TemporaryFile(mode="w+b") as key_file:
-        key_file.write(jcs_bytes(material))
-        key_file.flush()
-        os.lseek(key_file.fileno(), 0, os.SEEK_SET)
-        command.extend(["--key-material-fd", str(key_file.fileno())])
-        # No shell; executable and script are repository/runtime-owned absolute paths.
-        completed = subprocess.run(  # nosec B603
-            command,
-            cwd=str(Path(__file__).resolve().parents[3]),
-            env={"PATH": os.environ.get("PATH", "")},
-            capture_output=True,
-            text=False,
-            timeout=timeout_seconds,
-            check=False,
-            pass_fds=(source_fd, key_file.fileno()),
-        )
-    lines = completed.stdout.splitlines()
-    if (
-        completed.returncode != 0
-        or len(lines) != 3
-        or lines[0] != b"A4_VERIFY_PASS=1"
-        or lines[1] != b"ERROR_CODE=NONE"
-        or not lines[2].startswith(b"A4_VERIFICATION_RECEIPT_B64=")
-    ):
-        raise A4ContractError("BLOCK_OFFLINE_VERIFIER")
+    if "verification_signing_seed_b64" in material:
+        raise A4ContractError("BLOCK_TRUST_UNAVAILABLE")
     try:
-        encoded = lines[2].split(b"=", 1)[1]
-        encoded += b"=" * (-len(encoded) % 4)
-        full_receipt = strict_json_loads(base64.urlsafe_b64decode(encoded))
+        evidence_files = {
+            name: (evidence_dir / name).read_bytes() for name in EVIDENCE_FILES
+        }
+        finance_trust = trust_policy_path.read_bytes()
+        dictionary = CODE_DICTIONARY_PATH.read_bytes()
+    except OSError as exc:
+        raise A4ContractError("BLOCK_INPUT_CLOSURE") from exc
+    full_receipt = request_authority_verification(
+        authority_socket=VERIFIER_AUTHORITY_SOCKET_PATH,
+        authority_trust_path=VERIFIER_AUTHORITY_TRUST_PATH,
+        evidence_files=evidence_files,
+        finance_trust=finance_trust,
+        dictionary=dictionary,
+        key_material=material,
+        tenant_id=tenant_id,
+        source_fd=source_fd,
+        source_suffix=source_suffix,
+        now=datetime.now(timezone.utc),
+        request_nonce=secrets.token_hex(32),
+        allow_test_authority=ALLOW_TEST_VERIFIER_AUTHORITY,
+        timeout_seconds=timeout_seconds,
+    )
+    try:
         receipt_schema = strict_json_loads(
             VERIFICATION_RECEIPT_SCHEMA_PATH.read_bytes()
         )
@@ -546,15 +541,16 @@ def verify_in_separate_process(
             "compiled_manifest_digest", "graph_digest", "evidence_manifest_digest",
             "policy_digest", "adapter_digest", "dictionary_digest", "registry_digest",
             "code_tree_oid", "code_closure_digest", "verifier_id", "signer_key_id",
+            "authority_id", "signer_revocation_epoch", "signer_trust_digest",
             "verified_at_utc", "signature",
         }
         if (
             not isinstance(full_receipt, dict)
             or set(full_receipt) != required_receipt
             or full_receipt.get("schema_version")
-            != "butler.box5.a4.verification_receipt.v3.1"
+            != "butler.box5.a4.verification_receipt.v3.2"
             or full_receipt.get("contract_id")
-            != "BUTLER-BOX5-A4-V3.1-CANONICAL-DIRECTIVE"
+            != "BUTLER-BOX5-A4-V3.2-AUTHORITY-ISOLATED"
             or full_receipt.get("run_id") != evidence_dir.name
             or full_receipt.get("decision") != "PASS"
             or full_receipt.get("reason_codes") != []
@@ -572,20 +568,12 @@ def verify_in_separate_process(
             or full_receipt.get("graph_digest") != digest_object(graph_document)
             or full_receipt.get("evidence_manifest_digest")
             != sha256_bytes((evidence_dir / "manifest.json").read_bytes())
+            or full_receipt.get("verifier_id")
+            != "BUTLER_A4_ISOLATED_RAW_COMPILER_V3.2"
         ):
             raise ValueError
-        signature_text = full_receipt.pop("signature")
-        signature_raw = base64.urlsafe_b64decode(signature_text + "=" * (-len(signature_text) % 4))
-        signer_key_id, public_raw = token_service.a4_verifier_public_key(tenant_id)
-        if full_receipt.get("signer_key_id") != signer_key_id:
-            raise ValueError
-        Ed25519PublicKey.from_public_bytes(public_raw).verify(
-            signature_raw, jcs_bytes(full_receipt)
-        )
     except (
         A4ContractError,
-        binascii.Error,
-        InvalidSignature,
         KeyError,
         OSError,
         SchemaError,
@@ -594,16 +582,7 @@ def verify_in_separate_process(
         ValueError,
     ) as exc:
         raise A4ContractError("BLOCK_SIGNATURE") from exc
-    body = {
-        "nonce": str(full_receipt["nonce"]),
-        "evidence_manifest_digest": str(full_receipt["evidence_manifest_digest"]),
-        "verifier_id": str(full_receipt["verifier_id"]),
-        "signer_key_id": str(full_receipt["signer_key_id"]),
-        "code_closure_digest": str(full_receipt["code_closure_digest"]),
-        "decision": str(full_receipt["decision"]),
-        "verified_at": str(full_receipt["verified_at_utc"]),
-    }
-    return {"receipt_digest": digest_object(body), **body}
+    return full_receipt
 
 
 def run_canonical_product_reconciliation(

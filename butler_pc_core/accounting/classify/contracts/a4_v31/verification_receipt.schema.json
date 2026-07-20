@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:butler:box5:a4:verification-receipt:v3.1",
-  "title": "Butler A4 Verification Receipt v3.1",
+  "$id": "urn:butler:box5:a4:verification-receipt:v3.2",
+  "title": "Butler A4 Verification Receipt v3.2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -9,11 +9,12 @@
     "reason_codes", "source_sha256", "ordered_row_root", "compiled_manifest_digest",
     "graph_digest", "evidence_manifest_digest", "policy_digest", "adapter_digest",
     "dictionary_digest", "registry_digest", "code_tree_oid", "code_closure_digest",
-    "verifier_id", "signer_key_id", "verified_at_utc", "signature"
+    "verifier_id", "signer_key_id", "authority_id", "signer_revocation_epoch",
+    "signer_trust_digest", "verified_at_utc", "signature"
   ],
   "properties": {
-    "schema_version": {"const": "butler.box5.a4.verification_receipt.v3.1"},
-    "contract_id": {"const": "BUTLER-BOX5-A4-V3.1-CANONICAL-DIRECTIVE"},
+    "schema_version": {"const": "butler.box5.a4.verification_receipt.v3.2"},
+    "contract_id": {"const": "BUTLER-BOX5-A4-V3.2-AUTHORITY-ISOLATED"},
     "run_id": {"type": "string", "format": "uuid"},
     "nonce": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "decision": {"enum": ["PASS", "BLOCK"]},
@@ -35,6 +36,9 @@
     "code_closure_digest": {"$ref": "#/$defs/sha256"},
     "verifier_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
     "signer_key_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
+    "authority_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
+    "signer_revocation_epoch": {"type": "integer", "minimum": 0},
+    "signer_trust_digest": {"$ref": "#/$defs/sha256"},
     "verified_at_utc": {"type": "string", "format": "date-time"},
     "signature": {"type": "string", "pattern": "^[A-Za-z0-9_-]{80,120}$"}
   },

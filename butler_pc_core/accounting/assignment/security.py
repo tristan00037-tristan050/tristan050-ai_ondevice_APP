@@ -13,9 +13,6 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-
 from butler_pc_core.accounting.classify.vendor_match import (
     VENDOR_NORMALIZATION_VERSION,
     VendorMatchContractError,
@@ -33,7 +30,6 @@ A4_REFERENCE_CONTEXT = b"butler/box5/a4/bank-reference/v1"
 A4_ALIAS_CONTEXT = b"butler/box5/a4/counterparty-alias/v1"
 A4_COUNTER_ACCOUNT_CONTEXT = b"butler/box5/a4/counterparty-account/v2"
 A4_TXN_CONTEXT = b"butler/box5/a4/run-transaction/v1"
-A4_VERIFIER_SIGN_CONTEXT = b"BUTLER/A4/VERIFIER/SIGN/V3.1"
 _A4_CONTEXTS = {
     "BANK_REFERENCE": A4_REFERENCE_CONTEXT,
     "COUNTERPARTY_ALIAS": A4_ALIAS_CONTEXT,
@@ -280,14 +276,17 @@ class TokenService:
         return key_id, hmac.new(tenant_key, body, hashlib.sha256).hexdigest()
 
     def a4_verifier_material(self, tenant_id: str) -> dict[str, str]:
-        """Return tenant-derived keys for one anonymous verifier FD, never persistence."""
+        """Return only tokenization keys needed by the isolated A4 verifier.
+
+        Verification signing authority is deliberately absent.  A separate
+        verifier authority owns that key and returns only a signed receipt.
+        """
 
         contexts = {
             "own_account_key_b64": A4_OWN_ACCOUNT_CONTEXT,
             "bank_reference_key_b64": A4_REFERENCE_CONTEXT,
             "counterparty_account_key_b64": A4_COUNTER_ACCOUNT_CONTEXT,
             "run_transaction_key_b64": A4_TXN_CONTEXT,
-            "verification_signing_seed_b64": A4_VERIFIER_SIGN_CONTEXT,
         }
         material: dict[str, str] = {}
         key_ids: set[str] = set()
@@ -303,18 +302,8 @@ class TokenService:
             )
         material["key_id"] = key_ids.pop()
         material["tenant_id"] = tenant_id
-        material["schema_version"] = "butler.box5.a4.verifier_keys.v3.1"
+        material["schema_version"] = "butler.box5.a4.verifier_token_keys.v3.2"
         return material
-
-    def a4_verifier_public_key(self, tenant_id: str) -> tuple[str, bytes]:
-        key_id, seed = self._tenant_key(
-            tenant_id, A4_VERIFIER_SIGN_CONTEXT, require_existing=True
-        )
-        public = Ed25519PrivateKey.from_private_bytes(seed).public_key().public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw,
-        )
-        return f"{key_id}.a4-verifier-v31", public
 
     def a4_evidence_token(
         self,

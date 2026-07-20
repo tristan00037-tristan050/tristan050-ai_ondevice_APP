@@ -1,5 +1,5 @@
 {
-  "schema_version": "butler.box5.a4.completion_status.v3.1",
+  "schema_version": "butler.box5.a4.completion_status.v3.2",
   "status": "IMPLEMENTED_LOCAL_EXTERNAL_GATES_OPEN",
   "code_pass": false,
   "merge_ready": false,
@@ -36,7 +36,8 @@
     {"id": "A4V3-AUD-P1-027", "status": "FIXED_TESTED", "evidence_digest": "5cb66fd0f99d9ccb968bc4e664b269ad071801c51efe7c9a8ea7cbecf217ea5e"},
     {"id": "A4V3-AUD-P2-028", "status": "BLOCKED_EXTERNAL", "evidence_digest": null},
     {"id": "A4V3-AUD-P2-029", "status": "FIXED_TESTED", "evidence_digest": "5cb66fd0f99d9ccb968bc4e664b269ad071801c51efe7c9a8ea7cbecf217ea5e"},
-    {"id": "A4V3-AUD-P2-030", "status": "BLOCKED_EXTERNAL", "evidence_digest": null}
+    {"id": "A4V3-AUD-P2-030", "status": "BLOCKED_EXTERNAL", "evidence_digest": null},
+    {"id": "A4V5-AUD-P0-001", "status": "FIXED_TESTED", "evidence_digest": "4d5cb191ff27f73aadf9a999b96292f2f336aada0085d855221764383b08cb0d"}
   ],
   "external_gates": {
     "canonical_remote_pr_ci": "NOT_RUN",

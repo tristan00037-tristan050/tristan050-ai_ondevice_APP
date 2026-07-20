@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import os
 import shutil
+import subprocess
+import sys
+import tempfile
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,12 +20,14 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from jsonschema import Draft202012Validator
 
 import butler_pc_core.accounting.assignment.router as assignment_routes
+import butler_pc_core.accounting.assignment.store as assignment_store_module
 from butler_pc_core.accounting.assignment.runtime import (
     AccountingReviewRuntime,
     set_accounting_review_runtime_for_tests,
 )
 from butler_pc_core.accounting.assignment.security import MemoryKeyStore, TokenService
 from butler_pc_core.accounting.assignment.store import SQLiteAssignmentStore
+from butler_pc_core.accounting.assignment.domain import AssignmentError
 from butler_pc_core.accounting.classify.reconciliation_service_v2 import (
     SCHEMA_DIGEST,
     approved_split_adapter,
@@ -28,6 +35,10 @@ from butler_pc_core.accounting.classify.reconciliation_service_v2 import (
     run_canonical_product_reconciliation,
 )
 from butler_pc_core.accounting.classify import reconciliation_service_v2 as service_v2
+from butler_pc_core.accounting.classify.verifier_authority import (
+    load_authority_trust,
+    request_authority_verification,
+)
 from butler_pc_core.accounting.classify.reconciliation_v2 import (
     A4ContractError,
     CompileReceipt,
@@ -68,6 +79,112 @@ RUN_ID = "0c567f70-4e31-4d1e-b880-c737f57b2a38"
 TREE = "a" * 40
 SOURCE_SHA = hashlib.sha256(b"physical-bank-file-v2").hexdigest()
 SOURCE_SIZE = 1_024
+
+
+@pytest.fixture(scope="module", autouse=True)
+def isolated_verifier_authority(tmp_path_factory):
+    """Run the real verifier authority with a key unavailable to product code."""
+
+    # AF_UNIX paths are capped at roughly 104 bytes on macOS.  Keep the real
+    # authority transport under a private, short-lived directory.
+    del tmp_path_factory
+    root = Path(tempfile.mkdtemp(prefix="butler-a4-authority-", dir="/tmp"))
+    root.chmod(0o700)
+    socket_path = root / "authority.sock"
+    trust_path = root / "authority-trust.json"
+    private_key = Ed25519PrivateKey.generate()
+    trust = {
+        "schema_version": "butler.box5.a4.verifier_authority_trust.v1",
+        "enabled": True,
+        "environment": "TEST",
+        "authority_id": "butler-a4-isolated-test-authority",
+        "transport": "unix-scm-rights-v1",
+        "algorithm": "Ed25519",
+        "signer_key_id": "isolated-test-authority-key-v1",
+        "public_key_b64": base64.b64encode(
+            private_key.public_key().public_bytes_raw()
+        ).decode("ascii"),
+        "revocation_epoch": 9,
+        "not_before_utc": "2026-01-01T00:00:00Z",
+        "not_after_utc": "2030-01-01T00:00:00Z",
+    }
+    trust_path.write_bytes(jcs_bytes(trust))
+    trust_path.chmod(0o600)
+    read_fd, write_fd = os.pipe()
+    try:
+        os.write(write_fd, private_key.private_bytes_raw())
+    finally:
+        os.close(write_fd)
+    verifier = (
+        Path(__file__).resolve().parents[3]
+        / "butler_pc_core"
+        / "a4_verifier"
+        / "cli.py"
+    )
+    process = subprocess.Popen(  # nosec B603
+        [
+            sys.executable,
+            "-I",
+            str(verifier),
+            "--serve-authority",
+            "--socket",
+            str(socket_path),
+            "--authority-trust",
+            str(trust_path),
+            "--signing-key-fd",
+            str(read_fd),
+            "--allow-test-authority",
+        ],
+        cwd=str(Path(__file__).resolve().parents[3]),
+        env={"PATH": os.environ.get("PATH", "")},
+        pass_fds=(read_fd,),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=False,
+    )
+    os.close(read_fd)
+    deadline = time.monotonic() + 10
+    while not socket_path.exists() and process.poll() is None:
+        if time.monotonic() >= deadline:
+            process.terminate()
+            raise RuntimeError("isolated verifier authority did not start")
+        time.sleep(0.02)
+    if process.poll() is not None:
+        stdout, stderr = process.communicate(timeout=1)
+        raise RuntimeError(
+            "isolated verifier authority failed: "
+            f"stdout={stdout!r}, stderr={stderr!r}"
+        )
+
+    previous = (
+        service_v2.VERIFIER_AUTHORITY_SOCKET_PATH,
+        service_v2.VERIFIER_AUTHORITY_TRUST_PATH,
+        service_v2.ALLOW_TEST_VERIFIER_AUTHORITY,
+        assignment_store_module.A4_VERIFIER_AUTHORITY_TRUST_PATH,
+        assignment_store_module.A4_ALLOW_TEST_VERIFIER_AUTHORITY,
+    )
+    service_v2.VERIFIER_AUTHORITY_SOCKET_PATH = socket_path
+    service_v2.VERIFIER_AUTHORITY_TRUST_PATH = trust_path
+    service_v2.ALLOW_TEST_VERIFIER_AUTHORITY = True
+    assignment_store_module.A4_VERIFIER_AUTHORITY_TRUST_PATH = trust_path
+    assignment_store_module.A4_ALLOW_TEST_VERIFIER_AUTHORITY = True
+    try:
+        yield {"trust_path": trust_path, "socket_path": socket_path, "trust": trust}
+    finally:
+        (
+            service_v2.VERIFIER_AUTHORITY_SOCKET_PATH,
+            service_v2.VERIFIER_AUTHORITY_TRUST_PATH,
+            service_v2.ALLOW_TEST_VERIFIER_AUTHORITY,
+            assignment_store_module.A4_VERIFIER_AUTHORITY_TRUST_PATH,
+            assignment_store_module.A4_ALLOW_TEST_VERIFIER_AUTHORITY,
+        ) = previous
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def profile():
@@ -601,7 +718,29 @@ def test_product_db_outbox_export_and_independent_verifier(tmp_path, monkeypatch
             == 10
         )
         assert conn.execute("SELECT COUNT(*) FROM recon_review").fetchone()[0] == 0
+        stored_receipt = strict_json_loads(
+            bytes(
+                conn.execute(
+                    "SELECT receipt_jcs FROM recon_verification_receipt"
+                ).fetchone()[0]
+            )
+        )
+        assert stored_receipt["authority_id"] == "butler-a4-isolated-test-authority"
+        assert stored_receipt["signer_revocation_epoch"] == 9
         assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    forged_body = {key: value for key, value in stored_receipt.items() if key != "signature"}
+    forged_body["signer_revocation_epoch"] = 10
+    forged_signature = Ed25519PrivateKey.generate().sign(jcs_bytes(forged_body))
+    forged_receipt = {
+        **forged_body,
+        "signature": base64.urlsafe_b64encode(forged_signature)
+        .decode("ascii")
+        .rstrip("="),
+    }
+    with pytest.raises(AssignmentError, match="BLOCK_RECEIPT_BINDING"):
+        store.mark_reconciliation_verified(
+            str(request["tenant_id"]), RUN_ID, forged_receipt
+        )
 
 
 def test_actual_a4_product_endpoints_read_candidates_and_idempotent_review(
@@ -850,7 +989,7 @@ def test_v31_completion_status_has_exact_findings_and_remains_disabled():
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(status)
     finding_ids = [item["id"] for item in status["findings"]]
-    assert len(finding_ids) == len(set(finding_ids)) == 30
+    assert len(finding_ids) == len(set(finding_ids)) == 31
     assert status["code_pass"] is False
     assert status["runtime_activation_allowed"] is False
     release = strict_json_loads(
@@ -862,16 +1001,165 @@ def test_v31_completion_status_has_exact_findings_and_remains_disabled():
     )
     assert release == {
         "schema_version": "butler.box5.a4.release_manifest.v1",
-        "product_version": "4.1.0",
-        "contract_version": "3.1.0",
+        "product_version": "5.0.0",
+        "contract_version": "3.2.0",
         "canonical_base_commit_oid": "b38e9e3321c0b972fb257ebd3831fa472da9c5a4",
-        "database_migration": "a4_store_schema_v31",
-        "state_machine": "recon_run_v3.1",
-        "verifier": "BUTLER_A4_ISOLATED_RAW_COMPILER_V3.1",
-        "verification_receipt": "butler.box5.a4.verification_receipt.v3.1",
+        "database_migration": "a4_store_schema_v32",
+        "state_machine": "recon_run_v3.2",
+        "verifier": "BUTLER_A4_ISOLATED_RAW_COMPILER_V3.2",
+        "verifier_authority": "unix-scm-rights-v1",
+        "verification_receipt": "butler.box5.a4.verification_receipt.v3.2",
         "code_dictionary": "BUTLER_A4_KR_CODES@3.1.0",
         "runtime_activation_allowed": False,
     }
+
+
+def test_v5_producer_has_no_verifier_private_key_or_signing_api(
+    isolated_verifier_authority,
+):
+    service = TokenService(MemoryKeyStore(key=b"K" * 32))
+    material = service.a4_verifier_material(
+        "11111111-1111-4111-8111-111111111111"
+    )
+    assert set(material) == {
+        "schema_version",
+        "tenant_id",
+        "key_id",
+        "own_account_key_b64",
+        "bank_reference_key_b64",
+        "counterparty_account_key_b64",
+        "run_transaction_key_b64",
+    }
+    assert "verification_signing_seed_b64" not in material
+    assert not hasattr(service, "a4_verifier_public_key")
+    with pytest.raises(A4ContractError, match="BLOCK_TRUST_UNAVAILABLE"):
+        load_authority_trust(
+            isolated_verifier_authority["trust_path"],
+            now=NOW,
+            allow_test_authority=False,
+        )
+
+
+def test_v5_bundled_unapproved_authority_is_fail_closed():
+    contract_root = (
+        Path(__file__).resolve().parents[3]
+        / "butler_pc_core/accounting/classify/contracts/a4_v31"
+    )
+    schema = strict_json_loads(
+        (contract_root / "verifier_authority_trust.schema.json").read_bytes()
+    )
+    bundled = strict_json_loads(
+        (contract_root / "verifier_authority_trust.production.json").read_bytes()
+    )
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(bundled)
+    assert bundled["enabled"] is False
+    with pytest.raises(A4ContractError, match="BLOCK_TRUST_UNAVAILABLE"):
+        load_authority_trust(
+            contract_root / "verifier_authority_trust.production.json",
+            now=NOW,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("enabled", False),
+        ("not_after_utc", "2026-01-01T00:00:00Z"),
+        ("revocation_epoch", -1),
+    ],
+)
+def test_v5_disabled_expired_or_revoked_authority_is_rejected(
+    tmp_path, isolated_verifier_authority, field, value
+):
+    trust = {**isolated_verifier_authority["trust"], field: value}
+    trust_path = tmp_path / "invalid-authority-trust.json"
+    trust_path.write_bytes(jcs_bytes(trust))
+    trust_path.chmod(0o600)
+    with pytest.raises(A4ContractError, match="BLOCK_TRUST_UNAVAILABLE"):
+        load_authority_trust(
+            trust_path,
+            now=NOW,
+            allow_test_authority=True,
+        )
+
+
+def test_v5_public_key_substitution_does_not_match_running_authority(
+    tmp_path, isolated_verifier_authority
+):
+    substituted_key = Ed25519PrivateKey.generate().public_key().public_bytes_raw()
+    substituted_trust = {
+        **isolated_verifier_authority["trust"],
+        "public_key_b64": base64.b64encode(substituted_key).decode("ascii"),
+    }
+    trust_path = tmp_path / "substituted-authority-trust.json"
+    trust_path.write_bytes(jcs_bytes(substituted_trust))
+    trust_path.chmod(0o600)
+    source_path = tmp_path / "source.csv"
+    source_path.write_bytes(b"header\nvalue\n")
+    source_path.chmod(0o600)
+    descriptor = os.open(source_path, os.O_RDONLY)
+    try:
+        with pytest.raises(A4ContractError, match="BLOCK_OFFLINE_VERIFIER"):
+            request_authority_verification(
+                authority_socket=isolated_verifier_authority["socket_path"],
+                authority_trust_path=trust_path,
+                evidence_files={"run_request.json": b"{}"},
+                finance_trust=b"{}",
+                dictionary=b"{}",
+                key_material=TokenService(
+                    MemoryKeyStore(key=b"s" * 32)
+                ).a4_verifier_material(
+                    "11111111-1111-4111-8111-111111111111"
+                ),
+                tenant_id="11111111-1111-4111-8111-111111111111",
+                source_fd=descriptor,
+                source_suffix=".csv",
+                now=NOW,
+                request_nonce="f" * 64,
+                allow_test_authority=True,
+            )
+    finally:
+        os.close(descriptor)
+
+
+def test_v5_legacy_signed_receipts_require_explicit_migration(tmp_path):
+    store = make_store(tmp_path)
+    with store._connect() as conn:
+        conn.executescript(
+            """
+            DROP TRIGGER IF EXISTS recon_review_requires_published_receipt;
+            DROP TRIGGER IF EXISTS recon_publish_requires_pass_receipt;
+            DROP TRIGGER IF EXISTS recon_verification_receipt_no_update;
+            DROP TRIGGER IF EXISTS recon_verification_receipt_no_delete;
+            DROP TABLE recon_review;
+            DROP TABLE recon_verification_receipt;
+            CREATE TABLE recon_verification_receipt (
+                tenant_id TEXT NOT NULL,
+                run_id TEXT NOT NULL,
+                receipt_digest TEXT NOT NULL,
+                nonce TEXT NOT NULL,
+                evidence_manifest_digest TEXT NOT NULL,
+                verifier_id TEXT NOT NULL,
+                signer_key_id TEXT NOT NULL,
+                code_closure_digest TEXT NOT NULL,
+                decision TEXT NOT NULL,
+                verified_at TEXT NOT NULL,
+                receipt_jcs BLOB NOT NULL,
+                PRIMARY KEY (tenant_id, run_id)
+            );
+            INSERT INTO recon_verification_receipt VALUES (
+                'legacy-tenant','legacy-run','legacy-digest','legacy-nonce',
+                'legacy-manifest','legacy-verifier','producer-visible-root',
+                'legacy-closure','PASS','2026-07-01T00:00:00Z',X'7B7D'
+            );
+            """
+        )
+    migrated = SQLiteAssignmentStore(store.path, store.tokens)
+    with pytest.raises(
+        AssignmentError, match="BLOCK_SCHEMA_MIGRATION_REQUIRED"
+    ):
+        migrated._require_a4_schema()
 
 
 @pytest.mark.parametrize("suffix", [".csv", ".xlsx"])

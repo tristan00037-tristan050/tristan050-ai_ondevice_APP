@@ -10,6 +10,7 @@ import sqlite3
 import threading
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,17 @@ from .domain import (
     utc_now,
 )
 from .security import TokenService
-from .a4_store_schema_v31 import ensure_a4_v31_schema
+from .a4_store_schema_v32 import ensure_a4_v32_schema
+
+
+A4_VERIFIER_AUTHORITY_TRUST_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "classify"
+    / "contracts"
+    / "a4_v31"
+    / "verifier_authority_trust.production.json"
+)
+A4_ALLOW_TEST_VERIFIER_AUTHORITY = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +51,8 @@ class SQLiteAssignmentStore:
         self.tokens = tokens
         self._lock = threading.RLock()
         self._a4_schema_ready = False
+        self._a4_authority_trust_path = A4_VERIFIER_AUTHORITY_TRUST_PATH
+        self._a4_allow_test_authority = A4_ALLOW_TEST_VERIFIER_AUTHORITY
         path.parent.mkdir(parents=True, exist_ok=True)
         try:
             path.parent.chmod(0o700)
@@ -325,7 +338,7 @@ class SQLiteAssignmentStore:
                 conn.execute("ALTER TABLE recon_edge ADD COLUMN eligibility_basis TEXT")
             if "binding_digest" not in edge_columns:
                 conn.execute("ALTER TABLE recon_edge ADD COLUMN binding_digest TEXT")
-            self._a4_schema_ready = ensure_a4_v31_schema(conn)
+            self._a4_schema_ready = ensure_a4_v32_schema(conn)
         try:
             os.chmod(self.path, 0o600)
         except OSError:
@@ -2201,17 +2214,50 @@ class SQLiteAssignmentStore:
     ) -> None:
         """Bind verifier PASS receipt, then publish in the same transaction."""
 
+        from butler_pc_core.accounting.classify.verifier_authority import (
+            load_authority_trust,
+            verify_authority_receipt_signature,
+        )
+
         self._require_a4_schema()
         required = {
-            "receipt_digest", "nonce", "evidence_manifest_digest", "verifier_id",
-            "signer_key_id", "code_closure_digest", "decision", "verified_at",
+            "schema_version", "contract_id", "run_id", "nonce", "decision",
+            "reason_codes", "source_sha256", "ordered_row_root",
+            "compiled_manifest_digest", "graph_digest", "evidence_manifest_digest",
+            "policy_digest", "adapter_digest", "dictionary_digest", "registry_digest",
+            "code_tree_oid", "code_closure_digest", "verifier_id", "signer_key_id",
+            "authority_id", "signer_revocation_epoch", "signer_trust_digest",
+            "verified_at_utc", "signature",
         }
-        if set(receipt) != required or receipt.get("decision") != "PASS":
+        if (
+            set(receipt) != required
+            or receipt.get("schema_version")
+            != "butler.box5.a4.verification_receipt.v3.2"
+            or receipt.get("contract_id")
+            != "BUTLER-BOX5-A4-V3.2-AUTHORITY-ISOLATED"
+            or receipt.get("run_id") != run_id
+            or receipt.get("decision") != "PASS"
+            or receipt.get("reason_codes") != []
+            or not isinstance(receipt.get("signer_revocation_epoch"), int)
+            or isinstance(receipt.get("signer_revocation_epoch"), bool)
+            or int(receipt["signer_revocation_epoch"]) < 0
+            or not re.fullmatch(r"[0-9a-f]{64}", str(receipt.get("signer_trust_digest", "")))
+            or not re.fullmatch(r"[A-Za-z0-9._-]{3,80}", str(receipt.get("authority_id", "")))
+        ):
             raise AssignmentError("BLOCK_RECEIPT_BINDING", 422, "A4 receipt is invalid.")
-        receipt_jcs = self._a4_jcs(receipt)
-        receipt_body = {key: value for key, value in receipt.items() if key != "receipt_digest"}
-        if hashlib.sha256(self._a4_jcs(receipt_body)).hexdigest() != receipt["receipt_digest"]:
-            raise AssignmentError("BLOCK_RECEIPT_BINDING", 422, "A4 receipt digest is invalid.")
+        try:
+            trust = load_authority_trust(
+                self._a4_authority_trust_path,
+                now=datetime.now(timezone.utc),
+                allow_test_authority=self._a4_allow_test_authority,
+            )
+            verified_receipt = verify_authority_receipt_signature(receipt, trust)
+        except Exception as exc:
+            raise AssignmentError(
+                "BLOCK_RECEIPT_BINDING", 422, "A4 receipt signature is invalid."
+            ) from exc
+        receipt_jcs = self._a4_jcs(verified_receipt)
+        receipt_digest = hashlib.sha256(receipt_jcs).hexdigest()
         with self._lock, self._connect() as conn:
             self._begin(conn)
             try:
@@ -2230,11 +2276,11 @@ class SQLiteAssignmentStore:
                         "SELECT receipt_digest FROM recon_verification_receipt WHERE tenant_id=? AND run_id=?",
                         (tenant_id, run_id),
                     ).fetchone()
-                    if existing is None or existing["receipt_digest"] != receipt["receipt_digest"]:
+                    if existing is None or existing["receipt_digest"] != receipt_digest:
                         raise AssignmentError("IDEMPOTENCY_CONFLICT", 409, "A4 receipt conflicts.")
                     conn.execute("COMMIT")
                     return
-                now = receipt["verified_at"]
+                now = str(receipt["verified_at_utc"])
                 if row["state"] == "EVIDENCE_STAGED":
                     conn.execute(
                         "UPDATE recon_run SET state='VERIFYING',version=version+1,updated_at=? WHERE tenant_id=? AND run_id=?",
@@ -2254,13 +2300,15 @@ class SQLiteAssignmentStore:
                 conn.execute(
                     """INSERT INTO recon_verification_receipt
                        (tenant_id,run_id,receipt_digest,nonce,evidence_manifest_digest,
-                        verifier_id,signer_key_id,code_closure_digest,decision,verified_at,receipt_jcs)
-                       VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                        verifier_id,signer_key_id,authority_id,signer_revocation_epoch,
+                        signer_trust_digest,code_closure_digest,decision,verified_at,receipt_jcs)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
-                        tenant_id, run_id, receipt["receipt_digest"], receipt["nonce"],
+                        tenant_id, run_id, receipt_digest, receipt["nonce"],
                         receipt["evidence_manifest_digest"], receipt["verifier_id"],
-                        receipt["signer_key_id"], receipt["code_closure_digest"],
-                        receipt["decision"], now, receipt_jcs,
+                        receipt["signer_key_id"], receipt["authority_id"],
+                        receipt["signer_revocation_epoch"], receipt["signer_trust_digest"],
+                        receipt["code_closure_digest"], receipt["decision"], now, receipt_jcs,
                     ),
                 )
                 conn.execute(
@@ -2309,7 +2357,9 @@ class SQLiteAssignmentStore:
                    JOIN recon_verification_receipt v
                      ON v.tenant_id=r.tenant_id AND v.run_id=r.run_id
                    WHERE r.tenant_id=? AND r.run_id=? AND r.state='PUBLISHED'
-                     AND v.decision='PASS' AND v.nonce=r.nonce""",
+                     AND v.decision='PASS' AND v.nonce=r.nonce
+                     AND length(v.authority_id)>=3 AND v.signer_revocation_epoch>=0
+                     AND length(v.signer_trust_digest)=64""",
                 (tenant_id, run_id),
             ).fetchone()
             if authorized is None:
@@ -2364,7 +2414,9 @@ class SQLiteAssignmentStore:
                        FROM recon_run r JOIN recon_verification_receipt v
                          ON v.tenant_id=r.tenant_id AND v.run_id=r.run_id
                        WHERE r.tenant_id=? AND r.run_id=? AND r.state='PUBLISHED'
-                         AND v.decision='PASS' AND v.nonce=r.nonce""",
+                         AND v.decision='PASS' AND v.nonce=r.nonce
+                         AND length(v.authority_id)>=3 AND v.signer_revocation_epoch>=0
+                         AND length(v.signer_trust_digest)=64""",
                     (tenant_id, run_id),
                 ).fetchone()
                 if verification is None:

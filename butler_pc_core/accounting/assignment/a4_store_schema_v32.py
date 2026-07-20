@@ -1,4 +1,4 @@
-"""Canonical SQLite schema migration for the Box5 A4 v3.1 product path."""
+"""Canonical SQLite schema migration for the Box5 A4 v3.2 authority path."""
 
 from __future__ import annotations
 
@@ -223,6 +223,9 @@ CREATE TABLE IF NOT EXISTS recon_verification_receipt (
     evidence_manifest_digest TEXT NOT NULL,
     verifier_id TEXT NOT NULL,
     signer_key_id TEXT NOT NULL,
+    authority_id TEXT NOT NULL,
+    signer_revocation_epoch INTEGER NOT NULL CHECK(signer_revocation_epoch >= 0),
+    signer_trust_digest TEXT NOT NULL CHECK(length(signer_trust_digest)=64),
     code_closure_digest TEXT NOT NULL,
     decision TEXT NOT NULL CHECK(decision IN ('PASS','BLOCK')),
     verified_at TEXT NOT NULL,
@@ -272,6 +275,8 @@ WHEN NEW.state='PUBLISHED' AND NOT EXISTS (
  SELECT 1 FROM recon_verification_receipt v
  WHERE v.tenant_id=NEW.tenant_id AND v.run_id=NEW.run_id
    AND v.nonce=NEW.nonce AND v.decision='PASS'
+   AND length(v.authority_id) >= 3 AND v.signer_revocation_epoch >= 0
+   AND length(v.signer_trust_digest)=64
 )
 BEGIN SELECT RAISE(ABORT, 'BLOCK_UNVERIFIED_ACCESS'); END;
 DROP TRIGGER IF EXISTS recon_review_requires_published_receipt;
@@ -308,14 +313,41 @@ BEFORE DELETE ON recon_verification_receipt BEGIN SELECT RAISE(ABORT, 'APPEND_ON
 """
 
 
-def ensure_a4_v31_schema(conn: sqlite3.Connection) -> bool:
-    """Install v3.1 only when no legacy A4 evidence can be destroyed."""
+def ensure_a4_v32_schema(conn: sqlite3.Connection) -> bool:
+    """Install v3.2 without silently trusting legacy verifier receipts."""
 
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='recon_run'"
     ).fetchone()
     sql = str(row[0]) if row is not None and row[0] is not None else ""
     if "EVIDENCE_STAGED" in sql and "idempotency_digest" in sql:
+        receipt_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='recon_verification_receipt'"
+        ).fetchone()
+        if receipt_exists is not None:
+            columns = {
+                str(item[1])
+                for item in conn.execute("PRAGMA table_info(recon_verification_receipt)")
+            }
+            missing = {
+                "authority_id",
+                "signer_revocation_epoch",
+                "signer_trust_digest",
+            } - columns
+            if missing:
+                receipt_count = int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM recon_verification_receipt"
+                    ).fetchone()[0]
+                )
+                if receipt_count:
+                    return False
+                for statement in (
+                    "ALTER TABLE recon_verification_receipt ADD COLUMN authority_id TEXT NOT NULL DEFAULT ''",
+                    "ALTER TABLE recon_verification_receipt ADD COLUMN signer_revocation_epoch INTEGER NOT NULL DEFAULT -1",
+                    "ALTER TABLE recon_verification_receipt ADD COLUMN signer_trust_digest TEXT NOT NULL DEFAULT ''",
+                ):
+                    conn.execute(statement)
         conn.executescript(_SCHEMA)
         return True
     legacy_rows = 0

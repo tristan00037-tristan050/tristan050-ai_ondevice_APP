@@ -27,13 +27,16 @@ _REQUIRED_KEYS = {
 }
 _A4_CODE_FILES = (
     "butler_pc_core/a4_verifier/cli.py",
-    "butler_pc_core/accounting/assignment/a4_store_schema_v31.py",
+    "butler_pc_core/accounting/assignment/a4_store_schema_v32.py",
     "butler_pc_core/accounting/classify/reconciliation_v2.py",
     "butler_pc_core/accounting/classify/reconciliation_service_v2.py",
     "butler_pc_core/accounting/classify/source_snapshot_v2_1.py",
+    "butler_pc_core/accounting/classify/verifier_authority.py",
     "butler_pc_core/accounting/classify/contracts/a4_v2/evidence_bundle.schema.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/code_dictionary.production.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/release_manifest.production.json",
+    "butler_pc_core/accounting/classify/contracts/a4_v31/verifier_authority_trust.production.json",
+    "butler_pc_core/accounting/classify/contracts/a4_v31/verifier_authority_trust.schema.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/verification_receipt.schema.json",
 )
 

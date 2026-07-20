@@ -1,4 +1,4 @@
-# Butler Box5 A4 대사전환 제품 구현 v3.1
+# Butler Box5 A4 대사전환 제품 구현 v5 / 계약 v3.2
 
 ## 현재 판정
 
@@ -28,10 +28,14 @@ SLSA provenance, Apple M3 실측이 없으므로 완료나 운영 활성화를 �
   양쪽에서 정확히 검증된 reciprocal pair만 후보가 된다.
 - `reconciliation_service_v2.py`가 원자료, 정책, adapter, 사전, registry, code closure를
   한 run에 묶고 evidence staging, 독립 검증, verified publication을 순서대로 수행한다.
-- `a4_verifier/cli.py`는 producer 모듈을 import하지 않는다. 전달받은 원자료 FD를 다시
-  파싱·컴파일하고 canonical transaction 전체 필드, graph, optimum, DLP, code closure를
-  독립 계산한 뒤 Ed25519 서명 영수증을 발행한다.
-- `a4_store_schema_v31.py`는 단일 상태 머신
+  생산자는 검증 권한 공개키와 검증 요청만 사용하고 서명 비밀키나 범용 sign API를 갖지 않는다.
+- `verifier_authority.py`가 build-pinned trust와 Unix `SCM_RIGHTS` 원본 FD 전달을 검증한다.
+  권한 부재, key substitution, 만료·폐기 epoch, 서명 불일치는 모두 fail-closed다.
+- `a4_verifier/cli.py`는 producer 모듈을 import하지 않는 별도 `python -I` 권한 프로세스다.
+  보호된 FD로 한 번 주입된 Ed25519 seed는 프로세스 안에서만 보유하고, 전달받은 원자료 FD를
+  다시 파싱·컴파일하여 transaction 전체 필드, graph, optimum, DLP, code closure가 모두
+  일치할 때만 v3.2 영수증을 서명한다. seed를 반환하는 API는 없다.
+- `a4_store_schema_v32.py`는 독립 검증 권한 영수증까지 결속한 단일 상태 머신
   `QUEUED→LEASED→RUNNING→EVIDENCE_STAGED→VERIFYING→VERIFIED→PUBLISHED`를 사용한다.
   검증 전 후보 조회·검토·게시를 DB trigger와 API 양쪽에서 차단하고, 검토 행은 PASS
   verifier receipt에 FK/digest로 결속한다.
@@ -42,13 +46,14 @@ SLSA provenance, Apple M3 실측이 없으므로 완료나 운영 활성화를 �
 
 ## 로컬 검증 범위
 
-- 제품 경계, 회사 등록정보, 배정, 분류, 실제 sidecar SSE/다운로드 경로: `239 passed`.
-- 정적 검사와 patch whitespace 검사: PASS.
-- 회계 전체 회귀: `409 passed`, 3건 미통과. 1건은 기존 기대값 `전력비`와 현재 정본
-  `수도광열비`의 사전 정책 충돌이고, 2건은 번들에 없는 4B adapter 자산 검사다. 이 세
-  파일과 관련 분류 사전은 이번 A4 변경에서 수정하지 않았다.
-- 원시 결과와 개인 장비 hostname을 제거한 JUnit의 SHA-256은
-  `docs/ops/A4_LOCAL_EVIDENCE.json`에 고정했다.
+- A4 실제 CSV/XLSX raw replay, 독립 권한 프로세스, 저장소 이중 서명검증과 공격 회귀:
+  `28 passed`.
+- 회계 제품 전체 회귀: `412 passed, 1 skipped`.
+- CI `a4-canonical-product`와 동일한 로컬 범위: `430 passed, 1 skipped`.
+- 빌드정보·평가 정본 호환 회귀: `71 passed`.
+- 정적 검사, Python compile, patch whitespace 검사: PASS.
+- 실제 sidecar 앱 E2E, 원격 clean CI, production authority provisioning은 이번 환경에서
+  실행하지 않았으며 PASS로 간주하지 않는다.
 
 ## 2026 기준과 남은 외부 게이트
 
@@ -58,10 +63,11 @@ SLSA provenance, Apple M3 실측이 없으므로 완료나 운영 활성화를 �
   한 DB 트랜잭션 경계로 구성했다: https://sqlite.org/fileformat.html
 - 성능 완료는 MLPerf Inference v6.0의 재현 가능한 SUT·quality·latency 원칙을 따라야
   한다: https://docs.mlcommons.org/inference/index_gh/
-- 실제 두 은행 AB/BA, Group A 295, production Keychain/finance key, remote hosted CI,
+- 실제 두 은행 AB/BA, Group A 295, production verifier authority/Keychain/finance key,
+  remote hosted CI,
   signed provenance, full crash/fault matrix, mutation/coverage, Apple M3 성능·전력·thermal
   실측은 아직 실행하지 않았다.
 
-CSV는 독립 raw compiler까지 로컬 검증했다. XLS/XLSX는 formula/hidden-sheet를 포함한
-독립 parser 계약이 완성되기 전까지 A4에서 `BLOCK_UNSUPPORTED_SOURCE_FORMAT`으로
-fail closed한다. 기존 사용자 회계 분류·보고서 경로는 그대로 유지된다.
+CSV와 XLSX는 독립 raw compiler까지 로컬 검증했다. XLSX의 formula·hidden sheet는
+`BLOCK_ADAPTER_POLICY`로 차단한다. 레거시 XLS는 실제 은행 fixture 승인이 없으므로 외부
+게이트로 남긴다. 기존 사용자 회계 분류·보고서 경로는 그대로 유지된다.
