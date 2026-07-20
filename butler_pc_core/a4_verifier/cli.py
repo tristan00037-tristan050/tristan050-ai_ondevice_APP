@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import argparse
 import base64
+import csv
 import hashlib
 import hmac
+import io
 import json
 import os
 import re
@@ -52,8 +54,10 @@ CODE_FILES = (
     "butler_pc_core/accounting/assignment/a4_store_schema_v31.py",
     "butler_pc_core/accounting/classify/reconciliation_v2.py",
     "butler_pc_core/accounting/classify/reconciliation_service_v2.py",
+    "butler_pc_core/accounting/classify/source_snapshot_v2_1.py",
     "butler_pc_core/accounting/classify/contracts/a4_v2/evidence_bundle.schema.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/code_dictionary.production.json",
+    "butler_pc_core/accounting/classify/contracts/a4_v31/release_manifest.production.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/verification_receipt.schema.json",
 )
 MAX_MONEY = 9_000_000_000_000_000
@@ -282,6 +286,163 @@ def rebuild_row_closure(frame: Any) -> dict[str, Any]:
     }
 
 
+def physical_records(fd: int, suffix: str) -> list[list[object]]:
+    duplicate = os.dup(fd)
+    try:
+        os.lseek(duplicate, 0, os.SEEK_SET)
+        with os.fdopen(duplicate, "rb", closefd=True) as source:
+            raw = source.read(512 * 1024 * 1024 + 1)
+        duplicate = -1
+    finally:
+        if duplicate >= 0:
+            os.close(duplicate)
+    if len(raw) > 512 * 1024 * 1024:
+        block("BLOCK_RESOURCE_LIMIT")
+    if suffix == ".csv":
+        text: str | None = None
+        for encoding in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
+            try:
+                text = raw.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        if text is None:
+            block("BLOCK_INPUT_CLOSURE")
+        try:
+            return [list(row) for row in csv.reader(io.StringIO(text, newline=""))]
+        except csv.Error:
+            block("BLOCK_INPUT_CLOSURE")
+    if suffix == ".xlsx":
+        workbook = None
+        try:
+            import openpyxl
+
+            workbook = openpyxl.load_workbook(
+                io.BytesIO(raw), read_only=True, data_only=False, keep_links=True
+            )
+            if len(workbook.worksheets) != 1:
+                block("BLOCK_ADAPTER_POLICY")
+            worksheet = workbook.worksheets[0]
+            if worksheet.sheet_state != "visible" or getattr(
+                workbook, "_external_links", ()
+            ):
+                block("BLOCK_ADAPTER_POLICY")
+            rows: list[list[object]] = []
+            for record in worksheet.iter_rows():
+                if any(cell.data_type == "f" for cell in record):
+                    block("BLOCK_ADAPTER_POLICY")
+                rows.append([cell.value for cell in record])
+            return rows
+        except Block:
+            raise
+        except Exception:
+            block("BLOCK_INPUT_CLOSURE")
+        finally:
+            if workbook is not None:
+                workbook.close()
+    if suffix == ".xls":
+        try:
+            import xlrd
+
+            workbook = xlrd.open_workbook(file_contents=raw, on_demand=True)
+            if workbook.nsheets != 1:
+                block("BLOCK_ADAPTER_POLICY")
+            sheet = workbook.sheet_by_index(0)
+            if getattr(sheet, "visibility", 0) != 0:
+                block("BLOCK_ADAPTER_POLICY")
+            return [sheet.row_values(index) for index in range(sheet.nrows)]
+        except Block:
+            raise
+        except Exception:
+            block("BLOCK_INPUT_CLOSURE")
+    block("BLOCK_UNSUPPORTED_SOURCE_FORMAT")
+
+
+def rebuild_physical_row_closure(
+    fd: int, suffix: str, source_sha256: str, adapter: Mapping[str, Any]
+) -> dict[str, Any]:
+    records = physical_records(fd, suffix)
+    if not records or len(records) > 100_001:
+        block("BLOCK_RESOURCE_LIMIT")
+    required = tuple(
+        str(adapter.get(name))
+        for name in ("source_account", "bank_code", "booking_date", "withdrawal", "deposit")
+    )
+    normalized: list[list[str]] = []
+    header_index: int | None = None
+    for ordinal, record in enumerate(records):
+        if len(record) > 256:
+            block("BLOCK_RESOURCE_LIMIT")
+        cells = [normalized_cell(value) for value in record]
+        normalized.append(cells)
+        if header_index is None and all(cells.count(name) == 1 for name in required):
+            header_index = ordinal
+    if header_index is None:
+        block("BLOCK_ADAPTER_POLICY")
+    headers = normalized[header_index]
+    if len(headers) != len(set(headers)):
+        block("BLOCK_AMBIGUOUS_COLUMN")
+    fee_name = adapter.get("fee_type")
+    fee_index = headers.index(str(fee_name)) if fee_name in headers else None
+    rows: list[dict[str, Any]] = []
+    ordered = hashlib.sha256()
+    transaction_ordinal = 0
+    for ordinal, cells in enumerate(normalized):
+        if ordinal <= header_index:
+            disposition, txn_ordinal = "HEADER", None
+        elif not any(cells):
+            disposition, txn_ordinal = "BLANK", None
+        else:
+            fee = (
+                cells[fee_index].upper()
+                if fee_index is not None and fee_index < len(cells)
+                else ""
+            )
+            disposition = "FEE" if fee in {"FEE", "수수료"} else "PRINCIPAL"
+            txn_ordinal = transaction_ordinal
+            transaction_ordinal += 1
+        locator = digest(
+            {
+                "domain": "BUTLER/A4/ROW_LOCATOR/V3.1",
+                "source_sha256": source_sha256,
+                "sheet_id": "sheet-0001",
+                "row_ordinal": ordinal,
+            }
+        )
+        cell_digest = digest(
+            {
+                "domain": "BUTLER/A4/CELL_VECTOR/V3.1",
+                "row_ordinal": ordinal,
+                "cells": cells,
+            }
+        )
+        for value in (locator, cell_digest, disposition):
+            encoded = value.encode("utf-8")
+            ordered.update(len(encoded).to_bytes(4, "big"))
+            ordered.update(encoded)
+        rows.append(
+            {
+                "row_locator": locator,
+                "sheet_id": "sheet-0001",
+                "row_ordinal": ordinal,
+                "disposition": disposition,
+                "cell_vector_digest": cell_digest,
+                "transaction_ordinal": txn_ordinal,
+            }
+        )
+    names = ("PRINCIPAL", "FEE", "HEADER", "BLANK", "QUARANTINED", "REJECTED")
+    return {
+        "schema_version": "3.1.0",
+        "ordered_row_root": ordered.hexdigest(),
+        "row_count": len(rows),
+        "transaction_row_count": transaction_ordinal,
+        "disposition_counts": {
+            name: sum(item["disposition"] == name for item in rows) for name in names
+        },
+        "rows": rows,
+    }
+
+
 def verify_source_snapshot(fd: int, suffix: str, receipt: Mapping[str, Any]) -> None:
     os.lseek(fd, 0, os.SEEK_SET)
     source_digest = hashlib.sha256()
@@ -316,8 +477,15 @@ def verify_source_snapshot(fd: int, suffix: str, receipt: Mapping[str, Any]) -> 
         or size != snapshot.get("source_file_size")
     ):
         block("BLOCK_INPUT_CLOSURE")
-    frame = read_source_frame(fd, suffix)
-    if rebuild_row_closure(frame) != receipt.get("row_closure"):
+    adapter = receipt.get("adapter_contract")
+    if not isinstance(adapter, dict):
+        block("BLOCK_SCHEMA")
+    if (
+        rebuild_physical_row_closure(
+            fd, suffix, source_digest.hexdigest(), adapter
+        )
+        != receipt.get("row_closure")
+    ):
         block("BLOCK_ROW_CLOSURE")
 
 
@@ -857,9 +1025,9 @@ def verify_bindings(
         not isinstance(txs, list)
         or not isinstance(row_closure, dict)
         or input_receipt.get("source_row_count") != len(txs)
-        or row_closure.get("row_count") != len(txs)
+        or row_closure.get("transaction_row_count") != len(txs)
         or not isinstance(row_closure.get("rows"), list)
-        or len(row_closure["rows"]) != len(txs)
+        or len(row_closure["rows"]) != row_closure.get("row_count")
     ):
         block("BLOCK_SCHEMA")
     namespace = uuid.uuid5(uuid.UUID(tenant), input_receipt["source_file_sha256"])
@@ -1505,10 +1673,6 @@ def verify(
             block("BLOCK_CANONICAL_JSON")
     verify_hashes(raw, docs)
     run, txs, expected = verify_bindings(docs)
-    if source_suffix != ".csv":
-        # XLS/XLSX A4 remains fail-closed until formula, hidden-sheet and
-        # relationship inspection is implemented in both compilers.
-        block("BLOCK_UNSUPPORTED_SOURCE_FORMAT")
     verify_source_snapshot(source_fd, source_suffix, docs["input_receipt.json"])
     material = _key_material(key_material_fd, run["tenant_id"])
     dictionary = _dictionary(dictionary_path, run["dictionary_digest"])

@@ -720,6 +720,16 @@ def _rehash_evidence_bundle(root: Path) -> None:
     (root / "SHA256SUMS").write_bytes(checksums)
 
 
+def _physical_row_root(rows: list[dict[str, object]]) -> str:
+    ordered = hashlib.sha256()
+    for row in rows:
+        for name in ("row_locator", "cell_vector_digest", "disposition"):
+            encoded = str(row[name]).encode("utf-8")
+            ordered.update(len(encoded).to_bytes(4, "big"))
+            ordered.update(encoded)
+    return ordered.hexdigest()
+
+
 def test_independent_verifier_blocks_omitted_extra_and_changed_binding_edges(
     tmp_path, monkeypatch
 ):
@@ -745,7 +755,14 @@ def test_independent_verifier_blocks_omitted_extra_and_changed_binding_edges(
     )
     original = evidence_root / RUN_ID
 
-    for attack in ("OMIT", "EXTRA", "BINDING", "SEMANTIC"):
+    for attack in (
+        "OMIT",
+        "EXTRA",
+        "BINDING",
+        "FORGED_PRODUCT_CODE_NOT_IN_SOURCE",
+        "ROW_INJECTION",
+        "CELL_VALUE_SWAP",
+    ):
         attacked = tmp_path / f"attack-{attack.lower()}"
         shutil.copytree(original, attacked)
         graph_path = attacked / "graph_observation.json"
@@ -757,12 +774,39 @@ def test_independent_verifier_blocks_omitted_extra_and_changed_binding_edges(
             graph["edges"].append(extra)
         elif attack == "BINDING":
             graph["edges"][0]["eligibility_basis"] = "TRACE_AND_ACCOUNT"
-        else:
+        elif attack == "FORGED_PRODUCT_CODE_NOT_IN_SOURCE":
             input_path = attacked / "input_receipt.json"
             input_receipt = strict_json_loads(input_path.read_bytes())
             input_receipt["compiled_transactions"][0]["product_code_id"] = "TRANSFER"
             input_path.write_bytes(jcs_bytes(input_receipt))
-        if attack != "SEMANTIC":
+        elif attack == "ROW_INJECTION":
+            input_path = attacked / "input_receipt.json"
+            input_receipt = strict_json_loads(input_path.read_bytes())
+            closure = input_receipt["row_closure"]
+            injected = dict(closure["rows"][-1])
+            injected["row_ordinal"] = closure["row_count"]
+            injected["row_locator"] = "f" * 64
+            injected["cell_vector_digest"] = "e" * 64
+            injected["disposition"] = "BLANK"
+            injected["transaction_ordinal"] = None
+            closure["rows"].append(injected)
+            closure["row_count"] += 1
+            closure["disposition_counts"]["BLANK"] += 1
+            closure["ordered_row_root"] = _physical_row_root(closure["rows"])
+            input_path.write_bytes(jcs_bytes(input_receipt))
+        elif attack == "CELL_VALUE_SWAP":
+            input_path = attacked / "input_receipt.json"
+            input_receipt = strict_json_loads(input_path.read_bytes())
+            rows = input_receipt["row_closure"]["rows"]
+            rows[1]["cell_vector_digest"], rows[2]["cell_vector_digest"] = (
+                rows[2]["cell_vector_digest"],
+                rows[1]["cell_vector_digest"],
+            )
+            input_receipt["row_closure"]["ordered_row_root"] = _physical_row_root(
+                rows
+            )
+            input_path.write_bytes(jcs_bytes(input_receipt))
+        if attack in {"OMIT", "EXTRA", "BINDING"}:
             graph_path.write_bytes(jcs_bytes(graph))
         _rehash_evidence_bundle(attacked)
         with pytest.raises(A4ContractError, match="BLOCK_OFFLINE_VERIFIER"):
@@ -809,13 +853,36 @@ def test_v31_completion_status_has_exact_findings_and_remains_disabled():
     assert len(finding_ids) == len(set(finding_ids)) == 30
     assert status["code_pass"] is False
     assert status["runtime_activation_allowed"] is False
+    release = strict_json_loads(
+        (
+            root
+            / "butler_pc_core/accounting/classify/contracts/a4_v31"
+            / "release_manifest.production.json"
+        ).read_bytes()
+    )
+    assert release == {
+        "schema_version": "butler.box5.a4.release_manifest.v1",
+        "product_version": "4.1.0",
+        "contract_version": "3.1.0",
+        "canonical_base_commit_oid": "b38e9e3321c0b972fb257ebd3831fa472da9c5a4",
+        "database_migration": "a4_store_schema_v31",
+        "state_machine": "recon_run_v3.1",
+        "verifier": "BUTLER_A4_ISOLATED_RAW_COMPILER_V3.1",
+        "verification_receipt": "butler.box5.a4.verification_receipt.v3.1",
+        "code_dictionary": "BUTLER_A4_KR_CODES@3.1.0",
+        "runtime_activation_allowed": False,
+    }
 
 
+@pytest.mark.parametrize("suffix", [".csv", ".xlsx"])
 def test_actual_snapshot_fd_product_path_and_independent_raw_replay(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, suffix
 ):
-    source = tmp_path / "bank.csv"
-    frame().to_csv(source, index=False, encoding="utf-8-sig")
+    source = tmp_path / f"bank{suffix}"
+    if suffix == ".csv":
+        frame().to_csv(source, index=False, encoding="utf-8-sig")
+    else:
+        frame().to_excel(source, index=False)
     source.chmod(0o600)
     snapshot = secure_source_snapshot(source)
     request = {
@@ -868,8 +935,62 @@ def test_actual_snapshot_fd_product_path_and_independent_raw_replay(
         (tmp_path / "snapshot-evidence" / RUN_ID / "input_receipt.json").read_bytes()
     )
     assert input_receipt["source_snapshot_receipt"]["snapshot_path_unlinked"] is True
-    assert input_receipt["row_closure"]["row_count"] == 2
+    assert input_receipt["row_closure"]["row_count"] == 3
+    assert input_receipt["row_closure"]["transaction_row_count"] == 2
+    assert input_receipt["row_closure"]["disposition_counts"]["HEADER"] == 1
     assert input_receipt["row_closure"]["disposition_counts"]["PRINCIPAL"] == 2
+
+
+@pytest.mark.parametrize("unsafe_kind", ["formula", "hidden_sheet"])
+def test_actual_xlsx_product_path_rejects_active_content(
+    tmp_path, monkeypatch, unsafe_kind
+):
+    source = tmp_path / f"unsafe-{unsafe_kind}.xlsx"
+    frame().to_excel(source, index=False)
+
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(source)
+    if unsafe_kind == "formula":
+        workbook.active["D2"] = "=50000+50000"
+    else:
+        workbook.active.sheet_state = "hidden"
+        workbook.create_sheet("visible")
+    workbook.save(source)
+    workbook.close()
+    source.chmod(0o600)
+
+    snapshot = secure_source_snapshot(source)
+    store = make_store(tmp_path)
+    request = {
+        **owner_request(),
+        "source_file_sha256": snapshot.receipt["source_file_sha256"],
+        "source_file_size": snapshot.receipt["source_file_size"],
+    }
+    request["input_closure_digest"] = digest_object(
+        {
+            "source_file_sha256": request["source_file_sha256"],
+            "source_file_size": request["source_file_size"],
+        }
+    )
+    monkeypatch.setattr(service_v2, "PINNED_TRUST_POLICY_PATH", tmp_path / "unused")
+    try:
+        with pytest.raises(A4ContractError, match="BLOCK_ADAPTER_POLICY"):
+            run_canonical_product_reconciliation(
+                frame=None,
+                company_profile=profile(),
+                token_service=store.tokens,
+                store=store,
+                owner_request=request,
+                policy_path=tmp_path / "unused-policy",
+                trust_policy_path=tmp_path / "unused-trust",
+                evidence_root=tmp_path / "unsafe-evidence",
+                observed_at=NOW,
+                verify_after_export=True,
+                source_snapshot=snapshot,
+            )
+    finally:
+        snapshot.close()
 
 
 def test_canonical_run_queue_is_durable_and_events_are_append_only(tmp_path):

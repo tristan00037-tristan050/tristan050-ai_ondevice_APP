@@ -13,12 +13,18 @@ on:
       - 'butler_pc_core/accounting/policy/**'
       # 이번 결합 본체(assignment suite + 제품 배선 + lock)를 게이트에 포함한다.
       - 'butler_pc_core/accounting/assignment/**'
+      - 'butler_pc_core/a4_verifier/**'
+      - 'butler_pc_core/accounting/ft_classifier.py'
       - 'butler_sidecar.py'
       - 'butler-desktop/src/lib/accounting_review/**'
       - 'butler-desktop/src/components/accounting_review/**'
       - 'tests/accounting/classify/**'
       - 'tests/accounting/policy/**'
       - 'tests/accounting/assignment/**'
+      - 'tests/accounting/test_finetuned_accuracy.py'
+      - 'tests/accounting/test_classifier.py'
+      - 'scripts/write_build_info.py'
+      - 'scripts/build_complete_app.sh'
       - 'tests/accounting/test_sse_phase_messages.py'
       - 'tests/company_policy/test_accounting_header_trust.py'
       - 'integration_lock.json'
@@ -30,10 +36,16 @@ on:
       - 'butler_pc_core/accounting/eval/**'
       - 'butler_pc_core/accounting/policy/**'
       - 'butler_pc_core/accounting/assignment/**'
+      - 'butler_pc_core/a4_verifier/**'
+      - 'butler_pc_core/accounting/ft_classifier.py'
       - 'butler_sidecar.py'
       - 'butler-desktop/src/lib/accounting_review/**'
       - 'butler-desktop/src/components/accounting_review/**'
       - 'tests/accounting/assignment/**'
+      - 'tests/accounting/test_finetuned_accuracy.py'
+      - 'tests/accounting/test_classifier.py'
+      - 'scripts/write_build_info.py'
+      - 'scripts/build_complete_app.sh'
       - 'tests/accounting/test_sse_phase_messages.py'
       - 'tests/company_policy/test_accounting_header_trust.py'
       - 'integration_lock.json'
@@ -46,6 +58,8 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -116,3 +130,67 @@ jobs:
         with:
           name: stage3-junit
           path: stage3-junit.xml
+
+  a4-canonical-product:
+    name: A4 canonical product + independent verifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install product-path dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest jsonschema cryptography pydantic fastapi==0.128.8 starlette==0.49.3 httpx python-multipart jinja2 pyyaml pandas openpyxl xlrd
+      - name: Enforce one A4 closure and verifier authority
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          from butler_pc_core.a4_verifier.cli import CODE_FILES
+          from butler_pc_core.accounting.classify.reconciliation_service_v2 import CODE_CLOSURE_FILES
+          from scripts.write_build_info import _A4_CODE_FILES
+
+          root = Path.cwd()
+          verifier = root / 'butler_pc_core/a4_verifier/cli.py'
+          tree = ast.parse(verifier.read_text(encoding='utf-8'))
+          imports = {
+              alias.name
+              for node in ast.walk(tree)
+              if isinstance(node, ast.Import)
+              for alias in node.names
+          } | {
+              (node.module or '')
+              for node in ast.walk(tree)
+              if isinstance(node, ast.ImportFrom)
+          }
+          assert not any(name.startswith('butler_pc_core.accounting') for name in imports)
+          assert tuple(CODE_CLOSURE_FILES) == tuple(CODE_FILES) == tuple(_A4_CODE_FILES)
+          assert len(list((root / 'butler_pc_core/a4_verifier').glob('cli.py'))) == 1
+          assert len(list((root / 'butler_pc_core/accounting/classify/contracts').glob('**/verification_receipt.schema.json'))) == 1
+          assert len(list((root / 'butler_pc_core/accounting/classify/contracts').glob('**/code_dictionary.production.json'))) == 1
+          assert len(list((root / 'butler_pc_core/accounting/classify/contracts').glob('**/release_manifest.production.json'))) == 1
+          print('A4_ONE_CANONICAL_AUTHORITY=1')
+          PY
+      - name: Accounting product and A4 attack suite
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          HOME: ${{ runner.temp }}/butler-home
+        run: |
+          python -m pytest \
+            tests/accounting \
+            tests/company_profile \
+            tests/company_policy/test_accounting_header_trust.py \
+            tests/test_write_build_info.py \
+            -q --tb=short --junitxml=a4-canonical-junit.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-canonical-junit
+          path: a4-canonical-junit.xml

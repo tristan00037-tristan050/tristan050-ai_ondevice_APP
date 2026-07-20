@@ -1,0 +1,12 @@
+{
+  "schema_version": "butler.box5.a4.release_manifest.v1",
+  "product_version": "4.1.0",
+  "contract_version": "3.1.0",
+  "canonical_base_commit_oid": "b38e9e3321c0b972fb257ebd3831fa472da9c5a4",
+  "database_migration": "a4_store_schema_v31",
+  "state_machine": "recon_run_v3.1",
+  "verifier": "BUTLER_A4_ISOLATED_RAW_COMPILER_V3.1",
+  "verification_receipt": "butler.box5.a4.verification_receipt.v3.1",
+  "code_dictionary": "BUTLER_A4_KR_CODES@3.1.0",
+  "runtime_activation_allowed": false
+}

@@ -88,8 +88,10 @@ CODE_CLOSURE_FILES = (
     "butler_pc_core/accounting/assignment/a4_store_schema_v31.py",
     "butler_pc_core/accounting/classify/reconciliation_v2.py",
     "butler_pc_core/accounting/classify/reconciliation_service_v2.py",
+    "butler_pc_core/accounting/classify/source_snapshot_v2_1.py",
     "butler_pc_core/accounting/classify/contracts/a4_v2/evidence_bundle.schema.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/code_dictionary.production.json",
+    "butler_pc_core/accounting/classify/contracts/a4_v31/release_manifest.production.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/verification_receipt.schema.json",
 )
 
@@ -496,7 +498,7 @@ def verify_in_separate_process(
         "--dictionary",
         str(CODE_DICTIONARY_PATH),
     ]
-    if source_suffix != ".csv":
+    if source_suffix not in {".csv", ".xls", ".xlsx"}:
         raise A4ContractError("BLOCK_UNSUPPORTED_SOURCE_FORMAT")
     material = token_service.a4_verifier_material(tenant_id)
     with tempfile.TemporaryFile(mode="w+b") as key_file:
@@ -673,7 +675,7 @@ def run_canonical_product_reconciliation(
     snapshot_receipt: Mapping[str, Any] | None = None
     if source_snapshot is not None:
         from butler_pc_core.accounting.classifier import read_source_frame_fd
-        from .source_snapshot_v2_1 import row_closure
+        from .source_snapshot_v2_1 import physical_row_closure
 
         snapshot_receipt = source_snapshot.receipt
         if (
@@ -686,11 +688,18 @@ def run_canonical_product_reconciliation(
         frame = read_source_frame_fd(
             source_snapshot.producer_fd, source_snapshot.suffix
         )
+        row_manifest = physical_row_closure(
+            source_snapshot.producer_fd,
+            source_snapshot.suffix,
+            source_sha256=str(owner_request["source_file_sha256"]),
+            adapter=adapter,
+        )
     elif frame is None:
         raise A4ContractError("BLOCK_INPUT_CLOSURE")
-    from .source_snapshot_v2_1 import row_closure
+    else:
+        from .source_snapshot_v2_1 import row_closure
 
-    row_manifest = row_closure(frame)
+        row_manifest = row_closure(frame)
     registry = store.a4_own_account_registry(str(owner_request["tenant_id"]))
     compilation = compile_dataframe(
         frame=frame,
@@ -702,6 +711,12 @@ def run_canonical_product_reconciliation(
         token_service=token_service,
         own_account_registry=registry,
     )
+    if (
+        source_snapshot is not None
+        and row_manifest.get("transaction_row_count")
+        != compilation.source_row_count
+    ):
+        raise A4ContractError("BLOCK_ROW_CLOSURE")
     try:
         if trust_policy_path.resolve(strict=True) != PINNED_TRUST_POLICY_PATH.resolve(
             strict=True

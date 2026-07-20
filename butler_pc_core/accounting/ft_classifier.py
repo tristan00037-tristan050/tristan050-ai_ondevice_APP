@@ -6,6 +6,7 @@ PEFT base model(Qwen/Qwen3-4B ~8GB) 미캐시 시 graceful fail → 규칙+오�
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -103,15 +104,9 @@ _register_domain_account_aliases()
 
 # ── PEFT 어댑터 경로 후보 ─────────────────────────────────────────────────────
 _MODEL_DIR = Path(__file__).parent / "models" / "qwen3_4b_accounting_v1"
-_T7_DIR = Path(
-    "/Volumes/T7 Shield/버틀러 트레이닝 데이터/회계데이터/06_models/qwen3_4b_accounting_v1"
-)
-
-_ADAPTER_CANDIDATES: list[Path] = [
-    Path(os.environ["ACCOUNTING_ADAPTER_PATH"]) if "ACCOUNTING_ADAPTER_PATH" in os.environ else None,  # type: ignore[list-item]
-    _MODEL_DIR,
-    _T7_DIR,
-]
+_ADAPTER_CONFIG = "adapter_config.json"
+_ADAPTER_WEIGHTS = "adapter_model.safetensors"
+_EXPECTED_BASE_MODEL = "Qwen/Qwen3-4B"
 
 # ── 런타임 PEFT 상태 ──────────────────────────────────────────────────────────
 _peft_model = None
@@ -140,10 +135,54 @@ class ClassifyResult:
     source: str  # "domain_override" | "peft" | "direction_override" | "rule_base"
 
 
+@dataclass(frozen=True)
+class AccountingAdapterStatus:
+    available: bool
+    reason_code: str
+    base_model: str | None = None
+
+
+def _adapter_candidates() -> tuple[Path, ...]:
+    """Resolve only explicit or bundled paths; never depend on a developer disk."""
+
+    configured = os.environ.get("ACCOUNTING_PEFT_ADAPTER_PATH") or os.environ.get(
+        "ACCOUNTING_ADAPTER_PATH"
+    )
+    if configured:
+        return (Path(configured),)
+    return (_MODEL_DIR,)
+
+
+def accounting_adapter_status(path: Path) -> AccountingAdapterStatus:
+    """Validate the minimum immutable PEFT asset closure without loading weights."""
+
+    if not path.is_dir() or path.is_symlink():
+        return AccountingAdapterStatus(False, "ACCOUNTING_ADAPTER_UNAVAILABLE")
+    config_path = path / _ADAPTER_CONFIG
+    weights_path = path / _ADAPTER_WEIGHTS
+    if any(
+        target.is_symlink() or not target.is_file()
+        for target in (config_path, weights_path)
+    ):
+        return AccountingAdapterStatus(False, "ACCOUNTING_ADAPTER_INCOMPLETE")
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        if not isinstance(config, dict):
+            return AccountingAdapterStatus(False, "ACCOUNTING_ADAPTER_INVALID")
+        base_model = config.get("base_model_name_or_path")
+        if base_model != _EXPECTED_BASE_MODEL:
+            return AccountingAdapterStatus(False, "ACCOUNTING_ADAPTER_BASE_MISMATCH")
+        if weights_path.stat().st_size <= 0:
+            return AccountingAdapterStatus(False, "ACCOUNTING_ADAPTER_INCOMPLETE")
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return AccountingAdapterStatus(False, "ACCOUNTING_ADAPTER_INVALID")
+    return AccountingAdapterStatus(True, "NONE", str(base_model))
+
+
 def _find_adapter() -> Optional[Path]:
-    for p in _ADAPTER_CANDIDATES:
-        if p and (p / "adapter_model.safetensors").exists():
-            return p
+    for path in _adapter_candidates():
+        if accounting_adapter_status(path).available:
+            return path
     return None
 
 
@@ -167,11 +206,18 @@ def load_peft() -> bool:
 
         device = "mps" if torch.backends.mps.is_available() else "cpu"
 
+        config = json.loads(
+            (adapter_path / _ADAPTER_CONFIG).read_text(encoding="utf-8")
+        )
+        base_model_name = str(config["base_model_name_or_path"])
         _peft_tokenizer = AutoTokenizer.from_pretrained(
-            str(adapter_path), trust_remote_code=True
+            base_model_name, trust_remote_code=False, local_files_only=True
         )
         base = AutoModelForCausalLM.from_pretrained(
-            "Qwen/Qwen3-4B", torch_dtype=torch.float16, trust_remote_code=True
+            base_model_name,
+            torch_dtype=torch.float16,
+            trust_remote_code=False,
+            local_files_only=True,
         )
         _peft_model = PeftModel.from_pretrained(base, str(adapter_path))
         _peft_model = _peft_model.to(device).eval()

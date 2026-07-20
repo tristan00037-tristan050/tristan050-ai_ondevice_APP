@@ -8,7 +8,9 @@ No path is reopened after the owner boundary.
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import os
 import stat
 import tempfile
@@ -246,6 +248,177 @@ def row_closure(frame: Any, *, fee_column: str = "거래유형") -> dict[str, An
         "disposition_counts": {
             name: sum(item["disposition"] == name for item in rows)
             for name in ("PRINCIPAL", "FEE", "HEADER", "QUARANTINED", "REJECTED")
+        },
+        "rows": rows,
+    }
+
+
+def _physical_rows(fd: int, suffix: str) -> list[list[object]]:
+    """Read physical source records from the already-owned descriptor."""
+
+    duplicate = os.dup(fd)
+    try:
+        os.lseek(duplicate, 0, os.SEEK_SET)
+        with os.fdopen(duplicate, "rb", closefd=True) as handle:
+            raw = handle.read(MAX_SOURCE_BYTES + 1)
+        duplicate = -1
+    finally:
+        if duplicate >= 0:
+            os.close(duplicate)
+    if len(raw) > MAX_SOURCE_BYTES:
+        raise A4ContractError("BLOCK_RESOURCE_LIMIT")
+    if suffix == ".csv":
+        decoded: str | None = None
+        for encoding in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
+            try:
+                decoded = raw.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        if decoded is None:
+            raise A4ContractError("BLOCK_INPUT_CLOSURE")
+        try:
+            return [list(row) for row in csv.reader(io.StringIO(decoded, newline=""))]
+        except csv.Error as exc:
+            raise A4ContractError("BLOCK_INPUT_CLOSURE") from exc
+    if suffix == ".xlsx":
+        workbook = None
+        try:
+            import openpyxl
+
+            workbook = openpyxl.load_workbook(
+                io.BytesIO(raw), read_only=True, data_only=False, keep_links=True
+            )
+            if len(workbook.worksheets) != 1:
+                raise A4ContractError("BLOCK_ADAPTER_POLICY")
+            worksheet = workbook.worksheets[0]
+            if worksheet.sheet_state != "visible" or getattr(
+                workbook, "_external_links", ()
+            ):
+                raise A4ContractError("BLOCK_ADAPTER_POLICY")
+            rows: list[list[object]] = []
+            for record in worksheet.iter_rows():
+                if any(cell.data_type == "f" for cell in record):
+                    raise A4ContractError("BLOCK_ADAPTER_POLICY")
+                rows.append([cell.value for cell in record])
+            return rows
+        except A4ContractError:
+            raise
+        except Exception as exc:
+            raise A4ContractError("BLOCK_INPUT_CLOSURE") from exc
+        finally:
+            if workbook is not None:
+                workbook.close()
+    if suffix == ".xls":
+        try:
+            import xlrd
+
+            workbook = xlrd.open_workbook(file_contents=raw, on_demand=True)
+            if workbook.nsheets != 1:
+                raise A4ContractError("BLOCK_ADAPTER_POLICY")
+            sheet = workbook.sheet_by_index(0)
+            if getattr(sheet, "visibility", 0) != 0:
+                raise A4ContractError("BLOCK_ADAPTER_POLICY")
+            return [sheet.row_values(index) for index in range(sheet.nrows)]
+        except A4ContractError:
+            raise
+        except Exception as exc:
+            raise A4ContractError("BLOCK_INPUT_CLOSURE") from exc
+    raise A4ContractError("BLOCK_UNSUPPORTED_SOURCE_FORMAT")
+
+
+def physical_row_closure(
+    fd: int,
+    suffix: str,
+    *,
+    source_sha256: str,
+    adapter: Any,
+) -> dict[str, Any]:
+    """Bind every physical source record before dataframe normalization."""
+
+    physical = _physical_rows(fd, suffix)
+    if not physical or len(physical) > 100_001:
+        raise A4ContractError("BLOCK_RESOURCE_LIMIT")
+    required = (
+        str(adapter.source_account),
+        str(adapter.bank_code),
+        str(adapter.booking_date),
+        str(adapter.withdrawal),
+        str(adapter.deposit),
+    )
+    normalized_rows: list[list[str]] = []
+    header_index: int | None = None
+    for index, raw_row in enumerate(physical):
+        if len(raw_row) > 256:
+            raise A4ContractError("BLOCK_RESOURCE_LIMIT")
+        row = [_normalized_cell(value) for value in raw_row]
+        normalized_rows.append(row)
+        if header_index is None and all(row.count(name) == 1 for name in required):
+            header_index = index
+    if header_index is None:
+        raise A4ContractError("BLOCK_ADAPTER_POLICY")
+    headers = normalized_rows[header_index]
+    if len(headers) != len(set(headers)):
+        raise A4ContractError("BLOCK_AMBIGUOUS_COLUMN")
+    fee_index = (
+        headers.index(str(adapter.fee_type))
+        if adapter.fee_type is not None and str(adapter.fee_type) in headers
+        else None
+    )
+    rows: list[dict[str, Any]] = []
+    ordered = hashlib.sha256()
+    transaction_ordinal = 0
+    for ordinal, cells in enumerate(normalized_rows):
+        if ordinal <= header_index:
+            disposition, txn_ordinal = "HEADER", None
+        elif not any(cells):
+            disposition, txn_ordinal = "BLANK", None
+        else:
+            fee = (
+                cells[fee_index].upper()
+                if fee_index is not None and fee_index < len(cells)
+                else ""
+            )
+            disposition = "FEE" if fee in {"FEE", "수수료"} else "PRINCIPAL"
+            txn_ordinal = transaction_ordinal
+            transaction_ordinal += 1
+        locator = digest_object(
+            {
+                "domain": "BUTLER/A4/ROW_LOCATOR/V3.1",
+                "source_sha256": source_sha256,
+                "sheet_id": "sheet-0001",
+                "row_ordinal": ordinal,
+            }
+        )
+        cell_digest = digest_object(
+            {
+                "domain": "BUTLER/A4/CELL_VECTOR/V3.1",
+                "row_ordinal": ordinal,
+                "cells": cells,
+            }
+        )
+        for value in (locator, cell_digest, disposition):
+            encoded = value.encode("utf-8")
+            ordered.update(len(encoded).to_bytes(4, "big"))
+            ordered.update(encoded)
+        rows.append(
+            {
+                "row_locator": locator,
+                "sheet_id": "sheet-0001",
+                "row_ordinal": ordinal,
+                "disposition": disposition,
+                "cell_vector_digest": cell_digest,
+                "transaction_ordinal": txn_ordinal,
+            }
+        )
+    names = ("PRINCIPAL", "FEE", "HEADER", "BLANK", "QUARANTINED", "REJECTED")
+    return {
+        "schema_version": "3.1.0",
+        "ordered_row_root": ordered.hexdigest(),
+        "row_count": len(rows),
+        "transaction_row_count": transaction_ordinal,
+        "disposition_counts": {
+            name: sum(item["disposition"] == name for item in rows) for name in names
         },
         "rows": rows,
     }
