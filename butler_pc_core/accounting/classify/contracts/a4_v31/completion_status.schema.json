@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:box5:a4:completion-status:v3.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "status", "code_pass", "merge_ready", "a4_closed",
+    "runtime_activation_allowed", "canonical_base", "findings", "external_gates"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.box5.a4.completion_status.v3.1"},
+    "status": {
+      "enum": [
+        "BLOCKED",
+        "IMPLEMENTED_LOCAL_EXTERNAL_GATES_OPEN",
+        "MERGE_READY_ACTIVATION_DISABLED"
+      ]
+    },
+    "code_pass": {"type": "boolean"},
+    "merge_ready": {"type": "boolean"},
+    "a4_closed": {"type": "boolean"},
+    "runtime_activation_allowed": {"const": false},
+    "canonical_base": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "findings": {
+      "type": "array",
+      "minItems": 30,
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "evidence_digest"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^A4V3-AUD-P[012]-[0-9]{3}$"},
+          "status": {"enum": ["OPEN", "FIXED_TESTED", "BLOCKED_EXTERNAL"]},
+          "evidence_digest": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "external_gates": {
+      "type": "object",
+      "minProperties": 6,
+      "additionalProperties": {
+        "enum": ["NOT_RUN", "PASS", "FAIL", "BLOCKED_EXTERNAL"]
+      }
+    }
+  }
+}

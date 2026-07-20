@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Atomically write and verify the bundled Butler build provenance stamp."""
+
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -16,11 +18,22 @@ _UTC_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 _REQUIRED_KEYS = {
     "app",
     "build_base_commit_oid",
+    "build_tree_oid",
     "git_describe",
     "build_timestamp_utc",
     "app_version",
     "builder",
+    "a4_code_closure",
 }
+_A4_CODE_FILES = (
+    "butler_pc_core/a4_verifier/cli.py",
+    "butler_pc_core/accounting/assignment/a4_store_schema_v31.py",
+    "butler_pc_core/accounting/classify/reconciliation_v2.py",
+    "butler_pc_core/accounting/classify/reconciliation_service_v2.py",
+    "butler_pc_core/accounting/classify/contracts/a4_v2/evidence_bundle.schema.json",
+    "butler_pc_core/accounting/classify/contracts/a4_v31/code_dictionary.production.json",
+    "butler_pc_core/accounting/classify/contracts/a4_v31/verification_receipt.schema.json",
+)
 
 
 class BuildInfoWriteError(RuntimeError):
@@ -28,10 +41,17 @@ class BuildInfoWriteError(RuntimeError):
 
 
 def _validated_payload(
-    *, build_oid: str, git_describe: str, timestamp_utc: str, app_version: str
-) -> dict[str, str]:
+    *,
+    build_oid: str,
+    build_tree_oid: str,
+    git_describe: str,
+    timestamp_utc: str,
+    app_version: str,
+) -> dict[str, object]:
     if not _OID_RE.fullmatch(build_oid):
         raise BuildInfoWriteError("INVALID_BUILD_OID")
+    if not re.fullmatch(r"[0-9a-f]{40}", build_tree_oid):
+        raise BuildInfoWriteError("INVALID_BUILD_TREE_OID")
     try:
         parsed_timestamp = datetime.strptime(timestamp_utc, _UTC_TIMESTAMP_FORMAT)
     except ValueError as exc:
@@ -45,6 +65,7 @@ def _validated_payload(
     return {
         "app": "Butler",
         "build_base_commit_oid": build_oid,
+        "build_tree_oid": build_tree_oid,
         "git_describe": git_describe,
         "build_timestamp_utc": timestamp_utc,
         "app_version": app_version,
@@ -52,7 +73,22 @@ def _validated_payload(
     }
 
 
-def _verify_payload(actual: object, expected: Mapping[str, str]) -> None:
+def _a4_code_closure(resources_root: Path) -> dict[str, object]:
+    files: dict[str, str] = {}
+    for relative in _A4_CODE_FILES:
+        path = resources_root / relative
+        if not path.is_file() or path.is_symlink():
+            raise BuildInfoWriteError("A4_CODE_CLOSURE_FILE_MISSING")
+        files[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+    canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {
+        "schema_version": "butler.a4.code_closure.v3.1",
+        "files": files,
+        "digest": hashlib.sha256(canonical).hexdigest(),
+    }
+
+
+def _verify_payload(actual: object, expected: Mapping[str, object]) -> None:
     if not isinstance(actual, dict):
         raise BuildInfoWriteError("BUILD_INFO_NOT_OBJECT")
     if set(actual) != _REQUIRED_KEYS or actual != dict(expected):
@@ -63,18 +99,21 @@ def write_build_info(
     output: Path,
     *,
     build_oid: str,
+    build_tree_oid: str,
     git_describe: str,
     timestamp_utc: str,
     app_version: str,
 ) -> None:
     payload = _validated_payload(
         build_oid=build_oid,
+        build_tree_oid=build_tree_oid,
         git_describe=git_describe,
         timestamp_utc=timestamp_utc,
         app_version=app_version,
     )
     if not output.parent.is_dir():
         raise BuildInfoWriteError("BUILD_INFO_PARENT_MISSING")
+    payload["a4_code_closure"] = _a4_code_closure(output.parent)
 
     fd = -1
     temporary_path: Path | None = None
@@ -122,6 +161,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--build-oid", required=True)
+    parser.add_argument("--build-tree-oid", required=True)
     parser.add_argument("--git-describe", required=True)
     parser.add_argument("--timestamp-utc", required=True)
     parser.add_argument("--app-version", required=True)
@@ -134,6 +174,7 @@ def main() -> int:
         write_build_info(
             args.output,
             build_oid=args.build_oid,
+            build_tree_oid=args.build_tree_oid,
             git_describe=args.git_describe,
             timestamp_utc=args.timestamp_utc,
             app_version=args.app_version,

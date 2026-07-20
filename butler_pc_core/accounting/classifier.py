@@ -1,12 +1,15 @@
 """결정적 분류 엔진 — 동일 입력 10회 반복 → 100% 동일 출력."""
+
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Optional, Union
 
 try:
     import pandas as pd
+
     _PANDAS_OK = True
 except ImportError:
     _PANDAS_OK = False
@@ -20,43 +23,113 @@ from butler_pc_core.company_profile.matcher import (
 )
 
 # ── 헤더 자동 감지 키워드 ────────────────────────────────────────────────────
-HEADER_KEYWORDS: frozenset[str] = frozenset({
-    '거래일', '거래일시', '거래일자', '일자', '일시',
-    '거래내용', '적요', '내역', '비고', '메모',
-    '출금', '출금액', '출금금액', '지급',
-    '입금', '입금액', '입금금액', '금액', '거래금액',
-    '잔액', '거래후잔액', '거래후 잔액',
-    '거래처', '상대처', '받는분', '보내는분', '상대계좌예금주명',
-})
+HEADER_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "거래일",
+        "거래일시",
+        "거래일자",
+        "일자",
+        "일시",
+        "거래내용",
+        "적요",
+        "내역",
+        "비고",
+        "메모",
+        "출금",
+        "출금액",
+        "출금금액",
+        "지급",
+        "입금",
+        "입금액",
+        "입금금액",
+        "금액",
+        "거래금액",
+        "잔액",
+        "거래후잔액",
+        "거래후 잔액",
+        "거래처",
+        "상대처",
+        "받는분",
+        "보내는분",
+        "상대계좌예금주명",
+    }
+)
 
 # ── 컬럼 후보 (우선순위순) ─────────────────────────────────────────────────
 _DESC_CANDIDATES = [
-    "적요", "내용", "거래내용", "거래내역", "description", "memo", "摘要", "비고", "내역",
-    "거래적요", "이체메모", "출금내역", "입금내역",
+    "적요",
+    "내용",
+    "거래내용",
+    "거래내역",
+    "description",
+    "memo",
+    "摘要",
+    "비고",
+    "내역",
+    "거래적요",
+    "이체메모",
+    "출금내역",
+    "입금내역",
 ]
 _VENDOR_CANDIDATES = [
-    "거래처", "상호", "vendor", "payee", "대상", "상대방", "입금처", "출금처",
-    "보낸분/받는분", "받는분", "보내는분", "상대계좌예금주명", "상대처",
+    "거래처",
+    "상호",
+    "vendor",
+    "payee",
+    "대상",
+    "상대방",
+    "입금처",
+    "출금처",
+    "보낸분/받는분",
+    "받는분",
+    "보내는분",
+    "상대계좌예금주명",
+    "상대처",
 ]
 _ACCOUNT_NUMBER_CANDIDATES = [
-    "상대계좌번호", "상대계좌", "상대방계좌번호", "상대방계좌",
-    "거래상대계좌번호", "거래상대계좌",
-    "counterparty_account", "counterparty_account_no", "counterparty_account_number",
+    "상대계좌번호",
+    "상대계좌",
+    "상대방계좌번호",
+    "상대방계좌",
+    "거래상대계좌번호",
+    "거래상대계좌",
+    "counterparty_account",
+    "counterparty_account_no",
+    "counterparty_account_number",
 ]
 _AMOUNT_CANDIDATES = [
-    "금액", "출금액", "입금액", "amount", "출금", "입금", "거래금액", "변동금액",
+    "금액",
+    "출금액",
+    "입금액",
+    "amount",
+    "출금",
+    "입금",
+    "거래금액",
+    "변동금액",
 ]
 _WITHDRAWAL_CANDIDATES = [
-    "출금", "출금액", "출금금액", "지급", "지급액",
+    "출금",
+    "출금액",
+    "출금금액",
+    "지급",
+    "지급액",
 ]
 _DEPOSIT_CANDIDATES = [
-    "입금", "입금액", "입금금액",
+    "입금",
+    "입금액",
+    "입금금액",
 ]
 _DATE_CANDIDATES = [
-    "거래일", "거래일시", "거래일자", "일자", "일시", "날짜",
+    "거래일",
+    "거래일시",
+    "거래일자",
+    "일자",
+    "일시",
+    "날짜",
 ]
 _TIME_CANDIDATES = [
-    "거래시간", "시간",
+    "거래시간",
+    "시간",
 ]
 # 2차 적요 컬럼 — 1차 desc_col에 텍스트 결합 (우리은행 메모, 농협 거래기록사항 등)
 _MEMO_CANDIDATES = [
@@ -66,14 +139,29 @@ _MEMO_CANDIDATES = [
 ]
 
 # classify_df가 내부적으로 추가하는 컬럼 — orig_cols에서 제외
-_INTERNAL_COLS = {"분류과목", "신뢰도", "_amt", "_datetime", "_guard_reason", "_pnl_excluded"}
+_INTERNAL_COLS = {
+    "분류과목",
+    "신뢰도",
+    "_amt",
+    "_datetime",
+    "_guard_reason",
+    "_pnl_excluded",
+}
 
 # [분류결과] 시트 컬럼 순서: [번호] → [분류과목, 신뢰도] → [아래 순서] → [나머지]
 _RESULT_COL_BEFORE_CLASS = ["번호"]
 _RESULT_COL_AFTER_CLASS = ["거래일시", "출금", "입금", "거래내용", "상대계좌예금주명"]
-_RESULT_DROP_COLS = frozenset([
-    "거래후잔액", "상대계좌번호", "상대은행", "메모", "거래구분", "수표어음금액", "CMS코드",
-])
+_RESULT_DROP_COLS = frozenset(
+    [
+        "거래후잔액",
+        "상대계좌번호",
+        "상대은행",
+        "메모",
+        "거래구분",
+        "수표어음금액",
+        "CMS코드",
+    ]
+)
 
 
 def _gubun_label(name: object, amount: object = None) -> str:
@@ -101,8 +189,8 @@ def _gubun_label(name: object, amount: object = None) -> str:
 
 def _normalize_col(s: str) -> str:
     """'(원)' 제거 + 공백/유니코드 공백 제거."""
-    s = re.sub(r'\(원\)', '', str(s))
-    s = re.sub(r'[\s　 ]+', '', s)
+    s = re.sub(r"\(원\)", "", str(s))
+    s = re.sub(r"[\s　 ]+", "", s)
     return s
 
 
@@ -111,7 +199,9 @@ def _build_result_output_cols(orig_cols: "list[str]") -> "tuple[list[str], list[
     orig_set = set(orig_cols)
     before = [c for c in _RESULT_COL_BEFORE_CLASS if c in orig_set]
     after = [c for c in _RESULT_COL_AFTER_CLASS if c in orig_set]
-    all_mentioned = set(_RESULT_COL_BEFORE_CLASS) | set(_RESULT_COL_AFTER_CLASS) | _RESULT_DROP_COLS
+    all_mentioned = (
+        set(_RESULT_COL_BEFORE_CLASS) | set(_RESULT_COL_AFTER_CLASS) | _RESULT_DROP_COLS
+    )
     remaining = [c for c in orig_cols if c not in all_mentioned]
     return before, after + remaining
 
@@ -141,7 +231,9 @@ def _detect_header_row(path: Path, max_check: int = 12) -> int:
     best_row = 0
     best_score = 0.0
 
-    for i, row in enumerate(ws.iter_rows(min_row=1, max_row=max_check, values_only=True)):
+    for i, row in enumerate(
+        ws.iter_rows(min_row=1, max_row=max_check, values_only=True)
+    ):
         score = 0.0
         for cell in row:
             if cell is None:
@@ -193,6 +285,71 @@ def _read_file(path: Union[str, Path]) -> "pd.DataFrame":
         raise ValueError(f"CSV 인코딩을 감지할 수 없습니다: {p}")
     else:
         raise ValueError(f"지원하지 않는 파일 형식: {suffix} (지원: .xlsx .xls .csv)")
+
+
+def read_source_frame_fd(fd: int, suffix: str) -> "pd.DataFrame":
+    """Read a seekable snapshot descriptor without reopening its original path."""
+
+    if not _PANDAS_OK:
+        raise ImportError("pandas가 설치되지 않았습니다. pip install pandas openpyxl")
+    normalized_suffix = str(suffix).lower()
+    if normalized_suffix not in {".xlsx", ".xls", ".csv"}:
+        raise ValueError("지원하지 않는 파일 형식")
+
+    def handle():
+        duplicate = os.dup(fd)
+        os.lseek(duplicate, 0, os.SEEK_SET)
+        return os.fdopen(duplicate, "rb", closefd=True)
+
+    if normalized_suffix == ".xlsx":
+        try:
+            import openpyxl
+        except ImportError:
+            header_row = 0
+        else:
+            with handle() as source:
+                workbook = openpyxl.load_workbook(
+                    source, read_only=True, data_only=True
+                )
+                worksheet = workbook.active
+                best_row = 0
+                best_score = 0.0
+                normalized_keywords = {_normalize_col(k) for k in HEADER_KEYWORDS}
+                for index, row in enumerate(
+                    worksheet.iter_rows(min_row=1, max_row=12, values_only=True)
+                ):
+                    score = 0.0
+                    for cell in row:
+                        if cell is None:
+                            continue
+                        cell_text = _normalize_col(str(cell).strip())
+                        if cell_text in normalized_keywords:
+                            score += 1.0
+                        elif any(
+                            keyword in cell_text for keyword in normalized_keywords
+                        ):
+                            score += 0.5
+                    if score > best_score:
+                        best_score = score
+                        best_row = index
+                workbook.close()
+                header_row = best_row
+        with handle() as source:
+            return pd.read_excel(source, header=header_row, dtype=str).fillna("")
+    if normalized_suffix == ".xls":
+        with handle() as source:
+            return pd.read_excel(source, header=0, dtype=str).fillna("")
+    raw = b""
+    with handle() as source:
+        raw = source.read()
+    for encoding in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
+        try:
+            from io import BytesIO
+
+            return pd.read_csv(BytesIO(raw), dtype=str, encoding=encoding).fillna("")
+        except UnicodeDecodeError:
+            continue
+    raise ValueError("CSV 인코딩을 감지할 수 없습니다")
 
 
 def _build_classify_text(
@@ -278,7 +435,8 @@ def classify_df(df: "pd.DataFrame", company_profile=None) -> "pd.DataFrame":
     amount_col = _detect_col(columns, _AMOUNT_CANDIDATES)
     if withdrawal_col and deposit_col and withdrawal_col != deposit_col:
         df["_amt"] = df.apply(
-            lambda r: _parse_numeric(r[deposit_col]) - _parse_numeric(r[withdrawal_col]),
+            lambda r: _parse_numeric(r[deposit_col])
+            - _parse_numeric(r[withdrawal_col]),
             axis=1,
         )
 
@@ -291,14 +449,24 @@ def classify_df(df: "pd.DataFrame", company_profile=None) -> "pd.DataFrame":
         desc, vendor = _build_classify_text(row, desc_col, vendor_col, memo_col)
         amt = float(row["_amt"]) if "_amt" in row.index else 0.0
         if "_amt" in row.index:
-            direction: Optional[str] = "입금" if amt > 0 else ("출금" if amt < 0 else None)
+            direction: Optional[str] = (
+                "입금" if amt > 0 else ("출금" if amt < 0 else None)
+            )
         else:
             direction = None
-        account_no = str(row[account_col]).strip() if account_col and account_col in row.index else ""
+        account_no = (
+            str(row[account_col]).strip()
+            if account_col and account_col in row.index
+            else ""
+        )
         guard_amount = (
             amt
             if "_amt" in row.index
-            else (_parse_numeric(row[amount_col]) if amount_col and amount_col in row.index else amt)
+            else (
+                _parse_numeric(row[amount_col])
+                if amount_col and amount_col in row.index
+                else amt
+            )
         )
         if company_profile is not None:
             guard_reason = _self_transfer_guard_reason(
@@ -328,9 +496,8 @@ def classify_df(df: "pd.DataFrame", company_profile=None) -> "pd.DataFrame":
     # 계정과목 부호 강제: 비용 계정(_amt > 0)은 음수로 정정
     if "_amt" in df.columns:
         _sign_map = {a.name: a.sign for a in ACCOUNT_BY_NAME.values()}
-        _expense_mask = (
-            df["분류과목"].map(lambda n: _sign_map.get(n, "+")).eq("-")
-            & (df["_amt"] > 0)
+        _expense_mask = df["분류과목"].map(lambda n: _sign_map.get(n, "+")).eq("-") & (
+            df["_amt"] > 0
         )
         df.loc[_expense_mask, "_amt"] = -df.loc[_expense_mask, "_amt"].abs()
 
@@ -341,6 +508,14 @@ def classify_file(path: Union[str, Path], company_profile=None) -> "pd.DataFrame
     """파일 경로 → 분류 결과 DataFrame."""
     df = _read_file(path)
     return classify_df(df, company_profile=company_profile)
+
+
+def classify_source_fd(fd: int, suffix: str, company_profile=None) -> "pd.DataFrame":
+    """Classify from the immutable product snapshot descriptor."""
+
+    return classify_df(
+        read_source_frame_fd(fd, suffix), company_profile=company_profile
+    )
 
 
 def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
@@ -369,7 +544,8 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
     bold = Font(bold=True)
     header_fill = (
         PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
-        if PatternFill else None
+        if PatternFill
+        else None
     )
     thick_top = Border(top=Side(border_style="medium")) if Border and Side else None
 
@@ -391,11 +567,17 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
         else:
             amount_col = _detect_col(list(df.columns), _AMOUNT_CANDIDATES)
             if amount_col:
-                cleaned = df_ok[amount_col].astype(str).str.replace(
-                    r"[,￦원\s]", "", regex=True
+                cleaned = (
+                    df_ok[amount_col]
+                    .astype(str)
+                    .str.replace(r"[,￦원\s]", "", regex=True)
                 )
                 df_ok["_amt"] = pd.to_numeric(cleaned, errors="coerce").fillna(0)
-                grp = df_ok.groupby("분류과목")["_amt"].agg(["count", "sum"]).reset_index()
+                grp = (
+                    df_ok.groupby("분류과목")["_amt"]
+                    .agg(["count", "sum"])
+                    .reset_index()
+                )
             else:
                 grp = df_ok.groupby("분류과목").size().reset_index(name="count")
                 grp["sum"] = 0
@@ -419,7 +601,9 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
             cnt = int(r["count"])
             amt = int(r["sum"])
             ratio = f"{cnt / t_cnt * 100:.1f}%" if t_cnt else "0%"
-            ws2.append([r["분류과목"], _gubun_label(r["분류과목"], amt), cnt, amt, ratio])
+            ws2.append(
+                [r["분류과목"], _gubun_label(r["분류과목"], amt), cnt, amt, ratio]
+            )
             ws2.cell(row=data_start_row + i, column=4).number_format = '#,##0"원"'
         totals_row = data_start_row + len(grp)
         ws2.append(["총계", "", t_cnt, t_sum, "100%"])
@@ -441,7 +625,9 @@ def save_classified(df: "pd.DataFrame", out_path: Union[str, Path]) -> None:
     )
     if "_amt" in df_ok.columns:
         df_ok["_abs_amt"] = df_ok["_amt"].abs()
-        df_ok = df_ok.sort_values(["_section_rank", "_abs_amt"], ascending=[True, False])
+        df_ok = df_ok.sort_values(
+            ["_section_rank", "_abs_amt"], ascending=[True, False]
+        )
         df_ok = df_ok.drop(columns=["_section_rank", "_abs_amt"])
     else:
         df_ok = df_ok.sort_values("_section_rank").drop(columns=["_section_rank"])

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:box5:a4:evidence-bundle:2",
+  "title": "Butler Box5 A4 canonical evidence bundle v2",
+  "type": "object",
+  "required": [
+    "run_request",
+    "input_receipt",
+    "policy_receipt",
+    "account_snapshot_receipt",
+    "graph_observation",
+    "classification_receipt",
+    "runtime_invariants",
+    "dlp_receipt",
+    "manifest"
+  ],
+  "properties": {
+    "run_request": {"$ref": "#/$defs/runRequest"},
+    "input_receipt": {"$ref": "#/$defs/inputReceipt"},
+    "policy_receipt": {"$ref": "#/$defs/policyReceipt"},
+    "account_snapshot_receipt": {"$ref": "#/$defs/accountSnapshot"},
+    "graph_observation": {"$ref": "#/$defs/graphObservation"},
+    "classification_receipt": {"$ref": "#/$defs/classification"},
+    "runtime_invariants": {"$ref": "#/$defs/runtimeInvariants"},
+    "dlp_receipt": {"$ref": "#/$defs/dlpReceipt"},
+    "manifest": {"$ref": "#/$defs/manifest"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "uuid": {"type": "string", "format": "uuid"},
+    "oid": {"type": "string", "pattern": "^[a-f0-9]{40,64}$"},
+    "runRequest": {
+      "type": "object",
+      "required": ["schema_version", "run_id", "nonce", "tenant_id", "code_tree_oid", "input_closure_digest", "adapter_digest", "policy_digest", "account_snapshot_digest", "dictionary_digest", "registry_digest"],
+      "properties": {
+        "schema_version": {"const": "1.0.0"},
+        "run_id": {"$ref": "#/$defs/uuid"},
+        "nonce": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+        "tenant_id": {"$ref": "#/$defs/uuid"},
+        "code_tree_oid": {"$ref": "#/$defs/oid"},
+        "input_closure_digest": {"$ref": "#/$defs/sha256"},
+        "adapter_digest": {"$ref": "#/$defs/sha256"},
+        "policy_digest": {"$ref": "#/$defs/sha256"},
+        "account_snapshot_digest": {"$ref": "#/$defs/sha256"},
+        "dictionary_digest": {"$ref": "#/$defs/sha256"},
+        "registry_digest": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "compiledTransaction": {
+      "type": "object",
+      "required": ["tenant_id", "txn_uid", "source_row_digest", "row_ordinal", "canonical_row_digest", "account_id", "direction", "amount_minor", "currency", "booked_at_utc", "local_date", "artifact_token", "bank_code", "bank_reference_token", "counterparty_account_token", "resolved_counterparty_account_id", "counterparty_resolution", "row_kind", "product_code_id", "channel_id", "adapter_id", "adapter_digest", "registry_digest"],
+      "properties": {
+        "tenant_id": {"$ref": "#/$defs/uuid"},
+        "txn_uid": {"$ref": "#/$defs/uuid"},
+        "source_row_digest": {"$ref": "#/$defs/sha256"},
+        "row_ordinal": {"type": "integer", "minimum": 0},
+        "canonical_row_digest": {"$ref": "#/$defs/sha256"},
+        "account_id": {"$ref": "#/$defs/uuid"},
+        "direction": {"enum": ["INFLOW", "OUTFLOW"]},
+        "amount_minor": {"type": "integer", "minimum": 1, "maximum": 9000000000000000},
+        "currency": {"const": "KRW"},
+        "booked_at_utc": {"type": "string", "format": "date-time"},
+        "local_date": {"type": "string", "format": "date"},
+        "artifact_token": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+        "bank_code": {"type": "string", "pattern": "^[A-Z0-9._:-]{1,16}$"},
+        "bank_reference_token": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "counterparty_account_token": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "resolved_counterparty_account_id": {"anyOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+        "counterparty_resolution": {"enum": ["EXACT_VERIFIED", "MASKED", "MISSING", "UNRESOLVED", "CONFLICT"]},
+        "row_kind": {"enum": ["PRINCIPAL", "FEE"]},
+        "product_code_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,96}$"},
+        "channel_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,96}$"},
+        "adapter_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,96}$"},
+        "adapter_digest": {"$ref": "#/$defs/sha256"},
+        "registry_digest": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "inputReceipt": {
+      "type": "object",
+      "required": ["schema_version", "run_id", "nonce_digest", "tenant_id", "source_file_sha256", "source_file_size", "source_row_count", "input_closure_digest", "adapter_digest", "dictionary_digest", "registry_digest", "adapter_contract", "source_snapshot_receipt", "row_closure", "compiled_transactions"],
+      "properties": {
+        "schema_version": {"const": "2.0.0"},
+        "run_id": {"$ref": "#/$defs/uuid"},
+        "nonce_digest": {"$ref": "#/$defs/sha256"},
+        "tenant_id": {"$ref": "#/$defs/uuid"},
+        "source_file_sha256": {"$ref": "#/$defs/sha256"},
+        "source_file_size": {"type": "integer", "minimum": 1},
+        "source_row_count": {"type": "integer", "minimum": 1, "maximum": 100000},
+        "input_closure_digest": {"$ref": "#/$defs/sha256"},
+        "adapter_digest": {"$ref": "#/$defs/sha256"},
+        "dictionary_digest": {"$ref": "#/$defs/sha256"},
+        "registry_digest": {"$ref": "#/$defs/sha256"},
+        "adapter_contract": {"type": "object"},
+        "source_snapshot_receipt": {"type": ["object", "null"]},
+        "row_closure": {"type": "object"},
+        "compiled_transactions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/compiledTransaction"}}
+      },
+      "additionalProperties": false
+    },
+    "policyReceipt": {
+      "type": "object",
+      "required": ["policy_type", "policy_id", "policy_version", "policy_digest", "finance_approval_id", "finance_approver_role", "signer_key_id", "issued_at", "effective_from", "expires_at", "revocation_epoch", "tenant_id", "schema_digest", "adapter_digest", "account_snapshot_digest", "dictionary_digest", "registry_digest", "code_tree_oid", "run_nonce_digest", "signature_b64"],
+      "properties": {
+        "policy_type": {"const": "A4_RECON_POLICY"},
+        "policy_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,96}$"},
+        "policy_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "policy_digest": {"$ref": "#/$defs/sha256"},
+        "finance_approval_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,96}$"},
+        "finance_approver_role": {"const": "FINANCE_APPROVER"},
+        "signer_key_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,96}$"},
+        "issued_at": {"type": "string", "format": "date-time"},
+        "effective_from": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"},
+        "revocation_epoch": {"type": "integer", "minimum": 0},
+        "tenant_id": {"$ref": "#/$defs/uuid"},
+        "schema_digest": {"$ref": "#/$defs/sha256"},
+        "adapter_digest": {"$ref": "#/$defs/sha256"},
+        "account_snapshot_digest": {"$ref": "#/$defs/sha256"},
+        "dictionary_digest": {"$ref": "#/$defs/sha256"},
+        "registry_digest": {"$ref": "#/$defs/sha256"},
+        "code_tree_oid": {"$ref": "#/$defs/oid"},
+        "run_nonce_digest": {"$ref": "#/$defs/sha256"},
+        "signature_b64": {"type": "string", "contentEncoding": "base64"}
+      },
+      "additionalProperties": false
+    },
+    "accountSnapshot": {"type": "object", "required": ["schema_version", "run_id", "nonce_digest", "tenant_id", "account_snapshot_digest", "registry_digest", "lookup_key_ids", "accounts"], "additionalProperties": false, "properties": {"schema_version": {"const": "2.0.0"}, "run_id": {"$ref": "#/$defs/uuid"}, "nonce_digest": {"$ref": "#/$defs/sha256"}, "tenant_id": {"$ref": "#/$defs/uuid"}, "account_snapshot_digest": {"$ref": "#/$defs/sha256"}, "registry_digest": {"$ref": "#/$defs/sha256"}, "lookup_key_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}, "accounts": {"type": "array", "minItems": 2, "items": {"type": "object", "required": ["account_id", "lookup_key_id", "lookup_token", "bank_code", "registry_version", "status"], "additionalProperties": false, "properties": {"account_id": {"$ref": "#/$defs/uuid"}, "lookup_key_id": {"type": "string"}, "lookup_token": {"$ref": "#/$defs/sha256"}, "bank_code": {"type": "string"}, "registry_version": {"type": "string"}, "status": {"const": "ACTIVE"}}}}}},
+    "graphObservation": {"type": "object", "required": ["schema_version", "run_id", "nonce_digest", "tenant_id", "objective", "policy_payload", "candidate_pair_checks", "max_candidate_bucket_size", "edges"], "additionalProperties": false, "properties": {"schema_version": {"const": "2.1.0"}, "run_id": {"$ref": "#/$defs/uuid"}, "nonce_digest": {"$ref": "#/$defs/sha256"}, "tenant_id": {"$ref": "#/$defs/uuid"}, "objective": {"const": ["MAX_MATCHED_PRINCIPALS", "MIN_TIME_DISTANCE", "MIN_FEE_PENALTY", "ORDERED_EDGE_ID_VECTOR"]}, "policy_payload": {"type": "object"}, "candidate_pair_checks": {"type": "integer", "minimum": 0}, "max_candidate_bucket_size": {"type": "integer", "minimum": 0}, "edges": {"type": "array", "items": {"type": "object"}}}},
+    "classification": {"type": "object", "required": ["schema_version", "run_id", "forced_edges", "components", "globally_unmatched_txn_uids", "shadow_only", "affects_reporting"], "additionalProperties": false, "properties": {"schema_version": {"const": "2.0.0"}, "run_id": {"$ref": "#/$defs/uuid"}, "forced_edges": {"type": "array"}, "components": {"type": "array"}, "globally_unmatched_txn_uids": {"type": "array", "items": {"$ref": "#/$defs/uuid"}}, "shadow_only": {"const": true}, "affects_reporting": {"const": false}}},
+    "runtimeInvariants": {"type": "object", "required": ["run_id", "nonce_digest", "shadow_only", "product_mutation_count", "journal_auto_post_allowed", "affects_reporting", "runtime_activation_allowed", "observer_product_bytes_equal", "terminal_count"], "additionalProperties": false, "properties": {"run_id": {"$ref": "#/$defs/uuid"}, "nonce_digest": {"$ref": "#/$defs/sha256"}, "shadow_only": {"const": true}, "product_mutation_count": {"const": 0}, "journal_auto_post_allowed": {"const": false}, "affects_reporting": {"const": false}, "runtime_activation_allowed": {"const": false}, "observer_product_bytes_equal": {"const": true}, "terminal_count": {"const": 1}}},
+    "dlpReceipt": {"type": "object", "required": ["run_id", "nonce_digest", "scanner_version", "files_scanned", "values_scanned", "leak_count", "closed_world_pass"], "additionalProperties": false, "properties": {"run_id": {"$ref": "#/$defs/uuid"}, "nonce_digest": {"$ref": "#/$defs/sha256"}, "scanner_version": {"const": "2.0.0"}, "files_scanned": {"type": "integer", "minimum": 1}, "values_scanned": {"type": "integer", "minimum": 1}, "leak_count": {"const": 0}, "closed_world_pass": {"const": true}}},
+    "manifest": {"type": "object", "required": ["schema_version", "run_id", "nonce_digest", "code_tree_oid", "files"], "additionalProperties": false, "properties": {"schema_version": {"const": "1.0.0"}, "run_id": {"$ref": "#/$defs/uuid"}, "nonce_digest": {"$ref": "#/$defs/sha256"}, "code_tree_oid": {"$ref": "#/$defs/oid"}, "files": {"type": "array", "minItems": 8, "maxItems": 8, "uniqueItems": true, "items": {"type": "object", "required": ["path", "sha256", "size"], "additionalProperties": false, "properties": {"path": {"type": "string", "pattern": "^[a-z_]+\\.json$"}, "sha256": {"$ref": "#/$defs/sha256"}, "size": {"type": "integer", "minimum": 1}}}}}
+  }
+}
+}

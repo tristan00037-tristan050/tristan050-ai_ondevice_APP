@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:box5:a4:verification-receipt:v3.1",
+  "title": "Butler A4 Verification Receipt v3.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "contract_id", "run_id", "nonce", "decision",
+    "reason_codes", "source_sha256", "ordered_row_root", "compiled_manifest_digest",
+    "graph_digest", "evidence_manifest_digest", "policy_digest", "adapter_digest",
+    "dictionary_digest", "registry_digest", "code_tree_oid", "code_closure_digest",
+    "verifier_id", "signer_key_id", "verified_at_utc", "signature"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.box5.a4.verification_receipt.v3.1"},
+    "contract_id": {"const": "BUTLER-BOX5-A4-V3.1-CANONICAL-DIRECTIVE"},
+    "run_id": {"type": "string", "format": "uuid"},
+    "nonce": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decision": {"enum": ["PASS", "BLOCK"]},
+    "reason_codes": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^BLOCK_[A-Z0-9_]+$"},
+      "uniqueItems": true
+    },
+    "source_sha256": {"$ref": "#/$defs/sha256"},
+    "ordered_row_root": {"$ref": "#/$defs/sha256"},
+    "compiled_manifest_digest": {"$ref": "#/$defs/sha256"},
+    "graph_digest": {"$ref": "#/$defs/sha256"},
+    "evidence_manifest_digest": {"$ref": "#/$defs/sha256"},
+    "policy_digest": {"$ref": "#/$defs/sha256"},
+    "adapter_digest": {"$ref": "#/$defs/sha256"},
+    "dictionary_digest": {"$ref": "#/$defs/sha256"},
+    "registry_digest": {"$ref": "#/$defs/sha256"},
+    "code_tree_oid": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "code_closure_digest": {"$ref": "#/$defs/sha256"},
+    "verifier_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
+    "signer_key_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
+    "verified_at_utc": {"type": "string", "format": "date-time"},
+    "signature": {"type": "string", "pattern": "^[A-Za-z0-9_-]{80,120}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"decision": {"const": "PASS"}}},
+      "then": {"properties": {"reason_codes": {"maxItems": 0}}}
+    },
+    {
+      "if": {"properties": {"decision": {"const": "BLOCK"}}},
+      "then": {"properties": {"reason_codes": {"minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

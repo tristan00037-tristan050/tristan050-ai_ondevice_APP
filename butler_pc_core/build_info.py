@@ -8,6 +8,7 @@ carried no in-bundle build/commit marker at all.
 Absence is non-fatal: fields degrade to ``"unknown"`` (a dev tree, or an older
 build that predates the stamp). Reading never raises and is cached.
 """
+
 from __future__ import annotations
 
 import json
@@ -25,10 +26,10 @@ def _stamp_path() -> Path:
     return Path(__file__).resolve().parent.parent / _STAMP_NAME
 
 
-def _git_head() -> str:
+def _git_revision(revision: str) -> str:
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", revision],
             cwd=str(Path(__file__).resolve().parent),
             capture_output=True,
             text=True,
@@ -39,6 +40,12 @@ def _git_head() -> str:
         return _UNKNOWN
     oid = result.stdout.strip()
     return oid if result.returncode == 0 and oid else _UNKNOWN
+
+
+def _git_head() -> str:
+    """Backward-compatible commit accessor used by existing health tests."""
+
+    return _git_revision("HEAD")
 
 
 @lru_cache(maxsize=1)
@@ -58,9 +65,11 @@ def build_info() -> dict:
             merged = {
                 "app": "Butler",
                 "build_base_commit_oid": _UNKNOWN,
+                "build_tree_oid": _UNKNOWN,
                 "git_describe": _UNKNOWN,
                 "build_timestamp_utc": _UNKNOWN,
                 "app_version": _UNKNOWN,
+                "a4_code_closure": None,
                 **data,
                 "source": "bundled_stamp",
             }
@@ -69,9 +78,11 @@ def build_info() -> dict:
     return {
         "app": "Butler",
         "build_base_commit_oid": _git_head(),
+        "build_tree_oid": _git_revision("HEAD^{tree}"),
         "git_describe": _UNKNOWN,
         "build_timestamp_utc": _UNKNOWN,
         "app_version": _UNKNOWN,
+        "a4_code_closure": None,
         "source": "runtime_fallback",
     }
 
@@ -79,3 +90,9 @@ def build_info() -> dict:
 def build_commit_oid() -> str:
     """Convenience accessor for the build-base commit OID (or ``"unknown"``)."""
     return str(build_info().get("build_base_commit_oid", _UNKNOWN))
+
+
+def build_tree_oid() -> str:
+    """Return the exact Git tree embedded by the build, or ``"unknown"``."""
+
+    return str(build_info().get("build_tree_oid", _UNKNOWN))

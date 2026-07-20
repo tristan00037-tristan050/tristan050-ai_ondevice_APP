@@ -7,24 +7,42 @@ from pathlib import Path
 
 import pytest
 
-from scripts.write_build_info import BuildInfoWriteError, write_build_info
+from scripts.write_build_info import _A4_CODE_FILES, BuildInfoWriteError, write_build_info
+
+
+pytestmark = pytest.mark.no_sidecar_token
 
 _VALID = {
     "build_oid": "b" * 40,
+    "build_tree_oid": "c" * 40,
     "git_describe": "v0.9.0-2-gbbbbbbb-dirty",
     "timestamp_utc": "2026-07-15T09:10:11Z",
     "app_version": "0.9.0",
 }
 
 
+def _prepare_a4_files(root: Path) -> None:
+    for relative in _A4_CODE_FILES:
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((relative + "\n").encode("utf-8"))
+
+
 def test_write_build_info_atomically_writes_exact_validated_payload(tmp_path):
+    _prepare_a4_files(tmp_path)
     output = tmp_path / "BUILD_INFO.json"
     write_build_info(output, **_VALID)
 
-    assert json.loads(output.read_text(encoding="utf-8")) == {
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    closure = payload.pop("a4_code_closure")
+    assert closure["schema_version"] == "butler.a4.code_closure.v3.1"
+    assert set(closure["files"]) == set(_A4_CODE_FILES)
+    assert len(closure["digest"]) == 64
+    assert payload == {
         "app": "Butler",
         "app_version": "0.9.0",
         "build_base_commit_oid": "b" * 40,
+        "build_tree_oid": "c" * 40,
         "build_timestamp_utc": "2026-07-15T09:10:11Z",
         "builder": "build_complete_app.sh",
         "git_describe": "v0.9.0-2-gbbbbbbb-dirty",
@@ -36,17 +54,23 @@ def test_write_build_info_atomically_writes_exact_validated_payload(tmp_path):
     ("overrides", "error_code"),
     [
         ({"build_oid": "unknown"}, "INVALID_BUILD_OID"),
+        ({"build_tree_oid": "unknown"}, "INVALID_BUILD_TREE_OID"),
         ({"timestamp_utc": "2026-07-15"}, "INVALID_BUILD_TIMESTAMP"),
         ({"app_version": "unknown"}, "INVALID_APP_VERSION"),
     ],
 )
-def test_write_build_info_rejects_incomplete_provenance(tmp_path, overrides, error_code):
+def test_write_build_info_rejects_incomplete_provenance(
+    tmp_path, overrides, error_code
+):
     arguments = {**_VALID, **overrides}
     with pytest.raises(BuildInfoWriteError, match=error_code):
         write_build_info(tmp_path / "BUILD_INFO.json", **arguments)
 
 
-def test_replace_failure_preserves_existing_stamp_and_cleans_temp(tmp_path, monkeypatch):
+def test_replace_failure_preserves_existing_stamp_and_cleans_temp(
+    tmp_path, monkeypatch
+):
+    _prepare_a4_files(tmp_path)
     output = tmp_path / "BUILD_INFO.json"
     previous = {"build_base_commit_oid": "previous"}
     output.write_text(json.dumps(previous), encoding="utf-8")
@@ -72,6 +96,8 @@ def test_cli_returns_nonzero_and_stable_code_when_stamp_cannot_be_written(tmp_pa
             str(tmp_path / "missing" / "BUILD_INFO.json"),
             "--build-oid",
             _VALID["build_oid"],
+            "--build-tree-oid",
+            _VALID["build_tree_oid"],
             "--git-describe",
             _VALID["git_describe"],
             "--timestamp-utc",
