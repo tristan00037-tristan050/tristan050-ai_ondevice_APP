@@ -4,6 +4,7 @@ import base64
 import hashlib
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -21,6 +22,7 @@ from jsonschema import Draft202012Validator
 
 import butler_pc_core.accounting.assignment.router as assignment_routes
 import butler_pc_core.accounting.assignment.store as assignment_store_module
+from butler_pc_core.a4_verifier.cli import AUTHORITY_MAX_CLIENTS
 from butler_pc_core.accounting.assignment.runtime import (
     AccountingReviewRuntime,
     set_accounting_review_runtime_for_tests,
@@ -36,6 +38,8 @@ from butler_pc_core.accounting.classify.reconciliation_service_v2 import (
 )
 from butler_pc_core.accounting.classify import reconciliation_service_v2 as service_v2
 from butler_pc_core.accounting.classify.verifier_authority import (
+    _receive_response,
+    _send_request,
     load_authority_trust,
     request_authority_verification,
 )
@@ -809,6 +813,56 @@ def test_actual_a4_product_endpoints_read_candidates_and_idempotent_review(
         set_accounting_review_runtime_for_tests(None)
 
 
+def test_v51_published_candidates_and_review_are_denied_after_trust_revocation(
+    tmp_path, monkeypatch, isolated_verifier_authority
+):
+    store = make_store(tmp_path)
+    _source, snapshot, request, compiled = snapshot_fixture(tmp_path, store)
+    policy_path, finance_trust_path, _ = policy_files(
+        tmp_path, compiled, request_override=request
+    )
+    monkeypatch.setattr(service_v2, "PINNED_TRUST_POLICY_PATH", finance_trust_path)
+    try:
+        run_canonical_product_reconciliation(
+            frame=None,
+            company_profile=profile(),
+            token_service=store.tokens,
+            store=store,
+            owner_request=request,
+            policy_path=policy_path,
+            trust_policy_path=finance_trust_path,
+            evidence_root=tmp_path / "revocation-evidence",
+            observed_at=NOW,
+            verify_after_export=True,
+            source_snapshot=snapshot,
+        )
+    finally:
+        snapshot.close()
+
+    candidates = store.reconciliation_candidates(str(request["tenant_id"]), RUN_ID)
+    assert candidates
+    revoked_trust = {
+        **isolated_verifier_authority["trust"],
+        "enabled": False,
+    }
+    revoked_path = tmp_path / "revoked-authority-trust.json"
+    revoked_path.write_bytes(jcs_bytes(revoked_trust))
+    revoked_path.chmod(0o600)
+    store._a4_authority_trust_path = revoked_path
+
+    with pytest.raises(AssignmentError, match="BLOCK_UNVERIFIED_ACCESS"):
+        store.reconciliation_candidates(str(request["tenant_id"]), RUN_ID)
+    with pytest.raises(AssignmentError, match="BLOCK_UNVERIFIED_ACCESS"):
+        store.append_reconciliation_review(
+            tenant_id=str(request["tenant_id"]),
+            run_id=RUN_ID,
+            edge_id=candidates[0]["edge_id"],
+            decision="DEFER",
+            actor_id="reviewer",
+            idempotency_key="post-revocation-review-attempt",
+        )
+
+
 def test_export_retry_reverifies_full_file_set_and_tamper_blocks(tmp_path, monkeypatch):
     store = make_store(tmp_path)
     _source, snapshot, request, compiled = snapshot_fixture(tmp_path, store)
@@ -974,7 +1028,7 @@ def test_value_dlp_detects_allowed_looking_pii_and_paths():
         )
 
 
-def test_v31_completion_status_has_exact_findings_and_remains_disabled():
+def test_v51_completion_status_has_exact_findings_and_remains_disabled():
     root = Path(__file__).resolve().parents[3]
     schema = strict_json_loads(
         (
@@ -989,7 +1043,25 @@ def test_v31_completion_status_has_exact_findings_and_remains_disabled():
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(status)
     finding_ids = [item["id"] for item in status["findings"]]
-    assert len(finding_ids) == len(set(finding_ids)) == 31
+    assert len(finding_ids) == len(set(finding_ids)) == 36
+    v51 = [item for item in status["findings"] if item["id"].startswith("A4V51-")]
+    assert len(v51) == 5
+    assert len({item["evidence_digest"] for item in v51}) == 5
+    local_evidence = strict_json_loads(
+        (root / "docs/ops/evidence/A4_V51_LOCAL_EVIDENCE.json").read_bytes()
+    )
+    evidence_by_id = {
+        item["finding_id"]: item for item in local_evidence["findings"]
+    }
+    assert set(evidence_by_id) == {item["id"] for item in v51}
+    for finding in v51:
+        evidence = evidence_by_id[finding["id"]]
+        product_file = root / evidence["primary_product_file"]
+        assert finding["status"] == evidence["status"]
+        assert finding["evidence_digest"] == evidence["evidence_digest"]
+        assert hashlib.sha256(product_file.read_bytes()).hexdigest() == evidence[
+            "evidence_digest"
+        ]
     assert status["code_pass"] is False
     assert status["runtime_activation_allowed"] is False
     release = strict_json_loads(
@@ -1038,6 +1110,49 @@ def test_v5_producer_has_no_verifier_private_key_or_signing_api(
             now=NOW,
             allow_test_authority=False,
         )
+
+
+def test_v51_stalled_authority_client_does_not_block_next_client(
+    tmp_path, isolated_verifier_authority
+):
+    stalled = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    stalled.settimeout(1)
+    stalled.connect(str(isolated_verifier_authority["socket_path"]))
+    source = tmp_path / "concurrency-source.csv"
+    source.write_bytes(b"header\nvalue\n")
+    source.chmod(0o600)
+    source_fd = os.open(source, os.O_RDONLY)
+    started = time.monotonic()
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as next_client:
+            next_client.settimeout(1.5)
+            next_client.connect(str(isolated_verifier_authority["socket_path"]))
+            _send_request(next_client, jcs_bytes({}), source_fd)
+            response = _receive_response(next_client)
+        assert response["status"] == "BLOCK"
+        assert time.monotonic() - started < 1.5
+    finally:
+        os.close(source_fd)
+        stalled.close()
+
+
+def test_v51_authority_applies_bounded_backpressure(isolated_verifier_authority):
+    clients: list[socket.socket] = []
+    try:
+        for _ in range(AUTHORITY_MAX_CLIENTS):
+            client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            client.settimeout(1)
+            client.connect(str(isolated_verifier_authority["socket_path"]))
+            clients.append(client)
+        time.sleep(0.05)
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as overflow:
+            overflow.settimeout(1)
+            overflow.connect(str(isolated_verifier_authority["socket_path"]))
+            assert overflow.recv(1) == b""
+    finally:
+        for client in clients:
+            client.close()
+        time.sleep(0.05)
 
 
 def test_v5_bundled_unapproved_authority_is_fail_closed():

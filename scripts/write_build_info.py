@@ -24,6 +24,7 @@ _REQUIRED_KEYS = {
     "app_version",
     "builder",
     "a4_code_closure",
+    "a4_authority_helper",
 }
 _A4_CODE_FILES = (
     "butler_pc_core/a4_verifier/cli.py",
@@ -100,6 +101,21 @@ def _verify_payload(actual: object, expected: Mapping[str, object]) -> None:
         raise BuildInfoWriteError("BUILD_INFO_VERIFY_MISMATCH")
 
 
+def _authority_helper(path: Path | None) -> dict[str, object]:
+    if path is None:
+        return {"bundled": False, "sha256": None}
+    try:
+        info = path.lstat()
+        if not path.is_file() or path.is_symlink() or info.st_size < 1:
+            raise BuildInfoWriteError("A4_AUTHORITY_HELPER_INVALID")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except BuildInfoWriteError:
+        raise
+    except OSError as exc:
+        raise BuildInfoWriteError("A4_AUTHORITY_HELPER_INVALID") from exc
+    return {"bundled": True, "sha256": digest}
+
+
 def write_build_info(
     output: Path,
     *,
@@ -108,6 +124,7 @@ def write_build_info(
     git_describe: str,
     timestamp_utc: str,
     app_version: str,
+    authority_helper: Path | None = None,
 ) -> None:
     payload = _validated_payload(
         build_oid=build_oid,
@@ -119,6 +136,7 @@ def write_build_info(
     if not output.parent.is_dir():
         raise BuildInfoWriteError("BUILD_INFO_PARENT_MISSING")
     payload["a4_code_closure"] = _a4_code_closure(output.parent)
+    payload["a4_authority_helper"] = _authority_helper(authority_helper)
 
     fd = -1
     temporary_path: Path | None = None
@@ -170,6 +188,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--git-describe", required=True)
     parser.add_argument("--timestamp-utc", required=True)
     parser.add_argument("--app-version", required=True)
+    parser.add_argument("--authority-helper", type=Path)
     return parser.parse_args()
 
 
@@ -183,6 +202,7 @@ def main() -> int:
             git_describe=args.git_describe,
             timestamp_utc=args.timestamp_utc,
             app_version=args.app_version,
+            authority_helper=args.authority_helper,
         )
     except BuildInfoWriteError as exc:
         print(f"BUILD_INFO_WRITE_OK=0 ERROR_CODE={exc}")

@@ -2347,13 +2347,56 @@ class SQLiteAssignmentStore:
             ).fetchone()
         return dict(row) if row is not None else None
 
+    def _require_current_a4_authority_receipt(
+        self, row: sqlite3.Row | None
+    ) -> dict[str, Any]:
+        """Revalidate a published receipt against current trust and revocation.
+
+        Publication is not a permanent trust grant. Every candidate read and
+        review mutation reopens the no-follow trust document and verifies the
+        stored receipt with the currently approved key, epoch, validity window,
+        and trust digest. A disabled, expired, replaced, or unavailable trust
+        document therefore quarantines the published result at the access
+        boundary without mutating append-only evidence.
+        """
+
+        from butler_pc_core.accounting.classify.reconciliation_v2 import (
+            strict_json_loads,
+        )
+        from butler_pc_core.accounting.classify.verifier_authority import (
+            load_authority_trust,
+            verify_authority_receipt_signature,
+        )
+
+        try:
+            if row is None:
+                raise ValueError("missing receipt")
+            receipt_jcs = bytes(row["receipt_jcs"])
+            if hashlib.sha256(receipt_jcs).hexdigest() != row["receipt_digest"]:
+                raise ValueError("receipt digest mismatch")
+            receipt = strict_json_loads(receipt_jcs)
+            if not isinstance(receipt, dict):
+                raise ValueError("receipt is not an object")
+            trust = load_authority_trust(
+                self._a4_authority_trust_path,
+                now=datetime.now(timezone.utc),
+                allow_test_authority=self._a4_allow_test_authority,
+            )
+            return verify_authority_receipt_signature(receipt, trust)
+        except Exception as exc:
+            raise AssignmentError(
+                "BLOCK_UNVERIFIED_ACCESS",
+                409,
+                "A4 publication is not trusted by the current authority policy.",
+            ) from exc
+
     def reconciliation_candidates(
         self, tenant_id: str, run_id: str
     ) -> list[dict[str, Any]]:
         self._require_a4_schema()
         with self._connect() as conn:
             authorized = conn.execute(
-                """SELECT v.receipt_digest FROM recon_run r
+                """SELECT v.receipt_digest,v.receipt_jcs FROM recon_run r
                    JOIN recon_verification_receipt v
                      ON v.tenant_id=r.tenant_id AND v.run_id=r.run_id
                    WHERE r.tenant_id=? AND r.run_id=? AND r.state='PUBLISHED'
@@ -2366,6 +2409,7 @@ class SQLiteAssignmentStore:
                 raise AssignmentError(
                     "BLOCK_UNVERIFIED_ACCESS", 409, "A4 candidates are not verified."
                 )
+            self._require_current_a4_authority_receipt(authorized)
             rows = conn.execute(
                 """SELECT e.edge_id,e.left_txn_uid,e.right_txn_uid,e.fee_txn_uid,e.fee_mode,
                           e.fee_minor,e.eligibility_basis,e.binding_digest,c.kind,c.affects_reporting
@@ -2410,7 +2454,7 @@ class SQLiteAssignmentStore:
             self._begin(conn)
             try:
                 verification = conn.execute(
-                    """SELECT v.receipt_digest,v.verifier_id,v.verified_at
+                    """SELECT v.receipt_digest,v.verifier_id,v.verified_at,v.receipt_jcs
                        FROM recon_run r JOIN recon_verification_receipt v
                          ON v.tenant_id=r.tenant_id AND v.run_id=r.run_id
                        WHERE r.tenant_id=? AND r.run_id=? AND r.state='PUBLISHED'
@@ -2423,6 +2467,7 @@ class SQLiteAssignmentStore:
                     raise AssignmentError(
                         "BLOCK_UNVERIFIED_ACCESS", 409, "A4 review requires verified publication."
                     )
+                self._require_current_a4_authority_receipt(verification)
                 existing = conn.execute(
                     """SELECT review_id,edge_id,decision,actor_id FROM recon_review
                        WHERE tenant_id=? AND run_id=? AND idempotency_digest=?""",

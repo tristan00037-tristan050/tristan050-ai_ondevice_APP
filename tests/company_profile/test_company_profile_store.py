@@ -186,7 +186,22 @@ def test_suggest_from_accounting_file_is_runtime_only(tmp_path, monkeypatch):
 def test_company_profile_routes_registered_in_butler_sidecar():
     from butler_sidecar import app
 
-    paths = {getattr(route, "path", "") for route in app.routes}
+    def registered_paths(routes):
+        paths = set()
+        for route in routes:
+            path = getattr(route, "path", None)
+            if isinstance(path, str):
+                paths.add(path)
+            nested = getattr(route, "routes", None)
+            if nested is not None:
+                paths.update(registered_paths(nested))
+            original_router = getattr(route, "original_router", None)
+            original_routes = getattr(original_router, "routes", None)
+            if original_routes is not None:
+                paths.update(registered_paths(original_routes))
+        return paths
+
+    paths = registered_paths(app.routes)
 
     assert "/v1/company-profile/status" in paths
     assert "/v1/company-profile/register" in paths

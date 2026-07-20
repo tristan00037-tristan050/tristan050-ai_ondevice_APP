@@ -1,5 +1,8 @@
 name: Box5 Stage3 Classify/Policy
 
+permissions:
+  contents: read
+
 # F012 — locked CI for the stage-3 integration (Area A policy loader + Area B classifier +
 # contract closure). Deterministic and model-free: journal/ledger/report (5·6단계) and the
 # accounting model runtime are out of scope, so this gate runs only the stage-3 classify/policy
@@ -25,6 +28,10 @@ on:
       - 'tests/accounting/test_classifier.py'
       - 'scripts/write_build_info.py'
       - 'scripts/build_complete_app.sh'
+      - 'scripts/build_a4_authority_helper_macos.sh'
+      - 'butler-desktop/src-tauri/native/a4_verifier_authority_launcher.swift'
+      - 'butler-desktop/src-tauri/src/lib.rs'
+      - 'tests/accounting/test_cli.py'
       - 'tests/accounting/test_sse_phase_messages.py'
       - 'tests/company_policy/test_accounting_header_trust.py'
       - 'integration_lock.json'
@@ -46,6 +53,10 @@ on:
       - 'tests/accounting/test_classifier.py'
       - 'scripts/write_build_info.py'
       - 'scripts/build_complete_app.sh'
+      - 'scripts/build_a4_authority_helper_macos.sh'
+      - 'butler-desktop/src-tauri/native/a4_verifier_authority_launcher.swift'
+      - 'butler-desktop/src-tauri/src/lib.rs'
+      - 'tests/accounting/test_cli.py'
       - 'tests/accounting/test_sse_phase_messages.py'
       - 'tests/company_policy/test_accounting_header_trust.py'
       - 'integration_lock.json'
@@ -57,10 +68,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.11'
       - name: Install deps (model-free)
@@ -125,7 +136,7 @@ jobs:
               pass
           print("CONTRACT_CLOSURE_VERIFIER_OK=1")
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: stage3-junit
@@ -136,10 +147,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.11'
       - name: Install product-path dependencies
@@ -189,7 +200,7 @@ jobs:
             tests/company_policy/test_accounting_header_trust.py \
             tests/test_write_build_info.py \
             -q --tb=short --junitxml=a4-canonical-junit.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: a4-canonical-junit

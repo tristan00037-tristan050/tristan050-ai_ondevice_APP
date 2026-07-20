@@ -6,6 +6,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/butler-desktop/src-tauri"
 APP="target/release/bundle/macos/Butler.app"
 RES="$APP/Contents/Resources"
+PRODUCTION_A4_AUTHORITY="${BUTLER_A4_PRODUCTION_AUTHORITY_BUILD:-0}"
+AUTHORITY_HELPER_EXE="$APP/Contents/Helpers/A4VerifierAuthority.app/Contents/MacOS/A4VerifierAuthority"
 
 echo "════════════════════════════════════════"
 echo " Butler 완성품 빌드 시작"
@@ -60,6 +62,18 @@ fi
 echo "[4/5] 모델 경로 계약 검증 (verifier)"
 python3 "$ROOT/scripts/verify_model_path_contract.py" "$ROOT" || { echo "❌ 계약 위반"; exit 1; }
 
+AUTHORITY_HELPER_ARGS=()
+if [[ "$PRODUCTION_A4_AUTHORITY" == "1" ]]; then
+  echo "[4.25/5] A4 운영 verifier authority helper 조립·분리 서명"
+  "$ROOT/scripts/build_a4_authority_helper_macos.sh" --install-helper "$APP" || {
+    echo "❌ A4 authority helper 조립 실패 — 운영 A4 비활성"; exit 1;
+  }
+  AUTHORITY_HELPER_ARGS=(--authority-helper "$AUTHORITY_HELPER_EXE")
+else
+  rm -rf "$APP/Contents/Helpers/A4VerifierAuthority.app"
+  echo "[4.25/5] A4 운영 verifier authority 비활성(승인된 인증서·Keychain provisioning 필요)"
+fi
+
 echo "[4.5/5] 빌드 표식 기록 (BUILD_INFO.json — 앱 내부 commit OID 표식)"
 BUILD_OID="$(cd "$ROOT" && git rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" || {
   echo "❌ git commit OID 확인 실패 — provenance 없는 앱 생성 차단"
@@ -81,11 +95,19 @@ if ! "$APP_PY" "$ROOT/scripts/write_build_info.py" \
   --build-tree-oid "$BUILD_TREE_OID" \
   --git-describe "$BUILD_DESC" \
   --timestamp-utc "$BUILD_TS" \
-  --app-version "$APP_VER"; then
+  --app-version "$APP_VER" \
+  "${AUTHORITY_HELPER_ARGS[@]}"; then
   echo "❌ BUILD_INFO.json 기록·검증 실패 — 불완전 앱 생성 차단"
   exit 1
 fi
 echo "  ✅ BUILD_INFO.json (OID $BUILD_OID)"
+
+if [[ "$PRODUCTION_A4_AUTHORITY" == "1" ]]; then
+  echo "[4.75/5] A4 helper 격리·앱 Hardened Runtime 최종 서명 검증"
+  "$ROOT/scripts/build_a4_authority_helper_macos.sh" --finalize-app "$APP" || {
+    echo "❌ A4 authority 권한 격리 검증 실패 — 배포 차단"; exit 1;
+  }
+fi
 
 echo "[5/5] 완성품 준비 완료"
 echo "  앱: $ROOT/butler-desktop/src-tauri/$APP"

@@ -23,15 +23,15 @@
     "canonical_base": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "findings": {
       "type": "array",
-      "minItems": 31,
-      "maxItems": 31,
+      "minItems": 36,
+      "maxItems": 36,
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["id", "status", "evidence_digest"],
         "properties": {
-          "id": {"type": "string", "pattern": "^A4V[35]-AUD-P[012]-[0-9]{3}$"},
-          "status": {"enum": ["OPEN", "FIXED_TESTED", "BLOCKED_EXTERNAL"]},
+          "id": {"type": "string", "pattern": "^A4V(?:3|5|51)-AUD-P[012]-[0-9]{3}$"},
+          "status": {"enum": ["OPEN", "FIXED_TESTED", "FIXED_TESTED_LOCAL", "BLOCKED_EXTERNAL"]},
           "evidence_digest": {
             "type": ["string", "null"],
             "pattern": "^[0-9a-f]{64}$"

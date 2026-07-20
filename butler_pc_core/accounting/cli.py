@@ -10,10 +10,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from butler_pc_core.accounting.classifier import classify_file, save_classified
-from butler_pc_core.accounting.report import build_summary
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Butler 회계 분류 CLI")
     parser.add_argument("input", help="입력 파일 (.xlsx/.csv/.xls)")
@@ -21,6 +17,11 @@ def main() -> None:
                         help="출력 xlsx 경로 (기본: <input>_classified.xlsx)")
     parser.add_argument("--summary", action="store_true", help="분류 요약 출력")
     args = parser.parse_args()
+
+    # Keep --help and argument errors independent from pandas/openpyxl and the
+    # reporting stack. Product work imports these only after CLI validation.
+    from butler_pc_core.accounting.classifier import classify_file, save_classified
+    from butler_pc_core.accounting.report import build_summary
 
     in_path = Path(args.input)
     if not in_path.exists():

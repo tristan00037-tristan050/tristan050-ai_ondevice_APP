@@ -35,9 +35,11 @@ def test_write_build_info_atomically_writes_exact_validated_payload(tmp_path):
 
     payload = json.loads(output.read_text(encoding="utf-8"))
     closure = payload.pop("a4_code_closure")
+    helper = payload.pop("a4_authority_helper")
     assert closure["schema_version"] == "butler.a4.code_closure.v3.1"
     assert set(closure["files"]) == set(_A4_CODE_FILES)
     assert len(closure["digest"]) == 64
+    assert helper == {"bundled": False, "sha256": None}
     assert payload == {
         "app": "Butler",
         "app_version": "0.9.0",
@@ -48,6 +50,20 @@ def test_write_build_info_atomically_writes_exact_validated_payload(tmp_path):
         "git_describe": "v0.9.0-2-gbbbbbbb-dirty",
     }
     assert not list(tmp_path.glob(".BUILD_INFO.json.*.tmp"))
+
+
+def test_write_build_info_binds_authority_helper_bytes(tmp_path):
+    _prepare_a4_files(tmp_path)
+    helper = tmp_path / "A4VerifierAuthority"
+    helper.write_bytes(b"signed-authority-helper")
+    output = tmp_path / "BUILD_INFO.json"
+    write_build_info(output, authority_helper=helper, **_VALID)
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["a4_authority_helper"] == {
+        "bundled": True,
+        "sha256": "f4b7215386e763c678a9ff707462de66d2011f192258c23eb21783e35b8a140a",
+    }
 
 
 @pytest.mark.parametrize(

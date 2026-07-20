@@ -70,6 +70,7 @@ def build_info() -> dict:
                 "build_timestamp_utc": _UNKNOWN,
                 "app_version": _UNKNOWN,
                 "a4_code_closure": None,
+                "a4_authority_helper": {"bundled": False, "sha256": None},
                 **data,
                 "source": "bundled_stamp",
             }
@@ -83,6 +84,7 @@ def build_info() -> dict:
         "build_timestamp_utc": _UNKNOWN,
         "app_version": _UNKNOWN,
         "a4_code_closure": None,
+        "a4_authority_helper": {"bundled": False, "sha256": None},
         "source": "runtime_fallback",
     }
 

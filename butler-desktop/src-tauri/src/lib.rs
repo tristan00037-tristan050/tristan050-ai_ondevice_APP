@@ -3,10 +3,18 @@ use std::{
     env,
     fs::{self, OpenOptions},
     io::Write,
+    os::unix::{
+        fs::{FileTypeExt, PermissionsExt},
+        net::UnixStream,
+    },
     path::{Path, PathBuf},
-    process::Command,
-    sync::Mutex,
-    time::{SystemTime, UNIX_EPOCH},
+    process::{Child, Command, Stdio},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+    thread,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::Manager;
 use tauri_plugin_shell::{
@@ -27,6 +35,8 @@ const HELPER2_EMBEDDING_ENV: &str = "BUTLER_HELPER2_EMBEDDING_SDK_PATH";
 const BOX3_HUMAN_APPROVAL_ENV: &str = "BUTLER_BOX3_HUMAN_APPROVAL_CONFIG_PATH";
 const BOX3_HELPER_GUARD_ENV: &str = "BUTLER_BOX3_HELPER_COMPONENT_GUARD_PATH";
 const BOX3_FIXED_EVAL_ENV: &str = "BUTLER_BOX3_FIXED_EVAL_REPORT_PATH";
+const A4_AUTHORITY_DISABLED_ENV: &str = "BUTLER_A4_VERIFIER_AUTHORITY_DISABLED";
+const A4_AUTHORITY_SOCKET_ENV: &str = "BUTLER_A4_VERIFIER_AUTHORITY_SOCKET";
 const BOX3_EXTRA_ENV_KEYS: [&str; 7] = [
     HELPER4_SDK_ENV,
     HELPER7_SDK_ENV,
@@ -39,6 +49,8 @@ const BOX3_EXTRA_ENV_KEYS: [&str; 7] = [
 
 struct SidecarState {
     child: Mutex<Option<CommandChild>>,
+    authority_child: Mutex<Option<Child>>,
+    authority_shutdown: AtomicBool,
 }
 
 fn sidecar_launch_log_path() -> PathBuf {
@@ -329,6 +341,9 @@ fn resolve_sidecar_env(app: &tauri::AppHandle) -> Result<Vec<(String, String)>, 
 }
 
 fn stop_sidecar(app: &tauri::AppHandle, reason: &str) {
+    app.state::<SidecarState>()
+        .authority_shutdown
+        .store(true, Ordering::Release);
     let child_opt = {
         let state = app.state::<SidecarState>();
         let x = state.child.lock().unwrap().take();
@@ -339,16 +354,206 @@ fn stop_sidecar(app: &tauri::AppHandle, reason: &str) {
         append_sidecar_launch_log(&format!("stop_sidecar reason={}", reason));
         println!("[main] sidecar 종료 완료 ({})", reason);
     }
+    let authority_opt = {
+        let state = app.state::<SidecarState>();
+        let child = state.authority_child.lock().unwrap().take();
+        child
+    };
+    if let Some(mut child) = authority_opt {
+        let _ = child.kill();
+        let _ = child.wait();
+        append_sidecar_launch_log(&format!("stop_a4_authority reason={}", reason));
+    }
 }
 
-async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<Option<CommandChild>, String> {
+fn start_a4_authority_supervisor(app: tauri::AppHandle) {
+    let _ = thread::Builder::new()
+        .name("a4-authority-supervisor".to_string())
+        .spawn(move || loop {
+            thread::sleep(Duration::from_secs(1));
+            if app
+                .state::<SidecarState>()
+                .authority_shutdown
+                .load(Ordering::Acquire)
+            {
+                return;
+            }
+            let exited = {
+                let state = app.state::<SidecarState>();
+                let mut guard = state.authority_child.lock().unwrap();
+                match guard.as_mut() {
+                    Some(child) => match child.try_wait() {
+                        Ok(Some(_)) | Err(_) => {
+                            guard.take();
+                            true
+                        }
+                        Ok(None) => false,
+                    },
+                    None => true,
+                }
+            };
+            if !exited {
+                continue;
+            }
+            append_sidecar_launch_log("a4_authority=restart");
+            match spawn_a4_verifier_authority(&app) {
+                Ok((Some(mut child), _)) => {
+                    if app
+                        .state::<SidecarState>()
+                        .authority_shutdown
+                        .load(Ordering::Acquire)
+                    {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return;
+                    }
+                    let state = app.state::<SidecarState>();
+                    *state.authority_child.lock().unwrap() = Some(child);
+                    append_sidecar_launch_log("a4_authority=restarted");
+                }
+                Ok((None, _)) => return,
+                Err(code) => append_sidecar_launch_log(&format!(
+                    "a4_authority=restart_blocked code={}",
+                    code
+                )),
+            }
+        });
+}
+
+fn spawn_a4_verifier_authority(
+    app: &tauri::AppHandle,
+) -> Result<(Option<Child>, Option<String>), String> {
+    if env::var(A4_AUTHORITY_DISABLED_ENV).ok().as_deref() == Some("1")
+        || env::var("BUTLER_SIDECAR_EXTERNAL").ok().as_deref() == Some("1")
+    {
+        append_sidecar_launch_log("a4_authority=disabled");
+        return Ok((None, None));
+    }
+    let executable = env::current_exe().map_err(|_| "A4_AUTHORITY_APP_PATH".to_string())?;
+    let contents = executable
+        .parent()
+        .and_then(Path::parent)
+        .ok_or_else(|| "A4_AUTHORITY_APP_PATH".to_string())?;
+    let helper = contents
+        .join("Helpers")
+        .join("A4VerifierAuthority.app")
+        .join("Contents")
+        .join("MacOS")
+        .join("A4VerifierAuthority");
+    let resources = app
+        .path()
+        .resource_dir()
+        .map_err(|_| "A4_AUTHORITY_RESOURCES".to_string())?;
+    let python = resources.join("python").join("bin").join("python3");
+    let verifier = resources
+        .join("butler_pc_core")
+        .join("a4_verifier")
+        .join("cli.py");
+    let trust = resources
+        .join("butler_pc_core")
+        .join("accounting")
+        .join("classify")
+        .join("contracts")
+        .join("a4_v31")
+        .join("verifier_authority_trust.production.json");
+    let build_info = resources.join("BUILD_INFO.json");
+    if !helper.is_file() {
+        append_sidecar_launch_log("a4_authority=not_bundled");
+        return Ok((None, None));
+    }
+    if [&python, &verifier, &trust, &build_info]
+        .iter()
+        .any(|path| !path.is_file())
+    {
+        return Err("A4_AUTHORITY_BUNDLE_INCOMPLETE".to_string());
+    }
+    let security_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "A4_AUTHORITY_DATA_DIR".to_string())?
+        .join("Security");
+    fs::create_dir_all(&security_dir).map_err(|_| "A4_AUTHORITY_DATA_DIR".to_string())?;
+    fs::set_permissions(&security_dir, fs::Permissions::from_mode(0o700))
+        .map_err(|_| "A4_AUTHORITY_DATA_DIR".to_string())?;
+    let security_metadata =
+        fs::symlink_metadata(&security_dir).map_err(|_| "A4_AUTHORITY_DATA_DIR".to_string())?;
+    if !security_metadata.file_type().is_dir()
+        || security_metadata.permissions().mode() & 0o077 != 0
+    {
+        return Err("A4_AUTHORITY_DATA_DIR_UNSAFE".to_string());
+    }
+    let socket_path = security_dir.join("a4-verifier-authority.sock");
+    match fs::symlink_metadata(&socket_path) {
+        Ok(metadata) if metadata.file_type().is_socket() => {
+            fs::remove_file(&socket_path).map_err(|_| "A4_AUTHORITY_STALE_SOCKET".to_string())?;
+        }
+        Ok(_) => return Err("A4_AUTHORITY_SOCKET_UNSAFE".to_string()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err("A4_AUTHORITY_SOCKET_UNSAFE".to_string()),
+    }
+    let mut child = Command::new(helper)
+        .arg("--socket")
+        .arg(&socket_path)
+        .arg("--authority-trust")
+        .arg(&trust)
+        .arg("--python")
+        .arg(&python)
+        .arg("--verifier")
+        .arg(&verifier)
+        .arg("--build-info")
+        .arg(&build_info)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .env_clear()
+        .env("HOME", env::var_os("HOME").unwrap_or_default())
+        .env("TMPDIR", env::var_os("TMPDIR").unwrap_or_default())
+        .spawn()
+        .map_err(|_| "A4_AUTHORITY_SPAWN".to_string())?;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Ok(metadata) = fs::symlink_metadata(&socket_path) {
+            if metadata.file_type().is_socket()
+                && metadata.permissions().mode() & 0o077 == 0
+                && UnixStream::connect(&socket_path).is_ok()
+            {
+                append_sidecar_launch_log("a4_authority=ready");
+                return Ok((
+                    Some(child),
+                    Some(socket_path.to_string_lossy().into_owned()),
+                ));
+            }
+        }
+        if child
+            .try_wait()
+            .map_err(|_| "A4_AUTHORITY_STATUS".to_string())?
+            .is_some()
+        {
+            return Err("A4_AUTHORITY_EARLY_EXIT".to_string());
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("A4_AUTHORITY_READY_TIMEOUT".to_string());
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+}
+
+async fn spawn_sidecar(
+    app: &tauri::AppHandle,
+    authority_socket: Option<&str>,
+) -> Result<Option<CommandChild>, String> {
     // dev 외부 sidecar 모드: 앱이 자체 sidecar를 띄우지 않고 외부(수동) sidecar를 사용
     if env::var("BUTLER_SIDECAR_EXTERNAL").ok().as_deref() == Some("1") {
         append_sidecar_launch_log("spawn_sidecar=external_skip");
         return Ok(None);
     }
     append_sidecar_launch_log("spawn_sidecar=start");
-    let sidecar_env = resolve_sidecar_env(app)?;
+    let mut sidecar_env = resolve_sidecar_env(app)?;
+    if let Some(socket_path) = authority_socket {
+        sidecar_env.push((A4_AUTHORITY_SOCKET_ENV.to_string(), socket_path.to_string()));
+    }
     let (mut rx, child) = app
         .shell()
         .sidecar("butler-sidecar")
@@ -494,11 +699,29 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(SidecarState {
             child: Mutex::new(None),
+            authority_child: Mutex::new(None),
+            authority_shutdown: AtomicBool::new(false),
         })
         .setup(|app| {
             let app_handle = app.handle().clone();
             tauri::async_runtime::block_on(async move {
-                match spawn_sidecar(&app_handle).await {
+                let (authority_child, authority_socket) =
+                    match spawn_a4_verifier_authority(&app_handle) {
+                        Ok(value) => value,
+                        Err(code) => {
+                            append_sidecar_launch_log(&format!(
+                                "a4_authority=blocked code={}",
+                                code
+                            ));
+                            (None, None)
+                        }
+                    };
+                if let Some(child) = authority_child {
+                    let state = app_handle.state::<SidecarState>();
+                    *state.authority_child.lock().unwrap() = Some(child);
+                    start_a4_authority_supervisor(app_handle.clone());
+                }
+                match spawn_sidecar(&app_handle, authority_socket.as_deref()).await {
                     Ok(Some(child)) => {
                         // 명시적 블록으로 MutexGuard를 state보다 먼저 drop
                         {

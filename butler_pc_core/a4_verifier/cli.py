@@ -24,8 +24,10 @@ import socket
 import stat
 import struct
 import tempfile
+import threading
 import unicodedata
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -76,6 +78,8 @@ AUTHORITY_TRUST_SCHEMA = "butler.box5.a4.verifier_authority_trust.v1"
 AUTHORITY_TRANSPORT = "unix-scm-rights-v1"
 MAX_AUTHORITY_REQUEST_BYTES = 32 * 1024 * 1024
 MAX_AUTHORITY_RESPONSE_BYTES = 256 * 1024
+AUTHORITY_MAX_CLIENTS = 8
+AUTHORITY_HANDSHAKE_TIMEOUT_SECONDS = 3
 MAX_MONEY = 9_000_000_000_000_000
 NAMESPACE = uuid.UUID("b8f2ceca-9183-5c4a-9750-3e0ed0f87066")
 HEADER_KEYWORDS = frozenset(
@@ -1674,6 +1678,8 @@ def verify(
     source_suffix: str,
     key_material: Mapping[str, Any],
     dictionary_path: Path,
+    *,
+    require_bundled_build_stamp: bool = False,
 ) -> dict[str, Any]:
     raw = read_files(root)
     docs: dict[str, Any] = {}
@@ -1758,6 +1764,20 @@ def verify(
             block("BLOCK_CODE_CLOSURE")
         closure_files[relative] = hashlib.sha256(target.read_bytes()).hexdigest()
     code_closure_digest = digest(closure_files)
+    if require_bundled_build_stamp:
+        stamp_path = resources_root / "BUILD_INFO.json"
+        try:
+            stamp = strict_load(_read_trust_file(stamp_path))
+        except Block:
+            block("BLOCK_CODE_CLOSURE")
+        stamped_closure = stamp.get("a4_code_closure") if isinstance(stamp, dict) else None
+        if (
+            not isinstance(stamped_closure, dict)
+            or stamp.get("build_tree_oid") != run["code_tree_oid"]
+            or stamped_closure.get("files") != closure_files
+            or stamped_closure.get("digest") != code_closure_digest
+        ):
+            block("BLOCK_CODE_CLOSURE")
     verified_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     receipt = {
         "schema_version": "butler.box5.a4.verification_receipt.v3.2",
@@ -1992,7 +2012,11 @@ def _write_private(path: Path, payload: bytes) -> None:
 
 
 def _verified_unsigned_receipt(
-    request: Mapping[str, Any], source_fd: int, trust_digest: str
+    request: Mapping[str, Any],
+    source_fd: int,
+    trust_digest: str,
+    *,
+    require_bundled_build_stamp: bool,
 ) -> dict[str, Any]:
     required = {
         "schema_version",
@@ -2050,6 +2074,7 @@ def _verified_unsigned_receipt(
             str(request["source_suffix"]),
             request["key_material"],
             dictionary_path,
+            require_bundled_build_stamp=require_bundled_build_stamp,
         )
 
 
@@ -2059,6 +2084,8 @@ def _handle_authority_connection(
     trust: Mapping[str, Any],
     trust_digest: str,
     private_key: Ed25519PrivateKey,
+    signing_lock: threading.Lock,
+    require_bundled_build_stamp: bool,
 ) -> None:
     request_nonce = "0" * 64
     source_fd = -1
@@ -2066,7 +2093,12 @@ def _handle_authority_connection(
         request, source_fd = _receive_authority_request(connection)
         if re.fullmatch(r"[0-9a-f]{64}", str(request.get("request_nonce", ""))):
             request_nonce = str(request["request_nonce"])
-        receipt = _verified_unsigned_receipt(request, source_fd, trust_digest)
+        receipt = _verified_unsigned_receipt(
+            request,
+            source_fd,
+            trust_digest,
+            require_bundled_build_stamp=require_bundled_build_stamp,
+        )
         receipt.update(
             {
                 "authority_id": trust["authority_id"],
@@ -2075,7 +2107,11 @@ def _handle_authority_connection(
                 "signer_trust_digest": trust_digest,
             }
         )
-        signature = private_key.sign(jcs(receipt))
+        # cryptography does not promise that every backend key object is safe
+        # for concurrent use. Verification remains parallel; signing is short
+        # and serialized around the one authority-owned key.
+        with signing_lock:
+            signature = private_key.sign(jcs(receipt))
         receipt["signature"] = base64.urlsafe_b64encode(signature).decode(
             "ascii"
         ).rstrip("=")
@@ -2111,12 +2147,38 @@ def _handle_authority_connection(
         return
 
 
+def _serve_authority_client(
+    connection: socket.socket,
+    *,
+    trust: Mapping[str, Any],
+    trust_digest: str,
+    private_key: Ed25519PrivateKey,
+    signing_lock: threading.Lock,
+    client_slots: threading.BoundedSemaphore,
+    require_bundled_build_stamp: bool,
+) -> None:
+    try:
+        with connection:
+            connection.settimeout(AUTHORITY_HANDSHAKE_TIMEOUT_SECONDS)
+            _handle_authority_connection(
+                connection,
+                trust=trust,
+                trust_digest=trust_digest,
+                private_key=private_key,
+                signing_lock=signing_lock,
+                require_bundled_build_stamp=require_bundled_build_stamp,
+            )
+    finally:
+        client_slots.release()
+
+
 def serve_authority(
     socket_path: Path,
     authority_trust_path: Path,
     signing_key_fd: int,
     *,
     allow_test_authority: bool,
+    require_bundled_build_stamp: bool = False,
 ) -> int:
     trust, trust_digest = _authority_trust(
         authority_trust_path, allow_test=allow_test_authority
@@ -2141,23 +2203,42 @@ def serve_authority(
     try:
         server.bind(str(socket_path))
         os.chmod(socket_path, 0o600)
-        server.listen(8)
+        server.listen(AUTHORITY_MAX_CLIENTS)
     finally:
         os.umask(old_umask)
     print("A4_VERIFIER_AUTHORITY_READY=1", flush=True)
+    client_slots = threading.BoundedSemaphore(AUTHORITY_MAX_CLIENTS)
+    signing_lock = threading.Lock()
+    executor = ThreadPoolExecutor(
+        max_workers=AUTHORITY_MAX_CLIENTS,
+        thread_name_prefix="a4-authority",
+    )
     try:
         while True:
             connection, _address = server.accept()
-            with connection:
-                connection.settimeout(35)
-                _handle_authority_connection(
+            if not client_slots.acquire(blocking=False):
+                # Backpressure is fail-closed. Never queue an unbounded number
+                # of descriptors or let a stalled peer monopolize the server.
+                connection.close()
+                continue
+            try:
+                executor.submit(
+                    _serve_authority_client,
                     connection,
                     trust=trust,
                     trust_digest=trust_digest,
                     private_key=private_key,
+                    signing_lock=signing_lock,
+                    client_slots=client_slots,
+                    require_bundled_build_stamp=require_bundled_build_stamp,
                 )
+            except Exception:
+                connection.close()
+                client_slots.release()
+                raise
     finally:
         server.close()
+        executor.shutdown(wait=True, cancel_futures=True)
         try:
             socket_path.unlink()
         except FileNotFoundError:
@@ -2171,6 +2252,7 @@ def main() -> int:
     parser.add_argument("--authority-trust")
     parser.add_argument("--signing-key-fd", type=int)
     parser.add_argument("--allow-test-authority", action="store_true")
+    parser.add_argument("--require-bundled-build-stamp", action="store_true")
     try:
         args = parser.parse_args()
         if (
@@ -2185,6 +2267,7 @@ def main() -> int:
             Path(args.authority_trust),
             args.signing_key_fd,
             allow_test_authority=args.allow_test_authority,
+            require_bundled_build_stamp=args.require_bundled_build_stamp,
         )
     except Block as exc:
         print("A4_VERIFIER_AUTHORITY_READY=0")
