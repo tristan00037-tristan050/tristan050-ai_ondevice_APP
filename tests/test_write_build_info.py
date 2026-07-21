@@ -36,7 +36,7 @@ def test_write_build_info_atomically_writes_exact_validated_payload(tmp_path):
     payload = json.loads(output.read_text(encoding="utf-8"))
     closure = payload.pop("a4_code_closure")
     helper = payload.pop("a4_authority_helper")
-    assert closure["schema_version"] == "butler.a4.code_closure.v3.1"
+    assert closure["schema_version"] == "butler.a4.code_closure.v5.3"
     assert set(closure["files"]) == set(_A4_CODE_FILES)
     assert len(closure["digest"]) == 64
     assert helper == {"bundled": False, "sha256": None}

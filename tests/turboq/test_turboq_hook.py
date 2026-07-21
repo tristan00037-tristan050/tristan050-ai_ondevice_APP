@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import torch
+import pytest
+
+torch = pytest.importorskip(
+    "torch", reason="TurboQ requires the optional PyTorch runtime"
+)
 
 from scripts.turboq.turboq_butler_hook_v1 import ButlerTurboQuantHook
 

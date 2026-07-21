@@ -187,6 +187,9 @@ class SQLiteAssignmentStore:
                     currency TEXT NOT NULL CHECK(length(currency) = 3),
                     booked_at_utc TEXT NOT NULL,
                     local_date TEXT NOT NULL,
+                    value_date TEXT,
+                    duplicate_of_reference_token TEXT,
+                    reversal_of_reference_token TEXT,
                     PRIMARY KEY (tenant_id, txn_uid),
                     UNIQUE (tenant_id, source_row_digest)
                     ,CHECK((counterparty_resolution='EXACT_VERIFIED') =
@@ -1954,8 +1957,11 @@ class SQLiteAssignmentStore:
                         "currency",
                         "booked_at_utc",
                         "local_date",
+                        "value_date",
                         "bank_code",
                         "bank_reference_token",
+                        "duplicate_of_reference_token",
+                        "reversal_of_reference_token",
                         "counterparty_account_token",
                         "row_kind",
                         "product_code_id",
@@ -1979,8 +1985,15 @@ class SQLiteAssignmentStore:
                         "currency": item["currency"],
                         "booked_at_utc": item["booked_at_utc"],
                         "local_date": item["local_date"],
+                        "value_date": item.get("value_date"),
                         "bank_code": item["bank_code"],
                         "bank_reference_token": item.get("bank_reference_token"),
+                        "duplicate_of_reference_token": item.get(
+                            "duplicate_of_reference_token"
+                        ),
+                        "reversal_of_reference_token": item.get(
+                            "reversal_of_reference_token"
+                        ),
                         "counterparty_account_token": item.get(
                             "counterparty_account_token"
                         ),
@@ -1998,9 +2011,10 @@ class SQLiteAssignmentStore:
                                 canonical_row_digest,account_id,
                                 resolved_counterparty_account_id,counterparty_resolution,
                                 direction,amount_minor,currency,booked_at_utc,local_date,bank_code,
-                                bank_reference_token,counterparty_account_token,row_kind,
+                                value_date,bank_reference_token,duplicate_of_reference_token,
+                                reversal_of_reference_token,counterparty_account_token,row_kind,
                                 product_code_id,channel_id,adapter_id,adapter_digest,registry_digest)
-                               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                             (
                                 tenant_id,
                                 item["txn_uid"],
@@ -2017,7 +2031,10 @@ class SQLiteAssignmentStore:
                                 item["booked_at_utc"],
                                 item["local_date"],
                                 item["bank_code"],
+                                item.get("value_date"),
                                 item.get("bank_reference_token"),
+                                item.get("duplicate_of_reference_token"),
+                                item.get("reversal_of_reference_token"),
                                 item.get("counterparty_account_token"),
                                 item["row_kind"],
                                 item["product_code_id"],
@@ -2042,14 +2059,26 @@ class SQLiteAssignmentStore:
                         (tenant_id, run_id, item["txn_uid"], item["artifact_token"]),
                     )
                 for item in edges:
+                    outflow_ids = list(
+                        item.get("outflow_txn_uids") or [item["outflow_txn_uid"]]
+                    )
+                    inflow_ids = list(
+                        item.get("inflow_txn_uids") or [item["inflow_txn_uid"]]
+                    )
                     left, right = sorted(
                         (item["outflow_txn_uid"], item["inflow_txn_uid"])
+                    )
+                    match_type = item.get("match_type") or (
+                        "FEE_ADJUSTED"
+                        if item["fee_mode"] != "NO_FEE"
+                        else "EXACT"
                     )
                     conn.execute(
                         """INSERT INTO recon_edge
                                (tenant_id,run_id,edge_id,left_txn_uid,right_txn_uid,fee_txn_uid,fee_mode,
-                            fee_minor,eligibility_basis,binding_digest,candidate_digest,cost_tuple_jcs)
-                           VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            fee_minor,eligibility_basis,binding_digest,candidate_digest,cost_tuple_jcs,
+                            match_type,currency_mode,fx_rule_id,fx_receipt_digest,principal_count)
+                           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (
                             tenant_id,
                             run_id,
@@ -2065,8 +2094,26 @@ class SQLiteAssignmentStore:
                             self._a4_jcs(
                                 [item["time_delta_ms"], -int(item["exact_reference"])]
                             ),
+                            match_type,
+                            item.get("currency_mode") or item["currency"],
+                            item.get("fx_rule_id"),
+                            item.get("fx_receipt_digest"),
+                            len(outflow_ids) + len(inflow_ids),
                         ),
                     )
+                    members = [
+                        *(('OUTFLOW', ordinal, txn_uid) for ordinal, txn_uid in enumerate(outflow_ids)),
+                        *(('INFLOW', ordinal, txn_uid) for ordinal, txn_uid in enumerate(inflow_ids)),
+                    ]
+                    if item.get("fee_txn_uid"):
+                        members.append(("FEE", 0, item["fee_txn_uid"]))
+                    for role, ordinal, txn_uid in members:
+                        conn.execute(
+                            """INSERT INTO recon_edge_member
+                               (tenant_id,run_id,edge_id,txn_uid,member_role,member_ordinal)
+                               VALUES(?,?,?,?,?,?)""",
+                            (tenant_id, run_id, item["edge_id"], txn_uid, role, ordinal),
+                        )
                 for item in classifications:
                     conn.execute(
                         """INSERT INTO recon_classification
@@ -2225,22 +2272,26 @@ class SQLiteAssignmentStore:
             "reason_codes", "source_sha256", "ordered_row_root",
             "compiled_manifest_digest", "graph_digest", "evidence_manifest_digest",
             "policy_digest", "adapter_digest", "dictionary_digest", "registry_digest",
-            "code_tree_oid", "code_closure_digest", "verifier_id", "signer_key_id",
-            "authority_id", "signer_revocation_epoch", "signer_trust_digest",
+            "code_tree_oid", "code_closure_digest", "verifier_id", "protocol_version",
+            "authority_session_id", "authority_request_id", "authority_nonce_digest",
+            "caller_cdhash", "authority_cdhash", "verifier_cdhash",
+            "request_digest", "source_payload_digest",
+            "request_deadline_unix_ms", "signer_key_id", "authority_id",
+            "signer_key_epoch", "signer_trust_digest",
             "verified_at_utc", "signature",
         }
         if (
             set(receipt) != required
             or receipt.get("schema_version")
-            != "butler.box5.a4.verification_receipt.v3.2"
+            != "butler.box5.a4.verification_receipt.v5.3"
             or receipt.get("contract_id")
-            != "BUTLER-BOX5-A4-V3.2-AUTHORITY-ISOLATED"
+            != "BUTLER-BOX5-A4-V5.3-NATIVE-AUTHORITY"
             or receipt.get("run_id") != run_id
             or receipt.get("decision") != "PASS"
             or receipt.get("reason_codes") != []
-            or not isinstance(receipt.get("signer_revocation_epoch"), int)
-            or isinstance(receipt.get("signer_revocation_epoch"), bool)
-            or int(receipt["signer_revocation_epoch"]) < 0
+            or not isinstance(receipt.get("signer_key_epoch"), int)
+            or isinstance(receipt.get("signer_key_epoch"), bool)
+            or int(receipt["signer_key_epoch"]) < 0
             or not re.fullmatch(r"[0-9a-f]{64}", str(receipt.get("signer_trust_digest", "")))
             or not re.fullmatch(r"[A-Za-z0-9._-]{3,80}", str(receipt.get("authority_id", "")))
         ):
@@ -2307,7 +2358,7 @@ class SQLiteAssignmentStore:
                         tenant_id, run_id, receipt_digest, receipt["nonce"],
                         receipt["evidence_manifest_digest"], receipt["verifier_id"],
                         receipt["signer_key_id"], receipt["authority_id"],
-                        receipt["signer_revocation_epoch"], receipt["signer_trust_digest"],
+                        receipt["signer_key_epoch"], receipt["signer_trust_digest"],
                         receipt["code_closure_digest"], receipt["decision"], now, receipt_jcs,
                     ),
                 )
@@ -2412,13 +2463,35 @@ class SQLiteAssignmentStore:
             self._require_current_a4_authority_receipt(authorized)
             rows = conn.execute(
                 """SELECT e.edge_id,e.left_txn_uid,e.right_txn_uid,e.fee_txn_uid,e.fee_mode,
-                          e.fee_minor,e.eligibility_basis,e.binding_digest,c.kind,c.affects_reporting
+                          e.fee_minor,e.eligibility_basis,e.binding_digest,e.match_type,
+                          e.currency_mode,e.fx_rule_id,e.fx_receipt_digest,e.principal_count,
+                          c.kind,c.affects_reporting
                    FROM recon_edge e LEFT JOIN recon_classification c
                      ON c.tenant_id=e.tenant_id AND c.run_id=e.run_id AND c.classification_id=e.edge_id
                    WHERE e.tenant_id=? AND e.run_id=? ORDER BY e.edge_id""",
                 (tenant_id, run_id),
             ).fetchall()
-        return [dict(row) for row in rows]
+            members = conn.execute(
+                """SELECT edge_id,txn_uid,member_role,member_ordinal
+                   FROM recon_edge_member WHERE tenant_id=? AND run_id=?
+                   ORDER BY edge_id,member_role,member_ordinal""",
+                (tenant_id, run_id),
+            ).fetchall()
+        by_edge: dict[str, list[dict[str, Any]]] = {}
+        for member in members:
+            by_edge.setdefault(str(member["edge_id"]), []).append(
+                {
+                    "txn_uid": member["txn_uid"],
+                    "role": member["member_role"],
+                    "ordinal": member["member_ordinal"],
+                }
+            )
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["members"] = by_edge.get(str(row["edge_id"]), [])
+            result.append(item)
+        return result
 
     def append_reconciliation_review(
         self,

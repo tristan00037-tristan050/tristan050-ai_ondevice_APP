@@ -1,33 +1,31 @@
 #!/usr/bin/env python3
-"""Independent verifier authority executable for Box5 A4 evidence.
+"""Independent, private-key-free verifier executable for Box5 A4 evidence.
 
 The file is executable under ``python -I`` and contains its own parser,
 canonicalizer, graph oracle, fee checks, and DLP rules.  Importing the producer
-package is prohibited by construction and checked again in release tests.  Only
-this isolated process receives the signing seed through a protected inherited
-descriptor; the producer receives no private key or generic signing operation.
+package is prohibited by construction and checked again in release tests.  It
+emits an unsigned verified observation.  Native authority code owns the key,
+anti-replay state, receipt assembly, and the only attestation operation.
 """
 
 from __future__ import annotations
 
 import argparse
-import array
 import base64
 import csv
 import hashlib
 import hmac
 import io
+import itertools
 import json
 import os
 import re
-import socket
 import stat
 import struct
+import sys
 import tempfile
-import threading
 import unicodedata
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -36,10 +34,24 @@ from typing import Any, Mapping, NoReturn, Sequence
 from zoneinfo import ZoneInfo
 
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from butler_pc_core.a4_verifier.canonical import sha256_hex
+from butler_pc_core.a4_verifier.contracts import (
+    MAX_REQUEST_BYTES,
+    MAX_RESPONSE_BYTES,
+    MAX_SOURCE_BYTES,
+    OBSERVATION_SCHEMA,
+    PROTOCOL_VERSION,
+    VERIFY_REQUEST_SCHEMA,
+    AuthorityChallenge,
+    request_digest,
 )
+from butler_pc_core.a4_verifier.errors import public_error_code
+from butler_pc_core.a4_verifier.receipt import verified_observation
 
 
 FILES = frozenset(
@@ -60,6 +72,10 @@ JSON_FILES = FILES - {"SHA256SUMS"}
 SCHEMA_DIGEST = hashlib.sha256(b"butler.box5.a4.contracts.v3.1").hexdigest()
 CODE_FILES = (
     "butler_pc_core/a4_verifier/cli.py",
+    "butler_pc_core/a4_verifier/canonical.py",
+    "butler_pc_core/a4_verifier/contracts.py",
+    "butler_pc_core/a4_verifier/errors.py",
+    "butler_pc_core/a4_verifier/receipt.py",
     "butler_pc_core/accounting/assignment/a4_store_schema_v32.py",
     "butler_pc_core/accounting/classify/reconciliation_v2.py",
     "butler_pc_core/accounting/classify/reconciliation_service_v2.py",
@@ -72,14 +88,6 @@ CODE_FILES = (
     "butler_pc_core/accounting/classify/contracts/a4_v31/verifier_authority_trust.schema.json",
     "butler_pc_core/accounting/classify/contracts/a4_v31/verification_receipt.schema.json",
 )
-AUTHORITY_REQUEST_SCHEMA = "butler.box5.a4.authority_request.v1"
-AUTHORITY_RESPONSE_SCHEMA = "butler.box5.a4.authority_response.v1"
-AUTHORITY_TRUST_SCHEMA = "butler.box5.a4.verifier_authority_trust.v1"
-AUTHORITY_TRANSPORT = "unix-scm-rights-v1"
-MAX_AUTHORITY_REQUEST_BYTES = 32 * 1024 * 1024
-MAX_AUTHORITY_RESPONSE_BYTES = 256 * 1024
-AUTHORITY_MAX_CLIENTS = 8
-AUTHORITY_HANDSHAKE_TIMEOUT_SECONDS = 3
 MAX_MONEY = 9_000_000_000_000_000
 NAMESPACE = uuid.UUID("b8f2ceca-9183-5c4a-9750-3e0ed0f87066")
 HEADER_KEYWORDS = frozenset(
@@ -625,6 +633,8 @@ def independently_compile_source(
         for key in (
             "source_account", "bank_code", "booking_date", "withdrawal", "deposit",
             "reference", "counter_account", "fee_type", "product_code", "channel",
+            "currency", "value_date", "duplicate_of_reference",
+            "reversal_of_reference",
         )
     }
     for key in ("source_account", "bank_code", "booking_date", "withdrawal", "deposit"):
@@ -732,11 +742,58 @@ def independently_compile_source(
         channel_id = dictionary["channel"].get(channel_value.upper())
         if product_id is None or channel_id is None:
             block("BLOCK_DICTIONARY_VALUE")
+        currency = "KRW"
+        if names["currency"] in columns:
+            currency = normalized_cell(row.get(columns[names["currency"]])).upper()
+            if not re.fullmatch(r"[A-Z]{3}", currency):
+                block("BLOCK_SOURCE_SEMANTIC_MISMATCH")
+        value_date = None
+        if names["value_date"] in columns:
+            raw_value_date = normalized_cell(row.get(columns[names["value_date"]]))
+            if raw_value_date:
+                parsed_value_date = None
+                for date_format in formats:
+                    try:
+                        parsed_value_date = datetime.strptime(
+                            raw_value_date, str(date_format)
+                        )
+                        break
+                    except ValueError:
+                        continue
+                if parsed_value_date is None:
+                    block("BLOCK_SOURCE_SEMANTIC_MISMATCH")
+                value_date = parsed_value_date.date().isoformat()
+        duplicate_of_reference_token = None
+        reversal_of_reference_token = None
+        for name, destination in (
+            ("duplicate_of_reference", "duplicate"),
+            ("reversal_of_reference", "reversal"),
+        ):
+            if names[name] not in columns:
+                continue
+            raw_link = normalized_cell(row.get(columns[names[name]]))
+            if not raw_link:
+                continue
+            link_token = _token(
+                material["bank_reference_key_b64"],
+                tenant,
+                "BANK_REFERENCE",
+                raw_link,
+            )
+            if destination == "duplicate":
+                duplicate_of_reference_token = link_token
+            else:
+                reversal_of_reference_token = link_token
+        if (
+            duplicate_of_reference_token is not None
+            and reversal_of_reference_token is not None
+        ):
+            block("BLOCK_REVERSAL_BINDING")
         canonical = {
             "account_id": account_id,
             "direction": direction,
             "amount_minor": amount,
-            "currency": "KRW",
+            "currency": currency,
             "booked_at_utc": booked_at_text,
             "local_date": local_date,
             "bank_code": bank,
@@ -750,6 +807,9 @@ def independently_compile_source(
             "adapter_id": adapter["adapter_id"],
             "adapter_digest": run["adapter_digest"],
             "registry_digest": run["registry_digest"],
+            "value_date": value_date,
+            "duplicate_of_reference_token": duplicate_of_reference_token,
+            "reversal_of_reference_token": reversal_of_reference_token,
         }
         canonical_digest = digest(canonical)
         source_row_digest = digest(
@@ -782,7 +842,7 @@ def independently_compile_source(
                 "account_id": account_id,
                 "direction": direction,
                 "amount_minor": amount,
-                "currency": "KRW",
+                "currency": currency,
                 "booked_at_utc": booked_at_text,
                 "local_date": local_date,
                 "artifact_token": artifact,
@@ -797,6 +857,9 @@ def independently_compile_source(
                 "adapter_id": adapter["adapter_id"],
                 "adapter_digest": run["adapter_digest"],
                 "registry_digest": run["registry_digest"],
+                "value_date": value_date,
+                "duplicate_of_reference_token": duplicate_of_reference_token,
+                "reversal_of_reference_token": reversal_of_reference_token,
             }
         )
     return sorted(rebuilt, key=lambda item: (item["tenant_id"], item["txn_uid"]))
@@ -1076,6 +1139,9 @@ def verify_bindings(
             "adapter_id",
             "adapter_digest",
             "registry_digest",
+            "value_date",
+            "duplicate_of_reference_token",
+            "reversal_of_reference_token",
         }
         if not isinstance(tx, dict) or set(tx) != required_tx:
             block("BLOCK_SCHEMA")
@@ -1120,7 +1186,7 @@ def verify_bindings(
         amount = tx.get("amount_minor")
         if type(amount) is not int or not 1 <= amount <= MAX_MONEY:
             block("BLOCK_RANGE")
-        if tx.get("currency") != "KRW" or tx.get("direction") not in {
+        if not re.fullmatch(r"[A-Z]{3}", str(tx.get("currency"))) or tx.get("direction") not in {
             "INFLOW",
             "OUTFLOW",
         }:
@@ -1133,6 +1199,24 @@ def verify_bindings(
             or not re.fullmatch(r"[A-Za-z0-9._:-]{1,96}", str(tx.get("channel_id")))
         ):
             block("BLOCK_BINDING")
+        value_date = tx.get("value_date")
+        if value_date is not None:
+            try:
+                if datetime.fromisoformat(str(value_date)).date().isoformat() != value_date:
+                    block("BLOCK_SCHEMA")
+            except (TypeError, ValueError):
+                block("BLOCK_SCHEMA")
+        duplicate_link = tx.get("duplicate_of_reference_token")
+        reversal_link = tx.get("reversal_of_reference_token")
+        if (
+            any(
+                link is not None
+                and not re.fullmatch(r"[0-9a-f]{64}", str(link))
+                for link in (duplicate_link, reversal_link)
+            )
+            or (duplicate_link is not None and reversal_link is not None)
+        ):
+            block("BLOCK_SCHEMA")
         resolution = tx.get("counterparty_resolution")
         resolved = tx.get("resolved_counterparty_account_id")
         if resolution not in {
@@ -1173,22 +1257,211 @@ def exact_ref(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
 
 
 def edge_digest(edge: Mapping[str, Any]) -> str:
+    payload = {
+        "outflow": edge["outflow_txn_uid"],
+        "inflow": edge["inflow_txn_uid"],
+        "fee": edge["fee_txn_uid"],
+        "mode": edge["fee_mode"],
+        "fee_minor": edge["fee_minor"],
+        "eligibility_basis": edge["eligibility_basis"],
+        "binding_digest": edge["binding_digest"],
+    }
+    if edge.get("outflow_txn_uids") is not None or edge.get("match_type") == "FX":
+        payload.update(
+            {
+                "outflows": sorted(edge["outflow_txn_uids"]),
+                "inflows": sorted(edge["inflow_txn_uids"]),
+                "match_type": edge["match_type"],
+                "currency_mode": edge["currency_mode"],
+                "fx_rule_id": edge["fx_rule_id"],
+                "fx_receipt_digest": edge["fx_receipt_digest"],
+            }
+        )
+    return digest(payload)
+
+
+def strong_pair(
+    outflow: Mapping[str, Any],
+    inflow: Mapping[str, Any],
+    policy: Mapping[str, Any],
+) -> bool:
+    left_day = datetime.fromisoformat(
+        outflow.get("value_date") or outflow["local_date"]
+    ).date()
+    right_day = datetime.fromisoformat(
+        inflow.get("value_date") or inflow["local_date"]
+    ).date()
+    gap = (right_day - left_day).days
+    return (
+        outflow["direction"] == "OUTFLOW"
+        and inflow["direction"] == "INFLOW"
+        and outflow["tenant_id"] == inflow["tenant_id"]
+        and outflow["account_id"] != inflow["account_id"]
+        and outflow["counterparty_resolution"] == "EXACT_VERIFIED"
+        and inflow["counterparty_resolution"] == "EXACT_VERIFIED"
+        and outflow["resolved_counterparty_account_id"] == inflow["account_id"]
+        and inflow["resolved_counterparty_account_id"] == outflow["account_id"]
+        and policy["min_signed_gap_days"] <= gap <= policy["max_signed_gap_days"]
+    )
+
+
+def terminal_partition(
+    txs: Sequence[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Independently enforce duplicate/reversal terminal ownership."""
+
+    reference_index: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for tx in txs:
+        reference = tx.get("bank_reference_token")
+        if reference is not None:
+            reference_index.setdefault(
+                (str(tx["tenant_id"]), str(reference)), []
+            ).append(tx)
+
+    claimed: set[str] = set()
+    groups: list[dict[str, Any]] = []
+    for tx in txs:
+        link = tx.get("reversal_of_reference_token")
+        if link is None:
+            continue
+        targets = reference_index.get((str(tx["tenant_id"]), str(link)), [])
+        if len(targets) != 1:
+            block("BLOCK_REVERSAL_BINDING")
+        target = targets[0]
+        uids = sorted((str(tx["txn_uid"]), str(target["txn_uid"])))
+        if (
+            uids[0] == uids[1]
+            or tx["row_kind"] != "PRINCIPAL"
+            or target["row_kind"] != "PRINCIPAL"
+            or tx["account_id"] != target["account_id"]
+            or tx["direction"] == target["direction"]
+            or tx["amount_minor"] != target["amount_minor"]
+            or tx["currency"] != target["currency"]
+            or claimed.intersection(uids)
+        ):
+            block("BLOCK_REVERSAL_BINDING")
+        claimed.update(uids)
+        reason = "BLOCK_REVERSAL_BINDING"
+        groups.append(
+            {
+                "group_id": digest(
+                    {"transaction_uids": uids, "reason_code": reason}
+                ),
+                "state": "BLOCKED",
+                "reason_code": reason,
+                "transaction_uids": uids,
+            }
+        )
+
+    for tx in txs:
+        link = tx.get("duplicate_of_reference_token")
+        if link is None:
+            continue
+        targets = reference_index.get((str(tx["tenant_id"]), str(link)), [])
+        uid = str(tx["txn_uid"])
+        if (
+            len(targets) != 1
+            or targets[0]["txn_uid"] == uid
+            or uid in claimed
+        ):
+            block("BLOCK_DUPLICATE_BINDING")
+        claimed.add(uid)
+        reason = "BLOCK_DUPLICATE_BINDING"
+        uids = [uid]
+        groups.append(
+            {
+                "group_id": digest(
+                    {"transaction_uids": uids, "reason_code": reason}
+                ),
+                "state": "BLOCKED",
+                "reason_code": reason,
+                "transaction_uids": uids,
+            }
+        )
+
+    active = [tx for tx in txs if str(tx["txn_uid"]) not in claimed]
+    return active, sorted(groups, key=lambda item: item["group_id"])
+
+
+def multi_binding(
+    outflows: Sequence[Mapping[str, Any]],
+    inflows: Sequence[Mapping[str, Any]],
+    match_type: str,
+    fx_rule: Mapping[str, Any] | None = None,
+) -> str:
     return digest(
         {
-            "outflow": edge["outflow_txn_uid"],
-            "inflow": edge["inflow_txn_uid"],
-            "fee": edge["fee_txn_uid"],
-            "mode": edge["fee_mode"],
-            "fee_minor": edge["fee_minor"],
-            "eligibility_basis": edge["eligibility_basis"],
-            "binding_digest": edge["binding_digest"],
+            "domain": "BUTLER_A4_STRONG_BINDING_V5_4",
+            "tenant_id": outflows[0]["tenant_id"],
+            "outflow_txn_uids": sorted(item["txn_uid"] for item in outflows),
+            "inflow_txn_uids": sorted(item["txn_uid"] for item in inflows),
+            "outflow_account_ids": sorted({item["account_id"] for item in outflows}),
+            "inflow_account_ids": sorted({item["account_id"] for item in inflows}),
+            "match_type": match_type,
+            "fx_rule_id": fx_rule.get("rule_id") if fx_rule else None,
+            "fx_receipt_digest": (
+                fx_rule.get("rate_source_receipt_digest") if fx_rule else None
+            ),
+            "eligibility_basis": "RECIPROCAL_ACCOUNT",
         }
+    )
+
+
+def aggregate_delta_ms(items: Sequence[Mapping[str, Any]]) -> int:
+    times = [parse_time(item["booked_at_utc"]) for item in items]
+    return int((max(times) - min(times)).total_seconds() * 1_000)
+
+
+def exact_fx_rule(
+    rule: Mapping[str, Any],
+    outflow: Mapping[str, Any],
+    inflow: Mapping[str, Any],
+) -> bool:
+    required = {
+        "rule_id", "from_currency", "to_currency", "rate_numerator",
+        "rate_denominator", "source_fee_minor", "target_fee_minor",
+        "spread_bps", "rounding_mode", "effective_from", "effective_to",
+        "rate_source_receipt_digest",
+    }
+    if not isinstance(rule, dict) or set(rule) != required:
+        block("BLOCK_POLICY")
+    integers = [
+        rule["rate_numerator"], rule["rate_denominator"],
+        rule["source_fee_minor"], rule["target_fee_minor"], rule["spread_bps"],
+    ]
+    if any(type(value) is not int for value in integers) or not (
+        1 <= integers[0] <= 1_000_000_000_000
+        and 1 <= integers[1] <= 1_000_000_000_000
+        and 0 <= integers[2] <= MAX_MONEY
+        and 0 <= integers[3] <= MAX_MONEY
+        and 0 <= integers[4] < 10_000
+        and rule["rounding_mode"] == "EXACT_RATIONAL"
+        and re.fullmatch(r"[A-Z]{3}", str(rule["from_currency"]))
+        and re.fullmatch(r"[A-Z]{3}", str(rule["to_currency"]))
+        and rule["from_currency"] != rule["to_currency"]
+        and re.fullmatch(r"[A-Za-z0-9._:-]{1,96}", str(rule["rule_id"]))
+        and re.fullmatch(r"[0-9a-f]{64}", str(rule["rate_source_receipt_digest"]))
+    ):
+        block("BLOCK_POLICY")
+    start, end = parse_time(rule["effective_from"]), parse_time(rule["effective_to"])
+    source_time, target_time = parse_time(outflow["booked_at_utc"]), parse_time(inflow["booked_at_utc"])
+    source = outflow["amount_minor"] - rule["source_fee_minor"]
+    target = inflow["amount_minor"] + rule["target_fee_minor"]
+    return (
+        rule["from_currency"] == outflow["currency"]
+        and rule["to_currency"] == inflow["currency"]
+        and start <= source_time <= end
+        and start <= target_time <= end
+        and source > 0
+        and target > 0
+        and source * rule["rate_numerator"] * (10_000 - rule["spread_bps"])
+        == target * rule["rate_denominator"] * 10_000
     )
 
 
 def rebuild_edges(
     txs: Sequence[dict[str, Any]], policy: Mapping[str, Any]
-) -> tuple[list[dict[str, Any]], int, int]:
+) -> tuple[list[dict[str, Any]], int, int, int]:
     required_policy = {
         "min_signed_gap_days",
         "max_signed_gap_days",
@@ -1200,7 +1473,21 @@ def rebuild_edges(
         "max_memory_bytes",
         "fee_rules",
     }
-    if set(policy) != required_policy or not isinstance(policy["fee_rules"], list):
+    optional_policy = {"max_subset_size", "max_subset_branches", "fx_rules"}
+    if (
+        not required_policy <= set(policy) <= required_policy | optional_policy
+        or not isinstance(policy["fee_rules"], list)
+        or not isinstance(policy.get("fx_rules", []), list)
+    ):
+        block("BLOCK_POLICY")
+    subset_cap = policy.get("max_subset_size", 8)
+    branch_cap = policy.get("max_subset_branches", 4_096)
+    if (
+        type(subset_cap) is not int
+        or not 2 <= subset_cap <= 8
+        or type(branch_cap) is not int
+        or not 1 <= branch_cap <= 65_536
+    ):
         block("BLOCK_POLICY")
     caps = (
         policy["max_transactions"],
@@ -1305,8 +1592,12 @@ def rebuild_edges(
                     or outflow["account_id"] == inflow["account_id"]
                 ):
                     continue
-                left_day = datetime.fromisoformat(outflow["local_date"]).date()
-                right_day = datetime.fromisoformat(inflow["local_date"]).date()
+                left_day = datetime.fromisoformat(
+                    outflow.get("value_date") or outflow["local_date"]
+                ).date()
+                right_day = datetime.fromisoformat(
+                    inflow.get("value_date") or inflow["local_date"]
+                ).date()
                 gap = (right_day - left_day).days
                 if (
                     not policy["min_signed_gap_days"]
@@ -1418,19 +1709,166 @@ def rebuild_edges(
                     result[candidate["edge_id"]] = candidate
                     if len(result) > policy["max_candidate_edges"]:
                         block("BLOCK_RESOURCE_LIMIT")
-    return [result[key] for key in sorted(result)], pair_checks, max_bucket_size
+    outflows = [tx for tx in principals if tx["direction"] == "OUTFLOW"]
+    inflows = [tx for tx in principals if tx["direction"] == "INFLOW"]
+    subset_branches = 0
+
+    def add_subset(
+        candidate_outflows: tuple[dict[str, Any], ...],
+        candidate_inflows: tuple[dict[str, Any], ...],
+    ) -> None:
+        nonlocal subset_branches
+        subset_branches += 1
+        if subset_branches > branch_cap:
+            block("BLOCK_RESOURCE_SUBSET_BRANCHES")
+        currencies = {
+            tx["currency"] for tx in (*candidate_outflows, *candidate_inflows)
+        }
+        if len(currencies) != 1:
+            return
+        out_total = sum(tx["amount_minor"] for tx in candidate_outflows)
+        in_total = sum(tx["amount_minor"] for tx in candidate_inflows)
+        fee_rule = None
+        if out_total == in_total:
+            match_type = "PARTIAL"
+            fee_mode, fee_minor = "NO_FEE", 0
+            grade = "OBSERVED_PRINCIPAL"
+        elif out_total > in_total:
+            fee_minor = out_total - in_total
+            matching_rules = []
+            for rule in policy["fee_rules"]:
+                if not isinstance(rule, dict) or type(rule.get("fee_minor")) is not int:
+                    block("BLOCK_POLICY")
+                if rule["fee_minor"] != fee_minor:
+                    continue
+                if all(
+                    rule.get("bank_code") == tx["bank_code"]
+                    and rule.get("product_code") == tx["product_code_id"]
+                    and rule.get("channel") == tx["channel_id"]
+                    and type(rule.get("min_amount_minor")) is int
+                    and rule["min_amount_minor"] <= in_total <= rule.get("max_amount_minor", -1)
+                    and parse_time(rule["effective_from"])
+                    <= parse_time(tx["booked_at_utc"])
+                    <= parse_time(rule["effective_to"])
+                    for tx in candidate_outflows
+                ):
+                    matching_rules.append(rule)
+            if len(matching_rules) > 1:
+                block("BLOCK_AMBIGUOUS_FEE_RULE")
+            if not matching_rules:
+                return
+            fee_rule = matching_rules[0]
+            match_type, fee_mode = "FEE_ADJUSTED", "EMBEDDED_DEBIT"
+            grade = "SCHEDULE_SUPPORTED_FEE_CANDIDATE"
+        else:
+            return
+        ordered_out = tuple(sorted(candidate_outflows, key=lambda tx: tx["txn_uid"]))
+        ordered_in = tuple(sorted(candidate_inflows, key=lambda tx: tx["txn_uid"]))
+        edge = {
+            "outflow_txn_uid": ordered_out[0]["txn_uid"],
+            "inflow_txn_uid": ordered_in[0]["txn_uid"],
+            "fee_txn_uid": None,
+            "fee_mode": fee_mode,
+            "fee_minor": fee_minor,
+            "currency": next(iter(currencies)),
+            "evidence_grade": grade,
+            "policy_rule_id": fee_rule.get("rule_id") if fee_rule else None,
+            "time_delta_ms": aggregate_delta_ms((*ordered_out, *ordered_in)),
+            "exact_reference": all(
+                exact_ref(left, right) for left in ordered_out for right in ordered_in
+            ),
+            "eligibility_basis": "RECIPROCAL_ACCOUNT",
+            "binding_digest": multi_binding(ordered_out, ordered_in, match_type),
+            "affects_reporting": False,
+            "outflow_txn_uids": [tx["txn_uid"] for tx in ordered_out],
+            "inflow_txn_uids": [tx["txn_uid"] for tx in ordered_in],
+            "match_type": match_type,
+            "currency_mode": next(iter(currencies)),
+            "fx_rule_id": None,
+            "fx_receipt_digest": None,
+        }
+        edge["edge_id"] = edge_digest(edge)
+        result[edge["edge_id"]] = edge
+        if len(result) > policy["max_candidate_edges"]:
+            block("BLOCK_RESOURCE_LIMIT")
+
+    for outflow in outflows:
+        eligible = sorted(
+            (
+                tx for tx in inflows
+                if tx["currency"] == outflow["currency"]
+                and strong_pair(outflow, tx, policy)
+            ),
+            key=lambda tx: tx["txn_uid"],
+        )
+        for size in range(2, min(subset_cap, len(eligible)) + 1):
+            for subset in itertools.combinations(eligible, size):
+                add_subset((outflow,), subset)
+    for inflow in inflows:
+        eligible = sorted(
+            (
+                tx for tx in outflows
+                if tx["currency"] == inflow["currency"]
+                and strong_pair(tx, inflow, policy)
+            ),
+            key=lambda tx: tx["txn_uid"],
+        )
+        for size in range(2, min(subset_cap, len(eligible)) + 1):
+            for subset in itertools.combinations(eligible, size):
+                add_subset(subset, (inflow,))
+
+    for outflow in outflows:
+        for inflow in inflows:
+            if outflow["currency"] == inflow["currency"] or not strong_pair(
+                outflow, inflow, policy
+            ):
+                continue
+            matching = [
+                rule for rule in policy.get("fx_rules", [])
+                if exact_fx_rule(rule, outflow, inflow)
+            ]
+            if len(matching) > 1:
+                block("BLOCK_AMBIGUOUS_FX_RULE")
+            if not matching:
+                continue
+            rule = matching[0]
+            edge = {
+                "outflow_txn_uid": outflow["txn_uid"],
+                "inflow_txn_uid": inflow["txn_uid"],
+                "fee_txn_uid": None,
+                "fee_mode": "NO_FEE",
+                "fee_minor": 0,
+                "currency": outflow["currency"],
+                "evidence_grade": "RECEIPT_BOUND_FX",
+                "policy_rule_id": rule["rule_id"],
+                "time_delta_ms": aggregate_delta_ms((outflow, inflow)),
+                "exact_reference": exact_ref(outflow, inflow),
+                "eligibility_basis": "RECIPROCAL_ACCOUNT",
+                "binding_digest": multi_binding((outflow,), (inflow,), "FX", rule),
+                "affects_reporting": False,
+                "outflow_txn_uids": [outflow["txn_uid"]],
+                "inflow_txn_uids": [inflow["txn_uid"]],
+                "match_type": "FX",
+                "currency_mode": f"{rule['from_currency']}/{rule['to_currency']}",
+                "fx_rule_id": rule["rule_id"],
+                "fx_receipt_digest": rule["rate_source_receipt_digest"],
+            }
+            edge["edge_id"] = edge_digest(edge)
+            result[edge["edge_id"]] = edge
+            if len(result) > policy["max_candidate_edges"]:
+                block("BLOCK_RESOURCE_LIMIT")
+    return [result[key] for key in sorted(result)], pair_checks, max_bucket_size, subset_branches
 
 
 def edge_nodes(edge: Mapping[str, Any]) -> frozenset[str]:
-    return frozenset(
-        value
-        for value in (
-            edge["outflow_txn_uid"],
-            edge["inflow_txn_uid"],
-            edge["fee_txn_uid"],
-        )
-        if value
-    )
+    values = {
+        edge["outflow_txn_uid"],
+        edge["inflow_txn_uid"],
+        edge["fee_txn_uid"],
+        *edge.get("outflow_txn_uids", []),
+        *edge.get("inflow_txn_uids", []),
+    }
+    return frozenset(value for value in values if value)
 
 
 def components(edges: Sequence[dict[str, Any]]) -> list[list[dict[str, Any]]]:
@@ -1482,7 +1920,7 @@ def solve(group: Sequence[dict[str, Any]]) -> DP:
                 continue
             suffix = visit(index + 1, used | nodes)
             cost = (
-                -1,
+                -len(edge_nodes(edge) - ({edge["fee_txn_uid"]} if edge["fee_txn_uid"] else set())),
                 edge["time_delta_ms"],
                 int(edge["evidence_grade"] == "SCHEDULE_SUPPORTED_FEE_CANDIDATE"),
             )
@@ -1514,7 +1952,10 @@ def solve(group: Sequence[dict[str, Any]]) -> DP:
 
 
 def expected_classification(
-    run_id: str, txs: Sequence[dict[str, Any]], edges: list[dict[str, Any]]
+    run_id: str,
+    txs: Sequence[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    terminal_groups: Sequence[dict[str, Any]] = (),
 ) -> dict[str, Any]:
     component_docs: list[dict[str, Any]] = []
     forced_all: set[str] = set()
@@ -1557,7 +1998,7 @@ def expected_classification(
         )
     forced_edges = [edge for edge in edges if edge["edge_id"] in forced_all]
     unmatched = sorted(tx["txn_uid"] for tx in txs if tx["txn_uid"] not in graph_nodes)
-    return {
+    result = {
         "schema_version": "2.0.0",
         "run_id": run_id,
         "forced_edges": forced_edges,
@@ -1566,6 +2007,9 @@ def expected_classification(
         "shadow_only": True,
         "affects_reporting": False,
     }
+    if terminal_groups:
+        result["terminal_groups"] = list(terminal_groups)
+    return result
 
 
 def verify_dlp(docs: Mapping[str, Any]) -> None:
@@ -1596,6 +2040,10 @@ def verify_dlp(docs: Mapping[str, Any]) -> None:
         "fee_type",
         "product_code",
         "channel",
+        "currency",
+        "value_date",
+        "duplicate_of_reference",
+        "reversal_of_reference",
         "allowed_date_formats",
     }
     count = 0
@@ -1710,7 +2158,10 @@ def verify(
     )
     if docs["policy_receipt.json"]["policy_digest"] != run["policy_digest"]:
         block("BLOCK_BINDING")
-    rebuilt, pair_checks, max_bucket_size = rebuild_edges(txs, policy)
+    active_txs, terminal_groups = terminal_partition(txs)
+    rebuilt, pair_checks, max_bucket_size, subset_branches = rebuild_edges(
+        active_txs, policy
+    )
     observed = graph
     expected_graph_keys = {
         "schema_version",
@@ -1721,6 +2172,7 @@ def verify(
         "policy_payload",
         "candidate_pair_checks",
         "max_candidate_bucket_size",
+        "candidate_subset_branches",
         "edges",
     }
     if (
@@ -1735,10 +2187,13 @@ def verify(
         ]
         or observed.get("candidate_pair_checks") != pair_checks
         or observed.get("max_candidate_bucket_size") != max_bucket_size
+        or observed.get("candidate_subset_branches") != subset_branches
         or observed.get("edges") != rebuilt
     ):
         block("BLOCK_GRAPH")
-    expected_result = expected_classification(run["run_id"], txs, rebuilt)
+    expected_result = expected_classification(
+        run["run_id"], active_txs, rebuilt, terminal_groups
+    )
     if docs["classification_receipt.json"] != expected_result:
         block("BLOCK_OPTIMUM")
     invariants = docs["runtime_invariants.json"]
@@ -1780,8 +2235,8 @@ def verify(
             block("BLOCK_CODE_CLOSURE")
     verified_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     receipt = {
-        "schema_version": "butler.box5.a4.verification_receipt.v3.2",
-        "contract_id": "BUTLER-BOX5-A4-V3.2-AUTHORITY-ISOLATED",
+        "schema_version": "butler.box5.a4.verification_receipt.v5.3",
+        "contract_id": "BUTLER-BOX5-A4-V5.3-NATIVE-AUTHORITY",
         "run_id": run["run_id"],
         "nonce": run["nonce"].lower(),
         "decision": "PASS",
@@ -1797,55 +2252,10 @@ def verify(
         "registry_digest": run["registry_digest"],
         "code_tree_oid": run["code_tree_oid"],
         "code_closure_digest": code_closure_digest,
-        "verifier_id": "BUTLER_A4_ISOLATED_RAW_COMPILER_V3.2",
+        "verifier_id": "BUTLER_A4_ISOLATED_RAW_COMPILER_V5.3",
         "verified_at_utc": verified_at,
     }
     return receipt
-
-
-def _read_exact(connection: socket.socket, size: int) -> bytes:
-    result = bytearray()
-    while len(result) < size:
-        chunk = connection.recv(size - len(result))
-        if not chunk:
-            block("BLOCK_TRUST_UNAVAILABLE")
-        result.extend(chunk)
-    return bytes(result)
-
-
-def _receive_authority_request(connection: socket.socket) -> tuple[dict[str, Any], int]:
-    descriptor_size = array.array("i").itemsize
-    header, ancillary, _flags, _address = connection.recvmsg(
-        4, socket.CMSG_SPACE(descriptor_size)
-    )
-    if len(header) < 4:
-        header += _read_exact(connection, 4 - len(header))
-    descriptors: list[int] = []
-    for level, kind, data in ancillary:
-        if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
-            values = array.array("i")
-            values.frombytes(data[: len(data) - (len(data) % descriptor_size)])
-            descriptors.extend(values.tolist())
-    if len(descriptors) != 1:
-        for descriptor in descriptors:
-            os.close(descriptor)
-        block("BLOCK_INPUT_CLOSURE")
-    size = struct.unpack(">I", header)[0]
-    if not 0 < size <= MAX_AUTHORITY_REQUEST_BYTES:
-        os.close(descriptors[0])
-        block("BLOCK_RESOURCE_LIMIT")
-    request = strict_load(_read_exact(connection, size))
-    if not isinstance(request, dict):
-        os.close(descriptors[0])
-        block("BLOCK_SCHEMA")
-    return request, descriptors[0]
-
-
-def _send_authority_response(connection: socket.socket, response: Mapping[str, Any]) -> None:
-    payload = jcs(response)
-    if not 0 < len(payload) <= MAX_AUTHORITY_RESPONSE_BYTES:
-        block("BLOCK_RESOURCE_LIMIT")
-    connection.sendall(struct.pack(">I", len(payload)) + payload)
 
 
 def _decode_b64(value: object, *, maximum: int) -> bytes:
@@ -1908,91 +2318,6 @@ def _read_trust_file(path: Path) -> bytes:
             os.close(descriptor)
 
 
-def _authority_trust(path: Path, *, allow_test: bool) -> tuple[dict[str, Any], str]:
-    raw = _read_trust_file(path)
-    trust = strict_load(raw)
-    required = {
-        "schema_version",
-        "enabled",
-        "environment",
-        "authority_id",
-        "transport",
-        "algorithm",
-        "signer_key_id",
-        "public_key_b64",
-        "revocation_epoch",
-        "not_before_utc",
-        "not_after_utc",
-    }
-    if (
-        not isinstance(trust, dict)
-        or set(trust) != required
-        or raw not in {jcs(trust), jcs(trust) + b"\n"}
-        or trust.get("schema_version")
-        != "butler.box5.a4.verifier_authority_trust.v1"
-        or trust.get("enabled") is not True
-        or trust.get("transport") != AUTHORITY_TRANSPORT
-        or trust.get("algorithm") != "Ed25519"
-        or (
-            trust.get("environment") != "PRODUCTION"
-            and not (allow_test and trust.get("environment") == "TEST")
-        )
-        or not re.fullmatch(r"[A-Za-z0-9._-]{3,80}", str(trust.get("authority_id", "")))
-        or not re.fullmatch(r"[A-Za-z0-9._-]{3,80}", str(trust.get("signer_key_id", "")))
-        or not isinstance(trust.get("revocation_epoch"), int)
-        or isinstance(trust.get("revocation_epoch"), bool)
-        or trust["revocation_epoch"] < 0
-    ):
-        block("BLOCK_TRUST_UNAVAILABLE")
-    now = datetime.now(timezone.utc)
-    if not all(
-        isinstance(trust.get(name), str) and str(trust[name]).endswith("Z")
-        for name in ("not_before_utc", "not_after_utc")
-    ):
-        block("BLOCK_TRUST_UNAVAILABLE")
-    try:
-        not_before = datetime.fromisoformat(
-            str(trust["not_before_utc"])[:-1] + "+00:00"
-        )
-        not_after = datetime.fromisoformat(
-            str(trust["not_after_utc"])[:-1] + "+00:00"
-        )
-        public_key = base64.b64decode(str(trust["public_key_b64"]), validate=True)
-    except (ValueError, TypeError):
-        block("BLOCK_TRUST_UNAVAILABLE")
-    if (
-        len(public_key) != 32
-        or not_before.tzinfo is None
-        or not_after.tzinfo is None
-        or not not_before.astimezone(timezone.utc) <= now < not_after.astimezone(timezone.utc)
-    ):
-        block("BLOCK_TRUST_UNAVAILABLE")
-    trust["public_key_raw"] = public_key
-    return trust, hashlib.sha256(raw).hexdigest()
-
-
-def _signing_key(fd: int, expected_public_key: bytes) -> Ed25519PrivateKey:
-    try:
-        seed = bytearray()
-        while len(seed) <= 32:
-            chunk = os.read(fd, 33 - len(seed))
-            if not chunk:
-                break
-            seed.extend(chunk)
-    finally:
-        os.close(fd)
-    if len(seed) != 32:
-        block("BLOCK_TRUST_UNAVAILABLE")
-    try:
-        private_key = Ed25519PrivateKey.from_private_bytes(bytes(seed))
-    finally:
-        for index in range(len(seed)):
-            seed[index] = 0
-    if private_key.public_key().public_bytes_raw() != expected_public_key:
-        block("BLOCK_TRUST_UNAVAILABLE")
-    return private_key
-
-
 def _write_private(path: Path, payload: bytes) -> None:
     descriptor = os.open(
         path,
@@ -2014,16 +2339,16 @@ def _write_private(path: Path, payload: bytes) -> None:
 def _verified_unsigned_receipt(
     request: Mapping[str, Any],
     source_fd: int,
-    trust_digest: str,
     *,
     require_bundled_build_stamp: bool,
 ) -> dict[str, Any]:
     required = {
         "schema_version",
-        "request_nonce",
+        "protocol_version",
         "tenant_id",
         "source_suffix",
         "authority_trust_digest",
+        "source_payload_digest",
         "evidence_files_b64",
         "finance_trust_b64",
         "dictionary_b64",
@@ -2031,9 +2356,14 @@ def _verified_unsigned_receipt(
     }
     if (
         set(request) != required
-        or request.get("schema_version") != AUTHORITY_REQUEST_SCHEMA
-        or not re.fullmatch(r"[0-9a-f]{64}", str(request.get("request_nonce", "")))
-        or request.get("authority_trust_digest") != trust_digest
+        or request.get("schema_version") != "butler.box5.a4.producer_request.v5.3"
+        or request.get("protocol_version") != PROTOCOL_VERSION
+        or not re.fullmatch(
+            r"[0-9a-f]{64}", str(request.get("authority_trust_digest", ""))
+        )
+        or not re.fullmatch(
+            r"[0-9a-f]{64}", str(request.get("source_payload_digest", ""))
+        )
         or request.get("source_suffix") not in {".csv", ".xls", ".xlsx"}
         or not isinstance(request.get("evidence_files_b64"), dict)
         or set(request["evidence_files_b64"]) != FILES
@@ -2078,204 +2408,143 @@ def _verified_unsigned_receipt(
         )
 
 
-def _handle_authority_connection(
-    connection: socket.socket,
-    *,
-    trust: Mapping[str, Any],
-    trust_digest: str,
-    private_key: Ed25519PrivateKey,
-    signing_lock: threading.Lock,
-    require_bundled_build_stamp: bool,
-) -> None:
-    request_nonce = "0" * 64
-    source_fd = -1
-    try:
-        request, source_fd = _receive_authority_request(connection)
-        if re.fullmatch(r"[0-9a-f]{64}", str(request.get("request_nonce", ""))):
-            request_nonce = str(request["request_nonce"])
-        receipt = _verified_unsigned_receipt(
-            request,
-            source_fd,
-            trust_digest,
-            require_bundled_build_stamp=require_bundled_build_stamp,
-        )
-        receipt.update(
-            {
-                "authority_id": trust["authority_id"],
-                "signer_key_id": trust["signer_key_id"],
-                "signer_revocation_epoch": trust["revocation_epoch"],
-                "signer_trust_digest": trust_digest,
-            }
-        )
-        # cryptography does not promise that every backend key object is safe
-        # for concurrent use. Verification remains parallel; signing is short
-        # and serialized around the one authority-owned key.
-        with signing_lock:
-            signature = private_key.sign(jcs(receipt))
-        receipt["signature"] = base64.urlsafe_b64encode(signature).decode(
-            "ascii"
-        ).rstrip("=")
-        response = {
-            "schema_version": AUTHORITY_RESPONSE_SCHEMA,
-            "request_nonce": request_nonce,
-            "status": "PASS",
-            "error_code": "NONE",
-            "receipt": receipt,
-        }
-    except Block as exc:
-        response = {
-            "schema_version": AUTHORITY_RESPONSE_SCHEMA,
-            "request_nonce": request_nonce,
-            "status": "BLOCK",
-            "error_code": str(exc),
-            "receipt": None,
-        }
-    except Exception:
-        response = {
-            "schema_version": AUTHORITY_RESPONSE_SCHEMA,
-            "request_nonce": request_nonce,
-            "status": "BLOCK",
-            "error_code": "BLOCK_INTERNAL",
-            "receipt": None,
-        }
-    finally:
-        if source_fd >= 0:
-            os.close(source_fd)
-    try:
-        _send_authority_response(connection, response)
-    except (BrokenPipeError, ConnectionError, OSError, TimeoutError):
-        return
+def _read_stream_exact(size: int) -> bytes:
+    if size < 0:
+        block("BLOCK_REQUEST_SIZE")
+    value = sys.stdin.buffer.read(size)
+    if len(value) != size:
+        block("BLOCK_REQUEST_SIZE")
+    return value
 
 
-def _serve_authority_client(
-    connection: socket.socket,
-    *,
-    trust: Mapping[str, Any],
-    trust_digest: str,
-    private_key: Ed25519PrivateKey,
-    signing_lock: threading.Lock,
-    client_slots: threading.BoundedSemaphore,
-    require_bundled_build_stamp: bool,
-) -> None:
+def _receive_verify_request() -> tuple[dict[str, Any], bytes]:
+    request_size = struct.unpack(">I", _read_stream_exact(4))[0]
+    if not 0 < request_size <= MAX_REQUEST_BYTES:
+        block("BLOCK_REQUEST_SIZE")
+    wrapper = strict_load(_read_stream_exact(request_size))
+    source_size = struct.unpack(">Q", _read_stream_exact(8))[0]
+    if not 0 < source_size <= MAX_SOURCE_BYTES:
+        block("BLOCK_REQUEST_SIZE")
+    source = _read_stream_exact(source_size)
+    if sys.stdin.buffer.read(1):
+        block("BLOCK_REQUEST_SCHEMA")
+    if not isinstance(wrapper, dict):
+        block("BLOCK_REQUEST_SCHEMA")
+    return wrapper, source
+
+
+def _verify_request_wrapper(
+    wrapper: Mapping[str, Any], source: bytes, *, require_bundled_build_stamp: bool
+) -> dict[str, Any]:
+    required = {
+        "schema_version",
+        "protocol_version",
+        "challenge",
+        "producer_request",
+        "request_digest",
+        "source_payload_digest",
+    }
+    if (
+        set(wrapper) != required
+        or wrapper.get("schema_version") != VERIFY_REQUEST_SCHEMA
+        or wrapper.get("protocol_version") != PROTOCOL_VERSION
+        or not isinstance(wrapper.get("challenge"), dict)
+        or not isinstance(wrapper.get("producer_request"), dict)
+    ):
+        block("BLOCK_REQUEST_SCHEMA")
     try:
-        with connection:
-            connection.settimeout(AUTHORITY_HANDSHAKE_TIMEOUT_SECONDS)
-            _handle_authority_connection(
-                connection,
-                trust=trust,
-                trust_digest=trust_digest,
-                private_key=private_key,
-                signing_lock=signing_lock,
+        challenge = AuthorityChallenge.from_mapping(wrapper["challenge"])
+        computed_request_digest = request_digest(wrapper["producer_request"])
+    except (TypeError, ValueError):
+        block("BLOCK_REQUEST_SCHEMA")
+    source_digest = sha256_hex(source)
+    if (
+        wrapper.get("request_digest") != computed_request_digest
+        or wrapper.get("source_payload_digest") != source_digest
+        or wrapper["producer_request"].get("source_payload_digest") != source_digest
+    ):
+        block("BLOCK_SOURCE_DIGEST")
+    source_descriptor = -1
+    with tempfile.TemporaryDirectory(prefix="butler-a4-verifier-") as temporary:
+        source_path = Path(temporary) / ("source" + str(wrapper["producer_request"].get("source_suffix", "")))
+        _write_private(source_path, source)
+        source_descriptor = os.open(
+            source_path,
+            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
+        try:
+            receipt = _verified_unsigned_receipt(
+                wrapper["producer_request"],
+                source_descriptor,
                 require_bundled_build_stamp=require_bundled_build_stamp,
             )
-    finally:
-        client_slots.release()
+        finally:
+            os.close(source_descriptor)
+    return verified_observation(
+        receipt,
+        challenge=challenge,
+        request_digest=computed_request_digest,
+        source_payload_digest=source_digest,
+    )
 
 
-def serve_authority(
-    socket_path: Path,
-    authority_trust_path: Path,
-    signing_key_fd: int,
-    *,
-    allow_test_authority: bool,
-    require_bundled_build_stamp: bool = False,
-) -> int:
-    trust, trust_digest = _authority_trust(
-        authority_trust_path, allow_test=allow_test_authority
-    )
-    private_key = _signing_key(signing_key_fd, trust["public_key_raw"])
-    try:
-        parent = socket_path.parent.lstat()
-    except OSError:
-        block("BLOCK_TRUST_UNAVAILABLE")
-    if not stat.S_ISDIR(parent.st_mode) or parent.st_mode & 0o002:
-        block("BLOCK_TRUST_UNAVAILABLE")
-    try:
-        existing = socket_path.lstat()
-    except FileNotFoundError:
-        existing = None
-    if existing is not None:
-        if not stat.S_ISSOCK(existing.st_mode) or existing.st_uid != os.geteuid():
-            block("BLOCK_TRUST_UNAVAILABLE")
-        socket_path.unlink()
-    old_umask = os.umask(0o177)
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    try:
-        server.bind(str(socket_path))
-        os.chmod(socket_path, 0o600)
-        server.listen(AUTHORITY_MAX_CLIENTS)
-    finally:
-        os.umask(old_umask)
-    print("A4_VERIFIER_AUTHORITY_READY=1", flush=True)
-    client_slots = threading.BoundedSemaphore(AUTHORITY_MAX_CLIENTS)
-    signing_lock = threading.Lock()
-    executor = ThreadPoolExecutor(
-        max_workers=AUTHORITY_MAX_CLIENTS,
-        thread_name_prefix="a4-authority",
-    )
-    try:
-        while True:
-            connection, _address = server.accept()
-            if not client_slots.acquire(blocking=False):
-                # Backpressure is fail-closed. Never queue an unbounded number
-                # of descriptors or let a stalled peer monopolize the server.
-                connection.close()
-                continue
-            try:
-                executor.submit(
-                    _serve_authority_client,
-                    connection,
-                    trust=trust,
-                    trust_digest=trust_digest,
-                    private_key=private_key,
-                    signing_lock=signing_lock,
-                    client_slots=client_slots,
-                    require_bundled_build_stamp=require_bundled_build_stamp,
-                )
-            except Exception:
-                connection.close()
-                client_slots.release()
-                raise
-    finally:
-        server.close()
-        executor.shutdown(wait=True, cancel_futures=True)
-        try:
-            socket_path.unlink()
-        except FileNotFoundError:
-            pass
+def _write_observation(observation: Mapping[str, Any]) -> None:
+    payload = jcs(observation)
+    if not 0 < len(payload) <= MAX_RESPONSE_BYTES:
+        block("BLOCK_REQUEST_SIZE")
+    sys.stdout.buffer.write(struct.pack(">I", len(payload)))
+    sys.stdout.buffer.write(payload)
+    sys.stdout.buffer.flush()
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--serve-authority", action="store_true")
-    parser.add_argument("--socket")
-    parser.add_argument("--authority-trust")
-    parser.add_argument("--signing-key-fd", type=int)
-    parser.add_argument("--allow-test-authority", action="store_true")
+    parser.add_argument("--verify-observation", action="store_true")
     parser.add_argument("--require-bundled-build-stamp", action="store_true")
     try:
         args = parser.parse_args()
-        if (
-            not args.serve_authority
-            or args.socket is None
-            or args.authority_trust is None
-            or args.signing_key_fd is None
-        ):
-            block("BLOCK_TRUST_UNAVAILABLE")
-        return serve_authority(
-            Path(args.socket),
-            Path(args.authority_trust),
-            args.signing_key_fd,
-            allow_test_authority=args.allow_test_authority,
-            require_bundled_build_stamp=args.require_bundled_build_stamp,
+        if not args.verify_observation:
+            block("BLOCK_PROTOCOL_VERSION")
+        wrapper, source = _receive_verify_request()
+        _write_observation(
+            _verify_request_wrapper(
+                wrapper,
+                source,
+                require_bundled_build_stamp=args.require_bundled_build_stamp,
+            )
         )
+        return 0
     except Block as exc:
-        print("A4_VERIFIER_AUTHORITY_READY=0")
-        print(f"ERROR_CODE={exc}")
+        _write_observation(
+            {
+                "schema_version": OBSERVATION_SCHEMA,
+                "protocol_version": PROTOCOL_VERSION,
+                "status": "BLOCK",
+                "error_code": public_error_code(str(exc)),
+                "authority_session_id": None,
+                "authority_request_id": None,
+                "authority_nonce_digest": None,
+                "request_digest": None,
+                "source_payload_digest": None,
+                "receipt": None,
+            }
+        )
         return 1
     except Exception:
-        print("A4_VERIFIER_AUTHORITY_READY=0")
-        print("ERROR_CODE=BLOCK_INTERNAL")
+        _write_observation(
+            {
+                "schema_version": OBSERVATION_SCHEMA,
+                "protocol_version": PROTOCOL_VERSION,
+                "status": "BLOCK",
+                "error_code": "UNVERIFIED_INTERNAL",
+                "authority_session_id": None,
+                "authority_request_id": None,
+                "authority_nonce_digest": None,
+                "request_digest": None,
+                "source_payload_digest": None,
+                "receipt": None,
+            }
+        )
         return 1
 
 

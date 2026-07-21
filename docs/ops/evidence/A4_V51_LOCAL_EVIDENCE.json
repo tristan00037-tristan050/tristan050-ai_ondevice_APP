@@ -2,6 +2,7 @@
   "schema_version": "butler.box5.a4.v51.local_evidence.v1",
   "source_directive_sha256": "52477339de3fc76d38cfe26919137e1a5a17f44b0eaf4681fcfe396d23629383",
   "base_commit_oid": "0977585e0c1bdd4065598be4cbc8ef36af856149",
+  "feature_commit_oid": "2a05057046352c5c0335e0fec90b603bbf6c98fd",
   "runtime_activation_allowed": false,
   "findings": [
     {

@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import itertools
 import json
 import math
 import re
@@ -39,6 +40,7 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _OID = re.compile(r"^[0-9a-f]{40,64}$")
 _TOKEN = re.compile(r"^[0-9a-f]{32}$")
 _POLICY_ID = re.compile(r"^[A-Za-z0-9._:-]{1,96}$")
+_CURRENCY = re.compile(r"^[A-Z]{3}$")
 _INT_SOURCE = re.compile(r"^(?:0|[1-9][0-9]{0,18})$")
 _INT_GROUPED = re.compile(r"^(?:0|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$")
 _UUID_NAMESPACE = uuid.UUID("b8f2ceca-9183-5c4a-9750-3e0ed0f87066")
@@ -177,6 +179,14 @@ class EvidenceGrade(StrEnum):
     OBSERVED_PRINCIPAL = "OBSERVED_PRINCIPAL"
     SCHEDULE_SUPPORTED_FEE_CANDIDATE = "SCHEDULE_SUPPORTED_FEE_CANDIDATE"
     OBSERVED_FEE = "OBSERVED_FEE"
+    RECEIPT_BOUND_FX = "RECEIPT_BOUND_FX"
+
+
+class MatchType(StrEnum):
+    EXACT = "EXACT"
+    FEE_ADJUSTED = "FEE_ADJUSTED"
+    PARTIAL = "PARTIAL"
+    FX = "FX"
 
 
 class CounterpartyResolution(StrEnum):
@@ -296,6 +306,48 @@ class FeeRule:
 
 
 @dataclass(frozen=True, slots=True)
+class FxRule:
+    """Finance-approved, receipt-bound rational FX conversion."""
+
+    rule_id: str
+    from_currency: str
+    to_currency: str
+    rate_numerator: int
+    rate_denominator: int
+    source_fee_minor: int
+    target_fee_minor: int
+    spread_bps: int
+    rounding_mode: str
+    effective_from: datetime
+    effective_to: datetime
+    rate_source_receipt_digest: str
+
+    def matches(
+        self,
+        *,
+        source: "CompiledTransaction",
+        target: "CompiledTransaction",
+    ) -> bool:
+        if (
+            source.currency != self.from_currency
+            or target.currency != self.to_currency
+            or not self.effective_from <= source.booked_at_utc <= self.effective_to
+            or not self.effective_from <= target.booked_at_utc <= self.effective_to
+        ):
+            return False
+        source_principal = source.amount_minor - self.source_fee_minor
+        target_principal = target.amount_minor + self.target_fee_minor
+        if source_principal <= 0 or target_principal <= 0:
+            return False
+        return (
+            source_principal
+            * self.rate_numerator
+            * (10_000 - self.spread_bps)
+            == target_principal * self.rate_denominator * 10_000
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class VerifiedPolicy:
     receipt: Mapping[str, Any]
     payload: Mapping[str, Any]
@@ -308,6 +360,9 @@ class VerifiedPolicy:
     max_pair_checks: int = MAX_CANDIDATE_EDGES
     max_trace_bucket: int = 10_000
     max_memory_bytes: int = 512 * 1024 * 1024
+    max_subset_size: int = 8
+    max_subset_branches: int = 4_096
+    fx_rules: tuple[FxRule, ...] = ()
 
 
 def verify_signed_policy(
@@ -391,7 +446,7 @@ def verify_signed_policy(
     except (ValueError, TypeError, InvalidSignature) as exc:
         raise A4ContractError("BLOCK_SIGNATURE") from exc
 
-    allowed_payload = {
+    required_payload = {
         "min_signed_gap_days",
         "max_signed_gap_days",
         "max_component_nodes",
@@ -402,7 +457,8 @@ def verify_signed_policy(
         "max_memory_bytes",
         "fee_rules",
     }
-    if set(payload) != allowed_payload:
+    optional_payload = {"max_subset_size", "max_subset_branches", "fx_rules"}
+    if not required_payload <= set(payload) <= required_payload | optional_payload:
         raise A4ContractError("BLOCK_POLICY")
     low, high = payload["min_signed_gap_days"], payload["max_signed_gap_days"]
     nodes, edge_cap = payload["max_component_nodes"], payload["max_candidate_edges"]
@@ -410,6 +466,8 @@ def verify_signed_policy(
     pair_cap = payload["max_pair_checks"]
     trace_cap = payload["max_trace_bucket"]
     memory_cap = payload["max_memory_bytes"]
+    subset_cap = payload.get("max_subset_size", 8)
+    branch_cap = payload.get("max_subset_branches", 4_096)
     if any(
         type(value) is not int
         for value in (
@@ -421,6 +479,8 @@ def verify_signed_policy(
             pair_cap,
             trace_cap,
             memory_cap,
+            subset_cap,
+            branch_cap,
         )
     ):
         raise A4ContractError("BLOCK_POLICY")
@@ -432,6 +492,8 @@ def verify_signed_policy(
         or not 1 <= pair_cap <= MAX_CANDIDATE_EDGES
         or not 1 <= trace_cap <= pair_cap
         or not 1_048_576 <= memory_cap <= 4 * 1024 * 1024 * 1024
+        or not 2 <= subset_cap <= 8
+        or not 1 <= branch_cap <= 65_536
     ):
         raise A4ContractError("BLOCK_POLICY")
     rules: list[FeeRule] = []
@@ -473,6 +535,67 @@ def verify_signed_policy(
                 _rfc3339(item["effective_to"]),
             )
         )
+    fx_rules: list[FxRule] = []
+    raw_fx_rules = payload.get("fx_rules", [])
+    if not isinstance(raw_fx_rules, list):
+        raise A4ContractError("BLOCK_POLICY")
+    fx_keys = {
+        "rule_id",
+        "from_currency",
+        "to_currency",
+        "rate_numerator",
+        "rate_denominator",
+        "source_fee_minor",
+        "target_fee_minor",
+        "spread_bps",
+        "rounding_mode",
+        "effective_from",
+        "effective_to",
+        "rate_source_receipt_digest",
+    }
+    for item in raw_fx_rules:
+        if not isinstance(item, dict) or set(item) != fx_keys:
+            raise A4ContractError("BLOCK_POLICY")
+        integers = (
+            item["rate_numerator"],
+            item["rate_denominator"],
+            item["source_fee_minor"],
+            item["target_fee_minor"],
+            item["spread_bps"],
+        )
+        if any(type(value) is not int for value in integers) or not (
+            1 <= integers[0] <= 1_000_000_000_000
+            and 1 <= integers[1] <= 1_000_000_000_000
+            and 0 <= integers[2] <= MAX_MONEY_MINOR
+            and 0 <= integers[3] <= MAX_MONEY_MINOR
+            and 0 <= integers[4] < 10_000
+            and item["rounding_mode"] == "EXACT_RATIONAL"
+            and _CURRENCY.fullmatch(str(item["from_currency"]))
+            and _CURRENCY.fullmatch(str(item["to_currency"]))
+            and item["from_currency"] != item["to_currency"]
+            and _POLICY_ID.fullmatch(str(item["rule_id"]))
+            and _SHA256.fullmatch(str(item["rate_source_receipt_digest"]))
+        ):
+            raise A4ContractError("BLOCK_POLICY")
+        start, end = _rfc3339(item["effective_from"]), _rfc3339(item["effective_to"])
+        if end <= start:
+            raise A4ContractError("BLOCK_POLICY")
+        fx_rules.append(
+            FxRule(
+                str(item["rule_id"]),
+                str(item["from_currency"]),
+                str(item["to_currency"]),
+                integers[0],
+                integers[1],
+                integers[2],
+                integers[3],
+                integers[4],
+                "EXACT_RATIONAL",
+                start,
+                end,
+                str(item["rate_source_receipt_digest"]),
+            )
+        )
     return VerifiedPolicy(
         receipt,
         payload,
@@ -485,6 +608,9 @@ def verify_signed_policy(
         pair_cap,
         trace_cap,
         memory_cap,
+        subset_cap,
+        branch_cap,
+        tuple(fx_rules),
     )
 
 
@@ -503,6 +629,10 @@ class AdapterContract:
     fee_type: str | None = None
     product_code: str | None = None
     channel: str | None = None
+    currency: str | None = None
+    value_date: str | None = None
+    duplicate_of_reference: str | None = None
+    reversal_of_reference: str | None = None
     allowed_date_formats: tuple[str, ...] = ("%Y-%m-%d", "%Y%m%d")
 
     @property
@@ -524,6 +654,10 @@ class AdapterContract:
             "fee_type": self.fee_type,
             "product_code": self.product_code,
             "channel": self.channel,
+            "currency": self.currency,
+            "value_date": self.value_date,
+            "duplicate_of_reference": self.duplicate_of_reference,
+            "reversal_of_reference": self.reversal_of_reference,
             "allowed_date_formats": list(self.allowed_date_formats),
         }
 
@@ -645,6 +779,9 @@ class CompiledTransaction:
     adapter_id: str = "TEST"
     adapter_digest: str = "0" * 64
     registry_digest: str = "0" * 64
+    value_date: date | None = None
+    duplicate_of_reference_token: str | None = None
+    reversal_of_reference_token: str | None = None
 
     def __post_init__(self) -> None:
         _uuid(self.tenant_id)
@@ -663,7 +800,7 @@ class CompiledTransaction:
             or not 1 <= self.amount_minor <= MAX_MONEY_MINOR
         ):
             raise A4ContractError("BLOCK_RANGE")
-        if self.currency != "KRW" or type(self.local_date) is not date:
+        if not _CURRENCY.fullmatch(self.currency) or type(self.local_date) is not date:
             raise A4ContractError("BLOCK_TYPE")
         if (
             self.booked_at_utc.tzinfo is None
@@ -673,6 +810,19 @@ class CompiledTransaction:
             raise A4ContractError("BLOCK_TIMEZONE")
         if self.row_kind not in {"PRINCIPAL", "FEE"}:
             raise A4ContractError("BLOCK_SCHEMA")
+        if self.value_date is not None and type(self.value_date) is not date:
+            raise A4ContractError("BLOCK_SCHEMA")
+        for link in (
+            self.duplicate_of_reference_token,
+            self.reversal_of_reference_token,
+        ):
+            if link is not None and not _SHA256.fullmatch(link):
+                raise A4ContractError("BLOCK_SCHEMA")
+        if (
+            self.duplicate_of_reference_token is not None
+            and self.reversal_of_reference_token is not None
+        ):
+            raise A4ContractError("BLOCK_REVERSAL_BINDING")
         if (
             not _POLICY_ID.fullmatch(self.product_code_id)
             or not _POLICY_ID.fullmatch(self.channel_id)
@@ -730,6 +880,9 @@ class CompiledTransaction:
             "adapter_id": self.adapter_id,
             "adapter_digest": self.adapter_digest,
             "registry_digest": self.registry_digest,
+            "value_date": self.value_date.isoformat() if self.value_date else None,
+            "duplicate_of_reference_token": self.duplicate_of_reference_token,
+            "reversal_of_reference_token": self.reversal_of_reference_token,
         }
 
 
@@ -931,6 +1084,10 @@ def compile_dataframe(
         adapter.fee_type,
         adapter.product_code,
         adapter.channel,
+        adapter.currency,
+        adapter.value_date,
+        adapter.duplicate_of_reference,
+        adapter.reversal_of_reference,
     ]
     active = [_header(name) for name in semantic_names if name is not None]
     if len(active) != len(set(active)):
@@ -1056,11 +1213,45 @@ def compile_dataframe(
             channel_value = _cell(row.get(positions[_header(adapter.channel)])) or "DEFAULT"
         product_code_id = dictionary.resolve_product(product_code_value)
         channel_id = dictionary.resolve_channel(channel_value)
+        currency = "KRW"
+        if adapter.currency is not None and _header(adapter.currency) in positions:
+            currency = _cell(row.get(positions[_header(adapter.currency)])).upper()
+            if not _CURRENCY.fullmatch(currency):
+                raise A4ContractError("BLOCK_TYPE")
+        value_day = None
+        if adapter.value_date is not None and _header(adapter.value_date) in positions:
+            raw_value_date = _cell(row.get(positions[_header(adapter.value_date)]))
+            if raw_value_date:
+                _, value_day = _local_datetime(raw_value_date, adapter)
+        duplicate_of_reference_token = None
+        reversal_of_reference_token = None
+        for column_name, token_kind in (
+            (adapter.duplicate_of_reference, "DUPLICATE_OF_REFERENCE"),
+            (adapter.reversal_of_reference, "REVERSAL_OF_REFERENCE"),
+        ):
+            if column_name is None or _header(column_name) not in positions:
+                continue
+            raw_link = _cell(row.get(positions[_header(column_name)]))
+            if not raw_link:
+                continue
+            key_id, link_token = token_service.a4_evidence_token(
+                tenant_id, "BANK_REFERENCE", raw_link
+            )
+            key_ids.add(key_id)
+            if token_kind == "DUPLICATE_OF_REFERENCE":
+                duplicate_of_reference_token = link_token
+            else:
+                reversal_of_reference_token = link_token
+        if (
+            duplicate_of_reference_token is not None
+            and reversal_of_reference_token is not None
+        ):
+            raise A4ContractError("BLOCK_REVERSAL_BINDING")
         canonical_row = {
             "account_id": account_id,
             "direction": direction.value,
             "amount_minor": amount,
-            "currency": "KRW",
+            "currency": currency,
             "booked_at_utc": booked_at.isoformat().replace("+00:00", "Z"),
             "local_date": local_day.isoformat(),
             "bank_code": bank_code,
@@ -1074,6 +1265,9 @@ def compile_dataframe(
             "adapter_id": adapter.adapter_id,
             "adapter_digest": adapter.digest,
             "registry_digest": str(own_account_registry["registry_digest"]),
+            "value_date": value_day.isoformat() if value_day else None,
+            "duplicate_of_reference_token": duplicate_of_reference_token,
+            "reversal_of_reference_token": reversal_of_reference_token,
         }
         canonical_row_digest = digest_object(canonical_row)
         source_row_digest = digest_object(
@@ -1118,7 +1312,7 @@ def compile_dataframe(
                 account_id,
                 direction,
                 amount,
-                "KRW",
+                currency,
                 booked_at,
                 local_day,
                 artifact,
@@ -1133,6 +1327,9 @@ def compile_dataframe(
                 adapter.adapter_id,
                 adapter.digest,
                 str(own_account_registry["registry_digest"]),
+                value_day,
+                duplicate_of_reference_token,
+                reversal_of_reference_token,
             )
         )
     ordered_accounts = tuple(
@@ -1169,37 +1366,68 @@ class CandidateEdge:
     exact_reference: bool
     eligibility_basis: EligibilityBasis
     binding_digest: str
+    additional_outflows: tuple[CompiledTransaction, ...] = ()
+    additional_inflows: tuple[CompiledTransaction, ...] = ()
+    match_type: MatchType = MatchType.EXACT
+    currency_mode: str | None = None
+    fx_rule_id: str | None = None
+    fx_receipt_digest: str | None = None
+
+    @property
+    def outflows(self) -> tuple[CompiledTransaction, ...]:
+        return (self.outflow, *self.additional_outflows)
+
+    @property
+    def inflows(self) -> tuple[CompiledTransaction, ...]:
+        return (self.inflow, *self.additional_inflows)
+
+    @property
+    def principal_count(self) -> int:
+        return len(self.outflows) + len(self.inflows)
 
     @property
     def edge_id(self) -> str:
-        return digest_object(
-            {
-                "outflow": self.outflow.txn_uid,
-                "inflow": self.inflow.txn_uid,
-                "fee": self.fee.txn_uid if self.fee else None,
-                "mode": self.fee_mode.value,
-                "fee_minor": self.fee_minor,
-                "eligibility_basis": self.eligibility_basis.value,
-                "binding_digest": self.binding_digest,
-            }
-        )
+        payload: dict[str, Any] = {
+            "outflow": self.outflow.txn_uid,
+            "inflow": self.inflow.txn_uid,
+            "fee": self.fee.txn_uid if self.fee else None,
+            "mode": self.fee_mode.value,
+            "fee_minor": self.fee_minor,
+            "eligibility_basis": self.eligibility_basis.value,
+            "binding_digest": self.binding_digest,
+        }
+        if self.principal_count > 2 or self.match_type is MatchType.FX:
+            payload.update(
+                {
+                    "outflows": sorted(item.txn_uid for item in self.outflows),
+                    "inflows": sorted(item.txn_uid for item in self.inflows),
+                    "match_type": self.match_type.value,
+                    "currency_mode": self.currency_mode,
+                    "fx_rule_id": self.fx_rule_id,
+                    "fx_receipt_digest": self.fx_receipt_digest,
+                }
+            )
+        return digest_object(payload)
 
     @property
     def semantic_cost(self) -> tuple[int, int, int]:
         fee_penalty = int(
             self.evidence_grade is EvidenceGrade.SCHEDULE_SUPPORTED_FEE_CANDIDATE
         )
-        return (-1, self.time_delta_ms, fee_penalty)
+        return (-self.principal_count, self.time_delta_ms, fee_penalty)
 
     @property
     def node_uids(self) -> frozenset[str]:
-        values = {self.outflow.txn_uid, self.inflow.txn_uid}
+        values = {
+            *(item.txn_uid for item in self.outflows),
+            *(item.txn_uid for item in self.inflows),
+        }
         if self.fee is not None:
             values.add(self.fee.txn_uid)
         return frozenset(values)
 
     def safe_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "edge_id": self.edge_id,
             "outflow_txn_uid": self.outflow.txn_uid,
             "inflow_txn_uid": self.inflow.txn_uid,
@@ -1215,6 +1443,18 @@ class CandidateEdge:
             "binding_digest": self.binding_digest,
             "affects_reporting": False,
         }
+        if self.principal_count > 2 or self.match_type is MatchType.FX:
+            result.update(
+                {
+                    "outflow_txn_uids": sorted(item.txn_uid for item in self.outflows),
+                    "inflow_txn_uids": sorted(item.txn_uid for item in self.inflows),
+                    "match_type": self.match_type.value,
+                    "currency_mode": self.currency_mode,
+                    "fx_rule_id": self.fx_rule_id,
+                    "fx_receipt_digest": self.fx_receipt_digest,
+                }
+            )
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -1249,6 +1489,8 @@ class MatchResult:
     globally_unmatched_txn_uids: tuple[str, ...]
     candidate_pair_checks: int = 0
     max_candidate_bucket_size: int = 0
+    candidate_subset_branches: int = 0
+    terminal_groups: tuple["TerminalGroup", ...] = ()
 
     @property
     def forced_edges(self) -> tuple[CandidateEdge, ...]:
@@ -1260,12 +1502,338 @@ class MatchResult:
         return tuple(edge for edge in self.edges if edge.edge_id in forced)
 
 
+@dataclass(frozen=True, slots=True)
+class TerminalGroup:
+    transaction_uids: tuple[str, ...]
+    reason_code: str
+
+    def __post_init__(self) -> None:
+        if (
+            not self.transaction_uids
+            or tuple(sorted(set(self.transaction_uids))) != self.transaction_uids
+            or self.reason_code not in {
+                "BLOCK_DUPLICATE_BINDING",
+                "BLOCK_REVERSAL_BINDING",
+            }
+        ):
+            raise A4ContractError("BLOCK_SCHEMA")
+        for txn_uid in self.transaction_uids:
+            _uuid(txn_uid)
+
+    @property
+    def group_id(self) -> str:
+        return digest_object(
+            {
+                "transaction_uids": list(self.transaction_uids),
+                "reason_code": self.reason_code,
+            }
+        )
+
+    def safe_dict(self) -> dict[str, Any]:
+        return {
+            "group_id": self.group_id,
+            "state": "BLOCKED",
+            "reason_code": self.reason_code,
+            "transaction_uids": list(self.transaction_uids),
+        }
+
+
 def _exact_reference(left: CompiledTransaction, right: CompiledTransaction) -> bool:
     return (
         left.bank_reference_token is not None
         and right.bank_reference_token is not None
         and hmac.compare_digest(left.bank_reference_token, right.bank_reference_token)
     )
+
+
+def _strong_pair(
+    outflow: CompiledTransaction,
+    inflow: CompiledTransaction,
+    policy: VerifiedPolicy,
+) -> bool:
+    outflow_day = outflow.value_date or outflow.local_date
+    inflow_day = inflow.value_date or inflow.local_date
+    gap_days = (inflow_day - outflow_day).days
+    return (
+        outflow.direction is Direction.OUTFLOW
+        and inflow.direction is Direction.INFLOW
+        and outflow.tenant_id == inflow.tenant_id
+        and outflow.source_account_id != inflow.source_account_id
+        and outflow.counterparty_resolution is CounterpartyResolution.EXACT_VERIFIED
+        and inflow.counterparty_resolution is CounterpartyResolution.EXACT_VERIFIED
+        and outflow.resolved_counterparty_account_id == inflow.source_account_id
+        and inflow.resolved_counterparty_account_id == outflow.source_account_id
+        and policy.min_signed_gap_days <= gap_days <= policy.max_signed_gap_days
+    )
+
+
+def _terminal_partition(
+    transactions: Sequence[CompiledTransaction],
+) -> tuple[tuple[CompiledTransaction, ...], tuple[TerminalGroup, ...]]:
+    reference_index: dict[tuple[str, str], list[CompiledTransaction]] = {}
+    for tx in transactions:
+        if tx.bank_reference_token is not None:
+            reference_index.setdefault(
+                (tx.tenant_id, tx.bank_reference_token), []
+            ).append(tx)
+
+    claimed: set[str] = set()
+    groups: list[TerminalGroup] = []
+    for tx in transactions:
+        link = tx.reversal_of_reference_token
+        if link is None:
+            continue
+        targets = reference_index.get((tx.tenant_id, link), [])
+        if len(targets) != 1:
+            raise A4ContractError("BLOCK_REVERSAL_BINDING")
+        target = targets[0]
+        uids = tuple(sorted((tx.txn_uid, target.txn_uid)))
+        if (
+            tx.txn_uid == target.txn_uid
+            or tx.row_kind != "PRINCIPAL"
+            or target.row_kind != "PRINCIPAL"
+            or tx.source_account_id != target.source_account_id
+            or tx.direction is target.direction
+            or tx.amount_minor != target.amount_minor
+            or tx.currency != target.currency
+            or claimed.intersection(uids)
+        ):
+            raise A4ContractError("BLOCK_REVERSAL_BINDING")
+        claimed.update(uids)
+        groups.append(TerminalGroup(uids, "BLOCK_REVERSAL_BINDING"))
+
+    for tx in transactions:
+        link = tx.duplicate_of_reference_token
+        if link is None:
+            continue
+        targets = reference_index.get((tx.tenant_id, link), [])
+        if (
+            len(targets) != 1
+            or targets[0].txn_uid == tx.txn_uid
+            or tx.txn_uid in claimed
+        ):
+            raise A4ContractError("BLOCK_DUPLICATE_BINDING")
+        claimed.add(tx.txn_uid)
+        groups.append(
+            TerminalGroup((tx.txn_uid,), "BLOCK_DUPLICATE_BINDING")
+        )
+
+    active = tuple(tx for tx in transactions if tx.txn_uid not in claimed)
+    return active, tuple(sorted(groups, key=lambda item: item.group_id))
+
+
+def _multi_binding_digest(
+    outflows: Sequence[CompiledTransaction],
+    inflows: Sequence[CompiledTransaction],
+    *,
+    match_type: MatchType,
+    fx_rule: FxRule | None = None,
+) -> str:
+    return digest_object(
+        {
+            "domain": "BUTLER_A4_STRONG_BINDING_V5_4",
+            "tenant_id": outflows[0].tenant_id,
+            "outflow_txn_uids": sorted(item.txn_uid for item in outflows),
+            "inflow_txn_uids": sorted(item.txn_uid for item in inflows),
+            "outflow_account_ids": sorted(
+                {item.source_account_id for item in outflows}
+            ),
+            "inflow_account_ids": sorted(
+                {item.source_account_id for item in inflows}
+            ),
+            "match_type": match_type.value,
+            "fx_rule_id": fx_rule.rule_id if fx_rule else None,
+            "fx_receipt_digest": (
+                fx_rule.rate_source_receipt_digest if fx_rule else None
+            ),
+            "eligibility_basis": EligibilityBasis.RECIPROCAL_ACCOUNT.value,
+        }
+    )
+
+
+def _time_delta_ms(items: Sequence[CompiledTransaction]) -> int:
+    times = [item.booked_at_utc for item in items]
+    return int((max(times) - min(times)).total_seconds() * 1_000)
+
+
+def _aggregate_fee_rule(
+    outflows: Sequence[CompiledTransaction],
+    *,
+    principal_amount: int,
+    fee_minor: int,
+    policy: VerifiedPolicy,
+) -> FeeRule | None:
+    matches = [
+        rule
+        for rule in policy.fee_rules
+        if rule.fee_minor == fee_minor
+        and all(
+            rule.matches(
+                bank_code=item.bank_code,
+                product_code=item.product_code,
+                channel=item.channel,
+                amount=principal_amount,
+                at=item.booked_at_utc,
+            )
+            for item in outflows
+        )
+    ]
+    if len(matches) > 1:
+        raise A4ContractError("BLOCK_AMBIGUOUS_FEE_RULE")
+    return matches[0] if matches else None
+
+
+def _build_subset_edges(
+    principals: Sequence[CompiledTransaction],
+    policy: VerifiedPolicy,
+) -> tuple[tuple[CandidateEdge, ...], int]:
+    outflows = [item for item in principals if item.direction is Direction.OUTFLOW]
+    inflows = [item for item in principals if item.direction is Direction.INFLOW]
+    edges: dict[str, CandidateEdge] = {}
+    branches = 0
+
+    def add_candidate(
+        candidate_outflows: tuple[CompiledTransaction, ...],
+        candidate_inflows: tuple[CompiledTransaction, ...],
+    ) -> None:
+        nonlocal branches
+        branches += 1
+        if branches > policy.max_subset_branches:
+            raise A4ContractError("BLOCK_RESOURCE_SUBSET_BRANCHES")
+        currencies = {
+            item.currency for item in (*candidate_outflows, *candidate_inflows)
+        }
+        if len(currencies) != 1:
+            return
+        out_total = sum(item.amount_minor for item in candidate_outflows)
+        in_total = sum(item.amount_minor for item in candidate_inflows)
+        fee_rule: FeeRule | None = None
+        if out_total == in_total:
+            match_type = MatchType.PARTIAL
+            fee_mode = FeeMode.NO_FEE
+            fee_minor = 0
+            grade = EvidenceGrade.OBSERVED_PRINCIPAL
+        elif out_total > in_total:
+            fee_minor = out_total - in_total
+            fee_rule = _aggregate_fee_rule(
+                candidate_outflows,
+                principal_amount=in_total,
+                fee_minor=fee_minor,
+                policy=policy,
+            )
+            if fee_rule is None:
+                return
+            match_type = MatchType.FEE_ADJUSTED
+            fee_mode = FeeMode.EMBEDDED_DEBIT
+            grade = EvidenceGrade.SCHEDULE_SUPPORTED_FEE_CANDIDATE
+        else:
+            return
+        ordered_out = tuple(sorted(candidate_outflows, key=lambda item: item.txn_uid))
+        ordered_in = tuple(sorted(candidate_inflows, key=lambda item: item.txn_uid))
+        all_items = (*ordered_out, *ordered_in)
+        edge = CandidateEdge(
+            ordered_out[0],
+            ordered_in[0],
+            None,
+            fee_mode,
+            fee_minor,
+            grade,
+            fee_rule.rule_id if fee_rule else None,
+            _time_delta_ms(all_items),
+            all(
+                _exact_reference(outflow, inflow)
+                for outflow in ordered_out
+                for inflow in ordered_in
+            ),
+            EligibilityBasis.RECIPROCAL_ACCOUNT,
+            _multi_binding_digest(
+                ordered_out, ordered_in, match_type=match_type
+            ),
+            ordered_out[1:],
+            ordered_in[1:],
+            match_type,
+            next(iter(currencies)),
+        )
+        edges[edge.edge_id] = edge
+        if len(edges) > policy.max_candidate_edges:
+            raise A4ContractError("BLOCK_RESOURCE_LIMIT")
+
+    for outflow in outflows:
+        eligible = sorted(
+            (
+                item
+                for item in inflows
+                if item.currency == outflow.currency
+                and _strong_pair(outflow, item, policy)
+            ),
+            key=lambda item: item.txn_uid,
+        )
+        for size in range(2, min(policy.max_subset_size, len(eligible)) + 1):
+            for subset in itertools.combinations(eligible, size):
+                add_candidate((outflow,), subset)
+    for inflow in inflows:
+        eligible = sorted(
+            (
+                item
+                for item in outflows
+                if item.currency == inflow.currency
+                and _strong_pair(item, inflow, policy)
+            ),
+            key=lambda item: item.txn_uid,
+        )
+        for size in range(2, min(policy.max_subset_size, len(eligible)) + 1):
+            for subset in itertools.combinations(eligible, size):
+                add_candidate(subset, (inflow,))
+    return tuple(sorted(edges.values(), key=lambda item: item.edge_id)), branches
+
+
+def _build_fx_edges(
+    principals: Sequence[CompiledTransaction], policy: VerifiedPolicy
+) -> tuple[CandidateEdge, ...]:
+    if not policy.fx_rules:
+        return ()
+    edges: dict[str, CandidateEdge] = {}
+    outflows = [item for item in principals if item.direction is Direction.OUTFLOW]
+    inflows = [item for item in principals if item.direction is Direction.INFLOW]
+    for outflow in outflows:
+        for inflow in inflows:
+            if outflow.currency == inflow.currency or not _strong_pair(
+                outflow, inflow, policy
+            ):
+                continue
+            matching = [
+                rule
+                for rule in policy.fx_rules
+                if rule.matches(source=outflow, target=inflow)
+            ]
+            if len(matching) > 1:
+                raise A4ContractError("BLOCK_AMBIGUOUS_FX_RULE")
+            if not matching:
+                continue
+            rule = matching[0]
+            edge = CandidateEdge(
+                outflow,
+                inflow,
+                None,
+                FeeMode.NO_FEE,
+                0,
+                EvidenceGrade.RECEIPT_BOUND_FX,
+                rule.rule_id,
+                _time_delta_ms((outflow, inflow)),
+                _exact_reference(outflow, inflow),
+                EligibilityBasis.RECIPROCAL_ACCOUNT,
+                _multi_binding_digest(
+                    (outflow,), (inflow,), match_type=MatchType.FX, fx_rule=rule
+                ),
+                (),
+                (),
+                MatchType.FX,
+                f"{rule.from_currency}/{rule.to_currency}",
+                rule.rule_id,
+                rule.rate_source_receipt_digest,
+            )
+            edges[edge.edge_id] = edge
+    return tuple(sorted(edges.values(), key=lambda item: item.edge_id))
 
 
 def build_candidate_edges(
@@ -1358,7 +1926,9 @@ def build_candidate_edges(
                     or outflow.source_account_id == inflow.source_account_id
                 ):
                     continue
-                gap_days = (inflow.local_date - outflow.local_date).days
+                outflow_day = outflow.value_date or outflow.local_date
+                inflow_day = inflow.value_date or inflow.local_date
+                gap_days = (inflow_day - outflow_day).days
                 if not (
                     policy.min_signed_gap_days <= gap_days <= policy.max_signed_gap_days
                 ):
@@ -1463,9 +2033,16 @@ def build_candidate_edges(
                     edges[edge.edge_id] = edge
                     if len(edges) > policy.max_candidate_edges:
                         raise A4ContractError("BLOCK_RESOURCE_LIMIT")
+    subset_edges, subset_branches = _build_subset_edges(principals, policy)
+    fx_edges = _build_fx_edges(principals, policy)
+    for edge in (*subset_edges, *fx_edges):
+        edges[edge.edge_id] = edge
+        if len(edges) > policy.max_candidate_edges:
+            raise A4ContractError("BLOCK_RESOURCE_LIMIT")
     if metrics is not None:
         metrics["candidate_pair_checks"] = pair_checks
         metrics["max_candidate_bucket_size"] = max_bucket_size
+        metrics["candidate_subset_branches"] = subset_branches
     return tuple(sorted(edges.values(), key=lambda item: item.edge_id))
 
 
@@ -1579,8 +2156,9 @@ def reconcile(
         artifacts.add(tx.artifact_token)
         unique.setdefault(key, tx)
     ordered = tuple(sorted(unique.values(), key=lambda item: item.graph_key))
+    active, terminal_groups = _terminal_partition(ordered)
     metrics: dict[str, int] = {}
-    edges = build_candidate_edges(ordered, policy, metrics)
+    edges = build_candidate_edges(active, policy, metrics)
     components: list[ComponentResult] = []
     graph_nodes: set[str] = set()
     for group in _components(edges):
@@ -1624,7 +2202,7 @@ def reconcile(
             )
         )
     globally_unmatched = tuple(
-        sorted(tx.txn_uid for tx in ordered if tx.txn_uid not in graph_nodes)
+        sorted(tx.txn_uid for tx in active if tx.txn_uid not in graph_nodes)
     )
     return MatchResult(
         edges,
@@ -1632,6 +2210,8 @@ def reconcile(
         globally_unmatched,
         metrics.get("candidate_pair_checks", 0),
         metrics.get("max_candidate_bucket_size", 0),
+        metrics.get("candidate_subset_branches", 0),
+        terminal_groups,
     )
 
 
@@ -1673,6 +2253,10 @@ def closed_world_dlp(payloads: Mapping[str, Any]) -> dict[str, Any]:
         "fee_type",
         "product_code",
         "channel",
+        "currency",
+        "value_date",
+        "duplicate_of_reference",
+        "reversal_of_reference",
         "allowed_date_formats",
     }
     values_scanned = 0

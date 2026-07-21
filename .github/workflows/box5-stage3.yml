@@ -30,6 +30,7 @@ on:
       - 'scripts/build_complete_app.sh'
       - 'scripts/build_a4_authority_helper_macos.sh'
       - 'butler-desktop/src-tauri/native/a4_verifier_authority_launcher.swift'
+      - 'butler-desktop/src-tauri/native/a4_authority_*.swift'
       - 'butler-desktop/src-tauri/src/lib.rs'
       - 'tests/accounting/test_cli.py'
       - 'tests/accounting/test_sse_phase_messages.py'
@@ -55,6 +56,7 @@ on:
       - 'scripts/build_complete_app.sh'
       - 'scripts/build_a4_authority_helper_macos.sh'
       - 'butler-desktop/src-tauri/native/a4_verifier_authority_launcher.swift'
+      - 'butler-desktop/src-tauri/native/a4_authority_*.swift'
       - 'butler-desktop/src-tauri/src/lib.rs'
       - 'tests/accounting/test_cli.py'
       - 'tests/accounting/test_sse_phase_messages.py'
@@ -200,8 +202,59 @@ jobs:
             tests/company_policy/test_accounting_header_trust.py \
             tests/test_write_build_info.py \
             -q --tb=short --junitxml=a4-canonical-junit.xml
+      - name: Clean repository closure and changed-source secret scan
+        run: |
+          python - <<'PY'
+          import pathlib, re, subprocess
+          tracked = subprocess.check_output(
+              ['git', 'ls-files'], text=True
+          ).splitlines()
+          changed = subprocess.check_output(
+              ['git', 'diff', '--name-only', 'origin/main...HEAD'], text=True
+          ).splitlines()
+          forbidden = re.compile(r'(^|/)(__pycache__|\.pytest_cache|\.mypy_cache)(/|$)|\.py[co]$|\.log$|(^|/)\.DS_Store$|(^|/)\.env(?:\.|$)|credentials?', re.I)
+          secret = re.compile(r'(?:sk-[A-Za-z0-9._-]{10,}|AKIA[0-9A-Z]{16}|-----BEGIN[ \t]+[A-Z ]*PRIVATE KEY-----|EXPORT_SIGN_SECRET\s*=\s*dev-export-secret)')
+          errors = [f'FORBIDDEN_PATH:{name}' for name in tracked if forbidden.search(name)]
+          for name in changed:
+              path = pathlib.Path(name)
+              if path.is_file() and path.stat().st_size <= 2_000_000:
+                  text = path.read_text(encoding='utf-8', errors='ignore')
+                  if secret.search(text):
+                      errors.append(f'SECRET_PATTERN:{name}')
+          if errors:
+              raise SystemExit('\n'.join(errors))
+          print(f'A4_V54_CLEAN_REPOSITORY_CLOSURE=1 tracked={len(tracked)} changed={len(changed)}')
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: a4-canonical-junit
           path: a4-canonical-junit.xml
+
+  a4-native-contract:
+    name: A4 native authority contract
+    runs-on: macos-14
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - name: Typecheck the production XPC authority source set
+        run: |
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cat > "$tmp/AuthorityBuildConfig.swift" <<'SWIFT'
+          let a4KeychainAccessGroup = "group.com.butler.a4.ci"
+          let a4ExpectedCallerRequirement = "anchor apple generic"
+          let a4ExpectedAuthorityRequirement = "anchor apple generic"
+          let a4VerifierRequirement = "anchor apple generic"
+          let a4XPCServiceName = "com.butler.a4-verifier-authority"
+          SWIFT
+          xcrun swiftc -typecheck -module-cache-path "$tmp/module-cache" \
+            butler-desktop/src-tauri/native/a4_verifier_authority_launcher.swift \
+            butler-desktop/src-tauri/native/a4_authority_protocol.swift \
+            butler-desktop/src-tauri/native/a4_authority_canonical.swift \
+            butler-desktop/src-tauri/native/a4_authority_replay.swift \
+            "$tmp/AuthorityBuildConfig.swift" \
+            -framework Foundation -framework Security -framework CryptoKit -lsqlite3
+          bash -n scripts/build_a4_authority_helper_macos.sh

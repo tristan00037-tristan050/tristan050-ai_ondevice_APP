@@ -28,6 +28,10 @@ _REQUIRED_KEYS = {
 }
 _A4_CODE_FILES = (
     "butler_pc_core/a4_verifier/cli.py",
+    "butler_pc_core/a4_verifier/canonical.py",
+    "butler_pc_core/a4_verifier/contracts.py",
+    "butler_pc_core/a4_verifier/errors.py",
+    "butler_pc_core/a4_verifier/receipt.py",
     "butler_pc_core/accounting/assignment/a4_store_schema_v32.py",
     "butler_pc_core/accounting/classify/reconciliation_v2.py",
     "butler_pc_core/accounting/classify/reconciliation_service_v2.py",
@@ -88,7 +92,7 @@ def _a4_code_closure(resources_root: Path) -> dict[str, object]:
         files[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
     canonical = json.dumps(files, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return {
-        "schema_version": "butler.a4.code_closure.v3.1",
+        "schema_version": "butler.a4.code_closure.v5.3",
         "files": files,
         "digest": hashlib.sha256(canonical).hexdigest(),
     }

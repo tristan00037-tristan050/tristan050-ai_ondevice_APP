@@ -13,6 +13,8 @@ DROP TRIGGER IF EXISTS recon_run_transaction_no_update;
 DROP TRIGGER IF EXISTS recon_run_transaction_no_delete;
 DROP TRIGGER IF EXISTS recon_edge_no_update;
 DROP TRIGGER IF EXISTS recon_edge_no_delete;
+DROP TRIGGER IF EXISTS recon_edge_member_no_update;
+DROP TRIGGER IF EXISTS recon_edge_member_no_delete;
 DROP TRIGGER IF EXISTS recon_classification_no_update;
 DROP TRIGGER IF EXISTS recon_classification_no_delete;
 DROP TRIGGER IF EXISTS recon_policy_receipt_no_update;
@@ -29,6 +31,7 @@ DROP TABLE IF EXISTS recon_outbox;
 DROP TABLE IF EXISTS recon_evidence_payload;
 DROP TABLE IF EXISTS recon_policy_receipt;
 DROP TABLE IF EXISTS recon_classification;
+DROP TABLE IF EXISTS recon_edge_member;
 DROP TABLE IF EXISTS recon_edge;
 DROP TABLE IF EXISTS recon_run_transaction;
 DROP TABLE IF EXISTS recon_transaction;
@@ -131,8 +134,11 @@ CREATE TABLE IF NOT EXISTS recon_transaction (
     currency TEXT NOT NULL CHECK(length(currency) = 3),
     booked_at_utc TEXT NOT NULL,
     local_date TEXT NOT NULL,
+    value_date TEXT,
     bank_code TEXT NOT NULL,
     bank_reference_token TEXT,
+    duplicate_of_reference_token TEXT,
+    reversal_of_reference_token TEXT,
     counterparty_account_token TEXT,
     row_kind TEXT NOT NULL CHECK(row_kind IN ('PRINCIPAL','FEE')),
     product_code_id TEXT NOT NULL,
@@ -170,9 +176,29 @@ CREATE TABLE IF NOT EXISTS recon_edge (
     binding_digest TEXT NOT NULL,
     candidate_digest TEXT NOT NULL,
     cost_tuple_jcs BLOB NOT NULL,
+    match_type TEXT NOT NULL DEFAULT 'EXACT' CHECK(match_type IN
+        ('EXACT','FEE_ADJUSTED','PARTIAL','FX')),
+    currency_mode TEXT,
+    fx_rule_id TEXT,
+    fx_receipt_digest TEXT,
+    principal_count INTEGER NOT NULL DEFAULT 2 CHECK(principal_count >= 2),
     PRIMARY KEY (tenant_id, run_id, edge_id),
     CHECK(left_txn_uid < right_txn_uid),
     FOREIGN KEY (tenant_id, run_id) REFERENCES recon_run(tenant_id, run_id)
+);
+CREATE TABLE IF NOT EXISTS recon_edge_member (
+    tenant_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    edge_id TEXT NOT NULL,
+    txn_uid TEXT NOT NULL,
+    member_role TEXT NOT NULL CHECK(member_role IN ('OUTFLOW','INFLOW','FEE')),
+    member_ordinal INTEGER NOT NULL CHECK(member_ordinal >= 0),
+    PRIMARY KEY (tenant_id, run_id, edge_id, member_role, member_ordinal),
+    UNIQUE (tenant_id, run_id, edge_id, txn_uid),
+    FOREIGN KEY (tenant_id, run_id, edge_id)
+        REFERENCES recon_edge(tenant_id, run_id, edge_id),
+    FOREIGN KEY (tenant_id, txn_uid)
+        REFERENCES recon_transaction(tenant_id, txn_uid)
 );
 CREATE TABLE IF NOT EXISTS recon_classification (
     tenant_id TEXT NOT NULL,
@@ -302,6 +328,10 @@ CREATE TRIGGER IF NOT EXISTS recon_edge_no_update
 BEFORE UPDATE ON recon_edge BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_A4'); END;
 CREATE TRIGGER IF NOT EXISTS recon_edge_no_delete
 BEFORE DELETE ON recon_edge BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_A4'); END;
+CREATE TRIGGER IF NOT EXISTS recon_edge_member_no_update
+BEFORE UPDATE ON recon_edge_member BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_A4'); END;
+CREATE TRIGGER IF NOT EXISTS recon_edge_member_no_delete
+BEFORE DELETE ON recon_edge_member BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_A4'); END;
 CREATE TRIGGER IF NOT EXISTS recon_review_no_update
 BEFORE UPDATE ON recon_review BEGIN SELECT RAISE(ABORT, 'APPEND_ONLY_A4'); END;
 CREATE TRIGGER IF NOT EXISTS recon_review_no_delete
@@ -347,6 +377,39 @@ def ensure_a4_v32_schema(conn: sqlite3.Connection) -> bool:
                     "ALTER TABLE recon_verification_receipt ADD COLUMN signer_revocation_epoch INTEGER NOT NULL DEFAULT -1",
                     "ALTER TABLE recon_verification_receipt ADD COLUMN signer_trust_digest TEXT NOT NULL DEFAULT ''",
                 ):
+                    conn.execute(statement)
+        edge_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='recon_edge'"
+        ).fetchone()
+        if edge_exists is not None:
+            edge_columns = {
+                str(item[1]) for item in conn.execute("PRAGMA table_info(recon_edge)")
+            }
+            migrations = {
+                "match_type": "ALTER TABLE recon_edge ADD COLUMN match_type TEXT NOT NULL DEFAULT 'EXACT' CHECK(match_type IN ('EXACT','FEE_ADJUSTED','PARTIAL','FX'))",
+                "currency_mode": "ALTER TABLE recon_edge ADD COLUMN currency_mode TEXT",
+                "fx_rule_id": "ALTER TABLE recon_edge ADD COLUMN fx_rule_id TEXT",
+                "fx_receipt_digest": "ALTER TABLE recon_edge ADD COLUMN fx_receipt_digest TEXT",
+                "principal_count": "ALTER TABLE recon_edge ADD COLUMN principal_count INTEGER NOT NULL DEFAULT 2 CHECK(principal_count >= 2)",
+            }
+            for column, statement in migrations.items():
+                if column not in edge_columns:
+                    conn.execute(statement)
+        transaction_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='recon_transaction'"
+        ).fetchone()
+        if transaction_exists is not None:
+            transaction_columns = {
+                str(item[1])
+                for item in conn.execute("PRAGMA table_info(recon_transaction)")
+            }
+            transaction_migrations = {
+                "value_date": "ALTER TABLE recon_transaction ADD COLUMN value_date TEXT",
+                "duplicate_of_reference_token": "ALTER TABLE recon_transaction ADD COLUMN duplicate_of_reference_token TEXT",
+                "reversal_of_reference_token": "ALTER TABLE recon_transaction ADD COLUMN reversal_of_reference_token TEXT",
+            }
+            for column, statement in transaction_migrations.items():
+                if column not in transaction_columns:
                     conn.execute(statement)
         conn.executescript(_SCHEMA)
         return True

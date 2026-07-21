@@ -7,7 +7,7 @@ cd "$ROOT/butler-desktop/src-tauri"
 APP="target/release/bundle/macos/Butler.app"
 RES="$APP/Contents/Resources"
 PRODUCTION_A4_AUTHORITY="${BUTLER_A4_PRODUCTION_AUTHORITY_BUILD:-0}"
-AUTHORITY_HELPER_EXE="$APP/Contents/Helpers/A4VerifierAuthority.app/Contents/MacOS/A4VerifierAuthority"
+AUTHORITY_HELPER_EXE="$APP/Contents/XPCServices/A4VerifierAuthority.xpc/Contents/MacOS/A4VerifierAuthority"
 
 echo "════════════════════════════════════════"
 echo " Butler 완성품 빌드 시작"
@@ -64,13 +64,14 @@ python3 "$ROOT/scripts/verify_model_path_contract.py" "$ROOT" || { echo "❌ 계
 
 AUTHORITY_HELPER_ARGS=()
 if [[ "$PRODUCTION_A4_AUTHORITY" == "1" ]]; then
-  echo "[4.25/5] A4 운영 verifier authority helper 조립·분리 서명"
+  echo "[4.25/5] A4 운영 verifier authority XPC·bridge 조립·분리 서명"
   "$ROOT/scripts/build_a4_authority_helper_macos.sh" --install-helper "$APP" || {
     echo "❌ A4 authority helper 조립 실패 — 운영 A4 비활성"; exit 1;
   }
   AUTHORITY_HELPER_ARGS=(--authority-helper "$AUTHORITY_HELPER_EXE")
 else
-  rm -rf "$APP/Contents/Helpers/A4VerifierAuthority.app"
+  rm -rf "$APP/Contents/XPCServices/A4VerifierAuthority.xpc"
+  rm -f "$APP/Contents/Resources/butler_pc_core/a4_verifier/libButlerA4AuthorityBridge.dylib"
   echo "[4.25/5] A4 운영 verifier authority 비활성(승인된 인증서·Keychain provisioning 필요)"
 fi
 

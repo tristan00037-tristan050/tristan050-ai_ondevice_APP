@@ -80,22 +80,13 @@ VERIFIER_AUTHORITY_TRUST_PATH = (
     / "a4_v31"
     / "verifier_authority_trust.production.json"
 )
-VERIFIER_AUTHORITY_SOCKET_PATH = Path(
-    os.environ.get(
-        "BUTLER_A4_VERIFIER_AUTHORITY_SOCKET",
-        str(
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "Butler"
-            / "Security"
-            / "a4-verifier-authority.sock"
-        ),
-    )
-)
 ALLOW_TEST_VERIFIER_AUTHORITY = False
 CODE_CLOSURE_FILES = (
     "butler_pc_core/a4_verifier/cli.py",
+    "butler_pc_core/a4_verifier/canonical.py",
+    "butler_pc_core/a4_verifier/contracts.py",
+    "butler_pc_core/a4_verifier/errors.py",
+    "butler_pc_core/a4_verifier/receipt.py",
     "butler_pc_core/accounting/assignment/a4_store_schema_v32.py",
     "butler_pc_core/accounting/classify/reconciliation_v2.py",
     "butler_pc_core/accounting/classify/reconciliation_service_v2.py",
@@ -174,6 +165,10 @@ def approved_split_adapter() -> AdapterContract:
         fee_type="거래유형",
         product_code="상품코드",
         channel="거래채널",
+        currency="통화",
+        value_date="가치일자",
+        duplicate_of_reference="중복원거래참조번호",
+        reversal_of_reference="취소원거래참조번호",
         allowed_date_formats=("%Y-%m-%d", "%Y%m%d"),
     )
 
@@ -257,7 +252,7 @@ def make_owner_request(
 
 def _classification_payload(run_id: str, result: MatchResult) -> dict[str, Any]:
     forced = [edge.safe_dict() for edge in result.forced_edges]
-    return {
+    payload = {
         "schema_version": "2.0.0",
         "run_id": run_id,
         "forced_edges": forced,
@@ -266,6 +261,11 @@ def _classification_payload(run_id: str, result: MatchResult) -> dict[str, Any]:
         "shadow_only": True,
         "affects_reporting": False,
     }
+    if result.terminal_groups:
+        payload["terminal_groups"] = [
+            group.safe_dict() for group in result.terminal_groups
+        ]
+    return payload
 
 
 def _build_evidence(
@@ -325,6 +325,7 @@ def _build_evidence(
             "policy_payload": policy_document["payload"],
             "candidate_pair_checks": result.candidate_pair_checks,
             "max_candidate_bucket_size": result.max_candidate_bucket_size,
+            "candidate_subset_branches": result.candidate_subset_branches,
             "edges": [edge.safe_dict() for edge in result.edges],
         },
         "classification_receipt.json": _classification_payload(binding.run_id, result),
@@ -401,6 +402,15 @@ def _classifications(result: MatchResult) -> list[dict[str, Any]]:
                 "payload_digest": digest_object(
                     {"txn_uid": txn_uid, "kind": "UNMATCHED"}
                 ),
+            }
+        )
+    for group in result.terminal_groups:
+        payload = group.safe_dict()
+        records.append(
+            {
+                "classification_id": group.group_id,
+                "kind": "BLOCKED",
+                "payload_digest": digest_object(payload),
             }
         )
     return records
@@ -510,7 +520,6 @@ def verify_in_separate_process(
     except OSError as exc:
         raise A4ContractError("BLOCK_INPUT_CLOSURE") from exc
     full_receipt = request_authority_verification(
-        authority_socket=VERIFIER_AUTHORITY_SOCKET_PATH,
         authority_trust_path=VERIFIER_AUTHORITY_TRUST_PATH,
         evidence_files=evidence_files,
         finance_trust=finance_trust,
@@ -520,7 +529,6 @@ def verify_in_separate_process(
         source_fd=source_fd,
         source_suffix=source_suffix,
         now=datetime.now(timezone.utc),
-        request_nonce=secrets.token_hex(32),
         allow_test_authority=ALLOW_TEST_VERIFIER_AUTHORITY,
         timeout_seconds=timeout_seconds,
     )
@@ -541,16 +549,20 @@ def verify_in_separate_process(
             "compiled_manifest_digest", "graph_digest", "evidence_manifest_digest",
             "policy_digest", "adapter_digest", "dictionary_digest", "registry_digest",
             "code_tree_oid", "code_closure_digest", "verifier_id", "signer_key_id",
-            "authority_id", "signer_revocation_epoch", "signer_trust_digest",
+            "protocol_version", "authority_session_id", "authority_request_id",
+            "authority_nonce_digest", "caller_cdhash", "request_digest",
+            "authority_cdhash", "verifier_cdhash",
+            "source_payload_digest", "request_deadline_unix_ms", "authority_id",
+            "signer_key_epoch", "signer_trust_digest",
             "verified_at_utc", "signature",
         }
         if (
             not isinstance(full_receipt, dict)
             or set(full_receipt) != required_receipt
             or full_receipt.get("schema_version")
-            != "butler.box5.a4.verification_receipt.v3.2"
+            != "butler.box5.a4.verification_receipt.v5.3"
             or full_receipt.get("contract_id")
-            != "BUTLER-BOX5-A4-V3.2-AUTHORITY-ISOLATED"
+            != "BUTLER-BOX5-A4-V5.3-NATIVE-AUTHORITY"
             or full_receipt.get("run_id") != evidence_dir.name
             or full_receipt.get("decision") != "PASS"
             or full_receipt.get("reason_codes") != []
@@ -569,7 +581,7 @@ def verify_in_separate_process(
             or full_receipt.get("evidence_manifest_digest")
             != sha256_bytes((evidence_dir / "manifest.json").read_bytes())
             or full_receipt.get("verifier_id")
-            != "BUTLER_A4_ISOLATED_RAW_COMPILER_V3.2"
+            != "BUTLER_A4_ISOLATED_RAW_COMPILER_V5.3"
         ):
             raise ValueError
     except (
