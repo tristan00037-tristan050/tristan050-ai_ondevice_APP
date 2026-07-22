@@ -66,7 +66,11 @@ class ScanSummary:
 
     @property
     def ok(self) -> bool:
-        return not self.findings and not self.errors
+        return (
+            not self.findings
+            and not self.errors
+            and self.rotation_evidence_status != "BLOCKED_EXTERNAL"
+        )
 
 
 DIRECT_RULES: tuple[SecretRule, ...] = (
@@ -587,9 +591,13 @@ def _write_report(path: Path, summary: ScanSummary) -> None:
 
 
 def _print_summary(summary: ScanSummary) -> None:
+    rotation_blocked = summary.rotation_evidence_status == "BLOCKED_EXTERNAL"
     print(f"A4_REPOSITORY_SECRET_SCAN_OK={1 if summary.ok else 0}")
     print(f"A4_TRACKED_SECRET_SCAN_OK={1 if not any(item.scope == 'tracked' for item in summary.findings + summary.errors) else 0}")
-    print(f"A4_HISTORY_SECRET_SCAN_OK={1 if not any(item.scope == 'history' for item in summary.findings + summary.errors) else 0}")
+    print(
+        "A4_HISTORY_SECRET_SCAN_OK="
+        f"{1 if not rotation_blocked and not any(item.scope == 'history' for item in summary.findings + summary.errors) else 0}"
+    )
     print(f"METRIC_TRACKED_OBJECTS={summary.tracked_objects}")
     print(f"METRIC_HISTORY_BLOBS={summary.history_blobs}")
     print(f"METRIC_SECRET_FINDINGS={len(summary.findings)}")

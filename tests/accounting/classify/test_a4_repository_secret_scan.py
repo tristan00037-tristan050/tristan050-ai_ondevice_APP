@@ -189,6 +189,26 @@ def test_rotation_status_releases_only_the_exact_finding_after_complete_proof(tm
     assert mismatch.rotation_suppressed == 0
 
 
+def test_blocked_rotation_cannot_be_bypassed_by_baseline_or_history_rewrite(
+    tmp_path: Path,
+) -> None:
+    token = "gh" + "p_" + "Qz7mN2Vk9Lp4Rw8Hs6Yt3Bc5Df1Gj0Xa"
+    finding = scanner.scan_payload(
+        scope="history", object_id="a" * 40, path="deleted.env", payload=token.encode()
+    )[0]
+    blocked_path = tmp_path / "blocked.json"
+    blocked_path.write_text(
+        json.dumps(_rotation_document(finding, complete=False)), encoding="utf-8"
+    )
+
+    no_reachable_finding = scanner.ScanSummary(0, 0, (), ())
+    blocked = scanner.apply_rotation_evidence(no_reachable_finding, blocked_path)
+
+    assert blocked.findings == ()
+    assert blocked.rotation_evidence_status == "BLOCKED_EXTERNAL"
+    assert blocked.ok is False
+
+
 def test_rotation_status_rejects_partial_or_unbound_evidence(tmp_path: Path) -> None:
     token = "gh" + "p_" + "Qz7mN2Vk9Lp4Rw8Hs6Yt3Bc5Df1Gj0Xa"
     finding = scanner.scan_payload(
