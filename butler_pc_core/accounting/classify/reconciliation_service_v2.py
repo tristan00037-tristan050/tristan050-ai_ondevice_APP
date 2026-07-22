@@ -81,6 +81,17 @@ VERIFIER_AUTHORITY_TRUST_PATH = (
     / "verifier_authority_trust.production.json"
 )
 ALLOW_TEST_VERIFIER_AUTHORITY = False
+VERIFIER_TOKEN_KEY_FIELDS = frozenset(
+    {
+        "schema_version",
+        "tenant_id",
+        "key_id",
+        "own_account_key_b64",
+        "bank_reference_key_b64",
+        "counterparty_account_key_b64",
+        "run_transaction_key_b64",
+    }
+)
 CODE_CLOSURE_FILES = (
     "butler_pc_core/a4_verifier/cli.py",
     "butler_pc_core/a4_verifier/canonical.py",
@@ -509,8 +520,13 @@ def verify_in_separate_process(
     if source_suffix not in {".csv", ".xls", ".xlsx"}:
         raise A4ContractError("BLOCK_UNSUPPORTED_SOURCE_FORMAT")
     material = token_service.a4_verifier_material(tenant_id)
-    if "verification_signing_seed_b64" in material:
+    if (
+        not isinstance(material, Mapping)
+        or "verification_signing_seed_b64" in material
+        or set(material) != VERIFIER_TOKEN_KEY_FIELDS
+    ):
         raise A4ContractError("BLOCK_TRUST_UNAVAILABLE")
+    material = dict(material)
     try:
         evidence_files = {
             name: (evidence_dir / name).read_bytes() for name in EVIDENCE_FILES

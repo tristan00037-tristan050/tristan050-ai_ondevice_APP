@@ -4,9 +4,6 @@ import Foundation
 import Security
 import XPC
 
-@_silgen_name("butler_secure_zero")
-private func secureZero(_ pointer: UnsafeMutableRawPointer?, _ length: Int)
-
 @_silgen_name("butler_deny_debugger")
 private func denyDebugger() -> Int32
 
@@ -317,7 +314,7 @@ private func enforceTrustWatermark(_ trust: AuthorityTrust) throws {
     }
 }
 
-private func loadSigningSeed(expectedPublicKey: Data) throws -> Data {
+private func loadSigningSeed() throws -> Data {
     var query = keychainQuery(account: signingKeyAccount)
     query[kSecReturnData] = true
     query[kSecMatchLimit] = kSecMatchLimitOne
@@ -326,10 +323,6 @@ private func loadSigningSeed(expectedPublicKey: Data) throws -> Data {
           let seed = result as? Data,
           seed.count == 32 else {
         throw A4NativeError.keyUnavailable
-    }
-    let key = try Curve25519.Signing.PrivateKey(rawRepresentation: seed)
-    guard key.publicKey.rawRepresentation == expectedPublicKey else {
-        throw A4NativeError.keyEpoch
     }
     return seed
 }
@@ -526,13 +519,13 @@ private func attest(
         payloadDigest: payloadDigest,
         keyEpoch: trust.keyEpoch
     )
-    var seed = try loadSigningSeed(expectedPublicKey: trust.publicKey)
-    let signature: Data
-    do {
+    let signature = try a4WithZeroizedSigningSeed(loadSeed: loadSigningSeed) { seed in
         let key = try Curve25519.Signing.PrivateKey(rawRepresentation: seed)
-        signature = try key.signature(for: a4AttestationEnvelope(canonicalReceipt))
+        guard key.publicKey.rawRepresentation == trust.publicKey else {
+            throw A4NativeError.keyEpoch
+        }
+        return try key.signature(for: a4AttestationEnvelope(canonicalReceipt))
     }
-    seed.withUnsafeMutableBytes { secureZero($0.baseAddress, $0.count) }
     try ledger.commit(
         nonceDigest: challenge.nonceDigest,
         signatureDigest: a4SHA256Hex(signature)

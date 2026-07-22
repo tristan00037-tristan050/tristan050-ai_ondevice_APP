@@ -49,6 +49,7 @@ if [[ "$MODE" == "--install-helper" ]]; then
   NATIVE="$ROOT/butler-desktop/src-tauri/native"
   SOURCES=(
     "$NATIVE/a4_verifier_authority_launcher.swift"
+    "$NATIVE/a4_secure_memory.swift"
     "$NATIVE/a4_authority_protocol.swift"
     "$NATIVE/a4_authority_canonical.swift"
     "$NATIVE/a4_authority_replay.swift"

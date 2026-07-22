@@ -29,8 +29,13 @@ on:
       - 'scripts/write_build_info.py'
       - 'scripts/build_complete_app.sh'
       - 'scripts/build_a4_authority_helper_macos.sh'
+      - 'scripts/ci/a4_*.py'
       - 'butler-desktop/src-tauri/native/a4_verifier_authority_launcher.swift'
+      - 'butler-desktop/src-tauri/native/a4_secure_memory.swift'
       - 'butler-desktop/src-tauri/native/a4_authority_*.swift'
+      - 'docs/ops/A4_V55_*.json'
+      - 'docs/ops/A4_V55_*.md'
+      - 'docs/ops/A4_V54_INTEGRATION_STATUS.json'
       - 'butler-desktop/src-tauri/src/lib.rs'
       - 'tests/accounting/test_cli.py'
       - 'tests/accounting/test_sse_phase_messages.py'
@@ -49,14 +54,21 @@ on:
       - 'butler_sidecar.py'
       - 'butler-desktop/src/lib/accounting_review/**'
       - 'butler-desktop/src/components/accounting_review/**'
+      - 'tests/accounting/classify/**'
+      - 'tests/accounting/policy/**'
       - 'tests/accounting/assignment/**'
       - 'tests/accounting/test_finetuned_accuracy.py'
       - 'tests/accounting/test_classifier.py'
       - 'scripts/write_build_info.py'
       - 'scripts/build_complete_app.sh'
       - 'scripts/build_a4_authority_helper_macos.sh'
+      - 'scripts/ci/a4_*.py'
       - 'butler-desktop/src-tauri/native/a4_verifier_authority_launcher.swift'
+      - 'butler-desktop/src-tauri/native/a4_secure_memory.swift'
       - 'butler-desktop/src-tauri/native/a4_authority_*.swift'
+      - 'docs/ops/A4_V55_*.json'
+      - 'docs/ops/A4_V55_*.md'
+      - 'docs/ops/A4_V54_INTEGRATION_STATUS.json'
       - 'butler-desktop/src-tauri/src/lib.rs'
       - 'tests/accounting/test_cli.py'
       - 'tests/accounting/test_sse_phase_messages.py'
@@ -202,34 +214,49 @@ jobs:
             tests/company_policy/test_accounting_header_trust.py \
             tests/test_write_build_info.py \
             -q --tb=short --junitxml=a4-canonical-junit.xml
-      - name: Clean repository closure and changed-source secret scan
+      - name: Repository-wide ownership classification
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          HOME: ${{ runner.temp }}/butler-home
+        run: |
+          set +e
+          python -m pytest -q --tb=short --junitxml=a4-repo-wide-junit.xml
+          pytest_exit_code=$?
+          set -e
+          python scripts/ci/classify_a4_repository_failures.py \
+            --junit a4-repo-wide-junit.xml \
+            --baseline docs/ops/A4_V55_REPOSITORY_FAILURE_BASELINE.json \
+            --pytest-exit-code "$pytest_exit_code" \
+            --report a4-repo-failure-classification.json
+      - name: Clean repository closure
         run: |
           python - <<'PY'
-          import pathlib, re, subprocess
+          import re, subprocess
           tracked = subprocess.check_output(
               ['git', 'ls-files'], text=True
           ).splitlines()
-          changed = subprocess.check_output(
-              ['git', 'diff', '--name-only', 'origin/main...HEAD'], text=True
-          ).splitlines()
           forbidden = re.compile(r'(^|/)(__pycache__|\.pytest_cache|\.mypy_cache)(/|$)|\.py[co]$|\.log$|(^|/)\.DS_Store$|(^|/)\.env(?:\.|$)|credentials?', re.I)
-          secret = re.compile(r'(?:sk-[A-Za-z0-9._-]{10,}|AKIA[0-9A-Z]{16}|-----BEGIN[ \t]+[A-Z ]*PRIVATE KEY-----|EXPORT_SIGN_SECRET\s*=\s*dev-export-secret)')
           errors = [f'FORBIDDEN_PATH:{name}' for name in tracked if forbidden.search(name)]
-          for name in changed:
-              path = pathlib.Path(name)
-              if path.is_file() and path.stat().st_size <= 2_000_000:
-                  text = path.read_text(encoding='utf-8', errors='ignore')
-                  if secret.search(text):
-                      errors.append(f'SECRET_PATTERN:{name}')
           if errors:
               raise SystemExit('\n'.join(errors))
-          print(f'A4_V54_CLEAN_REPOSITORY_CLOSURE=1 tracked={len(tracked)} changed={len(changed)}')
+          print(f'A4_V55_CLEAN_REPOSITORY_CLOSURE=1 tracked={len(tracked)}')
           PY
+      - name: Full tracked and Git history secret scan
+        run: |
+          python scripts/ci/a4_repository_secret_scan.py \
+            --repo . \
+            --baseline docs/ops/A4_V55_SECRET_SCAN_BASELINE.json \
+            --rotation-status docs/ops/A4_V55_SECRET_ROTATION_STATUS.json \
+            --report a4-secret-scan.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: a4-canonical-junit
-          path: a4-canonical-junit.xml
+          path: |
+            a4-canonical-junit.xml
+            a4-repo-wide-junit.xml
+            a4-repo-failure-classification.json
+            a4-secret-scan.json
 
   a4-native-contract:
     name: A4 native authority contract
@@ -252,9 +279,18 @@ jobs:
           SWIFT
           xcrun swiftc -typecheck -module-cache-path "$tmp/module-cache" \
             butler-desktop/src-tauri/native/a4_verifier_authority_launcher.swift \
+            butler-desktop/src-tauri/native/a4_secure_memory.swift \
             butler-desktop/src-tauri/native/a4_authority_protocol.swift \
             butler-desktop/src-tauri/native/a4_authority_canonical.swift \
             butler-desktop/src-tauri/native/a4_authority_replay.swift \
             "$tmp/AuthorityBuildConfig.swift" \
             -framework Foundation -framework Security -framework CryptoKit -lsqlite3
+          xcrun clang -O2 -fno-builtin-memset -c \
+            butler-desktop/src-tauri/native/a4_secure_zero.c \
+            -o "$tmp/a4_secure_zero.o"
+          xcrun swiftc -module-cache-path "$tmp/test-module-cache" \
+            butler-desktop/src-tauri/native/a4_secure_memory.swift \
+            tests/accounting/classify/swift/a4_secure_memory_tests.swift \
+            "$tmp/a4_secure_zero.o" -o "$tmp/a4-secure-memory-tests"
+          "$tmp/a4-secure-memory-tests"
           bash -n scripts/build_a4_authority_helper_macos.sh
