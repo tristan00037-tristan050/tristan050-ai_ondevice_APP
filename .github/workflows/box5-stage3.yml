@@ -226,6 +226,7 @@ jobs:
           python scripts/ci/classify_a4_repository_failures.py \
             --junit a4-repo-wide-junit.xml \
             --baseline docs/ops/A4_V55_REPOSITORY_FAILURE_BASELINE.json \
+            --baseline-overlay docs/ops/A4_V55_REPOSITORY_FAILURE_BASELINE_UBUNTU_CI_OVERLAY.json \
             --pytest-exit-code "$pytest_exit_code" \
             --report a4-repo-failure-classification.json
       - name: Clean repository closure

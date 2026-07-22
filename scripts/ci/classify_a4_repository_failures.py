@@ -32,24 +32,55 @@ def failed_nodeids(junit_path: Path) -> tuple[str, ...]:
     return tuple(sorted(failures))
 
 
+def _load_baselines(
+    baseline_path: Path, overlay_paths: Sequence[Path]
+) -> tuple[dict[str, str], dict[str, str], list[str]]:
+    expected: dict[str, str] = {}
+    owners: dict[str, str] = {}
+    sources: list[str] = []
+    paths = (baseline_path, *overlay_paths)
+    for index, path in enumerate(paths):
+        baseline = json.loads(path.read_text(encoding="utf-8"))
+        if (
+            not isinstance(baseline, dict)
+            or baseline.get("schema_version")
+            != "butler.box5.a4.repository_failure_baseline.v5.5"
+            or not isinstance(baseline.get("failures"), dict)
+            or not isinstance(baseline.get("owner_notes"), dict)
+        ):
+            raise ValueError("failure baseline is invalid")
+        if index and baseline.get("baseline_role") != "platform_overlay":
+            raise ValueError("failure baseline overlay role is invalid")
+        incoming: dict[str, str] = baseline["failures"]
+        incoming_owners: dict[str, str] = baseline["owner_notes"]
+        if not incoming or any(owner not in incoming_owners for owner in incoming.values()):
+            raise ValueError("failure baseline ownership is incomplete")
+        overlap = set(expected) & set(incoming)
+        if overlap:
+            raise ValueError("failure baselines contain duplicate nodeids")
+        owner_conflicts = {
+            owner
+            for owner, note in incoming_owners.items()
+            if owner in owners and owners[owner] != note
+        }
+        if owner_conflicts:
+            raise ValueError("failure baseline owner notes conflict")
+        expected.update(incoming)
+        owners.update(incoming_owners)
+        sources.append(path.name)
+    return expected, owners, sources
+
+
 def classify(
-    *, junit_path: Path, baseline_path: Path, pytest_exit_code: int
+    *,
+    junit_path: Path,
+    baseline_path: Path,
+    pytest_exit_code: int,
+    overlay_paths: Sequence[Path] = (),
 ) -> dict[str, object]:
     if pytest_exit_code not in {0, 1}:
         raise ValueError("pytest did not complete normally")
-    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
-    if (
-        not isinstance(baseline, dict)
-        or baseline.get("schema_version")
-        != "butler.box5.a4.repository_failure_baseline.v5.5"
-        or not isinstance(baseline.get("failures"), dict)
-        or not isinstance(baseline.get("owner_notes"), dict)
-    ):
-        raise ValueError("failure baseline is invalid")
-    expected: dict[str, str] = baseline["failures"]
-    owners = baseline["owner_notes"]
-    if not expected or any(owner not in owners for owner in expected.values()):
-        raise ValueError("failure baseline ownership is incomplete")
+    expected, _owners, sources = _load_baselines(baseline_path, overlay_paths)
     observed = set(failed_nodeids(junit_path))
     unknown = sorted(observed - set(expected))
     a4_owned = sorted(
@@ -67,6 +98,8 @@ def classify(
         else "BLOCKED",
         "pytest_exit_code": pytest_exit_code,
         "raw_failure_output_included": False,
+        "baseline_sources": sources,
+        "baseline_failure_count": len(expected),
         "observed_failure_count": len(observed),
         "a4_owned_failure_count": len(a4_owned),
         "unknown_failure_count": len(unknown),
@@ -81,6 +114,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--junit", type=Path, required=True)
     parser.add_argument("--baseline", type=Path, required=True)
+    parser.add_argument("--baseline-overlay", type=Path, action="append", default=[])
     parser.add_argument("--pytest-exit-code", type=int, required=True)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -89,6 +123,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             junit_path=args.junit,
             baseline_path=args.baseline,
             pytest_exit_code=args.pytest_exit_code,
+            overlay_paths=args.baseline_overlay,
         )
     except Exception:
         print("A4_REPOSITORY_FAILURE_CLASSIFICATION_OK=0")

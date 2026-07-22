@@ -62,9 +62,10 @@
     }
   ],
   "local_validation": {
-    "a4_product_ci_scope": "460 passed, 1 skipped on the bundled Butler Python 3.11 runtime",
+    "a4_product_ci_scope": "463 passed, 1 skipped on the bundled Butler Python 3.11 runtime",
     "repository_wide": "3116 passed, 32 skipped, 41 classified external failures, 1 baseline failure resolved, 0 A4-owned failures, 0 collection errors",
     "repository_wide_status": "A4_OWNED_ZERO_EXTERNAL_41_CLASSIFIED_ONE_BASELINE_RESOLVED",
+    "repository_wide_ubuntu_ci_replay": "63 observed failures exactly classified as 36 base plus 27 llama_cpp-unavailable platform-overlay failures; 0 A4-owned and 0 unclassified",
     "native_authority_typecheck": "PASS",
     "signing_seed_defer_zeroization": "PASS",
     "repository_secret_scan": "BLOCKED_ONE_KNOWN_HISTORY_EXPOSURE",
