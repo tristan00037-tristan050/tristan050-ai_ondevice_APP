@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn().mockResolvedValue('test-capability-token'),
+  invoke: vi.fn().mockResolvedValue('sample-capability-token'),
 }));
 
 import { SIDECAR_BASE } from '../constants';
@@ -21,7 +21,7 @@ describe('sidecarFetch target confinement', () => {
     const [target, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
     expect(target.origin).toBe(new URL(SIDECAR_BASE).origin);
     expect(target.pathname).toBe('/v1/home/runtime-status');
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer test-capability-token');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer sample-capability-token');
     expect(init.redirect).toBe('error');
   });
 
