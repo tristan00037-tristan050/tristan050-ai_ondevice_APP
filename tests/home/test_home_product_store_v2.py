@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import sqlite3
 import stat
@@ -63,7 +64,10 @@ def test_private_app_data_encrypted_message_and_meta_authority(tmp_path: Path) -
             authority = db.execute("SELECT installation_id,workspace_id,key_id,schema_version FROM home_meta").fetchone()
             assert authority[1] == store.workspace_id
             assert len(authority[2]) == 64
-            assert authority[3] == 3
+            assert authority[3] == 4
+            assert "content_digest" not in {
+                row[1] for row in db.execute("PRAGMA table_info(home_messages)")
+            }
 
 
 def test_existing_db_missing_key_never_creates_or_quarantines(tmp_path: Path) -> None:
@@ -221,6 +225,7 @@ def test_schema_upgrade_creates_immutable_backup_and_manifest(tmp_path: Path) ->
     store.close()
     with sqlite3.connect(database) as db:
         db.execute("PRAGMA user_version=2")
+        db.execute("UPDATE home_meta SET schema_version=2")
         db.commit()
     upgraded = HomeStore(database, bootstrap_new_install=False)
     upgraded.close()
@@ -229,6 +234,204 @@ def test_schema_upgrade_creates_immutable_backup_and_manifest(tmp_path: Path) ->
     assert len(backups) == len(manifests) == 1
     assert stat.S_IMODE(backups[0].stat().st_mode) == 0o600
     assert json.loads(manifests[0].read_text())["integrity_result"] == "PASS"
+
+
+def _install_digest_bearing_variants(
+    database: Path, *, user_version: int, meta_version: int,
+    messages: bool, quarantine: bool,
+) -> None:
+    with sqlite3.connect(database) as db:
+        db.execute("PRAGMA foreign_keys=OFF")
+        if messages:
+            db.execute("ALTER TABLE home_messages RENAME TO home_messages_v4_source")
+            db.execute(
+                """CREATE TABLE home_messages(
+                    workspace_id TEXT NOT NULL, conversation_id TEXT NOT NULL,
+                    sequence INTEGER NOT NULL, message_id TEXT NOT NULL,
+                    role TEXT NOT NULL, ciphertext BLOB NOT NULL,
+                    content_digest TEXT NOT NULL, timestamp TEXT NOT NULL,
+                    source TEXT, fact_id TEXT, score REAL,
+                    PRIMARY KEY(workspace_id,conversation_id,sequence),
+                    UNIQUE(workspace_id,conversation_id,message_id),
+                    FOREIGN KEY(workspace_id,conversation_id)
+                      REFERENCES home_conversations(workspace_id,conversation_id)
+                      ON DELETE CASCADE)"""
+            )
+            db.execute(
+                """INSERT INTO home_messages
+                   SELECT workspace_id,conversation_id,sequence,message_id,role,
+                    ciphertext,?,timestamp,source,fact_id,score
+                   FROM home_messages_v4_source""",
+                (hashlib.sha256(b"offline-guess").hexdigest(),),
+            )
+            db.execute("DROP TABLE home_messages_v4_source")
+        if quarantine:
+            db.execute("ALTER TABLE home_quarantine RENAME TO home_quarantine_v4_source")
+            db.execute(
+                """CREATE TABLE home_quarantine(
+                    quarantine_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL,
+                    entity_type TEXT NOT NULL, entity_id TEXT NOT NULL,
+                    reason_code TEXT NOT NULL, content_digest TEXT,
+                    detected_at TEXT NOT NULL)"""
+            )
+            db.execute(
+                """INSERT INTO home_quarantine(
+                    quarantine_id,workspace_id,entity_type,entity_id,
+                    reason_code,content_digest,detected_at)
+                   SELECT quarantine_id,workspace_id,entity_type,entity_id,
+                    reason_code,?,detected_at FROM home_quarantine_v4_source""",
+                (hashlib.sha256(b"offline-guess").hexdigest(),),
+            )
+            db.execute("DROP TABLE home_quarantine_v4_source")
+        db.execute(
+            "UPDATE home_meta SET schema_version=? WHERE singleton_id=1",
+            (meta_version,),
+        )
+        db.execute(f"PRAGMA user_version={user_version}")
+        db.commit()
+
+
+def test_mislabeled_v4_digest_variant_is_rebuilt_before_ready(tmp_path: Path) -> None:
+    database = tmp_path / "home" / "home.sqlite3"
+    store = HomeStore(database)
+    accepted = accept(store, content="복호화 보존 원문")
+    before = store.messages("conversation-1")["messages"]
+    store.close()
+    _install_digest_bearing_variants(
+        database, user_version=4, meta_version=4,
+        messages=True, quarantine=True,
+    )
+
+    recovered = HomeStore(database, bootstrap_new_install=False)
+    try:
+        assert recovered.startup_status()["status"] == "HOME_READY"
+        assert recovered.messages("conversation-1")["messages"] == before
+        assert accepted["conversation_version"] == 1
+        with sqlite3.connect(database) as db:
+            assert db.execute("PRAGMA user_version").fetchone()[0] == 4
+            assert db.execute(
+                "SELECT schema_version FROM home_meta"
+            ).fetchone()[0] == 4
+            assert "content_digest" not in {
+                row[1] for table in ("home_messages", "home_quarantine")
+                for row in db.execute(f"PRAGMA table_info({table})")
+            }
+    finally:
+        recovered.close()
+
+
+def test_quarantine_only_v3_digest_variant_is_removed(tmp_path: Path) -> None:
+    database = tmp_path / "home" / "home.sqlite3"
+    store = HomeStore(database)
+    workspace = store.workspace_id
+    store.close()
+    _install_digest_bearing_variants(
+        database, user_version=3, meta_version=3,
+        messages=False, quarantine=True,
+    )
+    with sqlite3.connect(database) as db:
+        db.execute(
+            """INSERT INTO home_quarantine VALUES(?,?,?,?,?,?,?)""",
+            (
+                uid(), workspace, "message", "legacy-message",
+                "LEGACY", hashlib.sha256(b"sensitive").hexdigest(), CLIENT_TIME,
+            ),
+        )
+        db.commit()
+
+    recovered = HomeStore(database, bootstrap_new_install=False)
+    try:
+        assert recovered.startup_status()["status"] == "HOME_READY"
+        with sqlite3.connect(database) as db:
+            assert "content_digest" not in {
+                row[1] for row in db.execute("PRAGMA table_info(home_quarantine)")
+            }
+            assert db.execute("SELECT COUNT(*) FROM home_quarantine").fetchone()[0] == 1
+    finally:
+        recovered.close()
+
+
+def test_meta_user_version_mismatch_never_reaches_ready(tmp_path: Path) -> None:
+    database = tmp_path / "home" / "home.sqlite3"
+    store = HomeStore(database)
+    store.close()
+    with sqlite3.connect(database) as db:
+        db.execute("UPDATE home_meta SET schema_version=3")
+        db.commit()
+    blocked = HomeStore(database, bootstrap_new_install=False)
+    try:
+        assert blocked.startup_status()["status"] == "MIGRATION_BLOCKED"
+        assert blocked.startup_status()["mutation_allowed"] is False
+    finally:
+        blocked.close()
+
+
+def test_exact_schema_fingerprint_blocks_unexpected_trigger(tmp_path: Path) -> None:
+    database = tmp_path / "home" / "home.sqlite3"
+    store = HomeStore(database)
+    store.close()
+    with sqlite3.connect(database) as db:
+        db.execute(
+            """CREATE TRIGGER unexpected_message_export
+               AFTER INSERT ON home_messages BEGIN
+               SELECT NEW.message_id;
+               END"""
+        )
+        db.commit()
+    blocked = HomeStore(database, bootstrap_new_install=False)
+    try:
+        assert blocked.startup_status()["status"] == "MIGRATION_BLOCKED"
+        assert blocked.startup_status()["model_execution_allowed"] is False
+    finally:
+        blocked.close()
+
+
+def test_message_pages_expose_count_and_contiguous_sequence(tmp_path: Path) -> None:
+    with HomeStore(tmp_path / "home.sqlite3") as store:
+        first = accept(store, content="첫째")
+        store.append_assistant_turn(
+            "conversation-1", message("assistant-1", "butler", "둘째"),
+            first["conversation_version"], turn_id=first["turn_id"],
+            model_request_id=first["model_request_id"], request_id=uid(),
+            idempotency_key=uid(), actor="local-user",
+        )
+        page_one = store.messages("conversation-1", limit=1)
+        page_two = store.messages(
+            "conversation-1", after_sequence=page_one["next_sequence"], limit=1,
+        )
+        assert page_one["message_count"] == page_two["message_count"] == 2
+        assert page_one["messages"][0]["sequence"] == 1
+        assert page_one["next_sequence"] == 1
+        assert page_two["messages"][0]["sequence"] == 2
+        assert page_two["next_sequence"] is None
+
+
+def test_snapshot_cursor_is_scope_and_inventory_bound(tmp_path: Path) -> None:
+    with HomeStore(tmp_path / "home.sqlite3") as store:
+        for index in range(101):
+            conversation_id = f"conversation-{index:03d}"
+            store.accept_user_turn(
+                conversation(conversation_id),
+                message(f"message-{index:03d}", "user", f"내용 {index}"),
+                business_profile_id=None, expected_version=None,
+                request_id=uid(), idempotency_key=uid(), actor="local-user",
+            )
+        first = store.snapshot(limit=100)
+        assert len(first["conversations"]) == 100
+        assert first["filtered_conversation_count"] == 101
+        assert first["next_cursor"] is not None
+        second = store.snapshot(limit=100, cursor=first["next_cursor"])
+        assert len(second["conversations"]) == 1
+        assert second["next_cursor"] is None
+        assert second["inventory_digest"] == first["inventory_digest"]
+        assert len({
+            item["id"] for item in
+            [*first["conversations"], *second["conversations"]]
+        }) == 101
+        with pytest.raises(ValidationError, match="INVALID_CURSOR"):
+            store.snapshot(
+                limit=100, cursor=first["next_cursor"], include_trash=True,
+            )
 
 
 def test_storage_symlink_and_mode_widening_fail_closed(tmp_path: Path) -> None:
