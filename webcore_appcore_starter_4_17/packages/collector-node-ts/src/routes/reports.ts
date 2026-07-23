@@ -9,6 +9,7 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'node:crypto';
 import { requireTenantAuth, verifySignToken } from '../mw/auth.js';
+import { requireExportSignSecret } from '../security/exportSigningSecret.js';
 import * as reportsDb from '../db/reports.js';
 import * as signHistoryDb from '../db/signHistory.js';
 import * as signTokenCacheDb from '../db/signTokenCache.js';
@@ -265,7 +266,12 @@ router.post('/:id/sign', requireTenantAuth, async (req: Request, res: Response) 
     }
 
     // 새 토큰 생성
-    const signSecret = process.env.EXPORT_SIGN_SECRET || 'dev-secret';
+    let signSecret: string;
+    try {
+      signSecret = requireExportSignSecret();
+    } catch {
+      return res.status(503).json({ error: 'Signing service unavailable' });
+    }
     const expiresAt = issuedAt + 3600000; // 1시간
     const tokenPayload = {
       reportId: id,
@@ -470,4 +476,3 @@ router.get('/:id/bundle.zip', verifySignToken, async (req: Request, res: Respons
 export const reports: Map<string, Report> = new Map();
 
 export default router;
-

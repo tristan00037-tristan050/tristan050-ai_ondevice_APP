@@ -3,3 +3,12 @@
 /.cursor/rules/                       @tristan00037-tristan050
 /docs/ops/cursor_prompts/             @tristan00037-tristan050
 /docs/ops/contracts/                  @tristan00037-tristan050
+
+# A4 secret-scan gate, rotation-evidence verifier, and baseline approval (v5.6)
+# Changes to these paths require Code Owner approval.
+/docs/ops/A4_V55_*                          @tristan00037-tristan050
+/scripts/ci/a4_repository_secret_scan.py    @tristan00037-tristan050
+/.github/workflows/a4-*                     @tristan00037-tristan050
+/butler_pc_core/a4_verifier/**              @tristan00037-tristan050
+/.github/workflows/box5-stage3.yml           @tristan00037-tristan050
+/scripts/ci/prepare_a4_baseline_approval.py  @tristan00037-tristan050

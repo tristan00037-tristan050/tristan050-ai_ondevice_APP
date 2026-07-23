@@ -20,7 +20,7 @@ interface RateLimitEntry {
 // 인메모리 Rate Limit 저장소 (프로덕션에서는 Redis 사용 권장)
 class RateLimitStore {
   private store: Map<string, RateLimitEntry> = new Map();
-  private cleanupInterval: NodeJS.Timeout | null = null;
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     // 주기적으로 만료된 항목 정리 (1분마다)
@@ -170,4 +170,3 @@ export const looseRateLimiter = createRateLimiter({
   windowMs: 60000, // 1분
   maxRequests: 1000,
 });
-

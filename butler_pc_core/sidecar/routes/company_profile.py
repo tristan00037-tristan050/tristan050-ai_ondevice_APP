@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import csv
+from datetime import datetime, timezone
 from io import StringIO
 from typing import Any, Optional
 
 from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
+from butler_pc_core.accounting.assignment.domain import AssignmentError
 from butler_pc_core.auth.capability_token import (
     CapabilityTokenError,
     CapabilityTokenManager,
@@ -28,10 +30,16 @@ _STORE: CompanyProfileStore | None = None
 _TOKEN_MANAGER = CapabilityTokenManager()
 
 
+class OwnBankAccountRequest(BaseModel):
+    bank_code: str = Field(..., min_length=2, max_length=16)
+    account_number: str = Field(..., min_length=1, max_length=64)
+
+
 class CompanyProfileRegisterRequest(BaseModel):
     own_bank_holder_aliases: list[str] = Field(..., min_length=1)
     own_company_aliases: list[str] = Field(..., min_length=1)
     own_account_numbers: list[str] = Field(default_factory=list)
+    own_bank_accounts: list[OwnBankAccountRequest] = Field(default_factory=list)
 
 
 def get_company_profile_store() -> CompanyProfileStore:
@@ -103,20 +111,45 @@ async def register_company_profile(
     x_admin_auth_method: Optional[str] = Header(default=None),
 ) -> dict[str, Any]:
     try:
+        admin = _admin_context(
+            x_admin_role,
+            x_admin_id_digest,
+            x_admin_session_digest,
+            x_admin_auth_method,
+        )
         verify_admin_context(
-            _admin_context(x_admin_role, x_admin_id_digest, x_admin_session_digest, x_admin_auth_method),
+            admin,
             operation="register_company_profile",
         )
         runtime = make_runtime_profile(
             own_bank_holder_aliases=payload.own_bank_holder_aliases,
             own_company_aliases=payload.own_company_aliases,
             own_account_numbers=payload.own_account_numbers,
+            own_bank_accounts=[item.model_dump() for item in payload.own_bank_accounts],
         )
+        registry_digest = None
+        if runtime.own_bank_accounts:
+            from butler_pc_core.accounting.assignment.runtime import (
+                get_accounting_review_runtime,
+            )
+            from butler_pc_core.accounting.classify.reconciliation_v2 import tenant_uuid
+
+            registry = get_accounting_review_runtime().store.replace_a4_own_account_registry(
+                tenant_id=tenant_uuid(runtime.profile_id),
+                accounts=runtime.own_bank_accounts,
+                approval_id=admin.admin_id_digest,
+                observed_at=datetime.now(timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+            )
+            registry_digest = registry["registry_digest"]
         entry = get_company_profile_store().save_profile(runtime)
     except AdminAuthError as exc:
         raise HTTPException(status_code=403, detail=admin_error_payload(exc)) from exc
     except ContractValidationError as exc:
         raise HTTPException(status_code=422, detail={"fail_class": str(exc)}) from exc
+    except AssignmentError as exc:
+        raise HTTPException(status_code=exc.status, detail={"fail_class": exc.code}) from exc
     return {
         "schema_version": "company_profile.register.response.v1",
         "profile_id": entry.profile_id,
@@ -125,6 +158,8 @@ async def register_company_profile(
         "raw_text_logged": False,
         "plaintext_persisted": False,
         "external_send_zero": True,
+        "a4_registry_ready": bool(runtime.own_bank_accounts),
+        "a4_registry_digest": registry_digest,
     }
 
 

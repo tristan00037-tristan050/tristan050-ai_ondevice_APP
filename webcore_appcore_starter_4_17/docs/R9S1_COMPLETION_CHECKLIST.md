@@ -68,7 +68,7 @@
 
 ### 7. 환경 설정
 
-- ✅ `.env` 파일에 `EXPORT_SIGN_SECRET=dev-export-secret` 추가
+- ✅ 로컬 비밀 저장소에서 `EXPORT_SIGN_SECRET` 주입
 - ✅ BFF 서버 재기동 완료 (`/healthz` OK)
 
 ---
@@ -155,4 +155,3 @@ git pull origin main
 git switch -c r9-s2-cs-llm
 git push -u origin r9-s2-cs-llm
 ```
-

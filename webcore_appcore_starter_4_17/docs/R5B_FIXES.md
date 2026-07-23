@@ -230,7 +230,7 @@ router.post('/:id/sign', requireTenantAuth, async (req, res) => {
 export API_KEYS="default:collector-key,teamA:teamA-key"
 
 # 서명 시크릿
-export EXPORT_SIGN_SECRET=dev-secret
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 
 # 보존 기간 (일)
 export RETAIN_DAYS=30
@@ -315,5 +315,4 @@ TOKEN2=$(curl -X POST \
 3. ZIP 번들 생성 로직 구현
 4. 통합 테스트 작성
 5. 리포트 조회 UI/대시보드 구현 (Phase 5.3 UI 편성)
-
 

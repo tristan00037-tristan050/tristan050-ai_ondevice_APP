@@ -6,9 +6,12 @@ product path. Nothing here mutates the legacy DataFrame or the product response.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import math
+import os
 import re
+import secrets
+from pathlib import Path
 from typing import Any, Iterable
 
 from butler_pc_core.accounting.classify.models import DecisionState
@@ -28,10 +31,22 @@ _UNCLASSIFIED_LABELS = {"", "미분류", "none", "None"}
 
 
 def _legacy_classified(legacy_account: object) -> bool:
-    return str(legacy_account if legacy_account is not None else "").strip() not in _UNCLASSIFIED_LABELS
+    return (
+        str(legacy_account if legacy_account is not None else "").strip()
+        not in _UNCLASSIFIED_LABELS
+    )
 
 
-_DATE_COL_KEYWORDS = ("거래일시", "거래일자", "거래일", "거래날짜", "일자", "날짜", "date", "일시")
+_DATE_COL_KEYWORDS = (
+    "거래일시",
+    "거래일자",
+    "거래일",
+    "거래날짜",
+    "일자",
+    "날짜",
+    "date",
+    "일시",
+)
 _SINGLE_AMOUNT_COLUMNS = ("금액", "거래금액", "amount", "변동금액")
 
 
@@ -94,11 +109,15 @@ def _to_minor_amount(value: object) -> int | None:
     return int(round(number))
 
 
-def shadow_one(row: dict[str, Any], company_profile: Any = None) -> ShadowComparisonRecord:
+def shadow_one(
+    row: dict[str, Any], company_profile: Any = None
+) -> ShadowComparisonRecord:
     """Classify one row via the shadow classifier. Isolated: never raises."""
     legacy_account = row.get("legacy_account")
     legacy_status = "분류됨" if _legacy_classified(legacy_account) else "미분류"
-    legacy_account_id = str(legacy_account).strip() if _legacy_classified(legacy_account) else None
+    legacy_account_id = (
+        str(legacy_account).strip() if _legacy_classified(legacy_account) else None
+    )
     try:
         booked = _to_date(row["booked_date"])
         tx = build_canonical_transaction(
@@ -160,7 +179,14 @@ def run_shadow_over_rows(
 def rows_from_dataframe(df: Any) -> list[dict[str, Any]]:
     """Extract PII-free primitives from the legacy result DataFrame (best-effort)."""
     rows: list[dict[str, Any]] = []
-    internal = {"분류과목", "신뢰도", "_amt", "_datetime", "_guard_reason", "_pnl_excluded"}
+    internal = {
+        "분류과목",
+        "신뢰도",
+        "_amt",
+        "_datetime",
+        "_guard_reason",
+        "_pnl_excluded",
+    }
     columns = list(df.columns)
     date_col = _detect_date_column(columns)
     amount_col = _detect_single_amount_column(columns)
@@ -176,23 +202,29 @@ def rows_from_dataframe(df: Any) -> list[dict[str, Any]]:
             booked = r.get(date_col)
         # combine non-internal cell text ONLY to compute digests downstream (never stored raw)
         desc = " ".join(str(r.get(c, "")) for c in non_internal)
-        rows.append({
-            "index": i,
-            "amount_minor": amt,
-            "booked_date": booked,
-            "value_date": booked,
-            "desc_text": desc,
-            "vendor_text": str(r.get("상대계좌예금주명", r.get("거래처", ""))),
-            "counterparty_text": str(r.get("상대계좌예금주명", "")),
-            # raw counterparty account number for the self-transfer own-account check
-            # (in-memory only; never written to the shadow record).
-            "counterparty_account_no": str(r.get("상대계좌번호", r.get("상대계좌", "")) or ""),
-            "legacy_account": r.get("분류과목"),
-        })
+        rows.append(
+            {
+                "index": i,
+                "amount_minor": amt,
+                "booked_date": booked,
+                "value_date": booked,
+                "desc_text": desc,
+                "vendor_text": str(r.get("상대계좌예금주명", r.get("거래처", ""))),
+                "counterparty_text": str(r.get("상대계좌예금주명", "")),
+                # raw counterparty account number for the self-transfer own-account check
+                # (in-memory only; never written to the shadow record).
+                "counterparty_account_no": str(
+                    r.get("상대계좌번호", r.get("상대계좌", "")) or ""
+                ),
+                "legacy_account": r.get("분류과목"),
+            }
+        )
     return rows
 
 
-def run_shadow_over_dataframe(df: Any, company_profile: Any = None) -> list[ShadowComparisonRecord]:
+def run_shadow_over_dataframe(
+    df: Any, company_profile: Any = None
+) -> list[ShadowComparisonRecord]:
     """Top-level entry used by the isolated sidecar hook."""
     return run_shadow_over_rows(rows_from_dataframe(df), company_profile)
 
@@ -215,9 +247,121 @@ def run_and_write_shadow(df: Any, out_path: str, company_profile: Any = None) ->
         if not shadow_enabled():
             return 0
         records = run_shadow_over_dataframe(df, company_profile)
-        lines = "".join(r.to_jsonl() + "\n" for r in records)
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(lines)
+        lines = "".join(r.to_jsonl() + "\n" for r in records).encode("utf-8")
+        _publish_jsonl_once(Path(out_path), lines)
         return len(records)
     except Exception:  # noqa: BLE001 — observe-only; product path must never see this
         return 0
+
+
+def _publish_jsonl_once(path: Path, payload: bytes) -> None:
+    """Append-only, crash-safe publish; exact retries are idempotent."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.parent / f".{path.name}.{secrets.token_hex(12)}.tmp"
+    try:
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            if path.read_bytes() != payload:
+                raise ValueError("IDEMPOTENCY_CONFLICT")
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def run_and_write_product_shadow(
+    df: Any,
+    out_path: str,
+    company_profile: Any = None,
+    run_id: str | None = None,
+    a4_token_service: Any = None,
+    code_tree_oid: str | None = None,
+    observed_at: datetime | None = None,
+    a4_observation_store: Any = None,
+    a4_owner_request: Any = None,
+    a4_policy_path: str | None = None,
+    a4_evidence_root: str | None = None,
+    a4_source_snapshot: Any = None,
+) -> int:
+    """Canonical sink: existing Stage3 plus the A4 v3.1 product state machine.
+
+    A4 commits to the product SQLite store before its outbox exports evidence.
+    Missing signed policy/trust configuration fails closed and cannot alter the
+    DataFrame, response, journal, report, or established Stage3 artifact.
+    """
+
+    def terminate(error_code: str) -> None:
+        if (
+            a4_observation_store is None
+            or not isinstance(a4_owner_request, dict)
+            or not isinstance(a4_owner_request.get("tenant_id"), str)
+            or not isinstance(a4_owner_request.get("run_id"), str)
+        ):
+            return
+        try:
+            a4_observation_store.terminate_reconciliation_run(
+                tenant_id=a4_owner_request["tenant_id"],
+                run_id=a4_owner_request["run_id"],
+                error_code=error_code,
+                observed_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            )
+        except Exception:
+            return
+
+    try:
+        count = run_and_write_shadow(df, out_path, company_profile)
+        if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", str(code_tree_oid)):
+            terminate("BLOCK_BUILD_IDENTITY_UNKNOWN")
+            return count
+        if (
+            not run_id
+            or a4_token_service is None
+            or a4_observation_store is None
+            or not isinstance(a4_owner_request, dict)
+            or not a4_evidence_root
+            or a4_source_snapshot is None
+        ):
+            terminate("BLOCK_RUNTIME_UNAVAILABLE")
+            return count
+        if not a4_policy_path:
+            terminate("BLOCK_POLICY_MISSING")
+            return count
+        from butler_pc_core.accounting.classify.reconciliation_service_v2 import (
+            PINNED_TRUST_POLICY_PATH,
+            run_canonical_product_reconciliation,
+        )
+        from butler_pc_core.accounting.classify.reconciliation_v2 import A4ContractError
+
+        try:
+            run_canonical_product_reconciliation(
+                frame=None,
+                company_profile=company_profile,
+                token_service=a4_token_service,
+                store=a4_observation_store,
+                owner_request=a4_owner_request,
+                policy_path=Path(a4_policy_path),
+                trust_policy_path=PINNED_TRUST_POLICY_PATH,
+                evidence_root=Path(a4_evidence_root),
+                observed_at=observed_at or datetime.now(timezone.utc),
+                source_snapshot=a4_source_snapshot,
+            )
+        except A4ContractError as exc:
+            terminate(exc.code)
+            return count
+        except Exception:
+            terminate("BLOCK_INTERNAL")
+            return count
+        return count
+    finally:
+        if a4_source_snapshot is not None:
+            a4_source_snapshot.close()

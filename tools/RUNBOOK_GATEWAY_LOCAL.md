@@ -118,7 +118,7 @@ tail -n 50 /tmp/gateway_local.log
 ```bash
 export USE_PG=1
 export DATABASE_URL="postgres://app:app@127.0.0.1:5432/app"
-export EXPORT_SIGN_SECRET="dev-export-secret"
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 bash tools/run_gateway_local.sh
 ```
 
@@ -140,4 +140,3 @@ python3 -m http.server 5179
 ```
 http://127.0.0.1:5179
 ```
-

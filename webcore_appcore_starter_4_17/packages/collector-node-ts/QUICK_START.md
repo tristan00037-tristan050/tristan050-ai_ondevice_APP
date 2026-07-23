@@ -7,7 +7,7 @@ cd "/Users/kwong/Desktop/AI 온디바이스 플랫폼 앱/웹코어자료/trista
 
 # 환경 변수 설정
 export API_KEYS="default:collector-key"
-export EXPORT_SIGN_SECRET=dev-secret
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 export RETAIN_DAYS=30
 
 # 빌드 (변경사항이 있을 경우)
@@ -77,4 +77,3 @@ npm install
 # 재빌드
 npm run build
 ```
-

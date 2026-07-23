@@ -10,19 +10,21 @@ POST /api/precheck             파일 등급 사전 체크 (file_path)
 POST /api/analyze/stream       진행률 SSE 스트림 (text/event-stream)
 DELETE /api/analyze/{task_id}/cancel  작업 취소
 """
+
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
-import subprocess as _subprocess
+import secrets
 import sys
 import tempfile
 
 # 회계 분류 런타임 의존성 — 정적 분석/번들 도구(PyInstaller 등)에 visible하게 명시
 try:
     import openpyxl  # noqa: F401  xlsx read/write
-    import xlrd      # noqa: F401  legacy .xls read
+    import xlrd  # noqa: F401  legacy .xls read
 except ImportError:
     pass  # 미설치 시 accounting/classify 엔드포인트에서 RuntimeError로 처리
 import threading
@@ -42,6 +44,7 @@ try:
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse, StreamingResponse
     from pydantic import BaseModel
+
     _FASTAPI_AVAILABLE = True
 except ImportError:
     _FASTAPI_AVAILABLE = False
@@ -69,7 +72,7 @@ from butler_pc_core.inference.model_identity import (
     sidecar_model_status_payload,
 )
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
-from butler_pc_core.build_info import build_info
+from butler_pc_core.build_info import build_info, build_tree_oid
 from butler_pc_core.fail_class import FailClass, fail_payload, map_legacy_to_fail_class
 from butler_pc_core.auth.capability_token import (
     CapabilityTokenError,
@@ -166,7 +169,8 @@ def _model_tier_runtime_probes() -> tuple[RuntimeProbe, ...]:
         ),
         RuntimeProbe(
             variant_id=BOX3_1P7B_VARIANT_ID,
-            model_path=(box3_lifecycle.model_path if box3_lifecycle else None) or box3_path,
+            model_path=(box3_lifecycle.model_path if box3_lifecycle else None)
+            or box3_path,
             loaded=bool(box3_lifecycle and box3_lifecycle.loaded),
             ready=bool(box3_lifecycle and box3_lifecycle.ready),
             process_id=box3_lifecycle.process_id if box3_lifecycle else os.getpid(),
@@ -177,17 +181,24 @@ def _model_tier_runtime_probes() -> tuple[RuntimeProbe, ...]:
 def _start_model_tier_phase0_shadow() -> None:
     """Start isolated Phase 0 observers; failures never affect sidecar startup."""
     global _MODEL_TIER_RUNTIME_MONITOR, _MODEL_TIER_DEVICE_SAMPLER
-    if os.environ.get("BUTLER_MODEL_TIER_SHADOW_ENABLED", "1").strip().lower() in {"0", "false", "no"}:
+    if os.environ.get("BUTLER_MODEL_TIER_SHADOW_ENABLED", "1").strip().lower() in {
+        "0",
+        "false",
+        "no",
+    }:
         return
     try:
         runtime_monitor = RuntimeStateMonitor(_model_tier_runtime_probes)
         device_sampler = DeviceProfileSampler()
         runtime_monitor.start()
         device_sampler.start()
-        if initialize_phase0_shadow(
-            runtime_monitor=runtime_monitor,
-            device_sampler=device_sampler,
-        ) is None:
+        if (
+            initialize_phase0_shadow(
+                runtime_monitor=runtime_monitor,
+                device_sampler=device_sampler,
+            )
+            is None
+        ):
             runtime_monitor.stop()
             device_sampler.stop()
             return
@@ -208,6 +219,7 @@ def _stop_model_tier_phase0_shadow() -> None:
         runtime_monitor.stop()
     if device_sampler is not None:
         device_sampler.stop()
+
 
 # FactPack 관련 import 및 초기화는 FastAPI/Pydantic 가용성에 의존.
 # (Pydantic 미설치 환경에서도 stdlib fallback 모드가 import 단계에서 깨지지 않도록 가드)
@@ -234,7 +246,9 @@ else:
 # task_id → TimeoutController マップ (キャンセル用)
 _active_controllers: dict[str, TimeoutController] = {}
 
-_CHUNK_WORKER = Path(__file__).resolve().parent / "butler_pc_core" / "inference" / "chunk_worker.py"
+_CHUNK_WORKER = (
+    Path(__file__).resolve().parent / "butler_pc_core" / "inference" / "chunk_worker.py"
+)
 
 
 async def _real_chunk_work_isolated(
@@ -249,8 +263,10 @@ async def _real_chunk_work_isolated(
     cmd = [
         sys.executable,
         str(_CHUNK_WORKER),
-        "--params", params_json,
-        "--chunk-idx", str(chunk_idx),
+        "--params",
+        params_json,
+        "--chunk-idx",
+        str(chunk_idx),
     ]
 
     proc = await asyncio.create_subprocess_exec(
@@ -298,6 +314,7 @@ async def _real_chunk_work_inprocess(
     card: dict[str, object] = {"user_prompt_template": "{{ query }}"}
     try:
         from butler_pc_core.prompts.cards import load_card_prompt
+
         card = load_card_prompt(params.card_mode)
         system_prompt = card.get("system_prompt", system_prompt)
     except Exception:
@@ -310,7 +327,9 @@ async def _real_chunk_work_inprocess(
         except Exception:
             pass
 
-    user_content = render_card_user_prompt(card, query=params.query, file_texts=file_texts)
+    user_content = render_card_user_prompt(
+        card, query=params.query, file_texts=file_texts
+    )
 
     prompt = (
         f"<|im_start|>system\n{system_prompt}<|im_end|>\n"
@@ -383,18 +402,21 @@ if _FASTAPI_AVAILABLE:
     from butler_pc_core.sidecar.middleware.usage_accumulator import (
         add_usage_accumulator_middleware,
     )
+
     add_usage_accumulator_middleware(app)
 
     # ── v1.5 capability token middleware ──
     _TOKEN_MANAGER = CapabilityTokenManager()
 
-    _PUBLIC_GET_PATHS = frozenset({
-        "/health",
-        "/api/sidecar/health",
-        "/api/model/status",
-        "/api/egress/report",
-        "/api/model-tier/shadow/status",
-    })
+    _PUBLIC_GET_PATHS = frozenset(
+        {
+            "/health",
+            "/api/sidecar/health",
+            "/api/model/status",
+            "/api/egress/report",
+            "/api/model-tier/shadow/status",
+        }
+    )
 
     from butler_pc_core.sidecar.routes.home import (
         initialize_home_store,
@@ -441,10 +463,15 @@ if _FASTAPI_AVAILABLE:
                     request.headers.get("Authorization")
                 )
             except CapabilityTokenError as exc:
-                status = 401 if exc.fail_class == FailClass.CAPABILITY_TOKEN_MISSING else 403
+                status = (
+                    401 if exc.fail_class == FailClass.CAPABILITY_TOKEN_MISSING else 403
+                )
                 return JSONResponse(
                     status_code=status,
-                    content={"fail_class": exc.fail_class.value, "message": exc.message},
+                    content={
+                        "fail_class": exc.fail_class.value,
+                        "message": exc.message,
+                    },
                 )
             request.state.capability_actor_id = session.actor_id
             request.state.capability_session_digest = session.session_digest
@@ -455,18 +482,35 @@ if _FASTAPI_AVAILABLE:
     from butler_pc_core.sidecar.routes.box2_rewrite import router as box2_rewrite_router
     from butler_pc_core.sidecar.routes.box3_draft import router as box3_draft_router
     from butler_pc_core.company_fact.routes import router as company_fact_router
-    from butler_pc_core.sidecar.routes.company_learning import router as company_learning_router
-    from butler_pc_core.sidecar.routes.company_profile import router as company_profile_router
-    from butler_pc_core.accounting.assignment.router import router as accounting_assignment_router
-    from butler_pc_core.sidecar.routes.helper1_search import router as helper1_search_router
-    from butler_pc_core.sidecar.routes.router_decide import router as router_decide_router
-    from butler_pc_core.sidecar.routes.router_intake_decide import router as router_intake_decide_router
+    from butler_pc_core.sidecar.routes.company_learning import (
+        router as company_learning_router,
+    )
+    from butler_pc_core.sidecar.routes.company_profile import (
+        router as company_profile_router,
+    )
+    from butler_pc_core.accounting.assignment.router import (
+        router as accounting_assignment_router,
+    )
+    from butler_pc_core.sidecar.routes.helper1_search import (
+        router as helper1_search_router,
+    )
+    from butler_pc_core.sidecar.routes.router_decide import (
+        router as router_decide_router,
+    )
+    from butler_pc_core.sidecar.routes.router_intake_decide import (
+        router as router_intake_decide_router,
+    )
+
     # 관리자 정책·양식 등록 v1.2 (MAINDEV patches/0001 본질 흡수): admin RBAC route +
     # 중앙 PolicyGate middleware 등록. middleware 는 모든 박스/헬퍼 라우트보다 *먼저*
     # 실행되며(fail-closed), 정책 미정의·로딩 실패 시 admin setup 외 모든 박스/헬퍼는
     # 차단된다(bootstrap 게이트).
-    from butler_pc_core.sidecar.routes.admin_policy_format import router as admin_policy_format_router
-    from butler_pc_core.sidecar.routes.admin_role_registry import router as admin_role_registry_router
+    from butler_pc_core.sidecar.routes.admin_policy_format import (
+        router as admin_policy_format_router,
+    )
+    from butler_pc_core.sidecar.routes.admin_role_registry import (
+        router as admin_role_registry_router,
+    )
     from butler_pc_core.company_policy.middleware import add_policy_gate_middleware
     from butler_pc_core.company_policy.storage import PolicyStore
 
@@ -533,7 +577,9 @@ if _FASTAPI_AVAILABLE:
             model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "")
             llm_status = "loading" if model_path else "no_model"
             last_error = "" if model_path else "BUTLER_MODEL_PATH 미설정"
-        model_payload = sidecar_model_status_payload(status=llm_status, last_error=last_error)
+        model_payload = sidecar_model_status_payload(
+            status=llm_status, last_error=last_error
+        )
         payload = _health_payload()
         payload.update(
             {
@@ -542,7 +588,9 @@ if _FASTAPI_AVAILABLE:
                 "model_family": model_payload["model_family"],
                 "model_path_digest": model_payload["model_path_digest"],
                 "model_path_conflict": model_payload["model_path_conflict"],
-                "model_path_conflict_reason": model_payload["model_path_conflict_reason"],
+                "model_path_conflict_reason": model_payload[
+                    "model_path_conflict_reason"
+                ],
                 "box3_model": model_payload["box3_model"],
                 "active_tasks": len(_active_controllers),
             }
@@ -553,12 +601,18 @@ if _FASTAPI_AVAILABLE:
     def model_status():
         model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "")
         if _SHARED_LLM is not None:
-            return sidecar_model_status_payload(status=_SHARED_LLM.status, last_error=_SHARED_LLM.last_error)
+            return sidecar_model_status_payload(
+                status=_SHARED_LLM.status, last_error=_SHARED_LLM.last_error
+            )
         if not model_path:
-            return sidecar_model_status_payload(status="no_model", last_error="BUTLER_MODEL_PATH 미설정")
+            return sidecar_model_status_payload(
+                status="no_model", last_error="BUTLER_MODEL_PATH 미설정"
+            )
         p = Path(model_path)
         if not p.exists():
-            return sidecar_model_status_payload(status="no_model", last_error="파일 없음")
+            return sidecar_model_status_payload(
+                status="no_model", last_error="파일 없음"
+            )
         return sidecar_model_status_payload(status="loading", last_error="")
 
     @app.get("/api/egress/report")
@@ -568,22 +622,25 @@ if _FASTAPI_AVAILABLE:
         실제 네트워크 모니터링은 D-1-C 이후 구현 예정.
         """
         import uuid as _uuid
-        return JSONResponse({
-            "schema_version": "egress_report.v2",
-            "task_id": str(_uuid.uuid4()),
-            "mode": "local_only",
-            "raw_file_sent_external": False,
-            "raw_text_logged": False,
-            "egress_bytes_total": 0,
-            "dns_requests": 0,
-            "http_requests": 0,
-            "https_requests": 0,
-            "telemetry_enabled": False,
-            "crash_report_enabled": False,
-            "update_check_enabled": False,
-            "verdict": "PASS",
-            "generated_at": datetime.now(_tz.utc).isoformat(),
-        })
+
+        return JSONResponse(
+            {
+                "schema_version": "egress_report.v2",
+                "task_id": str(_uuid.uuid4()),
+                "mode": "local_only",
+                "raw_file_sent_external": False,
+                "raw_text_logged": False,
+                "egress_bytes_total": 0,
+                "dns_requests": 0,
+                "http_requests": 0,
+                "https_requests": 0,
+                "telemetry_enabled": False,
+                "crash_report_enabled": False,
+                "update_check_enabled": False,
+                "verdict": "PASS",
+                "generated_at": datetime.now(_tz.utc).isoformat(),
+            }
+        )
 
     @app.post("/api/precheck", response_model=PrecheckResponse)
     def precheck(req: PrecheckRequest):
@@ -638,7 +695,9 @@ if _FASTAPI_AVAILABLE:
             lines.append(f"※ 본 답변은 {fact.expires_at}까지 유효 (이후 재검증 필요)")
         return "\n".join(lines)
 
-    def _format_company_knowledge_answer(result: "CompanyKnowledgeResolveResult") -> str:
+    def _format_company_knowledge_answer(
+        result: "CompanyKnowledgeResolveResult",
+    ) -> str:
         """CompanyKnowledgeResolver 결과를 기존 FactPack 답변 흐름에 맞춰 포맷."""
         lines = [str(result.answer or "").rstrip(), "", "─────────"]
         if result.provenance == "company":
@@ -673,10 +732,14 @@ if _FASTAPI_AVAILABLE:
             self._llm = llm
             self._cancel_event = cancel_event
 
-        def generate(self, prompt: str, *, max_tokens: int = 2048, grammar: object | None = None) -> str:
+        def generate(
+            self, prompt: str, *, max_tokens: int = 2048, grammar: object | None = None
+        ) -> str:
             generate_with_cancel = getattr(self._llm, "generate_with_cancel", None)
             if callable(generate_with_cancel):
-                return generate_with_cancel(prompt, self._cancel_event, max_tokens=max_tokens, grammar=grammar)
+                return generate_with_cancel(
+                    prompt, self._cancel_event, max_tokens=max_tokens, grammar=grammar
+                )
             generate = getattr(self._llm, "generate", None)
             if callable(generate):
                 return generate(prompt, max_tokens=max_tokens, grammar=grammar)
@@ -699,7 +762,9 @@ if _FASTAPI_AVAILABLE:
             None,
             lambda: review_document(request_payload, model_client=model_client),
         )
-        deadline = time.monotonic() + max(0.001, min(ctrl.chunk_timeout, ctrl.hard_timeout))
+        deadline = time.monotonic() + max(
+            0.001, min(ctrl.chunk_timeout, ctrl.hard_timeout)
+        )
 
         while True:
             try:
@@ -714,7 +779,9 @@ if _FASTAPI_AVAILABLE:
                 ctrl._abort("chunk_timeout")
 
             try:
-                result = await asyncio.wait_for(asyncio.shield(future), timeout=min(remaining, 0.5))
+                result = await asyncio.wait_for(
+                    asyncio.shield(future), timeout=min(remaining, 0.5)
+                )
             except asyncio.TimeoutError:
                 continue
             return result
@@ -732,7 +799,9 @@ if _FASTAPI_AVAILABLE:
             None,
             lambda: fill_form(request_payload, model_client=model_client),
         )
-        deadline = time.monotonic() + max(0.001, min(ctrl.chunk_timeout, ctrl.hard_timeout))
+        deadline = time.monotonic() + max(
+            0.001, min(ctrl.chunk_timeout, ctrl.hard_timeout)
+        )
 
         while True:
             try:
@@ -747,7 +816,9 @@ if _FASTAPI_AVAILABLE:
                 ctrl._abort("chunk_timeout")
 
             try:
-                result = await asyncio.wait_for(asyncio.shield(future), timeout=min(remaining, 0.5))
+                result = await asyncio.wait_for(
+                    asyncio.shield(future), timeout=min(remaining, 0.5)
+                )
             except asyncio.TimeoutError:
                 continue
             return result
@@ -758,7 +829,9 @@ if _FASTAPI_AVAILABLE:
     ) -> AsyncGenerator[str, None]:
         """진행률 SSE 제너레이터."""
         if is_free_chat_mode(params.card_mode):
-            orchestrator = AnalyzeStreamOrchestrator(task_budget_func=decide_task_budget)
+            orchestrator = AnalyzeStreamOrchestrator(
+                task_budget_func=decide_task_budget
+            )
 
             async def _llm_factory():
                 return await _ensure_shared_llm()
@@ -780,19 +853,25 @@ if _FASTAPI_AVAILABLE:
             return
 
         if not is_known_card_mode(params.card_mode):
-            yield _sse("meta", {
-                "source": "policy_gate",
-                "route": "blocked",
-                "target_endpoint": "none",
-                "llm_invoked": False,
-                "external_send_zero": True,
-                "raw_text_logged": False,
-            })
-            yield _sse("error", {
-                "fail_class": "UNKNOWN_CARD_MODE",
-                "message": "알 수 없는 카드 모드입니다.",
-                "llm_invoked": False,
-            })
+            yield _sse(
+                "meta",
+                {
+                    "source": "policy_gate",
+                    "route": "blocked",
+                    "target_endpoint": "none",
+                    "llm_invoked": False,
+                    "external_send_zero": True,
+                    "raw_text_logged": False,
+                },
+            )
+            yield _sse(
+                "error",
+                {
+                    "fail_class": "UNKNOWN_CARD_MODE",
+                    "message": "알 수 없는 카드 모드입니다.",
+                    "llm_invoked": False,
+                },
+            )
             return
 
         def _uploaded_file_texts() -> list[str]:
@@ -816,46 +895,64 @@ if _FASTAPI_AVAILABLE:
             hub_paired=_is_hub_paired(),
             task_type=params.card_mode,
         )
-        yield _sse("meta", {
-            "route_check": True,
-            "route": budget.route,
-            "file_bytes": total_file_bytes,
-            "estimated_tokens": estimated_tokens,
-            "max_wall_time_sec": budget.max_wall_time_sec,
-        })
+        yield _sse(
+            "meta",
+            {
+                "route_check": True,
+                "route": budget.route,
+                "file_bytes": total_file_bytes,
+                "estimated_tokens": estimated_tokens,
+                "max_wall_time_sec": budget.max_wall_time_sec,
+            },
+        )
 
         if budget.route == Route.REFUSE_TEAM_HUB:
-            yield _sse("error", fail_payload(
-                FailClass.INVALID_REQUEST_SCHEMA,
-                budget.user_message,
-                error_class="input_too_large",
-            ))
+            yield _sse(
+                "error",
+                fail_payload(
+                    FailClass.INVALID_REQUEST_SCHEMA,
+                    budget.user_message,
+                    error_class="input_too_large",
+                ),
+            )
             return
 
         if budget.route == Route.TEAM_HUB_RECOMMENDED:
-            yield _sse("meta", {
-                "source": "team_hub",
-                "route": budget.route,
-                "message": budget.user_message,
-            })
-            yield _sse("complete", {
-                "result_text": budget.user_message,
-                "result_path": "",
-                "total_elapsed_sec": 0.0,
-            })
+            yield _sse(
+                "meta",
+                {
+                    "source": "team_hub",
+                    "route": budget.route,
+                    "message": budget.user_message,
+                },
+            )
+            yield _sse(
+                "complete",
+                {
+                    "result_text": budget.user_message,
+                    "result_path": "",
+                    "total_elapsed_sec": 0.0,
+                },
+            )
             return
 
         if budget.route == Route.PC_PREVIEW_TEAM_HUB:
-            yield _sse("meta", {
-                "source": "pc_preview",
-                "route": budget.route,
-                "message": budget.user_message,
-            })
-            yield _sse("complete", {
-                "result_text": budget.user_message,
-                "result_path": "",
-                "total_elapsed_sec": 0.0,
-            })
+            yield _sse(
+                "meta",
+                {
+                    "source": "pc_preview",
+                    "route": budget.route,
+                    "message": budget.user_message,
+                },
+            )
+            yield _sse(
+                "complete",
+                {
+                    "result_text": budget.user_message,
+                    "result_path": "",
+                    "total_elapsed_sec": 0.0,
+                },
+            )
             return
 
         if normalize_card_mode(params.card_mode) in _BOX4_DOCUMENT_REVIEW_MODES:
@@ -871,14 +968,17 @@ if _FASTAPI_AVAILABLE:
                 reference_documents = []
 
             llm_invoked = bool(target_document.strip())
-            yield _sse("meta", {
-                "source": "box4_document_review",
-                "route": budget.route,
-                "schema_version": "card_04.document_review.v1",
-                "llm_invoked": llm_invoked,
-                "external_send_zero": True,
-                "raw_text_logged": False,
-            })
+            yield _sse(
+                "meta",
+                {
+                    "source": "box4_document_review",
+                    "route": budget.route,
+                    "schema_version": "card_04.document_review.v1",
+                    "llm_invoked": llm_invoked,
+                    "external_send_zero": True,
+                    "raw_text_logged": False,
+                },
+            )
             request_payload = DocumentReviewInput(
                 target_document=target_document,
                 reference_documents=reference_documents,
@@ -886,7 +986,9 @@ if _FASTAPI_AVAILABLE:
                 request_id=task_id,
                 source_kind="ui",
             )
-            timeout_sec = max(1.0, min(float(budget.max_wall_time_sec), HARD_TIMEOUT_SEC))
+            timeout_sec = max(
+                1.0, min(float(budget.max_wall_time_sec), HARD_TIMEOUT_SEC)
+            )
             ctrl = TimeoutController(
                 task_id=task_id,
                 output_dir=params.output_dir,
@@ -908,38 +1010,52 @@ if _FASTAPI_AVAILABLE:
                     )
                 else:
                     result = review_document(request_payload, model_client=None)
-                yield _sse("complete", {
-                    "result_text": json.dumps(result.to_payload(), ensure_ascii=False, sort_keys=True),
-                    "result_path": "",
-                    "total_elapsed_sec": round(time.monotonic() - start, 2),
-                })
+                yield _sse(
+                    "complete",
+                    {
+                        "result_text": json.dumps(
+                            result.to_payload(), ensure_ascii=False, sort_keys=True
+                        ),
+                        "result_path": "",
+                        "total_elapsed_sec": round(time.monotonic() - start, 2),
+                    },
+                )
             except ChunkTimeoutError as exc:
                 partial_path = str(exc.partial_path)
-                yield _sse("cancelled", {
-                    "reason": "chunk_timeout",
-                    "partial_path": partial_path,
-                    "partial_result_path": partial_path,
-                    "completed_chunks": 0,
-                    "message": "문서검토 생성 시간이 초과되어 안전하게 중단했습니다.",
-                })
+                yield _sse(
+                    "cancelled",
+                    {
+                        "reason": "chunk_timeout",
+                        "partial_path": partial_path,
+                        "partial_result_path": partial_path,
+                        "completed_chunks": 0,
+                        "message": "문서검토 생성 시간이 초과되어 안전하게 중단했습니다.",
+                    },
+                )
             except HardTimeoutError as exc:
                 partial_path = str(exc.partial_path)
-                yield _sse("cancelled", {
-                    "reason": "hard_timeout",
-                    "partial_path": partial_path,
-                    "partial_result_path": partial_path,
-                    "completed_chunks": 0,
-                    "message": "문서검토 전체 시간이 초과되어 안전하게 중단했습니다.",
-                })
+                yield _sse(
+                    "cancelled",
+                    {
+                        "reason": "hard_timeout",
+                        "partial_path": partial_path,
+                        "partial_result_path": partial_path,
+                        "completed_chunks": 0,
+                        "message": "문서검토 전체 시간이 초과되어 안전하게 중단했습니다.",
+                    },
+                )
             except UserCancelledError as exc:
                 partial_path = str(exc.partial_path)
-                yield _sse("cancelled", {
-                    "reason": "user_cancel",
-                    "partial_path": partial_path,
-                    "partial_result_path": partial_path,
-                    "completed_chunks": 0,
-                    "message": "사용자 요청으로 문서검토를 중단했습니다.",
-                })
+                yield _sse(
+                    "cancelled",
+                    {
+                        "reason": "user_cancel",
+                        "partial_path": partial_path,
+                        "partial_result_path": partial_path,
+                        "completed_chunks": 0,
+                        "message": "사용자 요청으로 문서검토를 중단했습니다.",
+                    },
+                )
             finally:
                 _active_controllers.pop(task_id, None)
             return
@@ -949,15 +1065,18 @@ if _FASTAPI_AVAILABLE:
             blank_form = params.query
 
             llm_invoked = bool(blank_form.strip())
-            yield _sse("meta", {
-                "source": "box6_form_fill",
-                "route": budget.route,
-                "schema_version": "card_06.form_fill.v1",
-                "grammar_required": True,
-                "llm_invoked": llm_invoked,
-                "external_send_zero": True,
-                "raw_text_logged": False,
-            })
+            yield _sse(
+                "meta",
+                {
+                    "source": "box6_form_fill",
+                    "route": budget.route,
+                    "schema_version": "card_06.form_fill.v1",
+                    "grammar_required": True,
+                    "llm_invoked": llm_invoked,
+                    "external_send_zero": True,
+                    "raw_text_logged": False,
+                },
+            )
             request_payload = FormFillInput(
                 blank_form=blank_form,
                 data_documents=file_texts,
@@ -965,7 +1084,9 @@ if _FASTAPI_AVAILABLE:
                 request_id=task_id,
                 source_kind="ui",
             )
-            timeout_sec = max(1.0, min(float(budget.max_wall_time_sec), HARD_TIMEOUT_SEC))
+            timeout_sec = max(
+                1.0, min(float(budget.max_wall_time_sec), HARD_TIMEOUT_SEC)
+            )
             ctrl = TimeoutController(
                 task_id=task_id,
                 output_dir=params.output_dir,
@@ -987,50 +1108,69 @@ if _FASTAPI_AVAILABLE:
                     )
                 else:
                     result = fill_form(request_payload, model_client=None)
-                yield _sse("complete", {
-                    "result_text": json.dumps(result.to_payload(), ensure_ascii=False, sort_keys=True),
-                    "result_path": "",
-                    "total_elapsed_sec": round(time.monotonic() - start, 2),
-                })
+                yield _sse(
+                    "complete",
+                    {
+                        "result_text": json.dumps(
+                            result.to_payload(), ensure_ascii=False, sort_keys=True
+                        ),
+                        "result_path": "",
+                        "total_elapsed_sec": round(time.monotonic() - start, 2),
+                    },
+                )
             except ChunkTimeoutError as exc:
                 partial_path = str(exc.partial_path)
-                yield _sse("cancelled", {
-                    "reason": "chunk_timeout",
-                    "partial_path": partial_path,
-                    "partial_result_path": partial_path,
-                    "completed_chunks": 0,
-                    "message": "양식채우기 생성 시간이 초과되어 안전하게 중단했습니다.",
-                })
+                yield _sse(
+                    "cancelled",
+                    {
+                        "reason": "chunk_timeout",
+                        "partial_path": partial_path,
+                        "partial_result_path": partial_path,
+                        "completed_chunks": 0,
+                        "message": "양식채우기 생성 시간이 초과되어 안전하게 중단했습니다.",
+                    },
+                )
             except HardTimeoutError as exc:
                 partial_path = str(exc.partial_path)
-                yield _sse("cancelled", {
-                    "reason": "hard_timeout",
-                    "partial_path": partial_path,
-                    "partial_result_path": partial_path,
-                    "completed_chunks": 0,
-                    "message": "양식채우기 전체 시간이 초과되어 안전하게 중단했습니다.",
-                })
+                yield _sse(
+                    "cancelled",
+                    {
+                        "reason": "hard_timeout",
+                        "partial_path": partial_path,
+                        "partial_result_path": partial_path,
+                        "completed_chunks": 0,
+                        "message": "양식채우기 전체 시간이 초과되어 안전하게 중단했습니다.",
+                    },
+                )
             except UserCancelledError as exc:
                 partial_path = str(exc.partial_path)
-                yield _sse("cancelled", {
-                    "reason": "user_cancel",
-                    "partial_path": partial_path,
-                    "partial_result_path": partial_path,
-                    "completed_chunks": 0,
-                    "message": "사용자 요청으로 양식채우기를 중단했습니다.",
-                })
+                yield _sse(
+                    "cancelled",
+                    {
+                        "reason": "user_cancel",
+                        "partial_path": partial_path,
+                        "partial_result_path": partial_path,
+                        "completed_chunks": 0,
+                        "message": "사용자 요청으로 양식채우기를 중단했습니다.",
+                    },
+                )
             finally:
                 _active_controllers.pop(task_id, None)
             return
 
         # ── (1) CompanyKnowledgeResolver 1차 매칭 — HIT 시 LLM 호출 없이 즉시 응답 ──
-        knowledge_result = CompanyKnowledgeResolver(base_pack=FACT_PACK).resolve(params.query)
+        knowledge_result = CompanyKnowledgeResolver(base_pack=FACT_PACK).resolve(
+            params.query
+        )
         if knowledge_result.fail_class:
-            yield _sse("meta", {
-                "source": "company_knowledge",
-                "fail_class": knowledge_result.fail_class,
-                "company_facts_available": False,
-            })
+            yield _sse(
+                "meta",
+                {
+                    "source": "company_knowledge",
+                    "fail_class": knowledge_result.fail_class,
+                    "company_facts_available": False,
+                },
+            )
             if knowledge_result.answer is None:
                 error_payload = fail_payload(
                     FailClass.INTERNAL_RUNTIME_ERROR,
@@ -1042,42 +1182,54 @@ if _FASTAPI_AVAILABLE:
                 return
         if knowledge_result.answer is not None:
             answer = _format_company_knowledge_answer(knowledge_result)
-            yield _sse("meta", {
-                "source": "company_knowledge",
-                "provenance": knowledge_result.provenance,
-                "fact_id": knowledge_result.fact_id,
-                "fact_digest": knowledge_result.fact_digest,
-                "confidence": knowledge_result.confidence,
-                "raw_text_logged": False,
-                "external_send_zero": True,
-            })
-            yield _sse("complete", {
-                "result_text": answer,
-                "result_path": "",
-                "total_elapsed_sec": 0.0,
-            })
-            _factpack_audit_log.append(FactPackAuditEntry(
-                query_digest=sha256_text(params.query),
-                source="company_fact" if knowledge_result.provenance == "company" else "factpack",
-                fact_id=knowledge_result.fact_id,
-                score=knowledge_result.confidence,
-                threshold_used=FACT_PACK.matcher.threshold,
-                timestamp_iso=datetime.now(_tz.utc).isoformat(),
-                pack_version=_PACK_VERSION,
-            ))
+            yield _sse(
+                "meta",
+                {
+                    "source": "company_knowledge",
+                    "provenance": knowledge_result.provenance,
+                    "fact_id": knowledge_result.fact_id,
+                    "fact_digest": knowledge_result.fact_digest,
+                    "confidence": knowledge_result.confidence,
+                    "raw_text_logged": False,
+                    "external_send_zero": True,
+                },
+            )
+            yield _sse(
+                "complete",
+                {
+                    "result_text": answer,
+                    "result_path": "",
+                    "total_elapsed_sec": 0.0,
+                },
+            )
+            _factpack_audit_log.append(
+                FactPackAuditEntry(
+                    query_digest=sha256_text(params.query),
+                    source="company_fact"
+                    if knowledge_result.provenance == "company"
+                    else "factpack",
+                    fact_id=knowledge_result.fact_id,
+                    score=knowledge_result.confidence,
+                    threshold_used=FACT_PACK.matcher.threshold,
+                    timestamp_iso=datetime.now(_tz.utc).isoformat(),
+                    pack_version=_PACK_VERSION,
+                )
+            )
             return
 
         # ── (2) FactPack 미스 → 기존 LLM 파이프라인 ──
         yield _sse("meta", {"source": "llm"})
-        _factpack_audit_log.append(FactPackAuditEntry(
-            query_digest=sha256_text(params.query),
-            source="llm",
-            fact_id=None,
-            score=None,
-            threshold_used=FACT_PACK.matcher.threshold,
-            timestamp_iso=datetime.now(_tz.utc).isoformat(),
-            pack_version=_PACK_VERSION,
-        ))
+        _factpack_audit_log.append(
+            FactPackAuditEntry(
+                query_digest=sha256_text(params.query),
+                source="llm",
+                fact_id=None,
+                score=None,
+                threshold_used=FACT_PACK.matcher.threshold,
+                timestamp_iso=datetime.now(_tz.utc).isoformat(),
+                pack_version=_PACK_VERSION,
+            )
+        )
 
         total = max(1, params.total_chunks)
         ctrl = TimeoutController(
@@ -1102,11 +1254,14 @@ if _FASTAPI_AVAILABLE:
 
         try:
             estimated_chunk_sec = max(1, budget.max_wall_time_sec // max(1, total))
-            yield _sse("phase_start", {
-                "phase": "analyze",
-                "total_steps": total,
-                "status_message": f"1/{total} 단계 분석 시작 — 예상 {estimated_chunk_sec}초",
-            })
+            yield _sse(
+                "phase_start",
+                {
+                    "phase": "analyze",
+                    "total_steps": total,
+                    "status_message": f"1/{total} 단계 분석 시작 — 예상 {estimated_chunk_sec}초",
+                },
+            )
             last_event_time = time.monotonic()
             await asyncio.sleep(0)  # flush phase_start to client before LLM blocks
 
@@ -1127,6 +1282,7 @@ if _FASTAPI_AVAILABLE:
                 _card: dict[str, object] = {"user_prompt_template": "{{ query }}"}
                 try:
                     from butler_pc_core.prompts.cards import load_card_prompt
+
                     _card = load_card_prompt(params.card_mode)
                     _sys_prompt = _card.get("system_prompt", _sys_prompt)
                 except Exception:
@@ -1135,11 +1291,15 @@ if _FASTAPI_AVAILABLE:
                 _file_texts: list[str] = []
                 for fp in params.file_paths:
                     try:
-                        _file_texts.append(Path(fp).read_text(encoding="utf-8", errors="replace"))
+                        _file_texts.append(
+                            Path(fp).read_text(encoding="utf-8", errors="replace")
+                        )
                     except Exception:
                         pass
 
-                _user_content = render_card_user_prompt(_card, query=params.query, file_texts=_file_texts)
+                _user_content = render_card_user_prompt(
+                    _card, query=params.query, file_texts=_file_texts
+                )
 
                 _prompt = (
                     f"<|im_start|>system\n{_sys_prompt}<|im_end|>\n"
@@ -1160,7 +1320,9 @@ if _FASTAPI_AVAILABLE:
                     _lp: asyncio.AbstractEventLoop = _loop,
                 ) -> None:
                     try:
-                        for tok in llm.generate_stream_with_cancel(_p, _ce, max_tokens=2048):
+                        for tok in llm.generate_stream_with_cancel(
+                            _p, _ce, max_tokens=2048
+                        ):
                             _lp.call_soon_threadsafe(_q.put_nowait, tok)
                     except Exception:
                         pass
@@ -1231,34 +1393,46 @@ if _FASTAPI_AVAILABLE:
                 elapsed_total = time.monotonic() - start
                 remaining = max(0.0, (elapsed_total / (i + 1)) * (total - i - 1))
 
-                yield _sse("chunk_progress", {
-                    "current": i + 1,
-                    "total": total,
-                    "elapsed_sec": round(elapsed_total, 2),
-                    "est_remaining_sec": round(remaining, 2),
-                    "status_message": (
-                        f"{total}개 청크 중 {i + 1}번째 처리 중 — 근거 문장 검색 중"
-                    ),
-                })
+                yield _sse(
+                    "chunk_progress",
+                    {
+                        "current": i + 1,
+                        "total": total,
+                        "elapsed_sec": round(elapsed_total, 2),
+                        "est_remaining_sec": round(remaining, 2),
+                        "status_message": (
+                            f"{total}개 청크 중 {i + 1}번째 처리 중 — 근거 문장 검색 중"
+                        ),
+                    },
+                )
                 last_event_time = time.monotonic()
                 await asyncio.sleep(0)  # flush chunk_progress before chunk_done
 
-                yield _sse("chunk_done", {
-                    "chunk_id": i,
-                    "latency_ms": round(chunk_elapsed * 1000, 1),
-                })
+                yield _sse(
+                    "chunk_done",
+                    {
+                        "chunk_id": i,
+                        "latency_ms": round(chunk_elapsed * 1000, 1),
+                    },
+                )
                 last_event_time = time.monotonic()
                 await asyncio.sleep(0)  # flush chunk_done before next event
 
-            yield _sse("reduce_start", {
-                "input_chunks": total,
-                "status_message": f"{total}개 청크 결과 통합 중",
-            })
+            yield _sse(
+                "reduce_start",
+                {
+                    "input_chunks": total,
+                    "status_message": f"{total}개 청크 결과 통합 중",
+                },
+            )
             last_event_time = time.monotonic()
             await asyncio.sleep(0)  # flush reduce_start before verify_start
-            yield _sse("verify_start", {
-                "status_message": "출처 근거 검증 중",
-            })
+            yield _sse(
+                "verify_start",
+                {
+                    "status_message": "출처 근거 검증 중",
+                },
+            )
             last_event_time = time.monotonic()
             await asyncio.sleep(0)  # flush verify_start before complete
 
@@ -1266,57 +1440,80 @@ if _FASTAPI_AVAILABLE:
             result_path = str(Path(params.output_dir) / f"{task_id}_result.json")
             try:
                 with open(result_path, "w", encoding="utf-8") as _f:
-                    json.dump({"task_id": task_id, "results": chunk_results}, _f, ensure_ascii=False, indent=2)
+                    json.dump(
+                        {"task_id": task_id, "results": chunk_results},
+                        _f,
+                        ensure_ascii=False,
+                        indent=2,
+                    )
             except Exception:
                 pass
 
-            yield _sse("complete", {
-                "result_path": result_path,
-                "result_text": result_text,
-                "total_elapsed_sec": round(time.monotonic() - start, 2),
-            })
+            yield _sse(
+                "complete",
+                {
+                    "result_path": result_path,
+                    "result_text": result_text,
+                    "total_elapsed_sec": round(time.monotonic() - start, 2),
+                },
+            )
 
         except ChunkTimeoutError as exc:  # 구체 → 일반 순서 (P2 수정)
             partial_path = str(exc.partial_path)
-            yield _sse("cancelled", {
-                "reason": "chunk_timeout",
-                "partial_path": partial_path,
-                "partial_result_path": partial_path,
-                "completed_chunks": completed_count,
-                "message": f"사용자 중단. 현재까지 처리된 {completed_count}개 청크 결과를 부분 저장했습니다.",
-            })
+            yield _sse(
+                "cancelled",
+                {
+                    "reason": "chunk_timeout",
+                    "partial_path": partial_path,
+                    "partial_result_path": partial_path,
+                    "completed_chunks": completed_count,
+                    "message": f"사용자 중단. 현재까지 처리된 {completed_count}개 청크 결과를 부분 저장했습니다.",
+                },
+            )
         except HardTimeoutError as exc:
             partial_path = str(exc.partial_path)
-            yield _sse("cancelled", {
-                "reason": "hard_timeout",
-                "partial_path": partial_path,
-                "partial_result_path": partial_path,
-                "completed_chunks": completed_count,
-                "message": f"사용자 중단. 현재까지 처리된 {completed_count}개 청크 결과를 부분 저장했습니다.",
-            })
+            yield _sse(
+                "cancelled",
+                {
+                    "reason": "hard_timeout",
+                    "partial_path": partial_path,
+                    "partial_result_path": partial_path,
+                    "completed_chunks": completed_count,
+                    "message": f"사용자 중단. 현재까지 처리된 {completed_count}개 청크 결과를 부분 저장했습니다.",
+                },
+            )
         except UserCancelledError as exc:
             partial_path = str(exc.partial_path)
-            yield _sse("cancelled", {
-                "reason": "user_cancel",
-                "partial_path": partial_path,
-                "partial_result_path": partial_path,
-                "completed_chunks": completed_count,
-                "message": f"사용자 중단. 현재까지 처리된 {completed_count}개 청크 결과를 부분 저장했습니다.",
-            })
+            yield _sse(
+                "cancelled",
+                {
+                    "reason": "user_cancel",
+                    "partial_path": partial_path,
+                    "partial_result_path": partial_path,
+                    "completed_chunks": completed_count,
+                    "message": f"사용자 중단. 현재까지 처리된 {completed_count}개 청크 결과를 부분 저장했습니다.",
+                },
+            )
         except asyncio.TimeoutError as exc:
-            yield _sse("cancelled", {
-                "reason": "unknown_timeout",
-                "partial_path": "",
-                "partial_result_path": "",
-                "completed_chunks": completed_count,
-                "message": str(exc),
-            })
+            yield _sse(
+                "cancelled",
+                {
+                    "reason": "unknown_timeout",
+                    "partial_path": "",
+                    "partial_result_path": "",
+                    "completed_chunks": completed_count,
+                    "message": str(exc),
+                },
+            )
         except Exception as exc:  # noqa: BLE001
-            yield _sse("error", fail_payload(
-                map_legacy_to_fail_class(exc),
-                str(exc)[:500],
-                error_class=type(exc).__name__,
-            ))
+            yield _sse(
+                "error",
+                fail_payload(
+                    map_legacy_to_fail_class(exc),
+                    str(exc)[:500],
+                    error_class=type(exc).__name__,
+                ),
+            )
         finally:
             _active_controllers.pop(task_id, None)
 
@@ -1362,7 +1559,9 @@ if _FASTAPI_AVAILABLE:
                 if upload is not None and hasattr(upload, "read"):
                     fname = getattr(upload, "filename", "") or ""
                     suffix = Path(fname).suffix if fname else ""
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                    with tempfile.NamedTemporaryFile(
+                        delete=False, suffix=suffix
+                    ) as tmp:
                         content = await upload.read()
                         tmp.write(content)
                         file_paths.append(tmp.name)
@@ -1399,8 +1598,8 @@ if _FASTAPI_AVAILABLE:
     # -----------------------------------------------------------------------
     from fastapi.responses import FileResponse as _FileResponse
 
-    ACCOUNTING_RESULT_TTL = 21600       # 결과 보관 최대 시간 6시간 (베타 사용자 여유)
-    ACCOUNTING_CLEANUP_INTERVAL = 300   # 만료 스캔 주기 (초)
+    ACCOUNTING_RESULT_TTL = 21600  # 결과 보관 최대 시간 6시간 (베타 사용자 여유)
+    ACCOUNTING_CLEANUP_INTERVAL = 300  # 만료 스캔 주기 (초)
 
     # result_id → { "xlsx_path": str, "md_content": str, "summary": dict, "created_at": float }
     _accounting_results: dict[str, dict] = {}
@@ -1411,7 +1610,8 @@ if _FASTAPI_AVAILABLE:
             await asyncio.sleep(ACCOUNTING_CLEANUP_INTERVAL)
             now = time.monotonic()
             expired = [
-                rid for rid, entry in list(_accounting_results.items())
+                rid
+                for rid, entry in list(_accounting_results.items())
                 if now - entry.get("created_at", now) > ACCOUNTING_RESULT_TTL
             ]
             for rid in expired:
@@ -1422,9 +1622,17 @@ if _FASTAPI_AVAILABLE:
                     except Exception:
                         pass
                 try:
-                    from butler_pc_core.accounting.assignment.runtime import get_accounting_review_runtime
+                    from butler_pc_core.accounting.assignment.runtime import (
+                        get_accounting_review_runtime,
+                    )
 
                     get_accounting_review_runtime().remove_batch(rid)
+                except Exception:
+                    pass
+                try:
+                    (
+                        Path(tempfile.gettempdir()) / f"butler_box5_shadow_{rid}.jsonl"
+                    ).unlink(missing_ok=True)
                 except Exception:
                     pass
 
@@ -1441,7 +1649,9 @@ if _FASTAPI_AVAILABLE:
             "reason_code": "ACCOUNTING_REVIEW_PROJECTION_UNAVAILABLE",
         }
         try:
-            from butler_pc_core.accounting.assignment.runtime import get_accounting_review_runtime
+            from butler_pc_core.accounting.assignment.runtime import (
+                get_accounting_review_runtime,
+            )
 
             projection = get_accounting_review_runtime().ingest_dataframe(
                 result_id,
@@ -1482,16 +1692,31 @@ if _FASTAPI_AVAILABLE:
             loop = asyncio.get_running_loop()
 
             try:
-                from butler_pc_core.accounting.classifier import classify_file, save_classified
+                from butler_pc_core.accounting.classifier import (
+                    classify_file,
+                    save_classified,
+                )
                 from butler_pc_core.accounting.report import (
                     apply_company_format_to_report,
                     build_summary,
                     should_block_requested_accounting_format,
                 )
-                from butler_pc_core.company_fact.read_only import resolve_read_only_company_knowledge
-                from butler_pc_core.company_profile.storage import CompanyProfileStore, ProfileLoadError
+                from butler_pc_core.company_fact.read_only import (
+                    resolve_read_only_company_knowledge,
+                )
+                from butler_pc_core.company_profile.storage import (
+                    CompanyProfileStore,
+                    ProfileLoadError,
+                )
             except ImportError as exc:
-                yield _sse("error", fail_payload(FailClass.INTERNAL_RUNTIME_ERROR, str(exc), error_class="ImportError"))
+                yield _sse(
+                    "error",
+                    fail_payload(
+                        FailClass.INTERNAL_RUNTIME_ERROR,
+                        str(exc),
+                        error_class="ImportError",
+                    ),
+                )
                 return
 
             try:
@@ -1507,10 +1732,65 @@ if _FASTAPI_AVAILABLE:
                 )
                 return
 
-            df = await loop.run_in_executor(
-                None,
-                lambda: classify_file(file_path, company_profile=company_profile),
-            )
+            # A4 owner boundary: one no-follow open, two-pass verification, and
+            # unlinked producer/verifier snapshot descriptors. The original
+            # path is never reopened by the A4 product pipeline.
+            _a4_owner_request = None
+            _a4_source_snapshot = None
+            try:
+                from butler_pc_core.accounting.classify.source_snapshot_v2_1 import (
+                    secure_source_snapshot,
+                )
+
+                _a4_source_snapshot = secure_source_snapshot(file_path)
+                _source_sha = _a4_source_snapshot.receipt["source_file_sha256"]
+                _source_size = _a4_source_snapshot.receipt["source_file_size"]
+                _tenant_namespace = uuid.UUID("b8f2ceca-9183-5c4a-9750-3e0ed0f87066")
+                _tenant_id = str(
+                    uuid.uuid5(
+                        _tenant_namespace, str(company_profile.profile_id).strip()
+                    )
+                )
+                _closure = {
+                    "source_file_sha256": _source_sha,
+                    "source_file_size": _source_size,
+                }
+                _closure_digest = hashlib.sha256(
+                    json.dumps(_closure, sort_keys=True, separators=(",", ":")).encode(
+                        "utf-8"
+                    )
+                ).hexdigest()
+                _a4_owner_request = {
+                    "run_id": str(uuid.UUID(result_id)),
+                    "nonce": secrets.token_hex(32),
+                    "tenant_id": _tenant_id,
+                    "code_tree_oid": build_tree_oid(),
+                    "source_file_sha256": _source_sha,
+                    "source_file_size": _source_size,
+                    "input_closure_digest": _closure_digest,
+                }
+            except Exception:
+                if _a4_source_snapshot is not None:
+                    _a4_source_snapshot.close()
+                    _a4_source_snapshot = None
+                _a4_owner_request = None
+
+            if _a4_source_snapshot is not None:
+                from butler_pc_core.accounting.classifier import classify_source_fd
+
+                df = await loop.run_in_executor(
+                    None,
+                    lambda: classify_source_fd(
+                        _a4_source_snapshot.producer_fd,
+                        _a4_source_snapshot.suffix,
+                        company_profile=company_profile,
+                    ),
+                )
+            else:
+                df = await loop.run_in_executor(
+                    None,
+                    lambda: classify_file(file_path, company_profile=company_profile),
+                )
 
             # Register the actual classified rows with the canonical review runtime.
             # Raw descriptors remain in this request-local in-memory projection; the
@@ -1532,12 +1812,66 @@ if _FASTAPI_AVAILABLE:
             # delay the product response. Same verified company_profile drives the self-transfer
             # guard. Nothing is auto-consumed; JOURNAL_AUTO_POST_ALLOWED stays NO.
             try:
-                from butler_pc_core.accounting.classify.shadow.runner import run_and_write_shadow
+                from butler_pc_core.accounting.classify.shadow.runner import (
+                    run_and_write_product_shadow as run_and_write_shadow,
+                )
+                from butler_pc_core.accounting.assignment.runtime import (
+                    get_accounting_review_runtime,
+                )
 
-                _shadow_out = str(Path(tempfile.gettempdir()) / f"butler_box5_shadow_{result_id}.jsonl")
-                loop.run_in_executor(None, run_and_write_shadow, df, _shadow_out, company_profile)
+                _shadow_out = str(
+                    Path(tempfile.gettempdir())
+                    / f"butler_box5_shadow_{result_id}.jsonl"
+                )
+                _a4_runtime = (
+                    get_accounting_review_runtime()
+                    if review_projection.get("available") is True
+                    else None
+                )
+                _a4_tokens = _a4_runtime.tokens if _a4_runtime is not None else None
+                _a4_store = _a4_runtime.store if _a4_runtime is not None else None
+                _a4_policy_path = os.environ.get("BUTLER_A4_POLICY_PATH")
+                _a4_evidence_root = os.environ.get(
+                    "BUTLER_A4_EVIDENCE_ROOT",
+                    str(Path(tempfile.gettempdir()) / "butler_box5_a4_evidence"),
+                )
+                if (
+                    _a4_store is not None
+                    and _a4_owner_request is not None
+                    and _a4_source_snapshot is not None
+                    and _a4_policy_path
+                ):
+                    from butler_pc_core.accounting.classify.reconciliation_service_v2 import (
+                        queue_canonical_product_reconciliation,
+                    )
+
+                    # This commit is deliberately completed before the worker is
+                    # scheduled. A process crash after this point leaves QUEUED
+                    # evidence for lease-based recovery instead of losing the run.
+                    queue_canonical_product_reconciliation(
+                        store=_a4_store,
+                        owner_request=_a4_owner_request,
+                        observed_at=datetime.now(_tz.utc),
+                    )
+                loop.run_in_executor(
+                    None,
+                    run_and_write_shadow,
+                    df,
+                    _shadow_out,
+                    company_profile,
+                    result_id,
+                    _a4_tokens,
+                    build_tree_oid(),
+                    datetime.now(_tz.utc),
+                    _a4_store,
+                    _a4_owner_request,
+                    _a4_policy_path,
+                    _a4_evidence_root,
+                    _a4_source_snapshot,
+                )
             except Exception:  # noqa: BLE001 — shadow must never affect the product path
-                pass
+                if _a4_source_snapshot is not None:
+                    _a4_source_snapshot.close()
 
             yield _sse("phase_start", {"status_message": "보고서 생성 중 — 요약 집계"})
             await asyncio.sleep(0)
@@ -1551,7 +1885,9 @@ if _FASTAPI_AVAILABLE:
                 ),
             )
 
-            out_xlsx = Path(tempfile.gettempdir()) / f"butler_accounting_{result_id}.xlsx"
+            out_xlsx = (
+                Path(tempfile.gettempdir()) / f"butler_accounting_{result_id}.xlsx"
+            )
             await loop.run_in_executor(None, save_classified, df, out_xlsx)
 
             cats = summary.get("categories", {})
@@ -1559,10 +1895,18 @@ if _FASTAPI_AVAILABLE:
 
             def _cat_sort_key(item):
                 name, info = item
-                from butler_pc_core.accounting.account_dict import ACCOUNT_BY_NAME, SECTION_ORDER
+                from butler_pc_core.accounting.account_dict import (
+                    ACCOUNT_BY_NAME,
+                    SECTION_ORDER,
+                )
+
                 acc = ACCOUNT_BY_NAME.get(name)
                 section = acc.section if acc else "other"
-                return (SECTION_ORDER.get(section, 5), -abs(info.get("total_amount", 0)), -info["count"])
+                return (
+                    SECTION_ORDER.get(section, 5),
+                    -abs(info.get("total_amount", 0)),
+                    -info["count"],
+                )
 
             # 구분: sign 메타("+" 수익/"-" 비용) → 재무제표 구분 라벨
             def _gubun(info):
@@ -1607,12 +1951,16 @@ if _FASTAPI_AVAILABLE:
                 lambda: apply_company_format_to_report(md_content, format_id),
             )
             format_application = format_result.application.to_dict()
-            if should_block_requested_accounting_format(format_id, format_result.application):
+            if should_block_requested_accounting_format(
+                format_id, format_result.application
+            ):
                 try:
                     out_xlsx.unlink(missing_ok=True)
                 except Exception:
                     pass
-                error_class = str(format_application.get("fail_class") or "ACCOUNTING_FORMAT_UNUSABLE")
+                error_class = str(
+                    format_application.get("fail_class") or "ACCOUNTING_FORMAT_UNUSABLE"
+                )
                 yield _sse(
                     "error",
                     fail_payload(
@@ -1632,18 +1980,28 @@ if _FASTAPI_AVAILABLE:
                 "created_at": time.monotonic(),
             }
 
-            yield _sse("complete", {
-                "result_id": result_id,
-                "md_content": md_content,
-                "summary": summary,
-                "format_application": format_application,
-                "row_count": summary["total_rows"],
-                "category_count": len(cats),
-                "review_projection": review_projection,
-            })
+            yield _sse(
+                "complete",
+                {
+                    "result_id": result_id,
+                    "md_content": md_content,
+                    "summary": summary,
+                    "format_application": format_application,
+                    "row_count": summary["total_rows"],
+                    "category_count": len(cats),
+                    "review_projection": review_projection,
+                },
+            )
 
         except Exception as exc:
-            yield _sse("error", fail_payload(map_legacy_to_fail_class(exc), str(exc)[:500], error_class=type(exc).__name__))
+            yield _sse(
+                "error",
+                fail_payload(
+                    map_legacy_to_fail_class(exc),
+                    str(exc)[:500],
+                    error_class=type(exc).__name__,
+                ),
+            )
         finally:
             try:
                 Path(file_path).unlink(missing_ok=True)
@@ -1666,7 +2024,9 @@ if _FASTAPI_AVAILABLE:
         if not format_id:
             format_id = None
         raw_account_column = form.get("account_column")
-        account_column = str(raw_account_column).strip() if raw_account_column is not None else None
+        account_column = (
+            str(raw_account_column).strip() if raw_account_column is not None else None
+        )
         if not account_column:
             account_column = None
 
@@ -1699,10 +2059,18 @@ if _FASTAPI_AVAILABLE:
     def accounting_result_xlsx(result_id: str):
         """분류 결과 xlsx 파일 다운로드."""
         import logging as _log
+
         entry = _accounting_results.get(result_id)
         if entry is None:
-            _log.warning("[accounting] result_id 미존재 또는 만료: %s (보관 중 %d건)", result_id, len(_accounting_results))
-            raise HTTPException(status_code=404, detail=f"결과가 존재하지 않습니다. result_id={result_id} (만료 또는 미존재)")
+            _log.warning(
+                "[accounting] result_id 미존재 또는 만료: %s (보관 중 %d건)",
+                result_id,
+                len(_accounting_results),
+            )
+            raise HTTPException(
+                status_code=404,
+                detail=f"결과가 존재하지 않습니다. result_id={result_id} (만료 또는 미존재)",
+            )
         xlsx_path = entry["xlsx_path"]
         if not Path(xlsx_path).exists():
             _log.warning("[accounting] xlsx 파일 소멸: %s → %s", result_id, xlsx_path)
@@ -1711,16 +2079,19 @@ if _FASTAPI_AVAILABLE:
         # the response as a native download before fetch().arrayBuffer() can read it.
         xlsx_bytes = Path(xlsx_path).read_bytes()
         from fastapi.responses import Response as _RawResponse
+
         return _RawResponse(
             content=xlsx_bytes,
             media_type="application/octet-stream",
-            headers={"Content-Disposition": 'inline; filename="butler_accounting_result.xlsx"'},
+            headers={
+                "Content-Disposition": 'inline; filename="butler_accounting_result.xlsx"'
+            },
         )
 
     # -----------------------------------------------------------------------
     # 요청 파싱 (D-3 카드 1)
     # -----------------------------------------------------------------------
-    PARSE_RESULT_TTL = 1800       # 30분 보관 (인계서 §8.4)
+    PARSE_RESULT_TTL = 1800  # 30분 보관 (인계서 §8.4)
     PARSE_CLEANUP_INTERVAL = 120  # 만료 스캔 주기 (초)
 
     _parse_results: dict[str, dict] = {}
@@ -1730,20 +2101,32 @@ if _FASTAPI_AVAILABLE:
             await asyncio.sleep(PARSE_CLEANUP_INTERVAL)
             now = time.monotonic()
             expired = [
-                rid for rid, entry in list(_parse_results.items())
+                rid
+                for rid, entry in list(_parse_results.items())
                 if now - entry.get("created_at", now) > PARSE_RESULT_TTL
             ]
             for rid in expired:
                 _parse_results.pop(rid, None)
 
-    async def _stream_parse(text: str, input_format: str, result_id: str) -> AsyncGenerator[str, None]:
+    async def _stream_parse(
+        text: str, input_format: str, result_id: str
+    ) -> AsyncGenerator[str, None]:
         """카드 1 요청 파싱 SSE 4-phase 제너레이터 — card1_extraction 통합 (단계 8)."""
         try:
             from butler_pc_core.request_parsing import mask_pii
             from butler_pc_core.card1_extraction import extract_card1
-            from butler_pc_core.card1_extraction.confidence import confidence_band as _cb
+            from butler_pc_core.card1_extraction.confidence import (
+                confidence_band as _cb,
+            )
         except ImportError as exc:
-            yield _sse("error", fail_payload(FailClass.INTERNAL_RUNTIME_ERROR, str(exc), error_class="ImportError"))
+            yield _sse(
+                "error",
+                fail_payload(
+                    FailClass.INTERNAL_RUNTIME_ERROR,
+                    str(exc),
+                    error_class="ImportError",
+                ),
+            )
             return
 
         # Phase 1 — PII 마스킹
@@ -1752,11 +2135,15 @@ if _FASTAPI_AVAILABLE:
         masked = mask_pii(text)
 
         # Phase 2 — 패턴 추출 (deadlines / materials / actions)
-        yield _sse("phase_start", {"phase": 2, "status_message": "마감·자료·액션 패턴 추출 중"})
+        yield _sse(
+            "phase_start", {"phase": 2, "status_message": "마감·자료·액션 패턴 추출 중"}
+        )
         await asyncio.sleep(0)
 
         # Phase 3 — card1_extraction heuristic (SKIP_LLM=true)
-        yield _sse("phase_start", {"phase": 3, "status_message": "의도·마감·액션 분석 중"})
+        yield _sse(
+            "phase_start", {"phase": 3, "status_message": "의도·마감·액션 분석 중"}
+        )
         await asyncio.sleep(0)
 
         loop = asyncio.get_running_loop()
@@ -1766,11 +2153,20 @@ if _FASTAPI_AVAILABLE:
                 lambda: _run_card1_extraction(masked),
             )
         except Exception as exc:
-            yield _sse("error", fail_payload(map_legacy_to_fail_class(exc), str(exc), error_class=type(exc).__name__))
+            yield _sse(
+                "error",
+                fail_payload(
+                    map_legacy_to_fail_class(exc),
+                    str(exc),
+                    error_class=type(exc).__name__,
+                ),
+            )
             return
 
         # Phase 4 — verifier + 신뢰도 구간 판정
-        yield _sse("phase_start", {"phase": 4, "status_message": "검증 및 신뢰도 판정 중"})
+        yield _sse(
+            "phase_start", {"phase": 4, "status_message": "검증 및 신뢰도 판정 중"}
+        )
         await asyncio.sleep(0)
 
         band = _cb(result.confidence)
@@ -1801,10 +2197,13 @@ if _FASTAPI_AVAILABLE:
             "created_at": time.monotonic(),
         }
 
-        yield _sse("complete", {
-            "result_id": result_id,
-            "result": result_dict,
-        })
+        yield _sse(
+            "complete",
+            {
+                "result_id": result_id,
+                "result": result_dict,
+            },
+        )
 
     def _run_card1_extraction(text: str):
         """heuristic mode로 extract_card1() 실행 — thread-safe (단계 8.4).
@@ -1814,6 +2213,7 @@ if _FASTAPI_AVAILABLE:
         정정: extract_card1(skip_llm=True) 인자로 호출자 영역 LLM bypass — env mutation X.
         """
         from butler_pc_core.card1_extraction import extract_card1
+
         return extract_card1(text, skip_llm=True)
 
     @app.post("/request_parsing/parse")
@@ -1831,12 +2231,22 @@ if _FASTAPI_AVAILABLE:
             raise HTTPException(status_code=422, detail="text 필드가 비어 있습니다.")
 
         try:
-            from butler_pc_core.request_parsing import parse_text, TextTooShortError, TextTooLongError
+            from butler_pc_core.request_parsing import (
+                parse_text,
+                TextTooShortError,
+                TextTooLongError,
+            )
         except ImportError as exc:
-            raise HTTPException(status_code=500, detail=f"request_parsing 모듈 로드 실패: {exc}")
+            raise HTTPException(
+                status_code=500, detail=f"request_parsing 모듈 로드 실패: {exc}"
+            )
 
         try:
-            llm = _SHARED_LLM if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready") else None
+            llm = (
+                _SHARED_LLM
+                if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready")
+                else None
+            )
             result = parse_text(text, input_format=input_format, llm=llm)
         except TextTooShortError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
@@ -1870,12 +2280,25 @@ if _FASTAPI_AVAILABLE:
             raise HTTPException(status_code=422, detail="text 필드가 비어 있습니다.")
 
         try:
-            from butler_pc_core.request_parsing import TextTooShortError, TextTooLongError
-            from butler_pc_core.request_parsing.parser import MIN_TEXT_LENGTH, MAX_TEXT_LENGTH
+            from butler_pc_core.request_parsing import (
+                TextTooShortError,
+                TextTooLongError,
+            )
+            from butler_pc_core.request_parsing.parser import (
+                MIN_TEXT_LENGTH,
+                MAX_TEXT_LENGTH,
+            )
+
             if len(text) < MIN_TEXT_LENGTH:
-                raise HTTPException(status_code=422, detail=f"메시지가 너무 짧습니다 (최소 {MIN_TEXT_LENGTH}자)")
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"메시지가 너무 짧습니다 (최소 {MIN_TEXT_LENGTH}자)",
+                )
             if len(text) > MAX_TEXT_LENGTH:
-                raise HTTPException(status_code=422, detail=f"메시지가 너무 깁니다 (최대 {MAX_TEXT_LENGTH:,}자)")
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"메시지가 너무 깁니다 (최대 {MAX_TEXT_LENGTH:,}자)",
+                )
         except HTTPException:
             raise
         except ImportError:
@@ -1897,7 +2320,9 @@ if _FASTAPI_AVAILABLE:
         """파싱 결과 Markdown 다운로드."""
         entry = _parse_results.get(result_id)
         if entry is None:
-            raise HTTPException(status_code=404, detail=f"결과 없음 또는 만료: {result_id}")
+            raise HTTPException(
+                status_code=404, detail=f"결과 없음 또는 만료: {result_id}"
+            )
 
         try:
             from butler_pc_core.request_parsing import ParsedResult, result_to_markdown
@@ -1905,12 +2330,15 @@ if _FASTAPI_AVAILABLE:
             raise HTTPException(status_code=500, detail=str(exc))
 
         from fastapi.responses import Response as _RawResponse
+
         result = ParsedResult.from_dict(entry["result"])
         md_text = result_to_markdown(result)
         return _RawResponse(
             content=md_text.encode("utf-8"),
             media_type="text/markdown; charset=utf-8",
-            headers={"Content-Disposition": 'inline; filename="butler_parse_result.md"'},
+            headers={
+                "Content-Disposition": 'inline; filename="butler_parse_result.md"'
+            },
         )
 
     @app.get("/request_parsing/result/{result_id}/docx")
@@ -1918,14 +2346,21 @@ if _FASTAPI_AVAILABLE:
         """파싱 결과 .docx 다운로드."""
         entry = _parse_results.get(result_id)
         if entry is None:
-            raise HTTPException(status_code=404, detail=f"결과 없음 또는 만료: {result_id}")
+            raise HTTPException(
+                status_code=404, detail=f"결과 없음 또는 만료: {result_id}"
+            )
 
         try:
-            from butler_pc_core.request_parsing import ParsedResult, result_to_docx_bytes, ParseError
+            from butler_pc_core.request_parsing import (
+                ParsedResult,
+                result_to_docx_bytes,
+                ParseError,
+            )
         except ImportError as exc:
             raise HTTPException(status_code=500, detail=str(exc))
 
         from fastapi.responses import Response as _RawResponse
+
         try:
             result = ParsedResult.from_dict(entry["result"])
             docx_bytes = result_to_docx_bytes(result)
@@ -1935,7 +2370,9 @@ if _FASTAPI_AVAILABLE:
         return _RawResponse(
             content=docx_bytes,
             media_type="application/octet-stream",
-            headers={"Content-Disposition": 'inline; filename="butler_parse_result.docx"'},
+            headers={
+                "Content-Disposition": 'inline; filename="butler_parse_result.docx"'
+            },
         )
 
     @app.post("/request_parsing/feedback")
@@ -1951,12 +2388,19 @@ if _FASTAPI_AVAILABLE:
         comment: str = body.get("comment", "")
 
         if feedback not in ("positive", "negative"):
-            raise HTTPException(status_code=422, detail="feedback 값은 positive 또는 negative")
+            raise HTTPException(
+                status_code=422, detail="feedback 값은 positive 또는 negative"
+            )
 
         # 피드백 로깅 (향후 fine-tuning 데이터로 활용)
         import logging as _log
-        _log.info("[request_parsing] feedback result_id=%s feedback=%s comment=%r",
-                  result_id, feedback, comment[:100] if comment else "")
+
+        _log.info(
+            "[request_parsing] feedback result_id=%s feedback=%s comment=%r",
+            result_id,
+            feedback,
+            comment[:100] if comment else "",
+        )
 
         return JSONResponse({"ok": True, "result_id": result_id, "feedback": feedback})
 
@@ -1969,20 +2413,39 @@ if _FASTAPI_AVAILABLE:
         """
         try:
             from butler_pc_core.request_parsing import (
-                extract_text_from_file_bytes, ParseError, mask_pii,
+                extract_text_from_file_bytes,
+                ParseError,
+                mask_pii,
             )
-            from butler_pc_core.card1_extraction.confidence import confidence_band as _cb
+            from butler_pc_core.card1_extraction.confidence import (
+                confidence_band as _cb,
+            )
         except ImportError as exc:
-            yield _sse("error", fail_payload(FailClass.INTERNAL_RUNTIME_ERROR, str(exc), error_class="ImportError"))
+            yield _sse(
+                "error",
+                fail_payload(
+                    FailClass.INTERNAL_RUNTIME_ERROR,
+                    str(exc),
+                    error_class="ImportError",
+                ),
+            )
             return
 
         # Phase 1 — 파일 텍스트 추출
-        yield _sse("phase_start", {"phase": 1, "status_message": f"파일 텍스트 추출 중 ({suffix})"})
+        yield _sse(
+            "phase_start",
+            {"phase": 1, "status_message": f"파일 텍스트 추출 중 ({suffix})"},
+        )
         await asyncio.sleep(0)
         try:
             text = extract_text_from_file_bytes(file_bytes, suffix)
         except ParseError as exc:
-            yield _sse("error", fail_payload(FailClass.OUTPUT_SCHEMA_INVALID, str(exc), error_class="ParseError"))
+            yield _sse(
+                "error",
+                fail_payload(
+                    FailClass.OUTPUT_SCHEMA_INVALID, str(exc), error_class="ParseError"
+                ),
+            )
             return
 
         # Phase 2 — PII 마스킹
@@ -2001,11 +2464,20 @@ if _FASTAPI_AVAILABLE:
                 lambda: _run_card1_extraction(masked),
             )
         except Exception as exc:
-            yield _sse("error", fail_payload(map_legacy_to_fail_class(exc), str(exc), error_class=type(exc).__name__))
+            yield _sse(
+                "error",
+                fail_payload(
+                    map_legacy_to_fail_class(exc),
+                    str(exc),
+                    error_class=type(exc).__name__,
+                ),
+            )
             return
 
         # Phase 4 — verifier + 신뢰도 구간 판정
-        yield _sse("phase_start", {"phase": 4, "status_message": "검증 및 신뢰도 판정 중"})
+        yield _sse(
+            "phase_start", {"phase": 4, "status_message": "검증 및 신뢰도 판정 중"}
+        )
         await asyncio.sleep(0)
 
         band = _cb(result.confidence)
@@ -2060,7 +2532,13 @@ if _FASTAPI_AVAILABLE:
             )
 
         # input_format 결정
-        _format_map = {".txt": "text", ".md": "md", ".docx": "docx", ".pdf": "pdf", ".eml": "email"}
+        _format_map = {
+            ".txt": "text",
+            ".md": "md",
+            ".docx": "docx",
+            ".pdf": "pdf",
+            ".eml": "email",
+        }
         input_format = _format_map.get(suffix, "text")
 
         file_bytes: bytes = await upload.read()
@@ -2078,12 +2556,11 @@ if _FASTAPI_AVAILABLE:
             },
         )
 
-
     # -----------------------------------------------------------------------
     # 문서 변환 엔드포인트 (D-4 카드 2)
     # -----------------------------------------------------------------------
 
-    DOC_TRANSFORM_RESULT_TTL = 1800      # 결과 보관 30분
+    DOC_TRANSFORM_RESULT_TTL = 1800  # 결과 보관 30분
     DOC_TRANSFORM_CLEANUP_INTERVAL = 120
 
     # result_id → { "docx_bytes": bytes, "md_text": str, "summary": dict, "created_at": float }
@@ -2094,7 +2571,8 @@ if _FASTAPI_AVAILABLE:
             await asyncio.sleep(DOC_TRANSFORM_CLEANUP_INTERVAL)
             now = time.monotonic()
             expired = [
-                rid for rid, entry in list(_doc_transform_results.items())
+                rid
+                for rid, entry in list(_doc_transform_results.items())
                 if now - entry.get("created_at", now) > DOC_TRANSFORM_RESULT_TTL
             ]
             for rid in expired:
@@ -2111,33 +2589,55 @@ if _FASTAPI_AVAILABLE:
         """카드 2 문서 변환 SSE 4-phase — semantic_mapping 통합 (단계 8)."""
         try:
             from butler_pc_core.document_transform import transform_document
-            from butler_pc_core.company_fact.read_only import resolve_read_only_company_knowledge
+            from butler_pc_core.company_fact.read_only import (
+                resolve_read_only_company_knowledge,
+            )
             from butler_pc_core.semantic_mapping import map_fields
             from butler_pc_core.semantic_mapping.slot_schema import TARGET_SLOTS
         except ImportError as exc:
-            yield _sse("error", fail_payload(FailClass.INTERNAL_RUNTIME_ERROR, str(exc), error_class="ImportError"))
+            yield _sse(
+                "error",
+                fail_payload(
+                    FailClass.INTERNAL_RUNTIME_ERROR,
+                    str(exc),
+                    error_class="ImportError",
+                ),
+            )
             return
 
         # Phase 1 — 외부 문서 분석
-        yield _sse("phase_start", {"phase": 1, "status_message": "외부 문서 분석 중..."})
+        yield _sse(
+            "phase_start", {"phase": 1, "status_message": "외부 문서 분석 중..."}
+        )
         await asyncio.sleep(0)
 
         # Phase 2 — 양식 구조 분석
-        yield _sse("phase_start", {"phase": 2, "status_message": "우리 양식 구조 분석 중..."})
+        yield _sse(
+            "phase_start", {"phase": 2, "status_message": "우리 양식 구조 분석 중..."}
+        )
         await asyncio.sleep(0)
 
         # Phase 3 — 의미 매핑 (semantic_mapping pipeline)
-        yield _sse("phase_start", {"phase": 3, "status_message": "의미 매핑 중 (semantic_mapping)..."})
+        yield _sse(
+            "phase_start",
+            {"phase": 3, "status_message": "의미 매핑 중 (semantic_mapping)..."},
+        )
         await asyncio.sleep(0)
 
         loop = asyncio.get_running_loop()
         try:
-            llm = _SHARED_LLM if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready") else None
+            llm = (
+                _SHARED_LLM
+                if (_SHARED_LLM and getattr(_SHARED_LLM, "status", "") == "ready")
+                else None
+            )
             result = await loop.run_in_executor(
                 None,
                 lambda: transform_document(
-                    external_data, external_suffix,
-                    template_data, template_suffix,
+                    external_data,
+                    external_suffix,
+                    template_data,
+                    template_suffix,
                     include_source_note=include_source_note,
                     llm=llm,
                 ),
@@ -2149,7 +2649,14 @@ if _FASTAPI_AVAILABLE:
                 lambda: map_fields(source_fields, TARGET_SLOTS, use_llm=False),
             )
         except Exception as exc:
-            yield _sse("error", fail_payload(map_legacy_to_fail_class(exc), str(exc), error_class=type(exc).__name__))
+            yield _sse(
+                "error",
+                fail_payload(
+                    map_legacy_to_fail_class(exc),
+                    str(exc),
+                    error_class=type(exc).__name__,
+                ),
+            )
             return
 
         # Phase 4 — 문서 생성 + 신뢰도 §11 Block 적용
@@ -2193,23 +2700,29 @@ if _FASTAPI_AVAILABLE:
             "created_at": time.monotonic(),
         }
 
-        yield _sse("complete", {
-            "result_id": result_id,
-            "summary": _doc_transform_results[result_id]["summary"],
-        })
+        yield _sse(
+            "complete",
+            {
+                "result_id": result_id,
+                "summary": _doc_transform_results[result_id]["summary"],
+            },
+        )
 
     def _extract_source_fields_from_result(result) -> list:
         """TransformResult의 매핑된 섹션에서 semantic_mapping SourceField 목록 생성."""
         from butler_pc_core.semantic_mapping.contracts import SourceField, ValueType
+
         fields = []
         for sec in result.mapped_sections:
             if sec.content.strip():
-                fields.append(SourceField(
-                    label=sec.heading,
-                    value=sec.content.strip()[:300],
-                    raw_text=sec.content.strip()[:300],
-                    detected_type=ValueType.UNKNOWN,
-                ))
+                fields.append(
+                    SourceField(
+                        label=sec.heading,
+                        value=sec.content.strip()[:300],
+                        raw_text=sec.content.strip()[:300],
+                        detected_type=ValueType.UNKNOWN,
+                    )
+                )
         return fields
 
     async def _build_transform_response(form) -> StreamingResponse:
@@ -2217,12 +2730,18 @@ if _FASTAPI_AVAILABLE:
         v1.1 /api/document_transform/* alias 공용 (Codex P1)."""
         external_file = form.get("external_file")
         template_file = form.get("template_file")
-        include_source_note = str(form.get("include_source_note", "false")).lower() == "true"
+        include_source_note = (
+            str(form.get("include_source_note", "false")).lower() == "true"
+        )
 
         if external_file is None or not hasattr(external_file, "read"):
-            raise HTTPException(status_code=422, detail="external_file 필드가 없습니다.")
+            raise HTTPException(
+                status_code=422, detail="external_file 필드가 없습니다."
+            )
         if template_file is None or not hasattr(template_file, "read"):
-            raise HTTPException(status_code=422, detail="template_file 필드가 없습니다.")
+            raise HTTPException(
+                status_code=422, detail="template_file 필드가 없습니다."
+            )
 
         external_data = await external_file.read()
         external_suffix = Path(external_file.filename or "").suffix.lower().lstrip(".")
@@ -2230,23 +2749,34 @@ if _FASTAPI_AVAILABLE:
         template_suffix = Path(template_file.filename or "").suffix.lower().lstrip(".")
 
         if not external_data:
-            raise HTTPException(status_code=422, detail="외부 문서 파일이 비어 있습니다.")
+            raise HTTPException(
+                status_code=422, detail="외부 문서 파일이 비어 있습니다."
+            )
         if not template_data:
             raise HTTPException(status_code=422, detail="양식 파일이 비어 있습니다.")
 
         allowed_external = {"txt", "md", "docx", "pdf", "eml"}
         allowed_template = {"docx", "md"}
         if external_suffix not in allowed_external:
-            raise HTTPException(status_code=422, detail=f"외부 문서: .{external_suffix} 미지원 (지원: .txt .md .docx .pdf .eml)")
+            raise HTTPException(
+                status_code=422,
+                detail=f"외부 문서: .{external_suffix} 미지원 (지원: .txt .md .docx .pdf .eml)",
+            )
         if template_suffix not in allowed_template:
-            raise HTTPException(status_code=422, detail=f"양식 파일: .{template_suffix} 미지원 (지원: .docx .md)")
+            raise HTTPException(
+                status_code=422,
+                detail=f"양식 파일: .{template_suffix} 미지원 (지원: .docx .md)",
+            )
 
         result_id = str(uuid.uuid4())
         return StreamingResponse(
             _stream_transform(
-                external_data, external_suffix,
-                template_data, template_suffix,
-                include_source_note, result_id,
+                external_data,
+                external_suffix,
+                template_data,
+                template_suffix,
+                include_source_note,
+                result_id,
             ),
             media_type="text/event-stream",
             headers={
@@ -2275,6 +2805,7 @@ if _FASTAPI_AVAILABLE:
     def _dt_contract_descriptor(step: str) -> dict:
         """api_contract_v1_1 endpoint_matrix 에서 step 메타 반환."""
         from butler_pc_core.document_transform.api_contract_v1_1 import endpoint_matrix
+
         for item in endpoint_matrix():
             if item["step"] == step:
                 return {"status": "ready", "contract": "v1.1", **item}
@@ -2287,7 +2818,10 @@ if _FASTAPI_AVAILABLE:
             form = await request.form()
         except Exception:
             return JSONResponse(_dt_contract_descriptor(step), status_code=200)
-        if form.get("external_file") is not None and form.get("template_file") is not None:
+        if (
+            form.get("external_file") is not None
+            and form.get("template_file") is not None
+        ):
             return await _build_transform_response(form)
         return JSONResponse(_dt_contract_descriptor(step), status_code=200)
 
@@ -2314,20 +2848,28 @@ if _FASTAPI_AVAILABLE:
     @app.get("/api/document_transform/stream")
     async def api_document_transform_stream(result_id: str = ""):
         """v1.1 SSE stream alias (wall-clock 180s + idle 30s) — result_id 로 변환 결과 스트림."""
+
         async def _gen():
             if result_id and result_id in _doc_transform_results:
-                yield _sse("complete", {
-                    "result_id": result_id,
-                    "summary": _doc_transform_results[result_id]["summary"],
-                })
+                yield _sse(
+                    "complete",
+                    {
+                        "result_id": result_id,
+                        "summary": _doc_transform_results[result_id]["summary"],
+                    },
+                )
             elif result_id:
-                yield _sse("error", fail_payload(
-                    FailClass.INVALID_REQUEST_SCHEMA,
-                    "result_id 없음 또는 만료",
-                    error_class="NotFound",
-                ))
+                yield _sse(
+                    "error",
+                    fail_payload(
+                        FailClass.INVALID_REQUEST_SCHEMA,
+                        "result_id 없음 또는 만료",
+                        error_class="NotFound",
+                    ),
+                )
             else:
                 yield _sse("ready", {"contract": "v1.1", "step": "stream"})
+
         return StreamingResponse(
             _gen(),
             media_type="text/event-stream",
@@ -2340,10 +2882,13 @@ if _FASTAPI_AVAILABLE:
         if not entry:
             raise HTTPException(status_code=404, detail="결과가 없거나 만료되었습니다.")
         from fastapi.responses import Response as _Response
+
         return _Response(
             content=entry["docx_bytes"],
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": 'attachment; filename="butler_transform_result.docx"'},
+            headers={
+                "Content-Disposition": 'attachment; filename="butler_transform_result.docx"'
+            },
         )
 
     @app.get("/document_transform/result/{result_id}/md")
@@ -2352,10 +2897,13 @@ if _FASTAPI_AVAILABLE:
         if not entry:
             raise HTTPException(status_code=404, detail="결과가 없거나 만료되었습니다.")
         from fastapi.responses import Response as _Response
+
         return _Response(
             content=entry["md_text"].encode("utf-8"),
             media_type="text/markdown; charset=utf-8",
-            headers={"Content-Disposition": 'attachment; filename="butler_transform_result.md"'},
+            headers={
+                "Content-Disposition": 'attachment; filename="butler_transform_result.md"'
+            },
         )
 
     @app.post("/document_transform/feedback")
@@ -2367,8 +2915,15 @@ if _FASTAPI_AVAILABLE:
         result_id: str = body.get("result_id", "")
         feedback: str = body.get("feedback", "")
         if feedback not in ("positive", "negative"):
-            raise HTTPException(status_code=422, detail="feedback은 'positive' 또는 'negative'여야 합니다.")
-        _log.info("[document_transform] feedback result_id=%s feedback=%s", result_id, feedback)
+            raise HTTPException(
+                status_code=422,
+                detail="feedback은 'positive' 또는 'negative'여야 합니다.",
+            )
+        _log.info(
+            "[document_transform] feedback result_id=%s feedback=%s",
+            result_id,
+            feedback,
+        )
         return JSONResponse({"status": "ok"})
 
 
@@ -2389,7 +2944,9 @@ else:
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Access-Control-Allow-Origin", "tauri://localhost")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+            self.send_header(
+                "Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS"
+            )
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.end_headers()
             self.wfile.write(data)
@@ -2397,7 +2954,9 @@ else:
         def do_OPTIONS(self):
             self.send_response(204)
             self.send_header("Access-Control-Allow-Origin", "tauri://localhost")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+            self.send_header(
+                "Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS"
+            )
             self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.end_headers()
 
@@ -2408,11 +2967,24 @@ else:
                     self._send_json(200, _fallback_health_payload(self.path))
                 elif self.path == "/api/model/status":
                     if not model_path:
-                        self._send_json(200, sidecar_model_status_payload(status="no_model", last_error="BUTLER_MODEL_PATH 미설정"))
+                        self._send_json(
+                            200,
+                            sidecar_model_status_payload(
+                                status="no_model", last_error="BUTLER_MODEL_PATH 미설정"
+                            ),
+                        )
                     elif not Path(model_path).exists():
-                        self._send_json(200, sidecar_model_status_payload(status="no_model", last_error="파일 없음"))
+                        self._send_json(
+                            200,
+                            sidecar_model_status_payload(
+                                status="no_model", last_error="파일 없음"
+                            ),
+                        )
                     else:
-                        self._send_json(200, sidecar_model_status_payload(status="ready", last_error=""))
+                        self._send_json(
+                            200,
+                            sidecar_model_status_payload(status="ready", last_error=""),
+                        )
                 else:
                     self._send_json(200, _fallback_health_payload(self.path))
             else:
@@ -2426,20 +2998,30 @@ else:
                     req = json.loads(body)
                     file_path = req["file_path"]
                     result = classify_file(file_path)
-                    self._send_json(200, {
-                        "tier": result.tier,
-                        "size_kb": result.size_kb,
-                        "estimated_chunks": result.estimated_chunks,
-                        "estimated_seconds": result.estimated_seconds,
-                        "blocked": result.blocked,
-                        "block_reason": result.block_reason,
-                    })
+                    self._send_json(
+                        200,
+                        {
+                            "tier": result.tier,
+                            "size_kb": result.size_kb,
+                            "estimated_chunks": result.estimated_chunks,
+                            "estimated_seconds": result.estimated_seconds,
+                            "blocked": result.blocked,
+                            "block_reason": result.block_reason,
+                        },
+                    )
                 except FileNotFoundError as exc:
                     self._send_json(404, {"detail": str(exc)})
                 except IsADirectoryError:
-                    self._send_json(422, {"detail": "폴더가 아닌 개별 파일을 첨부해 주세요."})
+                    self._send_json(
+                        422, {"detail": "폴더가 아닌 개별 파일을 첨부해 주세요."}
+                    )
                 except NotAFileError:
-                    self._send_json(422, {"detail": "원본 파일을 직접 첨부해 주세요 (심볼릭 링크 불가)."})
+                    self._send_json(
+                        422,
+                        {
+                            "detail": "원본 파일을 직접 첨부해 주세요 (심볼릭 링크 불가)."
+                        },
+                    )
                 except (KeyError, json.JSONDecodeError) as exc:
                     self._send_json(400, {"detail": f"잘못된 요청: {exc}"})
                 except Exception as exc:
@@ -2460,12 +3042,19 @@ if __name__ == "__main__":
     import argparse as _argparse
 
     _parser = _argparse.ArgumentParser(description="Butler PC Core Sidecar")
-    _parser.add_argument("--host", default="127.0.0.1", help="바인딩 호스트 (기본: 127.0.0.1)")
-    _parser.add_argument("--port", type=int, default=8765, help="바인딩 포트 (기본: 8765)")
+    _parser.add_argument(
+        "--host", default="127.0.0.1", help="바인딩 호스트 (기본: 127.0.0.1)"
+    )
+    _parser.add_argument(
+        "--port", type=int, default=8765, help="바인딩 포트 (기본: 8765)"
+    )
     _args = _parser.parse_args()
 
     if _FASTAPI_AVAILABLE:
         import uvicorn
-        uvicorn.run("butler_sidecar:app", host=_args.host, port=_args.port, reload=False)
+
+        uvicorn.run(
+            "butler_sidecar:app", host=_args.host, port=_args.port, reload=False
+        )
     else:
         _run_stdlib_server(host=_args.host, port=_args.port)

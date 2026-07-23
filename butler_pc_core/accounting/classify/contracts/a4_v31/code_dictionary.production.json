@@ -1,0 +1,17 @@
+{
+  "schema_version": "butler.box5.a4.code_dictionary.v3.1",
+  "dictionary_id": "BUTLER_A4_KR_CODES",
+  "version": "3.1.0",
+  "unknown_policy": "QUARANTINE",
+  "product_codes": [
+    {"id": "DEFAULT", "aliases": ["DEFAULT"]},
+    {"id": "TRANSFER", "aliases": ["TRANSFER", "이체"]},
+    {"id": "FEE", "aliases": ["FEE", "수수료"]}
+  ],
+  "channels": [
+    {"id": "DEFAULT", "aliases": ["DEFAULT"]},
+    {"id": "ONLINE", "aliases": ["ONLINE", "인터넷", "모바일"]},
+    {"id": "ATM", "aliases": ["ATM"]},
+    {"id": "BRANCH", "aliases": ["BRANCH", "창구"]}
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:box5:a4:verification-receipt:v5.3",
+  "title": "Butler A4 Native Authority Verification Receipt v5.3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "contract_id", "protocol_version", "run_id", "nonce",
+    "decision", "reason_codes", "source_sha256", "ordered_row_root",
+    "compiled_manifest_digest", "graph_digest", "evidence_manifest_digest",
+    "policy_digest", "adapter_digest", "dictionary_digest", "registry_digest",
+    "code_tree_oid", "code_closure_digest", "verifier_id", "verified_at_utc",
+    "authority_session_id", "authority_request_id", "authority_nonce_digest",
+    "caller_cdhash", "authority_cdhash", "verifier_cdhash", "request_digest", "source_payload_digest",
+    "request_deadline_unix_ms", "signer_key_id", "authority_id",
+    "signer_key_epoch", "signer_trust_digest", "signature"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.box5.a4.verification_receipt.v5.3"},
+    "contract_id": {"const": "BUTLER-BOX5-A4-V5.3-NATIVE-AUTHORITY"},
+    "protocol_version": {"const": "butler.box5.a4.authority_protocol.v5.3"},
+    "run_id": {"type": "string", "format": "uuid"},
+    "nonce": {"$ref": "#/$defs/sha256"},
+    "decision": {"enum": ["PASS", "BLOCK"]},
+    "reason_codes": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^(BLOCK|UNVERIFIED)_[A-Z0-9_]+$"},
+      "uniqueItems": true
+    },
+    "source_sha256": {"$ref": "#/$defs/sha256"},
+    "ordered_row_root": {"$ref": "#/$defs/sha256"},
+    "compiled_manifest_digest": {"$ref": "#/$defs/sha256"},
+    "graph_digest": {"$ref": "#/$defs/sha256"},
+    "evidence_manifest_digest": {"$ref": "#/$defs/sha256"},
+    "policy_digest": {"$ref": "#/$defs/sha256"},
+    "adapter_digest": {"$ref": "#/$defs/sha256"},
+    "dictionary_digest": {"$ref": "#/$defs/sha256"},
+    "registry_digest": {"$ref": "#/$defs/sha256"},
+    "code_tree_oid": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "code_closure_digest": {"$ref": "#/$defs/sha256"},
+    "verifier_id": {"const": "BUTLER_A4_ISOLATED_RAW_COMPILER_V5.3"},
+    "verified_at_utc": {"type": "string", "format": "date-time"},
+    "authority_session_id": {"type": "string", "format": "uuid"},
+    "authority_request_id": {"type": "string", "format": "uuid"},
+    "authority_nonce_digest": {"$ref": "#/$defs/sha256"},
+    "caller_cdhash": {"$ref": "#/$defs/sha256"},
+    "authority_cdhash": {"$ref": "#/$defs/pinnedCdhash"},
+    "verifier_cdhash": {"$ref": "#/$defs/pinnedCdhash"},
+    "request_digest": {"$ref": "#/$defs/sha256"},
+    "source_payload_digest": {"$ref": "#/$defs/sha256"},
+    "request_deadline_unix_ms": {"type": "integer", "minimum": 1},
+    "signer_key_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
+    "authority_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
+    "signer_key_epoch": {"type": "integer", "minimum": 0},
+    "signer_trust_digest": {"$ref": "#/$defs/sha256"},
+    "signature": {"type": "string", "pattern": "^[A-Za-z0-9_-]{86}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"decision": {"const": "PASS"}}},
+      "then": {"properties": {"reason_codes": {"maxItems": 0}}}
+    },
+    {
+      "if": {"properties": {"decision": {"const": "BLOCK"}}},
+      "then": {"properties": {"reason_codes": {"minItems": 1}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "pinnedCdhash": {"type": "string", "pattern": "^(?!0{64}$|f{64}$)[0-9a-f]{64}$"}
+  }
+}

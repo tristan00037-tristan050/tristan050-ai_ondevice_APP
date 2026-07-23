@@ -3,7 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch", reason="TurboQ requires the optional torch runtime")
+torch = pytest.importorskip(
+    "torch", reason="TurboQ requires the optional PyTorch runtime"
+)
 
 from scripts.turboq.turboq_core_v1 import LloydMaxQuantizer, PolarQuant, QJLCorrector, TurboQuantKVCache
 

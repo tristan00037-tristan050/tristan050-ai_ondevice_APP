@@ -1,0 +1,31 @@
+{
+  "schema_version": "butler.box5.a4.local_evidence.v3.1",
+  "captured_at_utc": "2026-07-20T00:27:13Z",
+  "canonical_base": "b38e9e3321c0b972fb257ebd3831fa472da9c5a4",
+  "runtime": "CPython 3.11 canonical repository virtual environment",
+  "command": "python -m pytest tests/company_profile tests/accounting/assignment tests/accounting/classify tests/accounting/test_download_endpoint.py tests/accounting/test_download_stability.py tests/accounting/test_report_sort.py tests/accounting/test_sse_phase_messages.py -q --disable-warnings --junitxml=TEST_JUNIT.xml",
+  "result": {
+    "passed": 239,
+    "failed": 0,
+    "warnings": 72,
+    "duration_seconds": 7.57
+  },
+  "artifacts": {
+    "TEST_JUNIT.xml": "6a74d506f801758ec87ddfd416a1f345dacb022afba4501a5b1bbb71d9586bee",
+    "TEST_RAW.txt": "17731f4404a970318ea0938ffac23d08d9317d0a945133d79f54a215ed8236a0"
+  },
+  "privacy_transform": {
+    "TEST_JUNIT.xml": "hostname attribute replaced with REDACTED",
+    "source_junit_sha256": "0245b0083dcea3b2566c4a6faa18c1a8eb0a7b5bcdf9b521393b38ecc42b2870"
+  },
+  "scope": {
+    "actual_product_endpoint_e2e": "PASS_LOCAL",
+    "independent_raw_source_recompile": "PASS_LOCAL",
+    "signed_verification_receipt": "PASS_LOCAL",
+    "published_only_review_gate": "PASS_LOCAL",
+    "remote_hosted_ci": "NOT_RUN",
+    "production_keychain": "BLOCKED_EXTERNAL",
+    "real_bank_data": "BLOCKED_EXTERNAL",
+    "apple_m3_measurement": "BLOCKED_EXTERNAL"
+  }
+}

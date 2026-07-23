@@ -1,0 +1,88 @@
+{
+  "schema_version": "butler.box5.a4.integration_status.v5.5",
+  "status": "BLOCKED_EXTERNAL_SECRET_ROTATION_AND_DEVICE_EVIDENCE",
+  "canonical_base_commit_oid": "2a05057046352c5c0335e0fec90b603bbf6c98fd",
+  "single_integration_branch": "feat/box5-a4-v5-4-single-integration",
+  "code_pass": false,
+  "runtime_activation_allowed": false,
+  "journal_auto_post_allowed": false,
+  "shadow_only": true,
+  "p0_closure": [
+    {
+      "id": "P0-A",
+      "status": "IMPLEMENTED_LOCAL",
+      "evidence": "v5.1 canonical base with one producer, one verifier, one store, and one receipt contract"
+    },
+    {
+      "id": "P0-B",
+      "status": "IMPLEMENTED_TESTED_LOCAL",
+      "evidence": "bounded 1:N and N:1 reconciliation plus value-date, duplicate, reversal, and one-terminal-component enforcement are independently recomputed by the isolated verifier"
+    },
+    {
+      "id": "P0-C",
+      "status": "IMPLEMENTED_TESTED_LOCAL",
+      "evidence": "receipt-bound exact-rational FX with source fee, target fee, and spread conservation"
+    },
+    {
+      "id": "P0-D",
+      "status": "IMPLEMENTED_TYPECHECKED_LOCAL",
+      "evidence": "authority and verifier CDHash pins reject missing, constant, and mismatched identities"
+    },
+    {
+      "id": "P0-E",
+      "status": "IMPLEMENTED_TESTED_LOCAL",
+      "evidence": "the verifier receives no signing seed; the native Keychain authority alone signs receipts"
+    },
+    {
+      "id": "P0-F",
+      "status": "BLOCKED_EXTERNAL",
+      "evidence": "all tracked objects and reachable Git blobs are scanned; one historical exposure remains intentionally unsuppressed until DATABASE_URL and EXPORT_SIGN_SECRET rotation evidence is supplied"
+    }
+  ],
+  "v5_5_closure": [
+    {
+      "id": "FIX-V55-001",
+      "status": "IMPLEMENTED_TESTED_LOCAL",
+      "evidence": "signing seed load is immediately guarded by defer zeroization; injected key-construction and signature failures execute the C zeroizer"
+    },
+    {
+      "id": "FIX-V55-002",
+      "status": "IMPLEMENTED_BLOCKING_KNOWN_EXPOSURE",
+      "evidence": "full tracked and full reachable Git-blob scan with encoded candidate detection, exact audited non-secret baseline, and raw-value/path-zero report"
+    },
+    {
+      "id": "FIX-V55-003",
+      "status": "BLOCKED_EXTERNAL",
+      "evidence": "rotation actor, timestamps, and evidence URL are absent; file deletion is not counted as rotation"
+    },
+    {
+      "id": "FIX-V55-004",
+      "status": "IMPLEMENTED_VERIFIED_LOCAL",
+      "evidence": "42 repository failures are bound to exact test IDs and external owner tracks; A4-owned failures=0 and unclassified failures=0"
+    }
+  ],
+  "local_validation": {
+    "a4_product_ci_scope": "464 passed, 1 skipped on the bundled Butler Python 3.11 runtime",
+    "repository_wide": "3116 passed, 32 skipped, 41 classified external failures, 1 baseline failure resolved, 0 A4-owned failures, 0 collection errors",
+    "repository_wide_status": "A4_OWNED_ZERO_EXTERNAL_41_CLASSIFIED_ONE_BASELINE_RESOLVED",
+    "repository_wide_ubuntu_ci_replay": "63 observed failures exactly classified as 36 base plus 27 llama_cpp-unavailable platform-overlay failures; 0 A4-owned and 0 unclassified",
+    "native_authority_typecheck": "PASS",
+    "signing_seed_defer_zeroization": "PASS",
+    "repository_secret_scan": "BLOCKED_ONE_KNOWN_HISTORY_EXPOSURE",
+    "static_contracts": "PASS",
+    "clean_repository_closure": "PASS"
+  },
+  "local_blockers": [
+    "BLOCKED_SECRET_ROTATION_EVIDENCE"
+  ],
+  "external_blockers": [
+    "BLOCKED_PRODUCTION_CODESIGN_IDENTITY",
+    "BLOCKED_PRODUCTION_KEYCHAIN_PROVISIONING",
+    "BLOCKED_NOTARIZED_APP_E2E",
+    "BLOCKED_REAL_BANK_1N_N1_FX_FIXTURES",
+    "BLOCKED_M3_MEMORY_THERMAL_POWER_EVIDENCE",
+    "BLOCKED_HOSTED_SIGNED_PROVENANCE",
+    "BLOCKED_PRODUCTION_SECRET_ROTATION",
+    "BLOCKED_GROUP_A_OPERATIONAL_APPROVAL"
+  ]
+}

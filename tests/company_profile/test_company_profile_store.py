@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from butler_pc_core.accounting.assignment import runtime as assignment_runtime
+from butler_pc_core.accounting.assignment.domain import AssignmentError
 from butler_pc_core.company_policy import admin_auth
 from butler_pc_core.company_policy.contracts import AdminContext
 from butler_pc_core.company_policy.role_registry import RoleRegistryStore
@@ -137,6 +140,53 @@ def test_company_profile_register_and_status_routes_digest_only(tmp_path, monkey
     _assert_plaintext_absent(json.dumps(status, ensure_ascii=False))
 
 
+def test_company_profile_is_not_published_when_a4_registry_fails(tmp_path, monkeypatch):
+    store = CompanyProfileStore(root=tmp_path / "route_store")
+    _seed_role_registry(tmp_path, monkeypatch)
+    monkeypatch.setattr(route_module, "_STORE", store)
+
+    existing = make_runtime_profile(
+        own_bank_holder_aliases=[HOLDER_ALIAS],
+        own_company_aliases=[COMPANY_ALIAS],
+        own_account_numbers=[ACCOUNT_NUMBER],
+    )
+    existing_entry = store.save_profile(existing)
+
+    class RejectingRegistryStore:
+        def replace_a4_own_account_registry(self, **_kwargs):
+            raise AssignmentError(
+                "BLOCK_REGISTRY_IDENTITY", 503, "A4 registry was not committed."
+            )
+
+    monkeypatch.setattr(
+        assignment_runtime,
+        "get_accounting_review_runtime",
+        lambda: SimpleNamespace(store=RejectingRegistryStore()),
+    )
+    app = FastAPI()
+    app.include_router(route_module.router)
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/company-profile/register",
+        json={
+            "own_bank_holder_aliases": ["신규 법인"],
+            "own_company_aliases": ["신규"],
+            "own_bank_accounts": [
+                {"bank_code": "BANK-A", "account_number": "111-222"},
+                {"bank_code": "BANK-B", "account_number": "333-444"},
+            ],
+        },
+        headers=_admin_headers(),
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["fail_class"] == "BLOCK_REGISTRY_IDENTITY"
+    active = store.load_active_index()
+    assert active is not None
+    assert active.profile_id == existing_entry.profile_id
+
+
 def test_company_profile_status_fails_closed_when_vault_item_is_missing(tmp_path, monkeypatch):
     store = CompanyProfileStore(root=tmp_path / "broken_vault_store")
     monkeypatch.setattr(route_module, "_STORE", store)
@@ -186,7 +236,22 @@ def test_suggest_from_accounting_file_is_runtime_only(tmp_path, monkeypatch):
 def test_company_profile_routes_registered_in_butler_sidecar():
     from butler_sidecar import app
 
-    paths = {getattr(route, "path", "") for route in app.routes}
+    def registered_paths(routes):
+        paths = set()
+        for route in routes:
+            path = getattr(route, "path", None)
+            if isinstance(path, str):
+                paths.add(path)
+            nested = getattr(route, "routes", None)
+            if nested is not None:
+                paths.update(registered_paths(nested))
+            original_router = getattr(route, "original_router", None)
+            original_routes = getattr(original_router, "routes", None)
+            if original_routes is not None:
+                paths.update(registered_paths(original_routes))
+        return paths
+
+    paths = registered_paths(app.routes)
 
     assert "/v1/company-profile/status" in paths
     assert "/v1/company-profile/register" in paths
