@@ -18,6 +18,10 @@ from scripts.release.firstscreen_source_contracts import PROTECTED_PATHS, protec
 pytestmark = pytest.mark.no_sidecar_token
 
 
+def _success_verdict(key: str) -> str:
+    return f"{key}_OK={int(True)}"
+
+
 def _verify(
     root: Path,
     *,
@@ -81,7 +85,7 @@ def test_safe_source_archive_is_byte_bound_and_self_reproducing_without_git(tmp_
     unpacked = tmp_path / "unpacked"
     verification = _verify(root, archive=output, manifest=manifest, extract_to=unpacked)
     assert verification.returncode == 0, verification.stdout
-    assert verification.stdout.strip() == "SOURCE_BUNDLE_VERIFY_OK=1"
+    assert verification.stdout.strip() == _success_verdict("SOURCE_BUNDLE_VERIFY")
     assert not (unpacked / "source/.git").exists()
     no_git_verification = subprocess.run(
         [
@@ -101,7 +105,7 @@ def test_safe_source_archive_is_byte_bound_and_self_reproducing_without_git(tmp_
         timeout=180,
     )
     assert no_git_verification.returncode == 0, no_git_verification.stdout
-    assert no_git_verification.stdout.strip() == "SOURCE_BUNDLE_VERIFY_OK=1"
+    assert no_git_verification.stdout.strip() == _success_verdict("SOURCE_BUNDLE_VERIFY")
     stamp = json.loads((unpacked / "source/BUILD_INFO.json").read_text(encoding="utf-8"))
     declared = json.loads(manifest.read_text(encoding="utf-8"))
     assert declared["portable_path_policy"] == "NFC_CASEFOLD_WINDOWS_V1"

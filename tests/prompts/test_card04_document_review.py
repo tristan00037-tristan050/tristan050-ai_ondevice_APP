@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
 import subprocess
 import sys
@@ -19,6 +20,14 @@ BOX4_SMOKE_VALIDATOR = REPO_ROOT / "scripts" / "validate_box4_document_review_sm
 
 def success_verdict(key: str) -> str:
     return f"{key}_OK={int(True)}"
+
+
+def _load_activation_verifier():
+    spec = importlib.util.spec_from_file_location("box4_activation_verifier", BOX4_ACTIVATION_VERIFIER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_card04_render_query_as_target_and_files_as_references() -> None:
@@ -220,6 +229,15 @@ def test_box4_activation_verifier_accepts_contract() -> None:
 
     assert result.returncode == 0
     assert result.stdout.strip() == success_verdict("BOX4_DOCUMENT_REVIEW_CONTRACT")
+
+
+def test_box4_activation_dependency_guard_is_runtime_scoped() -> None:
+    verifier = _load_activation_verifier()
+
+    assert verifier._is_box4_runtime_dependency_file("requirements-serving.txt")
+    assert not verifier._is_box4_runtime_dependency_file("butler-desktop/package.json")
+    assert not verifier._is_box4_runtime_dependency_file("butler-desktop/package-lock.json")
+    assert not verifier._is_box4_runtime_dependency_file("requirements-firstscreen-ci.lock")
 
 
 def test_box4_smoke_validator_accepts_contract() -> None:

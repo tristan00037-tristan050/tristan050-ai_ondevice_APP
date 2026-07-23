@@ -23,6 +23,11 @@ pytestmark = pytest.mark.no_sidecar_token
 NOW = datetime(2026, 7, 21, 12, 0, 0, tzinfo=timezone.utc)
 
 
+def _verdict(key: str, passed: bool, error_code: str | None = None) -> str:
+    result = f"{key}_OK={int(passed)}"
+    return f"{result} ERROR_CODE={error_code}" if error_code else result
+
+
 def _key() -> tuple[Ed25519PrivateKey, str, str]:
     private = Ed25519PrivateKey.generate()
     raw = private.public_key().public_bytes_raw()
@@ -139,7 +144,7 @@ def test_in_process_chain_passes_without_ssh_keygen(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     completed = _run(root, _chain(tmp_path))
     assert completed.returncode == 0
-    assert completed.stdout.strip() == "STORAGE_RISK_ACCEPTANCE_OK=1"
+    assert completed.stdout.strip() == _verdict("STORAGE_RISK_ACCEPTANCE", True)
     assert completed.stderr == ""
 
 
@@ -150,7 +155,9 @@ def test_missing_chain_member_fails_closed(tmp_path: Path, artifact: str) -> Non
     paths[artifact].unlink()
     completed = _run(root, paths)
     assert completed.returncode == 1
-    assert completed.stdout.strip() == "STORAGE_RISK_ACCEPTANCE_OK=0 ERROR_CODE=STORAGE_RISK_ACCEPTANCE_INVALID"
+    assert completed.stdout.strip() == _verdict(
+        "STORAGE_RISK_ACCEPTANCE", False, "STORAGE_RISK_ACCEPTANCE_INVALID"
+    )
     assert completed.stderr == ""
 
 
