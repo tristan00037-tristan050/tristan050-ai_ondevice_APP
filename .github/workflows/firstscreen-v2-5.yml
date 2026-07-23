@@ -176,8 +176,8 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-firstscreen-ci.lock
       - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
-      - run: python -m pytest tests/ --collect-only -qq --import-mode=importlib --ignore=tests/turboq/ --ignore=tests/eval/test_eval_hardcase.py --ignore=tests/eval/test_eval_judge_v3.py
-      - run: python -m pytest tests/ -q --import-mode=importlib --ignore=tests/turboq/ --ignore=tests/eval/test_eval_hardcase.py --ignore=tests/eval/test_eval_judge_v3.py --junitxml=repository-junit.xml
+      - run: python -m pytest tests/ --collect-only -qq --ignore=tests/turboq/ --ignore=tests/eval/test_eval_hardcase.py --ignore=tests/eval/test_eval_judge_v3.py
+      - run: python -m pytest tests/ -q --ignore=tests/turboq/ --ignore=tests/eval/test_eval_hardcase.py --ignore=tests/eval/test_eval_judge_v3.py --junitxml=repository-junit.xml
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with: {name: firstscreen-v2-5-repository, path: repository-junit.xml, if-no-files-found: error, retention-days: 30}
 

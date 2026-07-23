@@ -190,7 +190,11 @@ pub fn validate_state(state: &TrustedState) -> Result<(), &'static str> {
         || state.previous_trusted_state_receipt_digest.is_none()
         || state.valid_root_signer_ids.is_empty()
         || state.valid_revocation_signer_ids.is_empty()
-        || state.valid_root_signer_ids.iter().collect::<std::collections::BTreeSet<_>>().len()
+        || state
+            .valid_root_signer_ids
+            .iter()
+            .collect::<std::collections::BTreeSet<_>>()
+            .len()
             != state.valid_root_signer_ids.len()
         || state
             .valid_revocation_signer_ids
@@ -214,7 +218,9 @@ pub fn validate_state(state: &TrustedState) -> Result<(), &'static str> {
         || sha256(&canonical_without_signatures(&root)?) != state.root_digest
         || sha256(&canonical_without_signatures(&revocations)?) != state.revocation_digest
         || root.get("version").and_then(serde_json::Value::as_u64) != Some(state.root_version)
-        || revocations.get("version").and_then(serde_json::Value::as_u64)
+        || revocations
+            .get("version")
+            .and_then(serde_json::Value::as_u64)
             != Some(state.revocation_version)
         || revocations
             .get("root_policy_digest")

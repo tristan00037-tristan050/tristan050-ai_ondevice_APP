@@ -27,7 +27,10 @@ pub fn initialize_authority() -> Result<AuthorityState, &'static str> {
 
 fn receipt_digest(receipt: &NativeTrustReceipt) -> Result<String, &'static str> {
     let mut value = serde_json::to_value(receipt).map_err(|_| "BLOCK_NATIVE_TRUST_VERIFICATION")?;
-    value.as_object_mut().ok_or("BLOCK_NATIVE_TRUST_VERIFICATION")?.remove("receipt_digest");
+    value
+        .as_object_mut()
+        .ok_or("BLOCK_NATIVE_TRUST_VERIFICATION")?
+        .remove("receipt_digest");
     Ok(sha256(&canonical(&value)?))
 }
 
@@ -36,7 +39,10 @@ pub fn verify_and_commit_trust_update(
     request: VerifyAndCommitRequest,
     authority: tauri::State<'_, AuthorityState>,
 ) -> Result<Value, String> {
-    let mut guard = authority.0.lock().map_err(|_| "BLOCK_TRUST_STATE_CAS".to_owned())?;
+    let mut guard = authority
+        .0
+        .lock()
+        .map_err(|_| "BLOCK_TRUST_STATE_CAS".to_owned())?;
     let persisted_raw = keychain::read().map_err(str::to_owned)?;
     let persisted = persisted_raw
         .as_deref()
@@ -52,9 +58,13 @@ pub fn verify_and_commit_trust_update(
 
     let verified = verify_update(&request, persisted.as_ref()).map_err(str::to_owned)?;
     let generation_before = persisted.as_ref().map_or(0, |state| state.generation);
-    let generation_after = generation_before.checked_add(1).ok_or("BLOCK_TRUST_STATE_CAS")?;
+    let generation_after = generation_before
+        .checked_add(1)
+        .ok_or("BLOCK_TRUST_STATE_CAS")?;
     let issued_at = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
-    let previous_receipt = persisted.as_ref().and_then(|state| state.previous_trusted_state_receipt_digest.clone());
+    let previous_receipt = persisted
+        .as_ref()
+        .and_then(|state| state.previous_trusted_state_receipt_digest.clone());
     let mut candidate = TrustedState {
         schema_version: STATE_SCHEMA.into(),
         policy_id: "butler-firstscreen-trust".into(),
@@ -105,8 +115,10 @@ pub fn verify_and_commit_trust_update(
     receipt.receipt_digest = receipt_digest(&receipt).map_err(str::to_owned)?;
     candidate.previous_trusted_state_receipt_digest = Some(receipt.receipt_digest.clone());
     let encoded = canonical(&candidate).map_err(str::to_owned)?;
-    let read_back = keychain::compare_and_swap(generation_before, &encoded).map_err(str::to_owned)?;
-    let confirmed: TrustedState = serde_json::from_slice(&read_back).map_err(|_| "BLOCK_TRUST_STATE_CAS")?;
+    let read_back =
+        keychain::compare_and_swap(generation_before, &encoded).map_err(str::to_owned)?;
+    let confirmed: TrustedState =
+        serde_json::from_slice(&read_back).map_err(|_| "BLOCK_TRUST_STATE_CAS")?;
     revalidate_persisted_state(&confirmed).map_err(str::to_owned)?;
     if committed_state_digest(&confirmed).map_err(str::to_owned)? != receipt.committed_state_digest
         || confirmed.previous_trusted_state_receipt_digest.as_deref()

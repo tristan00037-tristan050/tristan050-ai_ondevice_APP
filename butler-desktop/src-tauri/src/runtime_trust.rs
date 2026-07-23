@@ -11,6 +11,5 @@ mod state;
 mod verifier;
 
 pub use commands::{
-    get_runtime_trust_status, initialize_authority, verify_and_commit_trust_update,
-    AuthorityState,
+    get_runtime_trust_status, initialize_authority, verify_and_commit_trust_update, AuthorityState,
 };
