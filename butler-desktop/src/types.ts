@@ -37,6 +37,8 @@ export interface Message {
   role: 'user' | 'butler';
   content: string;
   timestamp: string;
+  /** Durable one-based sequence assigned by the product store. */
+  sequence?: number;
   source?: 'factpack' | 'llm';
   fact_id?: string;
   score?: number;
@@ -102,7 +104,19 @@ export interface HomeSnapshot {
   startup: HomeStartupStatus;
   total_conversation_count: number;
   filtered_conversation_count: number;
+  inventory_digest: string;
   active_profile_filter?: string | null;
+}
+
+export type HomeInventoryState = 'LOADING' | 'PARTIAL' | 'LOCKED' | 'ERROR' | 'COMPLETE';
+
+export interface ConversationMessageInventory {
+  state: Exclude<HomeInventoryState, 'LOADING'>;
+  messages: Message[];
+  expected_count: number;
+  loaded_count: number;
+  next_sequence: number | null;
+  error_code: string | null;
 }
 
 export interface RuntimeStatus {
