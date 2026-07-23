@@ -17,7 +17,13 @@ from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.write_build_info import validated_build_info_payload
+# TEMPORARY: main's v5.7 rework privatized the seven-field stamp builder as
+# scripts.write_build_info._validated_payload (dropping the public
+# validated_build_info_payload). We call the private helper here so this
+# FirstScreen safe-source archive keeps its exact stamp contract without
+# re-adding a firstscreen-specific API to main's file. Cleanup item: add a
+# public wrapper to main and switch this import back (tracked in PR #868).
+from scripts.write_build_info import _validated_payload
 from scripts.release.firstscreen_source_contracts import (
     PORTABLE_PATH_POLICY,
     PROTECTED_CONTRACT_ID,
@@ -105,14 +111,16 @@ def main() -> int:
     timestamp_utc = datetime.fromtimestamp(commit_timestamp, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     describe = git("describe", "--always", commit).decode().strip()
     package = json.loads(Path("butler-desktop/package.json").read_text(encoding="utf-8"))
-    build_stamp = validated_build_info_payload(
+    build_stamp = _validated_payload(
         build_oid=commit,
-        tree_oid=tree,
+        build_tree_oid=tree,
         git_describe=describe,
         timestamp_utc=timestamp_utc,
         app_version=str(package["version"]),
-        builder="build_safe_source_archive.py",
     )
+    # _validated_payload hardcodes builder="build_complete_app.sh"; restore the
+    # archive's own builder label so the stamp bytes are unchanged from before.
+    build_stamp["builder"] = "build_safe_source_archive.py"
     build_stamp_bytes = (json.dumps(build_stamp, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
     entries = git("ls-tree", "-r", "-z", commit).split(b"\0")
     parsed_entries: list[tuple[str, str, str, str]] = []
