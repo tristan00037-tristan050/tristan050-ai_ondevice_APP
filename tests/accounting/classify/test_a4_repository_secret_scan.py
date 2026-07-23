@@ -111,7 +111,7 @@ def test_scanner_fails_closed_for_oversized_blobs(tmp_path: Path) -> None:
 
 def _baseline_document(finding: scanner.Finding, *, source_head: str) -> dict[str, object]:
     return {
-        "schema_version": "butler.box5.a4.secret_scan_baseline.v5.5",
+        "schema_version": scanner._BASELINE_SCHEMA,
         "entries": [
             {
                 "scope": finding.scope,
@@ -121,21 +121,126 @@ def _baseline_document(finding: scanner.Finding, *, source_head: str) -> dict[st
                 "reason": "AUDITED_NON_SECRET_FIXTURE_OR_PLACEHOLDER",
             }
         ],
+        "raw_paths_included": False,
+        "raw_values_included": False,
         "source_head": source_head,
     }
 
 
-def test_baseline_suppresses_only_the_exact_audited_line(tmp_path: Path) -> None:
+def _approval_repo(tmp_path: Path) -> Path:
+    repo = _repo(tmp_path)
+    (repo / "README.md").write_text("approval test\n", encoding="utf-8")
+    _commit(repo, "approval base")
+    return repo
+
+
+def _signer(tmp_path: Path, name: str = "approver") -> tuple[Path, str]:
+    key = tmp_path / name
+    subprocess.run(
+        ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)],
+        check=True,
+        capture_output=True,
+    )
+    output = subprocess.run(
+        ["ssh-keygen", "-lf", str(key) + ".pub", "-E", "sha256"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    fingerprint = next(part for part in output.split() if part.startswith("SHA256:"))
+    return key, fingerprint
+
+
+def _write_baseline_with_manifest(
+    tmp_path: Path,
+    finding: scanner.Finding,
+    *,
+    source_head: str,
+    signer: Path,
+    manifest_head: str | None = None,
+    namespace: str = scanner._BASELINE_SIGNATURE_NAMESPACE,
+) -> tuple[Path, Path, Path]:
+    baseline = tmp_path / "baseline.json"
+    payload = (
+        json.dumps(
+            _baseline_document(finding, source_head=source_head),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+    baseline.write_bytes(payload)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": scanner._BASELINE_MANIFEST_SCHEMA,
+                "approved_source_head": manifest_head or source_head,
+                "baseline_sha256": hashlib.sha256(payload).hexdigest(),
+                "entry_count": 1,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    subprocess.run(
+        [
+            "ssh-keygen",
+            "-Y",
+            "sign",
+            "-f",
+            str(signer),
+            "-n",
+            namespace,
+            str(manifest),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    return baseline, manifest, Path(str(manifest) + ".sig")
+
+
+def _verify_approval(
+    *,
+    repo: Path,
+    baseline: Path,
+    manifest: Path,
+    signature: Path,
+    fingerprint: str,
+) -> scanner.BaselineApproval:
+    return scanner.verify_baseline_approval(
+        baseline,
+        manifest,
+        signature,
+        fingerprint,
+        _rev(repo),
+        repo=repo,
+    )
+
+
+def test_baseline_manifest_accepts_pinned_baseline(tmp_path: Path) -> None:
+    repo = _approval_repo(tmp_path)
+    signer, fingerprint = _signer(tmp_path)
     token = "gh" + "p_" + "Qz7mN2Vk9Lp4Rw8Hs6Yt3Bc5Df1Gj0Xa"
     finding = scanner.scan_payload(
         scope="tracked", object_id="blob", path="tests/fixture.txt", payload=token.encode()
     )[0]
-    baseline = tmp_path / "baseline.json"
-    baseline.write_text(json.dumps(_baseline_document(finding, source_head="0" * 40)), encoding="utf-8")
-    summary = scanner.ScanSummary(1, 0, (finding,), ())
-    suppressed = scanner.apply_baseline(summary, baseline)
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path, finding, source_head=_rev(repo), signer=signer
+    )
+    approval = _verify_approval(
+        repo=repo,
+        baseline=baseline,
+        manifest=manifest,
+        signature=signature,
+        fingerprint=fingerprint,
+    )
+    suppressed = scanner.apply_baseline(scanner.ScanSummary(1, 0, (finding,), ()), approval)
     assert suppressed.ok is True
     assert suppressed.baseline_suppressed == 1
+    assert suppressed.baseline_approval == "VERIFIED"
 
     changed = scanner.scan_payload(
         scope="tracked",
@@ -144,72 +249,335 @@ def test_baseline_suppresses_only_the_exact_audited_line(tmp_path: Path) -> None
         payload=(token + "Z").encode(),
     )[0]
     unsuppressed = scanner.apply_baseline(
-        scanner.ScanSummary(1, 0, (changed,), ()), baseline
+        scanner.ScanSummary(1, 0, (changed,), ()), approval
     )
     assert unsuppressed.ok is False
 
 
-def _write_baseline_with_manifest(
-    tmp_path: Path, finding: scanner.Finding, *, source_head: str, manifest_head: str | None = None
-) -> tuple[Path, Path]:
-    baseline = tmp_path / "baseline.json"
-    payload = json.dumps(_baseline_document(finding, source_head=source_head)).encode("utf-8")
-    baseline.write_bytes(payload)
-    manifest = tmp_path / "manifest.json"
-    manifest.write_text(
-        json.dumps(
-            {
-                "schema_version": "butler.box5.a4.secret_scan_baseline_manifest.v5.6",
-                "approved_source_head": manifest_head or source_head,
-                "baseline_sha256": hashlib.sha256(payload).hexdigest(),
-                "entry_count": 1,
-            }
-        ),
-        encoding="utf-8",
-    )
-    return baseline, manifest
-
-
-def test_baseline_manifest_accepts_pinned_baseline(tmp_path: Path) -> None:
-    token = "gh" + "p_" + "Qz7mN2Vk9Lp4Rw8Hs6Yt3Bc5Df1Gj0Xa"
-    finding = scanner.scan_payload(
-        scope="tracked", object_id="blob", path="tests/fixture.txt", payload=token.encode()
-    )[0]
-    baseline, manifest = _write_baseline_with_manifest(tmp_path, finding, source_head="a" * 40)
-    suppressed = scanner.apply_baseline(
-        scanner.ScanSummary(1, 0, (finding,), ()), baseline, manifest_path=manifest
-    )
-    assert suppressed.ok is True
-    assert suppressed.baseline_suppressed == 1
-
-
 def test_baseline_manifest_blocks_entry_tampering(tmp_path: Path) -> None:
+    repo = _approval_repo(tmp_path)
+    signer, fingerprint = _signer(tmp_path)
     token = "gh" + "p_" + "Qz7mN2Vk9Lp4Rw8Hs6Yt3Bc5Df1Gj0Xa"
     finding = scanner.scan_payload(
         scope="tracked", object_id="blob", path="tests/fixture.txt", payload=token.encode()
     )[0]
-    baseline, manifest = _write_baseline_with_manifest(tmp_path, finding, source_head="a" * 40)
-    # Silently append a byte to the baseline without updating the protected manifest.
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path, finding, source_head=_rev(repo), signer=signer
+    )
     baseline.write_bytes(baseline.read_bytes() + b" ")
-    with pytest.raises(ValueError):
-        scanner.apply_baseline(
-            scanner.ScanSummary(1, 0, (finding,), ()), baseline, manifest_path=manifest
+    with pytest.raises(scanner.BaselineApprovalError):
+        _verify_approval(
+            repo=repo,
+            baseline=baseline,
+            manifest=manifest,
+            signature=signature,
+            fingerprint=fingerprint,
         )
 
 
 def test_baseline_manifest_blocks_source_head_drift(tmp_path: Path) -> None:
+    repo = _approval_repo(tmp_path)
+    signer, fingerprint = _signer(tmp_path)
     token = "gh" + "p_" + "Qz7mN2Vk9Lp4Rw8Hs6Yt3Bc5Df1Gj0Xa"
     finding = scanner.scan_payload(
         scope="tracked", object_id="blob", path="tests/fixture.txt", payload=token.encode()
     )[0]
-    # Manifest approves head 'b'*40 but the baseline was generated at 'a'*40.
-    baseline, manifest = _write_baseline_with_manifest(
-        tmp_path, finding, source_head="a" * 40, manifest_head="b" * 40
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path,
+        finding,
+        source_head=_rev(repo),
+        manifest_head="b" * 40,
+        signer=signer,
     )
-    with pytest.raises(ValueError):
-        scanner.apply_baseline(
-            scanner.ScanSummary(1, 0, (finding,), ()), baseline, manifest_path=manifest
+    with pytest.raises(scanner.BaselineApprovalError):
+        _verify_approval(
+            repo=repo,
+            baseline=baseline,
+            manifest=manifest,
+            signature=signature,
+            fingerprint=fingerprint,
         )
+
+
+def test_ab01_baseline_and_manifest_co_update_without_new_signature_is_blocked(
+    tmp_path: Path,
+) -> None:
+    repo = _approval_repo(tmp_path)
+    signer, fingerprint = _signer(tmp_path)
+    finding = _history_finding()
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path, finding, source_head=_rev(repo), signer=signer
+    )
+    second = scanner.scan_payload(
+        scope="history",
+        object_id="b" * 40,
+        path="different.txt",
+        payload=("gh" + "p_" + "Vx8tL4Nk2Qw9Rs6Yp3Hd7Jm5Bc1Fa0Ze").encode(),
+    )[0]
+    baseline_document = json.loads(baseline.read_text(encoding="utf-8"))
+    baseline_document["entries"].append(
+        {
+            "scope": second.scope,
+            "rule_id": second.rule_id,
+            "path_digest": second.path_digest,
+            "line_digest": second.line_digest,
+            "reason": "AUDITED_NON_SECRET_FIXTURE_OR_PLACEHOLDER",
+        }
+    )
+    baseline_bytes = (
+        json.dumps(baseline_document, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode("utf-8")
+    baseline.write_bytes(baseline_bytes)
+    manifest_document = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_document["baseline_sha256"] = hashlib.sha256(baseline_bytes).hexdigest()
+    manifest_document["entry_count"] = 2
+    manifest.write_text(
+        json.dumps(manifest_document, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(scanner.BaselineApprovalError):
+        _verify_approval(
+            repo=repo,
+            baseline=baseline,
+            manifest=manifest,
+            signature=signature,
+            fingerprint=fingerprint,
+        )
+
+
+def test_ab02_repository_self_signed_approval_is_rejected_by_production_pin(
+    tmp_path: Path,
+) -> None:
+    repo = _approval_repo(tmp_path)
+    _, production_fingerprint = _signer(tmp_path, "production")
+    attacker, _ = _signer(tmp_path, "attacker")
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path, _history_finding(), source_head=_rev(repo), signer=attacker
+    )
+
+    with pytest.raises(scanner.BaselineApprovalError):
+        _verify_approval(
+            repo=repo,
+            baseline=baseline,
+            manifest=manifest,
+            signature=signature,
+            fingerprint=production_fingerprint,
+        )
+
+
+def test_ab03_manifest_cannot_replace_the_external_approver_fingerprint(tmp_path: Path) -> None:
+    repo = _approval_repo(tmp_path)
+    signer, fingerprint = _signer(tmp_path)
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path, _history_finding(), source_head=_rev(repo), signer=signer
+    )
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    document["pinned_fingerprint"] = fingerprint
+    manifest.write_text(
+        json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(scanner.BaselineApprovalError):
+        _verify_approval(
+            repo=repo,
+            baseline=baseline,
+            manifest=manifest,
+            signature=signature,
+            fingerprint=fingerprint,
+        )
+
+
+def test_ab04_repository_allowed_signers_file_cannot_expand_trust(tmp_path: Path) -> None:
+    repo = _approval_repo(tmp_path)
+    _, production_fingerprint = _signer(tmp_path, "production")
+    attacker, _ = _signer(tmp_path, "attacker")
+    (repo / "allowed_signers").write_text(
+        "attacker " + Path(str(attacker) + ".pub").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    _commit(repo, "untrusted signers file")
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path, _history_finding(), source_head=_rev(repo), signer=attacker
+    )
+
+    with pytest.raises(scanner.BaselineApprovalError):
+        _verify_approval(
+            repo=repo,
+            baseline=baseline,
+            manifest=manifest,
+            signature=signature,
+            fingerprint=production_fingerprint,
+        )
+
+
+def test_ab05_missing_detached_signature_is_blocked(tmp_path: Path) -> None:
+    repo = _approval_repo(tmp_path)
+    signer, fingerprint = _signer(tmp_path)
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path, _history_finding(), source_head=_rev(repo), signer=signer
+    )
+    signature.unlink()
+
+    with pytest.raises(scanner.BaselineApprovalError):
+        _verify_approval(
+            repo=repo,
+            baseline=baseline,
+            manifest=manifest,
+            signature=signature,
+            fingerprint=fingerprint,
+        )
+
+
+def test_ab06_signature_from_another_namespace_is_blocked(tmp_path: Path) -> None:
+    repo = _approval_repo(tmp_path)
+    signer, fingerprint = _signer(tmp_path)
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path,
+        _history_finding(),
+        source_head=_rev(repo),
+        signer=signer,
+        namespace="another-namespace",
+    )
+
+    with pytest.raises(scanner.BaselineApprovalError):
+        _verify_approval(
+            repo=repo,
+            baseline=baseline,
+            manifest=manifest,
+            signature=signature,
+            fingerprint=fingerprint,
+        )
+
+
+def test_ab07_approval_source_head_must_be_reachable_from_scan_head(tmp_path: Path) -> None:
+    repo = _approval_repo(tmp_path)
+    base_head = _rev(repo)
+    _git(repo, "checkout", "-q", "-b", "unrelated")
+    (repo / "unrelated.txt").write_text("unrelated\n", encoding="utf-8")
+    _commit(repo, "unrelated approval source")
+    unrelated_head = _rev(repo)
+    _git(repo, "checkout", "-q", base_head)
+    signer, fingerprint = _signer(tmp_path)
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path, _history_finding(), source_head=unrelated_head, signer=signer
+    )
+
+    with pytest.raises(scanner.BaselineApprovalError):
+        _verify_approval(
+            repo=repo,
+            baseline=baseline,
+            manifest=manifest,
+            signature=signature,
+            fingerprint=fingerprint,
+        )
+
+
+def test_ab08_baseline_entry_removal_without_resigning_is_blocked(tmp_path: Path) -> None:
+    repo = _approval_repo(tmp_path)
+    signer, fingerprint = _signer(tmp_path)
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path, _history_finding(), source_head=_rev(repo), signer=signer
+    )
+    document = json.loads(baseline.read_text(encoding="utf-8"))
+    document["entries"] = []
+    baseline.write_text(
+        json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(scanner.BaselineApprovalError):
+        _verify_approval(
+            repo=repo,
+            baseline=baseline,
+            manifest=manifest,
+            signature=signature,
+            fingerprint=fingerprint,
+        )
+
+
+def test_production_cli_rejects_ephemeral_signer_and_suppresses_zero_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = _repo(tmp_path)
+    token = "gh" + "p_" + "Qz7mN2Vk9Lp4Rw8Hs6Yt3Bc5Df1Gj0Xa"
+    (repo / "fixture.txt").write_text(token + "\n", encoding="utf-8")
+    _commit(repo, "fixture")
+    finding = next(item for item in scanner.scan_repository(repo).findings if item.scope == "tracked")
+    signer, _ = _signer(tmp_path)
+    baseline, manifest, signature = _write_baseline_with_manifest(
+        tmp_path, finding, source_head=_rev(repo), signer=signer
+    )
+    monkeypatch.setenv(
+        scanner._BASELINE_APPROVER_FINGERPRINT_ENV,
+        "SHA256:8JMrjrlD8gzcIqf6sU+yTzgFjlZ/oJNUWpPLcTC0qa0",
+    )
+
+    result = scanner.main(
+        [
+            "--repo",
+            str(repo),
+            "--baseline",
+            str(baseline),
+            "--baseline-manifest",
+            str(manifest),
+            "--baseline-manifest-signature",
+            str(signature),
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert result == 1
+    assert "BASELINE_APPROVAL=UNVERIFIED" in output
+    assert "METRIC_BASELINE_SUPPRESSED=0" in output
+    assert "ERROR_CODE=BASELINE_APPROVAL_UNVERIFIED" in output
+
+
+def test_ab10_product_export_signing_has_no_dev_fallback_and_blocks_missing_secret(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[3]
+    helpers = (
+        root
+        / "webcore_appcore_starter_4_17/packages/service-core-accounting/src/exportSigningSecret.ts",
+        root
+        / "webcore_appcore_starter_4_17/packages/collector-node-ts/src/security/exportSigningSecret.ts",
+    )
+    product_sources = (
+        root / "webcore_appcore_starter_4_17/packages/service-core-accounting/src/exports.ts",
+        root / "webcore_appcore_starter_4_17/packages/collector-node-ts/src/routes/reports.ts",
+        root / "webcore_appcore_starter_4_17/packages/collector-node-ts/src/mw/auth.ts",
+        *helpers,
+    )
+    rendered = "\n".join(path.read_text(encoding="utf-8") for path in product_sources)
+    assert "dev" + "-secret" not in rendered
+    assert "dev" + "-export-secret" not in rendered
+    assert rendered.count("requireExportSignSecret()") >= 3
+
+    imports = "\n".join(
+        f"import {{ requireExportSignSecret as s{index} }} from {json.dumps(path.as_uri())};"
+        for index, path in enumerate(helpers)
+    )
+    checks = "\n".join(
+        f"try {{ s{index}({{}}); process.exit(10 + {index}); }} "
+        f"catch (error) {{ if (error.status !== 503) process.exit(20 + {index}); }}"
+        for index in range(len(helpers))
+    )
+    completed = subprocess.run(
+        [
+            "node",
+            "--experimental-strip-types",
+            "--input-type=module",
+            "--eval",
+            imports + "\n" + checks,
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0
 
 
 # --------------------------------------------------------------------------- #

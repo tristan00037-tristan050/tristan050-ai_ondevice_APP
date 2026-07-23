@@ -79,7 +79,7 @@ VITE_TENANT=prod
 ```bash
 cd packages/collector-node-ts
 export API_KEYS="default:collector-key"
-export EXPORT_SIGN_SECRET=dev-secret
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 export RETAIN_DAYS=30
 npm start
 # http://localhost:9090
@@ -236,5 +236,4 @@ npm run preview
 - Netlify
 - AWS S3 + CloudFront
 - GitHub Pages
-
 

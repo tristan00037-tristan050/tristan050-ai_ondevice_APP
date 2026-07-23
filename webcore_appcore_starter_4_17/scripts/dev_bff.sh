@@ -26,7 +26,8 @@ fi
 
 # --- DB env ---
 export USE_PG=1
-export EXPORT_SIGN_SECRET="${EXPORT_SIGN_SECRET:-dev-export-secret}"
+: "${EXPORT_SIGN_SECRET:?EXPORT_SIGN_SECRET must be supplied by the local secret store}"
+export EXPORT_SIGN_SECRET
 export DATABASE_URL="${DATABASE_URL:-postgres://app:app@127.0.0.1:5432/app}"
 
 export PGHOST="${PGHOST:-127.0.0.1}"

@@ -307,7 +307,7 @@ packages/ops-console/
 export API_KEYS="default:collector-key,teamA:teamA-key"
 
 # 서명 시크릿
-export EXPORT_SIGN_SECRET=dev-secret
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 
 # 보존 기간 (일)
 export RETAIN_DAYS=30
@@ -329,7 +329,7 @@ VITE_PERMISSION=download  # 'read-only' 또는 'download'
 ```bash
 cd packages/collector-node-ts
 export API_KEYS="default:collector-key"
-export EXPORT_SIGN_SECRET=dev-secret
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 export RETAIN_DAYS=30
 npm install
 npm run build
@@ -376,5 +376,4 @@ npm run dev
 **버전**: R5d 서버사이드 완전 구현 v3
 **날짜**: 2025-01-XX
 **기준선**: web-core-4.17.0(4054c04)
-
 

@@ -27,7 +27,7 @@ npm run build
 
 ```bash
 export API_KEYS="default:collector-key"
-export EXPORT_SIGN_SECRET=dev-secret
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 export RETAIN_DAYS=30
 npm start
 ```
@@ -40,5 +40,4 @@ ESM 모듈에서는 import 경로에 `.js` 확장자가 필요할 수 있습니�
 ```typescript
 const reportsModule = await import('./routes/reports.js');
 ```
-
 

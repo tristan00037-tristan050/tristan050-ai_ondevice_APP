@@ -6,6 +6,7 @@
 
 import crypto from 'node:crypto';
 import { PgExportRepo, type ExportJobRow } from '@appcore/data-pg';
+import { requireExportSignSecret } from './exportSigningSecret.js';
 
 export type ExportFilters = {
   since?: string;
@@ -37,17 +38,12 @@ const memIdem = new Map<string, string>(); // tenant:idem → jobId
 const usePg = process.env.USE_PG === '1';
 const pgRepo = usePg ? new PgExportRepo() : null;
 
-function secret(): string {
-  return process.env.EXPORT_SIGN_SECRET ?? 'dev-export-secret';
-}
-
 function hmac(secret: string, msg: string) {
   return crypto.createHmac('sha256', secret).update(msg).digest('hex');
 }
 
 export function signExport(manifest: string, expiresAtIso: string) {
-  const cur = process.env.EXPORT_SIGN_SECRET ?? '';
-  if (!cur) throw Object.assign(new Error('missing_export_sign_secret'), { status: 500 });
+  const cur = requireExportSignSecret();
   const base = `${manifest}|${expiresAtIso}`;
   return hmac(cur, base);
 }

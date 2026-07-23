@@ -374,7 +374,7 @@ packages/ops-console/
 export API_KEYS="default:collector-key,teamA:teamA-key"
 
 # 서명 시크릿
-export EXPORT_SIGN_SECRET=dev-secret
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 
 # 보존 기간 (일)
 export RETAIN_DAYS=30
@@ -396,7 +396,7 @@ VITE_PERMISSION=download  # 'read-only' 또는 'download'
 ```bash
 cd packages/collector-node-ts
 export API_KEYS="default:collector-key"
-export EXPORT_SIGN_SECRET=dev-secret
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 export RETAIN_DAYS=30
 npm install
 npm run build
@@ -445,5 +445,4 @@ npm run dev
 **날짜**: 2025-01-XX
 **기준선**: web-core-4.17.0(4054c04)
 **P0 결함**: 해결 완료
-
 

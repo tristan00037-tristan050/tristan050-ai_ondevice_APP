@@ -107,7 +107,8 @@ fi
 export PORT=$PORT
 export USE_PG="${USE_PG:-1}"
 export DATABASE_URL="${DATABASE_URL:-postgres://app:app@127.0.0.1:5432/app}"
-export EXPORT_SIGN_SECRET="${EXPORT_SIGN_SECRET:-dev-export-secret}"
+: "${EXPORT_SIGN_SECRET:?EXPORT_SIGN_SECRET must be supplied by the local secret store}"
+export EXPORT_SIGN_SECRET
 
 # 서버 시작 (백그라운드)
 echo "서버를 시작합니다..."
@@ -177,4 +178,3 @@ echo "서버를 종료하려면:"
 echo "   kill $SERVER_PID"
 echo "   또는: kill \$(cat $PID_FILE)"
 echo ""
-

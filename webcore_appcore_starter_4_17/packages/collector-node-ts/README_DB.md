@@ -56,7 +56,7 @@ DB_PASSWORD=postgres
 
 # 기존 환경 변수 (유지)
 API_KEYS="default:collector-key,teamA:teamA-key"
-EXPORT_SIGN_SECRET=dev-secret
+EXPORT_SIGN_SECRET=<read-from-local-secret-store>
 RETAIN_DAYS=30
 ```
 
@@ -194,5 +194,4 @@ EXPLAIN ANALYZE SELECT * FROM reports WHERE tenant_id = 'default';
 - `docs/PHASE_5_4_KICKOFF.md` - Phase 5.4 킥오프 문서
 - `src/db/schema.sql` - 데이터베이스 스키마
 - `src/db/client.ts` - 데이터베이스 클라이언트
-
 

@@ -118,7 +118,7 @@ export DB_NAME=collector
 export DB_USER=postgres
 export DB_PASSWORD=postgres
 export API_KEYS="default:collector-key"
-export EXPORT_SIGN_SECRET=dev-secret
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 export RETAIN_DAYS=30
 export ENCRYPTION_KEY=dev-encryption-key
 
@@ -300,5 +300,4 @@ Phase 5.4 작업이 완료되었습니다. 다음 단계 제안:
 **버전**: Phase 5.4 완료 v1
 **날짜**: 2025-01-XX
 **상태**: ✅ 모든 Phase 5.4 작업 완료
-
 

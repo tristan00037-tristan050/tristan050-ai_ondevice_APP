@@ -16,7 +16,7 @@ cd packages/collector-node-ts
 
 # 환경 변수 설정
 export API_KEYS="default:collector-key"
-export EXPORT_SIGN_SECRET=dev-secret
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 export RETAIN_DAYS=30
 
 # 의존성 설치 (처음 한 번만)
@@ -84,7 +84,7 @@ pwd
 
 ```bash
 # Collector
-cd packages/collector-node-ts && export API_KEYS="default:collector-key" && export EXPORT_SIGN_SECRET=dev-secret && export RETAIN_DAYS=30 && npm install && npm run build && npm start
+cd packages/collector-node-ts && export API_KEYS="default:collector-key" && export EXPORT_SIGN_SECRET='<read-from-local-secret-store>' && export RETAIN_DAYS=30 && npm install && npm run build && npm start
 
 # Ops Console (새 터미널)
 cd packages/ops-console && npm install && npm run dev
@@ -103,5 +103,4 @@ curl http://localhost:9090/health
 ### Ops Console이 정상 실행되었는지 확인
 
 브라우저에서 `http://localhost:5173` 접속 시 Ops Console이 표시되어야 합니다.
-
 

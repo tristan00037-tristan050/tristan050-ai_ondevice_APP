@@ -17,12 +17,14 @@ import json
 import math
 import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, Optional, Sequence
 
@@ -35,6 +37,17 @@ MAX_DECODED_CANDIDATE_BYTES = 16 * 1024
 # self-attested rotation is honest but insufficient; a blocked rotation is
 # outstanding. Only COMPLETE_VERIFIED (network-proven) or NOT_PROVIDED pass.
 _NON_PASSING_ROTATION_STATES = frozenset({"BLOCKED_EXTERNAL", "COMPLETE_SELF_ATTESTED"})
+_BASELINE_APPROVAL_VERIFIED = "VERIFIED"
+_BASELINE_APPROVAL_UNVERIFIED = "UNVERIFIED"
+_BASELINE_APPROVER_FINGERPRINT_ENV = "A4_BASELINE_APPROVER_FINGERPRINT"
+_BASELINE_SIGNATURE_NAMESPACE = "butler-a4-secret-baseline"
+_BASELINE_MANIFEST_SCHEMA = "butler.box5.a4.secret_scan_baseline_manifest.v5.7"
+_BASELINE_SCHEMA = "butler.box5.a4.secret_scan_baseline.v5.5"
+_MAX_BASELINE_BYTES = 8 * 1024 * 1024
+_MAX_BASELINE_MANIFEST_BYTES = 64 * 1024
+_MAX_BASELINE_SIGNATURE_BYTES = 64 * 1024
+_OPENSSH_SHA256_FINGERPRINT_RE = re.compile(r"SHA256:[A-Za-z0-9+/]{43}")
+_TRUSTED_SSH_KEYGEN_PATHS = (Path("/usr/bin/ssh-keygen"), Path("/bin/ssh-keygen"))
 
 
 @dataclass(frozen=True)
@@ -72,15 +85,33 @@ class ScanSummary:
     stale_baseline_entries: int = 0
     rotation_suppressed: int = 0
     rotation_evidence_status: str = "NOT_PROVIDED"
+    baseline_approval: str = _BASELINE_APPROVAL_UNVERIFIED
+    baseline_entries: int = 0
+    baseline_source_head: str = "NONE"
+    baseline_required: bool = False
 
     @property
     def ok(self) -> bool:
         if self.findings or self.errors:
             return False
+        if self.baseline_required and self.baseline_approval != _BASELINE_APPROVAL_VERIFIED:
+            return False
         # Only a positively network-verified rotation, or the absence of any
         # rotation claim, may leave the gate open. Self-attested and blocked
         # states never pass even when no finding happens to remain reachable.
         return self.rotation_evidence_status not in _NON_PASSING_ROTATION_STATES
+
+
+@dataclass(frozen=True)
+class BaselineApproval:
+    baseline_sha256: str
+    entry_count: int
+    source_head: str
+    baseline_keys: frozenset[tuple[str, str, str, str]]
+
+
+class BaselineApprovalError(ValueError):
+    """The external baseline approval could not be verified."""
 
 
 DIRECT_RULES: tuple[SecretRule, ...] = (
@@ -387,7 +418,6 @@ def _finding_baseline_key(item: Finding) -> tuple[str, str, str, str]:
     return item.scope, item.rule_id, item.path_digest, item.line_digest
 
 
-_BASELINE_MANIFEST_SCHEMA = "butler.box5.a4.secret_scan_baseline_manifest.v5.6"
 _BASELINE_MANIFEST_FIELDS = {
     "schema_version",
     "approved_source_head",
@@ -396,85 +426,241 @@ _BASELINE_MANIFEST_FIELDS = {
 }
 
 
-def enforce_baseline_manifest(baseline_path: Path, manifest_path: Path) -> None:
-    """Pin the audited secret baseline to a protected approval manifest.
+def _read_stable_regular_file(path: Path, *, max_bytes: int) -> bytes:
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise BaselineApprovalError("baseline approval file is unavailable") from exc
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_size < 0 or before.st_size > max_bytes:
+            raise BaselineApprovalError("baseline approval file is invalid")
+        chunks: list[bytes] = []
+        remaining = before.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+            if not chunk:
+                raise BaselineApprovalError("baseline approval file is truncated")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise BaselineApprovalError("baseline approval file changed while reading")
+        after = os.fstat(descriptor)
+        identity_before = (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        )
+        identity_after = (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+        )
+        if identity_before != identity_after:
+            raise BaselineApprovalError("baseline approval file changed while reading")
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
 
-    The manifest fixes (a) the exact byte digest of the baseline file and (b) the
-    approved ``source_head`` the baseline was generated against. Any silent edit
-    to the baseline entries, or a baseline regenerated at a different head, breaks
-    one of these bindings and fails the scan closed rather than trusting the
-    unreviewed baseline.
-    """
 
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if not isinstance(manifest, dict) or set(manifest) != _BASELINE_MANIFEST_FIELDS:
-        raise ValueError("secret scan baseline manifest is invalid")
-    if manifest.get("schema_version") != _BASELINE_MANIFEST_SCHEMA:
-        raise ValueError("secret scan baseline manifest schema is invalid")
-    if not re.fullmatch(r"[0-9a-f]{40}", str(manifest.get("approved_source_head"))):
-        raise ValueError("secret scan baseline manifest source head is invalid")
-    if not re.fullmatch(r"[0-9a-f]{64}", str(manifest.get("baseline_sha256"))):
-        raise ValueError("secret scan baseline manifest digest is invalid")
-    if not isinstance(manifest.get("entry_count"), int) or manifest["entry_count"] < 0:
-        raise ValueError("secret scan baseline manifest entry count is invalid")
-
-    baseline_bytes = baseline_path.read_bytes()
-    actual_digest = hashlib.sha256(baseline_bytes).hexdigest()
-    if not hmac.compare_digest(actual_digest, manifest["baseline_sha256"]):
-        raise ValueError("secret scan baseline does not match the approved manifest digest")
-
-    document = json.loads(baseline_bytes.decode("utf-8"))
-    if not isinstance(document, dict):
-        raise ValueError("secret scan baseline is invalid")
-    if document.get("source_head") != manifest["approved_source_head"]:
-        raise ValueError("secret scan baseline source head is not the approved head")
-    entries = document.get("entries")
-    if not isinstance(entries, list) or len(entries) != manifest["entry_count"]:
-        raise ValueError("secret scan baseline entry count is not the approved count")
-
-
-def apply_baseline(
-    summary: ScanSummary,
-    baseline_path: Path,
-    *,
-    manifest_path: Optional[Path] = None,
-) -> ScanSummary:
-    if manifest_path is not None:
-        enforce_baseline_manifest(baseline_path, manifest_path)
-    document = json.loads(baseline_path.read_text(encoding="utf-8"))
+def _parse_baseline(baseline_bytes: bytes) -> tuple[str, frozenset[tuple[str, str, str, str]]]:
+    try:
+        document = json.loads(baseline_bytes.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise BaselineApprovalError("secret scan baseline is invalid") from exc
     if (
         not isinstance(document, dict)
-        or document.get("schema_version") != "butler.box5.a4.secret_scan_baseline.v5.5"
+        or set(document) != {
+            "entries",
+            "raw_paths_included",
+            "raw_values_included",
+            "schema_version",
+            "source_head",
+        }
+        or document.get("schema_version") != _BASELINE_SCHEMA
+        or document.get("raw_paths_included") is not False
+        or document.get("raw_values_included") is not False
+        or not re.fullmatch(r"[0-9a-f]{40}", str(document.get("source_head")))
         or not isinstance(document.get("entries"), list)
     ):
-        raise ValueError("secret scan baseline is invalid")
+        raise BaselineApprovalError("secret scan baseline is invalid")
     baseline_keys: set[tuple[str, str, str, str]] = set()
     for entry in document["entries"]:
         if not isinstance(entry, dict) or set(entry) != {
             "scope", "rule_id", "path_digest", "line_digest", "reason"
         }:
-            raise ValueError("secret scan baseline entry is invalid")
+            raise BaselineApprovalError("secret scan baseline entry is invalid")
         if entry["scope"] not in {"tracked", "history"} or entry["reason"] != "AUDITED_NON_SECRET_FIXTURE_OR_PLACEHOLDER":
-            raise ValueError("secret scan baseline entry is not auditable")
+            raise BaselineApprovalError("secret scan baseline entry is not auditable")
+        if not isinstance(entry["rule_id"], str) or not entry["rule_id"]:
+            raise BaselineApprovalError("secret scan baseline rule is invalid")
         for name in ("path_digest", "line_digest"):
             if not re.fullmatch(r"[0-9a-f]{64}", str(entry[name])):
-                raise ValueError("secret scan baseline digest is invalid")
+                raise BaselineApprovalError("secret scan baseline digest is invalid")
         baseline_keys.add(
             (entry["scope"], entry["rule_id"], entry["path_digest"], entry["line_digest"])
         )
+    if len(baseline_keys) != len(document["entries"]):
+        raise BaselineApprovalError("secret scan baseline contains duplicate entries")
+    return document["source_head"], frozenset(baseline_keys)
+
+
+def _trusted_ssh_keygen() -> Path:
+    for path in _TRUSTED_SSH_KEYGEN_PATHS:
+        if path.is_file() and os.access(path, os.X_OK):
+            return path
+    raise BaselineApprovalError("trusted ssh-keygen is unavailable")
+
+
+def _verify_sshsig(
+    manifest_bytes: bytes,
+    signature_bytes: bytes,
+    *,
+    pinned_fingerprint: str,
+) -> None:
+    if not _OPENSSH_SHA256_FINGERPRINT_RE.fullmatch(pinned_fingerprint):
+        raise BaselineApprovalError("baseline approver fingerprint is invalid")
+    with tempfile.NamedTemporaryFile(prefix="a4-baseline-", suffix=".sig", mode="w+b") as signature:
+        os.fchmod(signature.fileno(), 0o600)
+        signature.write(signature_bytes)
+        signature.flush()
+        os.fsync(signature.fileno())
+        try:
+            completed = subprocess.run(
+                [
+                    str(_trusted_ssh_keygen()),
+                    "-Y",
+                    "check-novalidate",
+                    "-n",
+                    _BASELINE_SIGNATURE_NAMESPACE,
+                    "-s",
+                    signature.name,
+                ],
+                input=manifest_bytes,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+                check=False,
+                timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise BaselineApprovalError("baseline approval signature verification failed") from exc
+    if completed.returncode != 0:
+        raise BaselineApprovalError("baseline approval signature is invalid")
+    verifier_output = (completed.stdout + completed.stderr)[:8192].decode("ascii", errors="ignore")
+    fingerprints = set(_OPENSSH_SHA256_FINGERPRINT_RE.findall(verifier_output))
+    if len(fingerprints) != 1:
+        raise BaselineApprovalError("baseline approval signer fingerprint is unavailable")
+    actual_fingerprint = next(iter(fingerprints))
+    if not hmac.compare_digest(actual_fingerprint, pinned_fingerprint):
+        raise BaselineApprovalError("baseline approval signer fingerprint does not match")
+
+
+def _is_ancestor(repo: Path, ancestor: str, descendant: str) -> bool:
+    completed = subprocess.run(
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor", ancestor, descendant],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if completed.returncode not in {0, 1}:
+        raise BaselineApprovalError("baseline source lineage could not be verified")
+    return completed.returncode == 0
+
+
+def verify_baseline_approval(
+    baseline_path: Path,
+    manifest_path: Path,
+    manifest_signature_path: Path,
+    pinned_fingerprint: str,
+    source_head: str,
+    *,
+    repo: Path,
+) -> BaselineApproval:
+    """Verify an externally signed baseline approval without trusting repository keys."""
+
+    repo = repo.resolve()
+    actual_head = _git(repo, ["rev-parse", "--verify", "HEAD"]).decode("ascii").strip()
+    if not hmac.compare_digest(actual_head, source_head):
+        raise BaselineApprovalError("baseline verification head is invalid")
+    baseline_bytes = _read_stable_regular_file(baseline_path, max_bytes=_MAX_BASELINE_BYTES)
+    manifest_bytes = _read_stable_regular_file(
+        manifest_path, max_bytes=_MAX_BASELINE_MANIFEST_BYTES
+    )
+    signature_bytes = _read_stable_regular_file(
+        manifest_signature_path, max_bytes=_MAX_BASELINE_SIGNATURE_BYTES
+    )
+    _verify_sshsig(
+        manifest_bytes,
+        signature_bytes,
+        pinned_fingerprint=pinned_fingerprint,
+    )
+
+    try:
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise BaselineApprovalError("secret scan baseline manifest is invalid") from exc
+    if not isinstance(manifest, dict) or set(manifest) != _BASELINE_MANIFEST_FIELDS:
+        raise BaselineApprovalError("secret scan baseline manifest is invalid")
+    if manifest.get("schema_version") != _BASELINE_MANIFEST_SCHEMA:
+        raise BaselineApprovalError("secret scan baseline manifest schema is invalid")
+    if not re.fullmatch(r"[0-9a-f]{40}", str(manifest.get("approved_source_head"))):
+        raise BaselineApprovalError("secret scan baseline manifest source head is invalid")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(manifest.get("baseline_sha256"))):
+        raise BaselineApprovalError("secret scan baseline manifest digest is invalid")
+    if (
+        not isinstance(manifest.get("entry_count"), int)
+        or isinstance(manifest["entry_count"], bool)
+        or manifest["entry_count"] < 0
+    ):
+        raise BaselineApprovalError("secret scan baseline manifest entry count is invalid")
+
+    actual_digest = hashlib.sha256(baseline_bytes).hexdigest()
+    if not hmac.compare_digest(actual_digest, manifest["baseline_sha256"]):
+        raise BaselineApprovalError("secret scan baseline does not match the approved manifest digest")
+    baseline_source_head, baseline_keys = _parse_baseline(baseline_bytes)
+    if not hmac.compare_digest(baseline_source_head, manifest["approved_source_head"]):
+        raise BaselineApprovalError("secret scan baseline source head is not the approved head")
+    if len(baseline_keys) != manifest["entry_count"]:
+        raise BaselineApprovalError("secret scan baseline entry count is not the approved count")
+    if not _is_ancestor(repo, baseline_source_head, source_head):
+        raise BaselineApprovalError("secret scan baseline source head is not reachable")
+    return BaselineApproval(actual_digest, len(baseline_keys), baseline_source_head, baseline_keys)
+
+
+def apply_baseline(summary: ScanSummary, approval: BaselineApproval) -> ScanSummary:
     observed_keys = {_finding_baseline_key(item) for item in summary.findings}
     remaining = tuple(
-        item for item in summary.findings if _finding_baseline_key(item) not in baseline_keys
+        item
+        for item in summary.findings
+        if _finding_baseline_key(item) not in approval.baseline_keys
     )
-    return ScanSummary(
-        summary.tracked_objects,
-        summary.history_blobs,
-        remaining,
-        summary.errors,
+    return replace(
+        summary,
+        findings=remaining,
         baseline_suppressed=len(summary.findings) - len(remaining),
-        stale_baseline_entries=len(baseline_keys - observed_keys),
-        rotation_suppressed=summary.rotation_suppressed,
-        rotation_evidence_status=summary.rotation_evidence_status,
+        stale_baseline_entries=len(approval.baseline_keys - observed_keys),
+        baseline_approval=_BASELINE_APPROVAL_VERIFIED,
+        baseline_entries=approval.entry_count,
+        baseline_source_head=approval.source_head,
+        baseline_required=True,
+    )
+
+
+def _mark_baseline_unverified(summary: ScanSummary) -> ScanSummary:
+    return replace(
+        summary,
+        baseline_suppressed=0,
+        stale_baseline_entries=0,
+        baseline_approval=_BASELINE_APPROVAL_UNVERIFIED,
+        baseline_entries=0,
+        baseline_source_head="UNVERIFIED",
+        baseline_required=True,
     )
 
 
@@ -736,16 +922,7 @@ def apply_rotation_evidence(
             raise ValueError("partial rotation completion is not accepted")
         if document.get("merge_gate") != "BLOCKED_UNTIL_ALL_ROTATION_EVIDENCE_IS_PRESENT":
             raise ValueError("secret rotation blocked merge gate is invalid")
-        return ScanSummary(
-            summary.tracked_objects,
-            summary.history_blobs,
-            summary.findings,
-            summary.errors,
-            summary.baseline_suppressed,
-            summary.stale_baseline_entries,
-            summary.rotation_suppressed,
-            "BLOCKED_EXTERNAL",
-        )
+        return replace(summary, rotation_evidence_status="BLOCKED_EXTERNAL")
     if status not in _ROTATION_COMPLETION_GATES or not all(cred.rotated for cred in validated):
         raise ValueError("secret rotation completion is invalid")
     if document.get("merge_gate") != _ROTATION_COMPLETION_GATES[status]:
@@ -754,16 +931,7 @@ def apply_rotation_evidence(
     # A self-attested completion is an honest record of an unverified rotation. It
     # keeps the finding and never opens the gate.
     if status == "COMPLETE_SELF_ATTESTED":
-        return ScanSummary(
-            summary.tracked_objects,
-            summary.history_blobs,
-            summary.findings,
-            summary.errors,
-            summary.baseline_suppressed,
-            summary.stale_baseline_entries,
-            summary.rotation_suppressed,
-            "COMPLETE_SELF_ATTESTED",
-        )
+        return replace(summary, rotation_evidence_status="COMPLETE_SELF_ATTESTED")
 
     # status == "COMPLETE_VERIFIED": perform the real, network-backed verification.
     # Every credential must reference the single pinned comment.
@@ -793,15 +961,13 @@ def apply_rotation_evidence(
         for item in summary.findings
         if (item.scope, item.object_id, item.path_digest, item.rule_id, item.line_digest) != target
     )
-    return ScanSummary(
-        summary.tracked_objects,
-        summary.history_blobs,
-        remaining,
-        summary.errors,
-        summary.baseline_suppressed,
-        summary.stale_baseline_entries,
-        summary.rotation_suppressed + len(summary.findings) - len(remaining),
-        "COMPLETE_VERIFIED",
+    return replace(
+        summary,
+        findings=remaining,
+        rotation_suppressed=(
+            summary.rotation_suppressed + len(summary.findings) - len(remaining)
+        ),
+        rotation_evidence_status="COMPLETE_VERIFIED",
     )
 
 
@@ -814,6 +980,9 @@ def _write_report(path: Path, summary: ScanSummary, *, history_scope: str) -> No
         "raw_paths_included": False,
         "tracked_objects": summary.tracked_objects,
         "history_blobs": summary.history_blobs,
+        "baseline_approval": summary.baseline_approval,
+        "baseline_entries": summary.baseline_entries,
+        "baseline_source_head": summary.baseline_source_head,
         "baseline_suppressed": summary.baseline_suppressed,
         "stale_baseline_entries": summary.stale_baseline_entries,
         "rotation_suppressed": summary.rotation_suppressed,
@@ -839,10 +1008,15 @@ def _print_summary(summary: ScanSummary, *, history_scope: str) -> None:
     print(f"METRIC_HISTORY_BLOBS={summary.history_blobs}")
     print(f"METRIC_SECRET_FINDINGS={len(summary.findings)}")
     print(f"METRIC_SCAN_ERRORS={len(summary.errors)}")
+    print(f"BASELINE_APPROVAL={summary.baseline_approval}")
+    print(f"BASELINE_ENTRIES={summary.baseline_entries}")
+    print(f"BASELINE_SOURCE_HEAD={summary.baseline_source_head}")
     print(f"METRIC_BASELINE_SUPPRESSED={summary.baseline_suppressed}")
     print(f"METRIC_STALE_BASELINE_ENTRIES={summary.stale_baseline_entries}")
     print(f"METRIC_ROTATION_SUPPRESSED={summary.rotation_suppressed}")
     print(f"ROTATION_EVIDENCE_STATUS={summary.rotation_evidence_status}")
+    if summary.baseline_required and summary.baseline_approval != _BASELINE_APPROVAL_VERIFIED:
+        print("ERROR_CODE=BASELINE_APPROVAL_UNVERIFIED")
     for item in summary.findings:
         print(
             "ERROR_CODE=SECRET_CANDIDATE "
@@ -862,6 +1036,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--report", type=Path)
     parser.add_argument("--baseline", type=Path)
     parser.add_argument("--baseline-manifest", type=Path)
+    parser.add_argument("--baseline-manifest-signature", type=Path)
     parser.add_argument("--rotation-status", type=Path)
     parser.add_argument("--max-blob-bytes", type=int, default=DEFAULT_MAX_BLOB_BYTES)
     parser.add_argument(
@@ -878,8 +1053,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.max_blob_bytes <= 0:
         parser.error("--max-blob-bytes must be positive")
-    if args.baseline_manifest and not args.baseline:
-        parser.error("--baseline-manifest requires --baseline")
+    baseline_inputs = (
+        args.baseline,
+        args.baseline_manifest,
+        args.baseline_manifest_signature,
+    )
+    if any(item is not None for item in baseline_inputs) and not all(
+        item is not None for item in baseline_inputs
+    ):
+        parser.error(
+            "--baseline, --baseline-manifest, and --baseline-manifest-signature are required together"
+        )
     history_rev_args = ("HEAD",) if args.history_scope == "head" else ("--all",)
     scope_label = "HEAD" if args.history_scope == "head" else "ALL"
     try:
@@ -889,7 +1073,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             history_rev_args=history_rev_args,
         )
         if args.baseline:
-            summary = apply_baseline(summary, args.baseline, manifest_path=args.baseline_manifest)
+            pinned_fingerprint = os.environ.get(_BASELINE_APPROVER_FINGERPRINT_ENV, "").strip()
+            try:
+                source_head = _git(args.repo.resolve(), ["rev-parse", "--verify", "HEAD"]).decode(
+                    "ascii"
+                ).strip()
+                approval = verify_baseline_approval(
+                    args.baseline,
+                    args.baseline_manifest,
+                    args.baseline_manifest_signature,
+                    pinned_fingerprint,
+                    source_head,
+                    repo=args.repo,
+                )
+            except (BaselineApprovalError, OSError, RuntimeError, UnicodeError):
+                summary = _mark_baseline_unverified(summary)
+            else:
+                summary = apply_baseline(summary, approval)
         if args.rotation_status:
             summary = apply_rotation_evidence(summary, args.rotation_status)
     except RotationEvidenceError:
