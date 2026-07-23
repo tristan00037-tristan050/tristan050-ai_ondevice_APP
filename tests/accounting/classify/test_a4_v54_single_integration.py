@@ -8,8 +8,15 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from butler_pc_core.a4_verifier.cli import Block, rebuild_edges, terminal_partition
+from butler_pc_core.a4_verifier.cli import (
+    Block,
+    _token,
+    canonical_evidence_value,
+    rebuild_edges,
+    terminal_partition,
+)
 from butler_pc_core.a4_verifier.canonical import receipt_signing_bytes
+from butler_pc_core.accounting.assignment.security import MemoryKeyStore, TokenService
 from butler_pc_core.accounting.classify.reconciliation_v2 import (
     A4ContractError,
     CompiledTransaction,
@@ -37,6 +44,26 @@ NOW = datetime(2026, 7, 21, 3, 0, tzinfo=timezone.utc)
 
 def _digest(value: str) -> str:
     return hashlib.sha256(value.encode("ascii")).hexdigest()
+
+
+def test_verifier_evidence_token_matches_product_nfkc_whitespace_contract():
+    raw_reference = "  ＡＢＣ　   １２３  "
+    token_service = TokenService(MemoryKeyStore(key=b"K" * 32))
+
+    _, product_token = token_service.a4_evidence_token(
+        TENANT, "BANK_REFERENCE", raw_reference
+    )
+    material = token_service.a4_verifier_material(TENANT)
+    verifier_key = base64.urlsafe_b64decode(material["bank_reference_key_b64"])
+    verifier_token = _token(
+        verifier_key,
+        TENANT,
+        "BANK_REFERENCE",
+        canonical_evidence_value(raw_reference),
+    )
+
+    assert canonical_evidence_value(raw_reference) == "ABC 123"
+    assert verifier_token == product_token
 
 
 def _tx(

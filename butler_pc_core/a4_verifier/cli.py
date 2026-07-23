@@ -224,6 +224,18 @@ def normalized_cell(value: object) -> str:
     return text
 
 
+def canonical_evidence_value(value: object) -> str:
+    """Mirror the producer's A4 evidence-token input contract."""
+
+    text = unicodedata.normalize("NFKC", str(value))
+    if any(unicodedata.category(character) in {"Cc", "Cf"} for character in text):
+        block("BLOCK_SOURCE_SEMANTIC_MISMATCH")
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text or len(text.encode("utf-8")) > 1_024:
+        block("BLOCK_SOURCE_SEMANTIC_MISMATCH")
+    return text
+
+
 def read_source_frame(fd: int, suffix: str) -> Any:
     try:
         import pandas as pd
@@ -701,7 +713,10 @@ def independently_compile_source(
             reference = normalized_cell(row.get(columns[names["reference"]]))
             if reference:
                 reference_token = _token(
-                    material["bank_reference_key_b64"], tenant, "BANK_REFERENCE", reference
+                    material["bank_reference_key_b64"],
+                    tenant,
+                    "BANK_REFERENCE",
+                    canonical_evidence_value(reference),
                 )
         counter_token = None
         resolved = None

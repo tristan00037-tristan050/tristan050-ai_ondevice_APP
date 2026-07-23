@@ -8,6 +8,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, File, Header, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
+from butler_pc_core.accounting.assignment.domain import AssignmentError
 from butler_pc_core.auth.capability_token import (
     CapabilityTokenError,
     CapabilityTokenManager,
@@ -126,7 +127,6 @@ async def register_company_profile(
             own_account_numbers=payload.own_account_numbers,
             own_bank_accounts=[item.model_dump() for item in payload.own_bank_accounts],
         )
-        entry = get_company_profile_store().save_profile(runtime)
         registry_digest = None
         if runtime.own_bank_accounts:
             from butler_pc_core.accounting.assignment.runtime import (
@@ -143,10 +143,13 @@ async def register_company_profile(
                 .replace("+00:00", "Z"),
             )
             registry_digest = registry["registry_digest"]
+        entry = get_company_profile_store().save_profile(runtime)
     except AdminAuthError as exc:
         raise HTTPException(status_code=403, detail=admin_error_payload(exc)) from exc
     except ContractValidationError as exc:
         raise HTTPException(status_code=422, detail={"fail_class": str(exc)}) from exc
+    except AssignmentError as exc:
+        raise HTTPException(status_code=exc.status, detail={"fail_class": exc.code}) from exc
     return {
         "schema_version": "company_profile.register.response.v1",
         "profile_id": entry.profile_id,
