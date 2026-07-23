@@ -2,9 +2,12 @@ use std::{
     ffi::OsStr,
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
-    path::{Path, PathBuf},
+    path::Path,
     time::SystemTime,
 };
+
+#[cfg(any(windows, test))]
+use std::path::PathBuf;
 
 use tauri_plugin_dialog::DialogExt;
 
@@ -360,10 +363,7 @@ fn atomic_write_export(
                     .st_dev
                     .try_into()
                     .map_err(|_| ExportError::TargetInvalid)?,
-                inode: stat
-                    .st_ino
-                    .try_into()
-                    .map_err(|_| ExportError::TargetInvalid)?,
+                inode: stat.st_ino,
                 status_changed_seconds: stat.st_ctime,
                 status_changed_nanoseconds: stat.st_ctime_nsec,
                 parent_device: expected.parent_device,

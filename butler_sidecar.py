@@ -372,9 +372,9 @@ if _FASTAPI_AVAILABLE:
             "http://localhost:1420",
             "http://127.0.0.1:1420",
         ],
-        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
-        expose_headers=["X-Task-Id"],
+        expose_headers=["X-Task-Id", "Idempotency-Replayed"],
     )
 
     # ── PR-B: Connect Loop usage accumulator (공통 1곳) ──
@@ -396,6 +396,12 @@ if _FASTAPI_AVAILABLE:
         "/api/model-tier/shadow/status",
     })
 
+    from butler_pc_core.sidecar.routes.home import (
+        initialize_home_store,
+        router as home_router,
+        shutdown_home_store,
+    )
+
     @app.get("/api/model-tier/shadow/status")
     async def _model_tier_shadow_status():
         return phase0_shadow_status()
@@ -404,9 +410,11 @@ if _FASTAPI_AVAILABLE:
     async def _startup_generate_token():
         _TOKEN_MANAGER.generate()
         _start_model_tier_phase0_shadow()
+        initialize_home_store()
 
     @app.on_event("shutdown")
     async def _shutdown_clear_token():
+        shutdown_home_store()
         _stop_model_tier_phase0_shadow()
         _TOKEN_MANAGER.clear()
 
@@ -414,9 +422,22 @@ if _FASTAPI_AVAILABLE:
     async def _capability_token_middleware(request, call_next):
         if request.method == "GET" and request.url.path in _PUBLIC_GET_PATHS:
             return await call_next(request)
-        if request.method in ("POST", "DELETE"):
+        home_request = request.url.path.startswith("/v1/home/")
+        if home_request:
+            host = request.headers.get("host", "").lower()
+            origin = request.headers.get("origin")
+            if host not in {"127.0.0.1:8765", "localhost:8765", "testserver"}:
+                return JSONResponse(status_code=400, content={"code": "UNTRUSTED_HOST"})
+            if origin not in {
+                None,
+                "tauri://localhost",
+                "http://localhost:1420",
+                "http://127.0.0.1:1420",
+            }:
+                return JSONResponse(status_code=403, content={"code": "UNTRUSTED_ORIGIN"})
+        if home_request or request.method in ("POST", "PUT", "PATCH", "DELETE"):
             try:
-                _TOKEN_MANAGER.verify_authorization_header(
+                session = _TOKEN_MANAGER.verify_authorization_header(
                     request.headers.get("Authorization")
                 )
             except CapabilityTokenError as exc:
@@ -425,6 +446,9 @@ if _FASTAPI_AVAILABLE:
                     status_code=status,
                     content={"fail_class": exc.fail_class.value, "message": exc.message},
                 )
+            request.state.capability_actor_id = session.actor_id
+            request.state.capability_session_digest = session.session_digest
+            request.state.capability_role = session.role
         return await call_next(request)
 
     # ── connect-loop router + box2/box3 card + helper1 router 등록 (separate route modules) ──
@@ -456,6 +480,7 @@ if _FASTAPI_AVAILABLE:
     app.include_router(admin_policy_format_router)
     app.include_router(admin_role_registry_router)
     app.include_router(company_profile_router)
+    app.include_router(home_router)
     app.include_router(accounting_assignment_router)
     app.include_router(company_fact_router)
     app.include_router(company_learning_router)

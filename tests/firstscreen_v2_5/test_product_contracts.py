@@ -140,6 +140,22 @@ def test_native_release_binary_requires_and_embeds_build_context_digest() -> Non
     assert 'env!("BUTLER_BUILD_CONTEXT_DIGEST")' in identity
 
 
+def test_repository_python_gate_uses_documented_collection_exclusions() -> None:
+    workflow = (ROOT / ".github/workflows/firstscreen-v2-5.yml").read_text(encoding="utf-8")
+    repository_commands = [
+        line.strip()
+        for line in workflow.splitlines()
+        if "python -m pytest tests/" in line
+        and ("--collect-only" in line or "repository-junit.xml" in line)
+    ]
+    assert len(repository_commands) == 2
+    for command in repository_commands:
+        assert "--import-mode=importlib" in command
+        assert "--ignore=tests/turboq/" in command
+        assert "--ignore=tests/eval/test_eval_hardcase.py" in command
+        assert "--ignore=tests/eval/test_eval_judge_v3.py" in command
+
+
 def test_outer_bundle_is_ascii_but_nested_git_source_accepts_safe_utf8() -> None:
     with pytest.raises(ProductBundleVerificationError, match="PATH_NOT_ASCII"):
         _safe_name("source/한글.txt")

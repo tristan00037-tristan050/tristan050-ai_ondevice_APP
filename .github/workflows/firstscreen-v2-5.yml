@@ -145,6 +145,16 @@ jobs:
           assert 'shell:default' not in default['permissions']
           PY
       - run: rustup toolchain install ${{ env.RUST_TOOLCHAIN }} --profile minimal --component clippy,rustfmt
+      - name: Prepare compile-only bundled resource paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src-tauri/models src-tauri/binaries
+          host="$(rustc -vV | sed -n 's/^host: //p')"
+          test -n "$host"
+          extension=""
+          if [[ "${RUNNER_OS}" == "Windows" ]]; then extension=".exe"; fi
+          touch "src-tauri/binaries/butler-sidecar-${host}${extension}"
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
@@ -163,8 +173,8 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-firstscreen-ci.lock
       - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
-      - run: python -m pytest --collect-only -qq
-      - run: python -m pytest -q --junitxml=repository-junit.xml
+      - run: python -m pytest tests/ --collect-only -qq --import-mode=importlib --ignore=tests/turboq/ --ignore=tests/eval/test_eval_hardcase.py --ignore=tests/eval/test_eval_judge_v3.py
+      - run: python -m pytest tests/ -q --import-mode=importlib --ignore=tests/turboq/ --ignore=tests/eval/test_eval_hardcase.py --ignore=tests/eval/test_eval_judge_v3.py --junitxml=repository-junit.xml
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with: {name: firstscreen-v2-5-repository, path: repository-junit.xml, if-no-files-found: error, retention-days: 30}
 

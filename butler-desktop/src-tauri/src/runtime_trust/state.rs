@@ -77,7 +77,10 @@ pub fn canonical<T: Serialize>(value: &T) -> Result<Vec<u8>, &'static str> {
                 let mut entries: Vec<_> = object.into_iter().collect();
                 entries.sort_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
                 serde_json::Value::Object(
-                    entries.into_iter().map(|(key, value)| (key, sorted(value))).collect(),
+                    entries
+                        .into_iter()
+                        .map(|(key, value)| (key, sorted(value)))
+                        .collect(),
                 )
             }
             serde_json::Value::Array(values) => {
@@ -95,12 +98,17 @@ pub fn sha256(bytes: &[u8]) -> String {
 }
 
 pub fn is_sha256(value: &str) -> bool {
-    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 pub fn is_oid(value: &str) -> bool {
     matches!(value.len(), 40 | 64)
-        && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 pub fn validate_state(state: &TrustedState) -> Result<(), &'static str> {

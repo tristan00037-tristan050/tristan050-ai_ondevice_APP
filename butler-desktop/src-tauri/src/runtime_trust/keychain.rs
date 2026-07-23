@@ -20,7 +20,11 @@ mod platform {
     extern "C" {
         static kCFAllocatorDefault: CFAllocatorRef;
         static kCFBooleanTrue: CFTypeRef;
-        fn CFStringCreateWithCString(allocator: CFAllocatorRef, value: *const c_char, encoding: u32) -> CFStringRef;
+        fn CFStringCreateWithCString(
+            allocator: CFAllocatorRef,
+            value: *const c_char,
+            encoding: u32,
+        ) -> CFStringRef;
         fn CFDataCreate(allocator: CFAllocatorRef, bytes: *const u8, length: CFIndex) -> CFDataRef;
         fn CFDictionaryCreate(
             allocator: CFAllocatorRef,
@@ -58,20 +62,26 @@ mod platform {
     struct Owned(CFTypeRef);
     impl Drop for Owned {
         fn drop(&mut self) {
-            if !self.0.is_null() { unsafe { CFRelease(self.0) }; }
+            if !self.0.is_null() {
+                unsafe { CFRelease(self.0) };
+            }
         }
     }
 
     unsafe fn text(value: &str) -> Result<Owned, &'static str> {
         let value = CString::new(value).map_err(|_| "BLOCK_TRUST_STATE_CAS")?;
         let reference = CFStringCreateWithCString(kCFAllocatorDefault, value.as_ptr(), UTF8);
-        if reference.is_null() { return Err("BLOCK_TRUST_STATE_CAS"); }
+        if reference.is_null() {
+            return Err("BLOCK_TRUST_STATE_CAS");
+        }
         Ok(Owned(reference))
     }
 
     unsafe fn data(value: &[u8]) -> Result<Owned, &'static str> {
         let reference = CFDataCreate(kCFAllocatorDefault, value.as_ptr(), value.len() as CFIndex);
-        if reference.is_null() { return Err("BLOCK_TRUST_STATE_CAS"); }
+        if reference.is_null() {
+            return Err("BLOCK_TRUST_STATE_CAS");
+        }
         Ok(Owned(reference))
     }
 
@@ -86,7 +96,9 @@ mod platform {
             ptr::null(),
             ptr::null(),
         );
-        if reference.is_null() { return Err("BLOCK_TRUST_STATE_CAS"); }
+        if reference.is_null() {
+            return Err("BLOCK_TRUST_STATE_CAS");
+        }
         Ok(Owned(reference))
     }
 
@@ -113,13 +125,22 @@ mod platform {
             ])?;
             let mut result: CFTypeRef = ptr::null();
             let status = SecItemCopyMatching(query.0, &mut result);
-            if status == ITEM_NOT_FOUND { return Ok(None); }
-            if status != 0 || result.is_null() { return Err("BLOCK_TRUST_STATE_MISSING_OR_ROLLBACK"); }
+            if status == ITEM_NOT_FOUND {
+                return Ok(None);
+            }
+            if status != 0 || result.is_null() {
+                return Err("BLOCK_TRUST_STATE_MISSING_OR_ROLLBACK");
+            }
             let owned = Owned(result);
-            if CFGetTypeID(owned.0) != CFDataGetTypeID() { return Err("BLOCK_TRUST_STATE_MISSING_OR_ROLLBACK"); }
+            if CFGetTypeID(owned.0) != CFDataGetTypeID() {
+                return Err("BLOCK_TRUST_STATE_MISSING_OR_ROLLBACK");
+            }
             let length = CFDataGetLength(owned.0 as CFDataRef);
-            if !(1..=1_048_576).contains(&length) { return Err("BLOCK_TRUST_STATE_MISSING_OR_ROLLBACK"); }
-            let bytes = std::slice::from_raw_parts(CFDataGetBytePtr(owned.0 as CFDataRef), length as usize);
+            if !(1..=1_048_576).contains(&length) {
+                return Err("BLOCK_TRUST_STATE_MISSING_OR_ROLLBACK");
+            }
+            let bytes =
+                std::slice::from_raw_parts(CFDataGetBytePtr(owned.0 as CFDataRef), length as usize);
             Ok(Some(bytes.to_vec()))
         }
     }
@@ -139,13 +160,24 @@ mod platform {
                     (kSecAttrService, service.0),
                     (kSecAttrAccount, account.0),
                     (kSecUseDataProtectionKeychain, kCFBooleanTrue),
-                    (kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly),
+                    (
+                        kSecAttrAccessible,
+                        kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                    ),
                     (kSecValueData, value.0),
                 ])?;
                 let added = SecItemAdd(add.0, ptr::null_mut());
-                if added == DUPLICATE_ITEM { SecItemUpdate(query.0, update.0) } else { added }
+                if added == DUPLICATE_ITEM {
+                    SecItemUpdate(query.0, update.0)
+                } else {
+                    added
+                }
             };
-            if status == 0 { Ok(()) } else { Err("BLOCK_TRUST_STATE_CAS") }
+            if status == 0 {
+                Ok(())
+            } else {
+                Err("BLOCK_TRUST_STATE_CAS")
+            }
         }
     }
 }

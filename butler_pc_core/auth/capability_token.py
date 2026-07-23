@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+import hashlib
+import os
 import secrets
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from butler_pc_core.fail_class import FailClass
 
 
-DEFAULT_TOKEN_PATH = Path.home() / ".butler" / "sidecar_token"
+def _default_token_path() -> Path:
+    app_data = os.environ.get("BUTLER_APP_DATA_DIR", "").strip()
+    if app_data:
+        root = Path(app_data).expanduser()
+        if root.is_absolute():
+            return root / "ipc" / "sidecar.capability"
+    return Path.home() / ".butler" / "sidecar_token"
 
 
 @dataclass(frozen=True)
@@ -22,18 +31,37 @@ class CapabilityTokenError(Exception):
 
 @dataclass
 class CapabilityTokenManager:
-    token_path: Path = DEFAULT_TOKEN_PATH
+    token_path: Path = field(default_factory=_default_token_path)
     _token: str | None = None
+    _session: "CapabilitySession | None" = None
 
     def generate(self) -> str:
         self._token = secrets.token_urlsafe(32)
-        self.token_path.parent.mkdir(parents=True, exist_ok=True)
-        self.token_path.write_text(self._token + "\n", encoding="utf-8")
+        self.token_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.token_path.parent.chmod(0o700)
+        temporary = self.token_path.with_name(
+            f".{self.token_path.name}.{secrets.token_hex(8)}.tmp"
+        )
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                handle.write(self._token + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, self.token_path)
+        except Exception:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
+            raise
         self.token_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        self._session = CapabilitySession.from_token(self._token)
         return self._token
 
     def clear(self) -> None:
         self._token = None
+        self._session = None
         try:
             self.token_path.unlink()
         except FileNotFoundError:
@@ -59,7 +87,7 @@ class CapabilityTokenManager:
             self._token = value or None
         return self._token
 
-    def verify_authorization_header(self, authorization: str | None) -> None:
+    def verify_authorization_header(self, authorization: str | None) -> "CapabilitySession":
         if not authorization:
             raise CapabilityTokenError(FailClass.CAPABILITY_TOKEN_MISSING, "capability token missing")
         prefix = "Bearer "
@@ -71,6 +99,35 @@ class CapabilityTokenManager:
             raise CapabilityTokenError(FailClass.CAPABILITY_TOKEN_MISSING, "capability token not initialized")
         if not secrets.compare_digest(presented, expected):
             raise CapabilityTokenError(FailClass.CAPABILITY_TOKEN_INVALID, "capability token invalid")
+        session = self._session
+        if session is None:
+            session = CapabilitySession.from_token(expected)
+            self._session = session
+        if session.expires_at <= datetime.now(timezone.utc):
+            raise CapabilityTokenError(FailClass.CAPABILITY_TOKEN_INVALID, "capability token expired")
+        return session
+
+
+@dataclass(frozen=True)
+class CapabilitySession:
+    session_id: str
+    actor_id: str
+    device_id: str
+    role: str
+    session_digest: str
+    expires_at: datetime
+
+    @classmethod
+    def from_token(cls, token: str) -> "CapabilitySession":
+        digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        return cls(
+            session_id="session_" + digest[:32],
+            actor_id="local-user",
+            device_id="device_" + digest[32:48],
+            role="user",
+            session_digest=digest,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        )
 
 
 def auth_error_payload(error: CapabilityTokenError) -> dict[str, str]:

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from butler.card1.safety.adapter_sha_verifier import verify_adapter_sha256
+from src.butler.card1.safety.adapter_sha_verifier import verify_adapter_sha256
 
 
 @pytest.fixture

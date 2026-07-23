@@ -551,8 +551,7 @@ pub fn run() {
             // Trust continuity is restored and validated before any sidecar
             // process can observe or serve product state.  Corruption blocks
             // startup; it never falls back to a fresh v1 bootstrap.
-            let authority = runtime_trust::initialize_authority()
-                .map_err(|code| std::io::Error::other(code))?;
+            let authority = runtime_trust::initialize_authority().map_err(std::io::Error::other)?;
             app.manage(authority);
             let app_handle = app.handle().clone();
             tauri::async_runtime::block_on(async move {
