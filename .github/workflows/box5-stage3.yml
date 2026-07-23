@@ -256,6 +256,7 @@ jobs:
         run: |
           python scripts/ci/a4_repository_secret_scan.py \
             --repo . \
+            --history-scope head \
             --baseline docs/ops/A4_V55_SECRET_SCAN_BASELINE.json \
             --baseline-manifest docs/ops/A4_V55_SECRET_SCAN_BASELINE_MANIFEST.json \
             --rotation-status docs/ops/A4_V55_SECRET_ROTATION_STATUS.json \

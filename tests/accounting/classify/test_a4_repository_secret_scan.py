@@ -46,6 +46,35 @@ def test_scanner_blocks_direct_and_encoded_secrets_without_echoing_values(tmp_pa
     assert bearer not in rendered
 
 
+def _rev(repo: Path) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    )
+    return result.stdout.strip()
+
+
+def test_history_scope_defaults_to_head_reachable_only(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    (repo / "readme.txt").write_text("hello\n", encoding="utf-8")
+    _commit(repo, "base")
+    base = _rev(repo)
+    # A secret committed only on an unrelated branch, unreachable from HEAD.
+    _git(repo, "checkout", "-q", "-b", "side-branch")
+    token = "xox" + "b-" + "Qz7mN2Vk9Lp4Rw8Hs6Yt3Bc5"
+    (repo / "leak.txt").write_text(token + "\n", encoding="utf-8")
+    _commit(repo, "side secret")
+    _git(repo, "checkout", "-q", base)  # detached at base; side-branch not reachable
+
+    head_scoped = scanner.scan_repository(repo)  # default: HEAD reachability
+    assert not any(item.rule_id == "SLACK_TOKEN" for item in head_scoped.findings)
+
+    repo_wide = scanner.scan_repository(repo, history_rev_args=("--all",))
+    assert any(
+        item.scope == "history" and item.rule_id == "SLACK_TOKEN"
+        for item in repo_wide.findings
+    )
+
+
 def test_scanner_inspects_deleted_history_blobs(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     token = "xox" + "b-" + "Qz7mN2Vk9Lp4Rw8Hs6Yt3Bc5"

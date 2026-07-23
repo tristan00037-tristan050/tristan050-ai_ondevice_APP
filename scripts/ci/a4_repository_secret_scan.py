@@ -296,8 +296,12 @@ def _tracked_blob_index(repo: Path) -> tuple[tuple[str, int, str], ...]:
     return tuple(result)
 
 
-def _history_blob_index(repo: Path) -> tuple[tuple[str, int, str], ...]:
-    objects = _git(repo, ["-c", "core.quotePath=false", "rev-list", "--objects", "--all"])
+def _history_blob_index(
+    repo: Path, rev_args: Sequence[str] = ("HEAD",)
+) -> tuple[tuple[str, int, str], ...]:
+    objects = _git(
+        repo, ["-c", "core.quotePath=false", "rev-list", "--objects", *rev_args]
+    )
     checked = _git(
         repo,
         ["cat-file", "--batch-check=%(objectname)\t%(objecttype)\t%(objectsize)\t%(rest)"],
@@ -341,7 +345,12 @@ def _read_blobs(repo: Path, blobs: Sequence[tuple[str, int, str]]) -> Iterator[t
             raise RuntimeError("git cat-file batch failed")
 
 
-def scan_repository(repo: Path, *, max_blob_bytes: int = DEFAULT_MAX_BLOB_BYTES) -> ScanSummary:
+def scan_repository(
+    repo: Path,
+    *,
+    max_blob_bytes: int = DEFAULT_MAX_BLOB_BYTES,
+    history_rev_args: Sequence[str] = ("HEAD",),
+) -> ScanSummary:
     repo = repo.resolve()
     findings: list[Finding] = []
     errors: list[ScanError] = []
@@ -355,7 +364,7 @@ def scan_repository(repo: Path, *, max_blob_bytes: int = DEFAULT_MAX_BLOB_BYTES)
     for object_id, path, payload in _read_blobs(repo, eligible_tracked):
         findings.extend(scan_payload(scope="tracked", object_id=object_id, path=path, payload=payload))
 
-    history_blobs = _history_blob_index(repo)
+    history_blobs = _history_blob_index(repo, history_rev_args)
     eligible: list[tuple[str, int, str]] = []
     for object_id, size, path in history_blobs:
         if size > max_blob_bytes:
@@ -851,13 +860,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--baseline-manifest", type=Path)
     parser.add_argument("--rotation-status", type=Path)
     parser.add_argument("--max-blob-bytes", type=int, default=DEFAULT_MAX_BLOB_BYTES)
+    parser.add_argument(
+        "--history-scope",
+        choices=("head", "all"),
+        default="head",
+        help=(
+            "History reachability to scan. 'head' (default) scans blobs reachable "
+            "from the checked-out HEAD, i.e. exactly what this branch would merge; "
+            "this keeps the merge gate deterministic and independent of unrelated "
+            "branches. 'all' scans every reachable ref for a full-repository audit."
+        ),
+    )
     args = parser.parse_args(argv)
     if args.max_blob_bytes <= 0:
         parser.error("--max-blob-bytes must be positive")
     if args.baseline_manifest and not args.baseline:
         parser.error("--baseline-manifest requires --baseline")
+    history_rev_args = ("HEAD",) if args.history_scope == "head" else ("--all",)
     try:
-        summary = scan_repository(args.repo, max_blob_bytes=args.max_blob_bytes)
+        summary = scan_repository(
+            args.repo,
+            max_blob_bytes=args.max_blob_bytes,
+            history_rev_args=history_rev_args,
+        )
         if args.baseline:
             summary = apply_baseline(summary, args.baseline, manifest_path=args.baseline_manifest)
         if args.rotation_status:
