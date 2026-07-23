@@ -26,7 +26,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from butler_pc_core.build_info import build_tree_oid
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 API_SCHEMA_VERSION = "2.1.0"
 MAX_TITLE_SCALARS = 256
 MAX_TITLE_BYTES = 1_024
@@ -56,6 +56,69 @@ _BIDI_CONTROLS = {
     chr(0x061C), chr(0x200E), chr(0x200F),
     *(chr(value) for value in range(0x202A, 0x202F)),
     *(chr(value) for value in range(0x2066, 0x2070)),
+}
+
+_MESSAGE_COLUMNS_V3 = (
+    "workspace_id", "conversation_id", "sequence", "message_id", "role",
+    "ciphertext", "content_digest", "timestamp", "source", "fact_id", "score",
+)
+_MESSAGE_COLUMNS_V4 = (
+    "workspace_id", "conversation_id", "sequence", "message_id", "role",
+    "ciphertext", "timestamp", "source", "fact_id", "score",
+)
+_QUARANTINE_COLUMNS_V3 = (
+    "quarantine_id", "workspace_id", "entity_type", "entity_id",
+    "reason_code", "content_digest", "detected_at",
+)
+_QUARANTINE_COLUMNS_V4 = (
+    "quarantine_id", "workspace_id", "entity_type", "entity_id",
+    "reason_code", "detected_at",
+)
+_EXACT_CORE_COLUMNS: dict[str, tuple[str, ...]] = {
+    "home_meta": (
+        "singleton_id", "installation_id", "workspace_id", "key_id",
+        "schema_version", "created_at", "updated_at",
+    ),
+    "home_folders": (
+        "workspace_id", "folder_id", "parent_id", "display_name",
+        "normalized_name", "system_kind", "version", "created_at", "updated_at",
+    ),
+    "home_conversations": (
+        "workspace_id", "conversation_id", "folder_id", "business_profile_id",
+        "title", "title_is_custom", "version", "created_at", "updated_at",
+        "deleted_at", "legacy_digest",
+    ),
+    "home_messages": _MESSAGE_COLUMNS_V4,
+    "home_events": (
+        "event_id", "sequence", "workspace_id", "conversation_id", "turn_id",
+        "model_request_id", "event_type", "outcome", "error_code", "request_id",
+        "actor", "actor_session_digest", "payload_digest", "created_at",
+    ),
+    "home_audit": (
+        "audit_id", "workspace_id", "entity_type", "entity_id", "action",
+        "before_digest", "after_digest", "request_id", "actor",
+        "actor_session_digest", "created_at",
+    ),
+    "home_commands": (
+        "command_id", "workspace_id", "actor_id", "operation",
+        "api_schema_version", "idempotency_key", "request_digest", "status",
+        "response_status", "response_headers_json", "response_body_json",
+        "created_at", "expires_at",
+    ),
+    "home_migration_items": (
+        "workspace_id", "migration_id", "conversation_id", "item_digest",
+        "disposition", "completed_at",
+    ),
+    "home_migration_receipts": (
+        "workspace_id", "migration_id", "input_digest", "id_set_digest",
+        "item_count", "receipt_json", "completed_at", "command_id",
+    ),
+    "home_backups": (
+        "backup_id", "schema_from", "schema_to", "source_db_digest",
+        "backup_digest", "manifest_digest", "integrity_result", "created_at",
+        "retention_state",
+    ),
+    "home_quarantine": _QUARANTINE_COLUMNS_V4,
 }
 
 
@@ -469,7 +532,13 @@ class HomeStore:
             self._set_status(status, count=self._safe_conversation_count())
             return
 
-        self._initialize_or_migrate()
+        try:
+            self._initialize_or_migrate()
+        except Exception:
+            # Existing bytes remain authoritative. Migration and schema-shape
+            # failures never fall through to a writable HOME_READY state.
+            self._set_status("MIGRATION_BLOCKED", count=self._safe_conversation_count())
+            return
         self._set_status("HOME_READY", count=self._safe_conversation_count())
         self.reconcile_interrupted_requests()
 
@@ -809,20 +878,37 @@ class HomeStore:
             current = int(db.execute("PRAGMA user_version").fetchone()[0])
             if current > SCHEMA_VERSION:
                 raise StorageUnavailableError("MIGRATION_BLOCKED")
+            meta_version = self._meta_schema_version(db)
+            if meta_version is not None and meta_version != current:
+                raise StorageUnavailableError("MIGRATION_BLOCKED")
+            source_shapes = self._migration_source_shapes(db)
             mode = "WAL" if _wal_runtime_safe() else "DELETE"
             actual = str(db.execute(f"PRAGMA journal_mode={mode}").fetchone()[0]).upper()
             if actual != mode:
                 raise StorageUnavailableError("HOME_JOURNAL_MODE_UNAVAILABLE")
-            if current < SCHEMA_VERSION:
+            requires_digest_removal = any(
+                "content_digest" in columns for columns in source_shapes.values()
+            )
+            if current < SCHEMA_VERSION or requires_digest_removal:
                 backup = self._create_immutable_backup(db, current, SCHEMA_VERSION)
                 db.execute("BEGIN EXCLUSIVE")
                 self._migrate_schema(db, current)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+                db.execute(
+                    "UPDATE home_meta SET schema_version=?,updated_at=? WHERE singleton_id=1",
+                    (SCHEMA_VERSION, _now()),
+                )
+                self._assert_exact_schema(db)
                 if str(db.execute("PRAGMA integrity_check").fetchone()[0]) != "ok":
                     raise StorageUnavailableError("READ_ONLY_DB_INTEGRITY_FAILED")
                 db.execute("COMMIT")
             else:
+                db.execute("BEGIN EXCLUSIVE")
                 self._create_schema(db)
+                self._assert_exact_schema(db)
+                if str(db.execute("PRAGMA integrity_check").fetchone()[0]) != "ok":
+                    raise StorageUnavailableError("READ_ONLY_DB_INTEGRITY_FAILED")
+                db.execute("COMMIT")
             if backup:
                 db.execute("BEGIN IMMEDIATE")
                 db.execute(
@@ -841,6 +927,140 @@ class HomeStore:
         finally:
             db.close()
             self._protect_database_files()
+
+    @staticmethod
+    def _table_columns(db: sqlite3.Connection, table: str) -> tuple[str, ...]:
+        return tuple(str(row[1]) for row in db.execute(f"PRAGMA table_info({table})"))
+
+    @classmethod
+    def _meta_schema_version(cls, db: sqlite3.Connection) -> int | None:
+        tables = {
+            str(row[0]) for row in
+            db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        if "home_meta" not in tables:
+            return None
+        columns = cls._table_columns(db, "home_meta")
+        if columns != _EXACT_CORE_COLUMNS["home_meta"]:
+            raise StorageUnavailableError("MIGRATION_BLOCKED")
+        rows = list(db.execute("SELECT schema_version FROM home_meta"))
+        if len(rows) != 1 or isinstance(rows[0][0], bool):
+            raise StorageUnavailableError("MIGRATION_BLOCKED")
+        try:
+            return int(rows[0][0])
+        except (TypeError, ValueError) as exc:
+            raise StorageUnavailableError("MIGRATION_BLOCKED") from exc
+
+    @classmethod
+    def _migration_source_shapes(
+        cls, db: sqlite3.Connection,
+    ) -> dict[str, tuple[str, ...]]:
+        tables = {
+            str(row[0]) for row in
+            db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        shapes: dict[str, tuple[str, ...]] = {}
+        for table, allowed in (
+            ("home_messages", {_MESSAGE_COLUMNS_V3, _MESSAGE_COLUMNS_V4}),
+            ("home_quarantine", {_QUARANTINE_COLUMNS_V3, _QUARANTINE_COLUMNS_V4}),
+        ):
+            if table not in tables:
+                continue
+            columns = cls._table_columns(db, table)
+            if columns not in allowed:
+                raise StorageUnavailableError("MIGRATION_BLOCKED")
+            shapes[table] = columns
+        return shapes
+
+    @staticmethod
+    def _normalize_schema_sql(value: str | None) -> str | None:
+        if value is None:
+            return None
+        return " ".join(
+            value.replace("\n", " ").replace("\t", " ").split()
+        ).casefold().replace(" if not exists ", " ")
+
+    @classmethod
+    def _schema_fingerprint(cls, db: sqlite3.Connection) -> dict[str, Any]:
+        fingerprint: dict[str, Any] = {}
+        for table in sorted(_EXACT_CORE_COLUMNS):
+            columns = [
+                tuple(row) for row in db.execute(f"PRAGMA table_info({table})")
+            ]
+            foreign_keys = [
+                tuple(row) for row in
+                db.execute(f"PRAGMA foreign_key_list({table})")
+            ]
+            indexes: list[dict[str, Any]] = []
+            for row in db.execute(f"PRAGMA index_list({table})"):
+                name = str(row[1])
+                origin = str(row[3])
+                definition = db.execute(
+                    "SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+                    (name,),
+                ).fetchone()
+                indexes.append({
+                    "name": name if origin == "c" else None,
+                    "unique": int(row[2]),
+                    "origin": origin,
+                    "partial": int(row[4]),
+                    "columns": [
+                        tuple(item[1:]) for item in
+                        db.execute(f"PRAGMA index_xinfo({json.dumps(name)})")
+                    ],
+                    "sql": cls._normalize_schema_sql(
+                        None if definition is None else definition[0]
+                    ),
+                })
+            triggers = [
+                {
+                    "name": str(row[0]),
+                    "sql": cls._normalize_schema_sql(row[1]),
+                }
+                for row in db.execute(
+                    """SELECT name,sql FROM sqlite_master
+                       WHERE type='trigger' AND tbl_name=? ORDER BY name""",
+                    (table,),
+                )
+            ]
+            fingerprint[table] = {
+                "columns": columns,
+                "foreign_keys": foreign_keys,
+                "indexes": sorted(
+                    indexes,
+                    key=lambda item: (
+                        item["name"] or "",
+                        item["origin"],
+                        _canonical(item["columns"]),
+                    ),
+                ),
+                "triggers": triggers,
+            }
+        return fingerprint
+
+    def _assert_exact_schema(self, db: sqlite3.Connection) -> None:
+        tables = {
+            str(row[0]) for row in
+            db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        for table, expected in _EXACT_CORE_COLUMNS.items():
+            if table not in tables or self._table_columns(db, table) != expected:
+                raise StorageUnavailableError("MIGRATION_BLOCKED")
+        for table in ("home_messages", "home_quarantine"):
+            if any(
+                "content_digest" == column.casefold()
+                for column in self._table_columns(db, table)
+            ):
+                raise StorageUnavailableError("MIGRATION_BLOCKED")
+        reference = sqlite3.connect(":memory:", isolation_level=None)
+        reference.row_factory = sqlite3.Row
+        try:
+            reference.execute("PRAGMA foreign_keys=ON")
+            self._create_schema(reference)
+            if self._schema_fingerprint(db) != self._schema_fingerprint(reference):
+                raise StorageUnavailableError("MIGRATION_BLOCKED")
+        finally:
+            reference.close()
 
     def _create_immutable_backup(self, db: sqlite3.Connection, schema_from: int, schema_to: int) -> dict[str, Any]:
         self.location.backup_root.mkdir(mode=0o700, exist_ok=True)
@@ -898,7 +1118,7 @@ class HomeStore:
             """CREATE TABLE IF NOT EXISTS home_messages(
                 workspace_id TEXT NOT NULL, conversation_id TEXT NOT NULL, sequence INTEGER NOT NULL,
                 message_id TEXT NOT NULL, role TEXT NOT NULL, ciphertext BLOB NOT NULL,
-                content_digest TEXT NOT NULL, timestamp TEXT NOT NULL, source TEXT, fact_id TEXT, score REAL,
+                timestamp TEXT NOT NULL, source TEXT, fact_id TEXT, score REAL,
                 PRIMARY KEY(workspace_id,conversation_id,sequence), UNIQUE(workspace_id,conversation_id,message_id),
                 FOREIGN KEY(workspace_id,conversation_id) REFERENCES home_conversations(workspace_id,conversation_id) ON DELETE CASCADE)""",
             """CREATE TABLE IF NOT EXISTS home_events(
@@ -933,7 +1153,7 @@ class HomeStore:
                 integrity_result TEXT NOT NULL, created_at TEXT NOT NULL, retention_state TEXT NOT NULL)""",
             """CREATE TABLE IF NOT EXISTS home_quarantine(
                 quarantine_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, entity_type TEXT NOT NULL,
-                entity_id TEXT NOT NULL, reason_code TEXT NOT NULL, content_digest TEXT, detected_at TEXT NOT NULL)""",
+                entity_id TEXT NOT NULL, reason_code TEXT NOT NULL, detected_at TEXT NOT NULL)""",
             """CREATE VIRTUAL TABLE IF NOT EXISTS home_conversation_fts USING fts5(
                 workspace_id UNINDEXED, conversation_id UNINDEXED, title, tokenize='unicode61')""",
         ]
@@ -970,6 +1190,7 @@ class HomeStore:
 
     def _migrate_schema(self, db: sqlite3.Connection, current: int) -> None:
         self._create_schema(db)
+        self._remove_unkeyed_content_digests(db)
         for column, declaration in (
             ("sequence", "INTEGER"), ("turn_id", "TEXT"), ("model_request_id", "TEXT"),
             ("actor_session_digest", "TEXT"),
@@ -1011,6 +1232,95 @@ class HomeStore:
                 )
             db.execute("DROP TABLE home_idempotency")
         self._system_folders(db)
+
+    @staticmethod
+    def _inventory_digest(
+        db: sqlite3.Connection, table: str, columns: tuple[str, ...],
+    ) -> tuple[int, str]:
+        digest = hashlib.sha256()
+        count = 0
+        order = ",".join(columns[:3])
+        for row in db.execute(
+            f"SELECT {','.join(columns)} FROM {table} ORDER BY {order}"
+        ):
+            normalized = [
+                {"bytes": bytes(value).hex()} if isinstance(value, (bytes, bytearray, memoryview))
+                else value
+                for value in row
+            ]
+            digest.update(_canonical(normalized).encode("utf-8"))
+            digest.update(b"\n")
+            count += 1
+        return count, digest.hexdigest()
+
+    def _remove_unkeyed_content_digests(self, db: sqlite3.Connection) -> None:
+        """Copy-and-swap legacy digest-bearing variants without losing rows."""
+        tables = {
+            str(row[0]) for row in
+            db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        if "home_messages" in tables:
+            columns = self._table_columns(db, "home_messages")
+            if columns == _MESSAGE_COLUMNS_V3:
+                before = self._inventory_digest(db, "home_messages", _MESSAGE_COLUMNS_V4)
+                db.execute(
+                    """CREATE TABLE home_messages_v4_new(
+                        workspace_id TEXT NOT NULL, conversation_id TEXT NOT NULL,
+                        sequence INTEGER NOT NULL, message_id TEXT NOT NULL,
+                        role TEXT NOT NULL, ciphertext BLOB NOT NULL,
+                        timestamp TEXT NOT NULL, source TEXT, fact_id TEXT, score REAL,
+                        PRIMARY KEY(workspace_id,conversation_id,sequence),
+                        UNIQUE(workspace_id,conversation_id,message_id),
+                        FOREIGN KEY(workspace_id,conversation_id)
+                          REFERENCES home_conversations(workspace_id,conversation_id)
+                          ON DELETE CASCADE)"""
+                )
+                db.execute(
+                    """INSERT INTO home_messages_v4_new(
+                        workspace_id,conversation_id,sequence,message_id,role,
+                        ciphertext,timestamp,source,fact_id,score)
+                       SELECT workspace_id,conversation_id,sequence,message_id,role,
+                        ciphertext,timestamp,source,fact_id,score FROM home_messages"""
+                )
+                after = self._inventory_digest(
+                    db, "home_messages_v4_new", _MESSAGE_COLUMNS_V4,
+                )
+                if before != after:
+                    raise StorageUnavailableError("MIGRATION_BLOCKED")
+                db.execute("DROP TABLE home_messages")
+                db.execute("ALTER TABLE home_messages_v4_new RENAME TO home_messages")
+            elif columns != _MESSAGE_COLUMNS_V4:
+                raise StorageUnavailableError("MIGRATION_BLOCKED")
+        if "home_quarantine" in tables:
+            columns = self._table_columns(db, "home_quarantine")
+            if columns == _QUARANTINE_COLUMNS_V3:
+                before = self._inventory_digest(
+                    db, "home_quarantine", _QUARANTINE_COLUMNS_V4,
+                )
+                db.execute(
+                    """CREATE TABLE home_quarantine_v4_new(
+                        quarantine_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL,
+                        entity_type TEXT NOT NULL, entity_id TEXT NOT NULL,
+                        reason_code TEXT NOT NULL, detected_at TEXT NOT NULL)"""
+                )
+                db.execute(
+                    """INSERT INTO home_quarantine_v4_new(
+                        quarantine_id,workspace_id,entity_type,entity_id,
+                        reason_code,detected_at)
+                       SELECT quarantine_id,workspace_id,entity_type,entity_id,
+                        reason_code,detected_at FROM home_quarantine"""
+                )
+                after = self._inventory_digest(
+                    db, "home_quarantine_v4_new", _QUARANTINE_COLUMNS_V4,
+                )
+                if before != after:
+                    raise StorageUnavailableError("MIGRATION_BLOCKED")
+                db.execute("DROP TABLE home_quarantine")
+                db.execute(
+                    "ALTER TABLE home_quarantine_v4_new RENAME TO home_quarantine"
+                )
+            elif columns != _QUARANTINE_COLUMNS_V4:
+                raise StorageUnavailableError("MIGRATION_BLOCKED")
 
     def _system_folders(self, db: sqlite3.Connection) -> None:
         now = _now()
@@ -1126,10 +1436,12 @@ class HomeStore:
         ).fetchone()[0])
         ciphertext = self._encrypt(conversation_id, message["id"], message["content"])
         db.execute(
-            "INSERT INTO home_messages VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            """INSERT INTO home_messages(
+                workspace_id,conversation_id,sequence,message_id,role,ciphertext,
+                timestamp,source,fact_id,score) VALUES(?,?,?,?,?,?,?,?,?,?)""",
             (
                 self.workspace_id, conversation_id, sequence, message["id"], message["role"],
-                ciphertext, hashlib.sha256(message["content"].encode()).hexdigest(), message["timestamp"],
+                ciphertext, message["timestamp"],
                 message.get("source"), message.get("fact_id"), message.get("score"),
             ),
         )
@@ -1401,14 +1713,41 @@ class HomeStore:
                 "folders": [], "conversations": [], "next_cursor": None,
                 "partial_errors": [], "read_only": True, "startup": self.startup_status(),
                 "total_conversation_count": 0, "filtered_conversation_count": 0,
+                "inventory_digest": _digest([]), "active_profile_filter": profile_id,
             }
         cursor_time: str | None = None
         cursor_id: str | None = None
+        cursor_inventory_digest: str | None = None
         if cursor:
             try:
-                cursor_time, cursor_id = json.loads(base64.urlsafe_b64decode(cursor + "=="))
+                decoded = json.loads(
+                    base64.urlsafe_b64decode(
+                        cursor + ("=" * (-len(cursor) % 4))
+                    )
+                )
+                if (
+                    not isinstance(decoded, dict)
+                    or set(decoded) != {
+                        "schema_version", "workspace_id", "include_trash",
+                        "profile_id", "updated_at", "conversation_id",
+                        "inventory_digest",
+                    }
+                    or decoded["schema_version"] != "butler.home.cursor.v2"
+                    or decoded["workspace_id"] != self.workspace_id
+                    or decoded["include_trash"] is not include_trash
+                    or decoded["profile_id"] != profile_id
+                ):
+                    raise ValueError("cursor scope mismatch")
+                cursor_time = decoded["updated_at"]
+                cursor_id = decoded["conversation_id"]
+                cursor_inventory_digest = decoded["inventory_digest"]
                 _validate_utc(cursor_time, "cursor")
                 _validate_safe_id(cursor_id, "INVALID_CURSOR")
+                if (
+                    not isinstance(cursor_inventory_digest, str)
+                    or not re.fullmatch(r"[a-f0-9]{64}", cursor_inventory_digest)
+                ):
+                    raise ValueError("invalid inventory digest")
             except Exception as exc:
                 raise ValidationError("INVALID_CURSOR") from exc
         db = self._connect(read_only=True)
@@ -1433,13 +1772,46 @@ class HomeStore:
                 "SELECT COUNT(*) FROM home_conversations WHERE workspace_id=? AND " + ("deleted_at IS NOT NULL" if include_trash else "deleted_at IS NULL"),
                 (self.workspace_id,),
             ).fetchone()[0])
+            filtered_clauses = [
+                "workspace_id=?",
+                "deleted_at IS NOT NULL" if include_trash else "deleted_at IS NULL",
+            ]
+            filtered_values: list[Any] = [self.workspace_id]
+            if profile_id is not None:
+                filtered_clauses.append("business_profile_id=?")
+                filtered_values.append(profile_id)
+            inventory_rows = list(db.execute(
+                f"""SELECT updated_at,conversation_id
+                    FROM home_conversations
+                    WHERE {' AND '.join(filtered_clauses)}
+                    ORDER BY updated_at DESC,conversation_id""",
+                filtered_values,
+            ))
+            filtered = len(inventory_rows)
+            inventory_digest = _digest([
+                [row["updated_at"], row["conversation_id"]]
+                for row in inventory_rows
+            ])
+            if (
+                cursor_inventory_digest is not None
+                and cursor_inventory_digest != inventory_digest
+            ):
+                raise ValidationError("INVALID_CURSOR")
         finally:
             db.close()
         has_more = len(rows) > int(limit)
         rows = rows[: int(limit)]
         next_cursor = None
         if has_more and rows:
-            next_cursor = base64.urlsafe_b64encode(_canonical([rows[-1]["updated_at"], rows[-1]["conversation_id"]]).encode()).decode().rstrip("=")
+            next_cursor = base64.urlsafe_b64encode(_canonical({
+                "schema_version": "butler.home.cursor.v2",
+                "workspace_id": self.workspace_id,
+                "include_trash": include_trash,
+                "profile_id": profile_id,
+                "updated_at": rows[-1]["updated_at"],
+                "conversation_id": rows[-1]["conversation_id"],
+                "inventory_digest": inventory_digest,
+            }).encode()).decode().rstrip("=")
         conversations_out = [
             {
                 "id": row["conversation_id"], "title": row["title"],
@@ -1468,7 +1840,8 @@ class HomeStore:
             "read_only": self.read_only,
             "startup": self.startup_status(),
             "total_conversation_count": total,
-            "filtered_conversation_count": len(conversations_out),
+            "filtered_conversation_count": filtered,
+            "inventory_digest": inventory_digest,
             "active_profile_filter": profile_id,
         }
 
@@ -1479,11 +1852,19 @@ class HomeStore:
         db = self._connect(read_only=True)
         try:
             exists = db.execute(
-                "SELECT 1 FROM home_conversations WHERE workspace_id=? AND conversation_id=?",
-                (self.workspace_id, conversation),
+                """SELECT (
+                    SELECT COUNT(*) FROM home_messages
+                    WHERE workspace_id=? AND conversation_id=?
+                ) AS message_count
+                FROM home_conversations
+                WHERE workspace_id=? AND conversation_id=?""",
+                (
+                    self.workspace_id, conversation, self.workspace_id, conversation,
+                ),
             ).fetchone()
             if not exists:
                 raise NotFoundError("CONVERSATION_NOT_FOUND")
+            message_count = int(exists["message_count"])
             rows = list(db.execute(
                 "SELECT * FROM home_messages WHERE workspace_id=? AND conversation_id=? AND sequence>? ORDER BY sequence LIMIT ?",
                 (self.workspace_id, conversation, after_sequence, limit + 1),
@@ -1494,17 +1875,16 @@ class HomeStore:
             return {
                 "schema_version": "butler.home.messages.v2", "messages": [],
                 "next_sequence": None, "partial_errors": [], "locked": True,
+                "message_count": message_count,
             }
         output: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
         for row in rows[:limit]:
             try:
                 content = self._decrypt(conversation, row["message_id"], row["ciphertext"])
-                if hashlib.sha256(content.encode()).hexdigest() != row["content_digest"]:
-                    raise ValueError("MESSAGE_DIGEST_MISMATCH")
                 output.append({
                     "id": row["message_id"], "role": row["role"], "content": content,
-                    "timestamp": row["timestamp"],
+                    "timestamp": row["timestamp"], "sequence": row["sequence"],
                     **({"source": row["source"]} if row["source"] is not None else {}),
                     **({"fact_id": row["fact_id"]} if row["fact_id"] is not None else {}),
                     **({"score": row["score"]} if row["score"] is not None else {}),
@@ -1515,6 +1895,7 @@ class HomeStore:
         return {
             "schema_version": "butler.home.messages.v2", "messages": output,
             "next_sequence": next_sequence, "partial_errors": errors, "locked": False,
+            "message_count": message_count,
         }
 
     def search(self, query: str, *, limit: int = 50, profile_id: str | None = None) -> dict[str, Any]:
