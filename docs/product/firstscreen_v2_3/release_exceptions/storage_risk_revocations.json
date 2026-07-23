@@ -1,0 +1,5 @@
+{
+  "schema_version": "butler.storage-risk-revocations.v1",
+  "decision_id": "STORAGE_RISK_FS_V2_3_001",
+  "revoked_epochs": []
+}

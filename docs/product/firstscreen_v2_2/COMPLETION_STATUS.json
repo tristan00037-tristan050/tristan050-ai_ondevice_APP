@@ -1,0 +1,79 @@
+{
+  "schema_version": "butler.firstscreen.completion.v2",
+  "evaluated_at_utc": "2026-07-20T00:00:00Z",
+  "scope": "FIRST_SCREEN_V2_2_PRODUCT_INTEGRATION",
+  "status": {
+    "DEVELOPMENT_COMPLETE": "NO",
+    "CODE_PASS": "NO",
+    "MERGE_READY": "NO",
+    "PRODUCT_RELEASE_READY": "NO",
+    "RUNTIME_ACTIVATION_ALLOWED": 0
+  },
+  "local_evidence": {
+    "handoff_zip_sha256": "0310425edc7600315ca34ad9e3ed7ac3e1812bdd14c3029d092a78fff1397039",
+    "handoff_crc": "PASS",
+    "handoff_internal_sha256": "44_OF_44_PASS",
+    "recovered_v2_1_source_tree": "a1f9d991eb31e5066a124dc9f27d7cb354afc3df",
+    "protected_accounting_review_changed_files": 0,
+    "python_collection": {
+      "status": "PASS",
+      "collected": 3166,
+      "errors": 0
+    },
+    "python_repository_regression": {
+      "status": "FAIL",
+      "passed": 3055,
+      "failed": 81,
+      "skipped": 32,
+      "junit": "evidence/pytest-repository-release.xml"
+    },
+    "firstscreen_targeted_python": {
+      "status": "PASS",
+      "passed": 43,
+      "failed": 0
+    },
+    "firstscreen_branch_coverage": {
+      "status": "FAIL",
+      "passed": 66,
+      "skipped": 1,
+      "measured_percent": 67.34,
+      "required_percent": 85.0,
+      "report": "evidence/coverage-firstscreen-final.xml"
+    },
+    "desktop_vitest": {
+      "status": "PASS",
+      "files_passed": 40,
+      "tests_passed": 331,
+      "failed": 0
+    },
+    "desktop_typescript_vite_build": "PASS",
+    "safe_source_without_git": "PASS",
+    "repository_contract_one_command": {
+      "status": "FAIL",
+      "failed_guard": "policy headers schema v1",
+      "error_code": "FILE_NOT_FOUND",
+      "evidence": "evidence/repo-contracts-summary.txt"
+    },
+    "playwright_axe_keyboard_actual_browser": "NOT_RUN_BROWSER_BINARY_UNAVAILABLE",
+    "tauri_macos_compile": "NOT_RUN_NO_MACOS_RUNNER",
+    "hosted_ci": "NOT_RUN_NO_CANONICAL_REMOTE_RUN"
+  },
+  "external_required_gates": {
+    "canonical_remote_push_clean_clone_pr_required_checks": "NOT_RUN",
+    "main_artifact_attestation": "NOT_RUN",
+    "signed_macos_15_arm64_app_e2e": "NOT_RUN",
+    "keychain_restart_decrypt_continuity": "NOT_RUN",
+    "voiceover_signed_app": "NOT_RUN",
+    "apple_silicon_m3_measurement": "NOT_RUN",
+    "metal_memory_thermal_power_raw_evidence": "NOT_RUN",
+    "independent_process_reproduction": "NOT_RUN"
+  },
+  "closed_decisions": {
+    "FS21-P0-005": {
+      "status": "ACCEPTED_SIGNED_RISK_DECISION",
+      "canonical_signature_digest": "1ae3c4e9e6f34976b224d633d7a2932589fea12757b76f6d72320540f25667ae",
+      "expires_at": "2027-01-20T00:00:00Z"
+    }
+  },
+  "completion_rule": "No partial, local, generated, or self-verified evidence is promoted to CODE_PASS."
+}

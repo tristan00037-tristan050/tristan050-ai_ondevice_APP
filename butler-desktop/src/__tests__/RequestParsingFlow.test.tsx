@@ -161,7 +161,8 @@ describe('RequestParsingModal', () => {
       expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
     });
     const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url as string).toContain('/request_parsing/parse_file_stream');
+    expect(url).toBeInstanceOf(URL);
+    expect((url as URL).pathname).toBe('/request_parsing/parse_file_stream');
     expect((opts as RequestInit).method).toBe('POST');
     expect((opts as RequestInit).body).toBeInstanceOf(FormData);
   });

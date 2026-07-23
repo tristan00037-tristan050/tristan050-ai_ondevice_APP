@@ -1,0 +1,26 @@
+{
+  "schema_version": "2.3.0",
+  "decision_id": "STORAGE_RISK_FS_V2_3_001",
+  "decision_owner": "ATLink 대표",
+  "approved_at": "2026-07-20",
+  "expires_at": "2027-01-20",
+  "key_id": "REPLACE_WITH_KEY_ID",
+  "revocation_epoch": 0,
+  "signature_scheme": "ssh-ed25519-detached; namespace=butler-storage-risk; sig_file=storage_risk_acceptance_FS_v2_3.json.sig",
+  "plaintext_scope": ["CONVERSATION_TITLE", "FTS_TITLE_INDEX"],
+  "protection_boundary": ["ON_DEVICE", "OS_USER_BOUNDARY", "APP_DATA_PATH", "OWNER_MODE_GUARD"],
+  "unprotected_threats": ["ADMIN_OR_ROOT", "SAME_USER_MALWARE", "UNLOCKED_DEVICE", "PLAINTEXT_TITLE_DISCLOSURE"],
+  "review_triggers": [
+    "개인정보·금융 규제 또는 컴플라이언스 요구가 변경될 때 즉시 재검토",
+    "엔터프라이즈·고객이 제목 암호화 또는 종단간 보호를 계약 요건으로 요구할 때",
+    "대화 데이터가 온디바이스를 벗어나 외부 저장·동기화·백업 대상이 될 때",
+    "규제 대상 민감정보를 대화 제목에 저장하게 될 때",
+    "만료일(expires_at) 도래 시"
+  ],
+  "competitor_equivalence_proven": false,
+  "maintenance_conditions": [
+    "대화 본문 메시지는 AES-GCM 암호화를 유지한다",
+    "앱데이터 경로 소유자·권한·심볼릭링크 가드를 유지한다",
+    "저장소 초기화 실패 시 조용히 파괴하지 않고 읽기전용으로 멈춘다"
+  ]
+}

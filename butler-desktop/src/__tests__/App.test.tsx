@@ -8,6 +8,33 @@ vi.mock('@tauri-apps/api/core', () => ({
     command === 'get_sidecar_capability_token' ? 'test-capability-token' : undefined,
 }));
 
+vi.mock('../lib/home/client', () => {
+  const folders = [
+    { folder_id: 'system-unclassified', parent_id: null, display_name: '미분류', system_kind: 'UNCLASSIFIED', version: 1, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+    { folder_id: 'system-trash', parent_id: null, display_name: '휴지통', system_kind: 'TRASH', version: 1, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+  ];
+  return {
+    HomeApiError: class HomeApiError extends Error { constructor(readonly status: number, readonly code: string) { super(code); } },
+    fetchHomeBootstrapStatus: async () => ({ schema_version: '2.1.0', status: 'HOME_READY', read_only: false, mutation_allowed: true, model_execution_allowed: true, existing_conversation_count: 0, support_code: 'HOME_TEST_READY', checked_at: '2026-01-01T00:00:00Z', tree_oid: null }),
+    fetchHomeSnapshot: async () => ({ schema_version: 'butler.home.snapshot.v2', workspace_id: '00000000-0000-4000-8000-000000000001', folders, conversations: [], next_cursor: null, partial_errors: [], read_only: false }),
+    fetchRuntimeStatus: async () => ({ schema_version: 'butler.home.runtime-status.v2', policy: { state: 'UNKNOWN', source: 'NOT_BOUND', evaluated_at: null }, measurement: { status: 'MEASUREMENT_UNAVAILABLE', receipt_digest: null, measured_at: null, source: null, freshness: 'UNAVAILABLE' }, display: '측정 자료 없음' }),
+    migrateLegacyConversations: async () => ({ schema_version: 'butler.home.snapshot.v2', workspace_id: '00000000-0000-4000-8000-000000000001', folders, conversations: [], next_cursor: null, partial_errors: [], read_only: false }),
+    acceptUserTurn: async () => ({ schema_version: '2.1.0', turn_id: '00000000-0000-4000-8000-000000000010', model_request_id: '00000000-0000-4000-8000-000000000011', conversation_id: 'conversation-test', conversation_version: 1, version: 1, folder_id: 'system-unclassified', request_id: '00000000-0000-4000-8000-000000000002', durable: true }),
+    appendAssistantTurn: async () => ({ version: 2, updated_at: '2026-01-01T00:00:01Z', request_id: '00000000-0000-4000-8000-000000000003', durable: true }),
+    recordTerminal: async () => undefined,
+    fetchConversationMessages: async () => [],
+    searchConversations: async () => [],
+    createFolder: async () => { throw new Error('unused'); },
+    deleteFolder: async () => undefined,
+    moveConversation: async () => { throw new Error('unused'); },
+    permanentlyDeleteConversation: async () => undefined,
+    renameConversation: async () => { throw new Error('unused'); },
+    renameFolder: async () => { throw new Error('unused'); },
+    restoreConversation: async () => { throw new Error('unused'); },
+    trashConversation: async () => { throw new Error('unused'); },
+  };
+});
+
 import { App } from '../App';
 
 beforeEach(() => {
@@ -73,6 +100,7 @@ describe('App integration', () => {
     vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
 
     const { container } = render(<App />);
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
 
     // 파일 첨부 (hidden file input 직접 조작)
     const file = new File(['통장내용'], 'bank.pdf', { type: 'application/pdf' });
@@ -120,6 +148,7 @@ describe('App integration', () => {
     vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
 
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
 
     fireEvent.change(screen.getByTestId('text-input'), {
       target: { value: 'test query' },
@@ -157,6 +186,7 @@ describe('App integration', () => {
     });
 
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
 
     fireEvent.change(screen.getByTestId('text-input'), { target: { value: '질문' } });
     await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
@@ -187,6 +217,7 @@ describe('App integration', () => {
     });
 
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
 
     fireEvent.change(screen.getByTestId('text-input'), { target: { value: '질문' } });
     await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
@@ -216,6 +247,7 @@ describe('App integration', () => {
     });
 
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
     fireEvent.change(screen.getByTestId('text-input'), { target: { value: '사실 확인' } });
     await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
 
@@ -243,6 +275,7 @@ describe('App integration', () => {
     });
 
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
     fireEvent.change(screen.getByTestId('text-input'), { target: { value: '질문' } });
     await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
 
@@ -253,11 +286,15 @@ describe('App integration', () => {
 
   it('test_status_message_displayed_during_processing', async () => {
     // ChatInput에 처리 중 상태 텍스트 요소 표시 (WKWebView placeholder 대응)
-    vi.spyOn(global, 'fetch').mockImplementation(() =>
-      Promise.resolve(new Response(new ReadableStream({ start(c) { c.close(); } }), { status: 200 }))
-    );
+    let closeStream!: () => void;
+    const pendingStream = new ReadableStream({ start(controller) { closeStream = () => controller.close(); } });
+    vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
+      if (String(url).includes('/health')) return Promise.resolve(new Response(JSON.stringify({ status: 'ok', version: '0.9.0' }), { headers: { 'Content-Type': 'application/json' } }));
+      return Promise.resolve(new Response(pendingStream, { status: 200 }));
+    });
 
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
     fireEvent.change(screen.getByTestId('text-input'), { target: { value: '질문' } });
 
     await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
@@ -266,6 +303,7 @@ describe('App integration', () => {
     await waitFor(() => {
       expect(screen.getByTestId('processing-status-text')).toBeInTheDocument();
     }, { timeout: 1000 });
+    closeStream();
   });
 
   it('test_phase_start_message_visible_with_flushsync', async () => {
@@ -288,6 +326,7 @@ describe('App integration', () => {
     });
 
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
     fireEvent.change(screen.getByTestId('text-input'), { target: { value: '질문' } });
     await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
 
@@ -319,6 +358,7 @@ describe('App integration', () => {
     });
 
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
     fireEvent.change(screen.getByTestId('text-input'), { target: { value: '인사' } });
     await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
 
@@ -356,6 +396,7 @@ describe('App integration', () => {
     });
 
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
     fireEvent.change(screen.getByTestId('text-input'), { target: { value: '취소 테스트' } });
     await act(async () => { fireEvent.click(screen.getByTestId('send-btn')); });
 
@@ -364,18 +405,17 @@ describe('App integration', () => {
       expect(screen.getByTestId('cancel-btn')).toBeInTheDocument();
     }, { timeout: 1000 });
 
-    // Click cancel — handleStop fires, pendingBot cleared
+    // Click cancel — durable terminal state is recorded and the cancelled state is visible.
     await act(async () => {
       fireEvent.click(screen.getByTestId('cancel-btn'));
       resolveStream(); // let the stream close
     });
 
-    // After cancel: processing stopped, cancel-btn gone, no result content
+    // After cancel: processing stopped and the user receives an explicit cancelled state.
     await waitFor(() => {
       expect(screen.queryByTestId('cancel-btn')).not.toBeInTheDocument();
     }, { timeout: 1000 });
-    // No bot result content in the DOM
-    expect(screen.queryByTestId('result-panel')).not.toBeInTheDocument();
+    expect(screen.getByTestId('result-panel')).toHaveTextContent('작업이 중단됐습니다.');
   });
 
   it('test_happy_no_files_works_with_text_only', async () => {
@@ -384,6 +424,7 @@ describe('App integration', () => {
     vi.spyOn(global, 'fetch').mockImplementation(fetchMock);
 
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
 
     fireEvent.change(screen.getByTestId('text-input'), {
       target: { value: '회의록 정리' },

@@ -50,6 +50,10 @@ BUILD_OID="$(cd "$ROOT" && git rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" 
   echo "❌ git commit OID 확인 실패 — provenance 없는 앱 생성 차단"
   exit 1
 }
+BUILD_TREE_OID="$(cd "$ROOT" && git rev-parse --verify 'HEAD^{tree}' 2>/dev/null)" || {
+  echo "git tree OID 확인 실패 — provenance 없는 앱 생성 차단"
+  exit 1
+}
 BUILD_DESC="$(cd "$ROOT" && git describe --always --dirty 2>/dev/null || echo unknown)"
 BUILD_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 APP_VER="$(cd "$ROOT/butler-desktop" && node -p "require('./package.json').version" 2>/dev/null)" || {
@@ -59,6 +63,7 @@ APP_VER="$(cd "$ROOT/butler-desktop" && node -p "require('./package.json').versi
 if ! "$APP_PY" "$ROOT/scripts/write_build_info.py" \
   --output "$RES/BUILD_INFO.json" \
   --build-oid "$BUILD_OID" \
+  --tree-oid "$BUILD_TREE_OID" \
   --git-describe "$BUILD_DESC" \
   --timestamp-utc "$BUILD_TS" \
   --app-version "$APP_VER"; then

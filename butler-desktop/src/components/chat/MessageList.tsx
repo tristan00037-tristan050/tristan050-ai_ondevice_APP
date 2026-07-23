@@ -45,6 +45,7 @@ export function MessageList({ messages, pendingBot, onRetry }: MessageListProps)
         style={{
           maxWidth: 760,
           margin: '0 auto',
+          unicodeBidi: 'plaintext',
         }}
       >
         {messages.map((msg, idx) => {

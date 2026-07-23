@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:firstscreen:completion-status:v2.5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "source_identity", "firstscreen_component_pass", "repository_integration_pass", "canonical_remote_verified", "main_provenance_verified", "signed_macos_e2e_pass", "keychain_continuity_pass", "accessibility_pass", "m3_measurement_pass", "code_pass", "merge_ready", "product_release_ready", "runtime_activation_allowed", "findings", "external_gates", "local_measurements"],
+  "properties": {
+    "schema_version": {"const": "butler.firstscreen.completion-status.v2.5"},
+    "status": {"enum": ["BLOCKED", "IMPLEMENTED_LOCAL_EXTERNAL_GATES_OPEN", "MERGE_READY_ACTIVATION_DISABLED"]},
+    "source_identity": {
+      "type": "object", "additionalProperties": false, "required": ["commit", "tree", "imported_from_commit", "imported_from_tree"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}, "tree": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+        "imported_from_commit": {"const": "fde4091cb244853e3f22817b23122f919841558b"}, "imported_from_tree": {"const": "0ad31a2ec73cb469d176fcf6ac779ce1088ab9a8"}
+      }
+    },
+    "firstscreen_component_pass": {"type": "boolean"}, "repository_integration_pass": {"type": "boolean"},
+    "canonical_remote_verified": {"type": "boolean"}, "main_provenance_verified": {"type": "boolean"},
+    "signed_macos_e2e_pass": {"type": "boolean"}, "keychain_continuity_pass": {"type": "boolean"},
+    "accessibility_pass": {"type": "boolean"}, "m3_measurement_pass": {"type": "boolean"},
+    "code_pass": {"type": "boolean"}, "merge_ready": {"type": "boolean"}, "product_release_ready": {"type": "boolean"},
+    "runtime_activation_allowed": {"const": 0},
+    "findings": {"type": "array", "minItems": 22, "maxItems": 22, "items": {"$ref": "#/$defs/finding"}},
+    "external_gates": {"type": "object", "minProperties": 6, "additionalProperties": {"enum": ["NOT_RUN", "PASS", "FAIL", "BLOCKED_OWNER", "BLOCKED_EXTERNAL"]}},
+    "local_measurements": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["firstscreen_junit", "repository_junit", "vitest_junit", "native_rust_compile", "release_subjects"]
+    }
+  },
+  "$defs": {
+    "digest_or_null": {"oneOf": [{"type": "string", "pattern": "^[0-9a-f]{64}$"}, {"type": "null"}]},
+    "finding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "status", "code_blob_digest", "test_id", "evidence_digest"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^FS23-P[012]-[0-9]{3}$"},
+        "status": {"enum": ["OPEN", "FIXED_TESTED", "BLOCKED_OWNER", "BLOCKED_EXTERNAL", "NOT_RUN"]},
+        "code_blob_digest": {"$ref": "#/$defs/digest_or_null"}, "test_id": {"oneOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "evidence_digest": {"$ref": "#/$defs/digest_or_null"}
+      }
+    }
+  }
+}

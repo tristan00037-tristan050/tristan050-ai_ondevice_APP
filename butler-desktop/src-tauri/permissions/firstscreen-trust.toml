@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-verify-and-commit-trust-update"
+description = "Allows only the native verify-and-CAS trust update command."
+commands.allow = ["verify_and_commit_trust_update"]
+
+[[permission]]
+identifier = "deny-verify-and-commit-trust-update"
+description = "Explicitly denies the native trust update command."
+commands.deny = ["verify_and_commit_trust_update"]

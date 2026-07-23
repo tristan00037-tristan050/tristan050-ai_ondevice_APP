@@ -6,6 +6,20 @@ vi.mock('@tauri-apps/api/core', () => ({
     command === 'get_sidecar_capability_token' ? 'test-capability-token' : undefined,
 }));
 
+vi.mock('../lib/home/client', () => ({
+  HomeApiError: class HomeApiError extends Error {},
+  fetchHomeBootstrapStatus: async () => ({ schema_version: '2.1.0', status: 'HOME_READY', read_only: false, mutation_allowed: true, model_execution_allowed: true, existing_conversation_count: 0, support_code: 'HOME_TEST_READY', checked_at: '2026-01-01T00:00:00Z', tree_oid: null }),
+  fetchHomeSnapshot: async () => ({ schema_version: 'butler.home.snapshot.v2', workspace_id: 'test-workspace', folders: [], conversations: [], next_cursor: null, partial_errors: [], read_only: false }),
+  fetchRuntimeStatus: async () => ({ schema_version: 'v2', policy: { state: 'UNKNOWN', source: 'NOT_BOUND', evaluated_at: null }, measurement: { status: 'MEASUREMENT_UNAVAILABLE', receipt_digest: null, measured_at: null, source: null, freshness: 'UNAVAILABLE' }, display: '측정 자료 없음' }),
+  migrateLegacyConversations: async () => ({ schema_version: 'butler.home.snapshot.v2', workspace_id: 'test-workspace', folders: [], conversations: [], next_cursor: null, partial_errors: [], read_only: false }),
+  acceptUserTurn: async () => ({ schema_version: '2.1.0', turn_id: '00000000-0000-4000-8000-000000000010', model_request_id: '00000000-0000-4000-8000-000000000011', conversation_id: 'conversation-test', conversation_version: 1, version: 1, folder_id: 'system-unclassified', request_id: 'request', durable: true }),
+  appendAssistantTurn: async () => ({ version: 2, updated_at: '2026-01-01T00:00:00Z', request_id: 'request', durable: true }),
+  recordTerminal: async () => undefined,
+  fetchConversationMessages: async () => [], searchConversations: async () => [], createFolder: async () => ({}), deleteFolder: async () => undefined,
+  moveConversation: async () => ({}), permanentlyDeleteConversation: async () => undefined, renameConversation: async () => ({}),
+  renameFolder: async () => ({}), restoreConversation: async () => ({}), trashConversation: async () => ({}),
+}));
+
 function makeFetchMock() {
   return vi.fn().mockImplementation((url: string | URL | Request) => {
     if (String(url).includes('/health')) {
@@ -87,6 +101,8 @@ describe('Box4 document_review feature flag (default ON)', () => {
     expect(sidecarCardMode('attachment_edit')).toBe('4');
 
     render(<App />);
+
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
 
     fireEvent.click(screen.getByTestId('card-4'));
     fireEvent.change(screen.getByTestId('text-input'), {

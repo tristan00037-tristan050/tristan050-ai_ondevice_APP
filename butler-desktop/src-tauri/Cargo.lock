@@ -38,7 +38,10 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "819e7219dbd41043ac279b19830f2efc897156490d7fd6ea916720117ee66311"
 dependencies = [
+ "base64 0.22.1",
+ "chrono",
  "libc",
+ "ring",
 ]
 
 [[package]]
@@ -173,8 +176,10 @@ checksum = "5d20789868f4b01b2f2caec9f5c4e0213b41e3e5702a50157d699ae31ced2fcb"
 name = "butler-desktop"
 version = "0.9.0"
 dependencies = [
+ "libc",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",

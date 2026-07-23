@@ -12,10 +12,12 @@ from pathlib import Path
 from typing import Mapping
 
 _OID_RE = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
+_SAFE_TEXT_RE = re.compile(r"[A-Za-z0-9._/+:-]{1,128}\Z")
 _UTC_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 _REQUIRED_KEYS = {
     "app",
     "build_base_commit_oid",
+    "build_tree_oid",
     "git_describe",
     "build_timestamp_utc",
     "app_version",
@@ -27,28 +29,34 @@ class BuildInfoWriteError(RuntimeError):
     """Stable failure boundary for build provenance generation."""
 
 
-def _validated_payload(
-    *, build_oid: str, git_describe: str, timestamp_utc: str, app_version: str
+def validated_build_info_payload(
+    *, build_oid: str, tree_oid: str, git_describe: str, timestamp_utc: str,
+    app_version: str, builder: str = "build_complete_app.sh",
 ) -> dict[str, str]:
     if not _OID_RE.fullmatch(build_oid):
         raise BuildInfoWriteError("INVALID_BUILD_OID")
+    if not _OID_RE.fullmatch(tree_oid):
+        raise BuildInfoWriteError("INVALID_TREE_OID")
     try:
         parsed_timestamp = datetime.strptime(timestamp_utc, _UTC_TIMESTAMP_FORMAT)
     except ValueError as exc:
         raise BuildInfoWriteError("INVALID_BUILD_TIMESTAMP") from exc
     if parsed_timestamp.strftime(_UTC_TIMESTAMP_FORMAT) != timestamp_utc:
         raise BuildInfoWriteError("INVALID_BUILD_TIMESTAMP")
-    if not app_version.strip() or app_version == "unknown":
+    if app_version == "unknown" or not _SAFE_TEXT_RE.fullmatch(app_version):
         raise BuildInfoWriteError("INVALID_APP_VERSION")
-    if not git_describe.strip():
+    if not _SAFE_TEXT_RE.fullmatch(git_describe):
         raise BuildInfoWriteError("INVALID_GIT_DESCRIBE")
+    if not _SAFE_TEXT_RE.fullmatch(builder):
+        raise BuildInfoWriteError("INVALID_BUILDER")
     return {
         "app": "Butler",
         "build_base_commit_oid": build_oid,
+        "build_tree_oid": tree_oid,
         "git_describe": git_describe,
         "build_timestamp_utc": timestamp_utc,
         "app_version": app_version,
-        "builder": "build_complete_app.sh",
+        "builder": builder,
     }
 
 
@@ -63,15 +71,18 @@ def write_build_info(
     output: Path,
     *,
     build_oid: str,
+    tree_oid: str,
     git_describe: str,
     timestamp_utc: str,
     app_version: str,
+    builder: str = "build_complete_app.sh",
 ) -> None:
-    payload = _validated_payload(
-        build_oid=build_oid,
+    payload = validated_build_info_payload(
+        build_oid=build_oid, tree_oid=tree_oid,
         git_describe=git_describe,
         timestamp_utc=timestamp_utc,
         app_version=app_version,
+        builder=builder,
     )
     if not output.parent.is_dir():
         raise BuildInfoWriteError("BUILD_INFO_PARENT_MISSING")
@@ -122,9 +133,11 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--build-oid", required=True)
+    parser.add_argument("--tree-oid", required=True)
     parser.add_argument("--git-describe", required=True)
     parser.add_argument("--timestamp-utc", required=True)
     parser.add_argument("--app-version", required=True)
+    parser.add_argument("--builder", default="build_complete_app.sh")
     return parser.parse_args()
 
 
@@ -134,9 +147,11 @@ def main() -> int:
         write_build_info(
             args.output,
             build_oid=args.build_oid,
+            tree_oid=args.tree_oid,
             git_describe=args.git_describe,
             timestamp_utc=args.timestamp_utc,
             app_version=args.app_version,
+            builder=args.builder,
         )
     except BuildInfoWriteError as exc:
         print(f"BUILD_INFO_WRITE_OK=0 ERROR_CODE={exc}")

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import type { Conversation } from '../../types';
 
 interface ConversationItemProps {
@@ -22,6 +22,8 @@ export function ConversationItem({
   const [isHovered, setIsHovered] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
 
   // Auto focus + select all when entering edit mode
   useEffect(() => {
@@ -34,6 +36,7 @@ export function ConversationItem({
   // Close menu when clicking outside
   useEffect(() => {
     if (!menuOpen) return;
+    menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
     const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
@@ -42,6 +45,28 @@ export function ConversationItem({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [menuOpen]);
+
+  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')
+    );
+    if (!items.length) return;
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      items[(current + 1 + items.length) % items.length].focus();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      items[(current - 1 + items.length) % items.length].focus();
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      items[event.key === 'Home' ? 0 : items.length - 1].focus();
+    }
+  };
 
   const commitRename = () => {
     const trimmed = editValue.trim();
@@ -80,6 +105,10 @@ export function ConversationItem({
       data-testid={`conv-item-${conversation.id}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onFocus={() => setIsHovered(true)}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsHovered(false);
+      }}
       style={{
         position: 'relative',
         borderRadius: 8,
@@ -115,11 +144,17 @@ export function ConversationItem({
           onClick={e => e.stopPropagation()}
         />
       ) : (
-        <span
+        <button
+          type="button"
           onClick={handleItemClick}
           onDoubleClick={handleDoubleClick}
           style={{
             flex: 1,
+            border: 0,
+            padding: 0,
+            background: 'transparent',
+            cursor: 'pointer',
+            textAlign: 'left',
             fontSize: 'var(--text-sm)',
             color: isActive ? 'var(--color-brand-primary)' : 'var(--color-text-primary)',
             fontWeight: isActive ? 600 : 400,
@@ -129,13 +164,15 @@ export function ConversationItem({
           }}
         >
           {conversation.title}
-        </span>
+        </button>
       )}
 
-      {!editMode && isHovered && (
+      {!editMode && (
         <div style={{ position: 'relative' }} ref={menuRef}>
           <button
+            ref={menuButtonRef}
             data-testid="conv-menu-btn"
+            data-conversation-menu={conversation.id}
             onClick={e => {
               e.stopPropagation();
               setMenuOpen(o => !o);
@@ -149,14 +186,22 @@ export function ConversationItem({
               color: 'var(--color-text-secondary)',
               fontSize: 16,
               lineHeight: 1,
+              opacity: isHovered || menuOpen ? 1 : 0.55,
             }}
             aria-label="대화 메뉴"
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            aria-controls={menuOpen ? menuId : undefined}
           >
             ⋯
           </button>
 
           {menuOpen && (
             <div
+              id={menuId}
+              role="menu"
+              aria-label="대화 작업"
+              onKeyDown={handleMenuKeyDown}
               style={{
                 position: 'absolute',
                 right: 0,
@@ -171,6 +216,7 @@ export function ConversationItem({
               }}
             >
               <button
+                role="menuitem"
                 data-testid="rename-menu-item"
                 onClick={e => {
                   e.stopPropagation();
@@ -193,6 +239,7 @@ export function ConversationItem({
                 이름 변경
               </button>
               <button
+                role="menuitem"
                 data-testid="delete-menu-item"
                 onClick={e => {
                   e.stopPropagation();

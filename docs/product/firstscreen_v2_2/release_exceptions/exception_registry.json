@@ -1,0 +1,20 @@
+{
+  "schema_version": "butler.release-exceptions.v1",
+  "entries": [
+    {
+      "finding_id": "FS21-P0-005",
+      "status": "INVALIDATED_SELF_HASH_NOT_SIGNATURE",
+      "owner": "ATLink 대표",
+      "expires_at": "2027-01-20T00:00:00Z",
+      "artifact": "storage_risk_acceptance_FS_v2_1.json",
+      "scope": ["CONVERSATION_TITLE", "FTS_TITLE_INDEX"]
+    },
+    {
+      "finding_id": "FS21-P1-019",
+      "status": "OPEN_UNSIGNED",
+      "owner": "UNASSIGNED",
+      "expires_at": null,
+      "scope": ["AUDIT_HMAC_CHAIN", "NON_MAC_CREDENTIAL_PROVIDER", "RECOVERY_REKEY", "PERFORMANCE_BUDGET"]
+    }
+  ]
+}

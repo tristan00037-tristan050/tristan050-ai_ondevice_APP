@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ConversationItem } from '../components/chat/ConversationItem';
 import type { Conversation } from '../types';
 
@@ -145,5 +145,30 @@ describe('ConversationItem', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(onRename).not.toHaveBeenCalled();
+  });
+
+  it('supports menu arrow navigation and Escape focus return', async () => {
+    render(
+      <ConversationItem
+        conversation={makeConv()}
+        isActive={false}
+        onSelect={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    const trigger = screen.getByTestId('conv-menu-btn');
+    fireEvent.click(trigger);
+    const rename = screen.getByTestId('rename-menu-item');
+    const remove = screen.getByTestId('delete-menu-item');
+    await waitFor(() => expect(rename).toHaveFocus());
+    fireEvent.keyDown(rename, { key: 'ArrowDown' });
+    expect(remove).toHaveFocus();
+    fireEvent.keyDown(remove, { key: 'ArrowUp' });
+    expect(rename).toHaveFocus();
+    fireEvent.keyDown(rename, { key: 'Escape' });
+    expect(trigger).toHaveFocus();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 });

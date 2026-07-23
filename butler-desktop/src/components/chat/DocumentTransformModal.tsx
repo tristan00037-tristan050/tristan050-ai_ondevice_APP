@@ -4,8 +4,6 @@
  * 파일만 유지하며, P3~P11 잔여 큐의 테스트 마이그레이션 후 제거 예정.
  */
 import React, { useCallback, useRef, useState } from 'react';
-import { save as tauriSave } from '@tauri-apps/plugin-dialog';
-import { writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
 import {
   ArrowRightLeft,
   X,
@@ -21,6 +19,7 @@ import {
 } from 'lucide-react';
 import { SIDECAR_BASE } from '../../constants';
 import { sidecarFetch } from '../../lib/sidecarFetch';
+import { saveExportFile } from '../../lib/nativeSave';
 
 interface DocumentTransformModalProps {
   onClose: () => void;
@@ -272,14 +271,10 @@ export function DocumentTransformModal({ onClose }: DocumentTransformModalProps)
   const handleDownloadDocx = async () => {
     if (phase.kind !== 'done') return;
     try {
-      const savePath = await tauriSave({
-        defaultPath: 'butler_transform_result.docx',
-        filters: [{ name: 'Word', extensions: ['docx'] }],
-      });
-      if (!savePath) return;
       const resp = await fetch(`${SIDECAR_BASE}/document_transform/result/${phase.resultId}/docx`);
+      if (!resp.ok) throw new Error('DOWNLOAD_RESPONSE_INVALID');
       const bytes = new Uint8Array(await resp.arrayBuffer());
-      await tauriWriteFile(savePath, bytes);
+      await saveExportFile('butler_transform_result.docx', 'docx', bytes);
     } catch (err) {
       console.error('docx download error', err);
     }
@@ -288,14 +283,10 @@ export function DocumentTransformModal({ onClose }: DocumentTransformModalProps)
   const handleDownloadMd = async () => {
     if (phase.kind !== 'done') return;
     try {
-      const savePath = await tauriSave({
-        defaultPath: 'butler_transform_result.md',
-        filters: [{ name: 'Markdown', extensions: ['md'] }],
-      });
-      if (!savePath) return;
       const resp = await fetch(`${SIDECAR_BASE}/document_transform/result/${phase.resultId}/md`);
+      if (!resp.ok) throw new Error('DOWNLOAD_RESPONSE_INVALID');
       const bytes = new Uint8Array(await resp.arrayBuffer());
-      await tauriWriteFile(savePath, bytes);
+      await saveExportFile('butler_transform_result.md', 'md', bytes);
     } catch (err) {
       console.error('md download error', err);
     }

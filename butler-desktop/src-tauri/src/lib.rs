@@ -3,7 +3,7 @@ use std::{
     env,
     fs::{self, OpenOptions},
     io::Write,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::Command,
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
@@ -14,7 +14,13 @@ use tauri_plugin_shell::{
     ShellExt,
 };
 
+mod build_identity;
+mod export;
+mod runtime_trust;
+
 const SIDECAR_ENV_CONFIG: &str = "sidecar-env.json";
+const BUTLER_APP_DATA_DIR_ENV: &str = "BUTLER_APP_DATA_DIR";
+const BUTLER_HOME_BOOTSTRAP_ENV: &str = "BUTLER_HOME_BOOTSTRAP_NEW_INSTALL";
 const MODEL_TIER_NATIVE_TELEMETRY_ENV: &str = "BUTLER_MODEL_TIER_NATIVE_TELEMETRY_JSON";
 const BUTLER_MODEL_PATH_ENV: &str = "BUTLER_MODEL_PATH";
 const BOX3_V9_MODEL_PATH_ENV: &str = "BUTLER_BOX3_V9_Q4_MODEL_PATH";
@@ -297,6 +303,37 @@ fn resolve_sidecar_env(app: &tauri::AppHandle) -> Result<Vec<(String, String)>, 
     let box3_v9_model_path = env_value_or_config(&config, BOX3_V9_MODEL_PATH_ENV);
 
     let mut values = Vec::new();
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "APP_DATA_DIR_UNAVAILABLE".to_string())?;
+    fs::create_dir_all(&app_data_dir).map_err(|_| "APP_DATA_DIR_CREATE_FAILED".to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&app_data_dir, fs::Permissions::from_mode(0o700))
+            .map_err(|_| "APP_DATA_DIR_PERMISSION_FAILED".to_string())?;
+    }
+    values.push((
+        BUTLER_APP_DATA_DIR_ENV.to_string(),
+        app_data_dir.to_string_lossy().to_string(),
+    ));
+    let home_root = app_data_dir.join("home");
+    let home_db = home_root.join("home.sqlite3");
+    let has_existing_home = [
+        home_db.clone(),
+        PathBuf::from(format!("{}-wal", home_db.display())),
+        PathBuf::from(format!("{}-shm", home_db.display())),
+        PathBuf::from(format!("{}-journal", home_db.display())),
+        home_root.join("workspace.id"),
+        home_root.join("home.key"),
+        home_root.join("backups"),
+    ]
+    .iter()
+    .any(|path| path.exists());
+    if !has_existing_home {
+        values.push((BUTLER_HOME_BOOTSTRAP_ENV.to_string(), "1".to_string()));
+    }
     if let Some(value) = butler_model_path {
         values.push((BUTLER_MODEL_PATH_ENV.to_string(), value));
     }
@@ -473,9 +510,24 @@ Pages purgeable: 2.\n";
 }
 
 #[tauri::command]
-fn get_sidecar_capability_token() -> Result<String, String> {
-    let home = env::var("HOME").map_err(|_| "HOME_UNAVAILABLE".to_string())?;
-    let token_path = Path::new(&home).join(".butler").join("sidecar_token");
+fn get_sidecar_capability_token(app: tauri::AppHandle) -> Result<String, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "APP_DATA_DIR_UNAVAILABLE".to_string())?;
+    let token_path = app_data_dir.join("ipc").join("sidecar.capability");
+    let metadata = fs::symlink_metadata(&token_path)
+        .map_err(|_| "CAPABILITY_TOKEN_UNAVAILABLE".to_string())?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err("CAPABILITY_TOKEN_TYPE_INVALID".to_string());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o777 != 0o600 {
+            return Err("CAPABILITY_TOKEN_MODE_INVALID".to_string());
+        }
+    }
     let token =
         fs::read_to_string(&token_path).map_err(|_| "CAPABILITY_TOKEN_UNAVAILABLE".to_string())?;
     let trimmed = token.trim().to_string();
@@ -496,6 +548,12 @@ pub fn run() {
             child: Mutex::new(None),
         })
         .setup(|app| {
+            // Trust continuity is restored and validated before any sidecar
+            // process can observe or serve product state.  Corruption blocks
+            // startup; it never falls back to a fresh v1 bootstrap.
+            let authority = runtime_trust::initialize_authority()
+                .map_err(|code| std::io::Error::other(code))?;
+            app.manage(authority);
             let app_handle = app.handle().clone();
             tauri::async_runtime::block_on(async move {
                 match spawn_sidecar(&app_handle).await {
@@ -529,7 +587,12 @@ pub fn run() {
                 stop_sidecar(window.app_handle(), "window_destroyed");
             }
         })
-        .invoke_handler(tauri::generate_handler![get_sidecar_capability_token])
+        .invoke_handler(tauri::generate_handler![
+            get_sidecar_capability_token,
+            build_identity::get_native_build_context_digest,
+            runtime_trust::verify_and_commit_trust_update,
+            export::save_export_file
+        ])
         .build(tauri::generate_context!())
         .expect("Tauri 앱 빌드 실패")
         .run(|app_handle, event| match event {

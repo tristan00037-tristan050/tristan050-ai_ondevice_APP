@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:firstscreen:root-policy:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "policy_id", "version", "expires_at_utc", "consistent_snapshot", "keys", "roles", "previous_root_digest", "signatures"],
+  "properties": {
+    "schema_version": {"const": "butler.firstscreen.root-policy.v1"},
+    "policy_id": {"const": "butler-firstscreen-trust"},
+    "version": {"type": "integer", "minimum": 1},
+    "expires_at_utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "consistent_snapshot": {"const": true},
+    "keys": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^ed25519\\.[0-9a-f]{64}$"},
+      "additionalProperties": {"$ref": "#/$defs/key"}
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "risk-decision", "revocation", "release"],
+      "properties": {
+        "root": {"$ref": "#/$defs/role"},
+        "risk-decision": {"$ref": "#/$defs/role"},
+        "revocation": {"$ref": "#/$defs/role"},
+        "release": {"$ref": "#/$defs/role"}
+      }
+    },
+    "previous_root_digest": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "signatures": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/signature"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "key_id": {"type": "string", "pattern": "^ed25519\\.[0-9a-f]{64}$"},
+    "key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "public_key"],
+      "properties": {
+        "algorithm": {"const": "ed25519"},
+        "public_key": {"type": "string", "pattern": "^[A-Za-z0-9_-]{43}$"}
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key_ids", "threshold"],
+      "properties": {
+        "key_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/key_id"}},
+        "threshold": {"type": "integer", "minimum": 1}
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key_id", "signature"],
+      "properties": {
+        "key_id": {"$ref": "#/$defs/key_id"},
+        "signature": {"type": "string", "pattern": "^[A-Za-z0-9_-]{86}$"}
+      }
+    }
+  }
+}

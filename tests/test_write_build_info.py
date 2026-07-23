@@ -9,8 +9,11 @@ import pytest
 
 from scripts.write_build_info import BuildInfoWriteError, write_build_info
 
+pytestmark = pytest.mark.no_sidecar_token
+
 _VALID = {
     "build_oid": "b" * 40,
+    "tree_oid": "c" * 40,
     "git_describe": "v0.9.0-2-gbbbbbbb-dirty",
     "timestamp_utc": "2026-07-15T09:10:11Z",
     "app_version": "0.9.0",
@@ -25,6 +28,7 @@ def test_write_build_info_atomically_writes_exact_validated_payload(tmp_path):
         "app": "Butler",
         "app_version": "0.9.0",
         "build_base_commit_oid": "b" * 40,
+        "build_tree_oid": "c" * 40,
         "build_timestamp_utc": "2026-07-15T09:10:11Z",
         "builder": "build_complete_app.sh",
         "git_describe": "v0.9.0-2-gbbbbbbb-dirty",
@@ -36,6 +40,7 @@ def test_write_build_info_atomically_writes_exact_validated_payload(tmp_path):
     ("overrides", "error_code"),
     [
         ({"build_oid": "unknown"}, "INVALID_BUILD_OID"),
+        ({"tree_oid": "unknown"}, "INVALID_TREE_OID"),
         ({"timestamp_utc": "2026-07-15"}, "INVALID_BUILD_TIMESTAMP"),
         ({"app_version": "unknown"}, "INVALID_APP_VERSION"),
     ],
@@ -72,6 +77,8 @@ def test_cli_returns_nonzero_and_stable_code_when_stamp_cannot_be_written(tmp_pa
             str(tmp_path / "missing" / "BUILD_INFO.json"),
             "--build-oid",
             _VALID["build_oid"],
+            "--tree-oid",
+            _VALID["tree_oid"],
             "--git-describe",
             _VALID["git_describe"],
             "--timestamp-utc",
@@ -89,3 +96,17 @@ def test_cli_returns_nonzero_and_stable_code_when_stamp_cannot_be_written(tmp_pa
         "BUILD_INFO_WRITE_OK=0 ERROR_CODE=BUILD_INFO_PARENT_MISSING"
     )
     assert completed.stderr == ""
+
+
+def test_source_archive_builder_identity_is_explicit(tmp_path):
+    output = tmp_path / "BUILD_INFO.json"
+    write_build_info(output, **_VALID, builder="build_safe_source_archive.py")
+    assert json.loads(output.read_text(encoding="utf-8"))["builder"] == "build_safe_source_archive.py"
+
+
+def test_write_build_info_rejects_control_characters(tmp_path):
+    with pytest.raises(BuildInfoWriteError, match="INVALID_APP_VERSION"):
+        write_build_info(
+            tmp_path / "BUILD_INFO.json",
+            **{**_VALID, "app_version": "0.9.0\nforged"},
+        )

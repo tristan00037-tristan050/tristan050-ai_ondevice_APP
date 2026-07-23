@@ -8,7 +8,7 @@ interface PrecheckResult {
 }
 
 interface ChatInputProps {
-  onSubmit: (text: string, files: File[], cardMode: string) => void;
+  onSubmit: (text: string, files: File[], cardMode: string) => Promise<boolean> | boolean | void;
   onStop: () => void;
   processing: boolean;
   cardMode: string;
@@ -72,11 +72,13 @@ export function ChatInput({
     Array.from(e.dataTransfer.files).forEach(processFile);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!processing && (text.trim() || files.length > 0)) {
-      onSubmit(text, files, cardMode);
-      setText('');
-      setFiles([]);
+      const accepted = await onSubmit(text, files, cardMode);
+      if (accepted !== false) {
+        setText('');
+        setFiles([]);
+      }
     } else if (!processing && !text.trim() && files.length === 0) {
       triggerShake();
     }
@@ -89,7 +91,7 @@ export function ChatInput({
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      void handleSubmit();
     }
   };
 
@@ -209,6 +211,7 @@ export function ChatInput({
             onKeyDown={handleKeyDown}
             disabled={isInputDisabled}
             placeholder="무엇을 도와드릴까요? 자유롭게…"
+            aria-label="Butler에게 보낼 요청"
             maxLength={maxLength}
             rows={3}
             style={{
@@ -249,7 +252,7 @@ export function ChatInput({
           ) : (
             <button
               data-testid="send-btn"
-              onClick={handleSubmit}
+              onClick={() => void handleSubmit()}
               disabled={disabled || (!text.trim() && files.length === 0)}
               style={{
                 width: 32,
