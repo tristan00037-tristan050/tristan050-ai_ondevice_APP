@@ -1,6 +1,7 @@
 import { sidecarFetch } from '../sidecarFetch';
 import type {
   Conversation,
+  ConversationMessageInventory,
   FolderRecord,
   HomeSnapshot,
   HomeStartupStatus,
@@ -18,6 +19,31 @@ export class HomeApiError extends Error {
     super(`HOME_API_${status}_${code}`);
     this.name = 'HomeApiError';
   }
+}
+
+export class HomePaginationError extends Error {
+  constructor(
+    readonly code: string,
+    readonly partialSnapshot: HomeSnapshot | null = null,
+  ) {
+    super(code);
+    this.name = 'HomePaginationError';
+  }
+}
+
+const HOME_PAGE_LIMIT = 100;
+const MAX_HOME_PAGES = 10_000;
+
+function isSafeCount(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0;
+}
+
+function isDigest(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+}
+
+function abortError(): DOMException {
+  return new DOMException('Aborted', 'AbortError');
 }
 
 async function json<T>(response: Response): Promise<T> {
@@ -108,17 +134,268 @@ export async function migrateLegacyConversations(conversations: Conversation[]):
   return result.snapshot;
 }
 
-export async function fetchHomeSnapshot(includeTrash = false): Promise<HomeSnapshot> {
-  return json(await sidecarFetch(`/v1/home/snapshot?limit=100&include_trash=${includeTrash ? 'true' : 'false'}`));
+export async function fetchHomeSnapshot(
+  includeTrash = false,
+  options: { signal?: AbortSignal; profileId?: string | null } = {},
+): Promise<HomeSnapshot> {
+  let cursor: string | null = null;
+  let aggregate: HomeSnapshot | null = null;
+  const seenCursors = new Set<string>();
+  const seenIds = new Set<string>();
+  let pages = 0;
+  try {
+    while (true) {
+      if (options.signal?.aborted) throw abortError();
+      if (++pages > MAX_HOME_PAGES) {
+        throw new HomePaginationError('HOME_SNAPSHOT_PAGE_LIMIT', aggregate);
+      }
+      const query = new URLSearchParams({
+        limit: String(HOME_PAGE_LIMIT),
+        include_trash: includeTrash ? 'true' : 'false',
+      });
+      if (cursor !== null) query.set('cursor', cursor);
+      if (options.profileId) query.set('profile_id', options.profileId);
+      const page = await json<HomeSnapshot>(await sidecarFetch(
+        `/v1/home/snapshot?${query.toString()}`,
+        { signal: options.signal },
+      ));
+      if (
+        page.schema_version !== 'butler.home.snapshot.v2'
+        || !Array.isArray(page.conversations)
+        || !Array.isArray(page.folders)
+        || !Array.isArray(page.partial_errors)
+        || !isSafeCount(page.total_conversation_count)
+        || !isSafeCount(page.filtered_conversation_count)
+        || !isDigest(page.inventory_digest)
+        || page.active_profile_filter !== (options.profileId ?? null)
+      ) {
+        throw new HomePaginationError('HOME_SNAPSHOT_SCHEMA_INVALID', aggregate);
+      }
+      if (aggregate === null) {
+        aggregate = { ...page, conversations: [], partial_errors: [] };
+      } else if (
+        page.workspace_id !== aggregate.workspace_id
+        || page.inventory_digest !== aggregate.inventory_digest
+        || page.filtered_conversation_count !== aggregate.filtered_conversation_count
+        || page.total_conversation_count !== aggregate.total_conversation_count
+        || page.read_only !== aggregate.read_only
+      ) {
+        throw new HomePaginationError('HOME_SNAPSHOT_CHANGED_DURING_READ', aggregate);
+      }
+      for (const conversation of page.conversations) {
+        if (!conversation || typeof conversation.id !== 'string' || seenIds.has(conversation.id)) {
+          throw new HomePaginationError('HOME_SNAPSHOT_DUPLICATE_OR_INVALID_ID', aggregate);
+        }
+        if (!isSafeCount(conversation.message_count)) {
+          throw new HomePaginationError('HOME_MESSAGE_COUNT_REQUIRED', aggregate);
+        }
+        seenIds.add(conversation.id);
+        aggregate.conversations.push(conversation);
+      }
+      const errorKeys = new Set(
+        aggregate.partial_errors.map(error => `${error.conversation_id}:${error.code}`),
+      );
+      for (const error of page.partial_errors) {
+        const key = `${error.conversation_id}:${error.code}`;
+        if (!errorKeys.has(key)) {
+          aggregate.partial_errors.push(error);
+          errorKeys.add(key);
+        }
+      }
+      const next = page.next_cursor;
+      if (next === null) break;
+      if (typeof next !== 'string' || next.length === 0 || seenCursors.has(next)) {
+        throw new HomePaginationError('HOME_SNAPSHOT_CURSOR_LOOP', aggregate);
+      }
+      if (page.conversations.length === 0) {
+        throw new HomePaginationError('HOME_SNAPSHOT_EMPTY_PAGE_WITH_CURSOR', aggregate);
+      }
+      seenCursors.add(next);
+      cursor = next;
+    }
+    if (aggregate === null) {
+      throw new HomePaginationError('HOME_SNAPSHOT_EMPTY_RESPONSE');
+    }
+    const computedInventory = await sha256(
+      aggregate.conversations.map(item => [item.updated_at, item.id]),
+    );
+    if (
+      aggregate.conversations.length !== aggregate.filtered_conversation_count
+      || computedInventory !== aggregate.inventory_digest
+      || aggregate.partial_errors.length !== 0
+    ) {
+      throw new HomePaginationError('HOME_SNAPSHOT_INVENTORY_INCOMPLETE', aggregate);
+    }
+    aggregate.next_cursor = null;
+    return aggregate;
+  } catch (error) {
+    if (error instanceof HomePaginationError) throw error;
+    if (options.signal?.aborted) throw abortError();
+    throw new HomePaginationError(
+      aggregate ? 'HOME_SNAPSHOT_PAGE_FAILED' : 'HOME_SNAPSHOT_FAILED',
+      aggregate,
+    );
+  }
 }
 
 export async function fetchHomeBootstrapStatus(): Promise<HomeStartupStatus> {
   return json(await sidecarFetch('/v1/home/bootstrap-status'));
 }
 
-export async function fetchConversationMessages(conversationId: string): Promise<Message[]> {
-  const result = await json<{messages:Message[]}>(await sidecarFetch(`/v1/home/conversations/${encodeURIComponent(conversationId)}/messages?limit=100`));
-  return result.messages;
+export async function fetchConversationMessages(
+  conversationId: string,
+  expectedCount: number,
+  options: {
+    signal?: AbortSignal;
+    initialItems?: Message[];
+  } = {},
+): Promise<ConversationMessageInventory> {
+  if (!isSafeCount(expectedCount)) {
+    return {
+      state: 'ERROR', messages: [], expected_count: 0, loaded_count: 0,
+      next_sequence: null, error_code: 'HOME_MESSAGE_COUNT_REQUIRED',
+    };
+  }
+  const messages = [...(options.initialItems ?? [])];
+  const ids = new Set<string>();
+  for (let index = 0; index < messages.length; index += 1) {
+    const item = messages[index];
+    if (
+      item.sequence !== index + 1
+      || typeof item.id !== 'string'
+      || ids.has(item.id)
+    ) {
+      return {
+        state: 'PARTIAL', messages, expected_count: expectedCount,
+        loaded_count: messages.length, next_sequence: null,
+        error_code: 'HOME_MESSAGE_INITIAL_INVENTORY_INVALID',
+      };
+    }
+    ids.add(item.id);
+  }
+  if (messages.length > expectedCount) {
+    return {
+      state: 'PARTIAL', messages, expected_count: expectedCount,
+      loaded_count: messages.length, next_sequence: null,
+      error_code: 'HOME_MESSAGE_COUNT_MISMATCH',
+    };
+  }
+  let afterSequence = messages.length;
+  let pages = 0;
+  try {
+    while (true) {
+      if (options.signal?.aborted) throw abortError();
+      if (++pages > MAX_HOME_PAGES) {
+        return {
+          state: 'PARTIAL', messages, expected_count: expectedCount,
+          loaded_count: messages.length, next_sequence: afterSequence || null,
+          error_code: 'HOME_MESSAGE_PAGE_LIMIT',
+        };
+      }
+      const result = await json<{
+        schema_version: string;
+        messages: Message[];
+        message_count: number;
+        next_sequence: number | null;
+        partial_errors: Array<{ sequence: number; code: string }>;
+        locked: boolean;
+      }>(await sidecarFetch(
+        `/v1/home/conversations/${encodeURIComponent(conversationId)}/messages?limit=${HOME_PAGE_LIMIT}&after_sequence=${afterSequence}`,
+        { signal: options.signal },
+      ));
+      if (
+        result.schema_version !== 'butler.home.messages.v2'
+        || !Array.isArray(result.messages)
+        || !Array.isArray(result.partial_errors)
+        || !isSafeCount(result.message_count)
+        || result.message_count !== expectedCount
+      ) {
+        return {
+          state: messages.length ? 'PARTIAL' : 'ERROR', messages,
+          expected_count: expectedCount, loaded_count: messages.length,
+          next_sequence: afterSequence || null,
+          error_code: 'HOME_MESSAGE_RESPONSE_SCHEMA_INVALID',
+        };
+      }
+      if (result.locked) {
+        return {
+          state: 'LOCKED', messages, expected_count: expectedCount,
+          loaded_count: messages.length, next_sequence: null,
+          error_code: 'HOME_MESSAGES_LOCKED',
+        };
+      }
+      let expectedSequence = afterSequence + 1;
+      for (const item of result.messages) {
+        if (
+          !isSafeCount(item.sequence)
+          || item.sequence !== expectedSequence
+          || item.sequence === 0
+          || typeof item.id !== 'string'
+          || ids.has(item.id)
+        ) {
+          return {
+            state: 'PARTIAL', messages, expected_count: expectedCount,
+            loaded_count: messages.length, next_sequence: afterSequence || null,
+            error_code: 'HOME_MESSAGE_SEQUENCE_GAP',
+          };
+        }
+        ids.add(item.id);
+        messages.push(item);
+        afterSequence = item.sequence;
+        expectedSequence += 1;
+      }
+      if (result.partial_errors.length !== 0) {
+        return {
+          state: 'PARTIAL', messages, expected_count: expectedCount,
+          loaded_count: messages.length, next_sequence: afterSequence || null,
+          error_code: 'HOME_MESSAGE_UNREADABLE',
+        };
+      }
+      if (result.next_sequence === null) {
+        const contiguous = messages.every(
+          (item, index) => item.sequence === index + 1,
+        );
+        if (
+          !contiguous
+          || messages.length !== expectedCount
+          || (expectedCount > 0 && afterSequence !== expectedCount)
+        ) {
+          return {
+            state: 'PARTIAL', messages, expected_count: expectedCount,
+            loaded_count: messages.length, next_sequence: null,
+            error_code: 'HOME_MESSAGE_INVENTORY_INCOMPLETE',
+          };
+        }
+        return {
+          state: 'COMPLETE', messages, expected_count: expectedCount,
+          loaded_count: messages.length, next_sequence: null, error_code: null,
+        };
+      }
+      if (
+        !Number.isSafeInteger(result.next_sequence)
+        || result.next_sequence <= 0
+        || result.messages.length === 0
+        || result.next_sequence !== afterSequence
+        || afterSequence >= expectedCount
+      ) {
+        return {
+          state: 'PARTIAL', messages, expected_count: expectedCount,
+          loaded_count: messages.length, next_sequence: afterSequence || null,
+          error_code: result.messages.length === 0
+            ? 'HOME_MESSAGE_EMPTY_PAGE_WITH_CURSOR'
+            : 'HOME_MESSAGE_CURSOR_INVALID',
+        };
+      }
+    }
+  } catch {
+    if (options.signal?.aborted) throw abortError();
+    return {
+      state: messages.length ? 'PARTIAL' : 'ERROR', messages,
+      expected_count: expectedCount, loaded_count: messages.length,
+      next_sequence: afterSequence || null,
+      error_code: 'HOME_MESSAGE_PAGE_FAILED',
+    };
+  }
 }
 
 export async function searchConversations(query: string): Promise<Conversation[]> {
