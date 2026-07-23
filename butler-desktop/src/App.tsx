@@ -13,7 +13,7 @@ import { SettingsShell, type SettingsAction } from './components/home/SettingsSh
 import { FormFillModal } from './components/v1_1/FormFillModal';
 import { DocumentReviewModal } from './components/v1_1/DocumentReviewModal';
 import { SIDECAR_BASE } from './constants';
-import type { SSEEvent, Conversation, Message, FolderRecord, RuntimeStatus, RuntimeTrustReceipt, HomeStartupStatus, TurnCorrelation } from './types';
+import type { SSEEvent, Conversation, Message, FolderRecord, RuntimeStatus, RuntimeTrustReceipt, HomeStartupStatus, TurnCorrelation, HomeInventoryState } from './types';
 import {
   loadConversations,
   generateId,
@@ -30,6 +30,7 @@ import {
   fetchRuntimeStatus,
   fetchAndPersistRuntimeTrustReceipt,
   HomeApiError,
+  HomePaginationError,
   migrateLegacyConversations,
   moveConversation,
   permanentlyDeleteConversation,
@@ -112,6 +113,9 @@ export function App() {
   const [homeStartup, setHomeStartup] = useState<HomeStartupStatus|null>(null);
   const [homeReadOnly, setHomeReadOnly] = useState(true);
   const [homeLoading, setHomeLoading] = useState(true);
+  const [homeInventoryState, setHomeInventoryState] = useState<HomeInventoryState>('LOADING');
+  const [messageInventoryState, setMessageInventoryState] = useState<Record<string, HomeInventoryState>>({});
+  const [messageInventoryError, setMessageInventoryError] = useState<Record<string, string | null>>({});
   const [conflictNotice, setConflictNotice] = useState<string | null>(null);
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarElapsed, setSidecarElapsed] = useState(0);
@@ -124,6 +128,8 @@ export function App() {
   const queueRef = useRef(new MutationQueue());
   const processingConversationRef = useRef<string | null>(null);
   const searchTimerRef = useRef<number>(0);
+  const messageLoadAbortRef = useRef<AbortController | null>(null);
+  const messageLoadGenerationRef = useRef(0);
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -137,33 +143,57 @@ export function App() {
   }, []);
 
   const refreshHome = useCallback(async () => {
-    const [active, trash, runtime] = await Promise.all([
-      fetchHomeSnapshot(false),
-      fetchHomeSnapshot(true),
-      fetchRuntimeStatus(),
-    ]);
-    setFolders(active.folders);
-    setConversations(mergeLoadedMessages(active.conversations));
-    setTrashedConversations(trash.conversations);
-    setRuntimeStatus(runtime);
+    setHomeInventoryState('LOADING');
     try {
-      setRuntimeTrustReceipt(await fetchAndPersistRuntimeTrustReceipt());
-      setRuntimeTrustState('verified');
+      const loadSnapshot = async (includeTrash: boolean) => {
+        try {
+          return { snapshot: await fetchHomeSnapshot(includeTrash), complete: true };
+        } catch (error) {
+          if (error instanceof HomePaginationError && error.partialSnapshot) {
+            return { snapshot: error.partialSnapshot, complete: false };
+          }
+          throw error;
+        }
+      };
+      const [activeResult, trashResult, runtime] = await Promise.all([
+        loadSnapshot(false),
+        loadSnapshot(true),
+        fetchRuntimeStatus(),
+      ]);
+      const active = activeResult.snapshot;
+      const trash = trashResult.snapshot;
+      const inventoryComplete = activeResult.complete && trashResult.complete;
+      setFolders(active.folders);
+      setConversations(mergeLoadedMessages(active.conversations));
+      setTrashedConversations(trash.conversations);
+      setRuntimeStatus(runtime);
+      try {
+        setRuntimeTrustReceipt(await fetchAndPersistRuntimeTrustReceipt());
+        setRuntimeTrustState('verified');
+      } catch (error) {
+        setRuntimeTrustReceipt(null);
+        const code = String(error);
+        setRuntimeTrustState(
+          code.includes('BLOCK_TRUST_STATE_MISSING_OR_ROLLBACK') || code.includes('BLOCK_TRUST_STATE_CAS')
+            ? 'recovery'
+            : code.includes('UNVERIFIED_PLATFORM_EVIDENCE_MISSING')
+              ? 'unavailable'
+              : 'blocked',
+        );
+      }
+      setHomeStartup(active.startup);
+      setHomeReadOnly(active.read_only || !inventoryComplete);
+      setHomeInventoryState(inventoryComplete ? 'COMPLETE' : 'PARTIAL');
+      setHomeLoading(false);
+      setHomeStoreError(inventoryComplete
+        ? null
+        : '대화 목록 일부만 복원되었습니다. 누락 방지를 위해 저장과 전송을 차단했습니다.');
     } catch (error) {
-      setRuntimeTrustReceipt(null);
-      const code = String(error);
-      setRuntimeTrustState(
-        code.includes('BLOCK_TRUST_STATE_MISSING_OR_ROLLBACK') || code.includes('BLOCK_TRUST_STATE_CAS')
-          ? 'recovery'
-          : code.includes('UNVERIFIED_PLATFORM_EVIDENCE_MISSING')
-            ? 'unavailable'
-            : 'blocked',
-      );
+      setHomeInventoryState('ERROR');
+      setHomeLoading(false);
+      setHomeReadOnly(true);
+      throw error;
     }
-    setHomeStartup(active.startup);
-    setHomeReadOnly(active.read_only);
-    setHomeLoading(false);
-    setHomeStoreError(null);
   }, [mergeLoadedMessages]);
 
   const reportMutationFailure = useCallback(async (error: unknown, label: string) => {
@@ -299,6 +329,14 @@ export function App() {
 
   const activeConv = conversations.find(c => c.id === activeConvId) ?? null;
   const hasMessages = (activeConv?.messages.length ?? 0) > 0 || pendingBot !== null;
+  const activeMessageState = activeConvId ? messageInventoryState[activeConvId] : undefined;
+  const activeMessageIncomplete = Boolean(
+    activeConv
+    && (
+      (activeConv.message_count ?? 0) !== activeConv.messages.length
+      || (activeMessageState !== undefined && activeMessageState !== 'COMPLETE')
+    ),
+  );
 
   // --- Conversation management ---
 
@@ -315,6 +353,8 @@ export function App() {
   };
 
   const handleNewConv = () => {
+    messageLoadAbortRef.current?.abort();
+    messageLoadGenerationRef.current += 1;
     setActiveConvId(null);
     setPendingBot(null);
     setCardMode('free');
@@ -324,7 +364,7 @@ export function App() {
     }
   };
 
-  const handleSelectConv = async (id: string) => {
+  const handleSelectConv = async (id: string, forceReload = false) => {
     if (processing) {
       abortRef.current?.abort();
       setProcessing(false);
@@ -332,13 +372,49 @@ export function App() {
     setPendingBot(null);
     setActiveConvId(id);
     const selected = conversationsRef.current.find(conversation => conversation.id === id);
-    if (!selected || selected.messages.length || !selected.message_count) return;
-    try {
-      const messages = await fetchConversationMessages(id);
-      setConversations(previous => previous.map(conversation => conversation.id === id ? { ...conversation, messages } : conversation));
-    } catch (error) {
-      await reportMutationFailure(error, '대화 내용을');
+    if (!selected) return;
+    const expectedCount = selected.message_count;
+    if (
+      typeof expectedCount !== 'number'
+      || !Number.isSafeInteger(expectedCount)
+      || expectedCount < 0
+    ) {
+      setMessageInventoryState(previous => ({ ...previous, [id]: 'ERROR' }));
+      setMessageInventoryError(previous => ({ ...previous, [id]: 'HOME_MESSAGE_COUNT_REQUIRED' }));
+      return;
     }
+    if (!forceReload && selected.messages.length === expectedCount) {
+      setMessageInventoryState(previous => ({ ...previous, [id]: 'COMPLETE' }));
+      return;
+    }
+    messageLoadAbortRef.current?.abort();
+    const controller = new AbortController();
+    messageLoadAbortRef.current = controller;
+    const generation = ++messageLoadGenerationRef.current;
+    setMessageInventoryState(previous => ({ ...previous, [id]: 'LOADING' }));
+    setMessageInventoryError(previous => ({ ...previous, [id]: null }));
+    const resumable = forceReload
+      && selected.messages.every((item, index) => item.sequence === index + 1)
+      ? selected.messages
+      : [];
+    const result = await fetchConversationMessages(id, expectedCount, {
+      signal: controller.signal,
+      initialItems: resumable,
+    }).catch(() => null);
+    if (
+      generation !== messageLoadGenerationRef.current
+      || controller.signal.aborted
+    ) return;
+    if (result === null) {
+      setMessageInventoryState(previous => ({ ...previous, [id]: 'ERROR' }));
+      setMessageInventoryError(previous => ({ ...previous, [id]: 'HOME_MESSAGE_PAGE_FAILED' }));
+      return;
+    }
+    setConversations(previous => previous.map(conversation => (
+      conversation.id === id ? { ...conversation, messages: result.messages } : conversation
+    )));
+    setMessageInventoryState(previous => ({ ...previous, [id]: result.state }));
+    setMessageInventoryError(previous => ({ ...previous, [id]: result.error_code }));
   };
 
   const handleRename = (id: string, title: string) => {
@@ -495,6 +571,17 @@ export function App() {
     const original = activeConvId
       ? conversationsRef.current.find(conversation => conversation.id === activeConvId) ?? createNewConversation()
       : createNewConversation();
+    if (
+      activeConvId
+      && (
+        (original.message_count ?? 0) !== original.messages.length
+        || (messageInventoryState[activeConvId] !== undefined
+          && messageInventoryState[activeConvId] !== 'COMPLETE')
+      )
+    ) {
+      setHomeStoreError('기존 대화를 빠짐없이 복원하기 전에는 새 메시지를 전송할 수 없습니다.');
+      return false;
+    }
     const now = new Date().toISOString();
     const userMessage: Message = { id: generateId(), role: 'user', content: text, timestamp: now };
     const isFirstMessage = (original.message_count ?? original.messages.length) === 0;
@@ -518,6 +605,7 @@ export function App() {
         ? previous.map(conversation => conversation.id === command.id ? acceptedConversation : conversation)
         : [acceptedConversation, ...previous]);
       setActiveConvId(command.id);
+      setMessageInventoryState(previous => ({ ...previous, [command.id]: 'COMPLETE' }));
     } catch (error) {
       await reportMutationFailure(error, '사용자 요청을');
       return false;
@@ -584,6 +672,7 @@ export function App() {
               ...conversation, ...persisted, messages: [...conversation.messages, botMessage],
               message_count: (conversation.message_count ?? conversation.messages.length) + 1,
             } : conversation));
+            setMessageInventoryState(previous => ({ ...previous, [command.id]: 'COMPLETE' }));
             setPendingBot(null);
             setProcessing(false);
             processingConversationRef.current = null;
@@ -782,6 +871,34 @@ export function App() {
           </div>
         </div>
 
+        {homeInventoryState !== 'COMPLETE' && (
+          <div className="home-inventory-status" role="status" data-state={homeInventoryState}>
+            {homeInventoryState === 'LOADING'
+              ? '전체 대화 목록을 복원하고 있습니다.'
+              : '대화 목록이 불완전하여 저장과 전송을 차단했습니다.'}
+            {homeInventoryState === 'PARTIAL' && (
+              <button onClick={() => { setHomeLoading(true); void refreshHome(); }}>목록 다시 불러오기</button>
+            )}
+          </div>
+        )}
+        {activeConvId && activeMessageState && activeMessageState !== 'COMPLETE' && (
+          <div className="home-inventory-status" role="status" data-state={activeMessageState}>
+            {activeMessageState === 'LOADING'
+              ? '대화 내용을 빠짐없이 복원하고 있습니다.'
+              : activeMessageState === 'LOCKED'
+                ? '암호화 키를 확인할 수 없어 대화 내용이 잠겼습니다.'
+                : '대화 내용 일부를 복원하지 못했습니다. 현재까지 복원된 내용은 보존했습니다.'}
+            {activeMessageState !== 'LOADING' && activeMessageState !== 'LOCKED' && (
+              <button onClick={() => { void handleSelectConv(activeConvId, true); }}>
+                이어서 다시 불러오기
+              </button>
+            )}
+            {messageInventoryError[activeConvId] && (
+              <span className="home-inventory-code">{messageInventoryError[activeConvId]}</span>
+            )}
+          </div>
+        )}
+
         {/* Content area — card grid always visible; compact strip when messages present */}
         {hasMessages ? (
           <>
@@ -803,7 +920,7 @@ export function App() {
           onStop={handleStop}
           processing={processing}
           cardMode={cardMode}
-          disabled={homeReadOnly || homeLoading}
+          disabled={homeReadOnly || homeLoading || activeMessageIncomplete}
         />
       </main>
 
