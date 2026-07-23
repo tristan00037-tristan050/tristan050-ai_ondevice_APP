@@ -9,6 +9,7 @@ import type {
   RuntimeStatus,
   RuntimeTrustCandidate,
   RuntimeTrustReceipt,
+  RuntimeTrustStatus,
   TurnCorrelation,
 } from '../../types';
 
@@ -230,13 +231,33 @@ export async function fetchRuntimeStatus(): Promise<RuntimeStatus> {
 }
 
 export async function fetchAndPersistRuntimeTrustReceipt(): Promise<RuntimeTrustReceipt> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  const nativeStatus = await invoke<RuntimeTrustStatus>('get_runtime_trust_status');
+  if (
+    nativeStatus.authority !== 'rust-native'
+    || !Number.isSafeInteger(nativeStatus.generation)
+    || nativeStatus.generation < 0
+    || nativeStatus.runtime_activation_allowed !== false
+  ) {
+    throw new Error('RUNTIME_TRUST_NATIVE_STATUS_INVALID');
+  }
+  // Browser storage is a disposable display cache. Native Keychain state is
+  // authoritative and heals missing, stale, or malformed renderer state.
+  const cachedGeneration = Number.parseInt(
+    localStorage.getItem('butler.firstscreen.trust-generation') ?? '',
+    10,
+  );
+  if (cachedGeneration !== nativeStatus.generation) {
+    localStorage.setItem(
+      'butler.firstscreen.trust-generation',
+      String(nativeStatus.generation),
+    );
+  }
   const candidate = await json<RuntimeTrustCandidate>(await sidecarFetch('/v1/home/runtime-trust-candidate'));
   if (candidate.runtime_activation_allowed !== false) {
     throw new Error('RUNTIME_TRUST_CANDIDATE_INVALID');
   }
-  const storedGeneration = Number.parseInt(localStorage.getItem('butler.firstscreen.trust-generation') ?? '0', 10);
-  const expectedGeneration = Number.isSafeInteger(storedGeneration) && storedGeneration >= 0 ? storedGeneration : 0;
-  const { invoke } = await import('@tauri-apps/api/core');
+  const expectedGeneration = nativeStatus.generation;
   const persisted = await invoke<RuntimeTrustReceipt>('verify_and_commit_trust_update', {
     request: {
       schema_version: 'butler.firstscreen.verify-and-commit.v2',
@@ -261,6 +282,13 @@ export async function fetchAndPersistRuntimeTrustReceipt(): Promise<RuntimeTrust
     throw new Error('RUNTIME_TRUST_RECEIPT_NATIVE_MISMATCH');
   }
   localStorage.setItem('butler.firstscreen.trust-generation', String(persisted.generation_after));
+  const confirmedStatus = await invoke<RuntimeTrustStatus>('get_runtime_trust_status');
+  if (
+    confirmedStatus.generation !== persisted.generation_after
+    || confirmedStatus.previous_trusted_state_receipt_digest !== persisted.receipt_digest
+  ) {
+    throw new Error('RUNTIME_TRUST_RECEIPT_NATIVE_MISMATCH');
+  }
   return persisted;
 }
 

@@ -1,9 +1,8 @@
-"""Runtime adapter for the canonical FirstScreen trust authority.
+"""Offline cross-validator for the canonical Rust FirstScreen trust authority.
 
-This module turns the already-verified root/revocation/decision/release chain
-into one closed-world receipt consumed unchanged by release tooling, the
-sidecar/UI, and the native Keychain CAS command.  It never enables runtime
-activation; activation remains a separate all-gates release decision.
+This module must never decide or persist product runtime trust. It exists only
+for deterministic cross-validation in owner tooling and CI. The Rust native
+authority owns the product receipt v2 and Keychain CAS.
 """
 
 from __future__ import annotations
@@ -24,6 +23,7 @@ from butler_pc_core.firstscreen_trust import (
     build_context_digest,
     canonical_json,
     document_digest,
+    load_trusted_root_for_update,
     strict_json_loads,
     verify_release_subjects,
     verify_current_revocations,
@@ -35,8 +35,8 @@ from butler_pc_core.firstscreen_trust import (
 
 DEVELOPMENT_OWNER_FINGERPRINT = "SHA256:8JMrjrlD8gzcIqf6sU+yTzgFjlZ/oJNUWpPLcTC0qa0"
 MAX_PIN_BYTES = 4 * 1024
-RECEIPT_SCHEMA = "butler.firstscreen.runtime-trust-receipt.v1"
-STATE_SCHEMA = "butler.firstscreen.trusted-state.v3"
+RECEIPT_SCHEMA = "butler.firstscreen.offline-cross-validation-receipt.v2"
+STATE_SCHEMA = "butler.firstscreen.offline-cross-validation-state.v1"
 
 
 class RuntimeTrustError(RuntimeError):
@@ -325,7 +325,7 @@ def verify_and_advance_runtime_trust(
     now: datetime | None = None,
     expected_owner_fingerprint: str = DEVELOPMENT_OWNER_FINGERPRINT,
 ) -> dict[str, Any]:
-    """Verify all product trust inputs and CAS a monotonic runtime receipt."""
+    """Cross-validate product inputs in an offline, non-authoritative store."""
 
     current_time = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     previous = store.load()
@@ -344,7 +344,7 @@ def verify_and_advance_runtime_trust(
             root = verify_current_root(root_bytes, now=current_time)
         else:
             trusted_bytes = canonical_json(previous["current_root"])
-            trusted_root = verify_current_root(trusted_bytes, now=current_time)
+            trusted_root = load_trusted_root_for_update(trusted_bytes)
             if trusted_root.digest != previous["root_digest"] or trusted_root.version != previous["root_version"]:
                 _fail("BLOCK_TRUST_STATE_MISSING_OR_ROLLBACK")
             if root_document["version"] == trusted_root.version:

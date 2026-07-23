@@ -291,6 +291,7 @@ def main() -> int:
         _run(
             sys.executable, "scripts/release/verify_source_bundle.py",
             "--archive", str(source_zip), "--manifest", str(source_manifest),
+            "--build-context", str(arguments.build_context.resolve()),
             "--extract-to", str(verified_source), cwd=root,
         )
         _run(

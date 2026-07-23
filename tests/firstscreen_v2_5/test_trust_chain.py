@@ -14,6 +14,7 @@ from butler_pc_core.firstscreen_trust import (
     canonical_json,
     document_digest,
     key_id_for_public_key,
+    load_trusted_root_for_update,
     sign_document,
     strict_json_loads,
     signature_message,
@@ -257,6 +258,43 @@ def test_tr_009_expired_root_blocks() -> None:
     with pytest.raises(TrustVerificationError, match="BLOCK_ROOT_EXPIRED"):
         verify_root_chain(anchor, encoded(document), now=NOW)
 
+def test_rs_rot_001_expired_trusted_root_authenticates_exactly_n_plus_one() -> None:
+    old_document, _old, _anchor, old_keys = policy()
+    old_document["expires_at_utc"] = "2026-07-20T00:00:00Z"
+    old_document["signatures"] = [
+        sign_document(
+            "root-policy",
+            old_document,
+            old_keys["roots"][0][0],
+            old_keys["roots"][0][1],
+        )
+    ]
+    expired_trusted = load_trusted_root_for_update(encoded(old_document))
+    candidate, _new, _new_anchor, new_keys = policy()
+    candidate["version"] = 2
+    candidate["previous_root_digest"] = expired_trusted.digest
+    candidate["signatures"] = [
+        sign_document(
+            "root-policy",
+            candidate,
+            old_keys["roots"][0][0],
+            old_keys["roots"][0][1],
+        ),
+        sign_document(
+            "root-policy",
+            candidate,
+            new_keys["roots"][0][0],
+            new_keys["roots"][0][1],
+        ),
+    ]
+    verified = verify_root_chain(
+        BootstrapRoot(expired_trusted.digest),
+        encoded(candidate),
+        trusted=expired_trusted,
+        now=NOW,
+    )
+    assert verified.version == 2
+
 
 @pytest.mark.parametrize(
     "updates,code",
@@ -343,6 +381,16 @@ def test_invalid_revoked_metadata_cannot_dos_valid_decision() -> None:
         "signature": base64.urlsafe_b64encode(b"invalid".ljust(64, b"\0")).decode().rstrip("="),
     })
     assert verify_risk_decision(root, revoked, encoded(document), now=NOW).decision_id == document["decision_id"]
+
+def test_rs_env_001_malformed_envelope_cannot_poison_valid_quorum() -> None:
+    _doc, root, anchor, keys = policy()
+    _rev_doc, revoked = revocations(root, anchor, keys)
+    document, _verified = decision(root, revoked, keys)
+    document["signatures"].insert(0, {"key_id": keys["risk"][1]})
+    assert (
+        verify_risk_decision(root, revoked, encoded(document), now=NOW).decision_id
+        == document["decision_id"]
+    )
 
 
 def test_cr_005_signature_domain_replay_blocks() -> None:
@@ -450,7 +498,7 @@ def test_runtime_receipt_is_single_authority_monotonic_and_activation_closed() -
     store = InMemoryRuntimeTrustStateStore()
     first = verify_and_advance_runtime_trust(**inputs, store=store, now=NOW)
     second = verify_and_advance_runtime_trust(**inputs, store=store, now=NOW)
-    assert first["schema_version"] == "butler.firstscreen.runtime-trust-receipt.v1"
+    assert first["schema_version"] == "butler.firstscreen.offline-cross-validation-receipt.v2"
     assert first["runtime_activation_allowed"] is False
     assert second == first
 

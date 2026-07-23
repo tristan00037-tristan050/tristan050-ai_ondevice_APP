@@ -10,16 +10,7 @@ mod keychain;
 mod state;
 mod verifier;
 
-use serde_json::Value;
-
-use state::VerifyAndCommitRequest;
-
-pub use commands::{initialize_authority, AuthorityState};
-
-#[tauri::command]
-pub fn verify_and_commit_trust_update(
-    request: VerifyAndCommitRequest,
-    authority: tauri::State<'_, AuthorityState>,
-) -> Result<Value, String> {
-    commands::verify_and_commit_trust_update(request, authority)
-}
+pub use commands::{
+    get_runtime_trust_status, initialize_authority, verify_and_commit_trust_update,
+    AuthorityState,
+};

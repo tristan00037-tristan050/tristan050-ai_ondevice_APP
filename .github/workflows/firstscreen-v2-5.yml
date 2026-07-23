@@ -80,11 +80,11 @@ jobs:
           python scripts/release/build_safe_source_archive.py --commit HEAD --scope-baseline "${base}" --output "${RUNNER_TEMP}/firstscreen/source.zip" --manifest "${RUNNER_TEMP}/firstscreen/SOURCE_ARCHIVE_MANIFEST.json"
           python scripts/release/build_with_git.py --output "${RUNNER_TEMP}/firstscreen/BUILD_CONTEXT.json" --source-manifest "${RUNNER_TEMP}/firstscreen/SOURCE_ARCHIVE_MANIFEST.json" --repository "${GITHUB_REPOSITORY}" --workflow-identity "${GITHUB_WORKFLOW_REF}" --toolchain-identity "python=${PYTHON_VERSION};node=${NODE_VERSION};rust=${RUST_TOOLCHAIN}" --baseline "${base}"
           python scripts/verify/verify_build_context.py "${RUNNER_TEMP}/firstscreen/BUILD_CONTEXT.json"
-          python scripts/release/verify_source_bundle.py --archive "${RUNNER_TEMP}/firstscreen/source.zip" --manifest "${RUNNER_TEMP}/firstscreen/SOURCE_ARCHIVE_MANIFEST.json" --extract-to "${RUNNER_TEMP}/firstscreen/no-git"
+          python scripts/release/verify_source_bundle.py --archive "${RUNNER_TEMP}/firstscreen/source.zip" --manifest "${RUNNER_TEMP}/firstscreen/SOURCE_ARCHIVE_MANIFEST.json" --build-context "${RUNNER_TEMP}/firstscreen/BUILD_CONTEXT.json" --extract-to "${RUNNER_TEMP}/firstscreen/no-git"
           (
             cd "${RUNNER_TEMP}/firstscreen/no-git/source"
             test ! -e .git
-            python "${GITHUB_WORKSPACE}/scripts/release/verify_source_bundle.py" --source-root . --manifest "${RUNNER_TEMP}/firstscreen/SOURCE_ARCHIVE_MANIFEST.json" --archive "${RUNNER_TEMP}/firstscreen/source.zip"
+            python "${GITHUB_WORKSPACE}/scripts/release/verify_source_bundle.py" --source-root . --manifest "${RUNNER_TEMP}/firstscreen/SOURCE_ARCHIVE_MANIFEST.json" --build-context "${RUNNER_TEMP}/firstscreen/BUILD_CONTEXT.json" --archive "${RUNNER_TEMP}/firstscreen/source.zip"
           )
       - working-directory: butler-desktop
         run: npm ci
@@ -140,7 +140,10 @@ jobs:
           capability = json.loads(Path('src-tauri/capabilities/firstscreen-trust.json').read_text())
           assert capability['windows'] == ['main']
           assert 'remote' not in capability
-          assert capability['permissions'] == ['allow-verify-and-commit-trust-update']
+          assert capability['permissions'] == [
+              'allow-get-runtime-trust-status',
+              'allow-verify-and-commit-trust-update',
+          ]
           default = json.loads(Path('src-tauri/capabilities/default.json').read_text())
           assert 'shell:default' not in default['permissions']
           PY

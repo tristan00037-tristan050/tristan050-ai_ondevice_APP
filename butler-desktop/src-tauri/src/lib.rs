@@ -590,6 +590,7 @@ pub fn run() {
             get_sidecar_capability_token,
             build_identity::get_native_build_context_digest,
             runtime_trust::verify_and_commit_trust_update,
+            runtime_trust::get_runtime_trust_status,
             export::save_export_file
         ])
         .build(tauri::generate_context!())

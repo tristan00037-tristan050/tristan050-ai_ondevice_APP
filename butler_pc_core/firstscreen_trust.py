@@ -217,21 +217,14 @@ def _unique_strings(value: Any, code: str) -> list[str]:
     return values
 
 
-def _validate_signatures(value: Any, code: str) -> list[dict[str, str]]:
+def _validate_signatures(value: Any, code: str) -> list[Any]:
     signatures = _sequence(value, code)
     if not signatures or len(signatures) > MAX_SIGNATURES:
         _fail(code)
-    result: list[dict[str, str]] = []
-    for envelope in signatures:
-        if not isinstance(envelope, dict):
-            _fail(code)
-        _exact_keys(envelope, {"key_id", "signature"}, code)
-        key_id = _string(envelope["key_id"], minimum=8, maximum=128, code=code)
-        if KEY_ID_RE.fullmatch(key_id) is None:
-            _fail(code)
-        _b64url(envelope["signature"], 64, code)
-        result.append({"key_id": key_id, "signature": envelope["signature"]})
-    return result
+    # Signature envelopes are deliberately outside the signed payload. Their
+    # individual shape/encoding is evaluated by the threshold verifier so one
+    # malformed or unknown envelope cannot poison an otherwise valid quorum.
+    return signatures
 
 
 def _validate_root(document: dict[str, Any]) -> None:
@@ -332,7 +325,18 @@ def _verify_threshold(
     rejected = 0
     message = signature_message(document_type, document)
     for envelope in document["signatures"]:
-        key_id = envelope["key_id"]
+        if not isinstance(envelope, dict) or set(envelope) != {"key_id", "signature"}:
+            rejected += 1
+            continue
+        key_id = envelope.get("key_id")
+        signature_text = envelope.get("signature")
+        if (
+            not isinstance(key_id, str)
+            or KEY_ID_RE.fullmatch(key_id) is None
+            or not isinstance(signature_text, str)
+        ):
+            rejected += 1
+            continue
         if key_id in valid or key_id not in allowed or key_id in revoked:
             rejected += 1
             continue
@@ -340,8 +344,12 @@ def _verify_threshold(
         if not isinstance(key, dict):
             rejected += 1
             continue
-        public = _b64url(key.get("public_key"), 32, error_code)
-        signature = _b64url(envelope["signature"], 64, error_code)
+        try:
+            public = _b64url(key.get("public_key"), 32, error_code)
+            signature = _b64url(signature_text, 64, error_code)
+        except TrustVerificationError:
+            rejected += 1
+            continue
         if _verify_ed25519(public, signature, message):
             valid.add(key_id)
         else:
@@ -432,6 +440,30 @@ def verify_current_root(
     return VerifiedRoot(
         document=candidate,
         digest=digest,
+        valid_signer_ids=verified_threshold.valid_signer_ids,
+    )
+
+def load_trusted_root_for_update(candidate_bytes: bytes) -> VerifiedRoot:
+    """Load the already-trusted root used only to authenticate exactly N+1.
+
+    TUF root update deliberately ignores expiry of N while verifying the
+    N-to-N+1 transition. The candidate/final root is still expiry-checked by
+    :func:`verify_current_root`.
+    """
+
+    candidate = strict_json_loads(candidate_bytes)
+    _validate_root(candidate)
+    verified_threshold = _verify_threshold(
+        document_type="root-policy",
+        document=candidate,
+        keys=candidate["keys"],
+        role=candidate["roles"]["root"],
+        error_code="BLOCK_TRUST_STATE_MISSING_OR_ROLLBACK",
+        role_name="root",
+    )
+    return VerifiedRoot(
+        document=candidate,
+        digest=document_digest(candidate),
         valid_signer_ids=verified_threshold.valid_signer_ids,
     )
 

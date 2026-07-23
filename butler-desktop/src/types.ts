@@ -134,6 +134,8 @@ export interface RuntimeTrustReceipt {
   valid_old_root_signer_ids: string[];
   valid_new_root_signer_ids: string[];
   valid_revocation_signer_ids: string[];
+  rejected_envelope_count: number;
+  rejected_envelope_reasons: string[];
   source_commit_oid: string;
   source_tree_oid: string;
   native_build_identity_digest: string;
@@ -142,6 +144,19 @@ export interface RuntimeTrustReceipt {
   issued_at_utc: string;
   runtime_activation_allowed: false;
   receipt_digest: string;
+}
+
+export interface RuntimeTrustStatus {
+  schema_version: 'butler.firstscreen.runtime-trust-status.v1';
+  authority: 'rust-native';
+  configured: boolean;
+  generation: number;
+  root_digest: string | null;
+  root_version: number | null;
+  revocation_digest: string | null;
+  revocation_version: number | null;
+  previous_trusted_state_receipt_digest: string | null;
+  runtime_activation_allowed: false;
 }
 
 export interface RuntimeTrustCandidate {

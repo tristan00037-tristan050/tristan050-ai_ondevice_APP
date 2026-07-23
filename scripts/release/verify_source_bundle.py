@@ -156,12 +156,67 @@ def _is_lower_hex(value: object, length: int) -> bool:
     )
 
 
-def _load_manifest(manifest_path: Path) -> tuple[dict[str, Any], bytes, list[dict[str, Any]]]:
+def _read_secure_regular(path: Path, *, maximum: int, code: str) -> bytes:
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = -1
     try:
-        metadata = manifest_path.lstat()
-        if manifest_path.is_symlink() or not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_ENTRY_BYTES:
-            raise SourceBundleVerificationError("MANIFEST_TYPE_INVALID")
-        manifest_bytes = manifest_path.read_bytes()
+        descriptor = os.open(path, flags)
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or not 0 < before.st_size <= maximum
+            or before.st_mode & 0o022
+            or _is_windows_reparse(before)
+            or (hasattr(os, "getuid") and before.st_uid != os.getuid())
+        ):
+            raise SourceBundleVerificationError(code)
+        chunks: list[bytes] = []
+        remaining = before.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, STREAM_CHUNK_BYTES))
+            if not chunk:
+                raise SourceBundleVerificationError(code)
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise SourceBundleVerificationError(code)
+        after = os.fstat(descriptor)
+        if (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+        ) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        ):
+            raise SourceBundleVerificationError(code)
+        return b"".join(chunks)
+    except SourceBundleVerificationError:
+        raise
+    except OSError as exc:
+        raise SourceBundleVerificationError(code) from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _load_manifest(
+    manifest_path: Path,
+    *,
+    expected_digest: str | None = None,
+) -> tuple[dict[str, Any], bytes, list[dict[str, Any]]]:
+    try:
+        manifest_bytes = _read_secure_regular(
+            manifest_path,
+            maximum=MAX_ENTRY_BYTES,
+            code="MANIFEST_UNREADABLE",
+        )
+        if expected_digest is not None and hashlib.sha256(manifest_bytes).hexdigest() != expected_digest:
+            raise SourceBundleVerificationError("MANIFEST_DIGEST_MISMATCH")
         manifest = json.loads(manifest_bytes)
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise SourceBundleVerificationError("MANIFEST_UNREADABLE") from exc
@@ -240,6 +295,32 @@ def _load_manifest(manifest_path: Path) -> tuple[dict[str, Any], bytes, list[dic
     except SourceContractError as exc:
         raise SourceBundleVerificationError(str(exc)) from exc
     return manifest, manifest_bytes, files
+
+
+def _manifest_anchor(build_context_path: Path) -> tuple[str, str, str]:
+    try:
+        payload = _read_secure_regular(
+            build_context_path,
+            maximum=64 * 1024,
+            code="BUILD_CONTEXT_UNREADABLE",
+        )
+        context = json.loads(payload)
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise SourceBundleVerificationError("BUILD_CONTEXT_UNREADABLE") from exc
+    if (
+        not isinstance(context, dict)
+        or context.get("schema_version") != "butler.firstscreen.build-context.v1"
+        or context.get("mode") != "production"
+        or not _is_lower_hex(context.get("source_manifest_digest"), 64)
+        or not any(_is_lower_hex(context.get("commit_oid"), length) for length in (40, 64))
+        or not any(_is_lower_hex(context.get("tree_oid"), length) for length in (40, 64))
+    ):
+        raise SourceBundleVerificationError("BUILD_CONTEXT_INVALID")
+    return (
+        context["source_manifest_digest"],
+        context["commit_oid"],
+        context["tree_oid"],
+    )
 
 
 def _reconstruct_tree(files: list[dict[str, Any]]) -> str:
@@ -445,8 +526,17 @@ def _verify_extracted_source(source_root: Path, manifest: dict[str, Any], files:
         raise SourceBundleVerificationError("GIT_TREE_MISMATCH")
 
 
-def verify_source_bundle(source_root: Path, manifest_path: Path, archive_path: Path) -> None:
-    manifest, manifest_bytes, files = _load_manifest(manifest_path)
+def verify_source_bundle(
+    source_root: Path,
+    manifest_path: Path,
+    archive_path: Path,
+    *,
+    expected_manifest_digest: str | None = None,
+) -> None:
+    manifest, manifest_bytes, files = _load_manifest(
+        manifest_path,
+        expected_digest=expected_manifest_digest,
+    )
     _verify_archive(archive_path, manifest, manifest_bytes, files)
     _verify_extracted_source(source_root, manifest, files)
 
@@ -668,12 +758,32 @@ def main() -> int:
     source.add_argument("--source-root", type=Path)
     source.add_argument("--extract-to", type=Path)
     parser.add_argument("--manifest", type=Path, required=True)
+    anchor = parser.add_mutually_exclusive_group(required=True)
+    anchor.add_argument("--build-context", type=Path)
+    anchor.add_argument("--expected-manifest-sha256")
     parser.add_argument("--archive", type=Path, required=True)
     arguments = parser.parse_args()
     try:
         manifest_path = arguments.manifest.resolve()
         archive_path = arguments.archive.resolve()
-        manifest, manifest_bytes, files = _load_manifest(manifest_path)
+        if arguments.build_context is not None:
+            manifest_digest, expected_commit, expected_tree = _manifest_anchor(
+                arguments.build_context.resolve()
+            )
+        else:
+            manifest_digest = arguments.expected_manifest_sha256
+            if not _is_lower_hex(manifest_digest, 64):
+                raise SourceBundleVerificationError("MANIFEST_DIGEST_INVALID")
+            expected_commit = None
+            expected_tree = None
+        manifest, manifest_bytes, files = _load_manifest(
+            manifest_path,
+            expected_digest=manifest_digest,
+        )
+        if arguments.build_context is not None and (
+            manifest.get("commit") != expected_commit or manifest.get("tree") != expected_tree
+        ):
+            raise SourceBundleVerificationError("BUILD_CONTEXT_IDENTITY_MISMATCH")
         with open_verified_archive(archive_path) as handle:
             index, expected = _verify_open_archive(handle, manifest, manifest_bytes, files)
             if arguments.extract_to is not None:
