@@ -378,6 +378,21 @@ def test_ab03_manifest_cannot_replace_the_external_approver_fingerprint(tmp_path
         json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",
     )
+    signature.unlink()
+    subprocess.run(
+        [
+            "ssh-keygen",
+            "-Y",
+            "sign",
+            "-f",
+            str(signer),
+            "-n",
+            scanner._BASELINE_SIGNATURE_NAMESPACE,
+            str(manifest),
+        ],
+        check=True,
+        capture_output=True,
+    )
 
     with pytest.raises(scanner.BaselineApprovalError):
         _verify_approval(
