@@ -150,7 +150,7 @@ def test_repository_python_gate_uses_documented_collection_exclusions() -> None:
     ]
     assert len(repository_commands) == 2
     for command in repository_commands:
-        assert "--import-mode=importlib" in command
+        assert "--import-mode=importlib" not in command
         assert "--ignore=tests/turboq/" in command
         assert "--ignore=tests/eval/test_eval_hardcase.py" in command
         assert "--ignore=tests/eval/test_eval_judge_v3.py" in command
