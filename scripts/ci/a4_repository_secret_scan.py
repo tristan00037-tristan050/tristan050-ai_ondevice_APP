@@ -12,20 +12,29 @@ import argparse
 import base64
 import datetime as dt
 import hashlib
+import hmac
 import json
 import math
+import os
 import re
 import subprocess
 import sys
+import urllib.error
 import urllib.parse
+import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, Sequence
+from typing import Callable, Iterable, Iterator, Optional, Sequence
 
 
 SCHEMA_VERSION = "butler.box5.a4.repository_secret_scan.v1"
 DEFAULT_MAX_BLOB_BYTES = 32 * 1024 * 1024
 MAX_DECODED_CANDIDATE_BYTES = 16 * 1024
+
+# Rotation-evidence states that must never leave the merge gate open. A merely
+# self-attested rotation is honest but insufficient; a blocked rotation is
+# outstanding. Only COMPLETE_VERIFIED (network-proven) or NOT_PROVIDED pass.
+_NON_PASSING_ROTATION_STATES = frozenset({"BLOCKED_EXTERNAL", "COMPLETE_SELF_ATTESTED"})
 
 
 @dataclass(frozen=True)
@@ -66,11 +75,12 @@ class ScanSummary:
 
     @property
     def ok(self) -> bool:
-        return (
-            not self.findings
-            and not self.errors
-            and self.rotation_evidence_status != "BLOCKED_EXTERNAL"
-        )
+        if self.findings or self.errors:
+            return False
+        # Only a positively network-verified rotation, or the absence of any
+        # rotation claim, may leave the gate open. Self-attested and blocked
+        # states never pass even when no finding happens to remain reachable.
+        return self.rotation_evidence_status not in _NON_PASSING_ROTATION_STATES
 
 
 DIRECT_RULES: tuple[SecretRule, ...] = (
@@ -368,7 +378,60 @@ def _finding_baseline_key(item: Finding) -> tuple[str, str, str, str]:
     return item.scope, item.rule_id, item.path_digest, item.line_digest
 
 
-def apply_baseline(summary: ScanSummary, baseline_path: Path) -> ScanSummary:
+_BASELINE_MANIFEST_SCHEMA = "butler.box5.a4.secret_scan_baseline_manifest.v5.6"
+_BASELINE_MANIFEST_FIELDS = {
+    "schema_version",
+    "approved_source_head",
+    "baseline_sha256",
+    "entry_count",
+}
+
+
+def enforce_baseline_manifest(baseline_path: Path, manifest_path: Path) -> None:
+    """Pin the audited secret baseline to a protected approval manifest.
+
+    The manifest fixes (a) the exact byte digest of the baseline file and (b) the
+    approved ``source_head`` the baseline was generated against. Any silent edit
+    to the baseline entries, or a baseline regenerated at a different head, breaks
+    one of these bindings and fails the scan closed rather than trusting the
+    unreviewed baseline.
+    """
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict) or set(manifest) != _BASELINE_MANIFEST_FIELDS:
+        raise ValueError("secret scan baseline manifest is invalid")
+    if manifest.get("schema_version") != _BASELINE_MANIFEST_SCHEMA:
+        raise ValueError("secret scan baseline manifest schema is invalid")
+    if not re.fullmatch(r"[0-9a-f]{40}", str(manifest.get("approved_source_head"))):
+        raise ValueError("secret scan baseline manifest source head is invalid")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(manifest.get("baseline_sha256"))):
+        raise ValueError("secret scan baseline manifest digest is invalid")
+    if not isinstance(manifest.get("entry_count"), int) or manifest["entry_count"] < 0:
+        raise ValueError("secret scan baseline manifest entry count is invalid")
+
+    baseline_bytes = baseline_path.read_bytes()
+    actual_digest = hashlib.sha256(baseline_bytes).hexdigest()
+    if not hmac.compare_digest(actual_digest, manifest["baseline_sha256"]):
+        raise ValueError("secret scan baseline does not match the approved manifest digest")
+
+    document = json.loads(baseline_bytes.decode("utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError("secret scan baseline is invalid")
+    if document.get("source_head") != manifest["approved_source_head"]:
+        raise ValueError("secret scan baseline source head is not the approved head")
+    entries = document.get("entries")
+    if not isinstance(entries, list) or len(entries) != manifest["entry_count"]:
+        raise ValueError("secret scan baseline entry count is not the approved count")
+
+
+def apply_baseline(
+    summary: ScanSummary,
+    baseline_path: Path,
+    *,
+    manifest_path: Optional[Path] = None,
+) -> ScanSummary:
+    if manifest_path is not None:
+        enforce_baseline_manifest(baseline_path, manifest_path)
     document = json.loads(baseline_path.read_text(encoding="utf-8"))
     if (
         not isinstance(document, dict)
@@ -430,6 +493,104 @@ _ROTATION_CREDENTIAL_FIELDS = {
 }
 _ROTATION_CREDENTIAL_IDS = {"DATABASE_URL", "EXPORT_SIGN_SECRET"}
 
+# Rotation evidence is pinned to exactly one authenticated source: a single
+# GitHub REST issue-comment on this repository. Arbitrary URLs are rejected.
+_EVIDENCE_API_HOST = "api.github.com"
+_EVIDENCE_REPO = "tristan00037-tristan050/tristan050-ai_ondevice_APP"
+_EVIDENCE_COMMENT_ID = "5053048876"
+_EVIDENCE_CANONICAL_URL = (
+    f"https://{_EVIDENCE_API_HOST}/repos/{_EVIDENCE_REPO}/issues/comments/{_EVIDENCE_COMMENT_ID}"
+)
+_EVIDENCE_TOKEN_ENV_VARS = ("A4_ROTATION_EVIDENCE_TOKEN", "GITHUB_TOKEN", "GH_TOKEN")
+_EVIDENCE_FETCH_TIMEOUT_SECONDS = 15.0
+_EVIDENCE_MAX_BODY_BYTES = 1 * 1024 * 1024
+_UNSET = object()
+
+
+class RotationEvidenceError(Exception):
+    """Rotation evidence could not be positively verified. Always fail-closed.
+
+    Raised for every non-verifiable condition: missing authentication, network or
+    HTTP failure, timeout, unparsable response, a body digest that does not match
+    the attested value, an actor that does not match the comment author, or an
+    evidence URL that is not the single pinned api.github.com comment. It is never
+    downgraded to a pass; an unverified rotation must block the gate.
+    """
+
+
+@dataclass(frozen=True)
+class FetchedComment:
+    body: bytes
+    author_login: str
+
+
+def _resolve_evidence_token() -> Optional[str]:
+    for name in _EVIDENCE_TOKEN_ENV_VARS:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
+def _parse_pinned_evidence_url(value: object) -> tuple[str, str]:
+    """Accept only the single pinned api.github.com comment URL; else fail-closed."""
+    if not _is_https_evidence_url(value):
+        raise RotationEvidenceError("rotation evidence url is not a valid https url")
+    parsed = urllib.parse.urlsplit(str(value))
+    if parsed.hostname != _EVIDENCE_API_HOST or parsed.port is not None:
+        raise RotationEvidenceError("rotation evidence url host is not the pinned api host")
+    if parsed.query:
+        raise RotationEvidenceError("rotation evidence url must not carry a query")
+    match = re.fullmatch(r"/repos/([^/]+/[^/]+)/issues/comments/([0-9]+)", parsed.path)
+    if not match:
+        raise RotationEvidenceError("rotation evidence url path is not a pinned comment path")
+    repo, comment_id = match.group(1), match.group(2)
+    if repo != _EVIDENCE_REPO or comment_id != _EVIDENCE_COMMENT_ID:
+        raise RotationEvidenceError("rotation evidence url is not the pinned repo/comment")
+    return repo, comment_id
+
+
+def _github_comment_fetcher(
+    repo: str, comment_id: str, *, token: Optional[str]
+) -> FetchedComment:
+    """Authenticated fetch of the one pinned issue-comment. Fail-closed on any error."""
+    if repo != _EVIDENCE_REPO or comment_id != _EVIDENCE_COMMENT_ID:
+        raise RotationEvidenceError("rotation evidence source is not the pinned repo/comment")
+    if not token:
+        raise RotationEvidenceError("no authentication token available for evidence verification")
+    request = urllib.request.Request(
+        _EVIDENCE_CANONICAL_URL,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "a4-repository-secret-scan",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=_EVIDENCE_FETCH_TIMEOUT_SECONDS) as response:
+            if response.status != 200:
+                raise RotationEvidenceError(f"rotation evidence fetch returned HTTP {response.status}")
+            raw = response.read(_EVIDENCE_MAX_BODY_BYTES + 1)
+    except RotationEvidenceError:
+        raise
+    except Exception as exc:  # network, TLS, timeout, HTTP error, DNS, ...
+        raise RotationEvidenceError("rotation evidence fetch failed") from exc
+    if len(raw) > _EVIDENCE_MAX_BODY_BYTES:
+        raise RotationEvidenceError("rotation evidence response is implausibly large")
+    try:
+        document = json.loads(raw)
+        body_text = document["body"]
+        author_login = document["user"]["login"]
+        echoed_url = document.get("url")
+    except (ValueError, KeyError, TypeError) as exc:
+        raise RotationEvidenceError("rotation evidence response could not be parsed") from exc
+    if not isinstance(body_text, str) or not isinstance(author_login, str):
+        raise RotationEvidenceError("rotation evidence response fields are invalid")
+    if echoed_url != _EVIDENCE_CANONICAL_URL:
+        raise RotationEvidenceError("rotation evidence response url did not match the pinned source")
+    return FetchedComment(body_text.encode("utf-8"), author_login)
+
 
 def _is_utc_timestamp(value: object) -> bool:
     if not isinstance(value, str) or not value.endswith("Z"):
@@ -462,7 +623,16 @@ def _is_https_evidence_url(value: object) -> bool:
     )
 
 
-def _validate_rotation_credential(entry: object) -> tuple[str, bool]:
+@dataclass(frozen=True)
+class _RotationCredential:
+    credential_id: str
+    rotated: bool
+    rotated_by: Optional[str]
+    evidence_url: Optional[str]
+    evidence_sha256: Optional[str]
+
+
+def _validate_rotation_credential(entry: object) -> _RotationCredential:
     if not isinstance(entry, dict) or set(entry) != _ROTATION_CREDENTIAL_FIELDS:
         raise ValueError("secret rotation credential entry is invalid")
     credential_id = entry.get("credential_id")
@@ -479,7 +649,7 @@ def _validate_rotation_credential(entry: object) -> tuple[str, bool]:
     if status == "ROTATION_EVIDENCE_REQUIRED":
         if any(value is not None for value in evidence_fields):
             raise ValueError("incomplete rotation evidence must not be partially asserted")
-        return credential_id, False
+        return _RotationCredential(credential_id, False, None, None, None)
     if status != "ROTATED":
         raise ValueError("secret rotation credential status is invalid")
     if not _is_utc_timestamp(entry.get("revoked_at_utc")):
@@ -492,16 +662,40 @@ def _validate_rotation_credential(entry: object) -> tuple[str, bool]:
         raise ValueError("secret rotation evidence URL is invalid")
     if not re.fullmatch(r"[0-9a-f]{64}", str(entry.get("evidence_sha256"))):
         raise ValueError("secret rotation evidence digest is invalid")
-    return credential_id, True
+    return _RotationCredential(
+        credential_id,
+        True,
+        str(entry.get("rotated_by")),
+        str(entry.get("evidence_url")),
+        str(entry.get("evidence_sha256")),
+    )
 
 
-def apply_rotation_evidence(summary: ScanSummary, status_path: Path) -> ScanSummary:
-    """Release one exact historical finding only after complete external rotation proof.
+_ROTATION_COMPLETION_GATES = {
+    "COMPLETE_SELF_ATTESTED": "SELF_ATTESTED_ROTATION_NOT_MERGEABLE",
+    "COMPLETE_VERIFIED": "ROTATION_EVIDENCE_VERIFIED_PENDING_SECRET_SCAN",
+}
+
+EvidenceFetcher = Callable[..., FetchedComment]
+
+
+def apply_rotation_evidence(
+    summary: ScanSummary,
+    status_path: Path,
+    *,
+    evidence_fetcher: EvidenceFetcher = _github_comment_fetcher,
+    token: object = _UNSET,
+) -> ScanSummary:
+    """Release one exact historical finding only after positively verifying evidence.
 
     The status document never contains the old or replacement credential values. A
     completed attestation is bound to one Git object, one path digest, one line
-    digest, and both affected credential identifiers. Any malformed or partial
-    claim fails the scan rather than weakening it.
+    digest, and both affected credential identifiers. Releasing the finding further
+    requires the attested ``evidence_sha256`` to equal the SHA-256 of the body of
+    the one pinned api.github.com comment (fetched with authentication) and each
+    ``rotated_by`` to equal that comment's author. Any malformed, partial, or
+    unverifiable claim fails the scan closed rather than weakening it. A document
+    that only self-attests is reported as COMPLETE_SELF_ATTESTED and never passes.
     """
 
     document = json.loads(status_path.read_text(encoding="utf-8"))
@@ -524,12 +718,12 @@ def apply_rotation_evidence(summary: ScanSummary, status_path: Path) -> ScanSumm
     if not isinstance(credentials, list) or len(credentials) != len(_ROTATION_CREDENTIAL_IDS):
         raise ValueError("secret rotation credential set is invalid")
     validated = [_validate_rotation_credential(item) for item in credentials]
-    if {credential_id for credential_id, _ in validated} != _ROTATION_CREDENTIAL_IDS:
+    if {cred.credential_id for cred in validated} != _ROTATION_CREDENTIAL_IDS:
         raise ValueError("secret rotation credential set is incomplete")
 
     status = document.get("status")
     if status == "BLOCKED_EXTERNAL":
-        if any(is_complete for _, is_complete in validated):
+        if any(cred.rotated for cred in validated):
             raise ValueError("partial rotation completion is not accepted")
         if document.get("merge_gate") != "BLOCKED_UNTIL_ALL_ROTATION_EVIDENCE_IS_PRESENT":
             raise ValueError("secret rotation blocked merge gate is invalid")
@@ -543,10 +737,40 @@ def apply_rotation_evidence(summary: ScanSummary, status_path: Path) -> ScanSumm
             summary.rotation_suppressed,
             "BLOCKED_EXTERNAL",
         )
-    if status != "COMPLETE" or not all(is_complete for _, is_complete in validated):
+    if status not in _ROTATION_COMPLETION_GATES or not all(cred.rotated for cred in validated):
         raise ValueError("secret rotation completion is invalid")
-    if document.get("merge_gate") != "ROTATION_EVIDENCE_COMPLETE_PENDING_SECRET_SCAN":
+    if document.get("merge_gate") != _ROTATION_COMPLETION_GATES[status]:
         raise ValueError("secret rotation completion merge gate is invalid")
+
+    # A self-attested completion is an honest record of an unverified rotation. It
+    # keeps the finding and never opens the gate.
+    if status == "COMPLETE_SELF_ATTESTED":
+        return ScanSummary(
+            summary.tracked_objects,
+            summary.history_blobs,
+            summary.findings,
+            summary.errors,
+            summary.baseline_suppressed,
+            summary.stale_baseline_entries,
+            summary.rotation_suppressed,
+            "COMPLETE_SELF_ATTESTED",
+        )
+
+    # status == "COMPLETE_VERIFIED": perform the real, network-backed verification.
+    # Every credential must reference the single pinned comment.
+    repo = comment_id = None
+    for cred in validated:
+        repo, comment_id = _parse_pinned_evidence_url(cred.evidence_url)
+    resolved_token = _resolve_evidence_token() if token is _UNSET else token
+    fetched = evidence_fetcher(repo, comment_id, token=resolved_token)
+    if not isinstance(fetched, FetchedComment):
+        raise RotationEvidenceError("rotation evidence fetch returned an invalid object")
+    actual_digest = hashlib.sha256(fetched.body).hexdigest()
+    for cred in validated:
+        if not hmac.compare_digest(actual_digest, cred.evidence_sha256 or ""):
+            raise RotationEvidenceError("rotation evidence body digest does not match the attestation")
+        if not hmac.compare_digest(cred.rotated_by or "", fetched.author_login):
+            raise RotationEvidenceError("rotation evidence actor does not match the comment author")
 
     target = (
         document["exposure_scope"],
@@ -591,7 +815,7 @@ def _write_report(path: Path, summary: ScanSummary) -> None:
 
 
 def _print_summary(summary: ScanSummary) -> None:
-    rotation_blocked = summary.rotation_evidence_status == "BLOCKED_EXTERNAL"
+    rotation_blocked = summary.rotation_evidence_status in _NON_PASSING_ROTATION_STATES
     print(f"A4_REPOSITORY_SECRET_SCAN_OK={1 if summary.ok else 0}")
     print(f"A4_TRACKED_SECRET_SCAN_OK={1 if not any(item.scope == 'tracked' for item in summary.findings + summary.errors) else 0}")
     print(
@@ -624,17 +848,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--report", type=Path)
     parser.add_argument("--baseline", type=Path)
+    parser.add_argument("--baseline-manifest", type=Path)
     parser.add_argument("--rotation-status", type=Path)
     parser.add_argument("--max-blob-bytes", type=int, default=DEFAULT_MAX_BLOB_BYTES)
     args = parser.parse_args(argv)
     if args.max_blob_bytes <= 0:
         parser.error("--max-blob-bytes must be positive")
+    if args.baseline_manifest and not args.baseline:
+        parser.error("--baseline-manifest requires --baseline")
     try:
         summary = scan_repository(args.repo, max_blob_bytes=args.max_blob_bytes)
         if args.baseline:
-            summary = apply_baseline(summary, args.baseline)
+            summary = apply_baseline(summary, args.baseline, manifest_path=args.baseline_manifest)
         if args.rotation_status:
             summary = apply_rotation_evidence(summary, args.rotation_status)
+    except RotationEvidenceError:
+        print("A4_REPOSITORY_SECRET_SCAN_OK=0")
+        print("ERROR_CODE=ROTATION_EVIDENCE_UNVERIFIED")
+        return 2
     except Exception:
         print("A4_REPOSITORY_SECRET_SCAN_OK=0")
         print("ERROR_CODE=SECRET_SCAN_INTERNAL_FAILURE")

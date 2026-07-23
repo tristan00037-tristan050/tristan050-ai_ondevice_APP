@@ -160,6 +160,12 @@ jobs:
     name: A4 canonical product + independent verifier
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # issues:read lets the pinned rotation-evidence verifier fetch the one
+    # api.github.com issue-comment it is bound to. contents:read is repeated
+    # because a job-level permissions block replaces the workflow default.
+    permissions:
+      contents: read
+      issues: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -243,10 +249,15 @@ jobs:
           print(f'A4_V55_CLEAN_REPOSITORY_CLOSURE=1 tracked={len(tracked)}')
           PY
       - name: Full tracked and Git history secret scan
+        env:
+          # Authenticates the pinned rotation-evidence fetch. No token, no pass:
+          # the verifier fails closed rather than trusting a self-attested claim.
+          A4_ROTATION_EVIDENCE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python scripts/ci/a4_repository_secret_scan.py \
             --repo . \
             --baseline docs/ops/A4_V55_SECRET_SCAN_BASELINE.json \
+            --baseline-manifest docs/ops/A4_V55_SECRET_SCAN_BASELINE_MANIFEST.json \
             --rotation-status docs/ops/A4_V55_SECRET_ROTATION_STATUS.json \
             --report a4-secret-scan.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
