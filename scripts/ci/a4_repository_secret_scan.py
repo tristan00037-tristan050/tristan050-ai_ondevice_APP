@@ -805,10 +805,11 @@ def apply_rotation_evidence(
     )
 
 
-def _write_report(path: Path, summary: ScanSummary) -> None:
+def _write_report(path: Path, summary: ScanSummary, *, history_scope: str) -> None:
     payload = {
         "schema_version": SCHEMA_VERSION,
         "status": "PASS" if summary.ok else "BLOCKED",
+        "history_scope": history_scope,
         "raw_values_included": False,
         "raw_paths_included": False,
         "tracked_objects": summary.tracked_objects,
@@ -823,8 +824,11 @@ def _write_report(path: Path, summary: ScanSummary) -> None:
     path.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
-def _print_summary(summary: ScanSummary) -> None:
+def _print_summary(summary: ScanSummary, *, history_scope: str) -> None:
     rotation_blocked = summary.rotation_evidence_status in _NON_PASSING_ROTATION_STATES
+    # Always record the scope so OK=1 is never mistaken for whole-repository
+    # cleanliness. HEAD covers exactly what this branch would merge.
+    print(f"SCOPE={history_scope}")
     print(f"A4_REPOSITORY_SECRET_SCAN_OK={1 if summary.ok else 0}")
     print(f"A4_TRACKED_SECRET_SCAN_OK={1 if not any(item.scope == 'tracked' for item in summary.findings + summary.errors) else 0}")
     print(
@@ -877,6 +881,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.baseline_manifest and not args.baseline:
         parser.error("--baseline-manifest requires --baseline")
     history_rev_args = ("HEAD",) if args.history_scope == "head" else ("--all",)
+    scope_label = "HEAD" if args.history_scope == "head" else "ALL"
     try:
         summary = scan_repository(
             args.repo,
@@ -888,16 +893,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.rotation_status:
             summary = apply_rotation_evidence(summary, args.rotation_status)
     except RotationEvidenceError:
+        print(f"SCOPE={scope_label}")
         print("A4_REPOSITORY_SECRET_SCAN_OK=0")
         print("ERROR_CODE=ROTATION_EVIDENCE_UNVERIFIED")
         return 2
     except Exception:
+        print(f"SCOPE={scope_label}")
         print("A4_REPOSITORY_SECRET_SCAN_OK=0")
         print("ERROR_CODE=SECRET_SCAN_INTERNAL_FAILURE")
         return 2
     if args.report:
-        _write_report(args.report, summary)
-    _print_summary(summary)
+        _write_report(args.report, summary, history_scope=scope_label)
+    _print_summary(summary, history_scope=scope_label)
     return 0 if summary.ok else 1
 
 
