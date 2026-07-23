@@ -1,0 +1,15 @@
+{
+  "schema_version": "butler.a4.product_delivery.v3.1",
+  "artifact_name": "Butler_Box5_A4_v31_product_codex.zip",
+  "content": "EXACT_BASE_GIT_BUNDLE_PLUS_PRODUCT_PATCH_AND_EVIDENCE",
+  "source_directive_sha256": "5417817cd01de74dff89edac1eb4cb4e95fd595b15970c13892d1425028a9847",
+  "product_v3_source_sha256": "382d5ea698ed82f03e1859d777d3d8cdf792ca229aef2abebeda99b2e029cc50",
+  "base_commit_oid": "b38e9e3321c0b972fb257ebd3831fa472da9c5a4",
+  "base_tree_oid": "9161aca6e6c391379c64477784f480d25f656758",
+  "completion_status_path": "docs/ops/A4_COMPLETION_STATUS.json",
+  "completion_status_sha256": "1a19a91af8a28e7372555c9b7c5891aa2b9e5a96a31b907cdfd652ec828c966b",
+  "status": "IMPLEMENTED_LOCAL_EXTERNAL_GATES_OPEN",
+  "code_pass": false,
+  "merge_ready": false,
+  "product_activation_allowed": false
+}

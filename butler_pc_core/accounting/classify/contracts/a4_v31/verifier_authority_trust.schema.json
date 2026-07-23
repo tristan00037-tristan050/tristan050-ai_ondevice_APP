@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:box5:a4:verifier-authority-trust:v5.3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "enabled", "environment", "authority_id", "transport",
+    "algorithm", "signer_key_id", "public_key_b64", "key_epoch",
+    "minimum_key_epoch", "revoked_key_ids", "not_before_utc", "not_after_utc",
+    "expected_authority_cdhash", "expected_verifier_cdhash"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.box5.a4.verifier_authority_trust.v5.3"},
+    "enabled": {"type": "boolean"},
+    "environment": {"enum": ["PRODUCTION", "TEST"]},
+    "authority_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
+    "transport": {"const": "native-xpc-v5.3"},
+    "algorithm": {"const": "Ed25519"},
+    "signer_key_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
+    "public_key_b64": {"type": "string"},
+    "key_epoch": {"type": "integer", "minimum": -1},
+    "minimum_key_epoch": {"type": "integer", "minimum": 0},
+    "revoked_key_ids": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[A-Za-z0-9._-]{3,80}$"},
+      "uniqueItems": true
+    },
+    "not_before_utc": {"type": "string", "format": "date-time"},
+    "not_after_utc": {"type": "string", "format": "date-time"},
+    "expected_authority_cdhash": {"type": "string", "pattern": "^(?:UNAPPROVED|(?!0{64}$|f{64}$)[0-9a-f]{64})$"},
+    "expected_verifier_cdhash": {"type": "string", "pattern": "^(?:UNAPPROVED|(?!0{64}$|f{64}$)[0-9a-f]{64})$"}
+  }
+}

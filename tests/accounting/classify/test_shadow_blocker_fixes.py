@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from datetime import date
 from pathlib import Path
@@ -20,7 +21,10 @@ pd = pytest.importorskip("pandas")
 
 from butler_pc_core.accounting.classify.models import DecisionState, ReasonCode
 from butler_pc_core.accounting.classify.pipeline import Stage3Classifier
-from butler_pc_core.accounting.classify.shadow.adapter import AtlinkShadowPort, build_canonical_transaction
+from butler_pc_core.accounting.classify.shadow.adapter import (
+    AtlinkShadowPort,
+    build_canonical_transaction,
+)
 from butler_pc_core.accounting.policy.vendor_descriptor import descriptor_hmac
 from butler_pc_core.company_profile.contracts import make_runtime_profile
 
@@ -32,16 +36,26 @@ PROFILE = make_runtime_profile(
 
 
 def _tx(**o):
-    base = dict(index=0, amount_minor=-10000, booked_date=date(2026, 3, 1), value_date=date(2026, 3, 1),
-                desc_text="d", vendor_text="아무개", counterparty_text="아무개")
+    base = dict(
+        index=0,
+        amount_minor=-10000,
+        booked_date=date(2026, 3, 1),
+        value_date=date(2026, 3, 1),
+        desc_text="d",
+        vendor_text="아무개",
+        counterparty_text="아무개",
+    )
     base.update(o)
     return build_canonical_transaction(**base)
 
 
 # ── Blocker 1: self-transfer guard ────────────────────────────────────────
 
+
 def test_blocker1_own_account_becomes_review_self_transfer_and_skips_rule():
-    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="123-456-789")
+    port = AtlinkShadowPort(
+        company_profile=PROFILE, counterparty_account_no="123-456-789"
+    )
     draft = Stage3Classifier().classify(_tx(), port)
     assert draft.state is DecisionState.REVIEW_REQUIRED
     assert draft.reason_code is ReasonCode.REVIEW_SELF_TRANSFER
@@ -51,7 +65,9 @@ def test_blocker1_own_account_becomes_review_self_transfer_and_skips_rule():
 
 
 def test_blocker1_non_own_account_does_not_trigger_self_transfer():
-    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="999-888-777")
+    port = AtlinkShadowPort(
+        company_profile=PROFILE, counterparty_account_no="999-888-777"
+    )
     draft = Stage3Classifier().classify(_tx(), port)
     assert draft.reason_code is not ReasonCode.REVIEW_SELF_TRANSFER
 
@@ -64,6 +80,7 @@ def test_blocker1_no_profile_stays_conservative_no_crash():
 
 # ── Blocker 2: registry-consistent HMAC vendor match → AUTO_PROPOSE ────────
 
+
 def _approved_registry(vendor: str) -> dict:
     # ★ HMAC computed from the SAME function the registry uses — not a pre-inserted placeholder.
     return {
@@ -74,7 +91,9 @@ def _approved_registry(vendor: str) -> dict:
         "descriptors": [
             {
                 "descriptor_id": "vendor.telecom.approved",
-                "normalized_exact_value_hmac": descriptor_hmac(vendor, policy_profile_id="atlink.smb.v1"),
+                "normalized_exact_value_hmac": descriptor_hmac(
+                    vendor, policy_profile_id="atlink.smb.v1"
+                ),
                 "bank_direction": "OUTFLOW",
                 "service_kind": "TELECOM",
                 "management_tags": ["TELECOM"],
@@ -84,21 +103,34 @@ def _approved_registry(vendor: str) -> dict:
     }
 
 
-def test_blocker2_real_transaction_token_matches_registry_and_auto_proposes(monkeypatch):
+def test_blocker2_real_transaction_token_matches_registry_and_auto_proposes(
+    monkeypatch,
+):
     vendor = "케이티 서버 이용료"
     real_read = AtlinkShadowPort._read
     monkeypatch.setattr(
-        AtlinkShadowPort, "_read",
-        staticmethod(lambda rel: _approved_registry(vendor) if rel == "vendor_descriptor_registry.template.json" else real_read(rel)),
+        AtlinkShadowPort,
+        "_read",
+        staticmethod(
+            lambda rel: _approved_registry(vendor)
+            if rel == "vendor_descriptor_registry.template.json"
+            else real_read(rel)
+        ),
     )
     # ★ REAL product path: build_canonical_transaction produces vendor_token; classify() makes the
     # pipeline call port.match_vendor_exact(tx.vendor_token). No direct descriptor_hmac shortcut.
     tx = _tx(vendor_text=vendor)
-    assert tx.vendor_token == "tok_" + descriptor_hmac(vendor, policy_profile_id="atlink.smb.v1")
-    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="999-888-777")
+    assert tx.vendor_token == "tok_" + descriptor_hmac(
+        vendor, policy_profile_id="atlink.smb.v1"
+    )
+    port = AtlinkShadowPort(
+        company_profile=PROFILE, counterparty_account_no="999-888-777"
+    )
     draft = Stage3Classifier().classify(tx, port)
     assert draft.state is DecisionState.AUTO_PROPOSE
-    assert draft.account_id == "PL.SGA.COMMUNICATION"   # TELECOM → 통신비 (registry-bound)
+    assert (
+        draft.account_id == "PL.SGA.COMMUNICATION"
+    )  # TELECOM → 통신비 (registry-bound)
     assert draft.reason_code is ReasonCode.AUTO_PROPOSE_EXACT_RULE
     # match_vendor_exact was actually reached WITH the tx token (a real hmac prefix, not "vendor:-")
     assert any(c.startswith("vendor:") and c != "vendor:-" for c in port._calls)
@@ -107,21 +139,33 @@ def test_blocker2_real_transaction_token_matches_registry_and_auto_proposes(monk
 def test_blocker2_non_approved_vendor_still_reviews(monkeypatch):
     real_read = AtlinkShadowPort._read
     monkeypatch.setattr(
-        AtlinkShadowPort, "_read",
-        staticmethod(lambda rel: _approved_registry("케이티 서버 이용료") if rel == "vendor_descriptor_registry.template.json" else real_read(rel)),
+        AtlinkShadowPort,
+        "_read",
+        staticmethod(
+            lambda rel: _approved_registry("케이티 서버 이용료")
+            if rel == "vendor_descriptor_registry.template.json"
+            else real_read(rel)
+        ),
     )
-    tx = _tx(vendor_text="전혀다른상호")   # token differs → no registry hit
-    port = AtlinkShadowPort(company_profile=PROFILE, counterparty_account_no="999-888-777")
+    tx = _tx(vendor_text="전혀다른상호")  # token differs → no registry hit
+    port = AtlinkShadowPort(
+        company_profile=PROFILE, counterparty_account_no="999-888-777"
+    )
     draft = Stage3Classifier().classify(tx, port)
     assert draft.state is not DecisionState.AUTO_PROPOSE
 
 
 # ── Blocker 3: shadow does not make the product wait ──────────────────────
 
+
 def test_blocker3_hook_is_fire_and_forget_not_awaited():
     src = Path("butler_sidecar.py").read_text(encoding="utf-8")
-    assert "loop.run_in_executor(None, run_and_write_shadow" in src
-    assert "await loop.run_in_executor(None, run_and_write_shadow" not in src
+    assert re.search(
+        r"(?m)^\s*loop\.run_in_executor\(\s*None,\s*run_and_write_shadow,", src
+    )
+    assert not re.search(
+        r"await\s+loop\.run_in_executor\(\s*None,\s*run_and_write_shadow,", src
+    )
 
 
 def test_blocker3_scheduled_slow_shadow_does_not_block_caller():

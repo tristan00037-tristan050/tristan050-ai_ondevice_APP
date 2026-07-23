@@ -35,7 +35,7 @@ async function main() {
   if (!r1.ok) {
     const err = await r1.text().catch(() => '');
     if (r1.status === 500 && err.includes('missing_export_sign_secret')) {
-      throw new Error(`HTTP ${r1.status}: ${err}\nHint: Start BFF with EXPORT_SIGN_SECRET (e.g. EXPORT_SIGN_SECRET=ci-secret or dev-export-secret).`);
+      throw new Error(`HTTP ${r1.status}: ${err}\nHint: Start BFF with EXPORT_SIGN_SECRET supplied by the test secret fixture.`);
     }
     throw new Error(`HTTP ${r1.status}: ${err}`);
   }
@@ -67,5 +67,4 @@ main().catch(e => {
   console.error('❌ E2E Exports test failed:', e);
   process.exit(1);
 });
-
 

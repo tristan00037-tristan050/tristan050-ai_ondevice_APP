@@ -35,7 +35,7 @@ R5b 배치 코어 기준선에 Phase 5.3 UI/대시보드를 추가한 완성 번
 ```bash
 cd packages/collector-node-ts
 export API_KEYS="default:collector-key"
-export EXPORT_SIGN_SECRET=dev-secret
+export EXPORT_SIGN_SECRET='<read-from-local-secret-store>'
 export RETAIN_DAYS=30
 npm install
 npm run build
@@ -98,7 +98,7 @@ CI 검증 항목:
 
 ```bash
 API_KEYS="default:collector-key,teamA:teamA-key"
-EXPORT_SIGN_SECRET=dev-secret
+EXPORT_SIGN_SECRET=<read-from-local-secret-store>
 RETAIN_DAYS=30
 ```
 

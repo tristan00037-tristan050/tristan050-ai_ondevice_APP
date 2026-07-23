@@ -161,6 +161,11 @@ class AccountingReviewRuntime:
         self.tokens = TokenService(key_store)
         self.registry = registry or RegistrySnapshot.bundled()
         self.store = SQLiteAssignmentStore(db_path, self.tokens)
+        try:
+            self.store.recover_expired_reconciliation_jobs(observed_at=utc_now())
+        except AssignmentError as exc:
+            if exc.code != "BLOCK_SCHEMA_MIGRATION_REQUIRED":
+                raise
         self._batches: dict[str, ReviewBatch] = {}
         self._lock = threading.RLock()
 

@@ -1,8 +1,6 @@
 """test_classifier.py — 분류 정확도 90% 이상 검증."""
 from __future__ import annotations
 
-import pytest
-
 try:
     import pandas as pd
     _PANDAS_OK = True
@@ -72,7 +70,8 @@ def test_vendor_pattern_assists_classification():
     ])
     result = classify_df(df)
 
-    assert result.iloc[0]["분류과목"] == "전력비"
+    # 2026-06-25 한국 회계 도메인 정본은 전기·수도·가스를 수도광열비로 통합한다.
+    assert result.iloc[0]["분류과목"] == "수도광열비"
     assert result.iloc[1]["분류과목"] == "보험료"
     assert result.iloc[2]["분류과목"] == "차량유지비"
 

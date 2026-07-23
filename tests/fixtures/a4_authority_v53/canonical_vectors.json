@@ -1,0 +1,18 @@
+{
+  "schema_version": "butler.box5.a4.canonical_vectors.v5.3",
+  "vectors": [
+    {
+      "id": "utf16-order-integer-envelope-001",
+      "value": {
+        "Z": "line\n\"quote\"",
+        "a": [true, null, -7, 0, 9007199254740991],
+        "": "bmp-private",
+        "😀": "supplementary",
+        "한글": "값"
+      },
+      "canonical_hex": "7b225a223a226c696e655c6e5c2271756f74655c22222c2261223a5b747275652c6e756c6c2c2d372c302c393030373139393235343734303939315d2c22ed959ceab880223a22eab092222c22f09f9880223a22737570706c656d656e74617279222c22ee8080223a22626d702d70726976617465227d",
+      "canonical_sha256": "123f08cd11ffe6a9adc228e4216f6c85e6d912f0f6a5a9efefb564f1ebdc88a1",
+      "envelope_sha256": "c3e5fd035b4dfc0b8a51f73e06f94a2e6bf3428ff4449164279df2b188e9cec7"
+    }
+  ]
+}

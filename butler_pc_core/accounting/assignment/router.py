@@ -4,18 +4,26 @@ from __future__ import annotations
 
 import re
 import uuid
-from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-from butler_pc_core.auth.capability_token import CapabilityTokenError, CapabilityTokenManager
+from butler_pc_core.auth.capability_token import (
+    CapabilityTokenError,
+    CapabilityTokenManager,
+)
 from butler_pc_core.company_profile.storage import CompanyProfileStore, ProfileLoadError
 
-from .domain import AssignCommand, AssignmentError, ConflictDecision, require_mutation_headers
+from .domain import (
+    AssignCommand,
+    AssignmentError,
+    ConflictDecision,
+    require_mutation_headers,
+)
 from .runtime import get_accounting_review_runtime
+from butler_pc_core.accounting.classify.reconciliation_v2 import tenant_uuid
 
 
 router = APIRouter()
@@ -33,7 +41,6 @@ class AssignmentPayload(BaseModel):
     expected_transaction_version: int
 
 
-
 class ConflictResolutionPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -42,9 +49,25 @@ class ConflictResolutionPayload(BaseModel):
     expected_conflict_version: int
 
 
+class A4RunPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+
+
+class A4ReviewPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: str
+
+
 def _request_id(request: Request) -> str:
     candidate = request.headers.get("x-request-id")
-    return candidate if candidate and _REQUEST_ID_RE.fullmatch(candidate) else uuid.uuid4().hex
+    return (
+        candidate
+        if candidate and _REQUEST_ID_RE.fullmatch(candidate)
+        else uuid.uuid4().hex
+    )
 
 
 def _problem(error: AssignmentError, request_id: str) -> JSONResponse:
@@ -61,9 +84,15 @@ def _reject_external_origin(origin: str | None) -> None:
     parsed = urlparse(origin)
     if parsed.scheme == "tauri" and parsed.hostname in {None, "localhost"}:
         return
-    if parsed.scheme in {"http", "https"} and parsed.hostname in {"127.0.0.1", "localhost", "::1"}:
+    if parsed.scheme in {"http", "https"} and parsed.hostname in {
+        "127.0.0.1",
+        "localhost",
+        "::1",
+    }:
         return
-    raise AssignmentError("AUTHORIZATION_DENIED", 403, "External origins cannot access accounting review.")
+    raise AssignmentError(
+        "AUTHORIZATION_DENIED", 403, "External origins cannot access accounting review."
+    )
 
 
 def _context(authorization: str | None, origin: str | None):
@@ -72,7 +101,9 @@ def _context(authorization: str | None, origin: str | None):
         _TOKEN_MANAGER.verify_authorization_header(authorization)
     except CapabilityTokenError as exc:
         status = 401 if "MISSING" in exc.fail_class.value else 403
-        raise AssignmentError("AUTHORIZATION_DENIED", status, "Accounting review authorization failed.") from exc
+        raise AssignmentError(
+            "AUTHORIZATION_DENIED", status, "Accounting review authorization failed."
+        ) from exc
     try:
         profile = CompanyProfileStore().load_active_profile()
     except ProfileLoadError as exc:
@@ -93,7 +124,9 @@ def review_summary(
 ):
     rid = _request_id(request)
     try:
-        return get_accounting_review_runtime().review_summary(_context(authorization, origin), batch_id)
+        return get_accounting_review_runtime().review_summary(
+            _context(authorization, origin), batch_id
+        )
     except AssignmentError as exc:
         return _problem(exc, rid)
 
@@ -110,7 +143,10 @@ def unaccounted_page(
     rid = _request_id(request)
     try:
         return get_accounting_review_runtime().unaccounted_page(
-            _context(authorization, origin), batch_id, cursor=cursor, page_size=page_size
+            _context(authorization, origin),
+            batch_id,
+            cursor=cursor,
+            page_size=page_size,
         )
     except AssignmentError as exc:
         return _problem(exc, rid)
@@ -169,7 +205,9 @@ def learned_rules(
 ):
     rid = _request_id(request)
     try:
-        return get_accounting_review_runtime().learned_rules(_context(authorization, origin), state)
+        return get_accounting_review_runtime().learned_rules(
+            _context(authorization, origin), state
+        )
     except AssignmentError as exc:
         return _problem(exc, rid)
 
@@ -209,7 +247,10 @@ def resolve_rule_conflict(
     rid = _request_id(request)
     try:
         key, version = require_mutation_headers(idempotency_key, if_match)
-        if payload.schema_version != "2.0" or payload.expected_conflict_version != version:
+        if (
+            payload.schema_version != "2.0"
+            or payload.expected_conflict_version != version
+        ):
             raise AssignmentError(
                 "CONFLICT_STALE",
                 412,
@@ -235,6 +276,118 @@ def review_capability(
 ):
     rid = _request_id(request)
     try:
-        return get_accounting_review_runtime().capability(_context(authorization, origin))
+        return get_accounting_review_runtime().capability(
+            _context(authorization, origin)
+        )
     except AssignmentError as exc:
         return _problem(exc, rid)
+
+
+def _a4_context(authorization: str | None, origin: str | None):
+    context = _context(authorization, origin)
+    return context, tenant_uuid(context.tenant_id)
+
+
+@router.post("/box5/reconciliation/a4/runs")
+def a4_run(
+    payload: A4RunPayload,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    origin: str | None = Header(default=None),
+):
+    """Return the canonical run created by the actual accounting pipeline."""
+
+    rid = _request_id(request)
+    try:
+        uuid.UUID(payload.run_id)
+        _, tenant_id = _a4_context(authorization, origin)
+        run = get_accounting_review_runtime().store.reconciliation_run(
+            tenant_id, payload.run_id
+        )
+        if run is None:
+            raise AssignmentError("A4_RUN_NOT_FOUND", 404, "A4 run is not available.")
+        return {**run, "affects_reporting": False, "runtime_activation_allowed": False}
+    except (AssignmentError, ValueError) as exc:
+        error = (
+            exc
+            if isinstance(exc, AssignmentError)
+            else AssignmentError("A4_RUN_INVALID", 422, "A4 run identifier is invalid.")
+        )
+        return _problem(error, rid)
+
+
+@router.get("/box5/reconciliation/a4/runs/{run_id}")
+def a4_get_run(
+    run_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    origin: str | None = Header(default=None),
+):
+    return a4_run(A4RunPayload(run_id=run_id), request, authorization, origin)
+
+
+@router.get("/box5/reconciliation/a4/runs/{run_id}/candidates")
+def a4_candidates(
+    run_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    origin: str | None = Header(default=None),
+):
+    rid = _request_id(request)
+    try:
+        uuid.UUID(run_id)
+        _, tenant_id = _a4_context(authorization, origin)
+        run = get_accounting_review_runtime().store.reconciliation_run(
+            tenant_id, run_id
+        )
+        if run is None:
+            raise AssignmentError("A4_RUN_NOT_FOUND", 404, "A4 run is not available.")
+        return {
+            "run_id": run_id,
+            "items": get_accounting_review_runtime().store.reconciliation_candidates(
+                tenant_id, run_id
+            ),
+            "affects_reporting": False,
+        }
+    except (AssignmentError, ValueError) as exc:
+        error = (
+            exc
+            if isinstance(exc, AssignmentError)
+            else AssignmentError("A4_RUN_INVALID", 422, "A4 run identifier is invalid.")
+        )
+        return _problem(error, rid)
+
+
+@router.post("/box5/reconciliation/a4/runs/{run_id}/candidates/{edge_id}/review")
+def a4_review_candidate(
+    run_id: str,
+    edge_id: str,
+    payload: A4ReviewPayload,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    origin: str | None = Header(default=None),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    rid = _request_id(request)
+    try:
+        uuid.UUID(run_id)
+        if not idempotency_key or not _REQUEST_ID_RE.fullmatch(idempotency_key):
+            raise AssignmentError(
+                "IDEMPOTENCY_KEY_REQUIRED", 400, "A valid idempotency key is required."
+            )
+        context, tenant_id = _a4_context(authorization, origin)
+        return get_accounting_review_runtime().store.append_reconciliation_review(
+            tenant_id=tenant_id,
+            run_id=run_id,
+            edge_id=edge_id,
+            decision=payload.decision,
+            actor_id=context.actor_id,
+            idempotency_key=idempotency_key,
+        )
+    except (AssignmentError, ValueError) as exc:
+        error = (
+            exc
+            if isinstance(exc, AssignmentError)
+            else AssignmentError("A4_REVIEW_INVALID", 422, "A4 review is invalid.")
+        )
+        return _problem(error, rid)

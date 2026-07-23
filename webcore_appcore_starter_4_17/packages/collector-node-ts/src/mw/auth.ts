@@ -6,6 +6,8 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+import { requireExportSignSecret } from '../security/exportSigningSecret.js';
 
 // API_KEYS 환경변수 파싱: "default:collector-key,teamA:teamA-key"
 function parseApiKeys(): Map<string, string> {
@@ -97,11 +99,15 @@ export function verifySignToken(
   }
 
   // 토큰 검증 (페이로드 디코딩 및 교차검증)
-  const signSecret = process.env.EXPORT_SIGN_SECRET || 'dev-secret';
+  let signSecret: string;
+  try {
+    signSecret = requireExportSignSecret();
+  } catch {
+    res.status(503).json({ error: 'Signing service unavailable' });
+    return;
+  }
   
   try {
-    const crypto = require('node:crypto');
-    
     // 토큰 형식: base64(payload).signature
     const [payloadBase64, signature] = token.split('.');
     
@@ -111,12 +117,13 @@ export function verifySignToken(
     }
     
     // 서명 검증
-    const expectedSignature = crypto
-      .createHmac('sha256', signSecret)
+    const expectedSignature = createHmac('sha256', signSecret)
       .update(payloadBase64)
       .digest('hex');
     
-    if (signature !== expectedSignature) {
+    const supplied = Buffer.from(signature, 'utf8');
+    const expected = Buffer.from(expectedSignature, 'utf8');
+    if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
       res.status(403).json({ error: 'Invalid token signature' });
       return;
     }
@@ -151,4 +158,3 @@ export function verifySignToken(
     res.status(500).json({ error: 'Token verification failed' });
   }
 }
-

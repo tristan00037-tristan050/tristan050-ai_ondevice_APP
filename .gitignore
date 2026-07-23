@@ -94,3 +94,6 @@ venv/
 # 사이드카 런타임 결과물
 *_result.json
 partial_result_*.json
+
+# 로컬 관리자 역할 저장소(테스트·개발 실행 시 재생성)
+.butler_role_registry_store/

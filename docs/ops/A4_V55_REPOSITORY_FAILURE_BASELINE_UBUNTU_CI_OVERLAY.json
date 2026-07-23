@@ -1,0 +1,50 @@
+{
+  "schema_version": "butler.box5.a4.repository_failure_baseline.v5.5",
+  "baseline_role": "platform_overlay",
+  "measured_head": "35b3a27304dbb1698c36486bcc7320216c2bbcdc",
+  "measured_run_id": "29966881442",
+  "measured_date_utc": "2026-07-23",
+  "environment": "github-actions ubuntu-latest python-3.11",
+  "environment_marker": {
+    "llama_cpp_importable": false,
+    "classification": "OPTIONAL_RUNTIME_DEPENDENCY_UNAVAILABLE_NOT_PASS"
+  },
+  "command": "python -m pytest -q --tb=short --junitxml=a4-repo-wide-junit.xml",
+  "summary": {
+    "additional_platform_failures": 27,
+    "a4_owned_failures": 0,
+    "truthful_skip_claimed": false
+  },
+  "owner_notes": {
+    "box4-box6-json-grammar": "Box4/Box6 required llama.cpp JSON grammar and dependent prompt/service tests fail closed when the optional llama_cpp runtime is absent from Ubuntu CI; this is an external product-runtime dependency track and is not reported as a pass or skip."
+  },
+  "failures": {
+    "tests.cards.box4.test_review_service::test_review_document_accepts_valid_schema": "box4-box6-json-grammar",
+    "tests.cards.box4.test_review_service::test_review_document_allows_no_issue_json_only": "box4-box6-json-grammar",
+    "tests.cards.box4.test_review_service::test_review_document_emits_raw_zero_telemetry_on_success": "box4-box6-json-grammar",
+    "tests.cards.box4.test_review_service::test_review_document_emits_reason_code_telemetry_on_schema_failure": "box4-box6-json-grammar",
+    "tests.cards.box4.test_review_service::test_review_document_redacts_secret_echoes": "box4-box6-json-grammar",
+    "tests.cards.box4.test_review_service::test_review_document_rejects_bad_enum_fail_closed": "box4-box6-json-grammar",
+    "tests.cards.box4.test_review_service::test_review_document_rejects_invalid_json_fail_closed": "box4-box6-json-grammar",
+    "tests.cards.box4.test_review_service::test_review_document_rejects_issue_extra_key_fail_closed": "box4-box6-json-grammar",
+    "tests.cards.box4.test_review_service::test_review_document_rejects_original_text_length_fail_closed": "box4-box6-json-grammar",
+    "tests.cards.box4.test_review_service::test_review_document_rejects_top_level_extra_key_fail_closed": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_accepts_valid_schema": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_allows_secret_label_only_when_unfilled_and_listed": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_emits_raw_zero_telemetry_on_success": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_emits_reason_code_telemetry_on_schema_failure": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_masks_secret_label_real_value_without_review_markers": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_mixed_filled_form_preserves_general_lines_and_masks_secret_lines": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_mixed_form_masks_only_sensitive_fields_no_whole_form_block": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_quarantines_secret_real_value_when_review_listed": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_redacts_secret_label_values_in_filled_form_and_warnings": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_rejects_legacy_mapping_schema": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_rejects_non_json_fail_closed": "box4-box6-json-grammar",
+    "tests.cards.box6.test_form_fill_service::test_fill_form_rejects_top_level_extra_key": "box4-box6-json-grammar",
+    "tests.prompts.test_card04_document_review::test_box4_sidecar_slow_review_times_out_and_cancels": "box4-box6-json-grammar",
+    "tests.prompts.test_card04_document_review::test_box4_smoke_validator_accepts_contract": "box4-box6-json-grammar",
+    "tests.prompts.test_card06_form_fill::test_box6_sidecar_stream_routes_to_form_fill_service": "box4-box6-json-grammar",
+    "tests.runtime.test_json_grammar::test_json_schema_grammar_builds_for_box4_and_box6": "box4-box6-json-grammar",
+    "tests.runtime.test_json_grammar::test_json_schema_grammar_does_not_reuse_stateful_object": "box4-box6-json-grammar"
+  }
+}

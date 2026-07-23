@@ -1,0 +1,12 @@
+{
+  "schema_version": "butler.integration_lock.v3",
+  "repository": "Butler product source tree",
+  "canonical_branch": "feat/box5-a4-v31-product-codex",
+  "base_commit_oid": "b38e9e3321c0b972fb257ebd3831fa472da9c5a4",
+  "base_tree_oid": "9161aca6e6c391379c64477784f480d25f656758",
+  "working_tree_state": "LOCAL_COMMIT_DELIVERY",
+  "completion_status_path": "docs/ops/A4_COMPLETION_STATUS.json",
+  "code_pass": false,
+  "merge_ready": false,
+  "product_activation_allowed": false
+}
