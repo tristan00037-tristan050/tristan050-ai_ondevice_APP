@@ -97,7 +97,7 @@ if ! "$APP_PY" "$ROOT/scripts/write_build_info.py" \
   --git-describe "$BUILD_DESC" \
   --timestamp-utc "$BUILD_TS" \
   --app-version "$APP_VER" \
-  "${AUTHORITY_HELPER_ARGS[@]}"; then
+  ${AUTHORITY_HELPER_ARGS[@]+"${AUTHORITY_HELPER_ARGS[@]}"}; then
   echo "❌ BUILD_INFO.json 기록·검증 실패 — 불완전 앱 생성 차단"
   exit 1
 fi
