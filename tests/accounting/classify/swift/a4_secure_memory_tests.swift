@@ -11,7 +11,7 @@ private struct A4SecureMemoryTests {
         try assertZeroizedAfterFailure(.keyConstruction)
         try assertZeroizedAfterFailure(.signature)
         try assertZeroizedAfterSuccess()
-        print("A4_SIGNING_SEED_DEFER_ZEROIZATION_OK=1")
+        print("A4_SIGNING_SEED_DEFER_ZEROIZATION_RESULT=PASS")
     }
 
     private static func assertZeroizedAfterFailure(_ failure: InjectedSigningFailure) throws {
