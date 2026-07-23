@@ -168,42 +168,10 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with: {name: firstscreen-v2-5-repository, path: repository-junit.xml, if-no-files-found: error, retention-days: 30}
 
-  source-attestation:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    needs: [native-compile, repository-python]
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with: {fetch-depth: 0}
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with: {python-version: '${{ env.PYTHON_VERSION }}'}
-      - name: Build source and SBOM subjects
-        shell: bash
-        run: |
-          set -euo pipefail
-          out="${RUNNER_TEMP}/firstscreen-release"
-          mkdir -p "${out}"
-          python scripts/release/build_safe_source_archive.py --commit HEAD --scope-baseline HEAD^ --output "${out}/source.zip" --manifest "${out}/SOURCE_ARCHIVE_MANIFEST.json"
-          python scripts/release/build_with_git.py --output "${out}/BUILD_CONTEXT.json" --source-manifest "${out}/SOURCE_ARCHIVE_MANIFEST.json" --repository "${GITHUB_REPOSITORY}" --workflow-identity "${GITHUB_WORKFLOW_REF}" --toolchain-identity "python=${PYTHON_VERSION};node=${NODE_VERSION};rust=${RUST_TOOLCHAIN}" --baseline HEAD^
-          python scripts/release/generate_cyclonedx_sbom.py --commit HEAD --output "${out}/butler.cdx.json" --build-context "${out}/BUILD_CONTEXT.json" --npm-lock butler-desktop/package-lock.json --python-requirements requirements-firstscreen-ci.lock
-      - uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
-        with:
-          subject-path: ${{ runner.temp }}/firstscreen-release/source.zip
-          sbom-path: ${{ runner.temp }}/firstscreen-release/butler.cdx.json
-      - name: Consumer verification of signer and subject
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh attestation verify "${RUNNER_TEMP}/firstscreen-release/source.zip" --repo "${GITHUB_REPOSITORY}" --signer-workflow "${GITHUB_WORKFLOW_REF%%@*}"
-
   gate:
     if: always()
     runs-on: ubuntu-latest
-    needs: [scope-and-contracts, desktop-web, native-compile, repository-python, source-attestation]
+    needs: [scope-and-contracts, desktop-web, native-compile, repository-python]
     steps:
       - name: Enforce event-applicable gates
         env:
@@ -211,12 +179,8 @@ jobs:
           WEB: ${{ needs.desktop-web.result }}
           NATIVE: ${{ needs.native-compile.result }}
           REPOSITORY: ${{ needs.repository-python.result }}
-          ATTESTATION: ${{ needs.source-attestation.result }}
-          EVENT: ${{ github.event_name }}
-          REF: ${{ github.ref }}
         run: |
           test "${CONTRACTS}" = success
           test "${WEB}" = success
           test "${NATIVE}" = success
           test "${REPOSITORY}" = success
-          if [ "${EVENT}" = push ] && [ "${REF}" = refs/heads/main ]; then test "${ATTESTATION}" = success; else test "${ATTESTATION}" = skipped; fi

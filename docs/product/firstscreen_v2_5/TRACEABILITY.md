@@ -11,7 +11,7 @@
 | FS23-P0-007 | single branch workflow, source provenance, consumer verify | canonical remote/PR 미실행으로 BLOCKED_EXTERNAL |
 | FS23-P0-008 | macOS/Windows/browser/M3 jobs | signed app·실기기 미실행 |
 | FS23-P1-009 | in-process `cryptography` Ed25519 | `ssh-keygen`/PATH 호출 제거, 70-test evidence |
-| FS23-P1-010 | GitHub `actions/attest` + consumer signer workflow check | workflow 구현, hosted run 미실행 |
+| FS23-P1-010 | canonical `product-verify-supplychain`의 GitHub `actions/attest` + consumer signer check | 단일 서명 권위로 구현, hosted main run 미실행 |
 | FS23-P1-011 | safe source builder and no-git verifier | deterministic archive와 nested payload 직접 검증 |
 | FS23-P1-012 | Tauri `ReplaceFileW`/no-replace move | 실제 소스 구현, Windows compile/E2E 미실행 |
 | FS23-P1-013 | exact dialog path, extension mismatch | 실제 소스 구현·web contract pass, native 실행 미실행 |
