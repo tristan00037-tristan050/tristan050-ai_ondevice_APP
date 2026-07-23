@@ -10,3 +10,5 @@
 /scripts/ci/a4_repository_secret_scan.py    @tristan00037-tristan050
 /.github/workflows/a4-*                     @tristan00037-tristan050
 /butler_pc_core/a4_verifier/**              @tristan00037-tristan050
+/.github/workflows/box5-stage3.yml           @tristan00037-tristan050
+/scripts/ci/prepare_a4_baseline_approval.py  @tristan00037-tristan050
