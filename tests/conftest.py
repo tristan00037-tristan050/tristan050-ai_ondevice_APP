@@ -27,6 +27,7 @@ def _install_active_policy(tmp_path, monkeypatch):
     importing or reloading butler_sidecar.
     """
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("BUTLER_APP_DATA_DIR", str(tmp_path / "app-data"))
 
     from butler_pc_core.company_policy.contracts import (
         AccessRule,

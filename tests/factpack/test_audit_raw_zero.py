@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,9 @@ from butler_pc_core.company_policy.contracts import sha256_text
 from butler_pc_core.factpack.schema import FactPackAuditEntry
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
 try:
     from fastapi.testclient import TestClient
 
@@ -18,7 +22,10 @@ except ImportError:
     _FASTAPI_OK = False
 
 
-pytestmark = pytest.mark.skipif(not _FASTAPI_OK, reason="fastapi 미설치")
+pytestmark = [
+    pytest.mark.skipif(not _FASTAPI_OK, reason="fastapi 미설치"),
+    pytest.mark.active_policy,
+]
 
 
 def _events(raw: str) -> list[dict[str, Any]]:
@@ -92,8 +99,17 @@ def test_factpack_audit_miss_stores_query_digest_not_raw_query():
 
 
 def test_factpack_audit_code_path_has_no_raw_query_assignment():
-    sidecar_text = Path("butler_sidecar.py").read_text(encoding="utf-8")
-    schema_text = Path("butler_pc_core/factpack/schema.py").read_text(encoding="utf-8")
+    sidecar_text = (REPO_ROOT / "butler_sidecar.py").read_text(encoding="utf-8")
+    schema_text = (REPO_ROOT / "butler_pc_core/factpack/schema.py").read_text(encoding="utf-8")
 
-    assert "query=params.query" not in sidecar_text
+    tree = ast.parse(sidecar_text)
+    audit_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "FactPackAuditEntry"
+    ]
+    assert audit_calls
+    assert all("query" not in {keyword.arg for keyword in call.keywords} for call in audit_calls)
     assert "query: str" not in schema_text

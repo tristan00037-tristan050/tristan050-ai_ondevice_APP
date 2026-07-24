@@ -833,6 +833,86 @@ if _FASTAPI_AVAILABLE:
                 task_budget_func=decide_task_budget
             )
 
+            def _local_knowledge_before_model(
+                request: AnalyzeStreamRequest,
+            ) -> tuple[list[str], bool]:
+                events: list[str] = []
+                knowledge_result = CompanyKnowledgeResolver(base_pack=FACT_PACK).resolve(
+                    request.query
+                )
+                if knowledge_result.fail_class:
+                    events.append(
+                        _sse(
+                            "meta",
+                            {
+                                "source": "company_knowledge",
+                                "fail_class": knowledge_result.fail_class,
+                                "company_facts_available": False,
+                            },
+                        )
+                    )
+                    if knowledge_result.answer is None:
+                        error_payload = fail_payload(
+                            FailClass.INTERNAL_RUNTIME_ERROR,
+                            knowledge_result.fail_class,
+                            error_class=knowledge_result.fail_class,
+                        )
+                        error_payload["query_digest"] = sha256_text(request.query)
+                        events.append(_sse("error", error_payload))
+                        return events, True
+                if knowledge_result.answer is not None:
+                    answer = _format_company_knowledge_answer(knowledge_result)
+                    events.append(
+                        _sse(
+                            "meta",
+                            {
+                                "source": "company_knowledge",
+                                "provenance": knowledge_result.provenance,
+                                "fact_id": knowledge_result.fact_id,
+                                "fact_digest": knowledge_result.fact_digest,
+                                "confidence": knowledge_result.confidence,
+                                "raw_text_logged": False,
+                                "external_send_zero": True,
+                            },
+                        )
+                    )
+                    events.append(
+                        _sse(
+                            "complete",
+                            {
+                                "result_text": answer,
+                                "result_path": "",
+                                "total_elapsed_sec": 0.0,
+                            },
+                        )
+                    )
+                    _factpack_audit_log.append(
+                        FactPackAuditEntry(
+                            query_digest=sha256_text(request.query),
+                            source="company_fact"
+                            if knowledge_result.provenance == "company"
+                            else "factpack",
+                            fact_id=knowledge_result.fact_id,
+                            score=knowledge_result.confidence,
+                            threshold_used=FACT_PACK.matcher.threshold,
+                            timestamp_iso=datetime.now(_tz.utc).isoformat(),
+                            pack_version=_PACK_VERSION,
+                        )
+                    )
+                    return events, True
+                _factpack_audit_log.append(
+                    FactPackAuditEntry(
+                        query_digest=sha256_text(request.query),
+                        source="llm",
+                        fact_id=None,
+                        score=None,
+                        threshold_used=FACT_PACK.matcher.threshold,
+                        timestamp_iso=datetime.now(_tz.utc).isoformat(),
+                        pack_version=_PACK_VERSION,
+                    )
+                )
+                return events, False
+
             async def _llm_factory():
                 return await _ensure_shared_llm()
 
@@ -848,6 +928,7 @@ if _FASTAPI_AVAILABLE:
                 sse=_sse,
                 hub_paired=_is_hub_paired,
                 llm_factory=_llm_factory,
+                pre_model_handler=_local_knowledge_before_model,
             ):
                 yield event
             return

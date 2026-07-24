@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 pytest.importorskip("fastapi")
+pytestmark = pytest.mark.active_policy
 
 
 def _load_sidecar():

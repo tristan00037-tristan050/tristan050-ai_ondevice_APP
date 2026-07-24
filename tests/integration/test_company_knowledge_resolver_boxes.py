@@ -4,6 +4,7 @@ import asyncio
 import json
 
 import pandas as pd
+import pytest
 
 from butler_pc_core.accounting.report import build_summary
 from butler_pc_core.company_fact.read_only import resolve_read_only_company_knowledge
@@ -13,9 +14,11 @@ from butler_pc_core.company_fact.resolver import (
 )
 from butler_pc_core.company_fact.storage import CompanyFactStore
 from butler_pc_core.company_policy.contracts import AdminContext, sha256_text
+from butler_pc_core.company_policy.role_registry import RoleRegistryStore
 
 
 ANSWER_TEXT = "Company approved policy answer for resolver consumers."
+pytestmark = pytest.mark.active_policy
 
 
 def _admin() -> AdminContext:
@@ -27,7 +30,12 @@ def _admin() -> AdminContext:
     )
 
 
-def _active_store(tmp_path) -> CompanyFactStore:
+def _active_store(tmp_path, monkeypatch) -> CompanyFactStore:
+    from butler_pc_core.company_policy import admin_auth
+
+    registry = RoleRegistryStore(root=tmp_path / "role-registry")
+    registry.bootstrap_self_admin(_admin())
+    monkeypatch.setattr(admin_auth, "get_default_role_registry_store", lambda: registry)
     store = CompanyFactStore(root=tmp_path / "facts")
     entry, _audit = store.save_candidate(
         category="company_rules",
@@ -229,30 +237,35 @@ def test_chat_clean_miss_still_enters_llm_fallback(monkeypatch):
     butler_sidecar._factpack_audit_log.clear()
     params = butler_sidecar._AnalyzeParams(query=query_text)
 
-    async def _collect_until_llm() -> list[dict]:
-        parsed = []
-        stream = butler_sidecar._stream_analyze(params, "company-knowledge-clean-miss-test")
-        try:
-            async for event in stream:
-                current = _parse_sse(event)
-                parsed.append(current)
-                if current["event"] == "meta" and current["data"].get("source") == "llm":
-                    break
-        finally:
-            await stream.aclose()
-        return parsed
+    class FakeLlm:
+        def generate_stream_with_cancel(self, prompt, cancel_event, max_tokens=1024):
+            yield "Safe local fallback."
 
-    events = asyncio.run(_collect_until_llm())
+    async def _fake_ensure_shared_llm():
+        return FakeLlm()
+
+    monkeypatch.setattr(butler_sidecar, "_ensure_shared_llm", _fake_ensure_shared_llm)
+
+    async def _collect() -> list[dict]:
+        return [
+            _parse_sse(event)
+            async for event in butler_sidecar._stream_analyze(
+                params,
+                "company-knowledge-clean-miss-test",
+            )
+        ]
+
+    events = asyncio.run(_collect())
 
     assert any(
-        event["event"] == "meta" and event["data"].get("source") == "llm"
+        event["event"] == "meta" and event["data"].get("source") == "safe_chat"
         for event in events
     )
     assert not any(event["event"] == "error" for event in events)
 
 
-def test_box2_read_only_company_knowledge_note_serves_active_only(tmp_path):
-    store = _active_store(tmp_path)
+def test_box2_read_only_company_knowledge_note_serves_active_only(tmp_path, monkeypatch):
+    store = _active_store(tmp_path, monkeypatch)
     resolver = CompanyKnowledgeResolver(company_store=store)
 
     note = resolve_read_only_company_knowledge(
@@ -271,8 +284,8 @@ def test_box2_read_only_company_knowledge_note_serves_active_only(tmp_path):
     assert len(store.list_index_entries(status="ACTIVE")) == 1
 
 
-def test_box5_read_only_note_does_not_change_accounting_categories(tmp_path):
-    store = _active_store(tmp_path)
+def test_box5_read_only_note_does_not_change_accounting_categories(tmp_path, monkeypatch):
+    store = _active_store(tmp_path, monkeypatch)
     resolver = CompanyKnowledgeResolver(company_store=store)
     df = pd.DataFrame(
         [

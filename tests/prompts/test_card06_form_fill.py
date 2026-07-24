@@ -12,6 +12,7 @@ import pytest
 
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.prompts.cards import load_card_prompt
+from butler_pc_core.runtime import json_grammar
 from butler_pc_core.sidecar.analyze_policy_preflight import is_known_card_mode
 
 
@@ -525,6 +526,12 @@ def test_card02_03_05_golden_render_diff_zero() -> None:
 def test_box6_sidecar_stream_routes_to_form_fill_service(monkeypatch) -> None:
     import butler_sidecar
     from butler_pc_core.cards.box6.form_fill_service import SCHEMA_VERSION
+
+    if json_grammar.LlamaGrammar is None:
+        monkeypatch.setattr(
+            "butler_pc_core.cards.box6.form_fill_service.build_json_schema_grammar",
+            lambda *_args, **_kwargs: object(),
+        )
 
     class FakeLlm:
         def generate(self, prompt: str, *, max_tokens: int = 2048, grammar=None) -> str:  # type: ignore[no-untyped-def]

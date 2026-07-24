@@ -3,6 +3,9 @@ from __future__ import annotations
 import asyncio
 import importlib
 import json
+import os
+import sys
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -19,6 +22,16 @@ from butler_pc_core.company_policy.storage import PolicyLoadError, PolicyStore
 from butler_pc_core.router.task_budget_router import Route, TaskBudget, decide_task_budget
 
 pytestmark = pytest.mark.no_sidecar_token
+
+
+@pytest.fixture(autouse=True)
+def _restore_shared_sidecar_module() -> Any:
+    original_cwd = Path.cwd()
+    yield
+    os.chdir(original_cwd)
+    loaded = sys.modules.get("butler_sidecar")
+    if loaded is not None:
+        importlib.reload(loaded)
 
 
 class FakeLLM:
@@ -313,7 +326,11 @@ def test_amount_alone_reaches_safe_chat_without_accounting_false_positive(tmp_pa
 def test_accounting_terms_do_not_reach_safe_chat(tmp_path, monkeypatch, query):
     client, _sidecar = _client(tmp_path, monkeypatch, with_policy=True, llm=FakeLLM(["이 토큰은 호출되면 안 됩니다."]))
 
-    response = _free_request(client, query)
+    with patch(
+        "butler_sidecar.CompanyKnowledgeResolver",
+        side_effect=AssertionError("non-chat routes must not query company knowledge"),
+    ):
+        response = _free_request(client, query)
 
     events = _parse_events(response.text)
     complete = next(event for event in events if event["event"] == "complete")

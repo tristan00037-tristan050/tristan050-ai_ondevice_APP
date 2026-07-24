@@ -2,17 +2,34 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from butler_pc_core.company_fact.resolver import CompanyKnowledgeResolveResult
 from butler_pc_core.company_fact.storage import CompanyFactStore
-from butler_pc_core.company_policy.contracts import sha256_text
+from butler_pc_core.company_policy.contracts import AdminContext, sha256_text
+from butler_pc_core.company_policy.role_registry import RoleRegistryStore
 from butler_pc_core.company_fact import routes as route_module
 
 
 ANSWER_TEXT = "Company approved answer for accounting retention policy."
 SOURCE_TEXT = "Company handbook verified by admin."
+
+
+@pytest.fixture(autouse=True)
+def _registered_route_admin(tmp_path, monkeypatch):
+    from butler_pc_core.company_policy import admin_auth
+
+    context = AdminContext(
+        admin_id_digest=sha256_text("company-fact-route-admin"),
+        role="admin",
+        admin_session_digest=sha256_text("company-fact-route-session"),
+        auth_method="tauri_secure_invoke",
+    )
+    registry = RoleRegistryStore(root=tmp_path / "role-registry")
+    registry.bootstrap_self_admin(context)
+    monkeypatch.setattr(admin_auth, "get_default_role_registry_store", lambda: registry)
 
 
 def _app_with_store(tmp_path, monkeypatch) -> tuple[TestClient, CompanyFactStore]:

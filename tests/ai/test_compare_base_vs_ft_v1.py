@@ -8,13 +8,12 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / 'scripts/ai/compare_base_vs_ft_v1.py'
-ADAPTER = ROOT / 'tmp/test_adapter'
-OUTDIR = ROOT / 'tmp/test_out'
+ADAPTER = ROOT / 'fixtures/final_verdict_all_pass'
 
 
-def run_dry():
-    OUTDIR.mkdir(parents=True, exist_ok=True)
-    cmd = [sys.executable, str(SCRIPT), '--base-model-id', 'Qwen/Qwen3-4B', '--adapter-dir', str(ADAPTER), '--output-dir', str(OUTDIR), '--dry-run']
+def run_dry(output_dir: Path):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [sys.executable, str(SCRIPT), '--base-model-id', 'Qwen/Qwen3-4B', '--adapter-dir', str(ADAPTER), '--output-dir', str(output_dir), '--dry-run']
     return subprocess.run(cmd, capture_output=True, text=True, check=False)
 
 
@@ -28,8 +27,8 @@ def test_argparse_required_args():
     assert r.returncode != 0
 
 
-def test_dry_run_exits_cleanly():
-    r = run_dry()
+def test_dry_run_exits_cleanly(tmp_path):
+    r = run_dry(tmp_path)
     assert r.returncode == 0
     out = r.stdout
     key, val = 'DRYRUN_OK', '1'
@@ -61,33 +60,33 @@ def test_retrieval_fixture_count():
     assert len(data) == 3
 
 
-def test_adapter_digest_format():
-    r = run_dry()
+def test_adapter_digest_format(tmp_path):
+    r = run_dry(tmp_path)
     assert r.returncode == 0
-    result = json.loads((OUTDIR/'compare_base_vs_ft_result.json').read_text(encoding='utf-8'))
+    result = json.loads((tmp_path/'compare_base_vs_ft_result.json').read_text(encoding='utf-8'))
     digest = result['adapter_digest_sha256_16']
     assert len(digest) == 16
     int(digest, 16)
 
 
-def test_result_json_required_fields():
-    run_dry()
-    result = json.loads((OUTDIR/'compare_base_vs_ft_result.json').read_text(encoding='utf-8'))
+def test_result_json_required_fields(tmp_path):
+    run_dry(tmp_path)
+    result = json.loads((tmp_path/'compare_base_vs_ft_result.json').read_text(encoding='utf-8'))
     required = ['execution_mode','adapter_digest_sha256_16','base_model_id','adapter_dir','seed','max_new_tokens','temperature','thinking_mode','base_scores','ft_scores','delta_scores','overall_delta','statistical_confidence','score_details_summary','BASE_VS_FT_OK','fail_cases']
     for k in required:
         assert k in result
     assert result['delta_scores'] is None or isinstance(result['delta_scores'], dict)
 
 
-def test_execution_mode_not_stub():
-    run_dry()
-    result = json.loads((OUTDIR/'compare_base_vs_ft_result.json').read_text(encoding='utf-8'))
+def test_execution_mode_not_stub(tmp_path):
+    run_dry(tmp_path)
+    result = json.loads((tmp_path/'compare_base_vs_ft_result.json').read_text(encoding='utf-8'))
     assert result['execution_mode'] != 'embedded_test_stub'
 
 
-def test_fail_cases_format():
-    run_dry()
-    result = json.loads((OUTDIR/'compare_base_vs_ft_result.json').read_text(encoding='utf-8'))
+def test_fail_cases_format(tmp_path):
+    run_dry(tmp_path)
+    result = json.loads((tmp_path/'compare_base_vs_ft_result.json').read_text(encoding='utf-8'))
     assert isinstance(result['fail_cases'], list)
 
 
@@ -96,10 +95,10 @@ def test_dialogue_scoring_continuous_present():
     assert 'korean_score' in text and 'len_score' in text and 'context_score' in text
 
 
-def test_report_jsonl_18_entries():
-    p = OUTDIR/'compare_base_vs_ft_report.jsonl'
-    if not p.exists():
-        pytest.skip('dry-run not executed yet')
+def test_report_jsonl_18_entries(tmp_path):
+    result = run_dry(tmp_path)
+    assert result.returncode == 0
+    p = tmp_path/'compare_base_vs_ft_report.jsonl'
     lines = p.read_text(encoding='utf-8').splitlines()
     assert len(lines) == 18
 

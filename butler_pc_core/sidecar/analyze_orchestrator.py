@@ -36,6 +36,7 @@ SseFactory = Callable[[str, dict[str, Any]], str]
 HubPairedFactory = Callable[[], bool]
 LlmFactory = Callable[[], Awaitable[Any]]
 TaskBudgetFactory = Callable[..., TaskBudget]
+PreModelHandler = Callable[["AnalyzeStreamRequest"], tuple[list[str], bool]]
 
 
 @dataclass(frozen=True)
@@ -108,6 +109,7 @@ class AnalyzeStreamOrchestrator:
         sse: SseFactory,
         hub_paired: HubPairedFactory,
         llm_factory: LlmFactory,
+        pre_model_handler: PreModelHandler | None = None,
     ) -> AsyncGenerator[str, None]:
         bootstrap = self.bootstrap_func()
         if not bootstrap.ready:
@@ -214,6 +216,13 @@ class AnalyzeStreamOrchestrator:
                 },
             )
             return
+
+        if pre_model_handler is not None:
+            events, terminal = pre_model_handler(params)
+            for event in events:
+                yield event
+            if terminal:
+                return
 
         try:
             llm = await llm_factory()

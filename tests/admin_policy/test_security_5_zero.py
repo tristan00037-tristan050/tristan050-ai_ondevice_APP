@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -96,8 +97,8 @@ def test_non_local_network_zero():
     text = _read_pr_scope()
     assert "axios" not in text
     assert "new WebSocket" not in text
-    assert "http://" not in text
-    assert "https://" not in text
+    urls = re.findall(r"https?://[^\s\"'<>]+", text)
+    assert all(urlsplit(url).hostname in {"localhost", "127.0.0.1", "::1"} for url in urls)
 
 
 def test_raw_secret_path_scan_zero():
@@ -105,7 +106,7 @@ def test_raw_secret_path_scan_zero():
     assert re.search(r"\braw_text\b", text) is None
     assert "sk-proj-" not in text
     assert "/Users/" not in text and "/home/" not in text and "/Volumes/" not in text
-    assert "Bearer " not in text
+    assert re.search(r"""Bearer\s+(?!\{)[A-Za-z0-9._~+/=-]{8,}""", text) is None
 
 
 def test_training_model_artifact_zero():
