@@ -16,11 +16,13 @@ from butler_pc_core.runtime.json_grammar import (
 )
 
 
+@pytest.mark.requires_llama_grammar
 def test_json_schema_grammar_builds_for_box4_and_box6() -> None:
     assert build_json_schema_grammar(BOX4_JSON_SCHEMA, required=True) is not None
     assert build_json_schema_grammar(BOX6_JSON_SCHEMA, required=True) is not None
 
 
+@pytest.mark.requires_llama_grammar
 def test_json_schema_grammar_does_not_reuse_stateful_object() -> None:
     first = build_json_schema_grammar(BOX4_JSON_SCHEMA, required=True)
     second = build_json_schema_grammar(BOX4_JSON_SCHEMA, required=True)
