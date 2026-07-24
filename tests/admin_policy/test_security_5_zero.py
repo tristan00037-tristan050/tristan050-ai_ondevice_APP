@@ -92,12 +92,35 @@ def test_token_storage_log_zero():
     assert "console.log" not in text
 
 
+# --- narrowed source-scan primitives (loopback-aware / real-secret-pattern) ---
+# The original scans forbade the bare substrings "http://" and "Bearer ", which
+# false-flag (a) the local-UI CORS origins http://localhost / http://127.0.0.1
+# and (b) f-string auth headers f"Bearer {token}". Narrow to actual egress /
+# actual literal secrets. Regression tests below plant genuine positives to
+# prove the narrowed scanners still detect real leaks.
+_HTTP_HOST_RE = re.compile(r"https?://([^/\s\"'`)\\]+)")
+_LOOPBACK_HOST_RE = re.compile(r"(?i)^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$")
+_LITERAL_BEARER_RE = re.compile(r"Bearer\s+([A-Za-z0-9._\-]{16,})")
+
+
+def _nonloopback_http_hosts(text: str) -> list[str]:
+    """http(s):// hosts that are NOT loopback (localhost/127.0.0.1/::1)."""
+    return [h for h in _HTTP_HOST_RE.findall(text) if not _LOOPBACK_HOST_RE.match(h)]
+
+
+def _literal_bearer_secrets(text: str) -> list[str]:
+    """`Bearer <literal high-entropy token>`. f"Bearer {token}" is NOT matched:
+    the char after 'Bearer ' is '{', outside the token charset (interpolation)."""
+    return _LITERAL_BEARER_RE.findall(text)
+
+
 def test_non_local_network_zero():
     text = _read_pr_scope()
     assert "axios" not in text
     assert "new WebSocket" not in text
-    assert "http://" not in text
-    assert "https://" not in text
+    # loopback-aware: only non-loopback http(s) egress is forbidden; the local UI
+    # CORS origins http://localhost / http://127.0.0.1 are permitted.
+    assert _nonloopback_http_hosts(text) == []
 
 
 def test_raw_secret_path_scan_zero():
@@ -105,7 +128,26 @@ def test_raw_secret_path_scan_zero():
     assert re.search(r"\braw_text\b", text) is None
     assert "sk-proj-" not in text
     assert "/Users/" not in text and "/home/" not in text and "/Volumes/" not in text
-    assert "Bearer " not in text
+    # real-secret-pattern: a literal Bearer token, not an f-string/format interpolation.
+    assert _literal_bearer_secrets(text) == []
+
+
+def test_nonloopback_http_regression_still_detected():
+    """★ Plant genuine external egress: the narrowed scan must still flag it."""
+    assert _nonloopback_http_hosts('x = "http://evil.example.com/exfil"') == ["evil.example.com"]
+    assert _nonloopback_http_hosts('u = "https://198.51.100.7:9000/c2"') == ["198.51.100.7:9000"]
+    # loopback stays permitted (the reason the original scan false-flagged)
+    assert _nonloopback_http_hosts('cors = "http://localhost:1420"') == []
+    assert _nonloopback_http_hosts('cors = "http://127.0.0.1:1420"') == []
+
+
+def test_literal_bearer_regression_still_detected():
+    """★ Plant a genuine literal Bearer secret: the narrowed scan must flag it."""
+    assert _literal_bearer_secrets('h = {"Authorization": "Bearer AKIAIOSFODNN7EXAMPLEKEY01"}') == [
+        "AKIAIOSFODNN7EXAMPLEKEY01"
+    ]
+    # f-string interpolation is not a literal secret
+    assert _literal_bearer_secrets('h = {"Authorization": f"Bearer {token}"}') == []
 
 
 def test_training_model_artifact_zero():
