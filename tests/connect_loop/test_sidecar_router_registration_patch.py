@@ -5,9 +5,10 @@ maindev 는 patches/0001-*.patch 파일을 검사했으나, 코덱스 구현은 
 """
 from __future__ import annotations
 
-import ast
 import re
 from pathlib import Path
+
+from tests.routing_introspection import collect_app_paths
 
 
 def _repo_root() -> Path:
@@ -16,24 +17,15 @@ def _repo_root() -> Path:
 
 def test_butler_sidecar_registers_router_decide_without_new_app():
     text = (_repo_root() / "butler_sidecar.py").read_text(encoding="utf-8")
-    tree = ast.parse(text)
-    imports_router = any(
-        isinstance(node, ast.ImportFrom)
-        and node.module == "butler_pc_core.sidecar.routes.router_decide"
-        and any(alias.name == "router" and alias.asname == "router_decide_router" for alias in node.names)
-        for node in ast.walk(tree)
-    )
-    includes_router = any(
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "include_router"
-        and node.args
-        and isinstance(node.args[0], ast.Name)
-        and node.args[0].id == "router_decide_router"
-        for node in ast.walk(tree)
-    )
-    assert imports_router
-    assert includes_router
+    # Fixture drift: the import was reformatted to a parenthesized multi-line
+    # form; match it whitespace/newline-insensitively (intent: router_decide is
+    # imported into butler_sidecar.py, not via a new FastAPI app).
+    assert re.search(
+        r"from\s+butler_pc_core\.sidecar\.routes\.router_decide\s+import\s*\(?\s*"
+        r"router\s+as\s+router_decide_router",
+        text,
+    ), "router_decide router must be imported into butler_sidecar.py"
+    assert "app.include_router(router_decide_router)" in text
 
 
 def test_router_decide_module_defines_router_not_new_app():
@@ -52,5 +44,5 @@ def test_router_decide_registered_in_live_app():
         import pytest
 
         pytest.skip("FastAPI 미가용")
-    paths = set(butler_sidecar.app.openapi()["paths"])
+    paths = collect_app_paths(butler_sidecar.app)
     assert "/v1/router/decide" in paths
