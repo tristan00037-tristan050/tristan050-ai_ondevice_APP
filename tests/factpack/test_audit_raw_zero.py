@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -91,9 +92,53 @@ def test_factpack_audit_miss_stores_query_digest_not_raw_query():
     assert raw_query not in encoded
 
 
+# Audit-path-scoped scan. The original `"query=params.query" not in sidecar_text`
+# whole-file scan false-flagged the required prompt/stream flow
+# (render_card_user_prompt(query=params.query), AnalyzeStreamRequest(query=...)).
+# The audit contract is only: the FactPackAuditEntry record must carry
+# query_digest, never a raw `query=` field. Scope the scan to those records.
+def _factpack_audit_record_bodies(text: str) -> list[str]:
+    marker = "FactPackAuditEntry("
+    bodies: list[str] = []
+    idx = 0
+    while True:
+        i = text.find(marker, idx)
+        if i == -1:
+            break
+        start = i + len(marker)
+        depth, j = 1, start
+        while j < len(text) and depth:
+            depth += {"(": 1, ")": -1}.get(text[j], 0)
+            j += 1
+        bodies.append(text[start : j - 1])
+        idx = j
+    return bodies
+
+
+def _audit_records_with_raw_query(text: str) -> list[str]:
+    """FactPackAuditEntry(...) records that assign a raw `query=` field
+    (query_digest= is the correct, allowed form)."""
+    offenders = []
+    for body in _factpack_audit_record_bodies(text):
+        if any(m.group(1) == "query" for m in re.finditer(r"\b(query\w*)\s*=", body)):
+            offenders.append(body)
+    return offenders
+
+
 def test_factpack_audit_code_path_has_no_raw_query_assignment():
     sidecar_text = Path("butler_sidecar.py").read_text(encoding="utf-8")
     schema_text = Path("butler_pc_core/factpack/schema.py").read_text(encoding="utf-8")
 
-    assert "query=params.query" not in sidecar_text
+    # audit-path-scoped: only the FactPackAuditEntry record construction, not the
+    # required prompt/stream `query=params.query` runtime flow.
+    assert _audit_records_with_raw_query(sidecar_text) == []
     assert "query: str" not in schema_text
+
+
+def test_factpack_audit_raw_query_regression_still_detected():
+    """★ Plant a genuine raw-query leak in an audit record: still detected."""
+    leak = 'FactPackAuditEntry(query=params.query, source="factpack")'
+    assert _audit_records_with_raw_query(leak) == [leak[len("FactPackAuditEntry("):-1]]
+    # the correct digest-only form is not flagged
+    ok = 'FactPackAuditEntry(query_digest=sha256_text(params.query), source="factpack")'
+    assert _audit_records_with_raw_query(ok) == []
