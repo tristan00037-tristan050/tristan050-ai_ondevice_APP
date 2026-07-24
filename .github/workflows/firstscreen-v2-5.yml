@@ -152,7 +152,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p src-tauri/models src-tauri/binaries
+          mkdir -p src-tauri/python-runtime src-tauri/models src-tauri/binaries
           host="$(rustc -vV | sed -n 's/^host: //p')"
           test -n "$host"
           extension=""
