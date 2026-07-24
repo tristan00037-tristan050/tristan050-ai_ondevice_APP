@@ -10,6 +10,11 @@ ZERO_DIGEST = "sha256:" + "0" * 64
 TEST_ADMIN_AUTH_ENV = "BUTLER_ALLOW_TEST_ADMIN_AUTH"
 
 
+# Exception classes must not be frozen dataclasses: on Python 3.11+ the
+# interpreter assigns __traceback__ on the raised instance, which a frozen
+# dataclass's __setattr__ rejects (FrozenInstanceError). eq=False keeps the
+# generated __init__ and inherits BaseException identity eq/hash.
+@dataclass(eq=False)
 class AdminAuthError(PermissionError):
     fail_class: str
     message: str
