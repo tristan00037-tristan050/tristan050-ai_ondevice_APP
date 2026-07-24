@@ -10,7 +10,6 @@ ZERO_DIGEST = "sha256:" + "0" * 64
 TEST_ADMIN_AUTH_ENV = "BUTLER_ALLOW_TEST_ADMIN_AUTH"
 
 
-@dataclass
 class AdminAuthError(PermissionError):
     fail_class: str
     message: str
