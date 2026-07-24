@@ -35,12 +35,22 @@ def _git(repo: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
-def prepare_manifest(*, repo: Path, baseline_path: Path, source_head: str) -> bytes:
+def prepare_manifest(
+    *,
+    repo: Path,
+    baseline_path: Path,
+    source_head: str,
+    canonical_ref: str,
+) -> bytes:
     repo = repo.resolve()
     if not re.fullmatch(r"[0-9a-f]{40}", source_head):
         raise ValueError("source head is invalid")
+    if not canonical_ref.strip():
+        raise ValueError("canonical ref is invalid")
     current_head = _git(repo, "rev-parse", "--verify", "HEAD")
     _git(repo, "merge-base", "--is-ancestor", source_head, current_head)
+    canonical_head = _git(repo, "rev-parse", "--verify", f"{canonical_ref}^{{commit}}")
+    _git(repo, "merge-base", "--is-ancestor", source_head, canonical_head)
 
     baseline_bytes = baseline_path.read_bytes()
     document = json.loads(baseline_bytes.decode("utf-8"))
@@ -69,6 +79,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--source-head", required=True)
+    parser.add_argument(
+        "--canonical-ref",
+        required=True,
+        help=(
+            "Canonical branch ref that must already contain source-head. "
+            "This prevents approvals bound only to a feature branch from "
+            "breaking after a squash merge."
+        ),
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
@@ -76,6 +95,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             repo=args.repo,
             baseline_path=args.baseline,
             source_head=args.source_head,
+            canonical_ref=args.canonical_ref,
         )
         args.output.write_bytes(manifest_bytes)
     except Exception:
