@@ -1,5 +1,6 @@
 import sys
 import importlib
+import importlib.util
 from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -17,6 +18,31 @@ def pytest_configure(config):
         "markers",
         "no_sidecar_token: skip automatic TestClient capability-token injection for tests that do not import the sidecar",
     )
+    config.addinivalue_line(
+        "markers",
+        "requires_llama_grammar: needs the optional llama-cpp grammar runtime "
+        "(absent from requirements-firstscreen-ci.lock)",
+    )
+
+
+def _llama_grammar_available() -> bool:
+    return importlib.util.find_spec("llama_cpp") is not None
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip (with a visible reason) tests that require the optional llama-cpp
+    grammar runtime when it is not installed. This does NOT mark them passed —
+    they show as skipped with the reason below, and still run in an environment
+    that has llama-cpp (see the proposed repository-python-grammar job)."""
+    if _llama_grammar_available():
+        return
+    skip = pytest.mark.skip(
+        reason="LLAMA_GRAMMAR_IMPORT_FAILED: llama-cpp-python is an optional runtime "
+        "absent from requirements-firstscreen-ci.lock"
+    )
+    for item in items:
+        if item.get_closest_marker("requires_llama_grammar"):
+            item.add_marker(skip)
 
 
 def _install_active_policy(tmp_path, monkeypatch):

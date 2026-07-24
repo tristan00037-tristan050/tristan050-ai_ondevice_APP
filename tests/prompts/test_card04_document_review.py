@@ -1,4 +1,5 @@
 from __future__ import annotations
+import pytest
 
 import asyncio
 import json
@@ -150,6 +151,7 @@ def test_box4_sidecar_stream_routes_to_review_service(monkeypatch) -> None:
         assert result["raw_log_zero"] is True
 
 
+@pytest.mark.requires_llama_grammar
 def test_box4_sidecar_slow_review_times_out_and_cancels(monkeypatch, tmp_path) -> None:
     import butler_sidecar
     from butler_pc_core.runtime.timeout_controller import TimeoutController as BaseTimeoutController
@@ -209,6 +211,7 @@ def test_box4_sidecar_slow_review_times_out_and_cancels(monkeypatch, tmp_path) -
     assert slow_llm.cancel_event.is_set()
 
 
+@pytest.mark.requires_llama_grammar
 def test_box4_activation_verifier_accepts_contract() -> None:
     result = subprocess.run(
         [sys.executable, str(BOX4_ACTIVATION_VERIFIER), str(REPO_ROOT)],
@@ -222,6 +225,7 @@ def test_box4_activation_verifier_accepts_contract() -> None:
     assert result.stdout.strip() == success_verdict("BOX4_DOCUMENT_REVIEW_CONTRACT")
 
 
+@pytest.mark.requires_llama_grammar
 def test_box4_smoke_validator_accepts_contract() -> None:
     result = subprocess.run(
         [sys.executable, str(BOX4_SMOKE_VALIDATOR)],
