@@ -11,6 +11,9 @@ from butler_pc_core.company_policy.contracts import sha256_text
 from butler_pc_core.factpack.schema import FactPackAuditEntry
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
 try:
     from fastapi.testclient import TestClient
 
@@ -19,7 +22,10 @@ except ImportError:
     _FASTAPI_OK = False
 
 
-pytestmark = pytest.mark.skipif(not _FASTAPI_OK, reason="fastapi 미설치")
+pytestmark = [
+    pytest.mark.skipif(not _FASTAPI_OK, reason="fastapi 미설치"),
+    pytest.mark.active_policy,
+]
 
 
 def _events(raw: str) -> list[dict[str, Any]]:
@@ -126,8 +132,8 @@ def _audit_records_with_raw_query(text: str) -> list[str]:
 
 
 def test_factpack_audit_code_path_has_no_raw_query_assignment():
-    sidecar_text = Path("butler_sidecar.py").read_text(encoding="utf-8")
-    schema_text = Path("butler_pc_core/factpack/schema.py").read_text(encoding="utf-8")
+    sidecar_text = (REPO_ROOT / "butler_sidecar.py").read_text(encoding="utf-8")
+    schema_text = (REPO_ROOT / "butler_pc_core/factpack/schema.py").read_text(encoding="utf-8")
 
     # audit-path-scoped: only the FactPackAuditEntry record construction, not the
     # required prompt/stream `query=params.query` runtime flow.

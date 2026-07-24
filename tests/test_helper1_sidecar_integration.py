@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 pytest.importorskip("fastapi")
+pytestmark = pytest.mark.active_policy
 
 
 def _load_sidecar():
@@ -21,7 +22,7 @@ def _client_and_token():
 
 def test_helper1_endpoints_registered():
     mod = _load_sidecar()
-    paths = {getattr(r, "path", None) for r in mod.app.routes}
+    paths = set(mod.app.openapi()["paths"])
     assert "/v1/helpers/1/search" in paths
     assert "/v1/helpers/1/ask" in paths
 
@@ -78,7 +79,7 @@ def test_helper1_audit_has_no_raw_text():
 
 def test_box2_box3_routes_not_regressed():
     mod = _load_sidecar()
-    paths = {getattr(r, "path", None) for r in mod.app.routes}
+    paths = set(mod.app.openapi()["paths"])
     assert "/v1/cards/2/rewrite" in paths
     assert "/v1/cards/3/draft" in paths
 

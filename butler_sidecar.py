@@ -391,9 +391,9 @@ if _FASTAPI_AVAILABLE:
             "http://localhost:1420",
             "http://127.0.0.1:1420",
         ],
-        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
-        expose_headers=["X-Task-Id"],
+        expose_headers=["X-Task-Id", "Idempotency-Replayed"],
     )
 
     # ── PR-B: Connect Loop usage accumulator (공통 1곳) ──
@@ -418,6 +418,12 @@ if _FASTAPI_AVAILABLE:
         }
     )
 
+    from butler_pc_core.sidecar.routes.home import (
+        initialize_home_store,
+        router as home_router,
+        shutdown_home_store,
+    )
+
     @app.get("/api/model-tier/shadow/status")
     async def _model_tier_shadow_status():
         return phase0_shadow_status()
@@ -426,9 +432,11 @@ if _FASTAPI_AVAILABLE:
     async def _startup_generate_token():
         _TOKEN_MANAGER.generate()
         _start_model_tier_phase0_shadow()
+        initialize_home_store()
 
     @app.on_event("shutdown")
     async def _shutdown_clear_token():
+        shutdown_home_store()
         _stop_model_tier_phase0_shadow()
         _TOKEN_MANAGER.clear()
 
@@ -436,9 +444,22 @@ if _FASTAPI_AVAILABLE:
     async def _capability_token_middleware(request, call_next):
         if request.method == "GET" and request.url.path in _PUBLIC_GET_PATHS:
             return await call_next(request)
-        if request.method in ("POST", "DELETE"):
+        home_request = request.url.path.startswith("/v1/home/")
+        if home_request:
+            host = request.headers.get("host", "").lower()
+            origin = request.headers.get("origin")
+            if host not in {"127.0.0.1:8765", "localhost:8765", "testserver"}:
+                return JSONResponse(status_code=400, content={"code": "UNTRUSTED_HOST"})
+            if origin not in {
+                None,
+                "tauri://localhost",
+                "http://localhost:1420",
+                "http://127.0.0.1:1420",
+            }:
+                return JSONResponse(status_code=403, content={"code": "UNTRUSTED_ORIGIN"})
+        if home_request or request.method in ("POST", "PUT", "PATCH", "DELETE"):
             try:
-                _TOKEN_MANAGER.verify_authorization_header(
+                session = _TOKEN_MANAGER.verify_authorization_header(
                     request.headers.get("Authorization")
                 )
             except CapabilityTokenError as exc:
@@ -452,6 +473,9 @@ if _FASTAPI_AVAILABLE:
                         "message": exc.message,
                     },
                 )
+            request.state.capability_actor_id = session.actor_id
+            request.state.capability_session_digest = session.session_digest
+            request.state.capability_role = session.role
         return await call_next(request)
 
     # ── connect-loop router + box2/box3 card + helper1 router 등록 (separate route modules) ──
@@ -500,6 +524,7 @@ if _FASTAPI_AVAILABLE:
     app.include_router(admin_policy_format_router)
     app.include_router(admin_role_registry_router)
     app.include_router(company_profile_router)
+    app.include_router(home_router)
     app.include_router(accounting_assignment_router)
     app.include_router(company_fact_router)
     app.include_router(company_learning_router)
@@ -808,6 +833,86 @@ if _FASTAPI_AVAILABLE:
                 task_budget_func=decide_task_budget
             )
 
+            def _local_knowledge_before_model(
+                request: AnalyzeStreamRequest,
+            ) -> tuple[list[str], bool]:
+                events: list[str] = []
+                knowledge_result = CompanyKnowledgeResolver(base_pack=FACT_PACK).resolve(
+                    request.query
+                )
+                if knowledge_result.fail_class:
+                    events.append(
+                        _sse(
+                            "meta",
+                            {
+                                "source": "company_knowledge",
+                                "fail_class": knowledge_result.fail_class,
+                                "company_facts_available": False,
+                            },
+                        )
+                    )
+                    if knowledge_result.answer is None:
+                        error_payload = fail_payload(
+                            FailClass.INTERNAL_RUNTIME_ERROR,
+                            knowledge_result.fail_class,
+                            error_class=knowledge_result.fail_class,
+                        )
+                        error_payload["query_digest"] = sha256_text(request.query)
+                        events.append(_sse("error", error_payload))
+                        return events, True
+                if knowledge_result.answer is not None:
+                    answer = _format_company_knowledge_answer(knowledge_result)
+                    events.append(
+                        _sse(
+                            "meta",
+                            {
+                                "source": "company_knowledge",
+                                "provenance": knowledge_result.provenance,
+                                "fact_id": knowledge_result.fact_id,
+                                "fact_digest": knowledge_result.fact_digest,
+                                "confidence": knowledge_result.confidence,
+                                "raw_text_logged": False,
+                                "external_send_zero": True,
+                            },
+                        )
+                    )
+                    events.append(
+                        _sse(
+                            "complete",
+                            {
+                                "result_text": answer,
+                                "result_path": "",
+                                "total_elapsed_sec": 0.0,
+                            },
+                        )
+                    )
+                    _factpack_audit_log.append(
+                        FactPackAuditEntry(
+                            query_digest=sha256_text(request.query),
+                            source="company_fact"
+                            if knowledge_result.provenance == "company"
+                            else "factpack",
+                            fact_id=knowledge_result.fact_id,
+                            score=knowledge_result.confidence,
+                            threshold_used=FACT_PACK.matcher.threshold,
+                            timestamp_iso=datetime.now(_tz.utc).isoformat(),
+                            pack_version=_PACK_VERSION,
+                        )
+                    )
+                    return events, True
+                _factpack_audit_log.append(
+                    FactPackAuditEntry(
+                        query_digest=sha256_text(request.query),
+                        source="llm",
+                        fact_id=None,
+                        score=None,
+                        threshold_used=FACT_PACK.matcher.threshold,
+                        timestamp_iso=datetime.now(_tz.utc).isoformat(),
+                        pack_version=_PACK_VERSION,
+                    )
+                )
+                return events, False
+
             async def _llm_factory():
                 return await _ensure_shared_llm()
 
@@ -823,6 +928,7 @@ if _FASTAPI_AVAILABLE:
                 sse=_sse,
                 hub_paired=_is_hub_paired,
                 llm_factory=_llm_factory,
+                pre_model_handler=_local_knowledge_before_model,
             ):
                 yield event
             return

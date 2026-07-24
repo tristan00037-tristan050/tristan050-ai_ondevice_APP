@@ -1,6 +1,4 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { save as tauriSave } from '@tauri-apps/plugin-dialog';
-import { writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
 import {
   Inbox,
   X,
@@ -19,6 +17,7 @@ import {
 } from 'lucide-react';
 import { SIDECAR_BASE } from '../../constants';
 import { sidecarFetch, uiSafeSidecarErrorMessage } from '../../lib/sidecarFetch';
+import { saveExportFile } from '../../lib/nativeSave';
 
 interface RequestParsingModalProps {
   onClose: () => void;
@@ -330,14 +329,10 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
   const handleDownloadMd = async () => {
     if (phase.kind !== 'done') return;
     try {
-      const savePath = await tauriSave({
-        defaultPath: 'butler_parse_result.md',
-        filters: [{ name: 'Markdown', extensions: ['md'] }],
-      });
-      if (!savePath) return;
       const resp = await fetch(`${SIDECAR_BASE}/request_parsing/result/${phase.resultId}/markdown`);
+      if (!resp.ok) throw new Error('DOWNLOAD_RESPONSE_INVALID');
       const bytes = new Uint8Array(await resp.arrayBuffer());
-      await tauriWriteFile(savePath, bytes);
+      await saveExportFile('butler_parse_result.md', 'md', bytes);
     } catch (err) {
       console.error('md download error', err);
     }
@@ -346,14 +341,10 @@ export function RequestParsingModal({ onClose }: RequestParsingModalProps) {
   const handleDownloadDocx = async () => {
     if (phase.kind !== 'done') return;
     try {
-      const savePath = await tauriSave({
-        defaultPath: 'butler_parse_result.docx',
-        filters: [{ name: 'Word', extensions: ['docx'] }],
-      });
-      if (!savePath) return;
       const resp = await fetch(`${SIDECAR_BASE}/request_parsing/result/${phase.resultId}/docx`);
+      if (!resp.ok) throw new Error('DOWNLOAD_RESPONSE_INVALID');
       const bytes = new Uint8Array(await resp.arrayBuffer());
-      await tauriWriteFile(savePath, bytes);
+      await saveExportFile('butler_parse_result.docx', 'docx', bytes);
     } catch (err) {
       console.error('docx download error', err);
     }

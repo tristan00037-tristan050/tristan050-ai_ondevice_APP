@@ -31,6 +31,35 @@ export class SidecarFetchError extends Error {
   }
 }
 
+export class SidecarTargetError extends Error {
+  constructor() {
+    super('SIDECAR_TARGET_REJECTED');
+    this.name = 'SidecarTargetError';
+  }
+}
+
+function resolveSidecarTarget(path: string): URL {
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) {
+    throw new SidecarTargetError();
+  }
+  let target: URL;
+  try {
+    target = new URL(path, `${SIDECAR_BASE}/`);
+  } catch {
+    throw new SidecarTargetError();
+  }
+  const expected = new URL(SIDECAR_BASE);
+  if (
+    target.origin !== expected.origin
+    || target.username !== ''
+    || target.password !== ''
+    || target.hash !== ''
+  ) {
+    throw new SidecarTargetError();
+  }
+  return target;
+}
+
 function toHeaderRecord(init?: HeadersInit): Record<string, string> {
   const out: Record<string, string> = {};
   if (!init) return out;
@@ -48,7 +77,8 @@ function toHeaderRecord(init?: HeadersInit): Record<string, string> {
 
 export async function sidecarFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const method = (init.method ?? 'GET').toUpperCase();
-  const url = path.startsWith('http') ? path : `${SIDECAR_BASE}${path}`;
+  const target = resolveSidecarTarget(path);
+  const endpoint = target.pathname;
   // headers 는 plain object 로 유지한다(기존 fetch 호출부·테스트와 동일 계약: headers.Authorization).
   const headers = toHeaderRecord(init.headers);
 
@@ -58,10 +88,10 @@ export async function sidecarFetch(path: string, init: RequestInit = {}): Promis
   headers['Authorization'] = `Bearer ${token}`;
 
   try {
-    return await fetch(url, { ...init, method, headers });
+    return await fetch(target, { ...init, method, headers, redirect: 'error' });
   } catch (cause) {
     // fetch 자체 실패(TypeError: Load failed 등) — endpoint/method 보존, raw 미로깅.
-    throw new SidecarFetchError(path, method, cause);
+    throw new SidecarFetchError(endpoint, method, cause);
   }
 }
 

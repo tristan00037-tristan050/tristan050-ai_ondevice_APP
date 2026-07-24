@@ -3,6 +3,8 @@ import pytest
 
 import json
 
+import pytest
+
 from butler_pc_core.cards.box4.review_service import (
     BOX4_JSON_SCHEMA,
     CONFIDENCES,
@@ -15,6 +17,16 @@ from butler_pc_core.cards.box4.review_service import (
     review_document,
 )
 from butler_pc_core.runtime.json_grammar import GrammarUnavailable
+from butler_pc_core.runtime import json_grammar
+
+
+@pytest.fixture(autouse=True)
+def _synthetic_grammar(monkeypatch: pytest.MonkeyPatch) -> None:
+    if json_grammar.LlamaGrammar is None:
+        monkeypatch.setattr(
+            "butler_pc_core.cards.box4.review_service.build_json_schema_grammar",
+            lambda *_args, **_kwargs: object(),
+        )
 
 
 class FakeModelClient:

@@ -12,29 +12,23 @@ export function loadConversations(): Conversation[] {
 }
 
 export function saveConversations(convs: Conversation[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(convs));
-  } catch {
-    // localStorage quota exceeded — silently ignore
-  }
+  void convs;
+  // The canonical store is the sidecar SQLite database. localStorage is read
+  // once only as a legacy migration source.
 }
 
 export function upsertConversation(conv: Conversation): void {
-  const convs = loadConversations();
-  const idx = convs.findIndex(c => c.id === conv.id);
-  if (idx >= 0) {
-    convs[idx] = conv;
-  } else {
-    convs.unshift(conv);
-  }
-  saveConversations(convs);
+  void conv;
 }
 
 export function deleteConversation(id: string): void {
-  const convs = loadConversations().filter(c => c.id !== id);
-  saveConversations(convs);
+  void id;
+}
+
+export function clearLegacyConversations(): void {
+  localStorage.removeItem(STORAGE_KEY);
 }
 
 export function generateId(): string {
-  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return crypto.randomUUID();
 }

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import { ModalFrame } from '../v1_1/ModalFrame';
 
 interface DeleteConfirmModalProps {
   isOpen: boolean;
@@ -7,21 +8,15 @@ interface DeleteConfirmModalProps {
 }
 
 export function DeleteConfirmModal({ isOpen, onConfirm, onCancel }: DeleteConfirmModalProps) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
   if (!isOpen) return null;
 
   return (
-    <div
-      data-testid="delete-confirm-modal"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.4)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
-      onClick={onCancel}
+    <ModalFrame
+      labelledBy="delete-confirm-title"
+      testId="delete-confirm-modal"
+      onClose={onCancel}
+      initialFocusRef={cancelRef}
     >
       <div
         style={{
@@ -32,9 +27,9 @@ export function DeleteConfirmModal({ isOpen, onConfirm, onCancel }: DeleteConfir
           maxWidth: 400,
           boxShadow: '0 8px 32px rgba(0,0,0,0.16)',
         }}
-        onClick={e => e.stopPropagation()}
       >
         <h3
+          id="delete-confirm-title"
           style={{
             margin: '0 0 8px',
             fontSize: 'var(--text-lg)',
@@ -55,6 +50,7 @@ export function DeleteConfirmModal({ isOpen, onConfirm, onCancel }: DeleteConfir
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
           <button
+            ref={cancelRef}
             data-testid="delete-cancel-btn"
             onClick={onCancel}
             style={{
@@ -89,6 +85,6 @@ export function DeleteConfirmModal({ isOpen, onConfirm, onCancel }: DeleteConfir
           </button>
         </div>
       </div>
-    </div>
+    </ModalFrame>
   );
 }

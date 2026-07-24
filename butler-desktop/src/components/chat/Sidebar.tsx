@@ -1,191 +1,172 @@
-import React from 'react';
-import type { Conversation } from '../../types';
+import React, { useMemo, useState } from 'react';
+import type { Conversation, FolderRecord } from '../../types';
 import { ConversationItem } from './ConversationItem';
 
-interface SidebarProps {
+interface Props {
   conversations: Conversation[];
+  trashedConversations: Conversation[];
+  folders: FolderRecord[];
   activeConvId: string | null;
+  isOpen: boolean;
+  disabled: boolean;
   onSelect: (id: string) => void;
   onNew: () => void;
   onRename: (id: string, title: string) => void;
   onDeleteRequest: (id: string) => void;
-  isOpen: boolean;
+  onCreateFolder: (name: string, parentId: string | null) => void;
+  onRenameFolder: (folder: FolderRecord, name: string) => void;
+  onDeleteFolder: (folder: FolderRecord) => void;
+  onMove: (conversation: Conversation, folderId: string) => void;
+  onRestore: (conversation: Conversation) => void;
+  onPermanentDelete: (conversation: Conversation) => void;
+  onOpenSettings: () => void;
+  onRetry: () => void;
+  onSearch: (query: string) => void;
 }
 
-type GroupKey = 'today' | 'yesterday' | 'week' | 'month' | 'older';
+export function Sidebar(props: Props) {
+  const {
+    conversations, trashedConversations, folders, activeConvId, isOpen, disabled,
+    onSelect, onNew, onRename, onDeleteRequest, onCreateFolder, onRenameFolder,
+    onDeleteFolder, onMove, onRestore, onPermanentDelete, onOpenSettings, onRetry, onSearch,
+  } = props;
+  const [name, setName] = useState('');
+  const [parentId, setParentId] = useState('');
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [trashOpen, setTrashOpen] = useState(false);
+  const [profileFilter, setProfileFilter] = useState('');
+  const visible = useMemo(() => folders.filter(folder => folder.system_kind !== 'TRASH'), [folders]);
+  const customFolders = visible.filter(folder => folder.system_kind === null);
+  const profiles = useMemo(() => Array.from(new Set(
+    conversations.map(conversation => conversation.business_profile_id).filter((value): value is string => Boolean(value)),
+  )).sort(), [conversations]);
+  const listedConversations = profileFilter
+    ? conversations.filter(conversation => conversation.business_profile_id === profileFilter)
+    : conversations;
 
-interface GroupedConvs {
-  today: Conversation[];
-  yesterday: Conversation[];
-  week: Conversation[];
-  month: Conversation[];
-  older: Conversation[];
-}
+  if (!isOpen) return <aside className="home-sidebar home-sidebar-closed" aria-hidden="true" />;
 
-const GROUP_LABELS: Record<GroupKey, string> = {
-  today: '오늘',
-  yesterday: '어제',
-  week: '지난 7일',
-  month: '지난 30일',
-  older: '더 오래',
-};
+  const renderFolder = (folder: FolderRecord, depth = 0): React.ReactNode => {
+    const items = listedConversations.filter(conversation => (conversation.folder_id ?? 'system-unclassified') === folder.folder_id);
+    const children = customFolders.filter(child => child.parent_id === folder.folder_id);
+    const open = expanded[folder.folder_id] ?? true;
+    return (
+      <section key={folder.folder_id} className="folder-group" style={{ '--folder-depth': depth } as React.CSSProperties}>
+        <div className="folder-heading">
+          <button
+            className="folder-disclosure"
+            aria-expanded={open}
+            onClick={() => setExpanded(value => ({ ...value, [folder.folder_id]: !open }))}
+          >
+            <span aria-hidden="true">{open ? '−' : '+'}</span>
+            <strong>{folder.display_name}</strong>
+            <span>{items.length}</span>
+          </button>
+          {folder.system_kind === null && (
+            <span className="folder-actions">
+              <button
+                disabled={disabled}
+                aria-label={`${folder.display_name} 이름 변경`}
+                onClick={() => {
+                  const next = window.prompt('새 폴더 이름', folder.display_name)?.trim();
+                  if (next && next !== folder.display_name) onRenameFolder(folder, next);
+                }}
+              >이름</button>
+              <button disabled={disabled} aria-label={`${folder.display_name} 삭제`} onClick={() => onDeleteFolder(folder)}>삭제</button>
+            </span>
+          )}
+        </div>
+        {open && (
+          <div>
+            {items.map(conversation => (
+              <div className="folder-conversation" key={conversation.id}>
+                <ConversationItem
+                  conversation={conversation}
+                  isActive={conversation.id === activeConvId}
+                  onSelect={() => onSelect(conversation.id)}
+                  onRename={title => onRename(conversation.id, title)}
+                  onDelete={() => onDeleteRequest(conversation.id)}
+                />
+                {conversation.business_profile_id && (
+                  <span className="profile-badge" title="생성 당시 업무 프로필">{conversation.business_profile_id}</span>
+                )}
+                <select
+                  aria-label={`${conversation.title} 이동`}
+                  value={folder.folder_id}
+                  disabled={disabled}
+                  onChange={event => onMove(conversation, event.target.value)}
+                >
+                  {visible.map(target => <option value={target.folder_id} key={target.folder_id}>{target.display_name}</option>)}
+                </select>
+              </div>
+            ))}
+            {children.map(child => renderFolder(child, depth + 1))}
+          </div>
+        )}
+      </section>
+    );
+  };
 
-function groupConversations(convs: Conversation[]): GroupedConvs {
-  const now = new Date();
-  const today = new Date(now); today.setHours(0, 0, 0, 0);
-  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-  const week = new Date(today); week.setDate(today.getDate() - 7);
-  const month = new Date(today); month.setDate(today.getDate() - 30);
-
-  const groups: GroupedConvs = { today: [], yesterday: [], week: [], month: [], older: [] };
-
-  for (const conv of convs) {
-    const d = new Date(conv.updated_at);
-    if (d >= today) {
-      groups.today.push(conv);
-    } else if (d >= yesterday) {
-      groups.yesterday.push(conv);
-    } else if (d >= week) {
-      groups.week.push(conv);
-    } else if (d >= month) {
-      groups.month.push(conv);
-    } else {
-      groups.older.push(conv);
-    }
-  }
-
-  return groups;
-}
-
-export function Sidebar({
-  conversations,
-  activeConvId,
-  onSelect,
-  onNew,
-  onRename,
-  onDeleteRequest,
-  isOpen,
-}: SidebarProps) {
-  const groups = groupConversations(conversations);
-  const ORDER: GroupKey[] = ['today', 'yesterday', 'week', 'month', 'older'];
+  const roots = visible.filter(folder => folder.system_kind !== null || folder.parent_id === null);
 
   return (
-    <div
-      style={{
-        width: isOpen ? 260 : 0,
-        flexShrink: 0,
-        overflow: 'hidden',
-        transition: 'width 200ms ease',
-        background: 'var(--color-bg-sidebar)',
-        borderRight: isOpen ? '1px solid var(--color-border-subtle)' : 'none',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-      }}
-    >
-      {isOpen && (
-        <>
-          {/* Header */}
-          <div
-            style={{
-              padding: 'var(--space-4)',
-              borderBottom: '1px solid var(--color-border-subtle)',
-            }}
-          >
-            <button
-              data-testid="new-conv-btn"
-              onClick={onNew}
-              style={{
-                width: '100%',
-                padding: 'var(--space-2) var(--space-3)',
-                background: 'var(--color-brand-primary)',
-                color: 'var(--color-text-on-brand)',
-                border: 'none',
-                borderRadius: 8,
-                cursor: 'pointer',
-                fontSize: 'var(--text-sm)',
-                fontFamily: 'var(--font-sans)',
-                fontWeight: 500,
-              }}
-            >
-              + 새 대화
-            </button>
+    <aside className="home-sidebar">
+      <div className="home-sidebar-header">
+        <button data-testid="new-conv-btn" className="primary-control" onClick={onNew}>새 대화</button>
+        <input
+          className="conversation-search"
+          type="search"
+          maxLength={200}
+          placeholder="대화 제목 검색"
+          aria-label="대화 제목 검색"
+          onChange={event => onSearch(event.target.value)}
+        />
+        <label className="profile-filter-label">
+          업무 프로필
+          <select value={profileFilter} onChange={event => setProfileFilter(event.target.value)}>
+            <option value="">전체 대화 ({conversations.length})</option>
+            {profiles.map(profile => <option key={profile} value={profile}>{profile}</option>)}
+          </select>
+        </label>
+        <form onSubmit={event => {
+          event.preventDefault();
+          const value = name.trim();
+          if (!disabled && value) {
+            onCreateFolder(value, parentId || null);
+            setName('');
+          }
+        }}>
+          <input value={name} maxLength={80} disabled={disabled} onChange={event => setName(event.target.value)} placeholder="새 폴더 이름" aria-label="새 폴더 이름" />
+          <select value={parentId} disabled={disabled} onChange={event => setParentId(event.target.value)} aria-label="상위 폴더">
+            <option value="">최상위</option>
+            {customFolders.map(folder => <option key={folder.folder_id} value={folder.folder_id}>{folder.display_name}</option>)}
+          </select>
+          <button type="submit" disabled={disabled}>추가</button>
+        </form>
+        {disabled && <div className="read-only-notice" role="status">읽기 전용입니다. <button onClick={onRetry}>다시 연결</button></div>}
+      </div>
+      <nav className="folder-tree" aria-label="대화 폴더">
+        {roots.map(folder => renderFolder(folder))}
+        {listedConversations.length === 0 && (
+          <div className="sidebar-empty">
+            <p>{profileFilter ? '이 프로필에 연결된 대화가 없습니다.' : '아직 대화가 없습니다.'}</p>
+            {profileFilter && <button onClick={() => setProfileFilter('')}>전체 대화 보기</button>}
           </div>
-
-          {/* Conversation list */}
-          <div
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: 'var(--space-2)',
-            }}
-          >
-            {conversations.length === 0 ? (
-              <div
-                data-testid="sidebar-empty"
-                style={{
-                  padding: 'var(--space-4)',
-                  textAlign: 'center',
-                  color: 'var(--color-text-secondary)',
-                  fontSize: 'var(--text-sm)',
-                }}
-              >
-                아직 대화가 없습니다
-              </div>
-            ) : (
-              ORDER.map(key => {
-                const items = groups[key];
-                if (items.length === 0) return null;
-                return (
-                  <div key={key}>
-                    <div
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--color-text-secondary)',
-                        fontWeight: 500,
-                        marginTop: 'var(--space-2)',
-                      }}
-                    >
-                      {GROUP_LABELS[key]}
-                    </div>
-                    {items.map(conv => (
-                      <ConversationItem
-                        key={conv.id}
-                        conversation={conv}
-                        isActive={conv.id === activeConvId}
-                        onSelect={() => onSelect(conv.id)}
-                        onRename={title => onRename(conv.id, title)}
-                        onDelete={() => onDeleteRequest(conv.id)}
-                      />
-                    ))}
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Footer */}
-          <div
-            style={{
-              padding: 'var(--space-3) var(--space-4)',
-              borderTop: '1px solid var(--color-border-subtle)',
-            }}
-          >
-            <button
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 'var(--text-sm)',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              ⚙️ 설정
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+        )}
+        <section className="trash-group">
+          <button className="folder-disclosure" aria-expanded={trashOpen} onClick={() => setTrashOpen(open => !open)}>
+            <span aria-hidden="true">{trashOpen ? '−' : '+'}</span><strong>휴지통</strong><span>{trashedConversations.length}</span>
+          </button>
+          {trashOpen && trashedConversations.map(conversation => (
+            <div className="trash-row" key={conversation.id}>
+              <span title={conversation.title}>{conversation.title}</span>
+              <button disabled={disabled} onClick={() => onRestore(conversation)}>복원</button>
+              <button disabled={disabled} onClick={() => onPermanentDelete(conversation)}>영구 삭제</button>
+            </div>
+          ))}
+        </section>
+      </nav>
+      <footer><button onClick={onOpenSettings}>설정</button></footer>
+    </aside>
   );
 }

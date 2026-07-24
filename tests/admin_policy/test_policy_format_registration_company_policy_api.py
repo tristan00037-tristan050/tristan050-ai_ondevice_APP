@@ -23,6 +23,7 @@ from butler_pc_core.company_policy.contracts import (
     validate_company_policy_dict,
 )
 from butler_pc_core.company_policy.policy_gate import PolicyGate, build_policy_task_envelope
+from butler_pc_core.company_policy.role_registry import RoleRegistryStore
 from butler_pc_core.company_policy.storage import CompanyFormatStore, PolicyLoadError, PolicyStore
 
 
@@ -31,6 +32,15 @@ SESSION_DIGEST = sha256_text("admin-session-001")
 EMPLOYEE_DIGEST = sha256_text("employee-001")
 DEPT_DIGEST = sha256_text("dept-finance")
 TENANT_DIGEST = sha256_text("tenant-main")
+
+
+@pytest.fixture(autouse=True)
+def _registered_admin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from butler_pc_core.company_policy import admin_auth
+
+    registry = RoleRegistryStore(root=tmp_path / "role-registry")
+    registry.bootstrap_self_admin(admin())
+    monkeypatch.setattr(admin_auth, "get_default_role_registry_store", lambda: registry)
 
 
 def admin(role: str = "admin") -> AdminContext:

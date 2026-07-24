@@ -19,9 +19,12 @@ TEST_FILES = (
     Path("tests/cards/box4/test_review_service.py"),
     Path("butler-desktop/src/__tests__/Box4CardMode.test.tsx"),
 )
-DEPENDENCY_FILE_RE = re.compile(
-    r"(^|/)(package(-lock)?\.json|pyproject\.toml|requirements[^/]*\.txt|poetry\.lock|uv\.lock)$"
-)
+# Box4 runs in the bundled Python sidecar. This is the manifest copied into the
+# app and consumed by scripts/build_runtime.sh. Frontend manifests are covered
+# by npm ci + the Box4 Vitest job and are valid to change for unrelated product
+# work; treating every package.json in the monorepo as a Box4 contract breach
+# made this verifier reject otherwise valid PRs.
+BOX4_RUNTIME_DEPENDENCY_FILES = frozenset({"requirements-serving.txt"})
 SUCCESS_MARKER_RE = re.compile(r"\b[A-Z0-9_]+_OK=1\b")
 FORBIDDEN_SEND_IMPORTS = {"requests", "httpx", "aiohttp", "urllib", "socket"}
 ISSUE_TYPES = {"MISSING", "ERROR", "INCONSISTENCY", "STYLE", "SUGGESTION"}
@@ -225,10 +228,13 @@ def _check_smoke_validator(root: Path) -> None:
         _fail("SMOKE_VALIDATOR_FAILED")
 
 
+def _is_box4_runtime_dependency_file(changed: str) -> bool:
+    return changed.replace("\\", "/") in BOX4_RUNTIME_DEPENDENCY_FILES
+
+
 def _check_dependency_files_unchanged(root: Path) -> None:
-    for changed in _changed_files(root):
-        if DEPENDENCY_FILE_RE.search(changed):
-            _fail("DEPENDENCY_FILE_CHANGED")
+    if any(_is_box4_runtime_dependency_file(changed) for changed in _changed_files(root)):
+        _fail("DEPENDENCY_FILE_CHANGED")
 
 
 def main() -> int:

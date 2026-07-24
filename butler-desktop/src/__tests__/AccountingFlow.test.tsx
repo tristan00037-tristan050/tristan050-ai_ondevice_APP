@@ -6,16 +6,7 @@ const { mockTauriInvoke } = vi.hoisted(() => ({
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: mockTauriInvoke,
 }));
-vi.mock('@tauri-apps/plugin-dialog', () => ({
-  save: vi.fn(),
-}));
-vi.mock('@tauri-apps/plugin-fs', () => ({
-  writeFile: vi.fn(),
-}));
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { save as tauriSave } from '@tauri-apps/plugin-dialog';
-import { writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { AccountingModal } from '../components/chat/AccountingModal';
 
@@ -71,10 +62,9 @@ describe('AccountingModal — 업로드 흐름', () => {
     mockTauriInvoke.mockReset();
     mockTauriInvoke.mockImplementation(async (command: string) => {
       if (command === 'get_sidecar_capability_token') return 'test-capability-token';
+      if (command === 'save_export_file') return true;
       throw new Error(`UNEXPECTED_TAURI_COMMAND:${command}`);
     });
-    vi.mocked(tauriSave).mockReset();
-    vi.mocked(tauriWriteFile).mockReset();
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -379,8 +369,7 @@ describe('AccountingModal — 업로드 흐름', () => {
     expect(screen.queryByTestId('accounting-selected-file')).not.toBeInTheDocument();
   });
 
-  it('test_download_btn_uses_tauri_dialog_and_fs', async () => {
-    // Tauri v2 표준 다운로드: save dialog + writeFile 호출 검증
+  it('test_download_btn_uses_native_user_selected_save', async () => {
     const xlsxBuffer = new ArrayBuffer(2048); // ≥ 1000 bytes to pass buffer guard
     new Uint8Array(xlsxBuffer).set([0x50, 0x4B, 0x03, 0x04]);
 
@@ -388,9 +377,6 @@ describe('AccountingModal — 업로드 흐름', () => {
       .mockResolvedValueOnce({ ok: true, body: makeSseStream(SSE_EVENTS_OK) })       // classify
       .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => xlsxBuffer });     // download
     vi.stubGlobal('fetch', mockFetch);
-
-    vi.mocked(tauriSave).mockResolvedValueOnce('/tmp/butler_accounting_result.xlsx');
-    vi.mocked(tauriWriteFile).mockResolvedValueOnce(undefined);
 
     render(<AccountingModal onClose={() => {}} />);
     const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
@@ -412,28 +398,29 @@ describe('AccountingModal — 업로드 흐름', () => {
     expect(xlsxUrl).toContain('/accounting/result/test-uuid-1234/xlsx');
     expect((xlsxOptions.headers as Record<string, string>).Authorization).toBe('Bearer test-capability-token');
 
-    // tauriSave: defaultPath + filters 검증
-    await waitFor(() => expect(tauriSave).toHaveBeenCalledOnce());
-    expect(tauriSave).toHaveBeenCalledWith({
-      defaultPath: 'butler_accounting_result.xlsx',
-      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
-    });
-
-    // tauriWriteFile: 경로 + Uint8Array 검증
-    await waitFor(() => expect(tauriWriteFile).toHaveBeenCalledOnce());
-    const [writePath, writeData] = vi.mocked(tauriWriteFile).mock.calls[0];
-    expect(writePath).toBe('/tmp/butler_accounting_result.xlsx');
-    expect(writeData).toBeInstanceOf(Uint8Array);
+    await waitFor(() => expect(mockTauriInvoke).toHaveBeenCalledWith(
+      'save_export_file',
+      expect.any(Uint8Array),
+      {
+        headers: {
+          'butler-export-name': 'butler_accounting_result.xlsx',
+          'butler-export-extension': 'xlsx',
+        },
+      },
+    ));
   });
 
-  it('test_download_cancel_does_not_write_file', async () => {
-    // save dialog에서 사용자가 취소(null 반환) → writeFile 미호출
+  it('test_download_cancel_is_reported_by_native_save_boundary', async () => {
     const mockFetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, body: makeSseStream(SSE_EVENTS_OK) })
       .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new ArrayBuffer(2048) }); // ≥ 1000 bytes
     vi.stubGlobal('fetch', mockFetch);
 
-    vi.mocked(tauriSave).mockResolvedValueOnce(null);
+    mockTauriInvoke.mockImplementation(async (command: string) => {
+      if (command === 'get_sidecar_capability_token') return 'test-capability-token';
+      if (command === 'save_export_file') return false;
+      throw new Error(`UNEXPECTED_TAURI_COMMAND:${command}`);
+    });
 
     render(<AccountingModal onClose={() => {}} />);
     const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
@@ -447,8 +434,11 @@ describe('AccountingModal — 업로드 흐름', () => {
       fireEvent.click(screen.getByTestId('accounting-download-btn'));
     });
 
-    await waitFor(() => expect(tauriSave).toHaveBeenCalledOnce());
-    expect(tauriWriteFile).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockTauriInvoke).toHaveBeenCalledWith(
+      'save_export_file',
+      expect.any(Uint8Array),
+      expect.objectContaining({ headers: expect.any(Object) }),
+    ));
   });
 
   it('test_phase_start_minimum_1500ms_display', async () => {
@@ -504,7 +494,6 @@ describe('AccountingModal — 업로드 흐름', () => {
       .mockResolvedValueOnce({ ok: false, status: 404 });
     vi.stubGlobal('fetch', mockFetch);
 
-    vi.mocked(tauriSave).mockResolvedValueOnce('/tmp/butler_result.xlsx');
 
     render(<AccountingModal onClose={() => {}} />);
     const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
@@ -520,7 +509,7 @@ describe('AccountingModal — 업로드 흐름', () => {
 
     await waitFor(() => expect(screen.getByTestId('accounting-error')).toBeInTheDocument());
     expect(screen.getByTestId('accounting-error').textContent).toContain('404');
-    expect(tauriWriteFile).not.toHaveBeenCalled();
+    expect(mockTauriInvoke.mock.calls.some(([command]) => command === 'save_export_file')).toBe(false);
   });
 
   it('test_category_summary_shows_amount', async () => {
@@ -934,8 +923,7 @@ describe('AccountingModal — 업로드 흐름', () => {
 
   // A.4 — 다운로드 버퍼 정확성 테스트
 
-  it('test_download_buffer_passed_exactly_to_writefile', async () => {
-    // fetch arrayBuffer 바이트가 tauriWriteFile에 그대로 전달되어야 한다 (byte-level 비교)
+  it('test_download_buffer_passed_exactly_to_native_save', async () => {
     const xlsx = new Uint8Array(2048);
     xlsx[0] = 0x50; xlsx[1] = 0x4B; xlsx[2] = 0x03; xlsx[3] = 0x04; // ZIP magic
     for (let i = 4; i < 2048; i++) xlsx[i] = (i % 256);
@@ -945,8 +933,6 @@ describe('AccountingModal — 업로드 흐름', () => {
       .mockResolvedValueOnce({ ok: true, body: makeSseStream(SSE_EVENTS_OK) })
       .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => xlsxBuffer });
     vi.stubGlobal('fetch', mockFetch);
-    vi.mocked(tauriSave).mockResolvedValueOnce('/tmp/out.xlsx');
-    vi.mocked(tauriWriteFile).mockResolvedValueOnce(undefined);
 
     render(<AccountingModal onClose={() => {}} />);
     const input = screen.getByTestId('accounting-file-input') as HTMLInputElement;
@@ -960,10 +946,9 @@ describe('AccountingModal — 업로드 흐름', () => {
       fireEvent.click(screen.getByTestId('accounting-download-btn'));
     });
 
-    await waitFor(() => expect(tauriWriteFile).toHaveBeenCalledOnce());
-    const [, writeData] = vi.mocked(tauriWriteFile).mock.calls[0];
-    expect(writeData).toBeInstanceOf(Uint8Array);
-    const written = writeData as Uint8Array;
+    await waitFor(() => expect(mockTauriInvoke.mock.calls.some(([command]) => command === 'save_export_file')).toBe(true));
+    const saveCall = mockTauriInvoke.mock.calls.find(([command]) => command === 'save_export_file');
+    const written = saveCall?.[1] as Uint8Array;
     expect(written.byteLength).toBe(2048);
     expect(written[0]).toBe(0x50);
     expect(written[1]).toBe(0x4B);
@@ -996,7 +981,7 @@ describe('AccountingModal — 업로드 흐름', () => {
 
     await waitFor(() => expect(screen.getByTestId('accounting-error')).toBeInTheDocument());
     expect(screen.getByTestId('accounting-error').textContent).toContain('42B');
-    expect(tauriWriteFile).not.toHaveBeenCalled();
+    expect(mockTauriInvoke.mock.calls.some(([command]) => command === 'save_export_file')).toBe(false);
   });
 
   // B.3 — ReactMarkdown 보고서 음수 금액 debit 색상 테스트

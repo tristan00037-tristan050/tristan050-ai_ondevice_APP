@@ -2,11 +2,10 @@ import React, { useRef, useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Calculator } from 'lucide-react';
-import { save as tauriSave } from '@tauri-apps/plugin-dialog';
-import { writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
 import butlerIconAnimatedUrl from '../../assets/butler-icon-animated.svg';
 import { SIDECAR_BASE } from '../../constants';
 import { getSidecarCapabilityToken } from '../../lib/connect_loop/sidecarAuth';
+import { saveExportFile } from '../../lib/nativeSave';
 
 const AccountingReviewPage = React.lazy(async () => {
   const module = await import('../accounting_review/AccountingReviewPage');
@@ -280,13 +279,7 @@ export function AccountingModal({ onClose }: AccountingModalProps) {
         setPhase({ kind: 'error', message: `다운로드 오류: 분류 결과 파일을 받지 못했습니다 (수신 크기: ${buffer.byteLength}B)` });
         return;
       }
-      const filePath = await tauriSave({
-        defaultPath: 'butler_accounting_result.xlsx',
-        filters: [{ name: 'Excel', extensions: ['xlsx'] }],
-      });
-      if (filePath) {
-        await tauriWriteFile(filePath, new Uint8Array(buffer));
-      }
+      await saveExportFile('butler_accounting_result.xlsx', 'xlsx', new Uint8Array(buffer));
     } catch (err: unknown) {
       setPhase({ kind: 'error', message: formatRequestFailure(err, '다운로드 오류') });
     }

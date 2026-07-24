@@ -1,0 +1,52 @@
+{
+  "schema_version": "butler.firstscreen.completion.v3",
+  "evaluated_at_utc": "2026-07-20T00:00:00Z",
+  "scope": "FIRST_SCREEN_V2_3_PRODUCT_CORRECTION",
+  "status": {
+    "DEVELOPMENT_COMPLETE": "NO",
+    "CODE_PASS": "NO",
+    "MERGE_READY": "NO",
+    "PRODUCT_RELEASE_READY": "NO",
+    "RUNTIME_ACTIVATION_ALLOWED": 0
+  },
+  "local_evidence": {
+    "handoff_zip_sha256": "810c323a75349aef2ec898e26500881c93246f30f98ea6c71494e71a40a77f2b",
+    "handoff_crc": "PASS",
+    "handoff_internal_sha256": "60_OF_60_PASS",
+    "ed25519_verifier_and_attack_tests": "PASS_LOCAL_OWNER_ARTIFACTS_ABSENT",
+    "archive_payload_attack_tests": "PASS_LOCAL",
+    "no_git_sbom": "PASS_LOCAL",
+    "cors_idempotency_exposure": "PASS_LOCAL",
+    "tauri_native_save_web_tests": "PASS_LOCAL_MACOS_COMPILE_NOT_RUN",
+    "python_collection": "PASS_3177_COLLECTED_0_ERRORS",
+    "python_repository_regression": "FAIL_3064_PASS_81_BASELINE_FAIL_32_SKIP_0_NEW_FAIL",
+    "firstscreen_targeted_python": "PASS_74_PASS_1_SKIP",
+    "firstscreen_branch_coverage": {
+      "status": "FAIL",
+      "measured_branch_percent": 53.18,
+      "measured_combined_percent": 68,
+      "required_percent": 85
+    },
+    "desktop_vitest": "PASS_335_PASS_0_FAIL",
+    "desktop_typescript_vite_build": "PASS_2056_MODULES",
+    "safe_source_without_git": "PENDING_COMMITTED_SOURCE_RUN",
+    "policy_source_semantic_guard": "PASS_LOCAL",
+    "repository_contract_one_command": "FAIL_BASE_REF_UNAVAILABLE"
+  },
+  "release_exception": {
+    "status": "BLOCKED_OWNER_UNSIGNED",
+    "accepted_signed_risk_decision": false,
+    "reason": "Detached signature and pinned owner public key were not supplied."
+  },
+  "external_required_gates": {
+    "canonical_remote_push_clean_clone_pr_required_checks": "NOT_RUN",
+    "main_artifact_attestation": "NOT_RUN",
+    "signed_macos_15_arm64_app_e2e": "NOT_RUN",
+    "keychain_restart_decrypt_continuity": "NOT_RUN",
+    "voiceover_signed_app": "NOT_RUN",
+    "apple_silicon_m3_measurement": "NOT_RUN",
+    "metal_memory_thermal_power_raw_evidence": "NOT_RUN",
+    "independent_process_reproduction": "NOT_RUN"
+  },
+  "completion_rule": "No unsigned, local-only, generated, or self-verified evidence is promoted to CODE_PASS."
+}

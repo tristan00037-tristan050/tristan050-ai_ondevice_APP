@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Inbox, ArrowRightLeft, FilePlus, FileSearch, Calculator, ClipboardList, Mic, BarChart3, type LucideIcon } from 'lucide-react';
 
 type CardMode = 'request_organize' | 'format_convert' | 'new_draft' | 'document_review' | 'accounting_classify' | 'form_fill' | 'meeting_notes' | 'data_insight';
@@ -30,20 +30,36 @@ const CARDS: Card[] = [
   { id: 8, mode: 'data_insight', title: '데이터 → 인사이트', desc: '수치 요약·분석', active: false, Icon: BarChart3 },
 ];
 
-export function CardGrid({ onCardSelect }: { onCardSelect: (mode: CardMode) => void }) {
+export function CardGrid({ onCardSelect, compact = false }: { onCardSelect: (mode: CardMode) => void; compact?: boolean }) {
+  const ref = useRef<HTMLElement>(null);
+  const [columns,setColumns]=useState(4);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const update = () => {
+      const width = node.getBoundingClientRect().width;
+      setColumns(compact ? (width < 520 ? 2 : width < 900 ? 4 : 8) : (width < 560 ? 1 : width < 900 ? 2 : 4));
+    };
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [compact]);
   return (
-    <section aria-label="Butler card grid" data-testid="card-grid" data-card-grid-version="d4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+    <section ref={ref} className={compact?'home-card-grid compact':'home-card-grid'} aria-label="Butler card grid" data-testid="card-grid" data-card-grid-version="v1.3" style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: compact?6:12 }}>
       {CARDS.map(({ id, mode, title, desc, active, Icon }) => (
         <button
           key={id}
           data-testid={`card-${id}`}
           disabled={!active}
+          aria-label={title}
           onClick={() => active && onCardSelect(mode)}
-          style={{ position: 'relative', minHeight: 132, padding: 16, borderRadius: 14, border: active ? '2px solid var(--color-brand-primary)' : '1px solid var(--color-border-subtle)', background: active ? 'var(--color-bg-input)' : 'var(--color-bg-app)', opacity: active ? 1 : 0.48, cursor: active ? 'pointer' : 'not-allowed', textAlign: 'left' }}
+          style={{ position: 'relative', minHeight: compact?40:132, padding: compact?8:16, borderRadius: 14, border: active ? '2px solid var(--color-brand-primary)' : '1px solid var(--color-border-subtle)', background: active ? 'var(--color-bg-input)' : 'var(--color-bg-app)', opacity: active ? 1 : 0.48, cursor: active ? 'pointer' : 'not-allowed', textAlign: 'left' }}
         >
-          <Icon size={24} aria-hidden />
-          <strong style={{ display: 'block', marginTop: 10, fontSize: 14 }}>{title}</strong>
-          <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>{desc}</span>
+          {!compact&&<Icon size={24} aria-hidden />}
+          <strong style={{ display: 'block', marginTop: compact?0:10, fontSize: 14 }}>{compact?id:title}</strong>
+          {!compact&&<span style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>{desc}</span>}
           {!active && <span style={{ position: 'absolute', top: 10, right: 10, fontSize: 11, color: 'var(--color-text-secondary)' }}>준비 중</span>}
         </button>
       ))}

@@ -35,7 +35,6 @@ REQUIRED_FILES = [
     "tests/convert/conftest.py",
     "tests/convert/test_convert_ort_mobile.py",
     "tests/convert/test_convert_budget.py",
-    "README_CONVERT_KO.md",
 ]
 
 

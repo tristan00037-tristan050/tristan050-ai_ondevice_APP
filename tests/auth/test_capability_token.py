@@ -40,7 +40,10 @@ PUBLIC_PATHS: list[tuple[str, str]] = [
     ("GET", "/api/egress/report"),
 ]
 
-PROTECTED_GET_PATHS: list[tuple[str, str]] = []
+PROTECTED_GET_PATHS: list[tuple[str, str]] = [
+    ("GET", "/v1/home/bootstrap-status"),
+    ("GET", "/v1/home/snapshot"),
+]
 
 
 # ------------------------------------------------------------------------------
@@ -169,7 +172,10 @@ def test_post_valid_token_200_contract(tmp_path):
     """기존 본질 보존 — 올바른 토큰 시 raise 0."""
     manager = CapabilityTokenManager(tmp_path / "sidecar_token")
     token = manager.generate()
-    manager.verify_authorization_header(f"Bearer {token}")
+    session = manager.verify_authorization_header(f"Bearer {token}")
+    assert session.actor_id == "local-user"
+    assert session.role == "user"
+    assert len(session.session_digest) == 64
 
 
 def test_token_file_chmod_600(tmp_path):
