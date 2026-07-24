@@ -5,11 +5,9 @@
 //! verification, Keychain CAS, receipt construction and read-back all remain
 //! inside this native boundary.
 
-mod commands;
+pub(crate) mod commands;
 mod keychain;
 mod state;
 mod verifier;
 
-pub use commands::{
-    get_runtime_trust_status, initialize_authority, verify_and_commit_trust_update, AuthorityState,
-};
+pub use commands::initialize_authority;

@@ -5,8 +5,8 @@ use serde_json::Value;
 
 use super::keychain;
 use super::state::{
-    canonical, committed_state_digest, NativeTrustReceipt, RuntimeTrustStatus, TrustedState,
-    VerifyAndCommitRequest, RECEIPT_SCHEMA, STATE_SCHEMA,
+    canonical, committed_state_digest, sha256, NativeTrustReceipt, RuntimeTrustStatus,
+    TrustedState, VerifyAndCommitRequest, RECEIPT_SCHEMA, STATE_SCHEMA,
 };
 use super::verifier::{revalidate_persisted_state, verify_update};
 
