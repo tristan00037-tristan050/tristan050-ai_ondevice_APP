@@ -1,10 +1,13 @@
 use std::{
     ffi::OsStr,
     fs::{self, File, OpenOptions},
-    io::{self, Read, Write},
+    io::{self, Write},
     path::Path,
     time::SystemTime,
 };
+
+#[cfg(unix)]
+use std::io::Read;
 
 #[cfg(any(windows, test))]
 use std::path::PathBuf;
@@ -25,6 +28,7 @@ enum ExportError {
     WriteFailed,
     SyncFailed,
     AtomicReplaceFailed,
+    #[cfg(unix)]
     DirectorySyncFailed,
 }
 
@@ -39,6 +43,7 @@ impl ExportError {
             Self::WriteFailed => "EXPORT_WRITE_FAILED",
             Self::SyncFailed => "EXPORT_SYNC_FAILED",
             Self::AtomicReplaceFailed => "EXPORT_ATOMIC_REPLACE_FAILED",
+            #[cfg(unix)]
             Self::DirectorySyncFailed => "EXPORT_DIRECTORY_SYNC_FAILED",
         }
     }
@@ -93,10 +98,12 @@ fn is_reparse_or_symlink(metadata: &fs::Metadata) -> bool {
     {
         use std::os::windows::fs::MetadataExt;
         const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
     }
     #[cfg(not(windows))]
-    false
+    {
+        false
+    }
 }
 
 #[cfg(windows)]
@@ -632,6 +639,7 @@ mod tests {
             ExportError::WriteFailed,
             ExportError::SyncFailed,
             ExportError::AtomicReplaceFailed,
+            #[cfg(unix)]
             ExportError::DirectorySyncFailed,
         ];
         assert!(codes
