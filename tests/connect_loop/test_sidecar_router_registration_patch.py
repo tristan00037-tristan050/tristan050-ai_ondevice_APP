@@ -8,6 +8,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tests.routing_introspection import collect_app_paths
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -15,7 +17,14 @@ def _repo_root() -> Path:
 
 def test_butler_sidecar_registers_router_decide_without_new_app():
     text = (_repo_root() / "butler_sidecar.py").read_text(encoding="utf-8")
-    assert "from butler_pc_core.sidecar.routes.router_decide import router as router_decide_router" in text
+    # Fixture drift: the import was reformatted to a parenthesized multi-line
+    # form; match it whitespace/newline-insensitively (intent: router_decide is
+    # imported into butler_sidecar.py, not via a new FastAPI app).
+    assert re.search(
+        r"from\s+butler_pc_core\.sidecar\.routes\.router_decide\s+import\s*\(?\s*"
+        r"router\s+as\s+router_decide_router",
+        text,
+    ), "router_decide router must be imported into butler_sidecar.py"
     assert "app.include_router(router_decide_router)" in text
 
 
@@ -35,5 +44,5 @@ def test_router_decide_registered_in_live_app():
         import pytest
 
         pytest.skip("FastAPI 미가용")
-    paths = {getattr(r, "path", None) for r in butler_sidecar.app.routes}
+    paths = collect_app_paths(butler_sidecar.app)
     assert "/v1/router/decide" in paths
