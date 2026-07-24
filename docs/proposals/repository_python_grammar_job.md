@@ -30,7 +30,15 @@ runtime.
           cache: pip
           cache-dependency-path: requirements-firstscreen-ci-grammar.lock
       - run: python -m pip install --require-hashes -r requirements-firstscreen-ci-grammar.lock
-      - run: python -m pytest tests/ -q -m requires_llama_grammar --junitxml=repository-grammar-junit.xml
+      # `-m` only SELECTS tests to run; pytest still COLLECTS/imports all of
+      # tests/ first, so carry the same ignores as repository-python (turboq/eval
+      # would otherwise fail collection before the grammar-marked tests run).
+      - run: >
+          python -m pytest tests/ -q -m requires_llama_grammar
+          --ignore=tests/turboq/
+          --ignore=tests/eval/test_eval_hardcase.py
+          --ignore=tests/eval/test_eval_judge_v3.py
+          --junitxml=repository-grammar-junit.xml
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()   # keep JUnit on failure too
         with: {name: firstscreen-v2-5-repository-grammar, path: repository-grammar-junit.xml, if-no-files-found: error}
