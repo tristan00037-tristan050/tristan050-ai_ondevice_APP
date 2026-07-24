@@ -1,4 +1,12 @@
-import React, { lazy, Suspense, useCallback, useState, useRef, useEffect } from 'react';
+import React, {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import { flushSync } from 'react-dom';
 import { getVersion } from '@tauri-apps/api/app';
 import { sidecarFetch, uiSafeSidecarErrorMessage } from './lib/sidecarFetch';
@@ -42,6 +50,13 @@ import {
   trashConversation,
 } from './lib/home/client';
 import { MutationQueue } from './lib/home/mutationQueue';
+import {
+  assessMessageInventory,
+  candidateFromRecord,
+  canMutateConversation,
+  messageInventoryReducer,
+  type MessageInventoryMap,
+} from './lib/home/messageInventory';
 
 const EgressMonitor = lazy(() => import('./components/chat/EgressMonitor').then(module => ({ default: module.EgressMonitor })));
 const AccountingModal = lazy(() => import('./components/chat/AccountingModal').then(module => ({ default: module.AccountingModal })));
@@ -114,8 +129,10 @@ export function App() {
   const [homeReadOnly, setHomeReadOnly] = useState(true);
   const [homeLoading, setHomeLoading] = useState(true);
   const [homeInventoryState, setHomeInventoryState] = useState<HomeInventoryState>('LOADING');
-  const [messageInventoryState, setMessageInventoryState] = useState<Record<string, HomeInventoryState>>({});
-  const [messageInventoryError, setMessageInventoryError] = useState<Record<string, string | null>>({});
+  const [messageInventories, dispatchMessageInventory] = useReducer(
+    messageInventoryReducer,
+    {},
+  );
   const [conflictNotice, setConflictNotice] = useState<string | null>(null);
   const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarElapsed, setSidecarElapsed] = useState(0);
@@ -130,16 +147,25 @@ export function App() {
   const searchTimerRef = useRef<number>(0);
   const messageLoadAbortRef = useRef<AbortController | null>(null);
   const messageLoadGenerationRef = useRef(0);
+  const messageInventoriesRef = useRef<MessageInventoryMap>({});
 
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
 
+  useEffect(() => {
+    messageInventoriesRef.current = messageInventories;
+  }, [messageInventories]);
+
   useEffect(() => () => window.clearTimeout(searchTimerRef.current), []);
 
   const mergeLoadedMessages = useCallback((rows: Conversation[]) => {
     const current = new Map(conversationsRef.current.map(conversation => [conversation.id, conversation.messages]));
-    return rows.map(conversation => ({ ...conversation, messages: current.get(conversation.id) ?? [] }));
+    return rows.map(conversation => ({
+      ...conversation,
+      messages: current.get(conversation.id)
+        ?? (Array.isArray(conversation.messages) ? conversation.messages : []),
+    }));
   }, []);
 
   const refreshHome = useCallback(async () => {
@@ -165,7 +191,12 @@ export function App() {
       const inventoryComplete = activeResult.complete && trashResult.complete;
       setFolders(active.folders);
       setConversations(mergeLoadedMessages(active.conversations));
-      setTrashedConversations(trash.conversations);
+      setTrashedConversations(trash.conversations.map(conversation => ({
+        ...conversation,
+        messages: Array.isArray(conversation.messages)
+          ? conversation.messages
+          : [],
+      })));
       setRuntimeStatus(runtime);
       try {
         setRuntimeTrustReceipt(await fetchAndPersistRuntimeTrustReceipt());
@@ -239,7 +270,7 @@ export function App() {
           const migrated = await migrateLegacyConversations(legacy);
           if (cancelled) return;
           setFolders(migrated.folders);
-          setConversations(migrated.conversations);
+          setConversations(mergeLoadedMessages(migrated.conversations));
           clearLegacyConversations();
           legacyConversationsRef.current = [];
         }
@@ -328,14 +359,31 @@ export function App() {
   }, []);
 
   const activeConv = conversations.find(c => c.id === activeConvId) ?? null;
-  const hasMessages = (activeConv?.messages.length ?? 0) > 0 || pendingBot !== null;
-  const activeMessageState = activeConvId ? messageInventoryState[activeConvId] : undefined;
-  const activeMessageIncomplete = Boolean(
+  const hasMessages = (activeConv?.messages?.length ?? 0) > 0 || pendingBot !== null;
+  const activeMessageInventory = activeConvId
+    ? messageInventories[activeConvId]
+    : undefined;
+  const activeMessageRecordCurrent = Boolean(
     activeConv
-    && (
-      (activeConv.message_count ?? 0) !== activeConv.messages.length
-      || (activeMessageState !== undefined && activeMessageState !== 'COMPLETE')
-    ),
+    && activeMessageInventory
+    && activeMessageInventory.conversationId === activeConv.id
+    && activeMessageInventory.conversationVersion === (activeConv.version ?? null)
+    && activeMessageInventory.expectedCount === activeConv.message_count,
+  );
+  const activeMessageState = activeConv
+    ? (
+        activeMessageInventory?.status === 'COMPLETE'
+        && !activeMessageRecordCurrent
+          ? 'PARTIAL'
+          : activeMessageInventory?.status ?? 'IDLE'
+      )
+    : undefined;
+  const activeMessageIncomplete = Boolean(
+    activeConv && !canMutateConversation(activeMessageInventory, {
+      conversationId: activeConv.id,
+      conversationVersion: activeConv.version ?? null,
+      expectedCount: activeConv.message_count,
+    }),
   );
 
   // --- Conversation management ---
@@ -364,6 +412,144 @@ export function App() {
     }
   };
 
+  const loadConversationInventory = useCallback(async (
+    selected: Conversation,
+    forceReload = false,
+  ): Promise<boolean> => {
+    const id = selected.id;
+    const expectedCount = selected.message_count;
+    const conversationVersion = selected.version ?? null;
+    const cached = messageInventoriesRef.current[id];
+
+    if (
+      typeof expectedCount !== 'number'
+      || !Number.isSafeInteger(expectedCount)
+      || expectedCount < 0
+    ) {
+      messageLoadAbortRef.current?.abort();
+      const generation = ++messageLoadGenerationRef.current;
+      dispatchMessageInventory({
+        type: 'LOAD_STARTED',
+        id,
+        conversationVersion,
+        expectedCount: -1,
+        messages: selected.messages,
+        generation,
+      });
+      dispatchMessageInventory({
+        type: 'INVALIDATE',
+        id,
+        generation,
+        status: 'ERROR',
+        reason: 'HOME_MESSAGE_COUNT_REQUIRED',
+      });
+      return false;
+    }
+
+    if (
+      !forceReload
+      && cached
+      && cached.expectedCount === expectedCount
+      && cached.conversationVersion === conversationVersion
+      && canMutateConversation(cached, {
+        conversationId: id,
+        conversationVersion,
+        expectedCount,
+      })
+    ) {
+      const reassessment = assessMessageInventory(candidateFromRecord(cached, {
+        conversationId: id,
+        conversationVersion,
+        generation: cached.generation,
+      }));
+      if (reassessment.status === 'COMPLETE' && reassessment.verified) {
+        return true;
+      }
+    }
+
+    messageLoadAbortRef.current?.abort();
+    const controller = new AbortController();
+    messageLoadAbortRef.current = controller;
+    const generation = ++messageLoadGenerationRef.current;
+    const resumableMessages = cached
+      && forceReload
+      && cached.conversationVersion === conversationVersion
+      && cached.expectedCount === expectedCount
+      && cached.messages.length <= expectedCount
+      && new Set(cached.messages.map(item => item.id)).size === cached.messages.length
+      && cached.messages.every((item, index) => item.sequence === index + 1)
+      ? cached.messages
+      : [];
+    dispatchMessageInventory({
+      type: 'LOAD_STARTED',
+      id,
+      conversationVersion,
+      expectedCount,
+      messages: resumableMessages,
+      generation,
+    });
+
+    const result = await fetchConversationMessages(id, expectedCount, {
+      signal: controller.signal,
+      initialItems: resumableMessages,
+      conversationVersion,
+    }).catch(() => null);
+    if (
+      generation !== messageLoadGenerationRef.current
+      || controller.signal.aborted
+    ) return false;
+    if (result === null) {
+      dispatchMessageInventory({
+        type: 'INVALIDATE',
+        id,
+        generation,
+        status: 'ERROR',
+        reason: 'HOME_MESSAGE_PAGE_FAILED',
+      });
+      return false;
+    }
+
+    setConversations(previous => previous.map(conversation => (
+      conversation.id === id ? { ...conversation, messages: result.messages } : conversation
+    )));
+
+    if (result.status === 'ERROR') {
+      dispatchMessageInventory({
+        type: 'INVALIDATE',
+        id,
+        generation,
+        status: 'ERROR',
+        reason: result.error_code ?? 'HOME_MESSAGE_PAGE_FAILED',
+        messages: result.messages,
+        nextSequence: result.next_sequence,
+        partialErrorCount: result.partial_errors.length,
+      });
+      return false;
+    }
+
+    const candidate = {
+      conversationId: result.conversation_id,
+      conversationVersion: result.conversation_version,
+      currentConversationId: id,
+      currentConversationVersion: conversationVersion,
+      expectedCount,
+      messages: result.messages,
+      nextSequence: result.next_sequence,
+      partialErrors: result.partial_errors,
+      locked: result.locked,
+      generation,
+      currentGeneration: messageLoadGenerationRef.current,
+    };
+    const assessment = assessMessageInventory(candidate);
+    dispatchMessageInventory({
+      type: 'LOAD_ASSESSED',
+      id,
+      generation,
+      candidate,
+    });
+    return assessment.status === 'COMPLETE' && assessment.verified;
+  }, []);
+
   const handleSelectConv = async (id: string, forceReload = false) => {
     if (processing) {
       abortRef.current?.abort();
@@ -373,62 +559,47 @@ export function App() {
     setActiveConvId(id);
     const selected = conversationsRef.current.find(conversation => conversation.id === id);
     if (!selected) return;
-    const expectedCount = selected.message_count;
+    await loadConversationInventory(selected, forceReload);
+  };
+
+  const ensureConversationMutationAllowed = async (
+    conversation: Conversation,
+  ): Promise<boolean> => {
+    if (homeReadOnly) return false;
+    const cached = messageInventoriesRef.current[conversation.id];
     if (
-      typeof expectedCount !== 'number'
-      || !Number.isSafeInteger(expectedCount)
-      || expectedCount < 0
+      canMutateConversation(cached, {
+        conversationId: conversation.id,
+        conversationVersion: conversation.version ?? null,
+        expectedCount: conversation.message_count,
+      })
     ) {
-      setMessageInventoryState(previous => ({ ...previous, [id]: 'ERROR' }));
-      setMessageInventoryError(previous => ({ ...previous, [id]: 'HOME_MESSAGE_COUNT_REQUIRED' }));
-      return;
+      return true;
     }
-    if (!forceReload && selected.messages.length === expectedCount) {
-      setMessageInventoryState(previous => ({ ...previous, [id]: 'COMPLETE' }));
-      return;
+    const verified = await loadConversationInventory(conversation);
+    if (!verified) {
+      setHomeStoreError(
+        '대화 내용을 완전히 검증하지 못해 변경 작업을 차단했습니다.',
+      );
     }
-    messageLoadAbortRef.current?.abort();
-    const controller = new AbortController();
-    messageLoadAbortRef.current = controller;
-    const generation = ++messageLoadGenerationRef.current;
-    setMessageInventoryState(previous => ({ ...previous, [id]: 'LOADING' }));
-    setMessageInventoryError(previous => ({ ...previous, [id]: null }));
-    const resumable = forceReload
-      && selected.messages.every((item, index) => item.sequence === index + 1)
-      ? selected.messages
-      : [];
-    const result = await fetchConversationMessages(id, expectedCount, {
-      signal: controller.signal,
-      initialItems: resumable,
-    }).catch(() => null);
-    if (
-      generation !== messageLoadGenerationRef.current
-      || controller.signal.aborted
-    ) return;
-    if (result === null) {
-      setMessageInventoryState(previous => ({ ...previous, [id]: 'ERROR' }));
-      setMessageInventoryError(previous => ({ ...previous, [id]: 'HOME_MESSAGE_PAGE_FAILED' }));
-      return;
-    }
-    setConversations(previous => previous.map(conversation => (
-      conversation.id === id ? { ...conversation, messages: result.messages } : conversation
-    )));
-    setMessageInventoryState(previous => ({ ...previous, [id]: result.state }));
-    setMessageInventoryError(previous => ({ ...previous, [id]: result.error_code }));
+    return verified;
   };
 
   const handleRename = (id: string, title: string) => {
     const target = conversationsRef.current.find(conversation => conversation.id === id);
-    if (!target || homeReadOnly) return;
-    setConversations(previous => previous.map(conversation => conversation.id === id ? { ...conversation, title, title_is_custom: true } : conversation));
-    void queueRef.current.enqueue(id, async () => {
-      try {
-        const result = await renameConversation(target, title);
-        setConversations(previous => previous.map(conversation => conversation.id === id ? { ...conversation, ...result } : conversation));
-      } catch (error) {
-        await reportMutationFailure(error, '대화 이름을');
-      }
-    });
+    if (!target) return;
+    void (async () => {
+      if (!await ensureConversationMutationAllowed(target)) return;
+      setConversations(previous => previous.map(conversation => conversation.id === id ? { ...conversation, title, title_is_custom: true } : conversation));
+      await queueRef.current.enqueue(id, async () => {
+        try {
+          const result = await renameConversation(target, title);
+          setConversations(previous => previous.map(conversation => conversation.id === id ? { ...conversation, ...result } : conversation));
+        } catch (error) {
+          await reportMutationFailure(error, '대화 이름을');
+        }
+      });
+    })();
   };
 
   const handleDeleteRequest = (id: string) => {
@@ -439,21 +610,25 @@ export function App() {
     if (!deleteTarget) return;
     const id = deleteTarget;
     const target = conversationsRef.current.find(conversation => conversation.id === id);
-    if (!target || homeReadOnly) return;
-    void queueRef.current.enqueue(id, async () => {
-      try {
-        const result = await trashConversation(target);
-        setConversations(previous => previous.filter(conversation => conversation.id !== id));
-        setTrashedConversations(previous => [{ ...target, ...result }, ...previous]);
-      } catch (error) {
-        await reportMutationFailure(error, '대화를 휴지통에');
-      }
-    });
-    if (activeConvId === deleteTarget) {
-      setActiveConvId(null);
-      setPendingBot(null);
-    }
     setDeleteTarget(null);
+    if (!target) return;
+    void (async () => {
+      if (!await ensureConversationMutationAllowed(target)) return;
+      await queueRef.current.enqueue(id, async () => {
+        try {
+          const result = await trashConversation(target);
+          setConversations(previous => previous.filter(conversation => conversation.id !== id));
+          setTrashedConversations(previous => [{ ...target, ...result }, ...previous]);
+          dispatchMessageInventory({ type: 'REMOVE', id });
+        } catch (error) {
+          await reportMutationFailure(error, '대화를 휴지통에');
+        }
+      });
+      if (activeConvId === id) {
+        setActiveConvId(null);
+        setPendingBot(null);
+      }
+    })();
   };
 
   const handleCreateFolder = (name: string, parentId: string | null) => {
@@ -493,41 +668,51 @@ export function App() {
   };
 
   const handleMove = (conversation: Conversation, folderId: string) => {
-    if (homeReadOnly || conversation.folder_id === folderId) return;
-    setConversations(previous => previous.map(item => item.id === conversation.id ? { ...item, folder_id: folderId } : item));
-    void queueRef.current.enqueue(conversation.id, async () => {
-      try {
-        const result = await moveConversation(conversation, folderId);
-        setConversations(previous => previous.map(item => item.id === conversation.id ? { ...item, ...result } : item));
-      } catch (error) {
-        await reportMutationFailure(error, '대화 위치를');
-      }
-    });
+    if (conversation.folder_id === folderId) return;
+    void (async () => {
+      if (!await ensureConversationMutationAllowed(conversation)) return;
+      setConversations(previous => previous.map(item => item.id === conversation.id ? { ...item, folder_id: folderId } : item));
+      await queueRef.current.enqueue(conversation.id, async () => {
+        try {
+          const result = await moveConversation(conversation, folderId);
+          setConversations(previous => previous.map(item => item.id === conversation.id ? { ...item, ...result } : item));
+        } catch (error) {
+          await reportMutationFailure(error, '대화 위치를');
+        }
+      });
+    })();
   };
 
   const handleRestore = (conversation: Conversation) => {
-    if (homeReadOnly) return;
-    void queueRef.current.enqueue(conversation.id, async () => {
-      try {
-        const result = await restoreConversation(conversation);
-        setTrashedConversations(previous => previous.filter(item => item.id !== conversation.id));
-        setConversations(previous => [{ ...conversation, ...result, deleted_at: null }, ...previous]);
-      } catch (error) {
-        await reportMutationFailure(error, '대화를');
-      }
-    });
+    void (async () => {
+      if (!await ensureConversationMutationAllowed(conversation)) return;
+      await queueRef.current.enqueue(conversation.id, async () => {
+        try {
+          const result = await restoreConversation(conversation);
+          setTrashedConversations(previous => previous.filter(item => item.id !== conversation.id));
+          setConversations(previous => [{ ...conversation, ...result, deleted_at: null }, ...previous]);
+          dispatchMessageInventory({ type: 'REMOVE', id: conversation.id });
+        } catch (error) {
+          await reportMutationFailure(error, '대화를');
+        }
+      });
+    })();
   };
 
   const handlePermanentDelete = (conversation: Conversation) => {
-    if (homeReadOnly || !window.confirm(`‘${conversation.title}’ 대화를 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
-    void queueRef.current.enqueue(conversation.id, async () => {
-      try {
-        await permanentlyDeleteConversation(conversation);
-        setTrashedConversations(previous => previous.filter(item => item.id !== conversation.id));
-      } catch (error) {
-        await reportMutationFailure(error, '대화를 영구');
-      }
-    });
+    if (!window.confirm(`‘${conversation.title}’ 대화를 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+    void (async () => {
+      if (!await ensureConversationMutationAllowed(conversation)) return;
+      await queueRef.current.enqueue(conversation.id, async () => {
+        try {
+          await permanentlyDeleteConversation(conversation);
+          setTrashedConversations(previous => previous.filter(item => item.id !== conversation.id));
+          dispatchMessageInventory({ type: 'REMOVE', id: conversation.id });
+        } catch (error) {
+          await reportMutationFailure(error, '대화를 영구');
+        }
+      });
+    })();
   };
 
   const handleSearch = (query: string) => {
@@ -573,11 +758,11 @@ export function App() {
       : createNewConversation();
     if (
       activeConvId
-      && (
-        (original.message_count ?? 0) !== original.messages.length
-        || (messageInventoryState[activeConvId] !== undefined
-          && messageInventoryState[activeConvId] !== 'COMPLETE')
-      )
+      && !canMutateConversation(messageInventoriesRef.current[activeConvId], {
+        conversationId: original.id,
+        conversationVersion: original.version ?? null,
+        expectedCount: original.message_count,
+      })
     ) {
       setHomeStoreError('기존 대화를 빠짐없이 복원하기 전에는 새 메시지를 전송할 수 없습니다.');
       return false;
@@ -605,7 +790,17 @@ export function App() {
         ? previous.map(conversation => conversation.id === command.id ? acceptedConversation : conversation)
         : [acceptedConversation, ...previous]);
       setActiveConvId(command.id);
-      setMessageInventoryState(previous => ({ ...previous, [command.id]: 'COMPLETE' }));
+      messageLoadAbortRef.current?.abort();
+      const generation = ++messageLoadGenerationRef.current;
+      dispatchMessageInventory({
+        type: 'LOAD_STARTED',
+        id: command.id,
+        conversationVersion: acceptedConversation.version ?? null,
+        expectedCount: acceptedConversation.message_count
+          ?? acceptedConversation.messages.length,
+        messages: acceptedConversation.messages,
+        generation,
+      });
     } catch (error) {
       await reportMutationFailure(error, '사용자 요청을');
       return false;
@@ -668,11 +863,23 @@ export function App() {
               timestamp: new Date().toISOString(), source: currentSource ?? undefined,
             };
             const persisted = await queueRef.current.enqueue(command.id, () => appendAssistantTurn(acceptedConversation, botMessage, accepted));
-            setConversations(previous => previous.map(conversation => conversation.id === command.id ? {
-              ...conversation, ...persisted, messages: [...conversation.messages, botMessage],
-              message_count: (conversation.message_count ?? conversation.messages.length) + 1,
-            } : conversation));
-            setMessageInventoryState(previous => ({ ...previous, [command.id]: 'COMPLETE' }));
+            const completedConversation: Conversation = {
+              ...acceptedConversation,
+              ...persisted,
+              messages: [...acceptedConversation.messages, botMessage],
+              message_count: (acceptedConversation.message_count
+                ?? acceptedConversation.messages.length) + 1,
+            };
+            setConversations(previous => previous.map(conversation => (
+              conversation.id === command.id
+                ? completedConversation
+                : conversation
+            )));
+            if (!await loadConversationInventory(completedConversation, true)) {
+              setHomeStoreError(
+                '저장된 대화의 전체 메시지를 검증하지 못해 추가 전송을 차단했습니다.',
+              );
+            }
             setPendingBot(null);
             setProcessing(false);
             processingConversationRef.current = null;
@@ -681,12 +888,14 @@ export function App() {
             const reason = String(data.reason ?? 'USER_CANCEL');
             const timedOut = reason.includes('timeout');
             await recordFailure(timedOut ? 'TIMED_OUT' : 'CANCELLED', timedOut ? 'MODEL_TIMEOUT' : 'USER_CANCEL');
+            await loadConversationInventory(acceptedConversation, true);
             setPendingBot(previous => previous ? { ...previous, content: timedOut ? '처리 시간이 초과되어 중단됐습니다.' : '작업이 중단됐습니다.', isError: true, loadingStatus: '', streamBuffer: '' } : previous);
             setProcessing(false);
             processingConversationRef.current = null;
             return true;
           } else if (eventType === 'error') {
             await recordFailure('FAILED', 'MODEL_STREAM_ERROR');
+            await loadConversationInventory(acceptedConversation, true);
             setPendingBot(previous => previous ? { ...previous, content: String(data.message ?? '처리 중 오류가 발생했습니다.'), isError: true, loadingStatus: '', streamBuffer: '' } : previous);
             setProcessing(false);
             processingConversationRef.current = null;
@@ -698,6 +907,7 @@ export function App() {
     } catch (error: unknown) {
       const aborted = typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
       await recordFailure(aborted ? 'CANCELLED' : 'FAILED', aborted ? 'USER_CANCEL' : 'MODEL_REQUEST_FAILED');
+      await loadConversationInventory(acceptedConversation, true);
       setPendingBot(previous => previous ? {
         ...previous,
         content: aborted ? '작업이 중단됐습니다.' : uiSafeSidecarErrorMessage(error),
@@ -893,8 +1103,14 @@ export function App() {
                 이어서 다시 불러오기
               </button>
             )}
-            {messageInventoryError[activeConvId] && (
-              <span className="home-inventory-code">{messageInventoryError[activeConvId]}</span>
+            {(activeMessageRecordCurrent
+              ? activeMessageInventory?.errorCode
+              : 'HOME_MESSAGE_INVENTORY_STALE') && (
+              <span className="home-inventory-code">
+                {activeMessageRecordCurrent
+                  ? activeMessageInventory?.errorCode
+                  : 'HOME_MESSAGE_INVENTORY_STALE'}
+              </span>
             )}
           </div>
         )}

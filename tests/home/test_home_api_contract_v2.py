@@ -113,6 +113,23 @@ def test_api_requires_strong_etag_and_terminal_correlation(tmp_path: Path) -> No
     assert duplicate_terminal.json()["detail"]["code"] == "TERMINAL_ALREADY_COMMITTED"
 
 
+def test_message_inventory_is_bound_to_conversation_version(tmp_path: Path) -> None:
+    api = client(tmp_path)
+    accepted = api.post(
+        "/v1/home/conversations/conversation-1/turns/user",
+        json=turn_payload(),
+        headers=headers(),
+    )
+    assert accepted.status_code == 200
+    inventory = api.get("/v1/home/conversations/conversation-1/messages")
+    assert inventory.status_code == 200
+    assert inventory.json()["conversation_id"] == "conversation-1"
+    assert inventory.json()["conversation_version"] == 1
+    assert inventory.json()["message_count"] == 1
+    assert inventory.json()["messages"][0]["sequence"] == 1
+    assert inventory.json()["next_sequence"] is None
+
+
 def test_folder_create_replays_byte_equivalent_response(tmp_path: Path) -> None:
     api = client(tmp_path)
     key = str(uuid.uuid4())

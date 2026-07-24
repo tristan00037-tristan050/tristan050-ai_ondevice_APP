@@ -15,7 +15,7 @@ vi.mock('../../lib/home/client', () => ({
   acceptUserTurn: async () => ({ schema_version: '2.1.0', turn_id: '00000000-0000-4000-8000-000000000010', model_request_id: '00000000-0000-4000-8000-000000000011', conversation_id: 'conversation-test', conversation_version: 1, version: 1, folder_id: 'system-unclassified', request_id: '00000000-0000-4000-8000-000000000002', durable: true }),
   appendAssistantTurn: async () => ({ version: 2, updated_at: '2026-01-01T00:00:00Z', request_id: 'request', durable: true }),
   recordTerminal: async () => undefined,
-  fetchConversationMessages: async () => [], searchConversations: async () => [], createFolder: async () => ({}), deleteFolder: async () => undefined,
+  fetchConversationMessages: async (conversationId: string, expectedCount: number, options: { conversationVersion?: number | null } = {}) => ({ status: 'READY', conversation_id: conversationId, conversation_version: options.conversationVersion ?? 0, messages: Array.from({ length: expectedCount }, (_, index) => ({ id: `inventory-${index + 1}`, role: index % 2 === 0 ? 'user' : 'butler', content: `message-${index + 1}`, timestamp: '2026-01-01T00:00:00Z', sequence: index + 1 })), expected_count: expectedCount, loaded_count: expectedCount, next_sequence: null, partial_errors: [], locked: false, error_code: null }), searchConversations: async () => [], createFolder: async () => ({}), deleteFolder: async () => undefined,
   moveConversation: async () => ({}), permanentlyDeleteConversation: async () => undefined, renameConversation: async () => ({}),
   renameFolder: async () => ({}), restoreConversation: async () => ({}), trashConversation: async () => ({}),
 }));

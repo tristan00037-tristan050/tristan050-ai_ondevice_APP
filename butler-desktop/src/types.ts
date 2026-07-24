@@ -110,12 +110,18 @@ export interface HomeSnapshot {
 
 export type HomeInventoryState = 'LOADING' | 'PARTIAL' | 'LOCKED' | 'ERROR' | 'COMPLETE';
 
-export interface ConversationMessageInventory {
-  state: Exclude<HomeInventoryState, 'LOADING'>;
+export type ConversationMessageLoadStatus = 'READY' | 'PARTIAL' | 'LOCKED' | 'ERROR';
+
+export interface ConversationMessageLoadResult {
+  status: ConversationMessageLoadStatus;
+  conversation_id: string;
+  conversation_version: number | null;
   messages: Message[];
   expected_count: number;
   loaded_count: number;
   next_sequence: number | null;
+  partial_errors: Array<{ sequence: number; code: string }>;
+  locked: boolean;
   error_code: string | null;
 }
 

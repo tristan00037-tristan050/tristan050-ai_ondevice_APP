@@ -400,6 +400,7 @@ def test_message_pages_expose_count_and_contiguous_sequence(tmp_path: Path) -> N
             "conversation-1", after_sequence=page_one["next_sequence"], limit=1,
         )
         assert page_one["message_count"] == page_two["message_count"] == 2
+        assert page_one["conversation_version"] == page_two["conversation_version"] == 2
         assert page_one["messages"][0]["sequence"] == 1
         assert page_one["next_sequence"] == 1
         assert page_two["messages"][0]["sequence"] == 2

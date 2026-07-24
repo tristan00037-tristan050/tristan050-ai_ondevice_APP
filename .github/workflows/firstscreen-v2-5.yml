@@ -165,11 +165,26 @@ jobs:
   repository-python:
     runs-on: ubuntu-latest
     needs: scope-and-contracts
-    env:
-      HOME: ${{ runner.temp }}/home
-      BUTLER_APP_DATA_DIR: ${{ runner.temp }}/butler-app-data
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with: {fetch-depth: 0}
+      - name: Prepare isolated repository test state
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "${RUNNER_TEMP}/home" "${RUNNER_TEMP}/butler-app-data"
+          {
+            echo "HOME=${RUNNER_TEMP}/home"
+            echo "BUTLER_APP_DATA_DIR=${RUNNER_TEMP}/butler-app-data"
+          } >> "${GITHUB_ENV}"
+      - name: Verify isolated repository test state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${HOME}" = "${RUNNER_TEMP}/home"
+          test "${BUTLER_APP_DATA_DIR}" = "${RUNNER_TEMP}/butler-app-data"
+          test "$(stat -c '%a' "${HOME}")" = "700"
+          test "$(stat -c '%a' "${BUTLER_APP_DATA_DIR}")" = "700"
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}

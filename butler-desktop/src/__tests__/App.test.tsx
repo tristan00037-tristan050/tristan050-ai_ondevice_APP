@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
+const inventoryScenario = vi.hoisted(() => ({
+  conversations: [] as Array<Record<string, unknown>>,
+  messageOverride: null as null | ((
+    conversationId: string,
+    expectedCount: number,
+    options: { conversationVersion?: number | null },
+  ) => unknown),
+}));
+
 // sidecarFetch 가 POST /api/analyze/stream 에 capability token 을 첨부한다 → token 획득(invoke)이
 // 항상 성공해야 한다. plain 함수로 둬서 beforeEach 의 restoreAllMocks 에 영향받지 않게 한다.
 vi.mock('@tauri-apps/api/core', () => ({
@@ -9,6 +18,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 vi.mock('../lib/home/client', () => {
+  const inventory = new Map<string, Array<Record<string, unknown>>>();
   const folders = [
     { folder_id: 'system-unclassified', parent_id: null, display_name: '미분류', system_kind: 'UNCLASSIFIED', version: 1, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
     { folder_id: 'system-trash', parent_id: null, display_name: '휴지통', system_kind: 'TRASH', version: 1, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
@@ -16,13 +26,49 @@ vi.mock('../lib/home/client', () => {
   return {
     HomeApiError: class HomeApiError extends Error { constructor(readonly status: number, readonly code: string) { super(code); } },
     fetchHomeBootstrapStatus: async () => ({ schema_version: '2.1.0', status: 'HOME_READY', read_only: false, mutation_allowed: true, model_execution_allowed: true, existing_conversation_count: 0, support_code: 'HOME_TEST_READY', checked_at: '2026-01-01T00:00:00Z', tree_oid: null }),
-    fetchHomeSnapshot: async () => ({ schema_version: 'butler.home.snapshot.v2', workspace_id: '00000000-0000-4000-8000-000000000001', folders, conversations: [], next_cursor: null, partial_errors: [], read_only: false }),
+    fetchHomeSnapshot: async (includeTrash: boolean) => ({ schema_version: 'butler.home.snapshot.v2', workspace_id: '00000000-0000-4000-8000-000000000001', folders, conversations: includeTrash ? [] : inventoryScenario.conversations, next_cursor: null, partial_errors: [], read_only: false }),
     fetchRuntimeStatus: async () => ({ schema_version: 'butler.home.runtime-status.v2', policy: { state: 'UNKNOWN', source: 'NOT_BOUND', evaluated_at: null }, measurement: { status: 'MEASUREMENT_UNAVAILABLE', receipt_digest: null, measured_at: null, source: null, freshness: 'UNAVAILABLE' }, display: '측정 자료 없음' }),
     migrateLegacyConversations: async () => ({ schema_version: 'butler.home.snapshot.v2', workspace_id: '00000000-0000-4000-8000-000000000001', folders, conversations: [], next_cursor: null, partial_errors: [], read_only: false }),
-    acceptUserTurn: async () => ({ schema_version: '2.1.0', turn_id: '00000000-0000-4000-8000-000000000010', model_request_id: '00000000-0000-4000-8000-000000000011', conversation_id: 'conversation-test', conversation_version: 1, version: 1, folder_id: 'system-unclassified', request_id: '00000000-0000-4000-8000-000000000002', durable: true }),
-    appendAssistantTurn: async () => ({ version: 2, updated_at: '2026-01-01T00:00:01Z', request_id: '00000000-0000-4000-8000-000000000003', durable: true }),
+    acceptUserTurn: async (conversation: { id: string }, message: Record<string, unknown>) => {
+      inventory.set(conversation.id, [{ ...message, sequence: 1 }]);
+      return { schema_version: '2.1.0', turn_id: '00000000-0000-4000-8000-000000000010', model_request_id: '00000000-0000-4000-8000-000000000011', conversation_id: conversation.id, conversation_version: 1, version: 1, folder_id: 'system-unclassified', request_id: '00000000-0000-4000-8000-000000000002', durable: true };
+    },
+    appendAssistantTurn: async (conversation: { id: string }, message: Record<string, unknown>) => {
+      inventory.set(conversation.id, [
+        ...(inventory.get(conversation.id) ?? []),
+        { ...message, sequence: 2 },
+      ]);
+      return { version: 2, updated_at: '2026-01-01T00:00:01Z', request_id: '00000000-0000-4000-8000-000000000003', durable: true };
+    },
     recordTerminal: async () => undefined,
-    fetchConversationMessages: async () => [],
+    fetchConversationMessages: async (
+      conversationId: string,
+      expectedCount: number,
+      options: { conversationVersion?: number | null } = {},
+    ) => inventoryScenario.messageOverride?.(
+      conversationId,
+      expectedCount,
+      options,
+    ) ?? ({
+      status: 'READY',
+      conversation_id: conversationId,
+      conversation_version: options.conversationVersion ?? 0,
+      messages: inventory.get(conversationId)?.length === expectedCount
+        ? inventory.get(conversationId)
+        : Array.from({ length: expectedCount }, (_, index) => ({
+            id: `inventory-${index + 1}`,
+            role: index % 2 === 0 ? 'user' : 'butler',
+            content: `message-${index + 1}`,
+            timestamp: '2026-01-01T00:00:00Z',
+            sequence: index + 1,
+          })),
+      expected_count: expectedCount,
+      loaded_count: expectedCount,
+      next_sequence: null,
+      partial_errors: [],
+      locked: false,
+      error_code: null,
+    }),
     searchConversations: async () => [],
     createFolder: async () => { throw new Error('unused'); },
     deleteFolder: async () => undefined,
@@ -39,6 +85,8 @@ import { App } from '../App';
 
 beforeEach(() => {
   localStorage.clear();
+  inventoryScenario.conversations = [];
+  inventoryScenario.messageOverride = null;
   vi.restoreAllMocks();
 });
 
@@ -443,5 +491,76 @@ describe('App integration', () => {
       expect(body.get('query')).toBe('회의록 정리');
       expect(body.has('file_0')).toBe(false);
     });
+  });
+
+  it('keeps a partial conversation blocked after selecting away and back', async () => {
+    const base = {
+      folder_id: 'system-unclassified',
+      title_is_custom: true,
+      created_at: '2026-07-24T00:00:00Z',
+      updated_at: '2026-07-24T00:00:00Z',
+      version: 7,
+      message_count: 2,
+    };
+    inventoryScenario.conversations = [
+      { ...base, id: 'conversation-a', title: '대화 A' },
+      { ...base, id: 'conversation-b', title: '대화 B' },
+    ];
+    const calls: string[] = [];
+    inventoryScenario.messageOverride = (conversationId, expectedCount, options) => {
+      calls.push(conversationId);
+      const partial = conversationId === 'conversation-a';
+      const sequences = partial ? [2, 3] : [1, 2];
+      return {
+        status: partial ? 'PARTIAL' : 'READY',
+        conversation_id: conversationId,
+        conversation_version: options.conversationVersion ?? 0,
+        messages: sequences.map(sequence => ({
+          id: `${conversationId}-${sequence}`,
+          role: sequence % 2 === 0 ? 'butler' : 'user',
+          content: `message-${sequence}`,
+          timestamp: '2026-07-24T00:00:00Z',
+          sequence,
+        })),
+        expected_count: expectedCount,
+        loaded_count: sequences.length,
+        next_sequence: null,
+        partial_errors: [],
+        locked: false,
+        error_code: partial ? 'HOME_MESSAGE_SEQUENCE_GAP' : null,
+      };
+    };
+    vi.spyOn(global, 'fetch').mockImplementation((url: string | URL | Request) => {
+      if (String(url).includes('/health')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          status: 'ok',
+          version: '0.9.0',
+        }), { headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response(new ReadableStream({
+        start(controller) { controller.close(); },
+      }), { status: 200 }));
+    });
+
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '대화 A' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '대화 A' }));
+    await waitFor(() => {
+      expect(screen.getByText('HOME_MESSAGE_SEQUENCE_GAP')).toBeInTheDocument();
+      expect(screen.getByTestId('text-input')).toBeDisabled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '대화 B' }));
+    await waitFor(() => expect(screen.getByTestId('text-input')).not.toBeDisabled());
+
+    fireEvent.click(screen.getByRole('button', { name: '대화 A' }));
+    await waitFor(() => {
+      expect(screen.getByText('HOME_MESSAGE_SEQUENCE_GAP')).toBeInTheDocument();
+      expect(screen.getByTestId('text-input')).toBeDisabled();
+    });
+    expect(calls.filter(id => id === 'conversation-a')).toHaveLength(2);
   });
 });

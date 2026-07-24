@@ -1,7 +1,7 @@
 import { sidecarFetch } from '../sidecarFetch';
 import type {
   Conversation,
-  ConversationMessageInventory,
+  ConversationMessageLoadResult,
   FolderRecord,
   HomeSnapshot,
   HomeStartupStatus,
@@ -248,13 +248,40 @@ export async function fetchConversationMessages(
   options: {
     signal?: AbortSignal;
     initialItems?: Message[];
+    conversationVersion?: number | null;
   } = {},
-): Promise<ConversationMessageInventory> {
+): Promise<ConversationMessageLoadResult> {
+  const failed = (
+    status: Exclude<ConversationMessageLoadResult['status'], 'READY'>,
+    messages: Message[],
+    code: string,
+    nextSequence: number | null,
+    locked = false,
+    partialErrors: Array<{ sequence: number; code: string }> = [
+      { sequence: nextSequence ?? 0, code },
+    ],
+  ): ConversationMessageLoadResult => ({
+    status,
+    conversation_id: conversationId,
+    conversation_version: options.conversationVersion ?? null,
+    messages,
+    expected_count: expectedCount,
+    loaded_count: messages.length,
+    next_sequence: nextSequence,
+    partial_errors: partialErrors,
+    locked,
+    error_code: code,
+  });
+
   if (!isSafeCount(expectedCount)) {
-    return {
-      state: 'ERROR', messages: [], expected_count: 0, loaded_count: 0,
-      next_sequence: null, error_code: 'HOME_MESSAGE_COUNT_REQUIRED',
-    };
+    return failed(
+      'ERROR',
+      [],
+      'HOME_MESSAGE_COUNT_REQUIRED',
+      null,
+      false,
+      [],
+    );
   }
   const messages = [...(options.initialItems ?? [])];
   const ids = new Set<string>();
@@ -265,20 +292,22 @@ export async function fetchConversationMessages(
       || typeof item.id !== 'string'
       || ids.has(item.id)
     ) {
-      return {
-        state: 'PARTIAL', messages, expected_count: expectedCount,
-        loaded_count: messages.length, next_sequence: null,
-        error_code: 'HOME_MESSAGE_INITIAL_INVENTORY_INVALID',
-      };
+      return failed(
+        'PARTIAL',
+        messages,
+        'HOME_MESSAGE_INITIAL_INVENTORY_INVALID',
+        null,
+      );
     }
     ids.add(item.id);
   }
   if (messages.length > expectedCount) {
-    return {
-      state: 'PARTIAL', messages, expected_count: expectedCount,
-      loaded_count: messages.length, next_sequence: null,
-      error_code: 'HOME_MESSAGE_COUNT_MISMATCH',
-    };
+    return failed(
+      'PARTIAL',
+      messages,
+      'HOME_MESSAGE_COUNT_MISMATCH',
+      null,
+    );
   }
   let afterSequence = messages.length;
   let pages = 0;
@@ -286,16 +315,19 @@ export async function fetchConversationMessages(
     while (true) {
       if (options.signal?.aborted) throw abortError();
       if (++pages > MAX_HOME_PAGES) {
-        return {
-          state: 'PARTIAL', messages, expected_count: expectedCount,
-          loaded_count: messages.length, next_sequence: afterSequence || null,
-          error_code: 'HOME_MESSAGE_PAGE_LIMIT',
-        };
+        return failed(
+          'PARTIAL',
+          messages,
+          'HOME_MESSAGE_PAGE_LIMIT',
+          afterSequence || null,
+        );
       }
       const result = await json<{
         schema_version: string;
+        conversation_id: string;
         messages: Message[];
         message_count: number;
+        conversation_version: number;
         next_sequence: number | null;
         partial_errors: Array<{ sequence: number; code: string }>;
         locked: boolean;
@@ -305,24 +337,34 @@ export async function fetchConversationMessages(
       ));
       if (
         result.schema_version !== 'butler.home.messages.v2'
+        || result.conversation_id !== conversationId
         || !Array.isArray(result.messages)
         || !Array.isArray(result.partial_errors)
         || !isSafeCount(result.message_count)
         || result.message_count !== expectedCount
+        || !isSafeCount(result.conversation_version)
+        || (
+          options.conversationVersion !== undefined
+          && options.conversationVersion !== null
+          && result.conversation_version !== options.conversationVersion
+        )
       ) {
-        return {
-          state: messages.length ? 'PARTIAL' : 'ERROR', messages,
-          expected_count: expectedCount, loaded_count: messages.length,
-          next_sequence: afterSequence || null,
-          error_code: 'HOME_MESSAGE_RESPONSE_SCHEMA_INVALID',
-        };
+        return failed(
+          messages.length ? 'PARTIAL' : 'ERROR',
+          messages,
+          'HOME_MESSAGE_RESPONSE_SCHEMA_INVALID',
+          afterSequence || null,
+        );
       }
       if (result.locked) {
-        return {
-          state: 'LOCKED', messages, expected_count: expectedCount,
-          loaded_count: messages.length, next_sequence: null,
-          error_code: 'HOME_MESSAGES_LOCKED',
-        };
+        return failed(
+          'LOCKED',
+          messages,
+          'HOME_STORE_LOCKED',
+          null,
+          true,
+          [],
+        );
       }
       let expectedSequence = afterSequence + 1;
       for (const item of result.messages) {
@@ -333,11 +375,12 @@ export async function fetchConversationMessages(
           || typeof item.id !== 'string'
           || ids.has(item.id)
         ) {
-          return {
-            state: 'PARTIAL', messages, expected_count: expectedCount,
-            loaded_count: messages.length, next_sequence: afterSequence || null,
-            error_code: 'HOME_MESSAGE_SEQUENCE_GAP',
-          };
+          return failed(
+            'PARTIAL',
+            messages,
+            'HOME_MESSAGE_SEQUENCE_GAP',
+            afterSequence || null,
+          );
         }
         ids.add(item.id);
         messages.push(item);
@@ -345,11 +388,18 @@ export async function fetchConversationMessages(
         expectedSequence += 1;
       }
       if (result.partial_errors.length !== 0) {
-        return {
-          state: 'PARTIAL', messages, expected_count: expectedCount,
-          loaded_count: messages.length, next_sequence: afterSequence || null,
-          error_code: 'HOME_MESSAGE_UNREADABLE',
-        };
+        const partialErrors = result.partial_errors.map(error => ({
+          sequence: error.sequence,
+          code: error.code || 'HOME_MESSAGE_PARTIAL_ERROR',
+        }));
+        return failed(
+          'PARTIAL',
+          messages,
+          partialErrors[0]?.code ?? 'HOME_MESSAGE_PARTIAL_ERROR',
+          afterSequence || null,
+          false,
+          partialErrors,
+        );
       }
       if (result.next_sequence === null) {
         const contiguous = messages.every(
@@ -360,15 +410,24 @@ export async function fetchConversationMessages(
           || messages.length !== expectedCount
           || (expectedCount > 0 && afterSequence !== expectedCount)
         ) {
-          return {
-            state: 'PARTIAL', messages, expected_count: expectedCount,
-            loaded_count: messages.length, next_sequence: null,
-            error_code: 'HOME_MESSAGE_INVENTORY_INCOMPLETE',
-          };
+          return failed(
+            'PARTIAL',
+            messages,
+            'HOME_MESSAGE_INVENTORY_INCOMPLETE',
+            null,
+          );
         }
         return {
-          state: 'COMPLETE', messages, expected_count: expectedCount,
-          loaded_count: messages.length, next_sequence: null, error_code: null,
+          status: 'READY',
+          conversation_id: conversationId,
+          conversation_version: result.conversation_version,
+          messages,
+          expected_count: expectedCount,
+          loaded_count: messages.length,
+          next_sequence: null,
+          partial_errors: [],
+          locked: false,
+          error_code: null,
         };
       }
       if (
@@ -378,23 +437,24 @@ export async function fetchConversationMessages(
         || result.next_sequence !== afterSequence
         || afterSequence >= expectedCount
       ) {
-        return {
-          state: 'PARTIAL', messages, expected_count: expectedCount,
-          loaded_count: messages.length, next_sequence: afterSequence || null,
-          error_code: result.messages.length === 0
+        return failed(
+          'PARTIAL',
+          messages,
+          result.messages.length === 0
             ? 'HOME_MESSAGE_EMPTY_PAGE_WITH_CURSOR'
             : 'HOME_MESSAGE_CURSOR_INVALID',
-        };
+          afterSequence || null,
+        );
       }
     }
   } catch {
     if (options.signal?.aborted) throw abortError();
-    return {
-      state: messages.length ? 'PARTIAL' : 'ERROR', messages,
-      expected_count: expectedCount, loaded_count: messages.length,
-      next_sequence: afterSequence || null,
-      error_code: 'HOME_MESSAGE_PAGE_FAILED',
-    };
+    return failed(
+      messages.length ? 'PARTIAL' : 'ERROR',
+      messages,
+      'HOME_MESSAGE_PAGE_FAILED',
+      afterSequence || null,
+    );
   }
 }
 

@@ -39,8 +39,10 @@ function installContiguousProducer(total: number): void {
     const last = items.at(-1)?.sequence ?? after;
     return ok({
       schema_version: 'butler.home.messages.v2',
+      conversation_id: 'conversation-1',
       messages: items,
       message_count: total,
+      conversation_version: 7,
       next_sequence: last < total ? last : null,
       partial_errors: [],
       locked: false,
@@ -57,8 +59,10 @@ describe('conversation message inventory pagination', () => {
     'restores %i messages only after a contiguous terminal inventory',
     async total => {
       installContiguousProducer(total);
-      const result = await fetchConversationMessages('conversation-1', total);
-      expect(result.state).toBe('COMPLETE');
+      const result = await fetchConversationMessages('conversation-1', total, {
+        conversationVersion: 7,
+      });
+      expect(result.status).toBe('READY');
       expect(result.loaded_count).toBe(total);
       expect(result.messages.at(0)?.sequence).toBe(1);
       expect(result.messages.at(-1)?.sequence).toBe(total);
@@ -69,41 +73,53 @@ describe('conversation message inventory pagination', () => {
   it('does not report COMPLETE for the audited [2,3] gap attack', async () => {
     mockedFetch.mockResolvedValue(ok({
       schema_version: 'butler.home.messages.v2',
+      conversation_id: 'conversation-1',
       messages: [message(2), message(3)],
       message_count: 2,
+      conversation_version: 7,
       next_sequence: null,
       partial_errors: [],
       locked: false,
     }));
-    const result = await fetchConversationMessages('conversation-1', 2);
-    expect(result.state).toBe('PARTIAL');
+    const result = await fetchConversationMessages('conversation-1', 2, {
+      conversationVersion: 7,
+    });
+    expect(result.status).toBe('PARTIAL');
     expect(result.error_code).toBe('HOME_MESSAGE_SEQUENCE_GAP');
   });
 
   it('requires message_count instead of trusting a terminal cursor', async () => {
     mockedFetch.mockResolvedValue(ok({
       schema_version: 'butler.home.messages.v2',
+      conversation_id: 'conversation-1',
       messages: [message(1)],
+      conversation_version: 7,
       next_sequence: null,
       partial_errors: [],
       locked: false,
     }));
-    const result = await fetchConversationMessages('conversation-1', 1);
-    expect(result.state).toBe('ERROR');
+    const result = await fetchConversationMessages('conversation-1', 1, {
+      conversationVersion: 7,
+    });
+    expect(result.status).toBe('ERROR');
     expect(result.error_code).toBe('HOME_MESSAGE_RESPONSE_SCHEMA_INVALID');
   });
 
   it('blocks a cursor that advances beyond the last returned sequence', async () => {
     mockedFetch.mockResolvedValue(ok({
       schema_version: 'butler.home.messages.v2',
+      conversation_id: 'conversation-1',
       messages: [message(1)],
       message_count: 2,
+      conversation_version: 7,
       next_sequence: 2,
       partial_errors: [],
       locked: false,
     }));
-    const result = await fetchConversationMessages('conversation-1', 2);
-    expect(result.state).toBe('PARTIAL');
+    const result = await fetchConversationMessages('conversation-1', 2, {
+      conversationVersion: 7,
+    });
+    expect(result.status).toBe('PARTIAL');
     expect(result.error_code).toBe('HOME_MESSAGE_CURSOR_INVALID');
   });
 
@@ -112,8 +128,9 @@ describe('conversation message inventory pagination', () => {
     const prefix = Array.from({ length: 100 }, (_, index) => message(index + 1));
     const result = await fetchConversationMessages('conversation-1', 250, {
       initialItems: prefix,
+      conversationVersion: 7,
     });
-    expect(result.state).toBe('COMPLETE');
+    expect(result.status).toBe('READY');
     expect(result.loaded_count).toBe(250);
     expect(String(mockedFetch.mock.calls[0][0])).toContain('after_sequence=100');
   });
@@ -124,16 +141,20 @@ describe('conversation message inventory pagination', () => {
       calls += 1;
       if (calls === 2) throw new TypeError('network unavailable');
       return ok({
-        schema_version: 'butler.home.messages.v2',
+      schema_version: 'butler.home.messages.v2',
+      conversation_id: 'conversation-1',
         messages: Array.from({ length: 100 }, (_, index) => message(index + 1)),
         message_count: 101,
+        conversation_version: 7,
         next_sequence: 100,
         partial_errors: [],
         locked: false,
       });
     });
-    const result = await fetchConversationMessages('conversation-1', 101);
-    expect(result.state).toBe('PARTIAL');
+    const result = await fetchConversationMessages('conversation-1', 101, {
+      conversationVersion: 7,
+    });
+    expect(result.status).toBe('PARTIAL');
     expect(result.loaded_count).toBe(100);
     expect(result.error_code).toBe('HOME_MESSAGE_PAGE_FAILED');
   });

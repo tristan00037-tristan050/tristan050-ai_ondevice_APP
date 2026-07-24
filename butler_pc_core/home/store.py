@@ -1852,7 +1852,7 @@ class HomeStore:
         db = self._connect(read_only=True)
         try:
             exists = db.execute(
-                """SELECT (
+                """SELECT version, (
                     SELECT COUNT(*) FROM home_messages
                     WHERE workspace_id=? AND conversation_id=?
                 ) AS message_count
@@ -1865,6 +1865,7 @@ class HomeStore:
             if not exists:
                 raise NotFoundError("CONVERSATION_NOT_FOUND")
             message_count = int(exists["message_count"])
+            conversation_version = int(exists["version"])
             rows = list(db.execute(
                 "SELECT * FROM home_messages WHERE workspace_id=? AND conversation_id=? AND sequence>? ORDER BY sequence LIMIT ?",
                 (self.workspace_id, conversation, after_sequence, limit + 1),
@@ -1873,9 +1874,11 @@ class HomeStore:
             db.close()
         if self._key is None:
             return {
-                "schema_version": "butler.home.messages.v2", "messages": [],
+                "schema_version": "butler.home.messages.v2",
+                "conversation_id": conversation, "messages": [],
                 "next_sequence": None, "partial_errors": [], "locked": True,
                 "message_count": message_count,
+                "conversation_version": conversation_version,
             }
         output: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
@@ -1893,9 +1896,11 @@ class HomeStore:
                 errors.append({"sequence": row["sequence"], "code": "MESSAGE_UNREADABLE"})
         next_sequence = rows[limit - 1]["sequence"] if len(rows) > limit else None
         return {
-            "schema_version": "butler.home.messages.v2", "messages": output,
+            "schema_version": "butler.home.messages.v2",
+            "conversation_id": conversation, "messages": output,
             "next_sequence": next_sequence, "partial_errors": errors, "locked": False,
             "message_count": message_count,
+            "conversation_version": conversation_version,
         }
 
     def search(self, query: str, *, limit: int = 50, profile_id: str | None = None) -> dict[str, Any]:
