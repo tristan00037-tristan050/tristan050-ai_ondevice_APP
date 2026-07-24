@@ -52,5 +52,5 @@ def test_router_decide_registered_in_live_app():
         import pytest
 
         pytest.skip("FastAPI 미가용")
-    paths = {getattr(r, "path", None) for r in butler_sidecar.app.routes}
+    paths = set(butler_sidecar.app.openapi()["paths"])
     assert "/v1/router/decide" in paths

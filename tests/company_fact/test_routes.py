@@ -268,7 +268,7 @@ def test_status_fails_closed_when_active_vault_item_is_missing(tmp_path, monkeyp
 def test_company_fact_routes_registered_in_sidecar():
     from butler_sidecar import app
 
-    paths = {getattr(route, "path", "") for route in app.routes}
+    paths = set(app.openapi()["paths"])
 
     assert "/v1/company-facts/status" in paths
     assert "/v1/company-facts/resolve" in paths

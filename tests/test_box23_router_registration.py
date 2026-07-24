@@ -15,14 +15,14 @@ def _load_app():
 
 def test_box2_box3_routes_registered_in_production_sidecar():
     mod = _load_app()
-    paths = {getattr(r, "path", None) for r in mod.app.routes}
+    paths = set(mod.app.openapi()["paths"])
     assert "/v1/cards/2/rewrite" in paths
     assert "/v1/cards/3/draft" in paths
 
 
 def test_existing_routes_not_regressed():
     mod = _load_app()
-    paths = {getattr(r, "path", None) for r in mod.app.routes}
+    paths = set(mod.app.openapi()["paths"])
     for existing in [
         "/health",
         "/api/sidecar/health",
