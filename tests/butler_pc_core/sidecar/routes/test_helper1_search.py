@@ -9,6 +9,11 @@ from __future__ import annotations
 
 import pytest
 
+# v3.2-R gate fix (fixture drift): the fail-closed company-policy gate
+# (POLICY_BOOTSTRAP_REQUIRED, added in #826/#844/#866) now requires an ACTIVE
+# policy; opt into the existing conftest bootstrap fixture.
+pytestmark = pytest.mark.active_policy
+
 pytest.importorskip("fastapi")
 
 

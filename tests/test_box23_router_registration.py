@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 import pytest
+from tests.routing_introspection import collect_app_paths
+
+# v3.2-R gate fix (fixture drift): the fail-closed company-policy gate
+# (POLICY_BOOTSTRAP_REQUIRED, added in #826/#844/#866) now requires an ACTIVE
+# policy; opt into the existing conftest bootstrap fixture.
+pytestmark = pytest.mark.active_policy
 
 pytest.importorskip("fastapi")
 
@@ -14,14 +20,14 @@ def _load_app():
 
 def test_box2_box3_routes_registered_in_production_sidecar():
     mod = _load_app()
-    paths = {getattr(r, "path", None) for r in mod.app.routes}
+    paths = collect_app_paths(mod.app)
     assert "/v1/cards/2/rewrite" in paths
     assert "/v1/cards/3/draft" in paths
 
 
 def test_existing_routes_not_regressed():
     mod = _load_app()
-    paths = {getattr(r, "path", None) for r in mod.app.routes}
+    paths = collect_app_paths(mod.app)
     for existing in [
         "/health",
         "/api/sidecar/health",
