@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-from butler_pc_core.runtime import json_grammar
 from butler_pc_core.cards.box4.review_service import BOX4_JSON_SCHEMA
 from butler_pc_core.cards.box6.form_fill_service import BOX6_JSON_SCHEMA
 from butler_pc_core.runtime.json_grammar import (
@@ -17,20 +16,13 @@ from butler_pc_core.runtime.json_grammar import (
 )
 
 
-_LLAMA_CPP_AVAILABLE = json_grammar.LlamaGrammar is not None
-requires_llama_cpp = pytest.mark.skipif(
-    not _LLAMA_CPP_AVAILABLE,
-    reason="llama-cpp-python is an optional serving dependency",
-)
-
-
-@requires_llama_cpp
+@pytest.mark.requires_llama_grammar
 def test_json_schema_grammar_builds_for_box4_and_box6() -> None:
     assert build_json_schema_grammar(BOX4_JSON_SCHEMA, required=True) is not None
     assert build_json_schema_grammar(BOX6_JSON_SCHEMA, required=True) is not None
 
 
-@requires_llama_cpp
+@pytest.mark.requires_llama_grammar
 def test_json_schema_grammar_does_not_reuse_stateful_object() -> None:
     first = build_json_schema_grammar(BOX4_JSON_SCHEMA, required=True)
     second = build_json_schema_grammar(BOX4_JSON_SCHEMA, required=True)

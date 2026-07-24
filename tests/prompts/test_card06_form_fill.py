@@ -523,6 +523,7 @@ def test_card02_03_05_golden_render_diff_zero() -> None:
         assert semantic_text(rendered) == semantic_text(expected)
 
 
+@pytest.mark.requires_llama_grammar
 def test_box6_sidecar_stream_routes_to_form_fill_service(monkeypatch) -> None:
     import butler_sidecar
     from butler_pc_core.cards.box6.form_fill_service import SCHEMA_VERSION

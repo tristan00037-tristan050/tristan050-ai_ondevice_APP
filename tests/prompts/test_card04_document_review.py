@@ -1,4 +1,5 @@
 from __future__ import annotations
+import pytest
 
 import asyncio
 import importlib.util
@@ -10,7 +11,6 @@ from pathlib import Path
 from butler_pc_core.cards.box4.review_service import SCHEMA_VERSION
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.prompts.cards import load_card_prompt
-from butler_pc_core.runtime import json_grammar
 from butler_pc_core.sidecar.analyze_policy_preflight import is_known_card_mode
 
 
@@ -119,12 +119,6 @@ def test_card04_no_global_jinja_env_mutation() -> None:
 def test_box4_sidecar_stream_routes_to_review_service(monkeypatch) -> None:
     import butler_sidecar
 
-    if json_grammar.LlamaGrammar is None:
-        monkeypatch.setattr(
-            "butler_pc_core.cards.box4.review_service.build_json_schema_grammar",
-            lambda *_args, **_kwargs: object(),
-        )
-
     class FakeLlm:
         def generate(self, prompt: str, *, max_tokens: int = 2048, grammar=None) -> str:  # type: ignore[no-untyped-def]
             assert grammar is not None
@@ -166,15 +160,10 @@ def test_box4_sidecar_stream_routes_to_review_service(monkeypatch) -> None:
         assert result["raw_log_zero"] is True
 
 
+@pytest.mark.requires_llama_grammar
 def test_box4_sidecar_slow_review_times_out_and_cancels(monkeypatch, tmp_path) -> None:
     import butler_sidecar
     from butler_pc_core.runtime.timeout_controller import TimeoutController as BaseTimeoutController
-
-    if json_grammar.LlamaGrammar is None:
-        monkeypatch.setattr(
-            "butler_pc_core.cards.box4.review_service.build_json_schema_grammar",
-            lambda *_args, **_kwargs: object(),
-        )
 
     class FastTimeoutController(BaseTimeoutController):
         def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
@@ -231,6 +220,7 @@ def test_box4_sidecar_slow_review_times_out_and_cancels(monkeypatch, tmp_path) -
     assert slow_llm.cancel_event.is_set()
 
 
+@pytest.mark.requires_llama_grammar
 def test_box4_activation_verifier_accepts_contract() -> None:
     result = subprocess.run(
         [sys.executable, str(BOX4_ACTIVATION_VERIFIER), str(REPO_ROOT)],
@@ -253,6 +243,7 @@ def test_box4_activation_dependency_guard_is_runtime_scoped() -> None:
     assert not verifier._is_box4_runtime_dependency_file("requirements-firstscreen-ci.lock")
 
 
+@pytest.mark.requires_llama_grammar
 def test_box4_smoke_validator_accepts_contract() -> None:
     result = subprocess.run(
         [sys.executable, str(BOX4_SMOKE_VALIDATOR)],

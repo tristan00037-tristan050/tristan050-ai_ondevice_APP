@@ -1,4 +1,5 @@
 from __future__ import annotations
+import pytest
 
 import json
 
@@ -73,6 +74,7 @@ def valid_payload(**overrides: object) -> dict[str, object]:
     return payload
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_accepts_valid_schema() -> None:
     client = FakeModelClient(valid_payload())
 
@@ -92,6 +94,7 @@ def test_fill_form_accepts_valid_schema() -> None:
     assert "/no_think" in client.prompts[0]
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_emits_raw_zero_telemetry_on_success(monkeypatch) -> None:
     events: list[dict[str, object]] = []
     monkeypatch.setattr("butler_pc_core.cards.box6.form_fill_service._log_structured_telemetry", events.append)
@@ -113,6 +116,7 @@ def test_fill_form_emits_raw_zero_telemetry_on_success(monkeypatch) -> None:
     assert "주식회사 버틀러" not in json.dumps(event, ensure_ascii=False)
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_rejects_non_json_fail_closed() -> None:
     result = fill_form(
         FormFillInput(blank_form="법인명: ___", data_documents=[]),
@@ -124,6 +128,7 @@ def test_fill_form_rejects_non_json_fail_closed() -> None:
     assert result.warnings == ["MODEL_JSON_NOT_FOUND"]
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_emits_reason_code_telemetry_on_schema_failure(monkeypatch) -> None:
     events: list[dict[str, object]] = []
     monkeypatch.setattr("butler_pc_core.cards.box6.form_fill_service._log_structured_telemetry", events.append)
@@ -166,6 +171,7 @@ def test_fill_form_fails_closed_when_model_client_cannot_accept_grammar() -> Non
     assert result.warnings == ["GRAMMAR_UNAVAILABLE"]
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_rejects_legacy_mapping_schema() -> None:
     mapping = dict(valid_payload()["field_mappings"][0])  # type: ignore[index]
     mapping["source_excerpt"] = "원문 일부"
@@ -178,6 +184,7 @@ def test_fill_form_rejects_legacy_mapping_schema() -> None:
     assert result.warnings == ["LEGACY_MAPPING_SCHEMA"]
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_rejects_top_level_extra_key() -> None:
     result = fill_form(
         FormFillInput(blank_form="법인명: ___", data_documents=[]),
@@ -187,6 +194,7 @@ def test_fill_form_rejects_top_level_extra_key() -> None:
     assert result.warnings == ["SCHEMA_KEYS_INVALID"]
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_masks_secret_label_real_value_without_review_markers() -> None:
     # A sensitive field with a real value and no review markers is now masked at
     # field level (not a whole-form abort): its value is replaced and the reason
@@ -218,6 +226,7 @@ def test_fill_form_masks_secret_label_real_value_without_review_markers() -> Non
     assert "plain-secret-1234" not in json.dumps(result.to_payload(), ensure_ascii=False)
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_mixed_form_masks_only_sensitive_fields_no_whole_form_block() -> None:
     # Mixed form: 6 general fields + 2 sensitive fields (both carrying real values
     # and no review markers, i.e. the case that previously aborted the ENTIRE form).
@@ -302,6 +311,7 @@ def test_fill_form_mixed_form_masks_only_sensitive_fields_no_whole_form_block() 
     assert "plain-secret-bbbb" not in dumped
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_mixed_filled_form_preserves_general_lines_and_masks_secret_lines() -> None:
     # Gap ③ real scenario: the secret real values live in filled_form itself
     # (6 general lines + 2 secret lines). The 1st-round test omitted this and so
@@ -382,6 +392,7 @@ def test_fill_form_mixed_filled_form_preserves_general_lines_and_masks_secret_li
     assert not _scan_runtime(result.filled_form).any_detected
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_allows_secret_label_only_when_unfilled_and_listed() -> None:
     mapping = dict(valid_payload()["field_mappings"][0])  # type: ignore[index]
     mapping.update(
@@ -410,6 +421,7 @@ def test_fill_form_allows_secret_label_only_when_unfilled_and_listed() -> None:
     assert result.field_mappings[0]["output_value"] == "UNFILLED"
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_quarantines_secret_real_value_when_review_listed() -> None:
     mapping = dict(valid_payload()["field_mappings"][0])  # type: ignore[index]
     mapping.update(
@@ -439,6 +451,7 @@ def test_fill_form_quarantines_secret_real_value_when_review_listed() -> None:
     assert "plain-secret-1234" not in json.dumps(result.to_payload(), ensure_ascii=False)
 
 
+@pytest.mark.requires_llama_grammar
 def test_fill_form_redacts_secret_label_values_in_filled_form_and_warnings() -> None:
     mapping = dict(valid_payload()["field_mappings"][0])  # type: ignore[index]
     mapping.update(

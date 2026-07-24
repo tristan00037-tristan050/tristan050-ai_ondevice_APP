@@ -1,4 +1,5 @@
 from __future__ import annotations
+import pytest
 
 import json
 
@@ -65,6 +66,7 @@ def valid_payload(**overrides: object) -> dict[str, object]:
     return payload
 
 
+@pytest.mark.requires_llama_grammar
 def test_review_document_accepts_valid_schema() -> None:
     client = FakeModelClient(valid_payload())
     result = review_document(
@@ -85,6 +87,7 @@ def test_review_document_accepts_valid_schema() -> None:
     assert client.grammars
 
 
+@pytest.mark.requires_llama_grammar
 def test_review_document_emits_raw_zero_telemetry_on_success(monkeypatch) -> None:
     events: list[dict[str, object]] = []
     monkeypatch.setattr("butler_pc_core.cards.box4.review_service._log_structured_telemetry", events.append)
@@ -106,6 +109,7 @@ def test_review_document_emits_raw_zero_telemetry_on_success(monkeypatch) -> Non
     assert "참고 문서와 납품일" not in json.dumps(event, ensure_ascii=False)
 
 
+@pytest.mark.requires_llama_grammar
 def test_review_document_allows_no_issue_json_only() -> None:
     result = review_document(
         DocumentReviewInput(target_document="완성된 공문입니다.", reference_documents=[]),
@@ -130,6 +134,7 @@ def test_extract_json_object_uses_first_balanced_object() -> None:
     assert parsed == {"a": {"b": "brace } in string"}}
 
 
+@pytest.mark.requires_llama_grammar
 def test_review_document_rejects_invalid_json_fail_closed() -> None:
     result = review_document(
         DocumentReviewInput(target_document="검토 대상", reference_documents=[]),
@@ -142,6 +147,7 @@ def test_review_document_rejects_invalid_json_fail_closed() -> None:
     assert result.raw_log_zero is True
 
 
+@pytest.mark.requires_llama_grammar
 def test_review_document_emits_reason_code_telemetry_on_schema_failure(monkeypatch) -> None:
     events: list[dict[str, object]] = []
     monkeypatch.setattr("butler_pc_core.cards.box4.review_service._log_structured_telemetry", events.append)
@@ -186,6 +192,7 @@ def test_review_document_fails_closed_when_model_client_cannot_accept_grammar() 
     assert result.warnings == ["GRAMMAR_UNAVAILABLE"]
 
 
+@pytest.mark.requires_llama_grammar
 def test_review_document_rejects_bad_enum_fail_closed() -> None:
     bad = valid_payload(
         issues=[
@@ -208,6 +215,7 @@ def test_review_document_rejects_bad_enum_fail_closed() -> None:
     assert result.warnings == ["ISSUE_TYPE_INVALID"]
 
 
+@pytest.mark.requires_llama_grammar
 def test_review_document_rejects_top_level_extra_key_fail_closed() -> None:
     result = review_document(
         DocumentReviewInput(target_document="검토 대상", reference_documents=[]),
@@ -219,6 +227,7 @@ def test_review_document_rejects_top_level_extra_key_fail_closed() -> None:
     assert result.warnings == ["SCHEMA_KEYS_INVALID"]
 
 
+@pytest.mark.requires_llama_grammar
 def test_review_document_rejects_issue_extra_key_fail_closed() -> None:
     issue = dict(valid_payload()["issues"][0])  # type: ignore[index]
     issue["raw_response"] = "숨겨진 원문"
@@ -233,6 +242,7 @@ def test_review_document_rejects_issue_extra_key_fail_closed() -> None:
     assert result.warnings == ["ISSUE_KEYS_INVALID"]
 
 
+@pytest.mark.requires_llama_grammar
 def test_review_document_rejects_original_text_length_fail_closed() -> None:
     issue = dict(valid_payload()["issues"][0])  # type: ignore[index]
     issue["original_text"] = "가" * 301
@@ -246,6 +256,7 @@ def test_review_document_rejects_original_text_length_fail_closed() -> None:
     assert result.warnings == ["ORIGINAL_TEXT_INVALID_TOO_LONG"]
 
 
+@pytest.mark.requires_llama_grammar
 def test_review_document_redacts_secret_echoes() -> None:
     issue = dict(valid_payload()["issues"][0])  # type: ignore[index]
     issue["original_text"] = "비밀번호는 정책1234야"
