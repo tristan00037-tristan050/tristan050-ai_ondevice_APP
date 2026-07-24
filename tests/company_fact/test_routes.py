@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from tests.routing_introspection import collect_app_paths
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -251,7 +252,7 @@ def test_status_fails_closed_when_active_vault_item_is_missing(tmp_path, monkeyp
 def test_company_fact_routes_registered_in_sidecar():
     from butler_sidecar import app
 
-    paths = {getattr(route, "path", "") for route in app.routes}
+    paths = collect_app_paths(app)
 
     assert "/v1/company-facts/status" in paths
     assert "/v1/company-facts/resolve" in paths
