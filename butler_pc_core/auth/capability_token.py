@@ -11,7 +11,9 @@ from butler_pc_core.fail_class import FailClass
 DEFAULT_TOKEN_PATH = Path.home() / ".butler" / "sidecar_token"
 
 
-@dataclass(frozen=True)
+# Exception classes must not be frozen: Python 3.11+ assigns __traceback__ on
+# the raised instance, which a frozen dataclass rejects (FrozenInstanceError).
+@dataclass(eq=False)
 class CapabilityTokenError(Exception):
     fail_class: FailClass
     message: str
