@@ -84,6 +84,9 @@ const blocked = (
   errorCode: string,
 ): InventoryAssessment => ({ status, verified: false, errorCode });
 
+const isPositiveAuthorityInteger = (value: unknown): value is number =>
+  Number.isSafeInteger(value) && Number(value) > 0;
+
 /**
  * The single authority that may issue a verified COMPLETE assessment.
  *
@@ -110,6 +113,18 @@ export function assessMessageInventory(
     || candidate.expectedCount < 0
   ) {
     return blocked('ERROR', 'HOME_MESSAGE_COUNT_REQUIRED');
+  }
+  if (
+    !isPositiveAuthorityInteger(candidate.conversationVersion)
+    || !isPositiveAuthorityInteger(candidate.currentConversationVersion)
+  ) {
+    return blocked('PARTIAL', 'HOME_CONVERSATION_VERSION_REQUIRED');
+  }
+  if (
+    !isPositiveAuthorityInteger(candidate.generation)
+    || !isPositiveAuthorityInteger(candidate.currentGeneration)
+  ) {
+    return blocked('PARTIAL', 'HOME_MESSAGE_GENERATION_REQUIRED');
   }
   if (candidate.messages.length !== candidate.expectedCount) {
     return blocked('PARTIAL', 'HOME_MESSAGE_COUNT_MISMATCH');
@@ -232,10 +247,13 @@ export const canMutateConversation = (
   record?.status === 'COMPLETE'
   && record.verified === true
   && record.errorCode === null
+  && isPositiveAuthorityInteger(record.conversationVersion)
+  && isPositiveAuthorityInteger(record.generation)
   && (
     current === undefined
     || (
-      record.conversationId === current.conversationId
+      isPositiveAuthorityInteger(current.conversationVersion)
+      && record.conversationId === current.conversationId
       && record.conversationVersion === current.conversationVersion
       && record.expectedCount === current.expectedCount
     )

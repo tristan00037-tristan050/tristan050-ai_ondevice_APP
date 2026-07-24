@@ -110,6 +110,42 @@ describe('message inventory single authority', () => {
       code: 'HOME_MESSAGE_COUNT_REQUIRED',
     },
     {
+      name: 'has the audited null conversation version',
+      value: candidate(2, undefined, {
+        conversationVersion: null,
+        currentConversationVersion: null,
+      }),
+      status: 'PARTIAL',
+      code: 'HOME_CONVERSATION_VERSION_REQUIRED',
+    },
+    {
+      name: 'has a zero conversation version',
+      value: candidate(2, undefined, {
+        conversationVersion: 0,
+        currentConversationVersion: 0,
+      }),
+      status: 'PARTIAL',
+      code: 'HOME_CONVERSATION_VERSION_REQUIRED',
+    },
+    {
+      name: 'has the audited zero load generation',
+      value: candidate(2, undefined, {
+        generation: 0,
+        currentGeneration: 0,
+      }),
+      status: 'PARTIAL',
+      code: 'HOME_MESSAGE_GENERATION_REQUIRED',
+    },
+    {
+      name: 'has an unset load generation',
+      value: candidate(2, undefined, {
+        generation: undefined as unknown as number,
+        currentGeneration: undefined as unknown as number,
+      }),
+      status: 'PARTIAL',
+      code: 'HOME_MESSAGE_GENERATION_REQUIRED',
+    },
+    {
       name: 'belongs to a stale conversation version',
       value: candidate(2, undefined, { currentConversationVersion: VERSION + 1 }),
       status: 'PARTIAL',
@@ -203,6 +239,18 @@ describe('message inventory single authority', () => {
       conversationVersion: (c.conversationVersion ?? 0) + 1,
       expectedCount: c.expectedCount,
     })).toBe(false);
+    expect(canMutateConversation({
+      ...record!,
+      conversationVersion: null,
+    }, {
+      conversationId: c.conversationId,
+      conversationVersion: null,
+      expectedCount: c.expectedCount,
+    })).toBe(false);
+    expect(canMutateConversation({
+      ...record!,
+      generation: 0,
+    })).toBe(false);
   });
 
   it('holds the complete iff oracle across deterministic generated inventories', () => {
@@ -232,6 +280,14 @@ describe('message inventory single authority', () => {
       })).status).not.toBe('COMPLETE');
       expect(assessMessageInventory(candidate(count, valid.messages, {
         locked: true,
+      })).status).not.toBe('COMPLETE');
+      expect(assessMessageInventory(candidate(count, valid.messages, {
+        conversationVersion: null,
+        currentConversationVersion: null,
+      })).status).not.toBe('COMPLETE');
+      expect(assessMessageInventory(candidate(count, valid.messages, {
+        generation: 0,
+        currentGeneration: 0,
       })).status).not.toBe('COMPLETE');
     }
   });
