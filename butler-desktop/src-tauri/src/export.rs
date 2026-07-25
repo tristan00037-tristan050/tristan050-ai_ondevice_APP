@@ -82,12 +82,20 @@ struct TargetSnapshot {
     parent_device: u64,
     #[cfg(unix)]
     parent_inode: u64,
-    #[cfg(windows)]
-    creation_time: u64,
-    #[cfg(windows)]
-    last_write_time: u64,
+    // Windows identity is anchored to the NTFS file id (volume serial number +
+    // file index), NOT to timestamps. creation_time/last_write_time were not
+    // stable under a delete+recreate: the timer resolution can collapse two
+    // writes to the same last_write_time, and NTFS "file tunneling" carries the
+    // previous creation_time onto a same-named replacement within ~15s — so an
+    // identity swap could go undetected non-deterministically. The file index is
+    // a fresh MFT record on recreation and is never tunneled, so it changes
+    // deterministically. file_attributes is kept as a secondary discriminator.
     #[cfg(windows)]
     file_attributes: u32,
+    #[cfg(windows)]
+    volume_serial: u64,
+    #[cfg(windows)]
+    file_index: u64,
 }
 
 fn is_reparse_or_symlink(metadata: &fs::Metadata) -> bool {
@@ -135,6 +143,10 @@ fn target_snapshot(path: &Path) -> Result<TargetSnapshot, ExportError> {
             use std::os::unix::fs::MetadataExt;
             #[cfg(windows)]
             use std::os::windows::fs::MetadataExt;
+            // NTFS file id (volume serial + file index) is the stable identity;
+            // it is derived from an opened handle, not from tunneled timestamps.
+            #[cfg(windows)]
+            let (volume_serial, file_index) = windows_file_identity(path)?;
             Ok(TargetSnapshot {
                 existed: true,
                 length: metadata.len(),
@@ -152,11 +164,11 @@ fn target_snapshot(path: &Path) -> Result<TargetSnapshot, ExportError> {
                 #[cfg(unix)]
                 parent_inode: parent_metadata.1,
                 #[cfg(windows)]
-                creation_time: metadata.creation_time(),
-                #[cfg(windows)]
-                last_write_time: metadata.last_write_time(),
-                #[cfg(windows)]
                 file_attributes: metadata.file_attributes(),
+                #[cfg(windows)]
+                volume_serial,
+                #[cfg(windows)]
+                file_index,
             })
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(TargetSnapshot {
@@ -176,14 +188,64 @@ fn target_snapshot(path: &Path) -> Result<TargetSnapshot, ExportError> {
             #[cfg(unix)]
             parent_inode: parent_metadata.1,
             #[cfg(windows)]
-            creation_time: 0,
-            #[cfg(windows)]
-            last_write_time: 0,
-            #[cfg(windows)]
             file_attributes: 0,
+            #[cfg(windows)]
+            volume_serial: 0,
+            #[cfg(windows)]
+            file_index: 0,
         }),
         Err(_) => Err(ExportError::TargetInvalid),
     }
+}
+
+// Stable NTFS identity for an existing regular file: (volume serial, file index).
+// Unlike creation/last-write time it survives no tunneling and is reassigned on a
+// delete+recreate, so it distinguishes an identity swap deterministically. The
+// caller has already rejected reparse points / symlinks via symlink_metadata.
+#[cfg(windows)]
+fn windows_file_identity(path: &Path) -> Result<(u64, u64), ExportError> {
+    use std::os::windows::io::AsRawHandle;
+
+    let file = OpenOptions::new()
+        .read(true)
+        .open(path)
+        .map_err(|_| ExportError::TargetInvalid)?;
+
+    #[repr(C)]
+    struct Filetime {
+        low: u32,
+        high: u32,
+    }
+    #[repr(C)]
+    struct ByHandleFileInformation {
+        file_attributes: u32,
+        creation_time: Filetime,
+        last_access_time: Filetime,
+        last_write_time: Filetime,
+        volume_serial_number: u32,
+        file_size_high: u32,
+        file_size_low: u32,
+        number_of_links: u32,
+        file_index_high: u32,
+        file_index_low: u32,
+    }
+    #[link(name = "Kernel32")]
+    extern "system" {
+        fn GetFileInformationByHandle(
+            handle: isize,
+            information: *mut ByHandleFileInformation,
+        ) -> i32;
+    }
+
+    let mut information: ByHandleFileInformation = unsafe { core::mem::zeroed() };
+    let ok = unsafe { GetFileInformationByHandle(file.as_raw_handle() as isize, &mut information) };
+    if ok == 0 {
+        return Err(ExportError::TargetInvalid);
+    }
+    let volume_serial = u64::from(information.volume_serial_number);
+    let file_index =
+        (u64::from(information.file_index_high) << 32) | u64::from(information.file_index_low);
+    Ok((volume_serial, file_index))
 }
 
 #[cfg(windows)]
@@ -677,12 +739,38 @@ mod tests {
 
     #[test]
     fn refuses_publish_after_confirmed_target_identity_changes() {
+        // A delete+recreate reassigns the file identity (Unix inode / NTFS file
+        // index). Use a distinct length and body so the swap is unambiguous and
+        // the refusal is deterministic on every platform.
         let root = test_root("identity-swap");
+        let target = root.join("report.md");
+        fs::write(&target, b"original-body").unwrap();
+        let confirmed = target_snapshot(&target).unwrap();
+        fs::remove_file(&target).unwrap();
+        fs::write(&target, b"replacement-decoy-body").unwrap();
+        assert_eq!(
+            atomic_write_export(&target, b"replacement", &confirmed).unwrap_err(),
+            ExportError::OverwriteNotConfirmed
+        );
+        assert_eq!(fs::read(&target).unwrap(), b"replacement-decoy-body");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn refuses_publish_when_same_length_replacement_recreated_back_to_back() {
+        // Regression for the non-deterministic Windows failure: the snapshot used
+        // to compare timestamps, which a same-length delete+recreate in the same
+        // timer tick (and, on NTFS, the tunneled creation_time) could leave
+        // unchanged — letting an identity swap slip through. Identity is now
+        // anchored to the file id, so even a byte-for-byte same-length swap done
+        // back-to-back (no delay: the tightest tunneling/timer-collision window)
+        // must be refused deterministically.
+        let root = test_root("identity-tunnel");
         let target = root.join("report.md");
         fs::write(&target, b"first").unwrap();
         let confirmed = target_snapshot(&target).unwrap();
         fs::remove_file(&target).unwrap();
-        fs::write(&target, b"other").unwrap();
+        fs::write(&target, b"other").unwrap(); // identical 5-byte length as "first"
         assert_eq!(
             atomic_write_export(&target, b"replacement", &confirmed).unwrap_err(),
             ExportError::OverwriteNotConfirmed
