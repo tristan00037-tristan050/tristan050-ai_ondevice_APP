@@ -144,6 +144,36 @@ jobs:
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
 
+      - name: Prepare FirstScreen source and SBOM subjects (main only)
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/firstscreen-release"
+          mkdir -p "${out}"
+          python scripts/release/build_safe_source_archive.py --commit HEAD --scope-baseline HEAD^ --output "${out}/source.zip" --manifest "${out}/SOURCE_ARCHIVE_MANIFEST.json"
+          # Regression guard (CI-gate): build_with_git.py enforces a clean working
+          # tree. This step MUST run before any step that writes untracked build
+          # outputs into the workspace (e.g. the bench-subject step's .artifacts/),
+          # otherwise the clean check trips and surfaces as BUILD_CONTEXT_INVALID.
+          # Assert the tree is clean at build_with_git time so an accidental
+          # reordering fails loudly here instead of being swallowed downstream.
+          tree_status="${RUNNER_TEMP}/firstscreen-build-context-git-status"
+          trap 'rm -f "${tree_status}"' EXIT
+          if ! git status --porcelain --untracked-files=all > "${tree_status}" 2>/dev/null; then
+            echo "BUILD_CONTEXT_TREE_CLEAN_OK=0"
+            echo "ERROR_CODE=GIT_STATUS_FAILED"
+            exit 1
+          fi
+          if [ -s "${tree_status}" ]; then
+            echo "BUILD_CONTEXT_TREE_CLEAN_OK=0"
+            echo "ERROR_CODE=TREE_NOT_CLEAN_BEFORE_BUILD_CONTEXT"
+            exit 1
+          fi
+          echo "BUILD_CONTEXT_TREE_CLEAN_OK=1"
+          python scripts/release/build_with_git.py --output "${out}/BUILD_CONTEXT.json" --source-manifest "${out}/SOURCE_ARCHIVE_MANIFEST.json" --repository "${GITHUB_REPOSITORY}" --workflow-identity "${GITHUB_WORKFLOW_REF}" --toolchain-identity "python=3.12;node=lock-only;rust=lock-only" --baseline HEAD^
+          python scripts/release/generate_cyclonedx_sbom.py --commit HEAD --output "${out}/butler.cdx.json" --build-context "${out}/BUILD_CONTEXT.json" --npm-lock butler-desktop/package-lock.json --python-requirements requirements-firstscreen-ci.lock
+
       - name: Prepare deterministic bench release + subject for attestation (main only)
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         shell: bash
@@ -163,17 +193,6 @@ jobs:
             echo "run_attempt=${GITHUB_RUN_ATTEMPT:-0}"
             echo "bench_model_tier_b_release_sha256=${RELEASE_SHA}"
           } > .artifacts/supplychain_subject.txt
-
-      - name: Prepare FirstScreen source and SBOM subjects (main only)
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          out="${RUNNER_TEMP}/firstscreen-release"
-          mkdir -p "${out}"
-          python scripts/release/build_safe_source_archive.py --commit HEAD --scope-baseline HEAD^ --output "${out}/source.zip" --manifest "${out}/SOURCE_ARCHIVE_MANIFEST.json"
-          python scripts/release/build_with_git.py --output "${out}/BUILD_CONTEXT.json" --source-manifest "${out}/SOURCE_ARCHIVE_MANIFEST.json" --repository "${GITHUB_REPOSITORY}" --workflow-identity "${GITHUB_WORKFLOW_REF}" --toolchain-identity "python=3.12;node=lock-only;rust=lock-only" --baseline HEAD^
-          python scripts/release/generate_cyclonedx_sbom.py --commit HEAD --output "${out}/butler.cdx.json" --build-context "${out}/BUILD_CONTEXT.json" --npm-lock butler-desktop/package-lock.json --python-requirements requirements-firstscreen-ci.lock
 
       - name: Generate DSSE provenance attestation (main only)
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
