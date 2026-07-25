@@ -3,7 +3,6 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{self, Write},
     path::Path,
-    time::SystemTime,
 };
 
 #[cfg(unix)]
@@ -11,6 +10,9 @@ use std::io::Read;
 
 #[cfg(any(windows, test))]
 use std::path::PathBuf;
+
+#[cfg(windows)]
+use std::time::SystemTime;
 
 use tauri_plugin_dialog::DialogExt;
 
@@ -65,29 +67,32 @@ fn valid_export_request(suggested_name: &str, extension: &str, bytes: &[u8]) -> 
         && bytes.len() <= MAX_EXPORT_BYTES
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 struct TargetSnapshot {
     existed: bool,
+    #[cfg(windows)]
     length: u64,
+    #[cfg(windows)]
     modified: Option<SystemTime>,
     #[cfg(unix)]
     device: u64,
     #[cfg(unix)]
     inode: u64,
     #[cfg(unix)]
-    status_changed_seconds: i64,
-    #[cfg(unix)]
-    status_changed_nanoseconds: i64,
-    #[cfg(unix)]
     parent_device: u64,
     #[cfg(unix)]
     parent_inode: u64,
-    #[cfg(windows)]
-    creation_time: u64,
-    #[cfg(windows)]
-    last_write_time: u64,
+    // Windows identity uses FILE_ID_INFO's volume serial plus full 128-bit id.
+    // The confirmation handle remains open through publication so a deleted
+    // object's identifier cannot be reused while the overwrite guard is active.
     #[cfg(windows)]
     file_attributes: u32,
+    #[cfg(windows)]
+    volume_serial: u64,
+    #[cfg(windows)]
+    file_id: [u8; 16],
+    #[cfg(windows)]
+    confirmation_handle: Option<File>,
 }
 
 fn is_reparse_or_symlink(metadata: &fs::Metadata) -> bool {
@@ -134,62 +139,165 @@ fn target_snapshot(path: &Path) -> Result<TargetSnapshot, ExportError> {
             #[cfg(unix)]
             use std::os::unix::fs::MetadataExt;
             #[cfg(windows)]
+            let (confirmation_handle, metadata, volume_serial, file_id) =
+                open_windows_identity(path)?;
+            #[cfg(windows)]
             use std::os::windows::fs::MetadataExt;
             Ok(TargetSnapshot {
                 existed: true,
+                #[cfg(windows)]
                 length: metadata.len(),
+                #[cfg(windows)]
                 modified: metadata.modified().ok(),
                 #[cfg(unix)]
                 device: metadata.dev(),
                 #[cfg(unix)]
                 inode: metadata.ino(),
                 #[cfg(unix)]
-                status_changed_seconds: metadata.ctime(),
-                #[cfg(unix)]
-                status_changed_nanoseconds: metadata.ctime_nsec(),
-                #[cfg(unix)]
                 parent_device: parent_metadata.0,
                 #[cfg(unix)]
                 parent_inode: parent_metadata.1,
                 #[cfg(windows)]
-                creation_time: metadata.creation_time(),
-                #[cfg(windows)]
-                last_write_time: metadata.last_write_time(),
-                #[cfg(windows)]
                 file_attributes: metadata.file_attributes(),
+                #[cfg(windows)]
+                volume_serial,
+                #[cfg(windows)]
+                file_id,
+                #[cfg(windows)]
+                confirmation_handle: Some(confirmation_handle),
             })
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(TargetSnapshot {
             existed: false,
+            #[cfg(windows)]
             length: 0,
+            #[cfg(windows)]
             modified: None,
             #[cfg(unix)]
             device: 0,
             #[cfg(unix)]
             inode: 0,
             #[cfg(unix)]
-            status_changed_seconds: 0,
-            #[cfg(unix)]
-            status_changed_nanoseconds: 0,
-            #[cfg(unix)]
             parent_device: parent_metadata.0,
             #[cfg(unix)]
             parent_inode: parent_metadata.1,
             #[cfg(windows)]
-            creation_time: 0,
-            #[cfg(windows)]
-            last_write_time: 0,
-            #[cfg(windows)]
             file_attributes: 0,
+            #[cfg(windows)]
+            volume_serial: 0,
+            #[cfg(windows)]
+            file_id: [0; 16],
+            #[cfg(windows)]
+            confirmation_handle: None,
         }),
         Err(_) => Err(ExportError::TargetInvalid),
     }
 }
 
 #[cfg(windows)]
+fn require_windows_file_id(identifier: [u8; 16]) -> Result<[u8; 16], ExportError> {
+    if identifier.iter().all(|byte| *byte == 0) {
+        Err(ExportError::TargetInvalid)
+    } else {
+        Ok(identifier)
+    }
+}
+
+#[cfg(windows)]
+fn windows_file_identity(file: &File) -> Result<(u64, [u8; 16]), ExportError> {
+    use std::os::windows::io::AsRawHandle;
+
+    #[repr(C)]
+    struct FileId128 {
+        identifier: [u8; 16],
+    }
+
+    #[repr(C)]
+    struct FileIdInfo {
+        volume_serial_number: u64,
+        file_id: FileId128,
+    }
+
+    #[link(name = "Kernel32")]
+    extern "system" {
+        fn GetFileInformationByHandleEx(
+            handle: *mut core::ffi::c_void,
+            information_class: i32,
+            information: *mut core::ffi::c_void,
+            buffer_size: u32,
+        ) -> i32;
+    }
+
+    const FILE_ID_INFO_CLASS: i32 = 0x12;
+    let mut information: FileIdInfo = unsafe { core::mem::zeroed() };
+    let buffer_size = u32::try_from(core::mem::size_of::<FileIdInfo>())
+        .map_err(|_| ExportError::TargetInvalid)?;
+    let ok = unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle(),
+            FILE_ID_INFO_CLASS,
+            (&mut information as *mut FileIdInfo).cast(),
+            buffer_size,
+        )
+    };
+    if ok == 0 {
+        return Err(ExportError::TargetInvalid);
+    }
+    let file_id = require_windows_file_id(information.file_id.identifier)?;
+    Ok((information.volume_serial_number, file_id))
+}
+
+#[cfg(windows)]
+fn open_windows_identity(path: &Path) -> Result<(File, fs::Metadata, u64, [u8; 16]), ExportError> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_SHARE_READ: u32 = 0x0000_0001;
+    const FILE_SHARE_WRITE: u32 = 0x0000_0002;
+    const FILE_SHARE_DELETE: u32 = 0x0000_0004;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+
+    let file = OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+        .map_err(|_| ExportError::TargetInvalid)?;
+    let metadata = file.metadata().map_err(|_| ExportError::TargetInvalid)?;
+    if !metadata.is_file() || is_reparse_or_symlink(&metadata) {
+        return Err(ExportError::TargetInvalid);
+    }
+    let (volume_serial, file_id) = windows_file_identity(&file)?;
+    Ok((file, metadata, volume_serial, file_id))
+}
+
+#[cfg(windows)]
 fn snapshot_unchanged(path: &Path, expected: &TargetSnapshot) -> Result<(), ExportError> {
-    let actual = target_snapshot(path)?;
-    if &actual != expected {
+    if !expected.existed {
+        return match fs::symlink_metadata(path) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            _ => Err(ExportError::OverwriteNotConfirmed),
+        };
+    }
+
+    let confirmed_handle = expected
+        .confirmation_handle
+        .as_ref()
+        .ok_or(ExportError::OverwriteNotConfirmed)?;
+    let confirmed_identity =
+        windows_file_identity(confirmed_handle).map_err(|_| ExportError::OverwriteNotConfirmed)?;
+    if confirmed_identity != (expected.volume_serial, expected.file_id) {
+        return Err(ExportError::OverwriteNotConfirmed);
+    }
+
+    let (_current_handle, metadata, volume_serial, file_id) =
+        open_windows_identity(path).map_err(|_| ExportError::OverwriteNotConfirmed)?;
+    use std::os::windows::fs::MetadataExt;
+    if volume_serial != expected.volume_serial
+        || file_id != expected.file_id
+        || metadata.len() != expected.length
+        || metadata.modified().ok() != expected.modified
+        || metadata.file_attributes() != expected.file_attributes
+    {
         return Err(ExportError::OverwriteNotConfirmed);
     }
     Ok(())
@@ -361,18 +469,11 @@ fn atomic_write_export(
             let stat = unsafe { stat.assume_init() };
             let actual = TargetSnapshot {
                 existed: true,
-                length: stat
-                    .st_size
-                    .try_into()
-                    .map_err(|_| ExportError::TargetInvalid)?,
-                modified: None,
                 device: stat
                     .st_dev
                     .try_into()
                     .map_err(|_| ExportError::TargetInvalid)?,
                 inode: stat.st_ino,
-                status_changed_seconds: stat.st_ctime,
-                status_changed_nanoseconds: stat.st_ctime_nsec,
                 parent_device: expected.parent_device,
                 parent_inode: expected.parent_inode,
             };
@@ -675,14 +776,75 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn replaces_confirmed_windows_file_while_identity_handle_is_retained() {
+        let root = test_root("windows-confirmed-replace");
+        let target = root.join("report.md");
+        fs::write(&target, b"confirmed").unwrap();
+        let snapshot = target_snapshot(&target).unwrap();
+        let confirmation_handle = snapshot.confirmation_handle.as_ref().unwrap();
+        let retained_identity = windows_file_identity(confirmation_handle).unwrap();
+        assert!(snapshot.file_id.iter().any(|byte| *byte != 0));
+        assert_eq!(
+            retained_identity,
+            (snapshot.volume_serial, snapshot.file_id)
+        );
+
+        atomic_write_export(&target, b"replacement", &snapshot).unwrap();
+
+        assert_eq!(
+            windows_file_identity(confirmation_handle).unwrap(),
+            retained_identity,
+            "the confirmed object must remain anchored until publication returns"
+        );
+        assert_eq!(fs::read(&target).unwrap(), b"replacement");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rejects_filesystems_without_a_nonzero_128_bit_file_id() {
+        assert_eq!(
+            require_windows_file_id([0; 16]).unwrap_err(),
+            ExportError::TargetInvalid
+        );
+    }
+
     #[test]
     fn refuses_publish_after_confirmed_target_identity_changes() {
+        // A delete+recreate reassigns the file identity (Unix inode / Windows
+        // 128-bit file id). Use a distinct length and body so the swap is
+        // unambiguous and the refusal is deterministic on every platform.
         let root = test_root("identity-swap");
+        let target = root.join("report.md");
+        fs::write(&target, b"original-body").unwrap();
+        let confirmed = target_snapshot(&target).unwrap();
+        fs::remove_file(&target).unwrap();
+        fs::write(&target, b"replacement-decoy-body").unwrap();
+        assert_eq!(
+            atomic_write_export(&target, b"replacement", &confirmed).unwrap_err(),
+            ExportError::OverwriteNotConfirmed
+        );
+        assert_eq!(fs::read(&target).unwrap(), b"replacement-decoy-body");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn refuses_publish_when_same_length_replacement_recreated_back_to_back() {
+        // Regression for the non-deterministic Windows failure: the snapshot used
+        // to compare timestamps, which a same-length delete+recreate in the same
+        // timer tick (and, on NTFS, the tunneled creation_time) could leave
+        // unchanged — letting an identity swap slip through. Identity is now
+        // anchored to the full file id while its original handle remains alive,
+        // so even a byte-for-byte same-length swap done back-to-back (no delay:
+        // the tightest tunneling/timer-collision window) must be refused.
+        let root = test_root("identity-tunnel");
         let target = root.join("report.md");
         fs::write(&target, b"first").unwrap();
         let confirmed = target_snapshot(&target).unwrap();
         fs::remove_file(&target).unwrap();
-        fs::write(&target, b"other").unwrap();
+        fs::write(&target, b"other").unwrap(); // identical 5-byte length as "first"
         assert_eq!(
             atomic_write_export(&target, b"replacement", &confirmed).unwrap_err(),
             ExportError::OverwriteNotConfirmed
