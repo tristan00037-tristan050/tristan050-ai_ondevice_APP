@@ -231,17 +231,19 @@ jobs:
           for i in $(seq 1 "${attempts}"); do
             if gh attestation verify "${RUNNER_TEMP}/firstscreen-release/source.zip" \
                  --repo "${GITHUB_REPOSITORY}" \
-                 --signer-workflow "${GITHUB_WORKFLOW_REF%%@*}"; then
-              echo "ATTESTATION_VERIFY_OK=1 attempt=${i}"
+                 --signer-workflow "${GITHUB_WORKFLOW_REF%%@*}" \
+                 >/dev/null 2>&1; then
+              echo "ATTESTATION_VERIFY_OK=1"
               exit 0
             fi
             if [ "${i}" -lt "${attempts}" ]; then
-              echo "attestation not yet indexed (attempt ${i}/${attempts}); retrying in ${delay}s"
+              echo "ATTESTATION_VERIFY_RETRY=1"
               sleep "${delay}"
               delay=$((delay * 2))
             fi
           done
-          echo "ATTESTATION_VERIFY_OK=0 ERROR_CODE=ATTESTATION_VERIFY_FAILED"
+          echo "ATTESTATION_VERIFY_OK=0"
+          echo "ERROR_CODE=ATTESTATION_VERIFY_FAILED"
           exit 1
 
       - name: Install deps for verify (jq) (main only)
