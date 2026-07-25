@@ -158,12 +158,19 @@ jobs:
           # otherwise the clean check trips and surfaces as BUILD_CONTEXT_INVALID.
           # Assert the tree is clean at build_with_git time so an accidental
           # reordering fails loudly here instead of being swallowed downstream.
-          dirty="$(git status --porcelain --untracked-files=all)"
-          if [ -n "${dirty}" ]; then
-            echo "TREE_NOT_CLEAN_BEFORE_BUILD_CONTEXT:"
-            echo "${dirty}"
+          tree_status="${RUNNER_TEMP}/firstscreen-build-context-git-status"
+          trap 'rm -f "${tree_status}"' EXIT
+          if ! git status --porcelain --untracked-files=all > "${tree_status}" 2>/dev/null; then
+            echo "BUILD_CONTEXT_TREE_CLEAN_OK=0"
+            echo "ERROR_CODE=GIT_STATUS_FAILED"
             exit 1
           fi
+          if [ -s "${tree_status}" ]; then
+            echo "BUILD_CONTEXT_TREE_CLEAN_OK=0"
+            echo "ERROR_CODE=TREE_NOT_CLEAN_BEFORE_BUILD_CONTEXT"
+            exit 1
+          fi
+          echo "BUILD_CONTEXT_TREE_CLEAN_OK=1"
           python scripts/release/build_with_git.py --output "${out}/BUILD_CONTEXT.json" --source-manifest "${out}/SOURCE_ARCHIVE_MANIFEST.json" --repository "${GITHUB_REPOSITORY}" --workflow-identity "${GITHUB_WORKFLOW_REF}" --toolchain-identity "python=3.12;node=lock-only;rust=lock-only" --baseline HEAD^
           python scripts/release/generate_cyclonedx_sbom.py --commit HEAD --output "${out}/butler.cdx.json" --build-context "${out}/BUILD_CONTEXT.json" --npm-lock butler-desktop/package-lock.json --python-requirements requirements-firstscreen-ci.lock
 
