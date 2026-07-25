@@ -121,6 +121,15 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
+    except BuildContextError as error:
+        # Surface the specific failure code so the cause is diagnosable in CI.
+        # BuildContextError messages are stable, path-free codes (e.g.
+        # BUILD_CONTEXT_REPOSITORY_NOT_CLEAN, BUILD_CONTEXT_PROTECTED_SCOPE_CHANGED),
+        # so the reason is exposed while no filesystem path leaks.
+        print(f"BUILD_CONTEXT_OK=0 ERROR_CODE={error}")
+        raise SystemExit(1)
     except Exception:
+        # Unexpected failure: keep the generic code (no details) to avoid leaking
+        # a path or internal message from an unclassified exception.
         print("BUILD_CONTEXT_OK=0 ERROR_CODE=BUILD_CONTEXT_INVALID")
         raise SystemExit(1)
