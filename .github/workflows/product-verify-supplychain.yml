@@ -216,7 +216,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh attestation verify "${RUNNER_TEMP}/firstscreen-release/source.zip" --repo "${GITHUB_REPOSITORY}" --signer-workflow "${GITHUB_WORKFLOW_REF%%@*}"
+          # The attestation was just uploaded in the previous step; the GitHub
+          # attestations read API is eventually consistent and can return HTTP
+          # 404 for a few seconds after upload (confirmed: the same subject
+          # digest resolves once indexed). Retry with exponential backoff so a
+          # read-after-write propagation lag does not red the gate.
+          #
+          # This does NOT weaken verification: --signer-workflow and the subject
+          # are still enforced on every attempt, and a genuine failure (wrong
+          # signer / tampered subject) keeps failing and exits non-zero after the
+          # final attempt. Only a transient not-yet-indexed 404 is tolerated.
+          attempts=6
+          delay=5
+          for i in $(seq 1 "${attempts}"); do
+            if gh attestation verify "${RUNNER_TEMP}/firstscreen-release/source.zip" \
+                 --repo "${GITHUB_REPOSITORY}" \
+                 --signer-workflow "${GITHUB_WORKFLOW_REF%%@*}"; then
+              echo "ATTESTATION_VERIFY_OK=1 attempt=${i}"
+              exit 0
+            fi
+            if [ "${i}" -lt "${attempts}" ]; then
+              echo "attestation not yet indexed (attempt ${i}/${attempts}); retrying in ${delay}s"
+              sleep "${delay}"
+              delay=$((delay * 2))
+            fi
+          done
+          echo "ATTESTATION_VERIFY_OK=0 ERROR_CODE=ATTESTATION_VERIFY_FAILED"
+          exit 1
 
       - name: Install deps for verify (jq) (main only)
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
