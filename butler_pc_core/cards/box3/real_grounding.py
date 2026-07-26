@@ -131,7 +131,14 @@ def _is_factual(sentence: str) -> bool:
     return any(hint in normalized for hint in _FACT_HINTS)
 
 
-def extract_claims(draft_text: str) -> list[DraftClaim]:
+def extract_claims(draft_text: str | None) -> list[DraftClaim]:
+    # None 은 '초안 없음'이라 정식 입력으로 받아 빈 목록을 돌려준다.
+    # 그 밖의 비문자열(False·0·[]·{} 포함)은 잘못된 입력이므로 조용히 빈 결과로
+    # 가리지 않고 즉시 드러낸다.
+    if draft_text is None:
+        return []
+    if not isinstance(draft_text, str):
+        raise TypeError("DRAFT_TEXT_TYPE_INVALID")
     claims: list[DraftClaim] = []
     raw_parts: list[str] = []
     for line in draft_text.splitlines():
