@@ -156,6 +156,22 @@ def test_repository_python_gate_uses_documented_collection_exclusions() -> None:
         assert "--ignore=tests/eval/test_eval_judge_v3.py" in command
 
 
+def test_firstscreen_sbom_attestation_verification_is_bound_and_index_independent() -> None:
+    workflow = (ROOT / ".github/workflows/product-verify-supplychain.yml").read_text(encoding="utf-8")
+    assert "id: attest_firstscreen_sbom" in workflow
+    assert (
+        "FIRSTSCREEN_ATTESTATION_BUNDLE: \"${{ steps.attest_firstscreen_sbom.outputs['bundle-path'] }}\""
+        in workflow
+    )
+    assert '--bundle "${FIRSTSCREEN_ATTESTATION_BUNDLE}"' in workflow
+    assert '--predicate-type "https://cyclonedx.org/bom"' in workflow
+    assert '--signer-workflow "${GITHUB_WORKFLOW_REF%%@*}"' in workflow
+    assert '--source-digest "${GITHUB_SHA}"' in workflow
+    assert '--source-ref "${GITHUB_REF}"' in workflow
+    assert "ATTESTATION_BUNDLE_UNAVAILABLE" in workflow
+    assert "ATTESTATION_VERIFY_RETRY" not in workflow
+
+
 def test_outer_bundle_is_ascii_but_nested_git_source_accepts_safe_utf8() -> None:
     with pytest.raises(ProductBundleVerificationError, match="PATH_NOT_ASCII"):
         _safe_name("source/한글.txt")
