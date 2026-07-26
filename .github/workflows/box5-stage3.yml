@@ -233,7 +233,7 @@ jobs:
             tests/company_profile \
             tests/company_policy/test_accounting_header_trust.py \
             tests/test_write_build_info.py \
-            -q --tb=short --junitxml=a4-canonical-junit.xml
+            -q --tb=short --junitxml="${RUNNER_TEMP}/a4-canonical-junit.xml"
       - name: Repository-wide ownership classification
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -283,7 +283,7 @@ jobs:
         with:
           name: a4-canonical-junit
           path: |
-            a4-canonical-junit.xml
+            ${{ runner.temp }}/a4-canonical-junit.xml
             a4-repo-wide-junit.xml
             a4-repo-failure-classification.json
             a4-secret-scan.json

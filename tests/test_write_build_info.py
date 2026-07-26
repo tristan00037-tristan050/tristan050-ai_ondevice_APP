@@ -36,10 +36,18 @@ def test_write_build_info_atomically_writes_exact_validated_payload(tmp_path):
     payload = json.loads(output.read_text(encoding="utf-8"))
     closure = payload.pop("a4_code_closure")
     helper = payload.pop("a4_authority_helper")
+    distribution = payload.pop("distribution")
     assert closure["schema_version"] == "butler.a4.code_closure.v5.3"
     assert set(closure["files"]) == set(_A4_CODE_FILES)
     assert len(closure["digest"]) == 64
     assert helper == {"bundled": False, "sha256": None}
+    # 기본값은 내부 빌드다. 배포용이 아님이 명시적으로 남아야 한다.
+    assert distribution == {
+        "schema_version": "butler.build_info.distribution.v1",
+        "release_distribution": False,
+        "not_for_distribution": True,
+        "root_anchor_sha256": None,
+    }
     assert payload == {
         "app": "Butler",
         "app_version": "0.9.0",
@@ -64,6 +72,47 @@ def test_write_build_info_binds_authority_helper_bytes(tmp_path):
         "bundled": True,
         "sha256": "f4b7215386e763c678a9ff707462de66d2011f192258c23eb21783e35b8a140a",
     }
+
+
+def test_distribution_build_records_bound_root_anchor(tmp_path):
+    _prepare_a4_files(tmp_path)
+    output = tmp_path / "BUILD_INFO.json"
+    anchor = "a" * 64
+    write_build_info(output, release_distribution=True, root_anchor=anchor, **_VALID)
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["distribution"] == {
+        "schema_version": "butler.build_info.distribution.v1",
+        "release_distribution": True,
+        "not_for_distribution": False,
+        "root_anchor_sha256": anchor,
+    }
+
+
+def test_distribution_claim_without_root_anchor_is_rejected(tmp_path):
+    _prepare_a4_files(tmp_path)
+    with pytest.raises(BuildInfoWriteError, match="DISTRIBUTION_WITHOUT_ROOT_ANCHOR"):
+        write_build_info(
+            tmp_path / "BUILD_INFO.json", release_distribution=True, **_VALID
+        )
+
+
+@pytest.mark.parametrize("anchor", ["", "A" * 64, "a" * 63, "z" * 64])
+def test_malformed_root_anchor_is_rejected(tmp_path, anchor):
+    _prepare_a4_files(tmp_path)
+    with pytest.raises(BuildInfoWriteError, match="INVALID_ROOT_ANCHOR"):
+        write_build_info(tmp_path / "BUILD_INFO.json", root_anchor=anchor, **_VALID)
+
+
+def test_internal_build_keeps_root_anchor_absent_rather_than_filled(tmp_path):
+    """anchor 가 없으면 없는 것으로 남긴다 — 임의 값으로 채우지 않는다."""
+    _prepare_a4_files(tmp_path)
+    output = tmp_path / "BUILD_INFO.json"
+    write_build_info(output, **_VALID)
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["distribution"]["root_anchor_sha256"] is None
+    assert payload["distribution"]["not_for_distribution"] is True
 
 
 @pytest.mark.parametrize(
