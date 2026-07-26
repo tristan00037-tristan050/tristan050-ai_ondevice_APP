@@ -224,6 +224,12 @@ jobs:
             echo "ERROR_CODE=ATTESTATION_BUNDLE_UNAVAILABLE"
             exit 1
           fi
+          # --source-digest 는 Fulcio 인증서의 Source Repository Digest 확장
+          # (OID 1.3.6.1.4.1.57264.1.13) 과 ★문자열 그대로 비교된다. GitHub 이 발급하는
+          # 인증서는 알고리즘 접두 없는 commit sha1 을 담으므로 ${GITHUB_SHA} 를 그대로
+          # 넘긴다. "sha1:" 을 붙이면 확장값과 달라져 이 게이트가 항상 실패한다.
+          # 실물 attestation 으로 고정한 회귀:
+          #   tests/firstscreen_v2_5/test_attestation_verification.py
           if gh attestation verify "${RUNNER_TEMP}/firstscreen-release/source.zip" \
                --repo "${GITHUB_REPOSITORY}" \
                --bundle "${FIRSTSCREEN_ATTESTATION_BUNDLE}" \
