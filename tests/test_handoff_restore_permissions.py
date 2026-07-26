@@ -260,6 +260,67 @@ def test_refuses_directory_without_handoff_marker(tmp_path: Path) -> None:
     assert _mode(secret) == 0o600
 
 
+def _parent_with_nested_package(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """인계 폴더의 한 칸 위 — 옆에 개인 자료가 있는 상황."""
+    parent = tmp_path / "바탕화면"
+    package = _package_with_marker(parent / "package")
+    secret = parent / "secret.txt"
+    secret.write_text("개인 자료\n", encoding="utf-8")
+    secret.chmod(0o600)
+    (package / "Butler.app" / "Contents" / "MacOS" / "butler-desktop").chmod(0o700)
+    return parent, package, secret
+
+
+def test_refuses_parent_of_package_even_though_app_exists_below(tmp_path: Path) -> None:
+    """★하위 트리에 Butler.app 이 있어도 한 칸 위는 대상이 될 수 없다."""
+    parent, package, secret = _parent_with_nested_package(tmp_path)
+
+    result = subprocess.run(
+        ["/bin/bash", str(SCRIPT), str(parent)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "표식이 없습니다" in result.stdout + result.stderr
+    # 옆 개인 자료가 열리지 않아야 한다.
+    assert _mode(secret) == 0o600
+    # 패키지 내부도 손대지 않아야 한다.
+    assert _mode(package / "Butler.app" / "Contents" / "MacOS" / "butler-desktop") == 0o700
+
+
+def test_refuses_relative_parent_from_inside_package(tmp_path: Path) -> None:
+    """패키지 안에서 `..` 로 한 칸 위를 지정해도 막혀야 한다."""
+    parent, package, secret = _parent_with_nested_package(tmp_path)
+
+    result = subprocess.run(
+        ["/bin/bash", str(SCRIPT), ".."],
+        cwd=str(package),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "표식이 없습니다" in result.stdout + result.stderr
+    assert _mode(secret) == 0o600
+    assert _mode(package / "Butler.app" / "Contents" / "MacOS" / "butler-desktop") == 0o700
+
+
+def test_package_itself_is_still_accepted(tmp_path: Path) -> None:
+    """한 칸 위는 거부하되, 패키지 자체는 정상 동작해야 한다."""
+    _parent, package, secret = _parent_with_nested_package(tmp_path)
+
+    result = subprocess.run(
+        ["/bin/bash", str(SCRIPT), str(package)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _mode(package / "Butler.app" / "Contents" / "MacOS" / "butler-desktop") == 0o755
+    assert _mode(secret) == 0o600  # 패키지 밖은 건드리지 않는다
+
+
 def test_accepts_handoff_manifest_marker(tmp_path: Path) -> None:
     package = tmp_path / "인계"
     (package / "도구").mkdir(parents=True)

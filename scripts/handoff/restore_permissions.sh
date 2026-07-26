@@ -46,8 +46,12 @@ fi
 [ -e "$TARGET/.git" ] && refuse "git 저장소 루트 — $TARGET"
 
 # 인계 패키지 표식이 있어야 한다. 아무 폴더에나 걸리지 않게 하는 마지막 방어선이다.
+#
+# ★표식은 TARGET 루트에 ★직접 있어야 한다. 하위 트리를 뒤지면 인계 폴더의 한 칸 위를
+#   TARGET 으로 넣어도 아래쪽 Butler.app 때문에 통과해 버리고, 그 위 폴더 전체가
+#   chmod 된다(옆에 있던 개인 자료가 0644 로 열린다). 재귀 검색을 쓰지 않는다.
 marker=""
-if find "$TARGET" -type d -path '*/Butler.app/Contents/MacOS' -print -quit 2>/dev/null | grep -q .; then
+if [ -d "$TARGET/Butler.app/Contents/MacOS" ]; then
   marker="Butler.app/Contents/MacOS"
 else
   for candidate in HANDOFF_MANIFEST.json handoff_manifest.json; do
@@ -58,7 +62,11 @@ else
   done
 fi
 [ -n "$marker" ] || refuse "인계 패키지 표식이 없습니다 — $TARGET
-   필요한 표식: Butler.app/Contents/MacOS 디렉터리, 또는 최상위의 HANDOFF_MANIFEST.json"
+   표식은 대상 폴더 ★바로 아래에 있어야 합니다(하위 폴더는 보지 않습니다).
+   · $TARGET/Butler.app/Contents/MacOS  디렉터리, 또는
+   · $TARGET/HANDOFF_MANIFEST.json      파일
+   앱이 하위 폴더(예: 01_앱/Butler.app)에 있는 패키지라면 패키지 최상위에
+   HANDOFF_MANIFEST.json 을 두고 그 폴더를 대상으로 지정하십시오."
 
 echo "권한 복구 대상 폴더: $TARGET"
 echo "인계 패키지 표식: $marker"

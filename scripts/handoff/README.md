@@ -26,8 +26,21 @@ cp scripts/handoff/restore_permissions.sh "<인계폴더>/권한복구.sh"
 - `/` 가 아닐 것 · 최상위 디렉터리(`/Users` 등)가 아닐 것
 - `$HOME` 자체가 아닐 것
 - git 저장소 루트(`.git` 보유)가 아닐 것
-- **인계 패키지 표식이 있을 것** — `Butler.app/Contents/MacOS` 디렉터리, 또는 최상위의
-  `HANDOFF_MANIFEST.json`
+- **인계 패키지 표식이 대상 폴더 바로 아래에 있을 것** — `<대상>/Butler.app/Contents/MacOS`
+  디렉터리, 또는 `<대상>/HANDOFF_MANIFEST.json`
+
+  ★표식은 **하위 트리를 뒤져서 찾지 않는다.** 재귀 검색을 하면 인계 폴더의 한 칸 위를
+  대상으로 넣어도 아래쪽 `Butler.app` 때문에 통과해 버리고, 그 위 폴더 전체가 `chmod` 된다
+  (옆에 있던 개인 자료가 `0644` 로 열린다).
+
+  그래서 **앱이 하위 폴더에 있는 패키지**(예: `01_앱/Butler.app`)는 패키지 최상위에
+  `HANDOFF_MANIFEST.json` 을 두어야 한다. 패키지를 만들 때 함께 넣는다.
+
+  ```bash
+  cp scripts/handoff/restore_permissions.sh "<인계폴더>/권한복구.sh"
+  printf '{"package":"butler-handoff","created":"%s"}\n' "$(date -u +%FT%TZ)" \
+    > "<인계폴더>/HANDOFF_MANIFEST.json"
+  ```
 
 ### 판정 규칙
 
