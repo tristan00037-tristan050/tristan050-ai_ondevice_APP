@@ -15,6 +15,12 @@ use tauri_plugin_shell::{
 };
 
 mod build_identity;
+// build script 전용 모듈이라 라이브러리 빌드에는 들어가지 않는다. 그대로 두면 게이트 판정
+// 규칙이 `cargo test` 에서 한 번도 실행되지 않으므로, 시험 빌드에만 끌어와 회귀 시험이
+// CI 에서 실제로 돌게 한다.
+#[cfg(test)]
+#[path = "../build_gate.rs"]
+mod build_gate_contract;
 #[cfg(test)]
 #[path = "../distribution_flag.rs"]
 mod distribution_flag_contract;
