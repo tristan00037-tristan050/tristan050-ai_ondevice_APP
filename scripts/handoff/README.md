@@ -37,10 +37,34 @@ cp scripts/handoff/restore_permissions.sh "<인계폴더>/권한복구.sh"
   `HANDOFF_MANIFEST.json` 을 두어야 한다. 패키지를 만들 때 함께 넣는다.
 
   ```bash
-  cp scripts/handoff/restore_permissions.sh "<인계폴더>/권한복구.sh"
-  printf '{"package":"butler-handoff","created":"%s"}\n' "$(date -u +%FT%TZ)" \
-    > "<인계폴더>/HANDOFF_MANIFEST.json"
+  pkg="<인계폴더>"
+  cp scripts/handoff/restore_permissions.sh "$pkg/권한복구.sh"
+  cat > "$pkg/HANDOFF_MANIFEST.json" <<JSON
+  {
+    "schema_version": "butler.handoff.manifest.v1",
+    "package_root": "$(basename "$pkg")",
+    "app_paths": ["01_앱/Butler.app"],
+    "created_utc": "$(date -u +%FT%TZ)"
+  }
+  JSON
   ```
+
+#### manifest 는 파일 존재만으로 승인되지 않는다
+
+빈 `{}` 를 상위 폴더에 두면 통과하던 구멍이 있었다. 이제 아래를 **전부** 만족해야
+표식으로 인정한다. 하나라도 어긋나면 아무것도 바꾸지 않고 거부한다.
+
+| 항목 | 규칙 |
+|---|---|
+| 파일 | symlink 금지. JSON 이어야 함(깨진 JSON 거부) |
+| `schema_version` | 정확히 `butler.handoff.manifest.v1` |
+| `package_root` | canonical 대상 폴더 이름과 **일치**. `/` · `.` · `..` 불가 |
+| `app_paths` | 배열이며 1개 이상 64개 이하 |
+| `app_paths[]` | 대상 폴더 기준 **상대 경로**. 절대경로 · `..` · `.` · 역슬래시 금지 |
+| `app_paths[]` | 경로 구성요소에 symlink 금지, 해석 결과가 대상 폴더 안에 머물 것 |
+| `app_paths[]` | 실제 존재하는 디렉터리이며 `Contents/MacOS` 를 가질 것 |
+
+검증은 macOS 기본 도구 `plutil` 로 한다. `plutil` 이 없으면 검증 없이 진행하지 않고 거부한다.
 
 ### 판정 규칙
 

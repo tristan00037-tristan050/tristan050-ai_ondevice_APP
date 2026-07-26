@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 import subprocess
@@ -321,24 +322,150 @@ def test_package_itself_is_still_accepted(tmp_path: Path) -> None:
     assert _mode(secret) == 0o600  # 패키지 밖은 건드리지 않는다
 
 
-def test_accepts_handoff_manifest_marker(tmp_path: Path) -> None:
-    package = tmp_path / "인계"
-    (package / "도구").mkdir(parents=True)
-    (package / "HANDOFF_MANIFEST.json").write_text("{}\n", encoding="utf-8")
-    binary = package / "도구" / "butler-verify"
-    binary.write_bytes(MACH_O)
+# ── manifest 표식: 파일 존재만으로 승인하지 않는다 ──────────────────────
+
+MANIFEST_SCHEMA = "butler.handoff.manifest.v1"
+
+
+def _nested_app_package(root: Path, *, app_relative: str = "01_앱/Butler.app") -> Path:
+    """앱이 하위 폴더에 있는 실제 인계 패키지 모양."""
+    app = root / app_relative
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    (app / "Contents" / "MacOS" / "butler-desktop").write_bytes(MACH_O)
+    (root / "00_먼저읽기.md").write_text("# 안내\n", encoding="utf-8")
+    return root
+
+
+def _write_manifest(package: Path, payload: object, name: str = "HANDOFF_MANIFEST.json") -> Path:
+    path = package / name
+    path.write_text(json.dumps(payload, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
+
+
+def _harden(package: Path) -> None:
     for path in sorted(package.rglob("*"), reverse=True):
         path.chmod(0o700)
 
-    result = subprocess.run(
-        ["/bin/bash", str(SCRIPT), str(package)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+
+def _valid_manifest(package: Path, app_relative: str = "01_앱/Butler.app") -> dict:
+    return {
+        "schema_version": MANIFEST_SCHEMA,
+        "package_root": package.name,
+        "app_paths": [app_relative],
+        "created_utc": "2026-07-26T01:00:00Z",
+    }
+
+
+def test_valid_manifest_is_accepted_and_restores_nested_app(tmp_path: Path) -> None:
+    package = _nested_app_package(tmp_path / "그룹A_인계")
+    _write_manifest(package, _valid_manifest(package))
+    _harden(package)
+
+    result = _run(package)
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "검증됨" in result.stdout
+    binary = package / "01_앱" / "Butler.app" / "Contents" / "MacOS" / "butler-desktop"
     assert _mode(binary) == 0o755
-    assert _mode(package / "HANDOFF_MANIFEST.json") == 0o644
+    assert _mode(package / "00_먼저읽기.md") == 0o644
+
+
+def test_empty_manifest_is_rejected(tmp_path: Path) -> None:
+    """★빈 {} manifest 는 표식이 아니다."""
+    package = _nested_app_package(tmp_path / "그룹A_인계")
+    _write_manifest(package, {})
+    _harden(package)
+
+    result = _run(package)
+    assert result.returncode != 0
+    assert "manifest 가 유효하지 않습니다" in result.stdout + result.stderr
+    binary = package / "01_앱" / "Butler.app" / "Contents" / "MacOS" / "butler-desktop"
+    assert _mode(binary) == 0o700
+
+
+def test_empty_manifest_in_parent_folder_does_not_open_neighbours(tmp_path: Path) -> None:
+    """빈 manifest 를 상위 폴더에 두어도 옆 개인 자료가 열리지 않아야 한다."""
+    parent = tmp_path / "바탕화면"
+    package = _nested_app_package(parent / "그룹A_인계")
+    secret = parent / "secret.txt"
+    secret.write_text("개인 자료\n", encoding="utf-8")
+    secret.chmod(0o600)
+    _write_manifest(parent, {})
+    _harden(package)
+
+    result = _run(parent)
+    assert result.returncode != 0
+    assert _mode(secret) == 0o600
+    # 패키지 내부도 그대로여야 한다.
+    assert _mode(package / "01_앱" / "Butler.app" / "Contents" / "MacOS") == 0o700
+
+
+@pytest.mark.parametrize(
+    ("mutate", "reason"),
+    [
+        (lambda m, p: m.update(schema_version="butler.handoff.manifest.v2"), "schema_version"),
+        (lambda m, p: m.pop("schema_version"), "schema_version"),
+        (lambda m, p: m.pop("app_paths"), "app_paths"),
+        (lambda m, p: m.update(app_paths=[]), "app_paths"),
+        (lambda m, p: m.update(app_paths="01_앱/Butler.app"), "app_paths"),
+        (lambda m, p: m.update(package_root="다른이름"), "package_root"),
+        (lambda m, p: m.pop("package_root"), "package_root"),
+        (lambda m, p: m.update(package_root="../바깥"), "package_root"),
+        (lambda m, p: m.update(app_paths=["../바깥/Butler.app"]), ".."),
+        (lambda m, p: m.update(app_paths=["01_앱/../../바깥/Butler.app"]), ".."),
+        (lambda m, p: m.update(app_paths=["/Applications/Butler.app"]), "절대 경로"),
+        (lambda m, p: m.update(app_paths=["없는폴더/Butler.app"]), "존재하지 않습니다"),
+        (lambda m, p: m.update(app_paths=["00_먼저읽기.md"]), "디렉터리가 아닙니다"),
+    ],
+)
+def test_manifest_schema_violations_are_rejected(tmp_path: Path, mutate, reason: str) -> None:
+    package = _nested_app_package(tmp_path / "그룹A_인계")
+    manifest = _valid_manifest(package)
+    mutate(manifest, package)
+    _write_manifest(package, manifest)
+    _harden(package)
+
+    result = _run(package)
+    output = result.stdout + result.stderr
+    assert result.returncode != 0, output
+    assert "유효하지 않습니다" in output
+    assert reason in output or "manifest" in output
+    binary = package / "01_앱" / "Butler.app" / "Contents" / "MacOS" / "butler-desktop"
+    assert _mode(binary) == 0o700
+
+
+def test_manifest_with_symlinked_app_path_is_rejected(tmp_path: Path) -> None:
+    outside = tmp_path / "바깥" / "Butler.app" / "Contents" / "MacOS"
+    outside.mkdir(parents=True)
+    package = tmp_path / "그룹A_인계"
+    package.mkdir()
+    (package / "01_앱").mkdir()
+    (package / "01_앱" / "Butler.app").symlink_to(
+        tmp_path / "바깥" / "Butler.app", target_is_directory=True
+    )
+    _write_manifest(package, _valid_manifest(package))
+
+    result = _run(package)
+    assert result.returncode != 0
+    assert "symlink" in result.stdout + result.stderr
+
+
+def test_symlinked_manifest_is_rejected(tmp_path: Path) -> None:
+    package = _nested_app_package(tmp_path / "그룹A_인계")
+    real = _write_manifest(package, _valid_manifest(package), name="real_manifest.json")
+    (package / "HANDOFF_MANIFEST.json").symlink_to(real)
+
+    result = _run(package)
+    assert result.returncode != 0
+    assert "symlink" in result.stdout + result.stderr
+
+
+def test_broken_json_manifest_is_rejected(tmp_path: Path) -> None:
+    package = _nested_app_package(tmp_path / "그룹A_인계")
+    (package / "HANDOFF_MANIFEST.json").write_text("{oops", encoding="utf-8")
+
+    result = _run(package)
+    assert result.returncode != 0
+    assert "유효하지 않습니다" in result.stdout + result.stderr
 
 
 def test_self_check_reports_unrecovered_app_binary(tmp_path: Path) -> None:

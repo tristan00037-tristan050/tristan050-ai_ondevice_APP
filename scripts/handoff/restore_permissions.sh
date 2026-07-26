@@ -50,13 +50,102 @@ fi
 # ★표식은 TARGET 루트에 ★직접 있어야 한다. 하위 트리를 뒤지면 인계 폴더의 한 칸 위를
 #   TARGET 으로 넣어도 아래쪽 Butler.app 때문에 통과해 버리고, 그 위 폴더 전체가
 #   chmod 된다(옆에 있던 개인 자료가 0644 로 열린다). 재귀 검색을 쓰지 않는다.
+#
+# manifest 경로도 ★파일 존재만으로 승인하지 않는다. 빈 {} 를 아무 폴더에나 두면
+# 통과해 버리기 때문이다. 아래를 전부 만족해야 표식으로 인정한다.
+#   · JSON 이고 schema_version 이 butler.handoff.manifest.v1
+#   · package_root 가 canonical TARGET 의 이름과 일치
+#   · app_paths 가 1개 이상이며 전부 허용된 상대 경로
+#   · 경로에 .. / 절대경로 / symlink 가 없고, 해석 결과가 TARGET 안에 머무름
+#   · 각 경로가 실제 존재하는 .app 이고 Contents/MacOS 를 가짐
+
+MANIFEST_SCHEMA_VERSION="butler.handoff.manifest.v1"
+
+manifest_field() {
+  # $1=파일 $2=키 — 값이 없거나 JSON 이 깨졌으면 실패한다.
+  plutil -extract "$2" raw -o - "$1" 2>/dev/null
+}
+
+reject_manifest() {
+  refuse "인계 manifest 가 유효하지 않습니다 — $1
+   manifest 는 다음을 만족해야 합니다.
+   · schema_version = \"$MANIFEST_SCHEMA_VERSION\"
+   · package_root   = \"$(basename "$TARGET")\"  (대상 폴더 이름과 일치)
+   · app_paths      = 대상 폴더 기준 상대 경로 1개 이상(.app 디렉터리)
+   절대경로·..·symlink 는 허용하지 않습니다."
+}
+
+validate_relative_app_path() {
+  local relative="$1" component accumulated resolved
+  [ -n "$relative" ] || reject_manifest "app_paths 에 빈 경로가 있습니다"
+  case "$relative" in
+    /*) reject_manifest "절대 경로는 허용하지 않습니다 — $relative" ;;
+    *[\\]*) reject_manifest "역슬래시 경로는 허용하지 않습니다 — $relative" ;;
+  esac
+  accumulated="$TARGET"
+  local saved_ifs="$IFS"
+  IFS='/'
+  # shellcheck disable=SC2086
+  set -- $relative
+  IFS="$saved_ifs"
+  for component in "$@"; do
+    case "$component" in
+      ""|"."|"..") reject_manifest "상대 경로에 . 또는 .. 를 쓸 수 없습니다 — $relative" ;;
+    esac
+    accumulated="$accumulated/$component"
+    [ -L "$accumulated" ] && reject_manifest "경로에 symlink 가 있습니다 — $relative"
+    [ -e "$accumulated" ] || reject_manifest "경로가 존재하지 않습니다 — $relative"
+  done
+  [ -d "$accumulated" ] || reject_manifest "디렉터리가 아닙니다 — $relative"
+  resolved="$(cd "$accumulated" && pwd -P)"
+  case "$resolved" in
+    "$TARGET"/*) ;;
+    *) reject_manifest "대상 폴더 밖을 가리킵니다 — $relative" ;;
+  esac
+  [ -d "$accumulated/Contents/MacOS" ] \
+    || reject_manifest "앱 번들이 아닙니다(Contents/MacOS 없음) — $relative"
+}
+
+validate_manifest() {
+  local path="$1" value count index
+  [ -L "$path" ] && reject_manifest "manifest 가 symlink 입니다"
+  command -v plutil >/dev/null 2>&1 \
+    || refuse "manifest 검증 도구(plutil)를 찾을 수 없습니다 — 검증 없이 진행하지 않습니다"
+
+  value="$(manifest_field "$path" schema_version)" \
+    || reject_manifest "JSON 이 아니거나 schema_version 이 없습니다"
+  [ "$value" = "$MANIFEST_SCHEMA_VERSION" ] \
+    || reject_manifest "schema_version 이 다릅니다 — $value"
+
+  value="$(manifest_field "$path" package_root)" \
+    || reject_manifest "package_root 가 없습니다"
+  case "$value" in
+    ""|*/*|.|..) reject_manifest "package_root 형식이 잘못됐습니다 — $value" ;;
+  esac
+  [ "$value" = "$(basename "$TARGET")" ] \
+    || reject_manifest "package_root 가 대상 폴더와 다릅니다 — manifest=$value 대상=$(basename "$TARGET")"
+
+  plutil -extract app_paths json -o - "$path" >/dev/null 2>&1 \
+    || reject_manifest "app_paths 가 배열이 아닙니다"
+  count=0
+  index=0
+  while value="$(manifest_field "$path" "app_paths.$index")"; do
+    validate_relative_app_path "$value"
+    count=$((count + 1))
+    index=$((index + 1))
+    [ "$index" -le 64 ] || reject_manifest "app_paths 가 너무 많습니다"
+  done
+  [ "$count" -ge 1 ] || reject_manifest "app_paths 가 비어 있습니다"
+}
+
 marker=""
 if [ -d "$TARGET/Butler.app/Contents/MacOS" ]; then
   marker="Butler.app/Contents/MacOS"
 else
   for candidate in HANDOFF_MANIFEST.json handoff_manifest.json; do
     if [ -f "$TARGET/$candidate" ]; then
-      marker="$candidate"
+      validate_manifest "$TARGET/$candidate"
+      marker="$candidate (검증됨)"
       break
     fi
   done
