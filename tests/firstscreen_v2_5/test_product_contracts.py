@@ -133,9 +133,12 @@ def test_build_context_uses_the_same_protected_scope_authority() -> None:
 
 def test_native_release_binary_requires_and_embeds_build_context_digest() -> None:
     build_script = (ROOT / "butler-desktop/src-tauri/build.rs").read_text(encoding="utf-8")
+    build_gate = (ROOT / "butler-desktop/src-tauri/build_gate.rs").read_text(encoding="utf-8")
     identity = (ROOT / "butler-desktop/src-tauri/src/build_identity.rs").read_text(encoding="utf-8")
     assert "BUILD_CONTEXT_DIGEST_REQUIRED" in build_script
-    assert "BUILD_CONTEXT_DIGEST_INVALID" in build_script
+    assert "mod build_gate;" in build_script
+    assert "build_gate::evaluate_build_gate(" in build_script
+    assert 'Err("BUILD_CONTEXT_DIGEST_INVALID")' in build_gate
     assert "cargo:rustc-env=BUTLER_BUILD_CONTEXT_DIGEST" in build_script
     assert 'env!("BUTLER_BUILD_CONTEXT_DIGEST")' in identity
 
