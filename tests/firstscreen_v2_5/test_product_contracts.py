@@ -143,6 +143,26 @@ def test_native_release_binary_requires_and_embeds_build_context_digest() -> Non
     assert 'env!("BUTLER_BUILD_CONTEXT_DIGEST")' in identity
 
 
+def test_handoff_regression_runs_on_macos_and_blocks_the_gate() -> None:
+    """인계 권한복구는 macOS 전용 스크립트다. 회귀가 실제 대상 OS 에서 돌아야 한다.
+
+    ubuntu job 에서만 돌면 plutil 분기가 CI 에서 한 번도 실행되지 않는다.
+    """
+    workflow = (ROOT / ".github/workflows/firstscreen-v2-5.yml").read_text(encoding="utf-8")
+    assert "handoff-macos:" in workflow
+    macos_job = workflow[workflow.index("handoff-macos:") : workflow.index("\n  gate:")]
+    assert "runs-on: macos-15" in macos_job
+    assert "command -v plutil" in macos_job
+    assert "tests/test_handoff_restore_permissions.py" in macos_job
+    # skip 은 실행되지 않은 것과 같다 — 게이트가 skip 을 통과시키면 안 된다.
+    assert "skipped cases" in macos_job
+    assert "HANDOFF_MACOS_GATE_FAILED" in macos_job
+
+    gate_job = workflow[workflow.index("\n  gate:") :]
+    assert "handoff-macos" in gate_job, "집계 gate 가 macOS job 을 기다려야 한다"
+    assert 'test "${HANDOFF_MACOS}" = success' in gate_job
+
+
 def test_repository_python_gate_uses_documented_collection_exclusions() -> None:
     workflow = (ROOT / ".github/workflows/firstscreen-v2-5.yml").read_text(encoding="utf-8")
     repository_commands = [
