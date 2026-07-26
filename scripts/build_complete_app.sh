@@ -97,18 +97,37 @@ export BUTLER_SOURCE_COMMIT_OID BUTLER_SOURCE_TREE_OID
 
 # ★root bootstrap anchor 는 owner root 키 세리머니의 산출물이다(첫 화면 범위확정 문서 §3 IM-10,
 #   배포 개시 전 이월 항목). 저장소에 정본이 없으므로 임의 생성은 금지한다 — 거짓 신뢰근거가 된다.
-if [[ -z "${BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256:-}" ]]; then
-  echo "❌ FIRSTSCREEN_ROOT_ANCHOR_REQUIRED — release 빌드는 부트스트랩 root anchor 를 요구한다."
-  echo "   값의 정의: 앱이 최초 신뢰 부트스트랩에서 받아들일 root-policy 문서의 canonical digest"
-  echo "   (butler-desktop/src-tauri/src/runtime_trust/verifier.rs 의 BLOCK_ROOT_BOOTSTRAP_ANCHOR)."
-  echo "   ★임의 값 생성 금지. 세리머니로 확정된 값을"
-  echo "   BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256=<64자리 소문자 hex> 로 전달하라."
-  exit 1
+#   배포 빌드(BUTLER_RELEASE_DISTRIBUTION=1)에서는 반드시 있어야 하고, 내부 빌드에서는
+#   없는 채로 진행하되 그 사실을 BUILD_INFO 에 남긴다.
+RELEASE_DISTRIBUTION="${BUTLER_RELEASE_DISTRIBUTION:-0}"
+export BUTLER_RELEASE_DISTRIBUTION="$RELEASE_DISTRIBUTION"
+BUILD_INFO_DISTRIBUTION_ARGS=()
+if [[ "$RELEASE_DISTRIBUTION" == "1" ]]; then
+  if [[ -z "${BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256:-}" ]]; then
+    echo "❌ FIRSTSCREEN_ROOT_ANCHOR_REQUIRED — 배포 빌드는 부트스트랩 root anchor 를 요구한다."
+    echo "   값의 정의: 앱이 최초 신뢰 부트스트랩에서 받아들일 root-policy 문서의 canonical digest"
+    echo "   (butler-desktop/src-tauri/src/runtime_trust/verifier.rs 의 BLOCK_ROOT_BOOTSTRAP_ANCHOR)."
+    echo "   ★임의 값 생성 금지. 세리머니로 확정된 값을"
+    echo "   BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256=<64자리 소문자 hex> 로 전달하라."
+    exit 1
+  fi
+  [[ "${BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256}" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "❌ root anchor 형식 위반(64자리 소문자 hex 아님)"; exit 1;
+  }
+  export BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256
+  BUILD_INFO_DISTRIBUTION_ARGS=(--release-distribution --root-anchor "$BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256")
+  echo "  ✅ 배포 빌드 — root anchor 결속"
+else
+  if [[ -n "${BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256:-}" ]]; then
+    [[ "${BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256}" =~ ^[0-9a-f]{64}$ ]] || {
+      echo "❌ root anchor 형식 위반(64자리 소문자 hex 아님)"; exit 1;
+    }
+    export BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256
+    BUILD_INFO_DISTRIBUTION_ARGS=(--root-anchor "$BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256")
+  fi
+  echo "  ℹ️ 내부 빌드(BUTLER_RELEASE_DISTRIBUTION≠1) — ★배포용 아님으로 BUILD_INFO 에 표시한다."
+  echo "     root anchor 미결속 상태이므로 최초 신뢰 부트스트랩은 차단된다(설계대로)."
 fi
-[[ "${BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256}" =~ ^[0-9a-f]{64}$ ]] || {
-  echo "❌ root anchor 형식 위반(64자리 소문자 hex 아님)"; exit 1;
-}
-export BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256
 echo "  ✅ build context digest $BUILD_CONTEXT_DIGEST · source $BUTLER_SOURCE_COMMIT_OID"
 
 echo "[1/5] Tauri 빌드 (.app)"
@@ -201,11 +220,16 @@ if ! "$APP_PY" "$ROOT/scripts/write_build_info.py" \
   --git-describe "$BUILD_DESC" \
   --timestamp-utc "$BUILD_TS" \
   --app-version "$APP_VER" \
-  ${AUTHORITY_HELPER_ARGS[@]+"${AUTHORITY_HELPER_ARGS[@]}"}; then
+  ${AUTHORITY_HELPER_ARGS[@]+"${AUTHORITY_HELPER_ARGS[@]}"} \
+  ${BUILD_INFO_DISTRIBUTION_ARGS[@]+"${BUILD_INFO_DISTRIBUTION_ARGS[@]}"}; then
   echo "❌ BUILD_INFO.json 기록·검증 실패 — 불완전 앱 생성 차단"
   exit 1
 fi
-echo "  ✅ BUILD_INFO.json (OID $BUILD_OID)"
+if [[ "$RELEASE_DISTRIBUTION" == "1" ]]; then
+  echo "  ✅ BUILD_INFO.json (OID $BUILD_OID · 배포 빌드)"
+else
+  echo "  ✅ BUILD_INFO.json (OID $BUILD_OID · ★배포용 아님)"
+fi
 
 if [[ "$PRODUCTION_A4_AUTHORITY" == "1" ]]; then
   echo "[4.75/5] A4 helper 격리·앱 Hardened Runtime 최종 서명 검증"
