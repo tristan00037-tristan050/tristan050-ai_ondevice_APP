@@ -407,6 +407,7 @@ def test_empty_manifest_in_parent_folder_does_not_open_neighbours(tmp_path: Path
         (lambda m, p: m.pop("app_paths"), "app_paths"),
         (lambda m, p: m.update(app_paths=[]), "app_paths"),
         (lambda m, p: m.update(app_paths="01_앱/Butler.app"), "app_paths"),
+        (lambda m, p: m.update(app_paths=["01_앱/Butler.app", 7]), "app_paths"),
         (lambda m, p: m.update(package_root="다른이름"), "package_root"),
         (lambda m, p: m.pop("package_root"), "package_root"),
         (lambda m, p: m.update(package_root="../바깥"), "package_root"),

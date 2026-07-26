@@ -60,10 +60,51 @@ fi
 #   · 각 경로가 실제 존재하는 .app 이고 Contents/MacOS 를 가짐
 
 MANIFEST_SCHEMA_VERSION="butler.handoff.manifest.v1"
+MANIFEST_PARSER=""
 
 manifest_field() {
-  # $1=파일 $2=키 — 값이 없거나 JSON 이 깨졌으면 실패한다.
-  plutil -extract "$2" raw -o - "$1" 2>/dev/null
+  # $1=파일 $2=키 — 문자열 값이 없거나 타입/JSON 이 잘못됐으면 실패한다.
+  if [ "$MANIFEST_PARSER" = "plutil" ]; then
+    plutil -extract "$2" raw -expect string -o - "$1" 2>/dev/null
+    return
+  fi
+  python3 - "$1" "$2" 2>/dev/null <<'PY'
+import json
+import sys
+
+path, key_path = sys.argv[1:3]
+with open(path, "r", encoding="utf-8") as stream:
+    value = json.load(stream)
+for component in key_path.split("."):
+    if isinstance(value, dict):
+        value = value[component]
+    elif isinstance(value, list) and component.isdecimal():
+        value = value[int(component)]
+    else:
+        raise KeyError(component)
+if not isinstance(value, str):
+    raise TypeError("manifest field must be a string")
+sys.stdout.write(value)
+PY
+}
+
+manifest_app_paths_count() {
+  local path="$1"
+  if [ "$MANIFEST_PARSER" = "plutil" ]; then
+    plutil -extract app_paths raw -expect array -o - "$path" 2>/dev/null
+    return
+  fi
+  python3 - "$path" 2>/dev/null <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as stream:
+    value = json.load(stream)
+app_paths = value.get("app_paths") if isinstance(value, dict) else None
+if not isinstance(app_paths, list):
+    raise TypeError("app_paths must be an array")
+sys.stdout.write(str(len(app_paths)))
+PY
 }
 
 reject_manifest() {
@@ -109,8 +150,13 @@ validate_relative_app_path() {
 validate_manifest() {
   local path="$1" value count index
   [ -L "$path" ] && reject_manifest "manifest 가 symlink 입니다"
-  command -v plutil >/dev/null 2>&1 \
-    || refuse "manifest 검증 도구(plutil)를 찾을 수 없습니다 — 검증 없이 진행하지 않습니다"
+  if command -v plutil >/dev/null 2>&1; then
+    MANIFEST_PARSER="plutil"
+  elif command -v python3 >/dev/null 2>&1; then
+    MANIFEST_PARSER="python3"
+  else
+    refuse "manifest 검증 도구(plutil 또는 python3)를 찾을 수 없습니다 — 검증 없이 진행하지 않습니다"
+  fi
 
   value="$(manifest_field "$path" schema_version)" \
     || reject_manifest "JSON 이 아니거나 schema_version 이 없습니다"
@@ -125,17 +171,20 @@ validate_manifest() {
   [ "$value" = "$(basename "$TARGET")" ] \
     || reject_manifest "package_root 가 대상 폴더와 다릅니다 — manifest=$value 대상=$(basename "$TARGET")"
 
-  plutil -extract app_paths json -o - "$path" >/dev/null 2>&1 \
+  count="$(manifest_app_paths_count "$path")" \
     || reject_manifest "app_paths 가 배열이 아닙니다"
-  count=0
-  index=0
-  while value="$(manifest_field "$path" "app_paths.$index")"; do
-    validate_relative_app_path "$value"
-    count=$((count + 1))
-    index=$((index + 1))
-    [ "$index" -le 64 ] || reject_manifest "app_paths 가 너무 많습니다"
-  done
+  case "$count" in
+    ""|*[!0-9]*) reject_manifest "app_paths 길이를 확인할 수 없습니다" ;;
+  esac
   [ "$count" -ge 1 ] || reject_manifest "app_paths 가 비어 있습니다"
+  [ "$count" -le 64 ] || reject_manifest "app_paths 가 너무 많습니다"
+  index=0
+  while [ "$index" -lt "$count" ]; do
+    value="$(manifest_field "$path" "app_paths.$index")" \
+      || reject_manifest "app_paths 항목은 문자열이어야 합니다 — index=$index"
+    validate_relative_app_path "$value"
+    index=$((index + 1))
+  done
 }
 
 marker=""

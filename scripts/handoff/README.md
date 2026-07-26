@@ -64,7 +64,9 @@ cp scripts/handoff/restore_permissions.sh "<인계폴더>/권한복구.sh"
 | `app_paths[]` | 경로 구성요소에 symlink 금지, 해석 결과가 대상 폴더 안에 머물 것 |
 | `app_paths[]` | 실제 존재하는 디렉터리이며 `Contents/MacOS` 를 가질 것 |
 
-검증은 macOS 기본 도구 `plutil` 로 한다. `plutil` 이 없으면 검증 없이 진행하지 않고 거부한다.
+검증은 macOS 기본 도구 `plutil` 을 우선 사용한다. `plutil` 이 없는 검증·복구 환경에서는
+`python3` 표준 라이브러리로 같은 문자열 타입·배열·필드 검사를 수행한다. 두 도구가 모두
+없으면 검증 없이 진행하지 않고 거부한다.
 
 ### 판정 규칙
 
