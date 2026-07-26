@@ -162,9 +162,27 @@ def test_no_git_add_all_pollution_manifest():
         "scripts/eval/dlp_corpus_schema_probe.py",
         "scripts/eval/dlp_mutation_matrix.py",
         "scripts/verify_dlp_runtime_unification.py",
-        "tests/cards/box6/test_form_fill_service.py",
-        "tests/dlp/",
-    )
+            "tests/cards/box6/test_form_fill_service.py",
+            "tests/dlp/",
+            # Asset path unification v2.0 approved product scope (2026-07-26).
+            "butler_pc_core/assets/",
+            "butler_pc_core/helper1/",
+            "contracts/assets/",
+            "tests/assets/",
+            "butler_pc_core/accounting/ft_classifier.py",
+            "butler_pc_core/cards/box2/",
+            "butler_pc_core/model_registry/ip3_model_registry.py",
+            "butler_pc_core/semantic_mapping/llm_corrector.py",
+            "butler_pc_core/sidecar/routes/helper1_search.py",
+            "scripts/build_complete_app.sh",
+            "tests/accounting/test_peft_opt_in.py",
+            "tests/butler_pc_core/sidecar/routes/test_helper1_search.py",
+            "tests/cards/box2/",
+            "tests/connect_loop/test_box3_asset_manifest.py",
+            "tests/connect_loop/test_sidecar_router_decide_integration.py",
+            "tests/test_helper1_sidecar_integration.py",
+            "tests/test_sidecar_lifecycle.py",
+        )
     stray = []
     for line in result.stdout.splitlines():
         parts = line.split()

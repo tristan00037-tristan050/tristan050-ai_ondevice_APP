@@ -433,6 +433,25 @@ if _FASTAPI_AVAILABLE:
         _TOKEN_MANAGER.generate()
         _start_model_tier_phase0_shadow()
         initialize_home_store()
+        await _verify_required_assets()
+
+    async def _verify_required_assets() -> None:
+        try:
+            from butler_pc_core.assets import AssetError, get_asset_service
+            from butler_pc_core.assets.context import get_platform_context
+            from butler_pc_core.assets.contracts import ReleaseProfile
+
+            context = get_platform_context()
+            await asyncio.to_thread(get_asset_service().verify_required_groups)
+        except AssetError as exc:
+            if exc.code == "PLATFORM_CONTEXT_MISSING":
+                return
+            if (
+                "context" in locals()
+                and context.release_profile is ReleaseProfile.PRODUCTION
+            ):
+                raise RuntimeError("ASSET_STARTUP_VERIFICATION_FAILED") from None
+            return
 
     @app.on_event("shutdown")
     async def _shutdown_clear_token():
@@ -457,7 +476,8 @@ if _FASTAPI_AVAILABLE:
                 "http://127.0.0.1:1420",
             }:
                 return JSONResponse(status_code=403, content={"code": "UNTRUSTED_ORIGIN"})
-        if home_request or request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        protected_asset_status = request.url.path == "/v1/assets/status"
+        if home_request or protected_asset_status or request.method in ("POST", "PUT", "PATCH", "DELETE"):
             try:
                 session = _TOKEN_MANAGER.verify_authorization_header(
                     request.headers.get("Authorization")
@@ -494,6 +514,7 @@ if _FASTAPI_AVAILABLE:
     from butler_pc_core.sidecar.routes.helper1_search import (
         router as helper1_search_router,
     )
+    from butler_pc_core.assets.status import router as asset_status_router
     from butler_pc_core.sidecar.routes.router_decide import (
         router as router_decide_router,
     )
@@ -521,6 +542,7 @@ if _FASTAPI_AVAILABLE:
     app.include_router(box2_rewrite_router)
     app.include_router(box3_draft_router)
     app.include_router(helper1_search_router)
+    app.include_router(asset_status_router)
     app.include_router(admin_policy_format_router)
     app.include_router(admin_role_registry_router)
     app.include_router(company_profile_router)
@@ -3131,11 +3153,17 @@ if __name__ == "__main__":
     )
     _args = _parser.parse_args()
 
+    if os.environ.get("BUTLER_ASSET_BOOTSTRAP_STDIN") == "1":
+        try:
+            from butler_pc_core.assets.context import read_native_bootstrap
+
+            read_native_bootstrap(sys.stdin)
+        except Exception:
+            raise SystemExit("ASSET_BOOTSTRAP_FAILED")
+
     if _FASTAPI_AVAILABLE:
         import uvicorn
 
-        uvicorn.run(
-            "butler_sidecar:app", host=_args.host, port=_args.port, reload=False
-        )
+        uvicorn.run(app, host=_args.host, port=_args.port, reload=False)
     else:
         _run_stdlib_server(host=_args.host, port=_args.port)

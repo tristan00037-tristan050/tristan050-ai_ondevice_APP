@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
 
+from butler_pc_core.assets import AssetError, get_asset_service
+
 from .account_dict import match_account, ACCOUNT_BY_NAME
 
 # ── 방향 감지 지표 ────────────────────────────────────────────────────────────
@@ -102,8 +104,6 @@ def _register_domain_account_aliases() -> None:
 
 _register_domain_account_aliases()
 
-# ── PEFT 어댑터 경로 후보 ─────────────────────────────────────────────────────
-_MODEL_DIR = Path(__file__).parent / "models" / "qwen3_4b_accounting_v1"
 _ADAPTER_CONFIG = "adapter_config.json"
 _ADAPTER_WEIGHTS = "adapter_model.safetensors"
 _EXPECTED_BASE_MODEL = "Qwen/Qwen3-4B"
@@ -113,6 +113,8 @@ _peft_model = None
 _peft_tokenizer = None
 _peft_loaded: bool = False
 _peft_attempted: bool = False
+_peft_materialized = None
+_peft_base_path: Optional[Path] = None
 
 
 def _env_truthy(name: str) -> bool:
@@ -142,17 +144,6 @@ class AccountingAdapterStatus:
     base_model: str | None = None
 
 
-def _adapter_candidates() -> tuple[Path, ...]:
-    """Resolve only explicit or bundled paths; never depend on a developer disk."""
-
-    configured = os.environ.get("ACCOUNTING_PEFT_ADAPTER_PATH") or os.environ.get(
-        "ACCOUNTING_ADAPTER_PATH"
-    )
-    if configured:
-        return (Path(configured),)
-    return (_MODEL_DIR,)
-
-
 def accounting_adapter_status(path: Path) -> AccountingAdapterStatus:
     """Validate the minimum immutable PEFT asset closure without loading weights."""
 
@@ -180,14 +171,46 @@ def accounting_adapter_status(path: Path) -> AccountingAdapterStatus:
 
 
 def _find_adapter() -> Optional[Path]:
-    for path in _adapter_candidates():
-        if accounting_adapter_status(path).available:
-            return path
-    return None
+    global _peft_base_path, _peft_materialized
+    if _peft_materialized is not None:
+        _peft_materialized.close()
+    _peft_materialized = None
+    _peft_base_path = None
+    try:
+        with get_asset_service().require_capability("accounting.adapter") as lease:
+            adapter_config = lease.require("adapter_config").entry.relative_path
+            adapter_weights = lease.require("adapter_weights").entry.relative_path
+            base_config = lease.require("base_model_config").entry.relative_path
+            base_weights = lease.require("base_model_weights").entry.relative_path
+            tokenizer_config = lease.require("tokenizer_config").entry.relative_path
+            adapter_parent = Path(adapter_config).parent
+            base_parent = Path(base_config).parent
+            if (
+                Path(adapter_weights).parent != adapter_parent
+                or Path(base_weights).parent != base_parent
+                or Path(tokenizer_config).parent != base_parent
+            ):
+                return None
+            materialized = lease.materialize_directory()
+    except AssetError:
+        return None
+    adapter_root = materialized.root / adapter_parent
+    base_root = materialized.root / base_parent
+    if (
+        not accounting_adapter_status(adapter_root).available
+        or not base_root.is_dir()
+        or base_root.is_symlink()
+    ):
+        materialized.close()
+        return None
+    _peft_materialized = materialized
+    _peft_base_path = base_root
+    return adapter_root
 
 
 def load_peft() -> bool:
     """PEFT 어댑터를 명시 opt-in일 때만 lazy 로드한다."""
+    global _peft_base_path, _peft_materialized
     global _peft_model, _peft_tokenizer, _peft_loaded, _peft_attempted
     if _peft_attempted:
         return _peft_loaded
@@ -196,7 +219,7 @@ def load_peft() -> bool:
         return False
 
     adapter_path = _find_adapter()
-    if adapter_path is None:
+    if adapter_path is None or _peft_base_path is None:
         return False
 
     try:
@@ -206,15 +229,11 @@ def load_peft() -> bool:
 
         device = "mps" if torch.backends.mps.is_available() else "cpu"
 
-        config = json.loads(
-            (adapter_path / _ADAPTER_CONFIG).read_text(encoding="utf-8")
-        )
-        base_model_name = str(config["base_model_name_or_path"])
         _peft_tokenizer = AutoTokenizer.from_pretrained(
-            base_model_name, trust_remote_code=False, local_files_only=True
+            str(_peft_base_path), trust_remote_code=False, local_files_only=True
         )
         base = AutoModelForCausalLM.from_pretrained(
-            base_model_name,
+            str(_peft_base_path),
             torch_dtype=torch.float16,
             trust_remote_code=False,
             local_files_only=True,
@@ -224,6 +243,10 @@ def load_peft() -> bool:
         _peft_loaded = True
         return True
     except Exception:
+        if _peft_materialized is not None:
+            _peft_materialized.close()
+        _peft_materialized = None
+        _peft_base_path = None
         return False
 
 

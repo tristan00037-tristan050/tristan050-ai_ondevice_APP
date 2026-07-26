@@ -1,7 +1,7 @@
 #!/bin/bash
 # Butler 완성품 빌드 — 한 번에 조립되는 완전한 앱
 # 부품을 매번 급조하지 않도록, 빌드+llama-cpp+모델확인+검증을 1개 스크립트로.
-set -uo pipefail
+set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/butler-desktop/src-tauri"
 APP="target/release/bundle/macos/Butler.app"
@@ -31,8 +31,8 @@ echo "[0/5] 생산 빌드 컨텍스트 준비 (BUILD_CONTEXT.json)"
 # clean-tree 는 보안 계약이다(build_with_git.py, firstscreen-v2-5.yml). 느슨하게 만들지 않는다.
 # 위반 시 무엇이 걸렸는지 그대로 보여 주고 중단한다. 자동 정리·무시목록 추가는 하지 않는다.
 if [[ -n "$(cd "$ROOT" && git status --porcelain --untracked-files=all)" ]]; then
-  echo "❌ CLEAN_TREE_VIOLATION — 아래 항목 때문에 중단한다(자동 정리하지 않음)"
-  (cd "$ROOT" && git status --porcelain --untracked-files=all)
+  echo "BUILD_CLEAN_TREE_OK=0"
+  echo "ERROR_CODE=CLEAN_TREE_VIOLATION"
   exit 1
 fi
 
@@ -43,7 +43,7 @@ command -v "$CONTEXT_PY" >/dev/null 2>&1 || {
 }
 
 if [[ -n "${BUTLER_BUILD_CONTEXT_PATH:-}" ]]; then
-  echo "  ℹ️ 외부에서 전달된 BUILD_CONTEXT 사용: $BUTLER_BUILD_CONTEXT_PATH"
+  echo "BUILD_CONTEXT_EXTERNAL=1"
 else
   # 임시 산출물은 저장소 밖에 둔다. 저장소 안에 쓰면 그 파일이 clean-tree 검사를 스스로 깬다.
   CONTEXT_DIR="$(mktemp -d)" || { echo "❌ 임시 디렉터리 생성 실패"; exit 1; }
@@ -89,7 +89,7 @@ else
       --extract-to "$CONTEXT_DIR/no-git" ) || { echo "❌ source bundle 결속 검증 실패"; exit 1; }
 
   export BUTLER_BUILD_CONTEXT_PATH="$CONTEXT_DIR/BUILD_CONTEXT.json"
-  echo "  ✅ BUILD_CONTEXT 생성: $BUTLER_BUILD_CONTEXT_PATH"
+  echo "BUILD_CONTEXT_GENERATED=1"
 fi
 
 BUILD_CONTEXT_DIGEST="$( ( cd "$ROOT" && "$CONTEXT_PY" scripts/verify/verify_build_context.py "$BUTLER_BUILD_CONTEXT_PATH" ) \
@@ -145,6 +145,38 @@ TAURI_RC=$?
 [[ $TAURI_RC -eq 0 ]] || { echo "❌ tauri build 실패 (exit $TAURI_RC) — STALE 번들 방지 위해 중단"; exit 1; }
 [[ -d "$APP" ]] || { echo "❌ .app 생성 실패"; exit 1; }
 echo "  ✅ .app 생성"
+APP_PY="$RES/python/bin/python3"
+
+echo "[1.5/5] sealed asset staging and full verification"
+ASSET_PROFILE="development"
+[[ "$RELEASE_DISTRIBUTION" == "1" ]] && ASSET_PROFILE="production"
+if [[ -n "${BUTLER_BUILD_ASSET_ROOT:-}" || -n "${BUTLER_BUILD_ASSET_INVENTORY:-}" ]]; then
+  [[ -n "${BUTLER_BUILD_ASSET_ROOT:-}" && -n "${BUTLER_BUILD_ASSET_INVENTORY:-}" ]] || {
+    echo "ASSET_STAGE_OK=0"
+    echo "ERROR_CODE=ASSET_INPUT_INCOMPLETE"
+    exit 1
+  }
+  "$APP_PY" -m butler_pc_core.assets.cli stage \
+    --source-root "$BUTLER_BUILD_ASSET_ROOT" \
+    --inventory "$BUTLER_BUILD_ASSET_INVENTORY" \
+    --resources-root "$RES" \
+    --source-commit "$BUTLER_SOURCE_COMMIT_OID" \
+    --source-tree "$BUTLER_SOURCE_TREE_OID" \
+    --release-profile "$ASSET_PROFILE"
+  "$APP_PY" -m butler_pc_core.assets.cli verify-release \
+    --package "$APP" \
+    --build-context "$RES/assets/ASSET_BUILD_CONTEXT.json" \
+    --release-profile "$ASSET_PROFILE"
+else
+  rm -rf "$RES/assets"
+  if [[ "$RELEASE_DISTRIBUTION" == "1" ]]; then
+    echo "ASSET_RELEASE_VERIFY_OK=0"
+    echo "ERROR_CODE=ASSET_INVENTORY_REQUIRED"
+    exit 1
+  fi
+  echo "ASSET_STAGE_SKIPPED=1"
+  echo "ERROR_CODE=ASSET_INVENTORY_NOT_PROVIDED"
+fi
 
 # CI(firstscreen-v2-5.yml)와 같은 확인: 생산 바이트에 context digest 가 실제로 각인됐는가.
 grep -R --fixed-strings "$BUILD_CONTEXT_DIGEST" "$ROOT/butler-desktop/dist" >/dev/null || {
@@ -153,7 +185,6 @@ grep -R --fixed-strings "$BUILD_CONTEXT_DIGEST" "$ROOT/butler-desktop/dist" >/de
 echo "  ✅ dist 에 context digest 각인 확인"
 
 echo "[2/5] llama-cpp 설치 (자립 앱의 필수 부품)"
-APP_PY="$RES/python/bin/python3"
 if ! "$APP_PY" -c "import llama_cpp" 2>/dev/null; then
   CMAKE_ARGS="-DGGML_METAL=ON" "$APP_PY" -m pip install llama-cpp-python 2>&1 | tail -2
 fi
@@ -165,29 +196,13 @@ M17="$RES/models/box3/butler-1.7b-v9-2-r2b-q4_k_m.gguf"
 [[ -f "$M4" ]] && echo "  ✅ 4B: $(du -h "$M4" | cut -f1)" || { echo "❌ 4B 없음"; exit 1; }
 [[ -f "$M17" ]] && echo "  ✅ 1.7B: $(du -h "$M17" | cut -f1)" || { echo "❌ 1.7B 없음"; exit 1; }
 
-echo "[3.5/5] 회계 adapter 배치 (박스5 4B 회계)"
-ACC_SRC="${ACCOUNTING_PEFT_ADAPTER_PATH:-}"
-ACC_DST="$RES/butler_pc_core/accounting/models/qwen3_4b_accounting_v1"
-if [[ -n "$ACC_SRC" ]]; then
-  [[ -d "$ACC_SRC" && ! -L "$ACC_SRC" ]] || {
-    echo "❌ 회계 adapter 경로가 유효한 디렉터리가 아님"; exit 1;
-  }
-  [[ -f "$ACC_SRC/adapter_config.json" && ! -L "$ACC_SRC/adapter_config.json" ]] || {
-    echo "❌ 회계 adapter_config.json 누락/링크 거부"; exit 1;
-  }
-  [[ -s "$ACC_SRC/adapter_model.safetensors" && ! -L "$ACC_SRC/adapter_model.safetensors" ]] || {
-    echo "❌ 회계 adapter_model.safetensors 누락/빈 파일/링크 거부"; exit 1;
-  }
-  "$APP_PY" -c 'import json,sys; c=json.load(open(sys.argv[1], encoding="utf-8")); assert isinstance(c,dict) and c.get("base_model_name_or_path")=="Qwen/Qwen3-4B"' "$ACC_SRC/adapter_config.json" || {
-    echo "❌ 회계 adapter base model 계약 불일치"; exit 1;
-  }
-  rm -rf "$ACC_DST" || { echo "❌ 기존 회계 adapter 정리 실패"; exit 1; }
-  mkdir -p "$(dirname "$ACC_DST")" || { echo "❌ 회계 adapter 대상 생성 실패"; exit 1; }
-  cp -R "$ACC_SRC" "$ACC_DST" || { echo "❌ 회계 adapter 복사 실패"; exit 1; }
-  echo "  ✅ 검증된 회계 adapter를 앱 Resources에 배치"
-else
-  echo "  ℹ️ 회계 PEFT 비활성(ACCOUNTING_PEFT_ADAPTER_PATH 미설정, 규칙 기반 계속 사용)"
+echo "[3.5/5] accounting adapter authority"
+if [[ -n "${ACCOUNTING_PEFT_ADAPTER_PATH:-}" || -n "${ACCOUNTING_ADAPTER_PATH:-}" ]]; then
+  echo "ACCOUNTING_ADAPTER_AUTHORITY_OK=0"
+  echo "ERROR_CODE=OVERRIDE_FORBIDDEN"
+  exit 1
 fi
+echo "ACCOUNTING_ADAPTER_AUTHORITY_OK=1"
 
 echo "[4/5] 모델 경로 계약 검증 (verifier)"
 python3 "$ROOT/scripts/verify_model_path_contract.py" "$ROOT" || { echo "❌ 계약 위반"; exit 1; }
@@ -246,9 +261,8 @@ if [[ "$PRODUCTION_A4_AUTHORITY" == "1" ]]; then
 fi
 
 echo "[5/5] 완성품 준비 완료"
-echo "  앱: $ROOT/butler-desktop/src-tauri/$APP"
-echo "  빌드 표식: $RES/BUILD_INFO.json (OID $BUILD_OID)"
-echo "  대치: rm -rf /Applications/Butler.app && cp -R '$APP' /Applications/Butler.app"
+echo "APP_BUNDLE_READY=1"
+echo "BUILD_INFO_READY=1"
 echo "════════════════════════════════════════"
 echo " ✅ Butler 완성품 빌드 완료"
 echo "════════════════════════════════════════"

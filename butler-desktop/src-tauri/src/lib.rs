@@ -28,6 +28,7 @@ mod export;
 mod runtime_trust;
 
 const SIDECAR_ENV_CONFIG: &str = "sidecar-env.json";
+const ASSET_BOOTSTRAP_STDIN_ENV: &str = "BUTLER_ASSET_BOOTSTRAP_STDIN";
 const BUTLER_APP_DATA_DIR_ENV: &str = "BUTLER_APP_DATA_DIR";
 const BUTLER_HOME_BOOTSTRAP_ENV: &str = "BUTLER_HOME_BOOTSTRAP_NEW_INSTALL";
 const MODEL_TIER_NATIVE_TELEMETRY_ENV: &str = "BUTLER_MODEL_TIER_NATIVE_TELEMETRY_JSON";
@@ -394,8 +395,10 @@ async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<Option<CommandChild>, S
         return Ok(None);
     }
     append_sidecar_launch_log("spawn_sidecar=start");
-    let sidecar_env = resolve_sidecar_env(app)?;
-    let (mut rx, child) = app
+    let mut sidecar_env = resolve_sidecar_env(app)?;
+    sidecar_env.push((ASSET_BOOTSTRAP_STDIN_ENV.to_string(), "1".to_string()));
+    let bootstrap = asset_bootstrap_frame(app)?;
+    let (mut rx, mut child) = app
         .shell()
         .sidecar("butler-sidecar")
         .map_err(|e| {
@@ -411,6 +414,11 @@ async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<Option<CommandChild>, S
             append_sidecar_launch_log(&message);
             message
         })?;
+    if let Err(error) = child.write(&bootstrap) {
+        let _ = child.kill();
+        append_sidecar_launch_log("asset_bootstrap=failed");
+        return Err(format!("asset bootstrap write failed: {}", error));
+    }
     append_sidecar_launch_log("spawn_sidecar=ok");
 
     // 로그 수신 — 별도 task로 분리 (spawn_sidecar를 블록하지 않음)
@@ -444,6 +452,115 @@ async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<Option<CommandChild>, S
     });
 
     Ok(Some(child))
+}
+
+fn asset_bootstrap_frame(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
+    let resource_root = app
+        .path()
+        .resource_dir()
+        .map_err(|_| "asset resource root unavailable".to_string())?;
+    let app_data_root = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "asset app data root unavailable".to_string())?;
+    fs::create_dir_all(&app_data_root)
+        .map_err(|_| "asset app data root unavailable".to_string())?;
+
+    let commit = option_env!("BUTLER_SOURCE_COMMIT_OID")
+        .filter(|value| !value.is_empty())
+        .unwrap_or("0000000000000000000000000000000000000000");
+    let tree = option_env!("BUTLER_SOURCE_TREE_OID")
+        .filter(|value| !value.is_empty())
+        .unwrap_or("0000000000000000000000000000000000000000");
+    let profile = if option_env!("BUTLER_RELEASE_DISTRIBUTION") == Some("1") {
+        "production"
+    } else {
+        "development"
+    };
+    let oid_valid = |value: &str| {
+        matches!(value.len(), 40 | 64)
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    };
+    if !oid_valid(commit)
+        || !oid_valid(tree)
+        || (profile == "production"
+            && (commit.bytes().all(|byte| byte == b'0') || tree.bytes().all(|byte| byte == b'0')))
+    {
+        return Err("asset native build identity invalid".to_string());
+    }
+    let manifest_set =
+        match fs::read_to_string(resource_root.join("assets/ASSET_BUILD_CONTEXT.json")) {
+            Ok(raw) => {
+                let value = serde_json::from_str::<serde_json::Value>(&raw)
+                    .map_err(|_| "asset build context invalid".to_string())?;
+                let object = value
+                    .as_object()
+                    .ok_or_else(|| "asset build context invalid".to_string())?;
+                let expected_keys = [
+                    "schema_version",
+                    "build_id",
+                    "source_commit",
+                    "source_tree",
+                    "release_profile",
+                    "manifest_set_sha256",
+                    "toolchain",
+                ];
+                if object.len() != expected_keys.len()
+                    || expected_keys.iter().any(|key| !object.contains_key(*key))
+                    || value.get("schema_version").and_then(|item| item.as_u64()) != Some(1)
+                    || value.get("build_id").and_then(|item| item.as_str()) != Some(commit)
+                    || value.get("source_commit").and_then(|item| item.as_str()) != Some(commit)
+                    || value.get("source_tree").and_then(|item| item.as_str()) != Some(tree)
+                    || value.get("release_profile").and_then(|item| item.as_str()) != Some(profile)
+                    || value
+                        .get("toolchain")
+                        .and_then(|item| item.as_object())
+                        .map(|item| item.is_empty())
+                        != Some(false)
+                {
+                    return Err("asset build context identity mismatch".to_string());
+                }
+                Some(
+                    value
+                        .get("manifest_set_sha256")
+                        .and_then(|item| item.as_str())
+                        .filter(|item| {
+                            item.len() == 64
+                                && item.bytes().all(|byte| {
+                                    byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
+                                })
+                        })
+                        .ok_or_else(|| "asset manifest set invalid".to_string())?
+                        .to_string(),
+                )
+            }
+            Err(error)
+                if error.kind() == std::io::ErrorKind::NotFound && profile != "production" =>
+            {
+                None
+            }
+            Err(_) => return Err("asset build context unavailable".to_string()),
+        };
+    let payload = serde_json::json!({
+        "schema_version": 1,
+        "resource_root": resource_root,
+        "app_data_root": app_data_root,
+        "release_profile": profile,
+        "build_id": commit,
+        "source_commit": commit,
+        "source_tree": tree,
+        "manifest_set_sha256": manifest_set,
+    });
+    let payload =
+        serde_json::to_vec(&payload).map_err(|_| "asset bootstrap encode failed".to_string())?;
+    let payload_size =
+        u32::try_from(payload.len()).map_err(|_| "asset bootstrap encode failed".to_string())?;
+    let mut frame = Vec::with_capacity(4 + payload.len());
+    frame.extend_from_slice(&payload_size.to_be_bytes());
+    frame.extend_from_slice(&payload);
+    Ok(frame)
 }
 
 #[cfg(test)]

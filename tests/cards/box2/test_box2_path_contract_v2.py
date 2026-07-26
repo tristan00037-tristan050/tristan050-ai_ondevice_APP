@@ -3,8 +3,8 @@ from pathlib import Path
 from butler_pc_core.cards.box2 import adapter_loader as a
 
 
-def test_default_handoff_root_contains_correct_model_handoff_dir():
-    assert "넘겨줄도우미모델" in a.DEFAULT_HANDOFF_ROOT
+def test_default_handoff_root_is_logical_asset_capability():
+    assert a.DEFAULT_HANDOFF_ROOT == "asset://box2.adapter"
 
 
 def test_legacy_direct_qwen_root_is_not_used_in_contract_constants():
@@ -27,9 +27,9 @@ def test_helper3_path_is_under_handoff_root():
 def test_butler_v3_lora_and_gguf_paths_are_split_constants():
     assert a.DEFAULT_BUTLER_V3_LORA_PATH != a.DEFAULT_BUTLER_V3_GGUF_F16_PATH
     assert a.DEFAULT_BUTLER_V3_LORA_PATH != a.DEFAULT_BUTLER_V3_GGUF_Q4_K_M_PATH
-    assert a.DEFAULT_BUTLER_V3_LORA_PATH.endswith("/lora_adapter")
-    assert a.DEFAULT_BUTLER_V3_GGUF_F16_PATH.endswith(".gguf")
-    assert a.DEFAULT_BUTLER_V3_GGUF_Q4_K_M_PATH.endswith(".gguf")
+    assert a.DEFAULT_BUTLER_V3_LORA_PATH.endswith("/butler_adapter")
+    assert a.DEFAULT_BUTLER_V3_GGUF_F16_PATH.endswith("/model_f16")
+    assert a.DEFAULT_BUTLER_V3_GGUF_Q4_K_M_PATH.endswith("/model_q4")
 
 
 def test_no_source_file_contains_forbidden_legacy_root():

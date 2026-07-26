@@ -28,9 +28,6 @@ _REPO_ROOT = _THIS.parents[3]
 EVAL_CANDIDATE_PATHS = [
     _REPO_ROOT / "butler-ct-shared/code_archive/box2_eval",
     _REPO_ROOT / "butler-ct-shared/code_archive/box2_eval/box2_eval.json",
-    Path.home() / "Desktop/도우미폴더/box2b_v5_outputs/rewrite/eval",
-    Path.home() / "Desktop/도우미폴더/box2b_v5_outputs/rewrite",
-    Path("/Volumes/T7 Shield/학습모델 폴더/알고리즘개발팀/box2b_v5_outputs/rewrite/eval"),
 ]
 
 CHECK_REQUIRED = "[확인 필요]"

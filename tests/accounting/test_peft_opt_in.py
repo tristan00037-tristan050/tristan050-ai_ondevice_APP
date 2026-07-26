@@ -9,10 +9,14 @@ from butler_pc_core.accounting import ft_classifier
 
 
 def _reset_peft_state() -> None:
+    if ft_classifier._peft_materialized is not None:
+        ft_classifier._peft_materialized.close()
     ft_classifier._peft_model = None
     ft_classifier._peft_tokenizer = None
     ft_classifier._peft_loaded = False
     ft_classifier._peft_attempted = False
+    ft_classifier._peft_materialized = None
+    ft_classifier._peft_base_path = None
 
 
 @pytest.fixture(autouse=True)
@@ -77,6 +81,7 @@ def test_enable_peft_attempts_adapter_load(monkeypatch: pytest.MonkeyPatch):
 
     def fake_find_adapter() -> Path:
         find_calls["count"] += 1
+        ft_classifier._peft_base_path = Path("/tmp/fake-accounting-base")
         return Path("/tmp/fake-accounting-adapter")
 
     def import_probe(name, *args, **kwargs):

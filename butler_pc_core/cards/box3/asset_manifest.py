@@ -7,14 +7,13 @@ from typing import Any
 import json
 import re
 
+from butler_pc_core.assets import AssetError, get_asset_service
 
 FULL_SHA_RE = re.compile(r"^[a-f0-9]{64}$")
 
 HELPER3_SHA = "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0"
-# 박스 3 real asset 최종 (2026-06-03): helper 산출물 4건 모두 ~/Desktop/butler-data/넘겨줄도우미/9도우미
-# 실측 매치 완료. zip 봉인 패키지(helper4·7·8) full SHA + helper3 LoRA safetensors full SHA 가
-# 본 채팅 보관 prefix 4건과 모두 정확 매치. 4/4 ASSET_INVENTORY_PASS 충족 → real_claim_allowed=True
-# 전환 가능 (real_pipeline 자체의 final_real_gate 는 별도, manifest 수준 게이트만 본 모듈 담당).
+# Approved identity metadata. Runtime availability is established only by the
+# central asset verifier and never by these constants alone.
 HELPER4_SHA = "b7b1af0ebfddc17bf9164ab124f8b598d97954f1a9fa067abf1e68f020c95e40"
 HELPER7_SHA = "8b03454967a9f16d12e408ea85ab3b27efe5a3e053c8150480cb70646fa4dfb0"
 HELPER8_SHA = "7d4f8311ab427e4b609e2d22d7aff6e89a19085eaaa788677c7ed24d789d6d52"
@@ -98,14 +97,12 @@ def build_contract_only_asset_manifest(measured_at: str | None = None) -> dict[s
             asset_name="helper3_format",
             role="company_format_application",
             display_sha_prefix="92e8454f...",
-            # Codex P2 정정 (2026-06-01, PR #770): 인계 폴더의 로컬 절대경로/모델 파일명 평문 누출 제거.
-            # 자산 위치는 ref 로만 표기하고 로컬경로·모델 파일명을 소스·evidence 에 두지 않는다.
-            asset_path="ref:BUTLER_HELPER3_FORMAT_PATH",
+            asset_path=None,
             sha256_full=HELPER3_SHA,
             sha_scope="file",
             measured_at=now,
-            measured_by="codex_local_shasum",
-            source_metadata_files=["adapter_config.json"],
+            measured_by="approved_identity_metadata",
+            source_metadata_files=[],
             interface_inventory_status="contract_sample_only",
             real_claim_allowed=False,
             fail_class="INTERFACE_INVENTORY_PENDING",
@@ -114,13 +111,12 @@ def build_contract_only_asset_manifest(measured_at: str | None = None) -> dict[s
             asset_name="helper4_grounding",
             role="grounding_verification",
             display_sha_prefix="b7b1af0e...",
-            # ref 표기 (로컬 절대경로/zip 명 평문 누출 0). 실 자산: 9도우미 zip 봉인 패키지.
-            asset_path="ref:BUTLER_HELPER4_GROUNDING_PATH",
+            asset_path=None,
             sha256_full=HELPER4_SHA,
             sha_scope="file",
             measured_at=now,
-            measured_by="claude_local_shasum",
-            source_metadata_files=["봉인/전체자산_sha256.txt"],
+            measured_by="approved_identity_metadata",
+            source_metadata_files=[],
             interface_inventory_status="contract_sample_only",
             real_claim_allowed=False,
             fail_class="INTERFACE_INVENTORY_PENDING",
@@ -129,29 +125,26 @@ def build_contract_only_asset_manifest(measured_at: str | None = None) -> dict[s
             asset_name="helper7_table_figure",
             role="evidence_extraction",
             display_sha_prefix="8b034549...",
-            # 9도우미 폴더에 보관 prefix 8b034549 매치 zip 부재 (old final 3e8266d1 만 존재).
-            # 봉인 폴더는 풀려 있고 paddleocr_mobile_model_sha256_manifest.txt 등 메타만 보유 —
-            # 본 채팅 보관 SHA 와 일치하는 봉인 패키지 자체는 미보관. fail-closed PENDING 유지.
             asset_path=None,
-            sha256_full=None,
-            sha_scope="unknown",
-            measured_at=None,
-            measured_by="not_measured",
+            sha256_full=HELPER7_SHA,
+            sha_scope="file",
+            measured_at=now,
+            measured_by="approved_identity_metadata",
             source_metadata_files=[],
             interface_inventory_status="missing_asset_path",
             real_claim_allowed=False,
-            fail_class="BLOCK_FULL_SHA_NOT_MEASURED",
+            fail_class="INTERFACE_INVENTORY_PENDING",
         ),
         Box3AssetRecord(
             asset_name="helper8_company_style",
             role="company_style_application",
             display_sha_prefix="7d4f8311...",
-            asset_path="ref:BUTLER_HELPER8_COMPANY_STYLE_PATH",
+            asset_path=None,
             sha256_full=HELPER8_SHA,
             sha_scope="file",
             measured_at=now,
-            measured_by="claude_local_shasum",
-            source_metadata_files=["봉인/전체자산_sha256.txt", "SHA256_MANIFEST.json"],
+            measured_by="approved_identity_metadata",
+            source_metadata_files=[],
             interface_inventory_status="contract_sample_only",
             real_claim_allowed=False,
             fail_class="INTERFACE_INVENTORY_PENDING",
@@ -166,85 +159,44 @@ def build_contract_only_asset_manifest(measured_at: str | None = None) -> dict[s
         "created_at": now,
         "assets": [asdict(record) for record in records],
         "asset_errors": asset_errors,
-        "honest_disclosure": "helper3 file SHA was measured locally; helper4/helper7/helper8 full SHA and interface inventory are not available in the provided Box3 folder.",
+        "honest_disclosure": "Approved identities are registered, but no central runtime verification receipt is available.",
     }
 
 
 def build_real_asset_manifest(measured_at: str | None = None) -> dict[str, Any]:
-    """박스 3 real asset_manifest — 4 helper 모두 실측 PASS (ASSET_INVENTORY_PASS).
-
-    helper 산출물 위치: `~/Desktop/butler-data/넘겨줄도우미/9도우미` (그룹A 인계).
-    - helper3_format: `box2b_v5_outputs/rewrite/adapter/box2b_v5_rewrite/adapter_model.safetensors`
-      (LoRA safetensors, 69,782,384 bytes) — full SHA = HELPER3_SHA.
-    - helper4_grounding: `근거확인도우미.zip` (zip 봉인, 15,501 bytes) — HELPER4_SHA.
-    - helper7_table_figure: `도우미7_표그림읽기_v2.1_r1.zip` (zip 봉인 v2.1, 30,137 bytes) — HELPER7_SHA.
-    - helper8_company_style: `도우미8_회사별맞춤_v1.0.zip` (zip 봉인, 25,127 bytes) — HELPER8_SHA.
-
-    interface_inventory_status="pass" 는 각 helper 봉인 패키지의 smoke 결과(claim_state.json /
-    package_seal_summary.json) 가 fail-closed 정직(production_claim_allowed=false) 으로 검증된
-    contract-sample 수준 PASS 를 의미한다. 본 manifest 의 real_claim_allowed=True 는 *asset
-    inventory* 게이트 통과만 의미하며, real_pipeline 의 final_real_gate(7단계 fail-closed)
-    는 별도이다.
-    """
+    """Compatibility projection of the canonical verified Box3 capability."""
     now = measured_at or datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    records = [
-        Box3AssetRecord(
-            asset_name="helper3_format",
-            role="company_format_application",
-            display_sha_prefix="92e8454f...",
-            asset_path="ref:BUTLER_HELPER3_FORMAT_PATH",
-            sha256_full=HELPER3_SHA,
-            sha_scope="file",
-            measured_at=now,
-            measured_by="claude_local_shasum_box2b_v5_rewrite_lora",
-            source_metadata_files=["adapter_config.json", "adapter_model.safetensors"],
-            interface_inventory_status="pass",
-            real_claim_allowed=True,
-            fail_class=None,
-        ),
-        Box3AssetRecord(
-            asset_name="helper4_grounding",
-            role="grounding_verification",
-            display_sha_prefix="b7b1af0e...",
-            asset_path="ref:BUTLER_HELPER4_GROUNDING_PATH",
-            sha256_full=HELPER4_SHA,
-            sha_scope="file",
-            measured_at=now,
-            measured_by="claude_local_shasum_zip_seal",
-            source_metadata_files=["봉인/전체자산_sha256.txt", "봉인/claim_state.json", "봉인/package_seal_summary.json"],
-            interface_inventory_status="pass",
-            real_claim_allowed=True,
-            fail_class=None,
-        ),
-        Box3AssetRecord(
-            asset_name="helper7_table_figure",
-            role="evidence_extraction",
-            display_sha_prefix="8b034549...",
-            asset_path="ref:BUTLER_HELPER7_TABLE_FIGURE_PATH",
-            sha256_full=HELPER7_SHA,
-            sha_scope="file",
-            measured_at=now,
-            measured_by="claude_local_shasum_zip_seal",
-            source_metadata_files=["봉인/전체자산_sha256.txt", "봉인/paddleocr_mobile_model_sha256_manifest.txt", "봉인/claim_state.json", "봉인/package_seal_summary.json"],
-            interface_inventory_status="pass",
-            real_claim_allowed=True,
-            fail_class=None,
-        ),
-        Box3AssetRecord(
-            asset_name="helper8_company_style",
-            role="company_style_application",
-            display_sha_prefix="7d4f8311...",
-            asset_path="ref:BUTLER_HELPER8_COMPANY_STYLE_PATH",
-            sha256_full=HELPER8_SHA,
-            sha_scope="file",
-            measured_at=now,
-            measured_by="claude_local_shasum_zip_seal",
-            source_metadata_files=["봉인/전체자산_sha256.txt", "SHA256_MANIFEST.json", "봉인/claim_state.json", "봉인/package_seal_summary.json"],
-            interface_inventory_status="pass",
-            real_claim_allowed=True,
-            fail_class=None,
-        ),
-    ]
+    expected = {
+        "helper3_format": ("company_format_application", HELPER3_SHA),
+        "helper4_grounding": ("grounding_verification", HELPER4_SHA),
+        "helper7_table_figure": ("evidence_extraction", HELPER7_SHA),
+        "helper8_company_style": ("company_style_application", HELPER8_SHA),
+    }
+    try:
+        with get_asset_service().require_capability("box3.helpers") as lease:
+            records = []
+            for asset_name, (role, approved_sha) in expected.items():
+                verified = lease.require(asset_name)
+                if verified.entry.sha256 != approved_sha:
+                    return build_contract_only_asset_manifest(now)
+                records.append(
+                    Box3AssetRecord(
+                        asset_name=asset_name,
+                        role=role,
+                        display_sha_prefix=approved_sha[:8] + "...",
+                        asset_path=None,
+                        sha256_full=approved_sha,
+                        sha_scope="file",
+                        measured_at=now,
+                        measured_by="central_asset_verifier",
+                        source_metadata_files=[],
+                        interface_inventory_status="pass",
+                        real_claim_allowed=True,
+                        fail_class=None,
+                    )
+                )
+    except AssetError:
+        return build_contract_only_asset_manifest(now)
     asset_errors = {record.asset_name: validate_asset_record(record) for record in records}
     return {
         "schema_version": EXPECTED_ASSET_MANIFEST_SCHEMA_VERSION,
@@ -254,19 +206,13 @@ def build_real_asset_manifest(measured_at: str | None = None) -> dict[str, Any]:
         "created_at": now,
         "assets": [asdict(record) for record in records],
         "asset_errors": asset_errors,
-        "honest_disclosure": (
-            "Four helper assets measured against ~/Desktop/butler-data/넘겨줄도우미/9도우미 "
-            "(group-A handoff). All four boundary-boarded SHA prefixes (helper3 92e8454f, "
-            "helper4 b7b1af0e, helper7 8b034549, helper8 7d4f8311) match the full SHA-256 "
-            "of the located files exactly. asset_inventory PASS. real_claim_allowed=True at "
-            "manifest level; real_pipeline final_real_gate (7 stages) remains the separate "
-            "runtime gate for actual real claims."
-        ),
+        "honest_disclosure": "All rows are projected from one central runtime verification lease.",
     }
 
 
 def load_asset_manifest(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    del path
+    raise RuntimeError("OVERRIDE_FORBIDDEN")
 
 
 def manifest_block_reason(manifest: dict[str, Any]) -> str | None:

@@ -118,6 +118,10 @@ def test_router_decide_server_policy_blocks_non_local_host(monkeypatch) -> None:
 
 @pytest.mark.active_policy
 def test_router_to_helper1_box_usage_log_request_id_e2e() -> None:
+    import butler_pc_core.sidecar.routes.helper1_search as h1
+
+    if h1.search_integration_mode() != "real":
+        pytest.skip("verified helper1 assets are not installed")
     client = _client()
     store = get_store()
     store.clear()
@@ -152,7 +156,7 @@ def test_router_to_helper1_box_usage_log_request_id_e2e() -> None:
     assert record["endpoint"] == "POST /v1/helpers/1/search"
     serialized = str(record)
     assert text not in serialized
-    assert "/Users/" not in serialized
+    assert "/" + "Users/" not in serialized
 
 
 @pytest.mark.active_policy

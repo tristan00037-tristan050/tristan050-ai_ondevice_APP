@@ -31,10 +31,10 @@ def test_runner_asset_requires_base_full_sha(tmp_path, monkeypatch):
     cfg = Box3RealRunnerConfig(runner_id="r", model_choice="qwen3-1.7b-v4-rt", model_path_ref="ref:BUTLER_BOX3_BASE_MODEL_PATH")
     verdict = verify_box3_real_runner_assets(cfg)
     assert verdict.allowed is False
-    assert verdict.fail_class == "BLOCK_BASE_MODEL_FULL_SHA_NOT_CONFIGURED"
+    assert verdict.fail_class == "BLOCK_ASSET_INVENTORY_NOT_PASS"
 
 
-def test_runner_asset_passes_with_matching_sha(tmp_path, monkeypatch):
+def test_runner_asset_cannot_bypass_central_inventory_with_matching_sha(tmp_path, monkeypatch):
     model = tmp_path / "model.gguf"
     model.write_text("model", encoding="utf-8")
     expected = sha256_text("model").split(":", 1)[1]
@@ -47,10 +47,11 @@ def test_runner_asset_passes_with_matching_sha(tmp_path, monkeypatch):
         readonly_required=False,
     )
     verdict = verify_box3_real_runner_assets(cfg)
-    assert verdict.allowed is True
+    assert verdict.allowed is False
+    assert verdict.fail_class == "BLOCK_ASSET_INVENTORY_NOT_PASS"
 
 
-def test_final_gate_candidate_when_human_approval_missing(tmp_path, monkeypatch):
+def test_final_gate_blocks_when_central_inventory_is_missing(tmp_path, monkeypatch):
     model = tmp_path / "model.gguf"
     model.write_text("model", encoding="utf-8")
     expected = sha256_text("model").split(":", 1)[1]
@@ -75,6 +76,6 @@ def test_final_gate_candidate_when_human_approval_missing(tmp_path, monkeypatch)
         fixed_eval_pass=True,
         human_approval=human,
     )
-    assert decision.status == "REAL_CANDIDATE"
+    assert decision.status == "BLOCKED"
     assert decision.real_claim_allowed is False
-    assert decision.fail_class == "BLOCK_HUMAN_APPROVAL_MISSING"
+    assert decision.fail_class == "BLOCK_ASSET_INVENTORY_NOT_PASS"

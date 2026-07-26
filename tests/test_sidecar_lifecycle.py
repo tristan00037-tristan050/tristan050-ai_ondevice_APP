@@ -138,43 +138,55 @@ def test_boundary_concurrent_chunks_no_lock_starvation():
 # ---------------------------------------------------------------------------
 # 결함 2 회귀: wrapper exec (& 없음) → python3가 wrapper PID 점유
 # ---------------------------------------------------------------------------
-def test_adv_wrapper_no_orphan_after_kill():
+def test_adv_wrapper_no_orphan_after_kill(tmp_path):
     """결함 2 회귀: wrapper에 & 없으면 exec 후 wrapper PID = python3 PID.
     kill 시 sidecar도 함께 종료 → orphan 없음."""
     wrapper = "/Applications/Butler.app/Contents/MacOS/butler-sidecar"
     if not os.path.exists(wrapper):
         pytest.skip("Butler.app 미설치 환경")
 
+    import socket
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    environment = os.environ.copy()
+    environment["BUTLER_APP_DATA_DIR"] = str(tmp_path / "app-data")
     proc = subprocess.Popen(
-        [wrapper, "--port", "5911", "--host", "127.0.0.1"],
+        [wrapper, "--port", str(port), "--host", "127.0.0.1"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        env=environment,
     )
     wrapper_pid = proc.pid
-    time.sleep(3)
+    try:
+        time.sleep(3)
 
-    # exec 정상: wrapper PID의 command가 python3를 포함해야 함
-    ps_result = subprocess.run(
-        ["ps", "-p", str(wrapper_pid), "-o", "pid=,command="],
-        capture_output=True,
-        text=True,
-    )
-    assert ps_result.returncode == 0, "wrapper 프로세스 없음 — exec & 버그 재발"
-    assert "python" in ps_result.stdout.lower(), (
-        f"exec 실패 — wrapper PID가 python3가 아님: {ps_result.stdout!r}"
-    )
+        # exec 정상: wrapper PID의 command가 python3를 포함해야 함
+        ps_result = subprocess.run(
+            ["ps", "-p", str(wrapper_pid), "-o", "pid=,command="],
+            capture_output=True,
+            text=True,
+        )
+        assert ps_result.returncode == 0, "wrapper 프로세스 없음 — exec & 버그 재발"
+        assert "python" in ps_result.stdout.lower(), (
+            f"exec 실패 — wrapper PID가 python3가 아님: {ps_result.stdout!r}"
+        )
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait(timeout=5)
 
     # kill 후 포트 5911 잔여 프로세스 없어야 함
-    proc.kill()
     time.sleep(1)
 
     lsof_result = subprocess.run(
-        ["lsof", "-ti", ":5911"],
+        ["lsof", "-ti", f":{port}"],
         capture_output=True,
         text=True,
     )
     assert lsof_result.stdout.strip() == "", (
-        f"orphan sidecar 발견 (포트 5911 점유): {lsof_result.stdout.strip()}"
+        f"orphan sidecar 발견: {lsof_result.stdout.strip()}"
     )
 
 
