@@ -25,7 +25,9 @@ _REQUIRED_KEYS = {
     "builder",
     "a4_code_closure",
     "a4_authority_helper",
+    "distribution",
 }
+_SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 _A4_CODE_FILES = (
     "butler_pc_core/a4_verifier/cli.py",
     "butler_pc_core/a4_verifier/canonical.py",
@@ -83,6 +85,26 @@ def _validated_payload(
     }
 
 
+def _distribution(release_distribution: bool, root_anchor: str | None) -> dict[str, object]:
+    """Record whether this bundle is a distribution build, and whether a real root anchor backs it.
+
+    앱 배포 위변조 방지 체계는 대표 결정(2026-07-23)으로 배포 개시 전까지 이월됐다.
+    그래서 내부 빌드는 root bootstrap anchor 없이 만들어진다. 그 사실을 앱 안에 남겨,
+    나중에 이 번들이 배포용인지 아닌지를 추측하지 않고 확인할 수 있게 한다.
+    anchor 가 없으면 없는 것으로 적는다 — 임의 값으로 채우지 않는다.
+    """
+    if root_anchor is not None and not _SHA256_RE.fullmatch(root_anchor):
+        raise BuildInfoWriteError("INVALID_ROOT_ANCHOR")
+    if release_distribution and root_anchor is None:
+        raise BuildInfoWriteError("DISTRIBUTION_WITHOUT_ROOT_ANCHOR")
+    return {
+        "schema_version": "butler.build_info.distribution.v1",
+        "release_distribution": release_distribution,
+        "not_for_distribution": not release_distribution,
+        "root_anchor_sha256": root_anchor,
+    }
+
+
 def _a4_code_closure(resources_root: Path) -> dict[str, object]:
     files: dict[str, str] = {}
     for relative in _A4_CODE_FILES:
@@ -129,6 +151,8 @@ def write_build_info(
     timestamp_utc: str,
     app_version: str,
     authority_helper: Path | None = None,
+    release_distribution: bool = False,
+    root_anchor: str | None = None,
 ) -> None:
     payload = _validated_payload(
         build_oid=build_oid,
@@ -137,6 +161,7 @@ def write_build_info(
         timestamp_utc=timestamp_utc,
         app_version=app_version,
     )
+    payload["distribution"] = _distribution(release_distribution, root_anchor)
     if not output.parent.is_dir():
         raise BuildInfoWriteError("BUILD_INFO_PARENT_MISSING")
     payload["a4_code_closure"] = _a4_code_closure(output.parent)
@@ -193,6 +218,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--timestamp-utc", required=True)
     parser.add_argument("--app-version", required=True)
     parser.add_argument("--authority-helper", type=Path)
+    parser.add_argument(
+        "--release-distribution",
+        action="store_true",
+        help="배포용 빌드로 표시한다. --root-anchor 가 함께 있어야 한다.",
+    )
+    parser.add_argument(
+        "--root-anchor",
+        help="배포 빌드에 결속된 root bootstrap anchor(64자리 소문자 hex). 없으면 생략한다.",
+    )
     return parser.parse_args()
 
 
@@ -207,6 +241,8 @@ def main() -> int:
             timestamp_utc=args.timestamp_utc,
             app_version=args.app_version,
             authority_helper=args.authority_helper,
+            release_distribution=args.release_distribution,
+            root_anchor=args.root_anchor,
         )
     except BuildInfoWriteError as exc:
         print(f"BUILD_INFO_WRITE_OK=0 ERROR_CODE={exc}")
