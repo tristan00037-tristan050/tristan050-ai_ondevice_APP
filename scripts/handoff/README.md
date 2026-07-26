@@ -16,6 +16,19 @@ cp scripts/handoff/restore_permissions.sh "<인계폴더>/권한복구.sh"
 패키지 루트에 두면 인자 없이 실행할 때 자기 폴더를 대상으로 삼는다.
 다른 폴더를 지정하려면 `bash 권한복구.sh <대상폴더>`.
 
+### 대상 검증 (먼저 걸린다)
+
+재귀 `chmod` 는 잘못된 대상에 걸리면 사용자 파일 권한을 광범위하게 파괴하거나 노출한다
+(644 는 다른 사용자에게 읽기를 허용한다). 그래서 대상을 좁게 강제한다. 하나라도 어긋나면
+**아무것도 바꾸지 않고 거부**한다.
+
+- 심볼릭 링크가 아닐 것
+- `/` 가 아닐 것 · 최상위 디렉터리(`/Users` 등)가 아닐 것
+- `$HOME` 자체가 아닐 것
+- git 저장소 루트(`.git` 보유)가 아닐 것
+- **인계 패키지 표식이 있을 것** — `Butler.app/Contents/MacOS` 디렉터리, 또는 최상위의
+  `HANDOFF_MANIFEST.json`
+
 ### 판정 규칙
 
 | 대상 | 권한 |
@@ -24,7 +37,7 @@ cp scripts/handoff/restore_permissions.sh "<인계폴더>/권한복구.sh"
 | 문서·데이터(기본값) | 644 |
 | `.sh` `.py` `.command` `.pl` `.rb` `.bash` `.zsh` | 755 |
 | `*/Contents/MacOS/*` `*/bin/*` `*/sbin/*` `*/libexec/*` `*/binaries/*` | 755 |
-| 내용이 Mach-O·ELF·shebang 인 파일(확장자 없거나 `.dylib` `.so` `.bundle` `.node` `.bin` `.out`) | 755 |
+| 내용이 Mach-O·universal(fat, 32/64비트)·ELF·shebang 인 파일(확장자 없거나 `.dylib` `.so` `.bundle` `.node` `.bin` `.out`) | 755 |
 
 마지막 규칙이 **확장자 없는 실행 파일**(`Butler.app/Contents/MacOS/butler-desktop` 등)을 살린다.
 2026-07-17 그룹A 지적의 원인이 이 규칙의 부재였다.

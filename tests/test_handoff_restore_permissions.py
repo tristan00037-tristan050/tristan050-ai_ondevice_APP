@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import os
 import stat
 import subprocess
 from pathlib import Path
@@ -20,6 +21,13 @@ SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "handoff" / "restore_
 # Mach-O 64bit little-endian 매직. 실제 실행 파일과 같은 첫 4바이트다.
 MACH_O = b"\xcf\xfa\xed\xfe" + b"\x00" * 60
 GGUF = b"GGUF" + b"\x00" * 60
+# universal(fat) 바이너리 매직 — 64비트 변종(FAT_MAGIC_64 / FAT_CIGAM_64)을 포함한다.
+FAT_MAGICS = {
+    "fat32_be": b"\xca\xfe\xba\xbe",
+    "fat32_le": b"\xbe\xba\xfe\xca",
+    "fat64_be": b"\xca\xfe\xba\xbf",
+    "fat64_le": b"\xbf\xba\xfe\xca",
+}
 
 
 def _mode(path: Path) -> int:
@@ -145,6 +153,131 @@ def test_old_extension_only_rule_would_have_failed(handoff_package: Path) -> Non
     # 수정본을 돌리면 되살아난다.
     assert _run(handoff_package).returncode == 0
     assert _mode(macos / "butler-desktop") == 0o755
+
+
+@pytest.mark.parametrize("label", sorted(FAT_MAGICS))
+def test_universal_binaries_including_fat64_are_detected(
+    handoff_package: Path, label: str
+) -> None:
+    """64비트 universal(fat) 바이너리도 실행 파일로 인식해야 한다."""
+    binary = handoff_package / "도구" / f"universal-{label}"
+    binary.write_bytes(FAT_MAGICS[label] + b"\x00" * 60)
+    binary.chmod(0o700)
+
+    result = _run(handoff_package)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _mode(binary) == 0o755
+
+
+# ── 대상 검증: 재귀 chmod 가 엉뚱한 곳에 걸리지 않아야 한다 ──────────────
+
+
+def _package_with_marker(root: Path) -> Path:
+    (root / "Butler.app" / "Contents" / "MacOS").mkdir(parents=True, exist_ok=True)
+    (root / "Butler.app" / "Contents" / "MacOS" / "butler-desktop").write_bytes(MACH_O)
+    return root
+
+
+def test_refuses_filesystem_root() -> None:
+    result = subprocess.run(
+        ["/bin/bash", str(SCRIPT), "/"], capture_output=True, text=True, check=False
+    )
+    assert result.returncode != 0
+    assert "거부" in result.stdout + result.stderr
+
+
+def test_refuses_top_level_directory() -> None:
+    top_level = Path("/Users")
+    if not top_level.is_dir():
+        pytest.skip("최상위 디렉터리를 확인할 수 없는 환경")
+    result = subprocess.run(
+        ["/bin/bash", str(SCRIPT), str(top_level)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "거부" in result.stdout + result.stderr
+
+
+def test_refuses_home_directory(tmp_path: Path) -> None:
+    """표식이 있어도 홈 디렉터리 자체는 대상이 될 수 없다."""
+    fake_home = _package_with_marker(tmp_path / "home")
+    environment = {**os.environ, "HOME": str(fake_home)}
+    result = subprocess.run(
+        ["/bin/bash", str(SCRIPT), str(fake_home)],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=environment,
+    )
+    assert result.returncode != 0
+    assert "홈 디렉터리" in result.stdout + result.stderr
+    assert _mode(fake_home / "Butler.app" / "Contents" / "MacOS" / "butler-desktop") != 0o755
+
+
+def test_refuses_git_repository_root(tmp_path: Path) -> None:
+    repository = _package_with_marker(tmp_path / "repo")
+    (repository / ".git").mkdir()
+    result = subprocess.run(
+        ["/bin/bash", str(SCRIPT), str(repository)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "저장소 루트" in result.stdout + result.stderr
+
+
+def test_refuses_symlink_target(tmp_path: Path) -> None:
+    package = _package_with_marker(tmp_path / "package")
+    link = tmp_path / "link"
+    link.symlink_to(package, target_is_directory=True)
+    result = subprocess.run(
+        ["/bin/bash", str(SCRIPT), str(link)], capture_output=True, text=True, check=False
+    )
+    assert result.returncode != 0
+    assert "심볼릭 링크" in result.stdout + result.stderr
+
+
+def test_refuses_directory_without_handoff_marker(tmp_path: Path) -> None:
+    """인계 패키지가 아닌 폴더는 건드리지 않는다."""
+    ordinary = tmp_path / "내문서"
+    ordinary.mkdir()
+    secret = ordinary / "가계부.txt"
+    secret.write_text("비밀\n", encoding="utf-8")
+    secret.chmod(0o600)
+
+    result = subprocess.run(
+        ["/bin/bash", str(SCRIPT), str(ordinary)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "표식이 없습니다" in result.stdout + result.stderr
+    # ★권한이 바뀌지 않아야 한다(644 로 열리면 다른 사용자에게 노출된다).
+    assert _mode(secret) == 0o600
+
+
+def test_accepts_handoff_manifest_marker(tmp_path: Path) -> None:
+    package = tmp_path / "인계"
+    (package / "도구").mkdir(parents=True)
+    (package / "HANDOFF_MANIFEST.json").write_text("{}\n", encoding="utf-8")
+    binary = package / "도구" / "butler-verify"
+    binary.write_bytes(MACH_O)
+    for path in sorted(package.rglob("*"), reverse=True):
+        path.chmod(0o700)
+
+    result = subprocess.run(
+        ["/bin/bash", str(SCRIPT), str(package)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _mode(binary) == 0o755
+    assert _mode(package / "HANDOFF_MANIFEST.json") == 0o644
 
 
 def test_self_check_reports_unrecovered_app_binary(tmp_path: Path) -> None:

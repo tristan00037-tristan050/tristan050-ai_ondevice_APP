@@ -22,10 +22,46 @@
 # ============================================================
 set -euo pipefail
 
-TARGET="${1:-$(cd "$(dirname "$0")" && pwd)}"
-[ -d "$TARGET" ] || { echo "❌ 대상 폴더가 없습니다: $TARGET"; exit 1; }
-TARGET="$(cd "$TARGET" && pwd)"
+RAW_TARGET="${1:-$(cd "$(dirname "$0")" && pwd)}"
+
+refuse() {
+  echo "❌ 권한 복구를 거부합니다: $1"
+  echo "   이 스크립트는 폴더 전체 권한을 재귀적으로 바꿉니다."
+  echo "   인계 패키지 폴더만 대상으로 삼습니다."
+  exit 1
+}
+
+# ── 0) 대상 검증 ─────────────────────────────────────────────
+#    재귀 chmod 는 잘못된 대상에 걸리면 사용자 파일 권한을 광범위하게 파괴하거나
+#    노출한다(644 는 다른 사용자에게 읽기 허용). 대상을 좁게 강제한다.
+[ -L "$RAW_TARGET" ] && refuse "심볼릭 링크는 대상이 될 수 없습니다 — $RAW_TARGET"
+[ -d "$RAW_TARGET" ] || { echo "❌ 대상 폴더가 없습니다: $RAW_TARGET"; exit 1; }
+TARGET="$(cd "$RAW_TARGET" && pwd -P)"
+
+[ "$TARGET" = "/" ] && refuse "루트 디렉터리(/)"
+[ "$(dirname "$TARGET")" = "/" ] && refuse "최상위 디렉터리 — $TARGET"
+if [ -n "${HOME:-}" ] && [ -d "$HOME" ]; then
+  [ "$TARGET" = "$(cd "$HOME" && pwd -P)" ] && refuse "홈 디렉터리 — $TARGET"
+fi
+[ -e "$TARGET/.git" ] && refuse "git 저장소 루트 — $TARGET"
+
+# 인계 패키지 표식이 있어야 한다. 아무 폴더에나 걸리지 않게 하는 마지막 방어선이다.
+marker=""
+if find "$TARGET" -type d -path '*/Butler.app/Contents/MacOS' -print -quit 2>/dev/null | grep -q .; then
+  marker="Butler.app/Contents/MacOS"
+else
+  for candidate in HANDOFF_MANIFEST.json handoff_manifest.json; do
+    if [ -f "$TARGET/$candidate" ]; then
+      marker="$candidate"
+      break
+    fi
+  done
+fi
+[ -n "$marker" ] || refuse "인계 패키지 표식이 없습니다 — $TARGET
+   필요한 표식: Butler.app/Contents/MacOS 디렉터리, 또는 최상위의 HANDOFF_MANIFEST.json"
+
 echo "권한 복구 대상 폴더: $TARGET"
+echo "인계 패키지 표식: $marker"
 
 # ── 1) 기본값: 디렉터리 755 · 파일 644 ────────────────────────
 # -exec ... + 로 묶어 실행한다(파일 하나당 chmod 한 번씩 부르지 않는다).
@@ -49,10 +85,17 @@ find "$TARGET" -type f \( \
 #    ★이번 버그의 핵심. 확장자에 기대지 않고 매직넘버/shebang 을 본다.
 is_executable_payload() {
   local path="$1" magic shebang
-  # Mach-O(32/64, BE/LE) · universal(fat) · ELF
+  # Mach-O(32/64, BE/LE) · universal(fat 32/64, BE/LE) · ELF
+  #   feedface/feedfacf : MH_MAGIC / MH_MAGIC_64
+  #   cefaedfe/cffaedfe : MH_CIGAM / MH_CIGAM_64
+  #   cafebabe/bebafeca : FAT_MAGIC / FAT_CIGAM
+  #   cafebabf/bfbafeca : FAT_MAGIC_64 / FAT_CIGAM_64  ← 64비트 universal 바이너리
+  #   7f454c46          : ELF
   magic="$(head -c 4 "$path" 2>/dev/null | od -An -v -tx1 | tr -d ' \n')"
   case "$magic" in
-    feedface|feedfacf|cefaedfe|cffaedfe|cafebabe|bebafeca|7f454c46) return 0 ;;
+    feedface|feedfacf|cefaedfe|cffaedfe) return 0 ;;
+    cafebabe|bebafeca|cafebabf|bfbafeca) return 0 ;;
+    7f454c46) return 0 ;;
   esac
   # #! 로 시작하는 스크립트
   shebang="$(head -c 2 "$path" 2>/dev/null || true)"
