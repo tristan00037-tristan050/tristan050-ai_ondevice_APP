@@ -1,6 +1,8 @@
 """융합 grounding — 4판정(supported/unsupported/no_evidence/non_claim) + 사실대조."""
 from __future__ import annotations
 
+import pytest
+
 from butler_pc_core.cards.box3.real_contracts import ClaimVerdict, sha256_text
 from butler_pc_core.cards.box3.real_grounding import (
     extract_claims,
@@ -123,4 +125,13 @@ def test_extract_claims_none_or_empty_does_not_crash():
     # yield no claims without raising.
     assert extract_claims(None) == []
     assert extract_claims("") == []
+    assert extract_claims(" \n\t") == []
     assert extract_claims("   \n\t \n") == []
+
+
+@pytest.mark.parametrize("value", [False, 0, [], {}])
+def test_extract_claims_rejects_invalid_falsy_types(value):
+    # falsy 를 통째로 빈 문자열로 바꾸면 잘못된 입력이 조용히 빈 결과로 가려진다.
+    # None 만 '초안 없음'으로 인정하고 나머지 비문자열은 즉시 드러낸다.
+    with pytest.raises(TypeError, match="DRAFT_TEXT_TYPE_INVALID"):
+        extract_claims(value)
