@@ -114,3 +114,13 @@ def test_summary_counts_and_citation_accuracy():
     assert summary.citation_accuracy == 1.0
     assert summary.claim_grounding_verified is True
     assert summary.fail_class is None
+
+
+def test_extract_claims_none_or_empty_does_not_crash():
+    # Regression: extract_claims(None) crashed at draft_text.splitlines()
+    # (AttributeError: 'NoneType' object has no attribute 'splitlines'), which
+    # recurred every round in the box3 pipeline. None/empty/blank drafts must
+    # yield no claims without raising.
+    assert extract_claims(None) == []
+    assert extract_claims("") == []
+    assert extract_claims("   \n\t \n") == []

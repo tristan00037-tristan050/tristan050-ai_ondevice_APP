@@ -132,6 +132,7 @@ def _is_factual(sentence: str) -> bool:
 
 
 def extract_claims(draft_text: str) -> list[DraftClaim]:
+    draft_text = draft_text or ""  # None/empty draft yields no claims, never crashes
     claims: list[DraftClaim] = []
     raw_parts: list[str] = []
     for line in draft_text.splitlines():
