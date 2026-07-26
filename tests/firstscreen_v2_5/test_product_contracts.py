@@ -157,6 +157,13 @@ def test_repository_python_gate_uses_documented_collection_exclusions() -> None:
 
 
 def test_firstscreen_sbom_attestation_verification_is_bound_and_index_independent() -> None:
+    """배선(어느 스텝의 bundle 을 쓰는가)만 본다.
+
+    ★인자 '값'이 맞는지는 여기서 판정하지 않는다. 문자열 존재 검사는 값이 틀려도 그대로
+    정본으로 굳기 때문이다. --source-digest·--source-ref 의 값 판정은
+    tests/firstscreen_v2_5/test_attestation_verification.py 가 ★실물 attestation 인증서
+    확장값과 대조해서, 그리고 gh attestation verify 를 실제로 실행해서 수행한다.
+    """
     workflow = (ROOT / ".github/workflows/product-verify-supplychain.yml").read_text(encoding="utf-8")
     assert "id: attest_firstscreen_sbom" in workflow
     assert (
@@ -164,11 +171,8 @@ def test_firstscreen_sbom_attestation_verification_is_bound_and_index_independen
         in workflow
     )
     assert '--bundle "${FIRSTSCREEN_ATTESTATION_BUNDLE}"' in workflow
-    assert '--predicate-type "https://cyclonedx.org/bom"' in workflow
-    assert '--signer-workflow "${GITHUB_WORKFLOW_REF%%@*}"' in workflow
-    assert '--source-digest "${GITHUB_SHA}"' in workflow
-    assert '--source-ref "${GITHUB_REF}"' in workflow
     assert "ATTESTATION_BUNDLE_UNAVAILABLE" in workflow
+    # 색인 지연을 재시도로 넘기던 우회는 제거된 상태여야 한다.
     assert "ATTESTATION_VERIFY_RETRY" not in workflow
 
 
