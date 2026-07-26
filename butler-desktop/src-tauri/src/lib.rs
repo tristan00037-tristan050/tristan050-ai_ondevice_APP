@@ -15,6 +15,9 @@ use tauri_plugin_shell::{
 };
 
 mod build_identity;
+#[cfg(test)]
+#[path = "../distribution_flag.rs"]
+mod distribution_flag_contract;
 mod export;
 mod runtime_trust;
 
@@ -589,6 +592,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_sidecar_capability_token,
             build_identity::get_native_build_context_digest,
+            build_identity::get_native_release_distribution,
             runtime_trust::commands::verify_and_commit_trust_update,
             runtime_trust::commands::get_runtime_trust_status,
             export::save_export_file

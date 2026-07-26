@@ -8,6 +8,15 @@ APP="target/release/bundle/macos/Butler.app"
 RES="$APP/Contents/Resources"
 PRODUCTION_A4_AUTHORITY="${BUTLER_A4_PRODUCTION_AUTHORITY_BUILD:-0}"
 AUTHORITY_HELPER_EXE="$APP/Contents/XPCServices/A4VerifierAuthority.xpc/Contents/MacOS/A4VerifierAuthority"
+RELEASE_DISTRIBUTION="${BUTLER_RELEASE_DISTRIBUTION-0}"
+case "$RELEASE_DISTRIBUTION" in
+  0|1) ;;
+  *)
+    echo "❌ RELEASE_DISTRIBUTION_FLAG_INVALID — BUTLER_RELEASE_DISTRIBUTION은 0 또는 1만 허용"
+    exit 1
+    ;;
+esac
+export BUTLER_RELEASE_DISTRIBUTION="$RELEASE_DISTRIBUTION"
 
 echo "════════════════════════════════════════"
 echo " Butler 완성품 빌드 시작"
@@ -99,8 +108,6 @@ export BUTLER_SOURCE_COMMIT_OID BUTLER_SOURCE_TREE_OID
 #   배포 개시 전 이월 항목). 저장소에 정본이 없으므로 임의 생성은 금지한다 — 거짓 신뢰근거가 된다.
 #   배포 빌드(BUTLER_RELEASE_DISTRIBUTION=1)에서는 반드시 있어야 하고, 내부 빌드에서는
 #   없는 채로 진행하되 그 사실을 BUILD_INFO 에 남긴다.
-RELEASE_DISTRIBUTION="${BUTLER_RELEASE_DISTRIBUTION:-0}"
-export BUTLER_RELEASE_DISTRIBUTION="$RELEASE_DISTRIBUTION"
 BUILD_INFO_DISTRIBUTION_ARGS=()
 if [[ "$RELEASE_DISTRIBUTION" == "1" ]]; then
   if [[ -z "${BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256:-}" ]]; then
@@ -125,7 +132,7 @@ else
     export BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256
     BUILD_INFO_DISTRIBUTION_ARGS=(--root-anchor "$BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256")
   fi
-  echo "  ℹ️ 내부 빌드(BUTLER_RELEASE_DISTRIBUTION≠1) — ★배포용 아님으로 BUILD_INFO 에 표시한다."
+  echo "  ℹ️ 내부 빌드(BUTLER_RELEASE_DISTRIBUTION=0) — ★배포용 아님으로 BUILD_INFO 에 표시한다."
   echo "     root anchor 미결속 상태이므로 최초 신뢰 부트스트랩은 차단된다(설계대로)."
 fi
 echo "  ✅ build context digest $BUILD_CONTEXT_DIGEST · source $BUTLER_SOURCE_COMMIT_OID"

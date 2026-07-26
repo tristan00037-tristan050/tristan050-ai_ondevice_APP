@@ -4,7 +4,8 @@ pub const BUILD_CONTEXT_DIGEST: &str = env!("BUTLER_BUILD_CONTEXT_DIGEST");
 /// 내부 빌드는 root 부트스트랩이 BLOCK_ROOT_BOOTSTRAP_ANCHOR 로 막힌다.
 pub const RELEASE_DISTRIBUTION: &str = env!("BUTLER_RELEASE_DISTRIBUTION");
 
-pub fn is_release_distribution() -> bool {
+#[tauri::command]
+pub fn get_native_release_distribution() -> bool {
     RELEASE_DISTRIBUTION == "1"
 }
 
@@ -25,6 +26,9 @@ mod tests {
     #[test]
     fn release_distribution_marker_is_explicit() {
         assert!(matches!(RELEASE_DISTRIBUTION, "0" | "1"));
-        assert_eq!(is_release_distribution(), RELEASE_DISTRIBUTION == "1");
+        assert_eq!(
+            get_native_release_distribution(),
+            RELEASE_DISTRIBUTION == "1"
+        );
     }
 }
