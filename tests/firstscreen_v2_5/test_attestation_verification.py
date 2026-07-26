@@ -13,11 +13,13 @@ fixture 출처: main push 로 성공한 실행
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -32,6 +34,13 @@ ATTESTED_SUBJECT_SHA256 = "dc0cc81511a91473bed318c50e87087feb181bd00d18d1d72f608
 REPOSITORY = "tristan00037-tristan050/tristan050-ai_ondevice_APP"
 SIGNER_WORKFLOW = f"{REPOSITORY}/.github/workflows/product-verify-supplychain.yml"
 PREDICATE_TYPE = "https://cyclonedx.org/bom"
+NON_GATING_LOCAL_ENV = "BUTLER_ATTESTATION_NON_GATING"
+
+ERROR_GH_CLI_UNAVAILABLE = "ATTESTATION_GH_CLI_UNAVAILABLE"
+ERROR_ARTIFACT_REGENERATION_FAILED = "ATTESTATION_ARTIFACT_REGENERATION_FAILED"
+ERROR_BASELINE_VERIFICATION_FAILED = "ATTESTATION_BASELINE_VERIFICATION_FAILED"
+ERROR_EXPECTED_ACCEPTANCE_FAILED = "ATTESTATION_EXPECTED_ACCEPTANCE_FAILED"
+ERROR_EXPECTED_REJECTION_FAILED = "ATTESTATION_EXPECTED_REJECTION_FAILED"
 
 # Fulcio(GitHub) 인증서 확장 OID
 OID_SOURCE_REPOSITORY_DIGEST = "1.3.6.1.4.1.57264.1.13"
@@ -177,48 +186,64 @@ def _gh_verify(artifact: Path, **overrides: str) -> subprocess.CompletedProcess[
     return subprocess.run(command, capture_output=True, text=True, check=False)
 
 
+def _is_gating_ci() -> bool:
+    return os.environ.get("CI") == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
+
+
+def _fail_or_skip_non_gating(error_code: str) -> NoReturn:
+    """CI는 항상 실패하고, 명시적으로 비게이팅인 로컬 실행만 건너뛴다."""
+    if not _is_gating_ci() and os.environ.get(NON_GATING_LOCAL_ENV) == "1":
+        pytest.skip(error_code)
+    pytest.fail(error_code, pytrace=False)
+
+
+def _assert_verification_succeeds(result: subprocess.CompletedProcess[str]) -> None:
+    if result.returncode != 0:
+        pytest.fail(ERROR_EXPECTED_ACCEPTANCE_FAILED, pytrace=False)
+
+
+def _assert_verification_rejects(result: subprocess.CompletedProcess[str]) -> None:
+    if result.returncode == 0:
+        pytest.fail(ERROR_EXPECTED_REJECTION_FAILED, pytrace=False)
+
+
 @pytest.fixture(scope="module")
 def attested_artifact(tmp_path_factory: pytest.TempPathFactory) -> Path:
     if shutil.which("gh") is None:
-        pytest.skip("gh CLI 없음 — attestation 통합 회귀 생략")
+        _fail_or_skip_non_gating(ERROR_GH_CLI_UNAVAILABLE)
     artifact = tmp_path_factory.mktemp("attestation") / "source.zip"
     try:
         _regenerate_attested_artifact(artifact)
-    except subprocess.CalledProcessError as error:  # pragma: no cover - 환경 의존
-        pytest.skip(f"attested commit 재생성 불가(히스토리 부족?): {error.stderr[-200:]}")
-    import hashlib
+    except subprocess.CalledProcessError:  # pragma: no cover - 환경 의존
+        _fail_or_skip_non_gating(ERROR_ARTIFACT_REGENERATION_FAILED)
 
     digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
     assert digest == ATTESTED_SUBJECT_SHA256, "재생성한 산출물이 attested subject 와 다르다"
 
     baseline = _gh_verify(artifact)
     if baseline.returncode != 0:
-        pytest.skip(
-            "gh attestation verify 기준선 실패(네트워크/신뢰루트 문제로 보임): "
-            f"{(baseline.stderr or baseline.stdout).strip()[-300:]}"
-        )
+        _fail_or_skip_non_gating(ERROR_BASELINE_VERIFICATION_FAILED)
     return artifact
 
 
 def test_integration_correct_subject_and_digest_passes(attested_artifact: Path) -> None:
-    assert _gh_verify(attested_artifact).returncode == 0
+    _assert_verification_succeeds(_gh_verify(attested_artifact))
 
 
 def test_integration_algorithm_prefixed_digest_fails(attested_artifact: Path) -> None:
     """지시된 'sha1:' 접두 형식은 실제로는 실패한다 — 되돌림 방지."""
     result = _gh_verify(attested_artifact, **{"--source-digest": f"sha1:{ATTESTED_COMMIT}"})
-    assert result.returncode != 0
-    assert "SourceRepositoryDigest" in result.stderr + result.stdout
+    _assert_verification_rejects(result)
 
 
 def test_integration_other_commit_fails(attested_artifact: Path) -> None:
     result = _gh_verify(attested_artifact, **{"--source-digest": "0" * 40})
-    assert result.returncode != 0
+    _assert_verification_rejects(result)
 
 
 def test_integration_other_source_ref_fails(attested_artifact: Path) -> None:
     result = _gh_verify(attested_artifact, **{"--source-ref": "refs/heads/not-main"})
-    assert result.returncode != 0
+    _assert_verification_rejects(result)
 
 
 def test_integration_other_signer_workflow_fails(attested_artifact: Path) -> None:
@@ -226,9 +251,61 @@ def test_integration_other_signer_workflow_fails(attested_artifact: Path) -> Non
         attested_artifact,
         **{"--signer-workflow": f"{REPOSITORY}/.github/workflows/firstscreen-v2-5.yml"},
     )
-    assert result.returncode != 0
+    _assert_verification_rejects(result)
 
 
 def test_integration_environment_is_reported(attested_artifact: Path) -> None:
     """이 시험이 실제로 돌았는지 로그로 남긴다(조용한 skip 방지)."""
     assert os.path.getsize(attested_artifact) > 0
+
+
+@pytest.mark.parametrize("ci_variable", ["CI", "GITHUB_ACTIONS"])
+def test_gating_ci_cannot_enable_attestation_skip(
+    monkeypatch: pytest.MonkeyPatch,
+    ci_variable: str,
+) -> None:
+    monkeypatch.setenv(ci_variable, "true")
+    monkeypatch.setenv(NON_GATING_LOCAL_ENV, "1")
+    with pytest.raises(pytest.fail.Exception, match=f"^{ERROR_BASELINE_VERIFICATION_FAILED}$"):
+        _fail_or_skip_non_gating(ERROR_BASELINE_VERIFICATION_FAILED)
+
+
+def test_local_attestation_skip_requires_explicit_non_gating_opt_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv(NON_GATING_LOCAL_ENV, raising=False)
+    with pytest.raises(pytest.fail.Exception, match=f"^{ERROR_BASELINE_VERIFICATION_FAILED}$"):
+        _fail_or_skip_non_gating(ERROR_BASELINE_VERIFICATION_FAILED)
+
+
+def test_explicit_non_gating_local_environment_uses_bounded_error_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setenv(NON_GATING_LOCAL_ENV, "1")
+    with pytest.raises(pytest.skip.Exception, match=f"^{ERROR_BASELINE_VERIFICATION_FAILED}$"):
+        _fail_or_skip_non_gating(ERROR_BASELINE_VERIFICATION_FAILED)
+
+
+def test_failure_reporting_does_not_embed_verifier_output() -> None:
+    source = Path(__file__).read_text(encoding="utf-8")
+    assert "baseline" + ".stderr" not in source
+    assert "baseline" + ".stdout" not in source
+    assert "error" + ".stderr" not in source
+
+
+def test_verification_failure_omits_captured_diagnostics() -> None:
+    result = subprocess.CompletedProcess(
+        args=["gh", "attestation", "verify"],
+        returncode=1,
+        stdout="RAW_STDOUT_MUST_NOT_PERSIST",
+        stderr="RAW_STDERR_MUST_NOT_PERSIST",
+    )
+    with pytest.raises(pytest.fail.Exception, match=f"^{ERROR_EXPECTED_ACCEPTANCE_FAILED}$") as caught:
+        _assert_verification_succeeds(result)
+    report = str(caught.value)
+    assert "RAW_STDOUT" not in report
+    assert "RAW_STDERR" not in report

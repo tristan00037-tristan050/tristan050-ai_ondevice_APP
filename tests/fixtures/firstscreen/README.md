@@ -23,3 +23,7 @@ subject 인 `source.zip` 은 15MB 라 저장소에 두지 않는다. 시험이 �
 로 **결정적으로 재생성**하고, sha256 이 위 subject 와 같은지 먼저 확인한다.
 
 이 fixture 를 쓰는 시험: `tests/firstscreen_v2_5/test_attestation_verification.py`
+
+`gh` 또는 신뢰 루트를 사용할 수 없는 로컬 비게이팅 환경에서만
+`BUTLER_ATTESTATION_NON_GATING=1`로 통합 검증을 명시적으로 생략할 수 있다.
+GitHub Actions에서는 이 값이 있어도 검증 실패를 건너뛰지 않는다.
