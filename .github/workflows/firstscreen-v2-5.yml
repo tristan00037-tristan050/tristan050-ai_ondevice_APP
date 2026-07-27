@@ -18,6 +18,7 @@ env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '24'
   RUST_TOOLCHAIN: '1.97.1'
+  PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   scope-and-contracts:
@@ -139,6 +140,8 @@ jobs:
     needs: scope-and-contracts
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.PR_HEAD_SHA }}
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -152,7 +155,7 @@ jobs:
         run: |
           mkdir -p test-results
           printf '{"schema_version":1,"pr_head":"%s","runner":"vitest"}\n' \
-            "${GITHUB_SHA}" > test-results/firstscreen-v7-unit-context.json
+            "${PR_HEAD_SHA}" > test-results/firstscreen-v7-unit-context.json
           npm run test:run -- \
             src/firstscreen/__tests__/egressDeadline.test.ts \
             src/firstscreen/__tests__/egressState.test.ts \
@@ -163,7 +166,7 @@ jobs:
             --outputFile.json=test-results/vitest-results.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: firstscreen-v7-unit-${{ github.sha }}
+          name: firstscreen-v7-unit-${{ env.PR_HEAD_SHA }}
           path: |
             butler-desktop/test-results/vitest-results.json
             butler-desktop/test-results/firstscreen-v7-unit-context.json
@@ -189,6 +192,8 @@ jobs:
             grep: preserves compact cards answer area folders and conditional setup banner
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.PR_HEAD_SHA }}
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -212,13 +217,13 @@ jobs:
         run: |
           mkdir -p test-results
           printf '{"schema_version":1,"pr_head":"%s","runner":"playwright","gate":"%s"}\n' \
-            "${GITHUB_SHA}" "${{ matrix.job_name }}" \
+            "${PR_HEAD_SHA}" "${{ matrix.job_name }}" \
             > test-results/firstscreen-v7-${{ matrix.evidence_name }}-context.json
           npx playwright test e2e/firstscreen-v5.spec.ts --grep "${REQUIRED_TEST_GREP}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: firstscreen-v7-browser-${{ matrix.evidence_name }}-${{ github.sha }}
+          name: firstscreen-v7-browser-${{ matrix.evidence_name }}-${{ env.PR_HEAD_SHA }}
           path: |
             butler-desktop/test-results/
             butler-desktop/playwright-report/
@@ -231,13 +236,15 @@ jobs:
     needs: [firstscreen-unit, firstscreen-browser-gates]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.PR_HEAD_SHA }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: firstscreen-v7-unit-${{ github.sha }}
+          name: firstscreen-v7-unit-${{ env.PR_HEAD_SHA }}
           path: evidence/unit
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: firstscreen-v7-browser-required-${{ github.sha }}
+          name: firstscreen-v7-browser-required-${{ env.PR_HEAD_SHA }}
           path: evidence/browser
       - name: Match required nodes to executed JSON reports
         working-directory: butler-desktop
@@ -246,11 +253,11 @@ jobs:
             --manifest acceptance/required-tests.v1.json \
             --vitest ../evidence/unit/vitest-results.json \
             --playwright ../evidence/browser/test-results/playwright-results.json \
-            --head "${GITHUB_SHA}" \
+            --head "${PR_HEAD_SHA}" \
             --output ../evidence/required-node-audit.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: firstscreen-v7-required-node-audit-${{ github.sha }}
+          name: firstscreen-v7-required-node-audit-${{ env.PR_HEAD_SHA }}
           path: evidence/required-node-audit.json
           if-no-files-found: error
           retention-days: 30

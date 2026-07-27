@@ -511,10 +511,10 @@ test.describe('FirstScreen v7 required product paths', () => {
     await openHome(page, { setup: jsonRoute(setupStatus(false)) });
     await expect(page.getByTestId('setup-banner')).toBeVisible();
     await expect(page.getByRole('button', { name: /미분류/ })).toBeVisible();
-    const messageList = page.getByTestId('message-list');
-    await expect(messageList).toBeVisible();
     await page.getByTestId('text-input').fill('v7 compact regression');
     await page.getByTestId('text-input').press('Enter');
+    const messageList = page.getByTestId('message-list');
+    await expect(messageList).toBeVisible();
     const grid = page.getByTestId('home-card-grid');
     await expect(grid).toHaveClass(/compact/, { timeout: 30_000 });
     const box = await grid.boundingBox();
