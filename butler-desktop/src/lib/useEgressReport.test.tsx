@@ -21,12 +21,16 @@ beforeAll(() => {
 
 afterAll(() => vi.unstubAllEnvs());
 
-function report(runId: string, bytes = 0) {
+function report(
+  runId: string,
+  bytes = 0,
+  measurementGeneration = runId === 'run-B' ? 2 : 1,
+) {
   const measured = new Date();
   const payload = {
     schema_version: 'butler.egress.report.v3',
     run_id: runId,
-    measurement_generation: runId === 'run-B' ? 2 : 1,
+    measurement_generation: measurementGeneration,
     measurement_started_at: new Date(measured.getTime() - 1_000).toISOString(),
     measured_at: measured.toISOString(),
     fresh_until: new Date(measured.getTime() + 60_000).toISOString(),
@@ -102,4 +106,29 @@ describe('useEgressReport transport and generation contract', () => {
     expect(result.current.state.kind === 'ready' && result.current.state.report.runId).toBe('run-B');
     expect(result.current.state.generation).toBe(2);
   });
+
+  it.each([2, 3])(
+    'rejects lower and duplicate signed measurement generation %s for one run',
+    async replayedGeneration => {
+      mockedFetch
+        .mockResolvedValueOnce(jsonResponse(report('run-replay', 2048, 3)))
+        .mockResolvedValueOnce(jsonResponse(report('run-replay', 0, replayedGeneration)));
+
+      const { result } = renderHook(() => useEgressReport());
+      await waitFor(() => expect(result.current.state.kind).toBe('ready'));
+      expect(
+        result.current.state.kind === 'ready'
+          && result.current.state.report.measurementGeneration,
+      ).toBe(3);
+
+      await act(async () => {
+        await result.current.refresh();
+      });
+      expect(result.current.state).toMatchObject({
+        kind: 'error',
+        code: 'MEASUREMENT_REPLAY',
+      });
+      expect(JSON.stringify(result.current.state)).not.toContain('밖으로 나간 것 0');
+    },
+  );
 });

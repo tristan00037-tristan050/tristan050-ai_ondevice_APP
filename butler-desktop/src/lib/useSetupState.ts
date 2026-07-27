@@ -12,7 +12,7 @@ const STATUS_KEYS = [
   'external_send_zero',
 ] as const;
 const PROFILE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
-const SHA256 = /^[0-9a-f]{64}$/;
+const SHA256 = /^sha256:[0-9a-f]{64}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -49,7 +49,7 @@ export function parseCompanySetupStatus(value: unknown): CanonicalSetupState {
   return { status: 'incomplete' };
 }
 
-export function useSetupState(): SetupUiState {
+export function useSetupState(sidecarReady = true) {
   const generation = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const [state, setState] = useState<SetupUiState>({ kind: 'resolving' });
@@ -80,12 +80,12 @@ export function useSetupState(): SetupUiState {
   }, []);
 
   useEffect(() => {
-    void resolve();
+    if (sidecarReady) void resolve();
     return () => {
       generation.current += 1;
       abort.current?.abort();
     };
-  }, [resolve]);
+  }, [resolve, sidecarReady]);
 
-  return state;
+  return { state, refresh: resolve } as const;
 }

@@ -62,6 +62,7 @@ import {
 } from './lib/home/messageInventory';
 
 const EgressMonitor = lazy(() => import('./components/chat/EgressMonitor').then(module => ({ default: module.EgressMonitor })));
+const CompanyProfileSetupModal = lazy(() => import('./components/home/CompanyProfileSetupModal').then(module => ({ default: module.CompanyProfileSetupModal })));
 const AccountingModal = lazy(() => import('./components/chat/AccountingModal').then(module => ({ default: module.AccountingModal })));
 const RequestParsingModal = lazy(() => import('./components/chat/RequestParsingModal').then(module => ({ default: module.RequestParsingModal })));
 const Card2DocumentTransform = lazy(() => import('./components/v1_1/Card2DocumentTransform').then(module => ({ default: module.Card2DocumentTransform })));
@@ -102,7 +103,8 @@ export function sidecarCardMode(mode: string): string {
 }
 
 export function App() {
-  const setupUiState = useSetupState();
+  const [sidecarReady, setSidecarReady] = useState(false);
+  const { state: setupUiState, refresh: refreshSetupState } = useSetupState(sidecarReady);
   const legacyConversationsRef = useRef<Conversation[]>(loadConversations());
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [trashedConversations, setTrashedConversations] = useState<Conversation[]>([]);
@@ -112,6 +114,7 @@ export function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [cardMode, setCardMode] = useState<string>('free');
+  const [companyProfileSetupOpen, setCompanyProfileSetupOpen] = useState(false);
   const [accountingModalOpen, setAccountingModalOpen] = useState(false);
   const [requestParsingModalOpen, setRequestParsingModalOpen] = useState(false);
   const [documentTransformModalOpen, setDocumentTransformModalOpen] = useState(false);
@@ -138,7 +141,6 @@ export function App() {
     {},
   );
   const [conflictNotice, setConflictNotice] = useState<string | null>(null);
-  const [sidecarReady, setSidecarReady] = useState(false);
   const [sidecarElapsed, setSidecarElapsed] = useState(0);
   const [sidecarFailed, setSidecarFailed] = useState(false);
   // 헤더 버전 표시: 앱 버전(getVersion, 실패 시 빌드시 주입값으로 폴백), 엔진 버전(/health)
@@ -735,7 +737,7 @@ export function App() {
     }, 200);
   };
 
-  const handleSettingsAction=(action:SettingsAction)=>{setSettingsOpen(false);if(action==='policy')setAdminPolicyConsoleOpen(true);else if(action==='format')setCompanyFormatConsoleOpen(true);else if(action==='fact')setCompanyFactConsoleOpen(true);else if(action==='learning')setCompanyLearningConsoleOpen(true);else if(action==='accounting')setAccountingModalOpen(true);else setEgressMonitorOpen(true);};
+  const handleSettingsAction=(action:SettingsAction)=>{setSettingsOpen(false);if(action==='profile')setCompanyProfileSetupOpen(true);else if(action==='policy')setAdminPolicyConsoleOpen(true);else if(action==='format')setCompanyFormatConsoleOpen(true);else if(action==='fact')setCompanyFactConsoleOpen(true);else if(action==='learning')setCompanyLearningConsoleOpen(true);else if(action==='accounting')setAccountingModalOpen(true);else setEgressMonitorOpen(true);};
 
   const handleDeleteCancel = () => {
     const target = deleteTarget;
@@ -932,6 +934,7 @@ export function App() {
   };
 
   const closeAllCardModals = () => {
+    setCompanyProfileSetupOpen(false);
     setAccountingModalOpen(false);
     setRequestParsingModalOpen(false);
     setDocumentTransformModalOpen(false);
@@ -1099,7 +1102,7 @@ export function App() {
           )}
           <SetupBanner
             setup={setupUiState}
-            onStart={() => setAccountingModalOpen(true)}
+            onStart={() => setCompanyProfileSetupOpen(true)}
           />
         </div>
 
@@ -1148,6 +1151,16 @@ export function App() {
       )}
       {settingsOpen&&<SettingsShell onClose={()=>setSettingsOpen(false)} onAction={handleSettingsAction} appVersion={appVersion} engineVersion={engineVersion}/>}
       {homeStoreError&&<div className="home-store-error" role="alert" data-home-startup={homeStartup?.status ?? 'UNKNOWN'}><span>{homeStoreError}</span><button onClick={()=>setHomeStoreError(null)}>닫기</button></div>}
+
+      {companyProfileSetupOpen && (
+        <CompanyProfileSetupModal
+          onClose={() => setCompanyProfileSetupOpen(false)}
+          onComplete={() => {
+            setCompanyProfileSetupOpen(false);
+            void refreshSetupState();
+          }}
+        />
+      )}
 
       {accountingModalOpen && (
         <AccountingModal

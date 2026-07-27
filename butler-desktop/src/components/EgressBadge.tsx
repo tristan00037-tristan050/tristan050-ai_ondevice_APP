@@ -10,7 +10,12 @@ type Props = Readonly<{
 }>;
 
 export type EgressBadgeView = Readonly<{
-  label: '확인 중' | '확인 실패' | '다시 확인 필요' | `밖으로 나간 것 ${number}`;
+  label:
+    | '확인 중'
+    | '확인 실패'
+    | '다시 확인 필요'
+    | '외부 전송 감지'
+    | `밖으로 나간 것 ${number}`;
   tone: 'loading' | 'error' | 'stale' | 'safe' | 'warning';
   ariaLabel: string;
 }>;
@@ -39,11 +44,24 @@ export function egressBadgeView(state: EgressUiState): EgressBadgeView {
       ariaLabel: `밖으로 나간 것 0 바이트, 측정 시각 ${report.measuredAt}`,
     };
   }
-  if (report.verdict === 'FAIL' && report.egressBytesTotal > 0) {
+  if (report.verdict === 'FAIL') {
+    const observations = [
+      report.egressBytesTotal > 0
+        ? `${report.egressBytesTotal} 바이트`
+        : null,
+      report.externalRequestCount > 0
+        ? `외부 요청 ${report.externalRequestCount}건`
+        : null,
+      report.rawFileSentExternal
+        ? '원본 파일 외부 전송 관측'
+        : null,
+    ].filter((value): value is string => value !== null);
     return {
-      label: `밖으로 나간 것 ${report.egressBytesTotal}`,
+      label: report.egressBytesTotal > 0
+        ? `밖으로 나간 것 ${report.egressBytesTotal}`
+        : '외부 전송 감지',
       tone: 'warning',
-      ariaLabel: `밖으로 나간 것 ${report.egressBytesTotal} 바이트, 측정 시각 ${report.measuredAt}`,
+      ariaLabel: `외부 전송 감지, ${observations.join(', ')}, 측정 시각 ${report.measuredAt}`,
     };
   }
   return {

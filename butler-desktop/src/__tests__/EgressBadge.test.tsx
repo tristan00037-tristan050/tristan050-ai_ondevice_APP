@@ -65,4 +65,37 @@ describe('EgressBadge', () => {
     fireEvent.click(badge);
     expect(onOpen).toHaveBeenCalledOnce();
   });
+
+  it.each([
+    {
+      runId: 'run-request',
+      externalRequestCount: 1,
+      rawFileSentExternal: false,
+      accessible: /외부 요청 1건/,
+    },
+    {
+      runId: 'run-raw-file',
+      externalRequestCount: 0,
+      rawFileSentExternal: true,
+      accessible: /원본 파일 외부 전송 관측/,
+    },
+  ])('warns for every verified zero-byte FAIL: $runId', report => {
+    renderState({
+      kind: 'ready',
+      generation: 4,
+      report: {
+        ...ZERO_REPORT,
+        runId: report.runId,
+        receiptRunId: report.runId,
+        externalRequestCount: report.externalRequestCount,
+        rawFileSentExternal: report.rawFileSentExternal,
+        verdict: 'FAIL',
+      },
+    });
+    const badge = screen.getByTestId('egress-badge');
+    expect(badge).toHaveTextContent('외부 전송 감지');
+    expect(badge).toHaveAttribute('data-tone', 'warning');
+    expect(badge).toHaveAccessibleName(report.accessible);
+    expect(badge).not.toHaveTextContent('확인 실패');
+  });
 });

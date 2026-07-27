@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { currentBuildIdentity } from '../../lib/buildIdentity';
 
-export type SettingsAction = 'policy' | 'format' | 'fact' | 'learning' | 'accounting' | 'egress';
+export type SettingsAction = 'profile' | 'policy' | 'format' | 'fact' | 'learning' | 'accounting' | 'egress';
 
 interface SettingsShellProps {
   onClose: () => void;
@@ -11,7 +11,7 @@ interface SettingsShellProps {
 }
 
 const GROUPS = [
-  { title: '우리 회사', rows: [{ label: '처음 설정하기', action: 'accounting' as const, note: '회사와 회계 기본 정보를 등록합니다.' }] },
+  { title: '우리 회사', rows: [{ label: '처음 설정하기', action: 'profile' as const, note: '회사와 회계 기본 정보를 등록합니다.' }] },
   { title: '정책·보안', rows: [{ label: '정책 관리', action: 'policy' as const }, { label: '외부 전송 상태', action: 'egress' as const }] },
   { title: '회사 배우기', rows: [{ label: '승인된 회사 지식', action: 'fact' as const }, { label: '폴더 학습 후보', action: 'learning' as const }, { label: '회사 양식', action: 'format' as const }] },
   { title: '데이터', rows: [{ label: '내보내기·삭제 관리', note: '준비 중' }] },

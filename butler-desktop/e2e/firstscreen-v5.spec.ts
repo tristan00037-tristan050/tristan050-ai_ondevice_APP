@@ -135,7 +135,7 @@ function setupStatus(active: boolean) {
     schema_version: 'company_profile.status.v1',
     active,
     profile_id: active ? 'company-profile-e2e' : null,
-    profile_digest: active ? 'b'.repeat(64) : null,
+    profile_digest: active ? `sha256:${'b'.repeat(64)}` : null,
     display_hints: {},
     raw_text_logged: false,
     external_send_zero: true,
@@ -567,7 +567,7 @@ test.describe('setup, compact and accessibility matrix', () => {
     const banner = page.getByTestId('setup-banner');
     await expect(banner).toBeVisible();
     await banner.getByRole('button', { name: '시작하기', exact: true }).click();
-    await expect(page.getByTestId('accounting-modal')).toBeVisible();
+    await expect(page.getByTestId('company-profile-setup-modal')).toBeVisible();
   });
 
   test('dismissal is tab-session scoped and a new page shows the banner', async ({ page, context }) => {

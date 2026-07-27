@@ -28,7 +28,8 @@ export type EgressErrorCode =
   | 'UNSUPPORTED_SCHEMA'
   | 'INCONSISTENT_REPORT'
   | 'CLOCK_INVALID'
-  | 'RECEIPT_UNBOUND';
+  | 'RECEIPT_UNBOUND'
+  | 'MEASUREMENT_REPLAY';
 
 export type EgressUiState =
   | Readonly<{ kind: 'loading'; generation: number }>
@@ -420,6 +421,7 @@ function reducer(state: EgressUiState, action: Action): EgressUiState {
 export function useEgressReport() {
   const generation = useRef(0);
   const abort = useRef<AbortController | null>(null);
+  const acceptedMeasurementGenerations = useRef(new Map<string, number>());
   const [state, dispatch] = useReducer(reducer, {
     kind: 'loading',
     generation: 0,
@@ -450,9 +452,29 @@ export function useEgressReport() {
         throw new EgressReportError('INVALID_JSON');
       }
       const parsed = await parseEgressReport(payload);
-      next = 'kind' in parsed
-        ? { ...parsed, generation: nextGeneration }
-        : { kind: 'ready', generation: nextGeneration, report: parsed };
+      if ('kind' in parsed) {
+        next = { ...parsed, generation: nextGeneration };
+      } else {
+        const previousGeneration =
+          acceptedMeasurementGenerations.current.get(parsed.runId);
+        if (
+          previousGeneration !== undefined
+          && parsed.measurementGeneration <= previousGeneration
+        ) {
+          throw new EgressReportError('MEASUREMENT_REPLAY');
+        }
+        if (
+          controller.signal.aborted
+          || nextGeneration !== generation.current
+        ) {
+          return;
+        }
+        acceptedMeasurementGenerations.current.set(
+          parsed.runId,
+          parsed.measurementGeneration,
+        );
+        next = { kind: 'ready', generation: nextGeneration, report: parsed };
+      }
     } catch (error) {
       if (controller.signal.aborted) return;
       next = {
