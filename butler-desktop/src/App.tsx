@@ -1048,7 +1048,6 @@ export function App() {
               style={{
                 fontSize: 'var(--text-xs)',
                 color: 'var(--color-text-secondary)',
-                opacity: 0.7,
                 whiteSpace: 'nowrap',
               }}
             >

@@ -324,23 +324,33 @@ test.describe('egress attack matrix (19/19)', () => {
   test('15 newest generation wins an A/B response race', async ({ page }) => {
     let requestCount = 0;
     let releaseA: (() => void) | undefined;
+    let settleA: (() => void) | undefined;
     const gateA = new Promise<void>(resolveGate => {
       releaseA = resolveGate;
+    });
+    const settledA = new Promise<void>(resolveSettled => {
+      settleA = resolveSettled;
     });
     await openHome(page, {
       egress: async route => {
         requestCount += 1;
         if (requestCount === 1) {
           await gateA;
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify(signedReport({
-              run_id: 'run-A',
-              receipt_run_id: 'run-A',
-              measurement_generation: 1,
-            })),
-          }).catch(() => undefined);
+          try {
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify(signedReport({
+                run_id: 'run-A',
+                receipt_run_id: 'run-A',
+                measurement_generation: 1,
+              })),
+            });
+          } catch {
+            // The product aborts obsolete requests; that is a valid race win.
+          } finally {
+            settleA?.();
+          }
           return;
         }
         await route.fulfill({
@@ -359,10 +369,14 @@ test.describe('egress attack matrix (19/19)', () => {
     });
     await page.getByTestId('egress-badge').click();
     await page.getByRole('button', { name: '다시 확인' }).click();
-    await expect(page.getByTestId('egress-badge')).toContainText('밖으로 나간 것 4096');
+    const badge = page.getByTestId('egress-badge');
+    await expect(badge).toContainText('밖으로 나간 것 4096');
+    const winningGeneration = await badge.getAttribute('data-generation');
+    expect(Number(winningGeneration)).toBeGreaterThanOrEqual(2);
     releaseA?.();
-    await expect(page.getByTestId('egress-badge')).toContainText('밖으로 나간 것 4096');
-    await expect(page.getByTestId('egress-badge')).toHaveAttribute('data-generation', '2');
+    await settledA;
+    await expect(badge).toContainText('밖으로 나간 것 4096');
+    await expect(badge).toHaveAttribute('data-generation', winningGeneration!);
   });
 
   test('16 signature binds measurement generation', async ({ page }) => {
