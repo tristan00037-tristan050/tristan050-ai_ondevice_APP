@@ -205,6 +205,19 @@ function exactArrayBuffer(value: Uint8Array): ArrayBuffer {
   return copy.buffer;
 }
 
+function cryptoBytes(value: Uint8Array): BufferSource {
+  // Node 20's WebCrypto rejects ArrayBuffers originating in jsdom's realm.
+  // This branch also supports Electron/SSR validation without changing the
+  // browser path; no Buffer polyfill or private key is shipped to Chromium.
+  const nodeBuffer = (
+    globalThis as typeof globalThis & {
+      Buffer?: { from(input: Uint8Array): unknown };
+    }
+  ).Buffer;
+  if (nodeBuffer) return nodeBuffer.from(value) as BufferSource;
+  return exactArrayBuffer(value);
+}
+
 /**
  * Canonical report bytes owned by both the runtime producer and UI verifier.
  *
@@ -250,14 +263,14 @@ async function verifyReceipt(
     const actualDigest =
       `sha256:${toHex(await crypto.subtle.digest(
         'SHA-256',
-        exactArrayBuffer(canonical),
+        cryptoBytes(canonical),
       ))}` as const;
     if (actualDigest !== report.receipt_digest) {
       throw new EgressReportError('RECEIPT_UNBOUND');
     }
     const publicKey = await crypto.subtle.importKey(
       'spki',
-      exactArrayBuffer(base64Bytes(trust.publicKeySpkiBase64)),
+      cryptoBytes(base64Bytes(trust.publicKeySpkiBase64)),
       { name: 'Ed25519' },
       false,
       ['verify'],
@@ -265,8 +278,8 @@ async function verifyReceipt(
     const valid = await crypto.subtle.verify(
       { name: 'Ed25519' },
       publicKey,
-      exactArrayBuffer(base64UrlBytes(report.receipt_signature)),
-      exactArrayBuffer(new TextEncoder().encode(report.receipt_digest)),
+      cryptoBytes(base64UrlBytes(report.receipt_signature)),
+      cryptoBytes(new TextEncoder().encode(report.receipt_digest)),
     );
     if (!valid) throw new EgressReportError('RECEIPT_UNBOUND');
   } catch (error) {

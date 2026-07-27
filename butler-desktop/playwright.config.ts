@@ -1,5 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
-import { generateKeyPairSync } from 'node:crypto';
+import {
+  createPrivateKey,
+  createPublicKey,
+  generateKeyPairSync,
+  type KeyObject,
+} from 'node:crypto';
 import { resolve } from 'node:path';
 
 const desktopRoot = resolve(import.meta.dirname);
@@ -7,8 +12,23 @@ const repositoryRoot = resolve(desktopRoot, '..');
 const appData = resolve(repositoryRoot, '.playwright-runtime', 'app-data');
 process.env.BUTLER_E2E_DATA_DIR = appData;
 const egressKeyId = 'butler-egress-verifier-playwright-v1';
-const { privateKey: egressPrivateKey, publicKey: egressPublicKey } =
-  generateKeyPairSync('ed25519');
+
+// Playwright may evaluate this config in both its coordinator and worker
+// processes. Reuse the inherited ephemeral key instead of silently generating
+// a second key whose private half no longer matches the Vite verifier.
+const inheritedPrivateKey =
+  process.env.BUTLER_E2E_EGRESS_PRIVATE_KEY_PKCS8_BASE64;
+let egressPrivateKey: KeyObject;
+if (inheritedPrivateKey) {
+  egressPrivateKey = createPrivateKey({
+    key: Buffer.from(inheritedPrivateKey, 'base64'),
+    format: 'der',
+    type: 'pkcs8',
+  });
+} else {
+  egressPrivateKey = generateKeyPairSync('ed25519').privateKey;
+}
+const egressPublicKey = createPublicKey(egressPrivateKey);
 process.env.BUTLER_E2E_EGRESS_PRIVATE_KEY_PKCS8_BASE64 = egressPrivateKey
   .export({ format: 'der', type: 'pkcs8' })
   .toString('base64');

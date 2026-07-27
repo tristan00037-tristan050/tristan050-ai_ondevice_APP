@@ -121,6 +121,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
           name: firstscreen-v2-5-web-${{ github.sha }}
           path: |
@@ -212,6 +213,7 @@ jobs:
       - run: python -m pytest tests/ --collect-only -qq --ignore=tests/turboq/ --ignore=tests/eval/test_eval_hardcase.py --ignore=tests/eval/test_eval_judge_v3.py
       - run: python -m pytest tests/ -q --ignore=tests/turboq/ --ignore=tests/eval/test_eval_hardcase.py --ignore=tests/eval/test_eval_judge_v3.py --junitxml=repository-junit.xml
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with: {name: firstscreen-v2-5-repository, path: repository-junit.xml, if-no-files-found: error, retention-days: 30}
 
   # 인계 권한복구 스크립트는 macOS 전용 운영 스크립트다. 회귀가 ubuntu job 에서만 돌면

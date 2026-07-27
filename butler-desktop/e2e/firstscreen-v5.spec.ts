@@ -634,7 +634,9 @@ test.describe('setup, compact and accessibility matrix', () => {
     const toggle = page.getByTestId('sidebar-toggle-btn');
     await toggle.focus();
     await toggle.press('Enter');
-    await expect(page.locator('.home-sidebar-closed')).toBeVisible();
+    const closedSidebar = page.locator('.home-sidebar-closed');
+    await expect(closedSidebar).toHaveAttribute('aria-hidden', 'true');
+    await expect(closedSidebar).toHaveCSS('width', '0px');
     await expect(toggle).toBeFocused();
     await toggle.press('Enter');
     await expect(page.getByTestId('settings-entry')).toBeVisible();
