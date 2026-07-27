@@ -137,6 +137,17 @@ else
 fi
 echo "  ✅ build context digest $BUILD_CONTEXT_DIGEST · source $BUTLER_SOURCE_COMMIT_OID"
 
+if [[ -z "${BUTLER_BUILD_ASSET_ROOT:-}" && -z "${BUTLER_BUILD_ASSET_INVENTORY:-}" ]]; then
+  echo "ASSET_BUILD_INPUTS_OK=0"
+  echo "ERROR_CODE=ASSET_INVENTORY_REQUIRED"
+  exit 1
+fi
+if [[ -z "${BUTLER_BUILD_ASSET_ROOT:-}" || -z "${BUTLER_BUILD_ASSET_INVENTORY:-}" ]]; then
+  echo "ASSET_BUILD_INPUTS_OK=0"
+  echo "ERROR_CODE=ASSET_INPUT_INCOMPLETE"
+  exit 1
+fi
+
 echo "[1/5] Tauri 빌드 (.app)"
 # pipefail(4행)로 npm 실패는 파이프 종료코드에 반영된다. 과거 `|| true` 가 이를 가려
 # beforeBuildCommand(build_runtime.sh) 실패 시 STALE 번들을 성공으로 오인했다 — 제거한다.
@@ -150,33 +161,17 @@ APP_PY="$RES/python/bin/python3"
 echo "[1.5/5] sealed asset staging and full verification"
 ASSET_PROFILE="development"
 [[ "$RELEASE_DISTRIBUTION" == "1" ]] && ASSET_PROFILE="production"
-if [[ -n "${BUTLER_BUILD_ASSET_ROOT:-}" || -n "${BUTLER_BUILD_ASSET_INVENTORY:-}" ]]; then
-  [[ -n "${BUTLER_BUILD_ASSET_ROOT:-}" && -n "${BUTLER_BUILD_ASSET_INVENTORY:-}" ]] || {
-    echo "ASSET_STAGE_OK=0"
-    echo "ERROR_CODE=ASSET_INPUT_INCOMPLETE"
-    exit 1
-  }
-  "$APP_PY" -m butler_pc_core.assets.cli stage \
-    --source-root "$BUTLER_BUILD_ASSET_ROOT" \
-    --inventory "$BUTLER_BUILD_ASSET_INVENTORY" \
-    --resources-root "$RES" \
-    --source-commit "$BUTLER_SOURCE_COMMIT_OID" \
-    --source-tree "$BUTLER_SOURCE_TREE_OID" \
-    --release-profile "$ASSET_PROFILE"
-  "$APP_PY" -m butler_pc_core.assets.cli verify-release \
-    --package "$APP" \
-    --build-context "$RES/assets/ASSET_BUILD_CONTEXT.json" \
-    --release-profile "$ASSET_PROFILE"
-else
-  rm -rf "$RES/assets"
-  if [[ "$RELEASE_DISTRIBUTION" == "1" ]]; then
-    echo "ASSET_RELEASE_VERIFY_OK=0"
-    echo "ERROR_CODE=ASSET_INVENTORY_REQUIRED"
-    exit 1
-  fi
-  echo "ASSET_STAGE_SKIPPED=1"
-  echo "ERROR_CODE=ASSET_INVENTORY_NOT_PROVIDED"
-fi
+"$APP_PY" -m butler_pc_core.assets.cli stage \
+  --source-root "$BUTLER_BUILD_ASSET_ROOT" \
+  --inventory "$BUTLER_BUILD_ASSET_INVENTORY" \
+  --resources-root "$RES" \
+  --source-commit "$BUTLER_SOURCE_COMMIT_OID" \
+  --source-tree "$BUTLER_SOURCE_TREE_OID" \
+  --release-profile "$ASSET_PROFILE"
+"$APP_PY" -m butler_pc_core.assets.cli verify-release \
+  --package "$APP" \
+  --build-context "$RES/assets/ASSET_BUILD_CONTEXT.json" \
+  --release-profile "$ASSET_PROFILE"
 
 # CI(firstscreen-v2-5.yml)와 같은 확인: 생산 바이트에 context digest 가 실제로 각인됐는가.
 grep -R --fixed-strings "$BUILD_CONTEXT_DIGEST" "$ROOT/butler-desktop/dist" >/dev/null || {

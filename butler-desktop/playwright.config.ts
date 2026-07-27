@@ -26,7 +26,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'python3 butler_sidecar.py --host 127.0.0.1 --port 8765',
+      command: 'python3 -m butler_pc_core.assets.dev_sidecar --host 127.0.0.1 --port 8765',
       cwd: repositoryRoot,
       url: 'http://127.0.0.1:8765/health',
       reuseExistingServer: !process.env.CI,

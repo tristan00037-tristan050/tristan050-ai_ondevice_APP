@@ -66,7 +66,10 @@ from butler_pc_core.runtime.timeout_controller import (
     CHUNK_TIMEOUT_SEC,
 )
 from butler_pc_core.inference.llm_runtime import LlmRuntime, _strip_residual_stop_tokens
-from butler_pc_core.inference.model_identity import sidecar_model_status_payload
+from butler_pc_core.inference.model_identity import (
+    assert_main_not_box3,
+    sidecar_model_status_payload,
+)
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.build_info import build_info, build_tree_oid
 from butler_pc_core.fail_class import FailClass, fail_payload, map_legacy_to_fail_class
