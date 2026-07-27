@@ -4,14 +4,19 @@ import hashlib
 import logging
 import re
 import socket
+import threading
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any, Optional
 from urllib.parse import urlparse
 
 
+RUNTIME_REAL_MEASUREMENT = "RUNTIME_REAL"
+
+
 class EgressMonitorReal:
     def __init__(self) -> None:
+        self._lock = threading.RLock()
         self._started = False
         self._originals: dict[str, Any] = {}
         self._restore_errors: list[tuple[str, str]] = []
@@ -40,11 +45,12 @@ class EgressMonitorReal:
         return datetime.now(timezone.utc).isoformat()
 
     def _record_violation(self, kind: str, target: str) -> None:
-        self.violations.append({
-            "kind": kind,
-            "target_digest16": self._digest16(target),
-            "timestamp": self._timestamp(),
-        })
+        with self._lock:
+            self.violations.append({
+                "kind": kind,
+                "target_digest16": self._digest16(target),
+                "timestamp": self._timestamp(),
+            })
 
     def _is_local_only(self, host: str) -> bool:
         if host in ("127.0.0.1", "::1", "localhost"):
@@ -88,12 +94,13 @@ class EgressMonitorReal:
 
     def _record_raw_text(self, log_text: str, reason: str) -> dict[str, Any]:
         digest = self._digest16(log_text)
-        self.raw_text_logged = True
-        self.violations.append({
-            "kind": "logging",
-            "target_digest16": digest,
-            "timestamp": self._timestamp(),
-        })
+        with self._lock:
+            self.raw_text_logged = True
+            self.violations.append({
+                "kind": "logging",
+                "target_digest16": digest,
+                "timestamp": self._timestamp(),
+            })
         return {"raw_text_logged": True, "raw_text_reason": reason, "raw_text_digest16": digest}
 
     def _patch_optional_libs(self) -> tuple[list[str], list[str]]:
@@ -139,7 +146,13 @@ class EgressMonitorReal:
 
             def httpx_patch(client, method, url, *args, **kwargs):
                 host = self._extract_host(url) or ""
-                if not self._is_local_only(host):
+                transport = getattr(client, "_transport", None)
+                transport_type = type(transport)
+                in_process_test_transport = (
+                    transport_type.__module__ == "starlette.testclient"
+                    and transport_type.__name__ == "_TestClientTransport"
+                )
+                if not self._is_local_only(host) and not in_process_test_transport:
                     self._record_violation("httpx", str(url))
                     raise PermissionError("external httpx call blocked")
                 return original_httpx(client, method, url, *args, **kwargs)
@@ -152,12 +165,13 @@ class EgressMonitorReal:
         return patched, skipped
 
     def start(self) -> None:
-        if self._started:
-            raise RuntimeError("duplicate start is forbidden")
-        self._started = True
-        self._originals["socket.socket.connect"] = socket.socket.connect
-        self._originals["urllib.request.urlopen"] = urllib.request.urlopen
-        self._originals["logging.Logger._log"] = logging.Logger._log
+        with self._lock:
+            if self._started:
+                raise RuntimeError("duplicate start is forbidden")
+            self._started = True
+            self._originals["socket.socket.connect"] = socket.socket.connect
+            self._originals["urllib.request.urlopen"] = urllib.request.urlopen
+            self._originals["logging.Logger._log"] = logging.Logger._log
 
         original_connect = socket.socket.connect
         original_urlopen = urllib.request.urlopen
@@ -194,13 +208,17 @@ class EgressMonitorReal:
                 self._record_raw_text(text, reason)
             return original_log(logger, level, msg, args, exc_info, extra, stack_info, stacklevel)
 
-        socket.socket.connect = connect_patch
-        urllib.request.urlopen = urlopen_patch
-        logging.Logger._log = log_patch
-        self.patched_targets.extend(["socket", "urllib", "logging"])
-        patched, skipped = self._patch_optional_libs()
-        self.patched_targets.extend(patched)
-        self.skipped_targets.extend(skipped)
+        try:
+            socket.socket.connect = connect_patch
+            urllib.request.urlopen = urlopen_patch
+            logging.Logger._log = log_patch
+            self.patched_targets.extend(["socket", "urllib", "logging"])
+            patched, skipped = self._patch_optional_libs()
+            self.patched_targets.extend(patched)
+            self.skipped_targets.extend(skipped)
+        except Exception:
+            self.stop()
+            raise
 
     def stop(self) -> None:
         restore_map = {
@@ -208,42 +226,47 @@ class EgressMonitorReal:
             "urllib.request.urlopen": (urllib.request, "urlopen"),
             "logging.Logger._log": (logging.Logger, "_log"),
         }
-        for name, original in list(self._originals.items()):
-            try:
-                if name in restore_map:
-                    obj, attr = restore_map[name]
-                    setattr(obj, attr, original)
-                elif name == "requests.sessions.Session.request":
-                    import requests  # type: ignore
-                    requests.sessions.Session.request = original
-                elif name == "httpx.Client.request":
-                    import httpx  # type: ignore
-                    httpx.Client.request = original
-            except Exception as exc:
-                self._restore_errors.append((name, str(exc)))
-        self._originals.clear()
-        # Codex P2 결함 정정: stop() 본질 종료 시 _started 클리어 본질
-        # public start()/stop() 본질 직접 사용 시 재시작 가능
-        # (__exit__ 본질은 이미 finally에서 _started=False 본질 — idempotent).
-        self._started = False
+        with self._lock:
+            for name, original in list(self._originals.items()):
+                try:
+                    if name in restore_map:
+                        obj, attr = restore_map[name]
+                        setattr(obj, attr, original)
+                    elif name == "requests.sessions.Session.request":
+                        import requests  # type: ignore
+                        requests.sessions.Session.request = original
+                    elif name == "httpx.Client.request":
+                        import httpx  # type: ignore
+                        httpx.Client.request = original
+                except Exception as exc:
+                    self._restore_errors.append((name, str(exc)))
+            self._originals.clear()
+            # Codex P2 결함 정정: stop() 본질 종료 시 _started 클리어 본질
+            # public start()/stop() 본질 직접 사용 시 재시작 가능
+            # (__exit__ 본질은 이미 finally에서 _started=False 본질 — idempotent).
+            self._started = False
 
     def record_telemetry_attempt(self, target: str) -> None:
-        self.telemetry_enabled = True
+        with self._lock:
+            self.telemetry_enabled = True
         self._record_violation("telemetry", target)
 
     def report(self) -> dict[str, Any]:
-        first_ts = self.violations[0]["timestamp"] if self.violations else None
-        return {
-            "schema_version": "egress_report.v2",
-            "mode": "local_only",
-            "raw_file_sent_external": False,
-            "raw_text_logged": self.raw_text_logged,
-            "telemetry_enabled": self.telemetry_enabled,
-            "external_calls_count": len(self.violations),
-            "external_calls_blocked": len(self.violations),
-            "first_violation_timestamp": first_ts,
-            "verdict": "FAIL" if self.violations else "PASS",
-            "patched_targets": self.patched_targets,
-            "skipped_targets": self.skipped_targets,
-            "violations": list(self.violations),
-        }
+        with self._lock:
+            violations = [dict(item) for item in self.violations]
+            first_ts = violations[0]["timestamp"] if violations else None
+            return {
+                "schema_version": "egress_report.v2",
+                "measurement": RUNTIME_REAL_MEASUREMENT,
+                "mode": "local_only",
+                "raw_file_sent_external": False,
+                "raw_text_logged": self.raw_text_logged,
+                "telemetry_enabled": self.telemetry_enabled,
+                "external_calls_count": len(violations),
+                "external_calls_blocked": len(violations),
+                "first_violation_timestamp": first_ts,
+                "verdict": "FAIL" if violations else "PASS",
+                "patched_targets": list(self.patched_targets),
+                "skipped_targets": list(self.skipped_targets),
+                "violations": violations,
+            }

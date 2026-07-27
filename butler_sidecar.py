@@ -110,6 +110,7 @@ from butler_pc_core.model_tier.shadow_observer import (
     phase0_shadow_status,
     shutdown_phase0_shadow,
 )
+from butler_pc_core.observability import EgressMonitorReal
 from datetime import datetime, timezone as _tz
 
 # ---------------------------------------------------------------------------
@@ -119,6 +120,42 @@ _SHARED_LLM: LlmRuntime | None = None
 _LLM_INIT_LOCK = threading.Lock()
 _MODEL_TIER_RUNTIME_MONITOR: RuntimeStateMonitor | None = None
 _MODEL_TIER_DEVICE_SAMPLER: DeviceProfileSampler | None = None
+_EGRESS_MONITOR: EgressMonitorReal | None = None
+_EGRESS_MONITOR_LOCK = threading.RLock()
+_STATIC_BETA_MEASUREMENT = "STATIC_BETA"
+
+
+def _start_egress_monitor() -> None:
+    global _EGRESS_MONITOR
+    with _EGRESS_MONITOR_LOCK:
+        if _EGRESS_MONITOR is not None:
+            raise RuntimeError("EGRESS_MONITOR_ALREADY_STARTED")
+        monitor = EgressMonitorReal()
+        monitor.start()
+        _EGRESS_MONITOR = monitor
+
+
+def _stop_egress_monitor() -> None:
+    global _EGRESS_MONITOR
+    with _EGRESS_MONITOR_LOCK:
+        monitor = _EGRESS_MONITOR
+        _EGRESS_MONITOR = None
+        if monitor is not None:
+            monitor.stop()
+
+
+def _egress_monitor_report() -> dict[str, object] | None:
+    with _EGRESS_MONITOR_LOCK:
+        if _EGRESS_MONITOR is None:
+            return None
+        return _EGRESS_MONITOR.report()
+
+
+def _static_beta_egress_payload() -> dict[str, str]:
+    return {
+        "detail": "EGRESS_MEASUREMENT_UNAVAILABLE",
+        "measurement": _STATIC_BETA_MEASUREMENT,
+    }
 
 
 def _init_shared_llm() -> None:
@@ -429,15 +466,27 @@ if _FASTAPI_AVAILABLE:
 
     @app.on_event("startup")
     async def _startup_generate_token():
-        _TOKEN_MANAGER.generate()
-        _start_model_tier_phase0_shadow()
-        initialize_home_store()
+        _start_egress_monitor()
+        try:
+            _TOKEN_MANAGER.generate()
+            _start_model_tier_phase0_shadow()
+            initialize_home_store()
+        except Exception:
+            _stop_egress_monitor()
+            raise
 
     @app.on_event("shutdown")
     async def _shutdown_clear_token():
-        shutdown_home_store()
-        _stop_model_tier_phase0_shadow()
-        _TOKEN_MANAGER.clear()
+        try:
+            shutdown_home_store()
+        finally:
+            try:
+                _stop_model_tier_phase0_shadow()
+            finally:
+                try:
+                    _TOKEN_MANAGER.clear()
+                finally:
+                    _stop_egress_monitor()
 
     @app.middleware("http")
     async def _capability_token_middleware(request, call_next):
@@ -621,17 +670,20 @@ if _FASTAPI_AVAILABLE:
 
     @app.get("/api/egress/report")
     def egress_report():
-        """Return only runtime-bound egress evidence.
-
-        The former beta response fabricated a fresh task id together with
-        static zero/PASS values.  A UI cannot distinguish that payload from a
-        real measurement, so the endpoint now fails closed until the runtime
-        owns an atomic v3 measurement and receipt.  Do not restore a synthetic
-        success response here.
-        """
-        raise HTTPException(
-            status_code=503,
-            detail="EGRESS_MEASUREMENT_UNAVAILABLE",
+        """Return the process-wide runtime monitor's atomic redacted snapshot."""
+        try:
+            report = _egress_monitor_report()
+        except Exception:
+            report = None
+        if report is None:
+            return JSONResponse(
+                status_code=503,
+                content=_static_beta_egress_payload(),
+                headers={"Cache-Control": "no-store"},
+            )
+        return JSONResponse(
+            content=report,
+            headers={"Cache-Control": "no-store"},
         )
 
     @app.post("/api/precheck", response_model=PrecheckResponse)
@@ -3020,7 +3072,9 @@ else:
             self.send_header(
                 "Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS"
             )
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header(
+                "Access-Control-Allow-Headers", "Content-Type, Authorization"
+            )
             self.end_headers()
             self.wfile.write(data)
 
@@ -3030,7 +3084,9 @@ else:
             self.send_header(
                 "Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS"
             )
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header(
+                "Access-Control-Allow-Headers", "Content-Type, Authorization"
+            )
             self.end_headers()
 
         def do_GET(self):
@@ -3060,6 +3116,8 @@ else:
                         )
                 else:
                     self._send_json(200, _fallback_health_payload(self.path))
+            elif self.path == "/api/egress/report":
+                self._send_json(503, _static_beta_egress_payload())
             else:
                 self._send_json(404, {"detail": "not found"})
 
