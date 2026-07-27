@@ -9,15 +9,26 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
 from .errors import AssetError, block
 from .manifest import canonical_json_bytes
 
 MAX_PROVENANCE_BYTES = 2 * 1024 * 1024
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 _KEY_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
+
+
+def _verify_ed25519(public: bytes, signature: bytes, payload: bytes) -> None:
+    try:
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+            Ed25519PublicKey,
+        )
+    except ImportError as exc:
+        raise block("BLOCK_CRYPTO_UNAVAILABLE") from exc
+    try:
+        Ed25519PublicKey.from_public_bytes(public).verify(signature, payload)
+    except (InvalidSignature, TypeError, ValueError) as exc:
+        raise block("BLOCK_SIGNATURE_INVALID") from exc
 
 
 @dataclass(frozen=True)
@@ -244,11 +255,9 @@ def verify_signed_provenance(
         signature_raw = base64.b64decode(signature["value_b64"], validate=True)
         if len(public) != 32 or len(signature_raw) != 64:
             raise ValueError
-        Ed25519PublicKey.from_public_bytes(public).verify(
-            signature_raw, canonical_json_bytes(payload)
-        )
-    except (InvalidSignature, TypeError, ValueError) as exc:
+    except (TypeError, ValueError) as exc:
         raise block("BLOCK_SIGNATURE_INVALID") from exc
+    _verify_ed25519(public, signature_raw, canonical_json_bytes(payload))
     if repository is not None:
         _verify_git(repository, source_oid, tree_oid)
     return VerifiedProvenance(

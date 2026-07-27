@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import uuid
 from pathlib import Path
 
@@ -15,6 +17,29 @@ from butler_pc_core.assets.manifest import canonical_json_bytes
 from butler_pc_core.assets.service import PRODUCTION_REQUIRED_GROUPS, AssetService
 
 pytestmark = pytest.mark.no_sidecar_token
+
+
+def test_product_modules_import_without_optional_crypto_dependency() -> None:
+    script = """
+import builtins
+original_import = builtins.__import__
+def deny_crypto(name, *args, **kwargs):
+    if name == "cryptography" or name.startswith("cryptography."):
+        raise ImportError("cryptography intentionally unavailable")
+    return original_import(name, *args, **kwargs)
+builtins.__import__ = deny_crypto
+import butler_pc_core.cards.box2.adapter_loader
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[2],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0
+    assert completed.stdout == ""
+    assert completed.stderr == ""
 
 
 def _stage(tmp_path: Path) -> tuple[Path, Path, str]:

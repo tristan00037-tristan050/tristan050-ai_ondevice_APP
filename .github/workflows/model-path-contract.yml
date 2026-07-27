@@ -4,19 +4,42 @@ on:
   pull_request:
     paths:
       - "butler-desktop/src-tauri/src/lib.rs"
+      - "butler-desktop/src-tauri/tauri.conf.json"
       - "butler_pc_core/inference/model_identity.py"
+      - "butler_pc_core/inference/llm_runtime.py"
+      - "butler_pc_core/inference/verified_model_loader.py"
       - "butler_sidecar.py"
       - "scripts/verify_model_path_contract.py"
+      - ".github/workflows/model-path-contract.yml"
   workflow_dispatch:
+
+env:
+  CONTROL_PLANE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   contract:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.CONTROL_PLANE_SHA }}
+      - name: Verify exact clean control-plane head
+        run: |
+          test "$(git rev-parse HEAD)" = "${CONTROL_PLANE_SHA}" || {
+            echo "MODEL_AUTHORITY_CONTROL_HEAD_OK=0"
+            echo "ERROR_CODE=CONTROL_HEAD_MISMATCH"
+            exit 1
+          }
+          test -z "$(git status --porcelain=v1)" || {
+            echo "MODEL_AUTHORITY_CONTROL_HEAD_OK=0"
+            echo "ERROR_CODE=TREE_NOT_CLEAN"
+            exit 1
+          }
+          echo "MODEL_AUTHORITY_CONTROL_HEAD_OK=1"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Verify free-chat/box3 model path role separation
+      - name: Verify descriptor-rooted model authority
         run: |
           python3 scripts/verify_model_path_contract.py .

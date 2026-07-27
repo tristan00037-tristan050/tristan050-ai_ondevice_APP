@@ -11,6 +11,7 @@ PRODUCT_ROOTS = (
     ROOT / "butler_pc_core",
     ROOT / "butler_sidecar.py",
     ROOT / "butler-desktop/src-tauri/src",
+    ROOT / "butler-desktop/src-tauri/tauri.conf.json",
 )
 FORBIDDEN_CAPABILITIES = (
     "PYTEST_" + "CURRENT_TEST",

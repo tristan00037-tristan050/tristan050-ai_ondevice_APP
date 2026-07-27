@@ -215,27 +215,24 @@ def test_adv_wrapper_no_orphan_after_kill(tmp_path):
     )
 
 
-def test_wrapper_uses_product_python_resolution_without_old_repo_venv():
-    """GUI open 회귀: wrapper가 옛 repo .venv 또는 개발 repo .venv에 의존하지 않는다."""
-    wrapper = (
+def test_tauri_has_no_legacy_external_sidecar_launcher() -> None:
+    """제품은 env 기반 externalBin 대신 native descriptor launcher만 쓴다."""
+    config = json.loads(
+        (
+            _REPO_ROOT
+            / "butler-desktop"
+            / "src-tauri"
+            / "tauri.conf.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert "externalBin" not in config["bundle"]
+    assert not (
         _REPO_ROOT
         / "butler-desktop"
         / "src-tauri"
         / "binaries"
         / "butler-sidecar-aarch64-apple-darwin"
-    )
-    text = wrapper.read_text(encoding="utf-8")
-
-    assert '"${HOME}/Desktop/butler/tristan050-ai_ondevice_APP/.venv/bin/python"' not in text
-    assert "HOME 영역 일반 후보" not in text
-    assert "WORK_DIR에서 위쪽 영역 .venv" not in text
-    assert "Application Support/com.butler.desktop" in text
-    assert "ignoring stale BUTLER_PYTHON" in text
-    assert 'cd "$RUN_DIR"' in text
-    assert 'export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"' in text
-    assert 'export PYTHONPATH="$WORK_DIR:${PYTHONPATH:-}"' in text
-    assert "BUTLER_PYTHON" in text
-    assert "command -v python3" in text
+    ).exists()
 
 
 def test_tauri_sidecar_spawn_writes_launch_log_without_model_path_env():
