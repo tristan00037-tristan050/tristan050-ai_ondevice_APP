@@ -54,7 +54,7 @@ jobs:
           # llama-cpp-python is needed only to BUILD the JSON grammar (no model file) so the
           # box4/box6 review smoke exercises the real structured path. Prebuilt CPU wheels keep
           # this fast and compile-free.
-          python -m pip install "llama-cpp-python>=0.2.50" --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+          python -m pip install "llama-cpp-python==0.3.20" --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
       - name: Box4 document_review activation/contract verifier
         run: |
           python scripts/verify_box4_document_review_activation.py | tee /tmp/box4_activation.log

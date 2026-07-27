@@ -186,7 +186,7 @@ echo "  ✅ dist 에 context digest 각인 확인"
 
 echo "[2/5] llama-cpp 설치 (자립 앱의 필수 부품)"
 if ! "$APP_PY" -c "import llama_cpp" 2>/dev/null; then
-  CMAKE_ARGS="-DGGML_METAL=ON" "$APP_PY" -m pip install llama-cpp-python 2>&1 | tail -2
+  CMAKE_ARGS="-DGGML_METAL=ON" "$APP_PY" -m pip install "llama-cpp-python==0.3.20" 2>&1 | tail -2
 fi
 "$APP_PY" -c "import llama_cpp; print('  ✅ llama-cpp', llama_cpp.__version__)" || { echo "❌ llama-cpp 실패"; exit 1; }
 

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import os
+import hashlib
+import json
+import secrets
 import shutil
 import tempfile
+import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -21,6 +25,17 @@ class GroupState(str, Enum):
     NOT_INSTALLED = "NOT_INSTALLED"
     NOT_REQUIRED = "NOT_REQUIRED"
     VERIFYING = "VERIFYING"
+
+
+class LeaseState(str, Enum):
+    UNINITIALIZED = "UNINITIALIZED"
+    SOURCE_OPENED = "SOURCE_OPENED"
+    SNAPSHOT_COPYING = "SNAPSHOT_COPYING"
+    SNAPSHOT_VERIFIED = "SNAPSHOT_VERIFIED"
+    SNAPSHOT_SEALED = "SNAPSHOT_SEALED"
+    LEASE_ACTIVE = "LEASE_ACTIVE"
+    LEASE_CLOSED = "LEASE_CLOSED"
+    BLOCKED = "BLOCKED"
 
 
 @dataclass(frozen=True)
@@ -67,10 +82,65 @@ class FileIdentity:
         )
 
 
-class VerifiedAsset:
-    """An owned verified descriptor. No filesystem path crosses this boundary."""
+AssetIdentity = FileIdentity
 
-    __slots__ = ("entry", "_fd", "identity", "identity_token")
+
+@dataclass(frozen=True)
+class VerifiedAssetReceipt:
+    schema_version: int
+    run_id: str
+    request_id: str
+    nonce: str
+    role: str
+    purpose: str
+    manifest_set_digest: str
+    asset_digest: str
+    snapshot_digest: str
+    loader_input_digest: str
+    source_oid: Mapping[str, str]
+    source_tree_oid: Mapping[str, str]
+    trust_policy_digest: str
+    signer_key_id: str
+    platform_seal_type: str
+    ordered_trace_digest: str
+    result: str
+    reason_code: str | None
+    issued_monotonic_ns: int
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "run_id": self.run_id,
+            "request_id": self.request_id,
+            "nonce": self.nonce,
+            "role": self.role,
+            "purpose": self.purpose,
+            "manifest_set_digest": self.manifest_set_digest,
+            "asset_digest": self.asset_digest,
+            "snapshot_digest": self.snapshot_digest,
+            "loader_input_digest": self.loader_input_digest,
+            "source_oid": dict(self.source_oid),
+            "source_tree_oid": dict(self.source_tree_oid),
+            "trust_policy_digest": self.trust_policy_digest,
+            "signer_key_id": self.signer_key_id,
+            "platform_seal_type": self.platform_seal_type,
+            "ordered_trace_digest": self.ordered_trace_digest,
+            "result": self.result,
+            "reason_code": self.reason_code,
+        }
+
+
+class VerifiedAsset:
+    """An owned immutable snapshot descriptor; the source fd never escapes."""
+
+    __slots__ = (
+        "entry",
+        "_fd",
+        "identity",
+        "identity_token",
+        "snapshot_digest",
+        "seal_type",
+    )
 
     def __init__(
         self,
@@ -79,11 +149,15 @@ class VerifiedAsset:
         fd: int,
         identity: FileIdentity,
         identity_token: str,
+        snapshot_digest: str,
+        seal_type: str,
     ) -> None:
         self.entry = entry
         self._fd = fd
         self.identity = identity
         self.identity_token = identity_token
+        self.snapshot_digest = snapshot_digest
+        self.seal_type = seal_type
 
     def open(self) -> BinaryIO:
         duplicate = os.dup(self._fd)
@@ -103,7 +177,16 @@ class VerifiedAsset:
 
 
 class CapabilityLease:
-    __slots__ = ("capability", "asset_group", "group_version", "_assets")
+    __slots__ = (
+        "capability",
+        "asset_group",
+        "group_version",
+        "request_id",
+        "purpose",
+        "_assets",
+        "_state",
+        "_receipts",
+    )
 
     def __init__(
         self,
@@ -112,18 +195,74 @@ class CapabilityLease:
         asset_group: str,
         group_version: int,
         assets: Mapping[str, VerifiedAsset],
+        request_id: str = "legacy-request",
+        purpose: str = "legacy-loader",
+        run_id: str = "legacy-run",
+        manifest_set_digest: str = "",
+        source_oid: Mapping[str, str] | None = None,
+        source_tree_oid: Mapping[str, str] | None = None,
+        trust_policy_digest: str = "",
+        signer_key_id: str = "",
     ) -> None:
         self.capability = capability
         self.asset_group = asset_group
         self.group_version = group_version
+        self.request_id = request_id
+        self.purpose = purpose
         self._assets = dict(assets)
+        self._state = LeaseState.LEASE_ACTIVE
+        trace = (
+            "SOURCE_OPENED",
+            "SNAPSHOT_COPYING",
+            "SNAPSHOT_VERIFIED",
+            "SNAPSHOT_SEALED",
+            "LEASE_ACTIVE",
+        )
+        trace_digest = hashlib.sha256(
+            json.dumps(trace, separators=(",", ":")).encode("ascii")
+        ).hexdigest()
+        self._receipts = {
+            role: VerifiedAssetReceipt(
+                schema_version=1,
+                run_id=run_id,
+                request_id=request_id,
+                nonce=secrets.token_hex(16),
+                role=role,
+                purpose=purpose,
+                manifest_set_digest=manifest_set_digest,
+                asset_digest=asset.entry.sha256,
+                snapshot_digest=asset.snapshot_digest,
+                loader_input_digest=asset.snapshot_digest,
+                source_oid=dict(source_oid or {}),
+                source_tree_oid=dict(source_tree_oid or {}),
+                trust_policy_digest=trust_policy_digest,
+                signer_key_id=signer_key_id,
+                platform_seal_type=asset.seal_type,
+                ordered_trace_digest=trace_digest,
+                result="ALLOW",
+                reason_code="OK",
+                issued_monotonic_ns=time.monotonic_ns(),
+            )
+            for role, asset in self._assets.items()
+        }
+
+    @property
+    def state(self) -> LeaseState:
+        return self._state
 
     @property
     def roles(self) -> tuple[str, ...]:
         return tuple(sorted(self._assets))
 
     def require(self, role: str) -> VerifiedAsset:
+        if self._state is not LeaseState.LEASE_ACTIVE:
+            raise RuntimeError("LEASE_NOT_ACTIVE")
         return self._assets[role]
+
+    def receipt(self, role: str) -> VerifiedAssetReceipt:
+        if self._state is not LeaseState.LEASE_ACTIVE:
+            raise RuntimeError("LEASE_NOT_ACTIVE")
+        return self._receipts[role]
 
     def materialize_directory(self) -> "MaterializedCapability":
         temporary = Path(tempfile.mkdtemp(prefix="butler-verified-assets-"))
@@ -149,6 +288,13 @@ class CapabilityLease:
                 finally:
                     if descriptor >= 0:
                         os.close(descriptor)
+                target.chmod(0o400)
+                with target.open("rb") as copied:
+                    digest = hashlib.sha256()
+                    while chunk := copied.read(8 * 1024 * 1024):
+                        digest.update(chunk)
+                if digest.hexdigest() != asset.snapshot_digest:
+                    raise RuntimeError("MATERIALIZED_DIGEST_MISMATCH")
             for directory in sorted(
                 (item for item in temporary.rglob("*") if item.is_dir()),
                 key=lambda item: len(item.parts),
@@ -156,15 +302,24 @@ class CapabilityLease:
             ):
                 directory.chmod(0o500)
             temporary.chmod(0o500)
-            return MaterializedCapability(temporary)
+            return MaterializedCapability(
+                temporary,
+                {
+                    role: asset.snapshot_digest
+                    for role, asset in self._assets.items()
+                },
+            )
         except Exception:
             shutil.rmtree(temporary, ignore_errors=True)
             raise
 
     def close(self) -> None:
+        if self._state is LeaseState.LEASE_CLOSED:
+            return
         assets, self._assets = self._assets, {}
         for asset in assets.values():
             asset.close()
+        self._state = LeaseState.LEASE_CLOSED
 
     def __enter__(self) -> "CapabilityLease":
         return self
@@ -174,10 +329,11 @@ class CapabilityLease:
 
 
 class MaterializedCapability:
-    __slots__ = ("root",)
+    __slots__ = ("root", "loader_input_digests")
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, loader_input_digests: Mapping[str, str]) -> None:
         self.root = root
+        self.loader_input_digests = dict(loader_input_digests)
 
     def close(self) -> None:
         if self.root.exists():

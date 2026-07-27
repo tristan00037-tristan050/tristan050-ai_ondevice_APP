@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import concurrent.futures
+import hashlib
 import os
+import secrets
 import time
+import uuid
 import weakref
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Callable, Optional
 
 from .real_contracts import Box3RealRuntimeEnvelope, sha256_text, stable_json_digest
@@ -61,17 +65,52 @@ def build_box3_local_real_runner(config: Box3RealRunnerConfig) -> RealRunner:
         from llama_cpp import Llama  # type: ignore
     except Exception as exc:  # pragma: no cover - depends on local runtime
         raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE) from exc
-    model_path = config.model_path
-    if model_path is None:
-        raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE)
+    try:
+        from butler_pc_core.assets import get_asset_service
+        from butler_pc_core.assets.context import get_platform_context
+
+        context = get_platform_context()
+        if context.manifest_set_sha256 is None:
+            raise RuntimeError("BLOCK_MANIFEST_BINDING_MISMATCH")
+        model_lease = get_asset_service().acquire(
+            role="box3.model",
+            purpose="box3-legacy-real-inference",
+            expected_manifest_set=context.manifest_set_sha256,
+            request_id=str(uuid.uuid4()),
+        )
+        materialized = model_lease.materialize_directory()
+        model_asset = model_lease.require("model_gguf")
+        model_path = materialized.root.joinpath(
+            *Path(model_asset.entry.relative_path).parts
+        )
+        measured = hashlib.sha256()
+        with model_path.open("rb") as handle:
+            while chunk := handle.read(8 * 1024 * 1024):
+                measured.update(chunk)
+        if not secrets.compare_digest(
+            measured.hexdigest(), model_asset.snapshot_digest
+        ):
+            raise RuntimeError("BLOCK_LOADER_INPUT_DIGEST_MISMATCH")
+    except Exception as exc:
+        try:
+            materialized.close()
+            model_lease.close()
+        except UnboundLocalError:
+            pass
+        raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE) from exc
     load_start = time.perf_counter()
-    llm = Llama(model_path=str(model_path), verbose=False)  # local file only, no network
+    try:
+        llm = Llama(model_path=str(model_path), verbose=False)
+    except Exception as exc:
+        materialized.close()
+        model_lease.close()
+        raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE) from exc
     from butler_pc_core.model_tier.capability_registry import BOX3_1P7B_VARIANT_ID
     from butler_pc_core.model_tier.runtime_state import publish_runtime_lifecycle
 
     publish_runtime_lifecycle(
         BOX3_1P7B_VARIANT_ID,
-        model_path=str(model_path),
+        model_path=None,
         loaded=True,
         ready=True,
         process_id=os.getpid(),
@@ -87,15 +126,18 @@ def build_box3_local_real_runner(config: Box3RealRunnerConfig) -> RealRunner:
         return str(choices[0].get("text") or "").strip()
 
     setattr(_runner, "_box3_load_ms", load_ms)
-    weakref.finalize(
-        _runner,
-        publish_runtime_lifecycle,
-        BOX3_1P7B_VARIANT_ID,
-        model_path=str(model_path),
-        loaded=False,
-        ready=False,
-        process_id=os.getpid(),
-    )
+    def _release() -> None:
+        materialized.close()
+        model_lease.close()
+        publish_runtime_lifecycle(
+            BOX3_1P7B_VARIANT_ID,
+            model_path=None,
+            loaded=False,
+            ready=False,
+            process_id=os.getpid(),
+        )
+
+    weakref.finalize(_runner, _release)
     return _runner
 
 

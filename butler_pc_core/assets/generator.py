@@ -12,6 +12,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
+from .atomic_publish import atomic_publish_noreplace
 from .contracts import AssetEntry, FileIdentity
 from .errors import AssetError, block
 from .formats import validate_format
@@ -306,13 +307,27 @@ def stage_assets(
         for file_path in candidate.rglob("*"):
             file_path.chmod(0o500 if file_path.is_dir() else 0o400)
         _fsync_tree(candidate)
-        os.replace(candidate, final)
+        atomic_publish_noreplace(candidate, final)
         final.chmod(0o500)
         directory_fd = os.open(resources_root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
         try:
             os.fsync(directory_fd)
         finally:
             os.close(directory_fd)
+        # The published bytes, not the staging receipt, are the final authority.
+        final_context = PlatformAssetContext(
+            resource_root=resources_root,
+            app_data_root=resources_root,
+            release_profile=ReleaseProfile(release_profile),
+            build_id=source_commit,
+            source_commit=source_commit,
+            source_tree=source_tree,
+            manifest_set_sha256=root_digest,
+            native_authority=True,
+        )
+        published = AssetService(final_context).verify_required_groups(release_profile)
+        if len(published) != expected_required:
+            raise block("PUBLISHED_ASSET_REVERIFY_FAILED")
         return root_digest
     except Exception:
         raise

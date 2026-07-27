@@ -624,7 +624,7 @@ def test_safetensors_overlapping_offsets_are_blocked() -> None:
         media_type="application/safetensors",
         validator="safetensors",
     )
-    with pytest.raises(AssetError, match="FORMAT_SCHEMA_INVALID"):
+    with pytest.raises(AssetError, match="BLOCK_FORMAT_INVALID"):
         validate_format(io.BytesIO(raw), entry)
 
 

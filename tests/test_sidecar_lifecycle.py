@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,17 +38,33 @@ async def _run_isolated(params: _TestParams, chunk_idx: int, timeout_sec: float)
     """chunk_worker.py 경로를 직접 사용하는 격리 실행 함수."""
     worker = _REPO_ROOT / "butler_pc_core" / "inference" / "chunk_worker.py"
     params_json = json.dumps(params.__dict__, default=str)
+    payload = b"authorized-test-model"
+    descriptor, model_name = tempfile.mkstemp(prefix="butler-test-model-")
+    os.write(descriptor, payload)
+    os.fsync(descriptor)
+    os.lseek(descriptor, 0, os.SEEK_SET)
     cmd = [
         sys.executable,
         str(worker),
-        "--params", params_json,
-        "--chunk-idx", str(chunk_idx),
+        "--params",
+        params_json,
+        "--chunk-idx",
+        str(chunk_idx),
+        "--model-fd",
+        str(descriptor),
+        "--model-sha256",
+        hashlib.sha256(payload).hexdigest(),
     ]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            pass_fds=(descriptor,),
+        )
+    finally:
+        os.close(descriptor)
+        os.unlink(model_name)
     try:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
         result = json.loads(stdout.decode())
@@ -148,7 +166,10 @@ def test_adv_wrapper_no_orphan_after_kill(tmp_path):
     import socket
 
     with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
+        try:
+            probe.bind(("127.0.0.1", 0))
+        except PermissionError:
+            pytest.skip("sandbox forbids local socket binding")
         port = probe.getsockname()[1]
     environment = os.environ.copy()
     environment["BUTLER_APP_DATA_DIR"] = str(tmp_path / "app-data")
@@ -213,20 +234,16 @@ def test_wrapper_uses_product_python_resolution_without_old_repo_venv():
     assert "command -v python3" in text
 
 
-def test_tauri_sidecar_spawn_writes_launch_log_and_injects_model_env():
-    """GUI open 회귀: Tauri spawn은 env를 주입하고 파일 로그를 남긴다."""
+def test_tauri_sidecar_spawn_writes_launch_log_without_model_path_env():
+    """GUI open 회귀: native bootstrap에는 root만 있고 모델 선택 경로는 없다."""
     lib_rs = _REPO_ROOT / "butler-desktop" / "src-tauri" / "src" / "lib.rs"
     text = lib_rs.read_text(encoding="utf-8")
 
     assert "sidecar-launch.log" in text
-    assert "BUTLER_MODEL_PATH" in text
-    assert "BUTLER_BOX3_V9_Q4_MODEL_PATH" in text
-    assert "push_free_chat_resource_env" in text
-    assert "validate_model_path_invariants" in text
-    assert "BUTLER_MODEL_PATH_ENV, model_path" not in text
-    assert "butler_model_path = box3_v9_model_path" not in text
-    assert "box3_v9_model_path = butler_model_path" not in text
-    assert "sidecar-env.json" in text
+    assert "BUTLER_MODEL_PATH" not in text
+    assert "BUTLER_BOX3_V9_Q4_MODEL_PATH" not in text
+    assert "asset_bootstrap_frame(app)?" in text
+    assert "ASSET_BOOTSTRAP_STDIN_ENV" in text
     assert ".envs(sidecar_env)" in text
     assert "append_sidecar_launch_log(\"spawn_sidecar=start\")" in text
     assert "append_sidecar_launch_log(\"spawn_sidecar=ok\")" in text

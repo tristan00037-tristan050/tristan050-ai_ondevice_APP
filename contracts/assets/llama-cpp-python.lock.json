@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "package": "llama-cpp-python",
+  "version": "0.3.20",
+  "embedded_llama_cpp_commit": "f49e9178767d557a522618b16ce8694f9ddac628",
+  "minimum_security_build": "b7824",
+  "advisory": "GHSA-96jg-mvhq-q7q7",
+  "cve": "CVE-2026-33298"
+}

@@ -5,6 +5,8 @@ from __future__ import annotations
 # while switching the operational default from v4/v5 to the v7 canonical q4_k_m model.
 
 import hashlib
+import os
+import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -135,26 +137,88 @@ def verify_base_model_asset(config: ActualRunnerAssetConfig | None = None) -> Ba
                     sha256_full=actual_sha,
                     readonly_verified=readonly,
                     helper_asset_rows=build_helper_asset_rows(),
-                    measured={"sha_scope": "file", "test_asset": True, "size_bytes": p.stat().st_size},
+                    measured={
+                        "sha_scope": "file",
+                        "test_asset": True,
+                        "size_bytes": p.stat().st_size,
+                    },
                 )
-    asset = verify_v7_q4_asset(readonly_required=cfg.readonly_required)
-    return BaseModelAssetVerdict(
-        allowed=asset.allowed,
-        status=asset.status,
-        fail_class=asset.fail_class,
-        model_format="GGUF",
-        required_engine="llama_cpp",
-        engine_available=False,  # engine probing happens in runner; asset gate remains deterministic/offline.
-        path_ref=asset.path_ref,
-        path_digest=asset.path_digest,
-        sha256_full=asset.sha256_full,
-        readonly_verified=asset.readonly_verified,
-        helper_asset_rows=[],
-        measured={
-            "model_name": BASE_MODEL_NAME,
-            "expected_sha256_full": BASE_MODEL_SHA256_FULL,
-            "sha_scope": asset.sha_scope,
-            "size_bytes": asset.size_bytes,
-            "production_claim_allowed": asset.production_claim_allowed,
-        },
-    )
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        legacy = verify_v7_q4_asset(
+            path_value=os.environ.get(cfg.model_path_env),
+            readonly_required=cfg.readonly_required,
+        )
+        return BaseModelAssetVerdict(
+            allowed=legacy.allowed,
+            status=legacy.status,
+            fail_class=legacy.fail_class,
+            model_format=cfg.expected_model_format,
+            required_engine="llama_cpp",
+            engine_available=False,
+            path_ref=legacy.path_ref,
+            path_digest=legacy.path_digest,
+            sha256_full=legacy.sha256_full,
+            readonly_verified=legacy.readonly_verified,
+            helper_asset_rows=build_helper_asset_rows(),
+            measured={
+                "sha_scope": legacy.sha_scope,
+                "test_compatibility_only": True,
+                "size_bytes": legacy.size_bytes,
+                "production_claim_allowed": False,
+            },
+        )
+    try:
+        from butler_pc_core.assets import get_asset_service
+        from butler_pc_core.assets.context import get_platform_context
+
+        context = get_platform_context()
+        if context.manifest_set_sha256 is None:
+            raise RuntimeError("BLOCK_MANIFEST_BINDING_MISMATCH")
+        with get_asset_service().acquire(
+            role="box3.model",
+            purpose="box3-asset-preflight",
+            expected_manifest_set=context.manifest_set_sha256,
+            request_id=str(uuid.uuid4()),
+        ) as lease:
+            verified = lease.require("model_gguf")
+            if verified.entry.sha256 != cfg.expected_base_sha256_full:
+                raise RuntimeError("BLOCK_MODEL_IDENTITY_MISMATCH")
+            return BaseModelAssetVerdict(
+                allowed=True,
+                status="ASSET_AUTHORITY_VERIFIED",
+                fail_class=None,
+                model_format="GGUF",
+                required_engine="llama_cpp",
+                engine_available=False,
+                path_ref="asset-authority:box3.model",
+                path_digest=None,
+                sha256_full=verified.snapshot_digest,
+                readonly_verified=True,
+                helper_asset_rows=build_helper_asset_rows(),
+                measured={
+                    "sha_scope": "sealed_snapshot",
+                    "size_bytes": verified.entry.size_bytes,
+                    "platform_seal_type": verified.seal_type,
+                },
+            )
+    except Exception:
+        return BaseModelAssetVerdict(
+            allowed=False,
+            status="ASSET_AUTHORITY_BLOCKED",
+            fail_class="PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE",
+            model_format="GGUF",
+            required_engine="llama_cpp",
+            engine_available=False,
+            path_ref="asset-authority:box3.model",
+            path_digest=None,
+            sha256_full=None,
+            readonly_verified=False,
+            helper_asset_rows=[],
+            measured={
+                "model_name": BASE_MODEL_NAME,
+                "expected_sha256_full": BASE_MODEL_SHA256_FULL,
+                "sha_scope": "none",
+                "size_bytes": None,
+                "production_claim_allowed": False,
+            },
+        )

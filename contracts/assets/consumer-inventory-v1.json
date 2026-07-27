@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "repository_head": {
+    "algorithm": "sha1",
+    "hex": "b77964bb28e551eef6522636ba1912579e9b1993",
+    "meaning": "inventory_audit_base"
+  },
+  "consumers": [
+    {
+      "id": "accounting-peft-loader",
+      "source_file": "butler_pc_core/accounting/ft_classifier.py",
+      "symbol": "load_peft",
+      "role": "accounting.adapter",
+      "current_authority": "AssetService.acquire plus sealed materialization",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "accounting-runtime",
+      "test_id": "tests/assets/test_asset_product_migrations.py"
+    },
+    {
+      "id": "box2-real-loader",
+      "source_file": "butler_pc_core/cards/box2/real_load_smoke.py",
+      "symbol": "load_real_model_chain",
+      "role": "box2.adapter",
+      "current_authority": "AssetService.acquire plus sealed materialization",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "box2-runtime",
+      "test_id": "tests/assets/test_asset_product_migrations.py"
+    },
+    {
+      "id": "box3-actual-loader",
+      "source_file": "butler_pc_core/cards/box3/local_sealed_runner.py",
+      "symbol": "build_local_sealed_real_runner",
+      "role": "box3.model",
+      "current_authority": "AssetService.acquire plus sealed materialization",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "box3-runtime",
+      "test_id": "tests/assets/test_asset_authority_v4_1.py"
+    },
+    {
+      "id": "box3-legacy-loader",
+      "source_file": "butler_pc_core/cards/box3/local_real_runner.py",
+      "symbol": "build_box3_local_real_runner",
+      "role": "box3.model",
+      "current_authority": "AssetService.acquire plus sealed materialization",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "box3-runtime",
+      "test_id": "tests/assets/test_asset_authority_v4_1.py"
+    },
+    {
+      "id": "shared-llama-loader",
+      "source_file": "butler_pc_core/inference/llm_runtime.py",
+      "symbol": "LlmRuntime._load",
+      "role": "free_chat.model",
+      "current_authority": "caller-provided sealed digest binding",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "inference-runtime",
+      "test_id": "tests/assets/test_asset_authority_v4_1.py::test_loader_invocation_is_zero_without_authority_digest"
+    },
+    {
+      "id": "free-chat-sidecar-owner",
+      "source_file": "butler_sidecar.py",
+      "symbol": "_new_authorized_shared_llm",
+      "role": "free_chat.model",
+      "current_authority": "AssetService.acquire plus sealed materialization",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "sidecar-runtime",
+      "test_id": "tests/assets/test_asset_authority_v4_1.py"
+    },
+    {
+      "id": "free-chat-worker-handle",
+      "source_file": "butler_pc_core/inference/chunk_worker.py",
+      "symbol": "main",
+      "role": "free_chat.model",
+      "current_authority": "inherited sealed descriptor plus digest binding",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "inference-runtime",
+      "test_id": "tests/assets/test_asset_authority_v4_1.py"
+    },
+    {
+      "id": "native-launcher-bootstrap",
+      "source_file": "butler-desktop/src-tauri/src/lib.rs",
+      "symbol": "asset_bootstrap_frame",
+      "role": "asset.bootstrap",
+      "current_authority": "private framed native bootstrap without asset paths",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "desktop-native",
+      "test_id": "tests/assets/test_asset_product_migrations.py::test_native_launcher_writes_private_asset_bootstrap_before_sidecar_use"
+    },
+    {
+      "id": "box3-governance-consumer",
+      "source_file": "butler_pc_core/cards/box3/endpoint_wiring.py",
+      "symbol": "_read_authorized_json",
+      "role": "box3.governance",
+      "current_authority": "AssetService.acquire sealed JSON handle",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "box3-runtime",
+      "test_id": "tests/assets/test_asset_product_migrations.py"
+    },
+    {
+      "id": "helper1-search-consumer",
+      "source_file": "butler_pc_core/helper1/memory_helper.py",
+      "symbol": "_load_assets",
+      "role": "helper1.search",
+      "current_authority": "AssetService.acquire sealed handles",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "helper1-runtime",
+      "test_id": "tests/assets/test_asset_trust_boundary.py::test_stage_verify_and_helper1_use_same_verified_handles"
+    },
+    {
+      "id": "ip3-model-consumer",
+      "source_file": "butler_pc_core/model_registry/ip3_model_registry.py",
+      "symbol": "resolve_ip3_model",
+      "role": "ip3.model",
+      "current_authority": "AssetService.acquire sealed materialization",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "ip3-runtime",
+      "test_id": "tests/assets/test_asset_product_migrations.py"
+    },
+    {
+      "id": "semantic-mapping-consumer",
+      "source_file": "butler_pc_core/semantic_mapping/llm_corrector.py",
+      "symbol": "_resolve_model",
+      "role": "semantic_mapping.model",
+      "current_authority": "AssetService.acquire sealed materialization",
+      "target_authority": "AssetAuthority.acquire",
+      "migration_status": "MIGRATED",
+      "owner": "semantic-mapping-runtime",
+      "test_id": "tests/assets/test_asset_product_migrations.py"
+    }
+  ]
+}

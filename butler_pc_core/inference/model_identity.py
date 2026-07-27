@@ -84,7 +84,31 @@ def sidecar_model_status_payload(
     status: str,
     last_error: str = "",
     environ: Mapping[str, str] | None = None,
+    authorized_models: Mapping[str, Mapping[str, object]] | None = None,
 ) -> dict[str, object]:
+    if authorized_models is not None:
+        main = authorized_models.get("free_chat", {})
+        box3 = authorized_models.get("box3_canonical", {})
+        return {
+            "status": status,
+            "last_error": last_error,
+            "model_role": "free_chat",
+            "model_family": FREE_CHAT_MODEL_FAMILY
+            if main.get("model_present") is True
+            else "",
+            "model_path_digest": str(main.get("asset_digest") or ""),
+            "model_present": main.get("model_present") is True,
+            "model_path_conflict": False,
+            "model_path_conflict_reason": "",
+            "box3_model": {
+                "model_role": "box3_canonical",
+                "model_family": BOX3_MODEL_FAMILY
+                if box3.get("model_present") is True
+                else "",
+                "model_path_digest": str(box3.get("asset_digest") or ""),
+                "model_present": box3.get("model_present") is True,
+            },
+        }
     env = environ or os.environ
     conflict_reason = model_path_conflict_reason(env)
     public_status = "error" if conflict_reason else status

@@ -10,6 +10,7 @@ from .contracts import AssetEntry, FileIdentity, VerifiedAsset
 from .errors import AssetError, block
 from .formats import validate_format
 from .path_policy import validate_relative_path
+from .snapshot import create_sealed_snapshot, digest_fd
 
 HASH_CHUNK_BYTES = 8 * 1024 * 1024
 _OPEN_BASE_FLAGS = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
@@ -20,7 +21,7 @@ _DIRECTORY = getattr(os, "O_DIRECTORY", 0)
 class SafeRoot:
     """Descriptor-rooted, no-follow traversal for a verified asset root."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, authority_root: Path | None = None) -> None:
         if os.name == "nt":
             # Python dir_fd traversal cannot provide the required Windows
             # reparse-point/ADS guarantees. The native handle bridge must be
@@ -32,6 +33,7 @@ class SafeRoot:
                 raise block("SYMLINK_REJECTED")
             self._fd = os.open(root, _OPEN_BASE_FLAGS | _DIRECTORY | _NOFOLLOW)
             self._identity = FileIdentity.from_stat(os.fstat(self._fd))
+            self._authority_root = authority_root
         except AssetError:
             raise
         except OSError as exc:
@@ -89,8 +91,14 @@ def _full_sha256(fd: int) -> str:
     return digest.hexdigest()
 
 
-def verify_entry(root: SafeRoot, entry: AssetEntry) -> VerifiedAsset:
+def verify_entry(
+    root: SafeRoot,
+    entry: AssetEntry,
+    *,
+    authority_root: Path | None = None,
+) -> VerifiedAsset:
     fd = root.open_regular(entry.relative_path)
+    snapshot_fd = -1
     try:
         before = FileIdentity.from_stat(os.fstat(fd))
         if before.link_count != 1:
@@ -102,16 +110,19 @@ def verify_entry(root: SafeRoot, entry: AssetEntry) -> VerifiedAsset:
         digest = _full_sha256(fd)
         if not secrets.compare_digest(digest, entry.sha256):
             raise block("FILE_DIGEST_MISMATCH")
-        duplicate = os.dup(fd)
-        try:
-            with os.fdopen(duplicate, "rb", closefd=True) as handle:
-                validate_format(handle, entry)
-        except Exception:
-            try:
-                os.close(duplicate)
-            except OSError:
-                pass
-            raise
+        snapshot = create_sealed_snapshot(
+            fd,
+            expected_size=before.size,
+            authority_root=authority_root or root._authority_root,
+        )
+        snapshot_fd = snapshot.fd
+        if not secrets.compare_digest(snapshot.digest, digest):
+            raise block("BLOCK_SNAPSHOT_DIGEST_MISMATCH")
+        duplicate = os.dup(snapshot_fd)
+        with os.fdopen(duplicate, "rb", closefd=True) as handle:
+            validate_format(handle, entry)
+        if not secrets.compare_digest(digest_fd(snapshot_fd), digest):
+            raise block("BLOCK_SNAPSHOT_DIGEST_MISMATCH")
         after = FileIdentity.from_stat(os.fstat(fd))
         if before != after:
             raise block("TOCTOU_CHANGED")
@@ -119,12 +130,23 @@ def verify_entry(root: SafeRoot, entry: AssetEntry) -> VerifiedAsset:
             f"{before.device}:{before.inode}:{before.size}:"
             f"{before.mtime_ns}:{before.ctime_ns}:{entry.sha256}"
         )
-        return VerifiedAsset(
+        verified = VerifiedAsset(
             entry=entry,
-            fd=fd,
+            fd=snapshot_fd,
             identity=before,
             identity_token=hashlib.sha256(identity_basis.encode("ascii")).hexdigest(),
+            snapshot_digest=snapshot.digest,
+            seal_type=snapshot.seal_type,
         )
-    except Exception:
-        os.close(fd)
-        raise
+        snapshot_fd = -1
+        return verified
+    finally:
+        if snapshot_fd >= 0:
+            try:
+                os.close(snapshot_fd)
+            except OSError:
+                pass
+        try:
+            os.close(fd)
+        except OSError:
+            pass

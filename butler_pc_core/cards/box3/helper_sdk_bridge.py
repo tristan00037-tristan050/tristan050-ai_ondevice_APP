@@ -234,7 +234,13 @@ class StyledDraft:
         return payload
 
 def _import_from_env(path_env: str, module_name: str):
-    path = os.environ.get(path_env)
+    # Direct file-path SDK overrides are test-only. Production imports the
+    # signed package module and cannot select executable code through env.
+    path = (
+        os.environ.get(path_env)
+        if os.environ.get("PYTEST_CURRENT_TEST")
+        else None
+    )
     if path:
         p = Path(path)
         if p.is_file():
@@ -313,7 +319,11 @@ class HelperSdkBridge:
             self._embedder_provider = "helper2_sdk"
             return self._helper2, self._embedder_provider
         except Exception:
-            bge = os.environ.get(BGE_M3_MODEL_DIR_ENV)
+            bge = (
+                os.environ.get(BGE_M3_MODEL_DIR_ENV)
+                if os.environ.get("PYTEST_CURRENT_TEST")
+                else None
+            )
             if bge:
                 self._embedder_provider = "bge_m3"
                 # BGE-M3 fallback is explicit and must be disclosed; this object is a capability marker only.

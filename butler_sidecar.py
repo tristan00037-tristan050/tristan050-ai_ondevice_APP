@@ -66,11 +66,7 @@ from butler_pc_core.runtime.timeout_controller import (
     CHUNK_TIMEOUT_SEC,
 )
 from butler_pc_core.inference.llm_runtime import LlmRuntime, _strip_residual_stop_tokens
-from butler_pc_core.inference.model_identity import (
-    MAIN_MODEL_PATH_ENV,
-    assert_main_not_box3,
-    sidecar_model_status_payload,
-)
+from butler_pc_core.inference.model_identity import sidecar_model_status_payload
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 from butler_pc_core.build_info import build_info, build_tree_oid
 from butler_pc_core.fail_class import FailClass, fail_payload, map_legacy_to_fail_class
@@ -119,14 +115,65 @@ _SHARED_LLM: LlmRuntime | None = None
 _LLM_INIT_LOCK = threading.Lock()
 _MODEL_TIER_RUNTIME_MONITOR: RuntimeStateMonitor | None = None
 _MODEL_TIER_DEVICE_SAMPLER: DeviceProfileSampler | None = None
+_SHARED_LLM_ASSET_LEASE = None
+_SHARED_LLM_MATERIALIZED = None
+_SHARED_LLM_ASSET_DIGEST = ""
+
+
+def _authorized_model_payload() -> dict[str, dict[str, object]]:
+    return {
+        "free_chat": {
+            "model_present": _SHARED_LLM_ASSET_LEASE is not None,
+            "asset_digest": (
+                f"sha256:{_SHARED_LLM_ASSET_DIGEST}"
+                if _SHARED_LLM_ASSET_DIGEST
+                else ""
+            ),
+        },
+        "box3_canonical": {"model_present": False, "asset_digest": ""},
+    }
+
+
+def _new_authorized_shared_llm() -> "LlmRuntime":
+    global _SHARED_LLM_ASSET_LEASE
+    global _SHARED_LLM_MATERIALIZED
+    global _SHARED_LLM_ASSET_DIGEST
+    from butler_pc_core.assets import AssetError, get_asset_service
+    from butler_pc_core.assets.context import get_platform_context
+
+    try:
+        context = get_platform_context()
+        if context.manifest_set_sha256 is None:
+            raise AssetError("BLOCK_MANIFEST_BINDING_MISMATCH")
+        lease = get_asset_service().acquire(
+            role="free_chat.model",
+            purpose="free-chat-inference",
+            expected_manifest_set=context.manifest_set_sha256,
+            request_id=str(uuid.uuid4()),
+        )
+        materialized = lease.materialize_directory()
+        asset = lease.require("model_gguf")
+        model_path = materialized.root.joinpath(*Path(asset.entry.relative_path).parts)
+        runtime = LlmRuntime(
+            model_path=str(model_path),
+            expected_sha256=asset.snapshot_digest,
+        )
+        if runtime.status not in {"ready", "error"}:
+            materialized.close()
+            lease.close()
+            return runtime
+        _SHARED_LLM_ASSET_LEASE = lease
+        _SHARED_LLM_MATERIALIZED = materialized
+        _SHARED_LLM_ASSET_DIGEST = asset.snapshot_digest
+        return runtime
+    except AssetError:
+        return LlmRuntime(model_path=None)
 
 
 def _init_shared_llm() -> None:
-    """BUTLER_MODEL_PATH 로 모델을 강제 로드(기존 인스턴스 교체). startup 이벤트에서 호출."""
+    """Load the shared model only through the sealed asset authority."""
     global _SHARED_LLM
-    assert_main_not_box3()
-    model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "") or None
-    _SHARED_LLM = LlmRuntime(model_path=model_path)
+    _SHARED_LLM = _new_authorized_shared_llm()
 
 
 def _init_if_none_sync() -> "LlmRuntime":
@@ -135,9 +182,7 @@ def _init_if_none_sync() -> "LlmRuntime":
     if _SHARED_LLM is None:
         with _LLM_INIT_LOCK:
             if _SHARED_LLM is None:
-                assert_main_not_box3()
-                model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "") or None
-                _SHARED_LLM = LlmRuntime(model_path=model_path)
+                _SHARED_LLM = _new_authorized_shared_llm()
     return _SHARED_LLM  # type: ignore[return-value]
 
 
@@ -157,20 +202,18 @@ async def _ensure_shared_llm() -> "LlmRuntime":
 
 def _model_tier_runtime_probes() -> tuple[RuntimeProbe, ...]:
     main_status = str(getattr(_SHARED_LLM, "status", "")) if _SHARED_LLM else ""
-    box3_path = os.environ.get("BUTLER_BOX3_V9_Q4_MODEL_PATH")
     box3_lifecycle = runtime_lifecycle_snapshot().get(BOX3_1P7B_VARIANT_ID)
     return (
         RuntimeProbe(
             variant_id=MAIN_4B_VARIANT_ID,
-            model_path=os.environ.get(MAIN_MODEL_PATH_ENV),
+            model_path=None,
             loaded=_SHARED_LLM is not None,
             ready=main_status == "ready",
             process_id=os.getpid(),
         ),
         RuntimeProbe(
             variant_id=BOX3_1P7B_VARIANT_ID,
-            model_path=(box3_lifecycle.model_path if box3_lifecycle else None)
-            or box3_path,
+            model_path=None,
             loaded=bool(box3_lifecycle and box3_lifecycle.loaded),
             ready=bool(box3_lifecycle and box3_lifecycle.ready),
             process_id=box3_lifecycle.process_id if box3_lifecycle else os.getpid(),
@@ -268,13 +311,30 @@ async def _real_chunk_work_isolated(
         "--chunk-idx",
         str(chunk_idx),
     ]
-
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent)},
+    if _SHARED_LLM_ASSET_LEASE is None:
+        await _ensure_shared_llm()
+    if _SHARED_LLM_ASSET_LEASE is None or os.name == "nt":
+        raise RuntimeError("ASSET_AUTHORITY_UNAVAILABLE")
+    model_handle = _SHARED_LLM_ASSET_LEASE.require("model_gguf").open()
+    model_digest = _SHARED_LLM_ASSET_LEASE.require("model_gguf").snapshot_digest
+    cmd.extend(
+        [
+            "--model-fd",
+            str(model_handle.fileno()),
+            "--model-sha256",
+            model_digest,
+        ]
     )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent)},
+            pass_fds=(model_handle.fileno(),),
+        )
+    finally:
+        model_handle.close()
 
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
@@ -455,9 +515,17 @@ if _FASTAPI_AVAILABLE:
 
     @app.on_event("shutdown")
     async def _shutdown_clear_token():
+        global _SHARED_LLM_ASSET_LEASE
+        global _SHARED_LLM_MATERIALIZED
         shutdown_home_store()
         _stop_model_tier_phase0_shadow()
         _TOKEN_MANAGER.clear()
+        if _SHARED_LLM_MATERIALIZED is not None:
+            _SHARED_LLM_MATERIALIZED.close()
+            _SHARED_LLM_MATERIALIZED = None
+        if _SHARED_LLM_ASSET_LEASE is not None:
+            _SHARED_LLM_ASSET_LEASE.close()
+            _SHARED_LLM_ASSET_LEASE = None
 
     @app.middleware("http")
     async def _capability_token_middleware(request, call_next):
@@ -596,11 +664,12 @@ if _FASTAPI_AVAILABLE:
             llm_status = _SHARED_LLM.status
             last_error = _SHARED_LLM.last_error
         else:
-            model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "")
-            llm_status = "loading" if model_path else "no_model"
-            last_error = "" if model_path else "BUTLER_MODEL_PATH 미설정"
+            llm_status = "loading"
+            last_error = ""
         model_payload = sidecar_model_status_payload(
-            status=llm_status, last_error=last_error
+            status=llm_status,
+            last_error=last_error,
+            authorized_models=_authorized_model_payload(),
         )
         payload = _health_payload()
         payload.update(
@@ -621,21 +690,17 @@ if _FASTAPI_AVAILABLE:
 
     @app.get("/api/model/status")
     def model_status():
-        model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "")
         if _SHARED_LLM is not None:
             return sidecar_model_status_payload(
-                status=_SHARED_LLM.status, last_error=_SHARED_LLM.last_error
+                status=_SHARED_LLM.status,
+                last_error=_SHARED_LLM.last_error,
+                authorized_models=_authorized_model_payload(),
             )
-        if not model_path:
-            return sidecar_model_status_payload(
-                status="no_model", last_error="BUTLER_MODEL_PATH 미설정"
-            )
-        p = Path(model_path)
-        if not p.exists():
-            return sidecar_model_status_payload(
-                status="no_model", last_error="파일 없음"
-            )
-        return sidecar_model_status_payload(status="loading", last_error="")
+        return sidecar_model_status_payload(
+            status="loading",
+            last_error="",
+            authorized_models=_authorized_model_payload(),
+        )
 
     @app.get("/api/egress/report")
     def egress_report():
@@ -3065,29 +3130,25 @@ else:
 
         def do_GET(self):
             if self.path in ("/health", "/api/model/status", "/api/sidecar/health"):
-                model_path = os.environ.get(MAIN_MODEL_PATH_ENV, "")
                 if self.path == "/health":
                     self._send_json(200, _fallback_health_payload(self.path))
                 elif self.path == "/api/model/status":
-                    if not model_path:
-                        self._send_json(
-                            200,
-                            sidecar_model_status_payload(
-                                status="no_model", last_error="BUTLER_MODEL_PATH 미설정"
+                    self._send_json(
+                        200,
+                        sidecar_model_status_payload(
+                            status=(
+                                _SHARED_LLM.status
+                                if _SHARED_LLM is not None
+                                else "loading"
                             ),
-                        )
-                    elif not Path(model_path).exists():
-                        self._send_json(
-                            200,
-                            sidecar_model_status_payload(
-                                status="no_model", last_error="파일 없음"
+                            last_error=(
+                                _SHARED_LLM.last_error
+                                if _SHARED_LLM is not None
+                                else ""
                             ),
-                        )
-                    else:
-                        self._send_json(
-                            200,
-                            sidecar_model_status_payload(status="ready", last_error=""),
-                        )
+                            authorized_models=_authorized_model_payload(),
+                        ),
+                    )
                 else:
                     self._send_json(200, _fallback_health_payload(self.path))
             else:

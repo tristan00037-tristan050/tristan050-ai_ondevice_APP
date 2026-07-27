@@ -10,7 +10,9 @@ LLM 런타임 — llama-cpp-python 래퍼 (설치 안 됐으면 stub 응답).
 """
 from __future__ import annotations
 
+import hashlib
 import os
+import secrets
 import threading
 from pathlib import Path
 from typing import Any, Iterator
@@ -49,10 +51,12 @@ class LlmRuntime:
     def __init__(
         self,
         model_path: str | None = None,
+        expected_sha256: str | None = None,
         n_ctx: int = 4096,
         n_threads: int = 0,
     ) -> None:
         self._model_path = model_path
+        self._expected_sha256 = expected_sha256
         self._n_ctx = n_ctx
         self._n_threads = n_threads or max(1, (os.cpu_count() or 2) - 1)
         self._llm: "Llama | None" = None
@@ -68,6 +72,27 @@ class LlmRuntime:
         p = Path(self._model_path or "")
         if not p.exists():
             self._status = "no_model"
+            return
+        if (
+            not isinstance(self._expected_sha256, str)
+            or len(self._expected_sha256) != 64
+            or any(ch not in "0123456789abcdef" for ch in self._expected_sha256)
+        ):
+            self._status = "error"
+            self._last_error = "BLOCK_LOADER_AUTHORITY_REQUIRED"
+            return
+        measured = hashlib.sha256()
+        try:
+            with p.open("rb") as handle:
+                while chunk := handle.read(8 * 1024 * 1024):
+                    measured.update(chunk)
+        except OSError:
+            self._status = "error"
+            self._last_error = "BLOCK_LOADER_INPUT_UNREADABLE"
+            return
+        if not secrets.compare_digest(measured.hexdigest(), self._expected_sha256):
+            self._status = "error"
+            self._last_error = "BLOCK_LOADER_INPUT_DIGEST_MISMATCH"
             return
 
         if not _LLAMA_AVAILABLE:
@@ -97,9 +122,10 @@ class LlmRuntime:
     def last_error(self) -> str:
         return self._last_error
 
-    def reload(self, model_path: str) -> None:
+    def reload(self, model_path: str, *, expected_sha256: str | None = None) -> None:
         with self._lock:
             self._model_path = model_path
+            self._expected_sha256 = expected_sha256
             self._llm = None
             self._load()
 
@@ -243,8 +269,8 @@ class LlmRuntime:
     @staticmethod
     def _stub_response(prompt: str) -> str:
         return (
-            "[stub] 모델 미설치 — BUTLER_MODEL_PATH 환경변수에 .gguf 경로를 설정하고 "
-            f"llama-cpp-python을 설치한 뒤 재시작하세요. (prompt_len={len(prompt)})"
+            "[사용 불가] 검증된 로컬 모델 자산을 사용할 수 없습니다. "
+            f"(prompt_len={len(prompt)})"
         )
 
     @staticmethod

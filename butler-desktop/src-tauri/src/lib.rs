@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     env,
     fs::{self, OpenOptions},
     io::Write,
@@ -27,31 +26,10 @@ mod distribution_flag_contract;
 mod export;
 mod runtime_trust;
 
-const SIDECAR_ENV_CONFIG: &str = "sidecar-env.json";
 const ASSET_BOOTSTRAP_STDIN_ENV: &str = "BUTLER_ASSET_BOOTSTRAP_STDIN";
 const BUTLER_APP_DATA_DIR_ENV: &str = "BUTLER_APP_DATA_DIR";
 const BUTLER_HOME_BOOTSTRAP_ENV: &str = "BUTLER_HOME_BOOTSTRAP_NEW_INSTALL";
 const MODEL_TIER_NATIVE_TELEMETRY_ENV: &str = "BUTLER_MODEL_TIER_NATIVE_TELEMETRY_JSON";
-const BUTLER_MODEL_PATH_ENV: &str = "BUTLER_MODEL_PATH";
-const BOX3_V9_MODEL_PATH_ENV: &str = "BUTLER_BOX3_V9_Q4_MODEL_PATH";
-const FREE_CHAT_MODEL_NAME: &str = "qwen3-4b-q4_k_m.gguf";
-const BOX3_MODEL_NAME: &str = "butler-1.7b-v9-2-r2b-q4_k_m.gguf";
-const HELPER4_SDK_ENV: &str = "BUTLER_HELPER4_GROUNDING_SDK_PATH";
-const HELPER7_SDK_ENV: &str = "BUTLER_HELPER7_TABLE_FIGURE_SDK_PATH";
-const HELPER8_SDK_ENV: &str = "BUTLER_HELPER8_COMPANY_STYLE_SDK_PATH";
-const HELPER2_EMBEDDING_ENV: &str = "BUTLER_HELPER2_EMBEDDING_SDK_PATH";
-const BOX3_HUMAN_APPROVAL_ENV: &str = "BUTLER_BOX3_HUMAN_APPROVAL_CONFIG_PATH";
-const BOX3_HELPER_GUARD_ENV: &str = "BUTLER_BOX3_HELPER_COMPONENT_GUARD_PATH";
-const BOX3_FIXED_EVAL_ENV: &str = "BUTLER_BOX3_FIXED_EVAL_REPORT_PATH";
-const BOX3_EXTRA_ENV_KEYS: [&str; 7] = [
-    HELPER4_SDK_ENV,
-    HELPER7_SDK_ENV,
-    HELPER8_SDK_ENV,
-    HELPER2_EMBEDDING_ENV,
-    BOX3_HUMAN_APPROVAL_ENV,
-    BOX3_HELPER_GUARD_ENV,
-    BOX3_FIXED_EVAL_ENV,
-];
 
 struct SidecarState {
     child: Mutex<Option<CommandChild>>,
@@ -79,122 +57,6 @@ fn append_sidecar_launch_log(message: &str) {
             .unwrap_or(0);
         let _ = writeln!(file, "{} {}", ts, message);
     }
-}
-
-fn read_sidecar_env_config(app: &tauri::AppHandle) -> HashMap<String, String> {
-    let mut values = HashMap::new();
-    let Ok(config_dir) = app.path().app_config_dir() else {
-        append_sidecar_launch_log("config_dir=unavailable");
-        return values;
-    };
-    let config_path = config_dir.join(SIDECAR_ENV_CONFIG);
-    let Ok(text) = fs::read_to_string(&config_path) else {
-        append_sidecar_launch_log("sidecar_env_config=missing");
-        return values;
-    };
-    let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
-        append_sidecar_launch_log("sidecar_env_config=invalid_json");
-        return values;
-    };
-    let Some(object) = json.as_object() else {
-        append_sidecar_launch_log("sidecar_env_config=not_object");
-        return values;
-    };
-    for key in [
-        BUTLER_MODEL_PATH_ENV,
-        BOX3_V9_MODEL_PATH_ENV,
-        HELPER4_SDK_ENV,
-        HELPER7_SDK_ENV,
-        HELPER8_SDK_ENV,
-        HELPER2_EMBEDDING_ENV,
-        BOX3_HUMAN_APPROVAL_ENV,
-        BOX3_HELPER_GUARD_ENV,
-        BOX3_FIXED_EVAL_ENV,
-    ] {
-        if let Some(value) = object.get(key).and_then(|v| v.as_str()) {
-            let trimmed = value.trim();
-            if !trimmed.is_empty() {
-                values.insert(key.to_string(), trimmed.to_string());
-            }
-        }
-    }
-    values
-}
-
-fn env_value_or_config(config: &HashMap<String, String>, key: &str) -> Option<String> {
-    env::var(key)
-        .ok()
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
-        .or_else(|| config.get(key).cloned())
-}
-
-fn push_if_resource_exists_and_unset(values: &mut Vec<(String, String)>, key: &str, path: PathBuf) {
-    if path.exists() && !values.iter().any(|(k, _)| k == key) {
-        values.push((key.to_string(), path.to_string_lossy().to_string()));
-    }
-}
-
-fn push_free_chat_resource_env(app: &tauri::AppHandle, values: &mut Vec<(String, String)>) {
-    let Ok(resource_dir) = app.path().resource_dir() else {
-        append_sidecar_launch_log("free_chat_resource_dir=unavailable");
-        return;
-    };
-    let chat_model = resource_dir.join("models").join(FREE_CHAT_MODEL_NAME);
-    push_if_resource_exists_and_unset(values, BUTLER_MODEL_PATH_ENV, chat_model);
-}
-
-fn push_box3_resource_env(app: &tauri::AppHandle, values: &mut Vec<(String, String)>) {
-    let Ok(resource_dir) = app.path().resource_dir() else {
-        append_sidecar_launch_log("box3_resource_dir=unavailable");
-        return;
-    };
-    let models_box3 = resource_dir.join("models").join("box3");
-    let model_path = models_box3.join(BOX3_MODEL_NAME);
-    let core_box3_sdk = resource_dir
-        .join("butler_pc_core")
-        .join("cards")
-        .join("box3")
-        .join("sdk");
-
-    push_if_resource_exists_and_unset(values, BOX3_V9_MODEL_PATH_ENV, model_path.clone());
-    push_if_resource_exists_and_unset(
-        values,
-        HELPER4_SDK_ENV,
-        core_box3_sdk.join("helper4_grounding_sdk.py"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        HELPER7_SDK_ENV,
-        core_box3_sdk.join("helper7_table_figure_sdk.py"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        HELPER8_SDK_ENV,
-        core_box3_sdk.join("helper8_company_style_sdk.py"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        HELPER2_EMBEDDING_ENV,
-        models_box3.join("helper2_embedding"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        BOX3_HUMAN_APPROVAL_ENV,
-        models_box3.join("config").join("human_approval_v1.json"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        BOX3_HELPER_GUARD_ENV,
-        models_box3
-            .join("config")
-            .join("helper_component_guard_v1.json"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        BOX3_FIXED_EVAL_ENV,
-        models_box3.join("eval").join("fixed_eval_report_v1.json"),
-    );
 }
 
 fn parse_positive_u64(text: &str) -> Option<u64> {
@@ -276,42 +138,7 @@ fn collect_model_tier_native_telemetry_json() -> Option<String> {
     .ok()
 }
 
-fn env_value<'a>(values: &'a [(String, String)], key: &str) -> Option<&'a str> {
-    values
-        .iter()
-        .find(|(existing, _)| existing == key)
-        .map(|(_, value)| value.as_str())
-}
-
-fn is_box3_model_path(value: &str) -> bool {
-    let normalized = value.replace('\\', "/");
-    normalized.contains(BOX3_MODEL_NAME) || normalized.contains("models/box3")
-}
-
-fn validate_model_path_invariants(values: &[(String, String)]) -> Result<(), String> {
-    let main = env_value(values, BUTLER_MODEL_PATH_ENV);
-    let box3 = env_value(values, BOX3_V9_MODEL_PATH_ENV);
-
-    if let Some(main_value) = main {
-        if is_box3_model_path(main_value) {
-            append_sidecar_launch_log("model_path_conflict main_model_is_box3=true");
-            return Err("MODEL_PATH_CONFLICT_MAIN_USES_BOX3".to_string());
-        }
-    }
-    if let (Some(main_value), Some(box3_value)) = (main, box3) {
-        if main_value == box3_value {
-            append_sidecar_launch_log("model_path_conflict main_equals_box3=true");
-            return Err("MODEL_PATH_CONFLICT_MAIN_EQUALS_BOX3".to_string());
-        }
-    }
-    Ok(())
-}
-
 fn resolve_sidecar_env(app: &tauri::AppHandle) -> Result<Vec<(String, String)>, String> {
-    let config = read_sidecar_env_config(app);
-    let butler_model_path = env_value_or_config(&config, BUTLER_MODEL_PATH_ENV);
-    let box3_v9_model_path = env_value_or_config(&config, BOX3_V9_MODEL_PATH_ENV);
-
     let mut values = Vec::new();
     let app_data_dir = app
         .path()
@@ -344,33 +171,12 @@ fn resolve_sidecar_env(app: &tauri::AppHandle) -> Result<Vec<(String, String)>, 
     if !has_existing_home {
         values.push((BUTLER_HOME_BOOTSTRAP_ENV.to_string(), "1".to_string()));
     }
-    if let Some(value) = butler_model_path {
-        values.push((BUTLER_MODEL_PATH_ENV.to_string(), value));
-    }
-    if let Some(value) = box3_v9_model_path {
-        values.push((BOX3_V9_MODEL_PATH_ENV.to_string(), value));
-    }
-
-    for key in BOX3_EXTRA_ENV_KEYS {
-        if values.iter().any(|(existing, _)| existing == key) {
-            continue;
-        }
-        if let Some(value) = env_value_or_config(&config, key) {
-            values.push((key.to_string(), value));
-        }
-    }
-
-    push_free_chat_resource_env(app, &mut values);
-    push_box3_resource_env(app, &mut values);
     if let Some(telemetry) = collect_model_tier_native_telemetry_json() {
         values.push((MODEL_TIER_NATIVE_TELEMETRY_ENV.to_string(), telemetry));
     }
-    validate_model_path_invariants(&values)?;
-
     append_sidecar_launch_log(&format!(
-        "resolved_env butler_model_path={} box3_v9_model_path={}",
-        values.iter().any(|(k, _)| k == BUTLER_MODEL_PATH_ENV),
-        values.iter().any(|(k, _)| k == BOX3_V9_MODEL_PATH_ENV)
+        "resolved_env asset_bootstrap={} legacy_model_paths=0",
+        true
     ));
     Ok(values)
 }
@@ -566,56 +372,6 @@ fn asset_bootstrap_frame(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn env_pair(key: &str, value: &str) -> (String, String) {
-        (key.to_string(), value.to_string())
-    }
-
-    #[test]
-    fn model_path_rejects_box3_as_main_model() {
-        let values = vec![env_pair(
-            BUTLER_MODEL_PATH_ENV,
-            "/Applications/Butler.app/Contents/Resources/models/box3/butler-1.7b-v9-2-r2b-q4_k_m.gguf",
-        )];
-
-        assert_eq!(
-            validate_model_path_invariants(&values).unwrap_err(),
-            "MODEL_PATH_CONFLICT_MAIN_USES_BOX3"
-        );
-    }
-
-    #[test]
-    fn model_path_rejects_identical_main_and_box3_paths() {
-        let shared = "/tmp/models/shared.gguf";
-        let values = vec![
-            env_pair(BUTLER_MODEL_PATH_ENV, shared),
-            env_pair(BOX3_V9_MODEL_PATH_ENV, shared),
-        ];
-
-        assert_eq!(
-            validate_model_path_invariants(&values).unwrap_err(),
-            "MODEL_PATH_CONFLICT_MAIN_EQUALS_BOX3"
-        );
-    }
-
-    #[test]
-    fn model_path_allows_separate_free_chat_and_box3_models() {
-        let values = vec![
-            env_pair(BUTLER_MODEL_PATH_ENV, "/tmp/models/qwen3-4b-q4_k_m.gguf"),
-            env_pair(
-                BOX3_V9_MODEL_PATH_ENV,
-                "/tmp/models/box3/butler-1.7b-v9-2-r2b-q4_k_m.gguf",
-            ),
-        ];
-
-        assert!(validate_model_path_invariants(&values).is_ok());
-    }
-
-    #[test]
-    fn model_path_detects_box3_model_name_without_raw_path_dependency() {
-        assert!(is_box3_model_path(BOX3_MODEL_NAME));
-        assert!(!is_box3_model_path(FREE_CHAT_MODEL_NAME));
-    }
 
     #[test]
     fn vm_stat_parser_sums_only_available_page_classes() {

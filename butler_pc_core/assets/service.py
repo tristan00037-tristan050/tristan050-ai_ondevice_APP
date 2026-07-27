@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import secrets
 import threading
+import uuid
 from pathlib import Path
 
 from .context import PlatformAssetContext, get_platform_context
@@ -15,6 +16,7 @@ from .contracts import (
 )
 from .errors import AssetError, block
 from .manifest import manifest_set_root, parse_manifest
+from .provenance import VerifiedProvenance, verify_packaged_provenance
 from .receipts import issue_group_receipt
 from .resolver import AssetResolver
 from .verifier import SafeRoot, verify_entry
@@ -55,6 +57,18 @@ CAPABILITY_GROUPS: dict[str, tuple[str, tuple[str, ...]]] = {
         "semantic_mapping.model",
         ("model_gguf",),
     ),
+    "free_chat.model": (
+        "free_chat.model",
+        ("model_gguf",),
+    ),
+    "box3.model": (
+        "box3.model",
+        ("model_gguf",),
+    ),
+    "box3.governance": (
+        "box3.governance",
+        ("human_approval", "helper_component_guard", "fixed_eval_report"),
+    ),
     "box3.helpers": (
         "box3.helpers",
         (
@@ -71,8 +85,14 @@ PRODUCTION_REQUIRED_GROUPS = frozenset(
 
 
 class AssetService:
-    def __init__(self, context: PlatformAssetContext | None = None) -> None:
+    def __init__(
+        self,
+        context: PlatformAssetContext | None = None,
+        *,
+        expected_package_sha256: str | None = None,
+    ) -> None:
         self._context = context or get_platform_context()
+        self._expected_package_sha256 = expected_package_sha256
         self._lock = threading.RLock()
         self._manifests: dict[str, AssetManifest] = {}
         self._statuses: dict[str, GroupStatus] = {}
@@ -80,8 +100,9 @@ class AssetService:
         self._failures: dict[str, AssetError] = {}
         self._inflight: set[str] = set()
         self._condition = threading.Condition(self._lock)
-        self._run_id = secrets.token_hex(16)
+        self._run_id = str(uuid.uuid4())
         self._loaded = False
+        self._provenance: VerifiedProvenance | None = None
 
     def _load_manifests(self) -> None:
         with self._lock:
@@ -165,6 +186,8 @@ class AssetService:
         self._load_manifests()
         if profile != "production":
             return
+        if self._context.manifest_set_sha256 is None:
+            raise block("BLOCK_MANIFEST_BINDING_MISMATCH")
         missing = PRODUCTION_REQUIRED_GROUPS - set(self._manifests)
         if missing:
             raise block("REQUIRED_ASSET_MISSING")
@@ -173,6 +196,17 @@ class AssetService:
             for group in PRODUCTION_REQUIRED_GROUPS
         ):
             raise block("REQUIRED_ASSET_MISSING")
+        if self._provenance is None:
+            self._provenance = verify_packaged_provenance(
+                self._context.resource_root,
+                expected_manifest_set=self._context.manifest_set_sha256,
+                expected_package_sha256=self._expected_package_sha256,
+            )
+        if (
+            self._provenance.source_oid.hex != self._context.source_commit
+            or self._provenance.source_tree_oid.hex != self._context.source_tree
+        ):
+            raise block("BLOCK_SOURCE_BINDING_MISMATCH")
 
     def _verify_group(self, manifest: AssetManifest) -> VerificationReceipt:
         group = manifest.asset_group
@@ -201,7 +235,9 @@ class AssetService:
         data_root = self._context.resource_root / ASSET_DATA_DIRECTORY / manifest.asset_group
         assets = {}
         try:
-            with SafeRoot(data_root) as root:
+            with SafeRoot(
+                data_root, authority_root=self._context.app_data_root
+            ) as root:
                 for entry in manifest.entries:
                     assets[entry.role] = verify_entry(root, entry)
             receipt = issue_group_receipt(
@@ -250,14 +286,58 @@ class AssetService:
 
     def require_capability(self, capability: str) -> CapabilityLease:
         self._load_manifests()
+        return self.acquire(
+            role=capability,
+            purpose="legacy-loader",
+            expected_manifest_set=self._context.manifest_set_sha256
+            or manifest_set_root(self._manifests.values()),
+            request_id=str(uuid.uuid4()),
+        )
+
+    def acquire(
+        self,
+        *,
+        role: str,
+        purpose: str,
+        expected_manifest_set: str,
+        request_id: str,
+    ) -> CapabilityLease:
+        self._load_manifests()
+        self.enforce_profile_contract(self._context.release_profile.value)
+        actual_manifest_set = manifest_set_root(self._manifests.values())
+        if (
+            not expected_manifest_set
+            or not secrets.compare_digest(actual_manifest_set, expected_manifest_set)
+            or (
+                self._context.manifest_set_sha256 is not None
+                and not secrets.compare_digest(
+                    self._context.manifest_set_sha256, expected_manifest_set
+                )
+            )
+        ):
+            raise block("BLOCK_MANIFEST_BINDING_MISMATCH")
+        if (
+            not isinstance(role, str)
+            or not role
+            or not isinstance(purpose, str)
+            or not purpose
+            or not isinstance(request_id, str)
+            or not request_id
+        ):
+            raise block("BLOCK_REQUEST_INVALID")
+        try:
+            if str(uuid.UUID(request_id)) != request_id:
+                raise ValueError
+        except ValueError as exc:
+            raise block("BLOCK_REQUEST_INVALID") from exc
         try:
             resolved = AssetResolver(
                 self._manifests, CAPABILITY_GROUPS
-            ).resolve(capability)
+            ).resolve(role)
         except AssetError as exc:
             if exc.code != "REQUIRED_ASSET_MISSING":
                 raise
-            group = CAPABILITY_GROUPS.get(capability, (capability, ()))[0]
+            group = CAPABILITY_GROUPS.get(role, (role, ()))[0]
             self._statuses[group] = GroupStatus(
                 group, 1, GroupState.NOT_INSTALLED, "NOT_INSTALLED"
             )
@@ -268,14 +348,32 @@ class AssetService:
         data_root = self._context.resource_root / ASSET_DATA_DIRECTORY / group
         assets = {}
         try:
-            with SafeRoot(data_root) as root:
+            with SafeRoot(
+                data_root, authority_root=self._context.app_data_root
+            ) as root:
                 for entry in resolved.entries:
                     assets[entry.role] = verify_entry(root, entry)
             return CapabilityLease(
-                capability=capability,
+                capability=role,
                 asset_group=group,
                 group_version=manifest.group_version,
                 assets=assets,
+                request_id=request_id,
+                purpose=purpose,
+                run_id=self._run_id,
+                manifest_set_digest=actual_manifest_set,
+                source_oid=_oid_payload(self._context.source_commit),
+                source_tree_oid=_oid_payload(self._context.source_tree),
+                trust_policy_digest=(
+                    self._provenance.trust_policy_digest
+                    if self._provenance is not None
+                    else ""
+                ),
+                signer_key_id=(
+                    self._provenance.signer_key_id
+                    if self._provenance is not None
+                    else ""
+                ),
             )
         except Exception as raw_exc:
             for asset in assets.values():
@@ -339,6 +437,13 @@ def _external_reason(reason: str) -> str:
     }:
         return "ASSET_INVALID"
     return "ASSET_UNAVAILABLE"
+
+
+def _oid_payload(value: str) -> dict[str, str]:
+    return {
+        "algorithm": "sha1" if len(value) == 40 else "sha256",
+        "hex": value,
+    }
 
 
 _DEFAULT_LOCK = threading.Lock()

@@ -83,12 +83,11 @@ def test_build_runtime_copies_model_from_configured_source(tmp_path: Path) -> No
     assert not (tmp_path / "models/box3").exists()
 
 
-def test_tauri_sidecar_box3_helper_envs_point_to_bundled_sdk_files() -> None:
+def test_tauri_sidecar_does_not_inject_box3_helper_asset_paths() -> None:
     lib_rs = (ROOT / "butler-desktop/src-tauri/src/lib.rs").read_text(encoding="utf-8")
 
-    assert 'core_box3_sdk.join("helper4_grounding_sdk.py")' in lib_rs
-    assert 'core_box3_sdk.join("helper7_table_figure_sdk.py")' in lib_rs
-    assert 'core_box3_sdk.join("helper8_company_style_sdk.py")' in lib_rs
-    assert 'core_box3_sdk.join("helper4_grounding")' not in lib_rs
-    assert 'core_box3_sdk.join("helper7_table_figure")' not in lib_rs
-    assert 'core_box3_sdk.join("helper8_company_style")' not in lib_rs
+    assert "BUTLER_HELPER4_GROUNDING_SDK_PATH" not in lib_rs
+    assert "BUTLER_HELPER7_TABLE_FIGURE_SDK_PATH" not in lib_rs
+    assert "BUTLER_HELPER8_COMPANY_STYLE_SDK_PATH" not in lib_rs
+    assert "BUTLER_HELPER2_EMBEDDING_SDK_PATH" not in lib_rs
+    assert "asset_bootstrap_frame(app)?" in lib_rs

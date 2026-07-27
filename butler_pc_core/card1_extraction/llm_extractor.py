@@ -2,9 +2,8 @@
 
 우선순위 (단계 6.5.1 — 2026-05):
   1. SKIP_LLM=true 또는 skip_llm=True → 즉시 heuristic fallback (테스트/CI)
-  2. BUTLER_LLM_MODEL_PATH + llama-cpp-python → 영역 내장 추론 (Metal 가속)
-  3. sidecar HTTP (127.0.0.1:8765) — 단계 6.5 이전 영역 호환
-  4. 없으면 heuristic fallback
+  2. sidecar HTTP (127.0.0.1:8765) — 중앙 자산 권위의 공유 모델
+  3. 없으면 heuristic fallback
 
 단계 6.5.1 신규 — card1_action_extraction.v1:
   - extract_with_llm_v1(text, parsed_hints, llm_callable) → (Card1Extraction, schema_valid, retry_count, retry_reasons)
@@ -30,11 +29,7 @@ from .contracts import (
 
 _SIDECAR_INFERENCE_URL = "http://127.0.0.1:8765/inference"
 _SIDECAR_HEALTH_URL    = "http://127.0.0.1:8765/health"
-
-# 단계 6.5.1 — llama-cpp-python 영역 영역 영역 (lazy load + thread-safe)
-_LLAMA_LOCK: threading.Lock = threading.Lock()
-_LLAMA_INSTANCE: Any = None
-_LLAMA_LOAD_FAILED: bool = False
+_GRAMMAR_LOCK = threading.Lock()
 
 _PROMPT_TEMPLATE = """\
 당신은 한국 비즈니스 문서에서 요청 핵심을 추출하는 전문가입니다.
@@ -96,82 +91,10 @@ def _call_sidecar(prompt: str) -> str:
         return data.get("text") or data.get("response") or str(data)
 
 
-def _get_llama_instance() -> Any:
-    """llama-cpp-python 모델 lazy load — BUTLER_LLM_MODEL_PATH 환경변수 영역.
-
-    한 번 로드된 모델은 프로세스 영역 영역 재사용 (Metal 영역 영역 영역 영역 영역 영역).
-    로드 실패 영역 _LLAMA_LOAD_FAILED 영역 영역 영역 재시도 X.
-    """
-    global _LLAMA_INSTANCE, _LLAMA_LOAD_FAILED
-    if _LLAMA_INSTANCE is not None:
-        return _LLAMA_INSTANCE
-    if _LLAMA_LOAD_FAILED:
-        return None
-
-    model_path = os.environ.get("BUTLER_LLM_MODEL_PATH", "").strip()
-    if not model_path or not os.path.exists(model_path):
-        _LLAMA_LOAD_FAILED = True
-        return None
-
-    with _LLAMA_LOCK:
-        if _LLAMA_INSTANCE is not None:
-            return _LLAMA_INSTANCE
-        try:
-            from llama_cpp import Llama
-        except ImportError:
-            _LLAMA_LOAD_FAILED = True
-            return None
-        try:
-            _LLAMA_INSTANCE = Llama(
-                model_path=model_path,
-                n_ctx=int(os.environ.get("BUTLER_LLM_N_CTX", "4096")),
-                n_gpu_layers=int(os.environ.get("BUTLER_LLM_N_GPU_LAYERS", "-1")),
-                n_threads=int(os.environ.get("BUTLER_LLM_N_THREADS", "8")),
-                verbose=False,
-                seed=42,
-            )
-        except Exception:
-            _LLAMA_LOAD_FAILED = True
-            return None
-        return _LLAMA_INSTANCE
-
-
-def _call_llama_cpp(prompt: str) -> str:
-    """Qwen3 chat template 영역 wrap → llama-cpp 영역 호출.
-
-    `/no_think` 영역 추가로 추론(<think>) 모드 비활성화 — JSON 추출 영역 영역 영역.
-    """
-    llm = _get_llama_instance()
-    if llm is None:
-        raise RuntimeError("llama-cpp 모델 미로드")
-    # Qwen3 chat template + /no_think 지시
-    wrapped = (
-        "<|im_start|>system\n"
-        "당신은 한국 비즈니스 문서 분석 전문가입니다. JSON으로만 응답합니다.<|im_end|>\n"
-        "<|im_start|>user\n"
-        f"{prompt}\n\n/no_think<|im_end|>\n"
-        "<|im_start|>assistant\n"
-    )
-    max_tokens = int(os.environ.get("BUTLER_LLM_MAX_TOKENS", "512"))
-    with _LLAMA_LOCK:
-        out = llm(
-            wrapped,
-            max_tokens=max_tokens,
-            temperature=0.1,
-            top_p=0.9,
-            stop=["<|im_end|>", "<|endoftext|>"],
-        )
-    return out["choices"][0]["text"]
-
-
 def _get_callable() -> Optional[Callable[[str], str]]:
     if os.environ.get("SKIP_LLM") == "true":
         return None
-    # 1) llama-cpp-python 영역 영역 영역 우선
-    if os.environ.get("BUTLER_LLM_MODEL_PATH"):
-        if _get_llama_instance() is not None:
-            return _call_llama_cpp
-    # 2) sidecar HTTP fallback
+    # The sidecar is the sole product owner of the authorized model lease.
     if _sidecar_available():
         return _call_sidecar
     return None
@@ -562,7 +485,7 @@ def _get_v1_grammar() -> Any:
         from llama_cpp import LlamaGrammar
     except ImportError:
         return None
-    with _LLAMA_LOCK:
+    with _GRAMMAR_LOCK:
         if _V1_GRAMMAR is None:
             try:
                 _V1_GRAMMAR = LlamaGrammar.from_json_schema(
@@ -574,30 +497,10 @@ def _get_v1_grammar() -> Any:
 
 
 def _call_llama_v1(prompt: str) -> str:
-    """LLM_EXTRACT_CONFIG + JSON Schema grammar 강제 llama-cpp 호출."""
-    llm = _get_llama_instance()
-    if llm is None:
-        raise RuntimeError("llama-cpp 모델 미로드 (BUTLER_LLM_MODEL_PATH 미설정)")
-
-    cfg = dict(LLM_EXTRACT_CONFIG)
-    cfg["stop"] = list(cfg.get("stop", [])) + ["<|im_end|>", "<|endoftext|>"]
-
-    kwargs: Dict[str, Any] = {
-        "prompt":         prompt,
-        "max_tokens":     cfg["max_tokens"],
-        "temperature":    cfg["temperature"],
-        "top_p":          cfg["top_p"],
-        "top_k":          cfg["top_k"],
-        "repeat_penalty": cfg["repeat_penalty"],
-        "stop":           cfg["stop"],
-    }
-    grammar = _get_v1_grammar()
-    if grammar is not None:
-        kwargs["grammar"] = grammar
-
-    with _LLAMA_LOCK:
-        out = llm.create_completion(**kwargs)
-    return out["choices"][0]["text"]
+    """Use the sidecar-owned authorized model; local path loading is forbidden."""
+    if not _sidecar_available():
+        raise RuntimeError("AUTHORIZED_MODEL_RUNTIME_UNAVAILABLE")
+    return _call_sidecar(prompt)
 
 
 _INTENT_TYPE_MAP_V1: Dict[str, IntentType] = {

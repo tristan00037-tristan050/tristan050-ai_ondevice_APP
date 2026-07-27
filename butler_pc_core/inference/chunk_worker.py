@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -21,14 +20,12 @@ from butler_pc_core.inference.llm_runtime import LlmRuntime
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
 
 
-def _default_model_path() -> str:
-    return os.environ.get("BUTLER_MODEL_PATH", "")
-
-
 def main() -> None:
     p = argparse.ArgumentParser(description="Butler chunk inference worker")
     p.add_argument("--params", required=True, help="JSON-encoded _AnalyzeParams.__dict__")
     p.add_argument("--chunk-idx", type=int, required=True)
+    p.add_argument("--model-fd", type=int, required=True)
+    p.add_argument("--model-sha256", required=True)
     args = p.parse_args()
 
     params: dict = json.loads(args.params)
@@ -62,7 +59,17 @@ def main() -> None:
         f"<|im_start|>assistant\n"
     )
 
-    llm = LlmRuntime(model_path=_default_model_path() or None)
+    if args.model_fd < 0:
+        raise SystemExit("AUTHORIZED_MODEL_HANDLE_REQUIRED")
+    descriptor_path = (
+        f"/dev/fd/{args.model_fd}"
+        if sys.platform == "darwin"
+        else f"/proc/self/fd/{args.model_fd}"
+    )
+    llm = LlmRuntime(
+        model_path=descriptor_path,
+        expected_sha256=args.model_sha256,
+    )
     result_text = llm.generate(prompt, max_tokens=1024)
 
     print(json.dumps({

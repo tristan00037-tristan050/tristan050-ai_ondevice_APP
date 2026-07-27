@@ -103,6 +103,11 @@ def parse_platform_context(raw: bytes, *, native_authority: bool) -> PlatformAss
         or (manifest_set is not None and (not isinstance(manifest_set, str) or not _SHA_RE.fullmatch(manifest_set)))
     ):
         raise block("PLATFORM_CONTEXT_INVALID")
+    if commit in {"0" * len(commit), "f" * len(commit)} or tree in {
+        "0" * len(tree),
+        "f" * len(tree),
+    }:
+        raise block("PLATFORM_CONTEXT_INVALID")
     if profile is ReleaseProfile.PRODUCTION and not native_authority:
         raise block("OVERRIDE_FORBIDDEN")
     return PlatformAssetContext(
@@ -161,8 +166,8 @@ def install_test_context(
         app_data_root=app_data_root,
         release_profile=ReleaseProfile.TEST,
         build_id="test-build",
-        source_commit="0" * 40,
-        source_tree="0" * 40,
+        source_commit="1" * 40,
+        source_tree="2" * 40,
         manifest_set_sha256=manifest_set_sha256,
         native_authority=False,
     )

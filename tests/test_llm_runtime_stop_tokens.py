@@ -49,7 +49,7 @@ def test_happy_stub_response_when_no_model():
     result = rt.generate("테스트 쿼리")
     assert isinstance(result, str)
     assert len(result) > 0
-    assert "[stub]" in result
+    assert "[사용 불가]" in result
 
 
 # ---------------------------------------------------------------------------

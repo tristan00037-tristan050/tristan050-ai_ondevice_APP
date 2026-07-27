@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/verified-asset-receipt-v1.schema.json",
+  "title": "Butler Verified Asset Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "run_id", "request_id", "nonce", "role", "purpose",
+    "manifest_set_digest", "asset_digest", "snapshot_digest", "loader_input_digest",
+    "source_oid", "source_tree_oid",
+    "trust_policy_digest", "signer_key_id", "platform_seal_type",
+    "ordered_trace_digest", "result", "reason_code"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "format": "uuid"},
+    "request_id": {"type": "string", "format": "uuid"},
+    "nonce": {"type": "string", "pattern": "^[0-9a-f]{32,128}$"},
+    "role": {"type": "string", "minLength": 2, "maxLength": 128},
+    "purpose": {"type": "string", "minLength": 2, "maxLength": 128},
+    "manifest_set_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "asset_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "snapshot_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "loader_input_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_oid": {"$ref": "#/$defs/git_oid"},
+    "source_tree_oid": {"$ref": "#/$defs/git_oid"},
+    "trust_policy_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "signer_key_id": {"type": "string", "minLength": 3, "maxLength": 128},
+    "platform_seal_type": {"enum": ["linux_memfd", "linux_fsverity", "macos_bundle", "macos_authority_store", "windows_handle_store"]},
+    "ordered_trace_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "result": {"enum": ["ALLOW", "BLOCK"]},
+    "reason_code": {"type": "string", "pattern": "^(OK|BLOCK_[A-Z0-9_]+)$"}
+  },
+  "$defs": {
+    "git_oid": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "hex"],
+          "properties": {
+            "algorithm": {"const": "sha1"},
+            "hex": {"type": "string", "pattern": "^(?!0{40}$)(?!f{40}$)[0-9a-f]{40}$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "hex"],
+          "properties": {
+            "algorithm": {"const": "sha256"},
+            "hex": {"type": "string", "pattern": "^(?!0{64}$)(?!f{64}$)[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"result": {"const": "ALLOW"}}},
+      "then": {
+        "properties": {
+          "reason_code": {"const": "OK"}
+        }
+      }
+    }
+  ]
+}

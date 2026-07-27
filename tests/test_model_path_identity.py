@@ -70,7 +70,7 @@ def test_model_path_status_payload_is_digest_only(tmp_path):
     assert payload["box3_model"]["model_family"] == "butler-1.7b-v9.2-r2b"
 
 
-def test_sidecar_model_status_omits_raw_paths(tmp_path, monkeypatch):
+def test_sidecar_model_status_ignores_raw_model_path_environment(tmp_path, monkeypatch):
     main = tmp_path / "models" / FREE_CHAT_MODEL_NAME
     box3 = tmp_path / "models" / "box3" / BOX3_MODEL_NAME
     main.parent.mkdir(parents=True)
@@ -93,11 +93,13 @@ def test_sidecar_model_status_omits_raw_paths(tmp_path, monkeypatch):
     assert "model_path" not in payload
     assert str(tmp_path) not in response.text
     assert payload["model_role"] == "free_chat"
-    assert payload["model_family"] == "qwen3-4b"
-    assert payload["box3_model"]["model_family"] == "butler-1.7b-v9.2-r2b"
+    assert payload["model_family"] == ""
+    assert payload["model_present"] is False
+    assert payload["box3_model"]["model_family"] == ""
+    assert payload["box3_model"]["model_present"] is False
 
 
-def test_sidecar_init_shared_llm_fails_closed_on_main_box3_path(tmp_path, monkeypatch):
+def test_sidecar_init_shared_llm_does_not_fallback_to_main_model_env(tmp_path, monkeypatch):
     box3 = tmp_path / "models" / "box3" / BOX3_MODEL_NAME
     box3.parent.mkdir(parents=True)
     box3.write_bytes(b"box3")
@@ -108,5 +110,6 @@ def test_sidecar_init_shared_llm_fails_closed_on_main_box3_path(tmp_path, monkey
     sidecar = importlib.reload(butler_sidecar)
     sidecar._SHARED_LLM = None
 
-    with pytest.raises(RuntimeError, match=MAIN_USES_BOX3):
-        sidecar._init_shared_llm()
+    sidecar._init_shared_llm()
+    assert sidecar._SHARED_LLM.status == "no_model"
+    assert sidecar._SHARED_LLM_ASSET_LEASE is None

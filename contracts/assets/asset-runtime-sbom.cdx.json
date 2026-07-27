@@ -1,0 +1,38 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/llama-cpp-python@0.3.20",
+      "name": "llama-cpp-python",
+      "version": "0.3.20",
+      "purl": "pkg:pypi/llama-cpp-python@0.3.20",
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/abetlen/llama-cpp-python/tree/f49e9178767d557a522618b16ce8694f9ddac628"
+        },
+        {
+          "type": "advisories",
+          "url": "https://github.com/ggml-org/llama.cpp/security/advisories/GHSA-96jg-mvhq-q7q7"
+        }
+      ],
+      "properties": [
+        {
+          "name": "butler:embedded-llama-cpp-commit",
+          "value": "f49e9178767d557a522618b16ce8694f9ddac628"
+        },
+        {
+          "name": "butler:minimum-security-build",
+          "value": "b7824"
+        },
+        {
+          "name": "butler:security-advisory",
+          "value": "GHSA-96jg-mvhq-q7q7"
+        }
+      ]
+    }
+  ]
+}

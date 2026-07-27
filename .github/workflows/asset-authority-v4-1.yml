@@ -1,0 +1,55 @@
+name: asset-authority-v4-1
+
+on:
+  pull_request:
+    paths:
+      - "butler_pc_core/assets/**"
+      - "butler_pc_core/inference/**"
+      - "butler_pc_core/cards/box2/**"
+      - "butler_pc_core/cards/box3/**"
+      - "butler_pc_core/accounting/ft_classifier.py"
+      - "butler_sidecar.py"
+      - "butler-desktop/src-tauri/src/lib.rs"
+      - "contracts/assets/**"
+      - "scripts/verify_asset_consumer_inventory.py"
+      - "scripts/verify_asset_runtime_supply_chain.py"
+      - "tests/assets/**"
+      - ".github/workflows/asset-authority-v4-1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts-and-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - run: python scripts/verify_asset_consumer_inventory.py
+      - run: python scripts/verify_asset_runtime_supply_chain.py
+
+  native-and-attack-corpus:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - run: python -m pytest tests/assets -q

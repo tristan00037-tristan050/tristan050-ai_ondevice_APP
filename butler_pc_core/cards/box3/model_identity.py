@@ -14,6 +14,7 @@ import hashlib
 import os
 import stat
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -138,9 +139,36 @@ def get_box3_model_identity_for_approval(
     반환 None 은 downstream 에서 MODEL_DIGEST_UNAVAILABLE 로 차단된다. 구체 reason 이 필요한
     스크립트/테스트는 hash_model_file_for_security 를 직접 호출한다.
     """
-    selected = str(model_path or _env_model_path(environ) or "").strip()
+    env = environ if environ is not None else os.environ
+    selected = str(model_path or "").strip()
+    if not selected and os.environ.get("PYTEST_CURRENT_TEST"):
+        selected = str(env.get(BOX3_MODEL_PATH_ENV) or "").strip()
     if not selected:
-        return None
+        try:
+            from butler_pc_core.assets import get_asset_service
+            from butler_pc_core.assets.context import get_platform_context
+
+            context = get_platform_context()
+            if context.manifest_set_sha256 is None:
+                return None
+            with get_asset_service().acquire(
+                role="box3.model",
+                purpose="box3-model-scope-approval",
+                expected_manifest_set=context.manifest_set_sha256,
+                request_id=str(uuid.uuid4()),
+            ) as lease:
+                asset = lease.require("model_gguf")
+                return Box3ModelIdentity(
+                    model_digest=canonical_sha256(asset.snapshot_digest),
+                    model_path_digest=_digest_of_text("asset-authority:box3.model"),
+                    realpath_digest=_digest_of_text("sealed-snapshot:box3.model"),
+                    size_bytes=asset.entry.size_bytes,
+                    mtime_ns=asset.identity.mtime_ns,
+                    inode=None,
+                    device=None,
+                )
+        except Exception:
+            return None
     try:
         return hash_model_file_for_security(selected)
     except (OSError, ValueError):
