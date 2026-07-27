@@ -51,6 +51,17 @@ def test_sidecar_exit_diagnostics_emit_only_fixed_codes() -> None:
     assert _exit_code("unclassified private diagnostic") == "SIDECAR_UNKNOWN_EXIT"
 
 
+def test_a4_product_path_installs_the_serving_runtime() -> None:
+    workflow = (ROOT / ".github/workflows/box5-stage3.yml").read_text(
+        encoding="utf-8"
+    )
+    install_step = workflow.split(
+        "- name: Install product-path dependencies",
+        maxsplit=1,
+    )[1].split("- name:", maxsplit=1)[0]
+    assert " uvicorn" in install_step
+
+
 @pytest.mark.skipif(os.name != "posix", reason="descriptor bootstrap is POSIX-only")
 def test_development_launcher_frame_is_native_and_unverified(tmp_path: Path) -> None:
     asset_root = tmp_path / "assets"
