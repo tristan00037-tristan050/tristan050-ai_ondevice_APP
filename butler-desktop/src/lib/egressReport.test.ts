@@ -15,6 +15,8 @@ const PUBLIC_KEY_SPKI_BASE64 = publicKey
 
 type WireReport = {
   schema_version: string;
+  measurement: 'MEASURED';
+  value: number;
   run_id: string;
   measurement_generation: number;
   measurement_started_at: string;
@@ -35,6 +37,8 @@ type WireReport = {
 function signedReport(overrides: Partial<WireReport> = {}): WireReport {
   const report: WireReport = {
     schema_version: 'butler.egress.report.v3',
+    measurement: 'MEASURED',
+    value: overrides.egress_bytes_total ?? 0,
     run_id: 'run-001',
     measurement_generation: 7,
     measurement_started_at: '2026-07-27T01:00:00Z',
@@ -89,6 +93,8 @@ describe('parseEgressReport fail-closed contract', () => {
     expect('kind' in report).toBe(false);
     if (!('kind' in report)) {
       expect(report.egressBytesTotal).toBe(0);
+      expect(report.measurement).toBe('MEASURED');
+      expect(report.value).toBe(0);
       expect(report.measurementGeneration).toBe(7);
       expect(report.receiptKeyId).toBe(KEY_ID);
     }
@@ -100,6 +106,7 @@ describe('parseEgressReport fail-closed contract', () => {
     [signedReport({ egress_bytes_total: -1 }), 'SCHEMA_INVALID'],
     [signedReport({ egress_bytes_total: Number.MAX_SAFE_INTEGER + 1 }), 'SCHEMA_INVALID'],
     [signedReport({ measurement_generation: 0 }), 'SCHEMA_INVALID'],
+    [signedReport({ value: 1 }), 'INCONSISTENT_REPORT'],
     [signedReport({ receipt_run_id: 'other-run' }), 'RECEIPT_UNBOUND'],
     [signedReport({ verdict: 'PASS', egress_bytes_total: 1 }), 'INCONSISTENT_REPORT'],
     [signedReport({ verdict: 'PASS', external_request_count: 1 }), 'INCONSISTENT_REPORT'],
@@ -109,6 +116,23 @@ describe('parseEgressReport fail-closed contract', () => {
     [signedReport({ measured_at: '2026-07-27T01:02:00Z' }), 'CLOCK_INVALID'],
   ] as const)('rejects invalid or contradictory payload %#', async (payload, code) => {
     expect(await errorCode(payload)).toBe(code);
+  });
+
+  it('classifies an exact STATIC_BETA marker as unmeasured without trusting value 0', async () => {
+    await expect(parseEgressReport({
+      value: 0,
+      measurement: 'STATIC_BETA',
+      measured_at: null,
+    }, NOW)).resolves.toEqual({
+      kind: 'unmeasured',
+      source: 'STATIC_BETA',
+      lastReportedAt: undefined,
+    });
+    expect(await errorCode({
+      value: 0,
+      measurement: 'MEASURED',
+      measured_at: '2026-07-27T01:00:20Z',
+    })).toBe('UNSUPPORTED_SCHEMA');
   });
 
   it.each([
@@ -172,6 +196,7 @@ describe('parseEgressReport fail-closed contract', () => {
   it('rejects body, digest, signature and trust-key tampering', async () => {
     const bodyTamper = signedReport();
     bodyTamper.egress_bytes_total = 1;
+    bodyTamper.value = 1;
     bodyTamper.external_request_count = 1;
     bodyTamper.verdict = 'FAIL';
     expect(await errorCode(bodyTamper)).toBe('RECEIPT_UNBOUND');

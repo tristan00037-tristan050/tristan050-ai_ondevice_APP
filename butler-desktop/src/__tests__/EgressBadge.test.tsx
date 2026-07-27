@@ -5,6 +5,8 @@ import type { EgressReport, EgressUiState } from '../lib/egressReport';
 
 const ZERO_REPORT: EgressReport = Object.freeze({
   schemaVersion: 'butler.egress.report.v3',
+  measurement: 'MEASURED',
+  value: 0,
   runId: 'run-zero',
   measurementGeneration: 1,
   measurementStartedAt: '2026-07-27T01:00:00Z',
@@ -30,12 +32,26 @@ function renderState(state: EgressUiState, onOpenDetails = vi.fn()) {
 describe('EgressBadge', () => {
   it.each([
     [{ kind: 'loading', generation: 1 }, '확인 중'],
+    [{ kind: 'unmeasured', generation: 1, source: 'STATIC_BETA' }, '아직 못 잼'],
     [{ kind: 'error', generation: 1, code: 'HTTP_ERROR' }, '확인 실패'],
     [{ kind: 'stale', generation: 1, code: 'FRESHNESS_EXPIRED' }, '다시 확인 필요'],
   ] as const)('does not turn non-ready state into zero', (state, label) => {
     renderState(state);
     expect(screen.getByTestId('egress-badge')).toHaveTextContent(label);
     expect(screen.getByTestId('egress-badge')).not.toHaveTextContent('밖으로 나간 것 0');
+  });
+
+  it('renders missing measurement in a non-green state with honest accessible text', () => {
+    renderState({
+      kind: 'unmeasured',
+      generation: 2,
+      source: 'STATIC_BETA',
+    });
+    const badge = screen.getByTestId('egress-badge');
+    expect(badge).toHaveTextContent('아직 못 잼');
+    expect(badge).toHaveAttribute('data-tone', 'unmeasured');
+    expect(badge).not.toHaveAttribute('data-tone', 'safe');
+    expect(badge).toHaveAccessibleName(/베타 상수는 안전 판정에 사용하지 않음/);
   });
 
   it('shows zero only for a fresh internally consistent PASS report', () => {

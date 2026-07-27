@@ -15,6 +15,8 @@ const EGRESS_KEY_ID = 'butler-egress-verifier-playwright-v1';
 
 type WireReport = {
   schema_version: string;
+  measurement: 'MEASURED';
+  value: number;
   run_id: string;
   measurement_generation: number;
   measurement_started_at: string;
@@ -67,6 +69,8 @@ async function installNativeBridge(page: Page): Promise<void> {
 function canonicalPayload(report: WireReport): Buffer {
   const payload: Record<string, unknown> = {
     schema_version: report.schema_version,
+    measurement: report.measurement,
+    value: report.value,
     run_id: report.run_id,
     measurement_generation: report.measurement_generation,
     measurement_started_at: report.measurement_started_at,
@@ -93,6 +97,8 @@ function signedReport(
   const measured = new Date();
   const report: WireReport = {
     schema_version: 'butler.egress.report.v3',
+    measurement: 'MEASURED',
+    value: overrides.egress_bytes_total ?? 0,
     run_id: 'e2e-run-001',
     measurement_generation: 1,
     measurement_started_at: new Date(measured.getTime() - 1_000).toISOString(),
@@ -211,9 +217,18 @@ test.describe('egress attack matrix (19/19)', () => {
     await expect(page.getByTestId('egress-badge')).toContainText('밖으로 나간 것 0');
   });
 
-  test('02 HTTP failure never appears as zero', async ({ page }) => {
-    await openHome(page, { egress: jsonRoute({ detail: 'synthetic' }, 500) });
-    await expect(page.getByTestId('egress-badge')).toContainText('확인 실패');
+  test('02 missing measurement is honest and never appears green', async ({ page }) => {
+    await openHome(page, {
+      egress: jsonRoute({
+        value: 0,
+        measurement: 'STATIC_BETA',
+        measured_at: null,
+      }),
+    });
+    const badge = page.getByTestId('egress-badge');
+    await expect(badge).toContainText('아직 못 잼');
+    await expect(badge).toHaveAttribute('data-tone', 'unmeasured');
+    await expect(badge).not.toHaveAttribute('data-tone', 'safe');
     await expectNotZero(page);
   });
 

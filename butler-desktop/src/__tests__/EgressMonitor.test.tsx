@@ -8,6 +8,8 @@ const STATE: EgressUiState = {
   generation: 7,
   report: Object.freeze({
     schemaVersion: 'butler.egress.report.v3',
+    measurement: 'MEASURED',
+    value: 0,
     runId: 'run-modal',
     measurementGeneration: 7,
     measurementStartedAt: '2026-07-27T01:00:00Z',
@@ -34,9 +36,30 @@ describe('EgressMonitor', () => {
       '7',
     );
     expect(screen.getByTestId('egress-monitor-bytes')).toHaveTextContent('0 bytes');
+    expect(screen.getByTestId('egress-monitor-measurement')).toHaveTextContent(
+      'MEASURED',
+    );
     expect(screen.getByTestId('egress-monitor-measured-at')).toHaveTextContent(
       STATE.report.measuredAt,
     );
+  });
+
+  it('discloses that STATIC_BETA is not measurement and renders no byte table', () => {
+    render(
+      <EgressMonitor
+        state={{
+          kind: 'unmeasured',
+          generation: 8,
+          source: 'STATIC_BETA',
+        }}
+        onRefresh={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('egress-monitor-unmeasured')).toHaveTextContent(
+      'STATIC_BETA 상수는 안전 판정에 사용하지 않습니다.',
+    );
+    expect(screen.queryByTestId('egress-monitor-bytes')).not.toBeInTheDocument();
   });
 
   it('closes by Escape, close button and backdrop', () => {

@@ -3,6 +3,8 @@ import { sidecarFetch } from './sidecarFetch';
 
 export type EgressReport = Readonly<{
   schemaVersion: 'butler.egress.report.v3';
+  measurement: 'MEASURED';
+  value: number;
   runId: string;
   measurementGeneration: number;
   measurementStartedAt: string;
@@ -33,6 +35,12 @@ export type EgressErrorCode =
 
 export type EgressUiState =
   | Readonly<{ kind: 'loading'; generation: number }>
+  | Readonly<{
+      kind: 'unmeasured';
+      generation: number;
+      source: 'STATIC_BETA' | 'UNAVAILABLE';
+      lastReportedAt?: string;
+    }>
   | Readonly<{ kind: 'ready'; generation: number; report: EgressReport }>
   | Readonly<{
       kind: 'stale';
@@ -47,8 +55,22 @@ export type EgressReceiptTrust = Readonly<{
   publicKeySpkiBase64: string;
 }>;
 
+type EgressParseState =
+  | Readonly<{
+      kind: 'unmeasured';
+      source: 'STATIC_BETA';
+      lastReportedAt?: string;
+    }>
+  | Readonly<{
+      kind: 'stale';
+      lastMeasuredAt?: string;
+      code: 'FRESHNESS_EXPIRED' | 'FRESHNESS_MISSING';
+    }>;
+
 type RawReport = {
   schema_version: string;
+  measurement: 'MEASURED';
+  value: number;
   run_id: string;
   measurement_generation: number;
   measurement_started_at: string;
@@ -68,6 +90,8 @@ type RawReport = {
 
 const REQUIRED_KEYS = [
   'schema_version',
+  'measurement',
+  'value',
   'run_id',
   'measurement_generation',
   'measurement_started_at',
@@ -229,6 +253,8 @@ function cryptoBytes(value: Uint8Array): BufferSource {
 export function canonicalEgressReceiptPayload(report: RawReport): Uint8Array {
   const payload: Record<string, unknown> = {
     schema_version: report.schema_version,
+    measurement: report.measurement,
+    value: report.value,
     run_id: report.run_id,
     measurement_generation: report.measurement_generation,
     measurement_started_at: report.measurement_started_at,
@@ -293,12 +319,28 @@ export async function parseEgressReport(
   value: unknown,
   nowMs = Date.now(),
   trust = defaultReceiptTrust(),
-): Promise<EgressReport | Readonly<{
-  kind: 'stale';
-  lastMeasuredAt?: string;
-  code: 'FRESHNESS_EXPIRED' | 'FRESHNESS_MISSING';
-}>> {
+): Promise<EgressReport | EgressParseState> {
   if (!isRecord(value)) throw new EgressReportError('SCHEMA_INVALID');
+  if (value.measurement === 'STATIC_BETA') {
+    const keys = Object.keys(value);
+    if (
+      keys.length !== 3
+      || !keys.includes('value')
+      || !keys.includes('measurement')
+      || !keys.includes('measured_at')
+    ) {
+      throw new EgressReportError('SCHEMA_INVALID');
+    }
+    requireSafeCount(value.value);
+    const reportedAt = value.measured_at === null
+      ? undefined
+      : requireTimestamp(value.measured_at).text;
+    return {
+      kind: 'unmeasured',
+      source: 'STATIC_BETA',
+      lastReportedAt: reportedAt,
+    };
+  }
   if (value.schema_version !== 'butler.egress.report.v3') {
     throw new EgressReportError('UNSUPPORTED_SCHEMA');
   }
@@ -328,6 +370,7 @@ export async function parseEgressReport(
     || !DIGEST.test(value.receipt_digest)
     || typeof value.receipt_signature !== 'string'
     || !ED25519_SIGNATURE.test(value.receipt_signature)
+    || value.measurement !== 'MEASURED'
     || typeof value.raw_file_sent_external !== 'boolean'
     || (value.verdict !== 'PASS' && value.verdict !== 'FAIL')
   ) {
@@ -339,6 +382,7 @@ export async function parseEgressReport(
   const measured = requireTimestamp(value.measured_at);
   const fresh = freshnessMissing ? undefined : requireTimestamp(value.fresh_until);
   const bytes = requireSafeCount(value.egress_bytes_total);
+  const reportedValue = requireSafeCount(value.value);
   const requests = requireSafeCount(value.external_request_count);
 
   if (value.receipt_run_id !== value.run_id) {
@@ -362,6 +406,8 @@ export async function parseEgressReport(
   const observedExternal =
     bytes > 0 || requests > 0 || value.raw_file_sent_external;
   if (
+    reportedValue !== bytes
+    ||
     (value.verdict === 'PASS' && observedExternal)
     || (value.verdict === 'FAIL' && !observedExternal)
   ) {
@@ -388,6 +434,8 @@ export async function parseEgressReport(
 
   return Object.freeze({
     schemaVersion: 'butler.egress.report.v3',
+    measurement: 'MEASURED',
+    value: reportedValue,
     runId: raw.run_id,
     measurementGeneration: generation,
     measurementStartedAt: started.text,
@@ -440,6 +488,17 @@ export function useEgressReport() {
       const response = await sidecarFetch('/api/egress/report', {
         signal: controller.signal,
       });
+      if (response.status === 503) {
+        next = {
+          kind: 'unmeasured',
+          generation: nextGeneration,
+          source: 'UNAVAILABLE',
+        };
+        if (nextGeneration === generation.current) {
+          dispatch({ type: 'resolved', generation: nextGeneration, state: next });
+        }
+        return;
+      }
       if (!response.ok) throw new EgressReportError('HTTP_ERROR');
       const contentType = response.headers.get('content-type') ?? '';
       if (!/^application\/json(?:;|$)/i.test(contentType)) {
@@ -453,7 +512,19 @@ export function useEgressReport() {
       }
       const parsed = await parseEgressReport(payload);
       if ('kind' in parsed) {
-        next = { ...parsed, generation: nextGeneration };
+        next = parsed.kind === 'unmeasured'
+          ? {
+              kind: 'unmeasured',
+              generation: nextGeneration,
+              source: parsed.source,
+              lastReportedAt: parsed.lastReportedAt,
+            }
+          : {
+              kind: 'stale',
+              generation: nextGeneration,
+              code: parsed.code,
+              lastMeasuredAt: parsed.lastMeasuredAt,
+            };
       } else {
         const previousGeneration =
           acceptedMeasurementGenerations.current.get(parsed.runId);
@@ -497,7 +568,9 @@ export function useEgressReport() {
 }
 
 export function isVerifiedZero(report: EgressReport): boolean {
-  return report.egressBytesTotal === 0
+  return report.measurement === 'MEASURED'
+    && report.value === 0
+    && report.egressBytesTotal === 0
     && report.externalRequestCount === 0
     && report.rawFileSentExternal === false
     && report.verdict === 'PASS'

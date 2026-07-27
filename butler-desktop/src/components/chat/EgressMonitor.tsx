@@ -89,8 +89,12 @@ export function EgressMonitor({ state, onRefresh, onClose }: Props) {
         {state.kind === 'ready' && (
           <dl>
             <div>
+              <dt>측정 여부</dt>
+              <dd data-testid="egress-monitor-measurement">{state.report.measurement}</dd>
+            </div>
+            <div>
               <dt>외부 전송 바이트</dt>
-              <dd data-testid="egress-monitor-bytes">{state.report.egressBytesTotal} bytes</dd>
+              <dd data-testid="egress-monitor-bytes">{state.report.value} bytes</dd>
             </div>
             <div>
               <dt>외부 요청 수</dt>
@@ -105,6 +109,14 @@ export function EgressMonitor({ state, onRefresh, onClose }: Props) {
               <dd data-testid="egress-monitor-measured-at">{state.report.measuredAt}</dd>
             </div>
           </dl>
+        )}
+
+        {state.kind === 'unmeasured' && (
+          <p data-testid="egress-monitor-unmeasured" role="note">
+            실측값이 없습니다. {state.source === 'STATIC_BETA'
+              ? 'STATIC_BETA 상수는 안전 판정에 사용하지 않습니다.'
+              : '실측 감시기 응답을 기다리고 있습니다.'}
+          </p>
         )}
 
         <p className="egress-monitor-help">

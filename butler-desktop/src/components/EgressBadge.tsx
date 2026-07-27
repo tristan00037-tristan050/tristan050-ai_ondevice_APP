@@ -12,17 +12,27 @@ type Props = Readonly<{
 export type EgressBadgeView = Readonly<{
   label:
     | '확인 중'
+    | '아직 못 잼'
     | '확인 실패'
     | '다시 확인 필요'
     | '외부 전송 감지'
     | `밖으로 나간 것 ${number}`;
-  tone: 'loading' | 'error' | 'stale' | 'safe' | 'warning';
+  tone: 'loading' | 'unmeasured' | 'error' | 'stale' | 'safe' | 'warning';
   ariaLabel: string;
 }>;
 
 export function egressBadgeView(state: EgressUiState): EgressBadgeView {
   if (state.kind === 'loading') {
     return { label: '확인 중', tone: 'loading', ariaLabel: '외부 전송 상태 확인 중' };
+  }
+  if (state.kind === 'unmeasured') {
+    return {
+      label: '아직 못 잼',
+      tone: 'unmeasured',
+      ariaLabel: state.source === 'STATIC_BETA'
+        ? '외부 전송 실측값 없음, 베타 상수는 안전 판정에 사용하지 않음'
+        : '외부 전송 실측값 없음',
+    };
   }
   if (state.kind === 'error') {
     return { label: '확인 실패', tone: 'error', ariaLabel: '외부 전송 상태 확인 실패' };

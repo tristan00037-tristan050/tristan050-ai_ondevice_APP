@@ -29,6 +29,8 @@ function report(
   const measured = new Date();
   const payload = {
     schema_version: 'butler.egress.report.v3',
+    measurement: 'MEASURED' as const,
+    value: bytes,
     run_id: runId,
     measurement_generation: measurementGeneration,
     measurement_started_at: new Date(measured.getTime() - 1_000).toISOString(),
@@ -77,6 +79,24 @@ describe('useEgressReport transport and generation contract', () => {
     await waitFor(() => expect(result.current.state.kind).toBe('error'));
     expect(result.current.state).toMatchObject({ kind: 'error', code });
     expect(JSON.stringify(result.current.state)).not.toContain('Response');
+  });
+
+  it.each([
+    new Response(JSON.stringify({ detail: 'EGRESS_MEASUREMENT_UNAVAILABLE' }), {
+      status: 503,
+      headers: { 'content-type': 'application/json' },
+    }),
+    jsonResponse({
+      value: 0,
+      measurement: 'STATIC_BETA',
+      measured_at: null,
+    }),
+  ])('maps unavailable and beta constants to an explicit unmeasured state', async response => {
+    mockedFetch.mockResolvedValueOnce(response);
+    const { result } = renderHook(() => useEgressReport());
+    await waitFor(() => expect(result.current.state.kind).toBe('unmeasured'));
+    expect(result.current.state).toMatchObject({ kind: 'unmeasured' });
+    expect(JSON.stringify(result.current.state)).not.toContain('ready');
   });
 
   it('keeps loading visible while the measurement is unresolved', async () => {
