@@ -97,7 +97,7 @@ jobs:
       - run: python -m pytest tests/assets/test_consumer_inventory.py -q
       - name: Bind inventory receipt to control-plane HEAD
         env:
-          GITHUB_SHA: ${{ env.CONTROL_PLANE_SHA }}
+          ASSET_CONTROL_PLANE_SHA: ${{ env.CONTROL_PLANE_SHA }}
           ASSET_INVENTORY_RECEIPT_OUT: ${{ runner.temp }}/asset-inventory-binding-receipt.json
         run: python scripts/verify_asset_consumer_inventory.py
       - uses: actions/upload-artifact@v4

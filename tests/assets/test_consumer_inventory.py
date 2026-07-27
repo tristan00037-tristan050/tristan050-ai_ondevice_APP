@@ -8,6 +8,7 @@ import pytest
 
 from butler_pc_core.assets.contracts import AssetIdentity, NativeReadHandle
 from butler_pc_core.inference.verified_model_loader import VerifiedLlamaLoader
+from scripts import verify_asset_consumer_inventory
 from scripts.verify_asset_consumer_inventory import audit_inventory
 
 
@@ -24,6 +25,19 @@ def test_all_language_loaders_are_inventoried() -> None:
     assert set(scan.python_model_loader_imports) <= sources
     assert set(scan.native_command_sources) <= sources
     assert all(row["authority_api"] == "AssetAuthority.acquire" for row in inventory["consumers"])
+
+
+def test_receipt_binds_explicit_control_head_not_reserved_github_sha(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    head = verify_asset_consumer_inventory._git("rev-parse", "HEAD")
+    monkeypatch.setenv("GITHUB_SHA", "f" * len(head))
+    monkeypatch.setenv("ASSET_CONTROL_PLANE_SHA", head)
+    receipt = tmp_path / "receipt.json"
+    monkeypatch.setenv("ASSET_INVENTORY_RECEIPT_OUT", str(receipt))
+
+    assert verify_asset_consumer_inventory.main() == 0
+    assert receipt.is_file()
 
 
 def test_authority_block_means_zero_loader_invocations(tmp_path: Path) -> None:

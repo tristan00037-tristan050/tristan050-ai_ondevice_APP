@@ -190,7 +190,7 @@ def _oid(value: str) -> dict[str, str]:
 def main() -> int:
     try:
         inventory, scan = audit_inventory()
-        external_head = os.environ.get("GITHUB_SHA", "")
+        external_head = os.environ.get("ASSET_CONTROL_PLANE_SHA", "")
         head = _git("rev-parse", "HEAD")
         tree = _git("rev-parse", "HEAD^{tree}")
         if not OID_RE.fullmatch(external_head) or external_head != head:
