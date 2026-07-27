@@ -15,17 +15,28 @@ from pathlib import Path
 import pytest
 
 from butler_pc_core.assets.context import parse_platform_context
-from butler_pc_core.assets.dev_sidecar import _bootstrap_frame, _child_environment
+from butler_pc_core.assets.dev_sidecar import (
+    _bootstrap_frame,
+    _child_environment,
+    _open_listener,
+    _validate_listener,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.no_sidecar_token
 
 
-def _free_port() -> int:
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        return int(listener.getsockname()[1])
+def _exit_code(stderr: str) -> str:
+    if "Address already in use" in stderr or "address already in use" in stderr:
+        return "SIDECAR_BIND_CONFLICT"
+    if "ASSET_BOOTSTRAP_FAILED" in stderr:
+        return "SIDECAR_ASSET_BOOTSTRAP_FAILED"
+    if "HOME_STORAGE_" in stderr or "HOME_NEW_INSTALL_" in stderr:
+        return "SIDECAR_HOME_STORAGE_FAILED"
+    if "Application startup failed" in stderr:
+        return "SIDECAR_STARTUP_FAILED"
+    return "SIDECAR_UNKNOWN_EXIT"
 
 
 @pytest.mark.skipif(os.name != "posix", reason="descriptor bootstrap is POSIX-only")
@@ -93,6 +104,40 @@ def test_development_child_home_is_private_and_platform_safe(
 
 
 @pytest.mark.skipif(os.name != "posix", reason="descriptor bootstrap is POSIX-only")
+def test_development_listener_validation_is_descriptor_bound() -> None:
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = int(listener.getsockname()[1])
+        _validate_listener(listener.fileno(), host="127.0.0.1", port=port)
+        with pytest.raises(SystemExit, match="BLOCK_DEVELOPMENT_LISTENER_MISMATCH"):
+            _validate_listener(
+                listener.fileno(),
+                host="127.0.0.1",
+                port=port + 1,
+            )
+
+
+@pytest.mark.skipif(os.name != "posix", reason="descriptor bootstrap is POSIX-only")
+def test_development_listener_opens_loopback_before_sidecar_exec() -> None:
+    descriptor = _open_listener(host="127.0.0.1", port=0)
+    try:
+        listener = socket.socket(fileno=os.dup(descriptor))
+        try:
+            assert listener.getsockname()[0] == "127.0.0.1"
+            assert listener.getsockname()[1] > 0
+        finally:
+            listener.close()
+    finally:
+        os.close(descriptor)
+    with pytest.raises(
+        SystemExit,
+        match="BLOCK_DEVELOPMENT_LISTEN_ADDRESS_INVALID",
+    ):
+        _open_listener(host="0.0.0.0", port=8765)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="descriptor bootstrap is POSIX-only")
 def test_direct_sidecar_without_bootstrap_stays_fail_closed() -> None:
     environment = os.environ.copy()
     environment.pop("BUTLER_BOOTSTRAP_FD", None)
@@ -119,7 +164,10 @@ def test_direct_sidecar_without_bootstrap_stays_fail_closed() -> None:
 
 @pytest.mark.skipif(os.name != "posix", reason="descriptor bootstrap is POSIX-only")
 def test_development_launcher_serves_real_sidecar_health(tmp_path: Path) -> None:
-    port = _free_port()
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(2048)
+    port = int(listener.getsockname()[1])
     environment = os.environ.copy()
     environment["BUTLER_APP_DATA_DIR"] = str(tmp_path)
     environment["BUTLER_HOME_BOOTSTRAP_NEW_INSTALL"] = "1"
@@ -132,13 +180,17 @@ def test_development_launcher_serves_real_sidecar_health(tmp_path: Path) -> None
             "127.0.0.1",
             "--port",
             str(port),
+            "--listen-fd",
+            str(listener.fileno()),
         ],
         cwd=ROOT,
         env=environment,
+        pass_fds=(listener.fileno(),),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
         text=True,
     )
+    listener.close()
     try:
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
@@ -147,6 +199,7 @@ def test_development_launcher_serves_real_sidecar_health(tmp_path: Path) -> None
                 digest = hashlib.sha256(stderr.encode("utf-8")).hexdigest()
                 pytest.fail(
                     "DEVELOPMENT_SIDECAR_EXITED "
+                    f"error_code={_exit_code(stderr)} "
                     f"stderr_length={len(stderr.encode('utf-8'))} "
                     f"stderr_sha256={digest}"
                 )

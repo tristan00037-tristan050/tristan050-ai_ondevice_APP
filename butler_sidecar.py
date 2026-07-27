@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import secrets
+import socket
 import sys
 import tempfile
 
@@ -3187,10 +3188,29 @@ else:
             else:
                 self._send_json(404, {"detail": "not found"})
 
-    def _run_stdlib_server(host: str = "127.0.0.1", port: int = 8765):
-        server = http.server.HTTPServer((host, port), _Handler)
+    def _run_stdlib_server(
+        host: str = "127.0.0.1",
+        port: int = 8765,
+        *,
+        listener_fd: int | None = None,
+    ) -> None:
+        server = http.server.HTTPServer(
+            (host, port),
+            _Handler,
+            bind_and_activate=False,
+        )
+        if listener_fd is None:
+            server.server_bind()
+            server.server_activate()
+        else:
+            server.socket.close()
+            server.socket = socket.socket(fileno=os.dup(listener_fd))
+            server.server_address = server.socket.getsockname()
         print(f"Butler sidecar (stdlib) running on http://{host}:{port}", flush=True)
-        server.serve_forever()
+        try:
+            server.serve_forever()
+        finally:
+            server.server_close()
 
 
 # ---------------------------------------------------------------------------
@@ -3218,9 +3238,53 @@ if __name__ == "__main__":
     except Exception:
         raise SystemExit("ASSET_BOOTSTRAP_FAILED")
 
-    if _FASTAPI_AVAILABLE:
-        import uvicorn
+    listener_fd = None
+    listener_fd_text = os.environ.pop("BUTLER_LISTEN_FD", None)
+    if listener_fd_text is not None:
+        try:
+            if not listener_fd_text.isdecimal():
+                raise ValueError
+            listener_fd = int(listener_fd_text)
+            if listener_fd < 3:
+                raise ValueError
+            listener = socket.socket(fileno=os.dup(listener_fd))
+            try:
+                if (
+                    listener.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE)
+                    != socket.SOCK_STREAM
+                    or listener.family not in {socket.AF_INET, socket.AF_INET6}
+                ):
+                    raise OSError
+                bound = listener.getsockname()
+                if (
+                    not isinstance(bound, tuple)
+                    or len(bound) < 2
+                    or bound[0] != _args.host
+                    or bound[1] != _args.port
+                ):
+                    raise OSError
+            finally:
+                listener.close()
+        except (OSError, OverflowError, TypeError, ValueError):
+            raise SystemExit("ASSET_LISTENER_INVALID")
 
-        uvicorn.run(app, host=_args.host, port=_args.port, reload=False)
-    else:
-        _run_stdlib_server(host=_args.host, port=_args.port)
+    try:
+        if _FASTAPI_AVAILABLE:
+            import uvicorn
+
+            uvicorn.run(
+                app,
+                host=_args.host,
+                port=_args.port,
+                fd=listener_fd,
+                reload=False,
+            )
+        else:
+            _run_stdlib_server(
+                host=_args.host,
+                port=_args.port,
+                listener_fd=listener_fd,
+            )
+    finally:
+        if listener_fd is not None:
+            os.close(listener_fd)

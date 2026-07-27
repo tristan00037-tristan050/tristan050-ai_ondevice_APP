@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
+import socket
 import stat
 import struct
 import subprocess
@@ -12,6 +14,7 @@ from pathlib import Path
 from .context import MAX_BOOTSTRAP_BYTES
 
 _BOOTSTRAP_FD_ENV = "BUTLER_BOOTSTRAP_FD"
+_LISTEN_FD_ENV = "BUTLER_LISTEN_FD"
 _APP_DATA_ENV = "BUTLER_APP_DATA_DIR"
 _DEFAULT_MODE = 0o700
 
@@ -23,6 +26,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--app-data", type=Path)
+    parser.add_argument("--listen-fd", type=int, help=argparse.SUPPRESS)
     return parser
 
 
@@ -83,6 +87,53 @@ def _open_development_asset_root(app_data: Path) -> int:
     except BaseException:
         os.close(asset_fd)
         raise
+
+
+def _listener_address(host: str, port: int) -> tuple[int, tuple[object, ...]]:
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError as exc:
+        raise SystemExit("BLOCK_DEVELOPMENT_LISTEN_ADDRESS_INVALID") from exc
+    if not address.is_loopback:
+        raise SystemExit("BLOCK_DEVELOPMENT_LISTEN_ADDRESS_INVALID")
+    family = socket.AF_INET6 if address.version == 6 else socket.AF_INET
+    return family, (str(address), port)
+
+
+def _validate_listener(descriptor: int, *, host: str, port: int) -> None:
+    if descriptor < 0:
+        raise SystemExit("BLOCK_DEVELOPMENT_LISTENER_INVALID")
+    family, expected = _listener_address(host, port)
+    try:
+        candidate = socket.socket(fileno=os.dup(descriptor))
+        try:
+            if (
+                candidate.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE)
+                != socket.SOCK_STREAM
+                or candidate.family != family
+            ):
+                raise SystemExit("BLOCK_DEVELOPMENT_LISTENER_INVALID")
+            bound = candidate.getsockname()
+            if bound[0] != expected[0] or bound[1] != expected[1]:
+                raise SystemExit("BLOCK_DEVELOPMENT_LISTENER_MISMATCH")
+        finally:
+            candidate.close()
+    except OSError as exc:
+        raise SystemExit("BLOCK_DEVELOPMENT_LISTENER_INVALID") from exc
+
+
+def _open_listener(*, host: str, port: int) -> int:
+    family, address = _listener_address(host, port)
+    listener = socket.socket(family, socket.SOCK_STREAM)
+    try:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(address)
+        listener.listen(2048)
+        listener.set_inheritable(True)
+        return listener.detach()
+    except OSError as exc:
+        listener.close()
+        raise SystemExit("BLOCK_DEVELOPMENT_LISTENER_UNAVAILABLE") from exc
 
 
 def _git_oid(repository_root: Path, revision: str) -> str:
@@ -151,7 +202,12 @@ def _bootstrap_frame(
     return struct.pack(">I", len(raw)) + raw
 
 
-def _child_environment(*, app_data: Path, bootstrap_fd: int) -> dict[str, str]:
+def _child_environment(
+    *,
+    app_data: Path,
+    bootstrap_fd: int,
+    listener_fd: int | None = None,
+) -> dict[str, str]:
     # macOS Keychain lookup is bound to the real login home. Other POSIX
     # development runtimes keep every home-relative write inside the private
     # app-data authority instead of inheriting an absent or shared CI HOME.
@@ -169,6 +225,8 @@ def _child_environment(*, app_data: Path, bootstrap_fd: int) -> dict[str, str]:
         "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
         "PATH": os.environ.get("PATH", os.defpath),
     }
+    if listener_fd is not None:
+        environment[_LISTEN_FD_ENV] = str(listener_fd)
     for name in ("TMPDIR", "TEMP", "TMP"):
         value = os.environ.get(name)
         if value:
@@ -196,9 +254,26 @@ def main() -> int:
     if not sidecar.is_file() or sidecar.is_symlink():
         raise SystemExit("BLOCK_DEVELOPMENT_SIDECAR_UNAVAILABLE")
 
-    asset_root_fd = _open_development_asset_root(app_data)
-    read_fd, write_fd = os.pipe()
+    listener_fd = -1
+    asset_root_fd = -1
+    read_fd = -1
+    write_fd = -1
     try:
+        if arguments.listen_fd is None:
+            listener_fd = _open_listener(
+                host=arguments.host,
+                port=arguments.port,
+            )
+        else:
+            listener_fd = arguments.listen_fd
+            _validate_listener(
+                listener_fd,
+                host=arguments.host,
+                port=arguments.port,
+            )
+            os.set_inheritable(listener_fd, True)
+        asset_root_fd = _open_development_asset_root(app_data)
+        read_fd, write_fd = os.pipe()
         frame = _bootstrap_frame(
             app_data=app_data,
             asset_root_fd=asset_root_fd,
@@ -212,6 +287,7 @@ def main() -> int:
         environment = _child_environment(
             app_data=app_data,
             bootstrap_fd=read_fd,
+            listener_fd=listener_fd,
         )
         os.execve(
             sys.executable,
@@ -228,8 +304,12 @@ def main() -> int:
     finally:
         if write_fd >= 0:
             os.close(write_fd)
-        os.close(read_fd)
-        os.close(asset_root_fd)
+        if read_fd >= 0:
+            os.close(read_fd)
+        if asset_root_fd >= 0:
+            os.close(asset_root_fd)
+        if listener_fd >= 0:
+            os.close(listener_fd)
     return 0
 
 
