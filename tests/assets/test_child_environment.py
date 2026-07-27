@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.no_sidecar_token
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS native launcher contract")
 def test_native_launcher_clears_poisoned_parent_environment() -> None:
     completed = subprocess.run(
         [
