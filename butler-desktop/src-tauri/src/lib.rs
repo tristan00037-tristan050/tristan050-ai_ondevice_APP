@@ -1,11 +1,16 @@
 use std::{
     env,
     fs::{self, OpenOptions},
-    io::{BufRead, BufReader, Read, Write},
+    io::Write,
     path::PathBuf,
-    process::{Child, Command, Stdio},
+    process::Child,
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
+};
+#[cfg(unix)]
+use std::{
+    io::{BufRead, BufReader, Read},
+    process::{Command, Stdio},
 };
 use tauri::Manager;
 
@@ -25,9 +30,13 @@ mod distribution_flag_contract;
 mod export;
 mod runtime_trust;
 
+#[cfg(unix)]
 const ASSET_BOOTSTRAP_FD_ENV: &str = "BUTLER_BOOTSTRAP_FD";
+#[cfg(unix)]
 const BUTLER_APP_DATA_DIR_ENV: &str = "BUTLER_APP_DATA_DIR";
+#[cfg(unix)]
 const BUTLER_HOME_BOOTSTRAP_ENV: &str = "BUTLER_HOME_BOOTSTRAP_NEW_INSTALL";
+#[cfg(unix)]
 const MODEL_TIER_NATIVE_TELEMETRY_ENV: &str = "BUTLER_MODEL_TIER_NATIVE_TELEMETRY_JSON";
 
 struct SidecarState {
@@ -58,11 +67,13 @@ fn append_sidecar_launch_log(message: &str) {
     }
 }
 
+#[cfg(unix)]
 fn parse_positive_u64(text: &str) -> Option<u64> {
     let value = text.trim().parse::<u64>().ok()?;
     (value > 0).then_some(value)
 }
 
+#[cfg(unix)]
 fn parse_vm_stat_available_bytes(text: &str) -> Option<u64> {
     let page_size = text
         .lines()
@@ -95,6 +106,7 @@ fn parse_vm_stat_available_bytes(text: &str) -> Option<u64> {
     found.then(|| pages.saturating_mul(page_size))
 }
 
+#[cfg(unix)]
 fn command_stdout(program: &str, args: &[&str]) -> Option<String> {
     let output = Command::new(program).args(args).output().ok()?;
     if !output.status.success() {
@@ -103,6 +115,7 @@ fn command_stdout(program: &str, args: &[&str]) -> Option<String> {
     String::from_utf8(output.stdout).ok()
 }
 
+#[cfg(unix)]
 fn collect_model_tier_native_telemetry_json() -> Option<String> {
     let total = command_stdout("/usr/sbin/sysctl", &["-n", "hw.memsize"])
         .and_then(|text| parse_positive_u64(&text));
@@ -137,6 +150,7 @@ fn collect_model_tier_native_telemetry_json() -> Option<String> {
     .ok()
 }
 
+#[cfg(unix)]
 fn resolve_sidecar_env(app: &tauri::AppHandle) -> Result<Vec<(String, String)>, String> {
     let mut values = Vec::new();
     let app_data_dir = app
@@ -180,6 +194,7 @@ fn resolve_sidecar_env(app: &tauri::AppHandle) -> Result<Vec<(String, String)>, 
     Ok(values)
 }
 
+#[cfg(unix)]
 fn configure_sidecar_environment(
     command: &mut Command,
     bootstrap_fd: i32,
@@ -366,6 +381,7 @@ async fn spawn_sidecar(_app: &tauri::AppHandle) -> Result<Child, String> {
     Err("BLOCK_PLATFORM_UNSUPPORTED".to_string())
 }
 
+#[cfg(unix)]
 fn asset_bootstrap_frame(app: &tauri::AppHandle, asset_root_fd: i32) -> Result<Vec<u8>, String> {
     let app_data_root = app
         .path()
@@ -484,6 +500,7 @@ fn asset_bootstrap_frame(app: &tauri::AppHandle, asset_root_fd: i32) -> Result<V
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn vm_stat_parser_sums_only_available_page_classes() {
         let sample = "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n\
@@ -495,6 +512,7 @@ Pages purgeable: 2.\n";
         assert_eq!(parse_vm_stat_available_bytes(sample), Some(35 * 16_384));
     }
 
+    #[cfg(unix)]
     #[test]
     fn vm_stat_parser_rejects_missing_available_measurements() {
         assert_eq!(parse_vm_stat_available_bytes("Pages active: 900.\n"), None);
