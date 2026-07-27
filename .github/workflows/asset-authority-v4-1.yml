@@ -34,7 +34,7 @@ jobs:
       - run: python -m pytest tests/assets/test_required_nodes.py tests/assets/test_no_env_capability.py -q
 
   asset-child-env-isolation:
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -71,7 +71,7 @@ jobs:
       - run: python -m pytest tests/assets/test_loader_object_macos.py -q
 
   asset-trust-root-attacks:
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
