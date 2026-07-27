@@ -9,14 +9,14 @@ use crate::asset_trust_root_constants::{
 pub const TRUST_ROOT_NOT_CONFIGURED: &str = "TRUST_ROOT_NOT_CONFIGURED";
 pub const TRUST_ROOT_CONFIGURED: &str = "TRUST_ROOT_CONFIGURED";
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TrustRootState {
     Unconfigured,
     Configured,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SignatureState {
     Missing,
@@ -26,7 +26,7 @@ pub enum SignatureState {
     Expired,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ProvenanceState {
     Unverified,
@@ -228,6 +228,30 @@ mod tests {
             assert_eq!(state.external_handoff_allowed, 0);
             assert_eq!(state.auto_update_allowed, 0);
             assert_eq!(state.operation_scope, "INTERNAL_OWNER_ONLY");
+        }
+    }
+
+    #[test]
+    fn trust_state_wire_contract_accepts_every_declared_closed_state() {
+        for (wire, expected) in [
+            ("MISSING", SignatureState::Missing),
+            ("INVALID", SignatureState::Invalid),
+            ("VERIFIED", SignatureState::Verified),
+            ("REVOKED", SignatureState::Revoked),
+            ("EXPIRED", SignatureState::Expired),
+        ] {
+            let parsed: SignatureState =
+                serde_json::from_str(&format!("\"{wire}\"")).expect("declared signature state");
+            assert_eq!(parsed, expected);
+        }
+        for (wire, expected) in [
+            ("UNVERIFIED", ProvenanceState::Unverified),
+            ("VERIFIED", ProvenanceState::Verified),
+            ("REJECTED", ProvenanceState::Rejected),
+        ] {
+            let parsed: ProvenanceState =
+                serde_json::from_str(&format!("\"{wire}\"")).expect("declared provenance state");
+            assert_eq!(parsed, expected);
         }
     }
 }
