@@ -166,7 +166,16 @@ export function Sidebar(props: Props) {
           ))}
         </section>
       </nav>
-      <footer><button onClick={onOpenSettings}>설정</button></footer>
+      <footer>
+        <button
+          type="button"
+          className="settings-entry"
+          data-testid="settings-entry"
+          onClick={onOpenSettings}
+        >
+          설정
+        </button>
+      </footer>
     </aside>
   );
 }

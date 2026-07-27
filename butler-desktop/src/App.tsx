@@ -18,9 +18,12 @@ import { MessageList } from './components/chat/MessageList';
 import { DeleteConfirmModal } from './components/chat/DeleteConfirmModal';
 import { CardGrid } from './components/v1_1/CardGrid';
 import { SettingsShell, type SettingsAction } from './components/home/SettingsShell';
+import { SetupBanner } from './components/home/SetupBanner';
 import { FormFillModal } from './components/v1_1/FormFillModal';
 import { DocumentReviewModal } from './components/v1_1/DocumentReviewModal';
 import { SIDECAR_BASE } from './constants';
+import { useEgressReport } from './lib/egressReport';
+import { useSetupState } from './lib/useSetupState';
 import type { SSEEvent, Conversation, Message, FolderRecord, RuntimeStatus, RuntimeTrustReceipt, HomeStartupStatus, TurnCorrelation, HomeInventoryState } from './types';
 import {
   loadConversations,
@@ -99,6 +102,7 @@ export function sidecarCardMode(mode: string): string {
 }
 
 export function App() {
+  const setupUiState = useSetupState();
   const legacyConversationsRef = useRef<Conversation[]>(loadConversations());
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [trashedConversations, setTrashedConversations] = useState<Conversation[]>([]);
@@ -121,9 +125,9 @@ export function App() {
   const [egressMonitorOpen, setEgressMonitorOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [folders, setFolders] = useState<FolderRecord[]>([]);
-  const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus|null>(null);
-  const [runtimeTrustReceipt, setRuntimeTrustReceipt] = useState<RuntimeTrustReceipt|null>(null);
-  const [runtimeTrustState, setRuntimeTrustState] = useState<'verified'|'blocked'|'recovery'|'unavailable'>('unavailable');
+  const [, setRuntimeStatus] = useState<RuntimeStatus|null>(null);
+  const [, setRuntimeTrustReceipt] = useState<RuntimeTrustReceipt|null>(null);
+  const [, setRuntimeTrustState] = useState<'verified'|'blocked'|'recovery'|'unavailable'>('unavailable');
   const [homeStoreError, setHomeStoreError] = useState<string|null>(null);
   const [homeStartup, setHomeStartup] = useState<HomeStartupStatus|null>(null);
   const [homeReadOnly, setHomeReadOnly] = useState(true);
@@ -148,6 +152,8 @@ export function App() {
   const messageLoadAbortRef = useRef<AbortController | null>(null);
   const messageLoadGenerationRef = useRef(0);
   const messageInventoriesRef = useRef<MessageInventoryMap>({});
+  const egressBadgeRef = useRef<HTMLButtonElement>(null);
+  const { state: egressState, refresh: refreshEgress } = useEgressReport();
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -953,6 +959,10 @@ export function App() {
     }
   };
 
+  const closeEgressMonitor = useCallback(() => {
+    setEgressMonitorOpen(false);
+    window.requestAnimationFrame(() => egressBadgeRef.current?.focus());
+  }, []);
 
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--color-bg-app)' }}>
@@ -979,6 +989,7 @@ export function App() {
       />
 
       <main
+        className="home-main"
         style={{
           flex: 1,
           display: 'flex',
@@ -1045,75 +1056,53 @@ export function App() {
             </span>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <button
-              data-testid="admin-policy-console-btn"
-              onClick={() => setAccountingModalOpen(true)}
-              style={{
-                background: 'none',
-                border: '1px solid var(--color-border-subtle)',
-                borderRadius: 6,
-                padding: '3px 10px',
-                cursor: 'pointer',
-                fontSize: 'var(--text-xs)',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              처음 설정하기
-            </button>
-            <button
-              data-testid="egress-monitor-btn"
-              onClick={() => setEgressMonitorOpen(true)}
-              style={{
-                background: 'none',
-                border: '1px solid var(--color-border-subtle)',
-                borderRadius: 6,
-                padding: '3px 10px',
-                cursor: 'pointer',
-                fontSize: 'var(--text-xs)',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              {runtimeStatus
-                ? `정책 ${runtimeStatus.policy.status} · 측정 ${runtimeStatus.measurement.status} · 신뢰 ${runtimeTrustState === 'verified' && runtimeTrustReceipt ? '검증됨' : runtimeTrustState === 'recovery' ? '상태 복구 필요' : runtimeTrustState === 'unavailable' ? '검증 서비스 사용 불가' : '업데이트 차단'}`
-                : '외부 전송 상태 확인 중'}
-            </button>
-            <button onClick={()=>setSettingsOpen(true)}>설정</button>
+            <EgressBadge
+              ref={egressBadgeRef}
+              state={egressState}
+              onOpenDetails={() => setEgressMonitorOpen(true)}
+            />
           </div>
         </div>
 
-        {homeInventoryState !== 'COMPLETE' && (
-          <div className="home-inventory-status" role="status" data-state={homeInventoryState}>
-            {homeInventoryState === 'LOADING'
-              ? '전체 대화 목록을 복원하고 있습니다.'
-              : '대화 목록이 불완전하여 저장과 전송을 차단했습니다.'}
-            {homeInventoryState === 'PARTIAL' && (
-              <button onClick={() => { setHomeLoading(true); void refreshHome(); }}>목록 다시 불러오기</button>
-            )}
-          </div>
-        )}
-        {activeConvId && activeMessageState && activeMessageState !== 'COMPLETE' && (
-          <div className="home-inventory-status" role="status" data-state={activeMessageState}>
-            {activeMessageState === 'LOADING'
-              ? '대화 내용을 빠짐없이 복원하고 있습니다.'
-              : activeMessageState === 'LOCKED'
-                ? '암호화 키를 확인할 수 없어 대화 내용이 잠겼습니다.'
-                : '대화 내용 일부를 복원하지 못했습니다. 현재까지 복원된 내용은 보존했습니다.'}
-            {activeMessageState !== 'LOADING' && activeMessageState !== 'LOCKED' && (
-              <button onClick={() => { void handleSelectConv(activeConvId, true); }}>
-                이어서 다시 불러오기
-              </button>
-            )}
-            {(activeMessageRecordCurrent
-              ? activeMessageInventory?.errorCode
-              : 'HOME_MESSAGE_INVENTORY_STALE') && (
-              <span className="home-inventory-code">
-                {activeMessageRecordCurrent
-                  ? activeMessageInventory?.errorCode
-                  : 'HOME_MESSAGE_INVENTORY_STALE'}
-              </span>
-            )}
-          </div>
-        )}
+        <div className="home-status-rail" data-testid="home-status-rail">
+          {homeInventoryState !== 'COMPLETE' && (
+            <div className="home-inventory-status" role="status" data-state={homeInventoryState}>
+              {homeInventoryState === 'LOADING'
+                ? '전체 대화 목록을 복원하고 있습니다.'
+                : '대화 목록이 불완전하여 저장과 전송을 차단했습니다.'}
+              {homeInventoryState === 'PARTIAL' && (
+                <button onClick={() => { setHomeLoading(true); void refreshHome(); }}>목록 다시 불러오기</button>
+              )}
+            </div>
+          )}
+          {activeConvId && activeMessageState && activeMessageState !== 'COMPLETE' && (
+            <div className="home-inventory-status" role="status" data-state={activeMessageState}>
+              {activeMessageState === 'LOADING'
+                ? '대화 내용을 빠짐없이 복원하고 있습니다.'
+                : activeMessageState === 'LOCKED'
+                  ? '암호화 키를 확인할 수 없어 대화 내용이 잠겼습니다.'
+                  : '대화 내용 일부를 복원하지 못했습니다. 현재까지 복원된 내용은 보존했습니다.'}
+              {activeMessageState !== 'LOADING' && activeMessageState !== 'LOCKED' && (
+                <button onClick={() => { void handleSelectConv(activeConvId, true); }}>
+                  이어서 다시 불러오기
+                </button>
+              )}
+              {(activeMessageRecordCurrent
+                ? activeMessageInventory?.errorCode
+                : 'HOME_MESSAGE_INVENTORY_STALE') && (
+                <span className="home-inventory-code">
+                  {activeMessageRecordCurrent
+                    ? activeMessageInventory?.errorCode
+                    : 'HOME_MESSAGE_INVENTORY_STALE'}
+                </span>
+              )}
+            </div>
+          )}
+          <SetupBanner
+            setup={setupUiState}
+            onStart={() => setAccountingModalOpen(true)}
+          />
+        </div>
 
         {/* Content area — card grid always visible; compact strip when messages present */}
         {hasMessages ? (
@@ -1128,7 +1117,9 @@ export function App() {
             />
           </>
         ) : (
-          <CardGrid onCardSelect={handleCardSelect} />
+          <div className="home-empty-content">
+            <CardGrid onCardSelect={handleCardSelect} />
+          </div>
         )}
 
         <ChatInput
@@ -1150,7 +1141,11 @@ export function App() {
 
       <Suspense fallback={<div className="modal-loading" role="status">기능을 불러오는 중입니다.</div>}>
       {egressMonitorOpen && (
-        <EgressMonitor onClose={() => setEgressMonitorOpen(false)} />
+        <EgressMonitor
+          state={egressState}
+          onRefresh={() => { void refreshEgress(); }}
+          onClose={closeEgressMonitor}
+        />
       )}
       {settingsOpen&&<SettingsShell onClose={()=>setSettingsOpen(false)} onAction={handleSettingsAction} appVersion={appVersion} engineVersion={engineVersion}/>}
       {homeStoreError&&<div className="home-store-error" role="alert" data-home-startup={homeStartup?.status ?? 'UNKNOWN'}><span>{homeStoreError}</span><button onClick={()=>setHomeStoreError(null)}>닫기</button></div>}

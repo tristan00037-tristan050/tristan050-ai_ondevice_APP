@@ -413,7 +413,6 @@ if _FASTAPI_AVAILABLE:
             "/health",
             "/api/sidecar/health",
             "/api/model/status",
-            "/api/egress/report",
             "/api/model-tier/shadow/status",
         }
     )
@@ -445,7 +444,12 @@ if _FASTAPI_AVAILABLE:
         if request.method == "GET" and request.url.path in _PUBLIC_GET_PATHS:
             return await call_next(request)
         home_request = request.url.path.startswith("/v1/home/")
-        if home_request:
+        protected_get_request = (
+            request.method == "GET"
+            and request.url.path == "/api/egress/report"
+        )
+        local_authenticated_request = home_request or protected_get_request
+        if local_authenticated_request:
             host = request.headers.get("host", "").lower()
             origin = request.headers.get("origin")
             if host not in {"127.0.0.1:8765", "localhost:8765", "testserver"}:
@@ -457,7 +461,7 @@ if _FASTAPI_AVAILABLE:
                 "http://127.0.0.1:1420",
             }:
                 return JSONResponse(status_code=403, content={"code": "UNTRUSTED_ORIGIN"})
-        if home_request or request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        if local_authenticated_request or request.method in ("POST", "PUT", "PATCH", "DELETE"):
             try:
                 session = _TOKEN_MANAGER.verify_authorization_header(
                     request.headers.get("Authorization")
@@ -617,29 +621,17 @@ if _FASTAPI_AVAILABLE:
 
     @app.get("/api/egress/report")
     def egress_report():
-        """Egress Monitor용 송신 현황 리포트 (베타: 모든 값 정적 반환).
+        """Return only runtime-bound egress evidence.
 
-        실제 네트워크 모니터링은 D-1-C 이후 구현 예정.
+        The former beta response fabricated a fresh task id together with
+        static zero/PASS values.  A UI cannot distinguish that payload from a
+        real measurement, so the endpoint now fails closed until the runtime
+        owns an atomic v3 measurement and receipt.  Do not restore a synthetic
+        success response here.
         """
-        import uuid as _uuid
-
-        return JSONResponse(
-            {
-                "schema_version": "egress_report.v2",
-                "task_id": str(_uuid.uuid4()),
-                "mode": "local_only",
-                "raw_file_sent_external": False,
-                "raw_text_logged": False,
-                "egress_bytes_total": 0,
-                "dns_requests": 0,
-                "http_requests": 0,
-                "https_requests": 0,
-                "telemetry_enabled": False,
-                "crash_report_enabled": False,
-                "update_check_enabled": False,
-                "verdict": "PASS",
-                "generated_at": datetime.now(_tz.utc).isoformat(),
-            }
+        raise HTTPException(
+            status_code=503,
+            detail="EGRESS_MEASUREMENT_UNAVAILABLE",
         )
 
     @app.post("/api/precheck", response_model=PrecheckResponse)
