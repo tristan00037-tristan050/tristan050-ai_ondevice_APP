@@ -3249,19 +3249,10 @@ if __name__ == "__main__":
                 raise ValueError
             listener = socket.socket(fileno=os.dup(listener_fd))
             try:
-                if (
-                    listener.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE)
-                    != socket.SOCK_STREAM
-                    or listener.family not in {socket.AF_INET, socket.AF_INET6}
-                ):
-                    raise OSError
-                bound = listener.getsockname()
-                if (
-                    not isinstance(bound, tuple)
-                    or len(bound) < 2
-                    or bound[0] != _args.host
-                    or bound[1] != _args.port
-                ):
+                if listener.getsockopt(
+                    socket.SOL_SOCKET,
+                    socket.SO_TYPE,
+                ) != socket.SOCK_STREAM:
                     raise OSError
             finally:
                 listener.close()

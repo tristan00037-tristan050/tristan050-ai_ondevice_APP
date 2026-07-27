@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import socket
 import struct
 import subprocess
@@ -28,6 +29,10 @@ pytestmark = pytest.mark.no_sidecar_token
 
 
 def _exit_code(stderr: str) -> str:
+    for line in reversed(stderr.splitlines()):
+        candidate = line.strip()
+        if re.fullmatch(r"[A-Z][A-Z0-9_]{2,80}", candidate):
+            return candidate
     if "Address already in use" in stderr or "address already in use" in stderr:
         return "SIDECAR_BIND_CONFLICT"
     if "ASSET_BOOTSTRAP_FAILED" in stderr:
@@ -37,6 +42,13 @@ def _exit_code(stderr: str) -> str:
     if "Application startup failed" in stderr:
         return "SIDECAR_STARTUP_FAILED"
     return "SIDECAR_UNKNOWN_EXIT"
+
+
+def test_sidecar_exit_diagnostics_emit_only_fixed_codes() -> None:
+    assert _exit_code("private path\nASSET_LISTENER_INVALID\n") == (
+        "ASSET_LISTENER_INVALID"
+    )
+    assert _exit_code("unclassified private diagnostic") == "SIDECAR_UNKNOWN_EXIT"
 
 
 @pytest.mark.skipif(os.name != "posix", reason="descriptor bootstrap is POSIX-only")
