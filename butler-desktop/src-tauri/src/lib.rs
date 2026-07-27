@@ -496,7 +496,7 @@ fn asset_bootstrap_frame(app: &tauri::AppHandle, asset_root_fd: i32) -> Result<V
     Ok(frame)
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
@@ -589,6 +589,12 @@ fn get_asset_security_state() -> Result<asset_trust_root::AssetSecurityState, St
 }
 
 #[tauri::command]
+fn authorize_asset_distribution() -> Result<(), String> {
+    let state = get_asset_security_state()?;
+    state.require_distribution().map_err(str::to_string)
+}
+
+#[tauri::command]
 fn authorize_asset_external_handoff() -> Result<(), String> {
     let state = get_asset_security_state()?;
     state.require_external_handoff().map_err(str::to_string)
@@ -637,6 +643,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_sidecar_capability_token,
             get_asset_security_state,
+            authorize_asset_distribution,
             authorize_asset_external_handoff,
             authorize_asset_auto_update,
             build_identity::get_native_build_context_digest,
