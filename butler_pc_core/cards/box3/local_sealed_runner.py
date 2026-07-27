@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import concurrent.futures
-import hashlib
 import os
 import re
-import secrets
 import time
 import uuid
 import weakref
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Callable
 
 from .actual_contracts import Box3ActualRuntimeEnvelope, sha256_text
@@ -185,17 +182,6 @@ def probe_helper3_helper5_adapter_stack(helper_guard: dict | None = None) -> Ada
     """
     from .v5_asset_manifest import MODEL_LINEAGE as _V5_LINEAGE
 
-    if os.environ.get("BUTLER_BOX3_ALLOW_HELPER35_MULTI_LORA_STACK") == "1":
-        return AdapterStackProbeVerdict(
-            False,
-            "BLOCK_HELPER35_DOUBLE_STACK_RISK",
-            ["helper3_format", "helper5_tool_call"],
-            True,
-            {
-                "reason": "v5 embeds helper3/helper5; runtime re-stack is forbidden",
-                "model_lineage": dict(_V5_LINEAGE),
-            },
-        )
     # PR #783: helper_guard 가 명시적으로 주어진 경우에만 검증 (PR #779 호환 경로).
     # 미지정 시 v5 embedded SSOT 로 직행 (MAINDEV 정본).
     if helper_guard is not None:
@@ -228,12 +214,9 @@ def build_local_sealed_real_runner(
     if asset.required_engine != "llama_cpp":
         raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE)
     try:
-        from llama_cpp import Llama  # type: ignore
-    except Exception as exc:  # pragma: no cover - runtime dependent
-        raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE) from exc
-    try:
         from butler_pc_core.assets import get_asset_service
         from butler_pc_core.assets.context import get_platform_context
+        from butler_pc_core.inference.llm_runtime import LlmRuntime
 
         context = get_platform_context()
         if context.manifest_set_sha256 is None:
@@ -244,38 +227,25 @@ def build_local_sealed_real_runner(
             expected_manifest_set=context.manifest_set_sha256,
             request_id=str(uuid.uuid4()),
         )
-        model_materialized = model_lease.materialize_directory()
         model_asset = model_lease.require("model_gguf")
-        model_path = str(
-            model_materialized.root.joinpath(
-                *Path(model_asset.entry.relative_path).parts
-            )
+        model_handle = model_asset.duplicate_read_handle(
+            manifest_set_sha256=context.manifest_set_sha256
         )
     except Exception as exc:
         raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE) from exc
     start = time.perf_counter()
     # Keep helper4/7/8 out of the model constructor. Only helper3/5 LoRA stack is eligible.
     # PR #781 (Box3 RAG·Prompt v1.2): grounded prompt 가 1k-2k 토큰 수준이 될 수 있으므로
-    # 충분한 context window 를 확보 (env override 가능). 기본 4096 = grounded prompt + 출력
-    # max_new_tokens(<=1024) 여유. n_ctx 환경변수가 설정되면 그것을 사용한다.
     try:
-        n_ctx = int(os.environ.get("BUTLER_BOX3_RUNNER_N_CTX", "4096"))
-    except ValueError:
-        n_ctx = 4096
-    measured = hashlib.sha256()
-    try:
-        with Path(model_path).open("rb") as handle:
-            while chunk := handle.read(8 * 1024 * 1024):
-                measured.update(chunk)
-        if not secrets.compare_digest(
-            measured.hexdigest(), model_asset.snapshot_digest
-        ):
-            raise RuntimeError("BLOCK_LOADER_INPUT_DIGEST_MISMATCH")
-        llm = Llama(model_path=model_path, n_ctx=n_ctx, verbose=False)
+        llm = LlmRuntime(model_handle=model_handle, n_ctx=4096)
+        if llm.status != "ready":
+            raise RuntimeError(llm.last_error or "BLOCK_LOADER_AUTHORITY_REQUIRED")
     except Exception as exc:
-        model_materialized.close()
+        model_handle.close()
         model_lease.close()
         raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE) from exc
+    finally:
+        model_handle.close()
     from butler_pc_core.model_tier.capability_registry import BOX3_1P7B_VARIANT_ID
     from butler_pc_core.model_tier.runtime_state import publish_runtime_lifecycle
 
@@ -289,8 +259,6 @@ def build_local_sealed_real_runner(
     load_ms = (time.perf_counter() - start) * 1000
 
     def _runner(envelope: Box3ActualRuntimeEnvelope) -> str:
-        if os.environ.get("BUTLER_BOX3_RUNNER_MODE") == "grounded_copy":
-            return build_grounded_copy_draft_from_envelope(envelope)
         prompt = compose_runner_prompt(envelope)
         # PR #781: temperature/top_p/repeat_penalty/stop 는 grounded_prompt.DecodeConfig 가
         # decode_config_digest 로 잠그지만, 본 runner 는 model-level 실제 디코딩 파라미터로
@@ -321,8 +289,13 @@ def build_local_sealed_real_runner(
     setattr(_runner, "_box3_model_load_ms", load_ms)
     setattr(_runner, "_box3_runner_engine", "llama_cpp")
     setattr(_runner, "_box3_adapter_stack", stack.to_dict())
+    setattr(
+        _runner,
+        "_box3_loaded_model_receipt",
+        llm.loaded_model_receipt.to_dict() if llm.loaded_model_receipt else None,
+    )
     def _release_model_assets() -> None:
-        model_materialized.close()
+        llm.close()
         model_lease.close()
         publish_runtime_lifecycle(
             BOX3_1P7B_VARIANT_ID,

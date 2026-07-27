@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
-
-from butler_pc_core.assets import AssetError, get_asset_service
+from typing import Any, Mapping, Protocol
 
 from .adapter_loader import sha_mismatch_count, verify_asset_contracts
 from .model_chain import REQUIRED_OUTPUT_FIELDS
@@ -36,6 +33,10 @@ class LoadedBox2Helper3Chain:
         # parse failure as None; evaluator._output_mapping coerces None to {} so
         # structure/coverage/format/semantic scores fail honestly.
         return parse_labeled_output(self.generate_text(build_digest_safe_eval_prompt(case), max_new_tokens=256))
+
+
+class VerifiedBox2Backend(Protocol):
+    def load(self) -> LoadedBox2Helper3Chain: ...
 
 
 def _sha256_text(value: str) -> str:
@@ -101,8 +102,9 @@ def _activate_multi_lora(model: Any) -> str:
     return "unsupported"
 
 
-def load_real_model_chain() -> tuple[LoadedBox2Helper3Chain | None, dict[str, Any]]:
-    os.environ.setdefault("HF_HUB_OFFLINE", "1"); os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+def load_real_model_chain(
+    backend: VerifiedBox2Backend | None = None,
+) -> tuple[LoadedBox2Helper3Chain | None, dict[str, Any]]:
     runtime = load_runtime(); evidence = _base_evidence(runtime)
     if not runtime.get("runtime_available"):
         return None, evidence
@@ -113,47 +115,27 @@ def load_real_model_chain() -> tuple[LoadedBox2Helper3Chain | None, dict[str, An
     if blocked:
         evidence.update({"fail_class": "PARTIAL_DONE_V3_ASSET_LOAD_BLOCKED", "status": "PARTIAL_DONE_V3_ASSET_LOAD_BLOCKED", "blocked_assets": blocked}); return None, evidence
     started = time.monotonic(); stages: list[str] = []
-    try:
-        from peft import PeftModel
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        with get_asset_service().require_capability("box2.adapter") as lease:
-            relative = {
-                role: Path(lease.require(role).entry.relative_path).parent
-                for role in ("base_model", "butler_adapter", "rewrite_adapter")
+    if backend is None:
+        evidence.update(
+            {
+                "fail_class": "PARTIAL_DONE_V3_ASSET_LOAD_BLOCKED",
+                "status": "PARTIAL_DONE_V3_ASSET_LOAD_BLOCKED",
+                "blocked_assets": ["verified_multi_file_loader"],
             }
-            with lease.materialize_directory() as root:
-                base_path = str(root / relative["base_model"])
-                butler_lora_path = str(root / relative["butler_adapter"])
-                helper_3_path = str(root / relative["rewrite_adapter"])
-                base = AutoModelForCausalLM.from_pretrained(
-                    base_path, local_files_only=True, trust_remote_code=False
-                )
-                tokenizer = AutoTokenizer.from_pretrained(
-                    base_path, local_files_only=True, trust_remote_code=False
-                )
-                stages.append("base")
-                model = PeftModel.from_pretrained(
-                    base,
-                    butler_lora_path,
-                    adapter_name="default",
-                    is_trainable=False,
-                )
-                stages.append("butler_v3")
-                if not hasattr(model, "load_adapter"):
-                    evidence.update({"stages_loaded": stages, "multi_lora_strategy": "unsupported", "fail_class": "PARTIAL_DONE_V3_STACKING_UNSUPPORTED", "status": "PARTIAL_DONE_V3_STACKING_UNSUPPORTED", "load_time_seconds": round(time.monotonic()-started, 6)}); return None, evidence
-                model.load_adapter(
-                    helper_3_path, adapter_name="helper_3", is_trainable=False
-                )
-                stages.append("helper_3")
-                strategy = _activate_multi_lora(model)
-                if strategy == "unsupported":
-                    evidence.update({"stages_loaded": stages, "multi_lora_strategy": strategy, "fail_class": "PARTIAL_DONE_V3_STACKING_UNSUPPORTED", "status": "PARTIAL_DONE_V3_STACKING_UNSUPPORTED", "load_time_seconds": round(time.monotonic()-started, 6)}); return None, evidence
-                evidence.update({"stages_loaded": stages, "multi_lora_strategy": strategy, "fail_class": None, "status": "PASS_V3_REAL_LOAD_READY", "load_time_seconds": round(time.monotonic()-started, 6)})
-                return LoadedBox2Helper3Chain(model=model, tokenizer=tokenizer, multi_lora_strategy=strategy), evidence
-    except AssetError:
-        evidence.update({"stages_loaded": stages, "fail_class": "PARTIAL_DONE_V3_ASSET_LOAD_BLOCKED", "status": "PARTIAL_DONE_V3_ASSET_LOAD_BLOCKED", "load_time_seconds": round(time.monotonic()-started, 6)})
+        )
         return None, evidence
+    try:
+        chain = backend.load()
+        evidence.update(
+            {
+                "stages_loaded": ["verified_native_backend"],
+                "multi_lora_strategy": chain.multi_lora_strategy,
+                "fail_class": None,
+                "status": "PASS_V3_REAL_LOAD_READY",
+                "load_time_seconds": round(time.monotonic() - started, 6),
+            }
+        )
+        return chain, evidence
     except Exception as exc:  # pragma: no cover
         evidence.update({"stages_loaded": stages, "fail_class": "PARTIAL_DONE_V3_REAL_LOAD_ERROR", "status": "PARTIAL_DONE_V3_REAL_LOAD_ERROR", "error_class": exc.__class__.__name__, "error_message_digest": "sha256:" + _sha256_text(str(exc)), "load_time_seconds": round(time.monotonic()-started, 6)})
         return None, evidence

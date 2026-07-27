@@ -9,7 +9,6 @@ from butler_pc_core.cards.box3.endpoint_wiring import run_box3_endpoint_wiring
 from butler_pc_core.cards.box3.helper_component_guard import build_example_component_use_guard
 from butler_pc_core.cards.box3.local_sealed_runner import build_deterministic_test_runner
 from butler_pc_core.cards.box3.model_identity import (
-    BOX3_MODEL_PATH_ENV,
     hash_model_file_for_security,
 )
 
@@ -20,11 +19,15 @@ REQUEST = "납품 일정을 반영해 보고서 초안을 작성하세요."
 
 @pytest.fixture()
 def box3_model_digest(tmp_path, monkeypatch) -> str:
-    """desktop 경로 model_scope 승인을 위해 물리 모델 파일과 env 를 준비하고 model_digest 반환."""
+    """승인 배선 시험에 사용할 명시적 테스트 모델 identity를 제공한다."""
     model = tmp_path / "butler-1.7b-v9-2-r2b-q4_k_m.gguf"
     model.write_bytes(b"BOX3-MODEL-BYTES" * 512)
-    monkeypatch.setenv(BOX3_MODEL_PATH_ENV, str(model))
-    return hash_model_file_for_security(str(model)).model_digest
+    identity = hash_model_file_for_security(str(model))
+    monkeypatch.setattr(
+        "butler_pc_core.cards.box3.endpoint_wiring.get_box3_model_identity_for_approval",
+        lambda _path=None: identity,
+    )
+    return identity.model_digest
 
 
 def _model_approval(scope_digest: str, *, allow: bool = True) -> dict:

@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import os
 import hashlib
 import json
+import os
 import secrets
-import shutil
-import tempfile
 import time
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import BinaryIO, Mapping
+
+from .snapshot import open_read_view
 
 
 class ReleaseProfile(str, Enum):
@@ -82,7 +81,104 @@ class FileIdentity:
         )
 
 
-AssetIdentity = FileIdentity
+@dataclass(frozen=True)
+class AssetIdentity:
+    role: str
+    sha256: str
+    size_bytes: int
+    format: str
+    manifest_set_sha256: str
+
+
+class NativeReadHandle:
+    """Owned descriptor for the already-verified immutable loader object."""
+
+    __slots__ = ("_fd", "identity", "seal_type")
+
+    def __init__(
+        self,
+        fd: int,
+        *,
+        identity: AssetIdentity,
+        seal_type: str,
+    ) -> None:
+        if fd < 0:
+            raise ValueError("NATIVE_HANDLE_INVALID")
+        self._fd = fd
+        self.identity = identity
+        self.seal_type = seal_type
+
+    @property
+    def fd(self) -> int:
+        if self._fd < 0:
+            raise RuntimeError("NATIVE_HANDLE_CLOSED")
+        return self._fd
+
+    def duplicate(self) -> "NativeReadHandle":
+        duplicate = os.dup(self.fd)
+        if self.seal_type != "darwin_posix_shm_readonly":
+            os.lseek(duplicate, 0, os.SEEK_SET)
+        return NativeReadHandle(
+            duplicate,
+            identity=self.identity,
+            seal_type=self.seal_type,
+        )
+
+    def open(self) -> BinaryIO:
+        return open_read_view(
+            self.fd,
+            size=self.identity.size_bytes,
+            seal_type=self.seal_type,
+        )
+
+    def close(self) -> None:
+        if self._fd >= 0:
+            os.close(self._fd)
+            self._fd = -1
+
+    def __enter__(self) -> "NativeReadHandle":
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except OSError:
+            pass
+
+
+@dataclass(frozen=True)
+class LoadedModelReceipt:
+    schema_version: int
+    run_id: str
+    nonce: str
+    asset_role: str
+    asset_sha256: str
+    mapped_asset_sha256: str
+    mapped_length: int
+    loader_binary_sha256: str
+    native_backend_sha256: str
+    platform_seal: str
+    result: str
+    reason_code: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "run_id": self.run_id,
+            "nonce": self.nonce,
+            "asset_role": self.asset_role,
+            "asset_sha256": self.asset_sha256,
+            "mapped_asset_sha256": self.mapped_asset_sha256,
+            "mapped_length": self.mapped_length,
+            "loader_binary_sha256": self.loader_binary_sha256,
+            "native_backend_sha256": self.native_backend_sha256,
+            "platform_seal": self.platform_seal,
+            "result": self.result,
+            "reason_code": self.reason_code,
+        }
 
 
 @dataclass(frozen=True)
@@ -160,9 +256,29 @@ class VerifiedAsset:
         self.seal_type = seal_type
 
     def open(self) -> BinaryIO:
+        return open_read_view(
+            self._fd,
+            size=self.entry.size_bytes,
+            seal_type=self.seal_type,
+        )
+
+    def duplicate_read_handle(self, *, manifest_set_sha256: str) -> NativeReadHandle:
+        if self._fd < 0:
+            raise RuntimeError("LEASE_NOT_ACTIVE")
         duplicate = os.dup(self._fd)
-        os.lseek(duplicate, 0, os.SEEK_SET)
-        return os.fdopen(duplicate, "rb", closefd=True)
+        if self.seal_type != "darwin_posix_shm_readonly":
+            os.lseek(duplicate, 0, os.SEEK_SET)
+        return NativeReadHandle(
+            duplicate,
+            identity=AssetIdentity(
+                role=self.entry.role,
+                sha256=self.snapshot_digest,
+                size_bytes=self.entry.size_bytes,
+                format=self.entry.validator,
+                manifest_set_sha256=manifest_set_sha256,
+            ),
+            seal_type=self.seal_type,
+        )
 
     def close(self) -> None:
         if self._fd >= 0:
@@ -264,55 +380,6 @@ class CapabilityLease:
             raise RuntimeError("LEASE_NOT_ACTIVE")
         return self._receipts[role]
 
-    def materialize_directory(self) -> "MaterializedCapability":
-        temporary = Path(tempfile.mkdtemp(prefix="butler-verified-assets-"))
-        try:
-            temporary.chmod(0o700)
-            for asset in self._assets.values():
-                relative = Path(asset.entry.relative_path)
-                target = temporary.joinpath(*relative.parts)
-                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                descriptor = os.open(
-                    target,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
-                    0o400,
-                )
-                try:
-                    with asset.open() as source, os.fdopen(
-                        descriptor, "wb", closefd=True
-                    ) as destination:
-                        descriptor = -1
-                        shutil.copyfileobj(source, destination, length=8 * 1024 * 1024)
-                        destination.flush()
-                        os.fsync(destination.fileno())
-                finally:
-                    if descriptor >= 0:
-                        os.close(descriptor)
-                target.chmod(0o400)
-                with target.open("rb") as copied:
-                    digest = hashlib.sha256()
-                    while chunk := copied.read(8 * 1024 * 1024):
-                        digest.update(chunk)
-                if digest.hexdigest() != asset.snapshot_digest:
-                    raise RuntimeError("MATERIALIZED_DIGEST_MISMATCH")
-            for directory in sorted(
-                (item for item in temporary.rglob("*") if item.is_dir()),
-                key=lambda item: len(item.parts),
-                reverse=True,
-            ):
-                directory.chmod(0o500)
-            temporary.chmod(0o500)
-            return MaterializedCapability(
-                temporary,
-                {
-                    role: asset.snapshot_digest
-                    for role, asset in self._assets.items()
-                },
-            )
-        except Exception:
-            shutil.rmtree(temporary, ignore_errors=True)
-            raise
-
     def close(self) -> None:
         if self._state is LeaseState.LEASE_CLOSED:
             return
@@ -323,33 +390,6 @@ class CapabilityLease:
 
     def __enter__(self) -> "CapabilityLease":
         return self
-
-    def __exit__(self, *_args: object) -> None:
-        self.close()
-
-
-class MaterializedCapability:
-    __slots__ = ("root", "loader_input_digests")
-
-    def __init__(self, root: Path, loader_input_digests: Mapping[str, str]) -> None:
-        self.root = root
-        self.loader_input_digests = dict(loader_input_digests)
-
-    def close(self) -> None:
-        if self.root.exists():
-            for item in self.root.rglob("*"):
-                try:
-                    item.chmod(0o700 if item.is_dir() else 0o600)
-                except OSError:
-                    pass
-            try:
-                self.root.chmod(0o700)
-            except OSError:
-                pass
-            shutil.rmtree(self.root, ignore_errors=True)
-
-    def __enter__(self) -> Path:
-        return self.root
 
     def __exit__(self, *_args: object) -> None:
         self.close()

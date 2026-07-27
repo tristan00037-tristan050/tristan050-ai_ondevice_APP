@@ -186,6 +186,7 @@ def test_production_source_oid_must_match_native_build_context(
         source_tree="2" * 40,
         manifest_set_sha256="a" * 64,
         native_authority=True,
+        trust_root_status="TRUST_ROOT_CONFIGURED",
     )
     entry = _entry(b"x", "opaque", "bin")
     service = AssetService(context)
@@ -401,25 +402,27 @@ def test_git_oid_rejects_untrusted_forms(value: object) -> None:
 
 
 def test_loader_invocation_is_zero_without_authority_digest(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     from butler_pc_core.inference import llm_runtime
 
     path = tmp_path / "model.gguf"
     path.write_bytes(b"not-loaded")
-    invocations = 0
 
-    def forbidden_loader(**_kwargs: object) -> object:
-        nonlocal invocations
-        invocations += 1
-        return object()
+    class ForbiddenLoader:
+        invocations = 0
 
-    monkeypatch.setattr(llm_runtime, "_LLAMA_AVAILABLE", True)
-    monkeypatch.setattr(llm_runtime, "Llama", forbidden_loader)
-    runtime = llm_runtime.LlmRuntime(model_path=str(path))
-    assert runtime.status == "error"
-    assert runtime.last_error == "BLOCK_LOADER_AUTHORITY_REQUIRED"
-    assert invocations == 0
+        def load_from_verified_handle(self, *_args: object, **_kwargs: object) -> object:
+            self.invocations += 1
+            raise AssertionError("loader must not run without an authority handle")
+
+    loader = ForbiddenLoader()
+    runtime = llm_runtime.LlmRuntime(loader=loader)  # type: ignore[arg-type]
+    assert runtime.status == "no_model"
+    assert runtime.last_error == ""
+    assert loader.invocations == 0
+    with pytest.raises(TypeError):
+        llm_runtime.LlmRuntime(model_path=str(path))  # type: ignore[call-arg]
 
 
 def test_windows_blocks_until_native_handle_bridge_exists(

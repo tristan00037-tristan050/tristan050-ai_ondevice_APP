@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/inventory-binding-receipt-v1.schema.json",
+  "title": "Butler Inventory Binding Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "head_oid",
+    "tree_oid",
+    "inventory_sha256",
+    "verifier_sha256",
+    "scan_result_sha256",
+    "result"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "format": "uuid"},
+    "head_oid": {"$ref": "#/$defs/oid"},
+    "tree_oid": {"$ref": "#/$defs/oid"},
+    "inventory_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "verifier_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "scan_result_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "result": {"enum": ["ALLOW", "BLOCK"]}
+  },
+  "$defs": {
+    "oid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "hex"],
+      "properties": {
+        "algorithm": {"enum": ["sha1", "sha256"]},
+        "hex": {"type": "string", "pattern": "^[0-9a-f]+$"}
+      }
+    }
+  }
+}

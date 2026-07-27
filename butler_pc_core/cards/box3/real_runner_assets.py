@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -127,20 +126,21 @@ class Box3RealRunnerConfig:
     allow_test_runner: bool = False
     mock_or_stub: bool = False
     readonly_required: bool = True
+    test_model_path: Optional[Path] = None
 
     @classmethod
-    def from_env(cls) -> "Box3RealRunnerConfig":
+    def product_default(cls) -> "Box3RealRunnerConfig":
         return cls(
-            runner_id=os.environ.get("BUTLER_BOX3_REAL_RUNNER_ID", "box3-local-real-runner"),
-            model_choice=os.environ.get("BUTLER_BOX3_MODEL_CHOICE", "qwen3-1.7b-v4-rt"),
+            runner_id="box3-local-real-runner",
+            model_choice="butler-1.7b-v9.2-r2b",
             model_path_ref="asset-authority:box3.model",
             model_path_env="ASSET_AUTHORITY_ONLY",
-            base_model_sha256_full=os.environ.get("BUTLER_BOX3_BASE_MODEL_SHA256_FULL"),
-            loader_name=os.environ.get("BUTLER_BOX3_LOADER", "llama_cpp"),
-            loader_version=os.environ.get("BUTLER_BOX3_LOADER_VERSION", "unmeasured"),
-            device_profile=os.environ.get("BUTLER_BOX3_DEVICE_PROFILE", "local"),
-            timeout_seconds=float(os.environ.get("BUTLER_BOX3_RUNNER_TIMEOUT_SEC", "30")),
-            memory_limit_mb=int(os.environ["BUTLER_BOX3_MEMORY_LIMIT_MB"]) if os.environ.get("BUTLER_BOX3_MEMORY_LIMIT_MB") else None,
+            base_model_sha256_full=None,
+            loader_name="llama_cpp",
+            loader_version="bundled",
+            device_profile="local",
+            timeout_seconds=30.0,
+            memory_limit_mb=None,
         )
 
     @property
@@ -190,11 +190,8 @@ def verify_box3_real_runner_assets(config: Box3RealRunnerConfig, *, helper_manif
     if not is_bare_sha256(base_sha):
         return Box3RealRunnerAssetVerdict(False, BLOCK_MODEL_ASSET_SHA_SCOPE_INVALID, stable_json_digest(config.to_digest_dict()), helper_manifest_digest, rows)
 
-    if config.allow_test_runner and os.environ.get("PYTEST_CURRENT_TEST"):
-        selected = os.environ.get(config.model_path_env) or os.environ.get(
-            "BUTLER_BOX3_BASE_MODEL_PATH"
-        )
-        model_path = Path(selected) if selected else None
+    if config.allow_test_runner:
+        model_path = config.test_model_path
         if model_path is None or not model_path.is_file():
             return Box3RealRunnerAssetVerdict(
                 False,

@@ -30,7 +30,6 @@ from .actual_fail_class import (
     Box3SecurityError,
 )
 
-BOX3_MODEL_PATH_ENV = "BUTLER_BOX3_V9_Q4_MODEL_PATH"
 DEVICE_DIGEST_PATH_ENV = "BUTLER_BOX3_DEVICE_DIGEST_PATH"
 
 _READ_CHUNK = 1024 * 1024
@@ -55,11 +54,6 @@ class Box3ModelIdentity:
             "size_bytes": self.size_bytes,
             "mtime_ns": self.mtime_ns,
         }
-
-
-def _env_model_path(environ: Mapping[str, str] | None) -> str | None:
-    env = environ if environ is not None else os.environ
-    return env.get(BOX3_MODEL_PATH_ENV)
 
 
 def _digest_of_text(value: str) -> str:
@@ -139,10 +133,7 @@ def get_box3_model_identity_for_approval(
     반환 None 은 downstream 에서 MODEL_DIGEST_UNAVAILABLE 로 차단된다. 구체 reason 이 필요한
     스크립트/테스트는 hash_model_file_for_security 를 직접 호출한다.
     """
-    env = environ if environ is not None else os.environ
     selected = str(model_path or "").strip()
-    if not selected and os.environ.get("PYTEST_CURRENT_TEST"):
-        selected = str(env.get(BOX3_MODEL_PATH_ENV) or "").strip()
     if not selected:
         try:
             from butler_pc_core.assets import get_asset_service

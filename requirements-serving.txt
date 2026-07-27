@@ -19,6 +19,4 @@ pdfminer.six>=20231228
 # LLM 추론 (stub 응답 대신 실제 Qwen3 응답을 원할 경우):
 # Apple Silicon: CMAKE_ARGS="-DGGML_METAL=ON" pip3 install llama-cpp-python
 # Intel Mac:     pip3 install llama-cpp-python
-# 0.3.20 embeds llama.cpp f49e9178767d557a522618b16ce8694f9ddac628,
-# which is after the CVE-2026-33298 minimum patched build b7824.
-llama-cpp-python==0.3.20
+llama-cpp-python>=0.2.50

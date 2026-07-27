@@ -73,6 +73,32 @@ pub fn evaluate_build_gate(
     })
 }
 
+pub fn evaluate_asset_trust_root_gate(
+    distribution: bool,
+    policy_sha256: &str,
+    keys_json: &str,
+    epoch: u64,
+    revoked_keys_json: &str,
+) -> Result<bool, &'static str> {
+    let entirely_empty =
+        policy_sha256.is_empty() && keys_json == "[]" && epoch == 0 && revoked_keys_json == "[]";
+    if entirely_empty {
+        return if distribution {
+            Err("ASSET_TRUST_ROOT_REQUIRED")
+        } else {
+            Ok(false)
+        };
+    }
+    if !is_lower_hex(policy_sha256, 64)
+        || keys_json == "[]"
+        || epoch == 0
+        || revoked_keys_json.is_empty()
+    {
+        return Err("ASSET_TRUST_ROOT_INVALID");
+    }
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,6 +202,18 @@ mod tests {
         assert_eq!(
             evaluate_build_gate(true, false, "not-a-digest", DIGEST, COMMIT, TREE),
             Err("FIRSTSCREEN_ROOT_ANCHOR_INVALID")
+        );
+    }
+
+    #[test]
+    fn asset_trust_root_warns_for_internal_build_and_blocks_distribution() {
+        assert_eq!(
+            evaluate_asset_trust_root_gate(false, "", "[]", 0, "[]"),
+            Ok(false)
+        );
+        assert_eq!(
+            evaluate_asset_trust_root_gate(true, "", "[]", 0, "[]"),
+            Err("ASSET_TRUST_ROOT_REQUIRED")
         );
     }
 }

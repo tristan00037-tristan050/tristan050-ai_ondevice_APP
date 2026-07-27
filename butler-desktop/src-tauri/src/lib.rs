@@ -1,18 +1,17 @@
 use std::{
     env,
     fs::{self, OpenOptions},
-    io::Write,
+    io::{BufRead, BufReader, Read, Write},
     path::PathBuf,
-    process::Command,
+    process::{Child, Command, Stdio},
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::Manager;
-use tauri_plugin_shell::{
-    process::{CommandChild, CommandEvent},
-    ShellExt,
-};
 
+mod asset_trust_root;
+#[path = "../asset_trust_root_constants.rs"]
+mod asset_trust_root_constants;
 mod build_identity;
 // build script 전용 모듈이라 라이브러리 빌드에는 들어가지 않는다. 그대로 두면 게이트 판정
 // 규칙이 `cargo test` 에서 한 번도 실행되지 않으므로, 시험 빌드에만 끌어와 회귀 시험이
@@ -26,13 +25,13 @@ mod distribution_flag_contract;
 mod export;
 mod runtime_trust;
 
-const ASSET_BOOTSTRAP_STDIN_ENV: &str = "BUTLER_ASSET_BOOTSTRAP_STDIN";
+const ASSET_BOOTSTRAP_FD_ENV: &str = "BUTLER_BOOTSTRAP_FD";
 const BUTLER_APP_DATA_DIR_ENV: &str = "BUTLER_APP_DATA_DIR";
 const BUTLER_HOME_BOOTSTRAP_ENV: &str = "BUTLER_HOME_BOOTSTRAP_NEW_INSTALL";
 const MODEL_TIER_NATIVE_TELEMETRY_ENV: &str = "BUTLER_MODEL_TIER_NATIVE_TELEMETRY_JSON";
 
 struct SidecarState {
-    child: Mutex<Option<CommandChild>>,
+    child: Mutex<Option<Child>>,
 }
 
 fn sidecar_launch_log_path() -> PathBuf {
@@ -181,90 +180,193 @@ fn resolve_sidecar_env(app: &tauri::AppHandle) -> Result<Vec<(String, String)>, 
     Ok(values)
 }
 
+fn configure_sidecar_environment(
+    command: &mut Command,
+    bootstrap_fd: i32,
+    sidecar_env: &[(String, String)],
+) {
+    command
+        .env_clear()
+        .env("LANG", "C.UTF-8")
+        .env("LC_ALL", "C.UTF-8")
+        .env(ASSET_BOOTSTRAP_FD_ENV, bootstrap_fd.to_string());
+    for (name, value) in sidecar_env {
+        command.env(name, value);
+    }
+}
+
 fn stop_sidecar(app: &tauri::AppHandle, reason: &str) {
     let child_opt = {
         let state = app.state::<SidecarState>();
         let x = state.child.lock().unwrap().take();
         x
     };
-    if let Some(child) = child_opt {
+    if let Some(mut child) = child_opt {
         let _ = child.kill();
         append_sidecar_launch_log(&format!("stop_sidecar reason={}", reason));
         println!("[main] sidecar 종료 완료 ({})", reason);
     }
 }
 
-async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<Option<CommandChild>, String> {
-    // dev 외부 sidecar 모드: 앱이 자체 sidecar를 띄우지 않고 외부(수동) sidecar를 사용
-    if env::var("BUTLER_SIDECAR_EXTERNAL").ok().as_deref() == Some("1") {
-        append_sidecar_launch_log("spawn_sidecar=external_skip");
-        return Ok(None);
-    }
-    append_sidecar_launch_log("spawn_sidecar=start");
-    let mut sidecar_env = resolve_sidecar_env(app)?;
-    sidecar_env.push((ASSET_BOOTSTRAP_STDIN_ENV.to_string(), "1".to_string()));
-    let bootstrap = asset_bootstrap_frame(app)?;
-    let (mut rx, mut child) = app
-        .shell()
-        .sidecar("butler-sidecar")
-        .map_err(|e| {
-            let message = format!("sidecar 명령 생성 실패: {}", e);
-            append_sidecar_launch_log(&message);
-            message
-        })?
-        .args(["--port", "8765", "--host", "127.0.0.1"])
-        .envs(sidecar_env)
-        .spawn()
-        .map_err(|e| {
-            let message = format!("sidecar 실행 실패: {}", e);
-            append_sidecar_launch_log(&message);
-            message
-        })?;
-    if let Err(error) = child.write(&bootstrap) {
-        let _ = child.kill();
-        append_sidecar_launch_log("asset_bootstrap=failed");
-        return Err(format!("asset bootstrap write failed: {}", error));
-    }
-    append_sidecar_launch_log("spawn_sidecar=ok");
+#[cfg(unix)]
+fn open_asset_root(app: &tauri::AppHandle) -> Result<std::fs::File, String> {
+    use std::ffi::CString;
+    use std::os::fd::FromRawFd;
+    use std::os::unix::ffi::OsStrExt;
 
-    // 로그 수신 — 별도 task로 분리 (spawn_sidecar를 블록하지 않음)
-    tauri::async_runtime::spawn(async move {
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(line) => {
-                    if let Ok(s) = String::from_utf8(line) {
-                        append_sidecar_launch_log(&format!("stdout {}", s.trim_end()));
-                        print!("[sidecar] {}", s);
-                    }
-                }
-                CommandEvent::Stderr(line) => {
-                    if let Ok(s) = String::from_utf8(line) {
-                        append_sidecar_launch_log(&format!("stderr {}", s.trim_end()));
-                        eprint!("[sidecar-err] {}", s);
-                    }
-                }
-                CommandEvent::Error(err) => {
-                    append_sidecar_launch_log(&format!("event_error {}", err));
-                    eprintln!("[sidecar-error] {}", err);
-                }
-                CommandEvent::Terminated(payload) => {
-                    append_sidecar_launch_log(&format!("terminated code={:?}", payload.code));
-                    eprintln!("[sidecar] 종료: code={:?}", payload.code);
-                    break;
-                }
-                _ => {}
-            }
-        }
-    });
-
-    Ok(Some(child))
+    let asset_root = app
+        .path()
+        .resource_dir()
+        .map_err(|_| "ASSET_RESOURCE_ROOT_UNAVAILABLE".to_string())?
+        .join("assets");
+    let raw = CString::new(asset_root.as_os_str().as_bytes())
+        .map_err(|_| "ASSET_RESOURCE_ROOT_INVALID".to_string())?;
+    let fd = unsafe {
+        libc::open(
+            raw.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        return Err("ASSET_RESOURCE_ROOT_UNAVAILABLE".to_string());
+    }
+    Ok(unsafe { std::fs::File::from_raw_fd(fd) })
 }
 
-fn asset_bootstrap_frame(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
+#[cfg(unix)]
+fn read_asset_root_file(root_fd: i32, name: &str, limit: u64) -> Result<String, String> {
+    use std::ffi::CString;
+    use std::os::fd::FromRawFd;
+
+    if name.is_empty() || name.contains('/') || name.contains("..") {
+        return Err("ASSET_RELATIVE_PATH_INVALID".to_string());
+    }
+    let raw = CString::new(name).map_err(|_| "ASSET_RELATIVE_PATH_INVALID".to_string())?;
+    let fd = unsafe {
+        libc::openat(
+            root_fd,
+            raw.as_ptr(),
+            libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        return Err("ASSET_BUILD_CONTEXT_UNAVAILABLE".to_string());
+    }
+    let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
+    let metadata = file
+        .metadata()
+        .map_err(|_| "ASSET_BUILD_CONTEXT_INVALID".to_string())?;
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > limit {
+        return Err("ASSET_BUILD_CONTEXT_INVALID".to_string());
+    }
+    let mut raw_text = String::new();
+    file.read_to_string(&mut raw_text)
+        .map_err(|_| "ASSET_BUILD_CONTEXT_INVALID".to_string())?;
+    Ok(raw_text)
+}
+
+#[cfg(unix)]
+fn sidecar_command_paths(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), String> {
     let resource_root = app
         .path()
         .resource_dir()
-        .map_err(|_| "asset resource root unavailable".to_string())?;
+        .map_err(|_| "SIDECAR_RESOURCE_ROOT_UNAVAILABLE".to_string())?;
+    let bundled = (
+        resource_root.join("python/bin/python3"),
+        resource_root.join("butler_sidecar.py"),
+    );
+    let selected = if bundled.0.is_file() && bundled.1.is_file() {
+        bundled
+    } else if cfg!(debug_assertions) {
+        (
+            PathBuf::from("/usr/bin/python3"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../..")
+                .join("butler_sidecar.py"),
+        )
+    } else {
+        return Err("SIDECAR_BUNDLE_INCOMPLETE".to_string());
+    };
+    for path in [&selected.0, &selected.1] {
+        let metadata =
+            fs::symlink_metadata(path).map_err(|_| "SIDECAR_EXECUTABLE_INVALID".to_string())?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() || !path.is_absolute() {
+            return Err("SIDECAR_EXECUTABLE_INVALID".to_string());
+        }
+    }
+    Ok(selected)
+}
+
+#[cfg(unix)]
+async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<Child, String> {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::process::CommandExt;
+
+    append_sidecar_launch_log("spawn_sidecar=start");
+    let sidecar_env = resolve_sidecar_env(app)?;
+    let asset_root = open_asset_root(app)?;
+    let asset_root_fd = asset_root.as_raw_fd();
+    let bootstrap = asset_bootstrap_frame(app, asset_root_fd)?;
+    let mut pipe_fds = [-1_i32; 2];
+    if unsafe { libc::pipe(pipe_fds.as_mut_ptr()) } != 0 {
+        return Err("ASSET_BOOTSTRAP_PIPE_FAILED".to_string());
+    }
+    let bootstrap_read = unsafe { std::fs::File::from_raw_fd(pipe_fds[0]) };
+    let mut bootstrap_write = unsafe { std::fs::File::from_raw_fd(pipe_fds[1]) };
+    bootstrap_write
+        .write_all(&bootstrap)
+        .map_err(|_| "ASSET_BOOTSTRAP_WRITE_FAILED".to_string())?;
+    drop(bootstrap_write);
+
+    let (python, sidecar) = sidecar_command_paths(app)?;
+    let bootstrap_fd = bootstrap_read.as_raw_fd();
+    let mut command = Command::new(python);
+    configure_sidecar_environment(&mut command, bootstrap_fd, &sidecar_env);
+    command
+        .arg(sidecar)
+        .args(["--port", "8765", "--host", "127.0.0.1"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    unsafe {
+        command.pre_exec(move || {
+            for fd in [bootstrap_fd, asset_root_fd] {
+                if libc::fcntl(fd, libc::F_SETFD, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+            }
+            Ok(())
+        });
+    }
+    let mut child = command
+        .spawn()
+        .map_err(|_| "SIDECAR_SPAWN_FAILED".to_string())?;
+    drop(bootstrap_read);
+    drop(asset_root);
+    append_sidecar_launch_log("spawn_sidecar=ok");
+    if let Some(stdout) = child.stdout.take() {
+        std::thread::spawn(move || {
+            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                append_sidecar_launch_log(&format!("stdout {}", line));
+            }
+        });
+    }
+    if let Some(stderr) = child.stderr.take() {
+        std::thread::spawn(move || {
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                append_sidecar_launch_log(&format!("stderr {}", line));
+            }
+        });
+    }
+    Ok(child)
+}
+
+#[cfg(not(unix))]
+async fn spawn_sidecar(_app: &tauri::AppHandle) -> Result<Child, String> {
+    Err("BLOCK_PLATFORM_UNSUPPORTED".to_string())
+}
+
+fn asset_bootstrap_frame(app: &tauri::AppHandle, asset_root_fd: i32) -> Result<Vec<u8>, String> {
     let app_data_root = app
         .path()
         .app_data_dir()
@@ -297,7 +399,7 @@ fn asset_bootstrap_frame(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
         return Err("asset native build identity invalid".to_string());
     }
     let manifest_set =
-        match fs::read_to_string(resource_root.join("assets/ASSET_BUILD_CONTEXT.json")) {
+        match read_asset_root_file(asset_root_fd, "ASSET_BUILD_CONTEXT.json", 64 * 1024) {
             Ok(raw) => {
                 let value = serde_json::from_str::<serde_json::Value>(&raw)
                     .map_err(|_| "asset build context invalid".to_string())?;
@@ -342,22 +444,31 @@ fn asset_bootstrap_frame(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
                         .to_string(),
                 )
             }
-            Err(error)
-                if error.kind() == std::io::ErrorKind::NotFound && profile != "production" =>
-            {
-                None
-            }
+            Err(_) if profile != "production" => None,
             Err(_) => return Err("asset build context unavailable".to_string()),
         };
+    let trust_root = asset_trust_root::embedded_asset_trust_root().map_err(str::to_string)?;
+    let security_state = asset_trust_root::AssetSecurityState::from_root(&trust_root, false);
+    if profile == "production" {
+        security_state
+            .require_distribution()
+            .map_err(str::to_string)?;
+    }
     let payload = serde_json::json!({
         "schema_version": 1,
-        "resource_root": resource_root,
+        "asset_root_fd": asset_root_fd,
         "app_data_root": app_data_root,
         "release_profile": profile,
         "build_id": commit,
         "source_commit": commit,
         "source_tree": tree,
         "manifest_set_sha256": manifest_set,
+        "trust_root_status": trust_root.status,
+        "root_policy_sha256": trust_root.policy_sha256,
+        "trusted_keys": trust_root.keys,
+        "trust_epoch": trust_root.current_epoch,
+        "revoked_key_ids": trust_root.revoked_key_ids,
+        "security_state": security_state,
     });
     let payload =
         serde_json::to_vec(&payload).map_err(|_| "asset bootstrap encode failed".to_string())?;
@@ -389,6 +500,41 @@ Pages purgeable: 2.\n";
         assert_eq!(parse_vm_stat_available_bytes("Pages active: 900.\n"), None);
         assert_eq!(parse_positive_u64("0"), None);
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_launcher_clears_poisoned_parent_environment() {
+        let mut command = Command::new("/usr/bin/env");
+        command
+            .env(concat!("PYTEST_", "CURRENT_TEST"), "attacker")
+            .env(concat!("HELPER1_", "SDK_PATH"), "/attacker")
+            .env(concat!("BGE_M3_", "MODEL_DIR"), "/attacker")
+            .env("PATH", "/attacker")
+            .env("PYTHONPATH", "/attacker")
+            .env("LD_PRELOAD", "/attacker")
+            .env("DYLD_INSERT_LIBRARIES", "/attacker");
+        configure_sidecar_environment(
+            &mut command,
+            17,
+            &[(
+                "BUTLER_APP_DATA_DIR".to_string(),
+                "/private/app".to_string(),
+            )],
+        );
+        let output = command.output().expect("absolute env command runs");
+        assert!(output.status.success());
+        let actual = String::from_utf8(output.stdout).expect("env output is utf8");
+        let rows: std::collections::BTreeSet<&str> = actual.lines().collect();
+        assert_eq!(
+            rows,
+            std::collections::BTreeSet::from([
+                "BUTLER_APP_DATA_DIR=/private/app",
+                "BUTLER_BOOTSTRAP_FD=17",
+                "LANG=C.UTF-8",
+                "LC_ALL=C.UTF-8",
+            ])
+        );
+    }
 }
 
 #[tauri::command]
@@ -419,6 +565,23 @@ fn get_sidecar_capability_token(app: tauri::AppHandle) -> Result<String, String>
     Ok(trimmed)
 }
 
+#[tauri::command]
+fn get_asset_security_state() -> Result<asset_trust_root::AssetSecurityState, String> {
+    asset_trust_root::current_asset_security_state(false).map_err(str::to_string)
+}
+
+#[tauri::command]
+fn authorize_asset_external_handoff() -> Result<(), String> {
+    let state = get_asset_security_state()?;
+    state.require_external_handoff().map_err(str::to_string)
+}
+
+#[tauri::command]
+fn authorize_asset_auto_update() -> Result<(), String> {
+    let state = get_asset_security_state()?;
+    state.require_auto_update().map_err(str::to_string)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -436,28 +599,13 @@ pub fn run() {
             let authority = runtime_trust::initialize_authority().map_err(std::io::Error::other)?;
             app.manage(authority);
             let app_handle = app.handle().clone();
-            tauri::async_runtime::block_on(async move {
-                match spawn_sidecar(&app_handle).await {
-                    Ok(Some(child)) => {
-                        // 명시적 블록으로 MutexGuard를 state보다 먼저 drop
-                        {
-                            let state = app_handle.state::<SidecarState>();
-                            *state.child.lock().unwrap() = Some(child);
-                        }
-                        println!("[main] sidecar 시작 완료 (포트 8765)");
-                    }
-                    Ok(None) => {
-                        append_sidecar_launch_log("setup_spawn_sidecar=external");
-                        println!("[main] 외부 sidecar 사용 모드 (BUTLER_SIDECAR_EXTERNAL=1)");
-                    }
-                    Err(e) => {
-                        append_sidecar_launch_log(&format!("setup_spawn_sidecar=failed {}", e));
-                        eprintln!("[main] sidecar 시작 실패: {}", e);
-                        eprintln!("[main] Python3 및 의존성 설치를 확인하세요.");
-                        eprintln!("[main] 가이드: docs/beta/getting_started_v1.md 1.4-1.5절");
-                    }
-                }
-            });
+            let child = tauri::async_runtime::block_on(spawn_sidecar(&app_handle))
+                .map_err(std::io::Error::other)?;
+            {
+                let state = app_handle.state::<SidecarState>();
+                *state.child.lock().unwrap() = Some(child);
+            }
+            append_sidecar_launch_log("setup_spawn_sidecar=ok");
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -470,6 +618,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_sidecar_capability_token,
+            get_asset_security_state,
+            authorize_asset_external_handoff,
+            authorize_asset_auto_update,
             build_identity::get_native_build_context_digest,
             build_identity::get_native_release_distribution,
             runtime_trust::commands::verify_and_commit_trust_update,

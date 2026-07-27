@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 import importlib
-import importlib.util
-import os
 import re
-import sys
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Any
 
 from .actual_contracts import assert_persistable_digest_only, sha256_text, stable_json_digest
@@ -27,12 +23,6 @@ from .real_grounding import (
     ground_claims,
     summarize_grounding,
 )
-
-HELPER4_SDK_PATH_ENV = "BUTLER_HELPER4_GROUNDING_SDK_PATH"
-HELPER7_SDK_PATH_ENV = "BUTLER_HELPER7_TABLE_FIGURE_SDK_PATH"
-HELPER8_SDK_PATH_ENV = "BUTLER_HELPER8_COMPANY_STYLE_SDK_PATH"
-HELPER2_SDK_PATH_ENV = "BUTLER_HELPER2_EMBEDDING_SDK_PATH"
-BGE_M3_MODEL_DIR_ENV = "BUTLER_BGE_M3_MODEL_DIR"
 
 @dataclass(frozen=True)
 class DigestOnlyReceipt:
@@ -233,40 +223,8 @@ class StyledDraft:
         assert_persistable_digest_only(payload)
         return payload
 
-def _import_from_env(path_env: str, module_name: str):
-    # Direct file-path SDK overrides are test-only. Production imports the
-    # signed package module and cannot select executable code through env.
-    path = (
-        os.environ.get(path_env)
-        if os.environ.get("PYTEST_CURRENT_TEST")
-        else None
-    )
-    if path:
-        p = Path(path)
-        if p.is_file():
-            # Import from an exact file path without persisting or logging it.
-            spec = importlib.util.spec_from_file_location(module_name, str(p))
-            if spec and spec.loader:
-                module = importlib.util.module_from_spec(spec)
-                previous_module = sys.modules.get(module_name)
-                sys.modules[module_name] = module
-                try:
-                    spec.loader.exec_module(module)  # type: ignore[union-attr]
-                except Exception:
-                    if previous_module is None:
-                        sys.modules.pop(module_name, None)
-                    else:
-                        sys.modules[module_name] = previous_module
-                    raise
-                return module
-        elif p.is_dir():
-            sys.path.insert(0, str(p))
-    # 박스 3 helper SDK 통합 v1.3 (2026-06-04, PR #779): 단일 경로 SSOT — env 미지정 시
-    # cards/box3/sdk/* 캐노니컬 subpackage 를 우선 사용한다 (CODEX src/ 병렬 봉합 0).
-    try:
-        return importlib.import_module(f"butler_pc_core.cards.box3.sdk.{module_name}")
-    except ImportError:
-        return importlib.import_module(module_name)
+def _import_canonical_sdk(module_name: str):
+    return importlib.import_module(f"butler_pc_core.cards.box3.sdk.{module_name}")
 
 class HelperSdkBridge:
     """Single server-local bridge for helper7 parse, helper4 grounding, helper8 style.
@@ -274,38 +232,48 @@ class HelperSdkBridge:
     All raw text stays inside runtime objects. Persistable outputs are digest/count/verdict/fail_class only.
     """
 
-    def __init__(self, *, allow_rule_proxy_for_tests: bool = False):
-        self.allow_rule_proxy_for_tests = allow_rule_proxy_for_tests
-        self._helper7 = None
-        self._helper4 = None
-        self._helper8 = None
-        self._helper2 = None
-        self._embedder_provider: str | None = None
+    def __init__(
+        self,
+        *,
+        helper7: Any | None = None,
+        helper4: Any | None = None,
+        helper8: Any | None = None,
+        helper2: Any | None = None,
+        allow_rule_proxy: bool = False,
+    ):
+        self.allow_rule_proxy = allow_rule_proxy
+        self._helper7 = helper7
+        self._helper4 = helper4
+        self._helper8 = helper8
+        self._helper2 = helper2
+        self._embedder_provider: str | None = (
+            "helper2_sdk" if helper2 is not None else None
+        )
 
     @classmethod
     def from_env(cls) -> "HelperSdkBridge":
-        return cls(allow_rule_proxy_for_tests=os.environ.get("BUTLER_BOX3_ALLOW_TEST_RULE_PROXY") == "1")
+        return cls()
 
     def _load_helper7(self):
         if self._helper7 is None:
-            self._helper7 = _import_from_env(HELPER7_SDK_PATH_ENV, "helper7_table_figure_sdk")
+            self._helper7 = _import_canonical_sdk("helper7_table_figure_sdk")
         return self._helper7
 
     def _load_helper4(self):
         if self._helper4 is None:
-            self._helper4 = _import_from_env(HELPER4_SDK_PATH_ENV, "helper4_grounding_sdk")
+            self._helper4 = _import_canonical_sdk("helper4_grounding_sdk")
         return self._helper4
 
     def _load_helper8(self):
         if self._helper8 is None:
-            self._helper8 = _import_from_env(HELPER8_SDK_PATH_ENV, "helper8_company_style_sdk")
+            self._helper8 = _import_canonical_sdk("helper8_company_style_sdk")
         return self._helper8
 
     def _load_embedder(self):
         if self._helper2 is not None:
             return self._helper2, self._embedder_provider
         try:
-            module = _import_from_env(HELPER2_SDK_PATH_ENV, "helper2_embedding_sdk")
+            module = _import_canonical_sdk("helper2_embedding_sdk")
             # 박스 3 v1.3 real activation (2026-06-04): module 이 .embed() 직접 노출하지 않고
             # Helper2Embedder/Embedder 클래스만 노출하는 경우, 자동으로 인스턴스화 (digest-only).
             embedder_obj = module
@@ -319,16 +287,6 @@ class HelperSdkBridge:
             self._embedder_provider = "helper2_sdk"
             return self._helper2, self._embedder_provider
         except Exception:
-            bge = (
-                os.environ.get(BGE_M3_MODEL_DIR_ENV)
-                if os.environ.get("PYTEST_CURRENT_TEST")
-                else None
-            )
-            if bge:
-                self._embedder_provider = "bge_m3"
-                # BGE-M3 fallback is explicit and must be disclosed; this object is a capability marker only.
-                self._helper2 = {"provider": "bge_m3", "model_dir_digest": sha256_text(bge)}
-                return self._helper2, self._embedder_provider
             return None, None
 
     def parse_evidence(self, reference_payload: list[str]) -> EvidenceBundle:
@@ -391,7 +349,7 @@ class HelperSdkBridge:
         try:
             helper4 = self._load_helper4()
         except Exception:
-            if not self.allow_rule_proxy_for_tests:
+            if not self.allow_rule_proxy:
                 summary = summarize_grounding([])
                 receipt = DigestOnlyReceipt("box3.helper_sdk.receipt.v1_2", request_digest, "helper4_grounding", {}, "partial", PARTIAL_HELPER_SDK_UNAVAILABLE)
                 return GroundingBundle([], summary, provider, PARTIAL_HELPER_SDK_UNAVAILABLE, receipt)

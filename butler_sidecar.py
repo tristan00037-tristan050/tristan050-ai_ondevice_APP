@@ -115,15 +115,13 @@ _SHARED_LLM: LlmRuntime | None = None
 _LLM_INIT_LOCK = threading.Lock()
 _MODEL_TIER_RUNTIME_MONITOR: RuntimeStateMonitor | None = None
 _MODEL_TIER_DEVICE_SAMPLER: DeviceProfileSampler | None = None
-_SHARED_LLM_ASSET_LEASE = None
-_SHARED_LLM_MATERIALIZED = None
 _SHARED_LLM_ASSET_DIGEST = ""
 
 
 def _authorized_model_payload() -> dict[str, dict[str, object]]:
     return {
         "free_chat": {
-            "model_present": _SHARED_LLM_ASSET_LEASE is not None,
+            "model_present": bool(_SHARED_LLM_ASSET_DIGEST),
             "asset_digest": (
                 f"sha256:{_SHARED_LLM_ASSET_DIGEST}"
                 if _SHARED_LLM_ASSET_DIGEST
@@ -135,8 +133,6 @@ def _authorized_model_payload() -> dict[str, dict[str, object]]:
 
 
 def _new_authorized_shared_llm() -> "LlmRuntime":
-    global _SHARED_LLM_ASSET_LEASE
-    global _SHARED_LLM_MATERIALIZED
     global _SHARED_LLM_ASSET_DIGEST
     from butler_pc_core.assets import AssetError, get_asset_service
     from butler_pc_core.assets.context import get_platform_context
@@ -145,29 +141,25 @@ def _new_authorized_shared_llm() -> "LlmRuntime":
         context = get_platform_context()
         if context.manifest_set_sha256 is None:
             raise AssetError("BLOCK_MANIFEST_BINDING_MISMATCH")
-        lease = get_asset_service().acquire(
+        with get_asset_service().acquire(
             role="free_chat.model",
             purpose="free-chat-inference",
             expected_manifest_set=context.manifest_set_sha256,
             request_id=str(uuid.uuid4()),
-        )
-        materialized = lease.materialize_directory()
-        asset = lease.require("model_gguf")
-        model_path = materialized.root.joinpath(*Path(asset.entry.relative_path).parts)
-        runtime = LlmRuntime(
-            model_path=str(model_path),
-            expected_sha256=asset.snapshot_digest,
-        )
-        if runtime.status not in {"ready", "error"}:
-            materialized.close()
-            lease.close()
-            return runtime
-        _SHARED_LLM_ASSET_LEASE = lease
-        _SHARED_LLM_MATERIALIZED = materialized
-        _SHARED_LLM_ASSET_DIGEST = asset.snapshot_digest
+        ) as lease:
+            asset = lease.require("model_gguf")
+            handle = asset.duplicate_read_handle(
+                manifest_set_sha256=context.manifest_set_sha256
+            )
+            try:
+                runtime = LlmRuntime(model_handle=handle)
+            finally:
+                handle.close()
+            if runtime.status == "ready":
+                _SHARED_LLM_ASSET_DIGEST = asset.snapshot_digest
         return runtime
     except AssetError:
-        return LlmRuntime(model_path=None)
+        return LlmRuntime()
 
 
 def _init_shared_llm() -> None:
@@ -311,18 +303,21 @@ async def _real_chunk_work_isolated(
         "--chunk-idx",
         str(chunk_idx),
     ]
-    if _SHARED_LLM_ASSET_LEASE is None:
-        await _ensure_shared_llm()
-    if _SHARED_LLM_ASSET_LEASE is None or os.name == "nt":
+    runtime = await _ensure_shared_llm()
+    receipt = runtime.loaded_model_receipt
+    if receipt is None or os.name == "nt":
         raise RuntimeError("ASSET_AUTHORITY_UNAVAILABLE")
-    model_handle = _SHARED_LLM_ASSET_LEASE.require("model_gguf").open()
-    model_digest = _SHARED_LLM_ASSET_LEASE.require("model_gguf").snapshot_digest
+    model_handle = runtime.duplicate_verified_handle()
     cmd.extend(
         [
             "--model-fd",
-            str(model_handle.fileno()),
+            str(model_handle.fd),
             "--model-sha256",
-            model_digest,
+            receipt.asset_sha256,
+            "--model-size",
+            str(receipt.mapped_length),
+            "--manifest-set-sha256",
+            receipt.manifest_set_sha256,
         ]
     )
     try:
@@ -330,8 +325,8 @@ async def _real_chunk_work_isolated(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent)},
-            pass_fds=(model_handle.fileno(),),
+            env={"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
+            pass_fds=(model_handle.fd,),
         )
     finally:
         model_handle.close()
@@ -515,17 +510,13 @@ if _FASTAPI_AVAILABLE:
 
     @app.on_event("shutdown")
     async def _shutdown_clear_token():
-        global _SHARED_LLM_ASSET_LEASE
-        global _SHARED_LLM_MATERIALIZED
+        global _SHARED_LLM
         shutdown_home_store()
         _stop_model_tier_phase0_shadow()
         _TOKEN_MANAGER.clear()
-        if _SHARED_LLM_MATERIALIZED is not None:
-            _SHARED_LLM_MATERIALIZED.close()
-            _SHARED_LLM_MATERIALIZED = None
-        if _SHARED_LLM_ASSET_LEASE is not None:
-            _SHARED_LLM_ASSET_LEASE.close()
-            _SHARED_LLM_ASSET_LEASE = None
+        if _SHARED_LLM is not None:
+            _SHARED_LLM.close()
+            _SHARED_LLM = None
 
     @app.middleware("http")
     async def _capability_token_middleware(request, call_next):
@@ -647,7 +638,7 @@ if _FASTAPI_AVAILABLE:
     @app.on_event("startup")
     async def _startup_load_model():
         """sidecar 기동 시 모델 로드 + 결과 eviction 태스크 등록."""
-        assert_main_not_box3()
+        assert_main_not_box3(_authorized_model_payload())
         loop = asyncio.get_running_loop()
         loop.run_in_executor(None, _init_shared_llm)
         asyncio.create_task(_cleanup_accounting_results())
@@ -3214,13 +3205,15 @@ if __name__ == "__main__":
     )
     _args = _parser.parse_args()
 
-    if os.environ.get("BUTLER_ASSET_BOOTSTRAP_STDIN") == "1":
-        try:
-            from butler_pc_core.assets.context import read_native_bootstrap
+    try:
+        bootstrap_fd_text = os.environ.pop("BUTLER_BOOTSTRAP_FD")
+        if not bootstrap_fd_text.isdecimal():
+            raise ValueError
+        from butler_pc_core.assets.context import read_native_bootstrap_fd
 
-            read_native_bootstrap(sys.stdin)
-        except Exception:
-            raise SystemExit("ASSET_BOOTSTRAP_FAILED")
+        read_native_bootstrap_fd(int(bootstrap_fd_text))
+    except Exception:
+        raise SystemExit("ASSET_BOOTSTRAP_FAILED")
 
     if _FASTAPI_AVAILABLE:
         import uvicorn

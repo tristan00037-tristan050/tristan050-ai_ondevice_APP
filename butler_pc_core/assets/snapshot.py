@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import io
+import mmap
 import os
 import platform
-import tempfile
+import secrets
+import stat
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
 
 from .errors import AssetError, block
 
@@ -76,40 +80,105 @@ def _darwin_snapshot(
     source_fd: int, expected_size: int, authority_root: Path | None
 ) -> SnapshotResult:
     if authority_root is None:
-        authority_root = Path(tempfile.gettempdir()) / "butler-asset-authority"
-    root = authority_root / "asset-snapshots"
-    root.mkdir(mode=0o700, parents=True, exist_ok=True)
-    root.chmod(0o700)
-    write_fd, name = tempfile.mkstemp(prefix=".snapshot-", dir=root)
+        raise block("BLOCK_SNAPSHOT_CREATE_FAILED")
+    root_fd = -1
+    object_root_fd = -1
+    write_fd = -1
     readonly_fd = -1
+    object_name = f".asset-{secrets.token_hex(24)}"
     try:
-        os.fchmod(write_fd, 0o400)
+        root_fd = os.open(
+            authority_root,
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+        )
+        try:
+            os.mkdir(".asset-objects", mode=0o700, dir_fd=root_fd)
+        except FileExistsError:
+            pass
+        object_root_fd = os.open(
+            ".asset-objects",
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=root_fd,
+        )
+        root_info = os.fstat(object_root_fd)
+        if (
+            not stat.S_ISDIR(root_info.st_mode)
+            or root_info.st_uid != os.getuid()
+            or stat.S_IMODE(root_info.st_mode) != 0o700
+        ):
+            raise block("BLOCK_SNAPSHOT_CREATE_FAILED")
+        write_fd = os.open(
+            object_name,
+            os.O_RDWR
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+            dir_fd=object_root_fd,
+        )
+        created = os.fstat(write_fd)
+        if (
+            not stat.S_ISREG(created.st_mode)
+            or created.st_uid != os.getuid()
+            or created.st_nlink != 1
+            or stat.S_IMODE(created.st_mode) != 0o600
+        ):
+            raise block("BLOCK_SNAPSHOT_CREATE_FAILED")
+        readonly_fd = os.open(
+            object_name,
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=object_root_fd,
+        )
+        opened = os.fstat(readonly_fd)
+        if (
+            created.st_dev,
+            created.st_ino,
+            created.st_nlink,
+        ) != (
+            opened.st_dev,
+            opened.st_ino,
+            opened.st_nlink,
+        ):
+            raise block("BLOCK_SNAPSHOT_SEAL_FAILED")
+        # Remove the namespace entry before the first asset byte is copied.
+        # The verified object is therefore never available through a path.
+        os.unlink(object_name, dir_fd=object_root_fd)
+        if os.fstat(write_fd).st_nlink != 0:
+            raise block("BLOCK_SNAPSHOT_SEAL_FAILED")
         size, digest = _copy(source_fd, write_fd, expected_size)
         before = os.fstat(write_fd)
-        readonly_fd = os.open(
-            name,
-            os.O_RDONLY
-            | getattr(os, "O_CLOEXEC", 0)
-            | getattr(os, "O_NOFOLLOW", 0),
-        )
         after = os.fstat(readonly_fd)
         if (
             before.st_dev,
             before.st_ino,
             before.st_size,
+            before.st_nlink,
         ) != (
             after.st_dev,
             after.st_ino,
             after.st_size,
+            after.st_nlink,
         ):
             raise block("BLOCK_SNAPSHOT_SEAL_FAILED")
-        os.unlink(name)
         os.close(write_fd)
         write_fd = -1
+        try:
+            os.write(readonly_fd, b"x")
+        except OSError:
+            pass
+        else:
+            raise block("BLOCK_SNAPSHOT_SEAL_FAILED")
         os.lseek(readonly_fd, 0, os.SEEK_SET)
-        return SnapshotResult(
-            readonly_fd, digest, size, "macos_authority_store"
-        )
+        return SnapshotResult(readonly_fd, digest, size, "macos_native_mapping")
     except Exception:
         if readonly_fd >= 0:
             os.close(readonly_fd)
@@ -117,10 +186,14 @@ def _darwin_snapshot(
     finally:
         if write_fd >= 0:
             os.close(write_fd)
-        try:
-            os.unlink(name)
-        except OSError:
-            pass
+        if object_root_fd >= 0:
+            try:
+                os.unlink(object_name, dir_fd=object_root_fd)
+            except OSError:
+                pass
+            os.close(object_root_fd)
+        if root_fd >= 0:
+            os.close(root_fd)
 
 
 def create_sealed_snapshot(
@@ -139,13 +212,22 @@ def create_sealed_snapshot(
     raise block("BLOCK_PLATFORM_UNSUPPORTED")
 
 
-def digest_fd(fd: int) -> str:
+def open_read_view(fd: int, *, size: int, seal_type: str) -> BinaryIO:
+    if seal_type == "darwin_posix_shm_readonly":
+        if size == 0:
+            return io.BytesIO()
+        return mmap.mmap(fd, size, flags=mmap.MAP_SHARED, prot=mmap.PROT_READ)
+    duplicate = os.dup(fd)
+    os.lseek(duplicate, 0, os.SEEK_SET)
+    return os.fdopen(duplicate, "rb", closefd=True)
+
+
+def digest_fd(fd: int, *, size: int, seal_type: str) -> str:
     digest = hashlib.sha256()
-    os.lseek(fd, 0, os.SEEK_SET)
-    while True:
-        chunk = os.read(fd, COPY_CHUNK_BYTES)
-        if not chunk:
-            break
-        digest.update(chunk)
-    os.lseek(fd, 0, os.SEEK_SET)
+    with open_read_view(fd, size=size, seal_type=seal_type) as stream:
+        while True:
+            chunk = stream.read(COPY_CHUNK_BYTES)
+            if not chunk:
+                break
+            digest.update(chunk)
     return digest.hexdigest()

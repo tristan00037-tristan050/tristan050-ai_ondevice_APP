@@ -10,20 +10,14 @@ LLM 런타임 — llama-cpp-python 래퍼 (설치 안 됐으면 stub 응답).
 """
 from __future__ import annotations
 
-import hashlib
 import os
-import secrets
 import threading
-from pathlib import Path
 from typing import Any, Iterator
 
+from butler_pc_core.assets import LoadedModelReceipt, NativeReadHandle
 from butler_pc_core.runtime.json_grammar import normalize_model_response_to_text
+from .verified_model_loader import VerifiedLlamaLoader, VerifiedLlamaSession
 
-try:
-    from llama_cpp import Llama  # type: ignore[import]
-    _LLAMA_AVAILABLE = True
-except ImportError:
-    _LLAMA_AVAILABLE = False
 
 # Qwen3 + 범용 stop token — [/S] 미설정 시 할루시네이션 루프 발생
 DEFAULT_STOP_TOKENS: list[str] = [
@@ -50,64 +44,41 @@ class LlmRuntime:
 
     def __init__(
         self,
-        model_path: str | None = None,
-        expected_sha256: str | None = None,
+        model_handle: NativeReadHandle | None = None,
+        loader: VerifiedLlamaLoader | None = None,
         n_ctx: int = 4096,
         n_threads: int = 0,
+        *,
+        model_path: str | None = None,
     ) -> None:
-        self._model_path = model_path
-        self._expected_sha256 = expected_sha256
+        if model_path is not None:
+            raise TypeError("BLOCK_LOADER_AUTHORITY_REQUIRED")
+        self._model_handle = model_handle
+        self._loader = loader or VerifiedLlamaLoader()
         self._n_ctx = n_ctx
         self._n_threads = n_threads or max(1, (os.cpu_count() or 2) - 1)
-        self._llm: "Llama | None" = None
+        self._session: VerifiedLlamaSession | None = None
+        self._llm: Any | None = None
         self._status: str = "no_model"
         self._last_error: str = ""
         self._lock = threading.Lock()
 
-        if model_path:
+        if model_handle is not None:
             self._load()
 
     # ------------------------------------------------------------------
     def _load(self) -> None:
-        p = Path(self._model_path or "")
-        if not p.exists():
+        if self._model_handle is None:
             self._status = "no_model"
             return
-        if (
-            not isinstance(self._expected_sha256, str)
-            or len(self._expected_sha256) != 64
-            or any(ch not in "0123456789abcdef" for ch in self._expected_sha256)
-        ):
-            self._status = "error"
-            self._last_error = "BLOCK_LOADER_AUTHORITY_REQUIRED"
-            return
-        measured = hashlib.sha256()
-        try:
-            with p.open("rb") as handle:
-                while chunk := handle.read(8 * 1024 * 1024):
-                    measured.update(chunk)
-        except OSError:
-            self._status = "error"
-            self._last_error = "BLOCK_LOADER_INPUT_UNREADABLE"
-            return
-        if not secrets.compare_digest(measured.hexdigest(), self._expected_sha256):
-            self._status = "error"
-            self._last_error = "BLOCK_LOADER_INPUT_DIGEST_MISMATCH"
-            return
-
-        if not _LLAMA_AVAILABLE:
-            self._status = "error"
-            self._last_error = "llama-cpp-python 미설치 — pip install llama-cpp-python"
-            return
-
         self._status = "loading"
         try:
-            self._llm = Llama(
-                model_path=str(p),
+            self._session = self._loader.load_from_verified_handle(
+                self._model_handle,
                 n_ctx=self._n_ctx,
                 n_threads=self._n_threads,
-                verbose=False,
             )
+            self._llm = self._session.backend
             self._status = "ready"
         except Exception as exc:
             self._status = "error"
@@ -122,12 +93,31 @@ class LlmRuntime:
     def last_error(self) -> str:
         return self._last_error
 
-    def reload(self, model_path: str, *, expected_sha256: str | None = None) -> None:
+    @property
+    def loaded_model_receipt(self) -> LoadedModelReceipt | None:
+        return self._session.receipt if self._session is not None else None
+
+    def duplicate_verified_handle(self) -> NativeReadHandle:
+        if self._session is None:
+            raise RuntimeError("BLOCK_LOADER_AUTHORITY_REQUIRED")
+        return self._session._handle.duplicate()
+
+    def reload(self, model_handle: NativeReadHandle) -> None:
         with self._lock:
-            self._model_path = model_path
-            self._expected_sha256 = expected_sha256
+            if self._session is not None:
+                self._session.close()
+            self._model_handle = model_handle
+            self._session = None
             self._llm = None
             self._load()
+
+    def close(self) -> None:
+        with self._lock:
+            if self._session is not None:
+                self._session.close()
+            self._session = None
+            self._llm = None
+            self._status = "no_model"
 
     def _reset_llama_kv_cache(self) -> bool:
         if self._llm is None:
@@ -165,6 +155,12 @@ class LlmRuntime:
             output = self._llm(prompt, **call_kwargs)
         text = normalize_model_response_to_text(output).strip()
         return _strip_residual_stop_tokens(text)
+
+    def create_chat_completion(self, **kwargs: Any) -> Any:
+        if self._status != "ready" or self._llm is None:
+            raise RuntimeError("BLOCK_LOADER_AUTHORITY_REQUIRED")
+        with self._lock:
+            return self._llm.create_chat_completion(**kwargs)
 
     def generate_stream(
         self,

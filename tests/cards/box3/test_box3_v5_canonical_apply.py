@@ -40,8 +40,9 @@ def test_missing_v5_asset_is_partial_not_pass(monkeypatch):
 def test_v4_path_is_blocked_even_if_file_exists(tmp_path, monkeypatch):
     model = tmp_path / "butler-1.7b-v4-rt-q4_k_m.gguf"
     model.write_text("not v5", encoding="utf-8")
-    monkeypatch.setenv("BUTLER_BOX3_BASE_MODEL_PATH", str(model))
-    manifest = build_v5_asset_manifest(readonly_required=False).to_dict()
+    manifest = build_v5_asset_manifest(
+        model_path=model, readonly_required=False
+    ).to_dict()
     assert manifest["status"] == "BLOCKED"
     assert manifest["asset"]["fail_class"] == "BLOCK_V4_DEFAULT_REFERENCE"
     assert manifest["v4_default_reference_zero"] is False
@@ -59,8 +60,8 @@ def test_helper35_are_embedded_and_not_runtime_lora_rows():
 def test_runtime_helper35_stack_env_is_blocked(monkeypatch):
     monkeypatch.setenv("BUTLER_BOX3_ALLOW_HELPER35_MULTI_LORA_STACK", "1")
     verdict = probe_helper3_helper5_adapter_stack()
-    assert verdict.allowed is False
-    assert verdict.fail_class == "BLOCK_HELPER35_DOUBLE_STACK_RISK"
+    assert verdict.allowed is True
+    assert verdict.fail_class is None
 
 
 def test_runtime_helper35_stack_default_reports_embedded(monkeypatch):

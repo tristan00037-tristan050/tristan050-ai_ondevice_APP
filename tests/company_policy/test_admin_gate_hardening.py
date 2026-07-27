@@ -11,7 +11,6 @@ from butler_pc_core.company_policy import admin_auth
 from butler_pc_core.company_fact.storage import CompanyFactStore
 from butler_pc_core.company_policy.admin_auth import (
     AdminAuthError,
-    TEST_ADMIN_AUTH_ENV,
     ZERO_DIGEST,
     _verify_admin_context_base,
     admin_error_payload,
@@ -68,9 +67,7 @@ def test_verify_admin_context_rejects_placeholder_zero_digest(field: str):
     _assert_error_is_raw_zero(raised.value)
 
 
-def test_verify_admin_context_rejects_test_only_without_local_opt_in(monkeypatch):
-    monkeypatch.delenv(TEST_ADMIN_AUTH_ENV, raising=False)
-
+def test_verify_admin_context_rejects_test_only_without_explicit_test_boundary():
     with pytest.raises(AdminAuthError) as raised:
         _verify_admin_context_base(_admin_context(auth_method="test_only"), operation="approve_company_fact")
 
@@ -78,17 +75,18 @@ def test_verify_admin_context_rejects_test_only_without_local_opt_in(monkeypatch
     _assert_error_is_raw_zero(raised.value)
 
 
-def test_verify_admin_context_allows_test_only_only_with_local_opt_in(monkeypatch):
-    monkeypatch.setenv(TEST_ADMIN_AUTH_ENV, "1")
-
-    verified = _verify_admin_context_base(_admin_context(auth_method="test_only"), operation="approve_company_fact")
+def test_verify_admin_context_allows_test_only_with_explicit_test_boundary():
+    verified = _verify_admin_context_base(
+        _admin_context(auth_method="test_only"),
+        operation="approve_company_fact",
+        allow_test_auth=True,
+    )
 
     assert verified.auth_method == "test_only"
 
 
-def test_verify_admin_context_rejects_test_only_when_flag_is_set_outside_pytest(monkeypatch):
-    monkeypatch.setenv(TEST_ADMIN_AUTH_ENV, "1")
-    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+def test_environment_cannot_enable_test_only_auth(monkeypatch):
+    monkeypatch.setenv("BUTLER_TEST_ADMIN_AUTH", "1")
 
     with pytest.raises(AdminAuthError) as raised:
         _verify_admin_context_base(_admin_context(auth_method="test_only"), operation="approve_company_fact")

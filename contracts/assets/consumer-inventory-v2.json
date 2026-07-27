@@ -1,0 +1,122 @@
+{
+  "schema_version": 2,
+  "consumers": [
+    {
+      "id": "verified-native-llama-loader",
+      "language": "python",
+      "source_path": "butler_pc_core/inference/verified_model_loader.py",
+      "symbol": "VerifiedLlamaLoader.load_from_verified_handle",
+      "asset_role": "model.gguf",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_all_language_loaders_are_inventoried"
+    },
+    {
+      "id": "shared-llm-runtime",
+      "language": "python",
+      "source_path": "butler_pc_core/inference/llm_runtime.py",
+      "symbol": "LlmRuntime._load",
+      "asset_role": "free_chat.model",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_authority_block_means_zero_loader_invocations"
+    },
+    {
+      "id": "free-chat-sidecar-owner",
+      "language": "python",
+      "source_path": "butler_sidecar.py",
+      "symbol": "_new_authorized_shared_llm",
+      "asset_role": "free_chat.model",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_authority_block_means_zero_loader_invocations"
+    },
+    {
+      "id": "free-chat-worker-handle",
+      "language": "python",
+      "source_path": "butler_pc_core/inference/chunk_worker.py",
+      "symbol": "main",
+      "asset_role": "free_chat.model",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_authority_block_means_zero_loader_invocations"
+    },
+    {
+      "id": "box3-actual-loader",
+      "language": "python",
+      "source_path": "butler_pc_core/cards/box3/local_sealed_runner.py",
+      "symbol": "build_local_sealed_real_runner",
+      "asset_role": "box3.model",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_authority_block_means_zero_loader_invocations"
+    },
+    {
+      "id": "box3-legacy-loader",
+      "language": "python",
+      "source_path": "butler_pc_core/cards/box3/local_real_runner.py",
+      "symbol": "build_box3_local_real_runner",
+      "asset_role": "box3.model",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_authority_block_means_zero_loader_invocations"
+    },
+    {
+      "id": "box3-governance-consumer",
+      "language": "python",
+      "source_path": "butler_pc_core/cards/box3/endpoint_wiring.py",
+      "symbol": "_read_authorized_json",
+      "asset_role": "box3.governance",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_authority_block_means_zero_loader_invocations"
+    },
+    {
+      "id": "box2-real-loader",
+      "language": "python",
+      "source_path": "butler_pc_core/cards/box2/real_load_smoke.py",
+      "symbol": "load_real_model_chain",
+      "asset_role": "box2.adapter",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_authority_block_means_zero_loader_invocations"
+    },
+    {
+      "id": "accounting-peft-loader",
+      "language": "python",
+      "source_path": "butler_pc_core/accounting/ft_classifier.py",
+      "symbol": "load_peft",
+      "asset_role": "accounting.adapter",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_authority_block_means_zero_loader_invocations"
+    },
+    {
+      "id": "helper1-search-consumer",
+      "language": "python",
+      "source_path": "butler_pc_core/helper1/memory_helper.py",
+      "symbol": "find",
+      "asset_role": "helper1.search",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_authority_block_means_zero_loader_invocations"
+    },
+    {
+      "id": "ip3-model-consumer",
+      "language": "python",
+      "source_path": "butler_pc_core/model_registry/ip3_model_registry.py",
+      "symbol": "physical_model_probe",
+      "asset_role": "ip3.model",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_authority_block_means_zero_loader_invocations"
+    },
+    {
+      "id": "semantic-mapping-consumer",
+      "language": "python",
+      "source_path": "butler_pc_core/semantic_mapping/llm_corrector.py",
+      "symbol": "correct_mapping",
+      "asset_role": "semantic_mapping.model",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_consumer_inventory.py::test_authority_block_means_zero_loader_invocations"
+    },
+    {
+      "id": "native-launcher-bootstrap",
+      "language": "rust",
+      "source_path": "butler-desktop/src-tauri/src/lib.rs",
+      "symbol": "spawn_sidecar",
+      "asset_role": "asset.bootstrap",
+      "authority_api": "AssetAuthority.acquire",
+      "test_node_id": "tests/assets/test_child_environment.py::test_native_launcher_clears_poisoned_parent_environment"
+    }
+  ]
+}

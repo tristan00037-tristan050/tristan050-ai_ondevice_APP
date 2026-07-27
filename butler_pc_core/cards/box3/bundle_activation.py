@@ -2,22 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 V9_2_R2B_MODEL_NAME = "butler-1.7b-v9-2-r2b-q4_k_m.gguf"
 V9_2_R2B_Q4_SHA256_FULL = "aae4ea7a4ebe0586db3317d5209b5565abcd326ea73decb7ffa99f433c218847"
-
-ENV_BOX3_MODEL = "BUTLER_BOX3_V9_Q4_MODEL_PATH"
-ENV_HELPER4 = "BUTLER_HELPER4_GROUNDING_SDK_PATH"
-ENV_HELPER7 = "BUTLER_HELPER7_TABLE_FIGURE_SDK_PATH"
-ENV_HELPER8 = "BUTLER_HELPER8_COMPANY_STYLE_SDK_PATH"
-ENV_HELPER2 = "BUTLER_HELPER2_EMBEDDING_SDK_PATH"
-ENV_HUMAN_APPROVAL = "BUTLER_BOX3_HUMAN_APPROVAL_CONFIG_PATH"
-ENV_HELPER_GUARD = "BUTLER_BOX3_HELPER_COMPONENT_GUARD_PATH"
-ENV_FIXED_EVAL = "BUTLER_BOX3_FIXED_EVAL_REPORT_PATH"
 
 FORBIDDEN_HELPER35_MARKERS = ("helper3", "helper5", "format_adapter", "tool_call_adapter")
 
@@ -51,19 +41,23 @@ class Box3BundleActivationReport:
         return data
 
 
+@dataclass(frozen=True)
+class BundleActivationInputs:
+    model_path: Path | None = None
+    models_root: Path | None = None
+    helper_sdk_paths: tuple[Path, ...] = ()
+    helper2_embedding_path: Path | None = None
+    human_approval_path: Path | None = None
+    helper_guard_path: Path | None = None
+    fixed_eval_path: Path | None = None
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _path_from_env(key: str) -> Path | None:
-    value = os.environ.get(key, "").strip()
-    if not value:
-        return None
-    return Path(value)
 
 
 def _safe_exists(path: Path | None) -> bool:
@@ -89,8 +83,7 @@ def _load_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def _check_model() -> CheckResult:
-    path = _path_from_env(ENV_BOX3_MODEL)
+def _check_model(path: Path | None) -> CheckResult:
     if not _safe_exists(path):
         return CheckResult("model_sha", False, "BOX3_V9_MODEL_MISSING")
     if not path or path.name != V9_2_R2B_MODEL_NAME:
@@ -106,14 +99,15 @@ def _check_model() -> CheckResult:
     return CheckResult("model_sha", True, details={"sha256_full": measured, "model_name": path.name})
 
 
-def _check_helper35_stack_zero() -> CheckResult:
-    model_path = _path_from_env(ENV_BOX3_MODEL)
+def _check_helper35_stack_zero(
+    model_path: Path | None,
+    models_root: Path | None,
+) -> CheckResult:
     roots = []
     if model_path is not None:
         roots.append(model_path.parent)
-    resource_hint = Path(os.environ.get("BUTLER_BOX3_MODELS_DIR", "") or "")
-    if str(resource_hint):
-        roots.append(resource_hint)
+    if models_root is not None:
+        roots.append(models_root)
     offenders: list[str] = []
     for root in roots:
         if not _safe_exists(root):
@@ -130,12 +124,19 @@ def _check_helper35_stack_zero() -> CheckResult:
     return CheckResult("helper35_runtime_stack_zero", True)
 
 
-def _check_helper_sdk_paths(repo_root: Path) -> CheckResult:
-    missing: list[str] = []
+def _check_helper_sdk_paths(
+    paths: tuple[Path, ...],
+    repo_root: Path,
+) -> CheckResult:
+    missing: list[str] = (
+        [f"helper_sdk_{index}" for index in range(len(paths), 3)]
+        if len(paths) < 3
+        else []
+    )
     non_internal: list[str] = []
     forbidden_names: list[str] = []
-    for key in (ENV_HELPER4, ENV_HELPER7, ENV_HELPER8):
-        path = _path_from_env(key)
+    for index, path in enumerate(paths):
+        key = f"helper_sdk_{index}"
         if not _safe_exists(path):
             missing.append(key)
             continue
@@ -155,15 +156,13 @@ def _check_helper_sdk_paths(repo_root: Path) -> CheckResult:
     return CheckResult("helper_sdk_repo_internal", True)
 
 
-def _check_helper2_embedding() -> CheckResult:
-    path = _path_from_env(ENV_HELPER2)
+def _check_helper2_embedding(path: Path | None) -> CheckResult:
     if not _safe_exists(path):
         return CheckResult("helper2_embedding", False, "HELPER2_EMBEDDING_ASSET_MISSING")
     return CheckResult("helper2_embedding", True, details={"kind": "directory" if path and path.is_dir() else "file"})
 
 
-def _check_json_path_env(key: str, name: str) -> CheckResult:
-    path = _path_from_env(key)
+def _check_json_path(path: Path | None, name: str) -> CheckResult:
     if not _safe_exists(path):
         return CheckResult(name, False, f"{name.upper()}_MISSING")
     assert path is not None
@@ -174,8 +173,7 @@ def _check_json_path_env(key: str, name: str) -> CheckResult:
     return CheckResult(name, True, details={"top_level_keys": sorted(value)[:12]})
 
 
-def _check_fixed_eval_report() -> CheckResult:
-    path = _path_from_env(ENV_FIXED_EVAL)
+def _check_fixed_eval_report(path: Path | None) -> CheckResult:
     if not _safe_exists(path):
         return CheckResult("fixed_eval_report", False, "FIXED_EVAL_REPORT_MISSING")
     assert path is not None
@@ -192,16 +190,21 @@ def _check_fixed_eval_report() -> CheckResult:
     return CheckResult("fixed_eval_report", True, details={"unsupported_count": unsupported, "degen_detected": degen})
 
 
-def verify_box3_bundle_activation(repo_root: Path | None = None) -> Box3BundleActivationReport:
+def verify_box3_bundle_activation(
+    repo_root: Path | None = None,
+    *,
+    inputs: BundleActivationInputs | None = None,
+) -> Box3BundleActivationReport:
     root = (repo_root or Path.cwd()).resolve()
+    supplied = inputs or BundleActivationInputs()
     checks = [
-        _check_model(),
-        _check_helper35_stack_zero(),
-        _check_helper_sdk_paths(root),
-        _check_helper2_embedding(),
-        _check_json_path_env(ENV_HUMAN_APPROVAL, "human_approval"),
-        _check_json_path_env(ENV_HELPER_GUARD, "helper_component_guard"),
-        _check_fixed_eval_report(),
+        _check_model(supplied.model_path),
+        _check_helper35_stack_zero(supplied.model_path, supplied.models_root),
+        _check_helper_sdk_paths(supplied.helper_sdk_paths, root),
+        _check_helper2_embedding(supplied.helper2_embedding_path),
+        _check_json_path(supplied.human_approval_path, "human_approval"),
+        _check_json_path(supplied.helper_guard_path, "helper_component_guard"),
+        _check_fixed_eval_report(supplied.fixed_eval_path),
     ]
     by_name = {c.name: c.passed for c in checks}
     pass_ready = all(c.passed for c in checks)

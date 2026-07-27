@@ -48,9 +48,10 @@ def test_helper1_has_no_dynamic_python_or_pickle_runtime() -> None:
 
 def test_native_launcher_writes_private_asset_bootstrap_before_sidecar_use() -> None:
     text = (ROOT / "butler-desktop/src-tauri/src/lib.rs").read_text(encoding="utf-8")
-    assert "asset_bootstrap_frame(app)?" in text
-    assert "child.write(&bootstrap)" in text
-    assert "ASSET_BOOTSTRAP_STDIN_ENV" in text
+    assert "asset_bootstrap_frame(app, asset_root_fd)?" in text
+    assert ".write_all(&bootstrap)" in text
+    assert "BUTLER_BOOTSTRAP_FD" in text
+    assert ".env_clear()" in text
     assert "payload_size.to_be_bytes()" in text
     assert 'option_env!("BUTLER_RELEASE_DISTRIBUTION") == Some("1")' in text
 

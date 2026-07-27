@@ -36,7 +36,6 @@ def cfg(tmp_path, monkeypatch):
     model = tmp_path / "model.gguf"
     model.write_bytes(b"butler-box3-test-model-bytes-7enablement")
     digest = hashlib.sha256(model.read_bytes()).hexdigest()
-    monkeypatch.setenv("BUTLER_BOX3_BASE_MODEL_PATH", str(model))
     return Box3RealRunnerConfig(
         runner_id="r1",
         model_choice="qwen3-1.7b-v4-rt",
@@ -44,6 +43,7 @@ def cfg(tmp_path, monkeypatch):
         base_model_sha256_full=digest,
         allow_test_runner=True,
         readonly_required=False,
+        test_model_path=model,
     )
 
 

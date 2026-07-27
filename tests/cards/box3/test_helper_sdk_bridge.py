@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import sys
+import importlib.util
 from pathlib import Path
 
 from butler_pc_core.cards.box3.helper_sdk_bridge import HelperSdkBridge
 
 
-def test_env_file_sdk_import_registers_module_before_dataclass_exec(tmp_path: Path, monkeypatch) -> None:
+def test_explicit_sdk_import_registers_module_before_dataclass_exec(tmp_path: Path) -> None:
     sdk_path = tmp_path / "helper7_table_figure_sdk.py"
     sdk_path.write_text(
         """
@@ -30,9 +31,13 @@ def parse_for_evidence(reference_payload):
         encoding="utf-8",
     )
     sys.modules.pop("helper7_table_figure_sdk", None)
-    monkeypatch.setenv("BUTLER_HELPER7_TABLE_FIGURE_SDK_PATH", str(sdk_path))
+    spec = importlib.util.spec_from_file_location("helper7_table_figure_sdk", sdk_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["helper7_table_figure_sdk"] = module
+    spec.loader.exec_module(module)
 
-    evidence = HelperSdkBridge().parse_evidence(["테스트 문서"])
+    evidence = HelperSdkBridge(helper7=module).parse_evidence(["테스트 문서"])
 
     assert evidence.parse_success is True
     assert evidence.fail_class is None

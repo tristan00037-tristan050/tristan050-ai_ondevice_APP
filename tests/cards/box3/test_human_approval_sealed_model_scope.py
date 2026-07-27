@@ -82,10 +82,9 @@ def test_hash_detects_path_swapped_after_hash(tmp_path, monkeypatch):
 def test_approval_path_never_uses_runtime_cache(tmp_path, monkeypatch):
     """승인 전용 identity 는 매번 full rehash — 동일 경로 내용 교체 시 digest 가 바뀐다."""
     model = _model(tmp_path, b"AAAA" * 4096)
-    monkeypatch.setenv(MI.BOX3_MODEL_PATH_ENV, str(model))
-    first = MI.get_box3_model_identity_for_approval()
+    first = MI.get_box3_model_identity_for_approval(str(model))
     model.write_bytes(b"BBBB" * 4096)
-    second = MI.get_box3_model_identity_for_approval()
+    second = MI.get_box3_model_identity_for_approval(str(model))
     assert first is not None and second is not None
     assert first.model_digest != second.model_digest
 
@@ -93,23 +92,23 @@ def test_approval_path_never_uses_runtime_cache(tmp_path, monkeypatch):
 def test_same_size_mtime_replacement_blocked(tmp_path, monkeypatch):
     """size/mtime 을 보존한 내용 교체도 model_digest 변화로 SCOPE_MISMATCH 를 만든다."""
     model = _model(tmp_path, b"AAAA" * 4096)
-    monkeypatch.setenv(MI.BOX3_MODEL_PATH_ENV, str(model))
-    approved = MI.get_box3_model_identity_for_approval()
+    approved = MI.get_box3_model_identity_for_approval(str(model))
     st = model.stat()
     swapped = b"BBBB" * 4096
     assert len(swapped) == st.st_size
     model.write_bytes(swapped)
     os.utime(model, ns=(st.st_atime_ns, st.st_mtime_ns))
     with pytest.raises(Box3SecurityError) as exc:
-        MI.assert_runtime_model_identity_matches_approval(approved)
+        MI.assert_runtime_model_identity_matches_approval(
+            approved, model_path=str(model)
+        )
     assert str(exc.value) == "APPROVED_MODEL_RUNTIME_MISMATCH"
 
 
 def test_actual_operation_rechecks_runtime_identity(tmp_path, monkeypatch):
     """런타임 loaded digest 가 승인 identity 와 다르면 재대조가 차단한다."""
     model = _model(tmp_path)
-    monkeypatch.setenv(MI.BOX3_MODEL_PATH_ENV, str(model))
-    approved = MI.get_box3_model_identity_for_approval()
+    approved = MI.get_box3_model_identity_for_approval(str(model))
 
     class RuntimeOk:
         loaded_model_sha256 = approved.model_digest

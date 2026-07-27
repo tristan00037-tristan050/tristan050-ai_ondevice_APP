@@ -54,6 +54,10 @@ async def _run_isolated(params: _TestParams, chunk_idx: int, timeout_sec: float)
         str(descriptor),
         "--model-sha256",
         hashlib.sha256(payload).hexdigest(),
+        "--model-size",
+        str(len(payload)),
+        "--manifest-set-sha256",
+        hashlib.sha256(b"authorized-test-manifest").hexdigest(),
     ]
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -242,9 +246,10 @@ def test_tauri_sidecar_spawn_writes_launch_log_without_model_path_env():
     assert "sidecar-launch.log" in text
     assert "BUTLER_MODEL_PATH" not in text
     assert "BUTLER_BOX3_V9_Q4_MODEL_PATH" not in text
-    assert "asset_bootstrap_frame(app)?" in text
-    assert "ASSET_BOOTSTRAP_STDIN_ENV" in text
-    assert ".envs(sidecar_env)" in text
+    assert "asset_bootstrap_frame(app, asset_root_fd)?" in text
+    assert "ASSET_BOOTSTRAP_FD_ENV" in text
+    assert ".env_clear()" in text
+    assert "for (name, value) in sidecar_env" in text
     assert "append_sidecar_launch_log(\"spawn_sidecar=start\")" in text
     assert "append_sidecar_launch_log(\"spawn_sidecar=ok\")" in text
     assert "fn stop_sidecar" in text

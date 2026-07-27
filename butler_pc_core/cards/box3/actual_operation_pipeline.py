@@ -266,7 +266,18 @@ def run_box3_actual_operation(
     # v1.2 §3.4: 실제 생성 직전, 승인된 model identity 와 런타임 모델을 재대조한다(TOCTOU 결속).
     if approved_model_identity is not None:
         try:
-            assert_runtime_model_identity_matches_approval(approved_model_identity, runtime=runner)
+            explicit_test_path = (
+                str(base_config.test_asset_path)
+                if base_config is not None
+                and base_config.allow_test_asset
+                and base_config.test_asset_path is not None
+                else None
+            )
+            assert_runtime_model_identity_matches_approval(
+                approved_model_identity,
+                runtime=runner,
+                model_path=explicit_test_path,
+            )
             stage_trace.append({"stage": "approved_model_runtime_recheck", "passed": True, "fail_class": None})
         except Box3SecurityError as exc:
             reason = str(exc) or APPROVED_MODEL_RUNTIME_MISMATCH

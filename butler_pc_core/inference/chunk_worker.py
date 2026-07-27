@@ -18,6 +18,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from butler_pc_core.inference.llm_runtime import LlmRuntime
 from butler_pc_core.prompts.card_renderer import render_card_user_prompt
+from butler_pc_core.assets import AssetIdentity, NativeReadHandle
 
 
 def main() -> None:
@@ -26,6 +27,8 @@ def main() -> None:
     p.add_argument("--chunk-idx", type=int, required=True)
     p.add_argument("--model-fd", type=int, required=True)
     p.add_argument("--model-sha256", required=True)
+    p.add_argument("--model-size", type=int, required=True)
+    p.add_argument("--manifest-set-sha256", required=True)
     args = p.parse_args()
 
     params: dict = json.loads(args.params)
@@ -61,15 +64,25 @@ def main() -> None:
 
     if args.model_fd < 0:
         raise SystemExit("AUTHORIZED_MODEL_HANDLE_REQUIRED")
-    descriptor_path = (
-        f"/dev/fd/{args.model_fd}"
-        if sys.platform == "darwin"
-        else f"/proc/self/fd/{args.model_fd}"
+    handle = NativeReadHandle(
+        args.model_fd,
+        identity=AssetIdentity(
+            role="model_gguf",
+            sha256=args.model_sha256,
+            size_bytes=args.model_size,
+            format="gguf",
+            manifest_set_sha256=args.manifest_set_sha256,
+        ),
+        seal_type=(
+            "darwin_posix_shm_readonly"
+            if sys.platform == "darwin"
+            else "linux_memfd"
+        ),
     )
-    llm = LlmRuntime(
-        model_path=descriptor_path,
-        expected_sha256=args.model_sha256,
-    )
+    try:
+        llm = LlmRuntime(model_handle=handle)
+    finally:
+        handle.close()
     result_text = llm.generate(prompt, max_tokens=1024)
 
     print(json.dumps({

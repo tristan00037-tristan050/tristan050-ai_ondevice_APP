@@ -90,4 +90,4 @@ def test_tauri_sidecar_does_not_inject_box3_helper_asset_paths() -> None:
     assert "BUTLER_HELPER7_TABLE_FIGURE_SDK_PATH" not in lib_rs
     assert "BUTLER_HELPER8_COMPANY_STYLE_SDK_PATH" not in lib_rs
     assert "BUTLER_HELPER2_EMBEDDING_SDK_PATH" not in lib_rs
-    assert "asset_bootstrap_frame(app)?" in lib_rs
+    assert "asset_bootstrap_frame(app, asset_root_fd)?" in lib_rs

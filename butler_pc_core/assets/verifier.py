@@ -10,7 +10,7 @@ from .contracts import AssetEntry, FileIdentity, VerifiedAsset
 from .errors import AssetError, block
 from .formats import validate_format
 from .path_policy import validate_relative_path
-from .snapshot import create_sealed_snapshot, digest_fd
+from .snapshot import create_sealed_snapshot, digest_fd, open_read_view
 
 HASH_CHUNK_BYTES = 8 * 1024 * 1024
 _OPEN_BASE_FLAGS = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
@@ -33,7 +33,7 @@ class SafeRoot:
                 raise block("SYMLINK_REJECTED")
             self._fd = os.open(root, _OPEN_BASE_FLAGS | _DIRECTORY | _NOFOLLOW)
             self._identity = FileIdentity.from_stat(os.fstat(self._fd))
-            self._authority_root = authority_root
+            self._authority_root = authority_root or root
         except AssetError:
             raise
         except OSError as exc:
@@ -42,6 +42,29 @@ class SafeRoot:
     @property
     def identity(self) -> FileIdentity:
         return self._identity
+
+    @classmethod
+    def from_fd(
+        cls,
+        fd: int,
+        *,
+        authority_root: Path | None = None,
+    ) -> "SafeRoot":
+        try:
+            duplicate = os.dup(fd)
+            info = os.fstat(duplicate)
+            if not stat.S_ISDIR(info.st_mode):
+                os.close(duplicate)
+                raise block("NOT_REGULAR_FILE")
+        except AssetError:
+            raise
+        except OSError as exc:
+            raise block("VERIFY_IO_ERROR") from exc
+        result = cls.__new__(cls)
+        result._fd = duplicate
+        result._identity = FileIdentity.from_stat(info)
+        result._authority_root = authority_root
+        return result
 
     def open_regular(self, relative_path: str) -> int:
         parts = validate_relative_path(relative_path).split("/")
@@ -67,6 +90,55 @@ class SafeRoot:
             raise block("SYMLINK_REJECTED") from exc
         finally:
             os.close(current)
+
+    def open_directory(self, relative_path: str) -> int:
+        parts = validate_relative_path(relative_path).split("/")
+        current = os.dup(self._fd)
+        try:
+            for part in parts:
+                following = os.open(
+                    part,
+                    _OPEN_BASE_FLAGS | _DIRECTORY | _NOFOLLOW,
+                    dir_fd=current,
+                )
+                os.close(current)
+                current = following
+            result = current
+            current = -1
+            return result
+        except AssetError:
+            raise
+        except OSError as exc:
+            raise block("SYMLINK_REJECTED") from exc
+        finally:
+            if current >= 0:
+                os.close(current)
+
+    def subroot(self, relative_path: str) -> "SafeRoot":
+        descriptor = self.open_directory(relative_path)
+        try:
+            return SafeRoot.from_fd(
+                descriptor,
+                authority_root=self._authority_root,
+            )
+        finally:
+            os.close(descriptor)
+
+    def list_names(self) -> tuple[str, ...]:
+        try:
+            names = os.listdir(self._fd)
+        except OSError as exc:
+            raise block("VERIFY_IO_ERROR") from exc
+        if any(
+            not isinstance(name, str)
+            or not name
+            or name in {".", ".."}
+            or "/" in name
+            or "\x00" in name
+            for name in names
+        ):
+            raise block("PATH_POLICY_VIOLATION")
+        return tuple(sorted(names))
 
     def close(self) -> None:
         if self._fd >= 0:
@@ -118,10 +190,20 @@ def verify_entry(
         snapshot_fd = snapshot.fd
         if not secrets.compare_digest(snapshot.digest, digest):
             raise block("BLOCK_SNAPSHOT_DIGEST_MISMATCH")
-        duplicate = os.dup(snapshot_fd)
-        with os.fdopen(duplicate, "rb", closefd=True) as handle:
+        with open_read_view(
+            snapshot_fd,
+            size=entry.size_bytes,
+            seal_type=snapshot.seal_type,
+        ) as handle:
             validate_format(handle, entry)
-        if not secrets.compare_digest(digest_fd(snapshot_fd), digest):
+        if not secrets.compare_digest(
+            digest_fd(
+                snapshot_fd,
+                size=entry.size_bytes,
+                seal_type=snapshot.seal_type,
+            ),
+            digest,
+        ):
             raise block("BLOCK_SNAPSHOT_DIGEST_MISMATCH")
         after = FileIdentity.from_stat(os.fstat(fd))
         if before != after:

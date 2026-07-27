@@ -6,7 +6,7 @@ import time
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from .errors import AssetError
-from .service import get_asset_service
+from .service import get_asset_service, unavailable_status_projection
 
 router = APIRouter()
 _LOCK = threading.Lock()
@@ -36,4 +36,4 @@ async def asset_status(request: Request, response: Response) -> dict[str, object
     try:
         return get_asset_service().get_cached_status()
     except AssetError:
-        return {"schema_version": 1, "overall_state": "UNAVAILABLE", "groups": []}
+        return unavailable_status_projection()

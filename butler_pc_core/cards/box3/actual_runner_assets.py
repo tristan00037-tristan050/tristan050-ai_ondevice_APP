@@ -5,7 +5,6 @@ from __future__ import annotations
 # while switching the operational default from v4/v5 to the v7 canonical q4_k_m model.
 
 import hashlib
-import os
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -21,10 +20,11 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
 from .v7_asset_manifest import verify_v7_q4_asset
 from .v7_constants import (
     BASE_MODEL_NAME,
-    BASE_MODEL_PATH_ENV,
     BASE_MODEL_SHA256_FULL,
     MODEL_LINEAGE,
     V7_F16_SHA256_FULL,
@@ -68,11 +68,18 @@ def build_helper_asset_rows() -> list[dict[str, Any]]:
     rows = []
     for name, digest in HELPER_EXPECTED_SHA.items():
         embedded = name in {"helper3_format", "helper5_tool_call"}
+        asset_reference = (
+            f"embedded_in_base_model:{BASE_MODEL_NAME}"
+            if embedded
+            else f"asset-role:box3.helpers/{name}"
+        )
         rows.append({
             "asset_name": name,
-            "path_ref": f"embedded_in_base_model:{BASE_MODEL_NAME}" if embedded else f"ref:BUTLER_{name.upper()}_PATH",
+            "path_ref": asset_reference,
             "path_digest": _sha256_text(
-                f"embedded:{name}:{BASE_MODEL_SHA256_FULL}" if embedded else f"ref:BUTLER_{name.upper()}_PATH"
+                f"embedded:{name}:{BASE_MODEL_SHA256_FULL}"
+                if embedded
+                else asset_reference
             ),
             "sha256_full": digest,
             "sha_scope": "embedded_adapter" if embedded else "file",
@@ -103,70 +110,45 @@ class BaseModelAssetVerdict:
 
 @dataclass(frozen=True)
 class ActualRunnerAssetConfig:
-    model_path_env: str = BASE_MODEL_PATH_ENV
     expected_base_sha256_full: str = BASE_MODEL_SHA256_FULL
     expected_model_format: str = "GGUF"
     readonly_required: bool = True
     allow_test_asset: bool = False
+    test_asset_path: Path | None = None
 
     @classmethod
-    def from_env(cls) -> "ActualRunnerAssetConfig":
+    def product_default(cls) -> "ActualRunnerAssetConfig":
         return cls()
 
 def verify_base_model_asset(config: ActualRunnerAssetConfig | None = None) -> BaseModelAssetVerdict:
-    cfg = config or ActualRunnerAssetConfig.from_env()
+    cfg = config or ActualRunnerAssetConfig.product_default()
     # PR #787 (v7 absorb): allow_test_asset=True 시 임의 SHA 의 test 파일도 측정 가능
     # (real claim 0). 그 외 경로는 v7_asset_manifest 의 sealed v7 SHA 게이트로 위임.
-    if cfg.allow_test_asset:
-        import os as _os
-        path_value = _os.environ.get(cfg.model_path_env)
-        if path_value:
-            p = Path(path_value)
-            if p.exists() and p.is_file():
-                actual_sha = sha256_file(p)
-                readonly = not _os.access(p, _os.W_OK) if cfg.readonly_required else True
-                return BaseModelAssetVerdict(
-                    allowed=True,
-                    status="ASSET_INVENTORY_PASS",
-                    fail_class=None,
-                    model_format="GGUF",
-                    required_engine="llama_cpp",
-                    engine_available=False,
-                    path_ref=f"ref:{cfg.model_path_env}",
-                    path_digest=_sha256_text(path_value),
-                    sha256_full=actual_sha,
-                    readonly_verified=readonly,
-                    helper_asset_rows=build_helper_asset_rows(),
-                    measured={
-                        "sha_scope": "file",
-                        "test_asset": True,
-                        "size_bytes": p.stat().st_size,
-                    },
-                )
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        legacy = verify_v7_q4_asset(
-            path_value=os.environ.get(cfg.model_path_env),
-            readonly_required=cfg.readonly_required,
-        )
-        return BaseModelAssetVerdict(
-            allowed=legacy.allowed,
-            status=legacy.status,
-            fail_class=legacy.fail_class,
-            model_format=cfg.expected_model_format,
-            required_engine="llama_cpp",
-            engine_available=False,
-            path_ref=legacy.path_ref,
-            path_digest=legacy.path_digest,
-            sha256_full=legacy.sha256_full,
-            readonly_verified=legacy.readonly_verified,
-            helper_asset_rows=build_helper_asset_rows(),
-            measured={
-                "sha_scope": legacy.sha_scope,
-                "test_compatibility_only": True,
-                "size_bytes": legacy.size_bytes,
-                "production_claim_allowed": False,
-            },
-        )
+    if cfg.allow_test_asset and cfg.test_asset_path is not None:
+        p = cfg.test_asset_path
+        if p.exists() and p.is_file():
+            actual_sha = sha256_file(p)
+            readonly = (
+                not p.stat().st_mode & 0o200 if cfg.readonly_required else True
+            )
+            return BaseModelAssetVerdict(
+                allowed=True,
+                status="ASSET_INVENTORY_PASS",
+                fail_class=None,
+                model_format="GGUF",
+                required_engine="llama_cpp",
+                engine_available=False,
+                path_ref="typed-test-asset",
+                path_digest=_sha256_text(str(p)),
+                sha256_full=actual_sha,
+                readonly_verified=readonly,
+                helper_asset_rows=build_helper_asset_rows(),
+                measured={
+                    "sha_scope": "file",
+                    "test_asset": True,
+                    "size_bytes": p.stat().st_size,
+                },
+            )
     try:
         from butler_pc_core.assets import get_asset_service
         from butler_pc_core.assets.context import get_platform_context

@@ -1,6 +1,7 @@
 use sha2::{Digest, Sha256};
 use std::process::Command;
 
+mod asset_trust_root_constants;
 mod build_gate;
 mod distribution_flag;
 
@@ -25,6 +26,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=BUTLER_RELEASE_DISTRIBUTION");
     println!("cargo:rerun-if-env-changed=BUTLER_SOURCE_COMMIT_OID");
     println!("cargo:rerun-if-env-changed=BUTLER_SOURCE_TREE_OID");
+    println!("cargo:rerun-if-changed=asset_trust_root_constants.rs");
     let release = std::env::var("PROFILE").as_deref() == Ok("release");
     // 배포 빌드 여부는 명시 플래그로만 켠다. 기본값은 내부 빌드다.
     // 근거: 대표 결정(2026-07-23) — 앱 배포 위변조 방지 체계는 배포 개시 전으로 이월.
@@ -66,6 +68,17 @@ fn main() {
         &tree,
     )
     .unwrap_or_else(|code| panic!("{code}"));
+    let asset_root_configured = build_gate::evaluate_asset_trust_root_gate(
+        gate.distribution,
+        asset_trust_root_constants::ASSET_ROOT_POLICY_SHA256,
+        asset_trust_root_constants::ASSET_TRUST_KEYS_JSON,
+        asset_trust_root_constants::ASSET_TRUST_EPOCH,
+        asset_trust_root_constants::ASSET_REVOKED_KEY_IDS_JSON,
+    )
+    .unwrap_or_else(|code| panic!("{code}"));
+    if !asset_root_configured {
+        println!("cargo:warning=TRUST_ROOT_NOT_CONFIGURED");
+    }
 
     println!("cargo:rustc-env=BUTLER_BUILD_CONTEXT_DIGEST={digest}");
     // anchor 가 없으면 없는 채로 둔다. 임의 값으로 채우지 않는다.

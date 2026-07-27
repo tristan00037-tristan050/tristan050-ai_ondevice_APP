@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -61,6 +62,24 @@ def apply_company_style(draft_text, profile_ref=None):
     helper2 = tmp_path / "helper2_embedding_sdk.py"
     helper2.write_text("class Helper2Embedder: pass\n", encoding="utf-8")
     return {"h7": helper7, "h4": helper4, "h8": helper8, "h2": helper2}
+
+
+def _load_module(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _bridge_from_paths(paths: dict[str, Path]) -> HelperSdkBridge:
+    return HelperSdkBridge(
+        helper7=_load_module(paths["h7"], "test_helper7_sdk"),
+        helper4=_load_module(paths["h4"], "test_helper4_sdk"),
+        helper8=_load_module(paths["h8"], "test_helper8_sdk"),
+        helper2=_load_module(paths["h2"], "test_helper2_sdk").Helper2Embedder(),
+    )
 
 
 def test_role_manifest_requires_helper5_and_separates_adapter_from_sdk():
@@ -128,10 +147,10 @@ def test_sdk_bridge_fail_closed_when_sdks_missing(monkeypatch):
     # _import_from_env 가 모든 경로에서 ImportError 를 내도록 monkeypatch 한다 (raw 0).
     from butler_pc_core.cards.box3 import helper_sdk_bridge as _bridge_mod
 
-    def _always_raise(_path_env, _module_name):
+    def _always_raise(_module_name):
         raise ImportError("simulated_sdk_unavailable")
 
-    monkeypatch.setattr(_bridge_mod, "_import_from_env", _always_raise)
+    monkeypatch.setattr(_bridge_mod, "_import_canonical_sdk", _always_raise)
     bridge = HelperSdkBridge()
     evidence = bridge.parse_evidence(["납품 일정은 2026년 6월 10일입니다."])
     assert evidence.parse_success is False
@@ -140,12 +159,7 @@ def test_sdk_bridge_fail_closed_when_sdks_missing(monkeypatch):
 
 def test_sdk_bridge_with_helper2_and_fake_sdks_passes(tmp_path, monkeypatch):
     paths = _write_fake_sdks(tmp_path)
-    monkeypatch.setenv("BUTLER_HELPER7_TABLE_FIGURE_SDK_PATH", str(paths["h7"]))
-    monkeypatch.setenv("BUTLER_HELPER4_GROUNDING_SDK_PATH", str(paths["h4"]))
-    monkeypatch.setenv("BUTLER_HELPER8_COMPANY_STYLE_SDK_PATH", str(paths["h8"]))
-    monkeypatch.setenv("BUTLER_HELPER2_EMBEDDING_SDK_PATH", str(paths["h2"]))
-
-    bridge = HelperSdkBridge()
+    bridge = _bridge_from_paths(paths)
     evidence = bridge.parse_evidence(["참고 문서에는 납품 일정이 2026년 6월 10일로 명시되어 있습니다."])
     assert evidence.parse_success is True
     grounded = bridge.ground_claims("핵심 내용: 납품 일정은 2026년 6월 10일입니다.", evidence)
@@ -164,9 +178,12 @@ def test_model_adapter_stack_probe_never_stacks_sdk_modules(monkeypatch):
     guard = build_example_component_use_guard(allow=True, stack_supported=True, sdk_call_supported=True, embedder_provider="helper2_sdk")
     monkeypatch.setenv("BUTLER_BOX3_ALLOW_HELPER35_MULTI_LORA_STACK", "1")
     verdict = probe_helper3_helper5_adapter_stack(guard)
-    assert verdict.allowed is False
-    assert verdict.fail_class == "BLOCK_HELPER35_DOUBLE_STACK_RISK"
-    assert verdict.model_adapters == ["helper3_format", "helper5_tool_call"]
+    assert verdict.allowed is True
+    assert verdict.fail_class is None
+    assert verdict.model_adapters == [
+        "embedded_in_v7_base_model:helper3_format",
+        "embedded_in_v7_base_model:helper5_tool_call",
+    ]
     assert verdict.helper_sdk_stack_attempt_zero is True
 
 
@@ -214,11 +231,7 @@ def test_endpoint_smoke_approval_false_contract_only():
 
 def test_raw_leak_zero_in_persistable_outputs(tmp_path, monkeypatch):
     paths = _write_fake_sdks(tmp_path)
-    monkeypatch.setenv("BUTLER_HELPER7_TABLE_FIGURE_SDK_PATH", str(paths["h7"]))
-    monkeypatch.setenv("BUTLER_HELPER4_GROUNDING_SDK_PATH", str(paths["h4"]))
-    monkeypatch.setenv("BUTLER_HELPER8_COMPANY_STYLE_SDK_PATH", str(paths["h8"]))
-    monkeypatch.setenv("BUTLER_HELPER2_EMBEDDING_SDK_PATH", str(paths["h2"]))
-    bridge = HelperSdkBridge()
+    bridge = _bridge_from_paths(paths)
     evidence = bridge.parse_evidence(["비밀이 아닌 참고 문서에는 납품 일정이 2026년 6월 10일로 명시되어 있습니다."])
     grounded = bridge.ground_claims("핵심 내용: 납품 일정은 2026년 6월 10일입니다.", evidence)
     encoded = json.dumps({"evidence": evidence.persistable_dict(), "grounding": grounded.persistable_dict()}, ensure_ascii=False)

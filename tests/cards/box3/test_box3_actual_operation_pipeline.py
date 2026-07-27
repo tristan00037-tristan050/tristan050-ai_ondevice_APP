@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from butler_pc_core.cards.box3.actual_contracts import Box3ActualRuntimeEnvelope
 from butler_pc_core.cards.box3.actual_operation_pipeline import run_box3_actual_operation
-from butler_pc_core.cards.box3.actual_runner_assets import BASE_MODEL_PATH_ENV
 from butler_pc_core.cards.box3.helper_component_guard import build_example_component_use_guard
 from butler_pc_core.cards.box3.local_sealed_runner import build_deterministic_test_runner
 from butler_pc_core.cards.box3.human_approval_sealed import default_locked_human_approval
@@ -16,11 +15,10 @@ def _env():
     )
 
 
-def test_pipeline_with_missing_model_is_partial_not_pass(monkeypatch):
-    monkeypatch.delenv(BASE_MODEL_PATH_ENV, raising=False)
+def test_pipeline_with_missing_model_authority_is_not_pass():
     env = _env()
     verdict = run_box3_actual_operation(env, helper_component_guard=build_example_component_use_guard(allow=True, stack_supported=True, sdk_call_supported=True, embedder_provider="helper2_sdk"))
-    assert verdict.status == "PARTIAL_REAL_ASSET_VOLUME_MISSING"
+    assert verdict.status == "PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE"
     assert verdict.real_claim_allowed is False
 
 

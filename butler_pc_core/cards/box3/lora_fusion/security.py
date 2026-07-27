@@ -58,6 +58,8 @@ def assert_ref_or_digest(value: str | None) -> None:
         raise ValueError("REF_OR_DIGEST_INVALID")
     if value.startswith("ref:"):
         return
+    if value.startswith("asset-role:"):
+        return
     if is_sha256_digest(value):
         return
     raise ValueError("REF_OR_DIGEST_INVALID")

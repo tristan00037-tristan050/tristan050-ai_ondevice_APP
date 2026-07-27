@@ -67,6 +67,13 @@ fn valid_export_request(suggested_name: &str, extension: &str, bytes: &[u8]) -> 
         && bytes.len() <= MAX_EXPORT_BYTES
 }
 
+fn require_external_handoff_authorized() -> Result<(), String> {
+    crate::asset_trust_root::current_asset_security_state(false)
+        .map_err(str::to_owned)?
+        .require_external_handoff()
+        .map_err(str::to_owned)
+}
+
 #[derive(Debug)]
 struct TargetSnapshot {
     existed: bool,
@@ -655,6 +662,7 @@ pub async fn save_export_file(
     app: tauri::AppHandle,
     request: tauri::ipc::Request<'_>,
 ) -> Result<bool, String> {
+    require_external_handoff_authorized()?;
     let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
         return Err(ExportError::RequestInvalid.into());
     };
@@ -727,6 +735,16 @@ mod tests {
             "xlsx",
             &vec![0; MAX_EXPORT_BYTES + 1]
         ));
+    }
+
+    #[test]
+    fn external_export_is_blocked_without_asset_trust_root() {
+        if crate::asset_trust_root_constants::ASSET_ROOT_POLICY_SHA256.is_empty() {
+            assert_eq!(
+                require_external_handoff_authorized(),
+                Err("BLOCK_EXTERNAL_HANDOFF_UNVERIFIED".to_string())
+            );
+        }
     }
 
     #[test]

@@ -7,13 +7,10 @@ PEFT base model(Qwen/Qwen3-4B ~8GB) 미캐시 시 graceful fail → 규칙+오�
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Tuple
-
-from butler_pc_core.assets import AssetError, get_asset_service
+from typing import Optional, Protocol, Tuple
 
 from .account_dict import match_account, ACCOUNT_BY_NAME
 
@@ -113,19 +110,11 @@ _peft_model = None
 _peft_tokenizer = None
 _peft_loaded: bool = False
 _peft_attempted: bool = False
-_peft_materialized = None
-_peft_base_path: Optional[Path] = None
+class AccountingPeftBackend(Protocol):
+    def load(self) -> tuple[object, object]: ...
 
 
-def _env_truthy(name: str) -> bool:
-    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes"}
-
-
-def _peft_enabled() -> bool:
-    # Backward compatibility: any non-empty ACCOUNTING_NO_PEFT disables PEFT.
-    if os.environ.get("ACCOUNTING_NO_PEFT"):
-        return False
-    return _env_truthy("ACCOUNTING_ENABLE_PEFT")
+_peft_backend: AccountingPeftBackend | None = None
 
 
 @dataclass
@@ -170,83 +159,26 @@ def accounting_adapter_status(path: Path) -> AccountingAdapterStatus:
     return AccountingAdapterStatus(True, "NONE", str(base_model))
 
 
-def _find_adapter() -> Optional[Path]:
-    global _peft_base_path, _peft_materialized
-    if _peft_materialized is not None:
-        _peft_materialized.close()
-    _peft_materialized = None
-    _peft_base_path = None
-    try:
-        with get_asset_service().require_capability("accounting.adapter") as lease:
-            adapter_config = lease.require("adapter_config").entry.relative_path
-            adapter_weights = lease.require("adapter_weights").entry.relative_path
-            base_config = lease.require("base_model_config").entry.relative_path
-            base_weights = lease.require("base_model_weights").entry.relative_path
-            tokenizer_config = lease.require("tokenizer_config").entry.relative_path
-            adapter_parent = Path(adapter_config).parent
-            base_parent = Path(base_config).parent
-            if (
-                Path(adapter_weights).parent != adapter_parent
-                or Path(base_weights).parent != base_parent
-                or Path(tokenizer_config).parent != base_parent
-            ):
-                return None
-            materialized = lease.materialize_directory()
-    except AssetError:
-        return None
-    adapter_root = materialized.root / adapter_parent
-    base_root = materialized.root / base_parent
-    if (
-        not accounting_adapter_status(adapter_root).available
-        or not base_root.is_dir()
-        or base_root.is_symlink()
-    ):
-        materialized.close()
-        return None
-    _peft_materialized = materialized
-    _peft_base_path = base_root
-    return adapter_root
-
-
 def load_peft() -> bool:
-    """PEFT 어댑터를 명시 opt-in일 때만 lazy 로드한다."""
-    global _peft_base_path, _peft_materialized
+    """Load only from an injected verified-handle backend.
+
+    The default product backend is intentionally absent until the multi-file
+    transformer stack supports native handles. Rule classification remains
+    available; no path materialization fallback is permitted.
+    """
     global _peft_model, _peft_tokenizer, _peft_loaded, _peft_attempted
     if _peft_attempted:
         return _peft_loaded
     _peft_attempted = True
-    if not _peft_enabled():
+    if _peft_backend is None:
         return False
-
-    adapter_path = _find_adapter()
-    if adapter_path is None or _peft_base_path is None:
-        return False
-
     try:
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        from peft import PeftModel
-
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
-
-        _peft_tokenizer = AutoTokenizer.from_pretrained(
-            str(_peft_base_path), trust_remote_code=False, local_files_only=True
-        )
-        base = AutoModelForCausalLM.from_pretrained(
-            str(_peft_base_path),
-            torch_dtype=torch.float16,
-            trust_remote_code=False,
-            local_files_only=True,
-        )
-        _peft_model = PeftModel.from_pretrained(base, str(adapter_path))
-        _peft_model = _peft_model.to(device).eval()
+        _peft_model, _peft_tokenizer = _peft_backend.load()
         _peft_loaded = True
         return True
     except Exception:
-        if _peft_materialized is not None:
-            _peft_materialized.close()
-        _peft_materialized = None
-        _peft_base_path = None
+        _peft_model = None
+        _peft_tokenizer = None
         return False
 
 

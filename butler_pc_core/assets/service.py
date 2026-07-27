@@ -84,6 +84,46 @@ PRODUCTION_REQUIRED_GROUPS = frozenset(
 )
 
 
+def security_state_projection(
+    *,
+    byte_safety_verified: bool,
+    origin_verified: bool,
+    trust_root_configured: bool,
+) -> dict[str, object]:
+    release_ready = bool(byte_safety_verified and origin_verified)
+    return {
+        "byte_safety_verified": bool(byte_safety_verified),
+        "origin_verified": bool(origin_verified),
+        "trust_root_state": (
+            "CONFIGURED" if trust_root_configured else "UNCONFIGURED"
+        ),
+        "signature_state": "VERIFIED" if origin_verified else "MISSING",
+        "provenance_state": "VERIFIED" if origin_verified else "UNVERIFIED",
+        "release_ready": release_ready,
+        "external_handoff_allowed": int(release_ready),
+        "auto_update_allowed": int(release_ready),
+        "operation_scope": (
+            "RELEASE_VERIFIED" if release_ready else "INTERNAL_OWNER_ONLY"
+        ),
+    }
+
+
+def unavailable_status_projection(
+    *,
+    trust_root_configured: bool = False,
+) -> dict[str, object]:
+    return {
+        "schema_version": 2,
+        "overall_state": "UNAVAILABLE",
+        "groups": [],
+        **security_state_projection(
+            byte_safety_verified=False,
+            origin_verified=False,
+            trust_root_configured=trust_root_configured,
+        ),
+    }
+
+
 class AssetService:
     def __init__(
         self,
@@ -104,19 +144,38 @@ class AssetService:
         self._loaded = False
         self._provenance: VerifiedProvenance | None = None
 
+    def _open_assets_root(self) -> SafeRoot:
+        if self._context.asset_root_fd is not None:
+            return SafeRoot.from_fd(
+                self._context.asset_root_fd,
+                authority_root=self._context.app_data_root,
+            )
+        if self._context.resource_root is None:
+            raise block("PLATFORM_CONTEXT_INVALID")
+        return SafeRoot(
+            self._context.resource_root / "assets",
+            authority_root=self._context.app_data_root,
+        )
+
     def _load_manifests(self) -> None:
         with self._lock:
             if self._loaded:
                 return
-            manifest_root = self._context.resource_root / MANIFEST_DIRECTORY
-            if not manifest_root.exists():
-                self._loaded = True
-                return
-            with SafeRoot(manifest_root) as safe_root:
+            try:
+                asset_root = self._open_assets_root()
+            except AssetError as exc:
+                if (
+                    exc.code in {"VERIFY_IO_ERROR", "SYMLINK_REJECTED"}
+                    and self._context.release_profile.value != "production"
+                ):
+                    self._loaded = True
+                    return
+                raise
+            with asset_root, asset_root.subroot("manifests") as safe_root:
                 names = sorted(
-                    item.name
-                    for item in manifest_root.iterdir()
-                    if item.name.endswith(".manifest.json")
+                    name
+                    for name in safe_root.list_names()
+                    if name.endswith(".manifest.json")
                 )
                 if len(names) > MAX_MANIFEST_FILES:
                     raise block("RESOURCE_LIMIT_EXCEEDED")
@@ -197,6 +256,10 @@ class AssetService:
         ):
             raise block("REQUIRED_ASSET_MISSING")
         if self._provenance is None:
+            if self._context.trust_root_status != "TRUST_ROOT_CONFIGURED":
+                raise block("BLOCK_TRUST_UNAVAILABLE")
+            if self._context.resource_root is None:
+                raise block("BLOCK_TRUST_UNAVAILABLE")
             self._provenance = verify_packaged_provenance(
                 self._context.resource_root,
                 expected_manifest_set=self._context.manifest_set_sha256,
@@ -232,11 +295,10 @@ class AssetService:
                 GroupState.VERIFYING,
                 None,
             )
-        data_root = self._context.resource_root / ASSET_DATA_DIRECTORY / manifest.asset_group
         assets = {}
         try:
-            with SafeRoot(
-                data_root, authority_root=self._context.app_data_root
+            with self._open_assets_root() as asset_root, asset_root.subroot(
+                f"data/{manifest.asset_group}"
             ) as root:
                 for entry in manifest.entries:
                     assets[entry.role] = verify_entry(root, entry)
@@ -345,11 +407,10 @@ class AssetService:
         group = resolved.manifest.asset_group
         manifest = resolved.manifest
 
-        data_root = self._context.resource_root / ASSET_DATA_DIRECTORY / group
         assets = {}
         try:
-            with SafeRoot(
-                data_root, authority_root=self._context.app_data_root
+            with self._open_assets_root() as asset_root, asset_root.subroot(
+                f"data/{group}"
             ) as root:
                 for entry in resolved.entries:
                     assets[entry.role] = verify_entry(root, entry)
@@ -420,7 +481,22 @@ class AssetService:
             if item.reason:
                 row["reason"] = _external_reason(item.reason)
             groups.append(row)
-        return {"schema_version": 1, "overall_state": overall, "groups": groups}
+        byte_safety_verified = bool(groups) and all(
+            item["state"] in {"AVAILABLE", "NOT_REQUIRED"} for item in groups
+        )
+        origin_verified = self._provenance is not None
+        return {
+            "schema_version": 2,
+            "overall_state": overall,
+            "groups": groups,
+            **security_state_projection(
+                byte_safety_verified=byte_safety_verified,
+                origin_verified=origin_verified,
+                trust_root_configured=(
+                    self._context.trust_root_status == "TRUST_ROOT_CONFIGURED"
+                ),
+            ),
+        }
 
 
 def _external_reason(reason: str) -> str:
@@ -456,11 +532,3 @@ def get_asset_service() -> AssetService:
         if _DEFAULT is None:
             _DEFAULT = AssetService()
         return _DEFAULT
-
-
-def reset_asset_service_for_tests() -> None:
-    global _DEFAULT
-    if os.environ.get("PYTEST_CURRENT_TEST") is None:
-        raise block("OVERRIDE_FORBIDDEN")
-    with _DEFAULT_LOCK:
-        _DEFAULT = None

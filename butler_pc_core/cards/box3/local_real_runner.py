@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import concurrent.futures
-import hashlib
 import os
-import secrets
 import time
 import uuid
 import weakref
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Callable, Optional
 
 from .real_contracts import Box3RealRuntimeEnvelope, sha256_text, stable_json_digest
@@ -62,12 +59,9 @@ def build_box3_local_real_runner(config: Box3RealRunnerConfig) -> RealRunner:
     if config.loader_name != "llama_cpp":
         raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE)
     try:
-        from llama_cpp import Llama  # type: ignore
-    except Exception as exc:  # pragma: no cover - depends on local runtime
-        raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE) from exc
-    try:
         from butler_pc_core.assets import get_asset_service
         from butler_pc_core.assets.context import get_platform_context
+        from butler_pc_core.inference.llm_runtime import LlmRuntime
 
         context = get_platform_context()
         if context.manifest_set_sha256 is None:
@@ -78,33 +72,27 @@ def build_box3_local_real_runner(config: Box3RealRunnerConfig) -> RealRunner:
             expected_manifest_set=context.manifest_set_sha256,
             request_id=str(uuid.uuid4()),
         )
-        materialized = model_lease.materialize_directory()
         model_asset = model_lease.require("model_gguf")
-        model_path = materialized.root.joinpath(
-            *Path(model_asset.entry.relative_path).parts
+        model_handle = model_asset.duplicate_read_handle(
+            manifest_set_sha256=context.manifest_set_sha256
         )
-        measured = hashlib.sha256()
-        with model_path.open("rb") as handle:
-            while chunk := handle.read(8 * 1024 * 1024):
-                measured.update(chunk)
-        if not secrets.compare_digest(
-            measured.hexdigest(), model_asset.snapshot_digest
-        ):
-            raise RuntimeError("BLOCK_LOADER_INPUT_DIGEST_MISMATCH")
     except Exception as exc:
         try:
-            materialized.close()
             model_lease.close()
         except UnboundLocalError:
             pass
         raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE) from exc
     load_start = time.perf_counter()
     try:
-        llm = Llama(model_path=str(model_path), verbose=False)
+        llm = LlmRuntime(model_handle=model_handle)
+        if llm.status != "ready":
+            raise RuntimeError(llm.last_error or "BLOCK_LOADER_AUTHORITY_REQUIRED")
     except Exception as exc:
-        materialized.close()
+        model_handle.close()
         model_lease.close()
         raise RuntimeError(PARTIAL_REAL_RUNNER_RUNTIME_UNAVAILABLE) from exc
+    finally:
+        model_handle.close()
     from butler_pc_core.model_tier.capability_registry import BOX3_1P7B_VARIANT_ID
     from butler_pc_core.model_tier.runtime_state import publish_runtime_lifecycle
 
@@ -119,15 +107,21 @@ def build_box3_local_real_runner(config: Box3RealRunnerConfig) -> RealRunner:
 
     def _runner(envelope: Box3RealRuntimeEnvelope) -> str:
         prompt = _compose_prompt(envelope)
-        result = llm(prompt, max_tokens=envelope.max_new_tokens, temperature=0.0, stop=["</s>"])
-        choices = result.get("choices") or []
-        if not choices:
-            return ""
-        return str(choices[0].get("text") or "").strip()
+        return llm.generate(
+            prompt,
+            max_tokens=envelope.max_new_tokens,
+            temperature=0.0,
+            stop=["</s>"],
+        )
 
     setattr(_runner, "_box3_load_ms", load_ms)
+    setattr(
+        _runner,
+        "_box3_loaded_model_receipt",
+        llm.loaded_model_receipt.to_dict() if llm.loaded_model_receipt else None,
+    )
     def _release() -> None:
-        materialized.close()
+        llm.close()
         model_lease.close()
         publish_runtime_lifecycle(
             BOX3_1P7B_VARIANT_ID,

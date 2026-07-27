@@ -3,7 +3,7 @@
 Tests:
   1. adapter_files_present           — 어댑터 파일 9개 존재 확인
   2. adapter_config_base_model       — base_model_name_or_path == Qwen/Qwen3-4B
-  3. peft_find_adapter_path          — _find_adapter() returns valid path
+  3. peft_asset_status               — immutable adapter closure status
   4. d2_jibeoum_expense_section_sign — D-2 Case1: 자문료 출금 → IV_sga / (-)
   5. d2_jibeoum_income_override      — D-2 Case2: 자문 수입 입금 → I_revenue / (+)
   6. d2_imdaeryo_expense             — D-2 Case3: 임대료 지급 → IV_sga / (-)
@@ -32,18 +32,13 @@ _REQUIRED_ADAPTER_FILES = ["adapter_config.json", "adapter_model.safetensors"]
 # ── 1. 어댑터 파일 존재 확인 ──────────────────────────────────────────────────
 def test_adapter_files_present():
     """누락 자산은 위조하지 않고 명시적 UNVERIFIED 상태로 격리한다."""
-    from butler_pc_core.accounting.ft_classifier import (
-        _find_adapter,
-        accounting_adapter_status,
-    )
+    from butler_pc_core.accounting.ft_classifier import accounting_adapter_status
 
     status = accounting_adapter_status(_ADAPTER_DIR)
     if status.available:
         assert all((_ADAPTER_DIR / name).is_file() for name in _REQUIRED_ADAPTER_FILES)
-        assert _find_adapter() == _ADAPTER_DIR
     else:
         assert status.reason_code.startswith("ACCOUNTING_ADAPTER_")
-        assert _find_adapter() is None
 
 
 # ── 2. adapter_config 기본 모델 확인 ─────────────────────────────────────────
@@ -57,19 +52,15 @@ def test_adapter_config_base_model():
     assert cfg["base_model_name_or_path"] == "Qwen/Qwen3-4B"
 
 
-# ── 3. _find_adapter() 경로 반환 확인 ────────────────────────────────────────
-def test_peft_find_adapter_path():
-    """_find_adapter()는 완전하고 검증된 어댑터만 반환해야 한다."""
-    from butler_pc_core.accounting.ft_classifier import (
-        _find_adapter,
-        accounting_adapter_status,
-    )
+# ── 3. immutable asset closure 상태 확인 ─────────────────────────────────────
+def test_peft_asset_status_is_explicit():
+    """경로 자동 탐색 없이 검증 가능한 자산 상태만 노출한다."""
+    from butler_pc_core.accounting.ft_classifier import accounting_adapter_status
 
-    path = _find_adapter()
-    if path is None:
-        assert not accounting_adapter_status(_ADAPTER_DIR).available
-    else:
-        assert accounting_adapter_status(path).available
+    status = accounting_adapter_status(_ADAPTER_DIR)
+    assert status.reason_code == "NONE" if status.available else status.reason_code.startswith(
+        "ACCOUNTING_ADAPTER_"
+    )
 
 
 # ── D-2 C/D 결함 4건 ─────────────────────────────────────────────────────────
