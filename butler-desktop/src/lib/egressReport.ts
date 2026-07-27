@@ -38,7 +38,7 @@ export type EgressUiState =
   | Readonly<{
       kind: 'unmeasured';
       generation: number;
-      source: 'STATIC_BETA' | 'UNAVAILABLE';
+      source: 'STATIC_BETA' | 'INCOMPLETE_RUNTIME' | 'UNAVAILABLE';
       lastReportedAt?: string;
     }>
   | Readonly<{ kind: 'ready'; generation: number; report: EgressReport }>
@@ -58,7 +58,7 @@ export type EgressReceiptTrust = Readonly<{
 type EgressParseState =
   | Readonly<{
       kind: 'unmeasured';
-      source: 'STATIC_BETA';
+      source: 'STATIC_BETA' | 'INCOMPLETE_RUNTIME';
       lastReportedAt?: string;
     }>
   | Readonly<{
@@ -341,6 +341,12 @@ export async function parseEgressReport(
       lastReportedAt: reportedAt,
     };
   }
+  if (value.measurement === 'RUNTIME_REAL') {
+    return {
+      kind: 'unmeasured',
+      source: 'INCOMPLETE_RUNTIME',
+    };
+  }
   if (value.schema_version !== 'butler.egress.report.v3') {
     throw new EgressReportError('UNSUPPORTED_SCHEMA');
   }
@@ -492,7 +498,7 @@ export function useEgressReport() {
         next = {
           kind: 'unmeasured',
           generation: nextGeneration,
-          source: 'UNAVAILABLE',
+          source: 'STATIC_BETA',
         };
         if (nextGeneration === generation.current) {
           dispatch({ type: 'resolved', generation: nextGeneration, state: next });

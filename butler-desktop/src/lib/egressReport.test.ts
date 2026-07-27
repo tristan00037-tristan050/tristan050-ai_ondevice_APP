@@ -135,6 +135,18 @@ describe('parseEgressReport fail-closed contract', () => {
     })).toBe('UNSUPPORTED_SCHEMA');
   });
 
+  it('keeps the current incomplete runtime response non-green until the wire contract is complete', async () => {
+    await expect(parseEgressReport({
+      schema_version: 'egress_report.v2',
+      measurement: 'RUNTIME_REAL',
+      external_calls_count: 0,
+      verdict: 'PASS',
+    }, NOW)).resolves.toEqual({
+      kind: 'unmeasured',
+      source: 'INCOMPLETE_RUNTIME',
+    });
+  });
+
   it.each([
     '2026-02-30T00:00:00Z',
     '2026-07-27 01:00:20Z',

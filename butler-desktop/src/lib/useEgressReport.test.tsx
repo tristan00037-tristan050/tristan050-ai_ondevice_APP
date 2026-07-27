@@ -99,6 +99,21 @@ describe('useEgressReport transport and generation contract', () => {
     expect(JSON.stringify(result.current.state)).not.toContain('ready');
   });
 
+  it('does not promote the current RUNTIME_REAL response without value and measured_at', async () => {
+    mockedFetch.mockResolvedValueOnce(jsonResponse({
+      schema_version: 'egress_report.v2',
+      measurement: 'RUNTIME_REAL',
+      external_calls_count: 0,
+      verdict: 'PASS',
+    }));
+    const { result } = renderHook(() => useEgressReport());
+    await waitFor(() => expect(result.current.state.kind).toBe('unmeasured'));
+    expect(result.current.state).toMatchObject({
+      kind: 'unmeasured',
+      source: 'INCOMPLETE_RUNTIME',
+    });
+  });
+
   it('keeps loading visible while the measurement is unresolved', async () => {
     mockedFetch.mockImplementationOnce(() => new Promise(() => undefined));
     const { result, unmount } = renderHook(() => useEgressReport());
