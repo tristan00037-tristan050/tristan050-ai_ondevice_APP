@@ -1,5 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { currentBuildIdentity } from '../../lib/buildIdentity';
+import {
+  fetchLearningCapabilitySnapshot,
+  selectLearningRows,
+  unavailableLearningCapability,
+  type LearningCapabilitySnapshot,
+} from '../../lib/learningCapability';
 
 export type SettingsAction = 'profile' | 'policy' | 'format' | 'fact' | 'learning' | 'accounting' | 'egress';
 
@@ -8,12 +14,12 @@ interface SettingsShellProps {
   onAction: (action: SettingsAction) => void;
   appVersion: string;
   engineVersion: string | null;
+  learningCapability?: LearningCapabilitySnapshot | null;
 }
 
 const GROUPS = [
   { title: '우리 회사', rows: [{ label: '처음 설정하기', action: 'profile' as const, note: '회사와 회계 기본 정보를 등록합니다.' }] },
   { title: '정책·보안', rows: [{ label: '정책 관리', action: 'policy' as const }, { label: '외부 전송 상태', action: 'egress' as const }] },
-  { title: '회사 배우기', rows: [{ label: '승인된 회사 지식', action: 'fact' as const }, { label: '폴더 학습 후보', action: 'learning' as const }, { label: '회사 양식', action: 'format' as const }] },
   { title: '데이터', rows: [{ label: '내보내기·삭제 관리', note: '준비 중' }] },
   { title: '개인화', rows: [{ label: '말투·답변 길이', note: '준비 중' }] },
   { title: '화면', rows: [{ label: '확대·테마·창 초기화', note: '준비 중' }] },
@@ -21,10 +27,38 @@ const GROUPS = [
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function SettingsShell({ onClose, onAction, appVersion, engineVersion }: SettingsShellProps) {
+export function SettingsShell({
+  onClose,
+  onAction,
+  appVersion,
+  engineVersion,
+  learningCapability,
+}: SettingsShellProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const buildIdentity = currentBuildIdentity();
+  const [liveLearningCapability, setLiveLearningCapability] = useState(
+    learningCapability ?? unavailableLearningCapability,
+  );
+  const learningRows = useMemo(
+    () => selectLearningRows(liveLearningCapability),
+    [liveLearningCapability],
+  );
+
+  useEffect(() => {
+    if (learningCapability !== undefined) {
+      setLiveLearningCapability(
+        learningCapability ?? unavailableLearningCapability,
+      );
+      return;
+    }
+    const controller = new AbortController();
+    void fetchLearningCapabilitySnapshot(controller.signal)
+      .then(snapshot => {
+        if (!controller.signal.aborted) setLiveLearningCapability(snapshot);
+      });
+    return () => controller.abort();
+  }, [learningCapability]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -84,12 +118,41 @@ export function SettingsShell({ onClose, onAction, appVersion, engineVersion }: 
               <div className="settings-row" key={row.label}>
                 <div><strong>{row.label}</strong>{'note' in row && row.note && <span>{row.note}</span>}</div>
                 {'action' in row && row.action
-                  ? <button onClick={() => onAction(row.action)}>열기</button>
+                  ? <button aria-label={`${row.label} 열기`} onClick={() => onAction(row.action)}>열기</button>
                   : <span className="not-ready" aria-label={`${row.label} 준비 중`}>준비 중</span>}
               </div>
             ))}
           </section>
         ))}
+        <section
+          className="settings-group"
+          data-testid="company-learning-settings"
+          aria-labelledby="company-learning-title"
+        >
+          <h3 id="company-learning-title">회사 배우기</h3>
+          <ul className="settings-row-list">
+            {learningRows.map(row => (
+              <li
+                className="settings-row"
+                key={row.id}
+                data-testid={`learning-row-${row.id}`}
+                aria-labelledby={`${row.id}-label`}
+                aria-describedby={`${row.id}-status`}
+              >
+                <div>
+                  <strong id={`${row.id}-label`}>{row.label}</strong>
+                  <span id={`${row.id}-status`}>{row.statusText}</span>
+                </div>
+                <button
+                  aria-label={`${row.label} 열기`}
+                  onClick={() => onAction(row.action)}
+                >
+                  열기
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
         <section className="settings-group">
           <h3>이 버틀러 정보</h3>
           <dl className="product-info">

@@ -135,16 +135,13 @@ describe('parseEgressReport fail-closed contract', () => {
     })).toBe('UNSUPPORTED_SCHEMA');
   });
 
-  it('keeps the current incomplete runtime response non-green until the wire contract is complete', async () => {
+  it('rejects an unknown runtime measurement marker', async () => {
     await expect(parseEgressReport({
       schema_version: 'egress_report.v2',
       measurement: 'RUNTIME_REAL',
       external_calls_count: 0,
       verdict: 'PASS',
-    }, NOW)).resolves.toEqual({
-      kind: 'unmeasured',
-      source: 'INCOMPLETE_RUNTIME',
-    });
+    }, NOW)).rejects.toMatchObject({ code: 'UNSUPPORTED_SCHEMA' });
   });
 
   it.each([

@@ -86,7 +86,7 @@ export function EgressMonitor({ state, onRefresh, onClose }: Props) {
           <strong>{view.label}</strong>
         </div>
 
-        {state.kind === 'ready' && (
+        {state.kind === 'measured' && (
           <dl>
             <div>
               <dt>측정 여부</dt>
@@ -115,8 +115,6 @@ export function EgressMonitor({ state, onRefresh, onClose }: Props) {
           <p data-testid="egress-monitor-unmeasured" role="note">
             실측값이 없습니다. {state.source === 'STATIC_BETA'
               ? 'STATIC_BETA 상수는 안전 판정에 사용하지 않습니다.'
-              : state.source === 'INCOMPLETE_RUNTIME'
-                ? '감시기 응답에 value, MEASURED, measured_at이 모두 들어올 때까지 안전 판정하지 않습니다.'
               : '실측 감시기 응답을 기다리고 있습니다.'}
           </p>
         )}

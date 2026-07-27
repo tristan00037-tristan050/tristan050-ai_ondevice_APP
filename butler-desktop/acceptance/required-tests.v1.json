@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "suite": "firstscreen-v7-correction",
+  "tests": [
+    {"id":"ACC-FS70-001","runner":"vitest","file":"src/firstscreen/__tests__/egressDeadline.test.ts","title":"keeps loading before the explicit egress deadline","required":true},
+    {"id":"ACC-FS70-002","runner":"vitest","file":"src/firstscreen/__tests__/egressDeadline.test.ts","title":"terminates with TIMEOUT after a never-settling adapter crosses its deadline","required":true},
+    {"id":"ACC-FS70-003","runner":"vitest","file":"src/firstscreen/__tests__/egressDeadline.test.ts","title":"does not classify an external abort as TIMEOUT","required":true},
+    {"id":"ACC-FS70-004","runner":"vitest","file":"src/firstscreen/__tests__/egressState.test.ts","title":"ignores completion and timeout from a superseded generation","required":true},
+    {"id":"ACC-FS70-005","runner":"vitest","file":"src/firstscreen/__tests__/egressState.test.ts","title":"cleans timers listeners and requests during unmount and StrictMode remount","required":true},
+    {"id":"ACC-FS70-006","runner":"vitest","file":"src/firstscreen/__tests__/egressMeasurement.test.ts","title":"shows zero only for a fresh verified MEASURED receipt","required":true},
+    {"id":"ACC-FS70-007","runner":"vitest","file":"src/firstscreen/__tests__/egressMeasurement.test.ts","title":"blocks STATIC_BETA legacy stale unsigned and future-dated zero values","required":true},
+    {"id":"ACC-FS70-008","runner":"vitest","file":"src/settings/__tests__/learningCapability.test.ts","title":"maps a canonical snapshot to exactly two in-use one registered-only and one preview-only row","required":true},
+    {"id":"ACC-FS70-009","runner":"vitest","file":"src/settings/__tests__/learningCapability.test.ts","title":"maps unavailable or incomplete signals to four unknown rows without inference","required":true},
+    {"id":"ACC-FS70-010","runner":"playwright","file":"e2e/firstscreen-v5.spec.ts","title":"never-settling egress report leaves loading and never displays a fake zero","required":true},
+    {"id":"ACC-FS70-011","runner":"playwright","file":"e2e/firstscreen-v5.spec.ts","title":"company learning shows the four canonical rows with signal-derived statuses","required":true},
+    {"id":"ACC-FS70-012","runner":"playwright","file":"e2e/firstscreen-v5.spec.ts","title":"company learning preserves four accessible rows when capability signals are unavailable","required":true},
+    {"id":"ACC-FS70-013","runner":"playwright","file":"e2e/firstscreen-v5.spec.ts","title":"preserves compact cards answer area folders and conditional setup banner","required":true},
+    {"id":"ACC-FS70-014","runner":"playwright","file":"e2e/firstscreen-v5.spec.ts","title":"remains keyboard operable and text-visible at narrow width and 200 percent zoom","required":true}
+  ]
+}

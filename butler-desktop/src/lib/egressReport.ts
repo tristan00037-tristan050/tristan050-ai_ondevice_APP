@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react';
-import { sidecarFetch } from './sidecarFetch';
+import {
+  SidecarDeadlineError,
+  SidecarFetchError,
+  sidecarFetch,
+  withDeadline,
+} from './sidecarFetch';
+
+export const EGRESS_REPORT_DEADLINE_MS = 8_000;
+const EGRESS_REPORT_MAX_BYTES = 64 * 1024;
 
 export type EgressReport = Readonly<{
   schemaVersion: 'butler.egress.report.v3';
@@ -23,6 +31,8 @@ export type EgressReport = Readonly<{
 }>;
 
 export type EgressErrorCode =
+  | 'TIMEOUT'
+  | 'TRANSPORT'
   | 'HTTP_ERROR'
   | 'INVALID_CONTENT_TYPE'
   | 'INVALID_JSON'
@@ -38,17 +48,22 @@ export type EgressUiState =
   | Readonly<{
       kind: 'unmeasured';
       generation: number;
-      source: 'STATIC_BETA' | 'INCOMPLETE_RUNTIME' | 'UNAVAILABLE';
+      source: 'STATIC_BETA' | 'UNAVAILABLE';
       lastReportedAt?: string;
     }>
-  | Readonly<{ kind: 'ready'; generation: number; report: EgressReport }>
+  | Readonly<{ kind: 'measured'; generation: number; report: EgressReport }>
   | Readonly<{
       kind: 'stale';
       generation: number;
       lastMeasuredAt?: string;
       code: 'FRESHNESS_EXPIRED' | 'FRESHNESS_MISSING';
     }>
-  | Readonly<{ kind: 'error'; generation: number; code: EgressErrorCode }>;
+  | Readonly<{
+      kind: 'error';
+      generation: number;
+      reason: 'TIMEOUT' | 'TRANSPORT' | 'SCHEMA' | 'SIGNATURE';
+      code: EgressErrorCode;
+    }>;
 
 export type EgressReceiptTrust = Readonly<{
   keyId: string;
@@ -58,7 +73,7 @@ export type EgressReceiptTrust = Readonly<{
 type EgressParseState =
   | Readonly<{
       kind: 'unmeasured';
-      source: 'STATIC_BETA' | 'INCOMPLETE_RUNTIME';
+      source: 'STATIC_BETA' | 'UNAVAILABLE';
       lastReportedAt?: string;
     }>
   | Readonly<{
@@ -321,17 +336,17 @@ export async function parseEgressReport(
   trust = defaultReceiptTrust(),
 ): Promise<EgressReport | EgressParseState> {
   if (!isRecord(value)) throw new EgressReportError('SCHEMA_INVALID');
+  // A legacy response without provenance can never establish a measurement.
+  // Normalize it to unavailable and deliberately discard any numeric zero.
+  if (!('measurement' in value)) {
+    return { kind: 'unmeasured', source: 'UNAVAILABLE' };
+  }
+  if (value.measurement === 'UNAVAILABLE') {
+    validateUnmeasuredWire(value);
+    return { kind: 'unmeasured', source: 'UNAVAILABLE' };
+  }
   if (value.measurement === 'STATIC_BETA') {
-    const keys = Object.keys(value);
-    if (
-      keys.length !== 3
-      || !keys.includes('value')
-      || !keys.includes('measurement')
-      || !keys.includes('measured_at')
-    ) {
-      throw new EgressReportError('SCHEMA_INVALID');
-    }
-    requireSafeCount(value.value);
+    validateUnmeasuredWire(value);
     const reportedAt = value.measured_at === null
       ? undefined
       : requireTimestamp(value.measured_at).text;
@@ -339,12 +354,6 @@ export async function parseEgressReport(
       kind: 'unmeasured',
       source: 'STATIC_BETA',
       lastReportedAt: reportedAt,
-    };
-  }
-  if (value.measurement === 'RUNTIME_REAL') {
-    return {
-      kind: 'unmeasured',
-      source: 'INCOMPLETE_RUNTIME',
     };
   }
   if (value.schema_version !== 'butler.egress.report.v3') {
@@ -460,15 +469,54 @@ export async function parseEgressReport(
   });
 }
 
+function validateUnmeasuredWire(value: Record<string, unknown>): void {
+  const keys = Object.keys(value);
+  const legacy = keys.length === 3
+    && keys.includes('value')
+    && keys.includes('measurement')
+    && keys.includes('measured_at');
+  const v2Keys = [
+    'schema_version',
+    'measurement',
+    'generation',
+    'run_id',
+    'value',
+    'measured_at',
+    'receipt',
+  ];
+  const v2 = keys.length === v2Keys.length
+    && v2Keys.every(key => key in value);
+  if (!legacy && !v2) throw new EgressReportError('SCHEMA_INVALID');
+  if (value.value !== null) requireSafeCount(value.value);
+  if (value.measured_at !== null) requireTimestamp(value.measured_at);
+  if (v2) {
+    if (
+      value.schema_version !== 2
+      || !Number.isSafeInteger(value.generation)
+      || (value.generation as number) < 0
+      || value.run_id !== null
+      || value.value !== null
+      || value.measured_at !== null
+      || value.receipt !== null
+    ) {
+      throw new EgressReportError('SCHEMA_INVALID');
+    }
+  }
+}
+
 type Action =
   | { type: 'loading'; generation: number }
   | { type: 'resolved'; generation: number; state: EgressUiState };
 
-function reducer(state: EgressUiState, action: Action): EgressUiState {
-  if (action.generation < state.generation) return state;
+export function reduceEgressState(
+  state: EgressUiState,
+  action: Action,
+): EgressUiState {
   if (action.type === 'loading') {
+    if (action.generation <= state.generation) return state;
     return { kind: 'loading', generation: action.generation };
   }
+  if (action.generation !== state.generation) return state;
   return action.state;
 }
 
@@ -476,7 +524,7 @@ export function useEgressReport() {
   const generation = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const acceptedMeasurementGenerations = useRef(new Map<string, number>());
-  const [state, dispatch] = useReducer(reducer, {
+  const [state, dispatch] = useReducer(reduceEgressState, {
     kind: 'loading',
     generation: 0,
   });
@@ -491,32 +539,32 @@ export function useEgressReport() {
 
     let next: EgressUiState;
     try {
-      const response = await sidecarFetch('/api/egress/report', {
-        signal: controller.signal,
-      });
-      if (response.status === 503) {
-        next = {
-          kind: 'unmeasured',
-          generation: nextGeneration,
-          source: 'STATIC_BETA',
-        };
-        if (nextGeneration === generation.current) {
-          dispatch({ type: 'resolved', generation: nextGeneration, state: next });
+      const parsed = await withDeadline(async signal => {
+        const response = await sidecarFetch('/api/egress/report', { signal });
+        if (response.status === 503) {
+          return { kind: 'unmeasured', source: 'UNAVAILABLE' } as const;
         }
-        return;
-      }
-      if (!response.ok) throw new EgressReportError('HTTP_ERROR');
-      const contentType = response.headers.get('content-type') ?? '';
-      if (!/^application\/json(?:;|$)/i.test(contentType)) {
-        throw new EgressReportError('INVALID_CONTENT_TYPE');
-      }
-      let payload: unknown;
-      try {
-        payload = await response.json();
-      } catch {
-        throw new EgressReportError('INVALID_JSON');
-      }
-      const parsed = await parseEgressReport(payload);
+        if (!response.ok) throw new EgressReportError('HTTP_ERROR');
+        const contentType = response.headers.get('content-type') ?? '';
+        if (!/^application\/json(?:;|$)/i.test(contentType)) {
+          throw new EgressReportError('INVALID_CONTENT_TYPE');
+        }
+        const text = await readBoundedText(
+          response,
+          EGRESS_REPORT_MAX_BYTES,
+          signal,
+        );
+        let payload: unknown;
+        try {
+          payload = JSON.parse(text);
+        } catch {
+          throw new EgressReportError('INVALID_JSON');
+        }
+        return parseEgressReport(payload);
+      }, {
+        deadlineMs: EGRESS_REPORT_DEADLINE_MS,
+        externalSignal: controller.signal,
+      });
       if ('kind' in parsed) {
         next = parsed.kind === 'unmeasured'
           ? {
@@ -550,14 +598,29 @@ export function useEgressReport() {
           parsed.runId,
           parsed.measurementGeneration,
         );
-        next = { kind: 'ready', generation: nextGeneration, report: parsed };
+        next = { kind: 'measured', generation: nextGeneration, report: parsed };
       }
     } catch (error) {
       if (controller.signal.aborted) return;
+      const code: EgressErrorCode = error instanceof SidecarDeadlineError
+        ? 'TIMEOUT'
+        : error instanceof SidecarFetchError
+          ? 'TRANSPORT'
+          : error instanceof EgressReportError
+            ? error.code
+            : 'TRANSPORT';
+      const reason = code === 'TIMEOUT'
+        ? 'TIMEOUT'
+        : code === 'RECEIPT_UNBOUND'
+          ? 'SIGNATURE'
+          : code === 'TRANSPORT' || code === 'HTTP_ERROR'
+            ? 'TRANSPORT'
+            : 'SCHEMA';
       next = {
         kind: 'error',
         generation: nextGeneration,
-        code: error instanceof EgressReportError ? error.code : 'HTTP_ERROR',
+        reason,
+        code,
       };
     }
     if (nextGeneration === generation.current) {
@@ -571,6 +634,43 @@ export function useEgressReport() {
   }, [refresh]);
 
   return { state, refresh } as const;
+}
+
+async function readBoundedText(
+  response: Response,
+  maxBytes: number,
+  signal: AbortSignal,
+): Promise<string> {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  let total = 0;
+  let text = '';
+  const cancel = () => {
+    void reader.cancel(signal.reason).catch(() => undefined);
+  };
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) throw new EgressReportError('SCHEMA_INVALID');
+      try {
+        text += decoder.decode(value, { stream: true });
+      } catch {
+        throw new EgressReportError('INVALID_JSON');
+      }
+    }
+    try {
+      return text + decoder.decode();
+    } catch {
+      throw new EgressReportError('INVALID_JSON');
+    }
+  } finally {
+    signal.removeEventListener('abort', cancel);
+    reader.releaseLock();
+  }
 }
 
 export function isVerifiedZero(report: EgressReport): boolean {

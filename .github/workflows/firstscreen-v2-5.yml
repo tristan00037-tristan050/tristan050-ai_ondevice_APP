@@ -133,6 +133,128 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  firstscreen-unit:
+    name: firstscreen-unit
+    runs-on: ubuntu-latest
+    needs: scope-and-contracts
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: butler-desktop/package-lock.json
+          package-manager-cache: true
+      - working-directory: butler-desktop
+        run: npm ci
+      - name: Execute exact FirstScreen v7 unit contracts
+        working-directory: butler-desktop
+        run: |
+          mkdir -p test-results
+          printf '{"schema_version":1,"pr_head":"%s","runner":"vitest"}\n' \
+            "${GITHUB_SHA}" > test-results/firstscreen-v7-unit-context.json
+          npm run test:run -- \
+            src/firstscreen/__tests__/egressDeadline.test.ts \
+            src/firstscreen/__tests__/egressState.test.ts \
+            src/firstscreen/__tests__/egressMeasurement.test.ts \
+            src/settings/__tests__/learningCapability.test.ts \
+            --reporter=default \
+            --reporter=json \
+            --outputFile.json=test-results/vitest-results.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: firstscreen-v7-unit-${{ github.sha }}
+          path: |
+            butler-desktop/test-results/vitest-results.json
+            butler-desktop/test-results/firstscreen-v7-unit-context.json
+          if-no-files-found: error
+          retention-days: 30
+
+  firstscreen-browser-gates:
+    name: ${{ matrix.job_name }}
+    runs-on: ubuntu-latest
+    needs: scope-and-contracts
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - job_name: firstscreen-playwright
+            evidence_name: required
+            grep: FirstScreen v7 required product paths
+          - job_name: firstscreen-accessibility
+            evidence_name: accessibility
+            grep: remains keyboard operable and text-visible at narrow width and 200 percent zoom
+          - job_name: firstscreen-existing-regression
+            evidence_name: regression
+            grep: preserves compact cards answer area folders and conditional setup banner
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-firstscreen-ci.lock
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: butler-desktop/package-lock.json
+          package-manager-cache: true
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - working-directory: butler-desktop
+        run: npm ci
+      - working-directory: butler-desktop
+        run: npx playwright install --with-deps chromium
+      - name: Execute exact FirstScreen browser contract
+        working-directory: butler-desktop
+        env:
+          REQUIRED_TEST_GREP: ${{ matrix.grep }}
+        run: |
+          mkdir -p test-results
+          printf '{"schema_version":1,"pr_head":"%s","runner":"playwright","gate":"%s"}\n' \
+            "${GITHUB_SHA}" "${{ matrix.job_name }}" \
+            > test-results/firstscreen-v7-${{ matrix.evidence_name }}-context.json
+          npx playwright test e2e/firstscreen-v5.spec.ts --grep "${REQUIRED_TEST_GREP}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: firstscreen-v7-browser-${{ matrix.evidence_name }}-${{ github.sha }}
+          path: |
+            butler-desktop/test-results/
+            butler-desktop/playwright-report/
+          if-no-files-found: error
+          retention-days: 30
+
+  firstscreen-required-node-audit:
+    name: firstscreen-required-node-audit
+    runs-on: ubuntu-latest
+    needs: [firstscreen-unit, firstscreen-browser-gates]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: firstscreen-v7-unit-${{ github.sha }}
+          path: evidence/unit
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: firstscreen-v7-browser-required-${{ github.sha }}
+          path: evidence/browser
+      - name: Match required nodes to executed JSON reports
+        working-directory: butler-desktop
+        run: |
+          node scripts/verify-required-test-nodes.mjs \
+            --manifest acceptance/required-tests.v1.json \
+            --vitest ../evidence/unit/vitest-results.json \
+            --playwright ../evidence/browser/test-results/playwright-results.json \
+            --head "${GITHUB_SHA}" \
+            --output ../evidence/required-node-audit.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: firstscreen-v7-required-node-audit-${{ github.sha }}
+          path: evidence/required-node-audit.json
+          if-no-files-found: error
+          retention-days: 30
+
   native-compile:
     strategy:
       fail-fast: true
@@ -276,18 +398,24 @@ jobs:
   gate:
     if: always()
     runs-on: ubuntu-latest
-    needs: [scope-and-contracts, desktop-web, native-compile, repository-python, handoff-macos]
+    needs: [scope-and-contracts, desktop-web, firstscreen-unit, firstscreen-browser-gates, firstscreen-required-node-audit, native-compile, repository-python, handoff-macos]
     steps:
       - name: Enforce event-applicable gates
         env:
           CONTRACTS: ${{ needs.scope-and-contracts.result }}
           WEB: ${{ needs.desktop-web.result }}
+          FIRSTSCREEN_UNIT: ${{ needs.firstscreen-unit.result }}
+          FIRSTSCREEN_BROWSER: ${{ needs.firstscreen-browser-gates.result }}
+          FIRSTSCREEN_NODE_AUDIT: ${{ needs.firstscreen-required-node-audit.result }}
           NATIVE: ${{ needs.native-compile.result }}
           REPOSITORY: ${{ needs.repository-python.result }}
           HANDOFF_MACOS: ${{ needs.handoff-macos.result }}
         run: |
           test "${CONTRACTS}" = success
           test "${WEB}" = success
+          test "${FIRSTSCREEN_UNIT}" = success
+          test "${FIRSTSCREEN_BROWSER}" = success
+          test "${FIRSTSCREEN_NODE_AUDIT}" = success
           test "${NATIVE}" = success
           test "${REPOSITORY}" = success
           test "${HANDOFF_MACOS}" = success

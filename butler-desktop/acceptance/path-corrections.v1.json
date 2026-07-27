@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "suite": "firstscreen-v7-correction",
+  "authority": "lead-supplement-2026-07-27",
+  "canonical_product_test": "e2e/firstscreen-v5.spec.ts",
+  "replacements": [
+    {
+      "instruction_path": "e2e/firstscreen-egress.spec.ts",
+      "actual_path": "e2e/firstscreen-v5.spec.ts"
+    },
+    {
+      "instruction_path": "e2e/settings-learning.spec.ts",
+      "actual_path": "e2e/firstscreen-v5.spec.ts"
+    },
+    {
+      "instruction_path": "e2e/firstscreen-regression.spec.ts",
+      "actual_path": "e2e/firstscreen-v5.spec.ts"
+    },
+    {
+      "instruction_path": "e2e/firstscreen-accessibility.spec.ts",
+      "actual_path": "e2e/firstscreen-v5.spec.ts"
+    }
+  ]
+}

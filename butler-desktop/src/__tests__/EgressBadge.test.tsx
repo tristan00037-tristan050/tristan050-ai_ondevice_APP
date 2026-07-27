@@ -33,7 +33,7 @@ describe('EgressBadge', () => {
   it.each([
     [{ kind: 'loading', generation: 1 }, '확인 중'],
     [{ kind: 'unmeasured', generation: 1, source: 'STATIC_BETA' }, '아직 못 잼'],
-    [{ kind: 'error', generation: 1, code: 'HTTP_ERROR' }, '확인 실패'],
+    [{ kind: 'error', generation: 1, reason: 'TRANSPORT', code: 'HTTP_ERROR' }, '확인 실패'],
     [{ kind: 'stale', generation: 1, code: 'FRESHNESS_EXPIRED' }, '다시 확인 필요'],
   ] as const)('does not turn non-ready state into zero', (state, label) => {
     renderState(state);
@@ -55,7 +55,7 @@ describe('EgressBadge', () => {
   });
 
   it('shows zero only for a fresh internally consistent PASS report', () => {
-    renderState({ kind: 'ready', generation: 2, report: ZERO_REPORT });
+    renderState({ kind: 'measured', generation: 2, report: ZERO_REPORT });
     const badge = screen.getByTestId('egress-badge');
     expect(badge).toHaveTextContent('밖으로 나간 것 0');
     expect(badge).toHaveAttribute('data-tone', 'safe');
@@ -64,7 +64,7 @@ describe('EgressBadge', () => {
 
   it('shows positive bytes as warning and opens the shared modal', () => {
     const onOpen = renderState({
-      kind: 'ready',
+      kind: 'measured',
       generation: 3,
       report: {
         ...ZERO_REPORT,
@@ -97,7 +97,7 @@ describe('EgressBadge', () => {
     },
   ])('warns for every verified zero-byte FAIL: $runId', report => {
     renderState({
-      kind: 'ready',
+      kind: 'measured',
       generation: 4,
       report: {
         ...ZERO_REPORT,

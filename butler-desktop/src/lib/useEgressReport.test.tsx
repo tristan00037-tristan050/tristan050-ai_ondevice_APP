@@ -1,8 +1,11 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./sidecarFetch', () => ({ sidecarFetch: vi.fn() }));
+vi.mock('./sidecarFetch', async importOriginal => ({
+  ...await importOriginal<typeof import('./sidecarFetch')>(),
+  sidecarFetch: vi.fn(),
+}));
 
 import { sidecarFetch } from './sidecarFetch';
 import { canonicalEgressReceiptPayload, useEgressReport } from './egressReport';
@@ -68,6 +71,7 @@ function jsonResponse(payload: unknown, status = 200) {
 
 describe('useEgressReport transport and generation contract', () => {
   beforeEach(() => mockedFetch.mockReset());
+  afterEach(() => vi.useRealTimers());
 
   it.each([
     [new Response('{}', { status: 500, headers: { 'content-type': 'application/json' } }), 'HTTP_ERROR'],
@@ -99,7 +103,7 @@ describe('useEgressReport transport and generation contract', () => {
     expect(JSON.stringify(result.current.state)).not.toContain('ready');
   });
 
-  it('does not promote the current RUNTIME_REAL response without value and measured_at', async () => {
+  it('fails closed for an unknown runtime measurement marker', async () => {
     mockedFetch.mockResolvedValueOnce(jsonResponse({
       schema_version: 'egress_report.v2',
       measurement: 'RUNTIME_REAL',
@@ -107,10 +111,11 @@ describe('useEgressReport transport and generation contract', () => {
       verdict: 'PASS',
     }));
     const { result } = renderHook(() => useEgressReport());
-    await waitFor(() => expect(result.current.state.kind).toBe('unmeasured'));
+    await waitFor(() => expect(result.current.state.kind).toBe('error'));
     expect(result.current.state).toMatchObject({
-      kind: 'unmeasured',
-      source: 'INCOMPLETE_RUNTIME',
+      kind: 'error',
+      reason: 'SCHEMA',
+      code: 'UNSUPPORTED_SCHEMA',
     });
   });
 
@@ -131,14 +136,14 @@ describe('useEgressReport transport and generation contract', () => {
     await act(async () => {
       await result.current.refresh();
     });
-    await waitFor(() => expect(result.current.state.kind).toBe('ready'));
-    expect(result.current.state.kind === 'ready' && result.current.state.report.runId).toBe('run-B');
+    await waitFor(() => expect(result.current.state.kind).toBe('measured'));
+    expect(result.current.state.kind === 'measured' && result.current.state.report.runId).toBe('run-B');
 
     await act(async () => {
       resolveA?.(jsonResponse(report('run-A', 0)));
       await Promise.resolve();
     });
-    expect(result.current.state.kind === 'ready' && result.current.state.report.runId).toBe('run-B');
+    expect(result.current.state.kind === 'measured' && result.current.state.report.runId).toBe('run-B');
     expect(result.current.state.generation).toBe(2);
   });
 
@@ -150,9 +155,9 @@ describe('useEgressReport transport and generation contract', () => {
         .mockResolvedValueOnce(jsonResponse(report('run-replay', 0, replayedGeneration)));
 
       const { result } = renderHook(() => useEgressReport());
-      await waitFor(() => expect(result.current.state.kind).toBe('ready'));
+      await waitFor(() => expect(result.current.state.kind).toBe('measured'));
       expect(
-        result.current.state.kind === 'ready'
+        result.current.state.kind === 'measured'
           && result.current.state.report.measurementGeneration,
       ).toBe(3);
 

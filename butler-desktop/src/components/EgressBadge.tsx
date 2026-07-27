@@ -31,9 +31,7 @@ export function egressBadgeView(state: EgressUiState): EgressBadgeView {
       tone: 'unmeasured',
       ariaLabel: state.source === 'STATIC_BETA'
         ? '외부 전송 실측값 없음, 베타 상수는 안전 판정에 사용하지 않음'
-        : state.source === 'INCOMPLETE_RUNTIME'
-          ? '외부 전송 감시기 응답에 측정값과 측정 시각이 없어 안전 판정하지 않음'
-          : '외부 전송 실측값 없음',
+        : '외부 전송 실측값 없음',
     };
   }
   if (state.kind === 'error') {

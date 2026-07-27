@@ -150,6 +150,7 @@ function setupStatus(active: boolean) {
 
 type OpenOptions = Readonly<{
   egress?: (route: Route) => Promise<void> | void;
+  learning?: (route: Route) => Promise<void> | void;
   setup?: (route: Route) => Promise<void> | void;
   waitForInput?: boolean;
 }>;
@@ -171,6 +172,20 @@ async function openHome(page: Page, options: OpenOptions = {}): Promise<void> {
       contentType: 'application/json',
       body: JSON.stringify(signedReport()),
     })),
+  );
+  await page.route(
+    '**/api/capabilities/learning',
+    options.learning ?? jsonRoute({
+      schema_version: 1,
+      source: 'UNAVAILABLE',
+      generation: 0,
+      capabilities: {
+        company_rules: 'UNKNOWN',
+        company_facts: 'UNKNOWN',
+        company_formats: 'UNKNOWN',
+        folder_learning: 'UNKNOWN',
+      },
+    }),
   );
   await page.goto('/');
   await expect(page.getByTestId('sidecar-loading')).toBeHidden({ timeout: 30_000 });
@@ -421,6 +436,133 @@ test.describe('egress attack matrix (19/19)', () => {
       egress: jsonRoute(signedReport({ receipt_run_id: 'other-run' })),
     });
     await expectNotZero(page);
+  });
+});
+
+test.describe('FirstScreen v7 required product paths', () => {
+  test('never-settling egress report leaves loading and never displays a fake zero', async ({ page }) => {
+    await openHome(page, {
+      egress: async () => new Promise<void>(() => undefined),
+    });
+    const badge = page.getByTestId('egress-badge');
+    await expect(badge).toContainText('확인 중');
+    await expect(badge).not.toContainText('밖으로 나간 것 0');
+    await expect(badge).toContainText('확인 실패', { timeout: 10_000 });
+    await expect(badge).not.toContainText('확인 중');
+    await expect(badge).not.toContainText('밖으로 나간 것 0');
+    await expect(badge).toHaveAttribute('data-tone', 'error');
+  });
+
+  test('company learning shows the four canonical rows with signal-derived statuses', async ({ page }) => {
+    await openHome(page, {
+      learning: jsonRoute({
+        schema_version: 1,
+        source: 'CANONICAL',
+        generation: 21,
+        capabilities: {
+          company_rules: 'IN_USE',
+          company_facts: 'IN_USE',
+          company_formats: 'REGISTERED_ONLY',
+          folder_learning: 'PREVIEW_ONLY',
+        },
+      }),
+    });
+    await page.getByTestId('settings-entry').click();
+    const group = page.getByTestId('company-learning-settings');
+    await expect(group).toBeVisible();
+    for (const label of [
+      '회사 규칙 등록',
+      '회사 사실 승인',
+      '회사 양식 등록',
+      '폴더에서 배우기',
+    ]) {
+      await expect(group.getByText(label, { exact: true })).toHaveCount(1);
+      await expect(group.getByRole('button', { name: `${label} 열기` })).toHaveCount(1);
+    }
+    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(2);
+    await expect(group.getByText('등록만 됩니다', { exact: true })).toHaveCount(1);
+    await expect(group.getByText('미리보기만 됩니다', { exact: true })).toHaveCount(1);
+  });
+
+  test('company learning preserves four accessible rows when capability signals are unavailable', async ({ page }) => {
+    await openHome(page, {
+      learning: jsonRoute({ detail: 'CAPABILITY_UNAVAILABLE' }, 503),
+    });
+    await page.getByTestId('settings-entry').click();
+    const group = page.getByTestId('company-learning-settings');
+    await expect(group.locator('.settings-row')).toHaveCount(4);
+    await expect(group.getByText('확인할 수 없습니다', { exact: true })).toHaveCount(4);
+    for (const label of [
+      '회사 규칙 등록',
+      '회사 사실 승인',
+      '회사 양식 등록',
+      '폴더에서 배우기',
+    ]) {
+      await expect(group.getByRole('button', { name: `${label} 열기` })).toHaveCount(1);
+    }
+  });
+
+  test('preserves compact cards answer area folders and conditional setup banner', async ({ page }) => {
+    await page.route('**/api/analyze/stream', route => route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: 'event: complete\ndata: {"result_text":"v7 회귀 확인 완료"}\n\n',
+    }));
+    await openHome(page, { setup: jsonRoute(setupStatus(false)) });
+    await expect(page.getByTestId('setup-banner')).toBeVisible();
+    await expect(page.getByRole('button', { name: /미분류/ })).toBeVisible();
+    const messageList = page.getByTestId('message-list');
+    await expect(messageList).toBeVisible();
+    await page.getByTestId('text-input').fill('v7 compact regression');
+    await page.getByTestId('text-input').press('Enter');
+    const grid = page.getByTestId('home-card-grid');
+    await expect(grid).toHaveClass(/compact/, { timeout: 30_000 });
+    const box = await grid.boundingBox();
+    expect(box).not.toBeNull();
+    expect(Math.round(box!.height)).toBe(52);
+    await expect(messageList).toContainText('v7 회귀 확인 완료');
+  });
+
+  test('remains keyboard operable and text-visible at narrow width and 200 percent zoom', async ({ page }) => {
+    await page.setViewportSize({ width: 640, height: 720 });
+    await openHome(page, {
+      learning: jsonRoute({
+        schema_version: 1,
+        source: 'CANONICAL',
+        generation: 31,
+        capabilities: {
+          company_rules: 'IN_USE',
+          company_facts: 'IN_USE',
+          company_formats: 'REGISTERED_ONLY',
+          folder_learning: 'PREVIEW_ONLY',
+        },
+      }),
+    });
+    await page.getByTestId('settings-entry').focus();
+    await page.getByTestId('settings-entry').press('Enter');
+    await page.evaluate(() => {
+      document.documentElement.style.zoom = '2';
+    });
+    const group = page.getByTestId('company-learning-settings');
+    for (const label of [
+      '회사 규칙 등록',
+      '회사 사실 승인',
+      '회사 양식 등록',
+      '폴더에서 배우기',
+    ]) {
+      const text = group.getByText(label, { exact: true });
+      await expect(text).toBeVisible();
+      expect(await text.evaluate(element => element.scrollWidth <= element.clientWidth + 1))
+        .toBe(true);
+    }
+    const firstAction = group.getByRole('button', { name: '회사 규칙 등록 열기' });
+    await firstAction.focus();
+    await expect(firstAction).toBeFocused();
+    const axe = await new AxeBuilder({ page })
+      .include('[data-testid="company-learning-settings"]')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    expect(axe.violations, JSON.stringify(axe.violations, null, 2)).toEqual([]);
   });
 });
 

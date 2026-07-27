@@ -46,6 +46,7 @@ export default defineConfig({
   reporter: [
     ['line'],
     ['junit', { outputFile: 'test-results/playwright-junit.xml' }],
+    ['json', { outputFile: 'test-results/playwright-results.json' }],
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
   ],
   use: {

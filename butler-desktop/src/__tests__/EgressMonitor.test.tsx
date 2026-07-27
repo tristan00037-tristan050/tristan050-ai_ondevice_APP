@@ -4,7 +4,7 @@ import { EgressMonitor } from '../components/chat/EgressMonitor';
 import type { EgressUiState } from '../lib/egressReport';
 
 const STATE: EgressUiState = {
-  kind: 'ready',
+  kind: 'measured',
   generation: 7,
   report: Object.freeze({
     schemaVersion: 'butler.egress.report.v3',
