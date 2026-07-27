@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
@@ -14,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from butler_pc_core.assets.context import parse_platform_context
-from butler_pc_core.assets.dev_sidecar import _bootstrap_frame
+from butler_pc_core.assets.dev_sidecar import _bootstrap_frame, _child_environment
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -76,6 +77,21 @@ def test_playwright_and_documented_launcher_use_descriptor_bootstrap() -> None:
     assert "ASSET_INVENTORY_NOT_PROVIDED" not in build_script
 
 
+def test_development_child_home_is_private_and_platform_safe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
+    linux_environment = _child_environment(app_data=tmp_path, bootstrap_fd=17)
+    assert linux_environment["HOME"] == str(tmp_path)
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    macos_environment = _child_environment(app_data=tmp_path, bootstrap_fd=17)
+    assert macos_environment["HOME"] == os.environ.get("HOME", str(Path.home()))
+    assert macos_environment["BUTLER_APP_DATA_DIR"] == str(tmp_path)
+    assert macos_environment["BUTLER_PRODUCTION"] == "0"
+
+
 @pytest.mark.skipif(os.name != "posix", reason="descriptor bootstrap is POSIX-only")
 def test_direct_sidecar_without_bootstrap_stays_fail_closed() -> None:
     environment = os.environ.copy()
@@ -127,7 +143,13 @@ def test_development_launcher_serves_real_sidecar_health(tmp_path: Path) -> None
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
             if process.poll() is not None:
-                pytest.fail("DEVELOPMENT_SIDECAR_EXITED")
+                stderr = process.stderr.read() if process.stderr is not None else ""
+                digest = hashlib.sha256(stderr.encode("utf-8")).hexdigest()
+                pytest.fail(
+                    "DEVELOPMENT_SIDECAR_EXITED "
+                    f"stderr_length={len(stderr.encode('utf-8'))} "
+                    f"stderr_sha256={digest}"
+                )
             try:
                 with urllib.request.urlopen(
                     f"http://127.0.0.1:{port}/health",

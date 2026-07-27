@@ -152,15 +152,24 @@ def _bootstrap_frame(
 
 
 def _child_environment(*, app_data: Path, bootstrap_fd: int) -> dict[str, str]:
+    # macOS Keychain lookup is bound to the real login home. Other POSIX
+    # development runtimes keep every home-relative write inside the private
+    # app-data authority instead of inheriting an absent or shared CI HOME.
+    home = (
+        os.environ.get("HOME", str(Path.home()))
+        if sys.platform == "darwin"
+        else str(app_data)
+    )
     environment: dict[str, str] = {
         _APP_DATA_ENV: str(app_data),
         _BOOTSTRAP_FD_ENV: str(bootstrap_fd),
         "BUTLER_PRODUCTION": "0",
+        "HOME": home,
         "LANG": os.environ.get("LANG", "C.UTF-8"),
         "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
         "PATH": os.environ.get("PATH", os.defpath),
     }
-    for name in ("HOME", "TMPDIR", "TEMP", "TMP"):
+    for name in ("TMPDIR", "TEMP", "TMP"):
         value = os.environ.get(name)
         if value:
             environment[name] = value
