@@ -20,6 +20,7 @@ PUBLIC_REASONS = frozenset(
         "AUTHORITY_UNREACHABLE",
         "AUTHORITY_INCOMPLETE",
         "AUTHORITY_CHANGED",
+        "AUTHORITY_CHANGED_DURING_SNAPSHOT",
         "GENERATION_UNAVAILABLE",
         "CONTRACT_MISMATCH",
         "INTERNAL_ERROR",
@@ -37,6 +38,7 @@ class CapabilityState(str, Enum):
 
 @dataclass(frozen=True)
 class AuthorityProbe:
+    key: str
     available: bool
     registered: bool
     consumer_bound: bool
@@ -45,6 +47,8 @@ class AuthorityProbe:
     evidence_digest: str
 
     def validate(self) -> None:
+        if self.key not in CAPABILITY_KEYS:
+            raise ValueError("PROBE_KEY_INVALID")
         if not self.available and (
             self.registered or self.consumer_bound or self.preview_only
         ):

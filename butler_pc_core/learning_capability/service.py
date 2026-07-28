@@ -40,10 +40,17 @@ class LearningCapabilityService:
                     authority.key: authority.revision()
                     for authority in self.authorities
                 }
-                if before != after:
+                if any(
+                    probes[key].key != key
+                    or before[key] != probes[key].revision
+                    or probes[key].revision != after[key]
+                    for key in CAPABILITY_KEYS
+                ):
                     if attempt == 0:
                         continue
-                    raise LearningCapabilityError("AUTHORITY_CHANGED")
+                    raise LearningCapabilityError(
+                        "AUTHORITY_CHANGED_DURING_SNAPSHOT"
+                    )
 
                 states = {
                     key: derive_state(probes[key])
@@ -81,7 +88,7 @@ class LearningCapabilityService:
                 )
                 snapshot.to_dict()
                 return snapshot
-            raise LearningCapabilityError("AUTHORITY_CHANGED")
+            raise LearningCapabilityError("AUTHORITY_CHANGED_DURING_SNAPSHOT")
         except LearningCapabilityError:
             raise
         except AuthorityReadError as exc:

@@ -77,7 +77,7 @@ def _policy_json_response(
 def add_policy_gate_middleware(
     app: Any,
     *,
-    policy_store: PolicyStore,
+    policy_store: PolicyStore | Callable[[], PolicyStore],
     route_operation: dict[str, tuple[str, str]] | None = None,
 ) -> None:
     """Register central PolicyGate middleware before box/helper route execution.
@@ -95,7 +95,8 @@ def add_policy_gate_middleware(
 
         box_id, operation = operation_binding
         try:
-            policy = policy_store.load_active_policy()
+            store = policy_store() if callable(policy_store) else policy_store
+            policy = store.load_active_policy()
         except PolicyLoadError:
             return _policy_json_response(
                 request,

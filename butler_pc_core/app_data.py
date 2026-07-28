@@ -12,12 +12,14 @@ def product_data_root(component: str, *, legacy_name: str) -> Path:
     """Return a device-local persistent root without accepting relative app data."""
 
     configured = os.environ.get("BUTLER_APP_DATA_DIR", "").strip()
-    if configured:
-        root = Path(configured).expanduser()
-        if not root.is_absolute():
-            raise AppDataPathError("APP_DATA_DIR_NOT_ABSOLUTE")
-        return root / component
-    # The native launcher always supplies BUTLER_APP_DATA_DIR. Preserve the
-    # documented repository/dev launcher behavior when it is intentionally
-    # absent instead of silently writing into a user's home directory.
-    return Path(legacy_name)
+    if not configured:
+        raise AppDataPathError("APP_DATA_DIR_REQUIRED")
+    root = Path(configured).expanduser()
+    if not root.is_absolute():
+        raise AppDataPathError("APP_DATA_DIR_NOT_ABSOLUTE")
+    if component in {"", ".", ".."} or "/" in component or "\\" in component:
+        raise AppDataPathError("APP_DATA_COMPONENT_INVALID")
+    # legacy_name remains in the signature to avoid a parallel call contract,
+    # but production never falls back to CWD or a legacy relative directory.
+    del legacy_name
+    return root / component

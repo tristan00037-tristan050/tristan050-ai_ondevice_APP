@@ -55,6 +55,7 @@ class CompanyPolicyAuthority:
             )
             bound = bool(digests) and self.bindings.is_bound(self.key, digests)
             probe = AuthorityProbe(
+                key=self.key,
                 available=True,
                 registered=summary.active_count > 0,
                 consumer_bound=bound,
@@ -100,6 +101,7 @@ class CompanyFactAuthority:
                 summary.active_fact_digests,
             )
             probe = AuthorityProbe(
+                key=self.key,
                 available=True,
                 registered=summary.active_count > 0,
                 consumer_bound=bound,
@@ -146,6 +148,7 @@ class CompanyFormatAuthority:
                 summary.active_format_digests,
             )
             probe = AuthorityProbe(
+                key=self.key,
                 available=True,
                 registered=summary.registered_count > 0,
                 consumer_bound=bound,
@@ -193,6 +196,7 @@ class FolderLearningAuthority:
             )
             preview_only = not registered and summary.candidate_count > 0
             probe = AuthorityProbe(
+                key=self.key,
                 available=True,
                 registered=registered,
                 consumer_bound=bound,

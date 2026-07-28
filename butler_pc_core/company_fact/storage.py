@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from butler_pc_core.app_data import product_data_root
+from butler_pc_core.strict_json import load_strict_bytes
 from butler_pc_core.company_policy.admin_auth import verify_admin_context
 from butler_pc_core.company_policy.contracts import AdminContext, stable_json_digest
 from butler_pc_core.company_policy.vault import LocalEncryptedVault, VaultError
@@ -74,7 +75,7 @@ class CompanyFactStore:
         if not self.index_path.exists():
             return self._empty_index()
         try:
-            data = json.loads(self.index_path.read_text(encoding="utf-8"))
+            data = load_strict_bytes(self.index_path.read_bytes(), allow_float=True)
             if data.get("schema_version") != "company_fact.index_file.v1":
                 raise CompanyFactLoadError("COMPANY_FACT_INDEX_SCHEMA_INVALID")
             if not isinstance(data.get("facts"), dict):
@@ -97,7 +98,10 @@ class CompanyFactStore:
         if not self.known_bad_index_path.exists():
             return self._empty_known_bad_index()
         try:
-            data = json.loads(self.known_bad_index_path.read_text(encoding="utf-8"))
+            data = load_strict_bytes(
+                self.known_bad_index_path.read_bytes(),
+                allow_float=True,
+            )
             if data.get("schema_version") != "company_fact.known_bad_index_file.v1":
                 raise CompanyFactLoadError("KNOWN_BAD_INDEX_SCHEMA_INVALID")
             if not isinstance(data.get("entries"), dict):
@@ -119,7 +123,10 @@ class CompanyFactStore:
         if not self.known_bad_override_path.exists():
             return {"schema_version": "company_fact.known_bad_override_file.v1", "overrides": {}}
         try:
-            data = json.loads(self.known_bad_override_path.read_text(encoding="utf-8"))
+            data = load_strict_bytes(
+                self.known_bad_override_path.read_bytes(),
+                allow_float=True,
+            )
             if data.get("schema_version") != "company_fact.known_bad_override_file.v1":
                 raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_SCHEMA_INVALID")
             if not isinstance(data.get("overrides"), dict):

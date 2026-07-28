@@ -24,6 +24,7 @@ class _StableAuthority:
 
     def probe(self) -> AuthorityProbe:
         return AuthorityProbe(
+            key=self.key,
             available=True,
             registered=True,
             consumer_bound=True,
@@ -60,7 +61,10 @@ def test_revision_race_retries_once_then_fails_closed(tmp_path):
     )
     with pytest.raises(Exception) as captured:
         service.snapshot()
-    assert getattr(captured.value, "reason", None) == "AUTHORITY_CHANGED"
+    assert (
+        getattr(captured.value, "reason", None)
+        == "AUTHORITY_CHANGED_DURING_SNAPSHOT"
+    )
     assert racing.calls == 4
     assert not (tmp_path / "generation.json").exists()
 
@@ -112,4 +116,3 @@ def test_generation_store_corruption_lock_failure_and_overflow_fail_closed(
     with pytest.raises(GenerationStoreError):
         store.generation_for("c" * 64)
     assert not store.path.exists()
-
