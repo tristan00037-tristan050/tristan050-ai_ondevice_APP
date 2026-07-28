@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 # The token manager resolves its persistent path at sidecar import time.
 os.environ["BUTLER_APP_DATA_DIR"] = tempfile.mkdtemp(
     prefix="butler-fs90-route-",
+    dir=Path(tempfile.gettempdir()).resolve(),
 )
 
 import butler_sidecar
