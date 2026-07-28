@@ -19,6 +19,7 @@ import {
   parseStrictJson,
   readStrictJsonFile,
 } from './strict_json.mjs';
+import { collectPinnedActions } from './action_pins.mjs';
 import { containsPrivateHomePath } from './evidence_privacy.mjs';
 
 const MAX_PACKAGE_FILES = 512;
@@ -261,15 +262,7 @@ async function verifyActionPins(root) {
     '.github/workflows/firstscreen-v2-5.yml',
   ], { encoding: 'utf8' });
   if (listing.status !== 0) throw new Error('WORKFLOW_SOURCE_UNAVAILABLE');
-  const observed = new Map();
-  for (const match of listing.stdout.matchAll(
-    /^\s*uses:\s*(actions\/[A-Za-z0-9_.-]+)@([0-9a-f]{40})\b/gmu,
-  )) {
-    const [, repository, commit] = match;
-    const existing = observed.get(repository);
-    if (existing && existing !== commit) throw new Error('ACTION_PIN_AMBIGUOUS');
-    observed.set(repository, commit);
-  }
+  const observed = collectPinnedActions(listing.stdout);
   if (observed.size !== expected.size
       || [...expected].some(([repository, commit]) => (
         observed.get(repository) !== commit

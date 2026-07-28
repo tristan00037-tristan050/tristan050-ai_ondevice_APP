@@ -12,6 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
+import { collectPinnedActions } from './action_pins.mjs';
 import { containsPrivateHomePath } from './evidence_privacy.mjs';
 
 const root = resolve(import.meta.dirname, '..', '..');
@@ -327,6 +328,34 @@ for (const repositoryPath of [
   if (containsPrivateHomePath(repositoryPath)) {
     throw new Error('REPOSITORY_PATH_FALSE_POSITIVE');
   }
+}
+const actionA = 'a'.repeat(40);
+const actionB = 'b'.repeat(40);
+const actionC = 'c'.repeat(40);
+const pinnedActions = collectPinnedActions(`
+steps:
+  - uses: actions/checkout@${actionA}
+  - name: Upload
+    uses: actions/upload-artifact@${actionB}
+`);
+if (pinnedActions.get('actions/checkout') !== actionA
+    || pinnedActions.get('actions/upload-artifact') !== actionB
+    || pinnedActions.size !== 2) {
+  throw new Error('ACTION_PIN_YAML_STYLE_NOT_DETECTED');
+}
+let ambiguousPinRejected = false;
+try {
+  collectPinnedActions(`
+steps:
+  - uses: actions/checkout@${actionA}
+  - uses: actions/checkout@${actionC}
+`);
+} catch (error) {
+  ambiguousPinRejected = error instanceof Error
+    && error.message === 'ACTION_PIN_AMBIGUOUS';
+}
+if (!ambiguousPinRejected) {
+  throw new Error('ACTION_PIN_AMBIGUITY_NOT_REJECTED');
 }
 function invokeEvidence(overrides = {}) {
   return spawnSync(process.execPath, [
