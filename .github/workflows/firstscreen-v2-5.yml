@@ -483,10 +483,10 @@ jobs:
     needs:
       [scope-and-contracts, firstscreen-unit, firstscreen-learning-backend,
        firstscreen-browser-gates, firstscreen-required-node-audit]
+    # 서명 증명(attestation) 권한은 공급망 전용 워크플로에만 둔다(P4-P0-02).
+    # 이 job 은 증거 꾸러미를 만들어 올리기만 한다.
     permissions:
       contents: read
-      id-token: write
-      attestations: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -592,41 +592,15 @@ jobs:
             sha256sum -c SHA256SUMS.txt
           )
           echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
-      - name: Create hosted artifact attestation
-        id: attest
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
-        with:
-          subject-path: ${{ steps.package.outputs.archive }}
-      - name: Verify detached digest, extracted payload and hosted attestation
-        env:
-          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
-        run: |
-          set -euo pipefail
-          test -n "${ATTESTATION_BUNDLE}"
-          node scripts/ci/verify_firstscreen_evidence_package.mjs \
-            --package "${RUNNER_TEMP}/firstscreen-v9-recheck/package" \
-            --zip "${{ steps.package.outputs.archive }}" \
-            --detached "${{ steps.package.outputs.archive }}.sha256" \
-            --attestation-bundle "${ATTESTATION_BUNDLE}" \
-            --repository "${GITHUB_REPOSITORY}" \
-            --signer-workflow \
-              "${GITHUB_REPOSITORY}/.github/workflows/firstscreen-v2-5.yml" \
-            --pull-request "${{ github.event.pull_request.number }}" \
-            --subject-head "${PR_HEAD_SHA}" \
-            --object-format "$(git rev-parse --show-object-format)" \
-            --tree "$(git rev-parse 'HEAD^{tree}')" \
-            --run-id "${GITHUB_RUN_ID}" \
-            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
-            --workflow-ref "${GITHUB_WORKFLOW_REF}" \
-            --source-digest "${GITHUB_SHA}" \
-            --output "${RUNNER_TEMP}/firstscreen-v9-evidence-verification.json"
+      # 서명 증명 생성·검증 단계는 공급망 전용 워크플로로 한정한다(P4-P0-02).
+      # 꾸러미 자체의 무결성은 위 package 단계가 SHA256SUMS 로 두 번 확인한다
+      # (꾸러미 내부 1회 + 재압축 해제본 1회) + detached .sha256 을 함께 올린다.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: firstscreen-v9-evidence-${{ env.PR_HEAD_SHA }}
           path: |
             ${{ steps.package.outputs.archive }}
             ${{ steps.package.outputs.archive }}.sha256
-            ${{ runner.temp }}/firstscreen-v9-evidence-verification.json
           if-no-files-found: error
           retention-days: 30
 
