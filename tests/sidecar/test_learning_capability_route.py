@@ -100,6 +100,46 @@ def test_learning_capability_route_exists_once_in_app_route_graph():
     assert len(matches) == 1
 
 
+def test_product_service_uses_lazy_product_store_getters(monkeypatch):
+    from butler_pc_core.company_fact import routes as fact_routes
+    from butler_pc_core.sidecar.routes import admin_policy_format
+    from butler_pc_core.sidecar.routes import company_learning
+
+    policy_store = object()
+    fact_store = object()
+    format_store = object()
+    learning_store = object()
+    monkeypatch.setattr(
+        admin_policy_format,
+        "get_policy_store",
+        lambda: policy_store,
+    )
+    monkeypatch.setattr(
+        admin_policy_format,
+        "get_format_store",
+        lambda: format_store,
+    )
+    monkeypatch.setattr(
+        fact_routes,
+        "get_company_fact_store",
+        lambda: fact_store,
+    )
+    monkeypatch.setattr(
+        company_learning,
+        "get_learning_event_store",
+        lambda: learning_store,
+    )
+
+    service = get_learning_capability_service()
+
+    assert [authority.store for authority in service.authorities] == [
+        policy_store,
+        fact_store,
+        format_store,
+        learning_store,
+    ]
+
+
 def test_success_wire_contract_matches_existing_frontend_parser():
     _override(_SuccessService())
     try:

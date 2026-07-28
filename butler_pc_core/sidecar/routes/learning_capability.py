@@ -41,11 +41,11 @@ def get_learning_capability_service() -> LearningCapabilityService:
     # mutation routes, not to a parallel inventory or UI-owned cache.
     from butler_pc_core.company_fact.routes import get_company_fact_store
     from butler_pc_core.sidecar.routes.admin_policy_format import (
-        _FORMAT_STORE,
-        _POLICY_STORE,
+        get_format_store,
+        get_policy_store,
     )
     from butler_pc_core.sidecar.routes.company_learning import (
-        _LEARNING_EVENT_STORE,
+        get_learning_event_store,
     )
 
     bindings = default_consumer_binding_store()
@@ -58,10 +58,10 @@ def get_learning_capability_service() -> LearningCapabilityService:
     )
     return LearningCapabilityService(
         authorities=(
-            CompanyPolicyAuthority(_POLICY_STORE, bindings),
+            CompanyPolicyAuthority(get_policy_store(), bindings),
             CompanyFactAuthority(get_company_fact_store(), bindings),
-            CompanyFormatAuthority(_FORMAT_STORE, bindings),
-            FolderLearningAuthority(_LEARNING_EVENT_STORE, bindings),
+            CompanyFormatAuthority(get_format_store(), bindings),
+            FolderLearningAuthority(get_learning_event_store(), bindings),
         ),
         generation_store=generation_store,
     )
