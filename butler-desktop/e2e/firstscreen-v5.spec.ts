@@ -444,6 +444,10 @@ test.describe('egress attack matrix (19/19)', () => {
 
 test.describe('FirstScreen v7 required product paths', () => {
   test('실제 sidecar가 불완전 권위를 503으로 닫고 네 행 모두 확인할 수 없습니다로 표시한다', async ({ page }) => {
+    test.skip(
+      process.env.BUTLER_E2E_PRESEED_LEARNING === '1',
+      '사전 권위 데이터가 없는 실제 sidecar 작업에서만 실행합니다.',
+    );
     await openHome(page, { useRealLearning: true });
     await page.getByTestId('settings-entry').click();
     const group = page.getByTestId('company-learning-settings');
@@ -452,6 +456,10 @@ test.describe('FirstScreen v7 required product paths', () => {
   });
 
   test('회사 배우기 네 행이 endpoint 가로채기 없이 실제 sidecar와 권위 저장소에서 계산된다', async ({ page }) => {
+    test.skip(
+      process.env.BUTLER_E2E_PRESEED_LEARNING !== '1',
+      '사전 권위 데이터가 있는 실제 sidecar 작업에서만 실행합니다.',
+    );
     await openHome(page, { useRealLearning: true });
     await page.getByTestId('settings-entry').click();
     const group = page.getByTestId('company-learning-settings');
@@ -461,6 +469,10 @@ test.describe('FirstScreen v7 required product paths', () => {
   });
 
   test('회사 배우기 실제 sidecar 경로가 좁은 창 200퍼센트 확대 키보드 포커스 접근성을 보존한다', async ({ page }) => {
+    test.skip(
+      process.env.BUTLER_E2E_PRESEED_LEARNING !== '1',
+      '사전 권위 데이터가 있는 실제 sidecar 작업에서만 실행합니다.',
+    );
     await page.setViewportSize({ width: 640, height: 720 });
     await openHome(page, { useRealLearning: true });
     await page.getByTestId('settings-entry').focus();
