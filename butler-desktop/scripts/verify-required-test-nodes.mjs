@@ -204,8 +204,11 @@ function collectVitest(report) {
   return nodes;
 }
 
-function collectPlaywrightSuite(suite, inheritedFile, nodes) {
-  const file = normalizedFile(suite.file ?? inheritedFile);
+function collectPlaywrightSuite(suite, inheritedFile, reportRoot, nodes) {
+  const reportedFile = normalizedFile(suite.file ?? inheritedFile);
+  const file = reportedFile && reportRoot && !reportedFile.startsWith(`${reportRoot}/`)
+    ? posix.join(reportRoot, reportedFile)
+    : reportedFile;
   for (const spec of suite.specs ?? []) {
     const tests = spec.tests ?? [];
     const results = tests.flatMap(test => test.results ?? []);
@@ -225,14 +228,38 @@ function collectPlaywrightSuite(suite, inheritedFile, nodes) {
     });
   }
   for (const child of suite.suites ?? []) {
-    collectPlaywrightSuite(child, file, nodes);
+    collectPlaywrightSuite(child, file, reportRoot, nodes);
   }
 }
 
 function collectPlaywright(report) {
   const nodes = [];
+  const configFile = String(report?.config?.configFile ?? '').replaceAll('\\', '/');
+  const rootDir = String(report?.config?.rootDir ?? '').replaceAll('\\', '/');
+  let reportRoot = '';
+  if (configFile || rootDir) {
+    if (!configFile || !rootDir || posix.basename(configFile) !== 'playwright.config.ts') {
+      throw new Error('PLAYWRIGHT_CONFIG_INVALID');
+    }
+    const configDirectory = posix.dirname(configFile);
+    const testRoot = posix.relative(configDirectory, rootDir);
+    const projectDirectory = posix.basename(configDirectory);
+    if (
+      !projectDirectory
+      || !testRoot
+      || testRoot === '.'
+      || testRoot.startsWith('../')
+      || isAbsolute(testRoot)
+      || posix.normalize(testRoot) !== testRoot
+    ) {
+      throw new Error('PLAYWRIGHT_ROOT_INVALID');
+    }
+    reportRoot = posix.join(projectDirectory, testRoot);
+  } else if ((report.suites ?? []).length > 0) {
+    throw new Error('PLAYWRIGHT_CONFIG_MISSING');
+  }
   for (const suite of report.suites ?? []) {
-    collectPlaywrightSuite(suite, '', nodes);
+    collectPlaywrightSuite(suite, '', reportRoot, nodes);
   }
   return nodes;
 }

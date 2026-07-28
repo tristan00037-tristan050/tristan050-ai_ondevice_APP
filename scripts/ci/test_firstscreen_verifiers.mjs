@@ -28,10 +28,31 @@ await writeFile(manifest, JSON.stringify({
     file: 'missing.test.ts',
     title: 'must be absent',
     required: true,
+  }, {
+    id: 'PW-PATH-1',
+    runner: 'playwright',
+    file: 'butler-desktop/e2e/firstscreen-v5.spec.ts',
+    title: 'hosted report path is reconstructed',
+    required: true,
   }],
 }));
 await writeFile(vitest, JSON.stringify({ testResults: [] }));
-await writeFile(playwright, JSON.stringify({ suites: [] }));
+await writeFile(playwright, JSON.stringify({
+  config: {
+    configFile: '/host/checkout/butler-desktop/playwright.config.ts',
+    rootDir: '/host/checkout/butler-desktop/e2e',
+  },
+  suites: [{
+    file: 'firstscreen-v5.spec.ts',
+    specs: [{
+      title: 'hosted report path is reconstructed',
+      tests: [{
+        expectedStatus: 'passed',
+        results: [{ status: 'passed' }],
+      }],
+    }],
+  }],
+}));
 const missingNode = spawnSync(
   process.execPath,
   [
