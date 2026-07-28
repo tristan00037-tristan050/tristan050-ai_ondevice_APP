@@ -470,7 +470,7 @@ jobs:
             find . -type f ! -name SHA256SUMS.txt -print0 \
               | sort -z \
               | xargs -0 sha256sum \
-              | sed 's#  \\./#  #' > "${checksum_file}"
+              | sed 's#  \./#  #' > "${checksum_file}"
             mv "${checksum_file}" SHA256SUMS.txt
             sha256sum -c SHA256SUMS.txt
           )
