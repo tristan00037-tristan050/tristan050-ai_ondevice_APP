@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..', '..');
 const temporary = await mkdtemp(resolve(tmpdir(), 'firstscreen-verifier-'));
-const head = 'a'.repeat(40);
+const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+  cwd: root,
+  encoding: 'utf8',
+}).trim();
+const tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], {
+  cwd: root,
+  encoding: 'utf8',
+}).trim();
 
 const manifest = resolve(temporary, 'manifest.json');
 const vitest = resolve(temporary, 'vitest.json');
@@ -48,7 +55,10 @@ await mkdir(resolve(packageRoot, 'contexts'), { recursive: true });
 const payload = resolve(packageRoot, 'source/source.zip');
 await writeFile(payload, 'original');
 const originalDigest = createHash('sha256').update('original').digest('hex');
-await writeFile(resolve(packageRoot, 'SHA256SUMS'), `${originalDigest}  source/source.zip\n`);
+await writeFile(
+  resolve(packageRoot, 'SHA256SUMS.txt'),
+  `${originalDigest}  source/source.zip\n`,
+);
 await writeFile(payload, 'tampered');
 const evidence = spawnSync(
   process.execPath,
@@ -59,6 +69,10 @@ const evidence = spawnSync(
     '--detached', resolve(temporary, 'result.sha256'),
     '--attestation-bundle', resolve(temporary, 'bundle.json'),
     '--repository', 'owner/repository',
+    '--pull-request', '886',
+    '--head', head,
+    '--tree', tree,
+    '--workflow', 'owner/repository/.github/workflows/firstscreen-v2-5.yml@refs/pull/886/merge',
   ],
   { encoding: 'utf8' },
 );
@@ -87,4 +101,3 @@ await writeFile(resolve(output), `${JSON.stringify({
   ],
 }, null, 2)}\n`);
 console.log('FIRSTSCREEN_VERIFIER_NEGATIVE_TESTS=PASS');
-

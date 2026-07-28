@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
-import { readFile, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { lstat, readFile, writeFile } from 'node:fs/promises';
+import { isAbsolute, posix, relative, resolve } from 'node:path';
+
+const MAX_REPORT_BYTES = 32 * 1024 * 1024;
+const repositoryRoot = resolve(import.meta.dirname, '..', '..');
 
 function args(argv) {
   const result = {
@@ -19,6 +23,99 @@ function args(argv) {
     else result[key] = value;
   }
   return result;
+}
+
+async function readRegular(path, maximum = MAX_REPORT_BYTES) {
+  const absolute = resolve(path);
+  const info = await lstat(absolute);
+  if (!info.isFile() || info.isSymbolicLink() || info.size > maximum) {
+    throw new Error('REPORT_FILE_INVALID');
+  }
+  return readFile(absolute, 'utf8');
+}
+
+function assertNoDuplicateJsonKeys(text) {
+  let index = 0;
+  const whitespace = () => {
+    while (/\s/u.test(text[index] ?? '')) index += 1;
+  };
+  const stringToken = () => {
+    if (text[index] !== '"') throw new Error('STRICT_JSON_INVALID');
+    const start = index;
+    index += 1;
+    while (index < text.length) {
+      if (text[index] === '\\') {
+        index += 2;
+        continue;
+      }
+      if (text[index] === '"') {
+        index += 1;
+        return JSON.parse(text.slice(start, index));
+      }
+      index += 1;
+    }
+    throw new Error('STRICT_JSON_INVALID');
+  };
+  const value = () => {
+    whitespace();
+    if (text[index] === '{') {
+      index += 1;
+      const keys = new Set();
+      whitespace();
+      if (text[index] === '}') {
+        index += 1;
+        return;
+      }
+      while (index < text.length) {
+        whitespace();
+        const key = stringToken();
+        if (keys.has(key)) throw new Error('JSON_DUPLICATE_KEY');
+        keys.add(key);
+        whitespace();
+        if (text[index] !== ':') throw new Error('STRICT_JSON_INVALID');
+        index += 1;
+        value();
+        whitespace();
+        if (text[index] === '}') {
+          index += 1;
+          return;
+        }
+        if (text[index] !== ',') throw new Error('STRICT_JSON_INVALID');
+        index += 1;
+      }
+    } else if (text[index] === '[') {
+      index += 1;
+      whitespace();
+      if (text[index] === ']') {
+        index += 1;
+        return;
+      }
+      while (index < text.length) {
+        value();
+        whitespace();
+        if (text[index] === ']') {
+          index += 1;
+          return;
+        }
+        if (text[index] !== ',') throw new Error('STRICT_JSON_INVALID');
+        index += 1;
+      }
+    } else if (text[index] === '"') {
+      stringToken();
+    } else {
+      const match = text.slice(index).match(/^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/u);
+      if (!match) throw new Error('STRICT_JSON_INVALID');
+      index += match[0].length;
+    }
+  };
+  value();
+  whitespace();
+  if (index !== text.length) throw new Error('STRICT_JSON_INVALID');
+}
+
+function strictJson(text) {
+  assertNoDuplicateJsonKeys(text);
+  return JSON.parse(text);
 }
 
 function decodeXml(value) {
@@ -69,8 +166,27 @@ function collectNode(report) {
   }));
 }
 
+function requiredFile(value) {
+  const file = String(value ?? '');
+  if (
+    !file
+    || file.includes('\\')
+    || isAbsolute(file)
+    || file.split('/').some(segment => !segment || segment === '.' || segment === '..')
+    || posix.normalize(file) !== file
+  ) {
+    throw new Error('REQUIRED_PATH_INVALID');
+  }
+  return file;
+}
+
 function normalizedFile(value) {
-  return String(value ?? '').replaceAll('\\', '/');
+  const file = String(value ?? '').replaceAll('\\', '/');
+  if (isAbsolute(file)) {
+    const local = relative(repositoryRoot, resolve(file)).replaceAll('\\', '/');
+    if (!local.startsWith('../')) return local;
+  }
+  return file.replace(/^\.\//u, '');
 }
 
 function collectVitest(report) {
@@ -126,35 +242,75 @@ function digest(text) {
 }
 
 const options = args(process.argv.slice(2));
+const objectFormat = execFileSync('git', ['rev-parse', '--show-object-format'], {
+  cwd: repositoryRoot,
+  encoding: 'utf8',
+}).trim();
+const oidLength = objectFormat === 'sha256' ? 64 : objectFormat === 'sha1' ? 40 : 0;
+const oidPattern = new RegExp(`^[0-9a-f]{${oidLength}}$`);
+const checkoutHead = execFileSync('git', ['rev-parse', 'HEAD'], {
+  cwd: repositoryRoot,
+  encoding: 'utf8',
+}).trim();
+const checkoutTree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], {
+  cwd: repositoryRoot,
+  encoding: 'utf8',
+}).trim();
 if (!options.manifest || !options.vitest || !options.playwright.length
-    || !options.head || !/^[0-9a-f]{40}$/.test(options.head)) {
+    || !options.head || !oidPattern.test(options.head)) {
   throw new Error('REQUIRED_INPUT_MISSING');
 }
-const manifestText = await readFile(resolve(options.manifest), 'utf8');
-const manifest = JSON.parse(manifestText);
+const manifestText = await readRegular(options.manifest, 1024 * 1024);
+const manifest = strictJson(manifestText);
 if (![1, 2].includes(manifest.schema_version) || !Array.isArray(manifest.tests)) {
   throw new Error('MANIFEST_INVALID');
 }
+if (checkoutHead !== options.head) throw new Error('CHECKOUT_HEAD_MISMATCH');
+const requiredIds = new Set();
+const requiredTriples = new Set();
+for (const test of manifest.tests) {
+  if (typeof test.id !== 'string' || requiredIds.has(test.id)) {
+    throw new Error('REQUIRED_ID_DUPLICATE');
+  }
+  requiredIds.add(test.id);
+  test.file = requiredFile(test.file);
+  const triple = `${test.runner}\0${test.file}\0${test.title}`;
+  if (requiredTriples.has(triple)) throw new Error('REQUIRED_NODE_DUPLICATE');
+  requiredTriples.add(triple);
+}
 
-const vitestText = await readFile(resolve(options.vitest), 'utf8');
-const actual = collectVitest(JSON.parse(vitestText));
+const vitestText = await readRegular(options.vitest);
+const actual = collectVitest(strictJson(vitestText));
 const playwrightDigests = [];
 for (const path of options.playwright) {
-  const text = await readFile(resolve(path), 'utf8');
+  const text = await readRegular(path);
   playwrightDigests.push(digest(text));
-  actual.push(...collectPlaywright(JSON.parse(text)));
+  actual.push(...collectPlaywright(strictJson(text)));
 }
 const pytestDigests = [];
 for (const path of options.pytest) {
-  const text = await readFile(resolve(path), 'utf8');
+  const text = await readRegular(path);
   pytestDigests.push(digest(text));
   actual.push(...collectPytest(text));
 }
 const nodeDigests = [];
 for (const path of options.node) {
-  const text = await readFile(resolve(path), 'utf8');
+  const text = await readRegular(path);
   nodeDigests.push(digest(text));
-  actual.push(...collectNode(JSON.parse(text)));
+  actual.push(...collectNode(strictJson(text)));
+}
+const actualIdentities = new Set();
+for (const node of actual) {
+  node.file = normalizedFile(node.file);
+  if (
+    ['vitest', 'playwright'].includes(node.runner)
+    && !node.file.startsWith('butler-desktop/')
+  ) {
+    node.file = `butler-desktop/${node.file}`;
+  }
+  const identity = `${node.runner}\0${node.file}\0${node.title}`;
+  if (actualIdentities.has(identity)) throw new Error('ACTUAL_NODE_DUPLICATE');
+  actualIdentities.add(identity);
 }
 
 const reportDigests = new Set([
@@ -171,13 +327,14 @@ if (manifest.schema_version === 2 && options.context.length === 0) {
   contextMissing = 1;
 }
 for (const path of options.context) {
-  const context = JSON.parse(await readFile(resolve(path), 'utf8'));
+  const context = strictJson(await readRegular(path, 1024 * 1024));
   if (context?.schema_version !== 1
       || context.subject_pr_head !== options.head
-      || !/^[0-9a-f]{40}$/.test(context.execution_commit ?? '')
+      || context.execution_commit !== options.head
       || !/^\d+$/.test(context.workflow_run_id ?? '')
-      || context.tree_oid?.algorithm !== 'sha1'
-      || !/^[0-9a-f]{40}$/.test(context.tree_oid?.hex ?? '')) {
+      || context.tree_oid?.algorithm !== objectFormat
+      || !oidPattern.test(context.tree_oid?.hex ?? '')
+      || context.tree_oid.hex !== checkoutTree) {
     headMismatch += 1;
   }
   if (!reportDigests.has(context.report_sha256)) {
@@ -192,18 +349,17 @@ if (manifest.schema_version === 2) {
 }
 
 const required = manifest.tests.filter(test => test.required === true);
+const consumedActual = new Set();
 const rows = required.map(test => {
-  const matches = actual.filter(node =>
+  const matches = actual.map((node, index) => ({ node, index })).filter(({ node }) =>
     node.runner === test.runner
-    && (
-      normalizedFile(node.file).endsWith(normalizedFile(test.file))
-      || (
-        !normalizedFile(node.file).includes('/')
-        && normalizedFile(test.file).endsWith(`/${normalizedFile(node.file)}`)
-      )
-    )
+    && normalizedFile(node.file) === test.file
     && node.title === test.title);
-  const statuses = matches.map(match => match.status);
+  const statuses = matches.map(match => match.node.status);
+  if (matches.length === 1) {
+    if (consumedActual.has(matches[0].index)) throw new Error('ACTUAL_NODE_REUSED');
+    consumedActual.add(matches[0].index);
+  }
   return {
     id: test.id,
     executed: matches.length,
@@ -236,6 +392,10 @@ const summary = {
   pytest_report_sha256: pytestDigests,
   node_report_sha256: nodeDigests,
   head_mismatch: headMismatch,
+  tree_mismatch: headMismatch,
+  duplicate_required: 0,
+  duplicate_actual: 0,
+  reused_actual: 0,
   context_missing: contextMissing,
   artifact_digest_mismatch: artifactDigestMismatch,
   nodes: rows,
@@ -249,6 +409,7 @@ const pass = summary.missing === 0
   && summary.xfail === 0
   && summary.failed === 0
   && summary.head_mismatch === 0
+  && summary.tree_mismatch === 0
   && summary.context_missing === 0
   && summary.artifact_digest_mismatch === 0;
 console.log(`REQUIRED_TEST_NODE_AUDIT=${pass ? 'PASS' : 'FAIL'}`);
@@ -258,6 +419,7 @@ console.log(`REQUIRED_TEST_NODES_DESELECTED=${summary.deselected}`);
 console.log(`REQUIRED_TEST_NODES_XFAIL=${summary.xfail}`);
 console.log(`REQUIRED_TEST_NODES_FAILED=${summary.failed}`);
 console.log(`REQUIRED_TEST_HEAD_MISMATCH=${summary.head_mismatch}`);
+console.log(`REQUIRED_TEST_TREE_MISMATCH=${summary.tree_mismatch}`);
 console.log(`REQUIRED_TEST_CONTEXT_MISSING=${summary.context_missing}`);
 console.log(`REQUIRED_TEST_ARTIFACT_DIGEST_MISMATCH=${summary.artifact_digest_mismatch}`);
 if (!pass) process.exitCode = 1;
