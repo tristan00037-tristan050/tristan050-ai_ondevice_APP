@@ -294,8 +294,12 @@ async function main() {
     'run-id',
     'run-attempt',
     'workflow-ref',
+    'source-digest',
   ]) {
     if (!options[name]) throw new Error('REQUIRED_INPUT_MISSING');
+  }
+  if (!['sha1', 'sha256'].includes(options['object-format'])) {
+    throw new Error('SUBJECT_IDENTITY_INVALID');
   }
   const oidLength = options['object-format'] === 'sha256' ? 64 : 40;
   if (!new RegExp(`^[0-9a-f]{${oidLength}}$`).test(options['subject-head'])
@@ -304,6 +308,13 @@ async function main() {
       || !/^[1-9]\d*$/.test(options['run-id'])
       || !/^[1-9]\d*$/.test(options['run-attempt'])) {
     throw new Error('SUBJECT_IDENTITY_INVALID');
+  }
+  if (!new RegExp(`^[0-9a-f]{${oidLength}}$`).test(options['source-digest'])) {
+    throw new Error('ATTESTATION_SOURCE_DIGEST_INVALID');
+  }
+  if (options['signer-workflow']
+      !== `${options.repository}/.github/workflows/firstscreen-v2-5.yml`) {
+    throw new Error('ATTESTATION_WORKFLOW_INVALID');
   }
 
   const root = resolve(options.package);
@@ -353,7 +364,7 @@ async function main() {
       '--signer-workflow',
       options['signer-workflow'],
       '--source-digest',
-      options['subject-head'],
+      options['source-digest'],
       '--deny-self-hosted-runners',
       '--format',
       'json',
@@ -390,6 +401,10 @@ async function main() {
     zip_sha256: zipDigest,
     detached_digest_match: true,
     attestation_verified: true,
+    attestation_repository: options.repository,
+    attestation_workflow: options['signer-workflow'],
+    attestation_workflow_ref: options['workflow-ref'],
+    attestation_source_commit: options['source-digest'],
   };
   if (options.output) {
     await writeFile(resolve(options.output), `${JSON.stringify(result, null, 2)}\n`);

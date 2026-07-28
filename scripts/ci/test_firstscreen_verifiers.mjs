@@ -298,6 +298,43 @@ await import('node:fs/promises').then(({ unlink }) => unlink(linkedReport.paths.
 await symlink(realReport, linkedReport.paths.vitest);
 expectFailure(invoke(linkedReport.paths), 'REPORT_FILE_TYPE_INVALID');
 
+const evidenceVerifier = resolve(
+  root,
+  'scripts/ci/verify_firstscreen_evidence_package.mjs',
+);
+function invokeEvidence(overrides = {}) {
+  return spawnSync(process.execPath, [
+    evidenceVerifier,
+    '--package', temporary,
+    '--zip', resolve(temporary, 'result.zip'),
+    '--detached', resolve(temporary, 'result.sha256'),
+    '--attestation-bundle', resolve(temporary, 'bundle.json'),
+    '--repository', 'owner/repository',
+    '--signer-workflow', overrides.signerWorkflow
+      ?? 'owner/repository/.github/workflows/firstscreen-v2-5.yml',
+    '--subject-head', head,
+    '--object-format', objectFormat,
+    '--tree', tree,
+    '--pull-request', '886',
+    '--run-id', '1',
+    '--run-attempt', '1',
+    '--workflow-ref',
+    'owner/repository/.github/workflows/firstscreen-v2-5.yml@refs/pull/886/merge',
+    '--source-digest', overrides.sourceDigest ?? head,
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+}
+expectFailure(
+  invokeEvidence({ sourceDigest: 'not-an-object-id' }),
+  'ATTESTATION_SOURCE_DIGEST_INVALID',
+);
+expectFailure(
+  invokeEvidence({ signerWorkflow: 'owner/repository/.github/workflows/other.yml' }),
+  'ATTESTATION_WORKFLOW_INVALID',
+);
+
 const output = process.argv[2];
 if (!output) throw new Error('OUTPUT_REQUIRED');
 const gateNodes = Array.from({ length: 14 }, (_value, index) => ({
