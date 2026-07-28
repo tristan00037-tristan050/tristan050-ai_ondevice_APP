@@ -275,7 +275,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   for (const key of [
     'package', 'zip', 'detached', 'attestation-bundle', 'repository',
-    'pull-request', 'head', 'tree', 'workflow',
+    'pull-request', 'head', 'tree', 'workflow', 'source-digest',
   ]) {
     if (!options[key]) throw new Error(`REQUIRED_${key.toUpperCase()}_MISSING`);
   }
@@ -285,6 +285,10 @@ async function main() {
   const objectFormat = execFileSync('git', ['rev-parse', '--show-object-format'], {
     encoding: 'utf8',
   }).trim();
+  const oidLength = objectFormat === 'sha256' ? 64 : objectFormat === 'sha1' ? 40 : 0;
+  if (!new RegExp(`^[0-9a-f]{${oidLength}}$`).test(options['source-digest'])) {
+    throw new Error('ATTESTATION_SOURCE_DIGEST_INVALID');
+  }
   if (actualHead !== options.head || actualTree !== options.tree) {
     throw new Error('CHECKOUT_IDENTITY_MISMATCH');
   }
@@ -317,7 +321,7 @@ async function main() {
       '--bundle', resolve(options['attestation-bundle']),
       '--format', 'json',
       '--signer-workflow', `${options.repository}/.github/workflows/firstscreen-v2-5.yml`,
-      '--source-digest', options.head,
+      '--source-digest', options['source-digest'],
       '--deny-self-hosted-runners',
     ],
     { encoding: 'utf8' },
@@ -338,7 +342,7 @@ async function main() {
     attestation_verified: true,
     attestation_repository: options.repository,
     attestation_workflow: options.workflow,
-    attestation_source_commit: options.head,
+    attestation_source_commit: options['source-digest'],
   };
   if (options.output) {
     await writeFile(resolve(options.output), `${JSON.stringify(result, null, 2)}\n`);

@@ -94,6 +94,7 @@ const evidence = spawnSync(
     '--head', head,
     '--tree', tree,
     '--workflow', 'owner/repository/.github/workflows/firstscreen-v2-5.yml@refs/pull/886/merge',
+    '--source-digest', head,
   ],
   { encoding: 'utf8' },
 );
