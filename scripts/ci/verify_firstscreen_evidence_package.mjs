@@ -19,6 +19,7 @@ import {
   parseStrictJson,
   readStrictJsonFile,
 } from './strict_json.mjs';
+import { containsPrivateHomePath } from './evidence_privacy.mjs';
 
 const MAX_PACKAGE_FILES = 512;
 const MAX_PACKAGE_BYTES = 512 * 1024 * 1024;
@@ -221,8 +222,6 @@ async function verifyContexts(root, index, options) {
 
 async function verifyPrivacy(root, files) {
   const forbidden = [
-    /(?:^|[\s"'=:<(])\/Users\/[^/\s"'<>]+/u,
-    /(?:^|[\s"'=:<(])\/home\/(?!runner(?:\/|$))[^/\s"'<>]+/u,
     /(?:^|["\s])hostname["\s]*:/iu,
   ];
   for (const name of files) {
@@ -230,7 +229,8 @@ async function verifyPrivacy(root, files) {
     const metadata = await stat(safeChild(root, name));
     if (metadata.size > 16 * 1024 * 1024) continue;
     const text = await readFile(safeChild(root, name), 'utf8');
-    if (forbidden.some(pattern => pattern.test(text))) {
+    if (containsPrivateHomePath(text)
+        || forbidden.some(pattern => pattern.test(text))) {
       throw new Error('EVIDENCE_PRIVACY_LEAK');
     }
   }

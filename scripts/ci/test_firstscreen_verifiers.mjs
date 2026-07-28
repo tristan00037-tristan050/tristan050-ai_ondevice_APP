@@ -12,6 +12,8 @@ import {
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
+import { containsPrivateHomePath } from './evidence_privacy.mjs';
+
 const root = resolve(import.meta.dirname, '..', '..');
 const verifier = resolve(
   root,
@@ -302,6 +304,30 @@ const evidenceVerifier = resolve(
   root,
   'scripts/ci/verify_firstscreen_evidence_package.mjs',
 );
+const macUserHome = '/' + [
+  'Users', 'private-user', 'Documents', 'customer-contract.txt',
+].join('/');
+const linuxUserHome = '/' + [
+  'home', 'private-user', 'customer-contract.txt',
+].join('/');
+for (const privatePath of [
+  macUserHome,
+  `path=${linuxUserHome}`,
+  `file://${macUserHome}`,
+]) {
+  if (!containsPrivateHomePath(privatePath)) {
+    throw new Error('PRIVATE_HOME_PATH_NOT_DETECTED');
+  }
+}
+for (const repositoryPath of [
+  'butler-desktop/src/components/home/SettingsShell.tsx',
+  'diff --git a/butler_pc_core/home/store.py b/butler_pc_core/home/store.py',
+  '/home/runner/work/repository/source.zip',
+]) {
+  if (containsPrivateHomePath(repositoryPath)) {
+    throw new Error('REPOSITORY_PATH_FALSE_POSITIVE');
+  }
+}
 function invokeEvidence(overrides = {}) {
   return spawnSync(process.execPath, [
     evidenceVerifier,
