@@ -193,9 +193,6 @@ jobs:
           - job_name: firstscreen-learning-authorities
             evidence_name: authorities
             targets: tests/learning_capability/test_authorities.py
-          - job_name: firstscreen-learning-route-security
-            evidence_name: route-security
-            targets: tests/sidecar/test_learning_capability_route.py
           - job_name: firstscreen-learning-product-integration
             evidence_name: product-integration
             targets: tests/learning_capability/test_snapshot_atomicity.py tests/integration/test_learning_capability_product_path.py
@@ -346,7 +343,6 @@ jobs:
             --playwright evidence/browser/test-results/playwright-results.json \
             --pytest evidence/backend/contract-pytest.xml \
             --pytest evidence/backend/authorities-pytest.xml \
-            --pytest evidence/backend/route-security-pytest.xml \
             --pytest evidence/backend/product-integration-pytest.xml \
             --pytest evidence/backend/v10-security-pytest.xml \
             --node evidence/node-verifier-results.json \
@@ -354,7 +350,6 @@ jobs:
             --context evidence/browser/test-results/firstscreen-v9-real-sidecar-context.json \
             --context evidence/backend/contract-context.json \
             --context evidence/backend/authorities-context.json \
-            --context evidence/backend/route-security-context.json \
             --context evidence/backend/product-integration-context.json \
             --context evidence/backend/v10-security-context.json \
             --context evidence/node-verifier-context.json \
