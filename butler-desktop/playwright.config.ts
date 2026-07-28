@@ -9,8 +9,13 @@ import { resolve } from 'node:path';
 
 const desktopRoot = resolve(import.meta.dirname);
 const repositoryRoot = resolve(desktopRoot, '..');
-const appData = resolve(repositoryRoot, '.playwright-runtime', 'app-data');
+const appData = process.env.BUTLER_E2E_DATA_DIR
+  ?? resolve(repositoryRoot, '.playwright-runtime', 'app-data');
+const e2ePython = process.env.BUTLER_E2E_PYTHON ?? 'python3';
 process.env.BUTLER_E2E_DATA_DIR = appData;
+const seedLearning = process.env.BUTLER_E2E_PRESEED_LEARNING === '1'
+  ? `${JSON.stringify(e2ePython)} scripts/ci/seed_firstscreen_learning_capabilities.py seed && `
+  : '';
 const egressKeyId = 'butler-egress-verifier-playwright-v1';
 
 // Playwright may evaluate this config in both its coordinator and worker
@@ -62,7 +67,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'python3 butler_sidecar.py --host 127.0.0.1 --port 8765',
+      command: `${seedLearning}${JSON.stringify(e2ePython)} butler_sidecar.py --host 127.0.0.1 --port 8765`,
       cwd: repositoryRoot,
       url: 'http://127.0.0.1:8765/health',
       reuseExistingServer: !process.env.CI,
@@ -71,6 +76,7 @@ export default defineConfig({
         ...process.env,
         BUTLER_APP_DATA_DIR: appData,
         BUTLER_HOME_BOOTSTRAP_NEW_INSTALL: '1',
+        BUTLER_HOME_E2E_FILE_KEY: '1',
         BUTLER_PRODUCTION: '0',
       },
     },

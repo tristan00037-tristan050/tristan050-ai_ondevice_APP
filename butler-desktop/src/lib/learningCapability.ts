@@ -42,11 +42,10 @@ const STATUS_TEXT: Readonly<Record<LearningCapabilityState, string>> = {
   UNKNOWN: '확인할 수 없습니다',
 };
 
-const STATES = new Set<LearningCapabilityState>([
+const CANONICAL_STATES = new Set<LearningCapabilityState>([
   'IN_USE',
   'REGISTERED_ONLY',
   'PREVIEW_ONLY',
-  'UNKNOWN',
 ]);
 const SNAPSHOT_KEYS = new Set([
   'schema_version',
@@ -66,7 +65,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function capabilityState(value: unknown): LearningCapabilityState {
-  return typeof value === 'string' && STATES.has(value as LearningCapabilityState)
+  return typeof value === 'string' && CANONICAL_STATES.has(value as LearningCapabilityState)
     ? value as LearningCapabilityState
     : 'UNKNOWN';
 }
@@ -91,13 +90,20 @@ export function parseLearningCapabilitySnapshot(
       generation: value.generation as number,
     });
   }
+  const states = [
+    capabilityState(value.capabilities.company_rules),
+    capabilityState(value.capabilities.company_facts),
+    capabilityState(value.capabilities.company_formats),
+    capabilityState(value.capabilities.folder_learning),
+  ] as const;
+  if (states.some(state => state === 'UNKNOWN')) return UNKNOWN_SNAPSHOT;
   return Object.freeze({
     source: 'CANONICAL_CAPABILITY',
     generation: value.generation as number,
-    companyRules: capabilityState(value.capabilities.company_rules),
-    companyFacts: capabilityState(value.capabilities.company_facts),
-    companyFormats: capabilityState(value.capabilities.company_formats),
-    folderLearning: capabilityState(value.capabilities.folder_learning),
+    companyRules: states[0],
+    companyFacts: states[1],
+    companyFormats: states[2],
+    folderLearning: states[3],
   });
 }
 

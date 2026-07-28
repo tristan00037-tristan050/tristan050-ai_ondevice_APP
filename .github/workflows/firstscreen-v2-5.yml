@@ -25,7 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with: {fetch-depth: 0}
+        with:
+          ref: ${{ env.PR_HEAD_SHA }}
+          fetch-depth: 0
+      - run: bash scripts/ci/verify_exact_checkout.sh "${PR_HEAD_SHA}"
       - name: Enforce protected product scope
         shell: bash
         env:
@@ -60,7 +63,10 @@ jobs:
     needs: scope-and-contracts
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with: {fetch-depth: 0}
+        with:
+          ref: ${{ env.PR_HEAD_SHA }}
+          fetch-depth: 0
+      - run: bash scripts/ci/verify_exact_checkout.sh "${PR_HEAD_SHA}"
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with: {python-version: '${{ env.PYTHON_VERSION }}'}
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -142,6 +148,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ env.PR_HEAD_SHA }}
+          fetch-depth: 0
+      - run: bash scripts/ci/verify_exact_checkout.sh "${PR_HEAD_SHA}"
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -154,8 +162,7 @@ jobs:
         working-directory: butler-desktop
         run: |
           mkdir -p test-results
-          printf '{"schema_version":1,"pr_head":"%s","runner":"vitest"}\n' \
-            "${PR_HEAD_SHA}" > test-results/firstscreen-v7-unit-context.json
+          started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           npm run test:run -- \
             src/firstscreen/__tests__/egressDeadline.test.ts \
             src/firstscreen/__tests__/egressState.test.ts \
@@ -164,12 +171,109 @@ jobs:
             --reporter=default \
             --reporter=json \
             --outputFile.json=test-results/vitest-results.json
+          finished="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          tools="$(node -e \
+            'console.log(JSON.stringify({node:process.version,npm:process.argv[1]}))' \
+            "$(npm --version)")"
+          node ../scripts/ci/write_firstscreen_test_context.mjs \
+            --report test-results/vitest-results.json \
+            --output test-results/firstscreen-v9-unit-context.json \
+            --subject-head "${PR_HEAD_SHA}" \
+            --execution-commit "$(git rev-parse HEAD)" \
+            --tree "$(git rev-parse HEAD^{tree})" \
+            --object-format "$(git rev-parse --show-object-format)" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --suite firstscreen-learning-unit \
+            --runner vitest \
+            --command "npm run test:run -- firstscreen required unit files" \
+            --tool-versions "${tools}" \
+            --started-at "${started}" \
+            --finished-at "${finished}" \
+            --os "${RUNNER_OS}" \
+            --arch "${RUNNER_ARCH}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: firstscreen-v7-unit-${{ env.PR_HEAD_SHA }}
           path: |
             butler-desktop/test-results/vitest-results.json
-            butler-desktop/test-results/firstscreen-v7-unit-context.json
+            butler-desktop/test-results/firstscreen-v9-unit-context.json
+          if-no-files-found: error
+          retention-days: 30
+
+  firstscreen-learning-backend:
+    name: ${{ matrix.job_name }}
+    runs-on: ubuntu-latest
+    needs: scope-and-contracts
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - job_name: firstscreen-learning-contract
+            evidence_name: contract
+            targets: tests/sidecar/test_learning_capability_route.py
+          - job_name: firstscreen-learning-authorities
+            evidence_name: authorities
+            targets: tests/learning_capability/test_authorities.py
+          - job_name: firstscreen-learning-product-integration
+            evidence_name: product-integration
+            targets: tests/learning_capability/test_snapshot_atomicity.py tests/learning_capability/test_strict_json_and_state.py tests/integration/test_learning_capability_product_path.py
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.PR_HEAD_SHA }}
+          fetch-depth: 0
+      - run: bash scripts/ci/verify_exact_checkout.sh "${PR_HEAD_SHA}"
+      - name: Prepare isolated learning state
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "${RUNNER_TEMP}/butler-learning-state"
+          echo "BUTLER_APP_DATA_DIR=${RUNNER_TEMP}/butler-learning-state" >> "${GITHUB_ENV}"
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-firstscreen-ci.lock
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - name: Execute exact learning backend nodes
+        env:
+          PYTEST_TARGETS: ${{ matrix.targets }}
+        run: |
+          mkdir -p evidence
+          started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python -m pytest -q ${PYTEST_TARGETS} \
+            --junitxml="evidence/${{ matrix.evidence_name }}-pytest.xml"
+          finished="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python_version="$(python -c 'import platform; print(platform.python_version())')"
+          tools="$(node -e \
+            'console.log(JSON.stringify({python:process.argv[1],node:process.version}))' \
+            "${python_version}")"
+          node scripts/ci/write_firstscreen_test_context.mjs \
+            --report "evidence/${{ matrix.evidence_name }}-pytest.xml" \
+            --output "evidence/${{ matrix.evidence_name }}-context.json" \
+            --subject-head "${PR_HEAD_SHA}" \
+            --execution-commit "$(git rev-parse HEAD)" \
+            --tree "$(git rev-parse HEAD^{tree})" \
+            --object-format "$(git rev-parse --show-object-format)" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --suite "${{ matrix.job_name }}" \
+            --runner pytest \
+            --command "python -m pytest -q ${PYTEST_TARGETS}" \
+            --tool-versions "${tools}" \
+            --started-at "${started}" \
+            --finished-at "${finished}" \
+            --os "${RUNNER_OS}" \
+            --arch "${RUNNER_ARCH}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: firstscreen-v9-backend-${{ matrix.evidence_name }}-${{ env.PR_HEAD_SHA }}
+          path: evidence/
           if-no-files-found: error
           retention-days: 30
 
@@ -183,17 +287,30 @@ jobs:
         include:
           - job_name: firstscreen-playwright
             evidence_name: required
-            grep: FirstScreen v7 required product paths
+            grep: never-settling egress report leaves loading and never displays a fake zero
+            preseed: '0'
+          - job_name: firstscreen-learning-real-sidecar-unavailable
+            evidence_name: real-sidecar-unavailable
+            grep: 실제 sidecar가 불완전 권위를 503으로 닫고 네 행 모두 확인할 수 없습니다로 표시한다
+            preseed: '0'
+          - job_name: firstscreen-learning-real-sidecar
+            evidence_name: real-sidecar
+            grep: endpoint 가로채기|실제 sidecar 경로
+            preseed: '1'
           - job_name: firstscreen-accessibility
             evidence_name: accessibility
             grep: remains keyboard operable and text-visible at narrow width and 200 percent zoom
+            preseed: '0'
           - job_name: firstscreen-existing-regression
             evidence_name: regression
             grep: preserves compact cards answer area folders and conditional setup banner
+            preseed: '0'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ env.PR_HEAD_SHA }}
+          fetch-depth: 0
+      - run: bash scripts/ci/verify_exact_checkout.sh "${PR_HEAD_SHA}"
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -214,12 +331,32 @@ jobs:
         working-directory: butler-desktop
         env:
           REQUIRED_TEST_GREP: ${{ matrix.grep }}
+          BUTLER_E2E_PRESEED_LEARNING: ${{ matrix.preseed }}
         run: |
           mkdir -p test-results
-          printf '{"schema_version":1,"pr_head":"%s","runner":"playwright","gate":"%s"}\n' \
-            "${PR_HEAD_SHA}" "${{ matrix.job_name }}" \
-            > test-results/firstscreen-v7-${{ matrix.evidence_name }}-context.json
+          started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           npx playwright test e2e/firstscreen-v5.spec.ts --grep "${REQUIRED_TEST_GREP}"
+          finished="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          tools="$(node -e \
+            'console.log(JSON.stringify({node:process.version,playwright:process.argv[1]}))' \
+            "$(node -p "require('@playwright/test/package.json').version")")"
+          node ../scripts/ci/write_firstscreen_test_context.mjs \
+            --report test-results/playwright-results.json \
+            --output test-results/firstscreen-v9-${{ matrix.evidence_name }}-context.json \
+            --subject-head "${PR_HEAD_SHA}" \
+            --execution-commit "$(git rev-parse HEAD)" \
+            --tree "$(git rev-parse HEAD^{tree})" \
+            --object-format "$(git rev-parse --show-object-format)" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --suite "${{ matrix.job_name }}" \
+            --runner playwright \
+            --command "npx playwright test e2e/firstscreen-v5.spec.ts --grep exact" \
+            --tool-versions "${tools}" \
+            --started-at "${started}" \
+            --finished-at "${finished}" \
+            --os "${RUNNER_OS}" \
+            --arch "${RUNNER_ARCH}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -233,32 +370,257 @@ jobs:
   firstscreen-required-node-audit:
     name: firstscreen-required-node-audit
     runs-on: ubuntu-latest
-    needs: [firstscreen-unit, firstscreen-browser-gates]
+    needs: [firstscreen-unit, firstscreen-learning-backend, firstscreen-browser-gates]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ env.PR_HEAD_SHA }}
+          fetch-depth: 0
+      - run: bash scripts/ci/verify_exact_checkout.sh "${PR_HEAD_SHA}"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: firstscreen-v7-unit-${{ env.PR_HEAD_SHA }}
           path: evidence/unit
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: firstscreen-v7-browser-required-${{ env.PR_HEAD_SHA }}
-          path: evidence/browser
+          name: firstscreen-v7-browser-real-sidecar-${{ env.PR_HEAD_SHA }}
+          path: evidence/browser/success
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: firstscreen-v7-browser-real-sidecar-unavailable-${{ env.PR_HEAD_SHA }}
+          path: evidence/browser/unavailable
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: firstscreen-v9-backend-*-${{ env.PR_HEAD_SHA }}
+          path: evidence/backend
+          merge-multiple: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
       - name: Match required nodes to executed JSON reports
-        working-directory: butler-desktop
         run: |
-          node scripts/verify-required-test-nodes.mjs \
-            --manifest acceptance/required-tests.v1.json \
-            --vitest ../evidence/unit/vitest-results.json \
-            --playwright ../evidence/browser/test-results/playwright-results.json \
+          verifier_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          node scripts/ci/test_firstscreen_verifiers.mjs evidence/node-verifier-results.json
+          verifier_finished="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          tools="$(node -e \
+            'console.log(JSON.stringify({node:process.version}))')"
+          node scripts/ci/write_firstscreen_test_context.mjs \
+            --report evidence/node-verifier-results.json \
+            --output evidence/node-verifier-context.json \
+            --subject-head "${PR_HEAD_SHA}" \
+            --execution-commit "$(git rev-parse HEAD)" \
+            --tree "$(git rev-parse HEAD^{tree})" \
+            --object-format "$(git rev-parse --show-object-format)" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --suite firstscreen-required-verifier-negative-tests \
+            --runner node \
+            --command "node scripts/ci/test_firstscreen_verifiers.mjs" \
+            --tool-versions "${tools}" \
+            --started-at "${verifier_started}" \
+            --finished-at "${verifier_finished}" \
+            --os "${RUNNER_OS}" \
+            --arch "${RUNNER_ARCH}"
+          audit_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          node butler-desktop/scripts/verify-required-test-nodes.mjs \
+            --manifest butler-desktop/acceptance/required-tests.v2.json \
+            --vitest evidence/unit/vitest-results.json \
+            --playwright evidence/browser/success/test-results/playwright-results.json \
+            --playwright evidence/browser/unavailable/test-results/playwright-results.json \
+            --pytest evidence/backend/contract-pytest.xml \
+            --pytest evidence/backend/authorities-pytest.xml \
+            --pytest evidence/backend/product-integration-pytest.xml \
+            --node evidence/node-verifier-results.json \
+            --context evidence/unit/firstscreen-v9-unit-context.json \
+            --context evidence/browser/success/test-results/firstscreen-v9-real-sidecar-context.json \
+            --context evidence/browser/unavailable/test-results/firstscreen-v9-real-sidecar-unavailable-context.json \
+            --context evidence/backend/contract-context.json \
+            --context evidence/backend/authorities-context.json \
+            --context evidence/backend/product-integration-context.json \
+            --context evidence/node-verifier-context.json \
+            --event "${GITHUB_EVENT_PATH}" \
             --head "${PR_HEAD_SHA}" \
-            --output ../evidence/required-node-audit.json
+            --checkout-head "$(git rev-parse HEAD)" \
+            --checkout-tree "$(git rev-parse HEAD^{tree})" \
+            --object-format "$(git rev-parse --show-object-format)" \
+            --root "${GITHUB_WORKSPACE}" \
+            --output evidence/required-node-audit.json
+          audit_finished="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          node scripts/ci/write_firstscreen_test_context.mjs \
+            --report evidence/required-node-audit.json \
+            --output evidence/firstscreen-v9-required-audit-context.json \
+            --subject-head "${PR_HEAD_SHA}" \
+            --execution-commit "$(git rev-parse HEAD)" \
+            --tree "$(git rev-parse HEAD^{tree})" \
+            --object-format "$(git rev-parse --show-object-format)" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --suite firstscreen-required-node-audit \
+            --runner node \
+            --command "node butler-desktop/scripts/verify-required-test-nodes.mjs" \
+            --tool-versions "${tools}" \
+            --started-at "${audit_started}" \
+            --finished-at "${audit_finished}" \
+            --os "${RUNNER_OS}" \
+            --arch "${RUNNER_ARCH}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: firstscreen-v7-required-node-audit-${{ env.PR_HEAD_SHA }}
-          path: evidence/required-node-audit.json
+          path: |
+            evidence/required-node-audit.json
+            evidence/node-verifier-results.json
+            evidence/node-verifier-context.json
+            evidence/firstscreen-v9-required-audit-context.json
+          if-no-files-found: error
+          retention-days: 30
+
+  firstscreen-evidence-package:
+    name: firstscreen-evidence-package
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    needs:
+      [scope-and-contracts, firstscreen-unit, firstscreen-learning-backend,
+       firstscreen-browser-gates, firstscreen-required-node-audit]
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.PR_HEAD_SHA }}
+          fetch-depth: 0
+      - run: bash scripts/ci/verify_exact_checkout.sh "${PR_HEAD_SHA}"
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: firstscreen-v7-unit-${{ env.PR_HEAD_SHA }}
+          path: collected/unit
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: firstscreen-v7-browser-real-sidecar-${{ env.PR_HEAD_SHA }}
+          path: collected/browser/success
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: firstscreen-v7-browser-real-sidecar-unavailable-${{ env.PR_HEAD_SHA }}
+          path: collected/browser/unavailable
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: firstscreen-v9-backend-*-${{ env.PR_HEAD_SHA }}
+          path: collected/backend
+          merge-multiple: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: firstscreen-v7-required-node-audit-${{ env.PR_HEAD_SHA }}
+          path: collected/audit
+      - name: Build and independently recheck complete evidence ZIP
+        id: package
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          base="${BASE_SHA}"
+          if [ -z "${base}" ] || ! git cat-file -e "${base}^{commit}"; then
+            base="$(git rev-parse HEAD^)"
+          fi
+          root="${RUNNER_TEMP}/firstscreen-v9-evidence/package"
+          mkdir -p \
+            "${root}/source" \
+            "${root}/reports" \
+            "${root}/contexts" \
+            "${root}/manifests"
+          git archive --format=zip --output="${root}/source/source.zip" HEAD
+          git ls-tree -r --full-tree HEAD > "${root}/source/git-ls-tree.txt"
+          git diff --binary "${base}" HEAD > "${root}/source/correction.patch"
+          test -s "${root}/source/correction.patch"
+          cp collected/unit/vitest-results.json "${root}/reports/"
+          cp collected/browser/success/test-results/playwright-results.json \
+            "${root}/reports/playwright-success.json"
+          cp collected/browser/unavailable/test-results/playwright-results.json \
+            "${root}/reports/playwright-unavailable.json"
+          cp collected/backend/*-pytest.xml "${root}/reports/"
+          cp collected/audit/required-node-audit.json \
+            "${root}/reports/required-node-audit.json"
+          cp collected/audit/node-verifier-results.json "${root}/reports/"
+          cp collected/unit/firstscreen-v9-unit-context.json "${root}/contexts/"
+          cp collected/browser/success/test-results/firstscreen-v9-real-sidecar-context.json \
+            "${root}/contexts/"
+          cp collected/browser/unavailable/test-results/firstscreen-v9-real-sidecar-unavailable-context.json \
+            "${root}/contexts/"
+          cp collected/backend/*-context.json "${root}/contexts/"
+          cp collected/audit/*-context.json "${root}/contexts/"
+          cp butler-desktop/acceptance/required-tests.v2.json \
+            "${root}/manifests/"
+          cp .github/firstscreen-action-pins.json "${root}/manifests/"
+          cp contracts/evidence-index.schema.json "${root}/manifests/"
+          node scripts/ci/build_firstscreen_evidence_index.mjs \
+            --package "${root}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --pull-request "${{ github.event.pull_request.number }}" \
+            --subject-head "${PR_HEAD_SHA}" \
+            --object-format "$(git rev-parse --show-object-format)" \
+            --tree "$(git rev-parse HEAD^{tree})" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --workflow-ref "${GITHUB_WORKFLOW_REF}"
+          (
+            cd "${root}"
+            find . -type f ! -name SHA256SUMS.txt -print0 \
+              | sort -z \
+              | xargs -0 sha256sum \
+              | sed 's#  \\./#  #' > SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.txt
+          )
+          archive="${RUNNER_TEMP}/firstscreen-v9-evidence.zip"
+          (
+            cd "${RUNNER_TEMP}/firstscreen-v9-evidence"
+            zip -X -q -r "${archive}" package
+          )
+          sha256sum "${archive}" > "${archive}.sha256"
+          mkdir -p "${RUNNER_TEMP}/firstscreen-v9-recheck"
+          unzip -q "${archive}" -d "${RUNNER_TEMP}/firstscreen-v9-recheck"
+          (
+            cd "${RUNNER_TEMP}/firstscreen-v9-recheck/package"
+            sha256sum -c SHA256SUMS.txt
+          )
+          echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
+      - name: Create hosted artifact attestation
+        id: attest
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: ${{ steps.package.outputs.archive }}
+      - name: Verify detached digest, extracted payload and hosted attestation
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          test -n "${ATTESTATION_BUNDLE}"
+          node scripts/ci/verify_firstscreen_evidence_package.mjs \
+            --package "${RUNNER_TEMP}/firstscreen-v9-recheck/package" \
+            --zip "${{ steps.package.outputs.archive }}" \
+            --detached "${{ steps.package.outputs.archive }}.sha256" \
+            --attestation-bundle "${ATTESTATION_BUNDLE}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --signer-workflow \
+              "${GITHUB_REPOSITORY}/.github/workflows/firstscreen-v2-5.yml" \
+            --pull-request "${{ github.event.pull_request.number }}" \
+            --subject-head "${PR_HEAD_SHA}" \
+            --object-format "$(git rev-parse --show-object-format)" \
+            --tree "$(git rev-parse HEAD^{tree})" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --workflow-ref "${GITHUB_WORKFLOW_REF}" \
+            --output "${RUNNER_TEMP}/firstscreen-v9-evidence-verification.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: firstscreen-v9-evidence-${{ env.PR_HEAD_SHA }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.archive }}.sha256
+            ${{ runner.temp }}/firstscreen-v9-evidence-verification.json
           if-no-files-found: error
           retention-days: 30
 
@@ -273,6 +635,11 @@ jobs:
       run: {working-directory: butler-desktop}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.PR_HEAD_SHA }}
+          fetch-depth: 0
+      - working-directory: .
+        run: bash scripts/ci/verify_exact_checkout.sh "${PR_HEAD_SHA}"
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with: {node-version: '${{ env.NODE_VERSION }}', cache: npm, cache-dependency-path: butler-desktop/package-lock.json, package-manager-cache: true}
       - run: npm ci
@@ -315,7 +682,10 @@ jobs:
     needs: scope-and-contracts
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with: {fetch-depth: 0}
+        with:
+          ref: ${{ env.PR_HEAD_SHA }}
+          fetch-depth: 0
+      - run: bash scripts/ci/verify_exact_checkout.sh "${PR_HEAD_SHA}"
       - name: Prepare isolated repository test state
         shell: bash
         run: |
@@ -351,6 +721,10 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.PR_HEAD_SHA }}
+          fetch-depth: 0
+      - run: bash scripts/ci/verify_exact_checkout.sh "${PR_HEAD_SHA}"
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -405,15 +779,18 @@ jobs:
   gate:
     if: always()
     runs-on: ubuntu-latest
-    needs: [scope-and-contracts, desktop-web, firstscreen-unit, firstscreen-browser-gates, firstscreen-required-node-audit, native-compile, repository-python, handoff-macos]
+    needs: [scope-and-contracts, desktop-web, firstscreen-unit, firstscreen-learning-backend, firstscreen-browser-gates, firstscreen-required-node-audit, firstscreen-evidence-package, native-compile, repository-python, handoff-macos]
     steps:
       - name: Enforce event-applicable gates
         env:
           CONTRACTS: ${{ needs.scope-and-contracts.result }}
           WEB: ${{ needs.desktop-web.result }}
           FIRSTSCREEN_UNIT: ${{ needs.firstscreen-unit.result }}
+          FIRSTSCREEN_LEARNING_BACKEND: ${{ needs.firstscreen-learning-backend.result }}
           FIRSTSCREEN_BROWSER: ${{ needs.firstscreen-browser-gates.result }}
           FIRSTSCREEN_NODE_AUDIT: ${{ needs.firstscreen-required-node-audit.result }}
+          FIRSTSCREEN_EVIDENCE: ${{ needs.firstscreen-evidence-package.result }}
+          EVENT_NAME: ${{ github.event_name }}
           NATIVE: ${{ needs.native-compile.result }}
           REPOSITORY: ${{ needs.repository-python.result }}
           HANDOFF_MACOS: ${{ needs.handoff-macos.result }}
@@ -421,8 +798,14 @@ jobs:
           test "${CONTRACTS}" = success
           test "${WEB}" = success
           test "${FIRSTSCREEN_UNIT}" = success
+          test "${FIRSTSCREEN_LEARNING_BACKEND}" = success
           test "${FIRSTSCREEN_BROWSER}" = success
           test "${FIRSTSCREEN_NODE_AUDIT}" = success
+          if [ "${EVENT_NAME}" = pull_request ]; then
+            test "${FIRSTSCREEN_EVIDENCE}" = success
+          else
+            test "${FIRSTSCREEN_EVIDENCE}" = skipped
+          fi
           test "${NATIVE}" = success
           test "${REPOSITORY}" = success
           test "${HANDOFF_MACOS}" = success

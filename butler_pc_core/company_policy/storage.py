@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from butler_pc_core.app_data import product_data_root
 
 from .admin_auth import verify_admin_context
 from .audit import GLOBAL_ADMIN_AUDIT_STORE, build_admin_audit_record
@@ -27,9 +30,19 @@ class PolicyLoadError(RuntimeError):
     pass
 
 
+@dataclass(frozen=True)
+class PolicyCapabilitySummary:
+    active_count: int
+    active_policy_digest: str | None
+    revision: str
+
+
 class PolicyStore:
     def __init__(self, root: Path | None = None, vault: LocalEncryptedVault | None = None) -> None:
-        self.root = root or Path(".butler_policy_store")
+        self.root = root or product_data_root(
+            "company-policy",
+            legacy_name=".butler_policy_store",
+        )
         self.root.mkdir(parents=True, exist_ok=True)
         self.vault = vault or LocalEncryptedVault(root=self.root / "vault", key_path=self.root / "vault.key")
         self.index_path = self.root / "active_policy_ref.json"
@@ -78,10 +91,30 @@ class PolicyStore:
         except Exception as exc:
             raise PolicyLoadError("POLICY_LOAD_FAILED") from exc
 
+    def capability_summary(self) -> PolicyCapabilitySummary:
+        policy = self.load_active_policy()
+        active = policy is not None and policy.status == "ACTIVE"
+        digest = policy.policy_digest if active else None
+        revision = stable_json_digest(
+            {
+                "schema_version": 1,
+                "active_count": int(active),
+                "active_policy_digest": digest,
+            }
+        ).removeprefix("sha256:")
+        return PolicyCapabilitySummary(
+            active_count=int(active),
+            active_policy_digest=digest,
+            revision=revision,
+        )
+
 
 class CompanyFormatStore:
     def __init__(self, root: Path | None = None, vault: LocalEncryptedVault | None = None) -> None:
-        self.root = root or Path(".butler_format_store")
+        self.root = root or product_data_root(
+            "company-formats",
+            legacy_name=".butler_format_store",
+        )
         self.root.mkdir(parents=True, exist_ok=True)
         self.vault = vault or LocalEncryptedVault(root=self.root / "vault", key_path=self.root / "vault.key")
         self.index_path = self.root / "formats_index.json"
@@ -154,3 +187,55 @@ class CompanyFormatStore:
         if sha256_text(text) != company_format.template_digest:
             raise VaultError("FORMAT_TEMPLATE_DIGEST_MISMATCH")
         return text
+
+    def capability_summary(self) -> "FormatCapabilitySummary":
+        try:
+            index = self._load_index()
+            if set(index) != {"formats"} or not isinstance(index["formats"], dict):
+                raise PolicyLoadError("FORMAT_INDEX_SCHEMA_INVALID")
+            digests: list[str] = []
+            active_count = 0
+            for format_id, data in sorted(index["formats"].items()):
+                if not isinstance(format_id, str) or not isinstance(data, dict):
+                    raise PolicyLoadError("FORMAT_INDEX_SCHEMA_INVALID")
+                validate_company_format_dict(data)
+                if data.get("format_id") != format_id:
+                    raise PolicyLoadError("FORMAT_ID_MISMATCH")
+                if data["format_digest"] != compute_format_digest(data):
+                    raise PolicyLoadError("FORMAT_DIGEST_MISMATCH")
+                digests.append(data["format_digest"])
+                if data.get("status") == "ACTIVE":
+                    active_count += 1
+            index_digest = stable_json_digest(
+                {
+                    "schema_version": 1,
+                    "format_digests": digests,
+                    "active_count": active_count,
+                }
+            ).removeprefix("sha256:")
+            return FormatCapabilitySummary(
+                active_count=active_count,
+                registered_count=len(digests),
+                format_digests=tuple(digests),
+                active_format_digests=tuple(
+                    sorted(
+                        data["format_digest"]
+                        for data in index["formats"].values()
+                        if data.get("status") == "ACTIVE"
+                    )
+                ),
+                index_digest=index_digest,
+            )
+        except PolicyLoadError:
+            raise
+        except Exception as exc:
+            raise PolicyLoadError("FORMAT_CAPABILITY_LOAD_FAILED") from exc
+
+
+@dataclass(frozen=True)
+class FormatCapabilitySummary:
+    active_count: int
+    registered_count: int
+    format_digests: tuple[str, ...]
+    active_format_digests: tuple[str, ...]
+    index_digest: str

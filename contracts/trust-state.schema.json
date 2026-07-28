@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/learning-capability-trust-state.v1.schema.json",
+  "title": "Butler learning capability generation state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "last_generation",
+    "last_snapshot_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "last_generation": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "last_snapshot_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

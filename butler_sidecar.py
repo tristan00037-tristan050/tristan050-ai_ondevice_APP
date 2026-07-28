@@ -453,6 +453,12 @@ if _FASTAPI_AVAILABLE:
             "/api/model-tier/shadow/status",
         }
     )
+    _PROTECTED_GET_PATHS = frozenset(
+        {
+            "/api/egress/report",
+            "/api/capabilities/learning",
+        }
+    )
 
     from butler_pc_core.sidecar.routes.home import (
         initialize_home_store,
@@ -495,21 +501,38 @@ if _FASTAPI_AVAILABLE:
         home_request = request.url.path.startswith("/v1/home/")
         protected_get_request = (
             request.method == "GET"
-            and request.url.path == "/api/egress/report"
+            and request.url.path in _PROTECTED_GET_PATHS
         )
         local_authenticated_request = home_request or protected_get_request
+        protected_headers = (
+            {
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+                "X-Content-Type-Options": "nosniff",
+            }
+            if request.url.path == "/api/capabilities/learning"
+            else None
+        )
         if local_authenticated_request:
             host = request.headers.get("host", "").lower()
             origin = request.headers.get("origin")
             if host not in {"127.0.0.1:8765", "localhost:8765", "testserver"}:
-                return JSONResponse(status_code=400, content={"code": "UNTRUSTED_HOST"})
+                return JSONResponse(
+                    status_code=400,
+                    content={"code": "UNTRUSTED_HOST"},
+                    headers=protected_headers,
+                )
             if origin not in {
                 None,
                 "tauri://localhost",
                 "http://localhost:1420",
                 "http://127.0.0.1:1420",
             }:
-                return JSONResponse(status_code=403, content={"code": "UNTRUSTED_ORIGIN"})
+                return JSONResponse(
+                    status_code=403,
+                    content={"code": "UNTRUSTED_ORIGIN"},
+                    headers=protected_headers,
+                )
         if local_authenticated_request or request.method in ("POST", "PUT", "PATCH", "DELETE"):
             try:
                 session = _TOKEN_MANAGER.verify_authorization_header(
@@ -525,6 +548,7 @@ if _FASTAPI_AVAILABLE:
                         "fail_class": exc.fail_class.value,
                         "message": exc.message,
                     },
+                    headers=protected_headers,
                 )
             request.state.capability_actor_id = session.actor_id
             request.state.capability_session_digest = session.session_digest
@@ -537,6 +561,9 @@ if _FASTAPI_AVAILABLE:
     from butler_pc_core.company_fact.routes import router as company_fact_router
     from butler_pc_core.sidecar.routes.company_learning import (
         router as company_learning_router,
+    )
+    from butler_pc_core.sidecar.routes.learning_capability import (
+        router as learning_capability_router,
     )
     from butler_pc_core.sidecar.routes.company_profile import (
         router as company_profile_router,
@@ -581,6 +608,7 @@ if _FASTAPI_AVAILABLE:
     app.include_router(accounting_assignment_router)
     app.include_router(company_fact_router)
     app.include_router(company_learning_router)
+    app.include_router(learning_capability_router)
 
     # -----------------------------------------------------------------------
     # 모델
@@ -3067,6 +3095,9 @@ else:
             data = json.dumps(body, ensure_ascii=False).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Access-Control-Allow-Origin", "tauri://localhost")
             self.send_header(
@@ -3118,6 +3149,15 @@ else:
                     self._send_json(200, _fallback_health_payload(self.path))
             elif self.path == "/api/egress/report":
                 self._send_json(503, _static_beta_egress_payload())
+            elif self.path == "/api/capabilities/learning":
+                self._send_json(
+                    503,
+                    {
+                        "schema_version": 1,
+                        "source": "UNAVAILABLE",
+                        "reason": "AUTHORITY_UNREACHABLE",
+                    },
+                )
             else:
                 self._send_json(404, {"detail": "not found"})
 

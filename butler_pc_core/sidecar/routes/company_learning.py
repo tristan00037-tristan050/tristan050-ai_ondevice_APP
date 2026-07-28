@@ -10,6 +10,7 @@ from butler_pc_core.auth.capability_token import (
     CapabilityTokenManager,
     auth_error_payload,
 )
+from butler_pc_core.app_data import product_data_root
 from butler_pc_core.company_learning.folder_ingest import CompanyLearningIngestError, ingest_folder
 from butler_pc_core.company_learning.handoff import create_company_learning_candidate
 from butler_pc_core.company_learning.job_store import CompanyLearningJobStore
@@ -22,7 +23,13 @@ from butler_pc_core.inference.llm_runtime import LlmRuntime
 router = APIRouter()
 _TOKEN_MANAGER = CapabilityTokenManager()
 _JOB_STORE = CompanyLearningJobStore()
-_LEARNING_EVENT_STORE = LearningEventStore()
+_LEARNING_EVENT_STORE = LearningEventStore(
+    jsonl_path=product_data_root(
+        "company-learning",
+        legacy_name=".butler_company_learning",
+    )
+    / "learning_events.jsonl"
+)
 _LLM_RUNTIME: LlmRuntime | None = None
 LOCALHOST_HOSTS = {"127.0.0.1", "localhost", "::1", "testclient"}
 

@@ -731,7 +731,14 @@ class HomeStore:
         return key
 
     def _load_key(self, *, create: bool) -> bytes:
-        if sys.platform == "darwin":
+        # Headless browser CI cannot access a logged-in macOS keychain. This
+        # explicit non-production switch keeps the key inside the isolated E2E
+        # app-data root; production builds can never select it.
+        e2e_file_key = (
+            os.environ.get("BUTLER_HOME_E2E_FILE_KEY") == "1"
+            and os.environ.get("BUTLER_PRODUCTION", "0") != "1"
+        )
+        if sys.platform == "darwin" and not e2e_file_key:
             key = self._keychain_lookup(self.workspace_id)
             if key is not None:
                 return key
