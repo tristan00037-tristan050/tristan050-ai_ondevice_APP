@@ -1,0 +1,26 @@
+{
+  "schema_version": 2,
+  "suite": "firstscreen-learning-capability-real-provider",
+  "tests": [
+    {"id":"ACC-FS90-001","runner":"pytest","file":"tests/sidecar/test_learning_capability_route.py","title":"test_learning_capability_route_exists_once_in_app_route_graph","required":true},
+    {"id":"ACC-FS90-002","runner":"pytest","file":"tests/sidecar/test_learning_capability_route.py","title":"test_success_wire_contract_matches_existing_frontend_parser","required":true},
+    {"id":"ACC-FS90-003","runner":"pytest","file":"tests/sidecar/test_learning_capability_route.py","title":"test_one_incomplete_authority_returns_503_without_partial_200","required":true},
+    {"id":"ACC-FS90-004","runner":"pytest","file":"tests/sidecar/test_learning_capability_route.py","title":"test_missing_capability_token_is_rejected_before_authority_read","required":true},
+    {"id":"ACC-FS90-005","runner":"pytest","file":"tests/sidecar/test_learning_capability_route.py","title":"test_invalid_token_host_and_origin_are_rejected","required":true},
+    {"id":"ACC-FS90-006","runner":"pytest","file":"tests/learning_capability/test_authorities.py","title":"test_company_policy_in_use_requires_active_policy_and_real_policy_gate_consumer","required":true},
+    {"id":"ACC-FS90-007","runner":"pytest","file":"tests/learning_capability/test_authorities.py","title":"test_company_fact_in_use_requires_active_fact_resolved_by_real_product_consumer","required":true},
+    {"id":"ACC-FS90-008","runner":"pytest","file":"tests/learning_capability/test_authorities.py","title":"test_company_format_registered_only_and_in_use_are_not_self_claimed","required":true},
+    {"id":"ACC-FS90-009","runner":"pytest","file":"tests/learning_capability/test_authorities.py","title":"test_folder_learning_ignores_ephemeral_job_and_uses_persisted_handoff_authority","required":true},
+    {"id":"ACC-FS90-010","runner":"pytest","file":"tests/learning_capability/test_snapshot_atomicity.py","title":"test_revision_race_retries_once_then_fails_closed","required":true},
+    {"id":"ACC-FS90-011","runner":"pytest","file":"tests/learning_capability/test_snapshot_atomicity.py","title":"test_generation_is_stable_for_same_digest_and_monotonic_across_restart","required":true},
+    {"id":"ACC-FS90-012","runner":"pytest","file":"tests/learning_capability/test_snapshot_atomicity.py","title":"test_generation_store_corruption_lock_failure_and_overflow_fail_closed","required":true},
+    {"id":"ACC-FS90-013","runner":"pytest","file":"tests/integration/test_learning_capability_product_path.py","title":"test_all_four_states_are_derived_from_real_stores_and_consumers","required":true},
+    {"id":"ACC-FS90-014","runner":"playwright","file":"butler-desktop/e2e/firstscreen-v5.spec.ts","title":"회사 배우기 네 행이 endpoint 가로채기 없이 실제 sidecar와 권위 저장소에서 계산된다","required":true},
+    {"id":"ACC-FS90-015","runner":"playwright","file":"butler-desktop/e2e/firstscreen-v5.spec.ts","title":"권위 저장소 하나가 실패하면 실제 sidecar가 503을 반환하고 네 행 모두 확인할 수 없습니다로 닫힌다","required":true},
+    {"id":"ACC-FS90-016","runner":"vitest","file":"butler-desktop/src/settings/__tests__/learningCapability.test.ts","title":"parses the real provider contract and rejects incompatible v8 rows payload","required":true},
+    {"id":"ACC-FS90-017","runner":"vitest","file":"butler-desktop/src/settings/__tests__/learningCapability.test.ts","title":"keeps all four rows unknown for every unavailable transport and schema failure","required":true},
+    {"id":"ACC-FS90-018","runner":"playwright","file":"butler-desktop/e2e/firstscreen-v5.spec.ts","title":"회사 배우기 실제 sidecar 경로가 좁은 창 200퍼센트 확대 키보드 포커스 접근성을 보존한다","required":true},
+    {"id":"ACC-FS90-019","runner":"node","file":"butler-desktop/scripts/verify-required-test-nodes.mjs","title":"rejects missing or mismatched unit browser Playwright and required-node HEAD contexts","required":true},
+    {"id":"ACC-FS90-020","runner":"node","file":"scripts/ci/verify_firstscreen_evidence_package.mjs","title":"verifies full source delta reports checksums detached digest and artifact attestation","required":true}
+  ]
+}

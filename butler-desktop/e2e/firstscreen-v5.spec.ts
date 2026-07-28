@@ -8,10 +8,13 @@ import {
 } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { createHash, createPrivateKey, sign } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { promisify } from 'node:util';
 
 const EGRESS_KEY_ID = 'butler-egress-verifier-playwright-v1';
+const execFileAsync = promisify(execFile);
 
 type WireReport = {
   schema_version: string;
@@ -153,6 +156,7 @@ type OpenOptions = Readonly<{
   learning?: (route: Route) => Promise<void> | void;
   setup?: (route: Route) => Promise<void> | void;
   waitForInput?: boolean;
+  useRealLearning?: boolean;
 }>;
 
 async function openHome(page: Page, options: OpenOptions = {}): Promise<void> {
@@ -173,20 +177,22 @@ async function openHome(page: Page, options: OpenOptions = {}): Promise<void> {
       body: JSON.stringify(signedReport()),
     })),
   );
-  await page.route(
-    '**/api/capabilities/learning',
-    options.learning ?? jsonRoute({
-      schema_version: 1,
-      source: 'UNAVAILABLE',
-      generation: 0,
-      capabilities: {
-        company_rules: 'UNKNOWN',
-        company_facts: 'UNKNOWN',
-        company_formats: 'UNKNOWN',
-        folder_learning: 'UNKNOWN',
-      },
-    }),
-  );
+  if (!options.useRealLearning) {
+    await page.route(
+      '**/api/capabilities/learning',
+      options.learning ?? jsonRoute({
+        schema_version: 1,
+        source: 'UNAVAILABLE',
+        generation: 0,
+        capabilities: {
+          company_rules: 'UNKNOWN',
+          company_facts: 'UNKNOWN',
+          company_formats: 'UNKNOWN',
+          folder_learning: 'UNKNOWN',
+        },
+      }),
+    );
+  }
   await page.goto('/');
   await expect(page.getByTestId('sidecar-loading')).toBeHidden({ timeout: 30_000 });
   if (options.waitForInput !== false) {
@@ -195,6 +201,29 @@ async function openHome(page: Page, options: OpenOptions = {}): Promise<void> {
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
+}
+
+async function prepareRealLearningProvider(
+  mode: 'seed' | 'corrupt-policy',
+): Promise<void> {
+  const dataDir = process.env.BUTLER_E2E_DATA_DIR;
+  if (!dataDir) throw new Error('BUTLER_E2E_DATA_DIR_MISSING');
+  const python = process.env.BUTLER_E2E_PYTHON ?? 'python3';
+  const repositoryRoot = resolve(import.meta.dirname, '..', '..');
+  await execFileAsync(
+    python,
+    [
+      resolve(repositoryRoot, 'scripts', 'ci', 'seed_firstscreen_learning_capabilities.py'),
+      mode,
+    ],
+    {
+      cwd: repositoryRoot,
+      env: {
+        ...process.env,
+        BUTLER_APP_DATA_DIR: dataDir,
+      },
+    },
+  );
 }
 
 async function expectNotZero(page: Page): Promise<void> {
@@ -440,6 +469,46 @@ test.describe('egress attack matrix (19/19)', () => {
 });
 
 test.describe('FirstScreen v7 required product paths', () => {
+  test('회사 배우기 네 행이 endpoint 가로채기 없이 실제 sidecar와 권위 저장소에서 계산된다', async ({ page }) => {
+    await prepareRealLearningProvider('seed');
+    await openHome(page, { useRealLearning: true });
+    await page.getByTestId('settings-entry').click();
+    const group = page.getByTestId('company-learning-settings');
+    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(3);
+    await expect(group.getByText('미리보기만 됩니다', { exact: true })).toHaveCount(1);
+    await expect(group.getByText('확인할 수 없습니다', { exact: true })).toHaveCount(0);
+  });
+
+  test('권위 저장소 하나가 실패하면 실제 sidecar가 503을 반환하고 네 행 모두 확인할 수 없습니다로 닫힌다', async ({ page }) => {
+    await prepareRealLearningProvider('seed');
+    await prepareRealLearningProvider('corrupt-policy');
+    await openHome(page, { useRealLearning: true });
+    await page.getByTestId('settings-entry').click();
+    const group = page.getByTestId('company-learning-settings');
+    await expect(group.getByText('확인할 수 없습니다', { exact: true })).toHaveCount(4);
+    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(0);
+  });
+
+  test('회사 배우기 실제 sidecar 경로가 좁은 창 200퍼센트 확대 키보드 포커스 접근성을 보존한다', async ({ page }) => {
+    await prepareRealLearningProvider('seed');
+    await page.setViewportSize({ width: 640, height: 720 });
+    await openHome(page, { useRealLearning: true });
+    await page.getByTestId('settings-entry').focus();
+    await page.getByTestId('settings-entry').press('Enter');
+    await page.evaluate(() => {
+      document.documentElement.style.zoom = '2';
+    });
+    const group = page.getByTestId('company-learning-settings');
+    const firstAction = group.getByRole('button', { name: '회사 규칙 등록 열기' });
+    await firstAction.focus();
+    await expect(firstAction).toBeFocused();
+    const axe = await new AxeBuilder({ page })
+      .include('[data-testid="company-learning-settings"]')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    expect(axe.violations, JSON.stringify(axe.violations, null, 2)).toEqual([]);
+  });
+
   test('never-settling egress report leaves loading and never displays a fake zero', async ({ page }) => {
     await openHome(page, {
       egress: async () => new Promise<void>(() => undefined),

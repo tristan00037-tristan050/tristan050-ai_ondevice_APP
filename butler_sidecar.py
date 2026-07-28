@@ -453,6 +453,12 @@ if _FASTAPI_AVAILABLE:
             "/api/model-tier/shadow/status",
         }
     )
+    _PROTECTED_GET_PATHS = frozenset(
+        {
+            "/api/egress/report",
+            "/api/capabilities/learning",
+        }
+    )
 
     from butler_pc_core.sidecar.routes.home import (
         initialize_home_store,
@@ -495,7 +501,7 @@ if _FASTAPI_AVAILABLE:
         home_request = request.url.path.startswith("/v1/home/")
         protected_get_request = (
             request.method == "GET"
-            and request.url.path == "/api/egress/report"
+            and request.url.path in _PROTECTED_GET_PATHS
         )
         local_authenticated_request = home_request or protected_get_request
         if local_authenticated_request:
@@ -537,6 +543,9 @@ if _FASTAPI_AVAILABLE:
     from butler_pc_core.company_fact.routes import router as company_fact_router
     from butler_pc_core.sidecar.routes.company_learning import (
         router as company_learning_router,
+    )
+    from butler_pc_core.sidecar.routes.learning_capability import (
+        router as learning_capability_router,
     )
     from butler_pc_core.sidecar.routes.company_profile import (
         router as company_profile_router,
@@ -581,6 +590,7 @@ if _FASTAPI_AVAILABLE:
     app.include_router(accounting_assignment_router)
     app.include_router(company_fact_router)
     app.include_router(company_learning_router)
+    app.include_router(learning_capability_router)
 
     # -----------------------------------------------------------------------
     # 모델
@@ -3067,6 +3077,8 @@ else:
             data = json.dumps(body, ensure_ascii=False).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Access-Control-Allow-Origin", "tauri://localhost")
             self.send_header(
@@ -3118,6 +3130,15 @@ else:
                     self._send_json(200, _fallback_health_payload(self.path))
             elif self.path == "/api/egress/report":
                 self._send_json(503, _static_beta_egress_payload())
+            elif self.path == "/api/capabilities/learning":
+                self._send_json(
+                    503,
+                    {
+                        "schema_version": 1,
+                        "source": "UNAVAILABLE",
+                        "reason": "AUTHORITY_UNREACHABLE",
+                    },
+                )
             else:
                 self._send_json(404, {"detail": "not found"})
 

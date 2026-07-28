@@ -8,6 +8,9 @@ from fastapi.responses import JSONResponse
 from .contracts import ContractValidationError, sha256_text
 from .policy_gate import PolicyGate, build_policy_task_envelope
 from .storage import PolicyLoadError, PolicyStore
+from butler_pc_core.learning_capability.consumer_bindings import (
+    default_consumer_binding_store,
+)
 
 _LOCAL_UI_ORIGINS = frozenset({
     "tauri://localhost",
@@ -157,4 +160,15 @@ def add_policy_gate_middleware(
         response.headers["x-policy-audit-ref"] = gate.audit_ref
         if gate.applied_policy_digest:
             response.headers["x-applied-policy-digest"] = gate.applied_policy_digest
+            try:
+                default_consumer_binding_store().record(
+                    "company_rules",
+                    gate.applied_policy_digest,
+                    "PolicyGate.middleware.allowed_response.v1",
+                )
+            except Exception:
+                # A failed proof write must never create an IN_USE claim, but it
+                # also must not turn an already-authorized product request into
+                # a new availability failure.
+                pass
         return response

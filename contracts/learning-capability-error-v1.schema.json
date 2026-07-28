@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/learning-capability-error-v1.schema.json",
+  "title": "Butler learning capability unavailable v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source",
+    "reason"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "source": {
+      "const": "UNAVAILABLE"
+    },
+    "reason": {
+      "enum": [
+        "AUTHORITY_UNREACHABLE",
+        "AUTHORITY_INCOMPLETE",
+        "AUTHORITY_CHANGED",
+        "GENERATION_UNAVAILABLE",
+        "CONTRACT_MISMATCH",
+        "INTERNAL_ERROR"
+      ]
+    }
+  }
+}

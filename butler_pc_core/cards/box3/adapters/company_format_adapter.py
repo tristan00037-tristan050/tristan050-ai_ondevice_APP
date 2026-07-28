@@ -11,6 +11,9 @@ from butler_pc_core.company_policy.contracts import CompanyFormat
 from butler_pc_core.company_policy.contracts import sha256_text as sha256_digest_text
 from butler_pc_core.company_policy.storage import CompanyFormatStore as DeviceLocalEncryptedFormatStore
 from butler_pc_core.company_policy.vault import VaultError as FormatStoreError
+from butler_pc_core.learning_capability.consumer_bindings import (
+    default_consumer_binding_store,
+)
 
 
 @dataclass(frozen=True)
@@ -59,6 +62,14 @@ def apply_company_format_runtime(
     # the plaintext in process memory to render a response, but audit/evidence
     # receives only formatted_digest.
     formatted_runtime = template.replace("{draft}", draft_text_runtime_only) if "{draft}" in template else f"{template}\n\n{draft_text_runtime_only}"
+    try:
+        default_consumer_binding_store().record(
+            "company_formats",
+            company_format.format_digest,
+            "Box3.apply_company_format_runtime.v1",
+        )
+    except Exception:
+        pass
     return CompanyFormatApplication(
         format_id=format_id,
         format_applied=True,
