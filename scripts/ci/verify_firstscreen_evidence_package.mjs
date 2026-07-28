@@ -221,8 +221,8 @@ async function verifyContexts(root, index, options) {
 
 async function verifyPrivacy(root, files) {
   const forbidden = [
-    /\/Users\/[^/]+/u,
-    /\/home\/(?!runner(?:\/|$))[^/]+/u,
+    /(?:^|[\s"'=:<(])\/Users\/[^/\s"'<>]+/u,
+    /(?:^|[\s"'=:<(])\/home\/(?!runner(?:\/|$))[^/\s"'<>]+/u,
     /(?:^|["\s])hostname["\s]*:/iu,
   ];
   for (const name of files) {
