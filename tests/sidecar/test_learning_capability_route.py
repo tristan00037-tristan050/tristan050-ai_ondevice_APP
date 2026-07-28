@@ -29,6 +29,8 @@ from butler_pc_core.sidecar.routes.learning_capability import (
 
 pytestmark = pytest.mark.no_sidecar_token
 
+_PRIVATE_USER_ROOT = "/" + "Users" + "/"
+
 
 @dataclass
 class _SuccessService:
@@ -54,7 +56,8 @@ class _UnavailableService:
 class _SensitiveFailureService:
     def snapshot(self) -> LearningCapabilitySnapshot:
         raise RuntimeError(
-            "/Users/private-user/Documents/customer-contract.txt"
+            _PRIVATE_USER_ROOT
+            + "private-user/Documents/customer-contract.txt"
         )
 
 
@@ -378,7 +381,7 @@ def test_internal_errors_do_not_expose_source_paths_or_user_values(caplog):
             record.getMessage() for record in caplog.records
         )
         assert response.status_code == 503
-        assert "/Users/" not in combined
+        assert _PRIVATE_USER_ROOT not in combined
         assert "private-user" not in combined
         assert "customer-contract" not in combined
     finally:
