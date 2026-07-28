@@ -129,6 +129,10 @@ playwrightBasename.manifest.tests = [{
   title: 'playwright basename node',
   required: true,
 }];
+playwrightBasename.playwright.config = {
+  configFile: '/host/checkout/butler-desktop/playwright.config.ts',
+  rootDir: '/host/checkout/butler-desktop/e2e',
+};
 playwrightBasename.playwright.suites = [{
   file: 'self.spec.ts',
   specs: [{
@@ -150,6 +154,42 @@ await json(
 if (invoke(playwrightBasename.paths).status !== 0) {
   throw new Error('PLAYWRIGHT_BASENAME_REJECTED');
 }
+
+const playwrightWrongRoot = await fixture('playwright-wrong-root');
+playwrightWrongRoot.playwright.config = {
+  configFile: '/host/checkout/other-app/playwright.config.ts',
+  rootDir: '/host/checkout/other-app/e2e',
+};
+playwrightWrongRoot.playwright.suites = [{
+  file: 'self.spec.ts',
+  specs: [],
+}];
+await json(playwrightWrongRoot.paths.playwright, playwrightWrongRoot.playwright);
+await json(
+  playwrightWrongRoot.paths.playwrightContext,
+  playwrightWrongRoot.context(
+    sha256(await readFile(playwrightWrongRoot.paths.playwright)),
+  ),
+);
+expectFailure(invoke(playwrightWrongRoot.paths), 'PLAYWRIGHT_ROOT_INVALID');
+
+const playwrightAbsoluteFile = await fixture('playwright-absolute-file');
+playwrightAbsoluteFile.playwright.config = {
+  configFile: '/host/checkout/butler-desktop/playwright.config.ts',
+  rootDir: '/host/checkout/butler-desktop/e2e',
+};
+playwrightAbsoluteFile.playwright.suites = [{
+  file: '/host/checkout/butler-desktop/e2e/self.spec.ts',
+  specs: [],
+}];
+await json(playwrightAbsoluteFile.paths.playwright, playwrightAbsoluteFile.playwright);
+await json(
+  playwrightAbsoluteFile.paths.playwrightContext,
+  playwrightAbsoluteFile.context(
+    sha256(await readFile(playwrightAbsoluteFile.paths.playwright)),
+  ),
+);
+expectFailure(invoke(playwrightAbsoluteFile.paths), 'PLAYWRIGHT_FILE_INVALID');
 
 const wrongExecution = await fixture('wrong-execution');
 const wrongExecutionValue = wrongExecution.context(
