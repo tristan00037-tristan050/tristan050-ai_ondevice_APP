@@ -180,7 +180,7 @@ jobs:
             --output test-results/firstscreen-v9-unit-context.json \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
-            --tree "$(git rev-parse HEAD^{tree})" \
+            --tree "$(git rev-parse 'HEAD^{tree}')" \
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
@@ -243,9 +243,11 @@ jobs:
         env:
           PYTEST_TARGETS: ${{ matrix.targets }}
         run: |
+          set -euo pipefail
           mkdir -p evidence
+          read -r -a pytest_targets <<< "${PYTEST_TARGETS}"
           started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          python -m pytest -q ${PYTEST_TARGETS} \
+          python -m pytest -q "${pytest_targets[@]}" \
             --junitxml="evidence/${{ matrix.evidence_name }}-pytest.xml"
           finished="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           python_version="$(python -c 'import platform; print(platform.python_version())')"
@@ -257,7 +259,7 @@ jobs:
             --output "evidence/${{ matrix.evidence_name }}-context.json" \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
-            --tree "$(git rev-parse HEAD^{tree})" \
+            --tree "$(git rev-parse 'HEAD^{tree}')" \
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
@@ -345,7 +347,7 @@ jobs:
             --output test-results/firstscreen-v9-${{ matrix.evidence_name }}-context.json \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
-            --tree "$(git rev-parse HEAD^{tree})" \
+            --tree "$(git rev-parse 'HEAD^{tree}')" \
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
@@ -409,7 +411,7 @@ jobs:
             --output evidence/node-verifier-context.json \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
-            --tree "$(git rev-parse HEAD^{tree})" \
+            --tree "$(git rev-parse 'HEAD^{tree}')" \
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
@@ -441,7 +443,7 @@ jobs:
             --event "${GITHUB_EVENT_PATH}" \
             --head "${PR_HEAD_SHA}" \
             --checkout-head "$(git rev-parse HEAD)" \
-            --checkout-tree "$(git rev-parse HEAD^{tree})" \
+            --checkout-tree "$(git rev-parse 'HEAD^{tree}')" \
             --object-format "$(git rev-parse --show-object-format)" \
             --root "${GITHUB_WORKSPACE}" \
             --output evidence/required-node-audit.json
@@ -451,7 +453,7 @@ jobs:
             --output evidence/firstscreen-v9-required-audit-context.json \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
-            --tree "$(git rev-parse HEAD^{tree})" \
+            --tree "$(git rev-parse 'HEAD^{tree}')" \
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
@@ -554,7 +556,8 @@ jobs:
           cp collected/audit/*-context.json "${root}/contexts/"
           cp butler-desktop/acceptance/required-tests.v2.json \
             "${root}/manifests/"
-          cp .github/firstscreen-action-pins.json "${root}/manifests/"
+          cp butler-desktop/acceptance/action-pins.v1.json \
+            "${root}/manifests/"
           cp contracts/evidence-index.schema.json "${root}/manifests/"
           node scripts/ci/build_firstscreen_evidence_index.mjs \
             --package "${root}" \
@@ -562,16 +565,18 @@ jobs:
             --pull-request "${{ github.event.pull_request.number }}" \
             --subject-head "${PR_HEAD_SHA}" \
             --object-format "$(git rev-parse --show-object-format)" \
-            --tree "$(git rev-parse HEAD^{tree})" \
+            --tree "$(git rev-parse 'HEAD^{tree}')" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
             --workflow-ref "${GITHUB_WORKFLOW_REF}"
+          checksums="${RUNNER_TEMP}/firstscreen-v9-SHA256SUMS.txt"
           (
             cd "${root}"
             find . -type f ! -name SHA256SUMS.txt -print0 \
               | sort -z \
               | xargs -0 sha256sum \
-              | sed 's#  \\./#  #' > SHA256SUMS.txt
+              | sed 's#  \\./#  #' > "${checksums}"
+            mv "${checksums}" SHA256SUMS.txt
             sha256sum -c SHA256SUMS.txt
           )
           archive="${RUNNER_TEMP}/firstscreen-v9-evidence.zip"
@@ -609,7 +614,7 @@ jobs:
             --pull-request "${{ github.event.pull_request.number }}" \
             --subject-head "${PR_HEAD_SHA}" \
             --object-format "$(git rev-parse --show-object-format)" \
-            --tree "$(git rev-parse HEAD^{tree})" \
+            --tree "$(git rev-parse 'HEAD^{tree}')" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
             --workflow-ref "${GITHUB_WORKFLOW_REF}" \

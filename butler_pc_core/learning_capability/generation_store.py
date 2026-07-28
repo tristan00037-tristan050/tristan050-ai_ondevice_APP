@@ -22,11 +22,14 @@ class DurableGenerationStore:
     def __init__(self, path: Path, *, lock_timeout_seconds: float = 2.0) -> None:
         self.path = path
         self.lock_timeout_seconds = lock_timeout_seconds
-        self._state = TrustedStateFile(
-            path,
-            max_file_bytes=self.MAX_FILE_BYTES,
-            lock_timeout_seconds=lock_timeout_seconds,
-        )
+        try:
+            self._state = TrustedStateFile(
+                path,
+                max_file_bytes=self.MAX_FILE_BYTES,
+                lock_timeout_seconds=lock_timeout_seconds,
+            )
+        except TrustedStateError as exc:
+            raise GenerationStoreError(str(exc)) from exc
 
     @contextmanager
     def _locked(self) -> Iterator[TrustedStateSession]:

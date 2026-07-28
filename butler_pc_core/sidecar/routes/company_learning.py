@@ -23,13 +23,7 @@ from butler_pc_core.inference.llm_runtime import LlmRuntime
 router = APIRouter()
 _TOKEN_MANAGER = CapabilityTokenManager()
 _JOB_STORE = CompanyLearningJobStore()
-_LEARNING_EVENT_STORE = LearningEventStore(
-    jsonl_path=product_data_root(
-        "company-learning",
-        legacy_name=".butler_company_learning",
-    )
-    / "learning_events.jsonl"
-)
+_LEARNING_EVENT_STORE: LearningEventStore | None = None
 _LLM_RUNTIME: LlmRuntime | None = None
 LOCALHOST_HOSTS = {"127.0.0.1", "localhost", "::1", "testclient"}
 
@@ -41,6 +35,19 @@ class CompanyLearningConnectRequest(BaseModel):
 class CompanyLearningHandoffRequest(BaseModel):
     job_id: str = Field(..., min_length=1)
     admin_confirmed_needs_review: bool = False
+
+
+def get_learning_event_store() -> LearningEventStore:
+    global _LEARNING_EVENT_STORE
+    if _LEARNING_EVENT_STORE is None:
+        _LEARNING_EVENT_STORE = LearningEventStore(
+            jsonl_path=product_data_root(
+                "company-learning",
+                legacy_name=".butler_company_learning",
+            )
+            / "learning_events.jsonl"
+        )
+    return _LEARNING_EVENT_STORE
 
 
 def _error_detail(fail_class: str, message: str | None = None) -> dict[str, Any]:
@@ -251,7 +258,7 @@ async def company_learning_handoff(
 
     result = create_company_learning_candidate(
         job,
-        store=_LEARNING_EVENT_STORE,
+        store=get_learning_event_store(),
         llm_status=_llm_status(),
     )
     if result.event is None:

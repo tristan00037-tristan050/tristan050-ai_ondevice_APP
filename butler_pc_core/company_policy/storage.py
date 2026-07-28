@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from butler_pc_core.app_data import product_data_root
+from butler_pc_core.strict_json import load_strict_bytes
 
 from .admin_auth import verify_admin_context
 from .audit import GLOBAL_ADMIN_AUDIT_STORE, build_admin_audit_record
@@ -66,7 +67,7 @@ class PolicyStore:
         if not self.index_path.exists():
             return None
         try:
-            idx = json.loads(self.index_path.read_text(encoding="utf-8"))
+            idx = load_strict_bytes(self.index_path.read_bytes())
             data = self.vault.decrypt_json(idx["active_policy_ref"], aad=idx["policy_digest"])
             validate_company_policy_dict(data)
             if data["policy_digest"] != compute_policy_digest(data):
@@ -122,7 +123,7 @@ class CompanyFormatStore:
     def _load_index(self) -> dict[str, Any]:
         if not self.index_path.exists():
             return {"formats": {}}
-        return json.loads(self.index_path.read_text(encoding="utf-8"))
+        return load_strict_bytes(self.index_path.read_bytes())
 
     def _save_index(self, index: dict[str, Any]) -> None:
         self.index_path.write_text(json.dumps(index, ensure_ascii=False, sort_keys=True), encoding="utf-8")

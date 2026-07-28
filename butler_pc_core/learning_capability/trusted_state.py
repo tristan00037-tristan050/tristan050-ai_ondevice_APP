@@ -11,7 +11,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
-from .strict_json import canonical_json_bytes, load_strict_bytes
+from butler_pc_core.strict_json import (
+    dump_canonical_bytes as canonical_json_bytes,
+    load_strict_bytes,
+)
 
 
 class TrustedStateError(RuntimeError):

@@ -127,7 +127,7 @@ async function verifyIndex(root, actualFiles, options) {
     'EVIDENCE_INDEX.json',
     'SHA256SUMS.txt',
     'manifests/evidence-index.schema.json',
-    'manifests/firstscreen-action-pins.json',
+    'manifests/action-pins.v1.json',
     'manifests/required-tests.v2.json',
     'source/correction.patch',
     'source/git-ls-tree.txt',
@@ -238,7 +238,7 @@ async function verifyPrivacy(root, files) {
 
 async function verifyActionPins(root) {
   const pins = await readStrictJsonFile(
-    resolve(root, 'manifests/firstscreen-action-pins.json'),
+    resolve(root, 'manifests/action-pins.v1.json'),
     { maxBytes: 64 * 1024 },
   );
   if (pins.schema_version !== 1 || !Array.isArray(pins.actions)

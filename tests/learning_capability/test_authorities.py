@@ -44,7 +44,7 @@ from butler_pc_core.learning_capability.generation_store import (
 from butler_pc_core.learning_capability.service import (
     LearningCapabilityService,
 )
-from butler_pc_core.learning_capability.strict_json import load_strict_bytes
+from butler_pc_core.strict_json import load_strict_bytes
 
 
 pytestmark = pytest.mark.no_sidecar_token

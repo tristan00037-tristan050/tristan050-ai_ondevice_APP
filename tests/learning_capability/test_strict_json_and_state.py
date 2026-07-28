@@ -12,10 +12,10 @@ from butler_pc_core.learning_capability.generation_store import (
     DurableGenerationStore,
     GenerationStoreError,
 )
-from butler_pc_core.learning_capability.strict_json import (
+from butler_pc_core.strict_json import (
     MAX_JSON_BYTES,
     StrictJsonError,
-    canonical_json_bytes,
+    dump_canonical_bytes as canonical_json_bytes,
     load_strict_bytes,
 )
 from butler_pc_core.learning_capability.trusted_state import (
