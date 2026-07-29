@@ -705,7 +705,9 @@ jobs:
           archive="${RUNNER_TEMP}/firstscreen-v9-evidence.zip"
           (
             cd "${RUNNER_TEMP}/firstscreen-v9-evidence"
-            zip -X -q -r "${archive}" package
+            find package -type f -print0 \
+              | sort -z \
+              | xargs -0 zip -X -q "${archive}"
           )
           sha256sum "${archive}" > "${archive}.sha256"
           node scripts/ci/preflight_firstscreen_evidence_archive.mjs "${archive}"
