@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {"id": "HIST-001", "runner": "python", "operator": "merge_ref_as_head"},
+    {"id": "HIST-002", "runner": "node", "operator": "execution_commit_swap"},
+    {"id": "HIST-003", "runner": "node", "operator": "report_digest_flip"},
+    {"id": "HIST-004", "runner": "node", "operator": "duplicate_required_id"},
+    {"id": "HIST-005", "runner": "node", "operator": "reused_actual"},
+    {"id": "HIST-006", "runner": "node", "operator": "skipped_as_passed"},
+    {"id": "HIST-007", "runner": "python", "operator": "symlink_report"},
+    {"id": "HIST-008", "runner": "python", "operator": "oversized_report"},
+    {"id": "HIST-009", "runner": "node", "operator": "duplicate_key_context"},
+    {"id": "HIST-010", "runner": "node", "operator": "path_traversal"},
+    {"id": "HIST-011", "runner": "node", "operator": "backslash_path"},
+    {"id": "HIST-012", "runner": "node", "operator": "junit_doctype_entity"},
+    {"id": "HIST-013", "runner": "python", "operator": "archive_namespace_attack"}
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "assets": [
+    {
+      "path": "butler-desktop/acceptance/action-pins.v1.json",
+      "sha256": "489247cf44739c1275d16334025b2b00e87b441c536855907a297c06b2966ab1",
+      "bytes": 1215
+    },
+    {
+      "path": "butler-desktop/acceptance/required-tests.v3.json",
+      "sha256": "ca4b281d8200fb1ffd6ec595934b77023c6229769c2953af64253fd3ec08b7ea",
+      "bytes": 35477
+    },
+    {
+      "path": "butler-desktop/scripts/verify-required-test-nodes.mjs",
+      "sha256": "6e21ab71a244444f1eeb7b2866c045fa9a662168d69df0a9ec367a3d6dc71730",
+      "bytes": 23108
+    },
+    {
+      "path": "contracts/evidence-index.schema.json",
+      "sha256": "192fd3021596884e4e9203cb8aba348d6adf10454c2e2384dba6e49839829324",
+      "bytes": 4454
+    },
+    {
+      "path": "scripts/ci/parse_junit_xml.py",
+      "sha256": "f61c8bffbc3b926f9e51a146b6bc70b097ca068ad1cd9fe967a9b5e618faaf9c",
+      "bytes": 5119
+    },
+    {
+      "path": "scripts/ci/strict_json.mjs",
+      "sha256": "564cab9fa4463b4aa8483f2272f08e82b2edbe1835943f832f75050d577c066e",
+      "bytes": 5768
+    },
+    {
+      "path": "scripts/ci/trusted_firstscreen_artifact.py",
+      "sha256": "311d5cf272e4f8c2e7a2ce30f4de575a5558e85a62850fb3bbf1eedcfc9fd113",
+      "bytes": 29826
+    },
+    {
+      "path": "scripts/ci/trusted_firstscreen_historical.py",
+      "sha256": "1fe8de820df017aa2a43ad543a16b0105d6a2bc929674563105aef86e0e6310e",
+      "bytes": 7097
+    },
+    {
+      "path": "scripts/ci/trusted_firstscreen_mutations.mjs",
+      "sha256": "3edd204239fa327a3de076b33e4ba1e30f400e09c4384daebcc413439e346ed1",
+      "bytes": 11425
+    },
+    {
+      "path": "scripts/ci/trusted_firstscreen_run.py",
+      "sha256": "02dae07498d29d0a57a7356eb43b78f292463f8142b7f911cf9483d56dc3c1af",
+      "bytes": 14927
+    },
+    {
+      "path": "scripts/ci/verify_trusted_firstscreen_package.py",
+      "sha256": "5e79e9d439927cc8b7f44d8b5855d7b7b5d6d2d17625669313c5525521ec9d5d",
+      "bytes": 8099
+    },
+    {
+      "path": "tests/firstscreen_trusted/fixtures/historical_attacks.v1.json",
+      "sha256": "e934862587c17d0d2b7d40bf24fd379bef1bb2de14e4f09949f8c238608012d7",
+      "bytes": 1035
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/firstscreen-evidence-index.v3.schema.json",
+  "title": "Butler first screen evidence index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "subject", "workflow", "manifest", "runs"],
+  "properties": {
+    "schema_version": {"const": 3},
+    "subject": {"$ref": "#/$defs/subject"},
+    "workflow": {"$ref": "#/$defs/workflow"},
+    "manifest": {"$ref": "#/$defs/manifest"},
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/run"}
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "oid": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "hex"],
+          "properties": {
+            "algorithm": {"const": "sha1"},
+            "hex": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "hex"],
+          "properties": {
+            "algorithm": {"const": "sha256"},
+            "hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "pull_request", "head_oid", "tree_oid"],
+      "properties": {
+        "repository": {
+          "const": "tristan00037-tristan050/tristan050-ai_ondevice_APP"
+        },
+        "pull_request": {"const": 886},
+        "head_oid": {"$ref": "#/$defs/oid"},
+        "tree_oid": {"$ref": "#/$defs/oid"}
+      }
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner_kind",
+        "run_id",
+        "run_attempt",
+        "workflow_ref"
+      ],
+      "properties": {
+        "runner_kind": {"const": "github-hosted"},
+        "run_id": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "run_attempt": {"type": "integer", "minimum": 1},
+        "workflow_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "required_total"],
+      "properties": {
+        "path": {"const": "manifests/required-tests.v3.json"},
+        "sha256": {"$ref": "#/$defs/digest"},
+        "required_total": {"const": 92}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_name",
+        "runner",
+        "platform",
+        "command",
+        "tool_versions",
+        "exit_code",
+        "started_at",
+        "finished_at",
+        "os",
+        "arch",
+        "execution_oid",
+        "tree_oid",
+        "raw_result_path",
+        "raw_result_sha256",
+        "context_path",
+        "context_sha256"
+      ],
+      "properties": {
+        "job_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "runner": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "platform": {
+          "enum": ["ubuntu", "windows-2025", "macos-15"]
+        },
+        "command": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "tool_versions": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "exit_code": {"const": 0},
+        "started_at": {"type": "string", "format": "date-time"},
+        "finished_at": {"type": "string", "format": "date-time"},
+        "os": {"type": "string", "minLength": 1, "maxLength": 64},
+        "arch": {"type": "string", "minLength": 1, "maxLength": 64},
+        "execution_oid": {"$ref": "#/$defs/oid"},
+        "tree_oid": {"$ref": "#/$defs/oid"},
+        "raw_result_path": {
+          "type": "string",
+          "pattern": "^reports/[A-Za-z0-9._/-]+$"
+        },
+        "raw_result_sha256": {"$ref": "#/$defs/digest"},
+        "context_path": {
+          "type": "string",
+          "pattern": "^contexts/[A-Za-z0-9._/-]+$"
+        },
+        "context_sha256": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

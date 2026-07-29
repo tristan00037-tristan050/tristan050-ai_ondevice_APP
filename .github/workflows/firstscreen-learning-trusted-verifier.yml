@@ -1,0 +1,180 @@
+name: firstscreen-learning-trusted-verifier
+
+on:
+  workflow_run:
+    workflows: [firstscreen-v2-5-product-gate]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: firstscreen-trusted-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '24'
+  PRODUCER_WORKFLOW_NAME: firstscreen-v2-5-product-gate
+  PRODUCER_WORKFLOW_PATH: .github/workflows/firstscreen-v2-5.yml
+  ARTIFACT_PREFIX: firstscreen-v9-evidence-
+
+jobs:
+  trusted-evidence:
+    name: firstscreen-learning-trusted-evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out protected verifier revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up protected Python runtime
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up protected Node runtime
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install hash-locked verifier dependencies
+        run: >-
+          python -m pip install --require-hashes
+          -r requirements-firstscreen-ci.lock
+      - name: Verify protected verifier asset digests
+        run: >-
+          python scripts/ci/build_trusted_firstscreen_assets.py
+          --root .
+          --check
+      - name: Run protected verifier regressions
+        run: |
+          set -euo pipefail
+          umask 077
+          python_log="${RUNNER_TEMP}/trusted-python-regression.log"
+          node_log="${RUNNER_TEMP}/trusted-node-regression.log"
+          trap 'rm -f "${python_log}" "${node_log}"' EXIT
+          if ! python -m pytest tests/firstscreen_trusted -q \
+            >"${python_log}" 2>&1; then
+            echo "TRUSTED_REGRESSION_GATE_OK=0"
+            echo "ERROR_CODE=TRUSTED_PYTHON_REGRESSION_FAILED"
+            exit 1
+          fi
+          if ! node --test \
+            tests/firstscreen_trusted/test_required_verifier_contract.mjs \
+            >"${node_log}" 2>&1; then
+            echo "TRUSTED_REGRESSION_GATE_OK=0"
+            echo "ERROR_CODE=TRUSTED_NODE_REGRESSION_FAILED"
+            exit 1
+          fi
+          echo "TRUSTED_REGRESSION_GATE_OK=1"
+      - name: Bind and download the one canonical producer artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 \
+            "${RUNNER_TEMP}/firstscreen-trusted/input" \
+            "${RUNNER_TEMP}/firstscreen-trusted/state"
+          python scripts/ci/trusted_firstscreen_run.py \
+            --event "${GITHUB_EVENT_PATH}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --workflow-name "${PRODUCER_WORKFLOW_NAME}" \
+            --workflow-path "${PRODUCER_WORKFLOW_PATH}" \
+            --artifact-prefix "${ARTIFACT_PREFIX}" \
+            --artifact-output \
+              "${RUNNER_TEMP}/firstscreen-trusted/input/artifact.zip" \
+            --metadata-output \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/metadata.json" \
+            --event-output \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/event.json" \
+            --trusted-head "$(git rev-parse HEAD)" \
+            --trusted-tree "$(git rev-parse 'HEAD^{tree}')" \
+            --trusted-workflow-ref "${GITHUB_WORKFLOW_REF}"
+      - name: Preflight evidence archives and bind all digest layers
+        run: |
+          set -euo pipefail
+          python scripts/ci/trusted_firstscreen_artifact.py \
+            --outer "${RUNNER_TEMP}/firstscreen-trusted/input/artifact.zip" \
+            --destination "${RUNNER_TEMP}/firstscreen-trusted/extracted" \
+            --protected-manifest \
+              butler-desktop/acceptance/required-tests.v3.json \
+            --protected-action-pins \
+              butler-desktop/acceptance/action-pins.v1.json \
+            --protected-index-schema \
+              contracts/evidence-index.schema.json \
+            --metadata \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/metadata.json" \
+            --output \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/preflight.json"
+      - name: Verify exact 92-node accounting with protected code
+        run: |
+          set -euo pipefail
+          python scripts/ci/verify_trusted_firstscreen_package.py \
+            --repository-root . \
+            --extraction-root \
+              "${RUNNER_TEMP}/firstscreen-trusted/extracted" \
+            --preflight \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/preflight.json" \
+            --metadata \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/metadata.json" \
+            --event \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/event.json" \
+            --output \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/required-audit.json"
+      - name: Replay protected historical attack corpus
+        run: |
+          set -euo pipefail
+          python scripts/ci/trusted_firstscreen_historical.py \
+            --repository-root . \
+            --corpus \
+              tests/firstscreen_trusted/fixtures/historical_attacks.v1.json \
+            --output \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/historical.json"
+      - name: Run deterministic protected mutation attacks
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_rel="$(
+            python -c \
+              'import json,sys; print(json.load(open(sys.argv[1]))["package_relative"])' \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/preflight.json"
+          )"
+          case "${package_rel}" in
+            ""|/*|*\\*|*..*)
+              echo "TRUSTED_MUTATION_GATE_OK=0"
+              echo "ERROR_CODE=PACKAGE_PATH_INVALID"
+              exit 1
+              ;;
+          esac
+          node scripts/ci/trusted_firstscreen_mutations.mjs \
+            --manifest butler-desktop/acceptance/required-tests.v3.json \
+            --metadata \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/metadata.json" \
+            --package \
+              "${RUNNER_TEMP}/firstscreen-trusted/extracted/${package_rel}" \
+            --historical \
+              tests/firstscreen_trusted/fixtures/historical_attacks.v1.json \
+            --output \
+              "${RUNNER_TEMP}/firstscreen-trusted/state/mutations.json"
+      - name: Publish fixed trusted verdict
+        run: |
+          set -euo pipefail
+          {
+            echo "TRUSTED_VERIFIER_PASS=1"
+            echo "PR_CODE_EXECUTED_BY_TRUSTED_VERIFIER=0"
+            echo "REQUIRED_TOTAL=92"
+            echo "MISSING=0"
+            echo "SKIPPED=0"
+            echo "DESELECTED=0"
+            echo "XFAIL=0"
+            echo "FAILED=0"
+            echo "ERRORS=0"
+            echo "UNEXPECTED=0"
+            echo "TOTAL_GENERATED_CASES=3000"
+            echo "ACCEPTED_MALICIOUS=0"
+            echo "UNANALYSED=0"
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
