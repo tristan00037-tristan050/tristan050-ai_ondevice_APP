@@ -199,6 +199,16 @@ def _valid_outer(
             f"{MODULE.PACKAGE_ROOT}/SHA256SUMS.txt": checksums,
         },
     )
+    package_verify = {
+        "schema_version": 3,
+        "subject_head": head,
+        "tree_oid": {"algorithm": "sha1", "hex": tree},
+        "checksum_count": len(MODULE.PACKAGE_FILES) - 1,
+        "context_count": len(MODULE.CONTEXT_NAMES),
+        "zip_sha256": _sha256(inner),
+        "detached_digest_match": True,
+        "internal_checksums_verified": True,
+    }
     outer = tmp_path / "artifact.zip"
     _write_zip(
         outer,
@@ -207,6 +217,9 @@ def _valid_outer(
             MODULE.DETACHED_DIGEST: (
                 f"{_sha256(inner)}  {MODULE.INNER_ARCHIVE}\n".encode()
             ),
+            MODULE.PACKAGE_VERIFY: (
+                json.dumps(package_verify, separators=(",", ":")) + "\n"
+            ).encode(),
         },
     )
     metadata_value["artifact"]["sha256"] = _sha256(outer)
@@ -285,6 +298,26 @@ def test_archive_preflight_rejects_casefold_collision(tmp_path: Path) -> None:
             MODULE._preflight(stream)
 
 
+def test_source_archive_has_a_separate_bounded_entry_budget(tmp_path: Path) -> None:
+    archive_path = tmp_path / "repository-source.zip"
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_STORED) as archive:
+        for index in range(MODULE.MAX_ENTRIES + 1):
+            archive.writestr(f"source/{index:05d}.txt", b"")
+    with archive_path.open("rb") as stream:
+        with pytest.raises(
+            MODULE.ArtifactError,
+            match="ARCHIVE_ENTRY_COUNT_INVALID",
+        ):
+            MODULE._preflight(stream)
+    with archive_path.open("rb") as stream:
+        archive, infos = MODULE._preflight(
+            stream,
+            max_entries=MODULE.MAX_SOURCE_ENTRIES,
+        )
+        assert len(infos) == MODULE.MAX_ENTRIES + 1
+        archive.close()
+
+
 def test_detached_digest_must_not_contain_runner_path(tmp_path: Path) -> None:
     detached = tmp_path / MODULE.DETACHED_DIGEST
     detached.write_text(
@@ -301,6 +334,42 @@ def test_protected_manifest_mismatch_blocks_package(tmp_path: Path) -> None:
     outer, metadata, action_pins, index_schema = _valid_outer(tmp_path, protected)
     protected.write_text('{"schema_version":3,"changed":true}\n', encoding="utf-8")
     with pytest.raises(MODULE.ArtifactError, match="PROTECTED_MANIFEST_MISMATCH"):
+        MODULE.verify(
+            outer,
+            tmp_path / "extract",
+            protected,
+            action_pins,
+            index_schema,
+            metadata,
+            tmp_path / "result.json",
+        )
+
+
+def test_protected_schema_is_applied_to_evidence_index(tmp_path: Path) -> None:
+    protected = tmp_path / "required-tests.v3.json"
+    protected.write_text(
+        json.dumps({"schema_version": 3, "tests": []}) + "\n",
+        encoding="utf-8",
+    )
+    outer, metadata, action_pins, index_schema = _valid_outer(tmp_path, protected)
+    index_schema.write_text(
+        json.dumps(
+            {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "required": ["protected_required_field"],
+                "properties": {
+                    "protected_required_field": {"const": True},
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        MODULE.ArtifactError,
+        match="EVIDENCE_INDEX_SCHEMA_INVALID",
+    ):
         MODULE.verify(
             outer,
             tmp_path / "extract",

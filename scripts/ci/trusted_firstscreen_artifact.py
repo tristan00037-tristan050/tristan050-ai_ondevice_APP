@@ -16,14 +16,20 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO, Iterable
 
+from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema.exceptions import SchemaError
+
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 MAX_ENTRIES = 4096
+MAX_SOURCE_ENTRIES = 8192
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
 MAX_SINGLE_BYTES = 128 * 1024 * 1024
 MAX_RATIO = 100
+MAX_SOURCE_RATIO = 1000
 READ_CHUNK = 1024 * 1024
 INNER_ARCHIVE = "firstscreen-v9-evidence.zip"
 DETACHED_DIGEST = f"{INNER_ARCHIVE}.sha256"
+PACKAGE_VERIFY = f"{INNER_ARCHIVE}.verify.json"
 PACKAGE_ROOT = "package"
 REPORT_NAMES = {
     "reports/vitest-results.json",
@@ -170,13 +176,18 @@ def _entry_mode(info: zipfile.ZipInfo) -> int:
     return (info.external_attr >> 16) & 0xFFFF
 
 
-def _preflight(stream: BinaryIO) -> tuple[zipfile.ZipFile, list[zipfile.ZipInfo]]:
+def _preflight(
+    stream: BinaryIO,
+    *,
+    max_entries: int = MAX_ENTRIES,
+    max_ratio: int = MAX_RATIO,
+) -> tuple[zipfile.ZipFile, list[zipfile.ZipInfo]]:
     try:
         archive = zipfile.ZipFile(stream)
         infos = archive.infolist()
     except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile) as exc:
         raise ArtifactError("ARCHIVE_INVALID") from exc
-    if not infos or len(infos) > MAX_ENTRIES:
+    if not infos or len(infos) > max_entries:
         archive.close()
         raise ArtifactError("ARCHIVE_ENTRY_COUNT_INVALID")
     total = 0
@@ -208,7 +219,7 @@ def _preflight(stream: BinaryIO) -> tuple[zipfile.ZipFile, list[zipfile.ZipInfo]
             archive.close()
             raise ArtifactError("ARCHIVE_TOTAL_TOO_LARGE")
         compressed = max(info.compress_size, 1)
-        if info.file_size > compressed * MAX_RATIO:
+        if info.file_size > compressed * max_ratio:
             archive.close()
             raise ArtifactError("ARCHIVE_RATIO_EXCEEDED")
     return archive, infos
@@ -519,13 +530,33 @@ def _verify_mutation_report(package: Path) -> None:
         raise ArtifactError("MUTATION_EVIDENCE_INVALID")
 
 
+def _validate_index_schema(
+    index: dict[str, object],
+    protected_index_schema: Path,
+) -> None:
+    schema = _strict_json(protected_index_schema, max_bytes=2 * 1024 * 1024)
+    try:
+        Draft202012Validator.check_schema(schema)
+        validator = Draft202012Validator(
+            schema,
+            format_checker=FormatChecker(),
+        )
+        first_error = next(validator.iter_errors(index), None)
+    except SchemaError as exc:
+        raise ArtifactError("PROTECTED_INDEX_SCHEMA_INVALID") from exc
+    if first_error is not None:
+        raise ArtifactError("EVIDENCE_INDEX_SCHEMA_INVALID")
+
+
 def _verify_index(
     package: Path,
     metadata_path: Path,
     outer_digest: str,
+    protected_index_schema: Path,
 ) -> dict[str, object]:
     metadata = _strict_json(metadata_path, max_bytes=64 * 1024)
     index = _strict_json(package / "EVIDENCE_INDEX.json", max_bytes=1024 * 1024)
+    _validate_index_schema(index, protected_index_schema)
     producer = metadata.get("producer")
     artifact = metadata.get("artifact")
     tree = metadata.get("tree_oid")
@@ -640,6 +671,37 @@ def _parse_artifact_digest(value: str) -> str:
     return match.group(1)
 
 
+def _verify_packager_receipt(
+    path: Path,
+    *,
+    inner_digest: str,
+    metadata: dict[str, object],
+) -> None:
+    receipt = _strict_json(path, max_bytes=64 * 1024)
+    expected_keys = {
+        "schema_version",
+        "subject_head",
+        "tree_oid",
+        "checksum_count",
+        "context_count",
+        "zip_sha256",
+        "detached_digest_match",
+        "internal_checksums_verified",
+    }
+    if (
+        set(receipt) != expected_keys
+        or receipt.get("schema_version") != 3
+        or receipt.get("subject_head") != metadata.get("subject_head")
+        or receipt.get("tree_oid") != metadata.get("tree_oid")
+        or receipt.get("checksum_count") != len(PACKAGE_FILES) - 1
+        or receipt.get("context_count") != len(CONTEXT_NAMES)
+        or receipt.get("zip_sha256") != inner_digest
+        or receipt.get("detached_digest_match") is not True
+        or receipt.get("internal_checksums_verified") is not True
+    ):
+        raise ArtifactError("PACKAGE_VERIFY_RECEIPT_INVALID")
+
+
 def verify(
     outer: Path,
     destination: Path,
@@ -657,11 +719,17 @@ def verify(
         raise ArtifactError("UPLOAD_ARTIFACT_DIGEST_MISMATCH")
     outer_root = destination / f"outer-{secrets.token_hex(8)}"
     outer_names = _extract_zip(outer, outer_root)
-    if outer_names != sorted([DETACHED_DIGEST, INNER_ARCHIVE]):
+    if outer_names != sorted([DETACHED_DIGEST, INNER_ARCHIVE, PACKAGE_VERIFY]):
         raise ArtifactError("OUTER_FILESET_MISMATCH")
     inner = outer_root / INNER_ARCHIVE
-    if _sha256_path(inner) != _strict_detached(outer_root / DETACHED_DIGEST):
+    inner_digest = _sha256_path(inner)
+    if inner_digest != _strict_detached(outer_root / DETACHED_DIGEST):
         raise ArtifactError("DETACHED_DIGEST_MISMATCH")
+    _verify_packager_receipt(
+        outer_root / PACKAGE_VERIFY,
+        inner_digest=inner_digest,
+        metadata=trusted_metadata,
+    )
     inner_root = destination / f"inner-{secrets.token_hex(8)}"
     inner_names = _extract_zip(inner, inner_root)
     if not inner_names or any(
@@ -670,7 +738,7 @@ def verify(
         raise ArtifactError("INNER_ROOT_INVALID")
     package = inner_root / PACKAGE_ROOT
     checksum_count = _verify_checksums(package)
-    _verify_index(package, metadata, outer_digest)
+    _verify_index(package, metadata, outer_digest, protected_index_schema)
     packaged_manifest = package / "manifests" / "required-tests.v3.json"
     _require_regular(protected_manifest, max_bytes=2 * 1024 * 1024)
     _require_regular(packaged_manifest, max_bytes=2 * 1024 * 1024)
@@ -693,7 +761,11 @@ def verify(
             raise ArtifactError("PROTECTED_CONTRACT_MISMATCH")
     source_zip = package / "source" / "source.zip"
     with source_zip.open("rb") as source:
-        archive, _ = _preflight(source)
+        archive, _ = _preflight(
+            source,
+            max_entries=MAX_SOURCE_ENTRIES,
+            max_ratio=MAX_SOURCE_RATIO,
+        )
         archive.close()
     _verify_privacy(path for path in package.rglob("*") if path.is_file())
     result = {

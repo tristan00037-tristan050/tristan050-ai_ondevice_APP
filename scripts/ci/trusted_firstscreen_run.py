@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import hashlib
 import json
 import os
@@ -19,7 +21,11 @@ API_ROOT = "https://api.github.com"
 EXPECTED_EVENT = "pull_request"
 MAX_JSON_BYTES = 4 * 1024 * 1024
 MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
+MAX_PRODUCER_WORKFLOW_BYTES = 1024 * 1024
 READ_CHUNK = 1024 * 1024
+EXPECTED_PRODUCER_WORKFLOW_SHA256 = (
+    "daba6301a0a06b21923989ca271710760cd9e3ca3ea3edadf5b2a8ae5cae05aa"
+)
 
 
 class RunError(RuntimeError):
@@ -62,6 +68,33 @@ def _positive_int(value: Any, code: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise RunError(code)
     return value
+
+
+def _producer_workflow_bytes(
+    value: Mapping[str, Any],
+    workflow_path: str,
+) -> bytes:
+    content = value.get("content")
+    size = value.get("size")
+    if (
+        value.get("type") != "file"
+        or value.get("path") != workflow_path
+        or value.get("encoding") != "base64"
+        or not isinstance(content, str)
+        or isinstance(size, bool)
+        or not isinstance(size, int)
+        or size < 1
+        or size > MAX_PRODUCER_WORKFLOW_BYTES
+    ):
+        raise RunError("PRODUCER_WORKFLOW_CONTENT_INVALID")
+    try:
+        encoded = "".join(content.splitlines()).encode("ascii")
+        decoded = base64.b64decode(encoded, validate=True)
+    except (UnicodeEncodeError, binascii.Error) as exc:
+        raise RunError("PRODUCER_WORKFLOW_CONTENT_INVALID") from exc
+    if len(decoded) != size:
+        raise RunError("PRODUCER_WORKFLOW_CONTENT_INVALID")
+    return decoded
 
 
 class Api(Protocol):
@@ -228,6 +261,17 @@ def resolve_run(
         or workflow.get("state") != "active"
     ):
         raise RunError("PRODUCER_WORKFLOW_INVALID")
+    encoded_path = urllib.parse.quote(workflow_path, safe="/")
+    workflow_contents = api.json(
+        f"/repos/{repository}/contents/{encoded_path}?ref={head}"
+    )
+    workflow_bytes = _producer_workflow_bytes(
+        workflow_contents,
+        workflow_path,
+    )
+    workflow_sha256 = hashlib.sha256(workflow_bytes).hexdigest()
+    if workflow_sha256 != EXPECTED_PRODUCER_WORKFLOW_SHA256:
+        raise RunError("PRODUCER_WORKFLOW_DIGEST_MISMATCH")
 
     commit = api.json(f"/repos/{repository}/git/commits/{head}")
     tree = commit.get("tree")
@@ -284,6 +328,7 @@ def resolve_run(
             "workflow_id": workflow_id,
             "workflow_name": workflow_name,
             "workflow_path": workflow_path,
+            "workflow_sha256": workflow_sha256,
             "workflow_ref": producer_ref,
             "run_id": str(run_id),
             "run_attempt": run_attempt,

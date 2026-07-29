@@ -33,8 +33,8 @@
     },
     {
       "path": "scripts/ci/trusted_firstscreen_artifact.py",
-      "sha256": "5abfa9f6ad257edb628fc850dcb8a6b50b015d22e4fca936f833f0eb1c4323c8",
-      "bytes": 27488
+      "sha256": "311d5cf272e4f8c2e7a2ce30f4de575a5558e85a62850fb3bbf1eedcfc9fd113",
+      "bytes": 29826
     },
     {
       "path": "scripts/ci/trusted_firstscreen_historical.py",
@@ -48,8 +48,8 @@
     },
     {
       "path": "scripts/ci/trusted_firstscreen_run.py",
-      "sha256": "97f695185dd821d935db097476010d70225eec54e7c09fb0217daa3437c39bef",
-      "bytes": 13331
+      "sha256": "02dae07498d29d0a57a7356eb43b78f292463f8142b7f911cf9483d56dc3c1af",
+      "bytes": 14927
     },
     {
       "path": "scripts/ci/verify_trusted_firstscreen_package.py",

@@ -41,6 +41,10 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
+      - name: Install hash-locked verifier dependencies
+        run: >-
+          python -m pip install --require-hashes
+          -r requirements-firstscreen-ci.lock
       - name: Verify protected verifier asset digests
         run: >-
           python scripts/ci/build_trusted_firstscreen_assets.py
@@ -49,8 +53,24 @@ jobs:
       - name: Run protected verifier regressions
         run: |
           set -euo pipefail
-          python -m pytest tests/firstscreen_trusted -q
-          node --test tests/firstscreen_trusted/test_required_verifier_contract.mjs
+          umask 077
+          python_log="${RUNNER_TEMP}/trusted-python-regression.log"
+          node_log="${RUNNER_TEMP}/trusted-node-regression.log"
+          trap 'rm -f "${python_log}" "${node_log}"' EXIT
+          if ! python -m pytest tests/firstscreen_trusted -q \
+            >"${python_log}" 2>&1; then
+            echo "TRUSTED_REGRESSION_GATE_OK=0"
+            echo "ERROR_CODE=TRUSTED_PYTHON_REGRESSION_FAILED"
+            exit 1
+          fi
+          if ! node --test \
+            tests/firstscreen_trusted/test_required_verifier_contract.mjs \
+            >"${node_log}" 2>&1; then
+            echo "TRUSTED_REGRESSION_GATE_OK=0"
+            echo "ERROR_CODE=TRUSTED_NODE_REGRESSION_FAILED"
+            exit 1
+          fi
+          echo "TRUSTED_REGRESSION_GATE_OK=1"
       - name: Bind and download the one canonical producer artifact
         env:
           GITHUB_TOKEN: ${{ github.token }}

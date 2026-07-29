@@ -51,6 +51,22 @@ def test_trusted_workflow_has_read_only_permissions_and_no_attestation_path() ->
     assert all(value not in combined for value in forbidden)
 
 
+def test_trusted_workflow_installs_hash_locked_dependencies() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert "pip install --require-hashes" in text
+    assert "-r requirements-firstscreen-ci.lock" in text
+
+
+def test_regression_failures_emit_only_fixed_verdicts() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert '>"${python_log}" 2>&1' in text
+    assert '>"${node_log}" 2>&1' in text
+    assert "TRUSTED_PYTHON_REGRESSION_FAILED" in text
+    assert "TRUSTED_NODE_REGRESSION_FAILED" in text
+    assert 'cat "${python_log}"' not in text
+    assert 'cat "${node_log}"' not in text
+
+
 def test_all_actions_are_full_commit_pins_and_recorded() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     used = re.findall(r"uses: ([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@([0-9a-f]{40})", text)

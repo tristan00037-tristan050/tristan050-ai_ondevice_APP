@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
 from pathlib import Path
@@ -22,10 +23,16 @@ WORKFLOW_PATH = ".github/workflows/firstscreen-v2-5.yml"
 HEAD = "a" * 40
 TREE = "b" * 40
 ARTIFACT = b"artifact bytes"
+PRODUCER_WORKFLOW = b"canonical producer workflow fixture\n"
 
 
 class FakeApi:
-    def __init__(self, *, artifact_digest: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        artifact_digest: str | None = None,
+        producer_workflow: bytes = PRODUCER_WORKFLOW,
+    ) -> None:
         self._digest = artifact_digest or hashlib.sha256(ARTIFACT).hexdigest()
         self.responses = {
             f"/repos/{REPOSITORY}/pulls/886": {
@@ -37,6 +44,13 @@ class FakeApi:
                 "name": WORKFLOW_NAME,
                 "path": WORKFLOW_PATH,
                 "state": "active",
+            },
+            f"/repos/{REPOSITORY}/contents/{WORKFLOW_PATH}?ref={HEAD}": {
+                "type": "file",
+                "path": WORKFLOW_PATH,
+                "encoding": "base64",
+                "size": len(producer_workflow),
+                "content": base64.b64encode(producer_workflow).decode("ascii"),
             },
             f"/repos/{REPOSITORY}/git/commits/{HEAD}": {
                 "sha": HEAD,
@@ -81,6 +95,15 @@ def _event() -> dict:
     }
 
 
+@pytest.fixture(autouse=True)
+def _bind_fixture_workflow_digest(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        MODULE,
+        "EXPECTED_PRODUCER_WORKFLOW_SHA256",
+        hashlib.sha256(PRODUCER_WORKFLOW).hexdigest(),
+    )
+
+
 def _resolve(tmp_path: Path, event: dict, api: FakeApi):
     return MODULE.resolve_run(
         event,
@@ -104,6 +127,9 @@ def test_successful_run_binds_pr_head_tree_workflow_and_artifact(
     assert metadata["tree_oid"] == {"algorithm": "sha1", "hex": TREE}
     assert metadata["producer"]["run_id"] == "123"
     assert metadata["producer"]["run_attempt"] == 2
+    assert metadata["producer"]["workflow_sha256"] == hashlib.sha256(
+        PRODUCER_WORKFLOW
+    ).hexdigest()
     assert metadata["artifact"]["id"] == 456
     assert event["pull_request"]["head"]["sha"] == HEAD
 
@@ -138,3 +164,15 @@ def test_fork_artifact_is_rejected(tmp_path: Path) -> None:
 def test_github_artifact_digest_mismatch_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(MODULE.RunError, match="ARTIFACT_DIGEST_MISMATCH"):
         _resolve(tmp_path, _event(), FakeApi(artifact_digest="f" * 64))
+
+
+def test_modified_producer_workflow_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(
+        MODULE.RunError,
+        match="PRODUCER_WORKFLOW_DIGEST_MISMATCH",
+    ):
+        _resolve(
+            tmp_path,
+            _event(),
+            FakeApi(producer_workflow=b"modified producer workflow\n"),
+        )
