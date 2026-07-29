@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -196,26 +197,49 @@ def _seed() -> None:
     print("FIRSTSCREEN_LEARNING_SEED_OK=1")
 
 
+def _serve(*, host: str, port: int) -> None:
+    import uvicorn
+
+    uvicorn.run(
+        "butler_sidecar:app",
+        host=host,
+        port=port,
+        reload=False,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("seed", "seed-and-serve"))
+    parser.add_argument(
+        "mode",
+        choices=("seed", "seed-and-serve", "seed-stale-and-serve"),
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
-    _seed()
+    if args.mode == "seed":
+        _seed()
+        return 0
     if args.mode == "seed-and-serve":
         # Keep the product consumer bindings and the sidecar in one process.
         # Consumer binding v2 intentionally binds IN_USE to the in-memory
         # runtime instance; a seed process followed by a second Python process
         # would correctly invalidate those bindings as stale.
-        import uvicorn
+        _seed()
+        _serve(host=args.host, port=args.port)
+        return 0
 
-        uvicorn.run(
-            "butler_sidecar:app",
-            host=args.host,
-            port=args.port,
-            reload=False,
-        )
+    # Build the fixture only through the real product authorities/consumers,
+    # then start the sidecar in a distinct runtime. The persisted consumer
+    # binding is therefore stale by design and the canonical endpoint must
+    # fail closed with 503. No route interception or direct state mutation is
+    # used by this real-sidecar attack path.
+    subprocess.run(
+        [sys.executable, str(Path(__file__).resolve()), "seed"],
+        check=True,
+        env=os.environ.copy(),
+    )
+    _serve(host=args.host, port=args.port)
     return 0
 
 

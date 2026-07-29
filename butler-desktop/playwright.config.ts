@@ -13,9 +13,12 @@ const appData = process.env.BUTLER_E2E_DATA_DIR
   ?? resolve(repositoryRoot, '.playwright-runtime', 'app-data');
 const e2ePython = process.env.BUTLER_E2E_PYTHON ?? 'python3';
 process.env.BUTLER_E2E_DATA_DIR = appData;
-const sidecarCommand = process.env.BUTLER_E2E_PRESEED_LEARNING === '1'
+const learningFixtureMode = process.env.BUTLER_E2E_PRESEED_LEARNING;
+const sidecarCommand = learningFixtureMode === '1'
   ? `${JSON.stringify(e2ePython)} scripts/ci/seed_firstscreen_learning_capabilities.py seed-and-serve --host 127.0.0.1 --port 8765`
-  : `${JSON.stringify(e2ePython)} butler_sidecar.py --host 127.0.0.1 --port 8765`;
+  : learningFixtureMode === 'stale'
+    ? `${JSON.stringify(e2ePython)} scripts/ci/seed_firstscreen_learning_capabilities.py seed-stale-and-serve --host 127.0.0.1 --port 8765`
+    : `${JSON.stringify(e2ePython)} butler_sidecar.py --host 127.0.0.1 --port 8765`;
 const egressKeyId = 'butler-egress-verifier-playwright-v1';
 
 // Playwright may evaluate this config in both its coordinator and worker
