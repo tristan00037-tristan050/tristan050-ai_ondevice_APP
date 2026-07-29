@@ -14,6 +14,7 @@ for (let index = 2; index < process.argv.length; index += 2) {
 }
 for (const key of [
   'report',
+  'report-path',
   'output',
   'subject-head',
   'execution-commit',
@@ -21,14 +22,12 @@ for (const key of [
   'object-format',
   'run-id',
   'run-attempt',
-  'suite',
   'runner',
   'command',
   'tool-versions',
   'started-at',
   'finished-at',
   'os',
-  'arch',
 ]) {
   if (!options[key]) throw new Error(`REQUIRED_${key.toUpperCase()}_MISSING`);
 }
@@ -84,12 +83,17 @@ if (typeof repository !== 'string' || !/^[^/\s]+\/[^/\s]+$/.test(repository)
     || !['ubuntu', 'windows-2025', 'macos-15'].includes(platform)) {
   throw new Error('CONTEXT_WORKFLOW_IDENTITY_INVALID');
 }
+if (!/^reports\/[A-Za-z0-9._/-]+$/.test(options['report-path'])
+    || options['report-path'].split('/').some(part => (
+      part === '' || part === '.' || part === '..'
+    ))) {
+  throw new Error('CONTEXT_REPORT_PATH_INVALID');
+}
 const context = {
   schema_version: 2,
   repository,
   event_name: eventName,
   pr_number: Number(prNumberText),
-  suite: options.suite,
   subject_head: options['subject-head'],
   execution_commit: options['execution-commit'],
   tree: options.tree,
@@ -101,13 +105,11 @@ const context = {
   runner: options.runner,
   platform,
   command: options.command,
-  report_path: options.report.replaceAll('\\', '/'),
-  tool_versions: toolVersions,
+  report_path: options['report-path'],
+  report_sha256: createHash('sha256').update(report).digest('hex'),
   started_at: options['started-at'],
   finished_at: options['finished-at'],
-  os: options.os,
-  arch: options.arch,
-  report_sha256: createHash('sha256').update(report).digest('hex'),
+  tool_versions: toolVersions,
 };
 await writeFile(
   resolve(options.output),

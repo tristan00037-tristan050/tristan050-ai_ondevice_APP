@@ -121,7 +121,6 @@ async function fixture(name) {
     repository: 'owner/repository',
     event_name: 'pull_request',
     pr_number: 886,
-    suite: name,
     subject_head: head,
     execution_commit: head,
     tree,
@@ -134,12 +133,10 @@ async function fixture(name) {
     runner,
     platform: 'ubuntu',
     command: 'self-test',
-    report_path: `evidence/self-test-${runner}.json`,
+    report_path: `reports/self-test-${runner}.json`,
     report_sha256: reportSha,
     started_at: '2026-07-29T00:00:00Z',
     finished_at: '2026-07-29T00:00:01Z',
-    os: 'Linux',
-    arch: 'X64',
     tool_versions: { node: process.version },
   });
   await json(
@@ -168,6 +165,8 @@ function invoke(paths, overrides = {}) {
     '--object-format', overrides.objectFormat ?? objectFormat,
     '--repository', 'owner/repository',
     '--pull-request', '886',
+    '--run-id', '1',
+    '--run-attempt', '1',
     '--workflow-ref',
     'owner/repository/.github/workflows/firstscreen-v2-5.yml@refs/pull/886/merge',
     '--event-name', 'pull_request',
@@ -299,6 +298,22 @@ wrongAlgorithmValue.object_format =
   objectFormat === 'sha1' ? 'sha256' : 'sha1';
 await json(wrongAlgorithm.paths.vitestContext, wrongAlgorithmValue);
 expectFailure(invoke(wrongAlgorithm.paths), 'CONTEXT_IDENTITY_MISMATCH');
+
+const wrongRunIdentity = await fixture('wrong-run-identity');
+const wrongRunIdentityValue = wrongRunIdentity.context(
+  sha256(await readFile(wrongRunIdentity.paths.vitest)),
+);
+wrongRunIdentityValue.run_id = '2';
+await json(wrongRunIdentity.paths.vitestContext, wrongRunIdentityValue);
+expectFailure(invoke(wrongRunIdentity.paths), 'CONTEXT_IDENTITY_MISMATCH');
+
+const legacyContextField = await fixture('legacy-context-field');
+const legacyContextFieldValue = legacyContextField.context(
+  sha256(await readFile(legacyContextField.paths.vitest)),
+);
+legacyContextFieldValue.suite = 'legacy-field-must-not-return';
+await json(legacyContextField.paths.vitestContext, legacyContextFieldValue);
+expectFailure(invoke(legacyContextField.paths), 'CONTEXT_IDENTITY_MISMATCH');
 
 const eventMismatch = await fixture('event-mismatch');
 await json(eventMismatch.paths.event, {

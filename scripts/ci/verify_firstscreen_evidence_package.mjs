@@ -24,6 +24,28 @@ import { containsPrivateHomePath } from './evidence_privacy.mjs';
 const MAX_PACKAGE_FILES = 512;
 const MAX_PACKAGE_BYTES = 512 * 1024 * 1024;
 const MAX_JSON_BYTES = 32 * 1024 * 1024;
+const CONTEXT_KEYS = new Set([
+  'schema_version',
+  'repository',
+  'event_name',
+  'pr_number',
+  'subject_head',
+  'execution_commit',
+  'tree',
+  'object_format',
+  'run_id',
+  'run_attempt',
+  'workflow_ref',
+  'job_name',
+  'runner',
+  'platform',
+  'command',
+  'report_path',
+  'report_sha256',
+  'started_at',
+  'finished_at',
+  'tool_versions',
+]);
 
 function parseArgs(argv) {
   const options = {};
@@ -206,6 +228,8 @@ async function verifyContexts(root, index, options) {
       maxBytes: 64 * 1024,
     });
     if (context.schema_version !== 2
+        || Object.keys(context).length !== CONTEXT_KEYS.size
+        || Object.keys(context).some(key => !CONTEXT_KEYS.has(key))
         || context.repository !== options.repository
         || context.event_name !== 'pull_request'
         || context.pr_number !== Number(options['pull-request'])
@@ -220,13 +244,12 @@ async function verifyContexts(root, index, options) {
         || context.platform !== run.platform
         || context.runner !== run.runner
         || context.command !== run.command
+        || context.report_path !== run.raw_result_path
         || JSON.stringify(context.tool_versions)
           !== JSON.stringify(run.tool_versions)
         || context.started_at !== run.started_at
         || context.finished_at !== run.finished_at
         || Date.parse(context.finished_at) < Date.parse(context.started_at)
-        || context.os !== run.os
-        || context.arch !== run.arch
         || context.report_sha256 !== reportDigest) {
       throw new Error('CONTEXT_INVALID');
     }
@@ -235,6 +258,27 @@ async function verifyContexts(root, index, options) {
   }
   if (seen.size !== index.runs.length) throw new Error('REPORT_CONTEXT_INCOMPLETE');
   return index.runs.length;
+}
+
+async function verifyMutationEvidence(root) {
+  const report = await readStrictJsonFile(
+    resolve(root, 'security/mutation-generator.json'),
+    { maxBytes: 4 * 1024 * 1024 },
+  );
+  if (report.schema_version !== 1
+      || !Number.isSafeInteger(report.total_generated_cases)
+      || report.total_generated_cases < 3000
+      || report.accepted_malicious !== 0
+      || report.unanalysed !== 0
+      || !Array.isArray(report.reports)
+      || report.reports.length !== 3
+      || report.reports.some(item => (
+        item?.cases !== 1000
+        || item?.accepted_malicious !== 0
+        || item?.unanalysed !== 0
+      ))) {
+    throw new Error('MUTATION_EVIDENCE_INVALID');
+  }
 }
 
 async function verifyPrivacy(root, files) {
@@ -336,12 +380,15 @@ async function main() {
     await requireNonempty(resolve(root, path), failClass);
   }
   const contextCount = await verifyContexts(root, index, options);
+  await verifyMutationEvidence(root);
   await verifyPrivacy(root, files);
   await verifyActionPins(root);
 
   const zip = resolve(options.zip);
   const detachedText = (await readFile(resolve(options.detached), 'utf8')).trim();
-  const detachedMatch = detachedText.match(/^([0-9a-f]{64})(?:\s+.+)?$/);
+  const detachedMatch = detachedText.match(
+    /^([0-9a-f]{64})  firstscreen-v9-evidence\.zip$/,
+  );
   if (!detachedMatch) throw new Error('DETACHED_DIGEST_INVALID');
   const zipDigest = sha256(await readFile(zip));
   if (zipDigest !== detachedMatch[1]) throw new Error('DETACHED_DIGEST_MISMATCH');

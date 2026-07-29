@@ -17,6 +17,29 @@ import {
 const REPORT_LIMIT = 32 * 1024 * 1024;
 const CONTEXT_LIMIT = 64 * 1024;
 const RUNNERS = new Set(['pytest', 'vitest', 'playwright', 'node']);
+const PLATFORMS = new Set(['ubuntu', 'macos-15', 'windows-2025']);
+const CONTEXT_KEYS = new Set([
+  'schema_version',
+  'repository',
+  'event_name',
+  'pr_number',
+  'subject_head',
+  'execution_commit',
+  'tree',
+  'object_format',
+  'run_id',
+  'run_attempt',
+  'workflow_ref',
+  'job_name',
+  'runner',
+  'platform',
+  'command',
+  'report_path',
+  'report_sha256',
+  'started_at',
+  'finished_at',
+  'tool_versions',
+]);
 
 function args(argv) {
   const result = {
@@ -225,13 +248,6 @@ function nodeKey(node) {
   return `${node.runner}\0${node.platform}\0${node.file}\0${node.title}`;
 }
 
-function contextPlatform(value) {
-  if (value === 'Linux') return 'ubuntu';
-  if (value === 'Windows') return 'windows-2025';
-  if (value === 'macOS') return 'macos-15';
-  throw new Error('CONTEXT_PLATFORM_INVALID');
-}
-
 function descriptionDigest(test) {
   const canonical = JSON.stringify({
     file: test.file,
@@ -265,6 +281,8 @@ async function main() {
     'object-format',
     'repository',
     'pull-request',
+    'run-id',
+    'run-attempt',
     'workflow-ref',
     'event-name',
   ]) {
@@ -314,6 +332,10 @@ async function main() {
   const eventPullRequest = event?.pull_request?.number ?? 0;
   if (eventPullRequest !== Number(options['pull-request'])) {
     throw new Error('EVENT_PULL_REQUEST_MISMATCH');
+  }
+  if (!/^[1-9]\d*$/.test(options['run-id'])
+      || !/^[1-9]\d*$/.test(options['run-attempt'])) {
+    throw new Error('WORKFLOW_RUN_IDENTITY_INVALID');
   }
 
   const manifestRaw = await readFile(resolve(options.manifest));
@@ -383,6 +405,8 @@ async function main() {
       maxBytes: CONTEXT_LIMIT,
     });
     if (context.schema_version !== 2
+        || Object.keys(context).length !== CONTEXT_KEYS.size
+        || Object.keys(context).some(key => !CONTEXT_KEYS.has(key))
         || context.repository !== options.repository
         || context.event_name !== options['event-name']
         || context.pr_number !== Number(options['pull-request'])
@@ -390,13 +414,13 @@ async function main() {
         || context.execution_commit !== options['checkout-head']
         || context.tree !== options['checkout-tree']
         || context.object_format !== options['object-format']
-        || !/^\d+$/.test(context.run_id ?? '')
+        || context.run_id !== options['run-id']
         || !Number.isSafeInteger(context.run_attempt)
-        || context.run_attempt < 1
+        || context.run_attempt !== Number(options['run-attempt'])
         || context.workflow_ref !== options['workflow-ref']
         || typeof context.job_name !== 'string' || !context.job_name
         || !RUNNERS.has(context.runner)
-        || !['ubuntu', 'windows-2025', 'macos-15'].includes(context.platform)
+        || !PLATFORMS.has(context.platform)
         || typeof context.report_path !== 'string'
         || requireRepositoryPath(context.report_path) !== context.report_path
         || typeof context.report_sha256 !== 'string') {
@@ -408,9 +432,6 @@ async function main() {
     }
     if (reportByDigest.get(context.report_sha256)?.runner !== context.runner) {
       throw new Error('CONTEXT_RUNNER_MISMATCH');
-    }
-    if (context.platform !== contextPlatform(context.os)) {
-      throw new Error('CONTEXT_PLATFORM_MISMATCH');
     }
     const rfc3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
     if (!rfc3339.test(context.started_at ?? '')

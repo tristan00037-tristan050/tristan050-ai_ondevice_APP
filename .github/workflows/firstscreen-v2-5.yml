@@ -176,6 +176,7 @@ jobs:
             "$(npm --version)")"
           node ../scripts/ci/write_firstscreen_test_context.mjs \
             --report test-results/vitest-results.json \
+            --report-path reports/vitest-results.json \
             --output test-results/firstscreen-v9-unit-context.json \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
@@ -183,14 +184,12 @@ jobs:
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
-            --suite firstscreen-learning-unit \
             --runner vitest \
             --command "npm run test:run -- firstscreen required unit files" \
             --tool-versions "${tools}" \
             --started-at "${started}" \
             --finished-at "${finished}" \
-            --os "${RUNNER_OS}" \
-            --arch "${RUNNER_ARCH}"
+            --os "${RUNNER_OS}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: firstscreen-v7-unit-${{ env.PR_HEAD_SHA }}
@@ -265,6 +264,7 @@ jobs:
             "${python_version}")"
           node scripts/ci/write_firstscreen_test_context.mjs \
             --report "evidence/${{ matrix.evidence_name }}-pytest.xml" \
+            --report-path "reports/${{ matrix.evidence_name }}-pytest.xml" \
             --output "evidence/${{ matrix.evidence_name }}-context.json" \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
@@ -272,14 +272,12 @@ jobs:
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
-            --suite "${{ matrix.job_name }}" \
             --runner pytest \
             --command "python -m pytest -q ${PYTEST_TARGETS}" \
             --tool-versions "${tools}" \
             --started-at "${started}" \
             --finished-at "${finished}" \
-            --os "${RUNNER_OS}" \
-            --arch "${RUNNER_ARCH}"
+            --os "${RUNNER_OS}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -351,8 +349,18 @@ jobs:
           tools="$(node -e \
             'console.log(JSON.stringify({node:process.version,playwright:process.argv[1]}))' \
             "$(node -p "require('@playwright/test/package.json').version")")"
+          report_path="reports/playwright-${{ matrix.evidence_name }}.json"
+          case "${{ matrix.evidence_name }}" in
+            real-sidecar)
+              report_path="reports/playwright-success.json"
+              ;;
+            real-sidecar-unavailable)
+              report_path="reports/playwright-unavailable.json"
+              ;;
+          esac
           node ../scripts/ci/write_firstscreen_test_context.mjs \
             --report test-results/playwright-results.json \
+            --report-path "${report_path}" \
             --output test-results/firstscreen-v9-${{ matrix.evidence_name }}-context.json \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
@@ -360,14 +368,12 @@ jobs:
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
-            --suite "${{ matrix.job_name }}" \
             --runner playwright \
             --command "npx playwright test e2e/firstscreen-v5.spec.ts --grep exact" \
             --tool-versions "${tools}" \
             --started-at "${started}" \
             --finished-at "${finished}" \
-            --os "${RUNNER_OS}" \
-            --arch "${RUNNER_ARCH}"
+            --os "${RUNNER_OS}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -415,6 +421,7 @@ jobs:
             "$(python -c 'import platform; print(platform.python_version())')")"
           node scripts/ci/write_firstscreen_test_context.mjs \
             --report evidence/windows-trust-pytest.xml \
+            --report-path reports/windows-trust-pytest.xml \
             --output evidence/windows-trust-context.json \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
@@ -422,14 +429,12 @@ jobs:
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
-            --suite firstscreen-windows-trust-state \
             --runner pytest \
             --command "python -m pytest -q tests/learning_capability/test_trusted_state_windows.py" \
             --tool-versions "${tools}" \
             --started-at "${started}" \
             --finished-at "${finished}" \
-            --os "${RUNNER_OS}" \
-            --arch "${RUNNER_ARCH}"
+            --os "${RUNNER_OS}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -483,6 +488,7 @@ jobs:
             'console.log(JSON.stringify({node:process.version}))')"
           node scripts/ci/write_firstscreen_test_context.mjs \
             --report evidence/node-verifier-results.json \
+            --report-path reports/node-verifier-results.json \
             --output evidence/node-verifier-context.json \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
@@ -490,20 +496,19 @@ jobs:
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
-            --suite firstscreen-required-verifier-negative-tests \
             --runner node \
             --command "node scripts/ci/test_firstscreen_verifiers.mjs" \
             --tool-versions "${tools}" \
             --started-at "${verifier_started}" \
             --finished-at "${verifier_finished}" \
-            --os "${RUNNER_OS}" \
-            --arch "${RUNNER_ARCH}"
+            --os "${RUNNER_OS}"
           evidence_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           node scripts/ci/test_firstscreen_evidence_integrity.mjs \
             evidence/node-evidence-results.json
           evidence_finished="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           node scripts/ci/write_firstscreen_test_context.mjs \
             --report evidence/node-evidence-results.json \
+            --report-path reports/node-evidence-results.json \
             --output evidence/node-evidence-context.json \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
@@ -511,14 +516,12 @@ jobs:
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
-            --suite firstscreen-evidence-integrity-attacks \
             --runner node \
             --command "node scripts/ci/test_firstscreen_evidence_integrity.mjs" \
             --tool-versions "${tools}" \
             --started-at "${evidence_started}" \
             --finished-at "${evidence_finished}" \
-            --os "${RUNNER_OS}" \
-            --arch "${RUNNER_ARCH}"
+            --os "${RUNNER_OS}"
           node scripts/ci/test_firstscreen_mutation_generator.mjs \
             evidence/mutation-generator.json
           audit_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -551,6 +554,8 @@ jobs:
             --object-format "$(git rev-parse --show-object-format)" \
             --repository "${GITHUB_REPOSITORY}" \
             --pull-request "${PR_NUMBER}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
             --workflow-ref "${GITHUB_WORKFLOW_REF}" \
             --event-name "${GITHUB_EVENT_NAME}" \
             --root "${GITHUB_WORKSPACE}" \
@@ -558,6 +563,7 @@ jobs:
           audit_finished="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           node scripts/ci/write_firstscreen_test_context.mjs \
             --report evidence/required-node-audit.json \
+            --report-path reports/required-node-audit.json \
             --output evidence/firstscreen-v9-required-audit-context.json \
             --subject-head "${PR_HEAD_SHA}" \
             --execution-commit "$(git rev-parse HEAD)" \
@@ -565,14 +571,12 @@ jobs:
             --object-format "$(git rev-parse --show-object-format)" \
             --run-id "${GITHUB_RUN_ID}" \
             --run-attempt "${GITHUB_RUN_ATTEMPT}" \
-            --suite firstscreen-required-node-audit \
             --runner node \
             --command "node butler-desktop/scripts/verify-required-test-nodes.mjs" \
             --tool-versions "${tools}" \
             --started-at "${audit_started}" \
             --finished-at "${audit_finished}" \
-            --os "${RUNNER_OS}" \
-            --arch "${RUNNER_ARCH}"
+            --os "${RUNNER_OS}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: firstscreen-v7-required-node-audit-${{ env.PR_HEAD_SHA }}
@@ -709,7 +713,12 @@ jobs:
               | sort -z \
               | xargs -0 zip -X -q "${archive}"
           )
-          sha256sum "${archive}" > "${archive}.sha256"
+          archive_dir="$(dirname "${archive}")"
+          archive_name="$(basename "${archive}")"
+          (
+            cd "${archive_dir}"
+            sha256sum "${archive_name}" > "${archive_name}.sha256"
+          )
           node scripts/ci/preflight_firstscreen_evidence_archive.mjs "${archive}"
           mkdir -p "${RUNNER_TEMP}/firstscreen-v9-recheck"
           unzip -q "${archive}" -d "${RUNNER_TEMP}/firstscreen-v9-recheck"

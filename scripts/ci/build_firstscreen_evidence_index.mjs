@@ -45,6 +45,34 @@ function requireOid(value, algorithm) {
   }
 }
 
+const CONTEXT_KEYS = new Set([
+  'schema_version',
+  'repository',
+  'event_name',
+  'pr_number',
+  'subject_head',
+  'execution_commit',
+  'tree',
+  'object_format',
+  'run_id',
+  'run_attempt',
+  'workflow_ref',
+  'job_name',
+  'runner',
+  'platform',
+  'command',
+  'report_path',
+  'report_sha256',
+  'started_at',
+  'finished_at',
+  'tool_versions',
+]);
+const RUNTIME_BY_PLATFORM = {
+  ubuntu: { os: 'Linux', arch: 'X64' },
+  'windows-2025': { os: 'Windows', arch: 'X64' },
+  'macos-15': { os: 'macOS', arch: 'ARM64' },
+};
+
 const options = args(process.argv.slice(2));
 for (const name of [
   'package',
@@ -96,6 +124,8 @@ for (const contextPath of contextNames) {
     throw new Error('REPORT_CONTEXT_BINDING_INVALID');
   }
   if (context.schema_version !== 2
+      || Object.keys(context).length !== CONTEXT_KEYS.size
+      || Object.keys(context).some(key => !CONTEXT_KEYS.has(key))
       || context.repository !== options.repository
       || context.event_name !== 'pull_request'
       || context.pr_number !== Number(options['pull-request'])
@@ -108,8 +138,8 @@ for (const contextPath of contextNames) {
       || context.workflow_ref !== options['workflow-ref']
       || typeof context.job_name !== 'string'
       || typeof context.runner !== 'string'
-      || !['ubuntu', 'windows-2025', 'macos-15'].includes(context.platform)
-      || typeof context.report_path !== 'string'
+      || !Object.hasOwn(RUNTIME_BY_PLATFORM, context.platform)
+      || context.report_path !== reportPath
       || typeof context.command !== 'string'
       || typeof context.tool_versions !== 'object'
       || context.tool_versions === null
@@ -117,10 +147,10 @@ for (const contextPath of contextNames) {
       || !Number.isFinite(Date.parse(context.started_at))
       || !Number.isFinite(Date.parse(context.finished_at))
       || Date.parse(context.finished_at) < Date.parse(context.started_at)
-      || typeof context.os !== 'string'
-      || typeof context.arch !== 'string') {
+      || typeof context.report_sha256 !== 'string') {
     throw new Error('CONTEXT_CONTRACT_INVALID');
   }
+  const runtime = RUNTIME_BY_PLATFORM[context.platform];
   usedReports.add(reportPath);
   runs.push({
     job_name: context.job_name,
@@ -131,8 +161,8 @@ for (const contextPath of contextNames) {
     exit_code: 0,
     started_at: context.started_at,
     finished_at: context.finished_at,
-    os: context.os,
-    arch: context.arch,
+    os: runtime.os,
+    arch: runtime.arch,
     execution_oid: {
       algorithm: options['object-format'],
       hex: options['subject-head'],
