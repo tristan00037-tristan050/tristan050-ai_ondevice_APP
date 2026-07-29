@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { currentBuildIdentity } from '../../lib/buildIdentity';
 import {
   fetchLearningCapabilitySnapshot,
@@ -36,6 +42,8 @@ export function SettingsShell({
 }: SettingsShellProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const learningRequestEpoch = useRef(0);
+  const learningController = useRef<AbortController | null>(null);
   const buildIdentity = currentBuildIdentity();
   const [liveLearningCapability, setLiveLearningCapability] = useState(
     learningCapability ?? unavailableLearningCapability,
@@ -45,20 +53,36 @@ export function SettingsShell({
     [liveLearningCapability],
   );
 
-  useEffect(() => {
+  const refreshLearningCapability = useCallback(async () => {
     if (learningCapability !== undefined) {
       setLiveLearningCapability(
         learningCapability ?? unavailableLearningCapability,
       );
       return;
     }
+    const epoch = ++learningRequestEpoch.current;
+    learningController.current?.abort();
     const controller = new AbortController();
-    void fetchLearningCapabilitySnapshot(controller.signal)
-      .then(snapshot => {
-        if (!controller.signal.aborted) setLiveLearningCapability(snapshot);
-      });
-    return () => controller.abort();
+    learningController.current = controller;
+    // A prior success is not evidence for the new request. Remove it before
+    // I/O so a transport failure cannot leave a stale green state behind.
+    setLiveLearningCapability(unavailableLearningCapability);
+    const snapshot = await fetchLearningCapabilitySnapshot(controller.signal);
+    if (
+      epoch === learningRequestEpoch.current
+      && !controller.signal.aborted
+    ) {
+      setLiveLearningCapability(snapshot);
+    }
   }, [learningCapability]);
+
+  useEffect(() => {
+    void refreshLearningCapability();
+    return () => {
+      learningRequestEpoch.current += 1;
+      learningController.current?.abort();
+    };
+  }, [refreshLearningCapability]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -129,7 +153,17 @@ export function SettingsShell({
           data-testid="company-learning-settings"
           aria-labelledby="company-learning-title"
         >
-          <h3 id="company-learning-title">회사 배우기</h3>
+          <div className="settings-group-heading">
+            <h3 id="company-learning-title">회사 배우기</h3>
+            <button
+              type="button"
+              data-testid="learning-capability-refresh"
+              onClick={() => { void refreshLearningCapability(); }}
+              aria-label="회사 배우기 상태 다시 확인"
+            >
+              다시 확인
+            </button>
+          </div>
           <ul className="settings-row-list">
             {learningRows.map(row => (
               <li

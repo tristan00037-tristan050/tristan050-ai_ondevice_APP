@@ -75,7 +75,7 @@ class _WrongProbeKeyAuthority(_StableAuthority):
     def probe(self) -> AuthorityProbe:
         probe = super().probe()
         return AuthorityProbe(
-            key="company_facts",
+            key="company_fact",
             available=probe.available,
             registered=probe.registered,
             consumer_bound=probe.consumer_bound,
@@ -102,14 +102,14 @@ class _InvalidDigestAuthority(_StableAuthority):
 def _authorities(first) -> tuple:
     return (
         first,
-        _StableAuthority("company_facts", "3" * 64),
-        _StableAuthority("company_formats", "4" * 64),
+        _StableAuthority("company_fact", "3" * 64),
+        _StableAuthority("company_format", "4" * 64),
         _StableAuthority("folder_learning", "5" * 64),
     )
 
 
 def test_two_unstable_snapshot_attempts_fail_closed(tmp_path):
-    racing = _RacingAuthority("company_rules")
+    racing = _RacingAuthority("company_policy")
     service = LearningCapabilityService(
         authorities=_authorities(racing),
         generation_store=DurableGenerationStore(tmp_path / "generation.json"),
@@ -127,7 +127,7 @@ def test_two_unstable_snapshot_attempts_fail_closed(tmp_path):
 def test_probe_revision_must_equal_both_outer_revisions(tmp_path):
     service = LearningCapabilityService(
         authorities=_authorities(
-            _ProbeMismatchAuthority("company_rules", "1" * 64)
+            _ProbeMismatchAuthority("company_policy", "1" * 64)
         ),
         generation_store=DurableGenerationStore(tmp_path / "generation.json"),
     )
@@ -141,7 +141,7 @@ def test_probe_revision_must_equal_both_outer_revisions(tmp_path):
 
 
 def test_one_changed_authority_blocks_the_entire_snapshot(tmp_path):
-    racing = _RacingAuthority("company_rules")
+    racing = _RacingAuthority("company_policy")
     service = LearningCapabilityService(
         authorities=_authorities(racing),
         generation_store=DurableGenerationStore(tmp_path / "generation.json"),
@@ -157,7 +157,7 @@ def test_one_changed_authority_blocks_the_entire_snapshot(tmp_path):
 def test_first_unstable_attempt_is_discarded_and_second_stable_attempt_succeeds(
     tmp_path,
 ):
-    authority = _RetryThenStableAuthority("company_rules")
+    authority = _RetryThenStableAuthority("company_policy")
     service = LearningCapabilityService(
         authorities=_authorities(authority),
         generation_store=DurableGenerationStore(tmp_path / "generation.json"),
@@ -167,13 +167,13 @@ def test_first_unstable_attempt_is_discarded_and_second_stable_attempt_succeeds(
 
 
 def test_duplicate_authority_key_fails_before_generation(tmp_path):
-    stable = _StableAuthority("company_rules", "1" * 64)
+    stable = _StableAuthority("company_policy", "1" * 64)
     with pytest.raises(ValueError, match="AUTHORITY_KEYSET_INVALID"):
         LearningCapabilityService(
             authorities=(
                 stable,
-                _StableAuthority("company_rules", "2" * 64),
-                _StableAuthority("company_formats", "3" * 64),
+                _StableAuthority("company_policy", "2" * 64),
+                _StableAuthority("company_format", "3" * 64),
                 _StableAuthority("folder_learning", "4" * 64),
             ),
             generation_store=DurableGenerationStore(
@@ -183,7 +183,7 @@ def test_duplicate_authority_key_fails_before_generation(tmp_path):
 
 
 def test_missing_or_extra_authority_key_fails_before_generation(tmp_path):
-    stable = _StableAuthority("company_rules", "1" * 64)
+    stable = _StableAuthority("company_policy", "1" * 64)
     with pytest.raises(ValueError, match="AUTHORITY_KEYSET_INVALID"):
         LearningCapabilityService(
             authorities=_authorities(stable)[:-1],
@@ -201,19 +201,19 @@ def test_missing_or_extra_authority_key_fails_before_generation(tmp_path):
 
 def test_probe_key_mismatch_fails_before_generation(tmp_path):
     service = LearningCapabilityService(
-        authorities=_authorities(_WrongProbeKeyAuthority("company_rules", "1" * 64)),
+        authorities=_authorities(_WrongProbeKeyAuthority("company_policy", "1" * 64)),
         generation_store=DurableGenerationStore(tmp_path / "wrong-key.json"),
     )
     with pytest.raises(Exception) as captured:
         service.snapshot()
-    assert getattr(captured.value, "reason", None) == "CONTRACT_MISMATCH"
+    assert getattr(captured.value, "reason", None) == "AUTHORITY_PROBE_INVALID"
     assert not (tmp_path / "wrong-key.json").exists()
 
 
 def test_invalid_probe_revision_or_evidence_digest_is_rejected(tmp_path):
     invalid_authorities = (
-        _StableAuthority("company_rules", "not-a-digest"),
-        _InvalidDigestAuthority("company_rules", "1" * 64),
+        _StableAuthority("company_policy", "not-a-digest"),
+        _InvalidDigestAuthority("company_policy", "1" * 64),
     )
     for index, authority in enumerate(invalid_authorities):
         path = tmp_path / f"generation-{index}.json"
@@ -223,14 +223,14 @@ def test_invalid_probe_revision_or_evidence_digest_is_rejected(tmp_path):
         )
         with pytest.raises(Exception) as captured:
             service.snapshot()
-        assert getattr(captured.value, "reason", None) == "CONTRACT_MISMATCH"
+        assert getattr(captured.value, "reason", None) == "AUTHORITY_PROBE_INVALID"
         assert not path.exists()
 
 
 def test_failed_snapshot_attempt_does_not_advance_generation(tmp_path):
     path = tmp_path / "generation.json"
     service = LearningCapabilityService(
-        authorities=_authorities(_RacingAuthority("company_rules")),
+        authorities=_authorities(_RacingAuthority("company_policy")),
         generation_store=DurableGenerationStore(path),
     )
     with pytest.raises(Exception):

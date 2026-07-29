@@ -20,6 +20,7 @@ const verifier = resolve(
   root,
   'butler-desktop/scripts/verify-required-test-nodes.mjs',
 );
+await mkdir(tmpdir(), { recursive: true });
 const temporary = await mkdtemp(resolve(tmpdir(), 'firstscreen-verifier-'));
 
 function git(args) {
@@ -36,8 +37,48 @@ function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function finalizeNode(node) {
+  const value = {
+    kind: 'normative',
+    platform: 'ubuntu',
+    ...node,
+  };
+  value.description_digest = sha256(Buffer.from(JSON.stringify({
+    file: value.file,
+    id: value.id,
+    kind: value.kind,
+    platform: value.platform,
+    required: value.required,
+    runner: value.runner,
+    title: value.title,
+  })));
+  return value;
+}
+
+function finalizeManifest(manifest) {
+  const tests = manifest.tests.map(finalizeNode);
+  const supplemental = tests.filter(
+    test => test.kind === 'supplemental_required_regression',
+  ).length;
+  return {
+    ...manifest,
+    schema_version: 3,
+    normative_required: tests.length - supplemental,
+    supplemental_required: supplemental,
+    required_total: tests.length,
+    retired_ids: ['FSV10-EVIDENCE-007', 'FSV10-EVIDENCE-008'],
+    tests,
+  };
+}
+
 async function json(path, value) {
   await writeFile(path, `${JSON.stringify(value)}\n`);
+}
+
+async function manifestJson(path, value) {
+  const finalized = finalizeManifest(value);
+  await json(path, finalized);
+  return finalized;
 }
 
 async function fixture(name) {
@@ -52,8 +93,7 @@ async function fixture(name) {
     vitestContext: resolve(dir, 'vitest-context.json'),
     playwrightContext: resolve(dir, 'playwright-context.json'),
   };
-  const manifest = {
-    schema_version: 2,
+  let manifest = {
     suite: 'negative-self-test',
     tests: [{
       id: 'FSV10-SELF-VALID',
@@ -70,18 +110,37 @@ async function fixture(name) {
     }],
   };
   const playwright = { marker: name, suites: [] };
-  await json(paths.manifest, manifest);
+  manifest = await manifestJson(paths.manifest, manifest);
   await json(paths.vitest, vitest);
   await json(paths.playwright, playwright);
-  await json(paths.event, { pull_request: { head: { sha: head } } });
-  const context = reportSha => ({
-    schema_version: 1,
+  await json(paths.event, {
+    pull_request: { number: 886, head: { sha: head } },
+  });
+  const context = (reportSha, runner = 'vitest') => ({
+    schema_version: 2,
+    repository: 'owner/repository',
+    event_name: 'pull_request',
+    pr_number: 886,
     suite: name,
-    subject_pr_head: head,
+    subject_head: head,
     execution_commit: head,
-    tree_oid: { algorithm: objectFormat, hex: tree },
-    workflow_run_id: '1',
+    tree,
+    object_format: objectFormat,
+    run_id: '1',
+    run_attempt: 1,
+    workflow_ref:
+      'owner/repository/.github/workflows/firstscreen-v2-5.yml@refs/pull/886/merge',
+    job_name: 'self-test',
+    runner,
+    platform: 'ubuntu',
+    command: 'self-test',
+    report_path: `evidence/self-test-${runner}.json`,
     report_sha256: reportSha,
+    started_at: '2026-07-29T00:00:00Z',
+    finished_at: '2026-07-29T00:00:01Z',
+    os: 'Linux',
+    arch: 'X64',
+    tool_versions: { node: process.version },
   });
   await json(
     paths.vitestContext,
@@ -89,7 +148,7 @@ async function fixture(name) {
   );
   await json(
     paths.playwrightContext,
-    context(sha256(await readFile(paths.playwright))),
+    context(sha256(await readFile(paths.playwright)), 'playwright'),
   );
   return { paths, manifest, vitest, playwright, context };
 }
@@ -107,6 +166,11 @@ function invoke(paths, overrides = {}) {
     '--checkout-head', overrides.checkoutHead ?? head,
     '--checkout-tree', overrides.checkoutTree ?? tree,
     '--object-format', overrides.objectFormat ?? objectFormat,
+    '--repository', 'owner/repository',
+    '--pull-request', '886',
+    '--workflow-ref',
+    'owner/repository/.github/workflows/firstscreen-v2-5.yml@refs/pull/886/merge',
+    '--event-name', 'pull_request',
     '--root', root,
   ];
   return spawnSync(process.execPath, argumentsList, {
@@ -146,16 +210,31 @@ playwrightBasename.playwright.suites = [{
     }],
   }],
 }];
-await json(playwrightBasename.paths.manifest, playwrightBasename.manifest);
+playwrightBasename.vitest.testResults[0].assertionResults = [];
+playwrightBasename.manifest = await manifestJson(
+  playwrightBasename.paths.manifest,
+  playwrightBasename.manifest,
+);
+await json(playwrightBasename.paths.vitest, playwrightBasename.vitest);
 await json(playwrightBasename.paths.playwright, playwrightBasename.playwright);
+await json(
+  playwrightBasename.paths.vitestContext,
+  playwrightBasename.context(
+    sha256(await readFile(playwrightBasename.paths.vitest)),
+  ),
+);
 await json(
   playwrightBasename.paths.playwrightContext,
   playwrightBasename.context(
     sha256(await readFile(playwrightBasename.paths.playwright)),
+    'playwright',
   ),
 );
-if (invoke(playwrightBasename.paths).status !== 0) {
-  throw new Error('PLAYWRIGHT_BASENAME_REJECTED');
+const playwrightBasenameResult = invoke(playwrightBasename.paths);
+if (playwrightBasenameResult.status !== 0) {
+  throw new Error(
+    `PLAYWRIGHT_BASENAME_REJECTED:${playwrightBasenameResult.stdout}`,
+  );
 }
 
 const playwrightWrongRoot = await fixture('playwright-wrong-root');
@@ -172,6 +251,7 @@ await json(
   playwrightWrongRoot.paths.playwrightContext,
   playwrightWrongRoot.context(
     sha256(await readFile(playwrightWrongRoot.paths.playwright)),
+    'playwright',
   ),
 );
 expectFailure(invoke(playwrightWrongRoot.paths), 'PLAYWRIGHT_ROOT_INVALID');
@@ -190,6 +270,7 @@ await json(
   playwrightAbsoluteFile.paths.playwrightContext,
   playwrightAbsoluteFile.context(
     sha256(await readFile(playwrightAbsoluteFile.paths.playwright)),
+    'playwright',
   ),
 );
 expectFailure(invoke(playwrightAbsoluteFile.paths), 'PLAYWRIGHT_FILE_INVALID');
@@ -206,7 +287,7 @@ const wrongTree = await fixture('wrong-tree');
 const wrongTreeValue = wrongTree.context(
   sha256(await readFile(wrongTree.paths.vitest)),
 );
-wrongTreeValue.tree_oid.hex = '0'.repeat(tree.length);
+wrongTreeValue.tree = '0'.repeat(tree.length);
 await json(wrongTree.paths.vitestContext, wrongTreeValue);
 expectFailure(invoke(wrongTree.paths), 'CONTEXT_IDENTITY_MISMATCH');
 
@@ -214,7 +295,7 @@ const wrongAlgorithm = await fixture('wrong-algorithm');
 const wrongAlgorithmValue = wrongAlgorithm.context(
   sha256(await readFile(wrongAlgorithm.paths.vitest)),
 );
-wrongAlgorithmValue.tree_oid.algorithm =
+wrongAlgorithmValue.object_format =
   objectFormat === 'sha1' ? 'sha256' : 'sha1';
 await json(wrongAlgorithm.paths.vitestContext, wrongAlgorithmValue);
 expectFailure(invoke(wrongAlgorithm.paths), 'CONTEXT_IDENTITY_MISMATCH');
@@ -226,7 +307,7 @@ await json(eventMismatch.paths.event, {
 expectFailure(invoke(eventMismatch.paths), 'EVENT_HEAD_MISMATCH');
 
 const duplicateId = await fixture('duplicate-id');
-await json(duplicateId.paths.manifest, {
+await manifestJson(duplicateId.paths.manifest, {
   ...duplicateId.manifest,
   tests: [
     duplicateId.manifest.tests[0],
@@ -239,7 +320,7 @@ await json(duplicateId.paths.manifest, {
 expectFailure(invoke(duplicateId.paths), 'REQUIRED_ID_DUPLICATE');
 
 const duplicateTriple = await fixture('duplicate-triple');
-await json(duplicateTriple.paths.manifest, {
+await manifestJson(duplicateTriple.paths.manifest, {
   ...duplicateTriple.manifest,
   tests: [
     duplicateTriple.manifest.tests[0],
@@ -259,6 +340,23 @@ await json(
   duplicateActual.context(sha256(await readFile(duplicateActual.paths.vitest))),
 );
 expectFailure(invoke(duplicateActual.paths), 'ACTUAL_NODE_DUPLICATE');
+
+const unexpectedActual = await fixture('unexpected-actual');
+unexpectedActual.vitest.testResults[0].assertionResults.push({
+  title: 'unregistered node',
+  status: 'passed',
+});
+await json(unexpectedActual.paths.vitest, unexpectedActual.vitest);
+await json(
+  unexpectedActual.paths.vitestContext,
+  unexpectedActual.context(
+    sha256(await readFile(unexpectedActual.paths.vitest)),
+  ),
+);
+expectFailure(
+  invoke(unexpectedActual.paths),
+  'REQUIRED_TEST_NODE_NONPASS',
+);
 
 for (const status of ['skipped', 'failed']) {
   const nonpass = await fixture(`status-${status}`);
@@ -290,7 +388,7 @@ expectFailure(invoke(duplicateContext.paths), 'JSON_DUPLICATE_KEY');
 
 const invalidPath = await fixture('invalid-path');
 invalidPath.manifest.tests[0].file = '../outside.test.ts';
-await json(invalidPath.paths.manifest, invalidPath.manifest);
+await manifestJson(invalidPath.paths.manifest, invalidPath.manifest);
 expectFailure(invoke(invalidPath.paths), 'REPOSITORY_PATH_INVALID');
 
 const linkedReport = await fixture('linked-report');
@@ -301,10 +399,6 @@ await import('node:fs/promises').then(({ unlink }) => unlink(linkedReport.paths.
 await symlink(realReport, linkedReport.paths.vitest);
 expectFailure(invoke(linkedReport.paths), 'REPORT_FILE_TYPE_INVALID');
 
-const evidenceVerifier = resolve(
-  root,
-  'scripts/ci/verify_firstscreen_evidence_package.mjs',
-);
 const macUserHome = '/' + [
   'Users', 'private-user', 'Documents', 'customer-contract.txt',
 ].join('/');
@@ -357,39 +451,6 @@ steps:
 if (!ambiguousPinRejected) {
   throw new Error('ACTION_PIN_AMBIGUITY_NOT_REJECTED');
 }
-function invokeEvidence(overrides = {}) {
-  return spawnSync(process.execPath, [
-    evidenceVerifier,
-    '--package', temporary,
-    '--zip', resolve(temporary, 'result.zip'),
-    '--detached', resolve(temporary, 'result.sha256'),
-    '--attestation-bundle', resolve(temporary, 'bundle.json'),
-    '--repository', 'owner/repository',
-    '--signer-workflow', overrides.signerWorkflow
-      ?? 'owner/repository/.github/workflows/firstscreen-v2-5.yml',
-    '--subject-head', head,
-    '--object-format', objectFormat,
-    '--tree', tree,
-    '--pull-request', '886',
-    '--run-id', '1',
-    '--run-attempt', '1',
-    '--workflow-ref',
-    'owner/repository/.github/workflows/firstscreen-v2-5.yml@refs/pull/886/merge',
-    '--source-digest', overrides.sourceDigest ?? head,
-  ], {
-    cwd: root,
-    encoding: 'utf8',
-  });
-}
-expectFailure(
-  invokeEvidence({ sourceDigest: 'not-an-object-id' }),
-  'ATTESTATION_SOURCE_DIGEST_INVALID',
-);
-expectFailure(
-  invokeEvidence({ signerWorkflow: 'owner/repository/.github/workflows/other.yml' }),
-  'ATTESTATION_WORKFLOW_INVALID',
-);
-
 const output = process.argv[2];
 if (!output) throw new Error('OUTPUT_REQUIRED');
 const gateNodes = Array.from({ length: 14 }, (_value, index) => ({

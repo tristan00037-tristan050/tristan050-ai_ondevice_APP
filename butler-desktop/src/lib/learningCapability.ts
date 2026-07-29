@@ -2,12 +2,13 @@ import { sidecarFetch, withDeadline } from './sidecarFetch';
 
 export type LearningCapabilityState =
   | 'IN_USE'
-  | 'REGISTERED_ONLY'
-  | 'PREVIEW_ONLY'
-  | 'UNKNOWN';
+  | 'REGISTERED'
+  | 'NOT_REGISTERED'
+  | 'UNAVAILABLE';
 
 export type LearningCapabilitySnapshot = Readonly<{
   source: 'CANONICAL_CAPABILITY' | 'UNAVAILABLE';
+  snapshotRevision: string | null;
   generation: number;
   companyRules: LearningCapabilityState;
   companyFacts: LearningCapabilityState;
@@ -26,37 +27,40 @@ export type LearningRowView = Readonly<{
   action: 'policy' | 'fact' | 'format' | 'learning';
 }>;
 
-const UNKNOWN_SNAPSHOT: LearningCapabilitySnapshot = Object.freeze({
+const UNAVAILABLE_SNAPSHOT: LearningCapabilitySnapshot = Object.freeze({
   source: 'UNAVAILABLE',
+  snapshotRevision: null,
   generation: 0,
-  companyRules: 'UNKNOWN',
-  companyFacts: 'UNKNOWN',
-  companyFormats: 'UNKNOWN',
-  folderLearning: 'UNKNOWN',
+  companyRules: 'UNAVAILABLE',
+  companyFacts: 'UNAVAILABLE',
+  companyFormats: 'UNAVAILABLE',
+  folderLearning: 'UNAVAILABLE',
 });
 
 const STATUS_TEXT: Readonly<Record<LearningCapabilityState, string>> = {
   IN_USE: '쓰이는 중',
-  REGISTERED_ONLY: '등록만 됩니다',
-  PREVIEW_ONLY: '미리보기만 됩니다',
-  UNKNOWN: '확인할 수 없습니다',
+  REGISTERED: '등록됨',
+  NOT_REGISTERED: '등록되지 않음',
+  UNAVAILABLE: '확인할 수 없습니다',
 };
 
 const CANONICAL_STATES = new Set<LearningCapabilityState>([
   'IN_USE',
-  'REGISTERED_ONLY',
-  'PREVIEW_ONLY',
+  'REGISTERED',
+  'NOT_REGISTERED',
+  'UNAVAILABLE',
 ]);
 const SNAPSHOT_KEYS = new Set([
   'schema_version',
   'source',
+  'snapshot_revision',
   'generation',
   'capabilities',
 ]);
 const CAPABILITY_KEYS = new Set([
-  'company_rules',
-  'company_facts',
-  'company_formats',
+  'company_policy',
+  'company_fact',
+  'company_format',
   'folder_learning',
 ]);
 
@@ -67,7 +71,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function capabilityState(value: unknown): LearningCapabilityState {
   return typeof value === 'string' && CANONICAL_STATES.has(value as LearningCapabilityState)
     ? value as LearningCapabilityState
-    : 'UNKNOWN';
+    : 'UNAVAILABLE';
 }
 
 export function parseLearningCapabilitySnapshot(
@@ -76,29 +80,32 @@ export function parseLearningCapabilitySnapshot(
   if (!isRecord(value)
       || Object.keys(value).length !== SNAPSHOT_KEYS.size
       || Object.keys(value).some(key => !SNAPSHOT_KEYS.has(key))
-      || value.schema_version !== 1
+      || value.schema_version !== 2
+      || typeof value.snapshot_revision !== 'string'
+      || !/^[0-9a-f]{64}$/.test(value.snapshot_revision)
       || !Number.isSafeInteger(value.generation)
       || (value.generation as number) < 0
       || !isRecord(value.capabilities)
       || Object.keys(value.capabilities).length !== CAPABILITY_KEYS.size
       || Object.keys(value.capabilities).some(key => !CAPABILITY_KEYS.has(key))) {
-    return UNKNOWN_SNAPSHOT;
+    return UNAVAILABLE_SNAPSHOT;
   }
   if (value.source !== 'CANONICAL') {
     return Object.freeze({
-      ...UNKNOWN_SNAPSHOT,
+      ...UNAVAILABLE_SNAPSHOT,
       generation: value.generation as number,
     });
   }
   const states = [
-    capabilityState(value.capabilities.company_rules),
-    capabilityState(value.capabilities.company_facts),
-    capabilityState(value.capabilities.company_formats),
+    capabilityState(value.capabilities.company_policy),
+    capabilityState(value.capabilities.company_fact),
+    capabilityState(value.capabilities.company_format),
     capabilityState(value.capabilities.folder_learning),
   ] as const;
-  if (states.some(state => state === 'UNKNOWN')) return UNKNOWN_SNAPSHOT;
+  if (states.some(state => state === 'UNAVAILABLE')) return UNAVAILABLE_SNAPSHOT;
   return Object.freeze({
     source: 'CANONICAL_CAPABILITY',
+    snapshotRevision: value.snapshot_revision,
     generation: value.generation as number,
     companyRules: states[0],
     companyFacts: states[1],
@@ -118,7 +125,7 @@ export function selectLearningRows(
       expectedGeneration === undefined
       || snapshot.generation === expectedGeneration
     );
-  const source = usable ? snapshot : UNKNOWN_SNAPSHOT;
+  const source = usable ? snapshot : UNAVAILABLE_SNAPSHOT;
   return [
     {
       id: 'company-rules',
@@ -158,14 +165,14 @@ export async function fetchLearningCapabilitySnapshot(
   try {
     return await withDeadline(async signal => {
       const response = await sidecarFetch('/api/capabilities/learning', { signal });
-      if (!response.ok) return UNKNOWN_SNAPSHOT;
+      if (!response.ok) return UNAVAILABLE_SNAPSHOT;
       const contentType = response.headers.get('content-type') ?? '';
-      if (!/^application\/json(?:;|$)/i.test(contentType)) return UNKNOWN_SNAPSHOT;
+      if (!/^application\/json(?:;|$)/i.test(contentType)) return UNAVAILABLE_SNAPSHOT;
       return parseLearningCapabilitySnapshot(await response.json());
     }, { deadlineMs: 3_000, externalSignal });
   } catch {
-    return UNKNOWN_SNAPSHOT;
+    return UNAVAILABLE_SNAPSHOT;
   }
 }
 
-export const unavailableLearningCapability = UNKNOWN_SNAPSHOT;
+export const unavailableLearningCapability = UNAVAILABLE_SNAPSHOT;

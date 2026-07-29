@@ -64,7 +64,7 @@ def apply_company_format_runtime(
     formatted_runtime = template.replace("{draft}", draft_text_runtime_only) if "{draft}" in template else f"{template}\n\n{draft_text_runtime_only}"
     try:
         default_consumer_binding_store().record(
-            "company_formats",
+            "company_format",
             company_format.format_digest,
             "Box3.apply_company_format_runtime.v1",
         )

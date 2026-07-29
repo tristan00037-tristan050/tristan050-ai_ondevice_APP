@@ -163,7 +163,7 @@ def add_policy_gate_middleware(
             response.headers["x-applied-policy-digest"] = gate.applied_policy_digest
             try:
                 default_consumer_binding_store().record(
-                    "company_rules",
+                    "company_policy",
                     gate.applied_policy_digest,
                     "PolicyGate.middleware.allowed_response.v1",
                 )

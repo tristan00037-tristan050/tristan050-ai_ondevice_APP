@@ -36,12 +36,13 @@ _PRIVATE_USER_ROOT = "/" + "Users" + "/"
 class _SuccessService:
     def snapshot(self) -> LearningCapabilitySnapshot:
         return LearningCapabilitySnapshot(
+            snapshot_revision="a" * 64,
             generation=42,
             capabilities={
-                "company_rules": CapabilityState.IN_USE,
-                "company_facts": CapabilityState.IN_USE,
-                "company_formats": CapabilityState.REGISTERED_ONLY,
-                "folder_learning": CapabilityState.PREVIEW_ONLY,
+                "company_policy": CapabilityState.IN_USE,
+                "company_fact": CapabilityState.IN_USE,
+                "company_format": CapabilityState.REGISTERED,
+                "folder_learning": CapabilityState.NOT_REGISTERED,
             },
         )
 
@@ -49,7 +50,7 @@ class _SuccessService:
 @dataclass
 class _UnavailableService:
     def snapshot(self) -> LearningCapabilitySnapshot:
-        raise LearningCapabilityError("AUTHORITY_INCOMPLETE")
+        raise LearningCapabilityError("AUTHORITY_PROBE_INVALID")
 
 
 @dataclass
@@ -153,14 +154,15 @@ def test_success_wire_contract_matches_existing_frontend_parser():
             )
         assert response.status_code == 200
         assert response.json() == {
-            "schema_version": 1,
+            "schema_version": 2,
             "source": "CANONICAL",
+            "snapshot_revision": "a" * 64,
             "generation": 42,
             "capabilities": {
-                "company_rules": "IN_USE",
-                "company_facts": "IN_USE",
-                "company_formats": "REGISTERED_ONLY",
-                "folder_learning": "PREVIEW_ONLY",
+                "company_policy": "IN_USE",
+                "company_fact": "IN_USE",
+                "company_format": "REGISTERED",
+                "folder_learning": "NOT_REGISTERED",
             },
         }
         schema = json.loads(
@@ -188,9 +190,9 @@ def test_one_incomplete_authority_returns_503_without_partial_200():
             )
         assert response.status_code == 503
         assert response.json() == {
-            "schema_version": 1,
+            "schema_version": 2,
             "source": "UNAVAILABLE",
-            "reason": "AUTHORITY_INCOMPLETE",
+            "error_code": "AUTHORITY_PROBE_INVALID",
         }
         assert "capabilities" not in response.json()
         assert response.headers["cache-control"] == "no-store"
@@ -275,30 +277,33 @@ def test_untrusted_origin_is_rejected():
 def test_invalid_canonical_snapshots_never_return_200():
     invalid = (
         LearningCapabilitySnapshot(
+            snapshot_revision="a" * 64,
             generation=True,
             capabilities={
-                "company_rules": CapabilityState.IN_USE,
-                "company_facts": CapabilityState.IN_USE,
-                "company_formats": CapabilityState.REGISTERED_ONLY,
-                "folder_learning": CapabilityState.PREVIEW_ONLY,
+                "company_policy": CapabilityState.IN_USE,
+                "company_fact": CapabilityState.IN_USE,
+                "company_format": CapabilityState.REGISTERED,
+                "folder_learning": CapabilityState.NOT_REGISTERED,
             },
         ),
         LearningCapabilitySnapshot(
+            snapshot_revision="a" * 64,
             generation=1,
             capabilities={
-                "company_rules": CapabilityState.UNKNOWN,
-                "company_facts": CapabilityState.IN_USE,
-                "company_formats": CapabilityState.REGISTERED_ONLY,
-                "folder_learning": CapabilityState.PREVIEW_ONLY,
+                "company_policy": CapabilityState.UNAVAILABLE,
+                "company_fact": CapabilityState.IN_USE,
+                "company_format": CapabilityState.REGISTERED,
+                "folder_learning": CapabilityState.NOT_REGISTERED,
             },
         ),
         LearningCapabilitySnapshot(
+            snapshot_revision="a" * 64,
             generation=1,
             capabilities={
-                "company_rules": CapabilityState.IN_USE,
-                "company_facts": CapabilityState.IN_USE,
-                "company_formats": CapabilityState.REGISTERED_ONLY,
-                "folder_learning": CapabilityState.PREVIEW_ONLY,
+                "company_policy": CapabilityState.IN_USE,
+                "company_fact": CapabilityState.IN_USE,
+                "company_format": CapabilityState.REGISTERED,
+                "folder_learning": CapabilityState.NOT_REGISTERED,
                 "extra": CapabilityState.IN_USE,
             },
         ),

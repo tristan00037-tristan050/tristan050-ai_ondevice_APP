@@ -178,15 +178,9 @@ async function openHome(page: Page, options: OpenOptions = {}): Promise<void> {
     await page.route(
       '**/api/capabilities/learning',
       options.learning ?? jsonRoute({
-        schema_version: 1,
+        schema_version: 2,
         source: 'UNAVAILABLE',
-        generation: 0,
-        capabilities: {
-          company_rules: 'UNKNOWN',
-          company_facts: 'UNKNOWN',
-          company_formats: 'UNKNOWN',
-          folder_learning: 'UNKNOWN',
-        },
+        error_code: 'CAPABILITY_SERVICE_UNAVAILABLE',
       }),
     );
   }
@@ -443,6 +437,48 @@ test.describe('egress attack matrix (19/19)', () => {
 });
 
 test.describe('FirstScreen v7 required product paths', () => {
+  test('회사 배우기 실제 sidecar 시험은 route HAR service worker fetch monkey patch 프런트 응답 대체를 사용하지 않는다', async ({ page }) => {
+    test.skip(
+      process.env.BUTLER_E2E_PRESEED_LEARNING !== '1',
+      '사전 권위 데이터가 있는 실제 sidecar 작업에서만 실행합니다.',
+    );
+    const learningRequests: string[] = [];
+    page.on('request', request => {
+      if (request.url().endsWith('/api/capabilities/learning')) {
+        learningRequests.push(request.url());
+      }
+    });
+    await installNativeBridge(page);
+    await page.addInitScript(() => {
+      const originalFetch = window.fetch;
+      Object.defineProperty(window, '__BUTLER_E2E_ORIGINAL_FETCH__', {
+        value: originalFetch,
+        configurable: false,
+        enumerable: false,
+        writable: false,
+      });
+    });
+    await page.goto('/');
+    await expect(page.getByTestId('sidecar-loading')).toBeHidden({
+      timeout: 30_000,
+    });
+    await page.getByTestId('settings-entry').click();
+    const group = page.getByTestId('company-learning-settings');
+    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(3);
+    expect(learningRequests).toHaveLength(1);
+    const runtime = await page.evaluate(() => ({
+      fetchUntouched: window.fetch
+        === (window as typeof window & {
+          __BUTLER_E2E_ORIGINAL_FETCH__?: typeof window.fetch;
+        }).__BUTLER_E2E_ORIGINAL_FETCH__,
+      serviceWorkerControlled: Boolean(navigator.serviceWorker?.controller),
+    }));
+    expect(runtime).toEqual({
+      fetchUntouched: true,
+      serviceWorkerControlled: false,
+    });
+  });
+
   test('실제 sidecar가 불완전 권위를 503으로 닫고 네 행 모두 확인할 수 없습니다로 표시한다', async ({ page }) => {
     test.skip(
       process.env.BUTLER_E2E_PRESEED_LEARNING === '1',
@@ -464,7 +500,7 @@ test.describe('FirstScreen v7 required product paths', () => {
     await page.getByTestId('settings-entry').click();
     const group = page.getByTestId('company-learning-settings');
     await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(3);
-    await expect(group.getByText('미리보기만 됩니다', { exact: true })).toHaveCount(1);
+    await expect(group.getByText('등록되지 않음', { exact: true })).toHaveCount(1);
     await expect(group.getByText('확인할 수 없습니다', { exact: true })).toHaveCount(0);
   });
 
@@ -491,6 +527,24 @@ test.describe('FirstScreen v7 required product paths', () => {
     expect(axe.violations, JSON.stringify(axe.violations, null, 2)).toEqual([]);
   });
 
+  test('이전 성공 뒤 다음 조회 실패는 오래된 성공 상태를 제거하고 확인할 수 없습니다로 수렴한다', async ({ page, context }) => {
+    test.skip(
+      process.env.BUTLER_E2E_PRESEED_LEARNING !== '1',
+      '사전 권위 데이터가 있는 실제 sidecar 작업에서만 실행합니다.',
+    );
+    await openHome(page, { useRealLearning: true });
+    await page.getByTestId('settings-entry').click();
+    const group = page.getByTestId('company-learning-settings');
+    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(3);
+    await context.setOffline(true);
+    await page.getByTestId('learning-capability-refresh').click();
+    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(0);
+    await expect(
+      group.getByText('확인할 수 없습니다', { exact: true }),
+    ).toHaveCount(4);
+    await context.setOffline(false);
+  });
+
   test('never-settling egress report leaves loading and never displays a fake zero', async ({ page }) => {
     await openHome(page, {
       egress: async () => new Promise<void>(() => undefined),
@@ -507,14 +561,15 @@ test.describe('FirstScreen v7 required product paths', () => {
   test('company learning shows the four canonical rows with signal-derived statuses', async ({ page }) => {
     await openHome(page, {
       learning: jsonRoute({
-        schema_version: 1,
+        schema_version: 2,
         source: 'CANONICAL',
+        snapshot_revision: 'a'.repeat(64),
         generation: 21,
         capabilities: {
-          company_rules: 'IN_USE',
-          company_facts: 'IN_USE',
-          company_formats: 'REGISTERED_ONLY',
-          folder_learning: 'PREVIEW_ONLY',
+          company_policy: 'IN_USE',
+          company_fact: 'IN_USE',
+          company_format: 'REGISTERED',
+          folder_learning: 'NOT_REGISTERED',
         },
       }),
     });
@@ -531,8 +586,8 @@ test.describe('FirstScreen v7 required product paths', () => {
       await expect(group.getByRole('button', { name: `${label} 열기` })).toHaveCount(1);
     }
     await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(2);
-    await expect(group.getByText('등록만 됩니다', { exact: true })).toHaveCount(1);
-    await expect(group.getByText('미리보기만 됩니다', { exact: true })).toHaveCount(1);
+    await expect(group.getByText('등록됨', { exact: true })).toHaveCount(1);
+    await expect(group.getByText('등록되지 않음', { exact: true })).toHaveCount(1);
   });
 
   test('company learning preserves four accessible rows when capability signals are unavailable', async ({ page }) => {
@@ -578,14 +633,15 @@ test.describe('FirstScreen v7 required product paths', () => {
     await page.setViewportSize({ width: 640, height: 720 });
     await openHome(page, {
       learning: jsonRoute({
-        schema_version: 1,
+        schema_version: 2,
         source: 'CANONICAL',
+        snapshot_revision: 'b'.repeat(64),
         generation: 31,
         capabilities: {
-          company_rules: 'IN_USE',
-          company_facts: 'IN_USE',
-          company_formats: 'REGISTERED_ONLY',
-          folder_learning: 'PREVIEW_ONLY',
+          company_policy: 'IN_USE',
+          company_fact: 'IN_USE',
+          company_format: 'REGISTERED',
+          folder_learning: 'NOT_REGISTERED',
         },
       }),
     });

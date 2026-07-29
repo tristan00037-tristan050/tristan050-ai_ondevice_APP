@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "inputs": [
+    {
+      "name": "Butler_FirstScreen_Learning_v9_0_20260727_codex.zip",
+      "role": "product",
+      "sha256": "6d2a1e0350bc2610b2bc5eae51ca47661a4c8d6ec3bbca0a75043aa03e011632",
+      "approval": "APPROVED_AUDIT_INPUT"
+    },
+    {
+      "name": "Butler_FirstScreen_LearningCapability_v9_Algorithm_ProductModule.zip",
+      "role": "algorithm",
+      "sha256": "c09f881056878d209c4b7ba69fd17a615da08728a0d538acc33b8cae17524fb2",
+      "approval": "APPROVED_AUDIT_INPUT"
+    }
+  ]
+}

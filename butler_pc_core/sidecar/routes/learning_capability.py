@@ -28,11 +28,14 @@ _SECURITY_HEADERS = {
 }
 _ERROR_STATUS = {
     "AUTHORITY_CHANGED_DURING_SNAPSHOT": 409,
-    "AUTHORITY_INCOMPLETE": 503,
-    "AUTHORITY_UNREACHABLE": 503,
-    "CONTRACT_MISMATCH": 503,
-    "GENERATION_UNAVAILABLE": 503,
-    "INTERNAL_ERROR": 503,
+    "AUTHORITY_SET_INVALID": 503,
+    "AUTHORITY_PROBE_INVALID": 503,
+    "CONSUMER_BINDING_INVALID": 503,
+    "TRUST_STATE_INVALID": 503,
+    "TRUST_STATE_AUTHENTICITY_UNAVAILABLE": 503,
+    "TRUST_STATE_PLATFORM_UNSUPPORTED": 503,
+    "SNAPSHOT_GENERATION_UNAVAILABLE": 503,
+    "CAPABILITY_SERVICE_UNAVAILABLE": 503,
 }
 
 
@@ -89,6 +92,8 @@ def learning_capability_snapshot(
     except Exception:
         return JSONResponse(
             status_code=503,
-            content=LearningCapabilityError("INTERNAL_ERROR").to_dict(),
+            content=LearningCapabilityError(
+                "CAPABILITY_SERVICE_UNAVAILABLE"
+            ).to_dict(),
             headers=_SECURITY_HEADERS,
         )

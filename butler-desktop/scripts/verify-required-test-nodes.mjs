@@ -40,20 +40,6 @@ function digest(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function decodeXml(value) {
-  return String(value)
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&amp;', '&');
-}
-
-function xmlAttribute(source, name) {
-  const match = source.match(new RegExp(`\\b${name}="([^"]*)"`));
-  return match ? decodeXml(match[1]) : '';
-}
-
 function requireRepositoryPath(value) {
   if (typeof value !== 'string' || !value || value.includes('\\')
       || isAbsolute(value) || value.split('/').some(part => (
@@ -86,26 +72,26 @@ function normalizeActualFile(value, runner, repositoryRoot) {
   return requireRepositoryPath(normalized);
 }
 
-function collectPytest(xml) {
-  const nodes = [];
-  const pattern = /<testcase\b([^>]*)(?:\/>|>([\s\S]*?)<\/testcase>)/g;
-  for (const match of xml.matchAll(pattern)) {
-    const attributes = match[1] ?? '';
-    const body = match[2] ?? '';
-    const className = xmlAttribute(attributes, 'classname');
-    const title = xmlAttribute(attributes, 'name');
-    if (!className || !title) continue;
-    let status = 'passed';
-    if (/<(?:failure|error)\b/.test(body)) status = 'failed';
-    else if (/<skipped\b/.test(body)) status = 'skipped';
-    nodes.push({
-      runner: 'pytest',
-      file: `${className.replaceAll('.', '/')}.py`,
-      title,
-      status,
-    });
-  }
-  return nodes;
+function collectPytest(path, repositoryRoot) {
+  const parser = resolve(repositoryRoot, 'scripts/ci/parse_junit_xml.py');
+  const result = spawnSync(
+    process.env.PYTHON ?? 'python',
+    [parser, resolve(path)],
+    {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+      maxBuffer: REPORT_LIMIT,
+    },
+  );
+  if (result.status !== 0) throw new Error('JUNIT_PARSE_FAILED');
+  const parsed = parseStrictJson(Buffer.from(result.stdout), {
+    maxBytes: REPORT_LIMIT,
+    maxDepth: 16,
+    maxNodes: 1_000_000,
+    maxStringChars: 4_000_000,
+  });
+  if (!Array.isArray(parsed.nodes)) throw new Error('JUNIT_PARSE_FAILED');
+  return parsed.nodes;
 }
 
 function collectVitest(report) {
@@ -198,7 +184,7 @@ function collectNode(report) {
   }));
 }
 
-async function readReport(path, runner) {
+async function readReport(path, runner, repositoryRoot) {
   const metadata = await lstat(resolve(path));
   if (!metadata.isFile() || metadata.isSymbolicLink()) {
     throw new Error('REPORT_FILE_TYPE_INVALID');
@@ -207,7 +193,7 @@ async function readReport(path, runner) {
   const raw = await readFile(resolve(path));
   let nodes;
   if (runner === 'pytest') {
-    nodes = collectPytest(new TextDecoder('utf-8', { fatal: true }).decode(raw));
+    nodes = collectPytest(path, repositoryRoot);
   } else {
     const parsed = parseStrictJson(raw, {
       maxBytes: REPORT_LIMIT,
@@ -236,7 +222,27 @@ function assertHex(value, length, code) {
 }
 
 function nodeKey(node) {
-  return `${node.runner}\0${node.file}\0${node.title}`;
+  return `${node.runner}\0${node.platform}\0${node.file}\0${node.title}`;
+}
+
+function contextPlatform(value) {
+  if (value === 'Linux') return 'ubuntu';
+  if (value === 'Windows') return 'windows-2025';
+  if (value === 'macOS') return 'macos-15';
+  throw new Error('CONTEXT_PLATFORM_INVALID');
+}
+
+function descriptionDigest(test) {
+  const canonical = JSON.stringify({
+    file: test.file,
+    id: test.id,
+    kind: test.kind,
+    platform: test.platform,
+    required: test.required,
+    runner: test.runner,
+    title: test.title,
+  });
+  return digest(Buffer.from(canonical));
 }
 
 function gitValue(repositoryRoot, args, code) {
@@ -257,6 +263,10 @@ async function main() {
     'checkout-head',
     'checkout-tree',
     'object-format',
+    'repository',
+    'pull-request',
+    'workflow-ref',
+    'event-name',
   ]) {
     if (!options[name]) throw new Error('REQUIRED_INPUT_MISSING');
   }
@@ -298,8 +308,13 @@ async function main() {
   });
   const eventHead = event?.pull_request?.head?.sha
     ?? event?.merge_group?.head_sha
-    ?? event?.after;
+    ?? event?.after
+    ?? (options['event-name'] === 'workflow_dispatch' ? options.head : undefined);
   if (eventHead !== options.head) throw new Error('EVENT_HEAD_MISMATCH');
+  const eventPullRequest = event?.pull_request?.number ?? 0;
+  if (eventPullRequest !== Number(options['pull-request'])) {
+    throw new Error('EVENT_PULL_REQUEST_MISMATCH');
+  }
 
   const manifestRaw = await readFile(resolve(options.manifest));
   const manifest = parseStrictJson(manifestRaw, {
@@ -307,8 +322,17 @@ async function main() {
     maxDepth: 32,
     maxNodes: 100_000,
   });
-  if (manifest.schema_version !== 2 || typeof manifest.suite !== 'string'
-      || !Array.isArray(manifest.tests)) {
+  if (manifest.schema_version !== 3 || typeof manifest.suite !== 'string'
+      || !Number.isSafeInteger(manifest.normative_required)
+      || !Number.isSafeInteger(manifest.supplemental_required)
+      || !Number.isSafeInteger(manifest.required_total)
+      || manifest.normative_required + manifest.supplemental_required
+        !== manifest.required_total
+      || !Array.isArray(manifest.retired_ids)
+      || JSON.stringify(manifest.retired_ids)
+        !== JSON.stringify(['FSV10-EVIDENCE-007', 'FSV10-EVIDENCE-008'])
+      || !Array.isArray(manifest.tests)
+      || manifest.tests.length !== manifest.required_total) {
     throw new Error('MANIFEST_INVALID');
   }
   const required = manifest.tests.filter(test => test.required === true);
@@ -320,7 +344,10 @@ async function main() {
   for (const test of required) {
     if (typeof test.id !== 'string' || !test.id
         || !RUNNERS.has(test.runner)
-        || typeof test.title !== 'string' || !test.title) {
+        || !['normative', 'supplemental_required_regression'].includes(test.kind)
+        || !['ubuntu', 'windows-2025', 'macos-15'].includes(test.platform)
+        || typeof test.title !== 'string' || !test.title
+        || test.description_digest !== descriptionDigest(test)) {
       throw new Error('MANIFEST_NODE_INVALID');
     }
     test.file = requireRepositoryPath(test.file);
@@ -337,16 +364,78 @@ async function main() {
     ...options.pytest.map(path => ['pytest', path]),
     ...options.node.map(path => ['node', path]),
   ];
-  const actual = [];
+  const reports = [];
   const reportDigests = new Set();
   for (const [runner, path] of reportInputs) {
-    const report = await readReport(path, runner);
+    const report = await readReport(path, runner, repositoryRoot);
     if (reportDigests.has(report.digest)) throw new Error('REPORT_DIGEST_DUPLICATE');
     reportDigests.add(report.digest);
+    reports.push({ ...report, runner });
+  }
+
+  const contextualizedReports = new Set();
+  const reportPlatforms = new Map();
+  const reportByDigest = new Map(
+    reports.map(report => [report.digest, report]),
+  );
+  for (const path of options.context) {
+    const context = await readStrictJsonFile(resolve(path), {
+      maxBytes: CONTEXT_LIMIT,
+    });
+    if (context.schema_version !== 2
+        || context.repository !== options.repository
+        || context.event_name !== options['event-name']
+        || context.pr_number !== Number(options['pull-request'])
+        || context.subject_head !== options.head
+        || context.execution_commit !== options['checkout-head']
+        || context.tree !== options['checkout-tree']
+        || context.object_format !== options['object-format']
+        || !/^\d+$/.test(context.run_id ?? '')
+        || !Number.isSafeInteger(context.run_attempt)
+        || context.run_attempt < 1
+        || context.workflow_ref !== options['workflow-ref']
+        || typeof context.job_name !== 'string' || !context.job_name
+        || !RUNNERS.has(context.runner)
+        || !['ubuntu', 'windows-2025', 'macos-15'].includes(context.platform)
+        || typeof context.report_path !== 'string'
+        || requireRepositoryPath(context.report_path) !== context.report_path
+        || typeof context.report_sha256 !== 'string') {
+      throw new Error('CONTEXT_IDENTITY_MISMATCH');
+    }
+    assertHex(context.report_sha256, 64, 'CONTEXT_REPORT_DIGEST_INVALID');
+    if (!reportDigests.has(context.report_sha256)) {
+      throw new Error('CONTEXT_REPORT_DIGEST_MISMATCH');
+    }
+    if (reportByDigest.get(context.report_sha256)?.runner !== context.runner) {
+      throw new Error('CONTEXT_RUNNER_MISMATCH');
+    }
+    if (context.platform !== contextPlatform(context.os)) {
+      throw new Error('CONTEXT_PLATFORM_MISMATCH');
+    }
+    const rfc3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+    if (!rfc3339.test(context.started_at ?? '')
+        || !rfc3339.test(context.finished_at ?? '')
+        || Date.parse(context.finished_at) < Date.parse(context.started_at)) {
+      throw new Error('CONTEXT_TIME_INVALID');
+    }
+    if (contextualizedReports.has(context.report_sha256)) {
+      throw new Error('CONTEXT_REPORT_REUSED');
+    }
+    contextualizedReports.add(context.report_sha256);
+    reportPlatforms.set(context.report_sha256, context.platform);
+  }
+  if (contextualizedReports.size !== reportDigests.size) {
+    throw new Error('REPORT_CONTEXT_MISSING');
+  }
+  const actual = [];
+  for (const report of reports) {
+    const platform = reportPlatforms.get(report.digest);
+    if (!platform) throw new Error('REPORT_CONTEXT_MISSING');
     for (const node of report.nodes) {
       actual.push({
         ...node,
-        file: normalizeActualFile(node.file, runner, repositoryRoot),
+        platform,
+        file: normalizeActualFile(node.file, report.runner, repositoryRoot),
       });
     }
   }
@@ -359,33 +448,6 @@ async function main() {
     const key = nodeKey(node);
     if (actualKeys.has(key)) throw new Error('ACTUAL_NODE_DUPLICATE');
     actualKeys.add(key);
-  }
-
-  const contextualizedReports = new Set();
-  for (const path of options.context) {
-    const context = await readStrictJsonFile(resolve(path), {
-      maxBytes: CONTEXT_LIMIT,
-    });
-    if (context.schema_version !== 1
-        || context.subject_pr_head !== options.head
-        || context.execution_commit !== options['checkout-head']
-        || context.tree_oid?.algorithm !== options['object-format']
-        || context.tree_oid?.hex !== options['checkout-tree']
-        || !/^\d+$/.test(context.workflow_run_id ?? '')
-        || typeof context.report_sha256 !== 'string') {
-      throw new Error('CONTEXT_IDENTITY_MISMATCH');
-    }
-    assertHex(context.report_sha256, 64, 'CONTEXT_REPORT_DIGEST_INVALID');
-    if (!reportDigests.has(context.report_sha256)) {
-      throw new Error('CONTEXT_REPORT_DIGEST_MISMATCH');
-    }
-    if (contextualizedReports.has(context.report_sha256)) {
-      throw new Error('CONTEXT_REPORT_REUSED');
-    }
-    contextualizedReports.add(context.report_sha256);
-  }
-  if (contextualizedReports.size !== reportDigests.size) {
-    throw new Error('REPORT_CONTEXT_MISSING');
   }
 
   const usedActual = new Set();
@@ -412,8 +474,12 @@ async function main() {
   });
   const failures = rows.filter(row => row.executed !== 1
     || row.status !== 'passed');
+  const unexpected = actual.filter(node => !requiredKeys.has(nodeKey(node)));
+  const exactAccounting = unexpected.length === 0
+    && actual.length === required.length
+    && usedActual.size === required.length;
   const summary = {
-    schema_version: 2,
+    schema_version: 3,
     suite: manifest.suite,
     subject_head: options.head,
     checkout_head: options['checkout-head'],
@@ -427,15 +493,36 @@ async function main() {
       row.executed === 1 && row.status === 'passed'
     )).length,
     failed_total: failures.length,
+    unexpected_total: unexpected.length,
+    missing: rows.filter(row => row.status === 'missing').length,
+    duplicate_required_id: 0,
+    duplicate_required_identity: 0,
+    duplicate_actual_identity: 0,
+    reused_actual: rows.filter(row => row.status === 'reused').length,
+    skipped: rows.filter(row => row.status === 'skipped').length,
+    deselected: rows.filter(row => row.status === 'deselected').length,
+    xfail: rows.filter(row => row.status === 'xfail').length,
+    failed: rows.filter(row => row.status === 'failed').length,
+    errors: rows.filter(row => row.status === 'error').length,
+    unexpected: unexpected.length,
+    exact_accounting: exactAccounting,
     manifest_sha256: digest(manifestRaw),
     report_sha256: [...reportDigests].sort(),
     nodes: rows,
+    unexpected_nodes: unexpected.map(node => ({
+      runner: node.runner,
+      platform: node.platform,
+      file: node.file,
+      title: node.title,
+      status: node.status,
+    })),
   };
   if (options.output) {
     await writeFile(resolve(options.output), `${JSON.stringify(summary, null, 2)}\n`);
   }
-  console.log(`REQUIRED_TEST_NODE_AUDIT_OK=${failures.length === 0 ? 1 : 0}`);
-  if (failures.length !== 0) {
+  const passed = failures.length === 0 && exactAccounting;
+  console.log(`REQUIRED_TEST_NODE_AUDIT_OK=${passed ? 1 : 0}`);
+  if (!passed) {
     console.log('ERROR_CODE=REQUIRED_TEST_NODE_NONPASS');
     process.exitCode = 1;
   }

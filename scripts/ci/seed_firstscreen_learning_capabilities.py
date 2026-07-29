@@ -187,10 +187,10 @@ def _seed() -> None:
     )
     payload = service.snapshot().to_dict()
     if payload["capabilities"] != {
-        "company_rules": "IN_USE",
-        "company_facts": "IN_USE",
-        "company_formats": "IN_USE",
-        "folder_learning": "PREVIEW_ONLY",
+        "company_policy": "IN_USE",
+        "company_fact": "IN_USE",
+        "company_format": "IN_USE",
+        "folder_learning": "NOT_REGISTERED",
     }:
         raise RuntimeError("E2E_CANONICAL_SEED_MISMATCH")
     print("FIRSTSCREEN_LEARNING_SEED_OK=1")

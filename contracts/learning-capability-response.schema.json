@@ -1,44 +1,49 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://butler.local/contracts/learning-capability-response.v1.schema.json",
+  "$id": "https://butler.local/contracts/learning-capability-response.v2.schema.json",
   "title": "Butler learning capability canonical response",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "source",
+    "snapshot_revision",
     "generation",
     "capabilities"
   ],
   "properties": {
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "source": {
       "const": "CANONICAL"
     },
+    "snapshot_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "generation": {
       "type": "integer",
-      "minimum": 0,
+      "minimum": 1,
       "maximum": 9007199254740991
     },
     "capabilities": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "company_rules",
-        "company_facts",
-        "company_formats",
+        "company_policy",
+        "company_fact",
+        "company_format",
         "folder_learning"
       ],
       "properties": {
-        "company_rules": {
+        "company_policy": {
           "$ref": "#/$defs/capabilityState"
         },
-        "company_facts": {
+        "company_fact": {
           "$ref": "#/$defs/capabilityState"
         },
-        "company_formats": {
+        "company_format": {
           "$ref": "#/$defs/capabilityState"
         },
         "folder_learning": {
@@ -52,8 +57,9 @@
       "type": "string",
       "enum": [
         "IN_USE",
-        "REGISTERED_ONLY",
-        "PREVIEW_ONLY"
+        "REGISTERED",
+        "NOT_REGISTERED",
+        "UNAVAILABLE"
       ]
     }
   }

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 from typing import Sequence
 
 from .authorities import AuthorityReadError, LearningAuthority
@@ -10,7 +12,6 @@ from .contracts import (
     LearningCapabilityError,
     LearningCapabilitySnapshot,
     derive_state,
-    lower_hex_digest,
 )
 from .generation_store import DurableGenerationStore, GenerationStoreError
 
@@ -51,12 +52,12 @@ class LearningCapabilityService:
                     or tuple(probes) != CAPABILITY_KEYS
                     or tuple(after) != CAPABILITY_KEYS
                 ):
-                    raise LearningCapabilityError("CONTRACT_MISMATCH")
+                    raise LearningCapabilityError("AUTHORITY_SET_INVALID")
                 if any(
                     probes[key].key != key
                     for key in CAPABILITY_KEYS
                 ):
-                    raise LearningCapabilityError("CONTRACT_MISMATCH")
+                    raise LearningCapabilityError("AUTHORITY_PROBE_INVALID")
                 if not all(
                     before[key] == probes[key].revision == after[key]
                     for key in CAPABILITY_KEYS
@@ -67,14 +68,11 @@ class LearningCapabilityService:
                     key: derive_state(probes[key])
                     for key in CAPABILITY_KEYS
                 }
-                if any(
-                    state is CapabilityState.UNKNOWN
-                    for state in states.values()
-                ):
-                    raise LearningCapabilityError("AUTHORITY_INCOMPLETE")
-                snapshot_digest = lower_hex_digest(
+                if any(state is CapabilityState.UNAVAILABLE for state in states.values()):
+                    raise LearningCapabilityError("AUTHORITY_PROBE_INVALID")
+                canonical = json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "revisions": {
                             key: probes[key].revision
                             for key in CAPABILITY_KEYS
@@ -86,17 +84,24 @@ class LearningCapabilityService:
                             key: probes[key].evidence_digest
                             for key in CAPABILITY_KEYS
                         },
-                    }
-                )
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+                snapshot_digest = hashlib.sha256(
+                    b"butler.learning-snapshot.v2\x00" + canonical
+                ).hexdigest()
                 try:
                     generation = self.generation_store.generation_for(
                         snapshot_digest
                     )
                 except GenerationStoreError as exc:
                     raise LearningCapabilityError(
-                        "GENERATION_UNAVAILABLE"
+                        "SNAPSHOT_GENERATION_UNAVAILABLE"
                     ) from exc
                 snapshot = LearningCapabilitySnapshot(
+                    snapshot_revision=snapshot_digest,
                     generation=generation,
                     capabilities=states,
                 )
@@ -108,8 +113,8 @@ class LearningCapabilityService:
         except LearningCapabilityError:
             raise
         except AuthorityReadError as exc:
-            raise LearningCapabilityError("AUTHORITY_UNREACHABLE") from exc
+            raise LearningCapabilityError("CAPABILITY_SERVICE_UNAVAILABLE") from exc
         except ValueError as exc:
-            raise LearningCapabilityError("CONTRACT_MISMATCH") from exc
+            raise LearningCapabilityError("AUTHORITY_PROBE_INVALID") from exc
         except Exception as exc:
-            raise LearningCapabilityError("INTERNAL_ERROR") from exc
+            raise LearningCapabilityError("CAPABILITY_SERVICE_UNAVAILABLE") from exc

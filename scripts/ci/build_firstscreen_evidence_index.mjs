@@ -95,14 +95,21 @@ for (const contextPath of contextNames) {
   if (!reportPath || usedReports.has(reportPath)) {
     throw new Error('REPORT_CONTEXT_BINDING_INVALID');
   }
-  if (context.schema_version !== 1
-      || context.subject_pr_head !== options['subject-head']
+  if (context.schema_version !== 2
+      || context.repository !== options.repository
+      || context.event_name !== 'pull_request'
+      || context.pr_number !== Number(options['pull-request'])
+      || context.subject_head !== options['subject-head']
       || context.execution_commit !== options['subject-head']
-      || context.tree_oid?.algorithm !== options['object-format']
-      || context.tree_oid?.hex !== options.tree
-      || context.workflow_run_id !== options['run-id']
-      || context.workflow_run_attempt !== Number(options['run-attempt'])
+      || context.tree !== options.tree
+      || context.object_format !== options['object-format']
+      || context.run_id !== options['run-id']
+      || context.run_attempt !== Number(options['run-attempt'])
+      || context.workflow_ref !== options['workflow-ref']
+      || typeof context.job_name !== 'string'
       || typeof context.runner !== 'string'
+      || !['ubuntu', 'windows-2025', 'macos-15'].includes(context.platform)
+      || typeof context.report_path !== 'string'
       || typeof context.command !== 'string'
       || typeof context.tool_versions !== 'object'
       || context.tool_versions === null
@@ -116,7 +123,9 @@ for (const contextPath of contextNames) {
   }
   usedReports.add(reportPath);
   runs.push({
+    job_name: context.job_name,
     runner: context.runner,
+    platform: context.platform,
     command: context.command,
     tool_versions: context.tool_versions,
     exit_code: 0,
@@ -144,7 +153,7 @@ runs.sort((left, right) => (
 ));
 
 const index = {
-  schema_version: 1,
+  schema_version: 3,
   subject: {
     repository: options.repository,
     pull_request: Number(options['pull-request']),
@@ -162,6 +171,13 @@ const index = {
     run_id: options['run-id'],
     run_attempt: Number(options['run-attempt']),
     workflow_ref: options['workflow-ref'],
+  },
+  manifest: {
+    path: 'manifests/required-tests.v3.json',
+    sha256: sha256(
+      await readFile(resolve(root, 'manifests/required-tests.v3.json')),
+    ),
+    required_total: 92,
   },
   runs,
 };

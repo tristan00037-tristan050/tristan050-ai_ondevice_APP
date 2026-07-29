@@ -36,7 +36,7 @@ def _combined_revision(store_revision: str, binding_revision: str) -> str:
 class CompanyPolicyAuthority:
     store: PolicyStore
     bindings: ConsumerBindingStore
-    key: str = "company_rules"
+    key: str = "company_policy"
 
     def revision(self) -> str:
         try:
@@ -87,7 +87,7 @@ class CompanyPolicyAuthority:
 class CompanyFactAuthority:
     store: CompanyFactStore
     bindings: ConsumerBindingStore
-    key: str = "company_facts"
+    key: str = "company_fact"
 
     def revision(self) -> str:
         try:
@@ -131,7 +131,7 @@ class CompanyFactAuthority:
 class CompanyFormatAuthority:
     store: CompanyFormatStore
     bindings: ConsumerBindingStore
-    key: str = "company_formats"
+    key: str = "company_format"
 
     def revision(self) -> str:
         try:

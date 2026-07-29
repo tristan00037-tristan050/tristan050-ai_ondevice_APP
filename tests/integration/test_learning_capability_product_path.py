@@ -165,8 +165,8 @@ def test_all_four_states_are_derived_from_real_stores_and_consumers(
     payload = service.snapshot().to_dict()
     assert payload["source"] == "CANONICAL"
     assert payload["capabilities"] == {
-        "company_rules": "IN_USE",
-        "company_facts": "IN_USE",
-        "company_formats": "IN_USE",
-        "folder_learning": "PREVIEW_ONLY",
+        "company_policy": "IN_USE",
+        "company_fact": "IN_USE",
+        "company_format": "IN_USE",
+        "folder_learning": "NOT_REGISTERED",
     }

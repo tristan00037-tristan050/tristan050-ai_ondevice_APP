@@ -10,19 +10,22 @@ from typing import Any, Mapping
 
 SAFE_INTEGER_MAX = 9_007_199_254_740_991
 CAPABILITY_KEYS = (
-    "company_rules",
-    "company_facts",
-    "company_formats",
+    "company_policy",
+    "company_fact",
+    "company_format",
     "folder_learning",
 )
 PUBLIC_REASONS = frozenset(
     {
-        "AUTHORITY_UNREACHABLE",
-        "AUTHORITY_INCOMPLETE",
         "AUTHORITY_CHANGED_DURING_SNAPSHOT",
-        "GENERATION_UNAVAILABLE",
-        "CONTRACT_MISMATCH",
-        "INTERNAL_ERROR",
+        "AUTHORITY_SET_INVALID",
+        "AUTHORITY_PROBE_INVALID",
+        "CONSUMER_BINDING_INVALID",
+        "TRUST_STATE_INVALID",
+        "TRUST_STATE_AUTHENTICITY_UNAVAILABLE",
+        "TRUST_STATE_PLATFORM_UNSUPPORTED",
+        "SNAPSHOT_GENERATION_UNAVAILABLE",
+        "CAPABILITY_SERVICE_UNAVAILABLE",
     }
 )
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -30,9 +33,9 @@ _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 class CapabilityState(str, Enum):
     IN_USE = "IN_USE"
-    REGISTERED_ONLY = "REGISTERED_ONLY"
-    PREVIEW_ONLY = "PREVIEW_ONLY"
-    UNKNOWN = "UNKNOWN"
+    REGISTERED = "REGISTERED"
+    NOT_REGISTERED = "NOT_REGISTERED"
+    UNAVAILABLE = "UNAVAILABLE"
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,7 @@ class AuthorityProbe:
 
 @dataclass(frozen=True)
 class LearningCapabilitySnapshot:
+    snapshot_revision: str
     generation: int
     capabilities: Mapping[str, CapabilityState]
 
@@ -70,17 +74,17 @@ class LearningCapabilitySnapshot:
         if (
             isinstance(self.generation, bool)
             or not isinstance(self.generation, int)
-            or not 0 <= self.generation <= SAFE_INTEGER_MAX
+            or not 1 <= self.generation <= SAFE_INTEGER_MAX
         ):
             raise ValueError("GENERATION_INVALID")
+        normalize_object_digest(self.snapshot_revision)
         if tuple(sorted(self.capabilities)) != tuple(sorted(CAPABILITY_KEYS)):
             raise ValueError("CAPABILITY_KEYS_INVALID")
         values = {key: self.capabilities[key].value for key in CAPABILITY_KEYS}
-        if any(value == CapabilityState.UNKNOWN.value for value in values.values()):
-            raise ValueError("CANONICAL_SNAPSHOT_HAS_UNKNOWN")
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "source": "CANONICAL",
+            "snapshot_revision": self.snapshot_revision,
             "generation": self.generation,
             "capabilities": values,
         }
@@ -89,15 +93,15 @@ class LearningCapabilitySnapshot:
 class LearningCapabilityError(RuntimeError):
     def __init__(self, reason: str) -> None:
         if reason not in PUBLIC_REASONS:
-            reason = "INTERNAL_ERROR"
+            reason = "CAPABILITY_SERVICE_UNAVAILABLE"
         super().__init__(reason)
         self.reason = reason
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "source": "UNAVAILABLE",
-            "reason": self.reason,
+            "error_code": self.reason,
         }
 
 
@@ -121,11 +125,9 @@ def normalize_object_digest(value: str) -> str:
 def derive_state(probe: AuthorityProbe) -> CapabilityState:
     probe.validate()
     if not probe.available:
-        return CapabilityState.UNKNOWN
-    if probe.preview_only:
-        return CapabilityState.PREVIEW_ONLY
+        return CapabilityState.UNAVAILABLE
     if probe.registered and probe.consumer_bound:
         return CapabilityState.IN_USE
     if probe.registered:
-        return CapabilityState.REGISTERED_ONLY
-    return CapabilityState.UNKNOWN
+        return CapabilityState.REGISTERED
+    return CapabilityState.NOT_REGISTERED

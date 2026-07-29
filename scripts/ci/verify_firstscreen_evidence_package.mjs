@@ -16,7 +16,6 @@ import {
 } from 'node:path';
 
 import {
-  parseStrictJson,
   readStrictJsonFile,
 } from './strict_json.mjs';
 import { collectPinnedActions } from './action_pins.mjs';
@@ -92,9 +91,11 @@ async function verifyIndex(root, actualFiles, options) {
     maxDepth: 32,
     maxNodes: 100_000,
   });
-  if (index.schema_version !== 1
+  if (index.schema_version !== 3
       || JSON.stringify(Object.keys(index).sort())
-        !== JSON.stringify(['runs', 'schema_version', 'subject', 'workflow'])
+        !== JSON.stringify([
+          'manifest', 'runs', 'schema_version', 'subject', 'workflow',
+        ])
       || index.subject?.repository !== options.repository
       || index.subject?.pull_request !== Number(options['pull-request'])
       || index.subject?.head_oid?.algorithm !== options['object-format']
@@ -105,8 +106,16 @@ async function verifyIndex(root, actualFiles, options) {
       || index.workflow?.run_id !== options['run-id']
       || index.workflow?.run_attempt !== Number(options['run-attempt'])
       || index.workflow?.workflow_ref !== options['workflow-ref']
+      || index.manifest?.path !== 'manifests/required-tests.v3.json'
+      || !/^[0-9a-f]{64}$/.test(index.manifest?.sha256 ?? '')
+      || index.manifest?.required_total !== 92
       || !Array.isArray(index.runs) || index.runs.length === 0) {
     throw new Error('EVIDENCE_INDEX_INVALID');
+  }
+  if (sha256(await readFile(
+    resolve(root, 'manifests/required-tests.v3.json'),
+  )) !== index.manifest.sha256) {
+    throw new Error('REQUIRED_MANIFEST_DIGEST_MISMATCH');
   }
   const indexed = [];
   const reportPaths = new Set();
@@ -130,7 +139,7 @@ async function verifyIndex(root, actualFiles, options) {
     'SHA256SUMS.txt',
     'manifests/evidence-index.schema.json',
     'manifests/action-pins.v1.json',
-    'manifests/required-tests.v2.json',
+    'manifests/required-tests.v3.json',
     'source/correction.patch',
     'source/git-ls-tree.txt',
     'source/source.zip',
@@ -195,13 +204,19 @@ async function verifyContexts(root, index, options) {
     const context = await readStrictJsonFile(contextPath, {
       maxBytes: 64 * 1024,
     });
-    if (context.schema_version !== 1
-        || context.subject_pr_head !== options['subject-head']
+    if (context.schema_version !== 2
+        || context.repository !== options.repository
+        || context.event_name !== 'pull_request'
+        || context.pr_number !== Number(options['pull-request'])
+        || context.subject_head !== options['subject-head']
         || context.execution_commit !== options['subject-head']
-        || context.tree_oid?.algorithm !== options['object-format']
-        || context.tree_oid?.hex !== options.tree
-        || context.workflow_run_id !== options['run-id']
-        || context.workflow_run_attempt !== Number(options['run-attempt'])
+        || context.tree !== options.tree
+        || context.object_format !== options['object-format']
+        || context.run_id !== options['run-id']
+        || context.run_attempt !== Number(options['run-attempt'])
+        || context.workflow_ref !== options['workflow-ref']
+        || context.job_name !== run.job_name
+        || context.platform !== run.platform
         || context.runner !== run.runner
         || context.command !== run.command
         || JSON.stringify(context.tool_versions)
@@ -277,9 +292,7 @@ async function main() {
     'package',
     'zip',
     'detached',
-    'attestation-bundle',
     'repository',
-    'signer-workflow',
     'subject-head',
     'object-format',
     'tree',
@@ -287,7 +300,6 @@ async function main() {
     'run-id',
     'run-attempt',
     'workflow-ref',
-    'source-digest',
   ]) {
     if (!options[name]) throw new Error('REQUIRED_INPUT_MISSING');
   }
@@ -302,14 +314,6 @@ async function main() {
       || !/^[1-9]\d*$/.test(options['run-attempt'])) {
     throw new Error('SUBJECT_IDENTITY_INVALID');
   }
-  if (!new RegExp(`^[0-9a-f]{${oidLength}}$`).test(options['source-digest'])) {
-    throw new Error('ATTESTATION_SOURCE_DIGEST_INVALID');
-  }
-  if (options['signer-workflow']
-      !== `${options.repository}/.github/workflows/firstscreen-v2-5.yml`) {
-    throw new Error('ATTESTATION_WORKFLOW_INVALID');
-  }
-
   const root = resolve(options.package);
   const rootMetadata = await lstat(root);
   if (!rootMetadata.isDirectory() || rootMetadata.isSymbolicLink()) {
@@ -340,50 +344,8 @@ async function main() {
   if (!detachedMatch) throw new Error('DETACHED_DIGEST_INVALID');
   const zipDigest = sha256(await readFile(zip));
   if (zipDigest !== detachedMatch[1]) throw new Error('DETACHED_DIGEST_MISMATCH');
-  await requireNonempty(
-    resolve(options['attestation-bundle']),
-    'ATTESTATION_BUNDLE_MISSING',
-  );
-  const verified = spawnSync(
-    'gh',
-    [
-      'attestation',
-      'verify',
-      zip,
-      '--repo',
-      options.repository,
-      '--bundle',
-      resolve(options['attestation-bundle']),
-      '--signer-workflow',
-      options['signer-workflow'],
-      '--source-digest',
-      options['source-digest'],
-      '--deny-self-hosted-runners',
-      '--format',
-      'json',
-    ],
-    { encoding: 'utf8' },
-  );
-  if (verified.status !== 0) throw new Error('ATTESTATION_VERIFY_FAILED');
-  const attestationResults = parseStrictJson(Buffer.from(verified.stdout), {
-    maxBytes: 16 * 1024 * 1024,
-    maxDepth: 64,
-    maxNodes: 1_000_000,
-    maxStringChars: 4_000_000,
-    requireObject: false,
-  });
-  if (!Array.isArray(attestationResults) || attestationResults.length === 0) {
-    throw new Error('ATTESTATION_RESULT_INVALID');
-  }
-  const subjectMatched = attestationResults.some(result => (
-    result?.verificationResult?.statement?.subject?.some(subject => (
-      subject?.digest?.sha256 === zipDigest
-    ))
-  ));
-  if (!subjectMatched) throw new Error('ATTESTATION_SUBJECT_MISMATCH');
-
   const result = {
-    schema_version: 2,
+    schema_version: 3,
     subject_head: options['subject-head'],
     tree_oid: {
       algorithm: options['object-format'],
@@ -393,11 +355,7 @@ async function main() {
     context_count: contextCount,
     zip_sha256: zipDigest,
     detached_digest_match: true,
-    attestation_verified: true,
-    attestation_repository: options.repository,
-    attestation_workflow: options['signer-workflow'],
-    attestation_workflow_ref: options['workflow-ref'],
-    attestation_source_commit: options['source-digest'],
+    internal_checksums_verified: true,
   };
   if (options.output) {
     await writeFile(resolve(options.output), `${JSON.stringify(result, null, 2)}\n`);

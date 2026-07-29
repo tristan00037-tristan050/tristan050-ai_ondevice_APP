@@ -134,7 +134,7 @@ def test_company_policy_in_use_requires_active_policy_and_real_policy_gate_consu
     policy = _install_policy(policy_store, monkeypatch)
     bindings = ConsumerBindingStore(tmp_path / "bindings.json")
     authority = CompanyPolicyAuthority(policy_store, bindings)
-    assert derive_state(authority.probe()) is CapabilityState.REGISTERED_ONLY
+    assert derive_state(authority.probe()) is CapabilityState.REGISTERED
 
     monkeypatch.setattr(
         policy_middleware,
@@ -165,7 +165,7 @@ def test_company_fact_in_use_requires_active_fact_resolved_by_real_product_consu
     active = _install_fact(store, monkeypatch)
     bindings = ConsumerBindingStore(tmp_path / "bindings.json")
     authority = CompanyFactAuthority(store, bindings)
-    assert derive_state(authority.probe()) is CapabilityState.REGISTERED_ONLY
+    assert derive_state(authority.probe()) is CapabilityState.REGISTERED
 
     monkeypatch.setattr(
         resolver_module,
@@ -189,7 +189,7 @@ def test_company_format_registered_only_and_in_use_are_not_self_claimed(
     company_format = _install_format(store, monkeypatch)
     bindings = ConsumerBindingStore(tmp_path / "bindings.json")
     authority = CompanyFormatAuthority(store, bindings)
-    assert derive_state(authority.probe()) is CapabilityState.REGISTERED_ONLY
+    assert derive_state(authority.probe()) is CapabilityState.REGISTERED
 
     monkeypatch.setattr(
         company_format_adapter,
@@ -220,7 +220,7 @@ def test_folder_learning_ignores_ephemeral_job_and_uses_persisted_handoff_author
     event_path = tmp_path / "learning-events.jsonl"
     store = LearningEventStore(jsonl_path=event_path)
     authority = FolderLearningAuthority(store, bindings)
-    assert derive_state(authority.probe()) is CapabilityState.UNKNOWN
+    assert derive_state(authority.probe()) is CapabilityState.NOT_REGISTERED
 
     handoff = create_company_learning_candidate(job, store=store)
     assert handoff.fail_class is None
@@ -229,7 +229,7 @@ def test_folder_learning_ignores_ephemeral_job_and_uses_persisted_handoff_author
     restarted_authority = FolderLearningAuthority(restarted, bindings)
     assert (
         derive_state(restarted_authority.probe())
-        is CapabilityState.PREVIEW_ONLY
+        is CapabilityState.NOT_REGISTERED
     )
 
 
@@ -279,8 +279,8 @@ def test_binding_revision_mismatch_blocks_the_whole_snapshot(
     service = LearningCapabilityService(
         authorities=(
             policy_authority,
-            _StaticAuthority("company_facts", "b" * 64),
-            _StaticAuthority("company_formats", "c" * 64),
+            _StaticAuthority("company_fact", "b" * 64),
+            _StaticAuthority("company_format", "c" * 64),
             _StaticAuthority("folder_learning", "d" * 64),
         ),
         generation_store=DurableGenerationStore(
@@ -329,14 +329,14 @@ def test_binding_save_failure_preserves_product_response_without_in_use_claim(
         headers={"x-request-id": "request-12345678"},
     )
     assert response.status_code == 200
-    assert derive_state(authority.probe()) is CapabilityState.REGISTERED_ONLY
+    assert derive_state(authority.probe()) is CapabilityState.REGISTERED
 
 
 def test_binding_file_contains_only_digest_and_allowed_metadata(tmp_path):
     path = tmp_path / "bindings.json"
     store = ConsumerBindingStore(path)
     store.record(
-        "company_facts",
+        "company_fact",
         "a" * 64,
         "CompanyKnowledgeResolver.company_match.v1",
     )
@@ -344,12 +344,14 @@ def test_binding_file_contains_only_digest_and_allowed_metadata(tmp_path):
     assert "customer secret source text" not in payload
     document = load_strict_bytes(payload.encode("utf-8"))
     assert set(document) == {"schema_version", "bindings"}
-    assert set(document["bindings"]["company_facts"]) == {
+    assert set(document["bindings"]["company_fact"]) == {
         "schema_version",
         "authority_key",
         "authority_revision",
         "consumer_id",
+        "runtime_instance_id",
         "observed_at",
-        "generation",
+        "binding_sequence",
         "binding_digest",
     }
+    assert document["schema_version"] == 2

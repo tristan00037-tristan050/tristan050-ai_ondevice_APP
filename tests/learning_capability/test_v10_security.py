@@ -44,9 +44,9 @@ class _Authority:
 
 def _authorities(first: _Authority | None = None) -> tuple[_Authority, ...]:
     return (
-        first or _Authority("company_rules", "1" * 64),
-        _Authority("company_facts", "2" * 64),
-        _Authority("company_formats", "3" * 64),
+        first or _Authority("company_policy", "1" * 64),
+        _Authority("company_fact", "2" * 64),
+        _Authority("company_format", "3" * 64),
         _Authority("folder_learning", "4" * 64),
     )
 
@@ -55,7 +55,7 @@ def test_before_after_equal_but_probe_revision_mismatch_fails_closed(tmp_path):
     service = LearningCapabilityService(
         _authorities(
             _Authority(
-                "company_rules",
+                "company_policy",
                 "1" * 64,
                 probe_revision="9" * 64,
             )
@@ -72,12 +72,12 @@ def test_duplicate_missing_extra_authorities_are_rejected_before_mapping(tmp_pat
     store = DurableGenerationStore(tmp_path / "generation.json")
     for authorities in (
         _authorities()[:-1],
-        (*_authorities(), _Authority("company_rules", "5" * 64)),
+        (*_authorities(), _Authority("company_policy", "5" * 64)),
         (
-            _Authority("company_rules", "1" * 64),
-            _Authority("company_facts", "2" * 64),
+            _Authority("company_policy", "1" * 64),
+            _Authority("company_fact", "2" * 64),
             _Authority("folder_learning", "4" * 64),
-            _Authority("company_formats", "3" * 64),
+            _Authority("company_format", "3" * 64),
         ),
     ):
         with pytest.raises(ValueError):
@@ -88,16 +88,16 @@ def test_probe_key_mismatch_is_rejected(tmp_path):
     service = LearningCapabilityService(
         _authorities(
             _Authority(
-                "company_rules",
+                "company_policy",
                 "1" * 64,
-                probe_key="company_facts",
+                probe_key="company_fact",
             )
         ),
         DurableGenerationStore(tmp_path / "generation.json"),
     )
     with pytest.raises(Exception) as captured:
         service.snapshot()
-    assert captured.value.reason == "CONTRACT_MISMATCH"
+    assert captured.value.reason == "AUTHORITY_PROBE_INVALID"
 
 
 @pytest.mark.parametrize(

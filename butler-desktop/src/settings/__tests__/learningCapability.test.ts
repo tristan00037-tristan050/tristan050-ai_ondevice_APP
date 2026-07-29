@@ -7,21 +7,22 @@ import {
 describe('company learning capability selector', () => {
   it('parses the real provider contract and rejects incompatible v8 rows payload', () => {
     const canonical = parseLearningCapabilitySnapshot({
-      schema_version: 1,
+      schema_version: 2,
       source: 'CANONICAL',
+      snapshot_revision: 'a'.repeat(64),
       generation: 11,
       capabilities: {
-        company_rules: 'IN_USE',
-        company_facts: 'IN_USE',
-        company_formats: 'REGISTERED_ONLY',
-        folder_learning: 'PREVIEW_ONLY',
+        company_policy: 'IN_USE',
+        company_fact: 'IN_USE',
+        company_format: 'REGISTERED',
+        folder_learning: 'NOT_REGISTERED',
       },
     });
     const incompatible = parseLearningCapabilitySnapshot({
       schema_version: 'learning_capability.v1',
       source: 'CANONICAL',
       generation: 11,
-      rows: [{ key: 'company_rules', state: 'IN_USE' }],
+      rows: [{ key: 'company_policy', state: 'IN_USE' }],
     });
 
     expect(canonical.source).toBe('CANONICAL_CAPABILITY');
@@ -41,9 +42,9 @@ describe('company learning capability selector', () => {
         source: 'CANONICAL',
         generation: 1,
         capabilities: {
-          company_rules: 'IN_USE',
-          company_facts: 'IN_USE',
-          company_formats: 'REGISTERED_ONLY',
+          company_policy: 'IN_USE',
+          company_fact: 'IN_USE',
+          company_format: 'REGISTERED',
         },
       },
       {
@@ -51,10 +52,10 @@ describe('company learning capability selector', () => {
         source: 'CANONICAL',
         generation: 1,
         capabilities: {
-          company_rules: 'IN_USE',
-          company_facts: 'UNKNOWN',
-          company_formats: 'REGISTERED_ONLY',
-          folder_learning: 'PREVIEW_ONLY',
+          company_policy: 'IN_USE',
+          company_fact: 'UNKNOWN',
+          company_format: 'REGISTERED',
+          folder_learning: 'NOT_REGISTERED',
         },
       },
       {
@@ -62,10 +63,10 @@ describe('company learning capability selector', () => {
         source: 'CANONICAL',
         generation: true,
         capabilities: {
-          company_rules: 'IN_USE',
-          company_facts: 'IN_USE',
-          company_formats: 'REGISTERED_ONLY',
-          folder_learning: 'PREVIEW_ONLY',
+          company_policy: 'IN_USE',
+          company_fact: 'IN_USE',
+          company_format: 'REGISTERED',
+          folder_learning: 'NOT_REGISTERED',
         },
       },
     ];
@@ -78,14 +79,15 @@ describe('company learning capability selector', () => {
 
   it('maps a canonical snapshot to exactly two in-use one registered-only and one preview-only row', () => {
     const snapshot = parseLearningCapabilitySnapshot({
-      schema_version: 1,
+      schema_version: 2,
       source: 'CANONICAL',
+      snapshot_revision: 'b'.repeat(64),
       generation: 7,
       capabilities: {
-        company_rules: 'IN_USE',
-        company_facts: 'IN_USE',
-        company_formats: 'REGISTERED_ONLY',
-        folder_learning: 'PREVIEW_ONLY',
+        company_policy: 'IN_USE',
+        company_fact: 'IN_USE',
+        company_format: 'REGISTERED',
+        folder_learning: 'NOT_REGISTERED',
       },
     });
     const rows = selectLearningRows(snapshot, 7);
@@ -97,8 +99,8 @@ describe('company learning capability selector', () => {
       '폴더에서 배우기',
     ]);
     expect(rows.filter(row => row.statusText === '쓰이는 중')).toHaveLength(2);
-    expect(rows.filter(row => row.statusText === '등록만 됩니다')).toHaveLength(1);
-    expect(rows.filter(row => row.statusText === '미리보기만 됩니다')).toHaveLength(1);
+    expect(rows.filter(row => row.statusText === '등록됨')).toHaveLength(1);
+    expect(rows.filter(row => row.statusText === '등록되지 않음')).toHaveLength(1);
   });
 
   it('maps unavailable or incomplete signals to four unknown rows without inference', () => {
@@ -107,10 +109,10 @@ describe('company learning capability selector', () => {
       source: 'UNAVAILABLE',
       generation: 8,
       capabilities: {
-        company_rules: 'IN_USE',
-        company_facts: 'IN_USE',
-        company_formats: 'REGISTERED_ONLY',
-        folder_learning: 'PREVIEW_ONLY',
+        company_policy: 'IN_USE',
+        company_fact: 'IN_USE',
+        company_format: 'REGISTERED',
+        folder_learning: 'NOT_REGISTERED',
       },
     });
     const incomplete = parseLearningCapabilitySnapshot({

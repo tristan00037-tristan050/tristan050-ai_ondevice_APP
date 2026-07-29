@@ -116,7 +116,7 @@ class CompanyKnowledgeResolver:
             )
             try:
                 default_consumer_binding_store().record(
-                    "company_facts",
+                    "company_fact",
                     fact_digest,
                     "CompanyKnowledgeResolver.company_match.v1",
                 )
