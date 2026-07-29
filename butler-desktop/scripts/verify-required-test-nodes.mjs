@@ -443,9 +443,9 @@ async function main() {
     'object-format',
     'event-name',
     'pull-request',
-    'producer-run-id',
-    'producer-run-attempt',
-    'producer-workflow-ref',
+    'run-id',
+    'run-attempt',
+    'workflow-ref',
   ]) {
     if (!options[name]) throw new Error('REQUIRED_INPUT_MISSING');
   }
@@ -599,9 +599,9 @@ async function main() {
     head: options.head,
     tree: options['checkout-tree'],
     objectFormat: options['object-format'],
-    runId: options['producer-run-id'],
-    runAttempt: Number(options['producer-run-attempt']),
-    workflowRef: options['producer-workflow-ref'],
+    runId: options['run-id'],
+    runAttempt: Number(options['run-attempt']),
+    workflowRef: options['workflow-ref'],
   };
   for (const path of options.context) {
     const context = await readStrictJsonFile(resolve(path), {
