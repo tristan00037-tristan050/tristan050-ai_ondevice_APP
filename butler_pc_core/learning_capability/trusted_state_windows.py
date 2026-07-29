@@ -187,9 +187,16 @@ class _OwnedHandle:
         self.value = value
 
     def close(self) -> None:
-        if os.name == "nt" and self.value not in {None, INVALID_HANDLE_VALUE}:
+        if os.name != "nt" or self.value is None:
+            return
+        raw_value = (
+            self.value.value
+            if isinstance(self.value, ctypes.c_void_p)
+            else self.value
+        )
+        if raw_value != INVALID_HANDLE_VALUE:
             _kernel32.CloseHandle(self.value)
-            self.value = None
+        self.value = None
 
     def __enter__(self):
         return self

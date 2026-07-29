@@ -98,9 +98,31 @@ describe('company learning capability selector', () => {
       '회사 양식 등록',
       '폴더에서 배우기',
     ]);
-    expect(rows.filter(row => row.statusText === '쓰이는 중')).toHaveLength(2);
+    expect(rows.filter(row => row.statusText === '사용 중')).toHaveLength(2);
     expect(rows.filter(row => row.statusText === '등록됨')).toHaveLength(1);
     expect(rows.filter(row => row.statusText === '등록되지 않음')).toHaveLength(1);
+  });
+
+  it('preserves a valid per-capability unavailable state without hiding healthy rows', () => {
+    const snapshot = parseLearningCapabilitySnapshot({
+      schema_version: 2,
+      source: 'CANONICAL',
+      snapshot_revision: 'c'.repeat(64),
+      generation: 8,
+      capabilities: {
+        company_policy: 'IN_USE',
+        company_fact: 'REGISTERED',
+        company_format: 'UNAVAILABLE',
+        folder_learning: 'NOT_REGISTERED',
+      },
+    });
+
+    expect(selectLearningRows(snapshot).map(row => row.statusText)).toEqual([
+      '사용 중',
+      '등록됨',
+      '확인할 수 없습니다',
+      '등록되지 않음',
+    ]);
   });
 
   it('maps unavailable or incomplete signals to four unknown rows without inference', () => {

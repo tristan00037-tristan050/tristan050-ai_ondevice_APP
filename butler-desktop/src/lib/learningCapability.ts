@@ -38,7 +38,7 @@ const UNAVAILABLE_SNAPSHOT: LearningCapabilitySnapshot = Object.freeze({
 });
 
 const STATUS_TEXT: Readonly<Record<LearningCapabilityState, string>> = {
-  IN_USE: '쓰이는 중',
+  IN_USE: '사용 중',
   REGISTERED: '등록됨',
   NOT_REGISTERED: '등록되지 않음',
   UNAVAILABLE: '확인할 수 없습니다',
@@ -68,10 +68,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function capabilityState(value: unknown): LearningCapabilityState {
-  return typeof value === 'string' && CANONICAL_STATES.has(value as LearningCapabilityState)
-    ? value as LearningCapabilityState
-    : 'UNAVAILABLE';
+function isCapabilityState(value: unknown): value is LearningCapabilityState {
+  return typeof value === 'string'
+    && CANONICAL_STATES.has(value as LearningCapabilityState);
 }
 
 export function parseLearningCapabilitySnapshot(
@@ -84,7 +83,7 @@ export function parseLearningCapabilitySnapshot(
       || typeof value.snapshot_revision !== 'string'
       || !/^[0-9a-f]{64}$/.test(value.snapshot_revision)
       || !Number.isSafeInteger(value.generation)
-      || (value.generation as number) < 0
+      || (value.generation as number) < 1
       || !isRecord(value.capabilities)
       || Object.keys(value.capabilities).length !== CAPABILITY_KEYS.size
       || Object.keys(value.capabilities).some(key => !CAPABILITY_KEYS.has(key))) {
@@ -97,20 +96,20 @@ export function parseLearningCapabilitySnapshot(
     });
   }
   const states = [
-    capabilityState(value.capabilities.company_policy),
-    capabilityState(value.capabilities.company_fact),
-    capabilityState(value.capabilities.company_format),
-    capabilityState(value.capabilities.folder_learning),
+    value.capabilities.company_policy,
+    value.capabilities.company_fact,
+    value.capabilities.company_format,
+    value.capabilities.folder_learning,
   ] as const;
-  if (states.some(state => state === 'UNAVAILABLE')) return UNAVAILABLE_SNAPSHOT;
+  if (!states.every(isCapabilityState)) return UNAVAILABLE_SNAPSHOT;
   return Object.freeze({
     source: 'CANONICAL_CAPABILITY',
     snapshotRevision: value.snapshot_revision,
     generation: value.generation as number,
-    companyRules: states[0],
-    companyFacts: states[1],
-    companyFormats: states[2],
-    folderLearning: states[3],
+    companyRules: states[0] as LearningCapabilityState,
+    companyFacts: states[1] as LearningCapabilityState,
+    companyFormats: states[2] as LearningCapabilityState,
+    folderLearning: states[3] as LearningCapabilityState,
   });
 }
 

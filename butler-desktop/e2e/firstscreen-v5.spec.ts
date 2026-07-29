@@ -464,7 +464,7 @@ test.describe('FirstScreen v7 required product paths', () => {
     });
     await page.getByTestId('settings-entry').click();
     const group = page.getByTestId('company-learning-settings');
-    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(3);
+    await expect(group.getByText('사용 중', { exact: true })).toHaveCount(3);
     expect(learningRequests).toHaveLength(1);
     const runtime = await page.evaluate(() => ({
       fetchUntouched: window.fetch
@@ -488,7 +488,7 @@ test.describe('FirstScreen v7 required product paths', () => {
     await page.getByTestId('settings-entry').click();
     const group = page.getByTestId('company-learning-settings');
     await expect(group.getByText('확인할 수 없습니다', { exact: true })).toHaveCount(4);
-    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(0);
+    await expect(group.getByText('사용 중', { exact: true })).toHaveCount(0);
   });
 
   test('회사 배우기 네 행이 endpoint 가로채기 없이 실제 sidecar와 권위 저장소에서 계산된다', async ({ page }) => {
@@ -499,7 +499,7 @@ test.describe('FirstScreen v7 required product paths', () => {
     await openHome(page, { useRealLearning: true });
     await page.getByTestId('settings-entry').click();
     const group = page.getByTestId('company-learning-settings');
-    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(3);
+    await expect(group.getByText('사용 중', { exact: true })).toHaveCount(3);
     await expect(group.getByText('등록되지 않음', { exact: true })).toHaveCount(1);
     await expect(group.getByText('확인할 수 없습니다', { exact: true })).toHaveCount(0);
   });
@@ -535,10 +535,10 @@ test.describe('FirstScreen v7 required product paths', () => {
     await openHome(page, { useRealLearning: true });
     await page.getByTestId('settings-entry').click();
     const group = page.getByTestId('company-learning-settings');
-    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(3);
+    await expect(group.getByText('사용 중', { exact: true })).toHaveCount(3);
     await context.setOffline(true);
     await page.getByTestId('learning-capability-refresh').click();
-    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(0);
+    await expect(group.getByText('사용 중', { exact: true })).toHaveCount(0);
     await expect(
       group.getByText('확인할 수 없습니다', { exact: true }),
     ).toHaveCount(4);
@@ -585,7 +585,7 @@ test.describe('FirstScreen v7 required product paths', () => {
       await expect(group.getByText(label, { exact: true })).toHaveCount(1);
       await expect(group.getByRole('button', { name: `${label} 열기` })).toHaveCount(1);
     }
-    await expect(group.getByText('쓰이는 중', { exact: true })).toHaveCount(2);
+    await expect(group.getByText('사용 중', { exact: true })).toHaveCount(2);
     await expect(group.getByText('등록됨', { exact: true })).toHaveCount(1);
     await expect(group.getByText('등록되지 않음', { exact: true })).toHaveCount(1);
   });

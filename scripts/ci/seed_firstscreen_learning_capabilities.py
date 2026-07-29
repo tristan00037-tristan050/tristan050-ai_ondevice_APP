@@ -198,9 +198,24 @@ def _seed() -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("seed",))
+    parser.add_argument("mode", choices=("seed", "seed-and-serve"))
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
     _seed()
+    if args.mode == "seed-and-serve":
+        # Keep the product consumer bindings and the sidecar in one process.
+        # Consumer binding v2 intentionally binds IN_USE to the in-memory
+        # runtime instance; a seed process followed by a second Python process
+        # would correctly invalidate those bindings as stale.
+        import uvicorn
+
+        uvicorn.run(
+            "butler_sidecar:app",
+            host=args.host,
+            port=args.port,
+            reload=False,
+        )
     return 0
 
 

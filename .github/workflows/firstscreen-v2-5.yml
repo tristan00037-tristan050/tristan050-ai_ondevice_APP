@@ -519,6 +519,8 @@ jobs:
             --finished-at "${evidence_finished}" \
             --os "${RUNNER_OS}" \
             --arch "${RUNNER_ARCH}"
+          node scripts/ci/test_firstscreen_mutation_generator.mjs \
+            evidence/mutation-generator.json
           audit_started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           node butler-desktop/scripts/verify-required-test-nodes.mjs \
             --manifest butler-desktop/acceptance/required-tests.v3.json \
@@ -578,6 +580,7 @@ jobs:
             evidence/required-node-audit.json
             evidence/node-verifier-results.json
             evidence/node-evidence-results.json
+            evidence/mutation-generator.json
             evidence/node-verifier-context.json
             evidence/node-evidence-context.json
             evidence/firstscreen-v9-required-audit-context.json
@@ -648,7 +651,8 @@ jobs:
             "${root}/source" \
             "${root}/reports" \
             "${root}/contexts" \
-            "${root}/manifests"
+            "${root}/manifests" \
+            "${root}/security"
           git archive --format=zip --output="${root}/source/source.zip" HEAD
           git ls-tree -r --full-tree HEAD > "${root}/source/git-ls-tree.txt"
           git diff --binary "${base}" HEAD > "${root}/source/correction.patch"
@@ -664,6 +668,7 @@ jobs:
             "${root}/reports/required-node-audit.json"
           cp collected/audit/node-verifier-results.json "${root}/reports/"
           cp collected/audit/node-evidence-results.json "${root}/reports/"
+          cp collected/audit/mutation-generator.json "${root}/security/"
           cp collected/unit/firstscreen-v9-unit-context.json "${root}/contexts/"
           cp collected/browser/success/test-results/firstscreen-v9-real-sidecar-context.json \
             "${root}/contexts/"
