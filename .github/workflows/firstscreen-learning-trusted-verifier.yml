@@ -130,7 +130,7 @@ jobs:
               "${RUNNER_TEMP}/firstscreen-trusted/state/preflight.json"
           )"
           case "${package_rel}" in
-            *\\*|/*|*../*|../*|*/..|..)
+            ""|/*|*\\*|*..*)
               echo "TRUSTED_MUTATION_GATE_OK=0"
               echo "ERROR_CODE=PACKAGE_PATH_INVALID"
               exit 1
