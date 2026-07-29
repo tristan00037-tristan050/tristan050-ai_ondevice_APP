@@ -61,13 +61,13 @@ test('context contract rejects extra keys booleans and invalid order', () => {
     schema_version: 2,
     repository: expected.repository,
     event_name: expected.eventName,
-    pull_request: expected.pullRequest,
-    suite: 'suite',
-    subject_pr_head: expected.head,
+    pr_number: expected.pullRequest,
+    subject_head: expected.head,
     execution_commit: expected.head,
-    tree_oid: { algorithm: expected.objectFormat, hex: expected.tree },
-    workflow_run_id: expected.runId,
-    workflow_run_attempt: expected.runAttempt,
+    tree: expected.tree,
+    object_format: expected.objectFormat,
+    run_id: expected.runId,
+    run_attempt: expected.runAttempt,
     workflow_ref: expected.workflowRef,
     job_name: 'job',
     runner: 'node',
@@ -77,13 +77,11 @@ test('context contract rejects extra keys booleans and invalid order', () => {
     tool_versions: { node: '24' },
     started_at: '2026-07-29T00:00:00Z',
     finished_at: '2026-07-29T00:00:01Z',
-    os: 'Linux',
-    arch: 'X64',
     report_sha256: 'c'.repeat(64),
   };
   assert.equal(validateContext(context, expected), 'reports/node.json');
   assert.throws(() => validateContext(
-    { ...context, workflow_run_attempt: true },
+    { ...context, run_attempt: true },
     expected,
   ));
   assert.throws(() => validateContext(

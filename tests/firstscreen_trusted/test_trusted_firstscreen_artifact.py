@@ -78,40 +78,63 @@ def _valid_outer(
         name: f"report:{name}\n".encode()
         for name in MODULE.REPORT_NAMES
     }
-    context_files = {
-        name: f'{{"context":"{name}"}}\n'.encode()
-        for name in MODULE.CONTEXT_NAMES
-    }
-    assert len(report_files) == len(context_files)
+    context_files: dict[str, bytes] = {}
     runs = []
     for report_name, context_name in zip(
         sorted(MODULE.REPORT_NAMES),
         sorted(MODULE.CONTEXT_NAMES),
     ):
+        report_digest = hashlib.sha256(report_files[report_name]).hexdigest()
+        context = {
+            "schema_version": 2,
+            "repository": metadata_value["repository"],
+            "event_name": "pull_request",
+            "pr_number": 886,
+            "subject_head": head,
+            "execution_commit": head,
+            "tree": tree,
+            "object_format": "sha1",
+            "run_id": "123",
+            "run_attempt": 1,
+            "workflow_ref": metadata_value["producer"]["workflow_ref"],
+            "job_name": f"job-{len(runs)}",
+            "runner": "node",
+            "platform": "ubuntu",
+            "command": "test",
+            "report_path": report_name,
+            "report_sha256": report_digest,
+            "started_at": "2026-07-29T00:00:00Z",
+            "finished_at": "2026-07-29T00:00:01Z",
+            "tool_versions": {"node": "test"},
+        }
+        context_files[context_name] = (
+            json.dumps(context, separators=(",", ":")) + "\n"
+        ).encode()
         runs.append(
             {
+                "job_name": context["job_name"],
                 "runner": "node",
+                "platform": "ubuntu",
                 "command": "test",
                 "tool_versions": {"node": "test"},
                 "exit_code": 0,
-                "started_at": "2026-07-29T00:00:00Z",
-                "finished_at": "2026-07-29T00:00:01Z",
+                "started_at": context["started_at"],
+                "finished_at": context["finished_at"],
                 "os": "Linux",
                 "arch": "X64",
                 "execution_oid": {"algorithm": "sha1", "hex": head},
                 "tree_oid": {"algorithm": "sha1", "hex": tree},
                 "raw_result_path": report_name,
-                "raw_result_sha256": hashlib.sha256(
-                    report_files[report_name]
-                ).hexdigest(),
+                "raw_result_sha256": report_digest,
                 "context_path": context_name,
                 "context_sha256": hashlib.sha256(
                     context_files[context_name]
                 ).hexdigest(),
             }
         )
+    assert len(report_files) == len(context_files)
     index = {
-        "schema_version": 1,
+        "schema_version": 3,
         "subject": {
             "repository": metadata_value["repository"],
             "pull_request": 886,
@@ -124,7 +147,26 @@ def _valid_outer(
             "run_attempt": 1,
             "workflow_ref": metadata_value["producer"]["workflow_ref"],
         },
+        "manifest": {
+            "path": "manifests/required-tests.v3.json",
+            "sha256": _sha256(protected_manifest),
+            "required_total": 92,
+        },
         "runs": runs,
+    }
+    mutation_report = {
+        "schema_version": 1,
+        "total_generated_cases": 3000,
+        "accepted_malicious": 0,
+        "unanalysed": 0,
+        "reports": [
+            {
+                "cases": 1000,
+                "accepted_malicious": 0,
+                "unanalysed": 0,
+            }
+            for _ in range(3)
+        ],
     }
     package_files = {
         "manifests/required-tests.v3.json": protected_manifest.read_bytes(),
@@ -135,6 +177,9 @@ def _valid_outer(
         "source/correction.patch": b"patch\n",
         "EVIDENCE_INDEX.json": (
             json.dumps(index, separators=(",", ":")) + "\n"
+        ).encode(),
+        "security/mutation-generator.json": (
+            json.dumps(mutation_report, separators=(",", ":")) + "\n"
         ).encode(),
         **report_files,
         **context_files,

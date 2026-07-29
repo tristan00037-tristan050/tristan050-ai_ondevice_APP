@@ -18,8 +18,9 @@ REPORT_ARGUMENTS = (
     ("--playwright", "reports/playwright-unavailable.json"),
     ("--pytest", "reports/contract-pytest.xml"),
     ("--pytest", "reports/authorities-pytest.xml"),
+    ("--pytest", "reports/canonical-inputs-pytest.xml"),
     ("--pytest", "reports/product-integration-pytest.xml"),
-    ("--pytest", "reports/windows-pytest.xml"),
+    ("--pytest", "reports/windows-trust-pytest.xml"),
     ("--node", "reports/node-verifier-results.json"),
     ("--node", "reports/node-evidence-results.json"),
 )
@@ -29,8 +30,9 @@ CONTEXTS = (
     "contexts/firstscreen-v9-real-sidecar-unavailable-context.json",
     "contexts/contract-context.json",
     "contexts/authorities-context.json",
+    "contexts/canonical-inputs-context.json",
     "contexts/product-integration-context.json",
-    "contexts/windows-context.json",
+    "contexts/windows-trust-context.json",
     "contexts/node-verifier-context.json",
     "contexts/node-evidence-context.json",
 )

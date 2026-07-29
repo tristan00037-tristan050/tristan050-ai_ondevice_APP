@@ -23,7 +23,8 @@ def test_trusted_workflow_uses_default_branch_code_and_raw_artifact_data() -> No
     assert "actions/download-artifact@" not in text
     assert "trusted_firstscreen_run.py" in text
     assert "trusted_firstscreen_artifact.py" in text
-    assert "--ignore-scripts" in text
+    assert "npm ci" not in text
+    assert "saxes" not in text
     assert "source/source.zip" not in text
     assert "PR_CODE_EXECUTED_BY_TRUSTED_VERIFIER=0" in text
 
@@ -74,7 +75,8 @@ def test_protected_manifest_has_exact_v3_cardinality() -> None:
         ).read_text(encoding="utf-8")
     )
     assert manifest["schema_version"] == 3
-    assert manifest["normative_total"] == 90
-    assert manifest["supplemental_total"] == 2
+    assert manifest["normative_required"] == 90
+    assert manifest["supplemental_required"] == 2
+    assert manifest["required_total"] == 92
     assert len(manifest["tests"]) == 92
     assert len({item["id"] for item in manifest["tests"]}) == 92

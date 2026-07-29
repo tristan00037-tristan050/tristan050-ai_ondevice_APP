@@ -1,928 +1,933 @@
 {
   "schema_version": 3,
   "suite": "firstscreen-learning-capability-v11-product-gate",
-  "normative_total": 90,
-  "supplemental_total": 2,
+  "normative_required": 90,
+  "supplemental_required": 2,
+  "required_total": 92,
+  "retired_ids": [
+    "FSV10-EVIDENCE-007",
+    "FSV10-EVIDENCE-008"
+  ],
   "tests": [
     {
-      "id": "FSV10-API-001",
-      "kind": "api",
+      "id": "FSV10-CANON-004",
       "runner": "pytest",
+      "file": "tests/sidecar/test_learning_capability_route.py",
+      "title": "test_learning_capability_route_exists_once_in_app_route_graph",
+      "required": true,
+      "kind": "normative",
       "platform": "ubuntu",
+      "description_digest": "304acdcbcf73bb8f4d2a899ebcd314eaf2acbac3f042b826db2962b212c02b09"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-001",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_probe_revision_must_equal_both_outer_revisions",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "629bc919ec36bfb0d34835cbbe97f29a68fc4672f6b9305b229802a46da2b586"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-002",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_one_changed_authority_blocks_the_entire_snapshot",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "6f1ee974b302438b8a5f1650f76378151a58b0c5b936d265c1f1d2fe726489a8"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-003",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_first_unstable_attempt_is_discarded_and_second_stable_attempt_succeeds",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "66494452f3f946e1da3f7aa3cd1121be333705f6456fc032339fb81920178e6e"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-004",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_two_unstable_snapshot_attempts_fail_closed",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "65195cefd5d0107dc3e651bbd3ef4dc6097f236b6792f4e593ff45067204327d"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-005",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_duplicate_authority_key_fails_before_generation",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "c2c19f345eaab7c4d440fca971f54f7c54db550a863eef0db4b21602327cd868"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-006",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_missing_or_extra_authority_key_fails_before_generation",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "d98b424b34bd7a364e32261a451468c917ccc80148c1482f04aa43f0f1d7040c"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-007",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_probe_key_mismatch_fails_before_generation",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "282031e70ee848fdfa33ea8fb68a49b4d1d03070bd5bd733fab64b37a3710364"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-008",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_invalid_probe_revision_or_evidence_digest_is_rejected",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "20680d3ed3b7d0536ea9156a91e6e71e8912ab992bb8389767a8b94588b3ccf4"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-009",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_failed_snapshot_attempt_does_not_advance_generation",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "50c3d2a3a97e2d4dc690df437fb18f69b100f9d7bfe2edc6c8d42f83f03b8371"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-010",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_same_snapshot_digest_does_not_advance_generation",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "5ef34a7927753df6afc04cd99aec58eb6c3af61f101dd987b69c52e298927e31"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-011",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_changed_snapshot_digest_advances_generation_once_under_lock",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "93339662b15c01057cde275a93b5608f063594ce0499b412f129c81ad11effc8"
+    },
+    {
+      "id": "FSV10-SNAPSHOT-012",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_snapshot_atomicity.py",
+      "title": "test_concurrent_changed_snapshots_receive_distinct_generations",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "51fa0558c4d3e2c355a6407b12c3878641b8371e2eb782a9e4e05d041cc7af08"
+    },
+    {
+      "id": "FSV10-JSON-001",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-001]",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "0e150a803d742c633c0592b3c2c25613049d2fadfdf60050990a317cb4c4a122"
+    },
+    {
+      "id": "FSV10-JSON-002",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-002]",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "d78554cf6723592622523f5a9ae027c23fe2fc33f24a2f38bf68456343bd8285"
+    },
+    {
+      "id": "FSV10-JSON-003",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-003]",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "57669aeebacbd59d98f8542062c3bdcb02a59ed0cdc7bd3db86226b02cbf5f60"
+    },
+    {
+      "id": "FSV10-JSON-004",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-004]",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "c714c9bf40a9f76215af6af007bfc486895ba74afad477dea024f440186df4c1"
+    },
+    {
+      "id": "FSV10-JSON-005",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-005]",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "1b7b8c1a55d16af6b06ab17d129067b06db515f4d2e873a19cd0f7ac29265abc"
+    },
+    {
+      "id": "FSV10-JSON-006",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_strict_json_rejects_oversized_input_before_decode",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "5189801a6861a016342e0482562209ae87f7ef530cbc894a56bb9bae528f9e82"
+    },
+    {
+      "id": "FSV10-JSON-007",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_strict_json_enforces_depth_node_and_string_limits",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "535829b3287f2a21f98c15ea531cf2b6aad29dd5e35b26706d4191b8c1430685"
+    },
+    {
+      "id": "FSV10-JSON-008",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-008]",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "bedaedd778ec1d7af237243a1f952cbeb3ccd4523559266eca1ede51029808e7"
+    },
+    {
+      "id": "FSV10-JSON-009",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_generation_json_rejects_bool_float_negative_and_unsafe_integer",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "d98e8ed789d5fb04768edc43c1e001bc71a62c31e7cfbd962fa12314b2347b78"
+    },
+    {
+      "id": "FSV10-JSON-010",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_generation_json_rejects_unknown_schema_key",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "0fc59402c36a5d629a23f4db8336ba877478ed52f1690e1cb59de7722770ad7c"
+    },
+    {
+      "id": "FSV10-JSON-011",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_strict_json_canonical_round_trip_is_stable",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "3e6beedd1703c6e00325e87dffe4846cbfaa411a281589a35079ceb5c575b162"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-001",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_trusted_state_rejects_final_file_symlink",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "cde90e67d852cedc8af690066f580ab556c81c43e93b1100e6fa241db511b0f6"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-002",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_trusted_state_rejects_intermediate_directory_symlink",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "f679d4aeaa1fb5f23163a72a365e11038c40c45bbb362c7cdd2b88981c6d65f1"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-003",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_open_directory_descriptor_resists_parent_path_replacement",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "c5bc8390f5226c5c636b31a3bb0804a48dce020e1f291c6fb947070f83d5ecba"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-004",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_trusted_state_rejects_non_regular_file_types",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "b8031caa6ec4c44473ef8e8f81d8678a3820421e1a991adfb5cbf602046af294"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-005",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_trusted_state_rejects_foreign_owner",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "8f2fa67d64ce61c0b73eec5d5dbfdbc4b947996b2c89523b777aaa6e9fd80ed7"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-006",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_trusted_state_requires_exact_private_file_permissions",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "a9fc257601d957fe2ce7dbe40fe1dd5a7912d7fb4e6b24e993bcf998deaa069c"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-007",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_trusted_state_rejects_group_or_other_writable_root",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "b9c96d9fc259f2f7868e665a42085f2880c19ed11f70ca1d9be3d3b55125dc31"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-008",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_trusted_state_rejects_oversized_file_with_bounded_read",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "bb3fb1a8ce06dc5264bd630575460e5dea6669cff397b1fbb1e5d86bc5cf339d"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-009",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_trusted_state_lock_timeout_is_bounded",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "dc66afbc752e09729ad699ab12d1b62b0b49b2db62cf3286992911c21b798742"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-010",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_atomic_write_failure_preserves_previous_valid_state",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "67a0eaec408e1fa53f7e346ceaaa489e57f37bfa2a798a9dd72ee320d9c7bc6d"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-011",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_final_reopen_identity_and_digest_mismatch_is_rejected",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "e1bc923a9dad1474162f6fb275f00bf55b05b43eadb60c7587e0173e91b0fe90"
+    },
+    {
+      "id": "FSV10-FILE-POSIX-012",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_trusted_state_rejects_relative_or_missing_app_data_root",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "5b69d8fd364f9bee7b92f74358c19b2a48e9c294361eaa5e95c9605df339f478"
+    },
+    {
+      "id": "FSV10-FILE-WIN-007",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_strict_json_and_state.py",
+      "title": "test_non_posix_platform_fails_closed_without_generic_open",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "109d1f43875b2c11263f4d21ee2122435d551c3af22d2f16196d094ec3542e54"
+    },
+    {
+      "id": "FSV10-API-001",
+      "runner": "pytest",
       "file": "tests/sidecar/test_learning_capability_route.py",
       "title": "test_missing_capability_token_is_rejected_before_authority_read",
       "required": true,
-      "description_digest": "5967473e99128d9916e503c4a101ad64edbe26eaf2910728438c3f5d34e4c13f"
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "e48d6f46efa9941ec43b01ddd295377ad97ddbcf3e0b00e2f8de31da05d7d499"
     },
     {
       "id": "FSV10-API-002",
-      "kind": "api",
       "runner": "pytest",
-      "platform": "ubuntu",
       "file": "tests/sidecar/test_learning_capability_route.py",
       "title": "test_invalid_capability_token_is_rejected",
       "required": true,
-      "description_digest": "4a32d388a8bb791413e0c932d5c4047975a56ef7164301de25974753a76cc592"
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "734a9ce3d52b3bf6d809827c8aa1b7ce07af76482d60a03b213c71232bb88384"
     },
     {
       "id": "FSV10-API-003",
-      "kind": "api",
       "runner": "pytest",
-      "platform": "ubuntu",
       "file": "tests/sidecar/test_learning_capability_route.py",
       "title": "test_untrusted_host_is_rejected",
       "required": true,
-      "description_digest": "a4c4068414b653e85ef3285d5cb85f85ae100a7a0723a7ed7da447d23545a1ac"
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "fff364e76355b2e13d33b74d8d64846d4ee55139e3ccb038c8c9a3fb27dcc1a6"
     },
     {
       "id": "FSV10-API-004",
-      "kind": "api",
       "runner": "pytest",
-      "platform": "ubuntu",
       "file": "tests/sidecar/test_learning_capability_route.py",
       "title": "test_untrusted_origin_is_rejected",
       "required": true,
-      "description_digest": "4451776a3fb80904eff706ca4344b2365265325670a9241e50a2c3ba5f93787d"
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "b4709f350ffa3186a1cc8a9d50564db2cfa107c6d826210c52cee4e38d910546"
     },
     {
       "id": "FSV10-API-005",
-      "kind": "api",
       "runner": "pytest",
-      "platform": "ubuntu",
       "file": "tests/sidecar/test_learning_capability_route.py",
       "title": "test_success_wire_contract_matches_existing_frontend_parser",
       "required": true,
-      "description_digest": "5e705b816a9b355a795f615959ada884374348cfd949e6dcd80f90de1018dd38"
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "1833516f0a2dfb06ac7a929317730be5279bca90482fc4ff0c35a23e1dd55256"
     },
     {
       "id": "FSV10-API-006",
-      "kind": "api",
       "runner": "pytest",
-      "platform": "ubuntu",
       "file": "tests/sidecar/test_learning_capability_route.py",
       "title": "test_invalid_canonical_snapshots_never_return_200",
       "required": true,
-      "description_digest": "1d8d7df285f260b8ffa3c87c0c4264724ef69f96998d8bab951b8cb9194dc9c8"
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "cfa19ab78cc89a32be87826d0d6c36fa804568ffc61ed2b6ff8324c8378d37bb"
     },
     {
       "id": "FSV10-API-007",
-      "kind": "api",
       "runner": "pytest",
-      "platform": "ubuntu",
       "file": "tests/sidecar/test_learning_capability_route.py",
       "title": "test_every_learning_response_has_noncache_and_nosniff_headers",
       "required": true,
-      "description_digest": "58f14b558a5b5659496c8f309aa6b0b294fa0eccf9d8a8a51fcf7a96a32acd06"
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "65c07c3eb6bd5facef076628696bf5666abc86a1ea0fdf2673d1e7db4c49fd88"
     },
     {
       "id": "FSV10-API-008",
-      "kind": "api",
       "runner": "pytest",
-      "platform": "ubuntu",
       "file": "tests/sidecar/test_learning_capability_route.py",
       "title": "test_internal_errors_do_not_expose_source_paths_or_user_values",
       "required": true,
-      "description_digest": "74ff7505013eb7f4c5a5454caed87a5b3d3d7e8f9e4baf4d69749b6d73849689"
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "cb9ea62529b6fa16f3493cafdad8845332ae8b33a1767093e5a2b423fc83c1ee"
+    },
+    {
+      "id": "FSV10-CONSUMER-001",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_authorities.py",
+      "title": "test_company_policy_in_use_requires_active_policy_and_real_policy_gate_consumer",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "57fc4650587c72c897d3ad16bd16339c6dee2b709840c3a63d97c595f37820d5"
+    },
+    {
+      "id": "FSV10-CONSUMER-002",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_authorities.py",
+      "title": "test_company_fact_in_use_requires_active_fact_resolved_by_real_product_consumer",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "437642d94ad519827f18c7bedfc28b1ddab9990e48ea6563f3c5ed94866ad83b"
+    },
+    {
+      "id": "FSV10-CONSUMER-003",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_authorities.py",
+      "title": "test_company_format_registered_only_and_in_use_are_not_self_claimed",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "12907cf1f18054b43314f111a7fdfc4de7a1fbb7c2e7922f7e16b7de1dfa0ac1"
+    },
+    {
+      "id": "FSV10-CONSUMER-004",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_authorities.py",
+      "title": "test_folder_learning_ignores_ephemeral_job_and_uses_persisted_handoff_authority",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "dec096e7435fff64ab49447a52929e08c19ef1929a5c5bd1a9cf78f8007254be"
+    },
+    {
+      "id": "FSV10-CONSUMER-005",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_authorities.py",
+      "title": "test_binding_revision_mismatch_blocks_the_whole_snapshot",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "997210ff6d6e7b50ed667549fe295e72a0a00c04db7a579a157b29d4e508e0ca"
+    },
+    {
+      "id": "FSV10-CONSUMER-006",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_authorities.py",
+      "title": "test_binding_save_failure_preserves_product_response_without_in_use_claim",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "26ff4f02834d426fe88cc9c3f36f4de7b27f4cb603bc3dc495073e5e7aef3373"
+    },
+    {
+      "id": "FSV10-CONSUMER-007",
+      "runner": "pytest",
+      "file": "tests/learning_capability/test_authorities.py",
+      "title": "test_binding_file_contains_only_digest_and_allowed_metadata",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "caacd795cfb8c8cdab42ad903b468cdfda2178a9f83f9106a85e9f5580c75f88"
+    },
+    {
+      "id": "FSV10-E2E-001",
+      "runner": "playwright",
+      "file": "butler-desktop/e2e/firstscreen-v5.spec.ts",
+      "title": "회사 배우기 네 행이 endpoint 가로채기 없이 실제 sidecar와 권위 저장소에서 계산된다",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "d7cf8258c70bee5fce16d21a7fbbdaecb5621ea268ed13c2b714b227083749f1"
+    },
+    {
+      "id": "FSV10-E2E-003",
+      "runner": "playwright",
+      "file": "butler-desktop/e2e/firstscreen-v5.spec.ts",
+      "title": "실제 sidecar가 불완전 권위를 503으로 닫고 네 행 모두 확인할 수 없습니다로 표시한다",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "ad6502c8b884efd88065e2d3bbd3eac932feaebe0a29d1686ed34b939a2be29f"
+    },
+    {
+      "id": "FSV10-E2E-005",
+      "runner": "playwright",
+      "file": "butler-desktop/e2e/firstscreen-v5.spec.ts",
+      "title": "회사 배우기 실제 sidecar 경로가 좁은 창 200퍼센트 확대 키보드 포커스 접근성을 보존한다",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "f1133b6c739e5cdc4bca2a905f4c1f0bfc8b6050a6b0bf6aa6d76e7fcfd8e838"
+    },
+    {
+      "id": "REG-FS90-016",
+      "runner": "vitest",
+      "file": "butler-desktop/src/settings/__tests__/learningCapability.test.ts",
+      "title": "parses the real provider contract and rejects incompatible v8 rows payload",
+      "required": true,
+      "kind": "supplemental_required_regression",
+      "platform": "ubuntu",
+      "description_digest": "161f9ddef226c5b34151d567114cb02117c1c40ad4a4db1ae00f0327cafe04d7"
+    },
+    {
+      "id": "REG-FS90-017",
+      "runner": "vitest",
+      "file": "butler-desktop/src/settings/__tests__/learningCapability.test.ts",
+      "title": "keeps all four rows unknown for every unavailable transport and schema failure",
+      "required": true,
+      "kind": "supplemental_required_regression",
+      "platform": "ubuntu",
+      "description_digest": "154d3e520b29660c7c9f59159b0bb4754a848856ade7b9c3ff157cf6a2fb2b42"
+    },
+    {
+      "id": "FSV10-GATE-001",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-001",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "dbe036929cc2052e20779566cb785b121d6cacb6949da2bf8cae12596f5b9a0a"
+    },
+    {
+      "id": "FSV10-GATE-002",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-002",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "686f04636d4eec282b0ac47d25471dc565cb6013c718cc138c32cd08abada5f6"
+    },
+    {
+      "id": "FSV10-GATE-003",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-003",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "68bd2345bcd3d7e03ed7b34457963a7fe03c209d5333e47ee92f1ca36d258697"
+    },
+    {
+      "id": "FSV10-GATE-004",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-004",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "631aee513cb4da56e1be758cbd3991efce5506bd78dd32f8f4495f4ce34a2e9f"
+    },
+    {
+      "id": "FSV10-GATE-005",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-005",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "d7a22b4c1e280b2d5e8e62e7e82fa192246c1f9b939b986bb8c37e134664eee6"
+    },
+    {
+      "id": "FSV10-GATE-006",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-006",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "e096c553019e871817306652b7104f3ac05251161620923f06ff16cd711f39a5"
+    },
+    {
+      "id": "FSV10-GATE-007",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-007",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "561c42aee60fb6ba0b6a9790ae1650b6d7a0ed36553b548fdaf105151c09f718"
+    },
+    {
+      "id": "FSV10-GATE-008",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-008",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "93067b66a5ce4673c8d95cf4f9958bd4cb49b7fb3ac7a9561f635ea40ac0aa49"
+    },
+    {
+      "id": "FSV10-GATE-009",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-009",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "f70176e379a33a83d118cd687c6a7a693ec9032c1f1406ccc4e1294d99abfafe"
+    },
+    {
+      "id": "FSV10-GATE-010",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-010",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "b5cd51135a7bd4e59e97a960c22c5d02a7055d77583d6c346c9099a5d504bdeb"
+    },
+    {
+      "id": "FSV10-GATE-011",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-011",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "1f041ac05e02b407367232749fe3125b651dbf3b9b39cb349c61706d4e57f4f6"
+    },
+    {
+      "id": "FSV10-GATE-012",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-012",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "e8f0b1952768ad9f55a40991ab03b2b57aa14283a2678b7d4b41a571bf566659"
+    },
+    {
+      "id": "FSV10-GATE-013",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-013",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "d71c17545c7d3eaba37939f2e9bed152ecb802bd5afd863015553e467a190773"
+    },
+    {
+      "id": "FSV10-GATE-014",
+      "runner": "node",
+      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
+      "title": "FSV10-GATE-014",
+      "required": true,
+      "kind": "normative",
+      "platform": "ubuntu",
+      "description_digest": "4d511960e5c538d1c9041d924d0fac1d8ac837fa78b484a1d76cae3027197f03"
     },
     {
       "id": "FSV10-CANON-001",
-      "kind": "canonical-input",
       "runner": "pytest",
       "platform": "ubuntu",
       "file": "tests/learning_capability/test_canonical_inputs.py",
       "title": "test_both_approved_inputs_exist_and_match_approved_sha256",
       "required": true,
-      "description_digest": "0d03eab8cffb2d543659e0aca8ce725176786138291ba197511e3d91c2e897bb"
+      "kind": "normative",
+      "description_digest": "92dc19df0c6b5edee305784d10950238526eee73da95c6b9efe0a2897478ed28"
     },
     {
       "id": "FSV10-CANON-002",
-      "kind": "archive-preflight",
       "runner": "pytest",
       "platform": "ubuntu",
       "file": "tests/learning_capability/test_canonical_inputs.py",
       "title": "test_archive_preflight_rejects_unsafe_entries_before_extraction",
       "required": true,
-      "description_digest": "39a107d5ce3c4eeb270e96636afa74065ed6e783dd0ab17338cbc1ac423fa055"
+      "kind": "normative",
+      "description_digest": "fe8ed22ff7c49d6739cba963df125c8ca907fcc8e9f2f7cad648ce09844629c9"
     },
     {
       "id": "FSV10-CANON-003",
-      "kind": "canonical-service",
       "runner": "pytest",
       "platform": "ubuntu",
       "file": "tests/learning_capability/test_canonical_inputs.py",
       "title": "test_only_one_learning_capability_service_implementation_is_reachable",
       "required": true,
-      "description_digest": "3d33013477a3fdbdabb18d0f10eec4b028285fed66f1af24ddd4d821a0f47f40"
-    },
-    {
-      "id": "FSV10-CANON-004",
-      "kind": "canonical-service",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/sidecar/test_learning_capability_route.py",
-      "title": "test_learning_capability_route_exists_once_in_app_route_graph",
-      "required": true,
-      "description_digest": "9de787e72297ca610b012f0e5c95fe55cfd98f5c2cca2d0bf5cde73ef3c27ffb"
-    },
-    {
-      "id": "FSV10-CONSUMER-001",
-      "kind": "consumer-binding",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_authorities.py",
-      "title": "test_company_policy_in_use_requires_active_policy_and_real_policy_gate_consumer",
-      "required": true,
-      "description_digest": "aff400dd5a81a6ca6444361ea6764a3d598f94a03fff2ce19f69591dca95f034"
-    },
-    {
-      "id": "FSV10-CONSUMER-002",
-      "kind": "consumer-binding",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_authorities.py",
-      "title": "test_company_fact_in_use_requires_active_fact_resolved_by_real_product_consumer",
-      "required": true,
-      "description_digest": "db2e61e36a1b2a76bcdaef5fa4722592a2a854f56f83f2347e20a21688a03c12"
-    },
-    {
-      "id": "FSV10-CONSUMER-003",
-      "kind": "consumer-binding",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_authorities.py",
-      "title": "test_company_format_registered_only_and_in_use_are_not_self_claimed",
-      "required": true,
-      "description_digest": "60a5f92c75c9139bae81f05078d14dbec84451aaa1d06c5137f941b0d819361a"
-    },
-    {
-      "id": "FSV10-CONSUMER-004",
-      "kind": "consumer-binding",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_authorities.py",
-      "title": "test_folder_learning_ignores_ephemeral_job_and_uses_persisted_handoff_authority",
-      "required": true,
-      "description_digest": "d844ac576b333918fd8eb1e75091fcf68886c6d7009443578a31c3cebecef78b"
-    },
-    {
-      "id": "FSV10-CONSUMER-005",
-      "kind": "consumer-binding",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_authorities.py",
-      "title": "test_binding_revision_mismatch_blocks_the_whole_snapshot",
-      "required": true,
-      "description_digest": "fb338d9909f22f59830ea942d9ba8709b18d415b49b7b2a6eea11301d7d6e447"
-    },
-    {
-      "id": "FSV10-CONSUMER-006",
-      "kind": "consumer-binding",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_authorities.py",
-      "title": "test_binding_save_failure_preserves_product_response_without_in_use_claim",
-      "required": true,
-      "description_digest": "68b4500958868d12aa64dbcff3cf6ffc85f8428af3dde3c848f5643d102e2197"
-    },
-    {
-      "id": "FSV10-CONSUMER-007",
-      "kind": "consumer-binding",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_authorities.py",
-      "title": "test_binding_file_contains_only_digest_and_allowed_metadata",
-      "required": true,
-      "description_digest": "897d788a1d03d1fb7ebbc2e3110b7a88e1df62cdc84c3a331fccd93f9230fe0b"
-    },
-    {
-      "id": "FSV10-E2E-001",
-      "kind": "product-e2e",
-      "runner": "playwright",
-      "platform": "ubuntu",
-      "file": "butler-desktop/e2e/firstscreen-v5.spec.ts",
-      "title": "회사 배우기 네 행이 endpoint 가로채기 없이 실제 sidecar와 권위 저장소에서 계산된다",
-      "required": true,
-      "description_digest": "0d195d4df11eb3c927a99e5efd75f555b6af4549749e82508d3b94049e35cc35"
-    },
-    {
-      "id": "FSV10-E2E-002",
-      "kind": "product-e2e",
-      "runner": "playwright",
-      "platform": "ubuntu",
-      "file": "butler-desktop/e2e/firstscreen-v5.spec.ts",
-      "title": "회사 배우기 실제 sidecar 시험은 route HAR service worker fetch monkey patch 프런트 응답 대체를 사용하지 않는다",
-      "required": true,
-      "description_digest": "c2562b1cc0117cb0213aa997b7f7673939735e6f3d252bbb5e92cd80fe19cc24"
-    },
-    {
-      "id": "FSV10-E2E-003",
-      "kind": "product-e2e",
-      "runner": "playwright",
-      "platform": "ubuntu",
-      "file": "butler-desktop/e2e/firstscreen-v5.spec.ts",
-      "title": "실제 sidecar가 불완전 권위를 503으로 닫고 네 행 모두 확인할 수 없습니다로 표시한다",
-      "required": true,
-      "description_digest": "92defddfbd76e6c4e2919d858a4d5c62f0c1f9ea0cd7ebbc8cd615ed9c59ba7d"
-    },
-    {
-      "id": "FSV10-E2E-004",
-      "kind": "product-e2e",
-      "runner": "playwright",
-      "platform": "ubuntu",
-      "file": "butler-desktop/e2e/firstscreen-v5.spec.ts",
-      "title": "이전 성공 뒤 다음 조회 실패는 오래된 성공 상태를 제거하고 확인할 수 없습니다로 수렴한다",
-      "required": true,
-      "description_digest": "bdc3f07cc51285f4656f89595ae3c8195582d89d5fa0e7a8e5cacb07e20ab381"
-    },
-    {
-      "id": "FSV10-E2E-005",
-      "kind": "product-e2e",
-      "runner": "playwright",
-      "platform": "ubuntu",
-      "file": "butler-desktop/e2e/firstscreen-v5.spec.ts",
-      "title": "회사 배우기 실제 sidecar 경로가 좁은 창 200퍼센트 확대 키보드 포커스 접근성을 보존한다",
-      "required": true,
-      "description_digest": "ab0217796ab70835c4cc077f39df64dbc4b6620ed8d4c368c27ff5a03b6aa7c3"
-    },
-    {
-      "id": "FSV10-EVIDENCE-001",
-      "kind": "evidence-contract",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
-      "title": "FSV10-EVIDENCE-001",
-      "required": true,
-      "description_digest": "7f5bcb7defeaff17f7892faca91856bb16ac82d66976e41042376775267cdda2"
-    },
-    {
-      "id": "FSV10-EVIDENCE-002",
-      "kind": "evidence-contract",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
-      "title": "FSV10-EVIDENCE-002",
-      "required": true,
-      "description_digest": "821567adca9a7147324b672011206ebb64b4aed6f8b68e4b786bc9c37feb9041"
-    },
-    {
-      "id": "FSV10-EVIDENCE-003",
-      "kind": "evidence-contract",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
-      "title": "FSV10-EVIDENCE-003",
-      "required": true,
-      "description_digest": "fcdb92033482cb9a2e9406b6d7511354dc9014eb08a85e2feac4e093ab1b47ee"
-    },
-    {
-      "id": "FSV10-EVIDENCE-004",
-      "kind": "evidence-contract",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
-      "title": "FSV10-EVIDENCE-004",
-      "required": true,
-      "description_digest": "a0c1f85c0094223b46c8e220b950f9577869aa98512d39808f3a92c4fb9ccf08"
-    },
-    {
-      "id": "FSV10-EVIDENCE-005",
-      "kind": "evidence-contract",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
-      "title": "FSV10-EVIDENCE-005",
-      "required": true,
-      "description_digest": "d0c0f703f5758ef5f7330bc3324a2e034e6ab3e9aac54ca08243cf3d07b06a1c"
-    },
-    {
-      "id": "FSV10-EVIDENCE-006",
-      "kind": "evidence-contract",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
-      "title": "FSV10-EVIDENCE-006",
-      "required": true,
-      "description_digest": "871132426ea976ecdfde089250acb9b233846a5f9b87392df3d8330ecb72ee7f"
-    },
-    {
-      "id": "FSV10-EVIDENCE-009",
-      "kind": "evidence-contract",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
-      "title": "FSV10-EVIDENCE-009",
-      "required": true,
-      "description_digest": "561cded327d9d21646bcbdee47280252d06e5d1a19cb3a3d88069741c956ebe9"
-    },
-    {
-      "id": "FSV10-EVIDENCE-010",
-      "kind": "evidence-contract",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
-      "title": "FSV10-EVIDENCE-010",
-      "required": true,
-      "description_digest": "39bf57f66ce18f655c39c0300231dc315af10f12f6c0c44039997599f60f8fa9"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-001",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_trusted_state_rejects_final_file_symlink",
-      "required": true,
-      "description_digest": "30ff27f69d96ebb580130ec4c96cacb4c0e69ee783eb4bddcb357a1df9dd86d7"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-002",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_trusted_state_rejects_intermediate_directory_symlink",
-      "required": true,
-      "description_digest": "00d983f17a403aa8088e966281b2397b3336ed037e527d19665d18b583593cbf"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-003",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_open_directory_descriptor_resists_parent_path_replacement",
-      "required": true,
-      "description_digest": "08d15314360b9b48cf57f9e20c76887f10f2976fd6c9e2d9f42706c655f677e1"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-004",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_trusted_state_rejects_non_regular_file_types",
-      "required": true,
-      "description_digest": "895e1956e6179a30254fa0202f711e19a6b5b4cf92bcfe6fe152b082ddca5bf4"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-005",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_trusted_state_rejects_foreign_owner",
-      "required": true,
-      "description_digest": "5a71f78a958ca043e0cc814c3a0a0d8bf8fbbc710c8ee77ec53d75eeaeb13b57"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-006",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_trusted_state_requires_exact_private_file_permissions",
-      "required": true,
-      "description_digest": "3994bd213eff5ea0036d7555355d5fc28b52c49e46d54877efda071c865d76f5"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-007",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_trusted_state_rejects_group_or_other_writable_root",
-      "required": true,
-      "description_digest": "5d227c1755fa28c3faafbcd3755b6387455f56e8fb89cc90deac91f43da208aa"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-008",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_trusted_state_rejects_oversized_file_with_bounded_read",
-      "required": true,
-      "description_digest": "41dfa856c9efb64fd6013614f4f14c0d9ffb3f73038d797cb0696aff87a9c5ec"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-009",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_trusted_state_lock_timeout_is_bounded",
-      "required": true,
-      "description_digest": "987a2a04be5a776ec1058be6a80689921b02d18350d58295ba80b0db6d858fd1"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-010",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_atomic_write_failure_preserves_previous_valid_state",
-      "required": true,
-      "description_digest": "680edc71dbc0af02c8bd3078a2dce10fc75712991f8a93ad75a1ebe163ab440e"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-011",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_final_reopen_identity_and_digest_mismatch_is_rejected",
-      "required": true,
-      "description_digest": "dc47a1ee848923bf1f0523e6e244966d17c377792beb0580ab533de5eeda8062"
-    },
-    {
-      "id": "FSV10-FILE-POSIX-012",
-      "kind": "trusted-state-posix",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_trusted_state_rejects_relative_or_missing_app_data_root",
-      "required": true,
-      "description_digest": "af19570f088369a4b351098285f94e2cbde4ec2b7c416f70332cb87106226558"
+      "kind": "normative",
+      "description_digest": "8505fd345dae3ae4dd02341f5bd6432e9dead604bbed6ed50baf37c714ad5f5a"
     },
     {
       "id": "FSV10-FILE-WIN-001",
-      "kind": "trusted-state-windows",
       "runner": "pytest",
       "platform": "windows-2025",
       "file": "tests/learning_capability/test_trusted_state_windows.py",
       "title": "test_windows_rejects_final_reparse_point",
       "required": true,
-      "description_digest": "53d838b5724efe8d64615eef889a8e5f5ee500690afca7d0f0d2674a94651e7c"
+      "kind": "normative",
+      "description_digest": "36ddfd5cce04806552460b889967ad3656406af18638f45f2d40aec87405eb26"
     },
     {
       "id": "FSV10-FILE-WIN-002",
-      "kind": "trusted-state-windows",
       "runner": "pytest",
       "platform": "windows-2025",
       "file": "tests/learning_capability/test_trusted_state_windows.py",
       "title": "test_windows_rejects_intermediate_reparse_point",
       "required": true,
-      "description_digest": "2f816f830c5fd27cfd0dccca9888102e36e8ebab7b4142b2bcd8d94bacc81119"
+      "kind": "normative",
+      "description_digest": "02061da6dec0a044edc7d9e0fb2e48a04c635c76a6e000ada17ec438a0812d67"
     },
     {
       "id": "FSV10-FILE-WIN-003",
-      "kind": "trusted-state-windows",
       "runner": "pytest",
       "platform": "windows-2025",
       "file": "tests/learning_capability/test_trusted_state_windows.py",
       "title": "test_windows_rejects_unc_device_namespace_and_ads",
       "required": true,
-      "description_digest": "a93e30b6205cd9185a37ae72f409bc15471a7ad56afb0d14cef62ba3cc870989"
+      "kind": "normative",
+      "description_digest": "c3d4cca90a43afec42c2a9f5be0de1a9695f4dc42db00b016c491732533ea02d"
     },
     {
       "id": "FSV10-FILE-WIN-004",
-      "kind": "trusted-state-windows",
       "runner": "pytest",
       "platform": "windows-2025",
       "file": "tests/learning_capability/test_trusted_state_windows.py",
       "title": "test_windows_rejects_dacl_writable_by_other_ordinary_users",
       "required": true,
-      "description_digest": "eb5b8c7e57a480425f9221ac555ed40c6778811f197b7463d10247bab4acf25c"
+      "kind": "normative",
+      "description_digest": "994c58d26625f85c9bcfc645b870c504952e715bd6d8b7da694fe89a4933005f"
     },
     {
       "id": "FSV10-FILE-WIN-005",
-      "kind": "trusted-state-windows",
       "runner": "pytest",
       "platform": "windows-2025",
       "file": "tests/learning_capability/test_trusted_state_windows.py",
       "title": "test_windows_rejects_owner_sid_mismatch",
       "required": true,
-      "description_digest": "6ff3cbfef8f9db08574ac7b78f749c02f3f968999ca8ae3deb5434136cd02760"
+      "kind": "normative",
+      "description_digest": "39a0bf7293e885111ceaa5ee70a61b36970d4006d887b76eb10dfb4ff63eec1b"
     },
     {
       "id": "FSV10-FILE-WIN-006",
-      "kind": "trusted-state-windows",
       "runner": "pytest",
       "platform": "windows-2025",
       "file": "tests/learning_capability/test_trusted_state_windows.py",
       "title": "test_windows_rejects_volume_or_file_id_change",
       "required": true,
-      "description_digest": "b4d17c428769fb045f208fd4cabe763e292a2fa5a2461180c1aca66dfb1baaf8"
+      "kind": "normative",
+      "description_digest": "d722c37fb44ea0ba2d4932f3db48c3f1953d7a99a04ce8173bd8d4d851f3fb98"
     },
     {
-      "id": "FSV10-FILE-WIN-007",
-      "kind": "trusted-state-platform",
-      "runner": "pytest",
+      "id": "FSV10-E2E-002",
+      "runner": "playwright",
       "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_non_posix_platform_fails_closed_without_generic_open",
+      "file": "butler-desktop/e2e/firstscreen-v5.spec.ts",
+      "title": "회사 배우기 실제 sidecar 시험은 route HAR service worker fetch monkey patch 프런트 응답 대체를 사용하지 않는다",
       "required": true,
-      "description_digest": "8b045e9545803d0da1f48960a4218bd99cbf13392496c1b67974d096674c48aa"
+      "kind": "normative",
+      "description_digest": "a5c7be5e09e8acad07d9a928758a4990d9a2c60dda51342256c5c246db59d1e3"
     },
     {
-      "id": "FSV10-GATE-001",
-      "kind": "verifier-gate",
+      "id": "FSV10-E2E-004",
+      "runner": "playwright",
+      "platform": "ubuntu",
+      "file": "butler-desktop/e2e/firstscreen-v5.spec.ts",
+      "title": "이전 성공 뒤 다음 조회 실패는 오래된 성공 상태를 제거하고 확인할 수 없습니다로 수렴한다",
+      "required": true,
+      "kind": "normative",
+      "description_digest": "a22106b72f7b81e1842e3b5b254074243f55df9a2368d9bb06fb600b11a1f06f"
+    },
+    {
+      "id": "FSV10-EVIDENCE-001",
       "runner": "node",
       "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-001",
+      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
+      "title": "FSV10-EVIDENCE-001",
       "required": true,
-      "description_digest": "5c6e2e7066c776789dc683e83d302dde0faff6dff4b2997c42beb3908f453bbf"
+      "kind": "normative",
+      "description_digest": "cb3211d679474cfc9f498bc9e51dac41f443ca2038ccf3043c5e4aa84b991c74"
     },
     {
-      "id": "FSV10-GATE-002",
-      "kind": "verifier-gate",
+      "id": "FSV10-EVIDENCE-002",
       "runner": "node",
       "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-002",
+      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
+      "title": "FSV10-EVIDENCE-002",
       "required": true,
-      "description_digest": "bbf078e01eb848d688833aaec7040e0d849dc851a929c74d6cb9d10eebf85f4c"
+      "kind": "normative",
+      "description_digest": "3eecfd0f1be4b5b6ccbd24e13f826216095031c1e75ce74ae89af4310086a93a"
     },
     {
-      "id": "FSV10-GATE-003",
-      "kind": "verifier-gate",
+      "id": "FSV10-EVIDENCE-003",
       "runner": "node",
       "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-003",
+      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
+      "title": "FSV10-EVIDENCE-003",
       "required": true,
-      "description_digest": "348ab032ff899f5b239ae7901c13bf77365ce2c316e718ae12cd78291b3bd169"
+      "kind": "normative",
+      "description_digest": "e9bbe2222067b34c1d54813dfec54d59856008ae7793c094b54c785c68ac69cf"
     },
     {
-      "id": "FSV10-GATE-004",
-      "kind": "verifier-gate",
+      "id": "FSV10-EVIDENCE-004",
       "runner": "node",
       "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-004",
+      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
+      "title": "FSV10-EVIDENCE-004",
       "required": true,
-      "description_digest": "679ffb3f527fda04ace497f62fa00033b5c152af764bdbb2623d83ca190e17d1"
+      "kind": "normative",
+      "description_digest": "b206bbd77b008415a7e2ca6f1cefbbf6b4c16e0f753fd5d20672137cd8e86463"
     },
     {
-      "id": "FSV10-GATE-005",
-      "kind": "verifier-gate",
+      "id": "FSV10-EVIDENCE-005",
       "runner": "node",
       "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-005",
+      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
+      "title": "FSV10-EVIDENCE-005",
       "required": true,
-      "description_digest": "7ad7c6dd05a24ed31971e233145c0318c56db6d9fad4ac93b77ade703bdf3e85"
+      "kind": "normative",
+      "description_digest": "29aaad1eb79e20f9e15ee90d2cc63cab3048df8392bd2dfb71806fbe0e9f57ac"
     },
     {
-      "id": "FSV10-GATE-006",
-      "kind": "verifier-gate",
+      "id": "FSV10-EVIDENCE-006",
       "runner": "node",
       "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-006",
+      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
+      "title": "FSV10-EVIDENCE-006",
       "required": true,
-      "description_digest": "b9122f0d98a698e5cf83c304e8923d16846172b699ca325640bec4c14c4d96b8"
+      "kind": "normative",
+      "description_digest": "a2f7b5a1fa37efde771ae1d6320d28ea77ac7a49f4066876ffbf9167dea2cb75"
     },
     {
-      "id": "FSV10-GATE-007",
-      "kind": "verifier-gate",
+      "id": "FSV10-EVIDENCE-009",
       "runner": "node",
       "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-007",
+      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
+      "title": "FSV10-EVIDENCE-009",
       "required": true,
-      "description_digest": "89bb2a9816bd8a2428924d2fcf6c8ba05eee0f6ab3201825baf35a936958253b"
+      "kind": "normative",
+      "description_digest": "72fb52acb6d3028893fbd34884fd9beb388e05a4b5aad3df821c36767e16a97b"
     },
     {
-      "id": "FSV10-GATE-008",
-      "kind": "verifier-gate",
+      "id": "FSV10-EVIDENCE-010",
       "runner": "node",
       "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-008",
+      "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
+      "title": "FSV10-EVIDENCE-010",
       "required": true,
-      "description_digest": "8fd83c92b23b4d752aacca19bab45bc0a871555d5bfb2f4fe45775af391cd6f9"
-    },
-    {
-      "id": "FSV10-GATE-009",
-      "kind": "verifier-gate",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-009",
-      "required": true,
-      "description_digest": "508c9c0accbb75e3b838e32ee6cbc54c8d92d34c10f51f9166d1b728df215f83"
-    },
-    {
-      "id": "FSV10-GATE-010",
-      "kind": "verifier-gate",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-010",
-      "required": true,
-      "description_digest": "316561c7cc1fb4ff0f21ab2a546b3be3b8d8f7d6ad97a38b24bda2abccd320e6"
-    },
-    {
-      "id": "FSV10-GATE-011",
-      "kind": "verifier-gate",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-011",
-      "required": true,
-      "description_digest": "ba4ecb7c231d494bece858071dd8169dac6b0a990745a21e3f364293ef0325d9"
-    },
-    {
-      "id": "FSV10-GATE-012",
-      "kind": "verifier-gate",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-012",
-      "required": true,
-      "description_digest": "4bad74210b165a154172e997fb27d0aa2872ee0ed2cd72682c23523518b7fef6"
-    },
-    {
-      "id": "FSV10-GATE-013",
-      "kind": "verifier-gate",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-013",
-      "required": true,
-      "description_digest": "89dab9bfa06b7bdc66fd08d5bb83ab1894b20b57fbd2d672b11fb36eb9b9d566"
-    },
-    {
-      "id": "FSV10-GATE-014",
-      "kind": "verifier-gate",
-      "runner": "node",
-      "platform": "ubuntu",
-      "file": "scripts/ci/test_firstscreen_verifiers.mjs",
-      "title": "FSV10-GATE-014",
-      "required": true,
-      "description_digest": "17740cf65e4befc97a0738d5cc822811139f807c0ee250f6aea1e44e3086f1b3"
-    },
-    {
-      "id": "FSV10-JSON-001",
-      "kind": "strict-json",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-001]",
-      "required": true,
-      "description_digest": "7902103ef643a4a2d2b07ca1178e733fe9866c2bdebc3e6b40fd4047943d7860"
-    },
-    {
-      "id": "FSV10-JSON-002",
-      "kind": "strict-json",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-002]",
-      "required": true,
-      "description_digest": "e5a57e410041dd609e941c9c802900ff96c6b4e55fc9ad7bf3b3459caff48140"
-    },
-    {
-      "id": "FSV10-JSON-003",
-      "kind": "strict-json",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-003]",
-      "required": true,
-      "description_digest": "dfc036e29a70cb705798e6ce8dc7b0aeb468cfa70c51e6cd0e9c6732d5452c14"
-    },
-    {
-      "id": "FSV10-JSON-004",
-      "kind": "strict-json",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-004]",
-      "required": true,
-      "description_digest": "2cbf549b291aae842fcea297d6e4601fc5264f706e8e3fbe8fb21e5167e584e4"
-    },
-    {
-      "id": "FSV10-JSON-005",
-      "kind": "strict-json",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-005]",
-      "required": true,
-      "description_digest": "1464accb2983af6f412b2c4ccc3a24747b8ca9ee4491f9e9d735c5a034a18b35"
-    },
-    {
-      "id": "FSV10-JSON-006",
-      "kind": "strict-json",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_strict_json_rejects_oversized_input_before_decode",
-      "required": true,
-      "description_digest": "42ecee1546e2a240034a9e053fb0488132e36016729d9883a857a5bf7547ee93"
-    },
-    {
-      "id": "FSV10-JSON-007",
-      "kind": "strict-json",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_strict_json_enforces_depth_node_and_string_limits",
-      "required": true,
-      "description_digest": "e8d94f7341f4160242a8dacd1c6771bf136286b0b2124f8e82e74219fc4081e8"
-    },
-    {
-      "id": "FSV10-JSON-008",
-      "kind": "strict-json",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_strict_json_rejects_ambiguous_or_noncanonical_inputs[FSV10-JSON-008]",
-      "required": true,
-      "description_digest": "d8f2a1463e9d67e54e74f0acf2676e7ee9f28384b46acdea1329c9fbb40fdfe3"
-    },
-    {
-      "id": "FSV10-JSON-009",
-      "kind": "strict-json",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_generation_json_rejects_bool_float_negative_and_unsafe_integer",
-      "required": true,
-      "description_digest": "09882d4ba904adab33a51c2190c1bdaea0bdb9c90007b8f0100ddf6e79a12227"
-    },
-    {
-      "id": "FSV10-JSON-010",
-      "kind": "strict-json",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_generation_json_rejects_unknown_schema_key",
-      "required": true,
-      "description_digest": "62fd13e38257aff3ee96540ec87018267214de7d18f1a0b7e91703297d81436d"
-    },
-    {
-      "id": "FSV10-JSON-011",
-      "kind": "strict-json",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_strict_json_and_state.py",
-      "title": "test_strict_json_canonical_round_trip_is_stable",
-      "required": true,
-      "description_digest": "28acf26a58740d69dde9246b6b44ecee198d86c42a139757095044dee57875fc"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-001",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_probe_revision_must_equal_both_outer_revisions",
-      "required": true,
-      "description_digest": "4912d543c853370f0cf7c458714ac1b03ab286ef6525e1335db415b06e51bf05"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-002",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_one_changed_authority_blocks_the_entire_snapshot",
-      "required": true,
-      "description_digest": "64f57c00f50d2c5daa347241aaefa4fa32d21c9bfa1a86983ec53ec10ca1bf89"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-003",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_first_unstable_attempt_is_discarded_and_second_stable_attempt_succeeds",
-      "required": true,
-      "description_digest": "08ee26c0228ac9192ff6e7e2931a9078c5ed29ab928016f2938ab42e794ee5f4"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-004",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_two_unstable_snapshot_attempts_fail_closed",
-      "required": true,
-      "description_digest": "296744c077d193dd18a5d425a11a3342a44e0d68d6d4241f302fade744629fe2"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-005",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_duplicate_authority_key_fails_before_generation",
-      "required": true,
-      "description_digest": "2c9aa47dcc85b32fc1c3c2e2205a33e0eb0be5769edcd295e88e5dfb3d150a45"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-006",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_missing_or_extra_authority_key_fails_before_generation",
-      "required": true,
-      "description_digest": "f4c98b2fb307d0cb8be52c3086306a553da8f5185a868601728c420266f20462"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-007",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_probe_key_mismatch_fails_before_generation",
-      "required": true,
-      "description_digest": "8c75f02a4dfd7b2694ac70a6058dae87f6309d62110cd26637b43412e5e52519"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-008",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_invalid_probe_revision_or_evidence_digest_is_rejected",
-      "required": true,
-      "description_digest": "9e85ea8c8fe589820a60ebd211f685b69cf8109f27adaf9cd38005bf933640b4"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-009",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_failed_snapshot_attempt_does_not_advance_generation",
-      "required": true,
-      "description_digest": "b0aee345981465068885d97effc397c5f37952f9e5ba522291b9d8100f2f7d97"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-010",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_same_snapshot_digest_does_not_advance_generation",
-      "required": true,
-      "description_digest": "458c16266584320f74ad85b8d8e60ae5d2233e4e9d397e31104c1c2e3c64337a"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-011",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_changed_snapshot_digest_advances_generation_once_under_lock",
-      "required": true,
-      "description_digest": "43dd0b964131844872a722eaa58b2ba6e07be4288641e2f86f4306b0ac626ca9"
-    },
-    {
-      "id": "FSV10-SNAPSHOT-012",
-      "kind": "snapshot",
-      "runner": "pytest",
-      "platform": "ubuntu",
-      "file": "tests/learning_capability/test_snapshot_atomicity.py",
-      "title": "test_concurrent_changed_snapshots_receive_distinct_generations",
-      "required": true,
-      "description_digest": "e03ed4ebc6882fab897dec60208d1190cc5695cb26e34ef33614776c0f41140a"
+      "kind": "normative",
+      "description_digest": "79efae4c042aee3fb7d5e1f954fa54cab24945fb665729168f2ff3c20e970023"
     },
     {
       "id": "FSV11-EVIDENCE-011",
-      "kind": "evidence-contract",
       "runner": "node",
       "platform": "ubuntu",
       "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
       "title": "FSV11-EVIDENCE-011",
       "required": true,
-      "description_digest": "be54d7b0f99ba22d1fbb48c444f5b11b57d482a18f28b42423d7077906a108a3"
+      "kind": "normative",
+      "description_digest": "857e7f691a0432214b8157b796fa23c7672b7c775ac4ca7133eba2ea8e1341f5"
     },
     {
       "id": "FSV11-EVIDENCE-012",
-      "kind": "evidence-contract",
       "runner": "node",
       "platform": "ubuntu",
       "file": "scripts/ci/test_firstscreen_evidence_integrity.mjs",
       "title": "FSV11-EVIDENCE-012",
       "required": true,
-      "description_digest": "c2ae3eebff8a6496bf8726a60a04519fff9e867efb84d0ceef3406d870ae20b9"
-    },
-    {
-      "id": "REG-FS90-016",
-      "kind": "supplemental-regression",
-      "runner": "vitest",
-      "platform": "ubuntu",
-      "file": "butler-desktop/src/settings/__tests__/learningCapability.test.ts",
-      "title": "parses the real provider contract and rejects incompatible v8 rows payload",
-      "required": true,
-      "description_digest": "a6982a86dbaeee4a162f59835946da2519024a1118e94e0086873cd7a8cde5dd"
-    },
-    {
-      "id": "REG-FS90-017",
-      "kind": "supplemental-regression",
-      "runner": "vitest",
-      "platform": "ubuntu",
-      "file": "butler-desktop/src/settings/__tests__/learningCapability.test.ts",
-      "title": "keeps all four rows unknown for every unavailable transport and schema failure",
-      "required": true,
-      "description_digest": "1ff044d263837fe2f36227a0417abb8ebfdfeddd64f8bba0f504382335666add"
+      "kind": "normative",
+      "description_digest": "97395d7a733442baf040508359a4924aeb7d3348667f5b4da79feb40562a3242"
     }
   ]
 }

@@ -31,8 +31,9 @@ REPORT_NAMES = {
     "reports/playwright-unavailable.json",
     "reports/contract-pytest.xml",
     "reports/authorities-pytest.xml",
+    "reports/canonical-inputs-pytest.xml",
     "reports/product-integration-pytest.xml",
-    "reports/windows-pytest.xml",
+    "reports/windows-trust-pytest.xml",
     "reports/required-node-audit.json",
     "reports/node-verifier-results.json",
     "reports/node-evidence-results.json",
@@ -43,8 +44,9 @@ CONTEXT_NAMES = {
     "contexts/firstscreen-v9-real-sidecar-unavailable-context.json",
     "contexts/contract-context.json",
     "contexts/authorities-context.json",
+    "contexts/canonical-inputs-context.json",
     "contexts/product-integration-context.json",
-    "contexts/windows-context.json",
+    "contexts/windows-trust-context.json",
     "contexts/firstscreen-v9-required-audit-context.json",
     "contexts/node-verifier-context.json",
     "contexts/node-evidence-context.json",
@@ -57,6 +59,7 @@ PACKAGE_FILES = {
     "manifests/action-pins.v1.json",
     "manifests/evidence-index.schema.json",
     "EVIDENCE_INDEX.json",
+    "security/mutation-generator.json",
     "SHA256SUMS.txt",
     *REPORT_NAMES,
     *CONTEXT_NAMES,
@@ -411,6 +414,111 @@ def _utc_time(value: object) -> datetime:
     return parsed
 
 
+CONTEXT_KEYS = {
+    "schema_version",
+    "repository",
+    "event_name",
+    "pr_number",
+    "subject_head",
+    "execution_commit",
+    "tree",
+    "object_format",
+    "run_id",
+    "run_attempt",
+    "workflow_ref",
+    "job_name",
+    "runner",
+    "platform",
+    "command",
+    "report_path",
+    "report_sha256",
+    "started_at",
+    "finished_at",
+    "tool_versions",
+}
+
+
+def _nonempty_string(value: object, *, max_length: int = 4096) -> bool:
+    return isinstance(value, str) and 0 < len(value) <= max_length
+
+
+def _verify_context(
+    package: Path,
+    run: dict[str, object],
+    metadata: dict[str, object],
+    producer: dict[str, object],
+    tree: dict[str, object],
+) -> None:
+    report_path = run.get("raw_result_path")
+    context_path = run.get("context_path")
+    if not isinstance(report_path, str) or not isinstance(context_path, str):
+        raise ArtifactError("EVIDENCE_CONTEXT_PATH_INVALID")
+    context = _strict_json(
+        package.joinpath(*PurePosixPath(context_path).parts),
+        max_bytes=64 * 1024,
+    )
+    tools = context.get("tool_versions")
+    if (
+        set(context) != CONTEXT_KEYS
+        or context.get("schema_version") != 2
+        or context.get("repository") != metadata.get("repository")
+        or context.get("event_name") != metadata.get("event_name")
+        or context.get("pr_number") != metadata.get("pull_request")
+        or isinstance(context.get("pr_number"), bool)
+        or context.get("subject_head") != metadata.get("subject_head")
+        or context.get("execution_commit") != metadata.get("subject_head")
+        or context.get("tree") != tree.get("hex")
+        or context.get("object_format") != tree.get("algorithm")
+        or context.get("run_id") != producer.get("run_id")
+        or context.get("run_attempt") != producer.get("run_attempt")
+        or isinstance(context.get("run_attempt"), bool)
+        or context.get("workflow_ref") != producer.get("workflow_ref")
+        or context.get("job_name") != run.get("job_name")
+        or context.get("runner") != run.get("runner")
+        or context.get("platform") != run.get("platform")
+        or context.get("command") != run.get("command")
+        or context.get("report_path") != report_path
+        or context.get("report_sha256") != run.get("raw_result_sha256")
+        or context.get("started_at") != run.get("started_at")
+        or context.get("finished_at") != run.get("finished_at")
+        or tools != run.get("tool_versions")
+        or not isinstance(tools, dict)
+        or not tools
+        or any(
+            not _nonempty_string(value, max_length=256)
+            for value in tools.values()
+        )
+    ):
+        raise ArtifactError("EVIDENCE_CONTEXT_INVALID")
+
+
+def _verify_mutation_report(package: Path) -> None:
+    report = _strict_json(
+        package / "security" / "mutation-generator.json",
+        max_bytes=4 * 1024 * 1024,
+    )
+    reports = report.get("reports")
+    generated = report.get("total_generated_cases")
+    if (
+        report.get("schema_version") != 1
+        or isinstance(generated, bool)
+        or not isinstance(generated, int)
+        or generated < 3000
+        or report.get("accepted_malicious") != 0
+        or report.get("unanalysed") != 0
+        or not isinstance(reports, list)
+        or len(reports) != 3
+        or any(
+            not isinstance(item, dict)
+            or item.get("cases") != 1000
+            or item.get("accepted_malicious") != 0
+            or item.get("unanalysed") != 0
+            for item in reports
+        )
+    ):
+        raise ArtifactError("MUTATION_EVIDENCE_INVALID")
+
+
 def _verify_index(
     package: Path,
     metadata_path: Path,
@@ -423,14 +531,16 @@ def _verify_index(
     tree = metadata.get("tree_oid")
     subject = index.get("subject")
     workflow = index.get("workflow")
+    manifest = index.get("manifest")
     runs = index.get("runs")
+    packaged_manifest = package / "manifests" / "required-tests.v3.json"
     if (
         metadata.get("schema_version") != 1
         or not isinstance(producer, dict)
         or not isinstance(artifact, dict)
         or not isinstance(tree, dict)
         or artifact.get("sha256") != outer_digest
-        or index.get("schema_version") != 1
+        or index.get("schema_version") != 3
         or not isinstance(subject, dict)
         or subject.get("repository") != metadata.get("repository")
         or subject.get("pull_request") != metadata.get("pull_request")
@@ -444,6 +554,10 @@ def _verify_index(
         or workflow.get("run_id") != producer.get("run_id")
         or workflow.get("run_attempt") != producer.get("run_attempt")
         or workflow.get("workflow_ref") != producer.get("workflow_ref")
+        or not isinstance(manifest, dict)
+        or manifest.get("path") != "manifests/required-tests.v3.json"
+        or manifest.get("sha256") != _sha256_path(packaged_manifest)
+        or manifest.get("required_total") != 92
         or not isinstance(runs, list)
         or len(runs) != len(REPORT_NAMES)
     ):
@@ -459,11 +573,25 @@ def _verify_index(
         report_path = run.get("raw_result_path")
         context_path = run.get("context_path")
         if (
-            report_path not in REPORT_NAMES
+            not isinstance(report_path, str)
+            or not isinstance(context_path, str)
+            or report_path not in REPORT_NAMES
             or context_path not in CONTEXT_NAMES
             or report_path in observed_reports
             or context_path in observed_contexts
             or run.get("exit_code") != 0
+            or not _nonempty_string(run.get("job_name"), max_length=256)
+            or not _nonempty_string(run.get("runner"), max_length=64)
+            or run.get("platform") not in {
+                "ubuntu",
+                "windows-2025",
+                "macos-15",
+            }
+            or not _nonempty_string(run.get("command"))
+            or not isinstance(run.get("tool_versions"), dict)
+            or not run.get("tool_versions")
+            or not _nonempty_string(run.get("os"), max_length=64)
+            or not _nonempty_string(run.get("arch"), max_length=64)
             or not isinstance(run.get("execution_oid"), dict)
             or run["execution_oid"].get("hex") != metadata.get("subject_head")
             or run["execution_oid"].get("algorithm") != tree.get("algorithm")
@@ -481,10 +609,12 @@ def _verify_index(
         finished = run.get("finished_at")
         if _utc_time(started) > _utc_time(finished):
             raise ArtifactError("EVIDENCE_INDEX_TIME_INVALID")
+        _verify_context(package, run, metadata, producer, tree)
         observed_reports.add(report_path)
         observed_contexts.add(context_path)
     if observed_reports != REPORT_NAMES or observed_contexts != CONTEXT_NAMES:
         raise ArtifactError("EVIDENCE_INDEX_FILESET_MISMATCH")
+    _verify_mutation_report(package)
     return metadata
 
 

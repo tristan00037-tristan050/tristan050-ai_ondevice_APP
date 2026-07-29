@@ -32,74 +32,59 @@ const additions = [
 ];
 
 function kindFor(test) {
-  if (test.id.startsWith('FSV10-CANON-')) return 'canonical-service';
-  if (test.id.startsWith('FSV10-SNAPSHOT-')) return 'snapshot';
-  if (test.id.startsWith('FSV10-JSON-')) return 'strict-json';
-  if (test.id.startsWith('FSV10-FILE-POSIX-')) return 'trusted-state-posix';
-  if (test.id.startsWith('FSV10-FILE-WIN-')) return 'trusted-state-platform';
-  if (test.id.startsWith('FSV10-API-')) return 'api';
-  if (test.id.startsWith('FSV10-CONSUMER-')) return 'consumer-binding';
-  if (test.id.startsWith('FSV10-E2E-')) return 'product-e2e';
-  if (test.id.startsWith('FSV10-GATE-')) return 'verifier-gate';
-  if (test.id.startsWith('REG-FS90-')) return 'supplemental-regression';
-  throw new Error(`KIND_MISSING:${test.id}`);
+  return test.id.startsWith('REG-')
+    ? 'supplemental_required_regression'
+    : 'normative';
 }
 
 function descriptionDigest(test) {
-  return createHash('sha256').update([
-    test.id,
-    test.kind,
-    test.runner,
-    test.platform,
-    test.file,
-    test.title,
-  ].join('\0')).digest('hex');
+  return createHash('sha256').update(JSON.stringify({
+    file: test.file,
+    id: test.id,
+    kind: test.kind,
+    platform: test.platform,
+    required: test.required,
+    runner: test.runner,
+    title: test.title,
+  })).digest('hex');
 }
 
 const source = JSON.parse(await readFile(SOURCE, 'utf8'));
-const migrated = source.tests.map(raw => {
-  const id = raw.id === 'ACC-FS90-016'
-    ? 'REG-FS90-016'
-    : raw.id === 'ACC-FS90-017'
-      ? 'REG-FS90-017'
-      : raw.id;
-  const candidate = {
-    id,
-    kind: '',
-    runner: raw.runner,
-    platform: 'ubuntu',
-    file: raw.file,
-    title: raw.title,
-    required: true,
-    description_digest: '',
-  };
-  candidate.kind = kindFor(candidate);
-  candidate.description_digest = descriptionDigest(candidate);
-  return candidate;
+const existing = source.tests.map(test => {
+  if (test.id === 'ACC-FS90-016') {
+    return { ...test, id: 'REG-FS90-016' };
+  }
+  if (test.id === 'ACC-FS90-017') {
+    return { ...test, id: 'REG-FS90-017' };
+  }
+  return test;
 });
-for (const [id, kind, runner, platform, file, title] of additions) {
-  const candidate = {
-    id,
-    kind,
-    runner,
-    platform,
-    file,
-    title,
-    required: true,
-    description_digest: '',
+const tests = [
+  ...existing,
+  ...additions.map(([id, _kind, runner, platform, file, title]) => ({
+    id, runner, platform, file, title, required: true,
+  })),
+].map(test => {
+  const value = {
+    ...test,
+    kind: kindFor(test),
+    platform: test.platform ?? 'ubuntu',
   };
-  candidate.description_digest = descriptionDigest(candidate);
-  migrated.push(candidate);
-}
-migrated.sort((left, right) => left.id.localeCompare(right.id, 'en'));
-if (migrated.length !== 92 || new Set(migrated.map(test => test.id)).size !== 92) {
+  return {
+    ...value,
+    description_digest: descriptionDigest(value),
+  };
+});
+if (tests.length !== 92 || new Set(tests.map(test => test.id)).size !== 92) {
   throw new Error('REQUIRED_TEST_COUNT_INVALID');
 }
 await writeFile(TARGET, `${JSON.stringify({
   schema_version: 3,
   suite: 'firstscreen-learning-capability-v11-product-gate',
-  normative_total: 90,
-  supplemental_total: 2,
-  tests: migrated,
+  normative_required: 90,
+  supplemental_required: 2,
+  required_total: 92,
+  retired_ids: ['FSV10-EVIDENCE-007', 'FSV10-EVIDENCE-008'],
+  tests,
 }, null, 2)}\n`);
 console.log('REQUIRED_TEST_V3_BUILD_OK=1');

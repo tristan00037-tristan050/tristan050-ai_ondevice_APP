@@ -110,7 +110,7 @@ function mutateAndVerify(operator, canonical) {
     return rejected(() => requireRepositoryPath('../reports/result.json'));
   }
   if (operator === 'integer_bool') {
-    const mutated = { ...clone(context), workflow_run_attempt: true };
+    const mutated = { ...clone(context), run_attempt: true };
     return rejected(() => validateContext(mutated, expected));
   }
   if (operator === 'digest_flip') {
@@ -239,8 +239,10 @@ async function main() {
     'contexts/firstscreen-v9-real-sidecar-unavailable-context.json',
     'contexts/contract-context.json',
     'contexts/authorities-context.json',
+    'contexts/canonical-inputs-context.json',
     'contexts/product-integration-context.json',
-    'contexts/windows-context.json',
+    'contexts/windows-trust-context.json',
+    'contexts/firstscreen-v9-required-audit-context.json',
     'contexts/node-verifier-context.json',
     'contexts/node-evidence-context.json',
   ];

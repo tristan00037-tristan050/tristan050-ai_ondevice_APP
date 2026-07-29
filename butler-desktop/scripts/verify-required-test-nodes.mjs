@@ -8,8 +8,7 @@ import {
   resolve,
   sep,
 } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { SaxesParser } from 'saxes';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   parseStrictJson,
@@ -20,9 +19,10 @@ const REPORT_LIMIT = 32 * 1024 * 1024;
 const CONTEXT_LIMIT = 64 * 1024;
 const RUNNERS = new Set(['pytest', 'vitest', 'playwright', 'node']);
 const PLATFORMS = new Set(['ubuntu', 'macos-15', 'windows-2025']);
-const XML_MAX_SUITES = 4096;
-const XML_MAX_CASES = 1_000_000;
-const XML_MAX_ATTRIBUTE_CHARS = 16_384;
+const JUNIT_PARSER = fileURLToPath(new URL(
+  '../../scripts/ci/parse_junit_xml.py',
+  import.meta.url,
+));
 const WINDOWS_RESERVED = new Set([
   'CON',
   'PRN',
@@ -113,88 +113,24 @@ export function normalizeActualFile(
 }
 
 export function collectPytest(xml) {
-  if (/<!\s*(?:DOCTYPE|ENTITY)/iu.test(xml)) {
-    throw new Error('XML_DECLARATION_FORBIDDEN');
-  }
-  const nodes = [];
-  let suites = 0;
-  let active = null;
-  let declared = null;
-  const parser = new SaxesParser({ xmlns: false });
-  parser.ondoctype = () => {
-    throw new Error('XML_DOCTYPE_FORBIDDEN');
-  };
-  parser.onopentag = node => {
-    const attributes = Object.fromEntries(
-      Object.entries(node.attributes).map(([key, value]) => [
-        key,
-        typeof value === 'string' ? value : value.value,
-      ]),
-    );
-    if (Object.values(attributes).some(value => (
-      String(value).length > XML_MAX_ATTRIBUTE_CHARS
-    ))) {
-      throw new Error('XML_ATTRIBUTE_TOO_LARGE');
-    }
-    if (node.name === 'testsuite') {
-      suites += 1;
-      if (suites > XML_MAX_SUITES) throw new Error('XML_SUITE_LIMIT');
-      if (declared === null) {
-        const integer = name => {
-          const raw = attributes[name] ?? '0';
-          if (!/^(?:0|[1-9]\d*)$/.test(raw)) {
-            throw new Error('XML_SUITE_COUNT_INVALID');
-          }
-          return Number(raw);
-        };
-        declared = {
-          tests: integer('tests'),
-          errors: integer('errors'),
-          failures: integer('failures'),
-          skipped: integer('skipped'),
-        };
-      }
-    } else if (node.name === 'testcase') {
-      if (active !== null) throw new Error('XML_TESTCASE_NESTED');
-      if (nodes.length >= XML_MAX_CASES) throw new Error('XML_CASE_LIMIT');
-      const className = String(attributes.classname ?? '');
-      const title = String(attributes.name ?? '');
-      if (!className || !title) throw new Error('XML_TESTCASE_IDENTITY_MISSING');
-      active = {
-        runner: 'pytest',
-        file: `${className.replaceAll('.', '/')}.py`,
-        title,
-        status: 'passed',
-      };
-    } else if (active && node.name === 'failure') {
-      active.status = 'failed';
-    } else if (active && node.name === 'error') {
-      active.status = 'error';
-    } else if (active && node.name === 'skipped') {
-      active.status = 'skipped';
-    }
-  };
-  parser.onclosetag = tag => {
-    const name = typeof tag === 'string' ? tag : tag.name;
-    if (name === 'testcase') {
-      if (active === null) throw new Error('XML_TESTCASE_CLOSE_INVALID');
-      nodes.push(active);
-      active = null;
-    }
-  };
-  parser.onerror = () => {
-    throw new Error('XML_PARSE_INVALID');
-  };
-  parser.write(xml).close();
-  if (active !== null) throw new Error('XML_TESTCASE_UNCLOSED');
-  if (declared === null
-      || declared.tests !== nodes.length
-      || declared.errors !== nodes.filter(node => node.status === 'error').length
-      || declared.failures !== nodes.filter(node => node.status === 'failed').length
-      || declared.skipped !== nodes.filter(node => node.status === 'skipped').length) {
-    throw new Error('XML_SUITE_COUNT_MISMATCH');
-  }
-  return nodes;
+  const result = spawnSync(
+    process.env.PYTHON ?? 'python3',
+    [JUNIT_PARSER, '-'],
+    {
+      encoding: 'utf8',
+      input: xml,
+      maxBuffer: REPORT_LIMIT,
+    },
+  );
+  if (result.status !== 0) throw new Error('XML_PARSE_INVALID');
+  const parsed = parseStrictJson(Buffer.from(result.stdout), {
+    maxBytes: REPORT_LIMIT,
+    maxDepth: 16,
+    maxNodes: 1_000_000,
+    maxStringChars: 4_000_000,
+  });
+  if (!Array.isArray(parsed.nodes)) throw new Error('XML_PARSE_INVALID');
+  return parsed.nodes;
 }
 
 export function collectVitest(report) {
@@ -331,13 +267,13 @@ const CONTEXT_KEYS = new Set([
   'schema_version',
   'repository',
   'event_name',
-  'pull_request',
-  'suite',
-  'subject_pr_head',
+  'pr_number',
+  'subject_head',
   'execution_commit',
-  'tree_oid',
-  'workflow_run_id',
-  'workflow_run_attempt',
+  'tree',
+  'object_format',
+  'run_id',
+  'run_attempt',
   'workflow_ref',
   'job_name',
   'runner',
@@ -347,8 +283,6 @@ const CONTEXT_KEYS = new Set([
   'tool_versions',
   'started_at',
   'finished_at',
-  'os',
-  'arch',
   'report_sha256',
 ]);
 
@@ -359,16 +293,15 @@ export function validateContext(context, expected) {
       || context.schema_version !== 2
       || context.repository !== expected.repository
       || context.event_name !== expected.eventName
-      || context.pull_request !== expected.pullRequest
-      || context.subject_pr_head !== expected.head
+      || context.pr_number !== expected.pullRequest
+      || context.subject_head !== expected.head
       || context.execution_commit !== expected.head
-      || context.tree_oid?.algorithm !== expected.objectFormat
-      || context.tree_oid?.hex !== expected.tree
-      || context.workflow_run_id !== expected.runId
-      || !Number.isSafeInteger(context.workflow_run_attempt)
-      || context.workflow_run_attempt !== expected.runAttempt
+      || context.tree !== expected.tree
+      || context.object_format !== expected.objectFormat
+      || context.run_id !== expected.runId
+      || !Number.isSafeInteger(context.run_attempt)
+      || context.run_attempt !== expected.runAttempt
       || context.workflow_ref !== expected.workflowRef
-      || typeof context.suite !== 'string' || !context.suite
       || typeof context.job_name !== 'string' || !context.job_name
       || !RUNNERS.has(context.runner)
       || !PLATFORMS.has(context.platform)
@@ -377,8 +310,6 @@ export function validateContext(context, expected) {
       || typeof context.report_sha256 !== 'string'
       || typeof context.started_at !== 'string'
       || typeof context.finished_at !== 'string'
-      || typeof context.os !== 'string' || !context.os
-      || typeof context.arch !== 'string' || !context.arch
       || typeof context.tool_versions !== 'object'
       || context.tool_versions === null
       || Array.isArray(context.tool_versions)
@@ -413,14 +344,15 @@ export function nodeKey(node) {
 }
 
 function descriptionDigest(node) {
-  return digest([
-    node.id,
-    node.kind,
-    node.runner,
-    node.platform,
-    node.file,
-    node.title,
-  ].join('\0'));
+  return digest(JSON.stringify({
+    file: node.file,
+    id: node.id,
+    kind: node.kind,
+    platform: node.platform,
+    required: node.required,
+    runner: node.runner,
+    title: node.title,
+  }));
 }
 
 export function calculateAccounting(required, actual, expectedTotal) {
@@ -592,13 +524,15 @@ async function main() {
   });
   const selfTest = options['self-test'] === '1';
   if (manifest.schema_version !== 3
-      || typeof manifest.normative_total !== 'number'
-      || typeof manifest.supplemental_total !== 'number'
-      || manifest.normative_total + manifest.supplemental_total
+      || typeof manifest.normative_required !== 'number'
+      || typeof manifest.supplemental_required !== 'number'
+      || manifest.normative_required + manifest.supplemental_required
       !== manifest.tests?.length
+      || manifest.required_total !== manifest.tests?.length
       || (!selfTest && (
-        manifest.normative_total !== 90
-        || manifest.supplemental_total !== 2
+        manifest.normative_required !== 90
+        || manifest.supplemental_required !== 2
+        || manifest.required_total !== 92
         || manifest.tests?.length !== 92
         || manifest.suite
         !== 'firstscreen-learning-capability-v11-product-gate'

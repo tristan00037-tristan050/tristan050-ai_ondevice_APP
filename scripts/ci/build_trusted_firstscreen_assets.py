@@ -14,6 +14,7 @@ ASSETS = (
     "butler-desktop/acceptance/required-tests.v3.json",
     "butler-desktop/scripts/verify-required-test-nodes.mjs",
     "contracts/evidence-index.schema.json",
+    "scripts/ci/parse_junit_xml.py",
     "scripts/ci/strict_json.mjs",
     "scripts/ci/trusted_firstscreen_artifact.py",
     "scripts/ci/trusted_firstscreen_historical.py",
