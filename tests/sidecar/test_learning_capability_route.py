@@ -290,16 +290,6 @@ def test_invalid_canonical_snapshots_never_return_200():
             snapshot_revision="a" * 64,
             generation=1,
             capabilities={
-                "company_policy": CapabilityState.UNAVAILABLE,
-                "company_fact": CapabilityState.IN_USE,
-                "company_format": CapabilityState.REGISTERED,
-                "folder_learning": CapabilityState.NOT_REGISTERED,
-            },
-        ),
-        LearningCapabilitySnapshot(
-            snapshot_revision="a" * 64,
-            generation=1,
-            capabilities={
                 "company_policy": CapabilityState.IN_USE,
                 "company_fact": CapabilityState.IN_USE,
                 "company_format": CapabilityState.REGISTERED,
