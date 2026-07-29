@@ -140,6 +140,7 @@ async function verifyIndex(root, actualFiles, options) {
     'manifests/evidence-index.schema.json',
     'manifests/action-pins.v1.json',
     'manifests/required-tests.v3.json',
+    'security/mutation-generator.json',
     'source/correction.patch',
     'source/git-ls-tree.txt',
     'source/source.zip',

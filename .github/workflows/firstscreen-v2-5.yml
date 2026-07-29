@@ -717,6 +717,19 @@ jobs:
             cd "${RUNNER_TEMP}/firstscreen-v9-recheck/package"
             sha256sum -c SHA256SUMS.txt
           )
+          node scripts/ci/verify_firstscreen_evidence_package.mjs \
+            --package "${RUNNER_TEMP}/firstscreen-v9-recheck/package" \
+            --zip "${archive}" \
+            --detached "${archive}.sha256" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --subject-head "${PR_HEAD_SHA}" \
+            --object-format "$(git rev-parse --show-object-format)" \
+            --tree "$(git rev-parse 'HEAD^{tree}')" \
+            --pull-request "${{ github.event.pull_request.number }}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --workflow-ref "${GITHUB_WORKFLOW_REF}" \
+            --output "${archive}.verify.json"
           echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
       # 서명 증명 생성·검증 단계는 공급망 전용 워크플로로 한정한다(P4-P0-02).
       # 꾸러미 자체의 무결성은 위 package 단계가 SHA256SUMS 로 두 번 확인한다
@@ -728,6 +741,7 @@ jobs:
           path: |
             ${{ steps.package.outputs.archive }}
             ${{ steps.package.outputs.archive }}.sha256
+            ${{ steps.package.outputs.archive }}.verify.json
           if-no-files-found: error
           retention-days: 30
 

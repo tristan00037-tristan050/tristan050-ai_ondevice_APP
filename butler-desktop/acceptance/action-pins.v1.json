@@ -31,12 +31,6 @@
       "requested_tag": "v4.3.0",
       "resolved_commit_sha": "d3f86a106a0bac45b974a628896c90dbdf5c8093",
       "source_url": "https://github.com/actions/download-artifact"
-    },
-    {
-      "repository": "actions/attest-build-provenance",
-      "requested_tag": "v3",
-      "resolved_commit_sha": "977bb373ede98d70efdf65b84cb5f73e068dcc2a",
-      "source_url": "https://github.com/actions/attest-build-provenance/tree/977bb373ede98d70efdf65b84cb5f73e068dcc2a"
     }
   ]
 }
