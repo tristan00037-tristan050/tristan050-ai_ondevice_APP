@@ -19,8 +19,12 @@ const REPORT_LIMIT = 32 * 1024 * 1024;
 const CONTEXT_LIMIT = 64 * 1024;
 const RUNNERS = new Set(['pytest', 'vitest', 'playwright', 'node']);
 const PLATFORMS = new Set(['ubuntu', 'macos-15', 'windows-2025']);
+// 경로 격리(개발지시서 v13.1 §9, 총괄기획팀 2026-07-30 지시): 보호 검증기 사슬이
+// 검사받는 제품 PR 이 편집하는 도구를 신뢰 경계 안으로 들이지 않도록, JUnit 파서를
+// 독립 보호판(trusted_parse_junit_xml.py, main 강화판·stdin 지원)으로 고정한다.
+// 제품판 scripts/ci/parse_junit_xml.py 를 느슨하게 바꿔도 이 사슬은 영향받지 않는다.
 const JUNIT_PARSER = fileURLToPath(new URL(
-  '../../scripts/ci/parse_junit_xml.py',
+  '../../scripts/ci/trusted_parse_junit_xml.py',
   import.meta.url,
 ));
 const WINDOWS_RESERVED = new Set([
