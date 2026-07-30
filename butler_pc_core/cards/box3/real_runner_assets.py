@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import time
+import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -116,7 +116,7 @@ class Box3RealRunnerConfig:
     runner_id: str
     model_choice: str
     model_path_ref: str
-    model_path_env: str = "BUTLER_BOX3_BASE_MODEL_PATH"
+    model_path_env: str = "ASSET_AUTHORITY_ONLY"
     base_model_sha256_full: Optional[str] = None
     loader_name: str = "llama_cpp"
     loader_version: str = "unmeasured"
@@ -126,33 +126,33 @@ class Box3RealRunnerConfig:
     allow_test_runner: bool = False
     mock_or_stub: bool = False
     readonly_required: bool = True
+    test_model_path: Optional[Path] = None
 
     @classmethod
-    def from_env(cls) -> "Box3RealRunnerConfig":
+    def product_default(cls) -> "Box3RealRunnerConfig":
         return cls(
-            runner_id=os.environ.get("BUTLER_BOX3_REAL_RUNNER_ID", "box3-local-real-runner"),
-            model_choice=os.environ.get("BUTLER_BOX3_MODEL_CHOICE", "qwen3-1.7b-v4-rt"),
-            model_path_ref="ref:BUTLER_BOX3_BASE_MODEL_PATH",
-            model_path_env="BUTLER_BOX3_BASE_MODEL_PATH",
-            base_model_sha256_full=os.environ.get("BUTLER_BOX3_BASE_MODEL_SHA256_FULL"),
-            loader_name=os.environ.get("BUTLER_BOX3_LOADER", "llama_cpp"),
-            loader_version=os.environ.get("BUTLER_BOX3_LOADER_VERSION", "unmeasured"),
-            device_profile=os.environ.get("BUTLER_BOX3_DEVICE_PROFILE", "local"),
-            timeout_seconds=float(os.environ.get("BUTLER_BOX3_RUNNER_TIMEOUT_SEC", "30")),
-            memory_limit_mb=int(os.environ["BUTLER_BOX3_MEMORY_LIMIT_MB"]) if os.environ.get("BUTLER_BOX3_MEMORY_LIMIT_MB") else None,
+            runner_id="box3-local-real-runner",
+            model_choice="butler-1.7b-v9.2-r2b",
+            model_path_ref="asset-authority:box3.model",
+            model_path_env="ASSET_AUTHORITY_ONLY",
+            base_model_sha256_full=None,
+            loader_name="llama_cpp",
+            loader_version="bundled",
+            device_profile="local",
+            timeout_seconds=30.0,
+            memory_limit_mb=None,
         )
 
     @property
     def model_path(self) -> Optional[Path]:
-        value = os.environ.get(self.model_path_env)
-        return Path(value) if value else None
+        return None
 
     def to_digest_dict(self) -> dict[str, Any]:
         return {
             "runner_id": self.runner_id,
             "model_choice": self.model_choice,
             "model_path_ref": self.model_path_ref,
-            "model_path_digest": sha256_text(os.environ.get(self.model_path_env, self.model_path_ref)),
+            "model_path_digest": sha256_text(self.model_path_ref),
             "base_model_sha256_full": self.base_model_sha256_full,
             "loader_name": self.loader_name,
             "loader_version": self.loader_version,
@@ -190,34 +190,120 @@ def verify_box3_real_runner_assets(config: Box3RealRunnerConfig, *, helper_manif
     if not is_bare_sha256(base_sha):
         return Box3RealRunnerAssetVerdict(False, BLOCK_MODEL_ASSET_SHA_SCOPE_INVALID, stable_json_digest(config.to_digest_dict()), helper_manifest_digest, rows)
 
-    model_path = config.model_path
-    if model_path is None or not model_path.exists() or not model_path.is_file():
-        return Box3RealRunnerAssetVerdict(False, BLOCK_MODEL_ASSET_MISSING, stable_json_digest(config.to_digest_dict()), helper_manifest_digest, rows)
-    actual_sha = sha256_file(model_path)
-    if actual_sha != base_sha:
-        rows.append({
-            "asset_name": "base_model",
-            "path_ref": config.model_path_ref,
-            "path_digest": sha256_text(str(model_path)),
-            "sha256_full": actual_sha,
-            "sha_scope": "file",
-            "readonly_verified": not os.access(model_path, os.W_OK) if config.readonly_required else True,
-            "fail_class": BLOCK_MODEL_ASSET_SHA_MISMATCH,
-        })
-        return Box3RealRunnerAssetVerdict(False, BLOCK_MODEL_ASSET_SHA_MISMATCH, stable_json_digest(config.to_digest_dict()), helper_manifest_digest, rows)
+    if config.allow_test_runner:
+        model_path = config.test_model_path
+        if model_path is None or not model_path.is_file():
+            return Box3RealRunnerAssetVerdict(
+                False,
+                BLOCK_MODEL_ASSET_MISSING,
+                stable_json_digest(config.to_digest_dict()),
+                helper_manifest_digest,
+                rows,
+            )
+        actual_sha = sha256_file(model_path)
+        if actual_sha != base_sha:
+            return Box3RealRunnerAssetVerdict(
+                False,
+                BLOCK_MODEL_ASSET_SHA_MISMATCH,
+                stable_json_digest(config.to_digest_dict()),
+                helper_manifest_digest,
+                rows,
+            )
+        rows.append(
+            {
+                "asset_name": "base_model",
+                "path_ref": "test-only-model",
+                "path_digest": sha256_text(str(model_path)),
+                "sha256_full": actual_sha,
+                "sha_scope": "file",
+                "readonly_verified": True,
+                "test_compatibility_only": True,
+                "fail_class": None,
+            }
+        )
+        for helper in helper_manifest.get("assets", []):
+            if isinstance(helper, dict):
+                rows.append(
+                    {
+                        "asset_name": helper.get("asset_name"),
+                        "path_ref": helper.get("asset_path"),
+                        "path_digest": sha256_text(str(helper.get("asset_path"))),
+                        "sha256_full": helper.get("sha256_full"),
+                        "sha_scope": helper.get("sha_scope"),
+                        "readonly_verified": True,
+                        "fail_class": helper.get("fail_class"),
+                    }
+                )
+        return Box3RealRunnerAssetVerdict(
+            True,
+            None,
+            stable_json_digest({"config": config.to_digest_dict(), "rows": rows}),
+            helper_manifest_digest,
+            rows,
+            measured={
+                "measured_at_ms": int(time.time() * 1000),
+                "test_compatibility_only": True,
+            },
+        )
 
-    readonly = not os.access(model_path, os.W_OK) if config.readonly_required else True
-    rows.append({
-        "asset_name": "base_model",
-        "path_ref": config.model_path_ref,
-        "path_digest": sha256_text(str(model_path)),
-        "sha256_full": actual_sha,
-        "sha_scope": "file",
-        "readonly_verified": readonly,
-        "fail_class": None if readonly else BLOCK_MODEL_ASSET_MISSING,
-    })
-    if not readonly:
-        return Box3RealRunnerAssetVerdict(False, BLOCK_MODEL_ASSET_MISSING, stable_json_digest(config.to_digest_dict()), helper_manifest_digest, rows)
+    try:
+        from butler_pc_core.assets import get_asset_service
+        from butler_pc_core.assets.context import get_platform_context
+
+        context = get_platform_context()
+        if context.manifest_set_sha256 is None:
+            raise RuntimeError("BLOCK_MANIFEST_BINDING_MISMATCH")
+        with get_asset_service().acquire(
+            role="box3.model",
+            purpose="box3-legacy-real-preflight",
+            expected_manifest_set=context.manifest_set_sha256,
+            request_id=str(uuid.uuid4()),
+        ) as lease:
+            verified = lease.require("model_gguf")
+            actual_sha = verified.snapshot_digest
+            seal_type = verified.seal_type
+            size_bytes = verified.entry.size_bytes
+    except Exception:
+        return Box3RealRunnerAssetVerdict(
+            False,
+            BLOCK_MODEL_ASSET_MISSING,
+            stable_json_digest(config.to_digest_dict()),
+            helper_manifest_digest,
+            rows,
+        )
+    if actual_sha != base_sha:
+        rows.append(
+            {
+                "asset_name": "base_model",
+                "path_ref": "asset-authority:box3.model",
+                "path_digest": None,
+                "sha256_full": actual_sha,
+                "sha_scope": "sealed_snapshot",
+                "readonly_verified": True,
+                "fail_class": BLOCK_MODEL_ASSET_SHA_MISMATCH,
+            }
+        )
+        return Box3RealRunnerAssetVerdict(
+            False,
+            BLOCK_MODEL_ASSET_SHA_MISMATCH,
+            stable_json_digest(config.to_digest_dict()),
+            helper_manifest_digest,
+            rows,
+        )
+
+    rows.append(
+        {
+            "asset_name": "base_model",
+            "path_ref": "asset-authority:box3.model",
+            "path_digest": None,
+            "sha256_full": actual_sha,
+            "sha_scope": "sealed_snapshot",
+            "readonly_verified": True,
+            "platform_seal_type": seal_type,
+            "size_bytes": size_bytes,
+            "fail_class": None,
+        }
+    )
 
     for helper in helper_manifest.get("assets", []):
         if isinstance(helper, dict):

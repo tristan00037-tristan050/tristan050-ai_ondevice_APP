@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 
 from .contracts import AdminContext, ContractValidationError
 from .role_registry import RoleRegistryLoadError, get_default_role_registry_store
 
 ZERO_DIGEST = "sha256:" + "0" * 64
-TEST_ADMIN_AUTH_ENV = "BUTLER_ALLOW_TEST_ADMIN_AUTH"
 
 
 # Exception classes must not be frozen dataclasses: on Python 3.11+ the
@@ -20,11 +18,12 @@ class AdminAuthError(PermissionError):
     message: str
 
 
-def _test_admin_auth_allowed() -> bool:
-    return os.environ.get(TEST_ADMIN_AUTH_ENV) == "1" and os.environ.get("PYTEST_CURRENT_TEST") is not None
-
-
-def _verify_admin_context_base(context: AdminContext | None, *, operation: str) -> AdminContext:
+def _verify_admin_context_base(
+    context: AdminContext | None,
+    *,
+    operation: str,
+    allow_test_auth: bool = False,
+) -> AdminContext:
     """Verify Admin RBAC without RoleRegistry registration.
 
     Local sidecar capability token is intentionally not accepted here. Token only
@@ -41,7 +40,7 @@ def _verify_admin_context_base(context: AdminContext | None, *, operation: str) 
         raise AdminAuthError("ADMIN_RBAC_DENIED", f"admin role required for {operation}")
     if context.admin_id_digest == ZERO_DIGEST or context.admin_session_digest == ZERO_DIGEST:
         raise AdminAuthError("ADMIN_DIGEST_PLACEHOLDER", "admin digest placeholder is not allowed")
-    if context.auth_method == "test_only" and not _test_admin_auth_allowed():
+    if context.auth_method == "test_only" and not allow_test_auth:
         raise AdminAuthError("ADMIN_AUTH_METHOD_NOT_ALLOWED", "admin auth method is not allowed")
     return context
 

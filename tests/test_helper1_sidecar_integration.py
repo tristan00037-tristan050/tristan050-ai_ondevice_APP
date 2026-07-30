@@ -27,40 +27,26 @@ def test_helper1_endpoints_registered():
     assert "/v1/helpers/1/ask" in paths
 
 
-def test_helper1_search_post_200():
+def test_helper1_search_without_verified_assets_is_unavailable():
     client, token, _ = _client_and_token()
     resp = client.post(
         "/v1/helpers/1/search",
         json={"query": "지난 분기 매출 보고 어디 있었지", "top_k": 5},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 200, resp.text
-    data = resp.json()
-    assert data["integration_mode"] in ("real", "contract_only")
-    assert data["external_send_zero"] is True
-    assert data["raw_text_logged"] is False
-    assert data["audit"]["query_digest"].startswith("sha256:")
-    if data["integration_mode"] == "contract_only":
-        assert data["real_validation_done"] is False
-        assert data["results"] == []
+    assert resp.status_code == 503, resp.text
+    assert resp.json()["detail"]["code"] == "ASSET_UNAVAILABLE"
 
 
-def test_helper1_ask_post_200():
+def test_helper1_ask_without_verified_assets_is_unavailable():
     client, token, _ = _client_and_token()
     resp = client.post(
         "/v1/helpers/1/ask",
         json={"query": "내가 작년에 정리한 보안 정책 요약해줘"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 200, resp.text
-    data = resp.json()
-    assert data["integration_mode"] in ("real", "contract_only")
-    assert data["external_send_zero"] is True
-    assert data["raw_text_logged"] is False
-    if data["integration_mode"] == "contract_only":
-        assert data["answer"] == "contract_only_response"
-        assert data["sources"] == []
-        assert data["real_validation_done"] is False
+    assert resp.status_code == 503, resp.text
+    assert resp.json()["detail"]["code"] == "ASSET_UNAVAILABLE"
 
 
 def test_helper1_audit_has_no_raw_text():
@@ -71,10 +57,8 @@ def test_helper1_audit_has_no_raw_text():
         json={"query": secret_query},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 200
-    audit = resp.json()["audit"]
-    assert secret_query not in str(audit)
-    assert set(audit.keys()) == {"query_digest", "policy_decision", "reason"}
+    assert resp.status_code == 503
+    assert secret_query not in resp.text
 
 
 def test_box2_box3_routes_not_regressed():
@@ -132,13 +116,13 @@ def test_helper1_blocks_non_localhost(monkeypatch):
     assert resp.json()["detail"]["fail_class"] == "LOCALHOST_ONLY"
 
 
-def test_helper1_contract_only_does_not_call_sdk(monkeypatch):
+def test_helper1_unavailable_does_not_call_product_helper(monkeypatch):
     import butler_pc_core.sidecar.routes.helper1_search as h1
 
     def _boom(*a, **k):
         raise AssertionError("SDK must not be loaded in contract_only mode")
 
-    monkeypatch.setattr(h1, "ask_integration_mode", lambda: "contract_only")
+    monkeypatch.setattr(h1, "ask_integration_mode", lambda: "unavailable")
     monkeypatch.setattr(h1, "_load_memory_helper", _boom)
     client, token, _ = _client_and_token()
     resp = client.post(
@@ -146,11 +130,8 @@ def test_helper1_contract_only_does_not_call_sdk(monkeypatch):
         json={"query": "회사 정책 요약"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["integration_mode"] == "contract_only"
-    assert data["real_validation_done"] is False
-    assert data["answer"] == "contract_only_response"
+    assert resp.status_code == 503
+    assert resp.json()["detail"]["code"] == "ASSET_UNAVAILABLE"
 
 
 def test_helper1_real_mode_offload(monkeypatch):

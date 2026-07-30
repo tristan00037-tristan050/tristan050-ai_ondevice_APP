@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-import os
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -19,11 +19,6 @@ from .human_approval_sealed import (
 )
 from .model_identity import get_box3_model_identity_for_approval
 from .local_sealed_runner import RealRunner
-
-DEFAULT_APPROVAL_PATH = Path.home() / ".butler" / "box3" / "human_approval_v1.json"
-APPROVAL_PATH_ENV = "BUTLER_BOX3_HUMAN_APPROVAL_CONFIG_PATH"
-HELPER_GUARD_PATH_ENV = "BUTLER_BOX3_HELPER_COMPONENT_GUARD_PATH"
-FIXED_EVAL_REPORT_PATH_ENV = "BUTLER_BOX3_FIXED_EVAL_REPORT_PATH"
 
 _LEGACY_STATUS_MAP = {
     "CONTRACT_ONLY": "contract_only",
@@ -89,21 +84,46 @@ def _read_json_file(path: Path) -> dict[str, Any] | None:
         return None
     return data if isinstance(data, dict) else None
 
+
+def _read_authorized_json(role: str, purpose: str) -> dict[str, Any] | None:
+    try:
+        from butler_pc_core.assets import get_asset_service
+        from butler_pc_core.assets.context import get_platform_context
+
+        context = get_platform_context()
+        if context.manifest_set_sha256 is None:
+            return None
+        with get_asset_service().acquire(
+            role="box3.governance",
+            purpose=purpose,
+            expected_manifest_set=context.manifest_set_sha256,
+            request_id=str(uuid.uuid4()),
+        ) as lease:
+            with lease.require(role).open() as handle:
+                value = json.load(handle)
+        return value if isinstance(value, dict) else None
+    except Exception:
+        return None
+
+
 def load_server_local_sealed_approval(path: Path | None = None) -> dict[str, Any] | None:
-    selected = path or Path(os.environ.get(APPROVAL_PATH_ENV, str(DEFAULT_APPROVAL_PATH)))
-    return load_human_approval_config(selected) if selected.exists() else None
+    if path is not None:
+        return load_human_approval_config(path) if path.exists() else None
+    return _read_authorized_json("human_approval", "box3-human-approval")
 
 def load_helper_component_guard(path: Path | None = None) -> dict[str, Any] | None:
-    selected_raw = str(path) if path else os.environ.get(HELPER_GUARD_PATH_ENV)
-    if not selected_raw:
-        return None
-    return _read_json_file(Path(selected_raw))
+    if path is not None:
+        return _read_json_file(path)
+    return _read_authorized_json(
+        "helper_component_guard", "box3-helper-component-guard"
+    )
 
 def load_fixed_eval_pass(path: Path | None = None) -> bool:
-    selected_raw = str(path) if path else os.environ.get(FIXED_EVAL_REPORT_PATH_ENV)
-    if not selected_raw:
-        return False
-    report = _read_json_file(Path(selected_raw))
+    report = (
+        _read_json_file(path)
+        if path is not None
+        else _read_authorized_json("fixed_eval_report", "box3-fixed-eval")
+    )
     if not report:
         return False
     if report.get("fixed_eval_pass") is True:
@@ -238,7 +258,14 @@ def run_box3_endpoint_wiring(
 
     # v1.2 §3.1/§3.4: desktop app 경로는 model_scope 만 허용한다(request_scope fallback 0).
     # 승인 전용 identity 를 매번 full rehash 하여 얻고, 그 model_digest 를 기대 scope 로 고정한다.
-    model_identity = get_box3_model_identity_for_approval()
+    test_model_path = (
+        str(base_config.test_asset_path)
+        if base_config is not None
+        and base_config.allow_test_asset
+        and base_config.test_asset_path is not None
+        else None
+    )
+    model_identity = get_box3_model_identity_for_approval(test_model_path)
     try:
         expected_digest, approval_mode = resolve_expected_scope_digest(
             selected_approval,

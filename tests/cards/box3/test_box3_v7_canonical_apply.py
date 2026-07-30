@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -11,7 +10,6 @@ from butler_pc_core.cards.box3.v7_activation_gate import V7SmokeMetrics, evaluat
 from butler_pc_core.cards.box3.v7_asset_manifest import helper35_runtime_stack_requested, verify_v7_q4_asset
 from butler_pc_core.cards.box3.v7_constants import (
     BASE_MODEL_NAME,
-    BASE_MODEL_PATH_ENV,
     BASE_MODEL_SHA256_FULL,
     HELPER3_5_EMBEDDED_IN_BASE,
     HELPER3_5_RUNTIME_STACK_ALLOWED,
@@ -73,17 +71,21 @@ def test_pr785_precondition_blocks_missing_file(tmp_path):
     assert verdict.fail_class == BLOCK_PRECONDITION_PR785_NOT_MERGED
 
 
-def test_v5_v4_default_blocked(monkeypatch):
-    monkeypatch.setenv(BASE_MODEL_PATH_ENV, "/safe/ref/butler-1.7b-v4-rt-q4_k_m.gguf")
-    assert verify_v7_q4_asset().fail_class == BLOCK_V4_DEFAULT_REFERENCE
-    monkeypatch.setenv(BASE_MODEL_PATH_ENV, "/safe/ref/butler-1.7b-v5-q4_k_m.gguf")
-    assert verify_v7_q4_asset().fail_class == BLOCK_V5_DEFAULT_RESIDUE
+def test_v5_v4_default_blocked():
+    assert verify_v7_q4_asset(
+        path_value="/safe/ref/butler-1.7b-v4-rt-q4_k_m.gguf"
+    ).fail_class == BLOCK_V4_DEFAULT_REFERENCE
+    assert verify_v7_q4_asset(
+        path_value="/safe/ref/butler-1.7b-v5-q4_k_m.gguf"
+    ).fail_class == BLOCK_V5_DEFAULT_RESIDUE
 
 
-def test_no_helper35_restack(monkeypatch):
-    monkeypatch.setenv("BUTLER_BOX3_ALLOW_HELPER35_MULTI_LORA_STACK", "1")
-    assert helper35_runtime_stack_requested() is True
-    assert verify_v7_q4_asset().fail_class == BLOCK_HELPER35_DOUBLE_STACK_RISK
+def test_no_helper35_restack():
+    requested = ("helper3_format",)
+    assert helper35_runtime_stack_requested(requested) is True
+    assert verify_v7_q4_asset(
+        runtime_lora_refs=requested
+    ).fail_class == BLOCK_HELPER35_DOUBLE_STACK_RISK
 
 
 def test_abstain_marker_not_unsupported_and_overuse_partial():

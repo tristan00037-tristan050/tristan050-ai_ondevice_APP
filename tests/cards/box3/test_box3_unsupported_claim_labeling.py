@@ -15,7 +15,7 @@ from butler_pc_core.cards.box3.actual_operation_pipeline import (
     annotate_unsupported_lines,
     run_box3_actual_operation,
 )
-from butler_pc_core.cards.box3.actual_runner_assets import ActualRunnerAssetConfig, BASE_MODEL_PATH_ENV
+from butler_pc_core.cards.box3.actual_runner_assets import ActualRunnerAssetConfig
 from butler_pc_core.cards.box3.endpoint_wiring import run_box3_endpoint_wiring
 from butler_pc_core.cards.box3.helper_component_guard import build_example_component_use_guard
 from butler_pc_core.cards.box3.model_identity import hash_model_file_for_security
@@ -47,11 +47,10 @@ def _approval(scope_digest: str) -> dict:
     }
 
 
-def _write_model(tmp_path, monkeypatch) -> str:
+def _write_model(tmp_path) -> tuple[object, str]:
     model = tmp_path / "butler-1.7b-v9-2-r2b-q4_k_m.gguf"
     model.write_bytes(b"BOX3-LABEL-DEMOTION-MODEL" * 256)
-    monkeypatch.setenv(BASE_MODEL_PATH_ENV, str(model))
-    return hash_model_file_for_security(str(model)).model_digest
+    return model, hash_model_file_for_security(str(model)).model_digest
 
 
 def _unsupported_runner(_env) -> str:
@@ -66,7 +65,7 @@ def _unsupported_runner(_env) -> str:
 
 
 def test_unsupported_claim_is_real_candidate_with_runtime_label(tmp_path, monkeypatch):
-    _write_model(tmp_path, monkeypatch)
+    model, _ = _write_model(tmp_path)
     env = Box3ActualRuntimeEnvelope.from_raw(
         reference_texts=[REFERENCE],
         drafting_request="납품 일정을 반영해 보고서 초안을 작성하세요.",
@@ -75,7 +74,11 @@ def test_unsupported_claim_is_real_candidate_with_runtime_label(tmp_path, monkey
 
     verdict = run_box3_actual_operation(
         env,
-        base_config=ActualRunnerAssetConfig(allow_test_asset=True),
+        base_config=ActualRunnerAssetConfig(
+            allow_test_asset=True,
+            test_asset_path=model,
+            readonly_required=False,
+        ),
         helper_component_guard=_guard(),
         runner=_unsupported_runner,
     )
@@ -93,7 +96,7 @@ def test_unsupported_claim_is_real_candidate_with_runtime_label(tmp_path, monkey
 
 
 def test_endpoint_exposes_label_metadata_and_real_candidate_status(tmp_path, monkeypatch):
-    model_digest = _write_model(tmp_path, monkeypatch)
+    model, model_digest = _write_model(tmp_path)
 
     response = run_box3_endpoint_wiring(
         reference_docs=[REFERENCE],
@@ -102,7 +105,11 @@ def test_endpoint_exposes_label_metadata_and_real_candidate_status(tmp_path, mon
         approval_config=_approval(model_digest),
         helper_component_guard=_guard(),
         fixed_eval_pass=True,
-        base_config=ActualRunnerAssetConfig(allow_test_asset=True),
+        base_config=ActualRunnerAssetConfig(
+            allow_test_asset=True,
+            test_asset_path=model,
+            readonly_required=False,
+        ),
         runner=_unsupported_runner,
     )
 
@@ -132,7 +139,7 @@ def test_label_matching_failure_labels_all_factual_lines_without_silent_pass():
 
 
 def test_outbound_dlp_guard_prevents_labeled_draft_output(tmp_path, monkeypatch):
-    _write_model(tmp_path, monkeypatch)
+    model, _ = _write_model(tmp_path)
 
     def leaking_runner(_env) -> str:
         return (
@@ -150,7 +157,11 @@ def test_outbound_dlp_guard_prevents_labeled_draft_output(tmp_path, monkeypatch)
     )
     verdict = run_box3_actual_operation(
         env,
-        base_config=ActualRunnerAssetConfig(allow_test_asset=True),
+        base_config=ActualRunnerAssetConfig(
+            allow_test_asset=True,
+            test_asset_path=model,
+            readonly_required=False,
+        ),
         helper_component_guard=_guard(),
         runner=leaking_runner,
     )
@@ -161,7 +172,7 @@ def test_outbound_dlp_guard_prevents_labeled_draft_output(tmp_path, monkeypatch)
 
 
 def test_hard_approval_failure_blocks_before_unsupported_review_candidate(tmp_path, monkeypatch):
-    model_digest = _write_model(tmp_path, monkeypatch)
+    model, model_digest = _write_model(tmp_path)
     approval = _approval(model_digest)
     approval["kill_switch_enabled"] = True
     env = Box3ActualRuntimeEnvelope.from_raw(
@@ -172,7 +183,11 @@ def test_hard_approval_failure_blocks_before_unsupported_review_candidate(tmp_pa
 
     verdict = run_box3_actual_operation(
         env,
-        base_config=ActualRunnerAssetConfig(allow_test_asset=True),
+        base_config=ActualRunnerAssetConfig(
+            allow_test_asset=True,
+            test_asset_path=model,
+            readonly_required=False,
+        ),
         helper_component_guard=_guard(),
         human_approval_config=approval,
         fixed_eval_pass=True,

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.invalid/contracts/asset-status.schema.json",
+  "title": "Butler Redacted Asset Status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "overall_state",
+    "groups"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "overall_state": {
+      "enum": [
+        "AVAILABLE",
+        "UNAVAILABLE",
+        "VERIFYING",
+        "DEGRADED"
+      ]
+    },
+    "groups": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/group"
+      }
+    }
+  },
+  "$defs": {
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "asset_group",
+        "group_version",
+        "state"
+      ],
+      "properties": {
+        "asset_group": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+        },
+        "group_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "state": {
+          "enum": [
+            "AVAILABLE",
+            "UNAVAILABLE",
+            "NOT_INSTALLED",
+            "NOT_REQUIRED",
+            "VERIFYING"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "ASSET_UNAVAILABLE",
+            "ASSET_INVALID",
+            "NOT_INSTALLED",
+            "NOT_REQUIRED",
+            "VERIFYING"
+          ]
+        }
+      }
+    }
+  }
+}

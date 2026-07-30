@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/asset-provenance-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "payload", "signature"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package_sha256",
+        "repository_uri",
+        "source_oid",
+        "source_tree_oid",
+        "manifest_set_sha256",
+        "build_configuration_sha256",
+        "builder_id",
+        "workflow_id",
+        "invocation_id",
+        "pr_head_oid",
+        "trust_policy_sha256"
+      ],
+      "properties": {
+        "package_sha256": {"$ref": "#/$defs/sha256"},
+        "repository_uri": {"type": "string", "minLength": 8, "maxLength": 512},
+        "source_oid": {"$ref": "#/$defs/git_oid"},
+        "source_tree_oid": {"$ref": "#/$defs/git_oid"},
+        "manifest_set_sha256": {"$ref": "#/$defs/sha256"},
+        "build_configuration_sha256": {"$ref": "#/$defs/sha256"},
+        "builder_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "workflow_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "invocation_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "pr_head_oid": {"$ref": "#/$defs/git_oid"},
+        "trust_policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "key_id", "value_b64"],
+      "properties": {
+        "algorithm": {"const": "ed25519"},
+        "key_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"},
+        "value_b64": {"type": "string", "minLength": 86, "maxLength": 96}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git_oid": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "hex"],
+          "properties": {
+            "algorithm": {"const": "sha1"},
+            "hex": {"type": "string", "pattern": "^(?!0{40}$)(?!f{40}$)[0-9a-f]{40}$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "hex"],
+          "properties": {
+            "algorithm": {"const": "sha256"},
+            "hex": {"type": "string", "pattern": "^(?!0{64}$)(?!f{64}$)[0-9a-f]{64}$"}
+          }
+        }
+      ]
+    }
+  }
+}

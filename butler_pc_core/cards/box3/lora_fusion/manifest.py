@@ -79,13 +79,30 @@ def build_diagnosis_only_manifest(
     method = "already_fused" if diagnosis_status == "ALREADY_FUSED_CONFIRMED" else "inconclusive"
     mapped_status = "ALREADY_FUSED_CONFIRMED" if diagnosis_status == "ALREADY_FUSED_CONFIRMED" else "INCONCLUSIVE"
     adapters = [
-        FusionAdapterRef("helper3_format", "format", MODEL_ADAPTER_HELPERS["helper3_format"], "file", "ref:BUTLER_HELPER3_FORMAT_LORA"),
-        FusionAdapterRef("helper5_tool_call", "intent", MODEL_ADAPTER_HELPERS["helper5_tool_call"], "file", "ref:BUTLER_HELPER5_TOOL_CALL_LORA"),
+        FusionAdapterRef(
+            "helper3_format",
+            "format",
+            MODEL_ADAPTER_HELPERS["helper3_format"],
+            "file",
+            "asset-role:box3.helpers/helper3_format",
+        ),
+        FusionAdapterRef(
+            "helper5_tool_call",
+            "intent",
+            MODEL_ADAPTER_HELPERS["helper5_tool_call"],
+            "file",
+            "asset-role:box3.helpers/helper5_tool_call",
+        ),
     ]
     return LoraFusionManifest(
         schema_version=SCHEMA_VERSION_MANIFEST,
         diagnosis_status=mapped_status,  # type: ignore[arg-type]
-        base_model=FusionModelRef(base_model_choice, base_model_sha256_full, "ref:BUTLER_BOX3_BASE_MODEL_PATH", True),
+        base_model=FusionModelRef(
+            base_model_choice,
+            base_model_sha256_full,
+            "asset-role:box3.model/model_gguf",
+            True,
+        ),
         adapters=adapters,
         fusion_method=method,  # type: ignore[arg-type]
     )

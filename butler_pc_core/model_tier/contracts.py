@@ -111,7 +111,7 @@ class ModelVariant:
     family: str
     tier: ModelTier
     quantization: str
-    path_env_key: str
+    asset_role: str
     allowed_boxes: tuple[str, ...]
     embedded_adapters: tuple[str, ...] = ()
     external_helpers: tuple[str, ...] = ()
@@ -135,8 +135,8 @@ class ModelVariant:
             raise ValueError("AVAILABLE_MODEL_REQUIRES_SEALED_DIGEST")
         if self.max_context_tokens is not None and self.max_context_tokens <= 0:
             raise ValueError("MODEL_VARIANT_CONTEXT_INVALID")
-        if self.availability is not Availability.DISABLED and not self.path_env_key:
-            raise ValueError("MODEL_VARIANT_PATH_ENV_REQUIRED")
+        if self.availability is not Availability.DISABLED and not self.asset_role:
+            raise ValueError("MODEL_VARIANT_ASSET_ROLE_REQUIRED")
         if len(set(self.allowed_boxes)) != len(self.allowed_boxes):
             raise ValueError("MODEL_VARIANT_DUPLICATE_SCOPE")
 

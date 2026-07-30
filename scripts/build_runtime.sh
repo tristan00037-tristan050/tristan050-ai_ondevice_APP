@@ -242,5 +242,5 @@ if [[ "${MODEL_ONLY}" == "1" ]]; then
   log "model-only 완료."
 else
   log "완료. 다음 단계:"
-  log "  [2] CMAKE_ARGS=\"-DGGML_METAL=ON\" ${PYBIN} -m pip install llama-cpp-python"
+  log "  [2] CMAKE_ARGS=\"-DGGML_METAL=ON\" ${PYBIN} -m pip install llama-cpp-python==0.3.20"
 fi

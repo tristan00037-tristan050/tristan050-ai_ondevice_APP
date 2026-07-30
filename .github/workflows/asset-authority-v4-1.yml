@@ -1,0 +1,162 @@
+name: asset-authority-v6
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CONTROL_PLANE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  asset-no-env-capability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.CONTROL_PLANE_SHA }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - name: Bind exact source
+        run: |
+          echo "HEAD_OID=$(git rev-parse HEAD)"
+          echo "TREE_OID=$(git rev-parse 'HEAD^{tree}')"
+          test -z "$(git status --porcelain=v1)" || { echo "TREE_CLEAN_OK=0"; echo "ERROR_CODE=TREE_NOT_CLEAN"; exit 1; }
+          echo "TREE_CLEAN_OK=1"
+      - run: >-
+          python -m pytest
+          tests/assets/test_required_nodes.py
+          tests/assets/test_no_env_capability.py
+          tests/assets/test_development_sidecar_launcher.py
+          -q
+
+  asset-child-env-isolation:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, ref: "${{ env.CONTROL_PLANE_SHA }}"}
+      - run: test "$(git rev-parse HEAD)" = "${CONTROL_PLANE_SHA}" && test -z "$(git status --porcelain=v1)"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - run: mkdir -p butler-desktop/src-tauri/python-runtime butler-desktop/src-tauri/models butler-desktop/src-tauri/binaries
+      - run: python -m pytest tests/assets/test_child_environment.py -q
+
+  asset-loader-object-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, ref: "${{ env.CONTROL_PLANE_SHA }}"}
+      - run: test "$(git rev-parse HEAD)" = "${CONTROL_PLANE_SHA}" && test -z "$(git status --porcelain=v1)"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - run: python -m pytest tests/assets/test_loader_object_linux.py -q
+
+  asset-loader-object-macos:
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, ref: "${{ env.CONTROL_PLANE_SHA }}"}
+      - run: test "$(git rev-parse HEAD)" = "${CONTROL_PLANE_SHA}" && test -z "$(git status --porcelain=v1)"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - run: python -m pytest tests/assets/test_loader_object_macos.py -q
+
+  asset-trust-root-attacks:
+    runs-on: macos-14
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, ref: "${{ env.CONTROL_PLANE_SHA }}"}
+      - run: test "$(git rev-parse HEAD)" = "${CONTROL_PLANE_SHA}" && test -z "$(git status --porcelain=v1)"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - run: mkdir -p butler-desktop/src-tauri/python-runtime butler-desktop/src-tauri/models butler-desktop/src-tauri/binaries
+      - run: python -m pytest tests/assets/test_trust_root.py tests/assets/test_trust_state_propagation.py -q
+      - run: cargo test --locked --manifest-path butler-desktop/src-tauri/Cargo.toml asset_trust_root
+
+  asset-consumer-architecture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, ref: "${{ env.CONTROL_PLANE_SHA }}"}
+      - run: test "$(git rev-parse HEAD)" = "${CONTROL_PLANE_SHA}" && test -z "$(git status --porcelain=v1)"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - run: python -m pytest tests/assets/test_consumer_inventory.py -q
+      - name: Bind inventory receipt to control-plane HEAD
+        env:
+          ASSET_CONTROL_PLANE_SHA: ${{ env.CONTROL_PLANE_SHA }}
+          ASSET_INVENTORY_RECEIPT_OUT: ${{ runner.temp }}/asset-inventory-binding-receipt.json
+        run: python scripts/verify_asset_consumer_inventory.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asset-inventory-binding-receipt
+          path: ${{ runner.temp }}/asset-inventory-binding-receipt.json
+          if-no-files-found: error
+
+  asset-format-corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, ref: "${{ env.CONTROL_PLANE_SHA }}"}
+      - run: test "$(git rev-parse HEAD)" = "${CONTROL_PLANE_SHA}" && test -z "$(git status --porcelain=v1)"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - run: python -m pytest tests/assets/test_asset_authority_v4_1.py -q
+
+  asset-supply-chain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, ref: "${{ env.CONTROL_PLANE_SHA }}"}
+      - run: test "$(git rev-parse HEAD)" = "${CONTROL_PLANE_SHA}" && test -z "$(git status --porcelain=v1)"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - run: python -m pytest tests/assets/test_supply_chain.py -q
+      - run: python scripts/verify_asset_runtime_supply_chain.py
+
+  asset-package-offline-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, ref: "${{ env.CONTROL_PLANE_SHA }}"}
+      - run: test "$(git rev-parse HEAD)" = "${CONTROL_PLANE_SHA}" && test -z "$(git status --porcelain=v1)"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - run: python -m pytest tests/assets/test_asset_trust_boundary.py -q
+
+  repo-wide-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, ref: "${{ env.CONTROL_PLANE_SHA }}"}
+      - run: test "$(git rev-parse HEAD)" = "${CONTROL_PLANE_SHA}" && test -z "$(git status --porcelain=v1)"
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - run: mkdir -p butler-desktop/src-tauri/python-runtime butler-desktop/src-tauri/models butler-desktop/src-tauri/binaries
+      - run: python -m pytest tests/ -q --ignore=tests/turboq/ --ignore=tests/eval/test_eval_hardcase.py --ignore=tests/eval/test_eval_judge_v3.py

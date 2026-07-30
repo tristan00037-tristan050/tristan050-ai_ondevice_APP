@@ -10,14 +10,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
 from butler_pc_core.inference.model_identity import (
-    BOX3_MODEL_NAME,
-    BOX3_MODEL_PATH_ENV,
-    FREE_CHAT_MODEL_NAME,
     MAIN_EQUALS_BOX3,
-    MAIN_MODEL_PATH_ENV,
-    MAIN_USES_BOX3,
     assert_main_not_box3,
-    is_box3_model_path,
     model_path_conflict_reason,
     sidecar_model_status_payload,
 )
@@ -25,60 +19,59 @@ from butler_pc_core.inference.model_identity import (
 pytestmark = pytest.mark.no_sidecar_token
 
 
-def test_model_path_identity_detects_box3_model_forbidden_as_main():
-    env = {
-        MAIN_MODEL_PATH_ENV: f"/Applications/Butler.app/Contents/Resources/models/box3/{BOX3_MODEL_NAME}",
+def _authorized(*, main_digest: str, box3_digest: str) -> dict[str, dict[str, object]]:
+    return {
+        "free_chat": {
+            "asset_digest": main_digest,
+            "model_present": True,
+        },
+        "box3_canonical": {
+            "asset_digest": box3_digest,
+            "model_present": True,
+        },
     }
 
-    assert is_box3_model_path(env[MAIN_MODEL_PATH_ENV])
-    assert model_path_conflict_reason(env) == MAIN_USES_BOX3
-    with pytest.raises(RuntimeError, match=MAIN_USES_BOX3):
-        assert_main_not_box3(env)
+
+def test_model_identity_detects_equal_authorized_asset_digests():
+    shared = "sha256:" + "a" * 64
+    authorized = _authorized(main_digest=shared, box3_digest=shared)
+
+    assert model_path_conflict_reason(authorized) == MAIN_EQUALS_BOX3
+    with pytest.raises(RuntimeError, match=MAIN_EQUALS_BOX3):
+        assert_main_not_box3(authorized)
 
 
-def test_model_path_identity_detects_equal_main_and_box3_paths():
-    shared = "/tmp/butler/models/shared.gguf"
-    env = {
-        MAIN_MODEL_PATH_ENV: shared,
-        BOX3_MODEL_PATH_ENV: shared,
-    }
+def test_model_status_payload_is_digest_only():
+    main_digest = "sha256:" + "a" * 64
+    box3_digest = "sha256:" + "b" * 64
 
-    assert model_path_conflict_reason(env) == MAIN_EQUALS_BOX3
-
-
-def test_model_path_status_payload_is_digest_only(tmp_path):
-    main = tmp_path / "models" / FREE_CHAT_MODEL_NAME
-    box3 = tmp_path / "models" / "box3" / BOX3_MODEL_NAME
-    main.parent.mkdir(parents=True)
-    box3.parent.mkdir(parents=True)
-    main.write_bytes(b"main")
-    box3.write_bytes(b"box3")
-    env = {
-        MAIN_MODEL_PATH_ENV: str(main),
-        BOX3_MODEL_PATH_ENV: str(box3),
-    }
-
-    payload = sidecar_model_status_payload(status="ready", environ=env)
+    payload = sidecar_model_status_payload(
+        status="ready",
+        authorized_models=_authorized(
+            main_digest=main_digest,
+            box3_digest=box3_digest,
+        ),
+    )
 
     assert payload["status"] == "ready"
     assert payload["model_role"] == "free_chat"
     assert payload["model_family"] == "qwen3-4b"
-    assert payload["model_path_digest"].startswith("sha256:")
+    assert payload["model_path_digest"] == main_digest
     assert payload["model_path_conflict"] is False
-    assert str(tmp_path) not in repr(payload)
     assert payload["box3_model"]["model_role"] == "box3_canonical"
     assert payload["box3_model"]["model_family"] == "butler-1.7b-v9.2-r2b"
+    assert payload["box3_model"]["model_path_digest"] == box3_digest
 
 
-def test_sidecar_model_status_omits_raw_paths(tmp_path, monkeypatch):
-    main = tmp_path / "models" / FREE_CHAT_MODEL_NAME
-    box3 = tmp_path / "models" / "box3" / BOX3_MODEL_NAME
-    main.parent.mkdir(parents=True)
-    box3.parent.mkdir(parents=True)
+def test_sidecar_model_status_ignores_raw_model_path_environment(
+    tmp_path, monkeypatch
+):
+    main = tmp_path / "main.gguf"
+    box3 = tmp_path / "box3.gguf"
     main.write_bytes(b"main")
     box3.write_bytes(b"box3")
-    monkeypatch.setenv(MAIN_MODEL_PATH_ENV, str(main))
-    monkeypatch.setenv(BOX3_MODEL_PATH_ENV, str(box3))
+    monkeypatch.setenv("BUTLER_MAIN_MODEL_PATH", str(main))
+    monkeypatch.setenv("BUTLER_BOX3_V9_Q4_MODEL_PATH", str(box3))
 
     import butler_sidecar
 
@@ -93,20 +86,23 @@ def test_sidecar_model_status_omits_raw_paths(tmp_path, monkeypatch):
     assert "model_path" not in payload
     assert str(tmp_path) not in response.text
     assert payload["model_role"] == "free_chat"
-    assert payload["model_family"] == "qwen3-4b"
-    assert payload["box3_model"]["model_family"] == "butler-1.7b-v9.2-r2b"
+    assert payload["model_family"] == ""
+    assert payload["model_present"] is False
+    assert payload["box3_model"]["model_family"] == ""
+    assert payload["box3_model"]["model_present"] is False
 
 
-def test_sidecar_init_shared_llm_fails_closed_on_main_box3_path(tmp_path, monkeypatch):
-    box3 = tmp_path / "models" / "box3" / BOX3_MODEL_NAME
-    box3.parent.mkdir(parents=True)
-    box3.write_bytes(b"box3")
-    monkeypatch.setenv(MAIN_MODEL_PATH_ENV, str(box3))
+def test_sidecar_init_shared_llm_does_not_fallback_to_raw_path_env(
+    tmp_path, monkeypatch
+):
+    model = tmp_path / "box3.gguf"
+    model.write_bytes(b"box3")
+    monkeypatch.setenv("BUTLER_MAIN_MODEL_PATH", str(model))
 
     import butler_sidecar
 
     sidecar = importlib.reload(butler_sidecar)
     sidecar._SHARED_LLM = None
 
-    with pytest.raises(RuntimeError, match=MAIN_USES_BOX3):
-        sidecar._init_shared_llm()
+    sidecar._init_shared_llm()
+    assert sidecar._SHARED_LLM.status == "no_model"

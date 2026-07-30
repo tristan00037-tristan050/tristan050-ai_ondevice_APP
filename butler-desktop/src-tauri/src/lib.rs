@@ -1,19 +1,22 @@
 use std::{
-    collections::HashMap,
     env,
     fs::{self, OpenOptions},
     io::Write,
     path::PathBuf,
-    process::Command,
+    process::Child,
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::Manager;
-use tauri_plugin_shell::{
-    process::{CommandChild, CommandEvent},
-    ShellExt,
+#[cfg(unix)]
+use std::{
+    io::{BufRead, BufReader, Read},
+    process::{Command, Stdio},
 };
+use tauri::Manager;
 
+mod asset_trust_root;
+#[path = "../asset_trust_root_constants.rs"]
+mod asset_trust_root_constants;
 mod build_identity;
 // build script 전용 모듈이라 라이브러리 빌드에는 들어가지 않는다. 그대로 두면 게이트 판정
 // 규칙이 `cargo test` 에서 한 번도 실행되지 않으므로, 시험 빌드에만 끌어와 회귀 시험이
@@ -27,33 +30,17 @@ mod distribution_flag_contract;
 mod export;
 mod runtime_trust;
 
-const SIDECAR_ENV_CONFIG: &str = "sidecar-env.json";
+#[cfg(unix)]
+const ASSET_BOOTSTRAP_FD_ENV: &str = "BUTLER_BOOTSTRAP_FD";
+#[cfg(unix)]
 const BUTLER_APP_DATA_DIR_ENV: &str = "BUTLER_APP_DATA_DIR";
+#[cfg(unix)]
 const BUTLER_HOME_BOOTSTRAP_ENV: &str = "BUTLER_HOME_BOOTSTRAP_NEW_INSTALL";
+#[cfg(unix)]
 const MODEL_TIER_NATIVE_TELEMETRY_ENV: &str = "BUTLER_MODEL_TIER_NATIVE_TELEMETRY_JSON";
-const BUTLER_MODEL_PATH_ENV: &str = "BUTLER_MODEL_PATH";
-const BOX3_V9_MODEL_PATH_ENV: &str = "BUTLER_BOX3_V9_Q4_MODEL_PATH";
-const FREE_CHAT_MODEL_NAME: &str = "qwen3-4b-q4_k_m.gguf";
-const BOX3_MODEL_NAME: &str = "butler-1.7b-v9-2-r2b-q4_k_m.gguf";
-const HELPER4_SDK_ENV: &str = "BUTLER_HELPER4_GROUNDING_SDK_PATH";
-const HELPER7_SDK_ENV: &str = "BUTLER_HELPER7_TABLE_FIGURE_SDK_PATH";
-const HELPER8_SDK_ENV: &str = "BUTLER_HELPER8_COMPANY_STYLE_SDK_PATH";
-const HELPER2_EMBEDDING_ENV: &str = "BUTLER_HELPER2_EMBEDDING_SDK_PATH";
-const BOX3_HUMAN_APPROVAL_ENV: &str = "BUTLER_BOX3_HUMAN_APPROVAL_CONFIG_PATH";
-const BOX3_HELPER_GUARD_ENV: &str = "BUTLER_BOX3_HELPER_COMPONENT_GUARD_PATH";
-const BOX3_FIXED_EVAL_ENV: &str = "BUTLER_BOX3_FIXED_EVAL_REPORT_PATH";
-const BOX3_EXTRA_ENV_KEYS: [&str; 7] = [
-    HELPER4_SDK_ENV,
-    HELPER7_SDK_ENV,
-    HELPER8_SDK_ENV,
-    HELPER2_EMBEDDING_ENV,
-    BOX3_HUMAN_APPROVAL_ENV,
-    BOX3_HELPER_GUARD_ENV,
-    BOX3_FIXED_EVAL_ENV,
-];
 
 struct SidecarState {
-    child: Mutex<Option<CommandChild>>,
+    child: Mutex<Option<Child>>,
 }
 
 fn sidecar_launch_log_path() -> PathBuf {
@@ -80,127 +67,13 @@ fn append_sidecar_launch_log(message: &str) {
     }
 }
 
-fn read_sidecar_env_config(app: &tauri::AppHandle) -> HashMap<String, String> {
-    let mut values = HashMap::new();
-    let Ok(config_dir) = app.path().app_config_dir() else {
-        append_sidecar_launch_log("config_dir=unavailable");
-        return values;
-    };
-    let config_path = config_dir.join(SIDECAR_ENV_CONFIG);
-    let Ok(text) = fs::read_to_string(&config_path) else {
-        append_sidecar_launch_log("sidecar_env_config=missing");
-        return values;
-    };
-    let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
-        append_sidecar_launch_log("sidecar_env_config=invalid_json");
-        return values;
-    };
-    let Some(object) = json.as_object() else {
-        append_sidecar_launch_log("sidecar_env_config=not_object");
-        return values;
-    };
-    for key in [
-        BUTLER_MODEL_PATH_ENV,
-        BOX3_V9_MODEL_PATH_ENV,
-        HELPER4_SDK_ENV,
-        HELPER7_SDK_ENV,
-        HELPER8_SDK_ENV,
-        HELPER2_EMBEDDING_ENV,
-        BOX3_HUMAN_APPROVAL_ENV,
-        BOX3_HELPER_GUARD_ENV,
-        BOX3_FIXED_EVAL_ENV,
-    ] {
-        if let Some(value) = object.get(key).and_then(|v| v.as_str()) {
-            let trimmed = value.trim();
-            if !trimmed.is_empty() {
-                values.insert(key.to_string(), trimmed.to_string());
-            }
-        }
-    }
-    values
-}
-
-fn env_value_or_config(config: &HashMap<String, String>, key: &str) -> Option<String> {
-    env::var(key)
-        .ok()
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
-        .or_else(|| config.get(key).cloned())
-}
-
-fn push_if_resource_exists_and_unset(values: &mut Vec<(String, String)>, key: &str, path: PathBuf) {
-    if path.exists() && !values.iter().any(|(k, _)| k == key) {
-        values.push((key.to_string(), path.to_string_lossy().to_string()));
-    }
-}
-
-fn push_free_chat_resource_env(app: &tauri::AppHandle, values: &mut Vec<(String, String)>) {
-    let Ok(resource_dir) = app.path().resource_dir() else {
-        append_sidecar_launch_log("free_chat_resource_dir=unavailable");
-        return;
-    };
-    let chat_model = resource_dir.join("models").join(FREE_CHAT_MODEL_NAME);
-    push_if_resource_exists_and_unset(values, BUTLER_MODEL_PATH_ENV, chat_model);
-}
-
-fn push_box3_resource_env(app: &tauri::AppHandle, values: &mut Vec<(String, String)>) {
-    let Ok(resource_dir) = app.path().resource_dir() else {
-        append_sidecar_launch_log("box3_resource_dir=unavailable");
-        return;
-    };
-    let models_box3 = resource_dir.join("models").join("box3");
-    let model_path = models_box3.join(BOX3_MODEL_NAME);
-    let core_box3_sdk = resource_dir
-        .join("butler_pc_core")
-        .join("cards")
-        .join("box3")
-        .join("sdk");
-
-    push_if_resource_exists_and_unset(values, BOX3_V9_MODEL_PATH_ENV, model_path.clone());
-    push_if_resource_exists_and_unset(
-        values,
-        HELPER4_SDK_ENV,
-        core_box3_sdk.join("helper4_grounding_sdk.py"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        HELPER7_SDK_ENV,
-        core_box3_sdk.join("helper7_table_figure_sdk.py"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        HELPER8_SDK_ENV,
-        core_box3_sdk.join("helper8_company_style_sdk.py"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        HELPER2_EMBEDDING_ENV,
-        models_box3.join("helper2_embedding"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        BOX3_HUMAN_APPROVAL_ENV,
-        models_box3.join("config").join("human_approval_v1.json"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        BOX3_HELPER_GUARD_ENV,
-        models_box3
-            .join("config")
-            .join("helper_component_guard_v1.json"),
-    );
-    push_if_resource_exists_and_unset(
-        values,
-        BOX3_FIXED_EVAL_ENV,
-        models_box3.join("eval").join("fixed_eval_report_v1.json"),
-    );
-}
-
+#[cfg(unix)]
 fn parse_positive_u64(text: &str) -> Option<u64> {
     let value = text.trim().parse::<u64>().ok()?;
     (value > 0).then_some(value)
 }
 
+#[cfg(unix)]
 fn parse_vm_stat_available_bytes(text: &str) -> Option<u64> {
     let page_size = text
         .lines()
@@ -233,6 +106,7 @@ fn parse_vm_stat_available_bytes(text: &str) -> Option<u64> {
     found.then(|| pages.saturating_mul(page_size))
 }
 
+#[cfg(unix)]
 fn command_stdout(program: &str, args: &[&str]) -> Option<String> {
     let output = Command::new(program).args(args).output().ok()?;
     if !output.status.success() {
@@ -241,6 +115,7 @@ fn command_stdout(program: &str, args: &[&str]) -> Option<String> {
     String::from_utf8(output.stdout).ok()
 }
 
+#[cfg(unix)]
 fn collect_model_tier_native_telemetry_json() -> Option<String> {
     let total = command_stdout("/usr/sbin/sysctl", &["-n", "hw.memsize"])
         .and_then(|text| parse_positive_u64(&text));
@@ -275,42 +150,8 @@ fn collect_model_tier_native_telemetry_json() -> Option<String> {
     .ok()
 }
 
-fn env_value<'a>(values: &'a [(String, String)], key: &str) -> Option<&'a str> {
-    values
-        .iter()
-        .find(|(existing, _)| existing == key)
-        .map(|(_, value)| value.as_str())
-}
-
-fn is_box3_model_path(value: &str) -> bool {
-    let normalized = value.replace('\\', "/");
-    normalized.contains(BOX3_MODEL_NAME) || normalized.contains("models/box3")
-}
-
-fn validate_model_path_invariants(values: &[(String, String)]) -> Result<(), String> {
-    let main = env_value(values, BUTLER_MODEL_PATH_ENV);
-    let box3 = env_value(values, BOX3_V9_MODEL_PATH_ENV);
-
-    if let Some(main_value) = main {
-        if is_box3_model_path(main_value) {
-            append_sidecar_launch_log("model_path_conflict main_model_is_box3=true");
-            return Err("MODEL_PATH_CONFLICT_MAIN_USES_BOX3".to_string());
-        }
-    }
-    if let (Some(main_value), Some(box3_value)) = (main, box3) {
-        if main_value == box3_value {
-            append_sidecar_launch_log("model_path_conflict main_equals_box3=true");
-            return Err("MODEL_PATH_CONFLICT_MAIN_EQUALS_BOX3".to_string());
-        }
-    }
-    Ok(())
-}
-
+#[cfg(unix)]
 fn resolve_sidecar_env(app: &tauri::AppHandle) -> Result<Vec<(String, String)>, String> {
-    let config = read_sidecar_env_config(app);
-    let butler_model_path = env_value_or_config(&config, BUTLER_MODEL_PATH_ENV);
-    let box3_v9_model_path = env_value_or_config(&config, BOX3_V9_MODEL_PATH_ENV);
-
     let mut values = Vec::new();
     let app_data_dir = app
         .path()
@@ -343,35 +184,30 @@ fn resolve_sidecar_env(app: &tauri::AppHandle) -> Result<Vec<(String, String)>, 
     if !has_existing_home {
         values.push((BUTLER_HOME_BOOTSTRAP_ENV.to_string(), "1".to_string()));
     }
-    if let Some(value) = butler_model_path {
-        values.push((BUTLER_MODEL_PATH_ENV.to_string(), value));
-    }
-    if let Some(value) = box3_v9_model_path {
-        values.push((BOX3_V9_MODEL_PATH_ENV.to_string(), value));
-    }
-
-    for key in BOX3_EXTRA_ENV_KEYS {
-        if values.iter().any(|(existing, _)| existing == key) {
-            continue;
-        }
-        if let Some(value) = env_value_or_config(&config, key) {
-            values.push((key.to_string(), value));
-        }
-    }
-
-    push_free_chat_resource_env(app, &mut values);
-    push_box3_resource_env(app, &mut values);
     if let Some(telemetry) = collect_model_tier_native_telemetry_json() {
         values.push((MODEL_TIER_NATIVE_TELEMETRY_ENV.to_string(), telemetry));
     }
-    validate_model_path_invariants(&values)?;
-
     append_sidecar_launch_log(&format!(
-        "resolved_env butler_model_path={} box3_v9_model_path={}",
-        values.iter().any(|(k, _)| k == BUTLER_MODEL_PATH_ENV),
-        values.iter().any(|(k, _)| k == BOX3_V9_MODEL_PATH_ENV)
+        "resolved_env asset_bootstrap={} legacy_model_paths=0",
+        true
     ));
     Ok(values)
+}
+
+#[cfg(unix)]
+fn configure_sidecar_environment(
+    command: &mut Command,
+    bootstrap_fd: i32,
+    sidecar_env: &[(String, String)],
+) {
+    command
+        .env_clear()
+        .env("LANG", "C.UTF-8")
+        .env("LC_ALL", "C.UTF-8")
+        .env(ASSET_BOOTSTRAP_FD_ENV, bootstrap_fd.to_string());
+    for (name, value) in sidecar_env {
+        command.env(name, value);
+    }
 }
 
 fn stop_sidecar(app: &tauri::AppHandle, reason: &str) {
@@ -380,126 +216,291 @@ fn stop_sidecar(app: &tauri::AppHandle, reason: &str) {
         let x = state.child.lock().unwrap().take();
         x
     };
-    if let Some(child) = child_opt {
+    if let Some(mut child) = child_opt {
         let _ = child.kill();
         append_sidecar_launch_log(&format!("stop_sidecar reason={}", reason));
         println!("[main] sidecar 종료 완료 ({})", reason);
     }
 }
 
-async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<Option<CommandChild>, String> {
-    // dev 외부 sidecar 모드: 앱이 자체 sidecar를 띄우지 않고 외부(수동) sidecar를 사용
-    if env::var("BUTLER_SIDECAR_EXTERNAL").ok().as_deref() == Some("1") {
-        append_sidecar_launch_log("spawn_sidecar=external_skip");
-        return Ok(None);
+#[cfg(unix)]
+fn open_asset_root(app: &tauri::AppHandle) -> Result<std::fs::File, String> {
+    use std::ffi::CString;
+    use std::os::fd::FromRawFd;
+    use std::os::unix::ffi::OsStrExt;
+
+    let asset_root = app
+        .path()
+        .resource_dir()
+        .map_err(|_| "ASSET_RESOURCE_ROOT_UNAVAILABLE".to_string())?
+        .join("assets");
+    let raw = CString::new(asset_root.as_os_str().as_bytes())
+        .map_err(|_| "ASSET_RESOURCE_ROOT_INVALID".to_string())?;
+    let fd = unsafe {
+        libc::open(
+            raw.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        return Err("ASSET_RESOURCE_ROOT_UNAVAILABLE".to_string());
     }
-    append_sidecar_launch_log("spawn_sidecar=start");
-    let sidecar_env = resolve_sidecar_env(app)?;
-    let (mut rx, child) = app
-        .shell()
-        .sidecar("butler-sidecar")
-        .map_err(|e| {
-            let message = format!("sidecar 명령 생성 실패: {}", e);
-            append_sidecar_launch_log(&message);
-            message
-        })?
-        .args(["--port", "8765", "--host", "127.0.0.1"])
-        .envs(sidecar_env)
-        .spawn()
-        .map_err(|e| {
-            let message = format!("sidecar 실행 실패: {}", e);
-            append_sidecar_launch_log(&message);
-            message
-        })?;
-    append_sidecar_launch_log("spawn_sidecar=ok");
-
-    // 로그 수신 — 별도 task로 분리 (spawn_sidecar를 블록하지 않음)
-    tauri::async_runtime::spawn(async move {
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(line) => {
-                    if let Ok(s) = String::from_utf8(line) {
-                        append_sidecar_launch_log(&format!("stdout {}", s.trim_end()));
-                        print!("[sidecar] {}", s);
-                    }
-                }
-                CommandEvent::Stderr(line) => {
-                    if let Ok(s) = String::from_utf8(line) {
-                        append_sidecar_launch_log(&format!("stderr {}", s.trim_end()));
-                        eprint!("[sidecar-err] {}", s);
-                    }
-                }
-                CommandEvent::Error(err) => {
-                    append_sidecar_launch_log(&format!("event_error {}", err));
-                    eprintln!("[sidecar-error] {}", err);
-                }
-                CommandEvent::Terminated(payload) => {
-                    append_sidecar_launch_log(&format!("terminated code={:?}", payload.code));
-                    eprintln!("[sidecar] 종료: code={:?}", payload.code);
-                    break;
-                }
-                _ => {}
-            }
-        }
-    });
-
-    Ok(Some(child))
+    Ok(unsafe { std::fs::File::from_raw_fd(fd) })
 }
 
-#[cfg(test)]
+#[cfg(unix)]
+fn read_asset_root_file(root_fd: i32, name: &str, limit: u64) -> Result<String, String> {
+    use std::ffi::CString;
+    use std::os::fd::FromRawFd;
+
+    if name.is_empty() || name.contains('/') || name.contains("..") {
+        return Err("ASSET_RELATIVE_PATH_INVALID".to_string());
+    }
+    let raw = CString::new(name).map_err(|_| "ASSET_RELATIVE_PATH_INVALID".to_string())?;
+    let fd = unsafe {
+        libc::openat(
+            root_fd,
+            raw.as_ptr(),
+            libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        return Err("ASSET_BUILD_CONTEXT_UNAVAILABLE".to_string());
+    }
+    let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
+    let metadata = file
+        .metadata()
+        .map_err(|_| "ASSET_BUILD_CONTEXT_INVALID".to_string())?;
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > limit {
+        return Err("ASSET_BUILD_CONTEXT_INVALID".to_string());
+    }
+    let mut raw_text = String::new();
+    file.read_to_string(&mut raw_text)
+        .map_err(|_| "ASSET_BUILD_CONTEXT_INVALID".to_string())?;
+    Ok(raw_text)
+}
+
+#[cfg(unix)]
+fn sidecar_command_paths(app: &tauri::AppHandle) -> Result<(PathBuf, PathBuf), String> {
+    let resource_root = app
+        .path()
+        .resource_dir()
+        .map_err(|_| "SIDECAR_RESOURCE_ROOT_UNAVAILABLE".to_string())?;
+    let bundled = (
+        resource_root.join("python/bin/python3"),
+        resource_root.join("butler_sidecar.py"),
+    );
+    let selected = if bundled.0.is_file() && bundled.1.is_file() {
+        bundled
+    } else if cfg!(debug_assertions) {
+        (
+            PathBuf::from("/usr/bin/python3"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../..")
+                .join("butler_sidecar.py"),
+        )
+    } else {
+        return Err("SIDECAR_BUNDLE_INCOMPLETE".to_string());
+    };
+    for path in [&selected.0, &selected.1] {
+        let metadata =
+            fs::symlink_metadata(path).map_err(|_| "SIDECAR_EXECUTABLE_INVALID".to_string())?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() || !path.is_absolute() {
+            return Err("SIDECAR_EXECUTABLE_INVALID".to_string());
+        }
+    }
+    Ok(selected)
+}
+
+#[cfg(unix)]
+async fn spawn_sidecar(app: &tauri::AppHandle) -> Result<Child, String> {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::process::CommandExt;
+
+    append_sidecar_launch_log("spawn_sidecar=start");
+    let sidecar_env = resolve_sidecar_env(app)?;
+    let asset_root = open_asset_root(app)?;
+    let asset_root_fd = asset_root.as_raw_fd();
+    let bootstrap = asset_bootstrap_frame(app, asset_root_fd)?;
+    let mut pipe_fds = [-1_i32; 2];
+    if unsafe { libc::pipe(pipe_fds.as_mut_ptr()) } != 0 {
+        return Err("ASSET_BOOTSTRAP_PIPE_FAILED".to_string());
+    }
+    let bootstrap_read = unsafe { std::fs::File::from_raw_fd(pipe_fds[0]) };
+    let mut bootstrap_write = unsafe { std::fs::File::from_raw_fd(pipe_fds[1]) };
+    bootstrap_write
+        .write_all(&bootstrap)
+        .map_err(|_| "ASSET_BOOTSTRAP_WRITE_FAILED".to_string())?;
+    drop(bootstrap_write);
+
+    let (python, sidecar) = sidecar_command_paths(app)?;
+    let bootstrap_fd = bootstrap_read.as_raw_fd();
+    let mut command = Command::new(python);
+    configure_sidecar_environment(&mut command, bootstrap_fd, &sidecar_env);
+    command
+        .arg(sidecar)
+        .args(["--port", "8765", "--host", "127.0.0.1"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    unsafe {
+        command.pre_exec(move || {
+            for fd in [bootstrap_fd, asset_root_fd] {
+                if libc::fcntl(fd, libc::F_SETFD, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+            }
+            Ok(())
+        });
+    }
+    let mut child = command
+        .spawn()
+        .map_err(|_| "SIDECAR_SPAWN_FAILED".to_string())?;
+    drop(bootstrap_read);
+    drop(asset_root);
+    append_sidecar_launch_log("spawn_sidecar=ok");
+    if let Some(stdout) = child.stdout.take() {
+        std::thread::spawn(move || {
+            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                append_sidecar_launch_log(&format!("stdout {}", line));
+            }
+        });
+    }
+    if let Some(stderr) = child.stderr.take() {
+        std::thread::spawn(move || {
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                append_sidecar_launch_log(&format!("stderr {}", line));
+            }
+        });
+    }
+    Ok(child)
+}
+
+#[cfg(not(unix))]
+async fn spawn_sidecar(_app: &tauri::AppHandle) -> Result<Child, String> {
+    Err("BLOCK_PLATFORM_UNSUPPORTED".to_string())
+}
+
+#[cfg(unix)]
+fn asset_bootstrap_frame(app: &tauri::AppHandle, asset_root_fd: i32) -> Result<Vec<u8>, String> {
+    let app_data_root = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "asset app data root unavailable".to_string())?;
+    fs::create_dir_all(&app_data_root)
+        .map_err(|_| "asset app data root unavailable".to_string())?;
+
+    let commit = option_env!("BUTLER_SOURCE_COMMIT_OID")
+        .filter(|value| !value.is_empty())
+        .unwrap_or("0000000000000000000000000000000000000000");
+    let tree = option_env!("BUTLER_SOURCE_TREE_OID")
+        .filter(|value| !value.is_empty())
+        .unwrap_or("0000000000000000000000000000000000000000");
+    let profile = if option_env!("BUTLER_RELEASE_DISTRIBUTION") == Some("1") {
+        "production"
+    } else {
+        "development"
+    };
+    let oid_valid = |value: &str| {
+        matches!(value.len(), 40 | 64)
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    };
+    if !oid_valid(commit)
+        || !oid_valid(tree)
+        || (profile == "production"
+            && (commit.bytes().all(|byte| byte == b'0') || tree.bytes().all(|byte| byte == b'0')))
+    {
+        return Err("asset native build identity invalid".to_string());
+    }
+    let manifest_set =
+        match read_asset_root_file(asset_root_fd, "ASSET_BUILD_CONTEXT.json", 64 * 1024) {
+            Ok(raw) => {
+                let value = serde_json::from_str::<serde_json::Value>(&raw)
+                    .map_err(|_| "asset build context invalid".to_string())?;
+                let object = value
+                    .as_object()
+                    .ok_or_else(|| "asset build context invalid".to_string())?;
+                let expected_keys = [
+                    "schema_version",
+                    "build_id",
+                    "source_commit",
+                    "source_tree",
+                    "release_profile",
+                    "manifest_set_sha256",
+                    "toolchain",
+                ];
+                if object.len() != expected_keys.len()
+                    || expected_keys.iter().any(|key| !object.contains_key(*key))
+                    || value.get("schema_version").and_then(|item| item.as_u64()) != Some(1)
+                    || value.get("build_id").and_then(|item| item.as_str()) != Some(commit)
+                    || value.get("source_commit").and_then(|item| item.as_str()) != Some(commit)
+                    || value.get("source_tree").and_then(|item| item.as_str()) != Some(tree)
+                    || value.get("release_profile").and_then(|item| item.as_str()) != Some(profile)
+                    || value
+                        .get("toolchain")
+                        .and_then(|item| item.as_object())
+                        .map(|item| item.is_empty())
+                        != Some(false)
+                {
+                    return Err("asset build context identity mismatch".to_string());
+                }
+                Some(
+                    value
+                        .get("manifest_set_sha256")
+                        .and_then(|item| item.as_str())
+                        .filter(|item| {
+                            item.len() == 64
+                                && item.bytes().all(|byte| {
+                                    byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
+                                })
+                        })
+                        .ok_or_else(|| "asset manifest set invalid".to_string())?
+                        .to_string(),
+                )
+            }
+            Err(_) if profile != "production" => None,
+            Err(_) => return Err("asset build context unavailable".to_string()),
+        };
+    let trust_root = asset_trust_root::embedded_asset_trust_root().map_err(str::to_string)?;
+    let security_state = asset_trust_root::AssetSecurityState::from_root(&trust_root, false);
+    if profile == "production" {
+        security_state
+            .require_distribution()
+            .map_err(str::to_string)?;
+    }
+    let payload = serde_json::json!({
+        "schema_version": 1,
+        "asset_root_fd": asset_root_fd,
+        "app_data_root": app_data_root,
+        "release_profile": profile,
+        "build_id": commit,
+        "source_commit": commit,
+        "source_tree": tree,
+        "manifest_set_sha256": manifest_set,
+        "trust_root_status": trust_root.status,
+        "root_policy_sha256": trust_root.policy_sha256,
+        "trusted_keys": trust_root.keys,
+        "trust_epoch": trust_root.current_epoch,
+        "revoked_key_ids": trust_root.revoked_key_ids,
+        "security_state": security_state,
+    });
+    let payload =
+        serde_json::to_vec(&payload).map_err(|_| "asset bootstrap encode failed".to_string())?;
+    let payload_size =
+        u32::try_from(payload.len()).map_err(|_| "asset bootstrap encode failed".to_string())?;
+    let mut frame = Vec::with_capacity(4 + payload.len());
+    frame.extend_from_slice(&payload_size.to_be_bytes());
+    frame.extend_from_slice(&payload);
+    Ok(frame)
+}
+
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
-    fn env_pair(key: &str, value: &str) -> (String, String) {
-        (key.to_string(), value.to_string())
-    }
-
-    #[test]
-    fn model_path_rejects_box3_as_main_model() {
-        let values = vec![env_pair(
-            BUTLER_MODEL_PATH_ENV,
-            "/Applications/Butler.app/Contents/Resources/models/box3/butler-1.7b-v9-2-r2b-q4_k_m.gguf",
-        )];
-
-        assert_eq!(
-            validate_model_path_invariants(&values).unwrap_err(),
-            "MODEL_PATH_CONFLICT_MAIN_USES_BOX3"
-        );
-    }
-
-    #[test]
-    fn model_path_rejects_identical_main_and_box3_paths() {
-        let shared = "/tmp/models/shared.gguf";
-        let values = vec![
-            env_pair(BUTLER_MODEL_PATH_ENV, shared),
-            env_pair(BOX3_V9_MODEL_PATH_ENV, shared),
-        ];
-
-        assert_eq!(
-            validate_model_path_invariants(&values).unwrap_err(),
-            "MODEL_PATH_CONFLICT_MAIN_EQUALS_BOX3"
-        );
-    }
-
-    #[test]
-    fn model_path_allows_separate_free_chat_and_box3_models() {
-        let values = vec![
-            env_pair(BUTLER_MODEL_PATH_ENV, "/tmp/models/qwen3-4b-q4_k_m.gguf"),
-            env_pair(
-                BOX3_V9_MODEL_PATH_ENV,
-                "/tmp/models/box3/butler-1.7b-v9-2-r2b-q4_k_m.gguf",
-            ),
-        ];
-
-        assert!(validate_model_path_invariants(&values).is_ok());
-    }
-
-    #[test]
-    fn model_path_detects_box3_model_name_without_raw_path_dependency() {
-        assert!(is_box3_model_path(BOX3_MODEL_NAME));
-        assert!(!is_box3_model_path(FREE_CHAT_MODEL_NAME));
-    }
-
+    #[cfg(unix)]
     #[test]
     fn vm_stat_parser_sums_only_available_page_classes() {
         let sample = "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n\
@@ -511,10 +512,46 @@ Pages purgeable: 2.\n";
         assert_eq!(parse_vm_stat_available_bytes(sample), Some(35 * 16_384));
     }
 
+    #[cfg(unix)]
     #[test]
     fn vm_stat_parser_rejects_missing_available_measurements() {
         assert_eq!(parse_vm_stat_available_bytes("Pages active: 900.\n"), None);
         assert_eq!(parse_positive_u64("0"), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_launcher_clears_poisoned_parent_environment() {
+        let mut command = Command::new("/usr/bin/env");
+        command
+            .env(concat!("PYTEST_", "CURRENT_TEST"), "attacker")
+            .env(concat!("HELPER1_", "SDK_PATH"), "/attacker")
+            .env(concat!("BGE_M3_", "MODEL_DIR"), "/attacker")
+            .env("PATH", "/attacker")
+            .env("PYTHONPATH", "/attacker")
+            .env("LD_PRELOAD", "/attacker")
+            .env("DYLD_INSERT_LIBRARIES", "/attacker");
+        configure_sidecar_environment(
+            &mut command,
+            17,
+            &[(
+                "BUTLER_APP_DATA_DIR".to_string(),
+                "/private/app".to_string(),
+            )],
+        );
+        let output = command.output().expect("absolute env command runs");
+        assert!(output.status.success());
+        let actual = String::from_utf8(output.stdout).expect("env output is utf8");
+        let rows: std::collections::BTreeSet<&str> = actual.lines().collect();
+        assert_eq!(
+            rows,
+            std::collections::BTreeSet::from([
+                "BUTLER_APP_DATA_DIR=/private/app",
+                "BUTLER_BOOTSTRAP_FD=17",
+                "LANG=C.UTF-8",
+                "LC_ALL=C.UTF-8",
+            ])
+        );
     }
 }
 
@@ -546,6 +583,29 @@ fn get_sidecar_capability_token(app: tauri::AppHandle) -> Result<String, String>
     Ok(trimmed)
 }
 
+#[tauri::command]
+fn get_asset_security_state() -> Result<asset_trust_root::AssetSecurityState, String> {
+    asset_trust_root::current_asset_security_state(false).map_err(str::to_string)
+}
+
+#[tauri::command]
+fn authorize_asset_distribution() -> Result<(), String> {
+    let state = get_asset_security_state()?;
+    state.require_distribution().map_err(str::to_string)
+}
+
+#[tauri::command]
+fn authorize_asset_external_handoff() -> Result<(), String> {
+    let state = get_asset_security_state()?;
+    state.require_external_handoff().map_err(str::to_string)
+}
+
+#[tauri::command]
+fn authorize_asset_auto_update() -> Result<(), String> {
+    let state = get_asset_security_state()?;
+    state.require_auto_update().map_err(str::to_string)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -563,28 +623,13 @@ pub fn run() {
             let authority = runtime_trust::initialize_authority().map_err(std::io::Error::other)?;
             app.manage(authority);
             let app_handle = app.handle().clone();
-            tauri::async_runtime::block_on(async move {
-                match spawn_sidecar(&app_handle).await {
-                    Ok(Some(child)) => {
-                        // 명시적 블록으로 MutexGuard를 state보다 먼저 drop
-                        {
-                            let state = app_handle.state::<SidecarState>();
-                            *state.child.lock().unwrap() = Some(child);
-                        }
-                        println!("[main] sidecar 시작 완료 (포트 8765)");
-                    }
-                    Ok(None) => {
-                        append_sidecar_launch_log("setup_spawn_sidecar=external");
-                        println!("[main] 외부 sidecar 사용 모드 (BUTLER_SIDECAR_EXTERNAL=1)");
-                    }
-                    Err(e) => {
-                        append_sidecar_launch_log(&format!("setup_spawn_sidecar=failed {}", e));
-                        eprintln!("[main] sidecar 시작 실패: {}", e);
-                        eprintln!("[main] Python3 및 의존성 설치를 확인하세요.");
-                        eprintln!("[main] 가이드: docs/beta/getting_started_v1.md 1.4-1.5절");
-                    }
-                }
-            });
+            let child = tauri::async_runtime::block_on(spawn_sidecar(&app_handle))
+                .map_err(std::io::Error::other)?;
+            {
+                let state = app_handle.state::<SidecarState>();
+                *state.child.lock().unwrap() = Some(child);
+            }
+            append_sidecar_launch_log("setup_spawn_sidecar=ok");
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -597,6 +642,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_sidecar_capability_token,
+            get_asset_security_state,
+            authorize_asset_distribution,
+            authorize_asset_external_handoff,
+            authorize_asset_auto_update,
             build_identity::get_native_build_context_digest,
             build_identity::get_native_release_distribution,
             runtime_trust::commands::verify_and_commit_trust_update,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,7 +8,6 @@ from typing import Any
 
 from .v7_constants import (
     BASE_MODEL_NAME,
-    BASE_MODEL_PATH_ENV,
     BASE_MODEL_SHA256_FULL,
     BASE_MODEL_SHA_SCOPE,
     BOX3_BASE_MODEL_VERSION,
@@ -49,14 +47,12 @@ def _path_has_v5_reference(value: str) -> bool:
     return "butler-1.7b-v5" in lowered or "v5-q4" in lowered or "5e233aab" in lowered
 
 
-def helper35_runtime_stack_requested(env: dict[str, str] | None = None) -> bool:
-    e = env or os.environ
-    if e.get("BUTLER_BOX3_ALLOW_HELPER35_MULTI_LORA_STACK") in {"1", "true", "TRUE", "yes"}:
-        return True
-    for key, value in e.items():
-        if "LORA" in key.upper() and any(marker in str(value).casefold() for marker in ("helper3", "helper5", "ad852bbb", "92e8454f")):
-            return True
-    return False
+def helper35_runtime_stack_requested(runtime_lora_refs: tuple[str, ...] = ()) -> bool:
+    return any(
+        marker in value.casefold()
+        for value in runtime_lora_refs
+        for marker in ("helper3", "helper5", "ad852bbb", "92e8454f")
+    )
 
 
 @dataclass(frozen=True)
@@ -86,12 +82,16 @@ class V7AssetVerdict:
         return payload
 
 
-def verify_v7_q4_asset(*, path_value: str | None = None, env: dict[str, str] | None = None, readonly_required: bool = True) -> V7AssetVerdict:
-    e = env or os.environ
-    selected_path = path_value if path_value is not None else e.get(BASE_MODEL_PATH_ENV)
-    path_ref = f"ref:{BASE_MODEL_PATH_ENV}"
+def verify_v7_q4_asset(
+    *,
+    path_value: str | None = None,
+    runtime_lora_refs: tuple[str, ...] = (),
+    readonly_required: bool = True,
+) -> V7AssetVerdict:
+    selected_path = path_value
+    path_ref = "asset-authority:box3.model"
     lineage_digest = stable_json_digest(MODEL_LINEAGE)
-    if helper35_runtime_stack_requested(e):
+    if helper35_runtime_stack_requested(runtime_lora_refs):
         return _verdict(False, "BLOCKED", BLOCK_HELPER35_DOUBLE_STACK_RISK, path_ref, selected_path, None, None, False, lineage_digest)
     if not is_bare_sha256(BASE_MODEL_SHA256_FULL) or BASE_MODEL_SHA_SCOPE != "file":
         return _verdict(False, "BLOCKED", BLOCK_MODEL_ASSET_SHA_SCOPE_INVALID, path_ref, selected_path, None, None, False, lineage_digest)
@@ -108,7 +108,7 @@ def verify_v7_q4_asset(*, path_value: str | None = None, env: dict[str, str] | N
     size = path.stat().st_size
     if actual != BASE_MODEL_SHA256_FULL:
         return _verdict(False, "BLOCKED", BLOCK_V7_SHA_MISMATCH, path_ref, selected_path, actual, size, False, lineage_digest)
-    readonly = (not os.access(path, os.W_OK)) if readonly_required else True
+    readonly = (not path.stat().st_mode & 0o222) if readonly_required else True
     return _verdict(True, "ASSET_INVENTORY_PASS", None, path_ref, selected_path, actual, size, readonly, lineage_digest)
 
 

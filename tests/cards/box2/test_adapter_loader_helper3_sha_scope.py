@@ -32,25 +32,21 @@ def test_helper_3_contract_path_targets_measured_file():
     assert contracts["helper_3"].path_kind == "file", (
         "helper_3 path_kind must be 'file' so kind_matches requires path.is_file()"
     )
-    assert a.DEFAULT_HELPER_3_PATH.endswith("/box2b_v5_rewrite")
+    assert a.DEFAULT_HELPER_3_PATH == "asset://box2.adapter/rewrite_adapter"
     assert contracts["helper_3"].path.startswith(a.DEFAULT_HELPER_3_PATH + "/")
 
 
-def test_helper_3_tampered_file_would_raise_block_sha_mismatch(tmp_path, monkeypatch):
-    fake_root = tmp_path / "handoff"
-    fake_dir = fake_root / "box2b_v5_outputs/rewrite/adapter/box2b_v5_rewrite"
-    fake_dir.mkdir(parents=True)
-    tampered = fake_dir / "adapter_model.safetensors"
-    tampered.write_bytes(b"tampered weights - not the real adapter")
+def test_helper_3_arbitrary_path_override_cannot_bypass_central_service(monkeypatch):
+    class MissingService:
+        @staticmethod
+        def require_capability(_capability):
+            from butler_pc_core.assets.errors import AssetError
 
-    monkeypatch.setattr(a, "DEFAULT_HANDOFF_ROOT", str(fake_root))
-    monkeypatch.setattr(a, "DEFAULT_HELPER_3_PATH", str(fake_dir))
+            raise AssetError("REQUIRED_ASSET_MISSING")
 
+    monkeypatch.setattr(a, "get_asset_service", lambda: MissingService())
     contracts = a.asset_contracts()
     check = a.check_asset(contracts["helper_3"], allow_missing=False)
-    assert check.status == "BLOCK_V2_SHA_MISMATCH", (
-        f"tamper detection regressed: expected BLOCK_V2_SHA_MISMATCH, got {check.status} "
-        f"(sha_checked={check.sha_checked}, actual={check.actual_sha256})"
-    )
-    assert check.sha_checked is True
-    assert check.sha_match is False
+    assert check.status == "BLOCK_ASSET_PATH_MISSING"
+    assert check.sha_checked is False
+    assert check.actual_sha256 is None

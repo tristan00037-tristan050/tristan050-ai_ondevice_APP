@@ -5,11 +5,10 @@
   - heuristic 영역이 우선; LLM은 재검토 역할
   - LLM 실패 / SKIP_LLM=true → heuristic fallback
 
-모델 탐색 우선순위:
+모델 선택 우선순위:
   1. SKIP_LLM=true 환경변수 → 즉시 None (테스트/CI)
   2. sidecar HTTP (127.0.0.1:8765, 이미 카드 1/2/5에서 사용 중)
-  3. 로컬 모델 경로 (T7Shield SSD / ~/.butler/models/)
-  4. 없으면 fallback
+  3. 없으면 heuristic fallback
 """
 from __future__ import annotations
 
@@ -17,7 +16,6 @@ import json
 import os
 import urllib.request
 import urllib.error
-from pathlib import Path
 from typing import Callable, List, Optional
 
 from .contracts import MappingDecision, SourceField, TargetSlot
@@ -25,11 +23,6 @@ from .verifier import verify_llm_response
 
 _SIDECAR_INFERENCE_URL = "http://127.0.0.1:8765/inference"
 _SIDECAR_HEALTH_URL    = "http://127.0.0.1:8765/health"
-
-_MODEL_PATHS: list[Path] = [
-    Path("/Volumes/T7Shield/models/qwen3-4b-instruct"),
-    Path.home() / ".butler/models/qwen3-4b-instruct",
-]
 
 _PROMPT_TEMPLATE = """\
 당신은 문서 필드를 양식 슬롯에 매핑하는 전문가입니다.
@@ -102,12 +95,6 @@ def _get_default_callable() -> Optional[Callable[[str], str]]:
 
     if _sidecar_available():
         return _call_sidecar
-
-    # 로컬 모델 경로 확인 (모델 로딩은 단계 5 예정)
-    for path in _MODEL_PATHS:
-        if path.exists():
-            # TODO(stage-5): 로컬 transformers 추론 구현
-            return None
 
     return None
 

@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-import hashlib
-import json
-from dataclasses import asdict, dataclass
-from pathlib import Path
-from typing import Iterable, Literal
+from dataclasses import dataclass
+from typing import Literal
 
-DEFAULT_HANDOFF_ROOT = "~/Desktop/도우미폴더/넘겨줄도우미모델"
-DEFAULT_BASE_MODEL_PATH = f"{DEFAULT_HANDOFF_ROOT}/Qwen3-1.7B"
-DEFAULT_BUTLER_V3_LORA_PATH = f"{DEFAULT_HANDOFF_ROOT}/butler-qwen3-1.7b-v3/lora_adapter"
-DEFAULT_BUTLER_V3_GGUF_F16_PATH = f"{DEFAULT_HANDOFF_ROOT}/butler-qwen3-1.7b-v3/butler-1.7b-v3-f16.gguf"
-DEFAULT_BUTLER_V3_GGUF_Q4_K_M_PATH = f"{DEFAULT_HANDOFF_ROOT}/butler-qwen3-1.7b-v3/butler-1.7b-v3-q4_k_m.gguf"
-DEFAULT_HELPER_3_PATH = f"{DEFAULT_HANDOFF_ROOT}/box2b_v5_outputs/rewrite/adapter/box2b_v5_rewrite"
+from butler_pc_core.assets import AssetError, get_asset_service
+
+DEFAULT_HANDOFF_ROOT = "asset://box2.adapter"
+DEFAULT_BASE_MODEL_PATH = f"{DEFAULT_HANDOFF_ROOT}/base_model"
+DEFAULT_BUTLER_V3_LORA_PATH = f"{DEFAULT_HANDOFF_ROOT}/butler_adapter"
+DEFAULT_BUTLER_V3_GGUF_F16_PATH = f"{DEFAULT_HANDOFF_ROOT}/model_f16"
+DEFAULT_BUTLER_V3_GGUF_Q4_K_M_PATH = f"{DEFAULT_HANDOFF_ROOT}/model_q4"
+DEFAULT_HELPER_3_PATH = f"{DEFAULT_HANDOFF_ROOT}/rewrite_adapter"
 
 BUTLER_V3_LORA_ADAPTER_SHA = "ee35fe47c2421df18597dd9939a08b4ff3bf4e25b8766ba5d914060ccaedd284"
 BUTLER_V3_F16_GGUF_SHA = "46e75f40cd6b37fb26bcc7fb21fb375af05abb5b6eceeef00c7d85e4092f381d"
@@ -20,9 +19,6 @@ HELPER_3_REWRITE_ADAPTER_SHA = "92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48
 
 PathKind = Literal["file", "directory", "directory_or_file"]
 ShaScope = Literal["file", "directory_manifest", "unknown"]
-ADAPTER_WEIGHT_CANDIDATES = ("adapter_model.safetensors", "adapters.safetensors", "adapter.safetensors", "adapter_model.bin", "pytorch_model.bin")
-
-
 @dataclass(frozen=True)
 class AssetContract:
     name: str
@@ -32,8 +28,8 @@ class AssetContract:
     sha_scope: ShaScope
 
     @property
-    def expanded_path(self) -> Path:
-        return Path(self.path).expanduser()
+    def expanded_path(self):
+        raise RuntimeError("ASSET_PATH_RECONSTRUCTION_FORBIDDEN")
 
 
 @dataclass(frozen=True)
@@ -55,44 +51,6 @@ class AssetCheck:
 
 def _sha256_is_full(value: str | None) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
-
-
-def compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(chunk_size), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def _iter_manifest_entries(directory: Path) -> Iterable[tuple[str, str]]:
-    for item in sorted(p for p in directory.rglob("*") if p.is_file()):
-        yield item.relative_to(directory).as_posix(), compute_file_sha256(item)
-
-
-def compute_directory_manifest_sha256(directory: Path) -> str:
-    h = hashlib.sha256()
-    for rel_path, file_sha in _iter_manifest_entries(directory):
-        h.update(rel_path.encode("utf-8")); h.update(b"\0"); h.update(file_sha.encode("ascii")); h.update(b"\n")
-    return h.hexdigest()
-
-
-def resolve_adapter_weight_file(path: Path) -> Path | None:
-    if path.is_file():
-        return path
-    if not path.is_dir():
-        return None
-    for candidate in ADAPTER_WEIGHT_CANDIDATES:
-        target = path / candidate
-        if target.is_file():
-            return target
-    safetensors = sorted(path.glob("*.safetensors"))
-    if len(safetensors) == 1:
-        return safetensors[0]
-    bins = sorted(path.glob("*.bin"))
-    if len(bins) == 1:
-        return bins[0]
-    return None
 
 
 def asset_contracts() -> dict[str, AssetContract]:
@@ -120,39 +78,40 @@ def asset_contracts() -> dict[str, AssetContract]:
 
 ASSET_CONTRACTS = asset_contracts()
 
-def kind_matches(path: Path, path_kind: PathKind) -> bool:
-    return path.is_file() if path_kind == "file" else path.is_dir() if path_kind == "directory" else (path.is_file() or path.is_dir())
-
-
-def compute_sha_for_contract(contract: AssetContract) -> tuple[str | None, Path | None]:
-    path = contract.expanded_path
-    if not path.exists():
-        return None, None
-    if contract.sha_scope == "file":
-        digest_file = path if path.is_file() else resolve_adapter_weight_file(path)
-        return (compute_file_sha256(digest_file), digest_file) if digest_file else (None, None)
-    if contract.sha_scope == "directory_manifest" and path.is_dir():
-        return compute_directory_manifest_sha256(path), path
-    return None, None
+_ROLE_BY_CONTRACT = {
+    "base_model": "base_model",
+    "butler_v3_lora": "butler_adapter",
+    "butler_v3_gguf_f16": "model_f16",
+    "butler_v3_gguf_q4_k_m": "model_q4",
+    "helper_3": "rewrite_adapter",
+}
 
 
 def check_asset(contract: AssetContract, *, allow_missing: bool = True) -> AssetCheck:
-    path = contract.expanded_path
-    exists = path.exists()
-    kind_ok = kind_matches(path, contract.path_kind) if exists else False
-    if not exists:
-        return AssetCheck(contract.name, contract.path, contract.path_kind, contract.expected_sha256, contract.sha_scope, False, False, False, None, None, None, "MISSING_ALLOWED" if allow_missing else "BLOCK_ASSET_PATH_MISSING", "asset path is not present in this environment")
-    if not kind_ok:
-        return AssetCheck(contract.name, contract.path, contract.path_kind, contract.expected_sha256, contract.sha_scope, True, False, False, None, None, None, "BLOCK_ASSET_KIND_MISMATCH", "asset exists but has wrong kind")
-    if contract.expected_sha256 is None:
-        return AssetCheck(contract.name, contract.path, contract.path_kind, None, contract.sha_scope, True, True, False, None, None, None, "SHA_NOT_REQUIRED", "expected SHA-256 is intentionally not required")
-    if not _sha256_is_full(contract.expected_sha256):
+    if contract.expected_sha256 is not None and not _sha256_is_full(contract.expected_sha256):
         return AssetCheck(contract.name, contract.path, contract.path_kind, contract.expected_sha256, contract.sha_scope, True, True, False, None, None, None, "BLOCK_V3_SHA_CONTRACT_INVALID", "expected SHA-256 must be full lowercase 64-character digest")
-    actual, digest_path = compute_sha_for_contract(contract)
-    if actual is None:
-        return AssetCheck(contract.name, contract.path, contract.path_kind, contract.expected_sha256, contract.sha_scope, True, True, False, None, None, None, "PARTIAL_DONE_V3_SHA_SCOPE_PENDING", "adapter weight file could not be resolved")
-    match = actual == contract.expected_sha256
-    return AssetCheck(contract.name, contract.path, contract.path_kind, contract.expected_sha256, contract.sha_scope, True, True, True, match, actual, str(digest_path) if digest_path else None, "PASS" if match else "BLOCK_V2_SHA_MISMATCH", "sha verified" if match else "sha mismatch")
+    try:
+        with get_asset_service().require_capability("box2.adapter") as lease:
+            asset = lease.require(_ROLE_BY_CONTRACT[contract.name])
+            actual = asset.entry.sha256
+    except (AssetError, KeyError):
+        return AssetCheck(
+            contract.name,
+            contract.path,
+            contract.path_kind,
+            contract.expected_sha256,
+            contract.sha_scope,
+            False,
+            False,
+            False,
+            None,
+            None,
+            None,
+            "MISSING_ALLOWED" if allow_missing else "BLOCK_ASSET_PATH_MISSING",
+            "verified asset capability is unavailable",
+        )
+    match = contract.expected_sha256 is None or actual == contract.expected_sha256
+    return AssetCheck(contract.name, contract.path, contract.path_kind, contract.expected_sha256, contract.sha_scope, True, True, contract.expected_sha256 is not None, match, actual, None, "PASS" if match else "BLOCK_V2_SHA_MISMATCH", "verified by sealed manifest" if contract.expected_sha256 is None else ("sha verified" if match else "sha mismatch"))
 
 
 def verify_asset_contracts(*, allow_missing: bool = True) -> dict[str, AssetCheck]:
@@ -161,13 +120,3 @@ def verify_asset_contracts(*, allow_missing: bool = True) -> dict[str, AssetChec
 
 def sha_mismatch_count(checks: dict[str, AssetCheck]) -> int:
     return sum(1 for check in checks.values() if check.status in {"BLOCK_V2_SHA_MISMATCH", "BLOCK_V3_SHA_MISMATCH"})
-
-
-def load_sha_contract_v3(path: str | Path) -> dict:
-    return json.loads(Path(path).read_text(encoding="utf-8"))
-
-
-def export_asset_checks(path: str | Path, *, allow_missing: bool = True) -> None:
-    checks = verify_asset_contracts(allow_missing=allow_missing)
-    payload = {name: asdict(check) for name, check in checks.items()}
-    Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

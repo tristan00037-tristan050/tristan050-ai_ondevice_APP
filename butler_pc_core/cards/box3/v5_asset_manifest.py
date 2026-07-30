@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -13,8 +12,6 @@ V5_MODEL_NAME = "butler-1.7b-v5-q4_k_m.gguf"
 V5_Q4_K_M_SHA256_FULL = "5e233aab773d0cdb2b188649edbd36633f3dbb58be7ff4c4295a83de648212d2"
 V5_F16_SHA256_FULL = "9594280709d47ffc48b5e0e69e9b3d3f77589991f9950749db1955761042fc37"
 V5_SCHEMA_VERSION = "box3.v5_asset_manifest.v1_2"
-V5_ENV_PATH = "BUTLER_BOX3_BASE_MODEL_PATH"
-V5_ENV_SHA = "BUTLER_BOX3_BASE_MODEL_SHA256_FULL"
 V4_FORBIDDEN_NAME_FRAGMENTS = ("v4-rt", "v4_rt", "butler-1.7b-v4", "butler-1.7b-v4-rt-q4_k_m.gguf")
 FULL_SHA_RE = re.compile(r"^[a-f0-9]{64}$")
 
@@ -89,11 +86,10 @@ def _assert_digest_only_manifest(payload: dict[str, Any]) -> None:
             raise AssertionError(f"raw/path/secret leaked into v5 manifest: {item}")
 
 def build_v5_asset_manifest(model_path: Path | None = None, *, readonly_required: bool = True) -> V5AssetManifest:
-    env_path = os.environ.get(V5_ENV_PATH)
-    selected = model_path or (Path(env_path) if env_path else None)
-    expected_sha = os.environ.get(V5_ENV_SHA, V5_Q4_K_M_SHA256_FULL)
+    selected = model_path
+    expected_sha = V5_Q4_K_M_SHA256_FULL
 
-    path_ref = f"ref:{V5_ENV_PATH}"
+    path_ref = "historical-typed-input"
     if not is_full_sha256(expected_sha) or expected_sha != V5_Q4_K_M_SHA256_FULL:
         asset = V5AssetRecord(
             "box3_v5_base_model", "base_model", path_ref,
@@ -116,12 +112,12 @@ def build_v5_asset_manifest(model_path: Path | None = None, *, readonly_required
         asset = V5AssetRecord(
             "box3_v5_base_model", "base_model", path_ref,
             sha256_text(str(selected)), actual_sha, "file", selected.stat().st_size,
-            not os.access(selected, os.W_OK), _now(), "BLOCK_V4_DEFAULT_REFERENCE",
+            not selected.stat().st_mode & 0o222, _now(), "BLOCK_V4_DEFAULT_REFERENCE",
         )
         return V5AssetManifest(V5_SCHEMA_VERSION, "BLOCKED", V5_MODEL_NAME, MODEL_LINEAGE, asset, False)
 
     actual_sha = sha256_file(selected)
-    readonly = (not os.access(selected, os.W_OK)) if readonly_required else True
+    readonly = (not selected.stat().st_mode & 0o222) if readonly_required else True
     if actual_sha != V5_Q4_K_M_SHA256_FULL:
         fail = "BLOCK_MODEL_ASSET_SHA_MISMATCH"
         status = "BLOCKED"

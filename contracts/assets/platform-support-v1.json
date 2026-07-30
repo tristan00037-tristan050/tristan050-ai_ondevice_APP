@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "asset_authority": {
+    "linux": "SUPPORTED",
+    "macos": "SUPPORTED",
+    "windows": "NOT_SUPPORTED_NATIVE_HANDLE_BRIDGE_REQUIRED"
+  },
+  "windows_runtime_policy": "BLOCK_PLATFORM_UNSUPPORTED"
+}

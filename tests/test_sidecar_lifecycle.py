@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,17 +38,37 @@ async def _run_isolated(params: _TestParams, chunk_idx: int, timeout_sec: float)
     """chunk_worker.py 경로를 직접 사용하는 격리 실행 함수."""
     worker = _REPO_ROOT / "butler_pc_core" / "inference" / "chunk_worker.py"
     params_json = json.dumps(params.__dict__, default=str)
+    payload = b"authorized-test-model"
+    descriptor, model_name = tempfile.mkstemp(prefix="butler-test-model-")
+    os.write(descriptor, payload)
+    os.fsync(descriptor)
+    os.lseek(descriptor, 0, os.SEEK_SET)
     cmd = [
         sys.executable,
         str(worker),
-        "--params", params_json,
-        "--chunk-idx", str(chunk_idx),
+        "--params",
+        params_json,
+        "--chunk-idx",
+        str(chunk_idx),
+        "--model-fd",
+        str(descriptor),
+        "--model-sha256",
+        hashlib.sha256(payload).hexdigest(),
+        "--model-size",
+        str(len(payload)),
+        "--manifest-set-sha256",
+        hashlib.sha256(b"authorized-test-manifest").hexdigest(),
     ]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            pass_fds=(descriptor,),
+        )
+    finally:
+        os.close(descriptor)
+        os.unlink(model_name)
     try:
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
         result = json.loads(stdout.decode())
@@ -138,84 +160,93 @@ def test_boundary_concurrent_chunks_no_lock_starvation():
 # ---------------------------------------------------------------------------
 # 결함 2 회귀: wrapper exec (& 없음) → python3가 wrapper PID 점유
 # ---------------------------------------------------------------------------
-def test_adv_wrapper_no_orphan_after_kill():
+def test_adv_wrapper_no_orphan_after_kill(tmp_path):
     """결함 2 회귀: wrapper에 & 없으면 exec 후 wrapper PID = python3 PID.
     kill 시 sidecar도 함께 종료 → orphan 없음."""
     wrapper = "/Applications/Butler.app/Contents/MacOS/butler-sidecar"
     if not os.path.exists(wrapper):
         pytest.skip("Butler.app 미설치 환경")
 
+    import socket
+
+    with socket.socket() as probe:
+        try:
+            probe.bind(("127.0.0.1", 0))
+        except PermissionError:
+            pytest.skip("sandbox forbids local socket binding")
+        port = probe.getsockname()[1]
+    environment = os.environ.copy()
+    environment["BUTLER_APP_DATA_DIR"] = str(tmp_path / "app-data")
     proc = subprocess.Popen(
-        [wrapper, "--port", "5911", "--host", "127.0.0.1"],
+        [wrapper, "--port", str(port), "--host", "127.0.0.1"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        env=environment,
     )
     wrapper_pid = proc.pid
-    time.sleep(3)
+    try:
+        time.sleep(3)
 
-    # exec 정상: wrapper PID의 command가 python3를 포함해야 함
-    ps_result = subprocess.run(
-        ["ps", "-p", str(wrapper_pid), "-o", "pid=,command="],
-        capture_output=True,
-        text=True,
-    )
-    assert ps_result.returncode == 0, "wrapper 프로세스 없음 — exec & 버그 재발"
-    assert "python" in ps_result.stdout.lower(), (
-        f"exec 실패 — wrapper PID가 python3가 아님: {ps_result.stdout!r}"
-    )
+        # exec 정상: wrapper PID의 command가 python3를 포함해야 함
+        ps_result = subprocess.run(
+            ["ps", "-p", str(wrapper_pid), "-o", "pid=,command="],
+            capture_output=True,
+            text=True,
+        )
+        assert ps_result.returncode == 0, "wrapper 프로세스 없음 — exec & 버그 재발"
+        assert "python" in ps_result.stdout.lower(), (
+            f"exec 실패 — wrapper PID가 python3가 아님: {ps_result.stdout!r}"
+        )
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        proc.wait(timeout=5)
 
     # kill 후 포트 5911 잔여 프로세스 없어야 함
-    proc.kill()
     time.sleep(1)
 
     lsof_result = subprocess.run(
-        ["lsof", "-ti", ":5911"],
+        ["lsof", "-ti", f":{port}"],
         capture_output=True,
         text=True,
     )
     assert lsof_result.stdout.strip() == "", (
-        f"orphan sidecar 발견 (포트 5911 점유): {lsof_result.stdout.strip()}"
+        f"orphan sidecar 발견: {lsof_result.stdout.strip()}"
     )
 
 
-def test_wrapper_uses_product_python_resolution_without_old_repo_venv():
-    """GUI open 회귀: wrapper가 옛 repo .venv 또는 개발 repo .venv에 의존하지 않는다."""
-    wrapper = (
+def test_tauri_has_no_legacy_external_sidecar_launcher() -> None:
+    """제품은 env 기반 externalBin 대신 native descriptor launcher만 쓴다."""
+    config = json.loads(
+        (
+            _REPO_ROOT
+            / "butler-desktop"
+            / "src-tauri"
+            / "tauri.conf.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert "externalBin" not in config["bundle"]
+    assert not (
         _REPO_ROOT
         / "butler-desktop"
         / "src-tauri"
         / "binaries"
         / "butler-sidecar-aarch64-apple-darwin"
-    )
-    text = wrapper.read_text(encoding="utf-8")
-
-    assert '"${HOME}/Desktop/butler/tristan050-ai_ondevice_APP/.venv/bin/python"' not in text
-    assert "HOME 영역 일반 후보" not in text
-    assert "WORK_DIR에서 위쪽 영역 .venv" not in text
-    assert "Application Support/com.butler.desktop" in text
-    assert "ignoring stale BUTLER_PYTHON" in text
-    assert 'cd "$RUN_DIR"' in text
-    assert 'export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"' in text
-    assert 'export PYTHONPATH="$WORK_DIR:${PYTHONPATH:-}"' in text
-    assert "BUTLER_PYTHON" in text
-    assert "command -v python3" in text
+    ).exists()
 
 
-def test_tauri_sidecar_spawn_writes_launch_log_and_injects_model_env():
-    """GUI open 회귀: Tauri spawn은 env를 주입하고 파일 로그를 남긴다."""
+def test_tauri_sidecar_spawn_writes_launch_log_without_model_path_env():
+    """GUI open 회귀: native bootstrap에는 root만 있고 모델 선택 경로는 없다."""
     lib_rs = _REPO_ROOT / "butler-desktop" / "src-tauri" / "src" / "lib.rs"
     text = lib_rs.read_text(encoding="utf-8")
 
     assert "sidecar-launch.log" in text
-    assert "BUTLER_MODEL_PATH" in text
-    assert "BUTLER_BOX3_V9_Q4_MODEL_PATH" in text
-    assert "push_free_chat_resource_env" in text
-    assert "validate_model_path_invariants" in text
-    assert "BUTLER_MODEL_PATH_ENV, model_path" not in text
-    assert "butler_model_path = box3_v9_model_path" not in text
-    assert "box3_v9_model_path = butler_model_path" not in text
-    assert "sidecar-env.json" in text
-    assert ".envs(sidecar_env)" in text
+    assert "BUTLER_MODEL_PATH" not in text
+    assert "BUTLER_BOX3_V9_Q4_MODEL_PATH" not in text
+    assert "asset_bootstrap_frame(app, asset_root_fd)?" in text
+    assert "ASSET_BOOTSTRAP_FD_ENV" in text
+    assert ".env_clear()" in text
+    assert "for (name, value) in sidecar_env" in text
     assert "append_sidecar_launch_log(\"spawn_sidecar=start\")" in text
     assert "append_sidecar_launch_log(\"spawn_sidecar=ok\")" in text
     assert "fn stop_sidecar" in text

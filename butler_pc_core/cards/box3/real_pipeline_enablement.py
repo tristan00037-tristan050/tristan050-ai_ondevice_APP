@@ -20,7 +20,7 @@ def run_box3_real_enablement_pipeline(
     fixed_eval_pass: bool = False,
     runner: Optional[RealRunner] = None,
 ) -> Box3RealVerdict:
-    config = config or Box3RealRunnerConfig.from_env()
+    config = config or Box3RealRunnerConfig.product_default()
     stage_trace = []
 
     asset_verdict = verify_box3_real_runner_assets(config, helper_manifest=asset_manifest)

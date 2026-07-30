@@ -10,10 +10,7 @@ from butler_pc_core.company_fact.storage import CompanyFactStore
 
 
 @pytest.fixture(autouse=True)
-def _register_b_test_admin(_registered_admins_for_company_fact_tests, monkeypatch):
-    # test_only 인증 허용 env 는 monkeypatch 로 이 테스트 범위에만 설정한다(모듈 레벨 setenv 는
-    # pytest 세션 전역을 오염시켜 test_only 차단을 검증하는 다른 테스트를 깨뜨린다).
-    monkeypatch.setenv("BUTLER_ALLOW_TEST_ADMIN_AUTH", "1")
+def _register_b_test_admin(_registered_admins_for_company_fact_tests):
     # conftest의 _registered_admins_for_company_fact_tests 가 default RoleRegistry store 를 patch 하고
     # root admin 을 bootstrap 한 뒤 실행된다(인자 의존으로 순서 보장). B 테스트의 admin(admin:b-tests)을
     # 동일 registry 에 ACTIVE admin 으로 등록한다 — 미등록이면 verify_admin_context 가 ADMIN_ROLE_NOT_REGISTERED 로 차단한다.
@@ -34,7 +31,7 @@ def _admin() -> AdminContext:
         admin_id_digest=sha256_text("admin:b-tests"),
         role="admin",
         admin_session_digest=sha256_text("session:b-tests"),
-        auth_method="test_only",
+        auth_method="tauri_secure_invoke",
     )
 
 

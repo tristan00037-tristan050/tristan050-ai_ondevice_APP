@@ -200,17 +200,17 @@ def default_runtime_probe_provider() -> tuple[RuntimeProbe, ...]:
 
     lifecycle = runtime_lifecycle_snapshot()
 
-    def probe(variant_id: str, path_env: str) -> RuntimeProbe:
+    def probe(variant_id: str) -> RuntimeProbe:
         state = lifecycle.get(variant_id)
         return RuntimeProbe(
             variant_id=variant_id,
-            model_path=(state.model_path if state else None) or os.environ.get(path_env),
+            model_path=state.model_path if state else None,
             loaded=bool(state and state.loaded),
             ready=bool(state and state.ready),
             process_id=state.process_id if state else os.getpid(),
         )
 
     return (
-        probe(MAIN_4B_VARIANT_ID, "BUTLER_MODEL_PATH"),
-        probe(BOX3_1P7B_VARIANT_ID, "BUTLER_BOX3_V9_Q4_MODEL_PATH"),
+        probe(MAIN_4B_VARIANT_ID),
+        probe(BOX3_1P7B_VARIANT_ID),
     )

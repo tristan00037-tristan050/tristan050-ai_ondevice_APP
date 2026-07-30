@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/trust-policy-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "allowed_oid_algorithms",
+    "allowed_repository_uris",
+    "allowed_builder_ids",
+    "allowed_workflow_ids",
+    "signing_keys"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "allowed_oid_algorithms": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["sha1", "sha256"]}
+    },
+    "allowed_repository_uris": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 8, "maxLength": 512}
+    },
+    "allowed_builder_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 256}
+    },
+    "allowed_workflow_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 256}
+    },
+    "signing_keys": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key_id", "algorithm", "public_key_b64"],
+        "properties": {
+          "key_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"},
+          "algorithm": {"const": "ed25519"},
+          "public_key_b64": {"type": "string", "minLength": 43, "maxLength": 64}
+        }
+      }
+    }
+  }
+}
