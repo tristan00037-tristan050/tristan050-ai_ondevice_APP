@@ -137,6 +137,18 @@ else
 fi
 echo "  ✅ build context digest $BUILD_CONTEXT_DIGEST · source $BUTLER_SOURCE_COMMIT_OID"
 
+echo "[0.5/5] Box2 adapter 검증·번들 리소스 배치"
+BOX2_ADAPTER_SRC="${BUTLER_BOX2_ADAPTER_SRC:-$HOME/Desktop/butler-data/정리8박스모음/Butler빌드자산통합/box2_adapter}"
+BOX2_ADAPTER_DST="$ROOT/butler-desktop/src-tauri/models/box2/box2_adapter"
+BOX2_REWRITE_WEIGHT_SHA256="92e8454fdc01d9bb002a510b2fdaecabcc9b9cbf964b6e48e5d61c23b5ace4b0"
+if ! "$CONTEXT_PY" "$ROOT/scripts/stage_box2_adapter.py" \
+  --source "$BOX2_ADAPTER_SRC" \
+  --destination "$BOX2_ADAPTER_DST" \
+  --expected-weight-sha256 "$BOX2_REWRITE_WEIGHT_SHA256"; then
+  echo "❌ BOX2_ADAPTER_STAGE_FAILED — Box2 adapter 없는 앱 빌드 차단"
+  exit 1
+fi
+
 echo "[1/5] Tauri 빌드 (.app)"
 # pipefail(4행)로 npm 실패는 파이프 종료코드에 반영된다. 과거 `|| true` 가 이를 가려
 # beforeBuildCommand(build_runtime.sh) 실패 시 STALE 번들을 성공으로 오인했다 — 제거한다.

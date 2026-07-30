@@ -32,6 +32,10 @@ def test_box2_rewrite_endpoint_returns_required_contract():
     assert data["raw_doc_logged"] is False
     assert data["request_digest"].startswith("sha256:")
     assert data["model_chain"] == ["base", "butler_v3", "helper_3"]
+    assert data["adapter_used"] is False
+    assert data["execution_mode"] == "deterministic_fallback"
+    assert "helper_3_available" in data["model_chain_status"]
+    assert "helper_3_status" in data["model_chain_status"]
     assert "공급 계약 초안" not in data["request_digest"]
     for section in ["제목:", "발행일:", "담당자:", "핵심 내용:", "합의사항:", "금액/일정:", "확인 필요:", "최종 문안:"]:
         assert section in data["rewritten_doc"]
