@@ -26,7 +26,13 @@ def test_trusted_workflow_uses_default_branch_code_and_raw_artifact_data() -> No
     assert "npm ci" not in text
     assert "saxes" not in text
     assert "source/source.zip" not in text
-    assert "PR_CODE_EXECUTED_BY_TRUSTED_VERIFIER=0" in text
+    # 판정값 게시기는 인라인 heredoc 에서 보호 자산 파일로 추출됐다. 구조적 불변
+    # 리터럴은 이제 그 스크립트에 있으며, 워크플로는 그 스크립트를 호출한다.
+    assert "publish_trusted_verdict.py" in text
+    verdict = (
+        ROOT / "scripts/ci/publish_trusted_verdict.py"
+    ).read_text(encoding="utf-8")
+    assert "PR_CODE_EXECUTED_BY_TRUSTED_VERIFIER=0" in verdict
 
 
 def test_trusted_workflow_has_read_only_permissions_and_no_attestation_path() -> None:
