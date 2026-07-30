@@ -117,21 +117,33 @@ def test_router_decide_server_policy_blocks_non_local_host(monkeypatch) -> None:
     assert decision["reason_code"] == "LOCALHOST_ONLY"
 
 @pytest.mark.active_policy
-def test_router_to_helper1_box_usage_log_request_id_e2e() -> None:
+def test_router_to_helper1_box_refuses_until_native_runtime_is_ready() -> None:
     client = _client()
     store = get_store()
     store.clear()
     text = "이전 문서 찾아줘 검색"
-    request_id = "req-prd-followup-e2e-helper1"
+    request_id = "9699ce0c-2597-42ea-a6fa-29cfcb2bb75e"
+    workspace_id = "90321a6a-f937-4d93-b018-d09e8cab4e72"
 
-    router_response = client.post("/v1/router/decide", json=_router_payload(text, request_id=request_id))
+    router_response = client.post(
+        "/v1/router/decide",
+        json=_router_payload(text, request_id=request_id),
+    )
     assert router_response.status_code == 200
     decision = router_response.json()
     assert decision["target_endpoint"] == "POST /v1/helpers/1/search"
 
     box_response = client.post(
         "/v1/helpers/1/search",
-        json={"query": text, "top_k": 5},
+        json={
+            "schema_version": "butler.helper1.ask-request.v2",
+            "request_id": request_id,
+            "workspace_id": workspace_id,
+            "query": text,
+            "top_k": 5,
+            "requested_generation_id": None,
+            "effect_intent": "display_only",
+        },
         headers={
             "Authorization": client.headers["Authorization"],
             "x-request-id": request_id,
@@ -140,19 +152,19 @@ def test_router_to_helper1_box_usage_log_request_id_e2e() -> None:
         },
     )
 
-    assert box_response.status_code == 200
+    assert box_response.status_code == 503
     body = box_response.json()
-    assert body["external_send_zero"] is True
-    assert body["raw_text_logged"] is False
+    assert body["kind"] == "REFUSED_ASSET_MISSING"
+    assert body["answer"] is None
+    assert body["citations"] == []
     assert len(store.records) == 1
     record = store.records[0]
     assert record["request_id"] == request_id
-    assert record["intent_label"] == "memory_search"
-    assert record["box_id"] == "helper1"
-    assert record["endpoint"] == "POST /v1/helpers/1/search"
-    serialized = str(record)
-    assert text not in serialized
-    assert "/Users/" not in serialized
+    assert record["policy_decision"] == "deny"
+    assert record["integration_mode"] == "contract_only"
+    assert record["real_validation_done"] is False
+    assert record["source_digests"] == []
+    assert text not in str(record)
 
 
 @pytest.mark.active_policy

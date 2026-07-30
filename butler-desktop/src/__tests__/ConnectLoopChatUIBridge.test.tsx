@@ -158,9 +158,18 @@ describe('PR-D Chat UI Bridge contracts', () => {
 
   it('builds exact box payloads instead of sending generic bridge envelopes', () => {
     expect(buildTargetBoxPayload(
-      decision({ intent_label: 'memory_search', target_box_id: 'helper1', target_endpoint: 'POST /v1/helpers/1/search' }),
+      decision({ request_id: '9699ce0c-2597-42ea-a6fa-29cfcb2bb75e', intent_label: 'memory_search', target_box_id: 'helper1', target_endpoint: 'POST /v1/helpers/1/search' }),
       '이전 문서 찾아줘 검색',
-    )).toEqual({ query: '이전 문서 찾아줘 검색', top_k: 5 });
+      { helper1WorkspaceId: '90321a6a-f937-4d93-b018-d09e8cab4e72' },
+    )).toEqual({
+      schema_version: 'butler.helper1.ask-request.v2',
+      request_id: '9699ce0c-2597-42ea-a6fa-29cfcb2bb75e',
+      workspace_id: '90321a6a-f937-4d93-b018-d09e8cab4e72',
+      query: '이전 문서 찾아줘 검색',
+      top_k: 5,
+      requested_generation_id: null,
+      effect_intent: 'display_only',
+    });
     expect(buildTargetBoxPayload(
       decision({ intent_label: 'form_convert', target_box_id: '2', target_endpoint: 'POST /v1/cards/2/rewrite' }),
       '우리 양식 변환',

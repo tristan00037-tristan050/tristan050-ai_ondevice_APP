@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1/ask-request-v2.schema.json",
+  "title": "Butler Helper1 Ask Request v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "workspace_id",
+    "query",
+    "top_k",
+    "requested_generation_id",
+    "effect_intent"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.helper1.ask-request.v2"
+    },
+    "request_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "workspace_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]+$"
+    },
+    "top_k": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+    },
+    "requested_generation_id": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "effect_intent": {
+      "enum": [
+        "display_only",
+        "clipboard",
+        "export"
+      ]
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    }
+  }
+}

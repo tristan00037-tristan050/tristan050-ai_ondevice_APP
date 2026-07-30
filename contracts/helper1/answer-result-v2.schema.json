@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1/answer-result-v2.schema.json",
+  "title": "Butler Helper1 Answer Result v2",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/answered"
+    },
+    {
+      "$ref": "#/$defs/nonanswer"
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "safeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claim_id",
+        "chunk_id",
+        "source_id",
+        "evidence_start",
+        "evidence_end",
+        "evidence_sha256"
+      ],
+      "properties": {
+        "claim_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "chunk_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "source_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "evidence_start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "evidence_end": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "evidence_sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "answered": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "answer",
+        "request_id",
+        "workspace_id",
+        "generation_id",
+        "reason_code",
+        "model_identity_sha256",
+        "index_manifest_sha256",
+        "citations",
+        "release_receipt_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "butler.helper1.answer.v2"
+        },
+        "kind": {
+          "const": "ANSWERED"
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536
+        },
+        "request_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "workspace_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "generation_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "reason_code": {
+          "type": "null"
+        },
+        "model_identity_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "index_manifest_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "citations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "items": {
+            "$ref": "#/$defs/citation"
+          }
+        },
+        "release_receipt_sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "nonanswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "answer",
+        "request_id",
+        "workspace_id",
+        "generation_id",
+        "reason_code",
+        "model_identity_sha256",
+        "index_manifest_sha256",
+        "citations",
+        "release_receipt_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "butler.helper1.answer.v2"
+        },
+        "kind": {
+          "enum": [
+            "REFUSED_NO_GROUNDING",
+            "REFUSED_ASSET_MISSING",
+            "REFUSED_POLICY",
+            "REFUSED_DLP",
+            "REFUSED_INJECTION",
+            "REFUSED_INDEX_INVALID",
+            "CANCELLED",
+            "FAILED"
+          ]
+        },
+        "answer": {
+          "type": "null"
+        },
+        "request_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "workspace_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "generation_id": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,95}$"
+        },
+        "model_identity_sha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "index_manifest_sha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "citations": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "release_receipt_sha256": {
+          "type": "null"
+        }
+      }
+    }
+  }
+}
