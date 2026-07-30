@@ -7,11 +7,8 @@ from xml.parsers import expat
 
 
 MAX_BYTES = 32 * 1024 * 1024
-# Tighter caps adopted from the #886 producer revision (stricter of the two);
-# all main-side input validation (size/BOM/DTD-ENTITY/symlink/strict-int/
-# required-root-count) and stdin support are retained.
-MAX_SUITES = 2_048
-MAX_CASES = 100_000
+MAX_SUITES = 4_096
+MAX_CASES = 1_000_000
 MAX_ATTRIBUTES = 64
 MAX_ATTRIBUTE_CHARS = 16_384
 
