@@ -61,8 +61,18 @@ function clone(value) {
 function rejected(callback) {
   try {
     return callback() === false;
-  } catch {
-    return true;
+  } catch (error) {
+    // v16.0 (총괄기획팀 2026-07-30): 이전 판은 어떤 예외든 catch 해 "차단(true)"으로
+    // 셌다. 그 결과 검증기가 *능동적으로 거부* 한 것과 *아예 실행되지 못한 것* 을
+    // 구분하지 못했다. 보호 검증기는 거부를 UPPER_SNAKE 오류코드(예: XML_PARSE_INVALID,
+    // JSON_DUPLICATE_KEY, CONTEXT_IDENTITY_MISMATCH)로만 신호한다 — 이는 이 파일
+    // 최상위 main().catch 의 분류 규약과 동일하다. 그 형태가 아닌 예외(TypeError
+    // "x is not a function" 등 실행 실패)는 차단이 아니므로 다시 던져 호출부가
+    // UNANALYSED 로 집계하게 한다(파서 subprocess 의 생존 여부는 main() 시작부의
+    // 실행 통제가 별도로 증명한다).
+    const code = String(error?.message ?? '');
+    if (/^[A-Z0-9_]+$/.test(code)) return true;
+    throw error;
   }
 }
 
@@ -274,6 +284,34 @@ async function main() {
     schema_version: 1,
     nodes: [{ file: required[0].file, title: required[0].title, status: 'passed' }],
   });
+  // v16.0 (총괄기획팀 2026-07-30) 보호 파서 실행 통제.
+  // 변이 오라클은 "차단 건수 == 총건수" 로 보호 검증기의 건전성을 증명한다고
+  // 주장한다. 그러나 이전 판은 파서 subprocess 실행 실패(파일 부재·비정상 종료)를
+  // "차단" 으로 집계했기에, 보호 파서(trusted_parse_junit_xml.py)를 지우고 돌려도
+  // 3,000 건 전부 "차단" 으로 게이트가 통과했다(거짓 음성). 아래 통제는 집계 이전에
+  // 파서가 (1) 알려진 정상 JUnit 을 반드시 파싱하고(=파서 생존 증명), (2) DTD/ENTITY
+  // 공격을 반드시 거부함을 요구한다. 둘 중 하나라도 어긋나면 게이트는 즉시 실패한다 —
+  // 죽었거나 변조된 파서가 "완벽한 차단기" 로 위장할 수 없다.
+  let parserControlNodes;
+  try {
+    parserControlNodes = collectPytest(
+      '<testsuite tests="1">'
+      + '<testcase classname="tests.control" name="control"/></testsuite>',
+    );
+  } catch {
+    throw new Error('PARSER_LIVENESS_CONTROL_FAILED');
+  }
+  if (!Array.isArray(parserControlNodes) || parserControlNodes.length !== 1
+      || parserControlNodes[0].status !== 'passed') {
+    throw new Error('PARSER_LIVENESS_CONTROL_FAILED');
+  }
+  if (!rejected(() => collectPytest(
+    '<!DOCTYPE x [<!ENTITY y "z">]><testsuite tests="1">'
+    + '<testcase classname="tests.control" name="control">&y;</testcase>'
+    + '</testsuite>',
+  ))) {
+    throw new Error('PARSER_REJECTION_CONTROL_FAILED');
+  }
   const canonical = {
     actual,
     context,
@@ -311,9 +349,12 @@ async function main() {
       try {
         if (mutateAndVerify(operator, canonical)) rejectedCases += 1;
         else acceptedMalicious += 1;
-      } catch (error) {
-        if (error?.message === 'UNKNOWN_OPERATOR') unanalysed += 1;
-        else rejectedCases += 1;
+      } catch {
+        // v16.0: 평가 자체가 불가능했던 변이는 UNANALYSED 다. 실행 실패를 "차단"으로
+        // 세면 고장난/부재한 검증기가 완벽한 차단기로 위장한다. unanalysed !== 0 이면
+        // 게이트가 실패하므로, 이 경로는 fail-closed 다. (건전한 실행에서는 각 연산자가
+        // rejected()/calculateAccounting 로 불리언을 돌려주어 이 catch 에 닿지 않는다.)
+        unanalysed += 1;
       }
     }
     runs.push({
