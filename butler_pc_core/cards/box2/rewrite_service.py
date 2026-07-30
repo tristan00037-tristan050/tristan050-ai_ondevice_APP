@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import unicodedata
 from collections.abc import Mapping
@@ -28,9 +29,7 @@ _REPO_ROOT = _THIS.parents[3]
 EVAL_CANDIDATE_PATHS = [
     _REPO_ROOT / "butler-ct-shared/code_archive/box2_eval",
     _REPO_ROOT / "butler-ct-shared/code_archive/box2_eval/box2_eval.json",
-    Path.home() / "Desktop/도우미폴더/box2b_v5_outputs/rewrite/eval",
-    Path.home() / "Desktop/도우미폴더/box2b_v5_outputs/rewrite",
-    Path("/Volumes/T7 Shield/학습모델 폴더/알고리즘개발팀/box2b_v5_outputs/rewrite/eval"),
+    _REPO_ROOT / "models/box2/box2_adapter/rewrite/eval",
 ]
 
 CHECK_REQUIRED = "[확인 필요]"
@@ -129,6 +128,8 @@ class RewriteResult:
     raw_saved_zero: bool
     request_digest: str
     model_chain_status: dict
+    adapter_used: bool
+    execution_mode: Literal["adapter", "deterministic_fallback"]
 
 
 @dataclass(frozen=True)
@@ -650,6 +651,8 @@ def rewrite_to_company_format(foreign_doc: str, our_format: str, options: Rewrit
         raw_saved_zero=True,
         request_digest=request_digest,
         model_chain_status=asdict(chain_status),
+        adapter_used=False,
+        execution_mode="deterministic_fallback",
     )
 
 
@@ -843,7 +846,11 @@ def evaluate_rewrite_contract(
 
 
 def find_eval_set(candidate_paths: list[Path] | None = None) -> Path | None:
-    for candidate in candidate_paths or EVAL_CANDIDATE_PATHS:
+    configured = os.environ.get("BUTLER_BOX2_EVAL_PATH", "").strip()
+    selected_paths = candidate_paths or (
+        ([Path(configured).expanduser()] if configured else []) + EVAL_CANDIDATE_PATHS
+    )
+    for candidate in selected_paths:
         if candidate.exists():
             if candidate.is_file() and candidate.suffix.lower() in {".json", ".jsonl"}:
                 return candidate

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from .adapter_loader import DEFAULT_BASE_MODEL_PATH, DEFAULT_BUTLER_V3_LORA_PATH, DEFAULT_HELPER_3_PATH, sha_mismatch_count, verify_asset_contracts
+from .adapter_loader import resolved_asset_paths, sha_mismatch_count, verify_asset_contracts
 from .model_chain import REQUIRED_OUTPUT_FIELDS
 from .runtime_loader import load_runtime
 
@@ -114,7 +114,10 @@ def load_real_model_chain() -> tuple[LoadedBox2Helper3Chain | None, dict[str, An
     try:
         from peft import PeftModel
         from transformers import AutoModelForCausalLM, AutoTokenizer
-        base_path = str(Path(DEFAULT_BASE_MODEL_PATH).expanduser()); butler_lora_path = str(Path(DEFAULT_BUTLER_V3_LORA_PATH).expanduser()); helper_3_path = str(Path(DEFAULT_HELPER_3_PATH).expanduser())
+        asset_paths = resolved_asset_paths()
+        base_path = str(asset_paths["base_model"])
+        butler_lora_path = str(asset_paths["butler_v3_lora"])
+        helper_3_path = str(asset_paths["helper_3"])
         base = AutoModelForCausalLM.from_pretrained(base_path, local_files_only=True, trust_remote_code=False)
         tokenizer = AutoTokenizer.from_pretrained(base_path, local_files_only=True, trust_remote_code=False)
         stages.append("base")
