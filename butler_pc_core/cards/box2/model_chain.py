@@ -44,6 +44,8 @@ class ModelChainStatus:
     adapter_changed: bool = False
     model_weight_changed: bool = False
     sha_mismatch_count: int = 0
+    helper_3_available: bool = False
+    helper_3_status: str = "MISSING_ALLOWED"
     blocking_reasons: list[str] = field(default_factory=list)
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -92,6 +94,12 @@ def build_model_chain_status(*, allow_missing_assets: bool = True) -> ModelChain
         runtime_fail_class=runtime_payload.get("fail_class"),
     )
     mismatch_count = sha_mismatch_count(asset_statuses)
+    helper_3_check = asset_statuses.get("helper_3")
+    helper_3_status = (
+        getattr(helper_3_check, "status", "MISSING_ALLOWED")
+        if helper_3_check is not None
+        else "MISSING_ALLOWED"
+    )
     if mismatch_count:
         status = "BLOCK_V3_SHA_MISMATCH"
     elif any("PARTIAL_DONE_V3_RUNTIME_IMPORT_ERROR" in reason for reason in reasons):
@@ -106,7 +114,16 @@ def build_model_chain_status(*, allow_missing_assets: bool = True) -> ModelChain
         status = "PASS_V3_REAL_LOAD_READY"
     else:
         status = "PARTIAL_DONE_V3_RUNTIME_OR_ASSET_PENDING"
-    return ModelChainStatus(runtime_available=runtime.all_available, runtime_packages=runtime.to_dict(), load_mode=load_mode, status=status, sha_mismatch_count=mismatch_count, blocking_reasons=reasons)
+    return ModelChainStatus(
+        runtime_available=runtime.all_available,
+        runtime_packages=runtime.to_dict(),
+        load_mode=load_mode,
+        status=status,
+        sha_mismatch_count=mismatch_count,
+        helper_3_available=helper_3_status == "PASS",
+        helper_3_status=helper_3_status,
+        blocking_reasons=reasons,
+    )
 
 
 def build_rewrite_system_prompt() -> str:

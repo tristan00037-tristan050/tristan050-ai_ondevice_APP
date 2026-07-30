@@ -33,7 +33,9 @@ def test_helper_3_contract_path_targets_measured_file():
         "helper_3 path_kind must be 'file' so kind_matches requires path.is_file()"
     )
     assert a.DEFAULT_HELPER_3_PATH.endswith("/box2b_v5_rewrite")
-    assert contracts["helper_3"].path.startswith(a.DEFAULT_HELPER_3_PATH + "/")
+    assert contracts["helper_3"].path.endswith(
+        a.DEFAULT_HELPER_3_PATH + "/adapter_model.safetensors"
+    )
 
 
 def test_helper_3_tampered_file_would_raise_block_sha_mismatch(tmp_path, monkeypatch):
@@ -43,8 +45,7 @@ def test_helper_3_tampered_file_would_raise_block_sha_mismatch(tmp_path, monkeyp
     tampered = fake_dir / "adapter_model.safetensors"
     tampered.write_bytes(b"tampered weights - not the real adapter")
 
-    monkeypatch.setattr(a, "DEFAULT_HANDOFF_ROOT", str(fake_root))
-    monkeypatch.setattr(a, "DEFAULT_HELPER_3_PATH", str(fake_dir))
+    monkeypatch.setenv("BUTLER_BOX2_HELPER3_ADAPTER_PATH", str(fake_dir))
 
     contracts = a.asset_contracts()
     check = a.check_asset(contracts["helper_3"], allow_missing=False)
