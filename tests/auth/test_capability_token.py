@@ -28,19 +28,17 @@ from butler_pc_core.fail_class import FailClass
 # ------------------------------------------------------------------------------
 # View-4 식별 본질: PUBLIC / PROTECTED 라우트
 #
-# butler_sidecar.py 본질 (L287, L291, L306, L322) 에서 토큰 0 요구 GET 라우트.
-# PROTECTED_GET_PATHS: PR #750 본질에 capability_token이 butler_sidecar.py
-# 라우트에 통합 0 (grep capability_token butler_sidecar.py = 0건) → 빈 리스트.
-# 통합 본질 완료 후 후속 PR에서 채워야 함 (대표 회신 정직 보고).
+# 운영상태·측정결과처럼 신뢰 경계 내부인 GET은 capability token이 필요하다.
+# 공개 health/model status와 혼동하지 않도록 실제 FastAPI 경로를 직접 호출한다.
 # ------------------------------------------------------------------------------
 PUBLIC_PATHS: list[tuple[str, str]] = [
     ("GET", "/health"),
     ("GET", "/api/sidecar/health"),
     ("GET", "/api/model/status"),
-    ("GET", "/api/egress/report"),
 ]
 
 PROTECTED_GET_PATHS: list[tuple[str, str]] = [
+    ("GET", "/api/egress/report"),
     ("GET", "/v1/home/bootstrap-status"),
     ("GET", "/v1/home/snapshot"),
 ]
@@ -130,11 +128,7 @@ def test_public_paths_no_token_not_401(client, method, path):
 )
 @pytest.mark.skipif(
     not PROTECTED_GET_PATHS,
-    reason=(
-        "PROTECTED_GET_PATHS 본질 미식별 — "
-        "PR #750은 capability_token을 butler_sidecar.py에 통합 0. "
-        "통합 완료 후 후속 PR에서 채워야 함."
-    ),
+    reason="보호 GET 경로 계약이 아직 정의되지 않음",
 )
 def test_protected_paths_no_token_returns_401(client, method, path):
     """protected path는 토큰 없이 호출 시 반드시 401."""

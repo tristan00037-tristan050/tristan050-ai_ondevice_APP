@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/learning-consumer-bindings-v1.schema.json",
+  "title": "Butler digest-only learning consumer bindings",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "bindings"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "company_rules": {"$ref": "#/$defs/binding"},
+        "company_facts": {"$ref": "#/$defs/binding"},
+        "company_formats": {"$ref": "#/$defs/binding"},
+        "folder_learning": {"$ref": "#/$defs/binding"}
+      }
+    }
+  },
+  "$defs": {
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "authority_key",
+        "authority_revision",
+        "consumer_id",
+        "observed_at",
+        "generation",
+        "binding_digest"
+      ],
+      "properties": {
+        "schema_version": {"const": 1},
+        "authority_key": {
+          "enum": [
+            "company_rules",
+            "company_facts",
+            "company_formats",
+            "folder_learning"
+          ]
+        },
+        "authority_revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "consumer_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "binding_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/learning-capability-response.v2.schema.json",
+  "title": "Butler learning capability canonical response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source",
+    "snapshot_revision",
+    "generation",
+    "capabilities"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "source": {
+      "const": "CANONICAL"
+    },
+    "snapshot_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "company_policy",
+        "company_fact",
+        "company_format",
+        "folder_learning"
+      ],
+      "properties": {
+        "company_policy": {
+          "$ref": "#/$defs/capabilityState"
+        },
+        "company_fact": {
+          "$ref": "#/$defs/capabilityState"
+        },
+        "company_format": {
+          "$ref": "#/$defs/capabilityState"
+        },
+        "folder_learning": {
+          "$ref": "#/$defs/capabilityState"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "capabilityState": {
+      "type": "string",
+      "enum": [
+        "IN_USE",
+        "REGISTERED",
+        "NOT_REGISTERED",
+        "UNAVAILABLE"
+      ]
+    }
+  }
+}

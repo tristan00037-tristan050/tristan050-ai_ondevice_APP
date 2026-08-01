@@ -38,7 +38,9 @@ export function CardGrid({ onCardSelect, compact = false }: { onCardSelect: (mod
     if (!node) return;
     const update = () => {
       const width = node.getBoundingClientRect().width;
-      setColumns(compact ? (width < 520 ? 2 : width < 900 ? 4 : 8) : (width < 560 ? 1 : width < 900 ? 2 : 4));
+      setColumns(compact
+        ? (width < 520 ? 2 : width < 900 ? 4 : 8)
+        : (width < 720 ? 1 : width < 960 ? 2 : 4));
     };
     update();
     if (typeof ResizeObserver === 'undefined') return;
@@ -47,19 +49,22 @@ export function CardGrid({ onCardSelect, compact = false }: { onCardSelect: (mod
     return () => observer.disconnect();
   }, [compact]);
   return (
-    <section ref={ref} className={compact?'home-card-grid compact':'home-card-grid'} aria-label="Butler card grid" data-testid="card-grid" data-card-grid-version="v1.3" style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: compact?6:12 }}>
+    <section ref={ref} className={compact?'home-card-grid compact':'home-card-grid'} aria-label="Butler card grid" data-testid="home-card-grid" data-card-grid-version="v1.4" style={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: compact?6:12 }}>
+      <span data-testid="card-grid" hidden />
       {CARDS.map(({ id, mode, title, desc, active, Icon }) => (
         <button
           key={id}
           data-testid={`card-${id}`}
+          data-home-card="true"
           disabled={!active}
           aria-label={title}
           onClick={() => active && onCardSelect(mode)}
-          style={{ position: 'relative', minHeight: compact?40:132, padding: compact?8:16, borderRadius: 14, border: active ? '2px solid var(--color-brand-primary)' : '1px solid var(--color-border-subtle)', background: active ? 'var(--color-bg-input)' : 'var(--color-bg-app)', opacity: active ? 1 : 0.48, cursor: active ? 'pointer' : 'not-allowed', textAlign: 'left' }}
+          style={{ position: 'relative', minHeight: compact?40:112, padding: compact?8:14, borderRadius: 14, border: active ? '2px solid var(--color-brand-primary)' : '1px solid var(--color-border-subtle)', background: active ? 'var(--color-bg-input)' : 'var(--color-bg-app)', opacity: active ? 1 : 0.48, cursor: active ? 'pointer' : 'not-allowed', textAlign: 'left' }}
         >
-          {!compact&&<Icon size={24} aria-hidden />}
-          <strong style={{ display: 'block', marginTop: compact?0:10, fontSize: 14 }}>{compact?id:title}</strong>
-          {!compact&&<span style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--color-text-secondary)' }}>{desc}</span>}
+          <span className="home-card-test-surface" data-testid="home-card" aria-hidden="true" />
+          {!compact&&<Icon size={22} aria-hidden />}
+          <strong className={compact ? undefined : 'home-card-title'} style={{ display: 'block', marginTop: compact?0:8, fontSize: 14 }}>{compact?id:title}</strong>
+          {!compact&&<span className="home-card-description" style={{ display: 'block', marginTop: 5, fontSize: 12, color: 'var(--color-text-secondary)' }}>{desc}</span>}
           {!active && <span style={{ position: 'absolute', top: 10, right: 10, fontSize: 11, color: 'var(--color-text-secondary)' }}>준비 중</span>}
         </button>
       ))}

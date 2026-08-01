@@ -110,6 +110,7 @@ from butler_pc_core.model_tier.shadow_observer import (
     phase0_shadow_status,
     shutdown_phase0_shadow,
 )
+from butler_pc_core.observability import EgressMonitorReal
 from datetime import datetime, timezone as _tz
 
 # ---------------------------------------------------------------------------
@@ -119,6 +120,42 @@ _SHARED_LLM: LlmRuntime | None = None
 _LLM_INIT_LOCK = threading.Lock()
 _MODEL_TIER_RUNTIME_MONITOR: RuntimeStateMonitor | None = None
 _MODEL_TIER_DEVICE_SAMPLER: DeviceProfileSampler | None = None
+_EGRESS_MONITOR: EgressMonitorReal | None = None
+_EGRESS_MONITOR_LOCK = threading.RLock()
+_STATIC_BETA_MEASUREMENT = "STATIC_BETA"
+
+
+def _start_egress_monitor() -> None:
+    global _EGRESS_MONITOR
+    with _EGRESS_MONITOR_LOCK:
+        if _EGRESS_MONITOR is not None:
+            raise RuntimeError("EGRESS_MONITOR_ALREADY_STARTED")
+        monitor = EgressMonitorReal()
+        monitor.start()
+        _EGRESS_MONITOR = monitor
+
+
+def _stop_egress_monitor() -> None:
+    global _EGRESS_MONITOR
+    with _EGRESS_MONITOR_LOCK:
+        monitor = _EGRESS_MONITOR
+        _EGRESS_MONITOR = None
+        if monitor is not None:
+            monitor.stop()
+
+
+def _egress_monitor_report() -> dict[str, object] | None:
+    with _EGRESS_MONITOR_LOCK:
+        if _EGRESS_MONITOR is None:
+            return None
+        return _EGRESS_MONITOR.report()
+
+
+def _static_beta_egress_payload() -> dict[str, str]:
+    return {
+        "detail": "EGRESS_MEASUREMENT_UNAVAILABLE",
+        "measurement": _STATIC_BETA_MEASUREMENT,
+    }
 
 
 def _init_shared_llm() -> None:
@@ -413,8 +450,13 @@ if _FASTAPI_AVAILABLE:
             "/health",
             "/api/sidecar/health",
             "/api/model/status",
-            "/api/egress/report",
             "/api/model-tier/shadow/status",
+        }
+    )
+    _PROTECTED_GET_PATHS = frozenset(
+        {
+            "/api/egress/report",
+            "/api/capabilities/learning",
         }
     )
 
@@ -430,34 +472,68 @@ if _FASTAPI_AVAILABLE:
 
     @app.on_event("startup")
     async def _startup_generate_token():
-        _TOKEN_MANAGER.generate()
-        _start_model_tier_phase0_shadow()
-        initialize_home_store()
+        _start_egress_monitor()
+        try:
+            _TOKEN_MANAGER.generate()
+            _start_model_tier_phase0_shadow()
+            initialize_home_store()
+        except Exception:
+            _stop_egress_monitor()
+            raise
 
     @app.on_event("shutdown")
     async def _shutdown_clear_token():
-        shutdown_home_store()
-        _stop_model_tier_phase0_shadow()
-        _TOKEN_MANAGER.clear()
+        try:
+            shutdown_home_store()
+        finally:
+            try:
+                _stop_model_tier_phase0_shadow()
+            finally:
+                try:
+                    _TOKEN_MANAGER.clear()
+                finally:
+                    _stop_egress_monitor()
 
     @app.middleware("http")
     async def _capability_token_middleware(request, call_next):
         if request.method == "GET" and request.url.path in _PUBLIC_GET_PATHS:
             return await call_next(request)
         home_request = request.url.path.startswith("/v1/home/")
-        if home_request:
+        protected_get_request = (
+            request.method == "GET"
+            and request.url.path in _PROTECTED_GET_PATHS
+        )
+        local_authenticated_request = home_request or protected_get_request
+        protected_headers = (
+            {
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+                "X-Content-Type-Options": "nosniff",
+            }
+            if request.url.path == "/api/capabilities/learning"
+            else None
+        )
+        if local_authenticated_request:
             host = request.headers.get("host", "").lower()
             origin = request.headers.get("origin")
             if host not in {"127.0.0.1:8765", "localhost:8765", "testserver"}:
-                return JSONResponse(status_code=400, content={"code": "UNTRUSTED_HOST"})
+                return JSONResponse(
+                    status_code=400,
+                    content={"code": "UNTRUSTED_HOST"},
+                    headers=protected_headers,
+                )
             if origin not in {
                 None,
                 "tauri://localhost",
                 "http://localhost:1420",
                 "http://127.0.0.1:1420",
             }:
-                return JSONResponse(status_code=403, content={"code": "UNTRUSTED_ORIGIN"})
-        if home_request or request.method in ("POST", "PUT", "PATCH", "DELETE"):
+                return JSONResponse(
+                    status_code=403,
+                    content={"code": "UNTRUSTED_ORIGIN"},
+                    headers=protected_headers,
+                )
+        if local_authenticated_request or request.method in ("POST", "PUT", "PATCH", "DELETE"):
             try:
                 session = _TOKEN_MANAGER.verify_authorization_header(
                     request.headers.get("Authorization")
@@ -472,6 +548,7 @@ if _FASTAPI_AVAILABLE:
                         "fail_class": exc.fail_class.value,
                         "message": exc.message,
                     },
+                    headers=protected_headers,
                 )
             request.state.capability_actor_id = session.actor_id
             request.state.capability_session_digest = session.session_digest
@@ -484,6 +561,9 @@ if _FASTAPI_AVAILABLE:
     from butler_pc_core.company_fact.routes import router as company_fact_router
     from butler_pc_core.sidecar.routes.company_learning import (
         router as company_learning_router,
+    )
+    from butler_pc_core.sidecar.routes.learning_capability import (
+        router as learning_capability_router,
     )
     from butler_pc_core.sidecar.routes.company_profile import (
         router as company_profile_router,
@@ -506,15 +586,15 @@ if _FASTAPI_AVAILABLE:
     # 실행되며(fail-closed), 정책 미정의·로딩 실패 시 admin setup 외 모든 박스/헬퍼는
     # 차단된다(bootstrap 게이트).
     from butler_pc_core.sidecar.routes.admin_policy_format import (
+        get_policy_store,
         router as admin_policy_format_router,
     )
     from butler_pc_core.sidecar.routes.admin_role_registry import (
         router as admin_role_registry_router,
     )
     from butler_pc_core.company_policy.middleware import add_policy_gate_middleware
-    from butler_pc_core.company_policy.storage import PolicyStore
 
-    add_policy_gate_middleware(app, policy_store=PolicyStore())
+    add_policy_gate_middleware(app, policy_store=get_policy_store)
 
     app.include_router(router_decide_router)
     app.include_router(router_intake_decide_router)
@@ -528,6 +608,7 @@ if _FASTAPI_AVAILABLE:
     app.include_router(accounting_assignment_router)
     app.include_router(company_fact_router)
     app.include_router(company_learning_router)
+    app.include_router(learning_capability_router)
 
     # -----------------------------------------------------------------------
     # 모델
@@ -617,29 +698,20 @@ if _FASTAPI_AVAILABLE:
 
     @app.get("/api/egress/report")
     def egress_report():
-        """Egress Monitor용 송신 현황 리포트 (베타: 모든 값 정적 반환).
-
-        실제 네트워크 모니터링은 D-1-C 이후 구현 예정.
-        """
-        import uuid as _uuid
-
+        """Return the process-wide runtime monitor's atomic redacted snapshot."""
+        try:
+            report = _egress_monitor_report()
+        except Exception:
+            report = None
+        if report is None:
+            return JSONResponse(
+                status_code=503,
+                content=_static_beta_egress_payload(),
+                headers={"Cache-Control": "no-store"},
+            )
         return JSONResponse(
-            {
-                "schema_version": "egress_report.v2",
-                "task_id": str(_uuid.uuid4()),
-                "mode": "local_only",
-                "raw_file_sent_external": False,
-                "raw_text_logged": False,
-                "egress_bytes_total": 0,
-                "dns_requests": 0,
-                "http_requests": 0,
-                "https_requests": 0,
-                "telemetry_enabled": False,
-                "crash_report_enabled": False,
-                "update_check_enabled": False,
-                "verdict": "PASS",
-                "generated_at": datetime.now(_tz.utc).isoformat(),
-            }
+            content=report,
+            headers={"Cache-Control": "no-store"},
         )
 
     @app.post("/api/precheck", response_model=PrecheckResponse)
@@ -3023,12 +3095,17 @@ else:
             data = json.dumps(body, ensure_ascii=False).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Access-Control-Allow-Origin", "tauri://localhost")
             self.send_header(
                 "Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS"
             )
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header(
+                "Access-Control-Allow-Headers", "Content-Type, Authorization"
+            )
             self.end_headers()
             self.wfile.write(data)
 
@@ -3038,7 +3115,9 @@ else:
             self.send_header(
                 "Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS"
             )
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header(
+                "Access-Control-Allow-Headers", "Content-Type, Authorization"
+            )
             self.end_headers()
 
         def do_GET(self):
@@ -3068,6 +3147,17 @@ else:
                         )
                 else:
                     self._send_json(200, _fallback_health_payload(self.path))
+            elif self.path == "/api/egress/report":
+                self._send_json(503, _static_beta_egress_payload())
+            elif self.path == "/api/capabilities/learning":
+                self._send_json(
+                    503,
+                    {
+                        "schema_version": 1,
+                        "source": "UNAVAILABLE",
+                        "reason": "AUTHORITY_UNREACHABLE",
+                    },
+                )
             else:
                 self._send_json(404, {"detail": "not found"})
 

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from butler_pc_core.app_data import product_data_root
+from butler_pc_core.strict_json import load_strict_bytes
 from butler_pc_core.company_policy.admin_auth import verify_admin_context
-from butler_pc_core.company_policy.contracts import AdminContext
+from butler_pc_core.company_policy.contracts import AdminContext, stable_json_digest
 from butler_pc_core.company_policy.vault import LocalEncryptedVault, VaultError
 
 from .audit import CompanyFactAuditStore
@@ -39,6 +42,13 @@ class CompanyFactLoadError(RuntimeError):
     pass
 
 
+@dataclass(frozen=True)
+class CompanyFactCapabilitySummary:
+    active_count: int
+    active_fact_digests: tuple[str, ...]
+    revision: str
+
+
 class CompanyFactStore:
     def __init__(
         self,
@@ -46,7 +56,10 @@ class CompanyFactStore:
         vault: LocalEncryptedVault | None = None,
         audit_store: CompanyFactAuditStore | None = None,
     ) -> None:
-        self.root = root or Path(".butler_company_fact_store")
+        self.root = root or product_data_root(
+            "company-facts",
+            legacy_name=".butler_company_fact_store",
+        )
         self.root.mkdir(parents=True, exist_ok=True)
         self.vault = vault or LocalEncryptedVault(root=self.root / "vault", key_path=self.root / "vault.key")
         self.index_path = self.root / "company_facts_index.json"
@@ -62,7 +75,7 @@ class CompanyFactStore:
         if not self.index_path.exists():
             return self._empty_index()
         try:
-            data = json.loads(self.index_path.read_text(encoding="utf-8"))
+            data = load_strict_bytes(self.index_path.read_bytes(), allow_float=True)
             if data.get("schema_version") != "company_fact.index_file.v1":
                 raise CompanyFactLoadError("COMPANY_FACT_INDEX_SCHEMA_INVALID")
             if not isinstance(data.get("facts"), dict):
@@ -85,7 +98,10 @@ class CompanyFactStore:
         if not self.known_bad_index_path.exists():
             return self._empty_known_bad_index()
         try:
-            data = json.loads(self.known_bad_index_path.read_text(encoding="utf-8"))
+            data = load_strict_bytes(
+                self.known_bad_index_path.read_bytes(),
+                allow_float=True,
+            )
             if data.get("schema_version") != "company_fact.known_bad_index_file.v1":
                 raise CompanyFactLoadError("KNOWN_BAD_INDEX_SCHEMA_INVALID")
             if not isinstance(data.get("entries"), dict):
@@ -107,7 +123,10 @@ class CompanyFactStore:
         if not self.known_bad_override_path.exists():
             return {"schema_version": "company_fact.known_bad_override_file.v1", "overrides": {}}
         try:
-            data = json.loads(self.known_bad_override_path.read_text(encoding="utf-8"))
+            data = load_strict_bytes(
+                self.known_bad_override_path.read_bytes(),
+                allow_float=True,
+            )
             if data.get("schema_version") != "company_fact.known_bad_override_file.v1":
                 raise CompanyFactLoadError("KNOWN_BAD_OVERRIDE_SCHEMA_INVALID")
             if not isinstance(data.get("overrides"), dict):
@@ -458,3 +477,27 @@ class CompanyFactStore:
             except CompanyFactLoadError as exc:
                 raise CompanyFactLoadError("COMPANY_FACT_ACTIVE_LOAD_FAILED") from exc
         return active
+
+    def capability_summary(self) -> CompanyFactCapabilitySummary:
+        # Validate every index record, every ACTIVE vault record, known-bad
+        # records and overrides. A malformed side record cannot be skipped to
+        # manufacture a positive capability.
+        self._load_index_data()
+        self.load_known_bad_entries()
+        self._load_override_data()
+        active = self.load_active_facts()
+        for record in active:
+            if self.known_bad_flags_for_candidate(record)["known_bad_suspected"]:
+                raise CompanyFactLoadError("COMPANY_FACT_ACTIVE_KNOWN_BAD")
+        digests = tuple(sorted(record.fact_digest for record in active))
+        revision = stable_json_digest(
+            {
+                "schema_version": 1,
+                "active_fact_digests": digests,
+            }
+        ).removeprefix("sha256:")
+        return CompanyFactCapabilitySummary(
+            active_count=len(active),
+            active_fact_digests=digests,
+            revision=revision,
+        )

@@ -8,6 +8,9 @@ from butler_pc_core.company_policy.contracts import stable_json_digest
 from butler_pc_core.factpack import Fact, FactPack, FactMatch
 
 from .storage import CompanyFactLoadError, CompanyFactStore
+from butler_pc_core.learning_capability.consumer_bindings import (
+    default_consumer_binding_store,
+)
 
 
 @dataclass(frozen=True)
@@ -108,12 +111,23 @@ class CompanyKnowledgeResolver:
         company_match = company_pack.lookup(query_runtime_text) if company_pack is not None else None
 
         if company_match is not None:
+            fact_digest = company_digests.get(company_match.fact.id) or _base_fact_digest(
+                company_match
+            )
+            try:
+                default_consumer_binding_store().record(
+                    "company_fact",
+                    fact_digest,
+                    "CompanyKnowledgeResolver.company_match.v1",
+                )
+            except Exception:
+                pass
             return CompanyKnowledgeResolveResult(
                 answer=company_match.fact.answer,
                 source="company",
                 provenance="company",
                 fact_id=company_match.fact.id,
-                fact_digest=company_digests.get(company_match.fact.id) or _base_fact_digest(company_match),
+                fact_digest=fact_digest,
                 fact_source=company_match.fact.source,
                 source_url=company_match.fact.source_url,
                 source_doc=company_match.fact.source_doc,
