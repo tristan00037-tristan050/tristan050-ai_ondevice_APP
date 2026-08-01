@@ -63,7 +63,7 @@ sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 responses = {}
-for path in ("/health", "/api/sidecar/health"):
+for path in ("/health", "/api/sidecar/health", "/api/egress/report"):
     handler = object.__new__(module._Handler)
     handler.path = path
     captured = []
@@ -89,3 +89,9 @@ print("FALLBACK_HEALTH_JSON=" + json.dumps(responses, sort_keys=True))
         assert status_code == 200
         assert "build_base_commit_oid" in payload
         assert "build_timestamp_utc" in payload
+    egress_status, egress_payload = responses["/api/egress/report"]
+    assert egress_status == 503
+    assert egress_payload == {
+        "detail": "EGRESS_MEASUREMENT_UNAVAILABLE",
+        "measurement": "STATIC_BETA",
+    }

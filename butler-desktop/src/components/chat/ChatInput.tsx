@@ -99,6 +99,7 @@ export function ChatInput({
 
   return (
     <div
+      data-testid="chat-input"
       style={{
         padding: 'var(--space-4)',
         background: 'var(--color-bg-app)',

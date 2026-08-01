@@ -9,6 +9,8 @@ from typing import Any
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from butler_pc_core.strict_json import load_strict_bytes
+
 from .contracts import sha256_bytes, stable_json
 
 
@@ -72,14 +74,14 @@ class LocalEncryptedVault:
         item_path = self.root / f"{rel}.json"
         if not item_path.exists():
             raise VaultError("VAULT_ITEM_MISSING")
-        envelope = json.loads(item_path.read_text(encoding="utf-8"))
+        envelope = load_strict_bytes(item_path.read_bytes())
         key = self._load_key()
         nonce = base64.b64decode(envelope["nonce_b64"])
         ciphertext = base64.b64decode(envelope["ciphertext_b64"])
         plaintext = AESGCM(key).decrypt(nonce, ciphertext, aad.encode("utf-8"))
         if sha256_bytes(plaintext) != envelope.get("plaintext_digest"):
             raise VaultError("VAULT_DIGEST_MISMATCH")
-        value = json.loads(plaintext.decode("utf-8"))
+        value = load_strict_bytes(plaintext, allow_float=True)
         if not isinstance(value, dict):
             raise VaultError("VAULT_VALUE_NOT_OBJECT")
         return value

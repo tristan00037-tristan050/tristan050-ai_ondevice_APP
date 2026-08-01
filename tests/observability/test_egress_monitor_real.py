@@ -6,7 +6,10 @@ import urllib.request
 
 import pytest
 
-from butler_pc_core.observability.egress_monitor_real import EgressMonitorReal
+from butler_pc_core.observability.egress_monitor_real import (
+    EgressMonitorReal,
+    RUNTIME_REAL_MEASUREMENT,
+)
 
 
 def test_no_external_calls_pass():
@@ -17,6 +20,7 @@ def test_no_external_calls_pass():
         assert monitor._is_local_only("::1") is True
         assert monitor._is_local_only("/tmp/app.sock") is True
         report = monitor.report()
+        assert report["measurement"] == RUNTIME_REAL_MEASUREMENT
         assert report["verdict"] == "PASS"
         assert report["violations"] == []
     assert socket.socket.connect is original

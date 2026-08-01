@@ -3,12 +3,24 @@ from __future__ import annotations
 
 import copy
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
 from typing import Any
 
+from butler_pc_core.strict_json import load_strict_bytes
+
 from .learning_event_schema import validate_learning_event
 from .persisted_safety import _enforce_persisted_safety
+
+
+@dataclass(frozen=True)
+class LearningEventCapabilitySummary:
+    persisted_count: int
+    candidate_count: int
+    approved_count: int
+    event_digests: tuple[str, ...]
+    revision: str
 
 
 class LearningEventStore:
@@ -36,7 +48,10 @@ class LearningEventStore:
             for line in handle:
                 if not line.strip():
                     continue
-                stored = json.loads(line)
+                stored = load_strict_bytes(
+                    line.encode("utf-8"),
+                    allow_float=True,
+                )
                 _enforce_persisted_safety(stored)
                 validate_learning_event(stored)
                 self._index_stored_event(stored)
@@ -51,7 +66,15 @@ class LearningEventStore:
                 try:
                     self.jsonl_path.parent.mkdir(parents=True, exist_ok=True)
                     with self.jsonl_path.open("a", encoding="utf-8") as handle:
-                        handle.write(json.dumps(stored, ensure_ascii=False, sort_keys=True) + "\n")
+                        handle.write(
+                            json.dumps(
+                                stored,
+                                ensure_ascii=False,
+                                sort_keys=True,
+                                allow_nan=False,
+                            )
+                            + "\n"
+                        )
                 except Exception:
                     self.events.pop(stored["learning_event_id"], None)
                     self.learning_event_link_index.pop(stored["source_usage_log_id"], None)
@@ -64,3 +87,45 @@ class LearningEventStore:
     def get(self, learning_event_id: str) -> dict[str, Any] | None:
         event = self.events.get(learning_event_id)
         return copy.deepcopy(event) if event is not None else None
+
+    def capability_summary(self) -> LearningEventCapabilitySummary:
+        from butler_pc_core.learning_capability.contracts import lower_hex_digest
+
+        with self._lock:
+            events = [copy.deepcopy(value) for value in self.events.values()]
+        digests: list[str] = []
+        candidate_count = 0
+        approved_count = 0
+        for event in events:
+            _enforce_persisted_safety(event)
+            validate_learning_event(event)
+            status = event.get("status")
+            if status == "CANDIDATE":
+                candidate_count += 1
+            elif status == "APPROVED":
+                approved_count += 1
+            digests.append(
+                lower_hex_digest(
+                    {
+                        "learning_event_id": event["learning_event_id"],
+                        "status": status,
+                        "approved_text_digest": event["approved_text_digest"],
+                    }
+                )
+            )
+        ordered = tuple(sorted(digests))
+        revision = lower_hex_digest(
+            {
+                "schema_version": 1,
+                "event_digests": ordered,
+                "candidate_count": candidate_count,
+                "approved_count": approved_count,
+            }
+        )
+        return LearningEventCapabilitySummary(
+            persisted_count=len(events),
+            candidate_count=candidate_count,
+            approved_count=approved_count,
+            event_digests=ordered,
+            revision=revision,
+        )

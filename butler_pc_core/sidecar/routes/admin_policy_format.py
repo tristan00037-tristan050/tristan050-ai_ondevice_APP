@@ -19,8 +19,22 @@ from butler_pc_core.company_policy.storage import CompanyFormatStore, PolicyLoad
 
 router = APIRouter()
 
-_POLICY_STORE = PolicyStore()
-_FORMAT_STORE = CompanyFormatStore()
+_POLICY_STORE: PolicyStore | None = None
+_FORMAT_STORE: CompanyFormatStore | None = None
+
+
+def get_policy_store() -> PolicyStore:
+    global _POLICY_STORE
+    if _POLICY_STORE is None:
+        _POLICY_STORE = PolicyStore()
+    return _POLICY_STORE
+
+
+def get_format_store() -> CompanyFormatStore:
+    global _FORMAT_STORE
+    if _FORMAT_STORE is None:
+        _FORMAT_STORE = CompanyFormatStore()
+    return _FORMAT_STORE
 
 
 class AccessRulePayload(BaseModel):
@@ -101,7 +115,7 @@ async def register_company_policy(
             status=payload.status,
             masking_engine_verified=payload.masking_engine_verified,
         )
-        audit = _POLICY_STORE.save_policy(policy, admin)
+        audit = get_policy_store().save_policy(policy, admin)
         return {
             "schema_version": "admin.company_policy_register.response.v1",
             "policy_digest": policy.policy_digest,
@@ -129,7 +143,7 @@ async def register_company_format(
             _admin_context(x_admin_role, x_admin_id_digest, x_admin_session_digest, x_admin_auth_method),
             operation="register_company_format",
         )
-        fmt, audit = _FORMAT_STORE.register_format(
+        fmt, audit = get_format_store().register_format(
             template_runtime_text=payload.template_runtime_text,
             format_kind=payload.format_kind,
             title_runtime_text=payload.title_runtime_text,
@@ -157,7 +171,7 @@ async def register_company_format(
 @router.post("/v1/policy/evaluate")
 async def evaluate_policy(payload: PolicyGateEvaluateRequest) -> dict[str, Any]:
     try:
-        active = _POLICY_STORE.load_active_policy()
+        active = get_policy_store().load_active_policy()
     except PolicyLoadError:
         active = None
         gate = PolicyGate.evaluate(
@@ -189,7 +203,7 @@ async def format_adapter_preview(format_id: str, draft_digest: Optional[str] = N
     # 단일 경로가 정본이며 raw runtime text 가 있는 박스 3 파이프라인 내부에서만 수행된다.
     # 본 sidecar endpoint 는 raw text 가 없으므로 format 등록·활성 상태와 digest 메타만 노출
     # (raw 0 / digest-only). draft_digest 는 caller-side 정합 키로만 echo 한다.
-    company_format = _FORMAT_STORE.get_format(format_id)
+    company_format = get_format_store().get_format(format_id)
     if company_format is None:
         return {
             "schema_version": "helper3.company_format_adapter.v1",

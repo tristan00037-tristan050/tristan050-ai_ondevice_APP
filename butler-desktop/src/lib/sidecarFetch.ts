@@ -38,6 +38,83 @@ export class SidecarTargetError extends Error {
   }
 }
 
+export class SidecarDeadlineError extends Error {
+  readonly code = 'SIDECAR_DEADLINE_EXCEEDED';
+
+  constructor() {
+    super('SIDECAR_DEADLINE_EXCEEDED');
+    this.name = 'SidecarDeadlineError';
+  }
+}
+
+export type DeadlineOptions = Readonly<{
+  deadlineMs: number;
+  externalSignal?: AbortSignal;
+}>;
+
+/**
+ * Runs one complete caller-owned operation inside a finite deadline.
+ *
+ * This is deliberately opt-in: model execution, uploads and streaming have
+ * different budgets and must not inherit a short global timeout. The race is
+ * retained in addition to AbortController so adapters and test doubles that
+ * ignore AbortSignal still cannot leave the caller pending forever.
+ */
+export async function withDeadline<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+  options: DeadlineOptions,
+): Promise<T> {
+  const { deadlineMs, externalSignal } = options;
+  if (!Number.isSafeInteger(deadlineMs) || deadlineMs <= 0) {
+    throw new TypeError('DEADLINE_MS_INVALID');
+  }
+  if (externalSignal?.aborted) {
+    throw externalSignal.reason
+      ?? new DOMException('External abort', 'AbortError');
+  }
+
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let removeExternalListener = () => {};
+
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new SidecarDeadlineError();
+      controller.abort(error);
+      reject(error);
+    }, deadlineMs);
+  });
+
+  const externalAbort = new Promise<never>((_, reject) => {
+    if (!externalSignal) return;
+    const abort = () => {
+      const reason = externalSignal.reason
+        ?? new DOMException('External abort', 'AbortError');
+      controller.abort(reason);
+      reject(reason);
+    };
+    if (externalSignal.aborted) {
+      abort();
+      return;
+    }
+    externalSignal.addEventListener('abort', abort, { once: true });
+    removeExternalListener = () => {
+      externalSignal.removeEventListener('abort', abort);
+    };
+  });
+
+  try {
+    return await Promise.race([
+      operation(controller.signal),
+      deadline,
+      externalAbort,
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    removeExternalListener();
+  }
+}
+
 function resolveSidecarTarget(path: string): URL {
   if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) {
     throw new SidecarTargetError();

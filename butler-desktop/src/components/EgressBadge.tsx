@@ -1,82 +1,103 @@
-import React, { useState } from 'react';
-import type { EgressStats } from '../types';
+import React, { forwardRef } from 'react';
+import {
+  isVerifiedZero,
+  type EgressUiState,
+} from '../lib/egressReport';
 
-interface EgressBadgeProps {
-  stats?: Partial<EgressStats>;
-  isBlocked?: boolean;
-  isWorking?: boolean;
-}
+type Props = Readonly<{
+  state: EgressUiState;
+  onOpenDetails: () => void;
+}>;
 
-const DEFAULT_STATS: EgressStats = {
-  task_id: '',
-  mode: 'local_only',
-  egress_bytes_total: 0,
-  dns_requests: 0,
-  http_requests: 0,
-  https_requests: 0,
-  telemetry_enabled: false,
-  crash_report_enabled: false,
-  update_check_enabled: false,
-  raw_text_logged: false,
-  input_digest16: 'sha256:0000000000000000',
-  output_digest16: 'sha256:0000000000000000',
-  verdict: 'PASS',
-};
+export type EgressBadgeView = Readonly<{
+  label:
+    | '확인 중'
+    | '아직 못 잼'
+    | '확인 실패'
+    | '다시 확인 필요'
+    | '외부 전송 감지'
+    | `밖으로 나간 것 ${number}`;
+  tone: 'loading' | 'unmeasured' | 'error' | 'stale' | 'safe' | 'warning';
+  ariaLabel: string;
+}>;
 
-function downloadJson(data: object, filename: string) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-export function EgressBadge({ stats: statsProp, isBlocked = false, isWorking = false }: EgressBadgeProps) {
-  const [open, setOpen] = useState(false);
-  const stats: EgressStats = { ...DEFAULT_STATS, ...statsProp };
-
-  const badgeColor = isBlocked ? '#f5222d' : '#52c41a';
-  const badgeText = isBlocked
-    ? '⚠️ 외부 송신 차단됨'
-    : isWorking
-    ? `🔒 외부 송신 ${stats.egress_bytes_total} · 작업 중`
-    : `🔒 외부 송신 ${stats.egress_bytes_total} · Local-only Mode`;
-
-  const handleDownload = () => {
-    downloadJson({ schema_version: 'egress_report.v2', ...stats }, `egress_report_${Date.now()}.json`);
+export function egressBadgeView(state: EgressUiState): EgressBadgeView {
+  if (state.kind === 'loading') {
+    return { label: '확인 중', tone: 'loading', ariaLabel: '외부 전송 상태 확인 중' };
+  }
+  if (state.kind === 'unmeasured') {
+    return {
+      label: '아직 못 잼',
+      tone: 'unmeasured',
+      ariaLabel: state.source === 'STATIC_BETA'
+        ? '외부 전송 실측값 없음, 베타 상수는 안전 판정에 사용하지 않음'
+        : '외부 전송 실측값 없음',
+    };
+  }
+  if (state.kind === 'error') {
+    return { label: '확인 실패', tone: 'error', ariaLabel: '외부 전송 상태 확인 실패' };
+  }
+  if (state.kind === 'stale') {
+    return {
+      label: '다시 확인 필요',
+      tone: 'stale',
+      ariaLabel: state.lastMeasuredAt
+        ? `외부 전송 상태 다시 확인 필요, 마지막 측정 시각 ${state.lastMeasuredAt}`
+        : '외부 전송 상태 다시 확인 필요',
+    };
+  }
+  const { report } = state;
+  if (isVerifiedZero(report)) {
+    return {
+      label: '밖으로 나간 것 0',
+      tone: 'safe',
+      ariaLabel: `밖으로 나간 것 0 바이트, 측정 시각 ${report.measuredAt}`,
+    };
+  }
+  if (report.verdict === 'FAIL') {
+    const observations = [
+      report.egressBytesTotal > 0
+        ? `${report.egressBytesTotal} 바이트`
+        : null,
+      report.externalRequestCount > 0
+        ? `외부 요청 ${report.externalRequestCount}건`
+        : null,
+      report.rawFileSentExternal
+        ? '원본 파일 외부 전송 관측'
+        : null,
+    ].filter((value): value is string => value !== null);
+    return {
+      label: report.egressBytesTotal > 0
+        ? `밖으로 나간 것 ${report.egressBytesTotal}`
+        : '외부 전송 감지',
+      tone: 'warning',
+      ariaLabel: `외부 전송 감지, ${observations.join(', ')}, 측정 시각 ${report.measuredAt}`,
+    };
+  }
+  return {
+    label: '확인 실패',
+    tone: 'error',
+    ariaLabel: '외부 전송 측정값의 안전한 표시 조건을 확인하지 못함',
   };
-
-  return (
-    <div>
-      <button
-        data-testid="egress-badge"
-        onClick={() => setOpen(o => !o)}
-        style={{ background: badgeColor, color: '#fff', border: 'none', borderRadius: 4, padding: '4px 12px', cursor: 'pointer' }}
-        aria-expanded={open}
-      >
-        {badgeText}
-      </button>
-
-      {open && (
-        <div data-testid="egress-panel" style={{ marginTop: 8, padding: 16, border: '1px solid #ddd', borderRadius: 8 }}>
-          <h3 style={{ margin: '0 0 8px' }}>Egress Monitor</h3>
-          <dl>
-            <dt>Mode</dt><dd data-testid="egress-mode">{stats.mode}</dd>
-            <dt>Egress bytes total</dt><dd data-testid="egress-bytes">{stats.egress_bytes_total}</dd>
-            <dt>DNS requests</dt><dd>{stats.dns_requests}</dd>
-            <dt>HTTP requests</dt><dd>{stats.http_requests}</dd>
-            <dt>HTTPS requests</dt><dd>{stats.https_requests}</dd>
-            <dt>Telemetry</dt><dd>{stats.telemetry_enabled ? 'enabled' : 'disabled'}</dd>
-            <dt>Raw text logged</dt><dd>{String(stats.raw_text_logged)}</dd>
-            <dt>Verdict</dt><dd data-testid="egress-verdict">{stats.verdict}</dd>
-          </dl>
-          <button data-testid="download-btn" onClick={handleDownload}>
-            Egress Report 다운로드 (.json)
-          </button>
-        </div>
-      )}
-    </div>
-  );
 }
+
+export const EgressBadge = forwardRef<HTMLButtonElement, Props>(
+  function EgressBadge({ state, onOpenDetails }, ref) {
+    const view = egressBadgeView(state);
+    return (
+      <button
+        ref={ref}
+        type="button"
+        className="egress-badge"
+        data-tone={view.tone}
+        data-generation={state.generation}
+        data-testid="egress-badge"
+        onClick={onOpenDetails}
+        aria-label={view.ariaLabel}
+      >
+        <span aria-hidden="true">{view.tone === 'safe' ? '✓' : view.tone === 'loading' ? '…' : '!'}</span>
+        {view.label}
+      </button>
+    );
+  },
+);
