@@ -14,12 +14,17 @@ ASSETS = (
     "butler-desktop/acceptance/required-tests.v3.json",
     "butler-desktop/scripts/verify-required-test-nodes.mjs",
     "contracts/evidence-index.schema.json",
-    "scripts/ci/parse_junit_xml.py",
+    # 경로 격리: 보호 사슬이 실제로 쓰는 것은 trusted_parse_junit_xml.py 다.
+    # producer 판 scripts/ci/parse_junit_xml.py 는 사슬이 쓰지 않으며 자유롭게
+    # 느슨해질 수 있으므로 이 보호 manifest 에서 제외한다(그 변경이 manifest 를
+    # 흔들지 않도록). 판정값 게시기도 인라인에서 파일로 추출해 여기서 보호한다.
+    "scripts/ci/publish_trusted_verdict.py",
     "scripts/ci/strict_json.mjs",
     "scripts/ci/trusted_firstscreen_artifact.py",
     "scripts/ci/trusted_firstscreen_historical.py",
     "scripts/ci/trusted_firstscreen_mutations.mjs",
     "scripts/ci/trusted_firstscreen_run.py",
+    "scripts/ci/trusted_parse_junit_xml.py",
     "scripts/ci/verify_trusted_firstscreen_package.py",
     "tests/firstscreen_trusted/fixtures/historical_attacks.v1.json",
 )
