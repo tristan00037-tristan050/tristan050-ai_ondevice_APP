@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from butler_pc_core.firstscreen_trust import (
     BootstrapRoot,
+    TrustVerificationError,
     document_digest,
     key_id_for_public_key,
     sign_document,
@@ -20,7 +22,29 @@ from butler_pc_core.firstscreen_trust import (
 
 
 pytestmark = pytest.mark.no_sidecar_token
-NOW = datetime(2026, 7, 21, 12, 0, 0, tzinfo=timezone.utc)
+
+_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _iso(days_from_now: int) -> str:
+    """UTC timestamp N days from the real current time. Fixtures use relative
+    validity windows so they never expire as the wall clock advances; the
+    verifier always uses the real current time — no clock is injected."""
+    moment = datetime.now(timezone.utc) + timedelta(days=days_from_now)
+    return moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _load_verifier():
+    """Load the verify CLI as a module so a test can call verify_installed_policy
+    in-process and observe the specific TrustVerificationError code (the CLI
+    fails closed to a generic STORAGE_RISK_ACCEPTANCE_INVALID and hides it)."""
+    spec = importlib.util.spec_from_file_location(
+        "_verify_storage_risk_acceptance",
+        _ROOT / "scripts/verify/verify_storage_risk_acceptance.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _verdict(key: str, passed: bool, error_code: str | None = None) -> str:
@@ -40,7 +64,12 @@ def _write(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")), encoding="utf-8")
 
 
-def _chain(tmp_path: Path) -> dict[str, Path]:
+def _chain(
+    tmp_path: Path,
+    *,
+    decision_approved_days: int = -1,
+    decision_expires_days: int = 30,
+) -> dict[str, Path]:
     root_private, root_id, root_public = _key()
     risk_private, risk_id, risk_public = _key()
     rev_private, rev_id, rev_public = _key()
@@ -49,7 +78,7 @@ def _chain(tmp_path: Path) -> dict[str, Path]:
         "schema_version": "butler.firstscreen.root-policy.v1",
         "policy_id": "butler-firstscreen-trust",
         "version": 1,
-        "expires_at_utc": "2027-07-21T00:00:00Z",
+        "expires_at_utc": _iso(365),
         "consistent_snapshot": True,
         "keys": {
             root_id: {"algorithm": "ed25519", "public_key": root_public},
@@ -72,8 +101,8 @@ def _chain(tmp_path: Path) -> dict[str, Path]:
         "schema_version": "butler.firstscreen.revocations.v2",
         "policy_id": "butler-firstscreen-trust",
         "version": 1,
-        "generated_at_utc": "2026-07-21T00:00:00Z",
-        "expires_at_utc": "2026-08-21T00:00:00Z",
+        "generated_at_utc": _iso(-1),
+        "expires_at_utc": _iso(30),
         "previous_digest": None,
         "root_policy_digest": root_digest,
         "revoked_decision_ids": [],
@@ -87,8 +116,8 @@ def _chain(tmp_path: Path) -> dict[str, Path]:
         "policy_id": "butler-firstscreen-trust",
         "decision_id": "STORAGE_RISK_FS_V2_5_001",
         "version": 1,
-        "approved_at_utc": "2026-07-21T00:00:00Z",
-        "expires_at_utc": "2026-08-01T00:00:00Z",
+        "approved_at_utc": _iso(decision_approved_days),
+        "expires_at_utc": _iso(decision_expires_days),
         "scope": ["CONVERSATION_TITLE", "FTS_TITLE_INDEX"],
         "protection_boundary": ["ON_DEVICE", "OS_USER_BOUNDARY", "APP_DATA_PATH", "OWNER_MODE_GUARD"],
         "data_classification": "CONFIDENTIAL",
@@ -166,3 +195,30 @@ def test_repository_has_no_owner_policy_and_remains_blocked() -> None:
     policy = root / "docs/product/firstscreen_v2_5/trust"
     assert not (policy / "bootstrap.json").exists()
     assert not (policy / "root-policy.json").exists()
+
+
+def test_expired_decision_is_blocked(tmp_path: Path) -> None:
+    # 반대 시험: 실제 현재보다 과거로 만료된 결정서는 반드시 차단돼야 한다. 이 시험이
+    # 없으면 만료 검사가 실제로 도는지 알 수 없다. 검증기에 시각을 주입하지 않고,
+    # 실제 현재 시각 기준으로 이미 만료된 픽스처를 만들어 검사한다.
+    paths = _chain(tmp_path, decision_approved_days=-2, decision_expires_days=-1)
+
+    # CLI 는 구체 코드를 삼키고 generic INVALID 로 fail-closed 한다.
+    completed = _run(_ROOT, paths)
+    assert completed.returncode == 1
+    assert completed.stdout.strip() == _verdict(
+        "STORAGE_RISK_ACCEPTANCE", False, "STORAGE_RISK_ACCEPTANCE_INVALID"
+    )
+    assert completed.stderr == ""
+
+    # In-process 로 구체 코드가 BLOCK_DECISION_EXPIRED 임을 확인 — 만료 검사가 실제로
+    # 발화함을 증명한다(실제 현재 시각 기준).
+    verifier = _load_verifier()
+    with pytest.raises(TrustVerificationError) as exc:
+        verifier.verify_installed_policy(
+            bootstrap=paths["bootstrap"].resolve(),
+            root=paths["root"].resolve(),
+            revocations=paths["revocations"].resolve(),
+            decision=paths["decision"].resolve(),
+        )
+    assert exc.value.code == "BLOCK_DECISION_EXPIRED"
