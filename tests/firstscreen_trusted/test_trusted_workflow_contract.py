@@ -28,7 +28,12 @@ def test_trusted_workflow_uses_default_branch_code_and_raw_artifact_data() -> No
     assert "source/source.zip" not in text
     # 판정값 게시기는 인라인 heredoc 에서 보호 자산 파일로 추출됐다. 구조적 불변
     # 리터럴은 이제 그 스크립트에 있으며, 워크플로는 그 스크립트를 호출한다.
-    assert "publish_trusted_verdict.py" in text
+    # 주석이 아니라 실제 실행 명령을 검사한다: 호출 라인이 지워지면(주석만 남아도)
+    # fail-closed 되도록, 앞이 '#' 이 아닌 python3 호출 라인을 요구한다.
+    assert re.search(
+        r"(?m)^\s*python3 scripts/ci/publish_trusted_verdict\.py\b",
+        text,
+    ), "publisher must be invoked (not merely mentioned in a comment)"
     verdict = (
         ROOT / "scripts/ci/publish_trusted_verdict.py"
     ).read_text(encoding="utf-8")
