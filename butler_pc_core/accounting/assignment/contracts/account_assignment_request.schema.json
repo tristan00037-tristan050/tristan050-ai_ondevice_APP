@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://butler.local/schemas/accounting/account-assignment-request-2.0.json",
+  "$id": "https://butler.local/schemas/accounting/account-assignment-request-3.0.json",
   "title": "Account Assignment Request",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "account_id", "scope", "registry_digest", "expected_transaction_version"],
+  "required": ["account_id", "scope", "client_action_id", "user_action_nonce", "expected_transaction_version"],
   "properties": {
-    "schema_version": {"const": "2.0"},
-    "account_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "account_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
     "scope": {"enum": ["THIS_ONLY", "SAME_VENDOR_FUTURE"]},
-    "registry_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "expected_transaction_version": {"type": "integer", "minimum": 1}
+    "client_action_id": {"type": "string", "format": "uuid"},
+    "user_action_nonce": {"type": "string", "pattern": "^[A-Za-z0-9_-]{32,128}$"},
+    "expected_transaction_version": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
   }
 }

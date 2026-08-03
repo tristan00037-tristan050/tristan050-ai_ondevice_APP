@@ -16,20 +16,30 @@ on:
       - 'butler_pc_core/accounting/policy/**'
       # 이번 결합 본체(assignment suite + 제품 배선 + lock)를 게이트에 포함한다.
       - 'butler_pc_core/accounting/assignment/**'
+      - 'butler_pc_core/auth/capability_token.py'
       - 'butler_pc_core/a4_verifier/**'
       - 'butler_pc_core/accounting/ft_classifier.py'
       - 'butler_sidecar.py'
       - 'butler-desktop/src/lib/accounting_review/**'
       - 'butler-desktop/src/components/accounting_review/**'
+      - 'butler-desktop/src/__tests__/AccountingReviewPage.test.tsx'
       - 'tests/accounting/classify/**'
       - 'tests/accounting/policy/**'
       - 'tests/accounting/assignment/**'
+      - 'tests/auth/test_capability_token.py'
       - 'tests/accounting/test_finetuned_accuracy.py'
       - 'tests/accounting/test_classifier.py'
       - 'scripts/write_build_info.py'
+      - 'scripts/audit/**'
+      - 'scripts/verify_box5_integration_lock.py'
       - 'scripts/build_complete_app.sh'
       - 'scripts/build_a4_authority_helper_macos.sh'
       - 'scripts/ci/a4_*.py'
+      - 'scripts/ci/parse_junit_xml.py'
+      - 'scripts/ci/trusted_parse_junit_xml.py'
+      - 'scripts/ci/trusted_firstscreen_mutations.mjs'
+      - 'scripts/ci/verify_box5_junit_evidence.py'
+      - 'scripts/verify_box5_authorization_audit.py'
       - 'butler-desktop/src-tauri/native/a4_verifier_authority_launcher.swift'
       - 'butler-desktop/src-tauri/native/a4_secure_memory.swift'
       - 'butler-desktop/src-tauri/native/a4_authority_*.swift'
@@ -45,7 +55,11 @@ on:
       - 'tests/accounting/test_cli.py'
       - 'tests/accounting/test_sse_phase_messages.py'
       - 'tests/company_policy/test_accounting_header_trust.py'
+      - 'tests/firstscreen_trusted/test_parser_isolation_differential.py'
+      - 'tests/firstscreen_trusted/test_mutation_generator.py'
+      - 'tests/firstscreen_trusted/test_trusted_junit_semantics_box5.py'
       - 'integration_lock.json'
+      - 'requirements-firstscreen-ci.lock'
       - '.github/workflows/box5-stage3.yml'
   push:
     branches: [main]
@@ -54,20 +68,30 @@ on:
       - 'butler_pc_core/accounting/eval/**'
       - 'butler_pc_core/accounting/policy/**'
       - 'butler_pc_core/accounting/assignment/**'
+      - 'butler_pc_core/auth/capability_token.py'
       - 'butler_pc_core/a4_verifier/**'
       - 'butler_pc_core/accounting/ft_classifier.py'
       - 'butler_sidecar.py'
       - 'butler-desktop/src/lib/accounting_review/**'
       - 'butler-desktop/src/components/accounting_review/**'
+      - 'butler-desktop/src/__tests__/AccountingReviewPage.test.tsx'
       - 'tests/accounting/classify/**'
       - 'tests/accounting/policy/**'
       - 'tests/accounting/assignment/**'
+      - 'tests/auth/test_capability_token.py'
       - 'tests/accounting/test_finetuned_accuracy.py'
       - 'tests/accounting/test_classifier.py'
       - 'scripts/write_build_info.py'
+      - 'scripts/audit/**'
+      - 'scripts/verify_box5_integration_lock.py'
       - 'scripts/build_complete_app.sh'
       - 'scripts/build_a4_authority_helper_macos.sh'
       - 'scripts/ci/a4_*.py'
+      - 'scripts/ci/parse_junit_xml.py'
+      - 'scripts/ci/trusted_parse_junit_xml.py'
+      - 'scripts/ci/trusted_firstscreen_mutations.mjs'
+      - 'scripts/ci/verify_box5_junit_evidence.py'
+      - 'scripts/verify_box5_authorization_audit.py'
       - 'butler-desktop/src-tauri/native/a4_verifier_authority_launcher.swift'
       - 'butler-desktop/src-tauri/native/a4_secure_memory.swift'
       - 'butler-desktop/src-tauri/native/a4_authority_*.swift'
@@ -83,7 +107,11 @@ on:
       - 'tests/accounting/test_cli.py'
       - 'tests/accounting/test_sse_phase_messages.py'
       - 'tests/company_policy/test_accounting_header_trust.py'
+      - 'tests/firstscreen_trusted/test_parser_isolation_differential.py'
+      - 'tests/firstscreen_trusted/test_mutation_generator.py'
+      - 'tests/firstscreen_trusted/test_trusted_junit_semantics_box5.py'
       - 'integration_lock.json'
+      - 'requirements-firstscreen-ci.lock'
       - '.github/workflows/box5-stage3.yml'
 
 jobs:
@@ -94,14 +122,19 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: '3.11'
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: butler-desktop/package-lock.json
       - name: Install deps (model-free)
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install pytest jsonschema cryptography pydantic fastapi==0.128.8 starlette==0.49.3 httpx python-multipart jinja2 pyyaml pandas openpyxl
+        run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
       - name: Stage-3 policy assets invariants (registry-bound account_id / code null / lock)
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -129,10 +162,10 @@ jobs:
           lock = json.load(open("integration_lock.json"))
           schema = json.load(open("butler_pc_core/accounting/assignment/contracts/integration_lock.schema.json"))
           jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(lock)
-          assert lock["base_commit"] == "55d0f315e2b375d58c9c2a0263b606e5a757b59e"
-          assert lock["base_tree"]   == "9d21d32bca294bc9998253f7d1c2f6f88ad71114"
-          print("INTEGRATION_LOCK_BOUND_OK=1")
+          print("INTEGRATION_LOCK_SCHEMA_OK=1")
           PY
+          python scripts/verify_box5_integration_lock.py \
+            --expected-head "${{ github.event.pull_request.head.sha || github.sha }}"
       - name: Stage-3 classify + policy + assignment suite (green, model-free)
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -141,9 +174,28 @@ jobs:
             tests/accounting/classify \
             tests/accounting/policy \
             tests/accounting/assignment \
+            tests/auth/test_capability_token.py \
+            tests/firstscreen_trusted/test_mutation_generator.py \
+            tests/firstscreen_trusted/test_parser_isolation_differential.py \
+            tests/firstscreen_trusted/test_trusted_junit_semantics_box5.py \
             tests/accounting/test_sse_phase_messages.py \
             tests/company_policy/test_accounting_header_trust.py \
             -q --tb=short --junitxml=stage3-junit.xml
+      - name: Fail-closed semantic verification of raw Stage-3 JUnit
+        if: always()
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          junit_sha256="$(sha256sum stage3-junit.xml | cut -d ' ' -f 1)"
+          python scripts/ci/verify_box5_junit_evidence.py \
+            --junit stage3-junit.xml \
+            --expected-sha256 "$junit_sha256"
+      - name: Stage-3 product UI contract and component flow
+        working-directory: butler-desktop
+        run: |
+          npm ci
+          npx tsc -p tsconfig.json --noEmit
+          npx vitest run src/__tests__/AccountingReviewPage.test.tsx --reporter=dot
       - name: Contract closure offline verifier (reason registry + decision receipt)
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -181,16 +233,15 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: '3.11'
+          python-version: '3.12'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
       - name: Install product-path dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install pytest jsonschema cryptography pydantic fastapi==0.128.8 starlette==0.49.3 httpx python-multipart jinja2 pyyaml pandas openpyxl xlrd python-docx pdfminer.six
+        run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
       - name: Enforce one A4 closure and verifier authority
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -296,6 +347,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Typecheck the production XPC authority source set
         run: |
           tmp="$(mktemp -d)"

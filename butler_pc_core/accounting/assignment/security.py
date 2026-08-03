@@ -66,8 +66,10 @@ class MemoryKeyStore:
 
 @dataclass(slots=True)
 class MacOSKeychainStore:
-    # ★ RI-P0-006: 제품 기본 키 저장소는 macOS Keychain only (홈의 평문 파일이 아니다).
-    is_production_provider: bool = field(default=True, init=False)
+    # This compatibility provider still returns secret bytes to Python through
+    # /usr/bin/security.  Stage3 explicitly forbids treating that transport as
+    # production authority; a signed native/XPC authority must replace it.
+    is_production_provider: bool = field(default=False, init=False)
 
     service: str = "com.butler.accounting.vendor-match.v1"
     account: str = "device-root"

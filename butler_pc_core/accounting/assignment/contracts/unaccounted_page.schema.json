@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://butler.local/schemas/accounting/unaccounted-page-2.0.json",
+  "$id": "https://butler.local/schemas/accounting/unaccounted-page-3.0.json",
   "title": "Unaccounted Review Page",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "batch_id", "batch_version", "registry_digest", "overlay_digest", "items", "total_count", "next_cursor", "etag"],
   "properties": {
-    "schema_version": {"const": "2.0"},
+    "schema_version": {"const": "3.0"},
     "batch_id": {"$ref": "#/$defs/opaqueId"},
     "batch_version": {"type": "integer", "minimum": 1},
     "registry_digest": {"$ref": "#/$defs/sha256"},
@@ -29,7 +29,7 @@
       "required": ["account_id", "source", "safe_reason"],
       "properties": {
         "account_id": {"type": "string", "minLength": 1, "maxLength": 128},
-        "source": {"enum": ["AUTO_PROPOSE", "USER_RULE_SUGGESTED"]},
+        "source": {"enum": ["AUTO_PROPOSE", "USER_RULE_APPLIED_DRAFT"]},
         "safe_reason": {"type": "string", "maxLength": 200},
         "rule_id": {"type": ["string", "null"], "maxLength": 128}
       }
@@ -45,7 +45,7 @@
         "descriptor_display": {"type": "string", "maxLength": 200},
         "display_policy": {"enum": ["PLAIN", "MASKED", "RESTRICTED"]},
         "bank_direction": {"enum": ["INFLOW", "OUTFLOW"]},
-        "review_state": {"enum": ["AUTO_PROPOSE", "USER_RULE_SUGGESTED", "REVIEW_REQUIRED"]},
+        "review_state": {"enum": ["AUTO_PROPOSE", "USER_RULE_APPLIED_DRAFT", "REVIEW_REQUIRED"]},
         "suggestion": {"$ref": "#/$defs/suggestion"}
       }
     }

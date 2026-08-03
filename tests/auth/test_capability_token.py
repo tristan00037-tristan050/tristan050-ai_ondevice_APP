@@ -12,6 +12,7 @@ Capability token 인증 계약 테스트.
 from __future__ import annotations
 
 import errno
+import hashlib
 import stat
 from pathlib import Path
 
@@ -167,8 +168,11 @@ def test_post_valid_token_200_contract(tmp_path):
     manager = CapabilityTokenManager(tmp_path / "sidecar_token")
     token = manager.generate()
     session = manager.verify_authorization_header(f"Bearer {token}")
-    assert session.actor_id == "local-user"
-    assert session.role == "user"
+    assert session.audience == "butler-local-sidecar-ipc"
+    assert session.session_digest == hashlib.sha256(token.encode("utf-8")).hexdigest()
+    assert session.device_binding_digest
+    assert not hasattr(session, "actor_id")
+    assert not hasattr(session, "role")
     assert len(session.session_digest) == 64
 
 

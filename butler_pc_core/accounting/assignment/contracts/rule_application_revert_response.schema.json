@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting/rule-application-revert-response-3.0.json",
+  "title": "Forward-only user-rule draft revert response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "txn_id", "state", "transaction_version", "rule_id", "preserved_receipt_id", "event_hash"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "txn_id": {"type": "string", "format": "uuid"},
+    "state": {"const": "UNACCOUNTED"},
+    "transaction_version": {"type": "integer", "minimum": 2, "maximum": 9007199254740991},
+    "rule_id": {"type": "string", "format": "uuid"},
+    "preserved_receipt_id": {"type": "string", "format": "uuid"},
+    "event_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

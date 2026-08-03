@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sqlite3
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
@@ -29,8 +31,8 @@ def _profile(name: str = "tenant-a"):
 
 def _frame(*, descriptor: str = "승인상호", account_column: dict[str, object] | None = None):
     row = {
-        "거래일": "2026-07-16",
-        "거래내용": descriptor,
+        "거래일시": "2026-07-16",
+        "상대계좌예금주명": descriptor,
         "금액": "-1200",
         "분류과목": "미분류",
     }
@@ -76,13 +78,41 @@ def _first_assignable(runtime: AccountingReviewRuntime, *, exclude: str | None =
     )
 
 
-def _command(runtime: AccountingReviewRuntime, account_id: str, scope: str = "THIS_ONLY", version: int = 1):
+def _context(runtime: AccountingReviewRuntime, profile=None, *, action: str = "ASSIGNMENT_CREATE"):
+    session = SimpleNamespace(
+        actor_id="test-actor-00000001",
+        session_id="test-session-000001",
+        device_id="test-device-0000001",
+    )
+    return runtime.context_from_profile(profile or _profile(), session, action=action)
+
+
+def _ingest(runtime: AccountingReviewRuntime, batch_id: str, frame, profile=None, **kwargs):
+    return runtime.ingest_dataframe(
+        batch_id,
+        frame,
+        profile or _profile(),
+        source_file_sha256=hashlib.sha256(batch_id.encode()).hexdigest(),
+        adapter_id="kr.ibk.statement",
+        **kwargs,
+    )
+
+
+def _command(
+    runtime: AccountingReviewRuntime,
+    context,
+    txn_id: str,
+    account_id: str,
+    scope: str = "THIS_ONLY",
+    version: int = 1,
+):
+    nonce = runtime.issue_assignment_nonce(context, txn_id)["user_action_nonce"]
     return AssignCommand.from_dict(
         {
-            "schema_version": "2.0",
             "account_id": account_id,
             "scope": scope,
-            "registry_digest": runtime.registry.registry_digest,
+            "client_action_id": str(uuid.uuid4()),
+            "user_action_nonce": nonce,
             "expected_transaction_version": version,
         }
     )
@@ -98,7 +128,7 @@ def test_registry_assignable_is_server_calculated(runtime: AccountingReviewRunti
 
 
 def test_account_column_ambiguity_requires_explicit_selection(runtime: AccountingReviewRuntime):
-    result = runtime.ingest_dataframe(
+    result = _ingest(runtime,
         "batch_ambiguous_0001",
         _frame(account_column={"계정과목": "미확인", "account_id": "미확인"}),
         _profile(),
@@ -109,7 +139,7 @@ def test_account_column_ambiguity_requires_explicit_selection(runtime: Accountin
 
 def test_exact_account_column_removes_row_from_unaccounted(runtime: AccountingReviewRuntime):
     account_id = _first_assignable(runtime)
-    runtime.ingest_dataframe(
+    _ingest(runtime,
         "batch_declared_00001",
         _frame(account_column={"계정과목": account_id}),
         _profile(),
@@ -124,7 +154,7 @@ def test_exact_account_column_removes_row_from_unaccounted(runtime: AccountingRe
 
 def test_fuzzy_account_cell_never_assigns(runtime: AccountingReviewRuntime):
     display_name = next(entry.display_name for entry in runtime.registry.entries if entry.assignable)
-    runtime.ingest_dataframe(
+    _ingest(runtime,
         "batch_fuzzy_cell_01",
         _frame(account_column={"계정과목": display_name + " 유사"}),
         _profile(),
@@ -138,15 +168,15 @@ def test_fuzzy_account_cell_never_assigns(runtime: AccountingReviewRuntime):
 
 def test_pagination_is_stable_tamper_evident_and_snapshot_bound(runtime: AccountingReviewRuntime):
     profile = _profile()
-    context = runtime.context_from_profile(profile)
+    context = _context(runtime, profile)
     frame = pd.DataFrame(
         [
-            {"거래일": "2026-07-14", "거래내용": "거래 A", "금액": "-100", "분류과목": "미분류"},
-            {"거래일": "2026-07-15", "거래내용": "거래 B", "금액": "-200", "분류과목": "미분류"},
-            {"거래일": "2026-07-16", "거래내용": "거래 C", "금액": "-300", "분류과목": "미분류"},
+            {"거래일시": "2026-07-14", "상대계좌예금주명": "거래 A", "금액": "-100", "분류과목": "미분류"},
+            {"거래일시": "2026-07-15", "상대계좌예금주명": "거래 B", "금액": "-200", "분류과목": "미분류"},
+            {"거래일시": "2026-07-16", "상대계좌예금주명": "거래 C", "금액": "-300", "분류과목": "미분류"},
         ]
     )
-    runtime.ingest_dataframe("batch_pagination_001", frame, profile)
+    _ingest(runtime, "batch_pagination_001", frame, profile)
     first = runtime.unaccounted_page(context, "batch_pagination_001", cursor=None, page_size=1)
     second = runtime.unaccounted_page(context, "batch_pagination_001", cursor=first["next_cursor"], page_size=1)
     assert first["items"][0]["txn_id"] != second["items"][0]["txn_id"]
@@ -163,7 +193,7 @@ def test_pagination_is_stable_tamper_evident_and_snapshot_bound(runtime: Account
     runtime.assign(
         context,
         first["items"][0]["txn_id"],
-        _command(runtime, _first_assignable(runtime)),
+        _command(runtime, context, first["items"][0]["txn_id"], _first_assignable(runtime)),
         idempotency_key="idem-pagination-0001",
         if_match_version=1,
     )
@@ -171,29 +201,26 @@ def test_pagination_is_stable_tamper_evident_and_snapshot_bound(runtime: Account
         runtime.unaccounted_page(context, "batch_pagination_001", cursor=first["next_cursor"], page_size=1)
 
 
-def test_stale_full_registry_digest_is_rejected(runtime: AccountingReviewRuntime):
-    runtime.ingest_dataframe("batch_stale_registry", _frame(), _profile())
-    context = runtime.context_from_profile(_profile())
-    txn_id = runtime.unaccounted_page(context, "batch_stale_registry", cursor=None, page_size=50)["items"][0]["txn_id"]
-    command = AssignCommand.from_dict(
-        {
-            "schema_version": "2.0",
-            "account_id": _first_assignable(runtime),
-            "scope": "THIS_ONLY",
-            "registry_digest": "f" * 64,
-            "expected_transaction_version": 1,
-        }
-    )
-    with pytest.raises(AssignmentError, match="REGISTRY_STALE"):
-        runtime.assign(context, txn_id, command, idempotency_key="idem-stale-registry1", if_match_version=1)
-    assert runtime.store.current_assignment(context.tenant_digest, txn_id) is None
+def test_client_cannot_forge_registry_or_tenant_evidence(runtime: AccountingReviewRuntime):
+    with pytest.raises(AssignmentError, match="INVALID_REQUEST_SCHEMA"):
+        AssignCommand.from_dict(
+            {
+                "account_id": _first_assignable(runtime),
+                "scope": "THIS_ONLY",
+                "client_action_id": str(uuid.uuid4()),
+                "user_action_nonce": "n" * 48,
+                "expected_transaction_version": 1,
+                "registry_digest": "f" * 64,
+                "tenant_digest": "e" * 64,
+            }
+        )
 
 
 def test_assign_is_atomic_idempotent_and_raw_zero(runtime: AccountingReviewRuntime):
-    runtime.ingest_dataframe("batch_assign_000001", _frame(), _profile())
-    context = runtime.context_from_profile(_profile())
+    _ingest(runtime, "batch_assign_000001", _frame(), _profile())
+    context = _context(runtime)
     tx = runtime.unaccounted_page(context, "batch_assign_000001", cursor=None, page_size=50)["items"][0]
-    command = _command(runtime, _first_assignable(runtime))
+    command = _command(runtime, context, tx["txn_id"], _first_assignable(runtime))
 
     first = runtime.assign(context, tx["txn_id"], command, idempotency_key="idem-key-00000001", if_match_version=1)
     replay = runtime.assign(context, tx["txn_id"], command, idempotency_key="idem-key-00000001", if_match_version=1)
@@ -217,54 +244,63 @@ def test_assign_is_atomic_idempotent_and_raw_zero(runtime: AccountingReviewRunti
 
 
 def test_same_idempotency_key_different_body_is_blocked(runtime: AccountingReviewRuntime):
-    runtime.ingest_dataframe("batch_idem_00000001", _frame(), _profile())
-    context = runtime.context_from_profile(_profile())
+    _ingest(runtime, "batch_idem_00000001", _frame(), _profile())
+    context = _context(runtime)
     txn_id = runtime.unaccounted_page(context, "batch_idem_00000001", cursor=None, page_size=50)["items"][0]["txn_id"]
     first_account = _first_assignable(runtime)
+    command = _command(runtime, context, txn_id, first_account)
     runtime.assign(
         context,
         txn_id,
-        _command(runtime, first_account),
+        command,
         idempotency_key="idem-key-00000002",
         if_match_version=1,
     )
-    with pytest.raises(AssignmentError, match="IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_BODY"):
+    second = AssignCommand.from_dict({
+        "account_id": _first_assignable(runtime, exclude=first_account),
+        "scope": "THIS_ONLY",
+        "client_action_id": command.client_action_id,
+        "user_action_nonce": command.user_action_nonce,
+        "expected_transaction_version": 1,
+    })
+    with pytest.raises(AssignmentError, match="IDEMPOTENCY_KEY_REUSE_MISMATCH"):
         runtime.assign(
             context,
             txn_id,
-            _command(runtime, _first_assignable(runtime, exclude=first_account)),
+            second,
             idempotency_key="idem-key-00000002",
             if_match_version=1,
         )
 
 
 def test_two_windows_same_version_allow_exactly_one_assignment(runtime: AccountingReviewRuntime):
-    runtime.ingest_dataframe("batch_concurrent_001", _frame(), _profile())
-    context = runtime.context_from_profile(_profile())
+    _ingest(runtime, "batch_concurrent_001", _frame(), _profile())
+    context = _context(runtime)
     txn_id = runtime.unaccounted_page(context, "batch_concurrent_001", cursor=None, page_size=50)["items"][0]["txn_id"]
-    command = _command(runtime, _first_assignable(runtime))
 
     def assign(key: str):
         try:
+            command = _command(runtime, context, txn_id, _first_assignable(runtime))
             return runtime.assign(context, txn_id, command, idempotency_key=key, if_match_version=1)["state"]
         except AssignmentError as exc:
             return exc.code
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         outcomes = list(pool.map(assign, ("idem-concurrent-0001", "idem-concurrent-0002")))
-    assert sorted(outcomes) == ["TRANSACTION_STALE", "USER_ASSIGNED"]
+    assert len([value for value in outcomes if value == "USER_ASSIGNED"]) == 1
+    assert set(outcomes) <= {"USER_ASSIGNED", "STALE_ASSIGNMENT_VERSION", "NONCE_REUSED"}
     assert runtime.store.verify_replay(context.tenant_id, context.tenant_digest)["event_count"] == 1
 
 
 def test_stale_write_and_cross_tenant_access_are_blocked(runtime: AccountingReviewRuntime):
-    runtime.ingest_dataframe("batch_auth_00000001", _frame(), _profile())
-    context = runtime.context_from_profile(_profile())
+    _ingest(runtime, "batch_auth_00000001", _frame(), _profile())
+    context = _context(runtime)
     txn_id = runtime.unaccounted_page(context, "batch_auth_00000001", cursor=None, page_size=50)["items"][0]["txn_id"]
-    with pytest.raises(AssignmentError, match="TRANSACTION_STALE"):
+    with pytest.raises(AssignmentError, match="STALE_ASSIGNMENT_VERSION"):
         runtime.assign(
             context,
             txn_id,
-            _command(runtime, _first_assignable(runtime), version=2),
+            _command(runtime, context, txn_id, _first_assignable(runtime), version=2),
             idempotency_key="idem-key-00000003",
             if_match_version=1,
         )
@@ -273,7 +309,7 @@ def test_stale_write_and_cross_tenant_access_are_blocked(runtime: AccountingRevi
 
 
 def test_expired_batch_removes_authorized_raw_projection(runtime: AccountingReviewRuntime):
-    runtime.ingest_dataframe("batch_expired_00001", _frame(descriptor="만료 원문"), _profile())
+    _ingest(runtime, "batch_expired_00001", _frame(descriptor="만료 원문"), _profile())
     context = runtime.context_from_profile(_profile())
     assert runtime.unaccounted_page(context, "batch_expired_00001", cursor=None, page_size=50)["total_count"] == 1
     runtime.remove_batch("batch_expired_00001")
@@ -281,78 +317,94 @@ def test_expired_batch_removes_authorized_raw_projection(runtime: AccountingRevi
         runtime.unaccounted_page(context, "batch_expired_00001", cursor=None, page_size=50)
 
 
-def test_future_rule_is_suggestion_and_deactivation_stops_match(runtime: AccountingReviewRuntime):
+def test_future_rule_creates_draft_supports_revert_and_deactivation(runtime: AccountingReviewRuntime):
     profile = _profile()
-    context = runtime.context_from_profile(profile)
+    context = _context(runtime, profile, action="RULE_FUTURE_CREATE")
+    assign_context = _context(runtime, profile, action="RULE_APPLICATION_REVERT")
+    manage_context = _context(runtime, profile, action="RULE_DEACTIVATE")
     account_id = _first_assignable(runtime)
-    runtime.ingest_dataframe("batch_rule_one_0001", _frame(descriptor="동일상호"), profile)
+    _ingest(runtime, "batch_rule_one_0001", _frame(descriptor="동일상호"), profile)
     txn_id = runtime.unaccounted_page(context, "batch_rule_one_0001", cursor=None, page_size=50)["items"][0]["txn_id"]
     assigned = runtime.assign(
         context,
         txn_id,
-        _command(runtime, account_id, "SAME_VENDOR_FUTURE"),
+        _command(runtime, context, txn_id, account_id, "SAME_VENDOR_FUTURE"),
         idempotency_key="idem-key-00000004",
         if_match_version=1,
     )
     assert assigned["state"] == "USER_ASSIGNED"
-    assert assigned["rule_effect"] == "SUGGESTION_CREATED"
+    assert assigned["rule_effect"] == "ACTIVE_USER_RULE_CREATED"
     rules = runtime.learned_rules(context)["items"]
     assert rules[0]["descriptor_display"] == "동일상호"
+    assert rules[0]["state"] == "ACTIVE_USER_RULE"
     schema = json.loads(
         (Path(__file__).resolve().parents[3] / "butler_pc_core/accounting/assignment/contracts/learned_rule.schema.json")
         .read_text(encoding="utf-8")
     )
     jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(rules[0])
 
-    runtime.ingest_dataframe("batch_rule_two_0002", _frame(descriptor="동일상호"), profile)
-    suggested = runtime.unaccounted_page(context, "batch_rule_two_0002", cursor=None, page_size=50)["items"][0]
-    assert suggested["review_state"] == "USER_RULE_SUGGESTED"
-    assert suggested["suggestion"]["account_id"] == account_id
+    _ingest(runtime, "batch_rule_two_0002", _frame(descriptor="동일상호"), profile)
+    draft = runtime.unaccounted_page(context, "batch_rule_two_0002", cursor=None, page_size=50)["items"][0]
+    assert draft["review_state"] == "USER_RULE_APPLIED_DRAFT"
+    assert draft["suggestion"]["account_id"] == account_id
+    reverted = runtime.revert_rule_application(
+        assign_context,
+        draft["txn_id"],
+        expected_version=1,
+        idempotency_key="idem-key-00000013",
+    )
+    assert reverted["state"] == "UNACCOUNTED"
+    with sqlite3.connect(runtime.store.path) as conn:
+        assert conn.execute(
+            "SELECT count(*) FROM rule_application_receipts WHERE transaction_id=?",
+            (draft["txn_id"],),
+        ).fetchone()[0] == 1
 
     off = runtime.deactivate_rule(
-        context,
+        manage_context,
         assigned["rule_id"],
         idempotency_key="idem-key-00000005",
         if_match_version=1,
     )
     replay = runtime.deactivate_rule(
-        context,
+        manage_context,
         assigned["rule_id"],
         idempotency_key="idem-key-00000005",
         if_match_version=1,
     )
     assert off == replay
-    runtime.ingest_dataframe("batch_rule_three_03", _frame(descriptor="동일상호"), profile)
+    _ingest(runtime, "batch_rule_three_03", _frame(descriptor="동일상호"), profile)
     after = runtime.unaccounted_page(context, "batch_rule_three_03", cursor=None, page_size=50)["items"][0]
     assert after["review_state"] == "REVIEW_REQUIRED"
 
 
 def test_conflicting_rule_blocks_assignment_and_rule_replacement(runtime: AccountingReviewRuntime):
     profile = _profile()
-    context = runtime.context_from_profile(profile)
+    context = _context(runtime, profile, action="RULE_FUTURE_CREATE")
+    manage_context = _context(runtime, profile, action="CONFLICT_RESOLVE")
     account_a = _first_assignable(runtime)
     account_b = _first_assignable(runtime, exclude=account_a)
-    runtime.ingest_dataframe("batch_conflict_a_01", _frame(descriptor="충돌상호"), profile)
+    _ingest(runtime, "batch_conflict_a_01", _frame(descriptor="충돌상호"), profile)
     txn_a = runtime.unaccounted_page(context, "batch_conflict_a_01", cursor=None, page_size=50)["items"][0]["txn_id"]
     runtime.assign(
         context,
         txn_a,
-        _command(runtime, account_a, "SAME_VENDOR_FUTURE"),
+        _command(runtime, context, txn_a, account_a, "SAME_VENDOR_FUTURE"),
         idempotency_key="idem-key-00000006",
         if_match_version=1,
     )
-    runtime.ingest_dataframe("batch_conflict_b_02", _frame(descriptor="충돌상호"), profile)
+    _ingest(runtime, "batch_conflict_b_02", _frame(descriptor="충돌상호"), profile)
     txn_b = runtime.unaccounted_page(context, "batch_conflict_b_02", cursor=None, page_size=50)["items"][0]["txn_id"]
-    with pytest.raises(AssignmentError, match="LEARNED_RULE_CONFLICT") as caught:
+    with pytest.raises(AssignmentError, match="RULE_CONFLICT_REVIEW_REQUIRED") as caught:
         runtime.assign(
             context,
             txn_b,
-            _command(runtime, account_b, "SAME_VENDOR_FUTURE"),
+            _command(runtime, context, txn_b, account_b, "SAME_VENDOR_FUTURE"),
             idempotency_key="idem-key-00000007",
             if_match_version=1,
         )
     assert runtime.store.current_assignment(context.tenant_digest, txn_b) is None
-    assert len(runtime.store.list_rules(context.tenant_digest, "ACTIVE_SUGGESTION")) == 1
+    assert len(runtime.store.list_rules(context.tenant_digest, "ACTIVE_USER_RULE")) == 1
     problem = caught.value.problem("request_conflict_001")
     assert problem["conflict_id"]
     assert problem["conflict_version"] == 1
@@ -361,22 +413,22 @@ def test_conflicting_rule_blocks_assignment_and_rule_replacement(runtime: Accoun
 
     conflict_id = problem["conflict_id"]
     replaced = runtime.resolve_conflict(
-        context,
+        manage_context,
         conflict_id,
         decision=ConflictDecision.REPLACE_WITH_NEW,
         expected_conflict_version=1,
         idempotency_key="idem-key-00000009",
     )
     replay = runtime.resolve_conflict(
-        context,
+        manage_context,
         conflict_id,
         decision=ConflictDecision.REPLACE_WITH_NEW,
         expected_conflict_version=1,
         idempotency_key="idem-key-00000009",
     )
     assert replaced == replay
-    assert replaced["rule_effect"] == "SUGGESTION_REPLACED"
-    active = runtime.store.list_rules(context.tenant_digest, "ACTIVE_SUGGESTION")
+    assert replaced["rule_effect"] == "ACTIVE_USER_RULE_REPLACED"
+    active = runtime.store.list_rules(context.tenant_digest, "ACTIVE_USER_RULE")
     inactive = runtime.store.list_rules(context.tenant_digest, "INACTIVE_USER")
     assert [row["account_id"] for row in active] == [account_b]
     assert [row["account_id"] for row in inactive] == [account_a]
@@ -385,50 +437,51 @@ def test_conflicting_rule_blocks_assignment_and_rule_replacement(runtime: Accoun
 
 def test_conflict_keep_existing_assigns_current_transaction_only(runtime: AccountingReviewRuntime):
     profile = _profile()
-    context = runtime.context_from_profile(profile)
+    context = _context(runtime, profile, action="RULE_FUTURE_CREATE")
+    manage_context = _context(runtime, profile, action="CONFLICT_RESOLVE")
     account_a = _first_assignable(runtime)
     account_b = _first_assignable(runtime, exclude=account_a)
-    runtime.ingest_dataframe("batch_keep_rule_a01", _frame(descriptor="유지상호"), profile)
+    _ingest(runtime, "batch_keep_rule_a01", _frame(descriptor="유지상호"), profile)
     txn_a = runtime.unaccounted_page(context, "batch_keep_rule_a01", cursor=None, page_size=50)["items"][0]["txn_id"]
     runtime.assign(
         context,
         txn_a,
-        _command(runtime, account_a, "SAME_VENDOR_FUTURE"),
+        _command(runtime, context, txn_a, account_a, "SAME_VENDOR_FUTURE"),
         idempotency_key="idem-key-00000010",
         if_match_version=1,
     )
-    runtime.ingest_dataframe("batch_keep_rule_b02", _frame(descriptor="유지상호"), profile)
+    _ingest(runtime, "batch_keep_rule_b02", _frame(descriptor="유지상호"), profile)
     txn_b = runtime.unaccounted_page(context, "batch_keep_rule_b02", cursor=None, page_size=50)["items"][0]["txn_id"]
-    with pytest.raises(AssignmentError, match="LEARNED_RULE_CONFLICT") as caught:
+    with pytest.raises(AssignmentError, match="RULE_CONFLICT_REVIEW_REQUIRED") as caught:
         runtime.assign(
             context,
             txn_b,
-            _command(runtime, account_b, "SAME_VENDOR_FUTURE"),
+            _command(runtime, context, txn_b, account_b, "SAME_VENDOR_FUTURE"),
             idempotency_key="idem-key-00000011",
             if_match_version=1,
         )
     conflict_id = caught.value.actions[0].split(":", 1)[1]
     kept = runtime.resolve_conflict(
-        context,
+        manage_context,
         conflict_id,
         decision=ConflictDecision.KEEP_EXISTING,
         expected_conflict_version=1,
         idempotency_key="idem-key-00000012",
     )
-    assert kept["rule_effect"] == "EXISTING_SUGGESTION_KEPT"
+    assert kept["rule_effect"] == "EXISTING_USER_RULE_KEPT"
     assert runtime.store.current_assignment(context.tenant_digest, txn_b)["account_id"] == account_b
-    assert [row["account_id"] for row in runtime.store.list_rules(context.tenant_digest, "ACTIVE_SUGGESTION")] == [account_a]
+    assert [row["account_id"] for row in runtime.store.list_rules(context.tenant_digest, "ACTIVE_USER_RULE")] == [account_a]
 
 
 def test_event_table_rejects_update_and_key_rotation_fails_closed(runtime: AccountingReviewRuntime):
     profile = _profile()
-    context = runtime.context_from_profile(profile)
-    runtime.ingest_dataframe("batch_chain_0000001", _frame(), profile)
+    context = _context(runtime, profile)
+    _ingest(runtime, "batch_chain_0000001", _frame(), profile)
     txn_id = runtime.unaccounted_page(context, "batch_chain_0000001", cursor=None, page_size=50)["items"][0]["txn_id"]
     runtime.assign(
         context,
         txn_id,
-        _command(runtime, _first_assignable(runtime)),
+        _command(runtime, context, txn_id, _first_assignable(runtime)),
         idempotency_key="idem-key-00000008",
         if_match_version=1,
     )
@@ -444,13 +497,13 @@ def test_event_table_rejects_update_and_key_rotation_fails_closed(runtime: Accou
     )
     with pytest.raises(AssignmentError, match="EVENT_CHECKPOINT_INVALID"):
         rotated.store.verify_replay(context.tenant_id, context.tenant_digest)
-    rotated.ingest_dataframe("batch_rotated_key_01", _frame(descriptor="회전상호"), profile)
+    _ingest(rotated, "batch_rotated_key_01", _frame(descriptor="회전상호"), profile)
     rotated_txn = rotated.unaccounted_page(context, "batch_rotated_key_01", cursor=None, page_size=50)["items"][0]["txn_id"]
     with pytest.raises(AssignmentError, match="EVENT_CHECKPOINT_INVALID"):
         rotated.assign(
             context,
             rotated_txn,
-            _command(rotated, _first_assignable(rotated)),
+            _command(rotated, context, rotated_txn, _first_assignable(rotated)),
             idempotency_key="idem-key-rotated-001",
             if_match_version=1,
         )
@@ -459,8 +512,8 @@ def test_event_table_rejects_update_and_key_rotation_fails_closed(runtime: Accou
 
 def test_assignment_and_rule_roll_back_on_second_event_failure(runtime: AccountingReviewRuntime, monkeypatch):
     profile = _profile()
-    context = runtime.context_from_profile(profile)
-    runtime.ingest_dataframe("batch_partial_commit1", _frame(), profile)
+    context = _context(runtime, profile, action="RULE_FUTURE_CREATE")
+    _ingest(runtime, "batch_partial_commit1", _frame(), profile)
     txn_id = runtime.unaccounted_page(context, "batch_partial_commit1", cursor=None, page_size=50)["items"][0]["txn_id"]
     original = runtime.store._append_event
     calls = 0
@@ -477,7 +530,7 @@ def test_assignment_and_rule_roll_back_on_second_event_failure(runtime: Accounti
         runtime.assign(
             context,
             txn_id,
-            _command(runtime, _first_assignable(runtime), "SAME_VENDOR_FUTURE"),
+            _command(runtime, context, txn_id, _first_assignable(runtime), "SAME_VENDOR_FUTURE"),
             idempotency_key="idem-partial-commit1",
             if_match_version=1,
         )

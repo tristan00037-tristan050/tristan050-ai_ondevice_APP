@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting/quarantined-row-3.0.json",
+  "title": "Persistent quarantined source row projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["row_id", "batch_id", "source_row_number", "source_row_fingerprint", "reason_code", "state", "resource_version"],
+  "properties": {
+    "row_id": {"type": "string", "format": "uuid"},
+    "batch_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{16,128}$"},
+    "source_row_number": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "source_row_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "reason_code": {"enum": ["INVALID_AMOUNT", "ZERO_AMOUNT_REVIEW", "INVALID_BOOKING_DATE"]},
+    "state": {"const": "QUARANTINED"},
+    "resource_version": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+  }
+}

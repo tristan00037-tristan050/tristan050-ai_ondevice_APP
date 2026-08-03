@@ -8,6 +8,9 @@ APP="target/release/bundle/macos/Butler.app"
 RES="$APP/Contents/Resources"
 PRODUCTION_A4_AUTHORITY="${BUTLER_A4_PRODUCTION_AUTHORITY_BUILD:-0}"
 AUTHORITY_HELPER_EXE="$APP/Contents/XPCServices/A4VerifierAuthority.xpc/Contents/MacOS/A4VerifierAuthority"
+PRODUCTION_BOX5_AUTHORITY="${BUTLER_BOX5_PRODUCTION_AUTHORITY_BUILD:-0}"
+BOX5_AUTHORITY_HELPER="$RES/box5/Box5UserAuthority"
+BOX5_AUTHORITY_POLICY="$RES/box5/authorization-trust-policy-v2.json"
 RELEASE_DISTRIBUTION="${BUTLER_RELEASE_DISTRIBUTION-0}"
 case "$RELEASE_DISTRIBUTION" in
   0|1) ;;
@@ -16,6 +19,17 @@ case "$RELEASE_DISTRIBUTION" in
     exit 1
     ;;
 esac
+case "$PRODUCTION_BOX5_AUTHORITY" in
+  0|1) ;;
+  *)
+    echo "❌ BOX5_AUTHORITY_BUILD_FLAG_INVALID — BUTLER_BOX5_PRODUCTION_AUTHORITY_BUILD는 0 또는 1만 허용"
+    exit 1
+    ;;
+esac
+if [[ "$RELEASE_DISTRIBUTION" == "1" && "$PRODUCTION_BOX5_AUTHORITY" != "1" ]]; then
+  echo "❌ BLOCK_APPROVED_PRODUCTION_TRUST_POLICY_UNAVAILABLE — 배포 앱은 Box5 승인 정책·native authority가 필요합니다."
+  exit 1
+fi
 export BUTLER_RELEASE_DISTRIBUTION="$RELEASE_DISTRIBUTION"
 
 echo "════════════════════════════════════════"
@@ -217,6 +231,21 @@ else
   echo "[4.25/5] A4 운영 verifier authority 비활성(승인된 인증서·Keychain provisioning 필요)"
 fi
 
+BOX5_AUTHORITY_ARGS=()
+if [[ "$PRODUCTION_BOX5_AUTHORITY" == "1" ]]; then
+  echo "[4.35/5] Box5 사용자 권한 native helper·승인 정책 조립·분리 서명"
+  "$ROOT/scripts/build_box5_user_authority_helper_macos.sh" --install-helper "$APP" || {
+    echo "❌ Box5 native authority 조립 실패 — 회계 write 및 배포 차단"; exit 1;
+  }
+  BOX5_AUTHORITY_ARGS=(
+    --box5-authority-helper "$BOX5_AUTHORITY_HELPER"
+    --box5-authority-policy "$BOX5_AUTHORITY_POLICY"
+  )
+else
+  rm -rf "$RES/box5"
+  echo "[4.35/5] Box5 운영 사용자 권한 비활성(승인 정책·인증서·Keychain provisioning 필요)"
+fi
+
 echo "[4.5/5] 빌드 표식 기록 (BUILD_INFO.json — 앱 내부 commit OID 표식)"
 BUILD_OID="$(cd "$ROOT" && git rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" || {
   echo "❌ git commit OID 확인 실패 — provenance 없는 앱 생성 차단"
@@ -240,6 +269,7 @@ if ! "$APP_PY" "$ROOT/scripts/write_build_info.py" \
   --timestamp-utc "$BUILD_TS" \
   --app-version "$APP_VER" \
   ${AUTHORITY_HELPER_ARGS[@]+"${AUTHORITY_HELPER_ARGS[@]}"} \
+  ${BOX5_AUTHORITY_ARGS[@]+"${BOX5_AUTHORITY_ARGS[@]}"} \
   ${BUILD_INFO_DISTRIBUTION_ARGS[@]+"${BUILD_INFO_DISTRIBUTION_ARGS[@]}"}; then
   echo "❌ BUILD_INFO.json 기록·검증 실패 — 불완전 앱 생성 차단"
   exit 1
@@ -254,6 +284,13 @@ if [[ "$PRODUCTION_A4_AUTHORITY" == "1" ]]; then
   echo "[4.75/5] A4 helper 격리·앱 Hardened Runtime 최종 서명 검증"
   "$ROOT/scripts/build_a4_authority_helper_macos.sh" --finalize-app "$APP" || {
     echo "❌ A4 authority 권한 격리 검증 실패 — 배포 차단"; exit 1;
+  }
+fi
+
+if [[ "$PRODUCTION_BOX5_AUTHORITY" == "1" ]]; then
+  echo "[4.80/5] Box5 helper 격리·정책 digest·앱 Hardened Runtime 최종 검증"
+  "$ROOT/scripts/build_box5_user_authority_helper_macos.sh" --finalize-app "$APP" || {
+    echo "❌ Box5 authority 권한 격리 검증 실패 — 배포 차단"; exit 1;
   }
 fi
 

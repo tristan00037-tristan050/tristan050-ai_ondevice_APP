@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:box5:authorization-decision:v2",
+  "title": "Butler Box5 authorization decision v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision_id", "allowed", "reason_code", "actor_id_digest", "tenant_id", "company_id", "action", "resource_type", "resource_id_digest", "policy_version", "policy_digest", "assertion_digest", "ipc_session_digest", "device_binding_digest", "assertion_nonce_digest", "issued_epoch_s", "expires_epoch_s"],
+  "properties": {
+    "decision_id": {"type": "string", "pattern": "^[A-Fa-f0-9]{32,64}$"},
+    "allowed": {"type": "boolean"},
+    "reason_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"},
+    "actor_id_digest": {"$ref": "#/$defs/hex64"},
+    "tenant_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{3,128}$"},
+    "company_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{3,128}$"},
+    "action": {"enum": ["ACCOUNTING_REVIEW_VIEW", "ASSIGNMENT_CREATE", "RULE_FUTURE_CREATE", "QUARANTINE_ROW_RECOMPILE", "RULE_DEACTIVATE", "RULE_APPLICATION_REVERT", "CONFLICT_RESOLVE"]},
+    "resource_type": {"enum": ["ACCOUNTING_TRANSACTION", "QUARANTINED_ROW", "LEARNED_RULE", "RULE_CONFLICT", "REVIEW_BATCH"]},
+    "resource_id_digest": {"$ref": "#/$defs/hex64"},
+    "policy_version": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "policy_digest": {"$ref": "#/$defs/hex64"},
+    "assertion_digest": {"$ref": "#/$defs/hex64"},
+    "ipc_session_digest": {"$ref": "#/$defs/hex64"},
+    "device_binding_digest": {"$ref": "#/$defs/hex64"},
+    "assertion_nonce_digest": {"$ref": "#/$defs/hex64"},
+    "issued_epoch_s": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+    "expires_epoch_s": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+  },
+  "$defs": {"hex64": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

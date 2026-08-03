@@ -22,6 +22,8 @@ from jsonschema import Draft202012Validator
 
 import butler_pc_core.accounting.assignment.router as assignment_routes
 import butler_pc_core.accounting.assignment.store as assignment_store_module
+from butler_pc_core.accounting.assignment.authorization import Box5AuthorizationService
+from butler_pc_core.accounting.assignment.router import AccountingAssignmentDependencies
 from butler_pc_core.a4_verifier.canonical import receipt_signing_bytes
 from butler_pc_core.a4_verifier.contracts import (
     AUTHORITY_RESPONSE_SCHEMA,
@@ -30,10 +32,7 @@ from butler_pc_core.a4_verifier.contracts import (
     PROTOCOL_VERSION,
     VERIFY_REQUEST_SCHEMA,
 )
-from butler_pc_core.accounting.assignment.runtime import (
-    AccountingReviewRuntime,
-    set_accounting_review_runtime_for_tests,
-)
+from butler_pc_core.accounting.assignment.runtime import AccountingReviewRuntime
 from butler_pc_core.accounting.assignment.security import MemoryKeyStore, TokenService
 from butler_pc_core.accounting.assignment.store import SQLiteAssignmentStore
 from butler_pc_core.accounting.assignment.domain import AssignmentError
@@ -79,6 +78,7 @@ from butler_pc_core.accounting.classify.shadow.runner import (
 )
 from butler_pc_core.company_profile.contracts import make_runtime_profile
 from butler_pc_core.auth.capability_token import CapabilityTokenManager
+from butler_pc_core.company_policy.role_registry import RoleRegistryStore
 
 
 pytestmark = pytest.mark.no_sidecar_token
@@ -851,36 +851,41 @@ def test_actual_a4_product_endpoints_read_candidates_and_idempotent_review(
 
     token_manager = CapabilityTokenManager(tmp_path / "endpoint-token")
     token = token_manager.generate()
-    monkeypatch.setattr(assignment_routes, "CompanyProfileStore", ProfileStore)
-    monkeypatch.setattr(assignment_routes, "_TOKEN_MANAGER", token_manager)
-    set_accounting_review_runtime_for_tests(runtime)
     app = FastAPI()
+    app.state.box5_accounting_dependencies = AccountingAssignmentDependencies(
+        ipc_authenticator=token_manager,
+        authorization_service=Box5AuthorizationService(
+            ipc_authenticator=token_manager,
+            user_authority=None,
+            role_registry=RoleRegistryStore(root=tmp_path / "a4-role-registry"),
+            replay_store_provider=lambda: runtime.authorization_replay_store,
+        ),
+        profile_store_factory=ProfileStore,
+        runtime_provider=lambda: runtime,
+    )
     app.include_router(assignment_routes.router)
     client = TestClient(app, headers={"Authorization": f"Bearer {token}"})
-    try:
-        created = client.post("/box5/reconciliation/a4/runs", json={"run_id": RUN_ID})
-        assert created.status_code == 200
-        assert created.json()["state"] == "PUBLISHED"
-        candidates = client.get(f"/box5/reconciliation/a4/runs/{RUN_ID}/candidates")
-        assert candidates.status_code == 200
-        assert candidates.json()["affects_reporting"] is False
-        edge_id = candidates.json()["items"][0]["edge_id"]
-        path = f"/box5/reconciliation/a4/runs/{RUN_ID}/candidates/{edge_id}/review"
-        first = client.post(
-            path,
-            headers={"Idempotency-Key": "a4-review-endpoint-0001"},
-            json={"decision": "DEFER"},
-        )
-        replay = client.post(
-            path,
-            headers={"Idempotency-Key": "a4-review-endpoint-0001"},
-            json={"decision": "DEFER"},
-        )
-        assert first.status_code == replay.status_code == 200
-        assert first.json()["affects_reporting"] is False
-        assert replay.json()["replayed"] is True
-    finally:
-        set_accounting_review_runtime_for_tests(None)
+    created = client.post("/box5/reconciliation/a4/runs", json={"run_id": RUN_ID})
+    assert created.status_code == 200
+    assert created.json()["state"] == "PUBLISHED"
+    candidates = client.get(f"/box5/reconciliation/a4/runs/{RUN_ID}/candidates")
+    assert candidates.status_code == 200
+    assert candidates.json()["affects_reporting"] is False
+    edge_id = candidates.json()["items"][0]["edge_id"]
+    path = f"/box5/reconciliation/a4/runs/{RUN_ID}/candidates/{edge_id}/review"
+    first = client.post(
+        path,
+        headers={"Idempotency-Key": "a4-review-endpoint-0001"},
+        json={"decision": "DEFER"},
+    )
+    replay = client.post(
+        path,
+        headers={"Idempotency-Key": "a4-review-endpoint-0001"},
+        json={"decision": "DEFER"},
+    )
+    assert first.status_code == replay.status_code == 200
+    assert first.json()["affects_reporting"] is False
+    assert replay.json()["replayed"] is True
 
 
 def test_v51_published_candidates_and_review_are_denied_after_trust_revocation(

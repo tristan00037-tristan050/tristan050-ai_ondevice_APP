@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.invalid/schemas/protected-header-v2.schema.json",
+  "title": "Butler User Authorization Assertion v2 Protected Header",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["alg", "kid", "typ"],
+  "properties": {
+    "alg": {"const": "EdDSA"},
+    "kid": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+    "typ": {"const": "BUTLER-UA2"}
+  }
+}

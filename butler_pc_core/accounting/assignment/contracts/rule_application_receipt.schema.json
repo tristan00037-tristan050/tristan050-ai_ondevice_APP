@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/schemas/accounting/rule-application-receipt-3.0.json",
+  "title": "Immutable user-rule draft application receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receipt_id", "tenant_digest", "transaction_id", "rule_id", "source_assignment_id", "match_key_digest", "registry_digest", "classification_source", "journal_posted", "financial_statement_effective", "actor_id_digest", "applied_at_epoch_ms", "event_hash", "resource_version"],
+  "properties": {
+    "receipt_id": {"type": "string", "format": "uuid"},
+    "tenant_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "transaction_id": {"type": "string", "format": "uuid"},
+    "rule_id": {"type": "string", "format": "uuid"},
+    "source_assignment_id": {"type": "string", "format": "uuid"},
+    "match_key_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "registry_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "classification_source": {"const": "USER_RULE_APPLIED_DRAFT"},
+    "journal_posted": {"const": false},
+    "financial_statement_effective": {"const": false},
+    "actor_id_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "applied_at_epoch_ms": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "event_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "resource_version": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+  }
+}

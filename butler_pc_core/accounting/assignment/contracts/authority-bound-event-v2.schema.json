@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:butler:box5:authority-bound-event:v2",
+  "title": "Butler Box5 authority-bound event v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "event_type", "actor_id_digest", "tenant_digest", "company_digest", "ipc_session_digest", "authorization_assertion_digest", "authorization_decision_id", "policy_version", "policy_digest", "action", "resource_digest", "nonce_digest", "request_digest", "occurred_epoch_ms", "previous_event_hash", "event_hash"],
+  "properties": {
+    "event_id": {"type": "string", "format": "uuid"},
+    "event_type": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"},
+    "actor_id_digest": {"$ref": "#/$defs/hex64"},
+    "tenant_digest": {"$ref": "#/$defs/hex64"},
+    "company_digest": {"$ref": "#/$defs/hex64"},
+    "ipc_session_digest": {"$ref": "#/$defs/hex64"},
+    "authorization_assertion_digest": {"$ref": "#/$defs/hex64"},
+    "authorization_decision_id": {"type": "string", "pattern": "^[A-Fa-f0-9]{32,64}$"},
+    "policy_version": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "policy_digest": {"$ref": "#/$defs/hex64"},
+    "action": {"enum": ["ASSIGNMENT_CREATE", "RULE_FUTURE_CREATE", "RULE_DEACTIVATE", "RULE_APPLICATION_REVERT", "QUARANTINE_ROW_RECOMPILE", "CONFLICT_RESOLVE"]},
+    "resource_digest": {"$ref": "#/$defs/hex64"},
+    "nonce_digest": {"$ref": "#/$defs/hex64"},
+    "request_digest": {"$ref": "#/$defs/hex64"},
+    "occurred_epoch_ms": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+    "previous_event_hash": {"$ref": "#/$defs/hex64"},
+    "event_hash": {"$ref": "#/$defs/hex64"}
+  },
+  "$defs": {"hex64": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

@@ -25,6 +25,7 @@ _REQUIRED_KEYS = {
     "builder",
     "a4_code_closure",
     "a4_authority_helper",
+    "box5_authority",
     "distribution",
 }
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
@@ -142,6 +143,44 @@ def _authority_helper(path: Path | None) -> dict[str, object]:
     return {"bundled": True, "sha256": digest}
 
 
+def _box5_authority(helper: Path | None, policy: Path | None) -> dict[str, object]:
+    if helper is None and policy is None:
+        return {
+            "bundled": False,
+            "helper_identifier": None,
+            "helper_sha256": None,
+            "policy_sha256": None,
+        }
+    if helper is None or policy is None:
+        raise BuildInfoWriteError("BOX5_AUTHORITY_BINDING_INCOMPLETE")
+    try:
+        helper_info = helper.lstat()
+        policy_info = policy.lstat()
+        if (
+            helper.name != "Box5UserAuthority"
+            or policy.name != "authorization-trust-policy-v2.json"
+            or not helper.is_file()
+            or helper.is_symlink()
+            or helper_info.st_size < 1
+            or not policy.is_file()
+            or policy.is_symlink()
+            or not 1 <= policy_info.st_size <= 32_768
+        ):
+            raise BuildInfoWriteError("BOX5_AUTHORITY_BINDING_INVALID")
+        helper_digest = hashlib.sha256(helper.read_bytes()).hexdigest()
+        policy_digest = hashlib.sha256(policy.read_bytes()).hexdigest()
+    except BuildInfoWriteError:
+        raise
+    except OSError as exc:
+        raise BuildInfoWriteError("BOX5_AUTHORITY_BINDING_INVALID") from exc
+    return {
+        "bundled": True,
+        "helper_identifier": "com.butler.box5.user-authority.v2",
+        "helper_sha256": helper_digest,
+        "policy_sha256": policy_digest,
+    }
+
+
 def write_build_info(
     output: Path,
     *,
@@ -151,6 +190,8 @@ def write_build_info(
     timestamp_utc: str,
     app_version: str,
     authority_helper: Path | None = None,
+    box5_authority_helper: Path | None = None,
+    box5_authority_policy: Path | None = None,
     release_distribution: bool = False,
     root_anchor: str | None = None,
 ) -> None:
@@ -166,6 +207,9 @@ def write_build_info(
         raise BuildInfoWriteError("BUILD_INFO_PARENT_MISSING")
     payload["a4_code_closure"] = _a4_code_closure(output.parent)
     payload["a4_authority_helper"] = _authority_helper(authority_helper)
+    payload["box5_authority"] = _box5_authority(
+        box5_authority_helper, box5_authority_policy
+    )
 
     fd = -1
     temporary_path: Path | None = None
@@ -218,6 +262,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--timestamp-utc", required=True)
     parser.add_argument("--app-version", required=True)
     parser.add_argument("--authority-helper", type=Path)
+    parser.add_argument("--box5-authority-helper", type=Path)
+    parser.add_argument("--box5-authority-policy", type=Path)
     parser.add_argument(
         "--release-distribution",
         action="store_true",
@@ -241,6 +287,8 @@ def main() -> int:
             timestamp_utc=args.timestamp_utc,
             app_version=args.app_version,
             authority_helper=args.authority_helper,
+            box5_authority_helper=args.box5_authority_helper,
+            box5_authority_policy=args.box5_authority_policy,
             release_distribution=args.release_distribution,
             root_anchor=args.root_anchor,
         )

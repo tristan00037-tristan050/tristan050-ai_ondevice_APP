@@ -31,6 +31,9 @@ def parse_bytes(raw: bytes) -> list[dict[str, str]]:
     current: dict[str, str] | None = None
     nodes: list[dict[str, str]] = []
     declared: dict[str, int] | None = None
+    suite_names: set[str] = set()
+    case_identities: set[tuple[str, str, str]] = set()
+    active_suite: dict[str, object] | None = None
 
     def reject(*_args: object) -> None:
         raise ValueError("JUNIT_DTD_OR_ENTITY_FORBIDDEN")
@@ -45,7 +48,7 @@ def parse_bytes(raw: bytes) -> list[dict[str, str]]:
         return value
 
     def start(name: str, attributes: dict[str, str]) -> None:
-        nonlocal suites, cases, current, declared
+        nonlocal suites, cases, current, declared, active_suite
         if (
             len(attributes) > MAX_ATTRIBUTES
             or sum(len(key) + len(value) for key, value in attributes.items())
@@ -61,8 +64,22 @@ def parse_bytes(raw: bytes) -> list[dict[str, str]]:
                     key: integer(attributes, key)
                     for key in ("tests", "failures", "errors", "skipped")
                 }
+        if name == "testsuite":
+            if active_suite is not None:
+                raise ValueError("JUNIT_NESTED_SUITE")
+            suite_name = attributes.get("name", "")
+            if not suite_name or suite_name in suite_names:
+                raise ValueError("JUNIT_DUPLICATE_OR_EMPTY_SUITE_IDENTITY")
+            suite_names.add(suite_name)
+            active_suite = {
+                "declared": {
+                    key: integer(attributes, key)
+                    for key in ("tests", "failures", "errors", "skipped")
+                },
+                "start": len(nodes),
+            }
         if name == "testcase":
-            if current is not None:
+            if current is not None or active_suite is None:
                 raise ValueError("JUNIT_NESTED_TESTCASE")
             cases += 1
             if cases > MAX_CASES:
@@ -72,6 +89,10 @@ def parse_bytes(raw: bytes) -> list[dict[str, str]]:
             file_name = attributes.get("file", "")
             if not title or (not class_name and not file_name):
                 raise ValueError("JUNIT_TESTCASE_IDENTITY_INVALID")
+            identity = (class_name, file_name.replace("\\", "/"), title)
+            if identity in case_identities:
+                raise ValueError("JUNIT_DUPLICATE_TESTCASE")
+            case_identities.add(identity)
             if not file_name:
                 file_name = f"{class_name.replace('.', '/')}.py"
             current = {
@@ -88,12 +109,25 @@ def parse_bytes(raw: bytes) -> list[dict[str, str]]:
             current["status"] = "skipped"
 
     def end(name: str) -> None:
-        nonlocal current
+        nonlocal current, active_suite
         if name == "testcase":
             if current is None:
                 raise ValueError("JUNIT_TESTCASE_STRUCTURE_INVALID")
             nodes.append(current)
             current = None
+        elif name == "testsuite":
+            if active_suite is None:
+                raise ValueError("JUNIT_SUITE_STRUCTURE_INVALID")
+            suite_nodes = nodes[int(active_suite["start"]):]
+            observed_suite = {
+                "tests": len(suite_nodes),
+                "failures": sum(node["status"] == "failed" for node in suite_nodes),
+                "errors": sum(node["status"] == "error" for node in suite_nodes),
+                "skipped": sum(node["status"] == "skipped" for node in suite_nodes),
+            }
+            if not suite_nodes or observed_suite != active_suite["declared"]:
+                raise ValueError("JUNIT_SUITE_COUNT_MISMATCH")
+            active_suite = None
 
     parser.StartElementHandler = start
     parser.EndElementHandler = end
@@ -105,7 +139,7 @@ def parse_bytes(raw: bytes) -> list[dict[str, str]]:
         parser.Parse(raw, True)
     except expat.ExpatError as exc:
         raise ValueError("JUNIT_XML_INVALID") from exc
-    if current is not None or declared is None:
+    if current is not None or active_suite is not None or declared is None or not suite_names:
         raise ValueError("JUNIT_TESTCASE_STRUCTURE_INVALID")
     observed = {
         "tests": len(nodes),

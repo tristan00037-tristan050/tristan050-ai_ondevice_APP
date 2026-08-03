@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-box5-authorized-request"
+description = "Allows only the typed Box5 native human-authority request command."
+commands.allow = ["box5_authorized_request"]
+
+[[permission]]
+identifier = "deny-box5-authorized-request"
+description = "Explicitly denies the Box5 native human-authority request command."
+commands.deny = ["box5_authorized_request"]

@@ -1,49 +1,416 @@
 {
-  "schema_version": "butler.integration_lock.v1",
+  "schema_version": "butler.integration_lock.v2",
   "repository": "github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP",
-  "base_commit": "55d0f315e2b375d58c9c2a0263b606e5a757b59e",
-  "base_tree": "9d21d32bca294bc9998253f7d1c2f6f88ad71114",
-  "integration_branch": "feat/accounting-review-integration",
-  "route_inventory_digest": "43bf68f9afb5ca5486a31d34667b617ae45be94063ecb4522c0d9c04f2bcc0a4",
-  "contract_closure_digest": "2548a9782558edf8dafdf7ba8f72e63b7b83d8288c1cc9d8fa3eb7eb1d59843e",
-  "ui_tokens_digest": "d7e595b0b1109515dc97d4fdb77acee6721a13b367b8ae6ce4289305889409f5",
-  "source_zip_digests": [
-    "61f226da34e635760517dc05f49453ecd1d85bdf3d409a4495e84fd670710226",
-    "ca625691eb054942ab705ea82c3b7fc70559b569e999abf5da7009b1ddc7bbd8"
-  ],
-  "allowed_paths": {
-    "integration_owner": [
-      "integration_lock.json",
-      "butler_sidecar.py",
-      "butler_pc_core/**/router*.py",
-      ".github/workflows/**"
-    ],
-    "policy_knowledge_team": [
-      "butler_pc_core/company_policy/**",
-      "butler_pc_core/company_fact/**",
-      "tests/company_policy/**",
-      "tests/company_fact/**"
-    ],
-    "assignment_team": [
-      "butler_pc_core/accounting/assignment/**",
-      "tests/accounting/assignment/**"
-    ],
-    "algorithm_team": [
-      "butler_pc_core/cards/box2/**",
-      "butler_pc_core/accounting/classify/**",
-      "tests/cards/box2/**",
-      "tests/accounting/classify/**"
-    ],
-    "data_team": [
-      "butler_pc_core/accounting/canonical/**",
-      "butler_pc_core/accounting/migration/**"
-    ],
-    "ui_team": [
-      "butler-desktop/src/**",
-      "butler-desktop/src/__tests__/**"
-    ]
+  "approved_base_commit": "de3dd4ebaf5b3935a142b988dd61e6198aa9536d",
+  "approved_base_tree": "8c3509db047145714d2a1a84dfc76fb0a4c0fec9",
+  "critical_files": {
+    ".github/workflows/box5-stage3.yml": {
+      "mode": "100644",
+      "blob_oid": "b0b5446268b8a66fa26804826142e09ecf57d664",
+      "sha256": "cf5026c380c87ba3be45a876c240ced7152fba80c97e78dc3836b18498cf9d45",
+      "size": 18226
+    },
+    "butler-desktop/src-tauri/build.rs": {
+      "mode": "100644",
+      "blob_oid": "10af715a58ee58b35396399ecc93d29bc60e26d8",
+      "sha256": "8156352f65f06ce9e2eed93437042bcd5d8471c4fe726ab38705232435848d39",
+      "size": 4404
+    },
+    "butler-desktop/src-tauri/capabilities/box5-authority.json": {
+      "mode": "100644",
+      "blob_oid": "f351b5db0ebd4653bd7351edbb2fb1c1d9bbc954",
+      "sha256": "0d9221e5337582d6fb7a0040756a794999ccfbe9f10fe869c2936aa392f78c0a",
+      "size": 312
+    },
+    "butler-desktop/src-tauri/native/box5_user_authority_launcher.swift": {
+      "mode": "100644",
+      "blob_oid": "0eb7de8c4593b1bfbf580bb51964a2b03e18e14c",
+      "sha256": "2a02bf5b1b0416394dc4e217f8fe310adc72e5c90ab78f5aa06d7501a8b263d1",
+      "size": 1180
+    },
+    "butler-desktop/src-tauri/native/box5_user_authority_protocol.swift": {
+      "mode": "100644",
+      "blob_oid": "ab1e1fcdcd8b6762a54ca774f67b5d8d8d6bf31b",
+      "sha256": "93814781566315c3ac50fe7febbe3a880441da505f6021d52722c5ec037783b1",
+      "size": 15134
+    },
+    "butler-desktop/src-tauri/permissions/box5-authority.toml": {
+      "mode": "100644",
+      "blob_oid": "59a77228a40c45f0888bfefe6a1a12e3529fd89b",
+      "sha256": "75313ea6c775bd86e01adf6eeea9ed5fe2b2ce17cf81531ebbd4f6bbdc1de7ea",
+      "size": 375
+    },
+    "butler-desktop/src-tauri/src/lib.rs": {
+      "mode": "100644",
+      "blob_oid": "156cb7ac0377a234c7c1a529612b68f084f6fc50",
+      "sha256": "782c4f29a064093104f4cda62834b44c00c8db6eb30eebaabb946f624d8689aa",
+      "size": 43146
+    },
+    "butler-desktop/src/lib/accounting_review/client.ts": {
+      "mode": "100644",
+      "blob_oid": "24410dfe845209ad51fdc1a80a1f32576e7ca720",
+      "sha256": "ecb38197b633b6a2bd6283b4cdc959bb94596d86ffcc86540be407ee4de593d8",
+      "size": 10662
+    },
+    "butler-desktop/src/lib/accounting_review/nativeAuthorizedRequest.test.ts": {
+      "mode": "100644",
+      "blob_oid": "45311755bd960b62a2acb244bc54ff159442760e",
+      "sha256": "bebbbfd8d26bf1ada0728e6872f5e56b9c9b1dfac26c49abc9f6bb18437b04b9",
+      "size": 3881
+    },
+    "butler-desktop/src/lib/accounting_review/nativeAuthorizedRequest.ts": {
+      "mode": "100644",
+      "blob_oid": "e6231845d8b77c1ecbad0d312511614c4dd18bb0",
+      "sha256": "2cf00c6892d195c8fbc2985f3cf6c2cdb26c5c4a5fdc7cc6b6f17191e99ee096",
+      "size": 5869
+    },
+    "butler_pc_core/accounting/assignment/adapters.py": {
+      "mode": "100644",
+      "blob_oid": "097cacfdbc36e1daf81dd391e934a64877c3fdbf",
+      "sha256": "c0d3f873ae6a01fe62a578a1f78dbfab1272935a4168bb0a77b4db3751b29212",
+      "size": 4761
+    },
+    "butler_pc_core/accounting/assignment/authorization.py": {
+      "mode": "100644",
+      "blob_oid": "27f1145b135a4733292e085ea26d2ff62cd6b20f",
+      "sha256": "a3a593d76f837e4b3e0dd0034f4d82fb8241bd3a5562dce00b2808bf2753d903",
+      "size": 31859
+    },
+    "butler_pc_core/accounting/assignment/authorization_replay.py": {
+      "mode": "100644",
+      "blob_oid": "7d67a4d18977d38073310b2ef7c8fb348bb804b3",
+      "sha256": "29b0374ad5613debdd35d9d2d34feab6ed81e9ad76ed1837cc6bc3ce424ebae9",
+      "size": 12459
+    },
+    "butler_pc_core/accounting/assignment/contracts/action_nonce_response.schema.json": {
+      "mode": "100644",
+      "blob_oid": "7b9ecf81d8a821eaca3b0d0f687ba82a094d3e5f",
+      "sha256": "195d6738e9232dbe4f22bffeb082b48bd2c0618052c5f8dbb54eea2eb26c9118",
+      "size": 734
+    },
+    "butler_pc_core/accounting/assignment/contracts/authority-bound-event-v2.schema.json": {
+      "mode": "100644",
+      "blob_oid": "2e42517d63a8d9916f37b90806e26e8283cb468c",
+      "sha256": "cd5f1b107ad878973695cb6961a39a4a87362224d50b31043277ed2e8b240aca",
+      "size": 1765
+    },
+    "butler_pc_core/accounting/assignment/contracts/authorization-audit-v2.schema.json": {
+      "mode": "100644",
+      "blob_oid": "5d1f2d4af4572379faa546bbf88e3ae37d3e9ba7",
+      "sha256": "82152970dcb4f514eab173e983119346f75296e088d5520054982a0fb3a4c33c",
+      "size": 1846
+    },
+    "butler_pc_core/accounting/assignment/contracts/authorization-decision-v2.schema.json": {
+      "mode": "100644",
+      "blob_oid": "c4ef6185c4a8664141914b38db028a3b57f1a04d",
+      "sha256": "49ae7c4235179d36f705c17183eefe525b7241cea19073a1474b09360b4b14d6",
+      "size": 1916
+    },
+    "butler_pc_core/accounting/assignment/contracts/authorization-replay-v2.sql": {
+      "mode": "100644",
+      "blob_oid": "431046785abe32909494d25b471bcfe7769c58cc",
+      "sha256": "b0e11b52b7efd3d74c41fcfb46726312ba442c2dfa7a7a04203f7424342bd729",
+      "size": 1412
+    },
+    "butler_pc_core/accounting/assignment/contracts/integration_lock.schema.json": {
+      "mode": "100644",
+      "blob_oid": "9e00c534f7d088f6758592fde18c64937a88d0d8",
+      "sha256": "772f4c54c9c5cfa4bb241f2abc90468910c14a0e03ca13da1b00168a0a6e84fc",
+      "size": 2086
+    },
+    "butler_pc_core/accounting/assignment/contracts/native-authority-request-v2.schema.json": {
+      "mode": "100644",
+      "blob_oid": "385f78999d95f10647938708b7bc069c41df924e",
+      "sha256": "486e1f308bdaa882bfec8b12d77bffad964ea867a9f1a8257eb9ee3efdf137d5",
+      "size": 904
+    },
+    "butler_pc_core/accounting/assignment/contracts/protected-header-v2.schema.json": {
+      "mode": "100644",
+      "blob_oid": "cc807e6ed4cc4d31bec747e5a84f0989acd07377",
+      "sha256": "0467ee5244b1413b40697ab29eade13d56df3efcc6fcdd59e86e82b621abf0a4",
+      "size": 456
+    },
+    "butler_pc_core/accounting/assignment/contracts/trust-policy-v2.schema.json": {
+      "mode": "100644",
+      "blob_oid": "f70334f16645f49fe224e3373c7cab00587ca632",
+      "sha256": "4d19178093da627bd92034012d53216484f03150b85932e3a21dd46e1a5f7844",
+      "size": 1276
+    },
+    "butler_pc_core/accounting/assignment/contracts/user-assertion-v2.schema.json": {
+      "mode": "100644",
+      "blob_oid": "f19e18c7423a65fb68bbcfdf9218adca78a5e618",
+      "sha256": "babcd0bd6ff52cf1bb459eab0a699020707a9267d280b41d4f68602f760192bd",
+      "size": 1685
+    },
+    "butler_pc_core/accounting/assignment/domain.py": {
+      "mode": "100644",
+      "blob_oid": "a0aeec57ee000860911087a5f6f80e6ef56aeb5e",
+      "sha256": "e66ba3c8964cd8a423b02b2b918ddb2717164536ee3d7f26acba8e32cdcee01b",
+      "size": 12671
+    },
+    "butler_pc_core/accounting/assignment/router.py": {
+      "mode": "100644",
+      "blob_oid": "fe6d939b5f102e12fad14a59a6a939d4f61d1778",
+      "sha256": "a5be7b27fb35361c88d21c18948d9b7093462dcbae8918ecade18cd2774b2a87",
+      "size": 24129
+    },
+    "butler_pc_core/accounting/assignment/runtime.py": {
+      "mode": "100644",
+      "blob_oid": "0c9d9ad782504ccbbe86ef60d3bc17b2f2f08268",
+      "sha256": "b54eda21d1114196c2e1666ffaf809e92749b0df04fcc717c2b97ece3ea55f04",
+      "size": 54794
+    },
+    "butler_pc_core/accounting/assignment/stage3_store_schema_v3.py": {
+      "mode": "100644",
+      "blob_oid": "d0999b506fb17b5607be8a23b5a664a8e79a4a6a",
+      "sha256": "869e4aa501793d7ea62b9c8fe4f5abfa1589c5841ae8317c9629cb6bf5dbe9d6",
+      "size": 14991
+    },
+    "butler_pc_core/accounting/assignment/store.py": {
+      "mode": "100644",
+      "blob_oid": "4e5b66958f8ed4234c59557c8e6103bdb9d02e6a",
+      "sha256": "374145b61bb99e4a6d2a47748943e5d2f439ab5d9e9805401979cd89c15acae4",
+      "size": 166246
+    },
+    "butler_pc_core/auth/capability_token.py": {
+      "mode": "100644",
+      "blob_oid": "f7d57e1eb865efd2a2f88fc65b4659a42f6a2d09",
+      "sha256": "8a718a4720e21c9959c47c35061cfe85240c4ee847fc8d7262c2f9af02099698",
+      "size": 5418
+    },
+    "butler_pc_core/company_policy/admin_auth.py": {
+      "mode": "100644",
+      "blob_oid": "d48bbff8c008132dc6a1a4281c60a0117ce44f91",
+      "sha256": "966b1296a865629cb41e7e928ebf89ac0d78ff5b8ad3b72f6e378399d1230dc7",
+      "size": 3047
+    },
+    "butler_pc_core/company_policy/contracts.py": {
+      "mode": "100644",
+      "blob_oid": "3be056c6a8774bfd20d7414cf1377084b9f074fd",
+      "sha256": "160e1be8476462941eaf4d4933a47547ea0b184717a9a38d121f83c90e3614ad",
+      "size": 19266
+    },
+    "butler_pc_core/company_policy/role_registry.py": {
+      "mode": "100644",
+      "blob_oid": "a15d57e7f7c94fe89b6f414eb169f2a0667879dd",
+      "sha256": "75b502714ac649849bd29552b5c02b8ba1bd16cb8da6e1085ee6f906dc31173a",
+      "size": 13672
+    },
+    "butler_sidecar.py": {
+      "mode": "100644",
+      "blob_oid": "7e4e07e89f6d97bddc4416630ae847dcaf3f7e9d",
+      "sha256": "9b683334c20d6987c4e3f220bc2d6056f92c4310663f27fb0d53636f5740979f",
+      "size": 127220
+    },
+    "schemas/candidate-artifact-identity-v1.schema.json": {
+      "mode": "100644",
+      "blob_oid": "b5980eee04c90882f6882d133efef82a3202e43d",
+      "sha256": "1cb241d1e27f4537abbdf43ee4afc0a20a9e16fd3134b5e6ca590bbb8ad91dbc",
+      "size": 2420
+    },
+    "scripts/audit/reproduce_box5_ac11_schema_constraints_v1.py": {
+      "mode": "100644",
+      "blob_oid": "d8f32e5b6f6d1bdec1f31303b52e6d5c47450a87",
+      "sha256": "476bbca65ca3cf34a0335733cb71ffda91ea63422a33463c019482fe742f03ff",
+      "size": 6405
+    },
+    "scripts/build_box5_user_authority_helper_macos.sh": {
+      "mode": "100755",
+      "blob_oid": "683541b9d312318efd1a6c7b2d1fc7fa252116ec",
+      "sha256": "76a1e4557b3a06ad0f08df6fe97ebb5a550d5a2b7c0d4af9e81f0024bff9895e",
+      "size": 8275
+    },
+    "scripts/build_complete_app.sh": {
+      "mode": "100755",
+      "blob_oid": "48773df4afa39916b40fab84696fd36b90ae0e7c",
+      "sha256": "6da44d0c388ffae9400d44bad85a7edfea1f6d103266cd239de9307e72785ad0",
+      "size": 16653
+    },
+    "scripts/ci/trusted_firstscreen_mutations.mjs": {
+      "mode": "100644",
+      "blob_oid": "e624fec3b89bdc18ac372446789097e6bc6ef272",
+      "sha256": "67f7639e37811598e75b1ee68082e7444cbcc56537aa990f53b9032c35f99153",
+      "size": 14324
+    },
+    "scripts/ci/trusted_parse_junit_xml.py": {
+      "mode": "100644",
+      "blob_oid": "1f916cd24b7294de2036dbbf4d2364bb70ff078e",
+      "sha256": "e710f7787bd11658e2e88651cf3cf9857a57c4eca68eb6a58b5f8486aa9c92b0",
+      "size": 6897
+    },
+    "scripts/ci/verify_box5_junit_evidence.py": {
+      "mode": "100644",
+      "blob_oid": "708a8de06a605f904f92ded08d1871664749c5da",
+      "sha256": "06edf8a5a1a69a80d4c736236c2afaa4540c49d0498ce8c73271bc7e43f5d918",
+      "size": 2487
+    },
+    "scripts/verify_box5_authorization_audit.py": {
+      "mode": "100644",
+      "blob_oid": "85799d8b6d7cc341b0f133b143d46b3f1b48d761",
+      "sha256": "4bf84221dfb3d939ce3b6e2874617b8d637723dc47a9124569c16a458c4612ef",
+      "size": 8429
+    },
+    "scripts/verify_box5_integration_lock.py": {
+      "mode": "100644",
+      "blob_oid": "ffe46e488d14f37085047c6c39095cd22e31b8a9",
+      "sha256": "67d9bf58f9a62b77f2b082fe26bf2f2af3ca028cce95babaa3909fd5619871ff",
+      "size": 18368
+    },
+    "scripts/write_build_info.py": {
+      "mode": "100644",
+      "blob_oid": "9fd113a3611fd19b1c24e6b50420ca5a1c6df67c",
+      "sha256": "5a5f35d41fee9360eaa81279422f5fc219251872a0147f942f08539b80dacaf7",
+      "size": 11430
+    },
+    "tests/ac23/test_candidate_artifact_identity.py": {
+      "mode": "100644",
+      "blob_oid": "b1e8d70078c2947662afb5fe028983dd88f6e571",
+      "sha256": "6ed9df7240dd443d935ac84e58d829755cfb57d6d1fbfc41b3dbd90a68de52b0",
+      "size": 21254
+    },
+    "tests/accounting/assignment/authorization_testkit.py": {
+      "mode": "100644",
+      "blob_oid": "9853bc243a28c20e74caddc8a073d8261132a5db",
+      "sha256": "98779709bf6448b57353ad658556dbddb0c14fa63b9f3669d844690447b03b32",
+      "size": 5971
+    },
+    "tests/accounting/assignment/test_ac11_schema_matrix_verifier.py": {
+      "mode": "100644",
+      "blob_oid": "f877afdc60ee7a1555ffad6cda617967c625a8f6",
+      "sha256": "133f4a8b180ccf8fe89822930d25d482c88809b5513d7f291817fc03f781dcb8",
+      "size": 2427
+    },
+    "tests/accounting/assignment/test_authorization_product_route.py": {
+      "mode": "100644",
+      "blob_oid": "da8e69ed749adee74961da61e070eb8722b857df",
+      "sha256": "ef5b97f9ab6ad661f8cf6a22af22dbdc90966e5c8d54ac66fad30dcd3c69d1a5",
+      "size": 51452
+    },
+    "tests/accounting/assignment/test_authorization_replay_round3.py": {
+      "mode": "100644",
+      "blob_oid": "e44c746e844efc8685314bf050a9d1fa50fe5183",
+      "sha256": "db0a3f4bd4a417f6d1d5083b1997cf7c72df94fb24c4f35162b95662e026ca9f",
+      "size": 12188
+    },
+    "tests/accounting/assignment/test_authorization_wire_round3.py": {
+      "mode": "100644",
+      "blob_oid": "7ea4f3fd7dd3d5f92e30489c2b2ce8c43551d91c",
+      "sha256": "ec9c0dfb546df676782c17d5e0ee4a48c44beb49d543227e4d0c96f9dbdf6de3",
+      "size": 5977
+    },
+    "tests/accounting/assignment/test_box5_integration_lock_v2.py": {
+      "mode": "100644",
+      "blob_oid": "c1e74a5e0d533dc779c1959ab230414131bff7d4",
+      "sha256": "af7c0f27b9b42dd8fbd7e55055d3b14660ef1aa31cc142d5a64fec5c303cf307",
+      "size": 1719
+    },
+    "tests/firstscreen_trusted/test_trusted_junit_semantics_box5.py": {
+      "mode": "100644",
+      "blob_oid": "d936eb9f8e3144d3e160a983e824cda7091dd36a",
+      "sha256": "9b0620a741a3213cb294bdc571085e84d39091790cdb57a49997799556e4a0dc",
+      "size": 3075
+    },
+    "tests/fixtures/box5_ac11_schema_mutations_v1.json": {
+      "mode": "100644",
+      "blob_oid": "152bac95de3fdcceb4720242b937d8ae7a6df5e3",
+      "sha256": "bc7987b7625474c0fff168458cc770cb97846f8da34793b1743a7e7b81c39672",
+      "size": 1473
+    },
+    "tests/fixtures/box5_ua2_golden_v1.json": {
+      "mode": "100644",
+      "blob_oid": "dc7a667ebff0a61ccfe0a0d69ce5f14524701a9d",
+      "sha256": "6608fc725f3ddecf44446d08bb3df5ca09ae45c89d0fabb2e772021a317eb2a7",
+      "size": 2104
+    },
+    "tests/test_write_build_info.py": {
+      "mode": "100644",
+      "blob_oid": "48e156c02d1feb84f3a18095d3f55f4fe615b941",
+      "sha256": "3a9cf3b4d85c3596485063c631cd0773f90827fd5e87a3e60ccea34174353e58",
+      "size": 7951
+    },
+    "tools/ac23/archive_safety.py": {
+      "mode": "100755",
+      "blob_oid": "81cd041485c681a69f7bb99db61c6a216bbf39fd",
+      "sha256": "d694f596ad575b47e682811516ec136677c8e28d7b3814c81d2501a08ccc4cad",
+      "size": 8067
+    },
+    "tools/ac23/build_candidate_artifact_identity.py": {
+      "mode": "100755",
+      "blob_oid": "bb687c4a56b8ac0ae070a027bb1cddb28712c05d",
+      "sha256": "376c06cb0c96782cf1b9954b58471e958fc2fc4d01849fc03141bd8ee2f2d891",
+      "size": 19765
+    },
+    "tools/ac23/collect_ac23_evidence.py": {
+      "mode": "100755",
+      "blob_oid": "645dc005f70b252cffa11ed20951f73930a15802",
+      "sha256": "678a5dc64921432da0acf4d895849682ae63973a634af7e85bdf290d7acba274",
+      "size": 12662
+    },
+    "tools/ac23/package_ac23.sh": {
+      "mode": "100755",
+      "blob_oid": "51afa85cec81d1c26338e3d362a3ad04689958b7",
+      "sha256": "ed81acf8c995682384aa7fbd759c4afbd6dbddaf9771ab3cea61a2f69b8ea812",
+      "size": 1318
+    },
+    "tools/ac23/run_ac23_mutations.py": {
+      "mode": "100755",
+      "blob_oid": "36a29224b0ee1fdff4bd1427c0f988d5b015fa1e",
+      "sha256": "d875f3c79169102c00cbe42e5e7c29d7c3fe1c7865a5d71e5a4005561590e2a9",
+      "size": 5209
+    },
+    "tools/ac23/verify_candidate_artifact_identity.py": {
+      "mode": "100755",
+      "blob_oid": "a34fdeb56d3a66102f8ab7dfe2b0066264494f1b",
+      "sha256": "f710855880625b6e0397271d5fca21efd30d84cf65b5111a96693da1de9fe187",
+      "size": 32018
+    }
   },
-  "owner": "김성훈",
-  "created_at": "2026-07-16T03:07:18Z",
-  "expires_at": "2026-07-30T03:07:18Z"
+  "critical_manifest_sha256": "0ee879de696d40f4a276b5ec2de891d403385d2363c924f3e5cacd8af8288301",
+  "source_package_sha256": [
+    "08c558a1192d37804531212ee5a9e881166b7795288804959e707462c1080f01",
+    "2c65cb6c7260857ba69317d1e59d0f0f2d5917a5a091c27410cba0c0d0a69047",
+    "3433df7ca733ea641f001c5c0f6c27ab11a09456b492a8309cc5df22fd27c8e5"
+  ],
+  "allowed_paths": [
+    ".github/workflows/box5-stage3.yml",
+    "butler-desktop/src-tauri/build.rs",
+    "butler-desktop/src-tauri/capabilities/box5-authority.json",
+    "butler-desktop/src-tauri/native/box5_user_authority_*.swift",
+    "butler-desktop/src-tauri/permissions/box5-authority.toml",
+    "butler-desktop/src-tauri/src/lib.rs",
+    "butler-desktop/src/lib/accounting_review/**",
+    "butler-desktop/src/components/accounting_review/**",
+    "butler-desktop/src/__tests__/AccountingReviewPage.test.tsx",
+    "butler_pc_core/accounting/assignment/**",
+    "butler_pc_core/accounting/classify/**",
+    "butler_pc_core/auth/capability_token.py",
+    "butler_pc_core/company_policy/middleware.py",
+    "butler_sidecar.py",
+    "integration_lock.json",
+    "schemas/candidate-artifact-identity-v1.schema.json",
+    "scripts/audit/reproduce_box5_contract_forgery_v2.py",
+    "scripts/audit/reproduce_box5_ac11_schema_constraints_v1.py",
+    "scripts/build_box5_user_authority_helper_macos.sh",
+    "scripts/build_complete_app.sh",
+    "scripts/ci/parse_junit_xml.py",
+    "scripts/ci/trusted_parse_junit_xml.py",
+    "scripts/ci/trusted_firstscreen_mutations.mjs",
+    "scripts/ci/verify_box5_junit_evidence.py",
+    "scripts/verify_box5_authorization_audit.py",
+    "scripts/verify_box5_integration_lock.py",
+    "scripts/write_build_info.py",
+    "tools/ac23/**",
+    "tests/ac23/**",
+    "tests/accounting/assignment/**",
+    "tests/accounting/classify/**",
+    "tests/auth/test_capability_token.py",
+    "tests/firstscreen_trusted/test_parser_isolation_differential.py",
+    "tests/firstscreen_trusted/test_trusted_junit_semantics_box5.py",
+    "tests/fixtures/box5_ua2_golden_v1.json",
+    "tests/fixtures/box5_ac11_schema_mutations_v1.json",
+    "tests/test_write_build_info.py"
+  ],
+  "owner": "알고리즘 개발팀12(온디바이스)",
+  "created_at": "2026-08-03T07:31:13Z",
+  "expires_at": "2026-08-10T07:31:13Z"
 }

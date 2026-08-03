@@ -1,18 +1,18 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://butler.local/schemas/accounting/account-assignment-response-2.0.json",
+  "$id": "https://butler.local/schemas/accounting/account-assignment-response-3.0.json",
   "title": "Account Assignment Response",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "assignment_id", "txn_id", "state", "account_id", "scope", "rule_effect", "rule_id", "transaction_version", "receipt_digest"],
   "properties": {
-    "schema_version": {"const": "2.0"},
+    "schema_version": {"const": "3.0"},
     "assignment_id": {"$ref": "#/$defs/opaqueId"},
     "txn_id": {"$ref": "#/$defs/opaqueId"},
     "state": {"const": "USER_ASSIGNED"},
     "account_id": {"type": "string", "minLength": 1, "maxLength": 128},
     "scope": {"enum": ["THIS_ONLY", "SAME_VENDOR_FUTURE"]},
-    "rule_effect": {"enum": ["NONE", "SUGGESTION_CREATED"]},
+    "rule_effect": {"enum": ["NONE", "ACTIVE_USER_RULE_CREATED", "EXISTING_USER_RULE_KEPT", "ACTIVE_USER_RULE_REPLACED"]},
     "rule_id": {"type": ["string", "null"], "maxLength": 128},
     "transaction_version": {"type": "integer", "minimum": 2},
     "receipt_digest": {"$ref": "#/$defs/sha256"}
