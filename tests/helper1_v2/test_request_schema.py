@@ -23,7 +23,7 @@ def _validator() -> Draft202012Validator:
 def _request() -> dict[str, object]:
     return {
         "schema_version": "butler.helper1.ask-request.v2",
-        "request_id": str(uuid.uuid4()),
+        "client_request_id": str(uuid.uuid4()),
         "workspace_id": str(uuid.uuid4()),
         "query": "회사 규정",
         "top_k": 5,
@@ -41,7 +41,7 @@ def test_request_schema_accepts_exact_envelope():
     [
         ("top_k", True),
         ("query", ""),
-        ("request_id", "not-a-uuid"),
+        ("client_request_id", "not-a-uuid"),
         ("effect_intent", "network"),
     ],
 )

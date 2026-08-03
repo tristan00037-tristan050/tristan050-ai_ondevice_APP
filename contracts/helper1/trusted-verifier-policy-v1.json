@@ -1,0 +1,70 @@
+{
+  "schema_version": "butler.helper1.trusted-verifier-policy.v1",
+  "policy_epoch": 2,
+  "enabled": false,
+  "repository": "tristan00037-tristan050/tristan050-ai_ondevice_APP",
+  "producer_workflow_name": "helper1-v2-evidence-producer",
+  "producer_workflow_path": ".github/workflows/helper1-v2-evidence.yml",
+  "handoff_chain_anchor": {
+    "schema_version": "butler.helper1.handoff-chain-anchor.v1",
+    "chain_id": "helper1-v51-a4-closure",
+    "successor_generation": 12,
+    "immediate_predecessor": {
+      "generation": 11,
+      "package_sha256": "6a5c25fca77a4f92b4922d81812639700a371317941794e004be8c23fdf1a1f7",
+      "result_tree": "2681627b211f9d77aa87e00fc30b9169fe352080"
+    },
+    "forbidden_rollback_fixture": {
+      "generation": 10,
+      "package_sha256": "726fe20483c6e9d6ea98b050f50d66df0cec862fe09931df4ea4e8455ec3391d",
+      "result_tree": "4a22a5ca24d7b708fb9af6bd0351a0d148ceb822"
+    }
+  },
+  "protected_verifier_sha256": "sha256:f629e78bb9fa880e9dee939370ebc940a6742e6a089536b8ee6fc8fc45755588",
+  "protected_components_sha256": {
+    "butler_pc_core/helper1/approval_closure.py": "sha256:424ff97b21c7d3dcd824cc94671516ed0e77c8e2af185b57e74c4c1345d68aad",
+    "butler_pc_core/helper1/canonical_json.py": "sha256:ecf4c1e55ee2e64022d8e28abdaeab257cd90728fa3153e09945b7d2a255f557",
+    "butler_pc_core/helper1/execution.py": "sha256:71e8ded1242e85c4361bfa3c4c75385eac1e676b3886df4fb7bd7ac9ce24c533",
+    "butler_pc_core/helper1/replay_store.py": "sha256:fc6fd57bf2303240430534cb3108e73bab94b50051db250679901fa6fa5b6e86",
+    "butler_pc_core/helper1/retrieval_policy.py": "sha256:e71753c5deeedbcabefd3fd830b2a0919180bf89e795a94cbd6a4ba43285a325",
+    "scripts/ci/helper1_evidence_semantics.py": "sha256:578c24d0e1462045399a9d3d695e2833d949e56d6111f232d43f328c5e5fe2d7",
+    "scripts/ci/helper1_subject_binding.py": "sha256:f35b78e9c7a5b7e87fe99df90bce87819054ac709b5ff278ca47271858cbbad0",
+    "scripts/ci/helper1_trusted_verifier.py": "sha256:f629e78bb9fa880e9dee939370ebc940a6742e6a089536b8ee6fc8fc45755588",
+    "scripts/ci/helper1_postgresql_replay_probe.py": "sha256:c3af199dbe50043c4acaf6b4abc19b3750b5899183382f7b566d6b91ae5bdb08",
+    "scripts/ci/publish_helper1_subject_check.py": "sha256:dde05f133124e44312465a4d3bd3b23f79d710a5fcdb12c0aa73e2ec5bcf697b"
+  },
+  "approved_producer_identity": "sha256:44804ccc81a9a1008ab0fe6110a086c2ea918fd107a1bed199f46f0f09d7c126",
+  "approved_evidence_key_id": "butler/helper1/evidence/ed25519/v1",
+  "approved_verdict_key_id": "butler/helper1/verdict/ed25519/v1",
+  "approved_public_key_b64": null,
+  "approved_public_key_sha256": null,
+  "approved_verdict_public_key_b64": null,
+  "approved_verdict_public_key_sha256": null,
+  "approval_policy_sha256": null,
+  "approved_activation_public_key_b64": null,
+  "approved_activation_public_key_sha256": null,
+  "subject_check_name": "helper1-v2/protected-verdict",
+  "subject_check_app_slug": "github-actions",
+  "subject_check_required": true,
+  "required_evidence_files": [
+    "APPROVED_ASSET_CLOSURE.json",
+    "REAL_ASSET_E2E_RECEIPT.json",
+    "M3_M4_MEASUREMENT.json",
+    "MACOS_SANDBOX_E2E_RECEIPT.json"
+  ],
+  "required_approval_roles": [
+    "A1_STARTUP_COMPOSITION_RECEIPT",
+    "A2_SUBJECT_BINDING_RECEIPT",
+    "A3_EGRESS_OBSERVATION_RECEIPT",
+    "A4_RETRIEVAL_CALIBRATION_RECEIPT",
+    "A4_RETRIEVAL_SEALED_TEST_RECEIPT",
+    "A5_PARSER_ISOLATION_RECEIPT",
+    "A4_RETRIEVAL_THRESHOLD_POLICY"
+  ],
+  "legacy_approval_role_bindings": {
+    "A1_STARTUP_COMPOSITION_RECEIPT": "APPROVED_ASSET_CLOSURE.json",
+    "A2_SUBJECT_BINDING_RECEIPT": "REAL_ASSET_E2E_RECEIPT.json",
+    "A3_EGRESS_OBSERVATION_RECEIPT": "M3_M4_MEASUREMENT.json",
+    "A5_PARSER_ISOLATION_RECEIPT": "MACOS_SANDBOX_E2E_RECEIPT.json"
+  }
+}

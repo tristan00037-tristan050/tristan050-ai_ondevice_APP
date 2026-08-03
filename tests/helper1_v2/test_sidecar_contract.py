@@ -20,12 +20,24 @@ def _client():
 def _payload(**overrides):
     value = {
         "schema_version": "butler.helper1.ask-request.v2",
-        "request_id": str(uuid.uuid4()),
+        "client_request_id": str(uuid.uuid4()),
         "workspace_id": str(uuid.uuid4()),
         "query": "회사 정책",
         "top_k": 5,
         "requested_generation_id": None,
         "effect_intent": "display_only",
+    }
+    value.update(overrides)
+    return value
+
+
+def _index_payload(**overrides):
+    value = {
+        "schema_version": "butler.helper1.index-request.v2",
+        "client_request_id": str(uuid.uuid4()),
+        "workspace_id": str(uuid.uuid4()),
+        "requested_generation_id": None,
+        "effect_intent": "index_only",
     }
     value.update(overrides)
     return value
@@ -57,6 +69,28 @@ def test_search_missing_native_bootstrap_is_typed_503():
     assert response.json()["kind"] == "REFUSED_ASSET_MISSING"
 
 
+def test_index_missing_native_bootstrap_is_typed_503_not_success():
+    client, headers = _client()
+    response = client.post(
+        "/v1/helpers/1/index",
+        json=_index_payload(),
+        headers=headers,
+    )
+    assert response.status_code == 503
+    assert response.json()["kind"] == "REFUSED_ASSET_MISSING"
+
+
+def test_index_rejects_non_index_effect_before_service():
+    client, headers = _client()
+    response = client.post(
+        "/v1/helpers/1/index",
+        json=_index_payload(effect_intent="display_only"),
+        headers=headers,
+    )
+    assert response.status_code == 422
+    assert response.json()["reason_code"] == "REQUEST_INVALID"
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -80,7 +114,7 @@ def test_duplicate_json_field_is_rejected_without_echo():
     payload = _payload()
     body = (
         '{"schema_version":"butler.helper1.ask-request.v2",'
-        f'"request_id":"{payload["request_id"]}",'
+        f'"client_request_id":"{payload["client_request_id"]}",'
         f'"workspace_id":"{payload["workspace_id"]}",'
         '"query":"secret-one","query":"secret-two","top_k":5,'
         '"requested_generation_id":null,"effect_intent":"display_only"}'
@@ -104,6 +138,13 @@ def test_request_id_replay_is_refused_after_first_acceptance():
     assert second.status_code == 403
     assert second.json()["kind"] == "REFUSED_POLICY"
     assert second.json()["reason_code"] == "REQUEST_REPLAYED"
+
+
+def test_server_request_id_is_distinct_from_client_id():
+    client, headers = _client()
+    payload = _payload()
+    response = client.post("/v1/helpers/1/ask", json=payload, headers=headers)
+    assert response.json()["request_id"] != payload["client_request_id"]
 
 
 def test_non_display_effect_is_refused_without_payload_release():

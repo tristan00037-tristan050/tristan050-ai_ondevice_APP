@@ -13,6 +13,7 @@ import stat
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
+from types import MappingProxyType
 from typing import Any, Mapping, Protocol
 
 from butler_pc_core.connect_loop.dlp_guard import scan_runtime_text
@@ -136,7 +137,7 @@ class ClosureFile:
         require_digest(self.sha256, "CLOSURE_FILE_DIGEST_INVALID")
 
 
-@dataclass
+@dataclass(frozen=True)
 class VerifiedAssetClosure:
     """An immutable manifest plus the already-open asset directory."""
 
@@ -154,6 +155,11 @@ class VerifiedAssetClosure:
             raise Helper1SecurityError("CLOSURE_FILE_COUNT_INVALID")
         if set(self.files) != {record.path for record in self.files.values()}:
             raise Helper1SecurityError("CLOSURE_FILE_MAP_INVALID")
+        snapshot = {
+            path: ClosureFile(path=record.path, bytes=record.bytes, sha256=record.sha256)
+            for path, record in self.files.items()
+        }
+        object.__setattr__(self, "files", MappingProxyType(snapshot))
         calculated = sha256_bytes(
             canonical_json(
                 {
@@ -179,7 +185,7 @@ class VerifiedAssetClosure:
                 sha256_bytes(data), record.sha256
             ):
                 raise Helper1SecurityError("ASSET_CLOSURE_MISMATCH")
-        self._verified = True
+        object.__setattr__(self, "_verified", True)
 
     def open_verified(self, relative: str) -> int:
         if not self._verified:

@@ -24,6 +24,7 @@ from .contracts import (
     sha256_bytes,
 )
 from .security import Helper1SecurityError, KeyProvider, derive_subkey
+from .trace import RunTrace, TraceError
 
 ORDERED_GATES = (
     "QUERY_AUTHORIZED",
@@ -34,6 +35,7 @@ ORDERED_GATES = (
     "CLAIMS_VERIFIED",
     "DLP_PASSED",
     "EFFECT_AUTHORIZED",
+    "OS_EGRESS_VERIFIED",
     "RELEASED",
 )
 
@@ -45,6 +47,7 @@ class ReleaseReceipt:
     generation_id: str
     policy_sha256: str
     gate_bundle_sha256: str
+    ordered_trace_root: str
     authority_key_id: str
     signature: str
     terminal_count: int
@@ -59,6 +62,7 @@ class ReleaseReceipt:
         require_uuid(self.generation_id, "GENERATION_ID_INVALID")
         require_digest(self.policy_sha256, "RELEASE_POLICY_DIGEST_INVALID")
         require_digest(self.gate_bundle_sha256, "RELEASE_GATE_BUNDLE_INVALID")
+        require_digest(self.ordered_trace_root, "RELEASE_TRACE_ROOT_INVALID")
         require_safe_id(self.authority_key_id, "RELEASE_AUTHORITY_KEY_INVALID")
         if (
             not isinstance(self.signature, str)
@@ -83,6 +87,7 @@ class ReleaseReceipt:
             "generation_id": self.generation_id,
             "policy_sha256": self.policy_sha256,
             "gate_bundle_sha256": self.gate_bundle_sha256,
+            "ordered_trace_root": self.ordered_trace_root,
             "authority_key_id": self.authority_key_id,
             "terminal_count": self.terminal_count,
             "ordered_gates": list(self.ordered_gates),
@@ -120,6 +125,8 @@ class ExternalEffectAuthority:
         model_identity_sha256: str,
         index_manifest_sha256: str,
         policy_sha256: str,
+        egress_observation_sha256: str | None,
+        trace: RunTrace | None,
         completed_gates: tuple[str, ...],
         latch: TerminalLatch,
     ) -> ReleaseReceipt:
@@ -128,12 +135,17 @@ class ExternalEffectAuthority:
         require_digest(model_identity_sha256, "RELEASE_MODEL_IDENTITY_INVALID")
         require_digest(index_manifest_sha256, "RELEASE_INDEX_IDENTITY_INVALID")
         require_digest(policy_sha256, "RELEASE_POLICY_DIGEST_INVALID")
+        if self.key_provider.is_production_provider:
+            require_digest(
+                egress_observation_sha256,
+                "RELEASE_EGRESS_OBSERVATION_INVALID",
+            )
+            if trace is None:
+                raise Helper1SecurityError("RELEASE_TRACE_REQUIRED")
         if not answer or not citations:
             raise Helper1SecurityError("RELEASE_PAYLOAD_INVALID")
         citation_value = [citation.to_dict() for citation in citations]
-        dlp = scan_runtime_text(
-            answer + "\n" + canonical_json(citation_value).decode("utf-8")
-        )
+        dlp = scan_runtime_text(answer)
         if not dlp["passed"]:
             raise Helper1SecurityError("RELEASE_DLP_BLOCKED")
         gate_bundle = {
@@ -142,11 +154,20 @@ class ExternalEffectAuthority:
             "model_identity_sha256": model_identity_sha256,
             "index_manifest_sha256": index_manifest_sha256,
             "policy_sha256": policy_sha256,
+            "egress_observation_sha256": egress_observation_sha256,
+            "ordered_trace_root_before_terminal": trace.root if trace is not None else None,
             "effect": "display",
             "completed_gates": list(completed_gates),
         }
         gate_bundle_sha256 = sha256_bytes(canonical_json(gate_bundle))
         latch.commit("ANSWERED")
+        if trace is not None:
+            try:
+                trace.terminal("ANSWERED")
+                trace.verify_complete()
+            except TraceError as exc:
+                raise Helper1SecurityError("RELEASE_TRACE_INVALID") from exc
+        trace_root = trace.root if trace is not None else "0" * 64
         key_id, private_key = self._private_key(workspace_id)
         unsigned = {
             "schema_version": "butler.helper1.release-receipt.v2",
@@ -155,6 +176,7 @@ class ExternalEffectAuthority:
             "generation_id": generation_id,
             "policy_sha256": policy_sha256,
             "gate_bundle_sha256": gate_bundle_sha256,
+            "ordered_trace_root": trace_root,
             "authority_key_id": key_id,
             "terminal_count": latch.count,
             "ordered_gates": ORDERED_GATES,

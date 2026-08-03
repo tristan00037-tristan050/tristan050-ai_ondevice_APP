@@ -1,0 +1,9 @@
+{
+  "schema_version": "butler.helper1.baseline-policy.v1",
+  "repository_full_name": "tristan00037-tristan050/tristan050-ai_ondevice_APP",
+  "repository_id": 1097940756,
+  "base_commit": "390af710bdc76a58be3158b6bcbf0638d62b49a4",
+  "base_tree": "dfbd96c3055dad43024861543530d7e0e1469b5f",
+  "overlay_manifest_sha256": "f8346f655b17e2df99bb90618a9e3dd8449ae2f630acd1a911215056c6469cfc",
+  "reconstructed_tree": "b1fe153f0c14342f0f512d0d0ea39337104aae28"
+}

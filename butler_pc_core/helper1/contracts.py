@@ -93,6 +93,7 @@ class AnswerKind(str, Enum):
     REFUSED_DLP = "REFUSED_DLP"
     REFUSED_INJECTION = "REFUSED_INJECTION"
     REFUSED_INDEX_INVALID = "REFUSED_INDEX_INVALID"
+    REFUSED_MEASUREMENT_INVALID = "REFUSED_MEASUREMENT_INVALID"
     CANCELLED = "CANCELLED"
     FAILED = "FAILED"
 
@@ -105,6 +106,7 @@ HTTP_STATUS_BY_KIND: Mapping[AnswerKind, int] = {
     AnswerKind.REFUSED_DLP: 451,
     AnswerKind.REFUSED_INJECTION: 422,
     AnswerKind.REFUSED_INDEX_INVALID: 409,
+    AnswerKind.REFUSED_MEASUREMENT_INVALID: 503,
     AnswerKind.CANCELLED: 409,
     AnswerKind.FAILED: 500,
 }
@@ -250,6 +252,7 @@ class IndexManifest:
     encoder: EncoderIdentity
     lexical_tokenizer_sha256: str
     chunker_policy_sha256: str
+    parser_isolation_policy_sha256: str
     document_set_hmac_sha256: str
     policy_sha256: str
     chunk_count: int
@@ -269,6 +272,10 @@ class IndexManifest:
             require_uuid(self.previous_generation_id, "PREVIOUS_GENERATION_ID_INVALID")
         require_digest(self.lexical_tokenizer_sha256, "LEXICAL_TOKENIZER_INVALID")
         require_digest(self.chunker_policy_sha256, "CHUNKER_POLICY_INVALID")
+        require_digest(
+            self.parser_isolation_policy_sha256,
+            "PARSER_ISOLATION_POLICY_INVALID",
+        )
         require_digest(self.document_set_hmac_sha256, "DOCUMENT_SET_HMAC_INVALID")
         require_digest(self.policy_sha256, "INDEX_POLICY_DIGEST_INVALID")
         require_int(self.chunk_count, minimum=1, maximum=2**31 - 1, code="CHUNK_COUNT_INVALID")
@@ -308,6 +315,7 @@ class IndexManifest:
             "encoder": self.encoder.to_dict(),
             "lexical_tokenizer_sha256": self.lexical_tokenizer_sha256,
             "chunker_policy_sha256": self.chunker_policy_sha256,
+            "parser_isolation_policy_sha256": self.parser_isolation_policy_sha256,
             "document_set_hmac_sha256": self.document_set_hmac_sha256,
             "policy_sha256": self.policy_sha256,
             "chunk_count": self.chunk_count,
@@ -326,16 +334,22 @@ class IndexManifest:
 
 @dataclass(frozen=True)
 class RetrievedChunk:
+    workspace_id: str
     chunk_id: str
     source_id: str
     text: str
     dense_score: float | None
     lexical_score: float | None
     fused_score: float
+    dense_rank: int | None
+    lexical_rank: int | None
     generation_id: str
+    byte_start: int
+    byte_end: int
     content_sha256: str
 
     def __post_init__(self) -> None:
+        require_uuid(self.workspace_id, "CHUNK_WORKSPACE_INVALID")
         require_safe_id(self.chunk_id, "CHUNK_ID_INVALID")
         require_safe_id(self.source_id, "SOURCE_ID_INVALID")
         require_uuid(self.generation_id, "CHUNK_GENERATION_INVALID")
@@ -346,6 +360,13 @@ class RetrievedChunk:
         for score in (self.dense_score, self.lexical_score, self.fused_score):
             if score is not None:
                 require_finite(score, "CHUNK_SCORE_INVALID")
+        for rank in (self.dense_rank, self.lexical_rank):
+            if rank is not None:
+                require_int(rank, minimum=1, maximum=1000, code="CHUNK_RANK_INVALID")
+        require_int(self.byte_start, minimum=0, maximum=2**31 - 1, code="CHUNK_BYTE_RANGE_INVALID")
+        require_int(self.byte_end, minimum=1, maximum=2**31 - 1, code="CHUNK_BYTE_RANGE_INVALID")
+        if self.byte_start != 0 or self.byte_end != len(self.text.encode("utf-8")):
+            raise Helper1ContractError("CHUNK_BYTE_RANGE_INVALID")
         require_digest(self.content_sha256, "CHUNK_CONTENT_DIGEST_INVALID")
         if not hmac.compare_digest(
             self.content_sha256, sha256_bytes(self.text.encode("utf-8"))
@@ -409,6 +430,8 @@ class Claim:
 @dataclass(frozen=True)
 class Citation:
     claim_id: str
+    workspace_id: str
+    generation_id: str
     chunk_id: str
     source_id: str
     evidence_start: int
@@ -417,6 +440,8 @@ class Citation:
 
     def __post_init__(self) -> None:
         require_safe_id(self.claim_id, "CITATION_CLAIM_ID_INVALID")
+        require_uuid(self.workspace_id, "CITATION_WORKSPACE_INVALID")
+        require_uuid(self.generation_id, "CITATION_GENERATION_INVALID")
         require_safe_id(self.chunk_id, "CITATION_CHUNK_ID_INVALID")
         require_safe_id(self.source_id, "CITATION_SOURCE_ID_INVALID")
         require_int(
@@ -451,6 +476,7 @@ class AnswerResult:
     index_manifest_sha256: str | None
     citations: tuple[Citation, ...] = field(default_factory=tuple)
     release_receipt_sha256: str | None = None
+    execution_receipt: Mapping[str, Any] | None = None
     schema_version: str = "butler.helper1.answer.v2"
 
     def __post_init__(self) -> None:
@@ -484,6 +510,12 @@ class AnswerResult:
             )
             if not self.citations:
                 raise Helper1ContractError("ANSWERED_WITHOUT_CITATION")
+            if any(
+                citation.workspace_id != self.workspace_id
+                or citation.generation_id != self.generation_id
+                for citation in self.citations
+            ):
+                raise Helper1ContractError("CITATION_SUBJECT_BINDING_INVALID")
         else:
             if self.answer is not None or self.citations:
                 raise Helper1ContractError("NONANSWER_WITH_PAYLOAD")
@@ -494,6 +526,8 @@ class AnswerResult:
                 raise Helper1ContractError("NONANSWER_REASON_INVALID")
             if self.release_receipt_sha256 is not None:
                 raise Helper1ContractError("NONANSWER_WITH_RELEASE_RECEIPT")
+            if self.execution_receipt is not None:
+                raise Helper1ContractError("NONANSWER_WITH_EXECUTION_RECEIPT")
 
     @property
     def http_status(self) -> int:
@@ -512,6 +546,9 @@ class AnswerResult:
             "index_manifest_sha256": self.index_manifest_sha256,
             "citations": [citation.to_dict() for citation in self.citations],
             "release_receipt_sha256": self.release_receipt_sha256,
+            "execution_receipt": (
+                dict(self.execution_receipt) if self.execution_receipt is not None else None
+            ),
         }
 
 

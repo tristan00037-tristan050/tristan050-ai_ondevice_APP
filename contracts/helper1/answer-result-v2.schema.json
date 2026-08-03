@@ -30,6 +30,8 @@
       "additionalProperties": false,
       "required": [
         "claim_id",
+        "workspace_id",
+        "generation_id",
         "chunk_id",
         "source_id",
         "evidence_start",
@@ -39,6 +41,12 @@
       "properties": {
         "claim_id": {
           "$ref": "#/$defs/safeId"
+        },
+        "workspace_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "generation_id": {
+          "$ref": "#/$defs/uuid"
         },
         "chunk_id": {
           "$ref": "#/$defs/safeId"
@@ -75,7 +83,8 @@
         "model_identity_sha256",
         "index_manifest_sha256",
         "citations",
-        "release_receipt_sha256"
+        "release_receipt_sha256",
+        "execution_receipt"
       ],
       "properties": {
         "schema_version": {
@@ -117,6 +126,9 @@
         },
         "release_receipt_sha256": {
           "$ref": "#/$defs/digest"
+        },
+        "execution_receipt": {
+          "$ref": "#/$defs/executionReceipt"
         }
       }
     },
@@ -134,7 +146,8 @@
         "model_identity_sha256",
         "index_manifest_sha256",
         "citations",
-        "release_receipt_sha256"
+        "release_receipt_sha256",
+        "execution_receipt"
       ],
       "properties": {
         "schema_version": {
@@ -148,6 +161,7 @@
             "REFUSED_DLP",
             "REFUSED_INJECTION",
             "REFUSED_INDEX_INVALID",
+            "REFUSED_MEASUREMENT_INVALID",
             "CANCELLED",
             "FAILED"
           ]
@@ -201,6 +215,78 @@
         },
         "release_receipt_sha256": {
           "type": "null"
+        },
+        "execution_receipt": {
+          "type": "null"
+        }
+      }
+    },
+    "executionReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "key_id",
+        "subject_commit",
+        "subject_tree",
+        "workspace_id",
+        "generation_id",
+        "request_id",
+        "session_digest",
+        "action",
+        "nonce_digest",
+        "answer_sha256",
+        "issued_at_epoch_s",
+        "expires_at_epoch_s",
+        "signature_b64"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "butler.helper1.execution-receipt.v3"
+        },
+        "key_id": {
+          "$ref": "#/$defs/digest"
+        },
+        "subject_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+        },
+        "subject_tree": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+        },
+        "workspace_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "generation_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "request_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "session_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "action": {
+          "const": "ask"
+        },
+        "nonce_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "answer_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "issued_at_epoch_s": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expires_at_epoch_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "signature_b64": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{86}==$"
         }
       }
     }

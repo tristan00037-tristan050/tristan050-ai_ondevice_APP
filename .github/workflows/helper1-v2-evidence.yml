@@ -1,0 +1,85 @@
+name: helper1-v2-evidence-producer
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: helper1-v2-producer-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '24'
+
+jobs:
+  untrusted-producer:
+    name: helper1-v2-untrusted-evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out evidence subject
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.event.after || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Record untrusted canonical subject claim
+        id: canonical-subject
+        run: |
+          set -euo pipefail
+          python scripts/ci/helper1_canonical_subject.py \
+            --event-name "${GITHUB_EVENT_NAME}" \
+            --event "${GITHUB_EVENT_PATH}" \
+            --repository-id "${GITHUB_REPOSITORY_ID}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --workflow-ref "${GITHUB_WORKFLOW_REF}" \
+            --workflow-sha "${GITHUB_WORKFLOW_SHA}" \
+            --dispatch-sha "${GITHUB_SHA}" \
+            --output "${RUNNER_TEMP}/CANONICAL_SUBJECT.json" \
+            --github-output "${GITHUB_OUTPUT}"
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: butler-desktop/package-lock.json
+          package-manager-cache: true
+      - name: Install hash-locked Python dependencies
+        run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - name: Run Helper1 regressions and static preflight
+        run: |
+          set -euo pipefail
+          python -m pytest -q tests/helper1_v2
+          python scripts/verify_helper1_v2.py --static-only
+          npm ci --ignore-scripts --prefix butler-desktop
+          npm run test:run --prefix butler-desktop -- src/lib/helper1/client.test.ts
+      - name: Create bounded untrusted producer artifact
+        env:
+          PRODUCER_RUN_ID: ${{ github.run_id }}
+          PRODUCER_RUN_ATTEMPT: ${{ github.run_attempt }}
+          SUBJECT_SHA: ${{ steps.canonical-subject.outputs.subject_sha }}
+          SUBJECT_DIGEST: ${{ steps.canonical-subject.outputs.subject_digest }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 helper1-producer-artifact/evidence helper1-producer-artifact/artifacts/objects
+          install -m 0600 "${RUNNER_TEMP}/CANONICAL_SUBJECT.json" helper1-producer-artifact/CANONICAL_SUBJECT.json
+          python -c 'import json,os,pathlib; run="{}:{}".format(os.environ["PRODUCER_RUN_ID"],os.environ["PRODUCER_RUN_ATTEMPT"]); pathlib.Path("helper1-producer-artifact/SUBMISSION.json").write_text(json.dumps({"schema_version":"butler.helper1.untrusted-submission.v1","run_id":run,"subject_commit":os.environ["SUBJECT_SHA"],"canonical_subject_sha256":os.environ["SUBJECT_DIGEST"],"product_evidence_present":False},sort_keys=True,separators=(",",":"))+"\n",encoding="utf-8")'
+      - name: Upload untrusted producer artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: helper1-v2-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: helper1-producer-artifact/
+          if-no-files-found: error
+          retention-days: 30

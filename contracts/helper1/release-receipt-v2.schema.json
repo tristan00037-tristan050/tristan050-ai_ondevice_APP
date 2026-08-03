@@ -11,6 +11,7 @@
     "generation_id",
     "policy_sha256",
     "gate_bundle_sha256",
+    "ordered_trace_root",
     "authority_key_id",
     "signature",
     "terminal_count",
@@ -35,6 +36,9 @@
     "gate_bundle_sha256": {
       "$ref": "#/$defs/digest"
     },
+    "ordered_trace_root": {
+      "$ref": "#/$defs/digest"
+    },
     "authority_key_id": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
@@ -56,6 +60,7 @@
         "CLAIMS_VERIFIED",
         "DLP_PASSED",
         "EFFECT_AUTHORIZED",
+        "OS_EGRESS_VERIFIED",
         "RELEASED"
       ]
     }

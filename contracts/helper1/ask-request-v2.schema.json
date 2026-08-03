@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema_version",
-    "request_id",
+    "client_request_id",
     "workspace_id",
     "query",
     "top_k",
@@ -17,7 +17,7 @@
     "schema_version": {
       "const": "butler.helper1.ask-request.v2"
     },
-    "request_id": {
+    "client_request_id": {
       "$ref": "#/$defs/uuid"
     },
     "workspace_id": {

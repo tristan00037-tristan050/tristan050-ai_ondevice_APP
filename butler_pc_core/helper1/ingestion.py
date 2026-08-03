@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any, Iterator
 
 from .contracts import canonical_json, hmac_sha256, require_uuid, sha256_bytes
+from .parser_isolation import DocumentParserPort, NativeXPCParser
 from .security import Helper1SecurityError, open_regular_at, read_bounded_fd
 
 SUPPORTED_EXTENSIONS = frozenset({".docx", ".pdf", ".xlsx", ".md", ".txt"})
@@ -378,6 +379,8 @@ class ApprovedFolderIngestor:
     workspace_id: str
     folder_fd: int
     workspace_key: bytes
+    parser: DocumentParserPort | None = None
+    allow_test_parser: bool = False
 
     def __post_init__(self) -> None:
         require_uuid(self.workspace_id, "WORKSPACE_ID_INVALID")
@@ -386,6 +389,15 @@ class ApprovedFolderIngestor:
         info = os.fstat(self.folder_fd)
         if not stat.S_ISDIR(info.st_mode):
             raise IngestionError("FOLDER_HANDLE_INVALID")
+        if type(self.allow_test_parser) is not bool:
+            raise IngestionError("PARSER_MODE_INVALID")
+        if self.parser is None and not self.allow_test_parser:
+            raise IngestionError("REFUSED_PARSER_UNAVAILABLE")
+        if self.parser is not None and (
+            type(self.parser) is not NativeXPCParser
+            or not self.parser.is_production_parser
+        ):
+            raise IngestionError("PARSER_PRODUCTION_BOUNDARY_REQUIRED")
 
     def read_documents(self) -> tuple[ParsedDocument, ...]:
         documents: list[ParsedDocument] = []
@@ -412,7 +424,11 @@ class ApprovedFolderIngestor:
                 revision.encode("ascii"),
             )[:48]
             extension = _file_extension(relative)
-            text = parse_in_sandbox(data, extension)
+            text = (
+                self.parser.parse(data, extension)
+                if self.parser is not None
+                else parse_in_sandbox(data, extension)
+            )
             documents.append(
                 ParsedDocument(
                     source_id=source_id,

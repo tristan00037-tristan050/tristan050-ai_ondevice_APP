@@ -1,14 +1,40 @@
 # Prompt Registry / Cursor Rules (SSOT)
-# SSOT 경로 변경 시 최소 1명(Code Owner) 승인 + ruleset required approvals(2)로 2인 리뷰 강제
+# SSOT path changes require code-owner review plus the repository ruleset.
 /.cursor/rules/                       @tristan00037-tristan050
 /docs/ops/cursor_prompts/             @tristan00037-tristan050
 /docs/ops/contracts/                  @tristan00037-tristan050
 
 # A4 secret-scan gate, rotation-evidence verifier, and baseline approval (v5.6)
-# Changes to these paths require Code Owner approval.
 /docs/ops/A4_V55_*                          @tristan00037-tristan050
 /scripts/ci/a4_repository_secret_scan.py    @tristan00037-tristan050
 /.github/workflows/a4-*                     @tristan00037-tristan050
 /butler_pc_core/a4_verifier/**              @tristan00037-tristan050
 /.github/workflows/box5-stage3.yml           @tristan00037-tristan050
 /scripts/ci/prepare_a4_baseline_approval.py  @tristan00037-tristan050
+
+# Helper1 trust authority. These paths are effective only with required
+# code-owner reviews and the trusted workflow present on the default branch.
+/contracts/helper1/trusted-verifier-policy-v1.json @tristan00037-tristan050
+/scripts/ci/helper1_trusted_verifier.py             @tristan00037-tristan050
+/scripts/ci/helper1_postgresql_replay_probe.py      @tristan00037-tristan050
+/scripts/verify_helper1_v2.py                       @tristan00037-tristan050
+/.github/workflows/helper1-v2-evidence.yml          @tristan00037-tristan050
+/.github/workflows/helper1-v2-trusted-verifier.yml  @tristan00037-tristan050
+/tests/helper1_v2/test_self_selected_trust_regression.py @tristan00037-tristan050
+
+/scripts/ci/helper1_subject_binding.py               @tristan00037-tristan050
+/scripts/ci/helper1_evidence_semantics.py             @tristan00037-tristan050
+/scripts/ci/publish_helper1_subject_check.py          @tristan00037-tristan050
+/tests/helper1_v2/test_protected_workflow_topology.py @tristan00037-tristan050
+/butler_pc_core/helper1/approval_closure.py            @tristan00037-tristan050
+/butler_pc_core/helper1/canonical_json.py              @tristan00037-tristan050
+/butler_pc_core/helper1/execution.py                   @tristan00037-tristan050
+/butler_pc_core/helper1/retrieval_policy.py            @tristan00037-tristan050
+/butler_pc_core/helper1/replay_store.py                 @tristan00037-tristan050
+/contracts/helper1/evidence-envelope-v1.schema.json    @tristan00037-tristan050
+/contracts/helper1/retrieval-approval-trust-policy-v1.json @tristan00037-tristan050
+/contracts/helper1/retrieval-calibration-receipt-v1.schema.json @tristan00037-tristan050
+/contracts/helper1/retrieval-sealed-test-receipt-v1.schema.json @tristan00037-tristan050
+/contracts/helper1/retrieval-threshold-policy-v1.schema.json @tristan00037-tristan050
+/tests/helper1_v2/vectors/**                            @tristan00037-tristan050
+/tests/helper1_v2/test_*_v51.py                         @tristan00037-tristan050
