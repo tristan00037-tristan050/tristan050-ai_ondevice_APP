@@ -90,8 +90,22 @@ def _run_verifier(package: Path) -> tuple[int, str, str]:
 
 
 def _copy_package(source: Path, destination: Path) -> Path:
-    shutil.copytree(source, destination, copy_function=os.link)
+    shutil.copytree(source, destination, copy_function=shutil.copy2)
     return destination
+
+
+def _reseal_checksums(package: Path) -> None:
+    checksum = package / "SHA256SUMS.txt"
+    files = sorted(
+        path for path in package.rglob("*") if path.is_file() and path != checksum
+    )
+    _replace_bytes(
+        checksum,
+        "".join(
+            f"{_sha256(path)}  {path.relative_to(package).as_posix()}\n"
+            for path in files
+        ).encode("utf-8"),
+    )
 
 
 def _flip_byte(path: Path) -> None:
@@ -297,6 +311,7 @@ def _mutation_package(package_root: Path, tmp_path: Path) -> Path:
 
 
 def _expect_failure(package: Path, accepted: set[str]) -> None:
+    _reseal_checksums(package)
     exit_code, error_code, _ = _run_verifier(package)
     assert exit_code != 0
     assert error_code in accepted

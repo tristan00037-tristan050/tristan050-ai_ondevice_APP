@@ -36,42 +36,35 @@
       "maxLength": 2048
     },
     "object_format": {
-      "enum": ["sha1", "sha256"]
+      "const": "sha1"
     },
     "base_commit": {
       "type": "string",
-      "minLength": 40,
-      "pattern": "^[0-9a-f]+$"
+      "pattern": "^[0-9a-f]{40}$"
     },
     "base_tree": {
       "type": "string",
-      "minLength": 40,
-      "pattern": "^[0-9a-f]+$"
+      "pattern": "^[0-9a-f]{40}$"
     },
     "head_commit": {
       "type": "string",
-      "minLength": 40,
-      "pattern": "^[0-9a-f]+$"
+      "pattern": "^[0-9a-f]{40}$"
     },
     "head_tree": {
       "type": "string",
-      "minLength": 40,
-      "pattern": "^[0-9a-f]+$"
+      "pattern": "^[0-9a-f]{40}$"
     },
     "submitted_head_tree": {
       "type": "string",
-      "minLength": 40,
-      "pattern": "^[0-9a-f]+$"
+      "pattern": "^[0-9a-f]{40}$"
     },
     "patch_applied_tree": {
       "type": "string",
-      "minLength": 40,
-      "pattern": "^[0-9a-f]+$"
+      "pattern": "^[0-9a-f]{40}$"
     },
     "source_archive_tree": {
       "type": "string",
-      "minLength": 40,
-      "pattern": "^[0-9a-f]+$"
+      "pattern": "^[0-9a-f]{40}$"
     },
     "patch_sha256": {
       "type": "string",

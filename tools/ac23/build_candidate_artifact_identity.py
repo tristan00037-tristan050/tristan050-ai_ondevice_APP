@@ -21,12 +21,15 @@ from verify_candidate_artifact_identity import (
     APPROVED_REPOSITORY_URL,
     NORMATIVE_CONTRACT_PATH,
     NORMATIVE_CONTRACT_SHA256,
+    load_evidence_policy,
     normalize_repository_url,
+    verify_evidence_semantics,
 )
 
 
 SCHEMA_VERSION = "butler.box5.candidate-artifact-identity.v1"
-PRIOR_CANDIDATE_TREE = "a1bea246799684d1cf6df7c7fd970616f0bd72e3"
+ROUND5_START_COMMIT = "fbb90e182063edc50651d769cac9e840cf96ac3e"
+ROUND5_START_TREE = "c94833ca4ff2ff57cddccb48bd289305eaf33f94"
 ALLOWED_AC23_PATH_PREFIXES = ("tools/ac23/", "tests/ac23/")
 ALLOWED_AC23_PATHS = {"schemas/candidate-artifact-identity-v1.schema.json"}
 ALLOWED_REQUIRED_METADATA_PATHS = {
@@ -186,10 +189,16 @@ def _build_source_tar(repository: Path, head: str, destination: Path) -> None:
 
 def _safe_evidence_paths(root: Path) -> tuple[list[Path], list[Path]]:
     required_files = {
-        "environment.txt",
+        "environment.json",
         "commands.jsonl",
         "clean_status.bin",
         "tree_reconstruction.json",
+        "regression/frozen_19_details.json",
+        "regression/frozen_19_summary.json",
+        "mutation/mutation_results_v2.json",
+        "mutation/pytest_mutation.stdout.bin",
+        "mutation/pytest_mutation.stderr.bin",
+        "mutation/pytest_mutation.xml",
     }
     required_directories = {"regression", "mutation", "stdout", "stderr"}
     actual_files: list[Path] = []
@@ -325,7 +334,6 @@ def _validate_candidate(
     repository: Path,
     base: str,
     head: str,
-    expected_prior_tree: str,
 ) -> tuple[str, str, str]:
     if _git(repository, "status", "--porcelain=v1", "-z", "--untracked-files=all").stdout:
         raise BuildError("candidate worktree is not clean")
@@ -349,12 +357,12 @@ def _validate_candidate(
     object_format = _git(repository, "rev-parse", "--show-object-format").stdout.decode(
         "ascii"
     ).strip()
-    try:
-        prior_type = _git(repository, "cat-file", "-t", expected_prior_tree).stdout.strip()
-    except BuildError:
-        raise BuildError("prior candidate tree object is unavailable")
-    if prior_type != b"tree":
-        raise BuildError("prior candidate identity is not a tree")
+    if object_format != "sha1":
+        raise BuildError("unsupported Git object format")
+    if _git(repository, "show", "-s", "--format=%T", ROUND5_START_COMMIT).stdout.decode("ascii").strip() != ROUND5_START_TREE:
+        raise BuildError("Round5 start identity mismatch")
+    if _git(repository, "merge-base", "--is-ancestor", ROUND5_START_COMMIT, head, check=False).returncode:
+        raise BuildError("Round5 start is not an ancestor")
     delta = _git(
         repository,
         "diff-tree",
@@ -362,8 +370,8 @@ def _validate_candidate(
         "--name-only",
         "-r",
         "-z",
-        expected_prior_tree,
-        head_tree,
+        ROUND5_START_COMMIT,
+        head,
     ).stdout
     for raw_path in delta.split(b"\0"):
         if not raw_path:
@@ -384,6 +392,9 @@ def build(args: argparse.Namespace) -> Path:
     evidence = args.evidence_dir.resolve()
     verifier_source = args.verifier_source.resolve()
     schema_source = args.schema_source.resolve()
+    policy_source = args.policy_source.resolve()
+    policy_bytes = policy_source.read_bytes()
+    policy = load_evidence_policy(policy_bytes)
     if output.exists():
         if not output.is_dir() or any(output.iterdir()):
             raise BuildError("output directory must be absent or empty")
@@ -396,7 +407,7 @@ def build(args: argparse.Namespace) -> Path:
         "ascii"
     ).strip()
     base_tree, head_tree, object_format = _validate_candidate(
-        repository, args.base_commit, head, args.prior_candidate_tree
+        repository, args.base_commit, head
     )
     contract = _git(repository, "show", f"{head}:{NORMATIVE_CONTRACT_PATH}").stdout
     contract_digest = hashlib.sha256(contract).hexdigest()
@@ -457,6 +468,7 @@ def build(args: argparse.Namespace) -> Path:
             "normative_contract_path": NORMATIVE_CONTRACT_PATH,
             "normative_contract_sha256": contract_digest,
         }
+        verify_evidence_semantics(evidence_path, manifest, policy)
         _write_bytes(
             staging / "IDENTITY" / "candidate_artifact_identity.json",
             _canonical_json(manifest),
@@ -465,6 +477,8 @@ def build(args: argparse.Namespace) -> Path:
         os.chmod(staging / "VERIFY" / verifier_source.name, 0o755)
         shutil.copyfile(schema_source, staging / "VERIFY" / schema_source.name)
         os.chmod(staging / "VERIFY" / schema_source.name, 0o644)
+        shutil.copyfile(policy_source, staging / "VERIFY" / policy_source.name)
+        os.chmod(staging / "VERIFY" / policy_source.name, 0o644)
         _write_bytes(staging / "README_KO.md", _readme(manifest))
 
         files = sorted(
@@ -493,7 +507,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--repository-url", default=APPROVED_REPOSITORY_URL)
     parser.add_argument("--base-commit", default=APPROVED_BASE_COMMIT)
     parser.add_argument("--head-commit", default="HEAD")
-    parser.add_argument("--prior-candidate-tree", default=PRIOR_CANDIDATE_TREE)
     parser.add_argument(
         "--verifier-source",
         type=Path,
@@ -505,6 +518,11 @@ def _parser() -> argparse.ArgumentParser:
         default=Path(__file__).parents[2]
         / "schemas"
         / "candidate-artifact-identity-v1.schema.json",
+    )
+    parser.add_argument(
+        "--policy-source",
+        type=Path,
+        default=Path(__file__).with_name("evidence_policy_v2.json"),
     )
     return parser
 

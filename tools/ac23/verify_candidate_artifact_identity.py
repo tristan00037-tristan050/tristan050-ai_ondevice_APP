@@ -22,6 +22,8 @@ import tempfile
 import unicodedata
 import urllib.parse
 import zlib
+import xml.etree.ElementTree as ET
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -42,6 +44,8 @@ MAX_MEMBERS = 100_000
 MAX_MEMBER_SIZE = 1 << 30
 MAX_TOTAL_SIZE = 4 << 30
 MAX_MANIFEST_SIZE = 1 << 20
+MAX_JSON_SIZE = 16 << 20
+MAX_JUNIT_SIZE = 16 << 20
 MANIFEST_KEYS = {
     "schema_version",
     "digest_algorithm",
@@ -70,8 +74,32 @@ PACKAGE_FILES = {
     "EVIDENCE/evidence_raw.tar",
     "VERIFY/verify_candidate_artifact_identity.py",
     "VERIFY/candidate-artifact-identity-v1.schema.json",
+    "VERIFY/evidence_policy_v2.json",
     "README_KO.md",
     "SHA256SUMS.txt",
+}
+POLICY_PATH = "tools/ac23/evidence_policy_v2.json"
+POLICY_KEYS = {
+    "schema_version",
+    "object_format",
+    "required_runs",
+    "frozen_acceptance",
+    "legacy_mutation_categories",
+    "evidence_semantic_cases",
+    "limits",
+}
+COMMAND_KEYS = {
+    "sequence",
+    "run_id",
+    "argv",
+    "cwd",
+    "start_utc",
+    "end_utc",
+    "exit_code",
+    "stdout_path",
+    "stdout_sha256",
+    "stderr_path",
+    "stderr_sha256",
 }
 
 
@@ -224,9 +252,9 @@ def _load_manifest(path: Path) -> dict[str, Any]:
         fail("E_SCHEMA")
     if value.get("digest_algorithm") != "sha256":
         fail("E_SCHEMA")
-    if value.get("object_format") not in {"sha1", "sha256"}:
-        fail("E_SCHEMA")
-    oid_length = 40 if value["object_format"] == "sha1" else 64
+    if value.get("object_format") != "sha1":
+        fail("E_OBJECT_FORMAT_UNSUPPORTED")
+    oid_length = 40
     for key in (
         "base_commit",
         "base_tree",
@@ -333,15 +361,168 @@ def _inspect_source_tar(path: Path) -> list[tarfile.TarInfo]:
     return members
 
 
-def _validate_evidence_tar(path: Path, manifest: dict[str, Any]) -> None:
-    required = {
-        "environment.txt",
-        "commands.jsonl",
-        "clean_status.bin",
-        "tree_reconstruction.json",
-        "regression/frozen_19_summary.json",
-        "mutation/mutation_20_summary.json",
+def _load_json_bytes(payload: bytes, code: str, maximum: int = MAX_JSON_SIZE) -> Any:
+    if len(payload) > maximum:
+        fail(code)
+    try:
+        return json.loads(payload.decode("utf-8"), object_pairs_hook=_reject_duplicate_keys)
+    except (UnicodeDecodeError, json.JSONDecodeError, VerificationError):
+        fail(code)
+
+
+def verify_package_inventory(package_root: Path) -> None:
+    actual: set[str] = set()
+    folded: dict[str, str] = {}
+    for path in package_root.rglob("*"):
+        relative = path.relative_to(package_root).as_posix()
+        parts = _archive_segments(relative)
+        canonical = "/".join(parts)
+        folded_key = "/".join(
+            unicodedata.normalize("NFC", part).casefold() for part in parts
+        )
+        if folded_key in folded and folded[folded_key] != canonical:
+            fail("E_PACKAGE_INVENTORY")
+        folded[folded_key] = canonical
+        try:
+            stat_result = path.lstat()
+        except OSError:
+            fail("E_PACKAGE_INVENTORY")
+        if path.is_symlink() or not (path.is_dir() or path.is_file()):
+            fail("E_PACKAGE_INVENTORY")
+        if path.is_file():
+            if stat_result.st_nlink != 1:
+                fail("E_PACKAGE_INVENTORY")
+            actual.add(canonical)
+    if actual != PACKAGE_FILES:
+        fail("E_PACKAGE_INVENTORY")
+
+    checksum_path = package_root / "SHA256SUMS.txt"
+    try:
+        raw = checksum_path.read_bytes()
+    except OSError:
+        fail("E_PACKAGE_INVENTORY")
+    if not raw or not raw.endswith(b"\n") or raw.endswith(b"\n\n") or b"\r" in raw:
+        fail("E_PACKAGE_CHECKSUM_FORMAT")
+    entries: list[tuple[bytes, str]] = []
+    seen: set[str] = set()
+    pattern = re.compile(rb"([0-9a-f]{64})  ([!-~]+)\n")
+    for line in raw.splitlines(keepends=True):
+        matched = pattern.fullmatch(line)
+        if matched is None:
+            fail("E_PACKAGE_CHECKSUM_FORMAT")
+        try:
+            relative = matched.group(2).decode("ascii")
+        except UnicodeDecodeError:
+            fail("E_PACKAGE_CHECKSUM_FORMAT")
+        canonical = "/".join(_archive_segments(relative))
+        if canonical != relative or relative in seen or relative == "SHA256SUMS.txt":
+            fail("E_PACKAGE_CHECKSUM_FORMAT")
+        seen.add(relative)
+        entries.append((matched.group(1), relative))
+    if [relative.encode("ascii") for _, relative in entries] != sorted(
+        relative.encode("ascii") for _, relative in entries
+    ):
+        fail("E_PACKAGE_CHECKSUM_FORMAT")
+    if seen != PACKAGE_FILES - {"SHA256SUMS.txt"}:
+        fail("E_PACKAGE_INVENTORY")
+    for expected, relative in entries:
+        try:
+            actual_digest = _sha256(package_root / relative).encode("ascii")
+        except OSError:
+            fail("E_PACKAGE_CHECKSUM_DIGEST")
+        if not _same(actual_digest, expected):
+            fail("E_PACKAGE_CHECKSUM_DIGEST")
+
+
+def load_evidence_policy(payload: bytes) -> dict[str, Any]:
+    value = _load_json_bytes(payload, "E_EVIDENCE_POLICY")
+    if not isinstance(value, dict) or set(value) != POLICY_KEYS:
+        fail("E_EVIDENCE_POLICY")
+    if value.get("schema_version") != "butler.box5.ac23-evidence-policy.v2":
+        fail("E_EVIDENCE_POLICY")
+    if value.get("object_format") != "sha1":
+        fail("E_OBJECT_FORMAT_UNSUPPORTED")
+    limits = value.get("limits")
+    expected_limits = {
+        "max_tar_members": MAX_MEMBERS,
+        "max_total_bytes": MAX_TOTAL_SIZE,
+        "max_single_file_bytes": MAX_MEMBER_SIZE,
+        "max_json_bytes": MAX_JSON_SIZE,
+        "max_junit_bytes": MAX_JUNIT_SIZE,
+        "max_output_bytes_per_stream": 1 << 28,
     }
+    if limits != expected_limits:
+        fail("E_EVIDENCE_POLICY")
+    runs = value.get("required_runs")
+    if not isinstance(runs, list) or not runs:
+        fail("E_EVIDENCE_POLICY")
+    run_ids: set[str] = set()
+    for run in runs:
+        if not isinstance(run, dict) or set(run) != {
+            "run_id", "argv", "cwd", "parser", "result_path", "required_results", "required"
+        }:
+            fail("E_EVIDENCE_POLICY")
+        run_id = run.get("run_id")
+        if not isinstance(run_id, str) or not run_id or run_id in run_ids:
+            fail("E_EVIDENCE_POLICY")
+        run_ids.add(run_id)
+        if run.get("required") is not True or run.get("parser") not in {
+            "pytest-junit", "vitest", "cargo", "integration-lock"
+        }:
+            fail("E_EVIDENCE_POLICY")
+        if not isinstance(run.get("argv"), list) or not all(
+            isinstance(item, str) and item for item in run["argv"]
+        ):
+            fail("E_EVIDENCE_POLICY")
+        if not isinstance(run.get("cwd"), str) or not run["cwd"]:
+            fail("E_EVIDENCE_POLICY")
+        if not isinstance(run.get("result_path"), str):
+            fail("E_EVIDENCE_POLICY")
+        results = run.get("required_results")
+        if not isinstance(results, list) or len(results) != len(set(results)) or not all(
+            isinstance(item, str) and item for item in results
+        ):
+            fail("E_EVIDENCE_POLICY")
+    frozen = value.get("frozen_acceptance")
+    expected_ids = {
+        *(f"AC-{number:02d}" for number in range(3, 12)),
+        "AC-13", "AC-14", "AC-15",
+        *(f"AC-{number:02d}" for number in range(17, 23)),
+        "AC-24",
+    }
+    if not isinstance(frozen, list) or {item.get("acceptance_id") for item in frozen if isinstance(item, dict)} != expected_ids:
+        fail("E_EVIDENCE_POLICY")
+    for item in frozen:
+        if not isinstance(item, dict) or set(item) != {"acceptance_id", "run_ids", "required_results"}:
+            fail("E_EVIDENCE_POLICY")
+        if not item["run_ids"] or not set(item["run_ids"]).issubset(run_ids):
+            fail("E_EVIDENCE_POLICY")
+        if not item["required_results"] or len(item["required_results"]) != len(set(item["required_results"])):
+            fail("E_EVIDENCE_POLICY")
+    categories = value.get("legacy_mutation_categories")
+    if not isinstance(categories, list) or [item.get("category") for item in categories if isinstance(item, dict)] != list(range(1, 21)):
+        fail("E_EVIDENCE_POLICY")
+    all_legacy: list[str] = []
+    for item in categories:
+        if set(item) != {"category", "testcases"} or not isinstance(item["testcases"], list) or not item["testcases"]:
+            fail("E_EVIDENCE_POLICY")
+        all_legacy.extend(item["testcases"])
+    if len(all_legacy) != 27 or len(set(all_legacy)) != 27:
+        fail("E_EVIDENCE_POLICY")
+    semantic = value.get("evidence_semantic_cases")
+    if not isinstance(semantic, list) or len(semantic) != 36:
+        fail("E_EVIDENCE_POLICY")
+    if len({item.get("name") for item in semantic if isinstance(item, dict)}) != 36:
+        fail("E_EVIDENCE_POLICY")
+    for item in semantic:
+        if not isinstance(item, dict) or set(item) != {"name", "testcase", "expected_error"}:
+            fail("E_EVIDENCE_POLICY")
+        if not all(isinstance(item[key], str) and item[key] for key in item):
+            fail("E_EVIDENCE_POLICY")
+    return value
+
+
+def inspect_evidence_tar(path: Path) -> dict[str, bytes]:
     seen: set[str] = set()
     folded: dict[str, str] = {}
     payloads: dict[str, bytes] = {}
@@ -351,105 +532,286 @@ def _validate_evidence_tar(path: Path, manifest: dict[str, Any]) -> None:
         with archive:
             for index, member in enumerate(archive):
                 if index >= MAX_MEMBERS:
-                    fail("E_EVIDENCE_DIGEST")
+                    fail("E_EVIDENCE_INVENTORY")
                 parts = _archive_segments(member.name)
                 canonical = "/".join(parts)
                 if canonical in seen:
-                    fail("E_EVIDENCE_DIGEST")
+                    fail("E_EVIDENCE_INVENTORY")
                 seen.add(canonical)
-                folded_key = "/".join(
-                    unicodedata.normalize("NFC", part).casefold() for part in parts
-                )
+                folded_key = "/".join(unicodedata.normalize("NFC", part).casefold() for part in parts)
                 if folded_key in folded and folded[folded_key] != canonical:
-                    fail("E_EVIDENCE_DIGEST")
+                    fail("E_EVIDENCE_INVENTORY")
                 folded[folded_key] = canonical
-                if not (member.isdir() or member.isfile()):
-                    fail("E_EVIDENCE_DIGEST")
+                if not (member.isdir() or member.isfile()) or member.islnk() or member.issym():
+                    fail("E_EVIDENCE_INVENTORY")
                 if member.size < 0 or member.size > MAX_MEMBER_SIZE:
-                    fail("E_EVIDENCE_DIGEST")
+                    fail("E_EVIDENCE_INVENTORY")
                 total += member.size
                 if total > MAX_TOTAL_SIZE:
-                    fail("E_EVIDENCE_DIGEST")
+                    fail("E_EVIDENCE_INVENTORY")
                 if member.isfile():
                     source = archive.extractfile(member)
                     if source is None:
-                        fail("E_EVIDENCE_DIGEST")
+                        fail("E_EVIDENCE_INVENTORY")
                     payloads[canonical] = source.read()
     except VerificationError:
         raise
     except (OSError, UnicodeError, tarfile.TarError):
-        fail("E_EVIDENCE_DIGEST")
-    if not required.issubset(payloads):
-        fail("E_EVIDENCE_DIGEST")
-    forbidden_path_markers = (b"/Users/", b"/private/tmp/", b"\\Users\\")
-    if any(
-        marker in payload
-        for payload in payloads.values()
-        for marker in forbidden_path_markers
-    ):
-        fail("E_EVIDENCE_DIGEST")
+        fail("E_EVIDENCE_INVENTORY")
+    forbidden = (b"/Users/", b"/private/tmp/", b"\\Users\\")
+    if any(marker in payload for payload in payloads.values() for marker in forbidden):
+        fail("E_EVIDENCE_SEMANTICS")
+    return payloads
+
+
+def _timestamp(value: Any) -> datetime:
+    if not isinstance(value, str) or re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z", value) is None:
+        fail("E_EVIDENCE_TIMESTAMP")
+    try:
+        return datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError:
+        fail("E_EVIDENCE_TIMESTAMP")
+
+
+def parse_command_records(payload: bytes, policy: dict[str, Any]) -> list[dict[str, Any]]:
+    try:
+        lines = payload.decode("utf-8").splitlines()
+    except UnicodeDecodeError:
+        fail("E_EVIDENCE_COMMAND")
+    runs = policy["required_runs"]
+    if len(lines) != len(runs):
+        fail("E_EVIDENCE_COMMAND")
+    records: list[dict[str, Any]] = []
+    previous_end: datetime | None = None
+    for sequence, (line, run) in enumerate(zip(lines, runs), start=1):
+        entry = _load_json_bytes(line.encode("utf-8"), "E_EVIDENCE_COMMAND")
+        if not isinstance(entry, dict) or set(entry) != COMMAND_KEYS:
+            fail("E_EVIDENCE_COMMAND")
+        if entry["sequence"] != sequence or entry["run_id"] != run["run_id"]:
+            fail("E_EVIDENCE_COMMAND")
+        if entry["argv"] != run["argv"] or entry["cwd"] != run["cwd"]:
+            fail("E_EVIDENCE_COMMAND")
+        if not isinstance(entry["exit_code"], int) or isinstance(entry["exit_code"], bool):
+            fail("E_EVIDENCE_COMMAND")
+        if entry["exit_code"] != 0:
+            fail("E_EVIDENCE_NONZERO_EXIT")
+        start = _timestamp(entry["start_utc"])
+        end = _timestamp(entry["end_utc"])
+        if start > end or (previous_end is not None and start < previous_end):
+            fail("E_EVIDENCE_TIMESTAMP")
+        previous_end = end
+        expected_stdout = f"stdout/{sequence:04d}.bin"
+        expected_stderr = f"stderr/{sequence:04d}.bin"
+        if entry["stdout_path"] != expected_stdout or entry["stderr_path"] != expected_stderr:
+            fail("E_EVIDENCE_COMMAND")
+        for key in ("stdout_sha256", "stderr_sha256"):
+            if not isinstance(entry[key], str) or re.fullmatch(r"[0-9a-f]{64}", entry[key]) is None:
+                fail("E_EVIDENCE_COMMAND")
+        records.append(entry)
+    return records
+
+
+def verify_command_raw_streams(payloads: dict[str, bytes], records: list[dict[str, Any]]) -> None:
+    for record in records:
+        for path_key, digest_key in (("stdout_path", "stdout_sha256"), ("stderr_path", "stderr_sha256")):
+            relative = record[path_key]
+            if relative not in payloads:
+                fail("E_EVIDENCE_RAW_MISSING")
+            if hashlib.sha256(payloads[relative]).hexdigest() != record[digest_key]:
+                fail("E_EVIDENCE_RAW_DIGEST")
+
+
+def parse_junit_results(payload: bytes) -> set[str]:
+    if len(payload) > MAX_JUNIT_SIZE or b"<!DOCTYPE" in payload.upper() or b"<!ENTITY" in payload.upper():
+        fail("E_EVIDENCE_JUNIT")
+    try:
+        root = ET.fromstring(payload)
+    except ET.ParseError:
+        fail("E_EVIDENCE_JUNIT")
+    if "}" in root.tag or root.tag not in {"testsuite", "testsuites"}:
+        fail("E_EVIDENCE_JUNIT")
+    suites = [root] if root.tag == "testsuite" else list(root)
+    if not suites or any(suite.tag != "testsuite" or list(suite.findall("testsuite")) for suite in suites):
+        fail("E_EVIDENCE_JUNIT")
+    results: set[str] = set()
+    totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+    for suite in suites:
+        cases = [child for child in suite if child.tag == "testcase"]
+        observed = {
+            "tests": len(cases),
+            "failures": sum(any(child.tag == "failure" for child in case) for case in cases),
+            "errors": sum(any(child.tag == "error" for child in case) for case in cases),
+            "skipped": sum(any(child.tag == "skipped" for child in case) for case in cases),
+        }
+        for key, count in observed.items():
+            declared = suite.attrib.get(key, "0")
+            if not declared.isdigit() or int(declared) != count:
+                fail("E_EVIDENCE_JUNIT")
+            totals[key] += count
+        for case in cases:
+            if "}" in case.tag or any("}" in child.tag for child in case):
+                fail("E_EVIDENCE_JUNIT")
+            if any(child.tag in {"failure", "error", "skipped"} for child in case):
+                fail("E_EVIDENCE_JUNIT")
+            classname = case.attrib.get("classname")
+            name = case.attrib.get("name")
+            if not classname or not name:
+                fail("E_EVIDENCE_JUNIT")
+            testcase = f"{classname}::{name}"
+            if testcase in results:
+                fail("E_EVIDENCE_TESTCASE_SET")
+            results.add(testcase)
+    if root.tag == "testsuites":
+        for key, count in totals.items():
+            declared = root.attrib.get(key)
+            if declared is not None and (not declared.isdigit() or int(declared) != count):
+                fail("E_EVIDENCE_JUNIT")
+    return results
+
+
+def _run_results(payloads: dict[str, bytes], records: list[dict[str, Any]], policy: dict[str, Any]) -> dict[str, set[str]]:
+    output: dict[str, set[str]] = {}
+    for run, record in zip(policy["required_runs"], records):
+        if run["parser"] == "pytest-junit":
+            result_path = run["result_path"]
+            if result_path not in payloads:
+                fail("E_EVIDENCE_RAW_MISSING")
+            results = parse_junit_results(payloads[result_path])
+        elif run["parser"] == "vitest":
+            results = {"vitest_exit=0"} if b"Tests" in payloads[record["stdout_path"]] and b"passed" in payloads[record["stdout_path"]] else set()
+        elif run["parser"] == "cargo":
+            results = {"cargo_exit=0"} if b"test result: ok." in payloads[record["stdout_path"]] else set()
+        else:
+            results = {"STATUS=PASS"} if b"STATUS=PASS" in payloads[record["stdout_path"]] else set()
+        if not set(run["required_results"]).issubset(results):
+            fail("E_EVIDENCE_SEMANTICS")
+        output[run["run_id"]] = results
+    return output
+
+
+def verify_mutation_results(payloads: dict[str, bytes], policy: dict[str, Any]) -> None:
+    relative = "mutation/mutation_results_v2.json"
+    value = _load_json_bytes(payloads[relative], "E_EVIDENCE_SCHEMA")
+    keys = {
+        "schema_version", "argv", "cwd", "start_utc", "end_utc", "exit_code",
+        "legacy_categories", "evidence_semantic_cases", "stdout_path", "stdout_sha256",
+        "stderr_path", "stderr_sha256", "junit_path", "junit_sha256", "summary",
+    }
+    if not isinstance(value, dict) or set(value) != keys or any("provisional" in key for key in value):
+        fail("E_EVIDENCE_SCHEMA")
+    if value["schema_version"] != "butler.box5.ac23-mutation-results.v2" or value["exit_code"] != 0:
+        fail("E_EVIDENCE_NONZERO_EXIT")
+    if value["argv"] != [
+        "python3", "-m", "pytest", "-q", "--disable-warnings",
+        "tests/ac23/test_candidate_artifact_identity.py",
+        "tests/ac23/test_evidence_semantics.py", "-k",
+        "mutation or evidence_semantics_attack",
+        "--junitxml=.ac23-mutation-run/results.xml", "--basetemp",
+        ".ac23-mutation-run/tmp",
+    ] or value["cwd"] != "candidate":
+        fail("E_EVIDENCE_COMMAND")
+    if _timestamp(value["start_utc"]) > _timestamp(value["end_utc"]):
+        fail("E_EVIDENCE_TIMESTAMP")
+    for path_key, digest_key in (("stdout_path", "stdout_sha256"), ("stderr_path", "stderr_sha256"), ("junit_path", "junit_sha256")):
+        path = value[path_key]
+        if path not in payloads:
+            fail("E_EVIDENCE_RAW_MISSING")
+        if hashlib.sha256(payloads[path]).hexdigest() != value[digest_key]:
+            fail("E_EVIDENCE_RAW_DIGEST")
+    observed_tests = parse_junit_results(payloads[value["junit_path"]])
+    expected_categories = policy["legacy_mutation_categories"]
+    if value["legacy_categories"] != [
+        {"category": item["category"], "testcases": item["testcases"], "status": "PASS"}
+        for item in expected_categories
+    ]:
+        fail("E_EVIDENCE_MUTATION_MAPPING")
+    expected_semantic = policy["evidence_semantic_cases"]
+    if value["evidence_semantic_cases"] != [
+        {**item, "status": "PASS"} for item in expected_semantic
+    ]:
+        fail("E_EVIDENCE_MUTATION_MAPPING")
+    expected_tests = {
+        testcase for item in expected_categories for testcase in item["testcases"]
+    } | {item["testcase"] for item in expected_semantic}
+    if observed_tests != expected_tests:
+        fail("E_EVIDENCE_TESTCASE_SET")
+    expected_summary = {
+        "failed": 0,
+        "legacy_categories_passed": 20,
+        "legacy_subcases_passed": 27,
+        "semantic_attacks_passed": 36,
+    }
+    if value["summary"] != expected_summary:
+        fail("E_EVIDENCE_SUMMARY")
+
+
+def verify_frozen_acceptance(payloads: dict[str, bytes], policy: dict[str, Any], run_results: dict[str, set[str]]) -> None:
+    details = _load_json_bytes(payloads["regression/frozen_19_details.json"], "E_EVIDENCE_FROZEN_MAPPING")
+    if not isinstance(details, list) or len(details) != 19:
+        fail("E_EVIDENCE_FROZEN_MAPPING")
+    expected: list[dict[str, Any]] = []
+    for mapping in policy["frozen_acceptance"]:
+        available = set().union(*(run_results[run_id] for run_id in mapping["run_ids"]))
+        required = mapping["required_results"]
+        if not set(required).issubset(available):
+            fail("E_EVIDENCE_FROZEN_MAPPING")
+        expected.append({
+            "acceptance_id": mapping["acceptance_id"],
+            "run_ids": mapping["run_ids"],
+            "required_results": required,
+            "observed_results": required,
+            "status": "PASS",
+        })
+    if details != expected:
+        fail("E_EVIDENCE_FROZEN_MAPPING")
+    summary = _load_json_bytes(payloads["regression/frozen_19_summary.json"], "E_EVIDENCE_SUMMARY")
+    if summary != {"failed": 0, "passed": 19, "total": 19}:
+        fail("E_EVIDENCE_SUMMARY")
+
+
+def verify_tree_reconstruction_evidence(payload: bytes, manifest: dict[str, Any]) -> None:
+    value = _load_json_bytes(payload, "E_EVIDENCE_SCHEMA")
+    expected = {
+        "head_commit": manifest["head_commit"],
+        "head_tree": manifest["head_tree"],
+        "patch_applied_tree": manifest["patch_applied_tree"],
+        "source_archive_tree": manifest["source_archive_tree"],
+        "submitted_head_tree": manifest["submitted_head_tree"],
+        "patch_command_id": "git-apply-index-v1",
+        "source_reconstruction_id": "git-archive-index-v1",
+    }
+    if value != expected:
+        fail("E_EVIDENCE_SEMANTICS")
+
+
+def verify_evidence_semantics(path: Path, manifest: dict[str, Any], policy: dict[str, Any]) -> None:
+    payloads = inspect_evidence_tar(path)
+    base_required = {
+        "environment.json", "commands.jsonl", "clean_status.bin", "tree_reconstruction.json",
+        "regression/frozen_19_details.json", "regression/frozen_19_summary.json",
+        "mutation/mutation_results_v2.json", "mutation/pytest_mutation.stdout.bin",
+        "mutation/pytest_mutation.stderr.bin", "mutation/pytest_mutation.xml",
+    }
+    if not base_required.issubset(payloads):
+        fail("E_EVIDENCE_INVENTORY")
+    records = parse_command_records(payloads["commands.jsonl"], policy)
+    expected_files = set(base_required)
+    for sequence, run in enumerate(policy["required_runs"], start=1):
+        expected_files.update({f"stdout/{sequence:04d}.bin", f"stderr/{sequence:04d}.bin"})
+        if run["result_path"]:
+            expected_files.add(run["result_path"])
     if payloads["clean_status.bin"] != b"":
         fail("E_CLEAN_STATUS")
-    try:
-        environment = payloads["environment.txt"].decode("utf-8")
-        if not all(
-            marker in environment
-            for marker in ("os=", "architecture=", "git=", "python=", "locale=C", "timezone=UTC")
-        ):
-            fail("E_EVIDENCE_DIGEST")
-        command_lines = payloads["commands.jsonl"].decode("utf-8").splitlines()
-        if not command_lines:
-            fail("E_EVIDENCE_DIGEST")
-        for expected_sequence, line in enumerate(command_lines, start=1):
-            entry = json.loads(line, object_pairs_hook=_reject_duplicate_keys)
-            if not isinstance(entry, dict) or set(entry) != {
-                "sequence",
-                "argv",
-                "cwd",
-                "start_utc",
-                "end_utc",
-                "exit_code",
-            }:
-                fail("E_EVIDENCE_DIGEST")
-            if entry["sequence"] != expected_sequence:
-                fail("E_EVIDENCE_DIGEST")
-            if not isinstance(entry["argv"], list) or not all(
-                isinstance(item, str) and item for item in entry["argv"]
-            ):
-                fail("E_EVIDENCE_DIGEST")
-            if (
-                not isinstance(entry["cwd"], str)
-                or entry["cwd"].startswith("/")
-                or ".." in entry["cwd"].split("/")
-            ):
-                fail("E_EVIDENCE_DIGEST")
-            if not isinstance(entry["exit_code"], int):
-                fail("E_EVIDENCE_DIGEST")
-            for time_key in ("start_utc", "end_utc"):
-                if not isinstance(entry[time_key], str) or not entry[time_key].endswith("Z"):
-                    fail("E_EVIDENCE_DIGEST")
-        reconstruction = json.loads(payloads["tree_reconstruction.json"].decode("utf-8"))
-        if reconstruction != {
-            "head_tree": manifest["head_tree"],
-            "patch_applied_tree": manifest["patch_applied_tree"],
-            "source_archive_tree": manifest["source_archive_tree"],
-            "submitted_head_tree": manifest["submitted_head_tree"],
-        }:
-            fail("E_EVIDENCE_DIGEST")
-        regression = json.loads(
-            payloads["regression/frozen_19_summary.json"].decode("utf-8")
-        )
-        if regression != {"failed": 0, "passed": 19, "total": 19}:
-            fail("E_EVIDENCE_DIGEST")
-        mutation = json.loads(
-            payloads["mutation/mutation_20_summary.json"].decode("utf-8")
-        )
-        if mutation != {"failed": 0, "passed": 20, "total": 20}:
-            fail("E_EVIDENCE_DIGEST")
-    except VerificationError:
-        raise
-    except (UnicodeError, json.JSONDecodeError, TypeError, ValueError):
-        fail("E_EVIDENCE_DIGEST")
+    environment = _load_json_bytes(payloads["environment.json"], "E_EVIDENCE_SCHEMA")
+    if not isinstance(environment, dict) or set(environment) != {"os", "architecture", "git", "python", "locale", "timezone"} or environment["locale"] != "C" or environment["timezone"] != "UTC":
+        fail("E_EVIDENCE_SCHEMA")
+    verify_command_raw_streams(payloads, records)
+    if set(payloads) != expected_files:
+        fail("E_EVIDENCE_INVENTORY")
+    run_results = _run_results(payloads, records, policy)
+    verify_mutation_results(payloads, policy)
+    verify_frozen_acceptance(payloads, policy, run_results)
+    verify_tree_reconstruction_evidence(payloads["tree_reconstruction.json"], manifest)
 
 
 def _extract_source_tar(path: Path, destination: Path, members: list[tarfile.TarInfo]) -> None:
@@ -719,16 +1081,17 @@ def verify(package_root: Path, expected_repository_url: str | None = None) -> No
     package_root = package_root.resolve()
     if not package_root.is_dir():
         fail("E_SCHEMA")
-    actual_files = {
-        path.relative_to(package_root).as_posix()
-        for path in package_root.rglob("*")
-        if path.is_file() or path.is_symlink()
-    }
-    if actual_files != PACKAGE_FILES:
-        fail("E_SCHEMA")
+    verify_package_inventory(package_root)
     manifest = _load_manifest(
         package_root / "IDENTITY" / "candidate_artifact_identity.json"
     )
+    try:
+        packaged_policy_bytes = (
+            package_root / "VERIFY" / "evidence_policy_v2.json"
+        ).read_bytes()
+    except OSError:
+        fail("E_EVIDENCE_POLICY")
+    policy = load_evidence_policy(packaged_policy_bytes)
 
     normalized = normalize_repository_url(manifest["repository_url"])
     if not _same(normalized, manifest["repository_url"]):
@@ -773,7 +1136,15 @@ def verify(package_root: Path, expected_repository_url: str | None = None) -> No
         temporary = Path(temporary_text)
         repository, object_format = _prepare_bundle(paths["bundle"], temporary, manifest)
         _verify_objects(repository, manifest, object_format)
-        _validate_evidence_tar(paths["evidence"], manifest)
+        try:
+            committed_policy_bytes = _git(
+                repository, "show", f"{manifest['head_commit']}:{POLICY_PATH}"
+            ).stdout
+        except subprocess.CalledProcessError:
+            fail("E_EVIDENCE_POLICY")
+        if not _same(committed_policy_bytes, packaged_policy_bytes):
+            fail("E_EVIDENCE_POLICY")
+        verify_evidence_semantics(paths["evidence"], manifest, policy)
 
         try:
             contract = _git(

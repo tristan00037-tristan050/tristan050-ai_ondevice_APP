@@ -4,29 +4,30 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-
-FROZEN_PASS_IDS = [
-    *(f"AC-{number:02d}" for number in range(3, 12)),
-    "AC-13",
-    "AC-14",
-    "AC-15",
-    *(f"AC-{number:02d}" for number in range(17, 23)),
-    "AC-24",
-]
+from verify_candidate_artifact_identity import (
+    APPROVED_BASE_COMMIT,
+    load_evidence_policy,
+    parse_junit_results,
+    verify_mutation_results,
+)
 
 
 class EvidenceError(RuntimeError):
-    pass
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
 
 
 def _utc() -> str:
@@ -60,6 +61,7 @@ def _allowed_env(
 
 def _run(
     sequence: int,
+    run_id: str,
     argv: list[str],
     cwd: Path,
     cwd_id: str,
@@ -88,16 +90,101 @@ def _run(
     for source, replacement in replacements:
         stdout = stdout.replace(source, replacement)
         stderr = stderr.replace(source, replacement)
-    (evidence / "stdout" / f"{sequence:04d}.bin").write_bytes(stdout)
-    (evidence / "stderr" / f"{sequence:04d}.bin").write_bytes(stderr)
+    stdout_path = evidence / "stdout" / f"{sequence:04d}.bin"
+    stderr_path = evidence / "stderr" / f"{sequence:04d}.bin"
+    stdout_path.write_bytes(stdout)
+    stderr_path.write_bytes(stderr)
     return {
         "sequence": sequence,
+        "run_id": run_id,
         "argv": argv,
         "cwd": cwd_id,
         "start_utc": start,
         "end_utc": end,
         "exit_code": completed.returncode,
+        "stdout_path": f"stdout/{sequence:04d}.bin",
+        "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
+        "stderr_path": f"stderr/{sequence:04d}.bin",
+        "stderr_sha256": hashlib.sha256(stderr).hexdigest(),
     }
+
+
+def _git(repository: Path, *args: str, input_bytes: bytes | None = None) -> bytes:
+    completed = subprocess.run(
+        ["git", "-c", "core.autocrlf=false", "-c", "core.filemode=true", *args],
+        cwd=repository,
+        env={
+            "PATH": os.environ.get("PATH", ""),
+            "LC_ALL": "C",
+            "LANG": "C",
+            "TZ": "UTC",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+        },
+        input=input_bytes,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise EvidenceError("E_TREE_RECONSTRUCTION")
+    return completed.stdout
+
+
+def _tree_reconstruction(repository: Path, base: str) -> dict[str, str]:
+    head_commit = _git(repository, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
+    head_tree = _git(repository, "rev-parse", "--verify", "HEAD^{tree}").decode().strip()
+    with tempfile.TemporaryDirectory(prefix="ac23-tree-evidence-") as temporary_text:
+        temporary = Path(temporary_text)
+        patch = temporary / "candidate.patch"
+        patch.write_bytes(_git(repository, "diff", "--binary", "--full-index", "--no-renames", base, head_commit, "--"))
+        patch_repo = temporary / "patch"
+        patch_repo.mkdir()
+        _git(patch_repo, "init", "--quiet")
+        _git(patch_repo, "fetch", "--no-tags", os.fspath(repository), base)
+        _git(patch_repo, "checkout", "--detach", "--force", "FETCH_HEAD")
+        _git(patch_repo, "apply", "--binary", "--index", os.fspath(patch))
+        patch_tree = _git(patch_repo, "write-tree").decode().strip()
+
+        source_tar = temporary / "source.tar"
+        source_tar.write_bytes(_git(repository, "archive", "--format=tar", "--prefix=candidate/", head_commit))
+        source_root = temporary / "source"
+        source_root.mkdir()
+        with tarfile.open(source_tar, "r:") as archive:
+            archive.extractall(source_root, filter="data")
+        source_repo = source_root / "candidate"
+        _git(source_repo, "init", "--quiet")
+        _git(source_repo, "add", "-f", "-A")
+        source_tree = _git(source_repo, "write-tree").decode().strip()
+    if len({head_tree, patch_tree, source_tree}) != 1:
+        raise EvidenceError("E_TREE_RECONSTRUCTION")
+    return {
+        "head_commit": head_commit,
+        "head_tree": head_tree,
+        "patch_applied_tree": patch_tree,
+        "source_archive_tree": source_tree,
+        "submitted_head_tree": head_tree,
+        "patch_command_id": "git-apply-index-v1",
+        "source_reconstruction_id": "git-archive-index-v1",
+    }
+
+
+def _fsync_tree(root: Path) -> None:
+    for path in sorted(root.rglob("*"), key=lambda item: len(item.parts), reverse=True):
+        if path.is_file():
+            with path.open("rb") as stream:
+                os.fsync(stream.fileno())
+        elif path.is_dir():
+            descriptor = os.open(path, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+    descriptor = os.open(root, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def _tool_version(argv: list[str], cwd: Path) -> str:
@@ -120,6 +207,9 @@ def _tool_version(argv: list[str], cwd: Path) -> str:
 def collect(args: argparse.Namespace) -> Path:
     repository = args.repo.resolve()
     output = args.output.resolve()
+    policy_path = args.policy.resolve()
+    policy_bytes = policy_path.read_bytes()
+    policy = load_evidence_policy(policy_bytes)
     if output.exists():
         if not output.is_dir() or any(output.iterdir()):
             raise EvidenceError("output directory is not empty")
@@ -127,48 +217,27 @@ def collect(args: argparse.Namespace) -> Path:
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".ac23-evidence-", dir=output.parent))
     try:
-        for name in ("stdout", "stderr", "regression", "mutation"):
+        for name in ("stdout", "stderr", "junit", "regression", "mutation"):
             (staging / name).mkdir()
+        run_junit = repository / "tests" / "ac23" / ".ac23-evidence"
+        if run_junit.exists() or run_junit.is_symlink():
+            raise EvidenceError("E_OUTPUT_NOT_CLEAN")
+        run_junit.mkdir()
         with tempfile.TemporaryDirectory(prefix="ac23-app-data-") as app_data_text:
             env = _allowed_env(
                 Path(app_data_text), args.node_bin, args.python_executable
             )
-            python_commands: list[tuple[list[str], Path, str]] = [
-                (
-                    [
-                        "python3",
-                        "-m",
-                        "pytest",
-                        "-q",
-                        "--disable-warnings",
-                        "tests/ac23/test_candidate_artifact_identity.py",
-                        "-k",
-                        "unit",
-                    ],
-                    repository,
-                    "candidate",
-                ),
-                (
-                    [
-                        "python3",
-                        "-m",
-                        "pytest",
-                        "-q",
-                        "--disable-warnings",
-                        "tests/accounting/assignment",
-                        "tests/auth/test_capability_token.py",
-                        "tests/firstscreen_trusted/test_trusted_junit_semantics_box5.py",
-                    ],
-                    repository,
-                    "candidate",
-                ),
-            ]
+            runs = policy["required_runs"]
             records = [
-                _run(index, argv, cwd, cwd_id, staging, env)
-                for index, (argv, cwd, cwd_id) in enumerate(
-                    python_commands, start=1
-                )
+                _run(index, run["run_id"], run["argv"], repository, run["cwd"], staging, env)
+                for index, run in enumerate(runs[:2], start=1)
             ]
+            for index in (1, 2):
+                source = run_junit / f"run-{index:04d}.xml"
+                if not source.is_file():
+                    raise EvidenceError("E_RAW_EVIDENCE_MISSING")
+                shutil.copyfile(source, staging / "junit" / f"{index:04d}.xml")
+            shutil.rmtree(run_junit)
             node_link = repository / "butler-desktop" / "node_modules"
             if args.node_modules:
                 if node_link.exists() or node_link.is_symlink():
@@ -178,9 +247,10 @@ def collect(args: argparse.Namespace) -> Path:
                 records.append(
                     _run(
                         3,
-                        ["npm", "test", "--", "--run"],
+                        runs[2]["run_id"],
+                        runs[2]["argv"],
                         repository / "butler-desktop",
-                        "candidate/butler-desktop",
+                        runs[2]["cwd"],
                         staging,
                         env,
                     )
@@ -199,9 +269,10 @@ def collect(args: argparse.Namespace) -> Path:
                 records.append(
                     _run(
                         4,
-                        ["cargo", "test", "--lib", "--quiet"],
+                        runs[3]["run_id"],
+                        runs[3]["argv"],
                         tauri_root,
-                        "candidate/butler-desktop/src-tauri",
+                        runs[3]["cwd"],
                         staging,
                         env,
                     )
@@ -212,19 +283,17 @@ def collect(args: argparse.Namespace) -> Path:
             records.append(
                 _run(
                     5,
-                    [
-                        "python3",
-                        "scripts/verify_box5_integration_lock.py",
-                        "--allow-worktree-base",
-                    ],
+                    runs[4]["run_id"],
+                    runs[4]["argv"],
                     repository,
-                    "candidate",
+                    runs[4]["cwd"],
                     staging,
                     env,
                 )
             )
-        if any(record["exit_code"] != 0 for record in records):
-            raise EvidenceError("a frozen regression command failed")
+        failed_runs = [str(record["run_id"]).upper().replace("-", "_") for record in records if record["exit_code"] != 0]
+        if failed_runs:
+            raise EvidenceError("E_COMMAND_FAILED_" + failed_runs[0])
         (staging / "commands.jsonl").write_text(
             "".join(
                 json.dumps(record, separators=(",", ":"), sort_keys=True) + "\n"
@@ -233,16 +302,18 @@ def collect(args: argparse.Namespace) -> Path:
             encoding="utf-8",
             newline="\n",
         )
-        environment = (
-            f"os={platform.system()}\n"
-            f"architecture={platform.machine()}\n"
-            f"git={_tool_version(['git', '--version'], repository)}\n"
-            f"python={_tool_version([os.fspath(args.python_executable), '--version'], repository)}\n"
-            "locale=C\n"
-            "timezone=UTC\n"
-        )
-        (staging / "environment.txt").write_text(
-            environment, encoding="utf-8", newline="\n"
+        environment = {
+            "os": platform.system(),
+            "architecture": platform.machine(),
+            "git": _tool_version(["git", "--version"], repository),
+            "python": _tool_version([os.fspath(args.python_executable), "--version"], repository),
+            "locale": "C",
+            "timezone": "UTC",
+        }
+        (staging / "environment.json").write_text(
+            json.dumps(environment, separators=(",", ":"), sort_keys=True) + "\n",
+            encoding="utf-8",
+            newline="\n",
         )
         clean = subprocess.run(
             ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
@@ -261,71 +332,61 @@ def collect(args: argparse.Namespace) -> Path:
         if clean.returncode != 0 or clean.stdout:
             raise EvidenceError("candidate worktree is not clean")
         (staging / "clean_status.bin").write_bytes(clean.stdout)
-        reconstruction = {
-            "head_tree": args.head_tree,
-            "patch_applied_tree": args.head_tree,
-            "source_archive_tree": args.head_tree,
-            "submitted_head_tree": args.head_tree,
-        }
+        reconstruction = _tree_reconstruction(repository, args.base_commit)
         (staging / "tree_reconstruction.json").write_text(
             json.dumps(reconstruction, separators=(",", ":"), sort_keys=True) + "\n",
             encoding="utf-8",
             newline="\n",
         )
-        frozen_summary = {"failed": 0, "passed": 19, "total": 19}
+        frozen_junit = (staging / "junit" / "0002.xml").read_bytes()
+        observed = parse_junit_results(frozen_junit)
+        run_results: dict[str, set[str]] = {
+            policy["required_runs"][1]["run_id"]: observed,
+            policy["required_runs"][4]["run_id"]: {"STATUS=PASS"},
+        }
+        frozen_details: list[dict[str, object]] = []
+        for mapping in policy["frozen_acceptance"]:
+            available = set().union(*(run_results.get(run_id, set()) for run_id in mapping["run_ids"]))
+            if not set(mapping["required_results"]).issubset(available):
+                raise EvidenceError("E_FROZEN_MAPPING")
+            frozen_details.append(
+                {
+                    "acceptance_id": mapping["acceptance_id"],
+                    "run_ids": mapping["run_ids"],
+                    "required_results": mapping["required_results"],
+                    "observed_results": mapping["required_results"],
+                    "status": "PASS",
+                }
+            )
+        frozen_summary = {"failed": 0, "passed": len(frozen_details), "total": 19}
         (staging / "regression" / "frozen_19_summary.json").write_text(
             json.dumps(frozen_summary, separators=(",", ":"), sort_keys=True) + "\n",
             encoding="utf-8",
             newline="\n",
         )
-        frozen_details = {
-            "acceptance_ids": FROZEN_PASS_IDS,
-            "command_count": len(records),
-            "status": "PASS",
-        }
         (staging / "regression" / "frozen_19_details.json").write_text(
             json.dumps(frozen_details, separators=(",", ":"), sort_keys=True) + "\n",
             encoding="utf-8",
             newline="\n",
         )
-        if args.mutation_results:
-            mutation_result = json.loads(args.mutation_results.read_text(encoding="utf-8"))
-            if mutation_result.get("summary") != {"failed": 0, "passed": 20, "total": 20}:
-                raise EvidenceError("mutation result is not 20/20 PASS")
-            shutil.copyfile(
-                args.mutation_results,
-                staging / "mutation" / "mutation_20_details.json",
-            )
-            mutation_stem = args.mutation_results.with_suffix("")
-            for suffix, destination in (
-                (".stdout.bin", "pytest_mutation.stdout.bin"),
-                (".stderr.bin", "pytest_mutation.stderr.bin"),
-                (".xml", "pytest_mutation.xml"),
-            ):
-                source = mutation_stem.with_suffix(suffix)
-                if not source.is_file():
-                    raise EvidenceError("mutation raw evidence is incomplete")
-                shutil.copyfile(source, staging / "mutation" / destination)
-        elif args.provisional_mutation_claim:
-            mutation_result = {
-                "provisional": True,
-                "summary": {"failed": 0, "passed": 20, "total": 20},
-            }
-            (staging / "mutation" / "mutation_20_details.json").write_text(
-                json.dumps(mutation_result, separators=(",", ":"), sort_keys=True)
-                + "\n",
-                encoding="utf-8",
-                newline="\n",
-            )
-        else:
-            raise EvidenceError("verified mutation results are required")
-        (staging / "mutation" / "mutation_20_summary.json").write_text(
-            '{"failed":0,"passed":20,"total":20}\n',
-            encoding="utf-8",
-            newline="\n",
-        )
+        mutation_stem = args.mutation_results.with_suffix("")
+        mutation_sources = {
+            "mutation/mutation_results_v2.json": args.mutation_results,
+            "mutation/pytest_mutation.stdout.bin": mutation_stem.with_suffix(".stdout.bin"),
+            "mutation/pytest_mutation.stderr.bin": mutation_stem.with_suffix(".stderr.bin"),
+            "mutation/pytest_mutation.xml": mutation_stem.with_suffix(".xml"),
+        }
+        if not all(path.is_file() for path in mutation_sources.values()):
+            raise EvidenceError("E_RAW_EVIDENCE_MISSING")
+        mutation_payloads = {relative: source.read_bytes() for relative, source in mutation_sources.items()}
+        verify_mutation_results(mutation_payloads, policy)
+        for relative, source in mutation_sources.items():
+            shutil.copyfile(source, staging / relative)
+        _fsync_tree(staging)
         os.replace(staging, output)
     except Exception:
+        if 'run_junit' in locals() and (run_junit.exists() or run_junit.is_symlink()):
+            shutil.rmtree(run_junit, ignore_errors=True)
         shutil.rmtree(staging, ignore_errors=True)
         raise
     return output
@@ -335,23 +396,27 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--head-tree", required=True)
+    parser.add_argument("--base-commit", default=APPROVED_BASE_COMMIT)
+    parser.add_argument(
+        "--policy",
+        type=Path,
+        default=Path(__file__).with_name("evidence_policy_v2.json"),
+    )
     parser.add_argument("--node-bin")
     parser.add_argument("--node-modules", type=Path)
     parser.add_argument(
         "--python-executable", type=Path, default=Path(sys.executable)
     )
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--mutation-results", type=Path)
-    group.add_argument("--provisional-mutation-claim", action="store_true")
+    parser.add_argument("--mutation-results", type=Path, required=True)
     return parser
 
 
 def main() -> int:
     try:
         output = collect(_parser().parse_args())
-    except Exception:
-        print('{"evidence_pass":0,"error_code":"E_EVIDENCE"}', file=sys.stderr)
+    except Exception as error:
+        code = error.code if isinstance(error, EvidenceError) else "E_EVIDENCE"
+        print(json.dumps({"evidence_pass": 0, "error_code": code}, separators=(",", ":"), sort_keys=True), file=sys.stderr)
         return 1
     print('{"evidence_pass":1,"error_code":""}')
     print(f"EVIDENCE_DIR={output}")
