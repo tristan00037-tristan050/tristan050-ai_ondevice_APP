@@ -60,6 +60,7 @@ def test_hidden_temporary_files_are_not_collected(tmp_path):
             workspace_id=str(uuid.uuid4()),
             folder_fd=descriptor,
             workspace_key=b"k" * 32,
+            allow_test_parser=True,
         )
         documents = ingestor.read_documents()
     finally:

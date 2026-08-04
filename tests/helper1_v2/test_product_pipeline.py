@@ -6,6 +6,7 @@ import json
 import os
 import uuid
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 
 import pytest
@@ -32,6 +33,11 @@ from butler_pc_core.helper1.ingestion import (
     parse_in_sandbox,
 )
 from butler_pc_core.helper1.models import GeneratedDraft
+from butler_pc_core.helper1.measurement import (
+    MeasurementError,
+    ObservationHandle,
+    VerifiedEgressObservation,
+)
 from butler_pc_core.helper1.pipeline import Helper1AnswerPipeline
 from butler_pc_core.helper1.retrieval import (
     HybridRetriever,
@@ -105,6 +111,37 @@ class FakeGenerator:
         return self.draft
 
 
+class FakeMeasurementAuthority:
+    def __init__(self, *, fail_finish: bool = False) -> None:
+        self.fail_finish = fail_finish
+        self.actions: list[str] = []
+
+    def begin(self, *, request_id: str, session_digest: str, action: str):
+        self.actions.append(action)
+        return ObservationHandle(
+            opaque_handle="test-handle",
+            run_id=str(uuid.uuid4()),
+            request_id=request_id,
+            session_digest=session_digest,
+            action=action,
+            nonce_digest=_digest("nonce"),
+        )
+
+    def finish(self, handle: ObservationHandle):
+        assert handle.action == self.actions[-1]
+        if self.fail_finish:
+            raise MeasurementError("MEASUREMENT_SUMMARY_MISMATCH")
+        return VerifiedEgressObservation(
+            raw_observation_sha256=_digest(handle.action),
+            record_count=0,
+            sent_bytes=0,
+            connection_attempts=0,
+            gap_count=0,
+            process_closure_complete=True,
+            external_send_zero=True,
+        )
+
+
 @pytest.fixture
 def workspace_id() -> str:
     return str(uuid.uuid4())
@@ -123,7 +160,12 @@ def generation_store(tmp_path):
         os.close(fd)
 
 
-def _publish(store: EncryptedGenerationStore, workspace_id: str):
+def _publish(
+    store: EncryptedGenerationStore,
+    workspace_id: str,
+    *,
+    previous_generation_id: str | None = None,
+):
     chunks = (
         Chunk(
             chunk_id="chk:one",
@@ -151,8 +193,10 @@ def _publish(store: EncryptedGenerationStore, workspace_id: str):
         lexical_index=lexical,
         lexical_tokenizer_sha256=lexical_tokenizer_sha256(),
         chunker_policy_sha256=_digest("chunker"),
+        parser_isolation_policy_sha256=_digest("parser"),
         document_set_hmac_sha256=_digest("documents"),
         policy_sha256=_digest("policy"),
+        previous_generation_id=previous_generation_id,
     )
     return manifest, store.verify_generation()
 
@@ -194,6 +238,7 @@ def test_manifest_rejects_count_mismatch(workspace_id):
             encoder=_encoder(),
             lexical_tokenizer_sha256=_digest("lex"),
             chunker_policy_sha256=_digest("chunk"),
+            parser_isolation_policy_sha256=_digest("parser"),
             document_set_hmac_sha256=_digest("docs"),
             policy_sha256=_digest("policy"),
             chunk_count=2,
@@ -250,7 +295,7 @@ def test_answer_pipeline_releases_grounded_cited_answer(
                 text=answer,
                 chunk_id="chk:one",
                 evidence_start=0,
-                evidence_end=len(answer),
+                evidence_end=len(answer.encode("utf-8")),
             ),
         ),
     )
@@ -279,6 +324,46 @@ def test_pre_grounding_blocks_before_generator(generation_store, workspace_id):
     assert result.kind is AnswerKind.REFUSED_NO_GROUNDING
     assert generator.calls == 0
     assert result.answer is None and result.citations == ()
+
+
+def test_search_requires_and_verifies_same_observation_authority(
+    generation_store, workspace_id
+):
+    store, provider, _ = generation_store
+    draft = GeneratedDraft(
+        answer="unused",
+        claims=(Claim("claim:one", "unused", "chk:one", 0, 4),),
+    )
+    pipeline, _ = _pipeline(store, provider, workspace_id, draft)
+    with pytest.raises(MeasurementError, match="MEASUREMENT_AUTHORITY_UNAVAILABLE"):
+        pipeline.observed_search(
+            query="매출",
+            top_k=1,
+            request_id=str(uuid.uuid4()),
+            session_digest=_digest("session"),
+        )
+
+    invalid = FakeMeasurementAuthority(fail_finish=True)
+    pipeline.measurement_authority = invalid  # type: ignore[assignment]
+    with pytest.raises(MeasurementError, match="MEASUREMENT_SUMMARY_MISMATCH"):
+        pipeline.observed_search(
+            query="매출",
+            top_k=1,
+            request_id=str(uuid.uuid4()),
+            session_digest=_digest("session"),
+        )
+
+    valid = FakeMeasurementAuthority()
+    pipeline.measurement_authority = valid  # type: ignore[assignment]
+    chunks, observation = pipeline.observed_search(
+        query="매출",
+        top_k=1,
+        request_id=str(uuid.uuid4()),
+        session_digest=_digest("session"),
+    )
+    assert chunks
+    assert observation.external_send_zero is True
+    assert valid.actions == ["search"]
 
 
 def test_forged_or_unretrieved_citation_is_blocked(generation_store, workspace_id):
@@ -342,7 +427,7 @@ def test_dlp_blocks_answer_before_release(generation_store, workspace_id):
                 leaked_text,
                 "chk:one",
                 0,
-                len(leaked_text),
+                len(leaked_text.encode("utf-8")),
             ),
         ),
     )

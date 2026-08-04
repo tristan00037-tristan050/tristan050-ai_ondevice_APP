@@ -11,6 +11,7 @@
     "encoder",
     "lexical_tokenizer_sha256",
     "chunker_policy_sha256",
+    "parser_isolation_policy_sha256",
     "document_set_hmac_sha256",
     "policy_sha256",
     "chunk_count",
@@ -47,6 +48,9 @@
       "$ref": "#/$defs/digest"
     },
     "chunker_policy_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "parser_isolation_policy_sha256": {
       "$ref": "#/$defs/digest"
     },
     "document_set_hmac_sha256": {

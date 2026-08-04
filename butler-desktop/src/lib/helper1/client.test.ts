@@ -69,6 +69,7 @@ describe('Helper1 client contracts', () => {
       index_manifest_sha256: null,
       citations: [],
       release_receipt_sha256: null,
+      execution_receipt: null,
     }, 503));
     await expect(askHelper1(WORKSPACE_ID, '회사 규정')).resolves.toMatchObject({
       kind: 'REFUSED_ASSET_MISSING',
@@ -89,6 +90,8 @@ describe('Helper1 client contracts', () => {
       index_manifest_sha256: 'b'.repeat(64),
       citations: [{
         claim_id: 'c1',
+        workspace_id: WORKSPACE_ID,
+        generation_id: '00000000-0000-4000-8000-000000000003',
         chunk_id: 'k1',
         source_id: 's1',
         evidence_start: 10,
@@ -96,6 +99,7 @@ describe('Helper1 client contracts', () => {
         evidence_sha256: 'c'.repeat(64),
       }],
       release_receipt_sha256: 'd'.repeat(64),
+      execution_receipt: {},
     }));
     await expect(askHelper1(WORKSPACE_ID, '회사 규정')).rejects.toBeInstanceOf(
       Helper1ClientError,

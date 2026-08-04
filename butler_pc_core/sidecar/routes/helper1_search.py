@@ -4,6 +4,7 @@ from __future__ import annotations
 import functools
 import json
 import re
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,10 +23,18 @@ MAX_QUERY_LENGTH = 4000
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _REQUEST_FIELDS = {
     "schema_version",
-    "request_id",
+    "client_request_id",
     "workspace_id",
     "query",
     "top_k",
+    "requested_generation_id",
+    "effect_intent",
+}
+_LEGACY_REQUEST_FIELDS = (_REQUEST_FIELDS - {"client_request_id"}) | {"request_id"}
+_INDEX_REQUEST_FIELDS = {
+    "schema_version",
+    "client_request_id",
+    "workspace_id",
     "requested_generation_id",
     "effect_intent",
 }
@@ -38,9 +47,19 @@ class RequestContractError(ValueError):
 @dataclass(frozen=True)
 class AskEnvelope:
     request_id: str
+    client_request_id: str
     workspace_id: str
     query: str
     top_k: int
+    requested_generation_id: str | None
+    effect_intent: str
+
+
+@dataclass(frozen=True)
+class IndexEnvelope:
+    request_id: str
+    client_request_id: str
+    workspace_id: str
     requested_generation_id: str | None
     effect_intent: str
 
@@ -94,16 +113,20 @@ async def _json_body(request: Request) -> dict[str, Any]:
 
 
 def _query_payload(value: dict[str, Any]) -> AskEnvelope:
-    if set(value) != _REQUEST_FIELDS:
+    fields = set(value)
+    if fields != _REQUEST_FIELDS and fields != _LEGACY_REQUEST_FIELDS:
         raise RequestContractError("REQUEST_FIELDS_INVALID")
     if value.get("schema_version") != "butler.helper1.ask-request.v2":
         raise RequestContractError("REQUEST_SCHEMA_INVALID")
     workspace_id = value.get("workspace_id")
-    request_id = value.get("request_id")
+    client_request_id = value.get(
+        "client_request_id",
+        value.get("request_id"),
+    )
     requested_generation_id = value.get("requested_generation_id")
     try:
         require_uuid(workspace_id, "WORKSPACE_ID_INVALID")
-        require_uuid(request_id, "REQUEST_ID_INVALID")
+        require_uuid(client_request_id, "CLIENT_REQUEST_ID_INVALID")
         if requested_generation_id is not None:
             require_uuid(
                 requested_generation_id, "REQUESTED_GENERATION_ID_INVALID"
@@ -125,12 +148,41 @@ def _query_payload(value: dict[str, Any]) -> AskEnvelope:
     if effect_intent not in {"display_only", "clipboard", "export"}:
         raise RequestContractError("EFFECT_INTENT_INVALID")
     return AskEnvelope(
-        request_id=request_id,
+        request_id=str(uuid.uuid4()),
+        client_request_id=client_request_id,
         workspace_id=workspace_id,
         query=query.strip(),
         top_k=top_k,
         requested_generation_id=requested_generation_id,
         effect_intent=effect_intent,
+    )
+
+
+def _index_payload(value: dict[str, Any]) -> IndexEnvelope:
+    if set(value) != _INDEX_REQUEST_FIELDS:
+        raise RequestContractError("REQUEST_FIELDS_INVALID")
+    if value.get("schema_version") != "butler.helper1.index-request.v2":
+        raise RequestContractError("REQUEST_SCHEMA_INVALID")
+    workspace_id = value.get("workspace_id")
+    client_request_id = value.get("client_request_id")
+    requested_generation_id = value.get("requested_generation_id")
+    try:
+        require_uuid(workspace_id, "WORKSPACE_ID_INVALID")
+        require_uuid(client_request_id, "CLIENT_REQUEST_ID_INVALID")
+        if requested_generation_id is not None:
+            require_uuid(
+                requested_generation_id, "REQUESTED_GENERATION_ID_INVALID"
+            )
+    except Helper1ContractError as exc:
+        raise RequestContractError(str(exc)) from exc
+    if value.get("effect_intent") != "index_only":
+        raise RequestContractError("EFFECT_INTENT_INVALID")
+    return IndexEnvelope(
+        request_id=str(uuid.uuid4()),
+        client_request_id=client_request_id,
+        workspace_id=workspace_id,
+        requested_generation_id=requested_generation_id,
+        effect_intent="index_only",
     )
 
 
@@ -180,7 +232,29 @@ async def helper1_search(request: Request) -> JSONResponse:
         return _invalid_request()
     service = get_helper1_service()
     status, value = await anyio.to_thread.run_sync(
-        functools.partial(service.search, **vars(envelope))
+        functools.partial(
+            service.search,
+            **vars(envelope),
+            session_digest=request.state.capability_session_digest,
+        )
+    )
+    return JSONResponse(status_code=status, content=value)
+
+
+@router.post("/v1/helpers/1/index")
+async def helper1_index(request: Request) -> JSONResponse:
+    _localhost_only(request)
+    try:
+        envelope = _index_payload(await _json_body(request))
+    except RequestContractError:
+        return _invalid_request()
+    service = get_helper1_service()
+    status, value = await anyio.to_thread.run_sync(
+        functools.partial(
+            service.index,
+            **vars(envelope),
+            session_digest=request.state.capability_session_digest,
+        )
     )
     return JSONResponse(status_code=status, content=value)
 
@@ -194,6 +268,10 @@ async def helper1_ask(request: Request) -> JSONResponse:
         return _invalid_request()
     service = get_helper1_service()
     result = await anyio.to_thread.run_sync(
-        functools.partial(service.ask, **vars(envelope))
+        functools.partial(
+            service.ask,
+            **vars(envelope),
+            session_digest=request.state.capability_session_digest,
+        )
     )
     return JSONResponse(status_code=result.http_status, content=result.to_public_dict())

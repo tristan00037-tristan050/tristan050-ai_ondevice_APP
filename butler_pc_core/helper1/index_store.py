@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import fcntl
 import hashlib
 import hmac
 import json
@@ -339,6 +340,7 @@ def _manifest_from_dict(value: object) -> IndexManifest:
             "encoder",
             "lexical_tokenizer_sha256",
             "chunker_policy_sha256",
+            "parser_isolation_policy_sha256",
             "document_set_hmac_sha256",
             "policy_sha256",
             "chunk_count",
@@ -372,6 +374,7 @@ def _manifest_from_dict(value: object) -> IndexManifest:
             encoder=_encoder_from_dict(value.get("encoder")),
             lexical_tokenizer_sha256=value.get("lexical_tokenizer_sha256"),  # type: ignore[arg-type]
             chunker_policy_sha256=value.get("chunker_policy_sha256"),  # type: ignore[arg-type]
+            parser_isolation_policy_sha256=value.get("parser_isolation_policy_sha256"),  # type: ignore[arg-type]
             document_set_hmac_sha256=value.get("document_set_hmac_sha256"),  # type: ignore[arg-type]
             policy_sha256=value.get("policy_sha256"),  # type: ignore[arg-type]
             chunk_count=value.get("chunk_count"),  # type: ignore[arg-type]
@@ -410,6 +413,40 @@ class EncryptedGenerationStore:
             }
         )
 
+    def _recover_crash_debris(self) -> None:
+        for name in os.listdir(self.root_fd):
+            identifier = None
+            if name.startswith(".stage-"):
+                identifier = name[7:]
+            elif name.startswith(".current-"):
+                identifier = name[9:]
+            if identifier is None:
+                continue
+            try:
+                require_uuid(identifier, "INDEX_DEBRIS_NAME_INVALID")
+            except Helper1ContractError:
+                continue
+            try:
+                info = os.stat(name, dir_fd=self.root_fd, follow_symlinks=False)
+                if stat.S_ISDIR(info.st_mode):
+                    _remove_tree_at(self.root_fd, name)
+                elif stat.S_ISREG(info.st_mode):
+                    os.unlink(name, dir_fd=self.root_fd)
+            except FileNotFoundError:
+                continue
+        _fsync_directory(self.root_fd)
+
+    def _current_if_present(self) -> str | None:
+        try:
+            os.stat("CURRENT", dir_fd=self.root_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+        generation_id = self.current_generation_id()
+        verified = self.verify_generation(f"gen-{generation_id}")
+        if verified.manifest.generation_id != generation_id:
+            raise IndexStoreError("INDEX_CURRENT_BINDING_INVALID")
+        return generation_id
+
     def publish(
         self,
         *,
@@ -420,13 +457,67 @@ class EncryptedGenerationStore:
         lexical_index: Mapping[str, Any],
         lexical_tokenizer_sha256: str,
         chunker_policy_sha256: str,
+        parser_isolation_policy_sha256: str,
         document_set_hmac_sha256: str,
         policy_sha256: str,
         previous_generation_id: str | None = None,
+        activate: bool = True,
+    ) -> IndexManifest:
+        if type(activate) is not bool:
+            raise IndexStoreError("INDEX_ACTIVATION_POLICY_INVALID")
+        lock_fd = os.open(
+            ".helper1-publish.lock",
+            os.O_RDWR | os.O_CREAT | os.O_CLOEXEC,
+            0o600,
+            dir_fd=self.root_fd,
+        )
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            self._recover_crash_debris()
+            observed = self._current_if_present()
+            if observed != previous_generation_id:
+                raise IndexStoreError("INDEX_GENERATION_CAS_MISMATCH")
+            return self._publish_locked(
+                workspace_id=workspace_id,
+                encoder=encoder,
+                chunks=chunks,
+                embeddings=embeddings,
+                lexical_index=lexical_index,
+                lexical_tokenizer_sha256=lexical_tokenizer_sha256,
+                chunker_policy_sha256=chunker_policy_sha256,
+                parser_isolation_policy_sha256=parser_isolation_policy_sha256,
+                document_set_hmac_sha256=document_set_hmac_sha256,
+                policy_sha256=policy_sha256,
+                previous_generation_id=previous_generation_id,
+                activate=activate,
+            )
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            os.close(lock_fd)
+
+    def _publish_locked(
+        self,
+        *,
+        workspace_id: str,
+        encoder: EncoderIdentity,
+        chunks: tuple[Chunk, ...],
+        embeddings: tuple[tuple[float, ...], ...],
+        lexical_index: Mapping[str, Any],
+        lexical_tokenizer_sha256: str,
+        chunker_policy_sha256: str,
+        parser_isolation_policy_sha256: str,
+        document_set_hmac_sha256: str,
+        policy_sha256: str,
+        previous_generation_id: str | None = None,
+        activate: bool = True,
     ) -> IndexManifest:
         require_uuid(workspace_id, "WORKSPACE_ID_INVALID")
         require_digest(lexical_tokenizer_sha256, "LEXICAL_TOKENIZER_INVALID")
         require_digest(chunker_policy_sha256, "CHUNKER_POLICY_INVALID")
+        require_digest(
+            parser_isolation_policy_sha256,
+            "PARSER_ISOLATION_POLICY_INVALID",
+        )
         require_digest(document_set_hmac_sha256, "DOCUMENT_SET_HMAC_INVALID")
         require_digest(policy_sha256, "INDEX_POLICY_DIGEST_INVALID")
         if len(chunks) != len(embeddings):
@@ -481,6 +572,7 @@ class EncryptedGenerationStore:
                 encoder=encoder,
                 lexical_tokenizer_sha256=lexical_tokenizer_sha256,
                 chunker_policy_sha256=chunker_policy_sha256,
+                parser_isolation_policy_sha256=parser_isolation_policy_sha256,
                 document_set_hmac_sha256=document_set_hmac_sha256,
                 policy_sha256=policy_sha256,
                 chunk_count=len(chunks),
@@ -511,8 +603,32 @@ class EncryptedGenerationStore:
         if verified.manifest.digest != manifest.digest:
             raise IndexStoreError("INDEX_POST_PUBLISH_VERIFY_FAILED")
 
+        if activate:
+            self._activate_locked(
+                generation_id=generation_id,
+                expected_previous_generation_id=previous_generation_id,
+            )
+        return manifest
+
+    def _activate_locked(
+        self,
+        *,
+        generation_id: str,
+        expected_previous_generation_id: str | None,
+    ) -> LoadedIndex:
+        require_uuid(generation_id, "INDEX_GENERATION_ID_INVALID")
+        observed = self._current_if_present()
+        if observed != expected_previous_generation_id:
+            raise IndexStoreError("INDEX_GENERATION_CAS_MISMATCH")
+        loaded = self.verify_generation(f"gen-{generation_id}")
+        if loaded.manifest.previous_generation_id != expected_previous_generation_id:
+            raise IndexStoreError("INDEX_PREVIOUS_GENERATION_MISMATCH")
         pointer_name = f".current-{generation_id}"
-        _write_new_file(self.root_fd, pointer_name, (generation_id + "\n").encode("ascii"))
+        _write_new_file(
+            self.root_fd,
+            pointer_name,
+            (generation_id + "\n").encode("ascii"),
+        )
         os.replace(
             pointer_name,
             "CURRENT",
@@ -520,7 +636,31 @@ class EncryptedGenerationStore:
             dst_dir_fd=self.root_fd,
         )
         _fsync_directory(self.root_fd)
-        return manifest
+        return loaded
+
+    def activate_generation(
+        self,
+        *,
+        generation_id: str,
+        expected_previous_generation_id: str | None,
+    ) -> LoadedIndex:
+        """Atomically publish a verified candidate after external gates pass."""
+        lock_fd = os.open(
+            ".helper1-publish.lock",
+            os.O_RDWR | os.O_CREAT | os.O_CLOEXEC,
+            0o600,
+            dir_fd=self.root_fd,
+        )
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            self._recover_crash_debris()
+            return self._activate_locked(
+                generation_id=generation_id,
+                expected_previous_generation_id=expected_previous_generation_id,
+            )
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            os.close(lock_fd)
 
     def current_generation_id(self) -> str:
         value = _read_file(self.root_fd, "CURRENT", 128)

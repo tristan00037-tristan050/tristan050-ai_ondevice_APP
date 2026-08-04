@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .asset_lease import VerifiedAssetLease
 from .contracts import (
     AssetIdentity,
     Claim,
@@ -44,6 +45,8 @@ class DescriptorBgeM3Encoder:
     closure: VerifiedAssetClosure
     _identity: EncoderIdentity
     device: str | None = None
+    document_prefix: str = ""
+    query_prefix: str = ""
     _model: Any = field(default=None, init=False, repr=False)
     _tokenizer: Any = field(default=None, init=False, repr=False)
     _torch: Any = field(default=None, init=False, repr=False)
@@ -54,6 +57,13 @@ class DescriptorBgeM3Encoder:
             raise ModelRuntimeError("EMBEDDER_ROLE_INVALID")
         if self._identity.asset.closure_manifest_sha256 != self.closure.manifest_sha256:
             raise ModelRuntimeError("EMBEDDER_CLOSURE_IDENTITY_MISMATCH")
+        if (
+            sha256_bytes(self.document_prefix.encode("utf-8"))
+            != self._identity.document_prefix_sha256
+            or sha256_bytes(self.query_prefix.encode("utf-8"))
+            != self._identity.query_prefix_sha256
+        ):
+            raise ModelRuntimeError("EMBEDDER_PREFIX_IDENTITY_MISMATCH")
 
     @property
     def identity(self) -> EncoderIdentity:
@@ -156,9 +166,12 @@ class DescriptorBgeM3Encoder:
         self._tokenizer = tokenizer
         self.device = selected_device
 
-    def _encode(self, texts: tuple[str, ...]) -> tuple[tuple[float, ...], ...]:
+    def _encode(
+        self, texts: tuple[str, ...], *, prefix: str
+    ) -> tuple[tuple[float, ...], ...]:
         if not texts or any(not isinstance(text, str) or not text for text in texts):
             raise ModelRuntimeError("EMBEDDER_INPUT_INVALID")
+        prefixed_texts = tuple(prefix + text for text in texts)
         with self._lock:
             self._load()
             assert self._tokenizer is not None and self._model is not None
@@ -166,12 +179,12 @@ class DescriptorBgeM3Encoder:
             try:
                 if not truncation:
                     lengths = self._tokenizer(
-                        list(texts), add_special_tokens=True, truncation=False
+                        list(prefixed_texts), add_special_tokens=True, truncation=False
                     )["input_ids"]
                     if any(len(value) > self.identity.max_length for value in lengths):
                         raise ModelRuntimeError("EMBEDDER_INPUT_TOO_LONG")
                 batch = self._tokenizer(
-                    list(texts),
+                    list(prefixed_texts),
                     padding=True,
                     truncation=truncation,
                     max_length=self.identity.max_length,
@@ -210,10 +223,10 @@ class DescriptorBgeM3Encoder:
     def encode_documents(
         self, texts: tuple[str, ...]
     ) -> tuple[tuple[float, ...], ...]:
-        return self._encode(texts)
+        return self._encode(texts, prefix=self.document_prefix)
 
     def encode_query(self, text: str) -> tuple[float, ...]:
-        return self._encode((text,))[0]
+        return self._encode((text,), prefix=self.query_prefix)[0]
 
 
 @dataclass(frozen=True)
@@ -237,6 +250,7 @@ class NativeQwen3Generator:
     runner_path: str
     chat_template_sha256: str
     timeout_seconds: int = 120
+    _last_consumption_receipt_sha256: str | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.asset_identity.role != "helper1_answer":
@@ -293,19 +307,30 @@ class NativeQwen3Generator:
             raise ModelRuntimeError("GENERATOR_PROMPT_INVALID")
         if isinstance(max_tokens, bool) or not 1 <= max_tokens <= 4096:
             raise ModelRuntimeError("GENERATOR_TOKEN_LIMIT_INVALID")
-        model_fd = self.model_closure.open_verified(self.model_relative_path)
-        request = canonical_json(
-            {
-                "schema_version": "butler.helper1.native-request.v1",
-                "model_fd": model_fd,
-                "model_identity_sha256": self.identity_sha256,
-                "prompt": prompt,
-                "max_tokens": max_tokens,
-                "temperature": 0.1,
-                "thinking": False,
-                "json_output": True,
-            }
+        lease = VerifiedAssetLease.create(
+            self.model_closure, self.model_relative_path
         )
+        model_fd = -1
+        try:
+            model_fd = lease.duplicate_fd()
+            before = lease.measure()
+            request = canonical_json(
+                {
+                    "schema_version": "butler.helper1.native-request.v1",
+                    "model_fd": model_fd,
+                    "model_identity_sha256": self.identity_sha256,
+                    "prompt": prompt,
+                    "max_tokens": max_tokens,
+                    "temperature": 0.1,
+                    "thinking": False,
+                    "json_output": True,
+                }
+            )
+        except Exception:
+            if model_fd >= 0:
+                os.close(model_fd)
+            lease.close()
+            raise
         try:
             completed = subprocess.run(
                 [self.runner_path, "--protocol", "helper1-v1"],
@@ -327,6 +352,12 @@ class NativeQwen3Generator:
             raise ModelRuntimeError("GENERATOR_SPAWN_FAILED") from exc
         finally:
             os.close(model_fd)
+            try:
+                after = lease.measure()
+                receipt = lease.consumption_receipt(before, after)
+                self._last_consumption_receipt_sha256 = receipt.digest
+            finally:
+                lease.close()
         if completed.returncode != 0:
             raise ModelRuntimeError("GENERATOR_FAILED")
         if completed.stderr:

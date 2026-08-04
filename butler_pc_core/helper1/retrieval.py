@@ -14,6 +14,9 @@ from .contracts import (
     RetrievedChunk,
     assert_same_space,
     canonical_json,
+    require_digest,
+    require_finite,
+    require_int,
     sha256_bytes,
 )
 from .index_store import LoadedIndex
@@ -21,7 +24,6 @@ from .ingestion import Chunk
 
 TOKENIZER_VERSION = "unicode-nfkc-word-v2"
 TOKEN_RE = re.compile(r"[\w]+", re.UNICODE)
-RRF_K = 60
 
 
 class RetrievalError(RuntimeError):
@@ -37,6 +39,91 @@ class EmbeddingBackend(Protocol):
     ) -> tuple[tuple[float, ...], ...]: ...
 
     def encode_query(self, text: str) -> tuple[float, ...]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalPolicy:
+    """Immutable retrieval constants and protected calibration identity.
+
+    ``DEVELOPMENT_UNCALIBRATED`` is deliberately useful for unit tests and
+    local algorithm work, but the product composition root rejects it.  A
+    production policy is data issued by the protected calibration workflow;
+    code defaults can therefore never silently become an approval threshold.
+    """
+
+    dense_candidates: int = 50
+    lexical_candidates: int = 50
+    rrf_k: int = 60
+    bm25_k1: float = 1.2
+    bm25_b: float = 0.75
+    calibration_state: str = "DEVELOPMENT_UNCALIBRATED"
+    corpus_sha256: str | None = None
+    evaluator_sha256: str | None = None
+    threshold_policy_sha256: str | None = None
+    approval_receipt_sha256: str | None = None
+    schema_version: str = "butler.helper1.retrieval-policy.v1"
+
+    def __post_init__(self) -> None:
+        if self.schema_version != "butler.helper1.retrieval-policy.v1":
+            raise RetrievalError("RETRIEVAL_POLICY_SCHEMA_INVALID")
+        require_int(
+            self.dense_candidates,
+            minimum=1,
+            maximum=1000,
+            code="RETRIEVAL_CANDIDATE_LIMIT_INVALID",
+        )
+        require_int(
+            self.lexical_candidates,
+            minimum=1,
+            maximum=1000,
+            code="RETRIEVAL_CANDIDATE_LIMIT_INVALID",
+        )
+        require_int(self.rrf_k, minimum=1, maximum=100_000, code="RRF_K_INVALID")
+        k1 = require_finite(self.bm25_k1, "BM25_K1_INVALID")
+        b = require_finite(self.bm25_b, "BM25_B_INVALID")
+        if k1 <= 0.0 or not 0.0 <= b <= 1.0:
+            raise RetrievalError("BM25_POLICY_INVALID")
+        if self.calibration_state not in {
+            "DEVELOPMENT_UNCALIBRATED",
+            "APPROVED",
+        }:
+            raise RetrievalError("RETRIEVAL_CALIBRATION_STATE_INVALID")
+        identities = (
+            self.corpus_sha256,
+            self.evaluator_sha256,
+            self.threshold_policy_sha256,
+            self.approval_receipt_sha256,
+        )
+        if self.calibration_state == "APPROVED":
+            if any(value is None for value in identities):
+                raise RetrievalError("BLOCK_RETRIEVAL_POLICY_UNCALIBRATED")
+            for value in identities:
+                require_digest(value, "RETRIEVAL_CALIBRATION_DIGEST_INVALID")
+        elif any(value is not None for value in identities):
+            raise RetrievalError("RETRIEVAL_UNAPPROVED_IDENTITY_PRESENT")
+
+    @property
+    def is_calibrated(self) -> bool:
+        return self.calibration_state == "APPROVED"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "dense_candidates": self.dense_candidates,
+            "lexical_candidates": self.lexical_candidates,
+            "rrf_k": self.rrf_k,
+            "bm25_k1": self.bm25_k1,
+            "bm25_b": self.bm25_b,
+            "calibration_state": self.calibration_state,
+            "corpus_sha256": self.corpus_sha256,
+            "evaluator_sha256": self.evaluator_sha256,
+            "threshold_policy_sha256": self.threshold_policy_sha256,
+            "approval_receipt_sha256": self.approval_receipt_sha256,
+        }
+
+    @property
+    def digest(self) -> str:
+        return sha256_bytes(canonical_json(self.to_dict()))
 
 
 def tokenize(value: str) -> tuple[str, ...]:
@@ -205,13 +292,11 @@ def dense_scores(
 
 @dataclass(frozen=True)
 class HybridRetriever:
-    dense_candidates: int = 50
-    lexical_candidates: int = 50
+    policy: RetrievalPolicy = RetrievalPolicy()
 
     def __post_init__(self) -> None:
-        for value in (self.dense_candidates, self.lexical_candidates):
-            if isinstance(value, bool) or not 1 <= value <= 1000:
-                raise RetrievalError("RETRIEVAL_CANDIDATE_LIMIT_INVALID")
+        if type(self.policy) is not RetrievalPolicy:
+            raise RetrievalError("RETRIEVAL_POLICY_INVALID")
 
     def search(
         self,
@@ -230,31 +315,47 @@ class HybridRetriever:
         query_vector = embedder.encode_query(query)
         _validate_query_vector(query_vector, index.manifest.embedding_dimension)
         dense = dense_scores(query_vector, index.embeddings)
-        lexical = bm25_scores(query, index.lexical_index)
-        dense_rank = sorted(dense, key=lambda row: (-dense[row], row))[
-            : self.dense_candidates
+        lexical = bm25_scores(
+            query,
+            index.lexical_index,
+            k1=self.policy.bm25_k1,
+            b=self.policy.bm25_b,
+        )
+        stable_key = lambda row: (index.chunks[row].source_id, index.chunks[row].chunk_id)
+        dense_rank = sorted(dense, key=lambda row: (-dense[row], stable_key(row)))[
+            : self.policy.dense_candidates
         ]
-        lexical_rank = sorted(lexical, key=lambda row: (-lexical[row], row))[
-            : self.lexical_candidates
+        lexical_rank = sorted(lexical, key=lambda row: (-lexical[row], stable_key(row)))[
+            : self.policy.lexical_candidates
         ]
+        dense_positions = {row: rank for rank, row in enumerate(dense_rank, start=1)}
+        lexical_positions = {
+            row: rank for rank, row in enumerate(lexical_rank, start=1)
+        }
         fused: dict[int, float] = {}
         for rank, row in enumerate(dense_rank, start=1):
-            fused[row] = fused.get(row, 0.0) + 1.0 / (RRF_K + rank)
+            fused[row] = fused.get(row, 0.0) + 1.0 / (self.policy.rrf_k + rank)
         for rank, row in enumerate(lexical_rank, start=1):
-            fused[row] = fused.get(row, 0.0) + 1.0 / (RRF_K + rank)
-        ordered = sorted(fused, key=lambda row: (-fused[row], row))[:top_k]
+            fused[row] = fused.get(row, 0.0) + 1.0 / (self.policy.rrf_k + rank)
+        ordered = sorted(fused, key=lambda row: (-fused[row], stable_key(row)))[:top_k]
         results = []
         for row in ordered:
             chunk = index.chunks[row]
+            chunk_bytes = chunk.text.encode("utf-8")
             results.append(
                 RetrievedChunk(
+                    workspace_id=index.manifest.workspace_id,
                     chunk_id=chunk.chunk_id,
                     source_id=chunk.source_id,
                     text=chunk.text,
                     dense_score=dense.get(row),
                     lexical_score=lexical.get(row),
                     fused_score=fused[row],
+                    dense_rank=dense_positions.get(row),
+                    lexical_rank=lexical_positions.get(row),
                     generation_id=index.manifest.generation_id,
+                    byte_start=0,
+                    byte_end=len(chunk_bytes),
                     content_sha256=chunk.content_sha256,
                 )
             )

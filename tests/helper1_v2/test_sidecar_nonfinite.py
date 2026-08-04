@@ -17,7 +17,7 @@ def test_nonfinite_json_number_is_rejected_fail_closed():
     client = TestClient(butler_sidecar.app)
     body = (
         '{"schema_version":"butler.helper1.ask-request.v2",'
-        f'"request_id":"{uuid.uuid4()}",'
+        f'"client_request_id":"{uuid.uuid4()}",'
         f'"workspace_id":"{uuid.uuid4()}",'
         '"query":"x","top_k":NaN,"requested_generation_id":null,'
         '"effect_intent":"display_only"}'

@@ -1,0 +1,84 @@
+{
+  "schema_version": "butler.helper1.trusted-verifier-policy.v1",
+  "policy_epoch": 2,
+  "enabled": false,
+  "repository": "tristan00037-tristan050/tristan050-ai_ondevice_APP",
+  "producer_workflow_name": "helper1-v2-evidence-producer",
+  "producer_workflow_path": ".github/workflows/helper1-v2-evidence.yml",
+  "handoff_chain_authority": {
+    "schema_version": "butler.helper1.handoff-chain-authority.v1",
+    "chain_id": "helper1-v51-a4-closure",
+    "authority_mode": "PROTECTED_WORKFLOW_SIGNED_CHAIN",
+    "approved_public_key_b64": null,
+    "approved_public_key_sha256": null,
+    "required_environment": "helper1-production-verifier",
+    "required_check_name": "helper1-v2/protected-verdict"
+  },
+  "producer_package_contract": {
+    "schema_version": "butler.helper1.producer-package-contract.v1",
+    "chain_id": "helper1-v51-a4-closure",
+    "candidate_generation": 15,
+    "package_relative_path": "package/helper1-v51.zip",
+    "descriptor_relative_path": "package/helper1-v51.candidate.json",
+    "immediate_predecessor": {
+      "generation": 14,
+      "package_sha256": "41870dec77c3f503f34fa5742f13ea242cf9cc6941f4f2ee1b072276fb34a114",
+      "result_tree": "482d98334b80b7000e31ff8cacd508cd166f54c8"
+    },
+    "rollback_record": {
+      "generation": 13,
+      "package_sha256": "76e7cffe09e90e7ad5b9b632c5eb6793a5abd9ec6cf9d8eed28f206182f085cc",
+      "result_tree": "32c025dff173cf4526174a7df4ccc899345e47dc"
+    }
+  },
+  "protected_verifier_sha256": "sha256:e427af20868856470365801ddf65ac863b859cd9fbf95bf2427ae7b43c926f72",
+  "protected_components_sha256": {
+    "butler_pc_core/helper1/approval_closure.py": "sha256:424ff97b21c7d3dcd824cc94671516ed0e77c8e2af185b57e74c4c1345d68aad",
+    "butler_pc_core/helper1/canonical_json.py": "sha256:ecf4c1e55ee2e64022d8e28abdaeab257cd90728fa3153e09945b7d2a255f557",
+    "butler_pc_core/helper1/execution.py": "sha256:71e8ded1242e85c4361bfa3c4c75385eac1e676b3886df4fb7bd7ac9ce24c533",
+    "butler_pc_core/helper1/replay_store.py": "sha256:fc6fd57bf2303240430534cb3108e73bab94b50051db250679901fa6fa5b6e86",
+    "butler_pc_core/helper1/retrieval_policy.py": "sha256:e71753c5deeedbcabefd3fd830b2a0919180bf89e795a94cbd6a4ba43285a325",
+    "scripts/ci/helper1_evidence_semantics.py": "sha256:bcacf6cc72e5d808d7515d45afd8714f35cd585484e6fd46c6b85ccbde4041ae",
+    "scripts/ci/helper1_subject_binding.py": "sha256:f35b78e9c7a5b7e87fe99df90bce87819054ac709b5ff278ca47271858cbbad0",
+    "scripts/ci/helper1_trusted_verifier.py": "sha256:e427af20868856470365801ddf65ac863b859cd9fbf95bf2427ae7b43c926f72",
+    "scripts/ci/helper1_postgresql_replay_probe.py": "sha256:c3af199dbe50043c4acaf6b4abc19b3750b5899183382f7b566d6b91ae5bdb08",
+    "scripts/ci/helper1_product_approval_bundle.py": "sha256:200ce6c27fbfa3e018144d85684bf7249032135df6ada15217e1ab9bb276d853",
+    "scripts/ci/helper1_producer_package.py": "sha256:b894d85b8e58a208e3a594167767f572ba1631406dde97defde52be5fcaa410f",
+    "scripts/ci/publish_helper1_subject_check.py": "sha256:67c8a3a7a1892a3ccb18ad847c76808a581bee8dcbd1db3a8746853416b5ddc1",
+    "scripts/verify_helper1_v51_package.py": "sha256:ac7e12c819c3ede0601f3b8fcb5069144ac98bc1222c64bf96e6414cf18cb005"
+  },
+  "approved_producer_identity": "sha256:44804ccc81a9a1008ab0fe6110a086c2ea918fd107a1bed199f46f0f09d7c126",
+  "approved_evidence_key_id": "butler/helper1/evidence/ed25519/v1",
+  "approved_verdict_key_id": "butler/helper1/verdict/ed25519/v1",
+  "approved_public_key_b64": null,
+  "approved_public_key_sha256": null,
+  "approved_verdict_public_key_b64": null,
+  "approved_verdict_public_key_sha256": null,
+  "approval_policy_sha256": null,
+  "approved_activation_public_key_b64": null,
+  "approved_activation_public_key_sha256": null,
+  "subject_check_name": "helper1-v2/protected-verdict",
+  "subject_check_app_slug": "github-actions",
+  "subject_check_required": true,
+  "required_evidence_files": [
+    "APPROVED_ASSET_CLOSURE.json",
+    "REAL_ASSET_E2E_RECEIPT.json",
+    "M3_M4_MEASUREMENT.json",
+    "MACOS_SANDBOX_E2E_RECEIPT.json"
+  ],
+  "required_approval_roles": [
+    "A1_STARTUP_COMPOSITION_RECEIPT",
+    "A2_SUBJECT_BINDING_RECEIPT",
+    "A3_EGRESS_OBSERVATION_RECEIPT",
+    "A4_RETRIEVAL_CALIBRATION_RECEIPT",
+    "A4_RETRIEVAL_SEALED_TEST_RECEIPT",
+    "A5_PARSER_ISOLATION_RECEIPT",
+    "A4_RETRIEVAL_THRESHOLD_POLICY"
+  ],
+  "legacy_approval_role_bindings": {
+    "A1_STARTUP_COMPOSITION_RECEIPT": "APPROVED_ASSET_CLOSURE.json",
+    "A2_SUBJECT_BINDING_RECEIPT": "REAL_ASSET_E2E_RECEIPT.json",
+    "A3_EGRESS_OBSERVATION_RECEIPT": "M3_M4_MEASUREMENT.json",
+    "A5_PARSER_ISOLATION_RECEIPT": "MACOS_SANDBOX_E2E_RECEIPT.json"
+  }
+}

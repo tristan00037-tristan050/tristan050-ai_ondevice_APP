@@ -1,4 +1,10 @@
+import { invoke } from '@tauri-apps/api/core';
 import { sidecarFetch } from '../sidecarFetch';
+import {
+  type Helper1ExecutionReceipt,
+  type Helper1ExecutionTrustAnchor,
+  verifyHelper1ExecutionReceipt,
+} from './executionReceipt';
 
 export type Helper1WorkspaceState =
   | 'READY'
@@ -28,11 +34,14 @@ export type Helper1AnswerKind =
   | 'REFUSED_DLP'
   | 'REFUSED_INJECTION'
   | 'REFUSED_INDEX_INVALID'
+  | 'REFUSED_MEASUREMENT_INVALID'
   | 'CANCELLED'
   | 'FAILED';
 
 export interface Helper1Citation {
   claim_id: string;
+  workspace_id: string;
+  generation_id: string;
   chunk_id: string;
   source_id: string;
   evidence_start: number;
@@ -52,6 +61,7 @@ export interface Helper1Answer {
   index_manifest_sha256: string | null;
   citations: Helper1Citation[];
   release_receipt_sha256: string | null;
+  execution_receipt: Helper1ExecutionReceipt | null;
 }
 
 export class Helper1ClientError extends Error {
@@ -84,6 +94,7 @@ const ANSWER_KINDS = new Set<Helper1AnswerKind>([
   'REFUSED_DLP',
   'REFUSED_INJECTION',
   'REFUSED_INDEX_INVALID',
+  'REFUSED_MEASUREMENT_INVALID',
   'CANCELLED',
   'FAILED',
 ]);
@@ -114,6 +125,10 @@ function isCitation(value: unknown): value is Helper1Citation {
   if (!isObject(value)) return false;
   return (
     typeof value.claim_id === 'string'
+    && typeof value.workspace_id === 'string'
+    && UUID_RE.test(value.workspace_id)
+    && typeof value.generation_id === 'string'
+    && UUID_RE.test(value.generation_id)
     && typeof value.chunk_id === 'string'
     && typeof value.source_id === 'string'
     && Number.isSafeInteger(value.evidence_start)
@@ -172,12 +187,19 @@ function parseAnswer(value: Record<string, unknown>, status: number): Helper1Ans
     || !isNullableDigest(value.model_identity_sha256)
     || !isNullableDigest(value.index_manifest_sha256)
     || !isNullableDigest(value.release_receipt_sha256)
+    || !(value.execution_receipt === null || isObject(value.execution_receipt))
     || !Array.isArray(citations)
     || !citations.every(isCitation)
+    || (answered && citations.some(citation => (
+      citation.workspace_id !== value.workspace_id
+      || citation.generation_id !== value.generation_id
+    )))
     || (answered && (typeof value.answer !== 'string' || value.answer.length === 0))
     || (!answered && value.answer !== null)
     || (answered && value.reason_code !== null)
     || (!answered && (typeof value.reason_code !== 'string' || value.reason_code.length === 0))
+    || (answered && value.execution_receipt === null)
+    || (!answered && value.execution_receipt !== null)
   ) {
     throw new Helper1ClientError(status, 'HELPER1_ANSWER_INVALID');
   }
@@ -199,12 +221,13 @@ export async function askHelper1(
   if (!UUID_RE.test(workspaceId) || query.length === 0 || query.length > 4000) {
     throw new Helper1ClientError(0, 'HELPER1_REQUEST_INVALID');
   }
+  const requestId = crypto.randomUUID();
   const response = await sidecarFetch('/v1/helpers/1/ask', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       schema_version: 'butler.helper1.ask-request.v2',
-      request_id: crypto.randomUUID(),
+      client_request_id: requestId,
       workspace_id: workspaceId,
       query,
       top_k: 5,
@@ -213,5 +236,27 @@ export async function askHelper1(
     }),
     signal,
   });
-  return parseAnswer(await readObject(response), response.status);
+  const answer = parseAnswer(await readObject(response), response.status);
+  if (answer.kind === 'ANSWERED') {
+    let anchor: Helper1ExecutionTrustAnchor;
+    try {
+      anchor = await invoke<Helper1ExecutionTrustAnchor>(
+        'get_helper1_execution_trust_anchor',
+      );
+    } catch {
+      throw new Helper1ClientError(response.status, 'HELPER1_TRUST_ANCHOR_UNAVAILABLE');
+    }
+    try {
+      await verifyHelper1ExecutionReceipt(answer.execution_receipt, anchor, {
+        requestId: answer.request_id,
+        workspaceId,
+        generationId: answer.generation_id as string,
+        action: 'ask',
+        answer: answer.answer,
+      });
+    } catch {
+      throw new Helper1ClientError(response.status, 'HELPER1_EXECUTION_RECEIPT_REJECTED');
+    }
+  }
+  return answer;
 }
