@@ -14,7 +14,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from junit_closed_profile import parse_pytest_junit_closed
-from verify_candidate_artifact_identity import VerificationError, load_evidence_policy
+from strict_json import (
+    StrictJsonError,
+    canonical_json_bytes,
+    require_exact_dict_keys,
+    require_exact_str,
+    require_git_oid,
+    require_relative_posix_path,
+    require_sha256,
+    require_timestamp,
+    require_zero_exit,
+    strict_json_file,
+)
+from verify_candidate_artifact_identity import (
+    MANIFEST_KEYS,
+    VerificationError,
+    load_evidence_policy,
+)
 
 
 EXPECTED_IDS = frozenset(
@@ -72,12 +88,15 @@ def _sha256(path: Path) -> str:
 
 
 def _canonical(value: object) -> bytes:
-    return (json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
+    return canonical_json_bytes(value)
 
 
 def _subject(package: Path) -> dict[str, str]:
     identity_path = package / "IDENTITY" / "candidate_artifact_identity.json"
-    identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    identity = strict_json_file(identity_path, max_bytes=1 << 20, require_canonical=True)
+    require_exact_dict_keys(identity, MANIFEST_KEYS)
+    require_git_oid(identity["head_commit"])
+    require_git_oid(identity["head_tree"])
     return {
         "schema_version": "butler.box5.ac23-final-matrix-subject.v1",
         "package_checksum_sha256": _sha256(package / "SHA256SUMS.txt"),
@@ -98,25 +117,55 @@ def verify(evidence: Path, package: Path, policy_path: Path) -> None:
     actual = {path.relative_to(evidence).as_posix() for path in evidence.rglob("*") if path.is_file()}
     if actual != EXPECTED_FILES or any(path.is_symlink() for path in evidence.rglob("*")):
         raise MatrixError("E_FINAL_MATRIX_INVENTORY")
-    if json.loads((evidence / "subject.json").read_text(encoding="utf-8")) != _subject(package):
+    subject = strict_json_file(
+        evidence / "subject.json", max_bytes=1 << 20, require_canonical=True
+    )
+    require_exact_dict_keys(
+        subject,
+        {
+            "schema_version",
+            "package_checksum_sha256",
+            "package_identity_sha256",
+            "head_commit",
+            "head_tree",
+        },
+    )
+    require_exact_str(subject["schema_version"], min_bytes=1, max_bytes=64)
+    require_sha256(subject["package_checksum_sha256"])
+    require_sha256(subject["package_identity_sha256"])
+    require_git_oid(subject["head_commit"])
+    require_git_oid(subject["head_tree"])
+    if subject != _subject(package):
         raise MatrixError("E_FINAL_MATRIX_SUBJECT")
-    command = json.loads((evidence / "command.json").read_text(encoding="utf-8"))
+    command = strict_json_file(
+        evidence / "command.json", max_bytes=1 << 20, require_canonical=True
+    )
     expected_keys = {
         "schema_version", "argv", "cwd", "start_utc", "end_utc", "exit_code", "termination",
         "stdout_path", "stdout_sha256", "stderr_path", "stderr_sha256", "junit_path", "junit_sha256",
         "canonical_path", "canonical_sha256",
     }
-    if set(command) != expected_keys or command["schema_version"] != "butler.box5.ac23-final-matrix-command.v1":
+    require_exact_dict_keys(command, expected_keys)
+    if command["schema_version"] != "butler.box5.ac23-final-matrix-command.v1":
         raise MatrixError("E_FINAL_MATRIX_SCHEMA")
-    if command["argv"] != NORMAL_ARGV or command["cwd"] != "candidate" or command["exit_code"] != 0 or command["termination"] != "exit":
+    try:
+        require_zero_exit(command["exit_code"])
+    except StrictJsonError as error:
+        raise MatrixError("E_FINAL_MATRIX_COMMAND") from error
+    if command["argv"] != NORMAL_ARGV or command["cwd"] != "candidate" or command["termination"] != "exit":
         raise MatrixError("E_FINAL_MATRIX_COMMAND")
     try:
-        if datetime.fromisoformat(command["start_utc"].replace("Z", "+00:00")) > datetime.fromisoformat(command["end_utc"].replace("Z", "+00:00")):
+        if require_timestamp(command["start_utc"]) > require_timestamp(command["end_utc"]):
             raise MatrixError("E_FINAL_MATRIX_TIMESTAMP")
-    except (TypeError, ValueError) as error:
+    except StrictJsonError as error:
         raise MatrixError("E_FINAL_MATRIX_TIMESTAMP") from error
     for path_key, digest_key in (("stdout_path", "stdout_sha256"), ("stderr_path", "stderr_sha256"), ("junit_path", "junit_sha256"), ("canonical_path", "canonical_sha256")):
         relative = command[path_key]
+        try:
+            require_relative_posix_path(relative)
+            require_sha256(command[digest_key])
+        except StrictJsonError as error:
+            raise MatrixError("E_FINAL_MATRIX_RAW") from error
         if relative not in EXPECTED_FILES or _sha256(evidence / relative) != command[digest_key]:
             raise MatrixError("E_FINAL_MATRIX_RAW")
     limits = _limits(policy_path.resolve())
@@ -155,8 +204,12 @@ def collect(repo: Path, package: Path, output: Path, policy_path: Path) -> None:
         "LC_ALL": "C", "LANG": "C", "TZ": "UTC", "PYTHONDONTWRITEBYTECODE": "1",
         "AC23_PACKAGE_ROOT": os.fspath(package),
         "BUTLER_APP_DATA_DIR": os.fspath(run_root / "app-data"),
+        "TMPDIR": os.fspath(run_root / "tmp-env"),
+        "TEMP": os.fspath(run_root / "tmp-env"),
+        "TMP": os.fspath(run_root / "tmp-env"),
     }
     try:
+        (run_root / "tmp-env").mkdir(mode=0o700)
         completed = subprocess.run(actual_argv, cwd=repo, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
         end = _utc()
         junit_source = run_root / "junit.xml"
@@ -189,7 +242,10 @@ def collect(repo: Path, package: Path, output: Path, policy_path: Path) -> None:
         (staging / "command.json").write_bytes(_canonical(command))
         os.replace(staging, output)
     finally:
-        shutil.rmtree(run_root, ignore_errors=True)
+        if run_root.exists():
+            shutil.rmtree(run_root)
+        if run_root.exists() or run_root.is_symlink():
+            raise MatrixError("E_FINAL_MATRIX_CLEANUP")
         if staging.exists():
             shutil.rmtree(staging)
     if _subject(package) != subject:
@@ -215,7 +271,7 @@ def main() -> int:
             collect(args.repo, args.package, args.output, args.policy)
         else:
             verify(args.evidence, args.package, args.policy)
-    except (MatrixError, VerificationError, OSError, ValueError, KeyError):
+    except (MatrixError, VerificationError, StrictJsonError, OSError, ValueError, KeyError):
         print('{"error_code":"E_FINAL_PACKAGE_MATRIX","final_package_matrix_pass":0}', file=sys.stderr)
         return 1
     print('{"error_code":"","final_package_matrix_pass":1}')

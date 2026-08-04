@@ -20,6 +20,13 @@ from tests.ac23.test_junit_closed_profile import JUNIT_CASES
 TOOLS_ROOT = Path(__file__).parents[2] / "tools" / "ac23"
 sys.path.insert(0, os.fspath(TOOLS_ROOT))
 from junit_closed_profile import parse_pytest_junit_closed  # noqa: E402
+from collect_final_package_matrix import (  # noqa: E402
+    EXPECTED_IDS as FINAL_MATRIX_IDS,
+    MatrixError,
+    _subject as final_matrix_subject,
+    verify as verify_final_matrix,
+)
+from strict_json import StrictJsonError  # noqa: E402
 from verify_candidate_artifact_identity import (  # noqa: E402
     VerificationError,
     load_evidence_policy,
@@ -64,6 +71,28 @@ CASES = [
     ("checksum_self", "E_PACKAGE_CHECKSUM_FORMAT"),
     ("policy_mismatch", "E_EVIDENCE_POLICY"),
     ("object_format_sha256", "E_OBJECT_FORMAT_UNSUPPORTED"),
+    ("command_exit_false", "E_EVIDENCE_NONZERO_EXIT"),
+    ("command_exit_true", "E_EVIDENCE_NONZERO_EXIT"),
+    ("command_exit_float", "E_EVIDENCE_NONZERO_EXIT"),
+    ("command_exit_negative_zero_float", "E_EVIDENCE_NONZERO_EXIT"),
+    ("command_exit_string", "E_EVIDENCE_NONZERO_EXIT"),
+    ("command_exit_null", "E_EVIDENCE_NONZERO_EXIT"),
+    ("command_exit_missing", "E_EVIDENCE_COMMAND"),
+    ("mutation_exit_false", "E_EVIDENCE_NONZERO_EXIT"),
+    ("mutation_exit_true", "E_EVIDENCE_NONZERO_EXIT"),
+    ("mutation_exit_float", "E_EVIDENCE_NONZERO_EXIT"),
+    ("mutation_exit_negative_zero_float", "E_EVIDENCE_NONZERO_EXIT"),
+    ("mutation_exit_string", "E_EVIDENCE_NONZERO_EXIT"),
+    ("mutation_exit_null", "E_EVIDENCE_NONZERO_EXIT"),
+    ("mutation_exit_missing", "E_EVIDENCE_SCHEMA"),
+    ("sequence_false", "E_EVIDENCE_COMMAND"),
+    ("sequence_float", "E_EVIDENCE_COMMAND"),
+    ("category_false", "E_EVIDENCE_MUTATION_MAPPING"),
+    ("category_float", "E_EVIDENCE_MUTATION_MAPPING"),
+    ("summary_count_false", "E_EVIDENCE_SUMMARY"),
+    ("summary_count_float", "E_EVIDENCE_SUMMARY"),
+    ("policy_limit_false", "E_EVIDENCE_POLICY"),
+    ("policy_limit_float", "E_EVIDENCE_POLICY"),
 ]
 
 EXTERNAL_RESULT_CASES = {
@@ -94,6 +123,12 @@ def _replace(path: Path, payload: bytes) -> None:
 
 def _canonical(value: object) -> bytes:
     return (json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n").encode()
+
+
+def _xml(root: ET.Element) -> bytes:
+    return b'<?xml version="1.0" encoding="utf-8"?>' + ET.tostring(
+        root, encoding="utf-8", xml_declaration=False
+    )
 
 
 def _reseal(package: Path) -> None:
@@ -159,21 +194,37 @@ def _mutate_junit(payloads: dict[str, bytes], case: str) -> None:
         parent = next(suite for suite in ([root] if root.tag == "testsuite" else list(root)) if testcases[0] in list(suite))
         parent.append(copy.deepcopy(testcases[0]))
     _recount_junit(root)
-    payloads[path] = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    payloads[path] = _xml(root)
     details = json.loads(payloads["mutation/mutation_results_v3.json"])
     details["junit_sha256"] = hashlib.sha256(payloads[path]).hexdigest()
     payloads["mutation/mutation_results_v3.json"] = _canonical(details)
 
 
 def _mutate_evidence(payloads: dict[str, bytes], case: str) -> None:
-    if case.startswith("command_") or case in {"argv_swap", "cwd_swap", "sequence_gap", "timestamp_syntax", "timestamp_order", "stdout_digest", "stderr_digest"}:
+    exit_values = {
+        "false": False,
+        "true": True,
+        "float": 0.0,
+        "negative_zero_float": -0.0,
+        "string": "0",
+        "null": None,
+    }
+    if case.startswith("command_") or case.startswith("sequence_") or case in {"argv_swap", "cwd_swap", "sequence_gap", "timestamp_syntax", "timestamp_order", "stdout_digest", "stderr_digest"}:
         commands = _commands(payloads)
         if case == "command_nonzero": commands[0]["exit_code"] = 97
+        elif case.startswith("command_exit_"):
+            variant = case.removeprefix("command_exit_")
+            if variant == "missing":
+                commands[0].pop("exit_code")
+            else:
+                commands[0]["exit_code"] = exit_values[variant]
         elif case == "command_missing": commands.pop()
         elif case == "command_extra": commands.append(copy.deepcopy(commands[-1]))
         elif case == "argv_swap": commands[0]["argv"] = ["false"]
         elif case == "cwd_swap": commands[0]["cwd"] = "candidate/elsewhere"
         elif case == "sequence_gap": commands[0]["sequence"] = 2
+        elif case == "sequence_false": commands[0]["sequence"] = False
+        elif case == "sequence_float": commands[0]["sequence"] = 1.0
         elif case == "timestamp_syntax": commands[0]["start_utc"] = "not-time"
         elif case == "timestamp_order": commands[0]["start_utc"], commands[0]["end_utc"] = commands[0]["end_utc"], commands[0]["start_utc"]
         elif case == "stdout_digest": commands[0]["stdout_sha256"] = "0" * 64
@@ -188,11 +239,21 @@ def _mutate_evidence(payloads: dict[str, bytes], case: str) -> None:
         value = json.loads(payloads["mutation/mutation_results_v3.json"]); value["provisional"] = True
         payloads["mutation/mutation_results_v3.json"] = _canonical(value)
     elif case in {"junit_failure", "junit_error", "junit_skipped", "testcase_missing", "testcase_duplicate"}: _mutate_junit(payloads, case)
-    elif case in {"category_swap", "details_junit_digest", "summary_false"}:
+    elif case in {"category_swap", "details_junit_digest", "summary_false", "category_false", "category_float", "summary_count_false", "summary_count_float"} or case.startswith("mutation_exit_"):
         value = json.loads(payloads["mutation/mutation_results_v3.json"])
         if case == "category_swap": value["legacy_categories"][0]["category"] = 2
         elif case == "details_junit_digest": value["junit_sha256"] = "0" * 64
-        else: value["summary"]["failed"] = 1
+        elif case == "summary_false": value["summary"]["failed"] = 1
+        elif case == "category_false": value["legacy_categories"][0]["category"] = False
+        elif case == "category_float": value["legacy_categories"][0]["category"] = 1.0
+        elif case == "summary_count_false": value["summary"]["failed"] = False
+        elif case == "summary_count_float": value["summary"]["failed"] = 0.0
+        else:
+            variant = case.removeprefix("mutation_exit_")
+            if variant == "missing":
+                value.pop("exit_code")
+            else:
+                value["exit_code"] = exit_values[variant]
         payloads["mutation/mutation_results_v3.json"] = _canonical(value)
     elif case == "frozen_id_duplicate":
         payloads["regression/" + "frozen_" + "19_details.json"] = b"{}\n"
@@ -204,9 +265,7 @@ def _mutate_evidence(payloads: dict[str, bytes], case: str) -> None:
         testcase = next(root.iter("testcase"))
         suite.remove(testcase)
         _recount_junit(root)
-        payloads["junit/0002.xml"] = ET.tostring(
-            root, encoding="utf-8", xml_declaration=True
-        )
+        payloads["junit/0002.xml"] = _xml(root)
 
 
 def _run_verifier(package: Path) -> tuple[int, str, str]:
@@ -256,7 +315,7 @@ def _valid_external_mutation_payloads() -> tuple[dict[str, bytes], dict[str, obj
             "testcase",
             {"classname": classname, "name": name, "time": "0"},
         )
-    junit = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    junit = _xml(root)
     limits = policy["limits"]
     canonical = parse_pytest_junit_closed(
         junit,
@@ -275,6 +334,7 @@ def _valid_external_mutation_payloads() -> tuple[dict[str, bytes], dict[str, obj
             "python3", "-m", "pytest", "-q", "--disable-warnings",
             "tests/ac23/test_candidate_artifact_identity.py",
             "tests/ac23/test_evidence_semantics.py",
+            "tests/ac23/test_verifier_purity.py",
             "-k", "mutation or evidence_semantics_attack or closed_junit_integration_attack",
             "--junitxml=.ac23-mutation-run/results.xml",
             "--basetemp", ".ac23-mutation-run/tmp",
@@ -344,7 +404,7 @@ def _assert_external_mutation_failure(case: str, expected: str) -> None:
         else:
             suite.append(copy.deepcopy(testcases[0]))
             suite.set("tests", str(len(testcases) + 1))
-        payloads[junit_path] = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+        payloads[junit_path] = _xml(root)
         details = json.loads(payloads[details_path])
         details["junit_sha256"] = hashlib.sha256(payloads[junit_path]).hexdigest()
         payloads[details_path] = _canonical(details)
@@ -352,6 +412,23 @@ def _assert_external_mutation_failure(case: str, expected: str) -> None:
         details = json.loads(payloads[details_path])
         if case == "category_swap":
             details["legacy_categories"][0]["category"] = 2
+        elif case == "category_false":
+            details["legacy_categories"][0]["category"] = False
+        elif case == "category_float":
+            details["legacy_categories"][0]["category"] = 1.0
+        elif case.startswith("mutation_exit_"):
+            variant = case.removeprefix("mutation_exit_")
+            if variant == "missing":
+                details.pop("exit_code")
+            else:
+                details["exit_code"] = {
+                    "false": False,
+                    "true": True,
+                    "float": 0.0,
+                    "negative_zero_float": -0.0,
+                    "string": "0",
+                    "null": None,
+                }[variant]
         elif case == "details_junit_digest":
             details["junit_sha256"] = "0" * 64
         else:
@@ -371,6 +448,95 @@ def _assert_checksum_valid(package: Path) -> None:
         check=False,
     )
     assert completed.returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("variant", "value"),
+    [
+        ("false", False),
+        ("true", True),
+        ("float", 0.0),
+        ("negative-zero-float", -0.0),
+        ("string", "0"),
+        ("null", None),
+        ("missing", object()),
+    ],
+    ids=["false", "true", "float", "negative-zero-float", "string", "null", "missing"],
+)
+def test_evidence_semantics_attack_final_matrix_exit(
+    tmp_path: Path, variant: str, value: object
+) -> None:
+    source_text = os.environ.get("AC23_PACKAGE_ROOT")
+    if not source_text:
+        pytest.skip("AC23_PACKAGE_ROOT is required")
+    package = Path(source_text)
+    evidence = tmp_path / "matrix"
+    evidence.mkdir()
+    root = ET.Element("testsuites", {"name": "pytest tests"})
+    suite = ET.SubElement(
+        root,
+        "testsuite",
+        {
+            "name": "pytest",
+            "errors": "0",
+            "failures": "0",
+            "skipped": "0",
+            "tests": str(len(FINAL_MATRIX_IDS)),
+            "time": "0",
+            "timestamp": "2026-08-04T00:00:00.000000+00:00",
+            "hostname": "fixture-host",
+        },
+    )
+    for identity in sorted(FINAL_MATRIX_IDS):
+        classname, name = identity.split("::", 1)
+        ET.SubElement(
+            suite,
+            "testcase",
+            {"classname": classname, "name": name, "time": "0"},
+        )
+    junit = _xml(root)
+    policy = load_evidence_policy((TOOLS_ROOT / "evidence_policy_v3.json").read_bytes())
+    limits = policy["limits"]
+    canonical = parse_pytest_junit_closed(
+        junit,
+        expected_testcase_ids=FINAL_MATRIX_IDS,
+        max_bytes=limits["max_junit_bytes"],
+        max_elements=limits["max_xml_elements"],
+    ).to_bytes()
+    (evidence / "stdout.bin").write_bytes(b"")
+    (evidence / "stderr.bin").write_bytes(b"")
+    (evidence / "junit.xml").write_bytes(junit)
+    (evidence / "canonical.json").write_bytes(canonical)
+    (evidence / "subject.json").write_bytes(_canonical(final_matrix_subject(package)))
+    command = {
+        "schema_version": "butler.box5.ac23-final-matrix-command.v1",
+        "argv": [
+            "python3", "-m", "pytest", "-q", "--disable-warnings",
+            "tests/ac23/test_candidate_artifact_identity.py", "-k", "normal",
+            "--junitxml=.ac23-final-matrix/junit.xml", "--basetemp",
+            ".ac23-final-matrix/tmp",
+        ],
+        "cwd": "candidate",
+        "start_utc": "2026-08-04T00:00:00.000Z",
+        "end_utc": "2026-08-04T00:00:01.000Z",
+        "exit_code": 0,
+        "termination": "exit",
+        "stdout_path": "stdout.bin",
+        "stdout_sha256": hashlib.sha256(b"").hexdigest(),
+        "stderr_path": "stderr.bin",
+        "stderr_sha256": hashlib.sha256(b"").hexdigest(),
+        "junit_path": "junit.xml",
+        "junit_sha256": hashlib.sha256(junit).hexdigest(),
+        "canonical_path": "canonical.json",
+        "canonical_sha256": hashlib.sha256(canonical).hexdigest(),
+    }
+    if variant == "missing":
+        command.pop("exit_code")
+    else:
+        command["exit_code"] = value
+    (evidence / "command.json").write_bytes(_canonical(command))
+    with pytest.raises((MatrixError, StrictJsonError)):
+        verify_final_matrix(evidence, package, TOOLS_ROOT / "evidence_policy_v3.json")
 
 
 @pytest.mark.parametrize(("case", "expected"), CASES, ids=[case for case, _ in CASES])
@@ -395,11 +561,17 @@ def test_evidence_semantics_attack(tmp_path: Path, case: str, expected: str) -> 
         elif case == "checksum_extra": _replace(checksum, b"".join(lines + [b"0" * 64 + b"  zzzz-extra\n"]))
         elif case == "checksum_unsorted": _replace(checksum, b"".join(reversed(lines)))
         else: _replace(checksum, b"".join(lines + [b"0" * 64 + b"  SHA256SUMS.txt\n"]))
-    elif case in {"policy_mismatch", "frozen_id_missing"}:
+    elif case in {"policy_mismatch", "frozen_id_missing", "policy_limit_false", "policy_limit_float"}:
         policy = package / "VERIFY/evidence_policy_v3.json"
         if case == "frozen_id_missing":
             value = json.loads(policy.read_text(encoding="utf-8"))
             value["frozen_" + "acceptance"] = []
+            _replace(policy, _canonical(value))
+        elif case.startswith("policy_limit_"):
+            value = json.loads(policy.read_text(encoding="utf-8"))
+            value["limits"]["max_xml_elements"] = (
+                False if case.endswith("false") else 200000.0
+            )
             _replace(policy, _canonical(value))
         else:
             _replace(policy, policy.read_bytes().rstrip() + b" \n")

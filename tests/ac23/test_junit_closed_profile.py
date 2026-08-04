@@ -64,7 +64,10 @@ def _normal_root() -> ET.Element:
 
 
 def _xml(root: ET.Element) -> bytes:
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    return (
+        b'<?xml version="1.0" encoding="utf-8"?>'
+        + ET.tostring(root, encoding="utf-8", xml_declaration=False)
+    )
 
 
 def _case() -> ET.Element:
@@ -175,6 +178,52 @@ def _wrapped_case() -> bytes:
     return _xml(root)
 
 
+def _insert_before_root(fragment: bytes) -> bytes:
+    payload = _xml(_normal_root())
+    declaration = b'<?xml version="1.0" encoding="utf-8"?>'
+    return declaration + fragment + payload[len(declaration) :]
+
+
+def _insert_inside_root(fragment: bytes) -> bytes:
+    payload = _xml(_normal_root())
+    marker = b"><testsuite "
+    assert marker in payload
+    return payload.replace(marker, b">" + fragment + b"<testsuite ", 1)
+
+
+def _insert_after_root(fragment: bytes) -> bytes:
+    return _xml(_normal_root()) + fragment
+
+
+def _element_text(element: str, text: str) -> bytes:
+    root = _normal_root()
+    target = next(root.iter(element))
+    target.text = text
+    return _xml(root)
+
+
+def _testcase_tail(text: str) -> bytes:
+    root = _normal_root()
+    next(root.iter("testcase")).tail = text
+    return _xml(root)
+
+
+def _timestamp(value: str) -> bytes:
+    return _suite_attr("timestamp", value)
+
+
+def _attribute_reference(attribute: str, reference: bytes) -> bytes:
+    payload = _xml(_normal_root())
+    marker = (
+        b'classname="tests.ac23.test_junit_closed_profile"'
+        if attribute == "classname"
+        else b'name="test_fixture_pass"'
+    )
+    replacement = attribute.encode("ascii") + b'="test' + reference + b'fixture"'
+    assert marker in payload
+    return payload.replace(marker, replacement, 1)
+
+
 JUNIT_CASES: list[tuple[str, int, bytes, str]] = [
     ("descendant_failure", 1, _nested_status("failure"), "E_EVIDENCE_JUNIT_STATUS"),
     ("descendant_error", 1, _nested_status("error"), "E_EVIDENCE_JUNIT_STATUS"),
@@ -199,6 +248,28 @@ JUNIT_CASES: list[tuple[str, int, bytes, str]] = [
     ("failure_under_suite", 9, _suite_child("failure"), "E_EVIDENCE_JUNIT_STATUS"),
     ("passed_under_testcase", 9, _case_child("passed"), "E_EVIDENCE_JUNIT_STRUCTURE"),
     ("testcase_under_wrapper", 9, _wrapped_case(), "E_EVIDENCE_JUNIT_STRUCTURE"),
+    ("comment_before_root", 10, _insert_before_root(b"<!--x-->"), "E_EVIDENCE_JUNIT_DECLARATION"),
+    ("comment_inside_root", 10, _insert_inside_root(b"<!--x-->"), "E_EVIDENCE_JUNIT_DECLARATION"),
+    ("comment_after_root", 10, _insert_after_root(b"<!--x-->"), "E_EVIDENCE_JUNIT_DECLARATION"),
+    ("pi_before_root", 11, _insert_before_root(b"<?x y?>"), "E_EVIDENCE_JUNIT_DECLARATION"),
+    ("pi_inside_root", 11, _insert_inside_root(b"<?x y?>"), "E_EVIDENCE_JUNIT_DECLARATION"),
+    ("pi_after_root", 11, _insert_after_root(b"<?x y?>"), "E_EVIDENCE_JUNIT_DECLARATION"),
+    ("cdata", 12, _insert_inside_root(b"<![CDATA[x]]>"), "E_EVIDENCE_JUNIT_DECLARATION"),
+    ("root_text", 13, _element_text("testsuites", "forbidden"), "E_EVIDENCE_JUNIT_STRUCTURE"),
+    ("suite_text", 13, _element_text("testsuite", "forbidden"), "E_EVIDENCE_JUNIT_STRUCTURE"),
+    ("testcase_text", 13, _element_text("testcase", "forbidden"), "E_EVIDENCE_JUNIT_STRUCTURE"),
+    ("testcase_tail", 13, _testcase_tail("forbidden"), "E_EVIDENCE_JUNIT_STRUCTURE"),
+    ("iso_week_timestamp", 14, _timestamp("2026-W32-2T00:00:00.000000+00:00"), "E_EVIDENCE_JUNIT_ATTRIBUTE"),
+    ("basic_timestamp", 14, _timestamp("20260804T000000.000000+00:00"), "E_EVIDENCE_JUNIT_ATTRIBUTE"),
+    ("timestamp_without_timezone", 14, _timestamp("2026-08-04T00:00:00.000000"), "E_EVIDENCE_JUNIT_ATTRIBUTE"),
+    ("timestamp_non_utc", 14, _timestamp("2026-08-04T09:00:00.000000+09:00"), "E_EVIDENCE_JUNIT_ATTRIBUTE"),
+    ("timestamp_wrong_precision", 14, _timestamp("2026-08-04T00:00:00.000+00:00"), "E_EVIDENCE_JUNIT_ATTRIBUTE"),
+    ("classname_lf_reference", 15, _attribute_reference("classname", b"&#10;"), "E_EVIDENCE_JUNIT_ATTRIBUTE"),
+    ("name_cr_reference", 15, _attribute_reference("name", b"&#13;"), "E_EVIDENCE_JUNIT_ATTRIBUTE"),
+    ("name_tab_reference", 15, _attribute_reference("name", b"&#9;"), "E_EVIDENCE_JUNIT_ATTRIBUTE"),
+    ("bom", 16, b"\xef\xbb\xbf" + _xml(_normal_root()), "E_EVIDENCE_JUNIT_DECLARATION"),
+    ("unknown_attribute", 16, _suite_attr("forbidden", "x"), "E_EVIDENCE_JUNIT_ATTRIBUTE"),
+    ("noncanonical_declaration", 16, _xml(_normal_root()).replace(b'encoding="utf-8"', b"encoding='utf-8'", 1), "E_EVIDENCE_JUNIT_DECLARATION"),
 ]
 
 
@@ -218,7 +289,7 @@ def _parse_packaged(payload: bytes, expected: frozenset[str] = EXPECTED):
 
 def test_closed_junit_normal_canonical_bytes() -> None:
     expected = (
-        b'{"errors":0,"failures":0,"profile":"pytest-junit-pass-v1",'
+        b'{"errors":0,"failures":0,"profile":"pytest-junit-pass-v2",'
         b'"skipped":0,"testcase_ids":["tests.ac23.test_junit_closed_profile::'
         b'test_fixture_pass"],"tests":1}\n'
     )

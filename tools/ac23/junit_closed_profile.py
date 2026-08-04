@@ -9,10 +9,10 @@ import re
 import unicodedata
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 
-PROFILE = "pytest-junit-pass-v1"
+PROFILE = "pytest-junit-pass-v2"
 ROOT_ATTRIBUTES = {"name"}
 SUITE_ATTRIBUTES = {
     "name",
@@ -29,10 +29,9 @@ KNOWN_TAGS = {"testsuites", "testsuite", "testcase"}
 STATUS_TAGS = {"failure", "error", "skipped"}
 CANONICAL_DECIMAL = re.compile(r"(?:0|[1-9][0-9]*)\Z")
 CANONICAL_DURATION = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\Z")
-XML_DECLARATION = re.compile(
-    br"<\?xml[ \t]+version=(?:\"1\.0\"|'1\.0')[ \t]+"
-    br"encoding=(?:\"utf-8\"|'utf-8')[ \t]*\?>",
-    re.IGNORECASE,
+XML_DECLARATION = b'<?xml version="1.0" encoding="utf-8"?>'
+JUNIT_TIMESTAMP = re.compile(
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+00:00\Z"
 )
 
 
@@ -75,21 +74,29 @@ def _raise(code: str) -> None:
 
 
 def preflight_xml_bytes(payload: bytes, *, max_bytes: int) -> None:
-    if not isinstance(payload, bytes) or not payload or len(payload) > max_bytes:
+    if type(payload) is not bytes or not payload or len(payload) > max_bytes:
         _raise("E_EVIDENCE_JUNIT_SIZE")
-    if b"\x00" in payload:
+    if payload.startswith(b"\xef\xbb\xbf"):
+        _raise("E_EVIDENCE_JUNIT_DECLARATION")
+    try:
+        payload.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        _raise("E_EVIDENCE_JUNIT_DECLARATION")
+    if not payload.startswith(XML_DECLARATION):
+        _raise("E_EVIDENCE_JUNIT_DECLARATION")
+    body = payload[len(XML_DECLARATION) :]
+    if not body.startswith(b"<") or body.endswith(tuple(bytes([value]) for value in range(0x21))):
+        _raise("E_EVIDENCE_JUNIT_DECLARATION")
+    if any(value < 0x20 for value in payload):
         _raise("E_EVIDENCE_JUNIT_DECLARATION")
     folded = payload.upper()
-    if b"<!DOCTYPE" in folded or b"<!ENTITY" in folded:
-        _raise("E_EVIDENCE_JUNIT_DECLARATION")
-    candidate = payload[3:] if payload.startswith(b"\xef\xbb\xbf") else payload
-    if candidate.startswith(b"<?xml"):
-        declaration_end = candidate.find(b"?>")
-        if declaration_end < 0 or XML_DECLARATION.fullmatch(
-            candidate[: declaration_end + 2]
-        ) is None:
-            _raise("E_EVIDENCE_JUNIT_DECLARATION")
-    elif not candidate.startswith(b"<"):
+    if (
+        b"<?" in body
+        or b"<!--" in payload
+        or b"<![CDATA[" in folded
+        or b"<!DOCTYPE" in folded
+        or b"<!ENTITY" in folded
+    ):
         _raise("E_EVIDENCE_JUNIT_DECLARATION")
 
 
@@ -123,8 +130,13 @@ def scan_all_xml_elements(root: ET.Element, *, max_elements: int) -> None:
         ):
             _raise("E_EVIDENCE_JUNIT_STRUCTURE")
         for attribute in element.attrib:
-            if "{" in attribute or "}" in attribute:
+            if type(attribute) is not str or "{" in attribute or "}" in attribute:
                 _raise("E_EVIDENCE_JUNIT_STRUCTURE")
+
+
+def _validate_layout_text(value: str | None) -> None:
+    if value is not None and (type(value) is not str or value.strip(" ") != ""):
+        _raise("E_EVIDENCE_JUNIT_STRUCTURE")
 
 
 def _require_attributes(
@@ -155,24 +167,25 @@ def _validate_duration(value: str) -> None:
         _raise("E_EVIDENCE_JUNIT_ATTRIBUTE")
 
 
-def _validate_text(value: str, *, max_bytes: int, allow_xml_newline_reference: bool = False) -> None:
+def _validate_text(value: str, *, max_bytes: int) -> None:
     if not value or value != value.strip() or unicodedata.normalize("NFC", value) != value:
         _raise("E_EVIDENCE_JUNIT_ATTRIBUTE")
     if len(value.encode("utf-8")) > max_bytes or "\x00" in value:
         _raise("E_EVIDENCE_JUNIT_ATTRIBUTE")
-    # Existing pinned pytest parameter IDs contain XML character references for
-    # newlines.  ElementTree decodes those references, so reject literal control
-    # characters other than that producer-specific representation.
-    if any(ord(character) < 0x20 and character not in ({"\n"} if allow_xml_newline_reference else set()) for character in value):
+    if any(ord(character) < 0x20 for character in value):
         _raise("E_EVIDENCE_JUNIT_ATTRIBUTE")
 
 
 def _validate_timestamp(value: str) -> None:
+    if type(value) is not str or JUNIT_TIMESTAMP.fullmatch(value) is None:
+        _raise("E_EVIDENCE_JUNIT_ATTRIBUTE")
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%f%z")
     except ValueError:
         _raise("E_EVIDENCE_JUNIT_ATTRIBUTE")
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
+    if parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+        _raise("E_EVIDENCE_JUNIT_ATTRIBUTE")
+    if parsed.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00") != value:
         _raise("E_EVIDENCE_JUNIT_ATTRIBUTE")
 
 
@@ -186,6 +199,8 @@ def validate_pytest_junit_grammar(
 ) -> tuple[str, ...]:
     if root.tag != "testsuites":
         _raise("E_EVIDENCE_JUNIT_STRUCTURE")
+    _validate_layout_text(root.text)
+    _validate_layout_text(root.tail)
     _require_attributes(
         root,
         ROOT_ATTRIBUTES,
@@ -206,6 +221,8 @@ def validate_pytest_junit_grammar(
     )
     if suite.attrib["name"] != "pytest":
         _raise("E_EVIDENCE_JUNIT_ATTRIBUTE")
+    _validate_layout_text(suite.text)
+    _validate_layout_text(suite.tail)
     _validate_duration(suite.attrib["time"])
     _validate_timestamp(suite.attrib["timestamp"])
     _validate_text(suite.attrib["hostname"], max_bytes=max_attribute_value_bytes)
@@ -218,6 +235,8 @@ def validate_pytest_junit_grammar(
     for case in cases:
         if case.tag != "testcase" or list(case):
             _raise("E_EVIDENCE_JUNIT_STRUCTURE")
+        _validate_layout_text(case.text)
+        _validate_layout_text(case.tail)
         _require_attributes(
             case,
             CASE_ATTRIBUTES,
@@ -227,11 +246,7 @@ def validate_pytest_junit_grammar(
         classname = case.attrib["classname"]
         name = case.attrib["name"]
         _validate_text(classname, max_bytes=max_testcase_id_bytes)
-        _validate_text(
-            name,
-            max_bytes=max_testcase_id_bytes,
-            allow_xml_newline_reference=True,
-        )
+        _validate_text(name, max_bytes=max_testcase_id_bytes)
         _validate_duration(case.attrib["time"])
         pair = (classname, name)
         display_id = f"{classname}::{name}"
@@ -264,7 +279,10 @@ def parse_pytest_junit_closed(
 ) -> CanonicalJunitResult:
     preflight_xml_bytes(payload, max_bytes=max_bytes)
     try:
-        root = ET.fromstring(payload)
+        parser = ET.XMLParser(
+            target=ET.TreeBuilder(insert_comments=True, insert_pis=True)
+        )
+        root = ET.fromstring(payload, parser=parser)
     except (ET.ParseError, ValueError):
         _raise("E_EVIDENCE_JUNIT_PARSE")
     scan_all_xml_elements(root, max_elements=max_elements)

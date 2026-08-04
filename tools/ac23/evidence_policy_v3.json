@@ -206,6 +206,191 @@
       "expected_error": "E_OBJECT_FORMAT_UNSUPPORTED",
       "name": "object_format_sha256",
       "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[object_format_sha256]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_true",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_true]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_negative_zero_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_negative_zero_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_string",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_string]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "command_exit_null",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_null]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_COMMAND",
+      "name": "command_exit_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[command_exit_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_true",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_true]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_negative_zero_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_negative_zero_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_string",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_string]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_NONZERO_EXIT",
+      "name": "mutation_exit_null",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_null]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_SCHEMA",
+      "name": "mutation_exit_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[mutation_exit_missing]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_COMMAND",
+      "name": "sequence_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[sequence_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_COMMAND",
+      "name": "sequence_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[sequence_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_MUTATION_MAPPING",
+      "name": "category_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[category_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_MUTATION_MAPPING",
+      "name": "category_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[category_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_SUMMARY",
+      "name": "summary_count_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[summary_count_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_SUMMARY",
+      "name": "summary_count_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[summary_count_float]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_POLICY",
+      "name": "policy_limit_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[policy_limit_false]"
+    },
+    {
+      "expected_error": "E_EVIDENCE_POLICY",
+      "name": "policy_limit_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack[policy_limit_float]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_false",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[false]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_true",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[true]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[float]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_negative_zero_float",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[negative-zero-float]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_string",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[string]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_null",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[null]"
+    },
+    {
+      "expected_error": "E_FINAL_PACKAGE_MATRIX",
+      "name": "final_matrix_exit_missing",
+      "testcase": "tests.ac23.test_evidence_semantics::test_evidence_semantics_attack_final_matrix_exit[missing]"
+    },
+    {
+      "expected_error": "E_INPUT_MUTATED",
+      "name": "verifier_purity_no_tmp_and_repeatable",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_no_tmp_and_repeatable"
+    },
+    {
+      "expected_error": "E_INPUT_MUTATED",
+      "name": "verifier_purity_read_only_input",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_read_only_input"
+    },
+    {
+      "expected_error": "E_WORK_ROOT",
+      "name": "verifier_purity_explicit_work_root",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_explicit_work_root"
+    },
+    {
+      "expected_error": "E_WORK_ROOT",
+      "name": "verifier_purity_rejects_internal_work_root",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_rejects_internal_work_root"
+    },
+    {
+      "expected_error": "E_WORK_ROOT_CLEANUP",
+      "name": "verifier_purity_failure_has_no_residue",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_failure_has_no_residue"
+    },
+    {
+      "expected_error": "E_WORK_ROOT_CLEANUP",
+      "name": "verifier_purity_child_temp_and_git_guards",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_child_temp_and_git_guards"
+    },
+    {
+      "expected_error": "E_WORK_ROOT_CLEANUP",
+      "name": "verifier_purity_cleanup_failure_is_nonpass",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_cleanup_failure_is_nonpass"
+    },
+    {
+      "expected_error": "E_INPUT_MUTATED",
+      "name": "verifier_purity_input_mutation_overrides",
+      "testcase": "tests.ac23.test_verifier_purity::test_evidence_semantics_attack_verifier_purity_input_mutation_overrides"
     }
   ],
   "junit_profile": {
@@ -353,10 +538,142 @@
         "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
         "name": "testcase_under_wrapper",
         "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[testcase_under_wrapper]"
+      },
+      {
+        "category": 10,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "comment_before_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[comment_before_root]"
+      },
+      {
+        "category": 10,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "comment_inside_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[comment_inside_root]"
+      },
+      {
+        "category": 10,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "comment_after_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[comment_after_root]"
+      },
+      {
+        "category": 11,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "pi_before_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[pi_before_root]"
+      },
+      {
+        "category": 11,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "pi_inside_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[pi_inside_root]"
+      },
+      {
+        "category": 11,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "pi_after_root",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[pi_after_root]"
+      },
+      {
+        "category": 12,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "cdata",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[cdata]"
+      },
+      {
+        "category": 13,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "root_text",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[root_text]"
+      },
+      {
+        "category": 13,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "suite_text",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[suite_text]"
+      },
+      {
+        "category": 13,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "testcase_text",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[testcase_text]"
+      },
+      {
+        "category": 13,
+        "expected_error": "E_EVIDENCE_JUNIT_STRUCTURE",
+        "name": "testcase_tail",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[testcase_tail]"
+      },
+      {
+        "category": 14,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "iso_week_timestamp",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[iso_week_timestamp]"
+      },
+      {
+        "category": 14,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "basic_timestamp",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[basic_timestamp]"
+      },
+      {
+        "category": 14,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "timestamp_without_timezone",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[timestamp_without_timezone]"
+      },
+      {
+        "category": 14,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "timestamp_non_utc",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[timestamp_non_utc]"
+      },
+      {
+        "category": 14,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "timestamp_wrong_precision",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[timestamp_wrong_precision]"
+      },
+      {
+        "category": 15,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "classname_lf_reference",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[classname_lf_reference]"
+      },
+      {
+        "category": 15,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "name_cr_reference",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[name_cr_reference]"
+      },
+      {
+        "category": 15,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "name_tab_reference",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[name_tab_reference]"
+      },
+      {
+        "category": 16,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "bom",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[bom]"
+      },
+      {
+        "category": 16,
+        "expected_error": "E_EVIDENCE_JUNIT_ATTRIBUTE",
+        "name": "unknown_attribute",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[unknown_attribute]"
+      },
+      {
+        "category": 16,
+        "expected_error": "E_EVIDENCE_JUNIT_DECLARATION",
+        "name": "noncanonical_declaration",
+        "testcase": "tests.ac23.test_evidence_semantics::test_closed_junit_integration_attack[noncanonical_declaration]"
       }
     ],
-    "fixture_manifest_sha256": "77dc39a18db00dd83158a30bc3d42dcd0b1cf771bc3803f0ce64ad5db8f5f42e",
-    "profile": "pytest-junit-pass-v1",
+    "fixture_manifest_sha256": "5a6462118d26cc4c9cd150ec063fb485635bbbd929bb85ab5ef2902e6d9031e6",
+    "profile": "pytest-junit-pass-v2",
     "root_attributes": [
       "name"
     ],
@@ -604,7 +921,7 @@
         "tests.ac23.test_candidate_artifact_identity::test_unit_url_rejects_credential_material[https://user:password@example.com/repo.git]",
         "tests.ac23.test_candidate_artifact_identity::test_unit_url_scp_canonicalization"
       ],
-      "parser": "pytest-junit-pass-v1",
+      "parser": "pytest-junit-pass-v2",
       "required": true,
       "result_path": "junit/0001.xml",
       "run_id": "ac23-source-unit"
@@ -792,7 +1109,7 @@
         "tests.firstscreen_trusted.test_trusted_junit_semantics_box5::test_trusted_parser_blocks_semantic_forgery[<testsuites tests=\"2\" failures=\"0\" errors=\"0\" skipped=\"0\"><testsuite name=\"box5\" tests=\"2\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase classname=\"box5.authorization\" name=\"allow\"/><testcase classname=\"box5.authorization\" name=\"allow\"/></testsuite></testsuites>-JUNIT_DUPLICATE_TESTCASE]",
         "tests.firstscreen_trusted.test_trusted_junit_semantics_box5::test_trusted_parser_blocks_semantic_forgery[<testsuites tests=\"2\" failures=\"0\" errors=\"0\" skipped=\"0\"><testsuite name=\"same\" tests=\"1\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase classname=\"box5.authorization\" name=\"allow\"/></testsuite><testsuite name=\"same\" tests=\"1\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase classname=\"x\" name=\"b\"/></testsuite></testsuites>-JUNIT_DUPLICATE_OR_EMPTY_SUITE_IDENTITY]"
       ],
-      "parser": "pytest-junit-pass-v1",
+      "parser": "pytest-junit-pass-v2",
       "required": true,
       "result_path": "junit/0002.xml",
       "run_id": "frozen-python"

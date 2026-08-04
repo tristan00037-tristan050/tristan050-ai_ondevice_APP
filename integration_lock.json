@@ -252,9 +252,9 @@
     },
     "scripts/verify_box5_integration_lock.py": {
       "mode": "100644",
-      "blob_oid": "a99da3026316ea0b04fc37afb9fb3bac6a13be32",
-      "sha256": "35f0d2a680b7202d93ce1dcff348a96f09ec3cc42c12ba4c1c5629401d4ccb3e",
-      "size": 18669
+      "blob_oid": "0b1f321564b313d926f506e04127d22db29739de",
+      "sha256": "bb5df465525d3c416f689dba215fa28d8694ae6de94a930392022fb272f2efd7",
+      "size": 18752
     },
     "scripts/write_build_info.py": {
       "mode": "100644",
@@ -270,15 +270,21 @@
     },
     "tests/ac23/test_evidence_semantics.py": {
       "mode": "100644",
-      "blob_oid": "5a3286bf29cc94856743dcb86d516368003082a0",
-      "sha256": "8fe3e786aeef9e47c06bfedaa03cee7fd5c5e4c091be688355986496cd939ddd",
-      "size": 20619
+      "blob_oid": "3152827b2af29fff5735938f76ceaaa758ac532f",
+      "sha256": "a9920d6aedadc58fcad37ca66532d2fd2b9d130960afebc2b127bddabbcf482f",
+      "size": 27678
     },
     "tests/ac23/test_junit_closed_profile.py": {
       "mode": "100644",
-      "blob_oid": "5311dc97f2fddd0e1116f65d2d504ac4dc1c69c9",
-      "sha256": "c6f8a5852f1bdf8a5429e131e2e26ee66253cdd47bad685fd0f384eb77cd750d",
-      "size": 7862
+      "blob_oid": "52c7d9f90f7f68412c5fd7315480af2386564bc1",
+      "sha256": "c04f7eb8e75923571fb371c23c3e757bdb0bc2417b633731b97434d5395a36cf",
+      "size": 11484
+    },
+    "tests/ac23/test_verifier_purity.py": {
+      "mode": "100644",
+      "blob_oid": "b657d6d5069d566a4217da34cc0ffa6ef7b957b6",
+      "sha256": "4cb9dfbacfc18511b2cf65040190ad4a437ce426fdcfc04a82a2cf869d52613b",
+      "size": 6975
     },
     "tests/accounting/assignment/authorization_testkit.py": {
       "mode": "100644",
@@ -348,60 +354,66 @@
     },
     "tools/ac23/build_candidate_artifact_identity.py": {
       "mode": "100755",
-      "blob_oid": "cb999bbbe43c3108798b599f9d0a515bda2c19a2",
-      "sha256": "b6548f264473773f04645fb318fcdd839033a6d4ace794a6d12704a5ca3ac363",
-      "size": 21491
+      "blob_oid": "6685634dcbc32afc99c4aff3e89acc2da95b9a66",
+      "sha256": "6a641f531bd267f2aa16878820a13ffa0913b05f305f193422644be629bd9fc5",
+      "size": 22074
     },
     "tools/ac23/collect_ac23_evidence.py": {
       "mode": "100755",
-      "blob_oid": "467f8963ac1bdc5481b71f0ca4ffd27eacf37b2a",
-      "sha256": "17543c43607beca2856cdd2cadf99e673fed89a4194196a886fd32e084c03e9c",
-      "size": 17974
+      "blob_oid": "dd183384f0a00d6ecedec891842d2b77fdf95ef8",
+      "sha256": "45fc057ea936834c59017719d58b7b911001e2bbf6d7313129bc7033b9cd9675",
+      "size": 18683
     },
     "tools/ac23/collect_final_package_matrix.py": {
       "mode": "100755",
-      "blob_oid": "aaa3d28a66041136b652f61c069dc6883f22a751",
-      "sha256": "0c33128418e9874723f96b4ffea7add7709106ed06db1b74356d1d1cc14a80b2",
-      "size": 9734
+      "blob_oid": "3f3dbe469bc7a77324e50aa53dca4fcb3a7ff927",
+      "sha256": "41d96d26755e259aee4210700725b5aa2442bf718ec79648141570a9706f2636",
+      "size": 11353
     },
     "tools/ac23/evidence_policy_v3.json": {
       "mode": "100644",
-      "blob_oid": "5cf92cdbebc107467b98f401c3bb15abdcf55308",
-      "sha256": "1d1ffec3a84748caa2b180c08fa707d4187773fd80fcd6725990b9865fa240f0",
-      "size": 48895
+      "blob_oid": "44d52260b04b35f2b1141a663be9dd964ef19534",
+      "sha256": "f8769f4bba29af5f1946cdfff72b7a9b403bb04f574a2574863c7b6170b05863",
+      "size": 62312
     },
     "tools/ac23/junit_closed_profile.py": {
       "mode": "100644",
-      "blob_oid": "71a71fc01babbff8f95d3a2109cf50cdf8ad7acd",
-      "sha256": "c8415fb38176ad00e4dbc7fdb13847ea6627eb59fee88779aa57309ab2911c5b",
-      "size": 9568
+      "blob_oid": "cbbc25f87aa65c8868cecc6223f29310608ed5bc",
+      "sha256": "f9da554dcea34c832edb7f75df49ba719674d70b708e3c867c58e41f9d2e5ab5",
+      "size": 10160
     },
     "tools/ac23/package_ac23.sh": {
       "mode": "100755",
-      "blob_oid": "683408b4c45a7880bcf74aee37397971a92f4927",
-      "sha256": "1cbb8aab76ea920af203846914fcd679ca2e419fed0b0eba048397803c93a2db",
-      "size": 4762
+      "blob_oid": "e3f2cf21fc82dcf46ed0b4ae3e060ee9cac53f67",
+      "sha256": "848f282e4910998272ec3ccd46a9b67de5750582bcc1de71c57d9e85f48b4346",
+      "size": 5867
     },
     "tools/ac23/run_ac23_mutations.py": {
       "mode": "100755",
-      "blob_oid": "84657f5cb2c40111fdb9f10db07587e44722d871",
-      "sha256": "055492a47e5432170b1d8e60065d6bba5be6cd2c31a82ab88c95b708978fbd00",
-      "size": 8573
+      "blob_oid": "938aee8e75bccb26f72907915c550d722429cc6c",
+      "sha256": "70cd8f4a255d29b319258a348195b0747e3a54215fd54713b0edd171a5ac6cc3",
+      "size": 9733
+    },
+    "tools/ac23/strict_json.py": {
+      "mode": "100644",
+      "blob_oid": "98ed582e0b9f0637297aebfe3c4f41f37eb9f776",
+      "sha256": "d2f83f1989eadd347cb968c1417e6f8e3c2afb0cbb8b1512a127f4b5c698d3a4",
+      "size": 5448
     },
     "tools/ac23/verify_candidate_artifact_identity.py": {
       "mode": "100755",
-      "blob_oid": "2824e2b1b436af49c25bde467e1cfa168f5d545d",
-      "sha256": "75ab91821530f221b803ccdb50fc14542c1e216d415ae70d6f34c5ea6bffb1e0",
-      "size": 62948
+      "blob_oid": "77341ee45dcb61abdc741d4c199b30c786dc82d4",
+      "sha256": "fa2badd7e5968e99fab18cb07c441866fade5c4db9e2d5af6bbfccd245de0fb3",
+      "size": 74407
     },
     "tools/ac23/verify_external_test_evidence.py": {
       "mode": "100755",
-      "blob_oid": "b77ea2d4af8a7b625f31df06f11f9d7e4d41f7bf",
-      "sha256": "662c280d416a3e3e27f8b8f8985fa9391792296c393bc0df66ea8e7c39e86331",
-      "size": 2787
+      "blob_oid": "7e494d8ec979ceb08b38d8306998b17b8c8377e9",
+      "sha256": "e1c7d45a88ba155da95dc2c82080cf781e5cc513a7c245b91cc8f565caa2bb6c",
+      "size": 3076
     }
   },
-  "critical_manifest_sha256": "ff940bf09cfaaf8633f8454995d9d04b2ce9a57269df968d1ade5ba911f42f53",
+  "critical_manifest_sha256": "91da2aff1b73f8d714e50d97d6f66c1a138fb79bda6941eeb1949a11312182df",
   "source_package_sha256": [
     "08c558a1192d37804531212ee5a9e881166b7795288804959e707462c1080f01",
     "2c65cb6c7260857ba69317d1e59d0f0f2d5917a5a091c27410cba0c0d0a69047",
@@ -447,6 +459,6 @@
     "tests/test_write_build_info.py"
   ],
   "owner": "알고리즘 개발팀12(온디바이스)",
-  "created_at": "2026-08-04T02:49:19Z",
-  "expires_at": "2026-08-11T02:49:19Z"
+  "created_at": "2026-08-04T05:21:12Z",
+  "expires_at": "2026-08-11T05:21:12Z"
 }

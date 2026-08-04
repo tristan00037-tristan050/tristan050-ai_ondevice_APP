@@ -8,6 +8,7 @@ The script is intentionally self-contained so the exact file can be copied to
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import hmac
 import json
@@ -16,6 +17,7 @@ import os
 import posixpath
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -25,7 +27,7 @@ import urllib.parse
 import zlib
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -53,6 +55,7 @@ MAX_TESTCASES_PER_RUN = 100_000
 MAX_ATTRIBUTE_COUNT = 8
 MAX_ATTRIBUTE_VALUE_BYTES = 8192
 MAX_TESTCASE_ID_BYTES = 4096
+MAX_SCHEMA_STRING_BYTES = 8192
 MANIFEST_KEYS = {
     "schema_version",
     "digest_algorithm",
@@ -111,6 +114,7 @@ COMMAND_KEYS = {
     "stderr_path",
     "stderr_sha256",
 }
+_CONTROLLED_TEMP: str | None = None
 
 
 class VerificationError(RuntimeError):
@@ -125,7 +129,7 @@ def fail(code: str) -> None:
 
 def _git_env(extra: dict[str, str] | None = None) -> dict[str, str]:
     env: dict[str, str] = {}
-    for key in ("PATH", "SYSTEMROOT", "TMPDIR"):
+    for key in ("PATH", "SYSTEMROOT"):
         if key in os.environ:
             env[key] = os.environ[key]
     env.update(
@@ -136,8 +140,17 @@ def _git_env(extra: dict[str, str] | None = None) -> dict[str, str]:
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_TERMINAL_PROMPT": "0",
+            "PYTHONDONTWRITEBYTECODE": "1",
         }
     )
+    if _CONTROLLED_TEMP is not None:
+        env.update(
+            {
+                "TMPDIR": _CONTROLLED_TEMP,
+                "TEMP": _CONTROLLED_TEMP,
+                "TMP": _CONTROLLED_TEMP,
+            }
+        )
     if extra:
         env.update(extra)
     return env
@@ -164,6 +177,10 @@ def _git(
         f"core.hooksPath={os.devnull}",
         "-c",
         f"core.excludesFile={os.devnull}",
+        "-c",
+        "maintenance.auto=0",
+        "-c",
+        "gc.auto=0",
         *(os.fspath(arg) for arg in args),
     ]
     result = subprocess.run(
@@ -245,6 +262,111 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return output
 
 
+def _reject_constant(_value: str) -> None:
+    fail("E_SCHEMA")
+
+
+def _canonical_json_bytes(value: object) -> bytes:
+    try:
+        text = json.dumps(
+            value,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+            allow_nan=False,
+        )
+    except (TypeError, ValueError):
+        fail("E_SCHEMA")
+    return (text + "\n").encode("utf-8")
+
+
+def require_exact_dict_keys(
+    value: object, keys: Iterable[str], code: str
+) -> dict[str, Any]:
+    if type(value) is not dict or set(value) != set(keys):
+        fail(code)
+    return value
+
+
+def require_exact_list(value: object, code: str) -> list[Any]:
+    if type(value) is not list:
+        fail(code)
+    return value
+
+
+def require_exact_str(
+    value: object,
+    code: str,
+    *,
+    min_bytes: int = 0,
+    max_bytes: int = MAX_SCHEMA_STRING_BYTES,
+    pattern: re.Pattern[str] | None = None,
+) -> str:
+    if type(value) is not str:
+        fail(code)
+    encoded = value.encode("utf-8")
+    if not min_bytes <= len(encoded) <= max_bytes:
+        fail(code)
+    if pattern is not None and pattern.fullmatch(value) is None:
+        fail(code)
+    return value
+
+
+def require_exact_bool(value: object, code: str) -> bool:
+    if type(value) is not bool:
+        fail(code)
+    return value
+
+
+def require_exact_int(
+    value: object, code: str, *, minimum: int, maximum: int
+) -> int:
+    if type(value) is not int or not minimum <= value <= maximum:
+        fail(code)
+    return value
+
+
+def require_nonnegative_int(value: object, code: str, *, maximum: int) -> int:
+    return require_exact_int(value, code, minimum=0, maximum=maximum)
+
+
+def require_zero_exit(value: object, code: str = "E_EVIDENCE_NONZERO_EXIT") -> int:
+    if type(value) is not int or value != 0:
+        fail(code)
+    return value
+
+
+def require_enum(value: object, allowed: frozenset[str], code: str) -> str:
+    text = require_exact_str(value, code, min_bytes=1, max_bytes=512)
+    if text not in allowed:
+        fail(code)
+    return text
+
+
+def require_sha256(value: object, code: str) -> str:
+    return require_exact_str(
+        value, code, max_bytes=64, pattern=re.compile(r"[0-9a-f]{64}\Z")
+    )
+
+
+def require_git_oid(value: object, code: str, *, length: int = 40) -> str:
+    return require_exact_str(
+        value,
+        code,
+        max_bytes=length,
+        pattern=re.compile(rf"[0-9a-f]{{{length}}}\Z"),
+    )
+
+
+def require_relative_posix_path(value: object, code: str) -> str:
+    text = require_exact_str(value, code, min_bytes=1, max_bytes=4096)
+    if text.startswith("/") or "\\" in text or "\x00" in text:
+        fail(code)
+    if any(part in {"", ".", ".."} for part in text.split("/")):
+        fail(code)
+    return text
+
+
 def _load_manifest(path: Path) -> dict[str, Any]:
     try:
         raw = path.read_bytes()
@@ -252,11 +374,9 @@ def _load_manifest(path: Path) -> dict[str, Any]:
         fail("E_SCHEMA")
     if len(raw) > MAX_MANIFEST_SIZE:
         fail("E_SCHEMA")
-    try:
-        value = json.loads(raw.decode("utf-8"), object_pairs_hook=_reject_duplicate_keys)
-    except (UnicodeDecodeError, json.JSONDecodeError, VerificationError):
-        fail("E_SCHEMA")
-    if not isinstance(value, dict) or set(value) != MANIFEST_KEYS:
+    value = _load_json_bytes(raw, "E_SCHEMA", MAX_MANIFEST_SIZE)
+    require_exact_dict_keys(value, MANIFEST_KEYS, "E_SCHEMA")
+    if not _same(_canonical_json_bytes(value), raw):
         fail("E_SCHEMA")
     if value.get("schema_version") != SCHEMA_VERSION:
         fail("E_SCHEMA")
@@ -274,11 +394,7 @@ def _load_manifest(path: Path) -> dict[str, Any]:
         "patch_applied_tree",
         "source_archive_tree",
     ):
-        field = value.get(key)
-        if not isinstance(field, str) or not re.fullmatch(
-            rf"[0-9a-f]{{{oid_length}}}", field
-        ):
-            fail("E_SCHEMA")
+        require_git_oid(value.get(key), "E_SCHEMA", length=oid_length)
     for key in (
         "patch_sha256",
         "source_archive_sha256",
@@ -286,13 +402,9 @@ def _load_manifest(path: Path) -> dict[str, Any]:
         "evidence_sha256",
         "normative_contract_sha256",
     ):
-        field = value.get(key)
-        if not isinstance(field, str) or not re.fullmatch(r"[0-9a-f]{64}", field):
-            fail("E_SCHEMA")
-    if not isinstance(value.get("repository_url"), str):
-        fail("E_SCHEMA")
-    if not isinstance(value.get("normative_contract_path"), str):
-        fail("E_SCHEMA")
+        require_sha256(value.get(key), "E_SCHEMA")
+    require_exact_str(value.get("repository_url"), "E_SCHEMA", min_bytes=1)
+    require_relative_posix_path(value.get("normative_contract_path"), "E_SCHEMA")
     return value
 
 
@@ -372,10 +484,16 @@ def _inspect_source_tar(path: Path) -> list[tarfile.TarInfo]:
 
 
 def _load_json_bytes(payload: bytes, code: str, maximum: int = MAX_JSON_SIZE) -> Any:
-    if len(payload) > maximum:
+    if type(payload) is not bytes or not payload or len(payload) > maximum:
+        fail(code)
+    if payload.startswith(b"\xef\xbb\xbf"):
         fail(code)
     try:
-        return json.loads(payload.decode("utf-8"), object_pairs_hook=_reject_duplicate_keys)
+        return json.loads(
+            payload.decode("utf-8", errors="strict"),
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_constant,
+        )
     except (UnicodeDecodeError, json.JSONDecodeError, VerificationError):
         fail(code)
 
@@ -446,14 +564,30 @@ def verify_package_inventory(package_root: Path) -> None:
 
 def load_evidence_policy(payload: bytes) -> dict[str, Any]:
     value = _load_json_bytes(payload, "E_EVIDENCE_POLICY")
-    if not isinstance(value, dict) or set(value) != POLICY_KEYS:
+    if type(value) is not dict or set(value) != POLICY_KEYS:
         legacy_mapping_key = "frozen_" + "acceptance"
         fail("E_EVIDENCE_POLICY_VERSION" if isinstance(value, dict) and legacy_mapping_key in value else "E_EVIDENCE_POLICY")
     if value.get("schema_version") != "butler.box5.ac23-evidence-policy.v3":
         fail("E_EVIDENCE_POLICY_VERSION")
     if value.get("object_format") != "sha1":
         fail("E_OBJECT_FORMAT_UNSUPPORTED")
-    limits = value.get("limits")
+    limits = require_exact_dict_keys(
+        value.get("limits"),
+        {
+            "max_tar_members",
+            "max_total_bytes",
+            "max_single_file_bytes",
+            "max_json_bytes",
+            "max_junit_bytes",
+            "max_output_bytes_per_stream",
+            "max_xml_elements",
+            "max_testcases_per_run",
+            "max_attribute_count_per_element",
+            "max_attribute_value_bytes",
+            "max_testcase_id_bytes",
+        },
+        "E_EVIDENCE_POLICY",
+    )
     expected_limits = {
         "max_tar_members": MAX_MEMBERS,
         "max_total_bytes": MAX_TOTAL_SIZE,
@@ -467,16 +601,18 @@ def load_evidence_policy(payload: bytes) -> dict[str, Any]:
         "max_attribute_value_bytes": MAX_ATTRIBUTE_VALUE_BYTES,
         "max_testcase_id_bytes": MAX_TESTCASE_ID_BYTES,
     }
-    if limits != expected_limits:
-        fail("E_EVIDENCE_POLICY")
+    for key, expected in expected_limits.items():
+        if require_nonnegative_int(
+            limits[key], "E_EVIDENCE_POLICY", maximum=MAX_TOTAL_SIZE
+        ) != expected:
+            fail("E_EVIDENCE_POLICY")
     profile = value.get("junit_profile")
     profile_keys = {
         "profile", "root_tag", "root_name", "suite_tag", "suite_name", "case_tag",
         "root_attributes", "suite_attributes", "case_attributes",
         "closed_junit_cases", "fixture_manifest_sha256",
     }
-    if not isinstance(profile, dict) or set(profile) != profile_keys:
-        fail("E_EVIDENCE_POLICY")
+    require_exact_dict_keys(profile, profile_keys, "E_EVIDENCE_POLICY")
     if {
         "profile": profile["profile"],
         "root_tag": profile["root_tag"],
@@ -488,7 +624,7 @@ def load_evidence_policy(payload: bytes) -> dict[str, Any]:
         "suite_attributes": profile["suite_attributes"],
         "case_attributes": profile["case_attributes"],
     } != {
-        "profile": "pytest-junit-pass-v1",
+        "profile": "pytest-junit-pass-v2",
         "root_tag": "testsuites",
         "root_name": "pytest tests",
         "suite_tag": "testsuite",
@@ -500,29 +636,34 @@ def load_evidence_policy(payload: bytes) -> dict[str, Any]:
     }:
         fail("E_EVIDENCE_POLICY")
     closed = profile["closed_junit_cases"]
-    if not isinstance(closed, list) or len(closed) != 23:
+    if type(closed) is not list or not closed:
         fail("E_EVIDENCE_POLICY")
-    if [sum(1 for item in closed if isinstance(item, dict) and item.get("category") == category) for category in range(1, 10)] != [3, 1, 2, 3, 4, 2, 2, 3, 3]:
-        fail("E_EVIDENCE_POLICY")
-    if any(
-        not isinstance(item, dict)
-        or set(item) != {"category", "name", "testcase", "expected_error"}
-        or not isinstance(item["category"], int)
-        or not all(isinstance(item[key], str) and item[key] for key in ("name", "testcase", "expected_error"))
-        for item in closed
-    ):
-        fail("E_EVIDENCE_POLICY")
-    if len({item["name"] for item in closed}) != 23 or len({item["testcase"] for item in closed}) != 23:
+    for item in closed:
+        require_exact_dict_keys(
+            item,
+            {"category", "name", "testcase", "expected_error"},
+            "E_EVIDENCE_POLICY",
+        )
+        require_exact_int(
+            item["category"], "E_EVIDENCE_POLICY", minimum=1, maximum=1000
+        )
+        for key in ("name", "testcase", "expected_error"):
+            require_exact_str(
+                item[key], "E_EVIDENCE_POLICY", min_bytes=1, max_bytes=4096
+            )
+    if len({item["name"] for item in closed}) != len(closed) or len(
+        {item["testcase"] for item in closed}
+    ) != len(closed):
         fail("E_EVIDENCE_POLICY")
     closed_bytes = json.dumps(closed, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
     if profile["fixture_manifest_sha256"] != hashlib.sha256(closed_bytes).hexdigest():
         fail("E_EVIDENCE_POLICY")
     runs = value.get("required_runs")
-    if not isinstance(runs, list) or len(runs) != 5:
+    if type(runs) is not list or len(runs) != 5:
         fail("E_EVIDENCE_POLICY")
     run_ids: set[str] = set()
     for run in runs:
-        if not isinstance(run, dict) or set(run) != {
+        if type(run) is not dict or set(run) != {
             "run_id", "argv", "cwd", "parser", "result_path",
             "canonical_result_path", "expected_testcase_ids", "required"
         }:
@@ -531,7 +672,7 @@ def load_evidence_policy(payload: bytes) -> dict[str, Any]:
         if not isinstance(run_id, str) or not run_id or run_id in run_ids:
             fail("E_EVIDENCE_POLICY")
         run_ids.add(run_id)
-        if run.get("required") is not True or run.get("parser") not in {"pytest-junit-pass-v1", "exit-code-only-v1"}:
+        if run.get("required") is not True or run.get("parser") not in {"pytest-junit-pass-v2", "exit-code-only-v1"}:
             fail("E_EVIDENCE_POLICY")
         if not isinstance(run.get("argv"), list) or not all(
             isinstance(item, str) and item for item in run["argv"]
@@ -552,7 +693,7 @@ def load_evidence_policy(payload: bytes) -> dict[str, Any]:
             isinstance(item, str) and item and unicodedata.normalize("NFC", item) == item for item in expected_ids
         ):
             fail("E_EVIDENCE_POLICY")
-        is_pytest = run["parser"] == "pytest-junit-pass-v1"
+        is_pytest = run["parser"] == "pytest-junit-pass-v2"
         if is_pytest != bool(run["result_path"]) or is_pytest != bool(run["canonical_result_path"]) or is_pytest != bool(expected_ids):
             fail("E_EVIDENCE_POLICY")
     regression = value.get("regression_runs")
@@ -563,28 +704,31 @@ def load_evidence_policy(payload: bytes) -> dict[str, Any]:
     if regression != expected_regression:
         fail("E_EVIDENCE_POLICY")
     categories = value.get("legacy_mutation_categories")
-    if not isinstance(categories, list) or [item.get("category") for item in categories if isinstance(item, dict)] != list(range(1, 21)):
+    if type(categories) is not list or [item.get("category") for item in categories if type(item) is dict] != list(range(1, 21)):
         fail("E_EVIDENCE_POLICY")
     all_legacy: list[str] = []
     for item in categories:
-        if set(item) != {"category", "testcases"} or not isinstance(item["testcases"], list) or not item["testcases"]:
+        if type(item) is not dict or set(item) != {"category", "testcases"} or type(item["testcases"]) is not list or not item["testcases"]:
             fail("E_EVIDENCE_POLICY")
+        require_exact_int(
+            item["category"], "E_EVIDENCE_POLICY", minimum=1, maximum=20
+        )
         all_legacy.extend(item["testcases"])
     if len(all_legacy) != 27 or len(set(all_legacy)) != 27:
         fail("E_EVIDENCE_POLICY")
     semantic = value.get("evidence_semantic_categories")
-    if not isinstance(semantic, list) or len(semantic) != 36:
+    if type(semantic) is not list or not semantic:
         fail("E_EVIDENCE_POLICY")
-    if len({item.get("name") for item in semantic if isinstance(item, dict)}) != 36:
+    if len({item.get("name") for item in semantic if type(item) is dict}) != len(semantic):
         fail("E_EVIDENCE_POLICY")
     for item in semantic:
-        if not isinstance(item, dict) or set(item) != {"name", "testcase", "expected_error"}:
+        if type(item) is not dict or set(item) != {"name", "testcase", "expected_error"}:
             fail("E_EVIDENCE_POLICY")
-        if not all(isinstance(item[key], str) and item[key] for key in item):
+        if not all(type(item[key]) is str and item[key] for key in item):
             fail("E_EVIDENCE_POLICY")
     inventory = value.get("evidence_inventory")
     if (
-        not isinstance(inventory, list)
+        type(inventory) is not list
         or inventory != sorted(inventory)
         or len(inventory) != len(set(inventory))
         or not all(isinstance(item, str) and item and not item.startswith("/") and "\\" not in item and all(part not in {"", ".", ".."} for part in item.split("/")) for item in inventory)
@@ -635,13 +779,20 @@ def inspect_evidence_tar(path: Path) -> dict[str, bytes]:
     return payloads
 
 
-def _timestamp(value: Any) -> datetime:
-    if not isinstance(value, str) or re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z", value) is None:
-        fail("E_EVIDENCE_TIMESTAMP")
+def require_timestamp(value: object, code: str = "E_EVIDENCE_TIMESTAMP") -> datetime:
+    if type(value) is not str or re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z", value
+    ) is None:
+        fail(code)
     try:
-        return datetime.fromisoformat(value[:-1] + "+00:00")
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ").replace(
+            tzinfo=timezone.utc
+        )
     except ValueError:
-        fail("E_EVIDENCE_TIMESTAMP")
+        fail(code)
+    if parsed.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z" != value:
+        fail(code)
+    return parsed
 
 
 def parse_command_records(payload: bytes, policy: dict[str, Any]) -> list[dict[str, Any]]:
@@ -658,18 +809,18 @@ def parse_command_records(payload: bytes, policy: dict[str, Any]) -> list[dict[s
         entry = _load_json_bytes(line.encode("utf-8"), "E_EVIDENCE_COMMAND")
         if not isinstance(entry, dict) or set(entry) != COMMAND_KEYS:
             fail("E_EVIDENCE_COMMAND")
+        require_exact_int(
+            entry["sequence"], "E_EVIDENCE_COMMAND", minimum=1, maximum=len(runs)
+        )
         if entry["sequence"] != sequence or entry["run_id"] != run["run_id"]:
             fail("E_EVIDENCE_COMMAND")
         if entry["argv"] != run["argv"] or entry["cwd"] != run["cwd"]:
             fail("E_EVIDENCE_COMMAND")
-        if not isinstance(entry["exit_code"], int) or isinstance(entry["exit_code"], bool):
-            fail("E_EVIDENCE_COMMAND")
         if entry["termination"] != "exit":
             fail("E_EVIDENCE_COMMAND")
-        if entry["exit_code"] != 0:
-            fail("E_EVIDENCE_NONZERO_EXIT")
-        start = _timestamp(entry["start_utc"])
-        end = _timestamp(entry["end_utc"])
+        require_zero_exit(entry["exit_code"])
+        start = require_timestamp(entry["start_utc"])
+        end = require_timestamp(entry["end_utc"])
         if start > end or (previous_end is not None and start < previous_end):
             fail("E_EVIDENCE_TIMESTAMP")
         previous_end = end
@@ -731,29 +882,38 @@ _JUNIT_STATUS_TAGS = {"failure", "error", "skipped"}
 _JUNIT_KNOWN_TAGS = {"testsuites", "testsuite", "testcase"}
 _JUNIT_INTEGER = re.compile(r"(?:0|[1-9][0-9]*)\Z")
 _JUNIT_DURATION = re.compile(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?\Z")
-_JUNIT_DECLARATION = re.compile(
-    br"<\?xml[ \t]+version=(?:\"1\.0\"|'1\.0')[ \t]+"
-    br"encoding=(?:\"utf-8\"|'utf-8')[ \t]*\?>",
-    re.IGNORECASE,
+_JUNIT_DECLARATION = b'<?xml version="1.0" encoding="utf-8"?>'
+_JUNIT_TIMESTAMP = re.compile(
+    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+00:00\Z"
 )
 
 
 def preflight_xml_bytes(payload: bytes, *, max_bytes: int) -> None:
-    if not isinstance(payload, bytes) or not payload or len(payload) > max_bytes:
+    if type(payload) is not bytes or not payload or len(payload) > max_bytes:
         fail("E_EVIDENCE_JUNIT_SIZE")
-    if b"\x00" in payload:
+    if payload.startswith(b"\xef\xbb\xbf"):
+        fail("E_EVIDENCE_JUNIT_DECLARATION")
+    try:
+        payload.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        fail("E_EVIDENCE_JUNIT_DECLARATION")
+    if not payload.startswith(_JUNIT_DECLARATION):
+        fail("E_EVIDENCE_JUNIT_DECLARATION")
+    body = payload[len(_JUNIT_DECLARATION) :]
+    if not body.startswith(b"<") or body.endswith(
+        tuple(bytes([value]) for value in range(0x21))
+    ):
+        fail("E_EVIDENCE_JUNIT_DECLARATION")
+    if any(value < 0x20 for value in payload):
         fail("E_EVIDENCE_JUNIT_DECLARATION")
     folded = payload.upper()
-    if b"<!DOCTYPE" in folded or b"<!ENTITY" in folded:
-        fail("E_EVIDENCE_JUNIT_DECLARATION")
-    candidate = payload[3:] if payload.startswith(b"\xef\xbb\xbf") else payload
-    if candidate.startswith(b"<?xml"):
-        declaration_end = candidate.find(b"?>")
-        if declaration_end < 0 or _JUNIT_DECLARATION.fullmatch(
-            candidate[: declaration_end + 2]
-        ) is None:
-            fail("E_EVIDENCE_JUNIT_DECLARATION")
-    elif not candidate.startswith(b"<"):
+    if (
+        b"<?" in body
+        or b"<!--" in payload
+        or b"<![CDATA[" in folded
+        or b"<!DOCTYPE" in folded
+        or b"<!ENTITY" in folded
+    ):
         fail("E_EVIDENCE_JUNIT_DECLARATION")
 
 
@@ -782,8 +942,13 @@ def scan_all_xml_elements(root: ET.Element, *, max_elements: int) -> None:
             or "}" in element.tag
         ):
             fail("E_EVIDENCE_JUNIT_STRUCTURE")
-        if any("{" in key or "}" in key for key in element.attrib):
+        if any(type(key) is not str or "{" in key or "}" in key for key in element.attrib):
             fail("E_EVIDENCE_JUNIT_STRUCTURE")
+
+
+def _junit_layout_text(value: str | None) -> None:
+    if value is not None and (type(value) is not str or value.strip(" ") != ""):
+        fail("E_EVIDENCE_JUNIT_STRUCTURE")
 
 
 def _junit_attributes(
@@ -817,9 +982,7 @@ def _junit_duration(value: str) -> None:
         fail("E_EVIDENCE_JUNIT_ATTRIBUTE")
 
 
-def _junit_text(
-    value: str, *, max_bytes: int, allow_xml_newline_reference: bool = False
-) -> None:
+def _junit_text(value: str, *, max_bytes: int) -> None:
     if (
         not value
         or value != value.strip()
@@ -828,17 +991,20 @@ def _junit_text(
         or "\x00" in value
     ):
         fail("E_EVIDENCE_JUNIT_ATTRIBUTE")
-    allowed = {"\n"} if allow_xml_newline_reference else set()
-    if any(ord(character) < 0x20 and character not in allowed for character in value):
+    if any(ord(character) < 0x20 for character in value):
         fail("E_EVIDENCE_JUNIT_ATTRIBUTE")
 
 
 def _junit_timestamp(value: str) -> None:
+    if type(value) is not str or _JUNIT_TIMESTAMP.fullmatch(value) is None:
+        fail("E_EVIDENCE_JUNIT_ATTRIBUTE")
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%f%z")
     except ValueError:
         fail("E_EVIDENCE_JUNIT_ATTRIBUTE")
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
+    if parsed.utcoffset() != timezone.utc.utcoffset(parsed):
+        fail("E_EVIDENCE_JUNIT_ATTRIBUTE")
+    if parsed.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00") != value:
         fail("E_EVIDENCE_JUNIT_ATTRIBUTE")
 
 
@@ -852,6 +1018,8 @@ def validate_pytest_junit_grammar(
 ) -> tuple[str, ...]:
     if root.tag != "testsuites":
         fail("E_EVIDENCE_JUNIT_STRUCTURE")
+    _junit_layout_text(root.text)
+    _junit_layout_text(root.tail)
     _junit_attributes(
         root,
         _JUNIT_ROOT_ATTRIBUTES,
@@ -872,6 +1040,8 @@ def validate_pytest_junit_grammar(
     )
     if suite.attrib["name"] != "pytest":
         fail("E_EVIDENCE_JUNIT_ATTRIBUTE")
+    _junit_layout_text(suite.text)
+    _junit_layout_text(suite.tail)
     _junit_duration(suite.attrib["time"])
     _junit_timestamp(suite.attrib["timestamp"])
     _junit_text(suite.attrib["hostname"], max_bytes=max_attribute_value_bytes)
@@ -883,6 +1053,8 @@ def validate_pytest_junit_grammar(
     for case in cases:
         if case.tag != "testcase" or list(case):
             fail("E_EVIDENCE_JUNIT_STRUCTURE")
+        _junit_layout_text(case.text)
+        _junit_layout_text(case.tail)
         _junit_attributes(
             case,
             _JUNIT_CASE_ATTRIBUTES,
@@ -892,11 +1064,7 @@ def validate_pytest_junit_grammar(
         classname = case.attrib["classname"]
         name = case.attrib["name"]
         _junit_text(classname, max_bytes=max_testcase_id_bytes)
-        _junit_text(
-            name,
-            max_bytes=max_testcase_id_bytes,
-            allow_xml_newline_reference=True,
-        )
+        _junit_text(name, max_bytes=max_testcase_id_bytes)
         _junit_duration(case.attrib["time"])
         pair = (classname, name)
         display_id = f"{classname}::{name}"
@@ -928,7 +1096,10 @@ def parse_pytest_junit_closed(
 ) -> CanonicalJunitResult:
     preflight_xml_bytes(payload, max_bytes=max_bytes)
     try:
-        root = ET.fromstring(payload)
+        parser = ET.XMLParser(
+            target=ET.TreeBuilder(insert_comments=True, insert_pis=True)
+        )
+        root = ET.fromstring(payload, parser=parser)
     except (ET.ParseError, ValueError):
         fail("E_EVIDENCE_JUNIT_PARSE")
     scan_all_xml_elements(root, max_elements=max_elements)
@@ -942,7 +1113,7 @@ def parse_pytest_junit_closed(
     if frozenset(ids) != expected_testcase_ids:
         fail("E_EVIDENCE_TESTCASE_SET")
     return CanonicalJunitResult(
-        profile="pytest-junit-pass-v1",
+        profile="pytest-junit-pass-v2",
         tests=len(ids),
         failures=0,
         errors=0,
@@ -955,7 +1126,7 @@ def _run_results(payloads: dict[str, bytes], records: list[dict[str, Any]], poli
     output: dict[str, set[str]] = {}
     limits = policy["limits"]
     for run, _record in zip(policy["required_runs"], records):
-        if run["parser"] == "pytest-junit-pass-v1":
+        if run["parser"] == "pytest-junit-pass-v2":
             result_path = run["result_path"]
             if result_path not in payloads:
                 fail("E_EVIDENCE_RAW_MISSING")
@@ -1006,10 +1177,14 @@ def verify_mutation_results(
         "subject_checksum_sha256", "subject_identity_sha256",
         "subject_head_commit", "subject_head_tree",
     }
-    if not isinstance(value, dict) or set(value) != keys or any("provisional" in key for key in value):
+    require_exact_dict_keys(value, keys, "E_EVIDENCE_SCHEMA")
+    if _canonical_json_bytes(value) != payloads[relative]:
         fail("E_EVIDENCE_SCHEMA")
-    if value["schema_version"] != "butler.box5.ac23-mutation-results.v3" or value["termination"] != "exit" or value["exit_code"] != 0:
+    if any("provisional" in key for key in value):
+        fail("E_EVIDENCE_SCHEMA")
+    if value["schema_version"] != "butler.box5.ac23-mutation-results.v3" or value["termination"] != "exit":
         fail("E_EVIDENCE_NONZERO_EXIT")
+    require_zero_exit(value["exit_code"])
     subject = {
         "subject_checksum_sha256": value["subject_checksum_sha256"],
         "subject_identity_sha256": value["subject_identity_sha256"],
@@ -1017,8 +1192,8 @@ def verify_mutation_results(
         "subject_head_tree": value["subject_head_tree"],
     }
     if (
-        any(re.fullmatch(r"[0-9a-f]{64}", subject[key]) is None for key in ("subject_checksum_sha256", "subject_identity_sha256"))
-        or any(re.fullmatch(r"[0-9a-f]{40}", subject[key]) is None for key in ("subject_head_commit", "subject_head_tree"))
+        any(require_sha256(subject[key], "E_EVIDENCE_SUBJECT") != subject[key] for key in ("subject_checksum_sha256", "subject_identity_sha256"))
+        or any(require_git_oid(subject[key], "E_EVIDENCE_SUBJECT") != subject[key] for key in ("subject_head_commit", "subject_head_tree"))
         or (expected_subject is not None and subject != expected_subject)
     ):
         fail("E_EVIDENCE_SUBJECT")
@@ -1026,12 +1201,13 @@ def verify_mutation_results(
         "python3", "-m", "pytest", "-q", "--disable-warnings",
         "tests/ac23/test_candidate_artifact_identity.py",
         "tests/ac23/test_evidence_semantics.py",
+        "tests/ac23/test_verifier_purity.py",
         "-k", "mutation or evidence_semantics_attack or closed_junit_integration_attack",
         "--junitxml=.ac23-mutation-run/results.xml", "--basetemp",
         ".ac23-mutation-run/tmp",
     ] or value["cwd"] != "candidate":
         fail("E_EVIDENCE_COMMAND")
-    if _timestamp(value["start_utc"]) > _timestamp(value["end_utc"]):
+    if require_timestamp(value["start_utc"]) > require_timestamp(value["end_utc"]):
         fail("E_EVIDENCE_TIMESTAMP")
     expected_paths = {
         "stdout_path": "mutation/pytest_mutation.stdout.bin",
@@ -1042,17 +1218,51 @@ def verify_mutation_results(
     if any(value[key] != path for key, path in expected_paths.items()):
         fail("E_EVIDENCE_SCHEMA")
     expected_categories = policy["legacy_mutation_categories"]
+    if type(value["legacy_categories"]) is not list:
+        fail("E_EVIDENCE_MUTATION_MAPPING")
+    for item in value["legacy_categories"]:
+        require_exact_dict_keys(
+            item, {"category", "testcases", "status"}, "E_EVIDENCE_MUTATION_MAPPING"
+        )
+        require_exact_int(
+            item["category"], "E_EVIDENCE_MUTATION_MAPPING", minimum=1, maximum=20
+        )
+        require_exact_list(item["testcases"], "E_EVIDENCE_MUTATION_MAPPING")
+        require_enum(item["status"], frozenset({"PASS"}), "E_EVIDENCE_MUTATION_MAPPING")
     if value["legacy_categories"] != [
         {"category": item["category"], "testcases": item["testcases"], "status": "PASS"}
         for item in expected_categories
     ]:
         fail("E_EVIDENCE_MUTATION_MAPPING")
     expected_semantic = policy["evidence_semantic_categories"]
+    if type(value["evidence_semantic_categories"]) is not list:
+        fail("E_EVIDENCE_MUTATION_MAPPING")
+    for item in value["evidence_semantic_categories"]:
+        require_exact_dict_keys(
+            item,
+            {"name", "testcase", "expected_error", "status"},
+            "E_EVIDENCE_MUTATION_MAPPING",
+        )
+        for key in ("name", "testcase", "expected_error", "status"):
+            require_exact_str(
+                item[key], "E_EVIDENCE_MUTATION_MAPPING", min_bytes=1, max_bytes=4096
+            )
     if value["evidence_semantic_categories"] != [
         {**item, "status": "PASS"} for item in expected_semantic
     ]:
         fail("E_EVIDENCE_MUTATION_MAPPING")
     expected_closed = policy["junit_profile"]["closed_junit_cases"]
+    if type(value["closed_junit_cases"]) is not list:
+        fail("E_EVIDENCE_MUTATION_MAPPING")
+    for item in value["closed_junit_cases"]:
+        require_exact_dict_keys(
+            item,
+            {"category", "name", "testcase", "expected_error", "status"},
+            "E_EVIDENCE_MUTATION_MAPPING",
+        )
+        require_exact_int(
+            item["category"], "E_EVIDENCE_MUTATION_MAPPING", minimum=1, maximum=1000
+        )
     if value["closed_junit_cases"] != [
         {**item, "status": "PASS"} for item in expected_closed
     ]:
@@ -1084,6 +1294,20 @@ def verify_mutation_results(
         if hashlib.sha256(payloads[value[path_key]]).hexdigest() != value[digest_key]:
             fail("E_EVIDENCE_RAW_DIGEST")
     closed_categories = len({item["category"] for item in expected_closed})
+    summary = require_exact_dict_keys(
+        value["summary"],
+        {
+            "failed",
+            "legacy_categories_passed",
+            "legacy_subcases_passed",
+            "existing_semantic_categories_passed",
+            "closed_junit_categories_passed",
+            "closed_junit_subcases_passed",
+        },
+        "E_EVIDENCE_SUMMARY",
+    )
+    for field in summary:
+        require_nonnegative_int(summary[field], "E_EVIDENCE_SUMMARY", maximum=1_000_000)
     expected_summary = {
         "failed": 0,
         "legacy_categories_passed": len(expected_categories),
@@ -1092,7 +1316,7 @@ def verify_mutation_results(
         "closed_junit_categories_passed": closed_categories,
         "closed_junit_subcases_passed": len(expected_closed),
     }
-    if value["summary"] != expected_summary:
+    if summary != expected_summary:
         fail("E_EVIDENCE_SUMMARY")
 
 
@@ -1107,7 +1331,8 @@ def verify_tree_reconstruction_evidence(payload: bytes, manifest: dict[str, Any]
         "patch_command_id": "git-apply-index-v1",
         "source_reconstruction_id": "git-archive-index-v1",
     }
-    if value != expected:
+    require_exact_dict_keys(value, expected, "E_EVIDENCE_SCHEMA")
+    if _canonical_json_bytes(value) != payload or value != expected:
         fail("E_EVIDENCE_SEMANTICS")
 
 
@@ -1133,7 +1358,8 @@ def verify_evidence_semantics(path: Path, manifest: dict[str, Any], policy: dict
     if payloads["clean_status.bin"] != b"":
         fail("E_CLEAN_STATUS")
     environment = _load_json_bytes(payloads["environment.json"], "E_EVIDENCE_SCHEMA")
-    if not isinstance(environment, dict) or set(environment) != {"os", "architecture", "git", "python", "locale", "timezone"} or environment["locale"] != "C" or environment["timezone"] != "UTC":
+    require_exact_dict_keys(environment, {"os", "architecture", "git", "python", "locale", "timezone"}, "E_EVIDENCE_SCHEMA")
+    if any(type(environment[key]) is not str or not environment[key] for key in environment) or environment["locale"] != "C" or environment["timezone"] != "UTC":
         fail("E_EVIDENCE_SCHEMA")
     toolchain = _load_json_bytes(payloads["toolchain.json"], "E_EVIDENCE_SCHEMA")
     toolchain_keys = {
@@ -1141,10 +1367,10 @@ def verify_evidence_semantics(path: Path, manifest: dict[str, Any], policy: dict
         "node_version", "npm_version", "cargo_version", "rustc_version", "git_version",
     }
     if (
-        not isinstance(toolchain, dict)
+        type(toolchain) is not dict
         or set(toolchain) != toolchain_keys
         or re.fullmatch(r"[0-9a-f]{64}", toolchain.get("python_executable_sha256", "")) is None
-        or any(not isinstance(toolchain[key], str) or not toolchain[key] or len(toolchain[key]) > 512 for key in toolchain_keys - {"python_executable_sha256"})
+        or any(type(toolchain[key]) is not str or not toolchain[key] or len(toolchain[key]) > 512 for key in toolchain_keys - {"python_executable_sha256"})
     ):
         fail("E_EVIDENCE_SCHEMA")
     verify_command_raw_streams(payloads, records)
@@ -1252,10 +1478,10 @@ def _source_tree(
                     mode = b"100755" if member.mode & 0o111 else b"100644"
                     if member.name.endswith(".json") and len(payload) <= MAX_MANIFEST_SIZE:
                         try:
-                            parsed = json.loads(payload.decode("utf-8"))
-                        except (UnicodeDecodeError, json.JSONDecodeError):
+                            parsed = _load_json_bytes(payload, "E_SCHEMA", MAX_MANIFEST_SIZE)
+                        except VerificationError:
                             parsed = None
-                        if isinstance(parsed, dict) and parsed.get("schema_version") == SCHEMA_VERSION:
+                        if type(parsed) is dict and parsed.get("schema_version") == SCHEMA_VERSION:
                             self_reference = True
                 oid = _write_loose_blob(repository, payload, object_format)
                 rows.append((relative, mode + b" " + oid + b"\t" + relative + b"\0"))
@@ -1433,7 +1659,12 @@ def _checkout_clean(bundle: Path, temporary: Path, manifest: dict[str, Any]) -> 
         fail("E_CLEAN_STATUS")
 
 
-def verify(package_root: Path, expected_repository_url: str | None = None) -> None:
+def verify(
+    package_root: Path,
+    expected_repository_url: str | None = None,
+    *,
+    work_root: Path | None = None,
+) -> None:
     package_root = package_root.resolve()
     if not package_root.is_dir():
         fail("E_SCHEMA")
@@ -1494,7 +1725,9 @@ def verify(package_root: Path, expected_repository_url: str | None = None) -> No
         if not _same(actual, manifest[manifest_key]):
             fail(error_code)
 
-    with tempfile.TemporaryDirectory(prefix="ac23-verify-") as temporary_text:
+    if work_root is None:
+        fail("E_WORK_ROOT")
+    with contextlib.nullcontext(os.fspath(work_root)) as temporary_text:
         temporary = Path(temporary_text)
         repository, object_format = _prepare_bundle(paths["bundle"], temporary, manifest)
         _verify_objects(repository, manifest, object_format)
@@ -1569,13 +1802,146 @@ def verify(package_root: Path, expected_repository_url: str | None = None) -> No
         _checkout_clean(paths["bundle"], temporary, manifest)
 
 
+def _is_same_or_descendant(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+    except ValueError:
+        return False
+    return True
+
+
+def _package_snapshot(package_root: Path) -> tuple[tuple[object, ...], ...]:
+    rows: list[tuple[object, ...]] = []
+    try:
+        root_status = package_root.lstat()
+    except OSError:
+        fail("E_INPUT_MUTATED")
+    if package_root.is_symlink() or not stat.S_ISDIR(root_status.st_mode):
+        fail("E_INPUT_MUTATED")
+    rows.append(("d", ".", stat.S_IMODE(root_status.st_mode)))
+    try:
+        paths = sorted(
+            package_root.rglob("*"),
+            key=lambda item: item.relative_to(package_root).as_posix().encode("utf-8"),
+        )
+        for path in paths:
+            relative = path.relative_to(package_root).as_posix()
+            status = path.lstat()
+            mode = stat.S_IMODE(status.st_mode)
+            if stat.S_ISLNK(status.st_mode):
+                fail("E_INPUT_MUTATED")
+            if stat.S_ISDIR(status.st_mode):
+                rows.append(("d", relative, mode))
+            elif stat.S_ISREG(status.st_mode):
+                rows.append(("f", relative, mode, status.st_size, _sha256(path)))
+            else:
+                fail("E_INPUT_MUTATED")
+    except VerificationError:
+        raise
+    except OSError:
+        fail("E_INPUT_MUTATED")
+    return tuple(rows)
+
+
+def _select_work_base(package_root: Path, requested: Path | None) -> Path:
+    candidate = package_root.parent if requested is None else requested
+    try:
+        if candidate.is_symlink():
+            fail("E_WORK_ROOT")
+        base = candidate.resolve(strict=True)
+        status = base.lstat()
+    except (OSError, RuntimeError):
+        fail("E_WORK_ROOT")
+    if not stat.S_ISDIR(status.st_mode) or _is_same_or_descendant(base, package_root):
+        fail("E_WORK_ROOT")
+    if status.st_mode & stat.S_IWOTH:
+        if requested is not None or not status.st_mode & stat.S_ISVTX:
+            fail("E_WORK_ROOT")
+    return base
+
+
+def _create_work_root(base: Path) -> Path:
+    try:
+        workspace = Path(tempfile.mkdtemp(prefix=".ac23-verify-", dir=base))
+        os.chmod(workspace, 0o700)
+        (workspace / "child-tmp").mkdir(mode=0o700)
+    except OSError:
+        fail("E_WORK_ROOT")
+    return workspace
+
+
+def _cleanup_work_root(workspace: Path) -> None:
+    try:
+        shutil.rmtree(workspace)
+    except OSError:
+        fail("E_WORK_ROOT_CLEANUP")
+    if workspace.exists() or workspace.is_symlink():
+        fail("E_WORK_ROOT_CLEANUP")
+
+
+def verify_pure(
+    package_argument: Path,
+    expected_repository_url: str | None = None,
+    requested_work_root: Path | None = None,
+) -> None:
+    global _CONTROLLED_TEMP
+    if package_argument.is_symlink():
+        fail("E_SCHEMA")
+    try:
+        package_root = package_argument.resolve(strict=True)
+    except (OSError, RuntimeError):
+        fail("E_SCHEMA")
+    before = _package_snapshot(package_root)
+    workspace: Path | None = None
+    original_error: VerificationError | None = None
+    unexpected_error: Exception | None = None
+    cleanup_error: VerificationError | None = None
+    try:
+        base = _select_work_base(package_root, requested_work_root)
+        workspace = _create_work_root(base)
+        _CONTROLLED_TEMP = os.fspath(workspace / "child-tmp")
+        verify(
+            package_root,
+            expected_repository_url,
+            work_root=workspace,
+        )
+    except VerificationError as error:
+        original_error = error
+    except Exception as error:
+        unexpected_error = error
+    finally:
+        _CONTROLLED_TEMP = None
+        if workspace is not None:
+            try:
+                _cleanup_work_root(workspace)
+            except VerificationError as error:
+                cleanup_error = error
+    try:
+        after = _package_snapshot(package_root)
+    except VerificationError:
+        fail("E_INPUT_MUTATED")
+    if after != before:
+        fail("E_INPUT_MUTATED")
+    if cleanup_error is not None:
+        raise cleanup_error
+    if original_error is not None:
+        raise original_error
+    if unexpected_error is not None:
+        raise unexpected_error
+
+
 def _main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Verify Butler AC-23 candidate identity")
     parser.add_argument("package_root", type=Path)
     parser.add_argument("--expected-repository-url")
+    parser.add_argument("--work-root", type=Path)
     args = parser.parse_args(argv)
     try:
-        verify(args.package_root, args.expected_repository_url)
+        verify_pure(
+            args.package_root,
+            args.expected_repository_url,
+            args.work_root,
+        )
     except VerificationError as error:
         print(
             json.dumps(

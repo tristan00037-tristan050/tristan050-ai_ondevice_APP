@@ -5,10 +5,16 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 from pathlib import Path
 
+from strict_json import (
+    StrictJsonError,
+    require_exact_dict_keys,
+    require_git_oid,
+    strict_json_file,
+)
 from verify_candidate_artifact_identity import (
+    MANIFEST_KEYS,
     VerificationError,
     load_evidence_policy,
     verify_mutation_results,
@@ -34,7 +40,10 @@ def verify(results: Path, policy_path: Path, package: Path) -> None:
     policy = load_evidence_policy(policy_path.resolve().read_bytes())
     package = package.resolve()
     identity_path = package / "IDENTITY" / "candidate_artifact_identity.json"
-    identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    identity = strict_json_file(identity_path, max_bytes=1 << 20, require_canonical=True)
+    require_exact_dict_keys(identity, MANIFEST_KEYS)
+    require_git_oid(identity["head_commit"])
+    require_git_oid(identity["head_tree"])
     subject = {
         "subject_checksum_sha256": _sha256(package / "SHA256SUMS.txt"),
         "subject_identity_sha256": _sha256(identity_path),
@@ -60,13 +69,10 @@ def main() -> int:
     args = parser.parse_args()
     try:
         verify(args.results, args.policy, args.package)
-    except VerificationError as error:
+    except (VerificationError, StrictJsonError) as error:
+        code = error.code if isinstance(error, VerificationError) else "E_EVIDENCE_SCHEMA"
         print(
-            json.dumps(
-                {"mutation_evidence_pass": 0, "error_code": error.code},
-                separators=(",", ":"),
-                sort_keys=True,
-            ),
+            '{"error_code":"' + code + '","mutation_evidence_pass":0}',
             file=__import__("sys").stderr,
         )
         return 1

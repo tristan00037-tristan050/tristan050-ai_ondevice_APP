@@ -32,6 +32,8 @@ ROUND5_START_COMMIT = "fbb90e182063edc50651d769cac9e840cf96ac3e"
 ROUND5_START_TREE = "c94833ca4ff2ff57cddccb48bd289305eaf33f94"
 ROUND6_START_COMMIT = "55b71445d3d1618d9f9f38c9a947fe82f6be39d2"
 ROUND6_START_TREE = "735a1958bb5b9a7df29dc0c886b59752670a8a91"
+ROUND7_START_COMMIT = "3f82ca194021248b01d607204cba3af9d6170935"
+ROUND7_START_TREE = "7dd1754d5e3f1f8ed24e23d964277dad4bc40283"
 ALLOWED_AC23_PATH_PREFIXES = ("tools/ac23/", "tests/ac23/")
 ALLOWED_AC23_PATHS = {"schemas/candidate-artifact-identity-v1.schema.json"}
 ALLOWED_REQUIRED_METADATA_PATHS = {
@@ -358,9 +360,13 @@ def _validate_candidate(
         raise BuildError("Round5 start is not an ancestor")
     if _git(repository, "show", "-s", "--format=%T", ROUND6_START_COMMIT).stdout.decode("ascii").strip() != ROUND6_START_TREE:
         raise BuildError("Round6 start identity mismatch")
+    if _git(repository, "merge-base", "--is-ancestor", ROUND6_START_COMMIT, head, check=False).returncode:
+        raise BuildError("Round6 start is not an ancestor")
+    if _git(repository, "show", "-s", "--format=%T", ROUND7_START_COMMIT).stdout.decode("ascii").strip() != ROUND7_START_TREE:
+        raise BuildError("Round7 start identity mismatch")
     parent = _git(repository, "show", "-s", "--format=%P", head).stdout.decode("ascii").strip().split()
-    if parent != [ROUND6_START_COMMIT]:
-        raise BuildError("candidate must have Round6 head as its only direct parent")
+    if parent != [ROUND7_START_COMMIT]:
+        raise BuildError("candidate must have Round7 head as its only direct parent")
     delta = _git(
         repository,
         "diff-tree",
@@ -498,10 +504,12 @@ def build(args: argparse.Namespace) -> Path:
         _write_bytes(staging / "SHA256SUMS.txt", checksum_lines)
         os.replace(staging, output)
     except Exception:
-        shutil.rmtree(temporary_root, ignore_errors=True)
+        if temporary_root.exists() or temporary_root.is_symlink():
+            shutil.rmtree(temporary_root)
         raise
     else:
-        shutil.rmtree(temporary_root, ignore_errors=True)
+        if temporary_root.exists() or temporary_root.is_symlink():
+            shutil.rmtree(temporary_root)
     return output
 
 

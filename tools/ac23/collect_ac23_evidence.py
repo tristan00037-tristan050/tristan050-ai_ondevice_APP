@@ -54,7 +54,10 @@ def _utc() -> str:
 
 
 def _allowed_env(
-    app_data: Path, node_bin: str | None, python_executable: Path
+    app_data: Path,
+    temp_root: Path,
+    node_bin: str | None,
+    python_executable: Path,
 ) -> dict[str, str]:
     path = os.environ.get("PATH", "")
     path = os.fspath(python_executable.parent) + os.pathsep + path
@@ -69,6 +72,9 @@ def _allowed_env(
         "BUTLER_APP_DATA_DIR": os.fspath(app_data),
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_CONFIG_GLOBAL": os.devnull,
+        "TMPDIR": os.fspath(temp_root),
+        "TEMP": os.fspath(temp_root),
+        "TMP": os.fspath(temp_root),
     }
     for key in ("HOME", "CARGO_HOME", "RUSTUP_HOME", "DEVELOPER_DIR", "SDKROOT"):
         if key in os.environ:
@@ -129,7 +135,10 @@ def _run(
 
 def _git(repository: Path, *args: str, input_bytes: bytes | None = None) -> bytes:
     completed = subprocess.run(
-        ["git", "-c", "core.autocrlf=false", "-c", "core.filemode=true", *args],
+        [
+            "git", "-c", "core.autocrlf=false", "-c", "core.filemode=true",
+            "-c", "maintenance.auto=0", "-c", "gc.auto=0", *args,
+        ],
         cwd=repository,
         env={
             "PATH": os.environ.get("PATH", ""),
@@ -149,10 +158,14 @@ def _git(repository: Path, *args: str, input_bytes: bytes | None = None) -> byte
     return completed.stdout
 
 
-def _tree_reconstruction(repository: Path, base: str) -> dict[str, str]:
+def _tree_reconstruction(
+    repository: Path, base: str, temporary_parent: Path
+) -> dict[str, str]:
     head_commit = _git(repository, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
     head_tree = _git(repository, "rev-parse", "--verify", "HEAD^{tree}").decode().strip()
-    with tempfile.TemporaryDirectory(prefix="ac23-tree-evidence-") as temporary_text:
+    with tempfile.TemporaryDirectory(
+        prefix="ac23-tree-evidence-", dir=temporary_parent
+    ) as temporary_text:
         temporary = Path(temporary_text)
         patch = temporary / "candidate.patch"
         patch.write_bytes(_git(repository, "diff", "--binary", "--full-index", "--no-renames", base, head_commit, "--"))
@@ -244,9 +257,16 @@ def collect(args: argparse.Namespace) -> Path:
         if run_junit.exists() or run_junit.is_symlink():
             raise EvidenceError("E_OUTPUT_NOT_CLEAN")
         run_junit.mkdir()
-        with tempfile.TemporaryDirectory(prefix="ac23-app-data-") as app_data_text:
+        controlled_temp = staging / "controlled-temp"
+        controlled_temp.mkdir(mode=0o700)
+        with tempfile.TemporaryDirectory(
+            prefix="ac23-app-data-", dir=staging
+        ) as app_data_text:
             env = _allowed_env(
-                Path(app_data_text), args.node_bin, args.python_executable
+                Path(app_data_text),
+                controlled_temp,
+                args.node_bin,
+                args.python_executable,
             )
             runs = policy["required_runs"]
             records = [
@@ -328,7 +348,7 @@ def collect(args: argparse.Namespace) -> Path:
         )
         limits = policy["limits"]
         for run in policy["required_runs"]:
-            if run["parser"] != "pytest-junit-pass-v1":
+            if run["parser"] != "pytest-junit-pass-v2":
                 continue
             try:
                 canonical = parse_pytest_junit_closed(
@@ -393,7 +413,9 @@ def collect(args: argparse.Namespace) -> Path:
         if clean.returncode != 0 or clean.stdout:
             raise EvidenceError("candidate worktree is not clean")
         _atomic_write(staging / "clean_status.bin", clean.stdout)
-        reconstruction = _tree_reconstruction(repository, args.base_commit)
+        reconstruction = _tree_reconstruction(
+            repository, args.base_commit, controlled_temp
+        )
         _atomic_write(
             staging / "tree_reconstruction.json",
             (
@@ -422,6 +444,9 @@ def collect(args: argparse.Namespace) -> Path:
             args.mutation_results,
             staging / "mutation/mutation_results_v2.json",
         )
+        shutil.rmtree(controlled_temp)
+        if controlled_temp.exists() or controlled_temp.is_symlink():
+            raise EvidenceError("E_WORK_ROOT_CLEANUP")
         actual_inventory = sorted(
             path.relative_to(staging).as_posix()
             for path in staging.rglob("*")
@@ -433,8 +458,9 @@ def collect(args: argparse.Namespace) -> Path:
         os.replace(staging, output)
     except Exception:
         if 'run_junit' in locals() and (run_junit.exists() or run_junit.is_symlink()):
-            shutil.rmtree(run_junit, ignore_errors=True)
-        shutil.rmtree(staging, ignore_errors=True)
+            shutil.rmtree(run_junit)
+        if staging.exists() or staging.is_symlink():
+            shutil.rmtree(staging)
         raise
     return output
 

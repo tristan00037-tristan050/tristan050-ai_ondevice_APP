@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -15,7 +16,14 @@ from pathlib import Path
 
 
 from junit_closed_profile import parse_pytest_junit_closed
+from strict_json import (
+    canonical_json_bytes,
+    require_exact_dict_keys,
+    require_git_oid,
+    strict_json_file,
+)
 from verify_candidate_artifact_identity import (
+    MANIFEST_KEYS,
     load_evidence_policy,
     verify_mutation_results,
 )
@@ -34,7 +42,10 @@ def _sha256(path: Path) -> str:
 def _subject(package: Path) -> dict[str, str]:
     identity = package / "IDENTITY" / "candidate_artifact_identity.json"
     checksums = package / "SHA256SUMS.txt"
-    value = json.loads(identity.read_text(encoding="utf-8"))
+    value = strict_json_file(identity, max_bytes=1 << 20, require_canonical=True)
+    require_exact_dict_keys(value, MANIFEST_KEYS)
+    require_git_oid(value["head_commit"])
+    require_git_oid(value["head_tree"])
     return {
         "subject_checksum_sha256": _sha256(checksums),
         "subject_identity_sha256": _sha256(identity),
@@ -48,21 +59,6 @@ def run(args: argparse.Namespace) -> Path:
     package = args.package.resolve()
     output = args.output.resolve()
     policy = load_evidence_policy(args.policy.resolve().read_bytes())
-    baseline = subprocess.run(
-        [
-            sys.executable,
-            os.fspath(package / "VERIFY/verify_candidate_artifact_identity.py"),
-            os.fspath(package),
-        ],
-        cwd=package,
-        env={"PATH": os.environ.get("PATH", ""), "LC_ALL": "C", "TZ": "UTC"},
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    if baseline.returncode != 0 or not baseline.stdout.rstrip().endswith(b"AC23_PASS=YES"):
-        raise RuntimeError("subject package is not a valid AC-23 package")
-    subject = _subject(package)
     output.parent.mkdir(parents=True, exist_ok=True)
     stem = output.with_suffix("")
     stdout_path = stem.with_suffix(".stdout.bin")
@@ -76,6 +72,41 @@ def run(args: argparse.Namespace) -> Path:
     if run_root.exists() or run_root.is_symlink():
         raise ValueError("mutation run path already exists")
     run_root.mkdir()
+    environment_temp = run_root / "environment-tmp"
+    verifier_work = run_root / "verifier-work"
+    environment_temp.mkdir(mode=0o700)
+    verifier_work.mkdir(mode=0o700)
+    baseline_env = {
+        "PATH": os.environ.get("PATH", ""),
+        "LC_ALL": "C",
+        "LANG": "C",
+        "TZ": "UTC",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "TMPDIR": os.fspath(environment_temp),
+        "TEMP": os.fspath(environment_temp),
+        "TMP": os.fspath(environment_temp),
+    }
+    try:
+        baseline = subprocess.run(
+            [
+                sys.executable,
+                os.fspath(package / "VERIFY/verify_candidate_artifact_identity.py"),
+                os.fspath(package),
+                "--work-root",
+                os.fspath(verifier_work),
+            ],
+            cwd=run_root,
+            env=baseline_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if baseline.returncode != 0 or not baseline.stdout.rstrip().endswith(b"AC23_PASS=YES"):
+            raise RuntimeError("subject package is not a valid AC-23 package")
+        subject = _subject(package)
+    except Exception:
+        shutil.rmtree(run_root)
+        raise
     raw_junit = run_root / "results.xml"
     pytest_tmp = run_root / "tmp"
     argv = [
@@ -86,6 +117,7 @@ def run(args: argparse.Namespace) -> Path:
             "--disable-warnings",
             "tests/ac23/test_candidate_artifact_identity.py",
             "tests/ac23/test_evidence_semantics.py",
+            "tests/ac23/test_verifier_purity.py",
             "-k",
             "mutation or evidence_semantics_attack or closed_junit_integration_attack",
             "--junitxml=.ac23-mutation-run/results.xml",
@@ -102,13 +134,17 @@ def run(args: argparse.Namespace) -> Path:
             "PYTHONDONTWRITEBYTECODE": "1",
             "AC23_PACKAGE_ROOT": os.fspath(package),
             "BUTLER_APP_DATA_DIR": os.fspath(Path(pytest_tmp) / "app-data"),
+            "TMPDIR": os.fspath(environment_temp),
+            "TEMP": os.fspath(environment_temp),
+            "TMP": os.fspath(environment_temp),
         }
         completed = subprocess.run(argv, cwd=repository, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
         if raw_junit.is_file():
             junit_path.write_bytes(raw_junit.read_bytes())
     finally:
-        import shutil
-        shutil.rmtree(run_root, ignore_errors=True)
+        shutil.rmtree(run_root)
+        if run_root.exists() or run_root.is_symlink():
+            raise RuntimeError("mutation work root cleanup failed")
     end = _utc()
     stdout_path.write_bytes(completed.stdout)
     stderr_path.write_bytes(completed.stderr)
@@ -148,6 +184,7 @@ def run(args: argparse.Namespace) -> Path:
             "--disable-warnings",
             "tests/ac23/test_candidate_artifact_identity.py",
             "tests/ac23/test_evidence_semantics.py",
+            "tests/ac23/test_verifier_purity.py",
             "-k",
             "mutation or evidence_semantics_attack or closed_junit_integration_attack",
             "--junitxml=.ac23-mutation-run/results.xml",
@@ -187,12 +224,7 @@ def run(args: argparse.Namespace) -> Path:
             "closed_junit_subcases_passed": len(closed),
         },
     }
-    output.write_text(
-        json.dumps(result, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-        + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    output.write_bytes(canonical_json_bytes(result))
     if _subject(package) != subject:
         raise RuntimeError("subject package changed during mutation tests")
     verify_mutation_results(
