@@ -298,12 +298,17 @@ def test_normal_15_clean_inventory(valid_verification: None, package_root: Path)
         assert clean is not None and clean.read() == b""
 
 
-def test_normal_16_frozen_regression(valid_verification: None, package_root: Path) -> None:
+def test_normal_16_regression_evidence_has_no_unowned_mapping(valid_verification: None, package_root: Path) -> None:
     with tarfile.open(package_root / "EVIDENCE" / "evidence_raw.tar", "r:") as archive:
-        source = archive.extractfile("regression/frozen_19_summary.json")
-        assert source is not None
-        summary = json.load(source)
-    assert summary == {"failed": 0, "passed": 19, "total": 19}
+        names = {member.name.rstrip("/") for member in archive.getmembers()}
+    assert not any(("frozen_" + "19") in name for name in names)
+    assert {"junit/0002.xml", "canonical/0002.json"}.issubset(names)
+    policy = json.loads(
+        (package_root / "VERIFY/evidence_policy_v3.json").read_text(encoding="utf-8")
+    )
+    assert ("frozen_" + "acceptance") not in policy
+    readme = (package_root / "README_KO.md").read_text(encoding="utf-8")
+    assert "AC_LEVEL_MAPPING_CLAIM=NOT_MADE" in readme
 
 
 def _mutation_package(package_root: Path, tmp_path: Path) -> Path:
@@ -557,7 +562,7 @@ def test_mutation_20_changed_path_semantics(package_root: Path, tmp_path: Path, 
 
 
 # Fast source-level tests run before the candidate commit exists.
-def test_unit_url_scp_normalization() -> None:
+def test_unit_url_scp_canonicalization() -> None:
     assert normalize_repository_url("git@GitHub.com:Owner/Repo.git/") == "ssh://git@github.com/Owner/Repo.git"
 
 

@@ -4,26 +4,43 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUTPUT="${1:-}"
 EVIDENCE="${2:-}"
-AUDIT_PROBE="${3:-}"
-AUDIT_PROBE_SHA256="054ceceb6426fd420a387d9474b4667efad34606c86af8f874f83fe1e1a70de8"
+ROUND5_PROBE="${3:-}"
+ROUND6_PROBE="${4:-}"
+MUTATION_RESULTS="${5:-}"
+FINAL_MATRIX_DIR="${6:-}"
+ROUND5_PROBE_SHA256="054ceceb6426fd420a387d9474b4667efad34606c86af8f874f83fe1e1a70de8"
+ROUND6_PROBE_SHA256="8858a40d21019b8e002e91f2409e76d2724cf3ec3afb48fb8e1a42efee07a7c7"
+ROUND6_HEAD="55b71445d3d1618d9f9f38c9a947fe82f6be39d2"
 
 fail() {
   printf '{"ac23_package":0,"error_code":"%s"}\n' "$1" >&2
   exit 1
 }
 
-[[ -n "$OUTPUT" && -n "$EVIDENCE" && -n "$AUDIT_PROBE" ]] || fail E_ARGUMENT
+[[ -n "$OUTPUT" && -n "$EVIDENCE" && -n "$ROUND5_PROBE" && -n "$ROUND6_PROBE" && -n "$MUTATION_RESULTS" && -n "$FINAL_MATRIX_DIR" ]] || fail E_ARGUMENT
 [[ -d "$EVIDENCE" && ! -L "$EVIDENCE" ]] || fail E_EVIDENCE
-[[ -f "$AUDIT_PROBE" && ! -L "$AUDIT_PROBE" ]] || fail E_AUDIT_PROBE
-[[ "$(shasum -a 256 "$AUDIT_PROBE" | awk '{print $1}')" == "$AUDIT_PROBE_SHA256" ]] \
+[[ -f "$ROUND5_PROBE" && ! -L "$ROUND5_PROBE" ]] || fail E_AUDIT_PROBE
+[[ -f "$ROUND6_PROBE" && ! -L "$ROUND6_PROBE" ]] || fail E_AUDIT_PROBE
+[[ "$(shasum -a 256 "$ROUND5_PROBE" | awk '{print $1}')" == "$ROUND5_PROBE_SHA256" ]] \
+  || fail E_AUDIT_PROBE_DIGEST
+[[ "$(shasum -a 256 "$ROUND6_PROBE" | awk '{print $1}')" == "$ROUND6_PROBE_SHA256" ]] \
   || fail E_AUDIT_PROBE_DIGEST
 [[ -z "$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)" ]] \
   || fail E_CLEAN_STATUS
 
 HEAD_COMMIT="$(git -C "$ROOT" rev-parse --verify 'HEAD^{commit}')"
 HEAD_TREE="$(git -C "$ROOT" show -s --format=%T "$HEAD_COMMIT")"
+[[ "$(git -C "$ROOT" show -s --format=%P "$HEAD_COMMIT")" == "$ROUND6_HEAD" ]] \
+  || fail E_HEAD_PARENT
 [[ "$(git -C "$ROOT" rev-parse "$HEAD_COMMIT^{tree}")" == "$HEAD_TREE" ]] \
   || fail E_HEAD_TREE
+
+BUTLER_APP_DATA_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ac23-parser-appdata.XXXXXX")"
+export BUTLER_APP_DATA_DIR
+trap 'rm -rf "$BUTLER_APP_DATA_DIR"' EXIT
+PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q --disable-warnings \
+  "$ROOT/tests/ac23/test_junit_closed_profile.py" >/dev/null \
+  || fail E_JUNIT_PROFILE_TEST
 
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tools/ac23/build_candidate_artifact_identity.py" \
   --repo "$ROOT" \
@@ -43,17 +60,62 @@ PYTHONDONTWRITEBYTECODE=1 python3 \
   shasum -a 256 -c SHA256SUMS.txt
 )
 
-PROBE_OUT="$(mktemp "${TMPDIR:-/tmp}/ac23-probe.XXXXXX")"
-PROBE_ERR="$(mktemp "${TMPDIR:-/tmp}/ac23-probe.XXXXXX")"
-trap 'rm -f "$PROBE_OUT" "$PROBE_ERR"' EXIT
-set +e
-PYTHONDONTWRITEBYTECODE=1 python3 "$AUDIT_PROBE" "$OUTPUT" >"$PROBE_OUT" 2>"$PROBE_ERR"
-PROBE_EXIT=$?
-set -e
-[[ "$PROBE_EXIT" -ne 0 ]] || fail E_AUDIT_FALSE_PASS
-grep -Eq '^VERIFIER_EXIT=[1-9][0-9]*$' "$PROBE_OUT" || fail E_AUDIT_FALSE_PASS
-! grep -q 'AC23_PASS=YES' "$PROBE_OUT" || fail E_AUDIT_FALSE_PASS
+run_probe() {
+  local probe="$1"
+  local family="$2"
+  local probe_out probe_err probe_exit
+  probe_out="$(mktemp "${TMPDIR:-/tmp}/ac23-probe.XXXXXX")"
+  probe_err="$(mktemp "${TMPDIR:-/tmp}/ac23-probe.XXXXXX")"
+  set +e
+  PYTHONDONTWRITEBYTECODE=1 python3 "$probe" "$OUTPUT" >"$probe_out" 2>"$probe_err"
+  probe_exit=$?
+  set -e
+  [[ "$probe_exit" -ne 0 ]] || fail E_AUDIT_FALSE_PASS
+  grep -Eq '^VERIFIER_EXIT=[1-9][0-9]*$' "$probe_out" || fail E_AUDIT_FALSE_PASS
+  ! grep -q 'AC23_PASS=YES' "$probe_out" || fail E_AUDIT_FALSE_PASS
+  if [[ -n "$family" ]]; then
+    grep -q "$family" "$probe_out" || fail E_AUDIT_ERROR_FAMILY
+  fi
+  rm -f "$probe_out" "$probe_err"
+  printf '%s' "$probe_exit"
+}
+
+ROUND5_EXIT="$(run_probe "$ROUND5_PROBE" '')"
+ROUND6_EXIT="$(run_probe "$ROUND6_PROBE" 'E_EVIDENCE_JUNIT')"
+
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tools/ac23/run_ac23_mutations.py" \
+  --repo "$ROOT" \
+  --package "$OUTPUT" \
+  --output "$MUTATION_RESULTS" \
+  --policy "$ROOT/tools/ac23/evidence_policy_v3.json" >/dev/null \
+  || fail E_MUTATION
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tools/ac23/verify_external_test_evidence.py" \
+  --results "$MUTATION_RESULTS" \
+  --package "$OUTPUT" \
+  --policy "$ROOT/tools/ac23/evidence_policy_v3.json" >/dev/null \
+  || fail E_MUTATION_EVIDENCE
+
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tools/ac23/collect_final_package_matrix.py" collect \
+  --repo "$ROOT" \
+  --package "$OUTPUT" \
+  --output "$FINAL_MATRIX_DIR" \
+  --policy "$ROOT/tools/ac23/evidence_policy_v3.json" >/dev/null \
+  || fail E_FINAL_PACKAGE_MATRIX
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tools/ac23/collect_final_package_matrix.py" verify \
+  --package "$OUTPUT" \
+  --evidence "$FINAL_MATRIX_DIR" \
+  --policy "$ROOT/tools/ac23/evidence_policy_v3.json" >/dev/null \
+  || fail E_FINAL_PACKAGE_MATRIX
+
+FRESH_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/ac23-fresh.XXXXXX")"
+cp -R "$OUTPUT" "$FRESH_ROOT/AC23_FINAL"
+(
+  cd "$FRESH_ROOT/AC23_FINAL"
+  shasum -a 256 -c SHA256SUMS.txt >/dev/null
+  PYTHONDONTWRITEBYTECODE=1 python3 VERIFY/verify_candidate_artifact_identity.py . >/dev/null
+) || fail E_FRESH_EXTRACTION
+rm -rf "$FRESH_ROOT"
 
 printf '{"ac23_package":1,"error_code":""}\n'
 printf 'HEAD_COMMIT=%s\nHEAD_TREE=%s\n' "$HEAD_COMMIT" "$HEAD_TREE"
-printf 'AUDIT_PROBE_EXIT=%s\n' "$PROBE_EXIT"
+printf 'ROUND5_PROBE_EXIT=%s\nROUND6_PROBE_EXIT=%s\n' "$ROUND5_EXIT" "$ROUND6_EXIT"

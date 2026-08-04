@@ -14,7 +14,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-from verify_candidate_artifact_identity import load_evidence_policy, parse_junit_results
+from junit_closed_profile import parse_pytest_junit_closed
+from verify_candidate_artifact_identity import (
+    load_evidence_policy,
+    verify_mutation_results,
+)
 
 
 def _utc() -> str:
@@ -27,17 +31,45 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _subject(package: Path) -> dict[str, str]:
+    identity = package / "IDENTITY" / "candidate_artifact_identity.json"
+    checksums = package / "SHA256SUMS.txt"
+    value = json.loads(identity.read_text(encoding="utf-8"))
+    return {
+        "subject_checksum_sha256": _sha256(checksums),
+        "subject_identity_sha256": _sha256(identity),
+        "subject_head_commit": value["head_commit"],
+        "subject_head_tree": value["head_tree"],
+    }
+
+
 def run(args: argparse.Namespace) -> Path:
     repository = args.repo.resolve()
     package = args.package.resolve()
     output = args.output.resolve()
     policy = load_evidence_policy(args.policy.resolve().read_bytes())
+    baseline = subprocess.run(
+        [
+            sys.executable,
+            os.fspath(package / "VERIFY/verify_candidate_artifact_identity.py"),
+            os.fspath(package),
+        ],
+        cwd=package,
+        env={"PATH": os.environ.get("PATH", ""), "LC_ALL": "C", "TZ": "UTC"},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if baseline.returncode != 0 or not baseline.stdout.rstrip().endswith(b"AC23_PASS=YES"):
+        raise RuntimeError("subject package is not a valid AC-23 package")
+    subject = _subject(package)
     output.parent.mkdir(parents=True, exist_ok=True)
     stem = output.with_suffix("")
     stdout_path = stem.with_suffix(".stdout.bin")
     stderr_path = stem.with_suffix(".stderr.bin")
     junit_path = stem.with_suffix(".xml")
-    for path in (output, stdout_path, stderr_path, junit_path):
+    canonical_path = stem.with_suffix(".canonical.json")
+    for path in (output, stdout_path, stderr_path, junit_path, canonical_path):
         if path.exists():
             raise ValueError("mutation output already exists")
     run_root = repository / ".ac23-mutation-run"
@@ -55,7 +87,7 @@ def run(args: argparse.Namespace) -> Path:
             "tests/ac23/test_candidate_artifact_identity.py",
             "tests/ac23/test_evidence_semantics.py",
             "-k",
-            "mutation or evidence_semantics_attack",
+            "mutation or evidence_semantics_attack or closed_junit_integration_attack",
             "--junitxml=.ac23-mutation-run/results.xml",
             "--basetemp",
             ".ac23-mutation-run/tmp",
@@ -82,16 +114,30 @@ def run(args: argparse.Namespace) -> Path:
     stderr_path.write_bytes(completed.stderr)
     if completed.returncode != 0 or not junit_path.is_file():
         raise RuntimeError("mutation pytest failed")
-    observed = parse_junit_results(junit_path.read_bytes())
     expected = {
         testcase
         for item in policy["legacy_mutation_categories"]
         for testcase in item["testcases"]
-    } | {item["testcase"] for item in policy["evidence_semantic_cases"]}
-    if observed != expected:
-        raise RuntimeError("mutation testcase set mismatch")
+    } | {item["testcase"] for item in policy["evidence_semantic_categories"]} | {
+        item["testcase"] for item in policy["junit_profile"]["closed_junit_cases"]
+    }
+    limits = policy["limits"]
+    canonical = parse_pytest_junit_closed(
+        junit_path.read_bytes(),
+        expected_testcase_ids=frozenset(expected),
+        max_bytes=limits["max_junit_bytes"],
+        max_elements=limits["max_xml_elements"],
+        max_testcases_per_run=limits["max_testcases_per_run"],
+        max_attribute_count_per_element=limits["max_attribute_count_per_element"],
+        max_attribute_value_bytes=limits["max_attribute_value_bytes"],
+        max_testcase_id_bytes=limits["max_testcase_id_bytes"],
+    )
+    canonical_path.write_bytes(canonical.to_bytes())
+    legacy = policy["legacy_mutation_categories"]
+    semantic = policy["evidence_semantic_categories"]
+    closed = policy["junit_profile"]["closed_junit_cases"]
     result = {
-        "schema_version": "butler.box5.ac23-mutation-results.v2",
+        "schema_version": "butler.box5.ac23-mutation-results.v3",
         "start_utc": start,
         "end_utc": end,
         "argv": [
@@ -103,20 +149,26 @@ def run(args: argparse.Namespace) -> Path:
             "tests/ac23/test_candidate_artifact_identity.py",
             "tests/ac23/test_evidence_semantics.py",
             "-k",
-            "mutation or evidence_semantics_attack",
+            "mutation or evidence_semantics_attack or closed_junit_integration_attack",
             "--junitxml=.ac23-mutation-run/results.xml",
             "--basetemp",
             ".ac23-mutation-run/tmp",
         ],
         "cwd": "candidate",
         "exit_code": completed.returncode,
+        "termination": "exit",
+        **subject,
         "legacy_categories": [
             {**item, "status": "PASS"}
-            for item in policy["legacy_mutation_categories"]
+            for item in legacy
         ],
-        "evidence_semantic_cases": [
+        "evidence_semantic_categories": [
             {**item, "status": "PASS"}
-            for item in policy["evidence_semantic_cases"]
+            for item in semantic
+        ],
+        "closed_junit_cases": [
+            {**item, "status": "PASS"}
+            for item in closed
         ],
         "stdout_path": "mutation/pytest_mutation.stdout.bin",
         "stdout_sha256": _sha256(stdout_path),
@@ -124,11 +176,15 @@ def run(args: argparse.Namespace) -> Path:
         "stderr_sha256": _sha256(stderr_path),
         "junit_path": "mutation/pytest_mutation.xml",
         "junit_sha256": _sha256(junit_path),
+        "canonical_path": "mutation/canonical.json",
+        "canonical_sha256": _sha256(canonical_path),
         "summary": {
             "failed": 0,
-            "legacy_categories_passed": 20,
-            "legacy_subcases_passed": 27,
-            "semantic_attacks_passed": 36,
+            "legacy_categories_passed": len(legacy),
+            "legacy_subcases_passed": sum(len(item["testcases"]) for item in legacy),
+            "existing_semantic_categories_passed": len(semantic),
+            "closed_junit_categories_passed": len({item["category"] for item in closed}),
+            "closed_junit_subcases_passed": len(closed),
         },
     }
     output.write_text(
@@ -136,6 +192,19 @@ def run(args: argparse.Namespace) -> Path:
         + "\n",
         encoding="utf-8",
         newline="\n",
+    )
+    if _subject(package) != subject:
+        raise RuntimeError("subject package changed during mutation tests")
+    verify_mutation_results(
+        {
+            "mutation/mutation_results_v3.json": output.read_bytes(),
+            "mutation/pytest_mutation.stdout.bin": stdout_path.read_bytes(),
+            "mutation/pytest_mutation.stderr.bin": stderr_path.read_bytes(),
+            "mutation/pytest_mutation.xml": junit_path.read_bytes(),
+            "mutation/canonical.json": canonical_path.read_bytes(),
+        },
+        policy,
+        expected_subject=subject,
     )
     return output
 
@@ -148,7 +217,7 @@ def main() -> int:
     parser.add_argument(
         "--policy",
         type=Path,
-        default=Path(__file__).with_name("evidence_policy_v2.json"),
+        default=Path(__file__).with_name("evidence_policy_v3.json"),
     )
     try:
         result = run(parser.parse_args())

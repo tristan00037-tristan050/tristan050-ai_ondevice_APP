@@ -252,9 +252,9 @@
     },
     "scripts/verify_box5_integration_lock.py": {
       "mode": "100644",
-      "blob_oid": "4880991d639200c32fa45c6710ac06c96258cf13",
-      "sha256": "8a6822f3c981c78dcb3745e29f119ea522f3c77106d1e1daed39c7287ac202ca",
-      "size": 18463
+      "blob_oid": "a99da3026316ea0b04fc37afb9fb3bac6a13be32",
+      "sha256": "35f0d2a680b7202d93ce1dcff348a96f09ec3cc42c12ba4c1c5629401d4ccb3e",
+      "size": 18669
     },
     "scripts/write_build_info.py": {
       "mode": "100644",
@@ -264,15 +264,21 @@
     },
     "tests/ac23/test_candidate_artifact_identity.py": {
       "mode": "100644",
-      "blob_oid": "6e6f14f6d5ea898e23102fae86f07be4f9136b62",
-      "sha256": "8879b4a66f6dd38b86d2be44b082daa1a09530e9faa5c53a0c8c1b71f9ffacc0",
-      "size": 21680
+      "blob_oid": "e6ff4e2af7fa6683dd98e400294f53817c86208c",
+      "sha256": "aedec617dba2bbf98f996bdd8a3ef48a2566a33dff911d5e701db1b694117fa6",
+      "size": 22009
     },
     "tests/ac23/test_evidence_semantics.py": {
       "mode": "100644",
-      "blob_oid": "694724154571e01823a60da8acabb9d3eef5a051",
-      "sha256": "e760c486edbd7982dba5ee23afb3572c7b8599d935824d3b266965fc65b72138",
-      "size": 11444
+      "blob_oid": "5a3286bf29cc94856743dcb86d516368003082a0",
+      "sha256": "8fe3e786aeef9e47c06bfedaa03cee7fd5c5e4c091be688355986496cd939ddd",
+      "size": 20619
+    },
+    "tests/ac23/test_junit_closed_profile.py": {
+      "mode": "100644",
+      "blob_oid": "5311dc97f2fddd0e1116f65d2d504ac4dc1c69c9",
+      "sha256": "c6f8a5852f1bdf8a5429e131e2e26ee66253cdd47bad685fd0f384eb77cd750d",
+      "size": 7862
     },
     "tests/accounting/assignment/authorization_testkit.py": {
       "mode": "100644",
@@ -342,42 +348,60 @@
     },
     "tools/ac23/build_candidate_artifact_identity.py": {
       "mode": "100755",
-      "blob_oid": "c219a5fa6ce4a2d6c6305f227cffb47af22757b7",
-      "sha256": "7df57c567ab883e0a3b8b5a6843507b34efc44e576c5decf9da1a17f4ee50ebb",
-      "size": 20664
+      "blob_oid": "cb999bbbe43c3108798b599f9d0a515bda2c19a2",
+      "sha256": "b6548f264473773f04645fb318fcdd839033a6d4ace794a6d12704a5ca3ac363",
+      "size": 21491
     },
     "tools/ac23/collect_ac23_evidence.py": {
       "mode": "100755",
-      "blob_oid": "8246741bd3ebc897f62783f8b302fbbeb001aa8a",
-      "sha256": "8405141b0c97aaa60b230c6c7a0758adc204d9ebf40eabfdc5ff147788bfab82",
-      "size": 16126
+      "blob_oid": "467f8963ac1bdc5481b71f0ca4ffd27eacf37b2a",
+      "sha256": "17543c43607beca2856cdd2cadf99e673fed89a4194196a886fd32e084c03e9c",
+      "size": 17974
     },
-    "tools/ac23/evidence_policy_v2.json": {
+    "tools/ac23/collect_final_package_matrix.py": {
+      "mode": "100755",
+      "blob_oid": "aaa3d28a66041136b652f61c069dc6883f22a751",
+      "sha256": "0c33128418e9874723f96b4ffea7add7709106ed06db1b74356d1d1cc14a80b2",
+      "size": 9734
+    },
+    "tools/ac23/evidence_policy_v3.json": {
       "mode": "100644",
-      "blob_oid": "bf0f260452e0df6164664c046fbbeee0b22c4524",
-      "sha256": "0b1c4851b341f52416aac56c1c69e1d1605bdd1a844c9b7c2400d0bfc486903d",
-      "size": 18752
+      "blob_oid": "5cf92cdbebc107467b98f401c3bb15abdcf55308",
+      "sha256": "1d1ffec3a84748caa2b180c08fa707d4187773fd80fcd6725990b9865fa240f0",
+      "size": 48895
+    },
+    "tools/ac23/junit_closed_profile.py": {
+      "mode": "100644",
+      "blob_oid": "71a71fc01babbff8f95d3a2109cf50cdf8ad7acd",
+      "sha256": "c8415fb38176ad00e4dbc7fdb13847ea6627eb59fee88779aa57309ab2911c5b",
+      "size": 9568
     },
     "tools/ac23/package_ac23.sh": {
       "mode": "100755",
-      "blob_oid": "7a35aa75b5b9ff30bec91ea275ab8fc4774b85ad",
-      "sha256": "04b4d7bc9b7ff6c01ee175f875c965299e83d74970d7d737013b7256b6e0dfbe",
-      "size": 2152
+      "blob_oid": "683408b4c45a7880bcf74aee37397971a92f4927",
+      "sha256": "1cbb8aab76ea920af203846914fcd679ca2e419fed0b0eba048397803c93a2db",
+      "size": 4762
     },
     "tools/ac23/run_ac23_mutations.py": {
       "mode": "100755",
-      "blob_oid": "3d22769ff09950c956e959c095a4c96f61484178",
-      "sha256": "0a60c2dd6e9b53d69f53fc153065696b7f524afe8d248ff88beaafaa1653c1ef",
-      "size": 5593
+      "blob_oid": "84657f5cb2c40111fdb9f10db07587e44722d871",
+      "sha256": "055492a47e5432170b1d8e60065d6bba5be6cd2c31a82ab88c95b708978fbd00",
+      "size": 8573
     },
     "tools/ac23/verify_candidate_artifact_identity.py": {
       "mode": "100755",
-      "blob_oid": "fb0c73ae31df572c80a720d94e8e24381215b5e5",
-      "sha256": "536ec5e4988941957dbc4a8ad6e5436bfb98fceda2dd4414819c5cbab8a17fbc",
-      "size": 49161
+      "blob_oid": "2824e2b1b436af49c25bde467e1cfa168f5d545d",
+      "sha256": "75ab91821530f221b803ccdb50fc14542c1e216d415ae70d6f34c5ea6bffb1e0",
+      "size": 62948
+    },
+    "tools/ac23/verify_external_test_evidence.py": {
+      "mode": "100755",
+      "blob_oid": "b77ea2d4af8a7b625f31df06f11f9d7e4d41f7bf",
+      "sha256": "662c280d416a3e3e27f8b8f8985fa9391792296c393bc0df66ea8e7c39e86331",
+      "size": 2787
     }
   },
-  "critical_manifest_sha256": "bd92080f05632ce1679cd16fd1647a607330566394a384c30961a1bb5a5c1567",
+  "critical_manifest_sha256": "ff940bf09cfaaf8633f8454995d9d04b2ce9a57269df968d1ade5ba911f42f53",
   "source_package_sha256": [
     "08c558a1192d37804531212ee5a9e881166b7795288804959e707462c1080f01",
     "2c65cb6c7260857ba69317d1e59d0f0f2d5917a5a091c27410cba0c0d0a69047",
@@ -423,6 +447,6 @@
     "tests/test_write_build_info.py"
   ],
   "owner": "알고리즘 개발팀12(온디바이스)",
-  "created_at": "2026-08-03T23:46:34Z",
-  "expires_at": "2026-08-10T23:46:34Z"
+  "created_at": "2026-08-04T02:49:19Z",
+  "expires_at": "2026-08-11T02:49:19Z"
 }

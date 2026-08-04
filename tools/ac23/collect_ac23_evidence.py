@@ -16,10 +16,10 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from junit_closed_profile import JunitProfileError, parse_pytest_junit_closed
 from verify_candidate_artifact_identity import (
     APPROVED_BASE_COMMIT,
     load_evidence_policy,
-    parse_junit_results,
     verify_mutation_results,
 )
 
@@ -28,6 +28,23 @@ class EvidenceError(RuntimeError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _atomic_write(path: Path, payload: bytes) -> None:
+    temporary = path.with_name(path.name + ".partial")
+    with temporary.open("xb") as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
 
 
 def _utc() -> str:
@@ -92,8 +109,8 @@ def _run(
         stderr = stderr.replace(source, replacement)
     stdout_path = evidence / "stdout" / f"{sequence:04d}.bin"
     stderr_path = evidence / "stderr" / f"{sequence:04d}.bin"
-    stdout_path.write_bytes(stdout)
-    stderr_path.write_bytes(stderr)
+    _atomic_write(stdout_path, stdout)
+    _atomic_write(stderr_path, stderr)
     return {
         "sequence": sequence,
         "run_id": run_id,
@@ -102,6 +119,7 @@ def _run(
         "start_utc": start,
         "end_utc": end,
         "exit_code": completed.returncode,
+        "termination": "exit" if completed.returncode >= 0 else "signal",
         "stdout_path": f"stdout/{sequence:04d}.bin",
         "stdout_sha256": hashlib.sha256(stdout).hexdigest(),
         "stderr_path": f"stderr/{sequence:04d}.bin",
@@ -201,7 +219,10 @@ def _tool_version(argv: list[str], cwd: Path) -> str:
         text=True,
         check=False,
     )
-    return result.stdout.strip().splitlines()[0]
+    lines = result.stdout.strip().splitlines()
+    if result.returncode != 0 or not lines:
+        raise EvidenceError("E_TOOLCHAIN")
+    return lines[0]
 
 
 def collect(args: argparse.Namespace) -> Path:
@@ -217,7 +238,7 @@ def collect(args: argparse.Namespace) -> Path:
     output.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".ac23-evidence-", dir=output.parent))
     try:
-        for name in ("stdout", "stderr", "junit", "regression", "mutation"):
+        for name in ("stdout", "stderr", "junit", "canonical", "mutation"):
             (staging / name).mkdir()
         run_junit = repository / "tests" / "ac23" / ".ac23-evidence"
         if run_junit.exists() or run_junit.is_symlink():
@@ -291,17 +312,38 @@ def collect(args: argparse.Namespace) -> Path:
                     env,
                 )
             )
-        failed_runs = [str(record["run_id"]).upper().replace("-", "_") for record in records if record["exit_code"] != 0]
+        failed_runs = [
+            str(record["run_id"]).upper().replace("-", "_")
+            for record in records
+            if record["exit_code"] != 0 or record["termination"] != "exit"
+        ]
         if failed_runs:
             raise EvidenceError("E_COMMAND_FAILED_" + failed_runs[0])
-        (staging / "commands.jsonl").write_text(
+        _atomic_write(
+            staging / "commands.jsonl",
             "".join(
                 json.dumps(record, separators=(",", ":"), sort_keys=True) + "\n"
                 for record in records
-            ),
-            encoding="utf-8",
-            newline="\n",
+            ).encode("utf-8"),
         )
+        limits = policy["limits"]
+        for run in policy["required_runs"]:
+            if run["parser"] != "pytest-junit-pass-v1":
+                continue
+            try:
+                canonical = parse_pytest_junit_closed(
+                    (staging / run["result_path"]).read_bytes(),
+                    expected_testcase_ids=frozenset(run["expected_testcase_ids"]),
+                    max_bytes=limits["max_junit_bytes"],
+                    max_elements=limits["max_xml_elements"],
+                    max_testcases_per_run=limits["max_testcases_per_run"],
+                    max_attribute_count_per_element=limits["max_attribute_count_per_element"],
+                    max_attribute_value_bytes=limits["max_attribute_value_bytes"],
+                    max_testcase_id_bytes=limits["max_testcase_id_bytes"],
+                )
+            except JunitProfileError as error:
+                raise EvidenceError(error.code) from error
+            _atomic_write(staging / run["canonical_result_path"], canonical.to_bytes())
         environment = {
             "os": platform.system(),
             "architecture": platform.machine(),
@@ -310,10 +352,29 @@ def collect(args: argparse.Namespace) -> Path:
             "locale": "C",
             "timezone": "UTC",
         }
-        (staging / "environment.json").write_text(
-            json.dumps(environment, separators=(",", ":"), sort_keys=True) + "\n",
-            encoding="utf-8",
-            newline="\n",
+        _atomic_write(
+            staging / "environment.json",
+            (
+                json.dumps(environment, separators=(",", ":"), sort_keys=True)
+                + "\n"
+            ).encode("utf-8"),
+        )
+        toolchain = {
+            "python_executable_sha256": _sha256_file(args.python_executable.resolve()),
+            "python_version": _tool_version([os.fspath(args.python_executable), "--version"], repository),
+            "pytest_version": _tool_version([os.fspath(args.python_executable), "-m", "pytest", "--version"], repository),
+            "node_version": _tool_version(["node", "--version"], repository),
+            "npm_version": _tool_version(["npm", "--version"], repository),
+            "cargo_version": _tool_version(["cargo", "--version"], repository),
+            "rustc_version": _tool_version(["rustc", "--version"], repository),
+            "git_version": _tool_version(["git", "--version"], repository),
+        }
+        _atomic_write(
+            staging / "toolchain.json",
+            (
+                json.dumps(toolchain, separators=(",", ":"), sort_keys=True)
+                + "\n"
+            ).encode("utf-8"),
         )
         clean = subprocess.run(
             ["git", "status", "--porcelain=v1", "-z", "--untracked-files=all"],
@@ -331,57 +392,43 @@ def collect(args: argparse.Namespace) -> Path:
         )
         if clean.returncode != 0 or clean.stdout:
             raise EvidenceError("candidate worktree is not clean")
-        (staging / "clean_status.bin").write_bytes(clean.stdout)
+        _atomic_write(staging / "clean_status.bin", clean.stdout)
         reconstruction = _tree_reconstruction(repository, args.base_commit)
-        (staging / "tree_reconstruction.json").write_text(
-            json.dumps(reconstruction, separators=(",", ":"), sort_keys=True) + "\n",
-            encoding="utf-8",
-            newline="\n",
-        )
-        frozen_junit = (staging / "junit" / "0002.xml").read_bytes()
-        observed = parse_junit_results(frozen_junit)
-        run_results: dict[str, set[str]] = {
-            policy["required_runs"][1]["run_id"]: observed,
-            policy["required_runs"][4]["run_id"]: {"STATUS=PASS"},
-        }
-        frozen_details: list[dict[str, object]] = []
-        for mapping in policy["frozen_acceptance"]:
-            available = set().union(*(run_results.get(run_id, set()) for run_id in mapping["run_ids"]))
-            if not set(mapping["required_results"]).issubset(available):
-                raise EvidenceError("E_FROZEN_MAPPING")
-            frozen_details.append(
-                {
-                    "acceptance_id": mapping["acceptance_id"],
-                    "run_ids": mapping["run_ids"],
-                    "required_results": mapping["required_results"],
-                    "observed_results": mapping["required_results"],
-                    "status": "PASS",
-                }
-            )
-        frozen_summary = {"failed": 0, "passed": len(frozen_details), "total": 19}
-        (staging / "regression" / "frozen_19_summary.json").write_text(
-            json.dumps(frozen_summary, separators=(",", ":"), sort_keys=True) + "\n",
-            encoding="utf-8",
-            newline="\n",
-        )
-        (staging / "regression" / "frozen_19_details.json").write_text(
-            json.dumps(frozen_details, separators=(",", ":"), sort_keys=True) + "\n",
-            encoding="utf-8",
-            newline="\n",
+        _atomic_write(
+            staging / "tree_reconstruction.json",
+            (
+                json.dumps(reconstruction, separators=(",", ":"), sort_keys=True)
+                + "\n"
+            ).encode("utf-8"),
         )
         mutation_stem = args.mutation_results.with_suffix("")
         mutation_sources = {
-            "mutation/mutation_results_v2.json": args.mutation_results,
+            "mutation/mutation_results_v3.json": args.mutation_results,
             "mutation/pytest_mutation.stdout.bin": mutation_stem.with_suffix(".stdout.bin"),
             "mutation/pytest_mutation.stderr.bin": mutation_stem.with_suffix(".stderr.bin"),
             "mutation/pytest_mutation.xml": mutation_stem.with_suffix(".xml"),
+            "mutation/canonical.json": mutation_stem.with_suffix(".canonical.json"),
         }
-        if not all(path.is_file() for path in mutation_sources.values()):
+        if not all(path.is_file() and not path.is_symlink() for path in mutation_sources.values()):
             raise EvidenceError("E_RAW_EVIDENCE_MISSING")
-        mutation_payloads = {relative: source.read_bytes() for relative, source in mutation_sources.items()}
+        mutation_payloads = {
+            relative: source.read_bytes()
+            for relative, source in mutation_sources.items()
+        }
         verify_mutation_results(mutation_payloads, policy)
         for relative, source in mutation_sources.items():
             shutil.copyfile(source, staging / relative)
+        shutil.copyfile(
+            args.mutation_results,
+            staging / "mutation/mutation_results_v2.json",
+        )
+        actual_inventory = sorted(
+            path.relative_to(staging).as_posix()
+            for path in staging.rglob("*")
+            if path.is_file()
+        )
+        if actual_inventory != policy["evidence_inventory"]:
+            raise EvidenceError("E_EVIDENCE_INVENTORY")
         _fsync_tree(staging)
         os.replace(staging, output)
     except Exception:
@@ -400,7 +447,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--policy",
         type=Path,
-        default=Path(__file__).with_name("evidence_policy_v2.json"),
+        default=Path(__file__).with_name("evidence_policy_v3.json"),
     )
     parser.add_argument("--node-bin")
     parser.add_argument("--node-modules", type=Path)

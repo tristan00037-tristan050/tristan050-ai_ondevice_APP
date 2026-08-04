@@ -30,6 +30,8 @@ from verify_candidate_artifact_identity import (
 SCHEMA_VERSION = "butler.box5.candidate-artifact-identity.v1"
 ROUND5_START_COMMIT = "fbb90e182063edc50651d769cac9e840cf96ac3e"
 ROUND5_START_TREE = "c94833ca4ff2ff57cddccb48bd289305eaf33f94"
+ROUND6_START_COMMIT = "55b71445d3d1618d9f9f38c9a947fe82f6be39d2"
+ROUND6_START_TREE = "735a1958bb5b9a7df29dc0c886b59752670a8a91"
 ALLOWED_AC23_PATH_PREFIXES = ("tools/ac23/", "tests/ac23/")
 ALLOWED_AC23_PATHS = {"schemas/candidate-artifact-identity-v1.schema.json"}
 ALLOWED_REQUIRED_METADATA_PATHS = {
@@ -187,20 +189,9 @@ def _build_source_tar(repository: Path, head: str, destination: Path) -> None:
                 archive.addfile(info, io.BytesIO(payload))
 
 
-def _safe_evidence_paths(root: Path) -> tuple[list[Path], list[Path]]:
-    required_files = {
-        "environment.json",
-        "commands.jsonl",
-        "clean_status.bin",
-        "tree_reconstruction.json",
-        "regression/frozen_19_details.json",
-        "regression/frozen_19_summary.json",
-        "mutation/mutation_results_v2.json",
-        "mutation/pytest_mutation.stdout.bin",
-        "mutation/pytest_mutation.stderr.bin",
-        "mutation/pytest_mutation.xml",
-    }
-    required_directories = {"regression", "mutation", "stdout", "stderr"}
+def _safe_evidence_paths(
+    root: Path, expected_inventory: list[str]
+) -> tuple[list[Path], list[Path]]:
     actual_files: list[Path] = []
     actual_directories: list[Path] = []
     for path in root.rglob("*"):
@@ -214,17 +205,16 @@ def _safe_evidence_paths(root: Path) -> tuple[list[Path], list[Path]]:
             actual_directories.append(path)
         else:
             actual_files.append(path)
-    file_names = {path.relative_to(root).as_posix() for path in actual_files}
-    directory_names = {path.relative_to(root).as_posix() for path in actual_directories}
-    if not required_files.issubset(file_names) or not required_directories.issubset(
-        directory_names
-    ):
-        raise BuildError("evidence inventory is incomplete")
+    file_names = sorted(path.relative_to(root).as_posix() for path in actual_files)
+    if file_names != expected_inventory:
+        raise BuildError("evidence inventory is not exact")
     return actual_directories, actual_files
 
 
-def _build_evidence_tar(evidence_root: Path, destination: Path) -> None:
-    directories, files = _safe_evidence_paths(evidence_root)
+def _build_evidence_tar(
+    evidence_root: Path, destination: Path, expected_inventory: list[str]
+) -> None:
+    directories, files = _safe_evidence_paths(evidence_root, expected_inventory)
     with tarfile.open(destination, "x", format=tarfile.PAX_FORMAT) as archive:
         for directory in sorted(directories, key=lambda path: path.relative_to(evidence_root).as_posix()):
             name = directory.relative_to(evidence_root).as_posix() + "/"
@@ -323,6 +313,9 @@ def _readme(manifest: dict[str, str]) -> bytes:
         "이 디렉터리는 네트워크와 원 개발 작업공간 없이 검증됩니다.\n\n"
         "```bash\npython3 VERIFY/verify_candidate_artifact_identity.py .\n```\n\n"
         "정상 판정의 마지막 줄은 `AC23_PASS=YES`입니다.\n\n"
+        "`AC23_PASS=YES`는 package verifier의 self-check이며 독립 재감사 전 프로젝트 판정을 승격하지 않습니다.\n\n"
+        "```text\nMAPPING_AUTHORITY=NOT_SUPPLIED\nAC_LEVEL_MAPPING_CLAIM=NOT_MADE\n"
+        "MUTATION_RESULT_V2_COMPAT_ALIAS=BYTE_EQUAL_NON_NORMATIVE\n```\n\n"
         f"- repository_url: `{manifest['repository_url']}`\n"
         f"- base_commit: `{manifest['base_commit']}`\n"
         f"- head_commit: `{manifest['head_commit']}`\n"
@@ -363,6 +356,11 @@ def _validate_candidate(
         raise BuildError("Round5 start identity mismatch")
     if _git(repository, "merge-base", "--is-ancestor", ROUND5_START_COMMIT, head, check=False).returncode:
         raise BuildError("Round5 start is not an ancestor")
+    if _git(repository, "show", "-s", "--format=%T", ROUND6_START_COMMIT).stdout.decode("ascii").strip() != ROUND6_START_TREE:
+        raise BuildError("Round6 start identity mismatch")
+    parent = _git(repository, "show", "-s", "--format=%P", head).stdout.decode("ascii").strip().split()
+    if parent != [ROUND6_START_COMMIT]:
+        raise BuildError("candidate must have Round6 head as its only direct parent")
     delta = _git(
         repository,
         "diff-tree",
@@ -409,6 +407,14 @@ def build(args: argparse.Namespace) -> Path:
     base_tree, head_tree, object_format = _validate_candidate(
         repository, args.base_commit, head
     )
+    committed_sources = {
+        "tools/ac23/verify_candidate_artifact_identity.py": verifier_source.read_bytes(),
+        "tools/ac23/evidence_policy_v3.json": policy_bytes,
+        "schemas/candidate-artifact-identity-v1.schema.json": schema_source.read_bytes(),
+    }
+    for relative, expected_bytes in committed_sources.items():
+        if _git(repository, "show", f"{head}:{relative}").stdout != expected_bytes:
+            raise BuildError("packaged verifier input is not the candidate head blob")
     contract = _git(repository, "show", f"{head}:{NORMATIVE_CONTRACT_PATH}").stdout
     contract_digest = hashlib.sha256(contract).hexdigest()
     if contract_digest != NORMATIVE_CONTRACT_SHA256:
@@ -442,7 +448,7 @@ def build(args: argparse.Namespace) -> Path:
         bundle_path = staging / "SOURCE" / "candidate_repository.bundle"
         _create_bundle(repository, head, bundle_path, temporary_root)
         evidence_path = staging / "EVIDENCE" / "evidence_raw.tar"
-        _build_evidence_tar(evidence, evidence_path)
+        _build_evidence_tar(evidence, evidence_path, policy["evidence_inventory"])
 
         patch_tree = _patch_tree(bundle_path, patch_path, args.base_commit, temporary_root)
         source_tree = _source_tree(source_path, temporary_root)
@@ -522,7 +528,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--policy-source",
         type=Path,
-        default=Path(__file__).with_name("evidence_policy_v2.json"),
+        default=Path(__file__).with_name("evidence_policy_v3.json"),
     )
     return parser
 
