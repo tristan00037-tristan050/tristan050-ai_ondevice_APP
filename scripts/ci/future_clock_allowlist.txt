@@ -1,0 +1,8 @@
+# future-clock 가드 baseline — 알려진 시한폭탄(고치기는 별도 지시)
+# 생성 scope=tests/connect_loop future=2027-06-01T00:00:00Z
+tests.connect_loop.test_learning_candidate_gate_dlp_and_expires_guards::test_caller_dlp_without_runtime_text_uses_caller_only
+tests.connect_loop.test_learning_candidate_gate_dlp_and_expires_guards::test_runtime_text_clean_with_caller_passed_true_passes_when_match
+tests.connect_loop.test_learning_candidate_gate_label_drift::test_happy_path_label_matches_source_passes
+tests.connect_loop.test_round4_secret_event_tenant_guards::test_envelope_valid_tenant_scope_passes[device]
+tests.connect_loop.test_round4_secret_event_tenant_guards::test_envelope_valid_tenant_scope_passes[org]
+tests.connect_loop.test_round4_secret_event_tenant_guards::test_envelope_valid_tenant_scope_passes[team]
