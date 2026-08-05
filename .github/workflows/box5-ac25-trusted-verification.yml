@@ -1,0 +1,167 @@
+name: Box5 AC-25 Trusted Verification
+
+# §10 보호된 워크플로. default branch(main) 에 병합된 뒤 workflow_dispatch 로만 돈다.
+# 사용자 입력은 권위값이 아니라 보호된 lock 과 완전일치하는지 대조할 주장값이다.
+# 후보(PR #903)의 Python/JS/셸 코드는 신뢰 검증기 경로에서 실행하지 않는다.
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 판정 대상 PR 번호(903 고정 대조)
+        required: true
+        type: string
+      expected_head:
+        description: 후보 head SHA(주장값 · lock 과 대조)
+        required: true
+        type: string
+      expected_tree:
+        description: 후보 head tree(주장값 · lock 과 대조)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: box5-ac25-${{ github.event.inputs.pr_number }}
+  cancel-in-progress: false
+
+env:
+  LOCK_PATH: .github/box5/ac25/pr903_candidate_lock.json
+  APPROVED_BASE: de3dd4ebaf5b3935a142b988dd61e6198aa9536d
+  APPROVED_HEAD: 61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04
+  APPROVED_HEAD_TREE: 313f40cf35b3ee2bf7bcdd946dea9c2e1c4896c2
+  INTEGRATION_BASE: afdb237e4e6e83d96a182b6c5366a2ad95949bee
+
+jobs:
+  # ── 신뢰 좌표 검증: 병합된 main 의 보호 코드로만 실행 ──
+  trusted-coordinate:
+    name: trusted-coordinate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      candidate_tree: ${{ steps.measure.outputs.candidate_tree }}
+    steps:
+      - name: Checkout trusted verifier (merged main)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: ac25-trusted
+
+      - name: Assert inputs equal protected lock (before any candidate fetch)
+        working-directory: ac25-trusted
+        run: |
+          set -euo pipefail
+          test "${{ github.event.inputs.pr_number }}" = "903" \
+            || { echo "::error::INPUT_PR_MISMATCH"; exit 1; }
+          test "${{ github.event.inputs.expected_head }}" = "$APPROVED_HEAD" \
+            || { echo "::error::INPUT_HEAD_MISMATCH"; exit 1; }
+          test "${{ github.event.inputs.expected_tree }}" = "$APPROVED_HEAD_TREE" \
+            || { echo "::error::INPUT_TREE_MISMATCH"; exit 1; }
+
+      - name: Fetch candidate objects (no code execution)
+        working-directory: ac25-trusted
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$APPROVED_BASE" "$APPROVED_HEAD"
+          # 후보 tree/base tree 실측
+          echo "OBSERVED_HEAD_TREE=$(git rev-parse "${APPROVED_HEAD}^{tree}")" >> "$GITHUB_ENV"
+
+      - name: Measure and verify lock (trusted code only)
+        id: measure
+        working-directory: ac25-trusted
+        env:
+          PYTHONPATH: scripts/ci
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet jsonschema
+          python scripts/ci/ac25/lock_verifier.py \
+            --repository-path "$PWD" \
+            --lock-path "$LOCK_PATH" \
+            --expected-head "${{ github.event.inputs.expected_head }}" \
+            --expected-tree "${{ github.event.inputs.expected_tree }}" \
+            --execution-commit "$APPROVED_HEAD"
+          echo "candidate_tree=$(git rev-parse "${APPROVED_HEAD}^{tree}")" >> "$GITHUB_OUTPUT"
+
+  # ── candidate lane: 비특권 job 에서만 후보 코드 실행 ──
+  candidate-lane:
+    name: candidate-lane
+    needs: trusted-coordinate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout candidate at expected head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.expected_head }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Assert exact head and tree
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.inputs.expected_head }}" \
+            || { echo "::error::CANDIDATE_HEAD_MISMATCH"; exit 1; }
+          test "$(git show -s --format=%T HEAD)" = "${{ github.event.inputs.expected_tree }}" \
+            || { echo "::error::CANDIDATE_TREE_MISMATCH"; exit 1; }
+          echo "candidate lane identity OK"
+
+  # ── integration lane: 합성 병합 좌표 실측(경로 정책은 여전히 base..head) ──
+  integration-lane:
+    name: integration-lane
+    needs: trusted-coordinate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout base repo (no candidate code run)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch and measure synthetic merge parents
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/pull/${{ github.event.inputs.pr_number }}/merge"
+          MERGE="$(git rev-parse FETCH_HEAD)"
+          test "$MERGE" != "$APPROVED_HEAD" \
+            || { echo "::error::MERGE_EQUALS_SCOPE_END"; exit 1; }
+          PARENTS="$(git rev-list --parents -n 1 "$MERGE" | cut -d' ' -f2-)"
+          echo "merge=$MERGE parents=$PARENTS"
+          echo "$PARENTS" | tr ' ' '\n' | grep -qx "$APPROVED_HEAD" \
+            || { echo "::error::MERGE_PARENT_MISSING_CANDIDATE"; exit 1; }
+          echo "integration merge coordinate OK (policy scope stays $APPROVED_BASE..$APPROVED_HEAD)"
+
+  # ── publish check: 후보 코드 미실행. 후보 head 에 고유 check-run 기록 ──
+  publish-check:
+    name: publish-check
+    needs: [trusted-coordinate, candidate-lane, integration-lane]
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+    steps:
+      - name: Record trusted exact-head check-run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const headSha = "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04";
+            const summary = [
+              `verifier_commit: ${context.sha}`,
+              `candidate_commit: ${headSha}`,
+              `candidate_tree: ${{ needs.trusted-coordinate.outputs.candidate_tree }}`,
+              `policy_scope_start: ${process.env.APPROVED_BASE}`,
+              `policy_scope_end: ${headSha}`,
+              `integration_comparison_base: ${process.env.INTEGRATION_BASE}`,
+            ].join("\n");
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: "box5-ac25/trusted-exact-head",
+              head_sha: headSha,
+              status: "completed",
+              conclusion: "success",
+              output: { title: "AC-25 trusted exact-head verification", summary },
+            });
