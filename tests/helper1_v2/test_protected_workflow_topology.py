@@ -30,6 +30,7 @@ EXECUTION = ROOT / "butler_pc_core/helper1/execution.py"
 REPLAY_STORE = ROOT / "butler_pc_core/helper1/replay_store.py"
 RETRIEVAL_POLICY = ROOT / "butler_pc_core/helper1/retrieval_policy.py"
 CODEOWNERS = ROOT / ".github/CODEOWNERS"
+PROTECTED_SURFACE = ROOT / "scripts/ci/helper1_protected_surface.py"
 
 
 def _load_producer_package_module():
@@ -43,6 +44,21 @@ def _load_producer_package_module():
     return module
 
 
+def _load_trusted_verifier_module():
+    spec = importlib.util.spec_from_file_location(
+        "helper1_trusted_verifier_fixture", VERIFIER
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    sys.path.insert(0, str(VERIFIER.parent))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
+    return module
+
+
 def _canonical(value: object) -> bytes:
     return json.dumps(
         value,
@@ -51,6 +67,37 @@ def _canonical(value: object) -> bytes:
         separators=(",", ":"),
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _quality_fixture(root: Path, *, commit: str, tree: str, run_id: str) -> Path:
+    from butler_pc_core.helper1.quality_evidence import (
+        MANIFEST_NAME,
+        QUALITY_FILES,
+        build_manifest,
+    )
+
+    payloads: dict[str, bytes] = {}
+    for name in QUALITY_FILES:
+        raw = b"observer" if name.endswith("observer.bin") else b"{}\n"
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(raw)
+        payloads[name] = raw
+    (root / MANIFEST_NAME).write_bytes(
+        build_manifest(
+            payloads,
+            source_commit=commit,
+            source_tree=tree,
+            evaluation_run_id=run_id,
+            evaluation_run_attempt=1,
+            producer_run_id=run_id,
+            producer_run_attempt=1,
+            workflow_id=1,
+            workflow_ref=f"owner/repo/.github/workflows/helper1-v2-evidence.yml@{commit}",
+            workflow_sha256="a" * 64,
+        )
+    )
+    return root
 
 
 def _producer_artifact(tmp_path: Path):
@@ -135,7 +182,34 @@ def _producer_artifact(tmp_path: Path):
         producer_run="fixture:1",
     )
     (product / "MANIFEST.json").write_bytes(_canonical(product_manifest) + b"\n")
-    descriptor = module.build(artifact, subject_path, submission_path, evidence, product)
+    quality = _quality_fixture(inputs / "quality", commit=commit, tree=tree, run_id="fixture:1")
+    approval_input = inputs / "approval-input.zip"
+    approval_input.write_bytes(b"fixture-approval-input")
+    provenance = inputs / "APPROVAL_INPUT_PROVENANCE.v2.json"
+    provenance.write_bytes(_canonical({
+        "schema_version": "butler.helper1.approval-input-provenance.v2",
+        "mode": "ARTIFACT",
+        "repository_id": 1,
+        "repository_name": subject["repository_full_name"],
+        "subject_commit": commit,
+        "subject_tree": tree,
+        "producer_workflow_ref": f'{subject["repository_full_name"]}/.github/workflows/helper1-v2-approval-evidence.yml@{commit}',
+        "producer_workflow_id": 1,
+        "producer_workflow_sha256": "a" * 64,
+        "run_id": 1,
+        "run_attempt": 1,
+        "event_name": "workflow_dispatch",
+        "artifact_id": 1,
+        "artifact_name": "fixture-approval",
+        "artifact_sha256": hashlib.sha256(approval_input.read_bytes()).hexdigest(),
+        "inventory_sha256": "b" * 64,
+        "canonical_subject_sha256": hashlib.sha256(_canonical(subject)).hexdigest(),
+    }) + b"\n")
+    module.verify_approval_input_bytes = lambda *_args, **_kwargs: None
+    descriptor = module.build(
+        artifact, subject_path, submission_path, evidence, product, quality,
+        approval_input, provenance,
+    )
     return module, artifact, subject_path, descriptor
 
 
@@ -403,33 +477,42 @@ def test_submission_is_downloaded_from_same_repository_but_never_executed():
 
 
 def test_protected_verifier_fingerprint_is_exactly_pinned():
-    import hashlib
-
     policy = json.loads(POLICY.read_text(encoding="utf-8"))
     observed = "sha256:" + hashlib.sha256(VERIFIER.read_bytes()).hexdigest()
+    tree = ast.parse(PROTECTED_SURFACE.read_text(encoding="utf-8"))
+    assignment = next(
+        node for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "PROTECTED_COMPONENT_PATHS" for target in node.targets)
+    )
+    component_paths = ast.literal_eval(assignment.value)
+    expected = {
+        path: "sha256:" + hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+        for path in component_paths
+    }
 
     assert policy["protected_verifier_sha256"] == observed
-    assert policy["protected_components_sha256"] == {
-        "scripts/ci/helper1_trusted_verifier.py": observed,
-        "scripts/ci/helper1_subject_binding.py": "sha256:" + hashlib.sha256(SUBJECT_BINDING.read_bytes()).hexdigest(),
-        "scripts/ci/helper1_evidence_semantics.py": "sha256:" + hashlib.sha256(SEMANTICS.read_bytes()).hexdigest(),
-        "scripts/ci/publish_helper1_subject_check.py": "sha256:" + hashlib.sha256(PUBLISHER.read_bytes()).hexdigest(),
-        "scripts/verify_helper1_v51_package.py": "sha256:" + hashlib.sha256(PACKAGE_VERIFIER.read_bytes()).hexdigest(),
-        "scripts/ci/helper1_postgresql_replay_probe.py": "sha256:" + hashlib.sha256(POSTGRES_PROBE.read_bytes()).hexdigest(),
-        "scripts/ci/helper1_product_approval_bundle.py": "sha256:" + hashlib.sha256(PRODUCT_APPROVAL_BUNDLE.read_bytes()).hexdigest(),
-        "scripts/ci/helper1_producer_package.py": "sha256:" + hashlib.sha256(PRODUCER_PACKAGE.read_bytes()).hexdigest(),
-        "butler_pc_core/helper1/approval_closure.py": "sha256:" + hashlib.sha256(APPROVAL_CLOSURE.read_bytes()).hexdigest(),
-        "butler_pc_core/helper1/canonical_json.py": "sha256:" + hashlib.sha256(CANONICAL_JSON.read_bytes()).hexdigest(),
-        "butler_pc_core/helper1/execution.py": "sha256:" + hashlib.sha256(EXECUTION.read_bytes()).hexdigest(),
-        "butler_pc_core/helper1/replay_store.py": "sha256:" + hashlib.sha256(REPLAY_STORE.read_bytes()).hexdigest(),
-        "butler_pc_core/helper1/retrieval_policy.py": "sha256:" + hashlib.sha256(RETRIEVAL_POLICY.read_bytes()).hexdigest(),
-    }
+    assert policy["protected_components_sha256"] == expected
     assert policy["policy_epoch"] == 2
     assert policy["enabled"] is False
     assert policy["approved_public_key_b64"] is None
     assert policy["approved_verdict_public_key_b64"] is None
     assert policy["approval_policy_sha256"] is None
     assert policy["approved_activation_public_key_b64"] is None
+
+
+def test_transitive_dependency_omission_is_detected_automatically() -> None:
+    module = _load_trusted_verifier_module()
+    omitted = "butler_pc_core/helper1/failure_codes.py"
+    module.PROTECTED_COMPONENTS = {
+        name: path
+        for name, path in module.PROTECTED_COMPONENTS.items()
+        if name != omitted
+    }
+
+    assert omitted in module._missing_transitive_components()
+    with pytest.raises(module.VerificationError, match="PROTECTED_TRANSITIVE_COMPONENT_MISSING"):
+        module.verify_protected_components({"protected_components_sha256": {}})
 
 
 def test_protected_success_path_invokes_a4_closure_before_verdict() -> None:
@@ -483,6 +566,9 @@ def test_existing_helper1_codeowners_rules_are_preserved_and_a4_is_owned() -> No
         "/tests/helper1_v2/vectors/**",
     )
     assert all(owners.count(path) == 1 for path in (*preserved, *added))
+    assert "/butler_pc_core/helper1/**" in owners
+    assert "/scripts/ci/helper1_*" in owners
+    assert "/contracts/helper1-*" in owners
 
 
 def test_postgresql_probe_fails_closed_without_protected_dsn() -> None:

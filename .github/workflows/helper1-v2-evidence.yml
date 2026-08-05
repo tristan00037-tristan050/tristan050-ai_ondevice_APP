@@ -6,9 +6,30 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      approval_repository_id: {description: Immutable repository ID, required: true, type: string}
+      approval_run_id: {description: Approval producer run ID, required: true, type: string}
+      approval_run_attempt: {description: Approval producer run attempt, required: true, type: string}
+      approval_artifact_id: {description: Exact approval artifact ID, required: true, type: string}
+      approval_artifact_name: {description: Exact approval artifact name, required: true, type: string}
+      approval_workflow_ref: {description: Approval workflow ref pinned to SHA, required: true, type: string}
+      approval_workflow_id: {description: Immutable protected approval workflow ID, required: true, type: string}
+      approval_workflow_sha256: {description: Approval workflow byte digest, required: true, type: string}
+      evidence_workflow_id: {description: Immutable ID of this protected producer workflow, required: true, type: string}
+      quality_repository_id: {description: Quality input repository ID, required: true, type: string}
+      quality_run_id: {description: Protected quality input run ID, required: true, type: string}
+      quality_run_attempt: {description: Protected quality input run attempt, required: true, type: string}
+      quality_artifact_id: {description: Exact quality input artifact ID, required: true, type: string}
+      quality_artifact_name: {description: Exact quality input artifact name, required: true, type: string}
+      quality_artifact_sha256: {description: Exact quality input artifact digest, required: true, type: string}
+      quality_workflow_ref: {description: Quality input workflow ref pinned to SHA, required: true, type: string}
+      quality_workflow_id: {description: Immutable quality input workflow ID, required: true, type: string}
+      quality_workflow_sha256: {description: Quality input workflow byte digest, required: true, type: string}
+      quality_event_name: {description: Quality input workflow event, required: true, type: string}
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: helper1-v2-producer-${{ github.ref }}
@@ -21,7 +42,7 @@ env:
 jobs:
   untrusted-producer:
     name: helper1-v2-untrusted-evidence
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, helper1-quality]
     timeout-minutes: 30
     steps:
       - name: Check out evidence subject
@@ -87,7 +108,55 @@ jobs:
           test "${evidence_rc}" -eq 2 || { echo "HELPER1_PRODUCER_EVIDENCE_OK=0"; echo "ERROR_CODE=PRODUCER_EVIDENCE_UNEXPECTED_STATE"; exit 1; }
           echo "HELPER1_PRODUCER_EVIDENCE_OK=1"
           echo "ERROR_CODE=NONE"
+      - name: Require explicit protected approval producer
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          echo "HELPER1_APPROVAL_INPUT_FETCH_OK=0"
+          echo "ERROR_CODE=NO_EXPLICIT_PRODUCER"
+          exit 1
+      - name: Fetch exact protected approval input
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SUBJECT_SHA: ${{ steps.canonical-subject.outputs.subject_sha }}
+          SUBJECT_DIGEST: ${{ steps.canonical-subject.outputs.subject_digest }}
+        run: |
+          set -euo pipefail
+          subject_tree="$(git rev-parse "${SUBJECT_SHA}^{tree}")"
+          python scripts/ci/helper1_approval_input_fetch.py \
+            --repository "${GITHUB_REPOSITORY}" \
+            --repository-id "${{ inputs.approval_repository_id }}" \
+            --run-id "${{ inputs.approval_run_id }}" \
+            --run-attempt "${{ inputs.approval_run_attempt }}" \
+            --artifact-id "${{ inputs.approval_artifact_id }}" \
+            --artifact-name "${{ inputs.approval_artifact_name }}" \
+            --subject-commit "${SUBJECT_SHA}" \
+            --subject-tree "${subject_tree}" \
+            --producer-workflow-ref "${{ inputs.approval_workflow_ref }}" \
+            --producer-workflow-id "${{ inputs.approval_workflow_id }}" \
+            --producer-workflow-sha256 "${{ inputs.approval_workflow_sha256 }}" \
+            --canonical-subject-sha256 "${SUBJECT_DIGEST}" \
+            --event-name "workflow_dispatch" \
+            --output-artifact "${RUNNER_TEMP}/helper1-build/approval-input.zip" \
+            --output-provenance "${RUNNER_TEMP}/helper1-build/APPROVAL_INPUT_PROVENANCE.v2.json"
+          python scripts/ci/helper1_approval_input_materialize.py \
+            --artifact "${RUNNER_TEMP}/helper1-build/approval-input.zip" \
+            --provenance "${RUNNER_TEMP}/helper1-build/APPROVAL_INPUT_PROVENANCE.v2.json" \
+            --repository-id "${{ inputs.approval_repository_id }}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --subject-commit "${SUBJECT_SHA}" \
+            --subject-tree "${subject_tree}" \
+            --run-id "${{ inputs.approval_run_id }}" \
+            --run-attempt "${{ inputs.approval_run_attempt }}" \
+            --workflow-ref "${{ inputs.approval_workflow_ref }}" \
+            --workflow-id "${{ inputs.approval_workflow_id }}" \
+            --workflow-sha256 "${{ inputs.approval_workflow_sha256 }}" \
+            --artifact-id "${{ inputs.approval_artifact_id }}" \
+            --artifact-name "${{ inputs.approval_artifact_name }}" \
+            --canonical-subject-sha256 "${SUBJECT_DIGEST}" \
+            --output-root "${RUNNER_TEMP}/helper1-product-approval-input"
       - name: Assemble complete product approval inventory
+        if: github.event_name == 'workflow_dispatch'
         env:
           PRODUCER_RUN_ID: ${{ github.run_id }}
           PRODUCER_RUN_ATTEMPT: ${{ github.run_attempt }}
@@ -101,7 +170,104 @@ jobs:
             --subject-commit "${SUBJECT_SHA}" \
             --subject-tree "${subject_tree}" \
             --producer-run "${PRODUCER_RUN_ID}:${PRODUCER_RUN_ATTEMPT}"
+      - name: Fetch exact protected SearchQuality input
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SUBJECT_SHA: ${{ steps.canonical-subject.outputs.subject_sha }}
+        run: |
+          set -euo pipefail
+          subject_tree="$(git rev-parse "${SUBJECT_SHA}^{tree}")"
+          python scripts/ci/helper1_quality_input_fetch.py \
+            --repository "${GITHUB_REPOSITORY}" \
+            --repository-id "${{ inputs.quality_repository_id }}" \
+            --run-id "${{ inputs.quality_run_id }}" \
+            --run-attempt "${{ inputs.quality_run_attempt }}" \
+            --artifact-id "${{ inputs.quality_artifact_id }}" \
+            --artifact-name "${{ inputs.quality_artifact_name }}" \
+            --artifact-sha256 "${{ inputs.quality_artifact_sha256 }}" \
+            --subject-commit "${SUBJECT_SHA}" \
+            --subject-tree "${subject_tree}" \
+            --producer-workflow-ref "${{ inputs.quality_workflow_ref }}" \
+            --producer-workflow-id "${{ inputs.quality_workflow_id }}" \
+            --producer-workflow-sha256 "${{ inputs.quality_workflow_sha256 }}" \
+            --event-name "${{ inputs.quality_event_name }}" \
+            --output-root "${RUNNER_TEMP}/helper1-quality-input"
+      - name: Execute protected SearchQuality chain
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          SUBJECT_SHA: ${{ steps.canonical-subject.outputs.subject_sha }}
+        run: |
+          set -euo pipefail
+          subject_tree="$(git rev-parse "${SUBJECT_SHA}^{tree}")"
+          evaluation_run_id="${{ inputs.quality_run_id }}:${{ inputs.quality_run_attempt }}"
+          benchmark_output="${RUNNER_TEMP}/helper1-quality-benchmark"
+          quality="${RUNNER_TEMP}/helper1-build/search-quality"
+          install -d -m 0700 "${quality}/INPUT" "${quality}/EVALUATION" "${quality}/DEVICE/M3" "${quality}/DEVICE/M4"
+          install -m 0600 "${RUNNER_TEMP}/helper1-quality-input/corpus-manifest.json" "${quality}/INPUT/corpus-manifest.json"
+          install -m 0600 "${RUNNER_TEMP}/helper1-quality-input/queries.jsonl" "${quality}/INPUT/queries.jsonl"
+          install -m 0600 "${RUNNER_TEMP}/helper1-quality-input/retrieval-policy.json" "${quality}/INPUT/retrieval-policy.json"
+          install -m 0600 "${RUNNER_TEMP}/helper1-quality-input/QUALITY_INPUT_PROVENANCE.v1.json" "${quality}/INPUT/QUALITY_INPUT_PROVENANCE.v1.json"
+          python scripts/ci/helper1_assert_start_tree.py \
+            --repository . --expected-tree "${subject_tree}" --expected-commit "${SUBJECT_SHA}" \
+            --output "${quality}/EVALUATION/start-tree-verdict.json"
+          python scripts/ci/helper1_build_evaluation_subject.py \
+            --queries "${quality}/INPUT/queries.jsonl" \
+            --corpus-manifest "${quality}/INPUT/corpus-manifest.json" \
+            --retrieval-policy "${quality}/INPUT/retrieval-policy.json" \
+            --threshold-policy "${RUNNER_TEMP}/helper1-build/product-approval/approval/A4_RETRIEVAL_THRESHOLD_POLICY.payload.json" \
+            --threshold-approval-envelope "${RUNNER_TEMP}/helper1-build/product-approval/approval/A4_RETRIEVAL_THRESHOLD_POLICY.envelope.json" \
+            --source-commit "${SUBJECT_SHA}" --source-tree "${subject_tree}" \
+            --run-id "${evaluation_run_id}" --run-attempt "${{ inputs.quality_run_attempt }}" \
+            --output "${quality}/EVALUATION/evaluation-run-subject.json"
+          python scripts/ci/helper1_run_sealed_benchmark.py \
+            --corpus-artifact "${quality}/INPUT/corpus-manifest.json" \
+            --answer-key-artifact "${quality}/INPUT/queries.jsonl" \
+            --policy "${quality}/INPUT/retrieval-policy.json" \
+            --execution-subject "${quality}/EVALUATION/evaluation-run-subject.json" \
+            --source-commit "${SUBJECT_SHA}" --source-tree "${subject_tree}" \
+            --run-attempt "${{ inputs.quality_run_attempt }}" --output "${benchmark_output}"
+          install -m 0600 "${benchmark_output}/retrieval-cases.jsonl" "${quality}/EVALUATION/retrieval-cases.jsonl"
+          install -m 0600 "${benchmark_output}/answer-cases.jsonl" "${quality}/EVALUATION/answer-cases.jsonl"
+          install -m 0600 "${benchmark_output}/ablation-retrieval-cases.jsonl" "${quality}/EVALUATION/ablation-retrieval-cases.jsonl"
+          install -m 0600 "${benchmark_output}/ablation-answer-cases.jsonl" "${quality}/EVALUATION/ablation-answer-cases.jsonl"
+          python scripts/ci/helper1_recompute_quality_report.py \
+            --queries "${quality}/INPUT/queries.jsonl" \
+            --retrieval-cases "${quality}/EVALUATION/retrieval-cases.jsonl" \
+            --answer-cases "${quality}/EVALUATION/answer-cases.jsonl" \
+            --ablation-retrieval-cases "${quality}/EVALUATION/ablation-retrieval-cases.jsonl" \
+            --ablation-answer-cases "${quality}/EVALUATION/ablation-answer-cases.jsonl" \
+            --execution-subject "${quality}/EVALUATION/evaluation-run-subject.json" \
+            --corpus-manifest "${quality}/INPUT/corpus-manifest.json" \
+            --retrieval-policy "${quality}/INPUT/retrieval-policy.json" \
+            --threshold-policy "${RUNNER_TEMP}/helper1-build/product-approval/approval/A4_RETRIEVAL_THRESHOLD_POLICY.payload.json" \
+            --output "${quality}/EVALUATION/quality-report.json"
+          for device in M3 M4; do
+            python scripts/ci/helper1_measure_device.py \
+              --device-class "${device}" --source-commit "${SUBJECT_SHA}" --source-tree "${subject_tree}" \
+              --run-id "${evaluation_run_id}" --run-attempt "${{ inputs.quality_run_attempt }}" \
+              --native-measurement "${RUNNER_TEMP}/helper1-quality-input/${device}/native-measurement.json" \
+              --raw-bundle "${RUNNER_TEMP}/helper1-quality-input/${device}/raw-bundle.json" \
+              --device-receipt "${RUNNER_TEMP}/helper1-quality-input/${device}/device-receipt.json" \
+              --observer-binary "${RUNNER_TEMP}/helper1-quality-input/${device}/observer.bin" \
+              --trust-policy contracts/helper1-device-trust-policy-v1.json \
+              --output "${quality}/DEVICE/${device}/native-measurement.json"
+            install -m 0600 "${RUNNER_TEMP}/helper1-quality-input/${device}/raw-bundle.json" "${quality}/DEVICE/${device}/raw-bundle.json"
+            install -m 0600 "${RUNNER_TEMP}/helper1-quality-input/${device}/device-receipt.json" "${quality}/DEVICE/${device}/device-receipt.json"
+            install -m 0600 "${RUNNER_TEMP}/helper1-quality-input/${device}/observer.bin" "${quality}/DEVICE/${device}/observer.bin"
+          done
+          workflow_sha256="$(shasum -a 256 .github/workflows/helper1-v2-evidence.yml | awk '{print $1}')"
+          python scripts/ci/helper1_quality_evidence_manifest.py \
+            --root "${quality}" --source-commit "${SUBJECT_SHA}" --source-tree "${subject_tree}" \
+            --evaluation-run-id "${evaluation_run_id}" \
+            --evaluation-run-attempt "${{ inputs.quality_run_attempt }}" \
+            --producer-run-id "${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}" \
+            --producer-run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --workflow-id "${{ inputs.evidence_workflow_id }}" \
+            --workflow-ref "${GITHUB_REPOSITORY}/.github/workflows/helper1-v2-evidence.yml@${SUBJECT_SHA}" \
+            --workflow-sha256 "${workflow_sha256}"
       - name: Build fixed-path Helper1 candidate package
+        if: github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
           python scripts/ci/helper1_producer_package.py build \
@@ -109,10 +275,14 @@ jobs:
             --canonical-subject "${RUNNER_TEMP}/helper1-build/CANONICAL_SUBJECT.json" \
             --submission "${RUNNER_TEMP}/helper1-build/SUBMISSION.json" \
             --test-evidence-root "${RUNNER_TEMP}/helper1-build/test-evidence" \
-            --product-approval-root "${RUNNER_TEMP}/helper1-build/product-approval"
+            --product-approval-root "${RUNNER_TEMP}/helper1-build/product-approval" \
+            --quality-evidence-root "${RUNNER_TEMP}/helper1-build/search-quality" \
+            --approval-input-artifact "${RUNNER_TEMP}/helper1-build/approval-input.zip" \
+            --approval-input-provenance "${RUNNER_TEMP}/helper1-build/APPROVAL_INPUT_PROVENANCE.v2.json"
           test -s helper1-producer-artifact/package/helper1-v51.zip
           test -s helper1-producer-artifact/package/helper1-v51.candidate.json
       - name: Upload untrusted producer artifact
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: helper1-v2-evidence-${{ github.run_id }}-${{ github.run_attempt }}

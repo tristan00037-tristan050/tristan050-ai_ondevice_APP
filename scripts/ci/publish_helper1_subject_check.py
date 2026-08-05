@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from helper1_subject_binding import SubjectBindingError, resolve_commit_tree
+from helper1_protected_surface import PROTECTED_COMPONENT_PATHS
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -68,22 +69,13 @@ POLICY_KEYS = {
     "subject_check_name",
     "subject_check_app_slug",
     "subject_check_required",
+    "quality_evidence_required",
+    "quality_producer_workflow_id",
+    "quality_producer_workflow_path",
+    "quality_producer_workflow_sha256",
+    "device_trust_policy_sha256",
 }
-PROTECTED_COMPONENTS = {
-    "scripts/ci/helper1_trusted_verifier.py": ROOT / "scripts/ci/helper1_trusted_verifier.py",
-    "scripts/ci/helper1_subject_binding.py": ROOT / "scripts/ci/helper1_subject_binding.py",
-    "scripts/ci/helper1_evidence_semantics.py": ROOT / "scripts/ci/helper1_evidence_semantics.py",
-    "scripts/ci/helper1_postgresql_replay_probe.py": ROOT / "scripts/ci/helper1_postgresql_replay_probe.py",
-    "scripts/ci/helper1_product_approval_bundle.py": ROOT / "scripts/ci/helper1_product_approval_bundle.py",
-    "scripts/ci/helper1_producer_package.py": ROOT / "scripts/ci/helper1_producer_package.py",
-    "scripts/ci/publish_helper1_subject_check.py": Path(__file__).resolve(),
-    "scripts/verify_helper1_v51_package.py": ROOT / "scripts/verify_helper1_v51_package.py",
-    "butler_pc_core/helper1/approval_closure.py": ROOT / "butler_pc_core/helper1/approval_closure.py",
-    "butler_pc_core/helper1/canonical_json.py": ROOT / "butler_pc_core/helper1/canonical_json.py",
-    "butler_pc_core/helper1/execution.py": ROOT / "butler_pc_core/helper1/execution.py",
-    "butler_pc_core/helper1/replay_store.py": ROOT / "butler_pc_core/helper1/replay_store.py",
-    "butler_pc_core/helper1/retrieval_policy.py": ROOT / "butler_pc_core/helper1/retrieval_policy.py",
-}
+PROTECTED_COMPONENTS = {path: ROOT / path for path in PROTECTED_COMPONENT_PATHS}
 VERDICT_KEYS = {
     "schema_version",
     "code_pass",
@@ -100,6 +92,7 @@ VERDICT_KEYS = {
     "producer_package_sha256",
     "chain_authority_sha256",
     "evidence_bundle_sha256",
+    "search_quality_evidence_sha256",
     "issued_at_epoch_s",
     "error_code",
     "signature_b64",
@@ -281,6 +274,8 @@ def verify_success_verdict(
         or SHA256.fullmatch(verdict["chain_authority_sha256"]) is None
         or type(verdict.get("evidence_bundle_sha256")) is not str
         or SHA256.fullmatch(verdict["evidence_bundle_sha256"]) is None
+        or type(verdict.get("search_quality_evidence_sha256")) is not str
+        or SHA256.fullmatch(verdict["search_quality_evidence_sha256"]) is None
         or type(verdict.get("issued_at_epoch_s")) is not int
         or verdict.get("error_code") != "NONE"
         or type(verdict.get("signature_b64")) is not str

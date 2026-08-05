@@ -46,18 +46,44 @@ def _native_module() -> ModuleType | None:
     return module
 
 
-def initialize_helper1_product(service: Helper1Service | None = None) -> bool:
-    """Install the one native assembly, or preserve fail-closed unavailability."""
-    target = service or get_helper1_service()
+def load_native_product_assembly() -> NativeProductAssembly | None:
+    """Load the signed native assembly without installing a parallel composition."""
     module = _native_module()
     if module is None:
-        return False
+        return None
     factory = getattr(module, "assemble_helper1_v2", None)
     if not callable(factory):
         raise CompositionError("HELPER1_NATIVE_FACTORY_MISSING")
     assembly = factory()
     if type(assembly) is not NativeProductAssembly:
         raise CompositionError("HELPER1_NATIVE_ASSEMBLY_INVALID")
+    return assembly
+
+
+def load_native_ablation_assembly(
+    normal_index_manifest_sha256: str,
+) -> NativeProductAssembly | None:
+    """Load the protected canary-removed index through the native trust root."""
+    module = _native_module()
+    if module is None:
+        return None
+    factory = getattr(module, "assemble_helper1_v2_ablation", None)
+    if not callable(factory):
+        raise CompositionError("HELPER1_NATIVE_ABLATION_FACTORY_MISSING")
+    assembly = factory(normal_index_manifest_sha256)
+    if type(assembly) is not NativeProductAssembly:
+        raise CompositionError("HELPER1_NATIVE_ABLATION_ASSEMBLY_INVALID")
+    if assembly.pipeline.index.manifest.digest == normal_index_manifest_sha256:
+        raise CompositionError("HELPER1_NATIVE_ABLATION_INDEX_INVALID")
+    return assembly
+
+
+def initialize_helper1_product(service: Helper1Service | None = None) -> bool:
+    """Install the one native assembly, or preserve fail-closed unavailability."""
+    target = service or get_helper1_service()
+    assembly = load_native_product_assembly()
+    if assembly is None:
+        return False
     target.register_native_pipeline(
         assembly.workspace_id,
         assembly.pipeline,

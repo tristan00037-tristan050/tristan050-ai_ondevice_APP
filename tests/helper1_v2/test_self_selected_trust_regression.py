@@ -534,8 +534,26 @@ def _build_signed_fixture(
         "subject_check_name": "helper1-v2/protected-verdict",
         "subject_check_app_slug": "github-actions",
         "subject_check_required": True,
+        "quality_evidence_required": True,
+        "quality_producer_workflow_id": 1,
+        "quality_producer_workflow_path": ".github/workflows/helper1-v2-evidence.yml",
+        "quality_producer_workflow_sha256": "sha256:" + "a" * 64,
+        "device_trust_policy_sha256": _sha256(
+            trusted_verifier.DEVICE_TRUST_POLICY_PATH.read_bytes()
+        ),
         "required_evidence_files": list(filenames.values()),
     }
+    monkeypatch.setattr(
+        trusted_verifier,
+        "verify_quality_evidence",
+        lambda *_args, **_kwargs: {
+            "quality_manifest_sha256": "1" * 64,
+            "quality_report_sha256": "2" * 64,
+            "evaluation_run_subject_sha256": "3" * 64,
+            "m3_measurement_sha256": "4" * 64,
+            "m4_measurement_sha256": "5" * 64,
+        },
+    )
     policy_path = tmp_path / "trusted-policy.json"
     policy_path.write_bytes(_canonical(policy))
     producer_package_path = tmp_path / "producer-artifact" / "package" / "helper1-v51.zip"
@@ -602,12 +620,78 @@ def _build_signed_fixture(
             producer_run=run_id,
         )
         monkeypatch.setattr(producer_package, "POLICY_PATH", policy_path)
+        from butler_pc_core.helper1.quality_evidence import (
+            MANIFEST_NAME as QUALITY_MANIFEST_NAME,
+            QUALITY_FILES,
+            build_manifest as build_quality_manifest,
+        )
+        quality_root = build_input / "quality"
+        quality_payloads = {}
+        for name in QUALITY_FILES:
+            raw = b"observer" if name.endswith("observer.bin") else b"{}\n"
+            target = quality_root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+            quality_payloads[name] = raw
+        (quality_root / QUALITY_MANIFEST_NAME).write_bytes(
+            build_quality_manifest(
+                quality_payloads,
+                source_commit=commit,
+                source_tree=actual_tree,
+                evaluation_run_id=run_id,
+                evaluation_run_attempt=int(run_id.rsplit(":", 1)[-1]),
+                producer_run_id=run_id,
+                producer_run_attempt=int(run_id.rsplit(":", 1)[-1]),
+                workflow_id=1,
+                workflow_ref=f"{repository}/.github/workflows/helper1-v2-evidence.yml@{commit}",
+                workflow_sha256="a" * 64,
+            )
+        )
+        approval_input_path = build_input / "approval-input.zip"
+        approval_input_path.write_bytes(b"fixture-approval-input")
+        approval_provenance_path = build_input / "APPROVAL_INPUT_PROVENANCE.v2.json"
+        approval_provenance_path.write_bytes(
+            _canonical(
+                {
+                    "schema_version": "butler.helper1.approval-input-provenance.v2",
+                    "mode": "ARTIFACT",
+                    "repository_id": 1,
+                    "repository_name": repository,
+                    "subject_commit": commit,
+                    "subject_tree": actual_tree,
+                    "producer_workflow_ref": f"{repository}/.github/workflows/helper1-v2-approval-evidence.yml@{commit}",
+                    "producer_workflow_id": 1,
+                    "producer_workflow_sha256": "a" * 64,
+                    "run_id": 1,
+                    "run_attempt": 1,
+                    "event_name": "workflow_dispatch",
+                    "artifact_id": 1,
+                    "artifact_name": "fixture-approval",
+                    "artifact_sha256": hashlib.sha256(
+                        approval_input_path.read_bytes()
+                    ).hexdigest(),
+                    "inventory_sha256": "b" * 64,
+                    "canonical_subject_sha256": hashlib.sha256(
+                        _canonical(canonical_subject)
+                    ).hexdigest(),
+                }
+            )
+            + b"\n"
+        )
+        monkeypatch.setattr(
+            producer_package,
+            "verify_approval_input_bytes",
+            lambda *_args, **_kwargs: None,
+        )
         producer_package.build(
             producer_package_path.parents[1],
             canonical_subject_path,
             submission_path,
             test_evidence_root,
             product_root,
+            quality_root,
+            approval_input_path,
+            approval_provenance_path,
         )
     else:
         _write_producer_package(

@@ -6,6 +6,7 @@ import hmac
 import json
 import math
 import re
+import struct
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -96,6 +97,21 @@ class AnswerKind(str, Enum):
     REFUSED_MEASUREMENT_INVALID = "REFUSED_MEASUREMENT_INVALID"
     CANCELLED = "CANCELLED"
     FAILED = "FAILED"
+
+
+class RetrievalDecision(str, Enum):
+    RETRIEVE = "RETRIEVE"
+    ABSTAIN = "ABSTAIN"
+
+
+class EvaluationAnswerDecision(str, Enum):
+    ANSWER = "ANSWER"
+    ABSTAIN = "ABSTAIN"
+
+
+class EvaluationVariant(str, Enum):
+    NORMAL = "NORMAL"
+    ABLATION = "ABLATION"
 
 
 HTTP_STATUS_BY_KIND: Mapping[AnswerKind, int] = {
@@ -550,6 +566,436 @@ class AnswerResult:
                 dict(self.execution_receipt) if self.execution_receipt is not None else None
             ),
         }
+
+
+def float64_bits(value: float, code: str) -> str:
+    """Return an exact binary64 representation and reject ambiguous -0.0."""
+    number = require_finite(value, code)
+    if number == 0.0 and math.copysign(1.0, number) < 0.0:
+        raise Helper1ContractError(code)
+    return struct.pack(">d", number).hex()
+
+
+@dataclass(frozen=True, slots=True)
+class EvaluationRunSubjectV2:
+    """One immutable identity for a complete protected quality run."""
+
+    run_id: str
+    run_attempt: int
+    source_commit: str
+    source_tree: str
+    query_manifest_sha256: str
+    corpus_manifest_sha256: str
+    retrieval_policy_sha256: str
+    threshold_policy_sha256: str
+    threshold_approval_receipt_sha256: str
+    encoder_space_sha256: str
+    normal_index_manifest_sha256: str
+    ablation_index_manifest_sha256: str | None
+    generator_identity_sha256: str
+    prompt_template_sha256: str
+    decoding_policy_sha256: str
+    seed: int
+    schema_version: str = "butler.helper1.evaluation-run-subject.v2"
+
+    def __post_init__(self) -> None:
+        if self.schema_version != "butler.helper1.evaluation-run-subject.v2":
+            raise Helper1ContractError("EVALUATION_SUBJECT_SCHEMA_INVALID")
+        require_safe_id(self.run_id, "EVALUATION_SUBJECT_RUN_INVALID")
+        require_int(
+            self.run_attempt,
+            minimum=1,
+            maximum=1_000_000,
+            code="EVALUATION_SUBJECT_RUN_INVALID",
+        )
+        for value in (self.source_commit, self.source_tree):
+            if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{40}", value) is None:
+                raise Helper1ContractError("EVALUATION_SUBJECT_SOURCE_INVALID")
+        for value in (
+            self.query_manifest_sha256,
+            self.corpus_manifest_sha256,
+            self.retrieval_policy_sha256,
+            self.threshold_policy_sha256,
+            self.threshold_approval_receipt_sha256,
+            self.encoder_space_sha256,
+            self.normal_index_manifest_sha256,
+            self.generator_identity_sha256,
+            self.prompt_template_sha256,
+            self.decoding_policy_sha256,
+        ):
+            require_digest(value, "EVALUATION_SUBJECT_IDENTITY_INVALID")
+        if self.ablation_index_manifest_sha256 is not None:
+            require_digest(
+                self.ablation_index_manifest_sha256,
+                "EVALUATION_SUBJECT_IDENTITY_INVALID",
+            )
+            if hmac.compare_digest(
+                self.ablation_index_manifest_sha256,
+                self.normal_index_manifest_sha256,
+            ):
+                raise Helper1ContractError("EVALUATION_SUBJECT_ABLATION_INVALID")
+        require_int(
+            self.seed,
+            minimum=0,
+            maximum=2**63 - 1,
+            code="EVALUATION_SUBJECT_SEED_INVALID",
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "run_id": self.run_id,
+            "run_attempt": self.run_attempt,
+            "source_commit": self.source_commit,
+            "source_tree": self.source_tree,
+            "query_manifest_sha256": self.query_manifest_sha256,
+            "corpus_manifest_sha256": self.corpus_manifest_sha256,
+            "retrieval_policy_sha256": self.retrieval_policy_sha256,
+            "threshold_policy_sha256": self.threshold_policy_sha256,
+            "threshold_approval_receipt_sha256": self.threshold_approval_receipt_sha256,
+            "encoder_space_sha256": self.encoder_space_sha256,
+            "normal_index_manifest_sha256": self.normal_index_manifest_sha256,
+            "ablation_index_manifest_sha256": self.ablation_index_manifest_sha256,
+            "generator_identity_sha256": self.generator_identity_sha256,
+            "prompt_template_sha256": self.prompt_template_sha256,
+            "decoding_policy_sha256": self.decoding_policy_sha256,
+            "seed": self.seed,
+        }
+
+    @property
+    def digest(self) -> str:
+        return sha256_bytes(canonical_json(self.to_dict()))
+
+
+def evaluation_run_subject_v2_from_mapping(
+    value: Mapping[str, object],
+) -> EvaluationRunSubjectV2:
+    expected = {
+        "schema_version",
+        "run_id",
+        "run_attempt",
+        "source_commit",
+        "source_tree",
+        "query_manifest_sha256",
+        "corpus_manifest_sha256",
+        "retrieval_policy_sha256",
+        "threshold_policy_sha256",
+        "threshold_approval_receipt_sha256",
+        "encoder_space_sha256",
+        "normal_index_manifest_sha256",
+        "ablation_index_manifest_sha256",
+        "generator_identity_sha256",
+        "prompt_template_sha256",
+        "decoding_policy_sha256",
+        "seed",
+    }
+    if type(value) is not dict or set(value) != expected:
+        raise Helper1ContractError("EVALUATION_SUBJECT_SCHEMA_INVALID")
+    try:
+        return EvaluationRunSubjectV2(**value)  # type: ignore[arg-type]
+    except TypeError as exc:
+        raise Helper1ContractError("EVALUATION_SUBJECT_SCHEMA_INVALID") from exc
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalTraceHitV2:
+    workspace_id: str
+    generation_id: str
+    source_id: str
+    chunk_id: str
+    content_utf8: str
+    content_sha256: str
+    dense_score: float | None
+    lexical_score: float | None
+    fused_score: float
+    dense_rank: int | None
+    lexical_rank: int | None
+    fused_rank: int
+
+    def __post_init__(self) -> None:
+        require_uuid(self.workspace_id, "RETRIEVAL_HIT_WORKSPACE_INVALID")
+        require_uuid(self.generation_id, "RETRIEVAL_HIT_GENERATION_INVALID")
+        require_safe_id(self.source_id, "RETRIEVAL_HIT_SOURCE_INVALID")
+        require_safe_id(self.chunk_id, "RETRIEVAL_HIT_CHUNK_INVALID")
+        if not isinstance(self.content_utf8, str) or not self.content_utf8:
+            raise Helper1ContractError("RETRIEVAL_HIT_CONTENT_INVALID")
+        require_digest(self.content_sha256, "RETRIEVAL_HIT_CONTENT_DIGEST_INVALID")
+        if not hmac.compare_digest(
+            self.content_sha256,
+            sha256_bytes(self.content_utf8.encode("utf-8")),
+        ):
+            raise Helper1ContractError("RETRIEVAL_HIT_CONTENT_DIGEST_MISMATCH")
+        if self.dense_score is None and self.lexical_score is None:
+            raise Helper1ContractError("RETRIEVAL_HIT_SCORE_ABSENT")
+        if self.dense_score is not None:
+            float64_bits(self.dense_score, "RETRIEVAL_HIT_DENSE_SCORE_INVALID")
+        if self.lexical_score is not None:
+            float64_bits(self.lexical_score, "RETRIEVAL_HIT_LEXICAL_SCORE_INVALID")
+        float64_bits(self.fused_score, "RETRIEVAL_HIT_FUSED_SCORE_INVALID")
+        for rank in (self.dense_rank, self.lexical_rank):
+            if rank is not None:
+                require_int(rank, minimum=1, maximum=1_000_000, code="RETRIEVAL_HIT_RANK_INVALID")
+        require_int(
+            self.fused_rank,
+            minimum=1,
+            maximum=1_000_000,
+            code="RETRIEVAL_HIT_RANK_INVALID",
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "workspace_id": self.workspace_id,
+            "generation_id": self.generation_id,
+            "source_id": self.source_id,
+            "chunk_id": self.chunk_id,
+            "content_utf8": self.content_utf8,
+            "content_sha256": self.content_sha256,
+            "dense_score_bits": (
+                None
+                if self.dense_score is None
+                else float64_bits(self.dense_score, "RETRIEVAL_HIT_DENSE_SCORE_INVALID")
+            ),
+            "lexical_score_bits": (
+                None
+                if self.lexical_score is None
+                else float64_bits(self.lexical_score, "RETRIEVAL_HIT_LEXICAL_SCORE_INVALID")
+            ),
+            "fused_score_bits": float64_bits(
+                self.fused_score, "RETRIEVAL_HIT_FUSED_SCORE_INVALID"
+            ),
+            "dense_rank": self.dense_rank,
+            "lexical_rank": self.lexical_rank,
+            "fused_rank": self.fused_rank,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalCaseRecordV2:
+    query_id: str
+    run_id: str
+    evaluation_run_subject_sha256: str
+    policy_sha256: str
+    encoder_space_sha256: str
+    index_manifest_sha256: str
+    started_monotonic_ns: int
+    finished_monotonic_ns: int
+    decision: RetrievalDecision
+    reason_code: str | None
+    hits: tuple[RetrievalTraceHitV2, ...]
+    schema_version: str = "butler.helper1.retrieval-case.v2"
+
+    def __post_init__(self) -> None:
+        if self.schema_version != "butler.helper1.retrieval-case.v2":
+            raise Helper1ContractError("RETRIEVAL_CASE_SCHEMA_INVALID")
+        require_safe_id(self.query_id, "RETRIEVAL_CASE_QUERY_INVALID")
+        require_safe_id(self.run_id, "RETRIEVAL_CASE_RUN_INVALID")
+        require_digest(
+            self.evaluation_run_subject_sha256,
+            "RETRIEVAL_CASE_SUBJECT_INVALID",
+        )
+        for value in (
+            self.policy_sha256,
+            self.encoder_space_sha256,
+            self.index_manifest_sha256,
+        ):
+            require_digest(value, "RETRIEVAL_CASE_IDENTITY_INVALID")
+        require_int(
+            self.started_monotonic_ns,
+            minimum=0,
+            maximum=2**63 - 1,
+            code="RETRIEVAL_CASE_TIME_INVALID",
+        )
+        require_int(
+            self.finished_monotonic_ns,
+            minimum=1,
+            maximum=2**63 - 1,
+            code="RETRIEVAL_CASE_TIME_INVALID",
+        )
+        if self.finished_monotonic_ns < self.started_monotonic_ns:
+            raise Helper1ContractError("RETRIEVAL_CASE_TIME_INVALID")
+        if not isinstance(self.decision, RetrievalDecision):
+            raise Helper1ContractError("RETRIEVAL_CASE_DECISION_INVALID")
+        if self.decision is RetrievalDecision.RETRIEVE:
+            if not self.hits or self.reason_code is not None:
+                raise Helper1ContractError("RETRIEVAL_CASE_DECISION_INVALID")
+        elif self.hits or REASON_RE.fullmatch(self.reason_code or "") is None:
+            raise Helper1ContractError("RETRIEVAL_CASE_DECISION_INVALID")
+        if len({(hit.source_id, hit.chunk_id) for hit in self.hits}) != len(self.hits):
+            raise Helper1ContractError("RETRIEVAL_CASE_HIT_DUPLICATE")
+        expected = sorted(
+            self.hits,
+            key=lambda hit: (hit.fused_rank, hit.source_id, hit.chunk_id),
+        )
+        if list(self.hits) != expected or [hit.fused_rank for hit in self.hits] != list(
+            range(1, len(self.hits) + 1)
+        ):
+            raise Helper1ContractError("RANKING_NONDETERMINISTIC")
+
+    def payload(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "query_id": self.query_id,
+            "run_id": self.run_id,
+            "evaluation_run_subject_sha256": self.evaluation_run_subject_sha256,
+            "policy_sha256": self.policy_sha256,
+            "encoder_space_sha256": self.encoder_space_sha256,
+            "index_manifest_sha256": self.index_manifest_sha256,
+            "started_monotonic_ns": self.started_monotonic_ns,
+            "finished_monotonic_ns": self.finished_monotonic_ns,
+            "decision": self.decision.value,
+            "reason_code": self.reason_code,
+            "hits": [hit.to_dict() for hit in self.hits],
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = self.payload()
+        return {**payload, "record_sha256": sha256_bytes(canonical_json(payload))}
+
+
+@dataclass(frozen=True, slots=True)
+class AnswerClaimV2:
+    claim_id: str
+    text_sha256: str
+    answer_byte_start: int
+    answer_byte_end: int
+
+    def __post_init__(self) -> None:
+        require_safe_id(self.claim_id, "ANSWER_CLAIM_ID_INVALID")
+        require_digest(self.text_sha256, "ANSWER_CLAIM_DIGEST_INVALID")
+        require_int(self.answer_byte_start, minimum=0, maximum=2**31 - 1, code="ANSWER_CLAIM_SPAN_INVALID")
+        require_int(self.answer_byte_end, minimum=1, maximum=2**31 - 1, code="ANSWER_CLAIM_SPAN_INVALID")
+        if self.answer_byte_end <= self.answer_byte_start:
+            raise Helper1ContractError("ANSWER_CLAIM_SPAN_INVALID")
+
+
+@dataclass(frozen=True, slots=True)
+class AnswerCitationV2:
+    claim_id: str
+    source_id: str
+    chunk_id: str
+    evidence_byte_start: int
+    evidence_byte_end: int
+    evidence_sha256: str
+
+    def __post_init__(self) -> None:
+        require_safe_id(self.claim_id, "ANSWER_CITATION_CLAIM_INVALID")
+        require_safe_id(self.source_id, "ANSWER_CITATION_SOURCE_INVALID")
+        require_safe_id(self.chunk_id, "ANSWER_CITATION_CHUNK_INVALID")
+        require_int(self.evidence_byte_start, minimum=0, maximum=2**31 - 1, code="ANSWER_CITATION_SPAN_INVALID")
+        require_int(self.evidence_byte_end, minimum=1, maximum=2**31 - 1, code="ANSWER_CITATION_SPAN_INVALID")
+        if self.evidence_byte_end <= self.evidence_byte_start:
+            raise Helper1ContractError("ANSWER_CITATION_SPAN_INVALID")
+        require_digest(self.evidence_sha256, "ANSWER_CITATION_DIGEST_INVALID")
+
+
+@dataclass(frozen=True, slots=True)
+class AnswerCaseRecordV2:
+    query_id: str
+    run_id: str
+    evaluation_run_subject_sha256: str
+    execution_variant: EvaluationVariant
+    generator_identity_sha256: str
+    prompt_template_sha256: str
+    decision: EvaluationAnswerDecision
+    reason_code: str | None
+    answer_utf8: str | None
+    claims: tuple[AnswerClaimV2, ...]
+    citations: tuple[AnswerCitationV2, ...]
+    normal_index_manifest_sha256: str
+    ablation_index_manifest_sha256: str | None
+    seed: int
+    decoding_policy_sha256: str
+    started_monotonic_ns: int
+    finished_monotonic_ns: int
+    schema_version: str = "butler.helper1.answer-case.v2"
+
+    def __post_init__(self) -> None:
+        if self.schema_version != "butler.helper1.answer-case.v2":
+            raise Helper1ContractError("ANSWER_CASE_SCHEMA_INVALID")
+        require_safe_id(self.query_id, "ANSWER_CASE_QUERY_INVALID")
+        require_safe_id(self.run_id, "ANSWER_CASE_RUN_INVALID")
+        require_digest(
+            self.evaluation_run_subject_sha256,
+            "ANSWER_CASE_SUBJECT_INVALID",
+        )
+        if not isinstance(self.execution_variant, EvaluationVariant):
+            raise Helper1ContractError("ANSWER_CASE_VARIANT_INVALID")
+        for value in (
+            self.generator_identity_sha256,
+            self.prompt_template_sha256,
+            self.normal_index_manifest_sha256,
+            self.decoding_policy_sha256,
+        ):
+            require_digest(value, "ANSWER_CASE_IDENTITY_INVALID")
+        if self.ablation_index_manifest_sha256 is not None:
+            require_digest(self.ablation_index_manifest_sha256, "ANSWER_CASE_IDENTITY_INVALID")
+        if self.execution_variant is EvaluationVariant.NORMAL:
+            if self.ablation_index_manifest_sha256 is not None:
+                raise Helper1ContractError("ANSWER_CASE_VARIANT_INVALID")
+        elif self.ablation_index_manifest_sha256 is None:
+            raise Helper1ContractError("ANSWER_CASE_VARIANT_INVALID")
+        require_int(self.seed, minimum=0, maximum=2**63 - 1, code="ANSWER_CASE_SEED_INVALID")
+        require_int(self.started_monotonic_ns, minimum=0, maximum=2**63 - 1, code="ANSWER_CASE_TIME_INVALID")
+        require_int(self.finished_monotonic_ns, minimum=1, maximum=2**63 - 1, code="ANSWER_CASE_TIME_INVALID")
+        if self.finished_monotonic_ns < self.started_monotonic_ns:
+            raise Helper1ContractError("ANSWER_CASE_TIME_INVALID")
+        if not isinstance(self.decision, EvaluationAnswerDecision):
+            raise Helper1ContractError("ANSWER_CASE_DECISION_INVALID")
+        if self.decision is EvaluationAnswerDecision.ANSWER:
+            if not self.answer_utf8 or self.reason_code is not None or not self.claims or not self.citations:
+                raise Helper1ContractError("ANSWER_CASE_DECISION_INVALID")
+            answer_bytes = self.answer_utf8.encode("utf-8")
+            for claim in self.claims:
+                if claim.answer_byte_end > len(answer_bytes):
+                    raise Helper1ContractError("ANSWER_CLAIM_SPAN_INVALID")
+                selected = answer_bytes[claim.answer_byte_start : claim.answer_byte_end]
+                try:
+                    selected.decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise Helper1ContractError("ANSWER_CLAIM_SPAN_INVALID") from exc
+                if not hmac.compare_digest(sha256_bytes(selected), claim.text_sha256):
+                    raise Helper1ContractError("ANSWER_CLAIM_DIGEST_MISMATCH")
+            claim_ids = {claim.claim_id for claim in self.claims}
+            if len(claim_ids) != len(self.claims) or any(
+                citation.claim_id not in claim_ids for citation in self.citations
+            ):
+                raise Helper1ContractError("ANSWER_CITATION_BINDING_INVALID")
+        elif (
+            self.answer_utf8 is not None
+            or self.claims
+            or self.citations
+            or REASON_RE.fullmatch(self.reason_code or "") is None
+        ):
+            raise Helper1ContractError("ANSWER_CASE_DECISION_INVALID")
+
+    def payload(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "query_id": self.query_id,
+            "run_id": self.run_id,
+            "evaluation_run_subject_sha256": self.evaluation_run_subject_sha256,
+            "execution_variant": self.execution_variant.value,
+            "generator_identity_sha256": self.generator_identity_sha256,
+            "prompt_template_sha256": self.prompt_template_sha256,
+            "decision": self.decision.value,
+            "reason_code": self.reason_code,
+            "answer_utf8": self.answer_utf8,
+            "answer_sha256": (
+                None if self.answer_utf8 is None else sha256_bytes(self.answer_utf8.encode("utf-8"))
+            ),
+            "claims": [asdict(claim) for claim in self.claims],
+            "citations": [asdict(citation) for citation in self.citations],
+            "normal_index_manifest_sha256": self.normal_index_manifest_sha256,
+            "ablation_index_manifest_sha256": self.ablation_index_manifest_sha256,
+            "seed": self.seed,
+            "decoding_policy_sha256": self.decoding_policy_sha256,
+            "started_monotonic_ns": self.started_monotonic_ns,
+            "finished_monotonic_ns": self.finished_monotonic_ns,
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = self.payload()
+        return {**payload, "record_sha256": sha256_bytes(canonical_json(payload))}
 
 
 @dataclass

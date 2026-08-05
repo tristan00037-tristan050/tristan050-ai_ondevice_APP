@@ -12,6 +12,7 @@ from .contracts import (
     EncoderIdentity,
     Helper1ContractError,
     RetrievedChunk,
+    RetrievalTraceHitV2,
     assert_same_space,
     canonical_json,
     require_digest,
@@ -306,10 +307,35 @@ class HybridRetriever:
         embedder: EmbeddingBackend,
         top_k: int,
     ) -> tuple[RetrievedChunk, ...]:
+        chunks, _trace = self.search_with_trace(
+            query=query,
+            index=index,
+            embedder=embedder,
+            top_k=top_k,
+            expected_workspace_id=index.manifest.workspace_id,
+            expected_generation_id=index.manifest.generation_id,
+        )
+        return chunks
+
+    def search_with_trace(
+        self,
+        *,
+        query: str,
+        index: LoadedIndex,
+        embedder: EmbeddingBackend,
+        top_k: int,
+        expected_workspace_id: str,
+        expected_generation_id: str,
+    ) -> tuple[tuple[RetrievedChunk, ...], tuple[RetrievalTraceHitV2, ...]]:
+        """Search one verified generation and emit an exact deterministic trace."""
         if not isinstance(query, str) or not query.strip() or len(query) > 4000:
             raise RetrievalError("QUERY_INVALID")
         if isinstance(top_k, bool) or not isinstance(top_k, int) or not 1 <= top_k <= 50:
             raise RetrievalError("TOP_K_INVALID")
+        if index.manifest.workspace_id != expected_workspace_id:
+            raise RetrievalError("WRONG_WORKSPACE_LEAKAGE")
+        if index.manifest.generation_id != expected_generation_id:
+            raise RetrievalError("STALE_GENERATION_LEAKAGE")
         assert_same_space(index.manifest.encoder, embedder.identity)
         validate_lexical_index(index.lexical_index, len(index.chunks))
         query_vector = embedder.encode_query(query)
@@ -338,25 +364,41 @@ class HybridRetriever:
         for rank, row in enumerate(lexical_rank, start=1):
             fused[row] = fused.get(row, 0.0) + 1.0 / (self.policy.rrf_k + rank)
         ordered = sorted(fused, key=lambda row: (-fused[row], stable_key(row)))[:top_k]
-        results = []
-        for row in ordered:
+        results: list[RetrievedChunk] = []
+        traces: list[RetrievalTraceHitV2] = []
+        for fused_rank, row in enumerate(ordered, start=1):
             chunk = index.chunks[row]
             chunk_bytes = chunk.text.encode("utf-8")
-            results.append(
-                RetrievedChunk(
-                    workspace_id=index.manifest.workspace_id,
-                    chunk_id=chunk.chunk_id,
-                    source_id=chunk.source_id,
-                    text=chunk.text,
-                    dense_score=dense.get(row),
-                    lexical_score=lexical.get(row),
-                    fused_score=fused[row],
-                    dense_rank=dense_positions.get(row),
-                    lexical_rank=lexical_positions.get(row),
-                    generation_id=index.manifest.generation_id,
-                    byte_start=0,
-                    byte_end=len(chunk_bytes),
-                    content_sha256=chunk.content_sha256,
+            result = RetrievedChunk(
+                workspace_id=index.manifest.workspace_id,
+                chunk_id=chunk.chunk_id,
+                source_id=chunk.source_id,
+                text=chunk.text,
+                dense_score=dense.get(row),
+                lexical_score=lexical.get(row),
+                fused_score=fused[row],
+                dense_rank=dense_positions.get(row),
+                lexical_rank=lexical_positions.get(row),
+                generation_id=index.manifest.generation_id,
+                byte_start=0,
+                byte_end=len(chunk_bytes),
+                content_sha256=chunk.content_sha256,
+            )
+            results.append(result)
+            traces.append(
+                RetrievalTraceHitV2(
+                    workspace_id=result.workspace_id,
+                    generation_id=result.generation_id,
+                    source_id=result.source_id,
+                    chunk_id=result.chunk_id,
+                    content_utf8=result.text,
+                    content_sha256=result.content_sha256,
+                    dense_score=result.dense_score,
+                    lexical_score=result.lexical_score,
+                    fused_score=result.fused_score,
+                    dense_rank=result.dense_rank,
+                    lexical_rank=result.lexical_rank,
+                    fused_rank=fused_rank,
                 )
             )
-        return tuple(results)
+        return tuple(results), tuple(traces)

@@ -9,6 +9,7 @@ select a verifier, key, policy manifest, or expected hash here.
 from __future__ import annotations
 
 import argparse
+import ast
 import base64
 import hashlib
 import json
@@ -22,20 +23,18 @@ ROUTE = ROOT / "butler_pc_core" / "sidecar" / "routes" / "helper1_search.py"
 CONTRACT_ROOT = ROOT / "contracts" / "helper1"
 TRUSTED_VERIFIER = ROOT / "scripts" / "ci" / "helper1_trusted_verifier.py"
 TRUSTED_POLICY = CONTRACT_ROOT / "trusted-verifier-policy-v1.json"
+PROTECTED_SURFACE = ROOT / "scripts/ci/helper1_protected_surface.py"
+_surface_tree = ast.parse(PROTECTED_SURFACE.read_text(encoding="utf-8"))
+_surface_assignment = next(
+    node for node in _surface_tree.body
+    if isinstance(node, ast.Assign)
+    and any(
+        isinstance(target, ast.Name) and target.id == "PROTECTED_COMPONENT_PATHS"
+        for target in node.targets
+    )
+)
 TRUSTED_COMPONENTS = {
-    "scripts/ci/helper1_trusted_verifier.py": TRUSTED_VERIFIER,
-    "scripts/ci/helper1_subject_binding.py": ROOT / "scripts/ci/helper1_subject_binding.py",
-    "scripts/ci/helper1_evidence_semantics.py": ROOT / "scripts/ci/helper1_evidence_semantics.py",
-    "scripts/ci/helper1_postgresql_replay_probe.py": ROOT / "scripts/ci/helper1_postgresql_replay_probe.py",
-    "scripts/ci/helper1_product_approval_bundle.py": ROOT / "scripts/ci/helper1_product_approval_bundle.py",
-    "scripts/ci/helper1_producer_package.py": ROOT / "scripts/ci/helper1_producer_package.py",
-    "scripts/ci/publish_helper1_subject_check.py": ROOT / "scripts/ci/publish_helper1_subject_check.py",
-    "scripts/verify_helper1_v51_package.py": ROOT / "scripts/verify_helper1_v51_package.py",
-    "butler_pc_core/helper1/approval_closure.py": CANONICAL_ROOT / "approval_closure.py",
-    "butler_pc_core/helper1/canonical_json.py": CANONICAL_ROOT / "canonical_json.py",
-    "butler_pc_core/helper1/execution.py": CANONICAL_ROOT / "execution.py",
-    "butler_pc_core/helper1/replay_store.py": CANONICAL_ROOT / "replay_store.py",
-    "butler_pc_core/helper1/retrieval_policy.py": CANONICAL_ROOT / "retrieval_policy.py",
+    path: ROOT / path for path in ast.literal_eval(_surface_assignment.value)
 }
 
 REQUIRED_FILES = (
@@ -164,6 +163,11 @@ POLICY_KEYS = {
     "subject_check_name",
     "subject_check_app_slug",
     "subject_check_required",
+    "quality_evidence_required",
+    "quality_producer_workflow_id",
+    "quality_producer_workflow_path",
+    "quality_producer_workflow_sha256",
+    "device_trust_policy_sha256",
 }
 
 
@@ -308,6 +312,12 @@ def static_audit() -> tuple[bool, str]:
             or policy["subject_check_name"] != "helper1-v2/protected-verdict"
             or policy["subject_check_app_slug"] != "github-actions"
             or policy["subject_check_required"] is not True
+            or policy["quality_evidence_required"] is not True
+            or type(policy["quality_producer_workflow_id"]) is not int
+            or policy["quality_producer_workflow_id"] < 0
+            or policy["quality_producer_workflow_path"] != ".github/workflows/helper1-v2-evidence.yml"
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", policy["quality_producer_workflow_sha256"]) is None
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", policy["device_trust_policy_sha256"]) is None
             or type(policy["required_evidence_files"]) is not list
             or len(policy["required_evidence_files"]) != 4
             or len(set(policy["required_evidence_files"])) != 4

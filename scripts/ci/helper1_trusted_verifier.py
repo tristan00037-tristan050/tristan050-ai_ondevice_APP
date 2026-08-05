@@ -10,6 +10,7 @@ pinned in that policy.
 from __future__ import annotations
 
 import argparse
+import ast
 import base64
 import hashlib
 import json
@@ -34,6 +35,7 @@ from helper1_producer_package import (
     load_verified_package,
 )
 from helper1_subject_binding import SubjectBindingError, resolve_commit_tree
+from helper1_protected_surface import PROTECTED_COMPONENT_PATHS
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -65,8 +67,13 @@ from butler_pc_core.helper1.retrieval_policy import (  # noqa: E402
     RetrievalPolicyAuthority,
     RetrievalPolicyAuthorityError,
 )
+from butler_pc_core.helper1.quality_evidence import (  # noqa: E402
+    QualityEvidenceError,
+    verify_quality_evidence,
+)
 
 POLICY_PATH = ROOT / "contracts" / "helper1" / "trusted-verifier-policy-v1.json"
+DEVICE_TRUST_POLICY_PATH = ROOT / "contracts/helper1-device-trust-policy-v1.json"
 APPROVAL_POLICY_PATH = ROOT / "contracts" / "helper1" / "retrieval-approval-trust-policy-v1.json"
 APPROVAL_DIRECTORY_NAME = "approval"
 ACTIVATION_GRANT_NAME = "ACTIVATION_GRANT.json"
@@ -104,22 +111,13 @@ POLICY_KEYS = {
     "subject_check_name",
     "subject_check_app_slug",
     "subject_check_required",
+    "quality_evidence_required",
+    "quality_producer_workflow_id",
+    "quality_producer_workflow_path",
+    "quality_producer_workflow_sha256",
+    "device_trust_policy_sha256",
 }
-PROTECTED_COMPONENTS = {
-    "scripts/ci/helper1_trusted_verifier.py": Path(__file__).resolve(),
-    "scripts/ci/helper1_subject_binding.py": ROOT / "scripts/ci/helper1_subject_binding.py",
-    "scripts/ci/helper1_evidence_semantics.py": ROOT / "scripts/ci/helper1_evidence_semantics.py",
-    "scripts/ci/helper1_postgresql_replay_probe.py": ROOT / "scripts/ci/helper1_postgresql_replay_probe.py",
-    "scripts/ci/helper1_product_approval_bundle.py": ROOT / "scripts/ci/helper1_product_approval_bundle.py",
-    "scripts/ci/helper1_producer_package.py": ROOT / "scripts/ci/helper1_producer_package.py",
-    "scripts/ci/publish_helper1_subject_check.py": ROOT / "scripts/ci/publish_helper1_subject_check.py",
-    "scripts/verify_helper1_v51_package.py": ROOT / "scripts/verify_helper1_v51_package.py",
-    "butler_pc_core/helper1/approval_closure.py": ROOT / "butler_pc_core/helper1/approval_closure.py",
-    "butler_pc_core/helper1/canonical_json.py": ROOT / "butler_pc_core/helper1/canonical_json.py",
-    "butler_pc_core/helper1/execution.py": ROOT / "butler_pc_core/helper1/execution.py",
-    "butler_pc_core/helper1/replay_store.py": ROOT / "butler_pc_core/helper1/replay_store.py",
-    "butler_pc_core/helper1/retrieval_policy.py": ROOT / "butler_pc_core/helper1/retrieval_policy.py",
-}
+PROTECTED_COMPONENTS = {path: ROOT / path for path in PROTECTED_COMPONENT_PATHS}
 REPLAY_STORE_FACTORY: Callable[[str], ReplayReservationStore] = PostgreSQLReplayStore
 EVIDENCE_KEYS = {
     "schema_version",
@@ -214,6 +212,15 @@ def load_policy() -> dict[str, Any]:
         or policy["subject_check_name"] != "helper1-v2/protected-verdict"
         or policy["subject_check_app_slug"] != "github-actions"
         or policy["subject_check_required"] is not True
+        or policy["quality_evidence_required"] is not True
+        or type(policy["quality_producer_workflow_id"]) is not int
+        or policy["quality_producer_workflow_id"] < 0
+        or policy["quality_producer_workflow_path"]
+        != ".github/workflows/helper1-v2-evidence.yml"
+        or type(policy["quality_producer_workflow_sha256"]) is not str
+        or SHA256.fullmatch(policy["quality_producer_workflow_sha256"]) is None
+        or type(policy["device_trust_policy_sha256"]) is not str
+        or SHA256.fullmatch(policy["device_trust_policy_sha256"]) is None
         or type(policy["required_evidence_files"]) is not list
         or len(policy["required_evidence_files"]) != 4
         or len(set(policy["required_evidence_files"])) != 4
@@ -234,6 +241,8 @@ def load_policy() -> dict[str, Any]:
     )
     if policy["enabled"]:
         if any(type(policy[key]) is not str or not policy[key] for key in trust_keys):
+            raise VerificationError("TRUST_POLICY_INCOMPLETE")
+        if policy["quality_producer_workflow_id"] < 1:
             raise VerificationError("TRUST_POLICY_INCOMPLETE")
         if SHA256.fullmatch(policy["approval_policy_sha256"]) is None:
             raise VerificationError("TRUST_POLICY_INCOMPLETE")
@@ -311,6 +320,9 @@ def valid_producer_package_contract(value: object) -> bool:
 
 
 def verify_protected_components(policy: dict[str, Any]) -> None:
+    missing = _missing_transitive_components()
+    if missing:
+        raise VerificationError("PROTECTED_TRANSITIVE_COMPONENT_MISSING")
     observed: dict[str, str] = {}
     try:
         for name, path in PROTECTED_COMPONENTS.items():
@@ -321,6 +333,68 @@ def verify_protected_components(policy: dict[str, Any]) -> None:
         raise VerificationError("PROTECTED_COMPONENT_DIGEST_MISMATCH")
     if observed["scripts/ci/helper1_trusted_verifier.py"] != policy["protected_verifier_sha256"]:
         raise VerificationError("PROTECTED_VERIFIER_DIGEST_MISMATCH")
+
+
+def _missing_transitive_components() -> tuple[str, ...]:
+    """Return repository-local imports omitted from the protected digest set."""
+    declared = set(PROTECTED_COMPONENTS)
+    pending = [Path(name) for name in declared if name.endswith(".py")]
+    visited: set[Path] = set()
+    discovered: set[str] = set()
+    while pending:
+        relative = pending.pop()
+        if relative in visited:
+            continue
+        visited.add(relative)
+        try:
+            tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeError) as exc:
+            raise VerificationError("PROTECTED_COMPONENT_UNAVAILABLE") from exc
+        module_parts = list(relative.with_suffix("").parts)
+        for node in ast.walk(tree):
+            candidates: list[str] = []
+            if isinstance(node, ast.Import):
+                candidates.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:
+                    base = module_parts[:-1]
+                    keep = len(base) - node.level + 1
+                    if keep < 0:
+                        continue
+                    prefix = base[:keep]
+                    if node.module:
+                        prefix.extend(node.module.split("."))
+                    candidates.append(".".join(prefix))
+                    candidates.extend(
+                        ".".join((*prefix, alias.name)) for alias in node.names
+                    )
+                elif node.module:
+                    candidates.append(node.module)
+                    candidates.extend(f"{node.module}.{alias.name}" for alias in node.names)
+            for module_name in candidates:
+                path = Path(*module_name.split(".")).with_suffix(".py")
+                if not (ROOT / path).is_file() and len(module_parts) > 1:
+                    sibling = relative.parent / f"{module_name}.py"
+                    path = sibling if (ROOT / sibling).is_file() else path
+                if (ROOT / path).is_file():
+                    name = path.as_posix()
+                    discovered.add(name)
+                    if path not in visited:
+                        pending.append(path)
+    workflow_calls: set[str] = set()
+    for name in declared:
+        if not name.startswith(".github/workflows/"):
+            continue
+        try:
+            source = (ROOT / name).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise VerificationError("PROTECTED_COMPONENT_UNAVAILABLE") from exc
+        workflow_calls.update(
+            match.group(1)
+            for match in re.finditer(r"\bpython\s+(scripts/[A-Za-z0-9_./-]+\.py)\b", source)
+            if (ROOT / match.group(1)).is_file()
+        )
+    return tuple(sorted((discovered | workflow_calls) - declared))
 
 
 def verify_event(event_path: Path, policy: dict[str, Any]) -> tuple[str, str]:
@@ -658,6 +732,7 @@ def main() -> int:
     run_id: str | None = None
     producer_package_sha256: str | None = None
     chain_authority_sha256: str | None = None
+    search_quality_evidence_sha256: str | None = None
     try:
         policy = load_policy()
         verify_protected_components(policy)
@@ -726,6 +801,44 @@ def main() -> int:
             legacy_digests=legacy_digests,
             now=int(time.time()),
         )
+        threshold_payload = package.approval_files[
+            "A4_RETRIEVAL_THRESHOLD_POLICY.payload.json"
+        ]
+        threshold_envelope = package.approval_files[
+            "A4_RETRIEVAL_THRESHOLD_POLICY.envelope.json"
+        ]
+        device_policy_raw = DEVICE_TRUST_POLICY_PATH.read_bytes()
+        if sha256(device_policy_raw) != policy["device_trust_policy_sha256"]:
+            raise VerificationError("MEASUREMENT_TRUST_POLICY_MISMATCH")
+        device_policy = json.loads(
+            device_policy_raw,
+            parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
+        )
+        try:
+            _run_number, attempt_text = run_id.rsplit(":", 1)
+            run_attempt = int(attempt_text)
+        except (AttributeError, ValueError) as exc:
+            raise VerificationError("QUALITY_SUBJECT_MISMATCH") from exc
+        if not _run_number or run_attempt < 1:
+            raise VerificationError("QUALITY_SUBJECT_MISMATCH")
+        quality_digests = verify_quality_evidence(
+            package.quality_evidence,
+            expected_commit=subject_commit,
+            expected_tree=subject_tree,
+            expected_producer_run=run_id,
+            expected_producer_run_attempt=run_attempt,
+            expected_workflow_id=policy["quality_producer_workflow_id"],
+            expected_workflow_ref=(
+                f"{policy['repository']}/{policy['quality_producer_workflow_path']}@{subject_commit}"
+            ),
+            expected_workflow_sha256=policy["quality_producer_workflow_sha256"].removeprefix("sha256:"),
+            threshold_approval_payload_sha256=hashlib.sha256(threshold_payload).hexdigest(),
+            threshold_policy_bytes=threshold_payload,
+            threshold_approval_envelope_sha256=hashlib.sha256(threshold_envelope).hexdigest(),
+            device_trust_policy=device_policy,
+            now_epoch_s=int(time.time()),
+        )
+        search_quality_evidence_sha256 = sha256(canonical_json(quality_digests))
         unsigned = {
             "schema_version": "butler.helper1.trusted-verdict.v1",
             "code_pass": True,
@@ -741,6 +854,7 @@ def main() -> int:
             "verifier_sha256": sha256(Path(__file__).read_bytes()),
             "producer_package_sha256": "sha256:" + producer_package_sha256,
             "chain_authority_sha256": "sha256:" + chain_authority_sha256,
+            "search_quality_evidence_sha256": search_quality_evidence_sha256,
             "evidence_bundle_sha256": sha256(
                 canonical_json(
                     {
@@ -750,6 +864,7 @@ def main() -> int:
                         },
                         "approval": approval_file_digests,
                         "approval_closure_sha256": approval_closure_digest,
+                        "search_quality": quality_digests,
                     }
                 )
             ),
@@ -772,8 +887,9 @@ def main() -> int:
         VerificationError,
         ReplayStoreError,
         ProducerPackageError,
+        QualityEvidenceError,
     ) as exc:
-        if isinstance(exc, VerificationError):
+        if isinstance(exc, (VerificationError, QualityEvidenceError)):
             error = str(exc)
         elif isinstance(exc, ReplayStoreError):
             error = _replay_store_error_code(exc)
@@ -797,6 +913,7 @@ def main() -> int:
             "chain_authority_sha256": (
                 "sha256:" + chain_authority_sha256 if chain_authority_sha256 else None
             ),
+            "search_quality_evidence_sha256": search_quality_evidence_sha256,
             "evidence_bundle_sha256": None,
             "issued_at_epoch_s": int(time.time()),
             "error_code": error_code,

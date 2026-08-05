@@ -28,6 +28,15 @@ from scripts.ci.helper1_product_approval_bundle import (  # noqa: E402
     load_bundle as load_product_approval_bundle,
     verify_files as verify_product_approval_files,
 )
+from butler_pc_core.helper1.approval_input import (  # noqa: E402
+    provenance_from_dict,
+    verify_approval_input_bytes,
+)
+from butler_pc_core.helper1.quality_evidence import (  # noqa: E402
+    QualityEvidenceError,
+    load_quality_directory,
+    verify_manifest as verify_quality_manifest,
+)
 
 POLICY_PATH = ROOT / "contracts/helper1/trusted-verifier-policy-v1.json"
 PACKAGE_RELATIVE = PurePosixPath("package/helper1-v51.zip")
@@ -37,8 +46,8 @@ ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 MAX_JSON_BYTES = 1024 * 1024
-MAX_EVIDENCE_BYTES = 64 * 1024 * 1024
-MAX_PACKAGE_BYTES = 80 * 1024 * 1024
+MAX_EVIDENCE_BYTES = 256 * 1024 * 1024
+MAX_PACKAGE_BYTES = 320 * 1024 * 1024
 EXPECTED_LANES = {
     "desktop-helper1-v51": "PASSED",
     "native-macos-helper1-v51": "BLOCKED",
@@ -55,6 +64,12 @@ EXPECTED_CHECKS = {
     "python-compileall-v51",
     "python-helper1-collect-v51",
 }
+APPROVAL_PRODUCER_REPOSITORY_ID = 1097940756
+APPROVAL_PRODUCER_WORKFLOW_ID = 0  # Fail closed until the protected repository pins it.
+APPROVAL_PRODUCER_WORKFLOW_PATH = ".github/workflows/helper1-v2-approval-evidence.yml"
+APPROVAL_PRODUCER_WORKFLOW_SHA256 = (
+    "51e951131bf4e0881d1abfc660fc6d9c1f9137899e06a46bf7e7b6045164cd77"
+)
 
 
 class ProducerPackageError(RuntimeError):
@@ -72,6 +87,7 @@ class VerifiedProducerPackage:
     legacy_evidence: Mapping[str, bytes]
     approval_files: Mapping[str, bytes]
     objects: Mapping[str, bytes]
+    quality_evidence: Mapping[str, bytes]
     manifest: Mapping[str, Any]
 
 
@@ -168,6 +184,15 @@ def _safe_relative(value: str) -> str:
     ):
         raise ProducerPackageError("PRODUCER_PACKAGE_PATH_INVALID")
     return path.as_posix()
+
+
+def _approval_workflow_ref(value: object, repository: object) -> str:
+    if type(value) is not str or type(repository) is not str:
+        raise ProducerPackageError("APPROVAL_INPUT_INVALID")
+    prefix = f"{repository}/{APPROVAL_PRODUCER_WORKFLOW_PATH}@"
+    if not value.startswith(prefix) or SHA40.fullmatch(value.removeprefix(prefix)) is None:
+        raise ProducerPackageError("APPROVAL_INPUT_INVALID")
+    return value
 
 
 def _git(*arguments: str) -> str:
@@ -286,6 +311,9 @@ def build(
     submission_path: Path,
     evidence_root: Path,
     product_approval_root: Path,
+    quality_evidence_root: Path,
+    approval_input_artifact: Path | None = None,
+    approval_input_provenance: Path | None = None,
 ) -> dict[str, Any]:
     contract, policy_raw = _policy()
     subject, subject_raw, subject_tree = _subject(canonical_subject, require_head=True)
@@ -318,6 +346,10 @@ def build(
         )
     except ProductApprovalBundleError as exc:
         raise ProducerPackageError(str(exc)) from exc
+    try:
+        quality_files = load_quality_directory(quality_evidence_root)
+    except QualityEvidenceError as exc:
+        raise ProducerPackageError(str(exc)) from exc
     files = {
         "SUBJECT/CANONICAL_SUBJECT.json": subject_raw,
         "SUBJECT/SUBMISSION.json": submission_raw,
@@ -329,9 +361,49 @@ def build(
         f"PRODUCT_APPROVAL/{PRODUCT_MANIFEST_NAME}": (
             product_approval_root / PRODUCT_MANIFEST_NAME
         ).read_bytes(),
+        **{
+            f"SEARCH_QUALITY/{name}": raw
+            for name, raw in sorted(quality_files.items())
+        },
     }
+    if approval_input_artifact is None or approval_input_provenance is None:
+        raise ProducerPackageError("APPROVAL_INPUT_INCOMPLETE")
+    try:
+        approval_bytes = approval_input_artifact.read_bytes()
+        provenance_bytes = approval_input_provenance.read_bytes()
+        provenance_value = _decode_json(
+            provenance_bytes,
+            "APPROVAL_INPUT_PROVENANCE_INVALID",
+        )
+        provenance = provenance_from_dict(provenance_value)
+        workflow_ref = _approval_workflow_ref(
+            provenance.producer_workflow_ref,
+            subject["repository_full_name"],
+        )
+        verify_approval_input_bytes(
+            approval_bytes,
+            provenance,
+            expected_repository_id=APPROVAL_PRODUCER_REPOSITORY_ID,
+            expected_repository_name=subject["repository_full_name"],
+            expected_subject_commit=subject["subject_sha"],
+            expected_subject_tree=subject_tree,
+            expected_run_id=provenance.run_id,
+            expected_run_attempt=provenance.run_attempt,
+            expected_workflow_ref=workflow_ref,
+            expected_workflow_id=APPROVAL_PRODUCER_WORKFLOW_ID,
+            expected_workflow_sha256=APPROVAL_PRODUCER_WORKFLOW_SHA256,
+            expected_artifact_id=provenance.artifact_id,
+            expected_artifact_name=provenance.artifact_name,
+            expected_canonical_subject_sha256=hashlib.sha256(
+                _canonical(subject)
+            ).hexdigest(),
+        )
+    except Exception as exc:
+        raise ProducerPackageError("APPROVAL_INPUT_INVALID") from exc
+    files["APPROVAL_INPUT/approval-input.zip"] = approval_bytes
+    files["APPROVAL_INPUT/APPROVAL_INPUT_PROVENANCE.v2.json"] = provenance_bytes
     manifest = {
-        "schema_version": "butler.helper1.producer-package.v1",
+        "schema_version": "butler.helper1.producer-package.v3",
         "subject_commit": subject["subject_sha"],
         "subject_tree": subject_tree,
         "policy_sha256": hashlib.sha256(policy_raw).hexdigest(),
@@ -473,7 +545,7 @@ def _read_package_bytes(raw: bytes) -> tuple[dict[str, bytes], dict[str, Any]]:
                     or stat.S_IMODE(mode) != 0o644
                     or item.date_time != ZIP_TIME
                     or item.extra
-                    or uncompressed_total > MAX_EVIDENCE_BYTES + (2 * MAX_JSON_BYTES)
+                    or uncompressed_total > MAX_EVIDENCE_BYTES + (4 * MAX_JSON_BYTES)
                 ):
                     raise ProducerPackageError("PRODUCER_PACKAGE_ARCHIVE_INVALID")
                 names.append(name)
@@ -498,7 +570,12 @@ def _read_package_bytes(raw: bytes) -> tuple[dict[str, bytes], dict[str, Any]]:
     payload = set(files) - {"MANIFEST.json", "SHA256SUMS.txt"}
     expected_files = manifest.get("files")
     if (
-        manifest.get("schema_version") != "butler.helper1.producer-package.v1"
+        manifest.get("schema_version")
+        not in {
+            "butler.helper1.producer-package.v1",
+            "butler.helper1.producer-package.v2",
+            "butler.helper1.producer-package.v3",
+        }
         or type(expected_files) is not dict
         or set(expected_files) != payload
         or set(sums) != set(files) - {"SHA256SUMS.txt"}
@@ -597,6 +674,40 @@ def load_verified_package(
         )
     except KeyError as exc:
         raise ProducerPackageError("PRODUCER_PACKAGE_INVENTORY_INVALID") from exc
+    if manifest.get("schema_version") in {
+        "butler.helper1.producer-package.v2",
+        "butler.helper1.producer-package.v3",
+    }:
+        try:
+            approval_provenance_value = _decode_json(
+                files["APPROVAL_INPUT/APPROVAL_INPUT_PROVENANCE.v2.json"],
+                "APPROVAL_INPUT_PROVENANCE_INVALID",
+            )
+            approval_provenance = provenance_from_dict(approval_provenance_value)
+            workflow_ref = _approval_workflow_ref(
+                approval_provenance.producer_workflow_ref,
+                policy.get("repository"),
+            )
+            verify_approval_input_bytes(
+                files["APPROVAL_INPUT/approval-input.zip"],
+                approval_provenance,
+                expected_repository_id=APPROVAL_PRODUCER_REPOSITORY_ID,
+                expected_repository_name=policy["repository"],
+                expected_subject_commit=subject_commit,
+                expected_subject_tree=subject_tree,
+                expected_run_id=approval_provenance.run_id,
+                expected_run_attempt=approval_provenance.run_attempt,
+                expected_workflow_ref=workflow_ref,
+                expected_workflow_id=APPROVAL_PRODUCER_WORKFLOW_ID,
+                expected_workflow_sha256=APPROVAL_PRODUCER_WORKFLOW_SHA256,
+                expected_artifact_id=approval_provenance.artifact_id,
+                expected_artifact_name=approval_provenance.artifact_name,
+                expected_canonical_subject_sha256=hashlib.sha256(
+                    _canonical(subject)
+                ).hexdigest(),
+            )
+        except Exception as exc:
+            raise ProducerPackageError("APPROVAL_INPUT_INVALID") from exc
     if (
         test_index.get("source_tree") != subject_tree
         or test_index.get("all_required_checks_passed") is not True
@@ -639,6 +750,18 @@ def load_verified_package(
         for name, payload in product_files.items()
         if name.startswith("objects/")
     }
+    quality = {
+        name.removeprefix("SEARCH_QUALITY/"): payload
+        for name, payload in files.items()
+        if name.startswith("SEARCH_QUALITY/")
+    }
+    if manifest.get("schema_version") == "butler.helper1.producer-package.v3":
+        try:
+            verify_quality_manifest(quality)
+        except QualityEvidenceError as exc:
+            raise ProducerPackageError(str(exc)) from exc
+    elif quality:
+        raise ProducerPackageError("QUALITY_INVENTORY_INVALID")
     descriptor = _derived_descriptor(
         contract,
         package_sha256=package_sha256,
@@ -667,6 +790,7 @@ def load_verified_package(
         legacy_evidence=MappingProxyType(legacy),
         approval_files=MappingProxyType(approval),
         objects=MappingProxyType(objects),
+        quality_evidence=MappingProxyType(quality),
         manifest=MappingProxyType(manifest),
     )
 
@@ -727,6 +851,9 @@ def main() -> int:
     build_parser.add_argument("--submission", required=True, type=Path)
     build_parser.add_argument("--test-evidence-root", required=True, type=Path)
     build_parser.add_argument("--product-approval-root", required=True, type=Path)
+    build_parser.add_argument("--quality-evidence-root", required=True, type=Path)
+    build_parser.add_argument("--approval-input-artifact", required=True, type=Path)
+    build_parser.add_argument("--approval-input-provenance", required=True, type=Path)
     verify_parser = sub.add_parser("verify")
     verify_parser.add_argument("--producer-package", required=True, type=Path)
     subject_parser = sub.add_parser("extract-subject")
@@ -741,6 +868,9 @@ def main() -> int:
                 args.submission,
                 args.test_evidence_root,
                 args.product_approval_root,
+                args.quality_evidence_root,
+                args.approval_input_artifact,
+                args.approval_input_provenance,
             )
             print("HELPER1_PRODUCER_PACKAGE_BUILD_OK=1")
         elif args.command == "verify":

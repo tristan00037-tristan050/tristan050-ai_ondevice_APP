@@ -41,3 +41,14 @@
 /contracts/helper1/retrieval-threshold-policy-v1.schema.json @tristan00037-tristan050
 /tests/helper1_v2/vectors/**                            @tristan00037-tristan050
 /tests/helper1_v2/test_*_v51.py                         @tristan00037-tristan050
+
+# Helper1 SearchQuality protected transitive surface. Broad rules ensure a new
+# local dependency cannot silently escape code-owner review.
+/butler_pc_core/helper1/**                              @tristan00037-tristan050
+/butler_pc_core/connect_loop/dlp_guard.py               @tristan00037-tristan050
+/butler_pc_core/connect_loop/persisted_safety.py        @tristan00037-tristan050
+/butler_pc_core/connect_loop/scan_normalization.py      @tristan00037-tristan050
+/butler_pc_core/dlp/runtime.py                          @tristan00037-tristan050
+/contracts/helper1-*                                   @tristan00037-tristan050
+/scripts/ci/helper1_*                                  @tristan00037-tristan050
+/scripts/run_helper1_v51_evidence.py                    @tristan00037-tristan050

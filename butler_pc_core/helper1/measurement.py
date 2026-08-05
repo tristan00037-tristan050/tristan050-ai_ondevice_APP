@@ -336,3 +336,332 @@ def verify_egress_observation(
     except (ValueError, TypeError, InvalidSignature) as exc:
         raise MeasurementError("MEASUREMENT_SIGNATURE_INVALID") from exc
     return VerifiedEgressObservation(**recomputed)
+
+
+DEVICE_MEASUREMENT_KEYS = {
+    "schema_version",
+    "run_id",
+    "run_attempt",
+    "device_class",
+    "hardware_model_identifier",
+    "os_version",
+    "os_build",
+    "source_commit",
+    "source_tree",
+    "device_receipt_sha256",
+    "receipt_key_id",
+    "measurement_policy_sha256",
+    "observer_name",
+    "observer_version",
+    "observer_binary_sha256",
+    "sample_clock",
+    "sample_interval_ns",
+    "cold_samples",
+    "warm_samples",
+    "thermal_samples",
+    "network_observation",
+    "raw_bundle_sha256",
+}
+
+DEVICE_RECEIPT_KEYS = {
+    "schema_version",
+    "key_id",
+    "run_id",
+    "run_attempt",
+    "device_class",
+    "hardware_model_identifier",
+    "os_build",
+    "source_commit",
+    "source_tree",
+    "observer_binary_sha256",
+    "measurement_policy_sha256",
+    "raw_bundle_sha256",
+    "issued_at_epoch_s",
+    "expires_at_epoch_s",
+    "signature_b64",
+}
+DEVICE_RAW_KEYS = {
+    "schema_version",
+    "run_id",
+    "run_attempt",
+    "device_class",
+    "hardware_model_identifier",
+    "os_version",
+    "os_build",
+    "source_commit",
+    "source_tree",
+    "observer_name",
+    "observer_version",
+    "observer_binary_sha256",
+    "measurement_policy_sha256",
+    "sample_clock",
+    "sample_interval_ns",
+    "samples",
+    "network_trace",
+}
+SAMPLE_KEYS = {
+    "sequence",
+    "phase",
+    "monotonic_ns",
+    "latency_ns",
+    "peak_rss_bytes",
+    "thermal_state",
+}
+NETWORK_TRACE_KEYS = {
+    "interface_counters",
+    "route_snapshot_sha256",
+    "observation_started_ns",
+    "observation_finished_ns",
+}
+
+
+def _verify_device_receipt(
+    raw: bytes,
+    *,
+    public_key_bytes: bytes,
+    expected_key_id: str,
+    expected_run_id: str,
+    expected_run_attempt: int,
+    expected_device_class: str,
+    expected_source_commit: str,
+    expected_source_tree: str,
+    expected_observer_sha256: str,
+    expected_policy_sha256: str,
+    expected_raw_bundle_sha256: str,
+    now_epoch_s: int,
+) -> dict[str, Any]:
+    receipt = _strict_json(raw, "DEVICE_RECEIPT_INVALID")
+    if set(receipt) != DEVICE_RECEIPT_KEYS:
+        raise MeasurementError("DEVICE_RECEIPT_INVALID")
+    if (
+        receipt.get("schema_version") != "butler.helper1.device-receipt.v2"
+        or receipt.get("key_id") != expected_key_id
+        or receipt.get("run_id") != expected_run_id
+        or receipt.get("run_attempt") != expected_run_attempt
+        or receipt.get("device_class") != expected_device_class
+        or receipt.get("source_commit") != expected_source_commit
+        or receipt.get("source_tree") != expected_source_tree
+        or receipt.get("observer_binary_sha256") != expected_observer_sha256
+        or receipt.get("measurement_policy_sha256") != expected_policy_sha256
+        or receipt.get("raw_bundle_sha256") != expected_raw_bundle_sha256
+    ):
+        raise MeasurementError("DEVICE_RECEIPT_INVALID")
+    for key in ("hardware_model_identifier", "os_build"):
+        if type(receipt.get(key)) is not str or not receipt[key].strip():
+            raise MeasurementError("DEVICE_RECEIPT_INVALID")
+    issued = _integer(receipt.get("issued_at_epoch_s"), 1, "DEVICE_RECEIPT_INVALID")
+    expires = _integer(receipt.get("expires_at_epoch_s"), 1, "DEVICE_RECEIPT_INVALID")
+    if not issued <= now_epoch_s < expires or expires - issued > 3600:
+        raise MeasurementError("DEVICE_RECEIPT_INVALID")
+    if (
+        not isinstance(public_key_bytes, bytes)
+        or len(public_key_bytes) != 32
+        or hashlib.sha256(public_key_bytes).hexdigest() != expected_key_id
+    ):
+        raise MeasurementError("MEASUREMENT_TRUST_ROOT_INVALID")
+    signature_b64 = receipt.get("signature_b64")
+    try:
+        if type(signature_b64) is not str:
+            raise ValueError
+        signature = base64.b64decode(signature_b64, validate=True)
+        if len(signature) != 64:
+            raise ValueError
+        unsigned = {key: value for key, value in receipt.items() if key != "signature_b64"}
+        Ed25519PublicKey.from_public_bytes(public_key_bytes).verify(
+            signature,
+            canonical_json(unsigned),
+        )
+    except (ValueError, TypeError, InvalidSignature) as exc:
+        raise MeasurementError("MEASUREMENT_SIGNATURE_INVALID") from exc
+    return receipt
+
+
+def _recompute_device_raw(raw_bundle: bytes) -> dict[str, Any]:
+    raw = _strict_json(raw_bundle, "RAW_SAMPLE_MISMATCH")
+    if set(raw) != DEVICE_RAW_KEYS or raw.get("schema_version") != "butler.helper1.device-raw-bundle.v2":
+        raise MeasurementError("RAW_SAMPLE_MISMATCH")
+    samples = raw.get("samples")
+    if type(samples) is not list or not samples:
+        raise MeasurementError("RAW_SAMPLE_MISMATCH")
+    phase_rows: dict[str, list[dict[str, object]]] = {"COLD": [], "WARM": [], "THERMAL": []}
+    previous_time = -1
+    for expected_sequence, sample in enumerate(samples, start=1):
+        if type(sample) is not dict or set(sample) != SAMPLE_KEYS:
+            raise MeasurementError("RAW_SAMPLE_MISMATCH")
+        sequence = _integer(sample.get("sequence"), 1, "RAW_SAMPLE_MISMATCH")
+        monotonic_ns = _integer(sample.get("monotonic_ns"), 1, "RAW_SAMPLE_MISMATCH")
+        latency_ns = _integer(sample.get("latency_ns"), 1, "RAW_SAMPLE_MISMATCH")
+        peak_rss = _integer(sample.get("peak_rss_bytes"), 1, "RAW_SAMPLE_MISMATCH")
+        phase = _string(sample.get("phase"), set(phase_rows), "RAW_SAMPLE_MISMATCH")
+        thermal = _string(
+            sample.get("thermal_state"),
+            {"nominal", "fair", "serious", "critical"},
+            "RAW_SAMPLE_MISMATCH",
+        )
+        if sequence != expected_sequence or monotonic_ns <= previous_time:
+            raise MeasurementError("RAW_SAMPLE_MISMATCH")
+        previous_time = monotonic_ns
+        if phase == "THERMAL":
+            phase_rows[phase].append({"monotonic_ns": monotonic_ns, "state": thermal})
+        else:
+            phase_rows[phase].append({"latency_ns": latency_ns, "peak_rss_bytes": peak_rss})
+    if any(not rows for rows in phase_rows.values()):
+        raise MeasurementError("RAW_SAMPLE_MISMATCH")
+    trace = raw.get("network_trace")
+    if type(trace) is not dict or set(trace) != NETWORK_TRACE_KEYS:
+        raise MeasurementError("RAW_SAMPLE_MISMATCH")
+    started = _integer(trace.get("observation_started_ns"), 1, "RAW_SAMPLE_MISMATCH")
+    finished = _integer(trace.get("observation_finished_ns"), 1, "RAW_SAMPLE_MISMATCH")
+    if finished < started:
+        raise MeasurementError("RAW_SAMPLE_MISMATCH")
+    require_digest(trace.get("route_snapshot_sha256"), "RAW_SAMPLE_MISMATCH")
+    counters = trace.get("interface_counters")
+    if type(counters) is not list or not counters:
+        raise MeasurementError("RAW_SAMPLE_MISMATCH")
+    names: list[str] = []
+    baseline = final = 0
+    for counter in counters:
+        if type(counter) is not dict or set(counter) != {"name", "baseline_bytes", "final_bytes"}:
+            raise MeasurementError("RAW_SAMPLE_MISMATCH")
+        name = counter.get("name")
+        if type(name) is not str or not name or name in names:
+            raise MeasurementError("RAW_SAMPLE_MISMATCH")
+        names.append(name)
+        interface_baseline = _integer(
+            counter.get("baseline_bytes"), 0, "RAW_SAMPLE_MISMATCH"
+        )
+        interface_final = _integer(
+            counter.get("final_bytes"), 0, "RAW_SAMPLE_MISMATCH"
+        )
+        if interface_final < interface_baseline:
+            raise MeasurementError("NETWORK_COUNTER_RESET_OR_WRAP")
+        baseline += interface_baseline
+        final += interface_final
+    return {
+        **{key: raw[key] for key in DEVICE_RAW_KEYS - {"samples", "network_trace"}},
+        "cold_samples": phase_rows["COLD"],
+        "warm_samples": phase_rows["WARM"],
+        "thermal_samples": phase_rows["THERMAL"],
+        "network_observation": {
+            "interface_set": sorted(names),
+            "route_snapshot_sha256": trace["route_snapshot_sha256"],
+            "baseline_bytes": baseline,
+            "final_bytes": final,
+            "delta_bytes": final - baseline,
+            "raw_trace_sha256": hashlib.sha256(canonical_json(trace)).hexdigest(),
+            "observation_started_ns": started,
+            "observation_finished_ns": finished,
+        },
+    }
+
+
+def validate_device_measurement_v2(
+    value: Mapping[str, Any],
+    *,
+    expected_device_class: str,
+    expected_source_commit: str,
+    expected_source_tree: str,
+    expected_run_id: str,
+    expected_run_attempt: int,
+    raw_bundle: bytes,
+    device_receipt: bytes,
+    observer_binary: bytes,
+    public_key_bytes: bytes,
+    expected_key_id: str,
+    expected_policy_sha256: str,
+    now_epoch_s: int,
+) -> dict[str, Any]:
+    """Verify signed native provenance and independently rebuild every measurement."""
+    if type(value) is not dict or set(value) != DEVICE_MEASUREMENT_KEYS:
+        raise MeasurementError("DEVICE_MEASUREMENT_MISSING")
+    if (
+        value.get("schema_version") != "butler.helper1.device-measurement.v2"
+        or expected_device_class not in {"M3", "M4"}
+        or value.get("device_class") != expected_device_class
+        or value.get("run_id") != expected_run_id
+        or value.get("run_attempt") != expected_run_attempt
+        or value.get("source_commit") != expected_source_commit
+        or value.get("source_tree") != expected_source_tree
+        or value.get("sample_clock") != "monotonic_ns"
+    ):
+        raise MeasurementError("DEVICE_RECEIPT_INVALID")
+    for key in (
+        "device_receipt_sha256",
+        "measurement_policy_sha256",
+        "observer_binary_sha256",
+        "raw_bundle_sha256",
+    ):
+        require_digest(value.get(key), "DEVICE_RECEIPT_INVALID")
+    require_digest(value.get("receipt_key_id"), "DEVICE_RECEIPT_INVALID")
+    if hashlib.sha256(raw_bundle).hexdigest() != value["raw_bundle_sha256"]:
+        raise MeasurementError("RAW_SAMPLE_MISMATCH")
+    if hashlib.sha256(device_receipt).hexdigest() != value["device_receipt_sha256"]:
+        raise MeasurementError("DEVICE_RECEIPT_INVALID")
+    if hashlib.sha256(observer_binary).hexdigest() != value["observer_binary_sha256"]:
+        raise MeasurementError("OBSERVATION_PROVENANCE_MISSING")
+    if value["receipt_key_id"] != expected_key_id or value["measurement_policy_sha256"] != expected_policy_sha256:
+        raise MeasurementError("MEASUREMENT_TRUST_ROOT_INVALID")
+    recomputed = _recompute_device_raw(raw_bundle)
+    receipt = _verify_device_receipt(
+        device_receipt,
+        public_key_bytes=public_key_bytes,
+        expected_key_id=expected_key_id,
+        expected_run_id=expected_run_id,
+        expected_run_attempt=expected_run_attempt,
+        expected_device_class=expected_device_class,
+        expected_source_commit=expected_source_commit,
+        expected_source_tree=expected_source_tree,
+        expected_observer_sha256=value["observer_binary_sha256"],
+        expected_policy_sha256=expected_policy_sha256,
+        expected_raw_bundle_sha256=value["raw_bundle_sha256"],
+        now_epoch_s=now_epoch_s,
+    )
+    for key in (
+        "hardware_model_identifier",
+        "os_version",
+        "os_build",
+        "observer_name",
+        "observer_version",
+    ):
+        if type(value.get(key)) is not str or not value[key].strip():
+            raise MeasurementError("OBSERVATION_PROVENANCE_MISSING")
+    for key in (
+        "run_id", "run_attempt", "device_class", "hardware_model_identifier", "os_version",
+        "os_build", "source_commit", "source_tree", "observer_name", "observer_version",
+        "observer_binary_sha256", "measurement_policy_sha256", "sample_clock",
+        "sample_interval_ns", "cold_samples", "warm_samples", "thermal_samples",
+        "network_observation",
+    ):
+        if value.get(key) != recomputed.get(key):
+            raise MeasurementError("RAW_SAMPLE_MISMATCH")
+    if (
+        receipt["hardware_model_identifier"] != value["hardware_model_identifier"]
+        or receipt["os_build"] != value["os_build"]
+    ):
+        raise MeasurementError("DEVICE_RECEIPT_INVALID")
+    network = value.get("network_observation")
+    if type(network) is not dict or set(network) != {
+        "interface_set",
+        "route_snapshot_sha256",
+        "baseline_bytes",
+        "final_bytes",
+        "delta_bytes",
+        "raw_trace_sha256",
+        "observation_started_ns",
+        "observation_finished_ns",
+    }:
+        raise MeasurementError("OBSERVATION_PROVENANCE_MISSING")
+    require_digest(network.get("route_snapshot_sha256"), "OBSERVATION_PROVENANCE_MISSING")
+    require_digest(network.get("raw_trace_sha256"), "OBSERVATION_PROVENANCE_MISSING")
+    baseline = _integer(network.get("baseline_bytes"), 0, "RAW_SAMPLE_MISMATCH")
+    final = _integer(network.get("final_bytes"), 0, "RAW_SAMPLE_MISMATCH")
+    delta = _integer(network.get("delta_bytes"), 0, "RAW_SAMPLE_MISMATCH")
+    started = _integer(network.get("observation_started_ns"), 1, "RAW_SAMPLE_MISMATCH")
+    finished = _integer(network.get("observation_finished_ns"), 1, "RAW_SAMPLE_MISMATCH")
+    if finished < started:
+        raise MeasurementError("RAW_SAMPLE_MISMATCH")
+    if final - baseline != delta:
+        raise MeasurementError("RAW_SAMPLE_MISMATCH")
+    if delta != 0:
+        raise MeasurementError("NETWORK_EGRESS_NONZERO")
+    return dict(value)
