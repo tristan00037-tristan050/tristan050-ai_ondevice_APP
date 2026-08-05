@@ -19,7 +19,9 @@ from .cross_track_approval import (
     CROSS_TRACK_APPROVAL_NOT_FOUND,
     ApprovalCoordinates,
     ApprovalFailure,
-    CrossTrackApproval,
+    CrossTrackApprovalV2,
+    IdentityDigests,
+    RemoteFacts,
     TrustAnchor,
     verify_cross_track_approval,
 )
@@ -54,12 +56,11 @@ def evaluate_protected_scope(
     *,
     changed_paths: frozenset[str],
     verified_unchanged: bool,
-    approval: CrossTrackApproval | None,
+    approval: CrossTrackApprovalV2 | None,
     anchor: TrustAnchor,
     coordinates: ApprovalCoordinates,
-    document_bytes: bytes | None,
-    approval_commit_reachable: bool,
-    run_started_at: str,
+    identity: IdentityDigests,
+    remote: RemoteFacts,
     now: str,
 ) -> ApprovalVerdict:
     protected = protected_subset(changed_paths)
@@ -72,23 +73,26 @@ def evaluate_protected_scope(
         return ApprovalVerdict(
             False, "FAIL",
             (ApprovalFailure(PROTECTED_SCOPE_EMPTY_STATE_INVALID,
-                             "보호 변경 없음이 검증되지 않음(verified_unchanged=False)"),),
+                             "보호 변경 없음이 검증되지 않음",
+                             expected="verified_unchanged=True",
+                             observed="verified_unchanged=False"),),
             ())
 
     # 보호 변경이 있는데 승인서가 없으면 반드시 NOT_FOUND
     if approval is None:
         return ApprovalVerdict(
             False, "FAIL",
-            (ApprovalFailure(CROSS_TRACK_APPROVAL_NOT_FOUND, "보호 변경 존재하나 승인서 없음"),),
+            (ApprovalFailure(CROSS_TRACK_APPROVAL_NOT_FOUND, "보호 변경 존재하나 승인서 없음",
+                             expected=anchor.document_path,
+                             observed="없음"),),
             tuple(sorted(protected)))
 
     # 상태2: 신뢰원 유효 승인 + 보호부분집합 == 승인경로(§16-3) + 좌표/시각
     ok, failures = verify_cross_track_approval(
         approval=approval, anchor=anchor, coordinates=coordinates,
+        identity=identity,
         protected_changed_paths=protected,
-        document_bytes=document_bytes,
-        approval_commit_reachable=approval_commit_reachable,
-        run_started_at=run_started_at, now=now,
+        remote=remote, now=now,
     )
     if ok:
         return ApprovalVerdict(True, "STATE_2_APPROVED", (), tuple(sorted(protected)))

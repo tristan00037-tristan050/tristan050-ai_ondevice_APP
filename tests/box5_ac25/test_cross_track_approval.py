@@ -1,133 +1,314 @@
-"""§8 교차 트랙 승인서 시험 + §10 좌표 축 (§11)."""
+"""§8 교차 트랙 승인서 시험 — 정오표 v1.2 (v2) 반영.
+
+§E6-4 가 지정한 열 개를 포함한다. 마지막 항목(정상 통과)을 반드시 넣는다.
+막기만 하는 판정기는 언제나 막는 도구이므로 통과로 보지 않는다.
+
+정상 통과 시험은 ★실물 승인 산출물(butler-ct-shared f734960 의 문서·서명·
+allowed_signers)을 픽스처로 쓴다. 지문이 코드에 고정돼 있어 시험용 열쇠로는
+통과시킬 수 없고, 그래야 시험이 실제 신뢰원을 검증한다.
+"""
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import re
+import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
 from ac25 import cross_track_approval as cta
+from ac25.approval_signature import SIGNATURE_NAMESPACE, SIGNING_KEY_FINGERPRINT
 
-HEAD = "6" * 40
-HEAD_TREE = "3" * 40
-INT_BASE = "a" * 40          # 통합 비교 base
-POLICY_BASE = "d" * 40       # 경로 판정 base (섞지 않음)
-DOC = b"approval document bytes"
-DOC_SHA = hashlib.sha256(DOC).hexdigest()
-PATHS = frozenset({"butler-desktop/src/lib/accounting_review/client.ts",
-                   "butler-desktop/src/components/accounting_review/AccountingReviewPage.tsx"})
+pytestmark = pytest.mark.no_sidecar_token
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+AC25_SOURCE = Path(__file__).resolve().parents[2] / "scripts" / "ci" / "ac25"
+
+DOCUMENT_BYTES = (FIXTURES / "approval_document.md").read_bytes()
+SIGNATURE_BYTES = (FIXTURES / "approval_document.md.sig").read_bytes()
+ALLOWED_SIGNERS_BYTES = (FIXTURES / "allowed_signers").read_bytes()
+DOCUMENT_SHA256 = hashlib.sha256(DOCUMENT_BYTES).hexdigest()
+
+INTEGRATION_BASE = "afdb237e4e6e83d96a182b6c5366a2ad95949bee"
+PROVENANCE_BASE = "de3dd4ebaf5b3935a142b988dd61e6198aa9536d"
+PROVENANCE_BASE_TREE = "8c3509db047145714d2a1a84dfc76fb0a4c0fec9"
+CANDIDATE_HEAD = "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04"
+CANDIDATE_HEAD_TREE = "313f40cf35b3ee2bf7bcdd946dea9c2e1c4896c2"
+ZIP_DIGEST = "5ea7f4b5355be5f4fd96b922c87f4530ddf6625abbef22848c091b2c629e2629"
+MANIFEST_DIGEST = "b59e4aacd0d3f9bdd9874c838901c1ba0506478cfb15123536e729f83b4c2e4f"
+
+APPROVAL_COMMIT = "f73496000e10dc533c3af243c1c0fb1c4d70e080"
+COMMITTER_UTC = "2026-08-05T04:48:43Z"
+RUN_STARTED_AT = "2026-08-05T05:00:00Z"
+NOW = "2026-08-05T06:00:00Z"
+EXPIRES_AT = "2026-08-12T23:59:59Z"
+
+APPROVED_PATHS = frozenset({"butler_pc_core/accounting/assignment/authorization.py"})
 
 ANCHOR = cta.TrustAnchor(
-    source_repo="ct/shared", protected_ref="refs/heads/main",
-    document_path="doc.md", allowed_approver_ids=frozenset({238947383}),
-    protected_ref_enforced=True)
-COORD = cta.ApprovalCoordinates(
-    candidate_head_sha=HEAD, candidate_head_tree=HEAD_TREE,
-    integration_comparison_base=INT_BASE)
+    source_repo="tristan00037-tristan050/butler-ct-shared",
+    protected_ref="refs/heads/main",
+    document_path="docs/decisions/교차트랙승인_박스5_AC12_v2_20260805.md",
+    signature_path="docs/decisions/교차트랙승인_박스5_AC12_v2_20260805.md.sig",
+    allowed_signers_path="docs/decisions/allowed_signers",
+)
+
+COORDINATES = cta.ApprovalCoordinates(
+    candidate_head_sha=CANDIDATE_HEAD,
+    candidate_head_tree=CANDIDATE_HEAD_TREE,
+    provenance_base_sha=PROVENANCE_BASE,
+    provenance_base_tree=PROVENANCE_BASE_TREE,
+    integration_comparison_base=INTEGRATION_BASE,
+)
+
+IDENTITY = cta.IdentityDigests(
+    identity_artifact_zip_sha256=ZIP_DIGEST,
+    identity_manifest_sha256=MANIFEST_DIGEST,
+)
 
 
-def _approval(**over):
-    base = dict(
-        schema_version="butler.ac25.cross_track_approval.v1",
-        source_repo="ct/shared", protected_ref="refs/heads/main",
-        approval_commit_sha="9" * 40, document_path="doc.md",
-        document_sha256=DOC_SHA, approver_login="rep", approver_id=238947383,
-        base_sha=INT_BASE, base_tree="b" * 40, head_sha=HEAD, head_tree=HEAD_TREE,
-        approved_paths=PATHS, issued_at="2026-08-05T01:00:00Z",
-        expires_at="2026-08-12T00:00:00Z")
-    base.update(over)
-    return cta.CrossTrackApproval(**base)
+def _approval(**overrides) -> cta.CrossTrackApprovalV2:
+    base = cta.CrossTrackApprovalV2(
+        schema_version=cta.SCHEMA_VERSION,
+        integration_base_sha=INTEGRATION_BASE,
+        provenance_base_sha=PROVENANCE_BASE,
+        provenance_base_tree=PROVENANCE_BASE_TREE,
+        candidate_head_sha=CANDIDATE_HEAD,
+        candidate_head_tree=CANDIDATE_HEAD_TREE,
+        identity_artifact_zip_sha256=ZIP_DIGEST,
+        identity_manifest_sha256=MANIFEST_DIGEST,
+        approved_paths=APPROVED_PATHS,
+        source_repo=ANCHOR.source_repo,
+        protected_ref=ANCHOR.protected_ref,
+        document_path=ANCHOR.document_path,
+        approval_commit_sha=APPROVAL_COMMIT,
+        document_sha256=DOCUMENT_SHA256,
+        approver_login="tristan00037-tristan050",
+        approver_id=238947383,
+        signature_path=ANCHOR.signature_path,
+        allowed_signers_path=ANCHOR.allowed_signers_path,
+        signing_key_fingerprint=SIGNING_KEY_FINGERPRINT,
+        signature_namespace=SIGNATURE_NAMESPACE,
+        expires_at=EXPIRES_AT,
+    )
+    return dataclasses.replace(base, **overrides) if overrides else base
 
 
-def _run(approval, protected=PATHS, doc=DOC, reachable=True,
-         run_started="2026-08-05T02:00:00Z", now="2026-08-05T03:00:00Z", anchor=ANCHOR):
+def _remote(**overrides) -> cta.RemoteFacts:
+    base = cta.RemoteFacts(
+        approval_commit_fetchable=True,
+        approval_commit_reachable=True,
+        approval_committer_utc=COMMITTER_UTC,
+        run_started_at=RUN_STARTED_AT,
+        document_bytes=DOCUMENT_BYTES,
+        signature_bytes=SIGNATURE_BYTES,
+        allowed_signers_bytes=ALLOWED_SIGNERS_BYTES,
+        approver_id_for_login=238947383,
+    )
+    return dataclasses.replace(base, **overrides) if overrides else base
+
+
+def _verify(approval=None, remote=None, identity=IDENTITY, paths=APPROVED_PATHS, now=NOW):
     return cta.verify_cross_track_approval(
-        approval=approval, anchor=anchor, coordinates=COORD,
-        protected_changed_paths=protected, document_bytes=doc,
-        approval_commit_reachable=reachable, run_started_at=run_started, now=now)
+        approval=_approval() if approval is None else approval,
+        anchor=ANCHOR,
+        coordinates=COORDINATES,
+        identity=identity,
+        protected_changed_paths=paths,
+        remote=_remote() if remote is None else remote,
+        now=now,
+    )
 
 
-def _codes(res):
-    return {f.code for f in res[1]}
+def _codes(failures) -> set[str]:
+    return {item.code for item in failures}
 
 
-def test_valid_exact_approval_passes():
-    ok, failures = _run(_approval())
-    assert ok, failures
+_SSH_KEYGEN = shutil.which("ssh-keygen")
+requires_ssh_keygen = pytest.mark.skipif(
+    _SSH_KEYGEN is None, reason="ssh-keygen 없음 — 서명 검증 불가"
+)
 
 
-def test_missing_approval_is_rejected():
-    ok, f = _run(None)
-    assert not ok and cta.CROSS_TRACK_APPROVAL_NOT_FOUND in {x.code for x in f}
+# ── §E6-4 지정 열 개 ──────────────────────────────────────────────────
 
 
-def test_trust_anchor_not_supplied_is_rejected():
-    bad = dataclasses.replace(ANCHOR, allowed_approver_ids=frozenset())
-    ok, f = _run(_approval(), anchor=bad)
-    assert cta.APPROVAL_TRUST_ANCHOR_NOT_SUPPLIED in {x.code for x in f}
+def test_identity_zip_digest_mismatch_is_rejected():
+    ok, failures = _verify(approval=_approval(identity_artifact_zip_sha256="0" * 64))
+    assert ok is False
+    assert cta.IDENTITY_PACKAGE_DIGEST_MISMATCH in _codes(failures)
 
 
-def test_protected_ref_not_enforced_is_rejected():
-    bad = dataclasses.replace(ANCHOR, protected_ref_enforced=False)
-    ok, f = _run(_approval(), anchor=bad)
-    assert cta.APPROVAL_PROTECTED_REF_NOT_ENFORCED in {x.code for x in f}
+def test_identity_manifest_digest_mismatch_is_rejected():
+    ok, failures = _verify(approval=_approval(identity_manifest_sha256="0" * 64))
+    assert ok is False
+    assert cta.IDENTITY_PACKAGE_DIGEST_MISMATCH in _codes(failures)
 
 
-def test_approval_digest_mismatch_is_rejected():
-    assert cta.APPROVAL_DIGEST_MISMATCH in _codes(_run(_approval(document_sha256="0" * 64)))
+def test_two_baselines_in_one_field_is_rejected():
+    """통합 base 자리에 경로 base 를 넣어 한 칸으로 뭉갠 승인서는 닫는다."""
+    ok, failures = _verify(approval=_approval(integration_base_sha=PROVENANCE_BASE))
+    assert ok is False
+    assert cta.BASELINE_ROLE_MISMATCH in _codes(failures)
 
 
-def test_approval_wrong_repository_is_rejected():
-    assert cta.APPROVAL_SOURCE_REPOSITORY_MISMATCH in _codes(_run(_approval(source_repo="evil/x")))
+def test_document_time_string_is_not_used_as_issued_at():
+    """issued_at 은 커밋 committer 시각이다. 승인서 구조에 그 칸이 없어야 한다."""
+    fields = {field.name for field in dataclasses.fields(cta.CrossTrackApprovalV2)}
+    assert "issued_at" not in fields
+
+    # 커밋 시각이 run 시작보다 늦으면 닫힌다 — 문서 본문 문자열로는 바꿀 수 없다.
+    ok, failures = _verify(remote=_remote(approval_committer_utc="2026-08-05T05:30:00Z"))
+    assert ok is False
+    assert cta.APPROVAL_ISSUED_AFTER_RUN in _codes(failures)
 
 
-def test_approval_commit_not_reachable_is_rejected():
-    assert cta.APPROVAL_COMMIT_NOT_REACHABLE in _codes(_run(_approval(), reachable=False))
+@requires_ssh_keygen
+def test_unsigned_approval_is_rejected():
+    ok, failures = _verify(remote=_remote(signature_bytes=None))
+    assert ok is False
+    assert cta.APPROVAL_SIGNATURE_INVALID in _codes(failures)
 
 
-def test_untrusted_approver_is_rejected():
-    assert cta.APPROVAL_SIGNER_UNTRUSTED in _codes(_run(_approval(approver_id=999)))
+@requires_ssh_keygen
+def test_wrong_signer_key_is_rejected(tmp_path):
+    """다른 열쇠로 만든 allowed_signers 는 고정 지문과 달라 거부된다."""
+    key = tmp_path / "other"
+    subprocess.run(
+        [_SSH_KEYGEN, "-t", "ed25519", "-N", "", "-C", "other", "-f", str(key)],
+        capture_output=True,
+        check=True,
+    )
+    public = (tmp_path / "other.pub").read_text(encoding="utf-8").strip()
+    other_signers = f'butler-approval-signer namespaces="butler-approval" {public}\n'
+    ok, failures = _verify(remote=_remote(allowed_signers_bytes=other_signers.encode("utf-8")))
+    assert ok is False
+    assert cta.APPROVAL_SIGNER_UNTRUSTED in _codes(failures)
 
 
-def test_approval_pathset_extra_path_is_rejected():
-    extra = PATHS | {"butler-desktop/src/lib/accounting_review/contracts.ts"}
-    assert cta.APPROVAL_PATHSET_MISMATCH in _codes(_run(_approval(), protected=extra))
+@requires_ssh_keygen
+def test_tampered_document_breaks_signature():
+    tampered = DOCUMENT_BYTES + b"\n<!-- tampered -->\n"
+    ok, failures = _verify(
+        approval=_approval(document_sha256=hashlib.sha256(tampered).hexdigest()),
+        remote=_remote(document_bytes=tampered),
+    )
+    assert ok is False
+    assert cta.APPROVAL_SIGNATURE_INVALID in _codes(failures)
 
 
-def test_approval_pathset_missing_path_is_rejected():
-    fewer = frozenset(list(PATHS)[:1])
-    assert cta.APPROVAL_PATHSET_MISMATCH in _codes(_run(_approval(), protected=fewer))
+@requires_ssh_keygen
+def test_allowed_signers_from_candidate_checkout_is_rejected(tmp_path):
+    """후보 checkout 이 심어 놓은 allowed_signers 로는 통과할 수 없다."""
+    key = tmp_path / "candidate"
+    subprocess.run(
+        [_SSH_KEYGEN, "-t", "ed25519", "-N", "", "-C", "candidate", "-f", str(key)],
+        capture_output=True,
+        check=True,
+    )
+    public = (tmp_path / "candidate.pub").read_text(encoding="utf-8").strip()
+    planted = tmp_path / "allowed_signers"
+    planted.write_text(
+        f'butler-approval-signer namespaces="butler-approval" {public}\n', encoding="utf-8"
+    )
+    document = tmp_path / "doc.md"
+    document.write_bytes(DOCUMENT_BYTES)
+    subprocess.run(
+        [
+            _SSH_KEYGEN, "-Y", "sign", "-f", str(key),
+            "-n", SIGNATURE_NAMESPACE, str(document),
+        ],
+        capture_output=True,
+        check=True,
+    )
+    forged_signature = (tmp_path / "doc.md.sig").read_bytes()
+
+    ok, failures = _verify(
+        remote=_remote(
+            allowed_signers_bytes=planted.read_bytes(),
+            signature_bytes=forged_signature,
+        )
+    )
+    assert ok is False
+    assert cta.APPROVAL_SIGNER_UNTRUSTED in _codes(failures)
 
 
-def test_approval_issued_after_run_is_rejected():
-    assert cta.APPROVAL_ISSUED_AFTER_RUN in _codes(
-        _run(_approval(issued_at="2026-08-05T05:00:00Z")))
+def test_no_assert_in_verdict_path():
+    """§E6-2 판정 경로에 assert 가 하나도 없어야 한다."""
+    offenders: list[str] = []
+    for source in sorted(AC25_SOURCE.glob("*.py")):
+        for number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
+            if re.match(r"^\s*assert\b", line):
+                offenders.append(f"{source.name}:{number}")
+    assert offenders == []
 
 
-def test_approval_not_yet_valid_is_rejected():
-    # issued 미래, run/now 도 그 이전 → not yet valid (또는 issued_after_run)
-    res = _run(_approval(issued_at="2026-08-10T00:00:00Z"),
-               run_started="2026-08-06T00:00:00Z", now="2026-08-06T01:00:00Z")
-    assert cta.APPROVAL_NOT_YET_VALID in _codes(res) or cta.APPROVAL_ISSUED_AFTER_RUN in _codes(res)
+@requires_ssh_keygen
+def test_valid_signed_approval_passes():
+    """정상 상태는 실제로 통과해야 한다. 막기만 하는 판정기는 통과로 보지 않는다."""
+    ok, failures = _verify()
+    assert failures == ()
+    assert ok is True
+
+
+# ── 회귀 보강 ─────────────────────────────────────────────────────────
+
+
+def test_provenance_base_must_match_lock_base():
+    ok, failures = _verify(approval=_approval(provenance_base_sha="0" * 40))
+    assert ok is False
+    assert cta.APPROVAL_COORDINATE_MISMATCH in _codes(failures)
+
+
+def test_candidate_head_tree_mismatch_is_rejected():
+    ok, failures = _verify(approval=_approval(candidate_head_tree="0" * 40))
+    assert ok is False
+    assert cta.APPROVAL_COORDINATE_MISMATCH in _codes(failures)
+
+
+def test_approval_commit_not_fetchable_is_reported_separately():
+    ok, failures = _verify(remote=_remote(approval_commit_fetchable=False))
+    assert ok is False
+    assert cta.APPROVAL_COMMIT_NOT_FETCHABLE in _codes(failures)
+
+
+def test_approver_id_mismatch_with_real_account_is_rejected():
+    ok, failures = _verify(remote=_remote(approver_id_for_login=999))
+    assert ok is False
+    assert cta.APPROVAL_SIGNER_UNTRUSTED in _codes(failures)
 
 
 def test_expired_approval_is_rejected():
-    res = _run(_approval(), run_started="2026-08-13T00:00:00Z", now="2026-08-13T01:00:00Z")
-    assert cta.APPROVAL_EXPIRED in _codes(res)
+    ok, failures = _verify(now="2026-08-13T00:00:00Z")
+    assert ok is False
+    assert cta.APPROVAL_EXPIRED in _codes(failures)
 
 
-def test_old_approval_cannot_be_replayed_for_new_head():
-    # 승인은 옛 head 를 지목하지만 현재 후보 head 는 다름 → 좌표 불일치
-    res = _run(_approval(head_sha="7" * 40))
-    assert cta.APPROVAL_COORDINATE_MISMATCH in _codes(res)
+def test_missing_approval_is_rejected():
+    ok, failures = cta.verify_cross_track_approval(
+        approval=None,
+        anchor=ANCHOR,
+        coordinates=COORDINATES,
+        identity=IDENTITY,
+        protected_changed_paths=APPROVED_PATHS,
+        remote=_remote(),
+        now=NOW,
+    )
+    assert ok is False
+    assert cta.CROSS_TRACK_APPROVAL_NOT_FOUND in _codes(failures)
 
 
-# ── §10: 두 base 를 섞지 않는다 ────────────────────────────────────────
-def test_base_axis_is_integration_base_not_policy_base():
-    # 승인서 base 가 통합 비교 base 와 같으면(정책 base 와 달라도) 통과
-    ok, f = _run(_approval(base_sha=INT_BASE))
-    assert ok, f
+def test_pathset_mismatch_is_rejected():
+    ok, failures = _verify(paths=APPROVED_PATHS | {"butler_sidecar.py"})
+    assert ok is False
+    assert cta.APPROVAL_PATHSET_MISMATCH in _codes(failures)
 
 
-def test_wrong_integration_base_is_rejected():
-    res = _run(_approval(base_sha="1" * 40))
-    assert cta.APPROVAL_COORDINATE_MISMATCH in _codes(res)
+def test_every_failure_carries_evidence():
+    """§7 증거가 하나도 없는 실패는 허용하지 않는다."""
+    ok, failures = _verify(approval=_approval(candidate_head_sha="0" * 40))
+    assert ok is False
+    for failure in failures:
+        assert failure.message
+        assert failure.expected is not None or failure.observed is not None
