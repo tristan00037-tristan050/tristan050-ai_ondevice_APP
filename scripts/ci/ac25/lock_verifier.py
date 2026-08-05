@@ -25,6 +25,7 @@ LOCK_HEAD_TREE_MISMATCH = "LOCK_HEAD_TREE_MISMATCH"
 LOCK_SCOPE_END_NOT_CANDIDATE_HEAD = "LOCK_SCOPE_END_NOT_CANDIDATE_HEAD"
 LOCK_APPROVED_BASE_MUTATED = "LOCK_APPROVED_BASE_MUTATED"
 LOCK_SCHEMA_INVALID = "LOCK_SCHEMA_INVALID"
+LOCK_FILE_UNREADABLE = "LOCK_FILE_UNREADABLE"
 LOCK_DUPLICATE_KEY = "LOCK_DUPLICATE_KEY"
 LOCK_EXPIRED = "LOCK_EXPIRED"
 GIT_OBJECT_NOT_FOUND = "GIT_OBJECT_NOT_FOUND"
@@ -236,6 +237,14 @@ def verify_integration_lock(
             lock = load_candidate_lock(fh.read())
     except LockSchemaError as exc:
         failures.append(FailureEvidence(exc.code, exc.message))
+        return LockVerdict(False, tuple(failures), changed, offending,
+                           "", "", "", "", execution_commit, "")
+    except OSError as exc:
+        # ★파일이 없거나 읽을 수 없는 것도 판정 실패다. 예외를 밖으로 흘리면
+        #   공개 로그에 traceback 이 찍힌다(§9 위반).
+        failures.append(FailureEvidence(
+            LOCK_FILE_UNREADABLE, "잠금 파일을 읽지 못했다",
+            expected=lock_path, observed=type(exc).__name__))
         return LockVerdict(False, tuple(failures), changed, offending,
                            "", "", "", "", execution_commit, "")
 

@@ -1,38 +1,52 @@
-"""§E7-1 단일 production orchestrator.
+"""§11 단일 production orchestrator.
 
 부품을 만들어 두고 워크플로가 부르지 않으면 검증은 존재하지 않는 것과 같다.
 이 모듈이 유일한 production 진입점이며, 아래를 한 실행 경로로 묶는다.
 
-    ① 원격 PR head/tree/base 재확인
-    ② 승인 commit·문서·서명·allowed_signers 취득 (★고정 repo·commit·path 만)
-    ③ 보호 ref 조상 여부 정확 확인 (compare API · 근사 금지)
-    ④ 승인서 strict loader
-    ⑤ 서명 · 경로 · 세 baseline · identity · 시각 검증
-    ⑥ lock 검증
-    ⑦ 보호 경로 완전일치
-    ⑧ effective_expiry = min(lock.expires_at, approval.expires_at)
+    dispatch input strict 검증           (M-4)
+    workflow identity·environment 검증   (M-2)
+    PR #903 remote head·tree·base 확인
+    승인 commit·문서·서명·signer 취득
+    승인 보호 ref 조상 확인
+    승인 strict load
+    승인 signature·coordinates·paths·time 검증
+    candidate lock 검증
+    protected scope 완전일치
+    dependency manifest resolve          (M-1)
+    지정 Python·JS 검사 목록 생성
+    effective expiry 계산
+    meta-only receipt 원자적 기록        (M-5)
 
 ★로컬 경로 입력 인자를 두지 않는다. 승인 바이트는 로컬 파일에서 읽지 않는다.
 ★시험 픽스처를 읽지 않는다. 시험 디렉터리를 import 하지 않는다.
+★공개 출력은 VERDICT 와 ERROR_CODE 두 줄뿐이다(§9).
 ★하나라도 판정하지 못하면 통과시키지 않는다(fail-closed). assert 를 쓰지 않는다.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import anchors, designated_checks, lock_verifier, protected_scope, remote_facts
-from .approval_loader import ApprovalDocumentError, DocumentOrigin, load_approval_document
-from .cross_track_approval import (
-    ApprovalCoordinates,
-    ApprovalFailure,
-    IdentityDigests,
+from . import (
+    anchors,
+    dependency_manifest,
+    designated_checks,
+    lock_verifier,
+    protected_scope,
+    remote_facts,
+    workflow_identity,
+    workflow_inputs,
 )
+from .approval_loader import ApprovalDocumentError, DocumentOrigin, load_approval_document
+from .cross_track_approval import ApprovalCoordinates, ApprovalFailure, IdentityDigests
 
 # ── 실패 코드 ──────────────────────────────────────────────────────────
 ORCHESTRATOR_REMOTE_FACTS_INCOMPLETE = "ORCHESTRATOR_REMOTE_FACTS_INCOMPLETE"
@@ -41,9 +55,11 @@ ORCHESTRATOR_APPROVAL_DOCUMENT_INVALID = "ORCHESTRATOR_APPROVAL_DOCUMENT_INVALID
 ORCHESTRATOR_REMOTE_HEAD_MISMATCH = "ORCHESTRATOR_REMOTE_HEAD_MISMATCH"
 ORCHESTRATOR_PROTECTED_SCOPE_FAILED = "ORCHESTRATOR_PROTECTED_SCOPE_FAILED"
 ORCHESTRATOR_DIFF_NOT_MEASURED = "ORCHESTRATOR_DIFF_NOT_MEASURED"
+ORCHESTRATOR_RECEIPT_WRITE_FAILED = "ORCHESTRATOR_RECEIPT_WRITE_FAILED"
 EFFECTIVE_APPROVAL_EXPIRED = "EFFECTIVE_APPROVAL_EXPIRED"
 
-# diff 를 신뢰할 수 없게 만드는 잠금 실패
+RECEIPT_FILENAME = "ac25-receipt.json"
+
 _DIFF_BLOCKING_CODES = frozenset({
     lock_verifier.CHANGED_PATHS_UNAVAILABLE,
     lock_verifier.GIT_ANCESTRY_INVALID,
@@ -57,25 +73,16 @@ class OrchestratorResult:
     failures: tuple[ApprovalFailure, ...] = ()
     receipt: dict = field(default_factory=dict)
 
-    def to_json(self) -> str:
-        return json.dumps(
-            {
-                "ok": self.ok,
-                "failures": [
-                    {
-                        "code": f.code,
-                        "message": f.message,
-                        "expected": f.expected,
-                        "observed": f.observed,
-                    }
-                    for f in self.failures
-                ],
-                "receipt": self.receipt,
-            },
-            ensure_ascii=False,
-            indent=2,
-            sort_keys=True,
-        )
+    @property
+    def error_code(self) -> str:
+        """★공개 출력에 쓰는 짧은 ASCII 코드 하나."""
+        return "OK" if self.ok else (self.failures[0].code if self.failures else "UNKNOWN")
+
+
+def path_manifest_sha256(paths) -> str:
+    """경로 목록의 지문. ★목록 자체는 공개하지 않고 이 값만 싣는다(§9)."""
+    joined = "\n".join(sorted(paths))
+    return hashlib.sha256((joined + "\n").encode("utf-8")).hexdigest()
 
 
 def trusted_repository_root() -> Path:
@@ -119,7 +126,7 @@ def run_verification(
     now: str | None = None,
     repository_root: Path | None = None,
 ) -> OrchestratorResult:
-    """전 구간 검증. 성공 시에만 receipt 를 확정값으로 채운다."""
+    """전 구간 검증. receipt 는 meta-only 로만 채운다(§9)."""
     moment = now or _utc_now()
     root = repository_root or trusted_repository_root()
     anchor = anchors.production_trust_anchor()
@@ -134,7 +141,7 @@ def run_verification(
         "pr_number": pr_number,
     }
 
-    # ── ⑥ 잠금: 좌표·identity 지문의 유일한 출처 ──────────────────────
+    # ── 잠금: 좌표·identity 지문의 유일한 출처 ────────────────────────
     lock_path = root / anchors.CANDIDATE_LOCK_PATH
     try:
         lock = lock_verifier.load_candidate_lock(lock_path.read_bytes())
@@ -142,7 +149,7 @@ def run_verification(
         return OrchestratorResult(
             False,
             (_fail(ORCHESTRATOR_LOCK_FAILED, "후보 잠금을 로드하지 못했다",
-                   anchors.CANDIDATE_LOCK_PATH, str(exc)),),
+                   anchors.CANDIDATE_LOCK_PATH, type(exc).__name__),),
             receipt,
         )
 
@@ -165,6 +172,7 @@ def run_verification(
                   f"{lock.approved_base_commit}..{lock.approved_head_commit}", "측정 실패")
         )
 
+    # ★경로 목록이 아니라 개수와 지문만 싣는다(§9)
     receipt.update({
         "provenance_base_commit": lock.approved_base_commit,
         "provenance_base_tree": lock.approved_base_tree,
@@ -174,38 +182,55 @@ def run_verification(
         "identity_artifact_zip_sha256": lock.identity_artifact_zip_sha256,
         "lock_expires_at": lock.expires_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "changed_path_count": len(lock_verdict.changed_paths),
-        # ★"지정된 후보 검사" 의 정의는 보호된 잠금에서 유도한다. 워크플로에
-        #   손으로 적어 넣으면 부르는 쪽이 검사를 고를 수 있게 된다.
-        "designated_python_tests": designated_checks.designated_python_tests(lock),
-        "designated_js_tests": designated_checks.designated_js_tests(lock),
+        "changed_path_manifest_sha256": path_manifest_sha256(lock_verdict.changed_paths),
+        "offending_path_count": len(lock_verdict.offending_paths),
+        "offending_path_manifest_sha256": path_manifest_sha256(lock_verdict.offending_paths),
     })
 
-    # ── 덮음 계약: 잠금의 tests 항목이 전부 덮이는가 ──────────────────
-    # 직접 선택되지 않은 항목(도우미·자료)은 선택된 검사가 참조해야 한다.
-    # 참조가 끊기면 조용히 구멍이 나는 것이 아니라 여기서 실패한다.
+    # ── M-1 dependency manifest ───────────────────────────────────────
+    try:
+        manifest = dependency_manifest.resolve_manifest(
+            repo_root=root, test_root=root / "tests" / "box5_ac25"
+        )
+        receipt.update({
+            "dependency_manifest_path": manifest.relative_path,
+            "dependency_manifest_sha256": manifest.sha256,
+            "dependency_hash_pinned": manifest.hash_pinned,
+            "dependency_required_count": len(manifest.required_distributions),
+        })
+    except dependency_manifest.DependencyManifestError as exc:
+        failures.append(
+            _fail(exc.code, "dependency manifest 해석 실패",
+                  ",".join(dependency_manifest.MANIFEST_CANDIDATES), "실패")
+        )
+
+    # ── 지정 검사 목록과 덮음 계약 ────────────────────────────────────
+    python_tests = designated_checks.designated_python_tests(lock)
+    js_tests = designated_checks.designated_js_tests(lock)
     coverage = designated_checks.verify_designated_coverage(
         lock=lock, read_blob=git_blob_reader(root, lock.approved_head_commit)
     )
-    receipt["designated_check_coverage"] = coverage.as_receipt()
-    # ★근거 문장은 발행되는 영수증(check-run 요약)에도 그대로 실린다.
-    #   coverage 측정으로 읽히면 안 되므로 축약하지 않는다.
-    receipt["coverage_basis"] = coverage.basis
-    receipt["coverage_summary"] = (
-        f"{len(coverage.directly_selected) + len(coverage.indirectly_covered)}"
-        f"/{len(coverage.lock_test_entries)}"
-        f" (직접 {len(coverage.directly_selected)} · 간접 {len(coverage.indirectly_covered)})"
-    )
+    receipt.update({
+        "designated_python_test_count": len(python_tests),
+        "designated_js_test_count": len(js_tests),
+        "designated_test_manifest_sha256": path_manifest_sha256(python_tests + js_tests),
+        "coverage_basis": coverage.basis,
+        "coverage_entry_count": len(coverage.lock_test_entries),
+        "coverage_covered_count": (
+            len(coverage.directly_selected) + len(coverage.indirectly_covered)
+        ),
+        "coverage_uncovered_count": len(coverage.uncovered),
+        "coverage_unreadable_count": len(coverage.unreadable),
+    })
     if not coverage.ok:
         failures.append(
-            _fail(
-                designated_checks.DESIGNATED_CHECK_COVERAGE_GAP,
-                "잠금 tests 항목이 지정 검사에 덮이지 않는다",
-                f"{len(coverage.lock_test_entries)}개 전부 덮임",
-                f"uncovered={list(coverage.uncovered)} unreadable={list(coverage.unreadable)}",
-            )
+            _fail(designated_checks.DESIGNATED_CHECK_COVERAGE_GAP,
+                  "잠금 tests 항목이 지정 검사에 덮이지 않는다",
+                  f"{len(coverage.lock_test_entries)}개 전부 덮임",
+                  f"uncovered={len(coverage.uncovered)} unreadable={len(coverage.unreadable)}")
         )
 
-    # ── ①②③ 원격 사실 ───────────────────────────────────────────────
+    # ── 원격 사실 ─────────────────────────────────────────────────────
     observation, remote_errors = remote_facts.collect_remote_facts(
         transport=transport,
         approval_repository=anchors.APPROVAL_REPOSITORY,
@@ -221,15 +246,11 @@ def run_verification(
     )
     for error in remote_errors:
         failures.append(
-            _fail(ORCHESTRATOR_REMOTE_FACTS_INCOMPLETE, f"[{error.code}] {error.message}",
-                  error.expected or "", error.observed or "")
+            _fail(ORCHESTRATOR_REMOTE_FACTS_INCOMPLETE, error.message, "", error.code)
         )
 
     receipt.update({
         "protected_ref_head": observation.protected_ref_head,
-        "observed_approval_repository": observation.observed_repository,
-        "observed_protected_ref": observation.observed_protected_ref,
-        "observed_document_path": observation.observed_document_path,
         "remote_candidate_head": observation.candidate_head_sha,
         "remote_candidate_tree": observation.candidate_head_tree,
         "integration_base_commit": observation.candidate_base_sha,
@@ -238,7 +259,6 @@ def run_verification(
         "run_started_at": observation.facts.run_started_at,
     })
 
-    # ── 원격 head/tree 가 잠금과 완전히 같아야 한다(exact-head) ────────
     if observation.candidate_head_sha != lock.approved_head_commit:
         failures.append(
             _fail(ORCHESTRATOR_REMOTE_HEAD_MISMATCH, "원격 PR head 가 잠금 head 와 다르다",
@@ -250,7 +270,7 @@ def run_verification(
                   lock.approved_head_tree, observation.candidate_head_tree or "읽기 실패")
         )
 
-    # ── ④ 승인서 strict load ─────────────────────────────────────────
+    # ── 승인서 strict load ────────────────────────────────────────────
     document_bytes = observation.facts.document_bytes
     if document_bytes is None:
         failures.append(
@@ -273,34 +293,27 @@ def run_verification(
         )
     except ApprovalDocumentError as exc:
         failures.append(
-            _fail(ORCHESTRATOR_APPROVAL_DOCUMENT_INVALID, f"[{exc.code}] {exc.message}",
-                  anchors.APPROVAL_DOCUMENT_PATH, "엄격 로드 실패")
+            _fail(ORCHESTRATOR_APPROVAL_DOCUMENT_INVALID, "승인 문서 엄격 로드 실패",
+                  anchors.APPROVAL_DOCUMENT_PATH, exc.code)
         )
         return OrchestratorResult(False, tuple(failures), receipt)
 
     receipt.update({
         "approval_document_sha256": anchors.APPROVAL_DOCUMENT_SHA256,
-        "approver_login": approval.approver_login,
-        "approver_id": approval.approver_id,
         "signing_key_fingerprint": approval.signing_key_fingerprint,
-        "signature_namespace": approval.signature_namespace,
         "approval_expires_at": approval.expires_at,
     })
 
-    # 승인자 실계정 ID 는 ★문서가 선언한 login★ 으로 다시 조회한다.
-    # 워크플로 입력이 아니라 서명된 문서에서 온 값이라는 점이 요지다.
     resolved_id, id_errors = remote_facts.read_account_id(
         transport=transport, login=approval.approver_login
     )
     for error in id_errors:
         failures.append(
-            _fail(ORCHESTRATOR_REMOTE_FACTS_INCOMPLETE, f"[{error.code}] {error.message}",
-                  error.expected or "", error.observed or "")
+            _fail(ORCHESTRATOR_REMOTE_FACTS_INCOMPLETE, error.message, "", error.code)
         )
     facts = replace(observation.facts, approver_id_for_login=resolved_id)
-    receipt["resolved_approver_id"] = resolved_id
 
-    # ── ⑧ 실질 만료 = 더 이른 쪽 ─────────────────────────────────────
+    # ── 실질 만료 = 더 이른 쪽 ────────────────────────────────────────
     effective = min(lock.expires_at.strftime("%Y-%m-%dT%H:%M:%SZ"), approval.expires_at)
     receipt["effective_expiry"] = effective
     if moment > effective:
@@ -309,7 +322,7 @@ def run_verification(
                   f"now <= {effective}", moment)
         )
 
-    # ── ⑤⑦ 승인·보호 경로 판정 ──────────────────────────────────────
+    # ── 승인·보호 경로 판정 ───────────────────────────────────────────
     coordinates = ApprovalCoordinates(
         candidate_head_sha=lock.approved_head_commit,
         candidate_head_tree=lock.approved_head_tree,
@@ -332,7 +345,11 @@ def run_verification(
         now=moment,
     )
     receipt["protected_state"] = verdict.state
-    receipt["protected_changed_paths"] = list(verdict.protected_changed_paths)
+    # ★경로 목록이 아니라 개수와 지문만(§9)
+    receipt["protected_changed_path_count"] = len(verdict.protected_changed_paths)
+    receipt["protected_changed_path_manifest_sha256"] = path_manifest_sha256(
+        verdict.protected_changed_paths
+    )
     if not verdict.ok:
         failures.extend(verdict.failures)
         failures.append(
@@ -340,51 +357,140 @@ def run_verification(
                   "STATE_1_UNCHANGED 또는 STATE_2_APPROVED", verdict.state)
         )
 
-    return OrchestratorResult(not failures, tuple(failures), receipt)
+    result = OrchestratorResult(not failures, tuple(failures), receipt)
+    receipt["verdict"] = 1 if result.ok else 0
+    receipt["error_code"] = result.error_code
+    return result
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """★로컬 경로 입력 인자를 두지 않는다.
+# ══ M-4 · M-2 진입 검증 ════════════════════════════════════════════════
+def verify_dispatch_and_identity(
+    *,
+    environ,
+    transport: remote_facts.Transport,
+    locked_head: str,
+    locked_tree: str,
+) -> workflow_inputs.DispatchInputs:
+    """★셸 본문이 아니라 env 로 받은 값을 strict 검증한다(M-4).
 
-    승인 문서·서명·allowed_signers 의 위치는 anchors 에 고정돼 있고 오직 API 로만
-    읽는다. 부르는 쪽이 파일을 가리킬 수 있으면 시험 픽스처를 먹일 수 있게 된다.
+    이어서 workflow 신원과 environment 정책을 원격 사실로 강제한다(M-2).
     """
-    parser = argparse.ArgumentParser(
-        description="AC-25 신뢰 검증 orchestrator (경로 입력 인자 없음)"
+    inputs = workflow_inputs.validate_dispatch_inputs(
+        pr_number=environ.get("AC25_PR_NUMBER"),
+        expected_head=environ.get("AC25_EXPECTED_HEAD"),
+        expected_tree=environ.get("AC25_EXPECTED_TREE"),
+        run_id=environ.get("GITHUB_RUN_ID"),
+        repository=environ.get("GITHUB_REPOSITORY"),
+        ref=environ.get("GITHUB_REF"),
+        event_name=environ.get("GITHUB_EVENT_NAME"),
+        locked_head=locked_head,
+        locked_tree=locked_tree,
     )
-    parser.add_argument("--run-id", required=True, type=int)
-    parser.add_argument("--expected-head", required=True)
-    parser.add_argument("--expected-tree", required=True)
-    parser.add_argument("--verifier-commit", required=True)
-    parser.add_argument("--pr-number", required=True, type=int)
-    return parser
+
+    identity = workflow_identity.WorkflowIdentity(
+        event_name=str(environ.get("GITHUB_EVENT_NAME") or ""),
+        repository=str(environ.get("GITHUB_REPOSITORY") or ""),
+        ref=str(environ.get("GITHUB_REF") or ""),
+        ref_protected=str(environ.get("GITHUB_REF_PROTECTED") or "").lower() == "true",
+        sha=str(environ.get("GITHUB_SHA") or ""),
+        run_id=inputs.run_id,
+        run_attempt=str(environ.get("GITHUB_RUN_ATTEMPT") or ""),
+        actor_id=str(environ.get("GITHUB_ACTOR_ID") or ""),
+    )
+    facts, errors = remote_facts.read_protected_facts(
+        transport=transport,
+        repository=workflow_identity.EXPECTED_REPOSITORY,
+        protected_ref=workflow_identity.EXPECTED_REF,
+        environment_name=workflow_identity.EXPECTED_ENVIRONMENT,
+    )
+    if errors:
+        raise workflow_identity.WorkflowIdentityError(
+            workflow_identity.TRUSTED_WORKFLOW_REMOTE_FACT_UNAVAILABLE
+        )
+    workflow_identity.verify_workflow_identity(
+        identity=identity, facts=facts, verifier_commit=identity.sha
+    )
+    return inputs
+
+
+def write_receipt(receipt: dict, *, directory: Path) -> Path:
+    """§9 — receipt 를 RUNNER_TEMP 아래에 ★원자적으로★ 기록한다."""
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / RECEIPT_FILENAME
+    payload = json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True)
+    handle, temporary = tempfile.mkstemp(dir=str(directory), prefix=".ac25-receipt-")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(payload + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+    except OSError:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+        raise
+    return target
+
+
+def _emit(verdict: int, error_code: str) -> None:
+    """★공개 출력은 정확히 두 줄. traceback·경로·원문을 내지 않는다(§9)."""
+    print(f"VERDICT={verdict}")
+    print(f"ERROR_CODE={error_code}")
 
 
 def _main(argv: list[str]) -> int:
-    args = build_parser().parse_args(argv)
+    parser = argparse.ArgumentParser(
+        description="AC-25 신뢰 검증 orchestrator (경로·값 입력 인자 없음)"
+    )
+    parser.add_argument("--mode", default="verify", choices=("verify",))
+    parser.parse_args(argv)
 
-    if args.pr_number != anchors.CANDIDATE_PR_NUMBER:
-        print(json.dumps({
-            "ok": False,
-            "failures": [{
-                "code": "ORCHESTRATOR_PR_NUMBER_MISMATCH",
-                "message": "고정된 후보 PR 번호가 아니다",
-                "expected": str(anchors.CANDIDATE_PR_NUMBER),
-                "observed": str(args.pr_number),
-            }],
-            "receipt": {},
-        }, ensure_ascii=False, indent=2))
+    environ = os.environ
+    root = trusted_repository_root()
+
+    try:
+        lock = lock_verifier.load_candidate_lock(
+            (root / anchors.CANDIDATE_LOCK_PATH).read_bytes()
+        )
+    except (OSError, lock_verifier.LockSchemaError):
+        _emit(0, ORCHESTRATOR_LOCK_FAILED)
+        return 1
+
+    try:
+        inputs = verify_dispatch_and_identity(
+            environ=environ,
+            transport=remote_facts.gh_transport,
+            locked_head=lock.approved_head_commit,
+            locked_tree=lock.approved_head_tree,
+        )
+    except workflow_inputs.WorkflowInputError as exc:
+        _emit(0, exc.code)
+        return 1
+    except workflow_identity.WorkflowIdentityError as exc:
+        _emit(0, exc.code)
         return 1
 
     result = run_verification(
         transport=remote_facts.gh_transport,
-        run_id=args.run_id,
-        expected_head=args.expected_head,
-        expected_tree=args.expected_tree,
-        verifier_commit=args.verifier_commit,
-        pr_number=args.pr_number,
+        run_id=int(inputs.run_id),
+        expected_head=inputs.expected_head,
+        expected_tree=inputs.expected_tree,
+        verifier_commit=str(environ.get("GITHUB_SHA") or ""),
+        pr_number=int(inputs.pr_number),
+        repository_root=root,
     )
-    print(result.to_json())
+
+    runner_temp = environ.get("RUNNER_TEMP")
+    try:
+        write_receipt(
+            result.receipt,
+            directory=Path(runner_temp) if runner_temp else root / ".ac25",
+        )
+    except OSError:
+        _emit(0, ORCHESTRATOR_RECEIPT_WRITE_FAILED)
+        return 1
+
+    _emit(1 if result.ok else 0, result.error_code)
     return 0 if result.ok else 1
 
 

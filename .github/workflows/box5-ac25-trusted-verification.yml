@@ -1,15 +1,15 @@
 name: Box5 AC-25 Trusted Verification
 
-# §10 보호된 워크플로. default branch(main) 에 병합된 뒤 workflow_dispatch 로만 돈다.
-# 사용자 입력은 권위값이 아니라 보호된 lock 과 완전일치하는지 대조할 주장값이다.
+# §4-2 단계 B 보호 실행. 병합된 main 에서 workflow_dispatch 로만 돈다.
 #
-# ★신뢰 검증의 유일한 진입점은 scripts/ci/ac25/orchestrator.py 다.
-#   부품만 만들어 두고 워크플로가 부르지 않으면 검증은 없는 것과 같다.
-# ★orchestrator 성공은 나머지 모든 job 의 필수 선행조건이다.
-# ★publish-check 는 두 레인의 실제 검사 결과와 정확한 OID·digest 를 모두 받은
-#   경우에만 성공 check-run 을 만든다.
-# ★후보(PR #903)의 Python/JS/셸 코드는 candidate/integration 레인에서만 돈다.
-#   그 레인들은 secrets 를 받지 않고 contents:read 만 갖는다.
+# ★허용 이벤트는 workflow_dispatch 하나뿐이다. pull_request·pull_request_target·
+#   push·workflow_run·repository_dispatch 를 두지 않는다. 자기시험은 별도 파일
+#   (box5-ac25-stage-a-smoke.yml)에 있다.
+# ★최상단 permissions 는 비어 있다. 각 job 이 필요한 만큼만 연다.
+# ★입력은 셸 본문에 넣지 않는다. env 로 넘겨 Python 에서 strict 검증한다(M-4).
+# ★설치·검사 명령 문자열을 조립하지 않는다. 보호 runner 가 만든다(M-1).
+# ★refs/pull/903/merge 는 참고값으로만 관측한다. 판정 대상은 직접 합성한다(M-3).
+# ★publish-check 는 always() 다. 실패해도 후보 head 에 도장을 남긴다(M-6).
 on:
   workflow_dispatch:
     inputs:
@@ -26,45 +26,24 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
-  group: box5-ac25-${{ github.event.inputs.pr_number }}
+  group: box5-ac25-trusted
   cancel-in-progress: false
-
-env:
-  APPROVED_BASE: de3dd4ebaf5b3935a142b988dd61e6198aa9536d
-  APPROVED_HEAD: 61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04
-  APPROVED_HEAD_TREE: 313f40cf35b3ee2bf7bcdd946dea9c2e1c4896c2
 
 jobs:
   # ══ 신뢰 검증: 병합된 main 의 보호 코드로만 실행 ══════════════════════
   trusted-verification:
     name: trusted-verification
     runs-on: ubuntu-latest
+    environment: ac25-trusted-main
     permissions:
       contents: read
     outputs:
-      ok: ${{ steps.orchestrate.outputs.ok }}
-      candidate_commit: ${{ steps.orchestrate.outputs.candidate_commit }}
-      candidate_tree: ${{ steps.orchestrate.outputs.candidate_tree }}
-      provenance_base_commit: ${{ steps.orchestrate.outputs.provenance_base_commit }}
-      integration_base_commit: ${{ steps.orchestrate.outputs.integration_base_commit }}
-      approval_commit: ${{ steps.orchestrate.outputs.approval_commit }}
-      approval_document_sha256: ${{ steps.orchestrate.outputs.approval_document_sha256 }}
-      identity_manifest_sha256: ${{ steps.orchestrate.outputs.identity_manifest_sha256 }}
-      identity_artifact_zip_sha256: ${{ steps.orchestrate.outputs.identity_artifact_zip_sha256 }}
-      signing_key_fingerprint: ${{ steps.orchestrate.outputs.signing_key_fingerprint }}
-      protected_ref_head: ${{ steps.orchestrate.outputs.protected_ref_head }}
-      effective_expiry: ${{ steps.orchestrate.outputs.effective_expiry }}
-      protected_state: ${{ steps.orchestrate.outputs.protected_state }}
-      coverage_basis: ${{ steps.orchestrate.outputs.coverage_basis }}
-      coverage_summary: ${{ steps.orchestrate.outputs.coverage_summary }}
-      designated_python_tests: ${{ steps.orchestrate.outputs.designated_python_tests }}
-      designated_js_tests: ${{ steps.orchestrate.outputs.designated_js_tests }}
+      verdict: ${{ steps.orchestrate.outputs.verdict }}
+      receipt: ${{ steps.orchestrate.outputs.receipt }}
     steps:
-      # actions/checkout v4 — 가변 태그가 아니라 커밋으로 고정
       - name: Checkout trusted verifier (merged main)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -72,293 +51,339 @@ jobs:
           persist-credentials: false
           path: ac25-trusted
 
-      - name: Assert inputs equal protected lock (before any candidate fetch)
-        working-directory: ac25-trusted
-        run: |
-          set -euo pipefail
-          test "${{ github.event.inputs.pr_number }}" = "903" \
-            || { echo "::error::INPUT_PR_MISMATCH"; exit 1; }
-          test "${{ github.event.inputs.expected_head }}" = "$APPROVED_HEAD" \
-            || { echo "::error::INPUT_HEAD_MISMATCH"; exit 1; }
-          test "${{ github.event.inputs.expected_tree }}" = "$APPROVED_HEAD_TREE" \
-            || { echo "::error::INPUT_TREE_MISMATCH"; exit 1; }
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
 
-      # 승인 저장소(butler-ct-shared)는 private 이고 후보 저장소는 public 이다.
-      # github.token 은 후보 저장소로만 범위가 잡히므로 승인 문서를 읽지 못한다.
-      # 토큰이 없으면 우회하지 않고 정확한 코드로 닫는다.
       - name: Require approval-repository read token
         env:
           APPROVAL_READ_TOKEN: ${{ secrets.AC25_APPROVAL_READ_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "${APPROVAL_READ_TOKEN}" ]; then
-            echo "::error::APPROVAL_READ_TOKEN_NOT_CONFIGURED — 승인 저장소는 private 이며 github.token 으로 읽을 수 없다"
+            echo "ERROR_CODE=APPROVAL_READ_TOKEN_NOT_CONFIGURED"
             exit 1
           fi
 
       - name: Fetch candidate objects (no candidate code execution)
         working-directory: ac25-trusted
+        env:
+          APPROVED_BASE: de3dd4ebaf5b3935a142b988dd61e6198aa9536d
+          APPROVED_HEAD: 61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04
         run: |
           set -euo pipefail
-          git fetch --no-tags origin "$APPROVED_BASE" "$APPROVED_HEAD"
+          git fetch --no-tags origin "${APPROVED_BASE}" "${APPROVED_HEAD}"
 
+      # ★입력은 전부 env 로 간다. run 본문에 inputs 표현식을 쓰지 않는다(M-4).
       - name: Run trusted orchestrator (single production entry point)
         id: orchestrate
         working-directory: ac25-trusted
         env:
           PYTHONPATH: scripts/ci
+          PYTHONNOUSERSITE: '1'
           GH_TOKEN: ${{ secrets.AC25_APPROVAL_READ_TOKEN }}
+          AC25_PR_NUMBER: ${{ inputs.pr_number }}
+          AC25_EXPECTED_HEAD: ${{ inputs.expected_head }}
+          AC25_EXPECTED_TREE: ${{ inputs.expected_tree }}
         run: |
           set -euo pipefail
-          # ★로컬 경로 인자를 넘기지 않는다. 승인 좌표는 검증기 안에 고정돼 있다.
           set +e
-          python3 -m ac25.orchestrator \
-            --pr-number "${{ github.event.inputs.pr_number }}" \
-            --run-id "${{ github.run_id }}" \
-            --expected-head "${{ github.event.inputs.expected_head }}" \
-            --expected-tree "${{ github.event.inputs.expected_tree }}" \
-            --verifier-commit "${{ github.sha }}" > verification.json
+          python3 -m ac25.orchestrator --mode verify
           STATUS=$?
           set -e
-          cat verification.json
-          if [ "$STATUS" -ne 0 ]; then
-            echo "::error::AC25_TRUSTED_VERIFICATION_FAILED"
-            exit "$STATUS"
-          fi
-          echo "ok=true" >> "$GITHUB_OUTPUT"
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          receipt = json.load(open("verification.json"))["receipt"]
-          keys = [
-              "candidate_commit", "candidate_tree", "provenance_base_commit",
-              "integration_base_commit", "approval_commit", "approval_document_sha256",
-              "identity_manifest_sha256", "identity_artifact_zip_sha256",
-              "signing_key_fingerprint", "protected_ref_head", "effective_expiry",
-              "protected_state", "coverage_basis", "coverage_summary",
-              "designated_python_tests", "designated_js_tests",
-          ]
-          for key in keys:
-              value = receipt.get(key, "")
-              if isinstance(value, (list, dict)):
-                  value = json.dumps(value)
-              print(f"{key}={value}")
-          PY
-
-      - name: Run verifier's own contract tests (trusted code)
-        working-directory: ac25-trusted
-        run: |
-          set -euo pipefail
-          python3 -m pip install --quiet --disable-pip-version-check pytest
-          # ★skipped=0 강제는 tests/box5_ac25/conftest.py 가 담당한다.
-          python3 -m pytest tests/box5_ac25 -q
+          {
+            echo "verdict=$([ "${STATUS}" -eq 0 ] && echo 1 || echo 0)"
+            echo "receipt<<AC25_RECEIPT_EOF"
+            cat "${RUNNER_TEMP}/ac25-receipt.json"
+            echo "AC25_RECEIPT_EOF"
+          } >> "${GITHUB_OUTPUT}"
+          exit "${STATUS}"
 
   # ══ candidate lane: 후보 코드를 비특권 job 에서 실제로 실행 ═══════════
   candidate-lane:
     name: candidate-lane
     needs: trusted-verification
-    if: needs.trusted-verification.outputs.ok == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    outputs:
-      result: ${{ steps.checks.outputs.result }}
-      execution_commit: ${{ steps.identity.outputs.execution_commit }}
-      execution_tree: ${{ steps.identity.outputs.execution_tree }}
     steps:
-      - name: Checkout candidate at exact approved head
+      - name: Checkout trusted runner (verifier commit)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ needs.trusted-verification.outputs.candidate_commit }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          path: ac25-trusted
+
+      - name: Checkout candidate at approved head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04
           fetch-depth: 0
           persist-credentials: false
+          path: ac25-worktree
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
 
       - name: Assert exact head and tree
         id: identity
+        working-directory: ac25-worktree
+        env:
+          EXPECTED_HEAD: ${{ inputs.expected_head }}
+          EXPECTED_TREE: ${{ inputs.expected_tree }}
         run: |
           set -euo pipefail
           HEAD_SHA="$(git rev-parse HEAD)"
           HEAD_TREE="$(git show -s --format=%T HEAD)"
-          test "$HEAD_SHA" = "${{ needs.trusted-verification.outputs.candidate_commit }}" \
-            || { echo "::error::CANDIDATE_HEAD_MISMATCH"; exit 1; }
-          test "$HEAD_TREE" = "${{ needs.trusted-verification.outputs.candidate_tree }}" \
-            || { echo "::error::CANDIDATE_TREE_MISMATCH"; exit 1; }
-          echo "execution_commit=$HEAD_SHA" >> "$GITHUB_OUTPUT"
-          echo "execution_tree=$HEAD_TREE" >> "$GITHUB_OUTPUT"
+          test "${HEAD_SHA}" = "${EXPECTED_HEAD}" \
+            || { echo "ERROR_CODE=CANDIDATE_HEAD_MISMATCH"; exit 1; }
+          test "${HEAD_TREE}" = "${EXPECTED_TREE}" \
+            || { echo "ERROR_CODE=CANDIDATE_TREE_MISMATCH"; exit 1; }
+          echo "execution_commit=${HEAD_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "execution_tree=${HEAD_TREE}" >> "${GITHUB_OUTPUT}"
 
-      - name: Run designated candidate checks (list derived from the protected lock)
-        id: checks
+      # ★실행 모듈은 ac25-trusted 에서 온다. 후보는 검사 대상 자리에만 있다.
+      - name: Install and run designated checks via protected runner
         env:
-          PYTHON_TESTS: ${{ needs.trusted-verification.outputs.designated_python_tests }}
-          JS_TESTS: ${{ needs.trusted-verification.outputs.designated_js_tests }}
+          PYTHONPATH: ac25-trusted/scripts/ci
+          PYTHONNOUSERSITE: '1'
         run: |
           set -euo pipefail
-          mapfile -t PY < <(printf '%s' "$PYTHON_TESTS" | python3 -c 'import json,sys
-          for path in json.load(sys.stdin): print(path)')
-          mapfile -t JS < <(printf '%s' "$JS_TESTS" | python3 -c 'import json,sys
-          for path in json.load(sys.stdin): print(path)')
-          test "${#PY[@]}" -gt 0 || { echo "::error::NO_DESIGNATED_PYTHON_TESTS"; exit 1; }
-          test "${#JS[@]}" -gt 0 || { echo "::error::NO_DESIGNATED_JS_TESTS"; exit 1; }
+          python3 -m ac25.stage_b_runner \
+            --trusted-root "${GITHUB_WORKSPACE}/ac25-trusted" \
+            --worktree "${GITHUB_WORKSPACE}/ac25-worktree" \
+            --mode install-and-test
 
-          python3 -m pip install --quiet --disable-pip-version-check -r requirements.txt
-          # ★검사가 실패하면 그대로 실패한다. 목록을 좁히거나 무시하지 않는다.
-          python3 -m pytest -q "${PY[@]}"
+    outputs:
+      execution_commit: ${{ steps.identity.outputs.execution_commit }}
+      execution_tree: ${{ steps.identity.outputs.execution_tree }}
 
-          npm --prefix butler-desktop ci
-          npm --prefix butler-desktop exec -- vitest run "${JS[@]#butler-desktop/}"
-
-          echo "result=success" >> "$GITHUB_OUTPUT"
-
-  # ══ integration lane: 합성 병합 tree 를 대상으로 통합 검사 실행 ═══════
+  # ══ integration lane: 승인 base 와 후보 head 로 직접 합성 ═════════════
   integration-lane:
     name: integration-lane
     needs: trusted-verification
-    if: needs.trusted-verification.outputs.ok == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    outputs:
-      result: ${{ steps.checks.outputs.result }}
-      merge_commit: ${{ steps.merge.outputs.merge_commit }}
-      merge_tree: ${{ steps.merge.outputs.merge_tree }}
     steps:
-      - name: Checkout base repository
+      - name: Checkout trusted runner (verifier commit)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+          path: ac25-trusted
 
-      - name: Fetch and measure synthetic merge coordinate
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      # ★GitHub 이 만든 merge ref 는 관측만 하고 판정에 쓰지 않는다.
+      - name: Build deterministic synthetic merge and run checks
         id: merge
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin "refs/pull/${{ github.event.inputs.pr_number }}/merge"
-          MERGE="$(git rev-parse FETCH_HEAD)"
-          CANDIDATE="${{ needs.trusted-verification.outputs.candidate_commit }}"
-          test "$MERGE" != "$CANDIDATE" \
-            || { echo "::error::MERGE_EQUALS_SCOPE_END"; exit 1; }
-          PARENTS="$(git rev-list --parents -n 1 "$MERGE" | cut -d' ' -f2-)"
-          echo "$PARENTS" | tr ' ' '\n' | grep -qx "$CANDIDATE" \
-            || { echo "::error::MERGE_PARENT_MISSING_CANDIDATE"; exit 1; }
-          git checkout --detach "$MERGE"
-          echo "merge_commit=$MERGE" >> "$GITHUB_OUTPUT"
-          echo "merge_tree=$(git show -s --format=%T "$MERGE")" >> "$GITHUB_OUTPUT"
-
-      - name: Run integration checks on the synthetic merge tree
-        id: checks
         env:
-          PYTHON_TESTS: ${{ needs.trusted-verification.outputs.designated_python_tests }}
-          JS_TESTS: ${{ needs.trusted-verification.outputs.designated_js_tests }}
+          PYTHONPATH: ac25-trusted/scripts/ci
+          PYTHONNOUSERSITE: '1'
         run: |
           set -euo pipefail
-          mapfile -t PY < <(printf '%s' "$PYTHON_TESTS" | python3 -c 'import json,sys
-          for path in json.load(sys.stdin): print(path)')
-          mapfile -t JS < <(printf '%s' "$JS_TESTS" | python3 -c 'import json,sys
-          for path in json.load(sys.stdin): print(path)')
-          python3 -m pip install --quiet --disable-pip-version-check -r requirements.txt
-          # 정책 scope 는 여전히 base..head 다. 여기서 도는 것은 병합 결과 검사다.
-          python3 -m pytest -q "${PY[@]}"
-          npm --prefix butler-desktop ci
-          npm --prefix butler-desktop exec -- vitest run "${JS[@]#butler-desktop/}"
-          echo "result=success" >> "$GITHUB_OUTPUT"
+          python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+          import os
+          from pathlib import Path
 
-  # ══ publish: 모든 검증 결과와 정확한 OID·digest 를 받은 경우에만 기록 ══
+          from ac25 import stage_b_runner
+          from ac25.integration_merge import (
+              build_synthetic_merge,
+              cleanup_worktree,
+              observe_github_merge_ref,
+          )
+
+          BASE = "afdb237e4e6e83d96a182b6c5366a2ad95949bee"
+          HEAD = "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04"
+
+          trusted = Path(os.environ["GITHUB_WORKSPACE"]) / "ac25-trusted"
+          worktree = Path(os.environ["RUNNER_TEMP"]) / "ac25-worktree"
+          observed = observe_github_merge_ref(trusted, 903)
+
+          merge = build_synthetic_merge(
+              repository=trusted,
+              destination=worktree,
+              integration_base_commit=BASE,
+              candidate_head=HEAD,
+              github_merge_ref_observed=observed,
+          )
+          try:
+              plan = stage_b_runner.build_plan(
+                  trusted_root=trusted, worktree=merge.worktree
+              )
+              stage_b_runner.install(plan)
+              stage_b_runner.run_checks(plan)
+          finally:
+              cleanup_worktree(trusted, worktree, raise_on_failure=False)
+
+          print(f"synthetic_merge_commit={merge.synthetic_merge_commit}")
+          print(f"synthetic_merge_tree={merge.merge_tree}")
+          print(f"parents={merge.parents[0]},{merge.parents[1]}")
+          print(f"github_merge_ref_observed={observed or 'NONE'}")
+          print("github_merge_ref_used_for_verdict=NO")
+          PY
+
+    outputs:
+      synthetic_merge_commit: ${{ steps.merge.outputs.synthetic_merge_commit }}
+      synthetic_merge_tree: ${{ steps.merge.outputs.synthetic_merge_tree }}
+      parents: ${{ steps.merge.outputs.parents }}
+      github_merge_ref_observed: ${{ steps.merge.outputs.github_merge_ref_observed }}
+
+  # ══ publish: ★always(). 실패해도 도장을 남긴다(M-6) ═══════════════════
   publish-check:
     name: publish-check
+    if: always()
     needs: [trusted-verification, candidate-lane, integration-lane]
     runs-on: ubuntu-latest
+    environment: ac25-trusted-main
     permissions:
       checks: write
+      contents: read
     steps:
-      # actions/github-script v7 — 가변 태그가 아니라 커밋으로 고정
-      - name: Record trusted exact-head check-run
+      # ★후보 코드를 checkout 하지 않는다. 실행하지도 않는다.
+      # actions/github-script v7 — 커밋 고정
+      - name: Publish final check-run on candidate head
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
-          EXPECTED_HEAD: ${{ github.event.inputs.expected_head }}
-          EXPECTED_TREE: ${{ github.event.inputs.expected_tree }}
+          # ★JSON 을 JavaScript 소스에 직접 삽입하지 않는다. env 로 넘겨 파싱한다(M-4).
+          TRUSTED_RESULT: ${{ needs.trusted-verification.result }}
+          CANDIDATE_RESULT: ${{ needs.candidate-lane.result }}
+          INTEGRATION_RESULT: ${{ needs.integration-lane.result }}
+          TRUSTED_VERDICT: ${{ needs.trusted-verification.outputs.verdict }}
+          TRUSTED_RECEIPT: ${{ needs.trusted-verification.outputs.receipt }}
+          CANDIDATE_COMMIT: ${{ needs.candidate-lane.outputs.execution_commit }}
+          CANDIDATE_TREE: ${{ needs.candidate-lane.outputs.execution_tree }}
+          MERGE_COMMIT: ${{ needs.integration-lane.outputs.synthetic_merge_commit }}
+          MERGE_TREE: ${{ needs.integration-lane.outputs.synthetic_merge_tree }}
+          MERGE_PARENTS: ${{ needs.integration-lane.outputs.parents }}
+          MERGE_REF_OBSERVED: ${{ needs.integration-lane.outputs.github_merge_ref_observed }}
+          EXPECTED_HEAD: 61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04
+          INTEGRATION_BASE: afdb237e4e6e83d96a182b6c5366a2ad95949bee
         with:
           script: |
-            const trusted = ${{ toJSON(needs.trusted-verification.outputs) }};
-            const candidate = ${{ toJSON(needs.candidate-lane.outputs) }};
-            const integration = ${{ toJSON(needs.integration-lane.outputs) }};
+            const OID = /^[0-9a-f]{40}$/;
+            const HEAD_SHA = process.env.EXPECTED_HEAD;
+            const BASE = process.env.INTEGRATION_BASE;
 
-            // ★하나라도 비어 있거나 어긋나면 성공 check-run 을 만들지 않는다.
-            const required = [
+            let errorCode = "OK";
+            let receipt = null;
+
+            const fail = (code) => {
+              if (errorCode === "OK") errorCode = code;
+            };
+
+            // ── 선행 job 결과 ────────────────────────────────────────
+            for (const [name, value] of [
+              ["TRUSTED", process.env.TRUSTED_RESULT],
+              ["CANDIDATE", process.env.CANDIDATE_RESULT],
+              ["INTEGRATION", process.env.INTEGRATION_RESULT],
+            ]) {
+              if (value !== "success") fail(`${name}_JOB_NOT_SUCCESS`);
+            }
+            if (process.env.TRUSTED_VERDICT !== "1") fail("TRUSTED_VERDICT_NOT_PASS");
+
+            // ── receipt 는 env 로 받아 파싱한다. 소스에 삽입하지 않는다 ──
+            try {
+              receipt = JSON.parse(process.env.TRUSTED_RECEIPT || "null");
+            } catch (_) {
+              fail("RECEIPT_NOT_PARSEABLE");
+            }
+            if (receipt === null || typeof receipt !== "object") {
+              fail("RECEIPT_MISSING");
+              receipt = {};
+            }
+
+            // ── 필수 key 와 값 형식 ──────────────────────────────────
+            const requiredOids = [
               "candidate_commit", "candidate_tree", "provenance_base_commit",
-              "integration_base_commit", "approval_commit", "approval_document_sha256",
-              "identity_manifest_sha256", "identity_artifact_zip_sha256",
-              "signing_key_fingerprint", "protected_ref_head", "effective_expiry",
-              "protected_state", "coverage_basis", "coverage_summary",
+              "provenance_base_tree", "integration_base_commit", "approval_commit",
+              "protected_ref_head",
             ];
-            const missing = required.filter((key) => !trusted[key]);
-            if (missing.length > 0) {
-              core.setFailed(`PUBLISH_EVIDENCE_INCOMPLETE: ${missing.join(", ")}`);
-              return;
-            }
-            if (trusted.ok !== "true") {
-              core.setFailed("PUBLISH_TRUSTED_VERIFICATION_NOT_OK");
-              return;
-            }
-            if (candidate.result !== "success" || integration.result !== "success") {
-              core.setFailed(
-                `PUBLISH_LANE_NOT_SUCCESSFUL: candidate=${candidate.result} integration=${integration.result}`,
-              );
-              return;
-            }
-            if (!["STATE_1_UNCHANGED", "STATE_2_APPROVED"].includes(trusted.protected_state)) {
-              core.setFailed(`PUBLISH_PROTECTED_STATE_INVALID: ${trusted.protected_state}`);
-              return;
-            }
-
-            // 후보 좌표는 입력 주장값·신뢰 판정·실제 실행 커밋이 모두 같아야 한다.
-            const headSha = trusted.candidate_commit;
-            const agreements = [
-              [process.env.EXPECTED_HEAD, headSha, "input head"],
-              [candidate.execution_commit, headSha, "candidate lane execution commit"],
-              [process.env.EXPECTED_TREE, trusted.candidate_tree, "input tree"],
-              [candidate.execution_tree, trusted.candidate_tree, "candidate lane execution tree"],
+            const requiredDigests = [
+              "approval_document_sha256", "identity_manifest_sha256",
+              "identity_artifact_zip_sha256", "dependency_manifest_sha256",
             ];
-            for (const [observed, expected, label] of agreements) {
-              if (observed !== expected) {
-                core.setFailed(
-                  `PUBLISH_COORDINATE_DISAGREEMENT: ${label} ${observed} != ${expected}`,
-                );
-                return;
+            for (const key of requiredOids) {
+              if (!OID.test(String(receipt[key] || ""))) fail("RECEIPT_OID_INVALID");
+            }
+            for (const key of requiredDigests) {
+              if (!/^[0-9a-f]{64}$/.test(String(receipt[key] || ""))) {
+                fail("RECEIPT_DIGEST_INVALID");
               }
             }
-            if (!integration.merge_commit || integration.merge_commit === headSha) {
-              core.setFailed(`PUBLISH_MERGE_COORDINATE_INVALID: ${integration.merge_commit}`);
-              return;
+            if (receipt.verdict !== 1) fail("RECEIPT_VERDICT_NOT_PASS");
+            if (!["STATE_1_UNCHANGED", "STATE_2_APPROVED"].includes(receipt.protected_state)) {
+              fail("RECEIPT_PROTECTED_STATE_INVALID");
+            }
+            if (receipt.coverage_uncovered_count !== 0) fail("RECEIPT_COVERAGE_GAP");
+
+            // ── 후보 좌표 일치 ──────────────────────────────────────
+            if (receipt.candidate_commit !== HEAD_SHA) fail("CANDIDATE_COORDINATE_MISMATCH");
+            if (process.env.CANDIDATE_COMMIT !== HEAD_SHA) fail("CANDIDATE_EXECUTION_MISMATCH");
+            if (process.env.CANDIDATE_TREE !== receipt.candidate_tree) {
+              fail("CANDIDATE_TREE_MISMATCH");
             }
 
+            // ── 합성 merge 부모·tree 일치 ───────────────────────────
+            const parents = String(process.env.MERGE_PARENTS || "").split(",");
+            if (!OID.test(String(process.env.MERGE_COMMIT || ""))) fail("MERGE_COMMIT_INVALID");
+            if (!OID.test(String(process.env.MERGE_TREE || ""))) fail("MERGE_TREE_INVALID");
+            if (parents.length !== 2 || parents[0] !== BASE || parents[1] !== HEAD_SHA) {
+              fail("MERGE_PARENT_MISMATCH");
+            }
+            if (process.env.MERGE_COMMIT === HEAD_SHA) fail("MERGE_EQUALS_SCOPE_END");
+
+            // ── 요약은 meta-only 좌표와 ERROR_CODE 만 담는다(§9) ─────
+            const conclusion = errorCode === "OK" ? "success" : "failure";
             const summary = [
-              `verifier_commit: ${context.sha}`,
-              `candidate_commit: ${headSha}`,
-              `candidate_tree: ${trusted.candidate_tree}`,
-              `policy_scope_start: ${trusted.provenance_base_commit}`,
-              `policy_scope_end: ${headSha}`,
-              `integration_comparison_base: ${trusted.integration_base_commit}`,
-              `integration_merge_commit: ${integration.merge_commit}`,
-              `integration_merge_tree: ${integration.merge_tree}`,
-              `approval_commit: ${trusted.approval_commit}`,
-              `approval_document_sha256: ${trusted.approval_document_sha256}`,
-              `approval_protected_ref_head: ${trusted.protected_ref_head}`,
-              `signing_key_fingerprint: ${trusted.signing_key_fingerprint}`,
-              `identity_manifest_sha256: ${trusted.identity_manifest_sha256}`,
-              `identity_artifact_zip_sha256: ${trusted.identity_artifact_zip_sha256}`,
-              `effective_expiry: ${trusted.effective_expiry}`,
-              `protected_state: ${trusted.protected_state}`,
-              `designated_check_coverage: ${trusted.coverage_summary}`,
-              `designated_check_coverage_basis: ${trusted.coverage_basis}`,
-              `candidate_lane: ${candidate.result}`,
-              `integration_lane: ${integration.result}`,
+              `verdict=${conclusion === "success" ? 1 : 0}`,
+              `error_code=${errorCode}`,
+              `verifier_commit=${context.sha}`,
+              `candidate_commit=${HEAD_SHA}`,
+              `candidate_tree=${receipt.candidate_tree || "NONE"}`,
+              `provenance_base_commit=${receipt.provenance_base_commit || "NONE"}`,
+              `integration_base_commit=${BASE}`,
+              `synthetic_merge_commit=${process.env.MERGE_COMMIT || "NONE"}`,
+              `synthetic_merge_tree=${process.env.MERGE_TREE || "NONE"}`,
+              `parents=${process.env.MERGE_PARENTS || "NONE"}`,
+              `github_merge_ref_observed=${process.env.MERGE_REF_OBSERVED || "NONE"}`,
+              `github_merge_ref_used_for_verdict=NO`,
+              `approval_commit=${receipt.approval_commit || "NONE"}`,
+              `approval_document_sha256=${receipt.approval_document_sha256 || "NONE"}`,
+              `identity_manifest_sha256=${receipt.identity_manifest_sha256 || "NONE"}`,
+              `dependency_manifest_sha256=${receipt.dependency_manifest_sha256 || "NONE"}`,
+              `changed_path_count=${receipt.changed_path_count ?? "NONE"}`,
+              `offending_path_count=${receipt.offending_path_count ?? "NONE"}`,
+              `protected_state=${receipt.protected_state || "NONE"}`,
+              `effective_expiry=${receipt.effective_expiry || "NONE"}`,
+              `designated_check_coverage=${receipt.coverage_covered_count ?? "NONE"}` +
+                `/${receipt.coverage_entry_count ?? "NONE"}`,
+              `designated_check_coverage_basis=${receipt.coverage_basis || "NONE"}`,
             ].join("\n");
 
-            await github.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: "box5-ac25/trusted-exact-head",
-              head_sha: headSha,
-              status: "completed",
-              conclusion: "success",
-              output: { title: "AC-25 trusted exact-head verification", summary },
-            });
+            // ★실패라고 발행을 생략하지 않는다(M-6).
+            try {
+              await github.rest.checks.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: "box5-ac25/trusted-exact-head",
+                head_sha: HEAD_SHA,
+                status: "completed",
+                conclusion,
+                output: { title: "AC-25 trusted exact-head verification", summary },
+              });
+            } catch (_) {
+              core.setFailed("CHECK_RUN_PUBLICATION_FAILED");
+              return;
+            }
+            if (conclusion !== "success") {
+              core.setFailed(`ERROR_CODE=${errorCode}`);
+            }

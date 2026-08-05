@@ -1,0 +1,160 @@
+name: Box5 AC-25 Stage A Smoke
+
+# §4-1 단계 A smoke — PR #904 후보 코드의 ★자기시험★ 이다.
+#
+# ★AC-25 독립검증이 아니다. 이 워크플로가 초록이어도 단계 B 판정이 아니다.
+# ★secret 0 · environment 0 · checks:write 0 · PR #903 checkout 0
+#
+# 존재 이유(회고 D-3): 두 레인이 없는 파일을 설치 대상으로 부르는데도 CI 57개가
+# 전부 초록이었다. 다른 job 이 먼저 해시 고정 lock 을 깔아 두어 우연히 넘어간
+# 것이다. 그래서 ★단계 B 와 같은 명령을 병합 전에 한 번 실제로 돌려 본다.
+#
+# ★이 파일은 설치·검사 명령 문자열을 직접 조립하지 않는다. 보호 runner 가 만든다.
+#
+# 주석 표기에 대하여: action 은 전부 ★full commit SHA 로 고정★ 한다. 다만 저장소
+# guard(verify_workflow_checkout_depth_ssot_v1)가 checkout 을 ★태그 문자열★ 로
+# 찾으므로, 고정 SHA 만 두면 guard 가 checkout 을 보지 못하고
+# CHECKOUT_FETCH_DEPTH_0_MISSING 으로 닫는다. 그래서 각 checkout 바로 위에 그 SHA
+# 가 어느 태그인지를 적은 한 줄 주석을 둔다. guard 를 고치거나 느슨하게 만들지
+# 않았고, 실제로 쓰이는 참조는 여전히 SHA 하나다.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/box5-ac25-*.yml
+      - scripts/ci/ac25/**
+      - tests/box5_ac25/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: box5-ac25-smoke-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ac25-stage-b-smoke:
+    name: ac25-stage-b-smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GIT_LFS_SKIP_SMUDGE: '1'
+    steps:
+      # actions/checkout@v4
+      - name: Checkout candidate at exact PR head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          lfs: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      # §5-2 — lock 은 Python 3.12 로 만들어졌다. 러너 기본 Python 을 쓰지 않는다.
+      # actions/setup-python v5 — 커밋 고정
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      # ★입력을 셸 본문에 넣지 않는다(M-4). env 로 넘긴 뒤 인용해 쓴다.
+      - name: Assert exact PR head and Python version
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${EXPECTED_HEAD}" \
+            || { echo "ERROR_CODE=SMOKE_HEAD_MISMATCH"; exit 1; }
+          python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version' \
+            || { echo "ERROR_CODE=SMOKE_PYTHON_VERSION_MISMATCH"; exit 1; }
+
+      # ★단계 B 와 ★같은 진입점★ 이다. 설치·검사 명령은 보호 runner 안에 있다.
+      - name: Resolve manifest, install, and self-test via protected runner
+        id: runner
+        env:
+          PYTHONPATH: scripts/ci
+          PYTHONNOUSERSITE: '1'
+        run: |
+          set -euo pipefail
+          python3 -m ac25.stage_b_runner \
+            --trusted-root "${PWD}" \
+            --worktree "${PWD}" \
+            --mode smoke
+
+      # runner 가 남긴 meta-only 요약만 읽는다. 원문·경로를 출력하지 않는다(§9).
+      - name: Report meta-only test evidence
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "ac25-selftest.json").read_text()
+          )
+          for key in ("tests_total", "tests_passed", "tests_failed",
+                      "tests_skipped", "junit_sha256"):
+              print(f"{key.upper()}={summary[key]}")
+          PY
+
+      # §12 저장소 계약. 이 스크립트는 무거운 준비를 전제로 한다 — 아래 순서는
+      # 이미 통과 중인 product-verify-repo-guards.yml 의 준비 단계를 그대로 옮긴 것이다.
+      # ★로컬(Node 26)에서는 preflight 가 Node 20 을 요구해 재현하지 못했다.
+      #   이 단계의 첫 실제 실행은 이 PR 의 원격 CI 다.
+      - name: Install ops dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ripgrep jq
+
+      # actions/setup-node@v4
+      - name: Set up Node.js 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+
+      - name: Preflight (single source)
+        uses: ./.github/actions/preflight_v1
+
+      - name: Ops deps preflight (fail-closed)
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg --require-jq
+
+      - name: Install deps (web_e2e)
+        run: npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
+
+      - name: Install Playwright browsers
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+        run: |
+          npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e \
+            playwright install --with-deps chromium
+
+      - name: Generate build stamp SSOT v1 (pre-verify)
+        run: bash scripts/ops/gen_build_stamp_v1.sh
+
+      - name: Generate artifact chain proof v2 (pre-verify)
+        run: bash scripts/ops/gen_artifact_chain_proof_v2.sh
+
+      - name: Repository contracts
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+          ONPREM_PROOF_STRICT_ENFORCE: '0'
+          DATABASE_URL: postgres://u:p@localhost:5432/app
+          EXPORT_SIGN_SECRET: ci_format_check_only_16ch
+          ARTIFACT_CHAIN_PROOF_V2_ENFORCE: '1'
+        run: |
+          set -euo pipefail
+          bash scripts/verify/verify_repo_contracts.sh
+
+      - name: Clean finish (tracked and untracked)
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "ERROR_CODE=SMOKE_WORKTREE_NOT_CLEAN"
+            git status --porcelain
+            exit 1
+          fi

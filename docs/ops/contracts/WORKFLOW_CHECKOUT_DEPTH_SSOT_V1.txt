@@ -8,3 +8,4 @@ REQUIRE_FETCH_DEPTH_0=.github/workflows/ops-reports-dockerless-proof.yml
 REQUIRE_FETCH_DEPTH_0=.github/workflows/ops-reports-nightly.yml
 REQUIRE_FETCH_DEPTH_0=.github/workflows/product-verify-onprem-proof-strict.yml
 REQUIRE_FETCH_DEPTH_0=.github/workflows/release.yml
+REQUIRE_FETCH_DEPTH_0=.github/workflows/box5-ac25-stage-a-smoke.yml

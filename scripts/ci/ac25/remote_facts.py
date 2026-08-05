@@ -287,6 +287,72 @@ def read_account_id(
     return account_id, tuple(reader.errors)
 
 
+def read_protected_facts(
+    *, transport: Transport, repository: str, protected_ref: str, environment_name: str
+):
+    """§6 M-2 — main 보호 상태와 environment 정책을 ★API 응답에서★ 읽는다.
+
+    workflow context 를 베끼지 않는다. 베끼면 대조가 자기증명이 된다.
+    반환값은 workflow_identity.ProtectedFacts 다(순환 import 를 피해 지연 import).
+    """
+    from .workflow_identity import ProtectedFacts
+
+    reader = _Reader(transport)
+    branch_name = protected_ref.removeprefix("refs/heads/")
+
+    repo_payload = reader.object(f"repos/{repository}", "저장소")
+    full_name = repo_payload.get("full_name") if repo_payload else None
+
+    branch = reader.object(f"repos/{repository}/branches/{branch_name}", "보호 branch")
+    main_head = ""
+    main_protected = False
+    if branch is not None:
+        commit = branch.get("commit")
+        sha = commit.get("sha") if isinstance(commit, dict) else None
+        if isinstance(sha, str) and _OID_RE.match(sha):
+            main_head = sha
+        else:
+            reader.fail(
+                REMOTE_FACT_MALFORMED, "보호 branch 의 head 를 읽지 못했다",
+                expected="40자 Git OID", observed=str(sha),
+            )
+        main_protected = branch.get("protected") is True
+
+    environment = reader.object(
+        f"repos/{repository}/environments/{quote(environment_name, safe='')}",
+        "environment",
+    )
+    observed_environment = ""
+    main_only = False
+    if environment is not None:
+        name = environment.get("name")
+        if isinstance(name, str):
+            observed_environment = name
+        policies = reader.object(
+            f"repos/{repository}/environments/{quote(environment_name, safe='')}"
+            f"/deployment-branch-policies",
+            "environment branch 정책",
+        )
+        if policies is not None:
+            branches = policies.get("branch_policies")
+            names = (
+                [entry.get("name") for entry in branches if isinstance(entry, dict)]
+                if isinstance(branches, list)
+                else []
+            )
+            main_only = names == [branch_name]
+
+    facts = ProtectedFacts(
+        repository=full_name if isinstance(full_name, str) else "",
+        main_ref=protected_ref if branch is not None else "",
+        main_head=main_head,
+        main_protected=main_protected,
+        environment_name=observed_environment,
+        environment_main_only=main_only,
+    )
+    return facts, tuple(reader.errors)
+
+
 def collect_remote_facts(
     *,
     transport: Transport,
@@ -454,5 +520,6 @@ __all__ = [
     "gh_transport",
     "is_ancestor",
     "read_account_id",
+    "read_protected_facts",
     "read_candidate_head",
 ]

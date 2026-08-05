@@ -55,13 +55,32 @@ def test_no_production_module_imports_tests():
                 assert module != "tests", f"{name}: {node.module}"
 
 
-@pytest.mark.parametrize("forbidden", ["box5_ac25", "fixtures", "conftest"])
+@pytest.mark.parametrize("forbidden", ["fixtures", "conftest"])
 def test_no_production_module_references_the_test_tree(forbidden):
+    """★승인 픽스처를 production 경로에서 가리킬 수 없다."""
     for name, source in _sources().items():
         tree = ast.parse(source, filename=name)
         for node in ast.walk(tree):
             if isinstance(node, ast.Constant) and isinstance(node.value, str):
                 assert forbidden not in node.value, f"{name} 안의 문자열: {node.value!r}"
+
+
+def test_test_tree_is_named_only_as_the_ast_scan_root():
+    """§5-1 은 시험 트리를 ★AST 로 전수 조사★ 하라고 정한다.
+
+    그래서 시험 디렉터리 이름이 production 에 남는다. 다만 그 용도는 오직
+    `test_root=` 인자여야 하며, 파일을 읽어 신뢰 판정에 쓰는 자리가 아니다.
+    """
+    allowed = {"orchestrator.py", "stage_b_runner.py"}
+    offenders = {name for name, source in _sources().items() if "box5_ac25" in source}
+    assert offenders == allowed, offenders
+    for name in sorted(allowed):
+        source = (PRODUCTION_DIR / name).read_text(encoding="utf-8")
+        occurrences = [line.strip() for line in source.splitlines() if "box5_ac25" in line]
+        assert occurrences, name
+        for line in occurrences:
+            # 허용 용도는 둘뿐이다 — AST 조사 뿌리, 그리고 자기시험 대상 디렉터리
+            assert "test_root=" in line or 'str(plan.trusted_root / "tests" / "box5_ac25")' in line, line
 
 
 def test_the_only_tests_prefix_is_the_lock_derived_candidate_filter():
@@ -117,9 +136,13 @@ def test_signature_verifier_names_no_repository_artifact():
 
 
 def test_orchestrator_reads_only_the_pinned_lock_path():
+    """orchestrator 의 파일 읽기는 ★고정된 잠금 경로★ 뿐이다."""
     source = (PRODUCTION_DIR / "orchestrator.py").read_text(encoding="utf-8")
     reads = [line.strip() for line in source.splitlines() if "read_bytes" in line]
-    assert reads == ["lock = lock_verifier.load_candidate_lock(lock_path.read_bytes())"]
+    assert reads == [
+        "lock = lock_verifier.load_candidate_lock(lock_path.read_bytes())",
+        "(root / anchors.CANDIDATE_LOCK_PATH).read_bytes()",
+    ], reads
     assert "root / anchors.CANDIDATE_LOCK_PATH" in source
 
 
@@ -139,22 +162,23 @@ def test_trust_anchor_takes_no_arguments():
 
 
 # ── ② production CLI 에 경로 인자 금지 ────────────────────────────────
-def test_cli_has_no_path_arguments():
-    parser = orchestrator.build_parser()
-    options = {
-        option
-        for action in parser._actions
-        for option in action.option_strings
-        if option.startswith("--")
-    }
-    assert options == {
-        "--help", "--run-id", "--expected-head", "--expected-tree",
-        "--verifier-commit", "--pr-number",
-    }
+def test_cli_takes_no_values_at_all():
+    """M-4 — 값은 인자가 아니라 env 로 온다. CLI 에는 경로도 좌표도 없다."""
+    import argparse
+    import io
+    import contextlib
+
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured), pytest.raises(SystemExit):
+        orchestrator._main(["--help"])
+    helptext = captured.getvalue()
+    options = set(re.findall(r"--[a-z-]+", helptext))
+    assert options == {"--help", "--mode"}, options
     assert not any(
-        re.search(r"(path|file|dir|root|document|signers|signature)", option)
+        re.search(r"(path|file|dir|root|document|signers|signature|head|tree)", option)
         for option in options
     )
+    assert argparse is not None
 
 
 # ── ① workflow 가 픽스처를 읽지 않는다 ────────────────────────────────
@@ -203,6 +227,19 @@ def test_gh_token_is_configured_for_the_orchestrator_step():
     assert orchestrate["env"]["GH_TOKEN"].strip()
 
 
+def test_approval_token_is_exposed_only_to_the_trusted_job():
+    """승인 token 은 trusted-verification 하나에만 노출한다(§6)."""
+    body = WORKFLOW.read_text(encoding="utf-8")
+    workflow = _workflow()
+    for name, job in workflow["jobs"].items():
+        rendered = yaml.dump(job, allow_unicode=True)
+        if name == "trusted-verification":
+            assert "AC25_APPROVAL_READ_TOKEN" in rendered
+        else:
+            assert "AC25_APPROVAL_READ_TOKEN" not in rendered, name
+    assert body.count("AC25_APPROVAL_READ_TOKEN") >= 1
+
+
 def test_publish_depends_on_all_verification_jobs():
     workflow = _workflow()
     publish = workflow["jobs"]["publish-check"]
@@ -211,22 +248,26 @@ def test_publish_depends_on_all_verification_jobs():
     }
 
 
-def test_both_lanes_require_trusted_verification_to_pass():
+def test_both_lanes_depend_on_trusted_verification():
+    """신뢰 검증이 실패하면 두 레인은 needs 로 자동 차단된다."""
     workflow = _workflow()
     for lane in ("candidate-lane", "integration-lane"):
         job = workflow["jobs"][lane]
         assert job["needs"] == "trusted-verification"
-        assert job["if"] == "needs.trusted-verification.outputs.ok == 'true'"
+        # publish 와 달리 always() 를 갖지 않는다 — 선행 실패 시 돌면 안 된다
+        assert "if" not in job
 
 
-def test_lanes_actually_run_the_designated_checks():
+def test_lanes_run_checks_only_through_the_protected_runner():
+    """★워크플로가 검사 명령을 조립하지 않는다(M-1 §5-3)."""
     workflow = _workflow()
     for lane in ("candidate-lane", "integration-lane"):
         script = "\n".join(
             step.get("run", "") for step in workflow["jobs"][lane]["steps"]
         )
-        assert "pytest" in script, lane
-        assert "vitest" in script, lane
+        assert "stage_b_runner" in script, lane
+        for forbidden in ("pip install", "pytest tests/", "vitest run"):
+            assert forbidden not in script, (lane, forbidden)
 
 
 def test_published_receipt_states_the_coverage_basis_verbatim():
@@ -239,28 +280,25 @@ def test_published_receipt_states_the_coverage_basis_verbatim():
     workflow = _workflow()
     script = workflow["jobs"]["publish-check"]["steps"][0]["with"]["script"]
     assert "designated_check_coverage_basis" in script
-    assert "trusted.coverage_basis" in script
+    assert "receipt.coverage_basis" in script
     # 근거 문장을 워크플로가 다시 쓰지 않고 검증기 값을 그대로 싣는다
     assert COVERAGE_BASIS not in script
 
 
 def test_publish_refuses_without_coverage_evidence():
-    """조건 1·3 — 덮음 증거가 없으면 성공 check-run 을 만들지 않는다."""
+    """조건 1·3 — 덮음 구멍이 있으면 성공 check-run 을 만들지 않는다."""
     script = _workflow()["jobs"]["publish-check"]["steps"][0]["with"]["script"]
-    required = script.split("const required = [", 1)[1].split("];", 1)[0]
-    assert "coverage_basis" in required
-    assert "coverage_summary" in required
+    assert "RECEIPT_COVERAGE_GAP" in script
+    assert "coverage_uncovered_count !== 0" in script
 
 
 def test_publish_refuses_when_evidence_is_missing():
-    workflow = _workflow()
-    steps = workflow["jobs"]["publish-check"]["steps"]
-    script = steps[0]["with"]["script"]
-    assert "PUBLISH_EVIDENCE_INCOMPLETE" in script
-    assert "PUBLISH_LANE_NOT_SUCCESSFUL" in script
-    assert "PUBLISH_COORDINATE_DISAGREEMENT" in script
-    # 성공 check-run 은 이 검사들을 통과한 뒤에만 만들어진다
-    assert script.index("PUBLISH_EVIDENCE_INCOMPLETE") < script.index("checks.create")
+    script = _workflow()["jobs"]["publish-check"]["steps"][0]["with"]["script"]
+    for code in ("RECEIPT_MISSING", "RECEIPT_OID_INVALID", "RECEIPT_DIGEST_INVALID",
+                 "_JOB_NOT_SUCCESS", "CANDIDATE_COORDINATE_MISMATCH"):
+        assert code in script, code
+        # 판정은 전부 발행 ★전에★ 끝난다
+        assert script.index(code) < script.index("checks.create"), code
 
 
 def test_only_publish_job_can_write_checks():

@@ -131,6 +131,14 @@ def repo(tmp_path: Path) -> dict:
     head_sha = _git(root, "rev-parse", "HEAD")
     head_tree = _git(root, "rev-parse", "HEAD^{tree}")
 
+    # M-1 — 합성 저장소에도 해시 고정 manifest 를 둔다. 없으면 orchestrator 가
+    # STAGE_B_DEPENDENCY_MANIFEST_NOT_FOUND 로 닫는다(그 자체가 배선 증거다).
+    (root / "requirements-firstscreen-ci.lock").write_text(
+        "pytest==9.1.1 \\\n    --hash=sha256:" + "1" * 64 + "\n"
+        "pyyaml==6.0.3 \\\n    --hash=sha256:" + "2" * 64 + "\n",
+        encoding="utf-8",
+    )
+
     lock_path = root / anchors.CANDIDATE_LOCK_PATH
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path.write_text(
@@ -305,14 +313,27 @@ def test_receipt_carries_every_field_publish_requires(repo, document, frozen_clo
         "integration_base_commit", "approval_commit", "approval_document_sha256",
         "identity_manifest_sha256", "identity_artifact_zip_sha256",
         "signing_key_fingerprint", "protected_ref_head", "effective_expiry",
-        "protected_state",
+        "protected_state", "dependency_manifest_sha256",
     ):
         assert receipt.get(key), key
     assert receipt["candidate_commit"] == repo["head_sha"]
     assert receipt["candidate_tree"] == repo["head_tree"]
     assert receipt["integration_base_commit"] == INTEGRATION_BASE
     assert receipt["protected_ref_head"] == PROTECTED_HEAD
-    assert receipt["resolved_approver_id"] == 238947383
+
+
+def test_receipt_is_meta_only(repo, document, frozen_clock, require_ssh_keygen):
+    """M-5 — receipt 에 raw path 목록이 들어가지 않는다."""
+    receipt = _run(repo, FakeGitHub(repo, document=document)).receipt
+    for key, value in receipt.items():
+        assert not isinstance(value, (list, tuple)), f"{key} 가 목록이다"
+        if isinstance(value, dict):
+            assert False, f"{key} 가 중첩 객체다"
+    assert receipt["protected_changed_path_count"] == 6
+    assert receipt["changed_path_count"] == 8
+    assert len(receipt["protected_changed_path_manifest_sha256"]) == 64
+    assert len(receipt["changed_path_manifest_sha256"]) == 64
+    assert receipt["offending_path_count"] == 0
 
 
 def test_effective_expiry_is_the_earlier_of_lock_and_approval(repo, document, frozen_clock,
@@ -336,15 +357,13 @@ def test_coverage_contract_runs_and_records_its_basis(repo, document, frozen_clo
     from ac25.designated_checks import COVERAGE_BASIS
 
     result = _run(repo, FakeGitHub(repo, document=document))
-    coverage = result.receipt["designated_check_coverage"]
-    assert coverage["basis"] == COVERAGE_BASIS
-    assert result.receipt["coverage_basis"] == COVERAGE_BASIS
-    assert coverage["uncovered"] == []
-    assert coverage["unreadable"] == []
+    receipt = result.receipt
+    assert receipt["coverage_basis"] == COVERAGE_BASIS
+    assert receipt["coverage_uncovered_count"] == 0
+    assert receipt["coverage_unreadable_count"] == 0
     # 이 합성 잠금의 tests 항목은 하나이며 직접 선택된다
-    assert coverage["lock_test_entry_count"] == 1
-    assert coverage["covered_count"] == 1
-    assert result.receipt["coverage_summary"].startswith("1/1")
+    assert receipt["coverage_entry_count"] == 1
+    assert receipt["coverage_covered_count"] == 1
 
 
 def test_coverage_gap_fails_the_whole_run(repo, document, frozen_clock,
@@ -366,14 +385,10 @@ def test_coverage_gap_fails_the_whole_run(repo, document, frozen_clock,
 
 def test_designated_checks_are_derived_from_the_lock(repo, document, frozen_clock,
                                                      require_ssh_keygen):
-    result = _run(repo, FakeGitHub(repo, document=document))
-    assert result.receipt["designated_python_tests"] == [
-        "tests/accounting/assignment/test_assignment_api.py"
-    ]
-    assert result.receipt["designated_js_tests"] == [
-        "butler-desktop/src/__tests__/AccountingReviewPage.test.tsx",
-        "butler-desktop/src/lib/accounting_review/nativeAuthorizedRequest.test.ts",
-    ]
+    receipt = _run(repo, FakeGitHub(repo, document=document)).receipt
+    assert receipt["designated_python_test_count"] == 1
+    assert receipt["designated_js_test_count"] == 2
+    assert len(receipt["designated_test_manifest_sha256"]) == 64
 
 
 # ══ fail-closed 갈래 ═══════════════════════════════════════════════════
@@ -460,12 +475,16 @@ def test_untrusted_fingerprint_in_document_is_rejected(repo, frozen_clock, requi
     assert "APPROVAL_SIGNER_UNTRUSTED" in _codes(result)
 
 
-def test_wrong_pr_number_is_refused_by_cli():
-    assert orchestrator._main([
-        "--pr-number", "999", "--run-id", "1",
-        "--expected-head", "6" * 40, "--expected-tree", "3" * 40,
-        "--verifier-commit", "9" * 40,
-    ]) == 1
+def test_cli_emits_two_meta_only_lines_on_failure(capsys, monkeypatch, tmp_path):
+    """M-5 — 실패해도 공개 출력은 정확히 두 줄이다."""
+    monkeypatch.setattr(orchestrator, "trusted_repository_root", lambda: tmp_path)
+    assert orchestrator._main([]) == 1
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out.splitlines() == [
+        "VERDICT=0",
+        f"ERROR_CODE={orchestrator.ORCHESTRATOR_LOCK_FAILED}",
+    ]
 
 
 def test_every_failure_carries_evidence(repo, document, frozen_clock, require_ssh_keygen):
