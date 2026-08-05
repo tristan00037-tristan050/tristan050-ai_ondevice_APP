@@ -1,0 +1,254 @@
+"""조건부 허용 4항 — 시험 픽스처가 production 경로로 새지 않음을 정적으로 강제.
+
+  ① production workflow 가 tests/box5_ac25/fixtures 를 절대 읽지 않는다
+  ② production CLI 에 로컬 경로 입력 인자가 없다
+  ③ 승인 바이트는 고정 repo·commit·path 의 API 응답으로만 얻는다
+  ④ production 모듈에서 tests/ import·경로 참조가 0 이다
+
+정적 시험이라 실행 없이도 성립한다. 사람이 지키기로 하는 약속이 아니라
+어기면 빨간불이 켜지는 계약이다.
+"""
+from __future__ import annotations
+
+import ast
+import re
+from pathlib import Path
+
+import pytest
+import yaml
+from ac25 import anchors, orchestrator
+
+pytestmark = pytest.mark.no_sidecar_token
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PRODUCTION_DIR = REPO_ROOT / "scripts" / "ci" / "ac25"
+WORKFLOW = REPO_ROOT / ".github" / "workflows" / "box5-ac25-trusted-verification.yml"
+
+PRODUCTION_MODULES = sorted(PRODUCTION_DIR.glob("*.py"))
+
+# 승인 바이트를 파일로 읽으면 안 되는 모듈(원격 API 만 허용).
+# approval_signature.py 는 제외한다 — ssh-keygen 에 넘기려고 ★자기가 방금 쓴
+# 임시 파일★ 을 여는 것뿐이며, 아래 별도 시험이 그 성질을 따로 강제한다.
+NO_FILESYSTEM_READ = ("approval_loader.py", "remote_facts.py")
+_READ_CALLS = ("open", "read_bytes", "read_text", "readlines")
+
+
+def _sources() -> dict[str, str]:
+    return {path.name: path.read_text(encoding="utf-8") for path in PRODUCTION_MODULES}
+
+
+def test_production_modules_exist():
+    names = {path.name for path in PRODUCTION_MODULES}
+    assert {"orchestrator.py", "anchors.py", "approval_loader.py", "remote_facts.py"} <= names
+
+
+# ── ④ tests/ import·경로 참조 0 ────────────────────────────────────────
+def test_no_production_module_imports_tests():
+    for name, source in _sources().items():
+        tree = ast.parse(source, filename=name)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    assert not alias.name.split(".")[0] == "tests", f"{name}: {alias.name}"
+            elif isinstance(node, ast.ImportFrom):
+                module = (node.module or "").split(".")[0]
+                assert module != "tests", f"{name}: {node.module}"
+
+
+@pytest.mark.parametrize("forbidden", ["box5_ac25", "fixtures", "conftest"])
+def test_no_production_module_references_the_test_tree(forbidden):
+    for name, source in _sources().items():
+        tree = ast.parse(source, filename=name)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                assert forbidden not in node.value, f"{name} 안의 문자열: {node.value!r}"
+
+
+def test_the_only_tests_prefix_is_the_lock_derived_candidate_filter():
+    """`tests/` 라는 글자가 남아 있어도 그것은 ★후보 저장소의 검사 목록★ 필터다.
+
+    승인 산출물을 읽는 경로가 아니다. 다른 모듈에는 나타나지 않는다.
+    """
+    offenders = {
+        name for name, source in _sources().items() if "tests/" in source
+    }
+    assert offenders <= {"orchestrator.py"}, offenders
+    orchestrator_source = (PRODUCTION_DIR / "orchestrator.py").read_text(encoding="utf-8")
+    occurrences = [
+        line for line in orchestrator_source.splitlines() if "tests/" in line
+    ]
+    assert len(occurrences) == 1
+    assert "startswith" in occurrences[0]
+
+
+# ── ③ 승인 바이트는 API 응답으로만 ────────────────────────────────────
+@pytest.mark.parametrize("name", NO_FILESYSTEM_READ)
+def test_approval_modules_never_read_the_filesystem(name):
+    source = (PRODUCTION_DIR / name).read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=name)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            called = getattr(func, "id", None) or getattr(func, "attr", None)
+            assert called not in _READ_CALLS, f"{name} 이 {called}() 를 부른다"
+
+
+def test_signature_verifier_can_only_be_given_bytes():
+    """서명 검증기는 ★위치★ 를 받지 않는다. 파일을 가리킬 수 없으니 읽을 수도 없다."""
+    import inspect
+
+    from ac25.approval_signature import verify_approval_signature
+
+    signature = inspect.signature(verify_approval_signature)
+    assert list(signature.parameters) == [
+        "document_bytes", "signature_bytes", "allowed_signers_bytes"
+    ]
+    for parameter in signature.parameters.values():
+        assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+        assert parameter.annotation == "bytes"
+
+
+def test_signature_verifier_names_no_repository_artifact():
+    """임시 디렉터리 밖의 경로를 문자열로도 갖고 있지 않다."""
+    source = (PRODUCTION_DIR / "approval_signature.py").read_text(encoding="utf-8")
+    assert "tempfile.TemporaryDirectory" in source
+    tree = ast.parse(source, filename="approval_signature.py")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if "/" in node.value:
+                # 지문·지문 정규식만 '/' 를 담을 수 있다
+                assert "SHA256:" in node.value, node.value
+
+
+def test_orchestrator_reads_only_the_pinned_lock_path():
+    source = (PRODUCTION_DIR / "orchestrator.py").read_text(encoding="utf-8")
+    reads = [line.strip() for line in source.splitlines() if "read_bytes" in line]
+    assert reads == ["lock = lock_verifier.load_candidate_lock(lock_path.read_bytes())"]
+    assert "root / anchors.CANDIDATE_LOCK_PATH" in source
+
+
+def test_approval_locations_are_pinned_constants():
+    assert anchors.APPROVAL_REPOSITORY == "tristan00037-tristan050/butler-ct-shared"
+    assert anchors.APPROVAL_PROTECTED_REF == "refs/heads/main"
+    assert re.fullmatch(r"[0-9a-f]{40}", anchors.APPROVAL_COMMIT_SHA)
+    assert re.fullmatch(r"[0-9a-f]{64}", anchors.APPROVAL_DOCUMENT_SHA256)
+    assert anchors.APPROVAL_SIGNATURE_PATH == anchors.APPROVAL_DOCUMENT_PATH + ".sig"
+
+
+def test_trust_anchor_takes_no_arguments():
+    import inspect
+
+    signature = inspect.signature(anchors.production_trust_anchor)
+    assert signature.parameters == {}
+
+
+# ── ② production CLI 에 경로 인자 금지 ────────────────────────────────
+def test_cli_has_no_path_arguments():
+    parser = orchestrator.build_parser()
+    options = {
+        option
+        for action in parser._actions
+        for option in action.option_strings
+        if option.startswith("--")
+    }
+    assert options == {
+        "--help", "--run-id", "--expected-head", "--expected-tree",
+        "--verifier-commit", "--pr-number",
+    }
+    assert not any(
+        re.search(r"(path|file|dir|root|document|signers|signature)", option)
+        for option in options
+    )
+
+
+# ── ① workflow 가 픽스처를 읽지 않는다 ────────────────────────────────
+def test_workflow_never_touches_the_test_fixtures():
+    body = WORKFLOW.read_text(encoding="utf-8")
+    for forbidden in ("fixtures", "approval_document.md", "allowed_signers"):
+        assert forbidden not in body, forbidden
+
+
+def test_workflow_invokes_the_orchestrator():
+    body = WORKFLOW.read_text(encoding="utf-8")
+    assert "ac25.orchestrator" in body
+
+
+def test_workflow_passes_no_path_arguments_to_the_orchestrator():
+    body = WORKFLOW.read_text(encoding="utf-8")
+    invocation = body.split("python3 -m ac25.orchestrator", 1)[1].split("STATUS=$?", 1)[0]
+    assert "--lock-path" not in invocation
+    assert "--repository-path" not in invocation
+    assert "--document" not in invocation
+
+
+# ── 워크플로 계약 ─────────────────────────────────────────────────────
+def _workflow() -> dict:
+    return yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+
+
+def test_every_action_is_pinned_to_a_full_commit_sha():
+    body = WORKFLOW.read_text(encoding="utf-8")
+    uses = re.findall(r"uses:\s*(\S+)", body)
+    assert uses, "actions 가 하나도 없다"
+    for reference in uses:
+        _, _, ref = reference.partition("@")
+        assert re.fullmatch(r"[0-9a-f]{40}", ref), reference
+
+
+def test_unused_jsonschema_install_is_gone():
+    assert "jsonschema" not in WORKFLOW.read_text(encoding="utf-8")
+
+
+def test_gh_token_is_configured_for_the_orchestrator_step():
+    workflow = _workflow()
+    steps = workflow["jobs"]["trusted-verification"]["steps"]
+    orchestrate = next(step for step in steps if step.get("id") == "orchestrate")
+    assert "GH_TOKEN" in orchestrate["env"]
+    assert orchestrate["env"]["GH_TOKEN"].strip()
+
+
+def test_publish_depends_on_all_verification_jobs():
+    workflow = _workflow()
+    publish = workflow["jobs"]["publish-check"]
+    assert set(publish["needs"]) == {
+        "trusted-verification", "candidate-lane", "integration-lane"
+    }
+
+
+def test_both_lanes_require_trusted_verification_to_pass():
+    workflow = _workflow()
+    for lane in ("candidate-lane", "integration-lane"):
+        job = workflow["jobs"][lane]
+        assert job["needs"] == "trusted-verification"
+        assert job["if"] == "needs.trusted-verification.outputs.ok == 'true'"
+
+
+def test_lanes_actually_run_the_designated_checks():
+    workflow = _workflow()
+    for lane in ("candidate-lane", "integration-lane"):
+        script = "\n".join(
+            step.get("run", "") for step in workflow["jobs"][lane]["steps"]
+        )
+        assert "pytest" in script, lane
+        assert "vitest" in script, lane
+
+
+def test_publish_refuses_when_evidence_is_missing():
+    workflow = _workflow()
+    steps = workflow["jobs"]["publish-check"]["steps"]
+    script = steps[0]["with"]["script"]
+    assert "PUBLISH_EVIDENCE_INCOMPLETE" in script
+    assert "PUBLISH_LANE_NOT_SUCCESSFUL" in script
+    assert "PUBLISH_COORDINATE_DISAGREEMENT" in script
+    # 성공 check-run 은 이 검사들을 통과한 뒤에만 만들어진다
+    assert script.index("PUBLISH_EVIDENCE_INCOMPLETE") < script.index("checks.create")
+
+
+def test_only_publish_job_can_write_checks():
+    workflow = _workflow()
+    for name, job in workflow["jobs"].items():
+        permissions = job.get("permissions", {})
+        if name == "publish-check":
+            assert permissions.get("checks") == "write"
+        else:
+            assert "checks" not in permissions, name

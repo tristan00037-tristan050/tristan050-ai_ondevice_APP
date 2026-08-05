@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import hashlib
-import shutil
 from pathlib import Path
 
 import pytest
@@ -54,10 +53,9 @@ IDENTITY = cta.IdentityDigests(
     identity_manifest_sha256=MANIFEST_DIGEST,
 )
 
-_SSH_KEYGEN = shutil.which("ssh-keygen")
-requires_ssh_keygen = pytest.mark.skipif(
-    _SSH_KEYGEN is None, reason="ssh-keygen 없음 — 서명 검증 불가"
-)
+# ★건너뛰지 않는다. ssh-keygen 이 없으면 서명 검증을 못 한 것이고, 그것은
+#   통과가 아니라 실패다(§E6-4 skipped=0). conftest 의 fixture 가 실패시킨다.
+requires_ssh_keygen = pytest.mark.usefixtures("require_ssh_keygen")
 
 
 def _approval(paths):
