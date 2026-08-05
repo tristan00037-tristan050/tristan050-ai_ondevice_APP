@@ -67,18 +67,14 @@ def test_no_production_module_references_the_test_tree(forbidden):
 def test_the_only_tests_prefix_is_the_lock_derived_candidate_filter():
     """`tests/` 라는 글자가 남아 있어도 그것은 ★후보 저장소의 검사 목록★ 필터다.
 
-    승인 산출물을 읽는 경로가 아니다. 다른 모듈에는 나타나지 않는다.
+    이 저장소의 시험 트리를 가리키는 것이 아니고, 승인 산출물을 읽는 경로도
+    아니다. 한 모듈의 이름 붙은 상수 하나로만 존재해야 한다.
     """
-    offenders = {
-        name for name, source in _sources().items() if "tests/" in source
-    }
-    assert offenders <= {"orchestrator.py"}, offenders
-    orchestrator_source = (PRODUCTION_DIR / "orchestrator.py").read_text(encoding="utf-8")
-    occurrences = [
-        line for line in orchestrator_source.splitlines() if "tests/" in line
-    ]
-    assert len(occurrences) == 1
-    assert "startswith" in occurrences[0]
+    offenders = {name for name, source in _sources().items() if "tests/" in source}
+    assert offenders == {"designated_checks.py"}, offenders
+    source = (PRODUCTION_DIR / "designated_checks.py").read_text(encoding="utf-8")
+    occurrences = [line.strip() for line in source.splitlines() if "tests/" in line]
+    assert occurrences == ['_TESTS_PREFIX = "tests/"']
 
 
 # ── ③ 승인 바이트는 API 응답으로만 ────────────────────────────────────
@@ -231,6 +227,29 @@ def test_lanes_actually_run_the_designated_checks():
         )
         assert "pytest" in script, lane
         assert "vitest" in script, lane
+
+
+def test_published_receipt_states_the_coverage_basis_verbatim():
+    """조건 2 — 발행되는 영수증이 근거를 그대로 실어야 한다.
+
+    check-run 요약만 읽는 사람이 coverage 측정으로 오해하면 안 된다.
+    """
+    from ac25.designated_checks import COVERAGE_BASIS
+
+    workflow = _workflow()
+    script = workflow["jobs"]["publish-check"]["steps"][0]["with"]["script"]
+    assert "designated_check_coverage_basis" in script
+    assert "trusted.coverage_basis" in script
+    # 근거 문장을 워크플로가 다시 쓰지 않고 검증기 값을 그대로 싣는다
+    assert COVERAGE_BASIS not in script
+
+
+def test_publish_refuses_without_coverage_evidence():
+    """조건 1·3 — 덮음 증거가 없으면 성공 check-run 을 만들지 않는다."""
+    script = _workflow()["jobs"]["publish-check"]["steps"][0]["with"]["script"]
+    required = script.split("const required = [", 1)[1].split("];", 1)[0]
+    assert "coverage_basis" in required
+    assert "coverage_summary" in required
 
 
 def test_publish_refuses_when_evidence_is_missing():

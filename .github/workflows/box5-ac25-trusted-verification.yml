@@ -59,6 +59,8 @@ jobs:
       protected_ref_head: ${{ steps.orchestrate.outputs.protected_ref_head }}
       effective_expiry: ${{ steps.orchestrate.outputs.effective_expiry }}
       protected_state: ${{ steps.orchestrate.outputs.protected_state }}
+      coverage_basis: ${{ steps.orchestrate.outputs.coverage_basis }}
+      coverage_summary: ${{ steps.orchestrate.outputs.coverage_summary }}
       designated_python_tests: ${{ steps.orchestrate.outputs.designated_python_tests }}
       designated_js_tests: ${{ steps.orchestrate.outputs.designated_js_tests }}
     steps:
@@ -132,7 +134,8 @@ jobs:
               "integration_base_commit", "approval_commit", "approval_document_sha256",
               "identity_manifest_sha256", "identity_artifact_zip_sha256",
               "signing_key_fingerprint", "protected_ref_head", "effective_expiry",
-              "protected_state", "designated_python_tests", "designated_js_tests",
+              "protected_state", "coverage_basis", "coverage_summary",
+              "designated_python_tests", "designated_js_tests",
           ]
           for key in keys:
               value = receipt.get(key, "")
@@ -284,7 +287,7 @@ jobs:
               "integration_base_commit", "approval_commit", "approval_document_sha256",
               "identity_manifest_sha256", "identity_artifact_zip_sha256",
               "signing_key_fingerprint", "protected_ref_head", "effective_expiry",
-              "protected_state",
+              "protected_state", "coverage_basis", "coverage_summary",
             ];
             const missing = required.filter((key) => !trusted[key]);
             if (missing.length > 0) {
@@ -344,6 +347,8 @@ jobs:
               `identity_artifact_zip_sha256: ${trusted.identity_artifact_zip_sha256}`,
               `effective_expiry: ${trusted.effective_expiry}`,
               `protected_state: ${trusted.protected_state}`,
+              `designated_check_coverage: ${trusted.coverage_summary}`,
+              `designated_check_coverage_basis: ${trusted.coverage_basis}`,
               `candidate_lane: ${candidate.result}`,
               `integration_lane: ${integration.result}`,
             ].join("\n");

@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import json
 import subprocess
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -327,6 +328,40 @@ def test_expiry_past_the_earlier_bound_is_rejected(repo, document, frozen_clock,
                                                    require_ssh_keygen):
     result = _run(repo, FakeGitHub(repo, document=document), now="2030-03-01T00:00:00Z")
     assert orchestrator.EFFECTIVE_APPROVAL_EXPIRED in _codes(result)
+
+
+def test_coverage_contract_runs_and_records_its_basis(repo, document, frozen_clock,
+                                                      require_ssh_keygen):
+    """조건 1·2 — 덮음 계약이 실제로 돌고 근거가 영수증에 남는다."""
+    from ac25.designated_checks import COVERAGE_BASIS
+
+    result = _run(repo, FakeGitHub(repo, document=document))
+    coverage = result.receipt["designated_check_coverage"]
+    assert coverage["basis"] == COVERAGE_BASIS
+    assert result.receipt["coverage_basis"] == COVERAGE_BASIS
+    assert coverage["uncovered"] == []
+    assert coverage["unreadable"] == []
+    # 이 합성 잠금의 tests 항목은 하나이며 직접 선택된다
+    assert coverage["lock_test_entry_count"] == 1
+    assert coverage["covered_count"] == 1
+    assert result.receipt["coverage_summary"].startswith("1/1")
+
+
+def test_coverage_gap_fails_the_whole_run(repo, document, frozen_clock,
+                                          require_ssh_keygen, monkeypatch):
+    """조건 3 — 참조가 끊기면 orchestrator 전체가 실패한다."""
+    from ac25 import designated_checks
+
+    real = designated_checks.verify_designated_coverage
+
+    def gapped(*, lock, read_blob):
+        report = real(lock=lock, read_blob=read_blob)
+        return replace(report, uncovered=("tests/fixtures/some_helper.json",))
+
+    monkeypatch.setattr(orchestrator.designated_checks, "verify_designated_coverage", gapped)
+    result = _run(repo, FakeGitHub(repo, document=document))
+    assert result.ok is False
+    assert designated_checks.DESIGNATED_CHECK_COVERAGE_GAP in _codes(result)
 
 
 def test_designated_checks_are_derived_from_the_lock(repo, document, frozen_clock,

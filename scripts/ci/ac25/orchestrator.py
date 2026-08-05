@@ -20,12 +20,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import anchors, lock_verifier, protected_scope, remote_facts
+from . import anchors, designated_checks, lock_verifier, protected_scope, remote_facts
 from .approval_loader import ApprovalDocumentError, DocumentOrigin, load_approval_document
 from .cross_track_approval import (
     ApprovalCoordinates,
@@ -82,21 +83,21 @@ def trusted_repository_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def designated_python_tests(lock) -> list[str]:
-    """잠금 허용목록에서 유도한 후보 Python 검사 목록."""
-    return sorted(
-        path for path in lock.allowed_paths
-        if path.startswith("tests/")
-        and path.endswith(".py")
-        and path.rsplit("/", 1)[-1].startswith("test_")
-    )
+def git_blob_reader(root: Path, commit: str) -> designated_checks.BlobReader:
+    """후보 head 의 원문 바이트를 읽는다.
 
+    ★후보 코드를 실행하지 않는다. checkout 도 하지 않는다. blob 을 꺼낼 뿐이다.
+    """
 
-def designated_js_tests(lock) -> list[str]:
-    """잠금 허용목록에서 유도한 후보 JS/TS 검사 목록."""
-    return sorted(
-        path for path in lock.allowed_paths if path.endswith((".test.ts", ".test.tsx"))
-    )
+    def read(path: str) -> bytes | None:
+        done = subprocess.run(
+            ["git", "-C", str(root), "show", f"{commit}:{path}"],
+            capture_output=True,
+            check=False,
+        )
+        return done.stdout if done.returncode == 0 else None
+
+    return read
 
 
 def _fail(code: str, message: str, expected: str, observed: str) -> ApprovalFailure:
@@ -175,9 +176,34 @@ def run_verification(
         "changed_path_count": len(lock_verdict.changed_paths),
         # ★"지정된 후보 검사" 의 정의는 보호된 잠금에서 유도한다. 워크플로에
         #   손으로 적어 넣으면 부르는 쪽이 검사를 고를 수 있게 된다.
-        "designated_python_tests": designated_python_tests(lock),
-        "designated_js_tests": designated_js_tests(lock),
+        "designated_python_tests": designated_checks.designated_python_tests(lock),
+        "designated_js_tests": designated_checks.designated_js_tests(lock),
     })
+
+    # ── 덮음 계약: 잠금의 tests 항목이 전부 덮이는가 ──────────────────
+    # 직접 선택되지 않은 항목(도우미·자료)은 선택된 검사가 참조해야 한다.
+    # 참조가 끊기면 조용히 구멍이 나는 것이 아니라 여기서 실패한다.
+    coverage = designated_checks.verify_designated_coverage(
+        lock=lock, read_blob=git_blob_reader(root, lock.approved_head_commit)
+    )
+    receipt["designated_check_coverage"] = coverage.as_receipt()
+    # ★근거 문장은 발행되는 영수증(check-run 요약)에도 그대로 실린다.
+    #   coverage 측정으로 읽히면 안 되므로 축약하지 않는다.
+    receipt["coverage_basis"] = coverage.basis
+    receipt["coverage_summary"] = (
+        f"{len(coverage.directly_selected) + len(coverage.indirectly_covered)}"
+        f"/{len(coverage.lock_test_entries)}"
+        f" (직접 {len(coverage.directly_selected)} · 간접 {len(coverage.indirectly_covered)})"
+    )
+    if not coverage.ok:
+        failures.append(
+            _fail(
+                designated_checks.DESIGNATED_CHECK_COVERAGE_GAP,
+                "잠금 tests 항목이 지정 검사에 덮이지 않는다",
+                f"{len(coverage.lock_test_entries)}개 전부 덮임",
+                f"uncovered={list(coverage.uncovered)} unreadable={list(coverage.unreadable)}",
+            )
+        )
 
     # ── ①②③ 원격 사실 ───────────────────────────────────────────────
     observation, remote_errors = remote_facts.collect_remote_facts(
