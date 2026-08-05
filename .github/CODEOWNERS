@@ -12,6 +12,7 @@
 /.github/workflows/box5-stage3.yml           @tristan00037-tristan050
 /scripts/ci/prepare_a4_baseline_approval.py  @tristan00037-tristan050
 
+/.github/workflows/                       @tristan00037-tristan050
 # Helper1 trust authority. These paths are effective only with required
 # code-owner reviews and the trusted workflow present on the default branch.
 /contracts/helper1/trusted-verifier-policy-v1.json @tristan00037-tristan050

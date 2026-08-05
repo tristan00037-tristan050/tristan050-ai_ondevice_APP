@@ -86,6 +86,12 @@ dist/
 .mypy_cache/
 .ruff_cache/
 
+# 커버리지 산출물 (#894 재유입 방지)
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
 # 환경
 .env.local
 .venv/
