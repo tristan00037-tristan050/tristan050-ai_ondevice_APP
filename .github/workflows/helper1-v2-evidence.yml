@@ -78,6 +78,10 @@ jobs:
           install -d -m 0700 "${RUNNER_TEMP}/helper1-build/test-evidence"
           install -m 0600 "${RUNNER_TEMP}/CANONICAL_SUBJECT.json" "${RUNNER_TEMP}/helper1-build/CANONICAL_SUBJECT.json"
           python -c 'import json,os,pathlib; run="{}:{}".format(os.environ["PRODUCER_RUN_ID"],os.environ["PRODUCER_RUN_ATTEMPT"]); pathlib.Path(os.environ["RUNNER_TEMP"]+"/helper1-build/SUBMISSION.json").write_text(json.dumps({"schema_version":"butler.helper1.untrusted-submission.v1","run_id":run,"subject_commit":os.environ["SUBJECT_SHA"],"canonical_subject_sha256":os.environ["SUBJECT_DIGEST"],"product_evidence_present":True},sort_keys=True,separators=(",",":"))+"\n",encoding="utf-8")'
+      # raw evidence 는 desktop vitest 를 실행하므로 그 앞에서 node_modules 설치
+      # (이 job 전용; product-regressions job 과 별개라 그쪽 npm ci 로는 못 고침)
+      - name: Install desktop node modules for evidence
+        run: npm ci --ignore-scripts --prefix butler-desktop
       - name: Produce machine-derived raw evidence
         run: |
           set +e
