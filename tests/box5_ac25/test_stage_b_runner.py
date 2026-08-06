@@ -105,14 +105,15 @@ def test_missing_roots_are_rejected(trusted, worktree, tmp_path):
 
 
 # ══ 명령 조립 ══════════════════════════════════════════════════════════
-def _captured(monkeypatch):
+def _captured(monkeypatch, returncode: int = 0):
+    """★격리기 경유 호출을 가로챈다. sbr 은 subprocess 를 직접 부르지 않는다."""
     calls = []
 
-    def fake_run(argv, **kwargs):
-        calls.append((argv, kwargs))
-        return subprocess.CompletedProcess(argv, 0)
+    def fake_run_and_read(argv, **kwargs):
+        calls.append((list(argv), kwargs))
+        return returncode, b"", b""
 
-    monkeypatch.setattr(sbr.subprocess, "run", fake_run)
+    monkeypatch.setattr(sbr.output_containment, "run_and_read", fake_run_and_read)
     return calls
 
 
@@ -135,6 +136,7 @@ def test_runner_never_uses_a_shell(trusted, worktree, monkeypatch):
     for argv, kwargs in calls:
         assert isinstance(argv, list), argv
         assert kwargs.get("shell") is not True
+        assert "shell" not in kwargs
 
 
 def test_checks_run_the_lock_derived_lists(trusted, worktree, monkeypatch):
@@ -186,10 +188,7 @@ def test_empty_designated_list_is_not_success(trusted, worktree, monkeypatch):
 
 
 def test_install_failure_propagates(trusted, worktree, monkeypatch):
-    monkeypatch.setattr(
-        sbr.subprocess, "run",
-        lambda argv, **kw: subprocess.CompletedProcess(argv, 1),
-    )
+    _captured(monkeypatch, returncode=1)
     with pytest.raises(sbr.StageBRunnerError) as caught:
         sbr.install(sbr.build_plan(trusted_root=trusted, worktree=worktree))
     assert caught.value.code == sbr.STAGE_B_RUNNER_INSTALL_FAILED
@@ -213,9 +212,9 @@ def selftest_plan(trusted, worktree, tmp_path, monkeypatch):
 def test_selftest_reads_junit_independently(selftest_plan, tmp_path, monkeypatch):
     def fake_run(argv, **kwargs):
         _junit(Path(tmp_path / "runner") / sbr.JUNIT_FILENAME, tests=184)
-        return subprocess.CompletedProcess(argv, 0)
+        return 0, b"", b""
 
-    monkeypatch.setattr(sbr.subprocess, "run", fake_run)
+    monkeypatch.setattr(sbr.output_containment, "run_and_read", fake_run)
     (tmp_path / "runner").mkdir(parents=True, exist_ok=True)
     summary = sbr.run_selftest(selftest_plan)
     assert summary["tests_total"] == 184
@@ -235,9 +234,9 @@ def test_selftest_reads_junit_independently(selftest_plan, tmp_path, monkeypatch
 def test_selftest_rejects_bad_totals(selftest_plan, tmp_path, monkeypatch, kwargs, code):
     def fake_run(argv, **_kwargs):
         _junit(Path(tmp_path / "runner") / sbr.JUNIT_FILENAME, **kwargs)
-        return subprocess.CompletedProcess(argv, 0)
+        return 0, b"", b""
 
-    monkeypatch.setattr(sbr.subprocess, "run", fake_run)
+    monkeypatch.setattr(sbr.output_containment, "run_and_read", fake_run)
     (tmp_path / "runner").mkdir(parents=True, exist_ok=True)
     with pytest.raises(sbr.StageBRunnerError) as caught:
         sbr.run_selftest(selftest_plan)
@@ -246,7 +245,7 @@ def test_selftest_rejects_bad_totals(selftest_plan, tmp_path, monkeypatch, kwarg
 
 def test_selftest_without_junit_is_fail_closed(selftest_plan, monkeypatch):
     monkeypatch.setattr(
-        sbr.subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(argv, 0)
+        sbr.output_containment, "run_and_read", lambda argv, **kw: (0, b"", b"")
     )
     with pytest.raises(sbr.StageBRunnerError) as caught:
         sbr.run_selftest(selftest_plan)
@@ -256,11 +255,11 @@ def test_selftest_without_junit_is_fail_closed(selftest_plan, monkeypatch):
 def test_selftest_does_not_trust_conftest_alone(selftest_plan, tmp_path, monkeypatch):
     """conftest 의 skip 금지 장치가 지워져도 JUnit 에서 잡힌다."""
     def fake_run(argv, **_kwargs):
-        # pytest 는 0 으로 끝났다고 치자(= conftest 장치가 없는 상황)
+        # 검사는 0 으로 끝났다고 치자(= skip 금지 장치가 없는 상황)
         _junit(Path(tmp_path / "runner") / sbr.JUNIT_FILENAME, tests=10, skipped=3)
-        return subprocess.CompletedProcess(argv, 0)
+        return 0, b"", b""
 
-    monkeypatch.setattr(sbr.subprocess, "run", fake_run)
+    monkeypatch.setattr(sbr.output_containment, "run_and_read", fake_run)
     (tmp_path / "runner").mkdir(parents=True, exist_ok=True)
     with pytest.raises(sbr.StageBRunnerError) as caught:
         sbr.run_selftest(selftest_plan)
@@ -270,9 +269,9 @@ def test_selftest_does_not_trust_conftest_alone(selftest_plan, tmp_path, monkeyp
 def test_selftest_writes_meta_only_summary(selftest_plan, tmp_path, monkeypatch):
     def fake_run(argv, **_kwargs):
         _junit(Path(tmp_path / "runner") / sbr.JUNIT_FILENAME, tests=184)
-        return subprocess.CompletedProcess(argv, 0)
+        return 0, b"", b""
 
-    monkeypatch.setattr(sbr.subprocess, "run", fake_run)
+    monkeypatch.setattr(sbr.output_containment, "run_and_read", fake_run)
     (tmp_path / "runner").mkdir(parents=True, exist_ok=True)
     sbr.run_selftest(selftest_plan)
     written = json.loads(

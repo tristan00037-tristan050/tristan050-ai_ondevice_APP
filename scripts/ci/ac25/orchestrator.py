@@ -28,7 +28,6 @@ import argparse
 import hashlib
 import json
 import os
-import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field, replace
@@ -41,6 +40,7 @@ from . import (
     designated_checks,
     lock_verifier,
     protected_scope,
+    output_containment,
     remote_facts,
     workflow_identity,
     workflow_inputs,
@@ -97,14 +97,27 @@ def git_blob_reader(root: Path, commit: str) -> designated_checks.BlobReader:
     """
 
     def read(path: str) -> bytes | None:
-        done = subprocess.run(
-            ["git", "-C", str(root), "show", f"{commit}:{path}"],
-            capture_output=True,
-            check=False,
-        )
-        return done.stdout if done.returncode == 0 else None
+        try:
+            code, out, _err = output_containment.run_and_read(
+                ["git", "-C", str(root), "show", f"{commit}:{path}"], cwd=root
+            )
+        except output_containment.ContainmentError:
+            return None
+        return out if code == 0 else None
 
     return read
+
+
+def production_router() -> remote_facts.TransportRouter:
+    """★승인 저장소와 후보 저장소를 ★다른 credential★ 로 읽는다(C5).
+
+    한쪽 열쇠로 다른 쪽 문을 열 수 있으면 최소권한이 아니다.
+    """
+    return remote_facts.TransportRouter(
+        approval=remote_facts.gh_transport_for(remote_facts.APPROVAL_TOKEN_ENV),
+        candidate=remote_facts.gh_transport_for(remote_facts.CANDIDATE_TOKEN_ENV),
+        run=remote_facts.gh_transport_for(remote_facts.CANDIDATE_TOKEN_ENV),
+    )
 
 
 def _fail(code: str, message: str, expected: str, observed: str) -> ApprovalFailure:
@@ -117,7 +130,7 @@ def _utc_now() -> str:
 
 def run_verification(
     *,
-    transport: remote_facts.Transport,
+    router: remote_facts.TransportRouter,
     run_id: int,
     expected_head: str,
     expected_tree: str,
@@ -232,7 +245,7 @@ def run_verification(
 
     # ── 원격 사실 ─────────────────────────────────────────────────────
     observation, remote_errors = remote_facts.collect_remote_facts(
-        transport=transport,
+        router=router,
         approval_repository=anchors.APPROVAL_REPOSITORY,
         approval_protected_ref=anchors.APPROVAL_PROTECTED_REF,
         approval_commit_sha=anchors.APPROVAL_COMMIT_SHA,
@@ -305,7 +318,7 @@ def run_verification(
     })
 
     resolved_id, id_errors = remote_facts.read_account_id(
-        transport=transport, login=approval.approver_login
+        transport=router.approval, login=approval.approver_login
     )
     for error in id_errors:
         failures.append(
@@ -367,7 +380,7 @@ def run_verification(
 def verify_dispatch_and_identity(
     *,
     environ,
-    transport: remote_facts.Transport,
+    router: remote_facts.TransportRouter,
     locked_head: str,
     locked_tree: str,
 ) -> workflow_inputs.DispatchInputs:
@@ -398,7 +411,7 @@ def verify_dispatch_and_identity(
         actor_id=str(environ.get("GITHUB_ACTOR_ID") or ""),
     )
     facts, errors = remote_facts.read_protected_facts(
-        transport=transport,
+        router=router,
         repository=workflow_identity.EXPECTED_REPOSITORY,
         protected_ref=workflow_identity.EXPECTED_REF,
         environment_name=workflow_identity.EXPECTED_ENVIRONMENT,
@@ -413,15 +426,20 @@ def verify_dispatch_and_identity(
     return inputs
 
 
-def write_receipt(receipt: dict, *, directory: Path) -> Path:
-    """§9 — receipt 를 RUNNER_TEMP 아래에 ★원자적으로★ 기록한다."""
+def write_receipt(receipt: dict, *, directory: Path) -> tuple[Path, str]:
+    """§9·C6 — receipt 를 RUNNER_TEMP 아래에 mode 0600 으로 ★원자 기록★ 한다.
+
+    ★원문은 job output·env 로 나가지 않는다. 나가는 것은 이 digest 뿐이다.
+    """
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / RECEIPT_FILENAME
-    payload = json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True)
+    payload = json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     handle, temporary = tempfile.mkstemp(dir=str(directory), prefix=".ac25-receipt-")
     try:
+        os.chmod(temporary, 0o600)
         with os.fdopen(handle, "w", encoding="utf-8") as stream:
-            stream.write(payload + "\n")
+            stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, target)
@@ -429,7 +447,37 @@ def write_receipt(receipt: dict, *, directory: Path) -> Path:
         if os.path.exists(temporary):
             os.unlink(temporary)
         raise
-    return target
+    return target, digest
+
+
+# ★C6 — job output 은 이 여섯만 허용한다. 원문·경로·응답은 0건이다.
+JOB_OUTPUT_ALLOWLIST = (
+    "verdict",
+    "error_code",
+    "receipt_sha256",
+    "candidate_commit",
+    "candidate_tree",
+    "changed_path_count",
+)
+
+_SINGLE_LINE = __import__("re").compile(r"\A[A-Za-z0-9_.:-]{1,128}\Z")
+
+
+def job_outputs(result: "OrchestratorResult", *, receipt_sha256: str) -> dict:
+    """허용 목록 값만, 한 줄 형식으로 검증해 내보낸다."""
+    receipt = result.receipt
+    values = {
+        "verdict": "1" if result.ok else "0",
+        "error_code": result.error_code,
+        "receipt_sha256": receipt_sha256,
+        "candidate_commit": str(receipt.get("candidate_commit", "")),
+        "candidate_tree": str(receipt.get("candidate_tree", "")),
+        "changed_path_count": str(receipt.get("changed_path_count", "")),
+    }
+    for key, value in values.items():
+        if key not in JOB_OUTPUT_ALLOWLIST or not _SINGLE_LINE.match(value):
+            raise ValueError("JOB_OUTPUT_INVALID")
+    return values
 
 
 def _emit(verdict: int, error_code: str) -> None:
@@ -459,7 +507,7 @@ def _main(argv: list[str]) -> int:
     try:
         inputs = verify_dispatch_and_identity(
             environ=environ,
-            transport=remote_facts.gh_transport,
+            router=production_router(),
             locked_head=lock.approved_head_commit,
             locked_tree=lock.approved_head_tree,
         )
@@ -471,7 +519,7 @@ def _main(argv: list[str]) -> int:
         return 1
 
     result = run_verification(
-        transport=remote_facts.gh_transport,
+        router=production_router(),
         run_id=int(inputs.run_id),
         expected_head=inputs.expected_head,
         expected_tree=inputs.expected_tree,
@@ -482,13 +530,24 @@ def _main(argv: list[str]) -> int:
 
     runner_temp = environ.get("RUNNER_TEMP")
     try:
-        write_receipt(
+        _path, receipt_sha256 = write_receipt(
             result.receipt,
             directory=Path(runner_temp) if runner_temp else root / ".ac25",
         )
     except OSError:
         _emit(0, ORCHESTRATOR_RECEIPT_WRITE_FAILED)
         return 1
+
+    # ★C6 — 허용 목록 값만 job output 으로 내보낸다. receipt 원문은 나가지 않는다.
+    output_file = environ.get("GITHUB_OUTPUT")
+    if output_file:
+        try:
+            with open(output_file, "a", encoding="utf-8") as stream:
+                for key, value in job_outputs(result, receipt_sha256=receipt_sha256).items():
+                    stream.write(f"{key}={value}\n")
+        except (OSError, ValueError):
+            _emit(0, ORCHESTRATOR_RECEIPT_WRITE_FAILED)
+            return 1
 
     _emit(1 if result.ok else 0, result.error_code)
     return 0 if result.ok else 1

@@ -36,13 +36,18 @@ jobs:
   # ══ 신뢰 검증: 병합된 main 의 보호 코드로만 실행 ══════════════════════
   trusted-verification:
     name: trusted-verification
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: ac25-trusted-main
     permissions:
       contents: read
     outputs:
+      # ★C6 — 허용 목록 여섯만. receipt 원문은 job output 으로 나가지 않는다.
       verdict: ${{ steps.orchestrate.outputs.verdict }}
-      receipt: ${{ steps.orchestrate.outputs.receipt }}
+      error_code: ${{ steps.orchestrate.outputs.error_code }}
+      receipt_sha256: ${{ steps.orchestrate.outputs.receipt_sha256 }}
+      candidate_commit: ${{ steps.orchestrate.outputs.candidate_commit }}
+      candidate_tree: ${{ steps.orchestrate.outputs.candidate_tree }}
+      changed_path_count: ${{ steps.orchestrate.outputs.changed_path_count }}
     steps:
       - name: Checkout trusted verifier (merged main)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -82,29 +87,29 @@ jobs:
         env:
           PYTHONPATH: scripts/ci
           PYTHONNOUSERSITE: '1'
-          GH_TOKEN: ${{ secrets.AC25_APPROVAL_READ_TOKEN }}
+          # ★C5 — 두 credential 을 분리한다. 한쪽 열쇠로 다른 쪽 문을 열지 못한다.
+          #   승인 저장소 read 는 AC25_APPROVAL_TOKEN 으로만,
+          #   후보 저장소·actions read 는 GITHUB_TOKEN 으로만 나간다.
+          AC25_APPROVAL_TOKEN: ${{ secrets.AC25_APPROVAL_READ_TOKEN }}
+          AC25_CANDIDATE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AC25_PR_NUMBER: ${{ inputs.pr_number }}
           AC25_EXPECTED_HEAD: ${{ inputs.expected_head }}
           AC25_EXPECTED_TREE: ${{ inputs.expected_tree }}
         run: |
           set -euo pipefail
+          # ★orchestrator 가 허용 목록 값만 GITHUB_OUTPUT 에 직접 쓴다.
+          #   워크플로가 receipt 를 cat 하지 않는다(C6).
           set +e
           python3 -m ac25.orchestrator --mode verify
           STATUS=$?
           set -e
-          {
-            echo "verdict=$([ "${STATUS}" -eq 0 ] && echo 1 || echo 0)"
-            echo "receipt<<AC25_RECEIPT_EOF"
-            cat "${RUNNER_TEMP}/ac25-receipt.json"
-            echo "AC25_RECEIPT_EOF"
-          } >> "${GITHUB_OUTPUT}"
           exit "${STATUS}"
 
   # ══ candidate lane: 후보 코드를 비특권 job 에서 실제로 실행 ═══════════
   candidate-lane:
     name: candidate-lane
     needs: trusted-verification
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -165,7 +170,7 @@ jobs:
   integration-lane:
     name: integration-lane
     needs: trusted-verification
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -224,166 +229,84 @@ jobs:
           finally:
               cleanup_worktree(trusted, worktree, raise_on_failure=False)
 
+          # ★C6 — 허용 목록 값만, 한 줄 형식으로 내보낸다.
+          import hashlib
+
           print(f"synthetic_merge_commit={merge.synthetic_merge_commit}")
           print(f"synthetic_merge_tree={merge.merge_tree}")
-          print(f"parents={merge.parents[0]},{merge.parents[1]}")
-          print(f"github_merge_ref_observed={observed or 'NONE'}")
-          print("github_merge_ref_used_for_verdict=NO")
+          print(f"parent_base={merge.parents[0]}")
+          print(f"parent_candidate={merge.parents[1]}")
+          observed_digest = (
+              hashlib.sha256((observed or "NONE").encode("utf-8")).hexdigest()
+          )
+          print(f"github_merge_ref_observed_sha256={observed_digest}")
           PY
 
     outputs:
+      # ★C6 — 허용 목록 다섯만. GitHub merge ref 는 ★digest 로만★ 남긴다.
       synthetic_merge_commit: ${{ steps.merge.outputs.synthetic_merge_commit }}
       synthetic_merge_tree: ${{ steps.merge.outputs.synthetic_merge_tree }}
-      parents: ${{ steps.merge.outputs.parents }}
-      github_merge_ref_observed: ${{ steps.merge.outputs.github_merge_ref_observed }}
+      parent_base: ${{ steps.merge.outputs.parent_base }}
+      parent_candidate: ${{ steps.merge.outputs.parent_candidate }}
+      github_merge_ref_observed_sha256: ${{ steps.merge.outputs.github_merge_ref_observed_sha256 }}
 
-  # ══ publish: ★always(). 실패해도 도장을 남긴다(M-6) ═══════════════════
+  # ══ publish: ★always(). 실패해도 도장을 남긴다(M-6 · C3) ═════════════
   publish-check:
     name: publish-check
-    if: always()
+    if: ${{ always() }}
     needs: [trusted-verification, candidate-lane, integration-lane]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: ac25-trusted-main
     permissions:
-      checks: write
       contents: read
+      checks: write
     steps:
-      # ★후보 코드를 checkout 하지 않는다. 실행하지도 않는다.
-      # actions/github-script v7 — 커밋 고정
-      - name: Publish final check-run on candidate head
+      # ★보호된 publisher 를 명시적으로 checkout 한다. GITHUB_WORKSPACE 에 무엇이
+      #   있는지 보장 없이 local import 하지 않는다(C3).
+      - name: Checkout trusted publisher
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          path: ac25-publisher
+          persist-credentials: false
+
+      - name: Publish final check-run
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
-          # ★JSON 을 JavaScript 소스에 직접 삽입하지 않는다. env 로 넘겨 파싱한다(M-4).
-          TRUSTED_RESULT: ${{ needs.trusted-verification.result }}
-          CANDIDATE_RESULT: ${{ needs.candidate-lane.result }}
-          INTEGRATION_RESULT: ${{ needs.integration-lane.result }}
-          TRUSTED_VERDICT: ${{ needs.trusted-verification.outputs.verdict }}
-          TRUSTED_RECEIPT: ${{ needs.trusted-verification.outputs.receipt }}
-          CANDIDATE_COMMIT: ${{ needs.candidate-lane.outputs.execution_commit }}
-          CANDIDATE_TREE: ${{ needs.candidate-lane.outputs.execution_tree }}
-          MERGE_COMMIT: ${{ needs.integration-lane.outputs.synthetic_merge_commit }}
-          MERGE_TREE: ${{ needs.integration-lane.outputs.synthetic_merge_tree }}
-          MERGE_PARENTS: ${{ needs.integration-lane.outputs.parents }}
-          MERGE_REF_OBSERVED: ${{ needs.integration-lane.outputs.github_merge_ref_observed }}
-          EXPECTED_HEAD: 61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04
-          INTEGRATION_BASE: afdb237e4e6e83d96a182b6c5366a2ad95949bee
+          # ★needs 전체를 JSON 으로 넘기지 않는다. 명시한 필드만 넘긴다(M-4 · C6).
+          AC25_TRUSTED_RESULT: ${{ needs.trusted-verification.result }}
+          AC25_CANDIDATE_RESULT: ${{ needs.candidate-lane.result }}
+          AC25_INTEGRATION_RESULT: ${{ needs.integration-lane.result }}
+          AC25_TRUSTED_VERDICT: ${{ needs.trusted-verification.outputs.verdict }}
+          AC25_ERROR_CODE: ${{ needs.trusted-verification.outputs.error_code }}
+          AC25_RECEIPT_SHA256: ${{ needs.trusted-verification.outputs.receipt_sha256 }}
+          AC25_CANDIDATE_COMMIT: ${{ needs.candidate-lane.outputs.execution_commit }}
+          AC25_CANDIDATE_TREE: ${{ needs.candidate-lane.outputs.execution_tree }}
+          AC25_MERGE_COMMIT: ${{ needs.integration-lane.outputs.synthetic_merge_commit }}
+          AC25_MERGE_TREE: ${{ needs.integration-lane.outputs.synthetic_merge_tree }}
+          AC25_PARENT_BASE: ${{ needs.integration-lane.outputs.parent_base }}
+          AC25_PARENT_CANDIDATE: ${{ needs.integration-lane.outputs.parent_candidate }}
+          AC25_REQUESTED_HEAD: ${{ inputs.expected_head }}
         with:
           script: |
-            const OID = /^[0-9a-f]{40}$/;
-            const HEAD_SHA = process.env.EXPECTED_HEAD;
-            const BASE = process.env.INTEGRATION_BASE;
-
-            let errorCode = "OK";
-            let receipt = null;
-
-            const fail = (code) => {
-              if (errorCode === "OK") errorCode = code;
-            };
-
-            // ── 선행 job 결과 ────────────────────────────────────────
-            for (const [name, value] of [
-              ["TRUSTED", process.env.TRUSTED_RESULT],
-              ["CANDIDATE", process.env.CANDIDATE_RESULT],
-              ["INTEGRATION", process.env.INTEGRATION_RESULT],
-            ]) {
-              if (value !== "success") fail(`${name}_JOB_NOT_SUCCESS`);
-            }
-            if (process.env.TRUSTED_VERDICT !== "1") fail("TRUSTED_VERDICT_NOT_PASS");
-
-            // ── receipt 는 env 로 받아 파싱한다. 소스에 삽입하지 않는다 ──
+            const { pathToFileURL } = require('node:url');
+            const moduleUrl = pathToFileURL(
+              `${process.env.GITHUB_WORKSPACE}/ac25-publisher/` +
+              `scripts/ci/ac25/publish_check.mjs`
+            ).href;
             try {
-              receipt = JSON.parse(process.env.TRUSTED_RECEIPT || "null");
-            } catch (_) {
-              fail("RECEIPT_NOT_PARSEABLE");
-            }
-            if (receipt === null || typeof receipt !== "object") {
-              fail("RECEIPT_MISSING");
-              receipt = {};
-            }
-
-            // ── 필수 key 와 값 형식 ──────────────────────────────────
-            const requiredOids = [
-              "candidate_commit", "candidate_tree", "provenance_base_commit",
-              "provenance_base_tree", "integration_base_commit", "approval_commit",
-              "protected_ref_head",
-            ];
-            const requiredDigests = [
-              "approval_document_sha256", "identity_manifest_sha256",
-              "identity_artifact_zip_sha256", "dependency_manifest_sha256",
-            ];
-            for (const key of requiredOids) {
-              if (!OID.test(String(receipt[key] || ""))) fail("RECEIPT_OID_INVALID");
-            }
-            for (const key of requiredDigests) {
-              if (!/^[0-9a-f]{64}$/.test(String(receipt[key] || ""))) {
-                fail("RECEIPT_DIGEST_INVALID");
-              }
-            }
-            if (receipt.verdict !== 1) fail("RECEIPT_VERDICT_NOT_PASS");
-            if (!["STATE_1_UNCHANGED", "STATE_2_APPROVED"].includes(receipt.protected_state)) {
-              fail("RECEIPT_PROTECTED_STATE_INVALID");
-            }
-            if (receipt.coverage_uncovered_count !== 0) fail("RECEIPT_COVERAGE_GAP");
-
-            // ── 후보 좌표 일치 ──────────────────────────────────────
-            if (receipt.candidate_commit !== HEAD_SHA) fail("CANDIDATE_COORDINATE_MISMATCH");
-            if (process.env.CANDIDATE_COMMIT !== HEAD_SHA) fail("CANDIDATE_EXECUTION_MISMATCH");
-            if (process.env.CANDIDATE_TREE !== receipt.candidate_tree) {
-              fail("CANDIDATE_TREE_MISMATCH");
-            }
-
-            // ── 합성 merge 부모·tree 일치 ───────────────────────────
-            const parents = String(process.env.MERGE_PARENTS || "").split(",");
-            if (!OID.test(String(process.env.MERGE_COMMIT || ""))) fail("MERGE_COMMIT_INVALID");
-            if (!OID.test(String(process.env.MERGE_TREE || ""))) fail("MERGE_TREE_INVALID");
-            if (parents.length !== 2 || parents[0] !== BASE || parents[1] !== HEAD_SHA) {
-              fail("MERGE_PARENT_MISMATCH");
-            }
-            if (process.env.MERGE_COMMIT === HEAD_SHA) fail("MERGE_EQUALS_SCOPE_END");
-
-            // ── 요약은 meta-only 좌표와 ERROR_CODE 만 담는다(§9) ─────
-            const conclusion = errorCode === "OK" ? "success" : "failure";
-            const summary = [
-              `verdict=${conclusion === "success" ? 1 : 0}`,
-              `error_code=${errorCode}`,
-              `verifier_commit=${context.sha}`,
-              `candidate_commit=${HEAD_SHA}`,
-              `candidate_tree=${receipt.candidate_tree || "NONE"}`,
-              `provenance_base_commit=${receipt.provenance_base_commit || "NONE"}`,
-              `integration_base_commit=${BASE}`,
-              `synthetic_merge_commit=${process.env.MERGE_COMMIT || "NONE"}`,
-              `synthetic_merge_tree=${process.env.MERGE_TREE || "NONE"}`,
-              `parents=${process.env.MERGE_PARENTS || "NONE"}`,
-              `github_merge_ref_observed=${process.env.MERGE_REF_OBSERVED || "NONE"}`,
-              `github_merge_ref_used_for_verdict=NO`,
-              `approval_commit=${receipt.approval_commit || "NONE"}`,
-              `approval_document_sha256=${receipt.approval_document_sha256 || "NONE"}`,
-              `identity_manifest_sha256=${receipt.identity_manifest_sha256 || "NONE"}`,
-              `dependency_manifest_sha256=${receipt.dependency_manifest_sha256 || "NONE"}`,
-              `changed_path_count=${receipt.changed_path_count ?? "NONE"}`,
-              `offending_path_count=${receipt.offending_path_count ?? "NONE"}`,
-              `protected_state=${receipt.protected_state || "NONE"}`,
-              `effective_expiry=${receipt.effective_expiry || "NONE"}`,
-              `designated_check_coverage=${receipt.coverage_covered_count ?? "NONE"}` +
-                `/${receipt.coverage_entry_count ?? "NONE"}`,
-              `designated_check_coverage_basis=${receipt.coverage_basis || "NONE"}`,
-            ].join("\n");
-
-            // ★실패라고 발행을 생략하지 않는다(M-6).
-            try {
-              await github.rest.checks.create({
+              const { publishCheck } = await import(moduleUrl);
+              await publishCheck({
+                github,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                name: "box5-ac25/trusted-exact-head",
-                head_sha: HEAD_SHA,
-                status: "completed",
-                conclusion,
-                output: { title: "AC-25 trusted exact-head verification", summary },
+                runUrl: `${context.serverUrl}/${context.repo.owner}/` +
+                  `${context.repo.repo}/actions/runs/${context.runId}`,
+                evidence: process.env,
               });
-            } catch (_) {
-              core.setFailed("CHECK_RUN_PUBLICATION_FAILED");
-              return;
-            }
-            if (conclusion !== "success") {
-              core.setFailed(`ERROR_CODE=${errorCode}`);
+            } catch (error) {
+              // ★stack·message 를 공개하지 않는다. 짧은 코드만 남긴다.
+              const code = /^[A-Z0-9_]{1,64}$/.test(error?.code || '')
+                ? error.code : 'CHECK_RUN_PUBLICATION_FAILED';
+              core.setFailed(`ERROR_CODE=${code}`);
             }

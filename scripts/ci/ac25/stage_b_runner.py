@@ -14,12 +14,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import output_containment
 from .dependency_manifest import DependencyManifestError, resolve_manifest
 from .designated_checks import designated_js_tests, designated_python_tests
 
@@ -109,10 +109,19 @@ def _environment(plan: StageBPlan) -> dict:
 
 
 def _run(argv: list[str], *, cwd: Path, env: dict, code: str) -> None:
-    # ★argv 배열 · shell=False
-    done = subprocess.run(argv, cwd=str(cwd), env=env, check=False)
-    if done.returncode != 0:
-        raise StageBRunnerError(code, f"exit={done.returncode}")
+    """★output_containment 를 통해서만 부른다(C1).
+
+    이전 판은 자식이 부모 stdout·stderr 를 그대로 상속했다. pip·pytest·npm 이
+    쏟는 traceback 과 절대경로가 공개 로그로 직행했다.
+    """
+    try:
+        returncode, _out, _err = output_containment.run_and_read(
+            argv, cwd=cwd, env=env
+        )
+    except output_containment.ContainmentError as exc:
+        raise StageBRunnerError(code, exc.code) from exc
+    if returncode != 0:
+        raise StageBRunnerError(code, f"exit={returncode}")
 
 
 def install(plan: StageBPlan) -> None:
@@ -185,16 +194,18 @@ def run_selftest(plan: StageBPlan) -> dict:
     reports.mkdir(parents=True, exist_ok=True)
     junit = reports / JUNIT_FILENAME
 
-    subprocess.run(
-        [
-            plan.python_executable, "-m", "pytest",
-            str(plan.trusted_root / "tests" / "box5_ac25"),
-            f"--junitxml={junit}", "-q",
-        ],
-        cwd=str(plan.trusted_root),
-        env=_environment(plan),
-        check=False,
-    )
+    try:
+        output_containment.run_and_read(
+            [
+                plan.python_executable, "-m", "pytest",
+                str(plan.trusted_root / "tests" / "box5_ac25"),
+                f"--junitxml={junit}", "-q",
+            ],
+            cwd=plan.trusted_root,
+            env=_environment(plan),
+        )
+    except output_containment.ContainmentError as exc:
+        raise StageBRunnerError(STAGE_B_SELFTEST_JUNIT_UNREADABLE, exc.code) from exc
 
     if not junit.is_file():
         raise StageBRunnerError(STAGE_B_SELFTEST_JUNIT_UNREADABLE, str(junit.name))

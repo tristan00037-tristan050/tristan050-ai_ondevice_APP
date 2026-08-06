@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+from . import output_containment
 
 # ── 실패 코드 (§E5) ────────────────────────────────────────────────────
 APPROVAL_SIGNATURE_INVALID = "APPROVAL_SIGNATURE_INVALID"
@@ -63,15 +64,15 @@ def _fingerprints(allowed_signers_bytes: bytes) -> tuple[str, ...]:
                 continue
             pub = Path(tmp) / f"key{index}.pub"
             pub.write_text(" ".join(fields[key_index:]) + "\n", encoding="utf-8")
-            completed = subprocess.run(
-                [keygen, "-lf", str(pub)],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if completed.returncode != 0:
+            try:
+                code, out, _err = output_containment.run_and_read(
+                    [keygen, "-lf", str(pub)], cwd=Path(tmp)
+                )
+            except output_containment.ContainmentError:
                 continue
-            match = _FINGERPRINT_RE.search(completed.stdout)
+            if code != 0:
+                continue
+            match = _FINGERPRINT_RE.search(out.decode("utf-8", "replace"))
             if match is not None:
                 found.append(match.group(0))
     return tuple(found)
@@ -125,34 +126,33 @@ def verify_approval_signature(
         signers.write_bytes(allowed_signers_bytes)
         signature.write_bytes(signature_bytes)
         document.write_bytes(document_bytes)
-        with document.open("rb") as stream:
-            completed = subprocess.run(
+        # ssh-keygen -Y verify 는 서명 대상 문서를 stdin 으로 읽는다.
+        # 격리기가 그 파일 하나만 열어 준다(부모 stdin 상속 없음).
+        try:
+            code, _out, _err = output_containment.run_and_read(
                 [
-                    keygen,
-                    "-Y",
-                    "verify",
-                    "-f",
-                    str(signers),
-                    "-I",
-                    SIGNER_IDENTITY,
-                    "-n",
-                    SIGNATURE_NAMESPACE,
-                    "-s",
-                    str(signature),
+                    keygen, "-Y", "verify",
+                    "-f", str(signers),
+                    "-I", SIGNER_IDENTITY,
+                    "-n", SIGNATURE_NAMESPACE,
+                    "-s", str(signature),
                 ],
-                stdin=stream,
-                capture_output=True,
-                text=True,
-                check=False,
+                cwd=Path(tmp),
+                stdin_path=document,
             )
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip().splitlines()
+        except output_containment.ContainmentError as exc:
+            return False, (
+                SignatureFailure(APPROVAL_SIGNATURE_INVALID, "서명 검증 실행 실패",
+                                 expected="contained ssh-keygen", observed=exc.code),
+            )
+    if code != 0:
+        # ★raw stderr 를 넣지 않는다. 종료 코드만 남긴다.
         return False, (
             SignatureFailure(
                 APPROVAL_SIGNATURE_INVALID,
                 "ssh-keygen -Y verify 실패",
                 expected=f"Good {SIGNATURE_NAMESPACE} signature for {SIGNER_IDENTITY}",
-                observed=detail[-1] if detail else f"exit={completed.returncode}",
+                observed=f"exit={code}",
             ),
         )
     return True, ()

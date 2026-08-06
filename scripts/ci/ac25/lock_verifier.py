@@ -10,10 +10,12 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
+
+from . import output_containment
 
 # ── 실패 코드 (§7) ─────────────────────────────────────────────────────
 LOCK_EXPECTED_HEAD_REQUIRED = "LOCK_EXPECTED_HEAD_REQUIRED"
@@ -201,8 +203,18 @@ def load_candidate_lock(raw_bytes: bytes) -> CandidateLock:
 
 # ── git 헬퍼 ───────────────────────────────────────────────────────────
 def _git(repo: str, args: list[str]) -> tuple[int, str, str]:
-    p = subprocess.run(["git", "-C", repo, *args], capture_output=True, check=False)
-    return p.returncode, p.stdout.decode("utf-8", "replace").strip(), p.stderr.decode("utf-8", "replace").strip()
+    """★output_containment 를 통해서만 부른다(C1)."""
+    try:
+        code, out, err = output_containment.run_and_read(
+            ["git", "-C", repo, *args], cwd=Path(repo)
+        )
+    except output_containment.ContainmentError:
+        return 1, "", ""
+    return (
+        code,
+        out.decode("utf-8", "replace").strip(),
+        err.decode("utf-8", "replace").strip(),
+    )
 
 
 def _tree_of(repo: str, commit: str) -> str | None:
@@ -314,25 +326,62 @@ def verify_integration_lock(
     )
 
 
+LOCK_CLI_ARGUMENTS_INVALID = "LOCK_CLI_ARGUMENTS_INVALID"
+LOCK_INTERNAL_ERROR = "LOCK_INTERNAL_ERROR"
+
+
+class _QuietParser(argparse.ArgumentParser):
+    """★argparse 기본 오류는 stderr 에 usage 와 ★입력값★ 을 찍는다.
+
+    공개 로그에 입력 원문이 남으면 안 되므로 조용히 실패시킨다(§6).
+    """
+
+    def error(self, message: str) -> None:  # noqa: D102 - argparse 계약
+        raise _CliArgumentError()
+
+    def exit(self, status: int = 0, message: str | None = None) -> None:  # noqa: D102
+        if status != 0:
+            raise _CliArgumentError()
+        raise SystemExit(status)
+
+
+class _CliArgumentError(Exception):
+    pass
+
+
+def _emit(verdict: int, error_code: str) -> None:
+    """★공개 출력은 정확히 두 줄. stderr 는 0 bytes 다(§5-5)."""
+    print(f"VERDICT={verdict}")
+    print(f"ERROR_CODE={error_code}")
+
+
 def _main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description="AC-25 lock verifier")
+    """구조화된 evidence 와 offending_paths 는 반환 객체에 남고 공개되지 않는다."""
+    parser = _QuietParser(description="AC-25 lock verifier", add_help=False)
     parser.add_argument("--repository-path", required=True)
     parser.add_argument("--lock-path", required=True)
     parser.add_argument("--expected-head", required=True)
     parser.add_argument("--expected-tree", required=True)
     parser.add_argument("--execution-commit", required=True)
-    args = parser.parse_args(argv)
-    verdict = verify_integration_lock(
-        repository_path=args.repository_path, lock_path=args.lock_path,
-        expected_head=args.expected_head, expected_tree=args.expected_tree,
-        execution_commit=args.execution_commit)
-    print(json.dumps({
-        "ok": verdict.ok,
-        "failures": [f.__dict__ for f in verdict.failures],
-        "changed_path_count": len(verdict.changed_paths),
-        "offending_paths": list(verdict.offending_paths),
-        "scope_start": verdict.scope_start, "scope_end": verdict.scope_end,
-    }, ensure_ascii=False, indent=2))
+    try:
+        args = parser.parse_args(argv)
+    except _CliArgumentError:
+        _emit(0, LOCK_CLI_ARGUMENTS_INVALID)
+        return 1
+
+    try:
+        verdict = verify_integration_lock(
+            repository_path=args.repository_path, lock_path=args.lock_path,
+            expected_head=args.expected_head, expected_tree=args.expected_tree,
+            execution_commit=args.execution_commit)
+    except Exception:  # noqa: BLE001 - traceback 을 공개하지 않는다
+        _emit(0, LOCK_INTERNAL_ERROR)
+        return 1
+
+    code = "OK" if verdict.ok else (
+        verdict.failures[0].code if verdict.failures else LOCK_INTERNAL_ERROR
+    )
+    _emit(1 if verdict.ok else 0, code)
     return 0 if verdict.ok else 1
 
 

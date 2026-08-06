@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+from . import output_containment
 
 # ── 오류 코드 (§7) ─────────────────────────────────────────────────────
 INTEGRATION_BASE_FETCH_FAILED = "INTEGRATION_BASE_FETCH_FAILED"
@@ -42,14 +43,31 @@ COMMITTER_EMAIL = "ac25-verifier@invalid"
 COMMITTER_DATE = "2000-01-01T00:00:00Z"
 MERGE_MESSAGE = "Butler AC-25 deterministic integration tree"
 
-_FIXED_ENV = {
+# §7 — locale·timezone·사용자 git config 가 결과에 개입하지 못하게 한다.
+FIXED_GIT_ENV = {
     "GIT_AUTHOR_NAME": COMMITTER_NAME,
     "GIT_AUTHOR_EMAIL": COMMITTER_EMAIL,
     "GIT_AUTHOR_DATE": COMMITTER_DATE,
     "GIT_COMMITTER_NAME": COMMITTER_NAME,
     "GIT_COMMITTER_EMAIL": COMMITTER_EMAIL,
     "GIT_COMMITTER_DATE": COMMITTER_DATE,
+    "TZ": "UTC",
+    "LC_ALL": "C.UTF-8",
+    "LANG": "C.UTF-8",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
 }
+_FIXED_ENV = FIXED_GIT_ENV
+
+# merge 동작이 사용자 config 에 의존하지 않게 argv 로 고정한다.
+FIXED_GIT_CONFIG_ARGS = (
+    "-c", "core.autocrlf=false",
+    "-c", "core.filemode=true",
+    "-c", "merge.renames=true",
+    "-c", "merge.conflictStyle=merge",
+)
+MERGE_STRATEGY = "ort"
+MERGE_STRATEGY_ARGS = ("--strategy", MERGE_STRATEGY)
 
 
 class IntegrationMergeError(Exception):
@@ -70,28 +88,39 @@ class SyntheticMerge:
     github_merge_ref_observed: str | None
 
 
+@dataclass(frozen=True)
+class _GitResult:
+    returncode: int
+    stdout: str
+    stderr: str
+
+
 def _git(
     repository: Path, args: list[str], *, env_extra: dict | None = None
-) -> subprocess.CompletedProcess:
+) -> _GitResult:
+    """★output_containment 를 통해서만 부른다(C1). raw 는 밖으로 내지 않는다."""
     import os
 
     env = dict(os.environ)
-    env.update(_FIXED_ENV)
+    env.update(FIXED_GIT_ENV)
     if env_extra:
         env.update(env_extra)
-    # ★argv 배열 · shell=False. 동적 문자열 조립을 하지 않는다.
-    return subprocess.run(
-        ["git", "-C", str(repository), *args],
-        capture_output=True,
-        text=True,
-        check=False,
-        env=env,
+    try:
+        code, out, err = output_containment.run_and_read(
+            ["git", "-C", str(repository), *FIXED_GIT_CONFIG_ARGS, *args],
+            cwd=repository if repository.is_dir() else Path.cwd(),
+            env=env,
+        )
+    except output_containment.ContainmentError:
+        return _GitResult(1, "", "")
+    return _GitResult(
+        code, out.decode("utf-8", "replace"), err.decode("utf-8", "replace")
     )
 
 
 def _require_oid(value: str, code: str) -> str:
     if _OID_RE.match(value or "") is None:
-        raise IntegrationMergeError(code, "40자 소문자 hex OID 아님")
+        raise IntegrationMergeError(code, "")
     return value
 
 
@@ -133,16 +162,16 @@ def build_synthetic_merge(
         if _object_type(repository, oid) is None:
             fetched = _git(repository, ["fetch", "--no-tags", "origin", oid])
             if fetched.returncode != 0:
-                raise IntegrationMergeError(code, oid)
+                raise IntegrationMergeError(code, "")
 
     # 3. commit 객체 확인
     for oid in (base, head):
         if _object_type(repository, oid) != "commit":
-            raise IntegrationMergeError(INTEGRATION_OBJECT_NOT_COMMIT, oid)
+            raise IntegrationMergeError(INTEGRATION_OBJECT_NOT_COMMIT, "")
 
     # 4. 전용 임시 destination 확인
     if destination.exists():
-        raise IntegrationMergeError(INTEGRATION_WORKTREE_INVALID, "destination 이 이미 있다")
+        raise IntegrationMergeError(INTEGRATION_WORKTREE_INVALID, "")
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     added = False
@@ -152,35 +181,29 @@ def build_synthetic_merge(
             repository, ["worktree", "add", "--detach", str(destination), base]
         )
         if created.returncode != 0:
-            raise IntegrationMergeError(
-                INTEGRATION_WORKTREE_INVALID, created.stderr.strip()[:200]
-            )
+            raise IntegrationMergeError(INTEGRATION_WORKTREE_INVALID, "")
         added = True
 
         # 6. candidate 를 --no-ff --no-commit 병합
-        merged = _git(destination, ["merge", "--no-ff", "--no-commit", head])
+        merged = _git(destination, ["merge", *MERGE_STRATEGY_ARGS, "--no-ff", "--no-commit", head])
         if merged.returncode != 0:
-            raise IntegrationMergeError(
-                INTEGRATION_MERGE_CONFLICT, merged.stdout.strip()[:200]
-            )
+            raise IntegrationMergeError(INTEGRATION_MERGE_CONFLICT, "")
 
         # 7. conflict 와 unmerged index 0 확인
         unmerged = _git(destination, ["diff", "--name-only", "--diff-filter=U"])
         if unmerged.returncode != 0 or unmerged.stdout.strip():
-            raise IntegrationMergeError(INTEGRATION_UNMERGED_INDEX, "unmerged entry 존재")
+            raise IntegrationMergeError(INTEGRATION_UNMERGED_INDEX, "")
         listed = _git(destination, ["ls-files", "--unmerged"])
         if listed.returncode != 0 or listed.stdout.strip():
-            raise IntegrationMergeError(INTEGRATION_UNMERGED_INDEX, "index 에 unmerged stage 존재")
+            raise IntegrationMergeError(INTEGRATION_UNMERGED_INDEX, "")
 
         # 8. write-tree 로 merge_tree 생성 (★여기서 처음으로 tree 가 생긴다)
         written = _git(destination, ["write-tree"])
         if written.returncode != 0:
-            raise IntegrationMergeError(
-                INTEGRATION_TREE_WRITE_FAILED, written.stderr.strip()[:200]
-            )
+            raise IntegrationMergeError(INTEGRATION_TREE_WRITE_FAILED, "")
         merge_tree = written.stdout.strip()
         if _OID_RE.match(merge_tree) is None:
-            raise IntegrationMergeError(INTEGRATION_TREE_WRITE_FAILED, merge_tree[:64])
+            raise IntegrationMergeError(INTEGRATION_TREE_WRITE_FAILED, "")
 
         # 9. commit-tree 로 두 부모 commit 생성 (★비로소 commit 이다)
         created_commit = _git(
@@ -188,26 +211,19 @@ def build_synthetic_merge(
             ["commit-tree", merge_tree, "-p", base, "-p", head, "-m", MERGE_MESSAGE],
         )
         if created_commit.returncode != 0:
-            raise IntegrationMergeError(
-                INTEGRATION_COMMIT_CREATE_FAILED, created_commit.stderr.strip()[:200]
-            )
+            raise IntegrationMergeError(INTEGRATION_COMMIT_CREATE_FAILED, "")
         merge_commit = created_commit.stdout.strip()
         if _OID_RE.match(merge_commit) is None:
-            raise IntegrationMergeError(INTEGRATION_COMMIT_CREATE_FAILED, merge_commit[:64])
+            raise IntegrationMergeError(INTEGRATION_COMMIT_CREATE_FAILED, "")
 
         # 10. tree 와 부모 순서 재검증
         observed_tree = _git(destination, ["show", "-s", "--format=%T", merge_commit])
         if observed_tree.returncode != 0 or observed_tree.stdout.strip() != merge_tree:
-            raise IntegrationMergeError(
-                INTEGRATION_MERGE_TREE_MISMATCH,
-                f"{observed_tree.stdout.strip()} != {merge_tree}",
-            )
+            raise IntegrationMergeError(INTEGRATION_MERGE_TREE_MISMATCH, "")
         observed_parents = _git(destination, ["show", "-s", "--format=%P", merge_commit])
         parents = tuple(observed_parents.stdout.split())
         if observed_parents.returncode != 0 or parents != (base, head):
-            raise IntegrationMergeError(
-                INTEGRATION_MERGE_PARENT_MISMATCH, " ".join(parents)[:120]
-            )
+            raise IntegrationMergeError(INTEGRATION_MERGE_PARENT_MISMATCH, "")
 
         return SyntheticMerge(
             integration_base_commit=base,
@@ -233,7 +249,7 @@ def cleanup_worktree(
         shutil.rmtree(destination, ignore_errors=True)
     _git(repository, ["worktree", "prune"])
     if raise_on_failure and destination.exists():
-        raise IntegrationMergeError(INTEGRATION_CLEANUP_FAILED, str(destination))
+        raise IntegrationMergeError(INTEGRATION_CLEANUP_FAILED, "")
 
 
 __all__ = [
@@ -251,7 +267,10 @@ __all__ = [
     "INTEGRATION_TREE_WRITE_FAILED",
     "INTEGRATION_UNMERGED_INDEX",
     "INTEGRATION_WORKTREE_INVALID",
+    "FIXED_GIT_CONFIG_ARGS",
+    "FIXED_GIT_ENV",
     "MERGE_MESSAGE",
+    "MERGE_STRATEGY",
     "IntegrationMergeError",
     "SyntheticMerge",
     "build_synthetic_merge",

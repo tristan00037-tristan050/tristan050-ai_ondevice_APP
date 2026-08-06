@@ -104,10 +104,11 @@ def test_internal_lock_verdict_still_carries_offending_paths(tmp_path):
 
 
 def test_orchestrator_result_keeps_full_failure_evidence(monkeypatch, tmp_path):
+    from ac25 import remote_facts as rf
+
+    dead = lambda path: rf.TransportResult(status=404)  # noqa: E731
     result = orchestrator.run_verification(
-        transport=lambda path: __import__(
-            "ac25.remote_facts", fromlist=["TransportResult"]
-        ).TransportResult(status=404),
+        router=rf.TransportRouter(approval=dead, candidate=dead, run=dead),
         run_id=1,
         expected_head="a" * 40,
         expected_tree="b" * 40,
@@ -130,10 +131,11 @@ ALLOWED_RECEIPT_KEYS = {
 
 
 def test_receipt_contains_only_meta_values(tmp_path):
+    from ac25 import remote_facts as rf
+
+    dead = lambda path: rf.TransportResult(status=404)  # noqa: E731
     result = orchestrator.run_verification(
-        transport=lambda path: __import__(
-            "ac25.remote_facts", fromlist=["TransportResult"]
-        ).TransportResult(status=404),
+        router=rf.TransportRouter(approval=dead, candidate=dead, run=dead),
         run_id=1,
         expected_head="a" * 40,
         expected_tree="b" * 40,
@@ -148,9 +150,12 @@ def test_receipt_contains_only_meta_values(tmp_path):
 
 
 def test_receipt_is_written_atomically(tmp_path):
-    target = orchestrator.write_receipt({"verdict": 1}, directory=tmp_path)
+    target, digest = orchestrator.write_receipt({"verdict": 1}, directory=tmp_path)
     assert target.name == orchestrator.RECEIPT_FILENAME
     assert json.loads(target.read_text())["verdict"] == 1
+    assert len(digest) == 64
+    # ★C6 — receipt 파일은 0600 이다
+    assert oct(target.stat().st_mode & 0o777) == "0o600"
     # 임시 파일이 남지 않는다
     leftovers = [p.name for p in tmp_path.iterdir() if p.name.startswith(".ac25-receipt-")]
     assert leftovers == []

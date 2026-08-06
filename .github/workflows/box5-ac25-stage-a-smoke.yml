@@ -1,17 +1,15 @@
 name: Box5 AC-25 Stage A Smoke
 
-# §4-1 단계 A smoke — PR #904 후보 코드의 ★자기시험★ 이다.
+# §18 단계 A smoke — PR #904 후보 코드의 ★무권한 자기시험★ 이다.
 #
-# ★AC-25 독립검증이 아니다. 이 워크플로가 초록이어도 단계 B 판정이 아니다.
+# ★AC-25 독립 승인으로 부르지 않는다. 이 워크플로가 초록이어도 단계 B 판정이 아니다.
 # ★secret 0 · environment 0 · checks:write 0 · PR #903 checkout 0
-#
-# 존재 이유(회고 D-3): 두 레인이 없는 파일을 설치 대상으로 부르는데도 CI 57개가
-# 전부 초록이었다. 다른 job 이 먼저 해시 고정 lock 을 깔아 두어 우연히 넘어간
-# 것이다. 그래서 ★단계 B 와 같은 명령을 병합 전에 한 번 실제로 돌려 본다.
-#
-# ★이 파일은 설치·검사 명령 문자열을 직접 조립하지 않는다. 보호 runner 가 만든다.
-#
 # ★action 은 전부 full commit SHA 로 고정한다.
+# ★설치·검사 명령 문자열을 이 파일에서 조립하지 않는다. 보호 runner 가 만든다.
+#
+# 신뢰 경계(§8 정정): 후보 ★제품 코드·빌드 스크립트·제품 테스트는 실행하지 않는다.
+# 다만 PR #904 의 ac25 verifier Python 코드는 이 비특권 job 에서 ★실행한다.
+# "후보 코드를 전혀 실행하지 않는다" 고 쓰면 사실이 아니다.
 on:
   pull_request:
     paths:
@@ -19,32 +17,26 @@ on:
       - scripts/ci/ac25/**
       - tests/box5_ac25/**
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: box5-ac25-smoke-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
+  # ══ 검증기 자기시험 ═══════════════════════════════════════════════════
   ac25-stage-b-smoke:
     name: ac25-stage-b-smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
-    env:
-      GIT_LFS_SKIP_SMUDGE: '1'
     steps:
-      # actions/checkout v4 — 커밋 고정
       - name: Checkout candidate at exact PR head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          lfs: false
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
-      # §5-2 — lock 은 Python 3.12 로 만들어졌다. 러너 기본 Python 을 쓰지 않는다.
-      # actions/setup-python v5 — 커밋 고정
       - name: Set up Python 3.12
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
@@ -63,7 +55,6 @@ jobs:
 
       # ★단계 B 와 ★같은 진입점★ 이다. 설치·검사 명령은 보호 runner 안에 있다.
       - name: Resolve manifest, install, and self-test via protected runner
-        id: runner
         env:
           PYTHONPATH: scripts/ci
           PYTHONNOUSERSITE: '1'
@@ -91,32 +82,136 @@ jobs:
               print(f"{key.upper()}={summary[key]}")
           PY
 
-      # §12 는 이 job 에서 저장소 계약 스크립트를 돌리라고 정한다.
-      # ★돌리지 못했다 — NOT_RUN 이다. 통과로 적지 않는다. 사유는 전부 원격 실측이다.
-      #
-      # ① 그 스크립트 이름이 워크플로 원문에 있으면 저장소 guard 가 이 파일을
-      #    "full-history 워크플로" 로 자동 분류하고 checkout-depth SSOT 등록을 강제한다.
-      # ② 그 SSOT 를 고치면 ssot registry consumer bind v1 이
-      #    SSOT_CHANGED_WITHOUT_BOUND_CONSUMER_CHANGE 로 닫는다. 풀려면 bound
-      #    consumer 인 guard 스크립트를 고쳐야 하는데, §3 허용 밖이고 §17 이 금지한다.
-      # ③ 이 job 은 검사를 먼저 돌리므로 캐시가 남고, 그 뒤 계약을 돌리면
-      #    NO_RAW_IN_LOGS_EXCEPTIONS_V1 이 닫힌다(원격 실측).
-      #
-      # 같은 계약은 이미 required job `product-verify-repo-guards` 가 ★같은 PR head★
-      # 에서 돌린다. 여기서 중복 실행하려면 위 세 계약을 건드려야 한다. 총괄 판단 대기.
-      - name: Repository contracts (delegated)
+      # §13 C4 — 재검토 승인 전에는 ACCEPTANCE_ERRATUM=1 을 출력하지 않는다.
+      # 아직 없는 승인을 있는 것처럼 기록하지 않는다.
+      - name: Acceptance erratum status (requested, not approved)
         run: |
           set -euo pipefail
           echo "REPO_CONTRACTS_IN_SMOKE=NOT_RUN"
-          echo "REPO_CONTRACTS_DELEGATED_TO=product-verify-repo-guards"
+          echo "ACCEPTANCE_ERRATUM_REQUESTED=1"
+          echo "ACCEPTANCE_ERRATUM_APPROVED=0"
 
+      # §18 — dirty 면 경로 목록을 로그에 내지 않는다. 코드만 낸다.
       - name: Clean finish (tracked and untracked)
         run: |
           set -euo pipefail
-          git diff --exit-code
-          git diff --cached --exit-code
-          if [ -n "$(git status --porcelain)" ]; then
+          if ! git diff --quiet || ! git diff --cached --quiet \
+             || [ -n "$(git status --porcelain)" ]; then
             echo "ERROR_CODE=SMOKE_WORKTREE_NOT_CLEAN"
-            git status --porcelain
             exit 1
           fi
+
+  # ══ C2 — Ubuntu 원격 재현 ═════════════════════════════════════════════
+  ac25-merge-reproducibility:
+    name: ac25-merge-reproducibility
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout candidate at exact PR head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Fetch approved base and candidate objects
+        env:
+          APPROVED_BASE: afdb237e4e6e83d96a182b6c5366a2ad95949bee
+          APPROVED_HEAD: 61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${APPROVED_BASE}" "${APPROVED_HEAD}"
+
+      # ★두 번 합성해 서로 같고 기대 좌표와도 같은지 본다.
+      # ★다른 값이 나와도 상수를 고쳐 맞추지 않는다.
+      - name: Synthesize twice and compare with expected coordinates
+        env:
+          PYTHONPATH: scripts/ci
+          PYTHONNOUSERSITE: '1'
+        run: |
+          set -euo pipefail
+          echo "C2_GIT_VERSION=$(git --version)"
+          echo "C2_RUNNER_IMAGE_OS=${ImageOS:-unknown}/${ImageVersion:-unknown}"
+          python3 - <<'PY'
+          import tempfile
+          from pathlib import Path
+
+          from ac25.integration_merge import build_synthetic_merge, cleanup_worktree
+
+          EXPECTED_SYNTHETIC_MERGE_COMMIT = "9ea18f7c6213b1052ce58af7d9cdce5e2e71e09d"
+          EXPECTED_SYNTHETIC_MERGE_TREE = "ae66b4274d5e644b34a1df6e09ecf6569171cdbb"
+          EXPECTED_MERGE_PARENTS = (
+              "afdb237e4e6e83d96a182b6c5366a2ad95949bee",
+              "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04",
+          )
+
+          repository = Path.cwd()
+          runs = []
+          for index in (1, 2):
+              root = Path(tempfile.mkdtemp(prefix=f"ac25-c2-{index}-"))
+              destination = root / "worktree"
+              try:
+                  merge = build_synthetic_merge(
+                      repository=repository,
+                      destination=destination,
+                      integration_base_commit=EXPECTED_MERGE_PARENTS[0],
+                      candidate_head=EXPECTED_MERGE_PARENTS[1],
+                  )
+                  runs.append(
+                      (merge.synthetic_merge_commit, merge.merge_tree, merge.parents)
+                  )
+              finally:
+                  cleanup_worktree(repository, destination, raise_on_failure=False)
+
+          for index, (commit, tree, parents) in enumerate(runs, start=1):
+              print(f"C2_RUN_{index}_COMMIT={commit}")
+              print(f"C2_RUN_{index}_TREE={tree}")
+              print(f"C2_RUN_{index}_PARENT_BASE={parents[0]}")
+              print(f"C2_RUN_{index}_PARENT_CANDIDATE={parents[1]}")
+
+          if runs[0] != runs[1]:
+              print("ERROR_CODE=INTEGRATION_MERGE_NOT_REPRODUCIBLE")
+              raise SystemExit(1)
+          commit, tree, parents = runs[0]
+          matches = (
+              commit == EXPECTED_SYNTHETIC_MERGE_COMMIT
+              and tree == EXPECTED_SYNTHETIC_MERGE_TREE
+              and parents == EXPECTED_MERGE_PARENTS
+          )
+          print(f"C2_MATCHES_EXPECTED={'YES' if matches else 'NO'}")
+          if not matches:
+              print("ERROR_CODE=INTEGRATION_MERGE_UNEXPECTED_COORDINATE")
+              raise SystemExit(1)
+          print("VERDICT=1")
+          print("ERROR_CODE=OK")
+          PY
+
+  # ══ C3 — 실행 가능한 발행 시험 ════════════════════════════════════════
+  ac25-publish-check-executable-test:
+    name: ac25-publish-check-executable-test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout candidate at exact PR head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+
+      # ★정적 문자열 검색이 아니라 ★실제 실행★ 이다. Checks API 를 mock 한다.
+      - name: Run publish_check executable tests
+        run: |
+          set -euo pipefail
+          node --test tests/box5_ac25/publish_check.test.mjs

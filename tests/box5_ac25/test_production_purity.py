@@ -219,12 +219,14 @@ def test_unused_jsonschema_install_is_gone():
     assert "jsonschema" not in WORKFLOW.read_text(encoding="utf-8")
 
 
-def test_gh_token_is_configured_for_the_orchestrator_step():
+def test_two_credentials_are_configured_for_the_orchestrator_step():
+    """★C5 — 단일 GH_TOKEN 이 아니라 두 credential 로 분리한다."""
     workflow = _workflow()
     steps = workflow["jobs"]["trusted-verification"]["steps"]
     orchestrate = next(step for step in steps if step.get("id") == "orchestrate")
-    assert "GH_TOKEN" in orchestrate["env"]
-    assert orchestrate["env"]["GH_TOKEN"].strip()
+    assert orchestrate["env"]["AC25_APPROVAL_TOKEN"].strip()
+    assert orchestrate["env"]["AC25_CANDIDATE_TOKEN"].strip()
+    assert "GH_TOKEN" not in orchestrate["env"]
 
 
 def test_approval_token_is_exposed_only_to_the_trusted_job():
@@ -270,35 +272,25 @@ def test_lanes_run_checks_only_through_the_protected_runner():
             assert forbidden not in script, (lane, forbidden)
 
 
-def test_published_receipt_states_the_coverage_basis_verbatim():
-    """조건 2 — 발행되는 영수증이 근거를 그대로 실어야 한다.
+def test_coverage_basis_stays_in_the_receipt():
+    """조건 2(4차 라운드) — 근거 문장은 ★receipt★ 에 남는다.
 
-    check-run 요약만 읽는 사람이 coverage 측정으로 오해하면 안 된다.
+    C6 이후 receipt 원문은 job output 으로 나가지 않으므로 check summary 가 아니라
+    receipt 파일이 그 문장을 담는 자리다.
     """
     from ac25.designated_checks import COVERAGE_BASIS
 
-    workflow = _workflow()
-    script = workflow["jobs"]["publish-check"]["steps"][0]["with"]["script"]
-    assert "designated_check_coverage_basis" in script
-    assert "receipt.coverage_basis" in script
-    # 근거 문장을 워크플로가 다시 쓰지 않고 검증기 값을 그대로 싣는다
-    assert COVERAGE_BASIS not in script
+    assert "static-reference" in COVERAGE_BASIS
+    assert "실행 도달 증거가 아니" in COVERAGE_BASIS
+    source = (PRODUCTION_DIR / "orchestrator.py").read_text(encoding="utf-8")
+    assert '"coverage_basis": coverage.basis' in source
 
 
-def test_publish_refuses_without_coverage_evidence():
-    """조건 1·3 — 덮음 구멍이 있으면 성공 check-run 을 만들지 않는다."""
-    script = _workflow()["jobs"]["publish-check"]["steps"][0]["with"]["script"]
-    assert "RECEIPT_COVERAGE_GAP" in script
-    assert "coverage_uncovered_count !== 0" in script
-
-
-def test_publish_refuses_when_evidence_is_missing():
-    script = _workflow()["jobs"]["publish-check"]["steps"][0]["with"]["script"]
-    for code in ("RECEIPT_MISSING", "RECEIPT_OID_INVALID", "RECEIPT_DIGEST_INVALID",
-                 "_JOB_NOT_SUCCESS", "CANDIDATE_COORDINATE_MISMATCH"):
-        assert code in script, code
-        # 판정은 전부 발행 ★전에★ 끝난다
-        assert script.index(code) < script.index("checks.create"), code
+def test_coverage_gap_still_fails_the_run():
+    """조건 1·3(4차 라운드) — 덮음 구멍은 여전히 전체 실패다."""
+    source = (PRODUCTION_DIR / "orchestrator.py").read_text(encoding="utf-8")
+    assert "DESIGNATED_CHECK_COVERAGE_GAP" in source
+    assert "if not coverage.ok:" in source
 
 
 def test_only_publish_job_can_write_checks():

@@ -14,8 +14,10 @@ HEAD·github.sha·합성 병합 커밋·작업 디렉터리 상태를 끝점으�
 from __future__ import annotations
 
 import re
-import subprocess
 from dataclasses import dataclass
+from pathlib import Path
+
+from . import output_containment
 
 
 class GitPathsError(Exception):
@@ -38,20 +40,22 @@ _OID_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _run_git(repository_path: str, args: list[str]) -> bytes:
+    """★output_containment 를 통해서만 부른다(C1).
+
+    stderr 는 ★분류에만★ 쓰고 예외 메시지에 넣지 않는다.
+    """
     try:
-        proc = subprocess.run(
-            ["git", "-C", repository_path, *args],
-            capture_output=True,
-            check=False,
+        code, out, err = output_containment.run_and_read(
+            ["git", "-C", repository_path, *args], cwd=Path(repository_path)
         )
-    except OSError as exc:  # git 미존재 등
-        raise GitPathsError(CHANGED_PATHS_UNAVAILABLE, f"git 실행 실패: {exc}") from exc
-    if proc.returncode != 0:
-        err = proc.stderr.decode("utf-8", "replace")
-        if "bad object" in err or "unknown revision" in err or "Not a valid object" in err:
-            raise GitPathsError(GIT_OBJECT_NOT_FOUND, err.strip())
-        raise GitPathsError(CHANGED_PATHS_UNAVAILABLE, err.strip() or "git diff 실패")
-    return proc.stdout
+    except output_containment.ContainmentError as exc:
+        raise GitPathsError(CHANGED_PATHS_UNAVAILABLE, exc.code) from exc
+    if code != 0:
+        text = err.decode("utf-8", "replace")
+        if "bad object" in text or "unknown revision" in text or "Not a valid object" in text:
+            raise GitPathsError(GIT_OBJECT_NOT_FOUND, "")
+        raise GitPathsError(CHANGED_PATHS_UNAVAILABLE, "")
+    return out
 
 
 def canonicalize_path(raw_bytes: bytes) -> str:

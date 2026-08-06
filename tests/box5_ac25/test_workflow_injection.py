@@ -156,24 +156,24 @@ def test_inputs_reach_python_only_through_env():
     assert "${{" not in orchestrate["run"]
 
 
-def test_github_script_receives_json_through_env_not_source():
-    """★output JSON 을 JavaScript 소스에 직접 삽입하지 않는다."""
-    workflow = _workflow(TRUSTED)
-    step = workflow["jobs"]["publish-check"]["steps"][0]
+def test_github_script_receives_values_through_env_not_source():
+    """★job output 을 JavaScript 소스에 직접 삽입하지 않는다."""
+    step = _workflow(TRUSTED)["jobs"]["publish-check"]["steps"][1]
     script = step["with"]["script"]
     assert "${{" not in script, "script 본문에 표현식이 삽입돼 있다"
-    assert "JSON.parse(process.env.TRUSTED_RECEIPT" in script
-    assert step["env"]["TRUSTED_RECEIPT"] == (
-        "${{ needs.trusted-verification.outputs.receipt }}"
-    )
+    # 값은 전부 env 로만 들어온다
+    assert "process.env" in script
+    assert all(key.startswith("AC25_") for key in step["env"])
 
 
-def test_github_script_validates_parsed_values():
-    script = _workflow(TRUSTED)["jobs"]["publish-check"]["steps"][0]["with"]["script"]
-    assert "RECEIPT_NOT_PARSEABLE" in script
-    assert "RECEIPT_OID_INVALID" in script
-    assert "RECEIPT_DIGEST_INVALID" in script
-    assert "/^[0-9a-f]{40}$/" in script
+def test_github_script_delegates_judgement_to_the_protected_module():
+    """판정 로직을 inline 문자열로 두지 않는다. 보호된 모듈이 한다(C3)."""
+    script = _workflow(TRUSTED)["jobs"]["publish-check"]["steps"][1]["with"]["script"]
+    assert "publish_check.mjs" in script
+    assert "pathToFileURL" in script
+    # inline 에서 결론을 계산하지 않는다
+    assert "conclusion" not in script
+    assert "checks.create" not in script
 
 
 def test_shell_true_count_is_zero_in_production_modules():

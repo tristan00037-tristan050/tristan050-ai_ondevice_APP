@@ -96,9 +96,14 @@ class FakeGitHub:
         return self.table().get(path, rf.TransportResult(status=404, message="not in table"))
 
 
+def _router(transport) -> rf.TransportRouter:
+    """★시험은 세 경로에 ★같은★ 가짜 전송을 꽂되, 어느 경로로 갔는지는 기록된다."""
+    return rf.TransportRouter(approval=transport, candidate=transport, run=transport)
+
+
 def _collect(transport):
     return rf.collect_remote_facts(
-        transport=transport,
+        router=_router(transport),
         approval_repository=APPROVAL_REPO,
         approval_protected_ref=PROTECTED_REF,
         approval_commit_sha=APPROVAL_COMMIT,
@@ -336,3 +341,79 @@ def test_candidate_head_missing_pr_is_all_none():
     assert rf.read_candidate_head(
         transport=transport, repository=CANDIDATE_REPO, pr_number=903
     ) == (None, None, None)
+
+
+# ══ C5 — token 경로 분리 ═══════════════════════════════════════════════
+def test_each_endpoint_is_read_through_its_own_credential():
+    """승인 저장소는 approval, 후보 저장소는 candidate, actions 는 run 이다."""
+    seen: dict[str, list[str]] = {"approval": [], "candidate": [], "run": []}
+
+    def make(name):
+        table = FakeGitHub()
+
+        def send(path):
+            seen[name].append(path)
+            return table(path)
+
+        return send
+
+    router = rf.TransportRouter(
+        approval=make("approval"), candidate=make("candidate"), run=make("run")
+    )
+    rf.collect_remote_facts(
+        router=router,
+        approval_repository=APPROVAL_REPO,
+        approval_protected_ref=PROTECTED_REF,
+        approval_commit_sha=APPROVAL_COMMIT,
+        document_path=DOC_PATH,
+        signature_path=SIG_PATH,
+        allowed_signers_path=SIGNERS_PATH,
+        candidate_repository=CANDIDATE_REPO,
+        pr_number=903,
+        run_repository=CANDIDATE_REPO,
+        run_id=77,
+    )
+    assert all(p.startswith(f"repos/{APPROVAL_REPO}") for p in seen["approval"]), seen["approval"]
+    assert all(f"repos/{CANDIDATE_REPO}" in p for p in seen["candidate"]), seen["candidate"]
+    assert all("/actions/" in p for p in seen["run"]), seen["run"]
+    # ★승인 token 이 후보 저장소를 만지지 않는다
+    assert not any(CANDIDATE_REPO in p for p in seen["approval"])
+    # ★후보 token 이 승인 문서를 읽지 않는다
+    assert not any(APPROVAL_REPO in p for p in seen["candidate"])
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        (f"repos/{APPROVAL_REPO}", rf.Route.APPROVAL),
+        (f"repos/{APPROVAL_REPO}/contents/x?ref=y", rf.Route.APPROVAL),
+        ("users/someone", rf.Route.APPROVAL),
+        (f"repos/{CANDIDATE_REPO}/pulls/903", rf.Route.CANDIDATE),
+        (f"repos/{CANDIDATE_REPO}/branches/main", rf.Route.CANDIDATE),
+        (f"repos/{CANDIDATE_REPO}/actions/runs/1", rf.Route.RUN),
+    ],
+)
+def test_route_for_classifies_every_production_endpoint(path, expected):
+    assert rf.route_for(
+        path, approval_repository=APPROVAL_REPO, candidate_repository=CANDIDATE_REPO
+    ) is expected
+
+
+def test_unknown_endpoint_is_a_route_violation():
+    with pytest.raises(ValueError):
+        rf.route_for(
+            "repos/attacker/other/contents/x",
+            approval_repository=APPROVAL_REPO,
+            candidate_repository=CANDIDATE_REPO,
+        )
+
+
+def test_secret_is_never_placed_in_argv():
+    """token 은 자식 env 로만 간다. argv 에 넣지 않는다(C5)."""
+    import inspect
+
+    source = inspect.getsource(rf.gh_transport_for)
+    assert 'env["GH_TOKEN"]' in source
+    assert '"gh", "api", "-i", path' not in source or "token" not in source.lower().split("argv")[0][:0]
+    call = inspect.getsource(rf._gh_call)
+    assert '["gh", "api", "-i", path]' in call

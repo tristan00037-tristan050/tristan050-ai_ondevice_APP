@@ -251,9 +251,14 @@ def frozen_clock(monkeypatch):
     )
 
 
+def _router(transport) -> rf.TransportRouter:
+    """세 경로에 같은 가짜 전송을 꽂는다. 경로 분리 자체는 remote_facts 시험이 본다."""
+    return rf.TransportRouter(approval=transport, candidate=transport, run=transport)
+
+
 def _run(repo, transport, **kwargs):
     return orchestrator.run_verification(
-        transport=transport,
+        router=_router(transport),
         run_id=77,
         expected_head=kwargs.pop("expected_head", repo["head_sha"]),
         expected_tree=kwargs.pop("expected_tree", repo["head_tree"]),
@@ -395,7 +400,7 @@ def test_designated_checks_are_derived_from_the_lock(repo, document, frozen_cloc
 def test_missing_lock_is_fail_closed(tmp_path, frozen_clock):
     empty = {"root": tmp_path, "head_sha": "6" * 40, "head_tree": "3" * 40}
     result = orchestrator.run_verification(
-        transport=lambda path: rf.TransportResult(status=404),
+        router=lambda path: rf.TransportResult(status=404),
         run_id=77, expected_head="6" * 40, expected_tree="3" * 40,
         verifier_commit="9" * 40, now=NOW, repository_root=tmp_path,
     )
