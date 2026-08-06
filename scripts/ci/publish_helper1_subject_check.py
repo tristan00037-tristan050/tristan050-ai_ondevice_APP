@@ -209,6 +209,13 @@ def validate_policy(policy: dict[str, Any]) -> None:
         or policy["policy_epoch"] < 1
         or type(policy.get("protected_components_sha256")) is not dict
         or set(policy["protected_components_sha256"]) != set(PROTECTED_COMPONENTS)
+        or type(policy.get("quality_producer_workflow_path")) is not str
+        or type(policy.get("quality_producer_workflow_sha256")) is not str
+        or SHA256.fullmatch(policy["quality_producer_workflow_sha256"]) is None
+        or policy["protected_components_sha256"].get(
+            policy["quality_producer_workflow_path"]
+        )
+        != policy["quality_producer_workflow_sha256"]
         or policy.get("subject_check_name") != CHECK_NAME
         or policy.get("subject_check_app_slug") != "github-actions"
         or policy.get("subject_check_required") is not True

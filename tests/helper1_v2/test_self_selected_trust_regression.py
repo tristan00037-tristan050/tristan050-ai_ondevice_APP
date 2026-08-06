@@ -537,7 +537,9 @@ def _build_signed_fixture(
         "quality_evidence_required": True,
         "quality_producer_workflow_id": 1,
         "quality_producer_workflow_path": ".github/workflows/helper1-v2-evidence.yml",
-        "quality_producer_workflow_sha256": "sha256:" + "a" * 64,
+        "quality_producer_workflow_sha256": component_digests[
+            ".github/workflows/helper1-v2-evidence.yml"
+        ],
         "device_trust_policy_sha256": _sha256(
             trusted_verifier.DEVICE_TRUST_POLICY_PATH.read_bytes()
         ),

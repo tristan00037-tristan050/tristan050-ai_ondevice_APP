@@ -77,10 +77,6 @@ APPROVAL_PRODUCER_REPOSITORY_ID = 1097940756
 # The protected bootstrap has one measured source identity. A separate approval
 # producer is deliberately not trusted until it is folded into the protected path.
 APPROVAL_PRODUCER_WORKFLOW_ID = PRODUCER_WORKFLOW_ID
-APPROVAL_PRODUCER_WORKFLOW_PATH = PRODUCER_WORKFLOW_PATH
-APPROVAL_PRODUCER_WORKFLOW_SHA256 = (
-    "69af10308c9e7758ce5e4f385b650e3b06a96480c5e43bf48f2553cbd61efbdc"
-)
 LEGACY_APPROVAL_WORKFLOW_ID = 0
 LEGACY_APPROVAL_WORKFLOW_PATH = ".github/workflows/helper1-v2-approval-evidence.yml"
 LEGACY_APPROVAL_WORKFLOW_SHA256 = (
@@ -151,8 +147,27 @@ def _load_json(path: Path, code: str) -> tuple[dict[str, Any], bytes]:
     return _decode_json(raw, code), raw
 
 
+def _canonical_producer_workflow_identity(
+    policy: Mapping[str, Any],
+) -> tuple[str, str]:
+    path = policy.get("quality_producer_workflow_path")
+    digest = policy.get("quality_producer_workflow_sha256")
+    components = policy.get("protected_components_sha256")
+    if (
+        path != PRODUCER_WORKFLOW_PATH
+        or type(digest) is not str
+        or not digest.startswith("sha256:")
+        or SHA256.fullmatch(digest.removeprefix("sha256:")) is None
+        or type(components) is not dict
+        or components.get(path) != digest
+    ):
+        raise ProducerPackageError("PRODUCER_PACKAGE_POLICY_INVALID")
+    return path, digest.removeprefix("sha256:")
+
+
 def _policy() -> tuple[dict[str, Any], bytes]:
     policy, raw = _load_json(POLICY_PATH, "PRODUCER_PACKAGE_POLICY_INVALID")
+    _canonical_producer_workflow_identity(policy)
     contract = policy.get("producer_package_contract")
     if (
         type(policy.get("enabled")) is not bool
@@ -777,6 +792,7 @@ def _verify_bootstrap_receipts(
 ) -> dict[str, bytes]:
     if policy.get("enabled") is not False:
         raise ProducerPackageError("BOOTSTRAP_PACKAGE_FORBIDDEN_WHEN_POLICY_ENABLED")
+    workflow_path, workflow_sha256 = _canonical_producer_workflow_identity(policy)
     names = {
         name.removeprefix("PROTECTED_BOOTSTRAP/"): raw
         for name, raw in files.items()
@@ -815,9 +831,8 @@ def _verify_bootstrap_receipts(
         or provenance.get("subject_tree") != subject_tree
         or provenance.get("producer_run") != producer_run
         or provenance.get("producer_workflow_id") != APPROVAL_PRODUCER_WORKFLOW_ID
-        or provenance.get("producer_workflow_path") != APPROVAL_PRODUCER_WORKFLOW_PATH
-        or provenance.get("producer_workflow_sha256")
-        != APPROVAL_PRODUCER_WORKFLOW_SHA256
+        or provenance.get("producer_workflow_path") != workflow_path
+        or provenance.get("producer_workflow_sha256") != workflow_sha256
         or provenance.get("test_evidence_index_sha256")
         != hashlib.sha256(test_index_raw).hexdigest()
         or quality.get("schema_version")
@@ -869,6 +884,7 @@ def load_verified_package(
     require_authority: bool = True,
 ) -> VerifiedProducerPackage:
     """Freeze one package FD and derive every final-verdict input from those bytes."""
+    _canonical_producer_workflow_identity(policy)
     _verify_delivery_layout(package_path)
     raw = _freeze_package(package_path)
     package_sha256 = hashlib.sha256(raw).hexdigest()

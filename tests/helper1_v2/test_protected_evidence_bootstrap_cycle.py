@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from dataclasses import replace
 import hashlib
 import io
 import json
@@ -13,6 +14,7 @@ import zipfile
 import pytest
 
 from butler_pc_core.helper1.test_evidence import CHECKS, LANES, CheckResult, LaneResult
+import scripts.ci.helper1_producer_package as producer_package_module
 from scripts.ci.helper1_producer_package import (
     PACKAGE_RELATIVE,
     ProducerPackageError,
@@ -365,6 +367,113 @@ def test_workflow_byte_drift_blocks_before_packaging(tmp_path: Path) -> None:
             request_json=request,
             request_archive=request_archive,
         )
+
+
+def test_policy_workflow_fingerprints_must_match_at_load(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy, _raw = _policy()
+    policy["quality_producer_workflow_sha256"] = "sha256:" + "0" * 64
+    divergent_policy = tmp_path / "policy.json"
+    divergent_policy.write_bytes(_canonical(policy) + b"\n")
+
+    monkeypatch.setattr(producer_package_module, "POLICY_PATH", divergent_policy)
+    with pytest.raises(ProducerPackageError, match="PRODUCER_PACKAGE_POLICY_INVALID"):
+        producer_package_module._policy()
+
+    scripts_ci = str(ROOT / "scripts/ci")
+    sys.path.insert(0, scripts_ci)
+    try:
+        from publish_helper1_subject_check import CheckPublishError, validate_policy
+
+        with pytest.raises(CheckPublishError, match="TRUST_POLICY_INVALID"):
+            validate_policy(policy)
+    finally:
+        sys.path.remove(scripts_ci)
+
+
+def test_provenance_workflow_fingerprint_must_match_canonical_policy(
+    tmp_path: Path,
+) -> None:
+    artifact_root = tmp_path / "input"
+    _materialize_raw_artifact(artifact_root)
+    event = _event(tmp_path)
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    request, request_archive = _transport(fixture, artifact_root)
+    policy, _raw = _policy()
+    verified = verify_untrusted_artifact(
+        artifact_root,
+        event,
+        policy,
+        request_json=request,
+        request_archive=request_archive,
+    )
+    receipts = build_bootstrap_receipts(
+        replace(verified, workflow_sha256="0" * 64),
+        policy_enabled=False,
+    )
+    files = {
+        "TEST_EVIDENCE/TEST_EVIDENCE_INDEX.v1.json": verified.test_index_raw,
+        **{
+            f"PROTECTED_BOOTSTRAP/{name}": raw
+            for name, raw in receipts.items()
+        },
+    }
+    manifest = {"release_eligible": False, "producer_run": verified.producer_run}
+
+    with pytest.raises(ProducerPackageError, match="BOOTSTRAP_RECEIPT_BINDING_INVALID"):
+        producer_package_module._verify_bootstrap_receipts(
+            files,
+            manifest,
+            policy=policy,
+            subject_commit=verified.subject["subject_sha"],
+            subject_tree=verified.source_tree,
+            producer_run=verified.producer_run,
+        )
+
+
+def test_current_workflow_fingerprint_reaches_unsigned_zero(
+    tmp_path: Path,
+) -> None:
+    artifact_root = tmp_path / "input"
+    _materialize_raw_artifact(artifact_root)
+    event = _event(tmp_path)
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    request, request_archive = _transport(fixture, artifact_root)
+    build_protected_bootstrap_package(
+        artifact_root,
+        event,
+        request_json=request,
+        request_archive=request_archive,
+    )
+    policy, policy_raw = _policy()
+    loaded = load_verified_package(
+        artifact_root / PACKAGE_RELATIVE,
+        policy=policy,
+        policy_raw=policy_raw,
+        require_authority=False,
+    )
+    approval = json.loads(loaded.bootstrap_receipts["APPROVAL_RECEIPT.v1.json"])
+
+    assert approval["state"] == "UNSIGNED_ZERO"
+    assert approval["signature_b64"] is None
+    assert set(approval["approval_values"].values()) == {0}
+
+
+def test_workflow_fingerprint_is_not_duplicated_in_execution_code() -> None:
+    workflow_sha256 = hashlib.sha256(WORKFLOW.read_bytes()).hexdigest()
+    execution_sources = sorted((ROOT / "scripts/ci").rglob("*.py"))
+
+    assert execution_sources
+    assert all(
+        workflow_sha256 not in path.read_text(encoding="utf-8")
+        for path in execution_sources
+    )
+    producer_source = (
+        ROOT / "scripts/ci/helper1_producer_package.py"
+    ).read_text(encoding="utf-8")
+    assert "APPROVAL_PRODUCER_WORKFLOW_SHA256" not in producer_source
 
 
 def test_downloaded_archive_digest_mismatch_blocks_before_packaging(tmp_path: Path) -> None:
