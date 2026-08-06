@@ -27,6 +27,8 @@ import shlex
 from dataclasses import dataclass
 from pathlib import Path
 
+from .workflow_yaml import WorkflowYamlError, load_workflow
+
 # ── 오류 코드 ──────────────────────────────────────────────────────────
 CANONICAL_WORKFLOW_MISSING = "CANONICAL_WORKFLOW_MISSING"
 CANONICAL_WORKFLOW_MALFORMED = "CANONICAL_WORKFLOW_MALFORMED"
@@ -132,15 +134,13 @@ def _argv_of(line: str) -> tuple[str, ...]:
 
 def _resolve_local_action(root: Path, reference: str) -> list[tuple[str, tuple[str, ...]]]:
     """로컬 composite action 의 run 명령을 꺼낸다(`./.github/actions/...`)."""
-    import yaml
-
     action_dir = root / reference.removeprefix("./")
     for filename in ("action.yml", "action.yaml"):
         path = action_dir / filename
         if path.is_file():
             try:
-                document = yaml.safe_load(path.read_text(encoding="utf-8"))
-            except yaml.YAMLError as exc:
+                document = load_workflow(path.read_text(encoding="utf-8"))
+            except WorkflowYamlError as exc:
                 raise CanonicalPlanError(CANONICAL_WORKFLOW_MALFORMED) from exc
             runs = document.get("runs") if isinstance(document, dict) else None
             steps = runs.get("steps") if isinstance(runs, dict) else None
@@ -159,17 +159,19 @@ def _resolve_local_action(root: Path, reference: str) -> list[tuple[str, tuple[s
 
 
 def extract_canonical_plan(root: Path, *, runner_temp: str = "/tmp") -> CanonicalPlan:
-    """canonical 워크플로에서 준비 계획을 읽어 만든다."""
-    import yaml
+    """canonical 워크플로에서 준비 계획을 읽어 만든다.
 
+    ★PyYAML 을 쓰지 않는다(workflow_yaml 참고). 이 코드는 신뢰 경로에서 돌고,
+      의존성이 빠진 환경에서는 검증기가 아예 실행되지 않기 때문이다.
+    """
     workflow_path = root / CANONICAL_WORKFLOW_PATH
     try:
         raw = workflow_path.read_bytes()
     except OSError as exc:
         raise CanonicalPlanError(CANONICAL_WORKFLOW_MISSING) from exc
     try:
-        document = yaml.safe_load(raw.decode("utf-8"))
-    except (UnicodeDecodeError, yaml.YAMLError) as exc:
+        document = load_workflow(raw.decode("utf-8"))
+    except (UnicodeDecodeError, WorkflowYamlError) as exc:
         raise CanonicalPlanError(CANONICAL_WORKFLOW_MALFORMED) from exc
 
     jobs = document.get("jobs") if isinstance(document, dict) else None
