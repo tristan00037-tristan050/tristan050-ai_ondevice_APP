@@ -11,12 +11,7 @@ name: Box5 AC-25 Stage A Smoke
 #
 # ★이 파일은 설치·검사 명령 문자열을 직접 조립하지 않는다. 보호 runner 가 만든다.
 #
-# 주석 표기에 대하여: action 은 전부 ★full commit SHA 로 고정★ 한다. 다만 저장소
-# guard(verify_workflow_checkout_depth_ssot_v1)가 checkout 을 ★태그 문자열★ 로
-# 찾으므로, 고정 SHA 만 두면 guard 가 checkout 을 보지 못하고
-# CHECKOUT_FETCH_DEPTH_0_MISSING 으로 닫는다. 그래서 각 checkout 바로 위에 그 SHA
-# 가 어느 태그인지를 적은 한 줄 주석을 둔다. guard 를 고치거나 느슨하게 만들지
-# 않았고, 실제로 쓰이는 참조는 여전히 SHA 하나다.
+# ★action 은 전부 full commit SHA 로 고정한다.
 on:
   pull_request:
     paths:
@@ -40,11 +35,10 @@ jobs:
     env:
       GIT_LFS_SKIP_SMUDGE: '1'
     steps:
-      # actions/checkout@v4
+      # actions/checkout v4 — 커밋 고정
       - name: Checkout candidate at exact PR head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          fetch-depth: 0
           lfs: false
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
@@ -97,56 +91,24 @@ jobs:
               print(f"{key.upper()}={summary[key]}")
           PY
 
-      # §12 저장소 계약. 이 스크립트는 무거운 준비를 전제로 한다 — 아래 순서는
-      # 이미 통과 중인 product-verify-repo-guards.yml 의 준비 단계를 그대로 옮긴 것이다.
-      # ★로컬(Node 26)에서는 preflight 가 Node 20 을 요구해 재현하지 못했다.
-      #   이 단계의 첫 실제 실행은 이 PR 의 원격 CI 다.
-      - name: Install ops dependencies
+      # §12 는 이 job 에서 저장소 계약 스크립트를 돌리라고 정한다.
+      # ★돌리지 못했다 — NOT_RUN 이다. 통과로 적지 않는다. 사유는 전부 원격 실측이다.
+      #
+      # ① 그 스크립트 이름이 워크플로 원문에 있으면 저장소 guard 가 이 파일을
+      #    "full-history 워크플로" 로 자동 분류하고 checkout-depth SSOT 등록을 강제한다.
+      # ② 그 SSOT 를 고치면 ssot registry consumer bind v1 이
+      #    SSOT_CHANGED_WITHOUT_BOUND_CONSUMER_CHANGE 로 닫는다. 풀려면 bound
+      #    consumer 인 guard 스크립트를 고쳐야 하는데, §3 허용 밖이고 §17 이 금지한다.
+      # ③ 이 job 은 검사를 먼저 돌리므로 캐시가 남고, 그 뒤 계약을 돌리면
+      #    NO_RAW_IN_LOGS_EXCEPTIONS_V1 이 닫힌다(원격 실측).
+      #
+      # 같은 계약은 이미 required job `product-verify-repo-guards` 가 ★같은 PR head★
+      # 에서 돌린다. 여기서 중복 실행하려면 위 세 계약을 건드려야 한다. 총괄 판단 대기.
+      - name: Repository contracts (delegated)
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y ripgrep jq
-
-      # actions/setup-node@v4
-      - name: Set up Node.js 20
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: '20'
-
-      - name: Preflight (single source)
-        uses: ./.github/actions/preflight_v1
-
-      - name: Ops deps preflight (fail-closed)
-        run: |
-          set -euo pipefail
-          bash scripts/verify/verify_ops_deps.sh --require-node-npm --require-rg --require-jq
-
-      - name: Install deps (web_e2e)
-        run: npm --prefix webcore_appcore_starter_4_17/scripts/web_e2e ci
-
-      - name: Install Playwright browsers
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
-        run: |
-          npx --prefix webcore_appcore_starter_4_17/scripts/web_e2e \
-            playwright install --with-deps chromium
-
-      - name: Generate build stamp SSOT v1 (pre-verify)
-        run: bash scripts/ops/gen_build_stamp_v1.sh
-
-      - name: Generate artifact chain proof v2 (pre-verify)
-        run: bash scripts/ops/gen_artifact_chain_proof_v2.sh
-
-      - name: Repository contracts
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
-          ONPREM_PROOF_STRICT_ENFORCE: '0'
-          DATABASE_URL: postgres://u:p@localhost:5432/app
-          EXPORT_SIGN_SECRET: ci_format_check_only_16ch
-          ARTIFACT_CHAIN_PROOF_V2_ENFORCE: '1'
-        run: |
-          set -euo pipefail
-          bash scripts/verify/verify_repo_contracts.sh
+          echo "REPO_CONTRACTS_IN_SMOKE=NOT_RUN"
+          echo "REPO_CONTRACTS_DELEGATED_TO=product-verify-repo-guards"
 
       - name: Clean finish (tracked and untracked)
         run: |
