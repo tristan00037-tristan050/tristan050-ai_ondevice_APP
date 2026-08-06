@@ -36,6 +36,19 @@ TREE = "b" * 40
 BASE = "c" * 40
 BLOB = "d" * 40
 
+# 계약이 실제로 내는 형태: KEY=0/1 줄과 실패 시 FAILED_GUARD 줄
+CONTRACT_STDOUT = (
+    b"P0_02_KEYS_ONLY_VAL=unset\n"
+    b"REPO_CONTRACTS_HYGIENE_OK=1\n"
+    b"WORKFLOW_YAML_PARSE_OK=1\n"
+)
+CONTRACT_STDOUT_FAILING = (
+    b"P0_02_KEYS_ONLY_VAL=unset\n"
+    b"REPO_CONTRACTS_FAILED_GUARD=some_guard_v1\n"
+    b"REPO_CONTRACTS_HYGIENE_OK=1\n"
+    b"SOME_GUARD_V1_OK=0\n"
+)
+
 
 class _FakeRunner:
     """격리기 호출을 가로채 명령 순서를 관측한다. 실제 명령은 돌리지 않는다."""
@@ -45,6 +58,7 @@ class _FakeRunner:
         self.contained: list[tuple[str, ...]] = []
         self.overrides = overrides or {}
         self.artifact = artifact
+        self.contract_env: dict = {}
 
     def key(self, argv) -> str:
         return " ".join(argv)
@@ -84,6 +98,17 @@ class _FakeRunner:
         if override is not None:
             return override
         return _result(returncode=0)
+
+    def run_and_capture(self, argv, *, cwd, env, timeout_seconds, runner_temp, **_kw):
+        """§7-4 — 계약은 결과 ★와★ stdout 을 함께 받는다."""
+        argv = tuple(argv)
+        self.contained.append(argv)
+        self.contract_env = dict(env)
+        key = self.key(argv)
+        override = self.overrides.get(f"contained:{key}")
+        result = override if override is not None else _result(returncode=0)
+        stdout = self.overrides.get(f"stdout:{key}", CONTRACT_STDOUT)
+        return result, stdout
 
 
 def _result(**overrides) -> oc.ContainedResult:
@@ -142,6 +167,7 @@ def _install_canonical(root: Path) -> None:
 def _install(monkeypatch, runner: _FakeRunner) -> None:
     monkeypatch.setattr(rcr.output_containment, "run_and_read", runner.run_and_read)
     monkeypatch.setattr(rcr.output_containment, "run_contained", runner.run_contained)
+    monkeypatch.setattr(rcr.output_containment, "run_and_capture", runner.run_and_capture)
 
 
 def _run(monkeypatch, workspace: Path, *, runner: _FakeRunner, head: str = HEAD, base: str = BASE):
@@ -416,6 +442,8 @@ def test_emitted_lines_carry_only_allowed_metadata(monkeypatch, workspace):
         # F-04 — canonical 동등성 증거도 영수증에 남는다
         "CANONICAL_WORKFLOW_SHA256", "CANONICAL_STEP_COUNT",
         "CANONICAL_MISSING_STEP_COUNT", "PREPARATION_ENV_BOUND_KEYS",
+        "CONTRACT_KEY_COUNT", "CONTRACT_UNPARSED_LINES",
+        "REPO_CONTRACTS_FAILED_GUARD", "FAILING_GUARD_KEYS",
     }
     for line in lines:
         key, _, value = line.partition("=")
@@ -514,3 +542,93 @@ def test_repo_contracts_are_not_run_twice_across_the_workflow():
     assert invocations[0][0] == "ac25-repo-contracts-exact-head"
     # 워크플로가 계약 스크립트를 직접 부르는 자리도 없다
     assert "verify_repo_contracts.sh" not in SMOKE.read_text(encoding="utf-8")
+
+
+# ══ §7-4 — 계약 출력에서 허용 key 만 구조화한다 ════════════════════════
+def test_contract_keys_are_structured_without_raw():
+    """raw 를 내지 않으면서 ★어느 guard 가 막았는지★ 알 수 있어야 진단이 된다."""
+    keys, unparsed = rcr.parse_contract_keys(CONTRACT_STDOUT_FAILING)
+    assert keys["REPO_CONTRACTS_FAILED_GUARD"] == "some_guard_v1"
+    assert keys["SOME_GUARD_V1_OK"] == "0"
+    assert keys["REPO_CONTRACTS_HYGIENE_OK"] == "1"
+    assert unparsed == 0
+    assert rcr.failing_guard_names(keys) == ["SOME_GUARD_V1_OK"]
+
+
+def test_unknown_lines_are_counted_not_used():
+    """알 수 없는 형태는 값으로 쓰지 않는다. 개수만 남긴다."""
+    keys, unparsed = rcr.parse_contract_keys(
+        b"A_OK=1\nsome free prose that is not a key\n\nB_OK=0\n"
+    )
+    assert set(keys) == {"A_OK", "B_OK"}
+    assert unparsed == 1
+
+
+def test_conflicting_duplicate_key_is_dropped():
+    """같은 key 가 다른 값으로 두 번 나오면 어느 쪽이 참인지 알 수 없다 — 버린다."""
+    keys, _ = rcr.parse_contract_keys(b"A_OK=1\nA_OK=0\nB_OK=1\n")
+    assert "A_OK" not in keys
+    assert keys["B_OK"] == "1"
+
+
+@pytest.mark.parametrize(
+    "line",
+    [b"lower_case_ok=1\n", b"A=1\n", b"A_OK=" + b"x" * 200 + b"\n", b"A_OK=has space\n"],
+)
+def test_malformed_key_lines_are_not_accepted(line):
+    keys, unparsed = rcr.parse_contract_keys(line)
+    assert keys == {}
+    assert unparsed == 1
+
+
+def test_receipt_names_the_failing_guard(monkeypatch, workspace):
+    """계약이 실패하면 영수증이 ★그 guard 이름★ 을 담는다(raw 없이)."""
+    runner = _FakeRunner(
+        artifact=workspace / rcr.BUILD_ARTIFACT,
+        overrides={
+            f"contained:{' '.join(rcr.CONTRACT_COMMAND)}": _result(returncode=1),
+            f"stdout:{' '.join(rcr.CONTRACT_COMMAND)}": CONTRACT_STDOUT_FAILING,
+        },
+    )
+    receipt = _run(monkeypatch, workspace, runner=runner)
+    assert receipt.error_code == rcr.REPO_CONTRACTS_FAILED
+    assert receipt.failed_guard == "some_guard_v1"
+    assert receipt.failing_guard_keys == ["SOME_GUARD_V1_OK"]
+    lines = rcr.emit_lines(receipt)
+    assert "REPO_CONTRACTS_FAILED_GUARD=some_guard_v1" in lines
+    assert "FAILING_GUARD_KEYS=SOME_GUARD_V1_OK" in lines
+
+
+def test_successful_contract_reports_no_failing_guard(monkeypatch, workspace):
+    runner = _FakeRunner(artifact=workspace / rcr.BUILD_ARTIFACT)
+    receipt = _run(monkeypatch, workspace, runner=runner)
+    assert receipt.error_code == "NONE"
+    assert receipt.failed_guard == "NONE"
+    assert receipt.failing_guard_keys == []
+    assert receipt.contract_key_count == 3
+
+
+def test_contract_receives_canonical_environment(monkeypatch, workspace):
+    """계약 env 가 canonical 여섯을 받는지 실제 호출로 확인한다."""
+    runner = _FakeRunner(artifact=workspace / rcr.BUILD_ARTIFACT)
+    _run(monkeypatch, workspace, runner=runner)
+    for key in ("ARTIFACT_CHAIN_PROOF_V2_ENFORCE", "ONPREM_PROOF_STRICT_ENFORCE",
+                "GIT_LFS_SKIP_SMUDGE", "PLAYWRIGHT_BROWSERS_PATH",
+                "DATABASE_URL", "EXPORT_SIGN_SECRET"):
+        assert key in runner.contract_env, key
+
+
+def test_raw_contract_output_never_reaches_the_receipt(monkeypatch, workspace):
+    """★구조화한 key 만 나간다. 원문 조각이 영수증·출력에 남으면 안 된다."""
+    marker = b"AC25_RAW_MARKER_DO_NOT_LEAK"
+    runner = _FakeRunner(
+        artifact=workspace / rcr.BUILD_ARTIFACT,
+        overrides={
+            f"stdout:{' '.join(rcr.CONTRACT_COMMAND)}":
+                CONTRACT_STDOUT + b"\n" + marker + b" free prose\n",
+        },
+    )
+    receipt = _run(monkeypatch, workspace, runner=runner)
+    rendered = "\n".join(rcr.emit_lines(receipt)) + repr(receipt.__dict__)
+    assert marker.decode() not in rendered
+    assert receipt.contract_unparsed_lines == 1

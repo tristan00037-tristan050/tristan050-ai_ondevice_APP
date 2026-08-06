@@ -293,6 +293,42 @@ def run_and_read(
     return report.returncode, out, err
 
 
+def run_and_capture(
+    argv: Sequence[str],
+    *,
+    cwd: Path,
+    env: Mapping[str, str],
+    timeout_seconds: int,
+    runner_temp: Path,
+    stdout_limit: int = _PARSE_LIMIT,
+) -> tuple[ContainedResult, bytes]:
+    """실행 결과 ★와★ stdout bytes 를 함께 돌려준다.
+
+    §7-4 는 계약 출력에서 "허용 목록 key 와 0/1 값만" 구조화하라고 정한다.
+    그러려면 후손·정리 지표(ContainedResult)와 파싱용 bytes 가 둘 다 필요하다.
+
+    ★돌려준 bytes 를 로그·예외·영수증에 넣으면 안 된다. strict parser 입력으로만
+      쓴다. 구조화한 key 와 0/1 값만 밖으로 나간다.
+    """
+    items = _validate_argv(argv)
+    working = _validate_directory(cwd, CONTAINMENT_CWD_INVALID)
+    capture_root = _validate_directory(runner_temp, CONTAINMENT_CAPTURE_ROOT_INVALID)
+
+    report, capture_dir = _supervised(
+        items, working=working, env=env, timeout_seconds=timeout_seconds,
+        capture_root=capture_root, stdin_path=None, delete_raw=False,
+    )
+    try:
+        out = _read_bounded(capture_dir / "stdout.bin", stdout_limit)
+    finally:
+        shutil.rmtree(capture_dir, ignore_errors=True)
+    # ★상한 초과·시간 초과·이탈 후손은 여기서 닫는다. 계약 실패(exit≠0)는 닫지
+    #   않는다 — 호출부가 그 종료 코드와 구조화된 key 로 판정해야 하기 때문이다.
+    if report.error_code != "NONE":
+        _raise_for_report(report)
+    return _result_from(report, raw_files_deleted=True), out
+
+
 def _read_bounded(path: Path, limit: int) -> bytes:
     try:
         with open(path, "rb") as handle:
@@ -334,6 +370,7 @@ __all__ = [
     "DEFAULT_TIMEOUT_SECONDS",
     "argv_digest",
     "default_runner_temp",
+    "run_and_capture",
     "run_and_read",
     "run_contained",
 ]

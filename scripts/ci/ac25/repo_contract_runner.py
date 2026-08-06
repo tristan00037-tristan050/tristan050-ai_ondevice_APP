@@ -152,6 +152,10 @@ class ContractReceipt:
     canonical_missing_steps: list = field(default_factory=list)
     contract_env_keys: list = field(default_factory=list)
     preparation_env_keys: list = field(default_factory=list)
+    contract_key_count: int = 0
+    contract_unparsed_lines: int = 0
+    failed_guard: str = "NONE"
+    failing_guard_keys: list = field(default_factory=list)
     final_worktree_clean: str = "NOT_RUN"
     error_code: str = "NONE"
     verdict: int = 0
@@ -180,6 +184,45 @@ def command_plan_sha256(root: Path | None = None, *, runner_temp: str = "/tmp") 
         ensure_ascii=False, separators=(",", ":"), sort_keys=True,
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+# ★§7-4 — 계약 출력에서 ★허용 목록 key 와 0/1 값만★ 구조화한다.
+#   raw 전체를 로그로 내지 않으면서도 ★어느 guard 가 막았는지★ 알 수 있어야
+#   진단이 된다. 알 수 없는 형태의 줄은 세기만 하고 값으로 쓰지 않는다.
+_CONTRACT_KEY_RE = re.compile(r"\A([A-Z][A-Z0-9_]{2,79})=([01]|[A-Za-z0-9_.:+-]{1,120})\Z")
+FAILED_GUARD_KEY = "REPO_CONTRACTS_FAILED_GUARD"
+
+
+def parse_contract_keys(stdout: bytes) -> tuple[dict[str, str], int]:
+    """계약 stdout 을 strict 하게 읽어 (key→값, 인식 못 한 줄 수) 를 낸다.
+
+    ★들어온 bytes 를 밖으로 내보내지 않는다. 구조화한 key 만 나간다.
+    중복 key 는 ★마지막 값이 아니라★ 충돌로 본다 — 계약이 같은 key 를 두 번
+    쓰면 어느 쪽이 참인지 알 수 없다.
+    """
+    found: dict[str, str] = {}
+    duplicated: set[str] = set()
+    unparsed = 0
+    for line in stdout.decode("utf-8", "replace").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        match = _CONTRACT_KEY_RE.match(stripped)
+        if match is None:
+            unparsed += 1
+            continue
+        key, value = match.group(1), match.group(2)
+        if key in found and found[key] != value:
+            duplicated.add(key)
+        found[key] = value
+    for key in duplicated:
+        found.pop(key, None)
+    return found, unparsed
+
+
+def failing_guard_names(keys: dict[str, str]) -> list[str]:
+    """0 으로 끝난 `*_OK` key 이름을 돌려준다. 값은 0/1 뿐이다."""
+    return sorted(k for k, v in keys.items() if k.endswith("_OK") and v == "0")
 
 
 def _run(argv, *, root: Path, cwd: str, runner_temp: Path, env) -> tuple[int, bytes, bytes]:
@@ -372,13 +415,20 @@ def run_exact_head_contracts(
         receipt.contract_env_keys = sorted(
             key for key, _value in extracted.contract_env
         )
-        result = output_containment.run_contained(
+        # ★§7-4 — 결과와 함께 stdout 을 받아 ★허용 key 만★ 구조화한다.
+        #   raw 는 로그·영수증 어디에도 가지 않는다.
+        result, contract_stdout = output_containment.run_and_capture(
             list(CONTRACT_COMMAND),
             cwd=root,
             env=contract_env,
             timeout_seconds=3600,
             runner_temp=temp,
         )
+        keys, unparsed = parse_contract_keys(contract_stdout)
+        receipt.contract_key_count = len(keys)
+        receipt.contract_unparsed_lines = unparsed
+        receipt.failed_guard = keys.get(FAILED_GUARD_KEY, "NONE")
+        receipt.failing_guard_keys = failing_guard_names(keys)
         receipt.contract_exit_code = result.returncode
         receipt.stdout_sha256 = result.stdout_sha256
         receipt.stderr_sha256 = result.stderr_sha256
@@ -426,6 +476,10 @@ def emit_lines(receipt: ContractReceipt) -> list[str]:
         f"CANONICAL_STEP_COUNT={receipt.canonical_step_count}",
         f"CANONICAL_MISSING_STEP_COUNT={len(receipt.canonical_missing_steps)}",
         f"PREPARATION_ENV_BOUND_KEYS={len(receipt.preparation_env_keys)}",
+        f"CONTRACT_KEY_COUNT={receipt.contract_key_count}",
+        f"CONTRACT_UNPARSED_LINES={receipt.contract_unparsed_lines}",
+        f"REPO_CONTRACTS_FAILED_GUARD={receipt.failed_guard}",
+        f"FAILING_GUARD_KEYS={','.join(receipt.failing_guard_keys) or 'NONE'}",
         f"RUNNER_IMAGE={receipt.runner_image or 'unknown'}",
         f"HELM_VERSION={receipt.helm_version or 'unknown'}",
         f"NODE_VERSION={receipt.tool_versions.get('node', 'unknown')}",
@@ -484,6 +538,8 @@ __all__ = [
     "assert_helm_major_three",
     "collect_tool_versions",
     "command_plan_sha256",
+    "failing_guard_names",
+    "parse_contract_keys",
     "emit_lines",
     "guard_blob_oids",
     "run_exact_head_contracts",
