@@ -20,6 +20,11 @@ import pytest
 from ac25 import cross_track_approval as cta
 from ac25.approval_signature import SIGNATURE_NAMESPACE, SIGNING_KEY_FINGERPRINT
 
+# ★R6-2 §5-1 — 좌표를 이 시험이 다시 적지 않는다. 보호된 단일 원본에서 읽는다.
+from ac25 import stage_b_coordinates as _sbc  # noqa: E402
+
+_COORDINATES = _sbc.load_trusted_coordinates()
+
 pytestmark = pytest.mark.no_sidecar_token
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -30,11 +35,11 @@ SIGNATURE_BYTES = (FIXTURES / "approval_document.md.sig").read_bytes()
 ALLOWED_SIGNERS_BYTES = (FIXTURES / "allowed_signers").read_bytes()
 DOCUMENT_SHA256 = hashlib.sha256(DOCUMENT_BYTES).hexdigest()
 
-INTEGRATION_BASE = "afdb237e4e6e83d96a182b6c5366a2ad95949bee"
-PROVENANCE_BASE = "de3dd4ebaf5b3935a142b988dd61e6198aa9536d"
-PROVENANCE_BASE_TREE = "8c3509db047145714d2a1a84dfc76fb0a4c0fec9"
-CANDIDATE_HEAD = "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04"
-CANDIDATE_HEAD_TREE = "313f40cf35b3ee2bf7bcdd946dea9c2e1c4896c2"
+INTEGRATION_BASE = _COORDINATES.stage_b.integration_base
+PROVENANCE_BASE = _COORDINATES.provenance_base_commit
+PROVENANCE_BASE_TREE = _COORDINATES.provenance_base_tree
+CANDIDATE_HEAD = _COORDINATES.stage_b.candidate_commit
+CANDIDATE_HEAD_TREE = _COORDINATES.stage_b.candidate_tree
 ZIP_DIGEST = "5ea7f4b5355be5f4fd96b922c87f4530ddf6625abbef22848c091b2c629e2629"
 MANIFEST_DIGEST = "b59e4aacd0d3f9bdd9874c838901c1ba0506478cfb15123536e729f83b4c2e4f"
 

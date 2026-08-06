@@ -22,8 +22,12 @@ MODULE = REPO_ROOT / "scripts" / "ci" / "ac25" / "publish_check.mjs"
 JS_TEST = REPO_ROOT / "tests" / "box5_ac25" / "publish_check.test.mjs"
 
 CHECK_NAME = "box5-ac25/trusted-exact-head"
-LOCKED_HEAD = "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04"
-LOCKED_BASE = "afdb237e4e6e83d96a182b6c5366a2ad95949bee"
+# ★R6-2 — 좌표를 이 시험이 다시 적지 않는다. 단일 원본에서 읽는다(§5-1).
+from ac25 import stage_b_coordinates as _sbc  # noqa: E402
+
+COORDINATES = _sbc.load_coordinates()
+LOCKED_HEAD = COORDINATES.candidate_commit
+LOCKED_BASE = COORDINATES.integration_base
 
 
 def _workflow(path: Path = TRUSTED) -> dict:
@@ -34,8 +38,12 @@ def _publish() -> dict:
     return _workflow()["jobs"]["publish-check"]
 
 
+def _script_step() -> dict:
+    return next(step for step in _publish()["steps"] if "script" in step.get("with", {}))
+
+
 def _script() -> str:
-    return _publish()["steps"][1]["with"]["script"]
+    return _script_step()["with"]["script"]
 
 
 # ══ 모듈이 존재하고 실행 가능한 시험이 붙어 있다 ═══════════════════════
@@ -70,11 +78,13 @@ def test_smoke_actually_runs_the_executable_test():
     assert job.get("environment") is None
 
 
-def test_locked_constants_match_between_module_and_lock():
+def test_locked_constants_come_from_the_single_source_not_the_module():
+    """★R6-2 — 모듈이 좌표를 갖고 있으면 원본이 둘이 된다(§5-1)."""
     body = MODULE.read_text(encoding="utf-8")
-    assert f"'{LOCKED_HEAD}'" in body
-    assert f"'{LOCKED_BASE}'" in body
     assert f"'{CHECK_NAME}'" in body
+    assert LOCKED_HEAD not in body, "publish_check.mjs 가 좌표를 복제했다"
+    assert LOCKED_BASE not in body, "publish_check.mjs 가 좌표를 복제했다"
+    assert "stage_b_coordinates.mjs" in body
 
 
 # ══ publish job 배선 ═══════════════════════════════════════════════════
@@ -82,9 +92,10 @@ def test_publish_runs_always():
     assert _publish()["if"] in ("always()", "${{ always() }}")
 
 
-def test_publish_needs_all_three_jobs():
+def test_publish_needs_all_four_jobs():
+    """★R6-3 — token-preflight 도 필수 선행이다(§6-5)."""
     assert set(_publish()["needs"]) == {
-        "trusted-verification", "candidate-lane", "integration-lane"
+        "token-preflight", "trusted-verification", "candidate-lane", "integration-lane",
     }
 
 
@@ -121,15 +132,20 @@ def test_publish_imports_the_module_by_absolute_file_url():
 
 def test_publish_does_not_run_candidate_code():
     steps = _publish()["steps"]
-    assert len(steps) == 2
-    assert all("run" not in step for step in steps)
-    # 후보 head 를 checkout 하지 않는다
-    assert steps[0]["with"]["ref"] == "${{ github.sha }}"
+    # checkout · 관문 비교 · 발행 셋뿐이며, 후보 코드를 실행하는 단계는 없다.
+    assert len(steps) == 3
+    checkouts = [step for step in steps if "checkout" in str(step.get("uses", ""))]
+    assert len(checkouts) == 1
+    assert checkouts[0]["with"]["ref"] == "${{ github.sha }}"
+    runs = [step.get("run", "") for step in steps if "run" in step]
+    assert len(runs) == 1, "관문 비교 외에 셸 단계를 두지 않는다"
+    for forbidden in ("pytest", "npm", "stage_b_runner", "vitest"):
+        assert forbidden not in runs[0], forbidden
 
 
 def test_publish_passes_only_named_fields():
     """★needs 전체를 JSON 으로 넘기지 않는다."""
-    env = _publish()["steps"][1]["env"]
+    env = _script_step()["env"]
     assert all(key.startswith("AC25_") for key in env), env
     body = TRUSTED.read_text(encoding="utf-8")
     assert "toJSON" not in body
@@ -153,7 +169,12 @@ def test_trusted_job_outputs_match_the_allowlist():
     from ac25.orchestrator import JOB_OUTPUT_ALLOWLIST
 
     outputs = _workflow()["jobs"]["trusted-verification"]["outputs"]
-    assert set(outputs) == set(JOB_OUTPUT_ALLOWLIST)
+    # orchestrator 허용 목록 + R6-2 좌표 전달용 네 값(모두 보호된 코드가 만든다)
+    coordinate_outputs = {
+        "coordinate_candidate_commit", "coordinate_candidate_tree",
+        "coordinate_integration_base", "coordinate_ssot_sha256",
+    }
+    assert set(outputs) == set(JOB_OUTPUT_ALLOWLIST) | coordinate_outputs
 
 
 def test_integration_job_outputs_match_the_allowlist():
@@ -189,10 +210,13 @@ def test_top_level_permissions_are_empty():
     assert _workflow(SMOKE)["permissions"] == {}
 
 
-def test_only_trusted_and_publish_use_the_environment():
+def test_only_protected_jobs_use_the_environment():
+    """★token-preflight 도 보호 environment 를 거친다(§6-5)."""
     jobs = _workflow()["jobs"]
     with_environment = {name for name, job in jobs.items() if job.get("environment")}
-    assert with_environment == {"trusted-verification", "publish-check"}
+    assert with_environment == {
+        "token-preflight", "trusted-verification", "publish-check",
+    }
 
 
 def test_smoke_has_no_environment_or_secret_anywhere():
@@ -211,13 +235,18 @@ def test_candidate_and_integration_lanes_have_no_secrets_or_write():
         assert "secrets." not in yaml.dump(job), name
 
 
-def test_approval_token_reaches_only_the_trusted_job():
-    """★C5 — 승인 credential 은 trusted-verification 하나에만 노출한다."""
+def test_approval_token_reaches_only_the_two_protected_jobs():
+    """★C5 — 승인 credential 은 사전점검과 신뢰 검증에만 노출한다.
+
+    두 job 모두 보호 environment 승인을 거치며, 비특권 lane 은 받지 못한다.
+    """
+    allowed = {"token-preflight", "trusted-verification"}
     jobs = _workflow()["jobs"]
     for name, job in jobs.items():
         rendered = yaml.dump(job, allow_unicode=True)
-        if name == "trusted-verification":
-            assert "AC25_APPROVAL_READ_TOKEN" in rendered
+        if name in allowed:
+            assert "AC25_APPROVAL_READ_TOKEN" in rendered, name
+            assert job.get("environment") == "ac25-trusted-main", name
         else:
             assert "AC25_APPROVAL_READ_TOKEN" not in rendered, name
 

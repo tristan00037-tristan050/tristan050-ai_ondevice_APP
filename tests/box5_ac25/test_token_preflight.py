@@ -1,115 +1,331 @@
-"""§20 C5 — token 경로와 사전점검 시험.
+"""§6-6 R6-3 — token 사전점검 의존형 상태기계 시험.
 
-★preflight 가 production endpoint 집합을 ★손으로 복제하지 않는다★ 는 것을
-  같은 builder 를 쓰는지로 확인한다. "API 네 개만 확인" 은 실제 호출망을 보장하지
-  못한다.
-★승인 token 으로 후보 저장소를, GITHUB_TOKEN 으로 승인 문서를 만지지 못한다.
+감사 C5 가 지목한 것
+  · `approval_compare("0" * 40)` — all-zero 자리표로 주소를 만들었다
+  · `--approver-login` — 사람이 준 승인자로 검사했다
+  · 아무 워크플로도 이 모듈을 부르지 않았다
+
+이 시험은 셋을 각각 닫혔는지 확인하고, 정상 fake runtime 이 S0→S6 를 실제로
+통과하는지도 본다. 막기만 하는 검사기는 합격이 아니다(§3-7).
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+from pathlib import Path
+
 import pytest
-from ac25 import anchors, remote_facts as rf, token_preflight as tp, workflow_identity
+import yaml
+from ac25 import anchors, lock_verifier
+from ac25 import remote_facts as rf
+from ac25 import token_preflight as tp
+from ac25 import workflow_identity
 
 pytestmark = pytest.mark.no_sidecar_token
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+WORKFLOW = REPO_ROOT / ".github" / "workflows" / "box5-ac25-trusted-verification.yml"
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+DOCUMENT_BYTES = (FIXTURES / "approval_document.md").read_bytes()
+DOCUMENT_SHA256 = hashlib.sha256(DOCUMENT_BYTES).hexdigest()
+
+LOCK = lock_verifier.load_candidate_lock(
+    (REPO_ROOT / anchors.CANDIDATE_LOCK_PATH).read_bytes()
+)
+LOCKED_HEAD = LOCK.approved_head_commit
+LOCKED_TREE = LOCK.approved_head_tree
+PROTECTED_HEAD = "1" * 40
+RUN_ID = 31058574141
 APPROVER = "tristan00037-tristan050"
 
 
-def _endpoints() -> rf.EndpointBuilder:
-    return tp.build_endpoints(
-        pr_number=anchors.CANDIDATE_PR_NUMBER,
-        candidate_head_sha="6" * 40,
-        run_id=77,
-        approver_login=APPROVER,
-    )
+def _contents(payload: bytes) -> dict:
+    return {"encoding": "base64", "content": base64.b64encode(payload).decode("ascii")}
 
 
 class Recorder:
-    """경로별 응답표. 어느 credential 로 왔는지 기록한다."""
+    """경로별 응답표. 어느 credential 로 왔는지, 몇 번째로 왔는지 기록한다."""
 
-    def __init__(self, name: str, seen: dict, *, overrides=None) -> None:
+    def __init__(self, name: str, log: list, *, overrides=None) -> None:
         self.name = name
-        self.seen = seen
+        self.log = log
         self.overrides = overrides or {}
 
     def __call__(self, path: str) -> rf.TransportResult:
-        self.seen.setdefault(self.name, []).append(path)
+        self.log.append((self.name, path))
         if path in self.overrides:
             return self.overrides[path]
-        endpoints = _endpoints()
-        if path == endpoints.candidate_environment():
-            return rf.TransportResult(
-                status=200,
-                payload={
-                    "name": workflow_identity.EXPECTED_ENVIRONMENT,
-                    "deployment_branch_policy": {"custom_branch_policies": True},
-                },
-            )
-        if path == endpoints.candidate_environment_policies():
-            return rf.TransportResult(
-                status=200, payload={"branch_policies": [{"name": "main"}]}
-            )
-        return rf.TransportResult(status=200, payload={"ok": True})
+        return _default_response(path)
 
 
-def _router(seen: dict, overrides=None) -> rf.TransportRouter:
+def _default_response(path: str) -> rf.TransportResult:
+    if path.endswith("/git/ref/heads/main"):
+        return rf.TransportResult(
+            status=200,
+            payload={"ref": "refs/heads/main", "object": {"sha": PROTECTED_HEAD}},
+        )
+    if "/contents/" in path:
+        return rf.TransportResult(status=200, payload=_contents(DOCUMENT_BYTES))
+    if path == f"repos/{anchors.CANDIDATE_REPOSITORY}/pulls/{anchors.CANDIDATE_PR_NUMBER}":
+        return rf.TransportResult(
+            status=200,
+            payload={"head": {"sha": LOCKED_HEAD}, "base": {"sha": "2" * 40}},
+        )
+    if path.endswith("/deployment-branch-policies"):
+        return rf.TransportResult(status=200, payload={"branch_policies": [{"name": "main"}]})
+    if "/environments/" in path:
+        return rf.TransportResult(
+            status=200,
+            payload={
+                "name": workflow_identity.EXPECTED_ENVIRONMENT,
+                "deployment_branch_policy": {"custom_branch_policies": True},
+            },
+        )
+    if "/compare/" in path:
+        return rf.TransportResult(status=200, payload={"status": "behind"})
+    if "/actions/runs/" in path:
+        return rf.TransportResult(
+            status=200, payload={"run_started_at": "2026-08-06T00:00:00Z"}
+        )
+    return rf.TransportResult(status=200, payload={"ok": True})
+
+
+def _router(log: list, overrides=None) -> rf.TransportRouter:
     return rf.TransportRouter(
-        approval=Recorder("approval", seen, overrides=overrides),
-        candidate=Recorder("candidate", seen, overrides=overrides),
-        run=Recorder("run", seen, overrides=overrides),
+        approval=Recorder("approval", log, overrides=overrides),
+        candidate=Recorder("candidate", log, overrides=overrides),
+        run=Recorder("run", log, overrides=overrides),
     )
 
 
-# ══ endpoint 집합이 production 과 같다 ═════════════════════════════════
-def test_preflight_reuses_the_production_endpoint_builder():
-    assert tp.build_endpoints.__module__ == "ac25.token_preflight"
-    assert isinstance(_endpoints(), rf.EndpointBuilder)
+def _run(overrides=None, *, run_id: int = RUN_ID, head: str = LOCKED_HEAD):
+    log: list = []
+    result = tp.run_preflight(
+        router=_router(log, overrides),
+        run_id=run_id,
+        locked_candidate_head=head,
+        locked_candidate_tree=LOCKED_TREE,
+    )
+    return result, log
 
 
-def test_endpoint_set_covers_every_documented_read():
-    paths = [path for _route, path in _endpoints().canonical_requests()]
-    joined = "\n".join(paths)
-    for fragment in (
-        "/git/ref/heads/main", "/commits/", "/compare/", "/contents/",
-        "/pulls/", "/git/commits/", "/branches/main",
-        "/environments/", "/deployment-branch-policies", "/actions/runs/",
-        "users/",
-    ):
-        assert fragment in joined, fragment
-    assert len(paths) == 15
+def _paths(log: list) -> list[str]:
+    return [path for _name, path in log]
 
 
-def test_preflight_visits_every_canonical_request():
-    seen: dict = {}
-    result = tp.run_preflight(router=_router(seen), endpoints=_endpoints())
+@pytest.fixture(autouse=True)
+def _pin_document_digest(monkeypatch):
+    """픽스처 문서의 지문으로 고정값을 바꿔 fake runtime 을 돌린다.
+
+    ★production 은 anchors 의 고정 지문을 쓴다. 시험만 이 자리를 바꾼다 —
+    바꿀 수 있는 자리가 CLI 인자였다면 그것이 C5 의 결함이다.
+    """
+    monkeypatch.setattr(anchors, "APPROVAL_DOCUMENT_SHA256", DOCUMENT_SHA256)
+    monkeypatch.setattr(tp.anchors, "APPROVAL_DOCUMENT_SHA256", DOCUMENT_SHA256)
+
+
+# ══ §6-6 정상 fake runtime 이 S0→S6 를 통과한다 ════════════════════════
+def test_normal_fake_runtime_passes_every_state():
+    result, log = _run()
     assert result.ok, result.error_code
-    assert result.checked == len(_endpoints().canonical_requests())
-    visited = sum(len(v) for v in seen.values())
-    assert visited == result.checked
+    assert result.reached_state == tp.State.PREFLIGHT_VERDICT.value
+    assert result.checked == len(log)
+    assert result.checked >= 12
 
 
-# ══ 경로 분리 ══════════════════════════════════════════════════════════
-def test_each_route_sees_only_its_own_endpoints():
-    seen: dict = {}
-    tp.run_preflight(router=_router(seen), endpoints=_endpoints())
-    approval = seen.get("approval", [])
-    candidate = seen.get("candidate", [])
-    run = seen.get("run", [])
+# ══ §6-6 all-zero OID 가 어느 경로에도 없다 ════════════════════════════
+def test_no_request_path_contains_an_all_zero_oid():
+    result, log = _run()
+    assert result.ok
+    for path in _paths(log):
+        assert "0" * 40 not in path, path
 
-    assert approval, "승인 경로가 하나도 안 불렸다"
-    assert candidate, "후보 경로가 하나도 안 불렸다"
-    assert run, "run 경로가 하나도 안 불렸다"
 
-    # ★승인 token 이 후보 저장소를 만지지 않는다
-    assert not any(anchors.CANDIDATE_REPOSITORY in p for p in approval)
-    # ★후보 token 이 승인 저장소를 읽지 않는다
-    assert not any(anchors.APPROVAL_REPOSITORY in p for p in candidate)
-    assert not any(anchors.APPROVAL_REPOSITORY in p for p in run)
-    assert all("/actions/" in p for p in run)
+def test_placeholder_head_is_rejected_before_any_transport():
+    result, log = _run(head="0" * 40)
+    assert result.ok is False
+    assert result.error_code == tp.PREFLIGHT_PLACEHOLDER_ID_REJECTED
+    assert log == [], "자리표인데도 요청을 보냈다"
+
+
+def test_endpoint_builder_no_longer_exposes_a_flat_url_list():
+    """폐기 확인 — 평평한 목록이 있으면 자리표가 다시 들어온다."""
+    import ast
+
+    assert not hasattr(rf.EndpointBuilder, "canonical_requests")
+    assert hasattr(rf.EndpointBuilder, "static_requests")
+    source = (REPO_ROOT / "scripts/ci/ac25/remote_facts.py").read_text(encoding="utf-8")
+    tree = ast.parse(source, filename="remote_facts.py")
+    docstrings = {
+        ast.get_docstring(node, clean=False) or ""
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef))
+    }
+    code = [
+        ast.unparse(node) for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+    ]
+    # ★코드에 all-zero 자리표를 만드는 표현이 없다(설명문에는 있어도 된다)
+    assert not any('"0" * 40' in item or "'0' * 40" in item for item in code)
+    assert any("자리표" in text for text in docstrings), "폐기 근거가 문서화돼 있지 않다"
+
+
+def test_static_requests_have_no_dependent_endpoints():
+    builder = tp.build_endpoints(
+        pr_number=anchors.CANDIDATE_PR_NUMBER,
+        candidate_head_sha=LOCKED_HEAD,
+        approver_login="",
+    )
+    paths = [path for _route, path in builder.static_requests()]
+    for forbidden in ("/compare/", "users/", "/git/commits/"):
+        assert not any(forbidden in path for path in paths), forbidden
+
+
+# ══ §6-6 의존 순서 ═════════════════════════════════════════════════════
+def test_compare_is_not_called_before_the_protected_ref_is_read():
+    _result, log = _run()
+    paths = _paths(log)
+    ref_index = next(i for i, p in enumerate(paths) if p.endswith("/git/ref/heads/main"))
+    compare_index = next(i for i, p in enumerate(paths) if "/compare/" in p)
+    assert ref_index < compare_index
+
+
+def test_candidate_commit_is_not_called_before_the_pr_is_verified():
+    _result, log = _run()
+    paths = _paths(log)
+    pull_index = next(i for i, p in enumerate(paths) if p.endswith(f"/pulls/{anchors.CANDIDATE_PR_NUMBER}"))
+    commit_index = next(i for i, p in enumerate(paths) if "/git/commits/" in p)
+    assert pull_index < commit_index
+
+
+def test_approver_endpoint_is_not_called_before_the_document_is_verified():
+    _result, log = _run()
+    paths = _paths(log)
+    document_index = next(i for i, p in enumerate(paths) if "/contents/" in p)
+    approver_index = next(i for i, p in enumerate(paths) if p.startswith("users/"))
+    assert document_index < approver_index
+
+
+def test_digest_mismatch_stops_before_any_dependent_request():
+    """문서 지문이 어긋나면 S4 이후 요청이 0 건이다."""
+    tampered = DOCUMENT_BYTES + b"\n<!-- tampered -->\n"
+    builder = tp.build_endpoints(
+        pr_number=anchors.CANDIDATE_PR_NUMBER, candidate_head_sha=LOCKED_HEAD,
+        approver_login="",
+    )
+    override = {
+        builder.approval_contents(anchors.APPROVAL_DOCUMENT_PATH):
+            rf.TransportResult(status=200, payload=_contents(tampered)),
+    }
+    result, log = _run(override)
+    assert result.ok is False
+    assert result.error_code == tp.PREFLIGHT_APPROVAL_DIGEST_MISMATCH
+    assert result.dependent_requests == ()
+    assert not any("/compare/" in path for path in _paths(log))
+    assert not any(path.startswith("users/") for path in _paths(log))
+
+
+def test_candidate_head_mismatch_stops_before_any_dependent_request():
+    builder = tp.build_endpoints(
+        pr_number=anchors.CANDIDATE_PR_NUMBER, candidate_head_sha=LOCKED_HEAD,
+        approver_login="",
+    )
+    override = {
+        builder.candidate_pull(): rf.TransportResult(
+            status=200, payload={"head": {"sha": "9" * 40}, "base": {"sha": "2" * 40}}
+        ),
+    }
+    result, log = _run(override)
+    assert result.ok is False
+    assert result.error_code == tp.PREFLIGHT_CANDIDATE_HEAD_MISMATCH
+    assert result.dependent_requests == ()
+    assert not any("/compare/" in path for path in _paths(log))
+
+
+def test_malformed_preceding_response_sends_no_further_transport():
+    builder = tp.build_endpoints(
+        pr_number=anchors.CANDIDATE_PR_NUMBER, candidate_head_sha=LOCKED_HEAD,
+        approver_login="",
+    )
+    override = {
+        builder.approval_ref(): rf.TransportResult(status=200, payload=None),
+    }
+    result, log = _run(override)
+    assert result.ok is False
+    assert result.dependent_requests == ()
+    # ref 까지만 부르고 멈춘다
+    assert not any("/compare/" in path for path in _paths(log))
+
+
+# ══ §6-6 사용자 제공 승인자 경로가 없다 ════════════════════════════════
+def test_cli_accepts_no_arguments_at_all():
+    assert tp._main(["--approver-login", "attacker"]) == 1
+    assert tp._main(["--candidate-head-sha", "f" * 40]) == 1
+    assert tp._main(["--run-id", "5"]) == 1
+
+
+def test_no_approver_or_coordinate_input_exists_in_the_module():
+    """CLI 인자 파서 자체가 없어야 한다. 설명문에 옛 인자 이름이 남는 것은 기록이다."""
+    import ast
+
+    source = (REPO_ROOT / "scripts/ci/ac25/token_preflight.py").read_text(encoding="utf-8")
+    tree = ast.parse(source, filename="token_preflight.py")
+    calls = [ast.unparse(node) for node in ast.walk(tree) if isinstance(node, ast.Call)]
+    for forbidden in ("add_argument", "ArgumentParser", "parse_args"):
+        assert not any(forbidden in call for call in calls), forbidden
+    imported = {
+        alias.name for node in ast.walk(tree)
+        if isinstance(node, ast.Import) for alias in node.names
+    }
+    assert "argparse" not in imported
+
+
+def test_run_preflight_takes_no_approver_argument():
+    import inspect
+
+    parameters = set(inspect.signature(tp.run_preflight).parameters)
+    assert parameters == {
+        "router", "run_id", "locked_candidate_head", "locked_candidate_tree",
+    }
+
+
+def test_approver_comes_from_the_verified_document():
+    """승인자 URL 은 ★문서에서 읽은★ login 으로 만들어진다."""
+    _result, log = _run()
+    approver_paths = [path for path in _paths(log) if path.startswith("users/")]
+    assert approver_paths == [f"users/{APPROVER}"]
+
+
+# ══ §6-6 URL 안전성 ════════════════════════════════════════════════════
+@pytest.mark.parametrize(
+    "path",
+    [
+        "https://evil.example.com/repos/x",
+        "repos/../../etc/passwd",
+        "repos/a%2Fb/contents/x",
+        "repos/x?access_token=abc",
+        "/repos/absolute",
+        "repos/x y",
+    ],
+)
+def test_unsafe_paths_are_rejected_before_transport(path):
+    with pytest.raises(tp._Stop) as caught:
+        tp._plan(rf.Route.APPROVAL, path, tp.PREFLIGHT_APPROVAL_READ_FAILED, "object")
+    assert caught.value.code == tp.PREFLIGHT_URL_NOT_ALLOWED
+
+
+def test_redirect_is_rejected():
+    builder = tp.build_endpoints(
+        pr_number=anchors.CANDIDATE_PR_NUMBER, candidate_head_sha=LOCKED_HEAD,
+        approver_login="",
+    )
+    override = {builder.approval_repo(): rf.TransportResult(status=302)}
+    result, _log = _run(override)
+    assert result.error_code == tp.PREFLIGHT_REDIRECT_REJECTED
 
 
 def test_cross_route_request_is_refused():
-    """builder 가 아닌 경로가 섞이면 호출 전에 닫는다."""
     with pytest.raises(ValueError):
         rf.route_for(
             "repos/attacker/repo/contents/secret",
@@ -118,84 +334,106 @@ def test_cross_route_request_is_refused():
         )
 
 
-# ══ 실패 코드 ══════════════════════════════════════════════════════════
-@pytest.mark.parametrize("status", [403, 404, 429, 500])
-def test_status_failures_are_fail_closed(status):
-    endpoints = _endpoints()
-    seen: dict = {}
-    router = _router(seen, overrides={endpoints.approval_repo(): rf.TransportResult(status=status)})
-    result = tp.run_preflight(router=router, endpoints=endpoints)
-    assert result.ok is False
-    assert result.error_code == tp.PREFLIGHT_APPROVAL_READ_FAILED
+# ══ §6-6 token 경로 분리 ═══════════════════════════════════════════════
+def test_each_token_class_sees_only_its_own_endpoints():
+    _result, log = _run()
+    approval = [path for name, path in log if name == "approval"]
+    candidate = [path for name, path in log if name == "candidate"]
+    run = [path for name, path in log if name == "run"]
+
+    assert approval and candidate and run
+    assert not any(anchors.CANDIDATE_REPOSITORY in path for path in approval)
+    assert not any(anchors.APPROVAL_REPOSITORY in path for path in candidate)
+    assert not any(anchors.APPROVAL_REPOSITORY in path for path in run)
+    assert all("/actions/" in path for path in run)
 
 
-def test_malformed_body_is_fail_closed():
-    endpoints = _endpoints()
-    seen: dict = {}
-    router = _router(
-        seen, overrides={endpoints.approval_ref(): rf.TransportResult(status=200, payload=None)}
-    )
-    result = tp.run_preflight(router=router, endpoints=endpoints)
-    assert result.ok is False
-    assert result.error_code == tp.PREFLIGHT_APPROVAL_READ_FAILED
-
-
+# ══ §6-6 상태 코드 fail-closed ═════════════════════════════════════════
 @pytest.mark.parametrize(
-    ("selector", "code"),
+    ("status", "expected"),
     [
-        ("approval_compare", tp.PREFLIGHT_APPROVAL_ANCESTRY_FAILED),
-        ("approver", tp.PREFLIGHT_APPROVER_READ_FAILED),
-        ("candidate_pull", tp.PREFLIGHT_CANDIDATE_COORD_READ_FAILED),
-        ("candidate_branch", tp.PREFLIGHT_BRANCH_PROTECTION_READ_FAILED),
-        ("candidate_environment", tp.PREFLIGHT_ENVIRONMENT_READ_FAILED),
-        ("candidate_environment_policies", tp.PREFLIGHT_BRANCH_POLICY_READ_FAILED),
-        ("run_facts", tp.PREFLIGHT_RUN_FACT_READ_FAILED),
+        (401, tp.PREFLIGHT_PERMISSION_INSUFFICIENT),
+        (403, tp.PREFLIGHT_PERMISSION_INSUFFICIENT),
+        (404, tp.PREFLIGHT_APPROVAL_READ_FAILED),
+        (429, tp.PREFLIGHT_APPROVAL_READ_FAILED),
+        (500, tp.PREFLIGHT_APPROVAL_READ_FAILED),
+        (0, tp.PREFLIGHT_APPROVAL_READ_FAILED),
     ],
 )
-def test_each_endpoint_has_its_own_failure_code(selector, code):
-    endpoints = _endpoints()
-    path = {
-        "approval_compare": endpoints.approval_compare("0" * 40),
-        "approver": endpoints.approver(),
-        "candidate_pull": endpoints.candidate_pull(),
-        "candidate_branch": endpoints.candidate_branch("main"),
-        "candidate_environment": endpoints.candidate_environment(),
-        "candidate_environment_policies": endpoints.candidate_environment_policies(),
-        "run_facts": endpoints.run_facts(),
-    }[selector]
-    seen: dict = {}
-    router = _router(seen, overrides={path: rf.TransportResult(status=404)})
-    result = tp.run_preflight(router=router, endpoints=endpoints)
+def test_status_failures_are_fail_closed(status, expected):
+    builder = tp.build_endpoints(
+        pr_number=anchors.CANDIDATE_PR_NUMBER, candidate_head_sha=LOCKED_HEAD,
+        approver_login="",
+    )
+    override = {builder.approval_repo(): rf.TransportResult(status=status)}
+    result, _log = _run(override)
     assert result.ok is False
-    assert result.error_code == code
+    assert result.error_code == expected
 
 
-# ══ branch policy 모드 ═════════════════════════════════════════════════
+def test_rate_limited_403_keeps_the_endpoint_code():
+    builder = tp.build_endpoints(
+        pr_number=anchors.CANDIDATE_PR_NUMBER, candidate_head_sha=LOCKED_HEAD,
+        approver_login="",
+    )
+    override = {
+        builder.approval_repo(): rf.TransportResult(
+            status=403, headers={"x-ratelimit-remaining": "0"}
+        )
+    }
+    result, _log = _run(override)
+    assert result.error_code == tp.PREFLIGHT_APPROVAL_READ_FAILED
+
+
+def test_truncated_json_is_fail_closed():
+    builder = tp.build_endpoints(
+        pr_number=anchors.CANDIDATE_PR_NUMBER, candidate_head_sha=LOCKED_HEAD,
+        approver_login="",
+    )
+    override = {
+        builder.approval_repo(): rf.TransportResult(
+            status=200, message="TRANSPORT_BODY_NOT_JSON"
+        )
+    }
+    result, _log = _run(override)
+    assert result.ok is False
+
+
+def test_list_response_where_an_object_is_required_is_rejected():
+    builder = tp.build_endpoints(
+        pr_number=anchors.CANDIDATE_PR_NUMBER, candidate_head_sha=LOCKED_HEAD,
+        approver_login="",
+    )
+    override = {builder.approval_repo(): rf.TransportResult(status=200, payload=[])}
+    result, _log = _run(override)
+    assert result.error_code == tp.PREFLIGHT_RESPONSE_SCHEMA_INVALID
+
+
+def test_invalid_run_id_is_context_invalid():
+    result, log = _run(run_id=0)
+    assert result.error_code == tp.PREFLIGHT_CONTEXT_INVALID
+    assert log == []
+
+
+# ══ §6-6 environment·branch 정책 ═══════════════════════════════════════
 def test_non_custom_branch_policy_mode_is_unapproved():
-    """★어떤 모드가 정본인지 모르면 억지로 성공시키지 않는다."""
-    endpoints = _endpoints()
-    seen: dict = {}
-    router = _router(seen, overrides={
-        endpoints.candidate_environment(): rf.TransportResult(
+    builder = tp.build_endpoints(
+        pr_number=anchors.CANDIDATE_PR_NUMBER, candidate_head_sha=LOCKED_HEAD,
+        approver_login="",
+    )
+    override = {
+        builder.candidate_environment(): rf.TransportResult(
             status=200,
-            payload={"name": "ac25-trusted-main",
-                     "deployment_branch_policy": {"custom_branch_policies": False}},
+            payload={
+                "name": workflow_identity.EXPECTED_ENVIRONMENT,
+                "deployment_branch_policy": {"custom_branch_policies": False},
+            },
         )
-    })
-    result = tp.run_preflight(router=router, endpoints=endpoints)
+    }
+    result, log = _run(override)
     assert result.error_code == tp.PREFLIGHT_BRANCH_POLICY_MODE_UNAPPROVED
-
-
-def test_missing_branch_policy_object_is_environment_failure():
-    endpoints = _endpoints()
-    seen: dict = {}
-    router = _router(seen, overrides={
-        endpoints.candidate_environment(): rf.TransportResult(
-            status=200, payload={"name": "ac25-trusted-main"}
-        )
-    })
-    result = tp.run_preflight(router=router, endpoints=endpoints)
-    assert result.error_code == tp.PREFLIGHT_ENVIRONMENT_READ_FAILED
+    # ★모드가 정본이 아니면 정책 endpoint 를 아예 만들지 않는다(§6-2 S4)
+    assert not any(path.endswith("/deployment-branch-policies") for path in _paths(log))
 
 
 @pytest.mark.parametrize(
@@ -203,23 +441,26 @@ def test_missing_branch_policy_object_is_environment_failure():
     [[], [{"name": "main"}, {"name": "release"}], [{"name": "release"}], "notalist"],
 )
 def test_branch_policy_other_than_main_only_is_unapproved(branches):
-    endpoints = _endpoints()
-    seen: dict = {}
-    router = _router(seen, overrides={
-        endpoints.candidate_environment_policies(): rf.TransportResult(
+    builder = tp.build_endpoints(
+        pr_number=anchors.CANDIDATE_PR_NUMBER, candidate_head_sha=LOCKED_HEAD,
+        approver_login="",
+    )
+    override = {
+        builder.candidate_environment_policies(): rf.TransportResult(
             status=200, payload={"branch_policies": branches}
         )
-    })
-    result = tp.run_preflight(router=router, endpoints=endpoints)
+    }
+    result, _log = _run(override)
     assert result.error_code == tp.PREFLIGHT_BRANCH_POLICY_MODE_UNAPPROVED
 
 
-# ══ 공개 출력 ══════════════════════════════════════════════════════════
+# ══ §6-6 공개 출력 ═════════════════════════════════════════════════════
 def test_cli_emits_exactly_two_lines(capsys, monkeypatch):
     monkeypatch.setattr(tp, "run_preflight", lambda **_kwargs: tp.PreflightResult(
         False, tp.PREFLIGHT_ENVIRONMENT_READ_FAILED, 3, ("approval",)
     ))
-    assert tp._main(["--run-id", "5", "--approver-login", APPROVER]) == 1
+    monkeypatch.setenv("GITHUB_RUN_ID", str(RUN_ID))
+    assert tp._main([]) == 1
     captured = capsys.readouterr()
     assert captured.out.splitlines() == [
         "VERDICT=0", f"ERROR_CODE={tp.PREFLIGHT_ENVIRONMENT_READ_FAILED}"
@@ -228,15 +469,16 @@ def test_cli_emits_exactly_two_lines(capsys, monkeypatch):
 
 
 def test_cli_never_prints_arguments(capsys):
-    assert tp._main(["--bogus", "$(id)"]) == 1
+    assert tp._main(["$(id)"]) == 1
     captured = capsys.readouterr()
     assert captured.err == ""
     assert "$(id)" not in captured.out
-    assert captured.out.splitlines() == ["VERDICT=0", "ERROR_CODE=PREFLIGHT_ARGUMENTS_INVALID"]
+    assert captured.out.splitlines() == [
+        "VERDICT=0", f"ERROR_CODE={tp.PREFLIGHT_ARGUMENTS_INVALID}"
+    ]
 
 
 def test_module_never_prints_raw_response_fields():
-    """payload 를 ★검사★ 하는 것은 되고, ★출력★ 하는 것은 안 된다."""
     import ast
     import inspect
 
@@ -247,16 +489,76 @@ def test_module_never_prints_raw_response_fields():
             printed.append(ast.unparse(node))
     assert printed, "출력이 하나도 없다"
     for statement in printed:
-        # 허용되는 것은 VERDICT·ERROR_CODE 두 줄뿐이다
         assert "VERDICT=" in statement or "ERROR_CODE=" in statement, statement
         for forbidden in ("payload", "headers", "result.", "response", "token"):
             assert forbidden not in statement, statement
 
 
-# ══ 단계 A 에서는 실행하지 않는다 ══════════════════════════════════════
-def test_no_workflow_runs_the_preflight_yet():
-    from pathlib import Path
+# ══ §6-6 워크플로 배선 ═════════════════════════════════════════════════
+def _workflow() -> dict:
+    return yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
 
-    root = Path(__file__).resolve().parents[2] / ".github" / "workflows"
-    for path in sorted(root.glob("box5-ac25-*.yml")):
-        assert "token_preflight" not in path.read_text(encoding="utf-8"), path.name
+
+def test_workflow_has_a_token_preflight_job():
+    workflow = _workflow()
+    job = workflow["jobs"]["token-preflight"]
+    assert job["runs-on"] == "ubuntu-24.04"
+    assert job["environment"] == "ac25-trusted-main"
+    assert job["permissions"] == {"actions": "read", "contents": "read"}
+    run_bodies = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "ac25.token_preflight" in run_bodies
+
+
+def test_every_verification_job_needs_the_preflight():
+    workflow = _workflow()
+    for name in ("trusted-verification", "candidate-lane", "integration-lane"):
+        needs = workflow["jobs"][name]["needs"]
+        needs = [needs] if isinstance(needs, str) else needs
+        assert "token-preflight" in needs, name
+
+
+def test_publish_check_needs_all_four_and_compares_results_explicitly():
+    workflow = _workflow()
+    publish = workflow["jobs"]["publish-check"]
+    assert set(publish["needs"]) == {
+        "token-preflight", "trusted-verification", "candidate-lane", "integration-lane",
+    }
+    assert publish["if"].strip() == "${{ always() }}"
+    gate = next(step for step in publish["steps"] if step.get("id") == "gate")
+    body = gate["run"]
+    assert '!= "success"' in body
+    for key in ("PREFLIGHT_RESULT", "TRUSTED_RESULT", "CANDIDATE_RESULT", "INTEGRATION_RESULT"):
+        assert key in gate["env"], key
+
+
+def test_publish_check_does_not_count_a_skipped_preflight_as_pass():
+    """workflow 가 결과를 넘기고, publish 모듈이 success 외를 전부 실패로 센다."""
+    workflow = _workflow()
+    publish = workflow["jobs"]["publish-check"]
+    script_step = next(step for step in publish["steps"] if "script" in step.get("with", {}))
+    assert script_step["env"]["AC25_PREFLIGHT_RESULT"] == "${{ needs.token-preflight.result }}"
+    module = (REPO_ROOT / "scripts/ci/ac25/publish_check.mjs").read_text(encoding="utf-8")
+    assert "AC25_PREFLIGHT_RESULT" in module
+    assert "PREFLIGHT_JOB_NOT_SUCCESS" in module
+
+
+def test_preflight_job_uses_two_separate_tokens():
+    job = _workflow()["jobs"]["token-preflight"]
+    step = next(step for step in job["steps"] if "ac25.token_preflight" in step.get("run", ""))
+    assert step["env"]["AC25_APPROVAL_TOKEN"].strip()
+    assert step["env"]["AC25_CANDIDATE_TOKEN"].strip()
+    assert "GH_TOKEN" not in step["env"]
+
+
+def test_workflow_dispatch_is_still_the_only_trigger():
+    workflow = _workflow()
+    triggers = workflow[True] if True in workflow else workflow["on"]
+    assert triggers == {"workflow_dispatch": None}
+
+
+# ══ §6-7 상태를 정직하게 기록한다 ══════════════════════════════════════
+def test_protected_runtime_is_not_claimed_anywhere_in_the_repo():
+    """보호 token 실제 실행을 PASS 로 적은 곳이 없어야 한다(§6-7 · §H)."""
+    for path in sorted((REPO_ROOT / ".github" / "workflows").glob("box5-ac25-*.yml")):
+        body = path.read_text(encoding="utf-8")
+        assert "TOKEN_PREFLIGHT_PROTECTED_RUNTIME=PASS" not in body, path.name

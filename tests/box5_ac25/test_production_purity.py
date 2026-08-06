@@ -193,6 +193,13 @@ def test_workflow_invokes_the_orchestrator():
     assert "ac25.orchestrator" in body
 
 
+def test_workflow_declares_no_dispatch_inputs():
+    """★R6-3 §6-5 — 좌표·PR 번호를 입력으로 노출하지 않는다."""
+    workflow = _workflow()
+    triggers = workflow[True] if True in workflow else workflow["on"]
+    assert triggers == {"workflow_dispatch": None}
+
+
 def test_workflow_passes_no_path_arguments_to_the_orchestrator():
     body = WORKFLOW.read_text(encoding="utf-8")
     invocation = body.split("python3 -m ac25.orchestrator", 1)[1].split("STATUS=$?", 1)[0]
@@ -229,14 +236,15 @@ def test_two_credentials_are_configured_for_the_orchestrator_step():
     assert "GH_TOKEN" not in orchestrate["env"]
 
 
-def test_approval_token_is_exposed_only_to_the_trusted_job():
-    """승인 token 은 trusted-verification 하나에만 노출한다(§6)."""
+def test_approval_token_is_exposed_only_to_protected_jobs():
+    """승인 token 은 보호 environment 를 거치는 두 job 에만 노출한다(§6 · §6-5)."""
     body = WORKFLOW.read_text(encoding="utf-8")
     workflow = _workflow()
+    allowed = {"token-preflight", "trusted-verification"}
     for name, job in workflow["jobs"].items():
         rendered = yaml.dump(job, allow_unicode=True)
-        if name == "trusted-verification":
-            assert "AC25_APPROVAL_READ_TOKEN" in rendered
+        if name in allowed:
+            assert "AC25_APPROVAL_READ_TOKEN" in rendered, name
         else:
             assert "AC25_APPROVAL_READ_TOKEN" not in rendered, name
     assert body.count("AC25_APPROVAL_READ_TOKEN") >= 1
@@ -246,16 +254,16 @@ def test_publish_depends_on_all_verification_jobs():
     workflow = _workflow()
     publish = workflow["jobs"]["publish-check"]
     assert set(publish["needs"]) == {
-        "trusted-verification", "candidate-lane", "integration-lane"
+        "token-preflight", "trusted-verification", "candidate-lane", "integration-lane",
     }
 
 
-def test_both_lanes_depend_on_trusted_verification():
-    """신뢰 검증이 실패하면 두 레인은 needs 로 자동 차단된다."""
+def test_both_lanes_depend_on_preflight_and_trusted_verification():
+    """사전점검·신뢰 검증이 실패하면 두 레인은 needs 로 자동 차단된다(§6-5)."""
     workflow = _workflow()
     for lane in ("candidate-lane", "integration-lane"):
         job = workflow["jobs"][lane]
-        assert job["needs"] == "trusted-verification"
+        assert set(job["needs"]) == {"token-preflight", "trusted-verification"}
         # publish 와 달리 always() 를 갖지 않는다 — 선행 실패 시 돌면 안 된다
         assert "if" not in job
 

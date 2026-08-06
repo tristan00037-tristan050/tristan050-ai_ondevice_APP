@@ -63,7 +63,9 @@ def test_input_failure_reports_only_its_code(capsys, monkeypatch):
     monkeypatch.setenv("AC25_PR_NUMBER", "$(id)")
     assert orchestrator._main([]) == 1
     lines = _lines(capsys.readouterr())
-    assert lines == ["VERDICT=0", "ERROR_CODE=INPUT_PR_NUMBER_MISMATCH"]
+    # ★R6-3 §6-5 — 좌표·PR 번호를 env 로 주는 경로 자체가 닫혔다. payload 는
+    #   해석되기도 전에 "그 이름이 존재한다" 는 사실만으로 거부된다.
+    assert lines == ["VERDICT=0", "ERROR_CODE=INPUT_USER_SUPPLIED_COORDINATE_PRESENT"]
     assert "$(id)" not in "\n".join(lines)
 
 

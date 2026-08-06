@@ -1,20 +1,30 @@
-// §9 C3 — Check Run 발행 모듈.
+// §9 C3 · §5 R6-2 — Check Run 발행 모듈(생산 판정 포함).
 //
 // ★workflow inline JavaScript 를 문자열로 검색해 통과시키지 않는다. 실행 가능한
 //   node:test 시험이 이 모듈을 실제로 부른다.
 // ★production 호출은 github.rest.checks.create 다. 다른 client 이름으로
 //   계약을 쓰면 mock 은 통과하고 실물은 안 불린다.
+// ★R6-2 — 기대 좌표를 이 파일에 다시 쓰지 않는다. stage_b_coordinates 단일
+//   원본에서 import 한다. 40자 형식 일치만으로 통과시키지 않고 다섯 좌표와
+//   합성 병합 부모 ★순서★ 까지 정확히 비교한다.
 // ★발행 대상은 잠긴 후보 head 하나다. workflow input 이나 실패한 lane output 이
 //   임의의 head SHA 로 대상을 바꾸지 못한다.
 // ★API 오류는 짧은 code 로만 바꾼다. JavaScript stack 을 공개하지 않는다.
+// ★전체 OID 를 로그에 반복하지 않는다. 짧은 8자 표시와 digest 만 남긴다(§5-2).
+
+import {
+  CoordinateContractError,
+  STAGE_B_COORDINATE_CONTRACT_INVALID,
+  coordinateSourceSha256,
+  evaluateObserved,
+  loadCoordinates,
+  shortOid,
+} from './stage_b_coordinates.mjs';
 
 export const CHECK_NAME = 'box5-ac25/trusted-exact-head';
-export const LOCKED_CANDIDATE_HEAD = '61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04';
-export const LOCKED_INTEGRATION_BASE = 'afdb237e4e6e83d96a182b6c5366a2ad95949bee';
 export const EXPECTED_OWNER = 'tristan00037-tristan050';
 export const EXPECTED_REPO = 'tristan050-ai_ondevice_APP';
 
-const OID = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const SHORT_CODE = /^[A-Z][A-Z0-9_]{1,63}$/;
 
@@ -26,18 +36,27 @@ export class PublicationError extends Error {
   }
 }
 
+// 잠긴 후보 head 는 단일 원본에서 온다. 이 파일이 값을 갖고 있지 않다.
+export function lockedCandidateHead() {
+  return loadCoordinates().candidate_commit;
+}
+
+export function lockedIntegrationBase() {
+  return loadCoordinates().integration_base;
+}
+
 function readEnv(evidence, key) {
   const value = evidence?.[key];
   return typeof value === 'string' ? value : '';
 }
 
 // 발행 전에 대상이 신뢰할 수 있는지부터 본다. 아니면 create 를 부르지 않는다.
-function assertTrustedTarget({ owner, repo, evidence }) {
+function assertTrustedTarget({ owner, repo, evidence, expected }) {
   if (owner !== EXPECTED_OWNER || repo !== EXPECTED_REPO) {
     throw new PublicationError('PUBLICATION_TARGET_UNTRUSTED');
   }
   const requested = readEnv(evidence, 'AC25_REQUESTED_HEAD');
-  if (requested && requested !== LOCKED_CANDIDATE_HEAD) {
+  if (requested && requested !== expected.candidate_commit) {
     throw new PublicationError('PUBLICATION_TARGET_UNTRUSTED');
   }
 }
@@ -49,12 +68,27 @@ export function evaluate(evidence) {
     if (!reasons.includes(code)) reasons.push(code);
   };
 
+  let expected = null;
+  try {
+    expected = loadCoordinates();
+  } catch (error) {
+    if (!(error instanceof CoordinateContractError)) throw error;
+    add(STAGE_B_COORDINATE_CONTRACT_INVALID);
+  }
+
   for (const [key, code] of [
+    ['AC25_PREFLIGHT_RESULT', 'PREFLIGHT_JOB_NOT_SUCCESS'],
     ['AC25_TRUSTED_RESULT', 'TRUSTED_JOB_NOT_SUCCESS'],
     ['AC25_CANDIDATE_RESULT', 'CANDIDATE_JOB_NOT_SUCCESS'],
     ['AC25_INTEGRATION_RESULT', 'INTEGRATION_JOB_NOT_SUCCESS'],
   ]) {
+    // skipped·cancelled·neutral·빈 값은 전부 성공이 아니다(§6-5).
     if (readEnv(evidence, key) !== 'success') add(code);
+  }
+
+  // workflow 가 따로 센 관문 결과도 성공이어야 한다. 둘 중 하나만 믿지 않는다.
+  if (readEnv(evidence, 'AC25_REQUIRED_JOBS_GATE') !== 'success') {
+    add('REQUIRED_JOBS_NOT_ALL_SUCCESS');
   }
 
   if (readEnv(evidence, 'AC25_TRUSTED_VERDICT') !== '1') {
@@ -66,23 +100,24 @@ export function evaluate(evidence) {
 
   const candidateCommit = readEnv(evidence, 'AC25_CANDIDATE_COMMIT');
   const candidateTree = readEnv(evidence, 'AC25_CANDIDATE_TREE');
+  const integrationBase = readEnv(evidence, 'AC25_PARENT_BASE');
   const mergeCommit = readEnv(evidence, 'AC25_MERGE_COMMIT');
   const mergeTree = readEnv(evidence, 'AC25_MERGE_TREE');
   const parentBase = readEnv(evidence, 'AC25_PARENT_BASE');
   const parentCandidate = readEnv(evidence, 'AC25_PARENT_CANDIDATE');
 
-  for (const value of [candidateCommit, candidateTree, mergeCommit, mergeTree]) {
-    if (!OID.test(value)) add('PUBLISH_EVIDENCE_INCOMPLETE');
+  // ★R6-2 생산 강제 — 다섯 좌표 + 부모 순서를 단일 원본과 정확히 비교한다.
+  for (const code of evaluateObserved({
+    candidateCommit,
+    candidateTree,
+    integrationBase,
+    mergeCommit,
+    mergeTree,
+    mergeParents: [parentBase, parentCandidate],
+    expected,
+  })) {
+    add(code);
   }
-
-  if (OID.test(candidateCommit) && candidateCommit !== LOCKED_CANDIDATE_HEAD) {
-    add('CANDIDATE_COORDINATE_MISMATCH');
-  }
-  if (OID.test(mergeCommit) && mergeCommit === LOCKED_CANDIDATE_HEAD) {
-    add('MERGE_EQUALS_SCOPE_END');
-  }
-  if (parentBase !== LOCKED_INTEGRATION_BASE) add('MERGE_PARENT_MISMATCH');
-  if (parentCandidate !== LOCKED_CANDIDATE_HEAD) add('MERGE_PARENT_MISMATCH');
 
   const errorCode = reasons.length === 0 ? 'OK' : reasons[0];
   return {
@@ -90,26 +125,37 @@ export function evaluate(evidence) {
     errorCode: SHORT_CODE.test(errorCode) || errorCode === 'OK'
       ? errorCode
       : 'PUBLISH_EVIDENCE_INCOMPLETE',
+    errorCodes: Object.freeze([...reasons]),
     receiptDigest,
+    candidateCommit,
     candidateTree,
     mergeCommit,
     mergeTree,
     parentBase,
     parentCandidate,
+    expected,
   };
 }
 
-// summary 는 meta-only 다. 경로·원문·token·stack 을 넣지 않는다.
+// summary 는 meta-only 다. 경로·원문·token·stack·전체 OID 를 넣지 않는다(§5-2).
 export function buildSummary(verdict, { runUrl }) {
+  let coordinateDigest = 'NONE';
+  try {
+    coordinateDigest = coordinateSourceSha256();
+  } catch (_error) {
+    coordinateDigest = 'NONE';
+  }
   return [
     `verdict=${verdict.conclusion === 'success' ? 1 : 0}`,
     `error_code=${verdict.errorCode}`,
-    `candidate_commit=${LOCKED_CANDIDATE_HEAD}`,
-    `candidate_tree=${verdict.candidateTree || 'NONE'}`,
-    `integration_base_commit=${LOCKED_INTEGRATION_BASE}`,
-    `synthetic_merge_commit=${verdict.mergeCommit || 'NONE'}`,
-    `synthetic_merge_tree=${verdict.mergeTree || 'NONE'}`,
-    `parents=${verdict.parentBase || 'NONE'},${verdict.parentCandidate || 'NONE'}`,
+    `error_codes=${verdict.errorCodes.join(',') || 'NONE'}`,
+    `coordinate_ssot_sha256=${coordinateDigest}`,
+    `candidate_commit_short=${shortOid(verdict.candidateCommit)}`,
+    `candidate_tree_short=${shortOid(verdict.candidateTree)}`,
+    `integration_base_short=${shortOid(verdict.parentBase)}`,
+    `synthetic_merge_commit_short=${shortOid(verdict.mergeCommit)}`,
+    `synthetic_merge_tree_short=${shortOid(verdict.mergeTree)}`,
+    `parents_short=${shortOid(verdict.parentBase)},${shortOid(verdict.parentCandidate)}`,
     `github_merge_ref_used_for_verdict=NO`,
     `receipt_sha256=${verdict.receiptDigest || 'NONE'}`,
     `run_url=${runUrl}`,
@@ -117,7 +163,16 @@ export function buildSummary(verdict, { runUrl }) {
 }
 
 export async function publishCheck({ github, owner, repo, runUrl, evidence }) {
-  assertTrustedTarget({ owner, repo, evidence });
+  // 발행 대상은 좌표 단일 원본이 정한다. 계약이 깨지면 발행 자체를 하지 않는다.
+  let expected;
+  try {
+    expected = loadCoordinates();
+  } catch (error) {
+    if (!(error instanceof CoordinateContractError)) throw error;
+    throw new PublicationError(STAGE_B_COORDINATE_CONTRACT_INVALID);
+  }
+
+  assertTrustedTarget({ owner, repo, evidence, expected });
 
   const verdict = evaluate(evidence);
   const runId = readEnv(evidence, 'GITHUB_RUN_ID') || '0';
@@ -126,7 +181,7 @@ export async function publishCheck({ github, owner, repo, runUrl, evidence }) {
     owner: EXPECTED_OWNER,
     repo: EXPECTED_REPO,
     name: CHECK_NAME,
-    head_sha: LOCKED_CANDIDATE_HEAD,
+    head_sha: expected.candidate_commit,
     status: 'completed',
     conclusion: verdict.conclusion,
     external_id: `ac25:${runId}:final`,

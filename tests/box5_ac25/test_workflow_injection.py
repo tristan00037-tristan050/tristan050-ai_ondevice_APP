@@ -15,6 +15,11 @@ import pytest
 import yaml
 from ac25 import workflow_inputs as wi
 
+# ★R6-2 §5-1 — 좌표를 이 시험이 다시 적지 않는다. 보호된 단일 원본에서 읽는다.
+from ac25 import stage_b_coordinates as _sbc  # noqa: E402
+
+_COORDINATES = _sbc.load_trusted_coordinates()
+
 pytestmark = pytest.mark.no_sidecar_token
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -23,8 +28,8 @@ TRUSTED = WORKFLOW_DIR / "box5-ac25-trusted-verification.yml"
 SMOKE = WORKFLOW_DIR / "box5-ac25-stage-a-smoke.yml"
 AC25_WORKFLOWS = (TRUSTED, SMOKE)
 
-HEAD = "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04"
-TREE = "313f40cf35b3ee2bf7bcdd946dea9c2e1c4896c2"
+HEAD = _COORDINATES.stage_b.candidate_commit
+TREE = _COORDINATES.stage_b.candidate_tree
 
 # 공격 payload — §8 이 나열한 일곱 형태
 PAYLOADS = [
@@ -144,21 +149,56 @@ def test_no_dynamic_refspec(path):
                 assert "${{" not in line, line
 
 
-def test_inputs_reach_python_only_through_env():
+def test_no_user_supplied_coordinate_reaches_python():
+    """§6-5 R6-3 — 좌표·PR 번호를 사용자 입력으로 받는 경로가 남아 있지 않다.
+
+    이전 판은 workflow_dispatch inputs 를 env(AC25_PR_NUMBER 등)로 넘겼다.
+    그 값을 바꾸면 검증 대상을 바꿀 수 있으므로 입력 자체를 없앴다.
+    """
     workflow = _workflow(TRUSTED)
+    body = TRUSTED.read_text(encoding="utf-8")
+    on_block = workflow[True] if True in workflow else workflow.get("on")
+    assert on_block == {"workflow_dispatch": None}, on_block
+
+    for forbidden in ("AC25_PR_NUMBER", "AC25_EXPECTED_HEAD", "AC25_EXPECTED_TREE",
+                      "inputs.pr_number", "inputs.expected_head", "inputs.expected_tree"):
+        assert forbidden not in body, forbidden
+
     steps = workflow["jobs"]["trusted-verification"]["steps"]
     orchestrate = next(step for step in steps if step.get("id") == "orchestrate")
-    env = orchestrate["env"]
-    assert env["AC25_PR_NUMBER"] == "${{ inputs.pr_number }}"
-    assert env["AC25_EXPECTED_HEAD"] == "${{ inputs.expected_head }}"
-    assert env["AC25_EXPECTED_TREE"] == "${{ inputs.expected_tree }}"
-    # run 본문에는 표현식이 없다
     assert "${{" not in orchestrate["run"]
+    # 남은 env 는 credential 과 Python 설정뿐이다
+    assert set(orchestrate["env"]) == {
+        "PYTHONPATH", "PYTHONNOUSERSITE", "AC25_APPROVAL_TOKEN", "AC25_CANDIDATE_TOKEN",
+    }
+
+
+def test_coordinates_come_from_the_protected_step_output():
+    """좌표는 보호된 코드가 낸 step output 으로만 흐른다(§5-1)."""
+    workflow = _workflow(TRUSTED)
+    steps = workflow["jobs"]["trusted-verification"]["steps"]
+    resolve = next(step for step in steps if step.get("id") == "coordinates")
+    assert "ac25.stage_b_coordinates" in resolve["run"]
+    assert "--emit-github-output" in resolve["run"]
+
+    lane = workflow["jobs"]["candidate-lane"]["steps"]
+    checkout = next(
+        step for step in lane
+        if step.get("with", {}).get("path") == "ac25-worktree"
+    )
+    assert checkout["with"]["ref"] == (
+        "${{ needs.trusted-verification.outputs.coordinate_candidate_commit }}"
+    )
+
+
+def _publish_script_step() -> dict:
+    steps = _workflow(TRUSTED)["jobs"]["publish-check"]["steps"]
+    return next(step for step in steps if "script" in step.get("with", {}))
 
 
 def test_github_script_receives_values_through_env_not_source():
     """★job output 을 JavaScript 소스에 직접 삽입하지 않는다."""
-    step = _workflow(TRUSTED)["jobs"]["publish-check"]["steps"][1]
+    step = _publish_script_step()
     script = step["with"]["script"]
     assert "${{" not in script, "script 본문에 표현식이 삽입돼 있다"
     # 값은 전부 env 로만 들어온다
@@ -168,7 +208,7 @@ def test_github_script_receives_values_through_env_not_source():
 
 def test_github_script_delegates_judgement_to_the_protected_module():
     """판정 로직을 inline 문자열로 두지 않는다. 보호된 모듈이 한다(C3)."""
-    script = _workflow(TRUSTED)["jobs"]["publish-check"]["steps"][1]["with"]["script"]
+    script = _publish_script_step()["with"]["script"]
     assert "publish_check.mjs" in script
     assert "pathToFileURL" in script
     # inline 에서 결론을 계산하지 않는다

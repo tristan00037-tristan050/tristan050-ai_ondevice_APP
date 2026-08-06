@@ -6,6 +6,9 @@ name: Box5 AC-25 Stage A Smoke
 # ★secret 0 · environment 0 · checks:write 0 · PR #903 checkout 0
 # ★action 은 전부 full commit SHA 로 고정한다.
 # ★설치·검사 명령 문자열을 이 파일에서 조립하지 않는다. 보호 runner 가 만든다.
+# ★R6-2 — 기대 좌표를 이 파일에 적지 않는다. 보호된 단일 원본에서만 온다.
+# ★R6-4 — 저장소 계약은 exact PR head 에서, 실제 빌드 산출물·Helm 을 준비한 뒤
+#   raw 출력을 격리한 상태로 정확히 한 번 돈다.
 #
 # 신뢰 경계(§8 정정): 후보 ★제품 코드·빌드 스크립트·제품 테스트는 실행하지 않는다.
 # 다만 PR #904 의 ac25 verifier Python 코드는 이 비특권 job 에서 ★실행한다.
@@ -82,26 +85,17 @@ jobs:
               print(f"{key.upper()}={summary[key]}")
           PY
 
-      # §13 C4 — 재검토 승인 전에는 ACCEPTANCE_ERRATUM=1 을 출력하지 않는다.
-      # 아직 없는 승인을 있는 것처럼 기록하지 않는다.
-      - name: Acceptance erratum status (requested, not approved)
-        run: |
-          set -euo pipefail
-          echo "REPO_CONTRACTS_IN_SMOKE=NOT_RUN"
-          echo "ACCEPTANCE_ERRATUM_REQUESTED=1"
-          echo "ACCEPTANCE_ERRATUM_APPROVED=0"
-
       # §18 — dirty 면 경로 목록을 로그에 내지 않는다. 코드만 낸다.
       - name: Clean finish (tracked and untracked)
         run: |
           set -euo pipefail
           if ! git diff --quiet || ! git diff --cached --quiet \
-             || [ -n "$(git status --porcelain)" ]; then
+             || [ -n "$(git status --porcelain --untracked-files=all)" ]; then
             echo "ERROR_CODE=SMOKE_WORKTREE_NOT_CLEAN"
             exit 1
           fi
 
-  # ══ C2 — Ubuntu 원격 재현 ═════════════════════════════════════════════
+  # ══ C2 — Ubuntu 원격 재현 (좌표는 단일 원본에서만 온다) ═══════════════
   ac25-merge-reproducibility:
     name: ac25-merge-reproducibility
     runs-on: ubuntu-24.04
@@ -120,17 +114,24 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Resolve stage-B coordinates from the protected single source
+        id: coordinates
+        env:
+          PYTHONPATH: scripts/ci
+          PYTHONNOUSERSITE: '1'
+        run: python3 -m ac25.stage_b_coordinates --emit-github-output
+
       - name: Fetch approved base and candidate objects
         env:
-          APPROVED_BASE: afdb237e4e6e83d96a182b6c5366a2ad95949bee
-          APPROVED_HEAD: 61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04
+          INTEGRATION_BASE: ${{ steps.coordinates.outputs.integration_base }}
+          CANDIDATE_HEAD: ${{ steps.coordinates.outputs.candidate_commit }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin "${APPROVED_BASE}" "${APPROVED_HEAD}"
+          git fetch --no-tags origin "${INTEGRATION_BASE}" "${CANDIDATE_HEAD}"
 
-      # ★두 번 합성해 서로 같고 기대 좌표와도 같은지 본다.
+      # ★두 번 합성해 서로 같고 단일 원본 좌표와도 같은지 본다.
       # ★다른 값이 나와도 상수를 고쳐 맞추지 않는다.
-      - name: Synthesize twice and compare with expected coordinates
+      - name: Synthesize twice and compare with the single-source coordinates
         env:
           PYTHONPATH: scripts/ci
           PYTHONNOUSERSITE: '1'
@@ -142,16 +143,12 @@ jobs:
           import tempfile
           from pathlib import Path
 
+          from ac25 import stage_b_coordinates
           from ac25.integration_merge import build_synthetic_merge, cleanup_worktree
 
-          EXPECTED_SYNTHETIC_MERGE_COMMIT = "9ea18f7c6213b1052ce58af7d9cdce5e2e71e09d"
-          EXPECTED_SYNTHETIC_MERGE_TREE = "ae66b4274d5e644b34a1df6e09ecf6569171cdbb"
-          EXPECTED_MERGE_PARENTS = (
-              "afdb237e4e6e83d96a182b6c5366a2ad95949bee",
-              "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04",
-          )
-
           repository = Path.cwd()
+          expected = stage_b_coordinates.load_trusted_coordinates(repository).stage_b
+
           runs = []
           for index in (1, 2):
               root = Path(tempfile.mkdtemp(prefix=f"ac25-c2-{index}-"))
@@ -160,8 +157,8 @@ jobs:
                   merge = build_synthetic_merge(
                       repository=repository,
                       destination=destination,
-                      integration_base_commit=EXPECTED_MERGE_PARENTS[0],
-                      candidate_head=EXPECTED_MERGE_PARENTS[1],
+                      integration_base_commit=expected.integration_base,
+                      candidate_head=expected.candidate_commit,
                   )
                   runs.append(
                       (merge.synthetic_merge_commit, merge.merge_tree, merge.parents)
@@ -169,24 +166,28 @@ jobs:
               finally:
                   cleanup_worktree(repository, destination, raise_on_failure=False)
 
+          # ★전체 OID 를 로그에 반복하지 않는다. 짧은 표시만 낸다(§5-2).
           for index, (commit, tree, parents) in enumerate(runs, start=1):
-              print(f"C2_RUN_{index}_COMMIT={commit}")
-              print(f"C2_RUN_{index}_TREE={tree}")
-              print(f"C2_RUN_{index}_PARENT_BASE={parents[0]}")
-              print(f"C2_RUN_{index}_PARENT_CANDIDATE={parents[1]}")
+              print(f"C2_RUN_{index}_COMMIT_SHORT={commit[:8]}")
+              print(f"C2_RUN_{index}_TREE_SHORT={tree[:8]}")
 
           if runs[0] != runs[1]:
               print("ERROR_CODE=INTEGRATION_MERGE_NOT_REPRODUCIBLE")
               raise SystemExit(1)
+
           commit, tree, parents = runs[0]
-          matches = (
-              commit == EXPECTED_SYNTHETIC_MERGE_COMMIT
-              and tree == EXPECTED_SYNTHETIC_MERGE_TREE
-              and parents == EXPECTED_MERGE_PARENTS
+          codes = stage_b_coordinates.evaluate_observed(
+              candidate_commit=expected.candidate_commit,
+              candidate_tree=expected.candidate_tree,
+              integration_base=expected.integration_base,
+              merge_commit=commit,
+              merge_tree=tree,
+              merge_parents=list(parents),
+              expected=expected,
           )
-          print(f"C2_MATCHES_EXPECTED={'YES' if matches else 'NO'}")
-          if not matches:
-              print("ERROR_CODE=INTEGRATION_MERGE_UNEXPECTED_COORDINATE")
+          print(f"C2_MATCHES_EXPECTED={'YES' if not codes else 'NO'}")
+          if codes:
+              print(f"ERROR_CODE={codes[0]}")
               raise SystemExit(1)
           print("VERDICT=1")
           print("ERROR_CODE=OK")
@@ -215,3 +216,43 @@ jobs:
         run: |
           set -euo pipefail
           node --test tests/box5_ac25/publish_check.test.mjs
+
+  # ══ R6-4 — exact head 저장소 계약 ═════════════════════════════════════
+  # §7. 준비 명령·순서는 보호된 코드 상수(repo_contract_runner)에 있고, 모든
+  # 바깥 명령은 격리기를 거친다. 이 job 이 §12 를 단계 A 에서 닫는 자리다.
+  ac25-repo-contracts-exact-head:
+    name: ac25-repo-contracts-exact-head
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout candidate at exact PR head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+
+      # ★checkout HEAD 가 event head 와 같은지 ★먼저★ 본다. 다르면 준비를 하지
+      #   않고 닫는다(§7-1). 문서 기준선 OID 를 하드코딩하지 않는다.
+      - name: Prepare toolchain and run repository contracts exactly once
+        env:
+          PYTHONPATH: scripts/ci
+          PYTHONNOUSERSITE: '1'
+          AC25_EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          AC25_BASE_REF: ${{ github.event.pull_request.base.sha }}
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+        run: |
+          set -euo pipefail
+          python3 -m ac25.repo_contract_runner

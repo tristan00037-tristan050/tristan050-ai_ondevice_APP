@@ -377,6 +377,13 @@ def run_verification(
 
 
 # ══ M-4 · M-2 진입 검증 ════════════════════════════════════════════════
+USER_SUPPLIED_COORDINATE_ENV = (
+    "AC25_PR_NUMBER",
+    "AC25_EXPECTED_HEAD",
+    "AC25_EXPECTED_TREE",
+)
+
+
 def verify_dispatch_and_identity(
     *,
     environ,
@@ -384,14 +391,25 @@ def verify_dispatch_and_identity(
     locked_head: str,
     locked_tree: str,
 ) -> workflow_inputs.DispatchInputs:
-    """★셸 본문이 아니라 env 로 받은 값을 strict 검증한다(M-4).
+    """★R6-3 — 좌표·PR 번호를 사용자 입력으로 받지 않는다(§6-5).
 
+    이전 판은 workflow_dispatch 입력을 env 로 받아 잠금과 대조했다. 그러나 대조할
+    주장값을 사람이 넣을 수 있으면, 그 값을 바꿔 검사 대상을 옮길 여지가 남는다.
+    이제 좌표는 보호된 잠금에서만 오고, env 에 그 이름이 ★있기만 해도★ 닫는다.
+
+    남은 env 는 러너가 준 workflow context 뿐이며, 그것도 strict 검증한다(M-4).
     이어서 workflow 신원과 environment 정책을 원격 사실로 강제한다(M-2).
     """
+    for name in USER_SUPPLIED_COORDINATE_ENV:
+        if environ.get(name) is not None:
+            raise workflow_inputs.WorkflowInputError(
+                workflow_inputs.INPUT_USER_SUPPLIED_COORDINATE_PRESENT, name
+            )
+
     inputs = workflow_inputs.validate_dispatch_inputs(
-        pr_number=environ.get("AC25_PR_NUMBER"),
-        expected_head=environ.get("AC25_EXPECTED_HEAD"),
-        expected_tree=environ.get("AC25_EXPECTED_TREE"),
+        pr_number=str(anchors.CANDIDATE_PR_NUMBER),
+        expected_head=locked_head,
+        expected_tree=locked_tree,
         run_id=environ.get("GITHUB_RUN_ID"),
         repository=environ.get("GITHUB_REPOSITORY"),
         ref=environ.get("GITHUB_REF"),

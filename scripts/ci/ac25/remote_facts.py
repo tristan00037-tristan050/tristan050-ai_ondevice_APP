@@ -171,24 +171,21 @@ class EndpointBuilder:
     def run_facts(self) -> str:
         return f"repos/{self.run_repository}/actions/runs/{self.run_id}"
 
-    def canonical_requests(self) -> tuple[tuple[Route, str], ...]:
-        """단계 B 가 실제로 부르는 read 전부. preflight 가 이 목록을 그대로 쓴다."""
+    def static_requests(self) -> tuple[tuple[Route, str], ...]:
+        """★R6-3 §6-2 S1 — 선행 의존이 ★없는★ read 만. 자리표를 쓰지 않는다.
+
+        이전 판의 `canonical_requests()` 는 실행 전에 모든 URL 을 평평하게 만들어
+        `approval_compare("0" * 40)` 같은 all-zero 자리표를 주소에 넣었다. 그
+        목록은 폐기했다. 의존이 있는 요청은 token_preflight 상태기계가 앞 응답의
+        실측 값으로 그때 만든다.
+        """
         return (
             (Route.APPROVAL, self.approval_repo()),
             (Route.APPROVAL, self.approval_ref()),
             (Route.APPROVAL, self.approval_commit()),
-            (Route.APPROVAL, self.approval_compare("0" * 40)),
             (Route.APPROVAL, self.approval_contents(self.document_path)),
-            (Route.APPROVAL, self.approval_contents(self.signature_path)),
-            (Route.APPROVAL, self.approval_contents(self.allowed_signers_path)),
-            (Route.APPROVAL, self.approver()),
             (Route.CANDIDATE, self.candidate_pull()),
-            (Route.CANDIDATE, self.candidate_commit(self.candidate_head_sha)),
-            (Route.CANDIDATE, self.candidate_repo()),
-            (Route.CANDIDATE, self.candidate_branch("main")),
             (Route.CANDIDATE, self.candidate_environment()),
-            (Route.CANDIDATE, self.candidate_environment_policies()),
-            (Route.RUN, self.run_facts()),
         )
 
 

@@ -8,10 +8,15 @@ from __future__ import annotations
 import pytest
 from ac25 import workflow_inputs as wi
 
+# ★R6-2 §5-1 — 좌표를 이 시험이 다시 적지 않는다. 보호된 단일 원본에서 읽는다.
+from ac25 import stage_b_coordinates as _sbc  # noqa: E402
+
+_COORDINATES = _sbc.load_trusted_coordinates()
+
 pytestmark = pytest.mark.no_sidecar_token
 
-HEAD = "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04"
-TREE = "313f40cf35b3ee2bf7bcdd946dea9c2e1c4896c2"
+HEAD = _COORDINATES.stage_b.candidate_commit
+TREE = _COORDINATES.stage_b.candidate_tree
 
 
 def _validate(**overrides):

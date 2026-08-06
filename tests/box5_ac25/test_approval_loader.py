@@ -18,6 +18,11 @@ from ac25.approval_loader import (
 )
 from ac25.cross_track_approval import SCHEMA_VERSION
 
+# ★R6-2 §5-1 — 좌표를 이 시험이 다시 적지 않는다. 보호된 단일 원본에서 읽는다.
+from ac25 import stage_b_coordinates as _sbc  # noqa: E402
+
+_COORDINATES = _sbc.load_trusted_coordinates()
+
 pytestmark = pytest.mark.no_sidecar_token
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -40,11 +45,11 @@ def _load(data: bytes):
 def test_real_approval_document_loads():
     approval = _load(DOC)
     assert approval.schema_version == SCHEMA_VERSION
-    assert approval.integration_base_sha == "afdb237e4e6e83d96a182b6c5366a2ad95949bee"
-    assert approval.provenance_base_sha == "de3dd4ebaf5b3935a142b988dd61e6198aa9536d"
-    assert approval.provenance_base_tree == "8c3509db047145714d2a1a84dfc76fb0a4c0fec9"
-    assert approval.candidate_head_sha == "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04"
-    assert approval.candidate_head_tree == "313f40cf35b3ee2bf7bcdd946dea9c2e1c4896c2"
+    assert approval.integration_base_sha == _COORDINATES.stage_b.integration_base
+    assert approval.provenance_base_sha == _COORDINATES.provenance_base_commit
+    assert approval.provenance_base_tree == _COORDINATES.provenance_base_tree
+    assert approval.candidate_head_sha == _COORDINATES.stage_b.candidate_commit
+    assert approval.candidate_head_tree == _COORDINATES.stage_b.candidate_tree
     assert approval.approver_login == "tristan00037-tristan050"
     assert approval.approver_id == 238947383
     assert approval.expires_at == "2026-08-12T23:59:59Z"
@@ -134,7 +139,7 @@ def test_missing_required_key_is_rejected():
 
 def test_malformed_oid_is_rejected():
     forged = DOC.replace(
-        b"61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04", b"61ba1bf4"
+        _COORDINATES.stage_b.candidate_commit.encode("ascii"), b"61ba1bf4"
     )
     with pytest.raises(ApprovalDocumentError) as caught:
         _load(forged)

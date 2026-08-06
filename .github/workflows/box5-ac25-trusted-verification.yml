@@ -5,49 +5,79 @@ name: Box5 AC-25 Trusted Verification
 # ★허용 이벤트는 workflow_dispatch 하나뿐이다. pull_request·pull_request_target·
 #   push·workflow_run·repository_dispatch 를 두지 않는다. 자기시험은 별도 파일
 #   (box5-ac25-stage-a-smoke.yml)에 있다.
+# ★R6-3 — 첫 관문은 token-preflight 다. 나머지 job 은 전부 그 성공을 needs 로 건다.
+# ★R6-2 — 기대 좌표는 이 파일에 없다. 보호된 코드의 단일 원본
+#   (scripts/ci/ac25/stage_b_coordinates.v1.json)에서 step output 으로만 온다.
+#   workflow_dispatch inputs 는 두지 않는다 — 입력으로 좌표를 받으면 그 값을 바꿔
+#   검증을 통과시킬 수 있다(§6-5 · §9-2).
 # ★최상단 permissions 는 비어 있다. 각 job 이 필요한 만큼만 연다.
-# ★입력은 셸 본문에 넣지 않는다. env 로 넘겨 Python 에서 strict 검증한다(M-4).
 # ★설치·검사 명령 문자열을 조립하지 않는다. 보호 runner 가 만든다(M-1).
 # ★refs/pull/903/merge 는 참고값으로만 관측한다. 판정 대상은 직접 합성한다(M-3).
-# ★publish-check 는 always() 다. 실패해도 후보 head 에 도장을 남긴다(M-6).
+# ★publish-check 는 always() 이고, 네 job 이 모두 success 인지 ★명시 비교★ 한다.
 on:
   workflow_dispatch:
-    inputs:
-      pr_number:
-        description: 판정 대상 PR 번호(903 고정 대조)
-        required: true
-        type: string
-      expected_head:
-        description: 후보 head SHA(주장값 · lock 과 대조)
-        required: true
-        type: string
-      expected_tree:
-        description: 후보 head tree(주장값 · lock 과 대조)
-        required: true
-        type: string
 
 permissions: {}
 
 concurrency:
-  group: box5-ac25-trusted
+  # ★run id 에 결속해 이전 성공 영수증을 재사용하지 못하게 한다(§10-3).
+  group: box5-ac25-trusted-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
-  # ══ 신뢰 검증: 병합된 main 의 보호 코드로만 실행 ══════════════════════
-  trusted-verification:
-    name: trusted-verification
+  # ══ R6-3 첫 관문: token 사전점검 ═════════════════════════════════════
+  token-preflight:
+    name: token-preflight
     runs-on: ubuntu-24.04
     environment: ac25-trusted-main
     permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout trusted verifier
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: ac25-trusted
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Run token preflight
+        working-directory: ac25-trusted
+        env:
+          PYTHONPATH: scripts/ci
+          PYTHONNOUSERSITE: '1'
+          AC25_APPROVAL_TOKEN: ${{ secrets.AC25_APPROVAL_READ_TOKEN }}
+          AC25_CANDIDATE_TOKEN: ${{ github.token }}
+        run: python3 -m ac25.token_preflight
+
+  # ══ 신뢰 검증: 병합된 main 의 보호 코드로만 실행 ══════════════════════
+  trusted-verification:
+    name: trusted-verification
+    needs: token-preflight
+    runs-on: ubuntu-24.04
+    environment: ac25-trusted-main
+    permissions:
+      actions: read
       contents: read
     outputs:
-      # ★C6 — 허용 목록 여섯만. receipt 원문은 job output 으로 나가지 않는다.
+      # ★C6 — 허용 목록만. receipt 원문은 job output 으로 나가지 않는다.
       verdict: ${{ steps.orchestrate.outputs.verdict }}
       error_code: ${{ steps.orchestrate.outputs.error_code }}
       receipt_sha256: ${{ steps.orchestrate.outputs.receipt_sha256 }}
       candidate_commit: ${{ steps.orchestrate.outputs.candidate_commit }}
       candidate_tree: ${{ steps.orchestrate.outputs.candidate_tree }}
       changed_path_count: ${{ steps.orchestrate.outputs.changed_path_count }}
+      # ★R6-2 — 좌표는 보호된 단일 원본에서 나온다. 사용자 입력이 아니다.
+      coordinate_candidate_commit: ${{ steps.coordinates.outputs.candidate_commit }}
+      coordinate_candidate_tree: ${{ steps.coordinates.outputs.candidate_tree }}
+      coordinate_integration_base: ${{ steps.coordinates.outputs.integration_base }}
+      coordinate_ssot_sha256: ${{ steps.coordinates.outputs.coordinate_ssot_sha256 }}
     steps:
       - name: Checkout trusted verifier (merged main)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -71,16 +101,27 @@ jobs:
             exit 1
           fi
 
+      # ★좌표를 workflow 가 적지 않는다. 보호된 코드가 output 으로 내보낸다.
+      - name: Resolve stage-B coordinates from the protected single source
+        id: coordinates
+        working-directory: ac25-trusted
+        env:
+          PYTHONPATH: scripts/ci
+          PYTHONNOUSERSITE: '1'
+        run: python3 -m ac25.stage_b_coordinates --emit-github-output
+
       - name: Fetch candidate objects (no candidate code execution)
         working-directory: ac25-trusted
         env:
-          APPROVED_BASE: de3dd4ebaf5b3935a142b988dd61e6198aa9536d
-          APPROVED_HEAD: 61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04
+          PROVENANCE_BASE: ${{ steps.coordinates.outputs.provenance_base_commit }}
+          CANDIDATE_HEAD: ${{ steps.coordinates.outputs.candidate_commit }}
+          INTEGRATION_BASE: ${{ steps.coordinates.outputs.integration_base }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin "${APPROVED_BASE}" "${APPROVED_HEAD}"
+          git fetch --no-tags origin \
+            "${PROVENANCE_BASE}" "${CANDIDATE_HEAD}" "${INTEGRATION_BASE}"
 
-      # ★입력은 전부 env 로 간다. run 본문에 inputs 표현식을 쓰지 않는다(M-4).
+      # ★입력은 전부 env 로 간다. run 본문에 표현식을 쓰지 않는다(M-4).
       - name: Run trusted orchestrator (single production entry point)
         id: orchestrate
         working-directory: ac25-trusted
@@ -88,17 +129,10 @@ jobs:
           PYTHONPATH: scripts/ci
           PYTHONNOUSERSITE: '1'
           # ★C5 — 두 credential 을 분리한다. 한쪽 열쇠로 다른 쪽 문을 열지 못한다.
-          #   승인 저장소 read 는 AC25_APPROVAL_TOKEN 으로만,
-          #   후보 저장소·actions read 는 GITHUB_TOKEN 으로만 나간다.
           AC25_APPROVAL_TOKEN: ${{ secrets.AC25_APPROVAL_READ_TOKEN }}
           AC25_CANDIDATE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          AC25_PR_NUMBER: ${{ inputs.pr_number }}
-          AC25_EXPECTED_HEAD: ${{ inputs.expected_head }}
-          AC25_EXPECTED_TREE: ${{ inputs.expected_tree }}
         run: |
           set -euo pipefail
-          # ★orchestrator 가 허용 목록 값만 GITHUB_OUTPUT 에 직접 쓴다.
-          #   워크플로가 receipt 를 cat 하지 않는다(C6).
           set +e
           python3 -m ac25.orchestrator --mode verify
           STATUS=$?
@@ -108,7 +142,7 @@ jobs:
   # ══ candidate lane: 후보 코드를 비특권 job 에서 실제로 실행 ═══════════
   candidate-lane:
     name: candidate-lane
-    needs: trusted-verification
+    needs: [token-preflight, trusted-verification]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -120,10 +154,11 @@ jobs:
           persist-credentials: false
           path: ac25-trusted
 
-      - name: Checkout candidate at approved head
+      # ★checkout ref 도 단일 원본에서 온다. 이 파일에 OID 를 적지 않는다.
+      - name: Checkout candidate at the coordinate-declared head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04
+          ref: ${{ needs.trusted-verification.outputs.coordinate_candidate_commit }}
           fetch-depth: 0
           persist-credentials: false
           path: ac25-worktree
@@ -137,8 +172,8 @@ jobs:
         id: identity
         working-directory: ac25-worktree
         env:
-          EXPECTED_HEAD: ${{ inputs.expected_head }}
-          EXPECTED_TREE: ${{ inputs.expected_tree }}
+          EXPECTED_HEAD: ${{ needs.trusted-verification.outputs.coordinate_candidate_commit }}
+          EXPECTED_TREE: ${{ needs.trusted-verification.outputs.coordinate_candidate_tree }}
         run: |
           set -euo pipefail
           HEAD_SHA="$(git rev-parse HEAD)"
@@ -169,7 +204,7 @@ jobs:
   # ══ integration lane: 승인 base 와 후보 head 로 직접 합성 ═════════════
   integration-lane:
     name: integration-lane
-    needs: trusted-verification
+    needs: [token-preflight, trusted-verification]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -188,6 +223,7 @@ jobs:
           python-version: '3.12'
 
       # ★GitHub 이 만든 merge ref 는 관측만 하고 판정에 쓰지 않는다.
+      # ★좌표는 loader 에서 읽는다. 이 파일에도 이 스크립트에도 OID 가 없다.
       - name: Build deterministic synthetic merge and run checks
         id: merge
         env:
@@ -196,28 +232,27 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+          import hashlib
           import os
           from pathlib import Path
 
-          from ac25 import stage_b_runner
+          from ac25 import stage_b_coordinates, stage_b_runner
           from ac25.integration_merge import (
               build_synthetic_merge,
               cleanup_worktree,
               observe_github_merge_ref,
           )
 
-          BASE = "afdb237e4e6e83d96a182b6c5366a2ad95949bee"
-          HEAD = "61ba1bf48d4ce5aa62f256ef80fc84e4e8aafd04"
-
           trusted = Path(os.environ["GITHUB_WORKSPACE"]) / "ac25-trusted"
+          coordinates = stage_b_coordinates.load_trusted_coordinates(trusted).stage_b
           worktree = Path(os.environ["RUNNER_TEMP"]) / "ac25-worktree"
           observed = observe_github_merge_ref(trusted, 903)
 
           merge = build_synthetic_merge(
               repository=trusted,
               destination=worktree,
-              integration_base_commit=BASE,
-              candidate_head=HEAD,
+              integration_base_commit=coordinates.integration_base,
+              candidate_head=coordinates.candidate_commit,
               github_merge_ref_observed=observed,
           )
           try:
@@ -230,8 +265,6 @@ jobs:
               cleanup_worktree(trusted, worktree, raise_on_failure=False)
 
           # ★C6 — 허용 목록 값만, 한 줄 형식으로 내보낸다.
-          import hashlib
-
           print(f"synthetic_merge_commit={merge.synthetic_merge_commit}")
           print(f"synthetic_merge_tree={merge.merge_tree}")
           print(f"parent_base={merge.parents[0]}")
@@ -243,7 +276,6 @@ jobs:
           PY
 
     outputs:
-      # ★C6 — 허용 목록 다섯만. GitHub merge ref 는 ★digest 로만★ 남긴다.
       synthetic_merge_commit: ${{ steps.merge.outputs.synthetic_merge_commit }}
       synthetic_merge_tree: ${{ steps.merge.outputs.synthetic_merge_tree }}
       parent_base: ${{ steps.merge.outputs.parent_base }}
@@ -254,15 +286,14 @@ jobs:
   publish-check:
     name: publish-check
     if: ${{ always() }}
-    needs: [trusted-verification, candidate-lane, integration-lane]
+    needs: [token-preflight, trusted-verification, candidate-lane, integration-lane]
     runs-on: ubuntu-24.04
     environment: ac25-trusted-main
     permissions:
       contents: read
       checks: write
     steps:
-      # ★보호된 publisher 를 명시적으로 checkout 한다. GITHUB_WORKSPACE 에 무엇이
-      #   있는지 보장 없이 local import 하지 않는다(C3).
+      # ★보호된 publisher 를 명시적으로 checkout 한다.
       - name: Checkout trusted publisher
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -270,13 +301,34 @@ jobs:
           path: ac25-publisher
           persist-credentials: false
 
+      # ★§6-5 — 네 결과가 모두 success 인지 ★명시 비교★ 한다.
+      #   skipped·cancelled·neutral 을 성공으로 세지 않는다.
+      - name: Assert every required job succeeded
+        id: gate
+        env:
+          PREFLIGHT_RESULT: ${{ needs.token-preflight.result }}
+          TRUSTED_RESULT: ${{ needs.trusted-verification.result }}
+          CANDIDATE_RESULT: ${{ needs.candidate-lane.result }}
+          INTEGRATION_RESULT: ${{ needs.integration-lane.result }}
+        run: |
+          set -euo pipefail
+          GATE=success
+          for value in "${PREFLIGHT_RESULT}" "${TRUSTED_RESULT}" \
+                       "${CANDIDATE_RESULT}" "${INTEGRATION_RESULT}"; do
+            if [ "${value}" != "success" ]; then GATE=not_success; fi
+          done
+          echo "gate=${GATE}" >> "${GITHUB_OUTPUT}"
+          echo "REQUIRED_JOBS_ALL_SUCCESS=$([ "${GATE}" = success ] && echo YES || echo NO)"
+
       - name: Publish final check-run
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           # ★needs 전체를 JSON 으로 넘기지 않는다. 명시한 필드만 넘긴다(M-4 · C6).
+          AC25_PREFLIGHT_RESULT: ${{ needs.token-preflight.result }}
           AC25_TRUSTED_RESULT: ${{ needs.trusted-verification.result }}
           AC25_CANDIDATE_RESULT: ${{ needs.candidate-lane.result }}
           AC25_INTEGRATION_RESULT: ${{ needs.integration-lane.result }}
+          AC25_REQUIRED_JOBS_GATE: ${{ steps.gate.outputs.gate }}
           AC25_TRUSTED_VERDICT: ${{ needs.trusted-verification.outputs.verdict }}
           AC25_ERROR_CODE: ${{ needs.trusted-verification.outputs.error_code }}
           AC25_RECEIPT_SHA256: ${{ needs.trusted-verification.outputs.receipt_sha256 }}
@@ -286,7 +338,6 @@ jobs:
           AC25_MERGE_TREE: ${{ needs.integration-lane.outputs.synthetic_merge_tree }}
           AC25_PARENT_BASE: ${{ needs.integration-lane.outputs.parent_base }}
           AC25_PARENT_CANDIDATE: ${{ needs.integration-lane.outputs.parent_candidate }}
-          AC25_REQUESTED_HEAD: ${{ inputs.expected_head }}
         with:
           script: |
             const { pathToFileURL } = require('node:url');
