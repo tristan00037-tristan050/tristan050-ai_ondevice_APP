@@ -132,7 +132,7 @@ LANES: dict[str, TestLaneSpec] = {
             "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_existing_helper1_codeowners_rules_are_preserved_and_a4_is_owned",
             "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_handoff_chain_authority_is_fixed_outside_the_candidate_package",
             "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_package_and_self_selected_authority_joint_mutation_is_rejected",
-            "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_producer_execution_creates_required_fixed_path_package",
+            "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_producer_uploads_raw_material_and_protected_side_creates_fixed_package",
             "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_producer_package_fingerprint_matches_candidate_descriptor",
             "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_uploaded_artifact_roundtrip_preserves_exact_verifier_path",
             "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_missing_renamed_or_substituted_package_blocks_final_gate",
@@ -144,6 +144,20 @@ LANES: dict[str, TestLaneSpec] = {
             "--deselect=tests/helper1_v2/test_replay_store_v51.py::test_postgresql_pins_every_resolved_host_port_and_address",
             "--deselect=tests/helper1_v2/test_replay_store_v51.py::test_postgresql_routing_environment_is_rejected_before_connecting",
             "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_postgresql_probe_fails_closed_without_protected_dsn",
+            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_clean_runner_executes_raw_to_package_to_unsigned_verdict",
+            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_actual_github_response_shape_and_failed_sibling_job_are_accepted",
+            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_unsuccessful_untrusted_job_blocks_before_packaging",
+            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_workflow_byte_drift_blocks_before_packaging",
+            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_downloaded_archive_digest_mismatch_blocks_before_packaging",
+            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_extracted_content_must_match_verified_archive_bytes",
+            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_bootstrap_receipts_cannot_be_upgraded_under_enabled_policy",
+            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_preexisting_candidate_package_is_not_used_as_trusted_input",
+            "--deselect=tests/helper1_v2/test_approval_input_v61.py",
+            "--deselect=tests/helper1_v2/test_approval_transport_v61.py",
+            "--deselect=tests/helper1_v2/test_device_measurement_v61.py",
+            "--deselect=tests/helper1_v2/test_retrieval_quality_v61.py",
+            "--deselect=tests/helper1_v2/test_start_tree_v61.py",
+            "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_transitive_dependency_omission_is_detected_automatically",
             "--junitxml={report}",
         ),
         cwd_rel=".",
@@ -181,6 +195,25 @@ LANES: dict[str, TestLaneSpec] = {
         required_capabilities=frozenset({"python", "pytest", "cryptography", "sqlite"}),
         expected_collected=149,
     ),
+    "python-helper1-v61-quality": TestLaneSpec(
+        lane_id="python-helper1-v61-quality",
+        argv=(
+            "{python}", "-m", "pytest", "-q",
+            "tests/helper1_v2/test_approval_input_v61.py",
+            "tests/helper1_v2/test_approval_transport_v61.py",
+            "tests/helper1_v2/test_device_measurement_v61.py",
+            "tests/helper1_v2/test_retrieval_quality_v61.py",
+            "tests/helper1_v2/test_start_tree_v61.py",
+            "tests/helper1_v2/test_protected_workflow_topology.py::test_transitive_dependency_omission_is_detected_automatically",
+            "--junitxml={report}",
+        ),
+        cwd_rel=".",
+        report_kind="junit",
+        report_name="python-helper1-v61-quality.junit.xml",
+        timeout_seconds=180,
+        required_capabilities=frozenset({"python", "pytest", "cryptography"}),
+        expected_collected=32,
+    ),
     "python-helper1-protected-replay": TestLaneSpec(
         lane_id="python-helper1-protected-replay",
         argv=(
@@ -197,7 +230,7 @@ LANES: dict[str, TestLaneSpec] = {
             "tests/helper1_v2/test_protected_workflow_topology.py::test_existing_helper1_codeowners_rules_are_preserved_and_a4_is_owned",
             "tests/helper1_v2/test_protected_workflow_topology.py::test_handoff_chain_authority_is_fixed_outside_the_candidate_package",
             "tests/helper1_v2/test_protected_workflow_topology.py::test_package_and_self_selected_authority_joint_mutation_is_rejected",
-            "tests/helper1_v2/test_protected_workflow_topology.py::test_producer_execution_creates_required_fixed_path_package",
+            "tests/helper1_v2/test_protected_workflow_topology.py::test_producer_uploads_raw_material_and_protected_side_creates_fixed_package",
             "tests/helper1_v2/test_protected_workflow_topology.py::test_producer_package_fingerprint_matches_candidate_descriptor",
             "tests/helper1_v2/test_protected_workflow_topology.py::test_uploaded_artifact_roundtrip_preserves_exact_verifier_path",
             "tests/helper1_v2/test_protected_workflow_topology.py::test_missing_renamed_or_substituted_package_blocks_final_gate",
@@ -209,6 +242,14 @@ LANES: dict[str, TestLaneSpec] = {
             "tests/helper1_v2/test_replay_store_v51.py::test_postgresql_pins_every_resolved_host_port_and_address",
             "tests/helper1_v2/test_replay_store_v51.py::test_postgresql_routing_environment_is_rejected_before_connecting",
             "tests/helper1_v2/test_protected_workflow_topology.py::test_postgresql_probe_fails_closed_without_protected_dsn",
+            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_clean_runner_executes_raw_to_package_to_unsigned_verdict",
+            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_actual_github_response_shape_and_failed_sibling_job_are_accepted",
+            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_unsuccessful_untrusted_job_blocks_before_packaging",
+            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_workflow_byte_drift_blocks_before_packaging",
+            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_downloaded_archive_digest_mismatch_blocks_before_packaging",
+            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_extracted_content_must_match_verified_archive_bytes",
+            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_bootstrap_receipts_cannot_be_upgraded_under_enabled_policy",
+            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_preexisting_candidate_package_is_not_used_as_trusted_input",
             "--junitxml={report}",
         ),
         cwd_rel=".",
@@ -216,7 +257,7 @@ LANES: dict[str, TestLaneSpec] = {
         report_name="python-helper1-protected-replay.junit.xml",
         timeout_seconds=180,
         required_capabilities=frozenset({"python", "pytest", "cryptography", "sqlite"}),
-        expected_collected=24,
+        expected_collected=32,
     ),
     "desktop-helper1-v51": TestLaneSpec(
         lane_id="desktop-helper1-v51",
@@ -325,10 +366,10 @@ def _source_identity() -> tuple[str, str]:
     return commit, tree
 
 
-def parse_junit(path: Path) -> tuple[int, int, int, int, int]:
+def parse_junit_bytes(raw: bytes) -> tuple[int, int, int, int, int]:
     try:
-        root = ET.parse(path).getroot()
-    except (OSError, ET.ParseError) as exc:
+        root = ET.fromstring(raw)
+    except ET.ParseError as exc:
         raise TestEvidenceError("JUNIT_REPORT_INVALID") from exc
     suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
     if not suites:
@@ -348,10 +389,17 @@ def parse_junit(path: Path) -> tuple[int, int, int, int, int]:
     return tests, passed, failures, errors, skipped
 
 
-def parse_vitest(path: Path) -> tuple[int, int, int, int, int]:
+def parse_junit(path: Path) -> tuple[int, int, int, int, int]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return parse_junit_bytes(path.read_bytes())
+    except OSError as exc:
+        raise TestEvidenceError("JUNIT_REPORT_INVALID") from exc
+
+
+def parse_vitest_bytes(raw: bytes) -> tuple[int, int, int, int, int]:
+    try:
+        value = json.loads(raw)
+    except (UnicodeError, json.JSONDecodeError) as exc:
         raise TestEvidenceError("VITEST_REPORT_INVALID") from exc
     if type(value) is not dict:
         raise TestEvidenceError("VITEST_REPORT_INVALID")
@@ -362,6 +410,13 @@ def parse_vitest(path: Path) -> tuple[int, int, int, int, int]:
     if total != passed + failed + skipped:
         raise TestEvidenceError("VITEST_REPORT_INVALID")
     return total, passed, failed, 0, skipped
+
+
+def parse_vitest(path: Path) -> tuple[int, int, int, int, int]:
+    try:
+        return parse_vitest_bytes(path.read_bytes())
+    except OSError as exc:
+        raise TestEvidenceError("VITEST_REPORT_INVALID") from exc
 
 
 def _parse_report(spec: TestLaneSpec, path: Path) -> tuple[int, int, int, int, int]:

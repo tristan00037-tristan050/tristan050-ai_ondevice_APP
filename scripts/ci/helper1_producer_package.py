@@ -37,6 +37,14 @@ from butler_pc_core.helper1.quality_evidence import (  # noqa: E402
     load_quality_directory,
     verify_manifest as verify_quality_manifest,
 )
+from scripts.ci.helper1_protected_bootstrap import (  # noqa: E402
+    PRODUCER_WORKFLOW_ID,
+    PRODUCER_WORKFLOW_PATH,
+    ProtectedBootstrapError,
+    VerifiedUntrustedArtifact,
+    build_bootstrap_receipts,
+    verify_untrusted_artifact,
+)
 
 POLICY_PATH = ROOT / "contracts/helper1/trusted-verifier-policy-v1.json"
 PACKAGE_RELATIVE = PurePosixPath("package/helper1-v51.zip")
@@ -54,6 +62,7 @@ EXPECTED_LANES = {
     "python-helper1-protected-replay": "PASSED",
     "python-helper1-v4-original": "PASSED",
     "python-helper1-v51-targeted": "PASSED",
+    "python-helper1-v61-quality": "PASSED",
 }
 EXPECTED_CHECKS = {
     "desktop-lock-install-v51",
@@ -65,9 +74,16 @@ EXPECTED_CHECKS = {
     "python-helper1-collect-v51",
 }
 APPROVAL_PRODUCER_REPOSITORY_ID = 1097940756
-APPROVAL_PRODUCER_WORKFLOW_ID = 0  # Fail closed until the protected repository pins it.
-APPROVAL_PRODUCER_WORKFLOW_PATH = ".github/workflows/helper1-v2-approval-evidence.yml"
+# The protected bootstrap has one measured source identity. A separate approval
+# producer is deliberately not trusted until it is folded into the protected path.
+APPROVAL_PRODUCER_WORKFLOW_ID = PRODUCER_WORKFLOW_ID
+APPROVAL_PRODUCER_WORKFLOW_PATH = PRODUCER_WORKFLOW_PATH
 APPROVAL_PRODUCER_WORKFLOW_SHA256 = (
+    "69af10308c9e7758ce5e4f385b650e3b06a96480c5e43bf48f2553cbd61efbdc"
+)
+LEGACY_APPROVAL_WORKFLOW_ID = 0
+LEGACY_APPROVAL_WORKFLOW_PATH = ".github/workflows/helper1-v2-approval-evidence.yml"
+LEGACY_APPROVAL_WORKFLOW_SHA256 = (
     "51e951131bf4e0881d1abfc660fc6d9c1f9137899e06a46bf7e7b6045164cd77"
 )
 
@@ -88,6 +104,7 @@ class VerifiedProducerPackage:
     approval_files: Mapping[str, bytes]
     objects: Mapping[str, bytes]
     quality_evidence: Mapping[str, bytes]
+    bootstrap_receipts: Mapping[str, bytes]
     manifest: Mapping[str, Any]
 
 
@@ -189,7 +206,7 @@ def _safe_relative(value: str) -> str:
 def _approval_workflow_ref(value: object, repository: object) -> str:
     if type(value) is not str or type(repository) is not str:
         raise ProducerPackageError("APPROVAL_INPUT_INVALID")
-    prefix = f"{repository}/{APPROVAL_PRODUCER_WORKFLOW_PATH}@"
+    prefix = f"{repository}/{LEGACY_APPROVAL_WORKFLOW_PATH}@"
     if not value.startswith(prefix) or SHA40.fullmatch(value.removeprefix(prefix)) is None:
         raise ProducerPackageError("APPROVAL_INPUT_INVALID")
     return value
@@ -305,6 +322,136 @@ def _atomic_write(path: Path, raw: bytes) -> None:
         raise
 
 
+def _event_path() -> Path:
+    value = os.environ.get("GITHUB_EVENT_PATH")
+    if not value:
+        raise ProducerPackageError("WORKFLOW_EVENT_UNAVAILABLE")
+    return Path(value)
+
+
+def _write_package_files(
+    artifact_root: Path,
+    files: Mapping[str, bytes],
+    *,
+    contract: Mapping[str, Any],
+    subject_commit: str,
+    subject_tree: str,
+) -> dict[str, Any]:
+    package_path = artifact_root / PACKAGE_RELATIVE
+    descriptor_path = artifact_root / DESCRIPTOR_RELATIVE
+    package_dir = package_path.parent
+    if (
+        artifact_root.is_symlink()
+        or (artifact_root.exists() and not artifact_root.is_dir())
+        or package_dir.is_symlink()
+        or (package_dir.exists() and not package_dir.is_dir())
+        or package_path.exists()
+        or package_path.is_symlink()
+        or descriptor_path.exists()
+        or descriptor_path.is_symlink()
+    ):
+        raise ProducerPackageError("PRODUCER_PACKAGE_OUTPUT_INVALID")
+    package_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temporary = package_path.with_name(f".{package_path.name}.tmp")
+    try:
+        descriptor_fd = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+        )
+        with os.fdopen(descriptor_fd, "w+b") as stream:
+            with zipfile.ZipFile(
+                stream, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
+            ) as archive:
+                for name, raw in sorted(files.items()):
+                    archive.writestr(_zip_info(name), raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, package_path)
+    except BaseException:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise
+    package_digest = hashlib.sha256(_freeze_package(package_path)).hexdigest()
+    descriptor = _derived_descriptor(
+        contract,
+        package_sha256=package_digest,
+        subject_commit=subject_commit,
+        subject_tree=subject_tree,
+    )
+    _atomic_write(descriptor_path, _canonical(descriptor) + b"\n")
+    return descriptor
+
+
+def build_protected_bootstrap_package(
+    artifact_root: Path,
+    event_path: Path,
+    *,
+    request_json=None,
+    request_archive=None,
+) -> tuple[VerifiedUntrustedArtifact, dict[str, Any]]:
+    """Turn downloaded raw material into a non-release protected-side package."""
+    contract, policy_raw = _policy()
+    policy = _decode_json(policy_raw, "PRODUCER_PACKAGE_POLICY_INVALID")
+    try:
+        verified = verify_untrusted_artifact(
+            artifact_root,
+            event_path,
+            policy,
+            request_json=request_json,
+            request_archive=request_archive,
+        )
+        receipts = build_bootstrap_receipts(
+            verified,
+            policy_enabled=policy["enabled"],
+        )
+    except ProtectedBootstrapError as exc:
+        raise ProducerPackageError(str(exc)) from exc
+    files = {
+        "SUBJECT/CANONICAL_SUBJECT.json": verified.subject_raw,
+        "SUBJECT/SUBMISSION.json": verified.submission_raw,
+        **{
+            f"TEST_EVIDENCE/{name}": raw
+            for name, raw in sorted(verified.test_files.items())
+        },
+        **{
+            f"PROTECTED_BOOTSTRAP/{name}": raw
+            for name, raw in sorted(receipts.items())
+        },
+    }
+    manifest = {
+        "schema_version": "butler.helper1.producer-package.v4-bootstrap",
+        "subject_commit": verified.subject["subject_sha"],
+        "subject_tree": verified.source_tree,
+        "producer_run": verified.producer_run,
+        "policy_sha256": hashlib.sha256(policy_raw).hexdigest(),
+        "release_eligible": False,
+        "files": {
+            name: {
+                "bytes": len(raw),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "mode": "0644",
+            }
+            for name, raw in sorted(files.items())
+        },
+    }
+    files["MANIFEST.json"] = _canonical(manifest)
+    files["SHA256SUMS.txt"] = "".join(
+        f"{hashlib.sha256(raw).hexdigest()}  {name}\n"
+        for name, raw in sorted(files.items())
+    ).encode("utf-8")
+    descriptor = _write_package_files(
+        artifact_root,
+        files,
+        contract=contract,
+        subject_commit=verified.subject["subject_sha"],
+        subject_tree=verified.source_tree,
+    )
+    return verified, descriptor
+
+
 def build(
     artifact_root: Path,
     canonical_subject: Path,
@@ -390,8 +537,8 @@ def build(
             expected_run_id=provenance.run_id,
             expected_run_attempt=provenance.run_attempt,
             expected_workflow_ref=workflow_ref,
-            expected_workflow_id=APPROVAL_PRODUCER_WORKFLOW_ID,
-            expected_workflow_sha256=APPROVAL_PRODUCER_WORKFLOW_SHA256,
+            expected_workflow_id=LEGACY_APPROVAL_WORKFLOW_ID,
+            expected_workflow_sha256=LEGACY_APPROVAL_WORKFLOW_SHA256,
             expected_artifact_id=provenance.artifact_id,
             expected_artifact_name=provenance.artifact_name,
             expected_canonical_subject_sha256=hashlib.sha256(
@@ -512,7 +659,8 @@ def _verify_delivery_layout(package_path: Path) -> None:
         package_names = {item.name for item in package_dir.iterdir()}
     except OSError as exc:
         raise ProducerPackageError("PRODUCER_ARTIFACT_LAYOUT_INVALID") from exc
-    if root_names != {"package"} or package_names != {
+    raw_roots = {"CANONICAL_SUBJECT.json", "SUBMISSION.json", "test-evidence", "package"}
+    if root_names not in ({"package"}, raw_roots) or package_names != {
         "helper1-v51.zip",
         "helper1-v51.candidate.json",
     }:
@@ -575,6 +723,7 @@ def _read_package_bytes(raw: bytes) -> tuple[dict[str, bytes], dict[str, Any]]:
             "butler.helper1.producer-package.v1",
             "butler.helper1.producer-package.v2",
             "butler.helper1.producer-package.v3",
+            "butler.helper1.producer-package.v4-bootstrap",
         }
         or type(expected_files) is not dict
         or set(expected_files) != payload
@@ -615,6 +764,101 @@ def _derived_descriptor(
         "signature_state": "MISSING",
         "provenance_state": "UNVERIFIED",
     }
+
+
+def _verify_bootstrap_receipts(
+    files: Mapping[str, bytes],
+    manifest: Mapping[str, Any],
+    *,
+    policy: Mapping[str, Any],
+    subject_commit: str,
+    subject_tree: str,
+    producer_run: str,
+) -> dict[str, bytes]:
+    if policy.get("enabled") is not False:
+        raise ProducerPackageError("BOOTSTRAP_PACKAGE_FORBIDDEN_WHEN_POLICY_ENABLED")
+    names = {
+        name.removeprefix("PROTECTED_BOOTSTRAP/"): raw
+        for name, raw in files.items()
+        if name.startswith("PROTECTED_BOOTSTRAP/")
+    }
+    if set(names) != {
+        "RAW_ARTIFACT_PROVENANCE.v1.json",
+        "QUALITY_MEASUREMENT.v1.json",
+        "APPROVAL_RECEIPT.v1.json",
+    }:
+        raise ProducerPackageError("BOOTSTRAP_RECEIPT_INVENTORY_INVALID")
+    provenance = _decode_json(
+        names["RAW_ARTIFACT_PROVENANCE.v1.json"],
+        "BOOTSTRAP_PROVENANCE_INVALID",
+    )
+    quality = _decode_json(
+        names["QUALITY_MEASUREMENT.v1.json"],
+        "BOOTSTRAP_QUALITY_INVALID",
+    )
+    approval = _decode_json(
+        names["APPROVAL_RECEIPT.v1.json"],
+        "BOOTSTRAP_APPROVAL_INVALID",
+    )
+    test_index_raw = files.get("TEST_EVIDENCE/TEST_EVIDENCE_INDEX.v1.json")
+    if test_index_raw is None:
+        raise ProducerPackageError("PRODUCER_EVIDENCE_INVALID")
+    test_index = _decode_json(test_index_raw, "PRODUCER_EVIDENCE_INVALID")
+    if (
+        manifest.get("release_eligible") is not False
+        or manifest.get("producer_run") != producer_run
+        or provenance.get("schema_version")
+        != "butler.helper1.untrusted-artifact-provenance.v1"
+        or provenance.get("repository_id") != APPROVAL_PRODUCER_REPOSITORY_ID
+        or provenance.get("repository") != policy.get("repository")
+        or provenance.get("subject_commit") != subject_commit
+        or provenance.get("subject_tree") != subject_tree
+        or provenance.get("producer_run") != producer_run
+        or provenance.get("producer_workflow_id") != APPROVAL_PRODUCER_WORKFLOW_ID
+        or provenance.get("producer_workflow_path") != APPROVAL_PRODUCER_WORKFLOW_PATH
+        or provenance.get("producer_workflow_sha256")
+        != APPROVAL_PRODUCER_WORKFLOW_SHA256
+        or provenance.get("test_evidence_index_sha256")
+        != hashlib.sha256(test_index_raw).hexdigest()
+        or quality.get("schema_version")
+        != "butler.helper1.protected-bootstrap-quality.v1"
+        or quality.get("subject_commit") != subject_commit
+        or quality.get("subject_tree") != subject_tree
+        or quality.get("producer_run") != producer_run
+        or quality.get("provenance_sha256")
+        != hashlib.sha256(names["RAW_ARTIFACT_PROVENANCE.v1.json"]).hexdigest()
+        or quality.get("all_required_checks_passed")
+        is not test_index.get("all_required_checks_passed")
+        or quality.get("all_required_lanes_passed")
+        is not test_index.get("all_required_lanes_passed")
+        or quality.get("required_lanes_blocked")
+        != test_index.get("required_lanes_blocked")
+        or quality.get("quality_approved") != 0
+        or quality.get("state") != "UNAPPROVED"
+        or quality.get("reason_code")
+        != "PROTECTED_QUALITY_APPROVAL_NOT_CONFIGURED"
+        or approval.get("schema_version")
+        != "butler.helper1.protected-bootstrap-approval.v1"
+        or approval.get("subject_commit") != subject_commit
+        or approval.get("subject_tree") != subject_tree
+        or approval.get("producer_run") != producer_run
+        or approval.get("quality_measurement_sha256")
+        != hashlib.sha256(names["QUALITY_MEASUREMENT.v1.json"]).hexdigest()
+        or approval.get("policy_enabled") is not False
+        or approval.get("approval_values")
+        != {
+            "code_pass": 0,
+            "external_handoff_allowed": 0,
+            "product_release_allowed": 0,
+            "production_claim_allowed": 0,
+            "runtime_activation_allowed": 0,
+        }
+        or approval.get("state") != "UNSIGNED_ZERO"
+        or approval.get("reason_code") != "TRUST_POLICY_DISABLED"
+        or approval.get("signature_b64") is not None
+    ):
+        raise ProducerPackageError("BOOTSTRAP_RECEIPT_BINDING_INVALID")
+    return names
 
 
 def load_verified_package(
@@ -663,6 +907,58 @@ def load_verified_package(
     ):
         raise ProducerPackageError("PRODUCER_PACKAGE_SUBJECT_MISMATCH")
 
+    if manifest.get("schema_version") == "butler.helper1.producer-package.v4-bootstrap":
+        try:
+            observed_tree = _git("rev-parse", f"{subject_commit}^{{tree}}")
+        except ProducerPackageError as exc:
+            raise ProducerPackageError("PRODUCER_SUBJECT_GIT_INVALID") from exc
+        if observed_tree != subject_tree:
+            raise ProducerPackageError("PRODUCER_SUBJECT_TREE_MISMATCH")
+        bootstrap = _verify_bootstrap_receipts(
+            files,
+            manifest,
+            policy=policy,
+            subject_commit=subject_commit,
+            subject_tree=subject_tree,
+            producer_run=producer_run,
+        )
+        test_evidence = {
+            name.removeprefix("TEST_EVIDENCE/"): payload
+            for name, payload in files.items()
+            if name.startswith("TEST_EVIDENCE/")
+        }
+        descriptor = _derived_descriptor(
+            contract,
+            package_sha256=package_sha256,
+            subject_commit=subject_commit,
+            subject_tree=subject_tree,
+        )
+        observed_descriptor = _decode_json(
+            _freeze_regular_file(
+                package_path.with_name("helper1-v51.candidate.json"),
+                max_bytes=MAX_JSON_BYTES,
+                missing_code="PRODUCER_PACKAGE_DESCRIPTOR_MISSING",
+                changed_code="PRODUCER_PACKAGE_DESCRIPTOR_CHANGED_DURING_READ",
+            ),
+            "PRODUCER_PACKAGE_DESCRIPTOR_INVALID",
+        )
+        if observed_descriptor != descriptor:
+            raise ProducerPackageError("PRODUCER_PACKAGE_DESCRIPTOR_MISMATCH")
+        return VerifiedProducerPackage(
+            package_sha256=package_sha256,
+            chain_authority_sha256="",
+            subject_commit=subject_commit,
+            subject_tree=subject_tree,
+            producer_run=producer_run,
+            test_evidence=MappingProxyType(test_evidence),
+            legacy_evidence=MappingProxyType({}),
+            approval_files=MappingProxyType({}),
+            objects=MappingProxyType({}),
+            quality_evidence=MappingProxyType({}),
+            bootstrap_receipts=MappingProxyType(bootstrap),
+            manifest=MappingProxyType(manifest),
+        )
+
     try:
         test_index = _decode_json(
             files["TEST_EVIDENCE/TEST_EVIDENCE_INDEX.v1.json"],
@@ -698,8 +994,8 @@ def load_verified_package(
                 expected_run_id=approval_provenance.run_id,
                 expected_run_attempt=approval_provenance.run_attempt,
                 expected_workflow_ref=workflow_ref,
-                expected_workflow_id=APPROVAL_PRODUCER_WORKFLOW_ID,
-                expected_workflow_sha256=APPROVAL_PRODUCER_WORKFLOW_SHA256,
+                expected_workflow_id=LEGACY_APPROVAL_WORKFLOW_ID,
+                expected_workflow_sha256=LEGACY_APPROVAL_WORKFLOW_SHA256,
                 expected_artifact_id=approval_provenance.artifact_id,
                 expected_artifact_name=approval_provenance.artifact_name,
                 expected_canonical_subject_sha256=hashlib.sha256(
@@ -791,6 +1087,7 @@ def load_verified_package(
         approval_files=MappingProxyType(approval),
         objects=MappingProxyType(objects),
         quality_evidence=MappingProxyType(quality),
+        bootstrap_receipts=MappingProxyType({}),
         manifest=MappingProxyType(manifest),
     )
 
@@ -880,16 +1177,21 @@ def main() -> int:
                 args.producer_package,
                 policy=policy,
                 policy_raw=policy_raw,
+                require_authority=policy["enabled"],
             )
             print("HELPER1_PRODUCER_PACKAGE_STRUCTURE_OK=1")
             print("HELPER1_PRODUCER_PACKAGE_VERIFY_OK=1")
             print(f"PRODUCER_PACKAGE_SHA256={loaded.package_sha256}")
-            print(f"CHAIN_AUTHORITY_SHA256={loaded.chain_authority_sha256}")
+            print(
+                "CHAIN_AUTHORITY_SHA256="
+                + (loaded.chain_authority_sha256 or "UNCONFIGURED")
+            )
         else:
-            files, _manifest = _read_package_bytes(_freeze_package(args.producer_package))
-            subject_raw = files.get("SUBJECT/CANONICAL_SUBJECT.json")
-            if subject_raw is None:
-                raise ProducerPackageError("PRODUCER_SUBJECT_INVALID")
+            verified, _descriptor = build_protected_bootstrap_package(
+                args.producer_package.parent.parent,
+                _event_path(),
+            )
+            subject_raw = verified.subject_raw
             _decode_json(subject_raw, "PRODUCER_SUBJECT_INVALID")
             _atomic_write(args.output, subject_raw)
             print("HELPER1_PRODUCER_PACKAGE_SUBJECT_OK=1")

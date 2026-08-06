@@ -408,7 +408,8 @@ def verify_event(event_path: Path, policy: dict[str, Any]) -> tuple[str, str]:
         repository.get("full_name") != policy["repository"]
         or run.get("name") != policy["producer_workflow_name"]
         or run.get("path") != policy["producer_workflow_path"]
-        or run.get("conclusion") != "success"
+        or run.get("status") != "completed"
+        or run.get("conclusion") not in {"success", "failure"}
         or type(run.get("id")) is not int
         or type(run.get("run_attempt")) is not int
         or type(head_sha) is not str
@@ -736,8 +737,6 @@ def main() -> int:
     try:
         policy = load_policy()
         verify_protected_components(policy)
-        if not policy["enabled"]:
-            raise VerificationError("TRUST_POLICY_DISABLED")
         subject_commit, run_id = verify_event(args.event, policy)
         try:
             subject_tree = resolve_commit_tree(ROOT, subject_commit)
@@ -748,6 +747,7 @@ def main() -> int:
                 args.producer_package,
                 policy=policy,
                 policy_raw=POLICY_PATH.read_bytes(),
+                require_authority=policy["enabled"],
             )
         except ProducerPackageError as exc:
             raise VerificationError(str(exc)) from exc
@@ -759,6 +759,13 @@ def main() -> int:
             or package.producer_run != run_id
         ):
             raise VerificationError("PRODUCER_PACKAGE_SUBJECT_MISMATCH")
+        quality_receipt = package.bootstrap_receipts.get(
+            "QUALITY_MEASUREMENT.v1.json"
+        )
+        if quality_receipt is not None:
+            search_quality_evidence_sha256 = sha256(quality_receipt)
+        if not policy["enabled"]:
+            raise VerificationError("TRUST_POLICY_DISABLED")
         evidence_key_bytes = decode_b64(
             policy["approved_public_key_b64"], expected_bytes=32, code="EVIDENCE_TRUST_ROOT_INVALID"
         )

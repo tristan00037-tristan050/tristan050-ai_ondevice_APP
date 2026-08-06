@@ -50,6 +50,7 @@ PROTECTED_COMPONENT_PATHS = (
     "scripts/ci/helper1_evidence_semantics.py",
     "scripts/ci/helper1_measure_device.py",
     "scripts/ci/helper1_postgresql_replay_probe.py",
+    "scripts/ci/helper1_protected_bootstrap.py",
     "scripts/ci/helper1_producer_package.py",
     "scripts/ci/helper1_product_approval_bundle.py",
     "scripts/ci/helper1_protected_surface.py",

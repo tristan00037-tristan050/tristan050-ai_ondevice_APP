@@ -193,9 +193,11 @@ def _producer_artifact(tmp_path: Path):
         "repository_name": subject["repository_full_name"],
         "subject_commit": commit,
         "subject_tree": tree,
-        "producer_workflow_ref": f'{subject["repository_full_name"]}/.github/workflows/helper1-v2-approval-evidence.yml@{commit}',
+        "producer_workflow_ref": (
+            f'{subject["repository_full_name"]}/{module.LEGACY_APPROVAL_WORKFLOW_PATH}@{commit}'
+        ),
         "producer_workflow_id": 1,
-        "producer_workflow_sha256": "a" * 64,
+        "producer_workflow_sha256": module.LEGACY_APPROVAL_WORKFLOW_SHA256,
         "run_id": 1,
         "run_attempt": 1,
         "event_name": "workflow_dispatch",
@@ -242,22 +244,20 @@ def test_trusted_verifier_runs_from_protected_default_branch_only():
     assert "persist-credentials: false" in producer
 
 
-def test_producer_execution_creates_required_fixed_path_package(tmp_path: Path) -> None:
-    module, artifact, _subject, descriptor = _producer_artifact(tmp_path)
-
-    assert (artifact / module.PACKAGE_RELATIVE).is_file()
-    assert (artifact / module.DESCRIPTOR_RELATIVE).is_file()
-    assert descriptor["package_relative_path"] == "package/helper1-v51.zip"
+def test_producer_uploads_raw_material_and_protected_side_creates_fixed_package() -> None:
     workflow = PRODUCER.read_text(encoding="utf-8")
-    assert "python scripts/ci/helper1_producer_package.py build" in workflow
-    assert "python scripts/ci/helper1_product_approval_bundle.py" in workflow
-    assert "helper1-producer-artifact/artifacts/objects" not in workflow
-    assert workflow.index("helper1_product_approval_bundle.py") < workflow.index(
-        "helper1_producer_package.py build"
-    ) < workflow.index("actions/upload-artifact")
-    assert "helper1-producer-artifact/package/helper1-v51.zip" in workflow
-    assert "helper1-producer-artifact/package/helper1-v51.candidate.json" in workflow
-    assert "path: helper1-producer-artifact/" in workflow
+    trusted = TRUSTED.read_text(encoding="utf-8")
+
+    assert "untrusted-candidate:" in workflow
+    assert "product-regressions:" in workflow
+    assert "butler.helper1.untrusted-submission.v1" in workflow
+    assert "helper1-v2-evidence-${{ github.run_id }}-${{ github.run_attempt }}" in workflow
+    assert "path: ${{ runner.temp }}/helper1-build/" in workflow
+    assert "helper1_producer_package.py build" not in workflow
+    assert "helper1_product_approval_bundle.py" not in workflow
+    assert "helper1_producer_package.py extract-subject" in trusted
+    assert "helper1_producer_package.py verify" in trusted
+    assert "${RUNNER_TEMP}/helper1/input/package/helper1-v51.zip" in trusted
     assert "--previous-result-package" not in workflow
     assert "--rollback-predecessor-package" not in workflow
 

@@ -72,7 +72,7 @@ def test_audit_self_selected_verifier_and_key_can_never_set_code_pass(tmp_path: 
     assert "CODE_PASS=1" not in completed.stdout
 
 
-def test_protected_verifier_fails_closed_while_approval_policy_is_disabled(tmp_path: Path) -> None:
+def test_protected_verifier_rejects_invalid_event_before_disabled_policy_verdict(tmp_path: Path) -> None:
     event = tmp_path / "event.json"
     event.write_text("{}\n", encoding="utf-8")
     completed = subprocess.run(
@@ -97,11 +97,11 @@ def test_protected_verifier_fails_closed_while_approval_policy_is_disabled(tmp_p
         "RUNTIME_ACTIVATION_ALLOWED=0",
         "HELPER1_PRODUCTION_CLAIM_ALLOWED=0",
         "CODE_PASS=0",
-        "ERROR_CODE=TRUST_POLICY_DISABLED",
+        "ERROR_CODE=WORKFLOW_EVENT_INVALID",
     ]
     verdict = json.loads((tmp_path / "verdict.json").read_text(encoding="utf-8"))
     assert verdict["code_pass"] is False
-    assert verdict["error_code"] == "TRUST_POLICY_DISABLED"
+    assert verdict["error_code"] == "WORKFLOW_EVENT_INVALID"
     assert verdict["signature_b64"] is None
 
 
@@ -728,6 +728,7 @@ def _build_signed_fixture(
                     "run_attempt": 1,
                     "name": "helper1-v2-evidence-producer",
                     "path": ".github/workflows/helper1-v2-evidence.yml",
+                    "status": "completed",
                     "conclusion": "success",
                     "head_sha": commit,
                     "pull_requests": [],
