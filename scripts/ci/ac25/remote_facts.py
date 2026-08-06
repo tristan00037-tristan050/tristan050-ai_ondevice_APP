@@ -233,7 +233,7 @@ def gh_transport_for(token_env_name: str) -> Transport:
     secret 은 argv 에 넣지 않는다. 자식 env 로만 넘긴다.
 
     ★F-03 — host 와 자격 출처를 전송 계층에서 강제한다.
-      · argv 에 `--hostname api.github.com` 을 명시한다
+      · argv 에 `--hostname github.com` 을 명시한다(gh 는 ★GitHub 호스트★ 를 받는다)
       · 자식 환경은 allowlist 로 새로 만든다(os.environ 을 물려주지 않는다)
       · 격리된 빈 GH_CONFIG_DIR 을 준다
       · token 이 비어 있으면 요청 전에 닫는다(익명 호출 방지)
@@ -242,6 +242,15 @@ def gh_transport_for(token_env_name: str) -> Transport:
     def send(path: str) -> TransportResult:
         import os as _os
         import shutil as _shutil
+
+        # ★v2.0 §3-2 — 요청을 보내기 전에 ★두 토큰을 함께★ 본다.
+        #   한쪽만 있어도 승인 저장소 요청부터 나가던 자리다. 이제 아무것도 안 나간다.
+        try:
+            gh_transport_policy.require_token_pair(
+                approval_env=APPROVAL_TOKEN_ENV, candidate_env=CANDIDATE_TOKEN_ENV
+            )
+        except gh_transport_policy.TransportPolicyError as exc:
+            return TransportResult(status=0, message=exc.code)
 
         token = _os.environ.get(token_env_name, "")
         try:

@@ -419,9 +419,12 @@ def test_secret_is_never_placed_in_argv(monkeypatch, tmp_path):
     from ac25 import output_containment
 
     secret = "ghp_" + "S" * 36
-    monkeypatch.setattr(
-        os, "environ", {"PATH": "/usr/bin", "AC25_APPROVAL_TOKEN": secret}
-    )
+    monkeypatch.setattr(os, "environ", {
+        "PATH": "/usr/bin",
+        "AC25_APPROVAL_TOKEN": secret,
+        # ★v2.0 §3-2 — 두 토큰이 갖춰져야 요청이 나간다
+        "AC25_CANDIDATE_TOKEN": "ghp_" + "C" * 36,
+    })
     monkeypatch.setattr(output_containment, "default_runner_temp", lambda: tmp_path)
 
     seen: dict = {}

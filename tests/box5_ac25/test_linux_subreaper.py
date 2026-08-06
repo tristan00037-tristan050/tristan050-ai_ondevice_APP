@@ -25,7 +25,11 @@ from ac25 import linux_subreaper as ls
 pytestmark = pytest.mark.no_sidecar_token
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-requires_linux = pytest.mark.skipif(sys.platform != "linux", reason="R6-1 은 Linux 전용")
+# ★v2.0 §4-2 — 양성 시험은 ★실제 /proc 계보 관측★ 이 되는 환경에서만 뜻이 있다.
+#   Linux 라고 /proc 이 있는 것은 아니다(컨테이너·hidepid·chroot).
+#   관측 불가 환경에서는 conftest 가 ★수집에서 제외★ 한다(skip 이 아니다).
+#   ★부정 시험에는 붙이지 않는다 — 그 환경이야말로 부정 시험이 필요한 곳이다.
+requires_procfs = pytest.mark.requires_procfs
 
 
 def _report_payload(**overrides) -> bytes:
@@ -52,7 +56,7 @@ def _report_payload(**overrides) -> bytes:
 
 
 # ══ subreaper 설정 ═════════════════════════════════════════════════════
-@requires_linux
+@requires_procfs
 def test_child_subreaper_can_be_enabled_and_verified():
     """자식 프로세스에서 걸어 본다 — 시험 프로세스 자신을 subreaper 로 만들지 않는다."""
     code = (
@@ -146,7 +150,7 @@ def test_supervisor_never_sends_a_traceback():
 
 
 # ══ supervisor 강제 종료 ═══════════════════════════════════════════════
-@requires_linux
+@requires_procfs
 def test_supervisor_death_is_fail_closed(tmp_path):
     """supervisor 가 보고 없이 죽으면 성공으로 세지 않는다."""
 
@@ -168,7 +172,7 @@ def test_supervisor_death_is_fail_closed(tmp_path):
     assert caught.value.code == ls.CONTAINMENT_SUPERVISOR_DIED
 
 
-@requires_linux
+@requires_procfs
 def test_supervisor_emitting_garbage_is_a_protocol_error(tmp_path):
     def noisy_spawn(*_args, **kwargs):
         return subprocess.Popen(  # noqa: S603
@@ -189,7 +193,7 @@ def test_supervisor_emitting_garbage_is_a_protocol_error(tmp_path):
 
 
 # ══ PID 재사용 방어 ════════════════════════════════════════════════════
-@requires_linux
+@requires_procfs
 def test_pin_process_refuses_a_recycled_pid():
     """같은 PID 인데 starttime 이 다르면 신호를 보내지 않고 닫는다."""
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(5)"])
@@ -206,7 +210,7 @@ def test_pin_process_refuses_a_recycled_pid():
         child.wait(timeout=5)
 
 
-@requires_linux
+@requires_procfs
 def test_pin_process_uses_pidfd_when_available():
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(5)"])
     try:
@@ -223,7 +227,7 @@ def test_pin_process_uses_pidfd_when_available():
         child.wait(timeout=5)
 
 
-@requires_linux
+@requires_procfs
 def test_pin_process_on_exited_pid_reports_not_signalled():
     child = subprocess.Popen([sys.executable, "-c", "pass"])
     child.wait(timeout=5)
@@ -275,7 +279,7 @@ def test_raw_delete_failure_closes_the_run(tmp_path):
     assert report["cleanup_ok"] is False
 
 
-@requires_linux
+@requires_procfs
 def test_raw_files_are_deleted_on_success(tmp_path):
     out = tmp_path / "stdout.bin"
     err = tmp_path / "stderr.bin"
@@ -334,7 +338,7 @@ def test_enumeration_is_by_lineage_not_by_name():
     assert "stat.pgrp == pgid" in source
 
 
-@requires_linux
+@requires_procfs
 def test_living_children_sees_only_my_children():
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(5)"])
     other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(5)"])
@@ -350,7 +354,7 @@ def test_living_children_sees_only_my_children():
             process.wait(timeout=5)
 
 
-@requires_linux
+@requires_procfs
 def test_zombie_is_not_counted_as_living():
     child = subprocess.Popen([sys.executable, "-c", "pass"])
     child.poll()

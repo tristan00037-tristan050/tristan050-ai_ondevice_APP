@@ -8,18 +8,21 @@
     gh 는 GH_ENTERPRISE_TOKEN 을 별도로 인식한다
 
 그래서 **코드 안의 allowlist 는 전송 계층의 실제 제약이 아니었다.** 검사기가
-"api.github.com 만 부른다" 고 믿는 동안, 실행 환경이 그것을 조용히 뒤집을 수 있었다.
+"github.com 만 부른다" 고 믿는 동안, 실행 환경이 그것을 조용히 뒤집을 수 있었다.
 
 이 모듈이 닫는 것
 
-    ① `--hostname api.github.com` 을 argv 에 ★명시★ 한다.
+    ① `--hostname github.com` 을 argv 에 ★명시★ 한다.
        gh 가 환경에서 host 를 고르게 두지 않는다.
     ② 자식 환경을 ★allowlist 로 새로 만든다★. os.environ 을 물려주지 않는다.
        GH_HOST · GH_ENTERPRISE_TOKEN · GITHUB_TOKEN · GH_CONFIG_DIR 등
        자격·host 를 바꾸는 이름은 ★애초에 들어가지 않는다★.
     ③ ★격리된 빈 GH_CONFIG_DIR★ 을 준다. 저장된 자격이 있어도 쓰이지 않는다.
-    ④ 전송 전에 해당 token 이 비어 있지 않은지 확인한다. 빈 token 으로 부르면
+    ④ ★첫 요청 전에 두 token 을 함께★ 확인한다(v2.0 §3-2). 빈 token 으로 부르면
        익명 호출이 되어 public repo 에서는 200 이 온다 — 권한 검증이 증발한다.
+       한쪽만 비어도 ★아무 요청도 보내지 않는다.★
+    ⑤ proxy·CA 이름을 자식에게 넘기지 않는다(v2.0 §3-3). 넘기면 호출이 어디로
+       가는지·무엇을 신뢰하는지가 바깥에서 바뀐다.
 
 ★토큰은 argv 에 넣지 않는다. 자식 env 로만 간다(§3-2).
 ★이 모듈은 환경을 ★만들 뿐★ 실행하지 않는다. 실행은 output_containment 다.
@@ -34,17 +37,30 @@ from pathlib import Path
 
 # ── 오류 코드 ──────────────────────────────────────────────────────────
 TRANSPORT_TOKEN_MISSING = "TRANSPORT_TOKEN_MISSING"
+TRANSPORT_TOKEN_PAIR_INCOMPLETE = "TRANSPORT_TOKEN_PAIR_INCOMPLETE"
 TRANSPORT_HOST_NOT_ALLOWED = "TRANSPORT_HOST_NOT_ALLOWED"
 TRANSPORT_CONFIG_NOT_ISOLATED = "TRANSPORT_CONFIG_NOT_ISOLATED"
 TRANSPORT_ENV_NOT_MINIMAL = "TRANSPORT_ENV_NOT_MINIMAL"
 
 # ★유일하게 허용하는 host. 값이 아니라 ★argv 로도★ 강제한다.
-ALLOWED_HOSTNAME = "api.github.com"
+#
+# ★v2.0 §3-1 교정 — 이 값은 API URL 이 아니라 ★GitHub 호스트★ 다.
+#   gh 는 `--hostname` 을 "The GitHub hostname for the request (default github.com)"
+#   으로 정의하고, ghinstance 가 여기에 `api.` 를 붙여 REST 주소를 만든다.
+#
+#       github.com      → https://api.github.com/       ★맞다
+#       api.github.com  → https://api.api.github.com/   ★없는 호스트다
+#
+#   이전 판은 `api.github.com` 을 주었다. 의미가 다른 정도가 아니라 ★모든 요청이
+#   DNS 에서 깨진다★. 병렬 개발이 아니었으면 원격 실행 전까지 몰랐을 결함이다.
+ALLOWED_HOSTNAME = "github.com"
 
 # 자식에게 넘기는 이름은 이 목록뿐이다. 나머지는 이름조차 전달하지 않는다.
+# ★proxy·CA 이름은 여기 없다. 있으면 호출이 어디로 가는지·무엇을 신뢰하는지가
+#   바깥에서 바뀐다(v2.0 §3-3).
 _ENV_ALLOWLIST = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR")
 
-# ★자격·host 를 바꿀 수 있는 이름. 자식 환경에 ★있어서는 안 된다★.
+# ★자격·host·경로·신뢰원을 바꿀 수 있는 이름. 자식 환경에 ★있어서는 안 된다★.
 FORBIDDEN_ENV_NAMES = (
     "GH_HOST",
     "GH_ENTERPRISE_TOKEN",
@@ -57,6 +73,18 @@ FORBIDDEN_ENV_NAMES = (
     "GH_FORCE_TTY",
     "AC25_APPROVAL_TOKEN",   # 라우팅된 토큰만 GH_TOKEN 으로 간다
     "AC25_CANDIDATE_TOKEN",
+    # ── v2.0 §3-3 — 통로와 신뢰원을 바깥에서 바꾸지 못하게 한다 ──────
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "REQUESTS_CA_BUNDLE",
+    "CURL_CA_BUNDLE",
+    "NODE_EXTRA_CA_CERTS",
 )
 
 _TOKEN_RE = re.compile(r"\A[A-Za-z0-9_.\-]{8,512}\Z")
@@ -145,6 +173,24 @@ def require_minimal_environment(env: dict[str, str], *, config_dir: Path) -> Non
         raise TransportPolicyError(TRANSPORT_ENV_NOT_MINIMAL)
 
 
+def require_token_pair(
+    *, approval_env: str, candidate_env: str, source_environ: dict[str, str] | None = None
+) -> None:
+    """★v2.0 §3-2 — ★첫 요청을 보내기 전에★ 두 토큰을 ★함께★ 본다.
+
+    이전 판은 각 전송 직전에 ★그때 고른 한 토큰만★ 확인했다. 그러면 승인 토큰만
+    있고 후보 토큰이 없는 상태에서도 승인 저장소 요청 여러 건이 먼저 나간 뒤,
+    후보 요청 차례가 되어서야 닫힌다. **이미 보낸 요청은 되돌릴 수 없다.**
+
+    한쪽이라도 비어 있으면 ★아무 요청도 보내지 않고★ 닫는다.
+    """
+    origin = dict(os.environ if source_environ is None else source_environ)
+    for name in (approval_env, candidate_env):
+        value = origin.get(name, "")
+        if not isinstance(value, str) or _TOKEN_RE.match(value) is None:
+            raise TransportPolicyError(TRANSPORT_TOKEN_PAIR_INCOMPLETE)
+
+
 def require_hostname_pinned(argv: list[str]) -> None:
     """argv 에 --hostname 이 정확히 한 번, 허용 host 로 들어갔는지 본다."""
     if argv[:2] != ["gh", "api"]:
@@ -163,9 +209,11 @@ __all__ = [
     "TRANSPORT_ENV_NOT_MINIMAL",
     "TRANSPORT_HOST_NOT_ALLOWED",
     "TRANSPORT_TOKEN_MISSING",
+    "TRANSPORT_TOKEN_PAIR_INCOMPLETE",
     "TransportEnvironment",
     "TransportPolicyError",
     "require_hostname_pinned",
+    "require_token_pair",
     "require_minimal_environment",
     "build_transport_environment",
     "isolated_config_dir",

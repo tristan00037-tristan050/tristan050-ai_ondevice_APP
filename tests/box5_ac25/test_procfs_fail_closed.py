@@ -24,11 +24,13 @@ from ac25 import linux_subreaper as ls
 
 pytestmark = pytest.mark.no_sidecar_token
 
-requires_linux = pytest.mark.skipif(sys.platform != "linux", reason="R6-1 은 Linux 전용")
+# ★v2.0 §4-2 — 아래에서 ★양성★ 시험에만 붙인다.
+#   부정 시험(관측 불능일 때 닫히는가)은 ★표식 없이 항상 돈다.★
+requires_procfs = pytest.mark.requires_procfs
 
 
 # ══ 종료한 프로세스는 사실이다 — None ══════════════════════════════════
-@requires_linux
+@requires_procfs
 def test_exited_process_reads_as_none_not_an_error():
     """이미 종료한 PID 는 관측 실패가 아니라 ★없다는 사실★ 이다."""
     absent = 4_194_303  # PID_MAX 부근 — 존재할 가능성이 사실상 없다
@@ -37,7 +39,7 @@ def test_exited_process_reads_as_none_not_an_error():
     assert ls.read_proc_stat(absent) is None
 
 
-@requires_linux
+@requires_procfs
 def test_self_is_readable():
     stat = ls.read_proc_stat(os.getpid())
     assert stat is not None
@@ -109,7 +111,7 @@ def test_lineage_enumeration_propagates_the_failure(monkeypatch):
 
 
 # ══ supervisor 는 시작 전에 관측 가능성을 확인한다 ═════════════════════
-@requires_linux
+@requires_procfs
 def test_require_procfs_passes_when_proc_is_usable():
     ls.require_procfs()  # 예외가 없으면 통과
 

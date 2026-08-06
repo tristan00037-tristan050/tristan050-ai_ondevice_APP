@@ -61,10 +61,11 @@ BUILD_ARTIFACT = f"{NPM_WORKSPACE}/packages/bff-accounting/dist/policy/loader.js
 # ★AC-25 가 canonical 보다 ★더★ 하는 준비(§7-3 4·5·6·7항).
 #   canonical 은 loader.js 를 만들지 않지만 §B-3 실측이 그것 없이는 계약이
 #   FILE_NOT_FOUND 로 막힌다고 확인했다. 그래서 더한다. ★덜 하지는 않는다.
+#   ★네 번째 칸은 env 다(v2.0 §4-1). AC-25 추가분은 canonical env 를 요구하지 않는다.
 AC25_EXTRA_PLAN = (
-    ("npm_ci", ("npm", "ci"), NPM_WORKSPACE),
-    ("npm_build", ("npm", "run", "build:packages:server"), NPM_WORKSPACE),
-    ("helm_version", ("helm", "version", "--short"), "."),
+    ("npm_ci", ("npm", "ci"), NPM_WORKSPACE, ()),
+    ("npm_build", ("npm", "run", "build:packages:server"), NPM_WORKSPACE, ()),
+    ("helm_version", ("helm", "version", "--short"), ".", ()),
 )
 CONTRACT_COMMAND = ("bash", "scripts/verify/verify_repo_contracts.sh")
 BASE_REF_SCRIPT = "scripts/verify/verify_base_ref_available_v1.sh"
@@ -72,7 +73,7 @@ BASE_REF_SCRIPT = "scripts/verify/verify_base_ref_available_v1.sh"
 
 def build_preparation_plan(
     root: Path, *, runner_temp: str = "/tmp"
-) -> tuple[tuple[str, tuple[str, ...], str], ...]:
+) -> tuple[tuple[str, tuple[str, ...], str, tuple[tuple[str, str], ...]], ...]:
     """★F-04 — 준비 계획을 canonical 에서 ★읽어★ 만든다. 베끼지 않는다.
 
     순서
@@ -81,11 +82,17 @@ def build_preparation_plan(
 
     canonical 이 단계를 늘리면 이 계획도 늘어난다. 손으로 옮겨 적었다면 그때
     조용히 어긋났을 것이다 — 그것이 F-04 가 지적한 축소 계획이다.
+
+    ★v2.0 §4-1 — 항목은 (name, argv, cwd, ★env) 다.
+      이전 판은 canonical 에서 `CanonicalStep.env` 를 ★읽어 놓고 버렸다★.
+      명령 목록은 같은데 실행 환경이 달랐다. `GIT_LFS_SKIP_SMUDGE` 없이 checkout
+      계열을 돌리거나 `PLAYWRIGHT_BROWSERS_PATH` 없이 Playwright 를 설치하면
+      같은 명령이라도 ★다른 일을 한다★. 이제 읽은 env 를 그대로 실어 보낸다.
     """
     plan = canonical_plan.extract_canonical_plan(root, runner_temp=runner_temp)
-    steps: list[tuple[str, tuple[str, ...], str]] = []
+    steps: list[tuple[str, tuple[str, ...], str, tuple[tuple[str, str], ...]]] = []
     for index, step in enumerate(plan.preparation):
-        steps.append((f"canonical_{index:02d}", step.argv, step.cwd))
+        steps.append((f"canonical_{index:02d}", step.argv, step.cwd, step.env))
     steps.extend(AC25_EXTRA_PLAN)
     return tuple(steps)
 
@@ -144,6 +151,7 @@ class ContractReceipt:
     canonical_step_count: int = 0
     canonical_missing_steps: list = field(default_factory=list)
     contract_env_keys: list = field(default_factory=list)
+    preparation_env_keys: list = field(default_factory=list)
     final_worktree_clean: str = "NOT_RUN"
     error_code: str = "NONE"
     verdict: int = 0
@@ -159,7 +167,10 @@ def command_plan_sha256(root: Path | None = None, *, runner_temp: str = "/tmp") 
     extracted = canonical_plan.extract_canonical_plan(source, runner_temp=runner_temp)
     payload = json.dumps(
         {
-            "preparation": [[name, list(argv), cwd] for name, argv, cwd in plan],
+            "preparation": [
+                [name, list(argv), cwd, [list(pair) for pair in env]]
+                for name, argv, cwd, env in plan
+            ],
             "contract": list(CONTRACT_COMMAND),
             "contract_env_keys": sorted(key for key, _value in extracted.contract_env),
             "artifact": BUILD_ARTIFACT,
@@ -294,6 +305,9 @@ def run_exact_head_contracts(
         extracted = canonical_plan.extract_canonical_plan(root, runner_temp=str(temp))
         receipt.canonical_workflow_sha256 = extracted.workflow_sha256
         receipt.canonical_step_count = len(extracted.preparation)
+        receipt.preparation_env_keys = sorted({
+            key for _n, _a, _c, env in preparation_plan for key, _v in env
+        })
 
         receipt.exact_head, receipt.exact_tree = assert_exact_head(
             root=root, expected_head=expected_head, runner_temp=temp, env=environment
@@ -318,8 +332,11 @@ def run_exact_head_contracts(
         # ── 준비 (canonical 순서 + AC-25 추가) ─────────────────────────
         executed: list[str] = []
         executed_keys: list[str] = []
-        for name, argv, cwd in preparation_plan:
-            code, out, _err = _run(argv, root=root, cwd=cwd, runner_temp=temp, env=environment)
+        for name, argv, cwd, step_env in preparation_plan:
+            # ★v2.0 §4-1 — canonical 이 그 단계에 걸어 둔 env 를 그대로 실어 준다.
+            #   읽어 놓고 버리면 명령은 같아도 실행 환경이 다르다.
+            merged_env = {**environment, **dict(step_env)}
+            code, out, _err = _run(argv, root=root, cwd=cwd, runner_temp=temp, env=merged_env)
             executed.append(name)
             executed_keys.append(" ".join(argv))
             if name == "helm_version":
@@ -337,7 +354,7 @@ def run_exact_head_contracts(
                 )
             if name == "npm_build":
                 assert_build_artifact(root)
-        if executed != [name for name, _argv, _cwd in preparation_plan]:
+        if executed != [name for name, _argv, _cwd, _env in preparation_plan]:
             raise RepoContractError(REPO_CONTRACTS_PREPARATION_FAILED)
 
         # ★canonical 이 요구하는데 우리가 빠뜨린 준비가 있으면 계약을 돌리지 않는다
@@ -408,6 +425,7 @@ def emit_lines(receipt: ContractReceipt) -> list[str]:
         f"CANONICAL_WORKFLOW_SHA256={receipt.canonical_workflow_sha256 or 'NONE'}",
         f"CANONICAL_STEP_COUNT={receipt.canonical_step_count}",
         f"CANONICAL_MISSING_STEP_COUNT={len(receipt.canonical_missing_steps)}",
+        f"PREPARATION_ENV_BOUND_KEYS={len(receipt.preparation_env_keys)}",
         f"RUNNER_IMAGE={receipt.runner_image or 'unknown'}",
         f"HELM_VERSION={receipt.helm_version or 'unknown'}",
         f"NODE_VERSION={receipt.tool_versions.get('node', 'unknown')}",

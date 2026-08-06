@@ -105,7 +105,15 @@ APPROVED_BRANCH_POLICY_MODE = "custom_branch_policies"
 APPROVED_BRANCH_NAME = "main"
 
 _ALL_ZERO_OID = "0" * 40
-_ALLOWED_HOSTS = frozenset({"api.github.com"})
+# ★두 축을 혼동하지 않는다(v2.0 §3-1 · 감사 F03_GH_HOSTNAME_KIND_CONFUSION).
+#
+#   REST_API_HOST      요청이 ★실제로 도달하는★ API 호스트   = api.github.com
+#   gh --hostname      gh 가 받는 ★GitHub 인스턴스 호스트★   = github.com
+#
+#   gh 는 후자에 `api.` 를 붙여 전자를 만든다. 그래서 값이 다르고, 둘 다 맞다.
+#   한쪽 값을 다른 쪽에 넣으면 api.api.github.com 이 된다.
+REST_API_HOST = "api.github.com"
+_ALLOWED_HOSTS = frozenset({REST_API_HOST})
 
 
 @dataclass(frozen=True)
@@ -175,7 +183,7 @@ def _plan(
 ) -> PlannedRequest:
     _validate_path(path)
     return PlannedRequest(
-        token_class=route, method="GET", host="api.github.com",
+        token_class=route, method="GET", host=REST_API_HOST,
         path=path, failure_code=failure_code, schema=schema,
     )
 
@@ -649,6 +657,7 @@ __all__ = [
     "PREFLIGHT_RUN_FACT_READ_FAILED",
     "PREFLIGHT_TOKEN_ROUTE_VIOLATION",
     "PREFLIGHT_URL_NOT_ALLOWED",
+    "REST_API_HOST",
     "PlannedRequest",
     "PreflightResult",
     "STATE_ORDER",

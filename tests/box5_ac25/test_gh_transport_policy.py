@@ -32,7 +32,7 @@ def config_dir(tmp_path) -> Path:
 def test_argv_pins_the_hostname(config_dir):
     env = gp.build_transport_environment(token=GOOD_TOKEN, config_dir=config_dir)
     argv = env.argv("repos/o/r")
-    assert argv[:4] == ["gh", "api", "--hostname", "api.github.com"]
+    assert argv[:4] == ["gh", "api", "--hostname", "github.com"]
     assert argv[-1] == "repos/o/r"
     gp.require_hostname_pinned(argv)
 
@@ -42,7 +42,8 @@ def test_argv_pins_the_hostname(config_dir):
     [
         ["gh", "api", "-i", "repos/o/r"],                                # 없음
         ["gh", "api", "--hostname", "ghe.internal", "-i", "repos/o/r"],  # 다른 host
-        ["gh", "api", "--hostname", "api.github.com",
+        ["gh", "api", "--hostname", "api.github.com", "-i", "repos/o/r"],  # ★옛 잘못된 값
+        ["gh", "api", "--hostname", "github.com",
          "--hostname", "ghe.internal", "-i", "x"],                       # 두 번
         ["curl", "https://api.github.com"],                              # gh 가 아님
     ],
@@ -186,7 +187,7 @@ def test_transport_refuses_to_send_when_token_is_absent(monkeypatch, tmp_path):
     """token 이 없으면 ★transport 를 부르지 않고★ 코드로 닫는다."""
     from ac25 import output_containment, remote_facts as rf
 
-    monkeypatch.delenv("AC25_APPROVAL_TOKEN", raising=False)
+    monkeypatch.setattr(os, "environ", {"PATH": "/usr/bin"})  # 두 토큰 다 없다
     monkeypatch.setattr(output_containment, "default_runner_temp", lambda: tmp_path)
 
     called: list = []
@@ -200,7 +201,8 @@ def test_transport_refuses_to_send_when_token_is_absent(monkeypatch, tmp_path):
     result = send("repos/o/r")
     assert called == []
     assert result.status == 0
-    assert result.message == gp.TRANSPORT_TOKEN_MISSING
+    # ★§3-2 이후 토큰 쌍 검사가 먼저 닫는다. 어느 쪽이든 요청은 0 건이다.
+    assert result.message == gp.TRANSPORT_TOKEN_PAIR_INCOMPLETE
 
 
 def test_transport_sends_pinned_argv_and_minimal_env(monkeypatch, tmp_path):
@@ -213,6 +215,7 @@ def test_transport_sends_pinned_argv_and_minimal_env(monkeypatch, tmp_path):
         "GH_ENTERPRISE_TOKEN": "enterprise-secret",
         "GITHUB_TOKEN": "other-token",
         "AC25_APPROVAL_TOKEN": GOOD_TOKEN,
+        "AC25_CANDIDATE_TOKEN": GOOD_TOKEN,   # §3-2 — 쌍이 갖춰져야 나간다
     }
     monkeypatch.setattr(os, "environ", hostile)
     monkeypatch.setattr(output_containment, "default_runner_temp", lambda: tmp_path)
@@ -242,11 +245,201 @@ def test_transport_sends_pinned_argv_and_minimal_env(monkeypatch, tmp_path):
     assert "other-token" not in joined
 
 
+# ══ v2.0 §3-1 — hostname 은 API URL 이 아니라 GitHub 호스트다 ══════════
+def test_hostname_is_the_github_host_not_the_api_url():
+    """gh 의 --hostname 은 GitHub 호스트를 받고 ghinstance 가 `api.` 를 붙인다.
+
+        github.com      → https://api.github.com/       ★맞다
+        api.github.com  → https://api.api.github.com/   ★없는 호스트다
+
+    이전 판은 뒤쪽을 주었다. 의미가 다른 정도가 아니라 모든 요청이 깨진다.
+    """
+    assert gp.ALLOWED_HOSTNAME == "github.com"
+    assert not gp.ALLOWED_HOSTNAME.startswith("api."), (
+        "API URL 을 넣으면 gh 가 api.api.github.com 으로 간다"
+    )
+
+
+def test_the_previous_wrong_hostname_is_now_refused():
+    """옛 값이 되살아나면 잡힌다 — 회귀 방지."""
+    argv = ["gh", "api", "--hostname", "api.github.com", "-i", "repos/o/r"]
+    with pytest.raises(gp.TransportPolicyError) as caught:
+        gp.require_hostname_pinned(argv)
+    assert caught.value.code == gp.TRANSPORT_HOST_NOT_ALLOWED
+
+
+def test_no_production_module_names_the_api_host_as_the_gh_hostname():
+    """production 어디에도 `--hostname api.github.com` 조합이 남지 않는다.
+
+    ★시험 트리는 제외한다 — 부정 시험이 그 잘못된 조합을 ★일부러★ 담고 있고,
+      그것이 회귀를 잡는 자리이기 때문이다.
+    """
+    directory = Path(__file__).resolve().parents[2] / "scripts" / "ci" / "ac25"
+    for path in sorted(directory.rglob("*.py")):
+        body = path.read_text(encoding="utf-8")
+        assert '"--hostname", "api.github.com"' not in body, path.name
+        assert "--hostname api.github.com" not in body, path.name
+    # 상수 자체도 확인한다
+    assert gp.ALLOWED_HOSTNAME == "github.com"
+
+
+def test_the_two_host_axes_are_named_apart():
+    """감사가 `F03_GH_HOSTNAME_KIND_CONFUSION` 이라 부른 혼동을 이름으로 닫는다.
+
+        REST_API_HOST   요청이 ★실제로 도달하는★ API 호스트  = api.github.com
+        gh --hostname   gh 가 받는 ★GitHub 인스턴스 호스트★  = github.com
+
+    둘은 다른 축이고 둘 다 맞다. 한쪽 값을 다른 쪽에 넣으면 깨진다.
+    """
+    from ac25 import token_preflight as tp
+
+    assert tp.REST_API_HOST == "api.github.com"
+    assert gp.ALLOWED_HOSTNAME == "github.com"
+    assert tp.REST_API_HOST != gp.ALLOWED_HOSTNAME
+    assert tp.REST_API_HOST == "api." + gp.ALLOWED_HOSTNAME
+
+
+# ══ v2.0 §3-2 — 두 토큰을 첫 요청 전에 함께 본다 ═══════════════════════
+def test_token_pair_passes_when_both_are_present():
+    gp.require_token_pair(
+        approval_env="A", candidate_env="B",
+        source_environ={"A": GOOD_TOKEN, "B": GOOD_TOKEN},
+    )
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {"A": GOOD_TOKEN},                       # 후보 토큰 없음
+        {"B": GOOD_TOKEN},                       # 승인 토큰 없음
+        {},                                      # 둘 다 없음
+        {"A": GOOD_TOKEN, "B": ""},              # 후보가 빈 문자열
+        {"A": "", "B": GOOD_TOKEN},              # 승인이 빈 문자열
+        {"A": GOOD_TOKEN, "B": "short"},         # 후보가 형식 불량
+    ],
+)
+def test_incomplete_token_pair_is_refused(environ):
+    with pytest.raises(gp.TransportPolicyError) as caught:
+        gp.require_token_pair(
+            approval_env="A", candidate_env="B", source_environ=environ
+        )
+    assert caught.value.code == gp.TRANSPORT_TOKEN_PAIR_INCOMPLETE
+
+
+def test_no_request_is_sent_when_only_one_token_exists(monkeypatch, tmp_path):
+    """★한쪽만 있어도 승인 저장소 요청부터 나가던 자리다. 이제 0 건이다."""
+    from ac25 import output_containment, remote_facts as rf
+
+    # 승인 토큰만 있고 후보 토큰이 없다
+    monkeypatch.setattr(
+        os, "environ", {"PATH": "/usr/bin", "AC25_APPROVAL_TOKEN": GOOD_TOKEN}
+    )
+    monkeypatch.setattr(output_containment, "default_runner_temp", lambda: tmp_path)
+
+    sent: list = []
+
+    def explode(*args, **kwargs):
+        sent.append(args)
+        raise AssertionError("토큰 쌍이 불완전한데 요청을 보냈다")
+
+    monkeypatch.setattr(output_containment, "run_and_read", explode)
+
+    # ★승인 경로조차 보내지 않는다 — 이것이 §3-2 의 요지다
+    result = rf.gh_transport_for("AC25_APPROVAL_TOKEN")("repos/o/r")
+    assert sent == []
+    assert result.status == 0
+    assert result.message == gp.TRANSPORT_TOKEN_PAIR_INCOMPLETE
+
+    # 후보 경로도 마찬가지
+    result = rf.gh_transport_for("AC25_CANDIDATE_TOKEN")("repos/o/r")
+    assert sent == []
+    assert result.message == gp.TRANSPORT_TOKEN_PAIR_INCOMPLETE
+
+
+def test_both_tokens_present_lets_the_request_through(monkeypatch, tmp_path):
+    """막기만 하는 게이트는 합격이 아니다 — 둘 다 있으면 나가야 한다."""
+    from ac25 import output_containment, remote_facts as rf
+
+    monkeypatch.setattr(os, "environ", {
+        "PATH": "/usr/bin",
+        "AC25_APPROVAL_TOKEN": GOOD_TOKEN,
+        "AC25_CANDIDATE_TOKEN": GOOD_TOKEN,
+    })
+    monkeypatch.setattr(output_containment, "default_runner_temp", lambda: tmp_path)
+    monkeypatch.setattr(
+        output_containment, "run_and_read",
+        lambda *a, **k: (0, b'HTTP/2 200\r\n\r\n{"ok": true}', b""),
+    )
+    assert rf.gh_transport_for("AC25_APPROVAL_TOKEN")("repos/o/r").status == 200
+
+
+# ══ v2.0 §3-3 — proxy·CA 를 자식에게 물려주지 않는다 ═══════════════════
+PROXY_AND_CA_NAMES = (
+    "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+    "http_proxy", "https_proxy", "no_proxy",
+    "SSL_CERT_FILE", "SSL_CERT_DIR",
+    "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "NODE_EXTRA_CA_CERTS",
+)
+
+
+@pytest.mark.parametrize("name", PROXY_AND_CA_NAMES)
+def test_proxy_and_ca_names_are_in_the_forbidden_list(name):
+    assert name in gp.FORBIDDEN_ENV_NAMES, name
+
+
+@pytest.mark.parametrize("name", PROXY_AND_CA_NAMES)
+def test_proxy_and_ca_names_never_reach_the_child(name, config_dir):
+    """★호출이 어디로 가는지·무엇을 신뢰하는지를 바깥에서 바꾸지 못한다."""
+    hostile = {"PATH": "/usr/bin", name: "http://attacker.example:3128"}
+    env = gp.build_transport_environment(
+        token=GOOD_TOKEN, config_dir=config_dir, source_environ=hostile
+    ).env
+    assert name not in env
+    assert "attacker.example" not in "\n".join(f"{k}={v}" for k, v in env.items())
+
+
+@pytest.mark.parametrize("name", PROXY_AND_CA_NAMES)
+def test_injected_proxy_or_ca_is_refused_by_the_final_check(name, config_dir):
+    env = gp.build_transport_environment(token=GOOD_TOKEN, config_dir=config_dir).env
+    env[name] = "http://attacker.example:3128"
+    with pytest.raises(gp.TransportPolicyError) as caught:
+        gp.require_minimal_environment(env, config_dir=config_dir)
+    assert caught.value.code == gp.TRANSPORT_ENV_NOT_MINIMAL
+
+
+def test_allowlist_contains_no_proxy_or_ca_name():
+    """allowlist 쪽에서도 못박는다 — 나중에 누가 더해도 시험이 잡는다."""
+    for name in gp._ENV_ALLOWLIST:
+        upper = name.upper()
+        assert "PROXY" not in upper, name
+        assert "CERT" not in upper, name
+        assert "CA_BUNDLE" not in upper, name
+
+
+def test_full_hostile_environment_yields_exactly_seven_keys(config_dir):
+    """proxy·CA·자격을 전부 심어도 자식은 정해진 키만 받는다."""
+    hostile = {name: "hostile" for name in gp.FORBIDDEN_ENV_NAMES}
+    hostile.update({"PATH": "/usr/bin", "HOME": "/root", "SURPRISE": "x"})
+    env = gp.build_transport_environment(
+        token=GOOD_TOKEN, config_dir=config_dir, source_environ=hostile
+    ).env
+    assert set(env) == {
+        "PATH", "HOME", "GH_TOKEN", "GH_CONFIG_DIR",
+        "GH_NO_UPDATE_NOTIFIER", "GH_PROMPT_DISABLED", "NO_COLOR",
+    }
+    leaked = {k: v for k, v in env.items() if k != "GH_CONFIG_DIR"}
+    assert "hostile" not in "\n".join(leaked.values())
+
+
 def test_transport_removes_the_config_dir_afterwards(monkeypatch, tmp_path):
     """격리 디렉터리를 남기지 않는다 — 남으면 다음 실행이 물려받는다."""
     from ac25 import output_containment, remote_facts as rf
 
-    monkeypatch.setattr(os, "environ", {"PATH": "/usr/bin", "AC25_APPROVAL_TOKEN": GOOD_TOKEN})
+    monkeypatch.setattr(os, "environ", {
+        "PATH": "/usr/bin",
+        "AC25_APPROVAL_TOKEN": GOOD_TOKEN,
+        "AC25_CANDIDATE_TOKEN": GOOD_TOKEN,
+    })
     monkeypatch.setattr(output_containment, "default_runner_temp", lambda: tmp_path)
     monkeypatch.setattr(
         output_containment, "run_and_read",

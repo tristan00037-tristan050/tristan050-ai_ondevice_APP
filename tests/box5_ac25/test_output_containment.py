@@ -147,7 +147,11 @@ def _read_pids(control: Path, expected: int, *, deadline: float = 5.0) -> list[i
     return [int(line) for line in control.read_text().splitlines() if line.strip()] if control.exists() else []
 
 
-requires_linux = pytest.mark.skipif(sys.platform != "linux", reason="R6-1 은 Linux 전용")
+# ★v2.0 §4-2 — 양성 시험은 ★실제 /proc 계보 관측★ 이 되는 환경에서만 뜻이 있다.
+#   Linux 라고 /proc 이 있는 것은 아니다(컨테이너·hidepid·chroot).
+#   관측 불가 환경에서는 conftest 가 ★수집에서 제외★ 한다(skip 이 아니다).
+#   ★부정 시험에는 붙이지 않는다 — 그 환경이야말로 부정 시험이 필요한 곳이다.
+requires_procfs = pytest.mark.requires_procfs
 
 
 # ══ 부모 stream 에 아무것도 안 남는다 (RAW_OUTPUT_EMITTED=0) ════════════
@@ -189,7 +193,7 @@ def test_error_message_carries_only_a_code(runner_temp):
 
 
 # ══ §4-5 공격 — 정상 종료 + 지속 손자 ═════════════════════════════════
-@requires_linux
+@requires_procfs
 def test_normal_exit_with_persistent_grandchild_is_detected(runner_temp, tmp_path):
     control = tmp_path / "pids.txt"
     body = f"""
@@ -216,7 +220,7 @@ sys.exit(0)
         assert not _pid_alive(pid), f"grandchild {pid} 이 살아남았다"
 
 
-@requires_linux
+@requires_procfs
 def test_grandchild_with_detached_stdio_is_still_detected(runner_temp, tmp_path):
     control = tmp_path / "pids.txt"
     body = f"""
@@ -242,7 +246,7 @@ sys.exit(0)
         assert not _pid_alive(pid)
 
 
-@requires_linux
+@requires_procfs
 def test_double_fork_setsid_escape_is_detected(runner_temp, tmp_path):
     control = tmp_path / "pids.txt"
     body = f"""
@@ -272,7 +276,7 @@ sys.exit(0)
         assert not _pid_alive(pid), f"setsid 이탈 손자 {pid} 가 살아남았다"
 
 
-@requires_linux
+@requires_procfs
 def test_root_exit_one_with_remaining_descendant_is_detected(runner_temp, tmp_path):
     body = """
 import os, sys, time, subprocess
@@ -288,7 +292,7 @@ sys.exit(1)
     assert caught.value.code == oc.CONTAINMENT_DESCENDANT_SURVIVED_ROOT
 
 
-@requires_linux
+@requires_procfs
 def test_sigterm_ignoring_descendant_needs_sigkill(runner_temp, tmp_path):
     control = tmp_path / "pids.txt"
     body = f"""
@@ -313,7 +317,7 @@ sys.exit(0)
 
 
 # ══ timeout·출력 초과 + 후손 ═══════════════════════════════════════════
-@requires_linux
+@requires_procfs
 def test_timeout_kills_the_whole_process_group(runner_temp, tmp_path):
     control = tmp_path / "pids.txt"
     body = f"""
@@ -332,7 +336,7 @@ time.sleep(120)
         assert not _pid_alive(pid), f"timeout 후 손자 {pid} 가 남았다"
 
 
-@requires_linux
+@requires_procfs
 def test_output_overflow_with_descendant_is_fail_closed(runner_temp, tmp_path):
     control = tmp_path / "pids.txt"
     body = f"""
@@ -392,7 +396,7 @@ def test_timeout_leaves_no_capture_behind(runner_temp):
 
 
 # ══ zombie·grace·정상 상태 ═════════════════════════════════════════════
-@requires_linux
+@requires_procfs
 def test_zombie_child_is_reaped_not_counted_as_alive(runner_temp, tmp_path):
     body = """
 import os, sys, time
@@ -412,7 +416,7 @@ sys.exit(0)
     assert result.process_group_empty is True
 
 
-@requires_linux
+@requires_procfs
 def test_descendant_that_exits_within_grace_is_success(runner_temp, tmp_path):
     body = """
 import sys, subprocess, time
@@ -468,7 +472,7 @@ def test_stdin_file_is_supplied_when_requested(runner_temp, tmp_path):
 
 
 # ══ §4-5 — 무관한 형제 프로세스는 살아남는다 ═══════════════════════════
-@requires_linux
+@requires_procfs
 def test_unrelated_sibling_process_survives(runner_temp):
     sibling = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
     try:

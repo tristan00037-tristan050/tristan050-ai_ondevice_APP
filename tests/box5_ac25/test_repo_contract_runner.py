@@ -296,7 +296,7 @@ def test_preparation_order_is_fixed(monkeypatch, workspace):
     runner = _FakeRunner(artifact=workspace / rcr.BUILD_ARTIFACT)
     _run(monkeypatch, workspace, runner=runner)
     plan = rcr.build_preparation_plan(workspace, runner_temp=str(workspace))
-    expected = [argv for _name, argv, _cwd in plan]
+    expected = [argv for _name, argv, _cwd, _env in plan]
     # ★도구 버전 기록은 준비 ★전에★ 돈다(§7-3 2항). 준비는 base ref 부터 시작한다.
     # (helm version 은 버전 기록과 준비 양쪽에 나오므로 이름으로 거를 수 없다.)
     start = runner.calls.index(("bash", rcr.BASE_REF_SCRIPT))
@@ -415,7 +415,7 @@ def test_emitted_lines_carry_only_allowed_metadata(monkeypatch, workspace):
         "NODE_VERSION", "PYTHON_VERSION",
         # F-04 — canonical 동등성 증거도 영수증에 남는다
         "CANONICAL_WORKFLOW_SHA256", "CANONICAL_STEP_COUNT",
-        "CANONICAL_MISSING_STEP_COUNT",
+        "CANONICAL_MISSING_STEP_COUNT", "PREPARATION_ENV_BOUND_KEYS",
     }
     for line in lines:
         key, _, value = line.partition("=")
