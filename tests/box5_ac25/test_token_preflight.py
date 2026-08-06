@@ -40,8 +40,29 @@ RUN_ID = 31058574141
 APPROVER = "tristan00037-tristan050"
 
 
-def _contents(payload: bytes) -> dict:
-    return {"encoding": "base64", "content": base64.b64encode(payload).decode("ascii")}
+CANDIDATE_MAIN_HEAD = "3" * 40   # 후보 저장소 main = 이 run 의 head
+APPROVER_ID = 238947383          # 승인 문서가 선언한 값
+
+
+def _contents(payload: bytes, path: str = anchors.APPROVAL_DOCUMENT_PATH) -> dict:
+    """contents 응답. ★path 를 반드시 담는다 — 검증기가 그것을 대조한다(F-01)."""
+    return {
+        "encoding": "base64",
+        "content": base64.b64encode(payload).decode("ascii"),
+        "path": path,
+    }
+
+
+def _contents_path_for(url: str) -> str:
+    """contents URL 이 어느 파일을 가리키는지 되짚는다(시험용 fake 서버 역할).
+
+    ★접두 일치로 고르면 안 된다 — 서명 경로는 문서 경로 + '.sig' 라서
+      문서 경로가 서명 URL 의 접두다. URL 을 실제로 해석한다.
+    """
+    from urllib.parse import unquote
+
+    encoded = url.partition("/contents/")[2].partition("?")[0]
+    return unquote(encoded)
 
 
 class Recorder:
@@ -60,13 +81,21 @@ class Recorder:
 
 
 def _default_response(path: str) -> rf.TransportResult:
+    """정상 상태의 fake GitHub 응답.
+
+    ★F-01 이후로는 ★사실이 담긴★ 응답이어야 통과한다. 예전 이 함수는
+    `{"ok": True}` 같은 빈 껍데기를 돌려주었고, 그래도 사전점검이 통과했다.
+    그것이 감사가 재현한 거짓 통과의 시험 쪽 얼굴이다.
+    """
     if path.endswith("/git/ref/heads/main"):
         return rf.TransportResult(
             status=200,
             payload={"ref": "refs/heads/main", "object": {"sha": PROTECTED_HEAD}},
         )
     if "/contents/" in path:
-        return rf.TransportResult(status=200, payload=_contents(DOCUMENT_BYTES))
+        return rf.TransportResult(
+            status=200, payload=_contents(DOCUMENT_BYTES, _contents_path_for(path))
+        )
     if path == f"repos/{anchors.CANDIDATE_REPOSITORY}/pulls/{anchors.CANDIDATE_PR_NUMBER}":
         return rf.TransportResult(
             status=200,
@@ -85,9 +114,40 @@ def _default_response(path: str) -> rf.TransportResult:
     if "/compare/" in path:
         return rf.TransportResult(status=200, payload={"status": "behind"})
     if "/actions/runs/" in path:
+        return rf.TransportResult(status=200, payload={
+            "id": RUN_ID,
+            "event": "workflow_dispatch",
+            "head_branch": "main",
+            "head_sha": CANDIDATE_MAIN_HEAD,
+            "repository": {"full_name": anchors.CANDIDATE_REPOSITORY},
+            "run_started_at": "2026-08-06T00:00:00Z",
+        })
+    if path.startswith("users/"):
         return rf.TransportResult(
-            status=200, payload={"run_started_at": "2026-08-06T00:00:00Z"}
+            status=200, payload={"login": APPROVER, "id": APPROVER_ID}
         )
+    if "/git/commits/" in path:
+        return rf.TransportResult(
+            status=200, payload={"sha": LOCKED_HEAD, "tree": {"sha": LOCKED_TREE}}
+        )
+    if path.endswith("/branches/main"):
+        return rf.TransportResult(
+            status=200,
+            payload={"protected": True, "commit": {"sha": CANDIDATE_MAIN_HEAD}},
+        )
+    if path == f"repos/{anchors.APPROVAL_REPOSITORY}":
+        return rf.TransportResult(
+            status=200, payload={"full_name": anchors.APPROVAL_REPOSITORY}
+        )
+    if path == f"repos/{anchors.CANDIDATE_REPOSITORY}":
+        return rf.TransportResult(
+            status=200, payload={"full_name": anchors.CANDIDATE_REPOSITORY}
+        )
+    if "/commits/" in path:  # 승인 커밋
+        return rf.TransportResult(status=200, payload={
+            "sha": anchors.APPROVAL_COMMIT_SHA,
+            "commit": {"committer": {"date": "2026-08-05T04:48:43Z"}},
+        })
     return rf.TransportResult(status=200, payload={"ok": True})
 
 

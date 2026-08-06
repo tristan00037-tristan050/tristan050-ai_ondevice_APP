@@ -21,6 +21,7 @@ import re
 from pathlib import Path
 
 import pytest
+from ac25 import canonical_plan
 from ac25 import output_containment as oc
 from ac25 import repo_contract_runner as rcr
 
@@ -109,10 +110,33 @@ def _result(**overrides) -> oc.ContainedResult:
 
 @pytest.fixture
 def workspace(tmp_path) -> Path:
+    """가짜 저장소. ★canonical 워크플로와 로컬 action 을 실물 그대로 넣는다.
+
+    F-04 이후 실행기는 준비 계획을 canonical 에서 ★읽는다★. 그래서 가짜
+    저장소에도 그 파일이 있어야 한다 — 없으면 계획을 만들 수 없고, 그때는
+    닫는 것이 옳다(그 성질도 아래 시험이 따로 확인한다).
+    """
     root = tmp_path / "repo"
     (root / rcr.NPM_WORKSPACE).mkdir(parents=True)
     (root / "scripts" / "verify").mkdir(parents=True)
+    _install_canonical(root)
     return root
+
+
+def _install_canonical(root: Path) -> None:
+    """실물 canonical 워크플로·composite action 을 가짜 저장소로 복사한다."""
+    import shutil
+
+    target = root / canonical_plan.CANONICAL_WORKFLOW_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(REPO_ROOT / canonical_plan.CANONICAL_WORKFLOW_PATH, target)
+
+    action_source = REPO_ROOT / ".github" / "actions" / "preflight_v1"
+    if action_source.is_dir():
+        shutil.copytree(
+            action_source, root / ".github" / "actions" / "preflight_v1",
+            dirs_exist_ok=True,
+        )
 
 
 def _install(monkeypatch, runner: _FakeRunner) -> None:
@@ -250,9 +274,11 @@ def test_missing_helm_fails_without_downloading(monkeypatch, workspace):
     )
     receipt = _run(monkeypatch, workspace, runner=runner)
     assert receipt.error_code == rcr.REPO_CONTRACTS_HELM_TOOLCHAIN_MISMATCH
-    # ★즉석 다운로드를 시도하지 않는다
+    # ★Helm 을 즉석 설치·다운로드하지 않는다. 불일치는 닫는다(§7-3).
+    #   canonical 이 스스로 하는 ripgrep·jq 설치는 계획의 일부이므로 별개다.
     joined = " ".join(" ".join(argv) for argv in runner.calls)
-    for forbidden in ("curl", "wget", "get_helm.sh", "apt-get"):
+    for forbidden in ("curl", "wget", "get_helm.sh", "install -y helm",
+                      "snap install helm", "brew install helm"):
         assert forbidden not in joined, forbidden
 
 
@@ -269,31 +295,56 @@ def test_repository_contracts_run_exactly_once(monkeypatch, workspace):
 def test_preparation_order_is_fixed(monkeypatch, workspace):
     runner = _FakeRunner(artifact=workspace / rcr.BUILD_ARTIFACT)
     _run(monkeypatch, workspace, runner=runner)
-    observed = [argv for argv in runner.calls if argv[0] in ("bash", "npm", "helm")]
-    expected = [argv for _name, argv, _cwd in rcr.PREPARATION_PLAN]
-    assert observed[: len(expected)] == expected
+    plan = rcr.build_preparation_plan(workspace, runner_temp=str(workspace))
+    expected = [argv for _name, argv, _cwd in plan]
+    # ★도구 버전 기록은 준비 ★전에★ 돈다(§7-3 2항). 준비는 base ref 부터 시작한다.
+    # (helm version 은 버전 기록과 준비 양쪽에 나오므로 이름으로 거를 수 없다.)
+    start = runner.calls.index(("bash", rcr.BASE_REF_SCRIPT))
+    observed = [
+        argv for argv in runner.calls[start:]
+        if argv[0] in ("bash", "npm", "npx", "helm", "sudo")
+    ]
+    assert observed[: len(expected)] == expected, observed[: len(expected)]
 
 
-def test_command_plan_digest_changes_when_the_plan_changes(monkeypatch):
-    before = rcr.command_plan_sha256()
-    monkeypatch.setattr(
-        rcr, "PREPARATION_PLAN", rcr.PREPARATION_PLAN[::-1]
+def test_tool_versions_are_recorded_before_preparation(monkeypatch, workspace):
+    """§7-3 2항 — 준비가 바꾼 버전을 적으면 재검증이 안 된다."""
+    runner = _FakeRunner(artifact=workspace / rcr.BUILD_ARTIFACT)
+    _run(monkeypatch, workspace, runner=runner)
+    keys = [" ".join(argv) for argv in runner.calls]
+    first_version = min(
+        keys.index(" ".join(argv)) for _name, argv in rcr.TOOL_VERSION_PLAN
+        if " ".join(argv) in keys
     )
-    assert rcr.command_plan_sha256() != before
+    first_prep = keys.index("bash " + rcr.BASE_REF_SCRIPT)
+    assert first_version < first_prep, (first_version, first_prep)
 
 
-def test_command_plan_digest_is_reproducible():
-    assert rcr.command_plan_sha256() == rcr.command_plan_sha256()
-    canonical = json.dumps(
-        {
-            "preparation": [[n, list(a), c] for n, a, c in rcr.PREPARATION_PLAN],
-            "contract": list(rcr.CONTRACT_COMMAND),
-            "artifact": rcr.BUILD_ARTIFACT,
-            "guards": list(rcr.PROTECTED_GUARD_PATHS),
-        },
-        ensure_ascii=False, separators=(",", ":"), sort_keys=True,
+def test_command_plan_digest_changes_when_the_plan_changes(monkeypatch, workspace):
+    before = rcr.command_plan_sha256(workspace, runner_temp=str(workspace))
+    monkeypatch.setattr(rcr, "AC25_EXTRA_PLAN", rcr.AC25_EXTRA_PLAN[::-1])
+    assert rcr.command_plan_sha256(workspace, runner_temp=str(workspace)) != before
+
+
+def test_command_plan_digest_changes_when_canonical_changes(workspace):
+    """★canonical 이 준비를 늘리면 지문이 바뀐다 — 조용히 어긋나지 않는다."""
+    before = rcr.command_plan_sha256(workspace, runner_temp=str(workspace))
+    path = workspace / canonical_plan.CANONICAL_WORKFLOW_PATH
+    body = path.read_text(encoding="utf-8").replace(
+        "      - name: Install ripgrep",
+        "      - name: New canonical prerequisite\n"
+        "        run: bash scripts/ops/new_prereq.sh\n"
+        "      - name: Install ripgrep",
     )
-    assert rcr.command_plan_sha256() == hashlib.sha256(canonical.encode()).hexdigest()
+    path.write_text(body, encoding="utf-8")
+    assert rcr.command_plan_sha256(workspace, runner_temp=str(workspace)) != before
+
+
+def test_command_plan_digest_is_reproducible(workspace):
+    first = rcr.command_plan_sha256(workspace, runner_temp=str(workspace))
+    assert first == rcr.command_plan_sha256(workspace, runner_temp=str(workspace))
+    assert re.fullmatch(r"[0-9a-f]{64}", first)
+    assert hashlib is not None and json is not None
 
 
 def test_contract_failure_is_reported(monkeypatch, workspace):
@@ -362,6 +413,9 @@ def test_emitted_lines_carry_only_allowed_metadata(monkeypatch, workspace):
         "STDOUT_BYTES", "STDERR_BYTES", "EXIT_CODE", "DESCENDANTS_OBSERVED",
         "FINAL_WORKTREE_CLEAN", "RUNNER_IMAGE", "HELM_VERSION",
         "NODE_VERSION", "PYTHON_VERSION",
+        # F-04 — canonical 동등성 증거도 영수증에 남는다
+        "CANONICAL_WORKFLOW_SHA256", "CANONICAL_STEP_COUNT",
+        "CANONICAL_MISSING_STEP_COUNT",
     }
     for line in lines:
         key, _, value = line.partition("=")

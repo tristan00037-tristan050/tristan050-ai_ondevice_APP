@@ -214,19 +214,30 @@ class ProcStat:
 
 
 def read_proc_stat(pid: int) -> ProcStat | None:
-    """/proc/<pid>/stat 한 줄을 파싱한다. 없으면 None(이미 종료)."""
+    """/proc/<pid>/stat 한 줄을 파싱한다.
+
+    ★F-02 — "이미 종료됨" 과 "관측 불능" 을 같은 값으로 합치지 않는다.
+      합치면 관측 수단이 사라졌을 때 "후손이 없다" 로 판정한다 — fail-open 이다.
+
+        없음(ENOENT·ESRCH)  → None      이미 종료했다. 사실이다.
+        그 밖의 OSError     → 예외      읽을 수 없다. 사실을 모른다.
+        파싱 실패           → 예외      형식이 예상과 다르다. 사실을 모른다.
+    """
     try:
         raw = Path(f"/proc/{pid}/stat").read_bytes()
-    except OSError:
+    except (FileNotFoundError, ProcessLookupError):
         return None
+    except OSError as exc:
+        # 권한 부족·hidepid·I/O 오류 — 관측할 수 없으면 닫는다
+        raise SubreaperProtocolError(CONTAINMENT_PROCESS_IDENTITY_UNPROVEN) from exc
     text = raw.decode("ascii", "replace")
     # comm 은 괄호 안에 공백·괄호가 올 수 있다. 마지막 ') ' 뒤가 나머지다.
-    head, separator, rest = text.rpartition(") ")
+    _head, separator, rest = text.rpartition(") ")
     if not separator:
-        return None
+        raise SubreaperProtocolError(CONTAINMENT_PROCESS_IDENTITY_UNPROVEN)
     fields = rest.split()
     if len(fields) < 20:
-        return None
+        raise SubreaperProtocolError(CONTAINMENT_PROCESS_IDENTITY_UNPROVEN)
     try:
         return ProcStat(
             pid=pid,
@@ -235,15 +246,32 @@ def read_proc_stat(pid: int) -> ProcStat | None:
             pgrp=int(fields[2]),
             starttime=int(fields[19]),
         )
-    except ValueError:
-        return None
+    except ValueError as exc:
+        raise SubreaperProtocolError(CONTAINMENT_PROCESS_IDENTITY_UNPROVEN) from exc
+
+
+def require_procfs() -> None:
+    """★F-02 — 관측 수단이 실제로 있는지 supervisor 시작 시 먼저 확인한다.
+
+    /proc 가 없거나 자기 자신조차 읽지 못하면, 이후의 "후손 0" 은 사실이 아니라
+    관측 실패다. 그 상태로 진행하지 않는다.
+    """
+    try:
+        raw = Path("/proc/self/stat").read_bytes()
+    except OSError as exc:
+        raise SubreaperProtocolError(CONTAINMENT_PROCESS_IDENTITY_UNPROVEN) from exc
+    if not raw or ") " not in raw.decode("ascii", "replace"):
+        raise SubreaperProtocolError(CONTAINMENT_PROCESS_IDENTITY_UNPROVEN)
+    # 열거도 실제로 되는지 확인한다. 읽기만 되고 열거가 막힌 경우를 잡는다.
+    _iter_proc_pids()
 
 
 def _iter_proc_pids() -> list[int]:
+    """★F-02 — /proc 열거 실패를 빈 목록으로 바꾸지 않는다. 닫는다."""
     try:
         entries = os.listdir("/proc")
-    except OSError:
-        return []
+    except OSError as exc:
+        raise SubreaperProtocolError(CONTAINMENT_PROCESS_IDENTITY_UNPROVEN) from exc
     return [int(name) for name in entries if name.isdigit()]
 
 
@@ -595,6 +623,7 @@ class _Supervisor:
         self._record_reap(reaped)
 
         # ── §4-2 9항: 최종 확인 ───────────────────────────────────────
+        # ★F-02 — 이 시점의 열거가 실패하면 "비었다" 로 적지 않는다. 위로 던진다.
         me = os.getpid()
         group_alive = living_group_members(root_pgid, exclude=frozenset({me}))
         children_alive = living_children_of(me)
@@ -715,6 +744,12 @@ def _supervisor_main() -> int:
     failure = enable_child_subreaper()
     if failure:
         return emit(_error_report(failure))
+
+    # ★F-02 — 관측 수단을 먼저 확인한다. 없으면 "후손 0" 은 사실이 아니다.
+    try:
+        require_procfs()
+    except SubreaperProtocolError as exc:
+        return emit(_error_report(exc.code))
 
     raw = sys.stdin.buffer.read(MAX_MESSAGE_BYTES + 1)
     try:

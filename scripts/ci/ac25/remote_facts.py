@@ -36,7 +36,7 @@ from typing import Mapping, Protocol
 from pathlib import Path
 from urllib.parse import quote
 
-from . import output_containment
+from . import gh_transport_policy, output_containment
 from .cross_track_approval import RemoteFacts
 
 # ── 실패 코드 ──────────────────────────────────────────────────────────
@@ -228,34 +228,51 @@ CANDIDATE_TOKEN_ENV = "AC25_CANDIDATE_TOKEN"
 
 
 def gh_transport_for(token_env_name: str) -> Transport:
-    """★해당 env 의 token 으로만 부르는 전송을 만든다(C5).
+    """★해당 env 의 token 으로만 부르는 전송을 만든다(C5 · F-03).
 
     secret 은 argv 에 넣지 않는다. 자식 env 로만 넘긴다.
+
+    ★F-03 — host 와 자격 출처를 전송 계층에서 강제한다.
+      · argv 에 `--hostname api.github.com` 을 명시한다
+      · 자식 환경은 allowlist 로 새로 만든다(os.environ 을 물려주지 않는다)
+      · 격리된 빈 GH_CONFIG_DIR 을 준다
+      · token 이 비어 있으면 요청 전에 닫는다(익명 호출 방지)
     """
 
     def send(path: str) -> TransportResult:
         import os as _os
+        import shutil as _shutil
 
-        env = dict(_os.environ)
-        env["GH_TOKEN"] = _os.environ.get(token_env_name, "")
-        env.pop("GITHUB_TOKEN", None)
-        return _gh_call(path, env=env)
+        token = _os.environ.get(token_env_name, "")
+        try:
+            config_dir = gh_transport_policy.isolated_config_dir(
+                output_containment.default_runner_temp()
+            )
+        except OSError:
+            return TransportResult(
+                status=0, message=gh_transport_policy.TRANSPORT_CONFIG_NOT_ISOLATED
+            )
+        try:
+            transport_env = gh_transport_policy.build_transport_environment(
+                token=token, config_dir=config_dir
+            )
+            argv = transport_env.argv(path)
+            gh_transport_policy.require_hostname_pinned(argv)
+            return _gh_call(argv, env=transport_env.env)
+        except gh_transport_policy.TransportPolicyError as exc:
+            # ★정책 위반은 요청을 보내기 전에 닫는다. 코드만 남긴다.
+            return TransportResult(status=0, message=exc.code)
+        finally:
+            _shutil.rmtree(config_dir, ignore_errors=True)
 
     return send
 
 
-def gh_transport(path: str) -> TransportResult:
-    """기본 전송(단일 token). production 은 gh_transport_for 를 쓴다."""
-    import os as _os
-
-    return _gh_call(path, env=dict(_os.environ))
-
-
-def _gh_call(path: str, *, env) -> TransportResult:
+def _gh_call(argv: list[str], *, env) -> TransportResult:
     """gh CLI 로 읽는다. 응답 헤더까지 받아 상태를 구분한다."""
     try:
         _code, out, _err = output_containment.run_and_read(
-            ["gh", "api", "-i", path], cwd=Path.cwd(), env=env
+            argv, cwd=Path.cwd(), env=env
         )
     except output_containment.ContainmentError as exc:
         # ★gh stderr·body·header 를 message 에 넣지 않는다. 고정 코드만.
@@ -728,7 +745,6 @@ __all__ = [
     "TransportResult",
     "classify",
     "collect_remote_facts",
-    "gh_transport",
     "gh_transport_for",
     "is_ancestor",
     "read_account_id",

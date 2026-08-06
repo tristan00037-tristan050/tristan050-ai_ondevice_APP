@@ -32,7 +32,7 @@ import sys
 from dataclasses import dataclass, field
 from enum import Enum
 
-from . import anchors, remote_facts, workflow_identity
+from . import anchors, preflight_facts, remote_facts, workflow_identity
 from .approval_loader import ApprovalDocumentError, DocumentOrigin, load_approval_document
 
 # ── 상태 (§6-2) ────────────────────────────────────────────────────────
@@ -84,6 +84,21 @@ PREFLIGHT_APPROVER_READ_FAILED = "PREFLIGHT_APPROVER_READ_FAILED"
 PREFLIGHT_TOKEN_ROUTE_VIOLATION = "PREFLIGHT_TOKEN_ROUTE_VIOLATION"
 PREFLIGHT_ARGUMENTS_INVALID = "PREFLIGHT_ARGUMENTS_INVALID"
 PREFLIGHT_INTERNAL_ERROR = "PREFLIGHT_INTERNAL_ERROR"
+PREFLIGHT_FACT_NOT_VERIFIED = "PREFLIGHT_FACT_NOT_VERIFIED"
+
+# ★F-01 — 읽은 사실의 의미 검증 코드는 preflight_facts 가 정본이다.
+#   여기서 재노출만 한다. 두 곳에 값을 적으면 한쪽만 고쳐진다.
+PREFLIGHT_APPROVAL_COMMIT_INVALID = preflight_facts.PREFLIGHT_APPROVAL_COMMIT_INVALID
+PREFLIGHT_APPROVAL_NOT_ANCESTOR = preflight_facts.PREFLIGHT_APPROVAL_NOT_ANCESTOR
+PREFLIGHT_APPROVAL_REF_MISMATCH = preflight_facts.PREFLIGHT_APPROVAL_REF_MISMATCH
+PREFLIGHT_APPROVAL_REPO_MISMATCH = preflight_facts.PREFLIGHT_APPROVAL_REPO_MISMATCH
+PREFLIGHT_BRANCH_HEAD_MISMATCH = preflight_facts.PREFLIGHT_BRANCH_HEAD_MISMATCH
+PREFLIGHT_BRANCH_NOT_PROTECTED = preflight_facts.PREFLIGHT_BRANCH_NOT_PROTECTED
+PREFLIGHT_CANDIDATE_REPO_MISMATCH = preflight_facts.PREFLIGHT_CANDIDATE_REPO_MISMATCH
+PREFLIGHT_CANDIDATE_TREE_MISMATCH = preflight_facts.PREFLIGHT_CANDIDATE_TREE_MISMATCH
+PREFLIGHT_CONTENTS_PATH_MISMATCH = preflight_facts.PREFLIGHT_CONTENTS_PATH_MISMATCH
+PREFLIGHT_ENVIRONMENT_MISMATCH = preflight_facts.PREFLIGHT_ENVIRONMENT_MISMATCH
+PREFLIGHT_RUN_FACT_INVALID = preflight_facts.PREFLIGHT_RUN_FACT_INVALID
 
 # ★승인된 정본은 custom branch policy 로 main 하나다(§G-1).
 APPROVED_BRANCH_POLICY_MODE = "custom_branch_policies"
@@ -206,6 +221,23 @@ class _Machine:
     static_paths: list[str] = field(default_factory=list)
     dependent_paths: list[str] = field(default_factory=list)
 
+    # ★읽은 사실을 이름표와 함께 보관한다. 버린 사실은 검증할 수 없다(F-01).
+    facts: dict[str, object] = field(default_factory=dict)
+    verified: set[str] = field(default_factory=set)
+    document_bytes: bytes = b""
+    run_head_sha: str = ""
+    approver_login: str = ""
+    approver_id: int = 0
+
+    def _check(self, rule, payload: object, **expected):
+        """사실 검사 하나를 돌린다. 거부는 안정 코드로 바꾼다."""
+        try:
+            outcome = rule(payload, **expected)
+        except preflight_facts.FactRejected as rejected:
+            raise _Stop(rejected.code) from rejected
+        self.verified.add(rule.__name__)
+        return outcome
+
     # ── 전송 ──────────────────────────────────────────────────────────
     def _send(self, request: PlannedRequest) -> remote_facts.TransportResult:
         if request.host not in _ALLOWED_HOSTS:
@@ -258,55 +290,79 @@ class _Machine:
         self.state = State.CONTEXT_VALIDATED
 
     # ── S1 ────────────────────────────────────────────────────────────
-    def s1_static(self) -> tuple[dict, dict, bytes, dict, dict]:
+    def s1_static(self) -> dict[str, object]:
+        """의존이 없는 read 를 모은다. ★읽은 것은 전부 self.facts 에 남긴다.
+
+        F-01 이전에는 여기서 읽은 값 일부를 그 자리에서 버렸다(`_commit`). 버린
+        사실은 검증할 수 없다. 그래서 읽은 것을 이름표와 함께 보관한다.
+        """
         endpoints = build_endpoints(
             pr_number=self.pr_number,
             candidate_head_sha=self.locked_candidate_head,
             approver_login="",  # 아직 모른다. 이 단계에서 쓰지 않는다.
         )
-        repo = self._static(_plan(
-            remote_facts.Route.APPROVAL, endpoints.approval_repo(),
-            PREFLIGHT_APPROVAL_READ_FAILED, "object",
-        )).payload
-        ref = self._static(_plan(
-            remote_facts.Route.APPROVAL, endpoints.approval_ref(),
-            PREFLIGHT_APPROVAL_READ_FAILED, "object",
-        )).payload
-        commit = self._static(_plan(
-            remote_facts.Route.APPROVAL, endpoints.approval_commit(),
-            PREFLIGHT_APPROVAL_READ_FAILED, "object",
-        )).payload
-        document = self._static(_plan(
-            remote_facts.Route.APPROVAL,
-            endpoints.approval_contents(anchors.APPROVAL_DOCUMENT_PATH),
-            PREFLIGHT_APPROVAL_READ_FAILED, "object",
-        )).payload
-        pull = self._static(_plan(
-            remote_facts.Route.CANDIDATE, endpoints.candidate_pull(),
-            PREFLIGHT_CANDIDATE_COORD_READ_FAILED, "object",
-        )).payload
-        run = self._static(_plan(
-            remote_facts.Route.RUN,
-            f"repos/{anchors.CANDIDATE_REPOSITORY}/actions/runs/{self.run_id}",
-            PREFLIGHT_RUN_FACT_READ_FAILED, "object",
-        )).payload
-        environment = self._static(_plan(
-            remote_facts.Route.CANDIDATE, endpoints.candidate_environment(),
-            PREFLIGHT_ENVIRONMENT_READ_FAILED, "object",
-        )).payload
+        reads = (
+            ("approval_repository", remote_facts.Route.APPROVAL, endpoints.approval_repo(),
+             PREFLIGHT_APPROVAL_READ_FAILED),
+            ("approval_ref", remote_facts.Route.APPROVAL, endpoints.approval_ref(),
+             PREFLIGHT_APPROVAL_READ_FAILED),
+            ("approval_commit", remote_facts.Route.APPROVAL, endpoints.approval_commit(),
+             PREFLIGHT_APPROVAL_READ_FAILED),
+            ("approval_document", remote_facts.Route.APPROVAL,
+             endpoints.approval_contents(anchors.APPROVAL_DOCUMENT_PATH),
+             PREFLIGHT_APPROVAL_READ_FAILED),
+            ("candidate_pull", remote_facts.Route.CANDIDATE, endpoints.candidate_pull(),
+             PREFLIGHT_CANDIDATE_COORD_READ_FAILED),
+            ("workflow_run", remote_facts.Route.RUN,
+             f"repos/{anchors.CANDIDATE_REPOSITORY}/actions/runs/{self.run_id}",
+             PREFLIGHT_RUN_FACT_READ_FAILED),
+            ("candidate_environment", remote_facts.Route.CANDIDATE,
+             endpoints.candidate_environment(), PREFLIGHT_ENVIRONMENT_READ_FAILED),
+        )
+        for label, route, path, failure in reads:
+            self.facts[label] = self._static(_plan(route, path, failure, "object")).payload
 
         self.state = State.STATIC_FACTS_FETCHED
-        document_bytes = _decode_contents(document)
+
+        # ★S1 에서 읽은 사실은 S2 로 넘어가기 전에 의미를 확인한다. 뒤로 미루면
+        #   위조 문서를 파싱하는 자리까지 잘못된 사실을 들고 가게 된다.
+        self._check(
+            preflight_facts.verify_approval_repository,
+            self.facts["approval_repository"],
+            expected_repository=anchors.APPROVAL_REPOSITORY,
+        )
+        self._check(
+            preflight_facts.verify_approval_commit,
+            self.facts["approval_commit"],
+            expected_commit=anchors.APPROVAL_COMMIT_SHA,
+        )
+        self.run_head_sha, _started = self._check(
+            preflight_facts.verify_run,
+            self.facts["workflow_run"],
+            expected_run_id=self.run_id,
+            expected_repository=anchors.CANDIDATE_REPOSITORY,
+        )
+        self._check(
+            preflight_facts.verify_environment,
+            self.facts["candidate_environment"],
+            expected_name=workflow_identity.EXPECTED_ENVIRONMENT,
+        )
+        self._check(
+            preflight_facts.verify_contents_path,
+            self.facts["approval_document"],
+            expected_path=anchors.APPROVAL_DOCUMENT_PATH,
+        )
+
+        document_bytes = _decode_contents(self.facts["approval_document"])
         if document_bytes is None:
             raise _Stop(PREFLIGHT_APPROVAL_READ_FAILED)
-        if not isinstance(run, dict):
-            raise _Stop(PREFLIGHT_RUN_FACT_READ_FAILED)
-        return ref, commit, document_bytes, pull, environment
+        self.document_bytes = document_bytes
+        return self.facts
 
     # ── S2 ────────────────────────────────────────────────────────────
-    def s2_document(self, *, document_bytes: bytes, ref_payload: dict) -> tuple[str, str]:
+    def s2_document(self) -> str:
         """digest 먼저, 그 다음 parser. 순서를 바꾸면 위조 문서를 파싱하게 된다."""
-        measured = hashlib.sha256(document_bytes).hexdigest()
+        measured = hashlib.sha256(self.document_bytes).hexdigest()
         if measured != self.pinned_document_sha256:
             raise _Stop(PREFLIGHT_APPROVAL_DIGEST_MISMATCH)
 
@@ -318,104 +374,135 @@ class _Machine:
         )
         try:
             approval = load_approval_document(
-                document_bytes, origin=origin,
+                self.document_bytes, origin=origin,
                 pinned_document_sha256=self.pinned_document_sha256,
             )
         except ApprovalDocumentError as exc:
             raise _Stop(PREFLIGHT_APPROVAL_SCHEMA_INVALID) from exc
 
-        obj = ref_payload.get("object") if isinstance(ref_payload, dict) else None
-        protected_head = obj.get("sha") if isinstance(obj, dict) else ""
-        if not isinstance(protected_head, str):
-            protected_head = ""
+        # 보호 ref 응답은 여기서 ★의미까지★ 확인하고 그 커밋을 얻는다
+        protected_head = self._check(
+            preflight_facts.verify_approval_ref,
+            self.facts["approval_ref"],
+            expected_ref=anchors.APPROVAL_PROTECTED_REF,
+        )
         _reject_placeholder(protected_head, approval.approver_login)
         if approval.candidate_head_sha != self.locked_candidate_head:
             raise _Stop(PREFLIGHT_APPROVER_MISMATCH)
+        if approval.candidate_head_tree != self.locked_candidate_tree:
+            raise _Stop(PREFLIGHT_CANDIDATE_TREE_MISMATCH)
 
+        # ★승인자는 문서에서만 온다. 뒤에 오는 user 응답을 이 값과 대조한다.
+        self.approver_login = approval.approver_login
+        self.approver_id = approval.approver_id
         self.state = State.APPROVAL_DOCUMENT_VERIFIED
-        return protected_head, approval.approver_login
+        return protected_head
 
     # ── S3 ────────────────────────────────────────────────────────────
-    def s3_candidate(self, pull_payload: dict) -> str:
-        head = pull_payload.get("head") if isinstance(pull_payload, dict) else None
-        sha = head.get("sha") if isinstance(head, dict) else None
-        if not isinstance(sha, str):
-            raise _Stop(PREFLIGHT_RESPONSE_SCHEMA_INVALID)
+    def s3_candidate(self) -> str:
+        sha = self._check(
+            preflight_facts.verify_candidate_pull,
+            self.facts["candidate_pull"],
+            expected_head=self.locked_candidate_head,
+        )
         _reject_placeholder(sha)
-        if sha != self.locked_candidate_head:
-            raise _Stop(PREFLIGHT_CANDIDATE_HEAD_MISMATCH)
         self.state = State.CANDIDATE_PR_VERIFIED
         return sha
 
     # ── S4 ────────────────────────────────────────────────────────────
     def s4_build(
-        self, *, protected_head: str, candidate_head: str, approver_login: str,
-        environment_payload: dict,
-    ) -> tuple[PlannedRequest, ...]:
+        self, *, protected_head: str, candidate_head: str,
+    ) -> tuple[tuple[str, PlannedRequest], ...]:
         if self.state is not State.CANDIDATE_PR_VERIFIED:
             raise _Stop(PREFLIGHT_DEPENDENCY_ORDER_VIOLATION)
-        _reject_placeholder(protected_head, candidate_head, approver_login)
+        # ★승인자는 검증된 문서에서만 온다(§6-1). CLI·환경에서 받지 않는다.
+        _reject_placeholder(protected_head, candidate_head, self.approver_login)
 
         endpoints = build_endpoints(
             pr_number=self.pr_number,
             candidate_head_sha=candidate_head,
-            approver_login=approver_login,
+            approver_login=self.approver_login,
         )
         planned = [
-            _plan(remote_facts.Route.APPROVAL, endpoints.approval_compare(protected_head),
-                  PREFLIGHT_APPROVAL_ANCESTRY_FAILED, "object"),
-            _plan(remote_facts.Route.APPROVAL,
-                  endpoints.approval_contents(anchors.APPROVAL_SIGNATURE_PATH),
-                  PREFLIGHT_APPROVAL_READ_FAILED, "object"),
-            _plan(remote_facts.Route.APPROVAL,
-                  endpoints.approval_contents(anchors.APPROVAL_ALLOWED_SIGNERS_PATH),
-                  PREFLIGHT_APPROVAL_READ_FAILED, "object"),
-            _plan(remote_facts.Route.APPROVAL, endpoints.approver(),
-                  PREFLIGHT_APPROVER_READ_FAILED, "object"),
-            _plan(remote_facts.Route.CANDIDATE, endpoints.candidate_commit(candidate_head),
-                  PREFLIGHT_CANDIDATE_COORD_READ_FAILED, "object"),
-            _plan(remote_facts.Route.CANDIDATE, endpoints.candidate_repo(),
-                  PREFLIGHT_CANDIDATE_COORD_READ_FAILED, "object"),
-            _plan(remote_facts.Route.CANDIDATE, endpoints.candidate_branch(APPROVED_BRANCH_NAME),
-                  PREFLIGHT_BRANCH_PROTECTION_READ_FAILED, "object"),
+            ("approval_compare",
+             _plan(remote_facts.Route.APPROVAL, endpoints.approval_compare(protected_head),
+                   PREFLIGHT_APPROVAL_ANCESTRY_FAILED, "object")),
+            ("approval_signature",
+             _plan(remote_facts.Route.APPROVAL,
+                   endpoints.approval_contents(anchors.APPROVAL_SIGNATURE_PATH),
+                   PREFLIGHT_APPROVAL_READ_FAILED, "object")),
+            ("approval_allowed_signers",
+             _plan(remote_facts.Route.APPROVAL,
+                   endpoints.approval_contents(anchors.APPROVAL_ALLOWED_SIGNERS_PATH),
+                   PREFLIGHT_APPROVAL_READ_FAILED, "object")),
+            ("approver",
+             _plan(remote_facts.Route.APPROVAL, endpoints.approver(),
+                   PREFLIGHT_APPROVER_READ_FAILED, "object")),
+            ("candidate_commit",
+             _plan(remote_facts.Route.CANDIDATE, endpoints.candidate_commit(candidate_head),
+                   PREFLIGHT_CANDIDATE_COORD_READ_FAILED, "object")),
+            ("candidate_repository",
+             _plan(remote_facts.Route.CANDIDATE, endpoints.candidate_repo(),
+                   PREFLIGHT_CANDIDATE_COORD_READ_FAILED, "object")),
+            ("candidate_branch",
+             _plan(remote_facts.Route.CANDIDATE,
+                   endpoints.candidate_branch(preflight_facts.APPROVED_BRANCH_NAME),
+                   PREFLIGHT_BRANCH_PROTECTION_READ_FAILED, "object")),
+            # environment 의 custom rule 여부는 S1 에서 이미 확인했다(§6-2 S4)
+            ("candidate_branch_policies",
+             _plan(remote_facts.Route.CANDIDATE, endpoints.candidate_environment_policies(),
+                   PREFLIGHT_BRANCH_POLICY_READ_FAILED, "object")),
         ]
-        # ★environment 응답에 custom rule 이 있을 때만 그 endpoint 를 만든다(§6-2 S4).
-        policy = (
-            environment_payload.get("deployment_branch_policy")
-            if isinstance(environment_payload, dict) else None
-        )
-        if not isinstance(policy, dict):
-            raise _Stop(PREFLIGHT_ENVIRONMENT_READ_FAILED)
-        if policy.get("custom_branch_policies") is not True:
-            raise _Stop(PREFLIGHT_BRANCH_POLICY_MODE_UNAPPROVED)
-        planned.append(
-            _plan(remote_facts.Route.CANDIDATE, endpoints.candidate_environment_policies(),
-                  PREFLIGHT_BRANCH_POLICY_READ_FAILED, "object")
-        )
         self.state = State.DEPENDENT_REQUESTS_BUILT
         return tuple(planned)
 
     # ── S5 · S6 ───────────────────────────────────────────────────────
-    def s5_fetch(self, planned: tuple[PlannedRequest, ...]) -> dict[str, object]:
-        payloads: dict[str, object] = {}
-        for request in planned:
-            payloads[request.path] = self._dependent(request).payload
+    def s5_fetch(self, planned: tuple[tuple[str, PlannedRequest], ...]) -> None:
+        for label, request in planned:
+            self.facts[label] = self._dependent(request).payload
         self.state = State.DEPENDENT_FACTS_FETCHED
-        return payloads
 
-    def s6_verdict(self, payloads: dict[str, object]) -> None:
-        policies = next(
-            (value for path, value in payloads.items()
-             if path.endswith("/deployment-branch-policies")),
-            None,
+    def s6_verdict(self) -> None:
+        """★읽은 사실을 하나도 남김없이 대조한다.
+
+        F-01 이전에는 여기서 branch policy 이름 하나만 봤다. 나머지 응답은 읽고
+        버렸고, 그래서 감사가 든 여섯 부정 사실이 전부 통과했다.
+        """
+        self._check(preflight_facts.verify_ancestry, self.facts["approval_compare"])
+        self._check(
+            preflight_facts.verify_contents_path, self.facts["approval_signature"],
+            expected_path=anchors.APPROVAL_SIGNATURE_PATH,
         )
-        branches = policies.get("branch_policies") if isinstance(policies, dict) else None
-        names = (
-            [entry.get("name") for entry in branches if isinstance(entry, dict)]
-            if isinstance(branches, list) else []
+        self._check(
+            preflight_facts.verify_contents_path, self.facts["approval_allowed_signers"],
+            expected_path=anchors.APPROVAL_ALLOWED_SIGNERS_PATH,
         )
-        if names != [APPROVED_BRANCH_NAME]:
-            raise _Stop(PREFLIGHT_BRANCH_POLICY_MODE_UNAPPROVED)
+        self._check(
+            preflight_facts.verify_approver, self.facts["approver"],
+            expected_login=self.approver_login, expected_id=self.approver_id,
+        )
+        self._check(
+            preflight_facts.verify_candidate_commit, self.facts["candidate_commit"],
+            expected_commit=self.locked_candidate_head,
+            expected_tree=self.locked_candidate_tree,
+        )
+        self._check(
+            preflight_facts.verify_candidate_repository, self.facts["candidate_repository"],
+            expected_repository=anchors.CANDIDATE_REPOSITORY,
+        )
+        self._check(
+            preflight_facts.verify_protected_branch, self.facts["candidate_branch"],
+            expected_head=self.run_head_sha,
+        )
+        self._check(
+            preflight_facts.verify_branch_policies, self.facts["candidate_branch_policies"],
+            expected_branch=preflight_facts.APPROVED_BRANCH_NAME,
+        )
+
+        # ★읽었는데 검사가 붙지 않은 사실이 하나라도 있으면 통과시키지 않는다.
+        missing = {rule.label for rule in preflight_facts.REQUIRED_FACT_RULES} - set(self.facts)
+        if missing:
+            raise _Stop(PREFLIGHT_FACT_NOT_VERIFIED)
         self.state = State.PREFLIGHT_VERDICT
 
 
@@ -464,17 +551,14 @@ def run_preflight(
 
     try:
         machine.s0_context()
-        ref, _commit, document_bytes, pull, environment = machine.s1_static()
-        protected_head, approver_login = machine.s2_document(
-            document_bytes=document_bytes, ref_payload=ref
-        )
-        candidate_head = machine.s3_candidate(pull)
+        machine.s1_static()
+        protected_head = machine.s2_document()
+        candidate_head = machine.s3_candidate()
         planned = machine.s4_build(
-            protected_head=protected_head, candidate_head=candidate_head,
-            approver_login=approver_login, environment_payload=environment,
+            protected_head=protected_head, candidate_head=candidate_head
         )
-        payloads = machine.s5_fetch(planned)
-        machine.s6_verdict(payloads)
+        machine.s5_fetch(planned)
+        machine.s6_verdict()
     except _Stop as stop:
         return _result(False, stop.code)
     except ValueError:

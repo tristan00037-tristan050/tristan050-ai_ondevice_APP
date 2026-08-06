@@ -324,9 +324,12 @@ def test_enumeration_is_by_lineage_not_by_name():
     # /proc 접근은 stat 과 디렉터리 열거뿐이다
     # f-string 조각까지 포함해 /proc 경로 문자열은 이 둘뿐이다(디렉터리 열거와 stat)
     proc_literals = sorted({text for text in code_literals if text.startswith("/proc")})
-    assert proc_literals == ["/proc", "/proc/"], proc_literals
+    # /proc/self/stat 은 F-02 가 요구한 ★관측 가능성 확인★ 이다. 자기 자신을 stat
+    # 하는 것이므로 이름 기반 탐색이 아니고 다른 계보를 보지도 않는다.
+    assert proc_literals == ["/proc", "/proc/", "/proc/self/stat"], proc_literals
     assert 'Path(f"/proc/{pid}/stat")' in source
     assert 'os.listdir("/proc")' in source
+    assert source.count('"/proc/self/stat"') == 1, "관측 확인은 한 자리에서만 한다"
     assert "stat.ppid == parent_pid" in source
     assert "stat.pgrp == pgid" in source
 

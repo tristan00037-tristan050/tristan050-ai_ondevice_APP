@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import os
 import base64
 import hashlib
 from pathlib import Path
@@ -408,12 +409,35 @@ def test_unknown_endpoint_is_a_route_violation():
         )
 
 
-def test_secret_is_never_placed_in_argv():
-    """token 은 자식 env 로만 간다. argv 에 넣지 않는다(C5)."""
-    import inspect
+def test_secret_is_never_placed_in_argv(monkeypatch, tmp_path):
+    """token 은 자식 env 로만 간다. argv 에 넣지 않는다(C5).
 
-    source = inspect.getsource(rf.gh_transport_for)
-    assert 'env["GH_TOKEN"]' in source
-    assert '"gh", "api", "-i", path' not in source or "token" not in source.lower().split("argv")[0][:0]
-    call = inspect.getsource(rf._gh_call)
-    assert '["gh", "api", "-i", path]' in call
+    ★F-03 이후 argv 조립과 env 구성은 gh_transport_policy 가 한다. 그래서 문자열
+      검색 대신 ★실제로 한 번 보내고★ argv·env 를 본다 — 계약을 직접 확인한다.
+    """
+    from ac25 import gh_transport_policy as gp
+    from ac25 import output_containment
+
+    secret = "ghp_" + "S" * 36
+    monkeypatch.setattr(
+        os, "environ", {"PATH": "/usr/bin", "AC25_APPROVAL_TOKEN": secret}
+    )
+    monkeypatch.setattr(output_containment, "default_runner_temp", lambda: tmp_path)
+
+    seen: dict = {}
+
+    def capture(argv, *, cwd, env, **kwargs):
+        seen["argv"] = list(argv)
+        seen["env"] = dict(env)
+        return 0, b'HTTP/2 200\r\n\r\n{"ok": true}', b""
+
+    monkeypatch.setattr(output_containment, "run_and_read", capture)
+    result = rf.gh_transport_for("AC25_APPROVAL_TOKEN")("repos/o/r")
+
+    assert result.status == 200
+    # ★argv 어디에도 token 이 없다
+    assert not any(secret in part for part in seen["argv"]), seen["argv"]
+    # ★env 로만 간다
+    assert seen["env"]["GH_TOKEN"] == secret
+    # ★host 는 argv 로 고정된다(F-03)
+    gp.require_hostname_pinned(seen["argv"])
