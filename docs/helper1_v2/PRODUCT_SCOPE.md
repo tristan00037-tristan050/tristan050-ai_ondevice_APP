@@ -34,3 +34,11 @@ Therefore `CODE_PASS`, product release, runtime activation, production claims,
 and external handoff all remain denied. These values may change only through
 the protected verifier after every required evidence class is independently
 validated.
+
+## Status (2026-08-06)
+
+The protected-evidence bootstrap cycle (FSQ61-NEXT-P0-01) is closed on this
+branch: the PR producer uploads untrusted raw materials, and the six evidence
+lanes report PASSED except the native macOS lane, which stays BLOCKED with
+`MACOS_NATIVE_LANE_NOT_CONFIGURED` (self-hosted runner infrastructure, tracked
+separately). The trust policy remains `enabled: false`.
