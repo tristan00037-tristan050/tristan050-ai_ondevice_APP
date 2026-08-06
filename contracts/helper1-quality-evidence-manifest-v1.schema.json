@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1-quality-evidence-manifest-v1.schema.json",
+  "title": "Helper1 immutable SearchQuality evidence manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_commit", "source_tree", "evaluation_run_id", "evaluation_run_attempt", "producer_run_id", "producer_run_attempt", "workflow_id", "workflow_ref", "workflow_sha256", "files"],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.quality-evidence-manifest.v1"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "evaluation_run_id": {"type": "string", "pattern": "^[1-9][0-9]*:[1-9][0-9]*$"},
+    "evaluation_run_attempt": {"type": "integer", "minimum": 1},
+    "producer_run_id": {"type": "string", "pattern": "^[1-9][0-9]*:[1-9][0-9]*$"},
+    "producer_run_attempt": {"type": "integer", "minimum": 1},
+    "workflow_id": {"type": "integer", "minimum": 1},
+    "workflow_ref": {"type": "string", "minLength": 45, "maxLength": 512},
+    "workflow_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "files": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bytes", "sha256"],
+        "properties": {
+          "bytes": {"type": "integer", "minimum": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1-retrieval-quality-report-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "split", "corpus_manifest_sha256", "evaluation_run_subject_sha256", "threshold_approval_receipt_sha256", "threshold_policy_sha256", "threshold_state", "sample_count", "answerable_count", "confusion_matrix", "metrics", "canary_leakage_count", "wrong_workspace_hit_count", "stale_generation_hit_count", "strata_sample_counts", "report_sha256"],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.retrieval-quality-report.v2"}, "split": {"enum": ["calibration", "sealed_test"]},
+    "corpus_manifest_sha256": {"$ref": "#/$defs/digest"}, "evaluation_run_subject_sha256": {"$ref": "#/$defs/digest"}, "threshold_approval_receipt_sha256": {"$ref": "#/$defs/digest"}, "threshold_policy_sha256": {"$ref": "#/$defs/digest"}, "threshold_state": {"const": "APPROVED"},
+    "sample_count": {"type": "integer", "minimum": 1}, "answerable_count": {"type": "integer", "minimum": 1}, "confusion_matrix": {"type": "object"}, "metrics": {"type": "object"}, "canary_leakage_count": {"type": "integer", "minimum": 0}, "wrong_workspace_hit_count": {"const": 0}, "stale_generation_hit_count": {"const": 0}, "strata_sample_counts": {"type": "object"}, "report_sha256": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

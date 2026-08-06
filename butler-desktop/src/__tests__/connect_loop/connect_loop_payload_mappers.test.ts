@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { buildTargetBoxPayload } from '../../lib/connect_loop/client';
 import { resolveCallableEndpoint, type RouterDecisionV1 } from '../../lib/connect_loop/contracts';
 
-// maindev v1.2 이식 — 코덱스 구현 기준 조정:
-//  buildBoxCallPlan({kind,payload}) → buildTargetBoxPayload(payload | null) (null = fallback).
-//  정책 게이트는 매퍼가 아니라 resolveCallableEndpoint 책임(코덱스 분리) → non-allow 는 거기서 검증.
+const REQUEST_ID = '9699ce0c-2597-42ea-a6fa-29cfcb2bb75e';
+const WORKSPACE_ID = '90321a6a-f937-4d93-b018-d09e8cab4e72';
+
 function decision(overrides: Partial<RouterDecisionV1> = {}): RouterDecisionV1 {
   return {
-    request_id: 'req-1',
+    request_id: REQUEST_ID,
     intent_label: 'memory_search',
     target_box_id: 'helper1',
     target_endpoint: 'POST /v1/helpers/1/search',
@@ -21,9 +21,25 @@ function decision(overrides: Partial<RouterDecisionV1> = {}): RouterDecisionV1 {
 }
 
 describe('sidecar payload mapper (codex buildTargetBoxPayload)', () => {
-  it('maps helper1 memory_search to measured Helper1Query schema', () => {
-    const payload = buildTargetBoxPayload(decision(), '자료 찾아줘', { topK: 7 });
-    expect(payload).toEqual({ query: '자료 찾아줘', top_k: 7 });
+  it('maps helper1 memory_search to the strict Helper1 v2 envelope', () => {
+    const payload = buildTargetBoxPayload(
+      decision(),
+      '자료 찾아줘',
+      { topK: 7, helper1WorkspaceId: WORKSPACE_ID },
+    );
+    expect(payload).toEqual({
+      schema_version: 'butler.helper1.ask-request.v2',
+      request_id: REQUEST_ID,
+      workspace_id: WORKSPACE_ID,
+      query: '자료 찾아줘',
+      top_k: 7,
+      requested_generation_id: null,
+      effect_intent: 'display_only',
+    });
+  });
+
+  it('fails closed when memory_search has no approved workspace', () => {
+    expect(buildTargetBoxPayload(decision(), '자료 찾아줘')).toBeNull();
   });
 
   it('returns null (fallback) for box2 when our format is missing', () => {
@@ -43,12 +59,19 @@ describe('sidecar payload mapper (codex buildTargetBoxPayload)', () => {
     expect(payload).toEqual({ input_text: '새 초안을 작성해줘', prompt_template: '안전 지침', max_new_tokens: 256 });
   });
 
-  it('blocks memory_search query exceeding helper1 4000 cap (bridge pre-block)', () => {
+  it('blocks memory_search query exceeding helper1 4000 cap', () => {
     const over = 'ㄱ'.repeat(4001);
-    expect(buildTargetBoxPayload(decision(), over)).toBeNull();
-    // 4000 이하는 통과
+    expect(buildTargetBoxPayload(
+      decision(),
+      over,
+      { helper1WorkspaceId: WORKSPACE_ID },
+    )).toBeNull();
     const ok = 'ㄱ'.repeat(4000);
-    expect(buildTargetBoxPayload(decision(), ok)).toEqual({ query: ok, top_k: 5 });
+    expect(buildTargetBoxPayload(
+      decision(),
+      ok,
+      { helper1WorkspaceId: WORKSPACE_ID },
+    )).toMatchObject({ query: ok, top_k: 5 });
   });
 
   it('does not resolve a callable endpoint for non-allow decisions', () => {

@@ -12,6 +12,8 @@ export function jcsCanonicalize(value: unknown): string {
   return JSON.stringify(norm);
 }
 
+export default jcsCanonicalize;
+
 function normalize(v: unknown): any {
   if (v === null) return null;
   const t = typeof v;

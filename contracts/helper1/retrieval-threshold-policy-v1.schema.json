@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1/retrieval-threshold-policy-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "policy_epoch", "evaluator_source_sha256", "encoder_provider",
+    "encoder_model", "encoder_revision", "encoder_artifact_sha256", "corpus_manifest_sha256",
+    "index_manifest_policy_sha256", "grounding_threshold_ppm", "abstention_threshold_ppm",
+    "required_strata", "minimum_sample_count", "minimum_per_stratum_count",
+    "minimum_metrics_ppm", "maximum_metrics_ppm", "issued_at_epoch_s", "expires_at_epoch_s"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.retrieval-threshold-policy.v1"},
+    "policy_epoch": {"type": "integer", "minimum": 1},
+    "evaluator_source_sha256": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/digest"},
+    "encoder_provider": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/id"},
+    "encoder_model": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/id"},
+    "encoder_revision": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/id"},
+    "encoder_artifact_sha256": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/digest"},
+    "corpus_manifest_sha256": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/digest"},
+    "index_manifest_policy_sha256": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/digest"},
+    "grounding_threshold_ppm": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/ppm"},
+    "abstention_threshold_ppm": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/ppm"},
+    "required_strata": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/id"}},
+    "minimum_sample_count": {"type": "integer", "minimum": 1},
+    "minimum_per_stratum_count": {"type": "integer", "minimum": 1},
+    "minimum_metrics_ppm": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/ppmMap"},
+    "maximum_metrics_ppm": {"$ref": "retrieval-calibration-receipt-v1.schema.json#/$defs/ppmMap"},
+    "issued_at_epoch_s": {"type": "integer", "minimum": 1},
+    "expires_at_epoch_s": {"type": "integer", "minimum": 1}
+  }
+}

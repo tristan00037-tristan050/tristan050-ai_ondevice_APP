@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-get-helper1-execution-trust-anchor"
+description = "Allows the main window to read the release-bound Helper1 verification anchor."
+commands.allow = ["get_helper1_execution_trust_anchor"]
+
+[[permission]]
+identifier = "deny-get-helper1-execution-trust-anchor"
+description = "Explicitly denies the Helper1 verification anchor command."
+commands.deny = ["get_helper1_execution_trust_anchor"]

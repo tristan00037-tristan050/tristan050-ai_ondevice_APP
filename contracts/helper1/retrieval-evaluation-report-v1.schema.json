@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1/retrieval-evaluation-report-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "corpus_sha256", "policy_sha256", "evaluator_sha256",
+    "split", "sample_count", "k", "metrics", "strata_sample_counts",
+    "approved_threshold_policy_sha256", "approved_calibration_receipt_sha256",
+    "gate"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.retrieval-evaluation-report.v1"},
+    "corpus_sha256": {"$ref": "#/$defs/digest"},
+    "policy_sha256": {"$ref": "#/$defs/digest"},
+    "evaluator_sha256": {"$ref": "#/$defs/digest"},
+    "split": {"enum": ["calibration", "sealed_test"]},
+    "sample_count": {"type": "integer", "minimum": 1},
+    "k": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recall_at_k", "mrr_at_k", "ndcg_at_k", "precision_at_k",
+        "abstention_precision", "abstention_recall", "wrong_workspace_leakage",
+        "stale_generation_rate", "evidence_span_validity"
+      ],
+      "properties": {
+        "recall_at_k": {"$ref": "#/$defs/ratio"},
+        "mrr_at_k": {"$ref": "#/$defs/ratio"},
+        "ndcg_at_k": {"$ref": "#/$defs/ratio"},
+        "precision_at_k": {"$ref": "#/$defs/ratio"},
+        "abstention_precision": {"$ref": "#/$defs/ratio"},
+        "abstention_recall": {"$ref": "#/$defs/ratio"},
+        "wrong_workspace_leakage": {"$ref": "#/$defs/ratio"},
+        "stale_generation_rate": {"$ref": "#/$defs/ratio"},
+        "evidence_span_validity": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "strata_sample_counts": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "integer", "minimum": 1}
+    },
+    "approved_threshold_policy_sha256": {
+      "oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]
+    },
+    "approved_calibration_receipt_sha256": {
+      "oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]
+    },
+    "gate": {
+      "enum": [
+        "BLOCK_RETRIEVAL_POLICY_UNCALIBRATED",
+        "READY_FOR_PROTECTED_THRESHOLD_CHECK"
+      ]
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ratio": {"type": "number", "minimum": 0, "maximum": 1}
+  }
+}
