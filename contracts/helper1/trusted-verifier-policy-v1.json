@@ -34,7 +34,7 @@
   "protected_verifier_sha256": "sha256:9158a5a1205c6589b195786613d99743df881b03040348ff96e89c8474b6e836",
   "protected_components_sha256": {
     ".github/workflows/helper1-v2-approval-evidence.yml": "sha256:51e951131bf4e0881d1abfc660fc6d9c1f9137899e06a46bf7e7b6045164cd77",
-    ".github/workflows/helper1-v2-evidence.yml": "sha256:fb5ced7f75a188f21989bc3907d419e7a381fe4f9adee6717c79a72d60e976d9",
+    ".github/workflows/helper1-v2-evidence.yml": "sha256:7c4b21d5a94d87fe6c09269042e0b421d1eab6db9758ad85680d12014d8155de",
     ".github/workflows/helper1-v2-trusted-verifier.yml": "sha256:8cc6dd0d7070a9b0033c1b34e2ae99878c0bfd48f98e0b15454ab1c3eede248a",
     "butler_pc_core/connect_loop/dlp_guard.py": "sha256:c77ad109e59f9786ae5b1ecad00c8e98e51d2f1d38a0955e8c4375a1f5ef3b03",
     "butler_pc_core/connect_loop/persisted_safety.py": "sha256:76a93c090d7c0ff995f3c65f583c89e2d8656a2132e50507d2bb102d9c228419",
@@ -111,7 +111,7 @@
   "quality_evidence_required": true,
   "quality_producer_workflow_id": 0,
   "quality_producer_workflow_path": ".github/workflows/helper1-v2-evidence.yml",
-  "quality_producer_workflow_sha256": "sha256:fb5ced7f75a188f21989bc3907d419e7a381fe4f9adee6717c79a72d60e976d9",
+  "quality_producer_workflow_sha256": "sha256:7c4b21d5a94d87fe6c09269042e0b421d1eab6db9758ad85680d12014d8155de",
   "device_trust_policy_sha256": "sha256:fd14d1d6b7dee134f9021df801a2f65a9bfe9d700d594e9163207243e0d56aba",
   "required_evidence_files": [
     "APPROVED_ASSET_CLOSURE.json",
