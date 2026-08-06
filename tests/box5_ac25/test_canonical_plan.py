@@ -242,7 +242,7 @@ def test_preparation_env_is_actually_passed_to_the_command(repo, monkeypatch, tm
     monkeypatch.setattr(rcr.output_containment, "run_and_read", capture)
     monkeypatch.setattr(
         rcr.output_containment, "run_and_capture",
-        lambda *a, **k: (contract(*a, **k), b"A_OK=1\n"),
+        lambda *a, **k: (contract(*a, **k), b"A_STATUS=green\n"),
     )
     receipt = rcr.run_exact_head_contracts(
         root=repo, expected_head="a" * 40, runner_temp=tmp_path, env={"PATH": "/usr/bin"},

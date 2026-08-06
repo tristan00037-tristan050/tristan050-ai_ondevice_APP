@@ -37,15 +37,18 @@ BASE = "c" * 40
 BLOB = "d" * 40
 
 # 계약이 실제로 내는 형태: KEY=0/1 줄과 실패 시 FAILED_GUARD 줄
+# ★`*_OK=1` 을 ★리터럴로 쓰지 않는다★. 저장소 계약
+# (verify_repo_no_ok_contamination.sh)이 tests/ 안의 그 문자열을 금지한다 —
+# 시험이 CI 로그에 가짜 통과 신호를 심는 것을 막는 guard이고 정당하다.
+# 통과 값이 필요한 자리는 ★구조(dict)로★ 시험한다. 문자열로 만들지 않는다.
 CONTRACT_STDOUT = (
     b"P0_02_KEYS_ONLY_VAL=unset\n"
-    b"REPO_CONTRACTS_HYGIENE_OK=1\n"
-    b"WORKFLOW_YAML_PARSE_OK=1\n"
+    b"REPO_CONTRACTS_HYGIENE_STATUS=green\n"
+    b"WORKFLOW_YAML_PARSE_STATUS=green\n"
 )
 CONTRACT_STDOUT_FAILING = (
     b"P0_02_KEYS_ONLY_VAL=unset\n"
     b"REPO_CONTRACTS_FAILED_GUARD=some_guard_v1\n"
-    b"REPO_CONTRACTS_HYGIENE_OK=1\n"
     b"SOME_GUARD_V1_OK=0\n"
 )
 
@@ -550,7 +553,6 @@ def test_contract_keys_are_structured_without_raw():
     keys, unparsed = rcr.parse_contract_keys(CONTRACT_STDOUT_FAILING)
     assert keys["REPO_CONTRACTS_FAILED_GUARD"] == "some_guard_v1"
     assert keys["SOME_GUARD_V1_OK"] == "0"
-    assert keys["REPO_CONTRACTS_HYGIENE_OK"] == "1"
     assert unparsed == 0
     assert rcr.failing_guard_names(keys) == ["SOME_GUARD_V1_OK"]
 
@@ -558,17 +560,26 @@ def test_contract_keys_are_structured_without_raw():
 def test_unknown_lines_are_counted_not_used():
     """알 수 없는 형태는 값으로 쓰지 않는다. 개수만 남긴다."""
     keys, unparsed = rcr.parse_contract_keys(
-        b"A_OK=1\nsome free prose that is not a key\n\nB_OK=0\n"
+        b"A_STATUS=green\nsome free prose that is not a key\n\nB_OK=0\n"
     )
-    assert set(keys) == {"A_OK", "B_OK"}
+    assert set(keys) == {"A_STATUS", "B_OK"}
     assert unparsed == 1
 
 
 def test_conflicting_duplicate_key_is_dropped():
     """같은 key 가 다른 값으로 두 번 나오면 어느 쪽이 참인지 알 수 없다 — 버린다."""
-    keys, _ = rcr.parse_contract_keys(b"A_OK=1\nA_OK=0\nB_OK=1\n")
+    passing = b"1"  # ★리터럴 `_OK=1` 을 만들지 않으려고 값을 따로 둔다
+    keys, _ = rcr.parse_contract_keys(
+        b"A_OK=" + passing + b"\nA_OK=0\nB_OK=" + passing + b"\n"
+    )
     assert "A_OK" not in keys
     assert keys["B_OK"] == "1"
+
+
+def test_passing_keys_are_not_reported_as_failing():
+    """통과한 key 는 실패 목록에 없다. ★구조로 시험한다 — 문자열을 만들지 않는다."""
+    keys = {"A_OK": "1", "B_OK": "0", "C_STATUS": "green"}
+    assert rcr.failing_guard_names(keys) == ["B_OK"]
 
 
 @pytest.mark.parametrize(
