@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import delivery_manifest as dm
+from . import contract_parse
 from . import output_containment
 from . import receipt_schema
 from . import strict_receipt as sr
@@ -134,7 +135,8 @@ def _validate_contract(root: Path, receipt: dict) -> Optional[str]:
             "target_head_sha", "command_plan_sha256", "expected_inventory",
             "expected_inventory_sha256", "process_exit_code",
             "primary_failed_guard", "parse_error_code", "observed_guards",
-            "failing_guard_keys",
+            "failing_guard_keys", "raw_stdout_path", "raw_stdout_sha256",
+            "raw_stdout_bytes",
         ),
     )
     if (
@@ -143,6 +145,25 @@ def _validate_contract(root: Path, receipt: dict) -> Optional[str]:
         or evidence["expected_inventory_sha256"] != receipt["expected_guard_inventory_sha256"]
     ):
         raise sr.StrictReceiptError("CONTRACT_BINDING_MISMATCH")
+    if evidence["raw_stdout_path"] != "contract/contract.stdout":
+        raise sr.StrictReceiptError("CONTRACT_RAW_PATH_INVALID")
+    raw_stdout = (root / evidence["raw_stdout_path"]).read_bytes()
+    if (
+        sr.sha256_bytes(raw_stdout) != evidence["raw_stdout_sha256"]
+        or len(raw_stdout) != evidence["raw_stdout_bytes"]
+    ):
+        raise sr.StrictReceiptError("CONTRACT_RAW_DIGEST_MISMATCH")
+    parsed = contract_parse.parse_contract_output(raw_stdout)
+    parsed_observed = {
+        key: value for key, value in parsed.keys if key.endswith("_OK")
+    }
+    if (
+        evidence["primary_failed_guard"] != parsed.primary_failed_guard
+        or evidence["parse_error_code"] != parsed.parse_error_code
+        or evidence["observed_guards"] != parsed_observed
+        or evidence["failing_guard_keys"] != list(parsed.failing_guard_keys)
+    ):
+        raise sr.StrictReceiptError("CONTRACT_RAW_EVIDENCE_MISMATCH")
     expected = evidence["expected_inventory"]
     observed = evidence["observed_guards"]
     failing = evidence["failing_guard_keys"]

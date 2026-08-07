@@ -99,6 +99,9 @@ def make_delivery(tmp_path: Path):
 
     expected = ["A_OK", "B_OK"]
     inventory_raw = sr.canonical_json_bytes({"guards": expected, "target_head_sha": target})
+    contract_stdout = b"A_OK=1\nB_OK=1\nREPO_CONTRACTS_FAILED_GUARD=NONE\n"
+    (root / "contract").mkdir()
+    (root / "contract/contract.stdout").write_bytes(contract_stdout)
     contract = {
         "command_plan_sha256": "1" * 64,
         "expected_inventory": expected,
@@ -107,6 +110,9 @@ def make_delivery(tmp_path: Path):
         "observed_guards": {"A_OK": "1", "B_OK": "1"},
         "parse_error_code": "NONE", "primary_failed_guard": "NONE",
         "process_exit_code": 0, "target_head_sha": target,
+        "raw_stdout_bytes": len(contract_stdout),
+        "raw_stdout_path": "contract/contract.stdout",
+        "raw_stdout_sha256": sr.sha256_bytes(contract_stdout),
     }
     contract_raw = put(root / "contract_evidence.json", contract)
     clean_raw_file = b""
@@ -216,6 +222,26 @@ def mutate_json(delivery: Path, receipt: dict, filename: str, digest_key: str, d
     refresh(delivery, receipt)
 
 
+def mutate_contract_raw(delivery: Path, receipt: dict, contract: dict, raw: bytes) -> None:
+    root = delivery / validator.RECEIPT_DIRNAME
+    (root / "contract/contract.stdout").write_bytes(raw)
+    parsed = validator.contract_parse.parse_contract_output(raw)
+    contract.update({
+        "failing_guard_keys": list(parsed.failing_guard_keys),
+        "observed_guards": {
+            key: value for key, value in parsed.keys if key.endswith("_OK")
+        },
+        "parse_error_code": parsed.parse_error_code,
+        "primary_failed_guard": parsed.primary_failed_guard,
+        "raw_stdout_bytes": len(raw),
+        "raw_stdout_sha256": sr.sha256_bytes(raw),
+    })
+    mutate_json(
+        delivery, receipt, "contract_evidence.json", "contract_evidence_sha256",
+        contract,
+    )
+
+
 def fake_remote(receipt, *, run_conclusion="success", job_conclusion="success", check_conclusion="success"):
     def fetch(url: str):
         if "/pulls/" in url:
@@ -277,10 +303,12 @@ def test_t01_35_failed_guards_never_pass(tmp_path):
     contract.update({
         "expected_inventory": keys,
         "expected_inventory_sha256": sr.sha256_bytes(sr.canonical_json_bytes({"guards": keys, "target_head_sha": receipt["target_head_sha"]})),
-        "observed_guards": {key: "0" for key in keys}, "failing_guard_keys": keys,
     })
     receipt["expected_guard_inventory_sha256"] = contract["expected_inventory_sha256"]
-    mutate_json(delivery, receipt, "contract_evidence.json", "contract_evidence_sha256", contract)
+    mutate_contract_raw(
+        delivery, receipt, contract,
+        ("".join(f"{key}=0\n" for key in keys) + "REPO_CONTRACTS_FAILED_GUARD=NONE\n").encode(),
+    )
     assert_blocked(validator.validate_delivery(delivery, repo), "CONTRACT_GUARDS_FAILED")
 
 
@@ -289,10 +317,11 @@ def test_t02_empty_contract_inventory_never_passes(tmp_path):
     contract.update({
         "expected_inventory": [],
         "expected_inventory_sha256": sr.sha256_bytes(sr.canonical_json_bytes({"guards": [], "target_head_sha": receipt["target_head_sha"]})),
-        "observed_guards": {}, "failing_guard_keys": [],
     })
     receipt["expected_guard_inventory_sha256"] = contract["expected_inventory_sha256"]
-    mutate_json(delivery, receipt, "contract_evidence.json", "contract_evidence_sha256", contract)
+    mutate_contract_raw(
+        delivery, receipt, contract, b"REPO_CONTRACTS_FAILED_GUARD=NONE\n",
+    )
     assert_blocked(validator.validate_delivery(delivery, repo), "CONTRACT_INVENTORY_EMPTY")
 
 

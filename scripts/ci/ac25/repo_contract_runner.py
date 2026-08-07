@@ -55,6 +55,11 @@ CLEAN_PATH_INVALID = "CLEAN_PATH_INVALID"
 # §5 출력 모순
 REPO_CONTRACTS_OUTPUT_CONTRADICTORY = "REPO_CONTRACTS_OUTPUT_CONTRADICTORY"
 REPO_CONTRACTS_OUTPUT_INVALID = "REPO_CONTRACTS_OUTPUT_INVALID"
+OUTPUT_ROOT_POLICY_VIOLATION = "OUTPUT_ROOT_POLICY_VIOLATION"
+ERRATUM_2_DIGEST_MISMATCH = "ERRATUM_2_DIGEST_MISMATCH"
+
+ERRATUM_2_PATH = "docs/box5/ac25/ac25-r6-erratum-2.json"
+ERRATUM_2_SHA256 = "2ed584f139227a454c821729c44586fd628d8f0239b61700fae62cc7d7c185db"
 
 _OID_RE = re.compile(r"\A[0-9a-f]{40}\Z")
 _STATUS_RE = re.compile(r"\A[ MADRCUT?!]{2}\Z")
@@ -196,8 +201,42 @@ class ContractReceipt:
     contract_parse_error_code: str = "NOT_RUN"
     contract_state_outcome: str = "NOT_RUN"
     contract_state_error_code: str = "NOT_RUN"
+    raw_clean_status_exit_code: int = -1
+    raw_clean_status_sha256: str = ""
+    raw_clean_status_bytes: int = 0
     error_code: str = "NONE"
     verdict: int = 0
+
+
+def _evidence_root(root: Path, environment: dict[str, str]) -> Path | None:
+    configured = environment.get("AC25_CONTRACT_EVIDENCE_ROOT", "")
+    if not configured:
+        return None
+    candidate = Path(configured).resolve()
+    repository = root.resolve()
+    try:
+        candidate.relative_to(repository)
+    except ValueError:
+        pass
+    else:
+        raise RepoContractError(OUTPUT_ROOT_POLICY_VIOLATION)
+    candidate.mkdir(parents=True, exist_ok=True, mode=0o700)
+    return candidate
+
+
+def _write_private(path: Path, raw: bytes) -> None:
+    path.write_bytes(raw)
+    path.chmod(0o600)
+
+
+def _bind_erratum_2(root: Path, receipt: ContractReceipt) -> None:
+    try:
+        raw = (root / ERRATUM_2_PATH).read_bytes()
+    except OSError as exc:
+        raise RepoContractError(ERRATUM_2_DIGEST_MISMATCH) from exc
+    if hashlib.sha256(raw).hexdigest() != ERRATUM_2_SHA256:
+        raise RepoContractError(ERRATUM_2_DIGEST_MISMATCH)
+    receipt.declared_canonical_output_policy = "OUTSIDE_REPOSITORY_ONLY"
 
 
 def command_plan_sha256(root: Path | None = None, *, runner_temp: str = "/tmp") -> str:
@@ -461,9 +500,11 @@ def run_exact_head_contracts(
     temp = runner_temp or output_containment.default_runner_temp()
     receipt = ContractReceipt()
     head_confirmed = False
+    evidence_root: Path | None = None
 
     try:
         try:
+            evidence_root = _evidence_root(root, environment)
             # ── §3-4 — 동등성 게이트. 다섯 축 전부 0 이 아니면 실행하지 않는다.
             expected = canonical_plan.extract_canonical_plan(root, runner_temp=str(temp))
             execution = build_execution_plan(root, runner_temp=str(temp))
@@ -482,6 +523,8 @@ def run_exact_head_contracts(
             gate = _diff_error_code(diff)
             if gate is not None:
                 raise RepoContractError(gate)
+
+            _bind_erratum_2(root, receipt)
 
             receipt.exact_head, receipt.exact_tree = assert_exact_head(
                 root=root, expected_head=expected_head, runner_temp=temp, env=environment
@@ -558,6 +601,8 @@ def run_exact_head_contracts(
             receipt.stdout_bytes = result.stdout_bytes
             receipt.stderr_bytes = result.stderr_bytes
             receipt.descendants_observed = result.descendants_observed
+            if evidence_root is not None:
+                _write_private(evidence_root / "contract.stdout", contract_stdout)
 
             # §5 — 손실 없는 구조화. raw 는 여기서 끝난다.
             parsed = contract_parse.parse_contract_output(contract_stdout)
@@ -604,6 +649,23 @@ def run_exact_head_contracts(
                     receipt.dirty_path_manifest_sha256 = dirty_manifest_sha256(dirty)
                     if receipt.first_dirty_phase == "NOT_EVALUATED":
                         receipt.first_dirty_phase = "NONE"
+                    if evidence_root is not None:
+                        clean_code, clean_raw, _clean_err = _run(
+                            (
+                                "git", "status", "--porcelain=v2", "-z",
+                                "--untracked-files=all",
+                            ),
+                            root=root,
+                            cwd=".",
+                            runner_temp=temp,
+                            env=environment,
+                        )
+                        receipt.raw_clean_status_exit_code = clean_code
+                        receipt.raw_clean_status_sha256 = hashlib.sha256(clean_raw).hexdigest()
+                        receipt.raw_clean_status_bytes = len(clean_raw)
+                        _write_private(evidence_root / "clean-status.porcelain-v2.z", clean_raw)
+                        if clean_code != 0:
+                            raise RepoContractError(CLEAN_CHECK_COMMAND_FAILED)
                 except RepoContractError as clean_exc:
                     receipt.clean_check_error_code = clean_exc.code
                     receipt.final_worktree_clean = "NOT_EVALUATED"
@@ -696,6 +758,9 @@ def emit_lines(receipt: ContractReceipt) -> list[str]:
         f"CONTRACT_STATE_OUTCOME={receipt.contract_state_outcome}",
         f"CONTRACT_STATE_ERROR_CODE={receipt.contract_state_error_code}",
         f"CONTRACT_BLOCK_LINE_COUNT={len(receipt.contract_block_lines)}",
+        f"RAW_CLEAN_STATUS_EXIT_CODE={receipt.raw_clean_status_exit_code}",
+        f"RAW_CLEAN_STATUS_SHA256={receipt.raw_clean_status_sha256 or 'NONE'}",
+        f"RAW_CLEAN_STATUS_BYTES={receipt.raw_clean_status_bytes}",
     ]
     # 계약 자신의 BLOCK 진단 — canonical 공개 로그와 같은 수준의 문구다.
     for ordinal, line in enumerate(receipt.contract_block_lines):
@@ -749,6 +814,29 @@ def _main(argv: list[str]) -> int:
         expected_head=os.environ.get("AC25_EVENT_HEAD_SHA", ""),
         base_ref=os.environ.get("AC25_BASE_REF", ""),
     )
+    configured = os.environ.get("AC25_CONTRACT_EVIDENCE_ROOT", "")
+    if configured and receipt.error_code != OUTPUT_ROOT_POLICY_VIOLATION:
+        evidence_root = Path(configured).resolve()
+        summary = {
+            "clean_status_bytes": receipt.raw_clean_status_bytes,
+            "clean_status_exit_code": receipt.raw_clean_status_exit_code,
+            "clean_status_path": "clean-status.porcelain-v2.z",
+            "clean_status_sha256": receipt.raw_clean_status_sha256,
+            "command_plan_sha256": receipt.command_plan_sha256,
+            "contract_exit_code": receipt.contract_exit_code,
+            "contract_stdout_bytes": receipt.stdout_bytes,
+            "contract_stdout_path": "contract.stdout",
+            "contract_stdout_sha256": receipt.stdout_sha256,
+            "guard_manifest_sha256": receipt.guard_manifest_sha256,
+            "post_run_cleanup_used": False,
+            "schema_version": "butler.ac25.contract-raw-evidence.v1",
+            "target_head_sha": receipt.exact_head,
+            "target_head_tree": receipt.exact_tree,
+        }
+        _write_private(
+            evidence_root / "contract-run.json",
+            (json.dumps(summary, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"),
+        )
     for line in emit_lines(receipt):
         print(line)
     return 0 if receipt.verdict == 1 else 1

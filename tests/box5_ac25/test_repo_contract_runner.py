@@ -40,6 +40,9 @@ def repo(tmp_path) -> Path:
         REPO_ROOT / ".github" / "actions" / "preflight_v1",
         root / ".github" / "actions" / "preflight_v1",
     )
+    erratum = root / rcr.ERRATUM_2_PATH
+    erratum.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(REPO_ROOT / rcr.ERRATUM_2_PATH, erratum)
     return root
 
 
@@ -616,8 +619,38 @@ def test_clean_command_failure_is_not_evaluated(repo, world, tmp_path):
     test_clean_command_failure_is_not_evaluated_with_stable_code(repo, world, tmp_path)
 
 
-def test_erratum_policy_cannot_pass_without_approved_digest(repo, world, tmp_path):
+def test_erratum_policy_is_bound_to_approved_digest(repo, world, tmp_path):
     receipt = run(repo, tmp_path)
-    assert receipt.declared_canonical_output_policy == "WAITING_ERRATUM_2"
+    assert receipt.declared_canonical_output_policy == "OUTSIDE_REPOSITORY_ONLY"
     lines = rcr.emit_lines(receipt)
-    assert "DECLARED_CANONICAL_OUTPUT_POLICY=WAITING_ERRATUM_2" in lines
+    assert "DECLARED_CANONICAL_OUTPUT_POLICY=OUTSIDE_REPOSITORY_ONLY" in lines
+
+
+def test_raw_evidence_is_written_only_to_external_root(repo, world, tmp_path):
+    evidence = tmp_path / "evidence"
+    receipt = run(
+        repo, tmp_path,
+        env={"PATH": "/usr/bin", "AC25_CONTRACT_EVIDENCE_ROOT": str(evidence)},
+    )
+    assert receipt.verdict == 1
+    assert (evidence / "contract.stdout").read_bytes() == world.contract_stdout
+    assert (evidence / "clean-status.porcelain-v2.z").read_bytes() == b""
+    assert (evidence / "contract.stdout").stat().st_mode & 0o777 == 0o600
+    assert receipt.raw_clean_status_exit_code == 0
+
+
+def test_evidence_root_inside_repository_is_rejected(repo, world, tmp_path):
+    inside = repo / "evidence"
+    receipt = run(
+        repo, tmp_path,
+        env={"PATH": "/usr/bin", "AC25_CONTRACT_EVIDENCE_ROOT": str(inside)},
+    )
+    assert receipt.error_code == rcr.OUTPUT_ROOT_POLICY_VIOLATION
+    assert not inside.exists()
+
+
+def test_erratum_digest_mismatch_blocks_before_execution(repo, world, tmp_path):
+    (repo / rcr.ERRATUM_2_PATH).write_text("{}\n", encoding="utf-8")
+    receipt = run(repo, tmp_path)
+    assert receipt.error_code == rcr.ERRATUM_2_DIGEST_MISMATCH
+    assert world.contract_calls == 0

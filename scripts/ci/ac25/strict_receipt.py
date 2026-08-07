@@ -33,7 +33,8 @@ TAP_FILE_MAX_BYTES = 16 * 1024 * 1024
 ROOT_FILES = frozenset(
     {
         "receipt.json", "receipt.schema.json", "changed_paths.json",
-        "contract_evidence.json", "clean_check.json", "clean-status.porcelain-v2.z",
+        "contract_evidence.json", "contract/contract.stdout",
+        "clean_check.json", "clean-status.porcelain-v2.z",
         "required_checks.json", "observed_checks.json", "provenance.json",
         "DIGESTS.sha256",
         "junit/manifest.json", "tap/manifest.json",
