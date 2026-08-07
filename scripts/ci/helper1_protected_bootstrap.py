@@ -67,6 +67,28 @@ class ProtectedBootstrapError(RuntimeError):
     pass
 
 
+class _CrossOriginAuthStrippingRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Keep the API token at api.github.com when following artifact redirects."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is None:
+            return None
+        source = urllib.parse.urlsplit(req.full_url)
+        destination = urllib.parse.urlsplit(newurl)
+        if destination.scheme != "https":
+            raise ProtectedBootstrapError("UNTRUSTED_ARTIFACT_DOWNLOAD_FAILED")
+        if (source.scheme, source.hostname, source.port) != (
+            destination.scheme,
+            destination.hostname,
+            destination.port,
+        ):
+            redirected.remove_header("Authorization")
+            redirected.remove_header("Proxy-Authorization")
+            redirected.remove_header("Cookie")
+        return redirected
+
+
 @dataclass(frozen=True)
 class VerifiedUntrustedArtifact:
     subject: Mapping[str, Any]
@@ -160,7 +182,8 @@ def _read_regular(path: Path, code: str, *, allow_empty: bool = False) -> bytes:
     return raw
 
 
-def _raw_inventory(root: Path) -> tuple[dict[str, bytes], str]:
+def verify_raw_producer_artifact_layout(root: Path) -> Path:
+    """Accept only the producer's exact raw-only top-level layout."""
     try:
         root_info = root.lstat()
         root_names = {item.name for item in root.iterdir()}
@@ -174,11 +197,19 @@ def _raw_inventory(root: Path) -> tuple[dict[str, bytes], str]:
     test_root = root / "test-evidence"
     try:
         test_info = test_root.lstat()
-        candidates = sorted(test_root.rglob("*"))
     except OSError as exc:
         raise ProtectedBootstrapError("UNTRUSTED_ARTIFACT_LAYOUT_INVALID") from exc
     if test_root.is_symlink() or not stat.S_ISDIR(test_info.st_mode) or test_info.st_mode & 0o022:
         raise ProtectedBootstrapError("UNTRUSTED_ARTIFACT_LAYOUT_INVALID")
+    return test_root
+
+
+def _raw_inventory(root: Path) -> tuple[dict[str, bytes], str]:
+    test_root = verify_raw_producer_artifact_layout(root)
+    try:
+        candidates = sorted(test_root.rglob("*"))
+    except OSError as exc:
+        raise ProtectedBootstrapError("UNTRUSTED_ARTIFACT_LAYOUT_INVALID") from exc
     files = {
         "CANONICAL_SUBJECT.json": _read_regular(
             root / "CANONICAL_SUBJECT.json", "UNTRUSTED_SUBJECT_INVALID"
@@ -240,8 +271,9 @@ def _default_request_bytes(url: str) -> bytes:
         raise ProtectedBootstrapError("UNTRUSTED_ARTIFACT_DOWNLOAD_FAILED")
     headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, headers=headers)
+    opener = urllib.request.build_opener(_CrossOriginAuthStrippingRedirectHandler())
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with opener.open(request, timeout=60) as response:
             raw = response.read(MAX_ARCHIVE_BYTES + 1)
     except (OSError, ValueError, urllib.error.URLError) as exc:
         raise ProtectedBootstrapError("UNTRUSTED_ARTIFACT_DOWNLOAD_FAILED") from exc

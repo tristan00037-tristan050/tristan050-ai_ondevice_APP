@@ -657,7 +657,8 @@ def _freeze_package(path: Path) -> bytes:
     )
 
 
-def _verify_delivery_layout(package_path: Path) -> None:
+def verify_protected_package_layout(package_path: Path) -> None:
+    """Require the exact package produced inside the protected verifier."""
     package_dir = package_path.parent
     artifact_root = package_dir.parent
     try:
@@ -885,7 +886,7 @@ def load_verified_package(
 ) -> VerifiedProducerPackage:
     """Freeze one package FD and derive every final-verdict input from those bytes."""
     _canonical_producer_workflow_identity(policy)
-    _verify_delivery_layout(package_path)
+    verify_protected_package_layout(package_path)
     raw = _freeze_package(package_path)
     package_sha256 = hashlib.sha256(raw).hexdigest()
     files, manifest = _read_package_bytes(raw)
