@@ -48,7 +48,7 @@ EXECUTION_JOB_NAME = "ac25-repo-contracts-exact-head"
 
 # ★harness — exact-head job 이 실행해도 되는 유일한 run 명령(§3-5).
 #   다른 이름·wrapper·shell 로 준비를 되살리면 여기서 EXTRA 로 잡힌다.
-APPROVED_HARNESS_ARGV = ("python3", "-m", "ac25.repo_contract_runner")
+APPROVED_HARNESS_ARGV = ("python3", "-S", "-m", "ac25.repo_contract_runner")
 
 # ★§3-3 (2) — mutable tag 를 고정할 수 있는, 저장소가 승인한 full SHA.
 #   시험이 이 표와 실제 워크플로 pin 의 일치를 강제한다.
@@ -631,6 +631,8 @@ def _compare_actions(
         if exp_step.family != act_step.family:
             continue  # 위에서 missing/extra 로 이미 잡혔다
         label = f"action:{exp_step.family}"
+        if exp_step.env != act_step.env:
+            mutated.append(f"{label}#env")
         if act_step.ref != exp_step.ref and act_step.ref != APPROVED_ACTION_PINS.get(
             exp_step.family, ""
         ):
@@ -656,7 +658,38 @@ def _compare_actions(
 
 def _compare_harness(harness: tuple[CanonicalRunStep, ...]) -> PlanDiff:
     """exact-head job 의 run step 은 승인된 harness 하나만 허용한다(§3-5)."""
-    if len(harness) == 1 and harness[0].argv == APPROVED_HARNESS_ARGV:
+    def metadata_exact(step: CanonicalRunStep) -> bool:
+        env = dict(step.env)
+        expected_keys = {
+            "AC25_BASE_REF",
+            "AC25_EVENT_HEAD_SHA",
+            "GIT_LFS_SKIP_SMUDGE",
+            "PLAYWRIGHT_BROWSERS_PATH",
+            "PYTHONNOUSERSITE",
+            "PYTHONPATH",
+            "PYTHONDONTWRITEBYTECODE",
+        }
+        playwright = env.get("PLAYWRIGHT_BROWSERS_PATH", "")
+        return (
+            step.cwd == "."
+            and step.shell == "bash"
+            and set(env) == expected_keys
+            and env["AC25_BASE_REF"] == PR_BASE_MARKER
+            and env["AC25_EVENT_HEAD_SHA"] == EXACT_HEAD_MARKER
+            and env["GIT_LFS_SKIP_SMUDGE"] == "1"
+            and env["PYTHONNOUSERSITE"] == "1"
+            and env["PYTHONDONTWRITEBYTECODE"] == "1"
+            and env["PYTHONPATH"] == "scripts/ci"
+            and playwright.startswith("/")
+            and playwright.endswith("/ms-playwright")
+            and "/../" not in playwright
+        )
+
+    if (
+        len(harness) == 1
+        and harness[0].argv == APPROVED_HARNESS_ARGV
+        and metadata_exact(harness[0])
+    ):
         return EMPTY_DIFF
     if not harness:
         return PlanDiff(("harness",), (), (), (), ())
@@ -666,7 +699,10 @@ def _compare_harness(harness: tuple[CanonicalRunStep, ...]) -> PlanDiff:
     )
     approved = [step for step in harness if step.argv == APPROVED_HARNESS_ARGV]
     missing = () if approved else ("harness",)
-    return PlanDiff(missing, extra, (), (), ())
+    mutated = () if not approved or all(
+        metadata_exact(step) for step in approved
+    ) else ("harness#metadata",)
+    return PlanDiff(missing, extra, (), mutated, ())
 
 
 def compare_exact_plan(*, expected: CanonicalPlan, actual: ExecutionPlan) -> PlanDiff:
@@ -691,17 +727,28 @@ def _self_check() -> int:
     try:
         plan = extract_canonical_plan(root, runner_temp="/tmp")
         actions, harness = extract_execution_workflow(root, runner_temp="/tmp")
+        execution = ExecutionPlan(plan.preparation, actions, harness)
+        diff = compare_exact_plan(expected=plan, actual=execution)
+        if not diff.exact:
+            raise CanonicalPlanError(CANONICAL_PLAN_INCOMPLETE)
     except CanonicalPlanError as exc:
         print("CANONICAL_SELF_CHECK=FAIL")
         print(f"ERROR_CODE={exc.code}")
         return 1
     # ★production import graph 가 표준 라이브러리만으로 여기까지 왔다는 사실
     #   자체가 -S 실행에서의 증거다. 수치는 관측값만 낸다.
-    third_party = [
-        name for name in sorted(sys.modules)
-        if name.split(".")[0] not in sys.stdlib_module_names
-        and not name.startswith(("ac25", "_"))
-    ]
+    stdlib_names = getattr(sys, "stdlib_module_names", frozenset())
+    third_party = []
+    for name, module in sorted(sys.modules.items()):
+        top = name.split(".")[0]
+        if top in stdlib_names or name.startswith(("ac25", "_")):
+            continue
+        location = str(getattr(module, "__file__", "") or "")
+        if not location or (
+            "site-packages" not in location and "dist-packages" not in location
+        ):
+            continue
+        third_party.append(name)
     print("CANONICAL_SELF_CHECK=PASS")
     print(f"CANONICAL_STEP_COUNT={len(plan.preparation)}")
     print(f"CANONICAL_ACTION_COUNT={len(plan.actions)}")

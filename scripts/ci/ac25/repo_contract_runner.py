@@ -25,10 +25,11 @@ import hashlib
 import json
 import os
 import re
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import canonical_plan, contract_parse, output_containment
+from . import canonical_plan, contract_parse, contract_state, output_containment
 
 # ── 오류 코드 ──────────────────────────────────────────────────────────
 REPO_CONTRACTS_EXACT_HEAD_MISMATCH = "REPO_CONTRACTS_EXACT_HEAD_MISMATCH"
@@ -53,8 +54,10 @@ CLEAN_OUTPUT_INVALID = "CLEAN_OUTPUT_INVALID"
 CLEAN_PATH_INVALID = "CLEAN_PATH_INVALID"
 # §5 출력 모순
 REPO_CONTRACTS_OUTPUT_CONTRADICTORY = "REPO_CONTRACTS_OUTPUT_CONTRADICTORY"
+REPO_CONTRACTS_OUTPUT_INVALID = "REPO_CONTRACTS_OUTPUT_INVALID"
 
 _OID_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+_STATUS_RE = re.compile(r"\A[ MADRCUT?!]{2}\Z")
 # 공개 로그에 내도 안전한 경로 문자만. 벗어나면 지문·개수로만 증명한다(§4-2).
 _SAFE_PATH_RE = re.compile(r"\A[A-Za-z0-9_./+-]{1,200}\Z")
 _DIRTY_PATH_LOG_LIMIT = 20
@@ -132,6 +135,17 @@ class RepoContractError(Exception):
 
 
 @dataclass
+class DirtyPathEvidence:
+    path: str
+    first_phase: str
+    plan_step_sha256: str
+    head_blob_oid: str
+    after_sha256: str
+    mode: str
+    status: str
+
+
+@dataclass
 class ContractReceipt:
     """§13 이 요구하는 키만 담는다. 원문은 담지 않는다."""
 
@@ -165,8 +179,10 @@ class ContractReceipt:
     dirty_path_count: int = 0
     dirty_path_manifest_sha256: str = ""
     dirty_paths: tuple = ()
+    dirty_path_evidence: dict[str, DirtyPathEvidence] = field(default_factory=dict)
     clean_check_error_code: str = "NONE"
     first_dirty_phase: str = "NOT_EVALUATED"
+    declared_canonical_output_policy: str = "WAITING_ERRATUM_2"
     # §5 guard 증거
     contract_key_count: int = 0
     primary_failed_guard: str = "NOT_RUN"
@@ -178,6 +194,8 @@ class ContractReceipt:
     contract_unparsed_total_bytes: int = 0
     contract_unparsed_manifest_sha256: str = ""
     contract_parse_error_code: str = "NOT_RUN"
+    contract_state_outcome: str = "NOT_RUN"
+    contract_state_error_code: str = "NOT_RUN"
     error_code: str = "NONE"
     verdict: int = 0
 
@@ -288,7 +306,7 @@ def _validate_dirty_path(raw: bytes) -> str:
     return path
 
 
-def clean_snapshot(*, root: Path, runner_temp: Path, env) -> tuple[str, ...]:
+def clean_snapshot_details(*, root: Path, runner_temp: Path, env) -> tuple[tuple[str, str], ...]:
     """`git status --porcelain=v1 -z --untracked-files=all` 을 격리 실행해
     dirty 경로의 정렬 목록을 낸다. ★관측만 한다. 정리하지 않는다(§4-3)."""
     code, out, _err = _run(
@@ -297,7 +315,7 @@ def clean_snapshot(*, root: Path, runner_temp: Path, env) -> tuple[str, ...]:
     )
     if code != 0:
         raise RepoContractError(CLEAN_CHECK_COMMAND_FAILED)
-    paths: list[str] = []
+    entries: list[tuple[str, str]] = []
     tokens = out.split(b"\x00")
     index = 0
     while index < len(tokens):
@@ -307,16 +325,36 @@ def clean_snapshot(*, root: Path, runner_temp: Path, env) -> tuple[str, ...]:
             continue
         if len(token) < 4 or token[2:3] != b" ":
             raise RepoContractError(CLEAN_OUTPUT_INVALID)
-        status = token[:2].decode("ascii", "replace")
-        paths.append(_validate_dirty_path(token[3:]))
+        try:
+            status = token[:2].decode("ascii", "strict")
+        except UnicodeDecodeError as exc:
+            raise RepoContractError(CLEAN_OUTPUT_INVALID) from exc
+        if _STATUS_RE.fullmatch(status) is None or status == "  ":
+            raise RepoContractError(CLEAN_OUTPUT_INVALID)
+        changed_path = _validate_dirty_path(token[3:])
+        entries.append((changed_path, status))
         if status[:1] in ("R", "C"):
             # rename/copy 는 다음 token 이 원래 경로다 — 그것도 증거다
             index += 1
             if index >= len(tokens) or not tokens[index]:
                 raise RepoContractError(CLEAN_OUTPUT_INVALID)
-            paths.append(_validate_dirty_path(tokens[index]))
+            entries.append((_validate_dirty_path(tokens[index]), status))
         index += 1
-    return tuple(sorted(paths))
+    if len({path for path, _status in entries}) != len(entries):
+        raise RepoContractError(CLEAN_OUTPUT_INVALID)
+    return tuple(sorted(entries))
+
+
+def clean_snapshot(*, root: Path, runner_temp: Path, env) -> tuple[str, ...]:
+    """Compatibility view containing only the observed paths."""
+    return tuple(
+        path
+        for path, _status in clean_snapshot_details(
+            root=root,
+            runner_temp=runner_temp,
+            env=env,
+        )
+    )
 
 
 def dirty_manifest_sha256(paths: tuple[str, ...]) -> str:
@@ -326,10 +364,62 @@ def dirty_manifest_sha256(paths: tuple[str, ...]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _observe_clean(receipt: ContractReceipt, phase: str, *, root, runner_temp, env) -> tuple[str, ...]:
+def _path_after_metadata(root: Path, path: str) -> tuple[str, str]:
+    candidate = root / path
+    try:
+        file_stat = candidate.lstat()
+    except OSError:
+        return "NONE", "NONE"
+    mode = f"{stat.S_IMODE(file_stat.st_mode):04o}"
+    if candidate.is_symlink():
+        payload = os.readlink(candidate).encode("utf-8", "surrogateescape")
+    elif candidate.is_file():
+        try:
+            payload = candidate.read_bytes()
+        except OSError:
+            return "NONE", mode
+    else:
+        return "NONE", mode
+    return hashlib.sha256(payload).hexdigest(), mode
+
+
+def _observe_clean(
+    receipt: ContractReceipt,
+    phase: str,
+    *,
+    root,
+    runner_temp,
+    env,
+    plan_step_sha256: str = "NONE",
+) -> tuple[str, ...]:
     """한 시점의 clean 을 재고 첫 dirty 시점을 기록한다. 실패 판정은 하지 않는다."""
-    dirty = clean_snapshot(root=root, runner_temp=runner_temp, env=env)
+    details = clean_snapshot_details(root=root, runner_temp=runner_temp, env=env)
+    dirty = tuple(path for path, _status in details)
     receipt.clean_check_executed = True
+    for path, observed_status in details:
+        previous = receipt.dirty_path_evidence.get(path)
+        first_phase = previous.first_phase if previous is not None else phase
+        first_plan_sha = (
+            previous.plan_step_sha256 if previous is not None else plan_step_sha256
+        )
+        head_blob_oid = _git_text(
+            root,
+            ("rev-parse", f"HEAD:{path}"),
+            runner_temp,
+            env,
+        )
+        if _OID_RE.fullmatch(head_blob_oid or "") is None:
+            head_blob_oid = "NONE"
+        after_sha256, mode = _path_after_metadata(root, path)
+        receipt.dirty_path_evidence[path] = DirtyPathEvidence(
+            path=path,
+            first_phase=first_phase,
+            plan_step_sha256=first_plan_sha,
+            head_blob_oid=head_blob_oid,
+            after_sha256=after_sha256,
+            mode=mode,
+            status=observed_status,
+        )
     if dirty and receipt.first_dirty_phase in ("NOT_EVALUATED", "NONE"):
         receipt.first_dirty_phase = phase
     return dirty
@@ -397,6 +487,12 @@ def run_exact_head_contracts(
                 root=root, expected_head=expected_head, runner_temp=temp, env=environment
             )
             head_confirmed = True
+
+            # P0 is the first post-identity observation.  Tool discovery must
+            # never create a preexisting-clean false negative.
+            if _observe_clean(receipt, "P0", root=root, runner_temp=temp, env=environment):
+                raise RepoContractError(REPO_CONTRACTS_PREEXISTING_WORKTREE_DIRTY)
+
             receipt.runner_image = (
                 f"{environment.get('ImageOS', 'unknown')}/"
                 f"{environment.get('ImageVersion', 'unknown')}"
@@ -413,10 +509,6 @@ def run_exact_head_contracts(
                 root=root, base_ref=base_ref, runner_temp=temp, env=environment
             )
 
-            # ── P0 — 준비 시작 전. 이미 dirty 면 시작하지 않는다(§4-2).
-            if _observe_clean(receipt, "P0", root=root, runner_temp=temp, env=environment):
-                raise RepoContractError(REPO_CONTRACTS_PREEXISTING_WORKTREE_DIRTY)
-
             # ── 준비 = canonical 그대로 (추가 명령 0) ──────────────────
             for position, step in enumerate(execution.runs):
                 merged_env = {**environment, **dict(step.env)}
@@ -431,7 +523,19 @@ def run_exact_head_contracts(
                     )
                 # P1 — 각 canonical 준비 단계 직후. 관측만 한다(§4-2·§4-3).
                 _observe_clean(
-                    receipt, f"P1:{position}", root=root, runner_temp=temp, env=environment
+                    receipt,
+                    f"P1:{position}",
+                    root=root,
+                    runner_temp=temp,
+                    env=environment,
+                    plan_step_sha256=hashlib.sha256(
+                        json.dumps(
+                            step.as_dict(),
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                            sort_keys=True,
+                        ).encode("utf-8")
+                    ).hexdigest(),
                 )
 
             # ── 저장소 계약: 정확히 한 번 ─────────────────────────────
@@ -442,7 +546,7 @@ def run_exact_head_contracts(
                 key for key, _value in expected.contract_env
             )
             result, contract_stdout = output_containment.run_and_capture(
-                list(CONTRACT_COMMAND),
+                list(expected.contract_argv),
                 cwd=root,
                 env=contract_env,
                 timeout_seconds=3600,
@@ -458,9 +562,7 @@ def run_exact_head_contracts(
             # §5 — 손실 없는 구조화. raw 는 여기서 끝난다.
             parsed = contract_parse.parse_contract_output(contract_stdout)
             receipt.contract_key_count = len(parsed.keys)
-            receipt.primary_failed_guard = contract_parse.resolve_primary(
-                parsed, exit_code=result.returncode
-            )
+            receipt.primary_failed_guard = parsed.primary_failed_guard
             receipt.primary_failed_guard_line_sha256 = parsed.primary_line_sha256
             receipt.primary_failed_guard_line_bytes = parsed.primary_line_bytes
             receipt.failing_guard_keys = parsed.failing_guard_keys
@@ -475,11 +577,18 @@ def run_exact_head_contracts(
 
             if result.descendant_escape_detected or not result.cleanup_ok:
                 raise RepoContractError(REPO_CONTRACTS_DESCENDANTS_SURVIVED)
-            if result.returncode != 0:
+            state = contract_state.evaluate_contract_state(
+                exit_code=result.returncode,
+                primary_failed_guard=receipt.primary_failed_guard,
+                failing_guard_keys=tuple(receipt.failing_guard_keys),
+                parse_error_code=receipt.contract_parse_error_code,
+            )
+            receipt.contract_state_outcome = state.outcome.value
+            receipt.contract_state_error_code = state.error_code
+            if state.outcome is contract_state.ContractOutcome.INVALID:
+                raise RepoContractError(REPO_CONTRACTS_OUTPUT_INVALID)
+            if state.outcome is contract_state.ContractOutcome.FAIL:
                 raise RepoContractError(REPO_CONTRACTS_FAILED)
-            # exit 0 인데 summary 가 NONE 이 아니면 출력이 스스로 모순이다(§5-4).
-            if receipt.primary_failed_guard != "NONE":
-                raise RepoContractError(REPO_CONTRACTS_OUTPUT_CONTRADICTORY)
         finally:
             # ── P3 — 예외 처리 finally. checkout 신원을 확인했다면 반드시 잰다.
             #   ★재지 못한 상태는 NOT_EVALUATED 로 남는다. NO 로 바꾸지 않는다(§2).
@@ -563,7 +672,9 @@ def emit_lines(receipt: ContractReceipt) -> list[str]:
         f"CANONICAL_UNSUPPORTED_STEP_COUNT={len(receipt.plan_unsupported)}",
         f"PREPARATION_ENV_BOUND_KEYS={len(receipt.preparation_env_keys)}",
         f"CLEAN_CHECK_EXECUTED={'YES' if receipt.clean_check_executed else 'NO'}",
+        f"RAW_FINAL_WORKTREE_CLEAN={receipt.final_worktree_clean}",
         f"FINAL_WORKTREE_CLEAN={receipt.final_worktree_clean}",
+        f"DECLARED_CANONICAL_OUTPUT_POLICY={receipt.declared_canonical_output_policy}",
         f"DIRTY_PATH_COUNT={receipt.dirty_path_count}",
         f"DIRTY_PATH_MANIFEST_SHA256={receipt.dirty_path_manifest_sha256 or 'NONE'}",
         f"FIRST_DIRTY_PHASE={receipt.first_dirty_phase}",
@@ -582,6 +693,8 @@ def emit_lines(receipt: ContractReceipt) -> list[str]:
         f"CONTRACT_UNPARSED_MANIFEST_SHA256="
         f"{receipt.contract_unparsed_manifest_sha256 or 'NONE'}",
         f"CONTRACT_PARSE_ERROR_CODE={receipt.contract_parse_error_code}",
+        f"CONTRACT_STATE_OUTCOME={receipt.contract_state_outcome}",
+        f"CONTRACT_STATE_ERROR_CODE={receipt.contract_state_error_code}",
         f"CONTRACT_BLOCK_LINE_COUNT={len(receipt.contract_block_lines)}",
     ]
     # 계약 자신의 BLOCK 진단 — canonical 공개 로그와 같은 수준의 문구다.
@@ -596,10 +709,24 @@ def emit_lines(receipt: ContractReceipt) -> list[str]:
         if _SAFE_PATH_RE.match(path) is None:
             continue
         line = f"DIRTY_PATH_{ordinal:02d}={path}"
-        cost = len(line.encode("utf-8"))
+        evidence = receipt.dirty_path_evidence.get(path)
+        detail_lines = []
+        if evidence is not None:
+            detail_lines = [
+                f"DIRTY_PATH_FIRST_PHASE_{ordinal:02d}={evidence.first_phase}",
+                f"DIRTY_PATH_PLAN_SHA256_{ordinal:02d}={evidence.plan_step_sha256}",
+                f"DIRTY_PATH_HEAD_BLOB_OID_{ordinal:02d}={evidence.head_blob_oid}",
+                f"DIRTY_PATH_AFTER_SHA256_{ordinal:02d}={evidence.after_sha256}",
+                f"DIRTY_PATH_MODE_{ordinal:02d}={evidence.mode}",
+                f"DIRTY_PATH_STATUS_{ordinal:02d}={evidence.status}",
+            ]
+        cost = sum(
+            len(item.encode("utf-8")) for item in (line, *detail_lines)
+        )
         if cost > budget:
             break
         lines.append(line)
+        lines.extend(detail_lines)
         budget -= cost
         emitted += 1
     lines.extend([
@@ -652,16 +779,19 @@ __all__ = [
     "REPO_CONTRACTS_FAILED",
     "REPO_CONTRACTS_GUARD_MUTATED",
     "REPO_CONTRACTS_OUTPUT_CONTRADICTORY",
+    "REPO_CONTRACTS_OUTPUT_INVALID",
     "REPO_CONTRACTS_PREEXISTING_WORKTREE_DIRTY",
     "REPO_CONTRACTS_PREPARATION_FAILED",
     "REPO_CONTRACTS_SHALLOW_CLONE",
     "ContractReceipt",
+    "DirtyPathEvidence",
     "RepoContractError",
     "assert_exact_head",
     "assert_guards_unmodified",
     "build_execution_plan",
     "build_preparation_plan",
     "clean_snapshot",
+    "clean_snapshot_details",
     "collect_tool_versions",
     "command_plan_sha256",
     "contract_environment",

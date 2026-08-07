@@ -170,14 +170,17 @@ def test_canonical_env_is_bound_to_steps_and_contract(repo, world, tmp_path):
 # ══ §4-4 ① contract 실패 후에도 finally clean 검사가 실행됨 ═══════════
 def test_clean_is_measured_in_finally_even_when_contract_fails(repo, world, tmp_path):
     world.contract_exit = 1
+    world.contract_stdout = b"REPO_CONTRACTS_FAILED_GUARD=named guard v1\n"
     receipt = run(repo, tmp_path)
     assert receipt.error_code == rcr.REPO_CONTRACTS_FAILED
     # ★실행됐고, 실측이 YES 다. 실패가 clean 을 NO 로 오염시키지 않는다(§11).
     assert receipt.clean_check_executed is True
     assert receipt.final_worktree_clean == "YES"
     assert world.status_calls == prep_count(repo) + 3
-    # 실패한 실행의 NONE 요약은 요약이 아니다 — UNPARSED 로 보고한다(§5-1)
-    assert receipt.primary_failed_guard == "UNPARSED"
+    # v4.1은 관측된 명명 guard를 보존하고 단일 상태 판정기로 FAIL 처리한다.
+    assert receipt.primary_failed_guard == "named guard v1"
+    assert receipt.contract_state_outcome == "FAIL"
+    assert receipt.contract_state_error_code == "CONTRACT_FAILED"
 
 
 # ══ §4-4 ② checkout 확인 전 실패는 NOT_EVALUATED ══════════════════════
@@ -234,6 +237,13 @@ def test_invalid_dirty_paths_are_rejected_not_normalized(repo, world, tmp_path, 
     world.clean_outputs = [entry]  # P0 에서 즉시
     receipt = run(repo, tmp_path)
     assert receipt.clean_check_error_code == rcr.CLEAN_PATH_INVALID
+    assert receipt.final_worktree_clean == "NOT_EVALUATED"
+
+
+def test_non_ascii_or_unknown_status_is_rejected(repo, world, tmp_path):
+    world.clean_outputs = [b"\xff? bad.bin\x00"]
+    receipt = run(repo, tmp_path)
+    assert receipt.clean_check_error_code == rcr.CLEAN_OUTPUT_INVALID
     assert receipt.final_worktree_clean == "NOT_EVALUATED"
     assert receipt.verdict == 0
 
@@ -412,14 +422,14 @@ def test_exit_zero_with_named_primary_is_contradictory(repo, world, tmp_path):
     world.contract_exit = 0
     world.contract_stdout = b"REPO_CONTRACTS_FAILED_GUARD=named guard v1\n"
     receipt = run(repo, tmp_path)
-    assert receipt.error_code == rcr.REPO_CONTRACTS_OUTPUT_CONTRADICTORY
+    assert receipt.error_code == rcr.REPO_CONTRACTS_OUTPUT_INVALID
     assert receipt.verdict == 0
 
 
 def test_exit_zero_without_summary_line_is_contradictory(repo, world, tmp_path):
     world.contract_stdout = b"WHATEVER_KEY=x\n"
     receipt = run(repo, tmp_path)
-    assert receipt.error_code == rcr.REPO_CONTRACTS_OUTPUT_CONTRADICTORY
+    assert receipt.error_code == rcr.REPO_CONTRACTS_OUTPUT_INVALID
     assert receipt.primary_failed_guard == "UNPARSED"
 
 
@@ -427,7 +437,7 @@ def test_non_utf8_contract_output_is_closed(repo, world, tmp_path):
     world.contract_stdout = b"\xff\xfe broken"
     receipt = run(repo, tmp_path)
     assert receipt.contract_parse_error_code == "CONTRACT_OUTPUT_NOT_UTF8"
-    assert receipt.error_code == rcr.REPO_CONTRACTS_OUTPUT_CONTRADICTORY
+    assert receipt.error_code == rcr.REPO_CONTRACTS_OUTPUT_INVALID
 
 
 def test_descendant_escape_is_fatal(repo, world, tmp_path):
@@ -532,3 +542,82 @@ def test_command_plan_digest_is_stable(repo):
     first = rcr.command_plan_sha256(repo, runner_temp="/tmp")
     assert first == rcr.command_plan_sha256(repo, runner_temp="/tmp")
     assert re.fullmatch(r"[0-9a-f]{64}", first)
+
+
+# ══ v4.1 §9 이름 결속 시험 ════════════════════════════════════════════
+def test_runner_maps_invalid_to_repo_contracts_output_invalid(repo, world, tmp_path):
+    world.contract_exit = 0
+    world.contract_stdout = b"REPO_CONTRACTS_FAILED_GUARD=named guard v1\n"
+    receipt = run(repo, tmp_path)
+    assert receipt.contract_state_outcome == "INVALID"
+    assert receipt.contract_state_error_code == "CONTRACT_EXIT_STATE_INCONSISTENT"
+    assert receipt.error_code == rcr.REPO_CONTRACTS_OUTPUT_INVALID
+    assert receipt.verdict == 0
+
+
+def test_runner_maps_contract_failure_to_repo_contracts_failed(repo, world, tmp_path):
+    world.contract_exit = 2
+    world.contract_stdout = b"REPO_CONTRACTS_FAILED_GUARD=named guard v1\n"
+    receipt = run(repo, tmp_path)
+    assert receipt.contract_state_outcome == "FAIL"
+    assert receipt.contract_state_error_code == "CONTRACT_FAILED"
+    assert receipt.error_code == rcr.REPO_CONTRACTS_FAILED
+    assert receipt.verdict == 0
+
+
+def test_cli_exit_matches_receipt_verdict(monkeypatch, capsys):
+    failed = rcr.ContractReceipt(verdict=0, error_code=rcr.REPO_CONTRACTS_OUTPUT_INVALID)
+    monkeypatch.setattr(rcr, "run_exact_head_contracts", lambda **_kw: failed)
+    assert rcr._main([]) == 1
+    assert "REPO_CONTRACTS_EXACT_HEAD=FAIL" in capsys.readouterr().out
+    passed = rcr.ContractReceipt(verdict=1)
+    monkeypatch.setattr(rcr, "run_exact_head_contracts", lambda **_kw: passed)
+    assert rcr._main([]) == 0
+
+
+def test_github_step_fails_when_cli_exits_one():
+    workflow = (REPO_ROOT / cp.EXECUTION_WORKFLOW_PATH).read_text(encoding="utf-8")
+    job = workflow.split("  ac25-repo-contracts-exact-head:", 1)[1]
+    assert "python3 -S -m ac25.repo_contract_runner" in job
+    assert "continue-on-error:" not in job
+    assert "|| true" not in job
+
+
+def test_raw_dirty_never_becomes_clean_by_allowlist(repo, world, tmp_path):
+    dirty = b"?? generated/report.bin\x00"
+    world.clean_outputs = [b""] + [dirty] * (prep_count(repo) + 2)
+    receipt = run(repo, tmp_path)
+    assert receipt.final_worktree_clean == "NO"
+    assert "generated/report.bin" in receipt.dirty_paths
+
+
+def test_cleanup_commands_absent():
+    test_no_cleanup_commands_in_production_runner()
+
+
+def test_first_dirty_phase_is_recorded_per_path(repo, world, tmp_path):
+    test_first_dirty_phase_records_the_step_index(repo, world, tmp_path)
+
+
+def test_outside_allowlist_is_observed(repo, world, tmp_path):
+    world.clean_outputs = [b"", b" M outside/proposed-set.txt\x00"]
+    receipt = run(repo, tmp_path)
+    evidence = receipt.dirty_path_evidence["outside/proposed-set.txt"]
+    assert evidence.first_phase.startswith("P1:")
+
+
+def test_untracked_path_is_observed(repo, world, tmp_path):
+    world.clean_outputs = [b"", b"?? novel.bin\x00"]
+    receipt = run(repo, tmp_path)
+    assert receipt.dirty_path_evidence["novel.bin"].status == "??"
+
+
+def test_clean_command_failure_is_not_evaluated(repo, world, tmp_path):
+    test_clean_command_failure_is_not_evaluated_with_stable_code(repo, world, tmp_path)
+
+
+def test_erratum_policy_cannot_pass_without_approved_digest(repo, world, tmp_path):
+    receipt = run(repo, tmp_path)
+    assert receipt.declared_canonical_output_policy == "WAITING_ERRATUM_2"
+    lines = rcr.emit_lines(receipt)
+    assert "DECLARED_CANONICAL_OUTPUT_POLICY=WAITING_ERRATUM_2" in lines

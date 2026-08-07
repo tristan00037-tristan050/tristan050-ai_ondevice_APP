@@ -10,7 +10,10 @@ v3.1 §3-6 이 이 파일의 계약이다. 이전 판의 `test_extra_ac25_steps_
 from __future__ import annotations
 
 import dataclasses
+import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -494,8 +497,8 @@ def test_command_plan_digest_covers_the_harness(repo):
     before = rcr.command_plan_sha256(repo, runner_temp="/tmp")
     path = repo / cp.EXECUTION_WORKFLOW_PATH
     body = path.read_text(encoding="utf-8").replace(
-        "python3 -m ac25.repo_contract_runner",
-        "python3 -m ac25.other_runner",
+        "python3 -S -m ac25.repo_contract_runner",
+        "python3 -S -m ac25.other_runner",
     )
     path.write_text(body, encoding="utf-8")
     assert rcr.command_plan_sha256(repo, runner_temp="/tmp") != before
@@ -513,3 +516,64 @@ def test_observation_allowlist_is_exact_match_only():
 def test_tool_version_plan_is_observation_only():
     for _name, argv in rcr.TOOL_VERSION_PLAN:
         assert cp.observation_only(argv), argv
+
+
+# ══ v4.1 §9 이름 결속 시험 ════════════════════════════════════════════
+def test_exact_head_workflow_uses_python3_dash_s():
+    body = (REPO_ROOT / cp.EXECUTION_WORKFLOW_PATH).read_text(encoding="utf-8")
+    job = body.split("  ac25-repo-contracts-exact-head:", 1)[1]
+    assert "python3 -S -m ac25.repo_contract_runner" in job
+    assert "python3 -m ac25.repo_contract_runner" not in job
+
+
+def test_production_runner_imports_under_python3_dash_s(tmp_path):
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONPATH": str(REPO_ROOT / "scripts/ci"),
+        "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    result = subprocess.run(
+        [sys.executable, "-S", "-c", "import ac25.repo_contract_runner, ac25.strict_receipt_validator"],
+        cwd=tmp_path, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
+
+
+def test_extra_step_fails_before_contract(repo):
+    test_one_extra_command_is_rejected(repo)
+
+
+def test_missing_step_fails_before_contract(repo):
+    test_one_missing_command_is_rejected(repo)
+
+
+def test_reordered_step_fails_before_contract(repo):
+    test_swapped_order_is_rejected(repo)
+
+
+def test_argv_mutation_fails_before_contract(repo):
+    test_changed_argv_argument_is_rejected(repo)
+
+
+def test_cwd_mutation_fails_before_contract(repo):
+    test_changed_cwd_is_rejected(repo)
+
+
+def test_shell_mutation_fails_before_contract(repo):
+    test_changed_shell_is_rejected(repo)
+
+
+def test_env_mutation_fails_before_contract(repo):
+    test_env_key_drop_add_or_value_change_is_rejected(repo, "change")
+
+
+def test_action_sha_mutation_fails_before_contract(repo):
+    test_unapproved_action_pin_is_rejected(repo)
+
+
+def test_unknown_expression_fails_closed():
+    test_dynamic_secrets_expression_is_closed()
+
+
+def test_nested_composite_uses_fails_closed(repo):
+    test_nested_uses_inside_composite_is_closed(repo)

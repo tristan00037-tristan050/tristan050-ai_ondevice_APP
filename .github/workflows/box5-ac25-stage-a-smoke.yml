@@ -229,6 +229,8 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
+    env:
+      GIT_LFS_SKIP_SMUDGE: '1'
     steps:
       - name: Checkout candidate at exact PR head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -257,4 +259,4 @@ jobs:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
         run: |
           set -euo pipefail
-          python3 -m ac25.repo_contract_runner
+          python3 -S -m ac25.repo_contract_runner

@@ -25,6 +25,10 @@ from dataclasses import dataclass
 
 # ── 오류 코드 ──────────────────────────────────────────────────────────
 CONTRACT_OUTPUT_NOT_UTF8 = "CONTRACT_OUTPUT_NOT_UTF8"
+CONTRACT_PRIMARY_GUARD_INVALID = "CONTRACT_PRIMARY_GUARD_INVALID"
+CONTRACT_DUPLICATE_PRIMARY = "CONTRACT_DUPLICATE_PRIMARY"
+CONTRACT_DUPLICATE_KEY = "CONTRACT_DUPLICATE_KEY"
+CONTRACT_MALFORMED_GUARD_KEY = "CONTRACT_MALFORMED_GUARD_KEY"
 PARSE_OK = "NONE"
 
 PRIMARY_KEY = "REPO_CONTRACTS_FAILED_GUARD"
@@ -33,6 +37,7 @@ PRIMARY_UNPARSED_DUPLICATE = "UNPARSED_DUPLICATE"
 
 # 구조화 키. 값은 0/1 또는 공백 없는 안전 문자열이다.
 _KEY_LINE_RE = re.compile(r"\A([A-Z][A-Z0-9_]{2,79})=([01]|[A-Za-z0-9_.:+-]{1,120})\Z")
+_GUARD_KEY_RE = re.compile(r"\A[A-Z][A-Z0-9_]{0,76}_OK\Z")
 
 # 계약 자신의 진단 줄. canonical job 에서는 이 줄이 공개 로그에 그대로 나온다 —
 # 같은 공개 수준의 meta-only 텍스트만 통과시킨다(경로·고정 문구, raw 내용 없음).
@@ -96,9 +101,11 @@ def parse_contract_output(stdout: bytes) -> ContractParseResult:
     keys: list[tuple[str, str]] = []
     block_lines: list[str] = []
     primary_values: list[str] = []
-    primary_line_sha256 = ""
-    primary_line_bytes = 0
+    primary_lines: list[bytes] = []
     primary_invalid = False
+    duplicate_key = False
+    malformed_guard_key = False
+    seen_keys: set[str] = set()
     unparsed_entries: list[dict] = []
     unparsed_total_bytes = 0
 
@@ -110,8 +117,7 @@ def parse_contract_output(stdout: bytes) -> ContractParseResult:
         if line.startswith(f"{PRIMARY_KEY}="):
             value = line[len(PRIMARY_KEY) + 1:]
             raw_line = line.encode("utf-8")
-            primary_line_sha256 = hashlib.sha256(raw_line).hexdigest()
-            primary_line_bytes = len(raw_line)
+            primary_lines.append(raw_line)
             if _valid_primary_value(value):
                 primary_values.append(value)
             else:
@@ -121,8 +127,19 @@ def parse_contract_output(stdout: bytes) -> ContractParseResult:
         # ② KEY=VALUE 구조화 키 — 값 그대로, 순서 그대로, 중복 그대로 보존한다.
         match = _KEY_LINE_RE.match(line)
         if match is not None:
-            keys.append((match.group(1), match.group(2)))
+            key, value = match.group(1), match.group(2)
+            if key in seen_keys:
+                duplicate_key = True
+            seen_keys.add(key)
+            if key.endswith(_OK_SUFFIX) and _GUARD_KEY_RE.fullmatch(key) is None:
+                malformed_guard_key = True
+            keys.append((key, value))
             continue
+
+        # `_OK` 판정처럼 보이는 malformed line을 일반 unparsed로 숨기지 않는다.
+        key_part, separator, _value_part = line.partition("=")
+        if separator and key_part.endswith(_OK_SUFFIX):
+            malformed_guard_key = True
 
         # ②′ 계약 자신의 BLOCK 진단 — canonical 공개 로그와 같은 수준의
         #    meta-only 문구만. 한도를 넘거나 검증 실패면 unparsed 로 남는다.
@@ -146,16 +163,41 @@ def parse_contract_output(stdout: bytes) -> ContractParseResult:
         key for key, value in keys if key.endswith(_OK_SUFFIX) and value == "0"
     }))
 
-    if primary_invalid and not primary_values:
-        primary = PRIMARY_UNPARSED
-    elif len(primary_values) > 1 or (primary_invalid and primary_values):
-        # 같은 summary 가 두 번 나오거나(동일 포함) 서로 다르면 닫는다(§5-2)
+    parse_error = PARSE_OK
+    if len(primary_lines) > 1:
         primary = PRIMARY_UNPARSED_DUPLICATE
+        parse_error = CONTRACT_DUPLICATE_PRIMARY
+    elif primary_invalid:
+        primary = PRIMARY_UNPARSED
+        parse_error = CONTRACT_PRIMARY_GUARD_INVALID
     elif primary_values:
         primary = primary_values[0]
     else:
         # summary 줄 자체가 없다. "없음" 을 "괜찮음" 으로 읽지 않는다(제1부 §D).
         primary = PRIMARY_UNPARSED
+
+    if duplicate_key and parse_error == PARSE_OK:
+        parse_error = CONTRACT_DUPLICATE_KEY
+    if malformed_guard_key and parse_error == PARSE_OK:
+        parse_error = CONTRACT_MALFORMED_GUARD_KEY
+
+    if len(primary_lines) == 1:
+        primary_line_sha256 = hashlib.sha256(primary_lines[0]).hexdigest()
+        primary_line_bytes = len(primary_lines[0])
+    elif primary_lines:
+        primary_manifest = [
+            {
+                "ordinal": ordinal,
+                "sha256": hashlib.sha256(raw_line).hexdigest(),
+                "bytes": len(raw_line),
+            }
+            for ordinal, raw_line in enumerate(primary_lines)
+        ]
+        primary_line_sha256 = _canonical_manifest_sha256(primary_manifest)
+        primary_line_bytes = sum(len(raw_line) for raw_line in primary_lines)
+    else:
+        primary_line_sha256 = ""
+        primary_line_bytes = 0
 
     return ContractParseResult(
         keys=tuple(keys),
@@ -167,23 +209,13 @@ def parse_contract_output(stdout: bytes) -> ContractParseResult:
         unparsed_manifest_sha256=_canonical_manifest_sha256(unparsed_entries),
         primary_line_sha256=primary_line_sha256,
         primary_line_bytes=primary_line_bytes,
-        parse_error_code=PARSE_OK,
+        parse_error_code=parse_error,
     )
 
 
 def resolve_primary(result: ContractParseResult, *, exit_code: int) -> str:
-    """보고용 primary 를 exit code 와 함께 정한다.
-
-    §5-1 — 실패한 실행이 `NONE` 을 냈다면 그 `NONE` 은 요약이 아니라
-    ★요약 실패★ 다. UNPARSED 로 보고한다. (그 줄의 지문·길이는 그대로 남는다.)
-
-    ★반대 방향은 이 저장소의 실측을 따른다 — canonical success(job 92559345428)
-      는 `NONE` 과 함께 `*_OK=0` 을 35 개 낸다. 이 저장소에서 `_OK=0` 은
-      "해당 없음/미집행" 이지 실패 판정이 아니다. 그래서 exit 0 의 `NONE` 은
-      0-key 가 있어도 유효하다. 이 해석 차이는 회신에 명시한다.
-    """
-    if exit_code != 0 and result.primary_failed_guard == "NONE":
-        return PRIMARY_UNPARSED
+    """Compatibility API: preserve the observed primary; state evaluation is separate."""
+    del exit_code
     return result.primary_failed_guard
 
 
@@ -194,6 +226,10 @@ def failing_keys_sha256(failing: tuple[str, ...]) -> str:
 
 __all__ = [
     "CONTRACT_OUTPUT_NOT_UTF8",
+    "CONTRACT_PRIMARY_GUARD_INVALID",
+    "CONTRACT_DUPLICATE_PRIMARY",
+    "CONTRACT_DUPLICATE_KEY",
+    "CONTRACT_MALFORMED_GUARD_KEY",
     "PARSE_OK",
     "PRIMARY_KEY",
     "PRIMARY_UNPARSED",

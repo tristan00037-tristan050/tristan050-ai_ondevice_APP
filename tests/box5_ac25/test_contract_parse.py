@@ -150,17 +150,14 @@ def test_raw_unparsed_content_never_leaves_the_parser():
 
 
 # ══ exit code 와의 결합 (§5-1·§5-4) ═══════════════════════════════════
-def test_nonzero_exit_with_none_summary_is_demoted_to_unparsed():
-    """기준 사실 그대로 — 실패 실행의 NONE 은 요약이 아니다."""
+def test_nonzero_exit_preserves_none_summary_for_state_cross_check():
+    """v4.1 keeps raw semantics; contract_state rejects this tuple later."""
     result = cpar.parse_contract_output(line(PRIMARY, "NONE"))
-    assert cpar.resolve_primary(result, exit_code=1) == cpar.PRIMARY_UNPARSED
+    assert cpar.resolve_primary(result, exit_code=1) == "NONE"
 
 
-def test_zero_exit_with_none_summary_stays_none_even_with_zero_keys():
-    """★실측 근거의 의도적 해석 — canonical success(job 92559345428)는
-    `NONE` 과 `*_OK=0` 35 개를 함께 낸다. 이 저장소에서 `_OK=0` 은
-    "해당 없음/미집행" 이다. 그래서 exit 0 의 NONE 은 유효하다.
-    v3.1 §5-1 문면과 다른 부분이며 회신 COUNTER_EVIDENCE 에 명시된다."""
+def test_zero_exit_preserves_none_and_zero_key_for_state_cross_check():
+    """The parser records the tuple; v4.1 contract_state marks it INVALID."""
     payload = line(PRIMARY, "NONE") + line("NOT_APPLICABLE_GUARD_OK", "0")
     result = cpar.parse_contract_output(payload)
     assert cpar.resolve_primary(result, exit_code=0) == "NONE"
