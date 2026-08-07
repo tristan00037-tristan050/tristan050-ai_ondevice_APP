@@ -82,6 +82,7 @@ def _verify_asset_closure(root: Path, roles: dict[str, str]) -> None:
         raise EvidenceMeaningError("ASSET_EVIDENCE_ROLES_INVALID")
     manifest = _exact(
         _json_object(root, roles["closure_manifest"], "ASSET_MANIFEST_INVALID"),
+        _json_object(objects, roles["closure_manifest"], "ASSET_MANIFEST_INVALID"),
         {"schema_version", "files"},
         "ASSET_MANIFEST_INVALID",
     )

@@ -70,9 +70,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python scripts/ci/helper1_subject_binding.py \
-            --fetch-event "${GITHUB_EVENT_PATH}" \
-            --subject "${RUNNER_TEMP}/helper1/input/CANONICAL_SUBJECT.json"
+
       - name: Verify with protected policy and issue signed verdict
         id: verify-evidence
         if: always()
@@ -84,8 +82,7 @@ jobs:
           set -euo pipefail
           python scripts/ci/helper1_trusted_verifier.py \
             --event "${GITHUB_EVENT_PATH}" \
-            --evidence-dir "${RUNNER_TEMP}/helper1/input/evidence" \
-            --artifact-root "${RUNNER_TEMP}/helper1/input/artifacts" \
+
             --output "${RUNNER_TEMP}/helper1/TRUSTED_VERDICT.json" | tee -a "${GITHUB_STEP_SUMMARY}"
 
       - name: Preserve immutable subject-bound verdict

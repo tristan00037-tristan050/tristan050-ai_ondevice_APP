@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1-answer-case-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "query_id", "run_id", "evaluation_run_subject_sha256", "execution_variant", "generator_identity_sha256", "prompt_template_sha256", "decision", "reason_code", "answer_utf8", "answer_sha256", "claims", "citations", "normal_index_manifest_sha256", "ablation_index_manifest_sha256", "seed", "decoding_policy_sha256", "started_monotonic_ns", "finished_monotonic_ns", "record_sha256"],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.answer-case.v2"}, "query_id": {"$ref": "#/$defs/id"}, "run_id": {"$ref": "#/$defs/id"}, "evaluation_run_subject_sha256": {"$ref": "#/$defs/digest"}, "execution_variant": {"enum": ["NORMAL", "ABLATION"]},
+    "generator_identity_sha256": {"$ref": "#/$defs/digest"}, "prompt_template_sha256": {"$ref": "#/$defs/digest"}, "decision": {"enum": ["ANSWER", "ABSTAIN"]},
+    "reason_code": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{2,95}$"}, "answer_utf8": {"type": ["string", "null"]}, "answer_sha256": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "claims": {"type": "array"}, "citations": {"type": "array"}, "normal_index_manifest_sha256": {"$ref": "#/$defs/digest"}, "ablation_index_manifest_sha256": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "seed": {"type": "integer", "minimum": 0}, "decoding_policy_sha256": {"$ref": "#/$defs/digest"}, "started_monotonic_ns": {"type": "integer", "minimum": 0}, "finished_monotonic_ns": {"type": "integer", "minimum": 1}, "record_sha256": {"$ref": "#/$defs/digest"}
+  },
+  "allOf": [
+    {"if": {"properties": {"execution_variant": {"const": "NORMAL"}}}, "then": {"properties": {"ablation_index_manifest_sha256": {"type": "null"}}}},
+    {"if": {"properties": {"execution_variant": {"const": "ABLATION"}}}, "then": {"properties": {"ablation_index_manifest_sha256": {"$ref": "#/$defs/digest"}}}}
+  ],
+  "$defs": {"id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"}, "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

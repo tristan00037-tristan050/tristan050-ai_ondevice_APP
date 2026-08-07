@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1-retrieval-benchmark-manifest-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_commit", "source_tree", "run_id", "corpus_artifact_sha256", "answer_key_artifact_sha256", "workspace_id", "generation_id", "index_manifest_sha256", "partition_inventory_sha256", "duplicate_detector_sha256", "tuning_history_manifest_sha256", "query_counts", "signature_envelope_sha256"],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.retrieval-benchmark-manifest.v2"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "corpus_artifact_sha256": {"$ref": "#/$defs/digest"},
+    "answer_key_artifact_sha256": {"$ref": "#/$defs/digest"},
+    "workspace_id": {"type": "string", "format": "uuid"},
+    "generation_id": {"type": "string", "format": "uuid"},
+    "index_manifest_sha256": {"$ref": "#/$defs/digest"},
+    "partition_inventory_sha256": {"$ref": "#/$defs/digest"},
+    "duplicate_detector_sha256": {"$ref": "#/$defs/digest"},
+    "tuning_history_manifest_sha256": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/digest"}},
+    "query_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "signature_envelope_sha256": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

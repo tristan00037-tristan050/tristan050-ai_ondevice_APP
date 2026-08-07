@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1-quality-input-provenance-v1.schema.json",
+  "title": "Helper1 protected quality input provenance v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "repository_id", "repository_name", "subject_commit", "subject_tree", "producer_workflow_ref", "producer_workflow_id", "producer_workflow_sha256", "run_id", "run_attempt", "event_name", "artifact_id", "artifact_name", "artifact_sha256"],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.quality-input-provenance.v1"},
+    "repository_id": {"type": "integer", "minimum": 1},
+    "repository_name": {"type": "string", "minLength": 3, "maxLength": 256},
+    "subject_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "subject_tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "producer_workflow_ref": {"type": "string", "minLength": 45, "maxLength": 512},
+    "producer_workflow_id": {"type": "integer", "minimum": 1},
+    "producer_workflow_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "run_id": {"type": "integer", "minimum": 1},
+    "run_attempt": {"type": "integer", "minimum": 1},
+    "event_name": {"type": "string", "enum": ["workflow_dispatch"]},
+    "artifact_id": {"type": "integer", "minimum": 1},
+    "artifact_name": {"type": "string", "minLength": 1, "maxLength": 256},
+    "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
