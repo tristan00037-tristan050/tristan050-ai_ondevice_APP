@@ -248,6 +248,10 @@ jobs:
         env:
           PYTHONPATH: scripts/ci
           PYTHONNOUSERSITE: '1'
+          # ★harness 가 scripts/ 아래에 __pycache__/*.pyc 를 만들면, 계약의
+          #   long-line guard(P5-PLAT-P0-05)가 그 .pyc 에서 BLOCK 한다 —
+          #   여섯 라운드 실패의 실증된 원인. 지우는 게 아니라 ★안 만든다★.
+          PYTHONDONTWRITEBYTECODE: '1'
           AC25_EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           AC25_BASE_REF: ${{ github.event.pull_request.base.sha }}
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright

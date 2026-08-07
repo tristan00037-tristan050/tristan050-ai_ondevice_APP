@@ -198,9 +198,10 @@ def test_each_dirty_kind_is_measured_as_no(repo, world, tmp_path, entry):
     total = prep_count(repo) + 3
     world.clean_outputs = [b""] * (total - 1) + [entry]
     receipt = run(repo, tmp_path)
+    # ★실측된 NO 는 증거이지 판정이 아니다 — 판정은 CLOSE-2 가 한다(§9-2).
     assert receipt.final_worktree_clean == "NO"
-    assert receipt.error_code == rcr.REPO_CONTRACTS_WORKTREE_NOT_CLEAN
-    assert receipt.verdict == 0
+    assert receipt.error_code == "NONE"
+    assert receipt.verdict == 1
     assert receipt.dirty_path_count == 1
     assert receipt.first_dirty_phase == "P3"
 
@@ -296,6 +297,7 @@ def test_first_dirty_phase_records_the_step_index(repo, world, tmp_path):
     assert receipt.first_dirty_phase == "P1:1"
     assert world.contract_calls == 1, "P1 dirty 는 관측이지 중단 사유가 아니다(§4-3)"
     assert receipt.final_worktree_clean == "NO"
+    assert receipt.verdict == 1, "실측된 NO 는 CLOSE-2 의 몫이다 — job 판정이 아니다"
 
 
 # ══ §3-4 동등성 게이트 — 어긋나면 계약을 실행하지 않는다 ══════════════

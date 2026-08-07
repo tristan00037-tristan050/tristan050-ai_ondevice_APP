@@ -37,7 +37,6 @@ REPO_CONTRACTS_BASE_REF_UNAVAILABLE = "REPO_CONTRACTS_BASE_REF_UNAVAILABLE"
 REPO_CONTRACTS_GUARD_MUTATED = "REPO_CONTRACTS_GUARD_MUTATED"
 REPO_CONTRACTS_PREPARATION_FAILED = "REPO_CONTRACTS_PREPARATION_FAILED"
 REPO_CONTRACTS_FAILED = "REPO_CONTRACTS_FAILED"
-REPO_CONTRACTS_WORKTREE_NOT_CLEAN = "REPO_CONTRACTS_WORKTREE_NOT_CLEAN"
 REPO_CONTRACTS_DESCENDANTS_SURVIVED = "REPO_CONTRACTS_DESCENDANTS_SURVIVED"
 # §3-4 고정 코드
 REPO_CONTRACTS_CANONICAL_PLAN_UNREADABLE = "REPO_CONTRACTS_CANONICAL_PLAN_UNREADABLE"
@@ -518,12 +517,15 @@ def run_exact_head_contracts(
         )
         receipt.verdict = 0
     else:
-        # 성공 경로 — 최종 상태가 실측 YES 일 때만 PASS 다.
-        if receipt.final_worktree_clean == "YES":
+        # 성공 경로 — clean 은 ★실측했어야★ 하지만, 실측된 NO 는 판정이 아니라
+        # 증거다(§4-3 "canonical step 이 만든 잔여물이라면 그것도 증거다").
+        # §15 는 CLOSE-1(job success)과 CLOSE-2(clean YES)를 별개 conjunct 로
+        # 둔다 — clean 판정은 CLOSE-2 가 receipt 값으로 한다. 여기서 NO 를
+        # 실패로 바꾸면 두 판정이 결합되어 §9 의 분리가 깨진다.
+        if receipt.final_worktree_clean in ("YES", "NO"):
             receipt.verdict = 1
-        elif receipt.final_worktree_clean == "NO":
-            receipt.error_code = REPO_CONTRACTS_WORKTREE_NOT_CLEAN
         else:
+            # 실측하지 못한 채로는 PASS 를 쓰지 않는다(§2)
             receipt.error_code = receipt.clean_check_error_code
     return receipt
 
@@ -647,7 +649,6 @@ __all__ = [
     "REPO_CONTRACTS_PREEXISTING_WORKTREE_DIRTY",
     "REPO_CONTRACTS_PREPARATION_FAILED",
     "REPO_CONTRACTS_SHALLOW_CLONE",
-    "REPO_CONTRACTS_WORKTREE_NOT_CLEAN",
     "ContractReceipt",
     "RepoContractError",
     "assert_exact_head",
