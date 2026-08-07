@@ -71,6 +71,7 @@ const AdminPolicyConsole = lazy(() => import('./components/v1_1/AdminPolicyConso
 const CompanyFormatConsole = lazy(() => import('./components/v1_1/CompanyFormatConsole').then(module => ({ default: module.CompanyFormatConsole })));
 const CompanyFactApprovalConsole = lazy(() => import('./components/v1_1/CompanyFactApprovalConsole').then(module => ({ default: module.CompanyFactApprovalConsole })));
 const CompanyLearningConsole = lazy(() => import('./components/v1_1/CompanyLearningConsole').then(module => ({ default: module.CompanyLearningConsole })));
+const Helper1Console = lazy(() => import('./components/v1_1/Helper1Console').then(module => ({ default: module.Helper1Console })));
 
 type PendingBotState = {
   source: 'factpack' | 'llm' | null;
@@ -125,6 +126,7 @@ export function App() {
   const [companyFormatConsoleOpen, setCompanyFormatConsoleOpen] = useState(false);
   const [companyFactConsoleOpen, setCompanyFactConsoleOpen] = useState(false);
   const [companyLearningConsoleOpen, setCompanyLearningConsoleOpen] = useState(false);
+  const [helper1ConsoleOpen, setHelper1ConsoleOpen] = useState(false);
   const [egressMonitorOpen, setEgressMonitorOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [folders, setFolders] = useState<FolderRecord[]>([]);
@@ -737,7 +739,7 @@ export function App() {
     }, 200);
   };
 
-  const handleSettingsAction=(action:SettingsAction)=>{setSettingsOpen(false);if(action==='profile')setCompanyProfileSetupOpen(true);else if(action==='policy')setAdminPolicyConsoleOpen(true);else if(action==='format')setCompanyFormatConsoleOpen(true);else if(action==='fact')setCompanyFactConsoleOpen(true);else if(action==='learning')setCompanyLearningConsoleOpen(true);else if(action==='accounting')setAccountingModalOpen(true);else setEgressMonitorOpen(true);};
+  const handleSettingsAction=(action:SettingsAction)=>{setSettingsOpen(false);if(action==='profile')setCompanyProfileSetupOpen(true);else if(action==='policy')setAdminPolicyConsoleOpen(true);else if(action==='format')setCompanyFormatConsoleOpen(true);else if(action==='fact')setCompanyFactConsoleOpen(true);else if(action==='learning')setCompanyLearningConsoleOpen(true);else if(action==='helper1')setHelper1ConsoleOpen(true);else if(action==='accounting')setAccountingModalOpen(true);else setEgressMonitorOpen(true);};
 
   const handleDeleteCancel = () => {
     const target = deleteTarget;
@@ -1223,6 +1225,9 @@ export function App() {
       )}
       {companyLearningConsoleOpen && (
         <CompanyLearningConsole onClose={() => setCompanyLearningConsoleOpen(false)} />
+      )}
+      {helper1ConsoleOpen && (
+        <Helper1Console onClose={() => setHelper1ConsoleOpen(false)} />
       )}
       </Suspense>
       {conflictNotice && <div className="home-conflict-notice" role="alert"><span>{conflictNotice}</span><button onClick={() => setConflictNotice(null)}>확인</button></div>}

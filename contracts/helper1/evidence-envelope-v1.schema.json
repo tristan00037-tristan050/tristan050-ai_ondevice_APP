@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1/evidence-envelope-v1.schema.json",
+  "title": "Helper1 detached signed evidence envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["signed", "signature_algorithm", "signature_b64u"],
+  "properties": {
+    "signed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "role", "key_id", "repository", "commit_sha", "tree_sha",
+        "workspace_id", "issued_at_epoch_s", "expires_at_epoch_s", "nonce_b64u",
+        "payload_media_type", "payload_sha256"
+      ],
+      "properties": {
+        "schema_version": {"const": "butler.helper1.evidence-envelope.v1"},
+        "role": {"enum": [
+          "A1_STARTUP_COMPOSITION_RECEIPT", "A2_SUBJECT_BINDING_RECEIPT",
+          "A3_EGRESS_OBSERVATION_RECEIPT", "A4_RETRIEVAL_CALIBRATION_RECEIPT",
+          "A4_RETRIEVAL_SEALED_TEST_RECEIPT", "A4_RETRIEVAL_THRESHOLD_POLICY",
+          "A5_PARSER_ISOLATION_RECEIPT"
+        ]},
+        "key_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{7,127}$"},
+        "repository": {"type": "string", "minLength": 3, "maxLength": 256},
+        "commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"},
+        "tree_sha": {"type": "string", "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"},
+        "workspace_id": {"type": "string", "format": "uuid"},
+        "issued_at_epoch_s": {"type": "integer", "minimum": 1},
+        "expires_at_epoch_s": {"type": "integer", "minimum": 1},
+        "nonce_b64u": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"},
+        "payload_media_type": {"type": "string", "pattern": "^application/vnd\\.butler\\.helper1\\.[a-z0-9-]+\\+json;v=1$"},
+        "payload_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "signature_algorithm": {"const": "Ed25519"},
+    "signature_b64u": {"type": "string", "pattern": "^[A-Za-z0-9_-]{86}$"}
+  }
+}

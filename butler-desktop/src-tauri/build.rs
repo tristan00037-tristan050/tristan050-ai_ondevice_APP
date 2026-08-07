@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use sha2::{Digest, Sha256};
 use std::process::Command;
 
@@ -23,6 +24,8 @@ fn main() {
     println!("cargo:rerun-if-env-changed=BUTLER_BUILD_CONTEXT_DIGEST");
     println!("cargo:rerun-if-env-changed=BUTLER_FIRSTSCREEN_ROOT_ANCHOR_SHA256");
     println!("cargo:rerun-if-env-changed=BUTLER_RELEASE_DISTRIBUTION");
+    println!("cargo:rerun-if-env-changed=BUTLER_HELPER1_EXECUTION_PUBLIC_KEY_B64");
+    println!("cargo:rerun-if-env-changed=BUTLER_HELPER1_EXECUTION_PUBLIC_KEY_SHA256");
     println!("cargo:rerun-if-env-changed=BUTLER_SOURCE_COMMIT_OID");
     println!("cargo:rerun-if-env-changed=BUTLER_SOURCE_TREE_OID");
     println!("cargo:rerun-if-env-changed=BUTLER_BOX5_PRODUCTION_AUTHORITY_BUILD");
@@ -90,6 +93,22 @@ fn main() {
         "cargo:rustc-env=BUTLER_RELEASE_DISTRIBUTION={}",
         u8::from(gate.distribution)
     );
+    let helper1_key_b64 = std::env::var("BUTLER_HELPER1_EXECUTION_PUBLIC_KEY_B64").ok();
+    let helper1_key_digest = std::env::var("BUTLER_HELPER1_EXECUTION_PUBLIC_KEY_SHA256").ok();
+    match (helper1_key_b64, helper1_key_digest) {
+        (None, None) => {}
+        (Some(encoded), Some(expected)) if gate.distribution => {
+            let decoded = STANDARD
+                .decode(&encoded)
+                .expect("HELPER1_EXECUTION_PUBLIC_KEY_INVALID");
+            if decoded.len() != 32 || format!("{:x}", Sha256::digest(&decoded)) != expected {
+                panic!("HELPER1_EXECUTION_TRUST_ROOT_MISMATCH");
+            }
+            println!("cargo:rustc-env=BUTLER_HELPER1_EXECUTION_PUBLIC_KEY_B64={encoded}");
+            println!("cargo:rustc-env=BUTLER_HELPER1_EXECUTION_PUBLIC_KEY_SHA256={expected}");
+        }
+        _ => panic!("HELPER1_EXECUTION_TRUST_ROOT_INCOMPLETE"),
+    }
     for (name, value) in [
         ("BUTLER_SOURCE_COMMIT_OID", commit),
         ("BUTLER_SOURCE_TREE_OID", tree),

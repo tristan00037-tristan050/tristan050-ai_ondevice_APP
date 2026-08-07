@@ -34,6 +34,7 @@ export type UsageLogVerification = 'verified' | 'missing' | 'not_configured';
 export type UsageLogVerifier = (requestId: string) => Promise<number | null>;
 
 export interface BoxRuntimeInputs {
+  helper1WorkspaceId?: string;
   foreignDoc?: string;
   ourFormat?: string;
   promptTemplate?: string;
@@ -72,6 +73,7 @@ export const DEFAULT_BOX3_PROMPT_TEMPLATE =
 // Codex P2: helper1 /v1/helpers/1/search 의 query 상한(Helper1Query.max_length=4000).
 // 라우터 runtime_text 상한(12000)이 더 크므로, 초과분은 박스 호출 전에 차단(원문이 helper1 422 로 echo 되는 것 방지).
 export const HELPER1_MAX_QUERY_LENGTH = 4000;
+const HELPER1_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function readJson(response: Response): Promise<unknown> {
   const contentType = response.headers.get('Content-Type') ?? '';
@@ -112,7 +114,7 @@ async function postLocalJson(
 }
 
 export function buildTargetBoxPayload(
-  decision: Pick<RouterDecisionV1, 'intent_label'>,
+  decision: Pick<RouterDecisionV1, 'intent_label' | 'request_id'>,
   runtimeText: string,
   inputs: BoxRuntimeInputs = {},
 ): JsonValue | null {
@@ -120,10 +122,15 @@ export function buildTargetBoxPayload(
   if (intent === 'memory_search') {
     // Codex P2: helper1 query 상한(4000) 초과분은 브리지에서 선제 차단(null=payload_missing) —
     // 박스 호출 전에 막아 원문이 helper1 422 응답으로 echo 되는 것을 방지.
-    if (runtimeText.length > HELPER1_MAX_QUERY_LENGTH) return null;
+    if (runtimeText.length > HELPER1_MAX_QUERY_LENGTH || !HELPER1_UUID_RE.test(decision.request_id) || !inputs.helper1WorkspaceId || !HELPER1_UUID_RE.test(inputs.helper1WorkspaceId)) return null;
     return {
+      schema_version: 'butler.helper1.ask-request.v2',
+      request_id: decision.request_id,
+      workspace_id: inputs.helper1WorkspaceId,
       query: runtimeText,
       top_k: inputs.topK ?? 5,
+      requested_generation_id: null,
+      effect_intent: 'display_only',
     };
   }
   if (intent === 'form_convert') {

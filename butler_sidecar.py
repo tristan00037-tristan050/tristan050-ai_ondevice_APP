@@ -475,6 +475,8 @@ if _FASTAPI_AVAILABLE:
         _start_egress_monitor()
         try:
             _TOKEN_MANAGER.generate()
+            from butler_pc_core.helper1.composition import initialize_helper1_product
+            initialize_helper1_product()
             _start_model_tier_phase0_shadow()
             initialize_home_store()
         except Exception:

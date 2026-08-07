@@ -26,6 +26,7 @@ mod build_gate_contract;
 #[path = "../distribution_flag.rs"]
 mod distribution_flag_contract;
 mod export;
+mod helper1_trust;
 mod runtime_trust;
 
 const SIDECAR_ENV_CONFIG: &str = "sidecar-env.json";
@@ -1176,7 +1177,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_sidecar_capability_token,
-            box5_authorized_request,
+
             build_identity::get_native_build_context_digest,
             build_identity::get_native_release_distribution,
             runtime_trust::commands::verify_and_commit_trust_update,

@@ -1,0 +1,137 @@
+name: helper1-v2-evidence-producer
+
+# FSQ61-NEXT-P0-01 PROTECTED_EVIDENCE_BOOTSTRAP_CYCLE 구조 (감사 §2)
+# PR·push·merge_group 은 ★비신뢰 원시 재료만 만들어 올린다(신뢰 승인물 금지).
+#   · CANONICAL_SUBJECT · SUBMISSION · 기계 산출 원시 증거
+#   · 업로드는 강제 실패 단계 없이, 회귀 검사와 ★별도 job 으로 분리(빈 꾸러미 방지)
+# 기본 브랜치의 보호된 helper1-v2-trusted-verifier(on: workflow_run)가 이 산출물을
+# 내려받아(비신뢰 데이터로만, 실행 금지) subject SHA/tree·workflow ID/path·run attempt·
+# artifact ID/digest 를 재검증한 뒤 품질 측정·승인 receipt·최종 꾸러미·서명 판정·
+# required check 를 ★보호 경로에서 만든다. 이 워크플로는 신뢰 승인물을 만들지 않는다.
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: helper1-v2-producer-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '24'
+
+jobs:
+  # ── 비신뢰 원시 재료 생산 + 업로드 (강제 실패 단계 없음, 회귀와 분리) ──
+  untrusted-candidate:
+    name: helper1-v2-untrusted-evidence
+    runs-on: [self-hosted, macOS, ARM64, helper1-quality]
+    timeout-minutes: 30
+    steps:
+      - name: Check out evidence subject
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.event.after || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: butler-desktop/package-lock.json
+          package-manager-cache: true
+      - name: Record untrusted canonical subject claim
+        id: canonical-subject
+        run: |
+          set -euo pipefail
+          python scripts/ci/helper1_canonical_subject.py \
+            --event-name "${GITHUB_EVENT_NAME}" \
+            --event "${GITHUB_EVENT_PATH}" \
+            --repository-id "${GITHUB_REPOSITORY_ID}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --workflow-ref "${GITHUB_WORKFLOW_REF}" \
+            --workflow-sha "${GITHUB_WORKFLOW_SHA}" \
+            --dispatch-sha "${GITHUB_SHA}" \
+            --output "${RUNNER_TEMP}/CANONICAL_SUBJECT.json" \
+            --github-output "${GITHUB_OUTPUT}"
+      - name: Install hash-locked Python dependencies
+        run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - name: Assemble bounded untrusted raw materials
+        env:
+          PRODUCER_RUN_ID: ${{ github.run_id }}
+          PRODUCER_RUN_ATTEMPT: ${{ github.run_attempt }}
+          SUBJECT_SHA: ${{ steps.canonical-subject.outputs.subject_sha }}
+          SUBJECT_DIGEST: ${{ steps.canonical-subject.outputs.subject_digest }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "${RUNNER_TEMP}/helper1-build/test-evidence"
+          install -m 0600 "${RUNNER_TEMP}/CANONICAL_SUBJECT.json" "${RUNNER_TEMP}/helper1-build/CANONICAL_SUBJECT.json"
+          python -c 'import json,os,pathlib; run="{}:{}".format(os.environ["PRODUCER_RUN_ID"],os.environ["PRODUCER_RUN_ATTEMPT"]); pathlib.Path(os.environ["RUNNER_TEMP"]+"/helper1-build/SUBMISSION.json").write_text(json.dumps({"schema_version":"butler.helper1.untrusted-submission.v1","run_id":run,"subject_commit":os.environ["SUBJECT_SHA"],"canonical_subject_sha256":os.environ["SUBJECT_DIGEST"],"product_evidence_present":True},sort_keys=True,separators=(",",":"))+"\n",encoding="utf-8")'
+      # raw evidence 는 desktop vitest 를 실행하므로 그 앞에서 node_modules 설치
+      # (이 job 전용; product-regressions job 과 별개라 그쪽 npm ci 로는 못 고침)
+      - name: Install desktop node modules for evidence
+        run: npm ci --ignore-scripts --prefix butler-desktop
+      - name: Produce machine-derived raw evidence
+        run: |
+          set +e
+          python scripts/run_helper1_v51_evidence.py \
+            --output-root "${RUNNER_TEMP}/helper1-build/test-evidence" \
+            --index "${RUNNER_TEMP}/helper1-build/test-evidence/TEST_EVIDENCE_INDEX.v1.json"
+          evidence_rc=$?
+          set -e
+          test "${evidence_rc}" -eq 2 || { echo "HELPER1_PRODUCER_EVIDENCE_OK=0"; echo "ERROR_CODE=PRODUCER_EVIDENCE_UNEXPECTED_STATE"; exit 1; }
+          echo "HELPER1_PRODUCER_EVIDENCE_OK=1"
+          echo "ERROR_CODE=NONE"
+      # ★강제 실패 단계보다 앞: 원시 재료를 별도 이름·스키마로 업로드(신뢰 승인물 아님)
+      - name: Upload untrusted candidate artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: helper1-v2-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/helper1-build/
+          if-no-files-found: error
+          retention-days: 30
+
+  # ── 제품 회귀·정적 검사 (원시 업로드와 분리; 실패해도 산출물 생성은 막지 않음) ──
+  product-regressions:
+    name: helper1-v2-product-regressions
+    runs-on: [self-hosted, macOS, ARM64, helper1-quality]
+    timeout-minutes: 30
+    steps:
+      - name: Check out evidence subject
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.event.after || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: butler-desktop/package-lock.json
+          package-manager-cache: true
+      - name: Install hash-locked Python dependencies
+        run: python -m pip install --require-hashes -r requirements-firstscreen-ci.lock
+      - name: Run Helper1 regressions and static preflight
+        run: |
+          set -euo pipefail
+          python -m pytest -q tests/helper1_v2
+          python scripts/verify_helper1_v2.py --static-only
+          npm ci --ignore-scripts --prefix butler-desktop
+          npm run test:run --prefix butler-desktop -- src/lib/helper1/client.test.ts

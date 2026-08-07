@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1/egress-observation-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "key_id", "run_id", "request_id", "session_digest",
+    "action", "nonce_digest", "raw_observation_sha256", "policy_sha256",
+    "record_count", "sent_bytes", "connection_attempts", "gap_count",
+    "process_closure_complete", "external_send_zero", "started_monotonic_ns",
+    "ended_monotonic_ns", "issued_at_epoch_s", "expires_at_epoch_s", "signature_b64"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.egress-observation.v1"},
+    "key_id": {"$ref": "#/$defs/digest"},
+    "run_id": {"$ref": "#/$defs/uuid"},
+    "request_id": {"$ref": "#/$defs/uuid"},
+    "session_digest": {"$ref": "#/$defs/digest"},
+    "action": {"enum": ["ask", "search", "index"]},
+    "nonce_digest": {"$ref": "#/$defs/digest"},
+    "raw_observation_sha256": {"$ref": "#/$defs/digest"},
+    "policy_sha256": {"$ref": "#/$defs/digest"},
+    "record_count": {"type": "integer", "minimum": 0},
+    "sent_bytes": {"type": "integer", "minimum": 0},
+    "connection_attempts": {"type": "integer", "minimum": 0},
+    "gap_count": {"type": "integer", "minimum": 0},
+    "process_closure_complete": {"const": true},
+    "external_send_zero": {"type": "boolean"},
+    "started_monotonic_ns": {"type": "integer", "minimum": 0},
+    "ended_monotonic_ns": {"type": "integer", "minimum": 1},
+    "issued_at_epoch_s": {"type": "integer", "minimum": 0},
+    "expires_at_epoch_s": {"type": "integer", "minimum": 1},
+    "signature_b64": {"type": "string", "pattern": "^[A-Za-z0-9+/]{86}==$"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "uuid": {"type": "string", "format": "uuid"}
+  }
+}

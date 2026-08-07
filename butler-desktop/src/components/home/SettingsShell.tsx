@@ -13,7 +13,7 @@ import {
   type LearningCapabilitySnapshot,
 } from '../../lib/learningCapability';
 
-export type SettingsAction = 'profile' | 'policy' | 'format' | 'fact' | 'learning' | 'accounting' | 'egress';
+export type SettingsAction = 'profile' | 'policy' | 'format' | 'fact' | 'learning' | 'helper1' | 'accounting' | 'egress';
 
 interface SettingsShellProps {
   onClose: () => void;
@@ -185,6 +185,21 @@ export function SettingsShell({
                 </button>
               </li>
             ))}
+            <li
+              className="settings-row"
+              data-testid="learning-row-helper1"
+            >
+              <div>
+                <strong>도우미1 회사 문서</strong>
+                <span>검증된 로컬 자산이 있을 때만 사용</span>
+              </div>
+              <button
+                aria-label="도우미1 회사 문서 열기"
+                onClick={() => onAction('helper1')}
+              >
+                열기
+              </button>
+            </li>
           </ul>
         </section>
         <section className="settings-group">

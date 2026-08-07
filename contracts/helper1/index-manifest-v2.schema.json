@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1/index-manifest-v2.schema.json",
+  "title": "Butler Helper1 Index Manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "workspace_id",
+    "generation_id",
+    "encoder",
+    "lexical_tokenizer_sha256",
+    "chunker_policy_sha256",
+    "parser_isolation_policy_sha256",
+    "document_set_hmac_sha256",
+    "policy_sha256",
+    "chunk_count",
+    "embedding_rows",
+    "embedding_dimension",
+    "lexical_term_count",
+    "artifacts",
+    "previous_generation_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.helper1.index.v2"
+    },
+    "workspace_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "generation_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "previous_generation_id": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "encoder": {
+      "$ref": "#/$defs/encoder"
+    },
+    "lexical_tokenizer_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "chunker_policy_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "parser_isolation_policy_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "document_set_hmac_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "policy_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "chunk_count": {
+      "$ref": "#/$defs/positiveInteger"
+    },
+    "embedding_rows": {
+      "$ref": "#/$defs/positiveInteger"
+    },
+    "embedding_dimension": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65536
+    },
+    "lexical_term_count": {
+      "$ref": "#/$defs/positiveInteger"
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "chunks",
+        "embeddings",
+        "lexical_index"
+      ],
+      "properties": {
+        "chunks": {
+          "$ref": "#/$defs/artifact"
+        },
+        "embeddings": {
+          "$ref": "#/$defs/artifact"
+        },
+        "lexical_index": {
+          "$ref": "#/$defs/artifact"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "safeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "modelId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "bytes",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "bytes": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "model_id",
+        "upstream_revision",
+        "closure_manifest_sha256",
+        "runtime_name",
+        "runtime_version",
+        "runtime_binary_sha256",
+        "tokenizer_sha256"
+      ],
+      "properties": {
+        "role": {
+          "const": "helper1_embed"
+        },
+        "model_id": {
+          "$ref": "#/$defs/modelId"
+        },
+        "upstream_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "not": {
+            "enum": [
+              "main",
+              "master",
+              "HEAD",
+              "latest"
+            ]
+          }
+        },
+        "closure_manifest_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "runtime_name": {
+          "$ref": "#/$defs/safeId"
+        },
+        "runtime_version": {
+          "$ref": "#/$defs/safeId"
+        },
+        "runtime_binary_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "tokenizer_sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "encoder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "asset",
+        "pooling",
+        "normalize",
+        "dimension",
+        "max_length",
+        "truncation_policy",
+        "document_prefix_sha256",
+        "query_prefix_sha256",
+        "output_dtype"
+      ],
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/asset"
+        },
+        "pooling": {
+          "enum": [
+            "cls",
+            "mean",
+            "last_token"
+          ]
+        },
+        "normalize": {
+          "type": "boolean"
+        },
+        "dimension": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "max_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        },
+        "truncation_policy": {
+          "enum": [
+            "reject",
+            "head",
+            "tail",
+            "balanced"
+          ]
+        },
+        "document_prefix_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "query_prefix_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "output_dtype": {
+          "const": "float32"
+        }
+      }
+    }
+  }
+}
