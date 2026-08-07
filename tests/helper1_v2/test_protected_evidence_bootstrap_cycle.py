@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import urllib.request
 import zipfile
 
 import pytest
@@ -21,12 +22,15 @@ from scripts.ci.helper1_producer_package import (
     build_protected_bootstrap_package,
     load_verified_package,
     main as producer_package_main,
+    verify_protected_package_layout,
 )
 from scripts.ci.helper1_protected_bootstrap import (
     EXPECTED_CHECKS,
     EXPECTED_LANES,
     ProtectedBootstrapError,
+    _CrossOriginAuthStrippingRedirectHandler,
     build_bootstrap_receipts,
+    verify_raw_producer_artifact_layout,
     verify_untrusted_artifact,
 )
 
@@ -231,6 +235,97 @@ def _transport(fixture: dict, artifact_root: Path):
 def _policy() -> tuple[dict, bytes]:
     raw = POLICY.read_bytes()
     return json.loads(raw), raw
+
+
+def test_raw_only_producer_artifact_layout_is_accepted(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "input"
+    _materialize_raw_artifact(artifact_root)
+
+    assert verify_raw_producer_artifact_layout(artifact_root) == (
+        artifact_root / "test-evidence"
+    )
+    assert not (artifact_root / "package").exists()
+
+
+def test_raw_producer_artifact_missing_file_is_blocked(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "input"
+    _materialize_raw_artifact(artifact_root)
+    (artifact_root / "SUBMISSION.json").unlink()
+
+    with pytest.raises(ProtectedBootstrapError, match="UNTRUSTED_ARTIFACT_LAYOUT_INVALID"):
+        verify_raw_producer_artifact_layout(artifact_root)
+
+
+def test_raw_producer_artifact_renamed_file_is_blocked(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "input"
+    _materialize_raw_artifact(artifact_root)
+    (artifact_root / "SUBMISSION.json").rename(artifact_root / "submission.json")
+
+    with pytest.raises(ProtectedBootstrapError, match="UNTRUSTED_ARTIFACT_LAYOUT_INVALID"):
+        verify_raw_producer_artifact_layout(artifact_root)
+
+
+def test_raw_producer_artifact_unknown_top_level_entry_is_blocked(
+    tmp_path: Path,
+) -> None:
+    artifact_root = tmp_path / "input"
+    _materialize_raw_artifact(artifact_root)
+    (artifact_root / "unexpected.txt").write_text("unexpected", encoding="utf-8")
+
+    with pytest.raises(ProtectedBootstrapError, match="UNTRUSTED_ARTIFACT_LAYOUT_INVALID"):
+        verify_raw_producer_artifact_layout(artifact_root)
+
+
+def test_protected_package_layout_still_requires_package(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "input"
+    _materialize_raw_artifact(artifact_root)
+
+    with pytest.raises(ProducerPackageError, match="PRODUCER_ARTIFACT_LAYOUT_INVALID"):
+        verify_protected_package_layout(artifact_root / PACKAGE_RELATIVE)
+
+
+def test_artifact_redirect_does_not_forward_github_authorization() -> None:
+    handler = _CrossOriginAuthStrippingRedirectHandler()
+    source = urllib.request.Request(
+        "https://api.github.com/repos/example/actions/artifacts/1/zip",
+        headers={"Authorization": "Bearer secret", "Cookie": "private=1"},
+    )
+
+    cross_origin = handler.redirect_request(
+        source,
+        None,
+        302,
+        "Found",
+        {},
+        "https://results-receiver.example/artifact.zip?sig=bound",
+    )
+    assert cross_origin is not None
+    assert cross_origin.get_header("Authorization") is None
+    assert cross_origin.get_header("Cookie") is None
+
+    same_origin = handler.redirect_request(
+        source,
+        None,
+        302,
+        "Found",
+        {},
+        "https://api.github.com/repos/example/actions/artifacts/2/zip",
+    )
+    assert same_origin is not None
+    assert same_origin.get_header("Authorization") == "Bearer secret"
+
+    with pytest.raises(
+        ProtectedBootstrapError,
+        match="UNTRUSTED_ARTIFACT_DOWNLOAD_FAILED",
+    ):
+        handler.redirect_request(
+            source,
+            None,
+            302,
+            "Found",
+            {},
+            "http://results-receiver.example/artifact.zip",
+        )
 
 
 def test_clean_runner_executes_raw_to_package_to_unsigned_verdict(tmp_path: Path) -> None:
