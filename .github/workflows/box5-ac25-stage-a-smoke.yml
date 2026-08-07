@@ -85,15 +85,44 @@ jobs:
               print(f"{key.upper()}={summary[key]}")
           PY
 
-      # §18 — dirty 면 경로 목록을 로그에 내지 않는다. 코드만 낸다.
+      - name: Verify erratum 2 and external evidence root
+        env:
+          EXPECTED_ERRATUM_SHA256: 2ed584f139227a454c821729c44586fd628d8f0239b61700fae62cc7d7c185db
+        run: |
+          set -euo pipefail
+          test "$(sha256sum docs/box5/ac25/ac25-r6-erratum-2.json | cut -d' ' -f1)" = "${EXPECTED_ERRATUM_SHA256}" \
+            || { echo "ERROR_CODE=ERRATUM_2_DIGEST_MISMATCH"; exit 1; }
+          case "${RUNNER_TEMP}" in
+            "${GITHUB_WORKSPACE}"|"${GITHUB_WORKSPACE}"/*)
+              echo "ERROR_CODE=OUTPUT_ROOT_POLICY_VIOLATION"
+              exit 1
+              ;;
+          esac
+
+      # §18 — 최종 상태의 원시 NUL 바이트는 저장소 밖에 남기고,
+      # dirty 면 경로 목록을 로그에 내지 않는다. 코드만 낸다.
       - name: Clean finish (tracked and untracked)
         run: |
           set -euo pipefail
+          clean_status="${RUNNER_TEMP}/ac25-clean-status.porcelain-v2.z"
+          git status --porcelain=v2 -z --untracked-files=all > "${clean_status}" \
+            || { echo "ERROR_CODE=SMOKE_CLEAN_CHECK_FAILED"; exit 1; }
           if ! git diff --quiet || ! git diff --cached --quiet \
-             || [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+             || [ -s "${clean_status}" ]; then
             echo "ERROR_CODE=SMOKE_WORKTREE_NOT_CLEAN"
             exit 1
           fi
+
+      - name: Upload raw Python acceptance evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ac25-v42-python-${{ github.event.pull_request.head.sha }}
+          path: |
+            ${{ runner.temp }}/ac25-junit.xml
+            ${{ runner.temp }}/ac25-selftest.json
+            ${{ runner.temp }}/ac25-clean-status.porcelain-v2.z
+          if-no-files-found: error
+          retention-days: 14
 
   # ══ C2 — Ubuntu 원격 재현 (좌표는 단일 원본에서만 온다) ═══════════════
   ac25-merge-reproducibility:
@@ -216,6 +245,16 @@ jobs:
         run: |
           set -euo pipefail
           node --test tests/box5_ac25/publish_check.test.mjs
+          node --test --test-reporter=tap tests/box5_ac25/publish_check.test.mjs \
+            > "${RUNNER_TEMP}/ac25-publish.tap"
+
+      - name: Upload raw Node acceptance evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ac25-v42-node-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/ac25-publish.tap
+          if-no-files-found: error
+          retention-days: 14
 
   # ══ R6-4 — exact head 저장소 계약 (v3.1 §3) ═══════════════════════════
   # 준비 = canonical 추출 그대로(추가 명령 0). action 도 canonical 과 같은

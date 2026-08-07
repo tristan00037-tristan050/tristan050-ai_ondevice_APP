@@ -534,13 +534,23 @@ def test_capture_root_must_exist(tmp_path):
     assert caught.value.code == oc.CONTAINMENT_CAPTURE_ROOT_INVALID
 
 
-# ══ raw artifact 업로드 0건 ════════════════════════════════════════════
-def test_no_workflow_uploads_raw_captures():
+# ══ raw stdout/stderr capture 업로드 0건 ═══════════════════════════════
+def test_workflow_uploads_only_approved_test_evidence():
+    approved = {
+        "ac25-junit.xml", "ac25-selftest.json", "ac25-publish.tap",
+        "ac25-clean-status.porcelain-v2.z",
+    }
     for path in WORKFLOWS:
         body = path.read_text(encoding="utf-8")
-        assert "upload-artifact" not in body, path.name
         assert "stdout.bin" not in body, path.name
         assert "stderr.bin" not in body, path.name
+        if "upload-artifact" not in body:
+            continue
+        assert "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in body
+        for line in body.splitlines():
+            stripped = line.strip()
+            if "runner.temp" in stripped and "/ac25-" in stripped:
+                assert any(name in stripped for name in approved), stripped
 
 
 def test_result_exposes_no_raw_text_fields():

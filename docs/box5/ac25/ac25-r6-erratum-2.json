@@ -1,0 +1,1 @@
+{"canonical_output_policy":"OUTSIDE_REPOSITORY_ONLY","cleanup_to_achieve_clean":"FORBIDDEN","dirty_path_allowlist":"FORBIDDEN","policy_id":"AC25_R6_ERRATUM_2","raw_final_worktree_clean":"REQUIRED","schema_version":"butler.ac25.scope-policy.v1","unknown_state":"FAIL_CLOSED"}

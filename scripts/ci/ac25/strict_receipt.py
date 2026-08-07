@@ -1,4 +1,4 @@
-"""AC-25 R6 close receipt primitives (v4.1).
+"""AC-25 R6 close receipt primitives (v4.2).
 
 Only raw, digest-bound evidence is accepted.  The module deliberately uses the
 Python standard library so the protected workflow can import it with ``-S``.
@@ -17,7 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable, Mapping, Sequence
 
 
-SCHEMA_VERSION = "butler.ac25.r6_close_receipt.v1"
+SCHEMA_VERSION = "butler.ac25.r6_close_receipt.v2"
 SHA256_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 OID_RE = re.compile(r"\A[0-9a-f]{40}\Z")
 DECIMAL_RE = re.compile(r"\A(?:0|[1-9][0-9]*)\Z")
@@ -33,8 +33,9 @@ TAP_FILE_MAX_BYTES = 16 * 1024 * 1024
 ROOT_FILES = frozenset(
     {
         "receipt.json", "receipt.schema.json", "changed_paths.json",
-        "dirty_paths.json", "required_checks.json", "observed_checks.json",
-        "failing_guard_keys.json", "provenance.json", "DIGESTS.sha256",
+        "contract_evidence.json", "clean_check.json", "clean-status.porcelain-v2.z",
+        "required_checks.json", "observed_checks.json", "provenance.json",
+        "DIGESTS.sha256",
         "junit/manifest.json", "tap/manifest.json",
     }
 )
@@ -384,41 +385,85 @@ def validate_test_manifest(
     return sha256_bytes(raw)
 
 
-def validate_required_checks(document) -> bool:
-    _exact_object(document, ("known", "complete", "source", "checks"))
-    if not isinstance(document["known"], bool) or not isinstance(document["complete"], bool):
+def _check_identity(check, *, code: str) -> tuple[str, int]:
+    name = check.get("name") if isinstance(check, dict) else None
+    app_id = check.get("app_id") if isinstance(check, dict) else None
+    if (
+        not isinstance(name, str) or not name or CONTROL_RE.search(name)
+        or not isinstance(app_id, int) or isinstance(app_id, bool) or app_id <= 0
+    ):
+        raise StrictReceiptError(code)
+    return name, app_id
+
+
+def validate_required_checks(document) -> tuple[tuple[str, int], ...]:
+    _exact_object(
+        document,
+        (
+            "known", "complete", "source", "branch_protection_pages_complete",
+            "ruleset_pages_complete", "checks",
+        ),
+    )
+    if document["known"] is not True or document["complete"] is not True:
+        raise StrictReceiptError("REQUIRED_CHECKS_INCOMPLETE")
+    if document["source"] not in ("branch-protection", "ruleset", "BOTH"):
         raise StrictReceiptError("REQUIRED_CHECKS_INVALID")
-    if document["source"] not in ("branch-protection", "ruleset", "BOTH", "UNKNOWN"):
-        raise StrictReceiptError("REQUIRED_CHECKS_INVALID")
+    if (
+        document["branch_protection_pages_complete"] is not True
+        or document["ruleset_pages_complete"] is not True
+    ):
+        raise StrictReceiptError("REQUIRED_CHECKS_PAGINATION_INCOMPLETE")
     if not isinstance(document["checks"], list):
         raise StrictReceiptError("REQUIRED_CHECKS_INVALID")
-    names = []
+    if not document["checks"]:
+        raise StrictReceiptError("REQUIRED_CHECK_SET_EMPTY")
+    identities = []
     for check in document["checks"]:
         _exact_object(check, ("name", "app_id"))
-        if not isinstance(check["name"], str) or not check["name"]:
-            raise StrictReceiptError("REQUIRED_CHECKS_INVALID")
-        if check["app_id"] is not None:
-            _nonnegative_int(check["app_id"])
-        names.append((check["name"], check["app_id"]))
-    if len(names) != len(set(names)):
+        identities.append(_check_identity(check, code="REQUIRED_CHECKS_INVALID"))
+    if len(identities) != len(set(identities)):
         raise StrictReceiptError("REQUIRED_CHECKS_DUPLICATE")
-    return document["known"] and document["complete"] and document["source"] != "UNKNOWN"
+    if identities != sorted(identities, key=lambda item: (item[0].encode("utf-8"), item[1])):
+        raise StrictReceiptError("REQUIRED_CHECKS_NOT_SORTED")
+    return tuple(identities)
 
 
-def validate_observed_checks(document) -> bool:
+def validate_observed_checks(document) -> dict[tuple[str, int], dict]:
     _exact_object(document, ("complete", "head_sha", "checks"))
     if not isinstance(document["complete"], bool) or OID_RE.fullmatch(document["head_sha"] or "") is None:
         raise StrictReceiptError("OBSERVED_CHECKS_INVALID")
     if not isinstance(document["checks"], list):
         raise StrictReceiptError("OBSERVED_CHECKS_INVALID")
-    identities = set()
-    all_success = document["complete"]
+    if document["complete"] is not True:
+        raise StrictReceiptError("OBSERVED_CHECKS_INCOMPLETE")
+    identities = {}
     for check in document["checks"]:
         _exact_object(check, ("name", "app_id", "run_id", "attempt", "status", "conclusion"))
-        identity = (check["name"], check["app_id"], check["run_id"], check["attempt"])
+        identity = _check_identity(check, code="OBSERVED_CHECKS_INVALID")
         if identity in identities:
             raise StrictReceiptError("OBSERVED_CHECKS_DUPLICATE")
-        identities.add(identity)
+        if (
+            not isinstance(check["run_id"], int) or isinstance(check["run_id"], bool)
+            or check["run_id"] <= 0
+            or not isinstance(check["attempt"], int) or isinstance(check["attempt"], bool)
+            or check["attempt"] <= 0
+            or not isinstance(check["status"], str)
+            or not isinstance(check["conclusion"], str)
+        ):
+            raise StrictReceiptError("OBSERVED_CHECKS_INVALID")
+        identities[identity] = check
+    return identities
+
+
+def require_successful_checks(
+    required: Sequence[tuple[str, int]], observed: Mapping[tuple[str, int], dict]
+) -> None:
+    observed_names = {name for name, _app_id in observed}
+    for identity in required:
+        if identity not in observed:
+            if identity[0] in observed_names:
+                raise StrictReceiptError("REQUIRED_CHECK_APP_ID_MISMATCH")
+            raise StrictReceiptError("REQUIRED_CHECK_MISSING")
+        check = observed[identity]
         if check["status"] != "completed" or check["conclusion"] != "success":
-            all_success = False
-    return all_success
+            raise StrictReceiptError("REQUIRED_CHECK_NOT_SUCCESS")
