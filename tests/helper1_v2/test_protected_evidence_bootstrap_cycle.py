@@ -16,6 +16,7 @@ import pytest
 
 from butler_pc_core.helper1.test_evidence import CHECKS, LANES, CheckResult, LaneResult
 import scripts.ci.helper1_producer_package as producer_package_module
+import scripts.ci.helper1_protected_bootstrap as protected_bootstrap_module
 from scripts.ci.helper1_producer_package import (
     PACKAGE_RELATIVE,
     ProducerPackageError,
@@ -29,6 +30,7 @@ from scripts.ci.helper1_protected_bootstrap import (
     EXPECTED_LANES,
     ProtectedBootstrapError,
     _CrossOriginAuthStrippingRedirectHandler,
+    _workflow_bytes,
     build_bootstrap_receipts,
     verify_raw_producer_artifact_layout,
     verify_untrusted_artifact,
@@ -38,6 +40,9 @@ ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "tests/helper1_v2/fixtures/github-helper1-run-31063756134.v1.json"
 POLICY = ROOT / "contracts/helper1/trusted-verifier-policy-v1.json"
 WORKFLOW = ROOT / ".github/workflows/helper1-v2-evidence.yml"
+GITHUB_CONTENTS_FIXTURE = (
+    ROOT / "tests/helper1_v2/fixtures/github-contents-helper1-v2-evidence.v1.json"
+)
 SUBJECT_COMMIT = "2f7fe4b9fc8c2a126ce947ed121d764dc033cb7c"
 SUBJECT_TREE = "ac0ce51d76cc08cb7aaa9a63728d1a1cae8f35b2"
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
@@ -200,7 +205,12 @@ def _event(root: Path) -> Path:
     return path
 
 
-def _transport(fixture: dict, artifact_root: Path):
+def _transport(
+    fixture: dict,
+    artifact_root: Path,
+    *,
+    workflow_response: dict | None = None,
+):
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(item for item in artifact_root.rglob("*") if item.is_file()):
@@ -213,7 +223,7 @@ def _transport(fixture: dict, artifact_root: Path):
     archive_raw = stream.getvalue()
     fixture["artifact"]["digest"] = "sha256:" + hashlib.sha256(archive_raw).hexdigest()
     fixture["artifact"]["size_in_bytes"] = len(archive_raw)
-    workflow = {
+    workflow = workflow_response or {
         "encoding": "base64",
         "content": base64.b64encode(WORKFLOW.read_bytes()).decode("ascii"),
     }
@@ -230,6 +240,13 @@ def _transport(fixture: dict, artifact_root: Path):
         raise AssertionError(url)
 
     return request, lambda _url: archive_raw
+
+
+def _github_contents_fixture() -> dict:
+    value = json.loads(GITHUB_CONTENTS_FIXTURE.read_text(encoding="utf-8"))
+    assert value["encoding"] == "base64"
+    assert "\n" in value["content"]
+    return value
 
 
 def _policy() -> tuple[dict, bytes]:
@@ -326,6 +343,202 @@ def test_artifact_redirect_does_not_forward_github_authorization() -> None:
             {},
             "http://results-receiver.example/artifact.zip",
         )
+
+
+def test_workflow_bytes_accepts_github_encodebytes_line_wrapping() -> None:
+    raw = WORKFLOW.read_bytes()
+    response = {
+        "encoding": "base64",
+        "content": base64.encodebytes(raw).decode("ascii"),
+    }
+
+    assert _workflow_bytes(response) == raw
+
+
+def test_workflow_bytes_accepts_crlf_line_wrapping() -> None:
+    raw = WORKFLOW.read_bytes()
+    content = base64.encodebytes(raw).decode("ascii").replace("\n", "\r\n")
+
+    assert _workflow_bytes({"encoding": "base64", "content": content}) == raw
+
+
+def test_github_contents_fixture_digest_matches_policy() -> None:
+    decoded = _workflow_bytes(_github_contents_fixture())
+    policy, _raw = _policy()
+
+    assert decoded == WORKFLOW.read_bytes()
+    assert "sha256:" + hashlib.sha256(decoded).hexdigest() == (
+        policy["quality_producer_workflow_sha256"]
+    )
+
+
+def test_workflow_bytes_rejects_non_crlf_whitespace() -> None:
+    content = base64.b64encode(b"protected workflow").decode("ascii")
+    for marker in (" ", "\t", "\v", "\f", "\u00a0", "\u2003"):
+        with pytest.raises(
+            ProtectedBootstrapError,
+            match="UNTRUSTED_WORKFLOW_IDENTITY_INVALID",
+        ):
+            _workflow_bytes(
+                {"encoding": "base64", "content": content[:4] + marker + content[4:]}
+            )
+
+
+def test_workflow_bytes_rejects_nonstandard_characters() -> None:
+    content = base64.b64encode(b"protected workflow").decode("ascii")
+    for marker in ("-", "_", "!"):
+        with pytest.raises(
+            ProtectedBootstrapError,
+            match="UNTRUSTED_WORKFLOW_IDENTITY_INVALID",
+        ):
+            _workflow_bytes(
+                {"encoding": "base64", "content": content[:4] + marker + content[5:]}
+            )
+
+
+def test_valid_base64_workflow_mutation_fails_policy_digest(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "input"
+    _materialize_raw_artifact(artifact_root)
+    event = _event(tmp_path)
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    response = _github_contents_fixture()
+    normalized = response["content"].replace("\r", "").replace("\n", "")
+    replacement = "A" if normalized[0] != "A" else "B"
+    response["content"] = replacement + normalized[1:]
+    request, request_archive = _transport(
+        fixture,
+        artifact_root,
+        workflow_response=response,
+    )
+
+    with pytest.raises(
+        ProtectedBootstrapError,
+        match="UNTRUSTED_WORKFLOW_IDENTITY_INVALID",
+    ):
+        verify_untrusted_artifact(
+            artifact_root,
+            event,
+            _policy()[0],
+            request_json=request,
+            request_archive=request_archive,
+        )
+
+
+def test_workflow_bytes_rejects_invalid_response_contract() -> None:
+    cases = (
+        {"encoding": "utf-8", "content": "YWJj"},
+        {"encoding": "base64"},
+        {"encoding": "base64", "content": None},
+        {"encoding": "base64", "content": b"YWJj"},
+    )
+    for response in cases:
+        with pytest.raises(
+            ProtectedBootstrapError,
+            match="UNTRUSTED_WORKFLOW_IDENTITY_INVALID",
+        ):
+            _workflow_bytes(response)
+
+
+def test_github_contents_fixture_extracts_subject_full_path(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "input"
+    _materialize_raw_artifact(artifact_root)
+    event = _event(tmp_path)
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    request, request_archive = _transport(
+        fixture,
+        artifact_root,
+        workflow_response=_github_contents_fixture(),
+    )
+
+    verified = verify_untrusted_artifact(
+        artifact_root,
+        event,
+        _policy()[0],
+        request_json=request,
+        request_archive=request_archive,
+    )
+
+    assert verified.subject["subject_sha"] == SUBJECT_COMMIT
+    assert verified.workflow_sha256 == hashlib.sha256(
+        WORKFLOW.read_bytes()
+    ).hexdigest()
+
+
+def test_github_contents_fixture_builds_protected_package(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "input"
+    _materialize_raw_artifact(artifact_root)
+    event = _event(tmp_path)
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    request, request_archive = _transport(
+        fixture,
+        artifact_root,
+        workflow_response=_github_contents_fixture(),
+    )
+
+    verified, descriptor = build_protected_bootstrap_package(
+        artifact_root,
+        event,
+        request_json=request,
+        request_archive=request_archive,
+    )
+
+    package = artifact_root / PACKAGE_RELATIVE
+    assert package.is_file()
+    assert descriptor["package_sha256"] == hashlib.sha256(
+        package.read_bytes()
+    ).hexdigest()
+    assert verified.workflow_sha256 == hashlib.sha256(
+        WORKFLOW.read_bytes()
+    ).hexdigest()
+
+
+def test_protected_workflow_extract_subject_command_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    artifact_root = tmp_path / "input"
+    _materialize_raw_artifact(artifact_root)
+    event = _event(tmp_path)
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    request, request_archive = _transport(
+        fixture,
+        artifact_root,
+        workflow_response=_github_contents_fixture(),
+    )
+    package = artifact_root / PACKAGE_RELATIVE
+    output = tmp_path / "CANONICAL_SUBJECT.json"
+    workflow_text = (
+        ROOT / ".github/workflows/helper1-v2-trusted-verifier.yml"
+    ).read_text(encoding="utf-8")
+    assert "python scripts/ci/helper1_producer_package.py extract-subject" in workflow_text
+
+    monkeypatch.setattr(protected_bootstrap_module, "_default_request_json", request)
+    monkeypatch.setattr(
+        protected_bootstrap_module,
+        "_default_request_bytes",
+        request_archive,
+    )
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "helper1_producer_package.py",
+            "extract-subject",
+            "--producer-package",
+            str(package),
+            "--output",
+            str(output),
+        ],
+    )
+
+    assert producer_package_main() == 0
+    assert package.is_file()
+    assert json.loads(output.read_text(encoding="utf-8"))["subject_sha"] == SUBJECT_COMMIT
+    stdout = capsys.readouterr().out
+    assert "HELPER1_PRODUCER_PACKAGE_SUBJECT_OK=1" in stdout
+    assert "ERROR_CODE=NONE" in stdout
 
 
 def test_clean_runner_executes_raw_to_package_to_unsigned_verdict(tmp_path: Path) -> None:
