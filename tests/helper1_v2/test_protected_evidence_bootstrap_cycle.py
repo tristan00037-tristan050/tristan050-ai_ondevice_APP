@@ -537,8 +537,9 @@ def test_protected_workflow_extract_subject_command_contract(
     assert package.is_file()
     assert json.loads(output.read_text(encoding="utf-8"))["subject_sha"] == SUBJECT_COMMIT
     stdout = capsys.readouterr().out
-    assert "HELPER1_PRODUCER_PACKAGE_SUBJECT_OK=1" in stdout
-    assert "ERROR_CODE=NONE" in stdout
+    verdict = dict(line.split("=", 1) for line in stdout.splitlines() if "=" in line)
+    assert verdict["HELPER1_PRODUCER_PACKAGE_SUBJECT_OK"] == "1"
+    assert verdict["ERROR_CODE"] == "NONE"
 
 
 def test_clean_runner_executes_raw_to_package_to_unsigned_verdict(tmp_path: Path) -> None:
