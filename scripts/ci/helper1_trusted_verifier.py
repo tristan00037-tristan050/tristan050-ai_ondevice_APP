@@ -10,7 +10,6 @@ pinned in that policy.
 from __future__ import annotations
 
 import argparse
-import ast
 import base64
 import hashlib
 import json
@@ -19,7 +18,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
@@ -29,13 +28,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 )
 
 from helper1_evidence_semantics import EvidenceMeaningError, verify_measurement_artifacts
-from helper1_producer_package import (
-    ProducerPackageError,
-    VerifiedProducerPackage,
-    load_verified_package,
-)
 from helper1_subject_binding import SubjectBindingError, resolve_commit_tree
-from helper1_protected_surface import PROTECTED_COMPONENT_PATHS
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -67,13 +60,8 @@ from butler_pc_core.helper1.retrieval_policy import (  # noqa: E402
     RetrievalPolicyAuthority,
     RetrievalPolicyAuthorityError,
 )
-from butler_pc_core.helper1.quality_evidence import (  # noqa: E402
-    QualityEvidenceError,
-    verify_quality_evidence,
-)
 
 POLICY_PATH = ROOT / "contracts" / "helper1" / "trusted-verifier-policy-v1.json"
-DEVICE_TRUST_POLICY_PATH = ROOT / "contracts/helper1-device-trust-policy-v1.json"
 APPROVAL_POLICY_PATH = ROOT / "contracts" / "helper1" / "retrieval-approval-trust-policy-v1.json"
 APPROVAL_DIRECTORY_NAME = "approval"
 ACTIVATION_GRANT_NAME = "ACTIVATION_GRANT.json"
@@ -91,8 +79,7 @@ POLICY_KEYS = {
     "repository",
     "producer_workflow_name",
     "producer_workflow_path",
-    "handoff_chain_authority",
-    "producer_package_contract",
+    "handoff_chain_anchor",
     "protected_verifier_sha256",
     "protected_components_sha256",
     "approved_producer_identity",
@@ -111,13 +98,19 @@ POLICY_KEYS = {
     "subject_check_name",
     "subject_check_app_slug",
     "subject_check_required",
-    "quality_evidence_required",
-    "quality_producer_workflow_id",
-    "quality_producer_workflow_path",
-    "quality_producer_workflow_sha256",
-    "device_trust_policy_sha256",
 }
-PROTECTED_COMPONENTS = {path: ROOT / path for path in PROTECTED_COMPONENT_PATHS}
+PROTECTED_COMPONENTS = {
+    "scripts/ci/helper1_trusted_verifier.py": Path(__file__).resolve(),
+    "scripts/ci/helper1_subject_binding.py": ROOT / "scripts/ci/helper1_subject_binding.py",
+    "scripts/ci/helper1_evidence_semantics.py": ROOT / "scripts/ci/helper1_evidence_semantics.py",
+    "scripts/ci/helper1_postgresql_replay_probe.py": ROOT / "scripts/ci/helper1_postgresql_replay_probe.py",
+    "scripts/ci/publish_helper1_subject_check.py": ROOT / "scripts/ci/publish_helper1_subject_check.py",
+    "butler_pc_core/helper1/approval_closure.py": ROOT / "butler_pc_core/helper1/approval_closure.py",
+    "butler_pc_core/helper1/canonical_json.py": ROOT / "butler_pc_core/helper1/canonical_json.py",
+    "butler_pc_core/helper1/execution.py": ROOT / "butler_pc_core/helper1/execution.py",
+    "butler_pc_core/helper1/replay_store.py": ROOT / "butler_pc_core/helper1/replay_store.py",
+    "butler_pc_core/helper1/retrieval_policy.py": ROOT / "butler_pc_core/helper1/retrieval_policy.py",
+}
 REPLAY_STORE_FACTORY: Callable[[str], ReplayReservationStore] = PostgreSQLReplayStore
 EVIDENCE_KEYS = {
     "schema_version",
@@ -212,22 +205,12 @@ def load_policy() -> dict[str, Any]:
         or policy["subject_check_name"] != "helper1-v2/protected-verdict"
         or policy["subject_check_app_slug"] != "github-actions"
         or policy["subject_check_required"] is not True
-        or policy["quality_evidence_required"] is not True
-        or type(policy["quality_producer_workflow_id"]) is not int
-        or policy["quality_producer_workflow_id"] < 0
-        or policy["quality_producer_workflow_path"]
-        != ".github/workflows/helper1-v2-evidence.yml"
-        or type(policy["quality_producer_workflow_sha256"]) is not str
-        or SHA256.fullmatch(policy["quality_producer_workflow_sha256"]) is None
-        or type(policy["device_trust_policy_sha256"]) is not str
-        or SHA256.fullmatch(policy["device_trust_policy_sha256"]) is None
         or type(policy["required_evidence_files"]) is not list
         or len(policy["required_evidence_files"]) != 4
         or len(set(policy["required_evidence_files"])) != 4
         or policy["required_approval_roles"] != list(APPROVAL_ROLES)
         or policy["legacy_approval_role_bindings"] != LEGACY_APPROVAL_BINDINGS
-        or not valid_handoff_chain_authority(policy["handoff_chain_authority"])
-        or not valid_producer_package_contract(policy["producer_package_contract"])
+        or not valid_handoff_chain_anchor(policy["handoff_chain_anchor"])
     ):
         raise VerificationError("TRUST_POLICY_INVALID")
     trust_keys = (
@@ -242,87 +225,53 @@ def load_policy() -> dict[str, Any]:
     if policy["enabled"]:
         if any(type(policy[key]) is not str or not policy[key] for key in trust_keys):
             raise VerificationError("TRUST_POLICY_INCOMPLETE")
-        if policy["quality_producer_workflow_id"] < 1:
-            raise VerificationError("TRUST_POLICY_INCOMPLETE")
         if SHA256.fullmatch(policy["approval_policy_sha256"]) is None:
-            raise VerificationError("TRUST_POLICY_INCOMPLETE")
-        if policy["handoff_chain_authority"]["approved_public_key_b64"] is None:
             raise VerificationError("TRUST_POLICY_INCOMPLETE")
     elif any(policy[key] is not None for key in trust_keys):
         raise VerificationError("TRUST_POLICY_DISABLED_WITH_MATERIAL")
     return policy
 
 
-def valid_handoff_chain_authority(value: object) -> bool:
+def valid_handoff_chain_anchor(value: object) -> bool:
     if type(value) is not dict or set(value) != {
         "schema_version",
         "chain_id",
-        "authority_mode",
-        "approved_public_key_b64",
-        "approved_public_key_sha256",
-        "required_environment",
-        "required_check_name",
-    }:
-        return False
-    key = value.get("approved_public_key_b64")
-    digest = value.get("approved_public_key_sha256")
-    if (key is None) != (digest is None):
-        return False
-    if key is not None:
-        try:
-            decoded = base64.b64decode(key, validate=True)
-        except (TypeError, ValueError):
-            return False
-        if len(decoded) != 32 or digest != sha256(decoded):
-            return False
-    return (
-        value.get("schema_version") == "butler.helper1.handoff-chain-authority.v1"
-        and value.get("chain_id") == "helper1-v51-a4-closure"
-        and value.get("authority_mode") == "PROTECTED_WORKFLOW_SIGNED_CHAIN"
-        and value.get("required_environment") == "helper1-production-verifier"
-        and value.get("required_check_name") == "helper1-v2/protected-verdict"
-    )
-
-
-def valid_producer_package_contract(value: object) -> bool:
-    if type(value) is not dict or set(value) != {
-        "schema_version",
-        "chain_id",
-        "candidate_generation",
-        "package_relative_path",
-        "descriptor_relative_path",
+        "successor_generation",
         "immediate_predecessor",
-        "rollback_record",
+        "forbidden_rollback_fixture",
     }:
         return False
-
-    def valid_record(record: object, generation: int) -> bool:
-        return (
-            type(record) is dict
-            and set(record) == {"generation", "package_sha256", "result_tree"}
-            and record.get("generation") == generation
-            and type(record.get("package_sha256")) is str
-            and HEX_SHA256.fullmatch(record["package_sha256"]) is not None
-            and type(record.get("result_tree")) is str
-            and re.fullmatch(r"[0-9a-f]{40}", record["result_tree"]) is not None
-        )
-
+    predecessor = value.get("immediate_predecessor")
+    rollback = value.get("forbidden_rollback_fixture")
+    generation = value.get("successor_generation")
+    if (
+        value.get("schema_version") != "butler.helper1.handoff-chain-anchor.v1"
+        or type(value.get("chain_id")) is not str
+        or not value["chain_id"]
+        or type(generation) is not int
+        or generation < 2
+    ):
+        return False
+    for record in (predecessor, rollback):
+        if (
+            type(record) is not dict
+            or set(record) != {"generation", "package_sha256", "result_tree"}
+            or type(record.get("generation")) is not int
+            or type(record.get("package_sha256")) is not str
+            or HEX_SHA256.fullmatch(record["package_sha256"]) is None
+            or type(record.get("result_tree")) is not str
+            or GIT_OBJECT.fullmatch(record["result_tree"]) is None
+        ):
+            return False
     return (
-        value.get("schema_version") == "butler.helper1.producer-package-contract.v1"
-        and value.get("chain_id") == "helper1-v51-a4-closure"
-        and value.get("candidate_generation") == 15
-        and value.get("package_relative_path") == "package/helper1-v51.zip"
-        and value.get("descriptor_relative_path") == "package/helper1-v51.candidate.json"
-        and valid_record(value.get("immediate_predecessor"), 14)
-        and valid_record(value.get("rollback_record"), 13)
-        and value["immediate_predecessor"] != value["rollback_record"]
+        predecessor["generation"] == generation - 1
+        and rollback["generation"] < predecessor["generation"]
+        and rollback["package_sha256"] != predecessor["package_sha256"]
+        and rollback["result_tree"] != predecessor["result_tree"]
     )
 
 
 def verify_protected_components(policy: dict[str, Any]) -> None:
-    missing = _missing_transitive_components()
-    if missing:
-        raise VerificationError("PROTECTED_TRANSITIVE_COMPONENT_MISSING")
     observed: dict[str, str] = {}
     try:
         for name, path in PROTECTED_COMPONENTS.items():
@@ -333,68 +282,6 @@ def verify_protected_components(policy: dict[str, Any]) -> None:
         raise VerificationError("PROTECTED_COMPONENT_DIGEST_MISMATCH")
     if observed["scripts/ci/helper1_trusted_verifier.py"] != policy["protected_verifier_sha256"]:
         raise VerificationError("PROTECTED_VERIFIER_DIGEST_MISMATCH")
-
-
-def _missing_transitive_components() -> tuple[str, ...]:
-    """Return repository-local imports omitted from the protected digest set."""
-    declared = set(PROTECTED_COMPONENTS)
-    pending = [Path(name) for name in declared if name.endswith(".py")]
-    visited: set[Path] = set()
-    discovered: set[str] = set()
-    while pending:
-        relative = pending.pop()
-        if relative in visited:
-            continue
-        visited.add(relative)
-        try:
-            tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
-        except (OSError, SyntaxError, UnicodeError) as exc:
-            raise VerificationError("PROTECTED_COMPONENT_UNAVAILABLE") from exc
-        module_parts = list(relative.with_suffix("").parts)
-        for node in ast.walk(tree):
-            candidates: list[str] = []
-            if isinstance(node, ast.Import):
-                candidates.extend(alias.name for alias in node.names)
-            elif isinstance(node, ast.ImportFrom):
-                if node.level:
-                    base = module_parts[:-1]
-                    keep = len(base) - node.level + 1
-                    if keep < 0:
-                        continue
-                    prefix = base[:keep]
-                    if node.module:
-                        prefix.extend(node.module.split("."))
-                    candidates.append(".".join(prefix))
-                    candidates.extend(
-                        ".".join((*prefix, alias.name)) for alias in node.names
-                    )
-                elif node.module:
-                    candidates.append(node.module)
-                    candidates.extend(f"{node.module}.{alias.name}" for alias in node.names)
-            for module_name in candidates:
-                path = Path(*module_name.split(".")).with_suffix(".py")
-                if not (ROOT / path).is_file() and len(module_parts) > 1:
-                    sibling = relative.parent / f"{module_name}.py"
-                    path = sibling if (ROOT / sibling).is_file() else path
-                if (ROOT / path).is_file():
-                    name = path.as_posix()
-                    discovered.add(name)
-                    if path not in visited:
-                        pending.append(path)
-    workflow_calls: set[str] = set()
-    for name in declared:
-        if not name.startswith(".github/workflows/"):
-            continue
-        try:
-            source = (ROOT / name).read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
-            raise VerificationError("PROTECTED_COMPONENT_UNAVAILABLE") from exc
-        workflow_calls.update(
-            match.group(1)
-            for match in re.finditer(r"\bpython\s+(scripts/[A-Za-z0-9_./-]+\.py)\b", source)
-            if (ROOT / match.group(1)).is_file()
-        )
-    return tuple(sorted((discovered | workflow_calls) - declared))
 
 
 def verify_event(event_path: Path, policy: dict[str, Any]) -> tuple[str, str]:
@@ -408,8 +295,7 @@ def verify_event(event_path: Path, policy: dict[str, Any]) -> tuple[str, str]:
         repository.get("full_name") != policy["repository"]
         or run.get("name") != policy["producer_workflow_name"]
         or run.get("path") != policy["producer_workflow_path"]
-        or run.get("status") != "completed"
-        or run.get("conclusion") not in {"success", "failure"}
+        or run.get("conclusion") != "success"
         or type(run.get("id")) is not int
         or type(run.get("run_attempt")) is not int
         or type(head_sha) is not str
@@ -419,15 +305,20 @@ def verify_event(event_path: Path, policy: dict[str, Any]) -> tuple[str, str]:
     return head_sha, f"{run['id']}:{run['run_attempt']}"
 
 
-def verify_artifact_object(objects: Mapping[str, bytes], digest: str) -> None:
+def verify_artifact_object(root: Path, digest: str) -> None:
     if SHA256.fullmatch(digest) is None:
         raise VerificationError("ARTIFACT_DIGEST_INVALID")
+    candidate = root / "objects" / digest.removeprefix("sha256:")
     try:
-        payload = objects[digest.removeprefix("sha256:")]
-        if type(payload) is not bytes or not 0 < len(payload) <= MAX_ARTIFACT_OBJECT_BYTES:
+        info = candidate.lstat()
+        if (
+            candidate.is_symlink()
+            or not candidate.is_file()
+            or not 0 < info.st_size <= MAX_ARTIFACT_OBJECT_BYTES
+        ):
             raise VerificationError("ARTIFACT_OBJECT_MISSING")
-        observed = sha256(payload)
-    except KeyError as exc:
+        observed = sha256(candidate.read_bytes())
+    except OSError as exc:
         raise VerificationError("ARTIFACT_OBJECT_MISSING") from exc
     if observed != digest:
         raise VerificationError("ARTIFACT_OBJECT_DIGEST_MISMATCH")
@@ -435,7 +326,7 @@ def verify_artifact_object(objects: Mapping[str, bytes], digest: str) -> None:
 
 
 def verify_evidence(
-    raw: bytes,
+    path: Path,
     *,
     public_key: Ed25519PublicKey,
     expected_key_digest: str,
@@ -444,15 +335,10 @@ def verify_evidence(
     expected_commit: str,
     expected_tree: str,
     expected_run: str,
-    objects: Mapping[str, bytes],
+    artifact_root: Path,
     now: int,
 ) -> tuple[str, str, str, str]:
-    try:
-        value = json.loads(raw, parse_constant=lambda _: (_ for _ in ()).throw(ValueError()))
-    except (UnicodeError, ValueError, json.JSONDecodeError) as exc:
-        raise VerificationError("EVIDENCE_INVALID") from exc
-    if type(value) is not dict:
-        raise VerificationError("EVIDENCE_INVALID")
+    value = load_object(path, code="EVIDENCE_INVALID")
     if set(value) != EVIDENCE_KEYS or value.get("schema_version") != "butler.helper1.product_evidence.v2":
         raise VerificationError("EVIDENCE_SCHEMA_INVALID")
     if value.get("subject_commit") != expected_commit:
@@ -481,7 +367,7 @@ def verify_evidence(
     for digest in artifacts:
         if type(digest) is not str:
             raise VerificationError("EVIDENCE_ARTIFACTS_INVALID")
-        verify_artifact_object(objects, digest)
+        verify_artifact_object(artifact_root, digest)
     evidence_type = value.get("evidence_type")
     if type(evidence_type) is not str:
         raise VerificationError("EVIDENCE_TYPE_INVALID")
@@ -490,7 +376,7 @@ def verify_evidence(
             evidence_type,
             value.get("measurement_artifacts"),
             artifacts,
-            objects,
+            artifact_root,
         )
     except EvidenceMeaningError as exc:
         raise VerificationError(str(exc)) from exc
@@ -500,7 +386,7 @@ def verify_evidence(
         public_key.verify(signature, canonical_json(unsigned))
     except InvalidSignature as exc:
         raise VerificationError("EVIDENCE_SIGNATURE_INVALID") from exc
-    return evidence_type, str(value["subject_tree"]), nonce, hashlib.sha256(raw).hexdigest()
+    return evidence_type, str(value["subject_tree"]), nonce, hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _load_raw_file(path: Path, *, maximum: int, code: str) -> bytes:
@@ -524,13 +410,20 @@ def _digest_strings(value: object) -> set[str]:
 
 
 def _load_approval_artifacts(
-    approval_files: Mapping[str, bytes],
-    objects: Mapping[str, bytes],
+    approval_root: Path,
+    artifact_root: Path,
 ) -> tuple[tuple[EvidenceArtifact, ...], dict[str, dict[str, Any]], dict[str, bytes]]:
     expected_names = {ACTIVATION_GRANT_NAME}
     for role in APPROVAL_ROLES:
         expected_names.update({f"{role}.envelope.json", f"{role}.payload.json"})
-    if set(approval_files) != expected_names:
+    try:
+        info = approval_root.lstat()
+        if approval_root.is_symlink() or not approval_root.is_dir() or info.st_mode & 0o002:
+            raise VerificationError("APPROVAL_EVIDENCE_INVENTORY_INVALID")
+        observed_names = {path.name for path in approval_root.iterdir()}
+    except OSError as exc:
+        raise VerificationError("APPROVAL_EVIDENCE_INVENTORY_INVALID") from exc
+    if observed_names != expected_names:
         raise VerificationError("APPROVAL_EVIDENCE_INVENTORY_INVALID")
 
     artifacts: list[EvidenceArtifact] = []
@@ -539,10 +432,16 @@ def _load_approval_artifacts(
     for role in APPROVAL_ROLES:
         envelope_name = f"{role}.envelope.json"
         payload_name = f"{role}.payload.json"
-        envelope_raw = approval_files[envelope_name]
-        payload_raw = approval_files[payload_name]
-        if not 0 < len(envelope_raw) <= MAX_JSON_BYTES or not 0 < len(payload_raw) <= MAX_JSON_BYTES:
-            raise VerificationError("APPROVAL_EVIDENCE_INVALID")
+        envelope_raw = _load_raw_file(
+            approval_root / envelope_name,
+            maximum=MAX_JSON_BYTES,
+            code="APPROVAL_EVIDENCE_INVALID",
+        )
+        payload_raw = _load_raw_file(
+            approval_root / payload_name,
+            maximum=MAX_JSON_BYTES,
+            code="APPROVAL_EVIDENCE_INVALID",
+        )
         try:
             payload = require_canonical_butler_cj1(payload_raw)
         except CanonicalJsonError as exc:
@@ -551,11 +450,14 @@ def _load_approval_artifacts(
             raise VerificationError("APPROVAL_EVIDENCE_INVALID")
         attachments: list[tuple[str, bytes]] = []
         for digest in sorted(_digest_strings(payload)):
-            raw = objects.get(digest)
-            if raw is None:
+            candidate = artifact_root / "objects" / digest
+            if not candidate.exists():
                 continue
-            if type(raw) is not bytes or not 0 < len(raw) <= MAX_ARTIFACT_OBJECT_BYTES:
-                raise VerificationError("APPROVAL_ATTACHMENT_INVALID")
+            raw = _load_raw_file(
+                candidate,
+                maximum=MAX_ARTIFACT_OBJECT_BYTES,
+                code="APPROVAL_ATTACHMENT_INVALID",
+            )
             if not hashlib.sha256(raw).hexdigest() == digest:
                 raise VerificationError("APPROVAL_ATTACHMENT_INVALID")
             attachments.append((digest, raw))
@@ -563,10 +465,11 @@ def _load_approval_artifacts(
         payloads[role] = payload
         raw_files[envelope_name] = envelope_raw
         raw_files[payload_name] = payload_raw
-    activation_raw = approval_files[ACTIVATION_GRANT_NAME]
-    if not 0 < len(activation_raw) <= MAX_JSON_BYTES:
-        raise VerificationError("ACTIVATION_GRANT_INVALID")
-    raw_files[ACTIVATION_GRANT_NAME] = activation_raw
+    raw_files[ACTIVATION_GRANT_NAME] = _load_raw_file(
+        approval_root / ACTIVATION_GRANT_NAME,
+        maximum=MAX_JSON_BYTES,
+        code="ACTIVATION_GRANT_INVALID",
+    )
     return tuple(artifacts), payloads, raw_files
 
 
@@ -606,8 +509,7 @@ def _approval_replay_store() -> ReplayReservationStore:
 def verify_approval_closure(
     policy: dict[str, Any],
     *,
-    approval_files: Mapping[str, bytes],
-    objects: Mapping[str, bytes],
+    artifact_root: Path,
     subject_commit: str,
     subject_tree: str,
     legacy_digests: dict[str, str],
@@ -643,7 +545,8 @@ def verify_approval_closure(
     ):
         raise VerificationError("APPROVAL_TRUST_POLICY_INCOMPLETE")
 
-    artifacts, payloads, raw_files = _load_approval_artifacts(approval_files, objects)
+    approval_root = artifact_root / APPROVAL_DIRECTORY_NAME
+    artifacts, payloads, raw_files = _load_approval_artifacts(approval_root, artifact_root)
     _verify_legacy_approval_bindings(payloads, legacy_digests)
     closure_digest = evidence_set_sha256(artifacts)
     activation_public = decode_b64(
@@ -719,7 +622,8 @@ def write_result(path: Path, value: dict[str, Any]) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--event", required=True, type=Path)
-    parser.add_argument("--producer-package", required=True, type=Path)
+    parser.add_argument("--evidence-dir", required=True, type=Path)
+    parser.add_argument("--artifact-root", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     return parser.parse_args()
 
@@ -731,41 +635,16 @@ def main() -> int:
     subject_commit: str | None = None
     subject_tree: str | None = None
     run_id: str | None = None
-    producer_package_sha256: str | None = None
-    chain_authority_sha256: str | None = None
-    search_quality_evidence_sha256: str | None = None
     try:
         policy = load_policy()
         verify_protected_components(policy)
+        if not policy["enabled"]:
+            raise VerificationError("TRUST_POLICY_DISABLED")
         subject_commit, run_id = verify_event(args.event, policy)
         try:
             subject_tree = resolve_commit_tree(ROOT, subject_commit)
         except SubjectBindingError as exc:
             raise VerificationError(str(exc)) from exc
-        try:
-            package = load_verified_package(
-                args.producer_package,
-                policy=policy,
-                policy_raw=POLICY_PATH.read_bytes(),
-                require_authority=policy["enabled"],
-            )
-        except ProducerPackageError as exc:
-            raise VerificationError(str(exc)) from exc
-        producer_package_sha256 = package.package_sha256
-        chain_authority_sha256 = package.chain_authority_sha256
-        if (
-            package.subject_commit != subject_commit
-            or package.subject_tree != subject_tree
-            or package.producer_run != run_id
-        ):
-            raise VerificationError("PRODUCER_PACKAGE_SUBJECT_MISMATCH")
-        quality_receipt = package.bootstrap_receipts.get(
-            "QUALITY_MEASUREMENT.v1.json"
-        )
-        if quality_receipt is not None:
-            search_quality_evidence_sha256 = sha256(quality_receipt)
-        if not policy["enabled"]:
-            raise VerificationError("TRUST_POLICY_DISABLED")
         evidence_key_bytes = decode_b64(
             policy["approved_public_key_b64"], expected_bytes=32, code="EVIDENCE_TRUST_ROOT_INVALID"
         )
@@ -773,7 +652,7 @@ def main() -> int:
             raise VerificationError("EVIDENCE_TRUST_ROOT_INVALID")
         evidence_key = Ed25519PublicKey.from_public_bytes(evidence_key_bytes)
         expected_files = tuple(policy["required_evidence_files"])
-        observed_files = tuple(sorted(package.legacy_evidence))
+        observed_files = tuple(sorted(path.name for path in args.evidence_dir.iterdir()))
         if observed_files != tuple(sorted(expected_files)):
             raise VerificationError("EVIDENCE_INVENTORY_MISMATCH")
         types: set[str] = set()
@@ -782,7 +661,7 @@ def main() -> int:
         legacy_digests: dict[str, str] = {}
         for filename in expected_files:
             evidence_type, tree, nonce, raw_digest = verify_evidence(
-                package.legacy_evidence[filename],
+                args.evidence_dir / filename,
                 public_key=evidence_key,
                 expected_key_digest=policy["approved_public_key_sha256"],
                 expected_key_id=policy["approved_evidence_key_id"],
@@ -790,7 +669,7 @@ def main() -> int:
                 expected_commit=subject_commit,
                 expected_tree=subject_tree,
                 expected_run=run_id,
-                objects=package.objects,
+                artifact_root=args.artifact_root,
                 now=int(time.time()),
             )
             types.add(evidence_type)
@@ -801,51 +680,12 @@ def main() -> int:
             raise VerificationError("EVIDENCE_CROSS_BINDING_INVALID")
         approval_closure_digest, approval_file_digests = verify_approval_closure(
             policy,
-            approval_files=package.approval_files,
-            objects=package.objects,
+            artifact_root=args.artifact_root,
             subject_commit=subject_commit,
             subject_tree=subject_tree,
             legacy_digests=legacy_digests,
             now=int(time.time()),
         )
-        threshold_payload = package.approval_files[
-            "A4_RETRIEVAL_THRESHOLD_POLICY.payload.json"
-        ]
-        threshold_envelope = package.approval_files[
-            "A4_RETRIEVAL_THRESHOLD_POLICY.envelope.json"
-        ]
-        device_policy_raw = DEVICE_TRUST_POLICY_PATH.read_bytes()
-        if sha256(device_policy_raw) != policy["device_trust_policy_sha256"]:
-            raise VerificationError("MEASUREMENT_TRUST_POLICY_MISMATCH")
-        device_policy = json.loads(
-            device_policy_raw,
-            parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
-        )
-        try:
-            _run_number, attempt_text = run_id.rsplit(":", 1)
-            run_attempt = int(attempt_text)
-        except (AttributeError, ValueError) as exc:
-            raise VerificationError("QUALITY_SUBJECT_MISMATCH") from exc
-        if not _run_number or run_attempt < 1:
-            raise VerificationError("QUALITY_SUBJECT_MISMATCH")
-        quality_digests = verify_quality_evidence(
-            package.quality_evidence,
-            expected_commit=subject_commit,
-            expected_tree=subject_tree,
-            expected_producer_run=run_id,
-            expected_producer_run_attempt=run_attempt,
-            expected_workflow_id=policy["quality_producer_workflow_id"],
-            expected_workflow_ref=(
-                f"{policy['repository']}/{policy['quality_producer_workflow_path']}@{subject_commit}"
-            ),
-            expected_workflow_sha256=policy["quality_producer_workflow_sha256"].removeprefix("sha256:"),
-            threshold_approval_payload_sha256=hashlib.sha256(threshold_payload).hexdigest(),
-            threshold_policy_bytes=threshold_payload,
-            threshold_approval_envelope_sha256=hashlib.sha256(threshold_envelope).hexdigest(),
-            device_trust_policy=device_policy,
-            now_epoch_s=int(time.time()),
-        )
-        search_quality_evidence_sha256 = sha256(canonical_json(quality_digests))
         unsigned = {
             "schema_version": "butler.helper1.trusted-verdict.v1",
             "code_pass": True,
@@ -859,19 +699,15 @@ def main() -> int:
             "verdict_key_id": policy["approved_verdict_key_id"],
             "policy_sha256": sha256(POLICY_PATH.read_bytes()),
             "verifier_sha256": sha256(Path(__file__).read_bytes()),
-            "producer_package_sha256": "sha256:" + producer_package_sha256,
-            "chain_authority_sha256": "sha256:" + chain_authority_sha256,
-            "search_quality_evidence_sha256": search_quality_evidence_sha256,
             "evidence_bundle_sha256": sha256(
                 canonical_json(
                     {
                         "legacy": {
-                            name: sha256(package.legacy_evidence[name])
+                            name: sha256((args.evidence_dir / name).read_bytes())
                             for name in sorted(expected_files)
                         },
                         "approval": approval_file_digests,
                         "approval_closure_sha256": approval_closure_digest,
-                        "search_quality": quality_digests,
                     }
                 )
             ),
@@ -886,17 +722,8 @@ def main() -> int:
         print("CODE_PASS=1")
         print("ERROR_CODE=NONE")
         return 0
-    except (
-        OSError,
-        KeyError,
-        TypeError,
-        ValueError,
-        VerificationError,
-        ReplayStoreError,
-        ProducerPackageError,
-        QualityEvidenceError,
-    ) as exc:
-        if isinstance(exc, (VerificationError, QualityEvidenceError)):
+    except (OSError, KeyError, TypeError, ValueError, VerificationError, ReplayStoreError) as exc:
+        if isinstance(exc, VerificationError):
             error = str(exc)
         elif isinstance(exc, ReplayStoreError):
             error = _replay_store_error_code(exc)
@@ -914,13 +741,6 @@ def main() -> int:
             "verdict_key_id": policy.get("approved_verdict_key_id") if policy is not None else None,
             "policy_sha256": sha256(POLICY_PATH.read_bytes()) if POLICY_PATH.is_file() else None,
             "verifier_sha256": sha256(Path(__file__).read_bytes()),
-            "producer_package_sha256": (
-                "sha256:" + producer_package_sha256 if producer_package_sha256 else None
-            ),
-            "chain_authority_sha256": (
-                "sha256:" + chain_authority_sha256 if chain_authority_sha256 else None
-            ),
-            "search_quality_evidence_sha256": search_quality_evidence_sha256,
             "evidence_bundle_sha256": None,
             "issued_at_epoch_s": int(time.time()),
             "error_code": error_code,

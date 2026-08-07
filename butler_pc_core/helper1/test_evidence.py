@@ -125,17 +125,8 @@ LANES: dict[str, TestLaneSpec] = {
             "--deselect=tests/helper1_v2/test_self_selected_trust_regression.py::test_missing_replay_store_returns_unsigned_zero_verdict",
             "--deselect=tests/helper1_v2/test_self_selected_trust_regression.py::test_replay_store_connection_failure_returns_unsigned_zero_verdict",
             "--deselect=tests/helper1_v2/test_self_selected_trust_regression.py::test_replay_store_reservation_failure_returns_unsigned_zero_verdict",
-            "--deselect=tests/helper1_v2/test_self_selected_trust_regression.py::test_external_evidence_mutation_after_package_creation_is_blocked",
-            "--deselect=tests/helper1_v2/test_self_selected_trust_regression.py::test_valid_but_different_external_inventory_cannot_override_package",
-            "--deselect=tests/helper1_v2/test_self_selected_trust_regression.py::test_approval_inventory_without_manifest_binding_is_blocked",
             "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_protected_success_path_invokes_a4_closure_before_verdict",
             "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_existing_helper1_codeowners_rules_are_preserved_and_a4_is_owned",
-            "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_handoff_chain_authority_is_fixed_outside_the_candidate_package",
-            "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_package_and_self_selected_authority_joint_mutation_is_rejected",
-            "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_producer_uploads_raw_material_and_protected_side_creates_fixed_package",
-            "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_producer_package_fingerprint_matches_candidate_descriptor",
-            "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_uploaded_artifact_roundtrip_preserves_exact_verifier_path",
-            "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_missing_renamed_or_substituted_package_blocks_final_gate",
             "--deselect=tests/helper1_v2/test_replay_store_v51.py::test_same_reservation_is_rejected_by_second_process",
             "--deselect=tests/helper1_v2/test_replay_store_v51.py::test_postgresql_atomic_reservation_has_one_concurrent_winner",
             "--deselect=tests/helper1_v2/test_replay_store_v51.py::test_postgresql_conninfo_rejects_routing_overrides_tls_downgrades_and_local_endpoints",
@@ -144,30 +135,6 @@ LANES: dict[str, TestLaneSpec] = {
             "--deselect=tests/helper1_v2/test_replay_store_v51.py::test_postgresql_pins_every_resolved_host_port_and_address",
             "--deselect=tests/helper1_v2/test_replay_store_v51.py::test_postgresql_routing_environment_is_rejected_before_connecting",
             "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_postgresql_probe_fails_closed_without_protected_dsn",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_clean_runner_executes_raw_to_package_to_unsigned_verdict",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_actual_github_response_shape_and_failed_sibling_job_are_accepted",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_unsuccessful_untrusted_job_blocks_before_packaging",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_workflow_byte_drift_blocks_before_packaging",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_policy_workflow_fingerprints_must_match_at_load",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_provenance_workflow_fingerprint_must_match_canonical_policy",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_current_workflow_fingerprint_reaches_unsigned_zero",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_workflow_fingerprint_is_not_duplicated_in_execution_code",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_downloaded_archive_digest_mismatch_blocks_before_packaging",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_extracted_content_must_match_verified_archive_bytes",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_bootstrap_receipts_cannot_be_upgraded_under_enabled_policy",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_preexisting_candidate_package_is_not_used_as_trusted_input",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_raw_only_producer_artifact_layout_is_accepted",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_raw_producer_artifact_missing_file_is_blocked",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_raw_producer_artifact_renamed_file_is_blocked",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_raw_producer_artifact_unknown_top_level_entry_is_blocked",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_protected_package_layout_still_requires_package",
-            "--deselect=tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_artifact_redirect_does_not_forward_github_authorization",
-            "--deselect=tests/helper1_v2/test_approval_input_v61.py",
-            "--deselect=tests/helper1_v2/test_approval_transport_v61.py",
-            "--deselect=tests/helper1_v2/test_device_measurement_v61.py",
-            "--deselect=tests/helper1_v2/test_retrieval_quality_v61.py",
-            "--deselect=tests/helper1_v2/test_start_tree_v61.py",
-            "--deselect=tests/helper1_v2/test_protected_workflow_topology.py::test_transitive_dependency_omission_is_detected_automatically",
             "--junitxml={report}",
         ),
         cwd_rel=".",
@@ -205,25 +172,6 @@ LANES: dict[str, TestLaneSpec] = {
         required_capabilities=frozenset({"python", "pytest", "cryptography", "sqlite"}),
         expected_collected=149,
     ),
-    "python-helper1-v61-quality": TestLaneSpec(
-        lane_id="python-helper1-v61-quality",
-        argv=(
-            "{python}", "-m", "pytest", "-q",
-            "tests/helper1_v2/test_approval_input_v61.py",
-            "tests/helper1_v2/test_approval_transport_v61.py",
-            "tests/helper1_v2/test_device_measurement_v61.py",
-            "tests/helper1_v2/test_retrieval_quality_v61.py",
-            "tests/helper1_v2/test_start_tree_v61.py",
-            "tests/helper1_v2/test_protected_workflow_topology.py::test_transitive_dependency_omission_is_detected_automatically",
-            "--junitxml={report}",
-        ),
-        cwd_rel=".",
-        report_kind="junit",
-        report_name="python-helper1-v61-quality.junit.xml",
-        timeout_seconds=180,
-        required_capabilities=frozenset({"python", "pytest", "cryptography"}),
-        expected_collected=32,
-    ),
     "python-helper1-protected-replay": TestLaneSpec(
         lane_id="python-helper1-protected-replay",
         argv=(
@@ -233,17 +181,8 @@ LANES: dict[str, TestLaneSpec] = {
             "tests/helper1_v2/test_self_selected_trust_regression.py::test_missing_replay_store_returns_unsigned_zero_verdict",
             "tests/helper1_v2/test_self_selected_trust_regression.py::test_replay_store_connection_failure_returns_unsigned_zero_verdict",
             "tests/helper1_v2/test_self_selected_trust_regression.py::test_replay_store_reservation_failure_returns_unsigned_zero_verdict",
-            "tests/helper1_v2/test_self_selected_trust_regression.py::test_external_evidence_mutation_after_package_creation_is_blocked",
-            "tests/helper1_v2/test_self_selected_trust_regression.py::test_valid_but_different_external_inventory_cannot_override_package",
-            "tests/helper1_v2/test_self_selected_trust_regression.py::test_approval_inventory_without_manifest_binding_is_blocked",
             "tests/helper1_v2/test_protected_workflow_topology.py::test_protected_success_path_invokes_a4_closure_before_verdict",
             "tests/helper1_v2/test_protected_workflow_topology.py::test_existing_helper1_codeowners_rules_are_preserved_and_a4_is_owned",
-            "tests/helper1_v2/test_protected_workflow_topology.py::test_handoff_chain_authority_is_fixed_outside_the_candidate_package",
-            "tests/helper1_v2/test_protected_workflow_topology.py::test_package_and_self_selected_authority_joint_mutation_is_rejected",
-            "tests/helper1_v2/test_protected_workflow_topology.py::test_producer_uploads_raw_material_and_protected_side_creates_fixed_package",
-            "tests/helper1_v2/test_protected_workflow_topology.py::test_producer_package_fingerprint_matches_candidate_descriptor",
-            "tests/helper1_v2/test_protected_workflow_topology.py::test_uploaded_artifact_roundtrip_preserves_exact_verifier_path",
-            "tests/helper1_v2/test_protected_workflow_topology.py::test_missing_renamed_or_substituted_package_blocks_final_gate",
             "tests/helper1_v2/test_replay_store_v51.py::test_same_reservation_is_rejected_by_second_process",
             "tests/helper1_v2/test_replay_store_v51.py::test_postgresql_atomic_reservation_has_one_concurrent_winner",
             "tests/helper1_v2/test_replay_store_v51.py::test_postgresql_conninfo_rejects_routing_overrides_tls_downgrades_and_local_endpoints",
@@ -252,24 +191,6 @@ LANES: dict[str, TestLaneSpec] = {
             "tests/helper1_v2/test_replay_store_v51.py::test_postgresql_pins_every_resolved_host_port_and_address",
             "tests/helper1_v2/test_replay_store_v51.py::test_postgresql_routing_environment_is_rejected_before_connecting",
             "tests/helper1_v2/test_protected_workflow_topology.py::test_postgresql_probe_fails_closed_without_protected_dsn",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_clean_runner_executes_raw_to_package_to_unsigned_verdict",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_actual_github_response_shape_and_failed_sibling_job_are_accepted",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_unsuccessful_untrusted_job_blocks_before_packaging",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_workflow_byte_drift_blocks_before_packaging",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_policy_workflow_fingerprints_must_match_at_load",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_provenance_workflow_fingerprint_must_match_canonical_policy",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_current_workflow_fingerprint_reaches_unsigned_zero",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_workflow_fingerprint_is_not_duplicated_in_execution_code",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_downloaded_archive_digest_mismatch_blocks_before_packaging",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_extracted_content_must_match_verified_archive_bytes",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_bootstrap_receipts_cannot_be_upgraded_under_enabled_policy",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_preexisting_candidate_package_is_not_used_as_trusted_input",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_raw_only_producer_artifact_layout_is_accepted",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_raw_producer_artifact_missing_file_is_blocked",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_raw_producer_artifact_renamed_file_is_blocked",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_raw_producer_artifact_unknown_top_level_entry_is_blocked",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_protected_package_layout_still_requires_package",
-            "tests/helper1_v2/test_protected_evidence_bootstrap_cycle.py::test_artifact_redirect_does_not_forward_github_authorization",
             "--junitxml={report}",
         ),
         cwd_rel=".",
@@ -277,7 +198,7 @@ LANES: dict[str, TestLaneSpec] = {
         report_name="python-helper1-protected-replay.junit.xml",
         timeout_seconds=180,
         required_capabilities=frozenset({"python", "pytest", "cryptography", "sqlite"}),
-        expected_collected=42,
+        expected_collected=15,
     ),
     "desktop-helper1-v51": TestLaneSpec(
         lane_id="desktop-helper1-v51",
@@ -386,10 +307,10 @@ def _source_identity() -> tuple[str, str]:
     return commit, tree
 
 
-def parse_junit_bytes(raw: bytes) -> tuple[int, int, int, int, int]:
+def parse_junit(path: Path) -> tuple[int, int, int, int, int]:
     try:
-        root = ET.fromstring(raw)
-    except ET.ParseError as exc:
+        root = ET.parse(path).getroot()
+    except (OSError, ET.ParseError) as exc:
         raise TestEvidenceError("JUNIT_REPORT_INVALID") from exc
     suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
     if not suites:
@@ -409,17 +330,10 @@ def parse_junit_bytes(raw: bytes) -> tuple[int, int, int, int, int]:
     return tests, passed, failures, errors, skipped
 
 
-def parse_junit(path: Path) -> tuple[int, int, int, int, int]:
+def parse_vitest(path: Path) -> tuple[int, int, int, int, int]:
     try:
-        return parse_junit_bytes(path.read_bytes())
-    except OSError as exc:
-        raise TestEvidenceError("JUNIT_REPORT_INVALID") from exc
-
-
-def parse_vitest_bytes(raw: bytes) -> tuple[int, int, int, int, int]:
-    try:
-        value = json.loads(raw)
-    except (UnicodeError, json.JSONDecodeError) as exc:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise TestEvidenceError("VITEST_REPORT_INVALID") from exc
     if type(value) is not dict:
         raise TestEvidenceError("VITEST_REPORT_INVALID")
@@ -430,13 +344,6 @@ def parse_vitest_bytes(raw: bytes) -> tuple[int, int, int, int, int]:
     if total != passed + failed + skipped:
         raise TestEvidenceError("VITEST_REPORT_INVALID")
     return total, passed, failed, 0, skipped
-
-
-def parse_vitest(path: Path) -> tuple[int, int, int, int, int]:
-    try:
-        return parse_vitest_bytes(path.read_bytes())
-    except OSError as exc:
-        raise TestEvidenceError("VITEST_REPORT_INVALID") from exc
 
 
 def _parse_report(spec: TestLaneSpec, path: Path) -> tuple[int, int, int, int, int]:

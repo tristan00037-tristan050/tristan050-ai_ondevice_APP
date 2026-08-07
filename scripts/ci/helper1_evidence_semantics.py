@@ -10,8 +10,8 @@ import hashlib
 import json
 import math
 import re
-from pathlib import PurePosixPath
-from typing import Any, Mapping
+from pathlib import Path
+from typing import Any
 
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 RAW_SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -46,24 +46,26 @@ def _positive_number(value: object, code: str) -> float:
     return number
 
 
-def _object_bytes(objects: Mapping[str, bytes], digest: str) -> bytes:
+def _object_bytes(root: Path, digest: str) -> bytes:
     if SHA256.fullmatch(digest) is None:
         raise EvidenceMeaningError("MEASUREMENT_ARTIFACT_DIGEST_INVALID")
+    path = root / "objects" / digest.removeprefix("sha256:")
     try:
-        payload = objects[digest.removeprefix("sha256:")]
-        if type(payload) is not bytes or not 0 < len(payload) <= MAX_OBJECT_BYTES:
+        info = path.lstat()
+        if path.is_symlink() or not path.is_file() or not 0 < info.st_size <= MAX_OBJECT_BYTES:
             raise EvidenceMeaningError("MEASUREMENT_ARTIFACT_OBJECT_INVALID")
-    except KeyError as exc:
+        payload = path.read_bytes()
+    except OSError as exc:
         raise EvidenceMeaningError("MEASUREMENT_ARTIFACT_OBJECT_INVALID") from exc
     if _sha256(payload) != digest:
         raise EvidenceMeaningError("MEASUREMENT_ARTIFACT_DIGEST_MISMATCH")
     return payload
 
 
-def _json_object(objects: Mapping[str, bytes], digest: str, code: str) -> dict[str, Any]:
+def _json_object(root: Path, digest: str, code: str) -> dict[str, Any]:
     try:
         value = json.loads(
-            _object_bytes(objects, digest),
+            _object_bytes(root, digest),
             parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
         )
     except (UnicodeError, ValueError, json.JSONDecodeError) as exc:
@@ -73,12 +75,13 @@ def _json_object(objects: Mapping[str, bytes], digest: str, code: str) -> dict[s
     return value
 
 
-def _verify_asset_closure(objects: Mapping[str, bytes], roles: dict[str, str]) -> None:
+def _verify_asset_closure(root: Path, roles: dict[str, str]) -> None:
     base_roles = {"closure_manifest", "consumption_receipt"}
     payload_roles = {name for name in roles if re.fullmatch(r"asset_payload_[0-9]+", name)}
     if not base_roles.issubset(roles) or set(roles) != base_roles | payload_roles or not payload_roles:
         raise EvidenceMeaningError("ASSET_EVIDENCE_ROLES_INVALID")
     manifest = _exact(
+        _json_object(root, roles["closure_manifest"], "ASSET_MANIFEST_INVALID"),
         _json_object(objects, roles["closure_manifest"], "ASSET_MANIFEST_INVALID"),
         {"schema_version", "files"},
         "ASSET_MANIFEST_INVALID",
@@ -94,7 +97,7 @@ def _verify_asset_closure(objects: Mapping[str, bytes], roles: dict[str, str]) -
             type(logical_path) is not str
             or not logical_path
             or logical_path.startswith("/")
-            or ".." in PurePosixPath(logical_path).parts
+            or ".." in Path(logical_path).parts
         ):
             raise EvidenceMeaningError("ASSET_LOGICAL_PATH_INVALID")
         record = _exact(
@@ -107,12 +110,12 @@ def _verify_asset_closure(objects: Mapping[str, bytes], roles: dict[str, str]) -
         artifact_digest = record["artifact_digest"]
         if type(artifact_digest) is not str or artifact_digest not in {roles[name] for name in payload_roles}:
             raise EvidenceMeaningError("ASSET_RECORD_INVALID")
-        payload = _object_bytes(objects, artifact_digest)
+        payload = _object_bytes(root, artifact_digest)
         if len(payload) != record["bytes"] or hashlib.sha256(payload).hexdigest() != record["sha256"]:
             raise EvidenceMeaningError("ASSET_PAYLOAD_MISMATCH")
         expected[logical_path] = (record["bytes"], record["sha256"], artifact_digest)
     receipt = _exact(
-        _json_object(objects, roles["consumption_receipt"], "ASSET_RECEIPT_INVALID"),
+        _json_object(root, roles["consumption_receipt"], "ASSET_RECEIPT_INVALID"),
         {"schema_version", "items"},
         "ASSET_RECEIPT_INVALID",
     )
@@ -157,12 +160,12 @@ def _verify_asset_closure(objects: Mapping[str, bytes], roles: dict[str, str]) -
         raise EvidenceMeaningError("ASSET_CONSUMPTION_SET_MISMATCH")
 
 
-def _verify_e2e(objects: Mapping[str, bytes], roles: dict[str, str]) -> None:
+def _verify_e2e(root: Path, roles: dict[str, str]) -> None:
     if set(roles) != {"answer_bytes", "endpoint_trace"}:
         raise EvidenceMeaningError("E2E_EVIDENCE_ROLES_INVALID")
-    answer = _object_bytes(objects, roles["answer_bytes"])
+    answer = _object_bytes(root, roles["answer_bytes"])
     trace = _exact(
-        _json_object(objects, roles["endpoint_trace"], "E2E_TRACE_INVALID"),
+        _json_object(root, roles["endpoint_trace"], "E2E_TRACE_INVALID"),
         {
             "schema_version",
             "request_id",
@@ -204,11 +207,11 @@ def _verify_e2e(objects: Mapping[str, bytes], roles: dict[str, str]) -> None:
         raise EvidenceMeaningError("E2E_EVENT_SEQUENCE_INVALID")
 
 
-def _verify_device_measurement(objects: Mapping[str, bytes], roles: dict[str, str]) -> None:
+def _verify_device_measurement(root: Path, roles: dict[str, str]) -> None:
     if set(roles) != {"device_probe", "measurement_samples"}:
         raise EvidenceMeaningError("DEVICE_EVIDENCE_ROLES_INVALID")
     probe = _exact(
-        _json_object(objects, roles["device_probe"], "DEVICE_PROBE_INVALID"),
+        _json_object(root, roles["device_probe"], "DEVICE_PROBE_INVALID"),
         {"schema_version", "chip", "architecture", "metal_device", "os_build"},
         "DEVICE_PROBE_INVALID",
     )
@@ -223,7 +226,7 @@ def _verify_device_measurement(objects: Mapping[str, bytes], roles: dict[str, st
     ):
         raise EvidenceMeaningError("DEVICE_PROBE_INVALID")
     samples = _exact(
-        _json_object(objects, roles["measurement_samples"], "MEASUREMENT_SAMPLES_INVALID"),
+        _json_object(root, roles["measurement_samples"], "MEASUREMENT_SAMPLES_INVALID"),
         {"schema_version", "samples"},
         "MEASUREMENT_SAMPLES_INVALID",
     )
@@ -259,11 +262,11 @@ def _verify_device_measurement(objects: Mapping[str, bytes], roles: dict[str, st
             raise EvidenceMeaningError("MEASUREMENT_QUALITY_INVALID")
 
 
-def _verify_sandbox(objects: Mapping[str, bytes], roles: dict[str, str]) -> None:
+def _verify_sandbox(root: Path, roles: dict[str, str]) -> None:
     if set(roles) != {"denial_records", "sandbox_profile"}:
         raise EvidenceMeaningError("SANDBOX_EVIDENCE_ROLES_INVALID")
     profile = _exact(
-        _json_object(objects, roles["sandbox_profile"], "SANDBOX_PROFILE_INVALID"),
+        _json_object(root, roles["sandbox_profile"], "SANDBOX_PROFILE_INVALID"),
         {
             "schema_version",
             "app_sandbox",
@@ -282,7 +285,7 @@ def _verify_sandbox(objects: Mapping[str, bytes], roles: dict[str, str]) -> None
     ):
         raise EvidenceMeaningError("SANDBOX_PROFILE_INVALID")
     records = _exact(
-        _json_object(objects, roles["denial_records"], "SANDBOX_DENIALS_INVALID"),
+        _json_object(root, roles["denial_records"], "SANDBOX_DENIALS_INVALID"),
         {"schema_version", "records"},
         "SANDBOX_DENIALS_INVALID",
     )
@@ -323,7 +326,7 @@ def verify_measurement_artifacts(
     evidence_type: str,
     value: object,
     artifact_digests: object,
-    objects: Mapping[str, bytes],
+    artifact_root: Path,
 ) -> None:
     if type(value) is not dict:
         raise EvidenceMeaningError("MEASUREMENT_ARTIFACTS_INVALID")
@@ -345,4 +348,4 @@ def verify_measurement_artifacts(
     }.get(evidence_type)
     if verifier is None:
         raise EvidenceMeaningError("EVIDENCE_TYPE_INVALID")
-    verifier(objects, roles)
+    verifier(artifact_root, roles)

@@ -70,21 +70,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python scripts/ci/helper1_producer_package.py extract-subject \
-            --producer-package "${RUNNER_TEMP}/helper1/input/package/helper1-v51.zip" \
-            --output "${RUNNER_TEMP}/helper1/CANONICAL_SUBJECT.json"
-          python scripts/ci/helper1_subject_binding.py \
-            --fetch-event "${GITHUB_EVENT_PATH}" \
-            --subject "${RUNNER_TEMP}/helper1/CANONICAL_SUBJECT.json"
-      - name: Verify fixed-path package and protected chain authority
-        id: verify-lineage
-        continue-on-error: true
-        env:
-          HELPER1_HANDOFF_CHAIN_AUTHORITY_B64: ${{ secrets.HELPER1_HANDOFF_CHAIN_AUTHORITY_B64 }}
-        run: |
-          set -euo pipefail
-          python scripts/ci/helper1_producer_package.py verify \
-            --producer-package "${RUNNER_TEMP}/helper1/input/package/helper1-v51.zip"
+
       - name: Verify with protected policy and issue signed verdict
         id: verify-evidence
         if: always()
@@ -96,7 +82,7 @@ jobs:
           set -euo pipefail
           python scripts/ci/helper1_trusted_verifier.py \
             --event "${GITHUB_EVENT_PATH}" \
-            --producer-package "${RUNNER_TEMP}/helper1/input/package/helper1-v51.zip" \
+
             --output "${RUNNER_TEMP}/helper1/TRUSTED_VERDICT.json" | tee -a "${GITHUB_STEP_SUMMARY}"
 
       - name: Preserve immutable subject-bound verdict
@@ -117,7 +103,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           HELPER1_REGRESSION_OUTCOME: ${{ steps.regressions.outcome }}
           HELPER1_REPLAY_PROBE_OUTCOME: ${{ steps.replay-store-probe.outcome }}
-          HELPER1_LINEAGE_OUTCOME: ${{ steps.verify-lineage.outcome }}
           HELPER1_FETCH_OUTCOME: ${{ steps.fetch-subject.outcome }}
           HELPER1_DOWNLOAD_OUTCOME: ${{ steps.download-evidence.outcome }}
           HELPER1_VERIFY_OUTCOME: ${{ steps.verify-evidence.outcome }}
@@ -143,7 +128,6 @@ jobs:
         env:
           REGRESSION_OUTCOME: ${{ steps.regressions.outcome }}
           REPLAY_PROBE_OUTCOME: ${{ steps.replay-store-probe.outcome }}
-          LINEAGE_OUTCOME: ${{ steps.verify-lineage.outcome }}
           FETCH_OUTCOME: ${{ steps.fetch-subject.outcome }}
           DOWNLOAD_OUTCOME: ${{ steps.download-evidence.outcome }}
           VERIFY_OUTCOME: ${{ steps.verify-evidence.outcome }}
@@ -151,7 +135,7 @@ jobs:
           PUBLISH_OUTCOME: ${{ steps.publish-subject-check.outcome }}
         run: |
           set -euo pipefail
-          for outcome in "${REGRESSION_OUTCOME}" "${REPLAY_PROBE_OUTCOME}" "${LINEAGE_OUTCOME}" "${FETCH_OUTCOME}" "${DOWNLOAD_OUTCOME}" "${VERIFY_OUTCOME}" "${PRESERVE_OUTCOME}" "${PUBLISH_OUTCOME}"; do
+          for outcome in "${REGRESSION_OUTCOME}" "${REPLAY_PROBE_OUTCOME}" "${FETCH_OUTCOME}" "${DOWNLOAD_OUTCOME}" "${VERIFY_OUTCOME}" "${PRESERVE_OUTCOME}" "${PUBLISH_OUTCOME}"; do
             test "${outcome}" = success || { echo "PROTECTED_SUBJECT_GATE=0"; echo "ERROR_CODE=PROTECTED_GATE_PREREQUISITE_FAILED"; exit 1; }
           done
           echo "PROTECTED_SUBJECT_GATE=1"

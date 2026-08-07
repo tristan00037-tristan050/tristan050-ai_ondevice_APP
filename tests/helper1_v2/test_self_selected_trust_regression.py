@@ -4,12 +4,9 @@ import base64
 import hashlib
 import json
 import os
-import shutil
 import time
 import subprocess
 import sys
-import stat
-import zipfile
 from copy import deepcopy
 from pathlib import Path
 
@@ -23,8 +20,6 @@ if str(CI_ROOT) not in sys.path:
     sys.path.insert(0, str(CI_ROOT))
 
 import helper1_trusted_verifier as trusted_verifier
-import helper1_producer_package as producer_package
-import helper1_product_approval_bundle as product_approval_bundle
 import publish_helper1_subject_check as subject_publisher
 import helper1_subject_binding as subject_binding
 from helper1_evidence_semantics import EvidenceMeaningError, verify_measurement_artifacts
@@ -72,17 +67,23 @@ def test_audit_self_selected_verifier_and_key_can_never_set_code_pass(tmp_path: 
     assert "CODE_PASS=1" not in completed.stdout
 
 
-def test_protected_verifier_rejects_invalid_event_before_disabled_policy_verdict(tmp_path: Path) -> None:
+def test_protected_verifier_fails_closed_while_approval_policy_is_disabled(tmp_path: Path) -> None:
     event = tmp_path / "event.json"
     event.write_text("{}\n", encoding="utf-8")
+    evidence = tmp_path / "evidence"
+    artifacts = tmp_path / "artifacts"
+    evidence.mkdir()
+    artifacts.mkdir()
     completed = subprocess.run(
         [
             sys.executable,
             str(ROOT / "scripts" / "ci" / "helper1_trusted_verifier.py"),
             "--event",
             str(event),
-            "--producer-package",
-            str(tmp_path / "missing.zip"),
+            "--evidence-dir",
+            str(evidence),
+            "--artifact-root",
+            str(artifacts),
             "--output",
             str(tmp_path / "verdict.json"),
         ],
@@ -97,11 +98,11 @@ def test_protected_verifier_rejects_invalid_event_before_disabled_policy_verdict
         "RUNTIME_ACTIVATION_ALLOWED=0",
         "HELPER1_PRODUCTION_CLAIM_ALLOWED=0",
         "CODE_PASS=0",
-        "ERROR_CODE=WORKFLOW_EVENT_INVALID",
+        "ERROR_CODE=TRUST_POLICY_DISABLED",
     ]
     verdict = json.loads((tmp_path / "verdict.json").read_text(encoding="utf-8"))
     assert verdict["code_pass"] is False
-    assert verdict["error_code"] == "WORKFLOW_EVENT_INVALID"
+    assert verdict["error_code"] == "TRUST_POLICY_DISABLED"
     assert verdict["signature_b64"] is None
 
 
@@ -130,118 +131,14 @@ def _public_bytes(private_key: Ed25519PrivateKey) -> bytes:
     )
 
 
-def _write_producer_package(
-    path: Path,
-    *,
-    repository: str,
-    commit: str,
-    tree: str,
-    run_id: str,
-    policy_raw: bytes,
-    evidence_dir: Path,
-    approval_root: Path,
-    objects_root: Path,
-    include_approval: bool,
-    bind_product_manifest: bool = True,
-) -> None:
-    subject = {
-        "schema_version": "butler.helper1.canonical-subject.v1",
-        "repository_full_name": repository,
-        "subject_sha": commit,
-    }
-    submission = {
-        "schema_version": "butler.helper1.untrusted-submission.v1",
-        "run_id": run_id,
-        "subject_commit": commit,
-        "canonical_subject_sha256": hashlib.sha256(_canonical(subject)).hexdigest(),
-        "product_evidence_present": True,
-    }
-    product_files: dict[str, bytes] = {
-        f"legacy/{item.name}": item.read_bytes() for item in sorted(evidence_dir.iterdir())
-    }
-    product_files.update(
-        {f"objects/{item.name}": item.read_bytes() for item in sorted(objects_root.iterdir())}
-    )
-    if include_approval:
-        product_files.update(
-            {f"approval/{item.name}": item.read_bytes() for item in sorted(approval_root.iterdir())}
-        )
-        product_manifest = product_approval_bundle.build_manifest(
-            product_files,
-            subject_commit=commit,
-            subject_tree=tree,
-            producer_run=run_id,
-        )
-        if not bind_product_manifest:
-            product_manifest["files"] = dict(product_manifest["files"])
-            product_manifest["files"].pop(next(iter(product_manifest["files"])))
-    else:
-        product_manifest = {
-            "schema_version": product_approval_bundle.SCHEMA,
-            "subject_commit": commit,
-            "subject_tree": tree,
-            "producer_run": run_id,
-            "files": {
-                name: {
-                    "bytes": len(raw),
-                    "sha256": hashlib.sha256(raw).hexdigest(),
-                    "mode": "0644",
-                }
-                for name, raw in sorted(product_files.items())
-            },
-        }
-    test_index = {
-        "schema_version": "butler.helper1.test-evidence-index.v1",
-        "source_tree": tree,
-        "all_required_checks_passed": True,
-    }
-    files = {
-        "SUBJECT/CANONICAL_SUBJECT.json": _canonical(subject),
-        "SUBJECT/SUBMISSION.json": _canonical(submission),
-        "TEST_EVIDENCE/TEST_EVIDENCE_INDEX.v1.json": _canonical(test_index),
-        **{
-            f"PRODUCT_APPROVAL/{name}": raw for name, raw in sorted(product_files.items())
-        },
-        "PRODUCT_APPROVAL/MANIFEST.json": _canonical(product_manifest),
-    }
-    manifest = {
-        "schema_version": "butler.helper1.producer-package.v1",
-        "subject_commit": commit,
-        "subject_tree": tree,
-        "policy_sha256": hashlib.sha256(policy_raw).hexdigest(),
-        "files": {
-            name: {
-                "bytes": len(raw),
-                "sha256": hashlib.sha256(raw).hexdigest(),
-                "mode": "0644",
-            }
-            for name, raw in sorted(files.items())
-        },
-    }
-    files["MANIFEST.json"] = _canonical(manifest)
-    files["SHA256SUMS.txt"] = "".join(
-        f"{hashlib.sha256(raw).hexdigest()}  {name}\n"
-        for name, raw in sorted(files.items())
-    ).encode("utf-8")
-    path.parent.mkdir(parents=True)
-    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        for name, raw in sorted(files.items()):
-            info = zipfile.ZipInfo(f"helper1-v51/{name}", (1980, 1, 1, 0, 0, 0))
-            info.create_system = 3
-            info.external_attr = (stat.S_IFREG | 0o644) << 16
-            info.compress_type = zipfile.ZIP_DEFLATED
-            archive.writestr(info, raw)
-
-
 def _build_signed_fixture(
     tmp_path: Path,
     monkeypatch,
     claimed_tree: str | None = None,
     *,
     include_approval: bool = True,
-    bind_product_manifest: bool = True,
 ) -> dict[str, object]:
-    repository = "tristan00037-tristan050/tristan050-ai_ondevice_APP"
+    repository = f"tests/helper1-protected-{tmp_path.name}"
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
     ).stdout.strip()
@@ -503,16 +400,9 @@ def _build_signed_fixture(
         "repository": repository,
         "producer_workflow_name": "helper1-v2-evidence-producer",
         "producer_workflow_path": ".github/workflows/helper1-v2-evidence.yml",
-        "handoff_chain_authority": {
-            **json.loads(
-                trusted_verifier.POLICY_PATH.read_text(encoding="utf-8")
-            )["handoff_chain_authority"],
-            "approved_public_key_b64": base64.b64encode(verdict_public).decode("ascii"),
-            "approved_public_key_sha256": _sha256(verdict_public),
-        },
-        "producer_package_contract": json.loads(
+        "handoff_chain_anchor": json.loads(
             trusted_verifier.POLICY_PATH.read_text(encoding="utf-8")
-        )["producer_package_contract"],
+        )["handoff_chain_anchor"],
         "protected_verifier_sha256": component_digests["scripts/ci/helper1_trusted_verifier.py"],
         "protected_components_sha256": component_digests,
         "approved_producer_identity": producer_identity,
@@ -534,190 +424,10 @@ def _build_signed_fixture(
         "subject_check_name": "helper1-v2/protected-verdict",
         "subject_check_app_slug": "github-actions",
         "subject_check_required": True,
-        "quality_evidence_required": True,
-        "quality_producer_workflow_id": 1,
-        "quality_producer_workflow_path": ".github/workflows/helper1-v2-evidence.yml",
-        "quality_producer_workflow_sha256": component_digests[
-            ".github/workflows/helper1-v2-evidence.yml"
-        ],
-        "device_trust_policy_sha256": _sha256(
-            trusted_verifier.DEVICE_TRUST_POLICY_PATH.read_bytes()
-        ),
         "required_evidence_files": list(filenames.values()),
     }
-    monkeypatch.setattr(
-        trusted_verifier,
-        "verify_quality_evidence",
-        lambda *_args, **_kwargs: {
-            "quality_manifest_sha256": "1" * 64,
-            "quality_report_sha256": "2" * 64,
-            "evaluation_run_subject_sha256": "3" * 64,
-            "m3_measurement_sha256": "4" * 64,
-            "m4_measurement_sha256": "5" * 64,
-        },
-    )
     policy_path = tmp_path / "trusted-policy.json"
     policy_path.write_bytes(_canonical(policy))
-    producer_package_path = tmp_path / "producer-artifact" / "package" / "helper1-v51.zip"
-    if include_approval and bind_product_manifest and claimed_tree is None:
-        build_input = tmp_path / "producer-build-input"
-        build_input.mkdir()
-        canonical_subject_path = build_input / "CANONICAL_SUBJECT.json"
-        canonical_subject = {
-            "schema_version": "butler.helper1.canonical-subject.v1",
-            "repository_full_name": repository,
-            "subject_sha": commit,
-        }
-        canonical_subject_path.write_bytes(_canonical(canonical_subject) + b"\n")
-        submission_path = build_input / "SUBMISSION.json"
-        submission_path.write_bytes(
-            _canonical(
-                {
-                    "schema_version": "butler.helper1.untrusted-submission.v1",
-                    "run_id": run_id,
-                    "subject_commit": commit,
-                    "canonical_subject_sha256": hashlib.sha256(
-                        _canonical(canonical_subject)
-                    ).hexdigest(),
-                    "product_evidence_present": True,
-                }
-            )
-            + b"\n"
-        )
-        test_evidence_root = build_input / "test-evidence"
-        test_evidence_root.mkdir()
-        test_index = {
-            "schema_version": "butler.helper1.test-evidence-index.v1",
-            "source_tree": actual_tree,
-            "lanes": [
-                {"lane_id": lane, "status": status}
-                for lane, status in sorted(producer_package.EXPECTED_LANES.items())
-            ],
-            "checks": [
-                {"check_id": check, "status": "PASSED"}
-                for check in sorted(producer_package.EXPECTED_CHECKS)
-            ],
-            "required_lanes_blocked": 1,
-            "all_required_lanes_passed": False,
-            "all_required_checks_passed": True,
-        }
-        (test_evidence_root / "TEST_EVIDENCE_INDEX.v1.json").write_bytes(
-            _canonical(test_index)
-        )
-        product_source = build_input / "product-source"
-        for name in ("legacy", "approval", "objects"):
-            (product_source / name).mkdir(parents=True, exist_ok=True)
-        for item in evidence_dir.iterdir():
-            shutil.copy2(item, product_source / "legacy" / item.name)
-        for item in approval_root.iterdir():
-            shutil.copy2(item, product_source / "approval" / item.name)
-        for item in objects.iterdir():
-            shutil.copy2(item, product_source / "objects" / item.name)
-        product_root = build_input / "product-approval"
-        product_approval_bundle.assemble(
-            product_source,
-            product_root,
-            subject_commit=commit,
-            subject_tree=actual_tree,
-            producer_run=run_id,
-        )
-        monkeypatch.setattr(producer_package, "POLICY_PATH", policy_path)
-        from butler_pc_core.helper1.quality_evidence import (
-            MANIFEST_NAME as QUALITY_MANIFEST_NAME,
-            QUALITY_FILES,
-            build_manifest as build_quality_manifest,
-        )
-        quality_root = build_input / "quality"
-        quality_payloads = {}
-        for name in QUALITY_FILES:
-            raw = b"observer" if name.endswith("observer.bin") else b"{}\n"
-            target = quality_root / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(raw)
-            quality_payloads[name] = raw
-        (quality_root / QUALITY_MANIFEST_NAME).write_bytes(
-            build_quality_manifest(
-                quality_payloads,
-                source_commit=commit,
-                source_tree=actual_tree,
-                evaluation_run_id=run_id,
-                evaluation_run_attempt=int(run_id.rsplit(":", 1)[-1]),
-                producer_run_id=run_id,
-                producer_run_attempt=int(run_id.rsplit(":", 1)[-1]),
-                workflow_id=1,
-                workflow_ref=f"{repository}/.github/workflows/helper1-v2-evidence.yml@{commit}",
-                workflow_sha256="a" * 64,
-            )
-        )
-        approval_input_path = build_input / "approval-input.zip"
-        approval_input_path.write_bytes(b"fixture-approval-input")
-        approval_provenance_path = build_input / "APPROVAL_INPUT_PROVENANCE.v2.json"
-        approval_provenance_path.write_bytes(
-            _canonical(
-                {
-                    "schema_version": "butler.helper1.approval-input-provenance.v2",
-                    "mode": "ARTIFACT",
-                    "repository_id": 1,
-                    "repository_name": repository,
-                    "subject_commit": commit,
-                    "subject_tree": actual_tree,
-                    "producer_workflow_ref": f"{repository}/.github/workflows/helper1-v2-approval-evidence.yml@{commit}",
-                    "producer_workflow_id": 1,
-                    "producer_workflow_sha256": "a" * 64,
-                    "run_id": 1,
-                    "run_attempt": 1,
-                    "event_name": "workflow_dispatch",
-                    "artifact_id": 1,
-                    "artifact_name": "fixture-approval",
-                    "artifact_sha256": hashlib.sha256(
-                        approval_input_path.read_bytes()
-                    ).hexdigest(),
-                    "inventory_sha256": "b" * 64,
-                    "canonical_subject_sha256": hashlib.sha256(
-                        _canonical(canonical_subject)
-                    ).hexdigest(),
-                }
-            )
-            + b"\n"
-        )
-        monkeypatch.setattr(
-            producer_package,
-            "verify_approval_input_bytes",
-            lambda *_args, **_kwargs: None,
-        )
-        producer_package.build(
-            producer_package_path.parents[1],
-            canonical_subject_path,
-            submission_path,
-            test_evidence_root,
-            product_root,
-            quality_root,
-            approval_input_path,
-            approval_provenance_path,
-        )
-    else:
-        _write_producer_package(
-            producer_package_path,
-            repository=repository,
-            commit=commit,
-            tree=bound_tree,
-            run_id=run_id,
-            policy_raw=policy_path.read_bytes(),
-            evidence_dir=evidence_dir,
-            approval_root=approval_root,
-            objects_root=objects,
-            include_approval=include_approval,
-            bind_product_manifest=bind_product_manifest,
-        )
-        descriptor = producer_package._derived_descriptor(
-            policy["producer_package_contract"],
-            package_sha256=hashlib.sha256(producer_package_path.read_bytes()).hexdigest(),
-            subject_commit=commit,
-            subject_tree=bound_tree,
-        )
-        descriptor_path = producer_package_path.with_name("helper1-v51.candidate.json")
-        descriptor_path.write_bytes(_canonical(descriptor) + b"\n")
-    monkeypatch.setattr(producer_package, "verify_authority", lambda _descriptor: "a" * 64)
     event_path = tmp_path / "event.json"
     event_path.write_bytes(
         _canonical(
@@ -730,7 +440,6 @@ def _build_signed_fixture(
                     "run_attempt": 1,
                     "name": "helper1-v2-evidence-producer",
                     "path": ".github/workflows/helper1-v2-evidence.yml",
-                    "status": "completed",
                     "conclusion": "success",
                     "head_sha": commit,
                     "pull_requests": [],
@@ -766,7 +475,6 @@ def _build_signed_fixture(
         "tree": actual_tree,
         "evidence_dir": evidence_dir,
         "artifact_root": objects.parent,
-        "producer_package": producer_package_path,
         "event": event_path,
         "policy": policy,
         "policy_path": policy_path,
@@ -782,8 +490,10 @@ def _run_trusted_verifier(fixture: dict[str, object], output: Path, monkeypatch)
             "helper1_trusted_verifier.py",
             "--event",
             str(fixture["event"]),
-            "--producer-package",
-            str(fixture["producer_package"]),
+            "--evidence-dir",
+            str(fixture["evidence_dir"]),
+            "--artifact-root",
+            str(fixture["artifact_root"]),
             "--output",
             str(output),
         ],
@@ -812,7 +522,7 @@ def test_audit_exact_mismatched_tree_fixture_is_fixed_at_code_pass_zero(
     assert "CODE_PASS=0" in stdout
     assert "CODE_PASS=1" not in stdout
     assert verdict["code_pass"] is False
-    assert verdict["error_code"] == "PRODUCER_PACKAGE_SUBJECT_MISMATCH"
+    assert verdict["error_code"] == "EVIDENCE_SUBJECT_TREE_MISMATCH"
     assert verdict["subject_tree"] == fixture["tree"]
 
 
@@ -827,44 +537,7 @@ def test_exact_tree_and_artifact_bytes_reach_signed_ephemeral_verdict(
     assert "CODE_PASS=1" in stdout
     assert verdict["subject_commit"] == fixture["commit"]
     assert verdict["subject_tree"] == fixture["tree"]
-    assert verdict["producer_package_sha256"] == _sha256(
-        Path(fixture["producer_package"]).read_bytes()
-    )
-    assert verdict["chain_authority_sha256"] == "sha256:" + "a" * 64
     assert type(verdict["signature_b64"]) is str
-
-
-def test_external_evidence_mutation_after_package_creation_is_blocked(
-    tmp_path: Path, monkeypatch, capsys
-) -> None:
-    fixture = _build_signed_fixture(tmp_path, monkeypatch)
-    external = Path(fixture["producer_package"]).parents[1] / "evidence"
-    external.mkdir()
-    source = Path(fixture["evidence_dir"]) / "APPROVED_ASSET_CLOSURE.json"
-    mutated = bytearray(source.read_bytes())
-    mutated[-1] ^= 1
-    (external / source.name).write_bytes(mutated)
-    output = tmp_path / "external-mutation-verdict.json"
-    assert _run_trusted_verifier(fixture, output, monkeypatch) == 1
-    capsys.readouterr()
-    _assert_unsigned_zero_verdict(output, "PRODUCER_ARTIFACT_LAYOUT_INVALID")
-
-
-def test_valid_but_different_external_inventory_cannot_override_package(
-    tmp_path: Path, monkeypatch, capsys
-) -> None:
-    fixture = _build_signed_fixture(tmp_path, monkeypatch)
-    external = Path(fixture["producer_package"]).parents[1] / "evidence"
-    external.mkdir()
-    for item in Path(fixture["evidence_dir"]).iterdir():
-        (external / item.name).write_bytes(item.read_bytes())
-    first = external / "APPROVED_ASSET_CLOSURE.json"
-    alternate = json.loads(first.read_text(encoding="utf-8"))
-    first.write_text(json.dumps(alternate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    output = tmp_path / "external-override-verdict.json"
-    assert _run_trusted_verifier(fixture, output, monkeypatch) == 1
-    capsys.readouterr()
-    _assert_unsigned_zero_verdict(output, "PRODUCER_ARTIFACT_LAYOUT_INVALID")
 
 
 def test_legacy_four_complete_without_approval_closure_never_reaches_code_pass(
@@ -877,17 +550,7 @@ def test_legacy_four_complete_without_approval_closure_never_reaches_code_pass(
     verdict = json.loads(output.read_text(encoding="utf-8"))
     assert "CODE_PASS=0" in stdout
     assert "CODE_PASS=1" not in stdout
-    assert verdict["error_code"] == "PRODUCT_APPROVAL_INVENTORY_INVALID"
-
-
-def test_approval_inventory_without_manifest_binding_is_blocked(
-    tmp_path: Path, monkeypatch, capsys
-) -> None:
-    fixture = _build_signed_fixture(tmp_path, monkeypatch, bind_product_manifest=False)
-    output = tmp_path / "manifest-unbound-verdict.json"
-    assert _run_trusted_verifier(fixture, output, monkeypatch) == 1
-    capsys.readouterr()
-    _assert_unsigned_zero_verdict(output, "PRODUCT_APPROVAL_MANIFEST_UNBOUND")
+    assert verdict["error_code"] == "APPROVAL_EVIDENCE_INVENTORY_INVALID"
 
 
 def test_protected_verifier_rejects_replayed_complete_approval_set(
@@ -960,13 +623,15 @@ def test_replay_store_reservation_failure_returns_unsigned_zero_verdict(
     _assert_unsigned_zero_verdict(output, "APPROVAL_REPLAY_STORE_RESERVATION_FAILED")
 
 
-def test_boolean_only_measurement_self_report_is_rejected() -> None:
+def test_boolean_only_measurement_self_report_is_rejected(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "artifacts"
+    (artifact_root / "objects").mkdir(parents=True)
     with pytest.raises(EvidenceMeaningError, match="MEASUREMENT_ARTIFACTS_INVALID"):
         verify_measurement_artifacts(
             "M3_M4_MEASUREMENT",
             {"passed": True},
             [],
-            {},
+            artifact_root,
         )
 
 
@@ -1006,21 +671,6 @@ def test_subject_check_payload_binds_exact_sha_tree_and_protected_prerequisites(
         prerequisites_ok=True,
     )
     assert mismatch_conclusion == "failure"
-
-    for field in ("producer_package_sha256", "chain_authority_sha256"):
-        tampered = deepcopy(verdict)
-        tampered[field] = "sha256:" + "f" * 64
-        _, tampered_conclusion, _ = subject_publisher.build_check_payload(
-            subject=str(fixture["commit"]),
-            producer_run="9001:1",
-            verdict=tampered,
-            verdict_digest=_sha256(_canonical(tampered)),
-            policy=fixture["policy"],
-            details_url="https://github.com/tristan00037-tristan050/tristan050-ai_ondevice_APP/actions/runs/1",
-            subject_tree=str(fixture["tree"]),
-            prerequisites_ok=True,
-        )
-        assert tampered_conclusion == "failure"
 
     _, prerequisite_conclusion, prerequisite_error = subject_publisher.build_check_payload(
         subject=str(fixture["commit"]),
@@ -1133,7 +783,6 @@ def test_subject_check_publisher_main_posts_exact_subject_and_records_server_ide
     for name in (
         "HELPER1_REGRESSION_OUTCOME",
         "HELPER1_REPLAY_PROBE_OUTCOME",
-        "HELPER1_LINEAGE_OUTCOME",
         "HELPER1_FETCH_OUTCOME",
         "HELPER1_DOWNLOAD_OUTCOME",
         "HELPER1_VERIFY_OUTCOME",

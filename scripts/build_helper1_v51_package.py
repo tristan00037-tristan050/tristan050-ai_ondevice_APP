@@ -20,7 +20,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_ROOT = "Butler_Helper1_v2_A4_ProducerEvidenceBindingClosure_20260804_codex"
+PACKAGE_ROOT = "Butler_Helper1_v2_A4_PreconnectReplayLineageClosure_20260803_codex"
 START_TREE = "243074f44cf6883a5ad9665a2c40132c7c42a535"
 BASE_COMMIT = "390af710bdc76a58be3158b6bcbf0638d62b49a4"
 BASE_BUNDLE_SHA256 = "53fccfead8b2089dc3b595ed4ce7f01e9d3e9664ec67faca045fa7dfdb4ed41d"
@@ -33,20 +33,6 @@ CANONICAL_VECTOR_PATHS = (
 )
 APPROVAL_POLICY_PATH = "contracts/helper1/retrieval-approval-trust-policy-v1.json"
 CHAIN_POLICY_PATH = ROOT / "contracts/helper1/trusted-verifier-policy-v1.json"
-CHAIN_ID = "helper1-v51-a4-closure"
-CHAIN_GENERATION = 15
-PREDECESSOR_GENERATION = 14
-ROLLBACK_GENERATION = 13
-EXPECTED_PREDECESSOR = {
-    "generation": 14,
-    "package_sha256": "41870dec77c3f503f34fa5742f13ea242cf9cc6941f4f2ee1b072276fb34a114",
-    "result_tree": "482d98334b80b7000e31ff8cacd508cd166f54c8",
-}
-EXPECTED_ROLLBACK = {
-    "generation": 13,
-    "package_sha256": "76e7cffe09e90e7ad5b9b632c5eb6793a5abd9ec6cf9d8eed28f206182f085cc",
-    "result_tree": "32c025dff173cf4526174a7df4ccc899345e47dc",
-}
 
 
 class PackageBuildError(RuntimeError):
@@ -166,60 +152,68 @@ def _write(path: Path, data: bytes) -> None:
     path.write_bytes(data)
 
 
-def _load_chain_contract() -> dict[str, object]:
+def _load_chain_anchor(anchor_path: Path) -> tuple[dict[str, object], bytes]:
     try:
         if (
-            CHAIN_POLICY_PATH.is_symlink()
-            or not CHAIN_POLICY_PATH.is_file()
+            anchor_path.resolve(strict=True) != CHAIN_POLICY_PATH.resolve(strict=True)
+            or anchor_path.is_symlink()
+            or not anchor_path.is_file()
         ):
-            raise PackageBuildError("PACKAGE_CHAIN_CONTRACT_UNAVAILABLE")
-        policy = json.loads(CHAIN_POLICY_PATH.read_bytes())
-        contract = policy["handoff_chain_authority"]
-        producer = policy["producer_package_contract"]
+            raise PackageBuildError("PACKAGE_CHAIN_ANCHOR_UNTRUSTED")
+        policy = json.loads(anchor_path.read_bytes())
+        anchor = policy["handoff_chain_anchor"]
     except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise PackageBuildError("PACKAGE_CHAIN_CONTRACT_INVALID") from exc
+        raise PackageBuildError("PACKAGE_CHAIN_ANCHOR_INVALID") from exc
     if (
         type(policy) is not dict
         or policy.get("enabled") is not False
-        or type(contract) is not dict
-        or set(contract) != {
+        or type(anchor) is not dict
+        or set(anchor) != {
             "schema_version",
             "chain_id",
-            "authority_mode",
-            "approved_public_key_b64",
-            "approved_public_key_sha256",
-            "required_environment",
-            "required_check_name",
+            "successor_generation",
+            "immediate_predecessor",
+            "forbidden_rollback_fixture",
         }
-        or contract.get("schema_version") != "butler.helper1.handoff-chain-authority.v1"
-        or contract.get("chain_id") != CHAIN_ID
-        or contract.get("authority_mode") != "PROTECTED_WORKFLOW_SIGNED_CHAIN"
-        or contract.get("approved_public_key_b64") is not None
-        or contract.get("approved_public_key_sha256") is not None
-        or contract.get("required_environment") != "helper1-production-verifier"
-        or contract.get("required_check_name") != "helper1-v2/protected-verdict"
-        or type(producer) is not dict
-        or producer.get("schema_version") != "butler.helper1.producer-package-contract.v1"
-        or producer.get("chain_id") != CHAIN_ID
-        or producer.get("candidate_generation") != CHAIN_GENERATION
-        or producer.get("package_relative_path") != "package/helper1-v51.zip"
-        or producer.get("descriptor_relative_path") != "package/helper1-v51.candidate.json"
-        or producer.get("immediate_predecessor") != EXPECTED_PREDECESSOR
-        or producer.get("rollback_record") != EXPECTED_ROLLBACK
+        or anchor.get("schema_version") != "butler.helper1.handoff-chain-anchor.v1"
     ):
-        raise PackageBuildError("PACKAGE_CHAIN_CONTRACT_INVALID")
-    return policy
+        raise PackageBuildError("PACKAGE_CHAIN_ANCHOR_INVALID")
+    predecessor = anchor.get("immediate_predecessor")
+    rollback = anchor.get("forbidden_rollback_fixture")
+    generation = anchor.get("successor_generation")
+    for record in (predecessor, rollback):
+        if (
+            type(record) is not dict
+            or set(record) != {"generation", "package_sha256", "result_tree"}
+            or type(record.get("generation")) is not int
+            or type(record.get("package_sha256")) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", record["package_sha256"]) is None
+            or type(record.get("result_tree")) is not str
+            or re.fullmatch(r"[0-9a-f]{40}", record["result_tree"]) is None
+        ):
+            raise PackageBuildError("PACKAGE_CHAIN_ANCHOR_INVALID")
+    if (
+        type(generation) is not int
+        or generation < 2
+        or predecessor["generation"] != generation - 1
+        or rollback["generation"] >= predecessor["generation"]
+    ):
+        raise PackageBuildError("PACKAGE_CHAIN_ANCHOR_INVALID")
+    material = _canonical(anchor)
+    return anchor, material
 
 
-def _candidate_package_material(
+def _anchored_package_material(
     package_path: Path,
+    expected: dict[str, object],
     *,
-    generation: int,
     require_result_patch: bool,
-) -> tuple[dict[str, object], bytes, bytes | None, bytes | None, bytes | None]:
+) -> tuple[str, bytes, bytes | None]:
     if not package_path.is_file() or package_path.is_symlink():
         raise PackageBuildError("PACKAGE_PREVIOUS_RESULT_MISSING")
     package = package_path.read_bytes()
+    if hashlib.sha256(package).hexdigest() != expected["package_sha256"]:
+        raise PackageBuildError("PACKAGE_PREVIOUS_RESULT_DIGEST_MISMATCH")
     try:
         with zipfile.ZipFile(io.BytesIO(package)) as archive:
             names = archive.namelist()
@@ -249,8 +243,7 @@ def _candidate_package_material(
             }
             for name, record in manifest_files.items()
         )
-        or type(report.get("result_tree")) is not str
-        or re.fullmatch(r"[0-9a-f]{40}", report["result_tree"]) is None
+        or report.get("result_tree") != expected["result_tree"]
     ):
         raise PackageBuildError("PACKAGE_PREVIOUS_RESULT_INVALID")
     sums: dict[str, str] = {}
@@ -266,18 +259,7 @@ def _candidate_package_material(
     result_patch = data.get("SOURCE/result.patch")
     if require_result_patch and not result_patch:
         raise PackageBuildError("PACKAGE_PREVIOUS_RESULT_INVALID")
-    record = {
-        "generation": generation,
-        "package_sha256": hashlib.sha256(package).hexdigest(),
-        "result_tree": report["result_tree"],
-    }
-    return (
-        record,
-        package,
-        result_patch,
-        data.get("SOURCE/helper1_v2_baseline_390af710.bundle"),
-        data.get("SOURCE/previous_result_package.zip"),
-    )
+    return str(report["result_tree"]), package, result_patch
 
 
 def _predecessor_to_result_patch(
@@ -426,6 +408,7 @@ def build(
     base_bundle_path: Path,
     previous_result_package_path: Path,
     rollback_predecessor_package_path: Path,
+    chain_anchor_path: Path,
 ) -> str:
     if output.suffix.lower() != ".zip" or output.exists():
         raise PackageBuildError("PACKAGE_OUTPUT_INVALID")
@@ -446,46 +429,21 @@ def build(
         raise PackageBuildError("PACKAGE_BASE_BUNDLE_INVALID") from exc
     if bundle_heads != [f"{BASE_COMMIT} HEAD"]:
         raise PackageBuildError("PACKAGE_BASE_BUNDLE_IDENTITY_MISMATCH")
-    chain_policy = _load_chain_contract()
-    (
-        predecessor,
-        previous_result_package,
-        predecessor_result_patch,
-        predecessor_base_bundle,
-        embedded_rollback_package,
-    ) = (
-        _candidate_package_material(
+    chain_anchor, chain_anchor_material = _load_chain_anchor(chain_anchor_path)
+    predecessor = chain_anchor["immediate_predecessor"]
+    rollback = chain_anchor["forbidden_rollback_fixture"]
+    previous_result_tree, previous_result_package, predecessor_result_patch = (
+        _anchored_package_material(
             previous_result_package_path,
-            generation=PREDECESSOR_GENERATION,
+            predecessor,
             require_result_patch=True,
         )
     )
-    rollback, rollback_package, _, _, _ = _candidate_package_material(
+    rollback_tree, rollback_package, _ = _anchored_package_material(
         rollback_predecessor_package_path,
-        generation=ROLLBACK_GENERATION,
+        rollback,
         require_result_patch=False,
     )
-    producer_contract = chain_policy["producer_package_contract"]
-    if (
-        predecessor != producer_contract["immediate_predecessor"]
-        or rollback != producer_contract["rollback_record"]
-        or predecessor["package_sha256"] == rollback["package_sha256"]
-        or predecessor["result_tree"] == rollback["result_tree"]
-    ):
-        raise PackageBuildError("PACKAGE_CHAIN_RECORDS_NOT_DISTINCT")
-    if predecessor_base_bundle != base_bundle or embedded_rollback_package != rollback_package:
-        raise PackageBuildError("PACKAGE_CHAIN_EMBEDDED_MATERIAL_MISMATCH")
-    candidate_descriptor = {
-        "schema_version": "butler.helper1.handoff-chain-candidate.v1",
-        "chain_id": CHAIN_ID,
-        "successor_generation": CHAIN_GENERATION,
-        "immediate_predecessor": predecessor,
-        "rollback_record": rollback,
-        "authority_state": "UNCONFIGURED",
-        "signature_state": "MISSING",
-        "provenance_state": "UNVERIFIED",
-    }
-    candidate_descriptor_material = _canonical(candidate_descriptor)
     try:
         evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -504,7 +462,7 @@ def build(
     if head_tree != START_TREE:
         raise PackageBuildError("PACKAGE_START_TREE_MISMATCH")
     paths = _changed_paths()
-    if len(paths) != 26:
+    if len(paths) != 22:
         raise PackageBuildError("PACKAGE_CHANGESET_COUNT_INVALID")
     with tempfile.TemporaryDirectory(prefix="helper1-v51-build-") as name:
         temporary = Path(name)
@@ -516,7 +474,7 @@ def build(
         predecessor_to_result, successor_paths = _predecessor_to_result_patch(
             paths,
             predecessor_result_patch,
-            str(predecessor["result_tree"]),
+            previous_result_tree,
             result_tree,
             temporary,
         )
@@ -529,8 +487,10 @@ def build(
         "SOURCE/working_tree_overlay.tar.gz": overlay,
         "SOURCE/CHANGED_FILES.txt": ("\n".join(paths) + "\n").encode("utf-8"),
         "SOURCE/SUCCESSOR_CHANGED_FILES.txt": ("\n".join(successor_paths) + "\n").encode("utf-8"),
+        "SOURCE/helper1_v2_baseline_390af710.bundle": base_bundle,
         "SOURCE/previous_result_package.zip": previous_result_package,
-        "SOURCE/candidate_chain_descriptor.json": candidate_descriptor_material,
+        "SOURCE/chain_anchor_snapshot.json": chain_anchor_material,
+        "EVIDENCE/chain/rollback_predecessor_10r.zip": rollback_package,
         "EVIDENCE/test-evidence-index-v1.json": _canonical(evidence),
         "VERIFY.py": (ROOT / "scripts/verify_helper1_v51_package.py").read_bytes(),
     }
@@ -615,7 +575,7 @@ def build(
     if (
         v4_counts["collected"] != 243
         or v51_counts["collected"] != 149
-        or replay_counts["collected"] != 24
+        or replay_counts["collected"] != 15
     ):
         raise PackageBuildError("PACKAGE_ACCEPTANCE_COUNT_MISMATCH")
     report = {
@@ -623,15 +583,12 @@ def build(
         "base_commit": BASE_COMMIT,
         "base_bundle_sha256": BASE_BUNDLE_SHA256,
         "start_tree": START_TREE,
-        "handoff_chain_id": CHAIN_ID,
-        "handoff_generation": CHAIN_GENERATION,
-        "chain_authority_state": "UNCONFIGURED",
-        "chain_signature_state": "MISSING",
-        "chain_provenance_state": "UNVERIFIED",
-        "candidate_chain_descriptor_sha256": hashlib.sha256(candidate_descriptor_material).hexdigest(),
-        "previous_result_tree": predecessor["result_tree"],
+        "handoff_chain_id": chain_anchor["chain_id"],
+        "handoff_generation": chain_anchor["successor_generation"],
+        "chain_anchor_sha256": hashlib.sha256(chain_anchor_material).hexdigest(),
+        "previous_result_tree": previous_result_tree,
         "previous_result_package_sha256": predecessor["package_sha256"],
-        "rollback_fixture_tree": rollback["result_tree"],
+        "rollback_fixture_tree": rollback_tree,
         "rollback_fixture_package_sha256": rollback["package_sha256"],
         "result_tree": result_tree,
         "v4_input_sha256": V4_INPUT_SHA256,
@@ -665,10 +622,9 @@ def build(
             "protected_verifier_a4_closure": "scripts/ci/helper1_trusted_verifier.py",
             "durable_replay_store": "butler_pc_core/helper1/replay_store.py",
             "preconnect_endpoint_pinning": "butler_pc_core/helper1/replay_store.py",
-            "protected_handoff_chain_authority": "contracts/helper1/trusted-verifier-policy-v1.json",
+            "protected_handoff_chain_anchor": "contracts/helper1/trusted-verifier-policy-v1.json",
             "protected_replay_workflow_binding": ".github/workflows/helper1-v2-trusted-verifier.yml",
             "protected_replay_database_probe": "scripts/ci/helper1_postgresql_replay_probe.py",
-            "fixed_path_producer_package": "scripts/ci/helper1_producer_package.py",
         },
         "canonical_vector_digest": _source_set_digest(CANONICAL_VECTOR_PATHS),
         "trust_policy_digest": hashlib.sha256((ROOT / APPROVAL_POLICY_PATH).read_bytes()).hexdigest(),
@@ -678,12 +634,10 @@ def build(
             "protected remote CI",
             "protected PostgreSQL replay environment and two-workflow-run E2E",
             "production signing identity and trust root",
-            "protected signed handoff chain authority",
         ],
         "blockers": [
             "MACOS_NATIVE_LANE_NOT_CONFIGURED",
             "PROTECTED_REPLAY_ENVIRONMENT_NOT_PROVISIONED",
-            "HANDOFF_CHAIN_AUTHORITY_NOT_CONFIGURED",
         ],
         "raw_diagnostics_policy": "CONTAINED_RAW_STDOUT_STDERR_WITH_SHA256",
         "publication": {"branch": False, "commit": False, "push": False, "pr": False},
@@ -718,6 +672,7 @@ def main() -> int:
     parser.add_argument("--base-bundle", required=True, type=Path)
     parser.add_argument("--previous-result-package", required=True, type=Path)
     parser.add_argument("--rollback-predecessor-package", required=True, type=Path)
+    parser.add_argument("--chain-anchor", required=True, type=Path)
     args = parser.parse_args()
     try:
         digest = build(
@@ -726,6 +681,7 @@ def main() -> int:
             args.base_bundle,
             args.previous_result_package,
             args.rollback_predecessor_package,
+            args.chain_anchor,
         )
     except PackageBuildError as exc:
         print("HELPER1_V51_PACKAGE_BUILD_OK=0")

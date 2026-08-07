@@ -1,8 +1,3 @@
-// @vitest-environment node
-// 이 파일은 DOM을 쓰지 않는 node 통합 시험이다(child_process로 실제 Python
-// Ed25519 서명을 만들어 Web Crypto로 검증). 기본 jsdom 환경에서는 jsdom의
-// webidl crypto.subtle.digest가 node-realm ArrayBuffer를 거부해 실패하므로,
-// 실제 브라우저 런타임과 동일하게 crypto와 ArrayBuffer가 같은 realm인 node에서 돈다.
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 

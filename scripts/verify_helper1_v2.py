@@ -9,8 +9,6 @@ select a verifier, key, policy manifest, or expected hash here.
 from __future__ import annotations
 
 import argparse
-import ast
-import base64
 import hashlib
 import json
 import re
@@ -23,18 +21,17 @@ ROUTE = ROOT / "butler_pc_core" / "sidecar" / "routes" / "helper1_search.py"
 CONTRACT_ROOT = ROOT / "contracts" / "helper1"
 TRUSTED_VERIFIER = ROOT / "scripts" / "ci" / "helper1_trusted_verifier.py"
 TRUSTED_POLICY = CONTRACT_ROOT / "trusted-verifier-policy-v1.json"
-PROTECTED_SURFACE = ROOT / "scripts/ci/helper1_protected_surface.py"
-_surface_tree = ast.parse(PROTECTED_SURFACE.read_text(encoding="utf-8"))
-_surface_assignment = next(
-    node for node in _surface_tree.body
-    if isinstance(node, ast.Assign)
-    and any(
-        isinstance(target, ast.Name) and target.id == "PROTECTED_COMPONENT_PATHS"
-        for target in node.targets
-    )
-)
 TRUSTED_COMPONENTS = {
-    path: ROOT / path for path in ast.literal_eval(_surface_assignment.value)
+    "scripts/ci/helper1_trusted_verifier.py": TRUSTED_VERIFIER,
+    "scripts/ci/helper1_subject_binding.py": ROOT / "scripts/ci/helper1_subject_binding.py",
+    "scripts/ci/helper1_evidence_semantics.py": ROOT / "scripts/ci/helper1_evidence_semantics.py",
+    "scripts/ci/helper1_postgresql_replay_probe.py": ROOT / "scripts/ci/helper1_postgresql_replay_probe.py",
+    "scripts/ci/publish_helper1_subject_check.py": ROOT / "scripts/ci/publish_helper1_subject_check.py",
+    "butler_pc_core/helper1/approval_closure.py": CANONICAL_ROOT / "approval_closure.py",
+    "butler_pc_core/helper1/canonical_json.py": CANONICAL_ROOT / "canonical_json.py",
+    "butler_pc_core/helper1/execution.py": CANONICAL_ROOT / "execution.py",
+    "butler_pc_core/helper1/replay_store.py": CANONICAL_ROOT / "replay_store.py",
+    "butler_pc_core/helper1/retrieval_policy.py": CANONICAL_ROOT / "retrieval_policy.py",
 }
 
 REQUIRED_FILES = (
@@ -143,8 +140,7 @@ POLICY_KEYS = {
     "repository",
     "producer_workflow_name",
     "producer_workflow_path",
-    "handoff_chain_authority",
-    "producer_package_contract",
+    "handoff_chain_anchor",
     "protected_verifier_sha256",
     "protected_components_sha256",
     "approved_producer_identity",
@@ -163,76 +159,42 @@ POLICY_KEYS = {
     "subject_check_name",
     "subject_check_app_slug",
     "subject_check_required",
-    "quality_evidence_required",
-    "quality_producer_workflow_id",
-    "quality_producer_workflow_path",
-    "quality_producer_workflow_sha256",
-    "device_trust_policy_sha256",
 }
 
 
-def valid_handoff_chain_authority(value: object) -> bool:
+def valid_handoff_chain_anchor(value: object) -> bool:
     if type(value) is not dict or set(value) != {
         "schema_version",
         "chain_id",
-        "authority_mode",
-        "approved_public_key_b64",
-        "approved_public_key_sha256",
-        "required_environment",
-        "required_check_name",
+        "successor_generation",
+        "immediate_predecessor",
+        "forbidden_rollback_fixture",
     }:
         return False
-    key = value.get("approved_public_key_b64")
-    digest = value.get("approved_public_key_sha256")
-    if (key is None) != (digest is None):
-        return False
-    if key is not None:
-        try:
-            decoded = base64.b64decode(key, validate=True)
-        except (TypeError, ValueError):
-            return False
-        if len(decoded) != 32 or digest != "sha256:" + hashlib.sha256(decoded).hexdigest():
+    predecessor = value.get("immediate_predecessor")
+    rollback = value.get("forbidden_rollback_fixture")
+    generation = value.get("successor_generation")
+    for record in (predecessor, rollback):
+        if (
+            type(record) is not dict
+            or set(record) != {"generation", "package_sha256", "result_tree"}
+            or type(record.get("generation")) is not int
+            or type(record.get("package_sha256")) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", record["package_sha256"]) is None
+            or type(record.get("result_tree")) is not str
+            or re.fullmatch(r"[0-9a-f]{40}", record["result_tree"]) is None
+        ):
             return False
     return (
-        value.get("schema_version") == "butler.helper1.handoff-chain-authority.v1"
-        and value.get("chain_id") == "helper1-v51-a4-closure"
-        and value.get("authority_mode") == "PROTECTED_WORKFLOW_SIGNED_CHAIN"
-        and value.get("required_environment") == "helper1-production-verifier"
-        and value.get("required_check_name") == "helper1-v2/protected-verdict"
-    )
-
-
-def valid_producer_package_contract(value: object) -> bool:
-    def valid_record(record: object, generation: int) -> bool:
-        return (
-            type(record) is dict
-            and set(record) == {"generation", "package_sha256", "result_tree"}
-            and record.get("generation") == generation
-            and type(record.get("package_sha256")) is str
-            and re.fullmatch(r"[0-9a-f]{64}", record["package_sha256"]) is not None
-            and type(record.get("result_tree")) is str
-            and re.fullmatch(r"[0-9a-f]{40}", record["result_tree"]) is not None
-        )
-
-    return (
-        type(value) is dict
-        and set(value) == {
-            "schema_version",
-            "chain_id",
-            "candidate_generation",
-            "package_relative_path",
-            "descriptor_relative_path",
-            "immediate_predecessor",
-            "rollback_record",
-        }
-        and value.get("schema_version") == "butler.helper1.producer-package-contract.v1"
-        and value.get("chain_id") == "helper1-v51-a4-closure"
-        and value.get("candidate_generation") == 15
-        and value.get("package_relative_path") == "package/helper1-v51.zip"
-        and value.get("descriptor_relative_path") == "package/helper1-v51.candidate.json"
-        and valid_record(value.get("immediate_predecessor"), 14)
-        and valid_record(value.get("rollback_record"), 13)
-        and value["immediate_predecessor"] != value["rollback_record"]
+        value.get("schema_version") == "butler.helper1.handoff-chain-anchor.v1"
+        and type(value.get("chain_id")) is str
+        and bool(value["chain_id"])
+        and type(generation) is int
+        and generation >= 2
+        and predecessor["generation"] == generation - 1
+        and rollback["generation"] < predecessor["generation"]
+        and rollback["package_sha256"] != predecessor["package_sha256"]
+        and rollback["result_tree"] != predecessor["result_tree"]
     )
 
 
@@ -296,8 +258,7 @@ def static_audit() -> tuple[bool, str]:
             or policy["repository"] != "tristan00037-tristan050/tristan050-ai_ondevice_APP"
             or policy["producer_workflow_name"] != "helper1-v2-evidence-producer"
             or policy["producer_workflow_path"] != ".github/workflows/helper1-v2-evidence.yml"
-            or not valid_handoff_chain_authority(policy["handoff_chain_authority"])
-            or not valid_producer_package_contract(policy["producer_package_contract"])
+            or not valid_handoff_chain_anchor(policy["handoff_chain_anchor"])
             or policy["approved_producer_identity"] != "sha256:44804ccc81a9a1008ab0fe6110a086c2ea918fd107a1bed199f46f0f09d7c126"
             or policy["approved_evidence_key_id"] != "butler/helper1/evidence/ed25519/v1"
             or policy["approved_verdict_key_id"] != "butler/helper1/verdict/ed25519/v1"
@@ -312,12 +273,6 @@ def static_audit() -> tuple[bool, str]:
             or policy["subject_check_name"] != "helper1-v2/protected-verdict"
             or policy["subject_check_app_slug"] != "github-actions"
             or policy["subject_check_required"] is not True
-            or policy["quality_evidence_required"] is not True
-            or type(policy["quality_producer_workflow_id"]) is not int
-            or policy["quality_producer_workflow_id"] < 0
-            or policy["quality_producer_workflow_path"] != ".github/workflows/helper1-v2-evidence.yml"
-            or re.fullmatch(r"sha256:[0-9a-f]{64}", policy["quality_producer_workflow_sha256"]) is None
-            or re.fullmatch(r"sha256:[0-9a-f]{64}", policy["device_trust_policy_sha256"]) is None
             or type(policy["required_evidence_files"]) is not list
             or len(policy["required_evidence_files"]) != 4
             or len(set(policy["required_evidence_files"])) != 4

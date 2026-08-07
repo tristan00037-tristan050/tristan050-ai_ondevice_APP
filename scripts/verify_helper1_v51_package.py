@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import hashlib
 import io
 import json
-import os
 import re
 import stat
 import subprocess
@@ -20,19 +18,11 @@ import xml.etree.ElementTree as ET
 from pathlib import Path, PurePosixPath
 from typing import Callable
 
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 SUM_RE = re.compile(r"^([0-9a-f]{64})  ([^\x00\r\n]+)$")
 BASE_COMMIT = "390af710bdc76a58be3158b6bcbf0638d62b49a4"
 BASE_BUNDLE_SHA256 = "53fccfead8b2089dc3b595ed4ce7f01e9d3e9664ec67faca045fa7dfdb4ed41d"
 START_TREE = "243074f44cf6883a5ad9665a2c40132c7c42a535"
-CHAIN_ID = "helper1-v51-a4-closure"
-CHAIN_GENERATIONS = (13, 14, 15)
-CHAIN_AUTHORITY_ENV = "HELPER1_HANDOFF_CHAIN_AUTHORITY_B64"
-ROOT = Path(__file__).resolve().parents[1]
-PROTECTED_POLICY_PATH = ROOT / "contracts/helper1/trusted-verifier-policy-v1.json"
 
 
 def _path(value: str) -> str | None:
@@ -210,7 +200,7 @@ def _reconstruct_product_trees(
         return False
 
 
-def _canonical_authority_value(value: object) -> bytes:
+def _canonical_anchor(value: object) -> bytes:
     return json.dumps(
         value,
         ensure_ascii=False,
@@ -219,137 +209,50 @@ def _canonical_authority_value(value: object) -> bytes:
     ).encode("utf-8")
 
 
-def _verify_signed_chain_authority(
-    raw: bytes,
-    public_key_b64: str,
-) -> tuple[dict[str, object], bytes] | None:
+def _load_chain_anchor(path: Path) -> tuple[dict[str, object], bytes] | None:
     try:
-        public_key = base64.b64decode(public_key_b64, validate=True)
-        authority = json.loads(raw)
-    except (TypeError, ValueError, json.JSONDecodeError):
-        return None
-    if (
-        len(public_key) != 32
-        or type(authority) is not dict
-        or set(authority) != {
-            "schema_version",
-            "chain_id",
-            "descriptors",
-            "signatures_b64",
-        }
-        or authority.get("schema_version") != "butler.helper1.signed-handoff-chain.v1"
-        or authority.get("chain_id") != CHAIN_ID
-    ):
-        return None
-    descriptors = authority.get("descriptors")
-    signatures = authority.get("signatures_b64")
-    if (
-        type(descriptors) is not list
-        or type(signatures) is not list
-        or len(descriptors) != 3
-        or len(signatures) != 3
-    ):
-        return None
-    materials: list[bytes] = []
-    for descriptor in descriptors:
-        if (
-            type(descriptor) is not dict
-            or set(descriptor) != {
-                "schema_version",
-                "chain_id",
-                "generation",
-                "package_sha256",
-                "result_tree",
-                "previous_descriptor_sha256",
-            }
-            or descriptor.get("schema_version") != "butler.helper1.handoff-chain-descriptor.v1"
-            or descriptor.get("chain_id") != CHAIN_ID
-            or type(descriptor.get("generation")) is not int
-            or type(descriptor.get("package_sha256")) is not str
-            or re.fullmatch(r"[0-9a-f]{64}", descriptor["package_sha256"]) is None
-            or type(descriptor.get("result_tree")) is not str
-            or re.fullmatch(r"[0-9a-f]{40}", descriptor["result_tree"]) is None
-        ):
+        if not path.is_file() or path.is_symlink():
             return None
-        materials.append(_canonical_authority_value(descriptor))
-    generations = [descriptor["generation"] for descriptor in descriptors]
-    if generations != list(CHAIN_GENERATIONS):
-        return None
-    if descriptors[0]["previous_descriptor_sha256"] is not None:
-        return None
-    for index in (1, 2):
-        expected = hashlib.sha256(materials[index - 1]).hexdigest()
-        if descriptors[index]["previous_descriptor_sha256"] != expected:
-            return None
-    identities = {
-        (descriptor["package_sha256"], descriptor["result_tree"])
-        for descriptor in descriptors
-    }
-    if len(identities) != 3:
-        return None
-    verifier = Ed25519PublicKey.from_public_bytes(public_key)
-    try:
-        for material, signature_b64 in zip(materials, signatures, strict=True):
-            if type(signature_b64) is not str:
-                return None
-            signature = base64.b64decode(signature_b64, validate=True)
-            if len(signature) != 64:
-                return None
-            verifier.verify(signature, material)
-    except (TypeError, ValueError, InvalidSignature):
-        return None
-    anchor = {
-        "chain_id": CHAIN_ID,
-        "successor_generation": descriptors[2]["generation"],
-        "rollback_record": {
-            key: descriptors[0][key]
-            for key in ("generation", "package_sha256", "result_tree")
-        },
-        "immediate_predecessor": {
-            key: descriptors[1][key]
-            for key in ("generation", "package_sha256", "result_tree")
-        },
-        "candidate": descriptors[2],
-        "authority_sha256": hashlib.sha256(raw).hexdigest(),
-    }
-    return anchor, raw
-
-
-def _load_protected_chain_authority(
-) -> tuple[tuple[dict[str, object], bytes], str] | None:
-    try:
-        if PROTECTED_POLICY_PATH.is_symlink() or not PROTECTED_POLICY_PATH.is_file():
-            return None
-        policy = json.loads(PROTECTED_POLICY_PATH.read_bytes())
-        contract = policy["handoff_chain_authority"]
-        public_key_b64 = contract["approved_public_key_b64"]
-        public_key = base64.b64decode(public_key_b64, validate=True)
+        policy = json.loads(path.read_bytes())
+        anchor = policy["handoff_chain_anchor"]
     except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
         return None
     if (
         type(policy) is not dict
-        or type(policy.get("enabled")) is not bool
-        or type(contract) is not dict
-        or contract.get("schema_version")
-        != "butler.helper1.handoff-chain-authority.v1"
-        or contract.get("chain_id") != CHAIN_ID
-        or contract.get("authority_mode") != "PROTECTED_WORKFLOW_SIGNED_CHAIN"
-        or contract.get("required_environment") != "helper1-production-verifier"
-        or contract.get("required_check_name") != "helper1-v2/protected-verdict"
-        or len(public_key) != 32
-        or contract.get("approved_public_key_sha256")
-        != "sha256:" + hashlib.sha256(public_key).hexdigest()
+        or policy.get("enabled") is not False
+        or type(anchor) is not dict
+        or set(anchor) != {
+            "schema_version",
+            "chain_id",
+            "successor_generation",
+            "immediate_predecessor",
+            "forbidden_rollback_fixture",
+        }
+        or anchor.get("schema_version") != "butler.helper1.handoff-chain-anchor.v1"
     ):
         return None
-    encoded = os.environ.get(CHAIN_AUTHORITY_ENV)
-    if not encoded:
+    predecessor = anchor.get("immediate_predecessor")
+    rollback = anchor.get("forbidden_rollback_fixture")
+    generation = anchor.get("successor_generation")
+    for record in (predecessor, rollback):
+        if (
+            type(record) is not dict
+            or set(record) != {"generation", "package_sha256", "result_tree"}
+            or type(record.get("generation")) is not int
+            or type(record.get("package_sha256")) is not str
+            or re.fullmatch(r"[0-9a-f]{64}", record["package_sha256"]) is None
+            or type(record.get("result_tree")) is not str
+            or re.fullmatch(r"[0-9a-f]{40}", record["result_tree"]) is None
+        ):
+            return None
+    if (
+        type(generation) is not int
+        or generation < 2
+        or predecessor["generation"] != generation - 1
+        or rollback["generation"] >= predecessor["generation"]
+    ):
         return None
-    try:
-        raw = base64.b64decode(encoded, validate=True)
-    except (TypeError, ValueError):
-        return None
-    verified = _verify_signed_chain_authority(raw, public_key_b64)
-    return None if verified is None else (verified, public_key_b64)
+    return anchor, _canonical_anchor(anchor)
 
 
 def _anchored_package_material(
@@ -357,7 +260,7 @@ def _anchored_package_material(
     expected: dict[str, object],
     *,
     require_result_patch: bool,
-) -> tuple[str, bytes | None, bytes | None, bytes | None] | None:
+) -> tuple[str, bytes | None] | None:
     if hashlib.sha256(package).hexdigest() != expected["package_sha256"]:
         return None
     try:
@@ -402,12 +305,7 @@ def _anchored_package_material(
         result_patch = data.get("SOURCE/result.patch")
         if require_result_patch and not result_patch:
             return None
-        return (
-            str(report["result_tree"]),
-            result_patch,
-            data.get("SOURCE/helper1_v2_baseline_390af710.bundle"),
-            data.get("SOURCE/previous_result_package.zip"),
-        )
+        return str(report["result_tree"]), result_patch
     except (KeyError, OSError, TypeError, UnicodeError, ValueError, zipfile.BadZipFile, json.JSONDecodeError):
         return None
 
@@ -492,9 +390,8 @@ def _append_base_to_start_mutation(raw: bytes) -> bytes:
 
 def _package_mutation_gate(
     package: str,
-    chain_authority: tuple[dict[str, object], bytes],
-    trusted_public_key_b64: str,
-) -> tuple[bool, bool, bool]:
+    chain_anchor: tuple[dict[str, object], bytes],
+) -> tuple[bool, bool]:
     with tempfile.TemporaryDirectory(prefix="helper1-package-mutations-") as name:
         temporary = Path(name)
         source = Path(package)
@@ -502,22 +399,14 @@ def _package_mutation_gate(
         rollback_mutant = temporary / "predecessor-rollback-mutant.zip"
         try:
             with zipfile.ZipFile(source) as archive:
-                predecessor_name = next(
+                rollback_name = next(
                     item
                     for item in archive.namelist()
-                    if item.endswith("/SOURCE/previous_result_package.zip")
+                    if item.endswith("/EVIDENCE/chain/rollback_predecessor_10r.zip")
                 )
-                predecessor_package = archive.read(predecessor_name)
-            predecessor_material = _anchored_package_material(
-                predecessor_package,
-                chain_authority[0]["immediate_predecessor"],
-                require_result_patch=True,
-            )
-            if predecessor_material is None or predecessor_material[3] is None:
-                return False, False, False
-            rollback_package = predecessor_material[3]
+                rollback_package = archive.read(rollback_name)
         except (OSError, StopIteration, zipfile.BadZipFile):
-            return False, False, False
+            return False, False
         base_created = _write_mutated_package(
             source,
             base_mutant,
@@ -530,39 +419,19 @@ def _package_mutation_gate(
             "SOURCE/previous_result_package.zip",
             lambda _raw: rollback_package,
         )
-        base_rejected = base_created and not verify(str(base_mutant), chain_authority)[0]
-        rollback_rejected = rollback_created and not verify(str(rollback_mutant), chain_authority)[0]
-        joint_rejected = False
-        if rollback_created:
-            try:
-                forged = json.loads(chain_authority[1])
-                descriptors = forged["descriptors"]
-                descriptors[1]["package_sha256"] = descriptors[0]["package_sha256"]
-                descriptors[1]["result_tree"] = descriptors[0]["result_tree"]
-                descriptors[2]["package_sha256"] = hashlib.sha256(
-                    rollback_mutant.read_bytes()
-                ).hexdigest()
-                descriptors[2]["previous_descriptor_sha256"] = hashlib.sha256(
-                    _canonical_authority_value(descriptors[1])
-                ).hexdigest()
-                joint_rejected = _verify_signed_chain_authority(
-                    _canonical_authority_value(forged),
-                    trusted_public_key_b64,
-                ) is None
-            except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
-                joint_rejected = False
-        return base_rejected, rollback_rejected, joint_rejected
+        base_rejected = base_created and not verify(str(base_mutant), chain_anchor)[0]
+        rollback_rejected = rollback_created and not verify(str(rollback_mutant), chain_anchor)[0]
+        return base_rejected, rollback_rejected
 
 
 def verify(
     package: str,
-    chain_authority: tuple[dict[str, object], bytes],
+    chain_anchor: tuple[dict[str, object], bytes],
 ) -> tuple[bool, tuple[str, ...]]:
     errors: set[str] = set()
-    anchor, _authority_material = chain_authority
+    anchor, anchor_material = chain_anchor
     predecessor = anchor["immediate_predecessor"]
-    rollback = anchor["rollback_record"]
-    candidate = anchor["candidate"]
+    rollback = anchor["forbidden_rollback_fixture"]
     data: dict[str, bytes] = {}
     root = ""
     try:
@@ -616,9 +485,11 @@ def verify(
     required = {
         "MANIFEST.json", "SHA256SUMS.txt", "VERIFY.py", "REPORT/RESULT.json",
         "SOURCE/result.patch", "SOURCE/base_to_start.patch", "SOURCE/predecessor_to_result.patch",
-        "SOURCE/working_tree_overlay.tar.gz", "SOURCE/candidate_chain_descriptor.json",
+        "SOURCE/working_tree_overlay.tar.gz", "SOURCE/chain_anchor_snapshot.json",
+        "SOURCE/helper1_v2_baseline_390af710.bundle",
         "SOURCE/previous_result_package.zip",
         "SOURCE/CHANGED_FILES.txt", "SOURCE/SUCCESSOR_CHANGED_FILES.txt",
+        "EVIDENCE/chain/rollback_predecessor_10r.zip",
         "EVIDENCE/test-evidence-index-v1.json",
         "EVIDENCE/python-helper1-v4-original.junit.xml", "EVIDENCE/python-helper1-v51-targeted.junit.xml",
         "EVIDENCE/python-helper1-protected-replay.junit.xml",
@@ -683,17 +554,14 @@ def verify(
                 "protected_verifier_a4_closure",
                 "durable_replay_store",
                 "preconnect_endpoint_pinning",
-                "protected_handoff_chain_authority",
+                "protected_handoff_chain_anchor",
                 "protected_replay_workflow_binding",
                 "protected_replay_database_probe",
-                "fixed_path_producer_package",
             }
             or report.get("start_tree") != START_TREE
-            or report.get("handoff_chain_id") != CHAIN_ID
+            or report.get("handoff_chain_id") != anchor["chain_id"]
             or report.get("handoff_generation") != anchor["successor_generation"]
-            or report.get("chain_authority_state") != "UNCONFIGURED"
-            or report.get("chain_signature_state") != "MISSING"
-            or report.get("chain_provenance_state") != "UNVERIFIED"
+            or report.get("chain_anchor_sha256") != hashlib.sha256(anchor_material).hexdigest()
             or report.get("previous_result_tree") != predecessor["result_tree"]
             or report.get("previous_result_package_sha256") != predecessor["package_sha256"]
             or report.get("rollback_fixture_tree") != rollback["result_tree"]
@@ -701,16 +569,15 @@ def verify(
             or report.get("base_to_start_verified") is not True
             or report.get("changed_files_verified") is not True
             or report.get("start_predecessor_result_chain_verified") is not True
-            or report.get("changed_file_count") != 26
+            or report.get("changed_file_count") != 22
             or report.get("v4_original_acceptance", {}).get("passed") != 243
             or report.get("v51_targeted_acceptance", {}).get("passed") != 149
-            or report.get("protected_replay_acceptance", {}).get("passed") != 24
+            or report.get("protected_replay_acceptance", {}).get("passed") != 15
             or report.get("base_commit") != BASE_COMMIT
             or report.get("base_bundle_sha256") != BASE_BUNDLE_SHA256
             or report.get("blockers") != [
                 "MACOS_NATIVE_LANE_NOT_CONFIGURED",
                 "PROTECTED_REPLAY_ENVIRONMENT_NOT_PROVISIONED",
-                "HANDOFF_CHAIN_AUTHORITY_NOT_CONFIGURED",
             ]
         ):
             errors.add("PACKAGE_RESULT_CONTRACT_INVALID")
@@ -773,7 +640,7 @@ def verify(
         changed_paths = tuple(changed_paths_raw.splitlines())
         if (
             not changed_paths_raw.endswith("\n")
-            or len(changed_paths) != 26
+            or len(changed_paths) != 22
             or changed_paths != tuple(sorted(changed_paths))
             or len(set(changed_paths)) != len(changed_paths)
             or any(_path(path) != path for path in changed_paths)
@@ -791,61 +658,30 @@ def verify(
         ):
             errors.add("PACKAGE_SUCCESSOR_CHANGED_FILES_INVALID")
         errors.update(_tar_errors(data["SOURCE/working_tree_overlay.tar.gz"]))
-        candidate_descriptor = json.loads(data["SOURCE/candidate_chain_descriptor.json"])
-        if (
-            candidate_descriptor.get("schema_version")
-            != "butler.helper1.handoff-chain-candidate.v1"
-            or candidate_descriptor.get("chain_id") != CHAIN_ID
-            or candidate_descriptor.get("successor_generation")
-            != anchor["successor_generation"]
-            or candidate_descriptor.get("immediate_predecessor") != predecessor
-            or candidate_descriptor.get("rollback_record") != rollback
-            or candidate_descriptor.get("authority_state") != "UNCONFIGURED"
-            or candidate_descriptor.get("signature_state") != "MISSING"
-            or candidate_descriptor.get("provenance_state") != "UNVERIFIED"
-            or report.get("candidate_chain_descriptor_sha256")
-            != hashlib.sha256(data["SOURCE/candidate_chain_descriptor.json"]).hexdigest()
-        ):
-            errors.add("PACKAGE_CHAIN_CANDIDATE_INVALID")
+        if hashlib.sha256(data["SOURCE/helper1_v2_baseline_390af710.bundle"]).hexdigest() != BASE_BUNDLE_SHA256:
+            errors.add("PACKAGE_BASE_BUNDLE_DIGEST_MISMATCH")
+        if data["SOURCE/chain_anchor_snapshot.json"] != anchor_material:
+            errors.add("PACKAGE_CHAIN_ANCHOR_SNAPSHOT_MISMATCH")
         previous_material = _anchored_package_material(
             data["SOURCE/previous_result_package.zip"],
             predecessor,
             require_result_patch=True,
         )
-        embedded_base_bundle = previous_material[2] if previous_material is not None else None
-        embedded_rollback_package = previous_material[3] if previous_material is not None else None
-        rollback_material = (
-            _anchored_package_material(
-                embedded_rollback_package,
-                rollback,
-                require_result_patch=False,
-            )
-            if embedded_rollback_package is not None
-            else None
+        rollback_material = _anchored_package_material(
+            data["EVIDENCE/chain/rollback_predecessor_10r.zip"],
+            rollback,
+            require_result_patch=False,
         )
         if previous_material is None or previous_material[0] != report.get("previous_result_tree"):
             errors.add("PACKAGE_PREVIOUS_RESULT_INVALID")
         if rollback_material is None or rollback_material[0] != report.get("rollback_fixture_tree"):
             errors.add("PACKAGE_ROLLBACK_FIXTURE_INVALID")
         if (
-            embedded_base_bundle is None
-            or hashlib.sha256(embedded_base_bundle).hexdigest() != BASE_BUNDLE_SHA256
-        ):
-            errors.add("PACKAGE_BASE_BUNDLE_DIGEST_MISMATCH")
-        package_digest = hashlib.sha256(Path(package).read_bytes()).hexdigest()
-        if (
-            candidate.get("package_sha256") != package_digest
-            or candidate.get("result_tree") != report.get("result_tree")
-            or candidate.get("generation") != report.get("handoff_generation")
-        ):
-            errors.add("PACKAGE_CHAIN_AUTHORITY_SUBJECT_MISMATCH")
-        if (
             previous_material is not None
-            and embedded_base_bundle is not None
             and "PACKAGE_CHANGED_FILES_INVALID" not in errors
             and "PACKAGE_SUCCESSOR_CHANGED_FILES_INVALID" not in errors
             and not _reconstruct_product_trees(
-                embedded_base_bundle,
+                data["SOURCE/helper1_v2_baseline_390af710.bundle"],
                 data["SOURCE/base_to_start.patch"],
                 previous_material[1],
                 data["SOURCE/predecessor_to_result.patch"],
@@ -866,44 +702,29 @@ def verify(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("package")
+    parser.add_argument("--chain-anchor", required=True, type=Path)
     args = parser.parse_args()
-    loaded_authority = _load_protected_chain_authority()
-    if loaded_authority is None:
+    chain_anchor = _load_chain_anchor(args.chain_anchor)
+    if chain_anchor is None:
         print("HELPER1_V51_PACKAGE_VERIFY_OK=0")
-        print("CHAIN_AUTHORITY_CONFIGURED=0")
         print("PACKAGE_MUTATION_BASE_TO_START_REJECTED=0")
         print("PACKAGE_MUTATION_PREDECESSOR_ROLLBACK_REJECTED=0")
-        print("PACKAGE_MUTATION_PACKAGE_AND_AUTHORITY_REJECTED=0")
-        print("ERROR_CODE=PACKAGE_CHAIN_AUTHORITY_NOT_CONFIGURED")
+        print("ERROR_CODE=PACKAGE_CHAIN_ANCHOR_INVALID")
         return 1
-    chain_authority, trusted_public_key_b64 = loaded_authority
-    ok, errors = verify(args.package, chain_authority)
+    ok, errors = verify(args.package, chain_anchor)
     base_mutant_rejected = False
     rollback_mutant_rejected = False
-    joint_mutant_rejected = False
     if ok:
-        (
-            base_mutant_rejected,
-            rollback_mutant_rejected,
-            joint_mutant_rejected,
-        ) = _package_mutation_gate(
+        base_mutant_rejected, rollback_mutant_rejected = _package_mutation_gate(
             args.package,
-            chain_authority,
-            trusted_public_key_b64,
+            chain_anchor,
         )
-        if not all(
-            (base_mutant_rejected, rollback_mutant_rejected, joint_mutant_rejected)
-        ):
+        if not base_mutant_rejected or not rollback_mutant_rejected:
             ok = False
             errors = (*errors, "PACKAGE_MUTATION_SURVIVED")
     print(f"HELPER1_V51_PACKAGE_VERIFY_OK={int(ok)}")
-    print("CHAIN_AUTHORITY_CONFIGURED=1")
     print(f"PACKAGE_MUTATION_BASE_TO_START_REJECTED={int(base_mutant_rejected)}")
     print(f"PACKAGE_MUTATION_PREDECESSOR_ROLLBACK_REJECTED={int(rollback_mutant_rejected)}")
-    print(
-        "PACKAGE_MUTATION_PACKAGE_AND_AUTHORITY_REJECTED="
-        f"{int(joint_mutant_rejected)}"
-    )
     for code in errors:
         print(f"ERROR_CODE={code}")
     if not errors:
