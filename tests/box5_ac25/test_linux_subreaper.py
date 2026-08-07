@@ -383,3 +383,15 @@ def test_read_proc_stat_handles_comm_with_spaces_and_parens(tmp_path, monkeypatc
     assert stat is not None
     assert stat.state == "S"
     assert stat.ppid == 3
+
+
+def test_supervisor_env_never_writes_bytecode_into_the_worktree():
+    """★CONTRACT_BLOCK_LINE 실측으로 확정된 여섯 라운드 실패의 뿌리.
+
+    supervisor 의 import 가 scripts/ci/ac25/__pycache__/*.pyc 를 만들면
+    저장소 계약의 long-line guard 가 그 .pyc 에서 BLOCK 한다. allowlist 에
+    PYTHONDONTWRITEBYTECODE=1 이 없으면 이 시험이 빨간불을 켠다.
+    """
+    env = ls._supervisor_env()
+    assert env["PYTHONDONTWRITEBYTECODE"] == "1"
+    assert env["PYTHONNOUSERSITE"] == "1"

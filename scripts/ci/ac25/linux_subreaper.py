@@ -798,6 +798,11 @@ def _supervisor_env() -> dict[str, str]:
         # ac25 패키지를 찾을 경로는 이 파일 위치에서 유도한다 — 입력이 아니다.
         "PYTHONPATH": str(Path(__file__).resolve().parents[1]),
         "PYTHONNOUSERSITE": "1",
+        # ★supervisor 의 import 가 scripts/ci/ac25/__pycache__/*.pyc 를 만들면
+        #   저장소 계약의 long-line guard(P5-PLAT-P0-05)가 그 .pyc 에서 BLOCK
+        #   한다 — CONTRACT_BLOCK_LINE 실측으로 확정된, 여섯 라운드 실패의
+        #   뿌리. harness 는 작업트리에 어떤 부산물도 만들지 않는다(§4-3).
+        "PYTHONDONTWRITEBYTECODE": "1",
     }
     for key in ("PATH", "LANG", "LC_ALL"):
         value = os.environ.get(key)
