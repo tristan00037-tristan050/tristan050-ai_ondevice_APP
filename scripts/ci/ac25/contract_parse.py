@@ -34,6 +34,11 @@ PRIMARY_UNPARSED_DUPLICATE = "UNPARSED_DUPLICATE"
 # 구조화 키. 값은 0/1 또는 공백 없는 안전 문자열이다.
 _KEY_LINE_RE = re.compile(r"\A([A-Z][A-Z0-9_]{2,79})=([01]|[A-Za-z0-9_.:+-]{1,120})\Z")
 
+# 계약 자신의 진단 줄. canonical job 에서는 이 줄이 공개 로그에 그대로 나온다 —
+# 같은 공개 수준의 meta-only 텍스트만 통과시킨다(경로·고정 문구, raw 내용 없음).
+_BLOCK_LINE_RE = re.compile(r"\ABLOCK: [A-Za-z0-9 ._:/()<>=-]{1,180}\Z")
+_BLOCK_LINE_LIMIT = 8
+
 # ★§5-2 — primary 값 규칙. 앞뒤 공백을 제거하지 않는다.
 #   UTF-8 · 1~160 bytes · 개행·NUL·제어문자 없음 ·
 #   허용 문자 = 영문·숫자·공백·점·밑줄·콜론·슬래시·괄호·하이픈
@@ -48,6 +53,7 @@ class ContractParseResult:
     keys: tuple[tuple[str, str], ...]
     primary_failed_guard: str
     failing_guard_keys: tuple[str, ...]
+    block_lines: tuple[str, ...]
     unparsed_line_count: int
     unparsed_total_bytes: int
     unparsed_manifest_sha256: str
@@ -76,6 +82,7 @@ def parse_contract_output(stdout: bytes) -> ContractParseResult:
     """계약 stdout 을 §5-2 규칙 그대로 읽는다. 판정하지 않는다 — 구조만 낸다."""
     closed = ContractParseResult(
         keys=(), primary_failed_guard=PRIMARY_UNPARSED, failing_guard_keys=(),
+        block_lines=(),
         unparsed_line_count=0, unparsed_total_bytes=0,
         unparsed_manifest_sha256=_canonical_manifest_sha256([]),
         primary_line_sha256="", primary_line_bytes=0,
@@ -87,6 +94,7 @@ def parse_contract_output(stdout: bytes) -> ContractParseResult:
         return closed
 
     keys: list[tuple[str, str]] = []
+    block_lines: list[str] = []
     primary_values: list[str] = []
     primary_line_sha256 = ""
     primary_line_bytes = 0
@@ -114,6 +122,14 @@ def parse_contract_output(stdout: bytes) -> ContractParseResult:
         match = _KEY_LINE_RE.match(line)
         if match is not None:
             keys.append((match.group(1), match.group(2)))
+            continue
+
+        # ②′ 계약 자신의 BLOCK 진단 — canonical 공개 로그와 같은 수준의
+        #    meta-only 문구만. 한도를 넘거나 검증 실패면 unparsed 로 남는다.
+        if line.startswith("BLOCK: ") and _BLOCK_LINE_RE.match(line) and (
+            len(block_lines) < _BLOCK_LINE_LIMIT
+        ):
+            block_lines.append(line)
             continue
 
         # ③ unparsed — 원문은 담지 않는다. 지문만 남긴다.
@@ -145,6 +161,7 @@ def parse_contract_output(stdout: bytes) -> ContractParseResult:
         keys=tuple(keys),
         primary_failed_guard=primary,
         failing_guard_keys=failing,
+        block_lines=tuple(block_lines),
         unparsed_line_count=len(unparsed_entries),
         unparsed_total_bytes=unparsed_total_bytes,
         unparsed_manifest_sha256=_canonical_manifest_sha256(unparsed_entries),

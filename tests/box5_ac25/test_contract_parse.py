@@ -182,3 +182,34 @@ def test_failing_keys_digest_is_deterministic():
     keys = ("A_GUARD_OK", "B_GUARD_OK")
     assert cpar.failing_keys_sha256(keys) == cpar.failing_keys_sha256(keys)
     assert cpar.failing_keys_sha256(keys) != cpar.failing_keys_sha256(keys[:1])
+
+
+# ══ BLOCK 진단 줄 — canonical 공개 로그와 같은 수준만 통과 ════════════
+def test_block_lines_are_captured_meta_only():
+    payload = (
+        b"BLOCK: long line (>2000) detected in scripts/some/file.txt\n"
+        b"BLOCK: sensitive pattern detected in reports/proofs\n"
+        b"junk raw line\n"
+    )
+    result = cpar.parse_contract_output(payload)
+    assert result.block_lines == (
+        "BLOCK: long line (>2000) detected in scripts/some/file.txt",
+        "BLOCK: sensitive pattern detected in reports/proofs",
+    )
+    assert result.unparsed_line_count == 1
+
+
+def test_block_lines_with_unsafe_content_stay_unparsed():
+    payload = b"BLOCK: bad\tcontrol\nBLOCK: " + b"x" * 300 + b"\n"
+    result = cpar.parse_contract_output(payload)
+    assert result.block_lines == ()
+    assert result.unparsed_line_count == 2
+
+
+def test_block_lines_are_bounded():
+    payload = b"".join(
+        f"BLOCK: item number {i} detected\n".encode() for i in range(20)
+    )
+    result = cpar.parse_contract_output(payload)
+    assert len(result.block_lines) == 8
+    assert result.unparsed_line_count == 12

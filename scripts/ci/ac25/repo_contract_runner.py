@@ -173,6 +173,7 @@ class ContractReceipt:
     primary_failed_guard_line_sha256: str = ""
     primary_failed_guard_line_bytes: int = 0
     failing_guard_keys: tuple = ()
+    contract_block_lines: tuple = ()
     contract_unparsed_line_count: int = 0
     contract_unparsed_total_bytes: int = 0
     contract_unparsed_manifest_sha256: str = ""
@@ -463,6 +464,7 @@ def run_exact_head_contracts(
             receipt.primary_failed_guard_line_sha256 = parsed.primary_line_sha256
             receipt.primary_failed_guard_line_bytes = parsed.primary_line_bytes
             receipt.failing_guard_keys = parsed.failing_guard_keys
+            receipt.contract_block_lines = parsed.block_lines
             receipt.contract_unparsed_line_count = parsed.unparsed_line_count
             receipt.contract_unparsed_total_bytes = parsed.unparsed_total_bytes
             receipt.contract_unparsed_manifest_sha256 = parsed.unparsed_manifest_sha256
@@ -580,7 +582,11 @@ def emit_lines(receipt: ContractReceipt) -> list[str]:
         f"CONTRACT_UNPARSED_MANIFEST_SHA256="
         f"{receipt.contract_unparsed_manifest_sha256 or 'NONE'}",
         f"CONTRACT_PARSE_ERROR_CODE={receipt.contract_parse_error_code}",
+        f"CONTRACT_BLOCK_LINE_COUNT={len(receipt.contract_block_lines)}",
     ]
+    # 계약 자신의 BLOCK 진단 — canonical 공개 로그와 같은 수준의 문구다.
+    for ordinal, line in enumerate(receipt.contract_block_lines):
+        lines.append(f"CONTRACT_BLOCK_LINE_{ordinal:02d}={line}")
     # §4-2 — 안전한 경로만, 최대 20 개 · 4096 bytes 까지. 초과분은 지문·개수다.
     emitted = 0
     budget = _DIRTY_PATH_LOG_BYTES
