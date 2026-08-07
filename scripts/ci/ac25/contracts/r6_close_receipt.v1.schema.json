@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ac25/r6_close_receipt.v1",
+  "title": "AC-25 R6 close receipt v1",
+  "description": "v3.1 A-03 — head, run, numbers, and their provenance bound in one canonical JSON document. The Python validator in scripts/ci/ac25/r6_close_receipt.py enforces exactly these rules with the standard library only; a test binds the two.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository",
+    "pr_number",
+    "head_sha",
+    "head_tree",
+    "base_sha",
+    "run_id",
+    "run_attempt",
+    "workflow_file_sha256",
+    "canonical_workflow_sha256",
+    "command_plan_sha256",
+    "plan_diff",
+    "exact_head_contract",
+    "clean_evidence",
+    "guard_evidence",
+    "python_tests",
+    "node_tests",
+    "required_checks",
+    "review_threads",
+    "changed_path_manifest_sha256",
+    "generated_at",
+    "expires_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "r6_close_receipt.v1" },
+    "repository": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+    "pr_number": { "type": "integer", "minimum": 0 },
+    "head_sha": { "$ref": "#/$defs/oid" },
+    "head_tree": { "$ref": "#/$defs/oid" },
+    "base_sha": { "$ref": "#/$defs/oid" },
+    "run_id": { "type": "integer", "minimum": 0 },
+    "run_attempt": { "type": "integer", "minimum": 1 },
+    "workflow_file_sha256": { "$ref": "#/$defs/sha256" },
+    "canonical_workflow_sha256": { "$ref": "#/$defs/sha256" },
+    "command_plan_sha256": { "$ref": "#/$defs/sha256" },
+    "plan_diff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["missing", "extra", "reordered", "mutated", "unsupported"],
+      "properties": {
+        "missing": { "$ref": "#/$defs/count" },
+        "extra": { "$ref": "#/$defs/count" },
+        "reordered": { "$ref": "#/$defs/count" },
+        "mutated": { "$ref": "#/$defs/count" },
+        "unsupported": { "$ref": "#/$defs/count" }
+      }
+    },
+    "exact_head_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conclusion", "job_id", "exit_code", "error_code", "provenance"],
+      "properties": {
+        "conclusion": { "enum": ["success", "failure", "cancelled", "not_run"] },
+        "job_id": { "type": "integer", "minimum": 0 },
+        "exit_code": { "type": "integer" },
+        "error_code": { "type": "string", "pattern": "^[A-Z0-9_]{1,80}$" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "clean_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clean_check_executed", "final_worktree_clean", "dirty_path_count",
+        "dirty_path_manifest_sha256", "first_dirty_phase",
+        "clean_check_error_code", "provenance"
+      ],
+      "properties": {
+        "clean_check_executed": { "type": "boolean" },
+        "final_worktree_clean": { "enum": ["YES", "NO", "NOT_EVALUATED"] },
+        "dirty_path_count": { "$ref": "#/$defs/count" },
+        "dirty_path_manifest_sha256": { "$ref": "#/$defs/sha256_or_none" },
+        "first_dirty_phase": { "type": "string", "pattern": "^(NONE|P0|P1:[0-9]{1,4}|P2|P3|NOT_EVALUATED)$" },
+        "clean_check_error_code": { "type": "string", "pattern": "^[A-Z0-9_]{1,80}$" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "guard_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_failed_guard", "primary_failed_guard_line_sha256",
+        "primary_failed_guard_line_bytes", "failing_guard_key_count",
+        "failing_guard_keys_sha256", "unparsed_line_count",
+        "unparsed_total_bytes", "unparsed_manifest_sha256",
+        "parse_error_code", "provenance"
+      ],
+      "properties": {
+        "primary_failed_guard": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z0-9 ._:/()\\-]+$" },
+        "primary_failed_guard_line_sha256": { "$ref": "#/$defs/sha256_or_none" },
+        "primary_failed_guard_line_bytes": { "$ref": "#/$defs/count" },
+        "failing_guard_key_count": { "$ref": "#/$defs/count" },
+        "failing_guard_keys_sha256": { "$ref": "#/$defs/sha256" },
+        "unparsed_line_count": { "$ref": "#/$defs/count" },
+        "unparsed_total_bytes": { "$ref": "#/$defs/count" },
+        "unparsed_manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "parse_error_code": { "type": "string", "pattern": "^[A-Z0-9_]{1,80}$" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "python_tests": { "$ref": "#/$defs/test_evidence" },
+    "node_tests": { "$ref": "#/$defs/test_evidence" },
+    "required_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_total", "success", "failure", "cancelled", "timed_out",
+        "action_required", "neutral", "skipped", "missing", "pending",
+        "unintended_skipped", "skip_allowlist", "provenance"
+      ],
+      "properties": {
+        "required_total": { "$ref": "#/$defs/count" },
+        "success": { "$ref": "#/$defs/count" },
+        "failure": { "$ref": "#/$defs/count" },
+        "cancelled": { "$ref": "#/$defs/count" },
+        "timed_out": { "$ref": "#/$defs/count" },
+        "action_required": { "$ref": "#/$defs/count" },
+        "neutral": { "$ref": "#/$defs/count" },
+        "skipped": { "$ref": "#/$defs/count" },
+        "missing": { "$ref": "#/$defs/count" },
+        "pending": { "$ref": "#/$defs/count" },
+        "unintended_skipped": { "$ref": "#/$defs/count" },
+        "skip_allowlist": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "review_threads": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query_complete", "total", "resolved", "non_outdated_unresolved", "provenance"],
+      "properties": {
+        "query_complete": { "type": "boolean" },
+        "total": { "$ref": "#/$defs/count" },
+        "resolved": { "$ref": "#/$defs/count" },
+        "non_outdated_unresolved": { "$ref": "#/$defs/count" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "changed_path_manifest_sha256": { "$ref": "#/$defs/sha256" },
+    "generated_at": { "$ref": "#/$defs/utc_time" },
+    "expires_at": { "$ref": "#/$defs/utc_time" }
+  },
+  "$defs": {
+    "oid": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "sha256_or_none": { "type": "string", "pattern": "^([0-9a-f]{64}|NONE)$" },
+    "count": { "type": "integer", "minimum": 0 },
+    "utc_time": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_type", "observed_at"],
+      "properties": {
+        "source_type": { "enum": ["github_job", "github_api", "local_command"] },
+        "source_url": { "type": "string", "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(/(pull|actions)/.*)?$" },
+        "command_argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+        },
+        "source_run_id": { "type": "integer", "minimum": 0 },
+        "source_run_attempt": { "type": "integer", "minimum": 1 },
+        "source_job_id": { "type": "integer", "minimum": 0 },
+        "source_head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "observed_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$" }
+      }
+    },
+    "test_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "passed", "failed", "skipped", "report_sha256", "provenance"],
+      "properties": {
+        "total": { "$ref": "#/$defs/count" },
+        "passed": { "$ref": "#/$defs/count" },
+        "failed": { "$ref": "#/$defs/count" },
+        "skipped": { "$ref": "#/$defs/count" },
+        "report_sha256": { "$ref": "#/$defs/sha256" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    }
+  }
+}

@@ -217,9 +217,12 @@ jobs:
           set -euo pipefail
           node --test tests/box5_ac25/publish_check.test.mjs
 
-  # ══ R6-4 — exact head 저장소 계약 ═════════════════════════════════════
-  # §7. 준비 명령·순서는 보호된 코드 상수(repo_contract_runner)에 있고, 모든
-  # 바깥 명령은 격리기를 거친다. 이 job 이 §12 를 단계 A 에서 닫는 자리다.
+  # ══ R6-4 — exact head 저장소 계약 (v3.1 §3) ═══════════════════════════
+  # 준비 = canonical 추출 그대로(추가 명령 0). action 도 canonical 과 같은
+  # 두 family(checkout·setup-node)뿐이다 — Python 은 runner 이미지의 시스템
+  # python3(3.12) 를 그대로 쓴다. 허용 차이는 §3-3 의 셋뿐이고, runner 가
+  # 이 파일을 실행 시점에 읽어 canonical 과 완전 비교한다. 어긋나면 계약을
+  # 실행하지 않는다.
   ac25-repo-contracts-exact-head:
     name: ac25-repo-contracts-exact-head
     runs-on: ubuntu-24.04
@@ -234,18 +237,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: '3.12'
-
       - name: Set up Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '20'
 
-      # ★checkout HEAD 가 event head 와 같은지 ★먼저★ 본다. 다르면 준비를 하지
-      #   않고 닫는다(§7-1). 문서 기준선 OID 를 하드코딩하지 않는다.
+      # ★이 job 의 유일한 run — 승인된 harness 하나다(§3-5). 준비를 이 파일
+      #   에서 조립하거나 다른 이름으로 되살리면 runner 의 EXTRA 축이 잡는다.
       - name: Prepare toolchain and run repository contracts exactly once
         env:
           PYTHONPATH: scripts/ci

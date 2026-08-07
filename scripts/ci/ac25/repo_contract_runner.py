@@ -1,18 +1,23 @@
-"""§7 R6-4 — exact-head 저장소 계약 실행기.
+"""R6-4 — exact-head 저장소 계약 실행기. v3.1 §3·§4·§5 판.
 
-저장소 계약을 PR #904 의 ★정확한 head★ 에서, 실제 빌드 산출물과 Helm 을 준비한
-뒤, raw 출력을 격리한 상태로 정확히 한 번 실행한다.
+이전 판에서 무엇이 틀렸었나(v3.1 §1)
 
-이 모듈이 존재하는 이유(§A-3)
-  C1 은 "바깥 명령의 출력이 공개 로그로 새는 것" 이었다. 그런데 저장소 계약은
-  npm ci·build·helm·guard 로 ★바깥 명령을 잔뜩★ 부른다. 그 job 을 워크플로 셸로
-  쓰면 같은 결함이 그대로 재발한다. 그래서 명령 계획을 ★코드 상수★ 로 고정하고
-  전부 run_contained() 로 돌린다.
+    · 계약이 실패하면 clean 검사를 ★실행하기 전에★ 예외 처리에서 `NOT_RUN` 을
+      일괄 `NO` 로 바꿨다. 그 `NO` 는 "더러웠다" 가 아니라 "재지 않았다" 였다.
+      재지 않은 값이 원인 단정의 근거가 됐다.
+    · canonical 비교가 누락만 찾고 추가를 허용했다. 상위집합이 통과했다.
+    · canonical 에 없는 npm ci·build·helm 세 명령을 준비에 더했다.
 
-★준비 명령 목록은 상수다(§7-3 8항). 워크플로가 문자열로 조립하지 않는다.
-★저장소 계약은 정확히 한 번 부른다(§7-7). 두 번 부르면 계약 위반이다.
-★성공 로그는 §7-4 가 허용한 키만 낸다. raw stdout/stderr 는 digest·길이로만 남는다.
-★clean-finish 는 tracked·untracked·후손·reader·임시파일을 모두 본다(§7-5).
+이 판
+
+    · 준비는 canonical 추출 ★그대로★ 다. 추가 명령 0(§3-4).
+    · 동등성은 다섯 축(missing·extra·reordered·mutated·unsupported) 전부 0
+      일 때만 성립하고, 아니면 계약을 실행하지 않는다.
+    · clean 은 ★실측 tri-state★ 다 — YES/NO/NOT_EVALUATED 를 서로 바꾸지
+      않는다(§2·§4). P0~P3 시점마다 재고, 정리로 통과시키지 않는다(§4-3).
+    · 계약 출력은 contract_parse 가 손실 없이 구조화한다(§5).
+
+★저장소 계약은 정확히 한 번 부른다. raw stdout/stderr 는 지문·길이로만 남는다.
 """
 from __future__ import annotations
 
@@ -23,29 +28,41 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import canonical_plan, output_containment
+from . import canonical_plan, contract_parse, output_containment
 
-# ── 오류 코드 (§7) ─────────────────────────────────────────────────────
+# ── 오류 코드 ──────────────────────────────────────────────────────────
 REPO_CONTRACTS_EXACT_HEAD_MISMATCH = "REPO_CONTRACTS_EXACT_HEAD_MISMATCH"
 REPO_CONTRACTS_SHALLOW_CLONE = "REPO_CONTRACTS_SHALLOW_CLONE"
 REPO_CONTRACTS_BASE_REF_UNAVAILABLE = "REPO_CONTRACTS_BASE_REF_UNAVAILABLE"
 REPO_CONTRACTS_GUARD_MUTATED = "REPO_CONTRACTS_GUARD_MUTATED"
-REPO_CONTRACTS_BUILD_ARTIFACT_MISSING = "REPO_CONTRACTS_BUILD_ARTIFACT_MISSING"
-REPO_CONTRACTS_HELM_TOOLCHAIN_MISMATCH = "REPO_CONTRACTS_HELM_TOOLCHAIN_MISMATCH"
 REPO_CONTRACTS_PREPARATION_FAILED = "REPO_CONTRACTS_PREPARATION_FAILED"
 REPO_CONTRACTS_FAILED = "REPO_CONTRACTS_FAILED"
-REPO_CONTRACTS_ALREADY_RUN = "REPO_CONTRACTS_ALREADY_RUN"
 REPO_CONTRACTS_WORKTREE_NOT_CLEAN = "REPO_CONTRACTS_WORKTREE_NOT_CLEAN"
 REPO_CONTRACTS_DESCENDANTS_SURVIVED = "REPO_CONTRACTS_DESCENDANTS_SURVIVED"
-REPO_CONTRACTS_CANONICAL_PLAN_MISMATCH = "REPO_CONTRACTS_CANONICAL_PLAN_MISMATCH"
+# §3-4 고정 코드
 REPO_CONTRACTS_CANONICAL_PLAN_UNREADABLE = "REPO_CONTRACTS_CANONICAL_PLAN_UNREADABLE"
+REPO_CONTRACTS_CANONICAL_PLAN_UNSUPPORTED = "REPO_CONTRACTS_CANONICAL_PLAN_UNSUPPORTED"
+REPO_CONTRACTS_CANONICAL_PLAN_MISSING = "REPO_CONTRACTS_CANONICAL_PLAN_MISSING"
+REPO_CONTRACTS_CANONICAL_PLAN_EXTRA = "REPO_CONTRACTS_CANONICAL_PLAN_EXTRA"
+REPO_CONTRACTS_CANONICAL_PLAN_REORDERED = "REPO_CONTRACTS_CANONICAL_PLAN_REORDERED"
+REPO_CONTRACTS_CANONICAL_PLAN_MUTATED = "REPO_CONTRACTS_CANONICAL_PLAN_MUTATED"
+REPO_CONTRACTS_CANONICAL_ACTION_MISMATCH = "REPO_CONTRACTS_CANONICAL_ACTION_MISMATCH"
+# §4 clean 실측
+REPO_CONTRACTS_PREEXISTING_WORKTREE_DIRTY = "REPO_CONTRACTS_PREEXISTING_WORKTREE_DIRTY"
+CLEAN_CHECK_COMMAND_FAILED = "CLEAN_CHECK_COMMAND_FAILED"
+CLEAN_OUTPUT_INVALID = "CLEAN_OUTPUT_INVALID"
+CLEAN_PATH_INVALID = "CLEAN_PATH_INVALID"
+# §5 출력 모순
+REPO_CONTRACTS_OUTPUT_CONTRADICTORY = "REPO_CONTRACTS_OUTPUT_CONTRADICTORY"
 
 _OID_RE = re.compile(r"\A[0-9a-f]{40}\Z")
-_HELM_MAJOR_RE = re.compile(r"\Av?(\d+)\.")
+# 공개 로그에 내도 안전한 경로 문자만. 벗어나면 지문·개수로만 증명한다(§4-2).
+_SAFE_PATH_RE = re.compile(r"\A[A-Za-z0-9_./+-]{1,200}\Z")
+_DIRTY_PATH_LOG_LIMIT = 20
+_DIRTY_PATH_LOG_BYTES = 4096
+_FAILING_KEYS_LOG_BYTES = 2048
 
 # ── §7-2 실행 전 기준 보호 대상 ────────────────────────────────────────
-# ★실제 파일명이 저장소와 다르면 추측해 만들지 않는다. 여기 목록은 현재 canonical
-#   dispatcher 가 부르는 경로에서 왔고, 시험이 그 사실을 강제한다.
 PROTECTED_GUARD_PATHS = (
     "scripts/verify/verify_repo_contracts.sh",
     "scripts/verify/verify_workflow_checkout_depth_ssot_v1.sh",
@@ -54,64 +71,10 @@ PROTECTED_GUARD_PATHS = (
     "scripts/verify/verify_no_raw_in_logs_exceptions_v1.sh",
 )
 
-# ── §7-3 고정 순서 + F-04 canonical 동등성 ─────────────────────────────
-NPM_WORKSPACE = "webcore_appcore_starter_4_17"
-BUILD_ARTIFACT = f"{NPM_WORKSPACE}/packages/bff-accounting/dist/policy/loader.js"
-
-# ★AC-25 가 canonical 보다 ★더★ 하는 준비(§7-3 4·5·6·7항).
-#   canonical 은 loader.js 를 만들지 않지만 §B-3 실측이 그것 없이는 계약이
-#   FILE_NOT_FOUND 로 막힌다고 확인했다. 그래서 더한다. ★덜 하지는 않는다.
-#   ★네 번째 칸은 env 다(v2.0 §4-1). AC-25 추가분은 canonical env 를 요구하지 않는다.
-AC25_EXTRA_PLAN = (
-    ("npm_ci", ("npm", "ci"), NPM_WORKSPACE, ()),
-    ("npm_build", ("npm", "run", "build:packages:server"), NPM_WORKSPACE, ()),
-    ("helm_version", ("helm", "version", "--short"), ".", ()),
-)
 CONTRACT_COMMAND = ("bash", "scripts/verify/verify_repo_contracts.sh")
 BASE_REF_SCRIPT = "scripts/verify/verify_base_ref_available_v1.sh"
 
-
-def build_preparation_plan(
-    root: Path, *, runner_temp: str = "/tmp"
-) -> tuple[tuple[str, tuple[str, ...], str, tuple[tuple[str, str], ...]], ...]:
-    """★F-04 — 준비 계획을 canonical 에서 ★읽어★ 만든다. 베끼지 않는다.
-
-    순서
-      ① canonical `product-verify-repo-guards.yml` 의 준비 단계 전부(그 순서대로)
-      ② AC-25 가 §7-3 로 추가한 준비(npm ci · build · helm)
-
-    canonical 이 단계를 늘리면 이 계획도 늘어난다. 손으로 옮겨 적었다면 그때
-    조용히 어긋났을 것이다 — 그것이 F-04 가 지적한 축소 계획이다.
-
-    ★v2.0 §4-1 — 항목은 (name, argv, cwd, ★env) 다.
-      이전 판은 canonical 에서 `CanonicalStep.env` 를 ★읽어 놓고 버렸다★.
-      명령 목록은 같은데 실행 환경이 달랐다. `GIT_LFS_SKIP_SMUDGE` 없이 checkout
-      계열을 돌리거나 `PLAYWRIGHT_BROWSERS_PATH` 없이 Playwright 를 설치하면
-      같은 명령이라도 ★다른 일을 한다★. 이제 읽은 env 를 그대로 실어 보낸다.
-    """
-    plan = canonical_plan.extract_canonical_plan(root, runner_temp=runner_temp)
-    steps: list[tuple[str, tuple[str, ...], str, tuple[tuple[str, str], ...]]] = []
-    for index, step in enumerate(plan.preparation):
-        steps.append((f"canonical_{index:02d}", step.argv, step.cwd, step.env))
-    steps.extend(AC25_EXTRA_PLAN)
-    return tuple(steps)
-
-
-def contract_environment(
-    root: Path, *, base_env: dict, runner_temp: str
-) -> dict[str, str]:
-    """★계약에 넘길 환경변수도 canonical 에서 읽는다.
-
-    이전 판은 환경변수를 하나도 넘기지 않았다. canonical 은 여섯을 넘긴다.
-    같은 스크립트라도 다른 환경에서 돌면 같은 검사가 아니다.
-    """
-    plan = canonical_plan.extract_canonical_plan(root, runner_temp=runner_temp)
-    merged = dict(base_env)
-    for key, value in plan.contract_env:
-        merged[key] = value
-    return merged
-
-# 도구 버전은 ★제한된 metadata★ 로만 기록한다(§7-3 2항).
+# 도구 버전은 ★비변형 observation★ 으로만 기록한다(§3-3 (3) allowlist).
 TOOL_VERSION_PLAN = (
     ("python", ("python3", "--version")),
     ("node", ("node", "--version")),
@@ -119,6 +82,46 @@ TOOL_VERSION_PLAN = (
     ("git", ("git", "--version")),
     ("helm", ("helm", "version", "--short")),
 )
+
+
+def build_preparation_plan(
+    root: Path, *, runner_temp: str = "/tmp"
+) -> tuple[canonical_plan.CanonicalRunStep, ...]:
+    """★준비 계획 = canonical 추출 그대로. 추가 명령 0 이다(§3-4).
+
+    v3.0 이 더했던 상위 workspace 설치·빌드·helm 세 명령은 제거됐다.
+    제거의 근거는 "그것 때문에 실패했다" 가 아니라 "canonical 에 없는 것을
+    더하지 않기로 정했다" 이다(제1부 §C).
+    제거 후에도 계약이 실패할 수 있다. 그러면 그 실패를 그대로 보고한다.
+    """
+    plan = canonical_plan.extract_canonical_plan(root, runner_temp=runner_temp)
+    return plan.preparation
+
+
+def build_execution_plan(
+    root: Path, *, runner_temp: str = "/tmp"
+) -> canonical_plan.ExecutionPlan:
+    """실행 측 전체 — 준비 run + exact-head job 이 선언한 action·harness."""
+    actions, harness = canonical_plan.extract_execution_workflow(
+        root, runner_temp=runner_temp
+    )
+    return canonical_plan.ExecutionPlan(
+        runs=build_preparation_plan(root, runner_temp=runner_temp),
+        actions=actions,
+        harness=harness,
+    )
+
+
+def contract_environment(
+    root: Path, *, base_env: dict, runner_temp: str
+) -> dict[str, str]:
+    """계약에 넘길 환경변수도 canonical 에서 읽는다. 같은 스크립트라도
+    다른 환경에서 돌면 같은 검사가 아니다."""
+    plan = canonical_plan.extract_canonical_plan(root, runner_temp=runner_temp)
+    merged = dict(base_env)
+    for key, value in plan.contract_env:
+        merged[key] = value
+    return merged
 
 
 class RepoContractError(Exception):
@@ -131,7 +134,7 @@ class RepoContractError(Exception):
 
 @dataclass
 class ContractReceipt:
-    """§7-4 가 허용한 키만 담는다. 원문·경로 목록은 넣지 않는다."""
+    """§13 이 요구하는 키만 담는다. 원문은 담지 않는다."""
 
     exact_head: str = ""
     exact_tree: str = ""
@@ -149,35 +152,48 @@ class ContractReceipt:
     descendants_observed: int = 0
     canonical_workflow_sha256: str = ""
     canonical_step_count: int = 0
-    canonical_missing_steps: list = field(default_factory=list)
+    # §3-4 다섯 축
+    plan_missing: list = field(default_factory=list)
+    plan_extra: list = field(default_factory=list)
+    plan_reordered: list = field(default_factory=list)
+    plan_mutated: list = field(default_factory=list)
+    plan_unsupported: list = field(default_factory=list)
     contract_env_keys: list = field(default_factory=list)
     preparation_env_keys: list = field(default_factory=list)
+    # §4 clean 실측 — NOT_EVALUATED 를 NO 로 바꾸지 않는다
+    clean_check_executed: bool = False
+    final_worktree_clean: str = "NOT_EVALUATED"
+    dirty_path_count: int = 0
+    dirty_path_manifest_sha256: str = ""
+    dirty_paths: tuple = ()
+    clean_check_error_code: str = "NONE"
+    first_dirty_phase: str = "NOT_EVALUATED"
+    # §5 guard 증거
     contract_key_count: int = 0
-    contract_unparsed_lines: int = 0
-    failed_guard: str = "NONE"
-    failing_guard_keys: list = field(default_factory=list)
-    final_worktree_clean: str = "NOT_RUN"
+    primary_failed_guard: str = "NOT_RUN"
+    primary_failed_guard_line_sha256: str = ""
+    primary_failed_guard_line_bytes: int = 0
+    failing_guard_keys: tuple = ()
+    contract_unparsed_line_count: int = 0
+    contract_unparsed_total_bytes: int = 0
+    contract_unparsed_manifest_sha256: str = ""
+    contract_parse_error_code: str = "NOT_RUN"
     error_code: str = "NONE"
     verdict: int = 0
 
 
 def command_plan_sha256(root: Path | None = None, *, runner_temp: str = "/tmp") -> str:
-    """준비 명령 계획의 지문. 목록·순서가 바뀌면 값이 바뀐다(§7-7).
-
-    ★canonical 에서 읽은 계획이 들어가므로, canonical 이 바뀌면 이 값도 바뀐다.
-    """
+    """준비·action·harness·계약 전체 계획의 지문. 무엇이 바뀌어도 값이 바뀐다."""
     source = root or Path(__file__).resolve().parents[3]
-    plan = build_preparation_plan(source, runner_temp=runner_temp)
     extracted = canonical_plan.extract_canonical_plan(source, runner_temp=runner_temp)
+    execution = build_execution_plan(source, runner_temp=runner_temp)
     payload = json.dumps(
         {
-            "preparation": [
-                [name, list(argv), cwd, [list(pair) for pair in env]]
-                for name, argv, cwd, env in plan
-            ],
+            "preparation": [step.as_dict() for step in execution.runs],
+            "actions": [step.as_dict() for step in execution.actions],
+            "harness": [step.as_dict() for step in execution.harness],
             "contract": list(CONTRACT_COMMAND),
             "contract_env_keys": sorted(key for key, _value in extracted.contract_env),
-            "artifact": BUILD_ARTIFACT,
             "guards": list(PROTECTED_GUARD_PATHS),
             "canonical_workflow_sha256": extracted.workflow_sha256,
         },
@@ -186,47 +202,8 @@ def command_plan_sha256(root: Path | None = None, *, runner_temp: str = "/tmp") 
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-# ★§7-4 — 계약 출력에서 ★허용 목록 key 와 0/1 값만★ 구조화한다.
-#   raw 전체를 로그로 내지 않으면서도 ★어느 guard 가 막았는지★ 알 수 있어야
-#   진단이 된다. 알 수 없는 형태의 줄은 세기만 하고 값으로 쓰지 않는다.
-_CONTRACT_KEY_RE = re.compile(r"\A([A-Z][A-Z0-9_]{2,79})=([01]|[A-Za-z0-9_.:+-]{1,120})\Z")
-FAILED_GUARD_KEY = "REPO_CONTRACTS_FAILED_GUARD"
-
-
-def parse_contract_keys(stdout: bytes) -> tuple[dict[str, str], int]:
-    """계약 stdout 을 strict 하게 읽어 (key→값, 인식 못 한 줄 수) 를 낸다.
-
-    ★들어온 bytes 를 밖으로 내보내지 않는다. 구조화한 key 만 나간다.
-    중복 key 는 ★마지막 값이 아니라★ 충돌로 본다 — 계약이 같은 key 를 두 번
-    쓰면 어느 쪽이 참인지 알 수 없다.
-    """
-    found: dict[str, str] = {}
-    duplicated: set[str] = set()
-    unparsed = 0
-    for line in stdout.decode("utf-8", "replace").splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        match = _CONTRACT_KEY_RE.match(stripped)
-        if match is None:
-            unparsed += 1
-            continue
-        key, value = match.group(1), match.group(2)
-        if key in found and found[key] != value:
-            duplicated.add(key)
-        found[key] = value
-    for key in duplicated:
-        found.pop(key, None)
-    return found, unparsed
-
-
-def failing_guard_names(keys: dict[str, str]) -> list[str]:
-    """0 으로 끝난 `*_OK` key 이름을 돌려준다. 값은 0/1 뿐이다."""
-    return sorted(k for k, v in keys.items() if k.endswith("_OK") and v == "0")
-
-
 def _run(argv, *, root: Path, cwd: str, runner_temp: Path, env) -> tuple[int, bytes, bytes]:
-    """§7-4 — 모든 바깥 명령은 격리기를 거친다. raw 를 로그로 내지 않는다."""
+    """모든 바깥 명령은 격리기를 거친다. raw 를 로그로 내지 않는다."""
     return output_containment.run_and_read(
         list(argv),
         cwd=(root / cwd).resolve(),
@@ -258,7 +235,7 @@ def assert_exact_head(*, root: Path, expected_head: str, runner_temp: Path, env)
 
 
 def guard_blob_oids(*, root: Path, runner_temp: Path, env) -> dict[str, str]:
-    """§7-2 — 계약·guard 파일의 blob OID 를 기록한다. 검사기를 바꿔 통과시키지 않는다."""
+    """§7-2 — 계약·guard 파일의 blob OID 를 기록한다(read-only git 조회)."""
     oids: dict[str, str] = {}
     for path in PROTECTED_GUARD_PATHS:
         value = _git_text(root, ("rev-parse", f"HEAD:{path}"), runner_temp, env)
@@ -295,37 +272,90 @@ def collect_tool_versions(*, root: Path, runner_temp: Path, env) -> dict[str, st
     return versions
 
 
-def assert_helm_major_three(version_text: str) -> str:
-    match = _HELM_MAJOR_RE.search((version_text or "").strip())
-    if match is None or match.group(1) != "3":
-        # ★즉석 다운로드로 재현성을 잃지 않는다. 불일치는 닫는다(§7-3).
-        raise RepoContractError(REPO_CONTRACTS_HELM_TOOLCHAIN_MISMATCH)
-    return version_text.strip()[:64]
-
-
-def assert_build_artifact(root: Path) -> None:
-    """§7-3 6항 — regular file 이고 크기가 0 보다 큼. 내용을 로그에 쓰지 않는다."""
-    target = root / BUILD_ARTIFACT
+# ── §4 clean 실측 ──────────────────────────────────────────────────────
+def _validate_dirty_path(raw: bytes) -> str:
+    """NUL 구분 Git 출력의 경로 하나를 검증한다. 위반은 예외로 닫는다(§4-2)."""
     try:
-        stat = target.stat()
-    except OSError as exc:
-        raise RepoContractError(REPO_CONTRACTS_BUILD_ARTIFACT_MISSING) from exc
-    if not target.is_file() or target.is_symlink() or stat.st_size <= 0:
-        raise RepoContractError(REPO_CONTRACTS_BUILD_ARTIFACT_MISSING)
+        path = raw.decode("utf-8", "strict")
+    except UnicodeDecodeError as exc:
+        raise RepoContractError(CLEAN_PATH_INVALID) from exc
+    if not path or path.startswith("/"):
+        raise RepoContractError(CLEAN_PATH_INVALID)
+    if any(part == ".." for part in path.split("/")):
+        raise RepoContractError(CLEAN_PATH_INVALID)
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in path):
+        raise RepoContractError(CLEAN_PATH_INVALID)
+    return path
 
 
-def assert_clean_finish(*, root: Path, runner_temp: Path, env) -> None:
-    """§7-5 — tracked·staged·untracked 잔여물 0."""
-    for argv in (("diff", "--quiet"), ("diff", "--cached", "--quiet")):
-        code, _out, _err = _run(("git", *argv), root=root, cwd=".", runner_temp=runner_temp, env=env)
-        if code != 0:
-            raise RepoContractError(REPO_CONTRACTS_WORKTREE_NOT_CLEAN)
+def clean_snapshot(*, root: Path, runner_temp: Path, env) -> tuple[str, ...]:
+    """`git status --porcelain=v1 -z --untracked-files=all` 을 격리 실행해
+    dirty 경로의 정렬 목록을 낸다. ★관측만 한다. 정리하지 않는다(§4-3)."""
     code, out, _err = _run(
-        ("git", "status", "--porcelain", "--untracked-files=all"),
+        ("git", "status", "--porcelain=v1", "-z", "--untracked-files=all"),
         root=root, cwd=".", runner_temp=runner_temp, env=env,
     )
-    if code != 0 or out.strip():
-        raise RepoContractError(REPO_CONTRACTS_WORKTREE_NOT_CLEAN)
+    if code != 0:
+        raise RepoContractError(CLEAN_CHECK_COMMAND_FAILED)
+    paths: list[str] = []
+    tokens = out.split(b"\x00")
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if not token:
+            index += 1
+            continue
+        if len(token) < 4 or token[2:3] != b" ":
+            raise RepoContractError(CLEAN_OUTPUT_INVALID)
+        status = token[:2].decode("ascii", "replace")
+        paths.append(_validate_dirty_path(token[3:]))
+        if status[:1] in ("R", "C"):
+            # rename/copy 는 다음 token 이 원래 경로다 — 그것도 증거다
+            index += 1
+            if index >= len(tokens) or not tokens[index]:
+                raise RepoContractError(CLEAN_OUTPUT_INVALID)
+            paths.append(_validate_dirty_path(tokens[index]))
+        index += 1
+    return tuple(sorted(paths))
+
+
+def dirty_manifest_sha256(paths: tuple[str, ...]) -> str:
+    payload = json.dumps(
+        {"paths": list(paths)}, ensure_ascii=False, separators=(",", ":")
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _observe_clean(receipt: ContractReceipt, phase: str, *, root, runner_temp, env) -> tuple[str, ...]:
+    """한 시점의 clean 을 재고 첫 dirty 시점을 기록한다. 실패 판정은 하지 않는다."""
+    dirty = clean_snapshot(root=root, runner_temp=runner_temp, env=env)
+    receipt.clean_check_executed = True
+    if dirty and receipt.first_dirty_phase in ("NOT_EVALUATED", "NONE"):
+        receipt.first_dirty_phase = phase
+    return dirty
+
+
+# ── §3-4 다섯 축 → 오류 코드 ───────────────────────────────────────────
+def _diff_error_code(diff: canonical_plan.PlanDiff) -> str | None:
+    if diff.exact:
+        return None
+    if diff.unsupported:
+        return REPO_CONTRACTS_CANONICAL_PLAN_UNSUPPORTED
+    action_labels = [
+        item
+        for bucket in (diff.missing, diff.extra, diff.reordered, diff.mutated)
+        for item in bucket
+        if item.startswith("action:")
+    ]
+    if action_labels:
+        return REPO_CONTRACTS_CANONICAL_ACTION_MISMATCH
+    if diff.missing:
+        return REPO_CONTRACTS_CANONICAL_PLAN_MISSING
+    if diff.extra:
+        return REPO_CONTRACTS_CANONICAL_PLAN_EXTRA
+    if diff.reordered:
+        return REPO_CONTRACTS_CANONICAL_PLAN_REORDERED
+    return REPO_CONTRACTS_CANONICAL_PLAN_MUTATED
 
 
 def run_exact_head_contracts(
@@ -336,131 +366,180 @@ def run_exact_head_contracts(
     runner_temp: Path | None = None,
     env: dict | None = None,
 ) -> ContractReceipt:
-    """§7-3 고정 순서를 그대로 실행한다. 저장소 계약은 정확히 한 번 부른다."""
+    """§14 순서 그대로. 저장소 계약은 정확히 한 번 부른다."""
     environment = dict(env if env is not None else os.environ)
     temp = runner_temp or output_containment.default_runner_temp()
     receipt = ContractReceipt()
+    head_confirmed = False
 
     try:
-        # ★F-04 — 계획을 canonical 에서 읽는다. 읽지 못하면 준비를 시작하지 않는다.
-        preparation_plan = build_preparation_plan(root, runner_temp=str(temp))
-        receipt.command_plan_sha256 = command_plan_sha256(root, runner_temp=str(temp))
-        extracted = canonical_plan.extract_canonical_plan(root, runner_temp=str(temp))
-        receipt.canonical_workflow_sha256 = extracted.workflow_sha256
-        receipt.canonical_step_count = len(extracted.preparation)
-        receipt.preparation_env_keys = sorted({
-            key for _n, _a, _c, env in preparation_plan for key, _v in env
-        })
+        try:
+            # ── §3-4 — 동등성 게이트. 다섯 축 전부 0 이 아니면 실행하지 않는다.
+            expected = canonical_plan.extract_canonical_plan(root, runner_temp=str(temp))
+            execution = build_execution_plan(root, runner_temp=str(temp))
+            receipt.command_plan_sha256 = command_plan_sha256(root, runner_temp=str(temp))
+            receipt.canonical_workflow_sha256 = expected.workflow_sha256
+            receipt.canonical_step_count = len(expected.preparation)
+            receipt.preparation_env_keys = sorted({
+                key for step in execution.runs for key, _value in step.env
+            })
+            diff = canonical_plan.compare_exact_plan(expected=expected, actual=execution)
+            receipt.plan_missing = list(diff.missing)
+            receipt.plan_extra = list(diff.extra)
+            receipt.plan_reordered = list(diff.reordered)
+            receipt.plan_mutated = list(diff.mutated)
+            receipt.plan_unsupported = list(diff.unsupported)
+            gate = _diff_error_code(diff)
+            if gate is not None:
+                raise RepoContractError(gate)
 
-        receipt.exact_head, receipt.exact_tree = assert_exact_head(
-            root=root, expected_head=expected_head, runner_temp=temp, env=environment
-        )
-        receipt.runner_image = (
-            f"{environment.get('ImageOS', 'unknown')}/"
-            f"{environment.get('ImageVersion', 'unknown')}"
-        )
-        # ★§7-3 2항 — 도구 버전 기록은 ★준비 전에★ 한다. 준비가 바꾼 버전을
-        #   적으면 재검증이 안 된다.
-        receipt.tool_versions = collect_tool_versions(
-            root=root, runner_temp=temp, env=environment
-        )
-        receipt.guard_blob_oids = guard_blob_oids(root=root, runner_temp=temp, env=environment)
-        receipt.guard_manifest_sha256 = hashlib.sha256(
-            json.dumps(receipt.guard_blob_oids, sort_keys=True).encode("utf-8")
-        ).hexdigest()
-        assert_guards_unmodified(
-            root=root, base_ref=base_ref, runner_temp=temp, env=environment
-        )
+            receipt.exact_head, receipt.exact_tree = assert_exact_head(
+                root=root, expected_head=expected_head, runner_temp=temp, env=environment
+            )
+            head_confirmed = True
+            receipt.runner_image = (
+                f"{environment.get('ImageOS', 'unknown')}/"
+                f"{environment.get('ImageVersion', 'unknown')}"
+            )
+            receipt.tool_versions = collect_tool_versions(
+                root=root, runner_temp=temp, env=environment
+            )
+            receipt.helm_version = receipt.tool_versions.get("helm", "unknown")
+            receipt.guard_blob_oids = guard_blob_oids(root=root, runner_temp=temp, env=environment)
+            receipt.guard_manifest_sha256 = hashlib.sha256(
+                json.dumps(receipt.guard_blob_oids, sort_keys=True).encode("utf-8")
+            ).hexdigest()
+            assert_guards_unmodified(
+                root=root, base_ref=base_ref, runner_temp=temp, env=environment
+            )
 
-        # ── 준비 (canonical 순서 + AC-25 추가) ─────────────────────────
-        executed: list[str] = []
-        executed_keys: list[str] = []
-        for name, argv, cwd, step_env in preparation_plan:
-            # ★v2.0 §4-1 — canonical 이 그 단계에 걸어 둔 env 를 그대로 실어 준다.
-            #   읽어 놓고 버리면 명령은 같아도 실행 환경이 다르다.
-            merged_env = {**environment, **dict(step_env)}
-            code, out, _err = _run(argv, root=root, cwd=cwd, runner_temp=temp, env=merged_env)
-            executed.append(name)
-            executed_keys.append(" ".join(argv))
-            if name == "helm_version":
+            # ── P0 — 준비 시작 전. 이미 dirty 면 시작하지 않는다(§4-2).
+            if _observe_clean(receipt, "P0", root=root, runner_temp=temp, env=environment):
+                raise RepoContractError(REPO_CONTRACTS_PREEXISTING_WORKTREE_DIRTY)
+
+            # ── 준비 = canonical 그대로 (추가 명령 0) ──────────────────
+            for position, step in enumerate(execution.runs):
+                merged_env = {**environment, **dict(step.env)}
+                code, _out, _err = _run(
+                    step.argv, root=root, cwd=step.cwd, runner_temp=temp, env=merged_env
+                )
                 if code != 0:
-                    raise RepoContractError(REPO_CONTRACTS_HELM_TOOLCHAIN_MISMATCH)
-                receipt.helm_version = assert_helm_major_three(
-                    out.decode("utf-8", "replace")
+                    raise RepoContractError(
+                        REPO_CONTRACTS_BASE_REF_UNAVAILABLE
+                        if BASE_REF_SCRIPT in step.argv
+                        else REPO_CONTRACTS_PREPARATION_FAILED
+                    )
+                # P1 — 각 canonical 준비 단계 직후. 관측만 한다(§4-2·§4-3).
+                _observe_clean(
+                    receipt, f"P1:{position}", root=root, runner_temp=temp, env=environment
                 )
-            elif code != 0:
-                # base ref preflight 은 별도 코드로 구분한다 — 원인이 다르다
-                raise RepoContractError(
-                    REPO_CONTRACTS_BASE_REF_UNAVAILABLE
-                    if BASE_REF_SCRIPT in argv
-                    else REPO_CONTRACTS_PREPARATION_FAILED
-                )
-            if name == "npm_build":
-                assert_build_artifact(root)
-        if executed != [name for name, _argv, _cwd, _env in preparation_plan]:
-            raise RepoContractError(REPO_CONTRACTS_PREPARATION_FAILED)
 
-        # ★canonical 이 요구하는데 우리가 빠뜨린 준비가 있으면 계약을 돌리지 않는다
-        gaps = canonical_plan.missing_steps(extracted, tuple(executed_keys))
-        receipt.canonical_missing_steps = list(gaps)
-        if gaps:
-            raise RepoContractError(REPO_CONTRACTS_CANONICAL_PLAN_MISMATCH)
+            # ── 저장소 계약: 정확히 한 번 ─────────────────────────────
+            contract_env = contract_environment(
+                root, base_env=environment, runner_temp=str(temp)
+            )
+            receipt.contract_env_keys = sorted(
+                key for key, _value in expected.contract_env
+            )
+            result, contract_stdout = output_containment.run_and_capture(
+                list(CONTRACT_COMMAND),
+                cwd=root,
+                env=contract_env,
+                timeout_seconds=3600,
+                runner_temp=temp,
+            )
+            receipt.contract_exit_code = result.returncode
+            receipt.stdout_sha256 = result.stdout_sha256
+            receipt.stderr_sha256 = result.stderr_sha256
+            receipt.stdout_bytes = result.stdout_bytes
+            receipt.stderr_bytes = result.stderr_bytes
+            receipt.descendants_observed = result.descendants_observed
 
-        # ── 저장소 계약: 정확히 한 번 ─────────────────────────────────
-        # ★canonical 이 넘기는 환경변수를 그대로 넘긴다. 같은 스크립트라도 다른
-        #   환경에서 돌면 같은 검사가 아니다.
-        contract_env = contract_environment(
-            root, base_env=environment, runner_temp=str(temp)
-        )
-        receipt.contract_env_keys = sorted(
-            key for key, _value in extracted.contract_env
-        )
-        # ★§7-4 — 결과와 함께 stdout 을 받아 ★허용 key 만★ 구조화한다.
-        #   raw 는 로그·영수증 어디에도 가지 않는다.
-        result, contract_stdout = output_containment.run_and_capture(
-            list(CONTRACT_COMMAND),
-            cwd=root,
-            env=contract_env,
-            timeout_seconds=3600,
-            runner_temp=temp,
-        )
-        keys, unparsed = parse_contract_keys(contract_stdout)
-        receipt.contract_key_count = len(keys)
-        receipt.contract_unparsed_lines = unparsed
-        receipt.failed_guard = keys.get(FAILED_GUARD_KEY, "NONE")
-        receipt.failing_guard_keys = failing_guard_names(keys)
-        receipt.contract_exit_code = result.returncode
-        receipt.stdout_sha256 = result.stdout_sha256
-        receipt.stderr_sha256 = result.stderr_sha256
-        receipt.stdout_bytes = result.stdout_bytes
-        receipt.stderr_bytes = result.stderr_bytes
-        receipt.descendants_observed = result.descendants_observed
-        if result.descendant_escape_detected or not result.cleanup_ok:
-            raise RepoContractError(REPO_CONTRACTS_DESCENDANTS_SURVIVED)
-        if result.returncode != 0:
-            raise RepoContractError(REPO_CONTRACTS_FAILED)
+            # §5 — 손실 없는 구조화. raw 는 여기서 끝난다.
+            parsed = contract_parse.parse_contract_output(contract_stdout)
+            receipt.contract_key_count = len(parsed.keys)
+            receipt.primary_failed_guard = contract_parse.resolve_primary(
+                parsed, exit_code=result.returncode
+            )
+            receipt.primary_failed_guard_line_sha256 = parsed.primary_line_sha256
+            receipt.primary_failed_guard_line_bytes = parsed.primary_line_bytes
+            receipt.failing_guard_keys = parsed.failing_guard_keys
+            receipt.contract_unparsed_line_count = parsed.unparsed_line_count
+            receipt.contract_unparsed_total_bytes = parsed.unparsed_total_bytes
+            receipt.contract_unparsed_manifest_sha256 = parsed.unparsed_manifest_sha256
+            receipt.contract_parse_error_code = parsed.parse_error_code
 
-        assert_clean_finish(root=root, runner_temp=temp, env=environment)
-        receipt.final_worktree_clean = "YES"
-        receipt.verdict = 1
+            # ── P2 — 계약 직후. 성패와 무관하게 잰다(§4-2).
+            _observe_clean(receipt, "P2", root=root, runner_temp=temp, env=environment)
+
+            if result.descendant_escape_detected or not result.cleanup_ok:
+                raise RepoContractError(REPO_CONTRACTS_DESCENDANTS_SURVIVED)
+            if result.returncode != 0:
+                raise RepoContractError(REPO_CONTRACTS_FAILED)
+            # exit 0 인데 summary 가 NONE 이 아니면 출력이 스스로 모순이다(§5-4).
+            if receipt.primary_failed_guard != "NONE":
+                raise RepoContractError(REPO_CONTRACTS_OUTPUT_CONTRADICTORY)
+        finally:
+            # ── P3 — 예외 처리 finally. checkout 신원을 확인했다면 반드시 잰다.
+            #   ★재지 못한 상태는 NOT_EVALUATED 로 남는다. NO 로 바꾸지 않는다(§2).
+            #   ★P3 자체의 실패가 원래 예외를 삼키면 안 된다 — 따로 받는다.
+            if head_confirmed and receipt.clean_check_error_code == "NONE":
+                try:
+                    dirty = _observe_clean(
+                        receipt, "P3", root=root, runner_temp=temp, env=environment
+                    )
+                    receipt.final_worktree_clean = "NO" if dirty else "YES"
+                    receipt.dirty_paths = dirty
+                    receipt.dirty_path_count = len(dirty)
+                    receipt.dirty_path_manifest_sha256 = dirty_manifest_sha256(dirty)
+                    if receipt.first_dirty_phase == "NOT_EVALUATED":
+                        receipt.first_dirty_phase = "NONE"
+                except RepoContractError as clean_exc:
+                    receipt.clean_check_error_code = clean_exc.code
+                    receipt.final_worktree_clean = "NOT_EVALUATED"
     except RepoContractError as exc:
-        receipt.error_code = exc.code
+        if exc.code in (CLEAN_CHECK_COMMAND_FAILED, CLEAN_OUTPUT_INVALID, CLEAN_PATH_INVALID):
+            # clean 검사 자체가 실패했다 — NOT_EVALUATED + 안정 코드(§4-4)
+            receipt.clean_check_error_code = exc.code
+            receipt.final_worktree_clean = "NOT_EVALUATED"
+            if receipt.error_code == "NONE":
+                receipt.error_code = exc.code
+        else:
+            receipt.error_code = exc.code
         receipt.verdict = 0
-        if receipt.final_worktree_clean == "NOT_RUN":
-            receipt.final_worktree_clean = "NO"
     except output_containment.ContainmentError as exc:
         receipt.error_code = exc.code
         receipt.verdict = 0
-    except canonical_plan.CanonicalPlanError:
-        # ★canonical 을 읽지 못하면 무엇과 같은지 말할 수 없다 — 닫는다
-        receipt.error_code = REPO_CONTRACTS_CANONICAL_PLAN_UNREADABLE
+    except canonical_plan.CanonicalPlanError as exc:
+        receipt.error_code = (
+            REPO_CONTRACTS_CANONICAL_PLAN_UNSUPPORTED
+            if exc.code == canonical_plan.CANONICAL_PLAN_UNSUPPORTED_SEMANTICS
+            else REPO_CONTRACTS_CANONICAL_PLAN_UNREADABLE
+        )
         receipt.verdict = 0
+    else:
+        # 성공 경로 — 최종 상태가 실측 YES 일 때만 PASS 다.
+        if receipt.final_worktree_clean == "YES":
+            receipt.verdict = 1
+        elif receipt.final_worktree_clean == "NO":
+            receipt.error_code = REPO_CONTRACTS_WORKTREE_NOT_CLEAN
+        else:
+            receipt.error_code = receipt.clean_check_error_code
     return receipt
 
 
-# ── §7-4 허용된 출력 형식 ──────────────────────────────────────────────
+# ── §13 허용된 출력 형식 ───────────────────────────────────────────────
+def _bounded_join(items, *, limit_bytes: int) -> str:
+    joined = ",".join(items)
+    if not joined:
+        return "NONE"
+    if len(joined.encode("utf-8")) > limit_bytes:
+        return "BOUNDED"
+    return joined
+
+
 def emit_lines(receipt: ContractReceipt) -> list[str]:
-    return [
+    lines = [
         f"REPO_CONTRACTS_EXACT_HEAD={'PASS' if receipt.verdict == 1 else 'FAIL'}",
         f"ERROR_CODE={receipt.error_code}",
         f"COMMAND_PLAN_SHA256={receipt.command_plan_sha256}",
@@ -471,20 +550,57 @@ def emit_lines(receipt: ContractReceipt) -> list[str]:
         f"STDERR_BYTES={receipt.stderr_bytes}",
         f"EXIT_CODE={receipt.contract_exit_code}",
         f"DESCENDANTS_OBSERVED={receipt.descendants_observed}",
-        f"FINAL_WORKTREE_CLEAN={receipt.final_worktree_clean}",
         f"CANONICAL_WORKFLOW_SHA256={receipt.canonical_workflow_sha256 or 'NONE'}",
         f"CANONICAL_STEP_COUNT={receipt.canonical_step_count}",
-        f"CANONICAL_MISSING_STEP_COUNT={len(receipt.canonical_missing_steps)}",
+        f"CANONICAL_MISSING_STEP_COUNT={len(receipt.plan_missing)}",
+        f"CANONICAL_EXTRA_STEP_COUNT={len(receipt.plan_extra)}",
+        f"CANONICAL_REORDERED_STEP_COUNT={len(receipt.plan_reordered)}",
+        f"CANONICAL_MUTATED_STEP_COUNT={len(receipt.plan_mutated)}",
+        f"CANONICAL_UNSUPPORTED_STEP_COUNT={len(receipt.plan_unsupported)}",
         f"PREPARATION_ENV_BOUND_KEYS={len(receipt.preparation_env_keys)}",
+        f"CLEAN_CHECK_EXECUTED={'YES' if receipt.clean_check_executed else 'NO'}",
+        f"FINAL_WORKTREE_CLEAN={receipt.final_worktree_clean}",
+        f"DIRTY_PATH_COUNT={receipt.dirty_path_count}",
+        f"DIRTY_PATH_MANIFEST_SHA256={receipt.dirty_path_manifest_sha256 or 'NONE'}",
+        f"FIRST_DIRTY_PHASE={receipt.first_dirty_phase}",
+        f"CLEAN_CHECK_ERROR_CODE={receipt.clean_check_error_code}",
+        f"PRIMARY_FAILED_GUARD={receipt.primary_failed_guard}",
+        f"PRIMARY_FAILED_GUARD_LINE_SHA256={receipt.primary_failed_guard_line_sha256 or 'NONE'}",
+        f"PRIMARY_FAILED_GUARD_LINE_BYTES={receipt.primary_failed_guard_line_bytes}",
+        f"FAILING_GUARD_KEY_COUNT={len(receipt.failing_guard_keys)}",
+        f"FAILING_GUARD_KEYS_SHA256="
+        f"{contract_parse.failing_keys_sha256(tuple(receipt.failing_guard_keys))}",
+        f"FAILING_GUARD_KEYS="
+        f"{_bounded_join(receipt.failing_guard_keys, limit_bytes=_FAILING_KEYS_LOG_BYTES)}",
         f"CONTRACT_KEY_COUNT={receipt.contract_key_count}",
-        f"CONTRACT_UNPARSED_LINES={receipt.contract_unparsed_lines}",
-        f"REPO_CONTRACTS_FAILED_GUARD={receipt.failed_guard}",
-        f"FAILING_GUARD_KEYS={','.join(receipt.failing_guard_keys) or 'NONE'}",
+        f"CONTRACT_UNPARSED_LINE_COUNT={receipt.contract_unparsed_line_count}",
+        f"CONTRACT_UNPARSED_TOTAL_BYTES={receipt.contract_unparsed_total_bytes}",
+        f"CONTRACT_UNPARSED_MANIFEST_SHA256="
+        f"{receipt.contract_unparsed_manifest_sha256 or 'NONE'}",
+        f"CONTRACT_PARSE_ERROR_CODE={receipt.contract_parse_error_code}",
+    ]
+    # §4-2 — 안전한 경로만, 최대 20 개 · 4096 bytes 까지. 초과분은 지문·개수다.
+    emitted = 0
+    budget = _DIRTY_PATH_LOG_BYTES
+    for ordinal, path in enumerate(receipt.dirty_paths):
+        if emitted >= _DIRTY_PATH_LOG_LIMIT:
+            break
+        if _SAFE_PATH_RE.match(path) is None:
+            continue
+        line = f"DIRTY_PATH_{ordinal:02d}={path}"
+        cost = len(line.encode("utf-8"))
+        if cost > budget:
+            break
+        lines.append(line)
+        budget -= cost
+        emitted += 1
+    lines.extend([
         f"RUNNER_IMAGE={receipt.runner_image or 'unknown'}",
         f"HELM_VERSION={receipt.helm_version or 'unknown'}",
         f"NODE_VERSION={receipt.tool_versions.get('node', 'unknown')}",
         f"PYTHON_VERSION={receipt.tool_versions.get('python', 'unknown')}",
-    ]
+    ])
+    return lines
 
 
 def _main(argv: list[str]) -> int:
@@ -510,36 +626,39 @@ if __name__ == "__main__":
 
 
 __all__ = [
-    "BUILD_ARTIFACT",
+    "CLEAN_CHECK_COMMAND_FAILED",
+    "CLEAN_OUTPUT_INVALID",
+    "CLEAN_PATH_INVALID",
     "CONTRACT_COMMAND",
-    "AC25_EXTRA_PLAN",
-    "build_preparation_plan",
-    "contract_environment",
     "PROTECTED_GUARD_PATHS",
-    "REPO_CONTRACTS_ALREADY_RUN",
     "REPO_CONTRACTS_BASE_REF_UNAVAILABLE",
-    "REPO_CONTRACTS_BUILD_ARTIFACT_MISSING",
-    "REPO_CONTRACTS_CANONICAL_PLAN_MISMATCH",
+    "REPO_CONTRACTS_CANONICAL_ACTION_MISMATCH",
+    "REPO_CONTRACTS_CANONICAL_PLAN_EXTRA",
+    "REPO_CONTRACTS_CANONICAL_PLAN_MISSING",
+    "REPO_CONTRACTS_CANONICAL_PLAN_MUTATED",
+    "REPO_CONTRACTS_CANONICAL_PLAN_REORDERED",
     "REPO_CONTRACTS_CANONICAL_PLAN_UNREADABLE",
+    "REPO_CONTRACTS_CANONICAL_PLAN_UNSUPPORTED",
     "REPO_CONTRACTS_DESCENDANTS_SURVIVED",
     "REPO_CONTRACTS_EXACT_HEAD_MISMATCH",
     "REPO_CONTRACTS_FAILED",
     "REPO_CONTRACTS_GUARD_MUTATED",
-    "REPO_CONTRACTS_HELM_TOOLCHAIN_MISMATCH",
+    "REPO_CONTRACTS_OUTPUT_CONTRADICTORY",
+    "REPO_CONTRACTS_PREEXISTING_WORKTREE_DIRTY",
     "REPO_CONTRACTS_PREPARATION_FAILED",
     "REPO_CONTRACTS_SHALLOW_CLONE",
     "REPO_CONTRACTS_WORKTREE_NOT_CLEAN",
     "ContractReceipt",
     "RepoContractError",
-    "assert_build_artifact",
-    "assert_clean_finish",
     "assert_exact_head",
     "assert_guards_unmodified",
-    "assert_helm_major_three",
+    "build_execution_plan",
+    "build_preparation_plan",
+    "clean_snapshot",
     "collect_tool_versions",
     "command_plan_sha256",
-    "failing_guard_names",
-    "parse_contract_keys",
+    "contract_environment",
+    "dirty_manifest_sha256",
     "emit_lines",
     "guard_blob_oids",
     "run_exact_head_contracts",
