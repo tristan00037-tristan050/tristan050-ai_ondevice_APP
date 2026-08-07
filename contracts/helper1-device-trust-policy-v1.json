@@ -1,0 +1,7 @@
+{
+  "schema_version": "butler.helper1.device-trust-policy.v1",
+  "enabled": false,
+  "key_id": null,
+  "public_key_b64": null,
+  "measurement_policy_sha256": null
+}

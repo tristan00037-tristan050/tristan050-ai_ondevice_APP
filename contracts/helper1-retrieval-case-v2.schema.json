@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1-retrieval-case-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "query_id", "run_id", "evaluation_run_subject_sha256", "policy_sha256", "encoder_space_sha256", "index_manifest_sha256", "started_monotonic_ns", "finished_monotonic_ns", "decision", "reason_code", "hits", "record_sha256"],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.retrieval-case.v2"},
+    "query_id": {"$ref": "#/$defs/id"}, "run_id": {"$ref": "#/$defs/id"}, "evaluation_run_subject_sha256": {"$ref": "#/$defs/digest"},
+    "policy_sha256": {"$ref": "#/$defs/digest"}, "encoder_space_sha256": {"$ref": "#/$defs/digest"}, "index_manifest_sha256": {"$ref": "#/$defs/digest"},
+    "started_monotonic_ns": {"type": "integer", "minimum": 0}, "finished_monotonic_ns": {"type": "integer", "minimum": 1},
+    "decision": {"enum": ["RETRIEVE", "ABSTAIN"]}, "reason_code": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{2,95}$"},
+    "hits": {"type": "array", "maxItems": 1000, "items": {"$ref": "#/$defs/hit"}},
+    "record_sha256": {"$ref": "#/$defs/digest"}
+  },
+  "allOf": [
+    {"if": {"properties": {"decision": {"const": "RETRIEVE"}}}, "then": {"properties": {"hits": {"minItems": 1}, "reason_code": {"type": "null"}}}},
+    {"if": {"properties": {"decision": {"const": "ABSTAIN"}}}, "then": {"properties": {"hits": {"maxItems": 0}, "reason_code": {"type": "string"}}}}
+  ],
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"}, "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "score": {"type": ["string", "null"], "pattern": "^[0-9a-f]{16}$"},
+    "hit": {"type": "object", "additionalProperties": false, "required": ["workspace_id", "generation_id", "source_id", "chunk_id", "content_utf8", "content_sha256", "dense_score_bits", "lexical_score_bits", "fused_score_bits", "dense_rank", "lexical_rank", "fused_rank"], "properties": {"workspace_id": {"type": "string", "format": "uuid"}, "generation_id": {"type": "string", "format": "uuid"}, "source_id": {"$ref": "#/$defs/id"}, "chunk_id": {"$ref": "#/$defs/id"}, "content_utf8": {"type": "string", "minLength": 1}, "content_sha256": {"$ref": "#/$defs/digest"}, "dense_score_bits": {"$ref": "#/$defs/score"}, "lexical_score_bits": {"$ref": "#/$defs/score"}, "fused_score_bits": {"type": "string", "pattern": "^[0-9a-f]{16}$"}, "dense_rank": {"type": ["integer", "null"], "minimum": 1}, "lexical_rank": {"type": ["integer", "null"], "minimum": 1}, "fused_rank": {"type": "integer", "minimum": 1}}}
+  }
+}

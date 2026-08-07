@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1/canonical-subject-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_name",
+    "event_action",
+    "repository_id",
+    "repository_full_name",
+    "subject_repository_full_name",
+    "subject_sha",
+    "pull_request_number",
+    "merge_group_head_ref",
+    "protected_ref",
+    "workflow_ref",
+    "workflow_sha",
+    "approval_eligible"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.canonical-subject.v1"},
+    "event_name": {"enum": ["pull_request", "merge_group", "push", "workflow_dispatch"]},
+    "event_action": {"type": ["string", "null"], "minLength": 1, "maxLength": 64},
+    "repository_id": {"type": "integer", "minimum": 1},
+    "repository_full_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+    "subject_repository_full_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+    "subject_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "pull_request_number": {"type": ["integer", "null"], "minimum": 1},
+    "merge_group_head_ref": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+    "protected_ref": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+    "workflow_ref": {"type": "string", "minLength": 1, "maxLength": 512},
+    "workflow_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "approval_eligible": {"type": "boolean"}
+  }
+}

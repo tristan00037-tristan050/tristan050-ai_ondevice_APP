@@ -1,0 +1,7 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema/acl/schemas/capability.schema.json",
+  "identifier": "helper1-trust-main-local",
+  "description": "Read-only Helper1 execution receipt trust anchor for the local main window",
+  "windows": ["main"],
+  "permissions": ["allow-get-helper1-execution-trust-anchor"]
+}

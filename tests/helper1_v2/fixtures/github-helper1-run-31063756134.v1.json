@@ -1,0 +1,40 @@
+{
+  "artifact": {
+    "digest": "sha256:ed3535787e2dd23ac9d88bd36154d7efa60f5e84fd0343b347869073e3b96f30",
+    "expired": false,
+    "id": 8953102850,
+    "name": "helper1-v2-evidence-31063756134-1",
+    "size_in_bytes": 30702,
+    "workflow_run": {
+      "head_branch": "feat/helper1-v2-searchquality-final",
+      "head_repository_id": 1097940756,
+      "head_sha": "2f7fe4b9fc8c2a126ce947ed121d764dc033cb7c",
+      "id": 31063756134,
+      "repository_id": 1097940756
+    }
+  },
+  "job": {
+    "conclusion": "success",
+    "head_sha": "2f7fe4b9fc8c2a126ce947ed121d764dc033cb7c",
+    "name": "helper1-v2-untrusted-evidence",
+    "run_attempt": 1,
+    "run_id": 31063756134,
+    "status": "completed",
+    "workflow_name": "helper1-v2-evidence-producer"
+  },
+  "run": {
+    "conclusion": "failure",
+    "event": "pull_request",
+    "head_sha": "2f7fe4b9fc8c2a126ce947ed121d764dc033cb7c",
+    "id": 31063756134,
+    "name": "helper1-v2-evidence-producer",
+    "path": ".github/workflows/helper1-v2-evidence.yml",
+    "repository": {
+      "full_name": "tristan00037-tristan050/tristan050-ai_ondevice_APP",
+      "id": 1097940756
+    },
+    "run_attempt": 1,
+    "status": "completed",
+    "workflow_id": 326757693
+  }
+}

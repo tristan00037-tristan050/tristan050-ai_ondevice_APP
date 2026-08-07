@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1/retrieval-policy-v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dense_candidates",
+    "lexical_candidates",
+    "rrf_k",
+    "bm25_k1",
+    "bm25_b",
+    "calibration_state",
+    "corpus_sha256",
+    "evaluator_sha256",
+    "threshold_policy_sha256",
+    "approval_receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.retrieval-policy.v1"},
+    "dense_candidates": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "lexical_candidates": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "rrf_k": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "bm25_k1": {"type": "number", "exclusiveMinimum": 0},
+    "bm25_b": {"type": "number", "minimum": 0, "maximum": 1},
+    "calibration_state": {"enum": ["DEVELOPMENT_UNCALIBRATED", "APPROVED"]},
+    "corpus_sha256": {"$ref": "#/$defs/nullableDigest"},
+    "evaluator_sha256": {"$ref": "#/$defs/nullableDigest"},
+    "threshold_policy_sha256": {"$ref": "#/$defs/nullableDigest"},
+    "approval_receipt_sha256": {"$ref": "#/$defs/nullableDigest"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"calibration_state": {"const": "APPROVED"}}},
+      "then": {
+        "properties": {
+          "corpus_sha256": {"$ref": "#/$defs/digest"},
+          "evaluator_sha256": {"$ref": "#/$defs/digest"},
+          "threshold_policy_sha256": {"$ref": "#/$defs/digest"},
+          "approval_receipt_sha256": {"$ref": "#/$defs/digest"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableDigest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]}
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": "butler.helper1.canonical-json-vectors.v1",
+  "vectors": [
+    {
+      "id": "object-key-order",
+      "raw_utf8": "{\"b\":2,\"a\":1}",
+      "canonical_utf8": "{\"a\":1,\"b\":2}",
+      "canonical_sha256": "43258cff783fe7036d8a43033f830adfc60ec037382473548ac742b888292777"
+    },
+    {
+      "id": "nfc-korean-value",
+      "raw_utf8": "{\"é\":\"한\"}",
+      "canonical_utf8": "{\"é\":\"한\"}",
+      "canonical_sha256": "9e57ee1884a16fd4738bed38f7669f412c3ae9c4db8fd9bd970b818ee2d60125"
+    }
+  ],
+  "rejections": [
+    {"id": "duplicate-key", "raw_utf8": "{\"a\":1,\"a\":2}", "error_code": "CJ1_DUPLICATE_KEY"},
+    {"id": "nfc-key-collision", "raw_utf8": "{\"é\":1,\"é\":2}", "error_code": "CJ1_NORMALIZED_KEY_COLLISION"},
+    {"id": "float", "raw_utf8": "{\"a\":0.35}", "error_code": "CJ1_FLOAT_FORBIDDEN"},
+    {"id": "exponent", "raw_utf8": "{\"a\":1e-3}", "error_code": "CJ1_FLOAT_FORBIDDEN"},
+    {"id": "int64-overflow", "raw_utf8": "{\"a\":9223372036854775808}", "error_code": "CJ1_INTEGER_OUT_OF_RANGE"}
+  ]
+}

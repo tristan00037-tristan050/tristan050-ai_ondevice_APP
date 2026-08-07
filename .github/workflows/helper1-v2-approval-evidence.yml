@@ -1,0 +1,90 @@
+name: helper1-v2-approval-evidence-producer
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository_id: {description: Immutable repository ID, required: true, type: string}
+      subject_commit: {description: Candidate commit SHA, required: true, type: string}
+      subject_tree: {description: Candidate tree SHA, required: true, type: string}
+      source_run_id: {description: Protected producer run ID, required: true, type: string}
+      source_run_attempt: {description: Protected producer run attempt, required: true, type: string}
+      source_artifact_id: {description: Exact source artifact ID, required: true, type: string}
+      source_artifact_name: {description: Exact source artifact name, required: true, type: string}
+      source_workflow_ref: {description: Producer workflow ref pinned to SHA, required: true, type: string}
+      source_workflow_id: {description: Immutable protected producer workflow ID, required: true, type: string}
+      source_workflow_sha256: {description: Producer workflow byte digest, required: true, type: string}
+      canonical_subject_sha256: {description: Canonical subject digest, required: true, type: string}
+      source_event_name: {description: Protected producer event name, required: true, type: string}
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: helper1-v2-approval-${{ inputs.source_run_id }}-${{ inputs.source_run_attempt }}
+  cancel-in-progress: false
+
+jobs:
+  approval-evidence:
+    name: helper1-v2-protected-approval-input
+    runs-on: ubuntu-latest
+    environment: helper1-v2-protected-approval
+    timeout-minutes: 20
+    steps:
+      - name: Check out trusted verifier code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+      - name: Fetch exact protected approval artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/ci/helper1_approval_input_fetch.py \
+            --repository "${GITHUB_REPOSITORY}" \
+            --repository-id "${{ inputs.repository_id }}" \
+            --run-id "${{ inputs.source_run_id }}" \
+            --run-attempt "${{ inputs.source_run_attempt }}" \
+            --artifact-id "${{ inputs.source_artifact_id }}" \
+            --artifact-name "${{ inputs.source_artifact_name }}" \
+            --subject-commit "${{ inputs.subject_commit }}" \
+            --subject-tree "${{ inputs.subject_tree }}" \
+            --producer-workflow-ref "${{ inputs.source_workflow_ref }}" \
+            --producer-workflow-id "${{ inputs.source_workflow_id }}" \
+            --producer-workflow-sha256 "${{ inputs.source_workflow_sha256 }}" \
+            --canonical-subject-sha256 "${{ inputs.canonical_subject_sha256 }}" \
+            --event-name "${{ inputs.source_event_name }}" \
+            --output-artifact "${RUNNER_TEMP}/approval-input.zip" \
+            --output-provenance "${RUNNER_TEMP}/APPROVAL_INPUT_PROVENANCE.v2.json"
+      - name: Verify and materialize without executing downloaded content
+        run: |
+          set -euo pipefail
+          python scripts/ci/helper1_approval_input_materialize.py \
+            --artifact "${RUNNER_TEMP}/approval-input.zip" \
+            --provenance "${RUNNER_TEMP}/APPROVAL_INPUT_PROVENANCE.v2.json" \
+            --repository-id "${{ inputs.repository_id }}" \
+            --repository "${GITHUB_REPOSITORY}" \
+            --subject-commit "${{ inputs.subject_commit }}" \
+            --subject-tree "${{ inputs.subject_tree }}" \
+            --run-id "${{ inputs.source_run_id }}" \
+            --run-attempt "${{ inputs.source_run_attempt }}" \
+            --workflow-ref "${{ inputs.source_workflow_ref }}" \
+            --workflow-id "${{ inputs.source_workflow_id }}" \
+            --workflow-sha256 "${{ inputs.source_workflow_sha256 }}" \
+            --artifact-id "${{ inputs.source_artifact_id }}" \
+            --artifact-name "${{ inputs.source_artifact_name }}" \
+            --canonical-subject-sha256 "${{ inputs.canonical_subject_sha256 }}" \
+            --output-root "${RUNNER_TEMP}/approval-root"
+      - name: Upload exact approval input inventory
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: helper1-v2-approval-${{ inputs.source_run_id }}-${{ inputs.source_run_attempt }}
+          path: ${{ runner.temp }}/approval-root/
+          if-no-files-found: error
+          retention-days: 30

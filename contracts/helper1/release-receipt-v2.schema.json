@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1/release-receipt-v2.schema.json",
+  "title": "Butler Helper1 Release Authority Receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "workspace_id",
+    "generation_id",
+    "policy_sha256",
+    "gate_bundle_sha256",
+    "ordered_trace_root",
+    "authority_key_id",
+    "signature",
+    "terminal_count",
+    "ordered_gates"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "butler.helper1.release-receipt.v2"
+    },
+    "request_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "workspace_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "generation_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "policy_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "gate_bundle_sha256": {
+      "$ref": "#/$defs/digest"
+    },
+    "ordered_trace_root": {
+      "$ref": "#/$defs/digest"
+    },
+    "authority_key_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{86}$"
+    },
+    "terminal_count": {
+      "const": 1
+    },
+    "ordered_gates": {
+      "const": [
+        "QUERY_AUTHORIZED",
+        "INDEX_VERIFIED",
+        "RETRIEVED",
+        "PRE_GROUNDING_PASSED",
+        "GENERATED_BUFFERED",
+        "CLAIMS_VERIFIED",
+        "DLP_PASSED",
+        "EFFECT_AUTHORIZED",
+        "OS_EGRESS_VERIFIED",
+        "RELEASED"
+      ]
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    }
+  }
+}

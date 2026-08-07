@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://butler.local/contracts/helper1-approval-input-provenance-v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "mode", "repository_id", "repository_name", "subject_commit", "subject_tree", "producer_workflow_ref", "producer_workflow_id", "producer_workflow_sha256", "run_id", "run_attempt", "event_name", "artifact_id", "artifact_name", "artifact_sha256", "inventory_sha256", "canonical_subject_sha256"],
+  "properties": {
+    "schema_version": {"const": "butler.helper1.approval-input-provenance.v2"},
+    "mode": {"const": "ARTIFACT"},
+    "repository_id": {"type": "integer", "minimum": 1},
+    "repository_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+    "subject_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "subject_tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "producer_workflow_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/\\.github/workflows/[A-Za-z0-9_.-]+@[0-9a-f]{40}$"},
+    "producer_workflow_id": {"type": "integer", "minimum": 1},
+    "producer_workflow_sha256": {"$ref": "#/$defs/digest"},
+    "run_id": {"type": "integer", "minimum": 1},
+    "run_attempt": {"type": "integer", "minimum": 1},
+    "event_name": {"type": "string", "pattern": "^[A-Za-z_]+$"},
+    "artifact_id": {"type": "integer", "minimum": 1},
+    "artifact_name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$"},
+    "artifact_sha256": {"$ref": "#/$defs/digest"},
+    "inventory_sha256": {"$ref": "#/$defs/digest"},
+    "canonical_subject_sha256": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}
