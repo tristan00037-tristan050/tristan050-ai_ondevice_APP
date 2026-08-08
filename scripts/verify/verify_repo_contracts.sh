@@ -1897,7 +1897,7 @@ echo "== guard: onprem signed bundle verify (manifest+sig) =="
 run_guard "onprem signed bundle verify" bash scripts/verify/verify_onprem_signed_bundle.sh
 ONPREM_SIGNED_BUNDLE_OK=1
 
-echo "== guard: onprem install/verify assets == "
+echo "== guard: onprem install/verify assets =="
 run_guard "onprem install/verify assets" bash scripts/verify/verify_onprem_install_verify_assets.sh
 ONPREM_INSTALL_VERIFY_OK=1
 
